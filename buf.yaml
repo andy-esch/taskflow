@@ -1,0 +1,11 @@
+version: v1
+name: buf.build/andy-esch/taskflow
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/protocolbuffers/wellknowntypes
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT

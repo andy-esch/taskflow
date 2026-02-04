@@ -1,0 +1,160 @@
+{
+  "$defs": {
+    "taskflow.v1.Task.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Task is the primary unit of work in TaskFlow.",
+      "patternProperties": {
+        "^(autonomyLevel)$": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "pattern": "^-?[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0,
+          "description": "1-5 level of autonomy required (5 being fully autonomous)"
+        },
+        "^(filePath)$": {
+          "default": "",
+          "description": "The Markdown file path relative to the repo root",
+          "type": "string"
+        }
+      },
+      "properties": {
+        "autonomy_level": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "pattern": "^-?[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0,
+          "description": "1-5 level of autonomy required (5 being fully autonomous)"
+        },
+        "effort": {
+          "default": "",
+          "description": "Estimated effort (e.g., \"2-4 hours\", \"1 day\")",
+          "type": "string"
+        },
+        "epic": {
+          "default": "",
+          "description": "The ID of the Epic this task belongs to",
+          "type": "string"
+        },
+        "file_path": {
+          "default": "",
+          "description": "The Markdown file path relative to the repo root",
+          "type": "string"
+        },
+        "id": {
+          "default": "",
+          "description": "Unique identifier (usually derived from the filename)",
+          "type": "string"
+        },
+        "objective": {
+          "default": "",
+          "description": "The core objective/summary extracted from the Markdown body",
+          "type": "string"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "pattern": "^PRIORITY_UNSPECIFIED$",
+              "type": "string"
+            },
+            {
+              "enum": [
+                "PRIORITY_LOW",
+                "PRIORITY_MEDIUM",
+                "PRIORITY_HIGH"
+              ],
+              "type": "string"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            }
+          ],
+          "default": 0,
+          "description": "Relative priority within the tier",
+          "title": "Priority"
+        },
+        "project": {
+          "default": "",
+          "description": "Cross-cutting initiative or project name",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "pattern": "^STATUS_UNSPECIFIED$",
+              "type": "string"
+            },
+            {
+              "enum": [
+                "STATUS_READY_TO_START",
+                "STATUS_NEXT_UP",
+                "STATUS_IN_PROGRESS",
+                "STATUS_COMPLETED",
+                "STATUS_DEPRECATED"
+              ],
+              "type": "string"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            }
+          ],
+          "default": 0,
+          "description": "The current state of the task",
+          "title": "Status"
+        },
+        "tags": {
+          "description": "Semantic tags for grouping and search",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tier": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "pattern": "^-?[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0,
+          "description": "Priority tier (1: Critical, 2: High, 3: Medium, 4: Low)"
+        },
+        "title": {
+          "default": "",
+          "description": "Human-readable title",
+          "type": "string"
+        }
+      },
+      "title": "Task",
+      "type": "object"
+    }
+  },
+  "$id": "taskflow.v1.Task.schema.bundle.json",
+  "$ref": "#/$defs/taskflow.v1.Task.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

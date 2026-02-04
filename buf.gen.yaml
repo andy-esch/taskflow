@@ -1,0 +1,9 @@
+version: v1
+plugins:
+  - plugin: buf.build/protocolbuffers/go
+    out: contracts/gen/go
+    opt: paths=source_relative
+  - plugin: buf.build/protocolbuffers/python
+    out: contracts/gen/python
+  - plugin: buf.build/bufbuild/protoschema-jsonschema
+    out: contracts/gen/jsonschema

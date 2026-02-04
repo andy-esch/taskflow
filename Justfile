@@ -1,32 +1,45 @@
-# Universal Makefile for TaskFlow
+# TaskFlow Justfile
 
-.PHONY: all dev build-cli build-api test
+# Default recipe: build the CLI
+default: build-cli
 
-all: build-cli build-api
+# --- Protobuf ---
+
+# Generate code from protobuf definitions
+proto:
+	buf generate
 
 # --- Development ---
 
-dev:
-	@echo "Starting dev environment..."
+# Start the dev stack
+dev-up:
 	docker-compose -f dev/docker-compose.yml up -d
-	go run ./cmd/taskflow
+
+# Stop the dev stack
+dev-down:
+	docker-compose -f dev/docker-compose.yml down
 
 # --- Build ---
 
+# Build the Go CLI
 build-cli:
 	@echo "Building Go CLI..."
 	go build -o bin/taskflow ./cmd/taskflow
 
+# Build the Python API Docker image
 build-api:
 	@echo "Building Python API..."
 	cd services/semantic-engine && docker build -t taskflow-api .
 
 # --- Testing ---
 
+# Run all tests
 test: test-go test-python
 
+# Run Go tests
 test-go:
 	go test ./...
 
+# Run Python tests
 test-python:
 	cd services/semantic-engine && pytest

@@ -1,57 +1,39 @@
-# TaskFlow: AI-Native Project Management
+# TaskFlow
 
-**TaskFlow** is a local-first, AI-native project management tool designed to bridge the gap between human intuition and AI automation. It uses a flat-file Markdown structure as the source of truth, augmented by a local intelligence layer (JSON Index + Vector Database).
+**AI-Native Project Management**
 
-## 🚀 Mission
-To offload the cognitive load of project management (searching, correlating, prioritizing) from humans and LLMs onto a specialized, low-latency local tool.
+TaskFlow is a local-first tool that bridges the gap between human intuition and AI automation. It uses a flat-file Markdown structure as the source of truth, augmented by a local intelligence layer.
 
-## 🏗️ Architecture
+## 🗺 Map
 
-TaskFlow operates as a hybrid system:
+| Directory | Purpose |
+| :--- | :--- |
+| **[planning/](./planning/)** | **The Plan**. Epics, Tasks, and Research. |
+| **[contracts/](./contracts/)** | **Data Model**. The Single Source of Truth (Protobuf) for Tasks. |
+| `cmd/` | **The CLI**. Go-based TUI application. |
+| `services/` | **The Brain**. Python/FastAPI Semantic Engine. |
 
-### 1. The Storage Layer (Source of Truth)
-- **Markdown Files**: Git-native, human-readable files.
-    - `epics/`: Strategic themes.
-    - `tasks/`: Actionable units of work.
-    - `research/`: ADRs and technical spikes.
-- **Benefits**: Works with any editor, version controlled via Git, perfect "context" for LLMs.
+## 🚀 Quick Start
 
-### 2. The Intelligence Layer (Dockerized Service)
-A local `docker-compose` stack providing the "Brain":
-- **PostgreSQL + pgvector**: Stores task metadata and semantic embeddings.
-- **FastAPI / Go API**: Exposes endpoints for the CLI.
-- **Watcher Service**: Monitors file system events (`inotify`) to auto-update the index and vector store when Markdown files change.
-    - *Note*: No historical vector storage needed; current state is what matters.
+1.  **Install Tools**: Ensure you have `go`, `docker`, and `just` installed.
+2.  **Generate Contracts**:
+    ```bash
+    just proto
+    ```
+3.  **Build CLI**:
+    ```bash
+    just build-cli
+    ```
+4.  **Run**:
+    ```bash
+    ./bin/taskflow --help
+    ```
 
-### 3. The Interaction Layer (CLI)
-- **`taskflow` (Python CLI)**: The user interface.
-    - `taskflow list`: Fast queries via API.
-    - `taskflow related <task>`: Semantic search via vector store.
-    - `taskflow project start`: Interactive wizard for bundling tasks.
-    - `taskflow recommend`: Dynamic, context-aware suggestions.
+## 🛠 Development
 
-## 🌟 Core Features
+Use `just` to run common tasks:
 
-### Hybrid Indexing
-- **JSON Index (Fast)**: Immediate lookups for "Find all Tier 1 tasks".
-- **Vector Store (Smart)**: Semantic understanding for "Find tasks related to auth refactoring".
-
-### AI Collaboration
-- **Prompt-to-Task**: "Create a project for Q1 cleanup" -> Tool generates file stubs.
-- **Context Injection**: Tool can dump a compressed, highly relevant context summary for an LLM session to save tokens.
-
-### Workflow Automation
-- **Projects/Sprints**: Cross-cutting bundles of tasks defined by tags, not folders.
-- **Dynamic Recommendations**: "You just finished Task A; Task B is unblocked and high priority."
-
-## 🗺️ Implementation Plan
-
-We will bootstrap TaskFlow using TaskFlow (meta!).
-
-1.  **Phase 1: Core CLI & File System** (Porting `pm` script logic)
-2.  **Phase 2: Indexing Engine** (JSON State + File Watcher)
-3.  **Phase 3: Semantic Layer** (Docker + pgvector + Embeddings)
-4.  **Phase 4: API & Interaction** (The "App" experience)
-
----
-*This project is being incubated within `desirelines-planning` but is designed to be spun out as a standalone open-source tool.*
+- `just proto`: Regenerate code from Protobuf definitions.
+- `just build`: Build the CLI and API.
+- `just dev-up`: Start the local development stack (Database + API).
+- `just test`: Run the test suite.

@@ -1,0 +1,100 @@
+{
+  "$defs": {
+    "taskflow.v1.Task.jsonschema.strict.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Task is the primary unit of work in TaskFlow.",
+      "properties": {
+        "autonomyLevel": {
+          "description": "1-5 level of autonomy required (5 being fully autonomous)",
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "type": "integer"
+        },
+        "effort": {
+          "description": "Estimated effort (e.g., \"2-4 hours\", \"1 day\")",
+          "type": "string"
+        },
+        "epic": {
+          "description": "The ID of the Epic this task belongs to",
+          "type": "string"
+        },
+        "filePath": {
+          "description": "The Markdown file path relative to the repo root",
+          "type": "string"
+        },
+        "id": {
+          "description": "Unique identifier (usually derived from the filename)",
+          "type": "string"
+        },
+        "objective": {
+          "description": "The core objective/summary extracted from the Markdown body",
+          "type": "string"
+        },
+        "priority": {
+          "description": "Relative priority within the tier",
+          "enum": [
+            "PRIORITY_UNSPECIFIED",
+            "PRIORITY_LOW",
+            "PRIORITY_MEDIUM",
+            "PRIORITY_HIGH"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "project": {
+          "description": "Cross-cutting initiative or project name",
+          "type": "string"
+        },
+        "status": {
+          "description": "The current state of the task",
+          "enum": [
+            "STATUS_UNSPECIFIED",
+            "STATUS_READY_TO_START",
+            "STATUS_NEXT_UP",
+            "STATUS_IN_PROGRESS",
+            "STATUS_COMPLETED",
+            "STATUS_DEPRECATED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Semantic tags for grouping and search",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tier": {
+          "description": "Priority tier (1: Critical, 2: High, 3: Medium, 4: Low)",
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "type": "integer"
+        },
+        "title": {
+          "description": "Human-readable title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "epic",
+        "effort",
+        "tier",
+        "priority",
+        "project",
+        "autonomyLevel",
+        "filePath",
+        "objective"
+      ],
+      "title": "Task",
+      "type": "object"
+    }
+  },
+  "$id": "taskflow.v1.Task.jsonschema.strict.bundle.json",
+  "$ref": "#/$defs/taskflow.v1.Task.jsonschema.strict.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

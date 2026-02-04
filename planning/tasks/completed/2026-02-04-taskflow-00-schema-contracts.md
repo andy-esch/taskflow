@@ -1,11 +1,12 @@
 ---
-status: ready-to-start
+status: completed
 epic: taskflow-v1-core
 effort: 4-6 hours
 tier: 1
 priority: high
 project: taskflow-bootstrap
 tags: [architecture, protobuf, json-schema, contracts]
+completed_at: 2026-02-04
 ---
 
 # TaskFlow 00: Schema & Contracts Strategy

@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package taskflow.v1;
+
+option go_package = "github.com/andy-esch/taskflow/gen/go/taskflow/v1;taskflowv1";
+
+// Status represents the lifecycle of a task.
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_READY_TO_START = 1;
+  STATUS_NEXT_UP = 2;
+  STATUS_IN_PROGRESS = 3;
+  STATUS_COMPLETED = 4;
+  STATUS_DEPRECATED = 5;
+}
+
+// Priority defines the importance of a task within its tier.
+enum Priority {
+  PRIORITY_UNSPECIFIED = 0;
+  PRIORITY_LOW = 1;
+  PRIORITY_MEDIUM = 2;
+  PRIORITY_HIGH = 3;
+}
+
+// Task is the primary unit of work in TaskFlow.
+message Task {
+  // Unique identifier (usually derived from the filename)
+  string id = 1;
+
+  // Human-readable title
+  string title = 2;
+
+  // The current state of the task
+  Status status = 3;
+
+  // The ID of the Epic this task belongs to
+  string epic = 4;
+
+  // Estimated effort (e.g., "2-4 hours", "1 day")
+  string effort = 5;
+
+  // Priority tier (1: Critical, 2: High, 3: Medium, 4: Low)
+  int32 tier = 6;
+
+  // Relative priority within the tier
+  Priority priority = 7;
+
+  // Semantic tags for grouping and search
+  repeated string tags = 8;
+
+  // Cross-cutting initiative or project name
+  string project = 9;
+
+  // 1-5 level of autonomy required (5 being fully autonomous)
+  int32 autonomy_level = 10;
+
+  // The Markdown file path relative to the repo root
+  string file_path = 11;
+
+  // The core objective/summary extracted from the Markdown body
+  string objective = 12;
+}

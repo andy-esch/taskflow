@@ -12,7 +12,8 @@ import subprocess
 from pathlib import Path
 
 # Configuration
-PLANNING_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PLANNING_DIR = REPO_ROOT / "planning"
 TASKS_DIR = PLANNING_DIR / "tasks"
 EPICS_DIR = PLANNING_DIR / "epics"
 RECOMMENDATIONS_FILE = PLANNING_DIR / "RECOMMENDATIONS.md"

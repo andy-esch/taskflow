@@ -1,11 +1,12 @@
 ---
-status: ready-to-start
+status: completed
 epic: taskflow-v1-core
 effort: 2-4 hours
 tier: 1
 priority: high
 project: taskflow-bootstrap
 tags: [cli, python, architecture]
+completed_at: 2026-02-04
 ---
 
 # TaskFlow 01: CLI Skeleton (Go)

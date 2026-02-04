@@ -27,14 +27,14 @@ Transform the current `pm` script concept into a robust, dockerized application 
 
 ### Phase 0: Foundation (Monorepo & Standards)
 - `taskflow-00-monorepo-structure.md` - Pattern C (Hybrid Standard), single Go/Python modules.
-- `taskflow-00-schema-contracts.md` - Protobuf as source of truth.
+- `taskflow-00-schema-contracts.md` - ✅ [Implemented](./contracts/README.md). Protobuf as source of truth.
 - `taskflow-00-documentation-standards.md` - Definitions (Project vs Epic), Style Guide.
 - `taskflow-00-naming-and-terminology.md` - "Semantic Engine", "Fast Path".
 - `taskflow-00-cross-repo-context.md` - Config schema for split repositories.
 
 ### Phase 1: Core CLI & File System
-- `taskflow-01-cli-skeleton-go.md` - Cobra/Viper setup.
-- `taskflow-02-json-schema-design.md` - Scalable JSON index for 10k+ tasks.
+- `taskflow-01-cli-skeleton-go.md` - ✅ [Implemented](../../cmd/taskflow). Cobra/Viper setup.
+- `taskflow-02-json-schema-design.md` - ✅ [Implemented](../../internal/index). Scalable JSON index for 10k+ tasks.
 
 ### Phase 2: Intelligence Layer (Docker)
 - `taskflow-03-docker-infrastructure.md` - Postgres + pgvector setup.
