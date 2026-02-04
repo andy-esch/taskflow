@@ -1,0 +1,433 @@
+#!/usr/bin/env python3
+"""
+Project Management CLI for Desirelines
+"""
+
+import sys
+import argparse
+import datetime
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+# Configuration
+PLANNING_DIR = Path(__file__).resolve().parent.parent
+TASKS_DIR = PLANNING_DIR / "tasks"
+EPICS_DIR = PLANNING_DIR / "epics"
+RECOMMENDATIONS_FILE = PLANNING_DIR / "RECOMMENDATIONS.md"
+
+# Status Directories
+STATUS_DIRS = {
+    "next-up": TASKS_DIR / "next-up",
+    "ready-to-start": TASKS_DIR / "ready-to-start",
+    "in-progress": TASKS_DIR / "in-progress",
+    "completed": TASKS_DIR / "completed",
+    "deprecated": TASKS_DIR / "deprecated",
+}
+
+# --- Parsing Utils ---
+
+
+def parse_yaml_front_matter(content):
+    """
+    Robustly parses YAML front matter.
+    Returns a dict.
+    """
+    # CORRECT REGEX: No extra quotes inside the pattern string
+    match = re.match(r"^(---\n)(.*?)(\n---)", content, re.DOTALL)
+    if not match:
+        return {}
+
+    fm_str = match.group(1)
+    data = {}
+
+    for line in fm_str.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if ":" in line:
+            key, val = line.split(":", 1)
+            key = key.strip()
+            val = val.strip()
+
+            if val.startswith("[") and val.endswith("]"):
+                items = val[1:-1].split(",")
+                val = [item.strip() for item in items if item.strip()]
+
+            data[key] = val
+
+    return data
+
+
+def update_front_matter(content, updates):
+    """
+    Updates YAML front matter in the content string.
+    'updates' is a dict of key-value pairs to set.
+    """
+    # CORRECT REGEX: No extra quotes inside the pattern string
+    fm_match = re.match(r"^(---\n)(.*?)(\n---)", content, re.DOTALL)
+    if not fm_match:
+        new_fm = "---\n"
+        for k, v in updates.items():
+            new_fm += f"{k}: {v}\n"
+        new_fm += "---\n\n"
+        return new_fm + content
+
+    start_tag, fm_body, end_tag = fm_match.groups()
+    lines = fm_body.split("\n")
+    new_lines = []
+    keys_updated = set()
+
+    for line in lines:
+        if ":" in line:
+            parts = line.split(":", 1)
+            key = parts[0].strip()
+            if key in updates:
+                new_lines.append(f"{key}: {updates[key]}")
+                keys_updated.add(key)
+            else:
+                new_lines.append(line)
+        else:
+            new_lines.append(line)
+
+    for k, v in updates.items():
+        if k not in keys_updated:
+            new_lines.append(f"{k}: {v}")
+
+    return start_tag + "\n".join(new_lines) + end_tag + content[fm_match.end() :]
+
+
+def find_task(task_name):
+    """Finds a task file in any active directory."""
+    path_obj = Path(task_name)
+    if path_obj.exists(): return path_obj.resolve()
+    root_path = PLANNING_DIR / task_name
+    if root_path.exists(): return root_path
+    if "/" in task_name:
+        path = TASKS_DIR / task_name
+        if path.exists(): return path
+    for subdir in STATUS_DIRS.values():
+        path = subdir / task_name
+        if path.exists(): return path
+        path = subdir / f"{task_name}.md"
+        if path.exists(): return path
+    return None
+
+
+def get_all_tasks(include_completed=False, include_deprecated=False):
+    """Generator that yields metadata_dict for all tasks."""
+    dirs = ["next-up", "in-progress", "ready-to-start"]
+    if include_completed: dirs.append("completed")
+    if include_deprecated: dirs.append("deprecated")
+
+    for d in dirs:
+        dir_path = STATUS_DIRS[d]
+        if not dir_path.exists(): continue
+        for f in dir_path.glob("*.md"):
+            content = f.read_text(errors="ignore")
+            meta = parse_yaml_front_matter(content)
+            meta["_path"] = f
+            meta["_filename"] = f.name
+            meta["_status"] = d
+            meta["_content"] = content
+            yield meta
+
+
+# --- Commands ---
+
+
+def list_tasks(args):
+    include_completed = args.status in ["completed", "all"]
+    include_deprecated = args.status in ["deprecated", "all"]
+
+    tasks = list(get_all_tasks(include_completed, include_deprecated))
+    filtered_tasks = []
+    missing_autonomy_count = 0
+
+    for t in tasks:
+        if not t.get("autonomy_level"): missing_autonomy_count += 1
+        if args.status and args.status != "all" and t["_status"] != args.status: continue
+        if args.tag:
+            tags = t.get("tags", [])
+            if isinstance(tags, str): tags = [tags]
+            if args.tag not in tags: continue
+        if args.epic and t.get("epic") != args.epic: continue
+        if args.tier and str(t.get("tier")) != str(args.tier): continue
+        if args.priority and t.get("priority") != args.priority: continue
+        if args.autonomy and str(t.get("autonomy_level", "")) != str(args.autonomy): continue
+        if args.search:
+            needle = args.search.lower()
+            haystack = t.get("_filename", "") + t.get("_content", "")
+            if needle not in haystack.lower(): continue
+        if args.quick_wins:
+            tier = str(t.get("tier", "4"))
+            effort = t.get("effort", "").lower()
+            if not (tier in ["1", "2"] and ("min" in effort or "1 hour" in effort)): continue
+        filtered_tasks.append(t)
+
+    grouped = {}
+    for t in filtered_tasks:
+        s = t["_status"]
+        if s not in grouped: grouped[s] = []
+        grouped[s].append(t)
+
+    order = ["next-up", "in-progress", "ready-to-start", "completed", "deprecated"]
+    total_count = 0
+
+    fmt = "  {:<50} {:<6} {:<6} {:<6} {:<20}"
+    reset = "\033[0m"
+    bold = "\033[1m"
+    dim = "\033[37m" # Light Grey for better dark-background compatibility
+
+    for status in order:
+        if status not in grouped: continue
+        items = grouped[status]
+        items.sort(key=lambda x: str(x.get("tier", "9")))
+
+        emoji = {"next-up": "🚀", "in-progress": "🏃", "ready-to-start": "📋", "completed": "✅", "deprecated": "🗑️"}.get(status, "•")
+        print(f"\n{emoji}  {bold}\033[4m{status.upper().replace('-', ' ')}{reset} ({len(items)})")
+        print(f"  {bold}{fmt.format('TASK', 'TIER', 'PRIO', 'AUTO', 'EFFORT')}{reset}")
+        print(f"  {dim}{fmt.format('-'*50, '----', '----', '----', '-'*20)}{reset}")
+
+        for t in items:
+            total_count += 1
+            if args.limit and total_count > args.limit:
+                print(f"  ... and {len(filtered_tasks) - args.limit} more")
+                return
+
+            tier_val = str(t.get("tier", "?"))
+            prio_val = t.get("priority", "?")[0].upper() if t.get("priority") else "?"
+            auto_val = str(t.get("autonomy_level", "?"))
+            effort_val = t.get("effort", "")[:20]
+
+            tier_color = "\033[91m" if tier_val == "1" else "\033[93m" if tier_val == "2" else ""
+            auto_color = "\033[92m" if auto_val == "5" else "\033[94m" if auto_val == "4" else ""
+
+            print(fmt.format(t['_filename'][:50], tier_color + tier_val + reset, prio_val, auto_color + auto_val + reset, effort_val))
+
+    if total_count == 0: print("No tasks found matching filters.")
+    if missing_autonomy_count > 0: print(f"\n\033[93m⚠️  {missing_autonomy_count} tasks are missing 'autonomy_level'. Run 'pm validate' to check.{reset}")
+
+
+def show_stats(args):
+    tasks = list(get_all_tasks(include_completed=True, include_deprecated=True))
+    stats = {"total": len(tasks), "by_status": {}, "by_epic": {}, "by_tier": {}, "by_autonomy": {}, "missing_autonomy": 0}
+    for t in tasks:
+        stats["by_status"][t["_status"]] = stats["by_status"].get(t["_status"], 0) + 1
+        stats["by_epic"][t.get("epic", "unknown")] = stats["by_epic"].get(t.get("epic", "unknown"), 0) + 1
+        tr = str(t.get("tier", "unknown"))
+        stats["by_tier"][tr] = stats["by_tier"].get(tr, 0) + 1
+        auto = str(t.get("autonomy_level", "unknown"))
+        stats["by_autonomy"][auto] = stats["by_autonomy"].get(auto, 0) + 1
+        if auto == "unknown": stats["missing_autonomy"] += 1
+
+    print(f"\n📊 \033[1mPROJECT STATISTICS\033[0m\nTotal Tasks: {stats['total']}")
+    print("\n\033[1mBy Status:\033[0m")
+    for k, v in stats["by_status"].items(): print(f"  {k:<15} {v}")
+    print("\n\033[1mBy Tier:\033[0m")
+    for k in sorted(stats["by_tier"].keys()): print(f"  Tier {k:<10} {stats['by_tier'][k]}")
+    print("\n\033[1mBy Autonomy:\033[0m")
+    for k in sorted(stats["by_autonomy"].keys()):
+        label = "Unknown" if k == "unknown" else f"Level {k}"
+        print(f"  {label:<10} {stats['by_autonomy'][k]}")
+    print("\n\033[1mBy Epic:\033[0m")
+    for k, v in sorted(stats["by_epic"].items()): print(f"  {k:<35} {v}")
+
+
+def get_valid_epics():
+    return [f.name.replace('.md', '') for f in EPICS_DIR.glob('*.md')] if EPICS_DIR.exists() else []
+
+def validate_tasks(args):
+    print("\n🔍 \033[1mVALIDATING TASKS\033[0m")
+    tasks = list(get_all_tasks(include_completed=False))
+    valid_epics = get_valid_epics()
+    issues = 0
+    for t in tasks:
+        local_issues = []
+        if not t.get("epic"): local_issues.append("Missing 'epic'")
+        elif valid_epics and t.get("epic") not in valid_epics: local_issues.append(f"Invalid epic ID: {t.get('epic')}")
+        if not t.get("tier"): local_issues.append("Missing 'tier'")
+        if not t.get("effort"): local_issues.append("Missing 'effort'")
+        if not t.get("autonomy_level"): local_issues.append("Missing 'autonomy_level'")
+        if t.get("epic") and not re.match(r"^\d{2}-", t.get("epic")):
+            local_issues.append(f"Invalid epic format: {t.get('epic')}")
+        if local_issues:
+            issues += 1
+            print(f"\n❌ {t['_filename']} ({t['_status']})")
+            for i in local_issues: print(f"   - {i}")
+    print(f"\n{'✅ All active tasks are valid!' if issues == 0 else f'Found issues in {issues} tasks.'}")
+
+def project_list(args):
+    tasks = list(get_all_tasks(include_completed=False))
+    projects = {}
+    for t in tasks:
+        p = t.get('project')
+        if p:
+            if p not in projects: projects[p] = []
+            projects[p].append(t)
+    if not projects:
+        print("No active projects found. Use './bin/pm project start <name>' to create one.")
+        return
+    print("\n🚀 \033[1mACTIVE PROJECTS\033[0m")
+    for p, p_tasks in projects.items():
+        print(f"\n📁 \033[1m{p}\033[0m ({len(p_tasks)} tasks)")
+        for t in p_tasks:
+            icon = "🏃" if t['_status'] == 'in-progress' else "•"
+            print(f"  {icon} {t['_filename']}")
+
+def project_start(args):
+    print(f"\n🚀 \033[1mInitializing Project: {args.name}\033[0m\n\n🔎 \033[1mStep 1: Add Existing Tasks\033[0m")
+    keyword = input("   Search keyword (or 'all', enter to skip): ").strip()
+    if keyword:
+        all_tasks = list(get_all_tasks(include_completed=False))
+        matches = all_tasks if keyword.lower() == 'all' else [t for t in all_tasks if keyword.lower() in t['_filename'].lower() or keyword.lower() in t.get('tags', [])]
+        if matches:
+            for i, t in enumerate(matches): print(f"   [{i+1}] {t['_filename']} (Epic: {t.get('epic')})")
+            sel = input("\n   Enter numbers to add (comma separated): ").strip()
+            if sel:
+                for idx in [int(x.strip()) - 1 for x in sel.split(',') if x.strip().isdigit()]:
+                    if 0 <= idx < len(matches):
+                        task = matches[idx]
+                        task['_path'].write_text(update_front_matter(task['_path'].read_text(), {'project': args.name}))
+                        git_add(task['_path'])
+                        print(f"   ✅ Added {task['_filename']}")
+    print("\n✨ \033[1mStep 2: Create New Tasks\033[0m\n   Enter details. Leave title empty to finish.")
+    while True:
+        title = input("\n   Title: ").strip()
+        if not title: break
+        epic, effort = input("   Epic ID (default: 00-misc): ").strip(), input("   Effort: ").strip()
+        filename = f"{title.lower().replace(' ', '-')}.md"
+        path = STATUS_DIRS['ready-to-start'] / filename
+        if path.exists(): print(f"   ❌ File exists: {filename}"); continue
+        path.write_text(f"---\nstatus: ready-to-start\nepic: {epic or '00-misc'}\neffort: {effort or 'Unknown'}\ntier: 2\npriority: medium\nproject: {args.name}\nautonomy_level: 3\ntags: []\n---\n\n# {title}\n\n## Objective\n{title}\n\n## Implementation Plan\n- [ ] TBD\n")
+        git_add(path); print(f"   ✅ Created {filename}")
+    print(f"\n🎉 Project {args.name} setup complete!")
+
+def git_add(path):
+    try: subprocess.run(["git", "add", str(path)], check=True, cwd=PLANNING_DIR, capture_output=True)
+    except subprocess.CalledProcessError: pass
+
+def move_file(old_path, new_path):
+    if old_path.resolve() == new_path.resolve(): return
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        is_tracked = subprocess.run(["git", "ls-files", "--error-unmatch", str(old_path)], capture_output=True, cwd=PLANNING_DIR).returncode == 0
+        if not is_tracked:
+            if subprocess.run(["git", "add", str(old_path)], capture_output=True, cwd=PLANNING_DIR).returncode == 0: is_tracked = True
+        if is_tracked:
+            subprocess.run(["git", "mv", str(old_path), str(new_path)], check=True, cwd=PLANNING_DIR, capture_output=True)
+            return
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError): pass
+    old_path.rename(new_path)
+
+def start_task(args):
+    path = find_task(args.task)
+    if not path: print(f"❌ Task not found: {args.task}"); return
+    print(f"🚀 Starting task: {path.name}")
+    new_content = update_front_matter(path.read_text(), {"status": "in-progress"})
+    target_path = STATUS_DIRS["in-progress"] / path.name
+    if target_path.exists() and target_path.resolve() != path.resolve(): print(f"⚠️  Already exists: {target_path}"); return
+    path.write_text(new_content)
+    if path.resolve() != target_path.resolve(): move_file(path, target_path)
+    git_add(target_path); print(f"✅ Started!")
+
+def complete_task(args):
+    path = find_task(args.task)
+    if not path: print(f"❌ Task not found: {args.task}"); return
+    print(f"🎉 Completing task: {path.name}")
+    content = path.read_text()
+    today = datetime.date.today().isoformat()
+    new_content = update_front_matter(content, {"status": "completed", "completed_at": today})
+    target_dir = STATUS_DIRS["completed"]
+    new_filename = f"{today}-{path.name}" if not path.name.startswith(today) else path.name
+    target_path = target_dir / new_filename
+    if target_path.exists() and target_path.resolve() != path.resolve(): print(f"⚠️  Already exists: {target_path}"); return
+    path.write_text(new_content)
+    if path.resolve() != target_path.resolve(): move_file(path, target_path)
+    git_add(target_path); print(f"✅ Completed!")
+    if args.recommend: generate_recommendations(args)
+
+def new_task(args):
+    slug = args.title.lower().replace(" ", "-") + ".md"
+    target_dir = STATUS_DIRS["next-up"] if args.next else STATUS_DIRS["ready-to-start"]
+    path = target_dir / slug
+    if path.exists(): print(f"❌ Exists: {path}"); return
+    path.write_text(f"---\nstatus: {target_dir.name}\nepic: {args.epic}\neffort: {args.effort}\ntier: {args.tier}\npriority: {args.priority}\nautonomy_level: 3\ntags: []\n---\n\n# {args.title}\n\n## Objective\n{args.title}\n\n## Implementation Plan\n- [ ] TBD\n")
+    git_add(path); print(f"✅ Created: {path}")
+
+def generate_recommendations(args):
+    print("🔄 Generating RECOMMENDATIONS.md...")
+    tasks = list(get_all_tasks(include_completed=False))
+    tasks.sort(key=lambda t: (0 if t['_status'] == 'next-up' else 1, int(t.get('tier', 9))))
+    lines = ["# 🎯 Recommended Focus\n", f"Generated on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n", "## 🚀 Next Up\n"]
+    for t in [t for t in tasks if t['_status'] == 'next-up']: lines.append(f"- **{t['_filename']}** (Tier {t.get('tier')} | A{t.get('autonomy_level', '?')})")
+    lines.append("\n## 📋 Top Ready Candidates\n")
+    for t in [t for t in tasks if t['_status'] == 'ready-to-start' and int(t.get('tier', 9)) <= 2][:10]: lines.append(f"- {t['_filename']} (Tier {t.get('tier')} | A{t.get('autonomy_level', '?')})")
+    RECOMMENDATIONS_FILE.write_text("\n".join(lines)); print(f"✅ Updated {RECOMMENDATIONS_FILE}")
+
+def deprecate_task(args):
+    path = find_task(args.task)
+    if not path: print(f"❌ Task not found: {args.task}"); return
+    print(f"🗑️  Deprecating task: {path.name}")
+    content = path.read_text()
+    today = datetime.date.today().isoformat()
+    new_content = update_front_matter(content, {"status": "deprecated", "deprecated_at": today})
+    target_dir = STATUS_DIRS["deprecated"]
+    new_filename = f"{today}-{path.name}" if not path.name.startswith(today) else path.name
+    target_path = target_dir / new_filename
+    if target_path.exists() and target_path.resolve() != path.resolve(): print(f"⚠️  Already exists: {target_path}"); return
+    path.write_text(new_content)
+    if path.resolve() != target_path.resolve(): move_file(path, target_path)
+    git_add(target_path); print(f"✅ Deprecated!")
+
+def move_to_next(args):
+    path = find_task(args.task)
+    if not path: print(f"❌ Task not found: {args.task}"); return
+    print(f"🚀 Moving task to Next Up: {path.name}")
+    new_content = update_front_matter(path.read_text(), {"status": "next-up"})
+    target_path = STATUS_DIRS["next-up"] / path.name
+    if target_path.exists() and target_path.resolve() != path.resolve(): print(f"⚠️  Already exists: {target_path}"); return
+    path.write_text(new_content)
+    if path.resolve() != target_path.resolve(): move_file(path, target_path)
+    git_add(target_path); print(f"✅ Moved to Next Up!")
+
+def main():
+    parser = argparse.ArgumentParser(description="Desirelines Project Manager")
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+    proj_parser = subparsers.add_parser("project")
+    proj_subparsers = proj_parser.add_subparsers(dest="project_command")
+    proj_subparsers.add_parser("start").add_argument("name")
+    proj_subparsers.add_parser("list")
+    list_parser = subparsers.add_parser("list")
+    list_parser.add_argument("--all", action="store_true")
+    list_parser.add_argument("--status", choices=["next-up", "in-progress", "ready-to-start", "completed", "deprecated", "all"])
+    list_parser.add_argument("--tag"); list_parser.add_argument("--epic"); list_parser.add_argument("--tier"); list_parser.add_argument("--priority"); list_parser.add_argument("--autonomy"); list_parser.add_argument("--search")
+    list_parser.add_argument("--quick-wins", action="store_true"); list_parser.add_argument("--limit", type=int, default=50)
+    subparsers.add_parser("stats"); subparsers.add_parser("recommend"); subparsers.add_parser("validate")
+    subparsers.add_parser("start").add_argument("task")
+    subparsers.add_parser("next").add_argument("task")
+    complete_parser = subparsers.add_parser("complete")
+    complete_parser.add_argument("task")
+    complete_parser.add_argument("--recommend", action="store_true")
+    subparsers.add_parser("deprecate").add_argument("task")
+    new_parser = subparsers.add_parser("new")
+    new_parser.add_argument("title"); new_parser.add_argument("--epic", required=True); new_parser.add_argument("--effort", default="Unknown"); new_parser.add_argument("--tier", default="3"); new_parser.add_argument("--priority", default="medium"); new_parser.add_argument("--next", action="store_true")
+    args = parser.parse_args()
+    if args.command == "project":
+        if args.project_command == "start": project_start(args)
+        elif args.project_command == "list": project_list(args)
+    elif args.command == "list": list_tasks(args)
+    elif args.command == "stats": show_stats(args)
+    elif args.command == "recommend": generate_recommendations(args)
+    elif args.command == "validate": validate_tasks(args)
+    elif args.command == "start": start_task(args)
+    elif args.command == "next": move_to_next(args)
+    elif args.command == "complete": complete_task(args)
+    elif args.command == "deprecate": deprecate_task(args)
+    elif args.command == "new": new_task(args)
+    else: list_tasks(parser.parse_args(["list"]))
+
+if __name__ == "__main__":
+    main()
