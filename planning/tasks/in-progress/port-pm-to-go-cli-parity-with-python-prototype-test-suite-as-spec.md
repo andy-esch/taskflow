@@ -203,6 +203,18 @@ high-value-cheap batch (lint + all tests green; `Move` re-smoke-tested):
   verified it fails without the fix. Plus a `--set key=value` round-trip test
   (T2) covering the riskiest untouched write path.
 
+**2026-06-08 — removed vestigial proto layer.** The spike's protobuf
+"contract" (`contracts/` — `task.proto` + generated Go/Python/JSON-schema, root
+`buf.yaml`/`buf.gen.yaml`) and its only consumer (`internal/index/`, the dead
+JSON fast-index) were leftovers, imported by nothing in the live binary — the
+real Task contract is the hand-written `internal/domain` struct over real YAML.
+Deleted both, dropped the now-unused `google.golang.org/protobuf` dep
+(`go mod tidy`), and rewrote the stale spike-era `README.md` (which advertised
+`contracts/` as the protobuf source of truth + non-existent `just proto`/
+`dev-up` recipes). `go build/vet/test ./...` + lint green. Still-vestigial spike
+dirs left in place pending a call: `services/` (Python "brain") and
+`internal/tui/` (Bubble Tea sketch — to be rebuilt over the current `core`).
+
 **Documented, deliberately deferred (review findings, not yet actioned):**
 - *Polish (low):* audit finding regexes over-match — `#### CODE.` inside a
   fenced code block is counted, and `**Status:** open-ish` matches via `\b`
