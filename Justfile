@@ -1,45 +1,40 @@
-# TaskFlow Justfile
+# taskflow Justfile — tskflwctl (Go CLI)
+# The main package lives at ./cmd/tskflwctl (standard Go layout), so use
+# `just build` / `just run ...` rather than `go build .` at the repo root.
 
-# Default recipe: build the CLI
-default: build-cli
+# Default: build the CLI
+default: build
 
-# --- Protobuf ---
+# Build the binary to ./bin/tskflwctl
+build:
+	@echo "Building tskflwctl → bin/tskflwctl"
+	go build -o bin/tskflwctl ./cmd/tskflwctl
 
-# Generate code from protobuf definitions
-proto:
-	buf generate
+# Run without installing: `just run task list --json`
+run *ARGS:
+	go run ./cmd/tskflwctl {{ARGS}}
 
-# --- Development ---
+# Install onto $GOBIN / $GOPATH/bin (so `tskflwctl` is on PATH)
+install:
+	go install ./cmd/tskflwctl
 
-# Start the dev stack
-dev-up:
-	docker-compose -f dev/docker-compose.yml up -d
-
-# Stop the dev stack
-dev-down:
-	docker-compose -f dev/docker-compose.yml down
-
-# --- Build ---
-
-# Build the Go CLI
-build-cli:
-	@echo "Building Go CLI..."
-	go build -o bin/taskflow ./cmd/taskflow
-
-# Build the Python API Docker image
-build-api:
-	@echo "Building Python API..."
-	cd services/semantic-engine && docker build -t taskflow-api .
-
-# --- Testing ---
-
-# Run all tests
-test: test-go test-python
-
-# Run Go tests
-test-go:
+# Run tests
+test:
 	go test ./...
 
-# Run Python tests
-test-python:
-	cd services/semantic-engine && pytest
+# Lint (golangci-lint)
+lint:
+	golangci-lint run ./...
+
+# Format Go sources + tidy lint formatting
+fmt:
+	gofmt -w cmd internal
+	golangci-lint fmt ./... || true
+
+# Tidy modules
+tidy:
+	go mod tidy
+
+# Clean build artifacts
+clean:
+	rm -rf bin

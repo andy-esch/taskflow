@@ -1,11 +1,14 @@
 ---
-status: ready-to-start
+status: deprecated
 epic: taskflow-v1-core
 effort: 4-6 hours
 tier: 1
 priority: high
 project: taskflow-bootstrap
 tags: [python, fastapi, docker, api]
+deprecated_at: 2026-06-07
+deprecated_reason: Superseded by the scoped tskflwctl design (epic 17-pm-go-cli); old over-ambitious taskflow vision (docker/api/semantic/AI-gen) retired 2026-06-07. Research mined + kept.
+updated_at: 2026-06-07
 ---
 
 # TaskFlow 04: API Layer (Python)

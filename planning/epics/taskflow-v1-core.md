@@ -1,7 +1,21 @@
-# Epic: TaskFlow v1 Core
+---
+status: archived
+description: SUPERSEDED by 17-pm-go-cli — original over-ambitious taskflow vision (docker/pgvector/semantic/AI). Kept for history.
+created: 2026-02-04
+tags: [pm-tooling, archived, superseded]
+---
 
-**Status**: Planning
-**Goal**: Build the MVP of TaskFlow, a local-first, AI-native project management tool.
+# Epic: TaskFlow v1 Core — ⛔ SUPERSEDED
+
+> **Superseded 2026-06-07 by [[17-pm-go-cli]]** (`planning/epics/17-pm-go-cli.md`).
+> This was the original, over-ambitious vision (Dockerized semantic engine,
+> pgvector, MCP, AI generation). The scoped design — CLI-first, single static
+> binary, **no intelligence layer** — lives in **17-pm-go-cli** + the
+> `planning/research/2026-06-06-*` docs. The 9 active tasks here were
+> deprecated 2026-06-07; the 4 completed ones remain as history below.
+
+**Status**: Archived (superseded)
+**Goal (original)**: Build the MVP of TaskFlow, a local-first, AI-native project management tool.
 
 ## Scope
 Transform the current `pm` script concept into a robust, dockerized application with semantic search capabilities and AI automation.

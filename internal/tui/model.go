@@ -35,7 +35,7 @@ func (m Model) View() string {
 	if m.quitting {
 		return "Bye!\n"
 	}
-	
+
 	style := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#FAFAFA")).
@@ -51,4 +51,3 @@ func (m Model) View() string {
 		"Press 'q' to quit.",
 	)
 }
-

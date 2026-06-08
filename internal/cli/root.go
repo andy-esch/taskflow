@@ -1,24 +1,74 @@
+// Package cli is the primary adapter: the cobra command tree over the core.
+// A future TUI is a second primary adapter over the same core.
 package cli
 
 import (
-	"context"
+	"fmt"
+	"io"
+	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/store"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "taskflow",
-	Short: "AI-Native Project Management",
-	Long: `TaskFlow is a local-first project management tool designed 
-to bridge the gap between human intuition and AI automation.`,
-	// Run: func(cmd *cobra.Command, args []string) { }, 
+// App is the dependency container. It is created empty by NewRootCmd and
+// populated lazily in PersistentPreRunE — after flags are parsed, since deps
+// (config, service) depend on flags like --chdir.
+type App struct {
+	Out    io.Writer
+	ErrOut io.Writer
+
+	JSON  bool
+	Chdir string
+
+	Cfg *config.Config
+	Svc *core.Service
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-func Execute(ctx context.Context) error {
-	return rootCmd.ExecuteContext(ctx)
+// NewRootCmd builds the command tree with explicit DI — no package globals.
+// All output flows through the injected writers, which makes commands testable.
+func NewRootCmd(out, errOut io.Writer) *cobra.Command {
+	app := &App{Out: out, ErrOut: errOut}
+
+	root := &cobra.Command{
+		Use:           "tskflwctl",
+		Short:         "Local-first planning CLI (tasks, epics, audits) over markdown",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			return app.resolve()
+		},
+	}
+	root.PersistentFlags().BoolVar(&app.JSON, "json", false, "machine-readable JSON output")
+	root.PersistentFlags().StringVarP(&app.Chdir, "chdir", "C", "", "anchor to the planning repo at this path")
+
+	root.AddCommand(newInitCmd(app))
+	root.AddCommand(newTaskCmd(app))
+	root.AddCommand(newEpicCmd(app))
+	root.AddCommand(newAuditCmd(app))
+	root.AddCommand(newLintCmd(app))
+	return root
 }
 
-func init() {
-	// Global flags can be defined here
+// resolve discovers the planning repo and constructs the service. Runs once,
+// after flag parsing, before any subcommand's RunE (the lazy App shell).
+func (a *App) resolve() error {
+	start := a.Chdir
+	if start == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("getwd: %w", err)
+		}
+		start = wd
+	}
+	cfg, err := config.Discover(start)
+	if err != nil {
+		return err
+	}
+	a.Cfg = cfg
+	a.Svc = core.NewService(store.NewFS(cfg.Root))
+	return nil
 }

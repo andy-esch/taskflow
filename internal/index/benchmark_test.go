@@ -37,9 +37,9 @@ func BenchmarkIndexLoad(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to marshal: %v", err)
 	}
-	
+
 	b.Logf("JSON Size: %.2f MB", float64(len(data))/(1024*1024))
-	
+
 	b.ResetTimer()
 
 	// 2. Measure: Unmarshal repeatedly

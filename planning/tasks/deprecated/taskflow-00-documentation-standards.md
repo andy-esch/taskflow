@@ -1,11 +1,14 @@
 ---
-status: ready-to-start
+status: deprecated
 epic: taskflow-v1-core
 effort: 2-3 hours
 tier: 2
 priority: high
 project: taskflow-bootstrap
 tags: [documentation, standards, process]
+deprecated_at: 2026-06-07
+deprecated_reason: Superseded by the scoped tskflwctl design (epic 17-pm-go-cli); old over-ambitious taskflow vision (docker/api/semantic/AI-gen) retired 2026-06-07. Research mined + kept.
+updated_at: 2026-06-07
 ---
 
 # TaskFlow 00: Documentation Standards & Style Guide

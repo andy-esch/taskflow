@@ -1,0 +1,20 @@
+# Foundation lint config. Enables golangci-lint's standard set (errcheck,
+# govet, ineffassign, staticcheck, unused). Tightening to full impl-repo parity
+# (gosec, wrapcheck, nolintlint) is a tracked follow-up — those need per-call
+# annotations the scaffold doesn't carry yet.
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      # CLI output writes (to stdout/stderr) have no actionable error path.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
