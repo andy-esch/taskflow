@@ -7,8 +7,45 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// fakeStore is an in-memory Store for pure core unit tests.
+// nopStore is a no-op core.Store: every method returns zero values. Tests embed
+// it and override only the handful they exercise — so adding a Store method
+// updates exactly one place, not every fake. The assertion below makes that a
+// build error if nopStore ever falls out of sync with the port.
+type nopStore struct{}
+
+var _ Store = nopStore{}
+
+func (nopStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) { return nil, nil, nil }
+func (nopStore) GetTask(string) (domain.Task, string, error) {
+	return domain.Task{}, "", domain.ErrNotFound
+}
+func (nopStore) Move(string, domain.Status, time.Time) (domain.Task, error) {
+	return domain.Task{}, nil
+}
+func (nopStore) SetFields(string, map[string]any) (domain.Task, error) { return domain.Task{}, nil }
+func (nopStore) CreateTask(domain.Task, string) (domain.Task, error)   { return domain.Task{}, nil }
+func (nopStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
+	return nil, nil, nil
+}
+func (nopStore) GetEpic(string) (domain.Epic, string, error) {
+	return domain.Epic{}, "", domain.ErrNotFound
+}
+func (nopStore) CreateEpic(string, domain.Epic, string) (domain.Epic, error) {
+	return domain.Epic{}, nil
+}
+func (nopStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) { return nil, nil, nil }
+func (nopStore) GetAudit(string) (domain.Audit, string, error) {
+	return domain.Audit{}, "", domain.ErrNotFound
+}
+func (nopStore) MoveAudit(string, domain.AuditBucket) (domain.Audit, error) {
+	return domain.Audit{}, nil
+}
+func (nopStore) FixFrontmatter(bool) ([]domain.FixResult, error) { return nil, nil }
+
+// fakeStore is an in-memory Store for pure core unit tests; it overrides only
+// the read/create methods its tests touch (the rest come from nopStore).
 type fakeStore struct {
+	nopStore
 	tasks   []domain.Task
 	epics   []domain.Epic
 	created []domain.Task // tasks passed to CreateTask
@@ -25,32 +62,12 @@ func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 	}
 	return domain.Task{}, "", domain.ErrNotFound
 }
-func (f *fakeStore) Move(string, domain.Status, time.Time) (domain.Task, error) {
-	return domain.Task{}, nil
-}
-func (f *fakeStore) SetFields(string, map[string]any) (domain.Task, error) {
-	return domain.Task{}, nil
-}
 func (f *fakeStore) CreateTask(t domain.Task, _ string) (domain.Task, error) {
 	f.created = append(f.created, t)
 	return t, nil
 }
-func (f *fakeStore) CreateEpic(slug string, e domain.Epic, _ string) (domain.Epic, error) {
-	e.ID = "01-" + slug
-	return e, nil
-}
 func (f *fakeStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return f.epics, nil, nil
-}
-func (f *fakeStore) FixFrontmatter(bool) ([]domain.FixResult, error) { return nil, nil }
-func (f *fakeStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
-	return nil, nil, nil
-}
-func (f *fakeStore) GetAudit(string) (domain.Audit, string, error) {
-	return domain.Audit{}, "", domain.ErrNotFound
-}
-func (f *fakeStore) MoveAudit(string, domain.AuditBucket) (domain.Audit, error) {
-	return domain.Audit{}, nil
 }
 func (f *fakeStore) GetEpic(id string) (domain.Epic, string, error) {
 	for _, e := range f.epics {

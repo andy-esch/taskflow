@@ -44,8 +44,11 @@ func LintTask(t Task, validEpic func(string) bool) []Issue {
 	if t.Effort == "" {
 		add("effort", "missing")
 	}
-	if t.Created == "" {
+	switch {
+	case t.Created == "":
 		add("created", "missing")
+	case ValidateDate(t.Created) != nil:
+		add("created", "must be YYYY-MM-DD")
 	}
 	if len(t.Tags) == 0 {
 		add("tags", "missing")
@@ -62,5 +65,20 @@ func LintTask(t Task, validEpic func(string) bool) []Issue {
 		add("description", fmt.Sprintf("too long (%d > %d)", len(t.Description), MaxDescriptionLen))
 	}
 
+	issues = append(issues, MisfiledIssues(t)...)
 	return issues
+}
+
+// MisfiledIssues reports the status/folder mismatch for a task, if any. It is
+// separate from the active-only field checks so archived tasks (completed/…)
+// can still be flagged for drift without nagging about missing fields.
+func MisfiledIssues(t Task) []Issue {
+	if !t.Misfiled() {
+		return nil
+	}
+	return []Issue{{
+		Field: "status",
+		Message: fmt.Sprintf("frontmatter says %q but file is in %s/ — folder wins; `lint --fix` realigns it",
+			t.Declared, t.Status),
+	}}
 }

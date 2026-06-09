@@ -183,7 +183,12 @@ func (s *FS) resolve(slug string) (path string, status domain.Status, err error)
 	case 1:
 		return paths[0], statuses[0], nil
 	default:
-		return "", "", fmt.Errorf("%q matches %d tasks: %w", slug, len(paths), domain.ErrAmbiguous)
+		where := make([]string, len(statuses))
+		for i, st := range statuses {
+			where[i] = string(st)
+		}
+		return "", "", fmt.Errorf("%q matches %d tasks (in %s): %w",
+			slug, len(paths), strings.Join(where, ", "), domain.ErrAmbiguous)
 	}
 }
 
@@ -195,9 +200,11 @@ func parseTask(content []byte, path string, dirStatus domain.Status) (domain.Tas
 			return domain.Task{}, fmt.Errorf("%w: %s", errBadFrontmatter, frontmatterError(fm, err))
 		}
 	}
-	if !t.Status.Valid() {
-		t.Status = dirStatus // directory is the source of truth
-	}
+	// The directory is the source of truth for status — always. The frontmatter
+	// value is kept as Declared so drift (a misfiled file) can be surfaced, but
+	// it never overrides where the file physically lives.
+	t.Declared = t.Status
+	t.Status = dirStatus
 	t.Slug = strings.TrimSuffix(filepath.Base(path), ".md")
 	t.Path = path
 	return t, nil

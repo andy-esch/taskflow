@@ -9,6 +9,9 @@ func TestSlugify(t *testing.T) {
 		"Add create verbs (task new and epic new)":      "add-create-verbs-task-new-and-epic-new",
 		"UPPER/Mixed Case":                              "uppermixed-case",
 		"--leading and trailing--":                      "leading-and-trailing",
+		`a:b\c*d?e<f>g|h"i/j`:                           "abcdefghij", // Windows-invalid chars stripped
+		"Done.":                                         "done",       // no trailing dot (Windows-unsafe)
+		"...dots...":                                    "dots",
 	}
 	for in, want := range cases {
 		if got := Slugify(in); got != want {

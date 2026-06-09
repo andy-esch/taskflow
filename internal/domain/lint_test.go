@@ -45,6 +45,36 @@ func TestLintTask_UnknownEpic(t *testing.T) {
 	}
 }
 
+func TestLintTask_BadDate(t *testing.T) {
+	task := cleanTask()
+	task.Created = "yesterday" // present but not YYYY-MM-DD
+	issues := LintTask(task, func(string) bool { return true })
+	found := false
+	for _, i := range issues {
+		if i.Field == "created" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a malformed-date 'created' issue, got %+v", issues)
+	}
+}
+
+func TestMisfiledIssues(t *testing.T) {
+	// A recognized status that disagrees with the folder is flagged.
+	if got := MisfiledIssues(Task{Status: StatusCompleted, Declared: StatusReadyToStart}); len(got) == 0 {
+		t.Error("expected a misfiled issue for ready-to-start in completed/")
+	}
+	// A foreign/legacy status word is tolerated (folder governs).
+	if got := MisfiledIssues(Task{Status: StatusCompleted, Declared: Status("superseded")}); len(got) != 0 {
+		t.Errorf("foreign status should not be flagged: %+v", got)
+	}
+	// Agreement is clean.
+	if got := MisfiledIssues(Task{Status: StatusCompleted, Declared: StatusCompleted}); len(got) != 0 {
+		t.Errorf("matching status should not be flagged: %+v", got)
+	}
+}
+
 func TestLintTask_BadConstraints(t *testing.T) {
 	task := cleanTask()
 	task.Tier = 9

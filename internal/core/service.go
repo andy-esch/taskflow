@@ -28,12 +28,6 @@ type TaskFilter struct {
 	All    bool
 }
 
-var activeStatuses = map[domain.Status]bool{
-	domain.StatusNextUp:       true,
-	domain.StatusReadyToStart: true,
-	domain.StatusInProgress:   true,
-}
-
 // ListTasks returns tasks matching the filter, plus any per-file load problems.
 // Filtering is pure (no I/O).
 func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, error) {
@@ -44,7 +38,7 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 	activeOnly := f.Status == "" && !f.All
 	out := make([]domain.Task, 0, len(all))
 	for _, t := range all {
-		if activeOnly && !activeStatuses[t.Status] {
+		if activeOnly && !t.Status.IsActive() {
 			continue
 		}
 		if f.Status != "" && string(t.Status) != f.Status {
@@ -138,15 +132,17 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	if !epicExists(epics, p.Epic) {
 		return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, p.Epic)
 	}
-	for field, val := range map[string]string{
-		"priority":       p.Priority,
-		"tier":           strconv.Itoa(p.Tier),
-		"autonomy_level": strconv.Itoa(p.Autonomy),
-		"description":    p.Description,
-	} {
-		if err := domain.ValidateField(field, val); err != nil {
-			return domain.Task{}, err
-		}
+	if err := domain.ValidatePriority(p.Priority); err != nil {
+		return domain.Task{}, err
+	}
+	if err := domain.ValidateTier(p.Tier); err != nil {
+		return domain.Task{}, err
+	}
+	if err := domain.ValidateAutonomy(p.Autonomy); err != nil {
+		return domain.Task{}, err
+	}
+	if err := domain.ValidateDescription(p.Description); err != nil {
+		return domain.Task{}, err
 	}
 	slug := domain.Slugify(p.Title)
 	if slug == "" {
@@ -205,10 +201,10 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 	if strings.TrimSpace(p.Description) == "" {
 		return domain.Epic{}, fmt.Errorf("%w: epic description is required", domain.ErrValidation)
 	}
-	if err := domain.ValidateField("description", p.Description); err != nil {
+	if err := domain.ValidateDescription(p.Description); err != nil {
 		return domain.Epic{}, err
 	}
-	if err := domain.ValidateField("priority", p.Priority); err != nil {
+	if err := domain.ValidatePriority(p.Priority); err != nil {
 		return domain.Epic{}, err
 	}
 	slug := domain.Slugify(p.Title)
@@ -329,10 +325,16 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 
 	var results []LintResult
 	for _, t := range tasks {
-		if !activeStatuses[t.Status] {
-			continue
+		// Active tasks get the full field lint; archived tasks are only checked
+		// for status/folder drift (no point nagging about missing fields on a
+		// completed item, but a misfiled one should still surface).
+		var issues []domain.Issue
+		if t.Status.IsActive() {
+			issues = domain.LintTask(t, validEpic)
+		} else {
+			issues = domain.MisfiledIssues(t)
 		}
-		if issues := domain.LintTask(t, validEpic); len(issues) > 0 {
+		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})
 		}
 	}

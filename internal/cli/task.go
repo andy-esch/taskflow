@@ -36,6 +36,7 @@ func newTaskNewCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "new <title>",
 		Short:       "Create a new task (validated, handoff-ready scaffold)",
+		Example:     "  tskflwctl task new \"Add retry backoff\" --epic 17-pm-go-cli --tags net\n  tskflwctl task new \"Triage flaky test\" --epic 17-pm-go-cli --next",
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{"safety": "mutating"},
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -47,7 +48,8 @@ func newTaskNewCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.CreatedJSON(app.Out, "task", t.Slug, t.Path)
 			}
-			render.CreatedHuman(app.Out, app.rel(t.Path))
+			render.CreatedHuman(app.Out, app.Style, app.rel(t.Path))
+			fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task start "+t.Slug))
 			return nil
 		},
 	}
@@ -70,6 +72,7 @@ func newTaskListCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List tasks (active by default)",
+		Example:     "  tskflwctl task list\n  tskflwctl task list --all --epic 17-pm-go-cli\n  tskflwctl task list --status in-progress --json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -82,10 +85,10 @@ func newTaskListCmd(app *App) *cobra.Command {
 					return err
 				}
 			} else {
-				if err := render.TasksHuman(app.Out, tasks); err != nil {
+				if err := render.TasksHuman(app.Out, app.Style, tasks); err != nil {
 					return err
 				}
-				render.ProblemsHuman(app.ErrOut, problems)
+				render.ProblemsHuman(app.ErrOut, app.Style, problems)
 			}
 			return problemsError(problems)
 		},
@@ -112,7 +115,7 @@ func newTaskShowCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.TaskShowJSON(app.Out, task, body)
 			}
-			return render.TaskShowHuman(app.Out, task, body)
+			return render.TaskShowHuman(app.Out, app.Style, task, body)
 		},
 	}
 }
@@ -166,7 +169,7 @@ func newTaskSetCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.TaskShowJSON(app.Out, task, "")
 			}
-			fmt.Fprintf(app.Out, "updated %s\n", task.Slug)
+			fmt.Fprintf(app.Out, "%s updated %s\n", app.Style.Green("✔"), app.Style.Bold(task.Slug))
 			return nil
 		},
 	}
@@ -202,6 +205,7 @@ func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Comm
 	return &cobra.Command{
 		Use:               use + " <task>...",
 		Short:             short,
+		Example:           "  tskflwctl task " + use + " my-task\n  tskflwctl task " + use + " task-a task-b",
 		Args:              cobra.MinimumNArgs(1),
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.taskCompleter(to), // don't offer tasks already at `to`

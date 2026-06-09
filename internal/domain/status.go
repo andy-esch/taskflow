@@ -45,3 +45,15 @@ func (s Status) Valid() bool {
 
 // Dir is the directory name for this status (identical to its string value).
 func (s Status) Dir() string { return string(s) }
+
+// IsActive reports whether a task in this status is part of the working set
+// (not completed/deprecated/deferred). The lifecycle invariant lives on the
+// domain type, not in a use-case.
+func (s Status) IsActive() bool {
+	switch s {
+	case StatusNextUp, StatusReadyToStart, StatusInProgress:
+		return true
+	default:
+		return false
+	}
+}

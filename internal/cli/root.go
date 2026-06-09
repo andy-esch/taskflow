@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/store"
@@ -22,11 +23,21 @@ type App struct {
 	Out    io.Writer
 	ErrOut io.Writer
 
-	JSON  bool
-	Chdir string
+	JSON    bool
+	Chdir   string
+	Color   string // auto | always | never
+	NoColor bool   // alias for --color=never
 
-	Cfg *config.Config
-	Svc *core.Service
+	Style render.Style
+	Cfg   *config.Config
+	Svc   *core.Service
+}
+
+// setStyle computes the output Style (color + terminal width) from the flags and
+// environment. Called by every command's PreRun (including those that skip repo
+// discovery, like init/version).
+func (a *App) setStyle() {
+	a.Style = render.NewStyle(wantColor(a.Color, a.NoColor, a.Out)).WithWidth(terminalWidth(a.Out))
 }
 
 // NewRootCmd builds the command tree with explicit DI — no package globals.
@@ -37,9 +48,11 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "tskflwctl",
 		Short:         "Local-first planning CLI (tasks, epics, audits) over markdown",
+		Version:       versionString(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			app.setStyle()
 			// Shell completion ('__complete') runs this hook too. Outside a
 			// planning repo, resolve() errors — which would abort completion.
 			// Stay silent there; completion funcs do their own forgiving
@@ -53,8 +66,11 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 	}
 	root.PersistentFlags().BoolVar(&app.JSON, "json", false, "machine-readable JSON output")
 	root.PersistentFlags().StringVarP(&app.Chdir, "chdir", "C", "", "anchor to the planning repo at this path")
+	root.PersistentFlags().StringVar(&app.Color, "color", "auto", "colorize output: auto|always|never")
+	root.PersistentFlags().BoolVar(&app.NoColor, "no-color", false, "disable colored output (alias for --color=never)")
 
 	root.AddCommand(newInitCmd(app))
+	root.AddCommand(newVersionCmd(app))
 	root.AddCommand(newTaskCmd(app))
 	root.AddCommand(newEpicCmd(app))
 	root.AddCommand(newAuditCmd(app))

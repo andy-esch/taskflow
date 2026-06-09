@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
@@ -18,6 +20,7 @@ func newEpicNewCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "new <title>",
 		Short:       "Create a new epic (auto-numbered NN-slug)",
+		Example:     "  tskflwctl epic new \"Billing overhaul\" --description \"Replace the legacy pipeline\"",
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{"safety": "mutating"},
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -29,7 +32,8 @@ func newEpicNewCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.CreatedJSON(app.Out, "epic", e.ID, e.Path)
 			}
-			render.CreatedHuman(app.Out, app.rel(e.Path))
+			render.CreatedHuman(app.Out, app.Style, app.rel(e.Path))
+			fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task new \"Title\" --epic "+e.ID))
 			return nil
 		},
 	}
@@ -44,6 +48,7 @@ func newEpicListCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:         "list",
 		Short:       "List epics with task rollup",
+		Example:     "  tskflwctl epic list\n  tskflwctl epic list --json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -56,10 +61,10 @@ func newEpicListCmd(app *App) *cobra.Command {
 					return err
 				}
 			} else {
-				if err := render.EpicsHuman(app.Out, epics); err != nil {
+				if err := render.EpicsHuman(app.Out, app.Style, epics); err != nil {
 					return err
 				}
-				render.ProblemsHuman(app.ErrOut, problems)
+				render.ProblemsHuman(app.ErrOut, app.Style, problems)
 			}
 			return problemsError(problems)
 		},
@@ -81,7 +86,7 @@ func newEpicShowCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.EpicShowJSON(app.Out, epic, tasks, body)
 			}
-			return render.EpicShowHuman(app.Out, epic, tasks, body)
+			return render.EpicShowHuman(app.Out, app.Style, epic, tasks, body)
 		},
 	}
 }

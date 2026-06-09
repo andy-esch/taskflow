@@ -65,4 +65,10 @@ func TestFS_Resolve_Ambiguous(t *testing.T) {
 	if !errors.Is(err, domain.ErrAmbiguous) {
 		t.Errorf("want ErrAmbiguous, got %v", err)
 	}
+	// The message should name where the duplicates live, so the user can clean up.
+	for _, want := range []string{"ready-to-start", "in-progress"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("ambiguous error should name %q: %v", want, err)
+		}
+	}
 }

@@ -119,7 +119,11 @@ func fieldOnLine(fm []byte, line int) string {
 		return ""
 	}
 	if i := strings.IndexByte(lines[line-1], ':'); i > 0 {
-		return strings.TrimSpace(lines[line-1][:i])
+		// Only report a plain top-level key. A list item or quoted value with an
+		// inner colon (e.g. `- "issue: x"`) would otherwise yield a junk "key".
+		if key := strings.TrimSpace(lines[line-1][:i]); isIdentifier(key) {
+			return key
+		}
 	}
 	return ""
 }
@@ -131,10 +135,26 @@ func cleanYAMLError(err error) string {
 }
 
 // frontmatterError builds the best available message for a decode failure:
-// a pinpointed field diagnosis when possible, else a cleaned YAML error.
+// a git-conflict notice if markers are present (common with synced repos —
+// Dropbox/Syncthing/git), then a pinpointed field diagnosis, else a cleaned
+// YAML error.
 func frontmatterError(fm []byte, structErr error) string {
+	if hasConflictMarkers(fm) {
+		return "git merge conflict markers detected (<<<<<<< / >>>>>>>) — resolve the conflict before this file can be parsed"
+	}
 	if msg := diagnoseFrontmatter(fm); msg != "" {
 		return msg
 	}
 	return cleanYAMLError(structErr)
+}
+
+// hasConflictMarkers reports whether fm contains git conflict markers. The
+// angle-bracket markers are unambiguous (no valid YAML line starts with them).
+func hasConflictMarkers(fm []byte) bool {
+	for _, line := range strings.Split(string(fm), "\n") {
+		if strings.HasPrefix(line, "<<<<<<<") || strings.HasPrefix(line, ">>>>>>>") {
+			return true
+		}
+	}
+	return false
 }

@@ -38,6 +38,32 @@ func TestFixFrontmatterText(t *testing.T) {
 	}
 }
 
+func TestFixFrontmatterText_PreservesInlineComments(t *testing.T) {
+	// A colon inside a trailing comment must NOT drag the comment into the value.
+	in := []byte("---\n" +
+		"priority: medium # note: double check\n" + // no fix needed; comment intact
+		"description: Phase 1: do it # ref: TICKET-9\n" + // value quoted, comment kept outside
+		"---\nbody\n")
+	out, _ := fixFrontmatterText(in)
+	s := string(out)
+
+	if !strings.Contains(s, "priority: medium # note: double check") {
+		t.Errorf("inline comment on an unchanged value was altered:\n%s", s)
+	}
+	if !strings.Contains(s, `description: "Phase 1: do it" # ref: TICKET-9`) {
+		t.Errorf("comment folded into the quoted value:\n%s", s)
+	}
+	// And it parses (comments are legal YAML).
+	fm, _ := splitFrontmatter(out)
+	var m map[string]any
+	if err := yaml.Unmarshal(fm, &m); err != nil {
+		t.Fatalf("fixed frontmatter invalid: %v\n%s", err, fm)
+	}
+	if m["description"] != "Phase 1: do it" {
+		t.Errorf("description value wrong: %#v", m["description"])
+	}
+}
+
 func TestFixFrontmatterText_NoOp(t *testing.T) {
 	in := []byte("---\nstatus: ready-to-start\ndescription: clean\ntags: [a, b]\n---\n# Body\n")
 	out, changes := fixFrontmatterText(in)

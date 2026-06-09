@@ -16,11 +16,12 @@ func newInitCmd(app *App) *cobra.Command {
 		Short:       "Scaffold a planning tree (tasks/ epics/ projects/ audits/) + config",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "mutating"},
+		Example:     "  tskflwctl init\n  tskflwctl init --path ./planning",
 		// init creates a NEW planning repo, so it must NOT require an existing
 		// one. A subcommand's own PersistentPreRunE overrides the root's
-		// resolve(), so this no-op skips the discovery step. (Non-interactive
-		// by design → no TTY-hang risk for headless agents.)
-		PersistentPreRunE: func(*cobra.Command, []string) error { return nil },
+		// resolve(), so this skips discovery (but still sets up styling).
+		// Non-interactive by design → no TTY-hang risk for headless agents.
+		PersistentPreRunE: func(*cobra.Command, []string) error { app.setStyle(); return nil },
 		RunE: func(_ *cobra.Command, _ []string) error {
 			abs, err := filepath.Abs(path)
 			if err != nil {
@@ -31,13 +32,14 @@ func newInitCmd(app *App) *cobra.Command {
 				return err
 			}
 			if len(created) == 0 {
-				fmt.Fprintf(app.Out, "already initialized: %s\n", abs)
+				fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)
 				return nil
 			}
-			fmt.Fprintf(app.Out, "initialized %s\n", abs)
+			fmt.Fprintf(app.Out, "%s initialized %s\n", app.Style.Green("✔"), app.Style.Bold(abs))
 			for _, c := range created {
-				fmt.Fprintf(app.Out, "  + %s\n", c)
+				fmt.Fprintf(app.Out, "  %s %s\n", app.Style.Dim("+"), c)
 			}
+			fmt.Fprintf(app.Out, "\n%s\n", app.Style.Dim(`→ next: tskflwctl epic new "Title" --description "..."`))
 			return nil
 		},
 	}

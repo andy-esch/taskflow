@@ -20,7 +20,10 @@ func Slugify(text string) string {
 	text = slugPunct.ReplaceAllString(text, "")
 	text = slugSpace.ReplaceAllString(text, "-")
 	text = slugDash.ReplaceAllString(text, "-")
-	text = strings.Trim(text, "-")
+	// Trim leading/trailing '-' and '.': a trailing dot is stripped by Windows
+	// and a leading dot makes a hidden file. (The Windows-reserved characters
+	// :\*?<>|"/ are already removed by slugPunct above.)
+	text = strings.Trim(text, "-.")
 	if len(text) > 80 {
 		text = text[:80]
 		if i := strings.LastIndex(text, "-"); i >= 0 {

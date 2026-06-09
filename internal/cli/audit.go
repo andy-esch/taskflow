@@ -24,6 +24,7 @@ func newAuditListCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List audits (open by default)",
+		Example:     "  tskflwctl audit list\n  tskflwctl audit list --all\n  tskflwctl audit list --closed --json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -43,10 +44,10 @@ func newAuditListCmd(app *App) *cobra.Command {
 					return err
 				}
 			} else {
-				if err := render.AuditsHuman(app.Out, audits); err != nil {
+				if err := render.AuditsHuman(app.Out, app.Style, audits); err != nil {
 					return err
 				}
-				render.ProblemsHuman(app.ErrOut, problems)
+				render.ProblemsHuman(app.ErrOut, app.Style, problems)
 			}
 			return problemsError(problems)
 		},
@@ -72,7 +73,7 @@ func newAuditShowCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.AuditShowJSON(app.Out, audit, body)
 			}
-			return render.AuditShowHuman(app.Out, audit, body)
+			return render.AuditShowHuman(app.Out, app.Style, audit, body)
 		},
 	}
 }
@@ -81,6 +82,7 @@ func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.
 	return &cobra.Command{
 		Use:               use + " <audit>...",
 		Short:             short,
+		Example:           "  tskflwctl audit " + use + " 2026-06-06-schemas-scripts",
 		Args:              cobra.MinimumNArgs(1),
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.auditCompleter(to), // don't offer audits already at `to`

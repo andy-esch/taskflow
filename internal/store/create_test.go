@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -40,9 +41,9 @@ func TestCreateTask_OrderQuotingClobber(t *testing.T) {
 	if _, _, err := fs.GetTask("demo"); err != nil {
 		t.Errorf("created task does not re-parse: %v", err)
 	}
-	// Clobber refused.
-	if _, err := fs.CreateTask(task, "x"); err == nil {
-		t.Fatal("expected refusal to clobber an existing task")
+	// Clobber refused with a conflict (not a generic validation error).
+	if _, err := fs.CreateTask(task, "x"); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("clobber should be ErrConflict, got %v", err)
 	}
 }
 

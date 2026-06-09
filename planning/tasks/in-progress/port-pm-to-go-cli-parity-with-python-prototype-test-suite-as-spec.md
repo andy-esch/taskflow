@@ -9,7 +9,7 @@ autonomy_level: 3
 tags: [pm-tooling, go, cli]
 created: 2026-06-06
 started_at: 2026-06-07
-updated_at: 2026-06-08
+updated_at: 2026-06-09
 ---
 
 # Port pm to Go CLI (parity with Python prototype + test suite as spec)
@@ -231,10 +231,30 @@ dirs left in place pending a call: `services/` (Python "brain") and
   `FixFrontmatter` is the one `Store` method that isn't a noun-CRUD op —
   candidate to split into a `Fixer` port later.
 
-**Remaining for parity:** audit finding-level commands (above); `track`;
-`schema`(+`--type cli`); global `--dry-run`; advisory `flock`; structured JSON
-error envelope; interactive `init` wizard. Minor: dates written quoted vs pm's
-unquoted — valid + pm-readable.
+**2026-06-09 — snapshot: daily loop + ergonomics landed (pm retired).** Beyond
+parity, the CLI is now a pleasant daily driver. Landed since the last entry
+(each tracked in its own completed task):
+- **`task new` + `epic new`** — the keystone create verbs (handoff-ready body,
+  validated, auto-numbered epics). The full create→update→move→lint loop runs
+  **without Python `pm`**; pm retired (kept only as spec). `CLAUDE.md` added.
+- **Shell completion** — command/flag/**slug** completion, status-aware.
+- **Ergonomics line** — TTY-aware color + status glyphs + headers + count
+  footers, relative-date `UPDATED` column, width-aware truncation, `version`
+  (+`--json`), help examples, styled output + next-step hints, `--color`/
+  `--no-color`/`NO_COLOR`/`FORCE_COLOR`.
+- **Robustness/triage** — `ErrConflict`(14) + portable O_EXCL create, git-
+  conflict-marker detection, slug cross-platform safety, parser **fuzz tests**,
+  typed validators, `Status.IsActive()`, date-format lint, config-file anchor.
+- **Data integrity** — directory is authoritative for status; a recognized
+  status in the wrong folder is **misfiled** (⚠ + lint + `lint --fix` realign);
+  validated on real `desirelines-planning` data.
+
+**Remaining for parity** (un-built): `adr` + `project` groups; audit
+finding-level commands (`status`/`fixed`/`followup`/`sync`/`new`/`noop`/
+`findings`/`stats`); `track`; `schema`(+`--type cli`); structured JSON error
+envelope; interactive `init` wizard. Filed as their own tasks: global
+`--dry-run`, the dashboard/`status` view, fuzzy slug resolution, advisory
+`flock`. This umbrella stays open until the parity set above is built.
 
 ## Related
 

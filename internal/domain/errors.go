@@ -9,4 +9,5 @@ var (
 	ErrAmbiguous         = errors.New("ambiguous match")
 	ErrValidation        = errors.New("validation failed")
 	ErrInvalidTransition = errors.New("invalid transition")
+	ErrConflict          = errors.New("conflict") // already exists / write conflict
 )

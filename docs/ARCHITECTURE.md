@@ -15,7 +15,11 @@ the one-screen orientation for contributors.
 ```
 
 - **`internal/domain`** — pure entities + invariants (`Task`, `Status`). No fs,
-  no cobra. The `Status` value *is* the directory name.
+  no cobra. The directory **is** the authoritative status (the read path always
+  uses the folder); the frontmatter value is kept as `Task.Declared` only to
+  detect drift. A *recognized* status that disagrees with its folder is
+  "misfiled" — flagged by `lint` (and `lint --fix` realigns it), shown with a
+  `⚠` in `task list`/`show`. A foreign/legacy status word is tolerated.
 - **`internal/core`** — use cases (`Service`) + the ports it needs
   (`TaskStore`, defined here at the consumer). Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
@@ -39,10 +43,44 @@ the one-screen orientation for contributors.
   semver `schema_version` and never emits ANSI.
 - **The core never touches the fs or cobra.**
 
+## Why these boundaries (and why not collapse them)
+Reviews periodically suggest folding the packages together ("Go favors fewer
+packages / concrete types"). That advice evaluates this **as a CLI**, but it is a
+**multi-adapter system**: the CLI ships now and a **Bubble Tea TUI is planned as
+a second primary adapter over the same `core`**. That single fact answers most
+of the critique — the layering exists so the TUI reuses the use-cases without
+duplicating logic, not for hypothetical future flexibility. The specifics:
+
+- **Cross-package exported types aren't "leakage."** `domain.FileProblem`,
+  `core.EpicSummary`, `core.NewTaskParams`, `render.MoveResult` are the *contract
+  between layers*. Everything lives under `internal/`, so "exported" means
+  "visible to sibling packages in this binary," never to the outside world —
+  exactly what a layered design needs.
+- **`core.Store` earns its keep today, not speculatively.** The core's unit
+  tests run against an in-memory `fakeStore` (`core/service_epic_test.go`), so
+  rollup/validation logic is tested with no filesystem. That's a real second
+  implementation now, plus the planned TUI is a second primary adapter over the
+  same core. (One known wart: `FixFrontmatter` sits awkwardly on the port — a
+  candidate to split into a `Fixer` later.)
+- **Frontmatter logic is already cohesive.** `frontmatter.go` (parse + surgical
+  write), `fix.go` (text repair), `diagnose.go` (error diagnosis) are all one
+  package (`store`), split into files by concern — idiomatic Go. `domain/
+  validate.go` is *semantic field rules* (tier 1–5, priority enum), a domain
+  concern, deliberately not coupled to the storage format.
+- **`cli/render` is the one genuinely revisitable call.** It's cli-only (the TUI
+  renders via Bubble Tea views, not these text/JSON formatters) and imports
+  `core` for two view-models (a mild `cli→render→core` diamond). Keeping it a
+  package buys isolation + the `render.` namespace; folding it into `cli` as
+  `render.go` would also be fine. Left split for now; not dogma — collapse it if
+  the boundary ever causes friction. (Note this is the *opposite* of dropping the
+  core seam: render is presentation that the TUI replaces; `core` is logic the
+  TUI reuses.)
+
 ## Testing
-Three layers: pure domain/core units, store round-trips against `t.TempDir()`,
-and in-process CLI tests that execute `NewRootCmd` with a captured buffer.
-`just go-test` + `just go-lint` (golangci-lint).
+Three layers: pure domain/core units (incl. a `fakeStore` for the core), store
+round-trips against `t.TempDir()`, and in-process CLI tests that execute
+`NewRootCmd` with a captured buffer. The hand-rolled byte parsers in `store`
+have fuzz targets (`store/fuzz_test.go`). `just test` + `just lint`.
 
 ## Status (2026-06-08)
 Substantially functional — the full create→update→move→lint loop runs without
@@ -51,9 +89,11 @@ the Python prototype:
 - `task new|list|show|set|move|start|promote|demote|complete|defer|deprecate`
 - `epic new|list|show`, `audit list|show|close|reopen|defer`
 
-Throughout: explicit noun-verb, semantic exit codes (10–13), atomic +
-surgical-`yaml.v3` writes, `--json` everywhere (`schema_version`), resilient
-reads with actionable frontmatter errors, agent safety annotations.
+Throughout: explicit noun-verb, semantic exit codes (`10` not-found · `11`
+validation · `12` invalid-transition · `13` ambiguous · `14` conflict), atomic
+writes (`writeFileAtomic` overwrite, `createFileAtomic` exclusive) + surgical
+`yaml.v3` edits, `--json` everywhere (`schema_version`), resilient reads with
+actionable frontmatter errors, agent safety annotations.
 
 Remaining (see `planning/`): `adr`/`project` groups, audit finding-level
 commands, reporting views (`stats`/`index`/`tags`), `track`, `schema --type

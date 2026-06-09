@@ -20,6 +20,8 @@ func ExitCode(err error) int {
 		return 12
 	case errors.Is(err, domain.ErrAmbiguous):
 		return 13
+	case errors.Is(err, domain.ErrConflict):
+		return 14
 	default:
 		return 1
 	}

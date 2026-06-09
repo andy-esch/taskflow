@@ -26,7 +26,7 @@ func runMoves[T any](app *App, slugs []string, status string, move func(slug str
 			return err
 		}
 	} else {
-		render.MovesHuman(app.Out, results)
+		render.MovesHuman(app.Out, app.Style, results)
 	}
 	return firstErr
 }

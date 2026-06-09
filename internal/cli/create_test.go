@@ -74,8 +74,12 @@ func TestTaskNew_RefusesClobber(t *testing.T) {
 	var out bytes.Buffer
 	cmd := NewRootCmd(&out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "new", "Dup", "--epic", "e1"})
-	if err := cmd.Execute(); err == nil {
+	err := cmd.Execute()
+	if err == nil {
 		t.Fatal("expected refusal to clobber an existing task")
+	}
+	if ExitCode(err) != 14 {
+		t.Errorf("clobber should exit 14 (conflict), got %d", ExitCode(err))
 	}
 }
 
@@ -94,6 +98,39 @@ func TestEpicNew(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Errorf("epic missing %q:\n%s", want, s)
 		}
+	}
+}
+
+func TestList_MisfiledMarker(t *testing.T) {
+	root := freshRepo(t)
+	// A file in ready-to-start/ (active, so it shows) whose frontmatter claims a
+	// different recognized status → misfiled, marked with ⚠.
+	mustWrite(t, filepath.Join(root, "tasks", "ready-to-start", "drift.md"),
+		"---\nstatus: completed\nepic: e\ndescription: d\ntier: 3\npriority: low\neffort: x\ncreated: 2026-06-09\ntags: [a]\n---\n# x\n")
+	out := runRoot(t, "-C", root, "task", "list")
+	if !strings.Contains(out, "⚠") {
+		t.Errorf("expected a ⚠ misfiled marker:\n%q", out)
+	}
+	if !strings.Contains(out, "misfiled") {
+		t.Errorf("expected a misfiled footer note:\n%q", out)
+	}
+}
+
+func TestLint_FlagsMisfiledArchivedTask(t *testing.T) {
+	root := freshRepo(t)
+	// A completed/ file with a stale active status — archived, so field lint is
+	// skipped, but the drift must still surface.
+	mustWrite(t, filepath.Join(root, "tasks", "completed", "old.md"),
+		"---\nstatus: in-progress\n---\n# x\n")
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetArgs([]string{"-C", root, "lint"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected lint to fail on a misfiled archived task")
+	}
+	if !strings.Contains(out.String(), "old") || !strings.Contains(out.String(), "folder") {
+		t.Errorf("expected a misfiled report for 'old':\n%s", out.String())
 	}
 }
 

@@ -58,9 +58,6 @@ func (s *FS) CreateTask(t domain.Task, body string) (domain.Task, error) {
 	}
 	dir := filepath.Join(s.tasksDir, t.Status.Dir())
 	path := filepath.Join(dir, t.Slug+".md")
-	if _, err := os.Stat(path); err == nil {
-		return domain.Task{}, fmt.Errorf("task %q already exists: %w", t.Slug, domain.ErrValidation)
-	}
 	content, err := buildFile(taskFields(t), body)
 	if err != nil {
 		return domain.Task{}, err
@@ -68,7 +65,10 @@ func (s *FS) CreateTask(t domain.Task, body string) (domain.Task, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return domain.Task{}, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
-	if err := writeFileAtomic(path, content, 0o644); err != nil {
+	if err := createFileAtomic(path, content, 0o644); err != nil {
+		if os.IsExist(err) {
+			return domain.Task{}, fmt.Errorf("task %q already exists: %w", t.Slug, domain.ErrConflict)
+		}
 		return domain.Task{}, err
 	}
 	t.Path = path
@@ -122,9 +122,6 @@ func (s *FS) CreateEpic(slug string, e domain.Epic, body string) (domain.Epic, e
 	}
 	id := fmt.Sprintf("%02d-%s", num, slug)
 	path := filepath.Join(s.epicsDir, id+".md")
-	if _, err := os.Stat(path); err == nil {
-		return domain.Epic{}, fmt.Errorf("epic %q already exists: %w", id, domain.ErrValidation)
-	}
 	content, err := buildFile(epicFields(e), body)
 	if err != nil {
 		return domain.Epic{}, err
@@ -132,7 +129,10 @@ func (s *FS) CreateEpic(slug string, e domain.Epic, body string) (domain.Epic, e
 	if err := os.MkdirAll(s.epicsDir, 0o755); err != nil {
 		return domain.Epic{}, fmt.Errorf("mkdir %s: %w", s.epicsDir, err)
 	}
-	if err := writeFileAtomic(path, content, 0o644); err != nil {
+	if err := createFileAtomic(path, content, 0o644); err != nil {
+		if os.IsExist(err) {
+			return domain.Epic{}, fmt.Errorf("epic %q already exists: %w", id, domain.ErrConflict)
+		}
 		return domain.Epic{}, err
 	}
 	e.ID = id

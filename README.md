@@ -1,8 +1,9 @@
 # taskflow
 
 Home of **`tskflwctl`** — a local-first planning CLI over markdown+frontmatter
-task/epic/audit files. It's the Go port of the Python `pm` prototype, and it
-dogfoods on its own planning under [`planning/`](./planning/).
+task/epic/audit files. It's the Go port of the Python `pm` prototype (now
+retired — see below), and it dogfoods on its own planning under
+[`planning/`](./planning/).
 
 ## Map
 
@@ -20,6 +21,51 @@ just build              # → bin/tskflwctl
 just run task list      # run without installing
 just install            # put tskflwctl on $PATH
 ```
+
+## Daily workflow
+
+`tskflwctl` anchors to the nearest planning repo (walks up for `tasks/`; `-C` to
+override). All commands take `--json` for scripting/agents.
+
+```bash
+tskflwctl init                         # scaffold a planning tree here
+
+# create
+tskflwctl task new "Add retry backoff" --epic 17-pm-go-cli --tags net
+tskflwctl epic new "Billing overhaul" --description "Replace legacy pipeline"
+
+# read
+tskflwctl task list                    # active tasks (--all / --status / --epic / --tag)
+tskflwctl task show <slug>
+tskflwctl epic list                    # rollup: done/total per epic
+tskflwctl audit list                   # open audits (--all / --closed / --deferred)
+
+# update + lifecycle
+tskflwctl task set <slug> --priority high --tags a,b
+tskflwctl task start|promote|demote|complete|defer|deprecate <slug>...
+tskflwctl audit close|reopen|defer <slug>...
+
+# hygiene
+tskflwctl lint                         # validate active task frontmatter
+tskflwctl lint --fix                   # auto-repair (quote colons, normalize lists)
+```
+
+A task's `status:` **is** its directory (`tasks/<status>/`); lifecycle verbs move
+the file and stamp dates atomically. Errors carry semantic exit codes — `10`
+not-found, `11` validation, `12` invalid-transition, `13` ambiguous, `14`
+conflict (e.g. a name already taken).
+
+Human output is colorized with status glyphs on a terminal and falls back to
+plain text when piped. Control it with `--color=auto|always|never`, `--no-color`,
+or the env vars [`NO_COLOR`](https://no-color.org) / `FORCE_COLOR` (the latter
+forces color even off a TTY — handy for agents). `--json` is always plain.
+`tskflwctl version` / `--version` report the build.
+
+### `pm` is retired
+
+The Python prototype (`bin/pm`) this tool was ported from is **no longer used** —
+`tskflwctl` covers the full create → update → move → lint loop. `bin/pm` and
+`tests/test_pm.py` are kept only as the historical executable spec.
 
 ## Shell completion
 

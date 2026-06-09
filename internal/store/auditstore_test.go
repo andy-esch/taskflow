@@ -44,6 +44,29 @@ func TestFS_ListAudits_FindingCounts(t *testing.T) {
 	}
 }
 
+func TestFS_FindingCounts_IgnoresFencesAndOpenIsh(t *testing.T) {
+	root := t.TempDir()
+	body := "# Audit\n\n" +
+		"#### H1. real  · **Status:** open\n\n" + // real open finding
+		"#### M2. doc-ish  · **Status:** open-ish\n\n" + // NOT open (open-ish)
+		"```\n#### S9. example in a code fence  · **Status:** open\n```\n\n" + // fenced: not counted
+		"#### L3. done  · **Status:** fixed\n"
+	writeAudit(t, root, "open", "b.md", "---\narea: x\n---\n"+body)
+
+	audits, _, err := NewFS(root).ListAudits()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := audits[0]
+	// 3 real findings (H1, M2, L3 — the fenced S9 is excluded); 1 open (H1 only).
+	if a.Findings != 3 {
+		t.Errorf("findings = %d, want 3 (fenced example excluded)", a.Findings)
+	}
+	if a.OpenFindings != 1 {
+		t.Errorf("open = %d, want 1 (open-ish and fenced excluded)", a.OpenFindings)
+	}
+}
+
 func TestFS_MoveAudit(t *testing.T) {
 	root := t.TempDir()
 	writeAudit(t, root, "open", "x.md", "---\narea: a\n---\n#### H1. t  · **Status:** open\n")

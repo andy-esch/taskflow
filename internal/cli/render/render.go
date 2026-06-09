@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -25,23 +24,53 @@ type taskJSON struct {
 	Description string   `json:"description,omitempty"`
 	Tier        int      `json:"tier,omitempty"`
 	Priority    string   `json:"priority,omitempty"`
+	Created     string   `json:"created,omitempty"`
+	Updated     string   `json:"updated_at,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 }
 
 func toJSON(t domain.Task) taskJSON {
 	return taskJSON{
 		Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
-		Description: t.Description, Tier: t.Tier, Priority: t.Priority, Tags: t.Tags,
+		Description: t.Description, Tier: t.Tier, Priority: t.Priority,
+		Created: t.Created, Updated: t.Updated, Tags: t.Tags,
 	}
 }
 
-// TasksHuman writes a scannable table of tasks.
-func TasksHuman(w io.Writer, tasks []domain.Task) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	for _, t := range tasks {
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", t.Status, t.Slug, t.Description)
+// TasksHuman writes a scannable table of tasks (empty input writes nothing).
+func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
+	if len(tasks) == 0 {
+		return nil
 	}
-	return tw.Flush()
+	rows := make([][]string, 0, len(tasks))
+	misfiled := 0
+	for _, t := range tasks {
+		status := st.Status(t.Status)
+		if t.Misfiled() {
+			misfiled++
+			status = st.Warn("⚠ ") + status
+		}
+		updated := t.Updated
+		if updated == "" {
+			updated = t.Created
+		}
+		// Description goes last so it's the column that truncates to terminal width.
+		rows = append(rows, []string{status, st.Bold(t.Slug), st.Dim(RelativeDate(updated)), t.Description})
+	}
+	writeTable(w, st.width, []string{st.Dim("STATUS"), st.Dim("TASK"), st.Dim("UPDATED"), st.Dim("DESCRIPTION")}, rows)
+	fmt.Fprintf(w, "\n%s\n", st.Dim(plural(len(tasks), "task")))
+	if misfiled > 0 {
+		fmt.Fprintf(w, "%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (status ≠ folder; run `lint --fix` to realign)", misfiled)))
+	}
+	return nil
+}
+
+// plural renders "N noun" / "N nouns".
+func plural(n int, noun string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, noun)
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 // TasksJSON writes a stable, versioned JSON envelope of tasks, including any
@@ -60,23 +89,36 @@ func TasksJSON(w io.Writer, tasks []domain.Task, problems []domain.FileProblem) 
 }
 
 // TaskShowHuman prints a task's metadata followed by its body.
-func TaskShowHuman(w io.Writer, t domain.Task, body string) error {
-	fmt.Fprintf(w, "slug:        %s\n", t.Slug)
-	fmt.Fprintf(w, "status:      %s\n", t.Status)
+func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
+	field := func(label, value string) {
+		fmt.Fprintf(w, "%s %s\n", st.Dim(fmt.Sprintf("%-12s", label+":")), value)
+	}
+	field("slug", st.Bold(t.Slug))
+	status := st.Status(t.Status)
+	if t.Misfiled() {
+		status += "  " + st.Warn(fmt.Sprintf("⚠ frontmatter says %q", t.Declared))
+	}
+	field("status", status)
 	if t.Epic != "" {
-		fmt.Fprintf(w, "epic:        %s\n", t.Epic)
+		field("epic", t.Epic)
 	}
 	if t.Priority != "" {
-		fmt.Fprintf(w, "priority:    %s\n", t.Priority)
+		field("priority", st.Priority(t.Priority))
 	}
 	if t.Tier != 0 {
-		fmt.Fprintf(w, "tier:        %d\n", t.Tier)
+		field("tier", fmt.Sprintf("%d", t.Tier))
 	}
 	if len(t.Tags) > 0 {
-		fmt.Fprintf(w, "tags:        %s\n", strings.Join(t.Tags, ", "))
+		field("tags", strings.Join(t.Tags, ", "))
 	}
 	if t.Description != "" {
-		fmt.Fprintf(w, "description: %s\n", t.Description)
+		field("description", t.Description)
+	}
+	if t.Created != "" {
+		field("created", t.Created)
+	}
+	if t.Updated != "" {
+		field("updated", fmt.Sprintf("%s %s", t.Updated, st.Dim("("+RelativeDate(t.Updated)+")")))
 	}
 	fmt.Fprintf(w, "\n%s", body)
 	return nil
@@ -101,12 +143,12 @@ type MoveResult struct {
 }
 
 // MovesHuman prints one line per transition outcome.
-func MovesHuman(w io.Writer, results []MoveResult) {
+func MovesHuman(w io.Writer, st Style, results []MoveResult) {
 	for _, r := range results {
 		if r.Error != "" {
-			fmt.Fprintf(w, "x %s: %s\n", r.Slug, r.Error)
+			fmt.Fprintf(w, "%s %s: %s\n", st.Red("✘"), st.Bold(r.Slug), r.Error)
 		} else {
-			fmt.Fprintf(w, "moved %s -> %s\n", r.Slug, r.To)
+			fmt.Fprintf(w, "%s moved %s -> %s\n", st.Green("✔"), st.Bold(r.Slug), r.To)
 		}
 	}
 }
@@ -125,9 +167,22 @@ func encodeJSON(w io.Writer, payload any) error {
 	return enc.Encode(payload)
 }
 
+// VersionHuman prints the CLI version.
+func VersionHuman(w io.Writer, st Style, version string) {
+	fmt.Fprintf(w, "%s %s\n", st.Bold("tskflwctl"), version)
+}
+
+// VersionJSON writes the version in the standard envelope.
+func VersionJSON(w io.Writer, version string) error {
+	return encodeJSON(w, struct {
+		SchemaVersion string `json:"schema_version"`
+		Version       string `json:"version"`
+	}{SchemaVersion: SchemaVersion, Version: version})
+}
+
 // CreatedHuman prints the path of a newly created file.
-func CreatedHuman(w io.Writer, path string) {
-	fmt.Fprintf(w, "created %s\n", path)
+func CreatedHuman(w io.Writer, st Style, path string) {
+	fmt.Fprintf(w, "%s %s\n", st.Green("created"), st.Bold(path))
 }
 
 // CreatedJSON writes a versioned envelope for a newly created item.
@@ -147,13 +202,17 @@ func CreatedJSON(w io.Writer, kind, id, path string) error {
 }
 
 // EpicsHuman writes a table of epics with task rollup.
-func EpicsHuman(w io.Writer, epics []core.EpicSummary) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	for _, e := range epics {
-		fmt.Fprintf(tw, "%s\t%s\t%d/%d (%d%%)\t%s\n",
-			e.Epic.ID, e.Epic.Status, e.Done, e.Total, e.Percent(), e.Epic.Description)
+func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
+	if len(epics) == 0 {
+		return nil
 	}
-	return tw.Flush()
+	rows := make([][]string, 0, len(epics))
+	for _, e := range epics {
+		progress := fmt.Sprintf("%d/%d (%s)", e.Done, e.Total, st.Percent(e.Percent()))
+		rows = append(rows, []string{st.Bold(e.Epic.ID), e.Epic.Status, progress, e.Epic.Description})
+	}
+	writeTable(w, st.width, []string{st.Dim("EPIC"), st.Dim("STATUS"), st.Dim("PROGRESS"), st.Dim("DESCRIPTION")}, rows)
+	return nil
 }
 
 type epicJSON struct {
@@ -183,31 +242,37 @@ func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []domain.FileProb
 }
 
 // EpicShowHuman prints an epic, its tasks, and its body.
-func EpicShowHuman(w io.Writer, epic domain.Epic, tasks []domain.Task, body string) error {
-	fmt.Fprintf(w, "id:          %s\n", epic.ID)
-	fmt.Fprintf(w, "status:      %s\n", epic.Status)
+func EpicShowHuman(w io.Writer, st Style, epic domain.Epic, tasks []domain.Task, body string) error {
+	field := func(label, value string) {
+		fmt.Fprintf(w, "%s %s\n", st.Dim(fmt.Sprintf("%-12s", label+":")), value)
+	}
+	field("id", st.Bold(epic.ID))
+	field("status", epic.Status)
 	if epic.Description != "" {
-		fmt.Fprintf(w, "description: %s\n", epic.Description)
+		field("description", epic.Description)
 	}
-	fmt.Fprintf(w, "tasks (%d):\n", len(tasks))
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "%s\n", st.Dim(fmt.Sprintf("tasks (%d):", len(tasks))))
+	rows := make([][]string, 0, len(tasks))
 	for _, t := range tasks {
-		fmt.Fprintf(tw, "  %s\t%s\n", t.Status, t.Slug)
+		rows = append(rows, []string{"  " + st.Status(t.Status), st.Bold(t.Slug)})
 	}
-	if err := tw.Flush(); err != nil {
-		return err
-	}
+	writeTable(w, st.width, nil, rows)
 	fmt.Fprintf(w, "\n%s", body)
 	return nil
 }
 
 // AuditsHuman writes a table of audits with finding counts.
-func AuditsHuman(w io.Writer, audits []domain.Audit) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	for _, a := range audits {
-		fmt.Fprintf(tw, "%s\t%s\t%d/%d open\t%s\n", a.Bucket, a.Slug, a.OpenFindings, a.Findings, a.Area)
+func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
+	if len(audits) == 0 {
+		return nil
 	}
-	return tw.Flush()
+	rows := make([][]string, 0, len(audits))
+	for _, a := range audits {
+		findings := fmt.Sprintf("%d/%d open", a.OpenFindings, a.Findings)
+		rows = append(rows, []string{st.Bucket(string(a.Bucket)), st.Bold(a.Slug), findings, a.Area})
+	}
+	writeTable(w, st.width, []string{st.Dim("BUCKET"), st.Dim("AUDIT"), st.Dim("FINDINGS"), st.Dim("AREA")}, rows)
+	return nil
 }
 
 type auditJSON struct {
@@ -241,16 +306,19 @@ func AuditsJSON(w io.Writer, audits []domain.Audit, problems []domain.FileProble
 }
 
 // AuditShowHuman prints an audit's metadata and body.
-func AuditShowHuman(w io.Writer, a domain.Audit, body string) error {
-	fmt.Fprintf(w, "slug:     %s\n", a.Slug)
-	fmt.Fprintf(w, "bucket:   %s\n", a.Bucket)
+func AuditShowHuman(w io.Writer, st Style, a domain.Audit, body string) error {
+	field := func(label, value string) {
+		fmt.Fprintf(w, "%s %s\n", st.Dim(fmt.Sprintf("%-9s", label+":")), value)
+	}
+	field("slug", st.Bold(a.Slug))
+	field("bucket", st.Bucket(string(a.Bucket)))
 	if a.Area != "" {
-		fmt.Fprintf(w, "area:     %s\n", a.Area)
+		field("area", a.Area)
 	}
 	if a.Date != "" {
-		fmt.Fprintf(w, "date:     %s\n", a.Date)
+		field("date", a.Date)
 	}
-	fmt.Fprintf(w, "findings: %d (%d open)\n\n%s", a.Findings, a.OpenFindings, body)
+	fmt.Fprintf(w, "%s %d (%d open)\n\n%s", st.Dim("findings:"), a.Findings, a.OpenFindings, body)
 	return nil
 }
 
@@ -264,21 +332,21 @@ func AuditShowJSON(w io.Writer, a domain.Audit, body string) error {
 }
 
 // FixHuman writes the auto-repairs applied (or proposed under --dry-run).
-func FixHuman(w io.Writer, results []domain.FixResult, dryRun bool) {
+func FixHuman(w io.Writer, st Style, results []domain.FixResult, dryRun bool) {
 	verb := "fixed"
 	if dryRun {
 		verb = "would fix"
 	}
 	for _, r := range results {
-		fmt.Fprintf(w, "%s %s\n", verb, r.Path)
+		fmt.Fprintf(w, "%s %s\n", st.Green(verb), st.Bold(r.Path))
 		for _, c := range r.Changes {
-			fmt.Fprintf(w, "  - %s\n", c)
+			fmt.Fprintf(w, "  %s %s\n", st.Dim("-"), c)
 		}
 	}
 	if len(results) == 0 {
-		fmt.Fprintln(w, "nothing to fix")
+		fmt.Fprintln(w, st.Dim("nothing to fix"))
 	} else {
-		fmt.Fprintf(w, "\n%d file(s) %s\n", len(results), verb)
+		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d file(s) %s", len(results), verb)))
 	}
 }
 
@@ -292,22 +360,22 @@ func FixJSON(w io.Writer, results []domain.FixResult, dryRun bool) error {
 }
 
 // ProblemsHuman writes per-file load problems (unreadable frontmatter).
-func ProblemsHuman(w io.Writer, problems []domain.FileProblem) {
+func ProblemsHuman(w io.Writer, st Style, problems []domain.FileProblem) {
 	for _, p := range problems {
-		fmt.Fprintf(w, "! %s\n    %s\n", p.Path, p.Message)
+		fmt.Fprintf(w, "%s %s\n    %s\n", st.Red("!"), st.Bold(p.Path), p.Message)
 	}
 }
 
 // LintHuman writes the per-task lint findings + a count footer.
-func LintHuman(w io.Writer, results []core.LintResult) {
+func LintHuman(w io.Writer, st Style, results []core.LintResult) {
 	for _, r := range results {
-		fmt.Fprintf(w, "%s\n", r.Slug)
+		fmt.Fprintf(w, "%s\n", st.Bold(r.Slug))
 		for _, iss := range r.Issues {
-			fmt.Fprintf(w, "  %s: %s\n", iss.Field, iss.Message)
+			fmt.Fprintf(w, "  %s %s\n", st.Red(iss.Field+":"), iss.Message)
 		}
 	}
 	if len(results) > 0 {
-		fmt.Fprintf(w, "\n%d task(s) with issues\n", len(results))
+		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d task(s) with issues", len(results))))
 	}
 }
 

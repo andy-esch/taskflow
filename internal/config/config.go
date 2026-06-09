@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Config records where the planning data lives (the "taskflow root": the dir
@@ -14,15 +15,20 @@ type Config struct {
 	Root string
 }
 
-// Discover walks up from start to find the planning root: a dir containing a
-// tasks/ directory, or one with a planning/tasks/ subdir. It terminates at a
-// .git boundary or the filesystem root — never an infinite climb.
+// Discover walks up from start to find the planning root. At each level it
+// prefers an explicit `.tskflwctl.toml` marker (honoring its taskflow_root),
+// then falls back to a tasks/ directory or a planning/tasks/ subdir. It
+// terminates at a .git boundary or the filesystem root — never an infinite
+// climb.
 func Discover(start string) (*Config, error) {
 	dir, err := filepath.Abs(start)
 	if err != nil {
 		return nil, fmt.Errorf("resolve %q: %w", start, err)
 	}
 	for {
+		if fileExists(filepath.Join(dir, ConfigFile)) {
+			return &Config{Root: configuredRoot(dir)}, nil
+		}
 		if isDir(filepath.Join(dir, "tasks")) {
 			return &Config{Root: dir}, nil
 		}
@@ -32,10 +38,42 @@ func Discover(start string) (*Config, error) {
 		parent := filepath.Dir(dir)
 		if parent == dir || isDir(filepath.Join(dir, ".git")) {
 			return nil, fmt.Errorf(
-				"not a taskflow planning repo (no tasks/ found from %s up) — run `tskflwctl init`", start)
+				"not a taskflow planning repo (no %s or tasks/ found from %s up) — run `tskflwctl init`",
+				ConfigFile, start)
 		}
 		dir = parent
 	}
+}
+
+// configuredRoot resolves the planning root from a dir holding ConfigFile,
+// honoring its taskflow_root (default "."). The result is cleaned and kept
+// within dir's tree.
+func configuredRoot(dir string) string {
+	rel := taskflowRoot(filepath.Join(dir, ConfigFile))
+	return filepath.Join(dir, filepath.FromSlash(rel))
+}
+
+// taskflowRoot reads the taskflow_root value from a config file with a minimal
+// line scan (no TOML dependency for one string key). Defaults to ".".
+func taskflowRoot(configPath string) string {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return "."
+	}
+	for _, ln := range strings.Split(string(data), "\n") {
+		ln = strings.TrimSpace(ln)
+		if ln == "" || strings.HasPrefix(ln, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(ln, "=")
+		if !ok || strings.TrimSpace(k) != "taskflow_root" {
+			continue
+		}
+		if v = strings.Trim(strings.TrimSpace(v), `"'`); v != "" {
+			return v
+		}
+	}
+	return "."
 }
 
 func isDir(p string) bool {
@@ -51,8 +89,10 @@ func fileExists(p string) bool {
 // ConfigFile is the per-repo config filename written by Init.
 const ConfigFile = ".tskflwctl.toml"
 
-const defaultConfigTOML = `# tskflwctl planning config
+const defaultConfigTOML = `# tskflwctl planning config — also the marker that anchors discovery.
+# taskflow_root: planning dir relative to this file (default ".").
 taskflow_root = "."
+# tracked_repos: reserved for future multi-repo tracking (not yet read).
 tracked_repos = []
 `
 

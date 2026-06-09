@@ -22,7 +22,7 @@ with the primary/secondary-adapter architecture holding up cleanly.
 - `task new|list|show|set|move|start|promote|demote|complete|defer|deprecate`
 - `epic new|list|show` (auto-numbered create; cross-task rollup)
 - `audit list|show|close|reopen|defer` (finding-count rollup, bucket lifecycle)
-- Cross-cutting: explicit noun-verb, semantic exit codes (10–13), atomic +
+- Cross-cutting: explicit noun-verb, semantic exit codes (10–14), atomic +
   surgical-`yaml.v3` writes, `--json` everywhere with `schema_version`,
   resilient reads with **actionable** frontmatter errors, agent safety tags.
 

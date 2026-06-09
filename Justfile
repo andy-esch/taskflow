@@ -5,10 +5,14 @@
 # Default: build the CLI
 default: build
 
+# Version stamped into the binary (git tag/sha, or "dev").
+version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+ldflags := "-X github.com/andy-esch/taskflow/internal/cli.version=" + version
+
 # Build the binary to ./bin/tskflwctl
 build:
-	@echo "Building tskflwctl → bin/tskflwctl"
-	go build -o bin/tskflwctl ./cmd/tskflwctl
+	@echo "Building tskflwctl {{version}} → bin/tskflwctl"
+	go build -ldflags "{{ldflags}}" -o bin/tskflwctl ./cmd/tskflwctl
 
 # Run without installing: `just run task list --json`
 run *ARGS:
@@ -16,7 +20,7 @@ run *ARGS:
 
 # Install onto $GOBIN / $GOPATH/bin (so `tskflwctl` is on PATH)
 install:
-	go install ./cmd/tskflwctl
+	go install -ldflags "{{ldflags}}" ./cmd/tskflwctl
 
 # Print the completion script for a shell (bash|zsh|fish|powershell) to stdout.
 completion SHELL="zsh":

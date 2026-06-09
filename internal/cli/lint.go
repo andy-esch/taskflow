@@ -12,9 +12,10 @@ import (
 func newLintCmd(app *App) *cobra.Command {
 	var fix, dryRun bool
 	cmd := &cobra.Command{
-		Use:   "lint",
-		Short: "Validate active task frontmatter (--fix to auto-repair)",
-		Args:  cobra.NoArgs,
+		Use:     "lint",
+		Short:   "Validate active task frontmatter (--fix to auto-repair)",
+		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --json",
+		Args:    cobra.NoArgs,
 		// Read-only by default; --fix opts into mutation explicitly.
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -39,10 +40,10 @@ func runLint(app *App) error {
 			return err
 		}
 	} else {
-		render.ProblemsHuman(app.Out, problems)
-		render.LintHuman(app.Out, results)
+		render.ProblemsHuman(app.Out, app.Style, problems)
+		render.LintHuman(app.Out, app.Style, results)
 		if len(results) == 0 && len(problems) == 0 {
-			fmt.Fprintln(app.Out, "all active tasks pass lint")
+			fmt.Fprintf(app.Out, "%s all active tasks pass lint\n", app.Style.Green("✔"))
 		}
 	}
 	if len(results)+len(problems) > 0 {
@@ -60,6 +61,6 @@ func runLintFix(app *App, dryRun bool) error {
 	if app.JSON {
 		return render.FixJSON(app.Out, results, dryRun)
 	}
-	render.FixHuman(app.Out, results, dryRun)
+	render.FixHuman(app.Out, app.Style, results, dryRun)
 	return nil
 }

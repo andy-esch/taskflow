@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+func TestFrontmatterError_GitConflictMarkers(t *testing.T) {
+	fm := []byte("status: open\n<<<<<<< HEAD\npriority: high\n=======\npriority: low\n>>>>>>> branch\n")
+	msg := frontmatterError(fm, errBadFrontmatter)
+	if !strings.Contains(msg, "conflict") {
+		t.Errorf("a conflicted file should report a merge conflict, got: %q", msg)
+	}
+}
+
 func TestDiagnoseFrontmatter_TagsAsString(t *testing.T) {
 	// The exact pm-written shape: bare comma string instead of a list.
 	msg := diagnoseFrontmatter([]byte("status: ready-to-start\ntags: dispatcher,refactoring,tech-debt\n"))
