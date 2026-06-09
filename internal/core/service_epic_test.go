@@ -9,8 +9,9 @@ import (
 
 // fakeStore is an in-memory Store for pure core unit tests.
 type fakeStore struct {
-	tasks []domain.Task
-	epics []domain.Epic
+	tasks   []domain.Task
+	epics   []domain.Epic
+	created []domain.Task // tasks passed to CreateTask
 }
 
 func (f *fakeStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
@@ -29,6 +30,14 @@ func (f *fakeStore) Move(string, domain.Status, time.Time) (domain.Task, error) 
 }
 func (f *fakeStore) SetFields(string, map[string]any) (domain.Task, error) {
 	return domain.Task{}, nil
+}
+func (f *fakeStore) CreateTask(t domain.Task, _ string) (domain.Task, error) {
+	f.created = append(f.created, t)
+	return t, nil
+}
+func (f *fakeStore) CreateEpic(slug string, e domain.Epic, _ string) (domain.Epic, error) {
+	e.ID = "01-" + slug
+	return e, nil
 }
 func (f *fakeStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return f.epics, nil, nil
@@ -76,6 +85,45 @@ func TestService_ListEpics_Rollup(t *testing.T) {
 	}
 	if summaries[1].Total != 0 || summaries[1].Percent() != 0 {
 		t.Errorf("e2 should be empty: %+v", summaries[1])
+	}
+}
+
+func TestService_NewTask_UnknownEpic(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
+	svc := NewService(fs)
+	_, err := svc.NewTask(NewTaskParams{Title: "X", Epic: "nope", Tier: 3, Autonomy: 3, Priority: "medium"})
+	if err == nil {
+		t.Fatal("expected error for unknown epic")
+	}
+	if len(fs.created) != 0 {
+		t.Errorf("nothing should be created on validation failure, got %d", len(fs.created))
+	}
+}
+
+func TestService_NewTask_Valid(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
+	svc := NewService(fs)
+	tk, err := svc.NewTask(NewTaskParams{Title: "My New Task", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium", Effort: "Unknown"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tk.Slug != "my-new-task" || tk.Status != domain.StatusReadyToStart || tk.Created == "" {
+		t.Errorf("unexpected created task: %+v", tk)
+	}
+	if len(fs.created) != 1 {
+		t.Errorf("expected one CreateTask call, got %d", len(fs.created))
+	}
+}
+
+func TestService_NewTask_Next(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
+	svc := NewService(fs)
+	tk, err := svc.NewTask(NewTaskParams{Title: "T", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium", Next: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tk.Status != domain.StatusNextUp {
+		t.Errorf("--next should yield next-up, got %s", tk.Status)
 	}
 }
 

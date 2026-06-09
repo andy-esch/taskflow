@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -38,7 +39,15 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 		Short:         "Local-first planning CLI (tasks, epics, audits) over markdown",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			// Shell completion ('__complete') runs this hook too. Outside a
+			// planning repo, resolve() errors — which would abort completion.
+			// Stay silent there; completion funcs do their own forgiving
+			// discovery (see completion.go).
+			if isCompletionCommand(cmd) {
+				_ = app.resolve()
+				return nil
+			}
 			return app.resolve()
 		},
 	}
@@ -71,4 +80,15 @@ func (a *App) resolve() error {
 	a.Cfg = cfg
 	a.Svc = core.NewService(store.NewFS(cfg.Root))
 	return nil
+}
+
+// rel renders path relative to the planning root for readable output, falling
+// back to the original path.
+func (a *App) rel(path string) string {
+	if a.Cfg != nil {
+		if r, err := filepath.Rel(a.Cfg.Root, path); err == nil {
+			return r
+		}
+	}
+	return path
 }

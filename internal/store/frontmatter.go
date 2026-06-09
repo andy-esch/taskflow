@@ -70,6 +70,12 @@ func updateFrontmatter(content []byte, updates map[string]any) ([]byte, error) {
 		setMapNode(mapping, k, node)
 	}
 
+	return assembleFile(mapping, body)
+}
+
+// assembleFile encodes a frontmatter mapping node and reattaches the `---`
+// fences and body. Shared by surgical updates and fresh-file creation.
+func assembleFile(mapping *yaml.Node, body []byte) ([]byte, error) {
 	var fmBuf bytes.Buffer
 	enc := yaml.NewEncoder(&fmBuf)
 	enc.SetIndent(2)

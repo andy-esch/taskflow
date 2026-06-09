@@ -112,7 +112,7 @@ func (s *FS) resolveAudit(slug string) (path string, bucket domain.AuditBucket, 
 	}
 	switch len(paths) {
 	case 0:
-		return "", "", fmt.Errorf("%q: %w", slug, domain.ErrNotFound)
+		return "", "", fmt.Errorf("audit %q: %w", slug, domain.ErrNotFound)
 	case 1:
 		return paths[0], buckets[0], nil
 	default:

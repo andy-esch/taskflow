@@ -17,12 +17,14 @@ type TaskStore interface {
 	GetTask(slug string) (task domain.Task, body string, err error)
 	Move(slug string, to domain.Status, now time.Time) (domain.Task, error)
 	SetFields(slug string, updates map[string]any) (domain.Task, error)
+	CreateTask(t domain.Task, body string) (domain.Task, error)
 }
 
 // EpicStore is the epic-persistence port.
 type EpicStore interface {
 	ListEpics() ([]domain.Epic, []domain.FileProblem, error)
 	GetEpic(id string) (epic domain.Epic, body string, err error)
+	CreateEpic(slug string, e domain.Epic, body string) (domain.Epic, error)
 }
 
 // AuditStore is the audit-persistence port.

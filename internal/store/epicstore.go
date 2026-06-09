@@ -48,7 +48,7 @@ func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return domain.Epic{}, "", fmt.Errorf("%q: %w", id, domain.ErrNotFound)
+			return domain.Epic{}, "", fmt.Errorf("epic %q: %w", id, domain.ErrNotFound)
 		}
 		return domain.Epic{}, "", fmt.Errorf("read epic %s: %w", path, err)
 	}

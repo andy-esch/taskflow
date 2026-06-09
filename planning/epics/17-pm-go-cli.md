@@ -16,19 +16,24 @@ planning. Phase 0.5 (spec), the foundation, and a large slice of the port have
 landed; built in `cmd/tskflwctl` + `internal/{domain,core,store,cli,config}`
 with the primary/secondary-adapter architecture holding up cleanly.
 
-**Working today** (`go test ./...` + `golangci-lint` green; 53 test funcs):
-- `init`, `lint` (+ `--fix`/`--dry-run` auto-repair of pm-written frontmatter)
-- `task list|show|set|move|start|promote|demote|complete|defer|deprecate`
-- `epic list|show` (cross-task rollup)
+**Working today** (`go test ./...` + `golangci-lint` green):
+- `init`, `completion` (command/flag/**slug** completion, status-aware), `lint`
+  (+ `--fix`/`--dry-run` auto-repair of pm-written frontmatter)
+- `task new|list|show|set|move|start|promote|demote|complete|defer|deprecate`
+- `epic new|list|show` (auto-numbered create; cross-task rollup)
 - `audit list|show|close|reopen|defer` (finding-count rollup, bucket lifecycle)
 - Cross-cutting: explicit noun-verb, semantic exit codes (10–13), atomic +
   surgical-`yaml.v3` writes, `--json` everywhere with `schema_version`,
   resilient reads with **actionable** frontmatter errors, agent safety tags.
 
+With `task new`/`epic new` in, the **full daily loop (create→update→move→lint)
+runs without Python `pm`** — the bare-bones-release bar.
+
 **Remaining** (see the port task's progress log): `adr`/`project` groups, the
 audit finding-level commands (`status`/`fixed`/`followup`/`sync`/`new`/`noop`/
-`findings`/`stats`), `track`, `schema --type cli`, a global `--dry-run`,
-advisory `flock`, structured JSON error envelope, interactive `init` wizard.
+`findings`/`stats`), reporting views (`stats`/`index`/`tags`), `track`,
+`schema --type cli`, a global `--dry-run`, advisory `flock`, structured JSON
+error envelope, interactive `init` wizard.
 
 The Python `pm` (epic 16) remains the prototype/spec and still manages the
 desirelines-planning repo; `tskflwctl` reads/writes the same markdown and the

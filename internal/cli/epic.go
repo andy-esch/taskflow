@@ -4,11 +4,39 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
+	"github.com/andy-esch/taskflow/internal/core"
 )
 
 func newEpicCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "epic", Short: "Work with epics"}
-	cmd.AddCommand(newEpicListCmd(app), newEpicShowCmd(app))
+	cmd.AddCommand(newEpicNewCmd(app), newEpicListCmd(app), newEpicShowCmd(app))
+	return cmd
+}
+
+func newEpicNewCmd(app *App) *cobra.Command {
+	var p core.NewEpicParams
+	cmd := &cobra.Command{
+		Use:         "new <title>",
+		Short:       "Create a new epic (auto-numbered NN-slug)",
+		Args:        cobra.ExactArgs(1),
+		Annotations: map[string]string{"safety": "mutating"},
+		RunE: func(_ *cobra.Command, args []string) error {
+			p.Title = args[0]
+			e, err := app.Svc.NewEpic(p)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return render.CreatedJSON(app.Out, "epic", e.ID, e.Path)
+			}
+			render.CreatedHuman(app.Out, app.rel(e.Path))
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&p.Description, "description", "", "one-line description (required, <=150 chars)")
+	cmd.Flags().StringVar(&p.Status, "status", "planning", "epic status")
+	cmd.Flags().StringVar(&p.Priority, "priority", "medium", "high|medium|low")
+	cmd.Flags().StringSliceVar(&p.Tags, "tags", nil, "comma-separated tags")
 	return cmd
 }
 
@@ -40,10 +68,11 @@ func newEpicListCmd(app *App) *cobra.Command {
 
 func newEpicShowCmd(app *App) *cobra.Command {
 	return &cobra.Command{
-		Use:         "show <epic>",
-		Short:       "Show an epic and the tasks under it",
-		Args:        cobra.ExactArgs(1),
-		Annotations: map[string]string{"safety": "read-only"},
+		Use:               "show <epic>",
+		Short:             "Show an epic and the tasks under it",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeEpicIDs,
 		RunE: func(_ *cobra.Command, args []string) error {
 			epic, tasks, body, err := app.Svc.ShowEpic(args[0])
 			if err != nil {

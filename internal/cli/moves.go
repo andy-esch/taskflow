@@ -10,7 +10,7 @@ func runMoves[T any](app *App, slugs []string, status string, move func(slug str
 	var firstErr error
 	results := make([]render.MoveResult, 0, len(slugs))
 	for _, slug := range slugs {
-		res := render.MoveResult{Slug: slug, Status: status}
+		res := render.MoveResult{Slug: slug, To: status}
 		if got, err := move(slug); err != nil {
 			res.Error = err.Error()
 			if firstErr == nil {

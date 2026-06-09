@@ -10,5 +10,6 @@ type Epic struct {
 	Status      string   `yaml:"status"`
 	Description string   `yaml:"description"`
 	Priority    string   `yaml:"priority"`
+	Created     string   `yaml:"created"`
 	Tags        []string `yaml:"tags"`
 }

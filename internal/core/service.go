@@ -92,6 +92,152 @@ func (s *Service) SetFields(slug string, updates map[string]any) (domain.Task, e
 	return s.store.SetFields(slug, withMeta)
 }
 
+// NewTaskParams are the inputs for creating a task. Tier/Autonomy default to 3,
+// Priority to "medium", Effort to "Unknown" when zero (set by the CLI flags).
+type NewTaskParams struct {
+	Title       string
+	Epic        string
+	Description string
+	Effort      string
+	Priority    string
+	Tier        int
+	Autonomy    int
+	Tags        []string
+	Next        bool   // create in next-up instead of ready-to-start
+	Body        string // override the default handoff scaffold
+}
+
+const taskBodyTemplate = `
+# %s
+
+## Objective
+
+<why / what — one short paragraph>
+
+## Acceptance criteria
+
+- [ ] <observable outcome>
+
+## Out of scope
+
+- <explicitly excluded>
+
+## Related
+
+- Epic [[%s]]
+`
+
+// NewTask validates and creates a task, returning the created task. The epic
+// must exist; tier/autonomy/priority/description are validated. On any invalid
+// input it returns ErrValidation and nothing is written.
+func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
+	epics, _, err := s.store.ListEpics()
+	if err != nil {
+		return domain.Task{}, err
+	}
+	if !epicExists(epics, p.Epic) {
+		return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, p.Epic)
+	}
+	for field, val := range map[string]string{
+		"priority":       p.Priority,
+		"tier":           strconv.Itoa(p.Tier),
+		"autonomy_level": strconv.Itoa(p.Autonomy),
+		"description":    p.Description,
+	} {
+		if err := domain.ValidateField(field, val); err != nil {
+			return domain.Task{}, err
+		}
+	}
+	slug := domain.Slugify(p.Title)
+	if slug == "" {
+		return domain.Task{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
+	}
+	status := domain.StatusReadyToStart
+	if p.Next {
+		status = domain.StatusNextUp
+	}
+	t := domain.Task{
+		Slug:        slug,
+		Status:      status,
+		Epic:        p.Epic,
+		Description: p.Description,
+		Effort:      p.Effort,
+		Tier:        p.Tier,
+		Priority:    p.Priority,
+		Autonomy:    p.Autonomy,
+		Tags:        p.Tags,
+		Created:     time.Now().Format("2006-01-02"),
+	}
+	body := p.Body
+	if body == "" {
+		body = fmt.Sprintf(taskBodyTemplate, p.Title, p.Epic)
+	}
+	return s.store.CreateTask(t, body)
+}
+
+// NewEpicParams are the inputs for creating an epic.
+type NewEpicParams struct {
+	Title       string
+	Description string
+	Status      string
+	Priority    string
+	Tags        []string
+	Body        string
+}
+
+const epicBodyTemplate = `
+# %s
+
+**Goal.** %s
+
+## Why this is its own epic
+
+<one paragraph: what makes this its own epic vs folding into a sibling?>
+
+## Out of scope
+
+- <explicitly excluded>
+`
+
+// NewEpic validates and creates an epic (auto-numbered NN-<slug>). Description
+// is required (single line, ≤ the description cap); priority is validated.
+func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
+	if strings.TrimSpace(p.Description) == "" {
+		return domain.Epic{}, fmt.Errorf("%w: epic description is required", domain.ErrValidation)
+	}
+	if err := domain.ValidateField("description", p.Description); err != nil {
+		return domain.Epic{}, err
+	}
+	if err := domain.ValidateField("priority", p.Priority); err != nil {
+		return domain.Epic{}, err
+	}
+	slug := domain.Slugify(p.Title)
+	if slug == "" {
+		return domain.Epic{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
+	}
+	e := domain.Epic{
+		Status:      p.Status,
+		Description: p.Description,
+		Priority:    p.Priority,
+		Tags:        p.Tags,
+		Created:     time.Now().Format("2006-01-02"),
+	}
+	body := p.Body
+	if body == "" {
+		body = fmt.Sprintf(epicBodyTemplate, p.Title, p.Description)
+	}
+	return s.store.CreateEpic(slug, e, body)
+}
+
+func epicExists(epics []domain.Epic, id string) bool {
+	for _, e := range epics {
+		if e.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // EpicSummary is an epic plus its task rollup.
 type EpicSummary struct {
 	Epic  domain.Epic

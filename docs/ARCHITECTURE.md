@@ -45,16 +45,18 @@ and in-process CLI tests that execute `NewRootCmd` with a captured buffer.
 `just go-test` + `just go-lint` (golangci-lint).
 
 ## Status (2026-06-08)
-Substantially functional:
-- `init`, `lint` (+`--fix`/`--dry-run`)
-- `task list|show|set|move|start|promote|demote|complete|defer|deprecate`
-- `epic list|show`, `audit list|show|close|reopen|defer`
+Substantially functional — the full create→update→move→lint loop runs without
+the Python prototype:
+- `init`, `completion` (command/flag/slug, status-aware), `lint` (+`--fix`/`--dry-run`)
+- `task new|list|show|set|move|start|promote|demote|complete|defer|deprecate`
+- `epic new|list|show`, `audit list|show|close|reopen|defer`
 
 Throughout: explicit noun-verb, semantic exit codes (10–13), atomic +
 surgical-`yaml.v3` writes, `--json` everywhere (`schema_version`), resilient
 reads with actionable frontmatter errors, agent safety annotations.
 
 Remaining (see `planning/`): `adr`/`project` groups, audit finding-level
-commands, `track`, `schema --type cli`, global `--dry-run`, advisory `flock`,
-structured JSON error envelope, interactive `init` wizard. Out of scope by a
-long shot: MCP / semantic engine / pgvector.
+commands, reporting views (`stats`/`index`/`tags`), `track`, `schema --type
+cli`, global `--dry-run`, advisory `flock`, structured JSON error envelope,
+interactive `init` wizard. Out of scope by a long shot: MCP / semantic engine /
+pgvector.

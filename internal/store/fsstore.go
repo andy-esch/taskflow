@@ -179,7 +179,7 @@ func (s *FS) resolve(slug string) (path string, status domain.Status, err error)
 	}
 	switch len(paths) {
 	case 0:
-		return "", "", fmt.Errorf("%q: %w", slug, domain.ErrNotFound)
+		return "", "", fmt.Errorf("task %q: %w", slug, domain.ErrNotFound)
 	case 1:
 		return paths[0], statuses[0], nil
 	default:

@@ -91,11 +91,13 @@ func TaskShowJSON(w io.Writer, t domain.Task, body string) error {
 	}{SchemaVersion: SchemaVersion, Task: toJSON(t), Body: body})
 }
 
-// MoveResult is the per-task outcome of a transition.
+// MoveResult is the per-item outcome of a transition. `To` is the destination
+// state — a task status or an audit bucket — so the JSON key is the neutral
+// "to" rather than "status".
 type MoveResult struct {
-	Slug   string `json:"slug"`
-	Status string `json:"status"`
-	Error  string `json:"error,omitempty"`
+	Slug  string `json:"slug"`
+	To    string `json:"to"`
+	Error string `json:"error,omitempty"`
 }
 
 // MovesHuman prints one line per transition outcome.
@@ -104,7 +106,7 @@ func MovesHuman(w io.Writer, results []MoveResult) {
 		if r.Error != "" {
 			fmt.Fprintf(w, "x %s: %s\n", r.Slug, r.Error)
 		} else {
-			fmt.Fprintf(w, "moved %s -> %s\n", r.Slug, r.Status)
+			fmt.Fprintf(w, "moved %s -> %s\n", r.Slug, r.To)
 		}
 	}
 }
@@ -121,6 +123,27 @@ func encodeJSON(w io.Writer, payload any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(payload)
+}
+
+// CreatedHuman prints the path of a newly created file.
+func CreatedHuman(w io.Writer, path string) {
+	fmt.Fprintf(w, "created %s\n", path)
+}
+
+// CreatedJSON writes a versioned envelope for a newly created item.
+func CreatedJSON(w io.Writer, kind, id, path string) error {
+	return encodeJSON(w, struct {
+		SchemaVersion string `json:"schema_version"`
+		Created       struct {
+			Kind string `json:"kind"`
+			ID   string `json:"id"`
+			Path string `json:"path"`
+		} `json:"created"`
+	}{SchemaVersion: SchemaVersion, Created: struct {
+		Kind string `json:"kind"`
+		ID   string `json:"id"`
+		Path string `json:"path"`
+	}{Kind: kind, ID: id, Path: path}})
 }
 
 // EpicsHuman writes a table of epics with task rollup.

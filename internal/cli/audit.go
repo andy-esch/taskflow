@@ -59,10 +59,11 @@ func newAuditListCmd(app *App) *cobra.Command {
 
 func newAuditShowCmd(app *App) *cobra.Command {
 	return &cobra.Command{
-		Use:         "show <audit>",
-		Short:       "Show an audit's metadata and body",
-		Args:        cobra.ExactArgs(1),
-		Annotations: map[string]string{"safety": "read-only"},
+		Use:               "show <audit>",
+		Short:             "Show an audit's metadata and body",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeAuditSlugs,
 		RunE: func(_ *cobra.Command, args []string) error {
 			audit, body, err := app.Svc.ShowAudit(args[0])
 			if err != nil {
@@ -78,10 +79,11 @@ func newAuditShowCmd(app *App) *cobra.Command {
 
 func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.Command {
 	return &cobra.Command{
-		Use:         use + " <audit>...",
-		Short:       short,
-		Args:        cobra.MinimumNArgs(1),
-		Annotations: map[string]string{"safety": "mutating"},
+		Use:               use + " <audit>...",
+		Short:             short,
+		Args:              cobra.MinimumNArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.auditCompleter(to), // don't offer audits already at `to`
 		RunE: func(_ *cobra.Command, args []string) error {
 			return runMoves(app, args, string(to),
 				func(slug string) (domain.Audit, error) { return app.Svc.MoveAudit(slug, to) },

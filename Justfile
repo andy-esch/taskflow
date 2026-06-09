@@ -18,6 +18,18 @@ run *ARGS:
 install:
 	go install ./cmd/tskflwctl
 
+# Print the completion script for a shell (bash|zsh|fish|powershell) to stdout.
+completion SHELL="zsh":
+	go run ./cmd/tskflwctl completion {{SHELL}}
+
+# Install zsh tab-completion → ~/.zsh/completions/_tskflwctl (one-time).
+# Run `just install` first so `tskflwctl` is on PATH when completion fires.
+completion-zsh:
+	mkdir -p ~/.zsh/completions
+	go run ./cmd/tskflwctl completion zsh > ~/.zsh/completions/_tskflwctl
+	@echo 'Installed → ~/.zsh/completions/_tskflwctl'
+	@echo 'First time? add to ~/.zshrc:  fpath=(~/.zsh/completions $fpath)  then:  autoload -Uz compinit && compinit'
+
 # Run tests
 test:
 	go test ./...
@@ -34,6 +46,10 @@ fmt:
 # Tidy modules
 tidy:
 	go mod tidy
+
+# Check Go module tidiness (fails if go.mod or go.sum would change)
+tidy-check:
+	go mod tidy -diff
 
 # Clean build artifacts
 clean:

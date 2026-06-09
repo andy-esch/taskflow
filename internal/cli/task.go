@@ -14,6 +14,7 @@ import (
 func newTaskCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "task", Short: "Work with tasks"}
 	cmd.AddCommand(
+		newTaskNewCmd(app),
 		newTaskListCmd(app),
 		newTaskShowCmd(app),
 		newTaskSetCmd(app),
@@ -27,6 +28,40 @@ func newTaskCmd(app *App) *cobra.Command {
 		newTransitionCmd(app, "defer", "Move task(s) to deferred", domain.StatusDeferred),
 		newTransitionCmd(app, "deprecate", "Move task(s) to deprecated", domain.StatusDeprecated),
 	)
+	return cmd
+}
+
+func newTaskNewCmd(app *App) *cobra.Command {
+	var p core.NewTaskParams
+	cmd := &cobra.Command{
+		Use:         "new <title>",
+		Short:       "Create a new task (validated, handoff-ready scaffold)",
+		Args:        cobra.ExactArgs(1),
+		Annotations: map[string]string{"safety": "mutating"},
+		RunE: func(_ *cobra.Command, args []string) error {
+			p.Title = args[0]
+			t, err := app.Svc.NewTask(p)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return render.CreatedJSON(app.Out, "task", t.Slug, t.Path)
+			}
+			render.CreatedHuman(app.Out, app.rel(t.Path))
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&p.Epic, "epic", "", "epic id (required)")
+	cmd.Flags().StringVar(&p.Description, "description", "", "one-line description (<=150 chars)")
+	cmd.Flags().StringVar(&p.Effort, "effort", "Unknown", "effort estimate")
+	cmd.Flags().StringVar(&p.Priority, "priority", "medium", "high|medium|low")
+	cmd.Flags().IntVar(&p.Tier, "tier", 3, "tier 1-5")
+	cmd.Flags().IntVar(&p.Autonomy, "autonomy", 3, "autonomy level 1-5")
+	cmd.Flags().StringSliceVar(&p.Tags, "tags", nil, "comma-separated tags")
+	cmd.Flags().BoolVar(&p.Next, "next", false, "create in next-up instead of ready-to-start")
+	cmd.Flags().StringVar(&p.Body, "body", "", "override the default body scaffold")
+	_ = cmd.MarkFlagRequired("epic")
+	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
 	return cmd
 }
 
@@ -64,10 +99,11 @@ func newTaskListCmd(app *App) *cobra.Command {
 
 func newTaskShowCmd(app *App) *cobra.Command {
 	return &cobra.Command{
-		Use:         "show <task>",
-		Short:       "Show a task's metadata and body",
-		Args:        cobra.ExactArgs(1),
-		Annotations: map[string]string{"safety": "read-only"},
+		Use:               "show <task>",
+		Short:             "Show a task's metadata and body",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeTaskSlugs,
 		RunE: func(_ *cobra.Command, args []string) error {
 			task, body, err := app.Svc.ShowTask(args[0])
 			if err != nil {
@@ -88,10 +124,11 @@ func newTaskSetCmd(app *App) *cobra.Command {
 		tags, extra                         []string
 	)
 	cmd := &cobra.Command{
-		Use:         "set <task>",
-		Short:       "Set one or more frontmatter fields (validated, single atomic write)",
-		Args:        cobra.ExactArgs(1),
-		Annotations: map[string]string{"safety": "mutating"},
+		Use:               "set <task>",
+		Short:             "Set one or more frontmatter fields (validated, single atomic write)",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeTaskSlugs,
 		RunE: func(c *cobra.Command, args []string) error {
 			updates := map[string]any{}
 			if c.Flags().Changed("description") {
@@ -146,10 +183,11 @@ func newTaskSetCmd(app *App) *cobra.Command {
 
 func newTaskMoveCmd(app *App) *cobra.Command {
 	return &cobra.Command{
-		Use:         "move <task>... <status>",
-		Short:       "Transition task(s) to <status> (generic escape hatch)",
-		Args:        cobra.MinimumNArgs(2),
-		Annotations: map[string]string{"safety": "mutating"},
+		Use:               "move <task>... <status>",
+		Short:             "Transition task(s) to <status> (generic escape hatch)",
+		Args:              cobra.MinimumNArgs(2),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeTaskSlugs,
 		RunE: func(_ *cobra.Command, args []string) error {
 			to, err := domain.ParseStatus(args[len(args)-1])
 			if err != nil {
@@ -162,10 +200,11 @@ func newTaskMoveCmd(app *App) *cobra.Command {
 
 func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Command {
 	return &cobra.Command{
-		Use:         use + " <task>...",
-		Short:       short,
-		Args:        cobra.MinimumNArgs(1),
-		Annotations: map[string]string{"safety": "mutating"},
+		Use:               use + " <task>...",
+		Short:             short,
+		Args:              cobra.MinimumNArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.taskCompleter(to), // don't offer tasks already at `to`
 		RunE: func(_ *cobra.Command, args []string) error {
 			return runTransition(app, to, args)
 		},
