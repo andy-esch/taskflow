@@ -1,0 +1,3 @@
+# tskflwctl planning config
+taskflow_root = "./planning"
+tracked_repos = []

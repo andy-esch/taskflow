@@ -1,24 +1,110 @@
+// Package cli is the primary adapter: the cobra command tree over the core.
+// A future TUI is a second primary adapter over the same core.
 package cli
 
 import (
-	"context"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/andy-esch/taskflow/internal/cli/render"
+	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/store"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "taskflow",
-	Short: "AI-Native Project Management",
-	Long: `TaskFlow is a local-first project management tool designed 
-to bridge the gap between human intuition and AI automation.`,
-	// Run: func(cmd *cobra.Command, args []string) { }, 
+// App is the dependency container. It is created empty by NewRootCmd and
+// populated lazily in PersistentPreRunE — after flags are parsed, since deps
+// (config, service) depend on flags like --chdir.
+type App struct {
+	Out    io.Writer
+	ErrOut io.Writer
+
+	JSON    bool
+	Chdir   string
+	Color   string // auto | always | never
+	NoColor bool   // alias for --color=never
+
+	Style render.Style
+	Cfg   *config.Config
+	Svc   *core.Service
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-func Execute(ctx context.Context) error {
-	return rootCmd.ExecuteContext(ctx)
+// setStyle computes the output Style (color + terminal width) from the flags and
+// environment. Called by every command's PreRun (including those that skip repo
+// discovery, like init/version).
+func (a *App) setStyle() {
+	a.Style = render.NewStyle(wantColor(a.Color, a.NoColor, a.Out)).WithWidth(terminalWidth(a.Out))
 }
 
-func init() {
-	// Global flags can be defined here
+// NewRootCmd builds the command tree with explicit DI — no package globals.
+// All output flows through the injected writers, which makes commands testable.
+func NewRootCmd(out, errOut io.Writer) *cobra.Command {
+	app := &App{Out: out, ErrOut: errOut}
+
+	root := &cobra.Command{
+		Use:           "tskflwctl",
+		Short:         "Local-first planning CLI (tasks, epics, audits) over markdown",
+		Version:       versionString(),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			app.setStyle()
+			// Shell completion ('__complete') runs this hook too. Outside a
+			// planning repo, resolve() errors — which would abort completion.
+			// Stay silent there; completion funcs do their own forgiving
+			// discovery (see completion.go).
+			if isCompletionCommand(cmd) {
+				_ = app.resolve()
+				return nil
+			}
+			return app.resolve()
+		},
+	}
+	root.PersistentFlags().BoolVar(&app.JSON, "json", false, "machine-readable JSON output")
+	root.PersistentFlags().StringVarP(&app.Chdir, "chdir", "C", "", "anchor to the planning repo at this path")
+	root.PersistentFlags().StringVar(&app.Color, "color", "auto", "colorize output: auto|always|never")
+	root.PersistentFlags().BoolVar(&app.NoColor, "no-color", false, "disable colored output (alias for --color=never)")
+
+	root.AddCommand(newInitCmd(app))
+	root.AddCommand(newVersionCmd(app))
+	root.AddCommand(newTaskCmd(app))
+	root.AddCommand(newEpicCmd(app))
+	root.AddCommand(newAuditCmd(app))
+	root.AddCommand(newLintCmd(app))
+	return root
+}
+
+// resolve discovers the planning repo and constructs the service. Runs once,
+// after flag parsing, before any subcommand's RunE (the lazy App shell).
+func (a *App) resolve() error {
+	start := a.Chdir
+	if start == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("getwd: %w", err)
+		}
+		start = wd
+	}
+	cfg, err := config.Discover(start)
+	if err != nil {
+		return err
+	}
+	a.Cfg = cfg
+	a.Svc = core.NewService(store.NewFS(cfg.Root))
+	return nil
+}
+
+// rel renders path relative to the planning root for readable output, falling
+// back to the original path.
+func (a *App) rel(path string) string {
+	if a.Cfg != nil {
+		if r, err := filepath.Rel(a.Cfg.Root, path); err == nil {
+			return r
+		}
+	}
+	return path
 }

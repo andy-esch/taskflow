@@ -1,0 +1,54 @@
+# taskflow — Claude Code guide
+
+This repo is **`tskflwctl`**, a local-first planning CLI (Go) over
+markdown+frontmatter task/epic/audit files. It **self-hosts its own planning**
+under `planning/`. Two hats: the Go implementation, and the planning that tracks
+its own work.
+
+## Build / test / lint
+
+- `just build` → `bin/tskflwctl` · `just test` → `go test ./...` · `just lint` →
+  `golangci-lint run ./...`. Get all three green before calling code done.
+- Standard Go layout: `main` is `./cmd/tskflwctl`, so `go build .` at the root
+  does nothing useful — use `just build` / `go build ./...`.
+
+## Architecture (read before changing code)
+
+`docs/ARCHITECTURE.md` is the one-screen orientation: `cli` (and a future `tui`)
+are **primary adapters** over `core`; the markdown filesystem is the
+**secondary adapter** (`store`). Non-negotiables: DI via one `*cli.App`
+populated in `PersistentPreRunE` (no globals), all output through injected
+`io.Writer`, `--json` everywhere with a `schema_version`, the core never touches
+fs/cobra, and **status/bucket == directory**.
+
+## Planning workflow — use `tskflwctl`, not `pm`
+
+We dogfood: drive this repo's planning with the tool itself.
+
+- **Create:** `./bin/tskflwctl task new "Title" --epic <id> [--next]` ·
+  `epic new "Title" --description "..."`.
+- **Lifecycle:** `task start|promote|demote|complete|defer|deprecate <slug>...`.
+- **Read/edit:** `task list|show|set`, `epic list|show`,
+  `audit list|show|close|reopen|defer`.
+- **Hygiene:** `tskflwctl lint` (`--fix` to auto-repair). Keep `planning/`
+  lint-clean.
+- Tasks live in `planning/tasks/<status>/`; a task's `status:` **is** its
+  directory. Every active task needs a one-line `description`.
+- **`bin/pm` (Python) is retired** — it was the prototype `tskflwctl` was ported
+  from. Don't use it; `tests/test_pm.py` is kept only as historical spec.
+
+## Git
+
+Inspection (`status`/`diff`/`log`) is fine; never run state-changing git
+(`add`/`commit`/`branch`/…) unless asked. `tskflwctl` deliberately does **not**
+touch git — it writes files; the user stages/commits.
+
+## Code conventions
+
+Match the surrounding code (naming, comment density, idiom). Errors wrap the
+domain sentinels (`ErrNotFound` / `ErrValidation` / `ErrInvalidTransition` /
+`ErrAmbiguous` / `ErrConflict`) so the CLI maps them to exit codes (10–14). New
+file writes go through the atomic helpers in `store/atomic.go`
+(`writeFileAtomic` to overwrite, `createFileAtomic` for exclusive create).
+Frontmatter is edited **surgically** — preserve unknown fields, comments, and
+key order.

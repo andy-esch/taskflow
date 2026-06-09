@@ -1,45 +1,60 @@
-# TaskFlow Justfile
+# taskflow Justfile — tskflwctl (Go CLI)
+# The main package lives at ./cmd/tskflwctl (standard Go layout), so use
+# `just build` / `just run ...` rather than `go build .` at the repo root.
 
-# Default recipe: build the CLI
-default: build-cli
+# Default: build the CLI
+default: build
 
-# --- Protobuf ---
+# Version stamped into the binary (git tag/sha, or "dev").
+version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+ldflags := "-X github.com/andy-esch/taskflow/internal/cli.version=" + version
 
-# Generate code from protobuf definitions
-proto:
-	buf generate
+# Build the binary to ./bin/tskflwctl
+build:
+	@echo "Building tskflwctl {{version}} → bin/tskflwctl"
+	go build -ldflags "{{ldflags}}" -o bin/tskflwctl ./cmd/tskflwctl
 
-# --- Development ---
+# Run without installing: `just run task list --json`
+run *ARGS:
+	go run ./cmd/tskflwctl {{ARGS}}
 
-# Start the dev stack
-dev-up:
-	docker-compose -f dev/docker-compose.yml up -d
+# Install onto $GOBIN / $GOPATH/bin (so `tskflwctl` is on PATH)
+install:
+	go install -ldflags "{{ldflags}}" ./cmd/tskflwctl
 
-# Stop the dev stack
-dev-down:
-	docker-compose -f dev/docker-compose.yml down
+# Print the completion script for a shell (bash|zsh|fish|powershell) to stdout.
+completion SHELL="zsh":
+	go run ./cmd/tskflwctl completion {{SHELL}}
 
-# --- Build ---
+# Install zsh tab-completion → ~/.zsh/completions/_tskflwctl (one-time).
+# Run `just install` first so `tskflwctl` is on PATH when completion fires.
+completion-zsh:
+	mkdir -p ~/.zsh/completions
+	go run ./cmd/tskflwctl completion zsh > ~/.zsh/completions/_tskflwctl
+	@echo 'Installed → ~/.zsh/completions/_tskflwctl'
+	@echo 'First time? add to ~/.zshrc:  fpath=(~/.zsh/completions $fpath)  then:  autoload -Uz compinit && compinit'
 
-# Build the Go CLI
-build-cli:
-	@echo "Building Go CLI..."
-	go build -o bin/taskflow ./cmd/taskflow
-
-# Build the Python API Docker image
-build-api:
-	@echo "Building Python API..."
-	cd services/semantic-engine && docker build -t taskflow-api .
-
-# --- Testing ---
-
-# Run all tests
-test: test-go test-python
-
-# Run Go tests
-test-go:
+# Run tests
+test:
 	go test ./...
 
-# Run Python tests
-test-python:
-	cd services/semantic-engine && pytest
+# Lint (golangci-lint)
+lint:
+	golangci-lint run ./...
+
+# Format Go sources + tidy lint formatting
+fmt:
+	gofmt -w cmd internal
+	golangci-lint fmt ./... || true
+
+# Tidy modules
+tidy:
+	go mod tidy
+
+# Check Go module tidiness (fails if go.mod or go.sum would change)
+tidy-check:
+	go mod tidy -diff
+
+# Clean build artifacts
+clean:
+	rm -rf bin
