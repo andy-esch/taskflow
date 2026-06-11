@@ -86,6 +86,12 @@ render concepts). Epic 17 is the CLI port; this is the interactive front-end.
   `reloadMsg` in S1.)
 - **S4 — mutations** [[tui-sprint-4-mutations-and-actions]]: lifecycle via
   `Service.Move`/`SetFields` with confirmation; reconsider multi-select then.
+- **S5 — pretty markdown** [[tui-glamour-markdown-rendering-with-rawpretty-toggle]]:
+  glamour-render the body (cached, never in `View()`) with an `R` raw/pretty toggle.
+- **S6 — cross-link navigation** [[tui-cross-link-navigation-between-epics-and-tasks]]:
+  follow epic↔task references with a jump + back-stack (body wikilinks/peek deferred).
+- **Polish** [[tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort]]:
+  S2b fresh-eyes follow-ups (occurrence-level find, highlight fidelity, per-entity sort).
 
 ## References
 
