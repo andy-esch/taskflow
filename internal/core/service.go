@@ -260,7 +260,12 @@ func (s *Service) ListEpics() ([]EpicSummary, []domain.FileProblem, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	problems := append(ep1, ep2...)
+	return rollupEpics(epics, tasks), append(ep1, ep2...), nil
+}
+
+// rollupEpics joins tasks onto their epics (by the tasks' `epic:` field) to
+// produce per-epic done/total counts. Shared by ListEpics and Summary.
+func rollupEpics(epics []domain.Epic, tasks []domain.Task) []EpicSummary {
 	idx := make(map[string]*EpicSummary, len(epics))
 	out := make([]EpicSummary, len(epics))
 	for i := range epics {
@@ -277,7 +282,57 @@ func (s *Service) ListEpics() ([]EpicSummary, []domain.FileProblem, error) {
 			es.Done++
 		}
 	}
-	return out, problems, nil
+	return out
+}
+
+// StatusCount is the number of tasks in a status (for the dashboard).
+type StatusCount struct {
+	Status domain.Status
+	Count  int
+}
+
+// Summary is the at-a-glance project state for the dashboard.
+type Summary struct {
+	Counts     []StatusCount        // every status in display order (count may be 0)
+	InProgress []domain.Task        // the in-progress working set
+	Epics      []EpicSummary        // epic rollups
+	Misfiled   int                  // tasks whose status disagrees with their folder
+	Problems   []domain.FileProblem // unreadable files
+}
+
+// Summary composes a one-screen overview from a single scan of tasks + epics.
+func (s *Service) Summary() (Summary, error) {
+	tasks, p1, err := s.store.ListTasks()
+	if err != nil {
+		return Summary{}, err
+	}
+	epics, p2, err := s.store.ListEpics()
+	if err != nil {
+		return Summary{}, err
+	}
+	counts := map[domain.Status]int{}
+	var inProgress []domain.Task
+	misfiled := 0
+	for _, t := range tasks {
+		counts[t.Status]++
+		if t.Status == domain.StatusInProgress {
+			inProgress = append(inProgress, t)
+		}
+		if t.Misfiled() {
+			misfiled++
+		}
+	}
+	ordered := make([]StatusCount, 0, len(domain.AllStatuses()))
+	for _, st := range domain.AllStatuses() {
+		ordered = append(ordered, StatusCount{Status: st, Count: counts[st]})
+	}
+	return Summary{
+		Counts:     ordered,
+		InProgress: inProgress,
+		Epics:      rollupEpics(epics, tasks),
+		Misfiled:   misfiled,
+		Problems:   append(p1, p2...),
+	}, nil
 }
 
 // ShowEpic returns an epic, the tasks that belong to it, and its body.

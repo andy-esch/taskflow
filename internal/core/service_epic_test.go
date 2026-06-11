@@ -144,6 +144,38 @@ func TestService_NewTask_Next(t *testing.T) {
 	}
 }
 
+func TestService_Summary(t *testing.T) {
+	svc := NewService(&fakeStore{
+		epics: []domain.Epic{{ID: "e1"}},
+		tasks: []domain.Task{
+			{Slug: "a", Status: domain.StatusInProgress, Epic: "e1"},
+			{Slug: "b", Status: domain.StatusReadyToStart, Epic: "e1"},
+			{Slug: "c", Status: domain.StatusCompleted, Epic: "e1"},
+			{Slug: "d", Status: domain.StatusCompleted, Declared: domain.StatusReadyToStart}, // misfiled, no epic
+		},
+	})
+	s, err := svc.Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := map[domain.Status]int{}
+	for _, c := range s.Counts {
+		counts[c.Status] = c.Count
+	}
+	if counts[domain.StatusInProgress] != 1 || counts[domain.StatusReadyToStart] != 1 || counts[domain.StatusCompleted] != 2 {
+		t.Errorf("counts wrong: %+v", counts)
+	}
+	if len(s.InProgress) != 1 || s.InProgress[0].Slug != "a" {
+		t.Errorf("in-progress wrong: %+v", s.InProgress)
+	}
+	if s.Misfiled != 1 {
+		t.Errorf("misfiled = %d, want 1", s.Misfiled)
+	}
+	if len(s.Epics) != 1 || s.Epics[0].Total != 3 || s.Epics[0].Done != 1 {
+		t.Errorf("epic rollup wrong: %+v", s.Epics)
+	}
+}
+
 func TestService_ShowEpic(t *testing.T) {
 	svc := NewService(&fakeStore{
 		epics: []domain.Epic{{ID: "e1"}},
