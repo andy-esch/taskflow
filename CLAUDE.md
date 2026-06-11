@@ -14,12 +14,13 @@ its own work.
 
 ## Architecture (read before changing code)
 
-`docs/ARCHITECTURE.md` is the one-screen orientation: `cli` (and a future `tui`)
-are **primary adapters** over `core`; the markdown filesystem is the
+`docs/ARCHITECTURE.md` is the one-screen orientation: `cli` and `tui` are
+**primary adapters** over `core`; the markdown filesystem is the
 **secondary adapter** (`store`). Non-negotiables: DI via one `*cli.App`
 populated in `PersistentPreRunE` (no globals), all output through injected
 `io.Writer`, `--json` everywhere with a `schema_version`, the core never touches
-fs/cobra, and **status/bucket == directory**.
+fs/cobra, and **status/bucket == directory**. The TUI never touches the store —
+it reads through `core.Service` as `tea.Cmd`s (no I/O in `Update`/`View`).
 
 ## Planning workflow — use `tskflwctl`, not `pm`
 

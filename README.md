@@ -10,7 +10,7 @@ retired — see below), and it dogfoods on its own planning under
 | Path | Purpose |
 | :--- | :--- |
 | **[`cmd/tskflwctl/`](./cmd/tskflwctl/)** | The CLI entrypoint (thin composition root). |
-| **[`internal/`](./internal/)** | `domain` (pure) · `core` (use cases) · `store` (markdown adapter) · `cli` (cobra) · `config`. |
+| **[`internal/`](./internal/)** | `domain` (pure) · `core` (use cases) · `store` (markdown adapter) · `cli` (cobra) · `tui` (Bubble Tea) · `theme` (shared glyphs/colors) · `config`. |
 | **[`planning/`](./planning/)** | This repo's own epics, tasks, and research (self-hosted). |
 | **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** | One-screen orientation: the primary/secondary-adapter design. |
 
@@ -40,6 +40,7 @@ tskflwctl task list                    # active tasks (--all / --status / --epic
 tskflwctl task show <slug>
 tskflwctl epic list                    # rollup: done/total per epic
 tskflwctl audit list                   # open audits (--all / --closed / --deferred)
+tskflwctl ui                           # interactive Bubble Tea browser (tasks/epics/audits)
 
 # update + lifecycle
 tskflwctl task set <slug> --priority high --tags a,b
@@ -104,6 +105,13 @@ a file's frontmatter is malformed).
 Design rationale lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) and
 [`planning/epics/17-pm-go-cli.md`](./planning/epics/17-pm-go-cli.md).
 
-> **Note:** `services/` and `internal/tui/` are leftovers from an earlier Go
-> spike (a Python "brain" and a Bubble Tea TUI sketch) and are not part of the
-> current CLI. The TUI will be rebuilt over the same `core` in a later phase.
+### Interactive TUI (`tskflwctl ui`)
+
+A Bubble Tea browser over the **same `core`** the CLI uses (a second primary
+adapter — never the filesystem directly). Two panes: an entity list (tasks /
+epics / audits) and a detail preview. Vim-first keys: `:` command-jump, `/`
+filter (slug/desc/tags), `o`/`O` sort, `s`/`S` status views, `[`/`]` tabs, `/`
++ `n`/`N` find-in-body when the detail is focused, `?` for the full keymap, `r`
+to refresh. It **live-reloads** via `fsnotify` — edits from your editor or a CLI
+`task move` in another terminal show up within ~200ms, cursor preserved. See
+[`planning/epics/18-tui-bubble-tea-interactive-planning-browser.md`](./planning/epics/18-tui-bubble-tea-interactive-planning-browser.md).

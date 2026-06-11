@@ -49,11 +49,32 @@ type entityTab struct {
 	statusView string  // tasks only: "" = working-set, "all", or a status string
 	sortKey    sortKey // interactive sort column ("o" cycles)
 	sortRev    bool    // sort direction toggle ("O")
+
+	restore string // id to re-select after this tab's next load (cursor preservation)
 }
 
 // reload re-fires the tab's list loader, passing the tab so the loader can read
 // its current statusView (a value-typed Model still mutates via the pointer).
 func (t *entityTab) reload(svc *core.Service) tea.Cmd { return t.loadList(t, svc) }
+
+// selectByID moves the cursor to the row with the given id. It ranges the
+// *visible* items, since list.Select indexes the filtered/paginated view (when
+// unfiltered, VisibleItems == Items, so this matches the naive version).
+func (t *entityTab) selectByID(id string) {
+	for i, it := range t.list.VisibleItems() {
+		if ei, ok := it.(entityItem); ok && ei.id() == id {
+			t.list.Select(i)
+			return
+		}
+	}
+}
+
+// markReload captures the current cursor id so the next load restores it.
+func (t *entityTab) markReload() {
+	if it, ok := t.list.SelectedItem().(entityItem); ok {
+		t.restore = it.id()
+	}
+}
 
 // chip is the per-tab state badge shown in the list's title slot: active status
 // view, sort column/direction, and any applied `/` filter. Empty (the clean

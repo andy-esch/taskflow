@@ -31,9 +31,17 @@ type detailErrMsg struct {
 	err  error
 }
 
-// reloadMsg requests a refresh of the active tab (fired by `r` now; by fsnotify
-// in a later sprint) — the cursor is preserved by id across the reload.
+// reloadMsg requests a refresh of every loaded tab (fired by `r` and by the
+// fsnotify debounce) — each tab's cursor is preserved by id across the reload.
 type reloadMsg struct{}
+
+// fsEventMsg is a raw filesystem change from the watcher. It (re)arms the debounce
+// rather than reloading directly, so an editor's save-storm coalesces.
+type fsEventMsg struct{}
+
+// debounceMsg fires fsDebounce after an fs event; the model reloads only if gen
+// still matches m.dirtyGen (i.e. no newer event re-armed the window).
+type debounceMsg struct{ gen int }
 
 // errMsg carries a fatal async failure (e.g. the initial entity-list load).
 type errMsg struct{ err error }

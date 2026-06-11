@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/exp/teatest v0.0.0-20260608090822-c3ad58c6c9e5
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/muesli/termenv v0.16.0
 	github.com/spf13/cobra v1.10.2
 	go.yaml.in/yaml/v3 v3.0.4

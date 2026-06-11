@@ -68,6 +68,23 @@ func drain(t *testing.T, m Model, cmd tea.Cmd) Model {
 	return tm.(Model)
 }
 
+// drainBatch runs a tea.Batch command, applying each sub-command's message — used
+// for reloadAll, which returns one reload Cmd per loaded tab.
+func drainBatch(t *testing.T, m Model, cmd tea.Cmd) Model {
+	t.Helper()
+	if cmd == nil {
+		return m
+	}
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected a tea.BatchMsg, got %T", cmd())
+	}
+	for _, c := range batch {
+		m = drain(t, m, c)
+	}
+	return m
+}
+
 func newModel(t *testing.T) Model {
 	t.Helper()
 	root := seedRepo(t)
@@ -599,8 +616,8 @@ func TestModel_RecoversFromFatalError(t *testing.T) {
 	}
 }
 
-// TestModel_RefreshFiresReloadMsg pins the single reload path: `r` emits a
-// reloadMsg (the seam fsnotify reuses in S3), which captures the restore id.
+// TestModel_RefreshFiresReloadMsg pins the reload path: `r` emits a reloadMsg
+// (the seam fsnotify reuses in S3), which captures each loaded tab's cursor id.
 func TestModel_RefreshFiresReloadMsg(t *testing.T) {
 	m := loaded(t, 120, 40)
 	_, cmd := m.Update(press("r"))
@@ -612,8 +629,8 @@ func TestModel_RefreshFiresReloadMsg(t *testing.T) {
 	}
 	tm, _ := m.Update(reloadMsg{})
 	m = tm.(Model)
-	if m.restore != "alpha" {
-		t.Errorf("reloadMsg should capture the cursor id for restore, got %q", m.restore)
+	if m.cur().restore != "alpha" {
+		t.Errorf("reloadMsg should capture the active tab's cursor id, got %q", m.cur().restore)
 	}
 }
 
@@ -858,6 +875,90 @@ func TestModel_HelpOverlayFitsTerminal(t *testing.T) {
 			if w := visibleW(ln); w > d.w {
 				t.Errorf("%dx%d with help: line %d is %d wide > %d: %q", d.w, d.h, i, w, d.w, ansi.Strip(ln))
 			}
+		}
+	}
+}
+
+// --- S3: fsnotify live reload ---
+
+// TestModel_ReloadAllTabsPreservesCursors pins that a reload refreshes every
+// loaded tab and keeps each cursor on its slug (not the active tab only).
+func TestModel_ReloadAllTabsPreservesCursors(t *testing.T) {
+	m := loaded(t, 120, 40)
+	// tasks: move the cursor to beta.
+	tm, _ := m.Update(press("j"))
+	m = tm.(Model)
+	if m.selectedID() != "beta" {
+		t.Fatalf("setup: want beta on tasks, got %q", m.selectedID())
+	}
+	// Visit epics so that tab is loaded too, and note its selection.
+	tm, cmd := m.Update(press("]"))
+	m = drain(t, tm.(Model), cmd)
+	if m.cur().name != "epics" {
+		t.Fatalf("setup: expected epics, got %q", m.cur().name)
+	}
+	epicID := m.selectedID()
+	// Back to tasks, then reload everything.
+	tm, _ = m.Update(press("["))
+	m = tm.(Model)
+	tm, cmd = m.Update(reloadMsg{})
+	m = drainBatch(t, tm.(Model), cmd)
+
+	if m.selectedID() != "beta" {
+		t.Errorf("tasks cursor should survive reload at beta, got %q", m.selectedID())
+	}
+	tm, _ = m.Update(press("]")) // epics is already loaded; no reload needed
+	m = tm.(Model)
+	if m.selectedID() != epicID {
+		t.Errorf("epics cursor should survive reload at %q, got %q", epicID, m.selectedID())
+	}
+}
+
+// TestModel_FsEventDebounces pins the coalescing: rapid fs events bump the
+// generation, and only a debounce tick whose gen is still current reloads.
+func TestModel_FsEventDebounces(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(fsEventMsg{})
+	m = tm.(Model)
+	tm, _ = m.Update(fsEventMsg{}) // a second event during the window
+	m = tm.(Model)
+	if m.dirtyGen != 2 {
+		t.Fatalf("two events should advance dirtyGen to 2, got %d", m.dirtyGen)
+	}
+	// The first event's debounce is now stale → must not reload.
+	if _, cmd := m.Update(debounceMsg{gen: 1}); cmd != nil {
+		t.Error("a superseded debounce tick must not reload")
+	}
+	// The latest event's debounce fires the reload.
+	_, cmd := m.Update(debounceMsg{gen: 2})
+	if cmd == nil {
+		t.Fatal("the current debounce tick should reload")
+	}
+	if _, ok := cmd().(reloadMsg); !ok {
+		t.Fatalf("debounce should fire reloadMsg, got %T", cmd())
+	}
+}
+
+func TestWatchDirs(t *testing.T) {
+	root := filepath.Join("x", "plan")
+	got := watchDirs(root)
+	for _, want := range []string{
+		filepath.Join(root, "epics"),
+		filepath.Join(root, "tasks"),
+		filepath.Join(root, "audits"),
+		filepath.Join(root, "tasks", "in-progress"),
+		filepath.Join(root, "tasks", "ready-to-start"),
+		filepath.Join(root, "audits", "open"),
+	} {
+		found := false
+		for _, d := range got {
+			if d == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("watchDirs(%q) missing %q; got %v", root, want, got)
 		}
 	}
 }

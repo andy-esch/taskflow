@@ -1,6 +1,9 @@
 // Package tui is the second primary adapter: an interactive Bubble Tea front-end
-// over the same core.Service the CLI uses. It never touches the store/fs — all
-// reads run as tea.Cmds against the service (see commands.go).
+// over the same core.Service the CLI uses. It never touches the store/fs — every
+// read runs as a tea.Cmd against the service (commands.go), so Update and View
+// stay I/O-free. Entities (tasks/epics/audits) are declared in a registry
+// (entity.go); the lists live-reload via fsnotify (watch.go). See
+// docs/ARCHITECTURE.md for the subsystem map.
 package tui
 
 import (
@@ -43,8 +46,10 @@ type Model struct {
 	cmd    commandBar
 
 	err      error
-	restore  string // id to re-select after a reload of the active tab
-	showHelp bool   // the `?` keybinding overlay is open
+	showHelp bool // the `?` keybinding overlay is open
+
+	watch    *watcher // fsnotify source (nil when unavailable / in tests); see watch.go
+	dirtyGen int      // bumped per fs event; the debounce tick fires a reload only when it matches
 }
 
 // New constructs the root model over the same *core.Service the CLI uses.
@@ -56,7 +61,27 @@ func New(svc *core.Service, root string) Model {
 	}
 }
 
-func (m Model) Init() tea.Cmd { return m.cur().reload(m.svc) }
+func (m Model) Init() tea.Cmd {
+	if m.watch != nil {
+		return tea.Batch(m.cur().reload(m.svc), waitForFS(m.watch))
+	}
+	return m.cur().reload(m.svc)
+}
+
+// reloadAll re-fires the loader for every loaded tab, each preserving its own
+// cursor by id. Unvisited tabs are left alone (they reload fresh on first visit).
+// This is the `r` / fsnotify path: a change from another process is reflected on
+// whichever tab you land on, not just the active one.
+func (m *Model) reloadAll() tea.Cmd {
+	var cmds []tea.Cmd
+	for _, t := range m.tabs {
+		if t.loaded {
+			t.markReload()
+			cmds = append(cmds, t.reload(m.svc))
+		}
+	}
+	return tea.Batch(cmds...)
+}
 
 // cur returns the active entity tab. The tab is a pointer, so reads use a value
 // receiver yet callers can still mutate the tab's list in place.
@@ -92,8 +117,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case reloadMsg:
-		m.restore = m.selectedID()
-		return m, m.cur().reload(m.svc)
+		return m, m.reloadAll()
+
+	case fsEventMsg:
+		// A filesystem change: keep listening, and (re)arm the debounce. The reload
+		// only fires from a debounce tick whose generation is still current, so an
+		// editor's save-storm of events coalesces into one reload.
+		m.dirtyGen++
+		return m, tea.Batch(waitForFS(m.watch), debounceTick(m.dirtyGen))
+
+	case debounceMsg:
+		if msg.gen != m.dirtyGen {
+			return m, nil // a newer event re-armed the debounce; this tick is stale
+		}
+		return m, func() tea.Msg { return reloadMsg{} }
 
 	case errMsg:
 		m.err = msg.err
@@ -107,8 +144,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleListLoaded applies an entity-list load to its tab (by kind, so a load
-// that finishes after a tab switch still lands correctly). For the active tab it
-// also restores the cursor and kicks off the selected item's detail load.
+// that finishes after a tab switch still lands correctly). Every tab restores its
+// own cursor by id (so an all-tabs reload preserves each); only the active tab
+// also kicks off the selected item's detail load.
 func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	i := indexOfKind(m.tabs, msg.kind)
 	if i < 0 {
@@ -122,12 +160,12 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	cmd := tab.list.SetItems(msg.items)
 	tab.loaded = true
 	tab.problems = msg.problems
+	if tab.restore != "" {
+		tab.selectByID(tab.restore)
+		tab.restore = ""
+	}
 	if msg.kind != m.cur().kind {
 		return m, cmd // a background tab loaded; leave the active view alone
-	}
-	if m.restore != "" {
-		m.selectByID(m.restore)
-		m.restore = ""
 	}
 	return m, tea.Batch(cmd, m.refreshDetail())
 }
@@ -338,19 +376,6 @@ func (m Model) selectedID() string {
 	return ""
 }
 
-func (m *Model) selectByID(id string) {
-	// Range the *visible* items: list.Select indexes the filtered/paginated view
-	// (Page*PerPage+cursor), so an unfiltered Items() index would land on the
-	// wrong row whenever a `/` filter is active. When unfiltered, VisibleItems ==
-	// Items, so this is identical to the naive version.
-	for i, it := range m.cur().list.VisibleItems() {
-		if ei, ok := it.(entityItem); ok && ei.id() == id {
-			m.cur().list.Select(i)
-			return
-		}
-	}
-}
-
 func (m Model) entityNames() []string {
 	names := make([]string, len(m.tabs))
 	for i, t := range m.tabs {
@@ -381,7 +406,7 @@ func (m *Model) applySortToCurrent() tea.Cmd {
 	items := t.list.Items()
 	sortItems(items, t.sortKey, t.sortRev)
 	cmd := t.list.SetItems(items)
-	m.selectByID(id)
+	t.selectByID(id)
 	return cmd
 }
 
@@ -417,9 +442,7 @@ func (m *Model) applyStatusView(view string) tea.Cmd {
 	m.active = i
 	m.focus = focusList
 	tab := m.tabs[i]
-	if it, ok := tab.list.SelectedItem().(entityItem); ok {
-		m.restore = it.id()
-	}
+	tab.markReload()
 	tab.statusView = view
 	m.detail.clear()
 	return tab.reload(m.svc)
