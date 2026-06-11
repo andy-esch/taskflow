@@ -8,7 +8,7 @@ priority: medium
 autonomy_level: 3
 tags: [tui, bubble-tea]
 created: "2026-06-10"
-updated_at: "2026-06-10"
+updated_at: "2026-06-11"
 started_at: "2026-06-10"
 completed_at: "2026-06-10"
 ---
@@ -88,6 +88,13 @@ vim navigation. Decisions/architecture in
   unhandled messages now forward to the list. (S2 adds the persistent chip,
   detail-pane vim find, status views, sort.)
 - Tests added for all three; full suite + lint green.
+- **Layout audit (2026-06-11):** a clipped-top-border report traced to rendering
+  before the first `WindowSizeMsg` (negative frame dims corrupt height
+  tracking). Hardened per the **Layout discipline** checklist now in the build
+  reference: size guard in `View()`, frame sizes from `GetFrameSize()` (not a
+  hardcoded `2`), ANSI/width-aware `truncate`, and a final `MaxWidth/MaxHeight`
+  clamp. Locked by `TestModel_ViewFitsTerminal` (View() == terminal height,
+  every line ≤ width). Validated by a research agent as idiomatic.
 
 ## Deferred to later sprints (noted in S2)
 

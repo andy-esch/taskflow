@@ -110,3 +110,35 @@ borders/padding not subtracted from child sizes · `textinput` swallowing nav
 keys · rendering before first resize · spinner/ticker that never stops ·
 out-of-order async results · un-debounced fsnotify storms · restoring cursor by
 index not slug · `q` quitting unconditionally (layer `Esc` under it).
+
+## Layout discipline (audited 2026-06-11, validated by research agent)
+
+The S1 two-pane layout was audited after a clipped-top-border report and
+hardened; these are the rules every future pane/tab must follow. The
+**invariant test** (`TestModel_ViewFitsTerminal`) locks them: `View()` is
+exactly `height` lines and **no line's display width exceeds `width`**.
+
+- **Subtract the frame before sizing children.** Never hardcode `2`. Derive
+  `paneHFrame`/`paneVFrame` from the pane style's
+  `GetHorizontalFrameSize()`/`GetVerticalFrameSize()` (style.go) so a future
+  border/padding change can't silently desync sizing.
+- **Guard `View()` before the first `WindowSizeMsg`.** With unset (0) sizes,
+  panes compute negative border dimensions → an oversized frame that corrupts
+  the renderer's height tracking (the clipped-top-border bug). Return a plain
+  `"loading…"` until `width>0 && height>0`.
+- **Clamp every inner dimension to ≥1** (`max1`). A tiny terminal must degrade,
+  never produce a negative-sized (panicking/broken) frame.
+- **Truncate, never wrap, anything fed to a `Join`.** `JoinVertical` pads every
+  row to the widest child — one overflowing line (e.g. the footer) widens the
+  whole frame past the terminal. Use the ANSI/width-aware `truncate`
+  (`ansi.Truncate`), not a rune slice.
+- **Final clamp as last line of defense:** wrap the composed view in
+  `MaxWidth(width).MaxHeight(height)` so a single missed truncation degrades
+  gracefully instead of corrupting the screen.
+- **No trailing newline from `View()`** in altscreen (it pushes the frame up a
+  row → top border scrolls off).
+- **Measure display cells, not bytes/runes,** anywhere width matters — ANSI
+  escapes and wide runes both fool `len`/rune-count (`ansi.StringWidth`).
+
+When the 3rd pane/tab lands, extract a small internal `pane`/layout helper
+rather than copy-pasting this arithmetic.
