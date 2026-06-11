@@ -60,9 +60,17 @@ regex over-matching, etc.).
 - Anything behavioral beyond these nits; the broader audit finding-level
   commands (their own deferred work).
 
+6. **Progress-bar logic is duplicated** (folded in from the S2a review,
+   2026-06-11). The fill calc (`filled := pct*width/100`, clamp 0..width) now
+   lives in **both** `render.Style.Bar` (CLI → ANSI) and `tui.miniBar` (TUI →
+   lipgloss). Per the "shared theme, not shared rendering" decision, extract the
+   *arithmetic* into a dependency-free `theme.BarFill(pct, width) int` (returns the
+   filled-cell count) and have both renderers draw their own runes from it — so the
+   two bars can't silently drift. The color is already shared via `theme.Percent`.
+
 ## Related
 
 - Epic [[17-pm-go-cli]]
 - Touches `internal/cli/audit.go`, `internal/store/auditstore.go`,
   `internal/cli/color.go`, `internal/cli/render/style.go`,
-  `internal/domain/validate.go`.
+  `internal/domain/validate.go`, `internal/theme/`, `internal/tui/style.go`.

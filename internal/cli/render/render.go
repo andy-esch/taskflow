@@ -184,7 +184,7 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("In progress (%d)", len(s.InProgress))))
 		rows := make([][]string, 0, len(s.InProgress))
 		for _, t := range s.InProgress {
-			rows = append(rows, []string{"  " + st.Bold(t.Slug), st.Dim(theme.RelativeDate(taskDate(t))), t.Description})
+			rows = append(rows, []string{"  " + st.Bold(t.Slug), st.Dim(theme.RelativeDate(theme.TaskDate(t))), t.Description})
 		}
 		writeTable(w, st.width, nil, rows)
 	}
@@ -206,13 +206,6 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable file(s) (run `lint`)", len(s.Problems))))
 	}
 	return nil
-}
-
-func taskDate(t domain.Task) string {
-	if t.Updated != "" {
-		return t.Updated
-	}
-	return t.Created
 }
 
 func splitCounts(counts []core.StatusCount) (active, archived []core.StatusCount) {

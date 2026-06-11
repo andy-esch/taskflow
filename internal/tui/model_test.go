@@ -35,7 +35,35 @@ func seedRepo(t *testing.T) string {
 	}
 	write("in-progress", "alpha", "the alpha task")
 	write("ready-to-start", "beta", "the beta task")
+
+	// One epic and one open audit so the epics/audits tabs have content.
+	writeFile := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile("epics/01-test.md", "---\nstatus: planning\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
+	writeFile("audits/open/2026-06-01-thing.md", "---\narea: store\ndate: 2026-06-01\n---\n# Audit\n")
 	return root
+}
+
+// drain runs a single (non-batch) command and applies its message — enough to
+// resolve the async list/detail loads switchTab and refresh return in tests.
+func drain(t *testing.T, m Model, cmd tea.Cmd) Model {
+	t.Helper()
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	if msg == nil {
+		return m
+	}
+	tm, _ := m.Update(msg)
+	return tm.(Model)
 }
 
 func newModel(t *testing.T) Model {
@@ -69,12 +97,12 @@ func press(s string) tea.KeyMsg {
 
 func TestModel_LoadsWorkingSetOrder(t *testing.T) {
 	m := loaded(t, 120, 40)
-	if m.loading {
-		t.Fatal("still loading")
+	if !m.cur().loaded {
+		t.Fatal("tasks tab should be loaded")
 	}
 	// Working-set order: in-progress (alpha) before ready-to-start (beta).
-	if m.selectedSlug() != "alpha" {
-		t.Errorf("expected in-progress task first, got %q", m.selectedSlug())
+	if m.selectedID() != "alpha" {
+		t.Errorf("expected in-progress task first, got %q", m.selectedID())
 	}
 	if !strings.Contains(m.View(), "alpha") || !strings.Contains(m.View(), "beta") {
 		t.Errorf("view should list both tasks:\n%s", m.View())
@@ -86,20 +114,20 @@ func TestModel_SelectionLoadsBodyWithStaleGuard(t *testing.T) {
 	// Move down → select beta, which triggers a body load.
 	tm, _ := m.Update(press("j"))
 	m = tm.(Model)
-	if m.selectedSlug() != "beta" {
-		t.Fatalf("expected beta after j, got %q", m.selectedSlug())
+	if m.selectedID() != "beta" {
+		t.Fatalf("expected beta after j, got %q", m.selectedID())
 	}
 	if !m.detail.loading {
 		t.Error("selection change should start a body load")
 	}
 	// A stale body (for alpha) must be dropped while beta is selected.
-	tm, _ = m.Update(taskBodyMsg{slug: "alpha", task: domain.Task{Slug: "alpha"}, body: "x"})
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: "alpha", content: taskDetail{t: domain.Task{Slug: "alpha"}, body: "x"}})
 	m = tm.(Model)
 	if m.detail.hasContent {
 		t.Error("stale body for a different selection must be ignored")
 	}
 	// The matching body sets the detail.
-	tm, _ = m.Update(taskBodyMsg{slug: "beta", task: domain.Task{Slug: "beta"}, body: "beta body"})
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: "beta", content: taskDetail{t: domain.Task{Slug: "beta"}, body: "beta body"}})
 	m = tm.(Model)
 	if !m.detail.hasContent || m.detail.title != "beta" {
 		t.Errorf("detail should show beta, got title %q hasContent=%v", m.detail.title, m.detail.hasContent)
@@ -146,9 +174,9 @@ func TestModel_Responsive(t *testing.T) {
 
 func TestModel_BodyErrorDoesNotBrick(t *testing.T) {
 	m := loaded(t, 120, 40)
-	slug := m.selectedSlug()
+	slug := m.selectedID()
 	// An ambiguous-slug (duplicate across dirs) body error must not blank the UI.
-	tm, _ := m.Update(bodyErrMsg{slug: slug, err: domain.ErrAmbiguous})
+	tm, _ := m.Update(detailErrMsg{kind: entityTasks, id: slug, err: domain.ErrAmbiguous})
 	m = tm.(Model)
 	if m.err != nil {
 		t.Error("a per-task body error must not set the fatal error")
@@ -163,9 +191,9 @@ func TestModel_BodyErrorDoesNotBrick(t *testing.T) {
 
 func TestModel_DetailScrollKeys(t *testing.T) {
 	m := loaded(t, 120, 12) // short, so the body overflows
-	slug := m.selectedSlug()
+	slug := m.selectedID()
 	long := strings.Repeat("a line of text\n", 60)
-	tm, _ := m.Update(taskBodyMsg{slug: slug, task: domain.Task{Slug: slug}, body: long})
+	tm, _ := m.Update(detailMsg{kind: entityTasks, id: slug, content: taskDetail{t: domain.Task{Slug: slug}, body: long}})
 	m = tm.(Model)
 	tm, _ = m.Update(press("l")) // focus detail
 	m = tm.(Model)
@@ -184,12 +212,12 @@ func TestModel_DetailScrollKeys(t *testing.T) {
 
 func TestModel_SlashFiltersAndCapturesKeys(t *testing.T) {
 	m := loaded(t, 120, 40)
-	if m.list.SettingFilter() {
+	if m.cur().list.SettingFilter() {
 		t.Fatal("should not be filtering initially")
 	}
 	tm, _ := m.Update(press("/"))
 	m = tm.(Model)
-	if !m.list.SettingFilter() {
+	if !m.cur().list.SettingFilter() {
 		t.Fatal("/ should open the list filter")
 	}
 	// Typing into the filter must not trigger global hotkeys (q/r).
@@ -197,7 +225,7 @@ func TestModel_SlashFiltersAndCapturesKeys(t *testing.T) {
 		tm, _ = m.Update(press(k))
 		m = tm.(Model)
 	}
-	if !m.list.SettingFilter() {
+	if !m.cur().list.SettingFilter() {
 		t.Error("global hotkeys must not leak out of the filter input")
 	}
 }
@@ -218,7 +246,7 @@ func TestModel_FilterNarrows(t *testing.T) {
 	tm.Send(press("q"))                     // quit (no longer filtering)
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(3*time.Second)).(Model)
-	vis := fm.list.VisibleItems()
+	vis := fm.cur().list.VisibleItems()
 	if len(vis) != 1 {
 		t.Fatalf("applied filter %q should leave 1 item, got %d", "beta", len(vis))
 	}
@@ -239,7 +267,7 @@ func TestModel_ViewFitsTerminal(t *testing.T) {
 		{120, 40}, {100, 24}, {90, 30}, {80, 24}, {70, 20}, {40, 12}, {24, 8},
 	} {
 		m := loaded(t, d.w, d.h)
-		tm, _ := m.Update(taskBodyMsg{slug: m.selectedSlug(), task: domain.Task{Slug: m.selectedSlug()}, body: "# body\n\nsome text here\n"})
+		tm, _ := m.Update(detailMsg{kind: entityTasks, id: m.selectedID(), content: taskDetail{t: domain.Task{Slug: m.selectedID()}, body: "# body\n\nsome text here\n"}})
 		m = tm.(Model)
 		lines := strings.Split(m.View(), "\n")
 		if len(lines) != d.h {
@@ -269,4 +297,334 @@ func TestModel_QuitsCleanly(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(t), teatest.WithInitialTermSize(120, 40))
 	tm.Send(press("q"))
 	tm.WaitFinished(t, teatest.WithFinalTimeout(3*time.Second))
+}
+
+// --- S2a: multi-entity navigation ---
+
+func TestModel_CycleTabsLoadsEntity(t *testing.T) {
+	m := loaded(t, 120, 40)
+	if m.cur().name != "tasks" {
+		t.Fatalf("should start on tasks, got %q", m.cur().name)
+	}
+	// ] → epics; the returned cmd loads the epic list.
+	tm, cmd := m.Update(press("]"))
+	m = tm.(Model)
+	if m.cur().name != "epics" {
+		t.Fatalf("] should switch to epics, got %q", m.cur().name)
+	}
+	m = drain(t, m, cmd)
+	if !m.cur().loaded {
+		t.Fatal("epics tab should load on switch")
+	}
+	if _, ok := m.cur().list.SelectedItem().(epicItem); !ok {
+		t.Errorf("epics tab should hold epicItems, got %T", m.cur().list.SelectedItem())
+	}
+	if m.selectedID() != "01-test" {
+		t.Errorf("expected epic 01-test selected, got %q", m.selectedID())
+	}
+	// [ wraps back to tasks (cursor preserved — see the dedicated test).
+	tm, _ = m.Update(press("["))
+	m = tm.(Model)
+	if m.cur().name != "tasks" {
+		t.Errorf("[ should switch back to tasks, got %q", m.cur().name)
+	}
+}
+
+func TestModel_CommandJumpSwitchesEntity(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press(":"))
+	m = tm.(Model)
+	if !m.cmd.active {
+		t.Fatal(": should open the command bar")
+	}
+	for _, r := range "audits" {
+		tm, _ = m.Update(press(string(r)))
+		m = tm.(Model)
+	}
+	if m.cmd.value() != "audits" {
+		t.Fatalf("command bar should hold %q, got %q", "audits", m.cmd.value())
+	}
+	tm, cmd := m.Update(press("enter"))
+	m = tm.(Model)
+	if m.cmd.active {
+		t.Error("enter should close the command bar")
+	}
+	if m.cur().name != "audits" {
+		t.Fatalf(":audits should switch to audits, got %q", m.cur().name)
+	}
+	m = drain(t, m, cmd)
+	if !m.cur().loaded {
+		t.Error("audits tab should load after the jump")
+	}
+	if m.selectedID() != "2026-06-01-thing" {
+		t.Errorf("expected the seeded audit selected, got %q", m.selectedID())
+	}
+}
+
+func TestModel_CommandBarCapturesKeysAndCompletes(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press(":"))
+	m = tm.(Model)
+	// A global hotkey (q) must not quit while the command bar is open — it's
+	// captured as input instead (proven by it landing in the value).
+	tm, _ = m.Update(press("q"))
+	m = tm.(Model)
+	if !m.cmd.active || m.cmd.value() != "q" {
+		t.Errorf("q should be captured as input, value=%q active=%v", m.cmd.value(), m.cmd.active)
+	}
+	// Tab completes the unique prefix: "q" has no match, so reset and try "e".
+	m.cmd.ti.SetValue("e")
+	m.cmd.complete(m.entityNames())
+	if m.cmd.value() != "epics" {
+		t.Errorf("Tab should complete %q → %q, got %q", "e", "epics", m.cmd.value())
+	}
+}
+
+func TestModel_UnknownCommandReopensWithError(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press(":"))
+	m = tm.(Model)
+	for _, r := range "bogus" {
+		tm, _ = m.Update(press(string(r)))
+		m = tm.(Model)
+	}
+	tm, _ = m.Update(press("enter"))
+	m = tm.(Model)
+	if !m.cmd.active {
+		t.Error("an unknown command should reopen the bar")
+	}
+	if m.cmd.err == "" {
+		t.Error("an unknown command should show an inline error")
+	}
+	if m.cur().name != "tasks" {
+		t.Errorf("an unknown command must not switch tabs, got %q", m.cur().name)
+	}
+}
+
+func TestModel_PerTabCursorPreserved(t *testing.T) {
+	m := loaded(t, 120, 40)
+	// Move the tasks cursor to beta.
+	tm, _ := m.Update(press("j"))
+	m = tm.(Model)
+	if m.selectedID() != "beta" {
+		t.Fatalf("expected beta selected on tasks, got %q", m.selectedID())
+	}
+	// Cycle tasks → epics → audits → tasks, draining each load.
+	for i := 0; i < 3; i++ {
+		tm, cmd := m.Update(press("]"))
+		m = drain(t, tm.(Model), cmd)
+	}
+	if m.cur().name != "tasks" {
+		t.Fatalf("expected to land back on tasks, got %q", m.cur().name)
+	}
+	if m.selectedID() != "beta" {
+		t.Errorf("tasks cursor should be preserved at beta, got %q", m.selectedID())
+	}
+}
+
+// seedManyTasks writes n ready-to-start tasks — enough to force bubbles/list to
+// paginate at a small height (its `••` dots render one line beyond SetHeight).
+func seedManyTasks(t *testing.T, n int) string {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "tasks", "ready-to-start")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < n; i++ {
+		slug := fmt.Sprintf("task-%02d", i)
+		body := fmt.Sprintf("---\nstatus: ready-to-start\ndescription: task %d\n---\n# %s\n", i, slug)
+		if err := os.WriteFile(filepath.Join(dir, slug+".md"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+// TestModel_ChromeVisibleWhenListPaginates pins the footer/tab-strip-cropping
+// regression: a paginated list must not push the chrome off-screen. (The list's
+// pagination row renders beyond its SetHeight; the layout reserves a line for it
+// and hard-clamps the body so the chrome always survives.)
+func TestModel_ChromeVisibleWhenListPaginates(t *testing.T) {
+	root := seedManyTasks(t, 20)
+	m := New(core.NewService(store.NewFS(root)), root)
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 14})
+	m = tm.(Model)
+	tm, _ = m.Update(m.Init()())
+	m = tm.(Model)
+	tm, _ = m.Update(press(":")) // open the command bar (bottom chrome)
+	m = tm.(Model)
+
+	lines := strings.Split(m.View(), "\n")
+	if len(lines) != 14 {
+		t.Fatalf("view must be exactly 14 lines, got %d", len(lines))
+	}
+	if top := ansi.Strip(lines[0]); !strings.Contains(top, "tasks") {
+		t.Errorf("tab strip (top chrome) must stay visible, got %q", top)
+	}
+	if last := ansi.Strip(lines[len(lines)-1]); !strings.HasPrefix(last, ":") {
+		t.Errorf("command bar (bottom chrome) must stay visible, got %q", last)
+	}
+}
+
+func TestModel_CommandAliases(t *testing.T) {
+	for _, tc := range []struct{ word, want string }{
+		{"t", "tasks"}, {"e", "epics"}, {"a", "audits"},
+		{"task", "tasks"}, {"epic", "epics"}, {"audits", "audits"},
+	} {
+		m := loaded(t, 120, 40)
+		tm, _ := m.Update(press(":"))
+		m = tm.(Model)
+		for _, r := range tc.word {
+			tm, _ = m.Update(press(string(r)))
+			m = tm.(Model)
+		}
+		tm, _ = m.Update(press("enter"))
+		m = tm.(Model)
+		if m.cur().name != tc.want {
+			t.Errorf(":%s → %q, want %q", tc.word, m.cur().name, tc.want)
+		}
+	}
+}
+
+func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
+	// A repo with tasks but no audits dir → the audits tab loads empty.
+	root := t.TempDir()
+	dir := filepath.Join(root, "tasks", "ready-to-start")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "only.md"),
+		[]byte("---\nstatus: ready-to-start\ndescription: x\n---\n# only\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := New(core.NewService(store.NewFS(root)), root)
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
+	m = tm.(Model)
+	tm, _ = m.Update(m.Init()())
+	m = tm.(Model)
+	// :audits → an empty list.
+	tm, cmd := m.Update(press("]")) // → epics (also empty)
+	m = drain(t, tm.(Model), cmd)
+	tm, cmd = m.Update(press("]")) // → audits (empty)
+	m = drain(t, tm.(Model), cmd)
+	if m.cur().name != "audits" || len(m.cur().list.Items()) != 0 {
+		t.Fatalf("expected an empty audits tab, got %q with %d items", m.cur().name, len(m.cur().list.Items()))
+	}
+	if m.detail.loading {
+		t.Error("an empty tab must not sit on a perpetual loading state")
+	}
+	if v := ansi.Strip(m.detail.View()); !strings.Contains(v, "nothing selected") {
+		t.Errorf("empty-tab detail should show the empty state, got %q", v)
+	}
+}
+
+func TestEntityDetailRenderers(t *testing.T) {
+	epic := epicDetail{
+		e:     domain.Epic{ID: "17-x", Status: "in-progress", Priority: "high"},
+		tasks: []domain.Task{{Slug: "a", Status: domain.StatusCompleted}, {Slug: "b", Status: domain.StatusReadyToStart}},
+		body:  "# Epic body",
+	}
+	out := ansi.Strip(epic.Render(70))
+	for _, want := range []string{"17-x", "1/2", "50%", "Epic body"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("epic detail missing %q:\n%s", want, out)
+		}
+	}
+	if epic.Title() != "17-x" {
+		t.Errorf("epic title = %q", epic.Title())
+	}
+
+	audit := auditDetail{
+		a:    domain.Audit{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Findings: 5, OpenFindings: 2},
+		body: "# Audit body",
+	}
+	out = ansi.Strip(audit.Render(70))
+	for _, want := range []string{"2026-06-01-x", "store", "2 open / 5 total", "Audit body"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("audit detail missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestModel_LongTitleKeepsDetailBorder pins the chrome-corruption fix: a detail
+// title longer than the pane is truncated, not wrapped — so the pane keeps its
+// bottom border (two `╯`, one per pane) at the narrowest two-pane width.
+func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "tasks", "in-progress")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	slug := "an-extremely-long-task-slug-well-past-the-detail-pane-inner-width"
+	if err := os.WriteFile(filepath.Join(dir, slug+".md"),
+		[]byte("---\nstatus: in-progress\ndescription: x\n---\n# body\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := New(core.NewService(store.NewFS(root)), root)
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 24}) // narrowest two-pane
+	m = tm.(Model)
+	tm, _ = m.Update(m.Init()())
+	m = tm.(Model)
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: slug, content: taskDetail{t: domain.Task{Slug: slug}, body: "body"}})
+	m = tm.(Model)
+
+	lines := strings.Split(m.View(), "\n")
+	if len(lines) != 24 {
+		t.Fatalf("view must be 24 lines, got %d", len(lines))
+	}
+	// The pane bottom-border row is just above the footer; both panes must close.
+	border := ansi.Strip(lines[len(lines)-2])
+	if got := strings.Count(border, "╯"); got != 2 {
+		t.Errorf("both panes must keep their bottom border (2 ╯), got %d: %q", got, border)
+	}
+}
+
+// TestModel_RecoversFromFatalError pins that a fatal load error clears on the
+// next successful load (otherwise a transient failure bricked the session).
+func TestModel_RecoversFromFatalError(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(errMsg{err: domain.ErrNotFound})
+	m = tm.(Model)
+	if m.err == nil || !strings.Contains(m.View(), "error:") {
+		t.Fatal("errMsg should show the error screen")
+	}
+	// A subsequent successful list load must clear it.
+	tm, _ = m.Update(m.Init()())
+	m = tm.(Model)
+	if m.err != nil {
+		t.Errorf("a successful load must clear the fatal error, got %v", m.err)
+	}
+}
+
+// TestModel_RefreshFiresReloadMsg pins the single reload path: `r` emits a
+// reloadMsg (the seam fsnotify reuses in S3), which captures the restore id.
+func TestModel_RefreshFiresReloadMsg(t *testing.T) {
+	m := loaded(t, 120, 40)
+	_, cmd := m.Update(press("r"))
+	if cmd == nil {
+		t.Fatal("r must return a command")
+	}
+	if _, ok := cmd().(reloadMsg); !ok {
+		t.Fatalf("r must fire reloadMsg, got %T", cmd())
+	}
+	tm, _ := m.Update(reloadMsg{})
+	m = tm.(Model)
+	if m.restore != "alpha" {
+		t.Errorf("reloadMsg should capture the cursor id for restore, got %q", m.restore)
+	}
+}
+
+func TestModel_TabStripCollapsesWhenNarrow(t *testing.T) {
+	wide := loaded(t, 120, 40)
+	strip := wide.tabStrip()
+	for _, name := range []string{"tasks", "epics", "audits"} {
+		if !strings.Contains(strip, name) {
+			t.Errorf("wide tab strip should list %q: %q", name, ansi.Strip(strip))
+		}
+	}
+	narrow := loaded(t, 50, 20)
+	if !strings.Contains(narrow.tabStrip(), "▾") {
+		t.Errorf("narrow tab strip should collapse to a chip, got %q", ansi.Strip(narrow.tabStrip()))
+	}
 }

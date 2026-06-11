@@ -5,14 +5,13 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/andy-esch/taskflow/internal/core"
-	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
@@ -23,11 +22,13 @@ const (
 	focusDetail
 )
 
-// Model is the root TUI model: a two-pane read-only task browser over the core
-// service. List on the left, detail preview on the right.
+// Model is the root TUI model: a multi-entity browser (tasks/epics/audits) over
+// the core service. A tab strip + `:` command-jump switch the active entity; each
+// entity keeps its own list (and cursor). The right pane shows the selection's
+// detail.
 type Model struct {
 	svc  *core.Service
-	root string
+	root string // planning root; reserved for the S3 fsnotify watch (not read yet)
 
 	width, height int
 	twoPane       bool
@@ -35,29 +36,30 @@ type Model struct {
 	detailOuterW  int
 	paneOuterH    int
 
-	focus    focus
-	list     list.Model
-	detail   detailPane
-	loading  bool
-	err      error
-	problems []domain.FileProblem
-	restore  string // slug to re-select after a reload
+	focus  focus
+	tabs   []*entityTab
+	active int
+	detail detailPane
+	cmd    commandBar
+
+	err     error
+	restore string // id to re-select after a reload of the active tab
 }
 
 // New constructs the root model over the same *core.Service the CLI uses.
 func New(svc *core.Service, root string) Model {
-	l := list.New(nil, taskDelegate{}, 0, 0)
-	l.Title = "Tasks"
-	l.Styles.Title = lipgloss.NewStyle().Bold(true)
-	l.SetShowHelp(false)
-	l.SetShowStatusBar(false)
-	// Built-in fuzzy `/` filter over FilterValue (slug + description); the list's
-	// title bar doubles as the filter input. Sprint 2 adds the persistent filter
-	// chip, `:` status views, and sortable columns.
-	return Model{svc: svc, root: root, focus: focusList, list: l, detail: newDetailPane(), loading: true}
+	return Model{
+		svc: svc, root: root, focus: focusList,
+		tabs: newEntityTabs(), active: 0,
+		detail: newDetailPane(), cmd: newCommandBar(),
+	}
 }
 
-func (m Model) Init() tea.Cmd { return loadTasks(m.svc) }
+func (m Model) Init() tea.Cmd { return m.cur().loadList(m.svc) }
+
+// cur returns the active entity tab. The tab is a pointer, so reads use a value
+// receiver yet callers can still mutate the tab's list in place.
+func (m Model) cur() *entityTab { return m.tabs[m.active] }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -67,108 +69,204 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// While the list's filter input is capturing text, the list owns every
-		// key — don't let global hotkeys (q/r/…) leak into the query.
-		if m.list.SettingFilter() {
-			return m.updateList(msg)
-		}
-		switch {
-		case key.Matches(msg, keys.ForceQuit), key.Matches(msg, keys.Quit):
-			return m, tea.Quit
-		case key.Matches(msg, keys.Refresh):
-			m.restore = m.selectedSlug()
-			m.loading = true
-			return m, loadTasks(m.svc)
-		case key.Matches(msg, keys.ToggleFocus):
-			m.toggleFocus()
-			return m, nil
-		}
-		if m.focus == focusList {
-			switch {
-			case key.Matches(msg, keys.Right):
-				m.setFocus(focusDetail)
-				return m, nil
-			case key.Matches(msg, keys.Left):
-				return m, nil // already leftmost
-			}
-			return m.updateList(msg)
-		}
-		// detail focus — viewport handles j/k/ctrl+d/u; g/G aren't in its keymap.
-		switch {
-		case key.Matches(msg, keys.Left), key.Matches(msg, keys.Back):
-			m.setFocus(focusList)
-			return m, nil
-		case key.Matches(msg, keys.Top):
-			m.detail.vp.GotoTop()
-			return m, nil
-		case key.Matches(msg, keys.Bottom):
-			m.detail.vp.GotoBottom()
-			return m, nil
-		}
-		var cmd tea.Cmd
-		m.detail.vp, cmd = m.detail.vp.Update(msg)
-		return m, cmd
+		return m.handleKey(msg)
 
-	case tasksLoadedMsg:
-		m.loading = false
-		m.problems = msg.problems
-		cmd := m.list.SetItems(msg.items)
-		if m.restore != "" {
-			m.selectSlug(m.restore)
-			m.restore = ""
-		}
-		m.detail.loading = true
-		return m, tea.Batch(cmd, loadBody(m.svc, m.selectedSlug()))
+	case listLoadedMsg:
+		return m.handleListLoaded(msg)
 
-	case taskBodyMsg:
-		if msg.slug != m.selectedSlug() {
-			return m, nil // stale: selection changed since this load fired
+	case detailMsg:
+		if !m.isCurrentSelection(msg.kind, msg.id) {
+			return m, nil // stale: tab or selection changed since this load fired
 		}
-		m.detail.SetContent(msg.task, msg.body)
+		m.detail.SetContent(msg.content)
 		return m, nil
 
-	case bodyErrMsg:
-		// A per-task load failure (e.g. an ambiguous duplicate slug) shows in the
+	case detailErrMsg:
+		// A per-item load failure (e.g. an ambiguous duplicate slug) shows in the
 		// detail pane — it must not blank the whole browser.
-		if msg.slug != m.selectedSlug() {
+		if !m.isCurrentSelection(msg.kind, msg.id) {
 			return m, nil
 		}
-		m.detail.SetError(msg.slug, msg.err.Error())
+		m.detail.SetError(msg.id, msg.err.Error())
 		return m, nil
 
 	case reloadMsg:
-		m.restore = m.selectedSlug()
-		return m, loadTasks(m.svc)
+		m.restore = m.selectedID()
+		return m, m.cur().loadList(m.svc)
 
 	case errMsg:
-		m.loading = false
 		m.err = msg.err
 		return m, nil
 	}
 	// Forward anything else (notably the list's async FilterMatchesMsg, which
-	// applies the `/` filter) to the list.
+	// applies the `/` filter) to the active list.
 	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
+	m.cur().list, cmd = m.cur().list.Update(msg)
 	return m, cmd
 }
 
-// updateList forwards a key to the list, lazily loading the detail body when the
-// selection changes.
-func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
-	prev := m.selectedSlug()
+// handleListLoaded applies an entity-list load to its tab (by kind, so a load
+// that finishes after a tab switch still lands correctly). For the active tab it
+// also restores the cursor and kicks off the selected item's detail load.
+func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
+	i := indexOfKind(m.tabs, msg.kind)
+	if i < 0 {
+		return m, nil
+	}
+	// A successful load clears any prior fatal error so a transient failure (e.g.
+	// the planning dir briefly unreadable) recovers on the next `r`/reload.
+	m.err = nil
+	tab := m.tabs[i]
+	cmd := tab.list.SetItems(msg.items)
+	tab.loaded = true
+	tab.problems = msg.problems
+	if msg.kind != m.cur().kind {
+		return m, cmd // a background tab loaded; leave the active view alone
+	}
+	if m.restore != "" {
+		m.selectByID(m.restore)
+		m.restore = ""
+	}
+	return m, tea.Batch(cmd, m.refreshDetail())
+}
+
+func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// 1. The command bar captures every key while open (so `:tasks` typing never
+	// leaks into global hotkeys).
+	if m.cmd.active {
+		switch {
+		case key.Matches(msg, keys.ForceQuit):
+			return m, tea.Quit
+		case key.Matches(msg, keys.Back):
+			m.cmd.blur()
+			return m, nil
+		case msg.Type == tea.KeyEnter:
+			return m.dispatchCommand()
+		case msg.Type == tea.KeyTab:
+			m.cmd.complete(m.entityNames())
+			return m, nil
+		}
+		return m, m.cmd.update(msg)
+	}
+
+	// 2. The list's filter input owns every key while capturing a query.
+	if m.cur().list.SettingFilter() {
+		var cmd tea.Cmd
+		m.cur().list, cmd = m.cur().list.Update(msg)
+		return m, cmd
+	}
+
+	// 3. Global hotkeys.
+	switch {
+	case key.Matches(msg, keys.ForceQuit), key.Matches(msg, keys.Quit):
+		return m, tea.Quit
+	case key.Matches(msg, keys.Command):
+		return m, m.cmd.focus()
+	case key.Matches(msg, keys.NextTab):
+		return m, m.switchTab((m.active + 1) % len(m.tabs))
+	case key.Matches(msg, keys.PrevTab):
+		return m, m.switchTab((m.active - 1 + len(m.tabs)) % len(m.tabs))
+	case key.Matches(msg, keys.Refresh):
+		return m, func() tea.Msg { return reloadMsg{} }
+	case key.Matches(msg, keys.ToggleFocus):
+		m.toggleFocus()
+		return m, nil
+	}
+
+	// 4. Focus-routed keys (list vs detail).
+	if m.focus == focusList {
+		switch {
+		case key.Matches(msg, keys.Right):
+			m.setFocus(focusDetail)
+			return m, nil
+		case key.Matches(msg, keys.Left):
+			return m, nil // already leftmost
+		}
+		return m.updateList(msg)
+	}
+	switch {
+	case key.Matches(msg, keys.Left), key.Matches(msg, keys.Back):
+		m.setFocus(focusList)
+		return m, nil
+	case key.Matches(msg, keys.Top):
+		m.detail.vp.GotoTop()
+		return m, nil
+	case key.Matches(msg, keys.Bottom):
+		m.detail.vp.GotoBottom()
+		return m, nil
+	}
 	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
-	if s := m.selectedSlug(); s != prev && s != "" {
+	m.detail.vp, cmd = m.detail.vp.Update(msg)
+	return m, cmd
+}
+
+// updateList forwards a key to the active list, lazily loading the detail body
+// when the selection changes.
+func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
+	prev := m.selectedID()
+	var cmd tea.Cmd
+	m.cur().list, cmd = m.cur().list.Update(msg)
+	if id := m.selectedID(); id != prev && id != "" {
 		m.detail.loading = true
-		return m, tea.Batch(cmd, loadBody(m.svc, s))
+		return m, tea.Batch(cmd, m.cur().loadItem(m.svc, id))
 	}
 	return m, cmd
 }
 
-func (m *Model) setFocus(f focus) {
-	m.focus = f
-	m.recomputeLayout()
+// dispatchCommand resolves the typed `:` word to an entity tab and switches to
+// it; an unknown word reopens the bar with an inline error.
+func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
+	word := m.cmd.value()
+	m.cmd.blur()
+	if word == "" {
+		return m, nil
+	}
+	for i, t := range m.tabs {
+		if t.matches(word) {
+			return m, m.switchTab(i)
+		}
+	}
+	cmd := m.cmd.focus()
+	m.cmd.err = "unknown: " + word
+	return m, cmd
 }
+
+// switchTab makes tab i active: it resets focus + the detail pane, loads the tab
+// on first visit, and (re)loads the selected item's detail. Per-tab cursors are
+// preserved because each tab owns its list.
+func (m *Model) switchTab(i int) tea.Cmd {
+	if i == m.active {
+		return nil
+	}
+	m.active = i
+	m.focus = focusList
+	m.detail.clear()
+	if !m.cur().loaded {
+		return m.cur().loadList(m.svc)
+	}
+	return m.refreshDetail()
+}
+
+// refreshDetail (re)loads the detail for the current selection, or settles the
+// pane into its empty state when the active tab has no items — so an empty tab
+// (e.g. a repo with no audits) never sits on a perpetual "loading…".
+func (m *Model) refreshDetail() tea.Cmd {
+	id := m.selectedID()
+	if id == "" {
+		m.detail.loading = false
+		return nil
+	}
+	m.detail.loading = true
+	return m.cur().loadItem(m.svc, id)
+}
+
+// isCurrentSelection reports whether (kind, id) still matches the active tab's
+// selection — the stale guard for async detail loads.
+func (m Model) isCurrentSelection(kind entityKind, id string) bool {
+	return kind == m.cur().kind && id == m.selectedID()
+}
+
+func (m *Model) setFocus(f focus) { m.focus = f }
 
 func (m *Model) toggleFocus() {
 	if m.focus == focusList {
@@ -178,38 +276,57 @@ func (m *Model) toggleFocus() {
 	}
 }
 
-func (m Model) selectedSlug() string {
-	if it, ok := m.list.SelectedItem().(taskItem); ok {
-		return it.t.Slug
+func (m Model) selectedID() string {
+	if it, ok := m.cur().list.SelectedItem().(entityItem); ok {
+		return it.id()
 	}
 	return ""
 }
 
-func (m *Model) selectSlug(slug string) {
-	for i, it := range m.list.Items() {
-		if ti, ok := it.(taskItem); ok && ti.t.Slug == slug {
-			m.list.Select(i)
+func (m *Model) selectByID(id string) {
+	// Range the *visible* items: list.Select indexes the filtered/paginated view
+	// (Page*PerPage+cursor), so an unfiltered Items() index would land on the
+	// wrong row whenever a `/` filter is active. When unfiltered, VisibleItems ==
+	// Items, so this is identical to the naive version.
+	for i, it := range m.cur().list.VisibleItems() {
+		if ei, ok := it.(entityItem); ok && ei.id() == id {
+			m.cur().list.Select(i)
 			return
 		}
 	}
 }
 
-// recomputeLayout sizes the panes from the terminal size + responsive mode.
-// Borders are subtracted before sizing children (the #1 lipgloss bug). The list
-// renders its own title bar; the detail pane gets a manual title line.
+func (m Model) entityNames() []string {
+	names := make([]string, len(m.tabs))
+	for i, t := range m.tabs {
+		names[i] = t.name
+	}
+	return names
+}
+
+// recomputeLayout sizes the tab strip, panes, and footer from the terminal size +
+// responsive mode. Borders are subtracted before sizing children (the #1 lipgloss
+// bug). Every tab's list is sized so a switch needs no relayout.
 func (m *Model) recomputeLayout() {
 	const (
 		footerH = 1
+		tabH    = 1 // the tab strip line
 		titleH  = 1 // the detail pane's manual title line
 	)
-	bodyH := m.height - footerH
+	bodyH := m.height - footerH - tabH
 	if bodyH < 4 {
 		bodyH = 4
 	}
 	m.paneOuterH = bodyH
-	listH := max1(bodyH - paneVFrame)
+	// bubbles/list renders its pagination footer ONE line *beyond* its SetHeight
+	// (the `••` dots), so a paginated list would overflow its pane and shove the
+	// footer/command bar off-screen. Reserve that line here so title+items+dots
+	// fit the pane's inner height exactly.
+	listH := max1(bodyH - paneVFrame - 1)
 	detailH := max1(bodyH - paneVFrame - titleH)
 	m.twoPane = m.width >= 90
+
+	var listInnerW int
 	if m.twoPane {
 		listOuterW := m.width * 2 / 5
 		if listOuterW < 28 {
@@ -217,13 +334,15 @@ func (m *Model) recomputeLayout() {
 		}
 		m.listOuterW = listOuterW
 		m.detailOuterW = m.width - listOuterW
-		m.list.SetSize(max1(listOuterW-paneHFrame), listH)
+		listInnerW = max1(listOuterW - paneHFrame)
 		m.detail.SetSize(max1(m.detailOuterW-paneHFrame), detailH)
 	} else {
 		m.listOuterW, m.detailOuterW = m.width, m.width
-		full := max1(m.width - paneHFrame)
-		m.list.SetSize(full, listH)
-		m.detail.SetSize(full, detailH)
+		listInnerW = max1(m.width - paneHFrame)
+		m.detail.SetSize(listInnerW, detailH)
+	}
+	for _, t := range m.tabs {
+		t.list.SetSize(listInnerW, listH)
 	}
 }
 
@@ -231,32 +350,45 @@ func (m Model) View() string {
 	switch {
 	case m.width == 0 || m.height == 0:
 		// No WindowSizeMsg yet. Rendering panes now would use unset (0) sizes →
-		// negative border dimensions → a broken oversized frame that corrupts the
-		// renderer's height tracking (the clipped-top-border bug). Wait for size.
+		// negative border dimensions → a broken oversized frame. Wait for size.
 		return "loading…"
 	case m.err != nil:
 		return fg(theme.ColorRed, "error: "+m.err.Error())
-	case m.loading:
-		return "loading…"
-	case len(m.list.Items()) == 0:
-		return m.emptyView()
 	}
+	// Hard-clamp the body to its budget so the tab strip and footer (the chrome)
+	// are ALWAYS rendered — a child that overflows its box loses its own bottom
+	// edge, never the load-bearing navigation/command line. Belt-and-suspenders
+	// with the per-list pagination reserve above.
+	body := lipgloss.NewStyle().MaxHeight(m.paneOuterH).Render(m.bodyView())
+	full := lipgloss.JoinVertical(lipgloss.Left, m.tabStrip(), body, m.footer())
+	return lipgloss.NewStyle().MaxWidth(m.width).MaxHeight(m.height).Render(full)
+}
 
-	listPane := m.pane(focusList, m.list.View(), m.listOuterW)
-
-	var view string
+// bodyView renders the pane area: a loading note until the active tab loads, then
+// the two-pane (or single-pane drill) layout.
+func (m Model) bodyView() string {
+	if !m.cur().loaded {
+		return m.pane(focusList, dim("loading…"), m.width)
+	}
+	listPane := m.pane(focusList, m.listPaneContent(), m.listOuterW)
 	switch {
 	case m.twoPane:
-		view = lipgloss.JoinHorizontal(lipgloss.Top, listPane, m.detailPaneView())
+		return lipgloss.JoinHorizontal(lipgloss.Top, listPane, m.detailPaneView())
 	case m.focus == focusDetail:
-		view = m.detailPaneView()
+		return m.detailPaneView()
 	default:
-		view = listPane
+		return listPane
 	}
-	full := lipgloss.JoinVertical(lipgloss.Left, view, m.footer())
-	// Last-line-of-defense clamp: a single missed truncation degrades gracefully
-	// instead of overflowing/corrupting the screen.
-	return lipgloss.NewStyle().MaxWidth(m.width).MaxHeight(m.height).Render(full)
+}
+
+// listPaneContent is the active list, or a helpful empty hint on an empty tasks
+// tab (other entities fall back to the list's own "No items.").
+func (m Model) listPaneContent() string {
+	t := m.cur()
+	if t.kind == entityTasks && len(t.list.Items()) == 0 {
+		return "No active tasks.\n\nCreate one:\n  tskflwctl task new \"Title\" --epic <id>"
+	}
+	return t.list.View()
 }
 
 // detailPaneView composes the detail pane: a title line + the scrollable body.
@@ -265,7 +397,11 @@ func (m Model) detailPaneView() string {
 	if m.focus == focusDetail {
 		titleStyle = selectedStyle
 	}
-	content := lipgloss.JoinVertical(lipgloss.Left, titleStyle.Render(m.detailTitle()), m.detail.View())
+	// Truncate the title to the pane's inner width — an un-truncated long slug
+	// would wrap to a second row, growing the pane past its budget and clipping
+	// its bottom border (the truncate discipline every Join input must follow).
+	title := titleStyle.Render(truncate(m.detailTitle(), max1(m.detail.width)))
+	content := lipgloss.JoinVertical(lipgloss.Left, title, m.detail.View())
 	return m.pane(focusDetail, content, m.detailOuterW)
 }
 
@@ -293,23 +429,33 @@ func max1(n int) int {
 	return n
 }
 
-func (m Model) footer() string {
-	hints := "j/k move · l/⏎ detail · / filter · tab focus · r refresh · q quit"
-	if m.focus == focusDetail {
-		hints = "j/k scroll · g/G top/bottom · h/esc back · q quit"
+// tabStrip renders the entity tabs (active accented), collapsing to a single
+// `[entity ▾]` chip under ~60 cols.
+func (m Model) tabStrip() string {
+	if m.width < 60 {
+		return truncate(activeTab.Render("["+m.cur().name+" ▾]"), m.width)
 	}
-	if len(m.problems) > 0 {
-		hints = fmt.Sprintf("! %d unreadable · ", len(m.problems)) + hints
+	parts := make([]string, len(m.tabs))
+	for i, t := range m.tabs {
+		if i == m.active {
+			parts[i] = activeTab.Render(t.name)
+		} else {
+			parts[i] = dim(t.name)
+		}
 	}
-	// Truncate to the terminal width — otherwise JoinVertical pads every pane row
-	// out to the footer's width and the whole frame overflows the terminal.
-	return dim(truncate(hints, m.width))
+	return truncate(strings.Join(parts, dim("  ·  ")), m.width)
 }
 
-func (m Model) emptyView() string {
-	msg := "No active tasks.\n\nCreate one:  tskflwctl task new \"Title\" --epic <id>"
-	if len(m.problems) > 0 {
-		msg += fmt.Sprintf("\n\n! %d unreadable file(s) — run `tskflwctl lint`", len(m.problems))
+func (m Model) footer() string {
+	if m.cmd.active {
+		return truncate(m.cmd.view(), m.width)
 	}
-	return msg
+	hints := ": cmd · [ ] tabs · j/k move · l/⏎ detail · / filter · tab focus · r refresh · q quit"
+	if m.focus == focusDetail {
+		hints = ": cmd · [ ] tabs · j/k scroll · g/G top/bottom · h/esc back · q quit"
+	}
+	if p := m.cur().problems; len(p) > 0 {
+		hints = fmt.Sprintf("! %d unreadable · ", len(p)) + hints
+	}
+	return dim(truncate(hints, m.width))
 }

@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -8,12 +10,17 @@ import (
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
+// accent is the focus/selection accent (cyan), shared by the active pane border
+// and the active tab in the strip.
+const accent = lipgloss.Color("6")
+
 var (
 	selectedStyle = lipgloss.NewStyle().Bold(true)
 	dimStyle      = lipgloss.NewStyle().Faint(true)
+	activeTab     = lipgloss.NewStyle().Bold(true).Foreground(accent)
 
 	// Two focus signals: an accent border + a bold title on the focused pane.
-	paneActive   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("6"))
+	paneActive   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent)
 	paneInactive = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8"))
 
 	// Frame sizes derived from the pane style (not a hardcoded 2) so a future
@@ -48,6 +55,23 @@ func fg(c theme.Color, s string) string {
 }
 
 func dim(s string) string { return dimStyle.Render(s) }
+
+// miniBar renders a width-cell progress bar for pct (0–100): filled in the
+// completion color (gray <34, yellow <100, green at 100), empty dim. Mirrors the
+// CLI render.Style.Bar so both surfaces show the same bar.
+func miniBar(pct, width int) string {
+	if width < 1 {
+		width = 1
+	}
+	filled := pct * width / 100
+	switch {
+	case filled > width:
+		filled = width
+	case filled < 0:
+		filled = 0
+	}
+	return fg(theme.Percent(pct), strings.Repeat("█", filled)) + dim(strings.Repeat("░", width-filled))
+}
 
 // statusText renders a colored glyph + status label.
 func statusText(st domain.Status) string {

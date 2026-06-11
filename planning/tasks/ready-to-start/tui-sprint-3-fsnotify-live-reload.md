@@ -41,6 +41,15 @@ hard parts are debounce + cursor preservation, not fsnotify itself.) See
 
 - Watching newly-created dirs at runtime (status dirs are fixed by `init`).
 
+## Follow-up folded in from S2a review (2026-06-11)
+
+- **Reload currently refreshes only the active tab.** `r` (and the `reloadMsg`
+  path) reloads `m.cur()` and restores its cursor by id; the other entity tabs
+  keep their already-loaded data until next visited. With fsnotify this should
+  refresh **all loaded tabs** (or mark inactive ones stale → reload on switch),
+  so a `task move` from another process is reflected on whichever tab you land on.
+  Preserve each tab's cursor by id, as 2a does for the active one.
+
 ## Related
 
 - Epic [[18-tui-bubble-tea-interactive-planning-browser]]

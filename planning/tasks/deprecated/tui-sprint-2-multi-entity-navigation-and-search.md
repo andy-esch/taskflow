@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: deprecated
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Entity registry with command-jump plus tab strip for tasks epics audits, and in-memory filter search
 effort: Unknown
@@ -8,9 +8,21 @@ priority: medium
 autonomy_level: 3
 tags: [tui, bubble-tea]
 created: "2026-06-10"
+updated_at: "2026-06-11"
+deprecated_at: "2026-06-11"
 ---
 
 # TUI sprint 2 multi-entity navigation and search
+
+> 🔀 **Deprecated 2026-06-11 — split into two stages** (this session) because the
+> scope grew large. Superseded by:
+> - [[tui-sprint-2a-entity-navigation-registry-tabs-command-jump]] — structure
+>   (registry, tabs, `:` command-jump, per-entity lists).
+> - [[tui-sprint-2b-search-status-views-and-interactive-sort]] — refinement
+>   (`/` filter + chip, status views, interactive sort, detail vim find).
+>
+> The full scope below is preserved verbatim as the source for the split; the
+> implementing agent should confirm the seam at sprint start.
 
 ## Objective
 
