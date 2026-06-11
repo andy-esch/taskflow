@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -20,11 +22,13 @@ const (
 	entityAudits
 )
 
-// entityItem is a list row that knows its own stable id (slug / epic id), so the
-// model can preserve the cursor and stale-guard detail loads generically.
+// entityItem is a list row that knows its own stable id (slug / epic id) and the
+// fields it can be sorted by, so the model can preserve the cursor, stale-guard
+// detail loads, and reorder lists generically across entities.
 type entityItem interface {
 	list.Item
 	id() string
+	sortFields() sortFields
 }
 
 // entityTab bundles one entity's static config (name, loaders, delegate via its
@@ -36,10 +40,45 @@ type entityTab struct {
 	name     string   // the tab label and the canonical `:` command word
 	aliases  []string // shorthands accepted by `:` (e.g. "t", "task")
 	list     list.Model
-	loadList func(*core.Service) tea.Cmd
+	loadList func(*entityTab, *core.Service) tea.Cmd // reads the tab's statusView
 	loadItem func(svc *core.Service, id string) tea.Cmd
 	loaded   bool
 	problems []domain.FileProblem
+
+	// S2b list-scoped state (persists per tab across switches/reloads).
+	statusView string  // tasks only: "" = working-set, "all", or a status string
+	sortKey    sortKey // interactive sort column ("o" cycles)
+	sortRev    bool    // sort direction toggle ("O")
+}
+
+// reload re-fires the tab's list loader, passing the tab so the loader can read
+// its current statusView (a value-typed Model still mutates via the pointer).
+func (t *entityTab) reload(svc *core.Service) tea.Cmd { return t.loadList(t, svc) }
+
+// chip is the per-tab state badge shown in the list's title slot: active status
+// view, sort column/direction, and any applied `/` filter. Empty (the clean
+// default) collapses the title row, giving the list one more visible row.
+func (t *entityTab) chip() string {
+	var parts []string
+	if t.kind == entityTasks && t.statusView != "" {
+		parts = append(parts, "view:"+t.statusView)
+	}
+	filtered := t.list.FilterState() == list.FilterApplied
+	// Show the sort badge whenever the order is non-natural — a chosen column OR a
+	// reversed default (so `O` on the working set is never a silent reorder). It's
+	// suppressed while a filter is applied: the filtered view is ranked by match
+	// relevance, so the sort has no visible effect and the badge would mislead.
+	if (t.sortKey != sortDefault || t.sortRev) && !filtered {
+		arrow := "↓"
+		if t.sortRev {
+			arrow = "↑"
+		}
+		parts = append(parts, "sort:"+t.sortKey.label()+arrow)
+	}
+	if filtered {
+		parts = append(parts, "filter:"+t.list.FilterValue())
+	}
+	return strings.Join(parts, "  ")
 }
 
 // matches reports whether a typed `:` word selects this tab (canonical name or a
@@ -58,28 +97,31 @@ func (t *entityTab) matches(word string) bool {
 
 // newEntityTabs is the entity registry: the ordered set of browsable entities.
 func newEntityTabs() []*entityTab {
-	mk := func(title string, d list.ItemDelegate) list.Model {
+	mk := func(d list.ItemDelegate) list.Model {
 		l := list.New(nil, d, 0, 0)
-		l.Title = title
+		// The title slot carries the S2b state chip (set each render from chip()),
+		// not a static "Tasks" label — that duplicated the tab strip. An empty chip
+		// collapses the row entirely. TitleBar padding is stripped so the chip (and
+		// the `/` filter prompt, which bubbles draws in this same slot) sit on one
+		// tight line.
 		l.Styles.Title = lipgloss.NewStyle().Bold(true)
+		l.Styles.TitleBar = lipgloss.NewStyle()
 		l.SetShowHelp(false)
 		l.SetShowStatusBar(false)
-		// Built-in fuzzy `/` filter over each item's FilterValue; S2b adds the
-		// persistent chip + status views.
 		return l
 	}
 	return []*entityTab{
 		{
 			kind: entityTasks, name: "tasks", aliases: []string{"t", "task"},
-			list: mk("Tasks", taskDelegate{}), loadList: loadTaskList, loadItem: loadTaskDetail,
+			list: mk(taskDelegate{}), loadList: loadTaskList, loadItem: loadTaskDetail,
 		},
 		{
 			kind: entityEpics, name: "epics", aliases: []string{"e", "epic"},
-			list: mk("Epics", epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
+			list: mk(epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
 		},
 		{
 			kind: entityAudits, name: "audits", aliases: []string{"a", "audit"},
-			list: mk("Audits", auditDelegate{}), loadList: loadAuditList, loadItem: loadAuditDetail,
+			list: mk(auditDelegate{}), loadList: loadAuditList, loadItem: loadAuditDetail,
 		},
 	}
 }

@@ -42,8 +42,9 @@ type Model struct {
 	detail detailPane
 	cmd    commandBar
 
-	err     error
-	restore string // id to re-select after a reload of the active tab
+	err      error
+	restore  string // id to re-select after a reload of the active tab
+	showHelp bool   // the `?` keybinding overlay is open
 }
 
 // New constructs the root model over the same *core.Service the CLI uses.
@@ -55,7 +56,7 @@ func New(svc *core.Service, root string) Model {
 	}
 }
 
-func (m Model) Init() tea.Cmd { return m.cur().loadList(m.svc) }
+func (m Model) Init() tea.Cmd { return m.cur().reload(m.svc) }
 
 // cur returns the active entity tab. The tab is a pointer, so reads use a value
 // receiver yet callers can still mutate the tab's list in place.
@@ -92,7 +93,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case reloadMsg:
 		m.restore = m.selectedID()
-		return m, m.cur().loadList(m.svc)
+		return m, m.cur().reload(m.svc)
 
 	case errMsg:
 		m.err = msg.err
@@ -117,6 +118,7 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	// the planning dir briefly unreadable) recovers on the next `r`/reload.
 	m.err = nil
 	tab := m.tabs[i]
+	sortItems(msg.items, tab.sortKey, tab.sortRev) // honor the tab's sort across reloads
 	cmd := tab.list.SetItems(msg.items)
 	tab.loaded = true
 	tab.problems = msg.problems
@@ -131,6 +133,15 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// 0. The help overlay is modal: any key dismisses it (ctrl+c still quits).
+	if m.showHelp {
+		if key.Matches(msg, keys.ForceQuit) {
+			return m, tea.Quit
+		}
+		m.showHelp = false
+		return m, nil
+	}
+
 	// 1. The command bar captures every key while open (so `:tasks` typing never
 	// leaks into global hotkeys).
 	if m.cmd.active {
@@ -143,7 +154,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case msg.Type == tea.KeyEnter:
 			return m.dispatchCommand()
 		case msg.Type == tea.KeyTab:
-			m.cmd.complete(m.entityNames())
+			m.cmd.complete(m.commandOptions())
 			return m, nil
 		}
 		return m, m.cmd.update(msg)
@@ -156,16 +167,37 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// 2b. The detail pane's find input owns keys while a query is being typed
+	// (ctrl+c still force-quits).
+	if m.focus == focusDetail && m.detail.finding() {
+		if key.Matches(msg, keys.ForceQuit) {
+			return m, tea.Quit
+		}
+		return m, m.detail.updateFind(msg)
+	}
+
 	// 3. Global hotkeys.
 	switch {
 	case key.Matches(msg, keys.ForceQuit), key.Matches(msg, keys.Quit):
 		return m, tea.Quit
+	case key.Matches(msg, keys.Help):
+		m.showHelp = true
+		return m, nil
 	case key.Matches(msg, keys.Command):
 		return m, m.cmd.focus()
 	case key.Matches(msg, keys.NextTab):
 		return m, m.switchTab((m.active + 1) % len(m.tabs))
 	case key.Matches(msg, keys.PrevTab):
 		return m, m.switchTab((m.active - 1 + len(m.tabs)) % len(m.tabs))
+	case key.Matches(msg, keys.Sort):
+		return m, m.cycleSort(1)
+	case key.Matches(msg, keys.SortRev):
+		m.cur().sortRev = !m.cur().sortRev
+		return m, m.applySortToCurrent()
+	case key.Matches(msg, keys.StatusView):
+		return m, m.cycleStatusView(1)
+	case key.Matches(msg, keys.StatusRev):
+		return m, m.cycleStatusView(-1)
 	case key.Matches(msg, keys.Refresh):
 		return m, func() tea.Msg { return reloadMsg{} }
 	case key.Matches(msg, keys.ToggleFocus):
@@ -185,7 +217,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateList(msg)
 	}
 	switch {
+	case key.Matches(msg, keys.Find):
+		return m, m.detail.startFind()
+	case key.Matches(msg, keys.FindNext):
+		m.detail.findNext(1)
+		return m, nil
+	case key.Matches(msg, keys.FindPrev):
+		m.detail.findNext(-1)
+		return m, nil
 	case key.Matches(msg, keys.Left), key.Matches(msg, keys.Back):
+		// First Esc/h clears an active find; a second leaves the detail pane.
+		if m.detail.findActive() {
+			m.detail.clearFind()
+			return m, nil
+		}
 		m.setFocus(focusList)
 		return m, nil
 	case key.Matches(msg, keys.Top):
@@ -206,15 +251,22 @@ func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	prev := m.selectedID()
 	var cmd tea.Cmd
 	m.cur().list, cmd = m.cur().list.Update(msg)
-	if id := m.selectedID(); id != prev && id != "" {
+	switch id := m.selectedID(); id {
+	case prev:
+		return m, cmd
+	case "":
+		// A `/` filter narrowed the list to zero matches: drop the now-stale detail
+		// instead of leaving the last item showing.
+		m.detail.showEmpty()
+		return m, cmd
+	default:
 		m.detail.loading = true
 		return m, tea.Batch(cmd, m.cur().loadItem(m.svc, id))
 	}
-	return m, cmd
 }
 
-// dispatchCommand resolves the typed `:` word to an entity tab and switches to
-// it; an unknown word reopens the bar with an inline error.
+// dispatchCommand resolves the typed `:` word to an entity tab or a task status
+// view and applies it; an unknown word reopens the bar with an inline error.
 func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 	word := m.cmd.value()
 	m.cmd.blur()
@@ -225,6 +277,9 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 		if t.matches(word) {
 			return m, m.switchTab(i)
 		}
+	}
+	if view, ok := statusViewFor(word); ok {
+		return m, m.applyStatusView(view)
 	}
 	cmd := m.cmd.focus()
 	m.cmd.err = "unknown: " + word
@@ -242,7 +297,7 @@ func (m *Model) switchTab(i int) tea.Cmd {
 	m.focus = focusList
 	m.detail.clear()
 	if !m.cur().loaded {
-		return m.cur().loadList(m.svc)
+		return m.cur().reload(m.svc)
 	}
 	return m.refreshDetail()
 }
@@ -302,6 +357,72 @@ func (m Model) entityNames() []string {
 		names[i] = t.name
 	}
 	return names
+}
+
+// commandOptions is the full `:` Tab-completion set: entity names + their
+// aliases + the task status-view words. (Aliases were missing in S2a.)
+func (m Model) commandOptions() []string {
+	words := statusViewWords()
+	opts := make([]string, 0, len(m.tabs)*2+len(words))
+	for _, t := range m.tabs {
+		opts = append(opts, t.name)
+		opts = append(opts, t.aliases...)
+	}
+	return append(opts, words...)
+}
+
+// --- interactive sort ---
+
+// applySortToCurrent reorders the active list under its current sort state,
+// preserving the cursor by id (SetItems re-applies any active `/` filter).
+func (m *Model) applySortToCurrent() tea.Cmd {
+	t := m.cur()
+	id := m.selectedID()
+	items := t.list.Items()
+	sortItems(items, t.sortKey, t.sortRev)
+	cmd := t.list.SetItems(items)
+	m.selectByID(id)
+	return cmd
+}
+
+// cycleSort advances the active tab's sort column (wrapping) and re-sorts.
+func (m *Model) cycleSort(dir int) tea.Cmd {
+	cur := 0
+	for i, k := range sortCols {
+		if k == m.cur().sortKey {
+			cur = i
+			break
+		}
+	}
+	n := len(sortCols)
+	m.cur().sortKey = sortCols[((cur+dir)%n+n)%n]
+	return m.applySortToCurrent()
+}
+
+// --- status views (tasks) ---
+
+// cycleStatusView steps the tasks tab's status view (no-op on other entities,
+// which have no status axis). The cycle order lives in statusViews (statusview.go).
+func (m *Model) cycleStatusView(dir int) tea.Cmd {
+	if m.cur().kind != entityTasks {
+		return nil
+	}
+	return m.applyStatusView(statusViewStep(m.cur().statusView, dir))
+}
+
+// applyStatusView switches to the tasks tab, sets its status view, and reloads —
+// preserving the cursor by id when the task survives into the new view.
+func (m *Model) applyStatusView(view string) tea.Cmd {
+	i := indexOfKind(m.tabs, entityTasks)
+	m.active = i
+	m.focus = focusList
+	tab := m.tabs[i]
+	if it, ok := tab.list.SelectedItem().(entityItem); ok {
+		m.restore = it.id()
+	}
+	tab.statusView = view
+	m.detail.clear()
+	return tab.reload(m.svc)
 }
 
 // recomputeLayout sizes the tab strip, panes, and footer from the terminal size +
@@ -364,9 +485,22 @@ func (m Model) View() string {
 	return lipgloss.NewStyle().MaxWidth(m.width).MaxHeight(m.height).Render(full)
 }
 
-// bodyView renders the pane area: a loading note until the active tab loads, then
-// the two-pane (or single-pane drill) layout.
+// bodyView renders the pane area, with the `?` help panel floated over it when
+// open (the underlying panes stay visible around the modal).
 func (m Model) bodyView() string {
+	base := m.renderBody()
+	if !m.showHelp {
+		return base
+	}
+	// Normalize the body to exact body dimensions, then composite the help box on
+	// top so it floats over the items rather than blanking them.
+	canvas := lipgloss.Place(m.width, m.paneOuterH, lipgloss.Left, lipgloss.Top, base)
+	return overlay(canvas, helpBox(m.width-2, m.paneOuterH-2), m.width, m.paneOuterH)
+}
+
+// renderBody is the pane layout: a loading note until the active tab loads, then
+// the two-pane (or single-pane drill) view.
+func (m Model) renderBody() string {
 	if !m.cur().loaded {
 		return m.pane(focusList, dim("loading…"), m.width)
 	}
@@ -382,10 +516,14 @@ func (m Model) bodyView() string {
 }
 
 // listPaneContent is the active list, or a helpful empty hint on an empty tasks
-// tab (other entities fall back to the list's own "No items.").
+// tab (other entities fall back to the list's own "No items."). The chip (status
+// view / sort / applied filter) is written into the list's title slot here — a
+// pure function of state, idempotent per frame — so it shows above the rows (and
+// collapses to nothing in the clean default).
 func (m Model) listPaneContent() string {
 	t := m.cur()
-	if t.kind == entityTasks && len(t.list.Items()) == 0 {
+	t.list.Title = t.chip()
+	if t.kind == entityTasks && t.statusView == "" && len(t.list.Items()) == 0 {
 		return "No active tasks.\n\nCreate one:\n  tskflwctl task new \"Title\" --epic <id>"
 	}
 	return t.list.View()
@@ -450,9 +588,13 @@ func (m Model) footer() string {
 	if m.cmd.active {
 		return truncate(m.cmd.view(), m.width)
 	}
-	hints := ": cmd · [ ] tabs · j/k move · l/⏎ detail · / filter · tab focus · r refresh · q quit"
+	// The detail find input/status takes over the footer while searching a body.
+	if m.focus == focusDetail && (m.detail.finding() || m.detail.findActive()) {
+		return truncate(m.detail.findStatus(), m.width)
+	}
+	hints := ": cmd · / filter · o sort · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
 	if m.focus == focusDetail {
-		hints = ": cmd · [ ] tabs · j/k scroll · g/G top/bottom · h/esc back · q quit"
+		hints = ": cmd · / find · n/N match · j/k scroll · g/G top/bottom · h/esc back · q quit"
 	}
 	if p := m.cur().problems; len(p) > 0 {
 		hints = fmt.Sprintf("! %d unreadable · ", len(p)) + hints

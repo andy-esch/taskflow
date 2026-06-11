@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
@@ -626,5 +628,236 @@ func TestModel_TabStripCollapsesWhenNarrow(t *testing.T) {
 	narrow := loaded(t, 50, 20)
 	if !strings.Contains(narrow.tabStrip(), "▾") {
 		t.Errorf("narrow tab strip should collapse to a chip, got %q", ansi.Strip(narrow.tabStrip()))
+	}
+}
+
+// --- S2b: search, status views, sort, help ---
+
+func TestModel_SortReordersAndShowsChip(t *testing.T) {
+	m := loaded(t, 120, 40)
+	// Default (working-set): alpha (in-progress) before beta (ready-to-start).
+	if got := m.cur().list.Items()[0].(taskItem).t.Slug; got != "alpha" {
+		t.Fatalf("default order should lead with alpha, got %q", got)
+	}
+	// o×4 cycles default→priority→updated→tier→slug (sort applies synchronously).
+	for i := 0; i < 4; i++ {
+		tm, _ := m.Update(press("o"))
+		m = tm.(Model)
+	}
+	if m.cur().sortKey != sortSlug {
+		t.Fatalf("o×4 should land on sortSlug, got %v", m.cur().sortKey)
+	}
+	if !strings.Contains(m.cur().chip(), "sort:slug↓") {
+		t.Errorf("chip should announce the sort, got %q", m.cur().chip())
+	}
+	// Reverse → beta sorts before alpha, and the arrow flips.
+	tm, _ := m.Update(press("O"))
+	m = tm.(Model)
+	if got := m.cur().list.Items()[0].(taskItem).t.Slug; got != "beta" {
+		t.Errorf("reversed slug sort should lead with beta, got %q", got)
+	}
+	if !strings.Contains(m.cur().chip(), "sort:slug↑") {
+		t.Errorf("reversed chip should show ↑, got %q", m.cur().chip())
+	}
+}
+
+func TestModel_StatusViewCyclesAndFilters(t *testing.T) {
+	m := loaded(t, 120, 40)
+	// s → the first non-default view is in-progress; the reload filters to alpha.
+	tm, cmd := m.Update(press("s"))
+	m = drain(t, tm.(Model), cmd)
+	if m.cur().statusView != "in-progress" {
+		t.Fatalf("s should select the in-progress view, got %q", m.cur().statusView)
+	}
+	if n := len(m.cur().list.Items()); n != 1 {
+		t.Fatalf(":in-progress should show only alpha, got %d items", n)
+	}
+	if got := m.cur().list.Items()[0].(taskItem).t.Slug; got != "alpha" {
+		t.Errorf("the in-progress view should hold alpha, got %q", got)
+	}
+	if !strings.Contains(m.cur().chip(), "view:in-progress") {
+		t.Errorf("chip should announce the view, got %q", m.cur().chip())
+	}
+	// S steps backward: in-progress → "" (default), then wraps to the last entry.
+	tm, _ = m.Update(press("S"))
+	m = tm.(Model)
+	tm, cmd = m.Update(press("S")) // "" → wrap to "all"
+	m = drain(t, tm.(Model), cmd)
+	if m.cur().statusView != "all" {
+		t.Errorf("S past the default should wrap to all, got %q", m.cur().statusView)
+	}
+	if n := len(m.cur().list.Items()); n != 2 {
+		t.Errorf(":all should show both tasks, got %d", n)
+	}
+}
+
+func TestModel_StatusViewViaCommand(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press(":"))
+	m = tm.(Model)
+	for _, r := range "completed" {
+		tm, _ = m.Update(press(string(r)))
+		m = tm.(Model)
+	}
+	tm, cmd := m.Update(press("enter"))
+	m = drain(t, tm.(Model), cmd)
+	if m.cur().name != "tasks" || m.cur().statusView != "completed" {
+		t.Fatalf(":completed should set the tasks completed view, got tab=%q view=%q", m.cur().name, m.cur().statusView)
+	}
+	if n := len(m.cur().list.Items()); n != 0 {
+		t.Errorf("the seed has no completed tasks; expected an empty view, got %d", n)
+	}
+}
+
+// TestStatusViewsCoverAllStatuses guards the unified status-view table against
+// drift: every domain status must be reachable as a `:` view, so a new status
+// can't silently become unbrowsable in the TUI.
+func TestStatusViewsCoverAllStatuses(t *testing.T) {
+	for _, s := range domain.AllStatuses() {
+		if v, ok := statusViewFor(string(s)); !ok || v != string(s) {
+			t.Errorf("status %q is not reachable as a `:` view (ok=%v value=%q)", s, ok, v)
+		}
+	}
+	// The default + "all" specials must resolve too.
+	if v, ok := statusViewFor("active"); !ok || v != "" {
+		t.Errorf("`:active` should map to the working-set view, got ok=%v value=%q", ok, v)
+	}
+	if v, ok := statusViewFor("all"); !ok || v != "all" {
+		t.Errorf("`:all` should map to the all view, got ok=%v value=%q", ok, v)
+	}
+}
+
+func TestTaskFilterValueIncludesTags(t *testing.T) {
+	it := taskItem{domain.Task{Slug: "x", Description: "desc", Tags: []string{"go", "cli"}}}
+	fv := it.FilterValue()
+	for _, want := range []string{"x", "desc", "go", "cli"} {
+		if !strings.Contains(fv, want) {
+			t.Errorf("FilterValue %q should contain %q (tags are filterable)", fv, want)
+		}
+	}
+}
+
+func TestModel_HelpOverlayTogglesAndFloats(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press("?"))
+	m = tm.(Model)
+	if !m.showHelp {
+		t.Fatal("? should open the help overlay")
+	}
+	v := ansi.Strip(m.View())
+	if !strings.Contains(v, "Keys") || !strings.Contains(v, "filter the list") {
+		t.Errorf("help overlay should list keybindings:\n%s", v)
+	}
+	// It floats: the underlying list (alpha) stays partially visible around the box.
+	if !strings.Contains(v, "alpha") {
+		t.Errorf("help should float over the items, not blank them:\n%s", v)
+	}
+	// Any key dismisses it.
+	tm, _ = m.Update(press("j"))
+	m = tm.(Model)
+	if m.showHelp {
+		t.Error("a key press should dismiss the help overlay")
+	}
+}
+
+func TestModel_DetailFindHighlightsAndNavigates(t *testing.T) {
+	m := loaded(t, 120, 20)
+	// Give the detail a body with two "find" matches on separate lines, plus
+	// filler so the viewport must scroll.
+	body := "alpha line\nbeta\nfind me here\nbeta again\nfind once more\n" + strings.Repeat("filler\n", 30)
+	id := m.selectedID()
+	tm, _ := m.Update(detailMsg{kind: entityTasks, id: id, content: taskDetail{t: domain.Task{Slug: id}, body: body}})
+	m = tm.(Model)
+	tm, _ = m.Update(press("l")) // focus detail
+	m = tm.(Model)
+
+	tm, _ = m.Update(press("/")) // open find
+	m = tm.(Model)
+	if !m.detail.finding() {
+		t.Fatal("/ should open the find input in the detail pane")
+	}
+	for _, r := range "find" { // note: the 'n' is captured as input, not navigation
+		tm, _ = m.Update(press(string(r)))
+		m = tm.(Model)
+	}
+	tm, _ = m.Update(press("enter")) // apply
+	m = tm.(Model)
+	if m.detail.finding() {
+		t.Error("enter should stop typing")
+	}
+	if !m.detail.findActive() {
+		t.Fatal("enter should apply the query")
+	}
+	if n := len(m.detail.find.lines); n != 2 {
+		t.Fatalf("expected 2 matching lines, got %d", n)
+	}
+	if m.detail.find.cur != 0 {
+		t.Errorf("first match should be focused, got %d", m.detail.find.cur)
+	}
+	off1 := m.detail.vp.YOffset
+
+	tm, _ = m.Update(press("n")) // next match
+	m = tm.(Model)
+	if m.detail.find.cur != 1 {
+		t.Errorf("n should advance to the 2nd match, got %d", m.detail.find.cur)
+	}
+	if m.detail.vp.YOffset <= off1 {
+		t.Errorf("n should scroll down to the lower match (%d → %d)", off1, m.detail.vp.YOffset)
+	}
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "[2/2]") {
+		t.Errorf("footer should show the match position [2/2]:\n%s", v)
+	}
+
+	tm, _ = m.Update(press("esc")) // first esc clears the find
+	m = tm.(Model)
+	if m.detail.findActive() {
+		t.Error("esc should clear the active find")
+	}
+	if m.focus != focusDetail {
+		t.Error("clearing the find should keep focus in the detail pane")
+	}
+	tm, _ = m.Update(press("esc")) // second esc leaves the detail
+	m = tm.(Model)
+	if m.focus != focusList {
+		t.Error("a second esc should return to the list")
+	}
+}
+
+func TestHighlightOccurrences(t *testing.T) {
+	// lipgloss disables color off a TTY; force a profile so Render emits escapes.
+	old := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI)
+	defer lipgloss.SetColorProfile(old)
+
+	out := highlightOccurrences("the Find finds findings", "find", findMatch)
+	// The plain text round-trips (highlight only adds escapes, never alters text).
+	if ansi.Strip(out) != "the Find finds findings" {
+		t.Errorf("highlight must preserve the plain text, got %q", ansi.Strip(out))
+	}
+	// Case-insensitive: "Find", "find", "find" each get styled → ≥3 escape runs.
+	if got := strings.Count(out, "\x1b["); got < 3 {
+		t.Errorf("expected each (case-insensitive) match styled, got %d escapes", got)
+	}
+}
+
+// TestModel_HelpOverlayFitsTerminal extends the layout invariant to the `?`
+// overlay: floating the help box must not change the view's height or overflow
+// the width at any size.
+func TestModel_HelpOverlayFitsTerminal(t *testing.T) {
+	for _, d := range []struct{ w, h int }{
+		{120, 40}, {100, 24}, {80, 20}, {40, 12}, {24, 8},
+	} {
+		m := loaded(t, d.w, d.h)
+		tm, _ := m.Update(press("?"))
+		m = tm.(Model)
+		lines := strings.Split(m.View(), "\n")
+		if len(lines) != d.h {
+			t.Errorf("%dx%d with help: %d lines, want %d", d.w, d.h, len(lines), d.h)
+		}
+		for i, ln := range lines {
+			if w := visibleW(ln); w > d.w {
+				t.Errorf("%dx%d with help: line %d is %d wide > %d: %q", d.w, d.h, i, w, d.w, ansi.Strip(ln))
+			}
+		}
 	}
 }

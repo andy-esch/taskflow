@@ -16,14 +16,29 @@ import (
 
 // --- tasks ---
 
-// loadTaskList reads the active task list and sorts it into working-set order.
-func loadTaskList(svc *core.Service) tea.Cmd {
+// loadTaskList reads the task list for the tab's current status view. The
+// default view ("") is the active working set (sorted in-progress→next-up→…);
+// "all" includes archived; any other value is an exact status filter. The view
+// is snapshotted here so a later change can't race this load.
+func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
+	view := t.statusView
 	return func() tea.Msg {
-		tasks, problems, err := svc.ListTasks(core.TaskFilter{})
+		f := core.TaskFilter{}
+		switch view {
+		case "":
+			// active-only default
+		case "all":
+			f.All = true
+		default:
+			f.Status = view
+		}
+		tasks, problems, err := svc.ListTasks(f)
 		if err != nil {
 			return errMsg{err}
 		}
-		sortWorkingSet(tasks)
+		if view == "" {
+			sortWorkingSet(tasks) // working-set order only for the default view
+		}
 		items := make([]list.Item, 0, len(tasks))
 		for _, t := range tasks {
 			items = append(items, taskItem{t})
@@ -44,7 +59,7 @@ func loadTaskDetail(svc *core.Service, id string) tea.Cmd {
 
 // --- epics ---
 
-func loadEpicList(svc *core.Service) tea.Cmd {
+func loadEpicList(_ *entityTab, svc *core.Service) tea.Cmd {
 	return func() tea.Msg {
 		epics, problems, err := svc.ListEpics()
 		if err != nil {
@@ -70,9 +85,9 @@ func loadEpicDetail(svc *core.Service, id string) tea.Cmd {
 
 // --- audits ---
 
-// loadAuditList reads open audits (the working set). Bucket/archived views come
-// in S2b; for now the audits tab mirrors the CLI's default of open-only.
-func loadAuditList(svc *core.Service) tea.Cmd {
+// loadAuditList reads open audits (the working set). The audits tab mirrors the
+// CLI's default of open-only; interactive sort still applies.
+func loadAuditList(_ *entityTab, svc *core.Service) tea.Cmd {
 	return func() tea.Msg {
 		audits, problems, err := svc.ListAudits("", false)
 		if err != nil {

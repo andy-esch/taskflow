@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -29,8 +30,15 @@ func row(w io.Writer, m list.Model, index int, content string) {
 // taskItem adapts a domain.Task to a bubbles/list item.
 type taskItem struct{ t domain.Task }
 
-func (i taskItem) FilterValue() string { return i.t.Slug + " " + i.t.Description }
-func (i taskItem) id() string          { return i.t.Slug }
+// FilterValue feeds the `/` fuzzy filter: slug, description, and tags so a tag
+// query (e.g. "/go") narrows the list (S2b broadened this from slug+desc).
+func (i taskItem) FilterValue() string {
+	return i.t.Slug + " " + i.t.Description + " " + strings.Join(i.t.Tags, " ")
+}
+func (i taskItem) id() string { return i.t.Slug }
+func (i taskItem) sortFields() sortFields {
+	return sortFields{priorityRank: priorityRank(i.t.Priority), updated: i.t.Updated, tier: i.t.Tier, slug: i.t.Slug}
+}
 
 // taskDelegate renders one task row: colored status glyph, a ⚠ if misfiled, the
 // slug, and a dim relative date — truncated to fit the list width.
@@ -66,8 +74,14 @@ func (taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 // epicItem adapts a core.EpicSummary (epic + rollup) to a list item.
 type epicItem struct{ es core.EpicSummary }
 
-func (i epicItem) FilterValue() string { return i.es.Epic.ID + " " + i.es.Epic.Description }
-func (i epicItem) id() string          { return i.es.Epic.ID }
+func (i epicItem) FilterValue() string {
+	return i.es.Epic.ID + " " + i.es.Epic.Description + " " + strings.Join(i.es.Epic.Tags, " ")
+}
+func (i epicItem) id() string { return i.es.Epic.ID }
+func (i epicItem) sortFields() sortFields {
+	// Epics have no tier/updated; priority + id (slug) carry the sort.
+	return sortFields{priorityRank: priorityRank(i.es.Epic.Priority), slug: i.es.Epic.ID}
+}
 
 // epicDelegate renders one epic row: a rollup bar + colored percent + done/total
 // + the epic id and description.
@@ -97,6 +111,10 @@ type auditItem struct{ a domain.Audit }
 
 func (i auditItem) FilterValue() string { return i.a.Slug + " " + i.a.Area }
 func (i auditItem) id() string          { return i.a.Slug }
+func (i auditItem) sortFields() sortFields {
+	// Audits sort by date (as "updated") + slug; no priority/tier.
+	return sortFields{updated: i.a.Date, slug: i.a.Slug}
+}
 
 // auditDelegate renders one audit row: a bucket-colored marker, the slug, the
 // open/total finding count, and a dim area.
