@@ -10,8 +10,8 @@ import (
 )
 
 // Service is the application core: framework-agnostic use cases over the ports.
-// It has no fs and no cobra, so it is testable in isolation and reusable by a
-// future TUI primary adapter.
+// It has no fs and no cobra, so it is testable in isolation and reused by both
+// primary adapters (the cli and the tui).
 type Service struct {
 	store Store
 }
@@ -69,21 +69,82 @@ func (s *Service) Move(slug string, to domain.Status) (domain.Task, error) {
 // SetFields validates and applies frontmatter updates to a task (stamping
 // updated_at) in a single atomic write. On any invalid value it returns
 // ErrValidation and nothing is written.
+//
+// Values arriving as strings from the `--set key=value` escape hatch are coerced
+// to the native type a known typed field needs (tier/autonomy → int, tags →
+// list) before the store serializes them — otherwise the store would write a
+// corrupting !!str (e.g. tier: "4") that the strict loader then can't read back.
+// When `epic` is set it must exist, mirroring NewTask, so set can't orphan a task
+// out of its epic's rollup.
 func (s *Service) SetFields(slug string, updates map[string]any) (domain.Task, error) {
 	if len(updates) == 0 {
 		return domain.Task{}, fmt.Errorf("%w: no fields given", domain.ErrValidation)
 	}
+	withMeta := make(map[string]any, len(updates)+1)
 	for field, val := range updates {
-		if err := domain.ValidateField(field, stringify(val)); err != nil {
+		coerced, err := coerceField(field, val)
+		if err != nil {
 			return domain.Task{}, err
 		}
+		if err := domain.ValidateField(field, stringify(coerced)); err != nil {
+			return domain.Task{}, err
+		}
+		withMeta[field] = coerced
 	}
-	withMeta := make(map[string]any, len(updates)+1)
-	for k, v := range updates {
-		withMeta[k] = v
+	if epic, ok := withMeta["epic"].(string); ok {
+		epics, _, err := s.store.ListEpics()
+		if err != nil {
+			return domain.Task{}, err
+		}
+		if !epicExists(epics, epic) {
+			return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, epic)
+		}
 	}
 	withMeta["updated_at"] = time.Now().Format("2006-01-02")
 	return s.store.SetFields(slug, withMeta)
+}
+
+// intFields and listFields are the frontmatter keys whose stored YAML type is not
+// a string. The `--set key=value` loop hands every value over as a string, so
+// these must be coerced to their native Go type before the store writes them (the
+// typed `--tier`/`--tags` flags already pass native types and skip coercion).
+// Keep in sync with the domain.Task field tags.
+var (
+	intFields  = map[string]bool{"tier": true, "autonomy_level": true}
+	listFields = map[string]bool{"tags": true}
+)
+
+// coerceField converts a string `--set` value into the native type its field
+// needs (int / []string). Values already of the right type (from typed flags) and
+// genuinely-custom fields pass through unchanged.
+func coerceField(field string, val any) (any, error) {
+	str, isStr := val.(string)
+	if !isStr {
+		return val, nil // a typed flag already supplied the native type
+	}
+	switch {
+	case intFields[field]:
+		n, err := strconv.Atoi(strings.TrimSpace(str))
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s must be an integer, got %q", domain.ErrValidation, field, str)
+		}
+		return n, nil
+	case listFields[field]:
+		return splitList(str), nil
+	}
+	return str, nil
+}
+
+// splitList parses a comma-separated `--set tags=a,b` value into a trimmed,
+// empty-free slice.
+func splitList(s string) []string {
+	out := []string{}
+	for _, part := range strings.Split(s, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // NewTaskParams are the inputs for creating a task. Tier/Autonomy default to 3,

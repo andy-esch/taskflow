@@ -160,10 +160,17 @@ func (s *FS) SetFields(slug string, updates map[string]any) (domain.Task, error)
 	if err != nil {
 		return domain.Task{}, err
 	}
+	// Parse before committing: never leave an unreloadable file on disk. If the
+	// updated frontmatter wouldn't read back (e.g. a value serialized to the wrong
+	// YAML type), reject without writing rather than corrupt the source of truth.
+	t, err := parseTask(newContent, path, st)
+	if err != nil {
+		return domain.Task{}, err
+	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
 		return domain.Task{}, err
 	}
-	return parseTask(newContent, path, st)
+	return t, nil
 }
 
 // resolve finds the file and current status for an exact slug match.
