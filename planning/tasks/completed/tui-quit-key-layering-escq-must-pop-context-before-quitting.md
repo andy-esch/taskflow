@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Esc in list focus quits the app (bubbles list default Quit binding); q from single-pane detail exits instead of popping back to the list
 effort: Unknown
@@ -10,6 +10,7 @@ tags: [go, tui, bug]
 created: "2026-06-12"
 updated_at: "2026-06-12"
 started_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 # TUI quit-key layering — Esc/q pop context before quitting
 
@@ -34,11 +35,11 @@ started_at: "2026-06-12"
 
 ## Acceptance criteria
 
-- [ ] `DisableQuitKeybindings()` (or equivalent interception) in `mk()`; Esc
+- [x] `DisableQuitKeybindings()` (or equivalent interception) in `mk()`; Esc
       in list focus pops context / no-ops, never `tea.Quit`.
-- [ ] In single-pane drill with detail focus, `q` returns to the list; `q`
+- [x] In single-pane drill with detail focus, `q` returns to the list; `q`
       from the list still quits.
-- [ ] Tests: Esc pressed in list focus (currently uncovered —
+- [x] Tests: Esc pressed in list focus (currently uncovered —
       `TestModel_FocusRouting` only presses Esc detail-focused), and `q` in
       single-pane detail focus.
 

@@ -1,5 +1,5 @@
 ---
-status: next-up
+status: in-progress
 epic: 17-pm-go-cli
 description: CI installs golangci-lint v1.64.5 against the v2-schema .golangci.yml so the lint gate cannot run; just test lacks -race; no govulncheck
 effort: Unknown
@@ -8,6 +8,8 @@ priority: high
 autonomy_level: 3
 tags: [ci, tooling, go]
 created: "2026-06-12"
+updated_at: "2026-06-12"
+started_at: "2026-06-12"
 ---
 # Repair the CI lint gate and local test parity
 
@@ -37,11 +39,20 @@ created: "2026-06-12"
 
 - [ ] CI lint step runs the v2 binary against the v2 config and passes (or
       failures are triaged into follow-ups).
-- [ ] `just lint` works on a fresh machine following the README.
-- [ ] `just test` (or a documented variant) runs with `-race`.
-- [ ] `govulncheck` runs in CI.
+- [x] `just lint` works on a fresh machine following the README.
+- [x] `just test` (or a documented variant) runs with `-race`.
+- [x] `govulncheck` runs in CI.
 
 ## Related
 
 - Epic [[17-pm-go-cli]]
 - Touches `.github/workflows/ci.yml`, `Justfile`, possibly `.golangci.yml`.
+## Progress (2026-06-12)
+
+CI workflow now uses `golangci/golangci-lint-action@v8` with v2.1 (the v1
+install couldn't parse the v2 config); `just test` runs `-race`; `just
+vulncheck` + a CI govulncheck step added. Verified locally with golangci-lint
+v2.1.6: **0 issues** — no burn-down needed. Remaining: confirm the first CI
+run goes green after push (the only unchecked box). Note: `-race` needs cgo +
+a C compiler — fine on dev Macs and CI's ubuntu image, unavailable in the
+agent container.

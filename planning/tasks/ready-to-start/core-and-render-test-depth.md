@@ -45,9 +45,9 @@ store 80.2%, tui 79.3%, domain 85.9%.
 
 ## Acceptance criteria
 
-- [ ] core ≥80% with use-cases tested at the service seam.
+- [x] core ≥80% with use-cases tested at the service seam.
 - [ ] Render output pinned by goldens; JSON envelopes decode-asserted.
-- [ ] Binary smoke test exercises real exit codes.
+- [x] Binary smoke test exercises real exit codes.
 - [ ] One shared planning-tree fixture helper.
 
 ## Related
@@ -55,3 +55,14 @@ store 80.2%, tui 79.3%, domain 85.9%.
 - Epic [[17-pm-go-cli]]
 - Touches `internal/core/`, `internal/cli/render/`, `cmd/tskflwctl/`,
   test files across packages.
+## Progress (2026-06-12)
+
+core 54.5% → **83.0%** (`usecases_test.go`: Lint, ListAudits, NewEpic;
+`listtasks_test.go`: filter validation). render 24.9% → **68.4%** via
+`render_test.go` — strict-decode envelope tests (`DisallowUnknownFields`
+pins each JSON schema) plus human-output assertions; golden *files* were
+judged unnecessary given the decode-assert approach, revisit if desired.
+Built-binary smoke suite added (`cmd/tskflwctl/main_test.go`): real process
+exit codes 0/10/11, stderr `error:` contract, version stamp. CRLF behavioral
+test landed with [[store-write-path-hardening]]. Remaining: the shared
+`internal/testutil` fixture builder (four hand-rolled helpers still exist).

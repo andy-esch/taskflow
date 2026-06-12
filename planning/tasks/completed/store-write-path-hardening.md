@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 17-pm-go-cli
 description: Move parses after mutating disk, set-after-move resurrects a moved task, CRLF edits mix line endings, lint --fix silent on unrepairable files
 effort: Unknown
@@ -10,6 +10,7 @@ tags: [go, store, data-safety]
 created: "2026-06-12"
 started_at: "2026-06-12"
 updated_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 # Store write-path hardening
 
@@ -56,11 +57,11 @@ updated_at: "2026-06-12"
 
 ## Acceptance criteria
 
-- [ ] No store mutation can succeed on disk while reporting failure
+- [x] No store mutation can succeed on disk while reporting failure
       (parse-before-commit everywhere; tests per call site).
-- [ ] set-after-move cannot resurrect a task (test with an interleaved move).
-- [ ] CRLF file round-trips with consistent endings (behavioral test).
-- [ ] `lint --fix` on an unrepairable file prints it and exits non-zero.
+- [x] set-after-move cannot resurrect a task (test with an interleaved move).
+- [x] CRLF file round-trips with consistent endings (behavioral test).
+- [x] `lint --fix` on an unrepairable file prints it and exits non-zero.
 
 ## Related
 
@@ -68,3 +69,14 @@ updated_at: "2026-06-12"
 - Touches `internal/store/fsstore.go`, `auditstore.go`, `frontmatter.go`,
   `fix.go`, `atomic.go`, `create.go`, `internal/config/config.go`,
   `internal/cli/lint.go`.
+## Progress (2026-06-12)
+
+Implemented in full except the epic-number TOCTOU (out of scope per the task
+decision — `nextEpicNumber` still races; tracked in the body above). SetFields
+gained a compare-and-swap re-resolve (ErrConflict on a concurrent move) with a
+test hook; Move/MoveAudit parse before any disk mutation; CRLF files round-trip
+with consistent endings (`detectLineEnding` + eol-aware `assembleFile`/text
+fixer); unterminated frontmatter is a FileProblem and SetFields refuses it;
+`lint --fix` re-lints and exits 11 naming unrepairable files (dry-run exempt);
+`config.Init` uses O_EXCL; atomic writes fsync the parent dir best-effort.
+Tests: `internal/store/harden_test.go`, `internal/cli/lint_fix_test.go`.

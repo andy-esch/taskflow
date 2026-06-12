@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: FilterMatchesMsg misrouted to the active tab blanks filtered background tabs on reload; cursor restore lost; detail pane stale while filtering
 effort: Unknown
@@ -10,6 +10,7 @@ tags: [go, tui, bug]
 created: "2026-06-12"
 updated_at: "2026-06-12"
 started_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 # TUI filter × reload correctness
 
@@ -45,13 +46,13 @@ started_at: "2026-06-12"
 
 ## Acceptance criteria
 
-- [ ] Reload while a background tab has an applied filter: switching back
+- [x] Reload while a background tab has an applied filter: switching back
       shows the (refiltered) rows, never a blank list or cross-entity rows.
-- [ ] Cursor returns to the previously selected slug after a reload on a
+- [x] Cursor returns to the previously selected slug after a reload on a
       filtered tab when the item survives.
-- [ ] Detail pane tracks the selection while typing a filter, after Enter,
+- [x] Detail pane tracks the selection while typing a filter, after Enter,
       and shows empty-state on zero matches.
-- [ ] teatest coverage for reload-while-filtered (the harness from
+- [x] teatest coverage for reload-while-filtered (the harness from
       `TestModel_FilterNarrows` is the right tool); a detail-content
       assertion in the filter test so A1 cannot silently regress.
 

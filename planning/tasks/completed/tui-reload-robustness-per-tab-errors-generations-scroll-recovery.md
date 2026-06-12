@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Per-tab error state, generation guard for list loads, preserve detail scroll on fs reloads, let r recover a failed initial load, watcher-off signal
 effort: Unknown
@@ -10,6 +10,7 @@ tags: [go, tui, bug, robustness]
 created: "2026-06-12"
 updated_at: "2026-06-12"
 started_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 # TUI reload robustness
 
@@ -48,12 +49,12 @@ started_at: "2026-06-12"
 
 ## Acceptance criteria
 
-- [ ] External write while reading a long detail body does not reset scroll.
-- [ ] One tab failing while another succeeds shows the error in that tab
+- [x] External write while reading a long detail body does not reset scroll.
+- [x] One tab failing while another succeeds shows the error in that tab
       only; no full-screen swap, no stale-rows-with-no-signal.
-- [ ] `r` recovers from a failed initial load (test must go through the `r`
+- [x] `r` recovers from a failed initial load (test must go through the `r`
       key path, not `m.Init()()` — see `TestModel_RecoversFromFatalError`).
-- [ ] Out-of-order list/detail responses cannot regress the visible state.
+- [x] Out-of-order list/detail responses cannot regress the visible state.
 
 ## Related
 

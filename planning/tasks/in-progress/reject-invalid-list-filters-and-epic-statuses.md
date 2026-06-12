@@ -36,15 +36,23 @@ started_at: "2026-06-12"
 
 ## Acceptance criteria
 
-- [ ] `task list --status bogus` exits 11 with a message listing valid
+- [x] `task list --status bogus` exits 11 with a message listing valid
       statuses; same for an unknown `--epic`.
-- [ ] `task move`'s invalid-status error also enumerates valid statuses.
+- [x] `task move`'s invalid-status error also enumerates valid statuses.
 - [ ] Epic status has a decided vocabulary: enforced in `NewEpic` (and
       `epic` lint coverage) or explicitly documented as open.
-- [ ] Tests for each rejection path; suite + lint green.
+- [x] Tests for each rejection path; suite + lint green.
 
 ## Related
 
 - Epic [[17-pm-go-cli]]
 - Touches `internal/cli/task.go`, `internal/cli/epic.go`,
   `internal/core/service.go`, `internal/domain/`.
+## Progress (2026-06-12)
+
+H5 shipped: `domain.ParseStatus` now wraps ErrValidation and enumerates valid
+statuses (fixing `task move`'s message too); `core.ListTasks` validates the
+status filter and epic existence (one ListEpics call only when the filter is
+set). Tests: `domain/status_test.go`, `core/listtasks_test.go`,
+`cli/task_test.go`. **Deferred:** M9 (epic-status vocabulary) — pending the
+vocabulary decision from the user.
