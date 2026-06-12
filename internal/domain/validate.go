@@ -71,6 +71,10 @@ func ValidateField(field, value string) error {
 	switch {
 	case field == "status":
 		return fmt.Errorf("%w: set status with `task <verb>`/`task move`, not `set`", ErrValidation)
+	case field == "updated_at":
+		// Stamped on every mutation; an explicit value would validate and then be
+		// silently clobbered — reject it instead (decided 2026-06-12).
+		return fmt.Errorf("%w: updated_at is stamped automatically and cannot be set", ErrValidation)
 	case field == "priority":
 		return ValidatePriority(value)
 	case field == "tier" || field == "autonomy_level":

@@ -39,7 +39,10 @@ completion-zsh:
 test:
 	go test -race ./...
 
-# Lint (golangci-lint — must be a v2.x binary; .golangci.yml is v2-schema)
+# Lint (golangci-lint — needs a v2.x binary BUILT WITH Go ≥ go.mod's target;
+# .golangci.yml is v2-schema. `go install github.com/golangci/golangci-lint/v2/
+# cmd/golangci-lint@latest` compiles with your local toolchain, which sidesteps
+# the prebuilt-binary Go-version skew that brew/CI downloads can hit.)
 lint:
 	golangci-lint run ./...
 

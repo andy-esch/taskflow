@@ -88,6 +88,36 @@ func TestService_ListAudits_BucketFilters(t *testing.T) {
 	}
 }
 
+// TestService_NewTask_RequiresTags pins the D1 decision: `new` must not
+// scaffold a file its own linter rejects, so tags are required at creation.
+func TestService_NewTask_RequiresTags(t *testing.T) {
+	svc := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}})
+	_, err := svc.NewTask(NewTaskParams{Title: "X", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium"})
+	if err == nil || !strings.Contains(err.Error(), "tag") {
+		t.Errorf("tagless create should fail mentioning tags, got %v", err)
+	}
+}
+
+// TestService_Lint_FlagsInvalidEpicStatus pins the D2 decision: epic status is
+// a closed vocabulary, and files outside it surface in lint.
+func TestService_Lint_FlagsInvalidEpicStatus(t *testing.T) {
+	svc := NewService(&fakeStore{epics: []domain.Epic{
+		{ID: "good", Status: "planning"},
+		{ID: "weird", Status: "bananas"},
+	}})
+	results, _, err := svc.Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var flagged []string
+	for _, r := range results {
+		flagged = append(flagged, r.Slug)
+	}
+	if len(flagged) != 1 || flagged[0] != "weird" {
+		t.Errorf("only the invalid epic status should be flagged, got %v", flagged)
+	}
+}
+
 func TestService_NewEpic(t *testing.T) {
 	svc := NewService(&fakeStore{})
 

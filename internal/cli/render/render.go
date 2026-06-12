@@ -14,28 +14,44 @@ import (
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
-// SchemaVersion is the semver of the --json payloads. Adding a field bumps the
-// minor; renaming/removing bumps the major.
-const SchemaVersion = "1.0"
+// SchemaVersion is the semver of the --json payloads — ONE version for the
+// whole CLI output schema, not per envelope (decided 2026-06-12). Adding a
+// field bumps the minor; renaming/removing bumps the major. Key naming rule:
+// JSON keys match the frontmatter keys exactly (`created`, `updated_at`).
+// 1.1: every CLI-settable field round-trips (effort, autonomy_level), and the
+// misfiled signal (previously human-output-only ⚠) is machine-readable.
+const SchemaVersion = "1.1"
 
 type taskJSON struct {
 	Slug        string   `json:"slug"`
 	Status      string   `json:"status"`
 	Epic        string   `json:"epic,omitempty"`
 	Description string   `json:"description,omitempty"`
+	Effort      string   `json:"effort,omitempty"`
 	Tier        int      `json:"tier,omitempty"`
 	Priority    string   `json:"priority,omitempty"`
+	Autonomy    int      `json:"autonomy_level,omitempty"`
 	Created     string   `json:"created,omitempty"`
 	Updated     string   `json:"updated_at,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+	// Misfiled/Declared surface status≠folder drift to JSON consumers (agents
+	// are exactly who should detect it); declared_status only when misfiled.
+	Misfiled bool   `json:"misfiled,omitempty"`
+	Declared string `json:"declared_status,omitempty"`
 }
 
 func toJSON(t domain.Task) taskJSON {
-	return taskJSON{
+	j := taskJSON{
 		Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
-		Description: t.Description, Tier: t.Tier, Priority: t.Priority,
+		Description: t.Description, Effort: t.Effort, Tier: t.Tier,
+		Priority: t.Priority, Autonomy: t.Autonomy,
 		Created: t.Created, Updated: t.Updated, Tags: t.Tags,
 	}
+	if t.Misfiled() {
+		j.Misfiled = true
+		j.Declared = string(t.Declared)
+	}
+	return j
 }
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
@@ -315,12 +331,15 @@ func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 }
 
 type epicJSON struct {
-	ID          string `json:"id"`
-	Status      string `json:"status,omitempty"`
-	Description string `json:"description,omitempty"`
-	Total       int    `json:"total"`
-	Done        int    `json:"done"`
-	Percent     int    `json:"percent"`
+	ID          string   `json:"id"`
+	Status      string   `json:"status,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Priority    string   `json:"priority,omitempty"`
+	Created     string   `json:"created,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Total       int      `json:"total"`
+	Done        int      `json:"done"`
+	Percent     int      `json:"percent"`
 }
 
 // EpicsJSON writes a versioned envelope of epics with rollup, including any
@@ -334,6 +353,7 @@ func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []domain.FileProb
 	for _, e := range epics {
 		payload.Epics = append(payload.Epics, epicJSON{
 			ID: e.Epic.ID, Status: e.Epic.Status, Description: e.Epic.Description,
+			Priority: e.Epic.Priority, Created: e.Epic.Created, Tags: e.Epic.Tags,
 			Total: e.Total, Done: e.Done, Percent: e.Percent(),
 		})
 	}
@@ -497,9 +517,12 @@ func LintJSON(w io.Writer, results []core.LintResult, problems []domain.FileProb
 }
 
 type epicMetaJSON struct {
-	ID          string `json:"id"`
-	Status      string `json:"status,omitempty"`
-	Description string `json:"description,omitempty"`
+	ID          string   `json:"id"`
+	Status      string   `json:"status,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Priority    string   `json:"priority,omitempty"`
+	Created     string   `json:"created,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 }
 
 // EpicShowJSON writes an epic, its tasks, and its body.
@@ -515,8 +538,24 @@ func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body strin
 		Body          string       `json:"body"`
 	}{
 		SchemaVersion: SchemaVersion,
-		Epic:          epicMetaJSON{ID: epic.ID, Status: epic.Status, Description: epic.Description},
-		Tasks:         jt,
-		Body:          body,
+		Epic: epicMetaJSON{
+			ID: epic.ID, Status: epic.Status, Description: epic.Description,
+			Priority: epic.Priority, Created: epic.Created, Tags: epic.Tags,
+		},
+		Tasks: jt,
+		Body:  body,
 	})
+}
+
+// InitJSON reports the scaffold result; created is empty (not null) when the
+// tree already existed, so consumers can len() it without a nil check.
+func InitJSON(w io.Writer, root string, created []string) error {
+	if created == nil {
+		created = []string{}
+	}
+	return encodeJSON(w, struct {
+		SchemaVersion string   `json:"schema_version"`
+		Root          string   `json:"root"`
+		Created       []string `json:"created"`
+	}{SchemaVersion, root, created})
 }

@@ -171,9 +171,11 @@ func (s *FS) SetFields(slug string, updates map[string]any) (domain.Task, error)
 	// Parse before committing: never leave an unreloadable file on disk. If the
 	// updated frontmatter wouldn't read back (e.g. a value serialized to the wrong
 	// YAML type), reject without writing rather than corrupt the source of truth.
+	// The error is a *validation* failure (the update is bad, exit 11) — not a
+	// file problem; the message must not blame a file that was never touched.
 	t, err := parseTask(newContent, path, st)
 	if err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, fmt.Errorf("%w: update would not reload (%v); nothing was written", domain.ErrValidation, err)
 	}
 	if testHookBeforeSetFieldsWrite != nil {
 		testHookBeforeSetFieldsWrite()

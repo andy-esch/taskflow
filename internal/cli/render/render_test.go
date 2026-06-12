@@ -42,11 +42,15 @@ func TestTasksJSON_Envelope(t *testing.T) {
 			Status      string   `json:"status"`
 			Epic        string   `json:"epic,omitempty"`
 			Description string   `json:"description,omitempty"`
+			Effort      string   `json:"effort,omitempty"`
 			Tier        int      `json:"tier,omitempty"`
 			Priority    string   `json:"priority,omitempty"`
+			Autonomy    int      `json:"autonomy_level,omitempty"`
 			Created     string   `json:"created,omitempty"`
 			Updated     string   `json:"updated_at,omitempty"`
 			Tags        []string `json:"tags,omitempty"`
+			Misfiled    bool     `json:"misfiled,omitempty"`
+			Declared    string   `json:"declared_status,omitempty"`
 		} `json:"tasks"`
 		Unreadable []struct {
 			Path    string `json:"path"`
@@ -59,6 +63,11 @@ func TestTasksJSON_Envelope(t *testing.T) {
 	}
 	if len(got.Tasks) != 2 || got.Tasks[0].Slug != "alpha" || got.Tasks[0].Tier != 2 {
 		t.Errorf("tasks payload wrong: %+v", got.Tasks)
+	}
+	// The misfiled signal (status ≠ folder) must be machine-readable — agents
+	// are exactly the consumers who should detect drift (schema 1.1).
+	if !got.Tasks[1].Misfiled || got.Tasks[1].Declared != "completed" {
+		t.Errorf("misfiled task must carry misfiled+declared_status: %+v", got.Tasks[1])
 	}
 	if len(got.Unreadable) != 1 || got.Unreadable[0].Path != "bad.md" {
 		t.Errorf("unreadable files must be included: %+v", got.Unreadable)
@@ -124,12 +133,15 @@ func TestEpicsJSONAndHuman(t *testing.T) {
 	var got struct {
 		SchemaVersion string `json:"schema_version"`
 		Epics         []struct {
-			ID          string `json:"id"`
-			Status      string `json:"status,omitempty"`
-			Description string `json:"description,omitempty"`
-			Total       int    `json:"total"`
-			Done        int    `json:"done"`
-			Percent     int    `json:"percent"`
+			ID          string   `json:"id"`
+			Status      string   `json:"status,omitempty"`
+			Description string   `json:"description,omitempty"`
+			Priority    string   `json:"priority,omitempty"`
+			Created     string   `json:"created,omitempty"`
+			Tags        []string `json:"tags,omitempty"`
+			Total       int      `json:"total"`
+			Done        int      `json:"done"`
+			Percent     int      `json:"percent"`
 		} `json:"epics"`
 		Unreadable []any `json:"unreadable,omitempty"`
 	}

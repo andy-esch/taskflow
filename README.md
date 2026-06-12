@@ -54,7 +54,7 @@ tskflwctl lint --fix                   # auto-repair (quote colons, normalize li
 
 A task's `status:` **is** its directory (`tasks/<status>/`); lifecycle verbs move
 the file and stamp dates atomically. Errors carry semantic exit codes — `10`
-not-found, `11` validation, `12` invalid-transition, `13` ambiguous, `14`
+not-found, `11` validation, `13` ambiguous, `14`
 conflict (e.g. a name already taken).
 
 Human output is colorized with status glyphs on a terminal and falls back to
@@ -65,9 +65,10 @@ forces color even off a TTY — handy for agents). `--json` is always plain.
 
 ### `pm` is retired
 
-The Python prototype (`bin/pm`) this tool was ported from is **no longer used** —
-`tskflwctl` covers the full create → update → move → lint loop. `bin/pm` and
-`tests/test_pm.py` are kept only as the historical executable spec.
+The Python prototype (`bin/pm`) this tool was ported from is **gone** —
+`tskflwctl` covers the full create → update → move → lint loop, and the Go
+test suite is the executable spec now. The prototype and its tests live only
+in git history (last at commit `39f1b83`) if archaeology is ever needed.
 
 ## Shell completion
 

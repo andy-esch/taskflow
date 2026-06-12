@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -118,6 +119,67 @@ func TestTaskMove_InvalidStatusEnumerates(t *testing.T) {
 	}
 	if !bytes.Contains([]byte(err.Error()), []byte("in-progress")) {
 		t.Errorf("error should enumerate valid statuses, got %q", err.Error())
+	}
+}
+
+// TestCreate_ContractValidation pins the D1/D2 decisions at the CLI seam:
+// tagless task creation and an off-vocabulary epic status both exit 11.
+func TestCreate_ContractValidation(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.MkdirAll(filepath.Join(root, "epics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "epics", "e1.md"),
+		[]byte("---\nstatus: planning\ndescription: e\n---\n# E\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"task", "new", "Tagless", "--epic", "e1", "--description", "d"}, "tag"},
+		{[]string{"epic", "new", "Weird", "--description", "d", "--status", "bananas"}, "planning"}, // enumerates
+	} {
+		var out bytes.Buffer
+		cmd := NewRootCmd(&out, &out)
+		cmd.SetArgs(append([]string{"-C", root}, tc.args...))
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		err := cmd.Execute()
+		if err == nil || ExitCode(err) != 11 {
+			t.Errorf("%v: want exit 11, got %v", tc.args, err)
+		}
+		if err != nil && !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%v: error should mention %q, got %q", tc.args, tc.want, err.Error())
+		}
+	}
+}
+
+// TestInit_JSON pins the one command that previously ignored --json.
+func TestInit_JSON(t *testing.T) {
+	root := t.TempDir()
+	decode := func(out string) (string, []string) {
+		var got struct {
+			SchemaVersion string   `json:"schema_version"`
+			Root          string   `json:"root"`
+			Created       []string `json:"created"`
+		}
+		if err := json.Unmarshal([]byte(out), &got); err != nil {
+			t.Fatalf("init --json invalid: %v\n%s", err, out)
+		}
+		if got.SchemaVersion == "" {
+			t.Error("init envelope missing schema_version")
+		}
+		return got.Root, got.Created
+	}
+	gotRoot, created := decode(runRoot(t, "init", "--path", root, "--json"))
+	if gotRoot != root || len(created) == 0 {
+		t.Errorf("first init should report created paths at %q: %v", root, created)
+	}
+	// Idempotent re-run: created is an empty array, never null.
+	out := runRoot(t, "init", "--path", root, "--json")
+	if _, created := decode(out); created == nil || len(created) != 0 {
+		t.Errorf("re-init should report an empty created array:\n%s", out)
 	}
 }
 

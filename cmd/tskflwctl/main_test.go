@@ -112,6 +112,30 @@ func TestSmoke_LifecycleAndExitCodes(t *testing.T) {
 	if !strings.Contains(stderr.String(), "error:") {
 		t.Errorf("errors should print to stderr with the error: prefix, got %q", stderr.String())
 	}
+
+	// Under --json, the failure is a machine-readable envelope on stderr and
+	// stdout stays empty — agents must never parse prose (schema 1.1).
+	cmd = exec.Command(binary(t), "-C", root, "task", "show", "ghost", "--json")
+	var jsonOut, jsonErr strings.Builder
+	cmd.Stdout = &jsonOut
+	cmd.Stderr = &jsonErr
+	_ = cmd.Run()
+	if jsonOut.Len() != 0 {
+		t.Errorf("stdout must stay empty on a --json failure, got %q", jsonOut.String())
+	}
+	var env struct {
+		SchemaVersion string `json:"schema_version"`
+		Error         struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(jsonErr.String()), &env); err != nil {
+		t.Fatalf("--json error should be a JSON envelope: %v\n%s", err, jsonErr.String())
+	}
+	if env.SchemaVersion == "" || env.Error.Code != "not-found" || env.Error.Message == "" {
+		t.Errorf("error envelope wrong: %+v", env)
+	}
 }
 
 func TestSmoke_VersionStamp(t *testing.T) {

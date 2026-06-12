@@ -35,8 +35,8 @@ We dogfood: drive this repo's planning with the tool itself.
   lint-clean.
 - Tasks live in `planning/tasks/<status>/`; a task's `status:` **is** its
   directory. Every active task needs a one-line `description`.
-- **`bin/pm` (Python) is retired** — it was the prototype `tskflwctl` was ported
-  from. Don't use it; `tests/test_pm.py` is kept only as historical spec.
+- **`pm` (Python) is gone** — it was the prototype `tskflwctl` was ported from;
+  it and its tests now live only in git history. The Go suite is the spec.
 
 ## Git
 

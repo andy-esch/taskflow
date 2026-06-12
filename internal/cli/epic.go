@@ -38,7 +38,7 @@ func newEpicNewCmd(app *App) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&p.Description, "description", "", "one-line description (required, <=150 chars)")
-	cmd.Flags().StringVar(&p.Status, "status", "planning", "epic status")
+	cmd.Flags().StringVar(&p.Status, "status", "planning", "epic status: planning|in-progress|completed|archived")
 	cmd.Flags().StringVar(&p.Priority, "priority", "medium", "high|medium|low")
 	cmd.Flags().StringSliceVar(&p.Tags, "tags", nil, "comma-separated tags")
 	return cmd

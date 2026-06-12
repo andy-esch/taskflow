@@ -139,7 +139,7 @@ the Python prototype:
   are the remaining sprints).
 
 Throughout: explicit noun-verb, semantic exit codes (`10` not-found · `11`
-validation · `12` invalid-transition · `13` ambiguous · `14` conflict), atomic
+validation · `13` ambiguous · `14` conflict), atomic
 writes (`writeFileAtomic` overwrite, `createFileAtomic` exclusive) + surgical
 `yaml.v3` edits, `--json` everywhere (`schema_version`), resilient reads with
 actionable frontmatter errors, agent safety annotations.

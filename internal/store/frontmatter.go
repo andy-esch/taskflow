@@ -8,6 +8,8 @@ import (
 	"strconv"
 
 	yaml "go.yaml.in/yaml/v3"
+
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // splitFrontmatter separates a leading `---`-fenced YAML block from the markdown
@@ -90,6 +92,10 @@ func updateFrontmatter(content []byte, updates map[string]any) ([]byte, error) {
 		return nil, err
 	}
 	for k, v := range updates {
+		if _, unset := v.(domain.UnsetField); unset {
+			deleteMapNode(mapping, k)
+			continue
+		}
 		node, err := valueNode(v)
 		if err != nil {
 			return nil, fmt.Errorf("field %q: %w", k, err)
@@ -156,6 +162,17 @@ func setMapNode(mapping *yaml.Node, key string, val *yaml.Node) {
 	}
 	mapping.Content = append(mapping.Content,
 		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, val)
+}
+
+// deleteMapNode removes key (and its value) from the mapping; absent keys are
+// a no-op, so unset is idempotent.
+func deleteMapNode(mapping *yaml.Node, key string) {
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			mapping.Content = append(mapping.Content[:i], mapping.Content[i+2:]...)
+			return
+		}
+	}
 }
 
 func valueNode(v any) (*yaml.Node, error) {
