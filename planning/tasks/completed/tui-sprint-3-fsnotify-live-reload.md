@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Watch the planning dirs and refresh the TUI on external edits, preserving the cursor by slug
 effort: Unknown
@@ -8,8 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [tui, bubble-tea]
 created: "2026-06-10"
-updated_at: "2026-06-11"
+updated_at: "2026-06-12"
 started_at: "2026-06-11"
+completed_at: "2026-06-12"
 ---
 
 # TUI sprint 3 fsnotify live reload

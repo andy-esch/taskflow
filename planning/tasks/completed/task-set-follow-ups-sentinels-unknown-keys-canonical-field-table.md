@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: Guard error not sentinel-wrapped, unknown --set keys written silently with no unset, epic unclearable, updated_at clobbered, list-field drift
 effort: Unknown
@@ -8,6 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [go, cli, store, validation]
 created: "2026-06-12"
+updated_at: "2026-06-12"
+started_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 # `task set` follow-ups (sentinels, unknown keys, canonical field table)
 
@@ -48,14 +51,27 @@ created: "2026-06-12"
 
 ## Acceptance criteria
 
-- [ ] Rejected updates exit 11 with a message that says nothing was written.
-- [ ] A typo'd key cannot silently persist (warn/error), and `--unset`
+- [x] Rejected updates exit 11 with a message that says nothing was written.
+- [x] A typo'd key cannot silently persist (warn/error), and `--unset`
       (if accepted) round-trips.
-- [ ] `--set related_tasks=a,b` and `lint --fix` agree on the written form.
-- [ ] Epic detach has a defined, tested behavior; so does `--set updated_at`.
+- [x] `--set related_tasks=a,b` and `lint --fix` agree on the written form.
+- [x] Epic detach has a defined, tested behavior; so does `--set updated_at`.
 
 ## Related
 
 - Epic [[17-pm-go-cli]]
 - Touches `internal/core/service.go`, `internal/store/fsstore.go`,
   `internal/store/diagnose.go`, `internal/domain/`.
+## Closure (2026-06-12)
+
+All four items shipped per decisions D4/D5/D6:
+- M4: the parse-before-commit guard now wraps ErrValidation ("update would not
+  reload … nothing was written") → exit 11.
+- Unknown `--set` keys are rejected (exit 11) unless `--force`; `--unset <key>`
+  removes a key through the same validated atomic write (status/updated_at
+  protected; idempotent). The field registry lives in `domain/fields.go`.
+- M5: one canonical IntFields/ListFields table in domain, used by core
+  coercion AND store diagnose/fix — `--set related_tasks=a,b` now writes the
+  form `lint --fix` wants (pinned by TestSetFields_ListCoercionAgreesWithFix).
+- B1 residuals: `--epic ""` detaches (removes the key); explicit
+  `--set updated_at` is rejected like `status`.

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 17-pm-go-cli
 description: task list --status typo or --epic bogus silently returns empty with exit 0, and epic new --status accepts any string unvalidated
 effort: Unknown
@@ -10,6 +10,7 @@ tags: [go, cli, core, validation]
 created: "2026-06-12"
 updated_at: "2026-06-12"
 started_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 # Reject invalid list filters and epic statuses
 
@@ -39,7 +40,7 @@ started_at: "2026-06-12"
 - [x] `task list --status bogus` exits 11 with a message listing valid
       statuses; same for an unknown `--epic`.
 - [x] `task move`'s invalid-status error also enumerates valid statuses.
-- [ ] Epic status has a decided vocabulary: enforced in `NewEpic` (and
+- [x] Epic status has a decided vocabulary: enforced in `NewEpic` (and
       `epic` lint coverage) or explicitly documented as open.
 - [x] Tests for each rejection path; suite + lint green.
 
@@ -56,3 +57,11 @@ status filter and epic existence (one ListEpics call only when the filter is
 set). Tests: `domain/status_test.go`, `core/listtasks_test.go`,
 `cli/task_test.go`. **Deferred:** M9 (epic-status vocabulary) — pending the
 vocabulary decision from the user.
+
+## Closure (2026-06-12)
+
+M9 resolved per decision D2: epic status is a **closed enum**
+(`planning | in-progress | completed | archived`) — `domain.ValidateEpicStatus`
+enforced in `NewEpic` (CLI help enumerates) and existing files are linted
+(`Service.Lint` flags off-vocabulary epic statuses). Tests:
+`TestService_Lint_FlagsInvalidEpicStatus`, `TestCreate_ContractValidation`.

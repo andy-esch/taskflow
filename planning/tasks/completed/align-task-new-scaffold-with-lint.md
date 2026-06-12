@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: 'A fresh task new scaffold fails tskflwctl lint (tags: missing, exit 11) - create and lint must agree on required fields'
 effort: Unknown
@@ -8,6 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [go, cli, ux, dogfooding]
 created: "2026-06-12"
+updated_at: "2026-06-12"
+started_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 # Align `task new` scaffold with `lint`
 
@@ -34,12 +37,18 @@ pairings so no second mismatch is lurking.
 
 ## Acceptance criteria
 
-- [ ] Fresh `init` → `epic new` → `task new` → `lint` exits 0.
-- [ ] An integration-style test pins the create→lint-clean invariant.
-- [ ] Help text documents whatever `--tags` contract is chosen.
+- [x] Fresh `init` → `epic new` → `task new` → `lint` exits 0.
+- [x] An integration-style test pins the create→lint-clean invariant.
+- [x] Help text documents whatever `--tags` contract is chosen.
 
 ## Related
 
 - Epic [[17-pm-go-cli]]
 - Touches `internal/cli/task.go`, `internal/core/service.go` (lint rules),
   docs/README examples.
+## Closure (2026-06-12)
+
+Decision D1: **Option A** — `--tags` is required at creation, enforced in
+`core.NewTask` (exit 11 with a clear message; help text updated). The
+create→lint-clean invariant is pinned by the binary smoke test
+(`cmd/tskflwctl/main_test.go`) and `TestCreate_ContractValidation`.

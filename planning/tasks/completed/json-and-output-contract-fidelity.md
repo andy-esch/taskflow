@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: JSON drops effort/autonomy/misfiled and epic fields, init ignores --json, cobra help bypasses injected writers, double error prints, stream drift
 effort: Unknown
@@ -8,6 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [go, cli, json, agents]
 created: "2026-06-12"
+updated_at: "2026-06-12"
+started_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 # `--json` and output contract fidelity
 
@@ -46,14 +49,14 @@ created: "2026-06-12"
 
 ## Acceptance criteria
 
-- [ ] Every field settable via the CLI is readable back via `--json`;
+- [x] Every field settable via the CLI is readable back via `--json`;
       misfiled state visible to JSON consumers.
-- [ ] `init --json` emits a versioned envelope.
-- [ ] Help/usage output flows through the injected writers (de-dupe the
+- [x] `init --json` emits a versioned envelope.
+- [x] Help/usage output flows through the injected writers (de-dupe the
       per-test patches).
-- [ ] One transition failure → one error print; diagnostics stream is
+- [x] One transition failure → one error print; diagnostics stream is
       consistent and documented.
-- [ ] `task move <slug> <tab>` completes statuses.
+- [x] `task move <slug> <tab>` completes statuses.
 
 ## Related
 
@@ -61,3 +64,20 @@ created: "2026-06-12"
 - Touches `internal/cli/render/render.go`, `internal/cli/root.go`,
   `internal/cli/init.go`, `internal/cli/moves.go`,
   `internal/cli/completion.go`, `internal/cli/task.go`.
+## Closure (2026-06-12)
+
+Schema bumped to **1.1** per decisions D7 (one global version, documented) and
+D8 (JSON keys match frontmatter — rule documented at SchemaVersion):
+- taskJSON round-trips `effort` + `autonomy_level` and carries
+  `misfiled`/`declared_status`; epicJSON/epicMetaJSON carry priority/created/
+  tags. Strict-decode tests pin every envelope.
+- `init --json` emits a versioned envelope (created always an array).
+- Cobra help/usage/completion flow through the injected writers
+  (root.SetOut/SetErr).
+- Transitions return a count summary wrapping the sentinel (no double print);
+  lint diagnostics moved to stderr matching list commands.
+- `task move <slug> <tab>` completes statuses; `--status`/`--epic` flag
+  completion registered on list/set.
+Plus D9 (from the ergonomics batch, implemented here): `--json` failures emit
+`{"schema_version","error":{"code","message"}}` on stderr, stdout empty —
+pinned by the binary smoke test.

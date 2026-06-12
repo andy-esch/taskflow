@@ -56,3 +56,14 @@ v2.1.6: **0 issues** — no burn-down needed. Remaining: confirm the first CI
 run goes green after push (the only unchecked box). Note: `-race` needs cgo +
 a C compiler — fine on dev Macs and CI's ubuntu image, unavailable in the
 agent container.
+
+## Progress (2026-06-12, second pass)
+
+First CI run failed differently: the action's **prebuilt** v2.1.6 binary is
+compiled with go1.24 and refuses a repo targeting go1.25.5 ("Go language
+version used to build golangci-lint is lower than the targeted Go version").
+Local installs dodge this because `go install` compiles from source with the
+local toolchain. Fixed by pinning the action to **v2.4** — the first release
+whose official binaries are built with go1.25 (golangci-lint issue #5873 /
+release v2.4.0). Justfile comment now documents the built-with-Go constraint.
+Still awaiting the next CI run to confirm green.

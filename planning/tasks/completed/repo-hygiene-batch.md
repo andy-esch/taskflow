@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: Stray empty top-level planning dirs, tests/test_pm.py untracked while docs call it the spec, no LICENSE or CHANGELOG, dead .gitignore sections
 effort: Unknown
@@ -9,6 +9,8 @@ autonomy_level: 3
 tags: [hygiene, docs, git]
 created: "2026-06-12"
 updated_at: "2026-06-12"
+started_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 # Repo hygiene batch
 
@@ -42,12 +44,21 @@ updated_at: "2026-06-12"
 
 ## Acceptance criteria
 
-- [ ] Walk-up discovery from repo root cannot anchor to an empty skeleton.
-- [ ] Docs only reference files that exist in a fresh clone.
-- [ ] `.gitignore` matches the Go reality; LICENSE present.
-- [ ] in-progress contains only genuinely active work.
+- [x] Walk-up discovery from repo root cannot anchor to an empty skeleton.
+- [x] Docs only reference files that exist in a fresh clone.
+- [x] `.gitignore` matches the Go reality; LICENSE present.
+- [x] in-progress contains only genuinely active work.
 
 ## Related
 
 - Epic [[17-pm-go-cli]]
 - Touches `.gitignore`, `README.md`, `CLAUDE.md`, `planning/tasks/`.
+## Closure (2026-06-12)
+
+Per decisions D10/D11/D12: `bin/pm` + `tests/test_pm.py` deleted (git history
+`39f1b83` keeps them; README/CLAUDE.md updated to say so); stray empty
+top-level `tasks/ epics/ audits/ projects/` skeleton removed; `.gitignore`
+rewritten to Go reality (dead Python/Docker sections gone). LICENSE
+intentionally **not** added (D11: private for now) — revisit before any public
+release. Stale tasks `port-pm-…` and `tui-sprint-3-…` verified and completed
+(closure note in the port task explains the descoped adr/schema items).

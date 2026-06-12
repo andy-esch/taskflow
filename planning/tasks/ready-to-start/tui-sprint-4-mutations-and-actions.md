@@ -15,22 +15,47 @@ created: "2026-06-10"
 ## Objective
 
 Turn the browser into a doer — trigger lifecycle from the TUI, reusing the async
-+ reload plumbing. (Design the action model at sprint start.) See
-[[18-tui-bubble-tea-interactive-planning-browser]].
++ reload plumbing. See [[18-tui-bubble-tea-interactive-planning-browser]].
 
-## Scope (to refine)
+## Design (locked 2026-06-12) — dual surface
 
-- [ ] **Action model:** decide lifecycle keys (e.g. on a task: a key → a small
-      action menu / palette of valid transitions) vs a `:`-command verb surface.
-      Confirmation for destructive (deprecate). Reuse the `:` infra from S2.
-- [ ] Mutations go through `Service.Move`/`SetFields` as Cmds; on success, the
-      S3 reload refreshes the list with the cursor preserved (folder-authoritative
-      status means the moved task relocates correctly).
-- [ ] Inline feedback line (success/error), reusing semantic colors.
-- [ ] Reconsider **multi-select + bulk move** here — only if a concrete bulk
-      need is real (the research flagged it as easy to over-build).
-- [ ] Tests: an action Cmd calls the right `Service` method; failure surfaces an
-      error without corrupting state.
+Mirror the S2a "discoverable affordance + `:` muscle-memory" pattern, for actions:
+
+- **Action menu (discoverable):** a leader key (proposed `a` for *actions*; adjust
+  if it collides) opens a small popup over the selected task listing the **valid
+  lifecycle transitions** (computed from the current status → allowed targets, not
+  a static list). Vim-select (`j`/`k`), `Enter` applies, `Esc` cancels. Reuse the
+  `overlay()` compositor from the `?` help modal so it floats over the list.
+- **`:` verbs (muscle memory):** extend the S2 command bar with lifecycle verbs —
+  `:start` `:complete` `:defer` `:deprecate` `:promote` `:demote` — acting on the
+  current selection (route through `dispatchCommand`).
+- **Confirmation:** destructive transitions (**deprecate**) require an inline
+  `y/n` confirm before applying; non-destructive moves apply immediately.
+- **Execution + feedback:** mutations run as `tea.Cmd`s through `core.Service.Move`
+  (→ a `movedMsg`/`actionErrMsg`). On success, fire the **S3 `reloadMsg`** path so
+  the list refreshes and the moved task relocates (folder-authoritative status),
+  cursor preserved by id (`markReload`). Show a transient inline line — `✔ moved
+  <slug> → completed` / red error — reusing `theme` colors; never swallow errors.
+- **Build on the hardened base:** the concurrent TUI rewrite added `tabMsg`
+  routing + `loadGen` guards; the mutation→reload must respect those (the reload
+  already does).
+
+## Scope
+
+- [ ] Action menu: valid-transition popup (overlay), vim-select, confirm-on-destructive.
+- [ ] `:` lifecycle verbs on the selection, via the command bar.
+- [ ] Mutations via `Service.Move` as Cmds → reload-on-success, cursor preserved.
+- [ ] Inline success/error feedback line, semantic colors.
+- [ ] Tests: an action Cmd calls `Service.Move` with the right status; a failed
+      move surfaces an error without corrupting state or the cursor; the `:` verb
+      path; the confirm gate blocks an unconfirmed deprecate.
+
+## Deferred (not this sprint)
+
+- **Multi-select + bulk move** — no concrete bulk need yet (research flagged it as
+  easy to over-build); revisit when one appears.
+- **Field edits** (`SetFields`: priority/tier/tags) from the TUI — a different
+  interaction (needs text input, not a transition menu); its own follow-on.
 
 ## Acceptance
 

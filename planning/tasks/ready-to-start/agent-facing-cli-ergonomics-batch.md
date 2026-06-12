@@ -8,6 +8,8 @@ priority: medium
 autonomy_level: 3
 tags: [cli, agents, ux, dx]
 created: "2026-06-12"
+started_at: "2026-06-12"
+updated_at: "2026-06-12"
 ---
 # Agent-facing CLI ergonomics batch
 
@@ -55,7 +57,7 @@ precise ("160 > 150").
 
 ## Acceptance criteria
 
-- [ ] `--json` failures emit a parseable envelope with a stable error code.
+- [x] `--json` failures emit a parseable envelope with a stable error code.
 - [ ] `task new --body-file -` works from stdin; quoting torture gone.
 - [ ] A body can be replaced/appended through the tool, atomically.
 - [ ] Create envelope carries `status`; path form consistent across modes.
@@ -66,3 +68,12 @@ precise ("160 > 150").
 - Epic [[17-pm-go-cli]]
 - Touches `cmd/tskflwctl/main.go`, `internal/cli/`, `internal/cli/render/`,
   `README.md`.
+## Progress (2026-06-12)
+
+Item 1 (the headline) shipped per decision D9: `--json` failures emit
+`{"schema_version","error":{"code","message"}}` on **stderr** with stdout
+empty; codes reuse the exit-code vocabulary (`cli.WriteError`, wired in main;
+pinned by the binary smoke test). Item 5 partially done: `task set --set` help
+now states the typed/validated/--force contract. Remaining: `--body-file`/
+stdin for `task new`, body editing through the tool, and the create-envelope
+`status` field + path-form consistency.
