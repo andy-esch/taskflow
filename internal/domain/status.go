@@ -3,7 +3,10 @@
 // isolation.
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Status is a task lifecycle state. It is identical to the directory name a
 // task file lives in; the "status == directory" invariant lives here.
@@ -27,14 +30,25 @@ var allStatuses = []Status{
 // AllStatuses returns every lifecycle status, in display order.
 func AllStatuses() []Status { return allStatuses }
 
-// ParseStatus validates s and returns the typed Status.
+// ParseStatus validates s and returns the typed Status. The failure wraps
+// ErrValidation (exit 11 at the CLI) and enumerates the valid statuses — a typo
+// must be a loud error, not a silently empty result.
 func ParseStatus(s string) (Status, error) {
 	for _, st := range allStatuses {
 		if Status(s) == st {
 			return st, nil
 		}
 	}
-	return "", fmt.Errorf("invalid status %q", s)
+	return "", fmt.Errorf("%w: invalid status %q (valid: %s)", ErrValidation, s, statusList())
+}
+
+// statusList renders the valid statuses for error messages.
+func statusList() string {
+	names := make([]string, len(allStatuses))
+	for i, st := range allStatuses {
+		names[i] = string(st)
+	}
+	return strings.Join(names, ", ")
 }
 
 // Valid reports whether s is a known status.

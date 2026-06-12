@@ -29,8 +29,25 @@ type TaskFilter struct {
 }
 
 // ListTasks returns tasks matching the filter, plus any per-file load problems.
-// Filtering is pure (no I/O).
+// Filter values are validated first — an unknown status or epic returns
+// ErrValidation rather than a silently empty list, which agents routing on exit
+// codes can't tell apart from an empty bucket. (The epic check costs one
+// ListEpics call, only when that filter is set.)
 func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, error) {
+	if f.Status != "" {
+		if _, err := domain.ParseStatus(f.Status); err != nil {
+			return nil, nil, err
+		}
+	}
+	if f.Epic != "" {
+		epics, _, err := s.store.ListEpics()
+		if err != nil {
+			return nil, nil, err
+		}
+		if !epicExists(epics, f.Epic) {
+			return nil, nil, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, f.Epic)
+		}
+	}
 	all, problems, err := s.store.ListTasks()
 	if err != nil {
 		return nil, nil, err

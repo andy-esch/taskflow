@@ -194,7 +194,7 @@ func newTaskMoveCmd(app *App) *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			to, err := domain.ParseStatus(args[len(args)-1])
 			if err != nil {
-				return fmt.Errorf("%w: %v", domain.ErrValidation, err)
+				return err // already wraps ErrValidation and lists valid statuses
 			}
 			return runTransition(app, to, args[:len(args)-1])
 		},

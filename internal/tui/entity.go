@@ -43,6 +43,8 @@ type entityTab struct {
 	loadList func(*entityTab, *core.Service) tea.Cmd // reads the tab's statusView
 	loadItem func(svc *core.Service, id string) tea.Cmd
 	loaded   bool
+	loadGen  int   // bumped per reload; stale list results/errors are dropped by gen
+	loadErr  error // this tab's last list-load failure (nil after a successful load)
 	problems []domain.FileProblem
 
 	// S2b list-scoped state (persists per tab across switches/reloads).
@@ -55,18 +57,26 @@ type entityTab struct {
 
 // reload re-fires the tab's list loader, passing the tab so the loader can read
 // its current statusView (a value-typed Model still mutates via the pointer).
-func (t *entityTab) reload(svc *core.Service) tea.Cmd { return t.loadList(t, svc) }
+// Each reload bumps the load generation so an older in-flight load can't land
+// over this one's result.
+func (t *entityTab) reload(svc *core.Service) tea.Cmd {
+	t.loadGen++
+	return t.loadList(t, svc)
+}
 
-// selectByID moves the cursor to the row with the given id. It ranges the
-// *visible* items, since list.Select indexes the filtered/paginated view (when
-// unfiltered, VisibleItems == Items, so this matches the naive version).
-func (t *entityTab) selectByID(id string) {
+// selectByID moves the cursor to the row with the given id, reporting whether it
+// was found. It ranges the *visible* items, since list.Select indexes the
+// filtered/paginated view — immediately after SetItems on a filtered list the
+// refilter is still in flight (VisibleItems is empty), so callers must keep the
+// restore pending until this succeeds.
+func (t *entityTab) selectByID(id string) bool {
 	for i, it := range t.list.VisibleItems() {
 		if ei, ok := it.(entityItem); ok && ei.id() == id {
 			t.list.Select(i)
-			return
+			return true
 		}
 	}
+	return false
 }
 
 // markReload captures the current cursor id so the next load restores it.
@@ -129,6 +139,11 @@ func newEntityTabs() []*entityTab {
 		l.Styles.TitleBar = lipgloss.NewStyle()
 		l.SetShowHelp(false)
 		l.SetShowStatusBar(false)
+		// The embedded list must never quit the program itself: its default Quit
+		// binding covers q AND esc, so an Esc in list focus (no filter applied)
+		// would exit the whole app instead of being a context no-op. Quit layering
+		// belongs to the root model (q global, ctrl+c force).
+		l.DisableQuitKeybindings()
 		return l
 	}
 	return []*entityTab{

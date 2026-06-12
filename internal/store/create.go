@@ -32,7 +32,7 @@ func buildFile(fields []fmField, body string) ([]byte, error) {
 		mapping.Content = append(mapping.Content,
 			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: f.key}, node)
 	}
-	return assembleFile(mapping, []byte(body))
+	return assembleFile(mapping, []byte(body), "\n") // new files are always LF
 }
 
 // taskFields is the canonical frontmatter order for a new task.

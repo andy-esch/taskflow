@@ -70,6 +70,57 @@ func TestTaskList_StatusFilter(t *testing.T) {
 	}
 }
 
+// TestTaskList_InvalidFiltersExit11 pins that a typo'd --status or an unknown
+// --epic is a loud validation error (exit 11) naming the problem — not a
+// silently empty list indistinguishable from an empty bucket.
+func TestTaskList_InvalidFiltersExit11(t *testing.T) {
+	root := setupRepo(t)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"task", "list", "--status", "bogus"}, "ready-to-start"}, // enumerates valid statuses
+		{[]string{"task", "list", "--epic", "nope"}, `unknown epic "nope"`},
+	} {
+		var out bytes.Buffer
+		cmd := NewRootCmd(&out, &out)
+		cmd.SetArgs(append([]string{"-C", root}, tc.args...))
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatalf("%v should fail", tc.args)
+		}
+		if ExitCode(err) != 11 {
+			t.Errorf("%v: want exit 11, got %d (%v)", tc.args, ExitCode(err), err)
+		}
+		if !bytes.Contains([]byte(err.Error()), []byte(tc.want)) {
+			t.Errorf("%v: error should mention %q, got %q", tc.args, tc.want, err.Error())
+		}
+	}
+}
+
+// TestTaskMove_InvalidStatusEnumerates pins that the move error lists the
+// valid statuses (it previously just said `invalid status "x"`).
+func TestTaskMove_InvalidStatusEnumerates(t *testing.T) {
+	root := setupRepo(t)
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetArgs([]string{"-C", root, "task", "move", "alpha", "limbo"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("move to an invalid status should fail")
+	}
+	if ExitCode(err) != 11 {
+		t.Errorf("want exit 11, got %d", ExitCode(err))
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("in-progress")) {
+		t.Errorf("error should enumerate valid statuses, got %q", err.Error())
+	}
+}
+
 func TestRoot_NotAPlanningRepo(t *testing.T) {
 	// A temp dir with no tasks/ should error clearly, not panic.
 	var out bytes.Buffer

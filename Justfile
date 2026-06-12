@@ -34,13 +34,18 @@ completion-zsh:
 	@echo 'Installed → ~/.zsh/completions/_tskflwctl'
 	@echo 'First time? add to ~/.zshrc:  fpath=(~/.zsh/completions $fpath)  then:  autoload -Uz compinit && compinit'
 
-# Run tests
+# Run tests (with the race detector — the fsnotify/debounce code is exactly
+# where races would live, and they should surface locally before CI)
 test:
-	go test ./...
+	go test -race ./...
 
-# Lint (golangci-lint)
+# Lint (golangci-lint — must be a v2.x binary; .golangci.yml is v2-schema)
 lint:
 	golangci-lint run ./...
+
+# Scan dependencies + stdlib usage for known vulnerabilities
+vulncheck:
+	govulncheck ./...
 
 # Format Go sources + tidy lint formatting
 fmt:

@@ -61,7 +61,10 @@ func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
 }
 
 func parseEpic(content []byte, path string) (domain.Epic, error) {
-	fm, _ := splitFrontmatter(content)
+	fm, _, err := splitFrontmatterStrict(content)
+	if err != nil {
+		return domain.Epic{}, err
+	}
 	var ep domain.Epic
 	if len(fm) > 0 {
 		if err := yaml.Unmarshal(fm, &ep); err != nil {

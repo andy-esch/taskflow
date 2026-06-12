@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,5 +33,45 @@ func TestLintFix_DryRunThenFix(t *testing.T) {
 	}
 	if listOut := runRoot(t, "-C", root, "task", "list"); !strings.Contains(listOut, "bad") {
 		t.Errorf("task should be readable after fix: %q", listOut)
+	}
+}
+
+// TestLintFix_UnrepairableFileExitsNonZero pins B4: a file the fixer can't
+// repair must be surfaced with a non-zero exit — `lint --fix` previously said
+// nothing and exited 0, leaving the tree broken while claiming success.
+func TestLintFix_UnrepairableFileExitsNonZero(t *testing.T) {
+	root := t.TempDir()
+	broken := filepath.Join(root, "tasks", "ready-to-start", "broken.md")
+	if err := os.MkdirAll(filepath.Dir(broken), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Unterminated frontmatter: nothing the text fixer can do with it.
+	if err := os.WriteFile(broken, []byte("---\nstatus: ready-to-start\n# no closing fence\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetArgs([]string{"-C", root, "lint", "--fix"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("lint --fix must fail when a file remains unrepairable")
+	}
+	if ExitCode(err) != 11 {
+		t.Errorf("want exit 11, got %d (%v)", ExitCode(err), err)
+	}
+	if !strings.Contains(out.String(), "broken.md") {
+		t.Errorf("the unrepairable file should be named in the output:\n%s", out.String())
+	}
+	// --dry-run stays exit 0 (it promises nothing about the result).
+	out.Reset()
+	dry := NewRootCmd(&out, &out)
+	dry.SetArgs([]string{"-C", root, "lint", "--fix", "--dry-run"})
+	dry.SetOut(&out)
+	dry.SetErr(&out)
+	if err := dry.Execute(); err != nil {
+		t.Errorf("dry-run should not fail on unrepairable files: %v", err)
 	}
 }

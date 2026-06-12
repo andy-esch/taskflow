@@ -21,7 +21,7 @@ import (
 // "all" includes archived; any other value is an exact status filter. The view
 // is snapshotted here so a later change can't race this load.
 func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
-	view := t.statusView
+	view, gen := t.statusView, t.loadGen
 	return func() tea.Msg {
 		f := core.TaskFilter{}
 		switch view {
@@ -34,7 +34,7 @@ func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 		}
 		tasks, problems, err := svc.ListTasks(f)
 		if err != nil {
-			return errMsg{err}
+			return errMsg{kind: entityTasks, gen: gen, err: err}
 		}
 		if view == "" {
 			sortWorkingSet(tasks) // working-set order only for the default view
@@ -43,7 +43,7 @@ func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 		for _, t := range tasks {
 			items = append(items, taskItem{t})
 		}
-		return listLoadedMsg{kind: entityTasks, items: items, problems: problems}
+		return listLoadedMsg{kind: entityTasks, gen: gen, items: items, problems: problems}
 	}
 }
 
@@ -59,17 +59,18 @@ func loadTaskDetail(svc *core.Service, id string) tea.Cmd {
 
 // --- epics ---
 
-func loadEpicList(_ *entityTab, svc *core.Service) tea.Cmd {
+func loadEpicList(t *entityTab, svc *core.Service) tea.Cmd {
+	gen := t.loadGen
 	return func() tea.Msg {
 		epics, problems, err := svc.ListEpics()
 		if err != nil {
-			return errMsg{err}
+			return errMsg{kind: entityEpics, gen: gen, err: err}
 		}
 		items := make([]list.Item, 0, len(epics))
 		for _, es := range epics {
 			items = append(items, epicItem{es})
 		}
-		return listLoadedMsg{kind: entityEpics, items: items, problems: problems}
+		return listLoadedMsg{kind: entityEpics, gen: gen, items: items, problems: problems}
 	}
 }
 
@@ -87,17 +88,18 @@ func loadEpicDetail(svc *core.Service, id string) tea.Cmd {
 
 // loadAuditList reads open audits (the working set). The audits tab mirrors the
 // CLI's default of open-only; interactive sort still applies.
-func loadAuditList(_ *entityTab, svc *core.Service) tea.Cmd {
+func loadAuditList(t *entityTab, svc *core.Service) tea.Cmd {
+	gen := t.loadGen
 	return func() tea.Msg {
 		audits, problems, err := svc.ListAudits("", false)
 		if err != nil {
-			return errMsg{err}
+			return errMsg{kind: entityAudits, gen: gen, err: err}
 		}
 		items := make([]list.Item, 0, len(audits))
 		for _, a := range audits {
 			items = append(items, auditItem{a})
 		}
-		return listLoadedMsg{kind: entityAudits, items: items, problems: problems}
+		return listLoadedMsg{kind: entityAudits, gen: gen, items: items, problems: problems}
 	}
 }
 

@@ -54,12 +54,22 @@ func (d *detailPane) SetSize(w, h int) {
 }
 
 func (d *detailPane) SetContent(c detailContent) {
+	// A live-reload refresh of the item already on screen keeps the scroll
+	// position (the viewport clamps it to the new content); only a *different*
+	// item snaps back to the top. Otherwise every external write under the
+	// watched tree would yank the body you're reading back to line one.
+	sameItem := d.hasContent && d.content != nil && d.title == c.Title()
+	offset := d.vp.YOffset
 	d.content = c
 	d.errMsg = ""
 	d.title = c.Title()
 	d.styled = c.Render(d.width)
 	d.refreshFind() // recompute matches for the new content (find persists across items)
-	d.vp.GotoTop()
+	if sameItem {
+		d.vp.SetYOffset(offset)
+	} else {
+		d.vp.GotoTop()
+	}
 	d.hasContent = true
 	d.loading = false
 }

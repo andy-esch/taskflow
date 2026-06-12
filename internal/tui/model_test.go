@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
@@ -140,13 +141,20 @@ func TestModel_SelectionLoadsBodyWithStaleGuard(t *testing.T) {
 		t.Error("selection change should start a body load")
 	}
 	// A stale body (for alpha) must be dropped while beta is selected.
-	tm, _ = m.Update(detailMsg{kind: entityTasks, id: "alpha", content: taskDetail{t: domain.Task{Slug: "alpha"}, body: "x"}})
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: "alpha", gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: "alpha"}, body: "x"}})
 	m = tm.(Model)
 	if m.detail.hasContent {
 		t.Error("stale body for a different selection must be ignored")
 	}
+	// An outdated request generation for the RIGHT id must be dropped too (two
+	// loads for the same id aren't ordered by (kind, id) alone).
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: "beta", gen: m.detailGen - 1, content: taskDetail{t: domain.Task{Slug: "beta"}, body: "old"}})
+	m = tm.(Model)
+	if m.detail.hasContent {
+		t.Error("an older detail load for the same id must be ignored")
+	}
 	// The matching body sets the detail.
-	tm, _ = m.Update(detailMsg{kind: entityTasks, id: "beta", content: taskDetail{t: domain.Task{Slug: "beta"}, body: "beta body"}})
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: "beta", gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: "beta"}, body: "beta body"}})
 	m = tm.(Model)
 	if !m.detail.hasContent || m.detail.title != "beta" {
 		t.Errorf("detail should show beta, got title %q hasContent=%v", m.detail.title, m.detail.hasContent)
@@ -195,10 +203,10 @@ func TestModel_BodyErrorDoesNotBrick(t *testing.T) {
 	m := loaded(t, 120, 40)
 	slug := m.selectedID()
 	// An ambiguous-slug (duplicate across dirs) body error must not blank the UI.
-	tm, _ := m.Update(detailErrMsg{kind: entityTasks, id: slug, err: domain.ErrAmbiguous})
+	tm, _ := m.Update(detailErrMsg{kind: entityTasks, id: slug, gen: m.detailGen, err: domain.ErrAmbiguous})
 	m = tm.(Model)
-	if m.err != nil {
-		t.Error("a per-task body error must not set the fatal error")
+	if m.cur().loadErr != nil {
+		t.Error("a per-task body error must not set the tab's list-load error")
 	}
 	if !m.detail.hasContent {
 		t.Error("the error should be shown in the detail pane")
@@ -212,7 +220,7 @@ func TestModel_DetailScrollKeys(t *testing.T) {
 	m := loaded(t, 120, 12) // short, so the body overflows
 	slug := m.selectedID()
 	long := strings.Repeat("a line of text\n", 60)
-	tm, _ := m.Update(detailMsg{kind: entityTasks, id: slug, content: taskDetail{t: domain.Task{Slug: slug}, body: long}})
+	tm, _ := m.Update(detailMsg{kind: entityTasks, id: slug, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: slug}, body: long}})
 	m = tm.(Model)
 	tm, _ = m.Update(press("l")) // focus detail
 	m = tm.(Model)
@@ -286,7 +294,7 @@ func TestModel_ViewFitsTerminal(t *testing.T) {
 		{120, 40}, {100, 24}, {90, 30}, {80, 24}, {70, 20}, {40, 12}, {24, 8},
 	} {
 		m := loaded(t, d.w, d.h)
-		tm, _ := m.Update(detailMsg{kind: entityTasks, id: m.selectedID(), content: taskDetail{t: domain.Task{Slug: m.selectedID()}, body: "# body\n\nsome text here\n"}})
+		tm, _ := m.Update(detailMsg{kind: entityTasks, id: m.selectedID(), gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: m.selectedID()}, body: "# body\n\nsome text here\n"}})
 		m = tm.(Model)
 		lines := strings.Split(m.View(), "\n")
 		if len(lines) != d.h {
@@ -585,7 +593,7 @@ func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
 	m = tm.(Model)
-	tm, _ = m.Update(detailMsg{kind: entityTasks, id: slug, content: taskDetail{t: domain.Task{Slug: slug}, body: "body"}})
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: slug, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: slug}, body: "body"}})
 	m = tm.(Model)
 
 	lines := strings.Split(m.View(), "\n")
@@ -599,20 +607,183 @@ func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
 	}
 }
 
-// TestModel_RecoversFromFatalError pins that a fatal load error clears on the
-// next successful load (otherwise a transient failure bricked the session).
-func TestModel_RecoversFromFatalError(t *testing.T) {
-	m := loaded(t, 120, 40)
-	tm, _ := m.Update(errMsg{err: domain.ErrNotFound})
+// TestModel_RecoversFromFailedInitialLoad pins the `r` escape hatch: a failed
+// FIRST load (nothing `loaded` yet) shows the error pane, and the r key — the
+// path a user actually has — must reload the active tab and recover. (The old
+// version of this test recovered via m.Init()(), a path no key takes, which
+// masked the dead-end.)
+func TestModel_RecoversFromFailedInitialLoad(t *testing.T) {
+	m := newModel(t)
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
-	if m.err == nil || !strings.Contains(m.View(), "error:") {
-		t.Fatal("errMsg should show the error screen")
+	// The initial load fails before anything is loaded.
+	tm, _ = m.Update(errMsg{kind: entityTasks, gen: m.cur().loadGen, err: domain.ErrNotFound})
+	m = tm.(Model)
+	if m.cur().loadErr == nil || !strings.Contains(m.View(), "error:") {
+		t.Fatal("a failed initial load should show the error pane")
 	}
-	// A subsequent successful list load must clear it.
-	tm, _ = m.Update(m.Init()())
+	// r → reloadMsg → reloadAll must reload the active tab even though !loaded.
+	tm, cmd := m.Update(press("r"))
 	m = tm.(Model)
-	if m.err != nil {
-		t.Errorf("a successful load must clear the fatal error, got %v", m.err)
+	tm, cmd = m.Update(cmd()) // reloadMsg
+	m = tm.(Model)
+	if cmd == nil {
+		t.Fatal("r must produce a reload for the active tab after a failed initial load")
+	}
+	m = pump(t, m, cmd, 8)
+	if !m.cur().loaded || m.cur().loadErr != nil {
+		t.Errorf("r should recover the session: loaded=%v err=%v", m.cur().loaded, m.cur().loadErr)
+	}
+	if !strings.Contains(m.View(), "alpha") {
+		t.Error("the recovered list should render its rows")
+	}
+}
+
+// TestModel_LoadErrorIsPerTab pins that one tab's loader failing neither blanks
+// the other tabs nor loses the failing tab's last good rows (the failure is
+// flagged in the footer instead).
+func TestModel_LoadErrorIsPerTab(t *testing.T) {
+	m := loaded(t, 120, 40)
+	// Visit epics so it's loaded, then fail a tasks reload in the background.
+	tm, cmd := m.Update(press("]"))
+	m = drain(t, tm.(Model), cmd)
+	tasks := m.tabs[indexOfKind(m.tabs, entityTasks)]
+	tm, _ = m.Update(errMsg{kind: entityTasks, gen: tasks.loadGen, err: domain.ErrNotFound})
+	m = tm.(Model)
+	// The active epics tab must be untouched.
+	if !strings.Contains(m.View(), "01-test") {
+		t.Errorf("a background tab's failure must not blank the active tab:\n%s", m.View())
+	}
+	// Back on tasks: the stale rows survive, and the footer flags the failure.
+	tm, _ = m.Update(press("["))
+	m = tm.(Model)
+	v := ansi.Strip(m.View())
+	if !strings.Contains(v, "alpha") {
+		t.Error("a failed reload should keep the last good rows visible")
+	}
+	if !strings.Contains(v, "reload failed") {
+		t.Errorf("the footer should flag the failed reload:\n%s", v)
+	}
+	// A stale failure (older generation) must be dropped entirely.
+	tm, _ = m.Update(errMsg{kind: entityEpics, gen: m.tabs[indexOfKind(m.tabs, entityEpics)].loadGen - 1, err: domain.ErrNotFound})
+	m = tm.(Model)
+	if m.tabs[indexOfKind(m.tabs, entityEpics)].loadErr != nil {
+		t.Error("an error from a superseded load generation must be ignored")
+	}
+}
+
+// TestModel_StaleListLoadDropped pins the load-generation guard: an older list
+// load finishing after a newer one must not clobber its result.
+func TestModel_StaleListLoadDropped(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tab := m.cur()
+	if n := len(tab.list.Items()); n != 2 {
+		t.Fatalf("setup: want 2 items, got %d", n)
+	}
+	stale := listLoadedMsg{kind: entityTasks, gen: tab.loadGen - 1,
+		items: []list.Item{taskItem{domain.Task{Slug: "ghost", Status: domain.StatusInProgress}}}}
+	tm, _ := m.Update(stale)
+	m = tm.(Model)
+	if n := len(m.cur().list.Items()); n != 2 {
+		t.Errorf("a stale list load must be dropped, got %d items", n)
+	}
+}
+
+// TestModel_DetailScrollSurvivesReload pins the live-reload affordance: a
+// refresh of the item already on screen keeps the scroll position; a different
+// item still snaps to the top.
+func TestModel_DetailScrollSurvivesReload(t *testing.T) {
+	m := loaded(t, 120, 12)
+	slug := m.selectedID()
+	long := strings.Repeat("a line of text\n", 60)
+	feed := func(id, body string) {
+		tm, _ := m.Update(detailMsg{kind: entityTasks, id: id, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: id}, body: body}})
+		m = tm.(Model)
+	}
+	feed(slug, long)
+	tm, _ := m.Update(press("l"))
+	m = tm.(Model)
+	tm, _ = m.Update(press("G")) // scroll to bottom
+	m = tm.(Model)
+	off := m.detail.vp.YOffset
+	if off == 0 {
+		t.Fatal("setup: the body should have scrolled")
+	}
+	feed(slug, long) // same item reloaded (e.g. an external write)
+	if m.detail.vp.YOffset != off {
+		t.Errorf("a same-item refresh must keep the scroll: %d → %d", off, m.detail.vp.YOffset)
+	}
+	// A different item snaps back to the top.
+	tm, _ = m.Update(press("h"))
+	m = tm.(Model)
+	tm, _ = m.Update(press("j"))
+	m = tm.(Model)
+	feed(m.selectedID(), long)
+	if m.detail.vp.YOffset != 0 {
+		t.Errorf("a different item should start at the top, got offset %d", m.detail.vp.YOffset)
+	}
+}
+
+// TestModel_EscInListFocusDoesNotQuit guards the embedded list's default quit
+// binding (q AND esc): Esc in list focus must be a context no-op, not exit the
+// program.
+func TestModel_EscInListFocusDoesNotQuit(t *testing.T) {
+	m := loaded(t, 120, 40)
+	if m.focus != focusList {
+		t.Fatal("setup: should be list-focused")
+	}
+	tm, cmd := m.Update(press("esc"))
+	m = tm.(Model)
+	if cmd != nil {
+		if _, quits := cmd().(tea.QuitMsg); quits {
+			t.Fatal("esc in list focus must not quit the app")
+		}
+	}
+	if !strings.Contains(m.View(), "alpha") {
+		t.Error("the browser should still be rendering after esc")
+	}
+}
+
+// TestModel_QuitPopsSinglePaneDetail pins q's context-quit layering: in
+// single-pane drill, q returns to the list (like Esc/h); from the list q quits.
+func TestModel_QuitPopsSinglePaneDetail(t *testing.T) {
+	m := loaded(t, 70, 24) // single-pane
+	if m.twoPane {
+		t.Fatal("setup: 70 cols should be single-pane")
+	}
+	tm, _ := m.Update(press("l")) // drill into detail
+	m = tm.(Model)
+	if m.focus != focusDetail {
+		t.Fatal("setup: should be detail-focused")
+	}
+	tm, cmd := m.Update(press("q"))
+	m = tm.(Model)
+	if m.focus != focusList {
+		t.Error("q from single-pane detail should pop back to the list")
+	}
+	if cmd != nil {
+		if _, quits := cmd().(tea.QuitMsg); quits {
+			t.Fatal("q from single-pane detail must not quit the app")
+		}
+	}
+	// From the list, q still quits.
+	_, cmd = m.Update(press("q"))
+	if cmd == nil {
+		t.Fatal("q from the list should quit")
+	}
+	if _, quits := cmd().(tea.QuitMsg); !quits {
+		t.Errorf("q from the list should quit, got %T", cmd())
+	}
+	// In two-pane, q quits from detail focus too (it isn't a drill layer there).
+	w := loaded(t, 120, 40)
+	tm, _ = w.Update(press("l"))
+	w = tm.(Model)
+	_, cmd = w.Update(press("q"))
+	if cmd == nil {
+		t.Fatal("two-pane q should quit")
+	}
+	if _, quits := cmd().(tea.QuitMsg); !quits {
+		t.Errorf("two-pane q from detail should quit, got %T", cmd())
 	}
 }
 
@@ -783,7 +954,7 @@ func TestModel_DetailFindHighlightsAndNavigates(t *testing.T) {
 	// filler so the viewport must scroll.
 	body := "alpha line\nbeta\nfind me here\nbeta again\nfind once more\n" + strings.Repeat("filler\n", 30)
 	id := m.selectedID()
-	tm, _ := m.Update(detailMsg{kind: entityTasks, id: id, content: taskDetail{t: domain.Task{Slug: id}, body: body}})
+	tm, _ := m.Update(detailMsg{kind: entityTasks, id: id, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: id}, body: body}})
 	m = tm.(Model)
 	tm, _ = m.Update(press("l")) // focus detail
 	m = tm.(Model)
@@ -936,6 +1107,103 @@ func TestModel_FsEventDebounces(t *testing.T) {
 	}
 	if _, ok := cmd().(reloadMsg); !ok {
 		t.Fatalf("debounce should fire reloadMsg, got %T", cmd())
+	}
+}
+
+// pump applies a Cmd and recursively feeds every resulting message back through
+// Update (depth-limited) — enough to settle the reload → SetItems → routed
+// refilter → cursor-restore chain that drain (one level) can't reach.
+func pump(t *testing.T, m Model, cmd tea.Cmd, depth int) Model {
+	t.Helper()
+	if cmd == nil || depth <= 0 {
+		return m
+	}
+	msg := cmd()
+	if msg == nil {
+		return m
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			m = pump(t, m, c, depth-1)
+		}
+		return m
+	}
+	tm, next := m.Update(msg)
+	return pump(t, tm.(Model), next, depth-1)
+}
+
+// TestModel_ReloadWithBackgroundFilterApplied pins the filter×reload misroute:
+// a reload while a BACKGROUND tab has an applied filter must re-deliver that
+// tab's async filter matches to that tab (not the active one). Before the fix,
+// the background tab came back blank (FilterApplied with nil matches) and the
+// active tab could receive the other entity's match set.
+func TestModel_ReloadWithBackgroundFilterApplied(t *testing.T) {
+	m := loaded(t, 120, 40)
+	// Apply a filter on tasks (synchronously, via the list's programmatic API)
+	// and put the cursor on its only match.
+	tasks := m.tabs[indexOfKind(m.tabs, entityTasks)]
+	tasks.list.SetFilterText("beta")
+	if n := len(tasks.list.VisibleItems()); n != 1 {
+		t.Fatalf("setup: filter should leave 1 visible task, got %d", n)
+	}
+	// Switch to epics (tasks is now a filtered background tab), then reload all.
+	tm, cmd := m.Update(press("]"))
+	m = drain(t, tm.(Model), cmd)
+	if m.cur().name != "epics" {
+		t.Fatalf("setup: expected epics active, got %q", m.cur().name)
+	}
+	tm, cmd = m.Update(reloadMsg{})
+	m = pump(t, tm.(Model), cmd, 8)
+
+	// The background tasks tab keeps its filter AND its matches.
+	tasks = m.tabs[indexOfKind(m.tabs, entityTasks)]
+	if tasks.list.FilterState() != list.FilterApplied {
+		t.Fatalf("tasks filter should survive the reload, state=%v", tasks.list.FilterState())
+	}
+	vis := tasks.list.VisibleItems()
+	if len(vis) != 1 {
+		t.Fatalf("filtered background tab must not go blank after a reload: %d visible", len(vis))
+	}
+	if it, _ := vis[0].(taskItem); it.t.Slug != "beta" {
+		t.Errorf("expected beta visible after reload, got %q", it.t.Slug)
+	}
+	// The cursor restore (pending until the refilter landed) points at beta.
+	if id := tasks.list.SelectedItem().(entityItem).id(); id != "beta" {
+		t.Errorf("cursor should be restored to beta after the refilter, got %q", id)
+	}
+	// The active epics tab was not polluted by the tasks tab's matches.
+	epics := m.tabs[indexOfKind(m.tabs, entityEpics)]
+	if n := len(epics.list.VisibleItems()); n != 1 {
+		t.Errorf("epics must keep its own (1) row, got %d", n)
+	}
+	if _, ok := epics.list.VisibleItems()[0].(epicItem); !ok {
+		t.Errorf("epics rows must stay epicItems, got %T", epics.list.VisibleItems()[0])
+	}
+}
+
+// TestModel_DetailFollowsFilter runs the real program (the list's filter is
+// async) and pins A1: while a `/` filter is typed, the detail pane follows the
+// moving selection instead of showing the pre-filter item until j/k is pressed.
+func TestModel_DetailFollowsFilter(t *testing.T) {
+	tm := teatest.NewTestModel(t, newModel(t), teatest.WithInitialTermSize(120, 40))
+	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
+		return bytes.Contains(b, []byte("beta"))
+	}, teatest.WithDuration(3*time.Second))
+	tm.Send(press("/"))
+	for _, r := range "beta" {
+		tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	// While still typing, the filter narrows to beta and the detail must follow:
+	// beta's status (ready-to-start) appears only via its detail pane — the rows
+	// render the status as a glyph, the body as text.
+	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
+		return bytes.Contains(b, []byte("ready-to-start"))
+	}, teatest.WithDuration(3*time.Second))
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter}) // apply
+	tm.Send(press("q"))                     // quit
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(3*time.Second)).(Model)
+	if fm.detail.title != "beta" {
+		t.Errorf("detail should track the filtered selection, showing %q", fm.detail.title)
 	}
 }
 

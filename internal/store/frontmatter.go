@@ -42,7 +42,31 @@ func splitFrontmatter(content []byte) (frontmatter, body []byte) {
 		}
 		offset += lineEnd + 1
 	}
-	return nil, content // no closing fence → treat as no frontmatter
+	return nil, content // no closing fence; splitFrontmatterStrict flags this
+}
+
+// splitFrontmatterStrict is splitFrontmatter plus the unterminated-fence check:
+// an opening `---` with no closing fence is malformed (a FileProblem) — NOT "no
+// frontmatter". Treating it as the latter would list the file as an empty task
+// and let a surgical edit prepend a *second* frontmatter block, demoting the
+// partial one into the body.
+func splitFrontmatterStrict(content []byte) (frontmatter, body []byte, err error) {
+	fm, body := splitFrontmatter(content)
+	if fm == nil && (bytes.HasPrefix(content, []byte("---\n")) || bytes.HasPrefix(content, []byte("---\r\n"))) {
+		return nil, nil, fmt.Errorf("%w: unterminated frontmatter (no closing ---)", errBadFrontmatter)
+	}
+	return fm, body, nil
+}
+
+// detectLineEnding returns the file's dominant line ending, so a surgical edit
+// re-emits the frontmatter in the style the file already uses — a CRLF file
+// must not come back with a mixed-ending (LF frontmatter / CRLF body) diff.
+func detectLineEnding(content []byte) string {
+	crlf := bytes.Count(content, []byte("\r\n"))
+	if lf := bytes.Count(content, []byte("\n")) - crlf; crlf > lf {
+		return "\r\n"
+	}
+	return "\n"
 }
 
 // updateFrontmatter applies key=value updates to a file's frontmatter, then
@@ -50,7 +74,10 @@ func splitFrontmatter(content []byte) (frontmatter, body []byte) {
 // fields, comments, and key order survive; the body is preserved verbatim.
 // Values may be string, int, or []string.
 func updateFrontmatter(content []byte, updates map[string]any) ([]byte, error) {
-	fm, body := splitFrontmatter(content)
+	fm, body, err := splitFrontmatterStrict(content)
+	if err != nil {
+		return nil, err
+	}
 
 	var doc yaml.Node
 	if len(bytes.TrimSpace(fm)) > 0 {
@@ -70,12 +97,14 @@ func updateFrontmatter(content []byte, updates map[string]any) ([]byte, error) {
 		setMapNode(mapping, k, node)
 	}
 
-	return assembleFile(mapping, body)
+	return assembleFile(mapping, body, detectLineEnding(content))
 }
 
 // assembleFile encodes a frontmatter mapping node and reattaches the `---`
-// fences and body. Shared by surgical updates and fresh-file creation.
-func assembleFile(mapping *yaml.Node, body []byte) ([]byte, error) {
+// fences and body, using eol for the fences and the (LF-encoded) YAML block so
+// the whole file keeps one line-ending style. Shared by surgical updates
+// (which pass the file's detected ending) and fresh-file creation (LF).
+func assembleFile(mapping *yaml.Node, body []byte, eol string) ([]byte, error) {
 	var fmBuf bytes.Buffer
 	enc := yaml.NewEncoder(&fmBuf)
 	enc.SetIndent(2)
@@ -84,10 +113,14 @@ func assembleFile(mapping *yaml.Node, body []byte) ([]byte, error) {
 	}
 	_ = enc.Close()
 
+	fmBytes := fmBuf.Bytes()
+	if eol != "\n" {
+		fmBytes = bytes.ReplaceAll(fmBytes, []byte("\n"), []byte(eol))
+	}
 	var out bytes.Buffer
-	out.WriteString("---\n")
-	out.Write(fmBuf.Bytes())
-	out.WriteString("---\n")
+	out.WriteString("---" + eol)
+	out.Write(fmBytes)
+	out.WriteString("---" + eol)
 	out.Write(body)
 	return out.Bytes(), nil
 }

@@ -48,7 +48,19 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("rename temp into place: %w", err)
 	}
+	syncDir(filepath.Dir(path))
 	return nil
+}
+
+// syncDir best-effort fsyncs a directory so a just-completed rename/create in
+// it survives a power loss. Errors are ignored: some filesystems (network and
+// FUSE mounts in particular) reject directory fsync, and degraded durability
+// there beats failing every write.
+func syncDir(dir string) {
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
 }
 
 // createFileAtomic writes a *new* file with O_EXCL: it fails with an os.IsExist
@@ -74,5 +86,6 @@ func createFileAtomic(path string, data []byte, perm os.FileMode) error {
 	if err = f.Close(); err != nil {
 		return fmt.Errorf("close %s: %w", path, err)
 	}
+	syncDir(filepath.Dir(path))
 	return nil
 }
