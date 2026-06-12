@@ -7,6 +7,20 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
+// movedMsg reports a successful lifecycle transition (S4). The model flashes a
+// confirmation and fires a reload so the relocated task shows in its new status.
+type movedMsg struct {
+	slug string
+	to   domain.Status
+}
+
+// actionErrMsg reports a failed mutation; the model flashes it (red) without
+// reloading or corrupting state.
+type actionErrMsg struct {
+	slug string
+	err  error
+}
+
 // listLoadedMsg carries the result of an async entity-list load. kind tags which
 // entity tab it belongs to, so a load that finishes after the user has switched
 // tabs still lands in the right list. gen is the tab's load generation at fire

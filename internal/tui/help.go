@@ -20,10 +20,11 @@ type helpSection struct {
 // with keys.go and the focus-routed handlers in model.go.
 var helpSections = []helpSection{
 	{"Global", []helpEntry{
-		{": ", "command / jump (entity or status)"},
+		{": ", "command / jump (entity, status, or verb)"},
 		{"/", "filter the list (slug, desc, tags)"},
 		{"o / O", "cycle sort column / reverse"},
 		{"s / S", "cycle status view / backward"},
+		{"a", "task actions (start/complete/defer/…)"},
 		{"[ / ]", "previous / next tab"},
 		{"tab", "switch focus (list ⇄ detail)"},
 		{"r", "refresh from disk"},

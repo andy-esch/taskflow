@@ -77,3 +77,10 @@ pinned by the binary smoke test). Item 5 partially done: `task set --set` help
 now states the typed/validated/--force contract. Remaining: `--body-file`/
 stdin for `task new`, body editing through the tool, and the create-envelope
 `status` field + path-form consistency.
+
+## Note (2026-06-12)
+
+A draft task ([[task-edit-opens-editor-on-the-body]]) proposes the *human*
+face of the body-editing gap this batch owns (items 2–3: --body-file, body
+replace/append). Planning needs to pick one owner before either starts —
+this batch's framing takes precedence; the draft defers here.

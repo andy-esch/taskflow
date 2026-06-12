@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
@@ -45,7 +46,10 @@ type Model struct {
 	detail detailPane
 	cmd    commandBar
 
-	showHelp bool // the `?` keybinding overlay is open
+	showHelp bool       // the `?` keybinding overlay is open
+	action   actionMenu // the `a` lifecycle action menu (S4)
+	flash    string     // transient post-action feedback line (cleared on the next key)
+	flashErr bool       // the flash is an error (rendered red)
 
 	watch     *watcher // fsnotify source (nil when unavailable / in tests); see watch.go
 	watchOff  bool     // the watcher failed to start: live reload is off (footer note)
@@ -122,6 +126,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tabMsg:
 		return m.handleTabMsg(msg)
+
+	case movedMsg:
+		// A transition succeeded: flash it and reload so the relocated task shows in
+		// its new status (folder-authoritative), each tab's cursor preserved by id.
+		m.flash = fmt.Sprintf("moved %s → %s", msg.slug, msg.to)
+		m.flashErr = false
+		return m, m.reloadAll()
+
+	case actionErrMsg:
+		m.flash = msg.err.Error()
+		m.flashErr = true
+		return m, nil
 
 	case reloadMsg:
 		return m, m.reloadAll()
@@ -235,6 +251,9 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Any key dismisses the post-action flash (it's a one-shot confirmation).
+	m.flash = ""
+
 	// 0. The help overlay is modal: any key dismisses it (ctrl+c still quits).
 	if m.showHelp {
 		if key.Matches(msg, keys.ForceQuit) {
@@ -242,6 +261,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.showHelp = false
 		return m, nil
+	}
+
+	// 0b. The action menu is modal: it owns every key while open.
+	if m.action.active {
+		return m.handleActionKey(msg)
 	}
 
 	// 1. The command bar captures every key while open (so `:tasks` typing never
@@ -293,6 +317,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case key.Matches(msg, keys.Help):
 		m.showHelp = true
+		return m, nil
+	case key.Matches(msg, keys.Action):
+		// Lifecycle actions apply to a task; a no-op on epics/audits.
+		if t, ok := m.selectedTask(); ok {
+			m.action.open(t.Slug, t.Status)
+		}
 		return m, nil
 	case key.Matches(msg, keys.Command):
 		return m, m.cmd.focus()
@@ -400,9 +430,84 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 	if view, ok := statusViewFor(word); ok {
 		return m, m.applyStatusView(view)
 	}
+	if tr, ok := transitionFor(word); ok {
+		t, ok := m.selectedTask()
+		if !ok {
+			cmd := m.cmd.focus()
+			m.cmd.err = "select a task first"
+			return m, cmd
+		}
+		if tr.destructive {
+			m.action.openConfirm(t.Slug, tr) // gate even an explicit :deprecate
+			return m, nil
+		}
+		return m, m.applyTransition(t.Slug, tr.to)
+	}
 	cmd := m.cmd.focus()
 	m.cmd.err = "unknown: " + word
 	return m, cmd
+}
+
+// handleActionKey drives the lifecycle action menu while it's open: vim-select a
+// transition, Enter applies it (a destructive one gates on y/n), Esc cancels.
+func (m Model) handleActionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if key.Matches(msg, keys.ForceQuit) {
+		return m, tea.Quit
+	}
+	if m.action.confirm {
+		switch msg.String() {
+		case "y", "Y":
+			tr, slug := m.action.selected(), m.action.slug
+			m.action.close()
+			return m, m.applyTransition(slug, tr.to)
+		case "n", "N", "esc":
+			if m.action.confirmOnly() {
+				m.action.close() // a bare `:deprecate` confirm has no menu to return to
+			} else {
+				m.action.confirm = false // back to the menu
+			}
+		}
+		return m, nil
+	}
+	switch msg.String() {
+	case "j", "down":
+		m.action.move(1)
+	case "k", "up":
+		m.action.move(-1)
+	case "enter", "l":
+		tr := m.action.selected()
+		if tr.destructive {
+			m.action.confirm = true
+			return m, nil
+		}
+		slug := m.action.slug
+		m.action.close()
+		return m, m.applyTransition(slug, tr.to)
+	case "esc", "h", "a", "q":
+		m.action.close()
+	}
+	return m, nil
+}
+
+// applyTransition moves a task to a status off the event loop, reporting success
+// (movedMsg → flash + reload) or failure (actionErrMsg → flash, no reload).
+func (m Model) applyTransition(slug string, to domain.Status) tea.Cmd {
+	svc := m.svc
+	return func() tea.Msg {
+		if _, err := svc.Move(slug, to); err != nil {
+			return actionErrMsg{slug: slug, err: err}
+		}
+		return movedMsg{slug: slug, to: to}
+	}
+}
+
+// selectedTask returns the selected row as a task — ok only on the tasks tab, so
+// lifecycle actions are a no-op elsewhere.
+func (m Model) selectedTask() (domain.Task, bool) {
+	if it, ok := m.cur().list.SelectedItem().(taskItem); ok {
+		return it.t, true
+	}
+	return domain.Task{}, false
 }
 
 // switchTab makes tab i active: it resets focus + the detail pane, loads the tab
@@ -491,12 +596,14 @@ func (m Model) entityNames() []string {
 // aliases + the task status-view words. (Aliases were missing in S2a.)
 func (m Model) commandOptions() []string {
 	words := statusViewWords()
-	opts := make([]string, 0, len(m.tabs)*2+len(words))
+	verbs := transitionVerbs()
+	opts := make([]string, 0, len(m.tabs)*2+len(words)+len(verbs))
 	for _, t := range m.tabs {
 		opts = append(opts, t.name)
 		opts = append(opts, t.aliases...)
 	}
-	return append(opts, words...)
+	opts = append(opts, words...)
+	return append(opts, verbs...)
 }
 
 // --- interactive sort ---
@@ -608,17 +715,24 @@ func (m Model) View() string {
 	return lipgloss.NewStyle().MaxWidth(m.width).MaxHeight(m.height).Render(full)
 }
 
-// bodyView renders the pane area, with the `?` help panel floated over it when
-// open (the underlying panes stay visible around the modal).
+// bodyView renders the pane area, with a modal (the `?` help panel or the `a`
+// action menu) floated over it when open — the underlying panes stay visible
+// around it.
 func (m Model) bodyView() string {
 	base := m.renderBody()
-	if !m.showHelp {
+	var box string
+	switch {
+	case m.showHelp:
+		box = helpBox(m.width-2, m.paneOuterH-2)
+	case m.action.active:
+		box = m.action.view(m.width-2, m.paneOuterH-2)
+	default:
 		return base
 	}
-	// Normalize the body to exact body dimensions, then composite the help box on
-	// top so it floats over the items rather than blanking them.
+	// Normalize the body to exact dimensions, then composite the box on top so it
+	// floats over the items rather than blanking them.
 	canvas := lipgloss.Place(m.width, m.paneOuterH, lipgloss.Left, lipgloss.Top, base)
-	return overlay(canvas, helpBox(m.width-2, m.paneOuterH-2), m.width, m.paneOuterH)
+	return overlay(canvas, box, m.width, m.paneOuterH)
 }
 
 // renderBody is the pane layout: a loading note (or this tab's load error) until
@@ -716,6 +830,13 @@ func (m Model) tabStrip() string {
 func (m Model) footer() string {
 	if m.cmd.active {
 		return truncate(m.cmd.view(), m.width)
+	}
+	// A post-action result takes over the footer until the next key.
+	if m.flash != "" {
+		if m.flashErr {
+			return truncate(fg(theme.ColorRed, "✘ "+m.flash), m.width)
+		}
+		return truncate(fg(theme.ColorGreen, "✔ "+m.flash), m.width)
 	}
 	// The detail find input/status takes over the footer while searching a body.
 	if m.focus == focusDetail && (m.detail.finding() || m.detail.findActive()) {

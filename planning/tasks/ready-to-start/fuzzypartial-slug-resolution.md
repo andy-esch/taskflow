@@ -41,3 +41,10 @@ let an unambiguous prefix/substring resolve it. `task show retry` → finds
 
 - Epic [[17-pm-go-cli]]; complements completion and the color work
   [[cli-color-glyphs-table-headers-render-styling]].
+
+## Note (2026-06-12)
+
+A draft task ([[interactive-prompt-layer-gh-style-pickers]]) proposes a
+TTY-only picker over this task's ambiguous-candidate output. **This task owns
+the resolution semantics** (exact > prefix > substring, explicit ErrAmbiguous)
+— the draft is presentation only and defers here; sequence this first.
