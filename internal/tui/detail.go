@@ -153,12 +153,12 @@ func (d *detailPane) applyQuery(q string) {
 	d.scrollToCurrent()
 }
 
-// findNext moves the focused match by dir (wrapping) and scrolls to it.
+// findNext moves the focused occurrence by dir (wrapping) and scrolls to it.
 func (d *detailPane) findNext(dir int) {
-	if len(d.find.lines) == 0 {
+	if len(d.find.matches) == 0 {
 		return
 	}
-	n := len(d.find.lines)
+	n := len(d.find.matches)
 	d.find.cur = ((d.find.cur+dir)%n + n) % n
 	d.refreshFind()
 	d.scrollToCurrent()
@@ -173,15 +173,15 @@ func (d *detailPane) clearFind() {
 func (d *detailPane) resetFind() {
 	d.find.typing = false
 	d.find.query = ""
-	d.find.lines = nil
+	d.find.matches = nil
 	d.find.cur = 0
 	d.find.input.Blur()
 }
 
-// refreshFind recomputes match line indices for the current query and re-renders
-// the viewport content with matches highlighted (current match stronger). Matched
-// lines are rebuilt from stripped text so a highlight never splits an existing
-// escape; unmatched lines keep their original colors.
+// refreshFind recomputes the occurrences of the current query and re-renders the
+// viewport with each highlighted (the focused one brighter). Each affected line is
+// rebuilt over its *styled* text, so a match's highlight preserves the rest of the
+// line's field colors and never splits an existing escape (see highlightLine).
 func (d *detailPane) refreshFind() {
 	if d.find.query == "" {
 		d.vp.SetContent(d.styled)
@@ -189,32 +189,41 @@ func (d *detailPane) refreshFind() {
 	}
 	styled := strings.Split(d.styled, "\n")
 	plain := strings.Split(ansi.Strip(d.styled), "\n")
-	q := strings.ToLower(d.find.query)
-	d.find.lines = d.find.lines[:0]
-	for i, pl := range plain {
-		if strings.Contains(strings.ToLower(pl), q) {
-			d.find.lines = append(d.find.lines, i)
+	d.find.matches = d.find.matches[:0]
+	for li, pl := range plain {
+		for _, r := range foldMatches(pl, d.find.query) {
+			d.find.matches = append(d.find.matches, matchPos{line: li, b0: r[0], b1: r[1]})
 		}
 	}
-	if d.find.cur >= len(d.find.lines) {
+	if d.find.cur >= len(d.find.matches) {
 		d.find.cur = 0
 	}
-	for k, li := range d.find.lines {
-		style := findMatch
-		if k == d.find.cur {
-			style = findCurrent
+	curLine, curB0 := -1, -1
+	if len(d.find.matches) > 0 {
+		curLine = d.find.matches[d.find.cur].line
+		curB0 = d.find.matches[d.find.cur].b0
+	}
+	// Group occurrences by line (matches are already ascending by line then b0).
+	occByLine := map[int][][2]int{}
+	for _, m := range d.find.matches {
+		occByLine[m.line] = append(occByLine[m.line], [2]int{m.b0, m.b1})
+	}
+	for li, occ := range occByLine {
+		cb := -1
+		if li == curLine {
+			cb = curB0
 		}
-		styled[li] = highlightOccurrences(plain[li], d.find.query, style)
+		styled[li] = highlightLine(styled[li], plain[li], occ, cb)
 	}
 	d.vp.SetContent(strings.Join(styled, "\n"))
 }
 
-// scrollToCurrent brings the focused match into view (a couple of lines of lead).
+// scrollToCurrent brings the focused occurrence into view (a couple of lines of lead).
 func (d *detailPane) scrollToCurrent() {
-	if len(d.find.lines) == 0 {
+	if len(d.find.matches) == 0 {
 		return
 	}
-	if target := d.find.lines[d.find.cur] - 2; target > 0 {
+	if target := d.find.matches[d.find.cur].line - 2; target > 0 {
 		d.vp.SetYOffset(target)
 	} else {
 		d.vp.GotoTop()
@@ -222,16 +231,16 @@ func (d *detailPane) scrollToCurrent() {
 }
 
 // findStatus is the footer line shown while finding: the live input, or the
-// applied query with a match position and the nav hint.
+// applied query with the occurrence position and the nav hint.
 func (d detailPane) findStatus() string {
 	if d.find.typing {
 		return d.find.input.View()
 	}
 	pos := 0
-	if len(d.find.lines) > 0 {
+	if len(d.find.matches) > 0 {
 		pos = d.find.cur + 1
 	}
-	return dim(fmt.Sprintf("/%s  [%d/%d]  n/N next/prev · esc clear", d.find.query, pos, len(d.find.lines)))
+	return dim(fmt.Sprintf("/%s  [%d/%d]  n/N next/prev · esc clear", d.find.query, pos, len(d.find.matches)))
 }
 
 func (d detailPane) View() string {

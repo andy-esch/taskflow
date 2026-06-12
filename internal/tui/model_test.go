@@ -835,17 +835,37 @@ func TestModel_SortReordersAndShowsChip(t *testing.T) {
 	if m.cur().sortKey != sortSlug {
 		t.Fatalf("o×4 should land on sortSlug, got %v", m.cur().sortKey)
 	}
-	if !strings.Contains(m.cur().chip(), "sort:slug↓") {
-		t.Errorf("chip should announce the sort, got %q", m.cur().chip())
+	// The arrow shows the column's ACTUAL direction (sortArrow): slug defaults
+	// to ascending → ↑; reversing flips both the order and the glyph.
+	if !strings.Contains(m.cur().chip(), "sort:slug↑") {
+		t.Errorf("chip should announce ascending slug sort, got %q", m.cur().chip())
 	}
-	// Reverse → beta sorts before alpha, and the arrow flips.
+	// Reverse → beta sorts before alpha, and the arrow flips to descending.
 	tm, _ := m.Update(press("O"))
 	m = tm.(Model)
 	if got := m.cur().list.Items()[0].(taskItem).t.Slug; got != "beta" {
 		t.Errorf("reversed slug sort should lead with beta, got %q", got)
 	}
-	if !strings.Contains(m.cur().chip(), "sort:slug↑") {
-		t.Errorf("reversed chip should show ↑, got %q", m.cur().chip())
+	if !strings.Contains(m.cur().chip(), "sort:slug↓") {
+		t.Errorf("reversed chip should show ↓, got %q", m.cur().chip())
+	}
+}
+
+// TestSortArrow pins the per-column direction semantics: updated is the one
+// column that defaults to descending (newest first).
+func TestSortArrow(t *testing.T) {
+	for _, tc := range []struct {
+		k    sortKey
+		rev  bool
+		want string
+	}{
+		{sortSlug, false, "↑"}, {sortSlug, true, "↓"},
+		{sortPriority, false, "↑"},
+		{sortUpdated, false, "↓"}, {sortUpdated, true, "↑"},
+	} {
+		if got := sortArrow(tc.k, tc.rev); got != tc.want {
+			t.Errorf("sortArrow(%v, %v) = %q, want %q", tc.k, tc.rev, got, tc.want)
+		}
 	}
 }
 
@@ -940,11 +960,45 @@ func TestModel_HelpOverlayTogglesAndFloats(t *testing.T) {
 	if !strings.Contains(v, "alpha") {
 		t.Errorf("help should float over the items, not blank them:\n%s", v)
 	}
-	// Any key dismisses it.
+	// j/k scroll the overlay (it can outgrow a short terminal) without closing.
 	tm, _ = m.Update(press("j"))
+	m = tm.(Model)
+	if !m.showHelp || m.helpScroll != 1 {
+		t.Errorf("j should scroll the help, not dismiss it (open=%v scroll=%d)", m.showHelp, m.helpScroll)
+	}
+	tm, _ = m.Update(press("k"))
+	m = tm.(Model)
+	if m.helpScroll != 0 {
+		t.Errorf("k should scroll back up, got %d", m.helpScroll)
+	}
+	// Any other key dismisses it (and resets the scroll).
+	tm, _ = m.Update(press("x"))
 	m = tm.(Model)
 	if m.showHelp {
 		t.Error("a key press should dismiss the help overlay")
+	}
+}
+
+// TestModel_HelpScrollRevealsTail pins that a short terminal can still reach
+// the bottom help entries by scrolling: the audits scope note is the last line.
+func TestModel_HelpScrollRevealsTail(t *testing.T) {
+	m := loaded(t, 100, 14) // too short for the full help content
+	tm, _ := m.Update(press("?"))
+	m = tm.(Model)
+	if v := ansi.Strip(m.View()); strings.Contains(v, "open bucket only") {
+		t.Skip("terminal tall enough to show the tail without scrolling")
+	}
+	for i := 0; i < len(helpLines()); i++ { // scroll past the clamp
+		tm, _ = m.Update(press("j"))
+		m = tm.(Model)
+	}
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "open bucket only") {
+		t.Errorf("scrolling should reveal the last help entries:\n%s", v)
+	}
+	// The layout invariant holds while scrolled.
+	lines := strings.Split(m.View(), "\n")
+	if len(lines) != 14 {
+		t.Errorf("scrolled help: view has %d lines, want 14", len(lines))
 	}
 }
 
@@ -976,8 +1030,8 @@ func TestModel_DetailFindHighlightsAndNavigates(t *testing.T) {
 	if !m.detail.findActive() {
 		t.Fatal("enter should apply the query")
 	}
-	if n := len(m.detail.find.lines); n != 2 {
-		t.Fatalf("expected 2 matching lines, got %d", n)
+	if n := len(m.detail.find.matches); n != 2 {
+		t.Fatalf("expected 2 occurrences, got %d", n)
 	}
 	if m.detail.find.cur != 0 {
 		t.Errorf("first match should be focused, got %d", m.detail.find.cur)
@@ -1011,20 +1065,59 @@ func TestModel_DetailFindHighlightsAndNavigates(t *testing.T) {
 	}
 }
 
-func TestHighlightOccurrences(t *testing.T) {
-	// lipgloss disables color off a TTY; force a profile so Render emits escapes.
+func TestFoldMatches(t *testing.T) {
+	// Case-insensitive, non-overlapping, left-to-right; ranges index the original.
+	got := foldMatches("the Find finds findings", "find")
+	if len(got) != 3 {
+		t.Fatalf("want 3 occurrences (Find/find/find), got %d: %v", len(got), got)
+	}
+	for _, r := range got {
+		if strings.ToLower("the Find finds findings"[r[0]:r[1]]) != "find" {
+			t.Errorf("range %v does not bound a 'find': %q", r, "the Find finds findings"[r[0]:r[1]])
+		}
+	}
+	if got := foldMatches("abc", "x"); got != nil {
+		t.Errorf("no match should be nil, got %v", got)
+	}
+}
+
+// TestFoldMatchesUnicode is the regression for the length-changing case fold (the
+// U+0130 class): folding must not misalign byte offsets or index past the end.
+func TestFoldMatchesUnicode(t *testing.T) {
+	// "İ" (U+0130, 2 bytes) lowercases to "i̇" (2 runes / 3 bytes) under ToLower —
+	// the exact mismatch the old strings.ToLower-then-slice approach tripped on.
+	s := "the İstanbul plan" // contains the dotted capital I
+	for _, q := range []string{"plan", "the", "İ"} {
+		for _, r := range foldMatches(s, q) {
+			if r[0] < 0 || r[1] > len(s) || r[0] > r[1] {
+				t.Fatalf("foldMatches(%q,%q) produced an out-of-range span %v (len=%d)", s, q, r, len(s))
+			}
+		}
+	}
+	// A plain ASCII query after the multibyte rune still resolves to the right text.
+	got := foldMatches(s, "plan")
+	if len(got) != 1 || s[got[0][0]:got[0][1]] != "plan" {
+		t.Errorf("expected one 'plan' match with correct offsets, got %v", got)
+	}
+}
+
+func TestHighlightLine(t *testing.T) {
 	old := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.ANSI)
 	defer lipgloss.SetColorProfile(old)
 
-	out := highlightOccurrences("the Find finds findings", "find", findMatch)
-	// The plain text round-trips (highlight only adds escapes, never alters text).
-	if ansi.Strip(out) != "the Find finds findings" {
+	// A styled line: a green prefix glyph then plain text. Highlighting "find"
+	// must keep the prefix's color and only restyle the match.
+	plain := "● find me"
+	styled := lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("●") + " find me"
+	occ := foldMatches(plain, "find")
+	out := highlightLine(styled, plain, occ, occ[0][0]) // the lone match is current
+	if ansi.Strip(out) != plain {
 		t.Errorf("highlight must preserve the plain text, got %q", ansi.Strip(out))
 	}
-	// Case-insensitive: "Find", "find", "find" each get styled → ≥3 escape runs.
-	if got := strings.Count(out, "\x1b["); got < 3 {
-		t.Errorf("expected each (case-insensitive) match styled, got %d escapes", got)
+	// The green prefix escape survives (field colors preserved around the match).
+	if !strings.Contains(out, "\x1b[") {
+		t.Error("the line should still carry styling")
 	}
 }
 

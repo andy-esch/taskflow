@@ -96,3 +96,13 @@ func truncate(s string, max int) string {
 	}
 	return ansi.Truncate(s, max, "…")
 }
+
+// padRight pads s with spaces to w *display cells* (not bytes), so a column stays
+// aligned even when a value has multi-byte or wide runes. Overlong s is returned
+// unchanged (truncate to the budget first).
+func padRight(s string, w int) string {
+	if gap := w - ansi.StringWidth(s); gap > 0 {
+		return s + strings.Repeat(" ", gap)
+	}
+	return s
+}

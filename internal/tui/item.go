@@ -65,7 +65,9 @@ func (taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 	if slugW < 8 {
 		slugW = 8
 	}
-	slug := fmt.Sprintf("%-*s", slugW, truncate(it.t.Slug, slugW))
+	// Pad by display cells, not bytes (%-*s) — a non-ASCII slug would otherwise
+	// shove the date column out of alignment.
+	slug := padRight(truncate(it.t.Slug, slugW), slugW)
 	row(w, m, index, fmt.Sprintf("%s %s %s  %s", fg(tok.Color, tok.Glyph), marker, slug, dim(date)))
 }
 

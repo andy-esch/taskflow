@@ -20,8 +20,24 @@ const (
 	sortSlug
 )
 
-// sortCols is the cycle order for the `o` key (sortDefault is the resting state).
-var sortCols = []sortKey{sortDefault, sortPriority, sortUpdated, sortTier, sortSlug}
+// Per-entity `o`-cycle orders: each entity offers only the columns it actually
+// has, so cycling never lands on a no-op sort (e.g. tier on epics) that would show
+// a chip while nothing reorders. sortDefault is the resting state in each.
+var (
+	taskSortCols  = []sortKey{sortDefault, sortPriority, sortUpdated, sortTier, sortSlug}
+	epicSortCols  = []sortKey{sortDefault, sortPriority, sortSlug}
+	auditSortCols = []sortKey{sortDefault, sortUpdated, sortSlug}
+)
+
+// sortArrow shows the column's *actual* direction (not just default-vs-reversed):
+// updated defaults to newest-first (↓), every other column to ascending (↑), and
+// rev flips it — so the glyph always means what you'd expect for that column.
+func sortArrow(k sortKey, rev bool) string {
+	if (k == sortUpdated) != rev { // updated is descending by default
+		return "↓"
+	}
+	return "↑"
+}
 
 func (k sortKey) label() string {
 	switch k {

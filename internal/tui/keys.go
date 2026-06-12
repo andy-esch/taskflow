@@ -3,8 +3,9 @@ package tui
 import "github.com/charmbracelet/bubbles/key"
 
 // keyMap holds the bindings the root model matches itself. List/viewport
-// navigation (j/k/g/G, ctrl+d/u) is handled by those sub-components, so it's not
-// here — only the keys that change focus, switch entity, or change app state.
+// navigation (j/k plus paging: d/u pages the list, ctrl+d/u half-pages the
+// detail viewport) is handled by those sub-components, so it's not here — only
+// the keys that change focus, switch entity, or change app state.
 type keyMap struct {
 	Right       key.Binding // l / enter → detail
 	Left        key.Binding // h → back to list
