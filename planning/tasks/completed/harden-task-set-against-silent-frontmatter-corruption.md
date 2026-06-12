@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: Coerce known typed fields under --set and validate epic existence in SetFields, so set can't write unreloadable frontmatter
 effort: Unknown
@@ -8,6 +8,9 @@ priority: high
 autonomy_level: 3
 tags: [go, cli, data-integrity]
 created: "2026-06-11"
+updated_at: "2026-06-11"
+started_at: "2026-06-11"
+completed_at: "2026-06-11"
 ---
 
 # Harden task set against silent frontmatter corruption
@@ -58,17 +61,56 @@ tags: [ui, chart]  -> ok                 # what --tags produces
 
 ## Acceptance criteria
 
-- [ ] `task set <t> --set tier=4` and `--set tags=a,b` write `!!int`/`!!seq`
+- [x] `task set <t> --set tier=4` and `--set tags=a,b` write `!!int`/`!!seq`
       (or are rejected), and the file reloads cleanly — no `FileProblem`.
-- [ ] `task set <t> --epic <unknown>` fails with `ErrValidation` and writes
+- [x] `task set <t> --epic <unknown>` fails with `ErrValidation` and writes
       nothing.
-- [ ] Tests: a set→reload round-trip for the corrupting cases; an unknown-epic
+- [x] Tests: a set→reload round-trip for the corrupting cases; an unknown-epic
       rejection. Suite + lint green.
 
 ## Out of scope
 
 - The typed flags themselves (already correct).
 - Broader frontmatter-schema validation beyond the known typed/list fields.
+
+## Progress Log
+
+### 2026-06-11 — independent review + fix (suite + lint green)
+
+**Review finding (the symptom was mis-described, the bug is real and worse).**
+Reproduced empirically against the real store: `SetFields` does *not* fail
+silently — `store.SetFields` writes the file **atomically first, then re-parses**
+(`fsstore.go`), so `--set tier=4` **corrupts the file on disk and then returns a
+post-hoc error**. Either way the file is left unreadable and drops out of sweeps.
+So the proposed fix is right; I also hardened the store so the corruption can't be
+written in the first place.
+
+**Fix (three parts):**
+1. **Core coercion** (`core.SetFields`) — string values from the `--set` escape
+   hatch are coerced to the native type a known typed field needs before the store
+   sees them: `tier`/`autonomy_level` → `int`, list fields (`tags`) → `[]string`
+   (comma-split, trimmed). `intFields`/`listFields` tables + `coerceField`/
+   `splitList`. Typed-flag values (already native) pass through untouched.
+2. **Epic existence check** (`core.SetFields`) — when `epic` is among the updates,
+   reject an unknown id with `ErrValidation`, mirroring `NewTask` (`epicExists`).
+3. **Store parse-before-commit** (`store.SetFields`) — *beyond the proposed scope,
+   on-objective:* parse the updated content and write only if it reloads. Any
+   caller that would produce unreadable frontmatter is now rejected **without
+   touching the file** — directly enforcing "set can't write unreloadable
+   frontmatter" as a store invariant, not just a CLI-path fix.
+
+**Verified:** real CLI `task set --set tier=4` → `tier: 4` (unquoted int);
+`--set tags=x,y` → `tags: [x, y]`; both reload clean (`lint` green).
+`--set epic=bogus` → `validation failed: unknown epic "bogus"` (exit 11), file
+untouched. `--set tier=notnum` → rejected.
+
+**Tests:** `core/setfields_coercion_test.go` (external `core_test`, real store):
+typed-string round-trips reload clean, non-numeric rejected, unknown-epic
+rejected. `store/setfields_test.go`: `TestFS_SetFields_RejectsUnreloadable` —
+unreloadable update rejected, file left byte-identical.
+
+**Also fixed in passing:** the stale `Service` doc comment ("reusable by a *future*
+TUI" → reused by both shipped adapters).
 
 ## Related
 
