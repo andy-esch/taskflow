@@ -3,7 +3,6 @@ package render
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -39,25 +38,6 @@ func TestVisibleWidth_IgnoresANSI(t *testing.T) {
 	}
 }
 
-func TestRelativeDate(t *testing.T) {
-	now := time.Date(2026, 6, 9, 12, 0, 0, 0, time.UTC)
-	cases := map[string]string{
-		"2026-06-09": "today",
-		"2026-06-08": "yesterday",
-		"2026-06-06": "3d ago",
-		"2026-05-26": "2w ago",
-		"2026-03-01": "3mo ago",
-		"2024-06-09": "2y ago",
-		"":           "", // empty
-		"not-a-date": "", // unparseable
-	}
-	for in, want := range cases {
-		if got := relativeDateFrom(in, now); got != want {
-			t.Errorf("relativeDateFrom(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestWriteTable_TruncatesLastColumnToWidth(t *testing.T) {
 	var b strings.Builder
 	long := "this description is quite long and should be cut to fit the narrow width"
@@ -79,6 +59,22 @@ func TestWriteTable_NoLimitKeepsFullWidth(t *testing.T) {
 	writeTable(&b, 0, []string{"A", "B"}, [][]string{{"a", long}}) // 0 = piped, no cap
 	if !strings.Contains(b.String(), long) || strings.Contains(b.String(), "…") {
 		t.Errorf("width 0 must not truncate (pipe-safe):\n%q", b.String())
+	}
+}
+
+func TestBar(t *testing.T) {
+	st := NewStyle(false) // plain
+	cases := map[[2]int]string{
+		{50, 10}: "█████░░░░░",
+		{0, 4}:   "░░░░",
+		{100, 4}: "████",
+		{77, 10}: "███████░░░",
+		{150, 4}: "████", // clamped
+	}
+	for in, want := range cases {
+		if got := st.Bar(in[0], in[1]); got != want {
+			t.Errorf("Bar(%d,%d) = %q, want %q", in[0], in[1], got, want)
+		}
 	}
 }
 

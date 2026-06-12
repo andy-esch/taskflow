@@ -11,6 +11,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // SchemaVersion is the semver of the --json payloads. Adding a field bumps the
@@ -55,7 +56,7 @@ func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
 			updated = t.Created
 		}
 		// Description goes last so it's the column that truncates to terminal width.
-		rows = append(rows, []string{status, st.Bold(t.Slug), st.Dim(RelativeDate(updated)), t.Description})
+		rows = append(rows, []string{status, st.Bold(t.Slug), st.Dim(theme.RelativeDate(updated)), t.Description})
 	}
 	writeTable(w, st.width, []string{st.Dim("STATUS"), st.Dim("TASK"), st.Dim("UPDATED"), st.Dim("DESCRIPTION")}, rows)
 	fmt.Fprintf(w, "\n%s\n", st.Dim(plural(len(tasks), "task")))
@@ -118,7 +119,7 @@ func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 		field("created", t.Created)
 	}
 	if t.Updated != "" {
-		field("updated", fmt.Sprintf("%s %s", t.Updated, st.Dim("("+RelativeDate(t.Updated)+")")))
+		field("updated", fmt.Sprintf("%s %s", t.Updated, st.Dim("("+theme.RelativeDate(t.Updated)+")")))
 	}
 	fmt.Fprintf(w, "\n%s", body)
 	return nil
@@ -165,6 +166,111 @@ func encodeJSON(w io.Writer, payload any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(payload)
+}
+
+// SummaryHuman renders the at-a-glance dashboard.
+func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
+	// Status counts — active line, then archived line, only non-zero buckets.
+	active, archived := splitCounts(s.Counts)
+	fmt.Fprintf(w, "%s\n", st.Bold("Tasks"))
+	if line := countLine(st, active); line != "" {
+		fmt.Fprintf(w, "  %s  %s\n", st.Dim("active  "), line)
+	}
+	if line := countLine(st, archived); line != "" {
+		fmt.Fprintf(w, "  %s  %s\n", st.Dim("archived"), line)
+	}
+
+	if len(s.InProgress) > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("In progress (%d)", len(s.InProgress))))
+		rows := make([][]string, 0, len(s.InProgress))
+		for _, t := range s.InProgress {
+			rows = append(rows, []string{"  " + st.Bold(t.Slug), st.Dim(theme.RelativeDate(taskDate(t))), t.Description})
+		}
+		writeTable(w, st.width, nil, rows)
+	}
+
+	if len(s.Epics) > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Bold("Epics"))
+		rows := make([][]string, 0, len(s.Epics))
+		for _, e := range s.Epics {
+			bar := fmt.Sprintf("%s %s", st.Bar(e.Percent(), 10), st.Percent(e.Percent()))
+			rows = append(rows, []string{"  " + st.Bold(e.Epic.ID), bar, fmt.Sprintf("%d/%d", e.Done, e.Total), e.Epic.Description})
+		}
+		writeTable(w, st.width, nil, rows)
+	}
+
+	if s.Misfiled > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (status ≠ folder; run `lint --fix`)", s.Misfiled)))
+	}
+	if len(s.Problems) > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable file(s) (run `lint`)", len(s.Problems))))
+	}
+	return nil
+}
+
+func taskDate(t domain.Task) string {
+	if t.Updated != "" {
+		return t.Updated
+	}
+	return t.Created
+}
+
+func splitCounts(counts []core.StatusCount) (active, archived []core.StatusCount) {
+	for _, c := range counts {
+		if c.Status.IsActive() {
+			active = append(active, c)
+		} else {
+			archived = append(archived, c)
+		}
+	}
+	return active, archived
+}
+
+// countLine renders "3 next-up · 1 in-progress", skipping zero buckets.
+func countLine(st Style, counts []core.StatusCount) string {
+	var parts []string
+	for _, c := range counts {
+		if c.Count == 0 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%d %s", c.Count, st.Status(c.Status)))
+	}
+	return strings.Join(parts, st.Dim(" · "))
+}
+
+type statusCountJSON struct {
+	Status string `json:"status"`
+	Count  int    `json:"count"`
+}
+
+// SummaryJSON writes the dashboard as a versioned envelope.
+func SummaryJSON(w io.Writer, s core.Summary) error {
+	counts := make([]statusCountJSON, 0, len(s.Counts))
+	for _, c := range s.Counts {
+		counts = append(counts, statusCountJSON{Status: string(c.Status), Count: c.Count})
+	}
+	inprog := make([]taskJSON, 0, len(s.InProgress))
+	for _, t := range s.InProgress {
+		inprog = append(inprog, toJSON(t))
+	}
+	epics := make([]epicJSON, 0, len(s.Epics))
+	for _, e := range s.Epics {
+		epics = append(epics, epicJSON{
+			ID: e.Epic.ID, Status: e.Epic.Status, Description: e.Epic.Description,
+			Total: e.Total, Done: e.Done, Percent: e.Percent(),
+		})
+	}
+	return encodeJSON(w, struct {
+		SchemaVersion string               `json:"schema_version"`
+		Counts        []statusCountJSON    `json:"counts"`
+		InProgress    []taskJSON           `json:"in_progress"`
+		Epics         []epicJSON           `json:"epics"`
+		Misfiled      int                  `json:"misfiled"`
+		Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+	}{
+		SchemaVersion: SchemaVersion, Counts: counts, InProgress: inprog,
+		Epics: epics, Misfiled: s.Misfiled, Unreadable: s.Problems,
+	})
 }
 
 // VersionHuman prints the CLI version.

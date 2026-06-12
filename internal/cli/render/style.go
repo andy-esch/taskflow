@@ -5,10 +5,10 @@ import (
 	"io"
 	"regexp"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // ANSI SGR codes. Kept minimal and 16-color so they degrade well everywhere.
@@ -23,6 +23,26 @@ const (
 	ansiCyan   = "\x1b[36m"
 	ansiGray   = "\x1b[90m"
 )
+
+// ansiCode maps a semantic theme.Color to its ANSI SGR code ("" for none).
+func ansiCode(c theme.Color) string {
+	switch c {
+	case theme.ColorRed:
+		return ansiRed
+	case theme.ColorGreen:
+		return ansiGreen
+	case theme.ColorYellow:
+		return ansiYellow
+	case theme.ColorBlue:
+		return ansiBlue
+	case theme.ColorCyan:
+		return ansiCyan
+	case theme.ColorGray:
+		return ansiGray
+	default:
+		return ""
+	}
+}
 
 // Style renders optional ANSI styling and carries the output width (0 = no
 // limit). The zero value is disabled (plain) with no width cap — so tests,
@@ -43,7 +63,7 @@ func (s Style) WithWidth(w int) Style { s.width = w; return s }
 func (s Style) Enabled() bool { return s.on }
 
 func (s Style) wrap(code, text string) string {
-	if !s.on || text == "" {
+	if !s.on || text == "" || code == "" {
 		return text
 	}
 	return code + text + ansiReset
@@ -53,74 +73,29 @@ func (s Style) wrap(code, text string) string {
 func (s Style) Bold(t string) string { return s.wrap(ansiBold, t) }
 func (s Style) Dim(t string) string  { return s.wrap(ansiDim, t) }
 
-// Status renders a status: a colored glyph + label when styled, the plain label
-// otherwise (so non-color output stays byte-stable).
+// Status renders a status: a colored glyph + label when styled (semantics from
+// the shared theme), the plain label otherwise (so output stays byte-stable).
 func (s Style) Status(st domain.Status) string {
 	if !s.on {
 		return string(st)
 	}
-	glyph, code := statusGlyph(st)
-	return code + glyph + " " + string(st) + ansiReset
-}
-
-func statusGlyph(st domain.Status) (glyph, code string) {
-	switch st {
-	case domain.StatusInProgress:
-		return "●", ansiYellow
-	case domain.StatusNextUp:
-		return "●", ansiBlue
-	case domain.StatusReadyToStart:
-		return "○", ansiCyan
-	case domain.StatusCompleted:
-		return "✔", ansiGreen
-	case domain.StatusDeprecated:
-		return "✘", ansiRed
-	case domain.StatusDeferred:
-		return "◌", ansiGray
-	default:
-		return "•", ansiGray
-	}
+	tok := theme.Status(st)
+	return ansiCode(tok.Color) + tok.Glyph + " " + string(st) + ansiReset
 }
 
 // Bucket colors an audit bucket name.
 func (s Style) Bucket(b string) string {
-	switch b {
-	case "open":
-		return s.wrap(ansiYellow, b)
-	case "closed":
-		return s.wrap(ansiGreen, b)
-	case "deferred":
-		return s.wrap(ansiGray, b)
-	default:
-		return b
-	}
+	return s.wrap(ansiCode(theme.Bucket(domain.AuditBucket(b))), b)
 }
 
 // Priority colors a priority label.
 func (s Style) Priority(p string) string {
-	switch p {
-	case "high":
-		return s.wrap(ansiRed, p)
-	case "medium":
-		return s.wrap(ansiYellow, p)
-	case "low":
-		return s.wrap(ansiGray, p)
-	default:
-		return p
-	}
+	return s.wrap(ansiCode(theme.Priority(p)), p)
 }
 
 // Percent colors a completion percentage: gray <34, yellow <100, green at 100.
 func (s Style) Percent(pct int) string {
-	txt := fmt.Sprintf("%d%%", pct)
-	switch {
-	case pct >= 100:
-		return s.wrap(ansiGreen, txt)
-	case pct >= 34:
-		return s.wrap(ansiYellow, txt)
-	default:
-		return s.wrap(ansiGray, txt)
-	}
+	return s.wrap(ansiCode(theme.Percent(pct)), fmt.Sprintf("%d%%", pct))
 }
 
 // Green / Red / Warn style status glyphs and success/error/warning text.
@@ -128,32 +103,21 @@ func (s Style) Green(t string) string { return s.wrap(ansiGreen, t) }
 func (s Style) Red(t string) string   { return s.wrap(ansiRed, t) }
 func (s Style) Warn(t string) string  { return s.wrap(ansiYellow, t) }
 
-// RelativeDate renders a YYYY-MM-DD date as a compact "today" / "3d ago" /
-// "2w ago" / "5mo ago" / "1y ago". Empty or unparseable input yields "".
-func RelativeDate(date string) string { return relativeDateFrom(date, time.Now()) }
-
-func relativeDateFrom(date string, now time.Time) string {
-	t, err := time.Parse(time.DateOnly, date)
-	if err != nil {
-		return ""
+// Bar renders a width-char progress bar for pct (0–100): filled in the
+// completion color (gray <34, yellow <100, green at 100), empty dim.
+func (s Style) Bar(pct, width int) string {
+	if width <= 0 {
+		width = 10
 	}
-	days := int(now.Sub(t).Hours() / 24)
+	filled := pct * width / 100
 	switch {
-	case days < 0:
-		return date // future date — show it verbatim rather than "−3d"
-	case days == 0:
-		return "today"
-	case days == 1:
-		return "yesterday"
-	case days < 7:
-		return fmt.Sprintf("%dd ago", days)
-	case days < 30:
-		return fmt.Sprintf("%dw ago", days/7)
-	case days < 365:
-		return fmt.Sprintf("%dmo ago", days/30)
-	default:
-		return fmt.Sprintf("%dy ago", days/365)
+	case filled > width:
+		filled = width
+	case filled < 0:
+		filled = 0
 	}
+	code := ansiCode(theme.Percent(pct))
+	return s.wrap(code, strings.Repeat("█", filled)) + s.wrap(ansiGray, strings.Repeat("░", width-filled))
 }
 
 var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
@@ -164,9 +128,6 @@ func visibleWidth(s string) int {
 	return utf8.RuneCountInString(ansiRe.ReplaceAllString(s, ""))
 }
 
-// writeTable prints a left-aligned, ANSI-aware table. Cells are already styled
-// by the caller; columns pad to their max visible width with a 2-space gutter,
-// and the last column isn't padded. Nothing is written for an empty body.
 // truncate shortens a plain string to max visible runes with a trailing "…".
 // Cells containing ANSI are returned unchanged (truncating them risks cutting an
 // escape); the last column is plain in practice.

@@ -29,6 +29,7 @@ override). All commands take `--json` for scripting/agents.
 
 ```bash
 tskflwctl init                         # scaffold a planning tree here
+tskflwctl status                       # at-a-glance board: counts, in-progress, epic progress
 
 # create
 tskflwctl task new "Add retry backoff" --epic 17-pm-go-cli --tags net

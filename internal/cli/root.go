@@ -71,6 +71,8 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 
 	root.AddCommand(newInitCmd(app))
 	root.AddCommand(newVersionCmd(app))
+	root.AddCommand(newStatusCmd(app))
+	root.AddCommand(newUICmd(app))
 	root.AddCommand(newTaskCmd(app))
 	root.AddCommand(newEpicCmd(app))
 	root.AddCommand(newAuditCmd(app))
