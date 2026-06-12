@@ -95,9 +95,13 @@ func fixFrontmatterText(content []byte) ([]byte, []string) {
 	if fm == nil {
 		return content, nil
 	}
+	// Re-emit in the file's own line-ending style: a CRLF file must not come
+	// back with LF frontmatter over a CRLF body.
+	eol := detectLineEnding(content)
 	lines := strings.Split(string(fm), "\n")
 	var changes []string
 	for i, line := range lines {
+		line = strings.TrimSuffix(line, "\r")
 		key, value, ok := splitKeyValue(line)
 		if !ok {
 			continue
@@ -106,15 +110,17 @@ func fixFrontmatterText(content []byte) ([]byte, []string) {
 		if change != "" {
 			lines[i] = key + ": " + fixed
 			changes = append(changes, change)
+		} else {
+			lines[i] = line
 		}
 	}
 	if len(changes) == 0 {
 		return content, nil
 	}
 	var out bytes.Buffer
-	out.WriteString("---\n")
-	out.WriteString(strings.Join(lines, "\n"))
-	out.WriteString("---\n")
+	out.WriteString("---" + eol)
+	out.WriteString(strings.Join(lines, eol))
+	out.WriteString("---" + eol)
 	out.Write(body)
 	return out.Bytes(), changes
 }
@@ -168,7 +174,7 @@ func fixValue(key, value string) (fixed, change string) {
 	if comment != "" {
 		suffix = " " + comment
 	}
-	if listFields[key] {
+	if domain.ListFields[key] {
 		return "[" + splitCommaList(val) + "]" + suffix, fmt.Sprintf("%s: normalized to a YAML list", key)
 	}
 	if strings.Contains(val, ": ") {

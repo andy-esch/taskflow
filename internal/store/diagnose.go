@@ -6,15 +6,9 @@ import (
 	"strings"
 
 	yaml "go.yaml.in/yaml/v3"
-)
 
-// listFields are frontmatter fields tskflwctl expects to be YAML lists. The
-// no-PyYAML Python pm sometimes wrote these as bare comma strings, which strict
-// YAML rejects — diagnoseFrontmatter turns that into actionable guidance.
-var listFields = map[string]bool{
-	"tags": true, "related_tasks": true, "dependencies": true,
-	"blocks": true, "blocked_by": true, "audit_sources": true, "projects": true,
-}
+	"github.com/andy-esch/taskflow/internal/domain"
+)
 
 // diagnoseFrontmatter returns an actionable, human-facing explanation of why fm
 // won't decode into the typed struct (which field, what's wrong, how to fix),
@@ -31,7 +25,7 @@ func diagnoseFrontmatter(fm []byte) string {
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
 		key, val := mapping.Content[i].Value, mapping.Content[i+1]
 		switch {
-		case listFields[key] && val.Kind != yaml.SequenceNode:
+		case domain.ListFields[key] && val.Kind != yaml.SequenceNode:
 			return fmt.Sprintf("field %q must be a YAML list, but it is %s\n       fix: %s: [%s]",
 				key, describeNode(val), key, splitCommaList(val.Value))
 		case (key == "tier" || key == "autonomy_level") && isQuotedScalar(val):

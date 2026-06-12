@@ -10,38 +10,111 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// loadTasks reads the active task list via the service (off the event loop) and
-// sorts it into working-set order. Never call the service from Update/View.
-func loadTasks(svc *core.Service) tea.Cmd {
+// Each entity has a list loader (off the event loop → listLoadedMsg) and an item
+// loader (lazy detail → detailMsg / detailErrMsg). Never call the service from
+// Update/View. The registry in entity.go wires these to their tabs.
+
+// --- tasks ---
+
+// loadTaskList reads the task list for the tab's current status view. The
+// default view ("") is the active working set (sorted in-progress→next-up→…);
+// "all" includes archived; any other value is an exact status filter. The view
+// is snapshotted here so a later change can't race this load.
+func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
+	view, gen := t.statusView, t.loadGen
 	return func() tea.Msg {
-		tasks, problems, err := svc.ListTasks(core.TaskFilter{})
-		if err != nil {
-			return errMsg{err}
+		f := core.TaskFilter{}
+		switch view {
+		case "":
+			// active-only default
+		case "all":
+			f.All = true
+		default:
+			f.Status = view
 		}
-		sortWorkingSet(tasks)
+		tasks, problems, err := svc.ListTasks(f)
+		if err != nil {
+			return errMsg{kind: entityTasks, gen: gen, err: err}
+		}
+		if view == "" {
+			sortWorkingSet(tasks) // working-set order only for the default view
+		}
 		items := make([]list.Item, 0, len(tasks))
 		for _, t := range tasks {
 			items = append(items, taskItem{t})
 		}
-		return tasksLoadedMsg{items: items, problems: problems}
+		return listLoadedMsg{kind: entityTasks, gen: gen, items: items, problems: problems}
 	}
 }
 
-// loadBody reads one task's body for the detail pane (lazy, on selection). A
-// failure (e.g. an ambiguous duplicate slug) becomes a bodyErrMsg shown in the
-// detail pane, not a fatal errMsg that would blank the browser.
-func loadBody(svc *core.Service, slug string) tea.Cmd {
+func loadTaskDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
-		t, body, err := svc.ShowTask(slug)
+		t, body, err := svc.ShowTask(id)
 		if err != nil {
-			return bodyErrMsg{slug: slug, err: err}
+			return detailErrMsg{kind: entityTasks, id: id, err: err}
 		}
-		return taskBodyMsg{slug: slug, task: t, body: body}
+		return detailMsg{kind: entityTasks, id: id, content: taskDetail{t: t, body: body}}
+	}
+}
+
+// --- epics ---
+
+func loadEpicList(t *entityTab, svc *core.Service) tea.Cmd {
+	gen := t.loadGen
+	return func() tea.Msg {
+		epics, problems, err := svc.ListEpics()
+		if err != nil {
+			return errMsg{kind: entityEpics, gen: gen, err: err}
+		}
+		items := make([]list.Item, 0, len(epics))
+		for _, es := range epics {
+			items = append(items, epicItem{es})
+		}
+		return listLoadedMsg{kind: entityEpics, gen: gen, items: items, problems: problems}
+	}
+}
+
+func loadEpicDetail(svc *core.Service, id string) tea.Cmd {
+	return func() tea.Msg {
+		e, tasks, body, err := svc.ShowEpic(id)
+		if err != nil {
+			return detailErrMsg{kind: entityEpics, id: id, err: err}
+		}
+		return detailMsg{kind: entityEpics, id: id, content: epicDetail{e: e, tasks: tasks, body: body}}
+	}
+}
+
+// --- audits ---
+
+// loadAuditList reads open audits (the working set). The audits tab mirrors the
+// CLI's default of open-only; interactive sort still applies.
+func loadAuditList(t *entityTab, svc *core.Service) tea.Cmd {
+	gen := t.loadGen
+	return func() tea.Msg {
+		audits, problems, err := svc.ListAudits("", false)
+		if err != nil {
+			return errMsg{kind: entityAudits, gen: gen, err: err}
+		}
+		items := make([]list.Item, 0, len(audits))
+		for _, a := range audits {
+			items = append(items, auditItem{a})
+		}
+		return listLoadedMsg{kind: entityAudits, gen: gen, items: items, problems: problems}
+	}
+}
+
+func loadAuditDetail(svc *core.Service, id string) tea.Cmd {
+	return func() tea.Msg {
+		a, body, err := svc.ShowAudit(id)
+		if err != nil {
+			return detailErrMsg{kind: entityAudits, id: id, err: err}
+		}
+		return detailMsg{kind: entityAudits, id: id, content: auditDetail{a: a, body: body}}
 	}
 }
 
 // statusRank orders statuses for a "what am I doing" view: active work first,
-// archived last. (Default scan is active-only; archived views come in sprint 2.)
+// archived last. (Default scan is active-only; archived views come in S2b.)
 var statusRank = map[domain.Status]int{
 	domain.StatusInProgress:   0,
 	domain.StatusNextUp:       1,

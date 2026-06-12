@@ -25,7 +25,20 @@ func TestTaskSet(t *testing.T) {
 
 func TestTaskSet_ArbitraryKeyValue(t *testing.T) {
 	root := setupRepo(t)
-	out := runRoot(t, "-C", root, "task", "set", "alpha",
+	// Unknown keys are rejected without --force (decided 2026-06-12): a typo'd
+	// field name must not silently persist.
+	{
+		var out bytes.Buffer
+		cmd := NewRootCmd(&out, &out)
+		cmd.SetArgs([]string{"-C", root, "task", "set", "alpha", "--set", "owner=me"})
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		err := cmd.Execute()
+		if err == nil || ExitCode(err) != 11 || !strings.Contains(err.Error(), "--force") {
+			t.Fatalf("unknown key without --force should exit 11 mentioning --force, got %v", err)
+		}
+	}
+	out := runRoot(t, "-C", root, "task", "set", "alpha", "--force",
 		"--set", "owner=me", "--set", "custom_field=keep me")
 	if !strings.Contains(out, "updated alpha") {
 		t.Errorf("unexpected output: %q", out)

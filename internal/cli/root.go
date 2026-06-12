@@ -64,6 +64,11 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 			return app.resolve()
 		},
 	}
+	// Cobra's own output (help, usage errors, completion scripts) must follow
+	// the injected writers too, or it leaks to os.Stdout/os.Stderr and escapes
+	// both tests and callers that capture output.
+	root.SetOut(out)
+	root.SetErr(errOut)
 	root.PersistentFlags().BoolVar(&app.JSON, "json", false, "machine-readable JSON output")
 	root.PersistentFlags().StringVarP(&app.Chdir, "chdir", "C", "", "anchor to the planning repo at this path")
 	root.PersistentFlags().StringVar(&app.Color, "color", "auto", "colorize output: auto|always|never")

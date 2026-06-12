@@ -43,11 +43,20 @@ jobs:
             exit 1
           fi
 
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5
-
+      # .golangci.yml is v2-schema (`version: "2"`) — v1.x binaries cannot
+      # parse it. The version must ALSO be built with a Go ≥ go.mod's target:
+      # the action downloads prebuilt binaries, and golangci-lint refuses a
+      # repo targeting a newer Go than it was compiled with. v2.4.0 is the
+      # first release built with go1.25 (go.mod says 1.25.x).
       - name: Run golangci-lint
-        run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.4
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          $(go env GOPATH)/bin/govulncheck ./...
 
       - name: Run tests with coverage
         run: go test -v -race -coverprofile=coverage.out ./...

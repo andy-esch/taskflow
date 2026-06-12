@@ -95,14 +95,20 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket) (domain.Audit, error)
 		return parseAudit(content, path, to)
 	}
 	newDir := filepath.Join(s.auditsDir, to.Dir())
+	newPath := filepath.Join(newDir, slug+".md")
+	// Parse before the rename: a malformed file must fail with the audit still
+	// in its original bucket, not move and then report failure.
+	a, err := parseAudit(content, newPath, to)
+	if err != nil {
+		return domain.Audit{}, err
+	}
 	if err := os.MkdirAll(newDir, 0o755); err != nil {
 		return domain.Audit{}, fmt.Errorf("mkdir %s: %w", newDir, err)
 	}
-	newPath := filepath.Join(newDir, slug+".md")
 	if err := os.Rename(path, newPath); err != nil {
 		return domain.Audit{}, fmt.Errorf("move audit: %w", err)
 	}
-	return parseAudit(content, newPath, to)
+	return a, nil
 }
 
 func (s *FS) resolveAudit(slug string) (path string, bucket domain.AuditBucket, err error) {
@@ -126,7 +132,10 @@ func (s *FS) resolveAudit(slug string) (path string, bucket domain.AuditBucket, 
 }
 
 func parseAudit(content []byte, path string, bucket domain.AuditBucket) (domain.Audit, error) {
-	fm, body := splitFrontmatter(content)
+	fm, body, err := splitFrontmatterStrict(content)
+	if err != nil {
+		return domain.Audit{}, err
+	}
 	var a domain.Audit
 	if len(fm) > 0 {
 		if err := yaml.Unmarshal(fm, &a); err != nil {

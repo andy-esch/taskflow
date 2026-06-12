@@ -47,7 +47,7 @@ func TestTaskNew_HappyPath(t *testing.T) {
 func TestTaskNew_Next(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
-	runRoot(t, "-C", root, "task", "new", "Soon", "--epic", "e1", "--next")
+	runRoot(t, "-C", root, "task", "new", "Soon", "--epic", "e1", "--tags", "x", "--next")
 	if _, err := os.Stat(filepath.Join(root, "tasks", "next-up", "soon.md")); err != nil {
 		t.Errorf("--next should land in next-up/: %v", err)
 	}
@@ -70,10 +70,10 @@ func TestTaskNew_UnknownEpic_Exit11(t *testing.T) {
 func TestTaskNew_RefusesClobber(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
-	runRoot(t, "-C", root, "task", "new", "Dup", "--epic", "e1")
+	runRoot(t, "-C", root, "task", "new", "Dup", "--epic", "e1", "--tags", "x")
 	var out bytes.Buffer
 	cmd := NewRootCmd(&out, &out)
-	cmd.SetArgs([]string{"-C", root, "task", "new", "Dup", "--epic", "e1"})
+	cmd.SetArgs([]string{"-C", root, "task", "new", "Dup", "--epic", "e1", "--tags", "x"})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected refusal to clobber an existing task")

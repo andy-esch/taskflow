@@ -59,7 +59,7 @@ func newTaskNewCmd(app *App) *cobra.Command {
 	cmd.Flags().StringVar(&p.Priority, "priority", "medium", "high|medium|low")
 	cmd.Flags().IntVar(&p.Tier, "tier", 3, "tier 1-5")
 	cmd.Flags().IntVar(&p.Autonomy, "autonomy", 3, "autonomy level 1-5")
-	cmd.Flags().StringSliceVar(&p.Tags, "tags", nil, "comma-separated tags")
+	cmd.Flags().StringSliceVar(&p.Tags, "tags", nil, "comma-separated tags (at least one required)")
 	cmd.Flags().BoolVar(&p.Next, "next", false, "create in next-up instead of ready-to-start")
 	cmd.Flags().StringVar(&p.Body, "body", "", "override the default body scaffold")
 	_ = cmd.MarkFlagRequired("epic")
@@ -97,7 +97,18 @@ func newTaskListCmd(app *App) *cobra.Command {
 	cmd.Flags().StringVar(&filter.Epic, "epic", "", "filter by epic")
 	cmd.Flags().StringVar(&filter.Tag, "tag", "", "filter by tag")
 	cmd.Flags().BoolVar(&filter.All, "all", false, "include completed/deprecated/deferred")
+	_ = cmd.RegisterFlagCompletionFunc("status", completeStatusValues)
+	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
 	return cmd
+}
+
+// completeStatusValues offers the closed status set for a --status flag.
+func completeStatusValues(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	opts := make([]string, 0, len(domain.AllStatuses()))
+	for _, st := range domain.AllStatuses() {
+		opts = append(opts, string(st))
+	}
+	return opts, cobra.ShellCompDirectiveNoFileComp
 }
 
 func newTaskShowCmd(app *App) *cobra.Command {
@@ -124,7 +135,8 @@ func newTaskSetCmd(app *App) *cobra.Command {
 	var (
 		description, priority, epic, effort string
 		tier, autonomy                      int
-		tags, extra                         []string
+		tags, extra, unsets                 []string
+		force                               bool
 	)
 	cmd := &cobra.Command{
 		Use:               "set <task>",
@@ -162,7 +174,13 @@ func newTaskSetCmd(app *App) *cobra.Command {
 				}
 				updates[k] = v
 			}
-			task, err := app.Svc.SetFields(args[0], updates)
+			for _, k := range unsets {
+				if _, dup := updates[k]; dup {
+					return fmt.Errorf("%w: %q is both set and unset", domain.ErrValidation, k)
+				}
+				updates[k] = domain.UnsetField{}
+			}
+			task, err := app.Svc.SetFields(args[0], updates, force)
 			if err != nil {
 				return err
 			}
@@ -180,21 +198,35 @@ func newTaskSetCmd(app *App) *cobra.Command {
 	cmd.Flags().IntVar(&tier, "tier", 0, "tier 1-5")
 	cmd.Flags().IntVar(&autonomy, "autonomy", 0, "autonomy level 1-5")
 	cmd.Flags().StringSliceVar(&tags, "tags", nil, "comma-separated tags")
-	cmd.Flags().StringArrayVar(&extra, "set", nil, "arbitrary key=value (repeatable)")
+	cmd.Flags().StringArrayVar(&extra, "set", nil,
+		"key=value (repeatable); known fields are typed+validated, unknown keys need --force")
+	cmd.Flags().StringArrayVar(&unsets, "unset", nil, "remove a frontmatter key (repeatable)")
+	cmd.Flags().BoolVar(&force, "force", false, "allow --set of a field tskflwctl doesn't know")
+	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
 	return cmd
 }
 
 func newTaskMoveCmd(app *App) *cobra.Command {
 	return &cobra.Command{
-		Use:               "move <task>... <status>",
-		Short:             "Transition task(s) to <status> (generic escape hatch)",
-		Args:              cobra.MinimumNArgs(2),
-		Annotations:       map[string]string{"safety": "mutating"},
-		ValidArgsFunction: app.completeTaskSlugs,
+		Use:         "move <task>... <status>",
+		Short:       "Transition task(s) to <status> (generic escape hatch)",
+		Args:        cobra.MinimumNArgs(2),
+		Annotations: map[string]string{"safety": "mutating"},
+		// Position-aware: the final arg is a status from a small closed set —
+		// offering task slugs there (the old behavior) actively misled.
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			opts, directive := app.completeTaskSlugs(cmd, args, toComplete)
+			if len(args) >= 1 {
+				for _, st := range domain.AllStatuses() {
+					opts = append(opts, string(st))
+				}
+			}
+			return opts, directive
+		},
 		RunE: func(_ *cobra.Command, args []string) error {
 			to, err := domain.ParseStatus(args[len(args)-1])
 			if err != nil {
-				return fmt.Errorf("%w: %v", domain.ErrValidation, err)
+				return err // already wraps ErrValidation and lists valid statuses
 			}
 			return runTransition(app, to, args[:len(args)-1])
 		},

@@ -73,14 +73,25 @@ render concepts). Epic 17 is the CLI port; this is the interactive front-end.
   two-pane tasks list + detail (frontmatter + body via `ShowTask`), vim nav,
   focus highlight, lazy body + spinner, responsive, empty/no-repo states,
   manual `r` refresh.
-- **S2 — multi-entity + search**
-  [[tui-sprint-2-multi-entity-navigation-and-search]]: entity registry + `:`
-  jump + tab strip (tasks/epics/audits), `/` in-memory filter.
+- **S2 — multi-entity + search** *(split 2026-06-11; the original
+  [[tui-sprint-2-multi-entity-navigation-and-search]] grew large)*:
+  - **S2a — entity navigation**
+    [[tui-sprint-2a-entity-navigation-registry-tabs-command-jump]]: entity
+    registry + `:` jump + tab strip (tasks/epics/audits), per-entity lists.
+  - **S2b — search, views & sort**
+    [[tui-sprint-2b-search-status-views-and-interactive-sort]]: `/` filter +
+    persistent chip, `:` status/archived views, interactive sort, detail vim find.
 - **S3 — live reload** [[tui-sprint-3-fsnotify-live-reload]]: fsnotify watch
   (debounced) → reload preserving cursor by slug. (~½–1 day; plumb the
   `reloadMsg` in S1.)
 - **S4 — mutations** [[tui-sprint-4-mutations-and-actions]]: lifecycle via
   `Service.Move`/`SetFields` with confirmation; reconsider multi-select then.
+- **S5 — pretty markdown** [[tui-glamour-markdown-rendering-with-rawpretty-toggle]]:
+  glamour-render the body (cached, never in `View()`) with an `R` raw/pretty toggle.
+- **S6 — cross-link navigation** [[tui-cross-link-navigation-between-epics-and-tasks]]:
+  follow epic↔task references with a jump + back-stack (body wikilinks/peek deferred).
+- **Polish** [[tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort]]:
+  S2b fresh-eyes follow-ups (occurrence-level find, highlight fidelity, per-entity sort).
 
 ## References
 

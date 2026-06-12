@@ -10,8 +10,8 @@ import (
 )
 
 // Service is the application core: framework-agnostic use cases over the ports.
-// It has no fs and no cobra, so it is testable in isolation and reusable by a
-// future TUI primary adapter.
+// It has no fs and no cobra, so it is testable in isolation and reused by both
+// primary adapters (the cli and the tui).
 type Service struct {
 	store Store
 }
@@ -29,8 +29,25 @@ type TaskFilter struct {
 }
 
 // ListTasks returns tasks matching the filter, plus any per-file load problems.
-// Filtering is pure (no I/O).
+// Filter values are validated first — an unknown status or epic returns
+// ErrValidation rather than a silently empty list, which agents routing on exit
+// codes can't tell apart from an empty bucket. (The epic check costs one
+// ListEpics call, only when that filter is set.)
 func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, error) {
+	if f.Status != "" {
+		if _, err := domain.ParseStatus(f.Status); err != nil {
+			return nil, nil, err
+		}
+	}
+	if f.Epic != "" {
+		epics, _, err := s.store.ListEpics()
+		if err != nil {
+			return nil, nil, err
+		}
+		if !epicExists(epics, f.Epic) {
+			return nil, nil, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, f.Epic)
+		}
+	}
 	all, problems, err := s.store.ListTasks()
 	if err != nil {
 		return nil, nil, err
@@ -69,21 +86,93 @@ func (s *Service) Move(slug string, to domain.Status) (domain.Task, error) {
 // SetFields validates and applies frontmatter updates to a task (stamping
 // updated_at) in a single atomic write. On any invalid value it returns
 // ErrValidation and nothing is written.
-func (s *Service) SetFields(slug string, updates map[string]any) (domain.Task, error) {
+//
+// Values arriving as strings from the `--set key=value` escape hatch are coerced
+// to the native type a known typed field needs (per the domain field registry)
+// before the store serializes them — otherwise the store would write a
+// corrupting !!str (e.g. tier: "4") that the strict loader then can't read back.
+// Keys outside the registry are rejected unless force is set — a typo'd field
+// name must not silently persist. A domain.UnsetField value removes the key;
+// an empty epic detaches the task (both decided 2026-06-12). When `epic` is set
+// non-empty it must exist, mirroring NewTask, so set can't orphan a task out of
+// its epic's rollup.
+func (s *Service) SetFields(slug string, updates map[string]any, force bool) (domain.Task, error) {
 	if len(updates) == 0 {
 		return domain.Task{}, fmt.Errorf("%w: no fields given", domain.ErrValidation)
 	}
+	withMeta := make(map[string]any, len(updates)+1)
 	for field, val := range updates {
-		if err := domain.ValidateField(field, stringify(val)); err != nil {
+		if _, unset := val.(domain.UnsetField); unset {
+			switch field {
+			case "status":
+				return domain.Task{}, fmt.Errorf("%w: status is the directory — use `task <verb>`/`task move`", domain.ErrValidation)
+			case "updated_at":
+				return domain.Task{}, fmt.Errorf("%w: updated_at is stamped automatically and cannot be unset", domain.ErrValidation)
+			}
+			withMeta[field] = val
+			continue
+		}
+		if !force && !domain.KnownTaskField(field) {
+			return domain.Task{}, fmt.Errorf(
+				"%w: unknown field %q (known fields only; use --force for a custom field)", domain.ErrValidation, field)
+		}
+		coerced, err := coerceField(field, val)
+		if err != nil {
 			return domain.Task{}, err
 		}
+		if err := domain.ValidateField(field, stringify(coerced)); err != nil {
+			return domain.Task{}, err
+		}
+		withMeta[field] = coerced
 	}
-	withMeta := make(map[string]any, len(updates)+1)
-	for k, v := range updates {
-		withMeta[k] = v
+	if epic, ok := withMeta["epic"].(string); ok {
+		if epic == "" {
+			withMeta["epic"] = domain.UnsetField{} // detach from the epic
+		} else {
+			epics, _, err := s.store.ListEpics()
+			if err != nil {
+				return domain.Task{}, err
+			}
+			if !epicExists(epics, epic) {
+				return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, epic)
+			}
+		}
 	}
 	withMeta["updated_at"] = time.Now().Format("2006-01-02")
 	return s.store.SetFields(slug, withMeta)
+}
+
+// coerceField converts a string `--set` value into the native type its field
+// needs (int / []string). Values already of the right type (from typed flags) and
+// genuinely-custom fields pass through unchanged.
+func coerceField(field string, val any) (any, error) {
+	str, isStr := val.(string)
+	if !isStr {
+		return val, nil // a typed flag already supplied the native type
+	}
+	switch {
+	case domain.IntFields[field]:
+		n, err := strconv.Atoi(strings.TrimSpace(str))
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s must be an integer, got %q", domain.ErrValidation, field, str)
+		}
+		return n, nil
+	case domain.ListFields[field]:
+		return splitList(str), nil
+	}
+	return str, nil
+}
+
+// splitList parses a comma-separated `--set tags=a,b` value into a trimmed,
+// empty-free slice.
+func splitList(s string) []string {
+	out := []string{}
+	for _, part := range strings.Split(s, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // NewTaskParams are the inputs for creating a task. Tier/Autonomy default to 3,
@@ -143,6 +232,12 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	}
 	if err := domain.ValidateDescription(p.Description); err != nil {
 		return domain.Task{}, err
+	}
+	// Tags are required at creation (decided 2026-06-12): lint demands non-empty
+	// tags on active tasks, and `new` must not scaffold a file its own linter
+	// rejects.
+	if len(p.Tags) == 0 {
+		return domain.Task{}, fmt.Errorf("%w: at least one tag is required (--tags)", domain.ErrValidation)
 	}
 	slug := domain.Slugify(p.Title)
 	if slug == "" {
@@ -205,6 +300,9 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 		return domain.Epic{}, err
 	}
 	if err := domain.ValidatePriority(p.Priority); err != nil {
+		return domain.Epic{}, err
+	}
+	if err := domain.ValidateEpicStatus(p.Status); err != nil {
 		return domain.Epic{}, err
 	}
 	slug := domain.Slugify(p.Title)
@@ -391,6 +489,15 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})
+		}
+	}
+	// Epic statuses are a closed vocabulary (see domain.ValidateEpicStatus);
+	// files predating the enum (or hand-edited ones) surface here.
+	for _, e := range epics {
+		if err := domain.ValidateEpicStatus(e.Status); err != nil {
+			results = append(results, LintResult{Slug: e.ID, Issues: []domain.Issue{
+				{Field: "status", Message: err.Error()},
+			}})
 		}
 	}
 	return results, problems, nil

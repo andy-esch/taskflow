@@ -40,7 +40,9 @@ func runLint(app *App) error {
 			return err
 		}
 	} else {
-		render.ProblemsHuman(app.Out, app.Style, problems)
+		// Diagnostics go to stderr, matching the list commands — scripts that
+		// capture stderr for problems must see them on one consistent stream.
+		render.ProblemsHuman(app.ErrOut, app.Style, problems)
 		render.LintHuman(app.Out, app.Style, results)
 		if len(results) == 0 && len(problems) == 0 {
 			fmt.Fprintf(app.Out, "%s all active tasks pass lint\n", app.Style.Green("✔"))
@@ -59,8 +61,27 @@ func runLintFix(app *App, dryRun bool) error {
 		return err
 	}
 	if app.JSON {
-		return render.FixJSON(app.Out, results, dryRun)
+		if err := render.FixJSON(app.Out, results, dryRun); err != nil {
+			return err
+		}
+	} else {
+		render.FixHuman(app.Out, app.Style, results, dryRun)
 	}
-	render.FixHuman(app.Out, app.Style, results, dryRun)
+	if dryRun {
+		return nil
+	}
+	// The fixer only reports files it changed — a file it can't repair would
+	// otherwise exit 0 in silence, leaving the tree broken while claiming
+	// success. Re-lint and surface what's still wrong, with plain lint's exit.
+	_, problems, err := app.Svc.Lint()
+	if err != nil {
+		return err
+	}
+	if len(problems) > 0 {
+		if !app.JSON {
+			render.ProblemsHuman(app.ErrOut, app.Style, problems)
+		}
+		return fmt.Errorf("%w: %d file(s) could not be auto-repaired", domain.ErrValidation, len(problems))
+	}
 	return nil
 }

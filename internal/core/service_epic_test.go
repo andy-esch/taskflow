@@ -46,13 +46,18 @@ func (nopStore) FixFrontmatter(bool) ([]domain.FixResult, error) { return nil, n
 // the read/create methods its tests touch (the rest come from nopStore).
 type fakeStore struct {
 	nopStore
-	tasks   []domain.Task
-	epics   []domain.Epic
-	created []domain.Task // tasks passed to CreateTask
+	tasks    []domain.Task
+	epics    []domain.Epic
+	audits   []domain.Audit
+	problems []domain.FileProblem // returned by ListTasks
+	created  []domain.Task        // tasks passed to CreateTask
 }
 
 func (f *fakeStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
-	return f.tasks, nil, nil
+	return f.tasks, f.problems, nil
+}
+func (f *fakeStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
+	return f.audits, nil, nil
 }
 func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 	for _, t := range f.tasks {
@@ -68,6 +73,10 @@ func (f *fakeStore) CreateTask(t domain.Task, _ string) (domain.Task, error) {
 }
 func (f *fakeStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return f.epics, nil, nil
+}
+func (f *fakeStore) CreateEpic(slug string, e domain.Epic, _ string) (domain.Epic, error) {
+	e.ID = slug
+	return e, nil
 }
 func (f *fakeStore) GetEpic(id string) (domain.Epic, string, error) {
 	for _, e := range f.epics {
@@ -120,7 +129,7 @@ func TestService_NewTask_UnknownEpic(t *testing.T) {
 func TestService_NewTask_Valid(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
 	svc := NewService(fs)
-	tk, err := svc.NewTask(NewTaskParams{Title: "My New Task", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium", Effort: "Unknown"})
+	tk, err := svc.NewTask(NewTaskParams{Title: "My New Task", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium", Effort: "Unknown", Tags: []string{"go"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +144,7 @@ func TestService_NewTask_Valid(t *testing.T) {
 func TestService_NewTask_Next(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
 	svc := NewService(fs)
-	tk, err := svc.NewTask(NewTaskParams{Title: "T", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium", Next: true})
+	tk, err := svc.NewTask(NewTaskParams{Title: "T", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium", Tags: []string{"go"}, Next: true})
 	if err != nil {
 		t.Fatal(err)
 	}

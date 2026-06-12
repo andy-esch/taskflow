@@ -1,18 +1,27 @@
 package cli
 
-import "github.com/andy-esch/taskflow/internal/cli/render"
+import (
+	"fmt"
+
+	"github.com/andy-esch/taskflow/internal/cli/render"
+)
 
 // runMoves applies a per-slug transition to a target status/bucket, prints a
-// per-item report (JSON or human), and returns the first error for the exit
-// code — every slug is attempted, no silent partials. Shared by task and audit
-// transitions so the loop + reporting policy live in exactly one place.
+// per-item report (JSON or human), and returns a summary error wrapping the
+// first failure for the exit code — every slug is attempted, no silent
+// partials. The summary (not the raw error) goes back to main so the failure
+// isn't printed twice: the per-item ✘ line already carried the detail. Shared
+// by task and audit transitions so the loop + reporting policy live in exactly
+// one place.
 func runMoves[T any](app *App, slugs []string, status string, move func(slug string) (T, error), slugOf func(T) string) error {
 	var firstErr error
+	failed := 0
 	results := make([]render.MoveResult, 0, len(slugs))
 	for _, slug := range slugs {
 		res := render.MoveResult{Slug: slug, To: status}
 		if got, err := move(slug); err != nil {
 			res.Error = err.Error()
+			failed++
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -28,5 +37,10 @@ func runMoves[T any](app *App, slugs []string, status string, move func(slug str
 	} else {
 		render.MovesHuman(app.Out, app.Style, results)
 	}
-	return firstErr
+	if firstErr != nil {
+		// %w keeps the sentinel (exit-code mapping); the text is a count, not a
+		// repeat of the already-printed detail.
+		return fmt.Errorf("%d of %d transitions failed: %w", failed, len(slugs), firstErr)
+	}
+	return nil
 }

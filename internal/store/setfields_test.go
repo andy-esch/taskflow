@@ -54,3 +54,28 @@ func TestFS_SetFields_NotFound(t *testing.T) {
 		t.Fatal("want error for missing task")
 	}
 }
+
+// TestFS_SetFields_RejectsUnreloadable pins the parse-before-commit guard: an
+// update that would serialize to unreadable frontmatter (here a string where the
+// loader needs an int) must be rejected WITHOUT touching the file on disk — the
+// store never leaves the source of truth corrupted.
+func TestFS_SetFields_RejectsUnreloadable(t *testing.T) {
+	root := t.TempDir()
+	const original = "---\nstatus: ready-to-start\ntier: 2\n---\n# Alpha\nbody\n"
+	writeTask(t, root, "ready-to-start", "alpha.md", original)
+	path := filepath.Join(root, "tasks", "ready-to-start", "alpha.md")
+
+	// tier as a string serializes to `tier: "4"` (!!str), which the strict Task
+	// loader can't read back into an int.
+	_, err := NewFS(root).SetFields("alpha", map[string]any{"tier": "4"})
+	if err == nil {
+		t.Fatal("want an error for an update that wouldn't reload")
+	}
+	b, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(b) != original {
+		t.Errorf("file must be left untouched on a rejected update, got:\n%s", b)
+	}
+}

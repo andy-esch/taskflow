@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
 )
 
@@ -30,6 +31,9 @@ func newInitCmd(app *App) *cobra.Command {
 			created, err := config.Init(abs)
 			if err != nil {
 				return err
+			}
+			if app.JSON {
+				return render.InitJSON(app.Out, abs, created)
 			}
 			if len(created) == 0 {
 				fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)

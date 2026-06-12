@@ -14,12 +14,13 @@ its own work.
 
 ## Architecture (read before changing code)
 
-`docs/ARCHITECTURE.md` is the one-screen orientation: `cli` (and a future `tui`)
-are **primary adapters** over `core`; the markdown filesystem is the
+`docs/ARCHITECTURE.md` is the one-screen orientation: `cli` and `tui` are
+**primary adapters** over `core`; the markdown filesystem is the
 **secondary adapter** (`store`). Non-negotiables: DI via one `*cli.App`
 populated in `PersistentPreRunE` (no globals), all output through injected
 `io.Writer`, `--json` everywhere with a `schema_version`, the core never touches
-fs/cobra, and **status/bucket == directory**.
+fs/cobra, and **status/bucket == directory**. The TUI never touches the store —
+it reads through `core.Service` as `tea.Cmd`s (no I/O in `Update`/`View`).
 
 ## Planning workflow — use `tskflwctl`, not `pm`
 
@@ -34,8 +35,8 @@ We dogfood: drive this repo's planning with the tool itself.
   lint-clean.
 - Tasks live in `planning/tasks/<status>/`; a task's `status:` **is** its
   directory. Every active task needs a one-line `description`.
-- **`bin/pm` (Python) is retired** — it was the prototype `tskflwctl` was ported
-  from. Don't use it; `tests/test_pm.py` is kept only as historical spec.
+- **`pm` (Python) is gone** — it was the prototype `tskflwctl` was ported from;
+  it and its tests now live only in git history. The Go suite is the spec.
 
 ## Git
 

@@ -10,7 +10,7 @@ the one-screen orientation for contributors.
    primary adapters            core                    secondary adapter
   ┌──────────────┐      ┌──────────────────┐         ┌──────────────────┐
   │ cli (cobra)  │ ───▶ │ core.Service      │ ──port▶ │ store.FS         │
-  │ tui (later)  │      │  + domain (pure)  │         │ markdown+yaml    │
+  │ tui (bubble) │      │  + domain (pure)  │         │ markdown+yaml    │
   └──────────────┘      └──────────────────┘         └──────────────────┘
 ```
 
@@ -25,9 +25,13 @@ the one-screen orientation for contributors.
 - **`internal/store`** — the secondary adapter: tasks as
   `<root>/tasks/<status>/<slug>.md`. Splits frontmatter with a zero-dep byte
   scanner; parses YAML with `go.yaml.in/yaml/v3`. `var _ core.TaskStore = (*FS)(nil)`.
-- **`internal/cli`** — the primary adapter: the cobra tree. The future
-  `internal/tui` is a *second* primary adapter calling the **same** core, so it
-  never duplicates logic.
+- **`internal/cli`** — a primary adapter: the cobra tree.
+- **`internal/tui`** — the *second* primary adapter (shipped): a Bubble Tea
+  browser calling the **same** `core.Service`, never the store/fs. See the TUI
+  section below.
+- **`internal/theme`** — dependency-free semantic tokens (status/bucket/priority
+  → glyph + color), imported by **both** `cli/render` (→ ANSI) and `tui`
+  (→ lipgloss), so "in-progress is a yellow ●" is decided in one place.
 - **`internal/config`** — discovers the planning root (walk up for tasks/;
   terminates at a `.git`/root boundary).
 - **`cmd/tskflwctl`** — thin; the sole composition root.
@@ -46,10 +50,10 @@ the one-screen orientation for contributors.
 ## Why these boundaries (and why not collapse them)
 Reviews periodically suggest folding the packages together ("Go favors fewer
 packages / concrete types"). That advice evaluates this **as a CLI**, but it is a
-**multi-adapter system**: the CLI ships now and a **Bubble Tea TUI is planned as
-a second primary adapter over the same `core`**. That single fact answers most
-of the critique — the layering exists so the TUI reuses the use-cases without
-duplicating logic, not for hypothetical future flexibility. The specifics:
+**multi-adapter system**: the CLI and a **Bubble Tea TUI both ship as primary
+adapters over the same `core`**. That single fact answers most of the critique —
+the layering exists so the TUI reuses the use-cases without duplicating logic,
+not for hypothetical future flexibility. The specifics:
 
 - **Cross-package exported types aren't "leakage."** `domain.FileProblem`,
   `core.EpicSummary`, `core.NewTaskParams`, `render.MoveResult` are the *contract
@@ -59,7 +63,7 @@ duplicating logic, not for hypothetical future flexibility. The specifics:
 - **`core.Store` earns its keep today, not speculatively.** The core's unit
   tests run against an in-memory `fakeStore` (`core/service_epic_test.go`), so
   rollup/validation logic is tested with no filesystem. That's a real second
-  implementation now, plus the planned TUI is a second primary adapter over the
+  implementation now, plus the shipped TUI is a second primary adapter over the
   same core. (One known wart: `FixFrontmatter` sits awkwardly on the port — a
   candidate to split into a `Fixer` later.)
 - **Frontmatter logic is already cohesive.** `frontmatter.go` (parse + surgical
@@ -76,21 +80,66 @@ duplicating logic, not for hypothetical future flexibility. The specifics:
   core seam: render is presentation that the TUI replaces; `core` is logic the
   TUI reuses.)
 
-## Testing
-Three layers: pure domain/core units (incl. a `fakeStore` for the core), store
-round-trips against `t.TempDir()`, and in-process CLI tests that execute
-`NewRootCmd` with a captured buffer. The hand-rolled byte parsers in `store`
-have fuzz targets (`store/fuzz_test.go`). `just test` + `just lint`.
+## The TUI (`internal/tui`)
+A Bubble Tea (Elm-architecture) browser, launched by `tskflwctl ui`. It is the
+**second primary adapter**: every read goes through `core.Service` as a `tea.Cmd`
+returning a custom `tea.Msg` — **never I/O in `Update`/`View`**, never the store.
+Files split by concern:
 
-## Status (2026-06-08)
+- **`model.go`** — the root `Model` + the `Update` reducer and `View`. Owns the
+  tab set, focus (list ⇄ detail), window size, and key routing.
+- **`entity.go`** — the **entity registry**: tasks/epics/audits as `*entityTab`s,
+  each owning its own `list.Model`, cursor, loaders, and list-scoped state
+  (status view, sort, filter restore). Adding Projects/ADRs later is a new
+  registry entry — no new keybindings or layout.
+- **`commands.go` / `messages.go`** — the async load `tea.Cmd`s and the `tea.Msg`
+  types they return (list loads, lazy detail loads, reload, errors).
+- **`detail.go` / `find.go`** — the right pane (a `viewport`) + vim-like `/` `n`
+  `N` find-in-body (matches tracked by wrapped-line index; highlight rebuilt from
+  stripped text so it can't split an escape).
+- **`item.go`** — per-entity `list.ItemDelegate`s (the glyph rows) and the
+  `sortFields`/`FilterValue` each row exposes.
+- **`sort.go` / `statusview.go` / `command.go`** — interactive sort, the unified
+  status-view table (`:` words + `s`/`S` cycle derive from it), and the `:`
+  command bar.
+- **`watch.go`** — `fsnotify` live reload: a self-perpetuating listener `Cmd`
+  feeds `fsEventMsg`; a generation-guarded `tea.Tick` debounce (200ms) coalesces
+  save-storms into one reload of every loaded tab, cursor preserved by id.
+- **`help.go`** — the `?` keybinding overlay (`helpSections` is the runtime
+  source of truth for keys) composited over the body with `ansi.Cut`.
+- **`style.go` / `keys.go`** — lipgloss styles (delegating to `theme`) and the
+  `key.Binding` map.
+
+**Layout discipline is load-bearing** (a clipped-top-border class of bug):
+subtract the border frame before sizing children, guard `View` before the first
+`WindowSizeMsg`, truncate (never wrap) anything fed to a `Join`, and clamp the
+composed view to the terminal. `TestModel_ViewFitsTerminal` locks the invariant
+(View height == terminal height; no line wider than the terminal). The full
+checklist is in `planning/research/2026-06-10-tui-design-decisions.md`.
+
+## Testing
+Three layers for the CLI/core: pure domain/core units (incl. a `fakeStore` for
+the core), store round-trips against `t.TempDir()`, and in-process CLI tests that
+execute `NewRootCmd` with a captured buffer. The hand-rolled byte parsers in `store`
+have fuzz targets (`store/fuzz_test.go`). The TUI is tested by **message
+injection** (build the model, send `tea.Msg`s to `Update`, assert on state /
+`View()` substrings) plus a few `x/teatest` full-program tests and the layout
+invariant; fs-event behavior uses synthetic messages, not real `fsnotify` timing.
+`just test` + `just lint`.
+
+## Status (2026-06-11)
 Substantially functional — the full create→update→move→lint loop runs without
 the Python prototype:
 - `init`, `completion` (command/flag/slug, status-aware), `lint` (+`--fix`/`--dry-run`)
 - `task new|list|show|set|move|start|promote|demote|complete|defer|deprecate`
 - `epic new|list|show`, `audit list|show|close|reopen|defer`
+- `ui` — the Bubble Tea browser (epic 18): two-pane read-only browse of
+  tasks/epics/audits, `:` jump, `/` filter, sort, status views, detail find, `?`
+  help, and `fsnotify` live reload (S0–S3 shipped; mutations/glamour/cross-link
+  are the remaining sprints).
 
 Throughout: explicit noun-verb, semantic exit codes (`10` not-found · `11`
-validation · `12` invalid-transition · `13` ambiguous · `14` conflict), atomic
+validation · `13` ambiguous · `14` conflict), atomic
 writes (`writeFileAtomic` overwrite, `createFileAtomic` exclusive) + surgical
 `yaml.v3` edits, `--json` everywhere (`schema_version`), resilient reads with
 actionable frontmatter errors, agent safety annotations.

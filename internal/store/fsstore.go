@@ -127,22 +127,30 @@ func (s *FS) Move(slug string, to domain.Status, now time.Time) (domain.Task, er
 	if err != nil {
 		return domain.Task{}, err
 	}
+	// Parse before committing: if the updated content wouldn't read back, fail
+	// with nothing on disk changed. Parsing *after* the move reported failure on
+	// a move that had already happened — a phantom failure a retrying caller
+	// (or agent) would act on.
+	newDir := filepath.Join(s.tasksDir, to.Dir())
+	newPath := filepath.Join(newDir, slug+".md")
+	t, err := parseTask(newContent, newPath, to)
+	if err != nil {
+		return domain.Task{}, err
+	}
 	// Write the updated content atomically into the *target* status dir, then
 	// remove the old file last. A crash between the two leaves both files (a
 	// recoverable duplicate), never one whose frontmatter status disagrees with
 	// its directory — so the status==directory invariant is never broken.
-	newDir := filepath.Join(s.tasksDir, to.Dir())
 	if err := os.MkdirAll(newDir, 0o755); err != nil {
 		return domain.Task{}, fmt.Errorf("mkdir %s: %w", newDir, err)
 	}
-	newPath := filepath.Join(newDir, slug+".md")
 	if err := writeFileAtomic(newPath, newContent, 0o644); err != nil {
 		return domain.Task{}, err
 	}
 	if err := os.Remove(path); err != nil {
 		return domain.Task{}, fmt.Errorf("remove old task file %s: %w", path, err)
 	}
-	return parseTask(newContent, newPath, to)
+	return t, nil
 }
 
 // SetFields surgically updates frontmatter fields on a task (no status/dir
@@ -160,11 +168,36 @@ func (s *FS) SetFields(slug string, updates map[string]any) (domain.Task, error)
 	if err != nil {
 		return domain.Task{}, err
 	}
+	// Parse before committing: never leave an unreloadable file on disk. If the
+	// updated frontmatter wouldn't read back (e.g. a value serialized to the wrong
+	// YAML type), reject without writing rather than corrupt the source of truth.
+	// The error is a *validation* failure (the update is bad, exit 11) — not a
+	// file problem; the message must not blame a file that was never touched.
+	t, err := parseTask(newContent, path, st)
+	if err != nil {
+		return domain.Task{}, fmt.Errorf("%w: update would not reload (%v); nothing was written", domain.ErrValidation, err)
+	}
+	if testHookBeforeSetFieldsWrite != nil {
+		testHookBeforeSetFieldsWrite()
+	}
+	// Re-resolve immediately before the write (compare-and-swap): a concurrent
+	// Move may have relocated the file, and renaming onto the *original* path
+	// would resurrect the slug in its old status directory — a permanent
+	// ErrAmbiguous with no repair tooling. Atomicity alone only guards against
+	// torn writes, not lost updates.
+	if curPath, _, err := s.resolve(slug); err != nil || curPath != path {
+		return domain.Task{}, fmt.Errorf("task %q changed on disk during update; retry: %w", slug, domain.ErrConflict)
+	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
 		return domain.Task{}, err
 	}
-	return parseTask(newContent, path, st)
+	return t, nil
 }
+
+// testHookBeforeSetFieldsWrite runs between SetFields' validation and its
+// compare-and-swap re-resolve — the seam tests use to interleave a concurrent
+// Move. Nil outside tests.
+var testHookBeforeSetFieldsWrite func()
 
 // resolve finds the file and current status for an exact slug match.
 func (s *FS) resolve(slug string) (path string, status domain.Status, err error) {
@@ -193,7 +226,10 @@ func (s *FS) resolve(slug string) (path string, status domain.Status, err error)
 }
 
 func parseTask(content []byte, path string, dirStatus domain.Status) (domain.Task, error) {
-	fm, _ := splitFrontmatter(content)
+	fm, _, err := splitFrontmatterStrict(content)
+	if err != nil {
+		return domain.Task{}, err
+	}
 	var t domain.Task
 	if len(fm) > 0 {
 		if err := yaml.Unmarshal(fm, &t); err != nil {

@@ -46,11 +46,34 @@ own-line config comments), but each is a cheap, correct hardening.
    file — but inline comments are valid TOML. Fix: strip a `#`-to-EOL comment
    (outside quotes) before extracting the value.
 
+Folded in from the 2026-06-12 review
+([[2026-06-12-critical-code-review-multi-lens]], findings B2/M2 + a slug low —
+same files, same theme):
+
+4. **`configuredRoot` doesn't enforce the containment its comment promises**
+   (`internal/config/config.go:48-54`). The comment says the result is "kept
+   within dir's tree" but the code is plain `filepath.Join` —
+   `taskflow_root = "../../elsewhere"` escapes. Reject a cleaned path that
+   escapes `dir`, or fix the comment.
+5. **A misconfigured `taskflow_root` silently forks the data tree**
+   (`config.go:51-54` + `store/fsstore.go:50-53`). `Discover` never checks
+   the configured root exists or contains `tasks/`; missing dirs read as
+   empty, and `task new` `MkdirAll`s a fresh tree at the bogus root —
+   planning data split across two roots with no signal. Verify the
+   configured root looks like a planning root (or warn loudly).
+6. **Slugs/epic-ids aren't sanitized against path separators**
+   (`store/fsstore.go:181`, `epicstore.go:47`, `auditstore.go:112`).
+   `epic show ../tasks/in-progress/x` reads outside the intended directory.
+   Reject names containing separators or `..` in `resolve`/`GetEpic`.
+
 ## Acceptance criteria
 
 - [ ] A non-ASCII title over the cap produces a valid-UTF-8 slug (rune test).
 - [ ] Discovery stops at a `.git` *file* boundary (worktree/submodule sim).
 - [ ] `taskflow_root = "x" # c` resolves to `x`. Suite + lint green.
+- [ ] An escaping or nonexistent `taskflow_root` errors (or warns) instead of
+      silently presenting an empty project.
+- [ ] A slug containing `/` or `..` is rejected with `ErrValidation`.
 
 ## Out of scope
 

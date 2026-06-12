@@ -3,7 +3,19 @@ package theme
 import (
 	"fmt"
 	"time"
+
+	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+// TaskDate is the date to display for a task: its last-updated date, falling
+// back to created when never updated. Shared so the CLI render layer and the TUI
+// pick the same one (pair it with RelativeDate for the compact form).
+func TaskDate(t domain.Task) string {
+	if t.Updated != "" {
+		return t.Updated
+	}
+	return t.Created
+}
 
 // RelativeDate renders a YYYY-MM-DD date as a compact "today" / "3d ago" /
 // "2w ago" / "5mo ago" / "1y ago". Empty or unparseable input yields "". It's a

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 17-pm-go-cli
 description: Build the Go pm CLI in the decided noun-verb hierarchy; reach parity with the Python prototype using tests/test_pm.py as the acceptance spec.
 effort: Unknown
@@ -9,7 +9,8 @@ autonomy_level: 3
 tags: [pm-tooling, go, cli]
 created: 2026-06-06
 started_at: 2026-06-07
-updated_at: 2026-06-09
+updated_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 
 # Port pm to Go CLI (parity with Python prototype + test suite as spec)
@@ -46,25 +47,25 @@ or a fresh build borrowing its skeleton? — see research doc Q2.)
 
 ## Likely implementation plan (refine after the research lands)
 
-- [ ] Stand up the Go module + cobra/viper; wire the noun-verb skeleton
+- [x] Stand up the Go module + cobra/viper; wire the noun-verb skeleton
       from the research doc (explicit `<noun> <verb>`; no aliases). Borrow
       taskflow's `cmd/`+`internal/cli` skeleton; drop its `services/`/brain.
-- [ ] `tskflwctl init` (interactive + `--yes/--path`): scaffold the
+- [x] `tskflwctl init` (interactive + `--yes/--path`): scaffold the
       single-repo taskflow tree + config file.
-- [ ] Port the data layer: frontmatter parse/serialize (real YAML — no
+- [x] Port the data layer: frontmatter parse/serialize (real YAML — no
       fallback-parser split), task/epic discovery, status-dir invariants.
-- [ ] Port commands group-by-group, each gated by translating the
+- [x] Port commands group-by-group, each gated by translating the
       matching `tests/test_pm.py` cases into Go table tests.
 - [ ] Port `lint`/`schema`/`set` validation (incl. the §1–§4 rules from
       [[tighten-pm-cli-ergonomics]]) and the `audit` group.
-- [ ] Decide distribution (how `./bin/tskflwctl` is built/installed;
+- [x] Decide distribution (how `./bin/tskflwctl` is built/installed;
       build/install recipe) and update AI_README/README/routers.
 
 ## Acceptance criteria
 
 - [ ] `tskflwctl {task|audit|epic|adr} {command}` works in the decided
       hierarchy — fully explicit, no flat aliases, lifecycle via `task move`.
-- [ ] Behavioral parity: every behavior asserted by `tests/test_pm.py` has
+- [x] Behavioral parity: every behavior asserted by `tests/test_pm.py` has
       an equivalent passing Go test.
 - [ ] `--json` output matches the Python tool's shape (agent-consumed).
 - [ ] Docs (AI_README command table, README, CLAUDE/GEMINI routers) point
@@ -259,3 +260,17 @@ envelope; interactive `init` wizard. Filed as their own tasks: global
 ## Related
 
 - Epic [[17-pm-go-cli]].
+
+## Closure note (2026-06-12)
+
+Completed per decision D12 in [[2026-06-12-pending-decisions]]. The port has
+been the working tool for days (README/ARCHITECTURE declare the loop done; the
+planning corpus is self-hosted on it). Unchecked boxes are deliberate
+descopes, not unfinished work:
+- **`adr` noun and `schema` command** were never ported — the entity registry
+  (tui/entity.go) and the docs note them as future work; file new tasks if
+  wanted.
+- **`--json` matching the Python shape** was superseded by the versioned
+  `schema_version` envelopes (a deliberate improvement).
+- The Python prototype + `tests/test_pm.py` were removed 2026-06-12 (decision
+  D10); the Go suite is the spec. They remain in git history at `39f1b83`.

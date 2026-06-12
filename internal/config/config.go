@@ -118,11 +118,30 @@ func Init(root string) ([]string, error) {
 		created = append(created, d)
 	}
 	cfg := filepath.Join(root, ConfigFile)
-	if !fileExists(cfg) {
-		if err := os.WriteFile(cfg, []byte(defaultConfigTOML), 0o644); err != nil {
-			return created, fmt.Errorf("write config: %w", err)
-		}
+	// Exclusive create instead of exists-then-write: a concurrent init must not
+	// clobber a config the other process just wrote (idempotency falls out of
+	// O_EXCL rather than a racy stat).
+	switch err := writeFileExclusive(cfg, []byte(defaultConfigTOML), 0o644); {
+	case err == nil:
 		created = append(created, ConfigFile)
+	case !os.IsExist(err):
+		return created, fmt.Errorf("write config: %w", err)
 	}
 	return created, nil
+}
+
+// writeFileExclusive creates a new file with O_EXCL semantics. (The store's
+// createFileAtomic is the same idea; config can't import store without
+// inverting the dependency, so the few lines are inlined.)
+func writeFileExclusive(path string, data []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		return err // os.IsExist(err) when the config already exists
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	return f.Close()
 }
