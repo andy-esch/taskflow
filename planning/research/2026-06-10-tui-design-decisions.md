@@ -44,8 +44,9 @@ Projects/ADRs/Research later = a registration, not new keys/layout.
 - **Focus = two signals:** accent border (lipgloss `BorderForeground`) **and** a
   pane-title marker (robust on mono/color-blind terminals). Selected row:
   reverse-video when focused, dim underline when not.
-- **Responsive (recompute on every `WindowSizeMsg`):** ≥100 cols two-pane
-  (≈40/60); 60–99 single-pane *drill* (list full-width → `Enter` replaces with
+- **Responsive (recompute on every `WindowSizeMsg`):** ≥90 cols two-pane
+  (≈40/60; was ≥100 — the code shipped 90, kept deliberately 2026-06-12: 90–99
+  two-pane is already useful and tests pin it); 60–89 single-pane *drill* (list full-width → `Enter` replaces with
   full-width detail → `Esc` back); <60 collapse the tab strip to `[Entity ▾]`.
 - **Truncate, never wrap** rows in bordered panes. Subtract the border+padding
   **frame** (`style.GetHorizontalFrameSize()`) from child sizes before sizing

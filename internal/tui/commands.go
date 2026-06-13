@@ -124,8 +124,18 @@ var statusRank = map[domain.Status]int{
 	domain.StatusDeferred:     5,
 }
 
+// rankOf returns a status's working-set rank. An unrecognized status (a foreign or
+// legacy word the loader tolerates) sorts LAST — a bare map index would give it
+// rank 0 and float it up among in-progress work.
+func rankOf(s domain.Status) int {
+	if r, ok := statusRank[s]; ok {
+		return r
+	}
+	return len(statusRank)
+}
+
 func sortWorkingSet(tasks []domain.Task) {
 	sort.SliceStable(tasks, func(i, j int) bool {
-		return statusRank[tasks[i].Status] < statusRank[tasks[j].Status]
+		return rankOf(tasks[i].Status) < rankOf(tasks[j].Status)
 	})
 }

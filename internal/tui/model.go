@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -46,10 +47,13 @@ type Model struct {
 	detail detailPane
 	cmd    commandBar
 
-	showHelp bool       // the `?` keybinding overlay is open
-	action   actionMenu // the `a` lifecycle action menu (S4)
-	flash    string     // transient post-action feedback line (cleared on the next key)
-	flashErr bool       // the flash is an error (rendered red)
+	showHelp   bool       // the `?` keybinding overlay is open
+	helpScroll int        // overlay scroll offset (j/k while open; clamped at render)
+	action     actionMenu // the `a` lifecycle action menu (S4)
+	follow     followMenu // the `f` reference picker (S6, epics → their tasks)
+	navStack   []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
+	flash      string     // transient post-action feedback line (cleared on the next key)
+	flashErr   bool       // the flash is an error (rendered red)
 
 	watch     *watcher // fsnotify source (nil when unavailable / in tests); see watch.go
 	watchOff  bool     // the watcher failed to start: live reload is off (footer note)
@@ -95,7 +99,19 @@ func (m *Model) reloadAll() tea.Cmd {
 // receiver yet callers can still mutate the tab's list in place.
 func (m Model) cur() *entityTab { return m.tabs[m.active] }
 
+// Update is the reducer. It delegates to update, then syncs the active tab's chip
+// into its list title — so View can stay a pure function of state (the title slot
+// is also where bubbles draws the `/` filter prompt, so the chip can't be a
+// separate line without losing it).
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.update(msg)
+	mm := next.(Model)
+	t := mm.cur()
+	t.list.Title = t.chip()
+	return mm, cmd
+}
+
+func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -241,8 +257,20 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	cmd := routeToTab(msg.kind, tab.list.SetItems(msg.items))
 	tab.loaded = true
 	tab.problems = msg.problems
-	if tab.restore != "" && tab.selectByID(tab.restore) {
-		tab.restore = ""
+	if tab.restore != "" {
+		switch {
+		case tab.selectByID(tab.restore):
+			tab.restore = ""
+		case tab.list.FilterState() == list.Unfiltered:
+			// The id is genuinely absent from a fully-visible list — a dangling
+			// reference jump (`f` to an epic that doesn't exist) or a selection
+			// deleted externally. Say so once instead of leaving a stale pending
+			// restore; a filtered tab keeps it pending for the async refilter.
+			if msg.kind == m.cur().kind {
+				m.flash, m.flashErr = tab.restore+" not found", true
+			}
+			tab.restore = ""
+		}
 	}
 	if msg.kind != m.cur().kind {
 		return m, cmd // a background tab loaded; leave the active view alone
@@ -254,18 +282,36 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Any key dismisses the post-action flash (it's a one-shot confirmation).
 	m.flash = ""
 
-	// 0. The help overlay is modal: any key dismisses it (ctrl+c still quits).
+	// 0. The help overlay is modal: j/k scroll it (the content can outgrow a
+	// short terminal); any other key dismisses it (ctrl+c still quits).
 	if m.showHelp {
-		if key.Matches(msg, keys.ForceQuit) {
+		switch {
+		case key.Matches(msg, keys.ForceQuit):
 			return m, tea.Quit
+		case msg.String() == "j" || msg.String() == "down":
+			if m.helpScroll < len(helpLines()) { // render-side clamp picks the true max
+				m.helpScroll++
+			}
+			return m, nil
+		case msg.String() == "k" || msg.String() == "up":
+			if m.helpScroll > 0 {
+				m.helpScroll--
+			}
+			return m, nil
 		}
 		m.showHelp = false
+		m.helpScroll = 0
 		return m, nil
 	}
 
 	// 0b. The action menu is modal: it owns every key while open.
 	if m.action.active {
 		return m.handleActionKey(msg)
+	}
+
+	// 0c. The follow picker (S6) is modal in the same way.
+	if m.follow.active {
+		return m.handleFollowKey(msg)
 	}
 
 	// 1. The command bar captures every key while open (so `:tasks` typing never
@@ -324,6 +370,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.action.open(t.Slug, t.Status)
 		}
 		return m, nil
+	case key.Matches(msg, keys.RawToggle):
+		m.detail.toggleMode() // raw ⇄ pretty markdown (cached, no recompile)
+		return m, nil
+	case key.Matches(msg, keys.Follow):
+		// f shadows the (undocumented) f-paging alias in list/viewport — d/u and
+		// ctrl+d/u remain the documented paging keys.
+		return m.followSelected()
+	case key.Matches(msg, keys.JumpBack):
+		return m.navBack()
 	case key.Matches(msg, keys.Command):
 		return m, m.cmd.focus()
 	case key.Matches(msg, keys.NextTab):
@@ -620,17 +675,19 @@ func (m *Model) applySortToCurrent() tea.Cmd {
 	return cmd
 }
 
-// cycleSort advances the active tab's sort column (wrapping) and re-sorts.
+// cycleSort advances the active tab's sort column (wrapping over the columns that
+// entity actually offers) and re-sorts.
 func (m *Model) cycleSort(dir int) tea.Cmd {
+	cols := m.cur().sortCols
 	cur := 0
-	for i, k := range sortCols {
+	for i, k := range cols {
 		if k == m.cur().sortKey {
 			cur = i
 			break
 		}
 	}
-	n := len(sortCols)
-	m.cur().sortKey = sortCols[((cur+dir)%n+n)%n]
+	n := len(cols)
+	m.cur().sortKey = cols[((cur+dir)%n+n)%n]
 	return m.applySortToCurrent()
 }
 
@@ -723,9 +780,11 @@ func (m Model) bodyView() string {
 	var box string
 	switch {
 	case m.showHelp:
-		box = helpBox(m.width-2, m.paneOuterH-2)
+		box = helpBox(m.width-2, m.paneOuterH-2, m.helpScroll)
 	case m.action.active:
 		box = m.action.view(m.width-2, m.paneOuterH-2)
+	case m.follow.active:
+		box = m.follow.view(m.width-2, m.paneOuterH-2)
 	default:
 		return base
 	}
@@ -759,15 +818,17 @@ func (m Model) renderBody() string {
 }
 
 // listPaneContent is the active list, or a helpful empty hint on an empty tasks
-// tab (other entities fall back to the list's own "No items."). The chip (status
-// view / sort / applied filter) is written into the list's title slot here — a
-// pure function of state, idempotent per frame — so it shows above the rows (and
-// collapses to nothing in the clean default).
+// or audits tab (epics fall back to the list's own "No items."). The audits hint
+// doubles as the tab's scope note: the TUI shows the open bucket only, so an
+// empty tab must say where the rest live rather than read as "no audits exist".
 func (m Model) listPaneContent() string {
 	t := m.cur()
-	t.list.Title = t.chip()
+	// The chip is synced into t.list.Title by Update (not here) so View is pure.
 	if t.kind == entityTasks && t.statusView == "" && len(t.list.Items()) == 0 {
 		return "No active tasks.\n\nCreate one:\n  tskflwctl task new \"Title\" --epic <id>"
+	}
+	if t.kind == entityAudits && len(t.list.Items()) == 0 {
+		return "No open audits.\n\nThis tab shows the open bucket only —\nclosed/deferred: tskflwctl audit list --all"
 	}
 	return t.list.View()
 }
@@ -787,10 +848,15 @@ func (m Model) detailPaneView() string {
 }
 
 func (m Model) detailTitle() string {
-	if m.detail.title == "" {
+	t := m.detail.title
+	if t == "" {
 		return "Detail"
 	}
-	return m.detail.title
+	// Flag raw mode in the title (pretty is the default, left unlabeled).
+	if m.detail.hasContent && !m.detail.pretty {
+		t += " · raw"
+	}
+	return t
 }
 
 // pane wraps content in a focus-colored border. Inner dimensions are clamped to
@@ -844,12 +910,16 @@ func (m Model) footer() string {
 	}
 	hints := ": cmd · / filter · o sort · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
 	if m.focus == focusDetail {
-		hints = ": cmd · / find · n/N match · j/k scroll · g/G top/bottom · h/esc back · q quit"
+		hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc back · q quit"
 		if !m.twoPane {
 			// Single-pane drill: q pops back to the list (context quit), so the
 			// hint must not promise it exits the app.
-			hints = ": cmd · / find · n/N match · j/k scroll · g/G top/bottom · h/esc/q back"
+			hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc/q back"
 		}
+	}
+	if n := len(m.navStack); n > 0 {
+		// Breadcrumb for the follow stack: where ctrl+o leads, and how deep.
+		hints = fmt.Sprintf("↩ ctrl+o %s (%d) · ", m.navStack[n-1].id, n) + hints
 	}
 	if p := m.cur().problems; len(p) > 0 {
 		hints = fmt.Sprintf("! %d unreadable · ", len(p)) + hints

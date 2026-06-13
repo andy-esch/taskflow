@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: 'Fresh-eyes follow-ups from S2b review: occurrence-level find, preserve field colors on matches, per-entity sort columns, View-purity, help scroll'
 effort: Unknown
@@ -8,6 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [tui, bubble-tea, cleanup]
 created: "2026-06-11"
+updated_at: "2026-06-12"
+started_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 
 # TUI S2b polish: find occurrences, highlight fidelity, per-entity sort
@@ -71,3 +74,24 @@ thought than a sprint-close patch. Each is independent — pick up à la carte.
 
 - Epic [[18-tui-bubble-tea-interactive-planning-browser]]
 - Follows [[tui-sprint-2b-search-status-views-and-interactive-sort]]
+
+## Closure (2026-06-12)
+
+Completed as the merged single pass (absorbing
+[[tui-review-polish-batch-sort-rank-help-drift-width-audit-scope]]), built
+across two agents: the macOS agent implemented (a) the find rewrite —
+occurrence-level n/N (`matchPos`), rune-by-rune `foldMatches` that never
+indexes a folded copy (U+0130-safe, regression-tested), `highlightLine`
+preserving field colors via display-column `ansi.Cut`; (b) `rankOf` sentinel
+(unknown statuses sort last); (c) per-entity sort columns
+(`taskSortCols`/`epicSortCols`/`auditSortCols`); (d) chip-sync moved into
+Update (View pure); (f) display-cell `padRight` for the date column; (g)
+`sortArrow` per-column direction semantics. The container agent finished the
+pass: updated the stale sort-chip test + `TestSortArrow`; (e) help/keys truth
+(d/u pages lists, ctrl+d/u half-pages detail, find keys documented) plus a
+scrollable help overlay (j/k scroll, anything else closes;
+`TestModel_HelpScrollRevealsTail`); audits open-bucket scope note
+(empty-state + help Notes row) per the recorded recommendation; design doc
+updated to the ≥90 two-pane threshold (code wins); pagination reserve kept
+deliberately (documented at the reserve site). Suite, vet, golangci-lint all
+green.

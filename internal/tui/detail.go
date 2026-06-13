@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -15,38 +16,121 @@ import (
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
-// detailContent is an entity-agnostic right-pane payload: a title for the pane
-// header and a width-aware renderer (wrapping happens in the model, not the load
-// Cmd, so it re-wraps on resize). Tasks, epics, and audits each implement it.
+// detailContent is an entity-agnostic right-pane payload, split so the pane can
+// render the markdown body two ways (raw / glamour) while the styled field block
+// above it is rendered once. meta is the non-markdown header (frontmatter fields,
+// and for epics the task list); rawBody is the markdown body. Wrapping happens in
+// the pane (not the load Cmd) so it re-wraps on resize.
 type detailContent interface {
 	Title() string
-	Render(width int) string
+	meta(width int) string
+	rawBody() string
 }
 
 // detailPane is the right pane: a scrollable view of the selected item's detail.
+// The body renders two ways — glamour (pretty) and raw — both cached so the `R`
+// toggle just swaps which is shown (no glamour recompile). pretty persists across
+// selections and tabs (the pane is a single Model field).
 type detailPane struct {
-	vp         viewport.Model
-	title      string
-	width      int
-	content    detailContent // current payload (re-rendered on resize); nil for errors
-	styled     string        // last rendered (styled) content, kept so find can re-highlight
-	errMsg     string
-	loading    bool
-	hasContent bool
-	find       finder
+	vp           viewport.Model
+	title        string
+	width        int
+	content      detailContent // current payload (re-rendered on resize); nil for errors
+	pretty       bool          // glamour body (true) vs raw markdown (false)
+	rawStyled    string        // meta + raw body (cached)
+	prettyStyled string        // meta + glamour body (cached)
+	styled       string        // the active composition, kept so find can re-highlight
+	errMsg       string
+	loading      bool
+	hasContent   bool
+	find         finder
+
+	glam  *glamour.TermRenderer // cached renderer, rebuilt only when width changes
+	glamW int                   // the width glam was built for
 }
 
-func newDetailPane() detailPane { return detailPane{vp: viewport.New(0, 0), find: newFinder()} }
+// prettyBody renders md with the pane's cached glamour renderer, rebuilding it
+// only when the width changed — compiling a renderer is the expensive part, so a
+// plain selection change (same width) reuses it. Falls back to plain wrapped text
+// on any error.
+func (d *detailPane) prettyBody(md string) string {
+	if strings.TrimSpace(md) == "" {
+		return ""
+	}
+	if d.glam == nil || d.glamW != d.width {
+		r, err := newGlamourRenderer(d.width)
+		if err != nil {
+			return wrap(md, d.width)
+		}
+		d.glam, d.glamW = r, d.width
+	}
+	out, ok := renderMarkdown(d.glam, md)
+	if !ok {
+		return wrap(md, d.width)
+	}
+	return out
+}
+
+func newDetailPane() detailPane {
+	return detailPane{vp: viewport.New(0, 0), find: newFinder(), pretty: true}
+}
+
+// render rebuilds both body compositions at the current width and points styled at
+// the active mode. Called on content/size change (Update) — NEVER in View, since
+// glamourBody compiles a renderer.
+func (d *detailPane) render() {
+	if d.content == nil {
+		d.rawStyled, d.prettyStyled, d.styled = "", "", ""
+		return
+	}
+	meta := d.content.meta(d.width)
+	body := d.content.rawBody()
+	d.rawStyled = joinDetail(meta, wrap(body, d.width))
+	d.prettyStyled = joinDetail(meta, d.prettyBody(body))
+	d.styled = d.activeStyled()
+}
+
+func (d detailPane) activeStyled() string {
+	if d.pretty {
+		return d.prettyStyled
+	}
+	return d.rawStyled
+}
+
+// toggleMode flips raw ⇄ pretty. Both are pre-rendered, so this only swaps which is
+// shown and re-applies any find — no glamour recompile.
+func (d *detailPane) toggleMode() {
+	d.pretty = !d.pretty
+	if d.content == nil {
+		return
+	}
+	d.styled = d.activeStyled()
+	d.refreshFind()
+}
+
+func joinDetail(meta, body string) string {
+	switch {
+	case meta == "":
+		return body
+	case body == "":
+		return meta
+	default:
+		return meta + "\n\n" + body
+	}
+}
 
 func (d *detailPane) SetSize(w, h int) {
+	widthChanged := w != d.width
 	d.width = w
 	d.vp.Width = w
 	d.vp.Height = h
-	// Re-wrap the current payload to the new width (keeps the body from clipping
-	// when the pane grows/shrinks), then re-apply any active find highlight.
 	switch {
 	case d.content != nil:
-		d.styled = d.content.Render(w)
+		// Body wrap (and glamour) depend on width — re-render only when it changed
+		// (a height-only resize must not re-run glamour).
+		if widthChanged || d.styled == "" {
+			d.render()
+		}
 		d.refreshFind()
 	case d.errMsg != "":
 		d.vp.SetContent(fg(theme.ColorRed, "⚠ "+d.errMsg))
@@ -63,7 +147,7 @@ func (d *detailPane) SetContent(c detailContent) {
 	d.content = c
 	d.errMsg = ""
 	d.title = c.Title()
-	d.styled = c.Render(d.width)
+	d.render()
 	d.refreshFind() // recompute matches for the new content (find persists across items)
 	if sameItem {
 		d.vp.SetYOffset(offset)
@@ -77,7 +161,7 @@ func (d *detailPane) SetContent(c detailContent) {
 // SetError shows a per-item load error in the pane (keeps the browser alive).
 func (d *detailPane) SetError(title, msg string) {
 	d.content = nil
-	d.styled = ""
+	d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 	d.resetFind()
 	d.errMsg = msg
 	d.title = title
@@ -91,7 +175,7 @@ func (d *detailPane) SetError(title, msg string) {
 // previous entity's detail doesn't linger while the new selection loads.
 func (d *detailPane) clear() {
 	d.content = nil
-	d.styled = ""
+	d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 	d.resetFind()
 	d.errMsg = ""
 	d.title = ""
@@ -104,7 +188,7 @@ func (d *detailPane) clear() {
 // doesn't linger.
 func (d *detailPane) showEmpty() {
 	d.content = nil
-	d.styled = ""
+	d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 	d.resetFind()
 	d.errMsg = ""
 	d.title = ""
@@ -153,12 +237,12 @@ func (d *detailPane) applyQuery(q string) {
 	d.scrollToCurrent()
 }
 
-// findNext moves the focused match by dir (wrapping) and scrolls to it.
+// findNext moves the focused occurrence by dir (wrapping) and scrolls to it.
 func (d *detailPane) findNext(dir int) {
-	if len(d.find.lines) == 0 {
+	if len(d.find.matches) == 0 {
 		return
 	}
-	n := len(d.find.lines)
+	n := len(d.find.matches)
 	d.find.cur = ((d.find.cur+dir)%n + n) % n
 	d.refreshFind()
 	d.scrollToCurrent()
@@ -173,15 +257,15 @@ func (d *detailPane) clearFind() {
 func (d *detailPane) resetFind() {
 	d.find.typing = false
 	d.find.query = ""
-	d.find.lines = nil
+	d.find.matches = nil
 	d.find.cur = 0
 	d.find.input.Blur()
 }
 
-// refreshFind recomputes match line indices for the current query and re-renders
-// the viewport content with matches highlighted (current match stronger). Matched
-// lines are rebuilt from stripped text so a highlight never splits an existing
-// escape; unmatched lines keep their original colors.
+// refreshFind recomputes the occurrences of the current query and re-renders the
+// viewport with each highlighted (the focused one brighter). Each affected line is
+// rebuilt over its *styled* text, so a match's highlight preserves the rest of the
+// line's field colors and never splits an existing escape (see highlightLine).
 func (d *detailPane) refreshFind() {
 	if d.find.query == "" {
 		d.vp.SetContent(d.styled)
@@ -189,32 +273,41 @@ func (d *detailPane) refreshFind() {
 	}
 	styled := strings.Split(d.styled, "\n")
 	plain := strings.Split(ansi.Strip(d.styled), "\n")
-	q := strings.ToLower(d.find.query)
-	d.find.lines = d.find.lines[:0]
-	for i, pl := range plain {
-		if strings.Contains(strings.ToLower(pl), q) {
-			d.find.lines = append(d.find.lines, i)
+	d.find.matches = d.find.matches[:0]
+	for li, pl := range plain {
+		for _, r := range foldMatches(pl, d.find.query) {
+			d.find.matches = append(d.find.matches, matchPos{line: li, b0: r[0], b1: r[1]})
 		}
 	}
-	if d.find.cur >= len(d.find.lines) {
+	if d.find.cur >= len(d.find.matches) {
 		d.find.cur = 0
 	}
-	for k, li := range d.find.lines {
-		style := findMatch
-		if k == d.find.cur {
-			style = findCurrent
+	curLine, curB0 := -1, -1
+	if len(d.find.matches) > 0 {
+		curLine = d.find.matches[d.find.cur].line
+		curB0 = d.find.matches[d.find.cur].b0
+	}
+	// Group occurrences by line (matches are already ascending by line then b0).
+	occByLine := map[int][][2]int{}
+	for _, m := range d.find.matches {
+		occByLine[m.line] = append(occByLine[m.line], [2]int{m.b0, m.b1})
+	}
+	for li, occ := range occByLine {
+		cb := -1
+		if li == curLine {
+			cb = curB0
 		}
-		styled[li] = highlightOccurrences(plain[li], d.find.query, style)
+		styled[li] = highlightLine(styled[li], plain[li], occ, cb)
 	}
 	d.vp.SetContent(strings.Join(styled, "\n"))
 }
 
-// scrollToCurrent brings the focused match into view (a couple of lines of lead).
+// scrollToCurrent brings the focused occurrence into view (a couple of lines of lead).
 func (d *detailPane) scrollToCurrent() {
-	if len(d.find.lines) == 0 {
+	if len(d.find.matches) == 0 {
 		return
 	}
-	if target := d.find.lines[d.find.cur] - 2; target > 0 {
+	if target := d.find.matches[d.find.cur].line - 2; target > 0 {
 		d.vp.SetYOffset(target)
 	} else {
 		d.vp.GotoTop()
@@ -222,16 +315,16 @@ func (d *detailPane) scrollToCurrent() {
 }
 
 // findStatus is the footer line shown while finding: the live input, or the
-// applied query with a match position and the nav hint.
+// applied query with the occurrence position and the nav hint.
 func (d detailPane) findStatus() string {
 	if d.find.typing {
 		return d.find.input.View()
 	}
 	pos := 0
-	if len(d.find.lines) > 0 {
+	if len(d.find.matches) > 0 {
 		pos = d.find.cur + 1
 	}
-	return dim(fmt.Sprintf("/%s  [%d/%d]  n/N next/prev · esc clear", d.find.query, pos, len(d.find.lines)))
+	return dim(fmt.Sprintf("/%s  [%d/%d]  n/N next/prev · esc clear", d.find.query, pos, len(d.find.matches)))
 }
 
 func (d detailPane) View() string {
@@ -265,12 +358,13 @@ type taskDetail struct {
 	body string
 }
 
-func (d taskDetail) Title() string       { return d.t.Slug }
-func (d taskDetail) Render(w int) string { return renderTaskDetail(d.t, d.body, w) }
+func (d taskDetail) Title() string     { return d.t.Slug }
+func (d taskDetail) rawBody() string   { return d.body }
+func (d taskDetail) meta(w int) string { return renderTaskMeta(d.t, w) }
 
-// renderTaskDetail formats a task's frontmatter fields + markdown body, wrapped
-// to width. Body is plain text for now (glamour is a later sprint).
-func renderTaskDetail(t domain.Task, body string, width int) string {
+// renderTaskMeta formats a task's frontmatter field block (no body), wrapped to
+// width. The body is rendered separately by the pane (raw or glamour).
+func renderTaskMeta(t domain.Task, width int) string {
 	var b strings.Builder
 	detailField(&b, "status", statusText(t.Status))
 	detailField(&b, "epic", t.Epic)
@@ -287,9 +381,7 @@ func renderTaskDetail(t domain.Task, body string, width int) string {
 	if t.Misfiled() {
 		detailField(&b, "⚠", fg(theme.ColorYellow, fmt.Sprintf("frontmatter says %q (folder wins)", t.Declared)))
 	}
-	b.WriteString("\n")
-	b.WriteString(body)
-	return wrap(b.String(), width)
+	return wrap(strings.TrimRight(b.String(), "\n"), width)
 }
 
 // --- epic detail ---
@@ -300,10 +392,11 @@ type epicDetail struct {
 	body  string
 }
 
-func (d epicDetail) Title() string       { return d.e.ID }
-func (d epicDetail) Render(w int) string { return renderEpicDetail(d.e, d.tasks, d.body, w) }
+func (d epicDetail) Title() string     { return d.e.ID }
+func (d epicDetail) rawBody() string   { return d.body }
+func (d epicDetail) meta(w int) string { return renderEpicMeta(d.e, d.tasks, w) }
 
-func renderEpicDetail(e domain.Epic, tasks []domain.Task, body string, width int) string {
+func renderEpicMeta(e domain.Epic, tasks []domain.Task, width int) string {
 	var b strings.Builder
 	detailField(&b, "epic", e.ID)
 	detailField(&b, "status", e.Status)
@@ -330,9 +423,7 @@ func renderEpicDetail(e domain.Epic, tasks []domain.Task, body string, width int
 			fmt.Fprintf(&b, "  %s %s\n", fg(tok.Color, tok.Glyph), t.Slug)
 		}
 	}
-	b.WriteString("\n")
-	b.WriteString(body)
-	return wrap(b.String(), width)
+	return wrap(strings.TrimRight(b.String(), "\n"), width)
 }
 
 // --- audit detail ---
@@ -342,17 +433,16 @@ type auditDetail struct {
 	body string
 }
 
-func (d auditDetail) Title() string       { return d.a.Slug }
-func (d auditDetail) Render(w int) string { return renderAuditDetail(d.a, d.body, w) }
+func (d auditDetail) Title() string     { return d.a.Slug }
+func (d auditDetail) rawBody() string   { return d.body }
+func (d auditDetail) meta(w int) string { return renderAuditMeta(d.a, w) }
 
-func renderAuditDetail(a domain.Audit, body string, width int) string {
+func renderAuditMeta(a domain.Audit, width int) string {
 	var b strings.Builder
 	detailField(&b, "audit", a.Slug)
 	detailField(&b, "bucket", fg(theme.Bucket(a.Bucket), string(a.Bucket)))
 	detailField(&b, "area", a.Area)
 	detailField(&b, "date", a.Date)
 	detailField(&b, "findings", fmt.Sprintf("%d open / %d total", a.OpenFindings, a.Findings))
-	b.WriteString("\n")
-	b.WriteString(body)
-	return wrap(b.String(), width)
+	return wrap(strings.TrimRight(b.String(), "\n"), width)
 }

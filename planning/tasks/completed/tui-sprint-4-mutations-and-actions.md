@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Lifecycle mutations from the TUI via core.Service with confirmation, reusing the async and reload plumbing
 effort: Unknown
@@ -10,6 +10,7 @@ tags: [tui, bubble-tea]
 created: "2026-06-10"
 updated_at: "2026-06-12"
 started_at: "2026-06-12"
+completed_at: "2026-06-12"
 ---
 
 # TUI sprint 4 mutations and actions

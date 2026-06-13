@@ -110,9 +110,12 @@ Design rationale lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) and
 
 A Bubble Tea browser over the **same `core`** the CLI uses (a second primary
 adapter — never the filesystem directly). Two panes: an entity list (tasks /
-epics / audits) and a detail preview. Vim-first keys: `:` command-jump, `/`
-filter (slug/desc/tags), `o`/`O` sort, `s`/`S` status views, `[`/`]` tabs, `/`
-+ `n`/`N` find-in-body when the detail is focused, `?` for the full keymap, `r`
-to refresh. It **live-reloads** via `fsnotify` — edits from your editor or a CLI
-`task move` in another terminal show up within ~200ms, cursor preserved. See
+epics / audits) and a detail preview rendered as **glamour markdown** (`R`
+toggles raw). Vim-first keys: `:` command-jump, `/` filter (slug/desc/tags),
+`o`/`O` sort, `s`/`S` status views, `[`/`]` tabs, `a` task actions
+(start/complete/…), `f` to follow a reference (task ⇄ epic) with `ctrl+o` to
+jump back, `/`+`n`/`N` find-in-body when the detail is focused, `?` for the
+full keymap, `r` to refresh. It **live-reloads** via `fsnotify` — edits from
+your editor or a CLI `task move` in another terminal show up within ~200ms,
+cursor preserved. See
 [`planning/epics/18-tui-bubble-tea-interactive-planning-browser.md`](./planning/epics/18-tui-bubble-tea-interactive-planning-browser.md).

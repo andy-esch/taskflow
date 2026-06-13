@@ -25,6 +25,8 @@ var helpSections = []helpSection{
 		{"o / O", "cycle sort column / reverse"},
 		{"s / S", "cycle status view / backward"},
 		{"a", "task actions (start/complete/defer/…)"},
+		{"f", "follow reference (task ⇄ epic)"},
+		{"ctrl+o", "jump back (follow history)"},
 		{"[ / ]", "previous / next tab"},
 		{"tab", "switch focus (list ⇄ detail)"},
 		{"r", "refresh from disk"},
@@ -34,14 +36,22 @@ var helpSections = []helpSection{
 	{"List", []helpEntry{
 		{"j / k", "move down / up"},
 		{"g / G", "top / bottom"},
-		{"ctrl+d / u", "half-page down / up"},
+		{"d / u", "page down / up (pgdn/pgup)"},
 		{"enter / l", "open detail"},
 		{"h", "back"},
 	}},
 	{"Detail", []helpEntry{
 		{"j / k", "scroll down / up"},
+		{"ctrl+d / u", "half-page down / up"},
 		{"g / G", "top / bottom"},
-		{"h / esc", "back to list"},
+		{"/", "find in body"},
+		{"n / N", "next / previous match"},
+		{"R", "raw ⇄ pretty markdown"},
+		{"h / esc", "back to list (esc clears a find first)"},
+	}},
+	{"Notes", []helpEntry{
+		{"audits", "open bucket only — closed/deferred: tskflwctl audit list --all"},
+		{"find", "matches the rendered text on screen — R for the raw source"},
 	}},
 }
 
@@ -51,8 +61,9 @@ var (
 	helpKeyStyle = lipgloss.NewStyle().Bold(true)
 )
 
-// helpBox renders the keybinding panel, clamped to fit within (maxW, maxH).
-func helpBox(maxW, maxH int) string {
+// helpLines builds the overlay's content lines (heading, sections, aligned
+// key→desc rows). Shared by helpBox (render) and the model's scroll clamp.
+func helpLines() []string {
 	// Widest key column across all sections → aligned descriptions.
 	keyW := 0
 	for _, s := range helpSections {
@@ -62,19 +73,30 @@ func helpBox(maxW, maxH int) string {
 			}
 		}
 	}
-	var b strings.Builder
-	b.WriteString(helpHeading.Render("Keys"))
-	b.WriteString("\n")
+	lines := []string{helpHeading.Render("Keys")}
 	for _, s := range helpSections {
-		b.WriteString("\n")
-		b.WriteString(dim(s.title))
-		b.WriteString("\n")
+		lines = append(lines, "", dim(s.title))
 		for _, e := range s.entries {
 			pad := strings.Repeat(" ", max(keyW-lipgloss.Width(e.keys), 0))
-			b.WriteString("  " + helpKeyStyle.Render(e.keys) + pad + "  " + e.desc + "\n")
+			lines = append(lines, "  "+helpKeyStyle.Render(e.keys)+pad+"  "+e.desc)
 		}
 	}
-	box := helpBorder.Render(strings.TrimRight(b.String(), "\n"))
+	return lines
+}
+
+// helpBox renders the keybinding panel, clamped to fit within (maxW, maxH).
+// When the content is taller than the box, scroll (clamped here, not in the
+// model — only render knows the box height) picks the visible window; j/k
+// scroll while the overlay is open.
+func helpBox(maxW, maxH, scroll int) string {
+	lines := helpLines()
+	const frameH = 2 // top+bottom border rows
+	if innerH := maxH - frameH; innerH > 0 && len(lines) > innerH {
+		maxScroll := len(lines) - innerH
+		scroll = min(max(scroll, 0), maxScroll)
+		lines = lines[scroll : scroll+innerH]
+	}
+	box := helpBorder.Render(strings.Join(lines, "\n"))
 	// Last-resort clamp so a tiny terminal can't make the box overflow the body.
 	return lipgloss.NewStyle().MaxWidth(maxW).MaxHeight(maxH).Render(box)
 }

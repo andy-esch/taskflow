@@ -48,9 +48,10 @@ type entityTab struct {
 	problems []domain.FileProblem
 
 	// S2b list-scoped state (persists per tab across switches/reloads).
-	statusView string  // tasks only: "" = working-set, "all", or a status string
-	sortKey    sortKey // interactive sort column ("o" cycles)
-	sortRev    bool    // sort direction toggle ("O")
+	statusView string    // tasks only: "" = working-set, "all", or a status string
+	sortCols   []sortKey // the `o`-cycle columns this entity offers
+	sortKey    sortKey   // interactive sort column ("o" cycles)
+	sortRev    bool      // sort direction toggle ("O")
 
 	restore string // id to re-select after this tab's next load (cursor preservation)
 }
@@ -100,11 +101,7 @@ func (t *entityTab) chip() string {
 	// suppressed while a filter is applied: the filtered view is ranked by match
 	// relevance, so the sort has no visible effect and the badge would mislead.
 	if (t.sortKey != sortDefault || t.sortRev) && !filtered {
-		arrow := "↓"
-		if t.sortRev {
-			arrow = "↑"
-		}
-		parts = append(parts, "sort:"+t.sortKey.label()+arrow)
+		parts = append(parts, "sort:"+t.sortKey.label()+sortArrow(t.sortKey, t.sortRev))
 	}
 	if filtered {
 		parts = append(parts, "filter:"+t.list.FilterValue())
@@ -150,14 +147,17 @@ func newEntityTabs() []*entityTab {
 		{
 			kind: entityTasks, name: "tasks", aliases: []string{"t", "task"},
 			list: mk(taskDelegate{}), loadList: loadTaskList, loadItem: loadTaskDetail,
+			sortCols: taskSortCols,
 		},
 		{
 			kind: entityEpics, name: "epics", aliases: []string{"e", "epic"},
 			list: mk(epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
+			sortCols: epicSortCols,
 		},
 		{
 			kind: entityAudits, name: "audits", aliases: []string{"a", "audit"},
 			list: mk(auditDelegate{}), loadList: loadAuditList, loadItem: loadAuditDetail,
+			sortCols: auditSortCols,
 		},
 	}
 }
