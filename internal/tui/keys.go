@@ -25,6 +25,8 @@ type keyMap struct {
 	StatusRev   key.Binding // S → cycle status view backward
 	Action      key.Binding // a → lifecycle action menu (tasks)
 	RawToggle   key.Binding // R → raw ⇄ pretty markdown in the detail body
+	Follow      key.Binding // f → follow the selection's reference (task ⇄ epic)
+	JumpBack    key.Binding // ctrl+o → pop the follow back-stack (vim jumplist)
 	Help        key.Binding // ? → toggle the keybinding overlay
 	Refresh     key.Binding // r
 	Quit        key.Binding // q (context)
@@ -50,6 +52,8 @@ var keys = keyMap{
 	StatusRev:   key.NewBinding(key.WithKeys("S")),
 	Action:      key.NewBinding(key.WithKeys("a")),
 	RawToggle:   key.NewBinding(key.WithKeys("R")),
+	Follow:      key.NewBinding(key.WithKeys("f")),
+	JumpBack:    key.NewBinding(key.WithKeys("ctrl+o")),
 	Help:        key.NewBinding(key.WithKeys("?")),
 	Refresh:     key.NewBinding(key.WithKeys("r")),
 	Quit:        key.NewBinding(key.WithKeys("q")),

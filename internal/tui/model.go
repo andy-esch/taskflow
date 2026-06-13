@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -49,6 +50,8 @@ type Model struct {
 	showHelp   bool       // the `?` keybinding overlay is open
 	helpScroll int        // overlay scroll offset (j/k while open; clamped at render)
 	action     actionMenu // the `a` lifecycle action menu (S4)
+	follow     followMenu // the `f` reference picker (S6, epics → their tasks)
+	navStack   []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
 	flash      string     // transient post-action feedback line (cleared on the next key)
 	flashErr   bool       // the flash is an error (rendered red)
 
@@ -254,8 +257,20 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	cmd := routeToTab(msg.kind, tab.list.SetItems(msg.items))
 	tab.loaded = true
 	tab.problems = msg.problems
-	if tab.restore != "" && tab.selectByID(tab.restore) {
-		tab.restore = ""
+	if tab.restore != "" {
+		switch {
+		case tab.selectByID(tab.restore):
+			tab.restore = ""
+		case tab.list.FilterState() == list.Unfiltered:
+			// The id is genuinely absent from a fully-visible list — a dangling
+			// reference jump (`f` to an epic that doesn't exist) or a selection
+			// deleted externally. Say so once instead of leaving a stale pending
+			// restore; a filtered tab keeps it pending for the async refilter.
+			if msg.kind == m.cur().kind {
+				m.flash, m.flashErr = tab.restore+" not found", true
+			}
+			tab.restore = ""
+		}
 	}
 	if msg.kind != m.cur().kind {
 		return m, cmd // a background tab loaded; leave the active view alone
@@ -292,6 +307,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// 0b. The action menu is modal: it owns every key while open.
 	if m.action.active {
 		return m.handleActionKey(msg)
+	}
+
+	// 0c. The follow picker (S6) is modal in the same way.
+	if m.follow.active {
+		return m.handleFollowKey(msg)
 	}
 
 	// 1. The command bar captures every key while open (so `:tasks` typing never
@@ -353,6 +373,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.RawToggle):
 		m.detail.toggleMode() // raw ⇄ pretty markdown (cached, no recompile)
 		return m, nil
+	case key.Matches(msg, keys.Follow):
+		// f shadows the (undocumented) f-paging alias in list/viewport — d/u and
+		// ctrl+d/u remain the documented paging keys.
+		return m.followSelected()
+	case key.Matches(msg, keys.JumpBack):
+		return m.navBack()
 	case key.Matches(msg, keys.Command):
 		return m, m.cmd.focus()
 	case key.Matches(msg, keys.NextTab):
@@ -757,6 +783,8 @@ func (m Model) bodyView() string {
 		box = helpBox(m.width-2, m.paneOuterH-2, m.helpScroll)
 	case m.action.active:
 		box = m.action.view(m.width-2, m.paneOuterH-2)
+	case m.follow.active:
+		box = m.follow.view(m.width-2, m.paneOuterH-2)
 	default:
 		return base
 	}
@@ -888,6 +916,10 @@ func (m Model) footer() string {
 			// hint must not promise it exits the app.
 			hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc/q back"
 		}
+	}
+	if n := len(m.navStack); n > 0 {
+		// Breadcrumb for the follow stack: where ctrl+o leads, and how deep.
+		hints = fmt.Sprintf("↩ ctrl+o %s (%d) · ", m.navStack[n-1].id, n) + hints
 	}
 	if p := m.cur().problems; len(p) > 0 {
 		hints = fmt.Sprintf("! %d unreadable · ", len(p)) + hints

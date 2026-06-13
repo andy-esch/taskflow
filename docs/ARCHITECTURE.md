@@ -104,6 +104,9 @@ Files split by concern:
   (per-entity columns), the unified status-view table (`:` words + `s`/`S` cycle),
   the `:` command bar, and the `a` lifecycle action menu (`Move` through the
   service, shared transition table with the `:` verbs).
+- **`nav.go`** — S6 cross-link navigation: `f` follows structured references
+  (a task's epic; an epic's tasks via a picker modal), `ctrl+o` pops the
+  back-stack; hidden targets escalate the tasks view to `:all` rather than fail.
 - **`watch.go`** — `fsnotify` live reload: a self-perpetuating listener `Cmd`
   feeds `fsEventMsg`; a generation-guarded `tea.Tick` debounce (200ms) coalesces
   save-storms into one reload of every loaded tab, cursor preserved by id.

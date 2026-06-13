@@ -31,7 +31,7 @@ func seedRepo(t *testing.T) string {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		body := fmt.Sprintf("---\nstatus: %s\ndescription: %s\n---\n# %s\n", status, desc, slug)
+		body := fmt.Sprintf("---\nstatus: %s\nepic: 01-test\ndescription: %s\n---\n# %s\n", status, desc, slug)
 		if err := os.WriteFile(filepath.Join(dir, slug+".md"), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -110,6 +110,8 @@ func press(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyEnter}
 	case "esc":
 		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "ctrl+o":
+		return tea.KeyMsg{Type: tea.KeyCtrlO}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 	}
