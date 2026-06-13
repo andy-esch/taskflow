@@ -55,6 +55,7 @@ func newAuditListCmd(app *App) *cobra.Command {
 	cmd.Flags().BoolVar(&all, "all", false, "all buckets")
 	cmd.Flags().BoolVar(&closed, "closed", false, "closed audits only")
 	cmd.Flags().BoolVar(&deferred, "deferred", false, "deferred audits only")
+	cmd.MarkFlagsMutuallyExclusive("all", "closed", "deferred")
 	return cmd
 }
 

@@ -18,7 +18,7 @@ var (
 	// openFindingRe matches a "**Status:** open" line. The trailing `[^-\w]|$`
 	// guard (RE2 has no lookahead) keeps "open-ish"/"openness" from matching
 	// while still allowing "open" followed by punctuation/space.
-	openFindingRe = regexp.MustCompile(`(?m)\*\*Status:\*\*\s*open(?:[^-\w]|$)`)
+	openFindingRe = regexp.MustCompile(`(?mi)\*\*Status:\*\*\s*open(?:[^-\w]|$)`)
 	// fenceRe spans a ```-fenced code block, so example finding/status syntax in
 	// docs isn't miscounted as a real finding.
 	fenceRe = regexp.MustCompile("(?s)```.*?```")
@@ -94,8 +94,11 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket) (domain.Audit, error)
 	if from == to {
 		return parseAudit(content, path, to)
 	}
+	// Destination filename from the RESOLVED path, never the query (fuzzy
+	// resolution must not rename the file to the abbreviation).
+	canonical := strings.TrimSuffix(filepath.Base(path), ".md")
 	newDir := filepath.Join(s.auditsDir, to.Dir())
-	newPath := filepath.Join(newDir, slug+".md")
+	newPath := filepath.Join(newDir, canonical+".md")
 	// Parse before the rename: a malformed file must fail with the audit still
 	// in its original bucket, not move and then report failure.
 	a, err := parseAudit(content, newPath, to)
@@ -111,24 +114,34 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket) (domain.Audit, error)
 	return a, nil
 }
 
+// resolveAudit finds an audit by slug — exact first, then fuzzy, like resolve.
 func (s *FS) resolveAudit(slug string) (path string, bucket domain.AuditBucket, err error) {
-	var paths []string
-	var buckets []domain.AuditBucket
+	var cands []candidate
 	for _, b := range domain.AllAuditBuckets() {
-		p := filepath.Join(s.auditsDir, b.Dir(), slug+".md")
-		if info, statErr := os.Stat(p); statErr == nil && !info.IsDir() {
-			paths = append(paths, p)
-			buckets = append(buckets, b)
+		dir := filepath.Join(s.auditsDir, b.Dir())
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return "", "", fmt.Errorf("read audit dir %s: %w", dir, err)
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+				continue
+			}
+			cands = append(cands, candidate{
+				id:   strings.TrimSuffix(e.Name(), ".md"),
+				path: filepath.Join(dir, e.Name()),
+				dir:  b.Dir(),
+			})
 		}
 	}
-	switch len(paths) {
-	case 0:
-		return "", "", fmt.Errorf("audit %q: %w", slug, domain.ErrNotFound)
-	case 1:
-		return paths[0], buckets[0], nil
-	default:
-		return "", "", fmt.Errorf("%q matches %d audits: %w", slug, len(paths), domain.ErrAmbiguous)
+	c, err := resolveID("audit", slug, cands)
+	if err != nil {
+		return "", "", err
 	}
+	return c.path, domain.AuditBucket(c.dir), nil
 }
 
 func parseAudit(content []byte, path string, bucket domain.AuditBucket) (domain.Audit, error) {

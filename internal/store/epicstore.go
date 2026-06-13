@@ -42,16 +42,32 @@ func (s *FS) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return epics, problems, nil
 }
 
-// GetEpic returns one epic plus its markdown body.
+// GetEpic returns one epic plus its markdown body. The id resolves exact
+// first, then fuzzy (unique prefix/substring), like task and audit slugs.
 func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
-	path := filepath.Join(s.epicsDir, id+".md")
-	content, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return domain.Epic{}, "", fmt.Errorf("epic %q: %w", id, domain.ErrNotFound)
-		}
-		return domain.Epic{}, "", fmt.Errorf("read epic %s: %w", path, err)
+	var cands []candidate
+	entries, err := os.ReadDir(s.epicsDir)
+	if err != nil && !os.IsNotExist(err) {
+		return domain.Epic{}, "", fmt.Errorf("read epics dir: %w", err)
 	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		cands = append(cands, candidate{
+			id:   strings.TrimSuffix(e.Name(), ".md"),
+			path: filepath.Join(s.epicsDir, e.Name()),
+		})
+	}
+	c, err := resolveID("epic", id, cands)
+	if err != nil {
+		return domain.Epic{}, "", err
+	}
+	content, err := os.ReadFile(c.path)
+	if err != nil {
+		return domain.Epic{}, "", fmt.Errorf("read epic %s: %w", c.path, err)
+	}
+	path := c.path
 	ep, err := parseEpic(content, path)
 	if err != nil {
 		return domain.Epic{}, "", fmt.Errorf("%s: %w", path, err)

@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: Mutually-exclusive audit list flags, case-insensitive audit Status regex, term.IsTerminal for color, and runewidth column alignment
 effort: Unknown
@@ -8,6 +8,9 @@ priority: low
 autonomy_level: 3
 tags: [go, cli, polish]
 created: "2026-06-11"
+updated_at: "2026-06-13"
+started_at: "2026-06-13"
+completed_at: "2026-06-13"
 ---
 
 # CLI/render polish batch (audit flags, color TTY, wide-char width)
@@ -51,9 +54,9 @@ regex over-matching, etc.).
 
 ## Acceptance criteria
 
-- [ ] `audit list --closed --deferred` errors instead of silently ignoring one.
-- [ ] Tables stay aligned with a wide-char (CJK/emoji) cell.
-- [ ] Whichever of 2/3/5 the reviewer accepts have a test. Suite + lint green.
+- [x] `audit list --closed --deferred` errors instead of silently ignoring one.
+- [x] Tables stay aligned with a wide-char (CJK/emoji) cell.
+- [x] Whichever of 2/3/5 the reviewer accepts have a test. Suite + lint green.
 
 ## Out of scope
 
@@ -74,3 +77,17 @@ regex over-matching, etc.).
 - Touches `internal/cli/audit.go`, `internal/store/auditstore.go`,
   `internal/cli/color.go`, `internal/cli/render/style.go`,
   `internal/domain/validate.go`, `internal/theme/`, `internal/tui/style.go`.
+
+## Closure (2026-06-13)
+
+All six items accepted and shipped: (1) `MarkFlagsMutuallyExclusive("all",
+"closed", "deferred")` — conflicting flags now error (live-verified + test);
+(2) `openFindingRe` is `(?i)` — hand-edited "**Status:** Open" counts, the
+word-boundary guard still blocks "opened-" (test); (3) `isTerminal` uses
+`term.IsTerminal` (isatty) instead of ModeCharDevice — /dev/null no longer
+gets ANSI; (4) `visibleWidth`/`truncate` count DISPLAY CELLS via
+`x/ansi.StringWidth`/`Truncate` — CJK/emoji no longer shift columns (tests);
+(5) description cap counts characters, not bytes — multibyte descriptions get
+the full 150 (test; error message now says "chars"); (6) the bar fill
+arithmetic lives once in `theme.BarFill`, drawn by both `render.Style.Bar`
+and `tui.miniBar` (table test).

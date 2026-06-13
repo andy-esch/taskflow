@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 17-pm-go-cli
 description: CI installs golangci-lint v1.64.5 against the v2-schema .golangci.yml so the lint gate cannot run; just test lacks -race; no govulncheck
 effort: Unknown
@@ -8,8 +8,9 @@ priority: high
 autonomy_level: 3
 tags: [ci, tooling, go]
 created: "2026-06-12"
-updated_at: "2026-06-12"
+updated_at: "2026-06-13"
 started_at: "2026-06-12"
+completed_at: "2026-06-13"
 ---
 # Repair the CI lint gate and local test parity
 
@@ -37,7 +38,7 @@ started_at: "2026-06-12"
 
 ## Acceptance criteria
 
-- [ ] CI lint step runs the v2 binary against the v2 config and passes (or
+- [x] CI lint step runs the v2 binary against the v2 config and passes (or
       failures are triaged into follow-ups).
 - [x] `just lint` works on a fresh machine following the README.
 - [x] `just test` (or a documented variant) runs with `-race`.
@@ -67,3 +68,9 @@ local toolchain. Fixed by pinning the action to **v2.4** — the first release
 whose official binaries are built with go1.25 (golangci-lint issue #5873 /
 release v2.4.0). Justfile comment now documents the built-with-Go constraint.
 Still awaiting the next CI run to confirm green.
+
+## Closure (2026-06-13)
+
+Confirmed: the first CI run with the golangci-lint v2.4 pin went green and
+the PR merged to main. All acceptance criteria met — gate repaired, `-race`
+local parity, govulncheck in CI.
