@@ -17,7 +17,7 @@ func TestCreateTask_OrderQuotingClobber(t *testing.T) {
 		Priority: "medium", Autonomy: 3, Tags: []string{"a", "b"}, Created: "2026-06-08",
 	}
 
-	got, err := fs.CreateTask(task, "\n# Demo\n")
+	got, err := fs.CreateTask(task, "\n# Demo\n", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestCreateTask_OrderQuotingClobber(t *testing.T) {
 		t.Errorf("created task does not re-parse: %v", err)
 	}
 	// Clobber refused with a conflict (not a generic validation error).
-	if _, err := fs.CreateTask(task, "x"); !errors.Is(err, domain.ErrConflict) {
+	if _, err := fs.CreateTask(task, "x", false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("clobber should be ErrConflict, got %v", err)
 	}
 }
@@ -50,7 +50,7 @@ func TestCreateTask_OrderQuotingClobber(t *testing.T) {
 func TestCreateEpic_AutoNumber(t *testing.T) {
 	fs := NewFS(t.TempDir())
 	// First epic → 01; with an existing 04-... the next is 05.
-	first, err := fs.CreateEpic("alpha", domain.Epic{Status: "planning", Description: "d", Priority: "medium", Created: "2026-06-08"}, "\n# Alpha\n")
+	first, err := fs.CreateEpic("alpha", domain.Epic{Status: "planning", Description: "d", Priority: "medium", Created: "2026-06-08"}, "\n# Alpha\n", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestCreateEpic_AutoNumber(t *testing.T) {
 	if err := os.WriteFile(fs.epicsDir+"/04-beta.md", []byte("---\nstatus: planning\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	next, err := fs.CreateEpic("gamma", domain.Epic{Status: "planning", Description: "d", Priority: "medium", Created: "2026-06-08"}, "\n# G\n")
+	next, err := fs.CreateEpic("gamma", domain.Epic{Status: "planning", Description: "d", Priority: "medium", Created: "2026-06-08"}, "\n# G\n", false)
 	if err != nil {
 		t.Fatal(err)
 	}

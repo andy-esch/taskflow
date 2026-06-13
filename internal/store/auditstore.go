@@ -79,7 +79,7 @@ func (s *FS) GetAudit(slug string) (domain.Audit, string, error) {
 // MoveAudit relocates an audit to another bucket (close/reopen/defer). Moving to
 // the current bucket is an idempotent no-op. The bucket directory is the state,
 // so only the file moves (no frontmatter rewrite).
-func (s *FS) MoveAudit(slug string, to domain.AuditBucket) (domain.Audit, error) {
+func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
 	if !to.Valid() {
 		return domain.Audit{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
 	}
@@ -104,6 +104,9 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket) (domain.Audit, error)
 	a, err := parseAudit(content, newPath, to)
 	if err != nil {
 		return domain.Audit{}, err
+	}
+	if dryRun {
+		return a, nil // resolved + parsed; only the rename is skipped
 	}
 	if err := os.MkdirAll(newDir, 0o755); err != nil {
 		return domain.Audit{}, fmt.Errorf("mkdir %s: %w", newDir, err)

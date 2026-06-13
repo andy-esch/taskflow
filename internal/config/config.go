@@ -146,7 +146,7 @@ tracked_repos = []
 // Init scaffolds the planning directory tree and writes the config file under
 // root. It is idempotent: existing dirs/config are left untouched. Returns the
 // relative paths created (empty if nothing was needed).
-func Init(root string) ([]string, error) {
+func Init(root string, dryRun bool) ([]string, error) {
 	dirs := []string{
 		"tasks/next-up", "tasks/ready-to-start", "tasks/in-progress",
 		"tasks/completed", "tasks/deprecated", "tasks/deferred",
@@ -159,8 +159,10 @@ func Init(root string) ([]string, error) {
 		if isDir(p) {
 			continue
 		}
-		if err := os.MkdirAll(p, 0o755); err != nil {
-			return created, fmt.Errorf("mkdir %s: %w", p, err)
+		if !dryRun {
+			if err := os.MkdirAll(p, 0o755); err != nil {
+				return created, fmt.Errorf("mkdir %s: %w", p, err)
+			}
 		}
 		created = append(created, d)
 	}
@@ -168,6 +170,12 @@ func Init(root string) ([]string, error) {
 	// Exclusive create instead of exists-then-write: a concurrent init must not
 	// clobber a config the other process just wrote (idempotency falls out of
 	// O_EXCL rather than a racy stat).
+	if dryRun {
+		if !fileExists(cfg) {
+			created = append(created, ConfigFile)
+		}
+		return created, nil
+	}
 	switch err := writeFileExclusive(cfg, []byte(defaultConfigTOML), 0o644); {
 	case err == nil:
 		created = append(created, ConfigFile)

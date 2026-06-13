@@ -25,15 +25,18 @@ func newEpicNewCmd(app *App) *cobra.Command {
 		Annotations: map[string]string{"safety": "mutating"},
 		RunE: func(_ *cobra.Command, args []string) error {
 			p.Title = args[0]
+			p.DryRun = app.DryRun
 			e, err := app.Svc.NewEpic(p)
 			if err != nil {
 				return err
 			}
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "epic", e.ID, e.Path)
+				return render.CreatedJSON(app.Out, "epic", e.ID, e.Path, app.DryRun)
 			}
-			render.CreatedHuman(app.Out, app.Style, app.rel(e.Path))
-			fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task new \"Title\" --epic "+e.ID))
+			render.CreatedHuman(app.Out, app.Style, app.rel(e.Path), app.DryRun)
+			if !app.DryRun {
+				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task new \"Title\" --epic "+e.ID))
+			}
 			return nil
 		},
 	}

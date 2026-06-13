@@ -25,7 +25,9 @@ just install            # put tskflwctl on $PATH
 ## Daily workflow
 
 `tskflwctl` anchors to the nearest planning repo (walks up for `tasks/`; `-C` to
-override). All commands take `--json` for scripting/agents.
+override). All commands take `--json` for scripting/agents, and every mutating
+command takes `--dry-run` to preview the write (full validation runs; nothing
+is written).
 
 ```bash
 tskflwctl init                         # scaffold a planning tree here

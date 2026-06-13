@@ -18,7 +18,7 @@ func TestFS_SetFields(t *testing.T) {
 		"priority":    "high",
 		"tags":        []string{"a", "b"},
 		"description": "new desc",
-	})
+	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestFS_SetFields(t *testing.T) {
 }
 
 func TestFS_SetFields_NotFound(t *testing.T) {
-	_, err := NewFS(t.TempDir()).SetFields("ghost", map[string]any{"priority": "low"})
+	_, err := NewFS(t.TempDir()).SetFields("ghost", map[string]any{"priority": "low"}, false)
 	if err == nil {
 		t.Fatal("want error for missing task")
 	}
@@ -67,7 +67,7 @@ func TestFS_SetFields_RejectsUnreloadable(t *testing.T) {
 
 	// tier as a string serializes to `tier: "4"` (!!str), which the strict Task
 	// loader can't read back into an int.
-	_, err := NewFS(root).SetFields("alpha", map[string]any{"tier": "4"})
+	_, err := NewFS(root).SetFields("alpha", map[string]any{"tier": "4"}, false)
 	if err == nil {
 		t.Fatal("want an error for an update that wouldn't reload")
 	}

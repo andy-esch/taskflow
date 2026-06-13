@@ -19,25 +19,27 @@ func (nopStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) { retur
 func (nopStore) GetTask(string) (domain.Task, string, error) {
 	return domain.Task{}, "", domain.ErrNotFound
 }
-func (nopStore) Move(string, domain.Status, time.Time) (domain.Task, error) {
+func (nopStore) Move(string, domain.Status, time.Time, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
-func (nopStore) SetFields(string, map[string]any) (domain.Task, error) { return domain.Task{}, nil }
-func (nopStore) CreateTask(domain.Task, string) (domain.Task, error)   { return domain.Task{}, nil }
+func (nopStore) SetFields(string, map[string]any, bool) (domain.Task, error) {
+	return domain.Task{}, nil
+}
+func (nopStore) CreateTask(domain.Task, string, bool) (domain.Task, error) { return domain.Task{}, nil }
 func (nopStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return nil, nil, nil
 }
 func (nopStore) GetEpic(string) (domain.Epic, string, error) {
 	return domain.Epic{}, "", domain.ErrNotFound
 }
-func (nopStore) CreateEpic(string, domain.Epic, string) (domain.Epic, error) {
+func (nopStore) CreateEpic(string, domain.Epic, string, bool) (domain.Epic, error) {
 	return domain.Epic{}, nil
 }
 func (nopStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) { return nil, nil, nil }
 func (nopStore) GetAudit(string) (domain.Audit, string, error) {
 	return domain.Audit{}, "", domain.ErrNotFound
 }
-func (nopStore) MoveAudit(string, domain.AuditBucket) (domain.Audit, error) {
+func (nopStore) MoveAudit(string, domain.AuditBucket, bool) (domain.Audit, error) {
 	return domain.Audit{}, nil
 }
 func (nopStore) FixFrontmatter(bool) ([]domain.FixResult, error) { return nil, nil }
@@ -67,14 +69,14 @@ func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 	}
 	return domain.Task{}, "", domain.ErrNotFound
 }
-func (f *fakeStore) CreateTask(t domain.Task, _ string) (domain.Task, error) {
+func (f *fakeStore) CreateTask(t domain.Task, _ string, _ bool) (domain.Task, error) {
 	f.created = append(f.created, t)
 	return t, nil
 }
 func (f *fakeStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return f.epics, nil, nil
 }
-func (f *fakeStore) CreateEpic(slug string, e domain.Epic, _ string) (domain.Epic, error) {
+func (f *fakeStore) CreateEpic(slug string, e domain.Epic, _ string, _ bool) (domain.Epic, error) {
 	e.ID = slug
 	return e, nil
 }

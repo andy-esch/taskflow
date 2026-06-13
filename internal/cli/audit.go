@@ -89,7 +89,7 @@ func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.
 		ValidArgsFunction: app.auditCompleter(to), // don't offer audits already at `to`
 		RunE: func(_ *cobra.Command, args []string) error {
 			return runMoves(app, args, string(to),
-				func(slug string) (domain.Audit, error) { return app.Svc.MoveAudit(slug, to) },
+				func(slug string) (domain.Audit, error) { return app.Svc.MoveAudit(slug, to, app.DryRun) },
 				func(a domain.Audit) string { return a.Slug })
 		},
 	}

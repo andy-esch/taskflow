@@ -28,18 +28,22 @@ func newInitCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			created, err := config.Init(abs)
+			created, err := config.Init(abs, app.DryRun)
 			if err != nil {
 				return err
 			}
 			if app.JSON {
-				return render.InitJSON(app.Out, abs, created)
+				return render.InitJSON(app.Out, abs, created, app.DryRun)
 			}
 			if len(created) == 0 {
 				fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)
 				return nil
 			}
-			fmt.Fprintf(app.Out, "%s initialized %s\n", app.Style.Green("✔"), app.Style.Bold(abs))
+			verb := "initialized"
+			if app.DryRun {
+				verb = "would initialize"
+			}
+			fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), verb, app.Style.Bold(abs))
 			for _, c := range created {
 				fmt.Fprintf(app.Out, "  %s %s\n", app.Style.Dim("+"), c)
 			}

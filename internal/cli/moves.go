@@ -31,11 +31,11 @@ func runMoves[T any](app *App, slugs []string, status string, move func(slug str
 		results = append(results, res)
 	}
 	if app.JSON {
-		if err := render.MovesJSON(app.Out, results); err != nil {
+		if err := render.MovesJSON(app.Out, results, app.DryRun); err != nil {
 			return err
 		}
 	} else {
-		render.MovesHuman(app.Out, app.Style, results)
+		render.MovesHuman(app.Out, app.Style, results, app.DryRun)
 	}
 	if firstErr != nil {
 		// %w keeps the sentinel (exit-code mapping); the text is a count, not a

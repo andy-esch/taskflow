@@ -41,15 +41,18 @@ func newTaskNewCmd(app *App) *cobra.Command {
 		Annotations: map[string]string{"safety": "mutating"},
 		RunE: func(_ *cobra.Command, args []string) error {
 			p.Title = args[0]
+			p.DryRun = app.DryRun
 			t, err := app.Svc.NewTask(p)
 			if err != nil {
 				return err
 			}
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "task", t.Slug, t.Path)
+				return render.CreatedJSON(app.Out, "task", t.Slug, t.Path, app.DryRun)
 			}
-			render.CreatedHuman(app.Out, app.Style, app.rel(t.Path))
-			fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task start "+t.Slug))
+			render.CreatedHuman(app.Out, app.Style, app.rel(t.Path), app.DryRun)
+			if !app.DryRun {
+				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task start "+t.Slug))
+			}
 			return nil
 		},
 	}
@@ -180,14 +183,18 @@ func newTaskSetCmd(app *App) *cobra.Command {
 				}
 				updates[k] = domain.UnsetField{}
 			}
-			task, err := app.Svc.SetFields(args[0], updates, force)
+			task, err := app.Svc.SetFields(args[0], updates, force, app.DryRun)
 			if err != nil {
 				return err
 			}
 			if app.JSON {
 				return render.TaskShowJSON(app.Out, task, "")
 			}
-			fmt.Fprintf(app.Out, "%s updated %s\n", app.Style.Green("✔"), app.Style.Bold(task.Slug))
+			verb := "updated"
+			if app.DryRun {
+				verb = "would update"
+			}
+			fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), verb, app.Style.Bold(task.Slug))
 			return nil
 		},
 	}
@@ -250,6 +257,6 @@ func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Comm
 // runTransition moves each task to status `to`, via the shared runMoves report.
 func runTransition(app *App, to domain.Status, slugs []string) error {
 	return runMoves(app, slugs, string(to),
-		func(slug string) (domain.Task, error) { return app.Svc.Move(slug, to) },
+		func(slug string) (domain.Task, error) { return app.Svc.Move(slug, to, app.DryRun) },
 		func(t domain.Task) string { return t.Slug })
 }

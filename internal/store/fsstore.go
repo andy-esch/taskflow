@@ -94,7 +94,7 @@ func (s *FS) GetTask(slug string) (domain.Task, string, error) {
 // Move transitions a task to status `to`: it updates frontmatter (status +
 // dates) and relocates the file to the target status directory. Moving to the
 // current status is an idempotent no-op.
-func (s *FS) Move(slug string, to domain.Status, now time.Time) (domain.Task, error) {
+func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun bool) (domain.Task, error) {
 	if !to.Valid() {
 		return domain.Task{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
 	}
@@ -142,6 +142,9 @@ func (s *FS) Move(slug string, to domain.Status, now time.Time) (domain.Task, er
 	if err != nil {
 		return domain.Task{}, err
 	}
+	if dryRun {
+		return t, nil // every check above ran; only the disk mutation is skipped
+	}
 	// Write the updated content atomically into the *target* status dir, then
 	// remove the old file last. A crash between the two leaves both files (a
 	// recoverable duplicate), never one whose frontmatter status disagrees with
@@ -160,7 +163,7 @@ func (s *FS) Move(slug string, to domain.Status, now time.Time) (domain.Task, er
 
 // SetFields surgically updates frontmatter fields on a task (no status/dir
 // change) and writes the file atomically in place.
-func (s *FS) SetFields(slug string, updates map[string]any) (domain.Task, error) {
+func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error) {
 	path, st, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, err
@@ -192,6 +195,9 @@ func (s *FS) SetFields(slug string, updates map[string]any) (domain.Task, error)
 	// torn writes, not lost updates.
 	if curPath, _, err := s.resolve(slug); err != nil || curPath != path {
 		return domain.Task{}, fmt.Errorf("task %q changed on disk during update; retry: %w", slug, domain.ErrConflict)
+	}
+	if dryRun {
+		return t, nil // validated end-to-end; only the write is skipped
 	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
 		return domain.Task{}, err

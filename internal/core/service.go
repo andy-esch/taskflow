@@ -79,8 +79,9 @@ func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
 
 // Move transitions a task to the given status (lifecycle engine behind the
 // explicit verbs). Moving to the current status is an idempotent no-op.
-func (s *Service) Move(slug string, to domain.Status) (domain.Task, error) {
-	return s.store.Move(slug, to, time.Now())
+// dryRun validates everything and returns the would-be task without writing.
+func (s *Service) Move(slug string, to domain.Status, dryRun bool) (domain.Task, error) {
+	return s.store.Move(slug, to, time.Now(), dryRun)
 }
 
 // SetFields validates and applies frontmatter updates to a task (stamping
@@ -96,7 +97,7 @@ func (s *Service) Move(slug string, to domain.Status) (domain.Task, error) {
 // an empty epic detaches the task (both decided 2026-06-12). When `epic` is set
 // non-empty it must exist, mirroring NewTask, so set can't orphan a task out of
 // its epic's rollup.
-func (s *Service) SetFields(slug string, updates map[string]any, force bool) (domain.Task, error) {
+func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun bool) (domain.Task, error) {
 	if len(updates) == 0 {
 		return domain.Task{}, fmt.Errorf("%w: no fields given", domain.ErrValidation)
 	}
@@ -139,7 +140,7 @@ func (s *Service) SetFields(slug string, updates map[string]any, force bool) (do
 		}
 	}
 	withMeta["updated_at"] = time.Now().Format("2006-01-02")
-	return s.store.SetFields(slug, withMeta)
+	return s.store.SetFields(slug, withMeta, dryRun)
 }
 
 // coerceField converts a string `--set` value into the native type its field
@@ -188,6 +189,7 @@ type NewTaskParams struct {
 	Tags        []string
 	Next        bool   // create in next-up instead of ready-to-start
 	Body        string // override the default handoff scaffold
+	DryRun      bool   // validate + report the would-be task without writing
 }
 
 const taskBodyTemplate = `
@@ -263,7 +265,7 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	if body == "" {
 		body = fmt.Sprintf(taskBodyTemplate, p.Title, p.Epic)
 	}
-	return s.store.CreateTask(t, body)
+	return s.store.CreateTask(t, body, p.DryRun)
 }
 
 // NewEpicParams are the inputs for creating an epic.
@@ -274,6 +276,7 @@ type NewEpicParams struct {
 	Priority    string
 	Tags        []string
 	Body        string
+	DryRun      bool // validate + report the would-be epic without writing
 }
 
 const epicBodyTemplate = `
@@ -320,7 +323,7 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 	if body == "" {
 		body = fmt.Sprintf(epicBodyTemplate, p.Title, p.Description)
 	}
-	return s.store.CreateEpic(slug, e, body)
+	return s.store.CreateEpic(slug, e, body, p.DryRun)
 }
 
 func epicExists(epics []domain.Epic, id string) bool {
@@ -537,8 +540,8 @@ func (s *Service) ShowAudit(slug string) (domain.Audit, string, error) {
 }
 
 // MoveAudit relocates an audit to another bucket (close/reopen/defer).
-func (s *Service) MoveAudit(slug string, to domain.AuditBucket) (domain.Audit, error) {
-	return s.store.MoveAudit(slug, to)
+func (s *Service) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
+	return s.store.MoveAudit(slug, to, dryRun)
 }
 
 func hasTag(tags []string, want string) bool {

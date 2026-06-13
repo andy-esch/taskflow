@@ -152,6 +152,5 @@ actionable frontmatter errors, agent safety annotations.
 
 Remaining (see `planning/`): `adr`/`project` groups, audit finding-level
 commands, reporting views (`stats`/`index`/`tags`), `track`, `schema --type
-cli`, global `--dry-run`, advisory `flock`, structured JSON error envelope,
-interactive `init` wizard. Out of scope by a long shot: MCP / semantic engine /
-pgvector.
+cli`, advisory `flock`, interactive `init` wizard. Out of scope by a long shot:
+MCP / semantic engine / pgvector.

@@ -23,7 +23,7 @@ func TestFS_Move_RejectsUnreloadableWithoutMoving(t *testing.T) {
 	const original = "---\nstatus: ready-to-start\ntier: \"4\"\n---\n# Alpha\n"
 	writeTask(t, root, "ready-to-start", "alpha.md", original)
 
-	_, err := NewFS(root).Move("alpha", domain.StatusInProgress, time.Now())
+	_, err := NewFS(root).Move("alpha", domain.StatusInProgress, time.Now(), false)
 	if err == nil {
 		t.Fatal("want an error for a move that wouldn't reload")
 	}
@@ -49,7 +49,7 @@ func TestFS_MoveAudit_RejectsMalformedWithoutMoving(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a1.md"), []byte("---\narea: store\n# no closing fence\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := NewFS(root).MoveAudit("a1", domain.AuditClosed)
+	_, err := NewFS(root).MoveAudit("a1", domain.AuditClosed, false)
 	if err == nil {
 		t.Fatal("want an error for a malformed audit")
 	}
@@ -81,7 +81,7 @@ func TestFS_SetFields_ConflictsWhenMovedConcurrently(t *testing.T) {
 	}
 	defer func() { testHookBeforeSetFieldsWrite = nil }()
 
-	_, err := fs.SetFields("alpha", map[string]any{"priority": "high"})
+	_, err := fs.SetFields("alpha", map[string]any{"priority": "high"}, false)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("want ErrConflict for a concurrently-moved task, got %v", err)
 	}
@@ -98,7 +98,7 @@ func TestFS_SetFields_CRLFRoundTrip(t *testing.T) {
 	crlf := strings.ReplaceAll("---\nstatus: ready-to-start\ndescription: old\n---\n# Alpha\nbody\n", "\n", "\r\n")
 	writeTask(t, root, "ready-to-start", "alpha.md", crlf)
 
-	task, err := NewFS(root).SetFields("alpha", map[string]any{"description": "new desc"})
+	task, err := NewFS(root).SetFields("alpha", map[string]any{"description": "new desc"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestFS_UnterminatedFrontmatterIsAProblemNotAnEmptyTask(t *testing.T) {
 		t.Errorf("problem should name the unterminated fence, got %q", problems[0].Message)
 	}
 
-	_, err = fs.SetFields("alpha", map[string]any{"priority": "high"})
+	_, err = fs.SetFields("alpha", map[string]any{"priority": "high"}, false)
 	if err == nil {
 		t.Fatal("SetFields must refuse an unterminated-frontmatter file")
 	}

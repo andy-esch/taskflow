@@ -79,7 +79,7 @@ func TestResolve_FuzzyTiers(t *testing.T) {
 // abbreviation must keep the file's full slug, not rename it to the query.
 func TestMove_FuzzyKeepsCanonicalSlug(t *testing.T) {
 	fs := fuzzyRepo(t)
-	task, err := fs.Move("backoff", domain.StatusInProgress, time.Now())
+	task, err := fs.Move("backoff", domain.StatusInProgress, time.Now(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
