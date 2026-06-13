@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Render the detail-pane body with glamour (cached, never in View), with an R toggle between raw and pretty; persist the preference
 effort: Unknown
@@ -8,8 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [tui, bubble-tea]
 created: "2026-06-11"
-updated_at: "2026-06-12"
+updated_at: "2026-06-13"
 started_at: "2026-06-12"
+completed_at: "2026-06-13"
 ---
 
 # TUI: glamour markdown rendering with raw/pretty toggle
