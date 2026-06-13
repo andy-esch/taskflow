@@ -164,3 +164,33 @@ func TestFixFrontmatterText_KeepsCRLF(t *testing.T) {
 		t.Errorf("tags not normalized:\n%s", fixed)
 	}
 }
+
+// TestFS_ListTasks_SkipsSymlinkedMarkdown pins that store scans accept only
+// regular .md files: a symlink named like a task must not be followed (it could
+// point out of the planning tree), so it's silently skipped, not parsed.
+func TestFS_ListTasks_SkipsSymlinkedMarkdown(t *testing.T) {
+	root := t.TempDir()
+	writeTask(t, root, "ready-to-start", "real.md",
+		"---\nstatus: ready-to-start\ndescription: real\n---\n# Real\n")
+
+	// A symlink in the status dir pointing at a file outside the tree.
+	outside := filepath.Join(t.TempDir(), "secret.md")
+	if err := os.WriteFile(outside, []byte("---\nstatus: ready-to-start\n---\n# Secret\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "tasks", "ready-to-start", "link.md")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unsupported here: %v", err)
+	}
+
+	tasks, problems, err := NewFS(root).ListTasks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(problems) != 0 {
+		t.Errorf("a skipped symlink must not surface as a problem, got %v", problems)
+	}
+	if len(tasks) != 1 || tasks[0].Slug != "real" {
+		t.Errorf("only the regular file should be listed, got %d tasks: %+v", len(tasks), tasks)
+	}
+}

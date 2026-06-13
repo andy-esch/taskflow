@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,5 +74,45 @@ func TestLintFix_UnrepairableFileExitsNonZero(t *testing.T) {
 	dry.SetErr(&out)
 	if err := dry.Execute(); err != nil {
 		t.Errorf("dry-run should not fail on unrepairable files: %v", err)
+	}
+}
+
+// TestLintFix_JSONReportsUnreadable pins the --json contract: an unrepairable
+// file must appear in the fix report's `unreadable` array, not only as a count
+// in the prose error — a --json consumer must never parse prose to learn what
+// stayed broken.
+func TestLintFix_JSONReportsUnreadable(t *testing.T) {
+	root := t.TempDir()
+	broken := filepath.Join(root, "tasks", "ready-to-start", "broken.md")
+	if err := os.MkdirAll(filepath.Dir(broken), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(broken, []byte("---\nstatus: ready-to-start\n# no closing fence\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// stdout carries the fix envelope; the error is returned (not written, since
+	// the root silences errors), so the buffer holds only the JSON report.
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetArgs([]string{"-C", root, "lint", "--fix", "--json"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err == nil || ExitCode(err) != 11 {
+		t.Fatalf("want exit 11 for an unrepairable file, got %v", err)
+	}
+
+	var env struct {
+		DryRun     bool `json:"dry_run"`
+		Unreadable []struct {
+			Path    string `json:"path"`
+			Message string `json:"message"`
+		} `json:"unreadable"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+		t.Fatalf("fix --json invalid: %v\n%s", err, out.String())
+	}
+	if len(env.Unreadable) != 1 || !strings.Contains(env.Unreadable[0].Path, "broken.md") {
+		t.Errorf("unreadable array should name broken.md, got %+v", env.Unreadable)
 	}
 }

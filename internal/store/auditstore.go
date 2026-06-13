@@ -39,7 +39,7 @@ func (s *FS) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 			return nil, nil, fmt.Errorf("read audit bucket %s: %w", dir, err)
 		}
 		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			if !markdownDoc(e) {
 				continue
 			}
 			path := filepath.Join(dir, e.Name())
@@ -130,7 +130,7 @@ func (s *FS) resolveAudit(slug string) (path string, bucket domain.AuditBucket, 
 			return "", "", fmt.Errorf("read audit dir %s: %w", dir, err)
 		}
 		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			if !markdownDoc(e) {
 				continue
 			}
 			cands = append(cands, candidate{

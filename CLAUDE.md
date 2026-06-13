@@ -47,8 +47,9 @@ touch git — it writes files; the user stages/commits.
 ## Code conventions
 
 Match the surrounding code (naming, comment density, idiom). Errors wrap the
-domain sentinels (`ErrNotFound` / `ErrValidation` / `ErrInvalidTransition` /
-`ErrAmbiguous` / `ErrConflict`) so the CLI maps them to exit codes (10–14). New
+domain sentinels (`ErrNotFound` / `ErrValidation` / `ErrAmbiguous` /
+`ErrConflict`) so the CLI maps them to exit codes (10, 11, 13, 14; 12 is retired
+but reserved). New
 file writes go through the atomic helpers in `store/atomic.go`
 (`writeFileAtomic` to overwrite, `createFileAtomic` for exclusive create).
 Frontmatter is edited **surgically** — preserve unknown fields, comments, and

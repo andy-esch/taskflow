@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func cleanTask() Task {
 	return Task{
@@ -93,5 +96,33 @@ func TestLintTask_BadConstraints(t *testing.T) {
 	}
 	if !got["tier"] || !got["priority"] || !got["description"] {
 		t.Errorf("expected tier/priority/description issues, got %+v", issues)
+	}
+}
+
+// TestLintTask_DescriptionLengthInRunes guards that lint counts characters, not
+// bytes, matching ValidateDescription — a multibyte description at the cap must
+// pass lint just as it passes creation validation.
+func TestLintTask_DescriptionLengthInRunes(t *testing.T) {
+	task := cleanTask()
+	// MaxDescriptionLen multibyte runes: under the rune cap, but far over it in
+	// bytes (each 'é' is 2 bytes), so a byte-based check would wrongly flag it.
+	task.Description = strings.Repeat("é", MaxDescriptionLen)
+	for _, i := range LintTask(task, func(string) bool { return true }) {
+		if i.Field == "description" {
+			t.Errorf("a %d-rune description (at the cap) must not be flagged too long: %q",
+				MaxDescriptionLen, i.Message)
+		}
+	}
+
+	// One rune over the cap must still be flagged.
+	task.Description = strings.Repeat("é", MaxDescriptionLen+1)
+	flagged := false
+	for _, i := range LintTask(task, func(string) bool { return true }) {
+		if i.Field == "description" {
+			flagged = true
+		}
+	}
+	if !flagged {
+		t.Errorf("a %d-rune description (over the cap) should be flagged too long", MaxDescriptionLen+1)
 	}
 }

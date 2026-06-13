@@ -120,6 +120,19 @@ func TestSetFields_UnsetRemovesKey(t *testing.T) {
 	}
 }
 
+// TestSetFields_UnsetRejectsUnknownField guards the gate that the unset path
+// once skipped: `--unset <typo>` without --force must fail like `--set <typo>`,
+// not silently no-op. --force still lets a genuine custom field through.
+func TestSetFields_UnsetRejectsUnknownField(t *testing.T) {
+	svc := setFieldsRepo(t)
+	if _, err := svc.SetFields("t", map[string]any{"descriptionn": domain.UnsetField{}}, false, false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("unset of an unknown field should be ErrValidation, got %v", err)
+	}
+	if _, err := svc.SetFields("t", map[string]any{"custom": domain.UnsetField{}}, true, false); err != nil {
+		t.Errorf("--force should allow unsetting a custom field, got %v", err)
+	}
+}
+
 // TestSetFields_EpicDetach pins the D5 decision: an empty epic detaches the
 // task (removes the key) instead of failing with `unknown epic ""`.
 func TestSetFields_EpicDetach(t *testing.T) {

@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // Issue is a single frontmatter lint finding.
@@ -61,8 +62,12 @@ func LintTask(t Task, validEpic func(string) bool) []Issue {
 		}
 	case strings.ContainsAny(t.Description, "\r\n"):
 		add("description", "must be a single line")
-	case len(t.Description) > MaxDescriptionLen:
-		add("description", fmt.Sprintf("too long (%d > %d)", len(t.Description), MaxDescriptionLen))
+	default:
+		// Count CHARACTERS, not bytes, to match ValidateDescription — a multibyte
+		// description must not be flagged here after passing creation validation.
+		if n := utf8.RuneCountInString(t.Description); n > MaxDescriptionLen {
+			add("description", fmt.Sprintf("too long (%d > %d chars)", n, MaxDescriptionLen))
+		}
 	}
 
 	issues = append(issues, MisfiledIssues(t)...)

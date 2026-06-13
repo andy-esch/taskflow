@@ -229,7 +229,7 @@ func TestSummaryOutputs(t *testing.T) {
 func TestFixOutputs(t *testing.T) {
 	results := []domain.FixResult{{Path: "tasks/ready-to-start/a.md", Changes: []string{"tags: normalized to a YAML list"}}}
 	var out bytes.Buffer
-	if err := FixJSON(&out, results, true); err != nil {
+	if err := FixJSON(&out, results, nil, true); err != nil {
 		t.Fatal(err)
 	}
 	var got struct {
@@ -239,10 +239,17 @@ func TestFixOutputs(t *testing.T) {
 			Path    string   `json:"path"`
 			Changes []string `json:"changes"`
 		} `json:"fixed"`
+		Unreadable []struct {
+			Path    string `json:"path"`
+			Message string `json:"message"`
+		} `json:"unreadable"`
 	}
 	decodeStrict(t, out.Bytes(), &got)
 	if !got.DryRun || len(got.Fixed) != 1 {
 		t.Errorf("fix payload wrong:\n%s", out.String())
+	}
+	if got.Unreadable == nil {
+		t.Errorf("unreadable should be present (empty, not null) on a dry-run:\n%s", out.String())
 	}
 
 	out.Reset()

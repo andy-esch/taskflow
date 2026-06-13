@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -95,6 +96,25 @@ func TestService_NewTask_RequiresTags(t *testing.T) {
 	_, err := svc.NewTask(NewTaskParams{Title: "X", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium"})
 	if err == nil || !strings.Contains(err.Error(), "tag") {
 		t.Errorf("tagless create should fail mentioning tags, got %v", err)
+	}
+}
+
+// TestService_Create_RejectsHostileTitle pins that the create path hard-fails on
+// filename-hostile title characters (a colon + em-dash) rather than silently
+// slugifying to a different name, for both tasks and epics.
+func TestService_Create_RejectsHostileTitle(t *testing.T) {
+	svc := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}})
+	_, err := svc.NewTask(NewTaskParams{Title: "Fix: the thing — now", Epic: "e1", Tags: []string{"x"}, Tier: 3, Autonomy: 3, Priority: "medium"})
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("task new with a hostile title should be ErrValidation, got %v", err)
+	}
+	_, err = svc.NewEpic(NewEpicParams{Title: "Plan: phase — two", Description: "d", Priority: "medium", Status: "planning"})
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("epic new with a hostile title should be ErrValidation, got %v", err)
+	}
+	// A clean title still creates.
+	if _, err := svc.NewTask(NewTaskParams{Title: "Fix the thing now", Epic: "e1", Tags: []string{"x"}, Tier: 3, Autonomy: 3, Priority: "medium"}); err != nil {
+		t.Errorf("a clean title should create, got %v", err)
 	}
 }
 

@@ -25,7 +25,7 @@ func ParseAuditBucket(s string) (AuditBucket, error) {
 			return b, nil
 		}
 	}
-	return "", fmt.Errorf("invalid audit bucket %q (open|closed|deferred)", s)
+	return "", fmt.Errorf("%w: invalid audit bucket %q (open|closed|deferred)", ErrValidation, s)
 }
 
 // Dir is the directory name for this bucket.

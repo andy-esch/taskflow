@@ -2,11 +2,20 @@ package store
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+// markdownDoc reports whether a directory entry is the shape every store scan
+// accepts: a regular `.md` file. Requiring a *regular* file (not just non-dir)
+// rejects symlinks, so a planted `x.md` link can't be followed out of the
+// planning tree — the read-side counterpart to validQueryName's query guard.
+func markdownDoc(e os.DirEntry) bool {
+	return e.Type().IsRegular() && strings.HasSuffix(e.Name(), ".md")
+}
 
 // Fuzzy slug resolution: the keyboard-economy companion to tab-completion.
 // An exact id always wins; otherwise a unique case-insensitive prefix, then a
