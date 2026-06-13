@@ -63,13 +63,7 @@ func miniBar(pct, width int) string {
 	if width < 1 {
 		width = 1
 	}
-	filled := pct * width / 100
-	switch {
-	case filled > width:
-		filled = width
-	case filled < 0:
-		filled = 0
-	}
+	filled := theme.BarFill(pct, width)
 	return fg(theme.Percent(pct), strings.Repeat("█", filled)) + dim(strings.Repeat("░", width-filled))
 }
 

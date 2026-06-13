@@ -52,7 +52,7 @@ func taskFields(t domain.Task) []fmField {
 
 // CreateTask writes a new task file under tasks/<status>/<slug>.md. It refuses
 // to clobber an existing file. The slug and status are taken from t.
-func (s *FS) CreateTask(t domain.Task, body string) (domain.Task, error) {
+func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error) {
 	if t.Slug == "" {
 		return domain.Task{}, fmt.Errorf("%w: empty task slug", domain.ErrValidation)
 	}
@@ -61,6 +61,14 @@ func (s *FS) CreateTask(t domain.Task, body string) (domain.Task, error) {
 	content, err := buildFile(taskFields(t), body)
 	if err != nil {
 		return domain.Task{}, err
+	}
+	if dryRun {
+		// Same collision contract as createFileAtomic, minus the write.
+		if _, statErr := os.Stat(path); statErr == nil {
+			return domain.Task{}, fmt.Errorf("task %q already exists: %w", t.Slug, domain.ErrConflict)
+		}
+		t.Path = path
+		return t, nil
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return domain.Task{}, fmt.Errorf("mkdir %s: %w", dir, err)
@@ -112,7 +120,7 @@ func epicFields(e domain.Epic) []fmField {
 
 // CreateEpic writes a new epic at epics/NN-<slug>.md, auto-assigning the next
 // number. It refuses to clobber an existing file.
-func (s *FS) CreateEpic(slug string, e domain.Epic, body string) (domain.Epic, error) {
+func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (domain.Epic, error) {
 	if slug == "" {
 		return domain.Epic{}, fmt.Errorf("%w: empty epic slug", domain.ErrValidation)
 	}
@@ -125,6 +133,11 @@ func (s *FS) CreateEpic(slug string, e domain.Epic, body string) (domain.Epic, e
 	content, err := buildFile(epicFields(e), body)
 	if err != nil {
 		return domain.Epic{}, err
+	}
+	if dryRun {
+		e.ID = id
+		e.Path = path
+		return e, nil // numbering + collision semantics ran; only the write is skipped
 	}
 	if err := os.MkdirAll(s.epicsDir, 0o755); err != nil {
 		return domain.Epic{}, fmt.Errorf("mkdir %s: %w", s.epicsDir, err)

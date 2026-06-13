@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -87,10 +89,26 @@ func TestWriteTable_AlignsColoredCells(t *testing.T) {
 	})
 	// Both data columns must start at the same visible offset despite the ANSI
 	// in row 1 — i.e. stripping ANSI yields a clean aligned table.
-	plain := ansiRe.ReplaceAllString(b.String(), "")
+	plain := ansi.Strip(b.String())
 	for _, ln := range strings.Split(strings.TrimRight(plain, "\n"), "\n") {
 		if !strings.Contains(ln, "  ") { // a 2-space gutter must survive
 			t.Errorf("row not padded: %q", ln)
 		}
 	}
 }
+
+// TestVisibleWidth_DisplayCells pins the wide-rune fix: CJK/emoji occupy two
+// display cells, so a rune count under-measured them and shifted columns.
+func TestVisibleWidth_DisplayCells(t *testing.T) {
+	if w := visibleWidth("日本語"); w != 6 {
+		t.Errorf("CJK width should count cells, got %d want 6", w)
+	}
+	if w := visibleWidth("\x1b[31mab\x1b[0m"); w != 2 {
+		t.Errorf("ANSI escapes must not count, got %d want 2", w)
+	}
+	if got := truncate("日本語のタイトル", 7); ansiStripWidth(got) > 7 {
+		t.Errorf("truncate must respect display cells, got %q (%d cells)", got, ansiStripWidth(got))
+	}
+}
+
+func ansiStripWidth(s string) int { return visibleWidth(s) }

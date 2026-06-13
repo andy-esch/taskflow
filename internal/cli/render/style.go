@@ -3,9 +3,9 @@ package render
 import (
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
-	"unicode/utf8"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
@@ -109,37 +109,29 @@ func (s Style) Bar(pct, width int) string {
 	if width <= 0 {
 		width = 10
 	}
-	filled := pct * width / 100
-	switch {
-	case filled > width:
-		filled = width
-	case filled < 0:
-		filled = 0
-	}
+	filled := theme.BarFill(pct, width)
 	code := ansiCode(theme.Percent(pct))
 	return s.wrap(code, strings.Repeat("█", filled)) + s.wrap(ansiGray, strings.Repeat("░", width-filled))
 }
 
-var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
-
-// visibleWidth is the rune width of s ignoring ANSI escapes — so colored cells
-// align correctly (text/tabwriter counts escape bytes, which breaks alignment).
+// visibleWidth is the DISPLAY-CELL width of s ignoring ANSI escapes — so
+// colored cells align (tabwriter counts escape bytes) and wide runes
+// (CJK/emoji occupy two cells) don't shift columns the way a rune count did.
 func visibleWidth(s string) int {
-	return utf8.RuneCountInString(ansiRe.ReplaceAllString(s, ""))
+	return ansi.StringWidth(s)
 }
 
-// truncate shortens a plain string to max visible runes with a trailing "…".
-// Cells containing ANSI are returned unchanged (truncating them risks cutting an
-// escape); the last column is plain in practice.
+// truncate shortens a plain string to max display cells with a trailing "…".
+// Cells containing ANSI are returned unchanged (truncating them risks cutting
+// an escape); the last column is plain in practice.
 func truncate(s string, max int) string {
 	if max <= 1 || strings.Contains(s, "\x1b") {
 		return s
 	}
-	r := []rune(s)
-	if len(r) <= max {
+	if ansi.StringWidth(s) <= max {
 		return s
 	}
-	return string(r[:max-1]) + "…"
+	return ansi.Truncate(s, max, "…")
 }
 
 // writeTable prints a left-aligned, ANSI-aware table. When maxWidth > 0 and the

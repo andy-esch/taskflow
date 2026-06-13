@@ -20,7 +20,8 @@ import (
 // JSON keys match the frontmatter keys exactly (`created`, `updated_at`).
 // 1.1: every CLI-settable field round-trips (effort, autonomy_level), and the
 // misfiled signal (previously human-output-only ⚠) is machine-readable.
-const SchemaVersion = "1.1"
+// 1.2: mutation envelopes carry dry_run:true under --dry-run previews.
+const SchemaVersion = "1.2"
 
 type taskJSON struct {
 	Slug        string   `json:"slug"`
@@ -159,23 +160,30 @@ type MoveResult struct {
 	Error string `json:"error,omitempty"`
 }
 
-// MovesHuman prints one line per transition outcome.
-func MovesHuman(w io.Writer, st Style, results []MoveResult) {
+// MovesHuman prints one line per transition outcome ("would move" on a
+// --dry-run preview).
+func MovesHuman(w io.Writer, st Style, results []MoveResult, dryRun bool) {
+	verb := "moved"
+	if dryRun {
+		verb = "would move"
+	}
 	for _, r := range results {
 		if r.Error != "" {
 			fmt.Fprintf(w, "%s %s: %s\n", st.Red("✘"), st.Bold(r.Slug), r.Error)
 		} else {
-			fmt.Fprintf(w, "%s moved %s -> %s\n", st.Green("✔"), st.Bold(r.Slug), r.To)
+			fmt.Fprintf(w, "%s %s %s -> %s\n", st.Green("✔"), verb, st.Bold(r.Slug), r.To)
 		}
 	}
 }
 
-// MovesJSON writes the structured per-task transition report.
-func MovesJSON(w io.Writer, results []MoveResult) error {
+// MovesJSON writes the structured per-task transition report; dry_run marks a
+// preview (nothing was written).
+func MovesJSON(w io.Writer, results []MoveResult, dryRun bool) error {
 	return encodeJSON(w, struct {
 		SchemaVersion string       `json:"schema_version"`
+		DryRun        bool         `json:"dry_run,omitempty"`
 		Moves         []MoveResult `json:"moves"`
-	}{SchemaVersion: SchemaVersion, Moves: results})
+	}{SchemaVersion: SchemaVersion, DryRun: dryRun, Moves: results})
 }
 
 func encodeJSON(w io.Writer, payload any) error {
@@ -295,21 +303,28 @@ func VersionJSON(w io.Writer, version string) error {
 	}{SchemaVersion: SchemaVersion, Version: version})
 }
 
-// CreatedHuman prints the path of a newly created file.
-func CreatedHuman(w io.Writer, st Style, path string) {
-	fmt.Fprintf(w, "%s %s\n", st.Green("created"), st.Bold(path))
+// CreatedHuman prints the path of a newly created file (or, under --dry-run,
+// the path that WOULD be created).
+func CreatedHuman(w io.Writer, st Style, path string, dryRun bool) {
+	verb := "created"
+	if dryRun {
+		verb = "would create"
+	}
+	fmt.Fprintf(w, "%s %s\n", st.Green(verb), st.Bold(path))
 }
 
-// CreatedJSON writes a versioned envelope for a newly created item.
-func CreatedJSON(w io.Writer, kind, id, path string) error {
+// CreatedJSON writes a versioned envelope for a newly created item; dry_run
+// marks a preview (nothing was written).
+func CreatedJSON(w io.Writer, kind, id, path string, dryRun bool) error {
 	return encodeJSON(w, struct {
 		SchemaVersion string `json:"schema_version"`
+		DryRun        bool   `json:"dry_run,omitempty"`
 		Created       struct {
 			Kind string `json:"kind"`
 			ID   string `json:"id"`
 			Path string `json:"path"`
 		} `json:"created"`
-	}{SchemaVersion: SchemaVersion, Created: struct {
+	}{SchemaVersion: SchemaVersion, DryRun: dryRun, Created: struct {
 		Kind string `json:"kind"`
 		ID   string `json:"id"`
 		Path string `json:"path"`
@@ -549,13 +564,14 @@ func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body strin
 
 // InitJSON reports the scaffold result; created is empty (not null) when the
 // tree already existed, so consumers can len() it without a nil check.
-func InitJSON(w io.Writer, root string, created []string) error {
+func InitJSON(w io.Writer, root string, created []string, dryRun bool) error {
 	if created == nil {
 		created = []string{}
 	}
 	return encodeJSON(w, struct {
 		SchemaVersion string   `json:"schema_version"`
+		DryRun        bool     `json:"dry_run,omitempty"`
 		Root          string   `json:"root"`
 		Created       []string `json:"created"`
-	}{SchemaVersion, root, created})
+	}{SchemaVersion, dryRun, root, created})
 }

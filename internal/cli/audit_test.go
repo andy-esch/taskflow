@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -60,5 +61,24 @@ func TestAuditClose_MovesBucket(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "audits", "closed", "o.md")); err != nil {
 		t.Errorf("audit not moved to closed: %v", err)
+	}
+}
+
+// TestAuditList_ConflictingFlagsError pins the mutual exclusion: --closed
+// --deferred (or --all with either) must error, not silently prefer one.
+func TestAuditList_ConflictingFlagsError(t *testing.T) {
+	root := setupRepo(t)
+	for _, args := range [][]string{
+		{"audit", "list", "--closed", "--deferred"},
+		{"audit", "list", "--all", "--closed"},
+	} {
+		var out bytes.Buffer
+		cmd := NewRootCmd(&out, &out)
+		cmd.SetArgs(append([]string{"-C", root}, args...))
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		if err := cmd.Execute(); err == nil {
+			t.Errorf("%v should error (mutually exclusive flags)", args)
+		}
 	}
 }

@@ -24,6 +24,7 @@ type App struct {
 	ErrOut io.Writer
 
 	JSON    bool
+	DryRun  bool // preview mutations: full validation, no writes
 	Chdir   string
 	Color   string // auto | always | never
 	NoColor bool   // alias for --color=never
@@ -70,6 +71,7 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 	root.SetOut(out)
 	root.SetErr(errOut)
 	root.PersistentFlags().BoolVar(&app.JSON, "json", false, "machine-readable JSON output")
+	root.PersistentFlags().BoolVar(&app.DryRun, "dry-run", false, "preview the mutation without writing (validation still runs)")
 	root.PersistentFlags().StringVarP(&app.Chdir, "chdir", "C", "", "anchor to the planning repo at this path")
 	root.PersistentFlags().StringVar(&app.Color, "color", "auto", "colorize output: auto|always|never")
 	root.PersistentFlags().BoolVar(&app.NoColor, "no-color", false, "disable colored output (alias for --color=never)")

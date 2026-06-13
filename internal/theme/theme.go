@@ -87,3 +87,17 @@ func Percent(pct int) Color {
 		return ColorGray
 	}
 }
+
+// BarFill is the filled-cell count for a width-cell progress bar at pct
+// (clamped 0..width). The ARITHMETIC is shared so the CLI's ANSI bar and the
+// TUI's lipgloss bar can't silently drift; each surface draws its own runes.
+func BarFill(pct, width int) int {
+	filled := pct * width / 100
+	switch {
+	case filled > width:
+		return width
+	case filled < 0:
+		return 0
+	}
+	return filled
+}

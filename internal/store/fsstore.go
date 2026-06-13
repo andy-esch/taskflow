@@ -94,7 +94,7 @@ func (s *FS) GetTask(slug string) (domain.Task, string, error) {
 // Move transitions a task to status `to`: it updates frontmatter (status +
 // dates) and relocates the file to the target status directory. Moving to the
 // current status is an idempotent no-op.
-func (s *FS) Move(slug string, to domain.Status, now time.Time) (domain.Task, error) {
+func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun bool) (domain.Task, error) {
 	if !to.Valid() {
 		return domain.Task{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
 	}
@@ -131,11 +131,19 @@ func (s *FS) Move(slug string, to domain.Status, now time.Time) (domain.Task, er
 	// with nothing on disk changed. Parsing *after* the move reported failure on
 	// a move that had already happened — a phantom failure a retrying caller
 	// (or agent) would act on.
+	//
+	// The destination filename comes from the RESOLVED path, never the query:
+	// with fuzzy resolution, `task complete retr` must not rename the file to
+	// retr.md.
+	canonical := strings.TrimSuffix(filepath.Base(path), ".md")
 	newDir := filepath.Join(s.tasksDir, to.Dir())
-	newPath := filepath.Join(newDir, slug+".md")
+	newPath := filepath.Join(newDir, canonical+".md")
 	t, err := parseTask(newContent, newPath, to)
 	if err != nil {
 		return domain.Task{}, err
+	}
+	if dryRun {
+		return t, nil // every check above ran; only the disk mutation is skipped
 	}
 	// Write the updated content atomically into the *target* status dir, then
 	// remove the old file last. A crash between the two leaves both files (a
@@ -155,7 +163,7 @@ func (s *FS) Move(slug string, to domain.Status, now time.Time) (domain.Task, er
 
 // SetFields surgically updates frontmatter fields on a task (no status/dir
 // change) and writes the file atomically in place.
-func (s *FS) SetFields(slug string, updates map[string]any) (domain.Task, error) {
+func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error) {
 	path, st, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, err
@@ -188,6 +196,9 @@ func (s *FS) SetFields(slug string, updates map[string]any) (domain.Task, error)
 	if curPath, _, err := s.resolve(slug); err != nil || curPath != path {
 		return domain.Task{}, fmt.Errorf("task %q changed on disk during update; retry: %w", slug, domain.ErrConflict)
 	}
+	if dryRun {
+		return t, nil // validated end-to-end; only the write is skipped
+	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
 		return domain.Task{}, err
 	}
@@ -199,30 +210,48 @@ func (s *FS) SetFields(slug string, updates map[string]any) (domain.Task, error)
 // Move. Nil outside tests.
 var testHookBeforeSetFieldsWrite func()
 
-// resolve finds the file and current status for an exact slug match.
+// resolve finds the file and current status for a slug — exact first, then
+// fuzzy (unique case-insensitive prefix, then substring) via resolveID, so a
+// half-remembered name works anywhere a slug is accepted. Ambiguity (including
+// the same slug in two status dirs) is an explicit ErrAmbiguous listing the
+// candidates.
 func (s *FS) resolve(slug string) (path string, status domain.Status, err error) {
-	var paths []string
-	var statuses []domain.Status
+	cands, err := s.taskCandidates()
+	if err != nil {
+		return "", "", err
+	}
+	c, err := resolveID("task", slug, cands)
+	if err != nil {
+		return "", "", err
+	}
+	return c.path, domain.Status(c.dir), nil
+}
+
+// taskCandidates lists every task file as a resolution candidate (the dir name
+// IS the status, per the status==directory invariant).
+func (s *FS) taskCandidates() ([]candidate, error) {
+	var out []candidate
 	for _, st := range domain.AllStatuses() {
-		p := filepath.Join(s.tasksDir, st.Dir(), slug+".md")
-		if info, statErr := os.Stat(p); statErr == nil && !info.IsDir() {
-			paths = append(paths, p)
-			statuses = append(statuses, st)
+		dir := filepath.Join(s.tasksDir, st.Dir())
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("read status dir %s: %w", dir, err)
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+				continue
+			}
+			out = append(out, candidate{
+				id:   strings.TrimSuffix(e.Name(), ".md"),
+				path: filepath.Join(dir, e.Name()),
+				dir:  st.Dir(),
+			})
 		}
 	}
-	switch len(paths) {
-	case 0:
-		return "", "", fmt.Errorf("task %q: %w", slug, domain.ErrNotFound)
-	case 1:
-		return paths[0], statuses[0], nil
-	default:
-		where := make([]string, len(statuses))
-		for i, st := range statuses {
-			where[i] = string(st)
-		}
-		return "", "", fmt.Errorf("%q matches %d tasks (in %s): %w",
-			slug, len(paths), strings.Join(where, ", "), domain.ErrAmbiguous)
-	}
+	return out, nil
 }
 
 func parseTask(content []byte, path string, dirStatus domain.Status) (domain.Task, error) {

@@ -9,7 +9,7 @@ import (
 func TestInit(t *testing.T) {
 	root := t.TempDir()
 
-	created, err := Init(root)
+	created, err := Init(root, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestInit(t *testing.T) {
 	}
 
 	// Idempotent: a second run creates nothing.
-	again, err := Init(root)
+	again, err := Init(root, false)
 	if err != nil {
 		t.Fatal(err)
 	}

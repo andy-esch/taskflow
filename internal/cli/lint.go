@@ -20,7 +20,7 @@ func newLintCmd(app *App) *cobra.Command {
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if fix {
-				return runLintFix(app, dryRun)
+				return runLintFix(app, dryRun || app.DryRun) // global --dry-run is honored too
 			}
 			return runLint(app)
 		},

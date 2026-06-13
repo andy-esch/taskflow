@@ -549,7 +549,7 @@ func (m Model) handleActionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) applyTransition(slug string, to domain.Status) tea.Cmd {
 	svc := m.svc
 	return func() tea.Msg {
-		if _, err := svc.Move(slug, to); err != nil {
+		if _, err := svc.Move(slug, to, false); err != nil {
 			return actionErrMsg{slug: slug, err: err}
 		}
 		return movedMsg{slug: slug, to: to}

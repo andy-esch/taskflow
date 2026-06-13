@@ -55,6 +55,7 @@ func newAuditListCmd(app *App) *cobra.Command {
 	cmd.Flags().BoolVar(&all, "all", false, "all buckets")
 	cmd.Flags().BoolVar(&closed, "closed", false, "closed audits only")
 	cmd.Flags().BoolVar(&deferred, "deferred", false, "deferred audits only")
+	cmd.MarkFlagsMutuallyExclusive("all", "closed", "deferred")
 	return cmd
 }
 
@@ -88,7 +89,7 @@ func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.
 		ValidArgsFunction: app.auditCompleter(to), // don't offer audits already at `to`
 		RunE: func(_ *cobra.Command, args []string) error {
 			return runMoves(app, args, string(to),
-				func(slug string) (domain.Audit, error) { return app.Svc.MoveAudit(slug, to) },
+				func(slug string) (domain.Audit, error) { return app.Svc.MoveAudit(slug, to, app.DryRun) },
 				func(a domain.Audit) string { return a.Slug })
 		},
 	}

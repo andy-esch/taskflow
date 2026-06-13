@@ -27,7 +27,11 @@ func Discover(start string) (*Config, error) {
 	}
 	for {
 		if fileExists(filepath.Join(dir, ConfigFile)) {
-			return &Config{Root: configuredRoot(dir)}, nil
+			root, err := configuredRoot(dir)
+			if err != nil {
+				return nil, err // loud, never a silently empty/forked tree
+			}
+			return &Config{Root: root}, nil
 		}
 		if isDir(filepath.Join(dir, "tasks")) {
 			return &Config{Root: dir}, nil
@@ -36,7 +40,10 @@ func Discover(start string) (*Config, error) {
 			return &Config{Root: filepath.Join(dir, "planning")}, nil
 		}
 		parent := filepath.Dir(dir)
-		if parent == dir || isDir(filepath.Join(dir, ".git")) {
+		// .git is the climb boundary whether it's a directory OR a file — in a
+		// git worktree/submodule it's a file pointing elsewhere, and missing it
+		// would over-climb into a parent's planning tree.
+		if parent == dir || exists(filepath.Join(dir, ".git")) {
 			return nil, fmt.Errorf(
 				"not a taskflow planning repo (no %s or tasks/ found from %s up) — run `tskflwctl init`",
 				ConfigFile, start)
@@ -46,15 +53,29 @@ func Discover(start string) (*Config, error) {
 }
 
 // configuredRoot resolves the planning root from a dir holding ConfigFile,
-// honoring its taskflow_root (default "."). The result is cleaned and kept
-// within dir's tree.
-func configuredRoot(dir string) string {
+// honoring its taskflow_root (default "."). The result must stay within dir's
+// tree and must look like a planning root (contain tasks/): a typo'd or
+// escaping value previously presented a clean EMPTY project — and `task new`
+// would then fork the data into a second tree — so both are loud errors now.
+func configuredRoot(dir string) (string, error) {
 	rel := taskflowRoot(filepath.Join(dir, ConfigFile))
-	return filepath.Join(dir, filepath.FromSlash(rel))
+	root := filepath.Join(dir, filepath.FromSlash(rel))
+	if r, err := filepath.Rel(dir, root); err != nil ||
+		r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("taskflow_root %q escapes %s's directory (%s)", rel, ConfigFile, dir)
+	}
+	if !isDir(filepath.Join(root, "tasks")) {
+		return "", fmt.Errorf(
+			"taskflow_root %q points at %s, which has no tasks/ — fix %s or run `tskflwctl init`",
+			rel, root, ConfigFile)
+	}
+	return root, nil
 }
 
 // taskflowRoot reads the taskflow_root value from a config file with a minimal
 // line scan (no TOML dependency for one string key). Defaults to ".".
+// Quoted values are extracted properly and an inline `# comment` (valid TOML)
+// is stripped — previously `taskflow_root = "." # note` yielded a garbage path.
 func taskflowRoot(configPath string) string {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -69,11 +90,37 @@ func taskflowRoot(configPath string) string {
 		if !ok || strings.TrimSpace(k) != "taskflow_root" {
 			continue
 		}
-		if v = strings.Trim(strings.TrimSpace(v), `"'`); v != "" {
+		if v = tomlStringValue(v); v != "" {
 			return v
 		}
 	}
 	return "."
+}
+
+// tomlStringValue extracts a string value from the raw right-hand side of a
+// `key = value` line: the quoted segment if quoted (comment after it ignored),
+// otherwise the text up to an inline `#` comment, trimmed.
+func tomlStringValue(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if q := raw[0]; q == '"' || q == '\'' {
+		if end := strings.IndexByte(raw[1:], q); end >= 0 {
+			return raw[1 : 1+end]
+		}
+		return "" // unterminated quote: treat as unset rather than guess
+	}
+	if i := strings.IndexByte(raw, '#'); i >= 0 {
+		raw = raw[:i]
+	}
+	return strings.TrimSpace(raw)
+}
+
+// exists reports whether path exists as anything (file or directory).
+func exists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }
 
 func isDir(p string) bool {
@@ -99,7 +146,7 @@ tracked_repos = []
 // Init scaffolds the planning directory tree and writes the config file under
 // root. It is idempotent: existing dirs/config are left untouched. Returns the
 // relative paths created (empty if nothing was needed).
-func Init(root string) ([]string, error) {
+func Init(root string, dryRun bool) ([]string, error) {
 	dirs := []string{
 		"tasks/next-up", "tasks/ready-to-start", "tasks/in-progress",
 		"tasks/completed", "tasks/deprecated", "tasks/deferred",
@@ -112,8 +159,10 @@ func Init(root string) ([]string, error) {
 		if isDir(p) {
 			continue
 		}
-		if err := os.MkdirAll(p, 0o755); err != nil {
-			return created, fmt.Errorf("mkdir %s: %w", p, err)
+		if !dryRun {
+			if err := os.MkdirAll(p, 0o755); err != nil {
+				return created, fmt.Errorf("mkdir %s: %w", p, err)
+			}
 		}
 		created = append(created, d)
 	}
@@ -121,6 +170,12 @@ func Init(root string) ([]string, error) {
 	// Exclusive create instead of exists-then-write: a concurrent init must not
 	// clobber a config the other process just wrote (idempotency falls out of
 	// O_EXCL rather than a racy stat).
+	if dryRun {
+		if !fileExists(cfg) {
+			created = append(created, ConfigFile)
+		}
+		return created, nil
+	}
 	switch err := writeFileExclusive(cfg, []byte(defaultConfigTOML), 0o644); {
 	case err == nil:
 		created = append(created, ConfigFile)

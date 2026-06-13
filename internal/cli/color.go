@@ -40,19 +40,12 @@ func forceColorEnv() bool {
 	return false
 }
 
-// isTerminal reports whether w is a character device (a TTY). It checks the
-// file mode rather than the terminal API so it works for the color decision
-// even on odd file types.
+// isTerminal reports whether w is a real TTY. term.IsTerminal (the isatty
+// ioctl) replaces the old ModeCharDevice stat: /dev/null is a char device but
+// not a terminal, so it no longer receives ANSI under --color=auto.
 func isTerminal(w io.Writer) bool {
 	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
+	return ok && term.IsTerminal(int(f.Fd()))
 }
 
 // terminalWidth returns the column width of w's terminal, or 0 when w isn't a

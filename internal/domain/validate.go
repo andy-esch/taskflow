@@ -5,9 +5,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
-// MaxDescriptionLen is the frontmatter description cap (matches the pm rule).
+// MaxDescriptionLen is the frontmatter description cap, in characters.
 const MaxDescriptionLen = 150
 
 var validPriorities = map[string]bool{"high": true, "medium": true, "low": true}
@@ -45,8 +46,10 @@ func ValidateDescription(d string) error {
 	if strings.ContainsAny(d, "\r\n") {
 		return fmt.Errorf("%w: description must be a single line", ErrValidation)
 	}
-	if len(d) > MaxDescriptionLen {
-		return fmt.Errorf("%w: description too long (%d > %d)", ErrValidation, len(d), MaxDescriptionLen)
+	if n := utf8.RuneCountInString(d); n > MaxDescriptionLen {
+		// Count CHARACTERS, not bytes — a non-ASCII description must not hit the
+		// cap early just for being multibyte.
+		return fmt.Errorf("%w: description too long (%d > %d chars)", ErrValidation, n, MaxDescriptionLen)
 	}
 	return nil
 }

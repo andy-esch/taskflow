@@ -71,7 +71,7 @@ func TestFS_MoveAudit(t *testing.T) {
 	root := t.TempDir()
 	writeAudit(t, root, "open", "x.md", "---\narea: a\n---\n#### H1. t  · **Status:** open\n")
 
-	a, err := NewFS(root).MoveAudit("x", domain.AuditClosed)
+	a, err := NewFS(root).MoveAudit("x", domain.AuditClosed, false)
 	if err != nil {
 		t.Fatal(err)
 	}

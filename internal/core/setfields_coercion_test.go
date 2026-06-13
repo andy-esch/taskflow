@@ -59,7 +59,7 @@ func TestSetFields_CoercesTypedStringsThroughRoundTrip(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := setFieldsRepo(t)
-			if _, err := svc.SetFields("t", map[string]any{tc.field: tc.value}, false); err != nil {
+			if _, err := svc.SetFields("t", map[string]any{tc.field: tc.value}, false, false); err != nil {
 				t.Fatalf("SetFields(%s=%q) rejected: %v", tc.field, tc.value, err)
 			}
 			// The write must reload cleanly through the strict loader.
@@ -76,7 +76,7 @@ func TestSetFields_CoercesTypedStringsThroughRoundTrip(t *testing.T) {
 // field that can't be coerced is rejected up front (no write), not corrupted.
 func TestSetFields_RejectsNonNumericTypedField(t *testing.T) {
 	svc := setFieldsRepo(t)
-	if _, err := svc.SetFields("t", map[string]any{"tier": "huge"}, false); err == nil {
+	if _, err := svc.SetFields("t", map[string]any{"tier": "huge"}, false, false); err == nil {
 		t.Fatal("want ErrValidation for a non-numeric tier")
 	}
 	if _, _, err := svc.ShowTask("t"); err != nil {
@@ -88,11 +88,11 @@ func TestSetFields_RejectsNonNumericTypedField(t *testing.T) {
 // a non-existent epic.
 func TestSetFields_RejectsUnknownEpic(t *testing.T) {
 	svc := setFieldsRepo(t)
-	if _, err := svc.SetFields("t", map[string]any{"epic": "bogus"}, false); err == nil {
+	if _, err := svc.SetFields("t", map[string]any{"epic": "bogus"}, false, false); err == nil {
 		t.Fatal("want ErrValidation for an unknown epic")
 	}
 	// A real epic still passes.
-	if _, err := svc.SetFields("t", map[string]any{"epic": "01-e"}, false); err != nil {
+	if _, err := svc.SetFields("t", map[string]any{"epic": "01-e"}, false, false); err != nil {
 		t.Errorf("setting an existing epic should succeed, got: %v", err)
 	}
 }
@@ -102,19 +102,19 @@ func TestSetFields_RejectsUnknownEpic(t *testing.T) {
 // unsetting it again is an idempotent no-op.
 func TestSetFields_UnsetRemovesKey(t *testing.T) {
 	svc := setFieldsRepo(t)
-	if _, err := svc.SetFields("t", map[string]any{"tier": domain.UnsetField{}}, false); err != nil {
+	if _, err := svc.SetFields("t", map[string]any{"tier": domain.UnsetField{}}, false, false); err != nil {
 		t.Fatal(err)
 	}
 	task, _, err := svc.ShowTask("t")
 	if err != nil || task.Tier != 0 {
 		t.Errorf("tier should be removed: %v tier=%d", err, task.Tier)
 	}
-	if _, err := svc.SetFields("t", map[string]any{"tier": domain.UnsetField{}}, false); err != nil {
+	if _, err := svc.SetFields("t", map[string]any{"tier": domain.UnsetField{}}, false, false); err != nil {
 		t.Errorf("unsetting an absent key should be a no-op, got %v", err)
 	}
 	// System fields can't be unset.
 	for _, field := range []string{"status", "updated_at"} {
-		if _, err := svc.SetFields("t", map[string]any{field: domain.UnsetField{}}, false); !errors.Is(err, domain.ErrValidation) {
+		if _, err := svc.SetFields("t", map[string]any{field: domain.UnsetField{}}, false, false); !errors.Is(err, domain.ErrValidation) {
 			t.Errorf("unset %s should be ErrValidation, got %v", field, err)
 		}
 	}
@@ -124,7 +124,7 @@ func TestSetFields_UnsetRemovesKey(t *testing.T) {
 // task (removes the key) instead of failing with `unknown epic ""`.
 func TestSetFields_EpicDetach(t *testing.T) {
 	svc := setFieldsRepo(t)
-	if _, err := svc.SetFields("t", map[string]any{"epic": ""}, false); err != nil {
+	if _, err := svc.SetFields("t", map[string]any{"epic": ""}, false, false); err != nil {
 		t.Fatal(err)
 	}
 	task, _, err := svc.ShowTask("t")
@@ -137,7 +137,7 @@ func TestSetFields_EpicDetach(t *testing.T) {
 // field — an explicit value is rejected, not validated-then-clobbered.
 func TestSetFields_RejectsUpdatedAt(t *testing.T) {
 	svc := setFieldsRepo(t)
-	if _, err := svc.SetFields("t", map[string]any{"updated_at": "2020-01-01"}, false); !errors.Is(err, domain.ErrValidation) {
+	if _, err := svc.SetFields("t", map[string]any{"updated_at": "2020-01-01"}, false, false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("explicit updated_at should be ErrValidation, got %v", err)
 	}
 }
@@ -147,7 +147,7 @@ func TestSetFields_RejectsUpdatedAt(t *testing.T) {
 // so the tool no longer generates drift its own fixer then repairs.
 func TestSetFields_ListCoercionAgreesWithFix(t *testing.T) {
 	svc := setFieldsRepo(t)
-	if _, err := svc.SetFields("t", map[string]any{"related_tasks": "a, b"}, false); err != nil {
+	if _, err := svc.SetFields("t", map[string]any{"related_tasks": "a, b"}, false, false); err != nil {
 		t.Fatal(err)
 	}
 	results, err := svc.LintFix(true) // dry-run: report what WOULD change
