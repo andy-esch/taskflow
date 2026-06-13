@@ -552,7 +552,7 @@ func TestEntityDetailRenderers(t *testing.T) {
 		tasks: []domain.Task{{Slug: "a", Status: domain.StatusCompleted}, {Slug: "b", Status: domain.StatusReadyToStart}},
 		body:  "# Epic body",
 	}
-	out := ansi.Strip(epic.Render(70))
+	out := ansi.Strip(epic.meta(70) + "\n" + epic.rawBody())
 	for _, want := range []string{"17-x", "1/2", "50%", "Epic body"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("epic detail missing %q:\n%s", want, out)
@@ -566,7 +566,7 @@ func TestEntityDetailRenderers(t *testing.T) {
 		a:    domain.Audit{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Findings: 5, OpenFindings: 2},
 		body: "# Audit body",
 	}
-	out = ansi.Strip(audit.Render(70))
+	out = ansi.Strip(audit.meta(70) + "\n" + audit.rawBody())
 	for _, want := range []string{"2026-06-01-x", "store", "2 open / 5 total", "Audit body"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("audit detail missing %q:\n%s", want, out)
@@ -1012,6 +1012,8 @@ func TestModel_DetailFindHighlightsAndNavigates(t *testing.T) {
 	m = tm.(Model)
 	tm, _ = m.Update(press("l")) // focus detail
 	m = tm.(Model)
+	tm, _ = m.Update(press("R")) // raw mode: deterministic line structure (glamour
+	m = tm.(Model)               // would paragraph-collapse this body)
 
 	tm, _ = m.Update(press("/")) // open find
 	m = tm.(Model)

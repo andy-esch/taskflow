@@ -350,6 +350,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.action.open(t.Slug, t.Status)
 		}
 		return m, nil
+	case key.Matches(msg, keys.RawToggle):
+		m.detail.toggleMode() // raw ⇄ pretty markdown (cached, no recompile)
+		return m, nil
 	case key.Matches(msg, keys.Command):
 		return m, m.cmd.focus()
 	case key.Matches(msg, keys.NextTab):
@@ -817,10 +820,15 @@ func (m Model) detailPaneView() string {
 }
 
 func (m Model) detailTitle() string {
-	if m.detail.title == "" {
+	t := m.detail.title
+	if t == "" {
 		return "Detail"
 	}
-	return m.detail.title
+	// Flag raw mode in the title (pretty is the default, left unlabeled).
+	if m.detail.hasContent && !m.detail.pretty {
+		t += " · raw"
+	}
+	return t
 }
 
 // pane wraps content in a focus-colored border. Inner dimensions are clamped to
@@ -874,11 +882,11 @@ func (m Model) footer() string {
 	}
 	hints := ": cmd · / filter · o sort · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
 	if m.focus == focusDetail {
-		hints = ": cmd · / find · n/N match · j/k scroll · g/G top/bottom · h/esc back · q quit"
+		hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc back · q quit"
 		if !m.twoPane {
 			// Single-pane drill: q pops back to the list (context quit), so the
 			// hint must not promise it exits the app.
-			hints = ": cmd · / find · n/N match · j/k scroll · g/G top/bottom · h/esc/q back"
+			hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc/q back"
 		}
 	}
 	if p := m.cur().problems; len(p) > 0 {

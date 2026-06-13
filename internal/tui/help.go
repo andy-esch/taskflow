@@ -44,10 +44,12 @@ var helpSections = []helpSection{
 		{"g / G", "top / bottom"},
 		{"/", "find in body"},
 		{"n / N", "next / previous match"},
+		{"R", "raw ⇄ pretty markdown"},
 		{"h / esc", "back to list (esc clears a find first)"},
 	}},
 	{"Notes", []helpEntry{
 		{"audits", "open bucket only — closed/deferred: tskflwctl audit list --all"},
+		{"find", "matches the rendered text on screen — R for the raw source"},
 	}},
 }
 

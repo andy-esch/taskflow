@@ -24,6 +24,7 @@ type keyMap struct {
 	StatusView  key.Binding // s → cycle status view (tasks)
 	StatusRev   key.Binding // S → cycle status view backward
 	Action      key.Binding // a → lifecycle action menu (tasks)
+	RawToggle   key.Binding // R → raw ⇄ pretty markdown in the detail body
 	Help        key.Binding // ? → toggle the keybinding overlay
 	Refresh     key.Binding // r
 	Quit        key.Binding // q (context)
@@ -48,6 +49,7 @@ var keys = keyMap{
 	StatusView:  key.NewBinding(key.WithKeys("s")),
 	StatusRev:   key.NewBinding(key.WithKeys("S")),
 	Action:      key.NewBinding(key.WithKeys("a")),
+	RawToggle:   key.NewBinding(key.WithKeys("R")),
 	Help:        key.NewBinding(key.WithKeys("?")),
 	Refresh:     key.NewBinding(key.WithKeys("r")),
 	Quit:        key.NewBinding(key.WithKeys("q")),

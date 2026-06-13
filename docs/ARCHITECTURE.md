@@ -94,14 +94,16 @@ Files split by concern:
   registry entry — no new keybindings or layout.
 - **`commands.go` / `messages.go`** — the async load `tea.Cmd`s and the `tea.Msg`
   types they return (list loads, lazy detail loads, reload, errors).
-- **`detail.go` / `find.go`** — the right pane (a `viewport`) + vim-like `/` `n`
-  `N` find-in-body (matches tracked by wrapped-line index; highlight rebuilt from
-  stripped text so it can't split an escape).
+- **`detail.go` / `find.go` / `glamour.go`** — the right pane (a `viewport`): the
+  field block + a markdown body rendered two ways (raw / `glamour`, both cached so
+  `R` toggles for free) + vim-like `/` `n` `N` find-in-body over *occurrences*
+  (ANSI-aware highlight that preserves the line's other colors; unicode-fold-safe).
 - **`item.go`** — per-entity `list.ItemDelegate`s (the glyph rows) and the
   `sortFields`/`FilterValue` each row exposes.
-- **`sort.go` / `statusview.go` / `command.go`** — interactive sort, the unified
-  status-view table (`:` words + `s`/`S` cycle derive from it), and the `:`
-  command bar.
+- **`sort.go` / `statusview.go` / `command.go` / `action.go`** — interactive sort
+  (per-entity columns), the unified status-view table (`:` words + `s`/`S` cycle),
+  the `:` command bar, and the `a` lifecycle action menu (`Move` through the
+  service, shared transition table with the `:` verbs).
 - **`watch.go`** — `fsnotify` live reload: a self-perpetuating listener `Cmd`
   feeds `fsEventMsg`; a generation-guarded `tea.Tick` debounce (200ms) coalesces
   save-storms into one reload of every loaded tab, cursor preserved by id.
@@ -135,8 +137,9 @@ the Python prototype:
 - `epic new|list|show`, `audit list|show|close|reopen|defer`
 - `ui` — the Bubble Tea browser (epic 18): two-pane read-only browse of
   tasks/epics/audits, `:` jump, `/` filter, sort, status views, detail find, `?`
-  help, and `fsnotify` live reload (S0–S3 shipped; mutations/glamour/cross-link
-  are the remaining sprints).
+  help, `fsnotify` live reload, lifecycle mutations (`a` menu + `:` verbs), and
+  glamour markdown with an `R` raw/pretty toggle (S0–S5 shipped; cross-link is the
+  remaining sprint).
 
 Throughout: explicit noun-verb, semantic exit codes (`10` not-found · `11`
 validation · `13` ambiguous · `14` conflict), atomic
