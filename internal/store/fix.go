@@ -27,7 +27,7 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 			return fmt.Errorf("read dir %s: %w", dir, err)
 		}
 		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			if !markdownDoc(e) {
 				continue
 			}
 			path := filepath.Join(dir, e.Name())

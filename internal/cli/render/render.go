@@ -21,7 +21,9 @@ import (
 // 1.1: every CLI-settable field round-trips (effort, autonomy_level), and the
 // misfiled signal (previously human-output-only ⚠) is machine-readable.
 // 1.2: mutation envelopes carry dry_run:true under --dry-run previews.
-const SchemaVersion = "1.2"
+// 1.3: dry_run is always present on mutation envelopes (was omitted when false);
+// the fix report carries `unreadable` (files it couldn't repair).
+const SchemaVersion = "1.3"
 
 type taskJSON struct {
 	Slug        string   `json:"slug"`
@@ -181,7 +183,7 @@ func MovesHuman(w io.Writer, st Style, results []MoveResult, dryRun bool) {
 func MovesJSON(w io.Writer, results []MoveResult, dryRun bool) error {
 	return encodeJSON(w, struct {
 		SchemaVersion string       `json:"schema_version"`
-		DryRun        bool         `json:"dry_run,omitempty"`
+		DryRun        bool         `json:"dry_run"`
 		Moves         []MoveResult `json:"moves"`
 	}{SchemaVersion: SchemaVersion, DryRun: dryRun, Moves: results})
 }
@@ -318,7 +320,7 @@ func CreatedHuman(w io.Writer, st Style, path string, dryRun bool) {
 func CreatedJSON(w io.Writer, kind, id, path string, dryRun bool) error {
 	return encodeJSON(w, struct {
 		SchemaVersion string `json:"schema_version"`
-		DryRun        bool   `json:"dry_run,omitempty"`
+		DryRun        bool   `json:"dry_run"`
 		Created       struct {
 			Kind string `json:"kind"`
 			ID   string `json:"id"`
@@ -484,13 +486,20 @@ func FixHuman(w io.Writer, st Style, results []domain.FixResult, dryRun bool) {
 	}
 }
 
-// FixJSON writes the structured fix report.
-func FixJSON(w io.Writer, results []domain.FixResult, dryRun bool) error {
+// FixJSON writes the structured fix report: what was repaired, plus any files
+// that still can't be read after the pass (empty on a dry-run, which writes
+// nothing) — so a --json consumer learns the residual breakage without parsing
+// the prose error.
+func FixJSON(w io.Writer, results []domain.FixResult, problems []domain.FileProblem, dryRun bool) error {
+	if problems == nil {
+		problems = []domain.FileProblem{}
+	}
 	return encodeJSON(w, struct {
-		SchemaVersion string             `json:"schema_version"`
-		DryRun        bool               `json:"dry_run"`
-		Fixed         []domain.FixResult `json:"fixed"`
-	}{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results})
+		SchemaVersion string               `json:"schema_version"`
+		DryRun        bool                 `json:"dry_run"`
+		Fixed         []domain.FixResult   `json:"fixed"`
+		Unreadable    []domain.FileProblem `json:"unreadable"`
+	}{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results, Unreadable: problems})
 }
 
 // ProblemsHuman writes per-file load problems (unreadable frontmatter).
@@ -570,7 +579,7 @@ func InitJSON(w io.Writer, root string, created []string, dryRun bool) error {
 	}
 	return encodeJSON(w, struct {
 		SchemaVersion string   `json:"schema_version"`
-		DryRun        bool     `json:"dry_run,omitempty"`
+		DryRun        bool     `json:"dry_run"`
 		Root          string   `json:"root"`
 		Created       []string `json:"created"`
 	}{SchemaVersion, dryRun, root, created})

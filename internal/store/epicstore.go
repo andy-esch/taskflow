@@ -24,7 +24,7 @@ func (s *FS) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	var epics []domain.Epic
 	var problems []domain.FileProblem
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+		if !markdownDoc(e) {
 			continue
 		}
 		path := filepath.Join(s.epicsDir, e.Name())
@@ -51,7 +51,7 @@ func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
 		return domain.Epic{}, "", fmt.Errorf("read epics dir: %w", err)
 	}
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+		if !markdownDoc(e) {
 			continue
 		}
 		cands = append(cands, candidate{

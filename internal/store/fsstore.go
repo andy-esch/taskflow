@@ -54,7 +54,7 @@ func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 			return nil, nil, fmt.Errorf("read status dir %s: %w", dir, err)
 		}
 		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			if !markdownDoc(e) {
 				continue
 			}
 			path := filepath.Join(dir, e.Name())
@@ -241,7 +241,7 @@ func (s *FS) taskCandidates() ([]candidate, error) {
 			return nil, fmt.Errorf("read status dir %s: %w", dir, err)
 		}
 		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			if !markdownDoc(e) {
 				continue
 			}
 			out = append(out, candidate{

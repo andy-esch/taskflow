@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -41,6 +42,20 @@ func TestSlugify_TruncatesOnBoundary(t *testing.T) {
 	}
 }
 
+// TestSlugify_LongFirstWordNotOverTrimmed guards against collapsing the slug to a
+// stub: a short first word before one very long token has its only dash near the
+// front, so backing up to it would yield "ab". The rune-boundary cut is kept
+// instead, so the slug stays a usable length.
+func TestSlugify_LongFirstWordNotOverTrimmed(t *testing.T) {
+	got := Slugify("ab " + strings.Repeat("c", 90))
+	if len(got) < 40 {
+		t.Errorf("slug should not collapse to a stub, got %q (len %d)", got, len(got))
+	}
+	if len(got) > 80 {
+		t.Errorf("slug should still be capped at ~80 bytes, got %d", len(got))
+	}
+}
+
 // TestSlugify_RuneSafeTruncation pins the over-cap cut to a rune boundary: a
 // long non-ASCII title must never slice mid-rune into an invalid-UTF-8 slug.
 func TestSlugify_RuneSafeTruncation(t *testing.T) {
@@ -57,6 +72,42 @@ func TestSlugify_RuneSafeTruncation(t *testing.T) {
 	got = Slugify(dashed)
 	if !utf8.ValidString(got) || strings.HasSuffix(got, "-") {
 		t.Errorf("dashed multibyte slug should be valid and dash-trimmed, got %q", got)
+	}
+}
+
+// TestValidateTitle guards the create-path hard-fail: filename-hostile chars are
+// rejected (the slug would otherwise silently differ), while benign titles pass.
+func TestValidateTitle(t *testing.T) {
+	// Rejected: filesystem-reserved ASCII + non-ASCII punctuation/symbols.
+	for _, bad := range []string{
+		"Fix: the thing — now", // colon + em-dash (the motivating bug)
+		"UI/UX design",         // path separator
+		"What now?",            // Windows-reserved
+		"a*b", `c"d`, "e<f>g", "h|i",
+		"En–dash", "horizontal ― bar", "curly “quotes”", "bullet • point", "arrow → there",
+	} {
+		if err := ValidateTitle(bad); !errors.Is(err, ErrValidation) {
+			t.Errorf("ValidateTitle(%q) should be ErrValidation, got %v", bad, err)
+		}
+	}
+	// Accepted: letters/digits/marks (any script), spaces, apostrophes, dots,
+	// hyphens, and benign ASCII punctuation (parens/commas) Slugify normalizes.
+	for _, ok := range []string{
+		"Add create verbs (task new, epic new)",
+		"don't shorten Tasks' apostrophes",
+		"v1.2.3 release",
+		"multi-entity navigation",
+		"café résumé naïve", // non-ASCII letters
+		"日本語タイトル",           // non-Latin script
+	} {
+		if err := ValidateTitle(ok); err != nil {
+			t.Errorf("ValidateTitle(%q) should pass, got %v", ok, err)
+		}
+	}
+	// The error suggests a clean, copy-paste title.
+	err := ValidateTitle("Fix: the thing — now")
+	if err == nil || !strings.Contains(err.Error(), `"Fix the thing now"`) {
+		t.Errorf("error should suggest a cleaned title, got %v", err)
 	}
 }
 

@@ -110,12 +110,16 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 			case "updated_at":
 				return domain.Task{}, fmt.Errorf("%w: updated_at is stamped automatically and cannot be unset", domain.ErrValidation)
 			}
+			// A typo'd field name must not silently persist (or, here, silently
+			// no-op) — gate unset on the registry too, mirroring the set path.
+			if !force && !domain.KnownTaskField(field) {
+				return domain.Task{}, unknownFieldErr(field)
+			}
 			withMeta[field] = val
 			continue
 		}
 		if !force && !domain.KnownTaskField(field) {
-			return domain.Task{}, fmt.Errorf(
-				"%w: unknown field %q (known fields only; use --force for a custom field)", domain.ErrValidation, field)
+			return domain.Task{}, unknownFieldErr(field)
 		}
 		coerced, err := coerceField(field, val)
 		if err != nil {
@@ -141,6 +145,13 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 	}
 	withMeta["updated_at"] = time.Now().Format("2006-01-02")
 	return s.store.SetFields(slug, withMeta, dryRun)
+}
+
+// unknownFieldErr is the shared rejection for a field outside the registry, used
+// by both the set and unset paths of SetFields.
+func unknownFieldErr(field string) error {
+	return fmt.Errorf(
+		"%w: unknown field %q (known fields only; use --force for a custom field)", domain.ErrValidation, field)
 }
 
 // coerceField converts a string `--set` value into the native type its field
@@ -241,6 +252,9 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	if len(p.Tags) == 0 {
 		return domain.Task{}, fmt.Errorf("%w: at least one tag is required (--tags)", domain.ErrValidation)
 	}
+	if err := domain.ValidateTitle(p.Title); err != nil {
+		return domain.Task{}, err
+	}
 	slug := domain.Slugify(p.Title)
 	if slug == "" {
 		return domain.Task{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
@@ -306,6 +320,9 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 		return domain.Epic{}, err
 	}
 	if err := domain.ValidateEpicStatus(p.Status); err != nil {
+		return domain.Epic{}, err
+	}
+	if err := domain.ValidateTitle(p.Title); err != nil {
 		return domain.Epic{}, err
 	}
 	slug := domain.Slugify(p.Title)

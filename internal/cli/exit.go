@@ -10,41 +10,44 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
+// errCodes is the single source of truth tying each domain sentinel to its exit
+// code and the stable machine name for the --json envelope. ExitCode and
+// errorCodeName both read it, so the code and its name can't drift apart.
+// 12 (invalid-transition) is retired but reserved — see domain/errors.go.
+var errCodes = []struct {
+	err  error
+	code int
+	name string
+}{
+	{domain.ErrNotFound, 10, "not-found"},
+	{domain.ErrValidation, 11, "validation"},
+	{domain.ErrAmbiguous, 13, "ambiguous"},
+	{domain.ErrConflict, 14, "conflict"},
+}
+
 // ExitCode maps an error to a semantic exit code, so agents can route on the
 // code without parsing text. 0 also covers idempotent no-ops.
 func ExitCode(err error) int {
-	switch {
-	case err == nil:
+	if err == nil {
 		return 0
-	case errors.Is(err, domain.ErrNotFound):
-		return 10
-	case errors.Is(err, domain.ErrValidation):
-		return 11
-	// 12 (invalid-transition) is retired but reserved — see domain/errors.go.
-	case errors.Is(err, domain.ErrAmbiguous):
-		return 13
-	case errors.Is(err, domain.ErrConflict):
-		return 14
-	default:
-		return 1
 	}
+	for _, e := range errCodes {
+		if errors.Is(err, e.err) {
+			return e.code
+		}
+	}
+	return 1
 }
 
 // errorCodeName is the stable machine name for an exit code — the `code` field
 // of the --json error envelope. Same vocabulary as the exit codes, as words.
 func errorCodeName(code int) string {
-	switch code {
-	case 10:
-		return "not-found"
-	case 11:
-		return "validation"
-	case 13:
-		return "ambiguous"
-	case 14:
-		return "conflict"
-	default:
-		return "error"
+	for _, e := range errCodes {
+		if e.code == code {
+			return e.name
+		}
 	}
+	return "error"
 }
 
 // WriteError reports a fatal error on w: prose normally, a versioned JSON

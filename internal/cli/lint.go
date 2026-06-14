@@ -10,7 +10,7 @@ import (
 )
 
 func newLintCmd(app *App) *cobra.Command {
-	var fix, dryRun bool
+	var fix bool
 	cmd := &cobra.Command{
 		Use:     "lint",
 		Short:   "Validate active task frontmatter (--fix to auto-repair)",
@@ -20,13 +20,12 @@ func newLintCmd(app *App) *cobra.Command {
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if fix {
-				return runLintFix(app, dryRun || app.DryRun) // global --dry-run is honored too
+				return runLintFix(app, app.DryRun) // --dry-run is the persistent flag (root.go)
 			}
 			return runLint(app)
 		},
 	}
 	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter (quote ':' values, normalize list fields)")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "with --fix, show changes without writing")
 	return cmd
 }
 
@@ -60,14 +59,13 @@ func runLintFix(app *App, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	if app.JSON {
-		if err := render.FixJSON(app.Out, results, dryRun); err != nil {
-			return err
-		}
-	} else {
-		render.FixHuman(app.Out, app.Style, results, dryRun)
-	}
+	// Dry-run only previews the repairs; nothing was written, so there's no
+	// post-fix state to re-lint.
 	if dryRun {
+		if app.JSON {
+			return render.FixJSON(app.Out, results, nil, dryRun)
+		}
+		render.FixHuman(app.Out, app.Style, results, dryRun)
 		return nil
 	}
 	// The fixer only reports files it changed — a file it can't repair would
@@ -77,10 +75,17 @@ func runLintFix(app *App, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	if len(problems) > 0 {
-		if !app.JSON {
-			render.ProblemsHuman(app.ErrOut, app.Style, problems)
+	if app.JSON {
+		// One envelope carrying both what was fixed and what couldn't be —
+		// a --json consumer must never parse the prose error to learn that.
+		if err := render.FixJSON(app.Out, results, problems, dryRun); err != nil {
+			return err
 		}
+	} else {
+		render.FixHuman(app.Out, app.Style, results, dryRun)
+		render.ProblemsHuman(app.ErrOut, app.Style, problems)
+	}
+	if len(problems) > 0 {
 		return fmt.Errorf("%w: %d file(s) could not be auto-repaired", domain.ErrValidation, len(problems))
 	}
 	return nil

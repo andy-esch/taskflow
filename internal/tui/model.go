@@ -33,7 +33,7 @@ const (
 // detail.
 type Model struct {
 	svc  *core.Service
-	root string // planning root; reserved for the S3 fsnotify watch (not read yet)
+	root string // planning root; passed to the fsnotify watcher (watch.go)
 
 	width, height int
 	twoPane       bool
@@ -48,7 +48,7 @@ type Model struct {
 	cmd    commandBar
 
 	showHelp   bool       // the `?` keybinding overlay is open
-	helpScroll int        // overlay scroll offset (j/k while open; clamped at render)
+	helpScroll int        // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
 	action     actionMenu // the `a` lifecycle action menu (S4)
 	follow     followMenu // the `f` reference picker (S6, epics → their tasks)
 	navStack   []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
@@ -289,7 +289,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.ForceQuit):
 			return m, tea.Quit
 		case msg.String() == "j" || msg.String() == "down":
-			if m.helpScroll < len(helpLines()) { // render-side clamp picks the true max
+			if m.helpScroll < m.helpMaxScroll() {
 				m.helpScroll++
 			}
 			return m, nil
@@ -792,6 +792,18 @@ func (m Model) bodyView() string {
 	// floats over the items rather than blanking them.
 	canvas := lipgloss.Place(m.width, m.paneOuterH, lipgloss.Left, lipgloss.Top, base)
 	return overlay(canvas, box, m.width, m.paneOuterH)
+}
+
+// helpMaxScroll is the largest in-bounds scroll offset for the `?` overlay,
+// mirroring helpBox's window math: the box gets paneOuterH-2 (see bodyView) and
+// spends 2 of that on its border rows. The j/k handler clamps to this so
+// helpScroll can't run past the visible bottom (leaving k presses doing nothing).
+func (m Model) helpMaxScroll() int {
+	innerH := m.paneOuterH - 2 - 2 // box height (paneOuterH-2) minus top+bottom border
+	if innerH <= 0 {
+		return 0
+	}
+	return max(len(helpLines())-innerH, 0)
 }
 
 // renderBody is the pane layout: a loading note (or this tab's load error) until
