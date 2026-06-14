@@ -19,6 +19,11 @@ type Service struct {
 // NewService wires the core to its store.
 func NewService(store Store) *Service { return &Service{store: store} }
 
+// WatchPaths exposes the store's watchable directory set to the TUI, so the
+// fs-layout knowledge stays behind the port instead of being rebuilt in the
+// watcher (the TUI never reconstructs the planning tree's shape itself).
+func (s *Service) WatchPaths() []string { return s.store.WatchPaths() }
+
 // TaskFilter narrows a task listing. Zero-valued fields are ignored. When no
 // explicit Status is given and All is false, only active tasks are returned.
 type TaskFilter struct {

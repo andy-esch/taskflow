@@ -14,17 +14,22 @@ the one-screen orientation for contributors.
   └──────────────┘      └──────────────────┘         └──────────────────┘
 ```
 
-- **`internal/domain`** — pure entities + invariants (`Task`, `Status`). No fs,
-  no cobra. The directory **is** the authoritative status (the read path always
+- **`internal/domain`** — entities + invariants (`Task`, `Status`). No fs, no
+  cobra logic (the one pragmatic concession: `Task`/`Epic`/`Audit` carry a `Path`
+  the store stamps, so callers can locate the source file). The directory **is**
+  the authoritative status (the read path always
   uses the folder); the frontmatter value is kept as `Task.Declared` only to
   detect drift. A *recognized* status that disagrees with its folder is
   "misfiled" — flagged by `lint` (and `lint --fix` realigns it), shown with a
   `⚠` in `task list`/`show`. A foreign/legacy status word is tolerated.
-- **`internal/core`** — use cases (`Service`) + the ports it needs
-  (`TaskStore`, defined here at the consumer). Pure; unit-testable without fs.
+- **`internal/core`** — use cases (`Service`) + the ports it needs (`Store`,
+  composed of `TaskStore`/`EpicStore`/`AuditStore`, defined here at the
+  consumer). Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
   `<root>/tasks/<status>/<slug>.md`. Splits frontmatter with a zero-dep byte
-  scanner; parses YAML with `go.yaml.in/yaml/v3`. `var _ core.TaskStore = (*FS)(nil)`.
+  scanner; parses YAML with `go.yaml.in/yaml/v3`. `var _ core.Store = (*FS)(nil)`.
+  It also owns the *layout* knowledge: `WatchPaths()` hands the TUI watcher its
+  dir set so the path convention isn't reconstructed outside the store.
 - **`internal/cli`** — a primary adapter: the cobra tree.
 - **`internal/tui`** — the *second* primary adapter (shipped): a Bubble Tea
   browser calling the **same** `core.Service`, never the store/fs. See the TUI
@@ -34,7 +39,8 @@ the one-screen orientation for contributors.
   (→ lipgloss), so "in-progress is a yellow ●" is decided in one place.
 - **`internal/config`** — discovers the planning root (walk up for tasks/;
   terminates at a `.git`/root boundary).
-- **`cmd/tskflwctl`** — thin; the sole composition root.
+- **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
+  `internal/cli` (`root.go`), which it calls.
 
 ## Non-negotiable patterns
 - **DI via one `*cli.App`**, populated in root `PersistentPreRunE` (the lazy
@@ -109,7 +115,9 @@ Files split by concern:
   back-stack; hidden targets escalate the tasks view to `:all` rather than fail.
 - **`watch.go`** — `fsnotify` live reload: a self-perpetuating listener `Cmd`
   feeds `fsEventMsg`; a generation-guarded `tea.Tick` debounce (200ms) coalesces
-  save-storms into one reload of every loaded tab, cursor preserved by id.
+  save-storms into one reload of every loaded tab, cursor preserved by id. The
+  watched dir set comes from `core.Service.WatchPaths()`, not from a root the TUI
+  reconstructs — layout knowledge stays in the store.
 - **`help.go`** — the `?` keybinding overlay (`helpSections` is the runtime
   source of truth for keys) composited over the body with `ansi.Cut`.
 - **`style.go` / `keys.go`** — lipgloss styles (delegating to `theme`) and the

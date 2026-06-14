@@ -117,7 +117,7 @@ func TestModel_FollowGracefulDeadEnds(t *testing.T) {
 		[]byte("---\nstatus: in-progress\ndescription: x\n---\n# loner\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := New(core.NewService(store.NewFS(root)), root)
+	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -167,7 +167,7 @@ func TestModel_FollowEscalatesToAllView(t *testing.T) {
 	write("tasks/in-progress/active-one.md", "---\nstatus: in-progress\nepic: 01-x\ndescription: a\n---\n# a\n")
 	write("tasks/completed/done-one.md", "---\nstatus: completed\nepic: 01-x\ndescription: d\n---\n# d\n")
 
-	m := New(core.NewService(store.NewFS(root)), root)
+	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -235,7 +235,7 @@ func TestModel_FollowDanglingEpicRef(t *testing.T) {
 		[]byte("---\nstatus: in-progress\nepic: 99-ghost\ndescription: x\n---\n# orphan\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := New(core.NewService(store.NewFS(root)), root)
+	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())

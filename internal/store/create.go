@@ -85,7 +85,25 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 
 var epicNumRe = regexp.MustCompile(`^(\d+)-`)
 
+// epicNum parses the leading NN- number from an epic id (0 if absent). Epics are
+// ordered by this, not lexically, so `100-x` sorts after `99-x` rather than
+// before it (the `%02d` pad only delays, never fixes, a string compare).
+func epicNum(id string) int {
+	if m := epicNumRe.FindStringSubmatch(id); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		return n
+	}
+	return 0
+}
+
 // nextEpicNumber returns max(existing NN- prefix)+1, or 1 if none.
+//
+// Not serialized against a concurrent CreateEpic: two `epic new` processes
+// racing between this scan and their writes could mint the same number with
+// different slugs (O_EXCL only guards an identical path). That's accepted — this
+// is a single-user local CLI with no daemon, so concurrent creation doesn't
+// occur in practice, and the numeric ordering above keeps even a hand-created
+// duplicate deterministic rather than flipping on string compare.
 func (s *FS) nextEpicNumber() (int, error) {
 	entries, err := os.ReadDir(s.epicsDir)
 	if err != nil {

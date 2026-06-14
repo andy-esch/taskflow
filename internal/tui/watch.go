@@ -1,13 +1,10 @@
 package tui
 
 import (
-	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fsnotify/fsnotify"
-
-	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // fsDebounce is the quiet period a change must be followed by before the TUI
@@ -23,35 +20,20 @@ type watcher struct {
 	fsw *fsnotify.Watcher
 }
 
-// newWatcher watches the planning tree's leaf dirs (fsnotify is non-recursive).
-// Dirs that don't exist are skipped — `init` fixes the standard set, and watching
-// missing optional buckets isn't worth failing over.
-func newWatcher(root string) (*watcher, error) {
+// newWatcher watches the given leaf dirs (fsnotify is non-recursive); the path
+// set comes from the store via core.Service.WatchPaths(), so the TUI never
+// reconstructs the planning-tree layout itself. Dirs that don't exist are
+// skipped — `init` fixes the standard set, and watching missing optional buckets
+// isn't worth failing over. (New status/bucket dirs at runtime are out of scope.)
+func newWatcher(paths []string) (*watcher, error) {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
-	for _, d := range watchDirs(root) {
+	for _, d := range paths {
 		_ = fsw.Add(d) // best-effort: a missing optional dir mustn't kill live reload
 	}
 	return &watcher{fsw}, nil
-}
-
-// watchDirs is the set of directories to watch: the entity parents plus every
-// task-status and audit-bucket subdir, so file create/write/move/delete are all
-// seen. (New status/bucket dirs at runtime are out of scope — they're fixed by
-// `init`.)
-func watchDirs(root string) []string {
-	tasks := filepath.Join(root, "tasks")
-	audits := filepath.Join(root, "audits")
-	dirs := []string{filepath.Join(root, "epics"), tasks, audits}
-	for _, st := range domain.AllStatuses() {
-		dirs = append(dirs, filepath.Join(tasks, st.Dir()))
-	}
-	for _, b := range domain.AllAuditBuckets() {
-		dirs = append(dirs, filepath.Join(audits, b.Dir()))
-	}
-	return dirs
 }
 
 func (w *watcher) close() error {

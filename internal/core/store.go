@@ -46,4 +46,9 @@ type Store interface {
 	// FixFrontmatter applies safe text-level frontmatter repairs across all
 	// task and epic files (or previews them when dryRun is true).
 	FixFrontmatter(dryRun bool) ([]domain.FixResult, error)
+
+	// WatchPaths is the directory set a filesystem watcher should observe. The
+	// store owns the on-disk layout; primary adapters (the TUI watcher) consume
+	// this instead of rebuilding the path convention themselves.
+	WatchPaths() []string
 }

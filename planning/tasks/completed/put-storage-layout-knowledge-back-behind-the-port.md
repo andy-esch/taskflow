@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: TUI watcher and config.Init both hardcode the store directory layout; assorted ARCHITECTURE.md and comment drift from the 2026-06-12 review
 effort: Unknown
@@ -8,6 +8,9 @@ priority: low
 autonomy_level: 3
 tags: [go, architecture, docs]
 created: "2026-06-12"
+updated_at: "2026-06-14"
+started_at: "2026-06-14"
+completed_at: "2026-06-14"
 ---
 # Put storage-layout knowledge back behind the port
 
@@ -45,10 +48,22 @@ created: "2026-06-12"
 
 ## Acceptance criteria
 
-- [ ] One source of truth for the directory layout, with a sync-guard test
-      covering `init` scaffolding and watcher paths.
-- [ ] The TUI no longer receives a raw fs root.
-- [ ] Listed doc/comment drift corrected.
+- [x] One source of truth for the directory layout, with a sync-guard test
+      covering `init` scaffolding and watcher paths. — `store.WatchPaths()` (M15a)
+      is the single layout source, exposed through `core.Store`/`Service`;
+      `config.Init` derives its dirs from `domain.AllStatuses()`/`AllAuditBuckets()`
+      (M15b). Guards: `TestFS_WatchPaths`, `TestInitScaffoldsEveryStatusAndBucket`.
+- [x] The TUI no longer receives a raw fs root. — `New(svc)`/`tui.Run(svc)` dropped
+      the `root` param; the watcher takes `svc.WatchPaths()`; `ui.go` no longer
+      passes `Cfg.Root`; the dead `Model.root` field is gone.
+- [x] Listed doc/comment drift corrected. — `root.go` "future TUI"→shipped;
+      ARCHITECTURE.md `core.TaskStore`→`core.Store`, composition-root wording,
+      `Task.Path` purity caveat, watcher-paths note. (`m.root` comment resolved by
+      deleting the field.)
+
+> Item #4 (schema/version key in scaffolds; `domain.CountFindings`) was **not**
+> done — it's an optional "consider," and `CountFindings` belongs with the audit
+> regexes. Left for a separate task if wanted.
 
 ## Related
 

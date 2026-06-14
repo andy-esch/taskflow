@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 func TestInit(t *testing.T) {
@@ -39,6 +41,27 @@ func TestInit(t *testing.T) {
 	}
 	if len(again) != 0 {
 		t.Errorf("second Init created %v, want none", again)
+	}
+}
+
+// TestInitScaffoldsEveryStatusAndBucket is the sync guard: `init` must create a
+// directory for every domain status and audit bucket, so adding one to the enum
+// can't silently ship with init not scaffolding it (while the watcher already
+// watches it). Derives expectations from the same enums Init does.
+func TestInitScaffoldsEveryStatusAndBucket(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Init(root, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, st := range domain.AllStatuses() {
+		if !isDir(filepath.Join(root, "tasks", st.Dir())) {
+			t.Errorf("init did not scaffold tasks/%s", st.Dir())
+		}
+	}
+	for _, b := range domain.AllAuditBuckets() {
+		if !isDir(filepath.Join(root, "audits", b.Dir())) {
+			t.Errorf("init did not scaffold audits/%s", b.Dir())
+		}
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // Config records where the planning data lives (the "taskflow root": the dir
@@ -147,11 +149,17 @@ tracked_repos = []
 // root. It is idempotent: existing dirs/config are left untouched. Returns the
 // relative paths created (empty if nothing was needed).
 func Init(root string, dryRun bool) ([]string, error) {
-	dirs := []string{
-		"tasks/next-up", "tasks/ready-to-start", "tasks/in-progress",
-		"tasks/completed", "tasks/deprecated", "tasks/deferred",
-		"epics", "projects",
-		"audits/open", "audits/closed", "audits/deferred",
+	// Derive the task-status and audit-bucket dirs from the domain enums so a new
+	// status/bucket is scaffolded automatically — a hardcoded list would silently
+	// drift (init not creating a dir the watcher already watches). Guarded by
+	// TestInitScaffoldsEveryStatusAndBucket.
+	dirs := make([]string, 0, len(domain.AllStatuses())+len(domain.AllAuditBuckets())+2)
+	for _, st := range domain.AllStatuses() {
+		dirs = append(dirs, "tasks/"+st.Dir())
+	}
+	dirs = append(dirs, "epics", "projects")
+	for _, b := range domain.AllAuditBuckets() {
+		dirs = append(dirs, "audits/"+b.Dir())
 	}
 	var created []string
 	for _, d := range dirs {

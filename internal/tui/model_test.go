@@ -89,7 +89,7 @@ func drainBatch(t *testing.T, m Model, cmd tea.Cmd) Model {
 func newModel(t *testing.T) Model {
 	t.Helper()
 	root := seedRepo(t)
-	return New(core.NewService(store.NewFS(root)), root)
+	return New(core.NewService(store.NewFS(root)))
 }
 
 // loaded returns a model that's been sized and had its task load applied.
@@ -476,7 +476,7 @@ func seedManyTasks(t *testing.T, n int) string {
 // and hard-clamps the body so the chrome always survives.)
 func TestModel_ChromeVisibleWhenListPaginates(t *testing.T) {
 	root := seedManyTasks(t, 20)
-	m := New(core.NewService(store.NewFS(root)), root)
+	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 14})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -527,7 +527,7 @@ func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
 		[]byte("---\nstatus: ready-to-start\ndescription: x\n---\n# only\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := New(core.NewService(store.NewFS(root)), root)
+	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -590,7 +590,7 @@ func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
 		[]byte("---\nstatus: in-progress\ndescription: x\n---\n# body\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := New(core.NewService(store.NewFS(root)), root)
+	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 24}) // narrowest two-pane
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -1301,29 +1301,5 @@ func TestModel_DetailFollowsFilter(t *testing.T) {
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(3*time.Second)).(Model)
 	if fm.detail.title != "beta" {
 		t.Errorf("detail should track the filtered selection, showing %q", fm.detail.title)
-	}
-}
-
-func TestWatchDirs(t *testing.T) {
-	root := filepath.Join("x", "plan")
-	got := watchDirs(root)
-	for _, want := range []string{
-		filepath.Join(root, "epics"),
-		filepath.Join(root, "tasks"),
-		filepath.Join(root, "audits"),
-		filepath.Join(root, "tasks", "in-progress"),
-		filepath.Join(root, "tasks", "ready-to-start"),
-		filepath.Join(root, "audits", "open"),
-	} {
-		found := false
-		for _, d := range got {
-			if d == want {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("watchDirs(%q) missing %q; got %v", root, want, got)
-		}
 	}
 }
