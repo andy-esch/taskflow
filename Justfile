@@ -63,6 +63,17 @@ tidy:
 tidy-check:
 	go mod tidy -diff
 
+# Dry-run a release locally: build all darwin/linux binaries + checksums into
+# ./dist via goreleaser, publishing nothing. Mirrors what the manual
+# workflow_dispatch path produces. Needs goreleaser installed
+# (go install github.com/goreleaser/goreleaser/v2@latest).
+release-snapshot:
+	goreleaser release --snapshot --clean
+
+# Validate .goreleaser.yml without building.
+release-check:
+	goreleaser check
+
 # Clean build artifacts
 clean:
-	rm -rf bin
+	rm -rf bin dist
