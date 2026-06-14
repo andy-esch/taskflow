@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 17-pm-go-cli
 description: goreleaser darwin+linux x amd64/arm64 binaries on tag push + opt-in snapshot dispatch; GitHub-Releases-only; v0.1.0 manual tags, checksums-only
 effort: Unknown
@@ -10,6 +10,7 @@ tags: [ci, distribution, goreleaser]
 created: "2026-06-12"
 updated_at: "2026-06-14"
 started_at: "2026-06-14"
+completed_at: "2026-06-14"
 ---
 # Binary releases via goreleaser
 
@@ -94,9 +95,12 @@ cloning or building. Two channels, both should work when this lands:
 - [x] `just release-snapshot` / `just release-check` recipes; `dist/`
       gitignored.
 - [x] README documents all three install paths.
-- [ ] **`goreleaser check` passes** on the config (validate locally / in CI).
-- [ ] **First `v0.1.0` tag pushed** and the release run is green, with
-      fetchable binaries. ← the remaining human/CI step.
+- [x] **`goreleaser check` passes** on the config (validated 2026-06-14 with
+      goreleaser v2.16.0; full `--snapshot` build produced all 4 archives +
+      checksums, version-stamped binary verified).
+- [x] **First `v0.1.0` tag pushed** and the release run is green — GitHub
+      Release v0.1.0 published with `tskflwctl_0.1.0_{darwin,linux}_{amd64,arm64}.tar.gz`
+      + `checksums.txt`.
 
 ## Downstream beneficiary
 
@@ -123,5 +127,10 @@ lean on the CLI lightly), but it's the logical follow-on.
   release), `.github/workflows/release.yml` (tag `v*` → real release; manual
   dispatch → `--snapshot` → workflow artifacts), `just release-snapshot` /
   `release-check`, `dist/` gitignored, and the README **Install** section
-  (gh release download / go install w/ GOPRIVATE / source). Remaining:
-  `goreleaser check` + first `v0.1.0` tag (human-driven git/tag).
+  (gh release download / go install w/ GOPRIVATE / source). Validated
+  locally: `goreleaser check` + full `--snapshot` build (4 archives,
+  checksums, version-stamped binary).
+- **2026-06-14**: Merged to main, tagged `v0.1.0`, release run green —
+  **GitHub Release v0.1.0 published** with all 4 platform archives +
+  `checksums.txt`. Distribution is live; `gh release download` /
+  `go install @v0.1.0` both work. Task complete.
