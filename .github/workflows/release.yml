@@ -1,0 +1,62 @@
+name: Release
+
+# Distribution is GitHub Releases only (decided 2026-06-12). Two entry points,
+# deliberately NOT "build on merge to main":
+#   - push a tag `vX.Y.Z`  → real GitHub Release (binaries + checksums).
+#   - manual workflow_dispatch → `--snapshot`: builds the current commit and
+#     uploads the binaries as workflow artifacts only. Never mints a Release,
+#     never burns a version.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the Release and upload assets
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  goreleaser:
+    name: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # goreleaser needs full history + tags
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache-dependency-path: go.sum
+
+      - name: Run goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          # tag push → publish a real Release; manual dispatch → snapshot only.
+          args: >-
+            ${{ github.event_name == 'workflow_dispatch'
+                && 'release --snapshot --clean'
+                || 'release --clean' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Snapshot builds don't publish a Release — surface the binaries as
+      # downloadable workflow artifacts instead.
+      - name: Upload snapshot artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tskflwctl-snapshot
+          path: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          if-no-files-found: error
+          retention-days: 14

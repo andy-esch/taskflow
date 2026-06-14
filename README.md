@@ -14,13 +14,36 @@ retired — see below), and it dogfoods on its own planning under
 | **[`planning/`](./planning/)** | This repo's own epics, tasks, and research (self-hosted). |
 | **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** | One-screen orientation: the primary/secondary-adapter design. |
 
-## Quick start
+## Install
+
+Distribution is **GitHub Releases only** — three paths, no Homebrew/external channels:
+
+```bash
+# 1) Prebuilt binary (no Go toolchain). The repo is private, so use gh (it
+#    handles auth); pick your platform: darwin/linux × amd64/arm64.
+gh release download -R andy-esch/taskflow -p "*linux_arm64*"
+tar xzf tskflwctl_*_linux_arm64.tar.gz && ./tskflwctl version
+
+# 2) go install from source (needs Go + git auth to the private repo)
+GOPRIVATE=github.com/andy-esch/* \
+  go install github.com/andy-esch/taskflow/cmd/tskflwctl@latest   # or @vX.Y.Z
+
+# 3) From a checkout
+just install            # → go install onto $PATH (version-stamped)
+```
+
+## Build / dev
 
 ```bash
 just build              # → bin/tskflwctl
 just run task list      # run without installing
 just install            # put tskflwctl on $PATH
+just release-snapshot   # dry-run a full release into ./dist (publishes nothing)
 ```
+
+Releases are cut by pushing a tag (`vX.Y.Z`), which runs `.github/workflows/release.yml`
+(goreleaser). A manual `workflow_dispatch` run builds a `--snapshot` and uploads
+the binaries as workflow artifacts without minting a Release.
 
 ## Daily workflow
 

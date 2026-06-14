@@ -1,0 +1,65 @@
+# goreleaser config for tskflwctl — see planning/tasks/in-progress/binary-releases-via-goreleaser.md
+# Pure-Go static binaries (CGO_ENABLED=0), darwin+linux × amd64+arm64, checksums
+# only (no signing/attestation yet). Distribution is GitHub Releases only — no
+# Homebrew tap, no external channels (decided 2026-06-12).
+#
+# Local dry-run: `just release-snapshot` (binaries → ./dist, nothing published).
+# Real release:  push a tag `vX.Y.Z` → the release.yml workflow runs this.
+version: 2
+
+project_name: tskflwctl
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: tskflwctl
+    main: ./cmd/tskflwctl
+    binary: tskflwctl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    # Stamp the same var the Justfile build uses; {{.Version}} is the tag
+    # (or the snapshot template below for --snapshot builds).
+    ldflags:
+      - -s -w -X github.com/andy-esch/taskflow/internal/cli.version={{ .Version }}
+
+archives:
+  - id: tskflwctl
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  # Used by `--snapshot` (manual workflow_dispatch / local dry-run): never a
+  # real version, never published.
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  github:
+    owner: andy-esch
+    name: taskflow
+  draft: false
+  prerelease: auto
