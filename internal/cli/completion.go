@@ -91,7 +91,7 @@ func (a *App) taskCompleter(exclude domain.Status) completeFunc {
 			if st == exclude {
 				continue
 			}
-			pats = append(pats, filepath.Join(root, "tasks", st.Dir(), "*.md"))
+			pats = append(pats, filepath.Join(root, domain.TasksDir, st.Dir(), "*.md"))
 		}
 		return slugsFromGlobs(pats, toComplete, args), cobra.ShellCompDirectiveNoFileComp
 	}
@@ -111,7 +111,7 @@ func (a *App) auditCompleter(exclude domain.AuditBucket) completeFunc {
 			if b == exclude {
 				continue
 			}
-			pats = append(pats, filepath.Join(root, "audits", b.Dir(), "*.md"))
+			pats = append(pats, filepath.Join(root, domain.AuditsDir, b.Dir(), "*.md"))
 		}
 		return slugsFromGlobs(pats, toComplete, args), cobra.ShellCompDirectiveNoFileComp
 	}
@@ -134,6 +134,6 @@ func (a *App) completeEpicIDs(_ *cobra.Command, args []string, toComplete string
 	if !ok {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	ids := slugsFromGlobs([]string{filepath.Join(root, "epics", "*.md")}, toComplete, args)
+	ids := slugsFromGlobs([]string{filepath.Join(root, domain.EpicsDir, "*.md")}, toComplete, args)
 	return ids, cobra.ShellCompDirectiveNoFileComp
 }

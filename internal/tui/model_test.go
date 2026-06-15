@@ -20,38 +20,23 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
-// seedRepo writes a tiny planning tree: alpha (in-progress), beta (ready-to-start).
+// seedRepo writes a tiny planning tree: alpha (in-progress), beta (ready-to-start),
+// one epic, and one open audit so every tab has content.
 func seedRepo(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
-	write := func(status, slug, desc string) {
-		dir := filepath.Join(root, "tasks", status)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
+	r := testutil.NewRepo(t)
+	task := func(status, slug, desc string) {
 		body := fmt.Sprintf("---\nstatus: %s\nepic: 01-test\ndescription: %s\n---\n# %s\n", status, desc, slug)
-		if err := os.WriteFile(filepath.Join(dir, slug+".md"), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		r.Task(status, slug+".md", body)
 	}
-	write("in-progress", "alpha", "the alpha task")
-	write("ready-to-start", "beta", "the beta task")
-
-	// One epic and one open audit so the epics/audits tabs have content.
-	writeFile := func(rel, content string) {
-		p := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	writeFile("epics/01-test.md", "---\nstatus: planning\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
-	writeFile("audits/open/2026-06-01-thing.md", "---\narea: store\ndate: 2026-06-01\n---\n# Audit\n")
-	return root
+	task("in-progress", "alpha", "the alpha task")
+	task("ready-to-start", "beta", "the beta task")
+	r.Epic("01-test.md", "---\nstatus: planning\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
+	r.Audit("open", "2026-06-01-thing.md", "---\narea: store\ndate: 2026-06-01\n---\n# Audit\n")
+	return r.Root
 }
 
 // drain runs a single (non-batch) command and applies its message — enough to

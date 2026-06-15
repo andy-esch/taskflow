@@ -65,6 +65,49 @@ func TestInitScaffoldsEveryStatusAndBucket(t *testing.T) {
 	}
 }
 
+// TestInitGitkeepsEveryDir pins that init drops a .gitkeep in each scaffolded
+// dir, so an empty planning tree is git-committable.
+func TestInitGitkeepsEveryDir(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Init(root, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range append(domain.TaskStatusDirs(),
+		append([]string{domain.EpicsDir, domain.ProjectsDir}, domain.AuditBucketDirs()...)...) {
+		keep := filepath.Join(root, filepath.FromSlash(d), ".gitkeep")
+		if !fileExists(keep) {
+			t.Errorf("init did not write %s/.gitkeep", d)
+		}
+	}
+}
+
+// TestInitRetrofitsGitkeep pins that re-running init on a tree whose dirs exist
+// but lack .gitkeep adds the keep (repairs older trees).
+func TestInitRetrofitsGitkeep(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "tasks", "ready-to-start")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	created, err := Init(root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fileExists(filepath.Join(dir, ".gitkeep")) {
+		t.Error("init should add a .gitkeep to a pre-existing dir that lacked one")
+	}
+	// The keep is reported as created even though the dir itself already existed.
+	var sawKeep bool
+	for _, c := range created {
+		if c == "tasks/ready-to-start/.gitkeep" {
+			sawKeep = true
+		}
+	}
+	if !sawKeep {
+		t.Errorf("the retrofitted .gitkeep should be reported in created: %v", created)
+	}
+}
+
 func TestDiscover_ConfigAnchorsAndHonorsRoot(t *testing.T) {
 	repo := t.TempDir()
 	// Config at the repo root points taskflow_root at a planning/ subdir that

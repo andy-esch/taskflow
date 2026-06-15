@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Glamour body uses a fixed dark style; adapt to terminal background (auto light/dark) and consider a style aligned with the theme palette
 effort: Unknown
@@ -8,6 +8,9 @@ priority: low
 autonomy_level: 3
 tags: [tui, bubble-tea]
 created: "2026-06-12"
+started_at: "2026-06-14"
+updated_at: "2026-06-14"
+completed_at: "2026-06-14"
 ---
 
 # TUI glamour theming auto light dark
@@ -21,12 +24,16 @@ the body matches the rest of the TUI. Deferred from S5 (out-of-scope: theming).
 
 ## Scope
 
-- [ ] Pick the glamour style by terminal background — `WithAutoStyle()` or a
-      `lipgloss.HasDarkBackground()` check — falling back to `dark`. Keep the cached
-      renderer keyed by width (and now style).
-- [ ] (Optional) a glamour `StyleConfig` aligned with the `theme` colors so headings
-      / code / accents match the CLI/TUI palette.
-- [ ] Test: the chosen style follows the background signal.
+- [x] Pick the glamour style by terminal background. — `glamourStyleFor(darkBG)`
+      maps light→"light", else→"dark"; `Run()` resolves `lipgloss.HasDarkBackground()`
+      ONCE at startup (a mid-program OSC query would race Bubble Tea's reader) and
+      threads the style through to the detail pane. Cached renderer now keyed by
+      width **and** style.
+- [~] (Optional) a glamour `StyleConfig` aligned with the `theme` colors. — **not
+      done** (deferred): it's a taste/design call, not needed for the readability
+      fix. Left for a follow-up if wanted.
+- [x] Test: the chosen style follows the background signal. — `TestGlamourStyleFor`
+      (mapping) + `TestDetailPane_GlamourRendererRebuildsOnStyle` (cache rekeys).
 
 ## Out of scope
 

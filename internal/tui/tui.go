@@ -2,6 +2,7 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/andy-esch/taskflow/internal/core"
 )
@@ -12,6 +13,9 @@ import (
 // so the degradation isn't silent.
 func Run(svc *core.Service) error {
 	m := New(svc)
+	// Resolve the terminal background ONCE, here, before the program starts
+	// reading input — querying it mid-program would race Bubble Tea's reader.
+	m.detail.glamStyle = glamourStyleFor(lipgloss.HasDarkBackground())
 	if w, err := newWatcher(svc.WatchPaths()); err == nil {
 		m.watch = w
 		defer func() { _ = w.close() }()

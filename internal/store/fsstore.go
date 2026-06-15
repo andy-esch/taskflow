@@ -32,9 +32,9 @@ var _ core.Store = (*FS)(nil)
 // NewFS returns a store rooted at a planning directory (the dir holding tasks/).
 func NewFS(root string) *FS {
 	return &FS{
-		tasksDir:  filepath.Join(root, "tasks"),
-		epicsDir:  filepath.Join(root, "epics"),
-		auditsDir: filepath.Join(root, "audits"),
+		tasksDir:  filepath.Join(root, domain.TasksDir),
+		epicsDir:  filepath.Join(root, domain.EpicsDir),
+		auditsDir: filepath.Join(root, domain.AuditsDir),
 	}
 }
 

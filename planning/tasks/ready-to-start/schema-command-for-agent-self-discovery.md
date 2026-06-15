@@ -1,7 +1,7 @@
 ---
 status: ready-to-start
 epic: 17-pm-go-cli
-description: 'DRAFT: revive the descoped schema command - one --json call emitting statuses, epic enum, field registry, exit/error codes, schema_version'
+description: 'DRAFT: schema command — agent self-discovery + authoring guidance (sections, field descriptions); shape needs design thought before finalizing'
 effort: Unknown
 tier: 3
 priority: low
@@ -18,8 +18,10 @@ created: "2026-06-12"
 
 ## Objective
 
-Let an agent configure itself in ONE call instead of parsing `--help` prose:
-`tskflwctl schema --json` emits the machine contract —
+Make the tool self-describing in ONE call instead of parsing `--help` prose.
+Two complementary halves:
+
+**A. Machine contract (the original scope).** `tskflwctl schema --json` emits —
 - task statuses (+ which are active) and the epic-status enum,
 - the known-field registry with types (`domain/fields.go` exists precisely
   for this: int/list/known sets),
@@ -28,6 +30,21 @@ Let an agent configure itself in ONE call instead of parsing `--help` prose:
 
 Human mode prints the same as a readable table. Nearly free now: every list
 it would emit already lives in `domain` as data.
+
+**B. Authoring guidance (folded in 2026-06-14).** The other half of
+self-discovery: how to *compose* a well-formed task/epic/audit, aimed mainly at
+an **AI drafting documents** — especially when `tskflwctl` is bundled into
+another repo with no CLAUDE.md to lean on (the strongest reason to build this).
+Per-kind: `tskflwctl schema task` / `schema epic` / `schema audit` would emit
+the body **section template** (Objective / Acceptance criteria / Out of scope /
+Related — already encoded in the `task new` scaffold at `core/service.go`),
+each **frontmatter field with a description + example** (not just its type),
+and any **conventions** (e.g. one-line `description`, required tags). The
+contract half (A) tells an agent *what values are valid*; the authoring half
+(B) tells it *how to write the document*.
+
+> ⚠️ **B needs design thought before finalizing — do not implement off this
+> sketch.** Open questions below.
 
 ## ⚠️ Conflicts to resolve before starting
 
@@ -42,15 +59,56 @@ it would emit already lives in `domain` as data.
   version) — adding it is a minor bump and its shape should be strict-decode
   tested like the other envelopes.
 
+## ⚠️ Open design questions for part B (authoring guidance)
+
+These need resolving before B is implementable — it is **not** a clean derive
+like A:
+
+- **One command or two?** Does `schema` carry both contract (A) and authoring
+  (B), or does B get its own verb (`guide`/`explain`/`template`)? A bare
+  `schema` for the global contract + `schema <kind>` for per-kind authoring is
+  one option.
+- **Where does the prose live (single source of truth)?** Field *descriptions*
+  and *examples* don't exist yet — the registry is type-only. Options: enrich
+  `domain/fields.go` from bool-maps into a richer registry (type + description +
+  example), which also upgrades A's output; and/or `go:embed` a small authoring
+  doc. Section names should be **derived from the actual `task new` scaffold**,
+  not hand-copied, so guidance and the generated skeleton can't disagree.
+- **How opinionated?** Best-practices prose drifts and is taste-laden — decide
+  how much normative guidance ships vs. just structure + field semantics.
+- **Per-repo override (`.tskflwctl.toml`).** Each repo has different conventions,
+  so the built-in guidance must be overridable: a config key (e.g.
+  `guidance_dir`/`authoring_docs`) pointing at repo-specific guidance the command
+  surfaces *instead of / layered over* the tool defaults. Open: replace vs. merge
+  with the built-in baseline; what format the override is (markdown the command
+  prints? structured?); and — crucially — the path is resolved by the same
+  config machinery whose relative/absolute handling is itself in question (see
+  the config-path note flagged 2026-06-14), so settle that first.
+- **Per-entity coverage:** task first; epic/audit have their own (smaller)
+  scaffolds and field sets — confirm the same command shape extends cleanly.
+- **Interaction with in-flight schema changes:** if the readiness axis
+  ([[task-readiness-state-draft-vs-finalized-in-frontmatter]]) or the scaffold
+  version key ([[scaffold-schema-version-key-and-domain-level-audit-finding-counter]])
+  land, B's field list and sections must reflect them — sequence accordingly.
+
 ## Acceptance criteria (draft)
 
-- [ ] Planning conflicts above resolved; task de-drafted.
-- [ ] One `--json` call yields statuses, epic enum, field registry with
+- [ ] Planning conflicts above resolved; **both** the part-A reversal question
+      and the part-B open design questions answered; task de-drafted.
+- [ ] **A:** one `--json` call yields statuses, epic enum, field registry with
       types, exit/error codes, schema_version (strict-decode test).
-- [ ] The emitted sets are DERIVED from domain (sync-guard test), never
-      hand-copied lists.
+- [ ] **B:** `schema <kind>` (or the chosen verb) emits the body section
+      template + per-field description/example + conventions, in `--json` and
+      human modes.
+- [ ] The emitted sets are DERIVED from domain (sync-guard test) — statuses,
+      fields, AND section names — never hand-copied lists.
 
 ## Related
 
 - Epic [[17-pm-go-cli]] · [[2026-06-12-pending-decisions]] (D7/D9) ·
-  `internal/domain/fields.go`.
+  `internal/domain/fields.go` (field registry to enrich) ·
+  `internal/core/service.go` (the `task new` body scaffold = section source).
+- Authoring half (B) interacts with
+  [[scaffold-schema-version-key-and-domain-level-audit-finding-counter]] and
+  [[task-readiness-state-draft-vs-finalized-in-frontmatter]] (both add
+  fields/sections the guidance must reflect).

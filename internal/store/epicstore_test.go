@@ -2,23 +2,17 @@ package store
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func writeEpic(t *testing.T, root, name, content string) {
 	t.Helper()
-	dir := filepath.Join(root, "epics")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	testutil.Write(t, filepath.Join(root, domain.EpicsDir, name), content)
 }
 
 // TestFS_ListEpics_NumericOrder pins that epics come back ordered by their NN-

@@ -101,10 +101,13 @@ func TestDryRun_EpicNewAndAuditMove(t *testing.T) {
 	if !strings.Contains(out, "would create") {
 		t.Errorf("dry-run epic new should preview, got %q", out)
 	}
-	// No epic file written (the would-be id is NN-preview-epic; just assert the dir is empty of it).
+	// No epic .md file written (the would-be id is NN-preview-epic). The dir holds
+	// init's .gitkeep, so assert specifically that no markdown landed.
 	entries, _ := os.ReadDir(filepath.Join(root, "epics"))
-	if len(entries) != 0 {
-		t.Errorf("dry-run epic new must not write a file, found %d", len(entries))
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".md") {
+			t.Errorf("dry-run epic new must not write a file, found %s", e.Name())
+		}
 	}
 
 	// Audit move: seed an open audit, dry-run close it.

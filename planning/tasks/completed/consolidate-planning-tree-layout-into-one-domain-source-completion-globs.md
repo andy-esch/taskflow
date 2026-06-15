@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: completion.go still globs tasks/<status>, audits/<bucket>, epics directly; derive the subdirs from one domain helper shared with WatchPaths/Init
 effort: Unknown
@@ -8,6 +8,9 @@ priority: low
 autonomy_level: 3
 tags: [go, architecture, refactor]
 created: "2026-06-14"
+started_at: "2026-06-14"
+updated_at: "2026-06-14"
+completed_at: "2026-06-14"
 ---
 
 # Consolidate planning-tree layout into one domain source (completion globs)
@@ -26,15 +29,16 @@ subdir enumeration down into `domain`, where all three consumers can share it.
 
 ## Acceptance criteria
 
-- [ ] A `domain` helper returns the canonical planning subdirs (e.g.
-      `TaskDirs()`/`AuditDirs()` or one `LayoutDirs()` yielding relative paths),
-      derived from `AllStatuses()`/`AllAuditBuckets()`.
-- [ ] `completion.go`, `config.Init`, and `store.WatchPaths()` all build from that
-      helper — no independent `tasks/<status>` / `audits/<bucket>` literals or
-      ad-hoc enumeration remain.
-- [ ] A sync-guard test (or extend the existing ones) so a new status/bucket
-      flows to completion automatically.
-- [ ] `go build/test/vet` green; `gofmt` clean.
+- [x] A `domain` helper returns the canonical planning subdirs. — `domain/layout.go`:
+      `TasksDir`/`EpicsDir`/`AuditsDir`/`ProjectsDir` constants + `TaskStatusDirs()`
+      / `AuditBucketDirs()` derived from `AllStatuses()`/`AllAuditBuckets()`.
+- [x] `completion.go`, `config.Init`, `store.NewFS`/`WatchPaths` (and config's repo
+      discovery) all build from it — verified no `"tasks"`/`"audits"`/`"epics"`/
+      `"projects"` literals remain in those files.
+- [x] Sync-guard tests: new `TestTaskStatusDirs`/`TestAuditBucketDirs` pin the
+      derivation; the existing `TestInitScaffoldsEveryStatusAndBucket` and
+      `TestFS_WatchPaths` still cover init + watcher.
+- [x] `go build/test/vet` green; `gofmt` clean.
 
 ## Out of scope
 
