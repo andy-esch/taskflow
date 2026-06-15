@@ -32,8 +32,7 @@ const (
 // entity keeps its own list (and cursor). The right pane shows the selection's
 // detail.
 type Model struct {
-	svc  *core.Service
-	root string // planning root; passed to the fsnotify watcher (watch.go)
+	svc *core.Service
 
 	width, height int
 	twoPane       bool
@@ -62,11 +61,11 @@ type Model struct {
 }
 
 // New constructs the root model over the same *core.Service the CLI uses.
-func New(svc *core.Service, root string) Model {
+func New(svc *core.Service) Model {
 	return Model{
-		svc: svc, root: root, focus: focusList,
+		svc: svc, focus: focusList,
 		tabs: newEntityTabs(), active: 0,
-		detail: newDetailPane(), cmd: newCommandBar(),
+		detail: newDetailPane("dark"), cmd: newCommandBar(),
 	}
 }
 

@@ -43,6 +43,7 @@ func (nopStore) MoveAudit(string, domain.AuditBucket, bool) (domain.Audit, error
 	return domain.Audit{}, nil
 }
 func (nopStore) FixFrontmatter(bool) ([]domain.FixResult, error) { return nil, nil }
+func (nopStore) WatchPaths() []string                            { return nil }
 
 // fakeStore is an in-memory Store for pure core unit tests; it overrides only
 // the read/create methods its tests touch (the rest come from nopStore).

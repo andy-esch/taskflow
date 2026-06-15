@@ -1,20 +1,16 @@
 package store
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func writeTask(t *testing.T, root, status, name, content string) {
 	t.Helper()
-	dir := filepath.Join(root, "tasks", status)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	testutil.Write(t, filepath.Join(root, domain.TasksDir, status, name), content)
 }
 
 func TestFS_ListTasks(t *testing.T) {

@@ -7,17 +7,12 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func writeAudit(t *testing.T, root, bucket, name, content string) {
 	t.Helper()
-	dir := filepath.Join(root, "audits", bucket)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	testutil.Write(t, filepath.Join(root, domain.AuditsDir, bucket, name), content)
 }
 
 func TestFS_ListAudits_FindingCounts(t *testing.T) {

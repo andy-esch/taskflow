@@ -20,38 +20,23 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
-// seedRepo writes a tiny planning tree: alpha (in-progress), beta (ready-to-start).
+// seedRepo writes a tiny planning tree: alpha (in-progress), beta (ready-to-start),
+// one epic, and one open audit so every tab has content.
 func seedRepo(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
-	write := func(status, slug, desc string) {
-		dir := filepath.Join(root, "tasks", status)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
+	r := testutil.NewRepo(t)
+	task := func(status, slug, desc string) {
 		body := fmt.Sprintf("---\nstatus: %s\nepic: 01-test\ndescription: %s\n---\n# %s\n", status, desc, slug)
-		if err := os.WriteFile(filepath.Join(dir, slug+".md"), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		r.Task(status, slug+".md", body)
 	}
-	write("in-progress", "alpha", "the alpha task")
-	write("ready-to-start", "beta", "the beta task")
-
-	// One epic and one open audit so the epics/audits tabs have content.
-	writeFile := func(rel, content string) {
-		p := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	writeFile("epics/01-test.md", "---\nstatus: planning\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
-	writeFile("audits/open/2026-06-01-thing.md", "---\narea: store\ndate: 2026-06-01\n---\n# Audit\n")
-	return root
+	task("in-progress", "alpha", "the alpha task")
+	task("ready-to-start", "beta", "the beta task")
+	r.Epic("01-test.md", "---\nstatus: planning\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
+	r.Audit("open", "2026-06-01-thing.md", "---\narea: store\ndate: 2026-06-01\n---\n# Audit\n")
+	return r.Root
 }
 
 // drain runs a single (non-batch) command and applies its message — enough to
@@ -89,7 +74,7 @@ func drainBatch(t *testing.T, m Model, cmd tea.Cmd) Model {
 func newModel(t *testing.T) Model {
 	t.Helper()
 	root := seedRepo(t)
-	return New(core.NewService(store.NewFS(root)), root)
+	return New(core.NewService(store.NewFS(root)))
 }
 
 // loaded returns a model that's been sized and had its task load applied.
@@ -476,7 +461,7 @@ func seedManyTasks(t *testing.T, n int) string {
 // and hard-clamps the body so the chrome always survives.)
 func TestModel_ChromeVisibleWhenListPaginates(t *testing.T) {
 	root := seedManyTasks(t, 20)
-	m := New(core.NewService(store.NewFS(root)), root)
+	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 14})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -527,7 +512,7 @@ func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
 		[]byte("---\nstatus: ready-to-start\ndescription: x\n---\n# only\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := New(core.NewService(store.NewFS(root)), root)
+	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -590,7 +575,7 @@ func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
 		[]byte("---\nstatus: in-progress\ndescription: x\n---\n# body\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := New(core.NewService(store.NewFS(root)), root)
+	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 24}) // narrowest two-pane
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -1301,29 +1286,5 @@ func TestModel_DetailFollowsFilter(t *testing.T) {
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(3*time.Second)).(Model)
 	if fm.detail.title != "beta" {
 		t.Errorf("detail should track the filtered selection, showing %q", fm.detail.title)
-	}
-}
-
-func TestWatchDirs(t *testing.T) {
-	root := filepath.Join("x", "plan")
-	got := watchDirs(root)
-	for _, want := range []string{
-		filepath.Join(root, "epics"),
-		filepath.Join(root, "tasks"),
-		filepath.Join(root, "audits"),
-		filepath.Join(root, "tasks", "in-progress"),
-		filepath.Join(root, "tasks", "ready-to-start"),
-		filepath.Join(root, "audits", "open"),
-	} {
-		found := false
-		for _, d := range got {
-			if d == want {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("watchDirs(%q) missing %q; got %v", root, want, got)
-		}
 	}
 }

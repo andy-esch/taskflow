@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: core.Service at 54.5% with whole use-cases untested directly, render at 24.9% with no golden files, no built-binary smoke tests
 effort: Unknown
@@ -8,6 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [go, testing, coverage]
 created: "2026-06-12"
+updated_at: "2026-06-14"
+started_at: "2026-06-14"
+completed_at: "2026-06-14"
 ---
 # Core and render test depth
 
@@ -46,9 +49,12 @@ store 80.2%, tui 79.3%, domain 85.9%.
 ## Acceptance criteria
 
 - [x] core ≥80% with use-cases tested at the service seam.
-- [ ] Render output pinned by goldens; JSON envelopes decode-asserted.
+- [x] Render output pinned by goldens; JSON envelopes decode-asserted. — done via
+      `DisallowUnknownFields` strict-decode per envelope; golden *files* judged
+      unnecessary (decode-assert is stricter and less brittle).
 - [x] Binary smoke test exercises real exit codes.
-- [ ] One shared planning-tree fixture helper.
+- [x] One shared planning-tree fixture helper. — `internal/testutil` (`Write` +
+      `Repo` builder); the store/cli/core/tui fixture helpers now delegate to it.
 
 ## Related
 
@@ -64,5 +70,13 @@ pins each JSON schema) plus human-output assertions; golden *files* were
 judged unnecessary given the decode-assert approach, revisit if desired.
 Built-binary smoke suite added (`cmd/tskflwctl/main_test.go`): real process
 exit codes 0/10/11, stderr `error:` contract, version stamp. CRLF behavioral
-test landed with [[store-write-path-hardening]]. Remaining: the shared
-`internal/testutil` fixture builder (four hand-rolled helpers still exist).
+test landed with [[store-write-path-hardening]].
+
+## Progress (2026-06-14)
+
+Final item done: `internal/testutil` now owns the one "mkdir + write a fixture
+file" implementation (`Write` + a chainable `Repo` builder). The per-package
+helpers — store's `writeTask`/`writeEpic`/`writeAudit`, cli's `mustWrite`,
+core's `setFieldsRepo`, tui's `seedRepo` — delegate to it; their call sites are
+unchanged, so the dedup carries no behavioral risk. Suite green (9/9), vet/gofmt
+clean. Task complete.

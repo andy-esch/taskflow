@@ -275,8 +275,8 @@ func SummaryJSON(w io.Writer, s core.Summary) error {
 	epics := make([]epicJSON, 0, len(s.Epics))
 	for _, e := range s.Epics {
 		epics = append(epics, epicJSON{
-			ID: e.Epic.ID, Status: e.Epic.Status, Description: e.Epic.Description,
-			Total: e.Total, Done: e.Done, Percent: e.Percent(),
+			epicMetaJSON: toEpicMeta(e.Epic),
+			Total:        e.Total, Done: e.Done, Percent: e.Percent(),
 		})
 	}
 	return encodeJSON(w, struct {
@@ -347,16 +347,13 @@ func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 	return nil
 }
 
+// epicJSON is epic list output: the shared meta (embedded, so `epic list` and
+// `epic show` can't drift) plus the task rollup.
 type epicJSON struct {
-	ID          string   `json:"id"`
-	Status      string   `json:"status,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Priority    string   `json:"priority,omitempty"`
-	Created     string   `json:"created,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	Total       int      `json:"total"`
-	Done        int      `json:"done"`
-	Percent     int      `json:"percent"`
+	epicMetaJSON
+	Total   int `json:"total"`
+	Done    int `json:"done"`
+	Percent int `json:"percent"`
 }
 
 // EpicsJSON writes a versioned envelope of epics with rollup, including any
@@ -369,9 +366,8 @@ func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []domain.FileProb
 	}{SchemaVersion: SchemaVersion, Epics: make([]epicJSON, 0, len(epics)), Unreadable: problems}
 	for _, e := range epics {
 		payload.Epics = append(payload.Epics, epicJSON{
-			ID: e.Epic.ID, Status: e.Epic.Status, Description: e.Epic.Description,
-			Priority: e.Epic.Priority, Created: e.Epic.Created, Tags: e.Epic.Tags,
-			Total: e.Total, Done: e.Done, Percent: e.Percent(),
+			epicMetaJSON: toEpicMeta(e.Epic),
+			Total:        e.Total, Done: e.Done, Percent: e.Percent(),
 		})
 	}
 	return encodeJSON(w, payload)
@@ -549,6 +545,15 @@ type epicMetaJSON struct {
 	Tags        []string `json:"tags,omitempty"`
 }
 
+// toEpicMeta is the one place epic meta fields are mapped to JSON, shared by
+// `epic list` (embedded in epicJSON) and `epic show`.
+func toEpicMeta(e domain.Epic) epicMetaJSON {
+	return epicMetaJSON{
+		ID: e.ID, Status: e.Status, Description: e.Description,
+		Priority: e.Priority, Created: e.Created, Tags: e.Tags,
+	}
+}
+
 // EpicShowJSON writes an epic, its tasks, and its body.
 func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body string) error {
 	jt := make([]taskJSON, 0, len(tasks))
@@ -562,12 +567,9 @@ func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body strin
 		Body          string       `json:"body"`
 	}{
 		SchemaVersion: SchemaVersion,
-		Epic: epicMetaJSON{
-			ID: epic.ID, Status: epic.Status, Description: epic.Description,
-			Priority: epic.Priority, Created: epic.Created, Tags: epic.Tags,
-		},
-		Tasks: jt,
-		Body:  body,
+		Epic:          toEpicMeta(epic),
+		Tasks:         jt,
+		Body:          body,
 	})
 }
 

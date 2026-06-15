@@ -32,10 +32,26 @@ var _ core.Store = (*FS)(nil)
 // NewFS returns a store rooted at a planning directory (the dir holding tasks/).
 func NewFS(root string) *FS {
 	return &FS{
-		tasksDir:  filepath.Join(root, "tasks"),
-		epicsDir:  filepath.Join(root, "epics"),
-		auditsDir: filepath.Join(root, "audits"),
+		tasksDir:  filepath.Join(root, domain.TasksDir),
+		epicsDir:  filepath.Join(root, domain.EpicsDir),
+		auditsDir: filepath.Join(root, domain.AuditsDir),
 	}
+}
+
+// WatchPaths is the set of leaf directories a filesystem watcher must observe to
+// catch every task/epic/audit change: the three entity parents plus each
+// task-status and audit-bucket subdir. The store owns the on-disk layout, so
+// this lives here rather than being reconstructed by the TUI watcher (which
+// would otherwise duplicate the `tasks/<status>` / `audits/<bucket>` convention).
+func (s *FS) WatchPaths() []string {
+	dirs := []string{s.epicsDir, s.tasksDir, s.auditsDir}
+	for _, st := range domain.AllStatuses() {
+		dirs = append(dirs, filepath.Join(s.tasksDir, st.Dir()))
+	}
+	for _, b := range domain.AllAuditBuckets() {
+		dirs = append(dirs, filepath.Join(s.auditsDir, b.Dir()))
+	}
+	return dirs
 }
 
 // ListTasks scans every status directory and parses each task's frontmatter.
@@ -46,29 +62,14 @@ func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 	var problems []domain.FileProblem
 	for _, st := range domain.AllStatuses() {
 		dir := filepath.Join(s.tasksDir, st.Dir())
-		entries, err := os.ReadDir(dir)
+		ts, ps, err := scanDir(dir, func(path string, content []byte) (domain.Task, error) {
+			return parseTask(content, path, st)
+		})
 		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, nil, fmt.Errorf("read status dir %s: %w", dir, err)
+			return nil, nil, err
 		}
-		for _, e := range entries {
-			if !markdownDoc(e) {
-				continue
-			}
-			path := filepath.Join(dir, e.Name())
-			content, err := os.ReadFile(path)
-			if err != nil {
-				return nil, nil, fmt.Errorf("read task %s: %w", path, err)
-			}
-			t, err := parseTask(content, path, st)
-			if err != nil {
-				problems = append(problems, domain.FileProblem{Path: path, Message: err.Error()})
-				continue
-			}
-			tasks = append(tasks, t)
-		}
+		tasks = append(tasks, ts...)
+		problems = append(problems, ps...)
 	}
 	return tasks, problems, nil
 }
@@ -145,6 +146,16 @@ func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun bool) (do
 	if dryRun {
 		return t, nil // every check above ran; only the disk mutation is skipped
 	}
+	if testHookBeforeMoveWrite != nil {
+		testHookBeforeMoveWrite()
+	}
+	// Re-resolve immediately before the write (compare-and-swap), like SetFields:
+	// a concurrent Move may have already relocated this slug, so writing the new
+	// file would leave a duplicate across two status dirs (a permanent
+	// ErrAmbiguous). Fail cleanly with nothing written instead.
+	if curPath, _, err := s.resolve(slug); err != nil || curPath != path {
+		return domain.Task{}, fmt.Errorf("task %q changed on disk during move; retry: %w", slug, domain.ErrConflict)
+	}
 	// Write the updated content atomically into the *target* status dir, then
 	// remove the old file last. A crash between the two leaves both files (a
 	// recoverable duplicate), never one whose frontmatter status disagrees with
@@ -210,6 +221,11 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 // Move. Nil outside tests.
 var testHookBeforeSetFieldsWrite func()
 
+// testHookBeforeMoveWrite is Move's equivalent seam: it runs just before Move's
+// compare-and-swap re-resolve, so a test can interleave a concurrent relocation.
+// Nil outside tests.
+var testHookBeforeMoveWrite func()
+
 // resolve finds the file and current status for a slug — exact first, then
 // fuzzy (unique case-insensitive prefix, then substring) via resolveID, so a
 // half-remembered name works anywhere a slug is accepted. Ambiguity (including
@@ -232,24 +248,11 @@ func (s *FS) resolve(slug string) (path string, status domain.Status, err error)
 func (s *FS) taskCandidates() ([]candidate, error) {
 	var out []candidate
 	for _, st := range domain.AllStatuses() {
-		dir := filepath.Join(s.tasksDir, st.Dir())
-		entries, err := os.ReadDir(dir)
+		cs, err := markdownCandidates(filepath.Join(s.tasksDir, st.Dir()), st.Dir())
 		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, fmt.Errorf("read status dir %s: %w", dir, err)
+			return nil, err
 		}
-		for _, e := range entries {
-			if !markdownDoc(e) {
-				continue
-			}
-			out = append(out, candidate{
-				id:   strings.TrimSuffix(e.Name(), ".md"),
-				path: filepath.Join(dir, e.Name()),
-				dir:  st.Dir(),
-			})
-		}
+		out = append(out, cs...)
 	}
 	return out, nil
 }

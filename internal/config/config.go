@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // Config records where the planning data lives (the "taskflow root": the dir
@@ -33,10 +35,10 @@ func Discover(start string) (*Config, error) {
 			}
 			return &Config{Root: root}, nil
 		}
-		if isDir(filepath.Join(dir, "tasks")) {
+		if isDir(filepath.Join(dir, domain.TasksDir)) {
 			return &Config{Root: dir}, nil
 		}
-		if isDir(filepath.Join(dir, "planning", "tasks")) {
+		if isDir(filepath.Join(dir, "planning", domain.TasksDir)) {
 			return &Config{Root: filepath.Join(dir, "planning")}, nil
 		}
 		parent := filepath.Dir(dir)
@@ -64,7 +66,7 @@ func configuredRoot(dir string) (string, error) {
 		r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("taskflow_root %q escapes %s's directory (%s)", rel, ConfigFile, dir)
 	}
-	if !isDir(filepath.Join(root, "tasks")) {
+	if !isDir(filepath.Join(root, domain.TasksDir)) {
 		return "", fmt.Errorf(
 			"taskflow_root %q points at %s, which has no tasks/ — fix %s or run `tskflwctl init`",
 			rel, root, ConfigFile)
@@ -136,6 +138,10 @@ func fileExists(p string) bool {
 // ConfigFile is the per-repo config filename written by Init.
 const ConfigFile = ".tskflwctl.toml"
 
+// gitKeep is the placeholder Init drops in each scaffolded dir so an empty
+// planning tree is still git-committable (git won't track empty directories).
+const gitKeep = ".gitkeep"
+
 const defaultConfigTOML = `# tskflwctl planning config — also the marker that anchors discovery.
 # taskflow_root: planning dir relative to this file (default ".").
 taskflow_root = "."
@@ -147,24 +153,36 @@ tracked_repos = []
 // root. It is idempotent: existing dirs/config are left untouched. Returns the
 // relative paths created (empty if nothing was needed).
 func Init(root string, dryRun bool) ([]string, error) {
-	dirs := []string{
-		"tasks/next-up", "tasks/ready-to-start", "tasks/in-progress",
-		"tasks/completed", "tasks/deprecated", "tasks/deferred",
-		"epics", "projects",
-		"audits/open", "audits/closed", "audits/deferred",
-	}
+	// Derive the task-status and audit-bucket dirs from the domain layout helpers
+	// so a new status/bucket is scaffolded automatically — a hardcoded list would
+	// silently drift (init not creating a dir the watcher already watches).
+	// Guarded by TestInitScaffoldsEveryStatusAndBucket.
+	dirs := domain.TaskStatusDirs()
+	dirs = append(dirs, domain.EpicsDir, domain.ProjectsDir)
+	dirs = append(dirs, domain.AuditBucketDirs()...)
 	var created []string
 	for _, d := range dirs {
 		p := filepath.Join(root, filepath.FromSlash(d))
-		if isDir(p) {
-			continue
-		}
-		if !dryRun {
-			if err := os.MkdirAll(p, 0o755); err != nil {
-				return created, fmt.Errorf("mkdir %s: %w", p, err)
+		if !isDir(p) {
+			if !dryRun {
+				if err := os.MkdirAll(p, 0o755); err != nil {
+					return created, fmt.Errorf("mkdir %s: %w", p, err)
+				}
 			}
+			created = append(created, d)
 		}
-		created = append(created, d)
+		// A .gitkeep makes the (otherwise empty) dir git-committable. Written if
+		// absent even when the dir already exists, so re-running init also repairs
+		// a tree scaffolded before this existed.
+		keep := filepath.Join(p, gitKeep)
+		if !fileExists(keep) {
+			if !dryRun {
+				if err := os.WriteFile(keep, nil, 0o644); err != nil {
+					return created, fmt.Errorf("write %s: %w", keep, err)
+				}
+			}
+			created = append(created, d+"/"+gitKeep)
+		}
 	}
 	cfg := filepath.Join(root, ConfigFile)
 	// Exclusive create instead of exists-then-write: a concurrent init must not

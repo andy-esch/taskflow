@@ -31,29 +31,14 @@ func (s *FS) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 	var problems []domain.FileProblem
 	for _, bucket := range domain.AllAuditBuckets() {
 		dir := filepath.Join(s.auditsDir, bucket.Dir())
-		entries, err := os.ReadDir(dir)
+		as, ps, err := scanDir(dir, func(path string, content []byte) (domain.Audit, error) {
+			return parseAudit(content, path, bucket)
+		})
 		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, nil, fmt.Errorf("read audit bucket %s: %w", dir, err)
+			return nil, nil, err
 		}
-		for _, e := range entries {
-			if !markdownDoc(e) {
-				continue
-			}
-			path := filepath.Join(dir, e.Name())
-			content, err := os.ReadFile(path)
-			if err != nil {
-				return nil, nil, fmt.Errorf("read audit %s: %w", path, err)
-			}
-			a, err := parseAudit(content, path, bucket)
-			if err != nil {
-				problems = append(problems, domain.FileProblem{Path: path, Message: err.Error()})
-				continue
-			}
-			audits = append(audits, a)
-		}
+		audits = append(audits, as...)
+		problems = append(problems, ps...)
 	}
 	return audits, problems, nil
 }
@@ -121,24 +106,11 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 func (s *FS) resolveAudit(slug string) (path string, bucket domain.AuditBucket, err error) {
 	var cands []candidate
 	for _, b := range domain.AllAuditBuckets() {
-		dir := filepath.Join(s.auditsDir, b.Dir())
-		entries, err := os.ReadDir(dir)
+		cs, err := markdownCandidates(filepath.Join(s.auditsDir, b.Dir()), b.Dir())
 		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return "", "", fmt.Errorf("read audit dir %s: %w", dir, err)
+			return "", "", err
 		}
-		for _, e := range entries {
-			if !markdownDoc(e) {
-				continue
-			}
-			cands = append(cands, candidate{
-				id:   strings.TrimSuffix(e.Name(), ".md"),
-				path: filepath.Join(dir, e.Name()),
-				dir:  b.Dir(),
-			})
-		}
+		cands = append(cands, cs...)
 	}
 	c, err := resolveID("audit", slug, cands)
 	if err != nil {

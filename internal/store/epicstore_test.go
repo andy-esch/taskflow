@@ -2,22 +2,64 @@ package store
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func writeEpic(t *testing.T, root, name, content string) {
 	t.Helper()
-	dir := filepath.Join(root, "epics")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	testutil.Write(t, filepath.Join(root, domain.EpicsDir, name), content)
+}
+
+// TestFS_ListEpics_NumericOrder pins that epics come back ordered by their NN-
+// number, not lexically — so 100 sorts after 99 (and 10 after 9), which a string
+// compare of the zero-padded id gets wrong.
+func TestFS_ListEpics_NumericOrder(t *testing.T) {
+	root := t.TempDir()
+	for _, id := range []string{"09-i", "10-j", "100-k", "02-b"} {
+		writeEpic(t, root, id+".md", "---\nstatus: planning\n---\n# "+id+"\n")
+	}
+	epics, _, err := NewFS(root).ListEpics()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
+	var got []string
+	for _, e := range epics {
+		got = append(got, e.ID)
+	}
+	want := []string{"02-b", "09-i", "10-j", "100-k"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("epics out of numeric order:\n got %v\nwant %v", got, want)
+	}
+}
+
+// TestFS_WatchPaths covers the directory set exposed for the TUI watcher: it must
+// be derived from the domain enums (one source of layout truth), so every status
+// and bucket subdir is present under the right parent.
+func TestFS_WatchPaths(t *testing.T) {
+	root := filepath.Join("x", "plan")
+	got := map[string]bool{}
+	for _, d := range NewFS(root).WatchPaths() {
+		got[d] = true
+	}
+	for _, parent := range []string{"epics", "tasks", "audits"} {
+		if !got[filepath.Join(root, parent)] {
+			t.Errorf("WatchPaths missing entity parent %q", parent)
+		}
+	}
+	for _, st := range domain.AllStatuses() {
+		if !got[filepath.Join(root, "tasks", st.Dir())] {
+			t.Errorf("WatchPaths missing status dir %q", st.Dir())
+		}
+	}
+	for _, b := range domain.AllAuditBuckets() {
+		if !got[filepath.Join(root, "audits", b.Dir())] {
+			t.Errorf("WatchPaths missing audit bucket %q", b.Dir())
+		}
 	}
 }
 

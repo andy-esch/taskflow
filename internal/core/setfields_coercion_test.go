@@ -8,32 +8,21 @@ package core_test
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func setFieldsRepo(t *testing.T) *core.Service {
 	t.Helper()
-	root := t.TempDir()
-	for _, d := range []string{filepath.Join("tasks", "ready-to-start"), "epics"} {
-		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write := func(rel, content string) {
-		if err := os.WriteFile(filepath.Join(root, rel), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write(filepath.Join("epics", "01-e.md"), "---\nstatus: planning\ndescription: e\n---\n# e\n")
-	write(filepath.Join("tasks", "ready-to-start", "t.md"),
+	r := testutil.NewRepo(t)
+	r.Epic("01-e.md", "---\nstatus: planning\ndescription: e\n---\n# e\n")
+	r.Task("ready-to-start", "t.md",
 		"---\nstatus: ready-to-start\nepic: 01-e\ndescription: t\ntier: 3\n---\n# t\n")
-	return core.NewService(store.NewFS(root))
+	return core.NewService(store.NewFS(r.Root))
 }
 
 // TestSetFields_CoercesTypedStringsThroughRoundTrip is the headline guard: a

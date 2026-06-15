@@ -32,12 +32,40 @@ func TestDetailPane_GlamourRendererCachedByWidth(t *testing.T) {
 }
 
 func TestGlamourBody(t *testing.T) {
-	out := glamourBody("# Title\n\nsome text", 60)
+	out := glamourBody("# Title\n\nsome text", 60, "dark")
 	if !strings.Contains(ansi.Strip(out), "Title") {
 		t.Errorf("glamour should render the heading text, got %q", ansi.Strip(out))
 	}
-	if glamourBody("", 60) != "" {
+	if glamourBody("", 60, "dark") != "" {
 		t.Error("empty markdown should render to empty")
+	}
+}
+
+// TestGlamourStyleFor pins the background→style mapping: light terminal → light
+// style, everything else → the safe dark default.
+func TestGlamourStyleFor(t *testing.T) {
+	if got := glamourStyleFor(true); got != "dark" {
+		t.Errorf("dark background should use the dark style, got %q", got)
+	}
+	if got := glamourStyleFor(false); got != "light" {
+		t.Errorf("light background should use the light style, got %q", got)
+	}
+}
+
+// TestDetailPane_GlamourRendererRebuildsOnStyle pins that the cached renderer is
+// keyed by style as well as width, so a background-driven style applies.
+func TestDetailPane_GlamourRendererRebuildsOnStyle(t *testing.T) {
+	d := newDetailPane("dark")
+	d.width = 60
+	d.prettyBody("# A")
+	r1 := d.glam
+	if r1 == nil {
+		t.Fatal("a renderer should be cached after the first render")
+	}
+	d.glamStyle = "light"
+	d.prettyBody("# B") // style changed → rebuild
+	if d.glam == r1 {
+		t.Error("a style change must rebuild the renderer")
 	}
 }
 

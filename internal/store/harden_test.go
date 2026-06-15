@@ -90,6 +90,38 @@ func TestFS_SetFields_ConflictsWhenMovedConcurrently(t *testing.T) {
 	}
 }
 
+// TestFS_Move_ConflictsWhenMovedConcurrently is the Move sibling of the CAS guard
+// above: a task relocated between Move's resolve and its write must produce
+// ErrConflict with no duplicate left behind, rather than writing the new file and
+// orphaning a copy in two status dirs.
+func TestFS_Move_ConflictsWhenMovedConcurrently(t *testing.T) {
+	root := t.TempDir()
+	writeTask(t, root, "ready-to-start", "alpha.md",
+		"---\nstatus: ready-to-start\n---\n# Alpha\n")
+	fs := NewFS(root)
+
+	oldPath := filepath.Join(root, "tasks", "ready-to-start", "alpha.md")
+	doneDir := filepath.Join(root, "tasks", "completed")
+	testHookBeforeMoveWrite = func() {
+		// A concurrent move to `completed` lands between this Move's resolve and write.
+		if err := os.MkdirAll(doneDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(oldPath, filepath.Join(doneDir, "alpha.md")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() { testHookBeforeMoveWrite = nil }()
+
+	_, err := fs.Move("alpha", domain.StatusInProgress, time.Now(), false)
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("want ErrConflict for a concurrently-moved task, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "tasks", "in-progress", "alpha.md")); statErr == nil {
+		t.Error("a conflicted move must not write the file into the target dir")
+	}
+}
+
 // TestFS_SetFields_CRLFRoundTrip pins the line-ending promise: a CRLF file
 // surgically edited must come back with consistent CRLF endings (no mixed
 // LF-frontmatter/CRLF-body file) and correct values.

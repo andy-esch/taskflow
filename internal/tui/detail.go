@@ -45,8 +45,11 @@ type detailPane struct {
 	hasContent   bool
 	find         finder
 
-	glam  *glamour.TermRenderer // cached renderer, rebuilt only when width changes
-	glamW int                   // the width glam was built for
+	glamStyle string // glamour standard-style for the terminal background (set at startup)
+
+	glam           *glamour.TermRenderer // cached renderer, rebuilt only when width/style changes
+	glamW          int                   // the width glam was built for
+	glamStyleBuilt string                // the style glam was built for
 }
 
 // prettyBody renders md with the pane's cached glamour renderer, rebuilding it
@@ -57,12 +60,12 @@ func (d *detailPane) prettyBody(md string) string {
 	if strings.TrimSpace(md) == "" {
 		return ""
 	}
-	if d.glam == nil || d.glamW != d.width {
-		r, err := newGlamourRenderer(d.width)
+	if d.glam == nil || d.glamW != d.width || d.glamStyleBuilt != d.glamStyle {
+		r, err := newGlamourRenderer(d.width, d.glamStyle)
 		if err != nil {
 			return wrap(md, d.width)
 		}
-		d.glam, d.glamW = r, d.width
+		d.glam, d.glamW, d.glamStyleBuilt = r, d.width, d.glamStyle
 	}
 	out, ok := renderMarkdown(d.glam, md)
 	if !ok {
@@ -71,8 +74,8 @@ func (d *detailPane) prettyBody(md string) string {
 	return out
 }
 
-func newDetailPane() detailPane {
-	return detailPane{vp: viewport.New(0, 0), find: newFinder(), pretty: true}
+func newDetailPane(glamStyle string) detailPane {
+	return detailPane{vp: viewport.New(0, 0), find: newFinder(), pretty: true, glamStyle: glamStyle}
 }
 
 // render rebuilds both body compositions at the current width and points styled at

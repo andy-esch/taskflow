@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -15,6 +16,65 @@ import (
 // planning tree — the read-side counterpart to validQueryName's query guard.
 func markdownDoc(e os.DirEntry) bool {
 	return e.Type().IsRegular() && strings.HasSuffix(e.Name(), ".md")
+}
+
+// scanDir reads every regular .md file in dir and parses each through parse. A
+// parse failure becomes a FileProblem (the file is skipped, not fatal) so one
+// bad file doesn't blind the listing; a missing dir yields nothing; only a real
+// read error is fatal. It's the shared body of ListTasks/ListEpics/ListAudits —
+// each passes a parse closure binding the file's status/bucket.
+func scanDir[T any](dir string, parse func(path string, content []byte) (T, error)) ([]T, []domain.FileProblem, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil, nil
+		}
+		return nil, nil, fmt.Errorf("read dir %s: %w", dir, err)
+	}
+	var out []T
+	var problems []domain.FileProblem
+	for _, e := range entries {
+		if !markdownDoc(e) {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read %s: %w", path, err)
+		}
+		v, err := parse(path, content)
+		if err != nil {
+			problems = append(problems, domain.FileProblem{Path: path, Message: err.Error()})
+			continue
+		}
+		out = append(out, v)
+	}
+	return out, problems, nil
+}
+
+// markdownCandidates lists every regular .md file in dir as a resolution
+// candidate, tagging each with dirName (the status/bucket, "" for epics). The
+// shared body of the task/epic/audit candidate gatherers.
+func markdownCandidates(dir, dirName string) ([]candidate, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read dir %s: %w", dir, err)
+	}
+	var out []candidate
+	for _, e := range entries {
+		if !markdownDoc(e) {
+			continue
+		}
+		out = append(out, candidate{
+			id:   strings.TrimSuffix(e.Name(), ".md"),
+			path: filepath.Join(dir, e.Name()),
+			dir:  dirName,
+		})
+	}
+	return out, nil
 }
 
 // Fuzzy slug resolution: the keyboard-economy companion to tab-completion.
