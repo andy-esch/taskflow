@@ -121,9 +121,22 @@ func TestAuditNew(t *testing.T) {
 			t.Errorf("created audit missing %q:\n%s", want, s)
 		}
 	}
-	// The fenced example finding must not inflate the count: a fresh audit is empty.
+	// Round-trips through show.
 	if show := runRoot(t, "-C", root, "audit", "show", "2026-06-16-dispatcher"); !strings.Contains(show, "dispatcher") {
 		t.Errorf("show failed: %q", show)
+	}
+	// The fenced example finding must not inflate the count: a fresh audit is empty.
+	var lst struct {
+		Audits []struct {
+			Slug     string `json:"slug"`
+			Findings int    `json:"findings"`
+		} `json:"audits"`
+	}
+	if err := json.Unmarshal([]byte(runRoot(t, "-C", root, "audit", "list", "--json")), &lst); err != nil {
+		t.Fatalf("audit list --json invalid: %v", err)
+	}
+	if len(lst.Audits) != 1 || lst.Audits[0].Findings != 0 {
+		t.Errorf("fresh audit should list once with 0 findings, got %+v", lst.Audits)
 	}
 	// Lifecycle round-trips through the CLI: close moves it to closed/.
 	runRoot(t, "-C", root, "audit", "close", "2026-06-16-dispatcher")
