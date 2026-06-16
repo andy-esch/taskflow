@@ -36,9 +36,15 @@ type entityItem interface {
 // problems). Tabs are held by pointer so the value-typed root Model can mutate a
 // tab's list in place.
 type entityTab struct {
-	kind     entityKind
-	name     string   // the tab label and the canonical `:` command word
-	aliases  []string // shorthands accepted by `:` (e.g. "t", "task")
+	kind    entityKind
+	name    string   // the tab label and the canonical `:` command word
+	aliases []string // shorthands accepted by `:` (e.g. "t", "task")
+
+	// View axis (static config): the s/S cycle + leading `:` words for this
+	// entity's status/bucket filter. nil for entities with no axis (epics).
+	viewAxis    []statusView
+	viewAliases []statusView // extra `:` words outside the s/S cycle
+
 	list     list.Model
 	loadList func(*entityTab, *core.Service) tea.Cmd // reads the tab's statusView
 	loadItem func(svc *core.Service, id string) tea.Cmd
@@ -48,7 +54,7 @@ type entityTab struct {
 	problems []domain.FileProblem
 
 	// S2b list-scoped state (persists per tab across switches/reloads).
-	statusView string    // tasks only: "" = working-set, "all", or a status string
+	statusView string    // view axis: "" = default, "all", a task status, or an audit bucket
 	sortCols   []sortKey // the `o`-cycle columns this entity offers
 	sortKey    sortKey   // interactive sort column ("o" cycles)
 	sortRev    bool      // sort direction toggle ("O")
@@ -87,12 +93,24 @@ func (t *entityTab) markReload() {
 	}
 }
 
-// chip is the per-tab state badge shown in the list's title slot: active status
-// view, sort column/direction, and any applied `/` filter. Empty (the clean
+// viewFor maps a `:` word to a view value on this tab's axis.
+func (t *entityTab) viewFor(word string) (string, bool) {
+	return viewFor(t.viewAxis, t.viewAliases, word)
+}
+
+// viewWords is this tab's `:` view vocabulary (axis cycle + aliases).
+func (t *entityTab) viewWords() []string {
+	return viewWords(t.viewAxis, t.viewAliases)
+}
+
+// chip is the per-tab state badge shown in the list's title slot: active status/
+// bucket view, sort column/direction, and any applied `/` filter. Empty (the clean
 // default) collapses the title row, giving the list one more visible row.
 func (t *entityTab) chip() string {
 	var parts []string
-	if t.kind == entityTasks && t.statusView != "" {
+	// Only axis-bearing tabs (tasks, audits) ever set statusView non-empty, so the
+	// non-default view shows here regardless of entity; the default ("") is silent.
+	if t.statusView != "" {
 		parts = append(parts, "view:"+t.statusView)
 	}
 	filtered := t.list.FilterState() == list.FilterApplied
@@ -146,6 +164,7 @@ func newEntityTabs() []*entityTab {
 	return []*entityTab{
 		{
 			kind: entityTasks, name: "tasks", aliases: []string{"t", "task"},
+			viewAxis: statusViews, viewAliases: statusViewAliases,
 			list: mk(taskDelegate{}), loadList: loadTaskList, loadItem: loadTaskDetail,
 			sortCols: taskSortCols,
 		},
@@ -156,7 +175,8 @@ func newEntityTabs() []*entityTab {
 		},
 		{
 			kind: entityAudits, name: "audits", aliases: []string{"a", "audit"},
-			list: mk(auditDelegate{}), loadList: loadAuditList, loadItem: loadAuditDetail,
+			viewAxis: auditViews,
+			list:     mk(auditDelegate{}), loadList: loadAuditList, loadItem: loadAuditDetail,
 			sortCols: auditSortCols,
 		},
 	}

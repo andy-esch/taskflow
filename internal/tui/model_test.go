@@ -904,20 +904,130 @@ func TestModel_StatusViewViaCommand(t *testing.T) {
 	}
 }
 
+// auditModel returns a loaded model whose repo has one audit in each bucket, so
+// the bucket-view axis has something distinct to show per view.
+func auditModel(t *testing.T) Model {
+	t.Helper()
+	r := testutil.NewRepo(t)
+	r.Epic("01-test.md", "---\nstatus: planning\ndescription: a test epic\n---\n# Test epic\n")
+	r.Audit("open", "2026-06-01-open-a.md", "---\narea: store\ndate: 2026-06-01\n---\n# Open A\n")
+	r.Audit("closed", "2026-05-01-closed-a.md", "---\narea: cli\ndate: 2026-05-01\n---\n# Closed A\n")
+	r.Audit("deferred", "2026-04-01-deferred-a.md", "---\narea: tui\ndate: 2026-04-01\n---\n# Deferred A\n")
+	m := New(core.NewService(store.NewFS(r.Root)))
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = tm.(Model)
+	tm, _ = m.Update(m.Init()())
+	return tm.(Model)
+}
+
+// auditSlugs is the slugs of the active list's audit rows, in order.
+func auditSlugs(m Model) []string {
+	items := m.cur().list.Items()
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		out = append(out, it.(auditItem).id())
+	}
+	return out
+}
+
+// cmdJump types `:word<enter>` and drains the resulting load — the command-bar
+// equivalent of a tab/view jump.
+func cmdJump(t *testing.T, m Model, word string) Model {
+	t.Helper()
+	tm, _ := m.Update(press(":"))
+	m = tm.(Model)
+	for _, r := range word {
+		tm, _ = m.Update(press(string(r)))
+		m = tm.(Model)
+	}
+	tm, cmd := m.Update(press("enter"))
+	return drain(t, tm.(Model), cmd)
+}
+
+func TestModel_AuditBucketCyclesAndFilters(t *testing.T) {
+	m := cmdJump(t, auditModel(t), "audits")
+	if m.cur().kind != entityAudits {
+		t.Fatalf(":audits should select the audits tab, got %q", m.cur().name)
+	}
+	// Default view is the open bucket: open audit only, and a silent chip.
+	if got := auditSlugs(m); len(got) != 1 || got[0] != "2026-06-01-open-a" {
+		t.Fatalf("default audits view should be open-only, got %v", got)
+	}
+	if c := m.cur().chip(); c != "" {
+		t.Errorf("the open (default) bucket should render no chip, got %q", c)
+	}
+	// s → next bucket (closed): closed audit only, chip announces it.
+	tm, cmd := m.Update(press("s"))
+	m = drain(t, tm.(Model), cmd)
+	if m.cur().statusView != "closed" {
+		t.Fatalf("s should advance to the closed bucket, got %q", m.cur().statusView)
+	}
+	if got := auditSlugs(m); len(got) != 1 || got[0] != "2026-05-01-closed-a" {
+		t.Errorf("closed bucket should list the closed audit, got %v", got)
+	}
+	if !strings.Contains(m.cur().chip(), "view:closed") {
+		t.Errorf("chip should announce the bucket, got %q", m.cur().chip())
+	}
+	// S steps backward: closed → "" (open default), then wraps to all.
+	tm, _ = m.Update(press("S"))
+	m = tm.(Model)
+	tm, cmd = m.Update(press("S")) // "" → wrap to all
+	m = drain(t, tm.(Model), cmd)
+	if m.cur().statusView != "all" {
+		t.Fatalf("S past the default should wrap to all, got %q", m.cur().statusView)
+	}
+	if n := len(auditSlugs(m)); n != 3 {
+		t.Errorf(":all should span every bucket (3 audits), got %d", n)
+	}
+}
+
+// TestModel_AuditViewViaCommand covers the `:` words, including the shared
+// "all"/"deferred" words resolving against the active tab (audits here) rather
+// than always falling through to tasks.
+func TestModel_AuditViewViaCommand(t *testing.T) {
+	// :closed is audits-only — reachable straight from the tasks tab.
+	m := cmdJump(t, auditModel(t), "closed")
+	if m.cur().kind != entityAudits || m.cur().statusView != "closed" {
+		t.Fatalf(":closed should land on the audits closed bucket, got tab=%q view=%q", m.cur().name, m.cur().statusView)
+	}
+	if got := auditSlugs(m); len(got) != 1 || got[0] != "2026-05-01-closed-a" {
+		t.Errorf("closed bucket should list the closed audit, got %v", got)
+	}
+	// :all is shared with tasks; on the audits tab it acts in context (audits all).
+	m = cmdJump(t, m, "all")
+	if m.cur().kind != entityAudits || m.cur().statusView != "all" {
+		t.Fatalf(":all on the audits tab should stay on audits, got tab=%q view=%q", m.cur().name, m.cur().statusView)
+	}
+	if n := len(auditSlugs(m)); n != 3 {
+		t.Errorf("audits :all should span every bucket, got %d", n)
+	}
+	// :deferred (also shared) selects the audits deferred bucket from audits.
+	m = cmdJump(t, m, "deferred")
+	if m.cur().kind != entityAudits || m.cur().statusView != "deferred" {
+		t.Fatalf(":deferred on audits should select the deferred bucket, got tab=%q view=%q", m.cur().name, m.cur().statusView)
+	}
+	// Back-compat: :all from the tasks tab still targets tasks.
+	m = cmdJump(t, m, "tasks")
+	m = cmdJump(t, m, "all")
+	if m.cur().kind != entityTasks || m.cur().statusView != "all" {
+		t.Fatalf(":all from the tasks tab should target tasks, got tab=%q view=%q", m.cur().name, m.cur().statusView)
+	}
+}
+
 // TestStatusViewsCoverAllStatuses guards the unified status-view table against
 // drift: every domain status must be reachable as a `:` view, so a new status
 // can't silently become unbrowsable in the TUI.
 func TestStatusViewsCoverAllStatuses(t *testing.T) {
 	for _, s := range domain.AllStatuses() {
-		if v, ok := statusViewFor(string(s)); !ok || v != string(s) {
+		if v, ok := viewFor(statusViews, statusViewAliases, string(s)); !ok || v != string(s) {
 			t.Errorf("status %q is not reachable as a `:` view (ok=%v value=%q)", s, ok, v)
 		}
 	}
 	// The default + "all" specials must resolve too.
-	if v, ok := statusViewFor("active"); !ok || v != "" {
+	if v, ok := viewFor(statusViews, statusViewAliases, "active"); !ok || v != "" {
 		t.Errorf("`:active` should map to the working-set view, got ok=%v value=%q", ok, v)
 	}
-	if v, ok := statusViewFor("all"); !ok || v != "all" {
+	if v, ok := viewFor(statusViews, statusViewAliases, "all"); !ok || v != "all" {
 		t.Errorf("`:all` should map to the all view, got ok=%v value=%q", ok, v)
 	}
 }
@@ -972,14 +1082,14 @@ func TestModel_HelpScrollRevealsTail(t *testing.T) {
 	m := loaded(t, 100, 14) // too short for the full help content
 	tm, _ := m.Update(press("?"))
 	m = tm.(Model)
-	if v := ansi.Strip(m.View()); strings.Contains(v, "open bucket only") {
+	if v := ansi.Strip(m.View()); strings.Contains(v, "switch bucket") {
 		t.Skip("terminal tall enough to show the tail without scrolling")
 	}
 	for i := 0; i < len(helpLines()); i++ { // scroll past the clamp
 		tm, _ = m.Update(press("j"))
 		m = tm.(Model)
 	}
-	if v := ansi.Strip(m.View()); !strings.Contains(v, "open bucket only") {
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "switch bucket") {
 		t.Errorf("scrolling should reveal the last help entries:\n%s", v)
 	}
 	// The layout invariant holds while scrolled.
