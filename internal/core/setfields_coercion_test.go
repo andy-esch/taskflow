@@ -8,6 +8,8 @@ package core_test
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/core"
@@ -58,6 +60,34 @@ func TestSetFields_CoercesTypedStringsThroughRoundTrip(t *testing.T) {
 			}
 			tc.verify(t, task)
 		})
+	}
+}
+
+// TestSetFields_AcceptsAuditedWithoutForce pins audited as a first-class known
+// date field. The nightly-sweep routine stamps `audited:` on every task it
+// re-verifies, so it must set without --force (unlike a typo'd custom field)
+// and validate as YYYY-MM-DD (unlike a free-form string).
+func TestSetFields_AcceptsAuditedWithoutForce(t *testing.T) {
+	svc := setFieldsRepo(t)
+	if _, err := svc.SetFields("t", map[string]any{"audited": "2026-06-16"}, false, false); err != nil {
+		t.Fatalf("audited is a known field; set without --force should succeed, got %v", err)
+	}
+	task, _, err := svc.ShowTask("t")
+	if err != nil {
+		t.Fatalf("task no longer reloads after setting audited (corrupted): %v", err)
+	}
+	raw, err := os.ReadFile(task.Path)
+	if err != nil {
+		t.Fatalf("read task file: %v", err)
+	}
+	// The store quotes a date-like string to keep its !!str type (same as the
+	// updated_at stamp written through this path), so don't pin the quoting.
+	if !strings.Contains(string(raw), "audited:") || !strings.Contains(string(raw), "2026-06-16") {
+		t.Errorf("frontmatter missing the stamped audited date:\n%s", raw)
+	}
+	// A non-date value is rejected as a malformed date, not written verbatim.
+	if _, err := svc.SetFields("t", map[string]any{"audited": "soon"}, false, false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("non-date audited should be ErrValidation, got %v", err)
 	}
 }
 

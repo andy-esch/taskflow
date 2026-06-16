@@ -64,7 +64,7 @@ func ValidateDate(value string) error {
 
 var dateFields = map[string]bool{
 	"created": true, "updated_at": true, "started_at": true,
-	"completed_at": true, "deprecated_at": true, "deferred_at": true,
+	"completed_at": true, "deprecated_at": true, "deferred_at": true, "audited": true,
 }
 
 // ValidateField checks a constrained frontmatter field from its string value —
