@@ -83,6 +83,48 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 	return t, nil
 }
 
+// auditFields is the canonical frontmatter order for a new audit.
+func auditFields(a domain.Audit) []fmField {
+	return []fmField{
+		{"area", a.Area},
+		{"date", a.Date},
+	}
+}
+
+// CreateAudit writes a new audit file under audits/open/<slug>.md. New audits
+// always start in the open bucket. It refuses to clobber an existing file.
+func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error) {
+	if a.Slug == "" {
+		return domain.Audit{}, fmt.Errorf("%w: empty audit slug", domain.ErrValidation)
+	}
+	a.Bucket = domain.AuditOpen
+	dir := filepath.Join(s.auditsDir, a.Bucket.Dir())
+	path := filepath.Join(dir, a.Slug+".md")
+	content, err := buildFile(auditFields(a), body)
+	if err != nil {
+		return domain.Audit{}, err
+	}
+	if dryRun {
+		// Same collision contract as createFileAtomic, minus the write.
+		if _, statErr := os.Stat(path); statErr == nil {
+			return domain.Audit{}, fmt.Errorf("audit %q already exists: %w", a.Slug, domain.ErrConflict)
+		}
+		a.Path = path
+		return a, nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return domain.Audit{}, fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	if err := createFileAtomic(path, content, 0o644); err != nil {
+		if os.IsExist(err) {
+			return domain.Audit{}, fmt.Errorf("audit %q already exists: %w", a.Slug, domain.ErrConflict)
+		}
+		return domain.Audit{}, err
+	}
+	a.Path = path
+	return a, nil
+}
+
 var epicNumRe = regexp.MustCompile(`^(\d+)-`)
 
 // epicNum parses the leading NN- number from an epic id (0 if absent). Epics are

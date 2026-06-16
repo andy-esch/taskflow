@@ -1,21 +1,55 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 func newAuditCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "audit", Short: "Work with code audits"}
 	cmd.AddCommand(
+		newAuditNewCmd(app),
 		newAuditListCmd(app),
 		newAuditShowCmd(app),
 		newAuditMoveCmd(app, "close", "Move audit(s) to closed/", domain.AuditClosed),
 		newAuditMoveCmd(app, "reopen", "Move audit(s) back to open/", domain.AuditOpen),
 		newAuditMoveCmd(app, "defer", "Move audit(s) to deferred/", domain.AuditDeferred),
 	)
+	return cmd
+}
+
+func newAuditNewCmd(app *App) *cobra.Command {
+	var p core.NewAuditParams
+	cmd := &cobra.Command{
+		Use:         "new <area>",
+		Short:       "Create a new audit (open bucket, scaffolded findings)",
+		Example:     "  tskflwctl audit new dispatcher\n  tskflwctl audit new arch-data-flow --date 2026-06-16",
+		Args:        cobra.ExactArgs(1),
+		Annotations: map[string]string{"safety": "mutating"},
+		RunE: func(_ *cobra.Command, args []string) error {
+			p.Area = args[0]
+			p.DryRun = app.DryRun
+			a, err := app.Svc.NewAudit(p)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return render.CreatedJSON(app.Out, "audit", a.Slug, a.Path, app.DryRun)
+			}
+			render.CreatedHuman(app.Out, app.Style, app.rel(a.Path), app.DryRun)
+			if !app.DryRun {
+				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: add findings, then tskflwctl audit close "+a.Slug))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&p.Date, "date", "", "audit date YYYY-MM-DD (default today)")
+	cmd.Flags().StringVar(&p.Body, "body", "", "override the default scaffold")
 	return cmd
 }
 

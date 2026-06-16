@@ -35,6 +35,7 @@ type AuditStore interface {
 	ListAudits() ([]domain.Audit, []domain.FileProblem, error)
 	GetAudit(slug string) (audit domain.Audit, body string, err error)
 	MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error)
+	CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error)
 }
 
 // Store is the full persistence port the Service depends on.

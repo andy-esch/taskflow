@@ -27,10 +27,10 @@ it reads through `core.Service` as `tea.Cmd`s (no I/O in `Update`/`View`).
 We dogfood: drive this repo's planning with the tool itself.
 
 - **Create:** `./bin/tskflwctl task new "Title" --epic <id> [--next]` ·
-  `epic new "Title" --description "..."`.
+  `epic new "Title" --description "..."` · `audit new <area> [--date]`.
 - **Lifecycle:** `task start|promote|demote|complete|defer|deprecate <slug>...`.
 - **Read/edit:** `task list|show|set`, `epic list|show`,
-  `audit list|show|close|reopen|defer`.
+  `audit new|list|show|close|reopen|defer`.
 - **Hygiene:** `tskflwctl lint` (`--fix` to auto-repair). Keep `planning/`
   lint-clean.
 - Tasks live in `planning/tasks/<status>/`; a task's `status:` **is** its

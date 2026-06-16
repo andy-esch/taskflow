@@ -59,6 +59,7 @@ tskflwctl status                       # at-a-glance board: counts, in-progress,
 # create
 tskflwctl task new "Add retry backoff" --epic 17-pm-go-cli --tags net
 tskflwctl epic new "Billing overhaul" --description "Replace legacy pipeline"
+tskflwctl audit new dispatcher          # → audits/open/YYYY-MM-DD-dispatcher.md (--date to override)
 
 # read
 tskflwctl task list                    # active tasks (--all / --status / --epic / --tag)

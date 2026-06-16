@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -43,6 +44,40 @@ func TestCreateTask_OrderQuotingClobber(t *testing.T) {
 	}
 	// Clobber refused with a conflict (not a generic validation error).
 	if _, err := fs.CreateTask(task, "x", false); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("clobber should be ErrConflict, got %v", err)
+	}
+}
+
+func TestCreateAudit_OpenBucketOrderClobber(t *testing.T) {
+	fs := NewFS(t.TempDir())
+	a := domain.Audit{Slug: "2026-06-16-dispatcher", Area: "dispatcher", Date: "2026-06-16"}
+
+	got, err := fs.CreateAudit(a, "\n# Audit\n", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// New audits land in the open bucket.
+	if base := filepath.Base(filepath.Dir(got.Path)); base != "open" {
+		t.Errorf("audit created under %q/, want open/", base)
+	}
+	if got.Bucket != domain.AuditOpen {
+		t.Errorf("created audit bucket = %q, want open", got.Bucket)
+	}
+	b, err := os.ReadFile(got.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	// Canonical frontmatter order: area before date.
+	if ai, di := strings.Index(s, "area:"), strings.Index(s, "date:"); ai < 0 || ai >= di {
+		t.Errorf("frontmatter not in canonical order (area before date):\n%s", s)
+	}
+	// And it re-parses through the store.
+	if _, _, err := fs.GetAudit("2026-06-16-dispatcher"); err != nil {
+		t.Errorf("created audit does not re-parse: %v", err)
+	}
+	// Clobber refused with a conflict.
+	if _, err := fs.CreateAudit(a, "x", false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("clobber should be ErrConflict, got %v", err)
 	}
 }

@@ -118,6 +118,47 @@ func TestService_Create_RejectsHostileTitle(t *testing.T) {
 	}
 }
 
+// TestService_NewAudit pins the create logic that lives in core: the slug is
+// <date>-<area-slug>, the date defaults to today when omitted, and area/date are
+// validated (nothing reaches the store on bad input).
+func TestService_NewAudit(t *testing.T) {
+	fs := &fakeStore{}
+	svc := NewService(fs)
+
+	// Explicit date → slug is <date>-<area-slug>; area kept verbatim, bucket open.
+	a, err := svc.NewAudit(NewAuditParams{Area: "Arch Data Flow", Date: "2026-06-16"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Slug != "2026-06-16-arch-data-flow" {
+		t.Errorf("slug = %q, want 2026-06-16-arch-data-flow", a.Slug)
+	}
+	if a.Bucket != domain.AuditOpen || a.Area != "Arch Data Flow" || a.Date != "2026-06-16" {
+		t.Errorf("audit fields wrong: %+v", a)
+	}
+	if len(fs.createdAudits) != 1 {
+		t.Fatalf("expected one CreateAudit call, got %d", len(fs.createdAudits))
+	}
+
+	// Empty date defaults to today, so the slug still carries a valid date prefix.
+	a2, err := svc.NewAudit(NewAuditParams{Area: "dispatcher"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	datePart := strings.TrimSuffix(a2.Slug, "-dispatcher")
+	if datePart == a2.Slug || domain.ValidateDate(datePart) != nil {
+		t.Errorf("defaulted slug is not <today>-dispatcher: %q", a2.Slug)
+	}
+
+	// A missing area and a malformed date are both ErrValidation.
+	if _, err := svc.NewAudit(NewAuditParams{Area: "   "}); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("empty area should be ErrValidation, got %v", err)
+	}
+	if _, err := svc.NewAudit(NewAuditParams{Area: "x", Date: "06-16-2026"}); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("bad date should be ErrValidation, got %v", err)
+	}
+}
+
 // TestService_Lint_FlagsInvalidEpicStatus pins the D2 decision: epic status is
 // a closed vocabulary, and files outside it surface in lint.
 func TestService_Lint_FlagsInvalidEpicStatus(t *testing.T) {

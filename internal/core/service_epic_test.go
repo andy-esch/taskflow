@@ -42,6 +42,9 @@ func (nopStore) GetAudit(string) (domain.Audit, string, error) {
 func (nopStore) MoveAudit(string, domain.AuditBucket, bool) (domain.Audit, error) {
 	return domain.Audit{}, nil
 }
+func (nopStore) CreateAudit(domain.Audit, string, bool) (domain.Audit, error) {
+	return domain.Audit{}, nil
+}
 func (nopStore) FixFrontmatter(bool) ([]domain.FixResult, error) { return nil, nil }
 func (nopStore) WatchPaths() []string                            { return nil }
 
@@ -49,11 +52,12 @@ func (nopStore) WatchPaths() []string                            { return nil }
 // the read/create methods its tests touch (the rest come from nopStore).
 type fakeStore struct {
 	nopStore
-	tasks    []domain.Task
-	epics    []domain.Epic
-	audits   []domain.Audit
-	problems []domain.FileProblem // returned by ListTasks
-	created  []domain.Task        // tasks passed to CreateTask
+	tasks         []domain.Task
+	epics         []domain.Epic
+	audits        []domain.Audit
+	problems      []domain.FileProblem // returned by ListTasks
+	created       []domain.Task        // tasks passed to CreateTask
+	createdAudits []domain.Audit       // audits passed to CreateAudit
 }
 
 func (f *fakeStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
@@ -73,6 +77,10 @@ func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 func (f *fakeStore) CreateTask(t domain.Task, _ string, _ bool) (domain.Task, error) {
 	f.created = append(f.created, t)
 	return t, nil
+}
+func (f *fakeStore) CreateAudit(a domain.Audit, _ string, _ bool) (domain.Audit, error) {
+	f.createdAudits = append(f.createdAudits, a)
+	return a, nil
 }
 func (f *fakeStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return f.epics, nil, nil

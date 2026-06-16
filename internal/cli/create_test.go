@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,6 +99,74 @@ func TestEpicNew(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Errorf("epic missing %q:\n%s", want, s)
 		}
+	}
+}
+
+func TestAuditNew(t *testing.T) {
+	root := freshRepo(t)
+	out := runRoot(t, "-C", root, "audit", "new", "dispatcher", "--date", "2026-06-16")
+	if !strings.Contains(out, "created") {
+		t.Errorf("unexpected output: %q", out)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "audits", "open", "2026-06-16-dispatcher.md"))
+	if err != nil {
+		t.Fatalf("audit file not created in open/: %v", err)
+	}
+	s := string(b)
+	for _, want := range []string{
+		"area: dispatcher", "date: \"2026-06-16\"", "## Findings",
+		"../HOWTO-execute.md", "## Candidate tasks",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("created audit missing %q:\n%s", want, s)
+		}
+	}
+	// The fenced example finding must not inflate the count: a fresh audit is empty.
+	if show := runRoot(t, "-C", root, "audit", "show", "2026-06-16-dispatcher"); !strings.Contains(show, "dispatcher") {
+		t.Errorf("show failed: %q", show)
+	}
+	// Lifecycle round-trips through the CLI: close moves it to closed/.
+	runRoot(t, "-C", root, "audit", "close", "2026-06-16-dispatcher")
+	if _, err := os.Stat(filepath.Join(root, "audits", "closed", "2026-06-16-dispatcher.md")); err != nil {
+		t.Errorf("close should move the audit to closed/: %v", err)
+	}
+}
+
+func TestAuditNew_JSONEnvelope(t *testing.T) {
+	root := freshRepo(t)
+	js := runRoot(t, "-C", root, "audit", "new", "arch-data-flow", "--date", "2026-06-16", "--json")
+	var env struct {
+		DryRun  bool `json:"dry_run"`
+		Created struct {
+			Kind, ID, Path string
+		} `json:"created"`
+	}
+	if err := json.Unmarshal([]byte(js), &env); err != nil {
+		t.Fatalf("audit new --json invalid: %v\n%s", err, js)
+	}
+	if env.DryRun || env.Created.Kind != "audit" || env.Created.ID != "2026-06-16-arch-data-flow" {
+		t.Errorf("envelope wrong: %+v", env)
+	}
+}
+
+func TestAuditNew_BadDate_Exit11(t *testing.T) {
+	root := freshRepo(t)
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetArgs([]string{"-C", root, "audit", "new", "x", "--date", "06-16-2026"})
+	if err := cmd.Execute(); err == nil || ExitCode(err) != 11 {
+		t.Errorf("a malformed date should exit 11 (validation), got %v", err)
+	}
+}
+
+func TestAuditNew_RefusesClobber(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "audit", "new", "dispatcher", "--date", "2026-06-16")
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetArgs([]string{"-C", root, "audit", "new", "dispatcher", "--date", "2026-06-16"})
+	if err := cmd.Execute(); err == nil || ExitCode(err) != 14 {
+		t.Errorf("clobber should exit 14 (conflict), got %v", err)
 	}
 }
 
