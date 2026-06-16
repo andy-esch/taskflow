@@ -534,6 +534,70 @@ func (s *Service) LintFix(dryRun bool) ([]domain.FixResult, error) {
 	return s.store.FixFrontmatter(dryRun)
 }
 
+// NewAuditParams are the inputs for creating an audit. Date defaults to today
+// when empty; the audit is always created in the open bucket.
+type NewAuditParams struct {
+	Area   string
+	Date   string // YYYY-MM-DD; empty → today
+	Body   string // override the default scaffold
+	DryRun bool   // validate + report the would-be audit without writing
+}
+
+// auditBodyTemplate is the default audit scaffold. The finding example is fenced
+// so a fresh audit counts zero findings until real ones are added (parseAudit
+// excludes fenced blocks); it also links HOWTO-execute, as every audit should.
+const auditBodyTemplate = "\n# Audit: %s — %s\n\n" +
+	"> Conventions: [`../HOWTO-execute.md`](../HOWTO-execute.md). Edit findings in\n" +
+	"> place and flip each `**Status:**` as you work it.\n\n" +
+	"## Findings\n\n" +
+	"<!-- One finding per issue, in this shape (un-fence it): -->\n\n" +
+	"```\n" +
+	"#### H1. <title>  · **Status:** open\n\n" +
+	"**File:** <path:line> | **Component:** <component>\n" +
+	"**Effort:** <XS|S|M|L> · **Urgency:** <acute|soon|eventually>\n\n" +
+	"<what's wrong, why it matters, evidence>\n\n" +
+	"**Recommendation:** <minimum fix>\n" +
+	"```\n\n" +
+	"## Candidate tasks\n\n" +
+	"<!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do -->\n\n" +
+	"- ⏳ `tskflwctl task new \"<title>\" --epic <id> --tags <tag>` — <one line>\n"
+
+// NewAudit validates and creates an audit in the open bucket, returning it. The
+// area must produce a non-empty slug and the date must be YYYY-MM-DD (today when
+// omitted); the slug is `<date>-<area-slug>`. On invalid input it returns
+// ErrValidation and nothing is written.
+func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
+	area := strings.TrimSpace(p.Area)
+	if area == "" {
+		return domain.Audit{}, fmt.Errorf("%w: audit area is required", domain.ErrValidation)
+	}
+	if err := domain.ValidateTitle(area); err != nil {
+		return domain.Audit{}, err
+	}
+	date := p.Date
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+	if err := domain.ValidateDate(date); err != nil {
+		return domain.Audit{}, err
+	}
+	areaSlug := domain.Slugify(area)
+	if areaSlug == "" {
+		return domain.Audit{}, fmt.Errorf("%w: area produced an empty slug: %q", domain.ErrValidation, area)
+	}
+	a := domain.Audit{
+		Slug:   date + "-" + areaSlug,
+		Bucket: domain.AuditOpen,
+		Area:   area,
+		Date:   date,
+	}
+	body := p.Body
+	if body == "" {
+		body = fmt.Sprintf(auditBodyTemplate, area, date)
+	}
+	return s.store.CreateAudit(a, body, p.DryRun)
+}
+
 // ListAudits returns audits in the requested bucket (default: open), plus any
 // per-file load problems. bucket="" + all=false means open only.
 func (s *Service) ListAudits(bucket string, all bool) ([]domain.Audit, []domain.FileProblem, error) {

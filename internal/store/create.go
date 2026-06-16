@@ -35,6 +35,32 @@ func buildFile(fields []fmField, body string) ([]byte, error) {
 	return assembleFile(mapping, []byte(body), "\n") // new files are always LF
 }
 
+// writeNewFile is the shared new-file contract for Create{Task,Epic,Audit}: it
+// atomically creates path (never clobbering), mapping an existing file to an
+// ErrConflict named by kind/id, and creating dir as needed. dryRun runs the same
+// collision check but skips the write — so a dry-run that would clash still fails.
+func (s *FS) writeNewFile(dir, path string, content []byte, kind, id string, dryRun bool) error {
+	conflict := func() error {
+		return fmt.Errorf("%s %q already exists: %w", kind, id, domain.ErrConflict)
+	}
+	if dryRun {
+		if _, statErr := os.Stat(path); statErr == nil {
+			return conflict()
+		}
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	if err := createFileAtomic(path, content, 0o644); err != nil {
+		if os.IsExist(err) {
+			return conflict()
+		}
+		return err
+	}
+	return nil
+}
+
 // taskFields is the canonical frontmatter order for a new task.
 func taskFields(t domain.Task) []fmField {
 	return []fmField{
@@ -62,25 +88,39 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 	if err != nil {
 		return domain.Task{}, err
 	}
-	if dryRun {
-		// Same collision contract as createFileAtomic, minus the write.
-		if _, statErr := os.Stat(path); statErr == nil {
-			return domain.Task{}, fmt.Errorf("task %q already exists: %w", t.Slug, domain.ErrConflict)
-		}
-		t.Path = path
-		return t, nil
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return domain.Task{}, fmt.Errorf("mkdir %s: %w", dir, err)
-	}
-	if err := createFileAtomic(path, content, 0o644); err != nil {
-		if os.IsExist(err) {
-			return domain.Task{}, fmt.Errorf("task %q already exists: %w", t.Slug, domain.ErrConflict)
-		}
+	if err := s.writeNewFile(dir, path, content, "task", t.Slug, dryRun); err != nil {
 		return domain.Task{}, err
 	}
 	t.Path = path
 	return t, nil
+}
+
+// auditFields is the canonical frontmatter order for a new audit.
+func auditFields(a domain.Audit) []fmField {
+	return []fmField{
+		{"area", a.Area},
+		{"date", a.Date},
+	}
+}
+
+// CreateAudit writes a new audit file under audits/open/<slug>.md. New audits
+// always start in the open bucket. It refuses to clobber an existing file.
+func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error) {
+	if a.Slug == "" {
+		return domain.Audit{}, fmt.Errorf("%w: empty audit slug", domain.ErrValidation)
+	}
+	a.Bucket = domain.AuditOpen
+	dir := filepath.Join(s.auditsDir, a.Bucket.Dir())
+	path := filepath.Join(dir, a.Slug+".md")
+	content, err := buildFile(auditFields(a), body)
+	if err != nil {
+		return domain.Audit{}, err
+	}
+	if err := s.writeNewFile(dir, path, content, "audit", a.Slug, dryRun); err != nil {
+		return domain.Audit{}, err
+	}
+	a.Path = path
+	return a, nil
 }
 
 var epicNumRe = regexp.MustCompile(`^(\d+)-`)
@@ -152,18 +192,9 @@ func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (d
 	if err != nil {
 		return domain.Epic{}, err
 	}
-	if dryRun {
-		e.ID = id
-		e.Path = path
-		return e, nil // numbering + collision semantics ran; only the write is skipped
-	}
-	if err := os.MkdirAll(s.epicsDir, 0o755); err != nil {
-		return domain.Epic{}, fmt.Errorf("mkdir %s: %w", s.epicsDir, err)
-	}
-	if err := createFileAtomic(path, content, 0o644); err != nil {
-		if os.IsExist(err) {
-			return domain.Epic{}, fmt.Errorf("epic %q already exists: %w", id, domain.ErrConflict)
-		}
+	// The auto-numbered id is always fresh, so the collision check can't actually
+	// fire here — but routing through writeNewFile keeps one create contract.
+	if err := s.writeNewFile(s.epicsDir, path, content, "epic", id, dryRun); err != nil {
 		return domain.Epic{}, err
 	}
 	e.ID = id

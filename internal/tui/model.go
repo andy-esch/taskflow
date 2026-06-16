@@ -390,9 +390,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cur().sortRev = !m.cur().sortRev
 		return m, m.applySortToCurrent()
 	case key.Matches(msg, keys.StatusView):
-		return m, m.cycleStatusView(1)
+		return m, m.cycleView(1)
 	case key.Matches(msg, keys.StatusRev):
-		return m, m.cycleStatusView(-1)
+		return m, m.cycleView(-1)
 	case key.Matches(msg, keys.Refresh):
 		return m, func() tea.Msg { return reloadMsg{} }
 	case key.Matches(msg, keys.ToggleFocus):
@@ -481,8 +481,8 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 			return m, m.switchTab(i)
 		}
 	}
-	if view, ok := statusViewFor(word); ok {
-		return m, m.applyStatusView(view)
+	if view, i, ok := m.resolveView(word); ok {
+		return m, m.applyView(i, view)
 	}
 	if tr, ok := transitionFor(word); ok {
 		t, ok := m.selectedTask()
@@ -646,18 +646,32 @@ func (m Model) entityNames() []string {
 	return names
 }
 
-// commandOptions is the full `:` Tab-completion set: entity names + their
-// aliases + the task status-view words. (Aliases were missing in S2a.)
+// commandOptions is the full `:` Tab-completion set: entity names + aliases, the
+// view-axis words of every tab, and the transition verbs. View words are deduped
+// because tasks and audits share "deferred"/"all".
 func (m Model) commandOptions() []string {
-	words := statusViewWords()
 	verbs := transitionVerbs()
-	opts := make([]string, 0, len(m.tabs)*2+len(words)+len(verbs))
-	for _, t := range m.tabs {
-		opts = append(opts, t.name)
-		opts = append(opts, t.aliases...)
+	opts := make([]string, 0, len(m.tabs)*2+len(verbs)+12)
+	seen := make(map[string]bool)
+	add := func(w string) {
+		if !seen[w] {
+			seen[w] = true
+			opts = append(opts, w)
+		}
 	}
-	opts = append(opts, words...)
-	return append(opts, verbs...)
+	for _, t := range m.tabs {
+		add(t.name)
+		for _, a := range t.aliases {
+			add(a)
+		}
+		for _, w := range t.viewWords() {
+			add(w)
+		}
+	}
+	for _, v := range verbs {
+		add(v)
+	}
+	return opts
 }
 
 // --- interactive sort ---
@@ -690,21 +704,37 @@ func (m *Model) cycleSort(dir int) tea.Cmd {
 	return m.applySortToCurrent()
 }
 
-// --- status views (tasks) ---
+// --- status / bucket views ---
 
-// cycleStatusView steps the tasks tab's status view (no-op on other entities,
-// which have no status axis). The cycle order lives in statusViews (statusview.go).
-func (m *Model) cycleStatusView(dir int) tea.Cmd {
-	if m.cur().kind != entityTasks {
+// cycleView steps the active tab's view axis (no-op on entities without one, e.g.
+// epics). The cycle order lives in the tab's viewAxis (statusview.go).
+func (m *Model) cycleView(dir int) tea.Cmd {
+	t := m.cur()
+	if len(t.viewAxis) == 0 {
 		return nil
 	}
-	return m.applyStatusView(statusViewStep(m.cur().statusView, dir))
+	return m.applyView(m.active, viewStep(t.viewAxis, t.statusView, dir))
 }
 
-// applyStatusView switches to the tasks tab, sets its status view, and reloads —
-// preserving the cursor by id when the task survives into the new view.
-func (m *Model) applyStatusView(view string) tea.Cmd {
-	i := indexOfKind(m.tabs, entityTasks)
+// resolveView maps a `:` word to a view value and the tab it applies to. The
+// active tab is tried first, so words shared across axes (":all"/":deferred", on
+// both tasks and audits) act in context; otherwise the first tab in the registry
+// that defines the word wins (tasks before audits — back-compat).
+func (m Model) resolveView(word string) (view string, tab int, ok bool) {
+	if v, ok := m.cur().viewFor(word); ok {
+		return v, m.active, true
+	}
+	for i, t := range m.tabs {
+		if v, ok := t.viewFor(word); ok {
+			return v, i, true
+		}
+	}
+	return "", -1, false
+}
+
+// applyView switches to tab i, sets its view filter, and reloads — preserving the
+// cursor by id when the item survives into the new view.
+func (m *Model) applyView(i int, view string) tea.Cmd {
 	m.active = i
 	m.focus = focusList
 	tab := m.tabs[i]
@@ -830,8 +860,8 @@ func (m Model) renderBody() string {
 
 // listPaneContent is the active list, or a helpful empty hint on an empty tasks
 // or audits tab (epics fall back to the list's own "No items."). The audits hint
-// doubles as the tab's scope note: the TUI shows the open bucket only, so an
-// empty tab must say where the rest live rather than read as "no audits exist".
+// names the empty bucket and points at the s/S cycle, since archived buckets are
+// reachable in-TUI now rather than only via `audit list --all`.
 func (m Model) listPaneContent() string {
 	t := m.cur()
 	// The chip is synced into t.list.Title by Update (not here) so View is pure.
@@ -839,7 +869,14 @@ func (m Model) listPaneContent() string {
 		return "No active tasks.\n\nCreate one:\n  tskflwctl task new \"Title\" --epic <id>"
 	}
 	if t.kind == entityAudits && len(t.list.Items()) == 0 {
-		return "No open audits.\n\nThis tab shows the open bucket only —\nclosed/deferred: tskflwctl audit list --all"
+		switch t.statusView {
+		case "":
+			return "No open audits.\n\nOther buckets: s/S or :closed / :deferred / :all"
+		case "all":
+			return "No audits in any bucket."
+		default:
+			return fmt.Sprintf("No %s audits.\n\nOther buckets: s/S or :open / :closed / :deferred / :all", t.statusView)
+		}
 	}
 	return t.list.View()
 }

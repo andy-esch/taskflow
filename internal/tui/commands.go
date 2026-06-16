@@ -86,12 +86,21 @@ func loadEpicDetail(svc *core.Service, id string) tea.Cmd {
 
 // --- audits ---
 
-// loadAuditList reads open audits (the working set). The audits tab mirrors the
-// CLI's default of open-only; interactive sort still applies.
+// loadAuditList reads the audits for the tab's current bucket view. The default
+// view ("") is the open bucket (the working set, matching the CLI default); "all"
+// spans every bucket; any other value is an exact bucket (closed/deferred). The
+// view is snapshotted here so a later change can't race this load.
 func loadAuditList(t *entityTab, svc *core.Service) tea.Cmd {
-	gen := t.loadGen
+	view, gen := t.statusView, t.loadGen
 	return func() tea.Msg {
-		audits, problems, err := svc.ListAudits("", false)
+		bucket, all := view, false
+		switch view {
+		case "":
+			// open-only default: bucket "" + all=false
+		case "all":
+			bucket, all = "", true
+		}
+		audits, problems, err := svc.ListAudits(bucket, all)
 		if err != nil {
 			return errMsg{kind: entityAudits, gen: gen, err: err}
 		}

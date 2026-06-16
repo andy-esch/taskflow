@@ -23,7 +23,7 @@ var helpSections = []helpSection{
 		{": ", "command / jump (entity, status, or verb)"},
 		{"/", "filter the list (slug, desc, tags)"},
 		{"o / O", "cycle sort column / reverse"},
-		{"s / S", "cycle status view / backward"},
+		{"s / S", "cycle view: task status / audit bucket"},
 		{"a", "task actions (start/complete/defer/…)"},
 		{"f", "follow reference (task ⇄ epic)"},
 		{"ctrl+o", "jump back (follow history)"},
@@ -50,7 +50,7 @@ var helpSections = []helpSection{
 		{"h / esc", "back to list (esc clears a find first)"},
 	}},
 	{"Notes", []helpEntry{
-		{"audits", "open bucket only — closed/deferred: tskflwctl audit list --all"},
+		{"audits", "s/S or :open/:closed/:deferred/:all to switch bucket"},
 		{"find", "matches the rendered text on screen — R for the raw source"},
 	}},
 }

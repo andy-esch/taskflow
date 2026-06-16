@@ -21,8 +21,8 @@ type keyMap struct {
 	NextTab     key.Binding // ] → next entity tab
 	Sort        key.Binding // o → cycle sort column
 	SortRev     key.Binding // O → toggle sort direction
-	StatusView  key.Binding // s → cycle status view (tasks)
-	StatusRev   key.Binding // S → cycle status view backward
+	StatusView  key.Binding // s → cycle view (task status / audit bucket)
+	StatusRev   key.Binding // S → cycle view backward
 	Action      key.Binding // a → lifecycle action menu (tasks)
 	RawToggle   key.Binding // R → raw ⇄ pretty markdown in the detail body
 	Follow      key.Binding // f → follow the selection's reference (task ⇄ epic)
