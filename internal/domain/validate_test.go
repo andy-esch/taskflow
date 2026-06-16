@@ -14,6 +14,7 @@ func TestValidateField_OK(t *testing.T) {
 		{"description", "a fine one-line description"},
 		{"effort", "anything goes"}, // unconstrained
 		{"tags", "unconstrained"},
+		{"audited", "2026-06-16"}, // routine-stamped audit date
 	}
 	for _, c := range ok {
 		if err := ValidateField(c.field, c.value); err != nil {
@@ -33,6 +34,7 @@ func TestValidateField_Invalid(t *testing.T) {
 		{"description", "two\nlines"},
 		{"created", "yesterday"},     // date fields must be YYYY-MM-DD
 		{"updated_at", "2026/06/09"}, // wrong separator
+		{"audited", "soon"},          // audited is a date field too
 	}
 	for _, c := range bad {
 		err := ValidateField(c.field, c.value)

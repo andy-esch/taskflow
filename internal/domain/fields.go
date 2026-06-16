@@ -22,7 +22,7 @@ var knownTaskFields = map[string]bool{
 	"status": true, "epic": true, "description": true, "effort": true,
 	"tier": true, "priority": true, "autonomy_level": true, "tags": true,
 	"created": true, "updated_at": true, "started_at": true,
-	"completed_at": true, "deprecated_at": true, "deferred_at": true,
+	"completed_at": true, "deprecated_at": true, "deferred_at": true, "audited": true,
 	"related_tasks": true, "dependencies": true, "blocks": true,
 	"blocked_by": true, "audit_sources": true, "projects": true,
 }
