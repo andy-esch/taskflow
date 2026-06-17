@@ -4,24 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/andy-esch/taskflow/internal/domain"
-)
-
-var (
-	// findingHeaderRe matches a finding sub-header like "#### H1." / "### M2." / "#### S3.".
-	findingHeaderRe = regexp.MustCompile(`(?m)^#{2,6}\s+[A-Z]+\d+\.`)
-	// openFindingRe matches a "**Status:** open" line. The trailing `[^-\w]|$`
-	// guard (RE2 has no lookahead) keeps "open-ish"/"openness" from matching
-	// while still allowing "open" followed by punctuation/space.
-	openFindingRe = regexp.MustCompile(`(?mi)\*\*Status:\*\*\s*open(?:[^-\w]|$)`)
-	// fenceRe spans a ```-fenced code block, so example finding/status syntax in
-	// docs isn't miscounted as a real finding.
-	fenceRe = regexp.MustCompile("(?s)```.*?```")
 )
 
 // ListAudits scans every audit bucket. Unreadable audits are skipped and
@@ -144,10 +131,10 @@ func parseAudit(content []byte, path string, bucket domain.AuditBucket) (domain.
 	a.Slug = strings.TrimSuffix(filepath.Base(path), ".md")
 	a.Path = path
 	a.Bucket = bucket
-	// Count findings on the prose only — fenced code blocks may contain example
-	// headers/status lines that aren't real findings.
-	prose := fenceRe.ReplaceAll(body, nil)
-	a.Findings = len(findingHeaderRe.FindAll(prose, -1))
-	a.OpenFindings = len(openFindingRe.FindAll(prose, -1))
+	// The finding grammar (and "what counts as open") lives in the domain, so the
+	// store just counts what ParseFindings reports.
+	findings := domain.ParseFindings(string(body))
+	a.Findings = len(findings)
+	a.OpenFindings = domain.CountOpenFindings(findings)
 	return a, nil
 }
