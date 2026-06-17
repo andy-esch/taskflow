@@ -49,6 +49,18 @@ updated_at: "2026-06-12"
    in the long help (and the unknown-key warning tracked in
    [[task-set-follow-ups-sentinels-unknown-keys-canonical-field-table]])
    makes the contract legible to agents.
+6. **`task new --start` (create-and-start shortcut).** *Added 2026-06-17 from
+   the same dogfooding feedback that filed
+   [[audit-finding-level-operations-query-write-lint-sync]].* `task new` has
+   `--next` (→ next-up) but no way to land straight in in-progress, so an
+   agent that knows it's working the task immediately pays a `task new` +
+   `task start` round-trip. Add `--start` (mirrors `--next`; mutually
+   exclusive with it) that scaffolds directly into `in-progress`. One
+   `domain.Status` switch in `NewTask` (`service.go` already branches `Next`).
+   Minor caveat: mildly tensions with the draft readiness-gate idea
+   ([[task-readiness-state-draft-vs-finalized-in-frontmatter]]) — a `--start`
+   that skips a future "draft can't be started" gate — but that gate is
+   undecided and this is the autonomous-agent path, so it's additive for now.
 
 Observed and *already good* (keep): exit codes 10/11 fire exactly as
 documented; `task show --json` includes the body; multi-slug transitions;
@@ -58,9 +70,12 @@ precise ("160 > 150").
 ## Acceptance criteria
 
 - [x] `--json` failures emit a parseable envelope with a stable error code.
-- [ ] `task new --body-file -` works from stdin; quoting torture gone.
+- [x] `task new --body-file -` works from stdin (and from a path); quoting
+      torture gone. Mutually exclusive with `--body`.
 - [ ] A body can be replaced/appended through the tool, atomically.
 - [ ] Create envelope carries `status`; path form consistent across modes.
+- [x] `task new --start` lands the task in in-progress; mutually exclusive with
+      `--next`; flag-conflict errors cleanly.
 - [ ] Suite + lint green; README "agent use" section updated.
 
 ## Related
@@ -77,6 +92,16 @@ pinned by the binary smoke test). Item 5 partially done: `task set --set` help
 now states the typed/validated/--force contract. Remaining: `--body-file`/
 stdin for `task new`, body editing through the tool, and the create-envelope
 `status` field + path-form consistency.
+
+## Progress (2026-06-17)
+
+Shipped two clean items: `task new --body-file <path|->` (reads body from a file
+or stdin via `resolveBody`, mutually exclusive with `--body`) and `task new
+--start` (scaffolds straight into in-progress; `NewTaskParams.Start`; mutually
+exclusive with `--next`). README create examples + 4 tests. Remaining: body
+replace/append (the item-3 fork below — needs the `set --body-file` vs `task
+append` decision) and the create-envelope `status` field + path-form
+consistency. Left ready-to-start as a partial batch.
 
 ## Note (2026-06-12)
 

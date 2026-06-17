@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -10,6 +12,28 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+// resolveBody returns the body to use when creating a document: --body verbatim,
+// or the contents of --body-file (a path, or "-" for stdin). The two flags are
+// mutually exclusive (enforced by the command), so at most one is set — this
+// kills the heredoc-in-command-substitution quoting hazard for long bodies.
+func resolveBody(cmd *cobra.Command, body, bodyFile string) (string, error) {
+	if bodyFile == "" {
+		return body, nil
+	}
+	if bodyFile == "-" {
+		data, err := io.ReadAll(cmd.InOrStdin())
+		if err != nil {
+			return "", fmt.Errorf("read body from stdin: %w", err)
+		}
+		return string(data), nil
+	}
+	data, err := os.ReadFile(bodyFile)
+	if err != nil {
+		return "", fmt.Errorf("%w: read --body-file: %v", domain.ErrValidation, err)
+	}
+	return string(data), nil
+}
 
 func newTaskCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "task", Short: "Work with tasks"}
@@ -32,15 +56,23 @@ func newTaskCmd(app *App) *cobra.Command {
 }
 
 func newTaskNewCmd(app *App) *cobra.Command {
-	var p core.NewTaskParams
+	var (
+		p        core.NewTaskParams
+		bodyFile string
+	)
 	cmd := &cobra.Command{
 		Use:         "new <title>",
 		Short:       "Create a new task (validated, handoff-ready scaffold)",
 		Example:     "  tskflwctl task new \"Add retry backoff\" --epic 17-pm-go-cli --tags net\n  tskflwctl task new \"Triage flaky test\" --epic 17-pm-go-cli --next",
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{"safety": "mutating"},
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			p.Title = args[0]
+			body, err := resolveBody(cmd, p.Body, bodyFile)
+			if err != nil {
+				return err
+			}
+			p.Body = body
 			p.DryRun = app.DryRun
 			t, err := app.Svc.NewTask(p)
 			if err != nil {
@@ -64,7 +96,11 @@ func newTaskNewCmd(app *App) *cobra.Command {
 	cmd.Flags().IntVar(&p.Autonomy, "autonomy", 3, "autonomy level 1-5")
 	cmd.Flags().StringSliceVar(&p.Tags, "tags", nil, "comma-separated tags (at least one required)")
 	cmd.Flags().BoolVar(&p.Next, "next", false, "create in next-up instead of ready-to-start")
+	cmd.Flags().BoolVar(&p.Start, "start", false, "create directly in in-progress")
 	cmd.Flags().StringVar(&p.Body, "body", "", "override the default body scaffold")
+	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the body from a file, or - for stdin (replaces --body)")
+	cmd.MarkFlagsMutuallyExclusive("next", "start")
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	_ = cmd.MarkFlagRequired("epic")
 	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
 	return cmd

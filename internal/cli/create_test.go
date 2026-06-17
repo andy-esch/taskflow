@@ -54,6 +54,65 @@ func TestTaskNew_Next(t *testing.T) {
 	}
 }
 
+func TestTaskNew_Start(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	runRoot(t, "-C", root, "task", "new", "Start Me", "--epic", "e1", "--tags", "x", "--start")
+	if _, err := os.Stat(filepath.Join(root, "tasks", "in-progress", "start-me.md")); err != nil {
+		t.Errorf("--start should land in in-progress/: %v", err)
+	}
+}
+
+func TestTaskNew_BodyFile(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	bf := filepath.Join(t.TempDir(), "body.md")
+	mustWrite(t, bf, "\n# Custom\n\nfrom a file\n")
+	runRoot(t, "-C", root, "task", "new", "File Body", "--epic", "e1", "--tags", "x", "--body-file", bf)
+	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "file-body.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "from a file") || strings.Contains(string(b), "## Acceptance criteria") {
+		t.Errorf("--body-file should replace the scaffold:\n%s", b)
+	}
+}
+
+func TestTaskNew_BodyFileStdin(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetIn(strings.NewReader("\n# Piped\n\nfrom stdin\n"))
+	cmd.SetArgs([]string{"-C", root, "task", "new", "Piped Body", "--epic", "e1", "--tags", "x", "--body-file", "-"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "piped-body.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "from stdin") {
+		t.Errorf("body should come from stdin:\n%s", b)
+	}
+}
+
+func TestTaskNew_MutuallyExclusiveFlags(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	for _, extra := range [][]string{
+		{"--next", "--start"},
+		{"--body", "x", "--body-file", "-"},
+	} {
+		var out bytes.Buffer
+		cmd := NewRootCmd(&out, &out)
+		cmd.SetArgs(append([]string{"-C", root, "task", "new", "X", "--epic", "e1", "--tags", "x"}, extra...))
+		if err := cmd.Execute(); err == nil {
+			t.Errorf("expected a flag-conflict error for %v", extra)
+		}
+	}
+}
+
 func TestTaskNew_UnknownEpic_Exit11(t *testing.T) {
 	root := freshRepo(t)
 	var out bytes.Buffer
@@ -142,6 +201,38 @@ func TestAuditNew(t *testing.T) {
 	runRoot(t, "-C", root, "audit", "close", "2026-06-16-dispatcher")
 	if _, err := os.Stat(filepath.Join(root, "audits", "closed", "2026-06-16-dispatcher.md")); err != nil {
 		t.Errorf("close should move the audit to closed/: %v", err)
+	}
+}
+
+func TestTaskNew_RejectsSlugInAnotherBucket(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	runRoot(t, "-C", root, "task", "new", "Dup Task", "--epic", "e1", "--tags", "x")
+	runRoot(t, "-C", root, "task", "complete", "dup-task") // → completed/
+	// Re-creating the same title (slug now in completed/) refuses with exit 14.
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetArgs([]string{"-C", root, "task", "new", "Dup Task", "--epic", "e1", "--tags", "x"})
+	if err := cmd.Execute(); err == nil || ExitCode(err) != 14 {
+		t.Errorf("cross-bucket slug collision should exit 14, got %v", err)
+	}
+	// The slug still resolves — no second file was created.
+	if show := runRoot(t, "-C", root, "task", "show", "dup-task"); !strings.Contains(show, "dup-task") {
+		t.Errorf("dup-task should still resolve to a single file: %q", show)
+	}
+}
+
+func TestAuditNew_BodyOverride(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "audit", "new", "dispatcher", "--date", "2026-06-17",
+		"--body", "\n# Custom\n\nhand-written body\n")
+	b, err := os.ReadFile(filepath.Join(root, "audits", "open", "2026-06-17-dispatcher.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	if !strings.Contains(s, "hand-written body") || strings.Contains(s, "## Findings") {
+		t.Errorf("--body should replace the scaffold, got:\n%s", s)
 	}
 }
 

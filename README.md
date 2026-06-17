@@ -58,6 +58,8 @@ tskflwctl status                       # at-a-glance board: counts, in-progress,
 
 # create
 tskflwctl task new "Add retry backoff" --epic 17-pm-go-cli --tags net
+tskflwctl task new "Triage flake" --epic 17-pm-go-cli --tags ci --start  # straight to in-progress
+echo "$BODY" | tskflwctl task new "Long writeup" --epic 17-pm-go-cli --tags x --body-file -  # body from stdin/file
 tskflwctl epic new "Billing overhaul" --description "Replace legacy pipeline"
 tskflwctl audit new dispatcher          # → audits/open/YYYY-MM-DD-dispatcher.md (--date to override)
 

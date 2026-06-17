@@ -204,6 +204,7 @@ type NewTaskParams struct {
 	Autonomy    int
 	Tags        []string
 	Next        bool   // create in next-up instead of ready-to-start
+	Start       bool   // create directly in in-progress (mutually exclusive with Next)
 	Body        string // override the default handoff scaffold
 	DryRun      bool   // validate + report the would-be task without writing
 }
@@ -265,7 +266,10 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 		return domain.Task{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
 	}
 	status := domain.StatusReadyToStart
-	if p.Next {
+	switch {
+	case p.Start:
+		status = domain.StatusInProgress
+	case p.Next:
 		status = domain.StatusNextUp
 	}
 	t := domain.Task{
