@@ -39,7 +39,7 @@ func newAuditNewCmd(app *App) *cobra.Command {
 				return err
 			}
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "audit", a.Slug, a.Path, app.DryRun)
+				return render.CreatedJSON(app.Out, "audit", a.Slug, string(a.Bucket), app.rel(a.Path), app.DryRun)
 			}
 			render.CreatedHuman(app.Out, app.Style, app.rel(a.Path), app.DryRun)
 			if !app.DryRun {
