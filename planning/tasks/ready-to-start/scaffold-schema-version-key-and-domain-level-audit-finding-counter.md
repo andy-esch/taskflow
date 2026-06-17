@@ -30,6 +30,14 @@ worth doing on their own. Independent of each other — split if it reads cleane
    `domain.CountFindings(body) (total, open int)` so the invariant is unit-tested
    in `domain` and the store just calls it.
 
+   > **Note (2026-06-17): item #2 is being subsumed by
+   > [[audit-finding-level-operations-query-write-lint-sync]].** That task needs
+   > a full per-finding parser (`domain.ParseFindings`); the counts fall out of
+   > it, so the count-move should be built there as part of `ParseFindings`
+   > rather than a standalone `CountFindings`. Take item #2 there; item #1 (the
+   > scaffold version marker) stays here as an independent cleanup — or close
+   > this task once #1 lands.
+
 ## Acceptance criteria
 
 - [ ] New scaffolds carry the reserved version key; existing files still parse
