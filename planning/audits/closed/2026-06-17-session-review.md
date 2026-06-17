@@ -31,21 +31,19 @@ its output funcs are exercised by `cli` tests): **whole tree 84.3%**, domain
 
 **Recommendation:** remove it. *(Done — deleted in this pass.)*
 
-#### M1. `task new --start` omits the `started_at` stamp  · **Status:** open
+#### M1. `task new --start` omits the `started_at` stamp  · **Status:** fixed 2026-06-17
 
-**File:** internal/core/service.go:271 | **Component:** core
-**Effort:** S · **Urgency:** eventually
+**File:** internal/core/service.go, internal/store/create.go | **Component:** core
+**Effort:** S · **Urgency:** soon
 
-`Move` into in-progress stamps `started_at` (`fsstore.go:117`), but `NewTask`
-with `--start` creates the file directly in in-progress and stamps only
-`created` — so a task *born* in-progress has no `started_at`, unlike one moved
-there. Not a lint failure (the field is optional), but an inconsistency any
-"time in progress" view would trip on. Stamping needs a small create-frontmatter
-addition (`taskFields` is a fixed list; `domain.Task` has no `StartedAt`), so
-it's a real change with a design choice attached.
+`Move` into in-progress stamps `started_at`, but `NewTask --start` created the
+file directly in in-progress stamping only `created` — so a task *born*
+in-progress had no `started_at`, unlike one moved there.
 
-**Recommendation:** either stamp `started_at` on `--start`, or decide a
-`--start` task's `created` *is* its start and document it. Owner's call.
+**Recommendation (done — owner chose "stamp"):** added `StartedAt` to
+`domain.Task` (the one lifecycle stamp a create can carry), `NewTask` sets it to
+today when status is in-progress, and `taskFields` appends it when set. So "every
+in-progress task has a `started_at`" now holds however it got there. Tested.
 
 #### L1. `ParseFindings` mis-read a literal `**Status:**` in a title  · **Status:** fixed 2026-06-17
 
@@ -74,26 +72,47 @@ and `epic new` (which had neither) didn't — a consistency gap.
 **Recommendation (done):** added `--body-file` to `audit new`, and `--body` +
 `--body-file` to `epic new`, all through the shared `resolveBody`. Tested.
 
-#### L3. `audit new` scaffold hardcodes `../HOWTO-execute.md`  · **Status:** open
+#### L3. `audit new` scaffold hardcodes `../HOWTO-execute.md`  · **Status:** fixed 2026-06-17
 
 **File:** internal/core/service.go (auditBodyTemplate) | **Component:** core
 **Effort:** XS · **Urgency:** eventually
 
-The scaffold links `[../HOWTO-execute.md]`, which exists in desirelines-planning
-but **not** in taskflow's own `planning/audits/` — so this very audit's link is
-dead (caught by dogfooding `audit new` here). The convention doc is a per-repo
-assumption baked into a shared scaffold.
+The scaffold linked `[../HOWTO-execute.md]`, which exists in desirelines-planning
+but **not** in taskflow's own `planning/audits/` — so this very audit's link was
+dead (caught by dogfooding `audit new` here). A per-repo assumption baked into a
+shared scaffold.
 
-**Recommendation:** make the link conditional (only when the file exists / a
-config points at it), or add a taskflow `planning/audits/HOWTO-execute.md`, or
-drop the line from the scaffold.
+**Recommendation (done — owner chose "drop"):** removed the link; the scaffold is
+generic now (kept the "flip `**Status:**`" guidance). A repo with a conventions
+doc points at it from its own tooling. `TestAuditNew` asserts the absence.
+
+#### L4. `task new --start`/`--next` could create a lint-failing task  · **Status:** fixed 2026-06-17
+
+**File:** internal/core/service.go | **Component:** core
+**Effort:** XS · **Urgency:** soon
+
+`task new` didn't require `--description`, but lint requires one for
+`next-up`/`in-progress` — so `--next`/`--start` without it created a task born
+immediately lint-failing. Pre-existing for `--next`; `--start` extended it.
+Surfaced dogfooding M1.
+
+**Recommendation (done — owner chose "require"):** `NewTask` now rejects a
+`--next`/`--start` create with no `--description` (ErrValidation, exit 11), the
+same principle as the existing required-tags check. README example + tests
+updated.
 
 ## Candidate tasks
 
-- ✅ S1 — dead `Style.Enabled()` removed this pass; no task needed.
-- ✅ L1 — parser robustness fixed this pass (surfaced by dogfooding this audit).
-- ✅ L2 — `--body-file` extended to `audit new`/`epic new` this pass.
-- ⏳ M1 — `task new --start` + `started_at`: decide stamp-vs-document, then
-  `tskflwctl task new "Stamp started_at on task new --start" --epic 17-pm-go-cli --tags cli,core`.
-- ⏳ L3 — low; the audit-scaffold `../HOWTO-execute.md` link, decide when next
-  touching the scaffold.
+- ✅ S1 — dead `Style.Enabled()` removed.
+- ✅ L1 — parser robustness fixed (surfaced by dogfooding this audit).
+- ✅ L2 — `--body-file` extended to `audit new`/`epic new`.
+- ✅ M1 — `started_at` now stamped on `task new --start` (owner: stamp).
+- ✅ L3 — repo-specific HOWTO link dropped from the scaffold (owner: drop).
+- ✅ L4 — `task new --next`/`--start` now requires `--description` (owner: require).
+
+## Closeout
+
+Closed-ready 2026-06-17: all six findings terminal — S1/L1/L2/M1/L3/L4 fixed,
+none carried forward. The dogfood paid off (L1 + L3 + L4 were surfaced *by*
+writing/working this audit with the tool). Run `tskflwctl audit close
+2026-06-17-session-review` to archive.

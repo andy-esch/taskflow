@@ -19,6 +19,7 @@ type Task struct {
 	Effort      string   `yaml:"effort"`
 	Created     string   `yaml:"created"`
 	Updated     string   `yaml:"updated_at"`
+	StartedAt   string   `yaml:"started_at"` // stamped when a task enters in-progress (incl. `new --start`)
 	Tags        []string `yaml:"tags"`
 }
 
