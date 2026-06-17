@@ -25,7 +25,10 @@ import (
 // the fix report carries `unreadable` (files it couldn't repair).
 // 1.4: `schema` envelopes (the tool's self-description contract + per-kind
 // authoring guidance) added.
-const SchemaVersion = "1.4"
+// 1.5: the create envelope carries `status` (task status / epic status / audit
+// bucket); its `path` is now relative to the planning root in both human and
+// JSON modes (was absolute in JSON).
+const SchemaVersion = "1.5"
 
 type taskJSON struct {
 	Slug        string   `json:"slug"`
@@ -318,21 +321,25 @@ func CreatedHuman(w io.Writer, st Style, path string, dryRun bool) {
 }
 
 // CreatedJSON writes a versioned envelope for a newly created item; dry_run
-// marks a preview (nothing was written).
-func CreatedJSON(w io.Writer, kind, id, path string, dryRun bool) error {
+// marks a preview (nothing was written). status is the new item's status (task
+// status / epic status / audit bucket); path is relative to the planning root,
+// matching the human output.
+func CreatedJSON(w io.Writer, kind, id, status, path string, dryRun bool) error {
 	return encodeJSON(w, struct {
 		SchemaVersion string `json:"schema_version"`
 		DryRun        bool   `json:"dry_run"`
 		Created       struct {
-			Kind string `json:"kind"`
-			ID   string `json:"id"`
-			Path string `json:"path"`
+			Kind   string `json:"kind"`
+			ID     string `json:"id"`
+			Status string `json:"status"`
+			Path   string `json:"path"`
 		} `json:"created"`
 	}{SchemaVersion: SchemaVersion, DryRun: dryRun, Created: struct {
-		Kind string `json:"kind"`
-		ID   string `json:"id"`
-		Path string `json:"path"`
-	}{Kind: kind, ID: id, Path: path}})
+		Kind   string `json:"kind"`
+		ID     string `json:"id"`
+		Status string `json:"status"`
+		Path   string `json:"path"`
+	}{Kind: kind, ID: id, Status: status, Path: path}})
 }
 
 // EpicsHuman writes a table of epics with task rollup.

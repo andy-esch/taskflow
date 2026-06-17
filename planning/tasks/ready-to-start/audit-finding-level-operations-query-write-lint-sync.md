@@ -110,7 +110,7 @@ both falling out of the parser:
 
 ## Acceptance criteria
 
-- [ ] `domain.ParseFindings(body) []Finding` exists with table tests (fenced-
+- [x] `domain.ParseFindings(body) []Finding` exists with table tests (fenced-
       code exclusion, the `open-ish`/`openness` guards, missing optional
       fields); `auditstore.go` counts derive from it; the regex-only counter
       no longer lives in the store. (Subsumes the item-#2 half of
@@ -126,6 +126,21 @@ both falling out of the parser:
       flags drift between them.
 - [ ] Errors wrap the domain sentinels (exit 10/11/13/14); suite + lint green;
       README "audit" / agent-use sections updated.
+
+## Progress Log
+
+- **2026-06-17**: Item 1 (the parser foundation) **done**. `domain/finding.go`:
+  `Finding{Code,Title,Status,File,Component,Effort,Urgency}` + `ParseFindings` +
+  `CountOpenFindings`, fence-aware and table-tested. `store/auditstore.go` now
+  derives both counts from it and the finding regexes are gone from the store —
+  one grammar in the domain. This subsumes the item-#2 half of
+  [[scaffold-schema-version-key-and-domain-level-audit-finding-counter]] (close
+  that half there). **Caveat:** the struct is *read*-shaped — it carries no body
+  offsets, so the item-3 surgical `--status` write still needs a small extension
+  (offset/section spans) before it can rewrite a line in place. Items 2–5 remain;
+  item 2 (`audit findings` query) is being designed first — its value is the
+  matching interface (filter dimensions + exact-vs-fuzzy per field + cross-audit
+  aggregation), which is an explicit design pass, not a fill-in.
 
 ## Out of scope
 

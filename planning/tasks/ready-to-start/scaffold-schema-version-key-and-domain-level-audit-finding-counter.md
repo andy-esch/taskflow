@@ -42,10 +42,13 @@ worth doing on their own. Independent of each other — split if it reads cleane
 
 - [ ] New scaffolds carry the reserved version key; existing files still parse
       (the key is optional on read, surgical edits preserve it).
-- [ ] `domain.CountFindings` exists with table tests (fenced-code exclusion,
-      open-vs-total, the `open-ish`/`openness` guards); `auditstore.go` delegates
-      to it and the parsing regexes no longer live in the store.
-- [ ] `go build/test/vet` green; `gofmt` clean.
+- [x] ~~`domain.CountFindings`~~ — **done as `domain.ParseFindings` +
+      `CountOpenFindings`** (2026-06-17) in
+      [[audit-finding-level-operations-query-write-lint-sync]] item 1, exactly as
+      this task's Note predicted: fence-aware, table-tested, `auditstore.go` now
+      derives both counts from it and the regexes are gone from the store.
+- [ ] `go build/test/vet` green; `gofmt` clean. *(Item #1 — the scaffold version
+      key — is the only remaining work here; close this task once it lands.)*
 
 ## Out of scope
 

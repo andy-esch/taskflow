@@ -242,7 +242,7 @@ func TestAuditNew_JSONEnvelope(t *testing.T) {
 	var env struct {
 		DryRun  bool `json:"dry_run"`
 		Created struct {
-			Kind, ID, Path string
+			Kind, ID, Status, Path string
 		} `json:"created"`
 	}
 	if err := json.Unmarshal([]byte(js), &env); err != nil {
@@ -250,6 +250,10 @@ func TestAuditNew_JSONEnvelope(t *testing.T) {
 	}
 	if env.DryRun || env.Created.Kind != "audit" || env.Created.ID != "2026-06-16-arch-data-flow" {
 		t.Errorf("envelope wrong: %+v", env)
+	}
+	// status = the audit bucket; path is relative to the planning root (not absolute).
+	if env.Created.Status != "open" || env.Created.Path != "audits/open/2026-06-16-arch-data-flow.md" {
+		t.Errorf("envelope status/path wrong: %+v", env.Created)
 	}
 }
 

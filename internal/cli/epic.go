@@ -31,7 +31,7 @@ func newEpicNewCmd(app *App) *cobra.Command {
 				return err
 			}
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "epic", e.ID, e.Path, app.DryRun)
+				return render.CreatedJSON(app.Out, "epic", e.ID, e.Status, app.rel(e.Path), app.DryRun)
 			}
 			render.CreatedHuman(app.Out, app.Style, app.rel(e.Path), app.DryRun)
 			if !app.DryRun {

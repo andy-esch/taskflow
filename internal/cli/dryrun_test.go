@@ -44,7 +44,7 @@ func TestDryRun_TaskNew(t *testing.T) {
 	var env struct {
 		DryRun  bool `json:"dry_run"`
 		Created struct {
-			ID, Path string
+			ID, Status, Path string
 		} `json:"created"`
 	}
 	if err := json.Unmarshal([]byte(js), &env); err != nil {
@@ -52,6 +52,10 @@ func TestDryRun_TaskNew(t *testing.T) {
 	}
 	if !env.DryRun || env.Created.ID != "json-preview" {
 		t.Errorf("dry-run envelope wrong: %+v", env)
+	}
+	// status = the would-be task status; path is relative to the planning root.
+	if env.Created.Status != "ready-to-start" || env.Created.Path != "tasks/ready-to-start/json-preview.md" {
+		t.Errorf("dry-run envelope status/path wrong: %+v", env.Created)
 	}
 	notExist(t, filepath.Join(root, "tasks", "ready-to-start", "json-preview.md"))
 
