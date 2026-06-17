@@ -102,15 +102,26 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	return a, nil
 }
 
-// resolveAudit finds an audit by slug — exact first, then fuzzy, like resolve.
-func (s *FS) resolveAudit(slug string) (path string, bucket domain.AuditBucket, err error) {
+// auditCandidates lists every audit file across all buckets as a resolution
+// candidate (the dir name IS the bucket). Shared by resolveAudit and the
+// create-time cross-bucket collision check.
+func (s *FS) auditCandidates() ([]candidate, error) {
 	var cands []candidate
 	for _, b := range domain.AllAuditBuckets() {
 		cs, err := markdownCandidates(filepath.Join(s.auditsDir, b.Dir()), b.Dir())
 		if err != nil {
-			return "", "", err
+			return nil, err
 		}
 		cands = append(cands, cs...)
+	}
+	return cands, nil
+}
+
+// resolveAudit finds an audit by slug — exact first, then fuzzy, like resolve.
+func (s *FS) resolveAudit(slug string) (path string, bucket domain.AuditBucket, err error) {
+	cands, err := s.auditCandidates()
+	if err != nil {
+		return "", "", err
 	}
 	c, err := resolveID("audit", slug, cands)
 	if err != nil {

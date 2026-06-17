@@ -82,6 +82,49 @@ func TestCreateAudit_OpenBucketOrderClobber(t *testing.T) {
 	}
 }
 
+func TestCreateTask_RejectsSlugInAnotherBucket(t *testing.T) {
+	fs := NewFS(t.TempDir())
+	mk := func(status domain.Status) domain.Task {
+		return domain.Task{
+			Slug: "dup", Status: status, Epic: "e", Description: "d", Effort: "x",
+			Tier: 3, Priority: "low", Autonomy: 3, Tags: []string{"a"}, Created: "2026-06-17",
+		}
+	}
+	if _, err := fs.CreateTask(mk(domain.StatusCompleted), "\n# x\n", false); err != nil {
+		t.Fatal(err)
+	}
+	// Same slug, different status dir → ErrConflict (not just a same-path clobber).
+	if _, err := fs.CreateTask(mk(domain.StatusReadyToStart), "\n# x\n", false); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("cross-bucket slug should be ErrConflict, got %v", err)
+	}
+	// The dry-run path enforces it too.
+	if _, err := fs.CreateTask(mk(domain.StatusReadyToStart), "x", true); !errors.Is(err, domain.ErrConflict) {
+		t.Errorf("dry-run cross-bucket should be ErrConflict, got %v", err)
+	}
+	// And the slug still resolves to the single file — never became ambiguous.
+	if _, _, err := fs.GetTask("dup"); err != nil {
+		t.Errorf("slug should resolve unambiguously, got %v", err)
+	}
+}
+
+func TestCreateAudit_RejectsSlugInAnotherBucket(t *testing.T) {
+	fs := NewFS(t.TempDir())
+	a := domain.Audit{Slug: "2026-06-17-x", Area: "x", Date: "2026-06-17"}
+	if _, err := fs.CreateAudit(a, "\n# A\n", false); err != nil {
+		t.Fatal(err)
+	}
+	// Move it out of open/, then a new open create with the same slug must conflict.
+	if _, err := fs.MoveAudit("2026-06-17-x", domain.AuditClosed, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fs.CreateAudit(a, "x", false); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("a slug in closed/ should block a new open create, got %v", err)
+	}
+	if _, _, err := fs.GetAudit("2026-06-17-x"); err != nil {
+		t.Errorf("slug should resolve to the single (closed) file, got %v", err)
+	}
+}
+
 func TestCreateEpic_AutoNumber(t *testing.T) {
 	fs := NewFS(t.TempDir())
 	// First epic → 01; with an existing 04-... the next is 05.

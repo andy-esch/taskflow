@@ -82,6 +82,15 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 	if t.Slug == "" {
 		return domain.Task{}, fmt.Errorf("%w: empty task slug", domain.ErrValidation)
 	}
+	// Reject a slug already living in ANY status dir, not just the target — two
+	// files sharing a slug make every later resolve of it ErrAmbiguous.
+	cands, err := s.taskCandidates()
+	if err != nil {
+		return domain.Task{}, err
+	}
+	if occ := slugCollision(t.Slug, cands); occ != "" {
+		return domain.Task{}, fmt.Errorf("task %q already exists in %s/: %w", t.Slug, occ, domain.ErrConflict)
+	}
 	dir := filepath.Join(s.tasksDir, t.Status.Dir())
 	path := filepath.Join(dir, t.Slug+".md")
 	content, err := buildFile(taskFields(t), body)
@@ -108,6 +117,15 @@ func auditFields(a domain.Audit) []fmField {
 func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error) {
 	if a.Slug == "" {
 		return domain.Audit{}, fmt.Errorf("%w: empty audit slug", domain.ErrValidation)
+	}
+	// Reject a slug already in ANY bucket, not just open/ — a slug in closed/ or
+	// deferred/ would otherwise resolve ambiguously after this create.
+	cands, err := s.auditCandidates()
+	if err != nil {
+		return domain.Audit{}, err
+	}
+	if occ := slugCollision(a.Slug, cands); occ != "" {
+		return domain.Audit{}, fmt.Errorf("audit %q already exists in %s/: %w", a.Slug, occ, domain.ErrConflict)
 	}
 	a.Bucket = domain.AuditOpen
 	dir := filepath.Join(s.auditsDir, a.Bucket.Dir())
@@ -177,7 +195,11 @@ func epicFields(e domain.Epic) []fmField {
 }
 
 // CreateEpic writes a new epic at epics/NN-<slug>.md, auto-assigning the next
-// number. It refuses to clobber an existing file.
+// number. It refuses to clobber an existing file. Unlike tasks/audits it needs
+// no cross-bucket slug check: the auto-numbered id is always fresh, so an exact
+// id collision can't occur. Duplicate *name*-slugs (01-billing + 02-billing) are
+// deliberately allowed — they stay distinct ids; only `epic show billing` goes
+// fuzzy-ambiguous, recoverable by using the full NN-slug.
 func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (domain.Epic, error) {
 	if slug == "" {
 		return domain.Epic{}, fmt.Errorf("%w: empty epic slug", domain.ErrValidation)

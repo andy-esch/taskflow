@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: Create refuses a slug that already exists in any bucket, not just the target dir; bundles audit-new follow-ups (--body test, area raw-vs-slug)
 effort: Unknown
@@ -8,6 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, core, validation]
 created: "2026-06-16"
+updated_at: "2026-06-17"
+started_at: "2026-06-17"
+completed_at: "2026-06-17"
 ---
 
 # Reject cross-bucket slug collisions on create (task/audit)
@@ -37,30 +40,37 @@ ambiguous — decide whether to warn.
 
 ## Acceptance criteria
 
-- [ ] `task new` / `audit new` reject a slug already present in **any** bucket
+- [x] `task new` / `audit new` reject a slug already present in **any** bucket
       (not just the target dir), returning ErrConflict (exit 14) and writing
       nothing. The check runs under `--dry-run` too.
-- [ ] The collision scan lives in the store (it owns the on-disk layout) and
-      reuses the existing per-entity candidate scan (`markdownCandidates` /
-      `resolveAudit`-style enumeration) rather than a second path convention.
-- [ ] Decide + implement epic behavior: either accept duplicate name-slugs
-      (status quo, document it) or warn on create that `<slug>` is now
-      fuzzy-ambiguous.
-- [ ] Tests: create-into-occupied-other-bucket is ErrConflict for task and
-      audit; same-slug-different-bucket no longer round-trips into an ambiguous
-      `show`.
+- [x] The collision scan lives in the store (it owns the on-disk layout) and
+      reuses the existing per-entity candidate scan (new `slugCollision` over
+      `taskCandidates()` / new `auditCandidates()`) rather than a second path
+      convention.
+- [x] Epic behavior: **accept** duplicate name-slugs (the auto-numbered id is
+      always fresh → no exact collision; only `epic show <bare-slug>` goes
+      fuzzy-ambiguous, recoverable via the full NN-slug). Documented in
+      `CreateEpic`.
+- [x] Tests: create-into-occupied-other-bucket is ErrConflict for task and
+      audit; same-slug-different-bucket still resolves through `show`.
 
 ## Also in scope (audit-new review follow-ups)
 
 Small items surfaced reviewing the `audit new` work — cheap to fold in here:
 
-- [ ] **`audit new --body` override is untested** — add a case asserting a
-      provided `--body` replaces the scaffold (mirrors the untested task/epic
-      `--body`; close all three or just audit).
-- [ ] **`area` raw vs slug** — `audit new "Arch Data Flow"` stores
-      `area: Arch Data Flow` while the slug is `…-arch-data-flow`. Decide: keep
-      raw (mirrors task title-vs-slug, fine for token areas) or normalize `area`
-      to the slug so they always match. Low stakes; just pick one and pin it.
+- [x] **`audit new --body` override** — now tested (`TestAuditNew_BodyOverride`:
+      a provided `--body` replaces the scaffold).
+- [x] **`area` raw vs slug** — decided: **keep raw** (mirrors task title-vs-slug;
+      fine for the token areas the routines use). No code change.
+
+## Progress Log
+
+- **2026-06-17**: Implemented. `slugCollision` (store/resolve.go) checks an exact
+  slug across all of an entity's dirs; `CreateTask`/`CreateAudit` call it before
+  writing (reusing `taskCandidates()` / extracted `auditCandidates()`), so a slug
+  in any other bucket → ErrConflict (exit 14), under `--dry-run` too. Epics
+  unchanged (accept dup name-slugs, documented). Folded in the two `audit new`
+  review nits. 4 new tests; suite + lint + vet green.
 
 ## Out of scope
 
