@@ -16,15 +16,23 @@ func newEpicCmd(app *App) *cobra.Command {
 }
 
 func newEpicNewCmd(app *App) *cobra.Command {
-	var p core.NewEpicParams
+	var (
+		p        core.NewEpicParams
+		bodyFile string
+	)
 	cmd := &cobra.Command{
 		Use:         "new <title>",
 		Short:       "Create a new epic (auto-numbered NN-slug)",
 		Example:     "  tskflwctl epic new \"Billing overhaul\" --description \"Replace the legacy pipeline\"",
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{"safety": "mutating"},
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			p.Title = args[0]
+			body, err := resolveBody(cmd, p.Body, bodyFile)
+			if err != nil {
+				return err
+			}
+			p.Body = body
 			p.DryRun = app.DryRun
 			e, err := app.Svc.NewEpic(p)
 			if err != nil {
@@ -44,6 +52,9 @@ func newEpicNewCmd(app *App) *cobra.Command {
 	cmd.Flags().StringVar(&p.Status, "status", "planning", "epic status: planning|in-progress|completed|archived")
 	cmd.Flags().StringVar(&p.Priority, "priority", "medium", "high|medium|low")
 	cmd.Flags().StringSliceVar(&p.Tags, "tags", nil, "comma-separated tags")
+	cmd.Flags().StringVar(&p.Body, "body", "", "override the default body scaffold")
+	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the body from a file, or - for stdin (replaces --body)")
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 

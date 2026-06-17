@@ -236,6 +236,50 @@ func TestAuditNew_BodyOverride(t *testing.T) {
 	}
 }
 
+func TestAuditNew_BodyFile(t *testing.T) {
+	root := freshRepo(t)
+	bf := filepath.Join(t.TempDir(), "body.md")
+	mustWrite(t, bf, "\n# Custom\n\naudit body from a file\n")
+	runRoot(t, "-C", root, "audit", "new", "dispatcher", "--date", "2026-06-17", "--body-file", bf)
+	b, err := os.ReadFile(filepath.Join(root, "audits", "open", "2026-06-17-dispatcher.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "audit body from a file") || strings.Contains(string(b), "## Findings") {
+		t.Errorf("audit --body-file should replace the scaffold:\n%s", b)
+	}
+}
+
+func TestEpicNew_Body(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "epic", "new", "Payments", "--description", "d", "--body", "\n# Custom\n\nepic body here\n")
+	b, err := os.ReadFile(filepath.Join(root, "epics", "01-payments.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "epic body here") || strings.Contains(string(b), "**Goal.**") {
+		t.Errorf("epic --body should replace the scaffold:\n%s", b)
+	}
+}
+
+func TestEpicNew_BodyFileStdin(t *testing.T) {
+	root := freshRepo(t)
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetIn(strings.NewReader("\n# Piped\n\nepic from stdin\n"))
+	cmd.SetArgs([]string{"-C", root, "epic", "new", "Streamed", "--description", "d", "--body-file", "-"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "epics", "01-streamed.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "epic from stdin") {
+		t.Errorf("epic --body-file - should read stdin:\n%s", b)
+	}
+}
+
 func TestAuditNew_JSONEnvelope(t *testing.T) {
 	root := freshRepo(t)
 	js := runRoot(t, "-C", root, "audit", "new", "arch-data-flow", "--date", "2026-06-16", "--json")

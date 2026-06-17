@@ -24,15 +24,23 @@ func newAuditCmd(app *App) *cobra.Command {
 }
 
 func newAuditNewCmd(app *App) *cobra.Command {
-	var p core.NewAuditParams
+	var (
+		p        core.NewAuditParams
+		bodyFile string
+	)
 	cmd := &cobra.Command{
 		Use:         "new <area>",
 		Short:       "Create a new audit (open bucket, scaffolded findings)",
 		Example:     "  tskflwctl audit new dispatcher\n  tskflwctl audit new arch-data-flow --date 2026-06-16",
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{"safety": "mutating"},
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			p.Area = args[0]
+			body, err := resolveBody(cmd, p.Body, bodyFile)
+			if err != nil {
+				return err
+			}
+			p.Body = body
 			p.DryRun = app.DryRun
 			a, err := app.Svc.NewAudit(p)
 			if err != nil {
@@ -50,6 +58,8 @@ func newAuditNewCmd(app *App) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&p.Date, "date", "", "audit date YYYY-MM-DD (default today)")
 	cmd.Flags().StringVar(&p.Body, "body", "", "override the default scaffold")
+	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the body from a file, or - for stdin (replaces --body)")
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 

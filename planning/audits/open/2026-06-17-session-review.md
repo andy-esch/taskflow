@@ -92,9 +92,8 @@ drop the line from the scaffold.
 
 - ✅ S1 — dead `Style.Enabled()` removed this pass; no task needed.
 - ✅ L1 — parser robustness fixed this pass (surfaced by dogfooding this audit).
+- ✅ L2 — `--body-file` extended to `audit new`/`epic new` this pass.
 - ⏳ M1 — `task new --start` + `started_at`: decide stamp-vs-document, then
   `tskflwctl task new "Stamp started_at on task new --start" --epic 17-pm-go-cli --tags cli,core`.
-- ⏳ L2 — extend `--body-file` to `audit new`/`epic new` (folds into
-  [[agent-facing-cli-ergonomics-batch]]).
 - ⏳ L3 — low; the audit-scaffold `../HOWTO-execute.md` link, decide when next
   touching the scaffold.
