@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: 'DRAFT: schema command — agent self-discovery + authoring guidance (sections, field descriptions); shape needs design thought before finalizing'
 effort: Unknown
@@ -8,6 +8,8 @@ priority: low
 autonomy_level: 3
 tags: [cli, agents, json, draft]
 created: "2026-06-12"
+updated_at: "2026-06-16"
+completed_at: "2026-06-16"
 ---
 # `schema` command for agent self-discovery
 
@@ -15,6 +17,32 @@ created: "2026-06-12"
 > 2026-06-12 CLI-design discussion. This *revives a deliberately descoped
 > item* — see the conflict note — so it needs an explicit planning yes
 > before work starts.
+
+## Resolution (shipped 2026-06-16)
+
+Built v1. Decisions made for the open questions:
+
+- **Reversal approved** (the descope is reversed); kept the name **`schema`**.
+- **One command:** `schema` = global contract (A); `schema <task|epic|audit>` =
+  authoring guidance (B).
+- **Everything derived from domain**, no hand-copied lists: field *types* from
+  the existing type maps (new `domain.FieldType` / `KnownTaskFieldNames`); the
+  body template + section names from the live `new` scaffold (new
+  `core.ScaffoldBody`). Only per-field description/example are hand-authored —
+  pinned to the real field set by a sync test (`TestTaskAuthoringFieldsMatchRegistry`).
+- **Did NOT enrich `fields.go` into a struct registry** — kept the load-bearing
+  bool maps; descriptions live in a separate `domain.FieldDoc` table instead.
+- **Runs with no planning repo** (overrides the root `resolve()`, like `version`)
+  — the bundled-self-describe use case. Tested.
+- `schema_version` bumped 1.3 → 1.4 (additive envelopes).
+
+**Deferred (not in v1):** the per-repo `.tskflwctl.toml` guidance override — it
+depends on the unsettled config relative/absolute path handling, so it's its own
+follow-up. The "envelope inventory" was also left out.
+
+Implemented across `domain/schema.go`, `core/scaffold.go`, `cli/schema.go`,
+`render.go`; tests in `domain/schema_test.go`, `cli/schema_test.go`. Suite + lint
++ vet green.
 
 ## Objective
 
