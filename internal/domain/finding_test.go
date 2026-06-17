@@ -43,3 +43,21 @@ func TestParseFindings_Empty(t *testing.T) {
 		t.Errorf("want no findings, got %+v", fs)
 	}
 }
+
+// TestParseFindings_LiteralStatusInTitle pins the fix the 2026-06-17 self-review
+// surfaced: a finding whose TITLE contains a literal `**Status:**` must not have
+// that mistaken for its status, and the title must survive intact. The marker is
+// authoritative only at line start or after the header's `· ` separator.
+func TestParseFindings_LiteralStatusInTitle(t *testing.T) {
+	body := "#### X1. parser takes the first `**Status:**` token  · **Status:** open\n\nbody\n"
+	fs := ParseFindings(body)
+	if len(fs) != 1 {
+		t.Fatalf("want 1 finding, got %d: %+v", len(fs), fs)
+	}
+	if fs[0].Status != "open" {
+		t.Errorf("status = %q, want open (the literal **Status:** in the title must not win)", fs[0].Status)
+	}
+	if fs[0].Title != "parser takes the first `**Status:**` token" {
+		t.Errorf("title = %q, want it kept intact (incl. the literal marker)", fs[0].Title)
+	}
+}

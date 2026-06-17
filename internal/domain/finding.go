@@ -30,10 +30,13 @@ var (
 	// fenceRe spans a ```-fenced code block, stripped first so example finding
 	// syntax in docs or the scaffold isn't parsed as a real finding.
 	fenceRe = regexp.MustCompile("(?s)```.*?```")
-	// statusRe captures the status TOKEN after `**Status:**` — the first run with
-	// no whitespace/·/| — so "fixed 2026-01-01 (PR #9)" yields "fixed" and
-	// "open-ish" stays distinct from "open".
-	statusRe    = regexp.MustCompile(`(?i)\*\*Status:\*\*\s*([^\s·|]+)`)
+	// statusRe captures the status TOKEN after `**Status:**`, but ONLY where the
+	// marker is authoritative — at line start (a status line) or right after the
+	// header's `· ` separator — so a literal `**Status:**` mentioned in a title or
+	// prose can't be mistaken for the status. The token is the first run with no
+	// whitespace/·/|, so "fixed 2026-01-01 (PR #9)" yields "fixed" and "open-ish"
+	// stays distinct from "open".
+	statusRe    = regexp.MustCompile(`(?mi)(?:^[ \t]*|·[ \t]*)\*\*Status:\*\*[ \t]*([^\s·|]+)`)
 	fileRe      = fieldValueRe("File")
 	componentRe = fieldValueRe("Component")
 	effortRe    = fieldValueRe("Effort")
@@ -89,10 +92,11 @@ func field(re *regexp.Regexp, section string) string {
 	return ""
 }
 
-// stripInlineStatus drops a trailing inline "· **Status:** …" the scaffold puts
-// on the header line, leaving just the title.
+// stripInlineStatus drops the header's trailing "· **Status:** …" (keyed on the
+// `· ` separator, so a literal `**Status:**` inside the title survives), leaving
+// just the title.
 func stripInlineStatus(title string) string {
-	if i := strings.Index(title, "**Status:**"); i >= 0 {
+	if i := strings.Index(title, "· **Status:**"); i >= 0 {
 		title = title[:i]
 	}
 	return strings.TrimRight(strings.TrimSpace(title), " ·\t")
