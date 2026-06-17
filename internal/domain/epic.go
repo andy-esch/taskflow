@@ -24,6 +24,9 @@ type Epic struct {
 // values already in use, plus "completed").
 var epicStatuses = []string{"planning", "in-progress", "completed", "archived"}
 
+// AllEpicStatuses returns the closed epic-status vocabulary, in declared order.
+func AllEpicStatuses() []string { return epicStatuses }
+
 // ValidateEpicStatus rejects an epic status outside the closed vocabulary,
 // wrapping ErrValidation and enumerating the valid values.
 func ValidateEpicStatus(s string) error {

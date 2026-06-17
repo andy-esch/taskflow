@@ -31,6 +31,9 @@ We dogfood: drive this repo's planning with the tool itself.
 - **Lifecycle:** `task start|promote|demote|complete|defer|deprecate <slug>...`.
 - **Read/edit:** `task list|show|set`, `epic list|show`,
   `audit new|list|show|close|reopen|defer`.
+- **Self-describe (agents):** `schema` (contract: statuses, field registry,
+  exit codes) · `schema task|epic|audit` (authoring guidance). Runs anywhere,
+  no planning repo needed.
 - **Hygiene:** `tskflwctl lint` (`--fix` to auto-repair). Keep `planning/`
   lint-clean.
 - Tasks live in `planning/tasks/<status>/`; a task's `status:` **is** its

@@ -85,6 +85,7 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(newEpicCmd(app))
 	root.AddCommand(newAuditCmd(app))
 	root.AddCommand(newLintCmd(app))
+	root.AddCommand(newSchemaCmd(app))
 	return root
 }
 
