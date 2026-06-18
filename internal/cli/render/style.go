@@ -59,9 +59,6 @@ func NewStyle(enabled bool) Style { return Style{on: enabled} }
 // piped output keeps full-width rows).
 func (s Style) WithWidth(w int) Style { s.width = w; return s }
 
-// Enabled reports whether styling is active.
-func (s Style) Enabled() bool { return s.on }
-
 func (s Style) wrap(code, text string) string {
 	if !s.on || text == "" || code == "" {
 		return text

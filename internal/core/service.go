@@ -272,6 +272,12 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	case p.Next:
 		status = domain.StatusNextUp
 	}
+	// A task born next-up/in-progress is active, and lint requires a description
+	// there — so `new --next`/`--start` must carry one, for the same reason tags
+	// are required: `new` must not scaffold a file its own linter rejects.
+	if (status == domain.StatusNextUp || status == domain.StatusInProgress) && strings.TrimSpace(p.Description) == "" {
+		return domain.Task{}, fmt.Errorf("%w: --description is required for a next-up/in-progress task (--next/--start)", domain.ErrValidation)
+	}
 	t := domain.Task{
 		Slug:        slug,
 		Status:      status,
@@ -283,6 +289,11 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 		Autonomy:    p.Autonomy,
 		Tags:        p.Tags,
 		Created:     time.Now().Format("2006-01-02"),
+	}
+	// A task born in-progress (`new --start`) gets the same started_at stamp Move
+	// writes, so "every in-progress task has a started_at" holds however it got there.
+	if status == domain.StatusInProgress {
+		t.StartedAt = t.Created
 	}
 	body := p.Body
 	if body == "" {
@@ -549,10 +560,11 @@ type NewAuditParams struct {
 
 // auditBodyTemplate is the default audit scaffold. The finding example is fenced
 // so a fresh audit counts zero findings until real ones are added (parseAudit
-// excludes fenced blocks); it also links HOWTO-execute, as every audit should.
+// excludes fenced blocks). It stays generic — no repo-specific conventions-doc
+// link (a repo that has one, e.g. desirelines-planning's HOWTO-execute, points
+// at it from its own tooling, not from the shared tool's scaffold).
 const auditBodyTemplate = "\n# Audit: %s — %s\n\n" +
-	"> Conventions: [`../HOWTO-execute.md`](../HOWTO-execute.md). Edit findings in\n" +
-	"> place and flip each `**Status:**` as you work it.\n\n" +
+	"> Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
 	"## Findings\n\n" +
 	"<!-- One finding per issue, in this shape (un-fence it): -->\n\n" +
 	"```\n" +

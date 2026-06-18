@@ -48,8 +48,11 @@ jobs:
       # the action downloads prebuilt binaries, and golangci-lint refuses a
       # repo targeting a newer Go than it was compiled with. v2.4.0 is the
       # first release built with go1.25 (go.mod says 1.25.x).
+      # Action @v9 runs on Node 24 (v8 ran on the now-deprecated Node 20, and
+      # pulled in a Node-20 actions/github-script transitively); v9 needs
+      # golangci-lint ≥ v2.1, satisfied by v2.4.
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.4
 

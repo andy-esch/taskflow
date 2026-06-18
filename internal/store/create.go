@@ -61,9 +61,11 @@ func (s *FS) writeNewFile(dir, path string, content []byte, kind, id string, dry
 	return nil
 }
 
-// taskFields is the canonical frontmatter order for a new task.
+// taskFields is the canonical frontmatter order for a new task. started_at is
+// appended only when set (a `new --start` task) — the one lifecycle stamp a
+// create can carry; the others are written only by Move.
 func taskFields(t domain.Task) []fmField {
-	return []fmField{
+	fields := []fmField{
 		{"status", string(t.Status)},
 		{"epic", t.Epic},
 		{"description", t.Description},
@@ -74,6 +76,10 @@ func taskFields(t domain.Task) []fmField {
 		{"tags", t.Tags},
 		{"created", t.Created},
 	}
+	if t.StartedAt != "" {
+		fields = append(fields, fmField{"started_at", t.StartedAt})
+	}
+	return fields
 }
 
 // CreateTask writes a new task file under tasks/<status>/<slug>.md. It refuses

@@ -155,7 +155,7 @@ func TestService_NewTask_Valid(t *testing.T) {
 func TestService_NewTask_Next(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
 	svc := NewService(fs)
-	tk, err := svc.NewTask(NewTaskParams{Title: "T", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium", Tags: []string{"go"}, Next: true})
+	tk, err := svc.NewTask(NewTaskParams{Title: "T", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium", Tags: []string{"go"}, Description: "do it", Next: true})
 	if err != nil {
 		t.Fatal(err)
 	}

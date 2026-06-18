@@ -48,18 +48,40 @@ func TestTaskNew_HappyPath(t *testing.T) {
 func TestTaskNew_Next(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
-	runRoot(t, "-C", root, "task", "new", "Soon", "--epic", "e1", "--tags", "x", "--next")
+	runRoot(t, "-C", root, "task", "new", "Soon", "--epic", "e1", "--tags", "x", "--description", "soon work", "--next")
 	if _, err := os.Stat(filepath.Join(root, "tasks", "next-up", "soon.md")); err != nil {
 		t.Errorf("--next should land in next-up/: %v", err)
+	}
+}
+
+// TestTaskNew_ActiveRequiresDescription pins L4: a task born next-up/in-progress
+// is active, so `new --next`/`--start` must carry a --description (else it would
+// scaffold a file lint immediately rejects). Exit 11.
+func TestTaskNew_ActiveRequiresDescription(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	for _, flag := range []string{"--next", "--start"} {
+		var out bytes.Buffer
+		cmd := NewRootCmd(&out, &out)
+		cmd.SetArgs([]string{"-C", root, "task", "new", "X", "--epic", "e1", "--tags", "t", flag})
+		if err := cmd.Execute(); err == nil || ExitCode(err) != 11 {
+			t.Errorf("%s without --description should exit 11, got %v", flag, err)
+		}
 	}
 }
 
 func TestTaskNew_Start(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
-	runRoot(t, "-C", root, "task", "new", "Start Me", "--epic", "e1", "--tags", "x", "--start")
-	if _, err := os.Stat(filepath.Join(root, "tasks", "in-progress", "start-me.md")); err != nil {
-		t.Errorf("--start should land in in-progress/: %v", err)
+	runRoot(t, "-C", root, "task", "new", "Start Me", "--epic", "e1", "--tags", "x", "--description", "start it", "--start")
+	path := filepath.Join(root, "tasks", "in-progress", "start-me.md")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("--start should land in in-progress/: %v", err)
+	}
+	// A task born in-progress carries started_at, like one moved there.
+	if !strings.Contains(string(b), "started_at:") {
+		t.Errorf("--start task should stamp started_at:\n%s", b)
 	}
 }
 
@@ -173,12 +195,15 @@ func TestAuditNew(t *testing.T) {
 	}
 	s := string(b)
 	for _, want := range []string{
-		"area: dispatcher", "date: \"2026-06-16\"", "## Findings",
-		"../HOWTO-execute.md", "## Candidate tasks",
+		"area: dispatcher", "date: \"2026-06-16\"", "## Findings", "## Candidate tasks",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("created audit missing %q:\n%s", want, s)
 		}
+	}
+	// The scaffold is generic — no repo-specific conventions-doc link.
+	if strings.Contains(s, "HOWTO-execute") {
+		t.Errorf("scaffold should not hardcode a repo-specific HOWTO link:\n%s", s)
 	}
 	// Round-trips through show.
 	if show := runRoot(t, "-C", root, "audit", "show", "2026-06-16-dispatcher"); !strings.Contains(show, "dispatcher") {
@@ -233,6 +258,50 @@ func TestAuditNew_BodyOverride(t *testing.T) {
 	s := string(b)
 	if !strings.Contains(s, "hand-written body") || strings.Contains(s, "## Findings") {
 		t.Errorf("--body should replace the scaffold, got:\n%s", s)
+	}
+}
+
+func TestAuditNew_BodyFile(t *testing.T) {
+	root := freshRepo(t)
+	bf := filepath.Join(t.TempDir(), "body.md")
+	mustWrite(t, bf, "\n# Custom\n\naudit body from a file\n")
+	runRoot(t, "-C", root, "audit", "new", "dispatcher", "--date", "2026-06-17", "--body-file", bf)
+	b, err := os.ReadFile(filepath.Join(root, "audits", "open", "2026-06-17-dispatcher.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "audit body from a file") || strings.Contains(string(b), "## Findings") {
+		t.Errorf("audit --body-file should replace the scaffold:\n%s", b)
+	}
+}
+
+func TestEpicNew_Body(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "epic", "new", "Payments", "--description", "d", "--body", "\n# Custom\n\nepic body here\n")
+	b, err := os.ReadFile(filepath.Join(root, "epics", "01-payments.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "epic body here") || strings.Contains(string(b), "**Goal.**") {
+		t.Errorf("epic --body should replace the scaffold:\n%s", b)
+	}
+}
+
+func TestEpicNew_BodyFileStdin(t *testing.T) {
+	root := freshRepo(t)
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetIn(strings.NewReader("\n# Piped\n\nepic from stdin\n"))
+	cmd.SetArgs([]string{"-C", root, "epic", "new", "Streamed", "--description", "d", "--body-file", "-"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "epics", "01-streamed.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "epic from stdin") {
+		t.Errorf("epic --body-file - should read stdin:\n%s", b)
 	}
 }
 
