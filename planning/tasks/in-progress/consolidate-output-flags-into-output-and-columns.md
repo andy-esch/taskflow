@@ -41,6 +41,8 @@ work on list commands for symmetry. Promoting `-o` to persistent later is additi
 - `json`  — the stable envelope; works on **every** command
 - `name`  — ids only, one per line (the old `-q` behavior)
 - `table` — headered TSV, all default columns (the old `--plain` behavior)
+- `csv`   — headered RFC 4180 comma-separated (for spreadsheets; cells with
+  commas/quotes/newlines are quoted via `encoding/csv`)
 
 **Projection axis — `-c, --columns a,b,c`:**
 
@@ -48,9 +50,9 @@ work on list commands for symmetry. Promoting `-o` to persistent later is additi
   parens, no value-internal `=`, no `table(...)` DSL.
 - Implies `-o table` when `--output` is unset (`task list -c slug,status` just
   works).
-- Compatible with `table` now and `csv` later; with `human`/`json`/`name` →
-  exit 11 naming the formats it applies to. (Relaxing to allow `json` projection
-  later is non-breaking: an error becomes a success.)
+- Compatible with the columnar formats (`table`, `csv`); with `human`/`json`/
+  `name` → exit 11 naming the formats it applies to. (Relaxing to allow `json`
+  projection later is non-breaking: an error becomes a success.)
 
 **Back-compat aliases:** `--json` → `-o json`, `-q/--quiet` → `-o name`. Both
 stay visible/supported (not deprecated). Reconciled in `resolve()` using
@@ -75,15 +77,16 @@ this so it isn't "fixed" later.
 
 ## Acceptance criteria
 
-- [ ] `-o/--output` resolves `human|json|name|table`; unknown value → exit 11
+- [ ] `-o/--output` resolves `human|json|name|table|csv`; unknown value → exit 11
       listing valid formats.
 - [ ] `--json` and `-q` behave exactly as before (aliases); `--json` + an
       explicit conflicting `-o` → exit 11.
-- [ ] `-c/--columns` projects a `table`; implies `-o table` when format unset;
-      `-c` with `human`/`json`/`name` → exit 11.
+- [ ] `-c/--columns` projects the columnar formats (`table`/`csv`); implies
+      `-o table` when format unset; `-c` with `human`/`json`/`name` → exit 11.
+- [ ] `csv` is RFC 4180 (comma cells quoted), header-only on empty, byte-stable.
 - [ ] Column names validated against the per-entity registry; unknown column →
       exit 11.
-- [ ] `-o <TAB>` completes the four formats; `-c slug,sta<TAB>` completes column
+- [ ] `-o <TAB>` completes the five formats; `-c slug,sta<TAB>` completes column
       names, dedups already-chosen ones, leaves the cursor mid-token (NoSpace).
 - [ ] Completion is unit-tested via the hidden `__complete` command (formats and
       columns), so it can't silently rot.
@@ -94,8 +97,9 @@ this so it isn't "fixed" later.
 
 ## Out of scope
 
-- A `csv` format and any `json` projection — the design leaves room for both, but
-  this task ships `human|json|name|table` + `-c` over `table` only.
+- `json` projection (slim envelopes) and a `yaml` format — the design leaves room
+  for both, but they're not shipped here. (`csv` *was* folded in — it reused the
+  registry + `-c` almost for free.)
 - Filtering/sorting/transforms in the output flags (the gcloud `--format`
   DSL-creep that the split exists to avoid).
 - The readiness axis and interactive pickers (separate epic-20 tasks).

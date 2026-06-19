@@ -1,6 +1,7 @@
 package render
 
 import (
+	"encoding/csv"
 	"fmt"
 	"io"
 	"strings"
@@ -84,6 +85,33 @@ func WriteTablePlain[T any](w io.Writer, cols []Column[T], items []T) {
 		rows = append(rows, row)
 	}
 	writePlain(w, header, rows)
+}
+
+// WriteCSV writes the same projected columns as WriteTablePlain, but as RFC 4180
+// CSV (encoding/csv quotes any cell containing a comma, quote, or newline) — the
+// `-o csv` format, for spreadsheets. Like the table, an empty result still emits
+// the header row. encoding/csv defaults to LF line endings, matching the rest of
+// our output.
+func WriteCSV[T any](w io.Writer, cols []Column[T], items []T) error {
+	cw := csv.NewWriter(w)
+	header := make([]string, len(cols))
+	for i, c := range cols {
+		header[i] = c.Name
+	}
+	if err := cw.Write(header); err != nil {
+		return err
+	}
+	row := make([]string, len(cols))
+	for _, it := range items {
+		for i, c := range cols {
+			row[i] = c.Extract(it)
+		}
+		if err := cw.Write(row); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	return cw.Error()
 }
 
 // TaskColumns is the projectable column set for `task list` (slug first — the id

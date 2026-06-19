@@ -103,13 +103,16 @@ The `list` commands (`task`/`epic`/`audit list`) share one output-format flag,
 | `human` *(default)* | colorized table | reading on a terminal |
 | `name` | ids only, one per line | `… \| xargs` |
 | `table` | tab-separated, header row, absolute dates, no color/truncation | `cut`/`awk`; stable across versions |
+| `csv` | RFC 4180 comma-separated, header row | spreadsheets; cells with commas are quoted |
 | `json` | full records + `schema_version` | `jq` |
 
 `-q`/`--quiet` is shorthand for `-o name`; `--json` (on every command) equals
-`-o json`. `-c/--columns slug,status,…` projects an `-o table` to the columns you
-name (and implies `-o table`) — both the formats and the column names are
-shell-completable. `-o table` is a documented contract under the one
-`schema_version` (a column add/reorder is a schema bump). Recipes:
+`-o json`. `-c/--columns slug,status,…` projects the columnar formats (`table`,
+`csv`) to the columns you name, in the order you name them (and implies
+`-o table`) — both the formats and the column names are shell-completable. `-o table` is a documented contract under
+the one `schema_version` (a column add/reorder is a schema bump), and always
+emits the header row — even with zero results — so a consumer gets a stable
+schema and detects "no rows" by line count. Recipes:
 
 ```bash
 # start every ready-to-start task tagged `tui`

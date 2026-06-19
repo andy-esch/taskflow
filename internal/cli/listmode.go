@@ -20,14 +20,20 @@ const (
 	modeJSON                    // stable JSON envelope
 	modeName                    // ids only, one per line (the -q alias)
 	modeTable                   // headered, byte-stable, tab-separated table
+	modeCSV                     // headered, RFC 4180 comma-separated (for spreadsheets)
 )
+
+// isColumnar reports whether a format is a projectable table (table/csv) — the
+// formats `-c/--columns` applies to.
+func isColumnar(m outputMode) bool { return m == modeTable || m == modeCSV }
 
 // listMode binds the output flags shared by the list commands (task/epic/audit)
 // and resolves the chosen format. The format axis is ONE flag —
-// `-o/--output {human,json,name,table}` — with `--json` (persistent, universal)
-// and `-q` kept as documented aliases for `-o json` / `-o name`. The projection
-// axis is a second, orthogonal flag: `-c/--columns` selects table columns and
-// implies `-o table`. See the consolidate-output-flags task for the design and
+// `-o/--output {human,json,name,table,csv}` — with `--json` (persistent,
+// universal) and `-q` kept as documented aliases for `-o json` / `-o name`. The
+// projection axis is a second, orthogonal flag: `-c/--columns` selects columns
+// for the columnar formats (table/csv) and implies `-o table`. See the
+// consolidate-output-flags task for the design and
 // the research behind the split (no value-internal DSL, so columns stay
 // shell-completable).
 type listMode struct {
@@ -40,9 +46,9 @@ type listMode struct {
 // entity's column set — it drives `-c` completion and the help text — so each
 // list command passes its own (e.g. render.Specs(render.TaskColumns())).
 func (m *listMode) bind(cmd *cobra.Command, columnSpecs []render.ColumnSpec) {
-	cmd.Flags().StringVarP(&m.output, "output", "o", "", "output format: human|json|name|table")
+	cmd.Flags().StringVarP(&m.output, "output", "o", "", "output format: human|json|name|table|csv")
 	cmd.Flags().StringSliceVarP(&m.columns, "columns", "c", nil,
-		"select table columns, comma-separated (implies -o table); available: "+specNames(columnSpecs))
+		"select columns for -o table/csv, comma-separated (implies -o table); available: "+specNames(columnSpecs))
 	cmd.Flags().BoolVarP(&m.quiet, "quiet", "q", false, "ids only, one per line (alias for -o name)")
 	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats)
 	_ = cmd.RegisterFlagCompletionFunc("columns", columnCompleter(columnSpecs))
@@ -71,15 +77,28 @@ func (m listMode) resolve(cmd *cobra.Command, app *App) (outputMode, error) {
 		want[mode] = "--output " + m.output
 	}
 
-	// -c implies table. If the user ALSO pinned a non-table format, that's the
-	// clearer error to raise than the generic conflict below.
+	// -c needs a columnar format (table/csv); it implies table when none is
+	// pinned. If the user pinned a NON-columnar format, that's the clearer error
+	// to raise than the generic conflict below — name every offender in a stable
+	// order (map iteration is randomized).
 	if len(m.columns) > 0 {
+		var bad []string
+		columnar := false
 		for mode, flag := range want {
-			if mode != modeTable {
-				return 0, fmt.Errorf("%w: --columns applies to -o table, not %s", domain.ErrValidation, flag)
+			if isColumnar(mode) {
+				columnar = true
+			} else {
+				bad = append(bad, flag)
 			}
 		}
-		want[modeTable] = "--columns"
+		if len(bad) > 0 {
+			sort.Strings(bad)
+			return 0, fmt.Errorf("%w: --columns applies to -o table or -o csv, not %s",
+				domain.ErrValidation, strings.Join(bad, ", "))
+		}
+		if !columnar {
+			want[modeTable] = "--columns"
+		}
 	}
 
 	switch len(want) {
@@ -104,8 +123,10 @@ func parseFormat(s string) (outputMode, error) {
 		return modeName, nil
 	case "table":
 		return modeTable, nil
+	case "csv":
+		return modeCSV, nil
 	default:
-		return 0, fmt.Errorf("%w: unknown output format %q (valid: human, json, name, table)", domain.ErrValidation, s)
+		return 0, fmt.Errorf("%w: unknown output format %q (valid: human, json, name, table, csv)", domain.ErrValidation, s)
 	}
 }
 
@@ -141,12 +162,18 @@ func renderList[T any](
 			ids[i] = cols[0].Extract(it) // first column is the id (slug / epic id)
 		}
 		render.IDsQuiet(app.Out, ids)
-	case modeTable:
+	case modeTable, modeCSV:
 		sel, err := render.SelectColumns(cols, columns)
 		if err != nil {
 			return err
 		}
-		render.WriteTablePlain(app.Out, sel, items)
+		if mode == modeCSV {
+			if err := render.WriteCSV(app.Out, sel, items); err != nil {
+				return err
+			}
+		} else {
+			render.WriteTablePlain(app.Out, sel, items)
+		}
 	default: // modeHuman
 		if err := humanFn(app.Out, app.Style, items); err != nil {
 			return err
@@ -157,16 +184,15 @@ func renderList[T any](
 }
 
 // completeOutputFormats offers the four output formats with descriptions
-// (KeepOrder so the shell shows them in this deliberate order, not sorted).
-func completeOutputFormats(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-	return []string{
-			"human\tcolored, aligned table (default)",
-			"json\tstable JSON envelope",
-			"name\tids only, one per line",
-			"table\theadered tab-separated table",
-		},
-		cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveKeepOrder
-}
+// (KeepOrder so the shell shows them in this deliberate order, not sorted). Built
+// from cobra's typed helpers rather than hand-joined "name\tdesc" strings.
+var completeOutputFormats = cobra.FixedCompletions([]cobra.Completion{
+	cobra.CompletionWithDesc("human", "colored, aligned table (default)"),
+	cobra.CompletionWithDesc("json", "stable JSON envelope"),
+	cobra.CompletionWithDesc("name", "ids only, one per line"),
+	cobra.CompletionWithDesc("table", "headered tab-separated table"),
+	cobra.CompletionWithDesc("csv", "headered comma-separated (RFC 4180)"),
+}, cobra.ShellCompDirectiveNoFileComp|cobra.ShellCompDirectiveKeepOrder)
 
 // columnCompleter completes a comma-separated `-c` value over the known columns:
 // it completes the column after the last comma, drops columns already chosen,
@@ -182,7 +208,7 @@ func columnCompleter(specs []render.ColumnSpec) completeFunc {
 		for _, p := range parts[:len(parts)-1] {
 			used[p] = true
 		}
-		var out []string
+		var out []cobra.Completion
 		for _, s := range specs {
 			if used[s.Name] || !strings.HasPrefix(s.Name, last) {
 				continue
@@ -191,7 +217,7 @@ func columnCompleter(specs []render.ColumnSpec) completeFunc {
 			if prefix != "" {
 				cand = prefix + "," + s.Name
 			}
-			out = append(out, cand+"\t"+s.Desc)
+			out = append(out, cobra.CompletionWithDesc(cand, s.Desc))
 		}
 		return out, cobra.ShellCompDirectiveNoSpace | cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveKeepOrder
 	}

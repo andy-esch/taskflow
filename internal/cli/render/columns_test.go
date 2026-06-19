@@ -1,0 +1,155 @@
+package render
+
+import (
+	"bytes"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/domain"
+)
+
+func TestSelectColumns(t *testing.T) {
+	cols := TaskColumns()
+
+	// Empty selection returns the full default set, in registry order.
+	if got, err := SelectColumns(cols, nil); err != nil || len(got) != len(cols) {
+		t.Fatalf("empty selection should be all %d columns (err=%v): got %d", len(cols), err, len(got))
+	}
+
+	// A selection projects to exactly those columns, in the requested order.
+	got, err := SelectColumns(cols, []string{"status", "slug"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 || got[0].Name != "status" || got[1].Name != "slug" {
+		t.Errorf("projection should preserve requested order: got %v", names(got))
+	}
+
+	// An unknown column is a validation error that names the offender + the menu.
+	_, err = SelectColumns(cols, []string{"slug", "nope"})
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("unknown column should wrap ErrValidation, got %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "nope") || !strings.Contains(err.Error(), "slug") {
+		t.Errorf("error should name the bad column and the available set: %v", err)
+	}
+}
+
+// TestColumnRegistries_FirstColumnIsID pins the invariant renderList relies on
+// for `-o name`/`-q`: the first column of every registry is the id.
+func TestColumnRegistries_FirstColumnIsID(t *testing.T) {
+	if got := TaskColumns()[0].Name; got != "slug" {
+		t.Errorf("TaskColumns first column must be the id (slug), got %q", got)
+	}
+	if got := EpicColumns()[0].Name; got != "id" {
+		t.Errorf("EpicColumns first column must be the id, got %q", got)
+	}
+	if got := AuditColumns()[0].Name; got != "slug" {
+		t.Errorf("AuditColumns first column must be the id (slug), got %q", got)
+	}
+}
+
+func TestWriteTablePlain_TaskExtractors(t *testing.T) {
+	var b bytes.Buffer
+	WriteTablePlain(&b, TaskColumns(), []domain.Task{{
+		Slug: "alpha", Status: domain.StatusInProgress, Tier: 2, Priority: "high",
+		Epic: "20-cli", Updated: "2026-06-19", Description: "do the thing",
+	}})
+	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
+	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription" {
+		t.Errorf("task header: %q", lines[0])
+	}
+	if lines[1] != "alpha\tin-progress\t2\thigh\t20-cli\t2026-06-19\tdo the thing" {
+		t.Errorf("task row: %q", lines[1])
+	}
+}
+
+// TestWriteTablePlain_UpdatedFallsBackToCreated covers the one non-trivial
+// extractor: updated falls back to created when unset.
+func TestWriteTablePlain_UpdatedFallsBackToCreated(t *testing.T) {
+	var b bytes.Buffer
+	WriteTablePlain(&b, TaskColumns(), []domain.Task{{Slug: "a", Created: "2026-01-01"}})
+	if !strings.Contains(b.String(), "2026-01-01") {
+		t.Errorf("updated should fall back to created:\n%s", b.String())
+	}
+}
+
+func TestWriteTablePlain_EpicExtractors(t *testing.T) {
+	var b bytes.Buffer
+	WriteTablePlain(&b, EpicColumns(), []core.EpicSummary{{
+		Epic: domain.Epic{ID: "20-cli", Status: "planning", Priority: "medium", Description: "ux"},
+		Done: 2, Total: 5,
+	}})
+	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
+	if lines[0] != "id\tstatus\tpriority\tdone\ttotal\tdescription" {
+		t.Errorf("epic header: %q", lines[0])
+	}
+	// done/total are plain numbers (not the human "2/5 (40%)" cell).
+	if lines[1] != "20-cli\tplanning\tmedium\t2\t5\tux" {
+		t.Errorf("epic row: %q", lines[1])
+	}
+}
+
+func TestWriteTablePlain_AuditExtractors(t *testing.T) {
+	var b bytes.Buffer
+	WriteTablePlain(&b, AuditColumns(), []domain.Audit{{
+		Slug: "2026-06-19-x", Bucket: domain.AuditOpen, Area: "cli",
+		Date: "2026-06-19", Findings: 4, OpenFindings: 1,
+	}})
+	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
+	if lines[0] != "slug\tbucket\tarea\tdate\tfindings\topen" {
+		t.Errorf("audit header: %q", lines[0])
+	}
+	if lines[1] != "2026-06-19-x\topen\tcli\t2026-06-19\t4\t1" {
+		t.Errorf("audit row: %q", lines[1])
+	}
+}
+
+// TestWriteTablePlain_EmptyIsHeaderOnly pins the porcelain contract: a zero-row
+// table still emits the header, so a consumer always gets a stable schema and
+// detects "no rows" by line count.
+func TestWriteTablePlain_EmptyIsHeaderOnly(t *testing.T) {
+	var b bytes.Buffer
+	WriteTablePlain(&b, TaskColumns(), nil)
+	if got := strings.TrimSpace(b.String()); got != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription" {
+		t.Errorf("empty table should be header-only, got %q", got)
+	}
+}
+
+func TestWriteCSV(t *testing.T) {
+	var b bytes.Buffer
+	if err := WriteCSV(&b, TaskColumns(), []domain.Task{
+		{Slug: "a", Status: domain.StatusReadyToStart, Description: "has, a comma"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
+	if lines[0] != "slug,status,tier,priority,epic,updated,description" {
+		t.Errorf("csv header: %q", lines[0])
+	}
+	// A cell containing a comma must be RFC 4180 quoted (this is exactly what
+	// the tab-separated table can't express and why csv earns its place).
+	if !strings.Contains(lines[1], `"has, a comma"`) {
+		t.Errorf("comma cell should be quoted: %q", lines[1])
+	}
+}
+
+func TestWriteCSV_EmptyIsHeaderOnly(t *testing.T) {
+	var b bytes.Buffer
+	if err := WriteCSV(&b, AuditColumns(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(b.String()); got != "slug,bucket,area,date,findings,open" {
+		t.Errorf("empty csv should be header-only, got %q", got)
+	}
+}
+
+func names[T any](cols []Column[T]) []string {
+	out := make([]string, len(cols))
+	for i, c := range cols {
+		out[i] = c.Name
+	}
+	return out
+}

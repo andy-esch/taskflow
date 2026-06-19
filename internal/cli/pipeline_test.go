@@ -64,6 +64,29 @@ func TestColumns_Projection(t *testing.T) {
 	}
 }
 
+// TestTable_EmptyIsHeaderOnly pins the porcelain contract end-to-end: an empty
+// result still emits the header row (stable schema), where -q/human emit nothing.
+func TestTable_EmptyIsHeaderOnly(t *testing.T) {
+	root := setupRepo(t) // alpha/beta have no tags, so --tag filters to empty
+	out := strings.TrimSpace(runRoot(t, "-C", root, "task", "list", "--tag", "zzz-none", "-o", "table"))
+	if out != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription" {
+		t.Errorf("empty -o table should be header-only, got %q", out)
+	}
+	if q := runRoot(t, "-C", root, "task", "list", "--tag", "zzz-none", "-q"); q != "" {
+		t.Errorf("empty -q should emit nothing, got %q", q)
+	}
+}
+
+// TestOutput_JSONAlias pins --json (universal) as identical to -o json on list.
+func TestOutput_JSONAlias(t *testing.T) {
+	root := setupRepo(t)
+	a := runRoot(t, "-C", root, "task", "list", "--json")
+	b := runRoot(t, "-C", root, "task", "list", "-o", "json")
+	if a != b {
+		t.Errorf("--json and -o json must be identical:\n --json:  %q\n -o json: %q", a, b)
+	}
+}
+
 func TestColumns_UnknownColumn(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
@@ -88,6 +111,23 @@ func TestTable_ByteStableUnderColor(t *testing.T) {
 	}
 	if on != off {
 		t.Errorf("-o table must be byte-stable across color settings:\n on:  %q\n off: %q", on, off)
+	}
+}
+
+func TestTaskList_CSV(t *testing.T) {
+	root := setupRepo(t)
+	out := runRoot(t, "-C", root, "task", "list", "-o", "csv")
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if lines[0] != "slug,status,tier,priority,epic,updated,description" {
+		t.Errorf("-o csv header wrong: %q", lines[0])
+	}
+	if cols := strings.Split(lines[1], ","); len(cols) != 7 {
+		t.Errorf("-o csv row should have 7 comma-separated columns, got %d: %q", len(cols), lines[1])
+	}
+	// -c projects csv too (csv is columnar, like table).
+	proj := runRoot(t, "-C", root, "task", "list", "-o", "csv", "-c", "slug,status")
+	if h := strings.SplitN(proj, "\n", 2)[0]; h != "slug,status" {
+		t.Errorf("-o csv -c projection header wrong: %q", h)
 	}
 }
 
@@ -138,11 +178,30 @@ func TestList_ModeConflicts(t *testing.T) {
 	}
 }
 
+// TestColumns_ConflictNamesEveryOffender guards determinism: when -c collides
+// with more than one format, the error names them all in a stable order (the
+// loop over the requested-format map would otherwise pick one at random).
+func TestColumns_ConflictNamesEveryOffender(t *testing.T) {
+	root := setupRepo(t)
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetArgs([]string{"-C", root, "task", "list", "-c", "slug", "--json", "-q"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected a conflict error")
+	}
+	for _, want := range []string{"--json", "-q/--quiet"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("conflict should name %q: %v", want, err)
+		}
+	}
+}
+
 // TestComplete_OutputFormats: `-o <TAB>` offers exactly the four formats.
 func TestComplete_OutputFormats(t *testing.T) {
 	root := setupRepo(t)
 	got := complete(t, "-C", root, "task", "list", "-o", "")
-	for _, want := range []string{"human", "json", "name", "table"} {
+	for _, want := range []string{"human", "json", "name", "table", "csv"} {
 		if !has(got, want) {
 			t.Errorf("output completion missing %q: %v", want, got)
 		}
