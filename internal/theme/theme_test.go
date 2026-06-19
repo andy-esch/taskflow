@@ -10,6 +10,17 @@ import (
 // render from, so its decision table is pinned here — a silent glyph/color/edge
 // change would otherwise shift both surfaces with no test catching it.
 
+// TestMarkdownStyleFor pins the body theme shared by `show` and the TUI: dracula
+// on a dark terminal, light on a light one.
+func TestMarkdownStyleFor(t *testing.T) {
+	if got := MarkdownStyleFor(true); got != "dracula" {
+		t.Errorf("dark background should be dracula, got %q", got)
+	}
+	if got := MarkdownStyleFor(false); got != "light" {
+		t.Errorf("light background should be light, got %q", got)
+	}
+}
+
 func TestStatus(t *testing.T) {
 	cases := []struct {
 		status domain.Status

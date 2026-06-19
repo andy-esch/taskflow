@@ -4,26 +4,17 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/glamour"
+
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
-// glamourStyleFor picks the glamour standard-style for the terminal background:
-// "light" on a light terminal, "dark" (the safe default) otherwise. The
-// background is resolved ONCE at startup (Run) and threaded through — a
-// mid-program OSC background query would race Bubble Tea's input reader.
-func glamourStyleFor(darkBG bool) string {
-	if darkBG {
-		return "dark"
-	}
-	return "light"
-}
-
 // newGlamourRenderer builds a renderer wrapped to width, in the given standard
-// style (empty falls back to "dark"). Constructing it (goldmark + chroma style
-// setup) is the CPU-heavy part, so the detail pane caches one per width+style
-// (see detailPane.prettyBody) rather than rebuilding per selection.
+// style (empty falls back to the dark/dracula default). Constructing it (goldmark
+// + chroma style setup) is the CPU-heavy part, so the detail pane caches one per
+// width+style (see detailPane.prettyBody) rather than rebuilding per selection.
 func newGlamourRenderer(width int, style string) (*glamour.TermRenderer, error) {
 	if style == "" {
-		style = "dark"
+		style = theme.MarkdownStyleDark
 	}
 	return glamour.NewTermRenderer(
 		glamour.WithStandardStyle(style),

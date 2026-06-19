@@ -26,6 +26,31 @@ func TestActiveHelp_MoveStatus(t *testing.T) {
 	}
 }
 
+// TestShow_GlamourRendering pins the glamour contract: raw markdown off a TTY /
+// under --raw / in --json, styled markdown under color.
+func TestShow_GlamourRendering(t *testing.T) {
+	root := setupRepo(t) // alpha's body is "# Alpha"
+
+	// Default (piped, no color in tests): raw markdown, byte-stable.
+	if out := runRoot(t, "-C", root, "task", "show", "alpha"); !strings.Contains(out, "# Alpha") {
+		t.Errorf("default show should be raw markdown:\n%s", out)
+	}
+	// --color=always: rendered — ANSI present, the literal '# Alpha' gone.
+	on := runRoot(t, "-C", root, "task", "show", "alpha", "--color=always")
+	if !strings.Contains(on, "\x1b[") || strings.Contains(on, "# Alpha") {
+		t.Errorf("--color=always should render the body via glamour:\n%s", on)
+	}
+	// --raw forces the source even with color.
+	if rc := runRoot(t, "-C", root, "task", "show", "alpha", "--raw", "--color=always"); !strings.Contains(rc, "# Alpha") {
+		t.Errorf("--raw should keep the raw markdown:\n%s", rc)
+	}
+	// --json body is always the raw markdown, never ANSI.
+	js := runRoot(t, "-C", root, "task", "show", "alpha", "--json", "--color=always")
+	if !strings.Contains(js, "# Alpha") || strings.Contains(js, "\x1b[") {
+		t.Errorf("--json body must be raw markdown with no ANSI:\n%s", js)
+	}
+}
+
 // TestCreate_LinksPathOnColor pins the OSC 8 contract: the create confirmation
 // path is a clickable file:// link on a TTY, plain text off it, and never in the
 // JSON envelope.

@@ -41,17 +41,6 @@ func TestGlamourBody(t *testing.T) {
 	}
 }
 
-// TestGlamourStyleFor pins the background→style mapping: light terminal → light
-// style, everything else → the safe dark default.
-func TestGlamourStyleFor(t *testing.T) {
-	if got := glamourStyleFor(true); got != "dark" {
-		t.Errorf("dark background should use the dark style, got %q", got)
-	}
-	if got := glamourStyleFor(false); got != "light" {
-		t.Errorf("light background should use the light style, got %q", got)
-	}
-}
-
 // TestDetailPane_GlamourRendererRebuildsOnStyle pins that the cached renderer is
 // keyed by style as well as width, so a background-driven style applies.
 func TestDetailPane_GlamourRendererRebuildsOnStyle(t *testing.T) {

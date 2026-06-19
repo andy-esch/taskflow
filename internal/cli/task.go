@@ -154,7 +154,8 @@ func completeStatusValues(*cobra.Command, []string, string) ([]string, cobra.She
 }
 
 func newTaskShowCmd(app *App) *cobra.Command {
-	return &cobra.Command{
+	var raw bool
+	cmd := &cobra.Command{
 		Use:               "show <task>",
 		Short:             "Show a task's metadata and body",
 		Args:              cobra.ExactArgs(1),
@@ -168,9 +169,11 @@ func newTaskShowCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.TaskShowJSON(app.Out, task, body)
 			}
-			return render.TaskShowHuman(app.Out, app.Style, task, body)
+			return render.TaskShowHuman(app.Out, app.Style, task, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
 		},
 	}
+	cmd.Flags().BoolVar(&raw, "raw", false, "print the raw markdown body (skip rendering)")
+	return cmd
 }
 
 func newTaskSetCmd(app *App) *cobra.Command {

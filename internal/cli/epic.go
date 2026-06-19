@@ -88,7 +88,8 @@ func newEpicListCmd(app *App) *cobra.Command {
 }
 
 func newEpicShowCmd(app *App) *cobra.Command {
-	return &cobra.Command{
+	var raw bool
+	cmd := &cobra.Command{
 		Use:               "show <epic>",
 		Short:             "Show an epic and the tasks under it",
 		Args:              cobra.ExactArgs(1),
@@ -102,7 +103,9 @@ func newEpicShowCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.EpicShowJSON(app.Out, epic, tasks, body)
 			}
-			return render.EpicShowHuman(app.Out, app.Style, epic, tasks, body)
+			return render.EpicShowHuman(app.Out, app.Style, epic, tasks, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
 		},
 	}
+	cmd.Flags().BoolVar(&raw, "raw", false, "print the raw markdown body (skip rendering)")
+	return cmd
 }

@@ -107,7 +107,8 @@ func newAuditListCmd(app *App) *cobra.Command {
 }
 
 func newAuditShowCmd(app *App) *cobra.Command {
-	return &cobra.Command{
+	var raw bool
+	cmd := &cobra.Command{
 		Use:               "show <audit>",
 		Short:             "Show an audit's metadata and body",
 		Args:              cobra.ExactArgs(1),
@@ -121,9 +122,11 @@ func newAuditShowCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.AuditShowJSON(app.Out, audit, body)
 			}
-			return render.AuditShowHuman(app.Out, app.Style, audit, body)
+			return render.AuditShowHuman(app.Out, app.Style, audit, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
 		},
 	}
+	cmd.Flags().BoolVar(&raw, "raw", false, "print the raw markdown body (skip rendering)")
+	return cmd
 }
 
 func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.Command {
