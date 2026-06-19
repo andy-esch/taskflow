@@ -5,6 +5,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // Run launches the TUI program over the given service. A filesystem watcher
@@ -15,7 +16,7 @@ func Run(svc *core.Service) error {
 	m := New(svc)
 	// Resolve the terminal background ONCE, here, before the program starts
 	// reading input — querying it mid-program would race Bubble Tea's reader.
-	m.detail.glamStyle = glamourStyleFor(lipgloss.HasDarkBackground())
+	m.detail.glamStyle = theme.MarkdownStyleFor(lipgloss.HasDarkBackground())
 	if w, err := newWatcher(svc.WatchPaths()); err == nil {
 		m.watch = w
 		defer func() { _ = w.close() }()

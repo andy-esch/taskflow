@@ -65,7 +65,7 @@ func New(svc *core.Service) Model {
 	return Model{
 		svc: svc, focus: focusList,
 		tabs: newEntityTabs(), active: 0,
-		detail: newDetailPane("dark"), cmd: newCommandBar(),
+		detail: newDetailPane(theme.MarkdownStyleDark), cmd: newCommandBar(),
 	}
 }
 

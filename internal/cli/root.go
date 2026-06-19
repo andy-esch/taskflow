@@ -9,12 +9,14 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // App is the dependency container. It is created empty by NewRootCmd and
@@ -107,6 +109,14 @@ func (a *App) resolve() error {
 	a.Cfg = cfg
 	a.Svc = core.NewService(store.NewFS(cfg.Root))
 	return nil
+}
+
+// markdownStyle resolves the glamour style for `show` body rendering from the
+// terminal background (dracula on dark, light on light). Background detection is
+// a terminal concern, so it lives here rather than in the render layer; it's
+// called only on the `show` path, where color is on.
+func (a *App) markdownStyle() string {
+	return theme.MarkdownStyleFor(lipgloss.HasDarkBackground())
 }
 
 // rel renders path relative to the planning root for readable output, falling

@@ -10,6 +10,7 @@ tskflwctl task show <task> [flags]
 
 ```
   -h, --help   help for show
+      --raw    print the raw markdown body (skip rendering)
 ```
 
 ### Options inherited from parent commands
