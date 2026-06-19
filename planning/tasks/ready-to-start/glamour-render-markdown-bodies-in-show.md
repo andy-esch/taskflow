@@ -21,15 +21,18 @@ Strictly a human-face nicety: it applies only when we'd already colorize (TTY +
 `--color`), and NEVER to `--json` (the `body` field stays raw) or piped/`--color=never`
 output. The agent/porcelain contract is untouched.
 
+**Decision (2026-06-19):** render on a TTY **by default** (gated on the existing
+color decision), and add a **`--raw`** escape hatch for humans who want the source.
+
 ## Acceptance criteria
 
-- [ ] `show` on a TTY renders the body via glamour; `--json` body is unchanged
-      (raw markdown), and piped / `--color=never` output is the raw body too.
-- [ ] Style follows the existing color decision (`wantColor`) — one gate, no new flag.
+- [ ] `show` on a TTY renders the body via glamour by default; `--json` body is
+      unchanged (raw markdown), and piped / `--color=never` output is the raw body.
+- [ ] `--raw` forces the unrendered source even on a TTY.
+- [ ] Style follows the existing color decision (`wantColor`) — one gate, no extra
+      "render?" flag beyond `--raw`.
 - [ ] Width respects the terminal (glamour `WithWordWrap`) and the existing
       width detection; downsample colors via lipgloss if needed.
-- [ ] A `--raw`/`--no-render` escape hatch is considered (humans who want the
-      source) — decide in/out during design.
 - [ ] Tests assert raw-under-json and rendered-under-TTY (golden or ANSI-present check).
 
 ## Out of scope

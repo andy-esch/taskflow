@@ -29,11 +29,12 @@ func newAuditNewCmd(app *App) *cobra.Command {
 		bodyFile string
 	)
 	cmd := &cobra.Command{
-		Use:         "new <area>",
-		Short:       "Create a new audit (open bucket, scaffolded findings)",
-		Example:     "  tskflwctl audit new dispatcher\n  tskflwctl audit new arch-data-flow --date 2026-06-16",
-		Args:        cobra.ExactArgs(1),
-		Annotations: map[string]string{"safety": "mutating"},
+		Use:               "new <area>",
+		Short:             "Create a new audit (open bucket, scaffolded findings)",
+		Example:           "  tskflwctl audit new dispatcher\n  tskflwctl audit new arch-data-flow --date 2026-06-16",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: activeHelpArg("provide an area to audit (e.g. dispatcher)"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p.Area = args[0]
 			body, err := resolveBody(cmd, p.Body, bodyFile)
@@ -49,7 +50,7 @@ func newAuditNewCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.CreatedJSON(app.Out, "audit", a.Slug, string(a.Bucket), app.rel(a.Path), app.DryRun)
 			}
-			render.CreatedHuman(app.Out, app.Style, app.rel(a.Path), app.DryRun)
+			render.CreatedHuman(app.Out, app.Style, app.linkPath(a.Path), app.DryRun)
 			if !app.DryRun {
 				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: add findings, then tskflwctl audit close "+a.Slug))
 			}

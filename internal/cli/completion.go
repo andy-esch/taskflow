@@ -15,6 +15,21 @@ import (
 // completeFunc is cobra's ValidArgsFunction shape.
 type completeFunc = func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective)
 
+// activeHelpArg is a ValidArgsFunction for a free-form positional (a title/area):
+// it offers no candidates and suppresses file completion (which only misleads
+// here), surfacing a one-line ActiveHelp hint instead. ActiveHelp shows only on
+// shells that support it (bash V2) and respects the user's on/off config; it
+// degrades to silence elsewhere.
+func activeHelpArg(hint string) completeFunc {
+	return func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+		var comps []string
+		if len(args) == 0 && cobra.GetActiveHelpConfig(cmd) != "off" {
+			comps = cobra.AppendActiveHelp(comps, hint)
+		}
+		return comps, cobra.ShellCompDirectiveNoFileComp
+	}
+}
+
 // isCompletionCommand reports whether cmd is cobra's hidden completion driver
 // (`__complete`/`__completeNoDesc`), so PersistentPreRunE can stay non-fatal
 // during shell completion.

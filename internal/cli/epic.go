@@ -21,11 +21,12 @@ func newEpicNewCmd(app *App) *cobra.Command {
 		bodyFile string
 	)
 	cmd := &cobra.Command{
-		Use:         "new <title>",
-		Short:       "Create a new epic (auto-numbered NN-slug)",
-		Example:     "  tskflwctl epic new \"Billing overhaul\" --description \"Replace the legacy pipeline\"",
-		Args:        cobra.ExactArgs(1),
-		Annotations: map[string]string{"safety": "mutating"},
+		Use:               "new <title>",
+		Short:             "Create a new epic (auto-numbered NN-slug)",
+		Example:           "  tskflwctl epic new \"Billing overhaul\" --description \"Replace the legacy pipeline\"",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: activeHelpArg("provide an epic title (quote it if it has spaces)"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p.Title = args[0]
 			body, err := resolveBody(cmd, p.Body, bodyFile)
@@ -41,7 +42,7 @@ func newEpicNewCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.CreatedJSON(app.Out, "epic", e.ID, e.Status, app.rel(e.Path), app.DryRun)
 			}
-			render.CreatedHuman(app.Out, app.Style, app.rel(e.Path), app.DryRun)
+			render.CreatedHuman(app.Out, app.Style, app.linkPath(e.Path), app.DryRun)
 			if !app.DryRun {
 				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task new \"Title\" --epic "+e.ID))
 			}

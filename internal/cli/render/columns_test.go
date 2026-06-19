@@ -118,6 +118,18 @@ func TestWriteTablePlain_EmptyIsHeaderOnly(t *testing.T) {
 	}
 }
 
+func TestStyle_Link(t *testing.T) {
+	on := NewStyle(true)
+	got := on.Link("planning/x.md", "file:///abs/x.md")
+	if !strings.Contains(got, "\x1b]8;;file:///abs/x.md\x1b\\") || !strings.Contains(got, "planning/x.md") {
+		t.Errorf("enabled Link should embed an OSC 8 sequence + the text: %q", got)
+	}
+	// Off (pipe / --color=never): plain text, byte-stable, no escape sequences.
+	if off := NewStyle(false).Link("planning/x.md", "file:///abs/x.md"); off != "planning/x.md" {
+		t.Errorf("disabled Link should return plain text, got %q", off)
+	}
+}
+
 func TestWriteCSV(t *testing.T) {
 	var b bytes.Buffer
 	if err := WriteCSV(&b, TaskColumns(), []domain.Task{

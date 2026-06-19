@@ -19,22 +19,30 @@ expose it so agents can validate our output and codegen typed clients. This is t
 natural completion of the `schema` self-description surface (which already emits the
 statuses/fields/exit-codes contract) and squarely on the agent-first line.
 
+**Decision (2026-06-19):** expose via a **`tskflwctl schema --json-schema`
+subcommand flag** (emit on demand), with **one schema using `$defs`** covering all
+envelopes. A committed file is *not* required (the subcommand is the source of
+truth); revisit if a static artifact is later wanted.
+
+**Prerequisite refactor:** today's envelopes are built as *anonymous* inline
+structs inside each `*JSON` render func (e.g. `TasksJSON`), which reflection can't
+name. First extract them into named exported types in `render` (e.g.
+`TasksEnvelope`, `MoveEnvelope`, …) and have the render funcs marshal those — a
+worthwhile cleanup in its own right, and the bulk of this task's work.
+
 ## Design sketch
 
-- Reflect the envelope structs (TasksJSON/EpicsJSON/AuditsJSON/show/move/create/
-  lint/schema payloads) into a schema, keyed by `schema_version`.
-- Expose via `tskflwctl schema --json-schema` (machine) and/or commit
-  `schema/v<MAJOR.MINOR>.json` so it's diffable and CI can guard it against the
-  live structs (regenerate → fail on drift, mirroring the docs-gen guard).
-- Decide one-schema-with-`$defs` vs per-envelope files (invopop `DoNotReference`
-  / `Anonymous` knobs control this).
+- Extract named envelope types; reflect them with invopop/jsonschema (Draft
+  2020-12, `AddGoComments` for field descriptions) into one schema with `$defs`.
+- `tskflwctl schema --json-schema` prints it; `schema --json-schema <kind>` could
+  scope to one envelope later.
 
 ## Acceptance criteria
 
-- [ ] A generator reflects the envelope structs → Draft 2020-12 schema with field
-      descriptions sourced from Go comments where present.
-- [ ] The schema is reachable as a committed file and/or a `schema` subcommand flag.
-- [ ] CI regenerates and fails on drift, so the schema tracks the structs.
+- [ ] Named envelope types extracted; the `*JSON` render funcs marshal them
+      (output byte-identical to today — guard with the existing output tests).
+- [ ] `tskflwctl schema --json-schema` emits a Draft 2020-12 schema with `$defs`
+      and field descriptions from Go comments where present.
 - [ ] The emitted schema actually validates real `--json` output for each command
       (a round-trip test).
 

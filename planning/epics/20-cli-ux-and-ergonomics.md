@@ -40,6 +40,8 @@ recovery faces, never reachable by an agent or a pipe.
   drift-guarded in CI (agent-readable docs).
 - `publish-json-schema-for-the-json-envelopes` — Draft 2020-12 schema for the
   `--json` envelopes so agents can validate output (agent contract).
+- `fixture-driven-cli-integration-tests-in-ci` — run the CLI against committed
+  fixtures in CI (testscript/golden/subprocess) — **approach not yet chosen**.
 
 Beyond pickers/output-modes/edit, the epic also covers **agent-facing DX** — an
 always-current command reference and a machine-validatable output contract.
