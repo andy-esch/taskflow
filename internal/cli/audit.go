@@ -71,11 +71,11 @@ func newAuditListCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List audits (open by default)",
-		Example:     "  tskflwctl audit list\n  tskflwctl audit list --all --plain\n  tskflwctl audit list --closed --json",
+		Example:     "  tskflwctl audit list\n  tskflwctl audit list --all -o table -c slug,open\n  tskflwctl audit list --closed -o json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
-		RunE: func(_ *cobra.Command, _ []string) error {
-			mode, err := lm.resolve(app)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			mode, err := lm.resolve(cmd, app)
 			if err != nil {
 				return err
 			}
@@ -90,15 +90,14 @@ func newAuditListCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := renderList(app, mode, audits, problems,
-				render.AuditsJSON, render.AuditsPlain, render.AuditsHuman,
-				func(a domain.Audit) string { return a.Slug }); err != nil {
+			if err := renderList(app, mode, lm.columns, audits, problems,
+				render.AuditColumns(), render.AuditsJSON, render.AuditsHuman); err != nil {
 				return err
 			}
 			return problemsError(problems)
 		},
 	}
-	lm.bind(cmd)
+	lm.bind(cmd, render.Specs(render.AuditColumns()))
 	cmd.Flags().BoolVar(&all, "all", false, "all buckets")
 	cmd.Flags().BoolVar(&closed, "closed", false, "closed audits only")
 	cmd.Flags().BoolVar(&deferred, "deferred", false, "deferred audits only")

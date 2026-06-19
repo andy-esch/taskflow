@@ -20,41 +20,82 @@ func TestTaskList_Quiet(t *testing.T) {
 	}
 }
 
-func TestTaskList_Plain(t *testing.T) {
+// TestOutput_NameEqualsQuiet pins -q as a pure alias for -o name.
+func TestOutput_NameEqualsQuiet(t *testing.T) {
 	root := setupRepo(t)
-	out := runRoot(t, "-C", root, "task", "list", "--plain")
+	q := runRoot(t, "-C", root, "task", "list", "-q")
+	name := runRoot(t, "-C", root, "task", "list", "-o", "name")
+	if q != name {
+		t.Errorf("-q and -o name must be identical:\n -q:      %q\n -o name: %q", q, name)
+	}
+}
+
+func TestTaskList_Table(t *testing.T) {
+	root := setupRepo(t)
+	out := runRoot(t, "-C", root, "task", "list", "-o", "table")
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	if len(lines) < 2 {
-		t.Fatalf("--plain needs a header + ≥1 row:\n%q", out)
+		t.Fatalf("-o table needs a header + ≥1 row:\n%q", out)
 	}
 	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription" {
-		t.Errorf("--plain header wrong: %q", lines[0])
+		t.Errorf("-o table header wrong: %q", lines[0])
 	}
 	if cols := strings.Split(lines[1], "\t"); len(cols) != 7 {
-		t.Errorf("--plain row should have 7 tab-separated columns, got %d: %q", len(cols), lines[1])
+		t.Errorf("-o table row should have 7 tab-separated columns, got %d: %q", len(cols), lines[1])
 	}
 }
 
-// TestPlain_ByteStableUnderColor pins the --plain contract: it ignores styling
+// TestColumns_Projection: -c selects (and orders) the columns, and implies table.
+func TestColumns_Projection(t *testing.T) {
+	root := setupRepo(t)
+	// Explicit -o table -c, and the bare -c (which implies -o table), must agree.
+	for _, args := range [][]string{
+		{"task", "list", "-o", "table", "-c", "status,slug"},
+		{"task", "list", "-c", "status,slug"},
+	} {
+		out := runRoot(t, append([]string{"-C", root}, args...)...)
+		lines := strings.Split(strings.TrimSpace(out), "\n")
+		if lines[0] != "status\tslug" {
+			t.Errorf("%v: header should be the projected columns in order, got %q", args, lines[0])
+		}
+		if cols := strings.Split(lines[1], "\t"); len(cols) != 2 {
+			t.Errorf("%v: row should have 2 columns, got %d: %q", args, len(cols), lines[1])
+		}
+	}
+}
+
+func TestColumns_UnknownColumn(t *testing.T) {
+	root := setupRepo(t)
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetArgs([]string{"-C", root, "task", "list", "-c", "slug,bogus"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatalf("unknown column should error; output:\n%s", out.String())
+	} else if !strings.Contains(err.Error(), "bogus") {
+		t.Errorf("error should name the bad column: %v", err)
+	}
+}
+
+// TestTable_ByteStableUnderColor pins the -o table contract: it ignores styling
 // entirely, so it's byte-identical whether color is forced on or off (a script
 // can rely on it). The default human table, by contrast, would emit ANSI here.
-func TestPlain_ByteStableUnderColor(t *testing.T) {
+func TestTable_ByteStableUnderColor(t *testing.T) {
 	root := setupRepo(t)
-	on := runRoot(t, "-C", root, "task", "list", "--plain", "--color=always")
-	off := runRoot(t, "-C", root, "task", "list", "--plain", "--color=never")
+	on := runRoot(t, "-C", root, "task", "list", "-o", "table", "--color=always")
+	off := runRoot(t, "-C", root, "task", "list", "-o", "table", "--color=never")
 	if strings.Contains(on, "\x1b[") {
-		t.Errorf("--plain must carry no ANSI even with --color=always:\n%q", on)
+		t.Errorf("-o table must carry no ANSI even with --color=always:\n%q", on)
 	}
 	if on != off {
-		t.Errorf("--plain must be byte-stable across color settings:\n on:  %q\n off: %q", on, off)
+		t.Errorf("-o table must be byte-stable across color settings:\n on:  %q\n off: %q", on, off)
 	}
 }
 
-func TestAuditList_Plain(t *testing.T) {
+func TestAuditList_Table(t *testing.T) {
 	root := setupAuditRepo(t)
-	out := runRoot(t, "-C", root, "audit", "list", "--plain")
+	out := runRoot(t, "-C", root, "audit", "list", "-o", "table")
 	if h := strings.SplitN(out, "\n", 2)[0]; h != "slug\tbucket\tarea\tdate\tfindings\topen" {
-		t.Errorf("audit --plain header wrong: %q", h)
+		t.Errorf("audit -o table header wrong: %q", h)
 	}
 }
 
@@ -78,12 +119,15 @@ func TestTransition_FailureToStderr(t *testing.T) {
 
 func TestList_ModeConflicts(t *testing.T) {
 	root := setupRepo(t)
-	// --json with -q/--plain is rejected (validation); -q with --plain is a cobra
-	// mutual-exclusion error. None may produce data.
+	// Every conflicting combination errors (validation, exit 11) and produces no
+	// data — the format axis admits at most one selection, and -c needs table.
 	for _, args := range [][]string{
-		{"task", "list", "--json", "--plain"},
-		{"task", "list", "--json", "-q"},
-		{"task", "list", "-q", "--plain"},
+		{"task", "list", "--json", "-o", "table"},    // --json vs explicit -o
+		{"task", "list", "--json", "-q"},             // json alias vs name alias
+		{"task", "list", "-q", "-o", "table"},        // name alias vs explicit -o
+		{"task", "list", "-c", "slug", "-o", "json"}, // -c needs table, not json
+		{"task", "list", "-c", "slug", "-q"},         // -c needs table, not name
+		{"task", "list", "-o", "bogus"},              // unknown format
 	} {
 		var out bytes.Buffer
 		cmd := NewRootCmd(&out, &out)
@@ -91,5 +135,35 @@ func TestList_ModeConflicts(t *testing.T) {
 		if err := cmd.Execute(); err == nil {
 			t.Errorf("expected an error for %v", args)
 		}
+	}
+}
+
+// TestComplete_OutputFormats: `-o <TAB>` offers exactly the four formats.
+func TestComplete_OutputFormats(t *testing.T) {
+	root := setupRepo(t)
+	got := complete(t, "-C", root, "task", "list", "-o", "")
+	for _, want := range []string{"human", "json", "name", "table"} {
+		if !has(got, want) {
+			t.Errorf("output completion missing %q: %v", want, got)
+		}
+	}
+	if has(got, "alpha") {
+		t.Errorf("output completion must not leak slugs: %v", got)
+	}
+}
+
+// TestComplete_Columns: `-c` completes column names, prefixes the chosen ones,
+// and drops a column already in the list (the dedup nicety the known-set buys).
+func TestComplete_Columns(t *testing.T) {
+	root := setupRepo(t)
+	if got := complete(t, "-C", root, "task", "list", "-c", "sl"); !has(got, "slug") {
+		t.Errorf("`-c sl` should complete to slug: %v", got)
+	}
+	got := complete(t, "-C", root, "task", "list", "-c", "slug,sta")
+	if !has(got, "slug,status") {
+		t.Errorf("`-c slug,sta` should complete to slug,status: %v", got)
+	}
+	if has(got, "slug") || has(got, "slug,slug") {
+		t.Errorf("an already-chosen column must not be re-offered: %v", got)
 	}
 }

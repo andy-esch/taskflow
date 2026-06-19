@@ -26,7 +26,9 @@ recovery faces, never reachable by an agent or a pipe.
 
 - `interactive-prompt-layer-gh-style-pickers` — huh TTY pickers for missing input.
 - `pipeline-output-modes-q-plain-stderr-discipline` — `-q`/`--plain`/stderr sweep.
-- `column-projection-format-table-cols-for-list-commands` — `--format table(cols)`.
+- `consolidate-output-flags-into-output-and-columns` — one `-o/--output`
+  format flag + a completable `-c/--columns` projection (supersedes the old
+  `column-projection` task, now deprecated).
 - `task-edit-opens-editor-on-the-body` — `$EDITOR` on a task body (human face).
 - `agent-facing-cli-ergonomics-batch` — the agent-side DX batch (body replace/
   append remains).

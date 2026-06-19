@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: deprecated
 epic: 20-cli-ux-and-ergonomics
 description: gcloud-lite --format table(col1,col2,...) column selection on list commands; reusable by audit findings query; selection only, no transforms/filters
 effort: Unknown
@@ -9,6 +9,7 @@ autonomy_level: 3
 tags: [cli, output, dx]
 created: "2026-06-17"
 updated_at: "2026-06-19"
+deprecated_at: "2026-06-19"
 ---
 
 # Column-projection: --format table(cols) for list commands

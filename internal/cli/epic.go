@@ -63,11 +63,11 @@ func newEpicListCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List epics with task rollup",
-		Example:     "  tskflwctl epic list\n  tskflwctl epic list --plain\n  tskflwctl epic list --json",
+		Example:     "  tskflwctl epic list\n  tskflwctl epic list -o table\n  tskflwctl epic list -o json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
-		RunE: func(_ *cobra.Command, _ []string) error {
-			mode, err := lm.resolve(app)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			mode, err := lm.resolve(cmd, app)
 			if err != nil {
 				return err
 			}
@@ -75,15 +75,14 @@ func newEpicListCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := renderList(app, mode, epics, problems,
-				render.EpicsJSON, render.EpicsPlain, render.EpicsHuman,
-				func(e core.EpicSummary) string { return e.Epic.ID }); err != nil {
+			if err := renderList(app, mode, lm.columns, epics, problems,
+				render.EpicColumns(), render.EpicsJSON, render.EpicsHuman); err != nil {
 				return err
 			}
 			return problemsError(problems)
 		},
 	}
-	lm.bind(cmd)
+	lm.bind(cmd, render.Specs(render.EpicColumns()))
 	return cmd
 }
 
