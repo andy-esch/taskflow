@@ -1,20 +1,25 @@
 ---
 status: ready-to-start
-epic: 17-pm-go-cli
-description: 'DRAFT: huh-based pickers as TTY-only fallback for missing inputs (task new epic/tags, bare transition verbs, ambiguity recovery); needs plan review'
+epic: 20-cli-ux-and-ergonomics
+description: huh TTY-only pickers for missing inputs (epic/tags, bare transition verbs, ambiguity); human-only - agents always get exit codes
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
-tags: [cli, ux, interactive, draft]
+tags: [cli, ux, interactive]
 created: "2026-06-12"
+updated_at: "2026-06-19"
 ---
 # Interactive prompt layer (gh-style pickers)
 
-> 🚧 **DRAFT — not yet integrated into the overall plan.** Filed from the
-> 2026-06-12 CLI-design discussion. Needs a planning pass to resolve the
-> conflicts called out below before it's actionable; defer to the existing
-> tasks named there wherever they disagree with this sketch.
+## Decided (2026-06-17)
+
+De-drafted. Resolution: **build it (option a), strictly human-only.** Prompts
+appear ONLY when stdin+stderr are TTYs, `--json` is off, and `--no-input` (flag
+/ `TSKFLW_NO_INPUT=1`) is unset; agents and pipelines always get today's exit
+11/13, and every prompt has a flag twin (a guardrail test enforces it). The
+required-input rule is unchanged for agents — humans just get a recovery face.
+Ambiguity-recovery (item 4) still sequences after the fuzzy-resolution task.
 
 ## Objective
 

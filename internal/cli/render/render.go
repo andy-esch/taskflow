@@ -169,16 +169,18 @@ type MoveResult struct {
 
 // MovesHuman prints one line per transition outcome ("would move" on a
 // --dry-run preview).
-func MovesHuman(w io.Writer, st Style, results []MoveResult, dryRun bool) {
+func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool) {
 	verb := "moved"
 	if dryRun {
 		verb = "would move"
 	}
 	for _, r := range results {
 		if r.Error != "" {
-			fmt.Fprintf(w, "%s %s: %s\n", st.Red("✘"), st.Bold(r.Slug), r.Error)
+			// Failures are diagnostics → stderr, so a partial `… | xargs move`
+			// doesn't interleave errors into the data stream.
+			fmt.Fprintf(errw, "%s %s: %s\n", st.Red("✘"), st.Bold(r.Slug), r.Error)
 		} else {
-			fmt.Fprintf(w, "%s %s %s -> %s\n", st.Green("✔"), verb, st.Bold(r.Slug), r.To)
+			fmt.Fprintf(out, "%s %s %s -> %s\n", st.Green("✔"), verb, st.Bold(r.Slug), r.To)
 		}
 	}
 }

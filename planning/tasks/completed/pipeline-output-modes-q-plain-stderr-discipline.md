@@ -1,19 +1,30 @@
 ---
-status: ready-to-start
-epic: 17-pm-go-cli
-description: 'DRAFT: ids-only -q and stable --plain (TSV, absolute dates) on list commands, move-failure lines to stderr, xargs recipes; needs plan review'
+status: completed
+epic: 20-cli-ux-and-ergonomics
+description: ids-only -q and a stable headered-table --plain (one schema_version) on list commands; move-failure lines to stderr; xargs/jq recipes
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
-tags: [cli, pipelines, agents, draft]
+tags: [cli, pipelines, agents]
 created: "2026-06-12"
+updated_at: "2026-06-19"
+started_at: "2026-06-19"
+completed_at: "2026-06-19"
 ---
 # Pipeline output modes (`-q`, `--plain`, stderr discipline)
 
-> 🚧 **DRAFT — not yet integrated into the overall plan.** Filed from the
-> 2026-06-12 CLI-design discussion. Needs a planning pass on the conflicts
-> below; defer to existing/completed contract decisions where they disagree.
+## Decided (2026-06-17)
+
+De-drafted. Resolutions:
+- `--plain` is a **headered table** (column-header row, stable columns, no
+  ANSI/truncation), covered by the **one global `schema_version`** (D7) — a
+  column add/reorder is a schema bump, documented next to the JSON schema; not a
+  second version number.
+- `-q/--quiet` (ids-only) and the stderr-discipline sweep stand as written.
+- The gcloud-style `--format table(col1,col2,…)` column projection is **split
+  out** to [[column-projection-format-table-cols-for-list-commands]] (reused by
+  the audit-findings query).
 
 ## Objective
 
@@ -48,15 +59,28 @@ are for eyes; these are for pipes.
   [[put-storage-layout-knowledge-back-behind-the-port]] — keep this task's
   scope clear of it.
 
-## Acceptance criteria (draft)
+## Acceptance criteria
 
-- [ ] Planning conflicts above resolved; task de-drafted.
-- [ ] `task list -q | xargs tskflwctl task complete` round-trips.
-- [ ] `--plain` output is byte-stable under TTY/no-TTY and documented as a
-      contract.
-- [ ] No data on stderr, no diagnostics on stdout, anywhere (test sweep).
+- [x] Planning conflicts resolved; de-drafted (see Decided block).
+- [x] `task list -q | xargs tskflwctl task complete` round-trips (verified).
+- [x] `--plain` is byte-stable TTY/no-TTY (no ANSI, no width truncation — it
+      ignores Style entirely) and documented as a contract (README "Pipelines"
+      + under the one `schema_version`).
+- [x] Move *failures* go to stderr (the called-out gap); list problems already
+      did; tested with split stdout/stderr buffers.
+
+## Progress Log
+
+- **2026-06-19**: Shipped. `-q/--quiet` (ids-only) + `--plain` (headered TSV,
+  absolute dates) on task/epic/audit `list` via a shared `listMode` (mutually
+  exclusive with `--json`; new `render/pipeline.go`). Move failures routed to
+  stderr (`MovesHuman` now takes out+errw). README "Pipelines" section (decision
+  table + xargs/jq/awk recipes). The `--format table(cols)` projection is its own
+  task ([[column-projection-format-table-cols-for-list-commands]]). 5 new tests;
+  suite + lint green.
 
 ## Related
 
-- Epic [[17-pm-go-cli]] · [[agent-facing-cli-ergonomics-batch]] ·
+- Epic [[20-cli-ux-and-ergonomics]] ·
+  [[column-projection-format-table-cols-for-list-commands]] ·
   [[2026-06-12-pending-decisions]] (D7).

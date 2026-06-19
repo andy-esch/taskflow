@@ -93,6 +93,36 @@ or the env vars [`NO_COLOR`](https://no-color.org) / `FORCE_COLOR` (the latter
 forces color even off a TTY — handy for agents). `--json` is always plain.
 `tskflwctl version` / `--version` report the build.
 
+### Pipelines
+
+The `list` commands (`task`/`epic`/`audit list`) take four mutually-exclusive
+output modes:
+
+| Mode | Output | For |
+| :--- | :--- | :--- |
+| *(default)* | colorized table | reading on a terminal |
+| `-q` / `--quiet` | ids only, one per line | `… \| xargs` |
+| `--plain` | tab-separated, header row, absolute dates, no color/truncation | `cut`/`awk`; stable across versions |
+| `--json` | full records + `schema_version` | `jq` |
+
+`--plain` is a documented contract under the one `schema_version` (a column
+add/reorder is a schema bump). Recipes:
+
+```bash
+# start every ready-to-start task tagged `tui`
+tskflwctl task list -q --tag tui | xargs tskflwctl task start
+
+# audits with open findings (col 6 = open count)
+tskflwctl audit list --all --plain | awk -F'\t' 'NR>1 && $6>0 {print $1}'
+
+# in-progress slugs via jq
+tskflwctl task list --status in-progress --json | jq -r '.tasks[].slug'
+```
+
+**stdout is data, stderr is diagnostics** — per-item transition failures,
+file-read problems, and prompts go to stderr, so a partial `… | xargs` never
+interleaves errors into the data stream.
+
 ### `pm` is retired
 
 The Python prototype (`bin/pm`) this tool was ported from is **gone** —

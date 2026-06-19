@@ -107,31 +107,34 @@ func newTaskNewCmd(app *App) *cobra.Command {
 }
 
 func newTaskListCmd(app *App) *cobra.Command {
-	var filter core.TaskFilter
+	var (
+		filter core.TaskFilter
+		lm     listMode
+	)
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List tasks (active by default)",
-		Example:     "  tskflwctl task list\n  tskflwctl task list --all --epic 17-pm-go-cli\n  tskflwctl task list --status in-progress --json",
+		Example:     "  tskflwctl task list\n  tskflwctl task list -q --tag tui | xargs tskflwctl task start\n  tskflwctl task list --status in-progress --json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
+			mode, err := lm.resolve(app)
+			if err != nil {
+				return err
+			}
 			tasks, problems, err := app.Svc.ListTasks(filter)
 			if err != nil {
 				return err
 			}
-			if app.JSON {
-				if err := render.TasksJSON(app.Out, tasks, problems); err != nil {
-					return err
-				}
-			} else {
-				if err := render.TasksHuman(app.Out, app.Style, tasks); err != nil {
-					return err
-				}
-				render.ProblemsHuman(app.ErrOut, app.Style, problems)
+			if err := renderList(app, mode, tasks, problems,
+				render.TasksJSON, render.TasksPlain, render.TasksHuman,
+				func(t domain.Task) string { return t.Slug }); err != nil {
+				return err
 			}
 			return problemsError(problems)
 		},
 	}
+	lm.bind(cmd)
 	cmd.Flags().StringVar(&filter.Status, "status", "", "filter by status")
 	cmd.Flags().StringVar(&filter.Epic, "epic", "", "filter by epic")
 	cmd.Flags().StringVar(&filter.Tag, "tag", "", "filter by tag")

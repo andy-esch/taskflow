@@ -1,6 +1,6 @@
 ---
 status: ready-to-start
-epic: 17-pm-go-cli
+epic: 20-cli-ux-and-ergonomics
 description: JSON error envelope, --body-file/stdin for long bodies, body editing through the tool, JSON create envelope gaps - from dogfooding by an agent
 effort: Unknown
 tier: 3
@@ -9,7 +9,7 @@ autonomy_level: 3
 tags: [cli, agents, ux, dx]
 created: "2026-06-12"
 started_at: "2026-06-12"
-updated_at: "2026-06-12"
+updated_at: "2026-06-19"
 ---
 # Agent-facing CLI ergonomics batch
 

@@ -1,20 +1,27 @@
 ---
 status: ready-to-start
-epic: 17-pm-go-cli
-description: 'DRAFT: git-style task edit <slug> opening EDITOR; the human face of the body-editing gap whose agent face (--body-file) is already queued'
+epic: 20-cli-ux-and-ergonomics
+description: git-style task edit <slug> opening EDITOR on the whole file (parse-before-accept on save); human face of body-editing, with slug autocomplete
 effort: Unknown
 tier: 3
 priority: low
 autonomy_level: 3
-tags: [cli, ux, draft]
+tags: [cli, ux]
 created: "2026-06-12"
+updated_at: "2026-06-19"
 ---
 # `task edit` — open $EDITOR on the body
 
-> 🚧 **DRAFT — not yet integrated into the overall plan.** Filed from the
-> 2026-06-12 CLI-design discussion. Overlaps a queued task — see the
-> conflict note; planning should decide where body-editing lives before
-> either is started.
+## Decided (2026-06-17)
+
+De-drafted. Resolutions:
+- **Human/agent faces stay split** — this owns the human face (`$EDITOR`); the
+  agent face (`--body-file`/stdin, body replace/append) stays in
+  [[agent-facing-cli-ergonomics-batch]]. Agents won't use `$EDITOR`.
+- Edit the **whole file** (git-`commit`-style) with **parse-before-accept on
+  save** — a frontmatter break or unknown key is caught and the editor reopened
+  / file restored.
+- **Slug auto-complete** is required (`task edit <TAB>`, like `task show`).
 
 ## Objective
 
