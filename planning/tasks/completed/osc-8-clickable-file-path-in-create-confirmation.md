@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Wrap the create-confirmation path in an OSC 8 file:// hyperlink (click-to-open), gated on color+TTY; raw under --json/pipe
 effort: Unknown
@@ -9,6 +9,8 @@ autonomy_level: 3
 tags: [cli, ux]
 created: "2026-06-19"
 started_at: "2026-06-19"
+updated_at: "2026-06-19"
+completed_at: "2026-06-19"
 ---
 ## Objective
 

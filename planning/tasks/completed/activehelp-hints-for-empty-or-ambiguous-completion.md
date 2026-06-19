@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: cobra ActiveHelp hints where completion is empty/ambiguous (title/area on new, status on task move); degrades gracefully off bash V2
 effort: Unknown
@@ -9,6 +9,8 @@ autonomy_level: 3
 tags: [cli, dx]
 created: "2026-06-19"
 started_at: "2026-06-19"
+updated_at: "2026-06-19"
+completed_at: "2026-06-19"
 ---
 ## Objective
 

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: cobra/doc GenMarkdownTree to docs/cli with DisableAutoGenTag; CI fails on drift so the command reference never goes stale (LLM-readable)
 effort: Unknown
@@ -10,6 +10,7 @@ tags: [cli, docs, dx]
 created: "2026-06-19"
 updated_at: "2026-06-19"
 started_at: "2026-06-19"
+completed_at: "2026-06-19"
 ---
 ## Objective
 

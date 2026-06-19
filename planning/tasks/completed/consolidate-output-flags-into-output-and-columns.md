@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: One -o/--output {human,json,name,table} flag + a completable -c/--columns projection flag; --json/-q stay as aliases
 effort: Unknown
@@ -10,6 +10,7 @@ tags: [cli, output, dx]
 created: "2026-06-19"
 updated_at: "2026-06-19"
 started_at: "2026-06-19"
+completed_at: "2026-06-19"
 ---
 ## Objective
 
