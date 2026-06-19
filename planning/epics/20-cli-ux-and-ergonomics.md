@@ -26,10 +26,25 @@ recovery faces, never reachable by an agent or a pipe.
 
 - `interactive-prompt-layer-gh-style-pickers` — huh TTY pickers for missing input.
 - `pipeline-output-modes-q-plain-stderr-discipline` — `-q`/`--plain`/stderr sweep.
-- `column-projection-format-table-cols-for-list-commands` — `--format table(cols)`.
+- `consolidate-output-flags-into-output-and-columns` — one `-o/--output`
+  format flag + a completable `-c/--columns` projection (supersedes the old
+  `column-projection` task, now deprecated).
 - `task-edit-opens-editor-on-the-body` — `$EDITOR` on a task body (human face).
 - `agent-facing-cli-ergonomics-batch` — the agent-side DX batch (body replace/
   append remains).
+- `glamour-render-markdown-bodies-in-show` — styled markdown in `show` on a TTY
+  (human face; raw under `--json`/pipe).
+- `evaluate-fang-for-styled-help-errors-and-manpages` — eval `fang` for styled
+  help/errors/manpages, hard-gated off the agent contract (human face).
+- `auto-generate-cli-reference-docs-with-a-ci-sync-check` — `cobra/doc` reference,
+  drift-guarded in CI (agent-readable docs).
+- `publish-json-schema-for-the-json-envelopes` — Draft 2020-12 schema for the
+  `--json` envelopes so agents can validate output (agent contract).
+- `fixture-driven-cli-integration-tests-in-ci` — run the CLI against committed
+  fixtures in CI (testscript/golden/subprocess) — **approach not yet chosen**.
+
+Beyond pickers/output-modes/edit, the epic also covers **agent-facing DX** — an
+always-current command reference and a machine-validatable output contract.
 
 ## Out of scope
 

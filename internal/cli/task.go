@@ -61,11 +61,12 @@ func newTaskNewCmd(app *App) *cobra.Command {
 		bodyFile string
 	)
 	cmd := &cobra.Command{
-		Use:         "new <title>",
-		Short:       "Create a new task (validated, handoff-ready scaffold)",
-		Example:     "  tskflwctl task new \"Add retry backoff\" --epic 17-pm-go-cli --tags net\n  tskflwctl task new \"Triage flaky test\" --epic 17-pm-go-cli --next",
-		Args:        cobra.ExactArgs(1),
-		Annotations: map[string]string{"safety": "mutating"},
+		Use:               "new <title>",
+		Short:             "Create a new task (validated, handoff-ready scaffold)",
+		Example:           "  tskflwctl task new \"Add retry backoff\" --epic 17-pm-go-cli --tags net\n  tskflwctl task new \"Triage flaky test\" --epic 17-pm-go-cli --next",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: activeHelpArg("provide a task title (quote it if it has spaces)"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p.Title = args[0]
 			body, err := resolveBody(cmd, p.Body, bodyFile)
@@ -81,7 +82,7 @@ func newTaskNewCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.CreatedJSON(app.Out, "task", t.Slug, string(t.Status), app.rel(t.Path), app.DryRun)
 			}
-			render.CreatedHuman(app.Out, app.Style, app.rel(t.Path), app.DryRun)
+			render.CreatedHuman(app.Out, app.Style, app.linkPath(t.Path), app.DryRun)
 			if !app.DryRun {
 				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task start "+t.Slug))
 			}
@@ -114,11 +115,11 @@ func newTaskListCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List tasks (active by default)",
-		Example:     "  tskflwctl task list\n  tskflwctl task list -q --tag tui | xargs tskflwctl task start\n  tskflwctl task list --status in-progress --json",
+		Example:     "  tskflwctl task list\n  tskflwctl task list -q --tag tui | xargs tskflwctl task start\n  tskflwctl task list -o table -c slug,status,epic",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
-		RunE: func(_ *cobra.Command, _ []string) error {
-			mode, err := lm.resolve(app)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			mode, err := lm.resolve(cmd, app)
 			if err != nil {
 				return err
 			}
@@ -126,15 +127,14 @@ func newTaskListCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := renderList(app, mode, tasks, problems,
-				render.TasksJSON, render.TasksPlain, render.TasksHuman,
-				func(t domain.Task) string { return t.Slug }); err != nil {
+			if err := renderList(app, mode, lm.columns, tasks, problems,
+				render.TaskColumns(), render.TasksJSON, render.TasksHuman); err != nil {
 				return err
 			}
 			return problemsError(problems)
 		},
 	}
-	lm.bind(cmd)
+	lm.bind(cmd, render.Specs(render.TaskColumns()))
 	cmd.Flags().StringVar(&filter.Status, "status", "", "filter by status")
 	cmd.Flags().StringVar(&filter.Epic, "epic", "", "filter by epic")
 	cmd.Flags().StringVar(&filter.Tag, "tag", "", "filter by tag")
@@ -265,6 +265,9 @@ func newTaskMoveCmd(app *App) *cobra.Command {
 			if len(args) >= 1 {
 				for _, st := range domain.AllStatuses() {
 					opts = append(opts, string(st))
+				}
+				if cobra.GetActiveHelpConfig(cmd) != "off" {
+					opts = cobra.AppendActiveHelp(opts, "the final argument is the target status")
 				}
 			}
 			return opts, directive

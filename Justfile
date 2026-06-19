@@ -63,6 +63,16 @@ tidy:
 tidy-check:
 	go mod tidy -diff
 
+# Regenerate the CLI reference under docs/cli/ from the cobra command tree.
+docs:
+	go run ./internal/tools/docgen -out docs/cli
+
+# Fail if the committed CLI reference is stale (CI drift guard). Regenerates,
+# then errors if anything changed — so editing a command/flag without running
+# `just docs` breaks the build.
+docs-check: docs
+	git diff --exit-code docs/cli
+
 # Dry-run a release locally: build all darwin/linux binaries + checksums into
 # ./dist via goreleaser, publishing nothing. Mirrors what the manual
 # workflow_dispatch path produces. Needs goreleaser installed

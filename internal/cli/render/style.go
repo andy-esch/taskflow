@@ -70,6 +70,22 @@ func (s Style) wrap(code, text string) string {
 func (s Style) Bold(t string) string { return s.wrap(ansiBold, t) }
 func (s Style) Dim(t string) string  { return s.wrap(ansiDim, t) }
 
+// Link wraps text in an OSC 8 terminal hyperlink to url when styling is on (a
+// TTY), so supporting terminals make it click-to-open; otherwise it returns text
+// unchanged — keeping piped / --color=never / JSON output byte-stable. url should
+// be absolute (e.g. file:///abs/path). Gated on the same `on` flag as color, so
+// it never reaches a pipe or an agent.
+func (s Style) Link(text, url string) string {
+	if !s.on || text == "" || url == "" {
+		return text
+	}
+	const (
+		osc8 = "\x1b]8;;"
+		st   = "\x1b\\" // String Terminator
+	)
+	return osc8 + url + st + text + osc8 + st
+}
+
 // Status renders a status: a colored glyph + label when styled (semantics from
 // the shared theme), the plain label otherwise (so output stays byte-stable).
 func (s Style) Status(st domain.Status) string {

@@ -34,6 +34,9 @@ jobs:
       - name: Verify Go module is tidy
         run: just tidy-check
 
+      - name: Verify CLI reference docs are up to date
+        run: just docs-check
+
       - name: Check Go formatting
         run: |
           unformatted=$(gofmt -l .)

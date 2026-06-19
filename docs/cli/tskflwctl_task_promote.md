@@ -1,0 +1,35 @@
+## tskflwctl task promote
+
+Move task(s) to next-up
+
+```
+tskflwctl task promote <task>... [flags]
+```
+
+### Examples
+
+```
+  tskflwctl task promote my-task
+  tskflwctl task promote task-a task-b
+```
+
+### Options
+
+```
+  -h, --help   help for promote
+```
+
+### Options inherited from parent commands
+
+```
+  -C, --chdir string   anchor to the planning repo at this path
+      --color string   colorize output: auto|always|never (default "auto")
+      --dry-run        preview the mutation without writing (validation still runs)
+      --json           machine-readable JSON output
+      --no-color       disable colored output (alias for --color=never)
+```
+
+### SEE ALSO
+
+* [tskflwctl task](tskflwctl_task.md)	 - Work with tasks
+

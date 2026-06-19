@@ -119,3 +119,11 @@ func (a *App) rel(path string) string {
 	}
 	return path
 }
+
+// linkPath renders an absolute path as a relative display string that is, on a
+// TTY, a click-to-open OSC 8 `file://` hyperlink (relative for readability, the
+// absolute path in the URL so the terminal can resolve it). Off a TTY / under
+// --json it's just the plain relative path, so machine output is unchanged.
+func (a *App) linkPath(abs string) string {
+	return a.Style.Link(a.rel(abs), "file://"+abs)
+}

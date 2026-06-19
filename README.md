@@ -95,28 +95,34 @@ forces color even off a TTY — handy for agents). `--json` is always plain.
 
 ### Pipelines
 
-The `list` commands (`task`/`epic`/`audit list`) take four mutually-exclusive
-output modes:
+The `list` commands (`task`/`epic`/`audit list`) share one output-format flag,
+`-o/--output`, plus an orthogonal column selector:
 
-| Mode | Output | For |
+| `-o` | Output | For |
 | :--- | :--- | :--- |
-| *(default)* | colorized table | reading on a terminal |
-| `-q` / `--quiet` | ids only, one per line | `… \| xargs` |
-| `--plain` | tab-separated, header row, absolute dates, no color/truncation | `cut`/`awk`; stable across versions |
-| `--json` | full records + `schema_version` | `jq` |
+| `human` *(default)* | colorized table | reading on a terminal |
+| `name` | ids only, one per line | `… \| xargs` |
+| `table` | tab-separated, header row, absolute dates, no color/truncation | `cut`/`awk`; stable across versions |
+| `csv` | RFC 4180 comma-separated, header row | spreadsheets; cells with commas are quoted |
+| `json` | full records + `schema_version` | `jq` |
 
-`--plain` is a documented contract under the one `schema_version` (a column
-add/reorder is a schema bump). Recipes:
+`-q`/`--quiet` is shorthand for `-o name`; `--json` (on every command) equals
+`-o json`. `-c/--columns slug,status,…` projects the columnar formats (`table`,
+`csv`) to the columns you name, in the order you name them (and implies
+`-o table`) — both the formats and the column names are shell-completable. `-o table` is a documented contract under
+the one `schema_version` (a column add/reorder is a schema bump), and always
+emits the header row — even with zero results — so a consumer gets a stable
+schema and detects "no rows" by line count. Recipes:
 
 ```bash
 # start every ready-to-start task tagged `tui`
 tskflwctl task list -q --tag tui | xargs tskflwctl task start
 
-# audits with open findings (col 6 = open count)
-tskflwctl audit list --all --plain | awk -F'\t' 'NR>1 && $6>0 {print $1}'
+# audits with open findings, projected to slug + open count
+tskflwctl audit list --all -o table -c slug,open | awk -F'\t' 'NR>1 && $2>0 {print $1}'
 
 # in-progress slugs via jq
-tskflwctl task list --status in-progress --json | jq -r '.tasks[].slug'
+tskflwctl task list --status in-progress -o json | jq -r '.tasks[].slug'
 ```
 
 **stdout is data, stderr is diagnostics** — per-item transition failures,

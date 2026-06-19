@@ -21,11 +21,12 @@ func newEpicNewCmd(app *App) *cobra.Command {
 		bodyFile string
 	)
 	cmd := &cobra.Command{
-		Use:         "new <title>",
-		Short:       "Create a new epic (auto-numbered NN-slug)",
-		Example:     "  tskflwctl epic new \"Billing overhaul\" --description \"Replace the legacy pipeline\"",
-		Args:        cobra.ExactArgs(1),
-		Annotations: map[string]string{"safety": "mutating"},
+		Use:               "new <title>",
+		Short:             "Create a new epic (auto-numbered NN-slug)",
+		Example:           "  tskflwctl epic new \"Billing overhaul\" --description \"Replace the legacy pipeline\"",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: activeHelpArg("provide an epic title (quote it if it has spaces)"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p.Title = args[0]
 			body, err := resolveBody(cmd, p.Body, bodyFile)
@@ -41,7 +42,7 @@ func newEpicNewCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.CreatedJSON(app.Out, "epic", e.ID, e.Status, app.rel(e.Path), app.DryRun)
 			}
-			render.CreatedHuman(app.Out, app.Style, app.rel(e.Path), app.DryRun)
+			render.CreatedHuman(app.Out, app.Style, app.linkPath(e.Path), app.DryRun)
 			if !app.DryRun {
 				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task new \"Title\" --epic "+e.ID))
 			}
@@ -63,11 +64,11 @@ func newEpicListCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List epics with task rollup",
-		Example:     "  tskflwctl epic list\n  tskflwctl epic list --plain\n  tskflwctl epic list --json",
+		Example:     "  tskflwctl epic list\n  tskflwctl epic list -o table\n  tskflwctl epic list -o json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
-		RunE: func(_ *cobra.Command, _ []string) error {
-			mode, err := lm.resolve(app)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			mode, err := lm.resolve(cmd, app)
 			if err != nil {
 				return err
 			}
@@ -75,15 +76,14 @@ func newEpicListCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := renderList(app, mode, epics, problems,
-				render.EpicsJSON, render.EpicsPlain, render.EpicsHuman,
-				func(e core.EpicSummary) string { return e.Epic.ID }); err != nil {
+			if err := renderList(app, mode, lm.columns, epics, problems,
+				render.EpicColumns(), render.EpicsJSON, render.EpicsHuman); err != nil {
 				return err
 			}
 			return problemsError(problems)
 		},
 	}
-	lm.bind(cmd)
+	lm.bind(cmd, render.Specs(render.EpicColumns()))
 	return cmd
 }
 

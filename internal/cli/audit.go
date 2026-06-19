@@ -29,11 +29,12 @@ func newAuditNewCmd(app *App) *cobra.Command {
 		bodyFile string
 	)
 	cmd := &cobra.Command{
-		Use:         "new <area>",
-		Short:       "Create a new audit (open bucket, scaffolded findings)",
-		Example:     "  tskflwctl audit new dispatcher\n  tskflwctl audit new arch-data-flow --date 2026-06-16",
-		Args:        cobra.ExactArgs(1),
-		Annotations: map[string]string{"safety": "mutating"},
+		Use:               "new <area>",
+		Short:             "Create a new audit (open bucket, scaffolded findings)",
+		Example:           "  tskflwctl audit new dispatcher\n  tskflwctl audit new arch-data-flow --date 2026-06-16",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: activeHelpArg("provide an area to audit (e.g. dispatcher)"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p.Area = args[0]
 			body, err := resolveBody(cmd, p.Body, bodyFile)
@@ -49,7 +50,7 @@ func newAuditNewCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.CreatedJSON(app.Out, "audit", a.Slug, string(a.Bucket), app.rel(a.Path), app.DryRun)
 			}
-			render.CreatedHuman(app.Out, app.Style, app.rel(a.Path), app.DryRun)
+			render.CreatedHuman(app.Out, app.Style, app.linkPath(a.Path), app.DryRun)
 			if !app.DryRun {
 				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: add findings, then tskflwctl audit close "+a.Slug))
 			}
@@ -71,11 +72,11 @@ func newAuditListCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List audits (open by default)",
-		Example:     "  tskflwctl audit list\n  tskflwctl audit list --all --plain\n  tskflwctl audit list --closed --json",
+		Example:     "  tskflwctl audit list\n  tskflwctl audit list --all -o table -c slug,open\n  tskflwctl audit list --closed -o json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
-		RunE: func(_ *cobra.Command, _ []string) error {
-			mode, err := lm.resolve(app)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			mode, err := lm.resolve(cmd, app)
 			if err != nil {
 				return err
 			}
@@ -90,15 +91,14 @@ func newAuditListCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := renderList(app, mode, audits, problems,
-				render.AuditsJSON, render.AuditsPlain, render.AuditsHuman,
-				func(a domain.Audit) string { return a.Slug }); err != nil {
+			if err := renderList(app, mode, lm.columns, audits, problems,
+				render.AuditColumns(), render.AuditsJSON, render.AuditsHuman); err != nil {
 				return err
 			}
 			return problemsError(problems)
 		},
 	}
-	lm.bind(cmd)
+	lm.bind(cmd, render.Specs(render.AuditColumns()))
 	cmd.Flags().BoolVar(&all, "all", false, "all buckets")
 	cmd.Flags().BoolVar(&closed, "closed", false, "closed audits only")
 	cmd.Flags().BoolVar(&deferred, "deferred", false, "deferred audits only")
