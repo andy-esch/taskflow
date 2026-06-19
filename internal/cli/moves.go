@@ -35,7 +35,7 @@ func runMoves[T any](app *App, slugs []string, status string, move func(slug str
 			return err
 		}
 	} else {
-		render.MovesHuman(app.Out, app.Style, results, app.DryRun)
+		render.MovesHuman(app.Out, app.ErrOut, app.Style, results, app.DryRun)
 	}
 	if firstErr != nil {
 		// %w keeps the sentinel (exit-code mapping); the text is a count, not a
