@@ -68,6 +68,7 @@ tskflwctl task list                    # active tasks (--all / --status / --epic
 tskflwctl task show <slug>
 tskflwctl epic list                    # rollup: done/total per epic
 tskflwctl audit list                   # open audits (--all / --closed / --deferred)
+tskflwctl audit findings --status open --effort XS,S --json  # query findings across audits
 tskflwctl schema                       # the tool's contract for agents (statuses, fields, codes)
 tskflwctl schema task --json           # how to author a task: sections, fields, conventions
 tskflwctl ui                           # interactive Bubble Tea browser (tasks/epics/audits)

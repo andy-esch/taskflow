@@ -16,6 +16,7 @@ func newAuditCmd(app *App) *cobra.Command {
 		newAuditNewCmd(app),
 		newAuditListCmd(app),
 		newAuditShowCmd(app),
+		newAuditFindingsCmd(app),
 		newAuditMoveCmd(app, "close", "Move audit(s) to closed/", domain.AuditClosed),
 		newAuditMoveCmd(app, "reopen", "Move audit(s) back to open/", domain.AuditOpen),
 		newAuditMoveCmd(app, "defer", "Move audit(s) to deferred/", domain.AuditDeferred),
@@ -103,6 +104,54 @@ func newAuditListCmd(app *App) *cobra.Command {
 	cmd.Flags().BoolVar(&closed, "closed", false, "closed audits only")
 	cmd.Flags().BoolVar(&deferred, "deferred", false, "deferred audits only")
 	cmd.MarkFlagsMutuallyExclusive("all", "closed", "deferred")
+	return cmd
+}
+
+func newAuditFindingsCmd(app *App) *cobra.Command {
+	var (
+		status, effort, urgency []string
+		component               string
+		lm                      listMode
+	)
+	cmd := &cobra.Command{
+		Use:   "findings [audit]",
+		Short: "Query findings across audits (or one) by status/effort/urgency/component",
+		Long: "Search audit findings — the structured per-finding view, not the aggregate.\n" +
+			"With no argument, searches every audit; with an audit slug, just that one.\n" +
+			"status/effort/urgency match exactly (case-insensitive, comma = any-of);\n" +
+			"--component is a case-insensitive substring. Each --json hit carries its\n" +
+			"audit slug and bucket.",
+		Example: "  tskflwctl audit findings --status open --effort XS,S --json\n" +
+			"  tskflwctl audit findings 2026-06-14-simplify-apigateway --status in-progress\n" +
+			"  tskflwctl audit findings --component stravapipe -o table",
+		Args:              cobra.MaximumNArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeAuditSlugs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mode, err := lm.resolve(cmd, app)
+			if err != nil {
+				return err
+			}
+			f := core.FindingFilter{Status: status, Effort: effort, Urgency: urgency, Component: component}
+			if len(args) == 1 {
+				f.Audit = args[0]
+			}
+			findings, problems, err := app.Svc.QueryFindings(f)
+			if err != nil {
+				return err
+			}
+			if err := renderList(app, mode, lm.columns, findings, problems,
+				render.FindingColumns(), render.FindingsJSON, render.FindingsHuman); err != nil {
+				return err
+			}
+			return problemsError(problems)
+		},
+	}
+	lm.bind(cmd, render.Specs(render.FindingColumns()))
+	cmd.Flags().StringSliceVar(&status, "status", nil, "filter by finding status (comma-separated, any-of)")
+	cmd.Flags().StringSliceVar(&effort, "effort", nil, "filter by effort XS,S,M,L (any-of)")
+	cmd.Flags().StringSliceVar(&urgency, "urgency", nil, "filter by urgency acute,soon,eventually (any-of)")
+	cmd.Flags().StringVar(&component, "component", "", "filter by component (case-insensitive substring)")
 	return cmd
 }
 

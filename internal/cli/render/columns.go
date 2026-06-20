@@ -146,6 +146,21 @@ func EpicColumns() []Column[core.EpicSummary] {
 	}
 }
 
+// FindingColumns is the projectable column set for `audit findings` (code first,
+// the id `-o name` projects).
+func FindingColumns() []Column[core.AuditFinding] {
+	return []Column[core.AuditFinding]{
+		{"code", "finding code (H1/M2/…)", func(f core.AuditFinding) string { return f.Code }},
+		{"audit", "audit slug", func(f core.AuditFinding) string { return f.Audit }},
+		{"status", "finding status", func(f core.AuditFinding) string { return f.Status }},
+		{"effort", "XS|S|M|L", func(f core.AuditFinding) string { return f.Effort }},
+		{"urgency", "acute|soon|eventually", func(f core.AuditFinding) string { return f.Urgency }},
+		{"component", "component", func(f core.AuditFinding) string { return f.Component }},
+		{"file", "file:line", func(f core.AuditFinding) string { return f.File }},
+		{"title", "finding title", func(f core.AuditFinding) string { return f.Title }},
+	}
+}
+
 // AuditColumns is the projectable column set for `audit list` (slug first).
 func AuditColumns() []Column[domain.Audit] {
 	return []Column[domain.Audit]{

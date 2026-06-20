@@ -28,7 +28,8 @@ import (
 // 1.5: the create envelope carries `status` (task status / epic status / audit
 // bucket); its `path` is now relative to the planning root in both human and
 // JSON modes (was absolute in JSON).
-const SchemaVersion = "1.5"
+// 1.6: the `findings` envelope (audit finding-level query) added.
+const SchemaVersion = "1.6"
 
 type taskJSON struct {
 	Slug        string   `json:"slug"`
@@ -427,6 +428,50 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, body string) error {
 // AuditShowJSON writes an audit plus its body.
 func AuditShowJSON(w io.Writer, a domain.Audit, body string) error {
 	return encodeJSON(w, AuditShowEnvelope{SchemaVersion: SchemaVersion, Audit: auditToJSON(a), Body: body})
+}
+
+type findingJSON struct {
+	Audit     string `json:"audit"`
+	Bucket    string `json:"bucket"`
+	Code      string `json:"code"`
+	Title     string `json:"title"`
+	Status    string `json:"status"`
+	File      string `json:"file,omitempty"`
+	Component string `json:"component,omitempty"`
+	Effort    string `json:"effort,omitempty"`
+	Urgency   string `json:"urgency,omitempty"`
+}
+
+// FindingsJSON writes the structured finding-query result: each parsed finding
+// tagged with its audit slug and bucket, so a cross-audit query stays
+// self-describing. Mirrors the list envelopes' `unreadable` for per-file problems.
+func FindingsJSON(w io.Writer, fs []core.AuditFinding, problems []domain.FileProblem) error {
+	payload := FindingsEnvelope{SchemaVersion: SchemaVersion, Findings: make([]findingJSON, 0, len(fs)), Unreadable: problems}
+	for _, f := range fs {
+		payload.Findings = append(payload.Findings, findingJSON{
+			Audit: f.Audit, Bucket: f.Bucket, Code: f.Code, Title: f.Title, Status: f.Status,
+			File: f.File, Component: f.Component, Effort: f.Effort, Urgency: f.Urgency,
+		})
+	}
+	return encodeJSON(w, payload)
+}
+
+// FindingsHuman writes a scannable table of findings (empty input writes nothing).
+// Title goes last so it's the column that truncates to terminal width.
+func FindingsHuman(w io.Writer, st Style, fs []core.AuditFinding) error {
+	if len(fs) == 0 {
+		return nil
+	}
+	rows := make([][]string, 0, len(fs))
+	for _, f := range fs {
+		rows = append(rows, []string{f.Status, st.Bold(f.Code), f.Audit, f.Effort, f.Urgency, f.Component, f.Title})
+	}
+	writeTable(w, st.width, []string{
+		st.Dim("STATUS"), st.Dim("CODE"), st.Dim("AUDIT"), st.Dim("EFFORT"),
+		st.Dim("URGENCY"), st.Dim("COMPONENT"), st.Dim("TITLE"),
+	}, rows)
+	fmt.Fprintf(w, "\n%s\n", st.Dim(plural(len(fs), "finding")))
+	return nil
 }
 
 // FixHuman writes the auto-repairs applied (or proposed under --dry-run).

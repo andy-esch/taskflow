@@ -24,6 +24,8 @@ func TestGolden_MachineContract(t *testing.T) {
 		{"epic_list_json", []string{"-C", fixtureRepo, "epic", "list", "--json"}},
 		{"epic_show_json", []string{"-C", fixtureRepo, "epic", "show", "01-fixture-epic", "--json"}},
 		{"status_json", []string{"-C", fixtureRepo, "status", "--json"}},
+		{"audit_findings_json", []string{"-C", fixtureRepo, "audit", "findings", "--json"}},
+		{"audit_findings_open_json", []string{"-C", fixtureRepo, "audit", "findings", "--status", "open", "--json"}},
 		{"lint_json", []string{"-C", fixtureRepo, "lint", "--json"}},
 		// Self-description runs anywhere (no planning repo needed) and is fully
 		// date-free — ideal to pin byte-for-byte, especially the JSON Schema.
