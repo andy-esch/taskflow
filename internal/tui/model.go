@@ -395,8 +395,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.StatusRev):
 		return m, m.cycleView(-1)
 	case key.Matches(msg, keys.FilterMode):
-		m.toggleFilterMode()
-		return m, nil
+		return m.toggleFilterMode()
 	case key.Matches(msg, keys.Refresh):
 		return m, func() tea.Msg { return reloadMsg{} }
 	case key.Matches(msg, keys.ToggleFocus):
@@ -725,20 +724,26 @@ func (m *Model) cycleView(dir int) tea.Cmd {
 // tab you filter in — and re-runs the visible filter so results update live. The
 // substring matcher is the shared listfilter.Substring the CLI picker uses, so the
 // two faces can't drift. Default stays fuzzy (the TUI's exploratory default).
-func (m *Model) toggleFilterMode() {
+func (m Model) toggleFilterMode() (tea.Model, tea.Cmd) {
 	exact := !m.cur().filterExact
 	var f list.FilterFunc = list.DefaultFilter
 	if exact {
 		f = listfilter.Substring
 	}
+	prev := m.selectedID()
 	for _, t := range m.tabs {
 		t.filterExact = exact
 		t.list.Filter = f
 		t.list.FilterInput.Prompt = filterPrompt(exact)
+		// Re-rank EVERY tab that has a filter applied (not just the visible one), so
+		// a background tab's rankings can't go stale under the new mode's chip.
+		if t.list.FilterState() != list.Unfiltered {
+			t.list.SetFilterText(t.list.FilterValue())
+		}
 	}
-	if cur := m.cur(); cur.list.FilterState() != list.Unfiltered {
-		cur.list.SetFilterText(cur.list.FilterValue()) // re-rank now with the new matcher
-	}
+	// The current tab's re-rank can move or empty the selection — keep the detail
+	// pane in sync, like every other selection-moving path.
+	return m.afterSelectionChange(prev, nil)
 }
 
 // resolveView maps a `:` word to a view value and the tab it applies to. The
