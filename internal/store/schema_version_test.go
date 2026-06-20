@@ -63,3 +63,25 @@ func TestSchemaVersion_ParsesAndSurvivesEdits(t *testing.T) {
 		t.Errorf("Move dropped the reserved schema key:\n%s", got)
 	}
 }
+
+// The reserved key also survives a body edit (EditBody append + replace), which
+// rewrites the body through the same surgical frontmatter path.
+func TestSchemaVersion_SurvivesBodyEdit(t *testing.T) {
+	root := t.TempDir()
+	writeTask(t, root, "ready-to-start", "keep.md", "---\nschema: 1\nstatus: ready-to-start\ndescription: d\n---\n# T\n\nbody\n")
+	fs := NewFS(root)
+	path := filepath.Join(root, domain.TasksDir, "ready-to-start", "keep.md")
+
+	if _, err := fs.EditBody("keep", "## Notes\n- x", true, bodyNow, false); err != nil { // append
+		t.Fatal(err)
+	}
+	if got := readFile(t, path); !strings.Contains(got, "schema: 1") {
+		t.Errorf("append dropped the reserved schema key:\n%s", got)
+	}
+	if _, err := fs.EditBody("keep", "# Rewritten", false, bodyNow, false); err != nil { // replace
+		t.Fatal(err)
+	}
+	if got := readFile(t, path); !strings.Contains(got, "schema: 1") {
+		t.Errorf("replace dropped the reserved schema key:\n%s", got)
+	}
+}

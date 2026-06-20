@@ -138,7 +138,13 @@ have fuzz targets (`store/fuzz_test.go`). The TUI is tested by **message
 injection** (build the model, send `tea.Msg`s to `Update`, assert on state /
 `View()` substrings) plus a few `x/teatest` full-program tests and the layout
 invariant; fs-event behavior uses synthetic messages, not real `fsnotify` timing.
-`just test` + `just lint`.
+The CLI also has **golden snapshots** of the byte-stable machine contract (the
+`--json` envelopes, `csv`, and `schema --json-schema`) under
+`internal/cli/testdata/golden/`, run in-process against the committed
+`testdata/planning/` fixture; regenerate them with `go test ./internal/cli
+-update` (the `-update` flag is cli-package-scoped, so target that package, not
+`./...`). The single subprocess smoke layer (real binary, exit codes, lifecycle)
+lives in `cmd/tskflwctl/main_test.go`. `just test` + `just lint`.
 
 ## Status (2026-06-11)
 Substantially functional — the full create→update→move→lint loop runs without
