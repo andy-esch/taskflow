@@ -66,6 +66,7 @@ func (s *FS) writeNewFile(dir, path string, content []byte, kind, id string, dry
 // create can carry; the others are written only by Move.
 func taskFields(t domain.Task) []fmField {
 	fields := []fmField{
+		{"schema", domain.FileSchemaVersion},
 		{"status", string(t.Status)},
 		{"epic", t.Epic},
 		{"description", t.Description},
@@ -113,6 +114,7 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 // auditFields is the canonical frontmatter order for a new audit.
 func auditFields(a domain.Audit) []fmField {
 	return []fmField{
+		{"schema", domain.FileSchemaVersion},
 		{"area", a.Area},
 		{"date", a.Date},
 	}
@@ -192,6 +194,7 @@ func (s *FS) nextEpicNumber() (int, error) {
 // epicFields is the canonical frontmatter order for a new epic.
 func epicFields(e domain.Epic) []fmField {
 	return []fmField{
+		{"schema", domain.FileSchemaVersion},
 		{"status", e.Status},
 		{"description", e.Description},
 		{"priority", e.Priority},
