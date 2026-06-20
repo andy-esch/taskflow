@@ -220,6 +220,31 @@
         "message"
       ]
     },
+    "FindingsEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/findingJSON"
+          },
+          "type": "array"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "findings"
+      ]
+    },
     "FixEnvelope": {
       "properties": {
         "schema_version": {
@@ -729,6 +754,46 @@
         "id"
       ]
     },
+    "findingJSON": {
+      "properties": {
+        "audit": {
+          "type": "string"
+        },
+        "bucket": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "effort": {
+          "type": "string"
+        },
+        "urgency": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "audit",
+        "bucket",
+        "code",
+        "title",
+        "status"
+      ]
+    },
     "jsonEnvelopes": {
       "properties": {
         "tasks": {
@@ -760,6 +825,9 @@
         },
         "audit_show": {
           "$ref": "#/$defs/AuditShowEnvelope"
+        },
+        "findings": {
+          "$ref": "#/$defs/FindingsEnvelope"
         },
         "fix": {
           "$ref": "#/$defs/FixEnvelope"
@@ -793,6 +861,7 @@
         "epic_show",
         "audits",
         "audit_show",
+        "findings",
         "fix",
         "lint",
         "init",
@@ -889,6 +958,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.5)",
+  "title": "tskflwctl --json output (schema_version 1.6)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

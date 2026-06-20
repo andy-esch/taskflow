@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: in-progress
 epic: 17-pm-go-cli
 description: 'Resurrect the deferred audit finding-level surface: per-finding parser plus findings query, finding-status write, audit lint, candidate-list sync'
 effort: Unknown
@@ -8,6 +8,8 @@ priority: medium
 autonomy_level: 3
 tags: [cli, core, audit]
 created: "2026-06-17"
+updated_at: "2026-06-20"
+started_at: "2026-06-20"
 ---
 
 # Audit finding-level operations query write lint sync
@@ -115,7 +117,7 @@ both falling out of the parser:
       fields); `auditstore.go` counts derive from it; the regex-only counter
       no longer lives in the store. (Subsumes the item-#2 half of
       [[scaffold-schema-version-key-and-domain-level-audit-finding-counter]].)
-- [ ] `audit findings` filters on status/effort/urgency/component, single- and
+- [x] `audit findings` filters on status/effort/urgency/component, single- and
       cross-audit, with a stable `--json` per-finding schema (`schema_version`).
 - [ ] `audit finding <slug> <code> --status <v> [--pr N]` surgically rewrites
       one Status line in the cheat-sheet format; body otherwise byte-identical;
@@ -141,6 +143,21 @@ both falling out of the parser:
   item 2 (`audit findings` query) is being designed first — its value is the
   matching interface (filter dimensions + exact-vs-fuzzy per field + cross-audit
   aggregation), which is an explicit design pass, not a fill-in.
+- **2026-06-20**: Item 2 (`audit findings` query) **done**.
+  `core.QueryFindings(FindingFilter)` parses findings across every audit (or one
+  via a resolved slug), each hit tagged with its `audit` + `bucket`; per-file load
+  problems returned separately (resilient-read). **Matching decisions:** the
+  closed-vocab fields (`status`/`effort`/`urgency`) match exactly, case-insensitive,
+  comma = any-of; `component` is a case-insensitive substring. Filters are NOT
+  vocab-validated here (a typo yields empty, fine for a read) — vocab enforcement
+  is item 4 (lint). Wired through the shared `renderList`/`Column[T]` machinery, so
+  it gets `-o human|json|name|table|csv` + `-c` like `list`; new `FindingsEnvelope`
+  (`schema_version` 1.5→1.6, additive) with code/title/status/file/component/
+  effort/urgency + audit/bucket. Tests: core (cross/single-audit, multi-value,
+  component substring, case-insensitive, unknown-slug→ErrNotFound) + 2 golden
+  snapshots against a new fixture audit + the round-trip schema test (now 17
+  envelopes). README + docs updated. **Remaining: items 3 (write), 4 (lint),
+  5 (sync).**
 
 ## Out of scope
 

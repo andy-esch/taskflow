@@ -67,6 +67,12 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"AuditShowEnvelope", func(w io.Writer) error {
 			return AuditShowJSON(w, domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, "# body")
 		}},
+		{"FindingsEnvelope", func(w io.Writer) error {
+			return FindingsJSON(w, []core.AuditFinding{{
+				Finding: domain.Finding{Code: "S1", Title: "tighten the gateway", Status: "open", Effort: "S", Urgency: "soon"},
+				Audit:   "2026-01-01-area", Bucket: "open",
+			}}, nil)
+		}},
 		{"LintEnvelope", func(w io.Writer) error {
 			return LintJSON(w, []core.LintResult{{Slug: "alpha", Issues: []domain.Issue{{Field: "epic", Message: "missing"}}}}, nil)
 		}},
@@ -99,8 +105,8 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return encodeJSON(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{Code: "not-found", Message: "task not found"}})
 		}},
 	}
-	if len(cases) != 16 {
-		t.Fatalf("expected all 16 envelopes covered, got %d", len(cases))
+	if len(cases) != 17 {
+		t.Fatalf("expected all 17 envelopes covered, got %d", len(cases))
 	}
 	for _, tc := range cases {
 		sch, err := c.Compile(id + "#/$defs/" + tc.def)

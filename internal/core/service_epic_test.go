@@ -64,6 +64,16 @@ type fakeStore struct {
 	problems      []domain.FileProblem // returned by ListTasks
 	created       []domain.Task        // tasks passed to CreateTask
 	createdAudits []domain.Audit       // audits passed to CreateAudit
+	auditBodies   map[string]string    // slug → body, for GetAudit (finding queries)
+}
+
+func (f *fakeStore) GetAudit(slug string) (domain.Audit, string, error) {
+	for _, a := range f.audits {
+		if a.Slug == slug {
+			return a, f.auditBodies[slug], nil
+		}
+	}
+	return domain.Audit{}, "", domain.ErrNotFound
 }
 
 func (f *fakeStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) {

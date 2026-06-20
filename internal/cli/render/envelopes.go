@@ -96,6 +96,13 @@ type AuditShowEnvelope struct {
 	Body          string    `json:"body"`
 }
 
+// FindingsEnvelope is `audit findings --json` (the finding-level query).
+type FindingsEnvelope struct {
+	SchemaVersion string               `json:"schema_version"`
+	Findings      []findingJSON        `json:"findings"`
+	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+}
+
 // FixEnvelope is `lint --fix --json`.
 type FixEnvelope struct {
 	SchemaVersion string               `json:"schema_version"`
@@ -156,6 +163,7 @@ type jsonEnvelopes struct {
 	EpicShow   EpicShowEnvelope   `json:"epic_show"`
 	Audits     AuditsEnvelope     `json:"audits"`
 	AuditShow  AuditShowEnvelope  `json:"audit_show"`
+	Findings   FindingsEnvelope   `json:"findings"`
 	Fix        FixEnvelope        `json:"fix"`
 	Lint       LintEnvelope       `json:"lint"`
 	Init       InitEnvelope       `json:"init"`
