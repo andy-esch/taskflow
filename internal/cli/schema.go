@@ -16,6 +16,7 @@ import (
 var sectionRe = regexp.MustCompile(`(?m)^##\s+(.+)$`)
 
 func newSchemaCmd(app *App) *cobra.Command {
+	var jsonSchema bool
 	cmd := &cobra.Command{
 		Use:   "schema [task|epic|audit]",
 		Short: "Describe the tool's contract + per-kind authoring guidance (for agents)",
@@ -23,8 +24,10 @@ func newSchemaCmd(app *App) *cobra.Command {
 			"enums, the task field registry with types, and the exit/error codes — so an\n" +
 			"agent can drive the tool without parsing --help prose. With a kind, emit how\n" +
 			"to author that document: the body section template, per-field guidance, and\n" +
-			"conventions. Everything is derived from the tool's own data.",
-		Example:     "  tskflwctl schema --json\n  tskflwctl schema task\n  tskflwctl schema audit --json",
+			"conventions. With --json-schema, emit a JSON Schema for the --json output\n" +
+			"envelopes so an agent can validate the tool's output. Everything is derived\n" +
+			"from the tool's own types and data.",
+		Example:     "  tskflwctl schema --json\n  tskflwctl schema task\n  tskflwctl schema --json-schema",
 		Args:        cobra.MaximumNArgs(1),
 		Annotations: map[string]string{"safety": "read-only"},
 		ValidArgs:   domain.SchemaKinds(),
@@ -33,13 +36,29 @@ func newSchemaCmd(app *App) *cobra.Command {
 		// (the strongest reason this command exists). Just set up styling.
 		PersistentPreRunE: func(*cobra.Command, []string) error { app.setStyle(); return nil },
 		RunE: func(_ *cobra.Command, args []string) error {
+			if jsonSchema {
+				return runJSONSchema(app)
+			}
 			if len(args) == 0 {
 				return runSchemaContract(app)
 			}
 			return runSchemaKind(app, args[0])
 		},
 	}
+	cmd.Flags().BoolVar(&jsonSchema, "json-schema", false,
+		"emit a JSON Schema (Draft 2020-12) for the --json output envelopes")
 	return cmd
+}
+
+// runJSONSchema emits the Draft 2020-12 JSON Schema for every --json envelope, so
+// an agent can validate the tool's machine output against it.
+func runJSONSchema(app *App) error {
+	schema, err := render.JSONSchema()
+	if err != nil {
+		return err
+	}
+	_, err = app.Out.Write(append(schema, '\n'))
+	return err
 }
 
 // runSchemaContract assembles the global contract from the domain enums/registry

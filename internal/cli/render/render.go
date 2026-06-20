@@ -102,11 +102,7 @@ func plural(n int, noun string) string {
 // per-file load problems so a JSON consumer never silently loses unreadable
 // files (mirrors LintJSON's `unreadable`).
 func TasksJSON(w io.Writer, tasks []domain.Task, problems []domain.FileProblem) error {
-	payload := struct {
-		SchemaVersion string               `json:"schema_version"`
-		Tasks         []taskJSON           `json:"tasks"`
-		Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
-	}{SchemaVersion: SchemaVersion, Tasks: make([]taskJSON, 0, len(tasks)), Unreadable: problems}
+	payload := TasksEnvelope{SchemaVersion: SchemaVersion, Tasks: make([]taskJSON, 0, len(tasks)), Unreadable: problems}
 	for _, t := range tasks {
 		payload.Tasks = append(payload.Tasks, toJSON(t))
 	}
@@ -151,11 +147,7 @@ func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 
 // TaskShowJSON writes a task plus its body.
 func TaskShowJSON(w io.Writer, t domain.Task, body string) error {
-	return encodeJSON(w, struct {
-		SchemaVersion string   `json:"schema_version"`
-		Task          taskJSON `json:"task"`
-		Body          string   `json:"body"`
-	}{SchemaVersion: SchemaVersion, Task: toJSON(t), Body: body})
+	return encodeJSON(w, TaskShowEnvelope{SchemaVersion: SchemaVersion, Task: toJSON(t), Body: body})
 }
 
 // MoveResult is the per-item outcome of a transition. `To` is the destination
@@ -188,11 +180,7 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 // MovesJSON writes the structured per-task transition report; dry_run marks a
 // preview (nothing was written).
 func MovesJSON(w io.Writer, results []MoveResult, dryRun bool) error {
-	return encodeJSON(w, struct {
-		SchemaVersion string       `json:"schema_version"`
-		DryRun        bool         `json:"dry_run"`
-		Moves         []MoveResult `json:"moves"`
-	}{SchemaVersion: SchemaVersion, DryRun: dryRun, Moves: results})
+	return encodeJSON(w, MovesEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Moves: results})
 }
 
 func encodeJSON(w io.Writer, payload any) error {
@@ -286,14 +274,7 @@ func SummaryJSON(w io.Writer, s core.Summary) error {
 			Total:        e.Total, Done: e.Done, Percent: e.Percent(),
 		})
 	}
-	return encodeJSON(w, struct {
-		SchemaVersion string               `json:"schema_version"`
-		Counts        []statusCountJSON    `json:"counts"`
-		InProgress    []taskJSON           `json:"in_progress"`
-		Epics         []epicJSON           `json:"epics"`
-		Misfiled      int                  `json:"misfiled"`
-		Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
-	}{
+	return encodeJSON(w, SummaryEnvelope{
 		SchemaVersion: SchemaVersion, Counts: counts, InProgress: inprog,
 		Epics: epics, Misfiled: s.Misfiled, Unreadable: s.Problems,
 	})
@@ -306,10 +287,7 @@ func VersionHuman(w io.Writer, st Style, version string) {
 
 // VersionJSON writes the version in the standard envelope.
 func VersionJSON(w io.Writer, version string) error {
-	return encodeJSON(w, struct {
-		SchemaVersion string `json:"schema_version"`
-		Version       string `json:"version"`
-	}{SchemaVersion: SchemaVersion, Version: version})
+	return encodeJSON(w, VersionEnvelope{SchemaVersion: SchemaVersion, Version: version})
 }
 
 // CreatedHuman prints the path of a newly created file (or, under --dry-run,
@@ -327,21 +305,7 @@ func CreatedHuman(w io.Writer, st Style, path string, dryRun bool) {
 // status / epic status / audit bucket); path is relative to the planning root,
 // matching the human output.
 func CreatedJSON(w io.Writer, kind, id, status, path string, dryRun bool) error {
-	return encodeJSON(w, struct {
-		SchemaVersion string `json:"schema_version"`
-		DryRun        bool   `json:"dry_run"`
-		Created       struct {
-			Kind   string `json:"kind"`
-			ID     string `json:"id"`
-			Status string `json:"status"`
-			Path   string `json:"path"`
-		} `json:"created"`
-	}{SchemaVersion: SchemaVersion, DryRun: dryRun, Created: struct {
-		Kind   string `json:"kind"`
-		ID     string `json:"id"`
-		Status string `json:"status"`
-		Path   string `json:"path"`
-	}{Kind: kind, ID: id, Status: status, Path: path}})
+	return encodeJSON(w, CreatedEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Created: CreatedItem{Kind: kind, ID: id, Status: status, Path: path}})
 }
 
 // EpicsHuman writes a table of epics with task rollup.
@@ -370,11 +334,7 @@ type epicJSON struct {
 // EpicsJSON writes a versioned envelope of epics with rollup, including any
 // per-file load problems (mirrors LintJSON's `unreadable`).
 func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []domain.FileProblem) error {
-	payload := struct {
-		SchemaVersion string               `json:"schema_version"`
-		Epics         []epicJSON           `json:"epics"`
-		Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
-	}{SchemaVersion: SchemaVersion, Epics: make([]epicJSON, 0, len(epics)), Unreadable: problems}
+	payload := EpicsEnvelope{SchemaVersion: SchemaVersion, Epics: make([]epicJSON, 0, len(epics)), Unreadable: problems}
 	for _, e := range epics {
 		payload.Epics = append(payload.Epics, epicJSON{
 			epicMetaJSON: toEpicMeta(e.Epic),
@@ -437,11 +397,7 @@ func auditToJSON(a domain.Audit) auditJSON {
 // AuditsJSON writes a versioned envelope of audits, including any per-file load
 // problems (mirrors LintJSON's `unreadable`).
 func AuditsJSON(w io.Writer, audits []domain.Audit, problems []domain.FileProblem) error {
-	payload := struct {
-		SchemaVersion string               `json:"schema_version"`
-		Audits        []auditJSON          `json:"audits"`
-		Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
-	}{SchemaVersion: SchemaVersion, Audits: make([]auditJSON, 0, len(audits)), Unreadable: problems}
+	payload := AuditsEnvelope{SchemaVersion: SchemaVersion, Audits: make([]auditJSON, 0, len(audits)), Unreadable: problems}
 	for _, a := range audits {
 		payload.Audits = append(payload.Audits, auditToJSON(a))
 	}
@@ -467,11 +423,7 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, body string) error {
 
 // AuditShowJSON writes an audit plus its body.
 func AuditShowJSON(w io.Writer, a domain.Audit, body string) error {
-	return encodeJSON(w, struct {
-		SchemaVersion string    `json:"schema_version"`
-		Audit         auditJSON `json:"audit"`
-		Body          string    `json:"body"`
-	}{SchemaVersion: SchemaVersion, Audit: auditToJSON(a), Body: body})
+	return encodeJSON(w, AuditShowEnvelope{SchemaVersion: SchemaVersion, Audit: auditToJSON(a), Body: body})
 }
 
 // FixHuman writes the auto-repairs applied (or proposed under --dry-run).
@@ -498,15 +450,15 @@ func FixHuman(w io.Writer, st Style, results []domain.FixResult, dryRun bool) {
 // nothing) — so a --json consumer learns the residual breakage without parsing
 // the prose error.
 func FixJSON(w io.Writer, results []domain.FixResult, problems []domain.FileProblem, dryRun bool) error {
+	// Empty (not null) for the array fields, so a consumer can len() without a nil
+	// check — and so the output validates against its own schema (type: array).
 	if problems == nil {
 		problems = []domain.FileProblem{}
 	}
-	return encodeJSON(w, struct {
-		SchemaVersion string               `json:"schema_version"`
-		DryRun        bool                 `json:"dry_run"`
-		Fixed         []domain.FixResult   `json:"fixed"`
-		Unreadable    []domain.FileProblem `json:"unreadable"`
-	}{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results, Unreadable: problems})
+	if results == nil {
+		results = []domain.FixResult{}
+	}
+	return encodeJSON(w, FixEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results, Unreadable: problems})
 }
 
 // ProblemsHuman writes per-file load problems (unreadable frontmatter).
@@ -536,11 +488,10 @@ type lintTaskJSON struct {
 
 // LintJSON writes the structured lint report: unreadable files + field issues.
 func LintJSON(w io.Writer, results []core.LintResult, problems []domain.FileProblem) error {
-	payload := struct {
-		SchemaVersion string               `json:"schema_version"`
-		Unreadable    []domain.FileProblem `json:"unreadable"`
-		Issues        []lintTaskJSON       `json:"issues"`
-	}{SchemaVersion: SchemaVersion, Unreadable: problems, Issues: make([]lintTaskJSON, 0, len(results))}
+	if problems == nil {
+		problems = []domain.FileProblem{} // empty, not null (see FixJSON) — schema is type: array
+	}
+	payload := LintEnvelope{SchemaVersion: SchemaVersion, Unreadable: problems, Issues: make([]lintTaskJSON, 0, len(results))}
 	for _, r := range results {
 		payload.Issues = append(payload.Issues, lintTaskJSON{Slug: r.Slug, Issues: r.Issues})
 	}
@@ -571,12 +522,7 @@ func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body strin
 	for _, t := range tasks {
 		jt = append(jt, toJSON(t))
 	}
-	return encodeJSON(w, struct {
-		SchemaVersion string       `json:"schema_version"`
-		Epic          epicMetaJSON `json:"epic"`
-		Tasks         []taskJSON   `json:"tasks"`
-		Body          string       `json:"body"`
-	}{
+	return encodeJSON(w, EpicShowEnvelope{
 		SchemaVersion: SchemaVersion,
 		Epic:          toEpicMeta(epic),
 		Tasks:         jt,
@@ -590,12 +536,7 @@ func InitJSON(w io.Writer, root string, created []string, dryRun bool) error {
 	if created == nil {
 		created = []string{}
 	}
-	return encodeJSON(w, struct {
-		SchemaVersion string   `json:"schema_version"`
-		DryRun        bool     `json:"dry_run"`
-		Root          string   `json:"root"`
-		Created       []string `json:"created"`
-	}{SchemaVersion, dryRun, root, created})
+	return encodeJSON(w, InitEnvelope{SchemaVersion, dryRun, root, created})
 }
 
 // --- schema (the tool's self-description for agents) ---
@@ -632,10 +573,7 @@ type SchemaContract struct {
 
 // SchemaJSON writes the global contract envelope.
 func SchemaJSON(w io.Writer, c SchemaContract) error {
-	return encodeJSON(w, struct {
-		SchemaVersion string `json:"schema_version"`
-		SchemaContract
-	}{SchemaVersion: SchemaVersion, SchemaContract: c})
+	return encodeJSON(w, SchemaEnvelope{SchemaVersion: SchemaVersion, SchemaContract: c})
 }
 
 // SchemaHuman renders the global contract as readable sections.
@@ -676,10 +614,7 @@ type KindSchema struct {
 
 // SchemaKindJSON writes the per-kind authoring envelope.
 func SchemaKindJSON(w io.Writer, ks KindSchema) error {
-	return encodeJSON(w, struct {
-		SchemaVersion string `json:"schema_version"`
-		KindSchema
-	}{SchemaVersion: SchemaVersion, KindSchema: ks})
+	return encodeJSON(w, SchemaKindEnvelope{SchemaVersion: SchemaVersion, KindSchema: ks})
 }
 
 // SchemaKindHuman renders the per-kind authoring guidance.

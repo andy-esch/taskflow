@@ -70,14 +70,7 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 		fmt.Fprintln(w, "error:", err)
 		return
 	}
-	var payload struct {
-		SchemaVersion string `json:"schema_version"`
-		Error         struct {
-			Code    string `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	payload.SchemaVersion = render.SchemaVersion
+	payload := render.ErrorEnvelope{SchemaVersion: render.SchemaVersion}
 	payload.Error.Code = errorCodeName(ExitCode(err))
 	payload.Error.Message = err.Error()
 	enc := json.NewEncoder(w)

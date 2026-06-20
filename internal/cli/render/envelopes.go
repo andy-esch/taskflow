@@ -1,0 +1,178 @@
+package render
+
+import (
+	"encoding/json"
+
+	"github.com/invopop/jsonschema"
+
+	"github.com/andy-esch/taskflow/internal/domain"
+)
+
+// This file is the named, reflectable form of the --json output contract. Every
+// *JSON render func marshals one of these envelopes, and JSONSchema() reflects
+// them into a Draft 2020-12 schema (`tskflwctl schema --json-schema`) so an agent
+// can validate the tool's output. Field names, json tags, and order mirror what
+// the funcs emit exactly — output is byte-stable, and the existing output tests
+// guard that the extraction changed nothing.
+
+// TasksEnvelope is `task list --json`.
+type TasksEnvelope struct {
+	SchemaVersion string               `json:"schema_version"`
+	Tasks         []taskJSON           `json:"tasks"`
+	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+}
+
+// TaskShowEnvelope is `task show --json`.
+type TaskShowEnvelope struct {
+	SchemaVersion string   `json:"schema_version"`
+	Task          taskJSON `json:"task"`
+	Body          string   `json:"body"`
+}
+
+// MovesEnvelope is the transition report (`task start --json`, etc.).
+type MovesEnvelope struct {
+	SchemaVersion string       `json:"schema_version"`
+	DryRun        bool         `json:"dry_run"`
+	Moves         []MoveResult `json:"moves"`
+}
+
+// SummaryEnvelope is `status --json`.
+type SummaryEnvelope struct {
+	SchemaVersion string               `json:"schema_version"`
+	Counts        []statusCountJSON    `json:"counts"`
+	InProgress    []taskJSON           `json:"in_progress"`
+	Epics         []epicJSON           `json:"epics"`
+	Misfiled      int                  `json:"misfiled"`
+	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+}
+
+// VersionEnvelope is `version --json`.
+type VersionEnvelope struct {
+	SchemaVersion string `json:"schema_version"`
+	Version       string `json:"version"`
+}
+
+// CreatedItem is the created document inside CreatedEnvelope.
+type CreatedItem struct {
+	Kind   string `json:"kind"`
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Path   string `json:"path"`
+}
+
+// CreatedEnvelope is `task/epic/audit new --json`.
+type CreatedEnvelope struct {
+	SchemaVersion string      `json:"schema_version"`
+	DryRun        bool        `json:"dry_run"`
+	Created       CreatedItem `json:"created"`
+}
+
+// EpicsEnvelope is `epic list --json`.
+type EpicsEnvelope struct {
+	SchemaVersion string               `json:"schema_version"`
+	Epics         []epicJSON           `json:"epics"`
+	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+}
+
+// EpicShowEnvelope is `epic show --json`.
+type EpicShowEnvelope struct {
+	SchemaVersion string       `json:"schema_version"`
+	Epic          epicMetaJSON `json:"epic"`
+	Tasks         []taskJSON   `json:"tasks"`
+	Body          string       `json:"body"`
+}
+
+// AuditsEnvelope is `audit list --json`.
+type AuditsEnvelope struct {
+	SchemaVersion string               `json:"schema_version"`
+	Audits        []auditJSON          `json:"audits"`
+	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+}
+
+// AuditShowEnvelope is `audit show --json`.
+type AuditShowEnvelope struct {
+	SchemaVersion string    `json:"schema_version"`
+	Audit         auditJSON `json:"audit"`
+	Body          string    `json:"body"`
+}
+
+// FixEnvelope is `lint --fix --json`.
+type FixEnvelope struct {
+	SchemaVersion string               `json:"schema_version"`
+	DryRun        bool                 `json:"dry_run"`
+	Fixed         []domain.FixResult   `json:"fixed"`
+	Unreadable    []domain.FileProblem `json:"unreadable"`
+}
+
+// LintEnvelope is `lint --json`.
+type LintEnvelope struct {
+	SchemaVersion string               `json:"schema_version"`
+	Unreadable    []domain.FileProblem `json:"unreadable"`
+	Issues        []lintTaskJSON       `json:"issues"`
+}
+
+// InitEnvelope is `init --json`.
+type InitEnvelope struct {
+	SchemaVersion string   `json:"schema_version"`
+	DryRun        bool     `json:"dry_run"`
+	Root          string   `json:"root"`
+	Created       []string `json:"created"`
+}
+
+// SchemaEnvelope is `schema --json` (the global contract).
+type SchemaEnvelope struct {
+	SchemaVersion string `json:"schema_version"`
+	SchemaContract
+}
+
+// SchemaKindEnvelope is `schema <kind> --json` (per-kind authoring guidance).
+type SchemaKindEnvelope struct {
+	SchemaVersion string `json:"schema_version"`
+	KindSchema
+}
+
+// ErrorItem is the error body inside ErrorEnvelope.
+type ErrorItem struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// ErrorEnvelope is the failure payload emitted under --json (see cli.WriteError).
+type ErrorEnvelope struct {
+	SchemaVersion string    `json:"schema_version"`
+	Error         ErrorItem `json:"error"`
+}
+
+// jsonEnvelopes registers every envelope so a single Reflect pulls them all (and
+// their shared types) into one schema document's $defs.
+type jsonEnvelopes struct {
+	Tasks      TasksEnvelope      `json:"tasks"`
+	TaskShow   TaskShowEnvelope   `json:"task_show"`
+	Moves      MovesEnvelope      `json:"moves"`
+	Summary    SummaryEnvelope    `json:"summary"`
+	Version    VersionEnvelope    `json:"version"`
+	Created    CreatedEnvelope    `json:"created"`
+	Epics      EpicsEnvelope      `json:"epics"`
+	EpicShow   EpicShowEnvelope   `json:"epic_show"`
+	Audits     AuditsEnvelope     `json:"audits"`
+	AuditShow  AuditShowEnvelope  `json:"audit_show"`
+	Fix        FixEnvelope        `json:"fix"`
+	Lint       LintEnvelope       `json:"lint"`
+	Init       InitEnvelope       `json:"init"`
+	Schema     SchemaEnvelope     `json:"schema"`
+	SchemaKind SchemaKindEnvelope `json:"schema_kind"`
+	Error      ErrorEnvelope      `json:"error"`
+}
+
+// JSONSchema returns the Draft 2020-12 JSON Schema for every --json envelope, as
+// one document. Each property of the root object names an envelope and $refs its
+// definition; validate a command's --json output against the matching entry in
+// $defs (e.g. `task list --json` against $defs/TasksEnvelope).
+func JSONSchema() ([]byte, error) {
+	r := &jsonschema.Reflector{}
+	s := r.Reflect(&jsonEnvelopes{})
+	s.Title = "tskflwctl --json output (schema_version " + SchemaVersion + ")"
+	s.Description = "Each property of the root names a --json envelope and references its definition in $defs; " +
+		"validate a command's --json output against the matching definition."
+	return json.MarshalIndent(s, "", "  ")
+}
