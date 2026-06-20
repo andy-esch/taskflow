@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
 	"github.com/andy-esch/taskflow/internal/core"
@@ -50,6 +52,70 @@ func (a *App) fillText(value, requiredMsg, title, placeholder string) (string, e
 		return value, err
 	}
 	return a.Prompt.Text(title, placeholder)
+}
+
+// fillTags resolves the required tags. Tags are FREE-FORM (no fixed vocabulary),
+// so the prompt is a comma-separated TEXT input — not a multiselect over a list
+// that doesn't really exist — with the tags already in use offered as a
+// placeholder hint. At least one tag is required. hintFn is called only on the
+// prompt path (a richer multiselect-of-suggestions is a future enhancement).
+func (a *App) fillTags(tags []string, hintFn func() string) ([]string, error) {
+	if done, err := a.needPrompt(len(tags) > 0, "--tags is required (at least one)"); done {
+		return tags, err
+	}
+	raw, err := a.Prompt.Text("Tags (comma-separated)", hintFn())
+	if err != nil {
+		return nil, err
+	}
+	parsed := parseTags(raw)
+	if len(parsed) == 0 {
+		return nil, fmt.Errorf("%w: at least one tag is required", domain.ErrValidation)
+	}
+	return parsed, nil
+}
+
+// parseTags splits a comma-separated string into trimmed, de-duplicated,
+// non-empty tags, preserving first-seen order.
+func parseTags(s string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		t := strings.TrimSpace(p)
+		if t == "" || seen[t] {
+			continue
+		}
+		seen[t] = true
+		out = append(out, t)
+	}
+	return out
+}
+
+// tagHint lists a few tags already in use as a placeholder suggestion for the
+// free-form tags prompt. Falls back to a generic example when none are in use or
+// the read fails (a hint must never block creating a task).
+func (a *App) tagHint() string {
+	tasks, _, err := a.Svc.ListTasks(core.TaskFilter{All: true})
+	if err != nil {
+		return "e.g. net, ui"
+	}
+	seen := map[string]bool{}
+	var tags []string
+	for _, t := range tasks {
+		for _, tag := range t.Tags {
+			if !seen[tag] {
+				seen[tag] = true
+				tags = append(tags, tag)
+			}
+		}
+	}
+	if len(tags) == 0 {
+		return "e.g. net, ui"
+	}
+	sort.Strings(tags)
+	if len(tags) > 6 {
+		tags = tags[:6]
+	}
+	return "in use: " + strings.Join(tags, ", ")
 }
 
 // labeledOption builds a picker option from an id plus an optional description —

@@ -78,6 +78,13 @@ func newTaskNewCmd(app *App) *cobra.Command {
 				return err
 			}
 			p.Epic = epic
+			// tags (≥1 required): flag values → free-form text prompt on a TTY →
+			// exit 11 otherwise.
+			tags, err := app.fillTags(p.Tags, app.tagHint)
+			if err != nil {
+				return err
+			}
+			p.Tags = tags
 			// A next-up/in-progress task requires a description (the L4 rule); on a
 			// TTY prompt for it, otherwise exit 11 — same flag-twin contract.
 			if p.Next || p.Start {

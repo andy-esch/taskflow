@@ -130,6 +130,72 @@ func TestFillText_GateOpen_Prompts(t *testing.T) {
 	}
 }
 
+func TestParseTags(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"net, ui ,, net", []string{"net", "ui"}}, // trim, drop empty, dedup, keep order
+		{"a,a,a", []string{"a"}},
+		{"  ,  ", nil},
+		{"", nil},
+		{"solo", []string{"solo"}},
+	}
+	for _, c := range cases {
+		got := parseTags(c.in)
+		if len(got) != len(c.want) {
+			t.Errorf("parseTags(%q) = %v; want %v", c.in, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("parseTags(%q) = %v; want %v", c.in, got, c.want)
+				break
+			}
+		}
+	}
+}
+
+func staticHint() string { return "e.g. net, ui" }
+
+func TestFillTags_FlagValuesWin(t *testing.T) {
+	app := &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{}} // empty fake errors if prompted
+	got, err := app.fillTags([]string{"net", "ui"}, staticHint)
+	if err != nil || len(got) != 2 || got[0] != "net" {
+		t.Fatalf("fillTags(flags) = %v, %v; want [net ui]", got, err)
+	}
+}
+
+func TestFillTags_GateClosed_RequiredError(t *testing.T) {
+	app := &App{Gate: prompt.NewGate(false), Prompt: &prompt.Fake{}}
+	if _, err := app.fillTags(nil, staticHint); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("closed gate should wrap ErrValidation (exit 11), got %v", err)
+	}
+}
+
+func TestFillTags_GateOpen_PromptsAndParses(t *testing.T) {
+	f := &prompt.Fake{TextAnswers: []string{"net, ui ,, net"}} // spaces, empty, dup
+	app := &App{Gate: prompt.NewGate(true), Prompt: f}
+	got, err := app.fillTags(nil, staticHint)
+	if err != nil || len(got) != 2 || got[0] != "net" || got[1] != "ui" {
+		t.Fatalf("fillTags(prompt) = %v, %v; want [net ui]", got, err)
+	}
+}
+
+// TestTaskNew_MissingTags_NonInteractive: missing --tags non-interactively is
+// exit-11 (the free-form tags prompt is TTY-only).
+func TestTaskNew_MissingTags_NonInteractive(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+
+	var out bytes.Buffer
+	cmd := NewRootCmd(&out, &out)
+	cmd.SetArgs([]string{"-C", root, "task", "new", "T", "--epic", "e1"}) // no --tags
+	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("missing --tags non-interactively should be ErrValidation (exit 11), got %v", err)
+	}
+}
+
 // TestTaskNew_StartMissingDescription_NonInteractive: a --start task without
 // --description, run non-interactively, is exit-11 — the prompt is TTY-only.
 func TestTaskNew_StartMissingDescription_NonInteractive(t *testing.T) {

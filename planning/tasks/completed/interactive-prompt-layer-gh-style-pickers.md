@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: huh TTY-only pickers for missing inputs (epic/tags, bare transition verbs, ambiguity); human-only - agents always get exit codes
 effort: Unknown
@@ -8,8 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, ux, interactive]
 created: "2026-06-12"
-updated_at: "2026-06-19"
+updated_at: "2026-06-20"
 started_at: "2026-06-19"
+completed_at: "2026-06-20"
 ---
 # Interactive prompt layer (gh-style pickers)
 
@@ -38,10 +39,13 @@ a capability, never the capability.
    type Option struct{ Label, Value string }
    type Prompter interface {
        SelectOne(title string, opts []Option) (string, error)
-       SelectMany(title string, opts []Option, allowNew bool) ([]string, error) // tags (post-D1)
        Text(title, placeholder string) (string, error)
    }
    ```
+   (No `SelectMany` was needed: tags are free-form, so they ship as a
+   comma-separated `Text` prompt — `fillTags` parses + dedups — not a multiselect
+   over a fixed vocabulary. A richer "multiselect of suggestions" stays a future
+   enhancement.)
 2. **One `Gate`, resolved once, injected** — not scattered `isTerminal` checks.
    `on = stdin TTY && stderr TTY && !--json && !--no-input` (`TSKFLW_NO_INPUT=1`),
    resolved in App setup next to `setStyle`, stored on the App (DI, no globals).
@@ -121,13 +125,28 @@ for missing required input, never a requirement** — TTY detection picks the
 - Epic fit: filed under 17 by default, but 17 is the port epic and nearly
   done — planning should decide whether interactive UX warrants its own epic.
 
-## Acceptance criteria (draft)
+## Acceptance criteria
 
-- [ ] Planning conflicts above resolved; task de-drafted.
-- [ ] No prompt is reachable when piped, under --json, or with --no-input
-      (test: every prompting command, non-TTY → current error codes).
-- [ ] Prompts write to stderr; stdout byte-identical to the flag-driven run.
-- [ ] Each prompt has a flag equivalent (no prompt-only capability).
+- [x] Planning conflicts resolved; task de-drafted (D1 = prompt for tags; epic
+      moved to 20; ambiguity/item-4 deferred behind fuzzy-resolution).
+- [x] No prompt is reachable when piped, under `--json`, or with `--no-input`
+      (contract tests: `task new` missing epic/tags, `--start` missing
+      description, bare transition → exit 11; the `gateOpen` truth table).
+- [x] Prompts write to stderr; stdout byte-stable on the flag-driven path.
+- [x] Each prompt has a flag equivalent (the `fillX` tri-state makes a
+      prompt-only path impossible to write).
+
+## Shipped (2026-06-20)
+
+`task new` interactive flow: **epic** picker → **tags** (free-form comma text) →
+**description** (only for `--start`/`--next`). **Bare transition verbs** → task
+picker. Pickers run on **bubbles/list** (substring filter, alt-screen) behind the
+`Prompter` port; text on huh. Gate + `--no-input` + the `fillSelect`/`fillText`/
+`fillTags` helpers enforce the contract; hardened via a two-agent adversarial
+review (fixed a Unicode-filter panic + a SIGINT→130 mapping). **Deferred:** item 4
+(ambiguity, blocked on [[fuzzypartial-slug-resolution]]); a richer
+multiselect-of-suggestions for tags; the TUI filter toggle
+([[toggle-tui-list-filter-between-fuzzy-and-substring]]).
 
 ## Related
 
