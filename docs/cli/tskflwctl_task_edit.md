@@ -5,9 +5,10 @@ Open a task in your editor (whole file; re-validated on save)
 ### Synopsis
 
 Open the task's markdown file in $VISUAL/$EDITOR (falling back to vi). On
-save the file is re-parsed: a frontmatter break or bad field reopens the
-editor with the error rather than landing on disk. The human counterpart to
-`task set` — agents and scripts should drive `set` (deterministic) instead.
+save the file is re-parsed: a frontmatter break (or a value the loader can't
+read) reopens the editor with the error rather than landing on disk — deeper
+field checks remain `lint`'s job. The human counterpart to `task set`; agents
+and scripts should drive `set` (deterministic) instead.
 
 ```
 tskflwctl task edit <task> [flags]

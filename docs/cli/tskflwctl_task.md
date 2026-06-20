@@ -22,6 +22,7 @@ Work with tasks
 ### SEE ALSO
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
+* [tskflwctl task append](tskflwctl_task_append.md)	 - Append a section to a task's body (atomic; agent-facing)
 * [tskflwctl task complete](tskflwctl_task_complete.md)	 - Move task(s) to completed
 * [tskflwctl task defer](tskflwctl_task_defer.md)	 - Move task(s) to deferred
 * [tskflwctl task demote](tskflwctl_task_demote.md)	 - Move task(s) to ready-to-start

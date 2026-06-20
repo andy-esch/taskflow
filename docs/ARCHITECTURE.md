@@ -144,7 +144,7 @@ invariant; fs-event behavior uses synthetic messages, not real `fsnotify` timing
 Substantially functional — the full create→update→move→lint loop runs without
 the Python prototype:
 - `init`, `completion` (command/flag/slug, status-aware), `lint` (+`--fix`/`--dry-run`)
-- `task new|list|show|set|move|start|promote|demote|complete|defer|deprecate`
+- `task new|list|show|set|edit|append|move|start|promote|demote|complete|defer|deprecate`
 - `epic new|list|show`, `audit list|show|close|reopen|defer`
 - `ui` — the Bubble Tea browser (epic 18): two-pane read-only browse of
   tasks/epics/audits, `:` jump, `/` filter, sort, status views, detail find, `?`

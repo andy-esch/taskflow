@@ -22,9 +22,10 @@ func newTaskEditCmd(app *App) *cobra.Command {
 		Use:   "edit <task>",
 		Short: "Open a task in your editor (whole file; re-validated on save)",
 		Long: "Open the task's markdown file in $VISUAL/$EDITOR (falling back to vi). On\n" +
-			"save the file is re-parsed: a frontmatter break or bad field reopens the\n" +
-			"editor with the error rather than landing on disk. The human counterpart to\n" +
-			"`task set` — agents and scripts should drive `set` (deterministic) instead.",
+			"save the file is re-parsed: a frontmatter break (or a value the loader can't\n" +
+			"read) reopens the editor with the error rather than landing on disk — deeper\n" +
+			"field checks remain `lint`'s job. The human counterpart to `task set`; agents\n" +
+			"and scripts should drive `set` (deterministic) instead.",
 		Example:           "  tskflwctl task edit add-retry-backoff\n  tskflwctl task edit   # pick from a list",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "mutating"},

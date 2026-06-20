@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: JSON error envelope, --body-file/stdin for long bodies, body editing through the tool, JSON create envelope gaps - from dogfooding by an agent
 effort: Unknown
@@ -8,8 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, agents, ux, dx]
 created: "2026-06-12"
-started_at: "2026-06-12"
-updated_at: "2026-06-19"
+started_at: "2026-06-20"
+updated_at: "2026-06-20"
+completed_at: "2026-06-20"
 ---
 # Agent-facing CLI ergonomics batch
 
@@ -72,13 +73,13 @@ precise ("160 > 150").
 - [x] `--json` failures emit a parseable envelope with a stable error code.
 - [x] `task new --body-file -` works from stdin (and from a path); quoting
       torture gone. Mutually exclusive with `--body`.
-- [ ] A body can be replaced/appended through the tool, atomically.
+- [x] A body can be replaced/appended through the tool, atomically.
 - [x] Create envelope carries `status` (task status / epic status / audit
       bucket); `path` is now relative to the planning root in both human and
       JSON modes (was absolute in JSON). schema_version 1.4 → 1.5.
 - [x] `task new --start` lands the task in in-progress; mutually exclusive with
       `--next`; flag-conflict errors cleanly.
-- [ ] Suite + lint green; README "agent use" section updated.
+- [x] Suite + lint green; README "agent use" section updated.
 
 ## Related
 
@@ -110,6 +111,31 @@ consistency. Left ready-to-start as a partial batch.
   the planning root in both modes (`render.CreatedJSON` + the three call sites;
   schema_version → 1.5; envelope tests assert it). Only the body replace/append
   fork remains (it needs the `set --body-file` vs `task append` decision).
+
+## Progress (2026-06-20) — final item, batch complete
+
+Shipped the body replace/append fork (item 3), resolving the design fork **both
+ways** as a coherent pair so the agent face mirrors the human `task edit`:
+
+- **`task append <slug>`** — append a section (`--body`/`--body-file`/stdin via
+  `-`), separated by one blank line, single trailing newline.
+- **`task set --body`/`--body-file`** — replace the whole body; its own atomic
+  write, **mutually exclusive with field flags** (a combined call is exit-11, so
+  field-surgery and body-surgery never share one ambiguous write).
+
+Both go through one store primitive — `FS.EditBody(slug, text, appendMode, now,
+dryRun)` (port + `Service.ReplaceBody`/`AppendBody`) — which swaps the body via
+the existing surgical `yaml.Node` path (`replaceBodyStamped`): **unknown
+frontmatter keys, comments, and key order survive**, `updated_at` is stamped, and
+it carries the same **parse-before-write + compare-and-swap** discipline as
+`SetFields`/`Move` (a concurrent relocation → `ErrConflict`, never a resurrected
+slug). `--dry-run` previews without writing; `--json` returns the task envelope.
+Tests: store engine (replace/append/preserve-unknown/dry-run/broken-frontmatter)
++ cli (append, stdin, empty→11, set-body replace, body+fields→11, dry-run).
+Docs regenerated (`task append`); README update + lifecycle examples added.
+
+Item 5 (the `--set` coercion help paragraph) shipped earlier; the full batch is
+now done.
 
 ## Note (2026-06-12)
 

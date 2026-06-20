@@ -29,10 +29,11 @@ We dogfood: drive this repo's planning with the tool itself.
 - **Create:** `./bin/tskflwctl task new "Title" --epic <id> [--next]` ·
   `epic new "Title" --description "..."` · `audit new <area> [--date]`.
 - **Lifecycle:** `task start|promote|demote|complete|defer|deprecate <slug>...`.
-- **Read/edit:** `task list|show|set|edit`, `epic list|show`,
-  `audit new|list|show|close|reopen|defer`. `task set` is the agent face
-  (field-level, scriptable); `task edit` is the human face ($EDITOR on the whole
-  file, re-validated on save).
+- **Read/edit:** `task list|show|set|edit|append`, `epic list|show`,
+  `audit new|list|show|close|reopen|defer`. Two faces of mutation: **agent**
+  (field-level `task set`; body via `task append` / `task set --body|--body-file`,
+  all scriptable + atomic) vs **human** (`task edit` — $EDITOR on the whole file,
+  re-validated on save).
 - **Self-describe (agents):** `schema` (contract: statuses, field registry,
   exit codes) · `schema task|epic|audit` (authoring guidance) ·
   `schema --json-schema` (Draft 2020-12 schema for the `--json` envelopes). Runs
