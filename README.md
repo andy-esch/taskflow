@@ -129,6 +129,21 @@ tskflwctl task list --status in-progress -o json | jq -r '.tasks[].slug'
 file-read problems, and prompts go to stderr, so a partial `… | xargs` never
 interleaves errors into the data stream.
 
+### Interactivity: one capability, two faces
+
+When a required input is missing, `tskflwctl` picks the *face* based on the
+terminal, never the capability ([clig.dev](https://clig.dev/#interactivity)):
+
+- **On a TTY** (a human): it prompts — `task new` without `--epic` opens an epic
+  picker; a bare `task start` opens a picker over ready-to-start tasks. Prompts
+  render to **stderr**, so stdout stays byte-identical to the flag-driven run.
+- **Off a TTY** (a pipe, an agent, `--json`, or `--no-input` / `TSKFLW_NO_INPUT=1`):
+  it never prompts — it fails with today's exit code (11) naming the flag to pass.
+
+So every prompt has a flag twin and nothing interactive can ever block a script.
+Ctrl-C out of a prompt exits **130** (the SIGINT convention) with a quiet
+`aborted`, not an error.
+
 ### `pm` is retired
 
 The Python prototype (`bin/pm`) this tool was ported from is **gone** —

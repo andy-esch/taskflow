@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Render task/epic/audit show bodies as styled markdown via glamour on a TTY (raw under --json/pipe); glamour already in the module graph
 effort: Unknown
@@ -10,6 +10,7 @@ tags: [cli, ux, output]
 created: "2026-06-19"
 updated_at: "2026-06-19"
 started_at: "2026-06-19"
+completed_at: "2026-06-19"
 ---
 ## Objective
 

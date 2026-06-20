@@ -48,6 +48,30 @@ func isTerminal(w io.Writer) bool {
 	return ok && term.IsTerminal(int(f.Fd()))
 }
 
+// isTerminalReader is the stdin counterpart of isTerminal: it reports whether r is
+// a real TTY (false for a pipe or a test buffer), so the prompt gate only opens
+// when input is genuinely interactive.
+func isTerminalReader(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
+}
+
+// envEnabled reports whether an env var is set to a non-empty, non-"0" value — the
+// "true-ish" convention used for TSKFLW_NO_INPUT (mirrors forceColorEnv).
+func envEnabled(key string) bool {
+	v, ok := os.LookupEnv(key)
+	return ok && v != "" && v != "0"
+}
+
+// gateOpen resolves whether interactive prompting is permitted. Extracted as a
+// pure function so the contract is unit-tested directly: prompt ONLY when neither
+// --json nor --no-input is set AND both stdin and stderr are real TTYs (clig.dev:
+// only prompt when stdin is interactive). Any false closes the gate, so no
+// agent/pipeline path can ever block.
+func gateOpen(jsonOut, noInput, stdinTTY, stderrTTY bool) bool {
+	return !jsonOut && !noInput && stdinTTY && stderrTTY
+}
+
 // terminalWidth returns the column width of w's terminal, or 0 when w isn't a
 // terminal (piped/redirected/tests) — which the renderer treats as "no limit",
 // so scripts get full-width rows.

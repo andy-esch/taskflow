@@ -69,6 +69,26 @@ func newTaskNewCmd(app *App) *cobra.Command {
 		ValidArgsFunction: activeHelpArg("provide a task title (quote it if it has spaces)"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p.Title = args[0]
+			// epic: flag value, else prompt (interactive), else exit 11. The
+			// required-input rule is unchanged for agents — this just adds a
+			// human picker when a TTY is present.
+			epic, err := app.fillSelect(p.Epic, "--epic is required",
+				"no epics exist yet — create one with 'epic new' first", "Epic for this task", app.epicOptions)
+			if err != nil {
+				return err
+			}
+			p.Epic = epic
+			// A next-up/in-progress task requires a description (the L4 rule); on a
+			// TTY prompt for it, otherwise exit 11 — same flag-twin contract.
+			if p.Next || p.Start {
+				desc, err := app.fillText(p.Description,
+					"--description is required for a --next/--start task",
+					"Description (one line, ≤150 chars)", "what & why")
+				if err != nil {
+					return err
+				}
+				p.Description = desc
+			}
 			body, err := resolveBody(cmd, p.Body, bodyFile)
 			if err != nil {
 				return err
@@ -102,7 +122,10 @@ func newTaskNewCmd(app *App) *cobra.Command {
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the body from a file, or - for stdin (replaces --body)")
 	cmd.MarkFlagsMutuallyExclusive("next", "start")
 	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
-	_ = cmd.MarkFlagRequired("epic")
+	// NOTE: --epic is intentionally NOT MarkFlagRequired — newTaskNewCmd resolves
+	// it via fillSelect (flag → prompt on a TTY → exit 11 otherwise), so a human
+	// gets a picker while agents still get a validation error. cobra's required
+	// check would short-circuit that (and exit 1, not our 11).
 	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
 	return cmd
 }
@@ -290,10 +313,19 @@ func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Comm
 		Use:               use + " <task>...",
 		Short:             short,
 		Example:           "  tskflwctl task " + use + " my-task\n  tskflwctl task " + use + " task-a task-b",
-		Args:              cobra.MinimumNArgs(1),
+		Args:              cobra.ArbitraryArgs, // bare verb → picker on a TTY; non-interactive needs ≥1 arg
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.taskCompleter(to), // don't offer tasks already at `to`
 		RunE: func(_ *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				// Bare verb: pick a task on a TTY; non-interactive → exit 11.
+				slug, err := app.fillSelect("", "specify at least one task to "+use,
+					"no tasks available to "+use, "Task to "+use, app.transitionOptions(to))
+				if err != nil {
+					return err
+				}
+				args = []string{slug}
+			}
 			return runTransition(app, to, args)
 		},
 	}
