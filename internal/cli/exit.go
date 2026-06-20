@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/andy-esch/taskflow/internal/cli/prompt"
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -31,6 +32,9 @@ func ExitCode(err error) int {
 	if err == nil {
 		return 0
 	}
+	if errors.Is(err, prompt.ErrAborted) {
+		return 130 // 128 + SIGINT(2): the user interrupted a prompt with ctrl-c
+	}
 	for _, e := range errCodes {
 		if errors.Is(err, e.err) {
 			return e.code
@@ -55,6 +59,13 @@ func errorCodeName(code int) string {
 // to parse prose to learn why a command failed (decided 2026-06-12). It goes
 // to stderr either way; stdout stays empty on failure.
 func WriteError(w io.Writer, err error, asJSON bool) {
+	// A prompt abort only reaches here on a TTY (the gate is closed under --json),
+	// so it's the human path: a quiet line, never a scary "error:" or a JSON
+	// envelope. Pairs with exit code 130.
+	if errors.Is(err, prompt.ErrAborted) {
+		fmt.Fprintln(w, "aborted")
+		return
+	}
 	if !asJSON {
 		fmt.Fprintln(w, "error:", err)
 		return

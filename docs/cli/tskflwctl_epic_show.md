@@ -21,6 +21,7 @@ tskflwctl epic show <epic> [flags]
       --dry-run        preview the mutation without writing (validation still runs)
       --json           machine-readable JSON output
       --no-color       disable colored output (alias for --color=never)
+      --no-input       never prompt; missing required input is an error (for scripts/agents; also TSKFLW_NO_INPUT)
 ```
 
 ### SEE ALSO

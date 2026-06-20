@@ -11,6 +11,7 @@ Local-first planning CLI (tasks, epics, audits) over markdown
   -h, --help           help for tskflwctl
       --json           machine-readable JSON output
       --no-color       disable colored output (alias for --color=never)
+      --no-input       never prompt; missing required input is an error (for scripts/agents; also TSKFLW_NO_INPUT)
 ```
 
 ### SEE ALSO

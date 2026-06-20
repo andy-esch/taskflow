@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
+	"github.com/andy-esch/taskflow/internal/cli/prompt"
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
@@ -25,29 +26,39 @@ import (
 type App struct {
 	Out    io.Writer
 	ErrOut io.Writer
+	In     io.Reader // stdin (for interactive prompts; non-TTY in tests/pipes)
 
 	JSON    bool
 	DryRun  bool // preview mutations: full validation, no writes
 	Chdir   string
 	Color   string // auto | always | never
 	NoColor bool   // alias for --color=never
+	NoInput bool   // never prompt; missing required input is an error (also TSKFLW_NO_INPUT)
 
-	Style render.Style
-	Cfg   *config.Config
-	Svc   *core.Service
+	Style  render.Style
+	Gate   prompt.Gate     // may we prompt? (resolved once, like Style)
+	Prompt prompt.Prompter // the human-recovery face (huh on a TTY)
+	Cfg    *config.Config
+	Svc    *core.Service
 }
 
-// setStyle computes the output Style (color + terminal width) from the flags and
-// environment. Called by every command's PreRun (including those that skip repo
-// discovery, like init/version).
+// setStyle resolves the presentation "face" — output Style (color + width) and the
+// input Gate/Prompter — from flags and environment. Called by every command's
+// PreRun. The Gate is the single source of truth for "may I prompt?": stdin AND
+// stderr must be TTYs, with --json and --no-input both off (the latter also via
+// TSKFLW_NO_INPUT). Off a TTY the gate is closed, so the agent/pipeline path never
+// blocks.
 func (a *App) setStyle() {
 	a.Style = render.NewStyle(wantColor(a.Color, a.NoColor, a.Out)).WithWidth(terminalWidth(a.Out))
+	noInput := a.NoInput || envEnabled("TSKFLW_NO_INPUT")
+	a.Gate = prompt.NewGate(gateOpen(a.JSON, noInput, isTerminalReader(a.In), isTerminal(a.ErrOut)))
+	a.Prompt = prompt.NewTTY(a.In, a.ErrOut)
 }
 
 // NewRootCmd builds the command tree with explicit DI — no package globals.
 // All output flows through the injected writers, which makes commands testable.
 func NewRootCmd(out, errOut io.Writer) *cobra.Command {
-	app := &App{Out: out, ErrOut: errOut}
+	app := &App{Out: out, ErrOut: errOut, In: os.Stdin}
 
 	root := &cobra.Command{
 		Use:           "tskflwctl",
@@ -78,6 +89,7 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 	root.PersistentFlags().StringVarP(&app.Chdir, "chdir", "C", "", "anchor to the planning repo at this path")
 	root.PersistentFlags().StringVar(&app.Color, "color", "auto", "colorize output: auto|always|never")
 	root.PersistentFlags().BoolVar(&app.NoColor, "no-color", false, "disable colored output (alias for --color=never)")
+	root.PersistentFlags().BoolVar(&app.NoInput, "no-input", false, "never prompt; missing required input is an error (for scripts/agents; also TSKFLW_NO_INPUT)")
 
 	root.AddCommand(newInitCmd(app))
 	root.AddCommand(newVersionCmd(app))
