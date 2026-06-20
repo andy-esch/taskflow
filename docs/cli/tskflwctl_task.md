@@ -22,10 +22,12 @@ Work with tasks
 ### SEE ALSO
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
+* [tskflwctl task append](tskflwctl_task_append.md)	 - Append a section to a task's body (atomic; agent-facing)
 * [tskflwctl task complete](tskflwctl_task_complete.md)	 - Move task(s) to completed
 * [tskflwctl task defer](tskflwctl_task_defer.md)	 - Move task(s) to deferred
 * [tskflwctl task demote](tskflwctl_task_demote.md)	 - Move task(s) to ready-to-start
 * [tskflwctl task deprecate](tskflwctl_task_deprecate.md)	 - Move task(s) to deprecated
+* [tskflwctl task edit](tskflwctl_task_edit.md)	 - Open a task in your editor (whole file; re-validated on save)
 * [tskflwctl task list](tskflwctl_task_list.md)	 - List tasks (active by default)
 * [tskflwctl task move](tskflwctl_task_move.md)	 - Transition task(s) to <status> (generic escape hatch)
 * [tskflwctl task new](tskflwctl_task_new.md)	 - Create a new task (validated, handoff-ready scaffold)

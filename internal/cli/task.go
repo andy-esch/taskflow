@@ -42,6 +42,8 @@ func newTaskCmd(app *App) *cobra.Command {
 		newTaskListCmd(app),
 		newTaskShowCmd(app),
 		newTaskSetCmd(app),
+		newTaskEditCmd(app),
+		newTaskAppendCmd(app),
 		newTaskMoveCmd(app),
 		// Explicit transition verbs over the internal move engine (no enum to
 		// hallucinate; per-verb intent). See the command spec.
@@ -211,6 +213,7 @@ func newTaskSetCmd(app *App) *cobra.Command {
 		description, priority, epic, effort string
 		tier, autonomy                      int
 		tags, extra, unsets                 []string
+		body, bodyFile                      string
 		force                               bool
 	)
 	cmd := &cobra.Command{
@@ -255,19 +258,30 @@ func newTaskSetCmd(app *App) *cobra.Command {
 				}
 				updates[k] = domain.UnsetField{}
 			}
+			// --body/--body-file replace the markdown body (the agent face of
+			// editing) — its own atomic write, not mixed with field surgery.
+			if c.Flags().Changed("body") || c.Flags().Changed("body-file") {
+				if len(updates) > 0 {
+					return fmt.Errorf("%w: --body/--body-file can't be combined with field flags — set the body in its own call", domain.ErrValidation)
+				}
+				text, err := resolveBody(c, body, bodyFile)
+				if err != nil {
+					return err
+				}
+				if strings.TrimSpace(text) == "" {
+					return fmt.Errorf("%w: --body is empty (nothing to write)", domain.ErrValidation)
+				}
+				task, err := app.Svc.ReplaceBody(args[0], text, app.DryRun)
+				if err != nil {
+					return err
+				}
+				return reportTaskMutation(app, task, "updated", "would update")
+			}
 			task, err := app.Svc.SetFields(args[0], updates, force, app.DryRun)
 			if err != nil {
 				return err
 			}
-			if app.JSON {
-				return render.TaskShowJSON(app.Out, task, "")
-			}
-			verb := "updated"
-			if app.DryRun {
-				verb = "would update"
-			}
-			fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), verb, app.Style.Bold(task.Slug))
-			return nil
+			return reportTaskMutation(app, task, "updated", "would update")
 		},
 	}
 	cmd.Flags().StringVar(&description, "description", "", "one-line description (<=150 chars)")
@@ -281,7 +295,59 @@ func newTaskSetCmd(app *App) *cobra.Command {
 		"key=value (repeatable); known fields are typed+validated, unknown keys need --force")
 	cmd.Flags().StringArrayVar(&unsets, "unset", nil, "remove a frontmatter key (repeatable)")
 	cmd.Flags().BoolVar(&force, "force", false, "allow --set of a field tskflwctl doesn't know")
+	cmd.Flags().StringVar(&body, "body", "", "replace the markdown body (its own call — not combined with field flags)")
+	cmd.Flags().StringVar(&bodyFile, "body-file", "", "replace the markdown body from a file (or - for stdin)")
 	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
+	return cmd
+}
+
+// reportTaskMutation writes the standard task-mutation result: the task JSON
+// envelope under --json, else a styled one-line confirmation. verb/dryVerb let the
+// caller phrase the action ("updated"/"would update", "appended to"/…).
+func reportTaskMutation(app *App, task domain.Task, verb, dryVerb string) error {
+	if app.JSON {
+		return render.TaskShowJSON(app.Out, task, "")
+	}
+	if app.DryRun {
+		verb = dryVerb
+	}
+	fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), verb, app.Style.Bold(task.Slug))
+	return nil
+}
+
+// newTaskAppendCmd is the scriptable counterpart to `task edit`: append markdown
+// to a task's body in one atomic, validated write, from --body/--body-file/stdin.
+func newTaskAppendCmd(app *App) *cobra.Command {
+	var body, bodyFile string
+	cmd := &cobra.Command{
+		Use:   "append <task>",
+		Short: "Append a section to a task's body (atomic; agent-facing)",
+		Long: "Append markdown to the end of a task's body in one atomic, validated write —\n" +
+			"the scriptable counterpart to `task edit`. Content comes from --body, --body-file,\n" +
+			"or stdin (--body-file -); a blank line separates it from the existing body.",
+		// --body is one line as typed; multi-line content comes from a file or stdin
+		// (a shell passes "\n" inside --body literally, it is not a newline).
+		Example:           "  tskflwctl task append my-task --body 'a one-line note'\n  printf '## Review\\n- looks good\\n' | tskflwctl task append my-task --body-file -",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeTaskSlugs,
+		RunE: func(c *cobra.Command, args []string) error {
+			text, err := resolveBody(c, body, bodyFile)
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(text) == "" {
+				return fmt.Errorf("%w: nothing to append (provide --body, --body-file, or stdin via -)", domain.ErrValidation)
+			}
+			task, err := app.Svc.AppendBody(args[0], text, app.DryRun)
+			if err != nil {
+				return err
+			}
+			return reportTaskMutation(app, task, "appended to", "would append to")
+		},
+	}
+	cmd.Flags().StringVar(&body, "body", "", "markdown to append")
+	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the markdown to append from a file (or - for stdin)")
 	return cmd
 }
 

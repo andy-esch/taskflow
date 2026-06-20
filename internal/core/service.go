@@ -82,6 +82,28 @@ func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
 	return s.store.GetTask(slug)
 }
 
+// EditTask opens a task for whole-file editing — the human face of mutation,
+// complementing the field-level `task set`. edit (run by the cli's $EDITOR layer)
+// receives the current file content and returns the new content; the store
+// accepts it only if it still parses as a task, reopening the editor on a broken
+// edit. Returns the reloaded task and whether anything changed.
+func (s *Service) EditTask(slug string, edit func(current string, prevErr error) (string, error)) (domain.Task, bool, error) {
+	return s.store.EditTask(slug, edit)
+}
+
+// ReplaceBody overwrites a task's markdown body in one atomic, validated write —
+// the agent face of body editing (`task set --body`), beside the human EditTask.
+// Frontmatter is preserved surgically and updated_at is stamped.
+func (s *Service) ReplaceBody(slug, body string, dryRun bool) (domain.Task, error) {
+	return s.store.EditBody(slug, body, false, time.Now(), dryRun)
+}
+
+// AppendBody appends a section to a task's markdown body (`task append`),
+// separated by a blank line, in one atomic, validated write.
+func (s *Service) AppendBody(slug, text string, dryRun bool) (domain.Task, error) {
+	return s.store.EditBody(slug, text, true, time.Now(), dryRun)
+}
+
 // Move transitions a task to the given status (lifecycle engine behind the
 // explicit verbs). Moving to the current status is an idempotent no-op.
 // dryRun validates everything and returns the would-be task without writing.

@@ -10,6 +10,8 @@ tskflwctl task set <task> [flags]
 
 ```
       --autonomy int         autonomy level 1-5
+      --body string          replace the markdown body (its own call — not combined with field flags)
+      --body-file string     replace the markdown body from a file (or - for stdin)
       --description string   one-line description (<=150 chars)
       --effort string        effort estimate
       --epic string          epic id

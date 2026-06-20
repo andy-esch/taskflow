@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
+	"strings"
 
 	yaml "go.yaml.in/yaml/v3"
 
@@ -129,6 +130,37 @@ func assembleFile(mapping *yaml.Node, body []byte, eol string) ([]byte, error) {
 	out.WriteString("---" + eol)
 	out.Write(body)
 	return out.Bytes(), nil
+}
+
+// replaceBodyStamped swaps a file's markdown body for newBody and stamps
+// updated_at, preserving the frontmatter surgically — unknown keys, comments, and
+// key order survive (the same yaml.Node path as updateFrontmatter, except the body
+// is replaced rather than kept verbatim).
+func replaceBodyStamped(content []byte, newBody, updatedAt string) ([]byte, error) {
+	fm, _, err := splitFrontmatterStrict(content)
+	if err != nil {
+		return nil, err
+	}
+	var doc yaml.Node
+	if len(bytes.TrimSpace(fm)) > 0 {
+		if err := yaml.Unmarshal(fm, &doc); err != nil {
+			return nil, fmt.Errorf("%w: parse frontmatter: %v", errBadFrontmatter, err)
+		}
+	}
+	mapping, err := documentMapping(&doc)
+	if err != nil {
+		return nil, err
+	}
+	setMapNode(mapping, "updated_at", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: updatedAt})
+	// newBody is built in LF; re-emit it in the file's own ending so a CRLF file
+	// doesn't come back with a mixed CRLF-frontmatter / LF-body diff (assembleFile
+	// only converts the frontmatter block, writing the body verbatim).
+	eol := detectLineEnding(content)
+	body := newBody
+	if eol != "\n" {
+		body = strings.ReplaceAll(newBody, "\n", eol)
+	}
+	return assembleFile(mapping, []byte(body), eol)
 }
 
 // documentMapping returns the top-level mapping node, creating an empty one if

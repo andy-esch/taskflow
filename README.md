@@ -48,9 +48,9 @@ the binaries as workflow artifacts without minting a Release.
 ## Daily workflow
 
 `tskflwctl` anchors to the nearest planning repo (walks up for `tasks/`; `-C` to
-override). All commands take `--json` for scripting/agents, and every mutating
-command takes `--dry-run` to preview the write (full validation runs; nothing
-is written).
+override). All commands take `--json` for scripting/agents, and mutating
+commands take `--dry-run` to preview the write (full validation runs; nothing
+is written) — except the interactive `task edit`, which has no preview.
 
 ```bash
 tskflwctl init                         # scaffold a planning tree here
@@ -74,6 +74,9 @@ tskflwctl ui                           # interactive Bubble Tea browser (tasks/e
 
 # update + lifecycle
 tskflwctl task set <slug> --priority high --tags a,b
+tskflwctl task edit <slug>                          # open the whole file in $EDITOR (human; re-validated on save)
+echo "## Findings" | tskflwctl task append <slug> --body-file -  # add a section (agent; atomic)
+tskflwctl task set <slug> --body-file notes.md      # replace the body (agent; its own call)
 tskflwctl task start|promote|demote|complete|defer|deprecate <slug>...
 tskflwctl audit close|reopen|defer <slug>...
 
