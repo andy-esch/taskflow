@@ -148,6 +148,21 @@ func (a *App) transitionOptions(to domain.Status) func() ([]prompt.Option, error
 	}
 }
 
+// editOptions lists the active tasks as a picker source for a bare `task edit`.
+// An explicit slug resolves across every status regardless; the picker just
+// offers the working set so a human doesn't have to remember a slug.
+func (a *App) editOptions() ([]prompt.Option, error) {
+	tasks, _, err := a.Svc.ListTasks(core.TaskFilter{})
+	if err != nil {
+		return nil, err
+	}
+	opts := make([]prompt.Option, 0, len(tasks))
+	for _, t := range tasks {
+		opts = append(opts, labeledOption(t.Slug, t.Description))
+	}
+	return opts, nil
+}
+
 // epicOptions lists epics as pickable options (id + description), for the
 // `task new` epic prompt. Read through the service like every other read.
 func (a *App) epicOptions() ([]prompt.Option, error) {

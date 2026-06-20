@@ -42,6 +42,7 @@ func newTaskCmd(app *App) *cobra.Command {
 		newTaskListCmd(app),
 		newTaskShowCmd(app),
 		newTaskSetCmd(app),
+		newTaskEditCmd(app),
 		newTaskMoveCmd(app),
 		// Explicit transition verbs over the internal move engine (no enum to
 		// hallucinate; per-verb intent). See the command spec.

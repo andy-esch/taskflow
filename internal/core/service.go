@@ -82,6 +82,15 @@ func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
 	return s.store.GetTask(slug)
 }
 
+// EditTask opens a task for whole-file editing — the human face of mutation,
+// complementing the field-level `task set`. edit (run by the cli's $EDITOR layer)
+// receives the current file content and returns the new content; the store
+// accepts it only if it still parses as a task, reopening the editor on a broken
+// edit. Returns the reloaded task and whether anything changed.
+func (s *Service) EditTask(slug string, edit func(current string, prevErr error) (string, error)) (domain.Task, bool, error) {
+	return s.store.EditTask(slug, edit)
+}
+
 // Move transitions a task to the given status (lifecycle engine behind the
 // explicit verbs). Moving to the current status is an idempotent no-op.
 // dryRun validates everything and returns the would-be task without writing.

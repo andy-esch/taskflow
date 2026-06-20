@@ -180,6 +180,9 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 // MovesJSON writes the structured per-task transition report; dry_run marks a
 // preview (nothing was written).
 func MovesJSON(w io.Writer, results []MoveResult, dryRun bool) error {
+	if results == nil {
+		results = []MoveResult{} // empty, not null — schema is type: array (see FixJSON)
+	}
 	return encodeJSON(w, MovesEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Moves: results})
 }
 
@@ -493,7 +496,11 @@ func LintJSON(w io.Writer, results []core.LintResult, problems []domain.FileProb
 	}
 	payload := LintEnvelope{SchemaVersion: SchemaVersion, Unreadable: problems, Issues: make([]lintTaskJSON, 0, len(results))}
 	for _, r := range results {
-		payload.Issues = append(payload.Issues, lintTaskJSON{Slug: r.Slug, Issues: r.Issues})
+		issues := r.Issues
+		if issues == nil {
+			issues = []domain.Issue{} // empty, not null — the per-row issues are type: array too
+		}
+		payload.Issues = append(payload.Issues, lintTaskJSON{Slug: r.Slug, Issues: issues})
 	}
 	return encodeJSON(w, payload)
 }

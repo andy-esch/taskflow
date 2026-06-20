@@ -26,6 +26,9 @@ func (nopStore) SetFields(string, map[string]any, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
 func (nopStore) CreateTask(domain.Task, string, bool) (domain.Task, error) { return domain.Task{}, nil }
+func (nopStore) EditTask(string, func(string, error) (string, error)) (domain.Task, bool, error) {
+	return domain.Task{}, false, nil
+}
 func (nopStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return nil, nil, nil
 }

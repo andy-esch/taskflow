@@ -20,6 +20,29 @@ func TestSchema_RunsWithoutPlanningRepo(t *testing.T) {
 	}
 }
 
+// TestSchema_JSONSchema pins the `schema --json-schema` wiring: it emits a Draft
+// 2020-12 schema whose $defs cover the --json envelopes, runnable without a
+// planning repo (like the rest of schema).
+func TestSchema_JSONSchema(t *testing.T) {
+	bare := t.TempDir()
+	out := runRoot(t, "-C", bare, "schema", "--json-schema")
+	var doc struct {
+		Schema string                     `json:"$schema"`
+		Defs   map[string]json.RawMessage `json:"$defs"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("--json-schema output is not valid JSON: %v\n%s", err, out)
+	}
+	if !strings.Contains(doc.Schema, "2020-12") {
+		t.Errorf("$schema should be Draft 2020-12, got %q", doc.Schema)
+	}
+	for _, def := range []string{"TasksEnvelope", "TaskShowEnvelope", "SchemaEnvelope", "ErrorEnvelope"} {
+		if _, ok := doc.Defs[def]; !ok {
+			t.Errorf("$defs missing %s", def)
+		}
+	}
+}
+
 func TestSchemaContract_JSON(t *testing.T) {
 	root := freshRepo(t)
 	js := runRoot(t, "-C", root, "schema", "--json")
