@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Generate Draft 2020-12 JSON Schema from the --json envelope structs, exposed via schema --json-schema so agents can validate output
 effort: Unknown
@@ -8,6 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, json, dx]
 created: "2026-06-19"
+updated_at: "2026-06-20"
+started_at: "2026-06-20"
+completed_at: "2026-06-20"
 ---
 ## Objective
 
@@ -39,17 +42,32 @@ worthwhile cleanup in its own right, and the bulk of this task's work.
 
 ## Acceptance criteria
 
-- [ ] Named envelope types extracted; the `*JSON` render funcs marshal them
-      (output byte-identical to today — guard with the existing output tests).
-- [ ] `tskflwctl schema --json-schema` emits a Draft 2020-12 schema with `$defs`
-      and field descriptions from Go comments where present.
-- [ ] The emitted schema actually validates real `--json` output for each command
-      (a round-trip test).
+- [x] Named envelope types extracted (`render/envelopes.go`, 16 incl. the error
+      payload); the `*JSON` render funcs marshal them — output byte-identical
+      (existing output tests green).
+- [x] `tskflwctl schema --json-schema` emits a Draft 2020-12 schema with `$defs`
+      (every envelope + shared types; `required` derived from non-`omitempty`).
+- [x] The emitted schema validates real `--json` output (round-trip test over a
+      representative spread, using santhosh-tekuri/jsonschema as a test dep).
 
-## Out of scope
+## Shipped (2026-06-20)
 
-- Generating Go types FROM schema (we own the structs; schema is derived, not source).
-- Changing any envelope shape — this is a derived artifact, not a redesign.
+`render/envelopes.go` holds the named envelope contract + `JSONSchema()`
+(invopop/jsonschema); `schema --json-schema` prints it; `exit.go` uses the named
+`ErrorEnvelope`. The round-trip test caught and fixed a latent bug:
+`LintJSON`/`FixJSON` could emit `null` (not `[]`) for nil slices — now normalized,
+matching the schema + the "empty not null" convention.
+
+## Out of scope / deferred
+
+- **Field descriptions** — deferred. `AddGoComments` needs the source at runtime
+  (absent in a shipped binary), so it would yield empty descriptions for the very
+  agents that consume the schema. The structure/types/required carry the value;
+  descriptions via `jsonschema:"description=…"` struct tags are the runtime-safe
+  follow-up.
+- New deps: `invopop/jsonschema` (in the binary), `santhosh-tekuri/jsonschema/v6`
+  (test-only validator).
+- Generating Go types FROM schema; changing any envelope shape.
 
 ## Related
 
