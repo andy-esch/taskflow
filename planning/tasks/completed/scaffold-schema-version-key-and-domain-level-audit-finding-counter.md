@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 17-pm-go-cli
 description: 'Reserve a version key in init/task new scaffolds; move audit open-finding regexes into a testable domain.CountFindings (storage-layout review item #4)'
 effort: Unknown
@@ -8,6 +8,9 @@ priority: low
 autonomy_level: 3
 tags: [go, domain, docs]
 created: "2026-06-14"
+updated_at: "2026-06-20"
+started_at: "2026-06-20"
+completed_at: "2026-06-20"
 ---
 
 # Scaffold schema-version key and domain-level audit finding counter
@@ -40,15 +43,30 @@ worth doing on their own. Independent of each other — split if it reads cleane
 
 ## Acceptance criteria
 
-- [ ] New scaffolds carry the reserved version key; existing files still parse
+- [x] New scaffolds carry the reserved version key; existing files still parse
       (the key is optional on read, surgical edits preserve it).
 - [x] ~~`domain.CountFindings`~~ — **done as `domain.ParseFindings` +
       `CountOpenFindings`** (2026-06-17) in
       [[audit-finding-level-operations-query-write-lint-sync]] item 1, exactly as
       this task's Note predicted: fence-aware, table-tested, `auditstore.go` now
       derives both counts from it and the regexes are gone from the store.
-- [ ] `go build/test/vet` green; `gofmt` clean. *(Item #1 — the scaffold version
-      key — is the only remaining work here; close this task once it lands.)*
+- [x] `go build/test/vet` green; `gofmt` clean.
+
+## Shipped (2026-06-20) — item #1 (item #2 already landed via ParseFindings)
+
+`domain.FileSchemaVersion = 1` (in `domain/layout.go`, beside the dir-layout
+reservations like `ProjectsDir`) is stamped as the **first** frontmatter key,
+`schema: 1`, by all three scaffolds (`taskFields`/`epicFields`/`auditFields` in
+`store/create.go`). Decisions: **coarse** versioning (bump only on a breaking
+shape change); key named **`schema`** (not `schema_version`, to stay distinct from
+the `--json` output contract's `render.SchemaVersion`, which versions output);
+**reserved, not a known field** — `parseTask` ignores it so existing files still
+parse, every surgical edit preserves it (`yaml.Node` keeps unknown keys), it stays
+out of `KnownTaskFieldNames` (so `--set` still needs `--force` and the `schema`
+contract + goldens are unchanged), and it lints clean. `init` writes no
+frontmatter, so it's untouched. Tests: store unit (all three kinds stamp it first;
+a `schema:1` file loads and survives `SetFields` + a relocating `Move`) + e2e
+create→lint→start→complete keeps it.
 
 ## Out of scope
 

@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Fixture-driven integration/e2e CLI tests (testscript, golden files, subprocess smoke); approach NOT yet chosen — options laid out for a decision
 effort: Unknown
@@ -8,6 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [testing, ci, dx]
 created: "2026-06-19"
+updated_at: "2026-06-20"
+started_at: "2026-06-20"
+completed_at: "2026-06-20"
 ---
 ## Objective
 
@@ -55,14 +58,43 @@ exit-code contract; add golden files (#2) for the rich-output contracts; one or
 two subprocess smokes (#4) in CI for true end-to-end confidence. Pairs with the
 docs drift-check.
 
+## Decision & shipped (2026-06-20)
+
+**Chosen: golden snapshots (#2) + subprocess smoke (#4). testscript (#3)
+deferred** — the in-process `runRoot` suite already covers lifecycle *logic*, so
+txtar would largely duplicate it; the real gaps were byte-stable output snapshots
+and real-binary fidelity, which #2 and #4 fill directly. (testscript remains a
+fine future add for living-doc lifecycle scripts — noted, not built.) Rolled a
+~20-line dep-free golden helper instead of importing the charm lib (repo's
+"no library for a 15-line job" ethos; full control of the diff).
+
+- **Fixture:** committed `internal/cli/testdata/planning/` — 3 tasks (one per
+  status), an epic, fixed 2026-01 dates so every snapshot is date-stable. Lints
+  clean.
+- **Golden (`golden_test.go` + `integration_golden_test.go`):** `assertGolden`
+  with `-update`; 11 snapshots of the date-stable machine contract — `task/epic
+  list|show --json`, `status --json`, `lint --json`, `-o csv`/`name`, and the
+  self-description trio incl. **`schema --json-schema` (894 lines — the entire
+  Draft 2020-12 contract pinned byte-for-byte)**. Drift fails with a regenerate
+  hint; proven by mutating a golden → FAIL.
+- **Subprocess smoke (`smoke_test.go`):** binary built once in `TestMain`
+  (`-short`-skippable), then `--version` shape, not-found → **exit 10**, the
+  `--json` **error envelope** (which only `main.go`'s `WriteError` emits — invisible
+  in-process), a clean `list --json`, and a full **create→start→complete lifecycle**
+  through the binary asserting file movement.
+- **CI:** no workflow change — both run under the existing `go test -race ./...`.
+  The in-process `runRoot` tests stay (unchanged), as scoped.
+
 ## Acceptance criteria (decision-gated)
 
-- [ ] Approach chosen (which of #2/#3/#4, or combination).
-- [ ] A committed `testdata/planning/` fixture tree exists (or fixtures are inline
-      per the chosen approach).
-- [ ] The chosen harness runs in CI and fails on regressions
-      (output drift / wrong exit code / wrong file state).
-- [ ] At least the lifecycle + exit-code-contract paths are covered.
+- [x] Approach chosen: golden (#2) + subprocess smoke (#4); testscript (#3)
+      deferred with rationale.
+- [x] A committed `testdata/planning/` fixture tree exists
+      (`internal/cli/testdata/planning/`).
+- [x] The chosen harness runs in CI (`go test -race ./...`) and fails on
+      regressions — output drift (golden), wrong exit code / wrong file state (smoke).
+- [x] Lifecycle (smoke create→start→complete) + the exit-code contract (exit 10 +
+      JSON error envelope) are covered.
 
 ## Out of scope
 
