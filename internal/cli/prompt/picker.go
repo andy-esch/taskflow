@@ -3,11 +3,11 @@ package prompt
 import (
 	"errors"
 	"io"
-	"strings"
-	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/andy-esch/taskflow/internal/listfilter"
 )
 
 // listItem adapts an Option to bubbles/list.Item. FilterValue is the label, so
@@ -40,44 +40,10 @@ func newPicker(title string, opts []Option) pickerModel {
 	l.Title = title
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
-	l.Filter = substringFilter // substring, not the default fuzzy (see below)
+	// Substring, not the default fuzzy — predictable for slug identifiers; the
+	// shared matcher the TUI also offers via its filter-mode toggle.
+	l.Filter = listfilter.Substring
 	return pickerModel{list: l}
-}
-
-// substringFilter is a case-insensitive "contains" filter, replacing
-// bubbles/list's default fuzzy matcher — which over-matches long structured
-// slugs (e.g. "multiuser" fuzzy-matching unrelated tasks via a scattered
-// subsequence). Matches keep the input order; MatchedIndexes mark the run for
-// highlighting. (ASCII/identifier content, so simple ToLower is offset-safe.)
-func substringFilter(term string, targets []string) []list.Rank {
-	term = strings.ToLower(strings.TrimSpace(term))
-	if term == "" {
-		ranks := make([]list.Rank, len(targets))
-		for i := range targets {
-			ranks[i] = list.Rank{Index: i}
-		}
-		return ranks
-	}
-	var ranks []list.Rank
-	for i, t := range targets {
-		lower := strings.ToLower(t)
-		b := strings.Index(lower, term)
-		if b < 0 {
-			continue
-		}
-		// Index and slice the SAME (lowercased) string: ToLower can change byte
-		// length (e.g. Ⱥ→ⱥ grows 2→3 bytes), so slicing the original t by b would
-		// panic. MatchedIndexes are rune positions in the lowercased string; for
-		// the rare case-folding-rune-count change the highlight can drift a rune,
-		// which is cosmetic — but it can never panic.
-		start := utf8.RuneCountInString(lower[:b])
-		matched := make([]int, utf8.RuneCountInString(term))
-		for k := range matched {
-			matched[k] = start + k
-		}
-		ranks = append(ranks, list.Rank{Index: i, MatchedIndexes: matched})
-	}
-	return ranks
 }
 
 func (m pickerModel) Init() tea.Cmd { return nil }

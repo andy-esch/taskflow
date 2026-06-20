@@ -22,6 +22,7 @@ var helpSections = []helpSection{
 	{"Global", []helpEntry{
 		{": ", "command / jump (entity, status, or verb)"},
 		{"/", "filter the list (slug, desc, tags)"},
+		{"F", "filter mode: fuzzy ⇄ substring (default fuzzy)"},
 		{"o / O", "cycle sort column / reverse"},
 		{"s / S", "cycle view: task status / audit bucket"},
 		{"a", "task actions (start/complete/defer/…)"},

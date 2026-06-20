@@ -23,6 +23,7 @@ type keyMap struct {
 	SortRev     key.Binding // O → toggle sort direction
 	StatusView  key.Binding // s → cycle view (task status / audit bucket)
 	StatusRev   key.Binding // S → cycle view backward
+	FilterMode  key.Binding // F → toggle list filter: fuzzy ⇄ substring
 	Action      key.Binding // a → lifecycle action menu (tasks)
 	RawToggle   key.Binding // R → raw ⇄ pretty markdown in the detail body
 	Follow      key.Binding // f → follow the selection's reference (task ⇄ epic)
@@ -50,6 +51,7 @@ var keys = keyMap{
 	SortRev:     key.NewBinding(key.WithKeys("O")),
 	StatusView:  key.NewBinding(key.WithKeys("s")),
 	StatusRev:   key.NewBinding(key.WithKeys("S")),
+	FilterMode:  key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "filter mode")),
 	Action:      key.NewBinding(key.WithKeys("a")),
 	RawToggle:   key.NewBinding(key.WithKeys("R")),
 	Follow:      key.NewBinding(key.WithKeys("f")),

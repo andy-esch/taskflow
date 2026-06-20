@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Toggle the TUI list filter between fuzzy and substring via a discoverable keybinding shown in the help footer, plus a visible mode indicator
 effort: Unknown
@@ -8,6 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [tui, ux, filter]
 created: "2026-06-19"
+updated_at: "2026-06-20"
+started_at: "2026-06-20"
+completed_at: "2026-06-20"
 ---
 ## Objective
 
@@ -38,13 +41,37 @@ forcing one.
 - Decide whether the choice persists for the session (likely yes) and whether it's
   remembered across tabs.
 
+## Shipped (2026-06-20)
+
+`F` toggles the TUI list filter fuzzy ⇄ substring.
+
+- **Shared matcher:** extracted the CLI picker's `substringFilter` into
+  `internal/listfilter.Substring` (a `list.FilterFunc`); both the picker
+  (`prompt/picker.go`) and the TUI now use it, so they can't drift. Its tests
+  moved with it.
+- **Toggle:** `F` (`keys.FilterMode`) → `Model.toggleFilterMode` swaps each tab's
+  `list.Filter` between `list.DefaultFilter` (fuzzy) and `listfilter.Substring`,
+  **session-wide across every tab** (consistent no matter where you filter), and
+  re-runs the visible filter live via `SetFilterText` so results update on toggle.
+- **Indicator:** the filter-input prompt names the mode while typing
+  (`filter (fuzzy): ` / `filter (exact): `); the title chip annotates an applied
+  filter as `filter(exact):…` when non-default (fuzzy stays the silent default,
+  matching the chip's `view:`/`sort:` philosophy).
+- **Discoverability:** `F` is in the `?` help overlay ("filter mode: fuzzy ⇄
+  substring (default fuzzy)").
+- **Decisions:** persists for the session and is remembered across tabs (a single
+  session-wide mode, not per-tab); default stays **fuzzy**.
+- Tests: `listfilter` unit (moved) + a TUI test (`F` flips the mode + prompt on
+  every tab, defaults fuzzy, toggles back).
+
 ## Acceptance criteria
 
-- [ ] A keybinding toggles the active list filter (fuzzy ↔ substring) live.
-- [ ] The shortcut is visible in the list help footer (not hidden/undocumented).
-- [ ] The active mode is indicated on-screen.
-- [ ] Default stays **fuzzy** (the TUI's exploratory default is unchanged).
-- [ ] The substring matcher is the SAME one the CLI picker uses (shared helper).
+- [x] A keybinding toggles the active list filter (fuzzy ↔ substring) live.
+- [x] The shortcut is visible in the list help footer (the `?` overlay).
+- [x] The active mode is indicated on-screen (filter prompt + chip when exact).
+- [x] Default stays **fuzzy** (the TUI's exploratory default is unchanged).
+- [x] The substring matcher is the SAME one the CLI picker uses
+      (`internal/listfilter`).
 
 ## Out of scope
 

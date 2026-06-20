@@ -17,6 +17,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/listfilter"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
@@ -393,6 +394,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.cycleView(1)
 	case key.Matches(msg, keys.StatusRev):
 		return m, m.cycleView(-1)
+	case key.Matches(msg, keys.FilterMode):
+		m.toggleFilterMode()
+		return m, nil
 	case key.Matches(msg, keys.Refresh):
 		return m, func() tea.Msg { return reloadMsg{} }
 	case key.Matches(msg, keys.ToggleFocus):
@@ -714,6 +718,27 @@ func (m *Model) cycleView(dir int) tea.Cmd {
 		return nil
 	}
 	return m.applyView(m.active, viewStep(t.viewAxis, t.statusView, dir))
+}
+
+// toggleFilterMode flips the list filter between fuzzy (the default) and substring
+// — session-wide across every tab, so the choice is consistent no matter which
+// tab you filter in — and re-runs the visible filter so results update live. The
+// substring matcher is the shared listfilter.Substring the CLI picker uses, so the
+// two faces can't drift. Default stays fuzzy (the TUI's exploratory default).
+func (m *Model) toggleFilterMode() {
+	exact := !m.cur().filterExact
+	var f list.FilterFunc = list.DefaultFilter
+	if exact {
+		f = listfilter.Substring
+	}
+	for _, t := range m.tabs {
+		t.filterExact = exact
+		t.list.Filter = f
+		t.list.FilterInput.Prompt = filterPrompt(exact)
+	}
+	if cur := m.cur(); cur.list.FilterState() != list.Unfiltered {
+		cur.list.SetFilterText(cur.list.FilterValue()) // re-rank now with the new matcher
+	}
 }
 
 // resolveView maps a `:` word to a view value and the tab it applies to. The

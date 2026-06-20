@@ -54,10 +54,11 @@ type entityTab struct {
 	problems []domain.FileProblem
 
 	// S2b list-scoped state (persists per tab across switches/reloads).
-	statusView string    // view axis: "" = default, "all", a task status, or an audit bucket
-	sortCols   []sortKey // the `o`-cycle columns this entity offers
-	sortKey    sortKey   // interactive sort column ("o" cycles)
-	sortRev    bool      // sort direction toggle ("O")
+	statusView  string    // view axis: "" = default, "all", a task status, or an audit bucket
+	sortCols    []sortKey // the `o`-cycle columns this entity offers
+	sortKey     sortKey   // interactive sort column ("o" cycles)
+	sortRev     bool      // sort direction toggle ("O")
+	filterExact bool      // false = fuzzy (default), true = substring; toggled session-wide by "F"
 
 	restore string // id to re-select after this tab's next load (cursor preservation)
 }
@@ -122,9 +123,25 @@ func (t *entityTab) chip() string {
 		parts = append(parts, "sort:"+t.sortKey.label()+sortArrow(t.sortKey, t.sortRev))
 	}
 	if filtered {
-		parts = append(parts, "filter:"+t.list.FilterValue())
+		// Default fuzzy is silent here (like view:/sort:); only the non-default
+		// substring mode annotates the badge, so an active exact filter is never a
+		// silent surprise. The prompt (below) always names the mode while typing.
+		label := "filter:"
+		if t.filterExact {
+			label = "filter(exact):"
+		}
+		parts = append(parts, label+t.list.FilterValue())
 	}
 	return strings.Join(parts, "  ")
+}
+
+// filterPrompt is the bubbles/list filter-input prefix, so the active mode is
+// visible while typing a filter ("filter (fuzzy): " / "filter (exact): ").
+func filterPrompt(exact bool) string {
+	if exact {
+		return "filter (exact): "
+	}
+	return "filter (fuzzy): "
 }
 
 // matches reports whether a typed `:` word selects this tab (canonical name or a
@@ -152,6 +169,9 @@ func newEntityTabs() []*entityTab {
 		// tight line.
 		l.Styles.Title = lipgloss.NewStyle().Bold(true)
 		l.Styles.TitleBar = lipgloss.NewStyle()
+		// Default filter is fuzzy (list.DefaultFilter); the prompt advertises the
+		// mode, which `F` toggles to substring at runtime.
+		l.FilterInput.Prompt = filterPrompt(false)
 		l.SetShowHelp(false)
 		l.SetShowStatusBar(false)
 		// The embedded list must never quit the program itself: its default Quit
