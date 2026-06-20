@@ -1,0 +1,894 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/andy-esch/taskflow/internal/cli/render/json-envelopes",
+  "$ref": "#/$defs/jsonEnvelopes",
+  "$defs": {
+    "AuditShowEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "audit": {
+          "$ref": "#/$defs/auditJSON"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "audit",
+        "body"
+      ]
+    },
+    "AuditsEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "audits": {
+          "items": {
+            "$ref": "#/$defs/auditJSON"
+          },
+          "type": "array"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "audits"
+      ]
+    },
+    "CreatedEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "created": {
+          "$ref": "#/$defs/CreatedItem"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "dry_run",
+        "created"
+      ]
+    },
+    "CreatedItem": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind",
+        "id",
+        "status",
+        "path"
+      ]
+    },
+    "EpicShowEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "epic": {
+          "$ref": "#/$defs/epicMetaJSON"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/taskJSON"
+          },
+          "type": "array"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "epic",
+        "tasks",
+        "body"
+      ]
+    },
+    "EpicsEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "epics": {
+          "items": {
+            "$ref": "#/$defs/epicJSON"
+          },
+          "type": "array"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "epics"
+      ]
+    },
+    "ErrorEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/$defs/ErrorItem"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "error"
+      ]
+    },
+    "ErrorItem": {
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "FieldDoc": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "example": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "required",
+        "description",
+        "example"
+      ]
+    },
+    "FileProblem": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path",
+        "message"
+      ]
+    },
+    "FixEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "fixed": {
+          "items": {
+            "$ref": "#/$defs/FixResult"
+          },
+          "type": "array"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "dry_run",
+        "fixed",
+        "unreadable"
+      ]
+    },
+    "FixResult": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "changes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path",
+        "changes"
+      ]
+    },
+    "InitEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "root": {
+          "type": "string"
+        },
+        "created": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "dry_run",
+        "root",
+        "created"
+      ]
+    },
+    "Issue": {
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "field",
+        "message"
+      ]
+    },
+    "LintEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/lintTaskJSON"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "unreadable",
+        "issues"
+      ]
+    },
+    "MoveResult": {
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "to"
+      ]
+    },
+    "MovesEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "moves": {
+          "items": {
+            "$ref": "#/$defs/MoveResult"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "dry_run",
+        "moves"
+      ]
+    },
+    "SchemaEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "statuses": {
+          "items": {
+            "$ref": "#/$defs/SchemaStatus"
+          },
+          "type": "array"
+        },
+        "epic_statuses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "audit_buckets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "task_fields": {
+          "items": {
+            "$ref": "#/$defs/SchemaField"
+          },
+          "type": "array"
+        },
+        "exit_codes": {
+          "items": {
+            "$ref": "#/$defs/SchemaExitCode"
+          },
+          "type": "array"
+        },
+        "kinds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "statuses",
+        "epic_statuses",
+        "audit_buckets",
+        "task_fields",
+        "exit_codes",
+        "kinds"
+      ]
+    },
+    "SchemaExitCode": {
+      "properties": {
+        "code": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "code",
+        "name"
+      ]
+    },
+    "SchemaField": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "SchemaKindEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "sections": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "body_template": {
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/FieldDoc"
+          },
+          "type": "array"
+        },
+        "conventions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "kind",
+        "sections",
+        "body_template",
+        "fields",
+        "conventions"
+      ]
+    },
+    "SchemaStatus": {
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "value",
+        "active"
+      ]
+    },
+    "SummaryEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "counts": {
+          "items": {
+            "$ref": "#/$defs/statusCountJSON"
+          },
+          "type": "array"
+        },
+        "in_progress": {
+          "items": {
+            "$ref": "#/$defs/taskJSON"
+          },
+          "type": "array"
+        },
+        "epics": {
+          "items": {
+            "$ref": "#/$defs/epicJSON"
+          },
+          "type": "array"
+        },
+        "misfiled": {
+          "type": "integer"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "counts",
+        "in_progress",
+        "epics",
+        "misfiled"
+      ]
+    },
+    "TaskShowEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "task": {
+          "$ref": "#/$defs/taskJSON"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "task",
+        "body"
+      ]
+    },
+    "TasksEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/taskJSON"
+          },
+          "type": "array"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "tasks"
+      ]
+    },
+    "VersionEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "version"
+      ]
+    },
+    "auditJSON": {
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "bucket": {
+          "type": "string"
+        },
+        "area": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "findings": {
+          "type": "integer"
+        },
+        "open_findings": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "bucket",
+        "findings",
+        "open_findings"
+      ]
+    },
+    "epicJSON": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string"
+        },
+        "created": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "done": {
+          "type": "integer"
+        },
+        "percent": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "total",
+        "done",
+        "percent"
+      ]
+    },
+    "epicMetaJSON": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string"
+        },
+        "created": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id"
+      ]
+    },
+    "jsonEnvelopes": {
+      "properties": {
+        "tasks": {
+          "$ref": "#/$defs/TasksEnvelope"
+        },
+        "task_show": {
+          "$ref": "#/$defs/TaskShowEnvelope"
+        },
+        "moves": {
+          "$ref": "#/$defs/MovesEnvelope"
+        },
+        "summary": {
+          "$ref": "#/$defs/SummaryEnvelope"
+        },
+        "version": {
+          "$ref": "#/$defs/VersionEnvelope"
+        },
+        "created": {
+          "$ref": "#/$defs/CreatedEnvelope"
+        },
+        "epics": {
+          "$ref": "#/$defs/EpicsEnvelope"
+        },
+        "epic_show": {
+          "$ref": "#/$defs/EpicShowEnvelope"
+        },
+        "audits": {
+          "$ref": "#/$defs/AuditsEnvelope"
+        },
+        "audit_show": {
+          "$ref": "#/$defs/AuditShowEnvelope"
+        },
+        "fix": {
+          "$ref": "#/$defs/FixEnvelope"
+        },
+        "lint": {
+          "$ref": "#/$defs/LintEnvelope"
+        },
+        "init": {
+          "$ref": "#/$defs/InitEnvelope"
+        },
+        "schema": {
+          "$ref": "#/$defs/SchemaEnvelope"
+        },
+        "schema_kind": {
+          "$ref": "#/$defs/SchemaKindEnvelope"
+        },
+        "error": {
+          "$ref": "#/$defs/ErrorEnvelope"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "tasks",
+        "task_show",
+        "moves",
+        "summary",
+        "version",
+        "created",
+        "epics",
+        "epic_show",
+        "audits",
+        "audit_show",
+        "fix",
+        "lint",
+        "init",
+        "schema",
+        "schema_kind",
+        "error"
+      ]
+    },
+    "lintTaskJSON": {
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/Issue"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "issues"
+      ]
+    },
+    "statusCountJSON": {
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "status",
+        "count"
+      ]
+    },
+    "taskJSON": {
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "epic": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "effort": {
+          "type": "string"
+        },
+        "tier": {
+          "type": "integer"
+        },
+        "priority": {
+          "type": "string"
+        },
+        "autonomy_level": {
+          "type": "integer"
+        },
+        "created": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "misfiled": {
+          "type": "boolean"
+        },
+        "declared_status": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "status"
+      ]
+    }
+  },
+  "title": "tskflwctl --json output (schema_version 1.5)",
+  "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
+}

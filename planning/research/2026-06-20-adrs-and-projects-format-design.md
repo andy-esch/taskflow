@@ -1,13 +1,15 @@
 ---
-date: 2026-06-20
+date: "2026-06-20"
 topic: Generic ADR and Project document formats for tskflwctl
 purpose: >-
   Synthesize ADR best practices, cross-tool Project/initiative product research, and
   the two repos' house style into generic ADR + Project templates tskflwctl will
-  scaffold, plus a cross-linking scheme. The decision record behind ADR-0001.
+  scaffold, plus a cross-linking scheme. The decision record behind ADR-0001 (ADRs)
+  and ADR-0002 (Projects).
 status: proposed
 related_adrs:
-  - 0001-adopt-adrs-and-projects.md
+  - ADR-0001
+  - ADR-0002
 related_research:
   - 2026-06-06-project-concept-cross-cutting-initiatives.md
   - 2026-06-06-tskflwctl-command-spec.md
@@ -15,197 +17,148 @@ related_research:
 
 # ADRs & Projects: format design and decision record
 
-This is the rationale behind [[0001-adopt-adrs-and-projects]]. It synthesizes three
-research streams — (1) online ADR best practices, (2) cross-tool product research on
-"Project / initiative" types, (3) a house-style mining of `taskflow/planning/` and
-`desirelines-planning/` — into two **generic** document formats that `tskflwctl`
-will scaffold for any repo, and a cross-linking scheme. The two repos are *fodder*
-(they set the house style the new types must match), not subjects to restructure.
+Rationale behind [[0001-adopt-adrs]] and [[0002-adopt-projects]]. It synthesizes
+three research streams — (1) online ADR best practices, (2) cross-tool product
+research on "Project / initiative" types, (3) a house-style mining of
+`taskflow/planning/` and `desirelines-planning/` — into two **generic** document
+formats `tskflwctl` will scaffold for any repo, plus a cross-linking scheme. The two
+repos are *fodder* (they set the house style the new types must match), not subjects
+to restructure.
+
+> **Revised after adversarial review (2026-06-20).** An earlier draft of this doc and
+> a combined ADR-0001 contained errors caught by review and corrected here: the Linear
+> "multiple projects per issue" claim was **false** (Linear is single-membership;
+> GitHub Projects is the multi-membership precedent); "immutability is unanimous" was
+> **false** (Joel Parker Henderson favors mutability in practice) — replaced by an
+> append-only *amendments* model; the project status enum now uses `completed` (not
+> `complete`) to match the repo; and the concept was **split into two ADRs**. See
+> §Corrections.
 
 ## TL;DR decisions
 
 | Question | Decision | Why |
 | :-- | :-- | :-- |
-| ADR core sections | Title, Status, Context, Decision, Consequences | The irreducible core *every* lineage agrees on (Nygard → MADR → AWS → MS → Fowler). |
-| ADR default extra | Considered Options (+ Related) | The one section everyone wishes Nygard had; MADR core. |
-| ADR optional (flags) | Decision Drivers, Confirmation, per-option Pros/Cons | MADR-full / Tyree heavyweight extras; keep the default ~1–2 pages. |
-| ADR status location | Frontmatter field (canonical), no `## Status` section | Avoids two-places drift; matches the repo's frontmatter-everywhere norm. |
-| ADR identity / layout | `planning/adrs/NNNN-slug.md`, flat, monotonic 4-digit | Nygard numbering rule; behaves like epics (durable, flat, frontmatter status). |
-| ADR home | `planning/adrs/` (configurable to `docs/adr`) | Co-located knowledge type; the `pm` impl-repo precedent was never actually used. |
-| ADR immutability | Append-only; supersede via a new ADR + bidirectional links | Unanimous across sources; the `supersede` command keeps both sides in sync. |
-| Project layout | `planning/projects/<slug>.md`, flat, frontmatter status | Orthogonal grouping like epics; matches prior project research; not board-like. |
-| Project lifecycle | `unstarted → in-progress → complete \| abandoned` | Linear's set collapsed to essentials; `abandoned` = Shape Up circuit-breaker. |
-| Project ↔ Epic | Orthogonal axes (1 epic, 0..N projects per task) | Linear is the validated twin; Jira/Asana/SAFe nest, which we reject. |
-| Membership | On the task (`projects: []`); member list computed | Every orthogonal tool does this; task stays single source of truth. |
-| Progress rollup | Filtered `done/total` over members, independent of epics | Orthogonal axes never share a denominator → no double-counting. |
-| Cross-linking | Tier 1 structured frontmatter (validated) + Tier 2 `[[wikilink]]` | One form per purpose; fixes today's three-syntaxes-for-one-thing drift. |
+| Split | ADR-0001 = adopt ADRs · ADR-0002 = adopt Projects | One decision per ADR; 0001 is acceptable on its own; 0002 builds on its format. |
+| Support model | **Opt-in**, never reflexive (init offers; `new` lazily creates) | "Support, not require." Directly answers the desirelines deprecation. |
+| ADR core sections | Title, Context, Decision, Consequences (+ Considered Options) | The irreducible core every lineage agrees on, plus MADR's one addition. |
+| ADR mutability | Frozen on accept; append-only `## Amendments`; reversal → supersede | Honest "append-only" without rigid immutability; fits a solo/agent flow. |
+| ADR status location | Frontmatter field, no `## Status` section | Matches MADR + the repo's frontmatter norm; avoids two-places drift. |
+| ADR identity | `ADR-NNNN`, one canonical spelling everywhere; `NNNN-slug.md`, flat | Nygard numbering; behaves like epics (durable, flat, frontmatter status). |
+| ADR numbering race | scan-max → exclusive-create (`O_EXCL`) → retry | No git, no `flock`; reuses `createFileAtomic`. |
+| ADR home | `planning/adrs/`, hardcoded (not configurable for v1) | Keeps layout dirs the single-source domain constants; supersedes command-spec. |
+| Project layout | `planning/projects/<slug>.md`, flat, frontmatter status | Orthogonal grouping like epics; matches prior research; not board-like. |
+| Project lifecycle | `unstarted → in-progress → completed \| abandoned`, via **verbs** | `completed` matches repo; verbs stamp (set-can't-stamp rule). |
+| Project ↔ Epic | Orthogonal (1 epic, 0..N projects per task) | GitHub Projects is the precedent; Jira/Asana/SAFe nest (rejected). |
+| Membership | On the task (`projects: []`, validated); members computed | Single source of truth; rollup is a filtered done/total, no double-count. |
+| Project `epics` list | **Computed, never stored** | Honors prior "no `related_epics`" decision (drift risk). |
+| Cross-link integrity | One stored side where possible; `lint` is the backstop | Non-transactional, git-agnostic tool can't guarantee multi-file writes. |
 
 ## 1. ADR best practices (online research)
 
 Sources: Nygard (2011, the canonical five sections), MADR (the Markdown tooling
-standard, introduced frontmatter in 3.0), Tyree & Akerman (IEEE 2005, the 14-field
-heavyweight), Y-statements (Zimmermann's one-liner), adr-tools (Nygard's CLI),
-Joel Parker Henderson's template collection, plus AWS / Microsoft / Fowler / UK GDS
-adoption guidance.
+standard; frontmatter since 3.0), Tyree & Akerman (IEEE 2005, the 14-field
+heavyweight), Y-statements (Zimmermann's one-liner), adr-tools (Nygard's CLI), Joel
+Parker Henderson's collection, plus AWS / Microsoft / Fowler / UK GDS guidance.
 
 **Irreducible core (no source disagrees):** Title (numbered) · Status · Context ·
-Decision · Consequences. AWS reduces the very definition of an ADR to "the
-decision, its **context**, and its **consequences**."
+Decision · Consequences. The one strongly-recommended addition is **Considered
+Options** (MADR core; Tyree's "Positions") — we scaffold it by default.
 
-**The one strongly-recommended addition:** *Considered Options* — core in MADR and
-Tyree ("Positions"), absent from bare Nygard. Captures the rejected alternatives so
-future readers see the road not taken. We scaffold it by default.
+**On the default template name.** MADR's *minimal* template carries **no status at
+all**. So our default is honestly "MADR-minimal **+ a frontmatter status we add for
+lint**," not a named off-the-shelf format. Keeping status in frontmatter (not a
+`## Status` section) is consistent with MADR 3.0+; Nygard/AWS/Microsoft instead keep
+a prose Status section — we deliberately depart from them there to match the repo.
 
-**Lifecycle (canonical state machine):**
+**Lifecycle:** `proposed → accepted → superseded | deprecated`, with `rejected`
+reachable only from `proposed`. Status-set size varies across sources (Nygard 5, AWS
+4, MS 3, MADR open-ended); we take the 5-state superset. **deprecated** = retired
+without replacement; **superseded** = replaced by a *specific* new ADR.
 
-```
-proposed ──accept──▶ accepted ──superseded-by-new-ADR──▶ superseded (links to replacement)
-   │                    │
- reject               retire, no replacement
-   ▼                    ▼
-rejected            deprecated
-```
+**Mutability — NOT unanimous.** AWS/Microsoft say "immutable, append-only." But Joel
+Parker Henderson — a cited lineage source — explicitly prefers **mutability in
+practice**. For a solo, agent-driven workflow, strict "never edit an accepted ADR" is
+mismatched (the agent will want to extend a record). Reconciliation (ADR-0001): the
+decision body **freezes on accept**, and post-acceptance changes are **append-only
+dated `## Amendments`** entries; only a genuine reversal triggers a superseding ADR.
+This is literally append-only without the dogma.
 
-Status-set size varies (Nygard 5, AWS 4, MS 3, MADR open-ended); we adopt the
-5-state superset. Key semantic distinction everyone honors: **deprecated** = retired
-*without* replacement; **superseded** = replaced by a *specific* new ADR.
+**Numbering:** `NNNN-kebab-title.md`, 4-digit zero-padded (lexical = numeric),
+"monotonic… never reused" (Nygard). The race this creates (ADRs are the only
+integer-identity type) is solved without locks: scan max, exclusive-create, retry.
+**Canonical id `ADR-NNNN`** everywhere (prose, wikilink, `supersedes`/`superseded_by`)
+— the earlier draft's bare-number/slug/`ADR-NNNN` mix was a real interop hazard
+(cf. adr-tools' "Superceded" typo, which broke its own link parser).
 
-**Immutability is unanimous.** "When the team accepts an ADR, it becomes immutable…
-the team proposes a new ADR [that] supersedes the previous" (AWS). "Append-only log…
-don't edit accepted records" (Microsoft). The only permitted edits are the status
-line and trivial fixes. **Bidirectional links** ("Superseded by ADR-N" / "Supersedes
-ADR-M") are the consensus mechanism — and the universal failure mode is updating
-only one side, which is exactly why `adr supersede` should write both.
-
-**Numbering:** `NNNN-kebab-title.md`, 4-digit zero-padded (so lexical sort = numeric
-order), "monotonic… numbers will not be reused" (Nygard). Storage path is the one
-real disagreement (`doc/adr` vs `docs/adr` vs MADR's `docs/decisions`) — hence we
-make it configurable.
-
-**Frontmatter caveat:** the *original* lineage (Nygard/AWS/MS/Fowler) carries status
-in a prose `## Status` section, **not** frontmatter — YAML frontmatter is a MADR/
-tooling convention. We adopt frontmatter because this repo already does everywhere,
-but it's a deliberate choice, not a universal standard.
-
-**What a generic scaffolder should emit by default vs. behind flags:** default to
-*MADR-minimal-plus-Status* (Title, Status=proposed, Context, Considered Options,
-Decision, Consequences) — the smallest format no source would call wrong — with
-sequential `NNNN-kebab.md`, an auto-maintained index, and a bidirectional-supersede
-command. Leave Decision Drivers, Confirmation, per-option Pros/Cons, and the
-heavyweight (Tyree) / one-liner (Y-statement) templates as opt-in.
+**Storage path** is the one real cross-source disagreement (`doc/adr` vs `docs/adr`
+vs MADR's `docs/decisions`). We hardcode `planning/adrs/` for v1; a configurable dir
+(e.g. an impl-repo `docs/adr`) is deferred because layout dir names are single-source
+domain constants threaded through the watcher/completion/init.
 
 ## 2. Project / initiative product research
 
 Surveyed Jira, Linear, GitHub Projects/Milestones, Asana, Shape Up, OKRs, SAFe.
 
-**Two camps on epic↔project:**
-- **Nested** (Jira, Asana, SAFe): strict containment tree — Initiative ⊃ Epic ⊃
-  Story. One parent per child.
-- **Orthogonal** (Linear, GitHub): work lives in one home (team/repo) but groups into
-  projects independently; a work item can be in multiple projects. **This is our
-  model — Linear is the closest validated precedent.**
+**Two camps on epic↔project:** *nested* (Jira, Asana, SAFe — strict containment tree)
+vs *orthogonal* (work lives in one home but groups into projects independently). Ours
+is orthogonal.
 
-**Terminology clash (name it in the docs):** "Epic" is overloaded. In SAFe an *Epic*
-is a large *funded, time-bounded initiative* (≈ our Project) and the durable
-direction is a *Strategic Theme* (≈ our Epic). Our usage is the Linear usage; SAFe's
-is inverted.
+**Multi-membership precedent is GitHub Projects, not Linear.** GitHub lets an item sit
+in multiple projects — matching our many-valued `projects: []`. **Linear restricts an
+issue to exactly one project** (the earlier draft's "Linear is the validated twin" was
+wrong). Cite Linear only for two things it genuinely does: (a) **status and health are
+separate fields** (lifecycle vs on-track/at-risk/off-track), and (b) manual
+completion. Note Linear's *health* is derived from periodic project **updates**, not a
+poked enum — so our manually-set `health` is *lighter than* Linear's, not "almost
+exactly" it.
 
-**Linear is the de-facto standard and maps onto our proposal almost exactly:**
-- Status and **health** are *separate* fields (lifecycle vs. on-track/at-risk/
-  off-track). We keep them separate; health is optional.
-- Lifecycle: Backlog/Planned → In Progress → Completed/Canceled. Collapsed to
-  essentials: `unstarted → in-progress → complete | abandoned`. `abandoned` is
-  essential — a completable thing must be able to *not* complete (Shape Up's
-  "circuit breaker").
-- Membership stored **on the work item** (the many-valued, orthogonal axis), while
-  the single-valued home (team/epic) is a field on the item. Progress = `done/total`
-  over members (Linear gives in-progress 25% partial credit; the defensible baseline,
-  matching GitHub/Asana milestones, is binary done/total).
+**Terminology clash (name it in docs):** in SAFe an *Epic* is a funded, time-bounded
+initiative (≈ our Project) and the durable direction is a *Strategic Theme* (≈ our
+Epic). Our usage is the colloquial/Linear usage; SAFe's is inverted.
 
-**Irreducible Project fields:** `slug`, `title`/`description`, `status` required;
-`goal` + `target_date` recommended (the time-bound + definition-of-done traits that
-distinguish a Project from an Epic); `health`, `epics` touched, `spawned_by`,
-milestones, `owner` optional. (The earlier project research dropped `owner` as a
-personal-project simplification; we keep it optional for the generic tool.)
+**Lifecycle & rollup:** the industry baseline is a status field + binary `done/total`
+rollup (GitHub/Asana milestones; Linear adds optional partial credit). We adopt
+`unstarted → in-progress → completed | abandoned` (Linear's set collapsed; `abandoned`
+= Shape Up circuit-breaker), spelled to match the repo's `completed`. Membership is
+stored on the work item in every orthogonal tool; the project's member list and the
+set of epics it touches are **computed** — we store neither (honoring the prior
+"no `related_epics`" decision).
 
-**Sharpest distinction derived:** *Epic = a place work lives (durable home, one per
-task, never done); Project = a finish line work moves toward (cross-cutting,
-time-bounded, completes; zero-or-more per task).*
+**Sharpest distinction:** *Epic = a place work lives (durable home, one per task,
+never done); Project = a finish line work moves toward (cross-cutting, time-bounded,
+completes; zero-or-more per task).*
 
 ## 3. House-style fingerprint (the two repos as fodder)
 
 Mined ~14 tasks, 6 epics, 5 audits, research/incident/issue docs across both repos.
-The conventions any new type must follow to feel native:
+Conventions any new type must follow to feel native:
 
 1. **Tool-first, schema-driven** — created/moved/edited via `tskflwctl <noun> <verb>`;
    frontmatter is whatever `schema` emits and `lint --fix` normalizes. No hand-`mv`,
    no ad-hoc fields.
 2. **`status == directory`** is the invariant for *flowing* completable types (tasks,
    audits). *Durable/grouping* types (epics — and now ADRs, projects) go **flat +
-   frontmatter status**. This is the structural tell that decided ADR and Project
-   layout.
-3. **ISO dates `YYYY-MM-DD`**, quoted in taskflow; stamps in frontmatter, not
-   filenames.
-4. **One-line `description` ≤150 chars**, required for active items (the triage
-   primitive surfaced in `--json`).
-5. **Bare enums, bare `NN-slug` epic refs, inline `[tag, tag]` lists** (quote only
-   when the value contains `:`).
+   frontmatter status**. (This adds a status mechanism; accepted as a conscious cost,
+   not silent drift.)
+3. **ISO dates `YYYY-MM-DD`, quoted in taskflow**; stamps in frontmatter, not filenames.
+4. **One-line `description` ≤150 chars**, required for active items (the `--json`
+   triage primitive).
+5. **Bare enums, bare `NN-slug` epic refs, inline `[tag, tag]` lists** (quote only if
+   the value contains `:`).
 6. **Filenames stable across lifecycle**; slug-only for slug-identity types,
    `NN-`/`NNNN-` numeric prefix for numbered types.
 7. **Canonical body skeleton:** H1 prose title → Objective/Goal → Context →
    done/acceptance section *with `- [ ]` checkboxes* → Out of scope → Related.
 8. **Append-only dated history in the body** (`## Progress Log`, dated `## Closure`),
-   never a parallel tracking doc.
-9. **`[[wikilink]]` for prose refs; `epic:` is the only validated structured link
-   today** — every other cross-link (wikilinks, `related_tasks`, `dependencies`,
-   relative paths, supersedes) is unvalidated prose.
+   never a parallel tracking doc. (The ADR `## Amendments` mechanism is this pattern.)
+9. **`epic:` is the only validated structured link today**; everything else
+   (wikilinks, `related_tasks`, relative paths, supersedes) is unvalidated prose, with
+   up to three coexisting syntaxes for one purpose. The new types validate their *own*
+   Tier-1 fields; the broader cross-link cleanup is deliberately out of scope.
 
-**The cross-linking problem (most important finding):** the same purpose has up to
-**three coexisting syntaxes** — a related task appears as `related_tasks: [slug]`
-(frontmatter), `[[slug]]` (body), and `[label](../bucket/slug.md)` (markdown link),
-sometimes all in one file; the `.md` suffix comes and goes; `audit_sources` mixes
-resolvable paths with prose labels. This is the drift the new scheme must end.
+## 4. The two scaffolds
 
-## 4. The cross-linking scheme
-
-Information flow we want legible:
-
-```
-   ADR ── the WHY (immutable decision + rationale)
-    │ spawns ▲ cites back (task.adrs / project.spawned_by)
-    ▼        │
- Epic + Project ── the WHAT/HOW
-    │ contain ▲ rollup
-    ▼         │
-   Task ──────┘ ── the WORK (epic: one home, projects: 0..N, adrs: cites)
-    ▲
-    │ spawns (audit finding → task)
-  Audit
-```
-
-**Tier 1 — structured frontmatter (validated, tool-maintained bidirectionality):**
-
-| Link | Field | On | Validated against |
-| :-- | :-- | :-- | :-- |
-| task → home | `epic:` (existing) | task | `epics/` |
-| task → initiative(s) | `projects: []` | task | `projects/` |
-| task → decision(s) | `adrs: []` | task | `adrs/` |
-| project → decision | `spawned_by:` | project | `adrs/` |
-| project → epics touched | `epics: []` | project | `epics/` (or derived from members) |
-| ADR ↔ ADR | `supersedes:` / `superseded_by:` | ADR | `adrs/` |
-
-**Tier 2 — `[[wikilink]]` in prose, one canonical form:** no `.md`; slug for tasks/
-projects/research, `NN-slug` for epics, `ADR-NNNN` for ADRs. `lint` resolves them;
-the TUI `f`-nav follows them (closing the gap the cross-link-navigation task
-explicitly deferred).
-
-**Relative paths only for implementation code** (`internal/...`, `../desirelines/...`),
-never for sibling planning docs. Drop the inline `[slug.md]` and mixed
-`related_tasks` styles.
-
-## 5. The scaffolds (what the tool emits)
-
-### `tskflwctl adr new "Title"`
+### `tskflwctl adr new "Title"` → `planning/adrs/NNNN-slug.md`
 
 ```markdown
 ---
@@ -214,44 +167,37 @@ date: "YYYY-MM-DD"
 deciders: [you]
 tags: [adr]
 supersedes: []
-superseded_by: []
+superseded_by: null
 ---
 
 # ADR-NNNN: <title>
 
 ## Context and Problem Statement
-<!-- The forces at play (technical, project, social), value-neutral. -->
-
 ## Considered Options
 - **Option A** — …
-- **Option B** — …
-
 ## Decision
-<!-- "We will …" — active voice. The chosen option, and *because*. -->
-
 ## Consequences
 **Positive.** …
 **Negative.** …
-
+## Amendments
+<!-- append-only, dated, added AFTER acceptance -->
 ## Related
-<!-- Spawns: [[NN-epic]] · Supersedes: ADR-MMMM · Cited by: task-slug -->
 ```
 
-### `tskflwctl project new "Title"`
+### `tskflwctl project new "Title"` → `planning/projects/<slug>.md`
 
 ```markdown
 ---
 status: unstarted
 description: <one line, ≤150 chars>
-goal: <the definition of done — what "shipped" means>
+goal: <definition of done>
 created: "YYYY-MM-DD"
 target_date: null
 started_at: null
 ended_at: null
 tags: []
 health: null            # on-track | at-risk | off-track (≠ status)
-epics: []               # thematic areas this cuts across
-spawned_by: null        # the ADR that originated it, e.g. ADR-0007
+spawned_by: null        # ADR-NNNN that originated it
 ---
 
 # Project: <title>
@@ -263,26 +209,69 @@ spawned_by: null        # the ADR that originated it, e.g. ADR-0007
 ## Related
 ```
 
-Tasks gain optional `projects: []` and `adrs: []` in frontmatter (the `projects`
-list replaces the old singular `project` tag).
+Tasks gain `projects: []` (already registered, now **validated**) and a **new**
+`adrs: []` field (registry + struct + schema-doc + sync-test change).
 
-## 6. Implementation path (for the spawned epic)
+## 5. Cross-linking scheme
 
-(a) ADR support — `planning/adrs/`, `adr` command group, schema, lint, race-free
-numbering; (b) Project support — `planning/projects/`, `projects:`/`adrs:` task
-fields, `project` command, cross-epic rollup; (c) cross-link Tier-1 validation +
-`[[wikilink]]` resolver + TUI `f`-nav; (d) docs + `schema adr|project` + generated
-CLI reference. Scoped to start only once [[0001-adopt-adrs-and-projects]] is accepted.
+```
+   ADR ── the WHY (decision; frozen + amendments)
+    │ spawns ▲ cites back (task.adrs / project.spawned_by)
+    ▼        │
+ Epic + Project ── the WHAT/HOW
+    │ contain ▲ computed rollup
+    ▼         │
+   Task ──────┘ ── the WORK (epic: one home, projects: 0..N, adrs: cites)
+    ▲
+    │ spawns (audit finding → task)
+  Audit
+```
+
+**Tier 1 — validated frontmatter:** task `epic:` (existing), task `projects: []`,
+task `adrs: []`; project `spawned_by:`; ADR `supersedes:`/`superseded_by:`. The only
+genuinely *bidirectional* link is ADR↔ADR supersession — and because the tool is
+non-transactional and git-agnostic, the *write* attempts both sides but **`lint` is
+the integrity backstop** that detects/`--fix`es a one-sided pair. Everything else has
+a single stored side (membership and touched-epics are computed).
+
+**Tier 2 — `[[ADR-NNNN]]` / `[[slug]]` prose refs** with one canonical form per type.
+A general resolver + TUI `f`-nav + migration of legacy links is **out of scope** for
+these two ADRs (a separate effort if ever justified).
+
+## 6. The desirelines lesson (engaged, not ignored)
+
+ADRs were tried in `desirelines` and the convention was **declined** (2026-05-26: "no
+precedent in the repo, and the versioning policy lives directly in openapi.yaml").
+The takeaway shaped two decisions: **opt-in** (the tool supports ADRs but never forces
+a repo to adopt them), and **ADRs don't replace inlining** a narrow, locally-enforced
+decision (Considered Option C in ADR-0001). Supporting the type ≠ requiring its use.
+
+## Corrections (post-review changelog)
+
+- Linear-as-multi-membership-precedent → **GitHub Projects**; Linear demoted to
+  status/health-separation only.
+- "Immutability is unanimous" → **append-only `## Amendments`** model (Henderson's
+  mutability stance + the solo/agent reality).
+- "MADR-minimal-plus-Status, the smallest no source would call wrong" → honest
+  "MADR-minimal + an added frontmatter status."
+- Project terminal state `complete` → **`completed`** (repo vocabulary).
+- `project set status …` → **lifecycle verbs** (`start|complete|abandon`) that stamp.
+- Stored `project.epics` → **computed only**.
+- ADR identity unified to **`ADR-NNNN`**; numbering race spec'd (exclusive-create).
+- ADR home **hardcoded** `planning/adrs/` (was a phantom `adr_dir` config); the
+  command-spec's impl-repo line is **superseded** by ADR-0001.
+- One combined ADR → **split** into ADR-0001 (ADRs) + ADR-0002 (Projects).
+- `adrs:` flagged as a **new** task field (real schema change), not a footnote.
 
 ## References
 
-- ADR: [[0001-adopt-adrs-and-projects]].
-- Project model origin (orthogonal axes, membership-on-task): [[2026-06-06-project-concept-cross-cutting-initiatives]].
-- Command spec (the `adr` / `project` groups): [[2026-06-06-tskflwctl-command-spec]].
+- ADRs: [[0001-adopt-adrs]] · [[0002-adopt-projects]].
+- Project model origin: [[2026-06-06-project-concept-cross-cutting-initiatives]].
+- Command spec (`adr` / `project` groups): [[2026-06-06-tskflwctl-command-spec]].
 - ADR lineage: Nygard (cognitect.com/blog/2011/11/15/documenting-architecture-decisions),
   MADR (adr.github.io/madr), Tyree & Akerman (IEEE Software 2005), adr-tools
   (github.com/npryce/adr-tools), Joel Parker Henderson
   (github.com/joelparkerhenderson/architecture-decision-record), AWS Prescriptive
   Guidance, Microsoft Azure WAF, Martin Fowler, UK GDS Way.
-- Project lineage: Linear (linear.app/docs), Jira Advanced Roadmaps, GitHub Projects,
-  Asana, Shape Up (basecamp.com/shapeup), SAFe (framework.scaledagile.com).
+- Project lineage: GitHub Projects (docs.github.com), Linear (linear.app/docs), Jira
+  Advanced Roadmaps, Asana, Shape Up (basecamp.com/shapeup), SAFe.

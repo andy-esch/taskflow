@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.5",
+  "epics": [
+    {
+      "id": "01-fixture-epic",
+      "status": "in-progress",
+      "description": "A fixture epic for golden snapshots",
+      "priority": "high",
+      "created": "2026-01-01",
+      "tags": [
+        "fixture"
+      ],
+      "total": 3,
+      "done": 1,
+      "percent": 33
+    }
+  ]
+}
