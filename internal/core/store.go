@@ -28,8 +28,9 @@ type TaskStore interface {
 	EditTask(slug string, edit func(current string, prevErr error) (string, error)) (domain.Task, bool, error)
 	// EditBody replaces (appendMode=false) or appends to (true) a task's markdown
 	// body in one atomic, validated write, preserving the frontmatter and stamping
-	// updated_at. The agent face of body editing, beside EditTask's editor.
-	EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, error)
+	// updated_at. The agent face of body editing, beside EditTask's editor. Returns
+	// the reloaded task and the resulting body (so a --json caller can echo it).
+	EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error)
 }
 
 // EpicStore is the epic-persistence port.

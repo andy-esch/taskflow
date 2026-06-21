@@ -97,24 +97,66 @@ func TestTaskAppend_DryRun_NoWrite(t *testing.T) {
 	}
 }
 
-// The body-mutation --json output is a parseable task envelope with updated_at.
+// The task_mutation --json envelope carries dry_run + the resulting body, and the
+// task with a stamped updated_at.
+type mutationEnv struct {
+	SchemaVersion string `json:"schema_version"`
+	DryRun        bool   `json:"dry_run"`
+	Body          string `json:"body"`
+	Task          struct {
+		Slug    string `json:"slug"`
+		Updated string `json:"updated_at"`
+		Tier    int    `json:"tier"`
+	} `json:"task"`
+}
+
 func TestTaskAppend_JSON(t *testing.T) {
 	root := setupRepo(t)
 	out := runRoot(t, "-C", root, "--json", "task", "append", "alpha", "--body", "## Notes")
-	var env struct {
-		SchemaVersion string `json:"schema_version"`
-		Task          struct {
-			Slug    string `json:"slug"`
-			Updated string `json:"updated_at"`
-		} `json:"task"`
-	}
+	var env mutationEnv
 	if err := json.Unmarshal([]byte(out), &env); err != nil {
 		t.Fatalf("append --json is not a parseable envelope: %v\n%s", err, out)
 	}
-	if env.SchemaVersion == "" || env.Task.Slug != "alpha" {
+	if env.SchemaVersion == "" || env.Task.Slug != "alpha" || env.Task.Updated == "" {
 		t.Errorf("append --json envelope wrong:\n%s", out)
 	}
-	if env.Task.Updated == "" {
-		t.Errorf("append should stamp updated_at in the JSON task:\n%s", out)
+	if env.DryRun {
+		t.Errorf("a real append should report dry_run=false")
+	}
+	// The resulting body is echoed and contains the appended section.
+	if !strings.Contains(env.Body, "## Notes") {
+		t.Errorf("append --json should echo the resulting body:\n%s", out)
+	}
+}
+
+// --dry-run is now distinguishable in JSON: dry_run=true and nothing written.
+func TestTaskSetBody_DryRun_JSON(t *testing.T) {
+	root := setupRepo(t)
+	before, _ := os.ReadFile(alphaPath(root))
+	out := runRoot(t, "-C", root, "--json", "--dry-run", "task", "set", "alpha", "--body", "# Preview")
+	var env mutationEnv
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("set --body --dry-run --json not parseable: %v\n%s", err, out)
+	}
+	if !env.DryRun {
+		t.Errorf("a --dry-run mutation must report dry_run=true:\n%s", out)
+	}
+	if !strings.Contains(env.Body, "# Preview") {
+		t.Errorf("dry-run should still echo the would-be body:\n%s", out)
+	}
+	if after, _ := os.ReadFile(alphaPath(root)); !bytes.Equal(before, after) {
+		t.Error("--dry-run must not write")
+	}
+}
+
+// Field-only `task set` is a mutation too: dry_run is present, body is omitted.
+func TestTaskSetFields_DryRun_JSON_NoBody(t *testing.T) {
+	root := setupRepo(t)
+	out := runRoot(t, "-C", root, "--json", "--dry-run", "task", "set", "alpha", "--tier", "2")
+	if !strings.Contains(out, `"dry_run": true`) {
+		t.Errorf("field-set --dry-run should carry dry_run=true:\n%s", out)
+	}
+	if strings.Contains(out, `"body"`) {
+		t.Errorf("field-set should omit body (omitempty):\n%s", out)
 	}
 }

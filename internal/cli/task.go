@@ -271,17 +271,17 @@ func newTaskSetCmd(app *App) *cobra.Command {
 				if strings.TrimSpace(text) == "" {
 					return fmt.Errorf("%w: --body is empty (nothing to write)", domain.ErrValidation)
 				}
-				task, err := app.Svc.ReplaceBody(args[0], text, app.DryRun)
+				task, newBody, err := app.Svc.ReplaceBody(args[0], text, app.DryRun)
 				if err != nil {
 					return err
 				}
-				return reportTaskMutation(app, task, "updated", "would update")
+				return reportTaskMutation(app, task, newBody, "updated", "would update")
 			}
 			task, err := app.Svc.SetFields(args[0], updates, force, app.DryRun)
 			if err != nil {
 				return err
 			}
-			return reportTaskMutation(app, task, "updated", "would update")
+			return reportTaskMutation(app, task, "", "updated", "would update")
 		},
 	}
 	cmd.Flags().StringVar(&description, "description", "", "one-line description (<=150 chars)")
@@ -301,12 +301,13 @@ func newTaskSetCmd(app *App) *cobra.Command {
 	return cmd
 }
 
-// reportTaskMutation writes the standard task-mutation result: the task JSON
-// envelope under --json, else a styled one-line confirmation. verb/dryVerb let the
+// reportTaskMutation writes the standard task-mutation result: the task_mutation
+// JSON envelope (carrying dry_run + the resulting body) under --json, else a styled
+// one-line confirmation. body is "" for field-only `set`. verb/dryVerb let the
 // caller phrase the action ("updated"/"would update", "appended to"/…).
-func reportTaskMutation(app *App, task domain.Task, verb, dryVerb string) error {
+func reportTaskMutation(app *App, task domain.Task, body, verb, dryVerb string) error {
 	if app.JSON {
-		return render.TaskShowJSON(app.Out, task, "")
+		return render.TaskMutationJSON(app.Out, task, body, app.DryRun)
 	}
 	if app.DryRun {
 		verb = dryVerb
@@ -339,11 +340,11 @@ func newTaskAppendCmd(app *App) *cobra.Command {
 			if strings.TrimSpace(text) == "" {
 				return fmt.Errorf("%w: nothing to append (provide --body, --body-file, or stdin via -)", domain.ErrValidation)
 			}
-			task, err := app.Svc.AppendBody(args[0], text, app.DryRun)
+			task, newBody, err := app.Svc.AppendBody(args[0], text, app.DryRun)
 			if err != nil {
 				return err
 			}
-			return reportTaskMutation(app, task, "appended to", "would append to")
+			return reportTaskMutation(app, task, newBody, "appended to", "would append to")
 		},
 	}
 	cmd.Flags().StringVar(&body, "body", "", "markdown to append")

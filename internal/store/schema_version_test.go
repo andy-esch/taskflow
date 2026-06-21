@@ -72,13 +72,13 @@ func TestSchemaVersion_SurvivesBodyEdit(t *testing.T) {
 	fs := NewFS(root)
 	path := filepath.Join(root, domain.TasksDir, "ready-to-start", "keep.md")
 
-	if _, err := fs.EditBody("keep", "## Notes\n- x", true, bodyNow, false); err != nil { // append
+	if _, _, err := fs.EditBody("keep", "## Notes\n- x", true, bodyNow, false); err != nil { // append
 		t.Fatal(err)
 	}
 	if got := readFile(t, path); !strings.Contains(got, "schema: 1") {
 		t.Errorf("append dropped the reserved schema key:\n%s", got)
 	}
-	if _, err := fs.EditBody("keep", "# Rewritten", false, bodyNow, false); err != nil { // replace
+	if _, _, err := fs.EditBody("keep", "# Rewritten", false, bodyNow, false); err != nil { // replace
 		t.Fatal(err)
 	}
 	if got := readFile(t, path); !strings.Contains(got, "schema: 1") {

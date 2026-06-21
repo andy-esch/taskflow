@@ -61,7 +61,7 @@ func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []domain.FileP
 	for _, a := range audits {
 		_, body, err := s.store.GetAudit(a.Slug)
 		if err != nil {
-			problems = append(problems, domain.FileProblem{Path: a.Slug, Message: err.Error()})
+			problems = append(problems, domain.FileProblem{Path: a.Path, Message: err.Error()})
 			continue
 		}
 		collect(a.Slug, string(a.Bucket), body)
@@ -98,7 +98,7 @@ func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, e
 	for _, a := range audits {
 		_, body, err := s.store.GetAudit(a.Slug)
 		if err != nil {
-			problems = append(problems, domain.FileProblem{Path: a.Slug, Message: err.Error()})
+			problems = append(problems, domain.FileProblem{Path: a.Path, Message: err.Error()})
 			continue
 		}
 		check(a, body)
@@ -124,7 +124,9 @@ func findingMatches(fd domain.Finding, f FindingFilter) bool {
 
 func anyEqualFold(opts []string, v string) bool {
 	for _, o := range opts {
-		if strings.EqualFold(strings.TrimSpace(o), v) {
+		// Skip empty/whitespace tokens — a stray comma (`--status "open,"` →
+		// ["open",""]) must NOT match findings with a missing field (where v == "").
+		if o = strings.TrimSpace(o); o != "" && strings.EqualFold(o, v) {
 			return true
 		}
 	}

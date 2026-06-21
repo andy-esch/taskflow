@@ -111,3 +111,37 @@ func TestLintAudits(t *testing.T) {
 		t.Errorf("the open gateway audit should lint clean, got %+v", clean)
 	}
 }
+
+func TestQueryFindings_EmptyTokenDoesNotOverMatch(t *testing.T) {
+	fs := &fakeStore{
+		audits:      []domain.Audit{{Slug: "a", Bucket: domain.AuditOpen}},
+		auditBodies: map[string]string{"a": "#### A1. t\n**Status:** open\n\n#### B1. no status\nbody\n"},
+	}
+	// B1 has no **Status:** line → parsed status "". A stray-comma filter
+	// (["open",""]) must NOT pull in the status-less finding via the empty token.
+	got, _, _ := NewService(fs).QueryFindings(FindingFilter{Status: []string{"open", ""}})
+	if len(got) != 1 || got[0].Code != "A1" {
+		t.Errorf("empty filter token must not over-match the status-less finding, got %v", codes(got))
+	}
+}
+
+func TestLintAudits_MultipleIssues(t *testing.T) {
+	fs := &fakeStore{
+		audits:      []domain.Audit{{Slug: "a", Bucket: domain.AuditClosed}},
+		auditBodies: map[string]string{"a": "#### S1. t\n**Status:** opne\n\n#### M1. t\n**Status:** open\n"},
+	}
+	// closed audit: S1 has a typo'd status + M1 is still open → 2 issues.
+	results, _, _ := NewService(fs).LintAudits("")
+	if len(results) != 1 || len(results[0].Issues) != 2 {
+		t.Fatalf("expected 2 issues (bad status + open-in-closed), got %+v", results)
+	}
+}
+
+func TestQueryFindings_Order(t *testing.T) {
+	got, _, _ := NewService(findingsRepo()).QueryFindings(FindingFilter{})
+	c := codes(got)
+	// ListAudits order (gateway, ingest) then per-audit document order.
+	if len(c) != 3 || c[0] != "2026-06-14-gateway:S1" || c[1] != "2026-06-14-gateway:H1" || c[2] != "2026-06-10-ingest:M1" {
+		t.Errorf("cross-audit order should be deterministic (ListAudits then doc order), got %v", c)
+	}
+}

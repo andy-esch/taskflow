@@ -16,7 +16,7 @@ var bodyNow = time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 // Replace swaps the whole body, keeps the frontmatter, and stamps updated_at.
 func TestEditBody_Replace(t *testing.T) {
 	fs, path := editRepo(t)
-	task, err := fs.EditBody("edit-me", "# New Title\n\nfresh content", false, bodyNow, false)
+	task, _, err := fs.EditBody("edit-me", "# New Title\n\nfresh content", false, bodyNow, false)
 	if err != nil {
 		t.Fatalf("EditBody: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestEditBody_Replace(t *testing.T) {
 // Append keeps the existing body and adds the section after one blank line.
 func TestEditBody_Append(t *testing.T) {
 	fs, path := editRepo(t)
-	if _, err := fs.EditBody("edit-me", "## Review\n- looks good", true, bodyNow, false); err != nil {
+	if _, _, err := fs.EditBody("edit-me", "## Review\n- looks good", true, bodyNow, false); err != nil {
 		t.Fatalf("EditBody append: %v", err)
 	}
 	got := readFile(t, path)
@@ -62,7 +62,7 @@ func TestEditBody_PreservesUnknownKeys(t *testing.T) {
 	seed := "---\nstatus: ready-to-start\ncustom_field: keep-me\ndescription: d\n---\n# B\n\nold\n"
 	writeTask(t, root, "ready-to-start", "u.md", seed)
 	fs := NewFS(root)
-	if _, err := fs.EditBody("u", "# B\n\nnew", false, bodyNow, false); err != nil {
+	if _, _, err := fs.EditBody("u", "# B\n\nnew", false, bodyNow, false); err != nil {
 		t.Fatalf("EditBody: %v", err)
 	}
 	got := readFile(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "u.md"))
@@ -75,7 +75,7 @@ func TestEditBody_PreservesUnknownKeys(t *testing.T) {
 func TestEditBody_DryRun_NoWrite(t *testing.T) {
 	fs, path := editRepo(t)
 	before := readFile(t, path)
-	task, err := fs.EditBody("edit-me", "# replaced", false, bodyNow, true)
+	task, _, err := fs.EditBody("edit-me", "# replaced", false, bodyNow, true)
 	if err != nil {
 		t.Fatalf("EditBody dryRun: %v", err)
 	}
@@ -95,8 +95,8 @@ func TestEditBody_CRLFRoundTrip(t *testing.T) {
 		name string
 		edit func(*FS) error
 	}{
-		{"replace", func(fs *FS) error { _, e := fs.EditBody("alpha", "# New\n\nfresh", false, bodyNow, false); return e }},
-		{"append", func(fs *FS) error { _, e := fs.EditBody("alpha", "## More\n- x", true, bodyNow, false); return e }},
+		{"replace", func(fs *FS) error { _, _, e := fs.EditBody("alpha", "# New\n\nfresh", false, bodyNow, false); return e }},
+		{"append", func(fs *FS) error { _, _, e := fs.EditBody("alpha", "## More\n- x", true, bodyNow, false); return e }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -143,7 +143,7 @@ func TestEditBody_RelocatedDuringWrite_Conflict(t *testing.T) {
 		_ = os.Rename(path, moved)
 	}
 	defer func() { testHookBeforeBodyWrite = nil }()
-	if _, err := fs.EditBody("edit-me", "# new body", false, bodyNow, false); !errors.Is(err, domain.ErrConflict) {
+	if _, _, err := fs.EditBody("edit-me", "# new body", false, bodyNow, false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("relocation during the write window should be ErrConflict, got %v", err)
 	}
 	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
@@ -157,7 +157,22 @@ func TestEditBody_BrokenFrontmatter_Errors(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "bad.md", "---\nstatus: ready-to-start\nno closing fence\n")
 	fs := NewFS(root)
-	if _, err := fs.EditBody("bad", "x", false, bodyNow, false); err == nil {
+	if _, _, err := fs.EditBody("bad", "x", false, bodyNow, false); err == nil {
 		t.Fatal("editing a file with unterminated frontmatter should error")
+	}
+}
+
+func TestEditBody_EchoesOnDiskBody(t *testing.T) {
+	root := t.TempDir()
+	crlf := strings.ReplaceAll("---\nstatus: ready-to-start\ndescription: d\n---\n# T\n\nbody\n", "\n", "\r\n")
+	writeTask(t, root, "ready-to-start", "alpha.md", crlf)
+	_, gotBody, err := NewFS(root).EditBody("alpha", "## New", true, bodyNow, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The echoed body matches the file's CRLF ending (so it equals what task show
+	// returns), not the LF intermediate.
+	if lone := strings.Count(gotBody, "\n") - strings.Count(gotBody, "\r\n"); lone != 0 || !strings.Contains(gotBody, "\r\n") {
+		t.Errorf("echoed body should use the file's CRLF ending (no lone LF), got %q", gotBody)
 	}
 }

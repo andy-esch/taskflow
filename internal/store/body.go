@@ -14,19 +14,20 @@ import (
 // the human `task edit`. The frontmatter is preserved surgically (unknown keys,
 // comments, and key order survive) and updated_at is stamped. Like the other
 // mutators it parses before committing and compare-and-swaps against a concurrent
-// relocation; dryRun runs every check but skips the write.
-func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, error) {
+// relocation; dryRun runs every check but skips the write. Returns the reloaded
+// task and the resulting (LF) body, so a --json caller can echo what it wrote.
+func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error) {
 	path, st, err := s.resolve(slug)
 	if err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, "", err
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return domain.Task{}, fmt.Errorf("read task %s: %w", path, err)
+		return domain.Task{}, "", fmt.Errorf("read task %s: %w", path, err)
 	}
 	_, body, err := splitFrontmatterStrict(content)
 	if err != nil {
-		return domain.Task{}, err // can't body-edit a file whose frontmatter won't parse
+		return domain.Task{}, "", err // can't body-edit a file whose frontmatter won't parse
 	}
 
 	var newBody string
@@ -37,12 +38,15 @@ func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun 
 	}
 	newContent, err := replaceBodyStamped(content, newBody, now.Format("2006-01-02"))
 	if err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, "", err
 	}
+	// Echo the body exactly as it lands on disk (the file's line ending), so a
+	// --json caller's echoed body matches what `task show --json` later returns.
+	_, storedBody := splitFrontmatter(newContent)
 	// Parse before committing: never leave an unreloadable file on disk.
 	t, err := parseTask(newContent, path, st)
 	if err != nil {
-		return domain.Task{}, fmt.Errorf("%w: %v", domain.ErrValidation, err)
+		return domain.Task{}, "", fmt.Errorf("%w: %v", domain.ErrValidation, err)
 	}
 	if testHookBeforeBodyWrite != nil {
 		testHookBeforeBodyWrite()
@@ -51,15 +55,15 @@ func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun 
 	// move may have relocated the file; writing the original path would resurrect
 	// the slug in its old status directory.
 	if curPath, _, rerr := s.resolve(slug); rerr != nil || curPath != path {
-		return domain.Task{}, fmt.Errorf("task %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
+		return domain.Task{}, "", fmt.Errorf("task %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
 	}
 	if dryRun {
-		return t, nil
+		return t, string(storedBody), nil
 	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
-		return domain.Task{}, fmt.Errorf("write task %s: %w", path, err)
+		return domain.Task{}, "", fmt.Errorf("write task %s: %w", path, err)
 	}
-	return t, nil
+	return t, string(storedBody), nil
 }
 
 // normalizeBody works in LF internally (any CRLF/CR input is folded to LF), trims
