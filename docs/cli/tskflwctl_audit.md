@@ -25,6 +25,7 @@ Work with code audits
 * [tskflwctl audit close](tskflwctl_audit_close.md)	 - Move audit(s) to closed/
 * [tskflwctl audit defer](tskflwctl_audit_defer.md)	 - Move audit(s) to deferred/
 * [tskflwctl audit findings](tskflwctl_audit_findings.md)	 - Query findings across audits (or one) by status/effort/urgency/component
+* [tskflwctl audit lint](tskflwctl_audit_lint.md)	 - Validate audit findings (status vocabulary, missing status, bucket↔state)
 * [tskflwctl audit list](tskflwctl_audit_list.md)	 - List audits (open by default)
 * [tskflwctl audit new](tskflwctl_audit_new.md)	 - Create a new audit (open bucket, scaffolded findings)
 * [tskflwctl audit reopen](tskflwctl_audit_reopen.md)	 - Move audit(s) back to open/

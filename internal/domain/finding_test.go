@@ -61,3 +61,26 @@ func TestParseFindings_LiteralStatusInTitle(t *testing.T) {
 		t.Errorf("title = %q, want it kept intact (incl. the literal marker)", fs[0].Title)
 	}
 }
+
+func TestLintFindings(t *testing.T) {
+	// Clean: open bucket, legal statuses → no issues.
+	if iss := LintFindings("open", []Finding{{Code: "S1", Status: "open"}, {Code: "H1", Status: "fixed"}}); len(iss) != 0 {
+		t.Errorf("clean findings should lint clean, got %v", iss)
+	}
+	// Typo'd status → one issue on the finding code.
+	if iss := LintFindings("open", []Finding{{Code: "S1", Status: "opne"}}); len(iss) != 1 || iss[0].Field != "S1" {
+		t.Errorf("typo status should be one issue on S1, got %v", iss)
+	}
+	// Missing status → flagged.
+	if iss := LintFindings("open", []Finding{{Code: "M2", Status: ""}}); len(iss) != 1 || iss[0].Field != "M2" {
+		t.Errorf("missing status should be flagged on M2, got %v", iss)
+	}
+	// bucket↔state: a closed audit with a still-open finding → bucket issue.
+	if iss := LintFindings("closed", []Finding{{Code: "S1", Status: "open"}}); len(iss) != 1 || iss[0].Field != "bucket" {
+		t.Errorf("closed audit with an open finding should flag bucket, got %v", iss)
+	}
+	// Vocabulary is case-insensitive and covers the full set.
+	if iss := LintFindings("open", []Finding{{Code: "S1", Status: "IN-PROGRESS"}, {Code: "H1", Status: "landed"}}); len(iss) != 0 {
+		t.Errorf("legal statuses (case-insensitive) should pass, got %v", iss)
+	}
+}

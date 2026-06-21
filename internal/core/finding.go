@@ -69,6 +69,43 @@ func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []domain.FileP
 	return out, problems, nil
 }
 
+// LintAudits validates audit findings — status vocabulary, missing status, and the
+// bucket↔state invariant — returning one LintResult per audit with issues (reusing
+// the task-lint result + render shape). slug, if set, restricts to one audit.
+func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, error) {
+	var (
+		results  []LintResult
+		problems []domain.FileProblem
+	)
+	check := func(a domain.Audit, body string) {
+		if iss := domain.LintFindings(string(a.Bucket), domain.ParseFindings(body)); len(iss) > 0 {
+			results = append(results, LintResult{Slug: a.Slug, Issues: iss})
+		}
+	}
+	if slug != "" {
+		a, body, err := s.store.GetAudit(slug)
+		if err != nil {
+			return nil, nil, err
+		}
+		check(a, body)
+		return results, nil, nil
+	}
+	audits, probs, err := s.store.ListAudits()
+	if err != nil {
+		return nil, nil, err
+	}
+	problems = probs
+	for _, a := range audits {
+		_, body, err := s.store.GetAudit(a.Slug)
+		if err != nil {
+			problems = append(problems, domain.FileProblem{Path: a.Slug, Message: err.Error()})
+			continue
+		}
+		check(a, body)
+	}
+	return results, problems, nil
+}
+
 func findingMatches(fd domain.Finding, f FindingFilter) bool {
 	if len(f.Status) > 0 && !anyEqualFold(f.Status, fd.Status) {
 		return false

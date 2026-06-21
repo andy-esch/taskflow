@@ -516,8 +516,10 @@ func ProblemsHuman(w io.Writer, st Style, problems []domain.FileProblem) {
 	}
 }
 
-// LintHuman writes the per-task lint findings + a count footer.
-func LintHuman(w io.Writer, st Style, results []core.LintResult) {
+// LintHuman writes the per-entity lint findings + a count footer. noun names the
+// entity for the footer ("task", "audit") since the same result/render shape backs
+// both `lint` and `audit lint`.
+func LintHuman(w io.Writer, st Style, results []core.LintResult, noun string) {
 	for _, r := range results {
 		fmt.Fprintf(w, "%s\n", st.Bold(r.Slug))
 		for _, iss := range r.Issues {
@@ -525,7 +527,7 @@ func LintHuman(w io.Writer, st Style, results []core.LintResult) {
 		}
 	}
 	if len(results) > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d task(s) with issues", len(results))))
+		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d %s(s) with issues", len(results), noun)))
 	}
 }
 

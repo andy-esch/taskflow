@@ -93,3 +93,21 @@ func TestQueryFindings_SingleAudit(t *testing.T) {
 		t.Error("unknown audit slug should error, not return empty")
 	}
 }
+
+func TestLintAudits(t *testing.T) {
+	// gateway (open): S1 open + H1 fixed → clean. ingest (closed): M1 open → bucket drift.
+	results, problems, err := NewService(findingsRepo()).LintAudits("")
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("LintAudits: %v / %v", err, problems)
+	}
+	if len(results) != 1 || results[0].Slug != "2026-06-10-ingest" {
+		t.Fatalf("expected only the closed-audit bucket drift, got %+v", results)
+	}
+	if results[0].Issues[0].Field != "bucket" {
+		t.Errorf("expected a bucket issue, got %v", results[0].Issues)
+	}
+	// Single, clean audit → no issues.
+	if clean, _, _ := NewService(findingsRepo()).LintAudits("2026-06-14-gateway"); len(clean) != 0 {
+		t.Errorf("the open gateway audit should lint clean, got %+v", clean)
+	}
+}

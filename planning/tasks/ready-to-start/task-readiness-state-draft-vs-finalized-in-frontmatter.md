@@ -1,6 +1,6 @@
 ---
 status: ready-to-start
-epic: 17-pm-go-cli
+epic: 20-cli-ux-and-ergonomics
 description: 'DRAFT: a readiness axis (draft/finalized) orthogonal to status, tied to an open-questions checklist, possibly gating promotion to in-progress'
 effort: Unknown
 tier: 3
@@ -8,6 +8,7 @@ priority: medium
 autonomy_level: 3
 tags: [planning-model, frontmatter, domain, draft]
 created: "2026-06-12"
+updated_at: "2026-06-21"
 ---
 # Task readiness state (draft vs finalized) in frontmatter
 
@@ -108,3 +109,10 @@ first-class, tool-visible concept so:
   the four 2026-06-12 draft tasks (motivating instances) ·
   `internal/store/auditstore.go` (content-derived counting precedent) ·
   `internal/domain/fields.go` (field registry).
+
+## Reassigned off the port (2026-06-21)
+
+Moved out of epic 17 (the pm→tskflwctl port): this is a NEW planning-model idea, not
+pm parity, so it must not gate closing the port. Kept alive here as a draft. Like
+Projects/ADRs, it is really a planning-*model* change — a natural future candidate to
+be proposed as an ADR rather than slipped in as a task.

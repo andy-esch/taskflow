@@ -1,7 +1,9 @@
 package domain
 
 import (
+	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -71,6 +73,53 @@ func ParseFindings(body string) []Finding {
 		})
 	}
 	return out
+}
+
+// findingStatuses is the legal finding-status vocabulary (the audit HOWTO + the
+// `audit new` scaffold). A free-text Status edit can write a typo; `audit lint`
+// catches it against this set.
+var findingStatuses = map[string]bool{
+	"open": true, "in-progress": true, "fixed": true, "landed": true,
+	"deferred": true, "superseded": true, "wontfix": true,
+}
+
+// FindingStatuses returns the legal finding statuses, sorted (for help/schema).
+func FindingStatuses() []string {
+	out := make([]string, 0, len(findingStatuses))
+	for s := range findingStatuses {
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// ValidFindingStatus reports whether s is a legal finding status (case-insensitive).
+func ValidFindingStatus(s string) bool {
+	return findingStatuses[strings.ToLower(strings.TrimSpace(s))]
+}
+
+// LintFindings validates an audit's parsed findings plus the bucket↔state
+// invariant, returning one Issue per problem (Field = the finding code, or
+// "bucket" for the audit-level check). It checks what the in-repo grammar makes
+// knowable: every finding carries a legal **Status:**, and a non-open audit has no
+// still-open findings. (The closeout-block nuance + candidate-list drift live with
+// the finding-write/sync surface, which parses the candidate list.)
+func LintFindings(bucket string, fs []Finding) []Issue {
+	var issues []Issue
+	for _, f := range fs {
+		switch {
+		case f.Status == "":
+			issues = append(issues, Issue{Field: f.Code, Message: "missing **Status:**"})
+		case !ValidFindingStatus(f.Status):
+			issues = append(issues, Issue{Field: f.Code, Message: fmt.Sprintf("unknown status %q", f.Status)})
+		}
+	}
+	if bucket != "" && bucket != string(AuditOpen) {
+		if open := CountOpenFindings(fs); open > 0 {
+			issues = append(issues, Issue{Field: "bucket", Message: fmt.Sprintf("%s audit still has %d open finding(s)", bucket, open)})
+		}
+	}
+	return issues
 }
 
 // CountOpenFindings reports how many findings are open (case-insensitive). The

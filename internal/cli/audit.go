@@ -17,6 +17,7 @@ func newAuditCmd(app *App) *cobra.Command {
 		newAuditListCmd(app),
 		newAuditShowCmd(app),
 		newAuditFindingsCmd(app),
+		newAuditLintCmd(app),
 		newAuditMoveCmd(app, "close", "Move audit(s) to closed/", domain.AuditClosed),
 		newAuditMoveCmd(app, "reopen", "Move audit(s) back to open/", domain.AuditOpen),
 		newAuditMoveCmd(app, "defer", "Move audit(s) to deferred/", domain.AuditDeferred),
@@ -153,6 +154,47 @@ func newAuditFindingsCmd(app *App) *cobra.Command {
 	cmd.Flags().StringSliceVar(&urgency, "urgency", nil, "filter by urgency acute,soon,eventually (any-of)")
 	cmd.Flags().StringVar(&component, "component", "", "filter by component (case-insensitive substring)")
 	return cmd
+}
+
+func newAuditLintCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "lint [audit]",
+		Short: "Validate audit findings (status vocabulary, missing status, bucket↔state)",
+		Long: "Lint audit findings — the audit analog of `lint` (which covers tasks/epics).\n" +
+			"Checks every finding has a legal **Status:** (catching typos a free-text edit\n" +
+			"allows) and that a non-open audit has no still-open findings. With no argument\n" +
+			"it lints every audit; with a slug, just that one. Exit 11 when issues are found.",
+		Example:           "  tskflwctl audit lint\n  tskflwctl audit lint 2026-06-14-gateway --json",
+		Args:              cobra.MaximumNArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeAuditSlugs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			slug := ""
+			if len(args) == 1 {
+				slug = args[0]
+			}
+			results, problems, err := app.Svc.LintAudits(slug)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				if err := render.LintJSON(app.Out, results, problems); err != nil {
+					return err
+				}
+			} else {
+				render.ProblemsHuman(app.ErrOut, app.Style, problems)
+				render.LintHuman(app.Out, app.Style, results, "audit")
+				if len(results) == 0 && len(problems) == 0 {
+					fmt.Fprintf(app.Out, "%s all audit findings pass lint\n", app.Style.Green("✔"))
+				}
+			}
+			if len(results)+len(problems) > 0 {
+				return fmt.Errorf("%w: %d audit(s) with finding issues, %d unreadable file(s)",
+					domain.ErrValidation, len(results), len(problems))
+			}
+			return nil
+		},
+	}
 }
 
 func newAuditShowCmd(app *App) *cobra.Command {
