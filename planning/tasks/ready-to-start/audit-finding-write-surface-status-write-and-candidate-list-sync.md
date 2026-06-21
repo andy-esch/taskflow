@@ -2,7 +2,7 @@
 schema: 1
 status: ready-to-start
 epic: 20-cli-ux-and-ergonomics
-description: 'audit finding --status write + audit sync + candidate drift lint — items 3+5 carved from the finding-level read task (blocked on external HOWTO)'
+description: 'audit finding --status write + audit sync + candidate drift lint — items 3+5 carved from the finding-level read task (grammar transcribed in-repo)'
 effort: Unknown
 tier: 3
 priority: medium
@@ -45,17 +45,34 @@ marked `⏳`) is conceptually a lint check, but it needs the candidate-list pars
 3. **Candidate-list drift check** — folded into `audit lint`: a finding whose status
    and candidate mark disagree is a warning (needs the candidate-list parser).
 
-## ⚠️ Blocked — needs the external grammar
+## Authoring grammar (transcribed in-repo 2026-06-21 — no longer blocked)
 
-Item 3's exact stamp format (`in-progress (since YYYY-MM-DD)`, `fixed YYYY-MM-DD
-(PR #N)`, and the formats for `landed`/`deferred`/`superseded`/`wontfix`) plus the
-resolution-block shape are **fixed by `desirelines-planning/audits/HOWTO-execute.md`,
-which is not in this repo**. The status *vocabulary* is known
-(`domain.FindingStatuses`), but the per-status line format and the resolution block
-must be sourced from HOWTO before item 1 can be built. The candidate
-`✅ done · ⚠️ partial · ⏳ open · ⛔ won't do` mapping IS in-repo
-(`core.auditBodyTemplate`), so the sync rewrite is unblocked once the body-offset
-extension lands.
+The earlier "blocked on an external HOWTO" note was wrong: that file
+(`audits/HOWTO-execute.md` in the sibling `desirelines-planning` repo) is reachable
+from this workspace, and its grammar is transcribed here so the task is
+**self-contained** — it no longer depends on an out-of-repo file.
+
+**`**Status:**` line values** (item 1 stamps these in place; vocabulary is already
+`domain.FindingStatuses`, this pins the per-status *line format*):
+
+| Value | Stamp format |
+|---|---|
+| open | `open` (default, written with the audit) |
+| in-progress | `in-progress (since YYYY-MM-DD)` |
+| fixed | `fixed YYYY-MM-DD (PR #N)` + a 1–3 line resolution block underneath (what landed + where the tests live) |
+| deferred | `deferred (reason)` — cite the deciding doc (epic, ADR, task, thread) |
+| superseded | `superseded by <link>` |
+| wontfix | `wontfix (reason)` |
+
+**Candidate-list symbols** (item 2 `sync` derives these from the Status lines):
+`✅ fixed · ⚠️ partial-with-follow-up · ⏳ still-open · ⛔ deferred or wontfix`. The
+in-repo `core.auditBodyTemplate` mapping (`✅ done · ⚠️ partial · ⏳ open · ⛔ won't
+do`) already encodes the same axis, so the `sync` rewrite is unblocked once the
+body-offset extension lands.
+
+**Open design call (not a blocker):** whether the generic tool adopts this
+desirelines house format verbatim or generalizes it (e.g. drops the
+desirelines-specific "merged to `main`" gloss). Decide during implementation.
 
 ## Acceptance criteria
 
@@ -70,6 +87,7 @@ extension lands.
 ## Related
 
 - Source: [[audit-finding-level-operations-query-write-lint-sync]] (items 3+5).
-- Format contract: `desirelines-planning/audits/HOWTO-execute.md` (external — blocks item 1).
+- Format source: desirelines `audits/HOWTO-execute.md` (transcribed into the grammar
+  section above on 2026-06-21; reachable in-workspace — no longer a blocker).
 - Interactive resolution-block prompt: [[interactive-prompt-layer-gh-style-pickers]].
 - Epic [[20-cli-ux-and-ergonomics]].
