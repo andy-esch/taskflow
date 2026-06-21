@@ -12,6 +12,9 @@ project_name: tskflwctl
 before:
   hooks:
     - go mod tidy
+    # Regenerate the roff manpage from the cobra tree so every archive ships an
+    # up-to-date tskflwctl.1 (see internal/tools/mangen).
+    - go run ./internal/tools/mangen -out manpages
 
 builds:
   - id: tskflwctl
@@ -37,6 +40,11 @@ archives:
     formats:
       - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Ship the README and the generated manpage alongside the binary.
+    files:
+      - src: README.md
+      - src: manpages/tskflwctl.1
+        dst: tskflwctl.1
 
 checksum:
   name_template: "checksums.txt"

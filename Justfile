@@ -67,6 +67,11 @@ tidy-check:
 docs:
 	go run ./internal/tools/docgen -out docs/cli
 
+# Regenerate the roff manpage → manpages/tskflwctl.1 (gitignored; goreleaser
+# regenerates it on release). Preview with `man ./manpages/tskflwctl.1`.
+man:
+	go run ./internal/tools/mangen -out manpages
+
 # Fail if the committed CLI reference is stale (CI drift guard). Regenerates,
 # then errors if anything changed — so editing a command/flag without running
 # `just docs` breaks the build.
@@ -86,4 +91,4 @@ release-check:
 
 # Clean build artifacts
 clean:
-	rm -rf bin dist
+	rm -rf bin dist manpages

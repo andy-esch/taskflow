@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Evaluate charmbracelet/fang for styled help/errors/manpages on the human face; gated so it never touches the --json envelope or exit codes
 effort: Unknown
@@ -8,6 +8,8 @@ priority: medium
 autonomy_level: 3
 tags: [cli, ux]
 created: "2026-06-19"
+updated_at: "2026-06-21"
+completed_at: "2026-06-21"
 ---
 ## Objective
 
@@ -50,3 +52,25 @@ help/error rendering and our machine contract is non-negotiable.
 - Sibling human-face work: [[glamour-render-markdown-bodies-in-show]]
 - fang's `man` overlaps the manpage angle noted in
   [[auto-generate-cli-reference-docs-with-a-ci-sync-check]].
+
+## Decision (2026-06-21): ADOPTED
+
+Evaluated via a worktree spike (`spike/fang-eval`), then shipped on branch
+`feat/fang-styled-cli`. Findings + cons + the in-scope follow-ups live in
+[[2026-06-21-fang-evaluation-spike]].
+
+**Outcome:** the central risk (a lipgloss v2 *bump* on the TUI) was a non-issue —
+v1 and v2 coexist (different module paths), so the TUI is untouched; and lipgloss
+v2 has since gone **stable (v2.0.4)**, which fang v1.0.0 builds against cleanly.
+The machine contract is preserved by a TTY/`--json` gate (`useFang`) — fang wraps
+the human face only; piped/agent output is byte-identical, guarded by a unit test
++ the existing subprocess smoke.
+
+**Shipped:** gated `fang.Execute` (styled help + errors), a repo-aligned 16-color
+ANSI `ColorScheme` (consistent with `render`/TUI, not charmtone truecolor),
+roff manpages via `internal/tools/mangen` + goreleaser archive wiring, `just man`.
+
+**Knowingly accepted:** fang title-cases help descriptions/headers (hardcoded,
+not configurable). **Deferred:** `WithNotifySignal` (needs prompt-abort
+interaction check) and the broader lipgloss-v2 UI ideas →
+[[explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements]].

@@ -144,3 +144,47 @@ func TestSmoke_VersionStamp(t *testing.T) {
 		t.Errorf("version: exit %d output %q", code, out)
 	}
 }
+
+// TestUseFang guards the machine contract at the gate: fang's styled human path
+// must be closed for every machine context (non-TTY, or any --json run), so
+// piped/agent output falls through to the original path and stays byte-identical.
+// This is the load-bearing check — if useFang ever returns true under --json or
+// off a TTY, fang could reshape the --json envelope / exit codes. (The
+// fall-through path itself is exercised end-to-end by TestSmoke above, which runs
+// the binary in a subprocess where stderr is not a TTY.)
+func TestUseFang(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		tty  bool
+		want bool
+	}{
+		{"tty, no flags", nil, true, true},
+		{"tty, plain subcommand", []string{"task", "list"}, true, true},
+		{"non-tty closes it (pipe/redirect/CI)", []string{"task", "list"}, false, false},
+		{"--json closes it even on a tty", []string{"task", "list", "--json"}, true, false},
+		{"--json=true closes it", []string{"--json=true"}, true, false},
+		{"--json on a non-tty", []string{"--json"}, false, false},
+		{"literal --json after -- does not count", []string{"task", "new", "--", "--json"}, true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := useFang(tc.args, tc.tty); got != tc.want {
+				t.Errorf("useFang(%q, tty=%v) = %v, want %v", tc.args, tc.tty, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRepoColorScheme is a smoke test: the scheme builds without panicking and
+// sets the accent slots, so a future fang ColorScheme change can't silently drop
+// our palette wiring.
+func TestRepoColorScheme(t *testing.T) {
+	cs := repoColorScheme(nil)
+	if cs.Title == nil || cs.Command == nil || cs.Flag == nil {
+		t.Fatal("repoColorScheme left accent colors unset")
+	}
+	if cs.ErrorHeader[0] == nil || cs.ErrorHeader[1] == nil {
+		t.Fatal("repoColorScheme left the error badge unset")
+	}
+}
