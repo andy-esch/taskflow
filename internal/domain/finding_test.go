@@ -84,3 +84,12 @@ func TestLintFindings(t *testing.T) {
 		t.Errorf("legal statuses (case-insensitive) should pass, got %v", iss)
 	}
 }
+
+func TestParseFindings_EmptyStatusBeforeBoldLabel(t *testing.T) {
+	// `**Status:** **Effort:** S` — an empty status immediately before another bold
+	// label must parse as "" (so lint flags it), not grab "**Effort:**" as garbage.
+	fs := ParseFindings("#### S1. t\n**Status:** **Effort:** S\n")
+	if len(fs) != 1 || fs[0].Status != "" {
+		t.Errorf("empty status before a bold label should be \"\", got %q", fs[0].Status)
+	}
+}

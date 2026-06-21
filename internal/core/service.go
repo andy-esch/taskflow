@@ -93,14 +93,16 @@ func (s *Service) EditTask(slug string, edit func(current string, prevErr error)
 
 // ReplaceBody overwrites a task's markdown body in one atomic, validated write —
 // the agent face of body editing (`task set --body`), beside the human EditTask.
-// Frontmatter is preserved surgically and updated_at is stamped.
-func (s *Service) ReplaceBody(slug, body string, dryRun bool) (domain.Task, error) {
+// Frontmatter is preserved surgically and updated_at is stamped. Returns the
+// reloaded task and the resulting body.
+func (s *Service) ReplaceBody(slug, body string, dryRun bool) (domain.Task, string, error) {
 	return s.store.EditBody(slug, body, false, time.Now(), dryRun)
 }
 
 // AppendBody appends a section to a task's markdown body (`task append`),
-// separated by a blank line, in one atomic, validated write.
-func (s *Service) AppendBody(slug, text string, dryRun bool) (domain.Task, error) {
+// separated by a blank line, in one atomic, validated write. Returns the reloaded
+// task and the resulting body.
+func (s *Service) AppendBody(slug, text string, dryRun bool) (domain.Task, string, error) {
 	return s.store.EditBody(slug, text, true, time.Now(), dryRun)
 }
 

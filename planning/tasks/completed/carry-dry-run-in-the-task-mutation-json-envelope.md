@@ -1,5 +1,5 @@
 ---
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: task set/append/set --body emit TaskShowEnvelope under --json — no dry_run field, so a --dry-run preview is indistinguishable from a real write
 effort: Unknown
@@ -8,6 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, agents, json]
 created: "2026-06-20"
+updated_at: "2026-06-21"
+started_at: "2026-06-21"
+completed_at: "2026-06-21"
 ---
 
 # Carry dry_run in the task-mutation JSON envelope
@@ -38,14 +41,35 @@ sense. Options:
 Option 1 is cleaner; confirm before building. Either way it's additive →
 schema_version minor bump, and the round-trip schema test must cover the new shape.
 
+## Shipped (2026-06-21)
+
+**Decisions (owner, 2026-06-21):** option 1 — a distinct **`TaskMutationEnvelope
+{schema_version, dry_run, task, body?}`** — and **echo the resulting body** for the
+body-editing commands.
+
+- New `render.TaskMutationEnvelope` + `TaskMutationJSON`; `task set`, `task append`,
+  and `task set --body` now emit it under `--json` (via `reportTaskMutation`).
+  `dry_run` is always present (a preview is distinguishable from a real write);
+  `body` is `omitempty` — populated for the body commands, omitted for field-only
+  `set`. `task show` keeps its own envelope (no `dry_run`).
+- To echo the body accurately (append computes old+addition in the store),
+  `store.EditBody` → `core.ReplaceBody`/`AppendBody` now return the resulting body
+  alongside the task (port + fake updated).
+- `schema_version` 1.6 → 1.7; the new envelope is in `schema --json-schema`
+  (with its doc-comment description), the round-trip test (now 18 envelopes), and
+  the regenerated golden. Human output unchanged.
+- Tests: cli (`append --json` echoes the body; `set --body --dry-run --json` →
+  `dry_run:true` + would-be body, no write; field-set `--dry-run --json` →
+  `dry_run:true`, body omitted). Verified end-to-end on the binary.
+
 ## Acceptance criteria
 
-- [ ] `task set|append` `--json --dry-run` output is distinguishable from a real
-      write (a `dry_run: true` marker).
-- [ ] Body-editing commands optionally return the resulting body in `--json`
-      (or an explicit decision to keep it omitted, recorded here).
-- [ ] schema_version bumped; `schema --json-schema` + the round-trip test updated.
-- [ ] Human output unchanged; suite + lint green.
+- [x] `task set|append` `--json --dry-run` output is distinguishable from a real
+      write (a `dry_run: true` marker) — true for the field-set path too.
+- [x] Body-editing commands return the resulting body in `--json` (decided: echo it).
+- [x] schema_version bumped (1.6→1.7); `schema --json-schema` + the round-trip test
+      + golden updated.
+- [x] Human output unchanged; suite + lint green.
 
 ## Out of scope
 

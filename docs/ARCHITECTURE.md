@@ -151,7 +151,7 @@ Substantially functional — the full create→update→move→lint loop runs wi
 the Python prototype:
 - `init`, `completion` (command/flag/slug, status-aware), `lint` (+`--fix`/`--dry-run`)
 - `task new|list|show|set|edit|append|move|start|promote|demote|complete|defer|deprecate`
-- `epic new|list|show`, `audit list|show|close|reopen|defer`
+- `epic new|list|show`, `audit list|show|findings|lint|close|reopen|defer`
 - `ui` — the Bubble Tea browser (epic 18): two-pane read-only browse of
   tasks/epics/audits, `:` jump, `/` filter, sort, status views, detail find, `?`
   help, `fsnotify` live reload, lifecycle mutations (`a` menu + `:` verbs), and
@@ -164,7 +164,8 @@ writes (`writeFileAtomic` overwrite, `createFileAtomic` exclusive) + surgical
 `yaml.v3` edits, `--json` everywhere (`schema_version`), resilient reads with
 actionable frontmatter errors, agent safety annotations.
 
-Remaining (see `planning/`): `adr`/`project` groups, audit finding-level
-commands, reporting views (`stats`/`index`/`tags`), `track`, `schema --type
-cli`, advisory `flock`, interactive `init` wizard. Out of scope by a long shot:
-MCP / semantic engine / pgvector.
+Remaining (see `planning/`): `adr`/`project` groups, the audit finding-*write*
+surface (`audit finding --status`/`sync`; the read surface — `audit findings`
+query + `audit lint` — shipped), reporting views (`stats`/`index`/`tags`),
+`track`, `schema --type cli`, advisory `flock`, interactive `init` wizard. Out of
+scope by a long shot: MCP / semantic engine / pgvector.

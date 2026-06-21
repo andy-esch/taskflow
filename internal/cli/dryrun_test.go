@@ -26,7 +26,10 @@ func runRootRC(t *testing.T, args ...string) (string, error) {
 	cmd.SetArgs(args)
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	return out.String(), cmd.Execute()
+	// Execute() BEFORE reading out: `return out.String(), cmd.Execute()` evaluates
+	// out.String() first (left-to-right), capturing the buffer pre-Execute (empty).
+	err := cmd.Execute()
+	return out.String(), err
 }
 
 func TestDryRun_TaskNew(t *testing.T) {

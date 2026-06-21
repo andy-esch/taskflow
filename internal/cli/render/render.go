@@ -29,20 +29,22 @@ import (
 // bucket); its `path` is now relative to the planning root in both human and
 // JSON modes (was absolute in JSON).
 // 1.6: the `findings` envelope (audit finding-level query) added.
-const SchemaVersion = "1.6"
+// 1.7: the `task_mutation` envelope (task set/append/set --body) added — it
+// carries dry_run and the resulting body, which `task_show` (a read) does not.
+const SchemaVersion = "1.7"
 
 type taskJSON struct {
-	Slug        string   `json:"slug"`
-	Status      string   `json:"status"`
-	Epic        string   `json:"epic,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Effort      string   `json:"effort,omitempty"`
-	Tier        int      `json:"tier,omitempty"`
-	Priority    string   `json:"priority,omitempty"`
-	Autonomy    int      `json:"autonomy_level,omitempty"`
-	Created     string   `json:"created,omitempty"`
-	Updated     string   `json:"updated_at,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
+	Slug        string   `json:"slug" jsonschema:"description=task identifier (filename without .md)"`
+	Status      string   `json:"status" jsonschema:"description=lifecycle status — equals the task's directory under tasks/"`
+	Epic        string   `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
+	Description string   `json:"description,omitempty" jsonschema:"description=one-line summary (<=150 chars)"`
+	Effort      string   `json:"effort,omitempty" jsonschema:"description=free-form effort estimate"`
+	Tier        int      `json:"tier,omitempty" jsonschema:"description=importance 1 (highest) to 5 (lowest)"`
+	Priority    string   `json:"priority,omitempty" jsonschema:"description=high | medium | low"`
+	Autonomy    int      `json:"autonomy_level,omitempty" jsonschema:"description=how autonomously this can be done 1-5"`
+	Created     string   `json:"created,omitempty" jsonschema:"description=creation date YYYY-MM-DD"`
+	Updated     string   `json:"updated_at,omitempty" jsonschema:"description=last-modified date YYYY-MM-DD"`
+	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
 	// Misfiled/Declared surface status≠folder drift to JSON consumers (agents
 	// are exactly who should detect it); declared_status only when misfiled.
 	Misfiled bool   `json:"misfiled,omitempty"`
@@ -149,6 +151,15 @@ func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 // TaskShowJSON writes a task plus its body.
 func TaskShowJSON(w io.Writer, t domain.Task, body string) error {
 	return encodeJSON(w, TaskShowEnvelope{SchemaVersion: SchemaVersion, Task: toJSON(t), Body: body})
+}
+
+// TaskMutationJSON writes the result of a task mutation (`task set`/`append`/`set
+// --body`): the reloaded task, dry_run (always present — a preview must be
+// distinguishable from a real write), and the resulting body for the body-editing
+// commands (empty/omitted for field-only `set`). Distinct from TaskShowEnvelope so
+// the mutation-only dry_run never lands on the `task show` read type.
+func TaskMutationJSON(w io.Writer, t domain.Task, body string, dryRun bool) error {
+	return encodeJSON(w, TaskMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Task: toJSON(t), Body: body})
 }
 
 // MoveResult is the per-item outcome of a transition. `To` is the destination
@@ -383,12 +394,12 @@ func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
 }
 
 type auditJSON struct {
-	Slug         string `json:"slug"`
-	Bucket       string `json:"bucket"`
-	Area         string `json:"area,omitempty"`
-	Date         string `json:"date,omitempty"`
-	Findings     int    `json:"findings"`
-	OpenFindings int    `json:"open_findings"`
+	Slug         string `json:"slug" jsonschema:"description=audit identifier (filename without .md)"`
+	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — equals the audit's directory"`
+	Area         string `json:"area,omitempty" jsonschema:"description=subsystem/topic audited"`
+	Date         string `json:"date,omitempty" jsonschema:"description=audit date YYYY-MM-DD"`
+	Findings     int    `json:"findings" jsonschema:"description=total findings parsed from the body"`
+	OpenFindings int    `json:"open_findings" jsonschema:"description=findings whose status is open"`
 }
 
 func auditToJSON(a domain.Audit) auditJSON {
@@ -431,15 +442,15 @@ func AuditShowJSON(w io.Writer, a domain.Audit, body string) error {
 }
 
 type findingJSON struct {
-	Audit     string `json:"audit"`
-	Bucket    string `json:"bucket"`
-	Code      string `json:"code"`
-	Title     string `json:"title"`
-	Status    string `json:"status"`
-	File      string `json:"file,omitempty"`
-	Component string `json:"component,omitempty"`
-	Effort    string `json:"effort,omitempty"`
-	Urgency   string `json:"urgency,omitempty"`
+	Audit     string `json:"audit" jsonschema:"description=slug of the audit this finding belongs to"`
+	Bucket    string `json:"bucket" jsonschema:"description=the audit's bucket — open | closed | deferred"`
+	Code      string `json:"code" jsonschema:"description=finding code within the audit (H1/M2/S3…)"`
+	Title     string `json:"title" jsonschema:"description=finding title"`
+	Status    string `json:"status" jsonschema:"description=open | in-progress | fixed | landed | deferred | superseded | wontfix"`
+	File      string `json:"file,omitempty" jsonschema:"description=file:line the finding refers to"`
+	Component string `json:"component,omitempty" jsonschema:"description=component/subsystem"`
+	Effort    string `json:"effort,omitempty" jsonschema:"description=XS | S | M | L"`
+	Urgency   string `json:"urgency,omitempty" jsonschema:"description=acute | soon | eventually"`
 }
 
 // FindingsJSON writes the structured finding-query result: each parsed finding
@@ -553,12 +564,12 @@ func LintJSON(w io.Writer, results []core.LintResult, problems []domain.FileProb
 }
 
 type epicMetaJSON struct {
-	ID          string   `json:"id"`
-	Status      string   `json:"status,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Priority    string   `json:"priority,omitempty"`
-	Created     string   `json:"created,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
+	ID          string   `json:"id" jsonschema:"description=epic identifier (NN-slug)"`
+	Status      string   `json:"status,omitempty" jsonschema:"description=planning | in-progress | completed | archived"`
+	Description string   `json:"description,omitempty" jsonschema:"description=one-line epic goal"`
+	Priority    string   `json:"priority,omitempty" jsonschema:"description=high | medium | low"`
+	Created     string   `json:"created,omitempty" jsonschema:"description=creation date YYYY-MM-DD"`
+	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
 }
 
 // toEpicMeta is the one place epic meta fields are mapped to JSON, shared by

@@ -146,10 +146,12 @@ func EpicColumns() []Column[core.EpicSummary] {
 	}
 }
 
-// FindingColumns is the projectable column set for `audit findings` (code first,
-// the id `-o name` projects).
+// FindingColumns is the projectable column set for `audit findings`. The first
+// column is the addressable id `audit:code` (what `-o name` projects) — unique
+// across audits, unlike a bare finding code which repeats.
 func FindingColumns() []Column[core.AuditFinding] {
 	return []Column[core.AuditFinding]{
+		{"ref", "addressable id: audit:code", func(f core.AuditFinding) string { return f.Audit + ":" + f.Code }},
 		{"code", "finding code (H1/M2/…)", func(f core.AuditFinding) string { return f.Code }},
 		{"audit", "audit slug", func(f core.AuditFinding) string { return f.Audit }},
 		{"status", "finding status", func(f core.AuditFinding) string { return f.Status }},

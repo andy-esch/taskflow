@@ -1,12 +1,21 @@
 package render
 
 import (
+	_ "embed"
 	"encoding/json"
 
 	"github.com/invopop/jsonschema"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+// schemaComments is the Go-doc comment map for the envelope + domain types,
+// generated at build time by internal/tools/schemacomments (the shipped binary has
+// no source for invopop's AddGoComments to read). Regenerate with
+// `go run ./internal/tools/schemacomments`; the drift test guards staleness.
+//
+//go:embed schema_comments.json
+var schemaComments []byte
 
 // This file is the named, reflectable form of the --json output contract. Every
 // *JSON render func marshals one of these envelopes, and JSONSchema() reflects
@@ -27,6 +36,17 @@ type TaskShowEnvelope struct {
 	SchemaVersion string   `json:"schema_version"`
 	Task          taskJSON `json:"task"`
 	Body          string   `json:"body"`
+}
+
+// TaskMutationEnvelope is `task set` / `task append` / `task set --body` under
+// --json: the reloaded task, dry_run, and (for the body commands) the resulting
+// body. Separate from TaskShowEnvelope so the mutation-only dry_run stays off the
+// read type.
+type TaskMutationEnvelope struct {
+	SchemaVersion string   `json:"schema_version"`
+	DryRun        bool     `json:"dry_run"`
+	Task          taskJSON `json:"task"`
+	Body          string   `json:"body,omitempty"`
 }
 
 // MovesEnvelope is the transition report (`task start --json`, etc.).
@@ -111,7 +131,8 @@ type FixEnvelope struct {
 	Unreadable    []domain.FileProblem `json:"unreadable"`
 }
 
-// LintEnvelope is `lint --json`.
+// LintEnvelope is `lint --json` and `audit lint --json` (the same per-entity
+// slug+issues shape backs both).
 type LintEnvelope struct {
 	SchemaVersion string               `json:"schema_version"`
 	Unreadable    []domain.FileProblem `json:"unreadable"`
@@ -153,23 +174,24 @@ type ErrorEnvelope struct {
 // jsonEnvelopes registers every envelope so a single Reflect pulls them all (and
 // their shared types) into one schema document's $defs.
 type jsonEnvelopes struct {
-	Tasks      TasksEnvelope      `json:"tasks"`
-	TaskShow   TaskShowEnvelope   `json:"task_show"`
-	Moves      MovesEnvelope      `json:"moves"`
-	Summary    SummaryEnvelope    `json:"summary"`
-	Version    VersionEnvelope    `json:"version"`
-	Created    CreatedEnvelope    `json:"created"`
-	Epics      EpicsEnvelope      `json:"epics"`
-	EpicShow   EpicShowEnvelope   `json:"epic_show"`
-	Audits     AuditsEnvelope     `json:"audits"`
-	AuditShow  AuditShowEnvelope  `json:"audit_show"`
-	Findings   FindingsEnvelope   `json:"findings"`
-	Fix        FixEnvelope        `json:"fix"`
-	Lint       LintEnvelope       `json:"lint"`
-	Init       InitEnvelope       `json:"init"`
-	Schema     SchemaEnvelope     `json:"schema"`
-	SchemaKind SchemaKindEnvelope `json:"schema_kind"`
-	Error      ErrorEnvelope      `json:"error"`
+	Tasks        TasksEnvelope        `json:"tasks"`
+	TaskShow     TaskShowEnvelope     `json:"task_show"`
+	TaskMutation TaskMutationEnvelope `json:"task_mutation"`
+	Moves        MovesEnvelope        `json:"moves"`
+	Summary      SummaryEnvelope      `json:"summary"`
+	Version      VersionEnvelope      `json:"version"`
+	Created      CreatedEnvelope      `json:"created"`
+	Epics        EpicsEnvelope        `json:"epics"`
+	EpicShow     EpicShowEnvelope     `json:"epic_show"`
+	Audits       AuditsEnvelope       `json:"audits"`
+	AuditShow    AuditShowEnvelope    `json:"audit_show"`
+	Findings     FindingsEnvelope     `json:"findings"`
+	Fix          FixEnvelope          `json:"fix"`
+	Lint         LintEnvelope         `json:"lint"`
+	Init         InitEnvelope         `json:"init"`
+	Schema       SchemaEnvelope       `json:"schema"`
+	SchemaKind   SchemaKindEnvelope   `json:"schema_kind"`
+	Error        ErrorEnvelope        `json:"error"`
 }
 
 // JSONSchema returns the Draft 2020-12 JSON Schema for every --json envelope, as
@@ -178,6 +200,13 @@ type jsonEnvelopes struct {
 // $defs (e.g. `task list --json` against $defs/TasksEnvelope).
 func JSONSchema() ([]byte, error) {
 	r := &jsonschema.Reflector{}
+	// Field/type descriptions come from the build-time-generated comment map, so a
+	// shipped binary emits them without needing the source tree at runtime.
+	var comments map[string]string
+	if err := json.Unmarshal(schemaComments, &comments); err != nil {
+		return nil, err
+	}
+	r.CommentMap = comments
 	s := r.Reflect(&jsonEnvelopes{})
 	s.Title = "tskflwctl --json output (schema_version " + SchemaVersion + ")"
 	s.Description = "Each property of the root names a --json envelope and references its definition in $defs; " +

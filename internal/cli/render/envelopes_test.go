@@ -43,6 +43,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 	}{
 		{"TasksEnvelope", func(w io.Writer) error { return TasksJSON(w, []domain.Task{task}, nil) }},
 		{"TaskShowEnvelope", func(w io.Writer) error { return TaskShowJSON(w, task, "# body") }},
+		{"TaskMutationEnvelope", func(w io.Writer) error { return TaskMutationJSON(w, task, "# new body", true) }},
 		{"CreatedEnvelope", func(w io.Writer) error {
 			return CreatedJSON(w, "task", "alpha", "ready-to-start", "tasks/ready-to-start/alpha.md", false)
 		}},
@@ -105,8 +106,8 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return encodeJSON(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{Code: "not-found", Message: "task not found"}})
 		}},
 	}
-	if len(cases) != 17 {
-		t.Fatalf("expected all 17 envelopes covered, got %d", len(cases))
+	if len(cases) != 18 {
+		t.Fatalf("expected all 18 envelopes covered, got %d", len(cases))
 	}
 	for _, tc := range cases {
 		sch, err := c.Compile(id + "#/$defs/" + tc.def)

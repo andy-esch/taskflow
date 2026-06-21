@@ -17,7 +17,7 @@ import (
 type Finding struct {
 	Code      string `json:"code"` // H1, M2, S3 …
 	Title     string `json:"title"`
-	Status    string `json:"status"` // open | in-progress | fixed | deferred | superseded | wontfix | …
+	Status    string `json:"status"` // open | in-progress | fixed | landed | deferred | superseded | wontfix (see FindingStatuses)
 	File      string `json:"file"`
 	Component string `json:"component"`
 	Effort    string `json:"effort"`  // XS | S | M | L
@@ -37,8 +37,10 @@ var (
 	// header's `· ` separator — so a literal `**Status:**` mentioned in a title or
 	// prose can't be mistaken for the status. The token is the first run with no
 	// whitespace/·/|, so "fixed 2026-01-01 (PR #9)" yields "fixed" and "open-ish"
-	// stays distinct from "open".
-	statusRe    = regexp.MustCompile(`(?mi)(?:^[ \t]*|·[ \t]*)\*\*Status:\*\*[ \t]*([^\s·|]+)`)
+	// stays distinct from "open". `*` is excluded too, so an EMPTY status before a
+	// following bold label (`**Status:** **Effort:** S`) parses as "" (then lint
+	// flags the missing status) instead of grabbing "**Effort:**" as garbage.
+	statusRe    = regexp.MustCompile(`(?mi)(?:^[ \t]*|·[ \t]*)\*\*Status:\*\*[ \t]*([^\s·|*]+)`)
 	fileRe      = fieldValueRe("File")
 	componentRe = fieldValueRe("Component")
 	effortRe    = fieldValueRe("Effort")

@@ -30,7 +30,7 @@ We dogfood: drive this repo's planning with the tool itself.
   `epic new "Title" --description "..."` · `audit new <area> [--date]`.
 - **Lifecycle:** `task start|promote|demote|complete|defer|deprecate <slug>...`.
 - **Read/edit:** `task list|show|set|edit|append`, `epic list|show`,
-  `audit new|list|show|close|reopen|defer`. Two faces of mutation: **agent**
+  `audit new|list|show|findings|lint|close|reopen|defer`. Two faces of mutation: **agent**
   (field-level `task set`; body via `task append` / `task set --body|--body-file`,
   all scriptable + atomic) vs **human** (`task edit` — $EDITOR on the whole file,
   re-validated on save).
