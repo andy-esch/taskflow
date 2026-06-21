@@ -1,8 +1,8 @@
 ---
-status: in-progress
+status: completed
 description: Port the prototype Python pm tool to a Go CLI in the decided noun-verb hierarchy; Python pm + its tests are the executable spec.
 created: 2026-06-06
-updated_at: 2026-06-08
+updated_at: 2026-06-21
 tags: [pm-tooling, go, cli]
 priority: medium
 ---
@@ -29,15 +29,31 @@ with the primary/secondary-adapter architecture holding up cleanly.
 With `task new`/`epic new` in, the **full daily loop (create→update→move→lint)
 runs without Python `pm`** — the bare-bones-release bar.
 
-**Remaining** (see the port task's progress log): `adr`/`project` groups, the
-audit finding-level commands (`status`/`fixed`/`followup`/`sync`/`new`/`noop`/
-`findings`/`stats`), reporting views (`stats`/`index`/`tags`), `track`,
-`schema --type cli`, a global `--dry-run`, advisory `flock`, structured JSON
-error envelope, interactive `init` wizard.
+## Close-out — port complete (2026-06-21)
 
-The Python `pm` (epic 16) remains the prototype/spec and still manages the
-desirelines-planning repo; `tskflwctl` reads/writes the same markdown and the
-two interoperate during the transition.
+**The port is done.** The full daily loop (create→update→move→lint) runs natively;
+`tskflwctl` long ago passed pm parity and is *the* tool. Plenty shipped beyond the
+original list too: a global `--dry-run`, the structured `--json` error envelope,
+glamour `show`, the interactive prompt layer, output modes (`-o`/`-c`), `task
+edit`/`append`, the published JSON Schema, and a golden + subprocess test harness.
+
+**What was *not* ported, and where it went** (so nothing dangles):
+- **`adr` / `project` groups** → a *separate* direction, **not** the port: proposed
+  in [[0001-adopt-adrs]] / [[0002-adopt-projects]]; spawns its own epic when accepted.
+- **Audit finding-level surface** → the *read* half (parser, `audit findings` query,
+  `audit lint`) shipped here; the *write* half (`audit finding --status`, `audit
+  sync`) is carved to
+  [[audit-finding-write-surface-status-write-and-candidate-list-sync]] — a feature,
+  blocked on an external grammar, not pm parity.
+- **`task-readiness-state`** → a new planning-*model* idea, moved to epic 20 as a
+  draft (not pm parity).
+- **Dropped from the port scope** (never built, not parity-critical; re-file
+  individually if ever wanted): reporting views (`stats`/`index`/`tags`), `track`,
+  `schema --type cli`, advisory `flock`, the interactive `init` wizard, and
+  `audit followup`/`noop`/`stats`.
+
+Python `pm` is **retired** — it lives only in git history; `tskflwctl` owns this
+repo's planning. **Epic closed.**
 
 **Goal.** Port the prototype Python `pm` tool to a Go CLI — binary
 **`tskflwctl`** (kubectl-style), built in the reused **taskflow** repo

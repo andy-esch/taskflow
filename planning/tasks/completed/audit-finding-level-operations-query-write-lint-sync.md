@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 epic: 17-pm-go-cli
 description: 'Resurrect the deferred audit finding-level surface: per-finding parser plus findings query, finding-status write, audit lint, candidate-list sync'
 effort: Unknown
@@ -8,8 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, core, audit]
 created: "2026-06-17"
-updated_at: "2026-06-20"
+updated_at: "2026-06-21"
 started_at: "2026-06-20"
+completed_at: "2026-06-21"
 ---
 
 # Audit finding-level operations query write lint sync
@@ -119,15 +120,17 @@ both falling out of the parser:
       [[scaffold-schema-version-key-and-domain-level-audit-finding-counter]].)
 - [x] `audit findings` filters on status/effort/urgency/component, single- and
       cross-audit, with a stable `--json` per-finding schema (`schema_version`).
-- [ ] `audit finding <slug> <code> --status <v> [--pr N]` surgically rewrites
-      one Status line in the cheat-sheet format; body otherwise byte-identical;
-      `--status fixed` appends/prompts the resolution block; `--dry-run` works.
-- [ ] Audits are linted (status vocabulary, header grammar, bucket==state) —
-      `audit lint` or folded into `lint`; `--json` envelope like the others.
-- [ ] `audit sync` re-derives candidate-list symbols from Status lines; lint
-      flags drift between them.
-- [ ] Errors wrap the domain sentinels (exit 10/11/13/14); suite + lint green;
-      README "audit" / agent-use sections updated.
+- [→] `audit finding <slug> <code> --status …` (item 3) — **carved out** to
+      [[audit-finding-write-surface-status-write-and-candidate-list-sync]]; it's a
+      feature, not pm parity, and is blocked on the external HOWTO format.
+- [x] Audits are linted (status vocabulary + missing status + bucket==state) —
+      standalone `audit lint [<slug>]`; reuses the `LintResult`/`--json` lint
+      envelope (no schema bump); exit 11 on issues.
+- [→] `audit sync` (item 5) — **carved out** to the same write-surface task (it's a
+      surgical write that shares machinery with item 3); the candidate-drift lint
+      check rides with it.
+- [x] Errors wrap the domain sentinels (exit 10/11/13/14); suite + lint green;
+      README "audit" + docs updated (for the shipped query + lint).
 
 ## Progress Log
 
@@ -158,6 +161,19 @@ both falling out of the parser:
   snapshots against a new fixture audit + the round-trip schema test (now 17
   envelopes). README + docs updated. **Remaining: items 3 (write), 4 (lint),
   5 (sync).**
+- **2026-06-21**: Item 4 (`audit lint`) **done**, and the task **closed out** as
+  the finding *read* surface. `domain.LintFindings(bucket, []Finding)` +
+  `domain.FindingStatuses`/`ValidFindingStatus` (the legal vocabulary);
+  `core.LintAudits(slug)`; standalone `audit lint [<slug>]` reusing the
+  `LintResult` + lint `--json` envelope (no schema bump) and exit 11 on issues.
+  Checks: legal/non-empty `**Status:**` (catches typos), and a non-open audit with
+  still-open findings (bucket↔state). `LintHuman` took a `noun` param so the footer
+  reads "audit(s)". Tests: domain + core + cli (dirty→exit 11, clean→0).
+  **Items 3 (write) + 5 (sync) carved into
+  [[audit-finding-write-surface-status-write-and-candidate-list-sync]]** — they're a
+  feature (and item 3 is blocked on the external HOWTO), not part of retiring `pm`,
+  so they don't gate the port. The parser + query + lint **are** the port's
+  finding-level deliverable, so this task is complete.
 
 ## Out of scope
 

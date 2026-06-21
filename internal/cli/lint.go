@@ -42,7 +42,7 @@ func runLint(app *App) error {
 		// Diagnostics go to stderr, matching the list commands — scripts that
 		// capture stderr for problems must see them on one consistent stream.
 		render.ProblemsHuman(app.ErrOut, app.Style, problems)
-		render.LintHuman(app.Out, app.Style, results)
+		render.LintHuman(app.Out, app.Style, results, "task")
 		if len(results) == 0 && len(problems) == 0 {
 			fmt.Fprintf(app.Out, "%s all active tasks pass lint\n", app.Style.Green("✔"))
 		}
