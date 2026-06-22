@@ -210,7 +210,15 @@ func writeTable(w io.Writer, maxWidth int, header []string, rows [][]string) {
 				b.WriteString(strings.Repeat(" ", width[c]-visibleWidth(cell)+2))
 			}
 		}
-		fmt.Fprintln(w, strings.TrimRight(b.String(), " "))
+		line := strings.TrimRight(b.String(), " ")
+		// Backstop the last-column shrink above: a wide *non-final* cell (a long
+		// slug/component/id) can still push the row past maxWidth, so clamp the whole
+		// composed line. ANSI-aware, so a colored cell isn't severed mid-escape;
+		// piped output (maxWidth <= 0) stays full-width.
+		if maxWidth > 0 {
+			line = ansi.Truncate(line, maxWidth, "…")
+		}
+		fmt.Fprintln(w, line)
 	}
 	if len(header) > 0 {
 		write(header)

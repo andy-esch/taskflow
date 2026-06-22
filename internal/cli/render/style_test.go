@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -112,3 +113,45 @@ func TestVisibleWidth_DisplayCells(t *testing.T) {
 }
 
 func ansiStripWidth(s string) int { return visibleWidth(s) }
+
+// TestWriteTable_ClampsWideNonFinalColumn pins M7: a wide NON-final cell (a long
+// slug/component) must not push a human-table row past maxWidth — the last-column
+// shrink alone doesn't cover it, so the whole line is clamped.
+func TestWriteTable_ClampsWideNonFinalColumn(t *testing.T) {
+	const maxWidth = 40
+	header := []string{"SLUG", "DESC"}
+	rows := [][]string{{strings.Repeat("x", 100), "short"}} // wide first (non-final) column
+	var buf bytes.Buffer
+	writeTable(&buf, maxWidth, header, rows)
+	for _, line := range strings.Split(strings.TrimRight(buf.String(), "\n"), "\n") {
+		if w := ansi.StringWidth(line); w > maxWidth {
+			t.Errorf("line exceeds maxWidth %d (got %d): %q", maxWidth, w, line)
+		}
+	}
+}
+
+// TestWriteTable_ClampsColoredCell: the clamp is ANSI-aware, so a colored wide cell
+// is clipped by display width (escapes don't count) without bleeding past maxWidth.
+func TestWriteTable_ClampsColoredCell(t *testing.T) {
+	const maxWidth = 30
+	st := NewStyle(true) // color on
+	header := []string{"SLUG", "DESC"}
+	rows := [][]string{{st.Bold(strings.Repeat("x", 100)), st.Dim("d")}}
+	var buf bytes.Buffer
+	writeTable(&buf, maxWidth, header, rows)
+	for _, line := range strings.Split(strings.TrimRight(buf.String(), "\n"), "\n") {
+		if w := ansi.StringWidth(line); w > maxWidth {
+			t.Errorf("colored line exceeds maxWidth %d (got %d): %q", maxWidth, w, line)
+		}
+	}
+}
+
+// TestWriteTable_NoClampWhenPiped: maxWidth <= 0 (piped) keeps rows full-width.
+func TestWriteTable_NoClampWhenPiped(t *testing.T) {
+	wide := strings.Repeat("x", 100)
+	var buf bytes.Buffer
+	writeTable(&buf, 0, []string{"SLUG", "DESC"}, [][]string{{wide, "d"}})
+	if !strings.Contains(buf.String(), wide) {
+		t.Errorf("piped output (maxWidth=0) must not clamp the wide cell:\n%s", buf.String())
+	}
+}

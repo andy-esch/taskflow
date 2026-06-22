@@ -23,6 +23,18 @@ func writeConfig(t *testing.T, dir, content string) {
 	}
 }
 
+// eval resolves symlinks in p (matching Discover), so a Root comparison holds on
+// platforms where t.TempDir() is itself symlinked — e.g. macOS, where /var ->
+// /private/var makes the resolved Root differ from the raw temp path.
+func eval(t *testing.T, p string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		t.Fatalf("eval %q: %v", p, err)
+	}
+	return r
+}
+
 // TestDiscover_GitFileBoundary pins the worktree/submodule case: .git is a
 // FILE there, and the climb must stop at it instead of escaping into a parent
 // that happens to have a planning tree.
@@ -52,6 +64,9 @@ func TestTaskflowRoot_TOMLValueForms(t *testing.T) {
 		{`taskflow_root = "."`, "."},
 		{`taskflow_root = "unterminated`, "."}, // unset rather than guessed
 		{`# taskflow_root = "commented-out"`, "."},
+		{`taskflow_root = "a\"b"`, "."},  // basic string w/ escape: refused, not mis-read as `a\`
+		{`taskflow_root = "a\\b"`, "."},  // ditto for \\
+		{`taskflow_root = 'a\b'`, `a\b`}, // literal string: backslash is intentional, preserved
 	} {
 		dir := t.TempDir()
 		writeConfig(t, dir, tc.line+"\n")
@@ -87,7 +102,42 @@ func TestDiscover_RejectsBadConfiguredRoots(t *testing.T) {
 	mkdirs(t, filepath.Join(dir3, "planning", "tasks"))
 	writeConfig(t, dir3, "taskflow_root = \"./planning\" # note\n")
 	cfg, err := Discover(dir3)
-	if err != nil || cfg.Root != filepath.Join(dir3, "planning") {
+	if err != nil || cfg.Root != eval(t, filepath.Join(dir3, "planning")) {
 		t.Errorf("commented good root should resolve, got %v / %v", cfg, err)
+	}
+}
+
+// TestDiscover_RejectsSymlinkEscape pins L8: a taskflow_root that stays lexically
+// inside the repo but is a SYMLINK pointing outside it must be rejected — the
+// containment check resolves symlinks, so `planning -> /outside` can't slip past a
+// no-`..` text check.
+func TestDiscover_RejectsSymlinkEscape(t *testing.T) {
+	outside := t.TempDir()
+	mkdirs(t, filepath.Join(outside, "tasks")) // a real planning tree, but outside the repo
+	repo := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(repo, "planning")); err != nil {
+		t.Skipf("symlinks unsupported here: %v", err)
+	}
+	writeConfig(t, repo, "taskflow_root = \"planning\"\n")
+	if _, err := Discover(repo); err == nil || !strings.Contains(err.Error(), "escapes") {
+		t.Errorf("a taskflow_root symlinked outside the repo must be rejected, got %v", err)
+	}
+}
+
+// TestDiscover_ResolvesSymlinkedWorktree pins L19: discovering through a symlink to a
+// planning tree resolves to the real root (physical ancestry), not the logical path.
+func TestDiscover_ResolvesSymlinkedWorktree(t *testing.T) {
+	real := t.TempDir()
+	mkdirs(t, filepath.Join(real, "tasks"))
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unsupported here: %v", err)
+	}
+	cfg, err := Discover(link)
+	if err != nil {
+		t.Fatalf("discovery through a symlink should succeed: %v", err)
+	}
+	if cfg.Root != eval(t, real) {
+		t.Errorf("Root = %q, want resolved %q", cfg.Root, eval(t, real))
 	}
 }

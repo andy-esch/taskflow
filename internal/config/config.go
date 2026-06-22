@@ -27,6 +27,11 @@ func Discover(start string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve %q: %w", start, err)
 	}
+	// Resolve symlinks so the .git-boundary walk-up and the discovered root use
+	// PHYSICAL ancestry — a symlinked worktree must climb its real parents, not its
+	// logical ones. evalOr falls back to the lexical path when start doesn't exist
+	// yet (a fresh dir), so discovery still errs sensibly there.
+	dir = evalOr(dir)
 	for {
 		if fileExists(filepath.Join(dir, ConfigFile)) {
 			root, err := configuredRoot(dir)
@@ -62,7 +67,11 @@ func Discover(start string) (*Config, error) {
 func configuredRoot(dir string) (string, error) {
 	rel := taskflowRoot(filepath.Join(dir, ConfigFile))
 	root := filepath.Join(dir, filepath.FromSlash(rel))
-	if r, err := filepath.Rel(dir, root); err != nil ||
+	// Containment must be PHYSICAL: filepath.Rel is lexical and can't see that a
+	// `planning -> /etc` symlink escapes dir's real tree. Resolve both ends before
+	// the no-`..` check (evalOr leaves a not-yet-existing path lexical, which then
+	// fails the tasks/-exists check below with a clear message).
+	if r, err := filepath.Rel(evalOr(dir), evalOr(root)); err != nil ||
 		r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("taskflow_root %q escapes %s's directory (%s)", rel, ConfigFile, dir)
 	}
@@ -101,22 +110,43 @@ func taskflowRoot(configPath string) string {
 
 // tomlStringValue extracts a string value from the raw right-hand side of a
 // `key = value` line: the quoted segment if quoted (comment after it ignored),
-// otherwise the text up to an inline `#` comment, trimmed.
+// otherwise the text up to an inline `#` comment, trimmed. Only the TOML subset
+// this one-key scanner can read losslessly is supported — escape-free basic
+// ("...") strings and literal ('...') strings; a basic string containing a
+// backslash escape (\", \\, \t) is refused rather than mis-decoded.
 func tomlStringValue(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
 	}
 	if q := raw[0]; q == '"' || q == '\'' {
-		if end := strings.IndexByte(raw[1:], q); end >= 0 {
-			return raw[1 : 1+end]
+		end := strings.IndexByte(raw[1:], q)
+		if end < 0 {
+			return "" // unterminated quote: treat as unset rather than guess
 		}
-		return "" // unterminated quote: treat as unset rather than guess
+		val := raw[1 : 1+end]
+		// A basic string's backslash escapes (\", \\, \t) need a real decoder; this
+		// scanner would mis-read `"a\"b"` as `a\`. Refuse to guess — treat as unset.
+		// Literal ('...') strings have no escapes, so a backslash there is intentional.
+		if q == '"' && strings.ContainsRune(val, '\\') {
+			return ""
+		}
+		return val
 	}
 	if i := strings.IndexByte(raw, '#'); i >= 0 {
 		raw = raw[:i]
 	}
 	return strings.TrimSpace(raw)
+}
+
+// evalOr resolves symlinks in p, falling back to p itself when it can't (e.g. p
+// doesn't exist yet) — so containment and boundary checks operate on physical
+// paths without breaking on a not-yet-created directory.
+func evalOr(p string) string {
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		return resolved
+	}
+	return p
 }
 
 // exists reports whether path exists as anything (file or directory).
