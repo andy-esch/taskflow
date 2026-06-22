@@ -38,6 +38,27 @@ design boundaries, invariants, concurrency, edge cases, and growth risk.
   store-port method plus `fakeStore` rework, i.e. a port-interface change, not a
   quick win; left open. All other findings (H5, the architecture/growth themes, and
   the remaining medium/low items) are still open.
+- **2026-06-22 (2)** — Second tranche (6 findings), each with a regression test;
+  suite + vet + `golangci-lint` green. Fixed: **H5** (post-move reload no longer
+  flashes a spurious "<slug> not found" over the success — `movedAway` guard),
+  **M4** (`MoveAudit` now refuses to close/defer an audit with open findings,
+  matching `audit lint`), **L3** (`applyView` resets the filter like `jumpTo`),
+  **L9** (nav back-stack capped + skips consecutive duplicates), **L13** (`runMoves`
+  prefers a sentinel-bearing exit code over a generic one, not argv order), **L21**
+  (clarified `repoColorScheme`'s intentionally-ignored `LightDarkFunc`). **17 of 44
+  fixed.** The remaining 27 are the architecture/growth themes + lower-priority
+  localized items — the substantial ones are now tracked as tasks under epic
+  `21-code-quality-architecture-hardening`; the rest stay here as the backlog.
+- **2026-06-22 (3)** — Third tranche (6 findings); suite + vet + `golangci-lint`
+  green. Fixed: **L5** (`SetFields` blames a pre-existing-corrupt file rather than the
+  user's update), **L7** (`FixFrontmatter` returns partial results on a write error;
+  `runLintFix` reports them), **L11** (shared `App.startDir()` for resolve/completion
+  discovery), **L15** (`WriteCSV` neutralizes formula-injection cells), **L22**
+  (documented the untagged-message tab-routing invariant), **L23** (task-creation
+  defaults applied in `NewTask`, not just CLI flags). L5/L15/L23 carry regression
+  tests; L11 is a behavior-preserving refactor; L22 is doc-only. **23 of 44 fixed.**
+  Remaining 21 = the 16 in the epic-21 tasks + 5 minor localized items (L2, L6, L14,
+  L16, L20) left here as backlog.
 
 ## Verdict
 
@@ -152,7 +173,7 @@ whose save lands on disk — accept-and-ignore of a safety flag, worse than reje
 skip the write, report "would update"), or reject `edit --dry-run` with
 `ErrValidation`. *(quick win)*
 
-#### H5. A successful lifecycle move flashes a spurious "<slug> not found" error  · **Status:** open
+#### H5. A successful lifecycle move flashes a spurious "<slug> not found" error  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/model.go:146-152,86-96,260-274 | **Component:** tui
 **Effort:** M · **Urgency:** soon
@@ -217,7 +238,7 @@ tree failure class the codebase elsewhere works to make loud.
 list commands), or explicitly document status as glance-only in help and schema.
 *(quick win)*
 
-#### M4. MoveAudit can close/defer an audit with open findings  · **Status:** open
+#### M4. MoveAudit can close/defer an audit with open findings  · **Status:** fixed (2026-06-22)
 
 **File:** internal/core/service.go:668-671 | **Component:** core
 **Effort:** S · **Urgency:** soon
@@ -451,7 +472,7 @@ futile reloads on a gone directory.
 **Recommendation:** Separate the Events and Errors cases: on a real error surface
 `watchOff`/a footer note and stop re-listening, or apply backoff before re-arming.
 
-#### L3. applyView (s/S cycle) keeps a stale '/' filter; jumpTo clears it  · **Status:** open
+#### L3. applyView (s/S cycle) keeps a stale '/' filter; jumpTo clears it  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/model.go:765-775 | **Component:** tui
 **Effort:** XS · **Urgency:** eventually
@@ -479,7 +500,7 @@ artifact is refused by every surgical mutator.
 (`bytes.TrimRight(line, " \t\r")`) when comparing to `---`; add a seed/fuzz case.
 *(quick win)*
 
-#### L5. updateFrontmatter only rewrites the first of duplicate keys; cause misattributed  · **Status:** open
+#### L5. updateFrontmatter only rewrites the first of duplicate keys; cause misattributed  · **Status:** fixed (2026-06-22)
 
 **File:** internal/store/frontmatter.go:186-197 | **Component:** store
 **Effort:** S · **Urgency:** eventually
@@ -508,7 +529,7 @@ preview, which shows the text fix without flagging the skipped realign.)
 **Recommendation:** When `realignStatus` declines because frontmatter won't decode,
 surface it in the `FixResult` ("status could not be realigned: <reason>").
 
-#### L7. FixFrontmatter aborts the whole run on the first write error, discarding progress  · **Status:** open
+#### L7. FixFrontmatter aborts the whole run on the first write error, discarding progress  · **Status:** fixed (2026-06-22)
 
 **File:** internal/store/fix.go:19-67 | **Component:** store
 **Effort:** S · **Urgency:** eventually
@@ -538,7 +559,7 @@ symlink dir-entries.)
 check; reject if the evaluated root escapes the evaluated dir. Add a symlinked-root
 test.
 
-#### L9. navStack grows unbounded with no cap or cycle detection  · **Status:** open
+#### L9. navStack grows unbounded with no cap or cycle detection  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/nav.go:135-151 | **Component:** tui
 **Effort:** XS · **Urgency:** eventually
@@ -565,7 +586,7 @@ today — a footgun not a live bug.
 **Recommendation:** Expose `IsIntField`/`IsListField` accessors like
 `KnownTaskField` and unexport the maps. *(quick win)*
 
-#### L11. Planning-root discovery duplicated between resolve() and planningRoot()  · **Status:** open
+#### L11. Planning-root discovery duplicated between resolve() and planningRoot()  · **Status:** fixed (2026-06-22)
 
 **File:** internal/cli/completion.go:49-63 | **Component:** cli
 **Effort:** S · **Urgency:** eventually
@@ -592,7 +613,7 @@ the burden on fakes is one no-op line.)
 **Recommendation:** Split `FixFrontmatter` (and possibly `WatchPaths`) into a narrow
 `Fixer`/`Layout` interface cli wires directly to the FS.
 
-#### L13. runMoves picks the exit code from whichever failure is first in argv  · **Status:** open
+#### L13. runMoves picks the exit code from whichever failure is first in argv  · **Status:** fixed (2026-06-22)
 
 **File:** internal/cli/moves.go:16-46 | **Component:** cli
 **Effort:** S · **Urgency:** eventually
@@ -619,7 +640,7 @@ render per row; an fsnotify save-storm reload runs glamour for a body nobody see
 **Recommendation:** Render the inactive mode lazily (thunks or a per-mode dirty
 flag), materializing the other only on first `toggleMode()`.
 
-#### L15. WriteCSV does not neutralize CSV formula-injection (leading =,+,-,@)  · **Status:** open
+#### L15. WriteCSV does not neutralize CSV formula-injection (leading =,+,-,@)  · **Status:** fixed (2026-06-22)
 
 **File:** internal/cli/render/columns.go:90-115 | **Component:** render
 **Effort:** S · **Urgency:** eventually
@@ -703,7 +724,7 @@ filter is ≤2 scans.) Negligible at current scale; only matters at thousands of
 **Recommendation:** If lists are expected to grow, build an id→index map once per
 `SetItems`; fine at current scale.
 
-#### L21. repoColorScheme ignores fang's LightDarkFunc  · **Status:** open
+#### L21. repoColorScheme ignores fang's LightDarkFunc  · **Status:** fixed (2026-06-22)
 
 **File:** cmd/tskflwctl/main.go:84-113 | **Component:** cmd
 **Effort:** XS · **Urgency:** eventually
@@ -717,7 +738,7 @@ became truecolor.)
 or name the param `_` with a note that 16-color indices are intentionally
 background-agnostic.
 
-#### L22. Non-key messages forward only to the active tab, silently dropping them for background tabs  · **Status:** open
+#### L22. Non-key messages forward only to the active tab, silently dropping them for background tabs  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/model.go:180-185 | **Component:** tui
 **Effort:** S · **Urgency:** eventually
@@ -732,7 +753,7 @@ future risk is real but speculative.
 tab-tagged), or broadcast the residual to all tabs with per-tab `routeToTab` wrapping
 if background components gain ticks.
 
-#### L23. Task creation defaults live in CLI flags, not the core  · **Status:** open
+#### L23. Task creation defaults live in CLI flags, not the core  · **Status:** fixed (2026-06-22)
 
 **File:** internal/core/service.go:219-234,259-327 | **Component:** architecture
 **Effort:** M · **Urgency:** eventually
