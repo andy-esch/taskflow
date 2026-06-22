@@ -280,3 +280,18 @@ func TestModel_FollowPickerFitsTerminal(t *testing.T) {
 		}
 	}
 }
+
+// TestPushLoc_SkipsConsecutiveDuplicate pins L9 (2026-06-22 audit): re-pushing the
+// current top adds no history, so the back-stack doesn't grow on repeated follows
+// of the same place.
+func TestPushLoc_SkipsConsecutiveDuplicate(t *testing.T) {
+	m := loaded(t, 120, 40)
+	if m.selectedID() == "" {
+		t.Fatal("setup: expected a selection to push")
+	}
+	m.pushLoc()
+	m.pushLoc()
+	if len(m.navStack) != 1 {
+		t.Errorf("consecutive identical pushes should dedup to 1, got %d", len(m.navStack))
+	}
+}

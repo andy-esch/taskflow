@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,13 +26,26 @@ type watcher struct {
 // reconstructs the planning-tree layout itself. Dirs that don't exist are
 // skipped — `init` fixes the standard set, and watching missing optional buckets
 // isn't worth failing over. (New status/bucket dirs at runtime are out of scope.)
+//
+// Individual Add failures are tolerated, but if NONE succeeded the watcher can
+// never deliver an event, so we return an error (closing the fsnotify watcher)
+// rather than a live-looking one — the caller then takes the watchOff branch and
+// the footer honestly shows live-reload as unavailable instead of silently never
+// firing (inotify limit, FUSE/overlay mount, all dirs absent).
 func newWatcher(paths []string) (*watcher, error) {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
+	added := 0
 	for _, d := range paths {
-		_ = fsw.Add(d) // best-effort: a missing optional dir mustn't kill live reload
+		if err := fsw.Add(d); err == nil { // best-effort: a missing optional dir mustn't kill live reload
+			added++
+		}
+	}
+	if added == 0 {
+		_ = fsw.Close()
+		return nil, errors.New("no watchable directories: live reload unavailable")
 	}
 	return &watcher{fsw}, nil
 }

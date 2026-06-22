@@ -54,6 +54,26 @@ func ValidateDescription(d string) error {
 	return nil
 }
 
+// ActiveTaskFieldErr enforces the field invariants that creation guarantees and
+// LintTask flags on active tasks: every active task needs at least one tag, and a
+// next-up/in-progress task needs a non-empty description. Both NewTask (creation)
+// and the SetFields write path call it, so the create and mutate paths cannot
+// drift apart and write a file the tool's own linter immediately rejects. Archived
+// tasks (completed/deprecated/deferred) are not held to these active-only rules,
+// mirroring Service.Lint (which only lints active tasks). Returns nil when met.
+func ActiveTaskFieldErr(t Task) error {
+	if !t.Status.IsActive() {
+		return nil
+	}
+	if len(t.Tags) == 0 {
+		return fmt.Errorf("%w: at least one tag is required", ErrValidation)
+	}
+	if (t.Status == StatusNextUp || t.Status == StatusInProgress) && strings.TrimSpace(t.Description) == "" {
+		return fmt.Errorf("%w: a description is required for a next-up/in-progress task", ErrValidation)
+	}
+	return nil
+}
+
 // ValidateDate checks a YYYY-MM-DD date string.
 func ValidateDate(value string) error {
 	if _, err := time.Parse(time.DateOnly, value); err != nil {

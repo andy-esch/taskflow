@@ -55,13 +55,17 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 		return nil
 	}
 
+	// On a mid-run write failure, return the results accumulated so far ALONGSIDE
+	// the error: files in earlier status dirs may already be repaired, and the
+	// caller must be able to report that partial progress rather than discard it
+	// (atomic writes mean each file is whole; only the run is incomplete).
 	for _, st := range domain.AllStatuses() {
 		if err := fixDir(filepath.Join(s.tasksDir, st.Dir()), st); err != nil {
-			return nil, err
+			return results, err
 		}
 	}
 	if err := fixDir(s.epicsDir, ""); err != nil { // epics: text-level only
-		return nil, err
+		return results, err
 	}
 	return results, nil
 }
@@ -174,7 +178,7 @@ func fixValue(key, value string) (fixed, change string) {
 	if comment != "" {
 		suffix = " " + comment
 	}
-	if domain.ListFields[key] {
+	if domain.IsListField(key) {
 		return "[" + splitCommaList(val) + "]" + suffix, fmt.Sprintf("%s: normalized to a YAML list", key)
 	}
 	if strings.Contains(val, ": ") {

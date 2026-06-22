@@ -14,7 +14,7 @@ import (
 // by task and audit transitions so the loop + reporting policy live in exactly
 // one place.
 func runMoves[T any](app *App, slugs []string, status string, move func(slug string) (T, error), slugOf func(T) string) error {
-	var firstErr error
+	var chosenErr error
 	failed := 0
 	results := make([]render.MoveResult, 0, len(slugs))
 	for _, slug := range slugs {
@@ -22,8 +22,12 @@ func runMoves[T any](app *App, slugs []string, status string, move func(slug str
 		if got, err := move(slug); err != nil {
 			res.Error = err.Error()
 			failed++
-			if firstErr == nil {
-				firstErr = err
+			// Prefer a sentinel-bearing error (a meaningful exit code: 10/11/13/14)
+			// over a generic exit-1 one, so the batch's summary code reports the most
+			// actionable cause rather than whichever failure happened to be first in
+			// argv. (The first sentinel wins; per-item ✘ lines carry the full detail.)
+			if chosenErr == nil || (ExitCode(chosenErr) == 1 && ExitCode(err) != 1) {
+				chosenErr = err
 			}
 		} else {
 			res.Slug = slugOf(got)
@@ -37,10 +41,10 @@ func runMoves[T any](app *App, slugs []string, status string, move func(slug str
 	} else {
 		render.MovesHuman(app.Out, app.ErrOut, app.Style, results, app.DryRun)
 	}
-	if firstErr != nil {
+	if chosenErr != nil {
 		// %w keeps the sentinel (exit-code mapping); the text is a count, not a
 		// repeat of the already-printed detail.
-		return fmt.Errorf("%d of %d transitions failed: %w", failed, len(slugs), firstErr)
+		return fmt.Errorf("%d of %d transitions failed: %w", failed, len(slugs), chosenErr)
 	}
 	return nil
 }

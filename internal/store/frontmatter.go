@@ -33,7 +33,7 @@ func splitFrontmatter(content []byte) (frontmatter, body []byte) {
 		} else {
 			line = rest[offset : offset+lineEnd]
 		}
-		if string(bytes.TrimRight(line, "\r")) == "---" { // closing fence
+		if string(bytes.TrimRight(line, " \t\r")) == "---" { // closing fence (tolerate trailing whitespace, a common editor artifact)
 			frontmatter = rest[:offset]
 			if lineEnd < 0 {
 				return frontmatter, nil

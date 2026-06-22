@@ -130,11 +130,26 @@ func (m Model) followSelected() (tea.Model, tea.Cmd) {
 	}
 }
 
+// navStackMax bounds the back-stack so a long bounce between an epic and its
+// tasks can't grow it for the whole session (a vim-jumplist-style cap).
+const navStackMax = 50
+
 // pushLoc records the current position on the back-stack (no-op on an empty
-// selection — there is nothing to come back to).
+// selection — there is nothing to come back to). It skips a push identical to the
+// current top (re-following the same place adds no useful history) and caps the
+// stack at navStackMax, dropping the oldest entries.
 func (m *Model) pushLoc() {
-	if id := m.selectedID(); id != "" {
-		m.navStack = append(m.navStack, navLoc{kind: m.cur().kind, id: id})
+	id := m.selectedID()
+	if id == "" {
+		return
+	}
+	loc := navLoc{kind: m.cur().kind, id: id}
+	if n := len(m.navStack); n > 0 && m.navStack[n-1] == loc {
+		return
+	}
+	m.navStack = append(m.navStack, loc)
+	if over := len(m.navStack) - navStackMax; over > 0 {
+		m.navStack = m.navStack[over:]
 	}
 }
 

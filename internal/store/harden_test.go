@@ -65,7 +65,7 @@ func TestFS_MoveAudit_RejectsMalformedWithoutMoving(t *testing.T) {
 func TestFS_SetFields_ConflictsWhenMovedConcurrently(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "alpha.md",
-		"---\nstatus: ready-to-start\n---\n# Alpha\n")
+		"---\nstatus: ready-to-start\ntags: [seed]\n---\n# Alpha\n")
 	fs := NewFS(root)
 
 	oldPath := filepath.Join(root, "tasks", "ready-to-start", "alpha.md")
@@ -127,7 +127,7 @@ func TestFS_Move_ConflictsWhenMovedConcurrently(t *testing.T) {
 // LF-frontmatter/CRLF-body file) and correct values.
 func TestFS_SetFields_CRLFRoundTrip(t *testing.T) {
 	root := t.TempDir()
-	crlf := strings.ReplaceAll("---\nstatus: ready-to-start\ndescription: old\n---\n# Alpha\nbody\n", "\n", "\r\n")
+	crlf := strings.ReplaceAll("---\nstatus: ready-to-start\ndescription: old\ntags: [seed]\n---\n# Alpha\nbody\n", "\n", "\r\n")
 	writeTask(t, root, "ready-to-start", "alpha.md", crlf)
 
 	task, err := NewFS(root).SetFields("alpha", map[string]any{"description": "new desc"}, false)

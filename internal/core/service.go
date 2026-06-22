@@ -192,13 +192,13 @@ func coerceField(field string, val any) (any, error) {
 		return val, nil // a typed flag already supplied the native type
 	}
 	switch {
-	case domain.IntFields[field]:
+	case domain.IsIntField(field):
 		n, err := strconv.Atoi(strings.TrimSpace(str))
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s must be an integer, got %q", domain.ErrValidation, field, str)
 		}
 		return n, nil
-	case domain.ListFields[field]:
+	case domain.IsListField(field):
 		return splitList(str), nil
 	}
 	return str, nil
@@ -264,6 +264,22 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	if !epicExists(epics, p.Epic) {
 		return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, p.Epic)
 	}
+	// Defaults for zero-valued fields live here so EVERY caller — not just the CLI
+	// flags — produces a valid, lint-clean task; the CLI flag defaults stay as
+	// help-text hints. (A second adapter calling NewTask without replicating them
+	// would otherwise get ErrValidation or scaffold a lint-failing file.)
+	if p.Priority == "" {
+		p.Priority = "medium"
+	}
+	if p.Tier == 0 {
+		p.Tier = 3
+	}
+	if p.Autonomy == 0 {
+		p.Autonomy = 3
+	}
+	if p.Effort == "" {
+		p.Effort = "Unknown"
+	}
 	if err := domain.ValidatePriority(p.Priority); err != nil {
 		return domain.Task{}, err
 	}
@@ -275,12 +291,6 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	}
 	if err := domain.ValidateDescription(p.Description); err != nil {
 		return domain.Task{}, err
-	}
-	// Tags are required at creation (decided 2026-06-12): lint demands non-empty
-	// tags on active tasks, and `new` must not scaffold a file its own linter
-	// rejects.
-	if len(p.Tags) == 0 {
-		return domain.Task{}, fmt.Errorf("%w: at least one tag is required (--tags)", domain.ErrValidation)
 	}
 	if err := domain.ValidateTitle(p.Title); err != nil {
 		return domain.Task{}, err
@@ -296,12 +306,6 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	case p.Next:
 		status = domain.StatusNextUp
 	}
-	// A task born next-up/in-progress is active, and lint requires a description
-	// there — so `new --next`/`--start` must carry one, for the same reason tags
-	// are required: `new` must not scaffold a file its own linter rejects.
-	if (status == domain.StatusNextUp || status == domain.StatusInProgress) && strings.TrimSpace(p.Description) == "" {
-		return domain.Task{}, fmt.Errorf("%w: --description is required for a next-up/in-progress task (--next/--start)", domain.ErrValidation)
-	}
 	t := domain.Task{
 		Slug:        slug,
 		Status:      status,
@@ -313,6 +317,12 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 		Autonomy:    p.Autonomy,
 		Tags:        p.Tags,
 		Created:     time.Now().Format("2006-01-02"),
+	}
+	// `new` must not scaffold a file its own linter rejects: every active task needs
+	// tags, and a next-up/in-progress one needs a description. The same rule the
+	// SetFields write path applies, defined once in the domain (decided 2026-06-12).
+	if err := domain.ActiveTaskFieldErr(t); err != nil {
+		return domain.Task{}, err
 	}
 	// A task born in-progress (`new --start`) gets the same started_at stamp Move
 	// writes, so "every in-progress task has a started_at" holds however it got there.

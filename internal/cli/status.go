@@ -19,9 +19,17 @@ func newStatusCmd(app *App) *cobra.Command {
 				return err
 			}
 			if app.JSON {
-				return render.SummaryJSON(app.Out, s)
+				if err := render.SummaryJSON(app.Out, s); err != nil {
+					return err
+				}
+			} else if err := render.SummaryHuman(app.Out, app.Style, s); err != nil {
+				return err
 			}
-			return render.SummaryHuman(app.Out, app.Style, s)
+			// Render the dashboard first, then exit non-zero if any file was
+			// unreadable — matching the list/lint/audit contract so an agent gating
+			// on `status` (incl. --json, which carries the unreadable array) doesn't
+			// get exit 0 on a forked/broken tree.
+			return problemsError(s.Problems)
 		},
 	}
 }

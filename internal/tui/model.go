@@ -54,6 +54,8 @@ type Model struct {
 	navStack   []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
 	flash      string     // transient post-action feedback line (cleared on the next key)
 	flashErr   bool       // the flash is an error (rendered red)
+	movedAway  string     // slug just relocated by a lifecycle action: its absence from the
+	// active tab after the post-move reload is the success, not a dangling reference
 
 	watch     *watcher // fsnotify source (nil when unavailable / in tests); see watch.go
 	watchOff  bool     // the watcher failed to start: live reload is off (footer note)
@@ -148,6 +150,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// its new status (folder-authoritative), each tab's cursor preserved by id.
 		m.flash = fmt.Sprintf("moved %s → %s", msg.slug, msg.to)
 		m.flashErr = false
+		// The moved task leaves the active list (folder-authoritative); its
+		// disappearance on the reload below is expected, so don't let the post-reload
+		// restore mistake it for a dangling reference and overwrite this success.
+		m.movedAway = msg.slug
 		return m, m.reloadAll()
 
 	case actionErrMsg:
@@ -177,8 +183,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	// Forward anything else (e.g. cursor-blink ticks) to the active list. List
-	// messages with a tab identity arrive as tabMsg above and route themselves.
+	// Forward anything else (e.g. cursor-blink ticks) to the active list ONLY.
+	// INVARIANT: any async message that must reach a *background* tab's list has to
+	// carry a tab identity (arrive as tabMsg above, which routes itself) — an
+	// untagged list-affecting message would be misdelivered or dropped here. This
+	// holds today because background tabs never focus their FilterInput (so generate
+	// no blink/spinner ticks); a future background component with its own ticks must
+	// be tab-tagged, or this fall-through changed to broadcast (per-tab routeToTab).
 	var cmd tea.Cmd
 	m.cur().list, cmd = m.cur().list.Update(msg)
 	return m, routeToTab(m.cur().kind, cmd)
@@ -266,7 +277,9 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 			// reference jump (`f` to an epic that doesn't exist) or a selection
 			// deleted externally. Say so once instead of leaving a stale pending
 			// restore; a filtered tab keeps it pending for the async refilter.
-			if msg.kind == m.cur().kind {
+			// EXCEPT the task we just relocated: its absence here is the success
+			// (flashed green already), not a not-found error.
+			if msg.kind == m.cur().kind && tab.restore != m.movedAway {
 				m.flash, m.flashErr = tab.restore+" not found", true
 			}
 			tab.restore = ""
@@ -275,6 +288,7 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.kind != m.cur().kind {
 		return m, cmd // a background tab loaded; leave the active view alone
 	}
+	m.movedAway = "" // consumed: the active tab's post-move reload has landed
 	return m, tea.Batch(cmd, m.refreshDetail())
 }
 
@@ -385,16 +399,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.switchTab((m.active + 1) % len(m.tabs))
 	case key.Matches(msg, keys.PrevTab):
 		return m, m.switchTab((m.active - 1 + len(m.tabs)) % len(m.tabs))
-	case key.Matches(msg, keys.Sort):
+	// Sort/status-view/filter-mode reshape the LIST, so they're list-scoped: gate
+	// them on list focus. Otherwise pressing e.g. `s` while reading the detail pane
+	// snaps focus back to the list, clears the detail, and triggers a reload —
+	// silently wiping the body being read (the detail-focus footer advertises none
+	// of these keys). In detail focus they fall through to the find handler / no-op.
+	case m.focus == focusList && key.Matches(msg, keys.Sort):
 		return m, m.cycleSort(1)
-	case key.Matches(msg, keys.SortRev):
+	case m.focus == focusList && key.Matches(msg, keys.SortRev):
 		m.cur().sortRev = !m.cur().sortRev
 		return m, m.applySortToCurrent()
-	case key.Matches(msg, keys.StatusView):
+	case m.focus == focusList && key.Matches(msg, keys.StatusView):
 		return m, m.cycleView(1)
-	case key.Matches(msg, keys.StatusRev):
+	case m.focus == focusList && key.Matches(msg, keys.StatusRev):
 		return m, m.cycleView(-1)
-	case key.Matches(msg, keys.FilterMode):
+	case m.focus == focusList && key.Matches(msg, keys.FilterMode):
 		return m.toggleFilterMode()
 	case key.Matches(msg, keys.Refresh):
 		return m, func() tea.Msg { return reloadMsg{} }
@@ -769,6 +788,10 @@ func (m *Model) applyView(i int, view string) tea.Cmd {
 	m.focus = focusList
 	tab := m.tabs[i]
 	tab.markReload()
+	// Reset the active filter when switching views, matching jumpTo: otherwise a
+	// stale `/foo` silently carries into the new status view (the chip still reads
+	// filter:foo and the view can look unexpectedly empty).
+	tab.list.ResetFilter()
 	tab.statusView = view
 	m.detail.clear()
 	return tab.reload(m.svc)

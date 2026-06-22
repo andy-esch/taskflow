@@ -43,7 +43,7 @@ func TestCreate_StampsSchemaVersion(t *testing.T) {
 // managed field.
 func TestSchemaVersion_ParsesAndSurvivesEdits(t *testing.T) {
 	root := t.TempDir()
-	seed := "---\nschema: 1\nstatus: ready-to-start\ndescription: d\ntier: 2\n---\n# T\n\nbody\n"
+	seed := "---\nschema: 1\nstatus: ready-to-start\ndescription: d\ntier: 2\ntags: [seed]\n---\n# T\n\nbody\n"
 	writeTask(t, root, "ready-to-start", "keep.md", seed)
 	fs := NewFS(root)
 

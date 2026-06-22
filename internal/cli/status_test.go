@@ -2,9 +2,27 @@ package cli
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// M3 (2026-06-22 audit): status must exit non-zero when files are unreadable,
+// matching the list/lint contract — an agent gating on `status` must not get a
+// success code on a broken tree. The dashboard still renders first.
+func TestStatus_ExitsNonZeroOnUnreadableFiles(t *testing.T) {
+	root := setupRepo(t)
+	// tier as a quoted string fails the strict decode → a FileProblem.
+	mustWrite(t, filepath.Join(root, "tasks", "ready-to-start", "broken.md"),
+		"---\nstatus: ready-to-start\ntier: \"4\"\n---\n# Broken\n")
+	out, err := runRootRC(t, "-C", root, "status")
+	if err == nil {
+		t.Fatal("status must exit non-zero when a file is unreadable")
+	}
+	if !strings.Contains(out, "Tasks") {
+		t.Errorf("the dashboard should still render before the non-zero exit:\n%s", out)
+	}
+}
 
 func TestStatus_Smoke(t *testing.T) {
 	root := setupRepo(t) // alpha (ready-to-start), beta (in-progress)

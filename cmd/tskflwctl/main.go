@@ -81,6 +81,11 @@ func useFang(args []string, stderrIsTTY bool) bool {
 // terminal-theme-adaptive and visually consistent with `list`/`status`/the TUI
 // instead of fang's truecolor charmtone default. Palette indices: 1 red, 2 green,
 // 3 yellow, 4 blue, 6 cyan, 8 bright-black, 15 bright-white.
+//
+// fang's LightDarkFunc parameter is intentionally ignored: ANSI 16-color indices
+// are remapped by the terminal's own light/dark theme, so the scheme is already
+// background-adaptive without per-slot light/dark selection. (Wire it only if a
+// slot ever needs a truecolor value.)
 func repoColorScheme(lipgloss.LightDarkFunc) fang.ColorScheme {
 	var (
 		def    = lipgloss.NoColor{} // terminal default foreground

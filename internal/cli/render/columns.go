@@ -104,7 +104,7 @@ func WriteCSV[T any](w io.Writer, cols []Column[T], items []T) error {
 	row := make([]string, len(cols))
 	for _, it := range items {
 		for i, c := range cols {
-			row[i] = c.Extract(it)
+			row[i] = csvInjectionSafe(c.Extract(it))
 		}
 		if err := cw.Write(row); err != nil {
 			return err
@@ -112,6 +112,22 @@ func WriteCSV[T any](w io.Writer, cols []Column[T], items []T) error {
 	}
 	cw.Flush()
 	return cw.Error()
+}
+
+// csvInjectionSafe neutralizes spreadsheet formula injection: a cell whose first
+// byte a spreadsheet treats as a formula (= + - @) or as a control prefix (tab,
+// CR) is prefixed with a single quote so Excel/Sheets render it as literal text.
+// Free-text cells (e.g. a finding title pasted from external review) are the risk;
+// header names are fixed and safe, so only data cells are guarded.
+func csvInjectionSafe(s string) string {
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + s
+	}
+	return s
 }
 
 // TaskColumns is the projectable column set for `task list` (slug first — the id

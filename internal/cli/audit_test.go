@@ -55,12 +55,29 @@ func TestAuditList_All(t *testing.T) {
 
 func TestAuditClose_MovesBucket(t *testing.T) {
 	root := setupAuditRepo(t)
-	out := runRoot(t, "-C", root, "audit", "close", "o")
-	if !strings.Contains(out, "o -> closed") {
+	// A clean audit (no open findings) closes fine — `o` carries an open finding
+	// and is covered by TestAuditClose_RejectsOpenFindings below.
+	mustWrite(t, filepath.Join(root, "audits", "open", "clean.md"),
+		"---\narea: clean\n---\n#### H1. t  · **Status:** fixed\n")
+	out := runRoot(t, "-C", root, "audit", "close", "clean")
+	if !strings.Contains(out, "clean -> closed") {
 		t.Errorf("unexpected output: %q", out)
 	}
-	if _, err := os.Stat(filepath.Join(root, "audits", "closed", "o.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "audits", "closed", "clean.md")); err != nil {
 		t.Errorf("audit not moved to closed: %v", err)
+	}
+}
+
+// M4 (2026-06-22 audit): closing/deferring an audit that still has open findings
+// must be refused (the bucket↔state invariant `audit lint` enforces), with the
+// audit left in its original bucket.
+func TestAuditClose_RejectsOpenFindings(t *testing.T) {
+	root := setupAuditRepo(t) // `o` has H1 open
+	if _, err := runRootRC(t, "-C", root, "audit", "close", "o"); err == nil {
+		t.Fatal("closing an audit with open findings must be rejected")
+	}
+	if _, err := os.Stat(filepath.Join(root, "audits", "open", "o.md")); err != nil {
+		t.Errorf("a rejected close must leave the audit in open/: %v", err)
 	}
 }
 

@@ -39,7 +39,15 @@ func stageTemp(dir string, data []byte, perm os.FileMode) (string, error) {
 // writeFileAtomic writes data via a temp file in the same directory, fsync, and
 // rename — so a crash or Ctrl-C mid-write can't leave a truncated file. Rename
 // overwrites an existing file in place.
+//
+// When overwriting, the destination's existing mode is preserved rather than
+// reset to perm: a user (or synced/encrypted setup) that chmod'd a task to 0600
+// must not have it silently widened to 0644 on the next edit. perm is the
+// fallback for a file that doesn't yet exist.
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	if info, err := os.Stat(path); err == nil {
+		perm = info.Mode().Perm()
+	}
 	tmp, err := stageTemp(filepath.Dir(path), data, perm)
 	if err != nil {
 		return err

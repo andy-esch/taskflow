@@ -50,6 +50,35 @@ func TestValidTransitions(t *testing.T) {
 	}
 }
 
+// TestModel_SuccessfulMoveKeepsSuccessFlash pins H5 (2026-06-22 audit):
+// completing a task from the default view moves it out of the working set, and the
+// post-move reload's cursor-restore must NOT report the just-moved task as
+// "<slug> not found" and clobber the green success flash.
+func TestModel_SuccessfulMoveKeepsSuccessFlash(t *testing.T) {
+	m := loaded(t, 120, 40)
+	if m.selectedID() != "alpha" {
+		t.Fatalf("setup: want alpha selected, got %q", m.selectedID())
+	}
+	tm, _ := m.Update(press("a"))
+	m = tm.(Model)
+	m = cursorTo(t, m, "complete")
+	tm, cmd := m.Update(press("enter"))
+	m = tm.(Model)
+	// Run the Move → movedMsg: the success flash is set and reloadAll kicked off.
+	tm, reload := m.Update(cmd())
+	m = tm.(Model)
+	if m.flash == "" || m.flashErr {
+		t.Fatalf("want a success flash after the move, got %q (err=%v)", m.flash, m.flashErr)
+	}
+	want := m.flash
+	// Drive the reload: alpha is now completed and absent from the working-set view,
+	// so the cursor-restore for "alpha" fails — but that absence is the success.
+	m = drain(t, m, reload)
+	if m.flashErr || m.flash != want {
+		t.Errorf("post-move reload clobbered the success flash: got %q (err=%v), want %q", m.flash, m.flashErr, want)
+	}
+}
+
 // TestModel_ActionMenuMovesTask is the end-to-end path: open the menu on a task,
 // pick a non-destructive transition, and the real Service.Move relocates it.
 func TestModel_ActionMenuMovesTask(t *testing.T) {
