@@ -30,7 +30,7 @@ func TestInit(t *testing.T) {
 
 	// Discover should now resolve this root.
 	cfg, err := Discover(root)
-	if err != nil || cfg.Root != root {
+	if err != nil || cfg.Root != eval(t, root) {
 		t.Errorf("Discover after init = %+v, %v", cfg, err)
 	}
 
@@ -126,7 +126,7 @@ func TestDiscover_ConfigAnchorsAndHonorsRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Root != planning {
+	if cfg.Root != eval(t, planning) {
 		t.Errorf("config taskflow_root not honored: got %q, want %q", cfg.Root, planning)
 	}
 }
@@ -138,7 +138,7 @@ func TestDiscover_FallsBackToTasksDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg, err := Discover(root)
-	if err != nil || cfg.Root != root {
+	if err != nil || cfg.Root != eval(t, root) {
 		t.Errorf("fallback discovery = %+v, %v", cfg, err)
 	}
 }
