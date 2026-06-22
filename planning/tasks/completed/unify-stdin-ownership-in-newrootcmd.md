@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: App.In, the prompt gate, the editor, and resolveBody read two different stdin handles; make one injectable source.
 effort: Unknown
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [cli, architecture]
 created: "2026-06-22"
+updated_at: "2026-06-22"
+completed_at: "2026-06-22"
 ---
 # Unify stdin ownership in NewRootCmd
 
@@ -27,9 +29,9 @@ DI story's input side. Relates to epic 20 (CLI UX).
 
 ## Acceptance criteria
 
-- [ ] One injectable stdin feeds App.In, the prompt gate, the editor, and resolveBody.
-- [ ] An in-process test can drive a prompt by injecting stdin.
-- [ ] just test + just lint green.
+- [x] One injectable stdin feeds App.In, the prompt gate, the editor, and resolveBody.
+- [x] An in-process test can drive a prompt by injecting stdin.
+- [x] just test + just lint green.
 
 ## Implementation plan
 

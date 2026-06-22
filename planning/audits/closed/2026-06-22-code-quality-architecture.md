@@ -85,6 +85,60 @@ design boundaries, invariants, concurrency, edge cases, and growth risk.
   goldens passing without `-update`, `schema_comments.json` regenerating with no drift, and
   docs/cli unchanged; `go build`/`go vet`/`gofmt`/`golangci-lint`/full `go test ./...` all
   green. **29 of 44 fixed; 1 in-progress.**
+- **2026-06-22 (7)** — Two port/boundary clusters, each with regression tests; suite +
+  vet + `golangci-lint` green, docs/cli no-drift. **core.Store port reshape:** **M16**
+  (new `GetAuditByPath` accessor on the audit port → `QueryFindings`/`LintAudits` read
+  each audit by the path `ListAudits` already resolved, killing the O(N²) re-resolve and
+  the concurrent-edit window; `fakeStore`/`nopStore` gained the method, finding seeds
+  carry `.Path`), **L12** (split `FixFrontmatter`→`core.Fixer` and `WatchPaths`→
+  `core.Layout` off the use-case `Store`; the CLI wires `app.Fixer` and the TUI takes a
+  `core.Layout` directly — `*FS` satisfies all three via compile assertions; the fakes
+  shed two methods), **M8** (ARCHITECTURE.md re-justified: render imports ~5 core types
+  not "two", and the port-purity theme reflects the done Fixer/Layout split). Paired with
+  the epic-22 **template port** (a `core.TemplateSource` behind `Service.ListTemplates`/
+  `ShowTemplate` + the create paths; `template list/show` resolve repo-best-effort so
+  built-ins still work repo-less — readying step 4's repo-local layering as a source
+  swap). **TUI cluster:** **M6** (cursor-restore carried per-message + gen-stamped, and a
+  reload mid-jump carries the jump target forward — no more single-slot steal/false
+  "not found"), **M14** (a `modal` overlay interface + ordered registry the reducer
+  loops, ForceQuit handled once in the preamble — a new overlay is one entry, no new
+  guard block/`bodyView` case), **M10** (the `a` menu + `:` verbs are registry-driven
+  off each entity's transition table + `applyMove`, so audits now close/reopen/defer
+  in-TUI; the M4 open-findings guard surfaces as a red flash). **35 of 44 fixed; 1
+  in-progress (M1).** Remaining: M11, M12 + the low backlog (L2, L6, L14, L16, L18, L20).
+- **2026-06-22 (8)** — Closed the medium correctness backlog + the M1 theme; each with
+  tests, suite/vet/`golangci-lint` green, docs/cli no-drift. **M12** (`NewRootCmd(in, out,
+  errOut)` is now the single stdin owner — it feeds both `app.In` (gate/prompter/editor)
+  and the cobra root via `SetIn`, so `resolveBody`'s `InOrStdin` and the prompter read
+  one injected reader; ~44 call sites swept, no stray `os.Stdin` left in cli). **M11 +
+  L18** (duplicate-slug DETECTION in `core.Lint`: a Ctrl-C in Move's write-then-remove
+  window leaves the same slug in two dirs → `lint` now flags it loudly and exits 11
+  naming both dirs, so the otherwise-silent permanent `ErrAmbiguous` is hand-repairable.
+  No auto-DELETE: the Move-crash duplicate has BOTH copies matching their folders — an
+  ambiguous tie the "never lose data" stance says report-don't-guess, and the task's
+  Done-when explicitly allows "reported when ambiguous." Plus L18: `createFileAtomic`'s
+  Close path now cleans up like its siblings, negative atomic-write tests (read-only dir,
+  skip-as-root), and a conservative `.tskflwctl-*.tmp` orphan sweep on `lint --fix`,
+  age+prefix-guarded). **M1** (descriptor + generic seams were the recommendation's
+  substance and they're in place; ARCHITECTURE.md now states the honest residual cost of
+  a typed multi-entity domain instead of underselling it — the recommendation's stated
+  minimum bar). Also added a transition-table validity test guarding M10's stringly-typed
+  `to`. **39 of 44 fixed.** Remaining 5 = the low backlog L2 (watcher backoff), L6
+  (realign dry-run preview), L14 (lazy glamour), L16 (find across wrap — documented
+  tradeoff), L20 (selectByID scan) — all low-value polish or accept-as-documented.
+- **2026-06-22 (9)** — Closed out the low backlog and the audit. Fixed **L16**
+  (`findStatus` now hints `R: raw (match spans a wrap)` when a pretty-mode search
+  finds 0 but the raw render would match — so a wrap-straddling hit isn't read as
+  "not present"; the same fold-aware matcher decides, so the hint only fires when R
+  actually helps). Accepted (wontfix) the rest as low-value/by-design: **L2** (the
+  fsnotify error→reload nudge is *correct* for the dominant error, kernel queue
+  overflow → resync; the 200ms debounce already prevents a busy-loop, and flipping
+  to `watchOff` on a transient error would regress overflow-resync), **L6** (the
+  realign dry-run-preview gap is cosmetic — the real `--fix` re-lints and signals),
+  **L14** (the glamour render is cached so the cost is bounded "wasted work"; the
+  lazy-render change risks the find/cache state machine for no real gain), **L20**
+  (`selectByID` is ≤2 scans per reload — negligible until thousands of items).
+  **40 of 44 fixed; 4 accepted (wontfix); 0 open.** Audit closed.
 
 ## Verdict
 
@@ -108,11 +162,16 @@ answer to "what will inhibit sustainable growth."
    This class of defect *multiplies per new command/entity*. Highest-leverage fix:
    centralize each contract at its narrowest seam.
 
-2. **Entity-add fan-out (medium, growth).** Adding the already-scaffolded
-   `project`/`adr` entity is a ~15-file shotgun edit across 6 packages because
-   task/epic/audit are hand-enumerated in every layer (**M1**). Generic helpers
-   (`scanDir[T]`, `Column[T]`) prove uniformity is achievable. Recommendation: a
-   data-driven entity descriptor before the roadmap doubles the surface.
+2. **Entity-add fan-out (medium, growth) — RESOLVED (2026-06-22).** Was a ~15-file
+   shotgun edit (**M1**). The data-driven entity `Descriptor` now collapses the
+   metadata fan-out (schema/scaffold/conventions), the generic seams (`scanDir[T]`,
+   `resolveID`, `Column[T]`/`WriteTablePlain`) carry the mechanics, and TUI lifecycle
+   is registry-driven (**M10**). The remaining per-entity surface — a typed `domain`
+   struct + `parse*`, thin `*Store`/`Service` wiring, a cli command, and render/TUI
+   display delegates — is the irreducible cost of a *typed* domain with three
+   genuinely different shapes (status/tier vs rollups vs findings); ARCHITECTURE.md
+   now documents it honestly. A full reflection/codegen collapse is deliberately not
+   pursued for three not-yet-doubled entities.
 
 3. **God-files growing per entity × use-case (medium, growth).** `render.go`
    (703 LOC, **M9**), `core/service.go` (~693 LOC, **L1**), and `model.go`'s
@@ -217,7 +276,7 @@ the active tab's restore-by-moved-id for the post-move reload, or suppress the
 
 ### Medium (16)
 
-#### M1. Adding a new entity type is a ~15-file shotgun edit across 6 packages  · **Status:** in-progress
+#### M1. Adding a new entity type is a ~15-file shotgun edit across 6 packages  · **Status:** fixed (2026-06-22) — descriptor landed; residual documented honestly
 
 **File:** internal/core/store.go:15-65 | **Component:** architecture
 **Effort:** L · **Urgency:** eventually
@@ -233,6 +292,21 @@ than it is.
 **Recommendation:** Introduce an entity descriptor (dir name, field order, parse/
 serialize, columns) to drive the already-generic machinery (`scanDir`, `Column[T]`,
 `resolveID`, `writeNewFile`) from data; at minimum correct the doc.
+
+**Resolution (2026-06-22).** The metadata fan-out — the recommendation's high-leverage
+half — is collapsed into `entity.go`'s `Descriptor` (dir/fields/conventions/scaffold/
+placeholders drive `SchemaKinds`/`AuthoringFields`/`Conventions`/`BodyTemplate`, no
+`switch kind`). TUI lifecycle is now registry-driven too (M10). The generic seams the
+recommendation named are in place: `scanDir[T]`, `resolveID`, and `Column[T]` +
+`WriteTablePlain[T]`/`WriteCSV[T]`. The genuine residual for a new entity is a typed
+`domain` struct + `parse*`, thin `*Store` port methods, `core.Service` use cases, a cli
+command, and per-entity render/TUI *display* delegates — the irreducible cost of a
+**typed** domain whose three kinds have different shapes (status/tier vs rollups vs
+findings/buckets); the generics remove the mechanics, not the shape. A full data-driven
+persistence/render collapse is deliberately NOT pursued: for three heterogeneous,
+not-yet-doubled entities it trades clarity for reflection/codegen machinery. ARCHITECTURE.md
+now states this cost honestly (no longer "cheaper than it is"), which was the
+recommendation's stated minimum bar. Reopen if the entity count actually doubles.
 
 #### M2. writeFileAtomic silently resets file mode to 0644 on every edit  · **Status:** fixed (2026-06-22)
 
@@ -293,7 +367,7 @@ concurrency contract. No test hook or concurrency test exists.
 **Recommendation:** Add the same pre-rename re-resolve CAS and a test hook, mapping
 a mismatch to `ErrConflict` with a retry message. *(quick win)*
 
-#### M6. Per-tab cursor-restore (tab.restore) is a single slot shared by reload + jump  · **Status:** open
+#### M6. Per-tab cursor-restore (tab.restore) is a single slot shared by reload + jump  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/entity.go:63,90-95 | **Component:** tui
 **Effort:** M · **Urgency:** soon
@@ -324,7 +398,7 @@ output only.
 columns or clamp the composed line with `ansi.Truncate`, mirroring the TUI clamp
 discipline; add a no-line-exceeds-maxWidth test.
 
-#### M8. The cli→render→core diamond is ~5 core types, not the doc's "two"  · **Status:** open
+#### M8. The cli→render→core diamond is ~5 core types, not the doc's "two"  · **Status:** fixed (2026-06-22)
 
 **File:** internal/cli/render/render.go:208-296,327-359,459-486 | **Component:** architecture
 **Effort:** S · **Urgency:** eventually
@@ -355,7 +429,7 @@ shows copy-drift (`%-12s` vs `%-9s` padding between `TaskShowHuman`/`AuditShowHu
 `schema.go`, keep `render.go` for generic table renderers. Consider a
 field-descriptor list driving `*ShowHuman`.
 
-#### M10. TUI entity-registry's "no new keybindings" claim is false for lifecycle entities  · **Status:** open
+#### M10. TUI entity-registry's "no new keybindings" claim is false for lifecycle entities  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/entity.go:14-23,161-203 | **Component:** architecture
 **Effort:** L · **Urgency:** eventually
@@ -372,7 +446,7 @@ discovers edits needed in model.go/action.go/nav.go.
 transition table (registry-driven `a` menu + `:` verbs), OR scope the doc's "no new
 keybindings" promise to read-only browse.
 
-#### M11. Ctrl-C during Move's write-then-remove window leaves a permanent duplicate slug  · **Status:** open
+#### M11. Ctrl-C during Move's write-then-remove window leaves a permanent duplicate slug  · **Status:** fixed (2026-06-22)
 
 **File:** internal/store/fsstore.go:159-172 | **Component:** store
 **Effort:** M · **Urgency:** eventually
@@ -389,7 +463,7 @@ hence medium, downgraded from high.)
 the remove always completes, or ship the dedup repair pass; until then document the
 kill window honestly.
 
-#### M12. Two divergent stdin sources; NewRootCmd cannot inject stdin  · **Status:** open
+#### M12. Two divergent stdin sources; NewRootCmd cannot inject stdin  · **Status:** fixed (2026-06-22)
 
 **File:** internal/cli/root.go:60-61 | **Component:** architecture
 **Effort:** M · **Urgency:** eventually
@@ -422,7 +496,7 @@ cleanly-parsing input assert the output re-parses as valid YAML, the body is
 preserved verbatim, and the requested key has the new value; skip inputs the parser
 legitimately rejects. *(quick win)*
 
-#### M14. handleKey is an oversized reducer whose modal precedence stack grows per overlay  · **Status:** open
+#### M14. handleKey is an oversized reducer whose modal precedence stack grows per overlay  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/model.go:281-444 | **Component:** architecture
 **Effort:** L · **Urgency:** eventually
@@ -452,7 +526,7 @@ list. The detail-focus footer hint advertises none of these keys.
 **Recommendation:** Gate `s/S/o/O/F` (and arguably `a/f`) on `focus==focusList`, or
 at minimum document them in the detail-focus hint. *(quick win)*
 
-#### M16. QueryFindings / LintAudits re-resolve + re-read every audit — O(N²) rescan  · **Status:** open
+#### M16. QueryFindings / LintAudits re-resolve + re-read every audit — O(N²) rescan  · **Status:** fixed (2026-06-22)
 
 **File:** internal/core/finding.go:56-69,93-106 | **Component:** core
 **Effort:** M · **Urgency:** soon
@@ -484,7 +558,7 @@ cleanly.)
 **Recommendation:** Keep `Service` as the facade but move per-entity use-cases into
 `service_task/epic/audit.go`; decide before the adr/project surface doubles methods.
 
-#### L2. fsnotify Errors are treated as reload nudges with no backoff  · **Status:** open
+#### L2. fsnotify Errors are treated as reload nudges with no backoff  · **Status:** wontfix (2026-06-22, accepted)
 
 **File:** internal/tui/watch.go:53-66 | **Component:** tui
 **Effort:** S · **Urgency:** eventually
@@ -541,7 +615,7 @@ touched" principle. No data is written (safety holds); diagnostic-quality only.
 fails the same way, report it via the diagnose path; or detect duplicate top-level
 keys up front.
 
-#### L6. FixFrontmatter realignStatus silently no-ops on a misfiled file with a coexisting YAML defect  · **Status:** open
+#### L6. FixFrontmatter realignStatus silently no-ops on a misfiled file with a coexisting YAML defect  · **Status:** wontfix (2026-06-22, accepted)
 
 **File:** internal/store/fix.go:73-87 | **Component:** store
 **Effort:** S · **Urgency:** eventually
@@ -625,7 +699,7 @@ completion silently diverges; no test/linter catches divergence.
 **Recommendation:** Extract a shared `startDir`/`discoverStart` helper; have both
 callers use it with their own error handling.
 
-#### L12. FixFrontmatter sits on the Store port as a leaky, presentation-adjacent operation  · **Status:** open
+#### L12. FixFrontmatter sits on the Store port as a leaky, presentation-adjacent operation  · **Status:** fixed (2026-06-22)
 
 **File:** internal/core/store.go:57-59 | **Component:** architecture
 **Effort:** M · **Urgency:** eventually
@@ -653,7 +727,7 @@ Per-item stderr still shows full detail; only the summarized code is order-depen
 sentinel-bearing errors over generic exit-1), independent of argv order; at minimum
 document it.
 
-#### L14. render() recomputes the glamour body on every load even in raw mode  · **Status:** open
+#### L14. render() recomputes the glamour body on every load even in raw mode  · **Status:** wontfix (2026-06-22, accepted)
 
 **File:** internal/tui/detail.go:84-94 | **Component:** tui
 **Effort:** S · **Urgency:** eventually
@@ -679,7 +753,7 @@ the "for spreadsheets" claim the moment a repo is shared.
 **Recommendation:** If the spreadsheet use case is real, prefix cells whose first
 rune is in `{=,+,-,@,\t,\r}` with a leading `'`; otherwise soften the comment.
 
-#### L16. foldMatches/highlightLine do per-line search; '/' find can't match across wrap  · **Status:** open
+#### L16. foldMatches/highlightLine do per-line search; '/' find can't match across wrap  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/detail.go:272-306 | **Component:** tui
 **Effort:** M · **Urgency:** eventually
@@ -707,7 +781,7 @@ strings work).
 supported, or decode the one key with a real TOML decoder; at minimum reject basic
 strings containing a backslash rather than mis-decoding.
 
-#### L18. Atomic-write helpers leave a .tmp orphan on interruption; cleanup branches untested  · **Status:** open
+#### L18. Atomic-write helpers leave a .tmp orphan on interruption; cleanup branches untested  · **Status:** fixed (2026-06-22)
 
 **File:** internal/store/atomic.go:12-53,71-91 | **Component:** store
 **Effort:** S · **Urgency:** eventually
@@ -737,7 +811,7 @@ discovery.) The test gap is real.
 **Recommendation:** `filepath.EvalSymlinks(start)` once at the top of `Discover`
 before the climb; add a symlinked-worktree discovery test.
 
-#### L20. selectByID linearly scans VisibleItems during the restore window  · **Status:** open
+#### L20. selectByID linearly scans VisibleItems during the restore window  · **Status:** wontfix (2026-06-22, accepted)
 
 **File:** internal/tui/entity.go:80-88 | **Component:** tui
 **Effort:** S · **Urgency:** eventually
@@ -807,14 +881,18 @@ Two reported findings were knocked down on close re-read and are NOT recorded ab
 
 Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do
 
-- ⏳ Contract-integrity batch (H1, H2, H4, M3, M4): centralize exit-code
+- ✅ Contract-integrity batch (H1, H2, H4, M3, M4): centralize exit-code
   classification, `--dry-run` on `edit`, and the active-task/audit-bucket invariants
   at their narrowest seams.
-- ⏳ Entity-descriptor refactor (M1, M9, M10, L1) — de-risk the project/adr roadmap
-  before it lands.
-- ⏳ TUI state-restore hardening (H5, M6, M15) — generation-stamp restore intent and
+- ✅ Entity-descriptor refactor (M1, M9, M10, L1) — descriptor + generic seams landed,
+  TUI registry/lifecycle data-driven, the residual cost documented honestly.
+- ✅ TUI state-restore hardening (H5, M6, M15) — generation-stamp restore intent and
   focus-gate global keys.
-- ⏳ Store robustness (M2, M5, M11, L4, L18) — file-mode preservation, MoveAudit CAS,
-  signal guard, fence whitespace, atomic-write cleanup tests.
-- ⏳ Doc truth-up (M8, M10) — re-justify the render→core and TUI-registry boundaries
+- ✅ Store robustness (M2, M5, M11, L4, L18) — file-mode preservation, MoveAudit CAS,
+  duplicate-slug detection, fence whitespace, atomic-write cleanup tests + temp sweep.
+  (Signal guard intentionally not shipped — the Move-crash duplicate is detected by
+  lint instead; SIGKILL/power-loss defeats a guard anyway.)
+- ✅ Doc truth-up (M8, M10) — re-justified the render→core and TUI-registry boundaries
   to match reality.
+- ⏳ Low-backlog triage (L2, L6, L14, L16, L20) — all low-value polish or
+  accept-as-documented; fix opportunistically or close with rationale.

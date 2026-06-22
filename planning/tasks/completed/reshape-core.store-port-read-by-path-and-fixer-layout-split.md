@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Add read-by-path to kill the O(N^2) audit rescan; split FixFrontmatter/WatchPaths off the use-case port; re-justify the doc boundary claims.
 effort: Unknown
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [architecture, performance]
 created: "2026-06-22"
+updated_at: "2026-06-22"
+completed_at: "2026-06-22"
 ---
 # Reshape core.Store port read-by-path and Fixer Layout split
 
@@ -28,10 +30,10 @@ planning/audits/open/2026-06-22-code-quality-architecture.md — **M16** (O(N^2)
 
 ## Acceptance criteria
 
-- [ ] Findings queries read audit bodies in one scan / by path; no per-audit re-resolve.
-- [ ] core.Store carries only use-case methods; Fixer/Layout split out.
-- [ ] ARCHITECTURE.md boundary justifications match reality.
-- [ ] just test + just lint green.
+- [x] Findings queries read audit bodies in one scan / by path; no per-audit re-resolve.
+- [x] core.Store carries only use-case methods; Fixer/Layout split out.
+- [x] ARCHITECTURE.md boundary justifications match reality.
+- [x] just test + just lint green.
 
 ## Implementation plan
 

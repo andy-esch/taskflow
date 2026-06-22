@@ -36,6 +36,10 @@ func (i taskItem) FilterValue() string {
 	return i.t.Slug + " " + i.t.Description + " " + strings.Join(i.t.Tags, " ")
 }
 func (i taskItem) id() string { return i.t.Slug }
+
+// lifecycleState is the task's current status — the action menu drops the no-op
+// transition that lands on it (M10).
+func (i taskItem) lifecycleState() string { return string(i.t.Status) }
 func (i taskItem) sortFields() sortFields {
 	return sortFields{priorityRank: priorityRank(i.t.Priority), updated: i.t.Updated, tier: i.t.Tier, slug: i.t.Slug}
 }
@@ -113,6 +117,10 @@ type auditItem struct{ a domain.Audit }
 
 func (i auditItem) FilterValue() string { return i.a.Slug + " " + i.a.Area }
 func (i auditItem) id() string          { return i.a.Slug }
+
+// lifecycleState is the audit's current bucket — the action menu drops the no-op
+// transition that lands on it (e.g. reopen on an already-open audit).
+func (i auditItem) lifecycleState() string { return string(i.a.Bucket) }
 func (i auditItem) sortFields() sortFields {
 	// Audits sort by date (as "updated") + slug; no priority/tier.
 	return sortFields{updated: i.a.Date, slug: i.a.Slug}

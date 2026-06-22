@@ -300,7 +300,7 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	}
 	body := p.Body
 	if body == "" {
-		tmpl, err := domain.Template("task", p.Template)
+		tmpl, err := s.templateBody("task", p.Template)
 		if err != nil {
 			return domain.Task{}, err
 		}

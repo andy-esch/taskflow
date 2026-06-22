@@ -36,7 +36,7 @@ func TestTaskShow(t *testing.T) {
 func TestTaskStart_NotFound_ExitCode(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "start", "ghost"})
 	err := cmd.Execute()
 	if err == nil {

@@ -40,6 +40,11 @@ type App struct {
 	Prompt prompt.Prompter // the human-recovery face (huh on a TTY)
 	Cfg    *config.Config
 	Svc    *core.Service
+	// Fixer/Layout are the narrow fs/text ports that aren't core use cases:
+	// `lint --fix` calls Fixer directly and the TUI watcher reads Layout, so
+	// neither routes through the Service (see core.Fixer/core.Layout).
+	Fixer  core.Fixer
+	Layout core.Layout
 }
 
 // setStyle resolves the presentation "face" — output Style (color + width) and the
@@ -56,9 +61,13 @@ func (a *App) setStyle() {
 }
 
 // NewRootCmd builds the command tree with explicit DI — no package globals.
-// All output flows through the injected writers, which makes commands testable.
-func NewRootCmd(out, errOut io.Writer) *cobra.Command {
-	app := &App{Out: out, ErrOut: errOut, In: os.Stdin}
+// All I/O flows through the injected streams, which makes commands testable.
+// in is the single stdin owner: it feeds App.In (the prompt gate, prompter, and
+// editor) AND the cobra root (cmd.InOrStdin, which resolveBody reads for
+// `--body-file -`), so a caller/test injects one reader and every input path
+// agrees — production passes os.Stdin.
+func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
+	app := &App{Out: out, ErrOut: errOut, In: in}
 
 	root := &cobra.Command{
 		Use:           "tskflwctl",
@@ -82,6 +91,7 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 	// Cobra's own output (help, usage errors, completion scripts) must follow
 	// the injected writers too, or it leaks to os.Stdout/os.Stderr and escapes
 	// both tests and callers that capture output.
+	root.SetIn(in)
 	root.SetOut(out)
 	root.SetErr(errOut)
 	root.PersistentFlags().BoolVar(&app.JSON, "json", false, "machine-readable JSON output")
@@ -130,7 +140,12 @@ func (a *App) resolve() error {
 		return err
 	}
 	a.Cfg = cfg
-	a.Svc = core.NewService(store.NewFS(cfg.Root))
+	// One *FS satisfies all three core ports; the Service gets the use-case Store,
+	// the adapters get the narrow Fixer/Layout (see the App field comment).
+	fs := store.NewFS(cfg.Root)
+	a.Svc = core.NewService(fs)
+	a.Fixer = fs
+	a.Layout = fs
 	return nil
 }
 

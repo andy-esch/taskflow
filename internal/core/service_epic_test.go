@@ -45,14 +45,15 @@ func (nopStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) { ret
 func (nopStore) GetAudit(string) (domain.Audit, string, error) {
 	return domain.Audit{}, "", domain.ErrNotFound
 }
+func (nopStore) GetAuditByPath(string) (domain.Audit, string, error) {
+	return domain.Audit{}, "", domain.ErrNotFound
+}
 func (nopStore) MoveAudit(string, domain.AuditBucket, bool) (domain.Audit, error) {
 	return domain.Audit{}, nil
 }
 func (nopStore) CreateAudit(domain.Audit, string, bool) (domain.Audit, error) {
 	return domain.Audit{}, nil
 }
-func (nopStore) FixFrontmatter(bool) ([]domain.FixResult, error) { return nil, nil }
-func (nopStore) WatchPaths() []string                            { return nil }
 
 // fakeStore is an in-memory Store for pure core unit tests; it overrides only
 // the read/create methods its tests touch (the rest come from nopStore).
@@ -63,6 +64,7 @@ type fakeStore struct {
 	audits        []domain.Audit
 	problems      []domain.FileProblem // returned by ListTasks
 	created       []domain.Task        // tasks passed to CreateTask
+	createdBodies []string             // bodies passed to CreateTask (parallel to created)
 	createdAudits []domain.Audit       // audits passed to CreateAudit
 	auditBodies   map[string]string    // slug → body, for GetAudit (finding queries)
 }
@@ -71,6 +73,18 @@ func (f *fakeStore) GetAudit(slug string) (domain.Audit, string, error) {
 	for _, a := range f.audits {
 		if a.Slug == slug {
 			return a, f.auditBodies[slug], nil
+		}
+	}
+	return domain.Audit{}, "", domain.ErrNotFound
+}
+
+// GetAuditByPath mirrors the real store's read-by-path: find the seeded audit
+// whose .Path matches and return its body (auditBodies stays slug-keyed, so seed
+// audits set .Path — typically to the slug — for the two keys to coincide).
+func (f *fakeStore) GetAuditByPath(path string) (domain.Audit, string, error) {
+	for _, a := range f.audits {
+		if a.Path == path {
+			return a, f.auditBodies[a.Slug], nil
 		}
 	}
 	return domain.Audit{}, "", domain.ErrNotFound
@@ -90,8 +104,9 @@ func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 	}
 	return domain.Task{}, "", domain.ErrNotFound
 }
-func (f *fakeStore) CreateTask(t domain.Task, _ string, _ bool) (domain.Task, error) {
+func (f *fakeStore) CreateTask(t domain.Task, body string, _ bool) (domain.Task, error) {
 	f.created = append(f.created, t)
+	f.createdBodies = append(f.createdBodies, body)
 	return t, nil
 }
 func (f *fakeStore) CreateAudit(a domain.Audit, _ string, _ bool) (domain.Audit, error) {

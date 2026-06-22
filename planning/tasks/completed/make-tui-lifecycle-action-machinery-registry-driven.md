@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: The a-menu, :verbs, transitions and follow are task-only; lift them onto each entity's declared table so audits/epics get lifecycle.
 effort: Unknown
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [tui, architecture]
 created: "2026-06-22"
+updated_at: "2026-06-22"
+completed_at: "2026-06-22"
 ---
 # Make TUI lifecycle action machinery registry-driven
 
@@ -27,9 +29,9 @@ keybindings" promise to read-only browse. Relates to epic 18 (TUI).
 
 ## Acceptance criteria
 
-- [ ] Lifecycle actions work for any entity that declares transitions (no per-entity edits in model.go/action.go/nav.go).
-- [ ] ARCHITECTURE.md / entity.go comment corrected.
-- [ ] just test + just lint green.
+- [x] Lifecycle actions work for any entity that declares transitions (no per-entity edits in model.go/action.go/nav.go).
+- [x] ARCHITECTURE.md / entity.go comment corrected.
+- [x] just test + just lint green.
 
 ## Implementation plan
 

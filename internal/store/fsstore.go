@@ -28,8 +28,14 @@ type FS struct {
 	auditsDir string
 }
 
-// Compile-time assertion that FS satisfies the full core port.
-var _ core.Store = (*FS)(nil)
+// Compile-time assertions that FS satisfies the core ports. The use-case Store is
+// the one the Service depends on; Fixer/Layout are the narrow fs/text ports the
+// primary adapters (lint --fix, the TUI watcher) wire to the FS directly.
+var (
+	_ core.Store  = (*FS)(nil)
+	_ core.Fixer  = (*FS)(nil)
+	_ core.Layout = (*FS)(nil)
+)
 
 // NewFS returns a store rooted at a planning directory (the dir holding tasks/).
 func NewFS(root string) *FS {

@@ -46,11 +46,13 @@ type Model struct {
 	active int
 	detail detailPane
 	cmd    commandBar
+	modals []modal // the ordered overlay registry (help, action, follow); see overlay.go
 
 	showHelp   bool       // the `?` keybinding overlay is open
 	helpScroll int        // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
 	action     actionMenu // the `a` lifecycle action menu (S4)
 	follow     followMenu // the `f` reference picker (S6, epics → their tasks)
+	edit       editMenu   // the `e` inline field editor (task set with a GUI)
 	navStack   []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
 	flash      string     // transient post-action feedback line (cleared on the next key)
 	flashErr   bool       // the flash is an error (rendered red)
@@ -69,14 +71,15 @@ func New(svc *core.Service) Model {
 		svc: svc, focus: focusList,
 		tabs: newEntityTabs(), active: 0,
 		detail: newDetailPane(theme.MarkdownStyleDark), cmd: newCommandBar(),
+		modals: defaultModals(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
 	if m.watch != nil {
-		return tea.Batch(m.cur().reload(m.svc), waitForFS(m.watch))
+		return tea.Batch(m.cur().reload(m.svc, ""), waitForFS(m.watch))
 	}
-	return m.cur().reload(m.svc)
+	return m.cur().reload(m.svc, "")
 }
 
 // reloadAll re-fires the loader for every loaded tab, each preserving its own
@@ -91,8 +94,9 @@ func (m *Model) reloadAll() tea.Cmd {
 		if !t.loaded && i != m.active {
 			continue
 		}
-		t.markReload()
-		cmds = append(cmds, t.reload(m.svc))
+		// markReload picks the restore id (a pending jump target, else the cursor);
+		// reload stamps it onto the load it fires.
+		cmds = append(cmds, t.reload(m.svc, t.markReload()))
 	}
 	return tea.Batch(cmds...)
 }
@@ -156,7 +160,29 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.movedAway = msg.slug
 		return m, m.reloadAll()
 
+	case editedMsg:
+		// A field edit succeeded: flash it and reload so the new value shows. The
+		// task keeps its dir (SetFields isn't a move), so this is a plain refresh —
+		// each tab's cursor preserved by id, no movedAway dance. If the editor is
+		// still open (the user can keep editing), refresh the field it just set so
+		// it isn't stale.
+		m.flash = fmt.Sprintf("set %s on %s", msg.field, msg.slug)
+		m.flashErr = false
+		if m.edit.active {
+			m.edit.applied(msg.field, msg.value) // back to the picker, value refreshed
+		}
+		return m, m.reloadAll()
+
 	case actionErrMsg:
+		// An inline-edit write failed: keep the field open with what was typed and
+		// show the validation error there, so the fix happens in place rather than
+		// the edit silently reverting. Other mutations (the action menu) flash.
+		if m.edit.active {
+			// Trim the "validation failed:" sentinel prefix — inline by the field, the
+			// bare reason ("at least one tag is required") reads cleaner.
+			m.edit.err = strings.TrimPrefix(msg.err.Error(), domain.ErrValidation.Error()+": ")
+			return m, nil
+		}
 		m.flash = msg.err.Error()
 		m.flashErr = true
 		return m, nil
@@ -235,8 +261,11 @@ func (m Model) handleTabMsg(msg tabMsg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	tab.list, cmd = tab.list.Update(msg.msg)
-	if tab.restore != "" && tab.selectByID(tab.restore) {
-		tab.restore = ""
+	// Retry a pending restore now its async refilter may have populated VisibleItems
+	// — but only for the gen that set it, so a newer reload's target isn't applied
+	// against this (now-superseded) filter pass.
+	if tab.restore != "" && tab.restoreGen == tab.loadGen && tab.selectByID(tab.restore) {
+		tab.restore, tab.restoreGen = "", 0
 	}
 	cmd = routeToTab(msg.kind, cmd)
 	if i != m.active {
@@ -268,21 +297,27 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	cmd := routeToTab(msg.kind, tab.list.SetItems(msg.items))
 	tab.loaded = true
 	tab.problems = msg.problems
-	if tab.restore != "" {
+	// Resolve the cursor restore carried by THIS load (gen-matched above). Reading
+	// the per-message id — not a mutable tab slot two triggers share — means a
+	// dropped stale load can't apply a restore meant for another (M6). This load
+	// supersedes any pending restore; clear it, then re-pend only if still unfound
+	// under an async filter.
+	tab.restore, tab.restoreGen = "", 0
+	if msg.restore != "" && !tab.selectByID(msg.restore) {
 		switch {
-		case tab.selectByID(tab.restore):
-			tab.restore = ""
 		case tab.list.FilterState() == list.Unfiltered:
 			// The id is genuinely absent from a fully-visible list — a dangling
 			// reference jump (`f` to an epic that doesn't exist) or a selection
-			// deleted externally. Say so once instead of leaving a stale pending
-			// restore; a filtered tab keeps it pending for the async refilter.
-			// EXCEPT the task we just relocated: its absence here is the success
-			// (flashed green already), not a not-found error.
-			if msg.kind == m.cur().kind && tab.restore != m.movedAway {
-				m.flash, m.flashErr = tab.restore+" not found", true
+			// deleted externally. Say so once. EXCEPT the task we just relocated: its
+			// absence here is the success (flashed green already), not a not-found.
+			if msg.kind == m.cur().kind && msg.restore != m.movedAway {
+				m.flash, m.flashErr = msg.restore+" not found", true
 			}
-			tab.restore = ""
+		default:
+			// Filtered: SetItems' refilter is async (VisibleItems is empty now), so
+			// keep the target pending — keyed to this gen — for handleTabMsg to retry
+			// when the FilterMatchesMsg lands.
+			tab.restore, tab.restoreGen = msg.restore, msg.gen
 		}
 	}
 	if msg.kind != m.cur().kind {
@@ -296,44 +331,30 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Any key dismisses the post-action flash (it's a one-shot confirmation).
 	m.flash = ""
 
-	// 0. The help overlay is modal: j/k scroll it (the content can outgrow a
-	// short terminal); any other key dismisses it (ctrl+c still quits).
-	if m.showHelp {
-		switch {
-		case key.Matches(msg, keys.ForceQuit):
-			return m, tea.Quit
-		case msg.String() == "j" || msg.String() == "down":
-			if m.helpScroll < m.helpMaxScroll() {
-				m.helpScroll++
+	// ForceQuit is the one key no layer may swallow: handle it once here, ahead of
+	// the modal loop and every input capture, so it isn't re-implemented in each.
+	if key.Matches(msg, keys.ForceQuit) {
+		return m, tea.Quit
+	}
+
+	// Modal overlays (help, action, follow) take precedence in registry order: the
+	// first active one owns the key. The markers are stateless and mutate the
+	// by-value model copy through &m (the "mutate the copy, return it" idiom), so a
+	// new overlay is one entry in defaultModals — no new guard block here. Input
+	// captures (the command bar, the list filter, the detail-find below) stay as
+	// special early returns: they're text inputs, not floating boxes.
+	for _, o := range m.modals {
+		if o.active(&m) {
+			if handled, cmd := o.handleKey(&m, msg); handled {
+				return m, cmd
 			}
-			return m, nil
-		case msg.String() == "k" || msg.String() == "up":
-			if m.helpScroll > 0 {
-				m.helpScroll--
-			}
-			return m, nil
 		}
-		m.showHelp = false
-		m.helpScroll = 0
-		return m, nil
-	}
-
-	// 0b. The action menu is modal: it owns every key while open.
-	if m.action.active {
-		return m.handleActionKey(msg)
-	}
-
-	// 0c. The follow picker (S6) is modal in the same way.
-	if m.follow.active {
-		return m.handleFollowKey(msg)
 	}
 
 	// 1. The command bar captures every key while open (so `:tasks` typing never
 	// leaks into global hotkeys).
 	if m.cmd.active {
 		switch {
-		case key.Matches(msg, keys.ForceQuit):
-			return m, tea.Quit
 		case key.Matches(msg, keys.Back):
 			m.cmd.blur()
 			return m, nil
@@ -353,19 +374,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateList(msg)
 	}
 
-	// 2b. The detail pane's find input owns keys while a query is being typed
-	// (ctrl+c still force-quits).
+	// 2b. The detail pane's find input owns keys while a query is being typed.
 	if m.focus == focusDetail && m.detail.finding() {
-		if key.Matches(msg, keys.ForceQuit) {
-			return m, tea.Quit
-		}
 		return m, m.detail.updateFind(msg)
 	}
 
 	// 3. Global hotkeys.
 	switch {
-	case key.Matches(msg, keys.ForceQuit):
-		return m, tea.Quit
 	case key.Matches(msg, keys.Quit):
 		// q is a *context* quit: in single-pane drill the detail pane is a layer,
 		// so q pops back to the list (like Esc/h) instead of exiting the app.
@@ -379,9 +394,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showHelp = true
 		return m, nil
 	case key.Matches(msg, keys.Action):
-		// Lifecycle actions apply to a task; a no-op on epics/audits.
+		// Lifecycle actions are registry-driven: open the menu for any entity that
+		// declares transitions (tasks: statuses; audits: buckets; epics: none).
+		if cur := m.cur(); len(cur.transitions) > 0 {
+			if id, state, ok := m.selectedLifecycle(); ok {
+				m.action.open(id, cur.transitions, state)
+			}
+		}
+		return m, nil
+	case key.Matches(msg, keys.Edit):
+		// Inline field edit via SetFields — task-only (status stays in the `a`
+		// menu); a no-op on epics/audits, which have no SetFields path in core.
 		if t, ok := m.selectedTask(); ok {
-			m.action.open(t.Slug, t.Status)
+			m.edit.open(t)
 		}
 		return m, nil
 	case key.Matches(msg, keys.RawToggle):
@@ -506,18 +531,18 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 	if view, i, ok := m.resolveView(word); ok {
 		return m, m.applyView(i, view)
 	}
-	if tr, ok := transitionFor(word); ok {
-		t, ok := m.selectedTask()
+	if tr, ok := transitionFor(m.cur().transitions, word); ok {
+		id, _, ok := m.selectedLifecycle()
 		if !ok {
 			cmd := m.cmd.focus()
-			m.cmd.err = "select a task first"
+			m.cmd.err = "select a row first"
 			return m, cmd
 		}
 		if tr.destructive {
-			m.action.openConfirm(t.Slug, tr) // gate even an explicit :deprecate
+			m.action.openConfirm(id, tr) // gate even an explicit :deprecate
 			return m, nil
 		}
-		return m, m.applyTransition(t.Slug, tr.to)
+		return m, m.cur().applyMove(m.svc, id, tr)
 	}
 	cmd := m.cmd.focus()
 	m.cmd.err = "unknown: " + word
@@ -525,17 +550,16 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 }
 
 // handleActionKey drives the lifecycle action menu while it's open: vim-select a
-// transition, Enter applies it (a destructive one gates on y/n), Esc cancels.
-func (m Model) handleActionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, keys.ForceQuit) {
-		return m, tea.Quit
-	}
+// transition, Enter applies it (a destructive one gates on y/n), Esc cancels. It
+// mutates the model copy directly (the modal loop passes &m) and returns the cmd;
+// ForceQuit is handled by handleKey's preamble, ahead of the modal loop.
+func (m *Model) handleActionKey(msg tea.KeyMsg) tea.Cmd {
 	if m.action.confirm {
 		switch msg.String() {
 		case "y", "Y":
 			tr, slug := m.action.selected(), m.action.slug
 			m.action.close()
-			return m, m.applyTransition(slug, tr.to)
+			return m.cur().applyMove(m.svc, slug, tr)
 		case "n", "N", "esc":
 			if m.action.confirmOnly() {
 				m.action.close() // a bare `:deprecate` confirm has no menu to return to
@@ -543,7 +567,7 @@ func (m Model) handleActionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.action.confirm = false // back to the menu
 			}
 		}
-		return m, nil
+		return nil
 	}
 	switch msg.String() {
 	case "j", "down":
@@ -554,36 +578,35 @@ func (m Model) handleActionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		tr := m.action.selected()
 		if tr.destructive {
 			m.action.confirm = true
-			return m, nil
+			return nil
 		}
 		slug := m.action.slug
 		m.action.close()
-		return m, m.applyTransition(slug, tr.to)
+		return m.cur().applyMove(m.svc, slug, tr)
 	case "esc", "h", "a", "q":
 		m.action.close()
 	}
-	return m, nil
+	return nil
 }
 
-// applyTransition moves a task to a status off the event loop, reporting success
-// (movedMsg → flash + reload) or failure (actionErrMsg → flash, no reload).
-func (m Model) applyTransition(slug string, to domain.Status) tea.Cmd {
-	svc := m.svc
-	return func() tea.Msg {
-		if _, err := svc.Move(slug, to, false); err != nil {
-			return actionErrMsg{slug: slug, err: err}
-		}
-		return movedMsg{slug: slug, to: to}
-	}
-}
-
-// selectedTask returns the selected row as a task — ok only on the tasks tab, so
-// lifecycle actions are a no-op elsewhere.
+// selectedTask returns the selected row as a task — ok only on the tasks tab. Used
+// by followSelected (the task→epic reference jump), which is task-specific.
 func (m Model) selectedTask() (domain.Task, bool) {
 	if it, ok := m.cur().list.SelectedItem().(taskItem); ok {
 		return it.t, true
 	}
 	return domain.Task{}, false
+}
+
+// selectedLifecycle returns the selected row's id and current lifecycle state (a
+// task's status or an audit's bucket) for the action menu, or ok=false on an
+// entity without a lifecycle (epics) or an empty list. It asks the row via the
+// lifecycleItem interface, so the reducer needn't switch on concrete item types.
+func (m Model) selectedLifecycle() (id, state string, ok bool) {
+	if li, ok := m.cur().list.SelectedItem().(lifecycleItem); ok {
+		return li.id(), li.lifecycleState(), true
+	}
+	return "", "", false
 }
 
 // switchTab makes tab i active: it resets focus + the detail pane, loads the tab
@@ -597,7 +620,7 @@ func (m *Model) switchTab(i int) tea.Cmd {
 	m.focus = focusList
 	m.detail.clear()
 	if !m.cur().loaded {
-		return m.cur().reload(m.svc)
+		return m.cur().reload(m.svc, "")
 	}
 	return m.refreshDetail()
 }
@@ -668,12 +691,14 @@ func (m Model) entityNames() []string {
 	return names
 }
 
-// commandOptions is the full `:` Tab-completion set: entity names + aliases, the
-// view-axis words of every tab, and the transition verbs. View words are deduped
-// because tasks and audits share "deferred"/"all".
+// commandOptions is the `:` Tab-completion set: every tab's names + aliases +
+// view-axis words (so any tab is reachable by name), plus the ACTIVE tab's
+// lifecycle verbs. Verbs are context-scoped to match dispatchCommand, which
+// resolves them against m.cur().transitions — so completion never offers a verb
+// that would be "unknown" on the tab in view. View words are deduped because tasks
+// and audits share "deferred"/"all".
 func (m Model) commandOptions() []string {
-	verbs := transitionVerbs()
-	opts := make([]string, 0, len(m.tabs)*2+len(verbs)+12)
+	opts := make([]string, 0, len(m.tabs)*2+len(m.cur().transitions)+12)
 	seen := make(map[string]bool)
 	add := func(w string) {
 		if !seen[w] {
@@ -690,8 +715,8 @@ func (m Model) commandOptions() []string {
 			add(w)
 		}
 	}
-	for _, v := range verbs {
-		add(v)
+	for _, tr := range m.cur().transitions {
+		add(tr.verb)
 	}
 	return opts
 }
@@ -787,14 +812,14 @@ func (m *Model) applyView(i int, view string) tea.Cmd {
 	m.active = i
 	m.focus = focusList
 	tab := m.tabs[i]
-	tab.markReload()
+	restoreID := tab.markReload() // preserve the cursor across the view change
 	// Reset the active filter when switching views, matching jumpTo: otherwise a
 	// stale `/foo` silently carries into the new status view (the chip still reads
 	// filter:foo and the view can look unexpectedly empty).
 	tab.list.ResetFilter()
 	tab.statusView = view
 	m.detail.clear()
-	return tab.reload(m.svc)
+	return tab.reload(m.svc, restoreID)
 }
 
 // recomputeLayout sizes the tab strip, panes, and footer from the terminal size +
@@ -854,26 +879,21 @@ func (m Model) View() string {
 	return lipgloss.NewStyle().MaxWidth(m.width).MaxHeight(m.height).Render(full)
 }
 
-// bodyView renders the pane area, with a modal (the `?` help panel or the `a`
-// action menu) floated over it when open — the underlying panes stay visible
-// around it.
+// bodyView renders the pane area, floating the topmost active modal (help/action/
+// follow) over it — the underlying panes stay visible around the box. The modal
+// registry is looped in precedence order, so the first active one wins (matching
+// the old switch order) and a new overlay needs no case added here.
 func (m Model) bodyView() string {
 	base := m.renderBody()
-	var box string
-	switch {
-	case m.showHelp:
-		box = helpBox(m.width-2, m.paneOuterH-2, m.helpScroll)
-	case m.action.active:
-		box = m.action.view(m.width-2, m.paneOuterH-2)
-	case m.follow.active:
-		box = m.follow.view(m.width-2, m.paneOuterH-2)
-	default:
-		return base
+	for _, o := range m.modals {
+		if o.active(&m) {
+			// Normalize the body to exact dimensions, then composite the box on top
+			// so it floats over the items rather than blanking them.
+			canvas := lipgloss.Place(m.width, m.paneOuterH, lipgloss.Left, lipgloss.Top, base)
+			return overlay(canvas, o.view(&m, m.width-2, m.paneOuterH-2), m.width, m.paneOuterH)
+		}
 	}
-	// Normalize the body to exact dimensions, then composite the box on top so it
-	// floats over the items rather than blanking them.
-	canvas := lipgloss.Place(m.width, m.paneOuterH, lipgloss.Left, lipgloss.Top, base)
-	return overlay(canvas, box, m.width, m.paneOuterH)
+	return base
 }
 
 // helpMaxScroll is the largest in-bounds scroll offset for the `?` overlay,
@@ -1009,7 +1029,7 @@ func (m Model) footer() string {
 	if m.focus == focusDetail && (m.detail.finding() || m.detail.findActive()) {
 		return truncate(m.detail.findStatus(), m.width)
 	}
-	hints := ": cmd · / filter · o sort · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
+	hints := ": cmd · / filter · a act · e edit · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
 	if m.focus == focusDetail {
 		hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc back · q quit"
 		if !m.twoPane {

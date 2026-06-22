@@ -8,6 +8,40 @@ import (
 	"testing"
 )
 
+// TestLint_DuplicateSlug_Exit11 pins M11 end-to-end: the same slug in two status
+// dirs (the Ctrl-C-in-Move leftover) makes `lint` exit 11 and name both dirs, so
+// the otherwise-silent permanent ErrAmbiguous is discoverable and hand-repairable.
+func TestLint_DuplicateSlug_Exit11(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Both copies folder-matching (the Move-crash shape): only the duplicate is wrong.
+	write("tasks/in-progress/dup.md", "---\nstatus: in-progress\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# Dup\n")
+	write("tasks/completed/dup.md", "---\nstatus: completed\n---\n# Dup\n")
+	write("epics/e1.md", "---\nstatus: in-progress\n---\n# E1\n")
+
+	var out bytes.Buffer
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd.SetArgs([]string{"-C", root, "lint"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("a duplicate slug should fail lint")
+	}
+	if ExitCode(err) != 11 {
+		t.Errorf("want exit 11 for a duplicate slug, got %d", ExitCode(err))
+	}
+	if o := out.String(); !strings.Contains(o, "duplicate") || !strings.Contains(o, "dup") {
+		t.Errorf("lint should name the duplicate slug:\n%s", o)
+	}
+}
+
 func TestLint_Clean(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, content string) {
@@ -33,7 +67,7 @@ func TestLint_Dirty_Exit11(t *testing.T) {
 	// setupRepo's tasks have only status+description → missing required fields.
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint"})
 	err := cmd.Execute()
 	if err == nil {

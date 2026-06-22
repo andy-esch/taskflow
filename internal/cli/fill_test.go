@@ -189,7 +189,7 @@ func TestTaskNew_MissingTags_NonInteractive(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "new", "T", "--epic", "e1"}) // no --tags
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("missing --tags non-interactively should be ErrValidation (exit 11), got %v", err)
@@ -203,7 +203,7 @@ func TestTaskNew_StartMissingDescription_NonInteractive(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "new", "T", "--epic", "e1", "--tags", "a", "--start"})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("--start without --description non-interactively should be ErrValidation (exit 11), got %v", err)
@@ -218,7 +218,7 @@ func TestTaskNew_MissingEpic_NonInteractive(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "new", "Some title", "--tags", "a"})
 	err := cmd.Execute()
 	if err == nil {
@@ -234,7 +234,7 @@ func TestTaskNew_MissingEpic_NonInteractive(t *testing.T) {
 func TestBareTransition_NonInteractive(t *testing.T) {
 	root := setupRepo(t) // alpha (ready-to-start), beta (in-progress)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "start"}) // no task arg
 	err := cmd.Execute()
 	if err == nil {

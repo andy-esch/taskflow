@@ -31,7 +31,7 @@ func setupRepo(t *testing.T) string {
 func runRoot(t *testing.T, args ...string) string {
 	t.Helper()
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs(args)
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -84,7 +84,7 @@ func TestTaskList_InvalidFiltersExit11(t *testing.T) {
 		{[]string{"task", "list", "--epic", "nope"}, `unknown epic "nope"`},
 	} {
 		var out bytes.Buffer
-		cmd := NewRootCmd(&out, &out)
+		cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 		cmd.SetArgs(append([]string{"-C", root}, tc.args...))
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)
@@ -106,7 +106,7 @@ func TestTaskList_InvalidFiltersExit11(t *testing.T) {
 func TestTaskMove_InvalidStatusEnumerates(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "move", "alpha", "limbo"})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -141,7 +141,7 @@ func TestCreate_ContractValidation(t *testing.T) {
 		{[]string{"epic", "new", "Weird", "--description", "d", "--status", "bananas"}, "planning"}, // enumerates
 	} {
 		var out bytes.Buffer
-		cmd := NewRootCmd(&out, &out)
+		cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 		cmd.SetArgs(append([]string{"-C", root}, tc.args...))
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)
@@ -186,7 +186,7 @@ func TestInit_JSON(t *testing.T) {
 func TestRoot_NotAPlanningRepo(t *testing.T) {
 	// A temp dir with no tasks/ should error clearly, not panic.
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", t.TempDir(), "task", "list"})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("expected an error for a non-planning dir")

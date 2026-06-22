@@ -20,7 +20,7 @@ import (
 func TestTaskEdit_NonInteractive(t *testing.T) {
 	root := setupRepo(t) // alpha (ready-to-start), beta (in-progress)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "edit", "alpha"})
 	err := cmd.Execute()
 	if err == nil {
@@ -37,7 +37,7 @@ func TestTaskEdit_NonInteractive(t *testing.T) {
 func TestTaskEditBare_NonInteractive(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "edit"}) // no slug
 	err := cmd.Execute()
 	if !errors.Is(err, domain.ErrValidation) {

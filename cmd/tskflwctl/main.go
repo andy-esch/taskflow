@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	root := cli.NewRootCmd(os.Stdout, os.Stderr)
+	root := cli.NewRootCmd(os.Stdin, os.Stdout, os.Stderr)
 
 	// fang wraps the *human* face only. When stderr is not a TTY, or the run is
 	// --json, fall through to the original machine path verbatim — so piped/agent

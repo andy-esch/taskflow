@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 22-selectable-template-library
 description: CLI reads domain.Template* directly; route resolution through a store-backed TemplateSource behind core.Service so step 4 (repo-local) is a port swap.
 effort: Unknown
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [architecture, templates, dx]
 created: "2026-06-22"
+updated_at: "2026-06-22"
+completed_at: "2026-06-22"
 ---
 # Route template resolution through a core port
 
@@ -36,9 +38,9 @@ not a CLI refactor.
 
 ## Acceptance criteria
 
-- [ ] `template list/show` and the create paths resolve via core.Service, not domain directly.
-- [ ] Built-in templates still work with no planning repo.
-- [ ] A fakeStore/port test proves the seam; `go build`/`go test`/`golangci-lint`/docs-check green.
+- [x] `template list/show` and the create paths resolve via core.Service, not domain directly.
+- [x] Built-in templates still work with no planning repo.
+- [x] A fakeStore/port test proves the seam; `go build`/`go test`/`golangci-lint`/docs-check green.
 
 ## Related
 

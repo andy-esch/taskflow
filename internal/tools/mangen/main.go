@@ -27,7 +27,7 @@ func main() {
 	out := flag.String("out", "manpages", "output directory for the generated manpage")
 	flag.Parse()
 
-	root := cli.NewRootCmd(os.Stdout, os.Stderr)
+	root := cli.NewRootCmd(os.Stdin, os.Stdout, os.Stderr)
 	page, err := mcobra.NewManPage(1, root)
 	if err != nil {
 		log.Fatalf("mangen: %v", err)

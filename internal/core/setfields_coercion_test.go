@@ -20,11 +20,21 @@ import (
 
 func setFieldsRepo(t *testing.T) *core.Service {
 	t.Helper()
+	svc, _ := setFieldsRepoFS(t)
+	return svc
+}
+
+// setFieldsRepoFS also returns the backing *FS for the one test that exercises
+// the Fixer port (FixFrontmatter) — no longer a Service pass-through after the
+// L12 Fixer/Layout split, so `lint --fix`'s seam is the FS directly.
+func setFieldsRepoFS(t *testing.T) (*core.Service, *store.FS) {
+	t.Helper()
 	r := testutil.NewRepo(t)
 	r.Epic("01-e.md", "---\nstatus: planning\ndescription: e\n---\n# e\n")
 	r.Task("ready-to-start", "t.md",
 		"---\nstatus: ready-to-start\nepic: 01-e\ndescription: t\ntier: 3\ntags: [seed]\n---\n# t\n")
-	return core.NewService(store.NewFS(r.Root))
+	fs := store.NewFS(r.Root)
+	return core.NewService(fs), fs
 }
 
 // TestSetFields_CoercesTypedStringsThroughRoundTrip is the headline guard: a
@@ -178,11 +188,11 @@ func TestSetFields_RejectsUpdatedAt(t *testing.T) {
 // registry list field via `--set` produces the same form `lint --fix` wants,
 // so the tool no longer generates drift its own fixer then repairs.
 func TestSetFields_ListCoercionAgreesWithFix(t *testing.T) {
-	svc := setFieldsRepo(t)
+	svc, fs := setFieldsRepoFS(t)
 	if _, err := svc.SetFields("t", map[string]any{"related_tasks": "a, b"}, false, false); err != nil {
 		t.Fatal(err)
 	}
-	results, err := svc.LintFix(true) // dry-run: report what WOULD change
+	results, err := fs.FixFrontmatter(true) // dry-run: report what WOULD change
 	if err != nil {
 		t.Fatal(err)
 	}

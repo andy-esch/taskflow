@@ -59,7 +59,10 @@ func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []domain.FileP
 	}
 	problems = probs
 	for _, a := range audits {
-		_, body, err := s.store.GetAudit(a.Slug)
+		// Read by the path ListAudits already resolved, not GetAudit(a.Slug):
+		// re-resolving every slug across all 3 bucket dirs per audit is the O(N^2)
+		// sweep M16 flagged, and re-resolving also reopens a concurrent-edit window.
+		_, body, err := s.store.GetAuditByPath(a.Path)
 		if err != nil {
 			problems = append(problems, domain.FileProblem{Path: a.Path, Message: err.Error()})
 			continue
@@ -96,7 +99,9 @@ func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, e
 	}
 	problems = probs
 	for _, a := range audits {
-		_, body, err := s.store.GetAudit(a.Slug)
+		// By path, not GetAudit(a.Slug) — same O(N^2) re-resolve avoidance as
+		// QueryFindings (the TUI runs LintAudits on every live reload).
+		_, body, err := s.store.GetAuditByPath(a.Path)
 		if err != nil {
 			problems = append(problems, domain.FileProblem{Path: a.Path, Message: err.Error()})
 			continue

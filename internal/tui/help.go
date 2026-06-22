@@ -26,6 +26,7 @@ var helpSections = []helpSection{
 		{"o / O", "cycle sort column / reverse"},
 		{"s / S", "cycle view: task status / audit bucket"},
 		{"a", "task actions (start/complete/defer/…)"},
+		{"e", "edit task fields (description/priority/tags/effort/tier)"},
 		{"f", "follow reference (task ⇄ epic)"},
 		{"ctrl+o", "jump back (follow history)"},
 		{"[ / ]", "previous / next tab"},

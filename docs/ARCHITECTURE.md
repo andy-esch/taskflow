@@ -27,17 +27,33 @@ the one-screen orientation for contributors.
   `Descriptor`); `SchemaKinds`/`AuthoringFields`/`Conventions`/`BodyTemplate` read
   that table instead of parallel `switch kind` blocks, so a kind's schema/scaffold
   surface is a registry entry, not a per-layer edit. Honest remaining fan-out for a
-  new entity (e.g. the scaffolded `projects/`): a store scan (`scanDir` + a per-kind
-  parse) plus render/TUI delegates — deliberately still per-entity, tracked by
-  M9/M10 in epic 21.
-- **`internal/core`** — use cases (`Service`) + the ports it needs (`Store`,
-  composed of `TaskStore`/`EpicStore`/`AuditStore`, defined here at the
-  consumer). Pure; unit-testable without fs.
+  new entity (e.g. the scaffolded `projects/`), after the descriptor + the generic
+  seams: a typed `domain` struct + a `parse*`, thin `*Store` port methods (the scan
+  is generic `scanDir[T]`, resolution generic `resolveID`), its `core.Service` use
+  cases, a cli command, and render + TUI *display* delegates (a Human/JSON formatter
+  — column layout is the generic `Column[T]`/`WriteTablePlain` — plus an `entityTab`
+  entry + row delegate). That residual is the cost of a **typed** domain whose three
+  entities have genuinely different shapes (tasks: status/tier/priority; epics:
+  rollups; audits: findings/buckets); the generics remove the *mechanics*, not the
+  per-entity shape. What IS collapsed: the metadata fan-out into the descriptor
+  (M1), and TUI *lifecycle* (the `a` menu + `:` verbs) into each entity's transition
+  table (M10), so an entity opts into close/move actions by declaring transitions,
+  not by editing the reducer. A further data-driven persistence/render collapse
+  isn't pursued — for three heterogeneous entities it trades clarity for machinery.
+- **`internal/core`** — use cases (`Service`) + the ports it needs, defined here
+  at the consumer. `Store` (composed of `TaskStore`/`EpicStore`/`AuditStore`) is
+  the *use-case* port the `Service` depends on; the two fs/text operations that
+  aren't use cases live in narrow sibling ports — `Fixer` (frontmatter repair)
+  and `Layout` (watch-path layout) — so a second `Store` and the test fakes don't
+  carry them. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
   `<root>/tasks/<status>/<slug>.md`. Splits frontmatter with a zero-dep byte
-  scanner; parses YAML with `go.yaml.in/yaml/v3`. `var _ core.Store = (*FS)(nil)`.
-  It also owns the *layout* knowledge: `WatchPaths()` hands the TUI watcher its
-  dir set so the path convention isn't reconstructed outside the store.
+  scanner; parses YAML with `go.yaml.in/yaml/v3`. One `*FS` satisfies all three
+  ports (`var _ core.Store/Fixer/Layout = (*FS)(nil)`): the Service gets the
+  use-case `Store`, the CLI's `lint --fix` and the TUI watcher get the narrow
+  `Fixer`/`Layout` wired directly. It owns the *layout* knowledge — `WatchPaths()`
+  hands the TUI watcher its dir set so the path convention isn't reconstructed
+  outside the store.
 - **`internal/cli`** — a primary adapter: the cobra tree.
 - **`internal/tui`** — the *second* primary adapter (shipped): a Bubble Tea
   browser calling the **same** `core.Service`, never the store/fs. See the TUI
@@ -78,21 +94,30 @@ not for hypothetical future flexibility. The specifics:
   tests run against an in-memory `fakeStore` (`core/service_epic_test.go`), so
   rollup/validation logic is tested with no filesystem. That's a real second
   implementation now, plus the shipped TUI is a second primary adapter over the
-  same core. (One known wart: `FixFrontmatter` sits awkwardly on the port — a
-  candidate to split into a `Fixer` later.)
+  same core. The port stays *use-case-only*: `FixFrontmatter` and `WatchPaths`
+  (fs/text operations, not use cases) were split off into the narrow `Fixer` and
+  `Layout` ports the adapters wire to the FS directly, so the `Store` the fakes
+  implement carries no presentation-adjacent baggage.
 - **Frontmatter logic is already cohesive.** `frontmatter.go` (parse + surgical
   write), `fix.go` (text repair), `diagnose.go` (error diagnosis) are all one
   package (`store`), split into files by concern — idiomatic Go. `domain/
   validate.go` is *semantic field rules* (tier 1–5, priority enum), a domain
   concern, deliberately not coupled to the storage format.
 - **`cli/render` is the one genuinely revisitable call.** It's cli-only (the TUI
-  renders via Bubble Tea views, not these text/JSON formatters) and imports
-  `core` for two view-models (a mild `cli→render→core` diamond). Keeping it a
-  package buys isolation + the `render.` namespace; folding it into `cli` as
-  `render.go` would also be fine. Left split for now; not dogma — collapse it if
-  the boundary ever causes friction. (Note this is the *opposite* of dropping the
-  core seam: render is presentation that the TUI replaces; `core` is logic the
-  TUI reuses.)
+  renders via Bubble Tea views, not these text/JSON formatters) and imports `core`
+  for its read-side view-models — today **five** (`Summary`, `StatusCount`,
+  `EpicSummary`, `AuditFinding`, `LintResult`), and growing roughly one per entity
+  as stats/index/tags land, so this is a real `cli→render→core` diamond, not the
+  "two types" an earlier draft claimed. It stays justified because render is the
+  *isolation seam the TUI doesn't touch*: these are core *results*, not store
+  internals, and render is where presentation is allowed to know them. The
+  trend-reversal if the count ever bites is the pattern `taskJSON`/`auditJSON`
+  already use — map core results into render-owned DTOs at the call site rather
+  than importing more core types. Keeping it a package buys isolation + the
+  `render.` namespace; folding it into `cli` would also be fine. Not dogma —
+  collapse it if the boundary ever causes friction. (Note this is the *opposite*
+  of dropping the core seam: render is presentation that the TUI replaces; `core`
+  is logic the TUI reuses.)
 
 ## The TUI (`internal/tui`)
 A Bubble Tea (Elm-architecture) browser, launched by `tskflwctl ui`. It is the
@@ -103,9 +128,12 @@ Files split by concern:
 - **`model.go`** — the root `Model` + the `Update` reducer and `View`. Owns the
   tab set, focus (list ⇄ detail), window size, and key routing.
 - **`entity.go`** — the **entity registry**: tasks/epics/audits as `*entityTab`s,
-  each owning its own `list.Model`, cursor, loaders, and list-scoped state
-  (status view, sort, filter restore). Adding Projects/ADRs later is a new
-  registry entry — no new keybindings or layout.
+  each owning its own `list.Model`, cursor, loaders, list-scoped state (status
+  view, sort, filter restore), and its **lifecycle table** (the transitions it
+  offers + an `applyMove`). Read/browse is keybinding-free; lifecycle is declared
+  here per entity (tasks by status via `Move`, audits by bucket via `MoveAudit`,
+  epics none), so adding Projects/ADRs later is a new registry entry — including
+  any `a`-menu / `:`-verb actions — not a reducer edit.
 - **`commands.go` / `messages.go`** — the async load `tea.Cmd`s and the `tea.Msg`
   types they return (list loads, lazy detail loads, reload, errors).
 - **`detail.go` / `find.go` / `glamour.go`** — the right pane (a `viewport`): the
@@ -114,18 +142,33 @@ Files split by concern:
   (ANSI-aware highlight that preserves the line's other colors; unicode-fold-safe).
 - **`item.go`** — per-entity `list.ItemDelegate`s (the glyph rows) and the
   `sortFields`/`FilterValue` each row exposes.
-- **`sort.go` / `statusview.go` / `command.go` / `action.go`** — interactive sort
-  (per-entity columns), the unified status-view table (`:` words + `s`/`S` cycle),
-  the `:` command bar, and the `a` lifecycle action menu (`Move` through the
-  service, shared transition table with the `:` verbs).
+- **`sort.go` / `statusview.go` / `command.go` / `action.go` / `overlay.go`** —
+  interactive sort (per-entity columns), the unified status-view table (`:` words +
+  `s`/`S` cycle), the `:` command bar, the `a` lifecycle action menu, and the modal
+  registry. The action menu and `:` verbs are **registry-driven**: both read the
+  active tab's transition table + `applyMove`, so tasks move by status and audits by
+  bucket (close/reopen/defer, in-TUI now) through one entity-agnostic path —
+  `movedMsg.to` is a plain string the closure interprets. Overlays (help, action,
+  follow, edit) satisfy a small `modal` interface and live in an ordered stack the
+  reducer loops; ForceQuit is handled once ahead of the loop, so a new overlay is one
+  entry, not a new `handleKey` guard block + `bodyView` case.
+- **`edit.go`** — the `e` inline field editor: the human face of `task set`. A form
+  modal listing the typed editable fields (description / priority / tags / effort /
+  tier) with their meanings (from the entity descriptor), the active field's widget
+  inline (enum cursor, single-line input, or a wrapped `textarea` for description).
+  Apply writes through `core.Service.SetFields` as a `tea.Cmd`; a core validation
+  error stays on the field (shown inline) for an in-place fix, success returns to the
+  picker. Task-only; status stays in the action menu. No new validation path —
+  core re-validates, the same as `task set`.
 - **`nav.go`** — S6 cross-link navigation: `f` follows structured references
   (a task's epic; an epic's tasks via a picker modal), `ctrl+o` pops the
   back-stack; hidden targets escalate the tasks view to `:all` rather than fail.
 - **`watch.go`** — `fsnotify` live reload: a self-perpetuating listener `Cmd`
   feeds `fsEventMsg`; a generation-guarded `tea.Tick` debounce (200ms) coalesces
   save-storms into one reload of every loaded tab, cursor preserved by id. The
-  watched dir set comes from `core.Service.WatchPaths()`, not from a root the TUI
-  reconstructs — layout knowledge stays in the store.
+  watched dir set comes from the `core.Layout` port (`WatchPaths()`, the FS
+  injected by the CLI), not from a root the TUI reconstructs — layout knowledge
+  stays in the store.
 - **`help.go`** — the `?` keybinding overlay (`helpSections` is the runtime
   source of truth for keys) composited over the body with `ansi.Cut`.
 - **`style.go` / `keys.go`** — lipgloss styles (delegating to `theme`) and the

@@ -52,7 +52,7 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 	}
 	body := p.Body
 	if body == "" {
-		tmpl, err := domain.Template("audit", p.Template)
+		tmpl, err := s.templateBody("audit", p.Template)
 		if err != nil {
 			return domain.Audit{}, err
 		}

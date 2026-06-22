@@ -48,6 +48,39 @@ func (s *FS) GetAudit(slug string) (domain.Audit, string, error) {
 	return a, string(body), nil
 }
 
+// GetAuditByPath reads one audit directly by file path, deriving the bucket from
+// the parent directory (audits/<bucket>/<slug>.md — the bucket==directory
+// invariant the store owns) instead of re-resolving the slug across every bucket.
+// The finding/lint sweeps use this to read each audit ListAudits already found
+// exactly once, which also closes the concurrent-edit window a re-resolve opens.
+func (s *FS) GetAuditByPath(path string) (domain.Audit, string, error) {
+	bucket, err := bucketFromPath(path)
+	if err != nil {
+		return domain.Audit{}, "", err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Audit{}, "", fmt.Errorf("read audit %s: %w", path, err)
+	}
+	a, err := parseAudit(content, path, bucket)
+	if err != nil {
+		return domain.Audit{}, "", fmt.Errorf("%s: %w", path, err)
+	}
+	_, body := splitFrontmatter(content)
+	return a, string(body), nil
+}
+
+// bucketFromPath maps an audit file path to its bucket via the parent directory
+// name (audits/<bucket>/<slug>.md). A path whose parent isn't a known bucket is
+// rejected rather than guessed, so a stray path can't be silently mis-bucketed.
+func bucketFromPath(path string) (domain.AuditBucket, error) {
+	bucket, err := domain.ParseAuditBucket(filepath.Base(filepath.Dir(path)))
+	if err != nil {
+		return "", fmt.Errorf("audit path %s: %w", path, err)
+	}
+	return bucket, nil
+}
+
 // MoveAudit relocates an audit to another bucket (close/reopen/defer). Moving to
 // the current bucket is an idempotent no-op. The bucket directory is the state,
 // so only the file moves (no frontmatter rewrite).

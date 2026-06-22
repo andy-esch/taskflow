@@ -55,7 +55,7 @@ func runLint(app *App) error {
 }
 
 func runLintFix(app *App, dryRun bool) error {
-	results, err := app.Svc.LintFix(dryRun)
+	results, err := app.Fixer.FixFrontmatter(dryRun)
 	if err != nil {
 		// A mid-run write failure still repaired earlier files: report that partial
 		// progress before surfacing the error, so the user can reconcile what landed.

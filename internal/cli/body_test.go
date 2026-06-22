@@ -33,19 +33,35 @@ func TestTaskAppend_Body(t *testing.T) {
 	}
 }
 
-// `task append --body-file -` reads the appended content from stdin.
+// `task append --body-file -` reads the appended content from the injected stdin.
+// The reader is passed via NewRootCmd's `in` param alone (no separate cmd.SetIn) —
+// proving M12: the one injected reader reaches resolveBody's cmd.InOrStdin().
 func TestTaskAppend_Stdin(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
-	cmd.SetIn(strings.NewReader("## Notes\n- from stdin\n"))
+	cmd := NewRootCmd(strings.NewReader("## Notes\n- from stdin\n"), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "append", "alpha", "--body-file", "-"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(alphaPath(root))
 	if !strings.Contains(string(b), "from stdin") {
-		t.Errorf("append body should come from stdin:\n%s", b)
+		t.Errorf("append body should come from the injected stdin:\n%s", b)
+	}
+}
+
+// TestNewRootCmd_UnifiesStdin pins M12: the single `in` param is the one stdin
+// owner. Before the fix, root.go never called SetIn, so cmd.InOrStdin() (the
+// source resolveBody reads for `--body-file -`) fell back to os.Stdin — a DIFFERENT
+// handle than app.In (which the prompt gate, prompter, and editor read). Now both
+// are the injected reader: this asserts the cobra side directly, and app.In is set
+// to the same `in` in the constructor, so every input path agrees.
+func TestNewRootCmd_UnifiesStdin(t *testing.T) {
+	in := strings.NewReader("piped input\n")
+	var out bytes.Buffer
+	cmd := NewRootCmd(in, &out, &out)
+	if cmd.InOrStdin() != in {
+		t.Error("cmd.InOrStdin() must be the injected reader (resolveBody's source), not os.Stdin")
 	}
 }
 
@@ -53,7 +69,7 @@ func TestTaskAppend_Stdin(t *testing.T) {
 func TestTaskAppend_Empty_Errors(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "append", "alpha", "--body", "   "})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("empty append should wrap ErrValidation (exit 11), got %v", err)
@@ -78,7 +94,7 @@ func TestTaskSet_BodyReplace(t *testing.T) {
 func TestTaskSet_BodyWithFields_Rejected(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "set", "alpha", "--tier", "2", "--body", "x"})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("combining --body with field flags should wrap ErrValidation, got %v", err)

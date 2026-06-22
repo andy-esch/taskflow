@@ -29,23 +29,39 @@ func cursorTo(t *testing.T, m Model, verb string) Model {
 	return m
 }
 
+// TestTransitionTablesValidStates guards M10's stringly-typed transition.to: a
+// typo'd destination compiles (it's a string now) but would fail only at runtime
+// when applyMove casts it. Pin every entity's table to its real state vocabulary.
+func TestTransitionTablesValidStates(t *testing.T) {
+	for _, tr := range taskTransitions {
+		if !domain.Status(tr.to).Valid() {
+			t.Errorf("task transition %q -> %q is not a valid status", tr.verb, tr.to)
+		}
+	}
+	for _, tr := range auditTransitions {
+		if !domain.AuditBucket(tr.to).Valid() {
+			t.Errorf("audit transition %q -> %q is not a valid bucket", tr.verb, tr.to)
+		}
+	}
+}
+
 func TestValidTransitions(t *testing.T) {
-	got := validTransitions(domain.StatusInProgress)
-	if len(got) != len(transitions)-1 {
-		t.Errorf("want %d transitions (all but current), got %d", len(transitions)-1, len(got))
+	got := validTransitions(taskTransitions, string(domain.StatusInProgress))
+	if len(got) != len(taskTransitions)-1 {
+		t.Errorf("want %d transitions (all but current), got %d", len(taskTransitions)-1, len(got))
 	}
 	for _, tr := range got {
-		if tr.to == domain.StatusInProgress {
+		if tr.to == string(domain.StatusInProgress) {
 			t.Error("the current status must be excluded from the menu")
 		}
 	}
-	if tr, ok := transitionFor("complete"); !ok || tr.to != domain.StatusCompleted {
+	if tr, ok := transitionFor(taskTransitions, "complete"); !ok || tr.to != string(domain.StatusCompleted) {
 		t.Errorf("complete should map to completed, got %v ok=%v", tr, ok)
 	}
-	if tr, ok := transitionFor("deprecate"); !ok || !tr.destructive {
+	if tr, ok := transitionFor(taskTransitions, "deprecate"); !ok || !tr.destructive {
 		t.Errorf("deprecate should be destructive, got %v ok=%v", tr, ok)
 	}
-	if _, ok := transitionFor("bogus"); ok {
+	if _, ok := transitionFor(taskTransitions, "bogus"); ok {
 		t.Error("bogus is not a lifecycle verb")
 	}
 }
@@ -149,7 +165,7 @@ func TestModel_ActionMenuConfirmGatesDeprecate(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("y should fire the move")
 	}
-	if msg, ok := cmd().(movedMsg); !ok || msg.to != domain.StatusDeprecated {
+	if msg, ok := cmd().(movedMsg); !ok || msg.to != string(domain.StatusDeprecated) {
 		t.Fatalf("expected a deprecate movedMsg, got %T %+v", cmd(), cmd())
 	}
 }
@@ -204,7 +220,7 @@ func TestModel_ActionMenuTasksOnly(t *testing.T) {
 
 func TestModel_ActionErrorFlashes(t *testing.T) {
 	m := loaded(t, 120, 40)
-	cmd := m.applyTransition("ghost-slug", domain.StatusCompleted)
+	cmd := m.cur().applyMove(m.svc, "ghost-slug", transition{verb: "complete", to: string(domain.StatusCompleted)})
 	msg := cmd()
 	if _, ok := msg.(actionErrMsg); !ok {
 		t.Fatalf("a failed move should yield actionErrMsg, got %T", msg)

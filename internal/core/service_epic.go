@@ -54,7 +54,7 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 	}
 	body := p.Body
 	if body == "" {
-		tmpl, err := domain.Template("epic", p.Template)
+		tmpl, err := s.templateBody("epic", p.Template)
 		if err != nil {
 			return domain.Epic{}, err
 		}

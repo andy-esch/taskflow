@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 
@@ -66,6 +67,22 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	}
 	if err := fixDir(s.epicsDir, ""); err != nil { // epics: text-level only
 		return results, err
+	}
+	// Sweep the tool's own crash-orphaned temp files (housekeeping). Only on a real
+	// run — a dry-run previews repairs and must write/remove nothing. The age +
+	// prefix guards in sweepStaleTemps keep it from touching a live write or a user
+	// file; the .md scan filter already hides these, so this just keeps the tree tidy.
+	if !dryRun {
+		now := time.Now()
+		dirs := []string{s.epicsDir}
+		for _, st := range domain.AllStatuses() {
+			dirs = append(dirs, filepath.Join(s.tasksDir, st.Dir()))
+		}
+		for _, dir := range dirs {
+			for _, p := range sweepStaleTemps(dir, now) {
+				results = append(results, domain.FixResult{Path: p, Changes: []string{"removed stale temp orphan"}})
+			}
+		}
 	}
 	return results, nil
 }

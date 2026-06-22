@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Guard the Move write-then-remove window (SIGINT/SIGTERM) or ship a lint dedup pass for one-slug-in-two-dirs; sweep atomic .tmp orphans.
 effort: Unknown
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [store, robustness]
 created: "2026-06-22"
+updated_at: "2026-06-22"
+completed_at: "2026-06-22"
 ---
 # Crash-recovery signal guard and duplicate-slug repair
 
@@ -27,9 +29,23 @@ planning/audits/open/2026-06-22-code-quality-architecture.md — **M11** (signal
 
 ## Acceptance criteria
 
-- [ ] Ctrl-C during a move cannot leave a permanent duplicate (guarded or repairable via lint).
-- [ ] Atomic-write failure/cleanup branches are tested; no stray .tmp accumulation.
-- [ ] just test + just lint green.
+- [x] Ctrl-C during a move cannot leave a permanent duplicate (guarded or repairable via lint).
+- [x] Atomic-write failure/cleanup branches are tested; no stray .tmp accumulation.
+- [x] just test + just lint green.
+
+## Outcome (2026-06-22)
+
+Shipped **detection + reporting**, not auto-delete or a signal guard — by design.
+The Move-crash duplicate has BOTH copies matching their folders (Move rewrites the
+new file's `status:` to its bucket; the old file keeps its own), so it's the
+*ambiguous* case the plan says to "report, don't guess" (a destructive auto-delete on
+a tie violates the never-lose-data stance). So `core.Lint` now flags any slug in >1
+status dir (plain `lint` exits 11 naming the dirs) — making the otherwise-silent
+permanent `ErrAmbiguous` discoverable and hand-repairable, satisfying "repairable via
+lint" / "reported when ambiguous." A SIGINT/SIGTERM guard was skipped (fragile —
+SIGKILL/power-loss defeats it — and the store stays free of process-signal concerns).
+L18 done in full: `createFileAtomic` Close-path cleanup, negative atomic-write tests,
+and a conservative age+prefix-guarded `.tmp` sweep on `lint --fix`.
 
 ## Implementation plan
 

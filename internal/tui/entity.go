@@ -13,7 +13,9 @@ import (
 
 // entityKind identifies a browsable entity. The registry (newEntityTabs) is the
 // single place entities are declared, so adding Projects/ADRs/Research later is a
-// new entry here — no new keybindings or layout.
+// new entry here. Read/browse is keybinding-free; lifecycle (the `a` menu and `:`
+// verbs) is declared per entity via its transition table + applyMove, so an entity
+// that wants lifecycle wires it in the registry rather than editing the reducer.
 type entityKind int
 
 const (
@@ -29,6 +31,15 @@ type entityItem interface {
 	list.Item
 	id() string
 	sortFields() sortFields
+}
+
+// lifecycleItem is an entityItem with a mutable lifecycle state (a task's status,
+// an audit's bucket). The action menu reads it to drop the no-op transition;
+// entities without one (epics) simply don't implement it, so the reducer asks for
+// the state generically instead of switching on concrete item types.
+type lifecycleItem interface {
+	entityItem
+	lifecycleState() string
 }
 
 // entityTab bundles one entity's static config (name, loaders, delegate via its
@@ -53,6 +64,14 @@ type entityTab struct {
 	loadErr  error // this tab's last list-load failure (nil after a successful load)
 	problems []domain.FileProblem
 
+	// Lifecycle (registry-driven, S4/M10): the transitions this entity offers and
+	// the move that applies one. Tasks declare status transitions (svc.Move); audits
+	// declare bucket transitions (svc.MoveAudit); epics declare none. The `a` menu
+	// and `:` verbs read these off the active tab, so lifecycle is no longer
+	// task-only plumbing in the reducer. nil transitions ⇒ no `a`/`:`-verb actions.
+	transitions []transition
+	applyMove   func(svc *core.Service, id string, tr transition) tea.Cmd
+
 	// S2b list-scoped state (persists per tab across switches/reloads).
 	statusView  string    // view axis: "" = default, "all", a task status, or an audit bucket
 	sortCols    []sortKey // the `o`-cycle columns this entity offers
@@ -60,16 +79,34 @@ type entityTab struct {
 	sortRev     bool      // sort direction toggle ("O")
 	filterExact bool      // false = fuzzy (default), true = substring; toggled session-wide by "F"
 
-	restore string // id to re-select after this tab's next load (cursor preservation)
+	// restore is the cursor id the next landing load (or its async refilter) should
+	// select — a jumpTo target or a reload's cursor-preservation. restoreGen stamps
+	// the loadGen it belongs to, so a newer reload supersedes a stale target and an
+	// old filter-match callback (handleTabMsg) can't apply it. The id also rides on
+	// each load's listLoadedMsg (gen-safe), so a dropped stale load never applies a
+	// restore meant for another — the single-slot race M6 flagged.
+	restore    string
+	restoreGen int
 }
 
-// reload re-fires the tab's list loader, passing the tab so the loader can read
-// its current statusView (a value-typed Model still mutates via the pointer).
-// Each reload bumps the load generation so an older in-flight load can't land
-// over this one's result.
-func (t *entityTab) reload(svc *core.Service) tea.Cmd {
+// reload re-fires the tab's list loader with the cursor id to restore afterward,
+// passing the tab so the loader can read its current statusView (a value-typed
+// Model still mutates via the pointer). Each reload bumps the load generation so an
+// older in-flight load can't land over this one's result, records restoreID as the
+// tab's pending intent (so a concurrent markReload carries it forward, not the
+// stale cursor), and stamps it onto the load's message for the gen-safe consumer.
+func (t *entityTab) reload(svc *core.Service, restoreID string) tea.Cmd {
 	t.loadGen++
-	return t.loadList(t, svc)
+	t.restore, t.restoreGen = restoreID, t.loadGen
+	load := t.loadList(t, svc)
+	return func() tea.Msg {
+		msg := load()
+		if lm, ok := msg.(listLoadedMsg); ok {
+			lm.restore = restoreID
+			return lm
+		}
+		return msg // errMsg passes through unchanged
+	}
 }
 
 // selectByID moves the cursor to the row with the given id, reporting whether it
@@ -87,11 +124,19 @@ func (t *entityTab) selectByID(id string) bool {
 	return false
 }
 
-// markReload captures the current cursor id so the next load restores it.
-func (t *entityTab) markReload() {
-	if it, ok := t.list.SelectedItem().(entityItem); ok {
-		t.restore = it.id()
+// markReload returns the id a reload should re-select. A pending navigation target
+// (a jumpTo whose load hasn't landed) outranks the current cursor, so a background
+// reload firing mid-jump carries the jump target forward instead of yanking the
+// cursor back to where it was — the M6 fix for the reload/jump race. With nothing
+// pending it captures the current cursor (the ordinary reload-preserves-cursor case).
+func (t *entityTab) markReload() string {
+	if t.restore != "" {
+		return t.restore
 	}
+	if it, ok := t.list.SelectedItem().(entityItem); ok {
+		return it.id()
+	}
+	return ""
 }
 
 // viewFor maps a `:` word to a view value on this tab's axis.
@@ -158,6 +203,29 @@ func (t *entityTab) matches(word string) bool {
 	return false
 }
 
+// moveTask applies a task status transition off the event loop, reporting success
+// (movedMsg → flash + reload) or failure (actionErrMsg → flash, no reload).
+func moveTask(svc *core.Service, id string, tr transition) tea.Cmd {
+	return func() tea.Msg {
+		if _, err := svc.Move(id, domain.Status(tr.to), false); err != nil {
+			return actionErrMsg{slug: id, err: err}
+		}
+		return movedMsg{slug: id, to: tr.to}
+	}
+}
+
+// moveAudit applies an audit bucket transition (close/reopen/defer). The store
+// refuses closing/deferring an audit with still-open findings (M4); that surfaces
+// as an actionErrMsg (red flash, no move), matching the CLI.
+func moveAudit(svc *core.Service, id string, tr transition) tea.Cmd {
+	return func() tea.Msg {
+		if _, err := svc.MoveAudit(id, domain.AuditBucket(tr.to), false); err != nil {
+			return actionErrMsg{slug: id, err: err}
+		}
+		return movedMsg{slug: id, to: tr.to}
+	}
+}
+
 // newEntityTabs is the entity registry: the ordered set of browsable entities.
 func newEntityTabs() []*entityTab {
 	mk := func(d list.ItemDelegate) list.Model {
@@ -186,18 +254,18 @@ func newEntityTabs() []*entityTab {
 			kind: entityTasks, name: "tasks", aliases: []string{"t", "task"},
 			viewAxis: statusViews, viewAliases: statusViewAliases,
 			list: mk(taskDelegate{}), loadList: loadTaskList, loadItem: loadTaskDetail,
-			sortCols: taskSortCols,
+			sortCols: taskSortCols, transitions: taskTransitions, applyMove: moveTask,
 		},
 		{
 			kind: entityEpics, name: "epics", aliases: []string{"e", "epic"},
 			list: mk(epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
-			sortCols: epicSortCols,
+			sortCols: epicSortCols, // no transitions: epics have no in-TUI lifecycle move
 		},
 		{
 			kind: entityAudits, name: "audits", aliases: []string{"a", "audit"},
 			viewAxis: auditViews,
 			list:     mk(auditDelegate{}), loadList: loadAuditList, loadItem: loadAuditDetail,
-			sortCols: auditSortCols,
+			sortCols: auditSortCols, transitions: auditTransitions, applyMove: moveAudit,
 		},
 	}
 }

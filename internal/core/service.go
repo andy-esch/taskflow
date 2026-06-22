@@ -12,16 +12,42 @@ import (
 // It has no fs and no cobra, so it is testable in isolation and reused by both
 // primary adapters (the cli and the tui).
 type Service struct {
-	store Store
+	store     Store
+	templates TemplateSource
 }
 
-// NewService wires the core to its store.
-func NewService(store Store) *Service { return &Service{store: store} }
+// Option configures a Service at construction. Functional options keep the common
+// NewService(store) call unchanged while leaving room for injected ports (the
+// template source today; repo-local sources in epic 22).
+type Option func(*Service)
 
-// WatchPaths exposes the store's watchable directory set to the TUI, so the
-// fs-layout knowledge stays behind the port instead of being rebuilt in the
-// watcher (the TUI never reconstructs the planning tree's shape itself).
-func (s *Service) WatchPaths() []string { return s.store.WatchPaths() }
+// WithTemplateSource overrides the built-in template source — epic 22 wires a
+// repo-local source layered over the built-ins, and tests inject a fake to prove
+// the list/show/create paths read through the port, not domain.Template* directly.
+func WithTemplateSource(src TemplateSource) Option {
+	return func(s *Service) {
+		if src != nil {
+			s.templates = src
+		}
+	}
+}
+
+// NewService wires the core to its store; templates default to the built-in
+// source unless WithTemplateSource overrides it.
+func NewService(store Store, opts ...Option) *Service {
+	s := &Service{store: store, templates: builtinTemplates{}}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// NewBuiltinTemplateService returns a Service backed only by the built-in
+// TemplateSource and no store — for the repo-less self-description surfaces
+// (`template list/show`, like `schema`). Only the template methods are safe to
+// call on it. When a planning repo IS present, the resolved store-backed Service
+// is used instead, and epic 22 layers repo-local templates over the built-ins.
+func NewBuiltinTemplateService() *Service { return NewService(nil) }
 
 // templateBodyConflict rejects supplying both an explicit body and a --template:
 // they're mutually exclusive (override the scaffold OR pick one). Enforced in core
@@ -122,6 +148,14 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})
 		}
 	}
+	// Duplicate slug across status dirs: a Ctrl-C in Move's write-then-remove
+	// window (or a stray hand-copy) leaves the same slug in two dirs, which makes
+	// every later resolve(slug) return ErrAmbiguous — the task can't be shown,
+	// moved, or set by name. Both copies are listed (different dirs), so group by
+	// slug and flag any with >1. Surfaced loudly here because there's no other
+	// signal; status==directory means the dirs are always distinct. (Tasks only:
+	// MoveAudit is an atomic rename, so audits have no such window.)
+	results = append(results, duplicateSlugIssues(tasks)...)
 	// Epic statuses are a closed vocabulary (see domain.ValidateEpicStatus);
 	// files predating the enum (or hand-edited ones) surface here.
 	for _, e := range epics {
@@ -134,10 +168,35 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	return results, problems, nil
 }
 
-// LintFix applies safe text-level frontmatter repairs across the planning
-// tree (or previews them when dryRun is true), returning the files changed.
-func (s *Service) LintFix(dryRun bool) ([]domain.FixResult, error) {
-	return s.store.FixFrontmatter(dryRun)
+// duplicateSlugIssues flags any slug that appears in more than one status dir,
+// reporting the buckets it occupies. Deterministic: groups in first-seen order
+// (tasks arrive in status-dir order), so the output is stable across runs.
+func duplicateSlugIssues(tasks []domain.Task) []LintResult {
+	type group struct{ statuses []string }
+	groups := map[string]*group{}
+	var order []string
+	for _, t := range tasks {
+		g, ok := groups[t.Slug]
+		if !ok {
+			g = &group{}
+			groups[t.Slug] = g
+			order = append(order, t.Slug)
+		}
+		g.statuses = append(g.statuses, string(t.Status))
+	}
+	var out []LintResult
+	for _, slug := range order {
+		g := groups[slug]
+		if len(g.statuses) < 2 {
+			continue
+		}
+		out = append(out, LintResult{Slug: slug, Issues: []domain.Issue{{
+			Field: "slug",
+			Message: fmt.Sprintf("duplicate: same slug in %d dirs (%s); resolve is ambiguous until you remove the wrong copy",
+				len(g.statuses), strings.Join(g.statuses, ", ")),
+		}}})
+	}
+	return out
 }
 
 func hasTag(tags []string, want string) bool {

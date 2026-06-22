@@ -8,10 +8,12 @@ import (
 )
 
 // movedMsg reports a successful lifecycle transition (S4). The model flashes a
-// confirmation and fires a reload so the relocated task shows in its new status.
+// confirmation and fires a reload so the relocated entity shows in its new state.
+// to is the destination as a string (a task status or an audit bucket), so one
+// message serves every entity's lifecycle.
 type movedMsg struct {
 	slug string
-	to   domain.Status
+	to   string
 }
 
 // actionErrMsg reports a failed mutation; the model flashes it (red) without
@@ -19,6 +21,16 @@ type movedMsg struct {
 type actionErrMsg struct {
 	slug string
 	err  error
+}
+
+// editedMsg reports a successful inline field edit (SetFields). The model flashes
+// it and reloads so the new value shows; unlike movedMsg the task doesn't change
+// dirs, so it's just a refresh, cursor preserved by id. value is the written value,
+// so the still-open editor can refresh the field it just set.
+type editedMsg struct {
+	slug  string
+	field string
+	value string
 }
 
 // listLoadedMsg carries the result of an async entity-list load. kind tags which
@@ -31,6 +43,11 @@ type listLoadedMsg struct {
 	gen      int
 	items    []list.Item
 	problems []domain.FileProblem
+	// restore is the cursor id this specific load should re-select (a jump target
+	// or a reload's cursor-preservation). Carrying it on the message — stamped with
+	// the same gen — means a dropped stale load can't apply a restore meant for a
+	// newer one, closing the M6 race where a reload and a jump shared one tab slot.
+	restore string
 }
 
 // detailMsg carries a lazily-loaded item detail for the right pane. It's applied
