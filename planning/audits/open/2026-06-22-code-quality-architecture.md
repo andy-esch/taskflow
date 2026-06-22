@@ -106,6 +106,26 @@ design boundaries, invariants, concurrency, edge cases, and growth risk.
   off each entity's transition table + `applyMove`, so audits now close/reopen/defer
   in-TUI; the M4 open-findings guard surfaces as a red flash). **35 of 44 fixed; 1
   in-progress (M1).** Remaining: M11, M12 + the low backlog (L2, L6, L14, L16, L18, L20).
+- **2026-06-22 (8)** — Closed the medium correctness backlog + the M1 theme; each with
+  tests, suite/vet/`golangci-lint` green, docs/cli no-drift. **M12** (`NewRootCmd(in, out,
+  errOut)` is now the single stdin owner — it feeds both `app.In` (gate/prompter/editor)
+  and the cobra root via `SetIn`, so `resolveBody`'s `InOrStdin` and the prompter read
+  one injected reader; ~44 call sites swept, no stray `os.Stdin` left in cli). **M11 +
+  L18** (duplicate-slug DETECTION in `core.Lint`: a Ctrl-C in Move's write-then-remove
+  window leaves the same slug in two dirs → `lint` now flags it loudly and exits 11
+  naming both dirs, so the otherwise-silent permanent `ErrAmbiguous` is hand-repairable.
+  No auto-DELETE: the Move-crash duplicate has BOTH copies matching their folders — an
+  ambiguous tie the "never lose data" stance says report-don't-guess, and the task's
+  Done-when explicitly allows "reported when ambiguous." Plus L18: `createFileAtomic`'s
+  Close path now cleans up like its siblings, negative atomic-write tests (read-only dir,
+  skip-as-root), and a conservative `.tskflwctl-*.tmp` orphan sweep on `lint --fix`,
+  age+prefix-guarded). **M1** (descriptor + generic seams were the recommendation's
+  substance and they're in place; ARCHITECTURE.md now states the honest residual cost of
+  a typed multi-entity domain instead of underselling it — the recommendation's stated
+  minimum bar). Also added a transition-table validity test guarding M10's stringly-typed
+  `to`. **39 of 44 fixed.** Remaining 5 = the low backlog L2 (watcher backoff), L6
+  (realign dry-run preview), L14 (lazy glamour), L16 (find across wrap — documented
+  tradeoff), L20 (selectByID scan) — all low-value polish or accept-as-documented.
 
 ## Verdict
 
@@ -129,11 +149,16 @@ answer to "what will inhibit sustainable growth."
    This class of defect *multiplies per new command/entity*. Highest-leverage fix:
    centralize each contract at its narrowest seam.
 
-2. **Entity-add fan-out (medium, growth).** Adding the already-scaffolded
-   `project`/`adr` entity is a ~15-file shotgun edit across 6 packages because
-   task/epic/audit are hand-enumerated in every layer (**M1**). Generic helpers
-   (`scanDir[T]`, `Column[T]`) prove uniformity is achievable. Recommendation: a
-   data-driven entity descriptor before the roadmap doubles the surface.
+2. **Entity-add fan-out (medium, growth) — RESOLVED (2026-06-22).** Was a ~15-file
+   shotgun edit (**M1**). The data-driven entity `Descriptor` now collapses the
+   metadata fan-out (schema/scaffold/conventions), the generic seams (`scanDir[T]`,
+   `resolveID`, `Column[T]`/`WriteTablePlain`) carry the mechanics, and TUI lifecycle
+   is registry-driven (**M10**). The remaining per-entity surface — a typed `domain`
+   struct + `parse*`, thin `*Store`/`Service` wiring, a cli command, and render/TUI
+   display delegates — is the irreducible cost of a *typed* domain with three
+   genuinely different shapes (status/tier vs rollups vs findings); ARCHITECTURE.md
+   now documents it honestly. A full reflection/codegen collapse is deliberately not
+   pursued for three not-yet-doubled entities.
 
 3. **God-files growing per entity × use-case (medium, growth).** `render.go`
    (703 LOC, **M9**), `core/service.go` (~693 LOC, **L1**), and `model.go`'s
@@ -238,7 +263,7 @@ the active tab's restore-by-moved-id for the post-move reload, or suppress the
 
 ### Medium (16)
 
-#### M1. Adding a new entity type is a ~15-file shotgun edit across 6 packages  · **Status:** in-progress
+#### M1. Adding a new entity type is a ~15-file shotgun edit across 6 packages  · **Status:** fixed (2026-06-22) — descriptor landed; residual documented honestly
 
 **File:** internal/core/store.go:15-65 | **Component:** architecture
 **Effort:** L · **Urgency:** eventually
@@ -254,6 +279,21 @@ than it is.
 **Recommendation:** Introduce an entity descriptor (dir name, field order, parse/
 serialize, columns) to drive the already-generic machinery (`scanDir`, `Column[T]`,
 `resolveID`, `writeNewFile`) from data; at minimum correct the doc.
+
+**Resolution (2026-06-22).** The metadata fan-out — the recommendation's high-leverage
+half — is collapsed into `entity.go`'s `Descriptor` (dir/fields/conventions/scaffold/
+placeholders drive `SchemaKinds`/`AuthoringFields`/`Conventions`/`BodyTemplate`, no
+`switch kind`). TUI lifecycle is now registry-driven too (M10). The generic seams the
+recommendation named are in place: `scanDir[T]`, `resolveID`, and `Column[T]` +
+`WriteTablePlain[T]`/`WriteCSV[T]`. The genuine residual for a new entity is a typed
+`domain` struct + `parse*`, thin `*Store` port methods, `core.Service` use cases, a cli
+command, and per-entity render/TUI *display* delegates — the irreducible cost of a
+**typed** domain whose three kinds have different shapes (status/tier vs rollups vs
+findings/buckets); the generics remove the mechanics, not the shape. A full data-driven
+persistence/render collapse is deliberately NOT pursued: for three heterogeneous,
+not-yet-doubled entities it trades clarity for reflection/codegen machinery. ARCHITECTURE.md
+now states this cost honestly (no longer "cheaper than it is"), which was the
+recommendation's stated minimum bar. Reopen if the entity count actually doubles.
 
 #### M2. writeFileAtomic silently resets file mode to 0644 on every edit  · **Status:** fixed (2026-06-22)
 
@@ -828,14 +868,18 @@ Two reported findings were knocked down on close re-read and are NOT recorded ab
 
 Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do
 
-- ⏳ Contract-integrity batch (H1, H2, H4, M3, M4): centralize exit-code
+- ✅ Contract-integrity batch (H1, H2, H4, M3, M4): centralize exit-code
   classification, `--dry-run` on `edit`, and the active-task/audit-bucket invariants
   at their narrowest seams.
-- ⏳ Entity-descriptor refactor (M1, M9, M10, L1) — de-risk the project/adr roadmap
-  before it lands.
-- ⏳ TUI state-restore hardening (H5, M6, M15) — generation-stamp restore intent and
+- ✅ Entity-descriptor refactor (M1, M9, M10, L1) — descriptor + generic seams landed,
+  TUI registry/lifecycle data-driven, the residual cost documented honestly.
+- ✅ TUI state-restore hardening (H5, M6, M15) — generation-stamp restore intent and
   focus-gate global keys.
-- ⏳ Store robustness (M2, M5, M11, L4, L18) — file-mode preservation, MoveAudit CAS,
-  signal guard, fence whitespace, atomic-write cleanup tests.
-- ⏳ Doc truth-up (M8, M10) — re-justify the render→core and TUI-registry boundaries
+- ✅ Store robustness (M2, M5, M11, L4, L18) — file-mode preservation, MoveAudit CAS,
+  duplicate-slug detection, fence whitespace, atomic-write cleanup tests + temp sweep.
+  (Signal guard intentionally not shipped — the Move-crash duplicate is detected by
+  lint instead; SIGKILL/power-loss defeats a guard anyway.)
+- ✅ Doc truth-up (M8, M10) — re-justified the render→core and TUI-registry boundaries
   to match reality.
+- ⏳ Low-backlog triage (L2, L6, L14, L16, L20) — all low-value polish or
+  accept-as-documented; fix opportunistically or close with rationale.
