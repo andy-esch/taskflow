@@ -80,6 +80,16 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	if dryRun {
 		return a, nil // resolved + parsed; only the rename is skipped
 	}
+	if testHookBeforeMoveAuditWrite != nil {
+		testHookBeforeMoveAuditWrite()
+	}
+	// Re-resolve immediately before the rename (compare-and-swap), like Move/
+	// SetFields: a concurrent relocation may have already moved this slug to another
+	// bucket, so renaming from the now-stale path would fail with a generic error
+	// (exit 1) instead of the exit-14 retry signal. Fail cleanly with nothing moved.
+	if curPath, _, err := s.resolveAudit(slug); err != nil || curPath != path {
+		return domain.Audit{}, fmt.Errorf("audit %q changed on disk during move; retry: %w", slug, domain.ErrConflict)
+	}
 	if err := os.MkdirAll(newDir, 0o755); err != nil {
 		return domain.Audit{}, fmt.Errorf("mkdir %s: %w", newDir, err)
 	}
@@ -88,6 +98,11 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	}
 	return a, nil
 }
+
+// testHookBeforeMoveAuditWrite runs between MoveAudit's validation and its
+// compare-and-swap re-resolve — the seam tests use to interleave a concurrent
+// relocation. Nil outside tests (mirrors testHookBeforeMoveWrite).
+var testHookBeforeMoveAuditWrite func()
 
 // auditCandidates lists every audit file across all buckets as a resolution
 // candidate (the dir name IS the bucket). Shared by resolveAudit and the

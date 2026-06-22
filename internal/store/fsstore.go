@@ -1,7 +1,6 @@
 package store
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,8 +14,11 @@ import (
 )
 
 // errBadFrontmatter marks a malformed-frontmatter parse failure (vs an I/O
-// error), so listing can decide whether to skip or fail.
-var errBadFrontmatter = errors.New("malformed frontmatter")
+// error), so listing can decide whether to skip or fail. It wraps
+// domain.ErrValidation so a malformed file surfaces with the same exit code (11)
+// on the single-item read/move paths (GetTask/GetEpic/GetAudit/Move) that the
+// write paths (SetFields/EditBody) already produce — agents route on the code.
+var errBadFrontmatter = fmt.Errorf("%w: malformed frontmatter", domain.ErrValidation)
 
 // FS reads/writes a planning tree: tasks at <root>/tasks/<status>/<slug>.md
 // and epics at <root>/epics/<id>.md.
@@ -195,6 +197,14 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 	t, err := parseTask(newContent, path, st)
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("%w: update would not reload (%v); nothing was written", domain.ErrValidation, err)
+	}
+	// `set` must not be able to write a file the tool's own linter rejects: an
+	// active task with emptied tags, or a next-up/in-progress task with its
+	// description cleared. NewTask applies the identical domain rule at creation, so
+	// the create and mutate paths can't diverge. Runs before the dry-run return so a
+	// preview fails identically.
+	if err := domain.ActiveTaskFieldErr(t); err != nil {
+		return domain.Task{}, err
 	}
 	if testHookBeforeSetFieldsWrite != nil {
 		testHookBeforeSetFieldsWrite()

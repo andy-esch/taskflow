@@ -25,7 +25,7 @@ func diagnoseFrontmatter(fm []byte) string {
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
 		key, val := mapping.Content[i].Value, mapping.Content[i+1]
 		switch {
-		case domain.ListFields[key] && val.Kind != yaml.SequenceNode:
+		case domain.IsListField(key) && val.Kind != yaml.SequenceNode:
 			return fmt.Sprintf("field %q must be a YAML list, but it is %s\n       fix: %s: [%s]",
 				key, describeNode(val), key, splitCommaList(val.Value))
 		case (key == "tier" || key == "autonomy_level") && isQuotedScalar(val):

@@ -385,16 +385,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.switchTab((m.active + 1) % len(m.tabs))
 	case key.Matches(msg, keys.PrevTab):
 		return m, m.switchTab((m.active - 1 + len(m.tabs)) % len(m.tabs))
-	case key.Matches(msg, keys.Sort):
+	// Sort/status-view/filter-mode reshape the LIST, so they're list-scoped: gate
+	// them on list focus. Otherwise pressing e.g. `s` while reading the detail pane
+	// snaps focus back to the list, clears the detail, and triggers a reload —
+	// silently wiping the body being read (the detail-focus footer advertises none
+	// of these keys). In detail focus they fall through to the find handler / no-op.
+	case m.focus == focusList && key.Matches(msg, keys.Sort):
 		return m, m.cycleSort(1)
-	case key.Matches(msg, keys.SortRev):
+	case m.focus == focusList && key.Matches(msg, keys.SortRev):
 		m.cur().sortRev = !m.cur().sortRev
 		return m, m.applySortToCurrent()
-	case key.Matches(msg, keys.StatusView):
+	case m.focus == focusList && key.Matches(msg, keys.StatusView):
 		return m, m.cycleView(1)
-	case key.Matches(msg, keys.StatusRev):
+	case m.focus == focusList && key.Matches(msg, keys.StatusRev):
 		return m, m.cycleView(-1)
-	case key.Matches(msg, keys.FilterMode):
+	case m.focus == focusList && key.Matches(msg, keys.FilterMode):
 		return m.toggleFilterMode()
 	case key.Matches(msg, keys.Refresh):
 		return m, func() tea.Msg { return reloadMsg{} }

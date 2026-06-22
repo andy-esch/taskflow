@@ -174,7 +174,7 @@ func fixValue(key, value string) (fixed, change string) {
 	if comment != "" {
 		suffix = " " + comment
 	}
-	if domain.ListFields[key] {
+	if domain.IsListField(key) {
 		return "[" + splitCommaList(val) + "]" + suffix, fmt.Sprintf("%s: normalized to a YAML list", key)
 	}
 	if strings.Contains(val, ": ") {

@@ -17,9 +17,9 @@ import (
 // won't produce.
 func FieldType(name string) string {
 	switch {
-	case IntFields[name]:
+	case IsIntField(name):
 		return "int"
-	case ListFields[name]:
+	case IsListField(name):
 		return "list"
 	case dateFields[name]:
 		return "date"

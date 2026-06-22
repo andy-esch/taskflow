@@ -22,8 +22,8 @@ func setupRepo(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	write("ready-to-start", "alpha.md", "---\nstatus: ready-to-start\ndescription: alpha\n---\n# Alpha\n")
-	write("in-progress", "beta.md", "---\nstatus: in-progress\ndescription: beta\n---\n# Beta\n")
+	write("ready-to-start", "alpha.md", "---\nstatus: ready-to-start\ndescription: alpha\ntags: [seed]\n---\n# Alpha\n")
+	write("in-progress", "beta.md", "---\nstatus: in-progress\ndescription: beta\ntags: [seed]\n---\n# Beta\n")
 	return root
 }
 

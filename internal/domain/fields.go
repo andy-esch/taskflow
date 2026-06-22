@@ -8,14 +8,22 @@ package domain
 //
 // Keep in sync with the domain.Task yaml tags + the stamped date fields.
 
-// IntFields are frontmatter keys stored as YAML ints.
-var IntFields = map[string]bool{"tier": true, "autonomy_level": true}
+// intFields are frontmatter keys stored as YAML ints.
+var intFields = map[string]bool{"tier": true, "autonomy_level": true}
 
-// ListFields are frontmatter keys stored as YAML lists.
-var ListFields = map[string]bool{
+// listFields are frontmatter keys stored as YAML lists.
+var listFields = map[string]bool{
 	"tags": true, "related_tasks": true, "dependencies": true,
 	"blocks": true, "blocked_by": true, "audit_sources": true, "projects": true,
 }
+
+// IsIntField reports whether a frontmatter key is stored as a YAML int, and
+// IsListField whether it's stored as a YAML list. They are accessors over the
+// unexported registries so no sibling package can mutate the canonical type map
+// (which would corrupt coercion/fix/diagnose/schema at once) — same tamper-proof
+// pattern as KnownTaskField.
+func IsIntField(f string) bool  { return intFields[f] }
+func IsListField(f string) bool { return listFields[f] }
 
 // knownTaskFields is every frontmatter key tskflwctl itself reads or writes.
 var knownTaskFields = map[string]bool{

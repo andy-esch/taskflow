@@ -31,6 +31,13 @@ func newTaskEditCmd(app *App) *cobra.Command {
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.completeTaskSlugs,
 		RunE: func(_ *cobra.Command, args []string) error {
+			// `edit` is interactive ($EDITOR on the whole file) and has no preview:
+			// honoring --dry-run would mean opening an editor whose save is silently
+			// discarded. Reject the flag rather than accept-and-ignore it (a safety
+			// flag must never be a no-op); point at the scriptable preview instead.
+			if app.DryRun {
+				return fmt.Errorf("%w: `task edit` has no --dry-run preview (it's interactive) — use `task set --dry-run` for a non-interactive preview", domain.ErrValidation)
+			}
 			// Bare `task edit` on a TTY → pick a task; a passed slug short-circuits
 			// the picker; non-interactive with no slug → exit 11 (like the verbs).
 			value := ""

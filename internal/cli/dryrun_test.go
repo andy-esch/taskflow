@@ -32,6 +32,20 @@ func runRootRC(t *testing.T, args ...string) (string, error) {
 	return out.String(), err
 }
 
+// H4 (2026-06-22 audit): `task edit` is interactive and has no preview, so it
+// must REJECT --dry-run rather than silently accept-and-ignore it (the flag would
+// otherwise open an editor whose save lands on disk — the opposite of the flag).
+func TestDryRun_TaskEditRejected(t *testing.T) {
+	root := setupRepo(t)
+	_, err := runRootRC(t, "-C", root, "task", "edit", "alpha", "--dry-run")
+	if err == nil {
+		t.Fatal("`task edit --dry-run` must be rejected, not silently accepted")
+	}
+	if !strings.Contains(err.Error(), "dry-run") {
+		t.Errorf("the rejection should explain the no-preview contract, got %v", err)
+	}
+}
+
 func TestDryRun_TaskNew(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
