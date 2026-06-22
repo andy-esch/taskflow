@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Drive per-entity bits (dir/fields/parse/columns) from a descriptor so a new entity (project/adr) isn't a ~15-file edit.
 effort: Unknown
@@ -11,6 +11,7 @@ tags: [architecture, growth]
 created: "2026-06-22"
 started_at: "2026-06-22"
 updated_at: "2026-06-22"
+completed_at: "2026-06-22"
 ---
 # Entity descriptor to collapse per-entity fan-out
 
@@ -103,3 +104,14 @@ status.
 descriptor + one `scanDir` call (demonstrated by a test that scans a temp tree for a
 new descriptor), the doc's fan-out claim is accurate, and `go build ./...`,
 `go test ./...`, `golangci-lint run ./...` are green.
+
+## Outcome (2026-06-22)
+
+Done. The `domain.Descriptor` registry (`internal/domain/entity.go`) collapsed the
+DOMAIN fan-out — schema kinds, authoring fields, conventions, and body templates are
+one registry entry per kind; the scaffold renderer is descriptor-driven (no per-kind
+switch). The selectable-template library (epic 22) was built on it. The remaining
+render/TUI per-entity fan-out is tracked separately by audit findings M9
+(split-render.go-and-service.go-god-files) and M10 (make-tui-lifecycle-action-machinery-
+registry-driven) — so the audit's broader M1 theme stays in-progress while this
+descriptor task is complete.

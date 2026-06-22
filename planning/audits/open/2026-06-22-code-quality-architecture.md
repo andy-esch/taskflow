@@ -59,6 +59,13 @@ design boundaries, invariants, concurrency, edge cases, and growth risk.
   tests; L11 is a behavior-preserving refactor; L22 is doc-only. **23 of 44 fixed.**
   Remaining 21 = the 16 in the epic-21 tasks + 5 minor localized items (L2, L6, L14,
   L16, L20) left here as backlog.
+- **2026-06-22 (4)** — Fixed **M7** (`writeTable` now clamps each composed human-table
+  line to the terminal width with an ANSI-aware `ansi.Truncate`, backstopping the
+  last-column shrink so a wide non-final cell — slug/component/id — can't wrap; machine
+  formats untouched; tests in `render/style_test.go`). **M1 → in-progress**: the entity
+  descriptor (epic 21 task, now complete) collapsed the DOMAIN fan-out, but the
+  render/TUI fan-out remains — tracked by **M9** (god-file split) and **M10** (TUI
+  registry), so the broad M1 theme stays in-progress. **24 of 44 fixed; 1 in-progress.**
 
 ## Verdict
 
@@ -191,7 +198,7 @@ the active tab's restore-by-moved-id for the post-move reload, or suppress the
 
 ### Medium (16)
 
-#### M1. Adding a new entity type is a ~15-file shotgun edit across 6 packages  · **Status:** open
+#### M1. Adding a new entity type is a ~15-file shotgun edit across 6 packages  · **Status:** in-progress
 
 **File:** internal/core/store.go:15-65 | **Component:** architecture
 **Effort:** L · **Urgency:** eventually
@@ -282,7 +289,7 @@ the list result but not the restore slot.
 **Recommendation:** Make restore intent explicit and generation-stamped: carry the
 target id + `loadGen` in the load result/Cmd rather than a mutable tab field.
 
-#### M7. writeTable only shrinks the last column, so a wide non-final cell overflows  · **Status:** open
+#### M7. writeTable only shrinks the last column, so a wide non-final cell overflows  · **Status:** fixed (2026-06-22)
 
 **File:** internal/cli/render/style.go:177-199 | **Component:** render
 **Effort:** M · **Urgency:** eventually
