@@ -163,9 +163,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editedMsg:
 		// A field edit succeeded: flash it and reload so the new value shows. The
 		// task keeps its dir (SetFields isn't a move), so this is a plain refresh —
-		// each tab's cursor preserved by id, no movedAway dance.
+		// each tab's cursor preserved by id, no movedAway dance. If the editor is
+		// still open (the user can keep editing), refresh the field it just set so
+		// it isn't stale.
 		m.flash = fmt.Sprintf("set %s on %s", msg.field, msg.slug)
 		m.flashErr = false
+		if m.edit.active {
+			m.edit.setCurrent(msg.field, msg.value)
+		}
 		return m, m.reloadAll()
 
 	case actionErrMsg:

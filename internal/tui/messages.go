@@ -25,10 +25,12 @@ type actionErrMsg struct {
 
 // editedMsg reports a successful inline field edit (SetFields). The model flashes
 // it and reloads so the new value shows; unlike movedMsg the task doesn't change
-// dirs, so it's just a refresh, cursor preserved by id.
+// dirs, so it's just a refresh, cursor preserved by id. value is the written value,
+// so the still-open editor can refresh the field it just set.
 type editedMsg struct {
 	slug  string
 	field string
+	value string
 }
 
 // listLoadedMsg carries the result of an async entity-list load. kind tags which

@@ -91,8 +91,8 @@ func TestModel_EditPriorityViaMenu(t *testing.T) {
 	m = enumCursorTo(t, m, "high")
 	tm, cmd := m.Update(press("enter")) // apply
 	m = tm.(Model)
-	if m.edit.active {
-		t.Error("applying should close the editor")
+	if !m.edit.active || m.edit.editing {
+		t.Error("applying a field should return to the picker (open, not editing)")
 	}
 	if cmd == nil {
 		t.Fatal("apply should return a SetFields command")
@@ -108,18 +108,64 @@ func TestModel_EditPriorityViaMenu(t *testing.T) {
 	}
 }
 
-// TestModel_EditDescriptionViaTextInput pins the text happy path: a typed keystroke
-// reaches the widget and the new value persists via SetFields.
+// TestModel_EditStaysOpenForMultipleFields pins the form flow: applying a field
+// returns to the picker (not closing) so several fields can be edited in one
+// session; only Esc from the picker closes.
+func TestModel_EditStaysOpenForMultipleFields(t *testing.T) {
+	m := loadedAt(t, cleanTaskRepo(t), 120, 40)
+	tm, _ := m.Update(press("e"))
+	m = tm.(Model)
+
+	// First field: priority → high.
+	m = editCursorTo(t, m, "priority")
+	tm, _ = m.Update(press("enter"))
+	m = enumCursorTo(t, tm.(Model), "high")
+	tm, cmd := m.Update(press("enter")) // apply
+	m = tm.(Model)
+	if !m.edit.active || m.edit.editing {
+		t.Fatal("after applying, the editor should be back at the picker (still open)")
+	}
+	tm, _ = m.Update(cmd()) // land editedMsg → the picker refreshes the value
+	m = tm.(Model)
+	for _, f := range m.edit.fields {
+		if f.key == "priority" && f.current != "high" {
+			t.Errorf("the picker should show the updated priority, got %q", f.current)
+		}
+	}
+
+	// Second field, without re-opening: tier → 1.
+	m = editCursorTo(t, m, "tier")
+	tm, _ = m.Update(press("enter"))
+	m = enumCursorTo(t, tm.(Model), "1")
+	tm, cmd = m.Update(press("enter"))
+	m = tm.(Model)
+	tm, _ = m.Update(cmd())
+	m = tm.(Model)
+
+	// Esc from the picker closes.
+	tm, _ = m.Update(press("esc"))
+	m = tm.(Model)
+	if m.edit.active {
+		t.Error("esc from the picker should close the editor")
+	}
+	if task, _, _ := m.svc.ShowTask("clean"); task.Priority != "high" || task.Tier != 1 {
+		t.Errorf("both edits should persist: priority=%q tier=%d", task.Priority, task.Tier)
+	}
+}
+
+// TestModel_EditDescriptionViaTextInput pins the long-text happy path: a typed
+// keystroke reaches the word-wrapped description box and the new value persists via
+// SetFields (Enter submits — it never inserts a newline, so description stays one line).
 func TestModel_EditDescriptionViaTextInput(t *testing.T) {
 	m := loadedAt(t, cleanTaskRepo(t), 120, 40)
 	tm, _ := m.Update(press("e"))
 	m = editCursorTo(t, tm.(Model), "description")
 	tm, _ = m.Update(press("enter")) // begin editing (prefilled "d", cursor at end)
 	m = tm.(Model)
-	tm, _ = m.Update(press("x")) // type a char — exercises the input key path
+	tm, _ = m.Update(press("x")) // type a char — exercises the textarea key path
 	m = tm.(Model)
-	if !strings.Contains(m.edit.input.Value(), "x") {
-		t.Fatalf("the keystroke should reach the input, got %q", m.edit.input.Value())
+	if !strings.Contains(m.edit.area.Value(), "x") {
+		t.Fatalf("the keystroke should reach the description box, got %q", m.edit.area.Value())
 	}
 	_, cmd := m.Update(press("enter")) // apply
 	if cmd == nil {
@@ -186,6 +232,30 @@ func TestModel_EditTasksOnly(t *testing.T) {
 	m = tm.(Model)
 	if m.edit.active {
 		t.Error("e must be a no-op on non-task entities")
+	}
+}
+
+// TestModel_EditFormFitsTerminal keeps the layout invariant with the editor open —
+// including the tall description box: the composited view must not change height or
+// overflow width at any size.
+func TestModel_EditFormFitsTerminal(t *testing.T) {
+	for _, d := range []struct{ w, h int }{
+		{120, 40}, {100, 24}, {80, 20}, {60, 16},
+	} {
+		m := loadedAt(t, cleanTaskRepo(t), d.w, d.h)
+		tm, _ := m.Update(press("e"))
+		m = editCursorTo(t, tm.(Model), "description")
+		tm, _ = m.Update(press("enter")) // open the tallest state (the wrapped box)
+		m = tm.(Model)
+		lines := strings.Split(m.View(), "\n")
+		if len(lines) != d.h {
+			t.Errorf("%dx%d with the editor: %d lines, want %d", d.w, d.h, len(lines), d.h)
+		}
+		for i, ln := range lines {
+			if w := ansi.StringWidth(ln); w > d.w {
+				t.Errorf("%dx%d with the editor: line %d is %d wide > %d", d.w, d.h, i, w, d.w)
+			}
+		}
 	}
 }
 

@@ -2,7 +2,7 @@
 schema: 1
 status: in-progress
 epic: 22-selectable-template-library
-description: Generalize the single per-kind body template into a named, selectable library (built-in + repo-local), chosen via --template and agent-discoverable.
+description: Generalize the single per-kind body template into a named, selectable library (built-in + repo-local), chosen via --template and agent-discoverable!
 effort: Unknown
 tier: 3
 priority: medium
