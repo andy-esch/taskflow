@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: in-progress
 epic: 21-code-quality-architecture-hardening
 description: Drive per-entity bits (dir/fields/parse/columns) from a descriptor so a new entity (project/adr) isn't a ~15-file edit.
 effort: Unknown
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [architecture, growth]
 created: "2026-06-22"
+started_at: "2026-06-22"
+updated_at: "2026-06-22"
 ---
 # Entity descriptor to collapse per-entity fan-out
 
