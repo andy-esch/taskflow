@@ -74,6 +74,17 @@ design boundaries, invariants, concurrency, edge cases, and growth risk.
   `"a\"b"` as `a\`; literal `'...'` strings unaffected). New symlink-escape /
   symlinked-worktree / TOML-escape tests; existing Root comparisons made symlink-safe
   for macOS temp dirs. **27 of 44 fixed; 1 in-progress.**
+- **2026-06-22 (6)** — God-file split (**M9** + **L1**, the same epic-21 task) landed as
+  a PURE, zero-behavior-change file move within each package: `render.go`'s JSON DTOs +
+  mappers → `dto.go`, the schema-contract types/funcs → `schema_render.go` (render.go now
+  holds only the generic + list/show renderers); `core/service.go`'s per-entity use-cases →
+  `service_task.go`/`service_epic.go`/`service_audit.go` (service.go keeps the `Service`
+  facade, `NewService`/`WatchPaths`, `Summary`/`Lint`, and shared helpers). No symbol
+  renamed, no casing changed, no exported surface or `core.Store` port touched. Proven by a
+  before/after output snapshot (54-command battery, color forced) that diffed EMPTY, plus
+  goldens passing without `-update`, `schema_comments.json` regenerating with no drift, and
+  docs/cli unchanged; `go build`/`go vet`/`gofmt`/`golangci-lint`/full `go test ./...` all
+  green. **29 of 44 fixed; 1 in-progress.**
 
 ## Verdict
 
@@ -329,7 +340,7 @@ doesn't touch these — hence medium.)
 up per entity), or map core results into render-owned DTOs at the call site as
 `taskJSON`/`auditJSON` already do.
 
-#### M9. render.go is a 703-LOC multi-concern god-file growing 4-6 funcs per entity  · **Status:** open
+#### M9. render.go is a 703-LOC multi-concern god-file growing 4-6 funcs per entity  · **Status:** fixed (2026-06-22)
 
 **File:** internal/cli/render/render.go:1-703 | **Component:** render
 **Effort:** M · **Urgency:** eventually
@@ -459,7 +470,7 @@ re-resolving `a.Slug`. *(quick win)*
 
 ### Low (23)
 
-#### L1. core.Service is a 21-method, ~693-line god-object  · **Status:** open
+#### L1. core.Service is a 21-method, ~693-line god-object  · **Status:** fixed (2026-06-22)
 
 **File:** internal/core/service.go:15-25,41-498,663-671 | **Component:** core
 **Effort:** M · **Urgency:** eventually
