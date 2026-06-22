@@ -23,5 +23,5 @@ List and inspect the body scaffolds `new --template` can use
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
 * [tskflwctl template list](tskflwctl_template_list.md)	 - List available body templates (kind, name, description)
-* [tskflwctl template show](tskflwctl_template_show.md)	 - Show a template's rendered body (name defaults to "default")
+* [tskflwctl template show](tskflwctl_template_show.md)	 - Show a template's body (name defaults to "default"; --raw for the unrendered source)
 

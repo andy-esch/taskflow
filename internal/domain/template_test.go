@@ -2,7 +2,7 @@ package domain
 
 import (
 	"errors"
-	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -64,20 +64,32 @@ func TestTemplateNames(t *testing.T) {
 	}
 }
 
-// TestTemplates_RenderWithoutFormatError is the load-bearing robustness guard: every
-// template of every kind must honor its kind's 2-arg Printf placeholder contract, so
-// a custom/added template (e.g. the security one) can't silently emit a
-// "%!(MISSING)"/"%!(EXTRA)" body. (All three kinds take two %s today.)
-func TestTemplates_RenderWithoutFormatError(t *testing.T) {
+// placeholderRe matches a {{key}} fill token.
+var placeholderRe = regexp.MustCompile(`{{([a-z_]+)}}`)
+
+// TestTemplates_OnlyDeclaredPlaceholders is the load-bearing robustness guard for
+// the named-placeholder model: every {{token}} a template uses must be a declared
+// Placeholder for its kind (so the create path fills it — no leftover {{token}} in
+// a created file), and no legacy Printf %s/%d remains. This is the invariant an
+// author-supplied/repo-local template (step 4) must satisfy, validated on load.
+func TestTemplates_OnlyDeclaredPlaceholders(t *testing.T) {
 	for _, kind := range SchemaKinds() {
+		declared := map[string]bool{}
+		for _, p := range Placeholders(kind) {
+			declared[p.Key] = true
+		}
 		for _, name := range TemplateNames(kind) {
 			body, err := Template(kind, name)
 			if err != nil {
 				t.Fatalf("%s/%s: %v", kind, name, err)
 			}
-			out := fmt.Sprintf(body, "alpha", "beta")
-			if strings.Contains(out, "%!") {
-				t.Errorf("%s/%s: template has a placeholder-arity mismatch:\n%s", kind, name, out)
+			for _, m := range placeholderRe.FindAllStringSubmatch(body, -1) {
+				if !declared[m[1]] {
+					t.Errorf("%s/%s uses undeclared placeholder %q (declared: %v)", kind, name, m[1], Placeholders(kind))
+				}
+			}
+			if strings.Contains(body, "%s") || strings.Contains(body, "%d") {
+				t.Errorf("%s/%s still has a legacy Printf verb; templates use {{key}} now:\n%s", kind, name, body)
 			}
 		}
 	}
@@ -85,14 +97,14 @@ func TestTemplates_RenderWithoutFormatError(t *testing.T) {
 
 // TestAuditTemplates_FreshCountZeroFindings: every audit template's finding example
 // is fenced, so a freshly created audit has zero open findings and is lint-clean.
+// (Placeholders live in the header, not findings, so the raw body is representative.)
 func TestAuditTemplates_FreshCountZeroFindings(t *testing.T) {
 	for _, name := range TemplateNames("audit") {
 		body, err := Template("audit", name)
 		if err != nil {
 			t.Fatal(err)
 		}
-		rendered := fmt.Sprintf(body, "area", "2026-06-22")
-		if n := len(ParseFindings(rendered)); n != 0 {
+		if n := len(ParseFindings(body)); n != 0 {
 			t.Errorf("audit/%s: a fresh audit should have 0 parsed findings, got %d", name, n)
 		}
 	}

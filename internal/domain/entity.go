@@ -24,20 +24,30 @@ type Descriptor struct {
 	AuthoringFields []FieldDoc      // frontmatter a drafter fills in (not tool-managed stamps)
 	Conventions     []string        // short, factual "how to write it" rules
 	Templates       []NamedTemplate // body scaffolds offered for this kind; the one named DefaultTemplate is used when --template is omitted
+	Placeholders    []Placeholder   // the {{key}} tokens this kind's templates fill (real values at create; preview labels at show)
 }
 
 // DefaultTemplate is the body-scaffold name used when --template is omitted; every
 // kind's descriptor must offer one (guarded by a test).
 const DefaultTemplate = "default"
 
-// NamedTemplate is one body scaffold a kind offers under a name. Body is a Printf
-// format honoring the kind's placeholder arity, so every template for a kind is
-// interchangeable at the create call site (task: title, epic-id; epic: title,
-// description; audit: area, date). Description is a one-liner for completion/listing.
+// NamedTemplate is one body scaffold a kind offers under a name. Body uses {{key}}
+// placeholders (NOT Printf %s) drawn from the kind's Descriptor.Placeholders, so an
+// author's body may contain a literal '%' and may use any subset of the kind's
+// placeholders without an arity contract. Description is a one-liner for listing.
 type NamedTemplate struct {
 	Name        string
 	Description string
 	Body        string
+}
+
+// Placeholder is a {{Key}} token a kind's templates may fill: the real value at
+// create time, or Label in a placeholder preview (`template show` / `schema`).
+// Declared per kind on the Descriptor so the renderer is registry-driven — a new
+// kind lights up without a per-kind switch.
+type Placeholder struct {
+	Key   string // the {{Key}} token, e.g. "title"
+	Label string // the preview label, e.g. "<title>"
 }
 
 // entities is the single registry of document kinds. The ORDER is the
@@ -64,8 +74,9 @@ var entities = []Descriptor{
 			"the slug is derived from the title; keep titles filename-safe.",
 		},
 		Templates: []NamedTemplate{
-			{DefaultTemplate, "Standard task scaffold: objective, acceptance criteria, scope.", taskBodyTemplate},
+			{DefaultTemplate, "Standard task scaffold: objective, acceptance criteria, out-of-scope, related epic.", taskBodyTemplate},
 		},
+		Placeholders: []Placeholder{{"title", "<title>"}, {"epic", "<epic-id>"}},
 	},
 	{
 		Kind: "epic",
@@ -81,8 +92,9 @@ var entities = []Descriptor{
 			"description is required (single line, ≤150 chars).",
 		},
 		Templates: []NamedTemplate{
-			{DefaultTemplate, "Standard epic scaffold: goal, rationale, scope.", epicBodyTemplate},
+			{DefaultTemplate, "Standard epic scaffold: goal, why-it's-its-own-epic, out-of-scope.", epicBodyTemplate},
 		},
+		Placeholders: []Placeholder{{"title", "<title>"}, {"description", "<description>"}},
 	},
 	{
 		Kind: "audit",
@@ -99,6 +111,7 @@ var entities = []Descriptor{
 			{DefaultTemplate, "Standard audit scaffold: findings + candidate tasks.", auditBodyTemplate},
 			{"security", "Security review: threat model, checklist, severity-tagged findings.", auditSecurityBodyTemplate},
 		},
+		Placeholders: []Placeholder{{"area", "<area>"}, {"date", "<date>"}},
 	},
 }
 
@@ -167,13 +180,23 @@ func LookupTemplate(kind, name string) (NamedTemplate, error) {
 		ErrValidation, kind, name, strings.Join(templateNames(d), ", "))
 }
 
-// Template returns a kind's named body scaffold. An empty name selects the
-// default. The body is a Printf format the create call site fills with the kind's
-// placeholders (task: title, epic-id; epic: title, description; audit: area, date),
-// so every template for a kind is interchangeable.
+// Template returns a kind's named body scaffold (raw, with {{key}} placeholders
+// unfilled). An empty name selects the default. The create paths fill the
+// placeholders with real values and `template show`/`schema` with preview labels;
+// see Placeholders.
 func Template(kind, name string) (string, error) {
 	t, err := LookupTemplate(kind, name)
 	return t.Body, err
+}
+
+// Placeholders returns the {{key}} tokens (with preview labels) a kind's templates
+// fill — registry-driven, so a new kind needs no renderer switch. Nil for an
+// unknown kind.
+func Placeholders(kind string) []Placeholder {
+	if d, ok := descriptorFor(kind); ok {
+		return append([]Placeholder(nil), d.Placeholders...)
+	}
+	return nil
 }
 
 // TemplatesFor returns the templates a kind offers (read-only copy, default first),
@@ -207,7 +230,7 @@ func templateNames(d Descriptor) []string {
 // drift-prone copy in core, and so the named-template set is one registry. Epic 22
 // (the selectable template library) layers repo-local templates over these.
 const taskBodyTemplate = `
-# %s
+# {{title}}
 
 ## Objective
 
@@ -223,13 +246,13 @@ const taskBodyTemplate = `
 
 ## Related
 
-- Epic [[%s]]
+- Epic [[{{epic}}]]
 `
 
 const epicBodyTemplate = `
-# %s
+# {{title}}
 
-**Goal.** %s
+**Goal.** {{description}}
 
 ## Why this is its own epic
 
@@ -244,7 +267,7 @@ const epicBodyTemplate = `
 // findings until real ones are added (parseAudit excludes fenced blocks). It stays
 // generic — a repo with its own conventions doc points at it from its own tooling,
 // not from the shared tool's scaffold.
-const auditBodyTemplate = "\n# Audit: %s — %s\n\n" +
+const auditBodyTemplate = "\n# Audit: {{area}} — {{date}}\n\n" +
 	"> Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
 	"## Findings\n\n" +
 	"<!-- One finding per issue, in this shape (un-fence it): -->\n\n" +
@@ -261,10 +284,9 @@ const auditBodyTemplate = "\n# Audit: %s — %s\n\n" +
 
 // auditSecurityBodyTemplate is the `security` audit scaffold: the same finding
 // grammar as the default (a fenced example, so a fresh audit counts zero findings)
-// plus a threat-model header and a review checklist to anchor a security pass. Same
-// Printf arity as the default audit template (area, date) so the two are
-// interchangeable at the create call site.
-const auditSecurityBodyTemplate = "\n# Security audit: %s — %s\n\n" +
+// plus a threat-model header and a review checklist to anchor a security pass. Uses
+// the same {{area}}/{{date}} placeholders as the default audit template.
+const auditSecurityBodyTemplate = "\n# Security audit: {{area}} — {{date}}\n\n" +
 	"> Security review. Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
 	"## Threat model\n\n" +
 	"- **Assets / trust boundaries:** <what's worth protecting; where untrusted input crosses in>\n" +

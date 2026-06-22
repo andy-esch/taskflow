@@ -176,6 +176,16 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 	return s.store.SetFields(slug, withMeta, dryRun)
 }
 
+// templateBodyConflict rejects supplying both an explicit body and a --template:
+// they're mutually exclusive (override the scaffold OR pick one). Enforced in core
+// so the declared contract holds for every adapter, not just cobra's flag check.
+func templateBodyConflict(body, template string) error {
+	if body != "" && template != "" {
+		return fmt.Errorf("%w: --body/--body-file and --template are mutually exclusive", domain.ErrValidation)
+	}
+	return nil
+}
+
 // unknownFieldErr is the shared rejection for a field outside the registry, used
 // by both the set and unset paths of SetFields.
 func unknownFieldErr(field string) error {
@@ -238,6 +248,9 @@ type NewTaskParams struct {
 // must exist; tier/autonomy/priority/description are validated. On any invalid
 // input it returns ErrValidation and nothing is written.
 func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
+	if err := templateBodyConflict(p.Body, p.Template); err != nil {
+		return domain.Task{}, err
+	}
 	epics, _, err := s.store.ListEpics()
 	if err != nil {
 		return domain.Task{}, err
@@ -316,7 +329,7 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 		if err != nil {
 			return domain.Task{}, err
 		}
-		body = fmt.Sprintf(tmpl, p.Title, p.Epic)
+		body = renderTemplate(tmpl, map[string]string{"title": p.Title, "epic": p.Epic})
 	}
 	return s.store.CreateTask(t, body, p.DryRun)
 }
@@ -336,6 +349,9 @@ type NewEpicParams struct {
 // NewEpic validates and creates an epic (auto-numbered NN-<slug>). Description
 // is required (single line, ≤ the description cap); priority is validated.
 func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
+	if err := templateBodyConflict(p.Body, p.Template); err != nil {
+		return domain.Epic{}, err
+	}
 	if strings.TrimSpace(p.Description) == "" {
 		return domain.Epic{}, fmt.Errorf("%w: epic description is required", domain.ErrValidation)
 	}
@@ -368,7 +384,7 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 		if err != nil {
 			return domain.Epic{}, err
 		}
-		body = fmt.Sprintf(tmpl, p.Title, p.Description)
+		body = renderTemplate(tmpl, map[string]string{"title": p.Title, "description": p.Description})
 	}
 	return s.store.CreateEpic(slug, e, body, p.DryRun)
 }
@@ -574,6 +590,9 @@ type NewAuditParams struct {
 // omitted); the slug is `<date>-<area-slug>`. On invalid input it returns
 // ErrValidation and nothing is written.
 func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
+	if err := templateBodyConflict(p.Body, p.Template); err != nil {
+		return domain.Audit{}, err
+	}
 	area := strings.TrimSpace(p.Area)
 	if area == "" {
 		return domain.Audit{}, fmt.Errorf("%w: audit area is required", domain.ErrValidation)
@@ -604,7 +623,7 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 		if err != nil {
 			return domain.Audit{}, err
 		}
-		body = fmt.Sprintf(tmpl, area, date)
+		body = renderTemplate(tmpl, map[string]string{"area": area, "date": date})
 	}
 	return s.store.CreateAudit(a, body, p.DryRun)
 }

@@ -52,10 +52,11 @@ func newTemplateListCmd(app *App) *cobra.Command {
 }
 
 func newTemplateShowCmd(app *App) *cobra.Command {
-	return &cobra.Command{
+	var raw bool
+	cmd := &cobra.Command{
 		Use:               "show <kind> [name]",
-		Short:             `Show a template's rendered body (name defaults to "default")`,
-		Example:           "  tskflwctl template show audit security\n  tskflwctl template show task --json",
+		Short:             `Show a template's body (name defaults to "default"; --raw for the unrendered source)`,
+		Example:           "  tskflwctl template show audit security\n  tskflwctl template show task --raw",
 		Args:              cobra.RangeArgs(1, 2),
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: completeTemplateShowArgs,
@@ -65,13 +66,15 @@ func newTemplateShowCmd(app *App) *cobra.Command {
 			if len(args) == 2 {
 				name = args[1]
 			}
+			// One resolution: LookupTemplate carries both the metadata and the raw
+			// body, so we render labels here rather than resolving a second time.
 			nt, err := domain.LookupTemplate(kind, name) // validates kind+name → exit 11
 			if err != nil {
 				return err
 			}
-			body, err := core.TemplateBody(kind, name)
-			if err != nil {
-				return err
+			body := nt.Body // --raw: the unrendered {{placeholder}} source, for forking
+			if !raw {
+				body = core.RenderLabels(kind, nt.Body) // preview with <title>/<area> labels
 			}
 			info := render.TemplateInfo{Kind: kind, Name: nt.Name, Description: nt.Description}
 			if app.JSON {
@@ -81,6 +84,8 @@ func newTemplateShowCmd(app *App) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&raw, "raw", false, "print the unrendered template source ({{placeholders}}) instead of the labelled preview")
+	return cmd
 }
 
 // templateInfos gathers the listable templates for kind (or every kind, in schema

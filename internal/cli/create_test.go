@@ -450,3 +450,61 @@ func TestCreate_TemplateAndBodyMutuallyExclusive(t *testing.T) {
 		t.Fatal("--body with --template should be rejected (mutually exclusive)")
 	}
 }
+
+// TestCreate_TemplateLeavesNoUnfilledPlaceholders pins the named-placeholder model:
+// a created doc of every kind has no leftover {{...}} — every placeholder the body
+// uses is filled by the create path. Guards create-path/descriptor key drift.
+func TestCreate_TemplateLeavesNoUnfilledPlaceholders(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	runRoot(t, "-C", root, "task", "new", "T One", "--epic", "e1", "--tags", "a")
+	runRoot(t, "-C", root, "epic", "new", "E Two", "--description", "the goal")
+	runRoot(t, "-C", root, "audit", "new", "area-three", "--date", "2026-06-22")
+
+	paths := []string{
+		filepath.Join(root, "tasks", "ready-to-start", "t-one.md"),
+		filepath.Join(root, "audits", "open", "2026-06-22-area-three.md"),
+	}
+	epics, _ := filepath.Glob(filepath.Join(root, "epics", "*-e-two.md")) // auto-numbered NN-e-two
+	if len(epics) != 1 {
+		t.Fatalf("expected 1 epic file, got %v", epics)
+	}
+	paths = append(paths, epics[0])
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("read %s: %v", p, err)
+		}
+		if strings.Contains(string(b), "{{") {
+			t.Errorf("%s has an unfilled placeholder:\n%s", p, b)
+		}
+	}
+}
+
+// TestCreate_TemplatePerKind covers --template + the --body/--template exclusion for
+// every create command (previously only task was tested).
+func TestCreate_TemplatePerKind(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	cases := []struct {
+		name string
+		ok   []string
+		bad  []string
+	}{
+		{"task",
+			[]string{"task", "new", "TT", "--epic", "e1", "--tags", "a", "--template", "default"},
+			[]string{"task", "new", "TT2", "--epic", "e1", "--tags", "a", "--body", "x", "--template", "default"}},
+		{"epic",
+			[]string{"epic", "new", "EE", "--description", "g", "--template", "default"},
+			[]string{"epic", "new", "EE2", "--description", "g", "--body", "x", "--template", "default"}},
+		{"audit",
+			[]string{"audit", "new", "aa", "--template", "default"},
+			[]string{"audit", "new", "aa2", "--body", "x", "--template", "default"}},
+	}
+	for _, tc := range cases {
+		runRoot(t, append([]string{"-C", root}, tc.ok...)...) // Fatalf if exit != 0
+		if _, err := runRootRC(t, append([]string{"-C", root}, tc.bad...)...); err == nil {
+			t.Errorf("%s: --body with --template should be rejected", tc.name)
+		}
+	}
+}

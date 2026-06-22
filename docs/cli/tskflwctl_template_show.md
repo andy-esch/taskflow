@@ -1,6 +1,6 @@
 ## tskflwctl template show
 
-Show a template's rendered body (name defaults to "default")
+Show a template's body (name defaults to "default"; --raw for the unrendered source)
 
 ```
 tskflwctl template show <kind> [name] [flags]
@@ -10,13 +10,14 @@ tskflwctl template show <kind> [name] [flags]
 
 ```
   tskflwctl template show audit security
-  tskflwctl template show task --json
+  tskflwctl template show task --raw
 ```
 
 ### Options
 
 ```
   -h, --help   help for show
+      --raw    print the unrendered template source ({{placeholders}}) instead of the labelled preview
 ```
 
 ### Options inherited from parent commands

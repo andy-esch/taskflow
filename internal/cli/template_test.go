@@ -87,3 +87,33 @@ func TestTemplateShow_UnknownNameRejected(t *testing.T) {
 		t.Errorf("error should list the available templates: %v", err)
 	}
 }
+
+func TestTemplateShow_Raw(t *testing.T) {
+	raw := runRoot(t, "template", "show", "audit", "security", "--raw")
+	if !strings.Contains(raw, "{{area}}") {
+		t.Errorf("--raw should show the unrendered {{area}} source:\n%s", raw)
+	}
+	preview := runRoot(t, "template", "show", "audit", "security")
+	if strings.Contains(preview, "{{area}}") || !strings.Contains(preview, "<area>") {
+		t.Errorf("default show should render labels, not raw placeholders:\n%s", preview)
+	}
+}
+
+func TestSchemaKind_AdvertisesTemplates(t *testing.T) {
+	out := runRoot(t, "schema", "audit", "--json")
+	var got struct {
+		Templates []struct {
+			Name string `json:"name"`
+		} `json:"templates"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad json: %v\n%s", err, out)
+	}
+	var names []string
+	for _, x := range got.Templates {
+		names = append(names, x.Name)
+	}
+	if !has(names, "default") || !has(names, "security") {
+		t.Errorf("schema audit should advertise templates default+security, got %v", names)
+	}
+}

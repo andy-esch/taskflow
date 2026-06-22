@@ -540,6 +540,12 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "templates": {
+          "items": {
+            "$ref": "#/$defs/TemplateInfo"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -550,7 +556,8 @@
         "sections",
         "body_template",
         "fields",
-        "conventions"
+        "conventions",
+        "templates"
       ],
       "description": "SchemaKindEnvelope is `schema \u003ckind\u003e --json` (per-kind authoring guidance)."
     },

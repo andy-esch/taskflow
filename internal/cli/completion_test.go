@@ -122,3 +122,19 @@ func mustWrite(t *testing.T, path, content string) {
 	t.Helper()
 	testutil.Write(t, path, content)
 }
+
+// TestComplete_Templates pins the template discovery surface (no repo needed).
+func TestComplete_Templates(t *testing.T) {
+	if got := complete(t, "template", "show", ""); !has(got, "audit") || !has(got, "task") {
+		t.Errorf("template show <kind> completion: %v", got)
+	}
+	if got := complete(t, "template", "show", "audit", ""); !has(got, "default") || !has(got, "security") {
+		t.Errorf("template show audit <name> completion: %v", got)
+	}
+	if got := complete(t, "audit", "new", "--template", ""); !has(got, "security") {
+		t.Errorf("audit new --template completion: %v", got)
+	}
+	if got := complete(t, "template", "list", "--kind", ""); !has(got, "audit") {
+		t.Errorf("template list --kind completion: %v", got)
+	}
+}
