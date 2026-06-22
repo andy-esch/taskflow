@@ -12,6 +12,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // Inline field editing (the human face of `task set`): `e` opens a single form
@@ -90,6 +91,7 @@ type editMenu struct {
 	input   textinput.Model // single-line text fields
 	area    textarea.Model  // the word-wrapped long-text field (description)
 	optCur  int             // enum option cursor
+	err     string          // last submit's validation error, shown until the next edit
 }
 
 // open shows the form for a task.
@@ -111,6 +113,25 @@ func (e *editMenu) open(t domain.Task) {
 
 func (e *editMenu) close() {
 	e.active = false
+	e.err = ""
+	e.input.Blur()
+	e.area.Blur()
+}
+
+// applied returns the form to field navigation after a confirmed write, refreshing
+// the just-set field's displayed value and clearing any prior error.
+func (e *editMenu) applied(field, val string) {
+	e.setCurrent(field, val)
+	e.editing = false
+	e.err = ""
+	e.input.Blur()
+	e.area.Blur()
+}
+
+// stopEditing drops back to the field picker (Esc from a widget), clearing the error.
+func (e *editMenu) stopEditing() {
+	e.editing = false
+	e.err = ""
 	e.input.Blur()
 	e.area.Blur()
 }
@@ -199,7 +220,7 @@ func (m *Model) handleEditKey(msg tea.KeyMsg) tea.Cmd {
 		case "enter":
 			return m.submitEdit()
 		case "esc":
-			m.edit.editing = false // back to field navigation
+			m.edit.stopEditing() // back to field navigation
 		}
 		return nil
 	case fieldLongText:
@@ -207,10 +228,10 @@ func (m *Model) handleEditKey(msg tea.KeyMsg) tea.Cmd {
 		case tea.KeyEnter:
 			return m.submitEdit()
 		case tea.KeyEsc:
-			m.edit.editing = false
-			m.edit.area.Blur()
+			m.edit.stopEditing()
 			return nil
 		}
+		m.edit.err = "" // any edit clears the stale validation error
 		var cmd tea.Cmd
 		m.edit.area, cmd = m.edit.area.Update(msg)
 		return cmd
@@ -219,29 +240,24 @@ func (m *Model) handleEditKey(msg tea.KeyMsg) tea.Cmd {
 		case tea.KeyEnter:
 			return m.submitEdit()
 		case tea.KeyEsc:
-			m.edit.editing = false
-			m.edit.input.Blur()
+			m.edit.stopEditing()
 			return nil
 		}
+		m.edit.err = ""
 		var cmd tea.Cmd
 		m.edit.input, cmd = m.edit.input.Update(msg)
 		return cmd
 	}
 }
 
-// submitEdit fires the SetFields write for the edited field and returns to field
-// navigation — the form stays open so the user can edit another field; Esc from the
-// picker closes it. Core re-validates (enum/key-order/surgical frontmatter); an
-// invalid value comes back as actionErrMsg (red flash, nothing written). The form's
-// displayed value updates only when the write confirms (editedMsg), so a rejected
-// edit leaves the real (old) value shown.
+// submitEdit fires the SetFields write for the edited field and waits on the result
+// before leaving the field: on success (editedMsg) the form returns to the picker
+// with the new value; on a core validation error (actionErrMsg) it stays on the
+// field, keeping what was typed, and shows the error so the user can fix it in place
+// (see the editedMsg/actionErrMsg handlers). The field stays focused meanwhile.
 func (m *Model) submitEdit() tea.Cmd {
-	f := m.edit.cur()
-	slug, val := m.edit.slug, m.edit.value()
-	m.edit.editing = false
-	m.edit.input.Blur()
-	m.edit.area.Blur()
-	return setFieldCmd(m.svc, slug, f.key, val)
+	m.edit.err = ""
+	return setFieldCmd(m.svc, m.edit.slug, m.edit.cur().key, m.edit.value())
 }
 
 // setCurrent updates the form's displayed value for a field after a confirmed
@@ -293,7 +309,12 @@ func (e editMenu) view(maxW, maxH int) string {
 		body += "\n\n" + editAreaBox.Render(e.area.View())
 	}
 	box := actionBorder.Render(body)
-	return clampBox(lipgloss.JoinVertical(lipgloss.Left, box, e.hint()), maxW, maxH)
+	lines := []string{box}
+	if e.err != "" {
+		lines = append(lines, fg(theme.ColorRed, "✘ "+truncate(e.err, max(maxW-2, 8))))
+	}
+	lines = append(lines, e.hint())
+	return clampBox(lipgloss.JoinVertical(lipgloss.Left, lines...), maxW, maxH)
 }
 
 // cell renders field i's value column: the inline editor when it's the one being

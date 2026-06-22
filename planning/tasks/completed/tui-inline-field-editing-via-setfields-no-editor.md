@@ -77,15 +77,19 @@ reload. No new core surface; reuses the S4 mutation plumbing.
 
 Shipped as a new modal in the M14 overlay registry (`internal/tui/edit.go` +
 `editModal` in `overlay.go`). **Decisions:** field set = description / priority /
-tags / effort / tier (the default); a dedicated `e` opens a two-phase modal — a
-field picker, then a per-field widget (text input for description/tags/effort,
-enum cursor for priority/tier) floated over the body like the `a` menu; submit
-fires `Service.SetFields` (force=false, dryRun=false) as a `tea.Cmd` → `editedMsg`
-→ flash + reload; invalid input comes back as `actionErrMsg` (red flash, no write);
-Esc cancels. Tags ride as a comma-list and tier as a string — the SetFields
-coercion turns them into a YAML list / int, the same path `task set` uses. Task-only
-(SetFields has no epic/audit path); status stays in `a`. The `$EDITOR`-escape
-follow-on is left out of scope as planned.
+tags / effort / tier (the default); a dedicated `e` opens a **single form panel** —
+all fields listed with their meanings (from the entity descriptor's
+`AuthoringFields`), the active field's editor shown **in place**: an enum's options
+inline in its row (priority/tier), a single-line input (tags/effort), or a taller
+word-wrapped `textarea` below the list (description). Apply (`⏎`) fires
+`Service.SetFields` (force=false, dryRun=false) as a `tea.Cmd` and **waits on the
+result**: success → back to the picker with the value refreshed (so several fields
+can be edited in one session); a core validation error → **stays on the field with
+the error shown inline** (sentinel prefix trimmed), keeping what was typed for an
+in-place fix. `Esc` backs out a level (field → picker → close). Tags ride as a
+comma-list and tier as a string — the SetFields coercion turns them into a YAML list
+/ int, the same path `task set` uses. Task-only (SetFields has no epic/audit path);
+status stays in `a`. The `$EDITOR`-escape follow-on is left out of scope as planned.
 
 **Testing note:** used the codebase's established message-injection + `View()`
 substring assertions (e.g. `TestModel_EditMenuComposites`, and the

@@ -169,11 +169,20 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.flash = fmt.Sprintf("set %s on %s", msg.field, msg.slug)
 		m.flashErr = false
 		if m.edit.active {
-			m.edit.setCurrent(msg.field, msg.value)
+			m.edit.applied(msg.field, msg.value) // back to the picker, value refreshed
 		}
 		return m, m.reloadAll()
 
 	case actionErrMsg:
+		// An inline-edit write failed: keep the field open with what was typed and
+		// show the validation error there, so the fix happens in place rather than
+		// the edit silently reverting. Other mutations (the action menu) flash.
+		if m.edit.active {
+			// Trim the "validation failed:" sentinel prefix — inline by the field, the
+			// bare reason ("at least one tag is required") reads cleaner.
+			m.edit.err = strings.TrimPrefix(msg.err.Error(), domain.ErrValidation.Error()+": ")
+			return m, nil
+		}
 		m.flash = msg.err.Error()
 		m.flashErr = true
 		return m, nil

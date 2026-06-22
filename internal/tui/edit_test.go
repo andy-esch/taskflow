@@ -89,16 +89,16 @@ func TestModel_EditPriorityViaMenu(t *testing.T) {
 		t.Fatal("enter should begin editing the field")
 	}
 	m = enumCursorTo(t, m, "high")
-	tm, cmd := m.Update(press("enter")) // apply
+	tm, cmd := m.Update(press("enter")) // apply (write in flight; still on the field)
 	m = tm.(Model)
-	if !m.edit.active || m.edit.editing {
-		t.Error("applying a field should return to the picker (open, not editing)")
-	}
 	if cmd == nil {
 		t.Fatal("apply should return a SetFields command")
 	}
 	tm, _ = m.Update(cmd()) // run SetFields → editedMsg
 	m = tm.(Model)
+	if !m.edit.active || m.edit.editing {
+		t.Error("a successful apply should return to the picker (open, not editing)")
+	}
 	if m.flash == "" || m.flashErr {
 		t.Errorf("expected a success flash, got %q (err=%v)", m.flash, m.flashErr)
 	}
@@ -122,11 +122,11 @@ func TestModel_EditStaysOpenForMultipleFields(t *testing.T) {
 	m = enumCursorTo(t, tm.(Model), "high")
 	tm, cmd := m.Update(press("enter")) // apply
 	m = tm.(Model)
-	if !m.edit.active || m.edit.editing {
-		t.Fatal("after applying, the editor should be back at the picker (still open)")
-	}
-	tm, _ = m.Update(cmd()) // land editedMsg → the picker refreshes the value
+	tm, _ = m.Update(cmd()) // land editedMsg → back to the picker, value refreshed
 	m = tm.(Model)
+	if !m.edit.active || m.edit.editing {
+		t.Fatal("after a successful apply, the editor should be back at the picker (still open)")
+	}
 	for _, f := range m.edit.fields {
 		if f.key == "priority" && f.current != "high" {
 			t.Errorf("the picker should show the updated priority, got %q", f.current)
@@ -179,7 +179,9 @@ func TestModel_EditDescriptionViaTextInput(t *testing.T) {
 }
 
 // TestModel_EditRejectedSurfacesError pins the validation contract: clearing tags on
-// an active task is rejected by core (red flash) and nothing is written.
+// an active task is rejected by core, the error is shown ON the field (not a bounce
+// to the picker or a silent revert), what was typed is kept, nothing is written —
+// and the user can fix it in place and re-submit.
 func TestModel_EditRejectedSurfacesError(t *testing.T) {
 	m := loadedAt(t, cleanTaskRepo(t), 120, 40)
 	tm, _ := m.Update(press("e"))
@@ -191,17 +193,63 @@ func TestModel_EditRejectedSurfacesError(t *testing.T) {
 	if m.edit.input.Value() != "" {
 		t.Fatalf("tags input should be empty, got %q", m.edit.input.Value())
 	}
-	_, cmd := m.Update(press("enter")) // submit empty tags
+	tm, cmd := m.Update(press("enter")) // submit empty tags
+	m = tm.(Model)
 	if cmd == nil {
 		t.Fatal("submit should return a command")
 	}
 	tm, _ = m.Update(cmd()) // run SetFields → rejection
 	m = tm.(Model)
-	if !m.flashErr || m.flash == "" {
-		t.Errorf("clearing tags on an active task should flash red, got %q (err=%v)", m.flash, m.flashErr)
+	if !m.edit.active || !m.edit.editing {
+		t.Error("a rejected edit should keep the field open for a fix, not bounce to the picker")
+	}
+	if m.edit.err == "" || !strings.Contains(m.edit.err, "tag") {
+		t.Errorf("the validation error should be shown on the field, got %q", m.edit.err)
 	}
 	if task, _, _ := m.svc.ShowTask("clean"); len(task.Tags) != 1 || task.Tags[0] != "a" {
 		t.Errorf("a rejected edit must not write; tags=%v", task.Tags)
+	}
+	// The user fixes it in place: type a valid tag and re-submit.
+	tm, _ = m.Update(press("x"))
+	m = tm.(Model)
+	if m.edit.err != "" {
+		t.Error("typing should clear the stale error")
+	}
+	tm, cmd = m.Update(press("enter"))
+	m = tm.(Model)
+	tm, _ = m.Update(cmd()) // success
+	m = tm.(Model)
+	if m.edit.editing {
+		t.Error("a successful re-submit should return to the picker")
+	}
+	if task, _, _ := m.svc.ShowTask("clean"); len(task.Tags) != 1 || task.Tags[0] != "x" {
+		t.Errorf("the fixed tag should persist; tags=%v", task.Tags)
+	}
+}
+
+// TestModel_EditTagsCoercedToList pins the one field with non-trivial coercion: a
+// comma-list typed in the editor lands as a YAML list (the same coercion `task set`
+// applies), so the GUI and agent faces agree.
+func TestModel_EditTagsCoercedToList(t *testing.T) {
+	m := loadedAt(t, cleanTaskRepo(t), 120, 40)
+	tm, _ := m.Update(press("e"))
+	m = editCursorTo(t, tm.(Model), "tags")
+	tm, _ = m.Update(press("enter")) // edit tags
+	m = tm.(Model)
+	m.edit.input.SetValue("net, ui") // a comma-list, like `task set tags=net,ui`
+	tm, cmd := m.Update(press("enter"))
+	m = tm.(Model)
+	if cmd == nil {
+		t.Fatal("apply should return a SetFields command")
+	}
+	tm, _ = m.Update(cmd())
+	m = tm.(Model)
+	task, _, err := m.svc.ShowTask("clean")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(task.Tags) != 2 || task.Tags[0] != "net" || task.Tags[1] != "ui" {
+		t.Errorf("tags should coerce to a 2-item list, got %v", task.Tags)
 	}
 }
 

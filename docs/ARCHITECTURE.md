@@ -149,9 +149,17 @@ Files split by concern:
   active tab's transition table + `applyMove`, so tasks move by status and audits by
   bucket (close/reopen/defer, in-TUI now) through one entity-agnostic path —
   `movedMsg.to` is a plain string the closure interprets. Overlays (help, action,
-  follow) satisfy a small `modal` interface and live in an ordered stack the reducer
-  loops; ForceQuit is handled once ahead of the loop, so a new overlay is one entry,
-  not a new `handleKey` guard block + `bodyView` case.
+  follow, edit) satisfy a small `modal` interface and live in an ordered stack the
+  reducer loops; ForceQuit is handled once ahead of the loop, so a new overlay is one
+  entry, not a new `handleKey` guard block + `bodyView` case.
+- **`edit.go`** — the `e` inline field editor: the human face of `task set`. A form
+  modal listing the typed editable fields (description / priority / tags / effort /
+  tier) with their meanings (from the entity descriptor), the active field's widget
+  inline (enum cursor, single-line input, or a wrapped `textarea` for description).
+  Apply writes through `core.Service.SetFields` as a `tea.Cmd`; a core validation
+  error stays on the field (shown inline) for an in-place fix, success returns to the
+  picker. Task-only; status stays in the action menu. No new validation path —
+  core re-validates, the same as `task set`.
 - **`nav.go`** — S6 cross-link navigation: `f` follows structured references
   (a task's epic; an epic's tasks via a picker modal), `ctrl+o` pops the
   back-stack; hidden targets escalate the tasks view to `:all` rather than fail.
