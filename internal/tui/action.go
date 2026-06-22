@@ -10,25 +10,39 @@ import (
 )
 
 // transition is one lifecycle action — the verb a user knows from the CLI mapped
-// to the status it moves a task to. This table is the single source of truth for
-// both the action menu and the `:`-command verbs.
+// to the destination state it moves the selection to. `to` is a string (a task
+// status OR an audit bucket); the tab's applyMove closure interprets it for the
+// right entity, so the menu/`:`-verb machinery is entity-agnostic. Each entity
+// declares its own table in the registry (entity.go) rather than this being
+// task-only.
 type transition struct {
 	verb        string
-	to          domain.Status
+	to          string
 	destructive bool // requires a y/n confirm (an archiving move)
 }
 
-var transitions = []transition{
-	{"start", domain.StatusInProgress, false},
-	{"promote", domain.StatusNextUp, false},
-	{"demote", domain.StatusReadyToStart, false},
-	{"complete", domain.StatusCompleted, false},
-	{"defer", domain.StatusDeferred, false},
-	{"deprecate", domain.StatusDeprecated, true},
+// taskTransitions are the task status moves (the working-set lifecycle).
+var taskTransitions = []transition{
+	{"start", string(domain.StatusInProgress), false},
+	{"promote", string(domain.StatusNextUp), false},
+	{"demote", string(domain.StatusReadyToStart), false},
+	{"complete", string(domain.StatusCompleted), false},
+	{"defer", string(domain.StatusDeferred), false},
+	{"deprecate", string(domain.StatusDeprecated), true},
 }
 
-// transitionFor resolves a `:`-command verb to its transition.
-func transitionFor(verb string) (transition, bool) {
+// auditTransitions are the audit bucket moves, mirroring `audit close/reopen/defer`.
+// close/defer to a non-open bucket are the ones the store guards on still-open
+// findings (M4) — that rejection surfaces as an actionErrMsg, which is correct.
+var auditTransitions = []transition{
+	{"close", string(domain.AuditClosed), false},
+	{"reopen", string(domain.AuditOpen), false},
+	{"defer", string(domain.AuditDeferred), false},
+}
+
+// transitionFor resolves a `:`-command verb to its transition within a given
+// table (the active tab's), so verbs are scoped to the entity in view.
+func transitionFor(transitions []transition, verb string) (transition, bool) {
 	for _, tr := range transitions {
 		if tr.verb == verb {
 			return tr, true
@@ -37,19 +51,10 @@ func transitionFor(verb string) (transition, bool) {
 	return transition{}, false
 }
 
-// transitionVerbs lists the lifecycle verbs for `:` Tab-completion.
-func transitionVerbs() []string {
-	v := make([]string, len(transitions))
-	for i, tr := range transitions {
-		v[i] = tr.verb
-	}
-	return v
-}
-
-// validTransitions are the moves offered for a task in status cur — every
-// transition except the one that lands on cur (moving to the current status is a
-// no-op, so it's never worth a menu row).
-func validTransitions(cur domain.Status) []transition {
+// validTransitions are the moves offered from state cur — every transition except
+// the one that lands on cur (a no-op, never worth a menu row). cur is the current
+// task status or audit bucket as a string.
+func validTransitions(transitions []transition, cur string) []transition {
 	out := make([]transition, 0, len(transitions))
 	for _, tr := range transitions {
 		if tr.to != cur {
@@ -71,9 +76,10 @@ type actionMenu struct {
 	confirm bool // a destructive choice is awaiting y/n
 }
 
-// open shows the transition menu for slug (currently in status cur).
-func (a *actionMenu) open(slug string, cur domain.Status) {
-	*a = actionMenu{active: true, slug: slug, options: validTransitions(cur)}
+// open shows the transition menu for slug from state cur (its current status or
+// bucket), offering the given entity's transition table minus the no-op row.
+func (a *actionMenu) open(slug string, transitions []transition, cur string) {
+	*a = actionMenu{active: true, slug: slug, options: validTransitions(transitions, cur)}
 }
 
 // openConfirm jumps straight to the y/n gate for one verb — used when a `:`
@@ -108,7 +114,7 @@ func (a actionMenu) view(maxW, maxH int) string {
 	slug := truncate(a.slug, max(maxW-8, 12))
 	if a.confirm {
 		tr := a.selected()
-		body := fg(theme.ColorRed, tr.verb+"?") + "\n\n" + slug + dim(" → "+string(tr.to))
+		body := fg(theme.ColorRed, tr.verb+"?") + "\n\n" + slug + dim(" → "+tr.to)
 		box := dangerBorder.Render(body)
 		hint := dim("y confirm · n/esc cancel")
 		return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, hint), maxW, maxH)
@@ -117,7 +123,7 @@ func (a actionMenu) view(maxW, maxH int) string {
 	b.WriteString(actionHeading.Render("move " + slug))
 	b.WriteString("\n\n")
 	for i, tr := range a.options {
-		label := tr.verb + dim(" → "+string(tr.to))
+		label := tr.verb + dim(" → "+tr.to)
 		if tr.destructive {
 			label += " " + fg(theme.ColorRed, "⚠")
 		}

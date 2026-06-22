@@ -23,9 +23,12 @@ const ingestBody = `# Audit: ingest
 
 func findingsRepo() *fakeStore {
 	return &fakeStore{
+		// .Path mirrors what ListAudits populates; finding sweeps now read by it.
+		// Keying Path to the slug lets the slug-keyed auditBodies map serve both
+		// GetAudit (single-audit) and GetAuditByPath (the cross-audit sweep).
 		audits: []domain.Audit{
-			{Slug: "2026-06-14-gateway", Bucket: domain.AuditOpen},
-			{Slug: "2026-06-10-ingest", Bucket: domain.AuditClosed},
+			{Slug: "2026-06-14-gateway", Path: "2026-06-14-gateway", Bucket: domain.AuditOpen},
+			{Slug: "2026-06-10-ingest", Path: "2026-06-10-ingest", Bucket: domain.AuditClosed},
 		},
 		auditBodies: map[string]string{
 			"2026-06-14-gateway": gatewayBody,
@@ -114,7 +117,7 @@ func TestLintAudits(t *testing.T) {
 
 func TestQueryFindings_EmptyTokenDoesNotOverMatch(t *testing.T) {
 	fs := &fakeStore{
-		audits:      []domain.Audit{{Slug: "a", Bucket: domain.AuditOpen}},
+		audits:      []domain.Audit{{Slug: "a", Path: "a", Bucket: domain.AuditOpen}},
 		auditBodies: map[string]string{"a": "#### A1. t\n**Status:** open\n\n#### B1. no status\nbody\n"},
 	}
 	// B1 has no **Status:** line → parsed status "". A stray-comma filter
@@ -127,7 +130,7 @@ func TestQueryFindings_EmptyTokenDoesNotOverMatch(t *testing.T) {
 
 func TestLintAudits_MultipleIssues(t *testing.T) {
 	fs := &fakeStore{
-		audits:      []domain.Audit{{Slug: "a", Bucket: domain.AuditClosed}},
+		audits:      []domain.Audit{{Slug: "a", Path: "a", Bucket: domain.AuditClosed}},
 		auditBodies: map[string]string{"a": "#### S1. t\n**Status:** opne\n\n#### M1. t\n**Status:** open\n"},
 	}
 	// closed audit: S1 has a typo'd status + M1 is still open → 2 issues.

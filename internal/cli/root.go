@@ -40,6 +40,11 @@ type App struct {
 	Prompt prompt.Prompter // the human-recovery face (huh on a TTY)
 	Cfg    *config.Config
 	Svc    *core.Service
+	// Fixer/Layout are the narrow fs/text ports that aren't core use cases:
+	// `lint --fix` calls Fixer directly and the TUI watcher reads Layout, so
+	// neither routes through the Service (see core.Fixer/core.Layout).
+	Fixer  core.Fixer
+	Layout core.Layout
 }
 
 // setStyle resolves the presentation "face" — output Style (color + width) and the
@@ -130,7 +135,12 @@ func (a *App) resolve() error {
 		return err
 	}
 	a.Cfg = cfg
-	a.Svc = core.NewService(store.NewFS(cfg.Root))
+	// One *FS satisfies all three core ports; the Service gets the use-case Store,
+	// the adapters get the narrow Fixer/Layout (see the App field comment).
+	fs := store.NewFS(cfg.Root)
+	a.Svc = core.NewService(fs)
+	a.Fixer = fs
+	a.Layout = fs
 	return nil
 }
 

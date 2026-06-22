@@ -44,22 +44,39 @@ type EpicStore interface {
 type AuditStore interface {
 	ListAudits() ([]domain.Audit, []domain.FileProblem, error)
 	GetAudit(slug string) (audit domain.Audit, body string, err error)
+	// GetAuditByPath reads one audit directly by its file path, deriving the
+	// bucket from the parent directory (the bucket==directory invariant) rather
+	// than re-resolving the slug across every bucket dir. The finding/lint sweeps
+	// use this to read each audit ListAudits already located exactly once, instead
+	// of an O(N^2) re-resolve+re-read per audit.
+	GetAuditByPath(path string) (audit domain.Audit, body string, err error)
 	MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error)
 	CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error)
 }
 
-// Store is the full persistence port the Service depends on.
+// Store is the use-case persistence port the Service depends on. It is
+// deliberately narrow: only the task/epic/audit use cases live here. The two
+// fs/text operations that aren't use cases (frontmatter repair, watch-path
+// layout) are split into Fixer/Layout below so a second Store implementation —
+// and the test fakes — don't pay for methods the core never calls.
 type Store interface {
 	TaskStore
 	EpicStore
 	AuditStore
+}
 
+// Fixer is the frontmatter-repair port. It is an fs/text operation, not a core
+// use case, so it sits beside Store rather than inside it; the CLI's `lint --fix`
+// wires it directly to the FS instead of routing through the Service.
+type Fixer interface {
 	// FixFrontmatter applies safe text-level frontmatter repairs across all
 	// task and epic files (or previews them when dryRun is true).
 	FixFrontmatter(dryRun bool) ([]domain.FixResult, error)
+}
 
-	// WatchPaths is the directory set a filesystem watcher should observe. The
-	// store owns the on-disk layout; primary adapters (the TUI watcher) consume
-	// this instead of rebuilding the path convention themselves.
+// Layout is the on-disk-layout port: the directory set a filesystem watcher must
+// observe. The store owns the layout convention, so the TUI watcher consumes this
+// instead of rebuilding the tasks/<status> + audits/<bucket> shape itself.
+type Layout interface {
 	WatchPaths() []string
 }

@@ -67,27 +67,24 @@ func (f followMenu) view(maxW, maxH int) string {
 	return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, hint), maxW, maxH)
 }
 
-// handleFollowKey drives the picker while it's open.
-func (m Model) handleFollowKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// handleFollowKey drives the picker while it's open. It mutates the model copy
+// directly (the modal loop passes &m) and returns the cmd; ForceQuit is handled by
+// handleKey's preamble, ahead of the modal loop.
+func (m *Model) handleFollowKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
-	case key.Matches(msg, keys.ForceQuit):
-		return m, tea.Quit
 	case msg.String() == "j" || msg.String() == "down":
 		m.follow.move(1)
-		return m, nil
 	case msg.String() == "k" || msg.String() == "up":
 		m.follow.move(-1)
-		return m, nil
 	case msg.Type == tea.KeyEnter:
 		target := m.follow.selected()
 		m.follow.close()
 		m.pushLoc()
-		return m, m.jumpTo(entityTasks, target.Slug)
+		return m.jumpTo(entityTasks, target.Slug)
 	case key.Matches(msg, keys.Back), key.Matches(msg, keys.Quit):
 		m.follow.close()
-		return m, nil
 	}
-	return m, nil
+	return nil
 }
 
 // followSelected follows the selected item's outgoing reference: a task jumps
@@ -183,8 +180,7 @@ func (m *Model) jumpTo(kind entityKind, id string) tea.Cmd {
 	tab := m.tabs[i]
 	tab.list.ResetFilter()
 	if !tab.loaded {
-		tab.restore = id
-		return tab.reload(m.svc)
+		return tab.reload(m.svc, id)
 	}
 	if tab.selectByID(id) {
 		return m.refreshDetail()
@@ -193,9 +189,8 @@ func (m *Model) jumpTo(kind entityKind, id string) tea.Cmd {
 		// The working set / a status view hides archived tasks an epic still
 		// lists — widen rather than fail (the chip shows view:all afterwards).
 		tab.statusView = "all"
-		tab.restore = id
 		m.flash, m.flashErr = fmt.Sprintf("showing :all to reach %s", id), false
-		return tab.reload(m.svc)
+		return tab.reload(m.svc, id)
 	}
 	m.flash, m.flashErr = fmt.Sprintf("%s not found", id), true
 	return m.refreshDetail()

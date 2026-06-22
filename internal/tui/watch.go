@@ -22,8 +22,8 @@ type watcher struct {
 }
 
 // newWatcher watches the given leaf dirs (fsnotify is non-recursive); the path
-// set comes from the store via core.Service.WatchPaths(), so the TUI never
-// reconstructs the planning-tree layout itself. Dirs that don't exist are
+// set comes from the store via the core.Layout port (WatchPaths), so the TUI
+// never reconstructs the planning-tree layout itself. Dirs that don't exist are
 // skipped — `init` fixes the standard set, and watching missing optional buckets
 // isn't worth failing over. (New status/bucket dirs at runtime are out of scope.)
 //

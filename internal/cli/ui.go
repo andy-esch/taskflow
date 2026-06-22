@@ -14,7 +14,7 @@ func newUICmd(app *App) *cobra.Command {
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return tui.Run(app.Svc)
+			return tui.Run(app.Svc, app.Layout)
 		},
 	}
 }

@@ -5,22 +5,29 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
-	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // newTemplateCmd is the body-template discovery surface: `template list` and
-// `template show`. Templates are built-in (domain data), so — like `schema` —
-// these need no planning repo and run anywhere an agent wants to learn which
-// scaffolds `new --template` can use. (Repo-local templates, when epic 22 adds
-// them, will resolve a repo on top of the built-ins.)
+// `template show`. Resolution runs through core.Service (like every other
+// read/create surface), so when epic 22 adds repo-local templates they layer on
+// here with no CLI change. The built-in scaffolds still work repo-less — the
+// PersistentPreRunE resolves a planning repo best-effort and falls back to a
+// built-in-only service, so these run anywhere `schema` does.
 func newTemplateCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "template",
 		Short:       "List and inspect the body scaffolds `new --template` can use",
 		Annotations: map[string]string{"safety": "read-only"},
-		// Pure self-description (like `schema`): no planning repo needed. Overriding
-		// the root's resolve() lets this run in any directory.
-		PersistentPreRunE: func(*cobra.Command, []string) error { app.setStyle(); return nil },
+		PersistentPreRunE: func(*cobra.Command, []string) error {
+			app.setStyle()
+			// Best-effort: a planning repo (when present) lets repo-local templates
+			// layer on; when absent, fall back to the built-in source so the
+			// built-in scaffolds still resolve anywhere.
+			if err := app.resolve(); err != nil {
+				app.Svc = core.NewBuiltinTemplateService()
+			}
+			return nil
+		},
 	}
 	cmd.AddCommand(newTemplateListCmd(app), newTemplateShowCmd(app))
 	return cmd
@@ -35,7 +42,7 @@ func newTemplateListCmd(app *App) *cobra.Command {
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
-			infos, err := templateInfos(kind)
+			infos, err := templateInfos(app, kind)
 			if err != nil {
 				return err
 			}
@@ -66,17 +73,17 @@ func newTemplateShowCmd(app *App) *cobra.Command {
 			if len(args) == 2 {
 				name = args[1]
 			}
-			// One resolution: LookupTemplate carries both the metadata and the raw
-			// body, so we render labels here rather than resolving a second time.
-			nt, err := domain.LookupTemplate(kind, name) // validates kind+name → exit 11
+			// One resolution through the service: ShowTemplate carries the metadata
+			// and the raw body, so we render labels here rather than resolving twice.
+			ti, raw0, err := app.Svc.ShowTemplate(kind, name) // validates kind+name → exit 11
 			if err != nil {
 				return err
 			}
-			body := nt.Body // --raw: the unrendered {{placeholder}} source, for forking
+			body := raw0 // --raw: the unrendered {{placeholder}} source, for forking
 			if !raw {
-				body = core.RenderLabels(kind, nt.Body) // preview with <title>/<area> labels
+				body = core.RenderLabels(kind, raw0) // preview with <title>/<area> labels
 			}
-			info := render.TemplateInfo{Kind: kind, Name: nt.Name, Description: nt.Description}
+			info := render.TemplateInfo{Kind: ti.Kind, Name: ti.Name, Description: ti.Description}
 			if app.JSON {
 				return render.TemplateShowJSON(app.Out, info, body)
 			}
@@ -89,22 +96,17 @@ func newTemplateShowCmd(app *App) *cobra.Command {
 }
 
 // templateInfos gathers the listable templates for kind (or every kind, in schema
-// order, when kind==""). An unknown kind is ErrValidation (exit 11). The slice is
-// always non-nil so `--json` emits [] rather than null.
-func templateInfos(kind string) ([]render.TemplateInfo, error) {
-	kinds := domain.SchemaKinds()
-	if kind != "" {
-		if _, err := domain.TemplatesFor(kind); err != nil {
-			return nil, err
-		}
-		kinds = []string{kind}
+// order, when kind=="") through the service, then maps the core results into the
+// render DTO. An unknown kind is ErrValidation (exit 11). The slice is always
+// non-nil so `--json` emits [] rather than null.
+func templateInfos(app *App, kind string) ([]render.TemplateInfo, error) {
+	infos, err := app.Svc.ListTemplates(kind)
+	if err != nil {
+		return nil, err
 	}
-	out := []render.TemplateInfo{}
-	for _, k := range kinds {
-		ts, _ := domain.TemplatesFor(k) // k is known here
-		for _, t := range ts {
-			out = append(out, render.TemplateInfo{Kind: k, Name: t.Name, Description: t.Description})
-		}
+	out := make([]render.TemplateInfo, len(infos))
+	for i, t := range infos {
+		out[i] = render.TemplateInfo{Kind: t.Kind, Name: t.Name, Description: t.Description}
 	}
 	return out, nil
 }

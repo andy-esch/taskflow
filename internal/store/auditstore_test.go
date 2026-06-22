@@ -87,3 +87,45 @@ func TestFS_GetAudit_NotFound(t *testing.T) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 }
+
+// TestFS_GetAuditByPath pins M16: a read-by-path returns the same audit+body as
+// GetAudit and derives the bucket from the parent directory (not the frontmatter).
+func TestFS_GetAuditByPath(t *testing.T) {
+	root := t.TempDir()
+	body := "# Audit\n\n#### H1. t  · **Status:** open\n"
+	writeAudit(t, root, "deferred", "2026-06-01-x.md", "---\narea: dispatcher\ndate: 2026-06-01\n---\n"+body)
+	fs := NewFS(root)
+
+	// Discover the path the way the sweeps do: ListAudits populates .Path.
+	audits, _, err := fs.ListAudits()
+	if err != nil || len(audits) != 1 {
+		t.Fatalf("ListAudits: %v (n=%d)", err, len(audits))
+	}
+	wantPath := audits[0].Path
+
+	a, gotBody, err := fs.GetAuditByPath(wantPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Slug != "2026-06-01-x" || a.Bucket != domain.AuditDeferred || a.Area != "dispatcher" {
+		t.Errorf("metadata wrong (bucket must come from the parent dir): %+v", a)
+	}
+	if a.Findings != 1 || a.OpenFindings != 1 {
+		t.Errorf("findings=%d open=%d, want 1/1", a.Findings, a.OpenFindings)
+	}
+	// Body matches the GetAudit (slug-resolved) read of the same file.
+	if _, slugBody, err := fs.GetAudit("2026-06-01-x"); err != nil || gotBody != slugBody {
+		t.Errorf("by-path body diverges from by-slug: %q vs %q (%v)", gotBody, slugBody, err)
+	}
+}
+
+// TestFS_GetAuditByPath_RejectsNonBucketDir pins that a path outside
+// audits/<bucket>/ is rejected (ErrValidation), not silently mis-bucketed.
+func TestFS_GetAuditByPath_RejectsNonBucketDir(t *testing.T) {
+	root := t.TempDir()
+	stray := filepath.Join(root, "audits", "bogus", "x.md")
+	testutil.Write(t, stray, "---\narea: a\n---\n# x\n")
+	if _, _, err := NewFS(root).GetAuditByPath(stray); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("want ErrValidation for a non-bucket parent dir, got %v", err)
+	}
+}

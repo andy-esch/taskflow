@@ -12,16 +12,42 @@ import (
 // It has no fs and no cobra, so it is testable in isolation and reused by both
 // primary adapters (the cli and the tui).
 type Service struct {
-	store Store
+	store     Store
+	templates TemplateSource
 }
 
-// NewService wires the core to its store.
-func NewService(store Store) *Service { return &Service{store: store} }
+// Option configures a Service at construction. Functional options keep the common
+// NewService(store) call unchanged while leaving room for injected ports (the
+// template source today; repo-local sources in epic 22).
+type Option func(*Service)
 
-// WatchPaths exposes the store's watchable directory set to the TUI, so the
-// fs-layout knowledge stays behind the port instead of being rebuilt in the
-// watcher (the TUI never reconstructs the planning tree's shape itself).
-func (s *Service) WatchPaths() []string { return s.store.WatchPaths() }
+// WithTemplateSource overrides the built-in template source — epic 22 wires a
+// repo-local source layered over the built-ins, and tests inject a fake to prove
+// the list/show/create paths read through the port, not domain.Template* directly.
+func WithTemplateSource(src TemplateSource) Option {
+	return func(s *Service) {
+		if src != nil {
+			s.templates = src
+		}
+	}
+}
+
+// NewService wires the core to its store; templates default to the built-in
+// source unless WithTemplateSource overrides it.
+func NewService(store Store, opts ...Option) *Service {
+	s := &Service{store: store, templates: builtinTemplates{}}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// NewBuiltinTemplateService returns a Service backed only by the built-in
+// TemplateSource and no store — for the repo-less self-description surfaces
+// (`template list/show`, like `schema`). Only the template methods are safe to
+// call on it. When a planning repo IS present, the resolved store-backed Service
+// is used instead, and epic 22 layers repo-local templates over the built-ins.
+func NewBuiltinTemplateService() *Service { return NewService(nil) }
 
 // templateBodyConflict rejects supplying both an explicit body and a --template:
 // they're mutually exclusive (override the scaffold OR pick one). Enforced in core
@@ -132,12 +158,6 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		}
 	}
 	return results, problems, nil
-}
-
-// LintFix applies safe text-level frontmatter repairs across the planning
-// tree (or previews them when dryRun is true), returning the files changed.
-func (s *Service) LintFix(dryRun bool) ([]domain.FixResult, error) {
-	return s.store.FixFrontmatter(dryRun)
 }
 
 func hasTag(tags []string, want string) bool {
