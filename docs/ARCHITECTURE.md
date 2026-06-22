@@ -22,6 +22,14 @@ the one-screen orientation for contributors.
   detect drift. A *recognized* status that disagrees with its folder is
   "misfiled" — flagged by `lint` (and `lint --fix` realigns it), shown with a
   `⚠` in `task list`/`show`. A foreign/legacy status word is tolerated.
+  Per-entity metadata — the top-level dir, authoring fields, conventions, and
+  body scaffold for `task`/`epic`/`audit` — lives in **one registry** (`entity.go`'s
+  `Descriptor`); `SchemaKinds`/`AuthoringFields`/`Conventions`/`BodyTemplate` read
+  that table instead of parallel `switch kind` blocks, so a kind's schema/scaffold
+  surface is a registry entry, not a per-layer edit. Honest remaining fan-out for a
+  new entity (e.g. the scaffolded `projects/`): a store scan (`scanDir` + a per-kind
+  parse) plus render/TUI delegates — deliberately still per-entity, tracked by
+  M9/M10 in epic 21.
 - **`internal/core`** — use cases (`Service`) + the ports it needs (`Store`,
   composed of `TaskStore`/`EpicStore`/`AuditStore`, defined here at the
   consumer). Pure; unit-testable without fs.

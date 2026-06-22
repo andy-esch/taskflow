@@ -20,6 +20,7 @@ type Descriptor struct {
 	Dir             string     // top-level planning dir (TasksDir / EpicsDir / AuditsDir)
 	AuthoringFields []FieldDoc // frontmatter a drafter fills in (not tool-managed stamps)
 	Conventions     []string   // short, factual "how to write it" rules
+	BodyTemplate    string     // default body scaffold (a Printf format; the placeholder arity is kind-specific — callers fill it)
 }
 
 // entities is the single registry of document kinds. The ORDER is the
@@ -45,6 +46,7 @@ var entities = []Descriptor{
 			"at least one tag is required at creation.",
 			"the slug is derived from the title; keep titles filename-safe.",
 		},
+		BodyTemplate: taskBodyTemplate,
 	},
 	{
 		Kind: "epic",
@@ -59,6 +61,7 @@ var entities = []Descriptor{
 			"epics are auto-numbered NN-<slug>; do not set the number yourself.",
 			"description is required (single line, ≤150 chars).",
 		},
+		BodyTemplate: epicBodyTemplate,
 	},
 	{
 		Kind: "audit",
@@ -71,7 +74,16 @@ var entities = []Descriptor{
 			"audits are created in the open bucket; move them with audit close/reopen/defer.",
 			"the slug is <date>-<area>; findings live in the body as `#### H1. … **Status:** open`.",
 		},
+		BodyTemplate: auditBodyTemplate,
 	},
+}
+
+// Descriptors returns the entity registry (read-only copy) in schema/display
+// order, so consumers can iterate the document kinds without re-listing them —
+// the store's layout, a future `schema --type cli`, and the template library all
+// read one source instead of hardcoding the entity set.
+func Descriptors() []Descriptor {
+	return append([]Descriptor(nil), entities...)
 }
 
 // descriptorFor returns the descriptor for a document kind.
@@ -109,3 +121,72 @@ func Conventions(kind string) []string {
 	}
 	return nil
 }
+
+// BodyTemplate returns the default body scaffold for a kind ("" if unknown). It
+// is the SAME template the create use-cases write and `schema <kind>` shows, now
+// single-sourced on the descriptor. The result is a Printf format; callers fill
+// the kind-specific placeholders (task: title, epic-id; epic: title, description;
+// audit: area, date).
+func BodyTemplate(kind string) string {
+	if d, ok := descriptorFor(kind); ok {
+		return d.BodyTemplate
+	}
+	return ""
+}
+
+// The default body scaffolds. They live in the domain beside the rest of a kind's
+// metadata (alongside FieldDoc prose) so a kind's scaffold isn't a separate,
+// drift-prone copy in core. (A future selectable template library would generalize
+// this single default into a named set — see epic 21.)
+const taskBodyTemplate = `
+# %s
+
+## Objective
+
+<why / what — one short paragraph>
+
+## Acceptance criteria
+
+- [ ] <observable outcome>
+
+## Out of scope
+
+- <explicitly excluded>
+
+## Related
+
+- Epic [[%s]]
+`
+
+const epicBodyTemplate = `
+# %s
+
+**Goal.** %s
+
+## Why this is its own epic
+
+<one paragraph: what makes this its own epic vs folding into a sibling?>
+
+## Out of scope
+
+- <explicitly excluded>
+`
+
+// auditBodyTemplate's finding example is fenced so a fresh audit counts zero
+// findings until real ones are added (parseAudit excludes fenced blocks). It stays
+// generic — a repo with its own conventions doc points at it from its own tooling,
+// not from the shared tool's scaffold.
+const auditBodyTemplate = "\n# Audit: %s — %s\n\n" +
+	"> Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
+	"## Findings\n\n" +
+	"<!-- One finding per issue, in this shape (un-fence it): -->\n\n" +
+	"```\n" +
+	"#### H1. <title>  · **Status:** open\n\n" +
+	"**File:** <path:line> | **Component:** <component>\n" +
+	"**Effort:** <XS|S|M|L> · **Urgency:** <acute|soon|eventually>\n\n" +
+	"<what's wrong, why it matters, evidence>\n\n" +
+	"**Recommendation:** <minimum fix>\n" +
+	"```\n\n" +
+	"## Candidate tasks\n\n" +
+	"<!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do -->\n\n" +
+	"- ⏳ `tskflwctl task new \"<title>\" --epic <id> --tags <tag>` — <one line>\n"

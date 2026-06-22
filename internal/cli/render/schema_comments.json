@@ -32,6 +32,7 @@
   "github.com/andy-esch/taskflow/internal/domain.AuditBucket": "AuditBucket is an audit's lifecycle state, identical to the directory it lives in (audits/\u003cbucket\u003e/).",
   "github.com/andy-esch/taskflow/internal/domain.Descriptor": "Descriptor is the per-entity metadata the tool would otherwise hand-enumerate in a `switch kind` at every layer.",
   "github.com/andy-esch/taskflow/internal/domain.Descriptor.AuthoringFields": "frontmatter a drafter fills in (not tool-managed stamps)",
+  "github.com/andy-esch/taskflow/internal/domain.Descriptor.BodyTemplate": "default body scaffold (a Printf format; the placeholder arity is kind-specific — callers fill it)",
   "github.com/andy-esch/taskflow/internal/domain.Descriptor.Conventions": "short, factual \"how to write it\" rules",
   "github.com/andy-esch/taskflow/internal/domain.Descriptor.Dir": "top-level planning dir (TasksDir / EpicsDir / AuditsDir)",
   "github.com/andy-esch/taskflow/internal/domain.Descriptor.Kind": "the `schema \u003ckind\u003e` word: task | epic | audit",
