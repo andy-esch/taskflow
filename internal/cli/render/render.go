@@ -33,38 +33,6 @@ import (
 // carries dry_run and the resulting body, which `task_show` (a read) does not.
 const SchemaVersion = "1.7"
 
-type taskJSON struct {
-	Slug        string   `json:"slug" jsonschema:"description=task identifier (filename without .md)"`
-	Status      string   `json:"status" jsonschema:"description=lifecycle status — equals the task's directory under tasks/"`
-	Epic        string   `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
-	Description string   `json:"description,omitempty" jsonschema:"description=one-line summary (<=150 chars)"`
-	Effort      string   `json:"effort,omitempty" jsonschema:"description=free-form effort estimate"`
-	Tier        int      `json:"tier,omitempty" jsonschema:"description=importance 1 (highest) to 5 (lowest)"`
-	Priority    string   `json:"priority,omitempty" jsonschema:"description=high | medium | low"`
-	Autonomy    int      `json:"autonomy_level,omitempty" jsonschema:"description=how autonomously this can be done 1-5"`
-	Created     string   `json:"created,omitempty" jsonschema:"description=creation date YYYY-MM-DD"`
-	Updated     string   `json:"updated_at,omitempty" jsonschema:"description=last-modified date YYYY-MM-DD"`
-	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
-	// Misfiled/Declared surface status≠folder drift to JSON consumers (agents
-	// are exactly who should detect it); declared_status only when misfiled.
-	Misfiled bool   `json:"misfiled,omitempty"`
-	Declared string `json:"declared_status,omitempty"`
-}
-
-func toJSON(t domain.Task) taskJSON {
-	j := taskJSON{
-		Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
-		Description: t.Description, Effort: t.Effort, Tier: t.Tier,
-		Priority: t.Priority, Autonomy: t.Autonomy,
-		Created: t.Created, Updated: t.Updated, Tags: t.Tags,
-	}
-	if t.Misfiled() {
-		j.Misfiled = true
-		j.Declared = string(t.Declared)
-	}
-	return j
-}
-
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
 	if len(tasks) == 0 {
@@ -267,11 +235,6 @@ func countLine(st Style, counts []core.StatusCount) string {
 	return strings.Join(parts, st.Dim(" · "))
 }
 
-type statusCountJSON struct {
-	Status string `json:"status"`
-	Count  int    `json:"count"`
-}
-
 // SummaryJSON writes the dashboard as a versioned envelope.
 func SummaryJSON(w io.Writer, s core.Summary) error {
 	counts := make([]statusCountJSON, 0, len(s.Counts))
@@ -337,15 +300,6 @@ func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 	return nil
 }
 
-// epicJSON is epic list output: the shared meta (embedded, so `epic list` and
-// `epic show` can't drift) plus the task rollup.
-type epicJSON struct {
-	epicMetaJSON
-	Total   int `json:"total"`
-	Done    int `json:"done"`
-	Percent int `json:"percent"`
-}
-
 // EpicsJSON writes a versioned envelope of epics with rollup, including any
 // per-file load problems (mirrors LintJSON's `unreadable`).
 func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []domain.FileProblem) error {
@@ -393,22 +347,6 @@ func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
 	return nil
 }
 
-type auditJSON struct {
-	Slug         string `json:"slug" jsonschema:"description=audit identifier (filename without .md)"`
-	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — equals the audit's directory"`
-	Area         string `json:"area,omitempty" jsonschema:"description=subsystem/topic audited"`
-	Date         string `json:"date,omitempty" jsonschema:"description=audit date YYYY-MM-DD"`
-	Findings     int    `json:"findings" jsonschema:"description=total findings parsed from the body"`
-	OpenFindings int    `json:"open_findings" jsonschema:"description=findings whose status is open"`
-}
-
-func auditToJSON(a domain.Audit) auditJSON {
-	return auditJSON{
-		Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date,
-		Findings: a.Findings, OpenFindings: a.OpenFindings,
-	}
-}
-
 // AuditsJSON writes a versioned envelope of audits, including any per-file load
 // problems (mirrors LintJSON's `unreadable`).
 func AuditsJSON(w io.Writer, audits []domain.Audit, problems []domain.FileProblem) error {
@@ -439,18 +377,6 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, body string) error {
 // AuditShowJSON writes an audit plus its body.
 func AuditShowJSON(w io.Writer, a domain.Audit, body string) error {
 	return encodeJSON(w, AuditShowEnvelope{SchemaVersion: SchemaVersion, Audit: auditToJSON(a), Body: body})
-}
-
-type findingJSON struct {
-	Audit     string `json:"audit" jsonschema:"description=slug of the audit this finding belongs to"`
-	Bucket    string `json:"bucket" jsonschema:"description=the audit's bucket — open | closed | deferred"`
-	Code      string `json:"code" jsonschema:"description=finding code within the audit (H1/M2/S3…)"`
-	Title     string `json:"title" jsonschema:"description=finding title"`
-	Status    string `json:"status" jsonschema:"description=open | in-progress | fixed | landed | deferred | superseded | wontfix"`
-	File      string `json:"file,omitempty" jsonschema:"description=file:line the finding refers to"`
-	Component string `json:"component,omitempty" jsonschema:"description=component/subsystem"`
-	Effort    string `json:"effort,omitempty" jsonschema:"description=XS | S | M | L"`
-	Urgency   string `json:"urgency,omitempty" jsonschema:"description=acute | soon | eventually"`
 }
 
 // FindingsJSON writes the structured finding-query result: each parsed finding
@@ -542,11 +468,6 @@ func LintHuman(w io.Writer, st Style, results []core.LintResult, noun string) {
 	}
 }
 
-type lintTaskJSON struct {
-	Slug   string         `json:"slug"`
-	Issues []domain.Issue `json:"issues"`
-}
-
 // LintJSON writes the structured lint report: unreadable files + field issues.
 func LintJSON(w io.Writer, results []core.LintResult, problems []domain.FileProblem) error {
 	if problems == nil {
@@ -561,24 +482,6 @@ func LintJSON(w io.Writer, results []core.LintResult, problems []domain.FileProb
 		payload.Issues = append(payload.Issues, lintTaskJSON{Slug: r.Slug, Issues: issues})
 	}
 	return encodeJSON(w, payload)
-}
-
-type epicMetaJSON struct {
-	ID          string   `json:"id" jsonschema:"description=epic identifier (NN-slug)"`
-	Status      string   `json:"status,omitempty" jsonschema:"description=planning | in-progress | completed | archived"`
-	Description string   `json:"description,omitempty" jsonschema:"description=one-line epic goal"`
-	Priority    string   `json:"priority,omitempty" jsonschema:"description=high | medium | low"`
-	Created     string   `json:"created,omitempty" jsonschema:"description=creation date YYYY-MM-DD"`
-	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
-}
-
-// toEpicMeta is the one place epic meta fields are mapped to JSON, shared by
-// `epic list` (embedded in epicJSON) and `epic show`.
-func toEpicMeta(e domain.Epic) epicMetaJSON {
-	return epicMetaJSON{
-		ID: e.ID, Status: e.Status, Description: e.Description,
-		Priority: e.Priority, Created: e.Created, Tags: e.Tags,
-	}
 }
 
 // EpicShowJSON writes an epic, its tasks, and its body.
@@ -602,109 +505,4 @@ func InitJSON(w io.Writer, root string, created []string, dryRun bool) error {
 		created = []string{}
 	}
 	return encodeJSON(w, InitEnvelope{SchemaVersion, dryRun, root, created})
-}
-
-// --- schema (the tool's self-description for agents) ---
-
-// SchemaStatus is one task status and whether it is part of the working set.
-type SchemaStatus struct {
-	Value  string `json:"value"`
-	Active bool   `json:"active"`
-}
-
-// SchemaField is one known frontmatter field and its YAML storage type.
-type SchemaField struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-}
-
-// SchemaExitCode is one exit code and its stable machine name (also the `code`
-// in the --json error envelope).
-type SchemaExitCode struct {
-	Code int    `json:"code"`
-	Name string `json:"name"`
-}
-
-// SchemaContract is the global machine contract (`tskflwctl schema`): everything
-// an agent needs to drive the tool without parsing --help prose.
-type SchemaContract struct {
-	Statuses     []SchemaStatus   `json:"statuses"`
-	EpicStatuses []string         `json:"epic_statuses"`
-	AuditBuckets []string         `json:"audit_buckets"`
-	TaskFields   []SchemaField    `json:"task_fields"`
-	ExitCodes    []SchemaExitCode `json:"exit_codes"`
-	Kinds        []string         `json:"kinds"`
-}
-
-// SchemaJSON writes the global contract envelope.
-func SchemaJSON(w io.Writer, c SchemaContract) error {
-	return encodeJSON(w, SchemaEnvelope{SchemaVersion: SchemaVersion, SchemaContract: c})
-}
-
-// SchemaHuman renders the global contract as readable sections.
-func SchemaHuman(w io.Writer, st Style, c SchemaContract) error {
-	fmt.Fprintf(w, "%s %s\n\n", st.Bold("tskflwctl schema"), st.Dim("v"+SchemaVersion))
-	fmt.Fprintf(w, "%s:\n", st.Bold("Task statuses"))
-	for _, s := range c.Statuses {
-		active := ""
-		if s.Active {
-			active = st.Dim(" (active)")
-		}
-		fmt.Fprintf(w, "  %s%s\n", s.Value, active)
-	}
-	fmt.Fprintf(w, "\n%s: %s\n", st.Bold("Epic statuses"), strings.Join(c.EpicStatuses, ", "))
-	fmt.Fprintf(w, "%s: %s\n", st.Bold("Audit buckets"), strings.Join(c.AuditBuckets, ", "))
-	fmt.Fprintf(w, "%s:   %s\n", st.Bold("Doc kinds"), strings.Join(c.Kinds, ", "))
-	fmt.Fprintf(w, "\n%s:\n", st.Bold("Task fields"))
-	for _, f := range c.TaskFields {
-		fmt.Fprintf(w, "  %-16s %s\n", f.Name, st.Dim(f.Type))
-	}
-	fmt.Fprintf(w, "\n%s:\n", st.Bold("Exit codes"))
-	for _, e := range c.ExitCodes {
-		fmt.Fprintf(w, "  %-3d %s\n", e.Code, st.Dim(e.Name))
-	}
-	fmt.Fprintf(w, "\n%s\n", st.Dim("`tskflwctl schema <task|epic|audit>` for per-kind authoring guidance."))
-	return nil
-}
-
-// KindSchema is the per-kind authoring guidance (`tskflwctl schema <kind>`): how
-// to compose a well-formed document of that kind.
-type KindSchema struct {
-	Kind         string            `json:"kind"`
-	Sections     []string          `json:"sections"`
-	BodyTemplate string            `json:"body_template"`
-	Fields       []domain.FieldDoc `json:"fields"`
-	Conventions  []string          `json:"conventions"`
-	Templates    []TemplateInfo    `json:"templates"`
-}
-
-// SchemaKindJSON writes the per-kind authoring envelope.
-func SchemaKindJSON(w io.Writer, ks KindSchema) error {
-	return encodeJSON(w, SchemaKindEnvelope{SchemaVersion: SchemaVersion, KindSchema: ks})
-}
-
-// SchemaKindHuman renders the per-kind authoring guidance.
-func SchemaKindHuman(w io.Writer, st Style, ks KindSchema) error {
-	fmt.Fprintf(w, "%s %s\n\n", st.Bold("schema "+ks.Kind), st.Dim("— authoring guidance"))
-	fmt.Fprintf(w, "%s: %s\n\n", st.Bold("Sections"), strings.Join(ks.Sections, " · "))
-	fmt.Fprintf(w, "%s:\n", st.Bold("Frontmatter"))
-	for _, f := range ks.Fields {
-		req := ""
-		if f.Required {
-			req = st.Dim(" (required)")
-		}
-		fmt.Fprintf(w, "  %-15s %s%s — %s %s\n", f.Name, st.Dim(f.Type), req, f.Description, st.Dim("e.g. "+f.Example))
-	}
-	fmt.Fprintf(w, "\n%s:\n", st.Bold("Conventions"))
-	for _, c := range ks.Conventions {
-		fmt.Fprintf(w, "  %s %s\n", st.Dim("-"), c)
-	}
-	if len(ks.Templates) > 0 {
-		fmt.Fprintf(w, "\n%s %s:\n", st.Bold("Templates"), st.Dim("(--template)"))
-		for _, t := range ks.Templates {
-			fmt.Fprintf(w, "  %-12s %s\n", t.Name, st.Dim(t.Description))
-		}
-	}
-	fmt.Fprintf(w, "\n%s:\n%s\n", st.Bold("Body template"), ks.BodyTemplate)
-	return nil
 }

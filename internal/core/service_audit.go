@@ -1,0 +1,94 @@
+package core
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/andy-esch/taskflow/internal/domain"
+)
+
+// NewAuditParams are the inputs for creating an audit. Date defaults to today
+// when empty; the audit is always created in the open bucket.
+type NewAuditParams struct {
+	Area     string
+	Date     string // YYYY-MM-DD; empty → today
+	Body     string // override the scaffold entirely (mutually exclusive with Template)
+	Template string // name of the body scaffold to use; empty = the kind's default
+	DryRun   bool   // validate + report the would-be audit without writing
+}
+
+// NewAudit validates and creates an audit in the open bucket, returning it. The
+// area must produce a non-empty slug and the date must be YYYY-MM-DD (today when
+// omitted); the slug is `<date>-<area-slug>`. On invalid input it returns
+// ErrValidation and nothing is written.
+func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
+	if err := templateBodyConflict(p.Body, p.Template); err != nil {
+		return domain.Audit{}, err
+	}
+	area := strings.TrimSpace(p.Area)
+	if area == "" {
+		return domain.Audit{}, fmt.Errorf("%w: audit area is required", domain.ErrValidation)
+	}
+	if err := domain.ValidateTitle(area); err != nil {
+		return domain.Audit{}, err
+	}
+	date := p.Date
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+	if err := domain.ValidateDate(date); err != nil {
+		return domain.Audit{}, err
+	}
+	areaSlug := domain.Slugify(area)
+	if areaSlug == "" {
+		return domain.Audit{}, fmt.Errorf("%w: area produced an empty slug: %q", domain.ErrValidation, area)
+	}
+	a := domain.Audit{
+		Slug:   date + "-" + areaSlug,
+		Bucket: domain.AuditOpen,
+		Area:   area,
+		Date:   date,
+	}
+	body := p.Body
+	if body == "" {
+		tmpl, err := domain.Template("audit", p.Template)
+		if err != nil {
+			return domain.Audit{}, err
+		}
+		body = renderTemplate(tmpl, map[string]string{"area": area, "date": date})
+	}
+	return s.store.CreateAudit(a, body, p.DryRun)
+}
+
+// ListAudits returns audits in the requested bucket (default: open), plus any
+// per-file load problems. bucket="" + all=false means open only.
+func (s *Service) ListAudits(bucket string, all bool) ([]domain.Audit, []domain.FileProblem, error) {
+	audits, problems, err := s.store.ListAudits()
+	if err != nil {
+		return nil, nil, err
+	}
+	out := make([]domain.Audit, 0, len(audits))
+	for _, a := range audits {
+		switch {
+		case bucket != "":
+			if string(a.Bucket) != bucket {
+				continue
+			}
+		case !all && a.Bucket != domain.AuditOpen:
+			continue
+		}
+		out = append(out, a)
+	}
+	return out, problems, nil
+}
+
+// ShowAudit returns one audit plus its body.
+func (s *Service) ShowAudit(slug string) (domain.Audit, string, error) {
+	return s.store.GetAudit(slug)
+}
+
+// MoveAudit relocates an audit to another bucket (close/reopen/defer).
+func (s *Service) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
+	return s.store.MoveAudit(slug, to, dryRun)
+}
