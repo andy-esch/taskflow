@@ -64,5 +64,12 @@
     "description is a single line, ≤150 characters.",
     "at least one tag is required at creation.",
     "the slug is derived from the title; keep titles filename-safe."
+  ],
+  "templates": [
+    {
+      "kind": "task",
+      "name": "default",
+      "description": "Standard task scaffold: objective, acceptance criteria, out-of-scope, related epic."
+    }
   ]
 }

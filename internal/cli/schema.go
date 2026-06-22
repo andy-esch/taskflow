@@ -106,12 +106,23 @@ func runSchemaKind(app *App, kind string) error {
 	if err != nil {
 		return err
 	}
+	// Advertise the kind's templates so an agent reading `schema <kind>` discovers
+	// `--template` options in-band, without a separate `template list` call.
+	tmpls, err := domain.TemplatesFor(kind)
+	if err != nil {
+		return err
+	}
+	infos := make([]render.TemplateInfo, len(tmpls))
+	for i, t := range tmpls {
+		infos[i] = render.TemplateInfo{Kind: kind, Name: t.Name, Description: t.Description}
+	}
 	ks := render.KindSchema{
 		Kind:         kind,
 		Sections:     sections(body),
 		BodyTemplate: body,
 		Fields:       fields,
 		Conventions:  domain.Conventions(kind),
+		Templates:    infos,
 	}
 	if app.JSON {
 		return render.SchemaKindJSON(app.Out, ks)

@@ -100,6 +100,7 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(newAuditCmd(app))
 	root.AddCommand(newLintCmd(app))
 	root.AddCommand(newSchemaCmd(app))
+	root.AddCommand(newTemplateCmd(app))
 	return root
 }
 

@@ -675,6 +675,7 @@ type KindSchema struct {
 	BodyTemplate string            `json:"body_template"`
 	Fields       []domain.FieldDoc `json:"fields"`
 	Conventions  []string          `json:"conventions"`
+	Templates    []TemplateInfo    `json:"templates"`
 }
 
 // SchemaKindJSON writes the per-kind authoring envelope.
@@ -697,6 +698,12 @@ func SchemaKindHuman(w io.Writer, st Style, ks KindSchema) error {
 	fmt.Fprintf(w, "\n%s:\n", st.Bold("Conventions"))
 	for _, c := range ks.Conventions {
 		fmt.Fprintf(w, "  %s %s\n", st.Dim("-"), c)
+	}
+	if len(ks.Templates) > 0 {
+		fmt.Fprintf(w, "\n%s %s:\n", st.Bold("Templates"), st.Dim("(--template)"))
+		for _, t := range ks.Templates {
+			fmt.Fprintf(w, "  %-12s %s\n", t.Name, st.Dim(t.Description))
+		}
 	}
 	fmt.Fprintf(w, "\n%s:\n%s\n", st.Bold("Body template"), ks.BodyTemplate)
 	return nil

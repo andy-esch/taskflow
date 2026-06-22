@@ -22,6 +22,7 @@ tskflwctl epic new <title> [flags]
       --priority string      high|medium|low (default "medium")
       --status string        epic status: planning|in-progress|completed|archived (default "planning")
       --tags strings         comma-separated tags
+      --template string      body scaffold to use (default "default"); completes the available names
 ```
 
 ### Options inherited from parent commands

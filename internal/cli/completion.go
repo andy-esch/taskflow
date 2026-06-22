@@ -29,6 +29,33 @@ func activeHelpArg(hint string) completeFunc {
 	}
 }
 
+// completeKinds offers the document kinds (task|epic|audit) — for `template
+// list --kind` and the `template show` first positional.
+func completeKinds(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return domain.SchemaKinds(), cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeTemplateShowArgs completes `template show <kind> [name]`: the kind first,
+// then that kind's template names.
+func completeTemplateShowArgs(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	switch len(args) {
+	case 0:
+		return domain.SchemaKinds(), cobra.ShellCompDirectiveNoFileComp
+	case 1:
+		return domain.TemplateNames(args[0]), cobra.ShellCompDirectiveNoFileComp
+	}
+	return nil, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeTemplateNames offers a kind's body-template names for `--template`
+// (default first), with file completion suppressed. The set is registry-driven, so
+// a new built-in (or, later, repo-local) template shows up here automatically.
+func completeTemplateNames(kind string) completeFunc {
+	return func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return domain.TemplateNames(kind), cobra.ShellCompDirectiveNoFileComp
+	}
+}
+
 // isCompletionCommand reports whether cmd is cobra's hidden completion driver
 // (`__complete`/`__completeNoDesc`), so PersistentPreRunE can stay non-fatal
 // during shell completion.

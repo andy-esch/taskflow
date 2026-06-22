@@ -159,6 +159,19 @@ type SchemaKindEnvelope struct {
 	KindSchema
 }
 
+// TemplatesEnvelope is `template list --json`.
+type TemplatesEnvelope struct {
+	SchemaVersion string         `json:"schema_version"`
+	Templates     []TemplateInfo `json:"templates"`
+}
+
+// TemplateShowEnvelope is `template show --json` (a template's metadata + body).
+type TemplateShowEnvelope struct {
+	SchemaVersion string       `json:"schema_version"`
+	Template      TemplateInfo `json:"template"`
+	Body          string       `json:"body"`
+}
+
 // ErrorItem is the error body inside ErrorEnvelope.
 type ErrorItem struct {
 	Code    string `json:"code"`
@@ -191,6 +204,8 @@ type jsonEnvelopes struct {
 	Init         InitEnvelope         `json:"init"`
 	Schema       SchemaEnvelope       `json:"schema"`
 	SchemaKind   SchemaKindEnvelope   `json:"schema_kind"`
+	Templates    TemplatesEnvelope    `json:"templates"`
+	TemplateShow TemplateShowEnvelope `json:"template_show"`
 	Error        ErrorEnvelope        `json:"error"`
 }
 

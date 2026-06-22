@@ -389,3 +389,122 @@ func TestEpicNew_RequiresDescription(t *testing.T) {
 		t.Fatal("expected error when --description is missing")
 	}
 }
+
+// --- selectable templates (epic 22, increment 1) ---
+
+// TestAuditNew_SecurityTemplate: --template security writes the security scaffold
+// (threat model + checklist) and the fresh audit is still lint-clean (0 findings).
+func TestAuditNew_SecurityTemplate(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "audit", "new", "auth", "--date", "2026-06-22", "--template", "security")
+	b, err := os.ReadFile(filepath.Join(root, "audits", "open", "2026-06-22-auth.md"))
+	if err != nil {
+		t.Fatalf("security audit not created: %v", err)
+	}
+	s := string(b)
+	for _, want := range []string{"Security audit: auth", "Threat model", "Review checklist"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("security audit missing %q:\n%s", want, s)
+		}
+	}
+	runRoot(t, "-C", root, "audit", "lint") // 0 findings → clean; Fatalf if exit != 0
+}
+
+// TestAuditNew_UnknownTemplateRejected: a bad --template fails with exit 11 and
+// names the available templates (the off-TTY/agent discovery path).
+func TestAuditNew_UnknownTemplateRejected(t *testing.T) {
+	root := freshRepo(t)
+	_, err := runRootRC(t, "-C", root, "audit", "new", "auth", "--template", "bogus")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("unknown --template should exit 11, got %v", err)
+	}
+	for _, want := range []string{"default", "security"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should list available template %q: %v", want, err)
+		}
+	}
+}
+
+// TestTaskNew_TemplateDefault: --template default is explicit-equivalent to omitting
+// it — the standard scaffold is written.
+func TestTaskNew_TemplateDefault(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	runRoot(t, "-C", root, "task", "new", "Tmpl", "--epic", "e1", "--tags", "a", "--template", "default")
+	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "tmpl.md"))
+	if err != nil {
+		t.Fatalf("task not created: %v", err)
+	}
+	if !strings.Contains(string(b), "## Acceptance criteria") {
+		t.Errorf("default template body missing:\n%s", b)
+	}
+}
+
+// TestCreate_TemplateAndBodyMutuallyExclusive: picking a scaffold (--template) and
+// overriding it (--body) at once is a usage error, not a silent precedence pick.
+func TestCreate_TemplateAndBodyMutuallyExclusive(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	_, err := runRootRC(t, "-C", root, "task", "new", "X", "--epic", "e1", "--tags", "a", "--body", "hi", "--template", "default")
+	if err == nil {
+		t.Fatal("--body with --template should be rejected (mutually exclusive)")
+	}
+}
+
+// TestCreate_TemplateLeavesNoUnfilledPlaceholders pins the named-placeholder model:
+// a created doc of every kind has no leftover {{...}} — every placeholder the body
+// uses is filled by the create path. Guards create-path/descriptor key drift.
+func TestCreate_TemplateLeavesNoUnfilledPlaceholders(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	runRoot(t, "-C", root, "task", "new", "T One", "--epic", "e1", "--tags", "a")
+	runRoot(t, "-C", root, "epic", "new", "E Two", "--description", "the goal")
+	runRoot(t, "-C", root, "audit", "new", "area-three", "--date", "2026-06-22")
+
+	paths := []string{
+		filepath.Join(root, "tasks", "ready-to-start", "t-one.md"),
+		filepath.Join(root, "audits", "open", "2026-06-22-area-three.md"),
+	}
+	epics, _ := filepath.Glob(filepath.Join(root, "epics", "*-e-two.md")) // auto-numbered NN-e-two
+	if len(epics) != 1 {
+		t.Fatalf("expected 1 epic file, got %v", epics)
+	}
+	paths = append(paths, epics[0])
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("read %s: %v", p, err)
+		}
+		if strings.Contains(string(b), "{{") {
+			t.Errorf("%s has an unfilled placeholder:\n%s", p, b)
+		}
+	}
+}
+
+// TestCreate_TemplatePerKind covers --template + the --body/--template exclusion for
+// every create command (previously only task was tested).
+func TestCreate_TemplatePerKind(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	cases := []struct {
+		name string
+		ok   []string
+		bad  []string
+	}{
+		{"task",
+			[]string{"task", "new", "TT", "--epic", "e1", "--tags", "a", "--template", "default"},
+			[]string{"task", "new", "TT2", "--epic", "e1", "--tags", "a", "--body", "x", "--template", "default"}},
+		{"epic",
+			[]string{"epic", "new", "EE", "--description", "g", "--template", "default"},
+			[]string{"epic", "new", "EE2", "--description", "g", "--body", "x", "--template", "default"}},
+		{"audit",
+			[]string{"audit", "new", "aa", "--template", "default"},
+			[]string{"audit", "new", "aa2", "--body", "x", "--template", "default"}},
+	}
+	for _, tc := range cases {
+		runRoot(t, append([]string{"-C", root}, tc.ok...)...) // Fatalf if exit != 0
+		if _, err := runRootRC(t, append([]string{"-C", root}, tc.bad...)...); err == nil {
+			t.Errorf("%s: --body with --template should be rejected", tc.name)
+		}
+	}
+}

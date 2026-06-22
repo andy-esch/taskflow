@@ -8,7 +8,7 @@ import (
 )
 
 // Finding is one parsed audit finding. The grammar is fixed by the `audit new`
-// scaffold (core's auditBodyTemplate) and audits/HOWTO-execute.md: a `#### CODE.`
+// scaffold (domain's auditBodyTemplate) and audits/HOWTO-execute.md: a `#### CODE.`
 // sub-header carrying a title, a `**Status:**`, and optional `**File:**` /
 // `**Component:**` / `**Effort:**` / `**Urgency:**` metadata. Fields absent in
 // the prose are "". ParseFindings is the SINGLE definition of the grammar — the

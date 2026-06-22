@@ -176,6 +176,16 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 	return s.store.SetFields(slug, withMeta, dryRun)
 }
 
+// templateBodyConflict rejects supplying both an explicit body and a --template:
+// they're mutually exclusive (override the scaffold OR pick one). Enforced in core
+// so the declared contract holds for every adapter, not just cobra's flag check.
+func templateBodyConflict(body, template string) error {
+	if body != "" && template != "" {
+		return fmt.Errorf("%w: --body/--body-file and --template are mutually exclusive", domain.ErrValidation)
+	}
+	return nil
+}
+
 // unknownFieldErr is the shared rejection for a field outside the registry, used
 // by both the set and unset paths of SetFields.
 func unknownFieldErr(field string) error {
@@ -229,7 +239,8 @@ type NewTaskParams struct {
 	Tags        []string
 	Next        bool   // create in next-up instead of ready-to-start
 	Start       bool   // create directly in in-progress (mutually exclusive with Next)
-	Body        string // override the default handoff scaffold
+	Body        string // override the scaffold entirely (mutually exclusive with Template)
+	Template    string // name of the body scaffold to use; empty = the kind's default
 	DryRun      bool   // validate + report the would-be task without writing
 }
 
@@ -237,6 +248,9 @@ type NewTaskParams struct {
 // must exist; tier/autonomy/priority/description are validated. On any invalid
 // input it returns ErrValidation and nothing is written.
 func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
+	if err := templateBodyConflict(p.Body, p.Template); err != nil {
+		return domain.Task{}, err
+	}
 	epics, _, err := s.store.ListEpics()
 	if err != nil {
 		return domain.Task{}, err
@@ -311,7 +325,11 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	}
 	body := p.Body
 	if body == "" {
-		body = fmt.Sprintf(domain.BodyTemplate("task"), p.Title, p.Epic)
+		tmpl, err := domain.Template("task", p.Template)
+		if err != nil {
+			return domain.Task{}, err
+		}
+		body = renderTemplate(tmpl, map[string]string{"title": p.Title, "epic": p.Epic})
 	}
 	return s.store.CreateTask(t, body, p.DryRun)
 }
@@ -323,13 +341,17 @@ type NewEpicParams struct {
 	Status      string
 	Priority    string
 	Tags        []string
-	Body        string
-	DryRun      bool // validate + report the would-be epic without writing
+	Body        string // override the scaffold entirely (mutually exclusive with Template)
+	Template    string // name of the body scaffold to use; empty = the kind's default
+	DryRun      bool   // validate + report the would-be epic without writing
 }
 
 // NewEpic validates and creates an epic (auto-numbered NN-<slug>). Description
 // is required (single line, ≤ the description cap); priority is validated.
 func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
+	if err := templateBodyConflict(p.Body, p.Template); err != nil {
+		return domain.Epic{}, err
+	}
 	if strings.TrimSpace(p.Description) == "" {
 		return domain.Epic{}, fmt.Errorf("%w: epic description is required", domain.ErrValidation)
 	}
@@ -358,7 +380,11 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 	}
 	body := p.Body
 	if body == "" {
-		body = fmt.Sprintf(domain.BodyTemplate("epic"), p.Title, p.Description)
+		tmpl, err := domain.Template("epic", p.Template)
+		if err != nil {
+			return domain.Epic{}, err
+		}
+		body = renderTemplate(tmpl, map[string]string{"title": p.Title, "description": p.Description})
 	}
 	return s.store.CreateEpic(slug, e, body, p.DryRun)
 }
@@ -552,10 +578,11 @@ func (s *Service) LintFix(dryRun bool) ([]domain.FixResult, error) {
 // NewAuditParams are the inputs for creating an audit. Date defaults to today
 // when empty; the audit is always created in the open bucket.
 type NewAuditParams struct {
-	Area   string
-	Date   string // YYYY-MM-DD; empty → today
-	Body   string // override the default scaffold
-	DryRun bool   // validate + report the would-be audit without writing
+	Area     string
+	Date     string // YYYY-MM-DD; empty → today
+	Body     string // override the scaffold entirely (mutually exclusive with Template)
+	Template string // name of the body scaffold to use; empty = the kind's default
+	DryRun   bool   // validate + report the would-be audit without writing
 }
 
 // NewAudit validates and creates an audit in the open bucket, returning it. The
@@ -563,6 +590,9 @@ type NewAuditParams struct {
 // omitted); the slug is `<date>-<area-slug>`. On invalid input it returns
 // ErrValidation and nothing is written.
 func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
+	if err := templateBodyConflict(p.Body, p.Template); err != nil {
+		return domain.Audit{}, err
+	}
 	area := strings.TrimSpace(p.Area)
 	if area == "" {
 		return domain.Audit{}, fmt.Errorf("%w: audit area is required", domain.ErrValidation)
@@ -589,7 +619,11 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 	}
 	body := p.Body
 	if body == "" {
-		body = fmt.Sprintf(domain.BodyTemplate("audit"), area, date)
+		tmpl, err := domain.Template("audit", p.Template)
+		if err != nil {
+			return domain.Audit{}, err
+		}
+		body = renderTemplate(tmpl, map[string]string{"area": area, "date": date})
 	}
 	return s.store.CreateAudit(a, body, p.DryRun)
 }

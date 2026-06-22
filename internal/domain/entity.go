@@ -1,6 +1,9 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Descriptor is the per-entity metadata the tool would otherwise hand-enumerate
 // in a `switch kind` at every layer. One registry entry (entities, below) gives a
@@ -16,11 +19,35 @@ import "fmt"
 // task's status: the per-status/bucket subdirs stay derived from the status/bucket
 // enums via layout.go's TaskStatusDirs/AuditBucketDirs.
 type Descriptor struct {
-	Kind            string     // the `schema <kind>` word: task | epic | audit
-	Dir             string     // top-level planning dir (TasksDir / EpicsDir / AuditsDir)
-	AuthoringFields []FieldDoc // frontmatter a drafter fills in (not tool-managed stamps)
-	Conventions     []string   // short, factual "how to write it" rules
-	BodyTemplate    string     // default body scaffold (a Printf format; the placeholder arity is kind-specific — callers fill it)
+	Kind            string          // the `schema <kind>` word: task | epic | audit
+	Dir             string          // top-level planning dir (TasksDir / EpicsDir / AuditsDir)
+	AuthoringFields []FieldDoc      // frontmatter a drafter fills in (not tool-managed stamps)
+	Conventions     []string        // short, factual "how to write it" rules
+	Templates       []NamedTemplate // body scaffolds offered for this kind; the one named DefaultTemplate is used when --template is omitted
+	Placeholders    []Placeholder   // the {{key}} tokens this kind's templates fill (real values at create; preview labels at show)
+}
+
+// DefaultTemplate is the body-scaffold name used when --template is omitted; every
+// kind's descriptor must offer one (guarded by a test).
+const DefaultTemplate = "default"
+
+// NamedTemplate is one body scaffold a kind offers under a name. Body uses {{key}}
+// placeholders (NOT Printf %s) drawn from the kind's Descriptor.Placeholders, so an
+// author's body may contain a literal '%' and may use any subset of the kind's
+// placeholders without an arity contract. Description is a one-liner for listing.
+type NamedTemplate struct {
+	Name        string
+	Description string
+	Body        string
+}
+
+// Placeholder is a {{Key}} token a kind's templates may fill: the real value at
+// create time, or Label in a placeholder preview (`template show` / `schema`).
+// Declared per kind on the Descriptor so the renderer is registry-driven — a new
+// kind lights up without a per-kind switch.
+type Placeholder struct {
+	Key   string // the {{Key}} token, e.g. "title"
+	Label string // the preview label, e.g. "<title>"
 }
 
 // entities is the single registry of document kinds. The ORDER is the
@@ -46,7 +73,10 @@ var entities = []Descriptor{
 			"at least one tag is required at creation.",
 			"the slug is derived from the title; keep titles filename-safe.",
 		},
-		BodyTemplate: taskBodyTemplate,
+		Templates: []NamedTemplate{
+			{DefaultTemplate, "Standard task scaffold: objective, acceptance criteria, out-of-scope, related epic.", taskBodyTemplate},
+		},
+		Placeholders: []Placeholder{{"title", "<title>"}, {"epic", "<epic-id>"}},
 	},
 	{
 		Kind: "epic",
@@ -61,7 +91,10 @@ var entities = []Descriptor{
 			"epics are auto-numbered NN-<slug>; do not set the number yourself.",
 			"description is required (single line, ≤150 chars).",
 		},
-		BodyTemplate: epicBodyTemplate,
+		Templates: []NamedTemplate{
+			{DefaultTemplate, "Standard epic scaffold: goal, why-it's-its-own-epic, out-of-scope.", epicBodyTemplate},
+		},
+		Placeholders: []Placeholder{{"title", "<title>"}, {"description", "<description>"}},
 	},
 	{
 		Kind: "audit",
@@ -74,7 +107,11 @@ var entities = []Descriptor{
 			"audits are created in the open bucket; move them with audit close/reopen/defer.",
 			"the slug is <date>-<area>; findings live in the body as `#### H1. … **Status:** open`.",
 		},
-		BodyTemplate: auditBodyTemplate,
+		Templates: []NamedTemplate{
+			{DefaultTemplate, "Standard audit scaffold: findings + candidate tasks.", auditBodyTemplate},
+			{"security", "Security review: threat model, checklist, severity-tagged findings.", auditSecurityBodyTemplate},
+		},
+		Placeholders: []Placeholder{{"area", "<area>"}, {"date", "<date>"}},
 	},
 }
 
@@ -122,24 +159,78 @@ func Conventions(kind string) []string {
 	return nil
 }
 
-// BodyTemplate returns the default body scaffold for a kind ("" if unknown). It
-// is the SAME template the create use-cases write and `schema <kind>` shows, now
-// single-sourced on the descriptor. The result is a Printf format; callers fill
-// the kind-specific placeholders (task: title, epic-id; epic: title, description;
-// audit: area, date).
-func BodyTemplate(kind string) string {
-	if d, ok := descriptorFor(kind); ok {
-		return d.BodyTemplate
+// LookupTemplate returns a kind's named template (an empty name selects the
+// default). An unknown kind or template name returns ErrValidation naming what's
+// available, so the CLI maps it to exit 11. It is the metadata-bearing form behind
+// `template show`; Template returns just the Body.
+func LookupTemplate(kind, name string) (NamedTemplate, error) {
+	d, ok := descriptorFor(kind)
+	if !ok {
+		return NamedTemplate{}, fmt.Errorf("%w: unknown kind %q (task|epic|audit)", ErrValidation, kind)
 	}
-	return ""
+	if name == "" {
+		name = DefaultTemplate
+	}
+	for _, t := range d.Templates {
+		if t.Name == name {
+			return t, nil
+		}
+	}
+	return NamedTemplate{}, fmt.Errorf("%w: unknown %s template %q (available: %s)",
+		ErrValidation, kind, name, strings.Join(templateNames(d), ", "))
 }
 
-// The default body scaffolds. They live in the domain beside the rest of a kind's
+// Template returns a kind's named body scaffold (raw, with {{key}} placeholders
+// unfilled). An empty name selects the default. The create paths fill the
+// placeholders with real values and `template show`/`schema` with preview labels;
+// see Placeholders.
+func Template(kind, name string) (string, error) {
+	t, err := LookupTemplate(kind, name)
+	return t.Body, err
+}
+
+// Placeholders returns the {{key}} tokens (with preview labels) a kind's templates
+// fill — registry-driven, so a new kind needs no renderer switch. Nil for an
+// unknown kind.
+func Placeholders(kind string) []Placeholder {
+	if d, ok := descriptorFor(kind); ok {
+		return append([]Placeholder(nil), d.Placeholders...)
+	}
+	return nil
+}
+
+// TemplatesFor returns the templates a kind offers (read-only copy, default first),
+// or ErrValidation for an unknown kind — the listable form behind `template list`.
+func TemplatesFor(kind string) ([]NamedTemplate, error) {
+	if d, ok := descriptorFor(kind); ok {
+		return append([]NamedTemplate(nil), d.Templates...), nil
+	}
+	return nil, fmt.Errorf("%w: unknown kind %q (task|epic|audit)", ErrValidation, kind)
+}
+
+// TemplateNames lists the body-template names a kind offers (default first), for
+// completion, listing, and error messages. Nil for an unknown kind.
+func TemplateNames(kind string) []string {
+	if d, ok := descriptorFor(kind); ok {
+		return templateNames(d)
+	}
+	return nil
+}
+
+func templateNames(d Descriptor) []string {
+	out := make([]string, len(d.Templates))
+	for i, t := range d.Templates {
+		out[i] = t.Name
+	}
+	return out
+}
+
+// The built-in body scaffolds. They live in the domain beside the rest of a kind's
 // metadata (alongside FieldDoc prose) so a kind's scaffold isn't a separate,
-// drift-prone copy in core. (A future selectable template library would generalize
-// this single default into a named set — see epic 21.)
+// drift-prone copy in core, and so the named-template set is one registry. Epic 22
+// (the selectable template library) layers repo-local templates over these.
 const taskBodyTemplate = `
-# %s
+# {{title}}
 
 ## Objective
 
@@ -155,13 +246,13 @@ const taskBodyTemplate = `
 
 ## Related
 
-- Epic [[%s]]
+- Epic [[{{epic}}]]
 `
 
 const epicBodyTemplate = `
-# %s
+# {{title}}
 
-**Goal.** %s
+**Goal.** {{description}}
 
 ## Why this is its own epic
 
@@ -176,7 +267,7 @@ const epicBodyTemplate = `
 // findings until real ones are added (parseAudit excludes fenced blocks). It stays
 // generic — a repo with its own conventions doc points at it from its own tooling,
 // not from the shared tool's scaffold.
-const auditBodyTemplate = "\n# Audit: %s — %s\n\n" +
+const auditBodyTemplate = "\n# Audit: {{area}} — {{date}}\n\n" +
 	"> Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
 	"## Findings\n\n" +
 	"<!-- One finding per issue, in this shape (un-fence it): -->\n\n" +
@@ -190,3 +281,31 @@ const auditBodyTemplate = "\n# Audit: %s — %s\n\n" +
 	"## Candidate tasks\n\n" +
 	"<!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do -->\n\n" +
 	"- ⏳ `tskflwctl task new \"<title>\" --epic <id> --tags <tag>` — <one line>\n"
+
+// auditSecurityBodyTemplate is the `security` audit scaffold: the same finding
+// grammar as the default (a fenced example, so a fresh audit counts zero findings)
+// plus a threat-model header and a review checklist to anchor a security pass. Uses
+// the same {{area}}/{{date}} placeholders as the default audit template.
+const auditSecurityBodyTemplate = "\n# Security audit: {{area}} — {{date}}\n\n" +
+	"> Security review. Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
+	"## Threat model\n\n" +
+	"- **Assets / trust boundaries:** <what's worth protecting; where untrusted input crosses in>\n" +
+	"- **Attacker & entry points:** <who, and through which surfaces>\n\n" +
+	"## Review checklist\n\n" +
+	"- [ ] Authn / authz — every privileged path checks identity *and* permission\n" +
+	"- [ ] Input validation — untrusted input is parsed/escaped (injection, path traversal)\n" +
+	"- [ ] Secrets — no hard-coded creds; least-privilege tokens; nothing sensitive logged\n" +
+	"- [ ] Dependencies — known-vuln scan; versions pinned\n" +
+	"- [ ] Data at rest / in transit — encryption + safe defaults\n\n" +
+	"## Findings\n\n" +
+	"<!-- One finding per issue, in this shape (un-fence it): -->\n\n" +
+	"```\n" +
+	"#### H1. <title>  · **Status:** open\n\n" +
+	"**File:** <path:line> | **Component:** <component>\n" +
+	"**Severity:** <critical|high|medium|low> · **Effort:** <XS|S|M|L> · **Urgency:** <acute|soon|eventually>\n\n" +
+	"<what's exploitable, the impact, and how>\n\n" +
+	"**Recommendation:** <the fix>\n" +
+	"```\n\n" +
+	"## Candidate tasks\n\n" +
+	"<!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do -->\n\n" +
+	"- ⏳ `tskflwctl task new \"<title>\" --epic <id> --tags security` — <one line>\n"

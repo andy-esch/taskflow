@@ -98,6 +98,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				BodyTemplate: "## Objective\n",
 				Fields:       []domain.FieldDoc{{Name: "tier", Type: "int", Required: true, Description: "d", Example: "3"}},
 				Conventions:  []string{"c"},
+				Templates:    []TemplateInfo{{Kind: "task", Name: "default", Description: "d"}},
 			})
 		}},
 		{"ErrorEnvelope", func(w io.Writer) error {
