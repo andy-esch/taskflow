@@ -73,6 +73,8 @@ tskflwctl audit findings --status open --effort XS,S --json  # query findings ac
 tskflwctl audit lint                   # validate finding status vocab + missing status + bucket↔state
 tskflwctl schema                       # the tool's contract for agents (statuses, fields, codes)
 tskflwctl schema task --json           # how to author a task: sections, fields, conventions
+tskflwctl template list                # body scaffolds `new --template` can use (--kind to filter)
+tskflwctl template show audit security # inspect a template's rendered body (--json for the envelope)
 tskflwctl ui                           # interactive Bubble Tea browser (tasks/epics/audits)
 
 # update + lifecycle
@@ -98,8 +100,9 @@ conflict (e.g. a name already taken).
 and an unknown one fails with exit `11` listing what's available. `audit` ships a
 `security` template (threat model + checklist) alongside `default`. `--template` is
 mutually exclusive with `--body`/`--body-file` (pick a scaffold *or* supply your
-own). Repo-local and custom templates, plus a `template list`/`show` surface, are
-the next steps (see `planning/epics/22-selectable-template-library.md`).
+own). Discover what's available with `template list` (`--kind` to filter, `--json`
+for agents) and `template show <kind> [name]`. Repo-local and custom templates are
+the next step (see `planning/epics/22-selectable-template-library.md`).
 
 Human output is colorized with status glyphs on a terminal and falls back to
 plain text when piped. Control it with `--color=auto|always|never`, `--no-color`,

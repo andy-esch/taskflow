@@ -106,3 +106,38 @@ func contains(ss []string, want string) bool {
 	}
 	return false
 }
+
+// TestLookupTemplate: metadata access for `template show` — default vs named, and
+// ErrValidation for an unknown kind or name.
+func TestLookupTemplate(t *testing.T) {
+	def, err := LookupTemplate("audit", "")
+	if err != nil || def.Name != DefaultTemplate {
+		t.Fatalf("default lookup: err=%v name=%q", err, def.Name)
+	}
+	sec, err := LookupTemplate("audit", "security")
+	if err != nil || sec.Name != "security" || sec.Description == "" || sec.Body == "" {
+		t.Errorf("security lookup: err=%v info=%+v", err, sec)
+	}
+	if _, err := LookupTemplate("audit", "nope"); !errors.Is(err, ErrValidation) {
+		t.Errorf("unknown name should be ErrValidation, got %v", err)
+	}
+	if _, err := LookupTemplate("bogus", ""); !errors.Is(err, ErrValidation) {
+		t.Errorf("unknown kind should be ErrValidation, got %v", err)
+	}
+}
+
+// TestTemplatesFor: the listable set per kind, ErrValidation for unknown, and a
+// defensive copy (mutating the result must not corrupt the registry).
+func TestTemplatesFor(t *testing.T) {
+	ts, err := TemplatesFor("audit")
+	if err != nil || len(ts) != 2 {
+		t.Fatalf("audit templates: err=%v n=%d", err, len(ts))
+	}
+	if _, err := TemplatesFor("bogus"); !errors.Is(err, ErrValidation) {
+		t.Errorf("unknown kind should be ErrValidation, got %v", err)
+	}
+	ts[0].Name = "MUTATED"
+	if again, _ := TemplatesFor("audit"); again[0].Name == "MUTATED" {
+		t.Error("TemplatesFor must return a copy, not the registry's slice")
+	}
+}

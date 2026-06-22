@@ -32,6 +32,9 @@ func TestGolden_MachineContract(t *testing.T) {
 		{"schema_json", []string{"schema", "--json"}},
 		{"schema_task_json", []string{"schema", "task", "--json"}},
 		{"schema_jsonschema", []string{"schema", "--json-schema"}},
+		// Templates are built-in + date-free, so their --json is byte-pinnable too.
+		{"template_list_json", []string{"template", "list", "--json"}},
+		{"template_show_security_json", []string{"template", "show", "audit", "security", "--json"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

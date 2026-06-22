@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.7",
+  "templates": [
+    {
+      "kind": "task",
+      "name": "default",
+      "description": "Standard task scaffold: objective, acceptance criteria, scope."
+    },
+    {
+      "kind": "epic",
+      "name": "default",
+      "description": "Standard epic scaffold: goal, rationale, scope."
+    },
+    {
+      "kind": "audit",
+      "name": "default",
+      "description": "Standard audit scaffold: findings + candidate tasks."
+    },
+    {
+      "kind": "audit",
+      "name": "security",
+      "description": "Security review: threat model, checklist, severity-tagged findings."
+    }
+  ]
+}

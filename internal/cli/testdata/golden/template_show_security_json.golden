@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.7",
+  "template": {
+    "kind": "audit",
+    "name": "security",
+    "description": "Security review: threat model, checklist, severity-tagged findings."
+  },
+  "body": "\n# Security audit: \u003carea\u003e — \u003cdate\u003e\n\n\u003e Security review. Edit findings in place and flip each `**Status:**` as you work it.\n\n## Threat model\n\n- **Assets / trust boundaries:** \u003cwhat's worth protecting; where untrusted input crosses in\u003e\n- **Attacker \u0026 entry points:** \u003cwho, and through which surfaces\u003e\n\n## Review checklist\n\n- [ ] Authn / authz — every privileged path checks identity *and* permission\n- [ ] Input validation — untrusted input is parsed/escaped (injection, path traversal)\n- [ ] Secrets — no hard-coded creds; least-privilege tokens; nothing sensitive logged\n- [ ] Dependencies — known-vuln scan; versions pinned\n- [ ] Data at rest / in transit — encryption + safe defaults\n\n## Findings\n\n\u003c!-- One finding per issue, in this shape (un-fence it): --\u003e\n\n```\n#### H1. \u003ctitle\u003e  · **Status:** open\n\n**File:** \u003cpath:line\u003e | **Component:** \u003ccomponent\u003e\n**Severity:** \u003ccritical|high|medium|low\u003e · **Effort:** \u003cXS|S|M|L\u003e · **Urgency:** \u003cacute|soon|eventually\u003e\n\n\u003cwhat's exploitable, the impact, and how\u003e\n\n**Recommendation:** \u003cthe fix\u003e\n```\n\n## Candidate tasks\n\n\u003c!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do --\u003e\n\n- ⏳ `tskflwctl task new \"\u003ctitle\u003e\" --epic \u003cid\u003e --tags security` — \u003cone line\u003e\n"
+}

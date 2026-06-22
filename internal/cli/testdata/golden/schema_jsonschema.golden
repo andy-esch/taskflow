@@ -686,6 +686,68 @@
       ],
       "description": "TasksEnvelope is `task list --json`."
     },
+    "TemplateInfo": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind",
+        "name",
+        "description"
+      ],
+      "description": "TemplateInfo is one body template's listable metadata (kind/name/description), populated by the cli for `template list`/`show`."
+    },
+    "TemplateShowEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "template": {
+          "$ref": "#/$defs/TemplateInfo"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "template",
+        "body"
+      ],
+      "description": "TemplateShowEnvelope is `template show --json` (a template's metadata + body)."
+    },
+    "TemplatesEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "templates": {
+          "items": {
+            "$ref": "#/$defs/TemplateInfo"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "templates"
+      ],
+      "description": "TemplatesEnvelope is `template list --json`."
+    },
     "VersionEnvelope": {
       "properties": {
         "schema_version": {
@@ -925,6 +987,12 @@
         "schema_kind": {
           "$ref": "#/$defs/SchemaKindEnvelope"
         },
+        "templates": {
+          "$ref": "#/$defs/TemplatesEnvelope"
+        },
+        "template_show": {
+          "$ref": "#/$defs/TemplateShowEnvelope"
+        },
         "error": {
           "$ref": "#/$defs/ErrorEnvelope"
         }
@@ -949,6 +1017,8 @@
         "init",
         "schema",
         "schema_kind",
+        "templates",
+        "template_show",
         "error"
       ]
     },

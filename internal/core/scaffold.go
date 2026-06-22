@@ -6,12 +6,12 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// ScaffoldBody returns the default body template for a kind, rendered with
-// placeholder values. It is the SAME default template `task new`/`epic new`/
-// `audit new` write, so `tskflwctl schema <kind>` can show the body skeleton
-// without a second, drift-prone copy. Unknown kinds return ErrValidation.
-func ScaffoldBody(kind string) (string, error) {
-	tmpl, err := domain.Template(kind, "") // "" = the kind's default template
+// TemplateBody renders a kind's named template scaffold with placeholder labels —
+// the body `tskflwctl schema <kind>` and `template show` display, NOT the create
+// path (which fills real title/epic/area values). An empty name selects the kind's
+// default. Unknown kind or template name returns ErrValidation.
+func TemplateBody(kind, name string) (string, error) {
+	tmpl, err := domain.Template(kind, name)
 	if err != nil {
 		return "", err
 	}
@@ -27,3 +27,8 @@ func ScaffoldBody(kind string) (string, error) {
 	}
 	return "", fmt.Errorf("%w: unknown kind %q (task|epic|audit)", domain.ErrValidation, kind)
 }
+
+// ScaffoldBody renders a kind's DEFAULT body scaffold with placeholder values, the
+// same scaffold `task new`/`epic new`/`audit new` write — so `tskflwctl schema
+// <kind>` shows the skeleton without a second, drift-prone copy.
+func ScaffoldBody(kind string) (string, error) { return TemplateBody(kind, "") }

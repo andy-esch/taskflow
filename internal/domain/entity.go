@@ -146,26 +146,43 @@ func Conventions(kind string) []string {
 	return nil
 }
 
-// Template returns a kind's named body scaffold. An empty name selects the
-// default. The body is a Printf format the create call site fills with the kind's
-// placeholders (task: title, epic-id; epic: title, description; audit: area, date),
-// so every template for a kind is interchangeable. An unknown kind or template name
-// returns ErrValidation naming what's available, so the CLI maps it to exit 11.
-func Template(kind, name string) (string, error) {
+// LookupTemplate returns a kind's named template (an empty name selects the
+// default). An unknown kind or template name returns ErrValidation naming what's
+// available, so the CLI maps it to exit 11. It is the metadata-bearing form behind
+// `template show`; Template returns just the Body.
+func LookupTemplate(kind, name string) (NamedTemplate, error) {
 	d, ok := descriptorFor(kind)
 	if !ok {
-		return "", fmt.Errorf("%w: unknown kind %q (task|epic|audit)", ErrValidation, kind)
+		return NamedTemplate{}, fmt.Errorf("%w: unknown kind %q (task|epic|audit)", ErrValidation, kind)
 	}
 	if name == "" {
 		name = DefaultTemplate
 	}
 	for _, t := range d.Templates {
 		if t.Name == name {
-			return t.Body, nil
+			return t, nil
 		}
 	}
-	return "", fmt.Errorf("%w: unknown %s template %q (available: %s)",
+	return NamedTemplate{}, fmt.Errorf("%w: unknown %s template %q (available: %s)",
 		ErrValidation, kind, name, strings.Join(templateNames(d), ", "))
+}
+
+// Template returns a kind's named body scaffold. An empty name selects the
+// default. The body is a Printf format the create call site fills with the kind's
+// placeholders (task: title, epic-id; epic: title, description; audit: area, date),
+// so every template for a kind is interchangeable.
+func Template(kind, name string) (string, error) {
+	t, err := LookupTemplate(kind, name)
+	return t.Body, err
+}
+
+// TemplatesFor returns the templates a kind offers (read-only copy, default first),
+// or ErrValidation for an unknown kind — the listable form behind `template list`.
+func TemplatesFor(kind string) ([]NamedTemplate, error) {
+	if d, ok := descriptorFor(kind); ok {
+		return append([]NamedTemplate(nil), d.Templates...), nil
+	}
+	return nil, fmt.Errorf("%w: unknown kind %q (task|epic|audit)", ErrValidation, kind)
 }
 
 // TemplateNames lists the body-template names a kind offers (default first), for
