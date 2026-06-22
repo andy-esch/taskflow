@@ -29,6 +29,15 @@ func activeHelpArg(hint string) completeFunc {
 	}
 }
 
+// completeTemplateNames offers a kind's body-template names for `--template`
+// (default first), with file completion suppressed. The set is registry-driven, so
+// a new built-in (or, later, repo-local) template shows up here automatically.
+func completeTemplateNames(kind string) completeFunc {
+	return func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return domain.TemplateNames(kind), cobra.ShellCompDirectiveNoFileComp
+	}
+}
+
 // isCompletionCommand reports whether cmd is cobra's hidden completion driver
 // (`__complete`/`__completeNoDesc`), so PersistentPreRunE can stay non-fatal
 // during shell completion.

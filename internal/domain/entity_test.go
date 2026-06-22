@@ -21,11 +21,16 @@ func TestEntityRegistry_CoversEverySchemaKind(t *testing.T) {
 		if len(d.Conventions) == 0 {
 			t.Errorf("%s: descriptor has no conventions", kind)
 		}
-		if d.BodyTemplate == "" {
-			t.Errorf("%s: descriptor has no body template", kind)
+		// Every kind offers at least a default template, and the lookups agree.
+		if len(d.Templates) == 0 {
+			t.Errorf("%s: descriptor has no templates", kind)
 		}
-		if BodyTemplate(kind) != d.BodyTemplate {
-			t.Errorf("%s: BodyTemplate disagrees with the descriptor", kind)
+		def, err := Template(kind, "")
+		if err != nil {
+			t.Errorf("%s: default Template returned error: %v", kind, err)
+		}
+		if def == "" {
+			t.Errorf("%s: default template body is empty", kind)
 		}
 		af, err := AuthoringFields(kind)
 		if err != nil {

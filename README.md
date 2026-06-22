@@ -62,6 +62,7 @@ tskflwctl task new "Triage flake" --epic 17-pm-go-cli --tags ci --description "i
 echo "$BODY" | tskflwctl task new "Long writeup" --epic 17-pm-go-cli --tags x --body-file -  # body from stdin/file
 tskflwctl epic new "Billing overhaul" --description "Replace legacy pipeline"
 tskflwctl audit new dispatcher          # → audits/open/YYYY-MM-DD-dispatcher.md (--date to override)
+tskflwctl audit new auth --template security  # pick a body scaffold (default|security); --template is shell-completable
 
 # read
 tskflwctl task list                    # active tasks (--all / --status / --epic / --tag)
@@ -91,6 +92,14 @@ A task's `status:` **is** its directory (`tasks/<status>/`); lifecycle verbs mov
 the file and stamp dates atomically. Errors carry semantic exit codes — `10`
 not-found, `11` validation, `13` ambiguous, `14`
 conflict (e.g. a name already taken).
+
+**Body templates.** Each kind ships named body scaffolds; `task/epic/audit new
+--template <name>` picks one (omit it for `default`). Names are shell-completable
+and an unknown one fails with exit `11` listing what's available. `audit` ships a
+`security` template (threat model + checklist) alongside `default`. `--template` is
+mutually exclusive with `--body`/`--body-file` (pick a scaffold *or* supply your
+own). Repo-local and custom templates, plus a `template list`/`show` surface, are
+the next steps (see `planning/epics/22-selectable-template-library.md`).
 
 Human output is colorized with status glyphs on a terminal and falls back to
 plain text when piped. Control it with `--color=auto|always|never`, `--no-color`,

@@ -129,13 +129,15 @@ func newTaskNewCmd(app *App) *cobra.Command {
 	cmd.Flags().BoolVar(&p.Start, "start", false, "create directly in in-progress")
 	cmd.Flags().StringVar(&p.Body, "body", "", "override the default body scaffold")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the body from a file, or - for stdin (replaces --body)")
+	cmd.Flags().StringVar(&p.Template, "template", "", `body scaffold to use (default "default"); completes the available names`)
 	cmd.MarkFlagsMutuallyExclusive("next", "start")
-	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file", "template")
 	// NOTE: --epic is intentionally NOT MarkFlagRequired — newTaskNewCmd resolves
 	// it via fillSelect (flag → prompt on a TTY → exit 11 otherwise), so a human
 	// gets a picker while agents still get a validation error. cobra's required
 	// check would short-circuit that (and exit 1, not our 11).
 	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
+	_ = cmd.RegisterFlagCompletionFunc("template", completeTemplateNames("task"))
 	return cmd
 }
 

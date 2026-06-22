@@ -55,7 +55,9 @@ func newEpicNewCmd(app *App) *cobra.Command {
 	cmd.Flags().StringSliceVar(&p.Tags, "tags", nil, "comma-separated tags")
 	cmd.Flags().StringVar(&p.Body, "body", "", "override the default body scaffold")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the body from a file, or - for stdin (replaces --body)")
-	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
+	cmd.Flags().StringVar(&p.Template, "template", "", `body scaffold to use (default "default"); completes the available names`)
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file", "template")
+	_ = cmd.RegisterFlagCompletionFunc("template", completeTemplateNames("epic"))
 	return cmd
 }
 
