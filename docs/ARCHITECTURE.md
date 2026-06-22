@@ -27,12 +27,19 @@ the one-screen orientation for contributors.
   `Descriptor`); `SchemaKinds`/`AuthoringFields`/`Conventions`/`BodyTemplate` read
   that table instead of parallel `switch kind` blocks, so a kind's schema/scaffold
   surface is a registry entry, not a per-layer edit. Honest remaining fan-out for a
-  new entity (e.g. the scaffolded `projects/`): a store scan (`scanDir` + a per-kind
-  parse) plus per-entity render/TUI *display* delegates (the row + JSON formatters)
-  — deliberately still per-entity. TUI *lifecycle* (the `a` menu + `:` verbs) is no
-  longer in that list: it's registry-driven off each entity's transition table
-  (M10), so an entity opts into close/move actions by declaring transitions, not by
-  editing the reducer.
+  new entity (e.g. the scaffolded `projects/`), after the descriptor + the generic
+  seams: a typed `domain` struct + a `parse*`, thin `*Store` port methods (the scan
+  is generic `scanDir[T]`, resolution generic `resolveID`), its `core.Service` use
+  cases, a cli command, and render + TUI *display* delegates (a Human/JSON formatter
+  — column layout is the generic `Column[T]`/`WriteTablePlain` — plus an `entityTab`
+  entry + row delegate). That residual is the cost of a **typed** domain whose three
+  entities have genuinely different shapes (tasks: status/tier/priority; epics:
+  rollups; audits: findings/buckets); the generics remove the *mechanics*, not the
+  per-entity shape. What IS collapsed: the metadata fan-out into the descriptor
+  (M1), and TUI *lifecycle* (the `a` menu + `:` verbs) into each entity's transition
+  table (M10), so an entity opts into close/move actions by declaring transitions,
+  not by editing the reducer. A further data-driven persistence/render collapse
+  isn't pursued — for three heterogeneous entities it trades clarity for machinery.
 - **`internal/core`** — use cases (`Service`) + the ports it needs, defined here
   at the consumer. `Store` (composed of `TaskStore`/`EpicStore`/`AuditStore`) is
   the *use-case* port the `Service` depends on; the two fs/text operations that

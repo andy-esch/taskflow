@@ -29,6 +29,22 @@ func cursorTo(t *testing.T, m Model, verb string) Model {
 	return m
 }
 
+// TestTransitionTablesValidStates guards M10's stringly-typed transition.to: a
+// typo'd destination compiles (it's a string now) but would fail only at runtime
+// when applyMove casts it. Pin every entity's table to its real state vocabulary.
+func TestTransitionTablesValidStates(t *testing.T) {
+	for _, tr := range taskTransitions {
+		if !domain.Status(tr.to).Valid() {
+			t.Errorf("task transition %q -> %q is not a valid status", tr.verb, tr.to)
+		}
+	}
+	for _, tr := range auditTransitions {
+		if !domain.AuditBucket(tr.to).Valid() {
+			t.Errorf("audit transition %q -> %q is not a valid bucket", tr.verb, tr.to)
+		}
+	}
+}
+
 func TestValidTransitions(t *testing.T) {
 	got := validTransitions(taskTransitions, string(domain.StatusInProgress))
 	if len(got) != len(taskTransitions)-1 {

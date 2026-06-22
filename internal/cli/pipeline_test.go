@@ -90,7 +90,7 @@ func TestOutput_JSONAlias(t *testing.T) {
 func TestColumns_UnknownColumn(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "list", "-c", "slug,bogus"})
 	if err := cmd.Execute(); err == nil {
 		t.Fatalf("unknown column should error; output:\n%s", out.String())
@@ -142,7 +142,7 @@ func TestAuditList_Table(t *testing.T) {
 func TestTransition_FailureToStderr(t *testing.T) {
 	root := setupRepo(t)
 	var out, errOut bytes.Buffer
-	cmd := NewRootCmd(&out, &errOut)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &errOut)
 	// alpha (ready-to-start) starts ok; ghost is not found → a partial failure.
 	cmd.SetArgs([]string{"-C", root, "task", "start", "alpha", "ghost"})
 	_ = cmd.Execute()
@@ -170,7 +170,7 @@ func TestList_ModeConflicts(t *testing.T) {
 		{"task", "list", "-o", "bogus"},              // unknown format
 	} {
 		var out bytes.Buffer
-		cmd := NewRootCmd(&out, &out)
+		cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 		cmd.SetArgs(append([]string{"-C", root}, args...))
 		if err := cmd.Execute(); err == nil {
 			t.Errorf("expected an error for %v", args)
@@ -184,7 +184,7 @@ func TestList_ModeConflicts(t *testing.T) {
 func TestColumns_ConflictNamesEveryOffender(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "list", "-c", "slug", "--json", "-q"})
 	err := cmd.Execute()
 	if err == nil {

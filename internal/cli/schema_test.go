@@ -119,7 +119,7 @@ func TestSchemaKind_DerivedFromScaffold(t *testing.T) {
 func TestSchema_UnknownKind_Exit11(t *testing.T) {
 	root := freshRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "schema", "bogus"})
 	if err := cmd.Execute(); err == nil || ExitCode(err) != 11 {
 		t.Errorf("unknown kind should exit 11 (validation), got %v", err)

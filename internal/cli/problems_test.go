@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -22,7 +23,7 @@ func TestTaskList_ReportsBadFileButShowsGood(t *testing.T) {
 	write("tasks/ready-to-start/bad.md", "---\nstatus: ready-to-start\ntags: a,b,c\n---\n# Bad\n")
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "list"})
 	err := cmd.Execute()
 

@@ -90,7 +90,7 @@ func TestAuditList_ConflictingFlagsError(t *testing.T) {
 		{"audit", "list", "--all", "--closed"},
 	} {
 		var out bytes.Buffer
-		cmd := NewRootCmd(&out, &out)
+		cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 		cmd.SetArgs(append([]string{"-C", root}, args...))
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)

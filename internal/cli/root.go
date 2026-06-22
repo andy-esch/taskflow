@@ -61,9 +61,13 @@ func (a *App) setStyle() {
 }
 
 // NewRootCmd builds the command tree with explicit DI — no package globals.
-// All output flows through the injected writers, which makes commands testable.
-func NewRootCmd(out, errOut io.Writer) *cobra.Command {
-	app := &App{Out: out, ErrOut: errOut, In: os.Stdin}
+// All I/O flows through the injected streams, which makes commands testable.
+// in is the single stdin owner: it feeds App.In (the prompt gate, prompter, and
+// editor) AND the cobra root (cmd.InOrStdin, which resolveBody reads for
+// `--body-file -`), so a caller/test injects one reader and every input path
+// agrees — production passes os.Stdin.
+func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
+	app := &App{Out: out, ErrOut: errOut, In: in}
 
 	root := &cobra.Command{
 		Use:           "tskflwctl",
@@ -87,6 +91,7 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 	// Cobra's own output (help, usage errors, completion scripts) must follow
 	// the injected writers too, or it leaks to os.Stdout/os.Stderr and escapes
 	// both tests and callers that capture output.
+	root.SetIn(in)
 	root.SetOut(out)
 	root.SetErr(errOut)
 	root.PersistentFlags().BoolVar(&app.JSON, "json", false, "machine-readable JSON output")

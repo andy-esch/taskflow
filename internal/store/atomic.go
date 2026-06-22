@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // stageTemp writes data to a fsync'd, chmod'd temp file in dir and returns its
@@ -92,8 +93,43 @@ func createFileAtomic(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("sync %s: %w", path, err)
 	}
 	if err = f.Close(); err != nil {
+		// Clean up the partial new file like the Write/Sync paths above — a failed
+		// close must not leave a half-written file behind (it was created here).
+		_ = os.Remove(path)
 		return fmt.Errorf("close %s: %w", path, err)
 	}
 	syncDir(filepath.Dir(path))
 	return nil
+}
+
+// tempGlob matches the temp files stageTemp/os.CreateTemp leave under the tool's
+// own prefix. Used only to sweep crash orphans — never a user file.
+const tempGlob = ".tskflwctl-*.tmp"
+
+// staleTempAge is how old a .tmp orphan must be before sweepStaleTemps removes it.
+// A live temp lives only milliseconds (stageTemp → rename), so an hour-old one is
+// unambiguously a crash leftover; the generous margin keeps the sweep safe even if
+// a write is somehow in flight.
+const staleTempAge = time.Hour
+
+// sweepStaleTemps removes the tool's own crash-orphaned .tmp files (older than
+// staleTempAge) from dir, returning the paths it removed. Best-effort: a dir that
+// doesn't exist or a file that races away is skipped, not an error. Conservative
+// by prefix + age so it can never touch a user file or a live write.
+func sweepStaleTemps(dir string, now time.Time) []string {
+	matches, err := filepath.Glob(filepath.Join(dir, tempGlob))
+	if err != nil {
+		return nil
+	}
+	var removed []string
+	for _, p := range matches {
+		info, err := os.Stat(p)
+		if err != nil || now.Sub(info.ModTime()) < staleTempAge {
+			continue
+		}
+		if os.Remove(p) == nil {
+			removed = append(removed, p)
+		}
+	}
+	return removed
 }

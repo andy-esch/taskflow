@@ -52,7 +52,7 @@ func TestLintFix_UnrepairableFileExitsNonZero(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint", "--fix"})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -68,7 +68,7 @@ func TestLintFix_UnrepairableFileExitsNonZero(t *testing.T) {
 	}
 	// --dry-run stays exit 0 (it promises nothing about the result).
 	out.Reset()
-	dry := NewRootCmd(&out, &out)
+	dry := NewRootCmd(strings.NewReader(""), &out, &out)
 	dry.SetArgs([]string{"-C", root, "lint", "--fix", "--dry-run"})
 	dry.SetOut(&out)
 	dry.SetErr(&out)
@@ -94,7 +94,7 @@ func TestLintFix_JSONReportsUnreadable(t *testing.T) {
 	// stdout carries the fix envelope; the error is returned (not written, since
 	// the root silences errors), so the buffer holds only the JSON report.
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint", "--fix", "--json"})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)

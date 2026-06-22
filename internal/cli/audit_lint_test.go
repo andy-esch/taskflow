@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -24,7 +25,7 @@ func TestAuditLint_DirtyExits11(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "audit", "lint"})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("a dirty audit should make `audit lint` wrap ErrValidation (exit 11), got %v", err)
@@ -35,7 +36,7 @@ func TestAuditLint_DirtyExits11(t *testing.T) {
 func TestAuditLint_CleanPasses(t *testing.T) {
 	root := setupRepo(t) // tasks only, no audits → nothing to flag
 	var out bytes.Buffer
-	cmd := NewRootCmd(&out, &out)
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "audit", "lint"})
 	if err := cmd.Execute(); err != nil {
 		t.Errorf("a clean repo should pass audit lint, got %v", err)
