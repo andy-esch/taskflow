@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: handleKey's modal guard chain grows per overlay; restore/detail use shared single slots. Add an overlay stack and stamp intent with loadGen.
 effort: Unknown
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [tui, architecture]
 created: "2026-06-22"
+updated_at: "2026-06-22"
+completed_at: "2026-06-22"
 ---
 # Harden TUI dispatch modal stack and generation-stamped reload
 
@@ -27,9 +29,9 @@ planning/audits/open/2026-06-22-code-quality-architecture.md — **M14** (modal 
 
 ## Acceptance criteria
 
-- [ ] New overlays are a registry entry, not edits across handleKey + bodyView + Model.
-- [ ] A reload overlapping a jump can't clobber the navigation target; detail tied to loadGen.
-- [ ] just test + just lint green.
+- [x] New overlays are a registry entry, not edits across handleKey + bodyView + Model.
+- [x] A reload overlapping a jump can't clobber the navigation target; detail tied to loadGen.
+- [x] just test + just lint green.
 
 ## Implementation plan
 

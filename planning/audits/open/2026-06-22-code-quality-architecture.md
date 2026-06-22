@@ -85,6 +85,27 @@ design boundaries, invariants, concurrency, edge cases, and growth risk.
   goldens passing without `-update`, `schema_comments.json` regenerating with no drift, and
   docs/cli unchanged; `go build`/`go vet`/`gofmt`/`golangci-lint`/full `go test ./...` all
   green. **29 of 44 fixed; 1 in-progress.**
+- **2026-06-22 (7)** — Two port/boundary clusters, each with regression tests; suite +
+  vet + `golangci-lint` green, docs/cli no-drift. **core.Store port reshape:** **M16**
+  (new `GetAuditByPath` accessor on the audit port → `QueryFindings`/`LintAudits` read
+  each audit by the path `ListAudits` already resolved, killing the O(N²) re-resolve and
+  the concurrent-edit window; `fakeStore`/`nopStore` gained the method, finding seeds
+  carry `.Path`), **L12** (split `FixFrontmatter`→`core.Fixer` and `WatchPaths`→
+  `core.Layout` off the use-case `Store`; the CLI wires `app.Fixer` and the TUI takes a
+  `core.Layout` directly — `*FS` satisfies all three via compile assertions; the fakes
+  shed two methods), **M8** (ARCHITECTURE.md re-justified: render imports ~5 core types
+  not "two", and the port-purity theme reflects the done Fixer/Layout split). Paired with
+  the epic-22 **template port** (a `core.TemplateSource` behind `Service.ListTemplates`/
+  `ShowTemplate` + the create paths; `template list/show` resolve repo-best-effort so
+  built-ins still work repo-less — readying step 4's repo-local layering as a source
+  swap). **TUI cluster:** **M6** (cursor-restore carried per-message + gen-stamped, and a
+  reload mid-jump carries the jump target forward — no more single-slot steal/false
+  "not found"), **M14** (a `modal` overlay interface + ordered registry the reducer
+  loops, ForceQuit handled once in the preamble — a new overlay is one entry, no new
+  guard block/`bodyView` case), **M10** (the `a` menu + `:` verbs are registry-driven
+  off each entity's transition table + `applyMove`, so audits now close/reopen/defer
+  in-TUI; the M4 open-findings guard surfaces as a red flash). **35 of 44 fixed; 1
+  in-progress (M1).** Remaining: M11, M12 + the low backlog (L2, L6, L14, L16, L18, L20).
 
 ## Verdict
 
@@ -293,7 +314,7 @@ concurrency contract. No test hook or concurrency test exists.
 **Recommendation:** Add the same pre-rename re-resolve CAS and a test hook, mapping
 a mismatch to `ErrConflict` with a retry message. *(quick win)*
 
-#### M6. Per-tab cursor-restore (tab.restore) is a single slot shared by reload + jump  · **Status:** open
+#### M6. Per-tab cursor-restore (tab.restore) is a single slot shared by reload + jump  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/entity.go:63,90-95 | **Component:** tui
 **Effort:** M · **Urgency:** soon
@@ -324,7 +345,7 @@ output only.
 columns or clamp the composed line with `ansi.Truncate`, mirroring the TUI clamp
 discipline; add a no-line-exceeds-maxWidth test.
 
-#### M8. The cli→render→core diamond is ~5 core types, not the doc's "two"  · **Status:** open
+#### M8. The cli→render→core diamond is ~5 core types, not the doc's "two"  · **Status:** fixed (2026-06-22)
 
 **File:** internal/cli/render/render.go:208-296,327-359,459-486 | **Component:** architecture
 **Effort:** S · **Urgency:** eventually
@@ -355,7 +376,7 @@ shows copy-drift (`%-12s` vs `%-9s` padding between `TaskShowHuman`/`AuditShowHu
 `schema.go`, keep `render.go` for generic table renderers. Consider a
 field-descriptor list driving `*ShowHuman`.
 
-#### M10. TUI entity-registry's "no new keybindings" claim is false for lifecycle entities  · **Status:** open
+#### M10. TUI entity-registry's "no new keybindings" claim is false for lifecycle entities  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/entity.go:14-23,161-203 | **Component:** architecture
 **Effort:** L · **Urgency:** eventually
@@ -422,7 +443,7 @@ cleanly-parsing input assert the output re-parses as valid YAML, the body is
 preserved verbatim, and the requested key has the new value; skip inputs the parser
 legitimately rejects. *(quick win)*
 
-#### M14. handleKey is an oversized reducer whose modal precedence stack grows per overlay  · **Status:** open
+#### M14. handleKey is an oversized reducer whose modal precedence stack grows per overlay  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/model.go:281-444 | **Component:** architecture
 **Effort:** L · **Urgency:** eventually
@@ -452,7 +473,7 @@ list. The detail-focus footer hint advertises none of these keys.
 **Recommendation:** Gate `s/S/o/O/F` (and arguably `a/f`) on `focus==focusList`, or
 at minimum document them in the detail-focus hint. *(quick win)*
 
-#### M16. QueryFindings / LintAudits re-resolve + re-read every audit — O(N²) rescan  · **Status:** open
+#### M16. QueryFindings / LintAudits re-resolve + re-read every audit — O(N²) rescan  · **Status:** fixed (2026-06-22)
 
 **File:** internal/core/finding.go:56-69,93-106 | **Component:** core
 **Effort:** M · **Urgency:** soon
@@ -625,7 +646,7 @@ completion silently diverges; no test/linter catches divergence.
 **Recommendation:** Extract a shared `startDir`/`discoverStart` helper; have both
 callers use it with their own error handling.
 
-#### L12. FixFrontmatter sits on the Store port as a leaky, presentation-adjacent operation  · **Status:** open
+#### L12. FixFrontmatter sits on the Store port as a leaky, presentation-adjacent operation  · **Status:** fixed (2026-06-22)
 
 **File:** internal/core/store.go:57-59 | **Component:** architecture
 **Effort:** M · **Urgency:** eventually
