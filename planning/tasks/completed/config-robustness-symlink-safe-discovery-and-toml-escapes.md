@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Discovery/containment are purely lexical (symlink-bypassable); the hand-rolled TOML reader mis-decodes basic-string escapes.
 effort: Unknown
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [config, security]
 created: "2026-06-22"
+updated_at: "2026-06-22"
+completed_at: "2026-06-22"
 ---
 # Config robustness symlink-safe discovery and TOML escapes
 

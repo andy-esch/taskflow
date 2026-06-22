@@ -66,6 +66,14 @@ design boundaries, invariants, concurrency, edge cases, and growth risk.
   descriptor (epic 21 task, now complete) collapsed the DOMAIN fan-out, but the
   render/TUI fan-out remains — tracked by **M9** (god-file split) and **M10** (TUI
   registry), so the broad M1 theme stays in-progress. **24 of 44 fixed; 1 in-progress.**
+- **2026-06-22 (5)** — Config-robustness tranche (`internal/config/config.go`): **L8**
+  (containment now resolves symlinks via `EvalSymlinks` before the `Rel` no-`..` check,
+  so a `planning -> /outside` symlink can't slip past), **L19** (`Discover` resolves the
+  start dir so the `.git`-boundary walk-up uses physical ancestry), **L17** (the one-key
+  TOML scanner now refuses a backslash-bearing basic string rather than mis-decoding
+  `"a\"b"` as `a\`; literal `'...'` strings unaffected). New symlink-escape /
+  symlinked-worktree / TOML-escape tests; existing Root comparisons made symlink-safe
+  for macOS temp dirs. **27 of 44 fixed; 1 in-progress.**
 
 ## Verdict
 
@@ -550,7 +558,7 @@ observability only — but it contradicts `scanDir`'s resilient read-side philos
 **Recommendation:** Return accumulated results alongside the error (or collect
 per-file errors and continue).
 
-#### L8. taskflow_root escape guard is purely lexical — a symlink defeats containment  · **Status:** open
+#### L8. taskflow_root escape guard is purely lexical — a symlink defeats containment  · **Status:** fixed (2026-06-22)
 
 **File:** internal/config/config.go:62-75 | **Component:** config
 **Effort:** S · **Urgency:** eventually
@@ -673,7 +681,7 @@ the R raw fallback — an intentional tradeoff enabling efficient inline highlig
 **Recommendation:** Acceptable as a documented limitation; consider noting in
 `findStatus` when 0 matches occur while the raw body contains the query.
 
-#### L17. Hand-rolled taskflow_root TOML parser mis-reads valid escapes  · **Status:** open
+#### L17. Hand-rolled taskflow_root TOML parser mis-reads valid escapes  · **Status:** fixed (2026-06-22)
 
 **File:** internal/config/config.go:105-119 | **Component:** config
 **Effort:** S · **Urgency:** eventually
@@ -704,7 +712,7 @@ siblings. No corruption.
 (read-only dir via chmod, skip as root); optionally sweep stale temps on startup or
 during lint; align `createFileAtomic`'s Close path.
 
-#### L19. Discovery never resolves symlinks; the .git walk-up boundary uses logical paths  · **Status:** open
+#### L19. Discovery never resolves symlinks; the .git walk-up boundary uses logical paths  · **Status:** fixed (2026-06-22)
 
 **File:** internal/config/config.go:25-55 | **Component:** config
 **Effort:** S · **Urgency:** eventually
