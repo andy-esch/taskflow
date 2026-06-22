@@ -126,6 +126,19 @@ design boundaries, invariants, concurrency, edge cases, and growth risk.
   `to`. **39 of 44 fixed.** Remaining 5 = the low backlog L2 (watcher backoff), L6
   (realign dry-run preview), L14 (lazy glamour), L16 (find across wrap — documented
   tradeoff), L20 (selectByID scan) — all low-value polish or accept-as-documented.
+- **2026-06-22 (9)** — Closed out the low backlog and the audit. Fixed **L16**
+  (`findStatus` now hints `R: raw (match spans a wrap)` when a pretty-mode search
+  finds 0 but the raw render would match — so a wrap-straddling hit isn't read as
+  "not present"; the same fold-aware matcher decides, so the hint only fires when R
+  actually helps). Accepted (wontfix) the rest as low-value/by-design: **L2** (the
+  fsnotify error→reload nudge is *correct* for the dominant error, kernel queue
+  overflow → resync; the 200ms debounce already prevents a busy-loop, and flipping
+  to `watchOff` on a transient error would regress overflow-resync), **L6** (the
+  realign dry-run-preview gap is cosmetic — the real `--fix` re-lints and signals),
+  **L14** (the glamour render is cached so the cost is bounded "wasted work"; the
+  lazy-render change risks the find/cache state machine for no real gain), **L20**
+  (`selectByID` is ≤2 scans per reload — negligible until thousands of items).
+  **40 of 44 fixed; 4 accepted (wontfix); 0 open.** Audit closed.
 
 ## Verdict
 
@@ -433,7 +446,7 @@ discovers edits needed in model.go/action.go/nav.go.
 transition table (registry-driven `a` menu + `:` verbs), OR scope the doc's "no new
 keybindings" promise to read-only browse.
 
-#### M11. Ctrl-C during Move's write-then-remove window leaves a permanent duplicate slug  · **Status:** open
+#### M11. Ctrl-C during Move's write-then-remove window leaves a permanent duplicate slug  · **Status:** fixed (2026-06-22)
 
 **File:** internal/store/fsstore.go:159-172 | **Component:** store
 **Effort:** M · **Urgency:** eventually
@@ -450,7 +463,7 @@ hence medium, downgraded from high.)
 the remove always completes, or ship the dedup repair pass; until then document the
 kill window honestly.
 
-#### M12. Two divergent stdin sources; NewRootCmd cannot inject stdin  · **Status:** open
+#### M12. Two divergent stdin sources; NewRootCmd cannot inject stdin  · **Status:** fixed (2026-06-22)
 
 **File:** internal/cli/root.go:60-61 | **Component:** architecture
 **Effort:** M · **Urgency:** eventually
@@ -545,7 +558,7 @@ cleanly.)
 **Recommendation:** Keep `Service` as the facade but move per-entity use-cases into
 `service_task/epic/audit.go`; decide before the adr/project surface doubles methods.
 
-#### L2. fsnotify Errors are treated as reload nudges with no backoff  · **Status:** open
+#### L2. fsnotify Errors are treated as reload nudges with no backoff  · **Status:** wontfix (2026-06-22, accepted)
 
 **File:** internal/tui/watch.go:53-66 | **Component:** tui
 **Effort:** S · **Urgency:** eventually
@@ -602,7 +615,7 @@ touched" principle. No data is written (safety holds); diagnostic-quality only.
 fails the same way, report it via the diagnose path; or detect duplicate top-level
 keys up front.
 
-#### L6. FixFrontmatter realignStatus silently no-ops on a misfiled file with a coexisting YAML defect  · **Status:** open
+#### L6. FixFrontmatter realignStatus silently no-ops on a misfiled file with a coexisting YAML defect  · **Status:** wontfix (2026-06-22, accepted)
 
 **File:** internal/store/fix.go:73-87 | **Component:** store
 **Effort:** S · **Urgency:** eventually
@@ -714,7 +727,7 @@ Per-item stderr still shows full detail; only the summarized code is order-depen
 sentinel-bearing errors over generic exit-1), independent of argv order; at minimum
 document it.
 
-#### L14. render() recomputes the glamour body on every load even in raw mode  · **Status:** open
+#### L14. render() recomputes the glamour body on every load even in raw mode  · **Status:** wontfix (2026-06-22, accepted)
 
 **File:** internal/tui/detail.go:84-94 | **Component:** tui
 **Effort:** S · **Urgency:** eventually
@@ -740,7 +753,7 @@ the "for spreadsheets" claim the moment a repo is shared.
 **Recommendation:** If the spreadsheet use case is real, prefix cells whose first
 rune is in `{=,+,-,@,\t,\r}` with a leading `'`; otherwise soften the comment.
 
-#### L16. foldMatches/highlightLine do per-line search; '/' find can't match across wrap  · **Status:** open
+#### L16. foldMatches/highlightLine do per-line search; '/' find can't match across wrap  · **Status:** fixed (2026-06-22)
 
 **File:** internal/tui/detail.go:272-306 | **Component:** tui
 **Effort:** M · **Urgency:** eventually
@@ -768,7 +781,7 @@ strings work).
 supported, or decode the one key with a real TOML decoder; at minimum reject basic
 strings containing a backslash rather than mis-decoding.
 
-#### L18. Atomic-write helpers leave a .tmp orphan on interruption; cleanup branches untested  · **Status:** open
+#### L18. Atomic-write helpers leave a .tmp orphan on interruption; cleanup branches untested  · **Status:** fixed (2026-06-22)
 
 **File:** internal/store/atomic.go:12-53,71-91 | **Component:** store
 **Effort:** S · **Urgency:** eventually
@@ -798,7 +811,7 @@ discovery.) The test gap is real.
 **Recommendation:** `filepath.EvalSymlinks(start)` once at the top of `Discover`
 before the climb; add a symlinked-worktree discovery test.
 
-#### L20. selectByID linearly scans VisibleItems during the restore window  · **Status:** open
+#### L20. selectByID linearly scans VisibleItems during the restore window  · **Status:** wontfix (2026-06-22, accepted)
 
 **File:** internal/tui/entity.go:80-88 | **Component:** tui
 **Effort:** S · **Urgency:** eventually

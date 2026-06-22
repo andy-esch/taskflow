@@ -327,7 +327,26 @@ func (d detailPane) findStatus() string {
 	if len(d.find.matches) > 0 {
 		pos = d.find.cur + 1
 	}
-	return dim(fmt.Sprintf("/%s  [%d/%d]  n/N next/prev · esc clear", d.find.query, pos, len(d.find.matches)))
+	status := dim(fmt.Sprintf("/%s  [%d/%d]  n/N next/prev · esc clear", d.find.query, pos, len(d.find.matches)))
+	// Find runs per rendered line, so a query straddling a glamour wrap/reflow point
+	// reads as 0 matches in pretty mode even though it's there. When the raw render
+	// WOULD match, point at R so a real hit isn't mistaken for "not present" (L16).
+	if d.pretty && d.find.query != "" && len(d.find.matches) == 0 && rawHasMatch(d.rawStyled, d.find.query) {
+		status += dim(" · R: raw (match spans a wrap)")
+	}
+	return status
+}
+
+// rawHasMatch reports whether query occurs in the raw-rendered text (what R shows),
+// using the same fold-aware matcher as the live search — so the L16 hint fires only
+// when switching to raw would actually reveal the match.
+func rawHasMatch(rawStyled, query string) bool {
+	for _, line := range strings.Split(ansi.Strip(rawStyled), "\n") {
+		if len(foldMatches(line, query)) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (d detailPane) View() string {
