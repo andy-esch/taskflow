@@ -57,6 +57,15 @@ func runLint(app *App) error {
 func runLintFix(app *App, dryRun bool) error {
 	results, err := app.Svc.LintFix(dryRun)
 	if err != nil {
+		// A mid-run write failure still repaired earlier files: report that partial
+		// progress before surfacing the error, so the user can reconcile what landed.
+		if len(results) > 0 {
+			if app.JSON {
+				_ = render.FixJSON(app.Out, results, nil, dryRun)
+			} else {
+				render.FixHuman(app.Out, app.Style, results, dryRun)
+			}
+		}
 		return err
 	}
 	// Dry-run only previews the repairs; nothing was written, so there's no

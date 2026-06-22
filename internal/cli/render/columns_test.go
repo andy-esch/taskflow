@@ -165,3 +165,23 @@ func names[T any](cols []Column[T]) []string {
 	}
 	return out
 }
+
+// TestWriteCSV_NeutralizesFormulaInjection pins L15 (2026-06-22 audit): cells whose
+// first char a spreadsheet treats as a formula (= + - @) are prefixed with a quote
+// so a shared CSV can't execute a pasted formula; safe cells are untouched.
+func TestWriteCSV_NeutralizesFormulaInjection(t *testing.T) {
+	cols := []Column[string]{{"v", "value", func(s string) string { return s }}}
+	var buf bytes.Buffer
+	if err := WriteCSV(&buf, cols, []string{"=SUM(A1)", "safe", "-1+2", "@cmd", "+x"}); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"'=SUM(A1)", "'-1+2", "'@cmd", "'+x"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("CSV did not neutralize a formula-injection cell %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "\nsafe\n") {
+		t.Errorf("a safe cell must be written unchanged:\n%s", out)
+	}
+}

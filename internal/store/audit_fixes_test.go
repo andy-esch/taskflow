@@ -121,6 +121,40 @@ func TestFS_MoveAudit_ConflictsWhenMovedConcurrently(t *testing.T) {
 	}
 }
 
+// M4: closing/deferring an audit that still has open findings must be refused
+// (the bucket↔state invariant `audit lint` enforces), with nothing moved.
+func TestFS_MoveAudit_RejectsOpenFindings(t *testing.T) {
+	root := t.TempDir()
+	writeAudit(t, root, "open", "x.md", "---\narea: a\n---\n#### H1. t  · **Status:** open\n")
+	_, err := NewFS(root).MoveAudit("x", domain.AuditClosed, false)
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("closing an audit with open findings must be rejected, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "audits", "open", "x.md")); statErr != nil {
+		t.Error("a rejected move must leave the audit in its original bucket")
+	}
+	// Deferring (also a non-open bucket) is refused for the same reason.
+	if _, err := NewFS(root).MoveAudit("x", domain.AuditDeferred, false); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("deferring an audit with open findings must be rejected, got %v", err)
+	}
+}
+
+// L5: when a SetFields update fails to reload because the file was ALREADY broken
+// the same way (pre-existing duplicate keys), blame the file, not the user's update.
+func TestFS_SetFields_PreexistingCorruptionAttributedToFile(t *testing.T) {
+	root := t.TempDir()
+	// Duplicate top-level key: yaml.Node accepts it, but the typed decode rejects it.
+	writeTask(t, root, "ready-to-start", "dup.md",
+		"---\nstatus: ready-to-start\ntier: 2\ntier: 3\ntags: [x]\n---\n# Dup\n")
+	_, err := NewFS(root).SetFields("dup", map[string]any{"priority": "high"}, false)
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("want ErrValidation, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "already has malformed frontmatter") {
+		t.Errorf("error should blame the pre-existing corruption, not the update: %v", err)
+	}
+}
+
 // L4: a closing fence with trailing whitespace (a common editor artifact) must
 // be recognized, not reported as an unterminated-frontmatter problem.
 func TestSplitFrontmatter_ToleratesTrailingWhitespaceFence(t *testing.T) {

@@ -64,7 +64,8 @@ func TestFS_FindingCounts_IgnoresFencesAndOpenIsh(t *testing.T) {
 
 func TestFS_MoveAudit(t *testing.T) {
 	root := t.TempDir()
-	writeAudit(t, root, "open", "x.md", "---\narea: a\n---\n#### H1. t  · **Status:** open\n")
+	// No open findings, so the bucket↔state invariant permits closing.
+	writeAudit(t, root, "open", "x.md", "---\narea: a\n---\n#### H1. t  · **Status:** fixed\n")
 
 	a, err := NewFS(root).MoveAudit("x", domain.AuditClosed, false)
 	if err != nil {

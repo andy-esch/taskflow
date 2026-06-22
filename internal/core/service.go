@@ -264,6 +264,22 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	if !epicExists(epics, p.Epic) {
 		return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, p.Epic)
 	}
+	// Defaults for zero-valued fields live here so EVERY caller — not just the CLI
+	// flags — produces a valid, lint-clean task; the CLI flag defaults stay as
+	// help-text hints. (A second adapter calling NewTask without replicating them
+	// would otherwise get ErrValidation or scaffold a lint-failing file.)
+	if p.Priority == "" {
+		p.Priority = "medium"
+	}
+	if p.Tier == 0 {
+		p.Tier = 3
+	}
+	if p.Autonomy == 0 {
+		p.Autonomy = 3
+	}
+	if p.Effort == "" {
+		p.Effort = "Unknown"
+	}
 	if err := domain.ValidatePriority(p.Priority); err != nil {
 		return domain.Task{}, err
 	}

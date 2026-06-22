@@ -103,16 +103,26 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 	return root
 }
 
+// startDir is the single source of the discovery start directory: --chdir if
+// given, else the cwd. resolve() (fatal) and completion's planningRoot() (forgiving)
+// share it so the "where do we start discovery" contract can't drift between them.
+func (a *App) startDir() (string, error) {
+	if a.Chdir != "" {
+		return a.Chdir, nil
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("getwd: %w", err)
+	}
+	return wd, nil
+}
+
 // resolve discovers the planning repo and constructs the service. Runs once,
 // after flag parsing, before any subcommand's RunE (the lazy App shell).
 func (a *App) resolve() error {
-	start := a.Chdir
-	if start == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("getwd: %w", err)
-		}
-		start = wd
+	start, err := a.startDir()
+	if err != nil {
+		return err
 	}
 	cfg, err := config.Discover(start)
 	if err != nil {

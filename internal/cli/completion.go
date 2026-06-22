@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -47,13 +46,9 @@ func isCompletionCommand(cmd *cobra.Command) bool {
 // relying on the lazily-built service, so completion works even when
 // PersistentPreRunE found no repo.
 func (a *App) planningRoot() (string, bool) {
-	start := a.Chdir
-	if start == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return "", false
-		}
-		start = wd
+	start, err := a.startDir()
+	if err != nil {
+		return "", false
 	}
 	cfg, err := config.Discover(start)
 	if err != nil {

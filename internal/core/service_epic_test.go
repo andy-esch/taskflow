@@ -168,6 +168,25 @@ func TestService_NewTask_Valid(t *testing.T) {
 	}
 }
 
+// TestService_NewTask_AppliesDefaults pins L23 (2026-06-22 audit): NewTask defaults
+// zero-valued priority/tier/autonomy/effort so a caller that doesn't replicate the
+// CLI flag defaults still produces a valid, lint-clean task.
+func TestService_NewTask_AppliesDefaults(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
+	svc := NewService(fs)
+	if _, err := svc.NewTask(NewTaskParams{Title: "Defaulted", Epic: "e1", Tags: []string{"x"}}); err != nil {
+		t.Fatalf("NewTask with zero-valued fields should default and succeed, got %v", err)
+	}
+	if len(fs.created) != 1 {
+		t.Fatalf("want 1 created task, got %d", len(fs.created))
+	}
+	got := fs.created[0]
+	if got.Priority != "medium" || got.Tier != 3 || got.Autonomy != 3 || got.Effort != "Unknown" {
+		t.Errorf("defaults not applied: priority=%q tier=%d autonomy=%d effort=%q",
+			got.Priority, got.Tier, got.Autonomy, got.Effort)
+	}
+}
+
 func TestService_NewTask_Next(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
 	svc := NewService(fs)

@@ -196,6 +196,13 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 	// file problem; the message must not blame a file that was never touched.
 	t, err := parseTask(newContent, path, st)
 	if err != nil {
+		// Attribute the failure correctly: if the ORIGINAL file already fails to
+		// parse the same way (e.g. pre-existing duplicate keys — a merge artifact
+		// updateFrontmatter rewrites only the first of), blame the file, not the
+		// user's update. Otherwise it's the update that wouldn't reload.
+		if _, perr := parseTask(content, path, st); perr != nil {
+			return domain.Task{}, fmt.Errorf("%w: %s already has malformed frontmatter (not caused by this update): %v", domain.ErrValidation, path, perr)
+		}
 		return domain.Task{}, fmt.Errorf("%w: update would not reload (%v); nothing was written", domain.ErrValidation, err)
 	}
 	// `set` must not be able to write a file the tool's own linter rejects: an
