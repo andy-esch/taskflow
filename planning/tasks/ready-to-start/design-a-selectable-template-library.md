@@ -129,17 +129,26 @@ deviations + decisions are noted at the end. Pick up at step 4 (repo-local).
   template file format (frontmatter header `name`/`description`/`kind`).
 
 **Next — step 5 (authoring surface):** `template new <kind> <name>` / `template edit`
-mirroring task/audit authoring; have `schema <kind>` advertise available templates.
+mirroring task/audit authoring. (`schema <kind>` now already advertises templates.)
 
-**Decisions made / still open:**
-- ⚠️ **Placeholder model is still per-kind `fmt.Sprintf` (each kind takes 2 `%s`).**
-  `TestTemplates_RenderWithoutFormatError` guards the built-ins, but an
-  author-supplied template with the wrong `%`-arity would emit `%!(MISSING)`/garbage.
-  **This is the key robustness decision for step 4/5** — switch to named placeholders
-  (`{{title}}`) or validate author templates on load before repo-local ships.
-- `template show` renders the placeholder-label body (`<area>`), not the raw `%s`
-  form — fine for inspection; revisit if authors need the raw.
-- Repo-local location + file format are still open (above).
+**Post-review hardening (2026-06-22 adversarial review):**
+- ✅ **Placeholder model RESOLVED — named placeholders.** Templates use `{{key}}`
+  (not Printf `%s`), filled by `core.renderTemplate`; the per-kind keys+labels live on
+  `Descriptor.Placeholders`. A literal `%` is now safe, a template may use any subset,
+  and an undeclared `{{token}}` is left visible (guarded by
+  `TestTemplates_OnlyDeclaredPlaceholders` + a no-leftover-`{{` create test). **Step 4
+  must validate author/repo-local templates on load** (reject undeclared `{{tokens}}`).
+- ✅ Closed-`switch kind` in the renderer retired — `TemplateBody`/`RenderLabels` are
+  descriptor-driven, so a new kind lights up without a renderer edit.
+- ✅ `template show --raw` added (the unrendered `{{...}}` source, for forking); core
+  mutual-exclusion guard for `--body`+`--template`; `schema <kind>` advertises templates.
+- ➡️ **Two review themes are now their own tasks under epic 22** (do before/with step 4):
+  - `route-template-resolution-through-a-core-port` — the CLI still reads `domain.Template*`
+    directly; step 4 needs a store-backed `TemplateSource` behind core.Service.
+  - `template-list-output-modes-and-source-provenance` — add `source` (built-in vs
+    repo-local) to the envelope + route `template list` through the shared `-o/-c/-q`.
+- Still open: repo-local location (`templates/` vs `.tskflwctl/templates/`); template
+  file format (frontmatter header `name`/`description`/`kind`).
 
 ## Related
 
