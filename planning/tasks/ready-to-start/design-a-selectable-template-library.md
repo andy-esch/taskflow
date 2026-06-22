@@ -85,7 +85,64 @@ paths consume; the descriptor resolves a *named* template instead of a single
 4. Repo-local override via the store (embed built-ins; scan `templates/`).
 5. Authoring surface (`template new`/`edit`) + docs.
 
+## Progress / handoff (as of 2026-06-22)
+
+**Steps 1–3 are IMPLEMENTED; steps 4–5 remain.** The design above still holds;
+deviations + decisions are noted at the end. Pick up at step 4 (repo-local).
+
+**Done — step 1 (named templates on the descriptor):**
+- `Descriptor.BodyTemplate` (one string) → `Descriptor.Templates []NamedTemplate`
+  (`{Name, Description, Body}`) in `internal/domain/entity.go`; `DefaultTemplate =
+  "default"`.
+- Lookups: `domain.Template(kind, name)` (body), `LookupTemplate(kind, name)`
+  (metadata), `TemplatesFor(kind)`, `TemplateNames(kind)`. Empty name = default;
+  unknown kind/name → `ErrValidation` listing the available names.
+- First real second template shipped: audit `security` (`auditSecurityBodyTemplate`).
+
+**Done — step 2 (`--template` selection):**
+- `--template` on `task/epic/audit new` (`internal/cli/{task,epic,audit}.go`);
+  `New{Task,Epic,Audit}Params` gained `Template`; create paths call
+  `domain.Template(kind, p.Template)`. Mutually exclusive with `--body`/`--body-file`;
+  shell-completable (`completeTemplateNames`); off-TTY bad name → exit 11.
+
+**Done — step 3 (`template list`/`show`):**
+- `internal/cli/template.go`: `template list` (`--kind`, `--json`) + `template show
+  <kind> [name]` (`--json`). Runs with no planning repo (overrides PersistentPreRunE,
+  like `schema`). Render + two `--json` envelopes: `internal/cli/render/templates.go`
+  + `envelopes.go` (registered in `jsonEnvelopes`, so `schema --json-schema` covers
+  them); golden snapshots for both. `core.TemplateBody(kind, name)` renders a named
+  scaffold with placeholder labels (generalized from `ScaffoldBody`).
+- Tests: `internal/domain/{template,entity}_test.go`,
+  `internal/cli/template_test.go`, golden cases in `integration_golden_test.go`.
+
+**Next — step 4 (repo-local templates): the first piece that needs the repo.**
+- Embed the built-ins (keep them as the floor); add a repo-local source scanning a
+  `templates/` dir; repo-local overrides built-in by `<kind>/<name>`.
+- Resolution must route through a store-backed port — today the cli reads
+  `domain.Template*` directly (fine for built-in, but repo-local needs the fs).
+  Likely shape: a `TemplateSource` port + a `core.Service` method that merges
+  built-in + repo-local; `template list/show` and the create paths consume it.
+- `template`'s PersistentPreRunE currently skips repo resolution ("runs anywhere").
+  Make the repo *optional-but-used*: resolve best-effort so built-ins still work
+  repo-less, and layer repo-local when a repo is present.
+- Settle first: repo-local location (`templates/` vs `.tskflwctl/templates/`); the
+  template file format (frontmatter header `name`/`description`/`kind`).
+
+**Next — step 5 (authoring surface):** `template new <kind> <name>` / `template edit`
+mirroring task/audit authoring; have `schema <kind>` advertise available templates.
+
+**Decisions made / still open:**
+- ⚠️ **Placeholder model is still per-kind `fmt.Sprintf` (each kind takes 2 `%s`).**
+  `TestTemplates_RenderWithoutFormatError` guards the built-ins, but an
+  author-supplied template with the wrong `%`-arity would emit `%!(MISSING)`/garbage.
+  **This is the key robustness decision for step 4/5** — switch to named placeholders
+  (`{{title}}`) or validate author templates on load before repo-local ships.
+- `template show` renders the placeholder-label body (`<area>`), not the raw `%s`
+  form — fine for inspection; revisit if authors need the raw.
+- Repo-local location + file format are still open (above).
+
 ## Related
 
-- Builds directly on epic 21's M1 entity descriptor (`internal/domain/entity.go`,
-  `BodyTemplate`) — the single-default seed this generalizes.
+- Builds directly on epic 21's M1 entity descriptor (`internal/domain/entity.go`) —
+  the single-default seed this generalizes. Shipped in increments; this task tracks
+  the remaining steps (4–5).

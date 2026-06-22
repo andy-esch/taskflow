@@ -27,6 +27,7 @@ tskflwctl task new <title> [flags]
       --priority string      high|medium|low (default "medium")
       --start                create directly in in-progress
       --tags strings         comma-separated tags (at least one required)
+      --template string      body scaffold to use (default "default"); completes the available names
       --tier int             tier 1-5 (default 3)
 ```
 

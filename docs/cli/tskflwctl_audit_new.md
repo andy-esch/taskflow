@@ -20,6 +20,7 @@ tskflwctl audit new <area> [flags]
       --body-file string   read the body from a file, or - for stdin (replaces --body)
       --date string        audit date YYYY-MM-DD (default today)
   -h, --help               help for new
+      --template string    body scaffold to use (default "default"); e.g. "security". completes the available names
 ```
 
 ### Options inherited from parent commands
