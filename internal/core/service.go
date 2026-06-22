@@ -233,26 +233,6 @@ type NewTaskParams struct {
 	DryRun      bool   // validate + report the would-be task without writing
 }
 
-const taskBodyTemplate = `
-# %s
-
-## Objective
-
-<why / what — one short paragraph>
-
-## Acceptance criteria
-
-- [ ] <observable outcome>
-
-## Out of scope
-
-- <explicitly excluded>
-
-## Related
-
-- Epic [[%s]]
-`
-
 // NewTask validates and creates a task, returning the created task. The epic
 // must exist; tier/autonomy/priority/description are validated. On any invalid
 // input it returns ErrValidation and nothing is written.
@@ -331,7 +311,7 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	}
 	body := p.Body
 	if body == "" {
-		body = fmt.Sprintf(taskBodyTemplate, p.Title, p.Epic)
+		body = fmt.Sprintf(domain.BodyTemplate("task"), p.Title, p.Epic)
 	}
 	return s.store.CreateTask(t, body, p.DryRun)
 }
@@ -346,20 +326,6 @@ type NewEpicParams struct {
 	Body        string
 	DryRun      bool // validate + report the would-be epic without writing
 }
-
-const epicBodyTemplate = `
-# %s
-
-**Goal.** %s
-
-## Why this is its own epic
-
-<one paragraph: what makes this its own epic vs folding into a sibling?>
-
-## Out of scope
-
-- <explicitly excluded>
-`
 
 // NewEpic validates and creates an epic (auto-numbered NN-<slug>). Description
 // is required (single line, ≤ the description cap); priority is validated.
@@ -392,7 +358,7 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 	}
 	body := p.Body
 	if body == "" {
-		body = fmt.Sprintf(epicBodyTemplate, p.Title, p.Description)
+		body = fmt.Sprintf(domain.BodyTemplate("epic"), p.Title, p.Description)
 	}
 	return s.store.CreateEpic(slug, e, body, p.DryRun)
 }
@@ -592,26 +558,6 @@ type NewAuditParams struct {
 	DryRun bool   // validate + report the would-be audit without writing
 }
 
-// auditBodyTemplate is the default audit scaffold. The finding example is fenced
-// so a fresh audit counts zero findings until real ones are added (parseAudit
-// excludes fenced blocks). It stays generic — no repo-specific conventions-doc
-// link (a repo that has one, e.g. desirelines-planning's HOWTO-execute, points
-// at it from its own tooling, not from the shared tool's scaffold).
-const auditBodyTemplate = "\n# Audit: %s — %s\n\n" +
-	"> Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
-	"## Findings\n\n" +
-	"<!-- One finding per issue, in this shape (un-fence it): -->\n\n" +
-	"```\n" +
-	"#### H1. <title>  · **Status:** open\n\n" +
-	"**File:** <path:line> | **Component:** <component>\n" +
-	"**Effort:** <XS|S|M|L> · **Urgency:** <acute|soon|eventually>\n\n" +
-	"<what's wrong, why it matters, evidence>\n\n" +
-	"**Recommendation:** <minimum fix>\n" +
-	"```\n\n" +
-	"## Candidate tasks\n\n" +
-	"<!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do -->\n\n" +
-	"- ⏳ `tskflwctl task new \"<title>\" --epic <id> --tags <tag>` — <one line>\n"
-
 // NewAudit validates and creates an audit in the open bucket, returning it. The
 // area must produce a non-empty slug and the date must be YYYY-MM-DD (today when
 // omitted); the slug is `<date>-<area-slug>`. On invalid input it returns
@@ -643,7 +589,7 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 	}
 	body := p.Body
 	if body == "" {
-		body = fmt.Sprintf(auditBodyTemplate, area, date)
+		body = fmt.Sprintf(domain.BodyTemplate("audit"), area, date)
 	}
 	return s.store.CreateAudit(a, body, p.DryRun)
 }

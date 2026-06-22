@@ -11,13 +11,19 @@ import (
 // write, so `tskflwctl schema <kind>` can show the body skeleton without a
 // second, drift-prone copy. Unknown kinds return ErrValidation.
 func ScaffoldBody(kind string) (string, error) {
+	tmpl := domain.BodyTemplate(kind)
+	if tmpl == "" {
+		return "", fmt.Errorf("%w: unknown kind %q (task|epic|audit)", domain.ErrValidation, kind)
+	}
+	// The template content is single-sourced on the descriptor; only the per-kind
+	// placeholder values stay here (each scaffold is a 2-arg Printf format).
 	switch kind {
 	case "task":
-		return fmt.Sprintf(taskBodyTemplate, "<title>", "<epic-id>"), nil
+		return fmt.Sprintf(tmpl, "<title>", "<epic-id>"), nil
 	case "epic":
-		return fmt.Sprintf(epicBodyTemplate, "<title>", "<description>"), nil
+		return fmt.Sprintf(tmpl, "<title>", "<description>"), nil
 	case "audit":
-		return fmt.Sprintf(auditBodyTemplate, "<area>", "<date>"), nil
+		return fmt.Sprintf(tmpl, "<area>", "<date>"), nil
 	}
 	return "", fmt.Errorf("%w: unknown kind %q (task|epic|audit)", domain.ErrValidation, kind)
 }
