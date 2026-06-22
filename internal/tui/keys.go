@@ -25,6 +25,7 @@ type keyMap struct {
 	StatusRev   key.Binding // S → cycle view backward
 	FilterMode  key.Binding // F → toggle list filter: fuzzy ⇄ substring
 	Action      key.Binding // a → lifecycle action menu (tasks)
+	Edit        key.Binding // e → inline field editor (tasks)
 	RawToggle   key.Binding // R → raw ⇄ pretty markdown in the detail body
 	Follow      key.Binding // f → follow the selection's reference (task ⇄ epic)
 	JumpBack    key.Binding // ctrl+o → pop the follow back-stack (vim jumplist)
@@ -53,6 +54,7 @@ var keys = keyMap{
 	StatusRev:   key.NewBinding(key.WithKeys("S")),
 	FilterMode:  key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "filter mode")),
 	Action:      key.NewBinding(key.WithKeys("a")),
+	Edit:        key.NewBinding(key.WithKeys("e")),
 	RawToggle:   key.NewBinding(key.WithKeys("R")),
 	Follow:      key.NewBinding(key.WithKeys("f")),
 	JumpBack:    key.NewBinding(key.WithKeys("ctrl+o")),

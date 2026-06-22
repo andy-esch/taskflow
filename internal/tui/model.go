@@ -52,6 +52,7 @@ type Model struct {
 	helpScroll int        // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
 	action     actionMenu // the `a` lifecycle action menu (S4)
 	follow     followMenu // the `f` reference picker (S6, epics → their tasks)
+	edit       editMenu   // the `e` inline field editor (task set with a GUI)
 	navStack   []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
 	flash      string     // transient post-action feedback line (cleared on the next key)
 	flashErr   bool       // the flash is an error (rendered red)
@@ -157,6 +158,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// disappearance on the reload below is expected, so don't let the post-reload
 		// restore mistake it for a dangling reference and overwrite this success.
 		m.movedAway = msg.slug
+		return m, m.reloadAll()
+
+	case editedMsg:
+		// A field edit succeeded: flash it and reload so the new value shows. The
+		// task keeps its dir (SetFields isn't a move), so this is a plain refresh —
+		// each tab's cursor preserved by id, no movedAway dance.
+		m.flash = fmt.Sprintf("set %s on %s", msg.field, msg.slug)
+		m.flashErr = false
 		return m, m.reloadAll()
 
 	case actionErrMsg:
@@ -377,6 +386,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if id, state, ok := m.selectedLifecycle(); ok {
 				m.action.open(id, cur.transitions, state)
 			}
+		}
+		return m, nil
+	case key.Matches(msg, keys.Edit):
+		// Inline field edit via SetFields — task-only (status stays in the `a`
+		// menu); a no-op on epics/audits, which have no SetFields path in core.
+		if t, ok := m.selectedTask(); ok {
+			m.edit.open(t)
 		}
 		return m, nil
 	case key.Matches(msg, keys.RawToggle):
@@ -999,7 +1015,7 @@ func (m Model) footer() string {
 	if m.focus == focusDetail && (m.detail.finding() || m.detail.findActive()) {
 		return truncate(m.detail.findStatus(), m.width)
 	}
-	hints := ": cmd · / filter · o sort · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
+	hints := ": cmd · / filter · a act · e edit · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
 	if m.focus == focusDetail {
 		hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc back · q quit"
 		if !m.twoPane {

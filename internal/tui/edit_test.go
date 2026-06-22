@@ -1,0 +1,204 @@
+package tui
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/store"
+)
+
+// cleanTaskRepo seeds a lint-clean in-progress task "clean" (with tags, so the
+// active-task invariant lets a single-field SetFields through) and its epic.
+func cleanTaskRepo(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	mk := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("epics/e1.md", "---\nstatus: in-progress\n---\n# E1\n")
+	mk("tasks/in-progress/clean.md",
+		"---\nstatus: in-progress\nepic: e1\ntier: 2\npriority: low\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# Clean\n")
+	return root
+}
+
+func loadedAt(t *testing.T, root string, w, h int) Model {
+	t.Helper()
+	m := New(core.NewService(store.NewFS(root)))
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	m = tm.(Model)
+	tm, _ = m.Update(m.Init()())
+	return tm.(Model)
+}
+
+// editCursorTo drives the field picker onto key via j-presses.
+func editCursorTo(t *testing.T, m Model, key string) Model {
+	t.Helper()
+	for i := 0; i < len(m.edit.fields); i++ {
+		if m.edit.cur().key == key {
+			return m
+		}
+		tm, _ := m.Update(press("j"))
+		m = tm.(Model)
+	}
+	t.Fatalf("field %q not reachable in the picker", key)
+	return m
+}
+
+// enumCursorTo drives an open enum widget onto opt via j-presses.
+func enumCursorTo(t *testing.T, m Model, opt string) Model {
+	t.Helper()
+	for i := 0; i <= len(m.edit.cur().options); i++ {
+		if m.edit.value() == opt {
+			return m
+		}
+		tm, _ := m.Update(press("j"))
+		m = tm.(Model)
+	}
+	t.Fatalf("enum option %q not reachable", opt)
+	return m
+}
+
+// TestModel_EditPriorityViaMenu pins the enum happy path: e → pick priority → choose
+// high → apply persists via SetFields, flashes success, and reloads.
+func TestModel_EditPriorityViaMenu(t *testing.T) {
+	m := loadedAt(t, cleanTaskRepo(t), 120, 40)
+	if m.selectedID() != "clean" {
+		t.Fatalf("setup: want clean selected, got %q", m.selectedID())
+	}
+	tm, _ := m.Update(press("e"))
+	m = tm.(Model)
+	if !m.edit.active {
+		t.Fatal("e should open the edit field picker on a task")
+	}
+	m = editCursorTo(t, m, "priority")
+	tm, _ = m.Update(press("enter")) // begin editing the enum (starts on current "low")
+	m = tm.(Model)
+	if !m.edit.editing {
+		t.Fatal("enter should begin editing the field")
+	}
+	m = enumCursorTo(t, m, "high")
+	tm, cmd := m.Update(press("enter")) // apply
+	m = tm.(Model)
+	if m.edit.active {
+		t.Error("applying should close the editor")
+	}
+	if cmd == nil {
+		t.Fatal("apply should return a SetFields command")
+	}
+	tm, _ = m.Update(cmd()) // run SetFields → editedMsg
+	m = tm.(Model)
+	if m.flash == "" || m.flashErr {
+		t.Errorf("expected a success flash, got %q (err=%v)", m.flash, m.flashErr)
+	}
+	task, _, err := m.svc.ShowTask("clean")
+	if err != nil || task.Priority != "high" {
+		t.Errorf("priority should be high after the edit: %q (%v)", task.Priority, err)
+	}
+}
+
+// TestModel_EditDescriptionViaTextInput pins the text happy path: a typed keystroke
+// reaches the widget and the new value persists via SetFields.
+func TestModel_EditDescriptionViaTextInput(t *testing.T) {
+	m := loadedAt(t, cleanTaskRepo(t), 120, 40)
+	tm, _ := m.Update(press("e"))
+	m = editCursorTo(t, tm.(Model), "description")
+	tm, _ = m.Update(press("enter")) // begin editing (prefilled "d", cursor at end)
+	m = tm.(Model)
+	tm, _ = m.Update(press("x")) // type a char — exercises the input key path
+	m = tm.(Model)
+	if !strings.Contains(m.edit.input.Value(), "x") {
+		t.Fatalf("the keystroke should reach the input, got %q", m.edit.input.Value())
+	}
+	_, cmd := m.Update(press("enter")) // apply
+	if cmd == nil {
+		t.Fatal("apply should return a SetFields command")
+	}
+	cmd() // run SetFields
+	task, _, err := m.svc.ShowTask("clean")
+	if err != nil || task.Description != "dx" {
+		t.Errorf("description should be the typed value 'dx', got %q (%v)", task.Description, err)
+	}
+}
+
+// TestModel_EditRejectedSurfacesError pins the validation contract: clearing tags on
+// an active task is rejected by core (red flash) and nothing is written.
+func TestModel_EditRejectedSurfacesError(t *testing.T) {
+	m := loadedAt(t, cleanTaskRepo(t), 120, 40)
+	tm, _ := m.Update(press("e"))
+	m = editCursorTo(t, tm.(Model), "tags")
+	tm, _ = m.Update(press("enter")) // edit tags (prefilled "a")
+	m = tm.(Model)
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace}) // clear → ""
+	m = tm.(Model)
+	if m.edit.input.Value() != "" {
+		t.Fatalf("tags input should be empty, got %q", m.edit.input.Value())
+	}
+	_, cmd := m.Update(press("enter")) // submit empty tags
+	if cmd == nil {
+		t.Fatal("submit should return a command")
+	}
+	tm, _ = m.Update(cmd()) // run SetFields → rejection
+	m = tm.(Model)
+	if !m.flashErr || m.flash == "" {
+		t.Errorf("clearing tags on an active task should flash red, got %q (err=%v)", m.flash, m.flashErr)
+	}
+	if task, _, _ := m.svc.ShowTask("clean"); len(task.Tags) != 1 || task.Tags[0] != "a" {
+		t.Errorf("a rejected edit must not write; tags=%v", task.Tags)
+	}
+}
+
+// TestModel_EditCancelNoWrite pins that Esc is a no-op: the editor closes and the
+// file is untouched.
+func TestModel_EditCancelNoWrite(t *testing.T) {
+	root := cleanTaskRepo(t)
+	path := filepath.Join(root, "tasks", "in-progress", "clean.md")
+	before, _ := os.ReadFile(path)
+	m := loadedAt(t, root, 120, 40)
+	tm, _ := m.Update(press("e"))
+	m = tm.(Model)
+	tm, _ = m.Update(press("esc"))
+	m = tm.(Model)
+	if m.edit.active {
+		t.Error("esc should close the editor")
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(before) {
+		t.Error("cancel must not write")
+	}
+}
+
+// TestModel_EditTasksOnly pins that inline edit is task-only (SetFields has no
+// epic/audit path): e is a no-op on a non-task tab.
+func TestModel_EditTasksOnly(t *testing.T) {
+	m := auditsTab(t, loaded(t, 120, 40))
+	tm, _ := m.Update(press("e"))
+	m = tm.(Model)
+	if m.edit.active {
+		t.Error("e must be a no-op on non-task entities")
+	}
+}
+
+// TestModel_EditMenuComposites pins that the picker floats over the body showing the
+// editable fields.
+func TestModel_EditMenuComposites(t *testing.T) {
+	m := loadedAt(t, cleanTaskRepo(t), 120, 40)
+	tm, _ := m.Update(press("e"))
+	m = tm.(Model)
+	v := ansi.Strip(m.View())
+	for _, want := range []string{"edit clean", "priority", "description", "tags", "tier"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("edit picker should show %q:\n%s", want, v)
+		}
+	}
+}

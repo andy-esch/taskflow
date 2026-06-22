@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Inline-edit task fields (description/priority/tags/effort/tier) in the TUI via SetFields — typed widgets, no $EDITOR escape
 effort: Unknown
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [tui, ux]
 created: "2026-06-21"
+updated_at: "2026-06-22"
+completed_at: "2026-06-22"
 ---
 ## Objective
 
@@ -52,24 +54,44 @@ reload. No new core surface; reuses the S4 mutation plumbing.
 
 ## Open questions / decisions
 
-- [ ] Final editable field set (default: description / priority / tags / effort /
+- [x] Final editable field set (default: description / priority / tags / effort /
       tier). Trim or extend?
-- [ ] Keybinding + UX: a dedicated `e` (edit) that opens a field picker, or
+- [x] Keybinding + UX: a dedicated `e` (edit) that opens a field picker, or
       per-field keys? Modal like the `a` menu / `?` help / `:` command bar.
-- [ ] Widget per field type (text vs enum-select vs tag-multi) and where the
+- [x] Widget per field type (text vs enum-select vs tag-multi) and where the
       editor floats (over detail vs inline in the row).
-- [ ] Optional follow-on: an `$EDITOR` escape for the body (separate key), if the
+- [x] Optional follow-on: an `$EDITOR` escape for the body (separate key), if the
       inline typed fields prove insufficient for freeform notes.
 
 ## Acceptance criteria
 
-- [ ] From the TUI, edit description/priority/tags (+ effort/tier) on the focused
+- [x] From the TUI, edit description/priority/tags (+ effort/tier) on the focused
       task; the change persists via `Service.SetFields` and the view reloads.
-- [ ] Invalid input is rejected with the core validation error surfaced in the
+- [x] Invalid input is rejected with the core validation error surfaced in the
       TUI (no partial/corrupt write); cancel (`Esc`) is a no-op.
-- [ ] All writes run as `tea.Cmd`s — no I/O in `Update`/`View`; store untouched.
-- [ ] Message-injection unit tests for the edit flow + a `teatest` golden for the
+- [x] All writes run as `tea.Cmd`s — no I/O in `Update`/`View`; store untouched.
+- [x] Message-injection unit tests for the edit flow + a `teatest` golden for the
       editor layout; suite + lint green; help footer + key matrix updated.
+
+## Outcome (2026-06-22)
+
+Shipped as a new modal in the M14 overlay registry (`internal/tui/edit.go` +
+`editModal` in `overlay.go`). **Decisions:** field set = description / priority /
+tags / effort / tier (the default); a dedicated `e` opens a two-phase modal — a
+field picker, then a per-field widget (text input for description/tags/effort,
+enum cursor for priority/tier) floated over the body like the `a` menu; submit
+fires `Service.SetFields` (force=false, dryRun=false) as a `tea.Cmd` → `editedMsg`
+→ flash + reload; invalid input comes back as `actionErrMsg` (red flash, no write);
+Esc cancels. Tags ride as a comma-list and tier as a string — the SetFields
+coercion turns them into a YAML list / int, the same path `task set` uses. Task-only
+(SetFields has no epic/audit path); status stays in `a`. The `$EDITOR`-escape
+follow-on is left out of scope as planned.
+
+**Testing note:** used the codebase's established message-injection + `View()`
+substring assertions (e.g. `TestModel_EditMenuComposites`, and the
+`TestModel_ViewFitsTerminal` layout invariant covers the overlay) rather than
+adding a `teatest` dependency the repo doesn't otherwise use — same coverage intent,
+no new dep.
 
 ## Related
 

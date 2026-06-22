@@ -20,11 +20,11 @@ type modal interface {
 	view(m *Model, w, h int) string
 }
 
-// defaultModals is the overlay registry in precedence order — help, then the
-// action menu, then the follow picker (the order the old guard chain used). The
-// first active modal owns the key and the floated box.
+// defaultModals is the overlay registry in precedence order — help, action menu,
+// follow picker, then the inline field editor. The first active modal owns the key
+// and the floated box. Adding one is a struct + an entry here (M14).
 func defaultModals() []modal {
-	return []modal{helpModal{}, actionModal{}, followModal{}}
+	return []modal{helpModal{}, actionModal{}, followModal{}, editModal{}}
 }
 
 // helpModal is the `?` keybinding overlay: j/k scroll it (the content can outgrow
@@ -74,3 +74,14 @@ func (followModal) handleKey(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
 }
 
 func (followModal) view(m *Model, w, h int) string { return m.follow.view(w, h) }
+
+// editModal is the `e` inline field editor (the human face of `task set`).
+type editModal struct{}
+
+func (editModal) active(m *Model) bool { return m.edit.active }
+
+func (editModal) handleKey(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
+	return true, m.handleEditKey(msg)
+}
+
+func (editModal) view(m *Model, w, h int) string { return m.edit.view(w, h) }

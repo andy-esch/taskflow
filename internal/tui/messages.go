@@ -23,6 +23,14 @@ type actionErrMsg struct {
 	err  error
 }
 
+// editedMsg reports a successful inline field edit (SetFields). The model flashes
+// it and reloads so the new value shows; unlike movedMsg the task doesn't change
+// dirs, so it's just a refresh, cursor preserved by id.
+type editedMsg struct {
+	slug  string
+	field string
+}
+
 // listLoadedMsg carries the result of an async entity-list load. kind tags which
 // entity tab it belongs to, so a load that finishes after the user has switched
 // tabs still lands in the right list. gen is the tab's load generation at fire
