@@ -66,12 +66,14 @@ func TestWriteTable_NoLimitKeepsFullWidth(t *testing.T) {
 }
 
 func TestBar(t *testing.T) {
-	st := NewStyle(false) // plain
+	st := NewStyle(false) // plain: the bubbles progress bar, ANSI-stripped by the gate
+	// The bubbles progress component rounds the filled cells (0.77×10 → 8), where
+	// the old hand-rolled bar floored (→ 7); otherwise identical glyphs.
 	cases := map[[2]int]string{
 		{50, 10}: "█████░░░░░",
 		{0, 4}:   "░░░░",
 		{100, 4}: "████",
-		{77, 10}: "███████░░░",
+		{77, 10}: "████████░░",
 		{150, 4}: "████", // clamped
 	}
 	for in, want := range cases {

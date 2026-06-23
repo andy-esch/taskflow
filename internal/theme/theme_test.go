@@ -103,15 +103,3 @@ func TestTaskDate(t *testing.T) {
 		t.Errorf("TaskDate falls back to Created, got %q", got)
 	}
 }
-
-// TestBarFill pins the shared fill arithmetic (one source for CLI + TUI bars).
-func TestBarFill(t *testing.T) {
-	for _, tc := range []struct{ pct, width, want int }{
-		{0, 10, 0}, {50, 10, 5}, {100, 10, 10}, {33, 12, 3},
-		{150, 10, 10}, {-5, 10, 0}, // clamped
-	} {
-		if got := BarFill(tc.pct, tc.width); got != tc.want {
-			t.Errorf("BarFill(%d, %d) = %d, want %d", tc.pct, tc.width, got, tc.want)
-		}
-	}
-}

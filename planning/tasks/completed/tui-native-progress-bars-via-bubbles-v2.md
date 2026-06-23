@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: 'No-brainer harvest: replace hand-rolled miniBar + Style.Bar with the bubbles v2 progress component (net code deletion). Depends on the v2 migration.'
 effort: Unknown
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [tui, ux]
 created: "2026-06-23"
+updated_at: "2026-06-23"
+completed_at: "2026-06-23"
 ---
 # TUI native progress bars via bubbles v2
 
