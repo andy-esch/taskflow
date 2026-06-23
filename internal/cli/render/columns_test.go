@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -34,6 +35,69 @@ func TestSelectColumns(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "nope") || !strings.Contains(err.Error(), "slug") {
 		t.Errorf("error should name the bad column and the available set: %v", err)
+	}
+}
+
+// TestProjectedListJSON pins the `--json -c` contract: a schema_version-first
+// envelope under the entity key, rows narrowed to the selected columns in -c
+// order, values as the column extractors' strings, and `unreadable` omitted
+// when there are no problems (mirroring the full envelope's omitempty).
+func TestProjectedListJSON(t *testing.T) {
+	tasks := []domain.Task{
+		{Slug: "alpha", Status: domain.StatusInProgress, Tier: 2, Description: "first"},
+		{Slug: "beta", Status: domain.StatusReadyToStart, Tier: 5, Description: "second"},
+	}
+	sel, err := SelectColumns(TaskColumns(), []string{"slug", "tier"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := ProjectedListJSON(&buf, "tasks", sel, tasks, nil); err != nil {
+		t.Fatalf("ProjectedListJSON: %v", err)
+	}
+	out := buf.String()
+
+	// Compact (no indentation) with a single trailing newline.
+	if strings.Contains(out, "\n  ") || strings.Count(out, "\n") != 1 {
+		t.Errorf("projected JSON should be compact with one trailing newline:\n%q", out)
+	}
+	// schema_version comes first, before the entity key — fixed contract order.
+	if sv, tk := strings.Index(out, "schema_version"), strings.Index(out, "\"tasks\""); sv < 0 || sv > tk {
+		t.Errorf("schema_version must precede the entity key:\n%s", out)
+	}
+	// `tier` (an int column) renders as its string form — a column VIEW, like table/csv.
+	if !strings.Contains(out, `"tier":"2"`) {
+		t.Errorf("numeric column should render as a string in the projection:\n%s", out)
+	}
+	// No `unreadable` key when there are no problems.
+	if strings.Contains(out, "unreadable") {
+		t.Errorf("clean projection must omit unreadable:\n%s", out)
+	}
+
+	var got struct {
+		SchemaVersion string           `json:"schema_version"`
+		Tasks         []map[string]any `json:"tasks"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("invalid json: %v\n%s", err, out)
+	}
+	if got.SchemaVersion != SchemaVersion {
+		t.Errorf("schema_version = %q, want %q", got.SchemaVersion, SchemaVersion)
+	}
+	for _, row := range got.Tasks {
+		if len(row) != 2 || row["slug"] == nil || row["tier"] == nil {
+			t.Errorf("each row must carry exactly the selected slug+tier: %v", row)
+		}
+	}
+
+	// With problems, `unreadable` appears (last).
+	buf.Reset()
+	probs := []domain.FileProblem{{Path: "tasks/x.md", Message: "bad frontmatter"}}
+	if err := ProjectedListJSON(&buf, "tasks", sel, tasks, probs); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "unreadable") {
+		t.Errorf("projection with problems must include unreadable:\n%s", buf.String())
 	}
 }
 
@@ -83,11 +147,12 @@ func TestWriteTablePlain_EpicExtractors(t *testing.T) {
 		Done: 2, Total: 5,
 	}})
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
-	if lines[0] != "id\tstatus\tpriority\tdone\ttotal\tdescription" {
+	// percent is appended LAST (after description) so the pre-existing default
+	// columns kept their positions; done/total/percent are plain numbers.
+	if lines[0] != "id\tstatus\tpriority\tdone\ttotal\tdescription\tpercent" {
 		t.Errorf("epic header: %q", lines[0])
 	}
-	// done/total are plain numbers (not the human "2/5 (40%)" cell).
-	if lines[1] != "20-cli\tplanning\tmedium\t2\t5\tux" {
+	if lines[1] != "20-cli\tplanning\tmedium\t2\t5\tux\t40" {
 		t.Errorf("epic row: %q", lines[1])
 	}
 }

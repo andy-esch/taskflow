@@ -20,14 +20,26 @@ func newSchemaCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "schema [task|epic|audit]",
 		Short: "Describe the tool's contract + per-kind authoring guidance (for agents)",
-		Long: "With no argument, emit the machine contract — statuses, the epic/bucket\n" +
+		Long: "For triage, lead with the terse path: `epic show <id>` for an epic's task\n" +
+			"roster, and `task list -o table -c slug,status,description` for a compact,\n" +
+			"byte-stable table. --json is compact and also takes -c to project just the\n" +
+			"fields you need; reach for full --json (no -c) when you need every frontmatter\n" +
+			"field. A --json -c projection is a string-valued column view — only full --json\n" +
+			"validates against --json-schema.\n\n" +
+			"With no argument, emit the machine contract — statuses, the epic/bucket\n" +
 			"enums, the task field registry with types, and the exit/error codes — so an\n" +
 			"agent can drive the tool without parsing --help prose. With a kind, emit how\n" +
 			"to author that document: the body section template, per-field guidance, and\n" +
-			"conventions. With --json-schema, emit a JSON Schema for the --json output\n" +
+			"conventions. With --json-schema, emit a JSON Schema for the full --json output\n" +
 			"envelopes so an agent can validate the tool's output. Everything is derived\n" +
 			"from the tool's own types and data.",
-		Example:     "  tskflwctl schema --json\n  tskflwctl schema task\n  tskflwctl schema --json-schema",
+		Example: "  # Triage first: cheap, scannable views\n" +
+			"  tskflwctl epic show <id>\n" +
+			"  tskflwctl task list -o table -c slug,status,description\n" +
+			"  # Full frontmatter only when you need every field:\n" +
+			"  tskflwctl schema --json\n" +
+			"  tskflwctl schema task\n" +
+			"  tskflwctl schema --json-schema",
 		Args:        cobra.MaximumNArgs(1),
 		Annotations: map[string]string{"safety": "read-only"},
 		ValidArgs:   domain.SchemaKinds(),

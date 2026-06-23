@@ -2,8 +2,12 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 func TestTaskList_Quiet(t *testing.T) {
@@ -61,6 +65,61 @@ func TestColumns_Projection(t *testing.T) {
 		if cols := strings.Split(lines[1], "\t"); len(cols) != 2 {
 			t.Errorf("%v: row should have 2 columns, got %d: %q", args, len(cols), lines[1])
 		}
+	}
+}
+
+// TestWriteError_JSONIsCompact pins that the --json error envelope is compact
+// (single line) like every other --json envelope, and carries the sentinel-
+// mapped code. (WriteError is what main calls on a fatal error under --json.)
+func TestWriteError_JSONIsCompact(t *testing.T) {
+	var buf bytes.Buffer
+	WriteError(&buf, fmt.Errorf("%w: bad thing", domain.ErrValidation), true)
+	out := buf.String()
+	if strings.Count(out, "\n") != 1 {
+		t.Errorf("JSON error envelope must be compact (one trailing newline): %q", out)
+	}
+	if !strings.HasPrefix(out, `{"schema_version"`) || !strings.Contains(out, `"code":"validation"`) {
+		t.Errorf("compact error envelope shape wrong: %q", out)
+	}
+}
+
+// TestColumns_JSONProjection: `--json -c` narrows each row to the selected
+// columns (in order), keeping the schema_version envelope. The single biggest
+// agent token win — field projection on the format agents actually parse.
+func TestColumns_JSONProjection(t *testing.T) {
+	root := setupRepo(t)
+	out := runRoot(t, "-C", root, "task", "list", "--json", "-c", "slug,status")
+	var got struct {
+		SchemaVersion string           `json:"schema_version"`
+		Tasks         []map[string]any `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("invalid json: %v\n%s", err, out)
+	}
+	if got.SchemaVersion == "" {
+		t.Errorf("projected envelope must carry schema_version:\n%s", out)
+	}
+	if len(got.Tasks) == 0 {
+		t.Fatalf("expected projected rows:\n%s", out)
+	}
+	for _, row := range got.Tasks {
+		if len(row) != 2 {
+			t.Errorf("row should carry exactly the 2 selected fields, got %d: %v", len(row), row)
+		}
+		if _, ok := row["slug"]; !ok {
+			t.Errorf("row missing selected field 'slug': %v", row)
+		}
+		if _, ok := row["status"]; !ok {
+			t.Errorf("row missing selected field 'status': %v", row)
+		}
+		// A non-selected, normally-present field must be absent.
+		if _, ok := row["description"]; ok {
+			t.Errorf("row should NOT carry the unselected 'description' field: %v", row)
+		}
+	}
+	// Key order follows -c (slug before status), which a plain map would lose.
+	if i, j := strings.Index(out, "\"slug\""), strings.Index(out, "\"status\""); i < 0 || j < 0 || i > j {
+		t.Errorf("projected keys should appear in -c order (slug before status):\n%s", out)
 	}
 }
 
@@ -160,14 +219,15 @@ func TestTransition_FailureToStderr(t *testing.T) {
 func TestList_ModeConflicts(t *testing.T) {
 	root := setupRepo(t)
 	// Every conflicting combination errors (validation, exit 11) and produces no
-	// data — the format axis admits at most one selection, and -c needs table.
+	// data — the format axis admits at most one selection, and -c needs a
+	// projectable format (table/csv/json, not name/human). NB: `-c` WITH `--json`
+	// is now a valid projection (see TestColumns_JSONProjection), not a conflict.
 	for _, args := range [][]string{
-		{"task", "list", "--json", "-o", "table"},    // --json vs explicit -o
-		{"task", "list", "--json", "-q"},             // json alias vs name alias
-		{"task", "list", "-q", "-o", "table"},        // name alias vs explicit -o
-		{"task", "list", "-c", "slug", "-o", "json"}, // -c needs table, not json
-		{"task", "list", "-c", "slug", "-q"},         // -c needs table, not name
-		{"task", "list", "-o", "bogus"},              // unknown format
+		{"task", "list", "--json", "-o", "table"}, // --json vs explicit -o
+		{"task", "list", "--json", "-q"},          // json alias vs name alias
+		{"task", "list", "-q", "-o", "table"},     // name alias vs explicit -o
+		{"task", "list", "-c", "slug", "-q"},      // -c needs columns, not name
+		{"task", "list", "-o", "bogus"},           // unknown format
 	} {
 		var out bytes.Buffer
 		cmd := NewRootCmd(strings.NewReader(""), &out, &out)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 func newEpicCmd(app *App) *cobra.Command {
@@ -62,11 +63,16 @@ func newEpicNewCmd(app *App) *cobra.Command {
 }
 
 func newEpicListCmd(app *App) *cobra.Command {
-	var lm listMode
+	var (
+		lm           listMode
+		statusFilter string
+	)
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List epics with task rollup",
-		Example:     "  tskflwctl epic list\n  tskflwctl epic list -o table\n  tskflwctl epic list -o json",
+		Use:   "list",
+		Short: "List epics with task rollup",
+		Example: "  tskflwctl epic list\n" +
+			"  tskflwctl epic list --status in-progress\n" +
+			"  tskflwctl epic list -o table -c id,status,percent,description",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -74,19 +80,49 @@ func newEpicListCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Validate the filter up front: epic status is a closed vocabulary, so a
+			// typo is a loud error (exit 11), never a silently-empty list.
+			if statusFilter != "" {
+				if err := domain.ValidateEpicStatus(statusFilter); err != nil {
+					return err
+				}
+			}
 			epics, problems, err := app.Svc.ListEpics()
 			if err != nil {
 				return err
 			}
+			epics = filterEpicsByStatus(epics, statusFilter)
 			if err := renderList(app, mode, lm.columns, epics, problems,
-				render.EpicColumns(), render.EpicsJSON, render.EpicsHuman); err != nil {
+				"epics", render.EpicColumns(), render.EpicsJSON, render.EpicsHuman); err != nil {
 				return err
 			}
 			return problemsError(problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.EpicColumns()))
+	cmd.Flags().StringVar(&statusFilter, "status", "", "filter by epic status (planning|in-progress|completed|archived)")
+	_ = cmd.RegisterFlagCompletionFunc("status",
+		func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+			return domain.AllEpicStatuses(), cobra.ShellCompDirectiveNoFileComp
+		})
 	return cmd
+}
+
+// filterEpicsByStatus narrows the rollup list to a single epic status; an empty
+// status keeps all. The cheap "don't pay for all epics" triage filter the other
+// list commands already offer — done CLI-side since core.ListEpics has several
+// callers and this is a small in-memory narrow, not a store query.
+func filterEpicsByStatus(epics []core.EpicSummary, status string) []core.EpicSummary {
+	if status == "" {
+		return epics
+	}
+	var out []core.EpicSummary
+	for _, e := range epics {
+		if e.Epic.Status == status {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 func newEpicShowCmd(app *App) *cobra.Command {
