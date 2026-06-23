@@ -50,6 +50,11 @@ func newInitCmd(app *App) *cobra.Command {
 				}
 				return runInitPointer(app, abs, repo, !noLinkBack)
 			}
+			// --no-link-back is pointer-only; reject it in scaffold mode for symmetry
+			// with the --track guard above (don't silently ignore a misused flag).
+			if cmd.Flags().Changed("no-link-back") {
+				return fmt.Errorf("%w: --no-link-back only applies with --planning-repo (pointer mode)", domain.ErrValidation)
+			}
 			return runInitScaffold(app, abs, tracks)
 		},
 	}
@@ -147,14 +152,21 @@ func runInitPointer(app *App, abs, planningRepo string, linkBack bool) error {
 		return err
 	}
 	var back string
+	var linkErr error
 	if linkBack {
-		// Best-effort: the pointer config is already written, so a link-back hiccup
-		// (e.g. the planning repo isn't writable) warns rather than fails the init.
-		if back, err = config.LinkBack(abs, planningRepo, app.DryRun); err != nil {
-			fmt.Fprintf(app.ErrOut, "%s link-back skipped: %v\n", app.Style.Warn("⚠"), err)
+		back, linkErr = config.LinkBack(abs, planningRepo, app.DryRun)
+	}
+	// Link-back is best-effort: the pointer config is already written, so a hiccup
+	// (e.g. the planning repo isn't writable) warns rather than fails the init. The
+	// warning goes to stderr, after the success line, so it never corrupts --json
+	// stdout and reads in order on a combined terminal.
+	warn := func() {
+		if linkErr != nil {
+			fmt.Fprintf(app.ErrOut, "%s link-back skipped: %v\n", app.Style.Warn("⚠"), linkErr)
 		}
 	}
 	if app.JSON {
+		warn()
 		return render.InitJSON(app.Out, "pointer", abs, planningRepo, created, app.DryRun)
 	}
 	if len(created) > 0 {
@@ -175,6 +187,7 @@ func runInitPointer(app *App, abs, planningRepo string, linkBack bool) error {
 		fmt.Fprintf(app.Out, "  %s %s — %s now tracks this repo as %s\n",
 			app.Style.Dim("+"), verb, app.Style.Bold(planningRepo), app.Style.Bold(back))
 	}
+	warn()
 	if len(created) > 0 {
 		fmt.Fprintf(app.Out, "\n%s\n", app.Style.Dim("→ next: run tskflwctl from here — planning resolves to the pointed repo"))
 	}

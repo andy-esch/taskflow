@@ -245,6 +245,46 @@ func TestSetTrackedReposInText(t *testing.T) {
 	if out3 := setTrackedReposInText("tracked_repos = [\"x\"]\n", nil); !strings.Contains(out3, "tracked_repos = []") {
 		t.Errorf("empty should render []:\n%s", out3)
 	}
+	// A comment containing the literal `tracked_repos = [...]` must NOT be edited —
+	// only the real, line-anchored assignment is rewritten (and exactly once).
+	commented := "# example: tracked_repos = [\"x\"]\ntracked_repos = []\n"
+	co := setTrackedReposInText(commented, []string{"../a"})
+	if !strings.Contains(co, `# example: tracked_repos = ["x"]`) {
+		t.Errorf("a bracketed comment must be preserved verbatim:\n%s", co)
+	}
+	if strings.Count(co, `tracked_repos = ["../a"]`) != 1 {
+		t.Errorf("only the real assignment should be rewritten once:\n%s", co)
+	}
+	// A `]` inside a quoted value must not end the array early.
+	br := setTrackedReposInText(`tracked_repos = ["../a]b"]`+"\n", []string{"../a]b", "../c"})
+	if !strings.Contains(br, `tracked_repos = ["../a]b", "../c"]`) {
+		t.Errorf("a bracket inside a value should not truncate the span:\n%s", br)
+	}
+}
+
+// TestAddTrackedRepo_BracketInPath is the regression for the review BLOCKER: a
+// stored path containing `]` must survive a SECOND edit without corrupting the
+// TOML (the old `[^\]]*` regex spliced into the middle of such a value).
+func TestAddTrackedRepo_BracketInPath(t *testing.T) {
+	parent := t.TempDir()
+	planning := filepath.Join(parent, "planning")
+	mustMkdir(t, filepath.Join(planning, "tasks"))
+	if _, err := Init(planning, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddTrackedRepo(planning, "../imp]l", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddTrackedRepo(planning, "../impl-b", false); err != nil {
+		t.Fatalf("a second edit must not corrupt a ]-bearing config: %v", err)
+	}
+	cf, err := readConfigFile(filepath.Join(planning, ConfigFile))
+	if err != nil {
+		t.Fatalf("config corrupted by a ]-path: %v", err)
+	}
+	if len(cf.TrackedRepos) != 2 || cf.TrackedRepos[0] != "../imp]l" || cf.TrackedRepos[1] != "../impl-b" {
+		t.Errorf("entries wrong after a ]-path edit: %v", cf.TrackedRepos)
+	}
 }
 
 func mustMkdir(t *testing.T, p string) {

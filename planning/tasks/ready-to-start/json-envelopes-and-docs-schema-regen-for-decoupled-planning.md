@@ -9,7 +9,7 @@ priority: medium
 autonomy_level: 3
 tags: [cli, docs, json]
 created: "2026-06-22"
-updated_at: "2026-06-22"
+updated_at: "2026-06-23"
 ---
 # JSON envelopes + docs/schema regen
 
@@ -43,3 +43,7 @@ Close out the machine-readable surface and the docs-check gate.
 ## Related
 
 - [[23-point-an-impl-repo-at-an-external-planning-repo]].
+
+## Inbound from review (2026-06-23)
+
+Adversarial review of tracked_repos flagged a --json parity gap to fold in here: the **init envelope has no link-back field**. Add (omitempty) `linked_back` (the planning→impl rel path written) and/or a `link_back_skipped` flag to InitEnvelope, so a --json consumer of `init --planning-repo` can tell whether/where a back-link was recorded. Bundle with the other init-envelope additions (mode/planning_repo already shipped in schema 1.8) + the doctor envelope under one schema bump.

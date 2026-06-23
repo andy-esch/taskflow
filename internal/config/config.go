@@ -422,24 +422,75 @@ func resolveRepoPath(dir, p string) string {
 	return evalOr(filepath.Clean(p))
 }
 
-// trackedReposRe matches a `tracked_repos = [ … ]` assignment, single- or
-// multi-line (the `[^\]]*` spans newlines but stops at the first `]`, which is
-// fine for arrays of plain path strings).
-var trackedReposRe = regexp.MustCompile(`(?s)tracked_repos\s*=\s*\[[^\]]*\]`)
+// trackedReposKeyRe matches the START of a top-level tracked_repos array
+// assignment — at the BEGINNING of a line (so the same text inside a comment or
+// another string is never matched), through the opening `[`. The closing `]` is
+// found separately by a string-aware scan, because a `]` can legally appear
+// inside a quoted path value.
+var trackedReposKeyRe = regexp.MustCompile(`(?m)^[ \t]*tracked_repos[ \t]*=[ \t]*\[`)
 
 // setTrackedReposInText surgically rewrites (or appends) the tracked_repos array,
-// leaving every other line — comments, key order, other values — intact.
+// leaving every other line — comments, key order, other values/arrays — intact.
+// It edits exactly ONE assignment (the first top-level one) and locates its
+// closing `]` with a quote-aware scan, so neither a `]` inside a path value nor a
+// bracketed comment can derail it.
 func setTrackedReposInText(text string, repos []string) string {
 	assignment := "tracked_repos = " + tomlStringArray(repos)
-	if trackedReposRe.MatchString(text) {
-		// Literal replacement: a path value could contain `$`, which $-expansion
-		// in ReplaceAllString would mangle.
-		return trackedReposRe.ReplaceAllLiteralString(text, assignment)
+	if start, end, ok := trackedReposSpan(text); ok {
+		return text[:start] + assignment + text[end:]
 	}
 	if text != "" && !strings.HasSuffix(text, "\n") {
 		text += "\n"
 	}
 	return text + assignment + "\n"
+}
+
+// trackedReposSpan returns the byte span [start,end) of the first top-level
+// tracked_repos array assignment — from the `tracked_repos` key through its
+// matching `]`. ok is false when there's no such assignment, or the array is
+// unterminated (caller then leaves the file untouched rather than risk corruption).
+func trackedReposSpan(text string) (start, end int, ok bool) {
+	loc := trackedReposKeyRe.FindStringIndex(text)
+	if loc == nil {
+		return 0, 0, false
+	}
+	// Advance past any leading whitespace so the rewrite preserves indentation.
+	start = loc[0]
+	for start < loc[1] && (text[start] == ' ' || text[start] == '\t') {
+		start++
+	}
+	// loc[1] is just past the opening '['. Scan to the matching ']', skipping over
+	// basic ("...") and literal ('...') strings so a bracket in a value is ignored.
+	for i := loc[1]; i < len(text); {
+		switch text[i] {
+		case ']':
+			return start, i + 1, true
+		case '"':
+			i = skipTOMLString(text, i+1, '"', true)
+		case '\'':
+			i = skipTOMLString(text, i+1, '\'', false)
+		default:
+			i++
+		}
+	}
+	return 0, 0, false // unterminated array
+}
+
+// skipTOMLString returns the index just past the closing quote, given i is the
+// first byte AFTER the opening quote. Basic strings ('escapes' true) honor a
+// backslash escape; literal strings have none.
+func skipTOMLString(text string, i int, quote byte, escapes bool) int {
+	for i < len(text) {
+		if escapes && text[i] == '\\' {
+			i += 2
+			continue
+		}
+		if text[i] == quote {
+			return i + 1
+		}
+		i++
+	}
+	return i // unterminated
 }
 
 // tomlStringArray renders paths as a TOML inline array of basic strings.

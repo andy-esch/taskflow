@@ -110,6 +110,15 @@ func TestInit_LinkBack(t *testing.T) {
 	}
 }
 
+// TestInit_NoLinkBackScaffoldConflict: --no-link-back is pointer-only → exit 11
+// in scaffold mode (symmetry with the --track guard).
+func TestInit_NoLinkBackScaffoldConflict(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := runRootRC(t, "init", "--path", dir, "--no-link-back"); err == nil || ExitCode(err) != 11 {
+		t.Fatalf("--no-link-back without --planning-repo should exit 11, got %v", err)
+	}
+}
+
 // TestInit_TrackPointerConflict: --track is meaningless in pointer mode → exit 11.
 func TestInit_TrackPointerConflict(t *testing.T) {
 	parent := t.TempDir()
