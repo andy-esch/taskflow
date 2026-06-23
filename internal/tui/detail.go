@@ -426,18 +426,30 @@ func renderEpicMeta(e domain.Epic, tasks []domain.Task, width int) string {
 	if len(e.Tags) > 0 {
 		detailField(&b, "tags", strings.Join(e.Tags, ", "))
 	}
-	done := 0
+	// Mirror core.rollupEpics: deprecated (withdrawn) tasks leave the denominator
+	// (counted separately) so this matches the epic list / status percentage;
+	// everything else — incl. deferred — counts toward total.
+	done, total, deprecated := 0, 0, 0
 	for _, t := range tasks {
+		if t.Status == domain.StatusDeprecated {
+			deprecated++
+			continue
+		}
+		total++
 		if t.Status == domain.StatusCompleted {
 			done++
 		}
 	}
 	pct := 0
-	if len(tasks) > 0 {
-		pct = done * 100 / len(tasks)
+	if total > 0 {
+		pct = done * 100 / total
 	}
-	detailField(&b, "progress", fmt.Sprintf("%s %s  %d/%d",
-		miniBar(pct, 12), fg(theme.Percent(pct), fmt.Sprintf("%d%%", pct)), done, len(tasks)))
+	progress := fmt.Sprintf("%s %s  %d/%d",
+		miniBar(pct, 12), fg(theme.Percent(pct), fmt.Sprintf("%d%%", pct)), done, total)
+	if deprecated > 0 {
+		progress += fmt.Sprintf("  (%d deprecated)", deprecated)
+	}
+	detailField(&b, "progress", progress)
 	if len(tasks) > 0 {
 		b.WriteString("\n")
 		for _, t := range tasks {

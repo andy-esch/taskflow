@@ -549,6 +549,26 @@ func TestEntityDetailRenderers(t *testing.T) {
 		t.Errorf("epic title = %q", epic.Title())
 	}
 
+	// Regression: the detail progress must exclude deprecated tasks from the
+	// denominator (mirroring the rollup / epic list), not divide by len(tasks).
+	dep := epicDetail{
+		e: domain.Epic{ID: "18-x"},
+		tasks: []domain.Task{
+			{Slug: "a", Status: domain.StatusCompleted},
+			{Slug: "b", Status: domain.StatusCompleted},
+			{Slug: "c", Status: domain.StatusDeprecated},
+		},
+	}
+	depOut := ansi.Strip(dep.meta(70))
+	for _, want := range []string{"2/2", "100%", "1 deprecated"} {
+		if !strings.Contains(depOut, want) {
+			t.Errorf("epic detail should exclude deprecated (want %q):\n%s", want, depOut)
+		}
+	}
+	if strings.Contains(depOut, "2/3") {
+		t.Errorf("a deprecated task must not be in the detail denominator:\n%s", depOut)
+	}
+
 	audit := auditDetail{
 		a:    domain.Audit{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Findings: 5, OpenFindings: 2},
 		body: "# Audit body",
