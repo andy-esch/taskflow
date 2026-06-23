@@ -188,6 +188,20 @@ type ErrorEnvelope struct {
 	Error         ErrorItem `json:"error"`
 }
 
+// DoctorEnvelope is `doctor --json`: the linkback audit result. Problems is
+// empty (not null) when the planning_repo <-> tracked_repos links are consistent.
+type DoctorEnvelope struct {
+	SchemaVersion string          `json:"schema_version"`
+	Root          string          `json:"root"`
+	Problems      []DoctorProblem `json:"problems"`
+}
+
+// DoctorProblem is one linkback inconsistency: the offending repo + a message.
+type DoctorProblem struct {
+	Repo    string `json:"repo"`
+	Message string `json:"message"`
+}
+
 // jsonEnvelopes registers every envelope so a single Reflect pulls them all (and
 // their shared types) into one schema document's $defs.
 type jsonEnvelopes struct {
@@ -206,6 +220,7 @@ type jsonEnvelopes struct {
 	Fix          FixEnvelope          `json:"fix"`
 	Lint         LintEnvelope         `json:"lint"`
 	Init         InitEnvelope         `json:"init"`
+	Doctor       DoctorEnvelope       `json:"doctor"`
 	Schema       SchemaEnvelope       `json:"schema"`
 	SchemaKind   SchemaKindEnvelope   `json:"schema_kind"`
 	Templates    TemplatesEnvelope    `json:"templates"`

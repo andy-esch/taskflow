@@ -20,10 +20,13 @@ import (
 // PlanningRepo, when set, points at an EXTERNAL planning repo (the sanctioned
 // out-of-tree escape): Discover resolves and validates it to choose Root, and it
 // wins over taskflow_root. The raw (unresolved) value is also carried here for
-// the linkback checks. TrackedRepos stays RAW and UNRESOLVED — a downstream task
-// reads it.
+// the linkback checks. TrackedRepos stays RAW and UNRESOLVED — CheckLinks reads
+// it. Dir is the (physical) directory the .tskflwctl.toml was found in — the
+// anchor planning_repo/tracked_repos resolve against, and this repo's identity
+// for linkback. It is empty when discovery fell back to a bare tasks/ dir.
 type Config struct {
 	Root         string
+	Dir          string
 	PlanningRepo string
 	TrackedRepos []string
 }
@@ -65,6 +68,7 @@ func Discover(start string) (*Config, error) {
 			// raw planning_repo + tracked_repos ride along for the linkback checks.
 			return &Config{
 				Root:         root,
+				Dir:          dir,
 				PlanningRepo: cf.PlanningRepo,
 				TrackedRepos: cf.TrackedRepos,
 			}, nil
@@ -420,6 +424,84 @@ func resolveRepoPath(dir, p string) string {
 		p = filepath.Join(dir, p)
 	}
 	return evalOr(filepath.Clean(p))
+}
+
+// LinkProblem is one linkback inconsistency between an impl repo's planning_repo
+// pointer and the planning repo's tracked_repos back-link. Repo is the offending
+// repo as spelled in the config; Message is human-readable.
+type LinkProblem struct {
+	Repo    string
+	Message string
+}
+
+// CheckLinks audits the bidirectional planning_repo <-> tracked_repos links
+// reachable from cfg and returns any inconsistencies (nil when consistent, or
+// when there are no links / no config). All comparisons are on PHYSICAL paths, so
+// relative, absolute, and symlinked spellings of the same dir never false-
+// positive. It assumes a planning repo's config sits at its root (how `init`
+// scaffolds them). Read-only; nothing is mutated.
+func CheckLinks(cfg *Config) []LinkProblem {
+	if cfg == nil || cfg.Dir == "" {
+		return nil
+	}
+	var problems []LinkProblem
+	if cfg.PlanningRepo != "" {
+		problems = append(problems, checkBackLink(cfg)...)
+	}
+	for _, tr := range cfg.TrackedRepos {
+		if p, bad := checkTrackedRepo(cfg, tr); bad {
+			problems = append(problems, p)
+		}
+	}
+	return problems
+}
+
+// checkBackLink (impl side): the planning repo this impl points at should list
+// this impl in its tracked_repos.
+func checkBackLink(cfg *Config) []LinkProblem {
+	me := resolveRepoPath(cfg.Dir, ".")
+	planningDir := resolveRepoPath(cfg.Dir, cfg.PlanningRepo)
+	pcfPath := filepath.Join(planningDir, ConfigFile)
+	if !fileExists(pcfPath) {
+		return []LinkProblem{{cfg.PlanningRepo, fmt.Sprintf(
+			"planning repo %q has no %s, so it can't track this repo back", cfg.PlanningRepo, ConfigFile)}}
+	}
+	pcf, err := readConfigFile(pcfPath)
+	if err != nil {
+		return []LinkProblem{{cfg.PlanningRepo, fmt.Sprintf(
+			"planning repo %q has an unreadable %s: %v", cfg.PlanningRepo, ConfigFile, err)}}
+	}
+	for _, tr := range pcf.TrackedRepos {
+		if resolveRepoPath(planningDir, tr) == me {
+			return nil // back-link present
+		}
+	}
+	return []LinkProblem{{cfg.PlanningRepo, fmt.Sprintf(
+		"one-sided link: planning repo %q does not track this repo back (run `init --track` there, or re-run `init --planning-repo`)", cfg.PlanningRepo)}}
+}
+
+// checkTrackedRepo (planning side): a tracked impl should exist and point its
+// planning_repo back here.
+func checkTrackedRepo(cfg *Config, tr string) (LinkProblem, bool) {
+	implDir := resolveRepoPath(cfg.Dir, tr)
+	if !isDir(implDir) {
+		return LinkProblem{tr, fmt.Sprintf("tracked repo %q does not exist", tr)}, true
+	}
+	icfPath := filepath.Join(implDir, ConfigFile)
+	if !fileExists(icfPath) {
+		return LinkProblem{tr, fmt.Sprintf("tracked repo %q has no %s (it can't point back)", tr, ConfigFile)}, true
+	}
+	icf, err := readConfigFile(icfPath)
+	if err != nil {
+		return LinkProblem{tr, fmt.Sprintf("tracked repo %q has an unreadable %s: %v", tr, ConfigFile, err)}, true
+	}
+	if icf.PlanningRepo == "" {
+		return LinkProblem{tr, fmt.Sprintf("tracked repo %q does not point back (no planning_repo)", tr)}, true
+	}
+	if resolveRepoPath(implDir, icf.PlanningRepo) != resolveRepoPath(cfg.Root, ".") {
+		return LinkProblem{tr, fmt.Sprintf("tracked repo %q points its planning_repo elsewhere, not here", tr)}, true
+	}
+	return LinkProblem{}, false
 }
 
 // trackedReposKeyRe matches the START of a top-level tracked_repos array

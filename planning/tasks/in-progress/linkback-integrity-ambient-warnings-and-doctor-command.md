@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: in-progress
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
 description: Ambient warning on link mismatch via config.CheckLinks in resolve(); plus tskflwctl doctor for an on-demand bidirectional audit (nonzero exit for CI).
 effort: Unknown
@@ -9,7 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [cli, config, doctor]
 created: "2026-06-22"
-updated_at: "2026-06-22"
+updated_at: "2026-06-23"
+started_at: "2026-06-23"
 ---
 # Linkback integrity — ambient warnings + `doctor`
 

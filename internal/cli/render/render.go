@@ -33,7 +33,8 @@ import (
 // carries dry_run and the resulting body, which `task_show` (a read) does not.
 // 1.8: the `init` envelope carries `mode` (scaffold|pointer) and `planning_repo`
 // (set in pointer mode), for `init --planning-repo`.
-const SchemaVersion = "1.8"
+// 1.9: the `doctor` envelope (planning_repo <-> tracked_repos linkback audit) added.
+const SchemaVersion = "1.9"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -174,6 +175,28 @@ func MovesJSON(w io.Writer, results []MoveResult, dryRun bool) error {
 func encodeJSON(w io.Writer, payload any) error {
 	enc := json.NewEncoder(w)
 	return enc.Encode(payload)
+}
+
+// DoctorJSON writes the linkback audit; problems is empty (not null) when the
+// links are consistent, so a consumer can len() it without a nil check.
+func DoctorJSON(w io.Writer, root string, problems []DoctorProblem) error {
+	if problems == nil {
+		problems = []DoctorProblem{}
+	}
+	return encodeJSON(w, DoctorEnvelope{SchemaVersion: SchemaVersion, Root: root, Problems: problems})
+}
+
+// DoctorHuman writes the linkback audit: a ⚠ per problem (with a count footer),
+// or a ✔ when the links are consistent.
+func DoctorHuman(w io.Writer, st Style, problems []DoctorProblem) {
+	if len(problems) == 0 {
+		fmt.Fprintf(w, "%s linkback consistent\n", st.Green("✔"))
+		return
+	}
+	for _, p := range problems {
+		fmt.Fprintf(w, "%s %s\n", st.Warn("⚠"), p.Message)
+	}
+	fmt.Fprintf(w, "\n%s\n", st.Dim(plural(len(problems), "linkback problem")))
 }
 
 // SummaryHuman renders the at-a-glance dashboard.
