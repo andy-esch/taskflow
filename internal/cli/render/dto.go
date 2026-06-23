@@ -50,9 +50,10 @@ type statusCountJSON struct {
 // `epic show` can't drift) plus the task rollup.
 type epicJSON struct {
 	epicMetaJSON
-	Total   int `json:"total"`
-	Done    int `json:"done"`
-	Percent int `json:"percent"`
+	Total      int `json:"total"`
+	Done       int `json:"done"`
+	Percent    int `json:"percent"`
+	Deprecated int `json:"deprecated"` // withdrawn tasks, excluded from total/done
 }
 
 type auditJSON struct {

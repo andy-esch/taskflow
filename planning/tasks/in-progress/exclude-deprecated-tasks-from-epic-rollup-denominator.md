@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: in-progress
 epic: 20-cli-ux-and-ergonomics
 description: epic show/list count deprecated tasks in done/total (epic 18 reads 16/17); exclude deprecated from the denominator so rollups reflect real work
 effort: Unknown
@@ -9,6 +9,8 @@ priority: low
 autonomy_level: 3
 tags: [cli, core]
 created: "2026-06-21"
+updated_at: "2026-06-23"
+started_at: "2026-06-23"
 ---
 ## Objective
 

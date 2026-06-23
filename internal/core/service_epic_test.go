@@ -156,6 +156,43 @@ func TestService_ListEpics_Rollup(t *testing.T) {
 	}
 }
 
+// TestService_ListEpics_ExcludesDeprecated: deprecated (withdrawn) tasks leave
+// total/done and are counted separately in Deprecated; deferred ("not now")
+// stays in total as real pending work.
+func TestService_ListEpics_ExcludesDeprecated(t *testing.T) {
+	svc := NewService(&fakeStore{
+		epics: []domain.Epic{{ID: "e1"}},
+		tasks: []domain.Task{
+			{Slug: "a", Epic: "e1", Status: domain.StatusCompleted},
+			{Slug: "b", Epic: "e1", Status: domain.StatusCompleted},
+			{Slug: "c", Epic: "e1", Status: domain.StatusDeferred},   // stays in total
+			{Slug: "d", Epic: "e1", Status: domain.StatusDeprecated}, // excluded
+			{Slug: "e", Epic: "e1", Status: domain.StatusDeprecated}, // excluded
+		},
+	})
+	s, _, err := svc.ListEpics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := s[0]
+	if e.Total != 3 || e.Done != 2 || e.Deprecated != 2 || e.Percent() != 66 {
+		t.Errorf("want total=3 done=2 deprecated=2 pct=66 (2 done + 1 deferred; 2 deprecated out), got %+v pct=%d", e, e.Percent())
+	}
+
+	// The epic-18 case: all real work done, one deprecated → 1/1 (100%), not 1/2.
+	svc2 := NewService(&fakeStore{
+		epics: []domain.Epic{{ID: "x"}},
+		tasks: []domain.Task{
+			{Slug: "p", Epic: "x", Status: domain.StatusCompleted},
+			{Slug: "q", Epic: "x", Status: domain.StatusDeprecated},
+		},
+	})
+	x, _, _ := svc2.ListEpics()
+	if x[0].Total != 1 || x[0].Done != 1 || x[0].Percent() != 100 || x[0].Deprecated != 1 {
+		t.Errorf("a fully-done epic with one deprecated task should read 1/1 (100%%) + 1 deprecated, got %+v pct=%d", x[0], x[0].Percent())
+	}
+}
+
 func TestService_NewTask_UnknownEpic(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
 	svc := NewService(fs)

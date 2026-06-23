@@ -250,10 +250,11 @@ func EpicColumns() []Column[core.EpicSummary] {
 		{"done", "completed task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Done) }},
 		{"total", "total task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Total) }},
 		{"description", "one-line summary", func(e core.EpicSummary) string { return e.Epic.Description }},
-		// percent is appended LAST so adding it didn't shift the pre-existing
-		// default `epic list -o table`/`csv` columns (description stays column 6);
-		// it's still `-c`-selectable in any position the caller asks for.
+		// percent/deprecated are appended LAST so adding them didn't shift the
+		// pre-existing default `epic list -o table`/`csv` columns (description stays
+		// column 6); both are still `-c`-selectable in any position the caller asks.
 		{"percent", "rollup % complete", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Percent()) }},
+		{"deprecated", "withdrawn (excluded) task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Deprecated) }},
 	}
 }
 

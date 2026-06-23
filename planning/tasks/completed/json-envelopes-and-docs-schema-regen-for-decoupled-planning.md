@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
 description: Extend InitEnvelope (mode/planning_repo/tracked_repos) + doctor envelope; regen docs/cli via docgen to satisfy the docs-check gate.
 effort: Unknown
@@ -10,6 +10,7 @@ autonomy_level: 3
 tags: [cli, docs, json]
 created: "2026-06-22"
 updated_at: "2026-06-23"
+completed_at: "2026-06-23"
 ---
 # JSON envelopes + docs/schema regen
 

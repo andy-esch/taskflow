@@ -72,14 +72,17 @@ func epicExists(epics []domain.Epic, id string) bool {
 	return false
 }
 
-// EpicSummary is an epic plus its task rollup.
+// EpicSummary is an epic plus its task rollup. Total/Done/Percent exclude
+// deprecated (withdrawn) tasks; Deprecated counts them separately so a consumer
+// can still surface "N withdrawn" without dragging the percentage.
 type EpicSummary struct {
-	Epic  domain.Epic
-	Total int
-	Done  int
+	Epic       domain.Epic
+	Total      int
+	Done       int
+	Deprecated int
 }
 
-// Percent is the completed share of the epic's tasks.
+// Percent is the completed share of the epic's NON-deprecated tasks.
 func (e EpicSummary) Percent() int {
 	if e.Total == 0 {
 		return 0
@@ -113,6 +116,13 @@ func rollupEpics(epics []domain.Epic, tasks []domain.Task) []EpicSummary {
 	for _, t := range tasks {
 		es, ok := idx[t.Epic]
 		if !ok {
+			continue
+		}
+		// Deprecated tasks are WITHDRAWN work — neither done nor pending — so they
+		// leave the rollup denominator entirely (tracked separately). Deferred
+		// ("not now") stays in Total: it's real, eventually-do work.
+		if t.Status == domain.StatusDeprecated {
+			es.Deprecated++
 			continue
 		}
 		es.Total++
