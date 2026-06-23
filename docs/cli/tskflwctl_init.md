@@ -18,8 +18,10 @@ tskflwctl init [flags]
 
 ```
   -h, --help                   help for init
+      --no-link-back           pointer mode: don't add this repo to the planning repo's tracked_repos
       --path string            directory to initialize (default ".")
       --planning-repo string   point this repo at an external planning repo (relative to --path, or absolute): writes a pointer config, no tree
+      --track strings          record an impl repo this planning repo tracks (repeatable; scaffold mode only)
 ```
 
 ### Options inherited from parent commands

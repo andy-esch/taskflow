@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -212,7 +213,8 @@ const gitKeep = ".gitkeep"
 const defaultConfigTOML = `# tskflwctl planning config — also the marker that anchors discovery.
 # taskflow_root: planning dir relative to this file (default ".").
 taskflow_root = "."
-# tracked_repos: reserved for future multi-repo tracking (not yet read).
+# tracked_repos: impl repos this planning repo tracks (managed by ` + "`init --track`" + ` /
+# the auto-link-back from ` + "`init --planning-repo`" + `).
 tracked_repos = []
 `
 
@@ -340,6 +342,140 @@ func InitPointer(dir, planningRepo string, dryRun bool) ([]string, error) {
 		return nil, fmt.Errorf("write config: %w", err)
 	}
 	return []string{ConfigFile}, nil
+}
+
+// AddTrackedRepo records repoPath in the tracked_repos of the planning config in
+// dir (an impl repo this planning repo tracks). Deduped by PHYSICAL path, so
+// "../x", an absolute path, and a symlinked checkout that resolve to the same
+// place collapse to one entry. The edit is SURGICAL — only the tracked_repos
+// array is rewritten; comments and other keys/order are preserved. A missing
+// config is a no-op. Returns whether an entry was actually added.
+func AddTrackedRepo(dir, repoPath string, dryRun bool) (bool, error) {
+	return appendTrackedRepo(dir, repoPath, dryRun)
+}
+
+// LinkBack records the impl repo at implDir in the EXTERNAL planning repo's
+// tracked_repos — the reverse of the impl's planning_repo pointer, so both sides
+// know about each other. The stored value is the planning→impl relative path. A
+// planning repo without a config yet is a SILENT no-op (returns ""), as is an
+// already-recorded repo. On a fresh link it returns the back-link path written.
+func LinkBack(implDir, planningRepo string, dryRun bool) (string, error) {
+	planningDir, err := resolvePlanningRepo(implDir, planningRepo)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(planningDir, evalOr(implDir))
+	if err != nil {
+		return "", err
+	}
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	added, err := appendTrackedRepo(planningDir, rel, dryRun)
+	if err != nil || !added {
+		return "", err
+	}
+	return rel, nil
+}
+
+// appendTrackedRepo is the shared core: append entry to dir's tracked_repos,
+// physical-path deduped, with a surgical (comment-preserving) text edit and an
+// atomic write. A missing config is a no-op (so LinkBack can skip an un-init'd
+// target); a blank entry is a validation error.
+func appendTrackedRepo(dir, entry string, dryRun bool) (bool, error) {
+	if strings.TrimSpace(entry) == "" {
+		return false, fmt.Errorf("%w: tracked repo path is required", domain.ErrValidation)
+	}
+	cfgPath := filepath.Join(dir, ConfigFile)
+	if !fileExists(cfgPath) {
+		return false, nil // nothing to track into
+	}
+	cf, err := readConfigFile(cfgPath)
+	if err != nil {
+		return false, err
+	}
+	target := resolveRepoPath(dir, entry)
+	for _, e := range cf.TrackedRepos {
+		if resolveRepoPath(dir, e) == target {
+			return false, nil // already tracked (same physical path)
+		}
+	}
+	if dryRun {
+		return true, nil
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return false, err
+	}
+	updated := setTrackedReposInText(string(data), append(cf.TrackedRepos, entry))
+	if err := writeFileAtomic(cfgPath, []byte(updated), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// resolveRepoPath resolves p (relative to dir, or absolute) to a physical path
+// for dedup comparison — the evalOr/Abs discipline used throughout discovery.
+func resolveRepoPath(dir, p string) string {
+	p = filepath.FromSlash(p)
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(dir, p)
+	}
+	return evalOr(filepath.Clean(p))
+}
+
+// trackedReposRe matches a `tracked_repos = [ … ]` assignment, single- or
+// multi-line (the `[^\]]*` spans newlines but stops at the first `]`, which is
+// fine for arrays of plain path strings).
+var trackedReposRe = regexp.MustCompile(`(?s)tracked_repos\s*=\s*\[[^\]]*\]`)
+
+// setTrackedReposInText surgically rewrites (or appends) the tracked_repos array,
+// leaving every other line — comments, key order, other values — intact.
+func setTrackedReposInText(text string, repos []string) string {
+	assignment := "tracked_repos = " + tomlStringArray(repos)
+	if trackedReposRe.MatchString(text) {
+		// Literal replacement: a path value could contain `$`, which $-expansion
+		// in ReplaceAllString would mangle.
+		return trackedReposRe.ReplaceAllLiteralString(text, assignment)
+	}
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	return text + assignment + "\n"
+}
+
+// tomlStringArray renders paths as a TOML inline array of basic strings.
+func tomlStringArray(items []string) string {
+	if len(items) == 0 {
+		return "[]"
+	}
+	quoted := make([]string, len(items))
+	for i, s := range items {
+		quoted[i] = fmt.Sprintf("%q", s)
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
+}
+
+// writeFileAtomic overwrites path atomically (temp in the same dir + rename), so a
+// crash mid-write never leaves a truncated config. (The store has the same idea;
+// config can't import store, so the few lines are inlined — cf. writeFileExclusive.)
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tskflwctl-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }() // no-op once renamed
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // writeFileExclusive creates a new file with O_EXCL semantics. (The store's

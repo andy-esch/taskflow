@@ -152,6 +152,101 @@ func TestInit_RefusesOverPointer(t *testing.T) {
 	}
 }
 
+// TestAddTrackedRepo: surgical append with physical-path dedup, comments preserved.
+func TestAddTrackedRepo(t *testing.T) {
+	parent := t.TempDir()
+	planning := filepath.Join(parent, "planning")
+	mustMkdir(t, filepath.Join(planning, "tasks"))
+	if _, err := Init(planning, false); err != nil {
+		t.Fatal(err)
+	}
+	if added, err := AddTrackedRepo(planning, "../impl-a", false); err != nil || !added {
+		t.Fatalf("first add should succeed, got %v / %v", added, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(planning, ConfigFile)); !strings.Contains(string(b), `tracked_repos = ["../impl-a"]`) {
+		t.Errorf("tracked_repos not written:\n%s", b)
+	}
+	// Same path again → no-op; an ABSOLUTE path to the same dir → physical dedup.
+	if added, _ := AddTrackedRepo(planning, "../impl-a", false); added {
+		t.Error("re-adding the same path should be a no-op")
+	}
+	if added, _ := AddTrackedRepo(planning, filepath.Join(parent, "impl-a"), false); added {
+		t.Error("an absolute path to an already-tracked repo must dedup")
+	}
+	// A distinct repo appends in order; comments survive the surgical edit.
+	if added, _ := AddTrackedRepo(planning, "../impl-b", false); !added {
+		t.Error("a distinct repo should be added")
+	}
+	b, _ := os.ReadFile(filepath.Join(planning, ConfigFile))
+	if !strings.Contains(string(b), `tracked_repos = ["../impl-a", "../impl-b"]`) {
+		t.Errorf("second repo not appended in order:\n%s", b)
+	}
+	if !strings.Contains(string(b), "# tskflwctl planning config") {
+		t.Errorf("surgical edit must preserve comments:\n%s", b)
+	}
+}
+
+func TestAddTrackedRepo_MissingConfigIsNoop(t *testing.T) {
+	dir := t.TempDir() // no .tskflwctl.toml
+	if added, err := AddTrackedRepo(dir, "../impl", false); err != nil || added {
+		t.Errorf("missing config should be a silent no-op, got %v / %v", added, err)
+	}
+	if fileExists(filepath.Join(dir, ConfigFile)) {
+		t.Error("must not create a config")
+	}
+}
+
+// TestLinkBack: the reverse of a planning_repo pointer — the impl is recorded in
+// the planning repo's tracked_repos as the planning→impl relative path.
+func TestLinkBack(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "desirelines")
+	planning := filepath.Join(parent, "desirelines-planning")
+	mustMkdir(t, impl)
+	mustMkdir(t, filepath.Join(planning, "tasks"))
+	if _, err := Init(planning, false); err != nil {
+		t.Fatal(err)
+	}
+	back, err := LinkBack(impl, "../desirelines-planning", false)
+	if err != nil || back != "../desirelines" {
+		t.Fatalf("back-link = %q (err %v), want ../desirelines", back, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(planning, ConfigFile)); !strings.Contains(string(b), `"../desirelines"`) {
+		t.Errorf("planning tracked_repos not updated:\n%s", b)
+	}
+	if back, err := LinkBack(impl, "../desirelines-planning", false); err != nil || back != "" {
+		t.Errorf("re-link should be a no-op, got %q / %v", back, err)
+	}
+}
+
+func TestLinkBack_MissingPlanningConfigIsNoop(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	mustMkdir(t, impl)
+	mustMkdir(t, filepath.Join(parent, "planning", "tasks")) // has tasks/, NO config
+	if back, err := LinkBack(impl, "../planning", false); err != nil || back != "" {
+		t.Errorf("missing planning config should be a silent no-op, got %q / %v", back, err)
+	}
+}
+
+// TestSetTrackedReposInText: surgical replace / append-when-absent / empty list.
+func TestSetTrackedReposInText(t *testing.T) {
+	in := "# header\ntaskflow_root = \".\"\n# note\ntracked_repos = []\n"
+	out := setTrackedReposInText(in, []string{"../a", "../b"})
+	if !strings.Contains(out, `tracked_repos = ["../a", "../b"]`) ||
+		!strings.Contains(out, "# header") || !strings.Contains(out, "# note") ||
+		!strings.Contains(out, `taskflow_root = "."`) {
+		t.Errorf("surgical replace failed:\n%s", out)
+	}
+	out2 := setTrackedReposInText("taskflow_root = \".\"\n", []string{"../a"})
+	if !strings.Contains(out2, `taskflow_root = "."`) || !strings.Contains(out2, `tracked_repos = ["../a"]`) {
+		t.Errorf("append-when-absent failed:\n%s", out2)
+	}
+	if out3 := setTrackedReposInText("tracked_repos = [\"x\"]\n", nil); !strings.Contains(out3, "tracked_repos = []") {
+		t.Errorf("empty should render []:\n%s", out3)
+	}
+}
+
 func mustMkdir(t *testing.T, p string) {
 	t.Helper()
 	if err := os.MkdirAll(p, 0o755); err != nil {

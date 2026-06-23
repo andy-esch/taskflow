@@ -70,6 +70,61 @@ func TestInit_Pointer(t *testing.T) {
 	}
 }
 
+// TestInit_Track: `init --track` seeds the planning repo's tracked_repos (and
+// dedups repeated flags).
+func TestInit_Track(t *testing.T) {
+	planning := filepath.Join(t.TempDir(), "planning")
+	runRoot(t, "init", "--path", planning, "--track", "../impl-a", "--track", "../impl-a")
+	b, err := os.ReadFile(filepath.Join(planning, ".tskflwctl.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `tracked_repos = ["../impl-a"]`) {
+		t.Errorf("--track should seed (and dedup) tracked_repos:\n%s", b)
+	}
+}
+
+// TestInit_LinkBack: `init --planning-repo` records this repo in the planning
+// repo's tracked_repos; `--no-link-back` suppresses it.
+func TestInit_LinkBack(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	planning := filepath.Join(parent, "planning")
+	if err := os.MkdirAll(impl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runRoot(t, "init", "--path", planning) // scaffold the planning repo
+
+	runRoot(t, "init", "--path", impl, "--planning-repo", "../planning")
+	if b, _ := os.ReadFile(filepath.Join(planning, ".tskflwctl.toml")); !strings.Contains(string(b), `"../impl"`) {
+		t.Errorf("auto-link-back should record the impl in planning's tracked_repos:\n%s", b)
+	}
+
+	other := filepath.Join(parent, "other")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runRoot(t, "init", "--path", other, "--planning-repo", "../planning", "--no-link-back")
+	if b, _ := os.ReadFile(filepath.Join(planning, ".tskflwctl.toml")); strings.Contains(string(b), `"../other"`) {
+		t.Errorf("--no-link-back must not record the impl:\n%s", b)
+	}
+}
+
+// TestInit_TrackPointerConflict: --track is meaningless in pointer mode → exit 11.
+func TestInit_TrackPointerConflict(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	if err := os.MkdirAll(impl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(parent, "planning", "tasks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runRootRC(t, "init", "--path", impl, "--planning-repo", "../planning", "--track", "../x"); err == nil || ExitCode(err) != 11 {
+		t.Fatalf("--track + --planning-repo should exit 11, got %v", err)
+	}
+}
+
 // TestInit_Pointer_BadTarget: a planning-repo that isn't a planning root exits 11
 // and writes nothing.
 func TestInit_Pointer_BadTarget(t *testing.T) {

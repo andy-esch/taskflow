@@ -9,12 +9,15 @@ import (
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 func newInitCmd(app *App) *cobra.Command {
 	var (
 		path         string
 		planningRepo string
+		tracks       []string
+		noLinkBack   bool
 	)
 	cmd := &cobra.Command{
 		Use:         "init",
@@ -41,14 +44,22 @@ func newInitCmd(app *App) *cobra.Command {
 				return err
 			}
 			if pointer {
-				return runInitPointer(app, abs, repo)
+				// tracked_repos lives in a PLANNING repo; a pointer repo only points.
+				if len(tracks) > 0 {
+					return fmt.Errorf("%w: --track records repos a PLANNING repo tracks; it can't combine with --planning-repo (pointer mode)", domain.ErrValidation)
+				}
+				return runInitPointer(app, abs, repo, !noLinkBack)
 			}
-			return runInitScaffold(app, abs)
+			return runInitScaffold(app, abs, tracks)
 		},
 	}
 	cmd.Flags().StringVar(&path, "path", ".", "directory to initialize")
 	cmd.Flags().StringVar(&planningRepo, "planning-repo", "",
 		"point this repo at an external planning repo (relative to --path, or absolute): writes a pointer config, no tree")
+	cmd.Flags().StringSliceVar(&tracks, "track", nil,
+		"record an impl repo this planning repo tracks (repeatable; scaffold mode only)")
+	cmd.Flags().BoolVar(&noLinkBack, "no-link-back", false,
+		"pointer mode: don't add this repo to the planning repo's tracked_repos")
 	return cmd
 }
 
@@ -81,51 +92,91 @@ func (a *App) resolveInitTarget(planningRepo string, flagSet bool) (pointer bool
 	return true, repo, nil
 }
 
-// runInitScaffold writes a full planning tree + config under abs (today's init).
-func runInitScaffold(app *App, abs string) error {
+// runInitScaffold writes a full planning tree + config under abs, then records
+// any --track impl repos in its tracked_repos (deduped, surgical).
+func runInitScaffold(app *App, abs string, tracks []string) error {
 	created, err := config.Init(abs, app.DryRun)
 	if err != nil {
 		return err
 	}
+	var tracked []string
+	for _, tr := range tracks {
+		added, err := config.AddTrackedRepo(abs, tr, app.DryRun)
+		if err != nil {
+			return err
+		}
+		if added {
+			tracked = append(tracked, tr)
+		}
+	}
 	if app.JSON {
 		return render.InitJSON(app.Out, "scaffold", abs, "", created, app.DryRun)
 	}
-	if len(created) == 0 {
+	if len(created) == 0 && len(tracked) == 0 {
 		fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)
 		return nil
 	}
 	verb := "initialized"
-	if app.DryRun {
+	switch {
+	case app.DryRun && len(created) == 0:
+		verb = "would update"
+	case app.DryRun:
 		verb = "would initialize"
+	case len(created) == 0:
+		verb = "updated"
 	}
 	fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), verb, app.Style.Bold(abs))
 	for _, c := range created {
 		fmt.Fprintf(app.Out, "  %s %s\n", app.Style.Dim("+"), c)
 	}
-	fmt.Fprintf(app.Out, "\n%s\n", app.Style.Dim(`→ next: tskflwctl epic new "Title" --description "..."`))
+	for _, tr := range tracked {
+		fmt.Fprintf(app.Out, "  %s tracks %s\n", app.Style.Dim("+"), app.Style.Bold(tr))
+	}
+	if len(created) > 0 {
+		fmt.Fprintf(app.Out, "\n%s\n", app.Style.Dim(`→ next: tskflwctl epic new "Title" --description "..."`))
+	}
 	return nil
 }
 
 // runInitPointer writes a pointer config under abs (no tree), validating the
-// external planning repo first.
-func runInitPointer(app *App, abs, planningRepo string) error {
+// external planning repo first, then (unless opted out) links back by recording
+// this repo in the planning repo's tracked_repos.
+func runInitPointer(app *App, abs, planningRepo string, linkBack bool) error {
 	created, err := config.InitPointer(abs, planningRepo, app.DryRun)
 	if err != nil {
 		return err
 	}
+	var back string
+	if linkBack {
+		// Best-effort: the pointer config is already written, so a link-back hiccup
+		// (e.g. the planning repo isn't writable) warns rather than fails the init.
+		if back, err = config.LinkBack(abs, planningRepo, app.DryRun); err != nil {
+			fmt.Fprintf(app.ErrOut, "%s link-back skipped: %v\n", app.Style.Warn("⚠"), err)
+		}
+	}
 	if app.JSON {
 		return render.InitJSON(app.Out, "pointer", abs, planningRepo, created, app.DryRun)
 	}
-	if len(created) == 0 {
+	if len(created) > 0 {
+		verb := "pointed"
+		if app.DryRun {
+			verb = "would point"
+		}
+		fmt.Fprintf(app.Out, "%s %s %s at planning repo %s\n",
+			app.Style.Green("✔"), verb, app.Style.Bold(abs), app.Style.Bold(planningRepo))
+	} else {
 		fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)
-		return nil
 	}
-	verb := "pointed"
-	if app.DryRun {
-		verb = "would point"
+	if back != "" {
+		verb := "linked back"
+		if app.DryRun {
+			verb = "would link back"
+		}
+		fmt.Fprintf(app.Out, "  %s %s — %s now tracks this repo as %s\n",
+			app.Style.Dim("+"), verb, app.Style.Bold(planningRepo), app.Style.Bold(back))
 	}
-	fmt.Fprintf(app.Out, "%s %s %s at planning repo %s\n",
-		app.Style.Green("✔"), verb, app.Style.Bold(abs), app.Style.Bold(planningRepo))
-	fmt.Fprintf(app.Out, "\n%s\n", app.Style.Dim("→ next: run tskflwctl from here — planning resolves to the pointed repo"))
+	if len(created) > 0 {
+		fmt.Fprintf(app.Out, "\n%s\n", app.Style.Dim("→ next: run tskflwctl from here — planning resolves to the pointed repo"))
+	}
 	return nil
 }
