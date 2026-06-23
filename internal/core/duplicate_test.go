@@ -24,21 +24,24 @@ func TestLint_DuplicateSlug(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var dup *LintResult
-	for i := range results {
-		if results[i].Slug == "dup" && results[i].Issues[0].Field == "slug" {
-			dup = &results[i]
+	// Capture the duplicate's message by value (no *LintResult): a nil-check-then-
+	// dereference trips staticcheck SA5011 on older versions that don't treat
+	// t.Fatalf as terminating the nil path.
+	dupMsg, found := "", false
+	for _, r := range results {
+		if r.Slug == "solo" {
+			t.Errorf("a unique slug must not be flagged: %+v", r)
 		}
-		if results[i].Slug == "solo" {
-			t.Errorf("a unique slug must not be flagged: %+v", results[i])
+		if r.Slug == "dup" && len(r.Issues) > 0 && r.Issues[0].Field == "slug" {
+			dupMsg, found = r.Issues[0].Message, true
 		}
 	}
-	if dup == nil {
+	if !found {
 		t.Fatalf("expected a duplicate-slug issue for 'dup', got %+v", results)
 	}
-	if !strings.Contains(dup.Issues[0].Message, "duplicate") ||
-		!strings.Contains(dup.Issues[0].Message, "completed") ||
-		!strings.Contains(dup.Issues[0].Message, "deprecated") {
-		t.Errorf("the issue should name the duplicate's two dirs, got %q", dup.Issues[0].Message)
+	if !strings.Contains(dupMsg, "duplicate") ||
+		!strings.Contains(dupMsg, "completed") ||
+		!strings.Contains(dupMsg, "deprecated") {
+		t.Errorf("the issue should name the duplicate's two dirs, got %q", dupMsg)
 	}
 }
