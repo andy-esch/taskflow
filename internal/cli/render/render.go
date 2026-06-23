@@ -36,7 +36,9 @@ import (
 // 1.9: the `doctor` envelope (planning_repo <-> tracked_repos linkback audit) added.
 // 1.10: the `init` envelope carries `linked_back` (pointer-mode auto-link-back
 // path) and `tracked` (scaffold-mode --track entries).
-const SchemaVersion = "1.10"
+// 1.11: epic rollups exclude deprecated (withdrawn) tasks from total/done; the
+// epic payload carries a separate `deprecated` count.
+const SchemaVersion = "1.11"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -278,7 +280,7 @@ func SummaryJSON(w io.Writer, s core.Summary) error {
 	for _, e := range s.Epics {
 		epics = append(epics, epicJSON{
 			epicMetaJSON: toEpicMeta(e.Epic),
-			Total:        e.Total, Done: e.Done, Percent: e.Percent(),
+			Total:        e.Total, Done: e.Done, Percent: e.Percent(), Deprecated: e.Deprecated,
 		})
 	}
 	return encodeJSON(w, SummaryEnvelope{
@@ -336,7 +338,7 @@ func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []domain.FileProb
 	for _, e := range epics {
 		payload.Epics = append(payload.Epics, epicJSON{
 			epicMetaJSON: toEpicMeta(e.Epic),
-			Total:        e.Total, Done: e.Done, Percent: e.Percent(),
+			Total:        e.Total, Done: e.Done, Percent: e.Percent(), Deprecated: e.Deprecated,
 		})
 	}
 	return encodeJSON(w, payload)
@@ -352,7 +354,19 @@ func EpicShowHuman(w io.Writer, st Style, epic domain.Epic, tasks []domain.Task,
 	if epic.Description != "" {
 		field("description", epic.Description)
 	}
-	fmt.Fprintf(w, "%s\n", st.Dim(fmt.Sprintf("tasks (%d):", len(tasks))))
+	deprecated := 0
+	for _, t := range tasks {
+		if t.Status == domain.StatusDeprecated {
+			deprecated++
+		}
+	}
+	header := fmt.Sprintf("tasks (%d):", len(tasks))
+	if deprecated > 0 {
+		// Note the withdrawn count — those tasks are listed but excluded from the
+		// done/total rollup shown by `epic list`/`status`.
+		header = fmt.Sprintf("tasks (%d, %d deprecated — excluded from progress):", len(tasks), deprecated)
+	}
+	fmt.Fprintf(w, "%s\n", st.Dim(header))
 	rows := make([][]string, 0, len(tasks))
 	for _, t := range tasks {
 		rows = append(rows, []string{"  " + st.Status(t.Status), st.Bold(t.Slug)})

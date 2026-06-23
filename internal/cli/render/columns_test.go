@@ -147,12 +147,13 @@ func TestWriteTablePlain_EpicExtractors(t *testing.T) {
 		Done: 2, Total: 5,
 	}})
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
-	// percent is appended LAST (after description) so the pre-existing default
-	// columns kept their positions; done/total/percent are plain numbers.
-	if lines[0] != "id\tstatus\tpriority\tdone\ttotal\tdescription\tpercent" {
+	// percent + deprecated are appended LAST (after description) so the pre-existing
+	// default columns kept their positions; done/total/percent/deprecated are plain
+	// numbers (deprecated is 0 here — none set on the fixture).
+	if lines[0] != "id\tstatus\tpriority\tdone\ttotal\tdescription\tpercent\tdeprecated" {
 		t.Errorf("epic header: %q", lines[0])
 	}
-	if lines[1] != "20-cli\tplanning\tmedium\t2\t5\tux\t40" {
+	if lines[1] != "20-cli\tplanning\tmedium\t2\t5\tux\t40\t0" {
 		t.Errorf("epic row: %q", lines[1])
 	}
 }

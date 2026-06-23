@@ -17,7 +17,7 @@ tskflwctl epic list [flags]
 ### Options
 
 ```
-  -c, --columns strings   select columns for -o table/csv/json, comma-separated (implies -o table); available: id,status,priority,done,total,description,percent
+  -c, --columns strings   select columns for -o table/csv/json, comma-separated (implies -o table); available: id,status,priority,done,total,description,percent,deprecated
   -h, --help              help for list
   -o, --output string     output format: human|json|name|table|csv
   -q, --quiet             ids only, one per line (alias for -o name)
