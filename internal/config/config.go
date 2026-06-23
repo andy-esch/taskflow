@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -212,7 +213,8 @@ const gitKeep = ".gitkeep"
 const defaultConfigTOML = `# tskflwctl planning config — also the marker that anchors discovery.
 # taskflow_root: planning dir relative to this file (default ".").
 taskflow_root = "."
-# tracked_repos: reserved for future multi-repo tracking (not yet read).
+# tracked_repos: impl repos this planning repo tracks (managed by ` + "`init --track`" + ` /
+# the auto-link-back from ` + "`init --planning-repo`" + `).
 tracked_repos = []
 `
 
@@ -220,6 +222,21 @@ tracked_repos = []
 // root. It is idempotent: existing dirs/config are left untouched. Returns the
 // relative paths created (empty if nothing was needed).
 func Init(root string, dryRun bool) ([]string, error) {
+	// Refuse to scaffold a local tree over an existing POINTER config: discovery
+	// would follow the pointer and the new tree would be orphaned/forked data (the
+	// "don't fork the data" non-negotiable). Re-initializing a SCAFFOLD repo is
+	// fine — it repairs .gitkeeps — so only a planning_repo config is refused.
+	if cfgPath := filepath.Join(root, ConfigFile); fileExists(cfgPath) {
+		cf, err := readConfigFile(cfgPath)
+		if err != nil {
+			return nil, err
+		}
+		if cf.PlanningRepo != "" {
+			return nil, fmt.Errorf(
+				"%w: %s points at an external planning repo (planning_repo=%q) — remove it to scaffold a local tree",
+				domain.ErrConflict, ConfigFile, cf.PlanningRepo)
+		}
+	}
 	// Derive the task-status and audit-bucket dirs from the domain layout helpers
 	// so a new status/bucket is scaffolded automatically — a hardcoded list would
 	// silently drift (init not creating a dir the watcher already watches).
@@ -268,6 +285,248 @@ func Init(root string, dryRun bool) ([]string, error) {
 		return created, fmt.Errorf("write config: %w", err)
 	}
 	return created, nil
+}
+
+// pointerConfigTOML renders the POINTER config InitPointer writes: the marker
+// that anchors discovery, pointing at an external planning repo instead of
+// scaffolding a tree here. The path is stored as the user gave it (relative or
+// absolute) so it stays portable; discovery resolves it relative to this file.
+// %q yields a valid TOML basic string for the common path cases.
+func pointerConfigTOML(planningRepo string) string {
+	return fmt.Sprintf("# tskflwctl planning config — this repo's planning lives in another repo.\n"+
+		"# planning_repo: the external planning repo, relative to this file (or absolute).\n"+
+		"planning_repo = %q\n", planningRepo)
+}
+
+// InitPointer writes a POINTER config under dir (`.tskflwctl.toml` with a
+// planning_repo) and scaffolds NO tree — for an impl repo whose planning lives
+// elsewhere. The target is validated as a real planning root BEFORE anything is
+// written (the "require + error" contract via the same resolvePlanningRepo
+// discovery uses), so a typo'd path fails loudly with nothing left behind.
+// Idempotent via O_EXCL: an existing config is left untouched (returns empty).
+func InitPointer(dir, planningRepo string, dryRun bool) ([]string, error) {
+	if strings.TrimSpace(planningRepo) == "" {
+		return nil, fmt.Errorf("%w: planning_repo path is required", domain.ErrValidation)
+	}
+	if _, err := resolvePlanningRepo(dir, planningRepo); err != nil {
+		return nil, err // not a planning root → loud, nothing written
+	}
+	cfg := filepath.Join(dir, ConfigFile)
+	// An existing config: same target → idempotent no-op; a DIFFERENT target (a
+	// re-point) or a scaffold config (a mode switch) → refuse, so a corrected typo
+	// or an intended switch isn't silently dropped as "already initialized".
+	if fileExists(cfg) {
+		existing, err := readConfigFile(cfg)
+		if err != nil {
+			return nil, err
+		}
+		if existing.PlanningRepo != planningRepo {
+			return nil, fmt.Errorf(
+				"%w: %s already exists here — remove it to re-init (or edit it to change the target)",
+				domain.ErrConflict, ConfigFile)
+		}
+		return nil, nil // unchanged
+	}
+	if dryRun {
+		return []string{ConfigFile}, nil
+	}
+	// Create the target dir if missing — parity with scaffold Init (which MkdirAll's
+	// the tree); done only after the target validates, so a bad path leaves nothing.
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	if err := writeFileExclusive(cfg, []byte(pointerConfigTOML(planningRepo)), 0o644); err != nil {
+		if os.IsExist(err) {
+			return nil, nil // O_EXCL race: a config appeared just now — treat as no-op
+		}
+		return nil, fmt.Errorf("write config: %w", err)
+	}
+	return []string{ConfigFile}, nil
+}
+
+// AddTrackedRepo records repoPath in the tracked_repos of the planning config in
+// dir (an impl repo this planning repo tracks). Deduped by PHYSICAL path, so
+// "../x", an absolute path, and a symlinked checkout that resolve to the same
+// place collapse to one entry. The edit is SURGICAL — only the tracked_repos
+// array is rewritten; comments and other keys/order are preserved. A missing
+// config is a no-op. Returns whether an entry was actually added.
+func AddTrackedRepo(dir, repoPath string, dryRun bool) (bool, error) {
+	return appendTrackedRepo(dir, repoPath, dryRun)
+}
+
+// LinkBack records the impl repo at implDir in the EXTERNAL planning repo's
+// tracked_repos — the reverse of the impl's planning_repo pointer, so both sides
+// know about each other. The stored value is the planning→impl relative path. A
+// planning repo without a config yet is a SILENT no-op (returns ""), as is an
+// already-recorded repo. On a fresh link it returns the back-link path written.
+func LinkBack(implDir, planningRepo string, dryRun bool) (string, error) {
+	planningDir, err := resolvePlanningRepo(implDir, planningRepo)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(planningDir, evalOr(implDir))
+	if err != nil {
+		return "", err
+	}
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	added, err := appendTrackedRepo(planningDir, rel, dryRun)
+	if err != nil || !added {
+		return "", err
+	}
+	return rel, nil
+}
+
+// appendTrackedRepo is the shared core: append entry to dir's tracked_repos,
+// physical-path deduped, with a surgical (comment-preserving) text edit and an
+// atomic write. A missing config is a no-op (so LinkBack can skip an un-init'd
+// target); a blank entry is a validation error.
+func appendTrackedRepo(dir, entry string, dryRun bool) (bool, error) {
+	if strings.TrimSpace(entry) == "" {
+		return false, fmt.Errorf("%w: tracked repo path is required", domain.ErrValidation)
+	}
+	cfgPath := filepath.Join(dir, ConfigFile)
+	if !fileExists(cfgPath) {
+		return false, nil // nothing to track into
+	}
+	cf, err := readConfigFile(cfgPath)
+	if err != nil {
+		return false, err
+	}
+	target := resolveRepoPath(dir, entry)
+	for _, e := range cf.TrackedRepos {
+		if resolveRepoPath(dir, e) == target {
+			return false, nil // already tracked (same physical path)
+		}
+	}
+	if dryRun {
+		return true, nil
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return false, err
+	}
+	updated := setTrackedReposInText(string(data), append(cf.TrackedRepos, entry))
+	if err := writeFileAtomic(cfgPath, []byte(updated), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// resolveRepoPath resolves p (relative to dir, or absolute) to a physical path
+// for dedup comparison — the evalOr/Abs discipline used throughout discovery.
+func resolveRepoPath(dir, p string) string {
+	p = filepath.FromSlash(p)
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(dir, p)
+	}
+	return evalOr(filepath.Clean(p))
+}
+
+// trackedReposKeyRe matches the START of a top-level tracked_repos array
+// assignment — at the BEGINNING of a line (so the same text inside a comment or
+// another string is never matched), through the opening `[`. The closing `]` is
+// found separately by a string-aware scan, because a `]` can legally appear
+// inside a quoted path value.
+var trackedReposKeyRe = regexp.MustCompile(`(?m)^[ \t]*tracked_repos[ \t]*=[ \t]*\[`)
+
+// setTrackedReposInText surgically rewrites (or appends) the tracked_repos array,
+// leaving every other line — comments, key order, other values/arrays — intact.
+// It edits exactly ONE assignment (the first top-level one) and locates its
+// closing `]` with a quote-aware scan, so neither a `]` inside a path value nor a
+// bracketed comment can derail it.
+func setTrackedReposInText(text string, repos []string) string {
+	assignment := "tracked_repos = " + tomlStringArray(repos)
+	if start, end, ok := trackedReposSpan(text); ok {
+		return text[:start] + assignment + text[end:]
+	}
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	return text + assignment + "\n"
+}
+
+// trackedReposSpan returns the byte span [start,end) of the first top-level
+// tracked_repos array assignment — from the `tracked_repos` key through its
+// matching `]`. ok is false when there's no such assignment, or the array is
+// unterminated (caller then leaves the file untouched rather than risk corruption).
+func trackedReposSpan(text string) (start, end int, ok bool) {
+	loc := trackedReposKeyRe.FindStringIndex(text)
+	if loc == nil {
+		return 0, 0, false
+	}
+	// Advance past any leading whitespace so the rewrite preserves indentation.
+	start = loc[0]
+	for start < loc[1] && (text[start] == ' ' || text[start] == '\t') {
+		start++
+	}
+	// loc[1] is just past the opening '['. Scan to the matching ']', skipping over
+	// basic ("...") and literal ('...') strings so a bracket in a value is ignored.
+	for i := loc[1]; i < len(text); {
+		switch text[i] {
+		case ']':
+			return start, i + 1, true
+		case '"':
+			i = skipTOMLString(text, i+1, '"', true)
+		case '\'':
+			i = skipTOMLString(text, i+1, '\'', false)
+		default:
+			i++
+		}
+	}
+	return 0, 0, false // unterminated array
+}
+
+// skipTOMLString returns the index just past the closing quote, given i is the
+// first byte AFTER the opening quote. Basic strings ('escapes' true) honor a
+// backslash escape; literal strings have none.
+func skipTOMLString(text string, i int, quote byte, escapes bool) int {
+	for i < len(text) {
+		if escapes && text[i] == '\\' {
+			i += 2
+			continue
+		}
+		if text[i] == quote {
+			return i + 1
+		}
+		i++
+	}
+	return i // unterminated
+}
+
+// tomlStringArray renders paths as a TOML inline array of basic strings.
+func tomlStringArray(items []string) string {
+	if len(items) == 0 {
+		return "[]"
+	}
+	quoted := make([]string, len(items))
+	for i, s := range items {
+		quoted[i] = fmt.Sprintf("%q", s)
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
+}
+
+// writeFileAtomic overwrites path atomically (temp in the same dir + rename), so a
+// crash mid-write never leaves a truncated config. (The store has the same idea;
+// config can't import store, so the few lines are inlined — cf. writeFileExclusive.)
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tskflwctl-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }() // no-op once renamed
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // writeFileExclusive creates a new file with O_EXCL semantics. (The store's

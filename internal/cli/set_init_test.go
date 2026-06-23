@@ -2,11 +2,149 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/cli/prompt"
 )
+
+// TestResolveInitTarget pins init's mode decision (the flag-twin): the flag
+// forces pointer mode; off a TTY (gate closed) it defaults to scaffold without
+// prompting; on a TTY it asks here-vs-elsewhere and, for elsewhere, the typed path.
+func TestResolveInitTarget(t *testing.T) {
+	// --planning-repo set → pointer outright, no prompt.
+	app := &App{Gate: prompt.NewGate(false), Prompt: &prompt.Fake{}}
+	if p, repo, err := app.resolveInitTarget("../planning", true); err != nil || !p || repo != "../planning" {
+		t.Errorf("flag should force pointer mode: %v %q %v", p, repo, err)
+	}
+	// Headless (gate off), no flag → scaffold; empty Fake would error if prompted.
+	app = &App{Gate: prompt.NewGate(false), Prompt: &prompt.Fake{}}
+	if p, _, err := app.resolveInitTarget("", false); err != nil || p {
+		t.Errorf("headless no-flag should be scaffold: pointer=%v err=%v", p, err)
+	}
+	// TTY, choose "here" → scaffold.
+	app = &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{SelectAnswers: []string{"here"}}}
+	if p, _, err := app.resolveInitTarget("", false); err != nil || p {
+		t.Errorf(`"here" should be scaffold: pointer=%v err=%v`, p, err)
+	}
+	// TTY, choose "elsewhere" then type a path → pointer.
+	app = &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{
+		SelectAnswers: []string{"elsewhere"}, TextAnswers: []string{"../planning"},
+	}}
+	if p, repo, err := app.resolveInitTarget("", false); err != nil || !p || repo != "../planning" {
+		t.Errorf(`"elsewhere" should be pointer with the typed path: %v %q %v`, p, repo, err)
+	}
+}
+
+// TestInit_Pointer: `init --planning-repo` writes a pointer config (no tree) and
+// --json reports mode "pointer".
+func TestInit_Pointer(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	if err := os.MkdirAll(impl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(parent, "planning", "tasks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := runRoot(t, "init", "--path", impl, "--planning-repo", "../planning", "--json")
+	var got struct {
+		Mode         string   `json:"mode"`
+		PlanningRepo string   `json:"planning_repo"`
+		Created      []string `json:"created"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("invalid json: %v\n%s", err, out)
+	}
+	if got.Mode != "pointer" || got.PlanningRepo != "../planning" {
+		t.Errorf("pointer --json wrong: %+v", got)
+	}
+	if _, err := os.Stat(filepath.Join(impl, ".tskflwctl.toml")); err != nil {
+		t.Errorf("pointer config not written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(impl, "tasks")); !os.IsNotExist(err) {
+		t.Error("pointer mode must not scaffold tasks/")
+	}
+}
+
+// TestInit_Track: `init --track` seeds the planning repo's tracked_repos (and
+// dedups repeated flags).
+func TestInit_Track(t *testing.T) {
+	planning := filepath.Join(t.TempDir(), "planning")
+	runRoot(t, "init", "--path", planning, "--track", "../impl-a", "--track", "../impl-a")
+	b, err := os.ReadFile(filepath.Join(planning, ".tskflwctl.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `tracked_repos = ["../impl-a"]`) {
+		t.Errorf("--track should seed (and dedup) tracked_repos:\n%s", b)
+	}
+}
+
+// TestInit_LinkBack: `init --planning-repo` records this repo in the planning
+// repo's tracked_repos; `--no-link-back` suppresses it.
+func TestInit_LinkBack(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	planning := filepath.Join(parent, "planning")
+	if err := os.MkdirAll(impl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runRoot(t, "init", "--path", planning) // scaffold the planning repo
+
+	runRoot(t, "init", "--path", impl, "--planning-repo", "../planning")
+	if b, _ := os.ReadFile(filepath.Join(planning, ".tskflwctl.toml")); !strings.Contains(string(b), `"../impl"`) {
+		t.Errorf("auto-link-back should record the impl in planning's tracked_repos:\n%s", b)
+	}
+
+	other := filepath.Join(parent, "other")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runRoot(t, "init", "--path", other, "--planning-repo", "../planning", "--no-link-back")
+	if b, _ := os.ReadFile(filepath.Join(planning, ".tskflwctl.toml")); strings.Contains(string(b), `"../other"`) {
+		t.Errorf("--no-link-back must not record the impl:\n%s", b)
+	}
+}
+
+// TestInit_NoLinkBackScaffoldConflict: --no-link-back is pointer-only → exit 11
+// in scaffold mode (symmetry with the --track guard).
+func TestInit_NoLinkBackScaffoldConflict(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := runRootRC(t, "init", "--path", dir, "--no-link-back"); err == nil || ExitCode(err) != 11 {
+		t.Fatalf("--no-link-back without --planning-repo should exit 11, got %v", err)
+	}
+}
+
+// TestInit_TrackPointerConflict: --track is meaningless in pointer mode → exit 11.
+func TestInit_TrackPointerConflict(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	if err := os.MkdirAll(impl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(parent, "planning", "tasks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runRootRC(t, "init", "--path", impl, "--planning-repo", "../planning", "--track", "../x"); err == nil || ExitCode(err) != 11 {
+		t.Fatalf("--track + --planning-repo should exit 11, got %v", err)
+	}
+}
+
+// TestInit_Pointer_BadTarget: a planning-repo that isn't a planning root exits 11
+// and writes nothing.
+func TestInit_Pointer_BadTarget(t *testing.T) {
+	impl := t.TempDir()
+	if _, err := runRootRC(t, "init", "--path", impl, "--planning-repo", "../nope"); err == nil || ExitCode(err) != 11 {
+		t.Fatalf("a bad planning-repo target should exit 11, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(impl, ".tskflwctl.toml")); !os.IsNotExist(err) {
+		t.Error("a rejected pointer init must leave no config behind")
+	}
+}
 
 func TestTaskSet(t *testing.T) {
 	root := setupRepo(t)

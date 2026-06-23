@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
 description: init writes a pointer-only config (no tree) via --planning-repo; on a TTY asks here-vs-elsewhere. Bare non-TTY init still scaffolds.
 effort: Unknown
@@ -9,7 +9,9 @@ priority: high
 autonomy_level: 3
 tags: [cli, init]
 created: "2026-06-22"
-updated_at: "2026-06-22"
+updated_at: "2026-06-23"
+started_at: "2026-06-23"
+completed_at: "2026-06-23"
 ---
 # `init` pointer mode + interactive flow
 
@@ -47,3 +49,11 @@ scaffolds the full tree — exactly what you don't want in an impl repo.
 
 - [[23-point-an-impl-repo-at-an-external-planning-repo]].
 - Interactive primitives mirror [[20-cli-ux-and-ergonomics]].
+
+## Review hardening (2026-06-23)
+
+Two adversarial reviewers (config/pointer + CLI/envelope). CLI/envelope: clean. Config found 3 MAJORs, all fixed:
+- **Dir-creation parity**: InitPointer now MkdirAll(dir) (after validation) — was a sentinel-less exit 1 on a missing --path, vs scaffold which creates it.
+- **Mode-collision silent no-op**: re-pointing to a different target / switching scaffold↔pointer now errors (ErrConflict, exit 14) instead of silently keeping the old config; same target stays an idempotent no-op.
+- **Scaffold-over-pointer data fork**: Init now refuses (ErrConflict) to scaffold a local tree over an existing pointer config (would orphan the tree while discovery follows the pointer).
+Plus doc nit: --planning-repo help now says 'relative to --path'. Tests added for all three.

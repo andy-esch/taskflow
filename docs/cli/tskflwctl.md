@@ -18,7 +18,7 @@ Local-first planning CLI (tasks, epics, audits) over markdown
 
 * [tskflwctl audit](tskflwctl_audit.md)	 - Work with code audits
 * [tskflwctl epic](tskflwctl_epic.md)	 - Work with epics
-* [tskflwctl init](tskflwctl_init.md)	 - Scaffold a planning tree (tasks/ epics/ projects/ audits/) + config
+* [tskflwctl init](tskflwctl_init.md)	 - Scaffold a planning tree here, or point at an external planning repo
 * [tskflwctl lint](tskflwctl_lint.md)	 - Validate active task frontmatter (--fix to auto-repair)
 * [tskflwctl schema](tskflwctl_schema.md)	 - Describe the tool's contract + per-kind authoring guidance (for agents)
 * [tskflwctl status](tskflwctl_status.md)	 - At-a-glance project dashboard (counts, in-progress, epic progress)
