@@ -162,6 +162,30 @@ func TestEpicsJSONAndHuman(t *testing.T) {
 	}
 }
 
+// TestEpicShowHuman_Tree: epic show renders a status-grouped tree (lipgloss/v2),
+// ANSI-free under no-color, with the deprecated footnote and the body intact.
+func TestEpicShowHuman_Tree(t *testing.T) {
+	var out bytes.Buffer
+	tasks := []domain.Task{
+		{Slug: "alpha", Status: domain.StatusCompleted},
+		{Slug: "beta", Status: domain.StatusCompleted},
+		{Slug: "gamma", Status: domain.StatusReadyToStart},
+		{Slug: "delta", Status: domain.StatusDeprecated},
+	}
+	if err := EpicShowHuman(&out, NewStyle(false), domain.Epic{ID: "e1", Status: "planning"}, tasks, "# body"); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	for _, want := range []string{"├──", "completed", "ready-to-start", "alpha", "gamma", "delta", "1 deprecated", "# body"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("epic show tree missing %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "\x1b[") {
+		t.Errorf("no-color epic show must be ANSI-free:\n%q", s)
+	}
+}
+
 func TestAuditsJSONAndHuman(t *testing.T) {
 	audits := []domain.Audit{{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Date: "2026-06-01", Findings: 5, OpenFindings: 2}}
 	var out bytes.Buffer

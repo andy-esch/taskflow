@@ -18,6 +18,17 @@ build:
 run *ARGS:
 	go run ./cmd/tskflwctl {{ARGS}}
 
+# Regenerate the demo GIFs (assets/*.gif) from assets/vhs/*.tape. Needs `vhs`
+# (https://github.com/charmbracelet/vhs) + its ttyd/ffmpeg deps — NOT a build or
+# runtime dep, only for recording. Builds first and runs each tape against the
+# fresh ./bin binary (prepended to PATH so it shows as `tskflwctl`).
+gifs: build
+	#!/usr/bin/env bash
+	set -euo pipefail
+	command -v vhs >/dev/null || { echo "vhs not installed — see https://github.com/charmbracelet/vhs"; exit 1; }
+	mkdir -p assets
+	for tape in assets/vhs/*.tape; do echo "→ $tape"; PATH="$PWD/bin:$PATH" vhs "$tape"; done
+
 # Install onto $GOBIN / $GOPATH/bin (so `tskflwctl` is on PATH)
 install:
 	go install -ldflags "{{ldflags}}" ./cmd/tskflwctl

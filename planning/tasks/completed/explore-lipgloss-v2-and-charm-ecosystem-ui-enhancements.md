@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Capture UI options unlocked by lipgloss v2 (tree/table/list) and stable bubbletea v2 once fang lands — research/decide, not build
 effort: Unknown
@@ -9,6 +9,9 @@ priority: low
 autonomy_level: 3
 tags: [cli, ux, research]
 created: "2026-06-21"
+updated_at: "2026-06-23"
+started_at: "2026-06-23"
+completed_at: "2026-06-23"
 ---
 ## Objective
 
@@ -81,3 +84,13 @@ agent/pipeline contract — every visual nicety is TTY-gated, raw under `--json`
   [[19-web-companion-apps-over-a-shared-core]].
 - Sibling human-face work: [[evaluate-fang-for-styled-help-errors-and-manpages]],
   [[glamour-render-markdown-bodies-in-show]].
+
+## Decision (2026-06-23)
+
+Full writeup: `planning/research/2026-06-23-lipgloss-v2-charm-ecosystem.md`.
+
+- **Greenlight (small, low-risk):** lipgloss/v2 `tree` for `epic show` (recommended FIRST slice — net-new human surface, no goldens to break, v2 already in the graph); `vhs` doc GIFs (tooling, not a runtime dep).
+- **Decline/defer:** `table` for list output (machine-contract + golden risk for ~0 value); `list` bullets (minor); `charmbracelet/log` (muddies the --json/stderr contract); `wish` → epic 19.
+- **Own epic-18 sprint (not here):** TUI → bubbletea v2 + bubbles v2 + lipgloss v2. Mechanical but large; pays down debt — consolidates the two lipgloss majors onto v2, gets the new renderer, and removes bubbletea v1's init()/OSC-11 ~5s-timeout footgun (bubbletea is in every binary's import graph — verify impact as step 1).
+
+Verified current state: bubbletea v2.0.0 stable (Feb 2026, ~v2.0.6; v1 frozen), bubbles v2.0.0 stable, lipgloss v2 stable (repo on v2.0.4). Proposed follow-ups listed in the doc.

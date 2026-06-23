@@ -5,6 +5,19 @@ task/epic/audit files. It's the Go port of the Python `pm` prototype (now
 retired — see below), and it dogfoods on its own planning under
 [`planning/`](./planning/).
 
+## Demos
+
+Recorded with [vhs](https://github.com/charmbracelet/vhs); regenerate with `just
+gifs` (tapes in [`assets/vhs/`](./assets/vhs/) — vhs is a dev-only tool, not a
+build or runtime dependency).
+
+| | |
+| :-- | :-- |
+| `tskflwctl --help` | ![help](./assets/help.gif) |
+| `tskflwctl status` | ![status](./assets/status.gif) |
+| `tskflwctl epic show <id>` | ![epic show](./assets/epic-show.gif) |
+| `tskflwctl task list -o table -c …` | ![task list](./assets/task-list.gif) |
+
 ## Map
 
 | Path | Purpose |
