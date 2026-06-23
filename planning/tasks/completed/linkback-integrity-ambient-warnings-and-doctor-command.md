@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
 description: Ambient warning on link mismatch via config.CheckLinks in resolve(); plus tskflwctl doctor for an on-demand bidirectional audit (nonzero exit for CI).
 effort: Unknown
@@ -11,6 +11,7 @@ tags: [cli, config, doctor]
 created: "2026-06-22"
 updated_at: "2026-06-23"
 started_at: "2026-06-23"
+completed_at: "2026-06-23"
 ---
 # Linkback integrity — ambient warnings + `doctor`
 
@@ -51,3 +52,11 @@ on-demand audit.
 ## Related
 
 - [[23-point-an-impl-repo-at-an-external-planning-repo]].
+
+## Review hardening (2026-06-23)
+
+Two adversarial reviewers. doctor/wiring/schema-bump: SHIP (completion not polluted, no double-warn, --json purity, exit codes, the 1.8->1.9 goldens version-only + DoctorEnvelope defs, headless safe). CheckLinks: false-positives clean for the config-at-root case (relative/absolute/symlink/trailing-slash all normalize), read-only, bounded, no-panic on weird shapes.
+
+Both reviewers converged on ONE defect (rated blocker / LOW): the config-at-root assumption. checkBackLink (read) AND LinkBack (write) looked for the planning config AT the planning root, but a taskflow_root-subdir planning repo keeps its .tskflwctl.toml above the root -> permanent false-positive ambient warning + unfixable back-link. Trigger is narrow (hand-set taskflow_root; init never makes one), so the confirmed desirelines flow was unaffected.
+
+Fix: a configForRoot(root) helper that finds the config governing a root (the root, or the ancestor whose taskflow_root resolves to it), used in BOTH checkBackLink and LinkBack so the two directions agree on identity. Regression test: TestCheckLinks_SubdirPlanningLayout (clean both sides + back-link lands in the config dir). No golden/docs change (internal logic).

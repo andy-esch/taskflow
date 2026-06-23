@@ -1,10 +1,41 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// TestCheckLinks_SubdirPlanningLayout regresses the review finding: a planning
+// repo whose config sits ABOVE its root (taskflow_root subdir) must still link
+// cleanly in BOTH directions — no false-positive ⚠ on the impl side — and
+// link-back must land in the config dir, not the root.
+func TestCheckLinks_SubdirPlanningLayout(t *testing.T) {
+	parent := t.TempDir()
+	plan := filepath.Join(parent, "plan")                  // config lives here
+	mustMkdir(t, filepath.Join(plan, "planning", "tasks")) // root is plan/planning
+	writeConfig(t, plan, "taskflow_root = \"./planning\"\n")
+	impl := filepath.Join(parent, "impl")
+	mustMkdir(t, impl)
+
+	if _, err := InitPointer(impl, "../plan/planning", false); err != nil {
+		t.Fatal(err)
+	}
+	back, err := LinkBack(impl, "../plan/planning", false)
+	if err != nil || back == "" {
+		t.Fatalf("link-back should write into the subdir planning's config dir, got %q / %v", back, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(plan, ConfigFile)); !strings.Contains(string(b), "../impl") {
+		t.Errorf("back-link must land in the config dir (plan/), not the root:\n%s", b)
+	}
+	if p := linksAt(t, impl); len(p) != 0 {
+		t.Errorf("impl side must be clean for a subdir planning layout, got %v", p)
+	}
+	if p := linksAt(t, plan); len(p) != 0 {
+		t.Errorf("planning side must be clean for a subdir planning layout, got %v", p)
+	}
+}
 
 // linksAt discovers cfg at dir and returns CheckLinks(cfg).
 func linksAt(t *testing.T, dir string) []LinkProblem {

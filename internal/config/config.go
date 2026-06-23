@@ -163,6 +163,34 @@ func resolvePlanningRepo(dir, planningRepo string) (string, error) {
 	return evalOr(root), nil
 }
 
+// configForRoot finds the .tskflwctl.toml that GOVERNS the planning root at
+// `root` — i.e. the config whose taskflow_root resolves back to `root` — and
+// returns its directory + parsed contents. Usually that's `root` itself
+// (taskflow_root "."); for a taskflow_root-subdir layout the config sits in an
+// ancestor (e.g. config at repo/, root at repo/planning), so a plain
+// root/.tskflwctl.toml lookup would miss it and falsely report a broken link.
+// ok is false when no config governs the root (a config-less or unrelated tree).
+func configForRoot(root string) (dir string, cf configFile, ok bool) {
+	root = evalOr(root)
+	for d := root; ; {
+		if p := filepath.Join(d, ConfigFile); fileExists(p) {
+			c, err := readConfigFile(p)
+			if err != nil {
+				return "", configFile{}, false
+			}
+			if r, err := resolveRoot(d, c); err == nil && evalOr(r) == root {
+				return d, c, true
+			}
+			return "", configFile{}, false // a config here governs a different root
+		}
+		parent := filepath.Dir(d)
+		if parent == d || exists(filepath.Join(d, ".git")) {
+			return "", configFile{}, false
+		}
+		d = parent
+	}
+}
+
 // readConfigFile decodes ConfigFile into a configFile with a real TOML parser.
 // A missing file decodes to zero values (the caller already gated on existence,
 // but this stays lenient on a vanished file). Malformed TOML is a LOUD error
@@ -364,16 +392,23 @@ func AddTrackedRepo(dir, repoPath string, dryRun bool) (bool, error) {
 // planning repo without a config yet is a SILENT no-op (returns ""), as is an
 // already-recorded repo. On a fresh link it returns the back-link path written.
 func LinkBack(implDir, planningRepo string, dryRun bool) (string, error) {
-	planningDir, err := resolvePlanningRepo(implDir, planningRepo)
+	planningRoot, err := resolvePlanningRepo(implDir, planningRepo)
 	if err != nil {
 		return "", err
 	}
-	rel, err := filepath.Rel(planningDir, evalOr(implDir))
+	// Write the back-link into the planning repo's CONFIG dir (which a subdir
+	// taskflow_root layout puts above the root), so tracked_repos is anchored
+	// where Discover/CheckLinks read it. No config there yet → silent no-op.
+	pdir, _, ok := configForRoot(planningRoot)
+	if !ok {
+		return "", nil
+	}
+	rel, err := filepath.Rel(pdir, evalOr(implDir))
 	if err != nil {
 		return "", err
 	}
 	rel = filepath.ToSlash(filepath.Clean(rel))
-	added, err := appendTrackedRepo(planningDir, rel, dryRun)
+	added, err := appendTrackedRepo(pdir, rel, dryRun)
 	if err != nil || !added {
 		return "", err
 	}
@@ -460,19 +495,16 @@ func CheckLinks(cfg *Config) []LinkProblem {
 // this impl in its tracked_repos.
 func checkBackLink(cfg *Config) []LinkProblem {
 	me := resolveRepoPath(cfg.Dir, ".")
-	planningDir := resolveRepoPath(cfg.Dir, cfg.PlanningRepo)
-	pcfPath := filepath.Join(planningDir, ConfigFile)
-	if !fileExists(pcfPath) {
+	planningRoot := resolveRepoPath(cfg.Dir, cfg.PlanningRepo)
+	// Find the planning repo's config wherever it lives (root or a taskflow_root
+	// ancestor) — NOT just at the root, which a subdir layout would miss.
+	pdir, pcf, ok := configForRoot(planningRoot)
+	if !ok {
 		return []LinkProblem{{cfg.PlanningRepo, fmt.Sprintf(
 			"planning repo %q has no %s, so it can't track this repo back", cfg.PlanningRepo, ConfigFile)}}
 	}
-	pcf, err := readConfigFile(pcfPath)
-	if err != nil {
-		return []LinkProblem{{cfg.PlanningRepo, fmt.Sprintf(
-			"planning repo %q has an unreadable %s: %v", cfg.PlanningRepo, ConfigFile, err)}}
-	}
 	for _, tr := range pcf.TrackedRepos {
-		if resolveRepoPath(planningDir, tr) == me {
+		if resolveRepoPath(pdir, tr) == me {
 			return nil // back-link present
 		}
 	}
