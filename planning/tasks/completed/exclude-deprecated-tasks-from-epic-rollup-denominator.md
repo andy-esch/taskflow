@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: epic show/list count deprecated tasks in done/total (epic 18 reads 16/17); exclude deprecated from the denominator so rollups reflect real work
 effort: Unknown
@@ -11,6 +11,7 @@ tags: [cli, core]
 created: "2026-06-21"
 updated_at: "2026-06-23"
 started_at: "2026-06-23"
+completed_at: "2026-06-23"
 ---
 ## Objective
 
@@ -54,3 +55,7 @@ when accumulating `Total` (and they're already not counted in `Done`).
 - Surfaced 2026-06-21 reviewing the board (epic 18's confusing 16/17).
 - `internal/core/service.go` (the `EpicSummary` rollup helper);
   `internal/cli/render/render.go` (renders `done/total`).
+
+## Review (2026-06-23)
+
+Single-agent adversarial pass: core rule, edge cases (all-deprecated epic → Total=0 no div-by-zero; deferred stays in), JSON contract/schema, goldens (1.10→1.11 + deprecated field only), and docs all verified clean. One MAJOR caught: the **TUI epic-detail pane** (detail.go renderEpicMeta) recomputed progress from len(tasks), so it showed a different % than the epic list/rollup for any epic with a deprecated task (epic 18: list 100%, detail 94%). Fixed to mirror rollupEpics (deprecated out of done+total, surfaced as '(N deprecated)'); added a TUI regression test. Display-only fix — no schema/golden change.
