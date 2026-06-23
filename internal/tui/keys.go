@@ -29,6 +29,8 @@ type keyMap struct {
 	RawToggle   key.Binding // R → raw ⇄ pretty markdown in the detail body
 	Follow      key.Binding // f → follow the selection's reference (task ⇄ epic)
 	JumpBack    key.Binding // ctrl+o → pop the follow back-stack (vim jumplist)
+	Yank        key.Binding // y → copy the selection's slug/id to the clipboard
+	YankPath    key.Binding // Y → copy the selection's file path to the clipboard
 	Help        key.Binding // ? → toggle the keybinding overlay
 	Refresh     key.Binding // r
 	Quit        key.Binding // q (context)
@@ -58,6 +60,8 @@ var keys = keyMap{
 	RawToggle:   key.NewBinding(key.WithKeys("R")),
 	Follow:      key.NewBinding(key.WithKeys("f")),
 	JumpBack:    key.NewBinding(key.WithKeys("ctrl+o")),
+	Yank:        key.NewBinding(key.WithKeys("y")),
+	YankPath:    key.NewBinding(key.WithKeys("Y")),
 	Help:        key.NewBinding(key.WithKeys("?")),
 	Refresh:     key.NewBinding(key.WithKeys("r")),
 	Quit:        key.NewBinding(key.WithKeys("q")),
