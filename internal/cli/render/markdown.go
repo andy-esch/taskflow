@@ -3,8 +3,7 @@ package render
 import (
 	"strings"
 
-	"github.com/charmbracelet/glamour"
-	"github.com/muesli/termenv"
+	"charm.land/glamour/v2"
 
 	"github.com/andy-esch/taskflow/internal/theme"
 )
@@ -23,12 +22,11 @@ func RenderBody(st Style, body, style string, raw bool) string {
 		style = theme.MarkdownStyleDark
 	}
 	opts := []glamour.TermRendererOption{
-		// We've already decided color is on (st.on). WithAutoStyle would pick the
-		// uncolored "ascii" style off a TTY (so `--color=always` piped, and tests,
-		// would get an unstyled body while the header is colored), so pin the
-		// resolved style + a color profile for consistent, deterministic rendering.
+		// Pin the resolved style (not WithAutoStyle, which picks the uncolored
+		// "ascii" style off a TTY — so `--color=always` piped + tests would get an
+		// unstyled body under a colored header). glamour v2 owns color-profile
+		// detection (colorprofile), so v1's WithColorProfile is gone.
 		glamour.WithStandardStyle(style),
-		glamour.WithColorProfile(termenv.ANSI256),
 	}
 	if st.width > 0 {
 		opts = append(opts, glamour.WithWordWrap(st.width))

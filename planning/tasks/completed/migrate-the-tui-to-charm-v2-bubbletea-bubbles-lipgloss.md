@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: next-up
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Move internal/tui + render to bubbletea/bubbles/lipgloss v2; retire the v1 lipgloss major; harvest the free perf wins incl. the OSC-11 init removal.
 effort: Unknown
@@ -9,6 +9,9 @@ priority: high
 autonomy_level: 3
 tags: [tui, perf, migration]
 created: "2026-06-23"
+updated_at: "2026-06-23"
+started_at: "2026-06-23"
+completed_at: "2026-06-23"
 ---
 # Migrate the TUI to charm v2 (bubbletea + bubbles + lipgloss)
 
@@ -52,3 +55,9 @@ Plan: `planning/research/2026-06-23-tui-v2-migration-plan.md`.
 - Plan: `planning/research/2026-06-23-tui-v2-migration-plan.md`; decision
   `planning/research/2026-06-23-lipgloss-v2-charm-ecosystem.md`.
 - [[18-tui-bubble-tea-interactive-planning-browser]].
+
+## OSC-11 spike result (2026-06-23)
+
+Step-1 spike done: `planning/research/2026-06-23-osc11-startup-latency-spike.md`. The mechanism IS present in our pinned deps (bubbletea v1.3.10 tea_init.go init() → lipgloss.HasDarkBackground() → termenv, OSCTimeout=5s) and fires on every invocation (bubbletea in the import graph). BUT it's hard TTY-gated: termenv short-circuits `if !o.isTTY()` before the query, so agents/pipes/redirects/CI pay nothing (measured non-TTY startup 7–32ms). The up-to-5s worst case is interactive-TTY-only AND only on terminals that don't answer OSC-11.
+
+**Re-rank:** OSC-11 is a real-but-NICHE bonus (helps some interactive users), NOT a headline/agent-wide perf win. The migration's primary justifications stand: consolidate the two lipgloss majors + the v2 feature wins (progress bars/layers/clipboard) + the new renderer. No clean v1 interim fix — v2 is the fix.

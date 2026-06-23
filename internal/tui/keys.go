@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import "charm.land/bubbles/v2/key"
 
 // keyMap holds the bindings the root model matches itself. List/viewport
 // navigation (j/k plus paging: d/u pages the list, ctrl+d/u half-pages the

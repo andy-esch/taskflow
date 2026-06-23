@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -11,8 +13,9 @@ import (
 )
 
 // accent is the focus/selection accent (cyan), shared by the active pane border
-// and the active tab in the strip.
-const accent = lipgloss.Color("6")
+// and the active tab in the strip. lipgloss v2 Color is a func returning a
+// color.Color value (not a const string type), so this is a var.
+var accent = lipgloss.Color("6")
 
 var (
 	selectedStyle = lipgloss.NewStyle().Bold(true)
@@ -31,7 +34,7 @@ var (
 
 // lipColor maps a semantic theme.Color to a lipgloss 16-color (the TUI's
 // rendering of the same status semantics the CLI renders as ANSI).
-func lipColor(c theme.Color) lipgloss.Color {
+func lipColor(c theme.Color) color.Color {
 	switch c {
 	case theme.ColorRed:
 		return lipgloss.Color("1")
@@ -56,15 +59,22 @@ func fg(c theme.Color, s string) string {
 
 func dim(s string) string { return dimStyle.Render(s) }
 
-// miniBar renders a width-cell progress bar for pct (0–100): filled in the
-// completion color (gray <34, yellow <100, green at 100), empty dim. Mirrors the
-// CLI render.Style.Bar so both surfaces show the same bar.
+// miniBar renders a width-cell progress bar for pct (0–100) via the bubbles v2
+// progress component: solid fill in the completion color (gray <34, yellow <100,
+// green at 100), empty gray. Mirrors the CLI render.Style.Bar so both surfaces
+// show the same bar.
 func miniBar(pct, width int) string {
 	if width < 1 {
 		width = 1
 	}
-	filled := theme.BarFill(pct, width)
-	return fg(theme.Percent(pct), strings.Repeat("█", filled)) + dim(strings.Repeat("░", width-filled))
+	p := progress.New(
+		progress.WithWidth(width),
+		progress.WithoutPercentage(),          // callers render the % separately
+		progress.WithFillCharacters('█', '░'), // non-half-block ⇒ solid fill
+		progress.WithColors(lipColor(theme.Percent(pct))),
+	)
+	p.EmptyColor = lipColor(theme.ColorGray)
+	return p.ViewAs(float64(pct) / 100)
 }
 
 // statusText renders a colored glyph + status label.

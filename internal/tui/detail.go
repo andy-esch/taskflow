@@ -5,11 +5,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -75,7 +75,7 @@ func (d *detailPane) prettyBody(md string) string {
 }
 
 func newDetailPane(glamStyle string) detailPane {
-	return detailPane{vp: viewport.New(0, 0), find: newFinder(), pretty: true, glamStyle: glamStyle}
+	return detailPane{vp: viewport.New(), find: newFinder(), pretty: true, glamStyle: glamStyle}
 }
 
 // render rebuilds both body compositions at the current width and points styled at
@@ -125,8 +125,8 @@ func joinDetail(meta, body string) string {
 func (d *detailPane) SetSize(w, h int) {
 	widthChanged := w != d.width
 	d.width = w
-	d.vp.Width = w
-	d.vp.Height = h
+	d.vp.SetWidth(w)
+	d.vp.SetHeight(h)
 	switch {
 	case d.content != nil:
 		// Body wrap (and glamour) depend on width — re-render only when it changed
@@ -146,7 +146,7 @@ func (d *detailPane) SetContent(c detailContent) {
 	// item snaps back to the top. Otherwise every external write under the
 	// watched tree would yank the body you're reading back to line one.
 	sameItem := d.hasContent && d.content != nil && d.title == c.Title()
-	offset := d.vp.YOffset
+	offset := d.vp.YOffset()
 	d.content = c
 	d.errMsg = ""
 	d.title = c.Title()
@@ -215,13 +215,13 @@ func (d *detailPane) startFind() tea.Cmd {
 
 // updateFind feeds a key to the find input: Esc cancels, Enter applies the query
 // (computing matches + jumping to the first), anything else edits the query.
-func (d *detailPane) updateFind(msg tea.KeyMsg) tea.Cmd {
+func (d *detailPane) updateFind(msg tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.Back):
 		d.find.typing = false
 		d.find.input.Blur()
 		return nil
-	case msg.Type == tea.KeyEnter:
+	case msg.String() == "enter":
 		d.find.typing = false
 		d.find.input.Blur()
 		d.applyQuery(d.find.input.Value())

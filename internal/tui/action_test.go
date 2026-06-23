@@ -230,7 +230,7 @@ func TestModel_ActionErrorFlashes(t *testing.T) {
 	if m.flash == "" || !m.flashErr {
 		t.Errorf("a move error should flash red, got %q (err=%v)", m.flash, m.flashErr)
 	}
-	if !strings.Contains(ansi.Strip(m.View()), "✘") {
+	if !strings.Contains(ansi.Strip(m.View().Content), "✘") {
 		t.Error("the error flash should show in the footer")
 	}
 }
@@ -244,7 +244,7 @@ func TestModel_ActionMenuFitsTerminal(t *testing.T) {
 		m := loaded(t, d.w, d.h)
 		tm, _ := m.Update(press("a"))
 		m = tm.(Model)
-		lines := strings.Split(m.View(), "\n")
+		lines := strings.Split(m.View().Content, "\n")
 		if len(lines) != d.h {
 			t.Errorf("%dx%d with action menu: %d lines, want %d", d.w, d.h, len(lines), d.h)
 		}

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
@@ -70,13 +70,13 @@ func (f followMenu) view(maxW, maxH int) string {
 // handleFollowKey drives the picker while it's open. It mutates the model copy
 // directly (the modal loop passes &m) and returns the cmd; ForceQuit is handled by
 // handleKey's preamble, ahead of the modal loop.
-func (m *Model) handleFollowKey(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) handleFollowKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case msg.String() == "j" || msg.String() == "down":
 		m.follow.move(1)
 	case msg.String() == "k" || msg.String() == "up":
 		m.follow.move(-1)
-	case msg.Type == tea.KeyEnter:
+	case msg.String() == "enter":
 		target := m.follow.selected()
 		m.follow.close()
 		m.pushLoc()

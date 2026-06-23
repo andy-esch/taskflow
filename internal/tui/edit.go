@@ -4,10 +4,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/core"
@@ -98,7 +98,7 @@ type editMenu struct {
 func (e *editMenu) open(t domain.Task) {
 	ti := textinput.New()
 	ti.CharLimit = 256
-	ti.Width = 36
+	ti.SetWidth(36)
 
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
@@ -196,7 +196,7 @@ func indexOf(opts []string, v string) int {
 // handleEditKey drives the form: navigate fields, then edit the selected one. Enter
 // submits via SetFields, Esc backs out a level. Mutates the model copy (the modal
 // loop passes &m); ForceQuit is the handleKey preamble's job.
-func (m *Model) handleEditKey(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) handleEditKey(msg tea.KeyPressMsg) tea.Cmd {
 	if !m.edit.editing {
 		switch msg.String() {
 		case "j", "down":
@@ -224,10 +224,10 @@ func (m *Model) handleEditKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	case fieldLongText:
-		switch msg.Type {
-		case tea.KeyEnter:
+		switch msg.String() {
+		case "enter":
 			return m.submitEdit()
-		case tea.KeyEsc:
+		case "esc":
 			m.edit.stopEditing()
 			return nil
 		}
@@ -236,10 +236,10 @@ func (m *Model) handleEditKey(msg tea.KeyMsg) tea.Cmd {
 		m.edit.area, cmd = m.edit.area.Update(msg)
 		return cmd
 	default:
-		switch msg.Type {
-		case tea.KeyEnter:
+		switch msg.String() {
+		case "enter":
 			return m.submitEdit()
-		case tea.KeyEsc:
+		case "esc":
 			m.edit.stopEditing()
 			return nil
 		}

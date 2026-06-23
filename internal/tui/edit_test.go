@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/core"
@@ -188,7 +188,7 @@ func TestModel_EditRejectedSurfacesError(t *testing.T) {
 	m = editCursorTo(t, tm.(Model), "tags")
 	tm, _ = m.Update(press("enter")) // edit tags (prefilled "a")
 	m = tm.(Model)
-	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace}) // clear → ""
+	tm, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace}) // clear → ""
 	m = tm.(Model)
 	if m.edit.input.Value() != "" {
 		t.Fatalf("tags input should be empty, got %q", m.edit.input.Value())
@@ -295,7 +295,7 @@ func TestModel_EditFormFitsTerminal(t *testing.T) {
 		m = editCursorTo(t, tm.(Model), "description")
 		tm, _ = m.Update(press("enter")) // open the tallest state (the wrapped box)
 		m = tm.(Model)
-		lines := strings.Split(m.View(), "\n")
+		lines := strings.Split(m.View().Content, "\n")
 		if len(lines) != d.h {
 			t.Errorf("%dx%d with the editor: %d lines, want %d", d.w, d.h, len(lines), d.h)
 		}
@@ -313,7 +313,7 @@ func TestModel_EditMenuComposites(t *testing.T) {
 	m := loadedAt(t, cleanTaskRepo(t), 120, 40)
 	tm, _ := m.Update(press("e"))
 	m = tm.(Model)
-	v := ansi.Strip(m.View())
+	v := ansi.Strip(m.View().Content)
 	for _, want := range []string{"edit clean", "priority", "description", "tags", "tier"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("edit picker should show %q:\n%s", want, v)

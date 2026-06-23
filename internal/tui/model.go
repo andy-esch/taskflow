@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -124,7 +124,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recomputeLayout()
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 
 	case listLoadedMsg:
@@ -327,7 +327,7 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmd, m.refreshDetail())
 }
 
-func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Any key dismisses the post-action flash (it's a one-shot confirmation).
 	m.flash = ""
 
@@ -358,9 +358,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Back):
 			m.cmd.blur()
 			return m, nil
-		case msg.Type == tea.KeyEnter:
+		case msg.String() == "enter":
 			return m.dispatchCommand()
-		case msg.Type == tea.KeyTab:
+		case msg.String() == "tab":
 			m.cmd.complete(m.commandOptions())
 			return m, nil
 		}
@@ -553,7 +553,7 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 // transition, Enter applies it (a destructive one gates on y/n), Esc cancels. It
 // mutates the model copy directly (the modal loop passes &m) and returns the cmd;
 // ForceQuit is handled by handleKey's preamble, ahead of the modal loop.
-func (m *Model) handleActionKey(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.action.confirm {
 		switch msg.String() {
 		case "y", "Y":
@@ -864,11 +864,15 @@ func (m *Model) recomputeLayout() {
 	}
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
+	// Alt-screen is declarative in v2 (a View field, not a program option) — set it
+	// on every view so the browser owns the full screen and restores cleanly on exit.
 	if m.width == 0 || m.height == 0 {
 		// No WindowSizeMsg yet. Rendering panes now would use unset (0) sizes →
 		// negative border dimensions → a broken oversized frame. Wait for size.
-		return "loading…"
+		v := tea.NewView("loading…")
+		v.AltScreen = true
+		return v
 	}
 	// Hard-clamp the body to its budget so the tab strip and footer (the chrome)
 	// are ALWAYS rendered — a child that overflows its box loses its own bottom
@@ -876,7 +880,9 @@ func (m Model) View() string {
 	// with the per-list pagination reserve above.
 	body := lipgloss.NewStyle().MaxHeight(m.paneOuterH).Render(m.bodyView())
 	full := lipgloss.JoinVertical(lipgloss.Left, m.tabStrip(), body, m.footer())
-	return lipgloss.NewStyle().MaxWidth(m.width).MaxHeight(m.height).Render(full)
+	v := tea.NewView(lipgloss.NewStyle().MaxWidth(m.width).MaxHeight(m.height).Render(full))
+	v.AltScreen = true
+	return v
 }
 
 // bodyView renders the pane area, floating the topmost active modal (help/action/
@@ -980,14 +986,17 @@ func (m Model) detailTitle() string {
 	return t
 }
 
-// pane wraps content in a focus-colored border. Inner dimensions are clamped to
-// ≥1 so a tiny terminal never produces a negative-sized (broken) frame.
+// pane wraps content in a focus-colored border. lipgloss v2 sizes by border-box
+// (Width/Height are the OUTER size; the border is subtracted internally to get the
+// content area), so we pass the outer dims directly — content lands in
+// outerW-paneHFrame × paneOuterH-paneVFrame, the inner budget children are sized
+// to. Clamped to ≥1 so a tiny terminal never produces a negative-sized frame.
 func (m Model) pane(f focus, content string, outerW int) string {
 	border := paneInactive
 	if m.focus == f {
 		border = paneActive
 	}
-	return border.Width(max1(outerW - paneHFrame)).Height(max1(m.paneOuterH - paneVFrame)).Render(content)
+	return border.Width(max1(outerW)).Height(max1(m.paneOuterH)).Render(content)
 }
 
 func max1(n int) int {

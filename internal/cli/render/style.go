@@ -2,9 +2,12 @@ package render
 
 import (
 	"fmt"
+	"image/color"
 	"io"
 	"strings"
 
+	"charm.land/bubbles/v2/progress"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -116,15 +119,41 @@ func (s Style) Green(t string) string { return s.wrap(ansiGreen, t) }
 func (s Style) Red(t string) string   { return s.wrap(ansiRed, t) }
 func (s Style) Warn(t string) string  { return s.wrap(ansiYellow, t) }
 
-// Bar renders a width-char progress bar for pct (0–100): filled in the
-// completion color (gray <34, yellow <100, green at 100), empty dim.
+// Bar renders a width-char progress bar for pct (0–100) via the bubbles v2
+// progress component: solid fill in the completion color (gray <34, yellow <100,
+// green at 100), empty gray. The component always emits lipgloss ANSI, so when
+// styling is off (piped / --json / tests) we strip it back to plain glyphs —
+// keeping the porcelain contract byte-stable. Same component the TUI uses.
 func (s Style) Bar(pct, width int) string {
 	if width <= 0 {
 		width = 10
 	}
-	filled := theme.BarFill(pct, width)
-	code := ansiCode(theme.Percent(pct))
-	return s.wrap(code, strings.Repeat("█", filled)) + s.wrap(ansiGray, strings.Repeat("░", width-filled))
+	p := progress.New(
+		progress.WithWidth(width),
+		progress.WithoutPercentage(),          // callers render the % separately
+		progress.WithFillCharacters('█', '░'), // non-half-block ⇒ solid fill
+		progress.WithColors(barColor(theme.Percent(pct))),
+	)
+	p.EmptyColor = barColor(theme.ColorGray)
+	out := p.ViewAs(float64(pct) / 100)
+	if !s.on {
+		return ansi.Strip(out)
+	}
+	return out
+}
+
+// barColor maps a semantic completion color to a lipgloss 16-color for the
+// progress component (theme stays rendering-tech-agnostic, so the mapping lives
+// here, mirroring ansiCode). Percent only yields gray/yellow/green.
+func barColor(c theme.Color) color.Color {
+	switch c {
+	case theme.ColorGreen:
+		return lipgloss.Color("2")
+	case theme.ColorYellow:
+		return lipgloss.Color("3")
+	default:
+		return lipgloss.Color("8")
+	}
 }
 
 // visibleWidth is the DISPLAY-CELL width of s ignoring ANSI escapes — so
