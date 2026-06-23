@@ -226,7 +226,9 @@ toggles raw). Vim-first keys: `:` command-jump, `/` filter (slug/desc/tags),
 `F` toggles the filter between fuzzy and substring,
 `o`/`O` sort, `s`/`S` status views, `[`/`]` tabs, `a` task actions
 (start/complete/…), `f` to follow a reference (task ⇄ epic) with `ctrl+o` to
-jump back, `/`+`n`/`N` find-in-body when the detail is focused, `?` for the
+jump back, `y`/`Y` to copy the selection's slug / file path to the system
+clipboard (OSC 52, so it works over SSH), `/`+`n`/`N` find-in-body when the
+detail is focused, `?` for the
 full keymap, `r` to refresh. It **live-reloads** via `fsnotify` — edits from
 your editor or a CLI `task move` in another terminal show up within ~200ms,
 cursor preserved. See

@@ -418,6 +418,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.followSelected()
 	case key.Matches(msg, keys.JumpBack):
 		return m.navBack()
+	case key.Matches(msg, keys.Yank):
+		return m.yank(m.selectedID(), "slug")
+	case key.Matches(msg, keys.YankPath):
+		return m.yank(m.selectedPath(), "path")
 	case key.Matches(msg, keys.Command):
 		return m, m.cmd.focus()
 	case key.Matches(msg, keys.NextTab):
@@ -681,6 +685,27 @@ func (m Model) selectedID() string {
 		return it.id()
 	}
 	return ""
+}
+
+// selectedPath is the file path of the active tab's selection (empty if none) —
+// the clipboard yank target for Y.
+func (m Model) selectedPath() string {
+	if it, ok := m.cur().list.SelectedItem().(entityItem); ok {
+		return it.path()
+	}
+	return ""
+}
+
+// yank copies text to the system clipboard (native OS utility when available,
+// else OSC 52 — see copyToClipboard) and flashes a confirmation; an empty target
+// (no selection) flashes an error instead. label names what was copied.
+func (m Model) yank(text, label string) (tea.Model, tea.Cmd) {
+	if text == "" {
+		m.flash, m.flashErr = "nothing to copy", true
+		return m, nil
+	}
+	m.flash, m.flashErr = fmt.Sprintf("copied %s: %s", label, text), false
+	return m, copyToClipboard(text)
 }
 
 func (m Model) entityNames() []string {

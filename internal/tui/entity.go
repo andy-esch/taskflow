@@ -30,6 +30,7 @@ const (
 type entityItem interface {
 	list.Item
 	id() string
+	path() string // the entity's on-disk file path (for the clipboard yank)
 	sortFields() sortFields
 }
 

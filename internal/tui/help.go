@@ -29,6 +29,7 @@ var helpSections = []helpSection{
 		{"e", "edit task fields (description/priority/tags/effort/tier)"},
 		{"f", "follow reference (task ⇄ epic)"},
 		{"ctrl+o", "jump back (follow history)"},
+		{"y / Y", "copy slug / file path to clipboard"},
 		{"[ / ]", "previous / next tab"},
 		{"tab", "switch focus (list ⇄ detail)"},
 		{"r", "refresh from disk"},

@@ -35,7 +35,8 @@ type taskItem struct{ t domain.Task }
 func (i taskItem) FilterValue() string {
 	return i.t.Slug + " " + i.t.Description + " " + strings.Join(i.t.Tags, " ")
 }
-func (i taskItem) id() string { return i.t.Slug }
+func (i taskItem) id() string   { return i.t.Slug }
+func (i taskItem) path() string { return i.t.Path }
 
 // lifecycleState is the task's current status — the action menu drops the no-op
 // transition that lands on it (M10).
@@ -83,7 +84,8 @@ type epicItem struct{ es core.EpicSummary }
 func (i epicItem) FilterValue() string {
 	return i.es.Epic.ID + " " + i.es.Epic.Description + " " + strings.Join(i.es.Epic.Tags, " ")
 }
-func (i epicItem) id() string { return i.es.Epic.ID }
+func (i epicItem) id() string   { return i.es.Epic.ID }
+func (i epicItem) path() string { return i.es.Epic.Path }
 func (i epicItem) sortFields() sortFields {
 	// Epics have no tier/updated; priority + id (slug) carry the sort.
 	return sortFields{priorityRank: priorityRank(i.es.Epic.Priority), slug: i.es.Epic.ID}
@@ -117,6 +119,7 @@ type auditItem struct{ a domain.Audit }
 
 func (i auditItem) FilterValue() string { return i.a.Slug + " " + i.a.Area }
 func (i auditItem) id() string          { return i.a.Slug }
+func (i auditItem) path() string        { return i.a.Path }
 
 // lifecycleState is the audit's current bucket — the action menu drops the no-op
 // transition that lands on it (e.g. reopen on an already-open audit).
