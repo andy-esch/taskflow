@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -80,6 +81,22 @@ func TestBar(t *testing.T) {
 		if got := st.Bar(in[0], in[1]); got != want {
 			t.Errorf("Bar(%d,%d) = %q, want %q", in[0], in[1], got, want)
 		}
+	}
+}
+
+var sgrRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// TestBar_ColoredIsGradient pins the gradient: a colored full bar paints multiple
+// distinct colors across its cells (a regression to a single solid color would
+// collapse to one). Plain mode is asserted glyph-stable by TestBar above.
+func TestBar_ColoredIsGradient(t *testing.T) {
+	out := NewStyle(true).Bar(100, 10)
+	distinct := map[string]struct{}{}
+	for _, m := range sgrRe.FindAllString(out, -1) {
+		distinct[m] = struct{}{}
+	}
+	if len(distinct) < 2 {
+		t.Errorf("a colored full bar should be a gradient (≥2 distinct colors), got %d in %q", len(distinct), out)
 	}
 }
 
