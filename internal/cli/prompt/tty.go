@@ -4,7 +4,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 )
 
 // ttyPrompter is the real-terminal Prompter: list pickers use bubbles/list (the
@@ -35,7 +35,10 @@ func (p ttyPrompter) Text(title, placeholder string) (string, error) {
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithInput(p.in).
 		WithOutput(p.out).
-		WithTheme(huh.ThemeDracula()).
+		// huh v2 themes are isDark-parameterized funcs; ThemeDracula matches the
+		// ThemeFunc signature, so wrap it and let huh supply isDark from its own
+		// (bubbletea v2) background detection.
+		WithTheme(huh.ThemeFunc(huh.ThemeDracula)).
 		Run()
 	if errors.Is(err, huh.ErrUserAborted) {
 		return "", ErrAborted

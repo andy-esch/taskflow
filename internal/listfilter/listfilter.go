@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/list"
+	"charm.land/bubbles/v2/list"
 )
 
 // Substring is a case-insensitive "contains" list.FilterFunc — the predictable

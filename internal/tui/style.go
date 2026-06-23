@@ -1,9 +1,10 @@
 package tui
 
 import (
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -11,8 +12,9 @@ import (
 )
 
 // accent is the focus/selection accent (cyan), shared by the active pane border
-// and the active tab in the strip.
-const accent = lipgloss.Color("6")
+// and the active tab in the strip. lipgloss v2 Color is a func returning a
+// color.Color value (not a const string type), so this is a var.
+var accent = lipgloss.Color("6")
 
 var (
 	selectedStyle = lipgloss.NewStyle().Bold(true)
@@ -31,7 +33,7 @@ var (
 
 // lipColor maps a semantic theme.Color to a lipgloss 16-color (the TUI's
 // rendering of the same status semantics the CLI renders as ANSI).
-func lipColor(c theme.Color) lipgloss.Color {
+func lipColor(c theme.Color) color.Color {
 	switch c {
 	case theme.ColorRed:
 		return lipgloss.Color("1")

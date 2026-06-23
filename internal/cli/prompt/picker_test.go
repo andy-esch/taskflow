@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // drive feeds messages through the model's Update (no tea program / TTY needed)
@@ -21,28 +21,28 @@ func drive(opts []Option, msgs ...tea.Msg) pickerModel {
 var twoOpts = []Option{{Label: "Alpha", Value: "a"}, {Label: "Beta", Value: "b"}}
 
 func TestPicker_EnterSelectsHighlighted(t *testing.T) {
-	fm := drive(twoOpts, tea.KeyMsg{Type: tea.KeyEnter})
+	fm := drive(twoOpts, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if fm.choice != "a" || fm.aborted {
 		t.Errorf("enter should select the first item: choice=%q aborted=%v", fm.choice, fm.aborted)
 	}
 }
 
 func TestPicker_DownThenEnter(t *testing.T) {
-	fm := drive(twoOpts, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyEnter})
+	fm := drive(twoOpts, tea.KeyPressMsg{Code: tea.KeyDown}, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if fm.choice != "b" {
 		t.Errorf("down then enter should select the second item, got %q", fm.choice)
 	}
 }
 
 func TestPicker_EscAborts(t *testing.T) {
-	fm := drive(twoOpts, tea.KeyMsg{Type: tea.KeyEsc})
+	fm := drive(twoOpts, tea.KeyPressMsg{Code: tea.KeyEsc})
 	if !fm.aborted || fm.choice != "" {
 		t.Errorf("esc on an unfiltered list should abort: aborted=%v choice=%q", fm.aborted, fm.choice)
 	}
 }
 
 func TestPicker_CtrlCAborts(t *testing.T) {
-	fm := drive(twoOpts, tea.KeyMsg{Type: tea.KeyCtrlC})
+	fm := drive(twoOpts, tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if !fm.aborted {
 		t.Error("ctrl-c should abort")
 	}
@@ -52,8 +52,8 @@ func TestPicker_CtrlCAborts(t *testing.T) {
 // the list's (cancel the filter), NOT an abort; only esc on an unfiltered list
 // aborts.
 func TestPicker_EscIsFilterAware(t *testing.T) {
-	slash := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
-	esc := tea.KeyMsg{Type: tea.KeyEsc}
+	slash := tea.KeyPressMsg{Code: '/', Text: "/"}
+	esc := tea.KeyPressMsg{Code: tea.KeyEsc}
 
 	if fm := drive(twoOpts, slash, esc); fm.aborted {
 		t.Error("esc while filtering should cancel the filter, not abort")

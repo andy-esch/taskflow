@@ -6,10 +6,10 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
-func ctrlC() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyCtrlC} }
+func ctrlC() tea.KeyPressMsg { return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl} }
 
 func quitsApp(cmd tea.Cmd) bool {
 	if cmd == nil {
@@ -99,7 +99,7 @@ func TestModal_BodyViewCompositesActiveOverlay(t *testing.T) {
 	m := loaded(t, 120, 40)
 	tm, _ := m.Update(press("a"))
 	m = tm.(Model)
-	v := ansi.Strip(m.View())
+	v := ansi.Strip(m.View().Content)
 	if !strings.Contains(v, "move alpha") {
 		t.Errorf("the action menu should be composited over the body:\n%s", v)
 	}

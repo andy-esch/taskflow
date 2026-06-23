@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
@@ -173,7 +173,7 @@ func (a *App) warnLinks() {
 // a terminal concern, so it lives here rather than in the render layer; it's
 // called only on the `show` path, where color is on.
 func (a *App) markdownStyle() string {
-	return theme.MarkdownStyleFor(lipgloss.HasDarkBackground())
+	return theme.MarkdownStyleFor(lipgloss.HasDarkBackground(os.Stdin, os.Stdout))
 }
 
 // rel renders path relative to the planning root for readable output, falling

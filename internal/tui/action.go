@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"

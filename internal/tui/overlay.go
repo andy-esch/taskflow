@@ -1,6 +1,6 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import tea "charm.land/bubbletea/v2"
 
 // modal is a floating overlay layer (the `?` help panel, the `a` action menu, the
 // `f` follow picker): while active it owns every key and floats a box over the
@@ -16,7 +16,7 @@ import tea "github.com/charmbracelet/bubbletea"
 // handleKey returns handled=false to decline a key (fall through to base routing).
 type modal interface {
 	active(m *Model) bool
-	handleKey(m *Model, msg tea.KeyMsg) (handled bool, cmd tea.Cmd)
+	handleKey(m *Model, msg tea.KeyPressMsg) (handled bool, cmd tea.Cmd)
 	view(m *Model, w, h int) string
 }
 
@@ -33,7 +33,7 @@ type helpModal struct{}
 
 func (helpModal) active(m *Model) bool { return m.showHelp }
 
-func (helpModal) handleKey(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
+func (helpModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	case "j", "down":
 		if m.helpScroll < m.helpMaxScroll() {
@@ -58,7 +58,7 @@ type actionModal struct{}
 
 func (actionModal) active(m *Model) bool { return m.action.active }
 
-func (actionModal) handleKey(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
+func (actionModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return true, m.handleActionKey(msg)
 }
 
@@ -69,7 +69,7 @@ type followModal struct{}
 
 func (followModal) active(m *Model) bool { return m.follow.active }
 
-func (followModal) handleKey(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
+func (followModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return true, m.handleFollowKey(msg)
 }
 
@@ -80,7 +80,7 @@ type editModal struct{}
 
 func (editModal) active(m *Model) bool { return m.edit.active }
 
-func (editModal) handleKey(m *Model, msg tea.KeyMsg) (bool, tea.Cmd) {
+func (editModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return true, m.handleEditKey(msg)
 }
 

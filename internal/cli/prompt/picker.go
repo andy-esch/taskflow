@@ -4,8 +4,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/andy-esch/taskflow/internal/listfilter"
 )
@@ -53,7 +53,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.list.SetSize(msg.Width, msg.Height)
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if msg.String() == "ctrl+c" {
 			m.aborted = true
 			return m, tea.Quit
@@ -81,7 +81,13 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m pickerModel) View() string { return m.list.View() }
+func (m pickerModel) View() tea.View {
+	// Alt-screen is declarative in v2 (a View field, not a program option): keeps
+	// the picker from scrolling the surrounding output, restored cleanly on exit.
+	v := tea.NewView(m.list.View())
+	v.AltScreen = true
+	return v
+}
 
 // runPicker runs the picker to completion on the given TTY (in / out=stderr) and
 // returns the chosen value, or ErrAborted if the user cancelled. The alt screen
@@ -92,7 +98,6 @@ func runPicker(in io.Reader, out io.Writer, title string, opts []Option) (string
 		newPicker(title, opts),
 		tea.WithInput(in),
 		tea.WithOutput(out),
-		tea.WithAltScreen(),
 	).Run()
 	if err := pickerErr(err); err != nil {
 		return "", err

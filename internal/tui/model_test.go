@@ -9,13 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/exp/teatest"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -87,18 +86,21 @@ func loaded(t *testing.T, w, h int) Model {
 	return tm.(Model)
 }
 
-func press(s string) tea.KeyMsg {
+func press(s string) tea.KeyPressMsg {
+	// v2 keys are a single struct: special keys carry only a Code (so String()
+	// renders the name, e.g. "enter"), ctrl combos a Code+Mod, and printable runes
+	// a Code+Text (Text is what String() returns and what inputs insert).
 	switch s {
 	case "tab":
-		return tea.KeyMsg{Type: tea.KeyTab}
+		return tea.KeyPressMsg{Code: tea.KeyTab}
 	case "enter":
-		return tea.KeyMsg{Type: tea.KeyEnter}
+		return tea.KeyPressMsg{Code: tea.KeyEnter}
 	case "esc":
-		return tea.KeyMsg{Type: tea.KeyEsc}
+		return tea.KeyPressMsg{Code: tea.KeyEsc}
 	case "ctrl+o":
-		return tea.KeyMsg{Type: tea.KeyCtrlO}
+		return tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl}
 	default:
-		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+		return tea.KeyPressMsg{Code: []rune(s)[0], Text: s}
 	}
 }
 
@@ -111,8 +113,8 @@ func TestModel_LoadsWorkingSetOrder(t *testing.T) {
 	if m.selectedID() != "alpha" {
 		t.Errorf("expected in-progress task first, got %q", m.selectedID())
 	}
-	if !strings.Contains(m.View(), "alpha") || !strings.Contains(m.View(), "beta") {
-		t.Errorf("view should list both tasks:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "alpha") || !strings.Contains(m.View().Content, "beta") {
+		t.Errorf("view should list both tasks:\n%s", m.View().Content)
 	}
 }
 
@@ -183,7 +185,7 @@ func TestModel_Responsive(t *testing.T) {
 	// Tiny terminal must not panic.
 	tm, _ = m.Update(tea.WindowSizeMsg{Width: 20, Height: 6})
 	m = tm.(Model)
-	_ = m.View()
+	_ = m.View().Content
 }
 
 func TestModel_BodyErrorDoesNotBrick(t *testing.T) {
@@ -198,8 +200,8 @@ func TestModel_BodyErrorDoesNotBrick(t *testing.T) {
 	if !m.detail.hasContent {
 		t.Error("the error should be shown in the detail pane")
 	}
-	if !strings.Contains(m.View(), "alpha") {
-		t.Errorf("the list must still render (not an error screen):\n%s", m.View())
+	if !strings.Contains(m.View().Content, "alpha") {
+		t.Errorf("the list must still render (not an error screen):\n%s", m.View().Content)
 	}
 }
 
@@ -214,13 +216,13 @@ func TestModel_DetailScrollKeys(t *testing.T) {
 
 	tm, _ = m.Update(press("G")) // bottom
 	m = tm.(Model)
-	if m.detail.vp.YOffset == 0 {
+	if m.detail.vp.YOffset() == 0 {
 		t.Error("G should scroll the detail pane down")
 	}
 	tm, _ = m.Update(press("g")) // top
 	m = tm.(Model)
-	if m.detail.vp.YOffset != 0 {
-		t.Errorf("g should scroll to top, YOffset=%d", m.detail.vp.YOffset)
+	if m.detail.vp.YOffset() != 0 {
+		t.Errorf("g should scroll to top, YOffset=%d", m.detail.vp.YOffset())
 	}
 }
 
@@ -254,10 +256,10 @@ func TestModel_FilterNarrows(t *testing.T) {
 	}, teatest.WithDuration(3*time.Second))
 	tm.Send(press("/"))
 	for _, r := range "beta" {
-		tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		tm.Send(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter}) // apply the filter
-	tm.Send(press("q"))                     // quit (no longer filtering)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter}) // apply the filter
+	tm.Send(press("q"))                          // quit (no longer filtering)
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(3*time.Second)).(Model)
 	vis := fm.cur().list.VisibleItems()
@@ -283,7 +285,7 @@ func TestModel_ViewFitsTerminal(t *testing.T) {
 		m := loaded(t, d.w, d.h)
 		tm, _ := m.Update(detailMsg{kind: entityTasks, id: m.selectedID(), gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: m.selectedID()}, body: "# body\n\nsome text here\n"}})
 		m = tm.(Model)
-		lines := strings.Split(m.View(), "\n")
+		lines := strings.Split(m.View().Content, "\n")
 		if len(lines) != d.h {
 			t.Errorf("%dx%d: View has %d lines, want exactly %d", d.w, d.h, len(lines), d.h)
 		}
@@ -301,7 +303,7 @@ func TestModel_NoFrameBeforeSize(t *testing.T) {
 	m := newModel(t)
 	tm, _ := m.Update(m.Init()()) // tasksLoadedMsg, but no WindowSizeMsg yet
 	m = tm.(Model)
-	v := m.View()
+	v := m.View().Content
 	if strings.ContainsAny(v, "╭╮│") || strings.Count(v, "\n") > 1 {
 		t.Errorf("must not render a frame before the first WindowSizeMsg:\n%q", v)
 	}
@@ -469,7 +471,7 @@ func TestModel_ChromeVisibleWhenListPaginates(t *testing.T) {
 	tm, _ = m.Update(press(":")) // open the command bar (bottom chrome)
 	m = tm.(Model)
 
-	lines := strings.Split(m.View(), "\n")
+	lines := strings.Split(m.View().Content, "\n")
 	if len(lines) != 14 {
 		t.Fatalf("view must be exactly 14 lines, got %d", len(lines))
 	}
@@ -603,7 +605,7 @@ func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
 	tm, _ = m.Update(detailMsg{kind: entityTasks, id: slug, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: slug}, body: "body"}})
 	m = tm.(Model)
 
-	lines := strings.Split(m.View(), "\n")
+	lines := strings.Split(m.View().Content, "\n")
 	if len(lines) != 24 {
 		t.Fatalf("view must be 24 lines, got %d", len(lines))
 	}
@@ -626,7 +628,7 @@ func TestModel_RecoversFromFailedInitialLoad(t *testing.T) {
 	// The initial load fails before anything is loaded.
 	tm, _ = m.Update(errMsg{kind: entityTasks, gen: m.cur().loadGen, err: domain.ErrNotFound})
 	m = tm.(Model)
-	if m.cur().loadErr == nil || !strings.Contains(m.View(), "error:") {
+	if m.cur().loadErr == nil || !strings.Contains(m.View().Content, "error:") {
 		t.Fatal("a failed initial load should show the error pane")
 	}
 	// r → reloadMsg → reloadAll must reload the active tab even though !loaded.
@@ -641,7 +643,7 @@ func TestModel_RecoversFromFailedInitialLoad(t *testing.T) {
 	if !m.cur().loaded || m.cur().loadErr != nil {
 		t.Errorf("r should recover the session: loaded=%v err=%v", m.cur().loaded, m.cur().loadErr)
 	}
-	if !strings.Contains(m.View(), "alpha") {
+	if !strings.Contains(m.View().Content, "alpha") {
 		t.Error("the recovered list should render its rows")
 	}
 }
@@ -658,13 +660,13 @@ func TestModel_LoadErrorIsPerTab(t *testing.T) {
 	tm, _ = m.Update(errMsg{kind: entityTasks, gen: tasks.loadGen, err: domain.ErrNotFound})
 	m = tm.(Model)
 	// The active epics tab must be untouched.
-	if !strings.Contains(m.View(), "01-test") {
-		t.Errorf("a background tab's failure must not blank the active tab:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "01-test") {
+		t.Errorf("a background tab's failure must not blank the active tab:\n%s", m.View().Content)
 	}
 	// Back on tasks: the stale rows survive, and the footer flags the failure.
 	tm, _ = m.Update(press("["))
 	m = tm.(Model)
-	v := ansi.Strip(m.View())
+	v := ansi.Strip(m.View().Content)
 	if !strings.Contains(v, "alpha") {
 		t.Error("a failed reload should keep the last good rows visible")
 	}
@@ -712,13 +714,13 @@ func TestModel_DetailScrollSurvivesReload(t *testing.T) {
 	m = tm.(Model)
 	tm, _ = m.Update(press("G")) // scroll to bottom
 	m = tm.(Model)
-	off := m.detail.vp.YOffset
+	off := m.detail.vp.YOffset()
 	if off == 0 {
 		t.Fatal("setup: the body should have scrolled")
 	}
 	feed(slug, long) // same item reloaded (e.g. an external write)
-	if m.detail.vp.YOffset != off {
-		t.Errorf("a same-item refresh must keep the scroll: %d → %d", off, m.detail.vp.YOffset)
+	if m.detail.vp.YOffset() != off {
+		t.Errorf("a same-item refresh must keep the scroll: %d → %d", off, m.detail.vp.YOffset())
 	}
 	// A different item snaps back to the top.
 	tm, _ = m.Update(press("h"))
@@ -726,8 +728,8 @@ func TestModel_DetailScrollSurvivesReload(t *testing.T) {
 	tm, _ = m.Update(press("j"))
 	m = tm.(Model)
 	feed(m.selectedID(), long)
-	if m.detail.vp.YOffset != 0 {
-		t.Errorf("a different item should start at the top, got offset %d", m.detail.vp.YOffset)
+	if m.detail.vp.YOffset() != 0 {
+		t.Errorf("a different item should start at the top, got offset %d", m.detail.vp.YOffset())
 	}
 }
 
@@ -746,7 +748,7 @@ func TestModel_EscInListFocusDoesNotQuit(t *testing.T) {
 			t.Fatal("esc in list focus must not quit the app")
 		}
 	}
-	if !strings.Contains(m.View(), "alpha") {
+	if !strings.Contains(m.View().Content, "alpha") {
 		t.Error("the browser should still be rendering after esc")
 	}
 }
@@ -1069,7 +1071,7 @@ func TestModel_HelpOverlayTogglesAndFloats(t *testing.T) {
 	if !m.showHelp {
 		t.Fatal("? should open the help overlay")
 	}
-	v := ansi.Strip(m.View())
+	v := ansi.Strip(m.View().Content)
 	if !strings.Contains(v, "Keys") || !strings.Contains(v, "filter the list") {
 		t.Errorf("help overlay should list keybindings:\n%s", v)
 	}
@@ -1102,18 +1104,18 @@ func TestModel_HelpScrollRevealsTail(t *testing.T) {
 	m := loaded(t, 100, 14) // too short for the full help content
 	tm, _ := m.Update(press("?"))
 	m = tm.(Model)
-	if v := ansi.Strip(m.View()); strings.Contains(v, "switch bucket") {
+	if v := ansi.Strip(m.View().Content); strings.Contains(v, "switch bucket") {
 		t.Skip("terminal tall enough to show the tail without scrolling")
 	}
 	for i := 0; i < len(helpLines()); i++ { // scroll past the clamp
 		tm, _ = m.Update(press("j"))
 		m = tm.(Model)
 	}
-	if v := ansi.Strip(m.View()); !strings.Contains(v, "switch bucket") {
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "switch bucket") {
 		t.Errorf("scrolling should reveal the last help entries:\n%s", v)
 	}
 	// The layout invariant holds while scrolled.
-	lines := strings.Split(m.View(), "\n")
+	lines := strings.Split(m.View().Content, "\n")
 	if len(lines) != 14 {
 		t.Errorf("scrolled help: view has %d lines, want 14", len(lines))
 	}
@@ -1155,17 +1157,17 @@ func TestModel_DetailFindHighlightsAndNavigates(t *testing.T) {
 	if m.detail.find.cur != 0 {
 		t.Errorf("first match should be focused, got %d", m.detail.find.cur)
 	}
-	off1 := m.detail.vp.YOffset
+	off1 := m.detail.vp.YOffset()
 
 	tm, _ = m.Update(press("n")) // next match
 	m = tm.(Model)
 	if m.detail.find.cur != 1 {
 		t.Errorf("n should advance to the 2nd match, got %d", m.detail.find.cur)
 	}
-	if m.detail.vp.YOffset <= off1 {
-		t.Errorf("n should scroll down to the lower match (%d → %d)", off1, m.detail.vp.YOffset)
+	if m.detail.vp.YOffset() <= off1 {
+		t.Errorf("n should scroll down to the lower match (%d → %d)", off1, m.detail.vp.YOffset())
 	}
-	if v := ansi.Strip(m.View()); !strings.Contains(v, "[2/2]") {
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "[2/2]") {
 		t.Errorf("footer should show the match position [2/2]:\n%s", v)
 	}
 
@@ -1221,9 +1223,9 @@ func TestFoldMatchesUnicode(t *testing.T) {
 }
 
 func TestHighlightLine(t *testing.T) {
-	old := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.ANSI)
-	defer lipgloss.SetColorProfile(old)
+	// v2 lipgloss has no global color profile: Render always emits ANSI escapes
+	// (downsampling happens at the output writer), so no profile setup is needed —
+	// the styled prefix below carries its escape unconditionally.
 
 	// A styled line: a green prefix glyph then plain text. Highlighting "find"
 	// must keep the prefix's color and only restyle the match.
@@ -1250,7 +1252,7 @@ func TestModel_HelpOverlayFitsTerminal(t *testing.T) {
 		m := loaded(t, d.w, d.h)
 		tm, _ := m.Update(press("?"))
 		m = tm.(Model)
-		lines := strings.Split(m.View(), "\n")
+		lines := strings.Split(m.View().Content, "\n")
 		if len(lines) != d.h {
 			t.Errorf("%dx%d with help: %d lines, want %d", d.w, d.h, len(lines), d.h)
 		}
@@ -1403,7 +1405,7 @@ func TestModel_DetailFollowsFilter(t *testing.T) {
 	}, teatest.WithDuration(3*time.Second))
 	tm.Send(press("/"))
 	for _, r := range "beta" {
-		tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		tm.Send(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
 	// While still typing, the filter narrows to beta and the detail must follow:
 	// beta's status (ready-to-start) appears only via its detail pane — the rows
@@ -1411,8 +1413,8 @@ func TestModel_DetailFollowsFilter(t *testing.T) {
 	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
 		return bytes.Contains(b, []byte("ready-to-start"))
 	}, teatest.WithDuration(3*time.Second))
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter}) // apply
-	tm.Send(press("q"))                     // quit
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter}) // apply
+	tm.Send(press("q"))                          // quit
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(3*time.Second)).(Model)
 	if fm.detail.title != "beta" {
 		t.Errorf("detail should track the filtered selection, showing %q", fm.detail.title)

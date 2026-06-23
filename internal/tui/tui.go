@@ -1,8 +1,10 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"os"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/theme"
@@ -17,13 +19,15 @@ func Run(svc *core.Service, layout core.Layout) error {
 	m := New(svc)
 	// Resolve the terminal background ONCE, here, before the program starts
 	// reading input — querying it mid-program would race Bubble Tea's reader.
-	m.detail.glamStyle = theme.MarkdownStyleFor(lipgloss.HasDarkBackground())
+	m.detail.glamStyle = theme.MarkdownStyleFor(lipgloss.HasDarkBackground(os.Stdin, os.Stdout))
 	if w, err := newWatcher(layout.WatchPaths()); err == nil {
 		m.watch = w
 		defer func() { _ = w.close() }()
 	} else {
 		m.watchOff = true
 	}
-	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	// Alt-screen is declarative in v2 (a View field, set in Model.View), not a
+	// program option — so there's no tea.WithAltScreen here anymore.
+	_, err := tea.NewProgram(m).Run()
 	return err
 }

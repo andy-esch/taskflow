@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"

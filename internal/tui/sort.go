@@ -3,7 +3,7 @@ package tui
 import (
 	"sort"
 
-	"github.com/charmbracelet/bubbles/list"
+	"charm.land/bubbles/v2/list"
 )
 
 // sortKey identifies an interactive sort column. sortDefault keeps the loader's

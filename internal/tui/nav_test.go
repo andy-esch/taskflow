@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/core"
@@ -34,7 +34,7 @@ func TestModel_FollowTaskToEpicAndBack(t *testing.T) {
 	if len(m.navStack) != 1 || m.navStack[0] != (navLoc{entityTasks, "alpha"}) {
 		t.Fatalf("the origin should be on the back-stack, got %v", m.navStack)
 	}
-	if v := ansi.Strip(m.View()); !strings.Contains(v, "ctrl+o alpha") {
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "ctrl+o alpha") {
 		t.Errorf("the footer should show the back breadcrumb:\n%s", v)
 	}
 	// ctrl+o returns to the task with the cursor restored, stack emptied.
@@ -269,7 +269,7 @@ func TestModel_FollowPickerFitsTerminal(t *testing.T) {
 		if !m.follow.active {
 			t.Fatalf("%dx%d: picker should open", d.w, d.h)
 		}
-		lines := strings.Split(m.View(), "\n")
+		lines := strings.Split(m.View().Content, "\n")
 		if len(lines) != d.h {
 			t.Errorf("%dx%d with picker: %d lines, want %d", d.w, d.h, len(lines), d.h)
 		}
