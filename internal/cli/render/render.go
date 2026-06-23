@@ -34,7 +34,9 @@ import (
 // 1.8: the `init` envelope carries `mode` (scaffold|pointer) and `planning_repo`
 // (set in pointer mode), for `init --planning-repo`.
 // 1.9: the `doctor` envelope (planning_repo <-> tracked_repos linkback audit) added.
-const SchemaVersion = "1.9"
+// 1.10: the `init` envelope carries `linked_back` (pointer-mode auto-link-back
+// path) and `tracked` (scaffold-mode --track entries).
+const SchemaVersion = "1.10"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -525,19 +527,14 @@ func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body strin
 	})
 }
 
-// InitJSON reports the init result. created is empty (not null) when nothing was
-// written (already initialized). mode is "scaffold" or "pointer"; planningRepo is
-// set only for pointer mode.
-func InitJSON(w io.Writer, mode, root, planningRepo string, created []string, dryRun bool) error {
-	if created == nil {
-		created = []string{}
+// InitJSON reports the init result. The caller fills the envelope's named fields
+// (mode/root/planning_repo/linked_back/tracked/created); InitJSON stamps the
+// schema_version and normalizes created to an empty array (not null) so a
+// consumer can len() it.
+func InitJSON(w io.Writer, e InitEnvelope) error {
+	e.SchemaVersion = SchemaVersion
+	if e.Created == nil {
+		e.Created = []string{}
 	}
-	return encodeJSON(w, InitEnvelope{
-		SchemaVersion: SchemaVersion,
-		DryRun:        dryRun,
-		Mode:          mode,
-		Root:          root,
-		PlanningRepo:  planningRepo,
-		Created:       created,
-	})
+	return encodeJSON(w, e)
 }

@@ -141,13 +141,18 @@ type LintEnvelope struct {
 
 // InitEnvelope is `init --json`. Mode is "scaffold" (a planning tree written
 // under Root) or "pointer" (a planning_repo pointing at an external repo, no
-// tree); PlanningRepo is set only in pointer mode.
+// tree); PlanningRepo is set only in pointer mode. LinkedBack is the
+// planning→impl path recorded in the planning repo's tracked_repos by pointer-
+// mode auto-link-back (empty when none was written). Tracked is the entries
+// `--track` added to this planning repo's tracked_repos (scaffold mode).
 type InitEnvelope struct {
 	SchemaVersion string   `json:"schema_version"`
 	DryRun        bool     `json:"dry_run"`
 	Mode          string   `json:"mode"`
 	Root          string   `json:"root"`
 	PlanningRepo  string   `json:"planning_repo,omitempty"`
+	LinkedBack    string   `json:"linked_back,omitempty"`
+	Tracked       []string `json:"tracked,omitempty"`
 	Created       []string `json:"created"`
 }
 
