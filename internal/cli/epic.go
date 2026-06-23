@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
@@ -141,7 +142,9 @@ func newEpicShowCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.EpicShowJSON(app.Out, epic, tasks, body)
 			}
-			return render.EpicShowHuman(app.Out, app.Style, epic, tasks, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
+			return app.paged(func(w io.Writer) error {
+				return render.EpicShowHuman(w, app.Style, epic, tasks, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&raw, "raw", false, "print the raw markdown body (skip rendering)")

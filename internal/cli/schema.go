@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"regexp"
 	"strings"
 
@@ -69,8 +70,10 @@ func runJSONSchema(app *App) error {
 	if err != nil {
 		return err
 	}
-	_, err = app.Out.Write(append(schema, '\n'))
-	return err
+	return app.paged(func(w io.Writer) error {
+		_, err := w.Write(append(schema, '\n'))
+		return err
+	})
 }
 
 // runSchemaContract assembles the global contract from the domain enums/registry
@@ -103,7 +106,9 @@ func runSchemaContract(app *App) error {
 	if app.JSON {
 		return render.SchemaJSON(app.Out, c)
 	}
-	return render.SchemaHuman(app.Out, app.Style, c)
+	return app.paged(func(w io.Writer) error {
+		return render.SchemaHuman(w, app.Style, c)
+	})
 }
 
 // runSchemaKind assembles the per-kind authoring guidance: the body template (the
@@ -139,7 +144,9 @@ func runSchemaKind(app *App, kind string) error {
 	if app.JSON {
 		return render.SchemaKindJSON(app.Out, ks)
 	}
-	return render.SchemaKindHuman(app.Out, app.Style, ks)
+	return app.paged(func(w io.Writer) error {
+		return render.SchemaKindHuman(w, app.Style, ks)
+	})
 }
 
 func sections(body string) []string {

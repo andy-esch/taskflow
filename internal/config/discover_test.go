@@ -196,6 +196,45 @@ tracked_repos = ["../impl-a", "../impl-b"]
 	}
 }
 
+// TestDiscover_ParsesPager pins the [pager] table: command verbatim and enabled as
+// a tri-state (an explicit false is distinct from unset/nil → default on).
+func TestDiscover_ParsesPager(t *testing.T) {
+	t.Run("explicit", func(t *testing.T) {
+		repo := t.TempDir()
+		mkdirs(t, filepath.Join(repo, "tasks"))
+		writeConfig(t, repo, `taskflow_root = "."
+[pager]
+enabled = false
+command = "bat -p"
+`)
+		cfg, err := Discover(repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Pager.Enabled == nil || *cfg.Pager.Enabled != false {
+			t.Errorf("Pager.Enabled = %v, want explicit false", cfg.Pager.Enabled)
+		}
+		if cfg.Pager.Command != "bat -p" {
+			t.Errorf("Pager.Command = %q, want %q", cfg.Pager.Command, "bat -p")
+		}
+	})
+	t.Run("absent table → nil/empty (default on downstream)", func(t *testing.T) {
+		repo := t.TempDir()
+		mkdirs(t, filepath.Join(repo, "tasks"))
+		writeConfig(t, repo, `taskflow_root = "."`+"\n")
+		cfg, err := Discover(repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Pager.Enabled != nil {
+			t.Errorf("Pager.Enabled = %v, want nil when [pager] is absent", *cfg.Pager.Enabled)
+		}
+		if cfg.Pager.Command != "" {
+			t.Errorf("Pager.Command = %q, want empty", cfg.Pager.Command)
+		}
+	})
+}
+
 // TestDiscover_FollowsPlanningRepo pins the sanctioned out-of-tree escape:
 // planning_repo points discovery at an EXTERNAL planning repo (here a sibling),
 // which taskflow_root may not. The raw value still rides along for linkbacks.

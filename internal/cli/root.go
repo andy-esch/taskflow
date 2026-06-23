@@ -28,12 +28,14 @@ type App struct {
 	ErrOut io.Writer
 	In     io.Reader // stdin (for interactive prompts; non-TTY in tests/pipes)
 
-	JSON    bool
-	DryRun  bool // preview mutations: full validation, no writes
-	Chdir   string
-	Color   string // auto | always | never
-	NoColor bool   // alias for --color=never
-	NoInput bool   // never prompt; missing required input is an error (also TSKFLW_NO_INPUT)
+	JSON     bool
+	DryRun   bool // preview mutations: full validation, no writes
+	Chdir    string
+	Color    string // auto | always | never
+	NoColor  bool   // alias for --color=never
+	NoInput  bool   // never prompt; missing required input is an error (also TSKFLW_NO_INPUT)
+	NoPager  bool   // force paging off (--no-pager)
+	Paginate bool   // force paging on, TTY gate permitting (--paginate)
 
 	Style  render.Style
 	Gate   prompt.Gate     // may we prompt? (resolved once, like Style)
@@ -104,6 +106,8 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.PersistentFlags().StringVar(&app.Color, "color", "auto", "colorize output: auto|always|never")
 	root.PersistentFlags().BoolVar(&app.NoColor, "no-color", false, "disable colored output (alias for --color=never)")
 	root.PersistentFlags().BoolVar(&app.NoInput, "no-input", false, "never prompt; missing required input is an error (for scripts/agents; also TSKFLW_NO_INPUT)")
+	root.PersistentFlags().BoolVar(&app.NoPager, "no-pager", false, "do not pipe long human output through a pager")
+	root.PersistentFlags().BoolVar(&app.Paginate, "paginate", false, "page long human output through $PAGER (on a TTY), even if disabled in config")
 
 	root.AddCommand(newInitCmd(app))
 	root.AddCommand(newVersionCmd(app))

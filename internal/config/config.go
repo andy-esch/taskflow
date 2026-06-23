@@ -29,14 +29,31 @@ type Config struct {
 	Dir          string
 	PlanningRepo string
 	TrackedRepos []string
+	Pager        PagerConfig
+}
+
+// PagerConfig is the `[pager]` table: whether to page long human output and which
+// program to use. Enabled is a pointer so "unset" (nil → default on) is distinct
+// from an explicit `enabled = false`. A local-terminal concern, so it rides on
+// whichever config Discover lands on — not resolved across a planning_repo pointer.
+type PagerConfig struct {
+	Enabled *bool
+	Command string
 }
 
 // configFile mirrors the on-disk .tskflwctl.toml schema for a real TOML decode.
 // Defaults (taskflow_root ".", the rest empty) are applied by readConfigFile.
 type configFile struct {
-	TaskflowRoot string   `toml:"taskflow_root"`
-	PlanningRepo string   `toml:"planning_repo"`
-	TrackedRepos []string `toml:"tracked_repos"`
+	TaskflowRoot string        `toml:"taskflow_root"`
+	PlanningRepo string        `toml:"planning_repo"`
+	TrackedRepos []string      `toml:"tracked_repos"`
+	Pager        pagerFileTOML `toml:"pager"`
+}
+
+// pagerFileTOML is the `[pager]` table as decoded from disk.
+type pagerFileTOML struct {
+	Enabled *bool  `toml:"enabled"`
+	Command string `toml:"command"`
 }
 
 // Discover walks up from start to find the planning root. At each level it
@@ -71,6 +88,7 @@ func Discover(start string) (*Config, error) {
 				Dir:          dir,
 				PlanningRepo: cf.PlanningRepo,
 				TrackedRepos: cf.TrackedRepos,
+				Pager:        PagerConfig{Enabled: cf.Pager.Enabled, Command: cf.Pager.Command},
 			}, nil
 		}
 		if isDir(filepath.Join(dir, domain.TasksDir)) {
@@ -248,6 +266,12 @@ taskflow_root = "."
 # tracked_repos: impl repos this planning repo tracks (managed by ` + "`init --track`" + ` /
 # the auto-link-back from ` + "`init --planning-repo`" + `).
 tracked_repos = []
+
+# [pager]: page long human output (show/schema) through $PAGER on a TTY, like git.
+# Never affects piped/--json output. Override the program or turn it off here.
+# [pager]
+# enabled = true
+# command = "less -FRX"
 `
 
 // Init scaffolds the planning directory tree and writes the config file under
