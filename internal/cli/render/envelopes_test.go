@@ -80,7 +80,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"FixEnvelope", func(w io.Writer) error {
 			return FixJSON(w, nil, nil, false) // the nil-slice path: must emit [] and validate
 		}},
-		{"InitEnvelope", func(w io.Writer) error { return InitJSON(w, "/root", []string{"tasks"}, false) }},
+		{"InitEnvelope", func(w io.Writer) error { return InitJSON(w, "scaffold", "/root", "", []string{"tasks"}, false) }},
 		{"SchemaEnvelope", func(w io.Writer) error {
 			return SchemaJSON(w, SchemaContract{
 				Statuses:     []SchemaStatus{{Value: "in-progress", Active: true}},

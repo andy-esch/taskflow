@@ -1,12 +1,163 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+// TestInitPointer covers pointer mode: a validated planning_repo config is
+// written, NO tree is scaffolded, and Discover then follows the pointer.
+func TestInitPointer(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	planning := filepath.Join(parent, "planning")
+	mustMkdir(t, impl)
+	mustMkdir(t, filepath.Join(planning, "tasks"))
+
+	created, err := InitPointer(impl, "../planning", false)
+	if err != nil {
+		t.Fatalf("InitPointer: %v", err)
+	}
+	if len(created) != 1 || created[0] != ConfigFile {
+		t.Errorf("should create only the config, got %v", created)
+	}
+	b, err := os.ReadFile(filepath.Join(impl, ConfigFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `planning_repo = "../planning"`) {
+		t.Errorf("config missing planning_repo:\n%s", b)
+	}
+	if isDir(filepath.Join(impl, "tasks")) {
+		t.Error("pointer mode must NOT scaffold a tasks/ tree")
+	}
+	// Discover from impl now resolves OUT to the external planning repo.
+	cfg, err := Discover(impl)
+	if err != nil || cfg.Root != evalOr(planning) {
+		t.Errorf("Discover should follow the pointer to %q, got %v / %v", planning, cfg, err)
+	}
+	// Idempotent: a second call writes nothing.
+	if again, err := InitPointer(impl, "../planning", false); err != nil || len(again) != 0 {
+		t.Errorf("re-init should be a no-op, got %v / %v", again, err)
+	}
+}
+
+func TestInitPointer_RejectsBadTarget(t *testing.T) {
+	impl := t.TempDir()
+	// ../planning doesn't exist / has no tasks/ → loud, nothing written.
+	if _, err := InitPointer(impl, "../planning", false); err == nil || !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("bad target should wrap ErrValidation, got %v", err)
+	}
+	if fileExists(filepath.Join(impl, ConfigFile)) {
+		t.Error("a rejected pointer init must leave no config behind")
+	}
+	// A blank path is a validation error too.
+	if _, err := InitPointer(impl, "  ", false); err == nil || !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("empty planning_repo should error, got %v", err)
+	}
+}
+
+func TestInitPointer_DryRun(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	mustMkdir(t, impl)
+	mustMkdir(t, filepath.Join(parent, "planning", "tasks"))
+	created, err := InitPointer(impl, "../planning", true)
+	if err != nil || len(created) != 1 {
+		t.Fatalf("dry-run should report the config, got %v / %v", created, err)
+	}
+	if fileExists(filepath.Join(impl, ConfigFile)) {
+		t.Error("dry-run must not write the config")
+	}
+}
+
+// TestInitPointer_CreatesMissingDir: pointer mode creates a missing --path dir
+// (parity with scaffold Init), but only AFTER the target validates.
+func TestInitPointer_CreatesMissingDir(t *testing.T) {
+	parent := t.TempDir()
+	mustMkdir(t, filepath.Join(parent, "planning", "tasks"))
+	impl := filepath.Join(parent, "newimpl") // does not exist yet
+	created, err := InitPointer(impl, "../planning", false)
+	if err != nil {
+		t.Fatalf("InitPointer should create a missing dir, got %v", err)
+	}
+	if len(created) != 1 || !fileExists(filepath.Join(impl, ConfigFile)) {
+		t.Errorf("pointer config not written into the created dir: %v", created)
+	}
+	// A bad target must NOT create the dir (validation precedes mkdir).
+	bad := filepath.Join(parent, "nope-impl")
+	if _, err := InitPointer(bad, "../planning-missing", false); err == nil {
+		t.Fatal("bad target should error")
+	}
+	if isDir(bad) {
+		t.Error("a rejected pointer init must not create the target dir")
+	}
+}
+
+// TestInitPointer_ModeCollision: an existing config with a DIFFERENT target (or a
+// scaffold) is refused (ErrConflict), not silently dropped; the same target is an
+// idempotent no-op.
+func TestInitPointer_ModeCollision(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	mustMkdir(t, impl)
+	mustMkdir(t, filepath.Join(parent, "planning-a", "tasks"))
+	mustMkdir(t, filepath.Join(parent, "planning-b", "tasks"))
+
+	if _, err := InitPointer(impl, "../planning-a", false); err != nil {
+		t.Fatal(err)
+	}
+	// Same target → idempotent no-op.
+	if again, err := InitPointer(impl, "../planning-a", false); err != nil || len(again) != 0 {
+		t.Errorf("same-target re-init should be a no-op, got %v / %v", again, err)
+	}
+	// Different target → ErrConflict, original preserved.
+	if _, err := InitPointer(impl, "../planning-b", false); err == nil || !errors.Is(err, domain.ErrConflict) {
+		t.Errorf("re-pointing to a new target should be ErrConflict, got %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(impl, ConfigFile)); !strings.Contains(string(b), "planning-a") {
+		t.Errorf("the original target must be preserved on a refused re-point:\n%s", b)
+	}
+	// A scaffold config + pointer init → ErrConflict (mode switch refused).
+	scaf := filepath.Join(parent, "scaf")
+	if _, err := Init(scaf, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InitPointer(scaf, "../planning-a", false); err == nil || !errors.Is(err, domain.ErrConflict) {
+		t.Errorf("pointer init over a scaffold config should be ErrConflict, got %v", err)
+	}
+}
+
+// TestInit_RefusesOverPointer: scaffolding over an existing pointer config is
+// refused (ErrConflict) — it would orphan a local tree while discovery follows
+// the pointer.
+func TestInit_RefusesOverPointer(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	mustMkdir(t, impl)
+	mustMkdir(t, filepath.Join(parent, "planning", "tasks"))
+	if _, err := InitPointer(impl, "../planning", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Init(impl, false); err == nil || !errors.Is(err, domain.ErrConflict) {
+		t.Errorf("scaffold over a pointer config should be ErrConflict, got %v", err)
+	}
+	if isDir(filepath.Join(impl, "tasks")) {
+		t.Error("a refused scaffold must not create a tasks/ tree")
+	}
+}
+
+func mustMkdir(t *testing.T, p string) {
+	t.Helper()
+	if err := os.MkdirAll(p, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestInit(t *testing.T) {
 	root := t.TempDir()

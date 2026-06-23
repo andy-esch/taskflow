@@ -139,11 +139,15 @@ type LintEnvelope struct {
 	Issues        []lintTaskJSON       `json:"issues"`
 }
 
-// InitEnvelope is `init --json`.
+// InitEnvelope is `init --json`. Mode is "scaffold" (a planning tree written
+// under Root) or "pointer" (a planning_repo pointing at an external repo, no
+// tree); PlanningRepo is set only in pointer mode.
 type InitEnvelope struct {
 	SchemaVersion string   `json:"schema_version"`
 	DryRun        bool     `json:"dry_run"`
+	Mode          string   `json:"mode"`
 	Root          string   `json:"root"`
+	PlanningRepo  string   `json:"planning_repo,omitempty"`
 	Created       []string `json:"created"`
 }
 

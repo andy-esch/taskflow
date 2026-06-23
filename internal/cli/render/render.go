@@ -31,7 +31,9 @@ import (
 // 1.6: the `findings` envelope (audit finding-level query) added.
 // 1.7: the `task_mutation` envelope (task set/append/set --body) added — it
 // carries dry_run and the resulting body, which `task_show` (a read) does not.
-const SchemaVersion = "1.7"
+// 1.8: the `init` envelope carries `mode` (scaffold|pointer) and `planning_repo`
+// (set in pointer mode), for `init --planning-repo`.
+const SchemaVersion = "1.8"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -500,11 +502,19 @@ func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body strin
 	})
 }
 
-// InitJSON reports the scaffold result; created is empty (not null) when the
-// tree already existed, so consumers can len() it without a nil check.
-func InitJSON(w io.Writer, root string, created []string, dryRun bool) error {
+// InitJSON reports the init result. created is empty (not null) when nothing was
+// written (already initialized). mode is "scaffold" or "pointer"; planningRepo is
+// set only for pointer mode.
+func InitJSON(w io.Writer, mode, root, planningRepo string, created []string, dryRun bool) error {
 	if created == nil {
 		created = []string{}
 	}
-	return encodeJSON(w, InitEnvelope{SchemaVersion, dryRun, root, created})
+	return encodeJSON(w, InitEnvelope{
+		SchemaVersion: SchemaVersion,
+		DryRun:        dryRun,
+		Mode:          mode,
+		Root:          root,
+		PlanningRepo:  planningRepo,
+		Created:       created,
+	})
 }

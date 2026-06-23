@@ -1,6 +1,6 @@
 ## tskflwctl init
 
-Scaffold a planning tree (tasks/ epics/ projects/ audits/) + config
+Scaffold a planning tree here, or point at an external planning repo
 
 ```
 tskflwctl init [flags]
@@ -11,13 +11,15 @@ tskflwctl init [flags]
 ```
   tskflwctl init
   tskflwctl init --path ./planning
+  tskflwctl init --planning-repo ../desirelines-planning
 ```
 
 ### Options
 
 ```
-  -h, --help          help for init
-      --path string   directory to initialize (default ".")
+  -h, --help                   help for init
+      --path string            directory to initialize (default ".")
+      --planning-repo string   point this repo at an external planning repo (relative to --path, or absolute): writes a pointer config, no tree
 ```
 
 ### Options inherited from parent commands

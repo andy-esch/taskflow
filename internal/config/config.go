@@ -220,6 +220,21 @@ tracked_repos = []
 // root. It is idempotent: existing dirs/config are left untouched. Returns the
 // relative paths created (empty if nothing was needed).
 func Init(root string, dryRun bool) ([]string, error) {
+	// Refuse to scaffold a local tree over an existing POINTER config: discovery
+	// would follow the pointer and the new tree would be orphaned/forked data (the
+	// "don't fork the data" non-negotiable). Re-initializing a SCAFFOLD repo is
+	// fine — it repairs .gitkeeps — so only a planning_repo config is refused.
+	if cfgPath := filepath.Join(root, ConfigFile); fileExists(cfgPath) {
+		cf, err := readConfigFile(cfgPath)
+		if err != nil {
+			return nil, err
+		}
+		if cf.PlanningRepo != "" {
+			return nil, fmt.Errorf(
+				"%w: %s points at an external planning repo (planning_repo=%q) — remove it to scaffold a local tree",
+				domain.ErrConflict, ConfigFile, cf.PlanningRepo)
+		}
+	}
 	// Derive the task-status and audit-bucket dirs from the domain layout helpers
 	// so a new status/bucket is scaffolded automatically — a hardcoded list would
 	// silently drift (init not creating a dir the watcher already watches).
@@ -268,6 +283,63 @@ func Init(root string, dryRun bool) ([]string, error) {
 		return created, fmt.Errorf("write config: %w", err)
 	}
 	return created, nil
+}
+
+// pointerConfigTOML renders the POINTER config InitPointer writes: the marker
+// that anchors discovery, pointing at an external planning repo instead of
+// scaffolding a tree here. The path is stored as the user gave it (relative or
+// absolute) so it stays portable; discovery resolves it relative to this file.
+// %q yields a valid TOML basic string for the common path cases.
+func pointerConfigTOML(planningRepo string) string {
+	return fmt.Sprintf("# tskflwctl planning config — this repo's planning lives in another repo.\n"+
+		"# planning_repo: the external planning repo, relative to this file (or absolute).\n"+
+		"planning_repo = %q\n", planningRepo)
+}
+
+// InitPointer writes a POINTER config under dir (`.tskflwctl.toml` with a
+// planning_repo) and scaffolds NO tree — for an impl repo whose planning lives
+// elsewhere. The target is validated as a real planning root BEFORE anything is
+// written (the "require + error" contract via the same resolvePlanningRepo
+// discovery uses), so a typo'd path fails loudly with nothing left behind.
+// Idempotent via O_EXCL: an existing config is left untouched (returns empty).
+func InitPointer(dir, planningRepo string, dryRun bool) ([]string, error) {
+	if strings.TrimSpace(planningRepo) == "" {
+		return nil, fmt.Errorf("%w: planning_repo path is required", domain.ErrValidation)
+	}
+	if _, err := resolvePlanningRepo(dir, planningRepo); err != nil {
+		return nil, err // not a planning root → loud, nothing written
+	}
+	cfg := filepath.Join(dir, ConfigFile)
+	// An existing config: same target → idempotent no-op; a DIFFERENT target (a
+	// re-point) or a scaffold config (a mode switch) → refuse, so a corrected typo
+	// or an intended switch isn't silently dropped as "already initialized".
+	if fileExists(cfg) {
+		existing, err := readConfigFile(cfg)
+		if err != nil {
+			return nil, err
+		}
+		if existing.PlanningRepo != planningRepo {
+			return nil, fmt.Errorf(
+				"%w: %s already exists here — remove it to re-init (or edit it to change the target)",
+				domain.ErrConflict, ConfigFile)
+		}
+		return nil, nil // unchanged
+	}
+	if dryRun {
+		return []string{ConfigFile}, nil
+	}
+	// Create the target dir if missing — parity with scaffold Init (which MkdirAll's
+	// the tree); done only after the target validates, so a bad path leaves nothing.
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	if err := writeFileExclusive(cfg, []byte(pointerConfigTOML(planningRepo)), 0o644); err != nil {
+		if os.IsExist(err) {
+			return nil, nil // O_EXCL race: a config appeared just now — treat as no-op
+		}
+		return nil, fmt.Errorf("write config: %w", err)
+	}
+	return []string{ConfigFile}, nil
 }
 
 // writeFileExclusive creates a new file with O_EXCL semantics. (The store's
