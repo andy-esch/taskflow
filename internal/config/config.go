@@ -7,21 +7,39 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/BurntSushi/toml"
+
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // Config records where the planning data lives (the "taskflow root": the dir
 // holding tasks/, epics/, ...). One planning repo per product; no cross-product
 // registry.
+//
+// PlanningRepo, when set, points at an EXTERNAL planning repo (the sanctioned
+// out-of-tree escape): Discover resolves and validates it to choose Root, and it
+// wins over taskflow_root. The raw (unresolved) value is also carried here for
+// the linkback checks. TrackedRepos stays RAW and UNRESOLVED — a downstream task
+// reads it.
 type Config struct {
-	Root string
+	Root         string
+	PlanningRepo string
+	TrackedRepos []string
+}
+
+// configFile mirrors the on-disk .tskflwctl.toml schema for a real TOML decode.
+// Defaults (taskflow_root ".", the rest empty) are applied by readConfigFile.
+type configFile struct {
+	TaskflowRoot string   `toml:"taskflow_root"`
+	PlanningRepo string   `toml:"planning_repo"`
+	TrackedRepos []string `toml:"tracked_repos"`
 }
 
 // Discover walks up from start to find the planning root. At each level it
-// prefers an explicit `.tskflwctl.toml` marker (honoring its taskflow_root),
-// then falls back to a tasks/ directory or a planning/tasks/ subdir. It
-// terminates at a .git boundary or the filesystem root — never an infinite
-// climb.
+// prefers an explicit `.tskflwctl.toml` marker (honoring its planning_repo if
+// set, else taskflow_root), then falls back to a tasks/ directory or a
+// planning/tasks/ subdir. It terminates at a .git boundary or the filesystem
+// root — never an infinite climb.
 func Discover(start string) (*Config, error) {
 	dir, err := filepath.Abs(start)
 	if err != nil {
@@ -34,11 +52,21 @@ func Discover(start string) (*Config, error) {
 	dir = evalOr(dir)
 	for {
 		if fileExists(filepath.Join(dir, ConfigFile)) {
-			root, err := configuredRoot(dir)
+			cf, err := readConfigFile(filepath.Join(dir, ConfigFile))
+			if err != nil {
+				return nil, err // malformed TOML is loud, never a silent default
+			}
+			root, err := resolveRoot(dir, cf)
 			if err != nil {
 				return nil, err // loud, never a silently empty/forked tree
 			}
-			return &Config{Root: root}, nil
+			// resolveRoot already followed/validated planning_repo into Root; the
+			// raw planning_repo + tracked_repos ride along for the linkback checks.
+			return &Config{
+				Root:         root,
+				PlanningRepo: cf.PlanningRepo,
+				TrackedRepos: cf.TrackedRepos,
+			}, nil
 		}
 		if isDir(filepath.Join(dir, domain.TasksDir)) {
 			return &Config{Root: dir}, nil
@@ -59,13 +87,15 @@ func Discover(start string) (*Config, error) {
 	}
 }
 
-// configuredRoot resolves the planning root from a dir holding ConfigFile,
-// honoring its taskflow_root (default "."). The result must stay within dir's
+// configuredRoot resolves the planning root from dir, honoring the already-parsed
+// taskflow_root rel value (default "" → "."). The result must stay within dir's
 // tree and must look like a planning root (contain tasks/): a typo'd or
 // escaping value previously presented a clean EMPTY project — and `task new`
 // would then fork the data into a second tree — so both are loud errors now.
-func configuredRoot(dir string) (string, error) {
-	rel := taskflowRoot(filepath.Join(dir, ConfigFile))
+func configuredRoot(dir, rel string) (string, error) {
+	if rel == "" {
+		rel = "."
+	}
 	root := filepath.Join(dir, filepath.FromSlash(rel))
 	// Containment must be PHYSICAL: filepath.Rel is lexical and can't see that a
 	// `planning -> /etc` symlink escapes dir's real tree. Resolve both ends before
@@ -73,70 +103,77 @@ func configuredRoot(dir string) (string, error) {
 	// fails the tasks/-exists check below with a clear message).
 	if r, err := filepath.Rel(evalOr(dir), evalOr(root)); err != nil ||
 		r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("taskflow_root %q escapes %s's directory (%s)", rel, ConfigFile, dir)
+		return "", fmt.Errorf("%w: taskflow_root %q escapes %s's directory (%s)", domain.ErrValidation, rel, ConfigFile, dir)
 	}
 	if !isDir(filepath.Join(root, domain.TasksDir)) {
 		return "", fmt.Errorf(
-			"taskflow_root %q points at %s, which has no tasks/ — fix %s or run `tskflwctl init`",
-			rel, root, ConfigFile)
+			"%w: taskflow_root %q points at %s, which has no tasks/ — fix %s or run `tskflwctl init`",
+			domain.ErrValidation, rel, root, ConfigFile)
 	}
 	return root, nil
 }
 
-// taskflowRoot reads the taskflow_root value from a config file with a minimal
-// line scan (no TOML dependency for one string key). Defaults to ".".
-// Quoted values are extracted properly and an inline `# comment` (valid TOML)
-// is stripped — previously `taskflow_root = "." # note` yielded a garbage path.
-func taskflowRoot(configPath string) string {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return "."
+// resolveRoot picks the planning root from a parsed config. planning_repo, when
+// set, is the sanctioned out-of-tree escape and wins; taskflow_root is the
+// in-tree (containment-checked) default. Setting both to different roots is a
+// conflict, not a silent override — taskflow_root "" / "." is the only value
+// that coexists with planning_repo (it just means "the default in-tree root",
+// which planning_repo overrides).
+func resolveRoot(dir string, cf configFile) (string, error) {
+	if cf.PlanningRepo == "" {
+		return configuredRoot(dir, cf.TaskflowRoot)
 	}
-	for _, ln := range strings.Split(string(data), "\n") {
-		ln = strings.TrimSpace(ln)
-		if ln == "" || strings.HasPrefix(ln, "#") {
-			continue
-		}
-		k, v, ok := strings.Cut(ln, "=")
-		if !ok || strings.TrimSpace(k) != "taskflow_root" {
-			continue
-		}
-		if v = tomlStringValue(v); v != "" {
-			return v
-		}
+	// Only a default-equivalent taskflow_root coexists with planning_repo; anything
+	// else names a SECOND root, which is a conflict, not a silent override.
+	// Normalize first so "./", " . ", "./." — all the in-tree root — aren't
+	// mistaken for a different root than ".".
+	if tr := strings.TrimSpace(cf.TaskflowRoot); tr != "" && filepath.Clean(filepath.FromSlash(tr)) != "." {
+		return "", fmt.Errorf(
+			"%w: %s sets both planning_repo (%q) and taskflow_root (%q), which name different roots — keep one",
+			domain.ErrConflict, ConfigFile, cf.PlanningRepo, cf.TaskflowRoot)
 	}
-	return "."
+	return resolvePlanningRepo(dir, cf.PlanningRepo)
 }
 
-// tomlStringValue extracts a string value from the raw right-hand side of a
-// `key = value` line: the quoted segment if quoted (comment after it ignored),
-// otherwise the text up to an inline `#` comment, trimmed. Only the TOML subset
-// this one-key scanner can read losslessly is supported — escape-free basic
-// ("...") strings and literal ('...') strings; a basic string containing a
-// backslash escape (\", \\, \t) is refused rather than mis-decoded.
-func tomlStringValue(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
+// resolvePlanningRepo resolves planning_repo relative to the config dir (an
+// absolute value is used as-is) and validates it is a real planning root. Unlike
+// taskflow_root, it is ALLOWED to escape dir's tree — that is the entire point
+// of pointing an impl repo at an external planning repo. A target without tasks/
+// is a loud error (the "require + validate" contract), never a clean empty tree.
+func resolvePlanningRepo(dir, planningRepo string) (string, error) {
+	root := filepath.FromSlash(planningRepo)
+	if !filepath.IsAbs(root) {
+		root = filepath.Join(dir, root)
 	}
-	if q := raw[0]; q == '"' || q == '\'' {
-		end := strings.IndexByte(raw[1:], q)
-		if end < 0 {
-			return "" // unterminated quote: treat as unset rather than guess
+	root = filepath.Clean(root)
+	if !isDir(filepath.Join(root, domain.TasksDir)) {
+		return "", fmt.Errorf(
+			"%w: planning_repo %q points at %s, which has no tasks/ — run `tskflwctl init` there first",
+			domain.ErrValidation, planningRepo, root)
+	}
+	// Resolve symlinks so Root is PHYSICAL, matching the in-tree branch (Discover
+	// evalOr's dir, which configuredRoot inherits). The linkback work compares
+	// physical paths, so a symlinked external planning repo must not leave Root
+	// logical here. evalOr falls back to the lexical path if it can't resolve.
+	return evalOr(root), nil
+}
+
+// readConfigFile decodes ConfigFile into a configFile with a real TOML parser.
+// A missing file decodes to zero values (the caller already gated on existence,
+// but this stays lenient on a vanished file). Malformed TOML is a LOUD error
+// wrapping domain.ErrValidation — never a silent default that would present a
+// clean empty project. Absent keys keep their zero values: taskflow_root is
+// defaulted to "." downstream in configuredRoot; planning_repo/tracked_repos
+// stay "" / nil.
+func readConfigFile(configPath string) (configFile, error) {
+	var cf configFile
+	if _, err := toml.DecodeFile(configPath, &cf); err != nil {
+		if os.IsNotExist(err) {
+			return configFile{}, nil
 		}
-		val := raw[1 : 1+end]
-		// A basic string's backslash escapes (\", \\, \t) need a real decoder; this
-		// scanner would mis-read `"a\"b"` as `a\`. Refuse to guess — treat as unset.
-		// Literal ('...') strings have no escapes, so a backslash there is intentional.
-		if q == '"' && strings.ContainsRune(val, '\\') {
-			return ""
-		}
-		return val
+		return configFile{}, fmt.Errorf("%w: parse %s: %w", domain.ErrValidation, ConfigFile, err)
 	}
-	if i := strings.IndexByte(raw, '#'); i >= 0 {
-		raw = raw[:i]
-	}
-	return strings.TrimSpace(raw)
+	return cf, nil
 }
 
 // evalOr resolves symlinks in p, falling back to p itself when it can't (e.g. p

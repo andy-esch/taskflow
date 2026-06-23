@@ -4,6 +4,7 @@ go 1.25.5
 
 require (
 	charm.land/lipgloss/v2 v2.0.4
+	github.com/BurntSushi/toml v1.6.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/fang v1.0.0
