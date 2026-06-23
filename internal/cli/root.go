@@ -85,7 +85,11 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 				_ = app.resolve()
 				return nil
 			}
-			return app.resolve()
+			if err := app.resolve(); err != nil {
+				return err
+			}
+			app.warnLinks()
+			return nil
 		},
 	}
 	// Cobra's own output (help, usage errors, completion scripts) must follow
@@ -109,6 +113,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(newEpicCmd(app))
 	root.AddCommand(newAuditCmd(app))
 	root.AddCommand(newLintCmd(app))
+	root.AddCommand(newDoctorCmd(app))
 	root.AddCommand(newSchemaCmd(app))
 	root.AddCommand(newTemplateCmd(app))
 	return root
@@ -147,6 +152,20 @@ func (a *App) resolve() error {
 	a.Fixer = fs
 	a.Layout = fs
 	return nil
+}
+
+// warnLinks emits the ambient linkback-integrity warnings — one ⚠ per finding to
+// stderr, so --json stdout stays clean and a pipe consuming data is unaffected.
+// Silent when the links are consistent (or absent); suppressed entirely by
+// TSKFLW_NO_LINK_WARN. The `doctor` command reports the same findings explicitly,
+// so its own PreRunE overrides the root hook that calls this.
+func (a *App) warnLinks() {
+	if envEnabled("TSKFLW_NO_LINK_WARN") {
+		return
+	}
+	for _, p := range config.CheckLinks(a.Cfg) {
+		fmt.Fprintf(a.ErrOut, "%s %s\n", a.Style.Warn("⚠"), p.Message)
+	}
 }
 
 // markdownStyle resolves the glamour style for `show` body rendering from the

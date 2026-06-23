@@ -141,13 +141,18 @@ type LintEnvelope struct {
 
 // InitEnvelope is `init --json`. Mode is "scaffold" (a planning tree written
 // under Root) or "pointer" (a planning_repo pointing at an external repo, no
-// tree); PlanningRepo is set only in pointer mode.
+// tree); PlanningRepo is set only in pointer mode. LinkedBack is the
+// planning→impl path recorded in the planning repo's tracked_repos by pointer-
+// mode auto-link-back (empty when none was written). Tracked is the entries
+// `--track` added to this planning repo's tracked_repos (scaffold mode).
 type InitEnvelope struct {
 	SchemaVersion string   `json:"schema_version"`
 	DryRun        bool     `json:"dry_run"`
 	Mode          string   `json:"mode"`
 	Root          string   `json:"root"`
 	PlanningRepo  string   `json:"planning_repo,omitempty"`
+	LinkedBack    string   `json:"linked_back,omitempty"`
+	Tracked       []string `json:"tracked,omitempty"`
 	Created       []string `json:"created"`
 }
 
@@ -188,6 +193,20 @@ type ErrorEnvelope struct {
 	Error         ErrorItem `json:"error"`
 }
 
+// DoctorEnvelope is `doctor --json`: the linkback audit result. Problems is
+// empty (not null) when the planning_repo <-> tracked_repos links are consistent.
+type DoctorEnvelope struct {
+	SchemaVersion string          `json:"schema_version"`
+	Root          string          `json:"root"`
+	Problems      []DoctorProblem `json:"problems"`
+}
+
+// DoctorProblem is one linkback inconsistency: the offending repo + a message.
+type DoctorProblem struct {
+	Repo    string `json:"repo"`
+	Message string `json:"message"`
+}
+
 // jsonEnvelopes registers every envelope so a single Reflect pulls them all (and
 // their shared types) into one schema document's $defs.
 type jsonEnvelopes struct {
@@ -206,6 +225,7 @@ type jsonEnvelopes struct {
 	Fix          FixEnvelope          `json:"fix"`
 	Lint         LintEnvelope         `json:"lint"`
 	Init         InitEnvelope         `json:"init"`
+	Doctor       DoctorEnvelope       `json:"doctor"`
 	Schema       SchemaEnvelope       `json:"schema"`
 	SchemaKind   SchemaKindEnvelope   `json:"schema_kind"`
 	Templates    TemplatesEnvelope    `json:"templates"`

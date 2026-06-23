@@ -115,7 +115,9 @@ func runInitScaffold(app *App, abs string, tracks []string) error {
 		}
 	}
 	if app.JSON {
-		return render.InitJSON(app.Out, "scaffold", abs, "", created, app.DryRun)
+		return render.InitJSON(app.Out, render.InitEnvelope{
+			DryRun: app.DryRun, Mode: "scaffold", Root: abs, Tracked: tracked, Created: created,
+		})
 	}
 	if len(created) == 0 && len(tracked) == 0 {
 		fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)
@@ -167,7 +169,9 @@ func runInitPointer(app *App, abs, planningRepo string, linkBack bool) error {
 	}
 	if app.JSON {
 		warn()
-		return render.InitJSON(app.Out, "pointer", abs, planningRepo, created, app.DryRun)
+		return render.InitJSON(app.Out, render.InitEnvelope{
+			DryRun: app.DryRun, Mode: "pointer", Root: abs, PlanningRepo: planningRepo, LinkedBack: back, Created: created,
+		})
 	}
 	if len(created) > 0 {
 		verb := "pointed"

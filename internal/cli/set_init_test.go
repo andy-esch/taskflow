@@ -110,6 +110,51 @@ func TestInit_LinkBack(t *testing.T) {
 	}
 }
 
+// TestInit_PointerJSON_LinkedBack: pointer-mode --json reports the back-link path
+// (and omits linked_back under --no-link-back).
+func TestInit_PointerJSON_LinkedBack(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	if err := os.MkdirAll(impl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runRoot(t, "init", "--path", filepath.Join(parent, "planning"))
+	out := runRoot(t, "init", "--path", impl, "--planning-repo", "../planning", "--json")
+	var env struct {
+		Mode       string `json:"mode"`
+		LinkedBack string `json:"linked_back"`
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("invalid json: %v\n%s", err, out)
+	}
+	if env.Mode != "pointer" || env.LinkedBack != "../impl" {
+		t.Errorf("expected mode=pointer, linked_back=../impl, got %+v", env)
+	}
+	impl2 := filepath.Join(parent, "impl2")
+	if err := os.MkdirAll(impl2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out2 := runRoot(t, "init", "--path", impl2, "--planning-repo", "../planning", "--no-link-back", "--json"); strings.Contains(out2, "linked_back") {
+		t.Errorf("--no-link-back should omit linked_back:\n%s", out2)
+	}
+}
+
+// TestInit_ScaffoldJSON_Tracked: scaffold-mode --json reports --track entries.
+func TestInit_ScaffoldJSON_Tracked(t *testing.T) {
+	planning := filepath.Join(t.TempDir(), "planning")
+	out := runRoot(t, "init", "--path", planning, "--track", "../impl-a", "--json")
+	var env struct {
+		Mode    string   `json:"mode"`
+		Tracked []string `json:"tracked"`
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("invalid json: %v\n%s", err, out)
+	}
+	if env.Mode != "scaffold" || len(env.Tracked) != 1 || env.Tracked[0] != "../impl-a" {
+		t.Errorf("expected mode=scaffold, tracked=[../impl-a], got %+v", env)
+	}
+}
+
 // TestInit_NoLinkBackScaffoldConflict: --no-link-back is pointer-only → exit 11
 // in scaffold mode (symmetry with the --track guard).
 func TestInit_NoLinkBackScaffoldConflict(t *testing.T) {

@@ -80,7 +80,12 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"FixEnvelope", func(w io.Writer) error {
 			return FixJSON(w, nil, nil, false) // the nil-slice path: must emit [] and validate
 		}},
-		{"InitEnvelope", func(w io.Writer) error { return InitJSON(w, "scaffold", "/root", "", []string{"tasks"}, false) }},
+		{"InitEnvelope", func(w io.Writer) error {
+			return InitJSON(w, InitEnvelope{Mode: "scaffold", Root: "/root", Created: []string{"tasks"}})
+		}},
+		{"DoctorEnvelope", func(w io.Writer) error {
+			return DoctorJSON(w, "/root", []DoctorProblem{{Repo: "../impl", Message: "one-sided link"}})
+		}},
 		{"SchemaEnvelope", func(w io.Writer) error {
 			return SchemaJSON(w, SchemaContract{
 				Statuses:     []SchemaStatus{{Value: "in-progress", Active: true}},
@@ -107,8 +112,8 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return encodeJSON(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{Code: "not-found", Message: "task not found"}})
 		}},
 	}
-	if len(cases) != 18 {
-		t.Fatalf("expected all 18 envelopes covered, got %d", len(cases))
+	if len(cases) != 19 {
+		t.Fatalf("expected all 19 envelopes covered, got %d", len(cases))
 	}
 	for _, tc := range cases {
 		sch, err := c.Compile(id + "#/$defs/" + tc.def)

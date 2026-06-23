@@ -96,6 +96,47 @@
       ],
       "description": "CreatedItem is the created document inside CreatedEnvelope."
     },
+    "DoctorEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/DoctorProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "root",
+        "problems"
+      ],
+      "description": "DoctorEnvelope is `doctor --json`: the linkback audit result."
+    },
+    "DoctorProblem": {
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "repo",
+        "message"
+      ],
+      "description": "DoctorProblem is one linkback inconsistency: the offending repo + a message."
+    },
     "EpicShowEnvelope": {
       "properties": {
         "schema_version": {
@@ -323,6 +364,15 @@
         },
         "planning_repo": {
           "type": "string"
+        },
+        "linked_back": {
+          "type": "string"
+        },
+        "tracked": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "created": {
           "items": {
@@ -995,6 +1045,9 @@
         "init": {
           "$ref": "#/$defs/InitEnvelope"
         },
+        "doctor": {
+          "$ref": "#/$defs/DoctorEnvelope"
+        },
         "schema": {
           "$ref": "#/$defs/SchemaEnvelope"
         },
@@ -1029,6 +1082,7 @@
         "fix",
         "lint",
         "init",
+        "doctor",
         "schema",
         "schema_kind",
         "templates",
@@ -1135,6 +1189,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.8)",
+  "title": "tskflwctl --json output (schema_version 1.10)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }
