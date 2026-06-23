@@ -9,6 +9,8 @@ import (
 	"io"
 	"strings"
 
+	"charm.land/lipgloss/v2/tree"
+
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
@@ -367,11 +369,29 @@ func EpicShowHuman(w io.Writer, st Style, epic domain.Epic, tasks []domain.Task,
 		header = fmt.Sprintf("tasks (%d, %d deprecated — excluded from progress):", len(tasks), deprecated)
 	}
 	fmt.Fprintf(w, "%s\n", st.Dim(header))
-	rows := make([][]string, 0, len(tasks))
-	for _, t := range tasks {
-		rows = append(rows, []string{"  " + st.Status(t.Status), st.Bold(t.Slug)})
+	if len(tasks) > 0 {
+		// Render epic → tasks as a tree grouped by status (lipgloss/v2). Node text
+		// is pre-styled by st (so --color is honored); the tree contributes only
+		// its plain connectors. Rootless — the "tasks (…)" header is the label, so
+		// the epic id isn't repeated. The --json envelope is unaffected.
+		byStatus := make(map[domain.Status][]domain.Task, len(tasks))
+		for _, task := range tasks {
+			byStatus[task.Status] = append(byStatus[task.Status], task)
+		}
+		tr := tree.New()
+		for _, s := range domain.AllStatuses() {
+			grp := byStatus[s]
+			if len(grp) == 0 {
+				continue
+			}
+			sub := tree.Root(st.Status(s))
+			for _, task := range grp {
+				sub.Child(st.Bold(task.Slug))
+			}
+			tr.Child(sub)
+		}
+		fmt.Fprintln(w, tr)
 	}
-	writeTable(w, st.width, nil, rows)
 	fmt.Fprintf(w, "\n%s", body)
 	return nil
 }
