@@ -25,7 +25,7 @@ tskflwctl audit findings [audit] [flags]
 ### Options
 
 ```
-  -c, --columns strings    select columns for -o table/csv, comma-separated (implies -o table); available: ref,code,audit,status,effort,urgency,component,file,title
+  -c, --columns strings    select columns for -o table/csv/json, comma-separated (implies -o table); available: ref,code,audit,status,effort,urgency,component,file,title
       --component string   filter by component (case-insensitive substring)
       --effort strings     filter by effort XS,S,M,L (any-of)
   -h, --help               help for findings

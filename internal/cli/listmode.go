@@ -23,16 +23,18 @@ const (
 	modeCSV                     // headered, RFC 4180 comma-separated (for spreadsheets)
 )
 
-// isColumnar reports whether a format is a projectable table (table/csv) — the
-// formats `-c/--columns` applies to.
-func isColumnar(m outputMode) bool { return m == modeTable || m == modeCSV }
+// isProjectable reports whether a format honors `-c/--columns` field projection:
+// the table/csv views and the JSON envelope (where the selection becomes
+// column-named string fields). modeName/modeHuman are not projectable.
+func isProjectable(m outputMode) bool { return m == modeTable || m == modeCSV || m == modeJSON }
 
 // listMode binds the output flags shared by the list commands (task/epic/audit)
 // and resolves the chosen format. The format axis is ONE flag —
 // `-o/--output {human,json,name,table,csv}` — with `--json` (persistent,
 // universal) and `-q` kept as documented aliases for `-o json` / `-o name`. The
 // projection axis is a second, orthogonal flag: `-c/--columns` selects columns
-// for the columnar formats (table/csv) and implies `-o table`. See the
+// for the projectable formats (table/csv and the json envelope) and implies
+// `-o table` when no format is pinned. See the
 // consolidate-output-flags task for the design and
 // the research behind the split (no value-internal DSL, so columns stay
 // shell-completable).
@@ -48,7 +50,7 @@ type listMode struct {
 func (m *listMode) bind(cmd *cobra.Command, columnSpecs []render.ColumnSpec) {
 	cmd.Flags().StringVarP(&m.output, "output", "o", "", "output format: human|json|name|table|csv")
 	cmd.Flags().StringSliceVarP(&m.columns, "columns", "c", nil,
-		"select columns for -o table/csv, comma-separated (implies -o table); available: "+specNames(columnSpecs))
+		"select columns for -o table/csv/json, comma-separated (implies -o table); available: "+specNames(columnSpecs))
 	cmd.Flags().BoolVarP(&m.quiet, "quiet", "q", false, "ids only, one per line (alias for -o name)")
 	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats)
 	_ = cmd.RegisterFlagCompletionFunc("columns", columnCompleter(columnSpecs))
@@ -83,20 +85,22 @@ func (m listMode) resolve(cmd *cobra.Command, app *App) (outputMode, error) {
 	// order (map iteration is randomized).
 	if len(m.columns) > 0 {
 		var bad []string
-		columnar := false
+		projectable := false
 		for mode, flag := range want {
-			if isColumnar(mode) {
-				columnar = true
+			if isProjectable(mode) {
+				projectable = true
 			} else {
 				bad = append(bad, flag)
 			}
 		}
 		if len(bad) > 0 {
 			sort.Strings(bad)
-			return 0, fmt.Errorf("%w: --columns applies to -o table or -o csv, not %s",
+			return 0, fmt.Errorf("%w: --columns applies to -o table, -o csv, or --json, not %s",
 				domain.ErrValidation, strings.Join(bad, ", "))
 		}
-		if !columnar {
+		// A pinned json/csv/table is projected in place; bare `-c` (no format)
+		// still implies table — the human-facing default projection target.
+		if !projectable {
 			want[modeTable] = "--columns"
 		}
 	}
@@ -148,11 +152,21 @@ func conflictList(want map[outputMode]string) string {
 // exit code, since it knows whether a problem is fatal for that command.
 func renderList[T any](
 	app *App, mode outputMode, columns []string, items []T, problems []domain.FileProblem,
-	cols []render.Column[T],
+	listKey string, cols []render.Column[T],
 	jsonFn func(io.Writer, []T, []domain.FileProblem) error,
 	humanFn func(io.Writer, render.Style, []T) error,
 ) error {
 	if mode == modeJSON {
+		// `--json -c …` narrows each row to the selected columns (as column-named
+		// string fields) while keeping the schema_version + unreadable envelope;
+		// bare `--json` emits the full typed envelope via jsonFn.
+		if len(columns) > 0 {
+			sel, err := render.SelectColumns(cols, columns)
+			if err != nil {
+				return err
+			}
+			return render.ProjectedListJSON(app.Out, listKey, sel, items, problems)
+		}
 		return jsonFn(app.Out, items, problems)
 	}
 	switch mode {

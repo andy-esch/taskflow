@@ -96,7 +96,7 @@ func newAuditListCmd(app *App) *cobra.Command {
 				return err
 			}
 			if err := renderList(app, mode, lm.columns, audits, problems,
-				render.AuditColumns(), render.AuditsJSON, render.AuditsHuman); err != nil {
+				"audits", render.AuditColumns(), render.AuditsJSON, render.AuditsHuman); err != nil {
 				return err
 			}
 			return problemsError(problems)
@@ -144,7 +144,7 @@ func newAuditFindingsCmd(app *App) *cobra.Command {
 				return err
 			}
 			if err := renderList(app, mode, lm.columns, findings, problems,
-				render.FindingColumns(), render.FindingsJSON, render.FindingsHuman); err != nil {
+				"findings", render.FindingColumns(), render.FindingsJSON, render.FindingsHuman); err != nil {
 				return err
 			}
 			return problemsError(problems)

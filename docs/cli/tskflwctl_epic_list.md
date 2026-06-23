@@ -10,17 +10,18 @@ tskflwctl epic list [flags]
 
 ```
   tskflwctl epic list
-  tskflwctl epic list -o table
-  tskflwctl epic list -o json
+  tskflwctl epic list --status in-progress
+  tskflwctl epic list -o table -c id,status,percent,description
 ```
 
 ### Options
 
 ```
-  -c, --columns strings   select columns for -o table/csv, comma-separated (implies -o table); available: id,status,priority,done,total,description
+  -c, --columns strings   select columns for -o table/csv/json, comma-separated (implies -o table); available: id,status,priority,done,total,description,percent
   -h, --help              help for list
   -o, --output string     output format: human|json|name|table|csv
   -q, --quiet             ids only, one per line (alias for -o name)
+      --status string     filter by epic status (planning|in-progress|completed|archived)
 ```
 
 ### Options inherited from parent commands

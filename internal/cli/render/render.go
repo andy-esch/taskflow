@@ -166,9 +166,11 @@ func MovesJSON(w io.Writer, results []MoveResult, dryRun bool) error {
 	return encodeJSON(w, MovesEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Moves: results})
 }
 
+// encodeJSON writes the payload as compact (un-indented) JSON with a single
+// trailing newline. Machine output: pretty-printing is pure token cost for a
+// consumer that parses it. Off-tree consumers pipe through `jq .` to read it.
 func encodeJSON(w io.Writer, payload any) error {
 	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
 	return enc.Encode(payload)
 }
 

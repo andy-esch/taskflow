@@ -1,7 +1,9 @@
 package render
 
 import (
+	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -114,6 +116,95 @@ func WriteCSV[T any](w io.Writer, cols []Column[T], items []T) error {
 	return cw.Error()
 }
 
+// projectedField is one key/value of a projected `--json -c` row. The value is
+// the column extractor's string — the projection is a column VIEW, so it mirrors
+// the table/csv cells (numbers and lists render as their string form), keeping
+// the column registry the single source of truth for table, csv, and json alike.
+type projectedField struct{ key, value string }
+
+// projectedRow marshals as a JSON object whose keys stay in column (i.e. `-c`)
+// order. A plain map can't: encoding/json sorts map keys, which would silently
+// drop the requested ordering.
+type projectedRow []projectedField
+
+func (r projectedRow) MarshalJSON() ([]byte, error) {
+	fields := make([]orderedField, len(r))
+	for i, f := range r {
+		fields[i] = orderedField{f.key, f.value}
+	}
+	return marshalOrderedObject(fields)
+}
+
+// orderedField is one key/value of an order-preserving JSON object.
+type orderedField struct {
+	key   string
+	value any
+}
+
+// marshalOrderedObject renders a compact JSON object whose keys appear in the
+// given order — what a struct gives for free but a map (sorted keys) does not.
+func marshalOrderedObject(fields []orderedField) ([]byte, error) {
+	var b bytes.Buffer
+	b.WriteByte('{')
+	for i, f := range fields {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		k, err := json.Marshal(f.key)
+		if err != nil {
+			return nil, err
+		}
+		v, err := json.Marshal(f.value)
+		if err != nil {
+			return nil, err
+		}
+		b.Write(k)
+		b.WriteByte(':')
+		b.Write(v)
+	}
+	b.WriteByte('}')
+	return b.Bytes(), nil
+}
+
+// ProjectedListJSON writes a `--json -c …` projection: the standard versioned
+// envelope (schema_version + the entity's listKey + an `unreadable` array only
+// when non-empty, mirroring the full envelope's omitempty) but with each row
+// narrowed to the selected columns as column-named string fields. listKey is the
+// entity's envelope key ("tasks", "epics", …), so a projected list lands under
+// the same key as its full envelope.
+//
+// This is a column VIEW (like -o table/csv), NOT the canonical typed envelope:
+// every value is a string and rows omit unselected fields, so projected output
+// does NOT validate against `schema --json-schema` (which describes the full
+// envelopes). Only bare `--json` is the schema-validated contract.
+func ProjectedListJSON[T any](w io.Writer, listKey string, cols []Column[T], items []T, problems []domain.FileProblem) error {
+	rows := make([]projectedRow, 0, len(items))
+	for _, it := range items {
+		row := make(projectedRow, len(cols))
+		for i, c := range cols {
+			row[i] = projectedField{key: c.Name, value: c.Extract(it)}
+		}
+		rows = append(rows, row)
+	}
+	// schema_version first, then the entity list, then unreadable (only when
+	// non-empty, mirroring the full envelope's omitempty) — a fixed, contract-
+	// stable order a map's sorted keys wouldn't give.
+	fields := []orderedField{
+		{"schema_version", SchemaVersion},
+		{listKey, rows},
+	}
+	if len(problems) > 0 {
+		fields = append(fields, orderedField{"unreadable", problems})
+	}
+	b, err := marshalOrderedObject(fields)
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n') // match encodeJSON's single trailing newline
+	_, err = w.Write(b)
+	return err
+}
+
 // csvInjectionSafe neutralizes spreadsheet formula injection: a cell whose first
 // byte a spreadsheet treats as a formula (= + - @) or as a control prefix (tab,
 // CR) is prefixed with a single quote so Excel/Sheets render it as literal text.
@@ -159,6 +250,10 @@ func EpicColumns() []Column[core.EpicSummary] {
 		{"done", "completed task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Done) }},
 		{"total", "total task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Total) }},
 		{"description", "one-line summary", func(e core.EpicSummary) string { return e.Epic.Description }},
+		// percent is appended LAST so adding it didn't shift the pre-existing
+		// default `epic list -o table`/`csv` columns (description stays column 6);
+		// it's still `-c`-selectable in any position the caller asks for.
+		{"percent", "rollup % complete", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Percent()) }},
 	}
 }
 

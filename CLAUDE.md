@@ -34,6 +34,15 @@ We dogfood: drive this repo's planning with the tool itself.
   (field-level `task set`; body via `task append` / `task set --body|--body-file`,
   all scriptable + atomic) vs **human** (`task edit` — $EDITOR on the whole file,
   re-validated on save).
+- **Triage (agents, cheapest first):** lead with the terse path — `epic show
+  <id>` for an epic's task roster, and `task list -o table -c
+  slug,status,description` for a compact, byte-stable table. `--json` is compact
+  (not pretty-printed) and also takes `-c` to project just the fields you need
+  (`task list --json -c slug,status,description`) — the cheap machine path. Reach
+  for *full* `--json` (no `-c`) only when you need every frontmatter field
+  (`tags`, `tier`, `priority`, `autonomy_level`, timestamps…). Note a `--json -c`
+  projection is a string-valued column **view** (like `-o table`/`csv`); only
+  full `--json` validates against `schema --json-schema`.
 - **Self-describe (agents):** `schema` (contract: statuses, field registry,
   exit codes) · `schema task|epic|audit` (authoring guidance) ·
   `schema --json-schema` (Draft 2020-12 schema for the `--json` envelopes). Runs

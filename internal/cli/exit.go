@@ -73,7 +73,7 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 	payload := render.ErrorEnvelope{SchemaVersion: render.SchemaVersion}
 	payload.Error.Code = errorCodeName(ExitCode(err))
 	payload.Error.Message = err.Error()
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(payload)
+	// Compact, like every other --json envelope (see render.encodeJSON): an agent
+	// parsing the failure shouldn't pay for indentation either.
+	_ = json.NewEncoder(w).Encode(payload)
 }

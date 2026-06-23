@@ -169,7 +169,7 @@ func TestTaskSetBody_DryRun_JSON(t *testing.T) {
 func TestTaskSetFields_DryRun_JSON_NoBody(t *testing.T) {
 	root := setupRepo(t)
 	out := runRoot(t, "-C", root, "--json", "--dry-run", "task", "set", "alpha", "--tier", "2")
-	if !strings.Contains(out, `"dry_run": true`) {
+	if !strings.Contains(out, `"dry_run":true`) {
 		t.Errorf("field-set --dry-run should carry dry_run=true:\n%s", out)
 	}
 	if strings.Contains(out, `"body"`) {

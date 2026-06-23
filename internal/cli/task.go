@@ -162,7 +162,7 @@ func newTaskListCmd(app *App) *cobra.Command {
 				return err
 			}
 			if err := renderList(app, mode, lm.columns, tasks, problems,
-				render.TaskColumns(), render.TasksJSON, render.TasksHuman); err != nil {
+				"tasks", render.TaskColumns(), render.TasksJSON, render.TasksHuman); err != nil {
 				return err
 			}
 			return problemsError(problems)

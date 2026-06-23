@@ -18,7 +18,7 @@ tskflwctl task list [flags]
 
 ```
       --all               include completed/deprecated/deferred
-  -c, --columns strings   select columns for -o table/csv, comma-separated (implies -o table); available: slug,status,tier,priority,epic,updated,description
+  -c, --columns strings   select columns for -o table/csv/json, comma-separated (implies -o table); available: slug,status,tier,priority,epic,updated,description
       --epic string       filter by epic
   -h, --help              help for list
   -o, --output string     output format: human|json|name|table|csv
