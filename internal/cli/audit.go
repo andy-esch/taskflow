@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
@@ -215,7 +216,9 @@ func newAuditShowCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.AuditShowJSON(app.Out, audit, body)
 			}
-			return render.AuditShowHuman(app.Out, app.Style, audit, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
+			return app.paged(func(w io.Writer) error {
+				return render.AuditShowHuman(w, app.Style, audit, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&raw, "raw", false, "print the raw markdown body (skip rendering)")

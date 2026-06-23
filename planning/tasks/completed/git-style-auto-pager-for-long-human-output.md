@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: 'Page long show output via $PAGER like git: TTY-gated off the machine contract; configurable per-repo via .tskflwctl.toml [pager] + --no-pager.'
 effort: Unknown
@@ -9,6 +9,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, ux, config]
 created: "2026-06-23"
+updated_at: "2026-06-23"
+started_at: "2026-06-23"
+completed_at: "2026-06-23"
 ---
 # Git-style auto-pager for long human output
 

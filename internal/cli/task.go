@@ -203,7 +203,9 @@ func newTaskShowCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.TaskShowJSON(app.Out, task, body)
 			}
-			return render.TaskShowHuman(app.Out, app.Style, task, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
+			return app.paged(func(w io.Writer) error {
+				return render.TaskShowHuman(w, app.Style, task, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&raw, "raw", false, "print the raw markdown body (skip rendering)")

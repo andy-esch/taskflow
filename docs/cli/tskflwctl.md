@@ -12,6 +12,8 @@ Local-first planning CLI (tasks, epics, audits) over markdown
       --json           machine-readable JSON output
       --no-color       disable colored output (alias for --color=never)
       --no-input       never prompt; missing required input is an error (for scripts/agents; also TSKFLW_NO_INPUT)
+      --no-pager       do not pipe long human output through a pager
+      --paginate       page long human output through $PAGER (on a TTY), even if disabled in config
 ```
 
 ### SEE ALSO
