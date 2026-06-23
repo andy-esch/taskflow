@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: in-progress
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
 description: Seed tracked_repos via --track; auto-append this repo to the planning repo's tracked_repos on init (--no-link-back to opt out); path-normalized.
 effort: Unknown
@@ -9,7 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [cli, config, init]
 created: "2026-06-22"
-updated_at: "2026-06-22"
+updated_at: "2026-06-23"
+started_at: "2026-06-23"
 ---
 # `tracked_repos` seeding + auto-link-back
 
