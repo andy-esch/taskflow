@@ -59,10 +59,21 @@ func fg(c theme.Color, s string) string {
 
 func dim(s string) string { return dimStyle.Render(s) }
 
+// neonBar is the 80s-synthwave fill gradient for the rollup bars: neon purple →
+// cyan → pink. Truecolor (downsampled on lesser terminals). Keep in sync with
+// render's copy so the CLI status bars match the TUI.
+var neonBar = []color.Color{
+	lipgloss.Color("#b026ff"), // neon purple
+	lipgloss.Color("#00e5ff"), // neon cyan
+	lipgloss.Color("#ff2ec4"), // neon pink
+}
+
 // miniBar renders a width-cell progress bar for pct (0–100) via the bubbles v2
-// progress component: solid fill in the completion color (gray <34, yellow <100,
-// green at 100), empty gray. Mirrors the CLI render.Style.Bar so both surfaces
-// show the same bar.
+// progress component. The fill is the 80s-neon gradient (neonBar) anchored to the
+// full width, so how far the fill reaches reads as progress; the hue is purely
+// decorative — the discrete completion tier (gray/yellow/green) still shows in the
+// % text beside the bar. Empty cells stay gray (distinguished from fill by the ░
+// vs █ glyph). Mirrors the CLI render.Style.Bar so both surfaces show the same bar.
 func miniBar(pct, width int) string {
 	if width < 1 {
 		width = 1
@@ -70,8 +81,8 @@ func miniBar(pct, width int) string {
 	p := progress.New(
 		progress.WithWidth(width),
 		progress.WithoutPercentage(),          // callers render the % separately
-		progress.WithFillCharacters('█', '░'), // non-half-block ⇒ solid fill
-		progress.WithColors(lipColor(theme.Percent(pct))),
+		progress.WithFillCharacters('█', '░'), // non-half-block ⇒ one color per cell
+		progress.WithColors(neonBar...),
 	)
 	p.EmptyColor = lipColor(theme.ColorGray)
 	return p.ViewAs(float64(pct) / 100)

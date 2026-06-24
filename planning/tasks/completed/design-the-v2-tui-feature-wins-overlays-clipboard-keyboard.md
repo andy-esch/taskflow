@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: 'Design: map v2 capabilities (overlays/clipboard/cursor/keyboard) to specific TUI needs and propose build tasks; no code. After the v2 migration.'
 effort: Unknown
@@ -11,6 +11,7 @@ tags: [tui, ux, design]
 created: "2026-06-23"
 updated_at: "2026-06-23"
 started_at: "2026-06-23"
+completed_at: "2026-06-23"
 ---
 # Design the v2 TUI feature wins (overlays / clipboard / cursor / keyboard)
 

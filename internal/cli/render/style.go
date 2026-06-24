@@ -119,11 +119,22 @@ func (s Style) Green(t string) string { return s.wrap(ansiGreen, t) }
 func (s Style) Red(t string) string   { return s.wrap(ansiRed, t) }
 func (s Style) Warn(t string) string  { return s.wrap(ansiYellow, t) }
 
+// neonBar is the 80s-synthwave fill gradient for the rollup bars: neon purple →
+// cyan → pink. Keep in sync with the TUI's copy (tui/style.go) so both surfaces
+// match.
+var neonBar = []color.Color{
+	lipgloss.Color("#b026ff"), // neon purple
+	lipgloss.Color("#00e5ff"), // neon cyan
+	lipgloss.Color("#ff2ec4"), // neon pink
+}
+
 // Bar renders a width-char progress bar for pct (0–100) via the bubbles v2
-// progress component: solid fill in the completion color (gray <34, yellow <100,
-// green at 100), empty gray. The component always emits lipgloss ANSI, so when
-// styling is off (piped / --json / tests) we strip it back to plain glyphs —
-// keeping the porcelain contract byte-stable. Same component the TUI uses.
+// progress component. The fill is the 80s-neon gradient (neonBar) anchored to the
+// full width, so the fill's reach reads as progress; the hue is decorative — the
+// discrete completion tier still shows in the % text beside the bar. The component
+// always emits lipgloss ANSI, so when styling is off (piped / --json / tests) we
+// strip it back to plain glyphs — keeping the porcelain contract byte-stable. Same
+// component (and gradient) the TUI uses.
 func (s Style) Bar(pct, width int) string {
 	if width <= 0 {
 		width = 10
@@ -131,29 +142,15 @@ func (s Style) Bar(pct, width int) string {
 	p := progress.New(
 		progress.WithWidth(width),
 		progress.WithoutPercentage(),          // callers render the % separately
-		progress.WithFillCharacters('█', '░'), // non-half-block ⇒ solid fill
-		progress.WithColors(barColor(theme.Percent(pct))),
+		progress.WithFillCharacters('█', '░'), // non-half-block ⇒ one color per cell
+		progress.WithColors(neonBar...),
 	)
-	p.EmptyColor = barColor(theme.ColorGray)
+	p.EmptyColor = lipgloss.Color("8") // dim gray unfilled track, lets the neon fill pop
 	out := p.ViewAs(float64(pct) / 100)
 	if !s.on {
 		return ansi.Strip(out)
 	}
 	return out
-}
-
-// barColor maps a semantic completion color to a lipgloss 16-color for the
-// progress component (theme stays rendering-tech-agnostic, so the mapping lives
-// here, mirroring ansiCode). Percent only yields gray/yellow/green.
-func barColor(c theme.Color) color.Color {
-	switch c {
-	case theme.ColorGreen:
-		return lipgloss.Color("2")
-	case theme.ColorYellow:
-		return lipgloss.Color("3")
-	default:
-		return lipgloss.Color("8")
-	}
 }
 
 // visibleWidth is the DISPLAY-CELL width of s ignoring ANSI escapes — so
