@@ -60,7 +60,7 @@ var entities = []Descriptor{
 		Dir:  TasksDir,
 		AuthoringFields: []FieldDoc{
 			{"epic", "string", true, "ID of the epic this task belongs to; must already exist.", "17-pm-go-cli"},
-			{"description", "string", false, "One line summarizing the task (≤150 chars); required once next-up/in-progress.", "Add retry backoff to the Strava webhook"},
+			{"description", "string", false, "One line summarizing the task (≤200 chars); required once next-up/in-progress.", "Add retry backoff to the Strava webhook"},
 			{"effort", "string", false, "Rough size estimate (free-form).", "1-2 hours"},
 			{"tier", "int", false, "Importance, 1 (highest) – 5 (lowest).", "2"},
 			{"priority", "string", false, "One of: high | medium | low.", "medium"},
@@ -69,7 +69,7 @@ var entities = []Descriptor{
 		},
 		Conventions: []string{
 			"status is the directory — set it with the lifecycle verbs (start/promote/complete/…), never in frontmatter.",
-			"description is a single line, ≤150 characters.",
+			"description is a single line, ≤200 characters.",
 			"at least one tag is required at creation.",
 			"the slug is derived from the title; keep titles filename-safe.",
 		},
@@ -83,13 +83,13 @@ var entities = []Descriptor{
 		Dir:  EpicsDir,
 		AuthoringFields: []FieldDoc{
 			{"status", "string", true, "One of: planning | in-progress | completed | archived.", "planning"},
-			{"description", "string", true, "One-line goal (≤150 chars); required.", "Replace the legacy ingest pipeline"},
+			{"description", "string", true, "One-line goal (≤200 chars); required.", "Replace the legacy ingest pipeline"},
 			{"priority", "string", false, "One of: high | medium | low.", "medium"},
 			{"tags", "list", false, "Topical tags.", "[infra]"},
 		},
 		Conventions: []string{
 			"epics are auto-numbered NN-<slug>; do not set the number yourself.",
-			"description is required (single line, ≤150 chars).",
+			"description is required (single line, ≤200 chars).",
 		},
 		Templates: []NamedTemplate{
 			{DefaultTemplate, "Standard epic scaffold: goal, why-it's-its-own-epic, out-of-scope.", epicBodyTemplate},

@@ -19,7 +19,7 @@ tskflwctl task new <title> [flags]
       --autonomy int         autonomy level 1-5 (default 3)
       --body string          override the default body scaffold
       --body-file string     read the body from a file, or - for stdin (replaces --body)
-      --description string   one-line description (<=150 chars)
+      --description string   one-line description (<=200 chars)
       --effort string        effort estimate (default "Unknown")
       --epic string          epic id (required)
   -h, --help                 help for new

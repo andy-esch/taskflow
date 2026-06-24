@@ -1145,7 +1145,7 @@
         },
         "description": {
           "type": "string",
-          "description": "one-line summary (\u003c=150 chars)"
+          "description": "one-line summary (\u003c=200 chars)"
         },
         "effort": {
           "type": "string",
