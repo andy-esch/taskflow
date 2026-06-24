@@ -2,15 +2,13 @@ package render
 
 import (
 	"fmt"
-	"image/color"
 	"io"
 	"strings"
 
-	"charm.land/bubbles/v2/progress"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/progressbar"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
@@ -119,34 +117,16 @@ func (s Style) Green(t string) string { return s.wrap(ansiGreen, t) }
 func (s Style) Red(t string) string   { return s.wrap(ansiRed, t) }
 func (s Style) Warn(t string) string  { return s.wrap(ansiYellow, t) }
 
-// neonBar is the 80s-synthwave fill gradient for the rollup bars: neon purple →
-// cyan → pink. Keep in sync with the TUI's copy (tui/style.go) so both surfaces
-// match.
-var neonBar = []color.Color{
-	lipgloss.Color("#b026ff"), // neon purple
-	lipgloss.Color("#00e5ff"), // neon cyan
-	lipgloss.Color("#ff2ec4"), // neon pink
-}
-
-// Bar renders a width-char progress bar for pct (0–100) via the bubbles v2
-// progress component. The fill is the 80s-neon gradient (neonBar) anchored to the
-// full width, so the fill's reach reads as progress; the hue is decorative — the
-// discrete completion tier still shows in the % text beside the bar. The component
-// always emits lipgloss ANSI, so when styling is off (piped / --json / tests) we
-// strip it back to plain glyphs — keeping the porcelain contract byte-stable. Same
-// component (and gradient) the TUI uses.
+// Bar renders a width-char progress bar for pct (0–100) via the shared progressbar
+// package (same constructor + neon gradient the TUI's miniBar uses, so the two
+// surfaces can't drift). The bar always emits lipgloss ANSI, so when styling is off
+// (piped / --json / tests) we strip it back to plain glyphs — keeping the porcelain
+// contract byte-stable.
 func (s Style) Bar(pct, width int) string {
 	if width <= 0 {
 		width = 10
 	}
-	p := progress.New(
-		progress.WithWidth(width),
-		progress.WithoutPercentage(),          // callers render the % separately
-		progress.WithFillCharacters('█', '░'), // non-half-block ⇒ one color per cell
-		progress.WithColors(neonBar...),
-	)
-	p.EmptyColor = lipgloss.Color("8") // dim gray unfilled track, lets the neon fill pop
-	out := p.ViewAs(float64(pct) / 100)
+	out := progressbar.Render(pct, width)
 	if !s.on {
 		return ansi.Strip(out)
 	}

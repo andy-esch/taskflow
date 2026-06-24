@@ -92,7 +92,7 @@ func newTaskNewCmd(app *App) *cobra.Command {
 			if p.Next || p.Start {
 				desc, err := app.fillText(p.Description,
 					"--description is required for a --next/--start task",
-					"Description (one line, ≤200 chars)", "what & why")
+					fmt.Sprintf("Description (one line, ≤%d chars)", domain.MaxDescriptionLen), "what & why")
 				if err != nil {
 					return err
 				}
@@ -119,7 +119,7 @@ func newTaskNewCmd(app *App) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&p.Epic, "epic", "", "epic id (required)")
-	cmd.Flags().StringVar(&p.Description, "description", "", "one-line description (<=200 chars)")
+	cmd.Flags().StringVar(&p.Description, "description", "", fmt.Sprintf("one-line description (<=%d chars)", domain.MaxDescriptionLen))
 	cmd.Flags().StringVar(&p.Effort, "effort", "Unknown", "effort estimate")
 	cmd.Flags().StringVar(&p.Priority, "priority", "medium", "high|medium|low")
 	cmd.Flags().IntVar(&p.Tier, "tier", 3, "tier 1-5")
@@ -288,7 +288,7 @@ func newTaskSetCmd(app *App) *cobra.Command {
 			return reportTaskMutation(app, task, "", "updated", "would update")
 		},
 	}
-	cmd.Flags().StringVar(&description, "description", "", "one-line description (<=200 chars)")
+	cmd.Flags().StringVar(&description, "description", "", fmt.Sprintf("one-line description (<=%d chars)", domain.MaxDescriptionLen))
 	cmd.Flags().StringVar(&priority, "priority", "", "high|medium|low")
 	cmd.Flags().StringVar(&epic, "epic", "", "epic id")
 	cmd.Flags().StringVar(&effort, "effort", "", "effort estimate")

@@ -64,16 +64,16 @@ func newSchemaCmd(app *App) *cobra.Command {
 }
 
 // runJSONSchema emits the Draft 2020-12 JSON Schema for every --json envelope, so
-// an agent can validate the tool's machine output against it.
+// an agent can validate the tool's machine output against it. NOT paged — it's
+// machine output, consistent with `--json` (which the pager gate excludes); only
+// the human `schema` / `schema <kind>` docs page.
 func runJSONSchema(app *App) error {
 	schema, err := render.JSONSchema()
 	if err != nil {
 		return err
 	}
-	return app.paged(func(w io.Writer) error {
-		_, err := w.Write(append(schema, '\n'))
-		return err
-	})
+	_, err = app.Out.Write(append(schema, '\n'))
+	return err
 }
 
 // runSchemaContract assembles the global contract from the domain enums/registry

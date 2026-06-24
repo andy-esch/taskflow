@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: 'Cleanup from the v2 review: derive the description-cap strings from MaxDescriptionLen (kill the 9-place drift), decide schema --json-schema paging, and dedup the TUI/CLI bar constructors.'
 effort: Unknown
@@ -10,6 +10,8 @@ autonomy_level: 3
 tags: [tech-debt, cli]
 created: "2026-06-24"
 updated_at: "2026-06-24"
+started_at: "2026-06-24"
+completed_at: "2026-06-24"
 ---
 ## Objective
 
