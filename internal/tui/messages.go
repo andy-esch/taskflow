@@ -33,6 +33,12 @@ type editedMsg struct {
 	value string
 }
 
+// editorClosedMsg reports that the external $EDITOR (opened by `E`) has exited. A
+// nil err triggers a reload so any change shows; a non-nil err (the editor failed
+// to launch) flashes instead. The file is edited in place — the same live-reload
+// path as an external edit — so there's no slug or content to carry.
+type editorClosedMsg struct{ err error }
+
 // listLoadedMsg carries the result of an async entity-list load. kind tags which
 // entity tab it belongs to, so a load that finishes after the user has switched
 // tabs still lands in the right list. gen is the tab's load generation at fire

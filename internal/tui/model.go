@@ -17,6 +17,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/editor"
 	"github.com/andy-esch/taskflow/internal/listfilter"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
@@ -172,6 +173,17 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.flashErr = false
 		if m.edit.active {
 			m.edit.applied(msg.field, msg.value) // back to the picker, value refreshed
+		}
+		return m, m.reloadAll()
+
+	case editorClosedMsg:
+		// The external $EDITOR (`E`) exited. A launch failure flashes; otherwise the
+		// editor may have changed the file, so reload — each tab's cursor preserved by
+		// id. status==dir, so a frontmatter `status:` edit can't move the file; it'll
+		// show as misfiled on reload, exactly as the CLI's `task edit` flags it.
+		if msg.err != nil {
+			m.flash, m.flashErr = "editor: "+msg.err.Error(), true
+			return m, nil
 		}
 		return m, m.reloadAll()
 
@@ -414,6 +426,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.edit.open(t)
 		}
 		return m, nil
+	case key.Matches(msg, keys.OpenEditor):
+		return m.openInEditor()
 	case key.Matches(msg, keys.RawToggle):
 		m.detail.toggleMode() // raw ⇄ pretty markdown (cached, no recompile)
 		return m, nil
@@ -713,6 +727,26 @@ func (m Model) yank(text, label string) (tea.Model, tea.Cmd) {
 	}
 	m.flash, m.flashErr = fmt.Sprintf("copied %s: %s", label, text), false
 	return m, copyToClipboard(text)
+}
+
+// openInEditor suspends the TUI and opens the current selection's file in the
+// user's $EDITOR: tea.ExecProcess releases the terminal for the editor, then
+// restores it. It edits the file directly rather than through core — the same
+// path as editing it in another terminal, which the fsnotify watcher already
+// handles — and reloads on return (via editorClosedMsg) so the change shows at
+// once, instant even when the watcher is off (the debounce coalesces the
+// duplicate fs event). It works on any entity (tasks/epics/audits) and from
+// either pane, since it acts on the selected row's path.
+func (m Model) openInEditor() (tea.Model, tea.Cmd) {
+	path := m.selectedPath()
+	if path == "" {
+		m.flash, m.flashErr = "nothing to edit", true
+		return m, nil
+	}
+	cmd := editor.Command(editor.Resolve(), path)
+	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return editorClosedMsg{err: err}
+	})
 }
 
 func (m Model) entityNames() []string {
@@ -1221,7 +1255,7 @@ func (m Model) footer() string {
 	if m.focus == focusDetail && (m.detail.finding() || m.detail.findActive()) {
 		return truncate(m.detail.findStatus(), m.width)
 	}
-	hints := ": cmd · / filter · m move · e edit · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
+	hints := ": cmd · / filter · m move · e edit · E editor · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
 	if m.focus == focusDetail {
 		hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc back · q quit"
 		if !m.twoPane {
