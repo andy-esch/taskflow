@@ -1065,7 +1065,9 @@ func TestTaskFilterValueIncludesTags(t *testing.T) {
 }
 
 func TestModel_HelpOverlayTogglesAndFloats(t *testing.T) {
-	m := loaded(t, 120, 40)
+	// Short enough that the focus-filtered help still overflows its box, so j/k
+	// scrolling is exercised (context filtering hides the inactive pane's keys).
+	m := loaded(t, 120, 24)
 	tm, _ := m.Update(press("?"))
 	m = tm.(Model)
 	if !m.showHelp {
@@ -1104,14 +1106,16 @@ func TestModel_HelpScrollRevealsTail(t *testing.T) {
 	m := loaded(t, 100, 14) // too short for the full help content
 	tm, _ := m.Update(press("?"))
 	m = tm.(Model)
-	if v := ansi.Strip(m.View().Content); strings.Contains(v, "switch bucket") {
+	// "force-quit" is the last row of the now-last Global section (Global sorts
+	// after the active pane's keys and Notes), so it's the tail to scroll to.
+	if v := ansi.Strip(m.View().Content); strings.Contains(v, "force-quit") {
 		t.Skip("terminal tall enough to show the tail without scrolling")
 	}
-	for i := 0; i < len(helpLines()); i++ { // scroll past the clamp
+	for i := 0; i < len(helpLines(m.focus)); i++ { // scroll past the clamp
 		tm, _ = m.Update(press("j"))
 		m = tm.(Model)
 	}
-	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "switch bucket") {
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "force-quit") {
 		t.Errorf("scrolling should reveal the last help entries:\n%s", v)
 	}
 	// The layout invariant holds while scrolled.

@@ -65,12 +65,40 @@ var (
 	helpKeyStyle = lipgloss.NewStyle().Bold(true)
 )
 
-// helpLines builds the overlay's content lines (heading, sections, aligned
-// key→desc rows). Shared by helpBox (render) and the model's scroll clamp.
-func helpLines() []string {
-	// Widest key column across all sections → aligned descriptions.
-	keyW := 0
+// helpSectionsFor orders the panel by relevance to where you are: the active
+// pane's keys first (List on the list, Detail in the detail pane), general Notes
+// next, and Global LAST — global keys work everywhere, so they're the best-known
+// and least in need of surfacing in a context panel. The inactive pane's section
+// is hidden, so `?` shows what actually works right now.
+func helpSectionsFor(f focus) []helpSection {
+	byTitle := make(map[string]helpSection, len(helpSections))
 	for _, s := range helpSections {
+		byTitle[s.title] = s
+	}
+	out := make([]helpSection, 0, 3)
+	add := func(title string) {
+		if s, ok := byTitle[title]; ok {
+			out = append(out, s)
+		}
+	}
+	if f == focusDetail {
+		add("Detail")
+	} else {
+		add("List")
+	}
+	add("Notes")
+	add("Global")
+	return out
+}
+
+// helpLines builds the overlay's content lines (heading, sections, aligned
+// key→desc rows) for the current focus. Shared by helpBox (render) and the model's
+// scroll clamp, so both window the SAME content.
+func helpLines(f focus) []string {
+	sections := helpSectionsFor(f)
+	// Widest key column across the shown sections → aligned descriptions.
+	keyW := 0
+	for _, s := range sections {
 		for _, e := range s.entries {
 			if w := lipgloss.Width(e.keys); w > keyW {
 				keyW = w
@@ -78,7 +106,7 @@ func helpLines() []string {
 		}
 	}
 	lines := []string{helpHeading.Render("Keys")}
-	for _, s := range helpSections {
+	for _, s := range sections {
 		lines = append(lines, "", dim(s.title))
 		for _, e := range s.entries {
 			pad := strings.Repeat(" ", max(keyW-lipgloss.Width(e.keys), 0))
@@ -92,8 +120,8 @@ func helpLines() []string {
 // When the content is taller than the box, scroll (clamped here, not in the
 // model — only render knows the box height) picks the visible window; j/k
 // scroll while the overlay is open.
-func helpBox(maxW, maxH, scroll int) string {
-	lines := helpLines()
+func helpBox(maxW, maxH, scroll int, f focus) string {
+	lines := helpLines(f)
 	const frameH = 2 // top+bottom border rows
 	if innerH := maxH - frameH; innerH > 0 && len(lines) > innerH {
 		maxScroll := len(lines) - innerH
