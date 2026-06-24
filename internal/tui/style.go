@@ -59,6 +59,13 @@ func fg(c theme.Color, s string) string {
 
 func dim(s string) string { return dimStyle.Render(s) }
 
+// osc8 wraps s in an OSC 8 terminal hyperlink to url, so supporting terminals make
+// it click-to-open (they typically underline it, which is the affordance). The TUI
+// doesn't capture the mouse, so clicks reach the terminal, not the app.
+func osc8(s, url string) string {
+	return "\x1b]8;;" + url + "\x1b\\" + s + "\x1b]8;;\x1b\\"
+}
+
 // miniBar renders the epic rollup bar (epic-list rows, epic-detail line) via the
 // shared progressbar package — same constructor + neon palette the CLI status bar
 // uses, so the two surfaces can't drift. The % text beside the bar carries the

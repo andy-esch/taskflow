@@ -1037,6 +1037,7 @@ func (m Model) View() tea.View {
 		// negative border dimensions → a broken oversized frame. Wait for size.
 		v := tea.NewView("loading…")
 		v.AltScreen = true
+		v.WindowTitle = m.windowTitle()
 		return v
 	}
 	// Hard-clamp the body to its budget so the tab strip and footer (the chrome)
@@ -1047,7 +1048,18 @@ func (m Model) View() tea.View {
 	full := lipgloss.JoinVertical(lipgloss.Left, m.tabStrip(), body, m.footer())
 	v := tea.NewView(lipgloss.NewStyle().MaxWidth(m.width).MaxHeight(m.height).Render(full))
 	v.AltScreen = true
+	v.WindowTitle = m.windowTitle()
 	return v
+}
+
+// windowTitle is the terminal window/tab title (tea.View.WindowTitle): the app
+// name plus the current selection (or the active tab when nothing's selected), so
+// the entity you're on shows up in the terminal's tab bar.
+func (m Model) windowTitle() string {
+	if id := m.selectedID(); id != "" {
+		return "tskflwctl · " + id
+	}
+	return "tskflwctl · " + m.cur().name
 }
 
 // bodyView renders the pane area, floating the topmost active modal (help/action/
@@ -1135,6 +1147,12 @@ func (m Model) detailPaneView() string {
 	// would wrap to a second row, growing the pane past its budget and clipping
 	// its bottom border (the truncate discipline every Join input must follow).
 	title := titleStyle.Render(truncate(m.detailTitle(), max1(m.detail.width)))
+	// Make the title click-to-open the entity's file (OSC 8) — only when content is
+	// loaded, so it points at a real path. The escape adds no display width, so the
+	// truncate/pane sizing above is unaffected.
+	if p := m.detail.path(); p != "" {
+		title = osc8(title, "file://"+p)
+	}
 	content := lipgloss.JoinVertical(lipgloss.Left, title, m.detail.View())
 	return m.pane(focusDetail, content, m.detailOuterW)
 }

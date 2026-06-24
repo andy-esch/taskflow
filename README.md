@@ -237,7 +237,9 @@ jump back, `y`/`Y` to copy the selection's slug / file path to the system
 clipboard (a native tool — pbcopy/wl-copy/xclip — when available, else OSC 52 so
 it still works over SSH), `/`+`n`/`N` find-in-body when the
 detail is focused, `?` for the
-full keymap, `r` to refresh. It **live-reloads** via `fsnotify` — edits from
+full keymap, `r` to refresh. The detail pane's title is a **click-to-open link**
+(OSC 8) to the entity's file, and the terminal window/tab title tracks the current
+selection. It **live-reloads** via `fsnotify` — edits from
 your editor or a CLI `task move` in another terminal show up within ~200ms,
 cursor preserved. See
 [`planning/epics/18-tui-bubble-tea-interactive-planning-browser.md`](./planning/epics/18-tui-bubble-tea-interactive-planning-browser.md).

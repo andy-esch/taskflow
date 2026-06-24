@@ -23,6 +23,7 @@ import (
 // the pane (not the load Cmd) so it re-wraps on resize.
 type detailContent interface {
 	Title() string
+	Path() string // the entity's on-disk file path (for the clickable detail title)
 	meta(width int) string
 	rawBody() string
 }
@@ -159,6 +160,15 @@ func (d *detailPane) SetContent(c detailContent) {
 	}
 	d.hasContent = true
 	d.loading = false
+}
+
+// path returns the loaded entity's file path, or "" when there's no content (error
+// or empty pane) — so the title is linkified only when it points somewhere real.
+func (d detailPane) path() string {
+	if d.content == nil {
+		return ""
+	}
+	return d.content.Path()
 }
 
 // SetError shows a per-item load error in the pane (keeps the browser alive).
@@ -381,6 +391,7 @@ type taskDetail struct {
 }
 
 func (d taskDetail) Title() string     { return d.t.Slug }
+func (d taskDetail) Path() string      { return d.t.Path }
 func (d taskDetail) rawBody() string   { return d.body }
 func (d taskDetail) meta(w int) string { return renderTaskMeta(d.t, w) }
 
@@ -415,6 +426,7 @@ type epicDetail struct {
 }
 
 func (d epicDetail) Title() string     { return d.e.ID }
+func (d epicDetail) Path() string      { return d.e.Path }
 func (d epicDetail) rawBody() string   { return d.body }
 func (d epicDetail) meta(w int) string { return renderEpicMeta(d.e, d.tasks, w) }
 
@@ -468,6 +480,7 @@ type auditDetail struct {
 }
 
 func (d auditDetail) Title() string     { return d.a.Slug }
+func (d auditDetail) Path() string      { return d.a.Path }
 func (d auditDetail) rawBody() string   { return d.body }
 func (d auditDetail) meta(w int) string { return renderAuditMeta(d.a, w) }
 
