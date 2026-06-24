@@ -67,6 +67,17 @@ func TestModal_ForceQuitFromEachOverlay(t *testing.T) {
 	if _, cmd := m.Update(ctrlC()); !quitsApp(cmd) {
 		t.Error("ctrl+c must quit from the command palette")
 	}
+
+	// inline field editor (e)
+	m = loaded(t, 120, 40)
+	tm, _ = m.Update(press("e"))
+	m = tm.(Model)
+	if !m.edit.active {
+		t.Fatal("setup: e should open the inline editor")
+	}
+	if _, cmd := m.Update(ctrlC()); !quitsApp(cmd) {
+		t.Error("ctrl+c must quit from the inline editor")
+	}
 }
 
 // TestModal_CapturesKeysWhileActive pins overlay precedence: an active modal owns

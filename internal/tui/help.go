@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // helpEntry is one key→description row in the help overlay.
@@ -136,26 +135,17 @@ func helpBox(maxW, maxH, scroll int, f focus) string {
 // overlay composites fg centered over bg, leaving the surrounding bg visible (a
 // floating modal, not a blank replacement). bg must already be exactly
 // width×height cells (use lipgloss.Place to normalize before calling).
+//
+// It uses lipgloss v2 layer compositing: a fixed width×height canvas with the bg
+// layer at the origin and the fg layer centered on top (higher z). The canvas is
+// fixed-size, so fg is clipped to it and the output is always exactly
+// width×height — the contract the bodyView layout depends on.
 func overlay(bg, fg string, width, height int) string {
-	bgLines := strings.Split(bg, "\n")
-	fgLines := strings.Split(fg, "\n")
-	fgW := 0
-	for _, l := range fgLines {
-		if w := ansi.StringWidth(l); w > fgW {
-			fgW = w
-		}
-	}
-	top := max((height-len(fgLines))/2, 0)
-	left := max((width-fgW)/2, 0)
-	for i, fl := range fgLines {
-		row := top + i
-		if row < 0 || row >= len(bgLines) {
-			continue
-		}
-		fl += strings.Repeat(" ", max(fgW-ansi.StringWidth(fl), 0)) // pad to box width
-		leftPart := ansi.Cut(bgLines[row], 0, left)
-		rightPart := ansi.Cut(bgLines[row], left+fgW, width)
-		bgLines[row] = leftPart + fl + rightPart
-	}
-	return strings.Join(bgLines, "\n")
+	x := max((width-lipgloss.Width(fg))/2, 0)
+	y := max((height-lipgloss.Height(fg))/2, 0)
+	comp := lipgloss.NewCompositor(
+		lipgloss.NewLayer(bg),
+		lipgloss.NewLayer(fg).X(x).Y(y).Z(1),
+	)
+	return lipgloss.NewCanvas(width, height).Compose(comp).Render()
 }
