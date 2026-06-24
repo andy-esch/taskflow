@@ -27,6 +27,7 @@ var helpSections = []helpSection{
 		{"s / S", "cycle view: task status / audit bucket"},
 		{"m", "move — lifecycle (start/complete/defer/…); audits: close/reopen/defer"},
 		{"e", "edit task fields (description/priority/tags/effort/tier)"},
+		{"E", "open the whole file in $EDITOR (any entity; re-read on save)"},
 		{"f", "follow reference (task ⇄ epic)"},
 		{"ctrl+o", "jump back (follow history)"},
 		{"y / Y", "copy slug / file path to clipboard"},

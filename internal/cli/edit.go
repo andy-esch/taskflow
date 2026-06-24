@@ -3,12 +3,11 @@ package cli
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/editor"
 )
 
 // newTaskEditCmd is the human face of mutation: open the whole task file in the
@@ -55,7 +54,7 @@ func newTaskEditCmd(app *App) *cobra.Command {
 			if !app.Gate.On() {
 				return fmt.Errorf("%w: `task edit` needs an interactive terminal — use `task set` to change fields non-interactively", domain.ErrValidation)
 			}
-			task, changed, err := app.Svc.EditTask(slug, app.editViaEditor(resolveEditor()))
+			task, changed, err := app.Svc.EditTask(slug, app.editViaEditor(editor.Resolve()))
 			if err != nil {
 				return err
 			}
@@ -76,23 +75,12 @@ func newTaskEditCmd(app *App) *cobra.Command {
 	}
 }
 
-// resolveEditor picks the editor the way every unix tool does: $VISUAL, then
-// $EDITOR, then vi as the last-resort default.
-func resolveEditor() string {
-	for _, env := range []string{"VISUAL", "EDITOR"} {
-		if v := strings.TrimSpace(os.Getenv(env)); v != "" {
-			return v
-		}
-	}
-	return "vi"
-}
-
 // editViaEditor returns the edit callback the store drives: it writes the content
 // to a temp file, runs the editor on it inheriting the terminal, and returns the
 // saved bytes. On a prior parse error (a reopen) it prints the error first so the
-// loop explains itself. The editor string is split on spaces so $EDITOR="code -w"
-// works.
-func (app *App) editViaEditor(editor string) func(string, error) (string, error) {
+// loop explains itself. editor.Command splits prog on spaces so $EDITOR="code -w"
+// works — the same launch the TUI's `E` uses.
+func (app *App) editViaEditor(prog string) func(string, error) (string, error) {
 	return func(current string, prevErr error) (string, error) {
 		if prevErr != nil {
 			fmt.Fprintf(app.ErrOut, "%s %v\n%s\n",
@@ -112,11 +100,10 @@ func (app *App) editViaEditor(editor string) func(string, error) (string, error)
 		if err := f.Close(); err != nil {
 			return "", err
 		}
-		fields := strings.Fields(editor)
-		cmd := exec.Command(fields[0], append(fields[1:], name)...)
+		cmd := editor.Command(prog, name)
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = app.In, app.Out, app.ErrOut
 		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("%w: could not run editor %q: %v (set $EDITOR)", domain.ErrValidation, editor, err)
+			return "", fmt.Errorf("%w: could not run editor %q: %v (set $EDITOR)", domain.ErrValidation, prog, err)
 		}
 		edited, err := os.ReadFile(name)
 		return string(edited), err

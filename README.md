@@ -232,7 +232,9 @@ toggles raw). Vim-first keys: `ctrl+p` command palette (fuzzy-jump to any
 task/epic/audit or run a command), `:` command-jump, `/` filter (slug/desc/tags),
 `F` toggles the filter between fuzzy and substring,
 `o`/`O` sort, `s`/`S` status views, `[`/`]` tabs, `m` move (lifecycle:
-start/complete/defer/…), `f` to follow a reference (task ⇄ epic) with `ctrl+o` to
+start/complete/defer/…), `e` to edit a task's fields inline, `E` to open the
+whole file in `$EDITOR` (any entity; re-read on save via live-reload), `f` to
+follow a reference (task ⇄ epic) with `ctrl+o` to
 jump back, `y`/`Y` to copy the selection's slug / file path to the system
 clipboard (a native tool — pbcopy/wl-copy/xclip — when available, else OSC 52 so
 it still works over SSH), `/`+`n`/`N` find-in-body when the
