@@ -21,7 +21,7 @@ import (
 // (description) in a taller word-wrapped box below the list. Submit fires
 // Service.SetFields (the SAME validated write `task set` uses), so the TUI is a
 // third mutation face that adds no new validation path. Status is absent by design
-// (status==directory; that's the `a` action menu).
+// (status==directory; that's the `m` action menu).
 
 // fieldKind selects the widget an editable field uses.
 type fieldKind int

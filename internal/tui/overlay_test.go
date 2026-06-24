@@ -34,9 +34,9 @@ func TestModal_ForceQuitFromEachOverlay(t *testing.T) {
 		t.Error("ctrl+c must quit from the help overlay")
 	}
 
-	// action menu (a)
+	// action menu (m)
 	m = loaded(t, 120, 40)
-	tm, _ = m.Update(press("a"))
+	tm, _ = m.Update(press("m"))
 	m = tm.(Model)
 	if !m.action.active {
 		t.Fatal("setup: a should open the action menu")
@@ -56,6 +56,28 @@ func TestModal_ForceQuitFromEachOverlay(t *testing.T) {
 	if _, cmd := m.Update(ctrlC()); !quitsApp(cmd) {
 		t.Error("ctrl+c must quit from the follow picker")
 	}
+
+	// command palette (ctrl+p)
+	m = loaded(t, 120, 40)
+	tm, _ = m.Update(ctrlP())
+	m = tm.(Model)
+	if !m.palette.active {
+		t.Fatal("setup: ctrl+p should open the palette")
+	}
+	if _, cmd := m.Update(ctrlC()); !quitsApp(cmd) {
+		t.Error("ctrl+c must quit from the command palette")
+	}
+
+	// inline field editor (e)
+	m = loaded(t, 120, 40)
+	tm, _ = m.Update(press("e"))
+	m = tm.(Model)
+	if !m.edit.active {
+		t.Fatal("setup: e should open the inline editor")
+	}
+	if _, cmd := m.Update(ctrlC()); !quitsApp(cmd) {
+		t.Error("ctrl+c must quit from the inline editor")
+	}
 }
 
 // TestModal_CapturesKeysWhileActive pins overlay precedence: an active modal owns
@@ -63,7 +85,7 @@ func TestModal_ForceQuitFromEachOverlay(t *testing.T) {
 // action menu open, `]` (next-tab) must not switch tabs.
 func TestModal_CapturesKeysWhileActive(t *testing.T) {
 	m := loaded(t, 120, 40)
-	tm, _ := m.Update(press("a"))
+	tm, _ := m.Update(press("m"))
 	m = tm.(Model)
 	if !m.action.active {
 		t.Fatal("setup: a should open the action menu")
@@ -97,7 +119,7 @@ func TestModal_FallsThroughWhenNoneActive(t *testing.T) {
 // over the body (the bodyView modal loop), so View() shows the menu's content.
 func TestModal_BodyViewCompositesActiveOverlay(t *testing.T) {
 	m := loaded(t, 120, 40)
-	tm, _ := m.Update(press("a"))
+	tm, _ := m.Update(press("m"))
 	m = tm.(Model)
 	v := ansi.Strip(m.View().Content)
 	if !strings.Contains(v, "move alpha") {

@@ -10,9 +10,12 @@ import (
 // the DTOs + mappers here keeps render.go to the generic + list/show renderers.
 
 type taskJSON struct {
-	Slug        string   `json:"slug" jsonschema:"description=task identifier (filename without .md)"`
-	Status      string   `json:"status" jsonschema:"description=lifecycle status — equals the task's directory under tasks/"`
-	Epic        string   `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
+	Slug   string `json:"slug" jsonschema:"description=task identifier (filename without .md)"`
+	Status string `json:"status" jsonschema:"description=lifecycle status — equals the task's directory under tasks/"`
+	Epic   string `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
+	// The "<=200" cap can't be computed (struct tags are static literals) — the only
+	// hardcoded copy of domain.MaxDescriptionLen left. Kept honest by
+	// TestTaskJSONDescriptionTagMatchesCap; update both if the cap changes.
 	Description string   `json:"description,omitempty" jsonschema:"description=one-line summary (<=200 chars)"`
 	Effort      string   `json:"effort,omitempty" jsonschema:"description=free-form effort estimate"`
 	Tier        int      `json:"tier,omitempty" jsonschema:"description=importance 1 (highest) to 5 (lowest)"`

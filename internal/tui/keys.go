@@ -17,6 +17,7 @@ type keyMap struct {
 	FindPrev    key.Binding // N (detail: previous match)
 	ToggleFocus key.Binding // tab
 	Command     key.Binding // : → entity command-jump
+	Palette     key.Binding // ctrl+p → fuzzy command palette (jump to anything / run a command)
 	PrevTab     key.Binding // [ → previous entity tab
 	NextTab     key.Binding // ] → next entity tab
 	Sort        key.Binding // o → cycle sort column
@@ -24,7 +25,7 @@ type keyMap struct {
 	StatusView  key.Binding // s → cycle view (task status / audit bucket)
 	StatusRev   key.Binding // S → cycle view backward
 	FilterMode  key.Binding // F → toggle list filter: fuzzy ⇄ substring
-	Action      key.Binding // a → lifecycle action menu (tasks)
+	Action      key.Binding // m → lifecycle move menu (mirrors the CLI `move`/start/complete/…)
 	Edit        key.Binding // e → inline field editor (tasks)
 	RawToggle   key.Binding // R → raw ⇄ pretty markdown in the detail body
 	Follow      key.Binding // f → follow the selection's reference (task ⇄ epic)
@@ -48,6 +49,7 @@ var keys = keyMap{
 	FindPrev:    key.NewBinding(key.WithKeys("N")),
 	ToggleFocus: key.NewBinding(key.WithKeys("tab")),
 	Command:     key.NewBinding(key.WithKeys(":")),
+	Palette:     key.NewBinding(key.WithKeys("ctrl+p")),
 	PrevTab:     key.NewBinding(key.WithKeys("[")),
 	NextTab:     key.NewBinding(key.WithKeys("]")),
 	Sort:        key.NewBinding(key.WithKeys("o")),
@@ -55,7 +57,7 @@ var keys = keyMap{
 	StatusView:  key.NewBinding(key.WithKeys("s")),
 	StatusRev:   key.NewBinding(key.WithKeys("S")),
 	FilterMode:  key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "filter mode")),
-	Action:      key.NewBinding(key.WithKeys("a")),
+	Action:      key.NewBinding(key.WithKeys("m")),
 	Edit:        key.NewBinding(key.WithKeys("e")),
 	RawToggle:   key.NewBinding(key.WithKeys("R")),
 	Follow:      key.NewBinding(key.WithKeys("f")),

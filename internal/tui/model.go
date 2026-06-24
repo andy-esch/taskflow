@@ -41,16 +41,17 @@ type Model struct {
 	detailOuterW  int
 	paneOuterH    int
 
-	focus  focus
-	tabs   []*entityTab
-	active int
-	detail detailPane
-	cmd    commandBar
-	modals []modal // the ordered overlay registry (help, action, follow); see overlay.go
+	focus   focus
+	tabs    []*entityTab
+	active  int
+	detail  detailPane
+	cmd     commandBar
+	palette palette // the ctrl+p command palette (fuzzy launcher); see palette.go
+	modals  []modal // the ordered overlay registry (see overlay.go / defaultModals)
 
 	showHelp   bool       // the `?` keybinding overlay is open
 	helpScroll int        // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
-	action     actionMenu // the `a` lifecycle action menu (S4)
+	action     actionMenu // the `m` lifecycle action menu (S4)
 	follow     followMenu // the `f` reference picker (S6, epics → their tasks)
 	edit       editMenu   // the `e` inline field editor (task set with a GUI)
 	navStack   []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
@@ -71,7 +72,8 @@ func New(svc *core.Service) Model {
 		svc: svc, focus: focusList,
 		tabs: newEntityTabs(), active: 0,
 		detail: newDetailPane(theme.MarkdownStyleDark), cmd: newCommandBar(),
-		modals: defaultModals(),
+		palette: newPalette(),
+		modals:  defaultModals(),
 	}
 }
 
@@ -297,6 +299,9 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	cmd := routeToTab(msg.kind, tab.list.SetItems(msg.items))
 	tab.loaded = true
 	tab.problems = msg.problems
+	if m.palette.active {
+		m.palette.reindex(m.paletteIndex()) // a tab finished loading while the palette is open
+	}
 	// Resolve the cursor restore carried by THIS load (gen-matched above). Reading
 	// the per-message id — not a mutable tab slot two triggers share — means a
 	// dropped stale load can't apply a restore meant for another (M6). This load
@@ -337,7 +342,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	// Modal overlays (help, action, follow) take precedence in registry order: the
+	// Modal overlays take precedence in registry order (see defaultModals): the
 	// first active one owns the key. The markers are stateless and mutate the
 	// by-value model copy through &m (the "mutate the copy, return it" idiom), so a
 	// new overlay is one entry in defaultModals — no new guard block here. Input
@@ -403,7 +408,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case key.Matches(msg, keys.Edit):
-		// Inline field edit via SetFields — task-only (status stays in the `a`
+		// Inline field edit via SetFields — task-only (status stays in the `m`
 		// menu); a no-op on epics/audits, which have no SetFields path in core.
 		if t, ok := m.selectedTask(); ok {
 			m.edit.open(t)
@@ -424,6 +429,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.yank(m.selectedPath(), "path")
 	case key.Matches(msg, keys.Command):
 		return m, m.cmd.focus()
+	case key.Matches(msg, keys.Palette):
+		return m, m.openPalette()
 	case key.Matches(msg, keys.NextTab):
 		return m, m.switchTab((m.active + 1) % len(m.tabs))
 	case key.Matches(msg, keys.PrevTab):
@@ -746,6 +753,139 @@ func (m Model) commandOptions() []string {
 	return opts
 }
 
+// openPalette builds the candidate index from the loaded tabs, kicks off loads for
+// any tab not yet loaded (the index fills in via the reindex hook in
+// handleListLoaded while the palette is open), sizes the overlay, and focuses the
+// query.
+func (m *Model) openPalette() tea.Cmd {
+	var loads []tea.Cmd
+	for _, t := range m.tabs {
+		if !t.loaded {
+			loads = append(loads, t.reload(m.svc, ""))
+		}
+	}
+	w := min(max(m.width-8, 28), 64)
+	h := min(max(m.paneOuterH-4, 4), 16)
+	cmds := append(loads, m.palette.open(m.paletteIndex(), w, h))
+	return tea.Batch(cmds...)
+}
+
+// paletteIndex is the flat candidate set: every loaded entity (jump to it) plus
+// every `:` command word (dispatch it).
+func (m Model) paletteIndex() []paletteItem {
+	var items []paletteItem
+	for _, t := range m.tabs {
+		for _, it := range t.list.Items() {
+			ei, ok := it.(entityItem)
+			if !ok {
+				continue
+			}
+			items = append(items, paletteItem{
+				kind: palJump, ek: t.kind, id: ei.id(),
+				title: ei.id(), filter: ei.id() + " " + t.name,
+			})
+		}
+	}
+	for _, w := range m.paletteCommands() {
+		items = append(items, paletteItem{kind: palCommand, word: w, title: ":" + w, filter: w})
+	}
+	return items
+}
+
+// paletteCommands is the canonical command words for the palette: tab names, each
+// tab's view words, and the active tab's verbs. Unlike commandOptions (which feeds
+// `:` Tab-completion), it omits the short aliases (t/e/a, task/epic/audit) — in a
+// fuzzy list they'd surface as near-duplicate rows, the exact clutter the palette
+// exists to avoid.
+func (m Model) paletteCommands() []string {
+	seen := make(map[string]bool)
+	var out []string
+	add := func(w string) {
+		if w != "" && !seen[w] {
+			seen[w] = true
+			out = append(out, w)
+		}
+	}
+	for _, t := range m.tabs {
+		add(t.name)
+		for _, w := range t.viewWords() {
+			add(w)
+		}
+	}
+	for _, tr := range m.cur().transitions {
+		add(tr.verb)
+	}
+	return out
+}
+
+// handlePaletteKey drives the palette while open: Esc closes, Enter runs the
+// selection, ↑/↓ move the cursor, anything else edits the query (re-filtering on
+// each keystroke).
+func (m *Model) handlePaletteKey(msg tea.KeyPressMsg) tea.Cmd {
+	switch {
+	case key.Matches(msg, keys.Back):
+		m.palette.close()
+		return nil
+	case msg.String() == "enter":
+		it, ok := m.palette.list.SelectedItem().(paletteItem)
+		m.palette.close()
+		if !ok {
+			return nil
+		}
+		return m.runPaletteItem(it)
+	case msg.String() == "up" || msg.String() == "down":
+		var cmd tea.Cmd
+		m.palette.list, cmd = m.palette.list.Update(msg)
+		return cmd
+	default:
+		var cmd tea.Cmd
+		m.palette.input, cmd = m.palette.input.Update(msg)
+		m.palette.refilter()
+		return cmd
+	}
+}
+
+// runPaletteItem executes the chosen candidate: jump to an entity, or dispatch a
+// `:` command word.
+func (m *Model) runPaletteItem(it paletteItem) tea.Cmd {
+	switch it.kind {
+	case palJump:
+		m.pushLoc()
+		return m.jumpTo(it.ek, it.id)
+	case palCommand:
+		return m.runPaletteCommand(it.word)
+	}
+	return nil
+}
+
+// runPaletteCommand resolves a `:` word the same way dispatchCommand does (shared
+// predicates: tab match → view → transition), but reports failure with a flash
+// since the palette has no command-bar line to re-focus. A verb acts on the
+// underlying selected row, exactly like `:`.
+func (m *Model) runPaletteCommand(word string) tea.Cmd {
+	for i, t := range m.tabs {
+		if t.matches(word) {
+			return m.switchTab(i)
+		}
+	}
+	if view, i, ok := m.resolveView(word); ok {
+		return m.applyView(i, view)
+	}
+	if tr, ok := transitionFor(m.cur().transitions, word); ok {
+		id, _, ok := m.selectedLifecycle()
+		if !ok {
+			m.flash, m.flashErr = "select a row first to :"+word, true
+			return nil
+		}
+		if tr.destructive {
+			m.action.openConfirm(id, tr)
+			return nil
+		}
+		return m.cur().applyMove(m.svc, id, tr)
+	}
+	return nil
+}
+
 // --- interactive sort ---
 
 // applySortToCurrent reorders the active list under its current sort state,
@@ -936,7 +1076,7 @@ func (m Model) helpMaxScroll() int {
 	if innerH <= 0 {
 		return 0
 	}
-	return max(len(helpLines())-innerH, 0)
+	return max(len(helpLines(m.focus))-innerH, 0)
 }
 
 // renderBody is the pane layout: a loading note (or this tab's load error) until
@@ -1063,7 +1203,7 @@ func (m Model) footer() string {
 	if m.focus == focusDetail && (m.detail.finding() || m.detail.findActive()) {
 		return truncate(m.detail.findStatus(), m.width)
 	}
-	hints := ": cmd · / filter · a act · e edit · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
+	hints := ": cmd · / filter · m move · e edit · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
 	if m.focus == focusDetail {
 		hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc back · q quit"
 		if !m.twoPane {

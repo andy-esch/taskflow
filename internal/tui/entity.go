@@ -13,7 +13,7 @@ import (
 
 // entityKind identifies a browsable entity. The registry (newEntityTabs) is the
 // single place entities are declared, so adding Projects/ADRs/Research later is a
-// new entry here. Read/browse is keybinding-free; lifecycle (the `a` menu and `:`
+// new entry here. Read/browse is keybinding-free; lifecycle (the `m` menu and `:`
 // verbs) is declared per entity via its transition table + applyMove, so an entity
 // that wants lifecycle wires it in the registry rather than editing the reducer.
 type entityKind int
@@ -67,9 +67,9 @@ type entityTab struct {
 
 	// Lifecycle (registry-driven, S4/M10): the transitions this entity offers and
 	// the move that applies one. Tasks declare status transitions (svc.Move); audits
-	// declare bucket transitions (svc.MoveAudit); epics declare none. The `a` menu
+	// declare bucket transitions (svc.MoveAudit); epics declare none. The `m` menu
 	// and `:` verbs read these off the active tab, so lifecycle is no longer
-	// task-only plumbing in the reducer. nil transitions ⇒ no `a`/`:`-verb actions.
+	// task-only plumbing in the reducer. nil transitions ⇒ no `m`/`:`-verb actions.
 	transitions []transition
 	applyMove   func(svc *core.Service, id string, tr transition) tea.Cmd
 

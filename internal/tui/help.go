@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // helpEntry is one key→description row in the help overlay.
@@ -20,12 +19,13 @@ type helpSection struct {
 // with keys.go and the focus-routed handlers in model.go.
 var helpSections = []helpSection{
 	{"Global", []helpEntry{
+		{"ctrl+p", "command palette — fuzzy jump to anything / run a command"},
 		{": ", "command / jump (entity, status, or verb)"},
 		{"/", "filter the list (slug, desc, tags)"},
 		{"F", "filter mode: fuzzy ⇄ substring (default fuzzy)"},
 		{"o / O", "cycle sort column / reverse"},
 		{"s / S", "cycle view: task status / audit bucket"},
-		{"a", "task actions (start/complete/defer/…)"},
+		{"m", "move — lifecycle (start/complete/defer/…); audits: close/reopen/defer"},
 		{"e", "edit task fields (description/priority/tags/effort/tier)"},
 		{"f", "follow reference (task ⇄ epic)"},
 		{"ctrl+o", "jump back (follow history)"},
@@ -64,12 +64,40 @@ var (
 	helpKeyStyle = lipgloss.NewStyle().Bold(true)
 )
 
-// helpLines builds the overlay's content lines (heading, sections, aligned
-// key→desc rows). Shared by helpBox (render) and the model's scroll clamp.
-func helpLines() []string {
-	// Widest key column across all sections → aligned descriptions.
-	keyW := 0
+// helpSectionsFor orders the panel by relevance to where you are: the active
+// pane's keys first (List on the list, Detail in the detail pane), general Notes
+// next, and Global LAST — global keys work everywhere, so they're the best-known
+// and least in need of surfacing in a context panel. The inactive pane's section
+// is hidden, so `?` shows what actually works right now.
+func helpSectionsFor(f focus) []helpSection {
+	byTitle := make(map[string]helpSection, len(helpSections))
 	for _, s := range helpSections {
+		byTitle[s.title] = s
+	}
+	out := make([]helpSection, 0, 3)
+	add := func(title string) {
+		if s, ok := byTitle[title]; ok {
+			out = append(out, s)
+		}
+	}
+	if f == focusDetail {
+		add("Detail")
+	} else {
+		add("List")
+	}
+	add("Notes")
+	add("Global")
+	return out
+}
+
+// helpLines builds the overlay's content lines (heading, sections, aligned
+// key→desc rows) for the current focus. Shared by helpBox (render) and the model's
+// scroll clamp, so both window the SAME content.
+func helpLines(f focus) []string {
+	sections := helpSectionsFor(f)
+	// Widest key column across the shown sections → aligned descriptions.
+	keyW := 0
+	for _, s := range sections {
 		for _, e := range s.entries {
 			if w := lipgloss.Width(e.keys); w > keyW {
 				keyW = w
@@ -77,7 +105,7 @@ func helpLines() []string {
 		}
 	}
 	lines := []string{helpHeading.Render("Keys")}
-	for _, s := range helpSections {
+	for _, s := range sections {
 		lines = append(lines, "", dim(s.title))
 		for _, e := range s.entries {
 			pad := strings.Repeat(" ", max(keyW-lipgloss.Width(e.keys), 0))
@@ -91,8 +119,8 @@ func helpLines() []string {
 // When the content is taller than the box, scroll (clamped here, not in the
 // model — only render knows the box height) picks the visible window; j/k
 // scroll while the overlay is open.
-func helpBox(maxW, maxH, scroll int) string {
-	lines := helpLines()
+func helpBox(maxW, maxH, scroll int, f focus) string {
+	lines := helpLines(f)
 	const frameH = 2 // top+bottom border rows
 	if innerH := maxH - frameH; innerH > 0 && len(lines) > innerH {
 		maxScroll := len(lines) - innerH
@@ -107,26 +135,17 @@ func helpBox(maxW, maxH, scroll int) string {
 // overlay composites fg centered over bg, leaving the surrounding bg visible (a
 // floating modal, not a blank replacement). bg must already be exactly
 // width×height cells (use lipgloss.Place to normalize before calling).
+//
+// It uses lipgloss v2 layer compositing: a fixed width×height canvas with the bg
+// layer at the origin and the fg layer centered on top (higher z). The canvas is
+// fixed-size, so fg is clipped to it and the output is always exactly
+// width×height — the contract the bodyView layout depends on.
 func overlay(bg, fg string, width, height int) string {
-	bgLines := strings.Split(bg, "\n")
-	fgLines := strings.Split(fg, "\n")
-	fgW := 0
-	for _, l := range fgLines {
-		if w := ansi.StringWidth(l); w > fgW {
-			fgW = w
-		}
-	}
-	top := max((height-len(fgLines))/2, 0)
-	left := max((width-fgW)/2, 0)
-	for i, fl := range fgLines {
-		row := top + i
-		if row < 0 || row >= len(bgLines) {
-			continue
-		}
-		fl += strings.Repeat(" ", max(fgW-ansi.StringWidth(fl), 0)) // pad to box width
-		leftPart := ansi.Cut(bgLines[row], 0, left)
-		rightPart := ansi.Cut(bgLines[row], left+fgW, width)
-		bgLines[row] = leftPart + fl + rightPart
-	}
-	return strings.Join(bgLines, "\n")
+	x := max((width-lipgloss.Width(fg))/2, 0)
+	y := max((height-lipgloss.Height(fg))/2, 0)
+	comp := lipgloss.NewCompositor(
+		lipgloss.NewLayer(bg),
+		lipgloss.NewLayer(fg).X(x).Y(y).Z(1),
+	)
+	return lipgloss.NewCanvas(width, height).Compose(comp).Render()
 }

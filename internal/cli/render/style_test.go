@@ -100,6 +100,20 @@ func TestBar_ColoredIsGradient(t *testing.T) {
 	}
 }
 
+// TestBar_ColoredWidth pins the colored bar's exact display width: TestBar only
+// checks the stripped form, but status/epic-list tables align against the colored
+// (per-cell ANSI) output, so a width regression there would slip past it.
+func TestBar_ColoredWidth(t *testing.T) {
+	st := NewStyle(true)
+	for _, w := range []int{1, 4, 8, 10, 20} {
+		for _, pct := range []int{-5, 0, 1, 33, 50, 99, 100, 150} {
+			if got := ansi.StringWidth(st.Bar(pct, w)); got != w {
+				t.Errorf("colored Bar(%d, %d) display width = %d, want %d", pct, w, got, w)
+			}
+		}
+	}
+}
+
 func TestWriteTable_AlignsColoredCells(t *testing.T) {
 	st := NewStyle(true)
 	var b strings.Builder

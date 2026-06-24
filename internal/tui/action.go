@@ -114,10 +114,12 @@ func (a actionMenu) view(maxW, maxH int) string {
 	slug := truncate(a.slug, max(maxW-8, 12))
 	if a.confirm {
 		tr := a.selected()
-		body := fg(theme.ColorRed, tr.verb+"?") + "\n\n" + slug + dim(" → "+tr.to)
-		box := dangerBorder.Render(body)
-		hint := dim("y confirm · n/esc cancel")
-		return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, hint), maxW, maxH)
+		q := fg(theme.ColorRed, tr.verb+"?") + " " + slug + dim(" → "+tr.to)
+		// Put the y/n prompt INSIDE the danger box and bold the keys — a dim hint
+		// below the box was easy to miss ("is it waiting on me?").
+		prompt := helpKeyStyle.Render("y") + " confirm   " + helpKeyStyle.Render("n") + "/" + helpKeyStyle.Render("esc") + " cancel"
+		box := dangerBorder.Render(q + "\n\n" + prompt)
+		return clampBox(box, maxW, maxH)
 	}
 	var b strings.Builder
 	b.WriteString(actionHeading.Render("move " + slug))

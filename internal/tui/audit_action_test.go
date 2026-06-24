@@ -25,7 +25,7 @@ func auditsTab(t *testing.T, m Model) Model {
 	return m
 }
 
-// TestModel_ActionMenuMovesAudit pins the M10 win: the registry-driven `a` menu
+// TestModel_ActionMenuMovesAudit pins the M10 win: the registry-driven `m` menu
 // now drives audit lifecycle (close/reopen/defer), not just tasks. Closing an
 // open audit with no findings relocates it to the closed bucket on disk.
 func TestModel_ActionMenuMovesAudit(t *testing.T) {
@@ -34,7 +34,7 @@ func TestModel_ActionMenuMovesAudit(t *testing.T) {
 	if m.selectedID() != "2026-06-01-thing" {
 		t.Fatalf("setup: want the seeded audit selected, got %q", m.selectedID())
 	}
-	tm, _ := m.Update(press("a"))
+	tm, _ := m.Update(press("m"))
 	m = tm.(Model)
 	if !m.action.active {
 		t.Fatal("a should open the action menu on an audit")
@@ -107,7 +107,7 @@ func TestModel_AuditCloseBlockedByOpenFindings(t *testing.T) {
 		t.Fatalf("setup: want the open-findings audit selected, got %q", m.selectedID())
 	}
 
-	tm, _ = m.Update(press("a"))
+	tm, _ = m.Update(press("m"))
 	m = cursorTo(t, tm.(Model), "close")
 	tm, cmd := m.Update(press("enter"))
 	m = tm.(Model)
