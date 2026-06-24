@@ -1203,7 +1203,7 @@ func (m Model) footer() string {
 	if m.focus == focusDetail && (m.detail.finding() || m.detail.findActive()) {
 		return truncate(m.detail.findStatus(), m.width)
 	}
-	hints := ": cmd · / filter · a act · e edit · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
+	hints := ": cmd · / filter · m move · e edit · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
 	if m.focus == focusDetail {
 		hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc back · q quit"
 		if !m.twoPane {
