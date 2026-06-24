@@ -106,3 +106,26 @@ func TestPalette_FilterNarrows(t *testing.T) {
 		t.Errorf("the typed target %q should remain in the filtered candidates", target)
 	}
 }
+
+// TestPalette_DropsCommandAliases: the palette indexes canonical command words
+// (tasks/epics/audits + views + verbs) but NOT the `:` short aliases (t/e/a,
+// task/epic/audit), which would clutter the fuzzy list with near-duplicates.
+func TestPalette_DropsCommandAliases(t *testing.T) {
+	m := loaded(t, 80, 24)
+	aliases := map[string]bool{"t": true, "task": true, "e": true, "epic": true, "a": true, "audit": true}
+	canonical := false
+	for _, it := range m.paletteIndex() {
+		if it.kind != palCommand {
+			continue
+		}
+		if aliases[it.word] {
+			t.Errorf("palette must not index the short alias %q", it.word)
+		}
+		if it.word == "tasks" {
+			canonical = true
+		}
+	}
+	if !canonical {
+		t.Error("palette should still index the canonical 'tasks' command")
+	}
+}

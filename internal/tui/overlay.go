@@ -21,8 +21,8 @@ type modal interface {
 }
 
 // defaultModals is the overlay registry in precedence order — help, action menu,
-// follow picker, then the inline field editor. The first active modal owns the key
-// and the floated box. Adding one is a struct + an entry here (M14).
+// follow picker, inline field editor, then the command palette. The first active
+// modal owns the key and the floated box. Adding one is a struct + an entry here (M14).
 func defaultModals() []modal {
 	return []modal{helpModal{}, actionModal{}, followModal{}, editModal{}, paletteModal{}}
 }

@@ -47,7 +47,7 @@ type Model struct {
 	detail  detailPane
 	cmd     commandBar
 	palette palette // the ctrl+p command palette (fuzzy launcher); see palette.go
-	modals  []modal // the ordered overlay registry (help, action, follow); see overlay.go
+	modals  []modal // the ordered overlay registry (see overlay.go / defaultModals)
 
 	showHelp   bool       // the `?` keybinding overlay is open
 	helpScroll int        // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
@@ -342,7 +342,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	// Modal overlays (help, action, follow) take precedence in registry order: the
+	// Modal overlays take precedence in registry order (see defaultModals): the
 	// first active one owns the key. The markers are stateless and mutate the
 	// by-value model copy through &m (the "mutate the copy, return it" idiom), so a
 	// new overlay is one entry in defaultModals — no new guard block here. Input
@@ -786,10 +786,36 @@ func (m Model) paletteIndex() []paletteItem {
 			})
 		}
 	}
-	for _, w := range m.commandOptions() {
+	for _, w := range m.paletteCommands() {
 		items = append(items, paletteItem{kind: palCommand, word: w, title: ":" + w, filter: w})
 	}
 	return items
+}
+
+// paletteCommands is the canonical command words for the palette: tab names, each
+// tab's view words, and the active tab's verbs. Unlike commandOptions (which feeds
+// `:` Tab-completion), it omits the short aliases (t/e/a, task/epic/audit) — in a
+// fuzzy list they'd surface as near-duplicate rows, the exact clutter the palette
+// exists to avoid.
+func (m Model) paletteCommands() []string {
+	seen := make(map[string]bool)
+	var out []string
+	add := func(w string) {
+		if w != "" && !seen[w] {
+			seen[w] = true
+			out = append(out, w)
+		}
+	}
+	for _, t := range m.tabs {
+		add(t.name)
+		for _, w := range t.viewWords() {
+			add(w)
+		}
+	}
+	for _, tr := range m.cur().transitions {
+		add(tr.verb)
+	}
+	return out
 }
 
 // handlePaletteKey drives the palette while open: Esc closes, Enter runs the
