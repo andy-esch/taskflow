@@ -51,7 +51,7 @@ type Model struct {
 
 	showHelp   bool       // the `?` keybinding overlay is open
 	helpScroll int        // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
-	action     actionMenu // the `a` lifecycle action menu (S4)
+	action     actionMenu // the `m` lifecycle action menu (S4)
 	follow     followMenu // the `f` reference picker (S6, epics → their tasks)
 	edit       editMenu   // the `e` inline field editor (task set with a GUI)
 	navStack   []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
@@ -408,7 +408,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case key.Matches(msg, keys.Edit):
-		// Inline field edit via SetFields — task-only (status stays in the `a`
+		// Inline field edit via SetFields — task-only (status stays in the `m`
 		// menu); a no-op on epics/audits, which have no SetFields path in core.
 		if t, ok := m.selectedTask(); ok {
 			m.edit.open(t)

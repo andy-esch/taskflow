@@ -2,7 +2,7 @@ package tui
 
 import tea "charm.land/bubbletea/v2"
 
-// modal is a floating overlay layer (the `?` help panel, the `a` action menu, the
+// modal is a floating overlay layer (the `?` help panel, the `m` action menu, the
 // `f` follow picker): while active it owns every key and floats a box over the
 // body. The reducer loops one ordered registry of these (Model.modals) instead of
 // an if-chain of `m.X.active` guards plus a parallel bodyView switch, so a NEW
@@ -63,7 +63,7 @@ func (helpModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 
 func (helpModal) view(m *Model, w, h int) string { return helpBox(w, h, m.helpScroll, m.focus) }
 
-// actionModal is the `a` lifecycle action menu: vim-select a transition, Enter
+// actionModal is the `m` lifecycle action menu: vim-select a transition, Enter
 // applies it, a destructive choice gates on y/n.
 type actionModal struct{}
 

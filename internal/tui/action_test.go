@@ -75,7 +75,7 @@ func TestModel_SuccessfulMoveKeepsSuccessFlash(t *testing.T) {
 	if m.selectedID() != "alpha" {
 		t.Fatalf("setup: want alpha selected, got %q", m.selectedID())
 	}
-	tm, _ := m.Update(press("a"))
+	tm, _ := m.Update(press("m"))
 	m = tm.(Model)
 	m = cursorTo(t, m, "complete")
 	tm, cmd := m.Update(press("enter"))
@@ -102,7 +102,7 @@ func TestModel_ActionMenuMovesTask(t *testing.T) {
 	if m.selectedID() != "alpha" {
 		t.Fatalf("setup: want alpha selected, got %q", m.selectedID())
 	}
-	tm, _ := m.Update(press("a"))
+	tm, _ := m.Update(press("m"))
 	m = tm.(Model)
 	if !m.action.active {
 		t.Fatal("a should open the action menu on a task")
@@ -138,7 +138,7 @@ func TestModel_ActionMenuMovesTask(t *testing.T) {
 // opens a y/n confirm instead of applying; n returns to the menu, y fires the move.
 func TestModel_ActionMenuConfirmGatesDeprecate(t *testing.T) {
 	m := loaded(t, 120, 40)
-	tm, _ := m.Update(press("a"))
+	tm, _ := m.Update(press("m"))
 	m = cursorTo(t, tm.(Model), "deprecate")
 	tm, cmd := m.Update(press("enter"))
 	m = tm.(Model)
@@ -211,7 +211,7 @@ func TestModel_ActionMenuTasksOnly(t *testing.T) {
 	if m.cur().name != "epics" {
 		t.Fatalf("setup: expected epics, got %q", m.cur().name)
 	}
-	tm, _ = m.Update(press("a"))
+	tm, _ = m.Update(press("m"))
 	m = tm.(Model)
 	if m.action.active {
 		t.Error("the action menu is a no-op on non-task entities")
@@ -242,7 +242,7 @@ func TestModel_ActionMenuFitsTerminal(t *testing.T) {
 		{120, 40}, {100, 24}, {80, 20}, {40, 12}, {24, 8},
 	} {
 		m := loaded(t, d.w, d.h)
-		tm, _ := m.Update(press("a"))
+		tm, _ := m.Update(press("m"))
 		m = tm.(Model)
 		lines := strings.Split(m.View().Content, "\n")
 		if len(lines) != d.h {

@@ -26,7 +26,7 @@ var helpSections = []helpSection{
 		{"F", "filter mode: fuzzy ⇄ substring (default fuzzy)"},
 		{"o / O", "cycle sort column / reverse"},
 		{"s / S", "cycle view: task status / audit bucket"},
-		{"a", "task actions (start/complete/defer/…)"},
+		{"m", "move — lifecycle (start/complete/defer/…); audits: close/reopen/defer"},
 		{"e", "edit task fields (description/priority/tags/effort/tier)"},
 		{"f", "follow reference (task ⇄ epic)"},
 		{"ctrl+o", "jump back (follow history)"},
