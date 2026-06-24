@@ -84,13 +84,14 @@ func TestStatus_IsActive(t *testing.T) {
 }
 
 // TestValidateDescription_CountsCharacters pins the byte→rune cap change: a
-// multibyte description must not hit the 150 cap early just for being UTF-8.
+// multibyte description must not hit the cap early just for being UTF-8. The
+// counts are derived from MaxDescriptionLen so they track the cap automatically.
 func TestValidateDescription_CountsCharacters(t *testing.T) {
-	cjk := strings.Repeat("情", 140) // 140 chars, 420 bytes
+	cjk := strings.Repeat("情", MaxDescriptionLen) // at the cap in runes, 3× in bytes
 	if err := ValidateDescription(cjk); err != nil {
-		t.Errorf("140 CJK chars should pass the 150-char cap, got %v", err)
+		t.Errorf("%d CJK chars (at the rune cap) should pass, got %v", MaxDescriptionLen, err)
 	}
-	if err := ValidateDescription(strings.Repeat("a", 151)); err == nil {
-		t.Error("151 chars should fail the cap")
+	if err := ValidateDescription(strings.Repeat("a", MaxDescriptionLen+1)); err == nil {
+		t.Errorf("%d chars should fail the cap", MaxDescriptionLen+1)
 	}
 }

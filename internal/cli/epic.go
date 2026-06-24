@@ -51,7 +51,7 @@ func newEpicNewCmd(app *App) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&p.Description, "description", "", "one-line description (required, <=150 chars)")
+	cmd.Flags().StringVar(&p.Description, "description", "", "one-line description (required, <=200 chars)")
 	cmd.Flags().StringVar(&p.Status, "status", "planning", "epic status: planning|in-progress|completed|archived")
 	cmd.Flags().StringVar(&p.Priority, "priority", "medium", "high|medium|low")
 	cmd.Flags().StringSliceVar(&p.Tags, "tags", nil, "comma-separated tags")
@@ -143,7 +143,7 @@ func newEpicShowCmd(app *App) *cobra.Command {
 				return render.EpicShowJSON(app.Out, epic, tasks, body)
 			}
 			return app.paged(func(w io.Writer) error {
-				return render.EpicShowHuman(w, app.Style, epic, tasks, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
+				return render.EpicShowHuman(w, app.Style, epic, tasks, render.RenderBody(app.Style, body, app.markdownStyle, raw))
 			})
 		},
 	}

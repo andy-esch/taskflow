@@ -17,7 +17,7 @@ tskflwctl epic new <title> [flags]
 ```
       --body string          override the default body scaffold
       --body-file string     read the body from a file, or - for stdin (replaces --body)
-      --description string   one-line description (required, <=150 chars)
+      --description string   one-line description (required, <=200 chars)
   -h, --help                 help for new
       --priority string      high|medium|low (default "medium")
       --status string        epic status: planning|in-progress|completed|archived (default "planning")

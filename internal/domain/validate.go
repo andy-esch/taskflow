@@ -9,7 +9,7 @@ import (
 )
 
 // MaxDescriptionLen is the frontmatter description cap, in characters.
-const MaxDescriptionLen = 150
+const MaxDescriptionLen = 200
 
 var validPriorities = map[string]bool{"high": true, "medium": true, "low": true}
 

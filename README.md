@@ -174,6 +174,12 @@ So every prompt has a flag twin and nothing interactive can ever block a script.
 Ctrl-C out of a prompt exits **130** (the SIGINT convention) with a quiet
 `aborted`, not an error.
 
+Long human output pages the same way: `show` / `schema` pipe through a pager (like
+git) **only on a TTY** — never under a pipe, `--json`, or `--no-input`, so machine
+output stays byte-identical. Program precedence: `TSKFLW_PAGER` → `[pager].command`
+(in `.tskflwctl.toml`) → `$PAGER` → `less -FRX`. On/off: `--no-pager` → `--paginate`
+→ `[pager].enabled` → default on.
+
 ### `pm` is retired
 
 The Python prototype (`bin/pm`) this tool was ported from is **gone** —
@@ -227,7 +233,8 @@ toggles raw). Vim-first keys: `:` command-jump, `/` filter (slug/desc/tags),
 `o`/`O` sort, `s`/`S` status views, `[`/`]` tabs, `a` task actions
 (start/complete/…), `f` to follow a reference (task ⇄ epic) with `ctrl+o` to
 jump back, `y`/`Y` to copy the selection's slug / file path to the system
-clipboard (OSC 52, so it works over SSH), `/`+`n`/`N` find-in-body when the
+clipboard (a native tool — pbcopy/wl-copy/xclip — when available, else OSC 52 so
+it still works over SSH), `/`+`n`/`N` find-in-body when the
 detail is focused, `?` for the
 full keymap, `r` to refresh. It **live-reloads** via `fsnotify` — edits from
 your editor or a CLI `task move` in another terminal show up within ~200ms,

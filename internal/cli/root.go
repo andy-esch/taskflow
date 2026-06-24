@@ -173,9 +173,12 @@ func (a *App) warnLinks() {
 }
 
 // markdownStyle resolves the glamour style for `show` body rendering from the
-// terminal background (dracula on dark, light on light). Background detection is
-// a terminal concern, so it lives here rather than in the render layer; it's
-// called only on the `show` path, where color is on.
+// terminal background (dracula on dark, light on light). Background detection is a
+// terminal concern, so it lives here rather than in the render layer. It is passed
+// to render.RenderBody as a LAZY provider (not called eagerly): HasDarkBackground
+// fires an OSC-11 terminal query that can stall on terminals that don't answer, so
+// it must run only when styled markdown is actually rendered — never on
+// --raw / --color=never / piped / empty-body, where the result would be discarded.
 func (a *App) markdownStyle() string {
 	return theme.MarkdownStyleFor(lipgloss.HasDarkBackground(os.Stdin, os.Stdout))
 }

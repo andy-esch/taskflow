@@ -217,7 +217,7 @@ func newAuditShowCmd(app *App) *cobra.Command {
 				return render.AuditShowJSON(app.Out, audit, body)
 			}
 			return app.paged(func(w io.Writer) error {
-				return render.AuditShowHuman(w, app.Style, audit, render.RenderBody(app.Style, body, app.markdownStyle(), raw))
+				return render.AuditShowHuman(w, app.Style, audit, render.RenderBody(app.Style, body, app.markdownStyle, raw))
 			})
 		},
 	}

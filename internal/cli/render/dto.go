@@ -13,7 +13,7 @@ type taskJSON struct {
 	Slug        string   `json:"slug" jsonschema:"description=task identifier (filename without .md)"`
 	Status      string   `json:"status" jsonschema:"description=lifecycle status — equals the task's directory under tasks/"`
 	Epic        string   `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
-	Description string   `json:"description,omitempty" jsonschema:"description=one-line summary (<=150 chars)"`
+	Description string   `json:"description,omitempty" jsonschema:"description=one-line summary (<=200 chars)"`
 	Effort      string   `json:"effort,omitempty" jsonschema:"description=free-form effort estimate"`
 	Tier        int      `json:"tier,omitempty" jsonschema:"description=importance 1 (highest) to 5 (lowest)"`
 	Priority    string   `json:"priority,omitempty" jsonschema:"description=high | medium | low"`
