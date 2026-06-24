@@ -20,6 +20,7 @@ type helpSection struct {
 // with keys.go and the focus-routed handlers in model.go.
 var helpSections = []helpSection{
 	{"Global", []helpEntry{
+		{"ctrl+p", "command palette — fuzzy jump to anything / run a command"},
 		{": ", "command / jump (entity, status, or verb)"},
 		{"/", "filter the list (slug, desc, tags)"},
 		{"F", "filter mode: fuzzy ⇄ substring (default fuzzy)"},

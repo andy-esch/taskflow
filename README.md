@@ -228,7 +228,8 @@ Design rationale lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) and
 A Bubble Tea browser over the **same `core`** the CLI uses (a second primary
 adapter — never the filesystem directly). Two panes: an entity list (tasks /
 epics / audits) and a detail preview rendered as **glamour markdown** (`R`
-toggles raw). Vim-first keys: `:` command-jump, `/` filter (slug/desc/tags),
+toggles raw). Vim-first keys: `ctrl+p` command palette (fuzzy-jump to any
+task/epic/audit or run a command), `:` command-jump, `/` filter (slug/desc/tags),
 `F` toggles the filter between fuzzy and substring,
 `o`/`O` sort, `s`/`S` status views, `[`/`]` tabs, `a` task actions
 (start/complete/…), `f` to follow a reference (task ⇄ epic) with `ctrl+o` to
