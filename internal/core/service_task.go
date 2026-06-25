@@ -261,9 +261,10 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	if err := domain.ValidateDescription(p.Description); err != nil {
 		return domain.Task{}, err
 	}
-	if err := domain.ValidateTitle(p.Title); err != nil {
-		return domain.Task{}, err
-	}
+	// Any title is accepted: Slugify derives a filesystem-safe id (it word-breaks
+	// path separators, control chars, and the unicode punctuation it can't keep)
+	// while the full original title is preserved in the body H1. The empty-slug
+	// error below is the only hard guard — a title that slugifies to nothing.
 	slug := domain.Slugify(p.Title)
 	if slug == "" {
 		return domain.Task{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)

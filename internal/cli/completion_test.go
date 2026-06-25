@@ -72,7 +72,7 @@ func TestComplete_TaskSlugs_DropsAlreadyTyped(t *testing.T) {
 func TestComplete_AuditAndEpic(t *testing.T) {
 	root := setupRepo(t)
 	mustWrite(t, filepath.Join(root, "audits", "open", "aud-sec.md"), "---\narea: x\n---\n")
-	mustWrite(t, filepath.Join(root, "epics", "17-pm.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "17-pm.md"), "---\nstatus: active\n---\n")
 
 	if got := complete(t, "-C", root, "audit", "close", ""); !has(got, "aud-sec") {
 		t.Errorf("audit completion missing aud-sec: %v", got)

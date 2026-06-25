@@ -10,7 +10,7 @@ tskflwctl epic list [flags]
 
 ```
   tskflwctl epic list
-  tskflwctl epic list --status in-progress
+  tskflwctl epic list --status active
   tskflwctl epic list -o table -c id,status,percent,description
 ```
 
@@ -21,7 +21,7 @@ tskflwctl epic list [flags]
   -h, --help              help for list
   -o, --output string     output format: human|json|name|table|csv
   -q, --quiet             ids only, one per line (alias for -o name)
-      --status string     filter by epic status (planning|in-progress|completed|archived)
+      --status string     filter by epic status (active|retired|deprecated)
 ```
 
 ### Options inherited from parent commands

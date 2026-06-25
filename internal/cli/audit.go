@@ -54,6 +54,7 @@ func newAuditNewCmd(app *App) *cobra.Command {
 				return render.CreatedJSON(app.Out, "audit", a.Slug, string(a.Bucket), app.rel(a.Path), app.DryRun)
 			}
 			render.CreatedHuman(app.Out, app.Style, app.linkPath(a.Path), app.DryRun)
+			render.CreatedSlugNote(app.Out, app.Style, p.Area, a.Slug)
 			if !app.DryRun {
 				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: add findings, then tskflwctl audit close "+a.Slug))
 			}

@@ -14,7 +14,12 @@ import (
 
 func TestService_Lint(t *testing.T) {
 	svc := NewService(&fakeStore{
-		epics: []domain.Epic{{ID: "e1"}},
+		epics: []domain.Epic{
+			// Valid epic the tasks join against.
+			{ID: "e1", Status: "active", Priority: "medium", Description: "the epic"},
+			// Bad epic: a typo'd status surfaces as its own LintResult (keyed by id).
+			{ID: "e2-bad", Status: "bogus", Priority: "medium", Description: "d"},
+		},
 		tasks: []domain.Task{
 			// Clean active task: no issues.
 			{Slug: "clean", Status: domain.StatusInProgress, Declared: domain.StatusInProgress,
@@ -56,6 +61,13 @@ func TestService_Lint(t *testing.T) {
 	}
 	if _, ok := got["archived-clean"]; ok {
 		t.Error("a clean archived task must not be nagged about missing fields")
+	}
+	// Epics are linted too: the bad-status epic surfaces as a result keyed by id.
+	if !strings.Contains(got["e2-bad"], "status") {
+		t.Errorf("bad epic status should be flagged, got %q", got["e2-bad"])
+	}
+	if _, ok := got["e1"]; ok {
+		t.Errorf("the valid epic must not be flagged: %q", got["e1"])
 	}
 }
 
@@ -99,22 +111,71 @@ func TestService_NewTask_RequiresTags(t *testing.T) {
 	}
 }
 
-// TestService_Create_RejectsHostileTitle pins that the create path hard-fails on
-// filename-hostile title characters (a colon + em-dash) rather than silently
-// slugifying to a different name, for both tasks and epics.
-func TestService_Create_RejectsHostileTitle(t *testing.T) {
-	svc := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}})
-	_, err := svc.NewTask(NewTaskParams{Title: "Fix: the thing — now", Epic: "e1", Tags: []string{"x"}, Tier: 3, Autonomy: 3, Priority: "medium"})
-	if !errors.Is(err, domain.ErrValidation) {
-		t.Errorf("task new with a hostile title should be ErrValidation, got %v", err)
+// TestService_Create_SlugifiesHostileTitle pins the 2026-06-25 reversal: a
+// filename-hostile title (colon + plus, the motivating case) is no longer
+// rejected — it slugifies to a safe id while the FULL original title is kept as
+// the body H1, across task / epic / audit create paths. The empty-slug error
+// stays the only hard guard (covered by TestService_Create_EmptySlugStillErrors).
+func TestService_Create_SlugifiesHostileTitle(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
+	svc := NewService(fs)
+
+	// task: hostile title accepted, slug derived, full title preserved in the H1.
+	tk, err := svc.NewTask(NewTaskParams{Title: "Wire OAuth: PKCE + refresh", Epic: "e1", Tags: []string{"x"}, Tier: 3, Autonomy: 3, Priority: "medium"})
+	if err != nil {
+		t.Fatalf("task new with a hostile title should succeed, got %v", err)
 	}
-	_, err = svc.NewEpic(NewEpicParams{Title: "Plan: phase — two", Description: "d", Priority: "medium", Status: "planning"})
-	if !errors.Is(err, domain.ErrValidation) {
-		t.Errorf("epic new with a hostile title should be ErrValidation, got %v", err)
+	if tk.Slug != "wire-oauth-pkce-refresh" {
+		t.Errorf("task slug = %q, want wire-oauth-pkce-refresh", tk.Slug)
 	}
-	// A clean title still creates.
-	if _, err := svc.NewTask(NewTaskParams{Title: "Fix the thing now", Epic: "e1", Tags: []string{"x"}, Tier: 3, Autonomy: 3, Priority: "medium"}); err != nil {
-		t.Errorf("a clean title should create, got %v", err)
+	if len(fs.createdBodies) != 1 || !strings.Contains(fs.createdBodies[0], "# Wire OAuth: PKCE + refresh") {
+		t.Errorf("task body should keep the full title as the H1, got %q", fs.createdBodies)
+	}
+
+	// epic: same — slug derived (the store adds the NN- number; the fake passes the
+	// slug through as the id), full title in the H1.
+	ep, err := svc.NewEpic(NewEpicParams{Title: "Plan: phase — two", Description: "d", Priority: "medium", Status: "active"})
+	if err != nil {
+		t.Fatalf("epic new with a hostile title should succeed, got %v", err)
+	}
+	if ep.ID != "plan-phase-two" {
+		t.Errorf("epic slug = %q, want plan-phase-two", ep.ID)
+	}
+	if len(fs.epicCreateBodies) != 1 || !strings.Contains(fs.epicCreateBodies[0], "# Plan: phase — two") {
+		t.Errorf("epic body should keep the full title as the H1, got %q", fs.epicCreateBodies)
+	}
+
+	// audit: a hostile area slugifies into <date>-<area-slug>, full area in the body.
+	au, err := svc.NewAudit(NewAuditParams{Area: "Auth: token / refresh", Date: "2026-06-25"})
+	if err != nil {
+		t.Fatalf("audit new with a hostile area should succeed, got %v", err)
+	}
+	if au.Slug != "2026-06-25-auth-token-refresh" {
+		t.Errorf("audit slug = %q, want 2026-06-25-auth-token-refresh", au.Slug)
+	}
+	if au.Area != "Auth: token / refresh" {
+		t.Errorf("audit area should keep the full original, got %q", au.Area)
+	}
+	if len(fs.auditCreateBodies) != 1 || !strings.Contains(fs.auditCreateBodies[0], "Auth: token / refresh") {
+		t.Errorf("audit body should keep the full area, got %q", fs.auditCreateBodies)
+	}
+}
+
+// TestService_Create_EmptySlugStillErrors pins the one remaining hard guard: a
+// title/area made only of punctuation slugifies to "" and is rejected as
+// ErrValidation, for all three create paths (nothing reaches the store).
+func TestService_Create_EmptySlugStillErrors(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
+	svc := NewService(fs)
+
+	if _, err := svc.NewTask(NewTaskParams{Title: "!!!", Epic: "e1", Tags: []string{"x"}, Tier: 3, Autonomy: 3, Priority: "medium"}); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("punctuation-only task title should be ErrValidation, got %v", err)
+	}
+	if _, err := svc.NewEpic(NewEpicParams{Title: "...", Description: "d", Priority: "medium", Status: "active"}); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("punctuation-only epic title should be ErrValidation, got %v", err)
+	}
+	if _, err := svc.NewAudit(NewAuditParams{Area: "***", Date: "2026-06-25"}); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("punctuation-only audit area should be ErrValidation, got %v", err)
 	}
 }
 
@@ -160,11 +221,12 @@ func TestService_NewAudit(t *testing.T) {
 }
 
 // TestService_Lint_FlagsInvalidEpicStatus pins the D2 decision: epic status is
-// a closed vocabulary, and files outside it surface in lint.
+// a closed vocabulary, and files outside it surface in lint. The "good" epic is
+// fully valid (status/priority/description) so only the typo'd one is flagged.
 func TestService_Lint_FlagsInvalidEpicStatus(t *testing.T) {
 	svc := NewService(&fakeStore{epics: []domain.Epic{
-		{ID: "good", Status: "planning"},
-		{ID: "weird", Status: "bananas"},
+		{ID: "good", Status: "active", Priority: "medium", Description: "a goal"},
+		{ID: "weird", Status: "bananas", Priority: "medium", Description: "a goal"},
 	}})
 	results, _, err := svc.Lint()
 	if err != nil {
@@ -195,11 +257,11 @@ func TestService_NewEpic(t *testing.T) {
 	}
 
 	// The happy path stamps created and passes the slug through.
-	e, err := svc.NewEpic(NewEpicParams{Title: "My Epic", Description: "d", Priority: "medium", Status: "planning"})
+	e, err := svc.NewEpic(NewEpicParams{Title: "My Epic", Description: "d", Priority: "medium", Status: "active"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Created == "" || e.Status != "planning" {
+	if e.Created == "" || e.Status != "active" {
 		t.Errorf("created epic wrong: %+v", e)
 	}
 }

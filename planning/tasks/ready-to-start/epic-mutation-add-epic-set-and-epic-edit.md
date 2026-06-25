@@ -9,6 +9,7 @@ priority: medium
 autonomy_level: 3
 tags: [cli]
 created: "2026-06-25"
+updated_at: "2026-06-25"
 ---
 # Epic mutation: `epic set` + `epic edit` (parity with tasks)
 
@@ -67,3 +68,7 @@ Relates to epic 20 (CLI UX). Sibling tasks: lint-covers-epics, audit-editing.
 
 `epic set 01-x --status in-progress` and `epic edit 01-x` both work — validated,
 atomic, JSON, picker — so an epic is no longer write-once.
+
+## Decision 2026-06-25 — depends on the new epic vocab
+
+BLOCKED ON [[redefine-epic-status-model-to-active-retired-deprecated-and-migrate]]: target the new active/retired/deprecated vocabulary, not the old set. Command shape: 'epic set --status retired' (+ --priority/--description/--tags) is the path — named lifecycle verbs (epic retire/deprecate) are a possible later nicety, NOT in this task.

@@ -13,7 +13,7 @@ func newLintCmd(app *App) *cobra.Command {
 	var fix bool
 	cmd := &cobra.Command{
 		Use:     "lint",
-		Short:   "Validate active task frontmatter (--fix to auto-repair)",
+		Short:   "Validate active task and epic frontmatter (--fix auto-repairs tasks)",
 		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --json",
 		Args:    cobra.NoArgs,
 		// Read-only by default; --fix opts into mutation explicitly.
@@ -25,7 +25,7 @@ func newLintCmd(app *App) *cobra.Command {
 			return runLint(app)
 		},
 	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter (quote ':' values, normalize list fields)")
+	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair task frontmatter (quote ':' values, normalize list fields); epics are reported, not fixed")
 	return cmd
 }
 
@@ -42,13 +42,14 @@ func runLint(app *App) error {
 		// Diagnostics go to stderr, matching the list commands — scripts that
 		// capture stderr for problems must see them on one consistent stream.
 		render.ProblemsHuman(app.ErrOut, app.Style, problems)
-		render.LintHuman(app.Out, app.Style, results, "task")
+		// Results mix tasks and epics now, so the footer noun is the neutral "item".
+		render.LintHuman(app.Out, app.Style, results, "item")
 		if len(results) == 0 && len(problems) == 0 {
-			fmt.Fprintf(app.Out, "%s all active tasks pass lint\n", app.Style.Green("✔"))
+			fmt.Fprintf(app.Out, "%s all active tasks and epics pass lint\n", app.Style.Green("✔"))
 		}
 	}
 	if len(results)+len(problems) > 0 {
-		return fmt.Errorf("%w: %d task(s) with issues, %d unreadable file(s)",
+		return fmt.Errorf("%w: %d item(s) with issues, %d unreadable file(s)",
 			domain.ErrValidation, len(results), len(problems))
 	}
 	return nil

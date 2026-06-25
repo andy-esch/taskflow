@@ -1,5 +1,5 @@
 ---
-status: planning
+status: active
 description: 'Post-port CLI UX and pipeline ergonomics: interactive pickers, output modes, task edit, column projection'
 priority: medium
 tags: [cli, ux, ergonomics]

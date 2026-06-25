@@ -45,6 +45,7 @@ func newEpicNewCmd(app *App) *cobra.Command {
 				return render.CreatedJSON(app.Out, "epic", e.ID, e.Status, app.rel(e.Path), app.DryRun)
 			}
 			render.CreatedHuman(app.Out, app.Style, app.linkPath(e.Path), app.DryRun)
+			render.CreatedSlugNote(app.Out, app.Style, p.Title, e.ID)
 			if !app.DryRun {
 				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task new \"Title\" --epic "+e.ID))
 			}
@@ -52,7 +53,7 @@ func newEpicNewCmd(app *App) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&p.Description, "description", "", fmt.Sprintf("one-line description (required, <=%d chars)", domain.MaxDescriptionLen))
-	cmd.Flags().StringVar(&p.Status, "status", "planning", "epic status: planning|in-progress|completed|archived")
+	cmd.Flags().StringVar(&p.Status, "status", "active", "epic status: active|retired|deprecated")
 	cmd.Flags().StringVar(&p.Priority, "priority", "medium", "high|medium|low")
 	cmd.Flags().StringSliceVar(&p.Tags, "tags", nil, "comma-separated tags")
 	cmd.Flags().StringVar(&p.Body, "body", "", "override the default body scaffold")
@@ -72,7 +73,7 @@ func newEpicListCmd(app *App) *cobra.Command {
 		Use:   "list",
 		Short: "List epics with task rollup",
 		Example: "  tskflwctl epic list\n" +
-			"  tskflwctl epic list --status in-progress\n" +
+			"  tskflwctl epic list --status active\n" +
 			"  tskflwctl epic list -o table -c id,status,percent,description",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
@@ -101,7 +102,7 @@ func newEpicListCmd(app *App) *cobra.Command {
 		},
 	}
 	lm.bind(cmd, render.Specs(render.EpicColumns()))
-	cmd.Flags().StringVar(&statusFilter, "status", "", "filter by epic status (planning|in-progress|completed|archived)")
+	cmd.Flags().StringVar(&statusFilter, "status", "", "filter by epic status (active|retired|deprecated)")
 	_ = cmd.RegisterFlagCompletionFunc("status",
 		func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 			return domain.AllEpicStatuses(), cobra.ShellCompDirectiveNoFileComp

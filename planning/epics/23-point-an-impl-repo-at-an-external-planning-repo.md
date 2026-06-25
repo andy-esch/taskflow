@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: planning
+status: active
 description: Point an impl repo at an external planning repo (planning_repo) + reverse tracked_repos, init pointer mode, and linkback integrity (warnings + doctor)
 priority: high
 tags: [config, cli, multi-repo]

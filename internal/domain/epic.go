@@ -20,9 +20,14 @@ type Epic struct {
 	Tags        []string `yaml:"tags"`
 }
 
-// epicStatuses is the closed epic-status vocabulary (decided 2026-06-12 — the
-// values already in use, plus "completed").
-var epicStatuses = []string{"planning", "in-progress", "completed", "archived"}
+// epicStatuses is the closed epic-status vocabulary (decided 2026-06-25). An
+// epic is a long-lived domain category, not a task that marches to "done", so
+// the states answer "is this bucket live, finished, or dead", not "what stage":
+// active = live (organizing current or future work); retired = goals satisfied,
+// closed successfully, kept for history; deprecated = it wasn't useful or was
+// replaced (a superseded epic is deprecated with a "superseded by X" note in
+// its description, not a separate state).
+var epicStatuses = []string{"active", "retired", "deprecated"}
 
 // AllEpicStatuses returns the closed epic-status vocabulary, in declared order.
 func AllEpicStatuses() []string { return epicStatuses }

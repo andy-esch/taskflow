@@ -21,7 +21,7 @@ func setupEpicRepo(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	write("epics/demo.md", "---\nstatus: in-progress\ndescription: demo epic\n---\n# Demo Epic\n")
+	write("epics/demo.md", "---\nstatus: active\ndescription: demo epic\n---\n# Demo Epic\n")
 	write("tasks/ready-to-start/a.md", "---\nstatus: ready-to-start\nepic: demo\n---\n# A\n")
 	write("tasks/completed/b.md", "---\nstatus: completed\nepic: demo\n---\n# B\n")
 	return root
@@ -55,17 +55,17 @@ func TestEpicList_JSONRollup(t *testing.T) {
 // (so an agent need not pay for every epic), and an out-of-vocabulary status is
 // a loud error rather than a silently-empty list.
 func TestEpicList_StatusFilter(t *testing.T) {
-	root := setupEpicRepo(t) // one in-progress epic "demo"
-	if err := os.WriteFile(filepath.Join(root, "epics", "archived-one.md"),
-		[]byte("---\nstatus: archived\ndescription: old epic\n---\n# Archived\n"), 0o644); err != nil {
+	root := setupEpicRepo(t) // one active epic "demo"
+	if err := os.WriteFile(filepath.Join(root, "epics", "deprecated-one.md"),
+		[]byte("---\nstatus: deprecated\ndescription: old epic\n---\n# Deprecated\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if all := runRoot(t, "-C", root, "epic", "list", "-q"); !strings.Contains(all, "demo") || !strings.Contains(all, "archived-one") {
+	if all := runRoot(t, "-C", root, "epic", "list", "-q"); !strings.Contains(all, "demo") || !strings.Contains(all, "deprecated-one") {
 		t.Fatalf("-q should list both epics:\n%s", all)
 	}
-	inprog := runRoot(t, "-C", root, "epic", "list", "-q", "--status", "in-progress")
-	if !strings.Contains(inprog, "demo") || strings.Contains(inprog, "archived-one") {
-		t.Errorf("--status in-progress should keep only demo:\n%s", inprog)
+	active := runRoot(t, "-C", root, "epic", "list", "-q", "--status", "active")
+	if !strings.Contains(active, "demo") || strings.Contains(active, "deprecated-one") {
+		t.Errorf("--status active should keep only demo:\n%s", active)
 	}
 	var buf bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &buf, &buf)

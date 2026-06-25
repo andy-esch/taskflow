@@ -78,6 +78,68 @@ func TestMisfiledIssues(t *testing.T) {
 	}
 }
 
+func cleanEpic() Epic {
+	return Epic{ID: "20-good", Status: "active", Priority: "high", Description: "a goal"}
+}
+
+func TestLintEpic_Clean(t *testing.T) {
+	if issues := LintEpic(cleanEpic()); len(issues) != 0 {
+		t.Errorf("clean epic has issues: %+v", issues)
+	}
+}
+
+func TestLintEpic_BadStatus(t *testing.T) {
+	e := cleanEpic()
+	e.Status = "bananas" // outside the closed vocabulary
+	found := false
+	for _, i := range LintEpic(e) {
+		if i.Field == "status" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected an invalid-status issue, got %+v", LintEpic(e))
+	}
+}
+
+func TestLintEpic_BadPriority(t *testing.T) {
+	e := cleanEpic()
+	e.Priority = "urgent" // not high|medium|low
+	found := false
+	for _, i := range LintEpic(e) {
+		if i.Field == "priority" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a priority issue, got %+v", LintEpic(e))
+	}
+}
+
+func TestLintEpic_MissingDescription(t *testing.T) {
+	e := cleanEpic()
+	e.Description = ""
+	found := false
+	for _, i := range LintEpic(e) {
+		if i.Field == "description" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a missing-description issue, got %+v", LintEpic(e))
+	}
+}
+
+// TestLintEpic_ArchivedMinimal pins the active-vs-archived split: an archived
+// epic is withdrawn, so missing priority/description must NOT be nagged — only
+// the status vocabulary is enforced (mirroring archived tasks).
+func TestLintEpic_ArchivedMinimal(t *testing.T) {
+	e := Epic{ID: "20-old", Status: "deprecated"} // no priority, no description
+	if issues := LintEpic(e); len(issues) != 0 {
+		t.Errorf("archived epic must not be nagged about fields: %+v", issues)
+	}
+}
+
 func TestLintTask_BadConstraints(t *testing.T) {
 	task := cleanTask()
 	task.Tier = 9

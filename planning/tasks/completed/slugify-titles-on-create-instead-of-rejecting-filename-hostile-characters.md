@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Accept titles with :, em-dashes, arrows on task/epic/audit new (Slugify the filename, keep the title in the body H1) instead of ValidateTitle rejecting them.
 effort: S
@@ -9,6 +9,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli]
 created: "2026-06-25"
+updated_at: "2026-06-25"
+started_at: "2026-06-25"
+completed_at: "2026-06-25"
 ---
 # Slugify titles on create instead of rejecting filename-hostile characters
 

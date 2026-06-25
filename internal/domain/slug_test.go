@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"errors"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -75,39 +74,24 @@ func TestSlugify_RuneSafeTruncation(t *testing.T) {
 	}
 }
 
-// TestValidateTitle guards the create-path hard-fail: filename-hostile chars are
-// rejected (the slug would otherwise silently differ), while benign titles pass.
-func TestValidateTitle(t *testing.T) {
-	// Rejected: filesystem-reserved ASCII + non-ASCII punctuation/symbols.
-	for _, bad := range []string{
-		"Fix: the thing — now", // colon + em-dash (the motivating bug)
-		"UI/UX design",         // path separator
-		"What now?",            // Windows-reserved
-		"a*b", `c"d`, "e<f>g", "h|i",
-		"En–dash", "horizontal ― bar", "curly “quotes”", "bullet • point", "arrow → there",
-	} {
-		if err := ValidateTitle(bad); !errors.Is(err, ErrValidation) {
-			t.Errorf("ValidateTitle(%q) should be ErrValidation, got %v", bad, err)
-		}
+// TestSlugify_HostileTitlesAreSlugified pins the create-path policy (2026-06-25):
+// filename-hostile titles are no longer rejected — they slugify to a safe id (the
+// full title is preserved in the body H1, tested at the core create paths). Path
+// separators, traversal, and control chars become word breaks, never a bad path.
+func TestSlugify_HostileTitlesAreSlugified(t *testing.T) {
+	cases := map[string]string{
+		"Wire OAuth: PKCE + refresh": "wire-oauth-pkce-refresh", // colon + plus (the motivating case)
+		"Fix: the thing — now":       "fix-the-thing-now",       // colon + em-dash
+		"UI/UX design":               "ui-ux-design",            // path separator → break
+		"What now?":                  "what-now",                // Windows-reserved
+		`a*b c"d e<f>g h|i`:          "a-b-c-d-e-f-g-h-i",
+		"arrow → there":              "arrow-there",
+		"../../etc/passwd":           "etc-passwd", // traversal neutralized
 	}
-	// Accepted: letters/digits/marks (any script), spaces, apostrophes, dots,
-	// hyphens, and benign ASCII punctuation (parens/commas) Slugify normalizes.
-	for _, ok := range []string{
-		"Add create verbs (task new, epic new)",
-		"don't shorten Tasks' apostrophes",
-		"v1.2.3 release",
-		"multi-entity navigation",
-		"café résumé naïve", // non-ASCII letters
-		"日本語タイトル",           // non-Latin script
-	} {
-		if err := ValidateTitle(ok); err != nil {
-			t.Errorf("ValidateTitle(%q) should pass, got %v", ok, err)
+	for in, want := range cases {
+		if got := Slugify(in); got != want {
+			t.Errorf("Slugify(%q) = %q, want %q", in, got, want)
 		}
-	}
-	// The error suggests a clean, copy-paste title.
-	err := ValidateTitle("Fix: the thing — now")
-	if err == nil || !strings.Contains(err.Error(), `"Fix the thing now"`) {
-		t.Errorf("error should suggest a cleaned title, got %v", err)
 	}
 }
 

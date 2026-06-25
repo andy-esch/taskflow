@@ -130,7 +130,7 @@ func TestCreate_ContractValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "epics", "e1.md"),
-		[]byte("---\nstatus: planning\ndescription: e\n---\n# E\n"), 0o644); err != nil {
+		[]byte("---\nstatus: active\ndescription: e\n---\n# E\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
@@ -138,7 +138,7 @@ func TestCreate_ContractValidation(t *testing.T) {
 		want string
 	}{
 		{[]string{"task", "new", "Tagless", "--epic", "e1", "--description", "d"}, "tag"},
-		{[]string{"epic", "new", "Weird", "--description", "d", "--status", "bananas"}, "planning"}, // enumerates
+		{[]string{"epic", "new", "Weird", "--description", "d", "--status", "bananas"}, "active"}, // enumerates
 	} {
 		var out bytes.Buffer
 		cmd := NewRootCmd(strings.NewReader(""), &out, &out)

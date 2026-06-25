@@ -48,7 +48,7 @@ func TestDryRun_TaskEditRejected(t *testing.T) {
 
 func TestDryRun_TaskNew(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n# E1\n")
 
 	out := runRoot(t, "-C", root, "task", "new", "Preview Me", "--epic", "e1", "--tags", "a", "--dry-run")
 	if !strings.Contains(out, "would create") {
@@ -84,7 +84,7 @@ func TestDryRun_TaskNew(t *testing.T) {
 
 func TestDryRun_TaskMoveAndSet(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n# E1\n")
 	runRoot(t, "-C", root, "task", "new", "Mover", "--epic", "e1", "--tags", "a")
 	orig := filepath.Join(root, "tasks", "ready-to-start", "mover.md")
 

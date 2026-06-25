@@ -30,9 +30,9 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 	if area == "" {
 		return domain.Audit{}, fmt.Errorf("%w: audit area is required", domain.ErrValidation)
 	}
-	if err := domain.ValidateTitle(area); err != nil {
-		return domain.Audit{}, err
-	}
+	// Any area is accepted: Slugify derives a filesystem-safe id while the full
+	// original area is preserved (frontmatter + body). The empty-slug error below
+	// is the only hard guard — an area that slugifies to nothing.
 	date := p.Date
 	if date == "" {
 		date = time.Now().Format("2006-01-02")

@@ -339,6 +339,28 @@ func CreatedHuman(w io.Writer, st Style, path string, dryRun bool) {
 	fmt.Fprintf(w, "%s %s\n", st.Green(verb), st.Bold(path))
 }
 
+// CreatedSlugNote surfaces the derived slug on a dim line after the "created …"
+// line, but only when Slugify did something beyond the obvious — a title with a
+// colon, em-dash, arrow, or other dropped character shows where its filename came
+// from, while the everyday "Add retry backoff" → add-retry-backoff stays silent
+// (lowercasing + space→hyphen is no surprise). The JSON envelope already carries
+// the id, so this is human-only. slug is the full filename id (NN-… for an epic,
+// <date>-… for an audit); divergence is judged on the original title/area.
+func CreatedSlugNote(w io.Writer, st Style, title, slug string) {
+	if slug == "" || domain.Slugify(title) == naiveSlug(title) {
+		return
+	}
+	fmt.Fprintf(w, "%s\n", st.Dim("→ slug: "+slug))
+}
+
+// naiveSlug is the "no surprise" slug: lowercase, with each run of whitespace
+// collapsed to a single hyphen. When Slugify's real output matches it, the only
+// transforms were the obvious ones (case + spaces) and the derivation needs no
+// note; when it differs, characters were dropped or reordered and the note fires.
+func naiveSlug(title string) string {
+	return strings.Join(strings.Fields(strings.ToLower(title)), "-")
+}
+
 // CreatedJSON writes a versioned envelope for a newly created item; dry_run
 // marks a preview (nothing was written). status is the new item's status (task
 // status / epic status / audit bucket); path is relative to the planning root,

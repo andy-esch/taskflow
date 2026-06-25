@@ -38,9 +38,9 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 	if err := domain.ValidateEpicStatus(p.Status); err != nil {
 		return domain.Epic{}, err
 	}
-	if err := domain.ValidateTitle(p.Title); err != nil {
-		return domain.Epic{}, err
-	}
+	// Any title is accepted: Slugify derives a filesystem-safe id while the full
+	// original title is preserved in the body H1. The empty-slug error below is the
+	// only hard guard — a title that slugifies to nothing.
 	slug := domain.Slugify(p.Title)
 	if slug == "" {
 		return domain.Epic{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)

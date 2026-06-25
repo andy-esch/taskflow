@@ -1,5 +1,5 @@
 ---
-status: completed
+status: retired
 description: Port the prototype Python pm tool to a Go CLI in the decided noun-verb hierarchy; Python pm + its tests are the executable spec.
 created: 2026-06-06
 updated_at: 2026-06-21

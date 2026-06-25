@@ -74,6 +74,40 @@ func LintTask(t Task, validEpic func(string) bool) []Issue {
 	return issues
 }
 
+// LintEpic returns the frontmatter issues for an epic. Mirrors LintTask, but
+// epics have no validEpic dependency (they're the join target, not a referrer)
+// and no status-directory drift (status is a flat frontmatter field, not a
+// folder). The status vocabulary is always checked; a `deprecated` epic is
+// withdrawn, so — like an archived task — it's spared the field nags (no point
+// demanding a priority/description on a dead goal).
+func LintEpic(e Epic) []Issue {
+	var issues []Issue
+	add := func(field, msg string) { issues = append(issues, Issue{Field: field, Message: msg}) }
+
+	// Always: the status must be in the closed vocabulary. Files predating the
+	// enum (or hand-edited ones) surface here regardless of active/deprecated.
+	if err := ValidateEpicStatus(e.Status); err != nil {
+		add("status", err.Error())
+	}
+	// A deprecated epic is dead/withdrawn — stop at the status check, don't nag
+	// about the active-only fields below (mirrors MisfiledIssues-only for
+	// archived tasks).
+	if e.Status == "deprecated" {
+		return issues
+	}
+
+	switch {
+	case e.Priority == "":
+		add("priority", "missing")
+	case !validPriorities[e.Priority]:
+		add("priority", "must be high|medium|low")
+	}
+	if e.Description == "" {
+		add("description", "missing")
+	}
+	return issues
+}
+
 // MisfiledIssues reports the status/folder mismatch for a task, if any. It is
 // separate from the active-only field checks so archived tasks (completed/…)
 // can still be flagged for drift without nagging about missing fields.

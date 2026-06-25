@@ -114,7 +114,7 @@ func TestModel_FollowGracefulDeadEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "loner.md"),
-		[]byte("---\nstatus: in-progress\ndescription: x\n---\n# loner\n"), 0o644); err != nil {
+		[]byte("---\nstatus: active\ndescription: x\n---\n# loner\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m := New(core.NewService(store.NewFS(root)))
@@ -163,8 +163,8 @@ func TestModel_FollowEscalatesToAllView(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("epics/01-x.md", "---\nstatus: planning\ndescription: e\n---\n# E\n")
-	write("tasks/in-progress/active-one.md", "---\nstatus: in-progress\nepic: 01-x\ndescription: a\n---\n# a\n")
+	write("epics/01-x.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
+	write("tasks/in-progress/active-one.md", "---\nstatus: active\nepic: 01-x\ndescription: a\n---\n# a\n")
 	write("tasks/completed/done-one.md", "---\nstatus: completed\nepic: 01-x\ndescription: d\n---\n# d\n")
 
 	m := New(core.NewService(store.NewFS(root)))
@@ -232,7 +232,7 @@ func TestModel_FollowDanglingEpicRef(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "orphan.md"),
-		[]byte("---\nstatus: in-progress\nepic: 99-ghost\ndescription: x\n---\n# orphan\n"), 0o644); err != nil {
+		[]byte("---\nstatus: active\nepic: 99-ghost\ndescription: x\n---\n# orphan\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m := New(core.NewService(store.NewFS(root)))

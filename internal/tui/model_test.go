@@ -33,7 +33,7 @@ func seedRepo(t *testing.T) string {
 	}
 	task("in-progress", "alpha", "the alpha task")
 	task("ready-to-start", "beta", "the beta task")
-	r.Epic("01-test.md", "---\nstatus: planning\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
+	r.Epic("01-test.md", "---\nstatus: active\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
 	r.Audit("open", "2026-06-01-thing.md", "---\narea: store\ndate: 2026-06-01\n---\n# Audit\n")
 	return r.Root
 }
@@ -537,7 +537,7 @@ func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
 
 func TestEntityDetailRenderers(t *testing.T) {
 	epic := epicDetail{
-		e:     domain.Epic{ID: "17-x", Status: "in-progress", Priority: "high"},
+		e:     domain.Epic{ID: "17-x", Status: "active", Priority: "high"},
 		tasks: []domain.Task{{Slug: "a", Status: domain.StatusCompleted}, {Slug: "b", Status: domain.StatusReadyToStart}},
 		body:  "# Epic body",
 	}
@@ -613,7 +613,7 @@ func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
 	}
 	slug := "an-extremely-long-task-slug-well-past-the-detail-pane-inner-width"
 	if err := os.WriteFile(filepath.Join(dir, slug+".md"),
-		[]byte("---\nstatus: in-progress\ndescription: x\n---\n# body\n"), 0o644); err != nil {
+		[]byte("---\nstatus: active\ndescription: x\n---\n# body\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m := New(core.NewService(store.NewFS(root)))
@@ -950,7 +950,7 @@ func TestModel_StatusViewViaCommand(t *testing.T) {
 func auditModel(t *testing.T) Model {
 	t.Helper()
 	r := testutil.NewRepo(t)
-	r.Epic("01-test.md", "---\nstatus: planning\ndescription: a test epic\n---\n# Test epic\n")
+	r.Epic("01-test.md", "---\nstatus: active\ndescription: a test epic\n---\n# Test epic\n")
 	r.Audit("open", "2026-06-01-open-a.md", "---\narea: store\ndate: 2026-06-01\n---\n# Open A\n")
 	r.Audit("closed", "2026-05-01-closed-a.md", "---\narea: cli\ndate: 2026-05-01\n---\n# Closed A\n")
 	r.Audit("deferred", "2026-04-01-deferred-a.md", "---\narea: tui\ndate: 2026-04-01\n---\n# Deferred A\n")

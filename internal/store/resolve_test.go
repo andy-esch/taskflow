@@ -18,9 +18,9 @@ func fuzzyRepo(t *testing.T) *FS {
 	writeTask(t, root, "ready-to-start", "add-retry-backoff.md",
 		"---\nstatus: ready-to-start\ndescription: x\n---\n# t\n")
 	writeTask(t, root, "in-progress", "add-retry-jitter.md",
-		"---\nstatus: in-progress\ndescription: x\n---\n# t\n")
+		"---\nstatus: active\ndescription: x\n---\n# t\n")
 	writeTask(t, root, "in-progress", "polish.md",
-		"---\nstatus: in-progress\ndescription: x\n---\n# t\n")
+		"---\nstatus: active\ndescription: x\n---\n# t\n")
 	// "polish" is also a strict prefix of this one — exact must still win.
 	writeTask(t, root, "completed", "polish-batch.md",
 		"---\nstatus: completed\ndescription: x\n---\n# t\n")
@@ -106,8 +106,8 @@ func TestResolveAuditAndEpic_Fuzzy(t *testing.T) {
 		}
 	}
 	write("audits/open/2026-06-01-store-review.md", "---\narea: store\n---\n# A\n")
-	write("epics/17-pm-go-cli.md", "---\nstatus: planning\ndescription: e\n---\n# E\n")
-	write("epics/18-tui-browser.md", "---\nstatus: planning\ndescription: e\n---\n# E\n")
+	write("epics/17-pm-go-cli.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
+	write("epics/18-tui-browser.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	fs := NewFS(root)
 
 	if a, _, err := fs.GetAudit("store-review"); err != nil || a.Slug != "2026-06-01-store-review" {

@@ -21,7 +21,7 @@ func writeEpic(t *testing.T, root, name, content string) {
 func TestFS_ListEpics_NumericOrder(t *testing.T) {
 	root := t.TempDir()
 	for _, id := range []string{"09-i", "10-j", "100-k", "02-b"} {
-		writeEpic(t, root, id+".md", "---\nstatus: planning\n---\n# "+id+"\n")
+		writeEpic(t, root, id+".md", "---\nstatus: active\n---\n# "+id+"\n")
 	}
 	epics, _, err := NewFS(root).ListEpics()
 	if err != nil {
@@ -65,14 +65,14 @@ func TestFS_WatchPaths(t *testing.T) {
 
 func TestFS_ListEpics_And_GetEpic(t *testing.T) {
 	root := t.TempDir()
-	writeEpic(t, root, "17-x.md", "---\nstatus: in-progress\ndescription: x epic\ntags: [a]\n---\n# Epic X\nbody\n")
+	writeEpic(t, root, "17-x.md", "---\nstatus: active\ndescription: x epic\ntags: [a]\n---\n# Epic X\nbody\n")
 
 	fs := NewFS(root)
 	epics, _, err := fs.ListEpics()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(epics) != 1 || epics[0].ID != "17-x" || epics[0].Status != "in-progress" || epics[0].Description != "x epic" {
+	if len(epics) != 1 || epics[0].ID != "17-x" || epics[0].Status != "active" || epics[0].Description != "x epic" {
 		t.Fatalf("bad epics: %+v", epics)
 	}
 

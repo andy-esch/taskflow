@@ -30,7 +30,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 	}
 
 	task := domain.Task{Slug: "alpha", Status: domain.StatusInProgress, Tier: 2, Tags: []string{"x"}}
-	epic := domain.Epic{ID: "e1", Status: "in-progress", Description: "d"}
+	epic := domain.Epic{ID: "e1", Status: "active", Description: "d"}
 	epicSum := core.EpicSummary{Epic: epic, Total: 2, Done: 1}
 
 	// Every envelope, validated against its own $defs entry — the whole --json
@@ -89,7 +89,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"SchemaEnvelope", func(w io.Writer) error {
 			return SchemaJSON(w, SchemaContract{
 				Statuses:     []SchemaStatus{{Value: "in-progress", Active: true}},
-				EpicStatuses: []string{"in-progress"},
+				EpicStatuses: []string{"active"},
 				AuditBuckets: []string{"open"},
 				TaskFields:   []SchemaField{{Name: "tier", Type: "int"}},
 				ExitCodes:    []SchemaExitCode{{Code: 10, Name: "not-found"}},

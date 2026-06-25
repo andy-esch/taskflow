@@ -20,7 +20,7 @@ tskflwctl epic new <title> [flags]
       --description string   one-line description (required, <=200 chars)
   -h, --help                 help for new
       --priority string      high|medium|low (default "medium")
-      --status string        epic status: planning|in-progress|completed|archived (default "planning")
+      --status string        epic status: active|retired|deprecated (default "active")
       --tags strings         comma-separated tags
       --template string      body scaffold to use (default "default"); completes the available names
 ```

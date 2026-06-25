@@ -1,5 +1,5 @@
 ---
-status: planning
+status: active
 description: Explore a web UI sister to the TUI (tskflwctl serve first), module separation into core + bundled apps, and GitHub discoverability
 priority: low
 tags: [web, architecture]

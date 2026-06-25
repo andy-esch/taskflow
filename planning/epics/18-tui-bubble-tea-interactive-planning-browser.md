@@ -1,5 +1,5 @@
 ---
-status: planning
+status: active
 description: Bubble Tea TUI (tskflwctl ui), a second primary adapter over core.Service; read-only browser first, mutations later
 priority: high
 tags: [tui, bubble-tea, ux]

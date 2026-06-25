@@ -100,7 +100,7 @@ type lintTaskJSON struct {
 
 type epicMetaJSON struct {
 	ID          string   `json:"id" jsonschema:"description=epic identifier (NN-slug)"`
-	Status      string   `json:"status,omitempty" jsonschema:"description=planning | in-progress | completed | archived"`
+	Status      string   `json:"status,omitempty" jsonschema:"description=active | retired | deprecated"`
 	Description string   `json:"description,omitempty" jsonschema:"description=one-line epic goal"`
 	Priority    string   `json:"priority,omitempty" jsonschema:"description=high | medium | low"`
 	Created     string   `json:"created,omitempty" jsonschema:"description=creation date YYYY-MM-DD"`

@@ -23,9 +23,9 @@ func TestLint_DuplicateSlug_Exit11(t *testing.T) {
 		}
 	}
 	// Both copies folder-matching (the Move-crash shape): only the duplicate is wrong.
-	write("tasks/in-progress/dup.md", "---\nstatus: in-progress\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# Dup\n")
+	write("tasks/in-progress/dup.md", "---\nstatus: active\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# Dup\n")
 	write("tasks/completed/dup.md", "---\nstatus: completed\n---\n# Dup\n")
-	write("epics/e1.md", "---\nstatus: in-progress\n---\n# E1\n")
+	write("epics/e1.md", "---\nstatus: active\n---\n# E1\n")
 
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
@@ -53,7 +53,9 @@ func TestLint_Clean(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("epics/e1.md", "---\nstatus: in-progress\n---\n# E1\n")
+	// The epic must itself be lint-clean now (status + priority + description),
+	// or `lint` would flag it and never report a pass.
+	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
 	write("tasks/ready-to-start/good.md",
 		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
 

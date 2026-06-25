@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: planning
+status: active
 description: 'Rework the on-disk data model: a stable-key layout with status in frontmatter not the directory, a shared core read-model/projection, and content-aware OCC. Design-first epic; much still undecided.'
 priority: medium
 tags: [storage, architecture, core]

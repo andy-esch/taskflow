@@ -27,9 +27,9 @@ func cleanTaskRepo(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	mk("epics/e1.md", "---\nstatus: in-progress\n---\n# E1\n")
+	mk("epics/e1.md", "---\nstatus: active\n---\n# E1\n")
 	mk("tasks/in-progress/clean.md",
-		"---\nstatus: in-progress\nepic: e1\ntier: 2\npriority: low\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# Clean\n")
+		"---\nstatus: active\nepic: e1\ntier: 2\npriority: low\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# Clean\n")
 	return root
 }
 

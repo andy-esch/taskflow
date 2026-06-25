@@ -9,6 +9,7 @@ priority: low
 autonomy_level: 3
 tags: [cli]
 created: "2026-06-25"
+updated_at: "2026-06-25"
 ---
 # Audit editing faces: `audit edit` + `audit set` + `audit append`
 
@@ -66,3 +67,7 @@ Relates to epic 20. Siblings: epic-mutation, lint-covers-epics.
 
 `audit edit`, `audit set`, and `audit append` all work — validated, atomic, JSON,
 picker — so authoring/fixing an audit no longer means leaving the tool.
+
+## Decision 2026-06-25 — drop 'audit set', date is immutable
+
+Scope to **audit edit + audit append only**. The audit 'date' (and 'area') ARE the slug (<date>-<area>), so they're immutable identity — there is no 'audit set' (the slug-rename problem dissolves). A mutable 'updated' timestamp is split into [[add-a-mutable-updated-timestamp-to-audits]]. Retitle/rescope this task to edit+append when picked up.

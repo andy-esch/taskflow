@@ -112,6 +112,7 @@ func newTaskNewCmd(app *App) *cobra.Command {
 				return render.CreatedJSON(app.Out, "task", t.Slug, string(t.Status), app.rel(t.Path), app.DryRun)
 			}
 			render.CreatedHuman(app.Out, app.Style, app.linkPath(t.Path), app.DryRun)
+			render.CreatedSlugNote(app.Out, app.Style, p.Title, t.Slug)
 			if !app.DryRun {
 				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task start "+t.Slug))
 			}

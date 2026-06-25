@@ -59,14 +59,16 @@ func (nopStore) CreateAudit(domain.Audit, string, bool) (domain.Audit, error) {
 // the read/create methods its tests touch (the rest come from nopStore).
 type fakeStore struct {
 	nopStore
-	tasks         []domain.Task
-	epics         []domain.Epic
-	audits        []domain.Audit
-	problems      []domain.FileProblem // returned by ListTasks
-	created       []domain.Task        // tasks passed to CreateTask
-	createdBodies []string             // bodies passed to CreateTask (parallel to created)
-	createdAudits []domain.Audit       // audits passed to CreateAudit
-	auditBodies   map[string]string    // slug → body, for GetAudit (finding queries)
+	tasks             []domain.Task
+	epics             []domain.Epic
+	audits            []domain.Audit
+	problems          []domain.FileProblem // returned by ListTasks
+	created           []domain.Task        // tasks passed to CreateTask
+	createdBodies     []string             // bodies passed to CreateTask (parallel to created)
+	createdAudits     []domain.Audit       // audits passed to CreateAudit
+	auditCreateBodies []string             // bodies passed to CreateAudit (parallel to createdAudits)
+	epicCreateBodies  []string             // bodies passed to CreateEpic
+	auditBodies       map[string]string    // slug → body, for GetAudit (finding queries)
 }
 
 func (f *fakeStore) GetAudit(slug string) (domain.Audit, string, error) {
@@ -109,15 +111,17 @@ func (f *fakeStore) CreateTask(t domain.Task, body string, _ bool) (domain.Task,
 	f.createdBodies = append(f.createdBodies, body)
 	return t, nil
 }
-func (f *fakeStore) CreateAudit(a domain.Audit, _ string, _ bool) (domain.Audit, error) {
+func (f *fakeStore) CreateAudit(a domain.Audit, body string, _ bool) (domain.Audit, error) {
 	f.createdAudits = append(f.createdAudits, a)
+	f.auditCreateBodies = append(f.auditCreateBodies, body)
 	return a, nil
 }
 func (f *fakeStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return f.epics, nil, nil
 }
-func (f *fakeStore) CreateEpic(slug string, e domain.Epic, _ string, _ bool) (domain.Epic, error) {
+func (f *fakeStore) CreateEpic(slug string, e domain.Epic, body string, _ bool) (domain.Epic, error) {
 	e.ID = slug
+	f.epicCreateBodies = append(f.epicCreateBodies, body)
 	return e, nil
 }
 func (f *fakeStore) GetEpic(id string) (domain.Epic, string, error) {
@@ -131,7 +135,7 @@ func (f *fakeStore) GetEpic(id string) (domain.Epic, string, error) {
 
 func TestService_ListEpics_Rollup(t *testing.T) {
 	svc := NewService(&fakeStore{
-		epics: []domain.Epic{{ID: "e1", Status: "in-progress"}, {ID: "e2"}},
+		epics: []domain.Epic{{ID: "e1", Status: "active"}, {ID: "e2"}},
 		tasks: []domain.Task{
 			{Slug: "a", Epic: "e1", Status: domain.StatusReadyToStart},
 			{Slug: "b", Epic: "e1", Status: domain.StatusCompleted},

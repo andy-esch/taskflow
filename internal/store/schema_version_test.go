@@ -17,7 +17,7 @@ func TestCreate_StampsSchemaVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	epicC, err := fs.CreateEpic("alpha", domain.Epic{Status: "planning", Description: "d", Priority: "medium", Created: "2026-01-01"}, "# E\n", false)
+	epicC, err := fs.CreateEpic("alpha", domain.Epic{Status: "active", Description: "d", Priority: "medium", Created: "2026-01-01"}, "# E\n", false)
 	if err != nil {
 		t.Fatal(err)
 	}
