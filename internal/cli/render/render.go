@@ -40,7 +40,10 @@ import (
 // path) and `tracked` (scaffold-mode --track entries).
 // 1.11: epic rollups exclude deprecated (withdrawn) tasks from total/done; the
 // epic payload carries a separate `deprecated` count.
-const SchemaVersion = "1.11"
+// 1.12: the `status` summary envelope carries `open_audits` — open-bucket audits
+// (the actionable subset) with the same finding rollup `audit list` reports;
+// omitted when there are none.
+const SchemaVersion = "1.12"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -236,6 +239,18 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		writeTable(w, st.width, nil, rows)
 	}
 
+	// Only open audits, only when there are any — the actionable subset, rendered
+	// with the same bar treatment as epics so the dashboard reads from one vocabulary.
+	if len(s.OpenAudits) > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("Open audits (%d)", len(s.OpenAudits))))
+		rows := make([][]string, 0, len(s.OpenAudits))
+		for _, a := range s.OpenAudits {
+			bar := fmt.Sprintf("%s %s", st.Bar(a.Percent(), 10), st.Percent(a.Percent()))
+			rows = append(rows, []string{"  " + st.Bold(a.Slug), bar, fmt.Sprintf("%d/%d", a.Resolved(), a.Findings), a.Area})
+		}
+		writeTable(w, st.width, nil, rows)
+	}
+
 	if s.Misfiled > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (status ≠ folder; run `lint --fix`)", s.Misfiled)))
 	}
@@ -285,9 +300,15 @@ func SummaryJSON(w io.Writer, s core.Summary) error {
 			Total:        e.Total, Done: e.Done, Percent: e.Percent(), Deprecated: e.Deprecated,
 		})
 	}
+	// open_audits is omitempty: absent unless there's actionable audit work, so a
+	// repo with none sees no envelope change (the human dashboard self-hides too).
+	audits := make([]auditJSON, 0, len(s.OpenAudits))
+	for _, a := range s.OpenAudits {
+		audits = append(audits, auditToJSON(a))
+	}
 	return encodeJSON(w, SummaryEnvelope{
 		SchemaVersion: SchemaVersion, Counts: counts, InProgress: inprog,
-		Epics: epics, Misfiled: s.Misfiled, Unreadable: s.Problems,
+		Epics: epics, OpenAudits: audits, Misfiled: s.Misfiled, Unreadable: s.Problems,
 	})
 }
 
@@ -326,7 +347,8 @@ func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 	}
 	rows := make([][]string, 0, len(epics))
 	for _, e := range epics {
-		progress := fmt.Sprintf("%d/%d (%s)", e.Done, e.Total, st.Percent(e.Percent()))
+		pct := e.Percent()
+		progress := fmt.Sprintf("%s %s %d/%d", st.Bar(pct, 8), st.Percent(pct), e.Done, e.Total)
 		rows = append(rows, []string{st.Bold(e.Epic.ID), e.Epic.Status, progress, e.Epic.Description})
 	}
 	writeTable(w, st.width, []string{st.Dim("EPIC"), st.Dim("STATUS"), st.Dim("PROGRESS"), st.Dim("DESCRIPTION")}, rows)
@@ -356,12 +378,14 @@ func EpicShowHuman(w io.Writer, st Style, epic domain.Epic, tasks []domain.Task,
 	if epic.Description != "" {
 		field("description", epic.Description)
 	}
-	deprecated := 0
-	for _, t := range tasks {
-		if t.Status == domain.StatusDeprecated {
-			deprecated++
-		}
+	// Shared rollup: deprecated tasks leave the denominator (counted separately in
+	// the tasks header), matching epic list / status / the TUI detail.
+	done, total, deprecated := core.TaskRollup(tasks)
+	pct := 0
+	if total > 0 {
+		pct = done * 100 / total
 	}
+	field("progress", fmt.Sprintf("%s %s  %d/%d", st.Bar(pct, 10), st.Percent(pct), done, total))
 	header := fmt.Sprintf("tasks (%d):", len(tasks))
 	if deprecated > 0 {
 		// Note the withdrawn count — those tasks are listed but excluded from the

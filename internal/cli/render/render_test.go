@@ -176,7 +176,8 @@ func TestEpicShowHuman_Tree(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := out.String()
-	for _, want := range []string{"├──", "completed", "ready-to-start", "alpha", "gamma", "delta", "1 deprecated", "# body"} {
+	// progress line rolls up non-deprecated tasks (2 of 3 done = 66%); delta excluded.
+	for _, want := range []string{"├──", "completed", "ready-to-start", "alpha", "gamma", "delta", "1 deprecated", "2/3", "66%", "# body"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("epic show tree missing %q:\n%s", want, s)
 		}
@@ -226,28 +227,59 @@ func TestSummaryOutputs(t *testing.T) {
 		},
 		InProgress: []domain.Task{{Slug: "alpha", Status: domain.StatusInProgress, Declared: domain.StatusInProgress}},
 		Epics:      []core.EpicSummary{{Epic: domain.Epic{ID: "01-x"}, Total: 2, Done: 1}},
+		OpenAudits: []domain.Audit{{Slug: "2026-06-01-audit-x", Bucket: domain.AuditOpen, Area: "store", Findings: 4, OpenFindings: 1}},
 		Misfiled:   1,
 	}
 	var out bytes.Buffer
 	if err := SummaryJSON(&out, s); err != nil {
 		t.Fatal(err)
 	}
-	var got map[string]any
+	var got struct {
+		SchemaVersion string `json:"schema_version"`
+		OpenAudits    []struct {
+			Slug         string `json:"slug"`
+			OpenFindings int    `json:"open_findings"`
+		} `json:"open_audits"`
+	}
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("summary json invalid: %v", err)
 	}
-	if got["schema_version"] != SchemaVersion {
+	if got.SchemaVersion != SchemaVersion {
 		t.Errorf("summary missing schema_version:\n%s", out.String())
+	}
+	if len(got.OpenAudits) != 1 || got.OpenAudits[0].Slug != "2026-06-01-audit-x" || got.OpenAudits[0].OpenFindings != 1 {
+		t.Errorf("summary open_audits wrong:\n%s", out.String())
 	}
 
 	out.Reset()
 	if err := SummaryHuman(&out, NewStyle(false), s); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"in-progress", "alpha", "01-x"} {
+	// open audits surface in their own dashboard section with the rollup (3/4 resolved).
+	for _, want := range []string{"in-progress", "alpha", "01-x", "Open audits", "2026-06-01-audit-x", "3/4"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("summary human output missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+// TestSummaryHuman_NoAudits pins the self-hiding contract: with no open audits the
+// dashboard renders no Audits section and the JSON omits open_audits entirely.
+func TestSummaryHuman_NoAudits(t *testing.T) {
+	s := core.Summary{Epics: []core.EpicSummary{{Epic: domain.Epic{ID: "01-x"}, Total: 2, Done: 1}}}
+	var out bytes.Buffer
+	if err := SummaryJSON(&out, s); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "open_audits") {
+		t.Errorf("open_audits must be omitted when there are none:\n%s", out.String())
+	}
+	out.Reset()
+	if err := SummaryHuman(&out, NewStyle(false), s); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "Open audits") {
+		t.Errorf("no Audits section expected when there are none:\n%s", out.String())
 	}
 }
 

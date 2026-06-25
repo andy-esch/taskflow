@@ -107,30 +107,36 @@ func (s *Service) ListEpics() ([]EpicSummary, []domain.FileProblem, error) {
 // rollupEpics joins tasks onto their epics (by the tasks' `epic:` field) to
 // produce per-epic done/total counts. Shared by ListEpics and Summary.
 func rollupEpics(epics []domain.Epic, tasks []domain.Task) []EpicSummary {
-	idx := make(map[string]*EpicSummary, len(epics))
-	out := make([]EpicSummary, len(epics))
-	for i := range epics {
-		out[i] = EpicSummary{Epic: epics[i]}
-		idx[epics[i].ID] = &out[i]
-	}
+	byEpic := make(map[string][]domain.Task, len(epics))
 	for _, t := range tasks {
-		es, ok := idx[t.Epic]
-		if !ok {
-			continue
-		}
-		// Deprecated tasks are WITHDRAWN work — neither done nor pending — so they
-		// leave the rollup denominator entirely (tracked separately). Deferred
-		// ("not now") stays in Total: it's real, eventually-do work.
-		if t.Status == domain.StatusDeprecated {
-			es.Deprecated++
-			continue
-		}
-		es.Total++
-		if t.Status == domain.StatusCompleted {
-			es.Done++
-		}
+		byEpic[t.Epic] = append(byEpic[t.Epic], t)
+	}
+	out := make([]EpicSummary, len(epics))
+	for i, e := range epics {
+		done, total, deprecated := TaskRollup(byEpic[e.ID])
+		out[i] = EpicSummary{Epic: e, Total: total, Done: done, Deprecated: deprecated}
 	}
 	return out
+}
+
+// TaskRollup counts a task set for an epic-style progress rollup, in ONE place so
+// the rule can't drift across the surfaces that draw it (epic list/status via
+// rollupEpics, plus epic show and the TUI epic detail). Deprecated tasks are
+// WITHDRAWN work — neither done nor pending — so they leave the denominator
+// entirely (tracked separately); deferred ("not now") stays in total as real,
+// eventually-do work; completed is done.
+func TaskRollup(tasks []domain.Task) (done, total, deprecated int) {
+	for _, t := range tasks {
+		if t.Status == domain.StatusDeprecated {
+			deprecated++
+			continue
+		}
+		total++
+		if t.Status == domain.StatusCompleted {
+			done++
+		}
+	}
+	return done, total, deprecated
 }
 
 // ShowEpic returns an epic, the tasks that belong to it, and its body.

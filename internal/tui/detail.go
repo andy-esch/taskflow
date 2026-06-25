@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
@@ -438,20 +439,9 @@ func renderEpicMeta(e domain.Epic, tasks []domain.Task, width int) string {
 	if len(e.Tags) > 0 {
 		detailField(&b, "tags", strings.Join(e.Tags, ", "))
 	}
-	// Mirror core.rollupEpics: deprecated (withdrawn) tasks leave the denominator
-	// (counted separately) so this matches the epic list / status percentage;
-	// everything else — incl. deferred — counts toward total.
-	done, total, deprecated := 0, 0, 0
-	for _, t := range tasks {
-		if t.Status == domain.StatusDeprecated {
-			deprecated++
-			continue
-		}
-		total++
-		if t.Status == domain.StatusCompleted {
-			done++
-		}
-	}
+	// Shared rollup (deprecated leaves the denominator, counted separately) so this
+	// matches epic list / status / epic show.
+	done, total, deprecated := core.TaskRollup(tasks)
 	pct := 0
 	if total > 0 {
 		pct = done * 100 / total
@@ -482,9 +472,9 @@ type auditDetail struct {
 func (d auditDetail) Title() string     { return d.a.Slug }
 func (d auditDetail) Path() string      { return d.a.Path }
 func (d auditDetail) rawBody() string   { return d.body }
-func (d auditDetail) meta(w int) string { return renderAuditMeta(d.a, w) }
+func (d auditDetail) meta(w int) string { return renderAuditMeta(d.a, d.body, w) }
 
-func renderAuditMeta(a domain.Audit, width int) string {
+func renderAuditMeta(a domain.Audit, body string, width int) string {
 	var b strings.Builder
 	tok := theme.Bucket(a.Bucket)
 	pct := a.Percent()
@@ -498,5 +488,20 @@ func renderAuditMeta(a domain.Audit, width int) string {
 	detailField(&b, "area", a.Area)
 	detailField(&b, "date", a.Date)
 	detailField(&b, "findings", progress)
+	// A glyph-coded finding index — status glyph + code + title, one scannable line
+	// each — mirroring the epic detail's task list. The body below renders the same
+	// findings as full prose; this is the at-a-glance, status-colored map of them
+	// (which the prose, with its **Status:** buried inline, doesn't give you).
+	if findings := domain.ParseFindings(body); len(findings) > 0 {
+		b.WriteString("\n")
+		for _, f := range findings {
+			ftok := theme.FindingStatus(f.Status)
+			line := fmt.Sprintf("  %s %s", fg(ftok.Color, ftok.Glyph), f.Code)
+			if f.Title != "" {
+				line += "  " + dim(truncate(f.Title, max1(width-len(f.Code)-6)))
+			}
+			b.WriteString(line + "\n")
+		}
+	}
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
 }

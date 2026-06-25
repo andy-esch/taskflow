@@ -22,6 +22,13 @@ func TestStyle_Disabled_IsPlain(t *testing.T) {
 	if got := st.Priority("high"); got != "high" {
 		t.Errorf("disabled Priority = %q, want plain", got)
 	}
+	// Bucket / FindingStatus must stay byte-stable (plain label, no glyph) when off.
+	if got := st.Bucket("open"); got != "open" {
+		t.Errorf("disabled Bucket = %q, want plain label", got)
+	}
+	if got := st.FindingStatus("fixed"); got != "fixed" {
+		t.Errorf("disabled FindingStatus = %q, want plain label", got)
+	}
 }
 
 func TestStyle_Enabled_WrapsANSI(t *testing.T) {
@@ -32,6 +39,17 @@ func TestStyle_Enabled_WrapsANSI(t *testing.T) {
 	got := st.Status(domain.StatusInProgress)
 	if !strings.Contains(got, "in-progress") || !strings.Contains(got, "\x1b[") {
 		t.Errorf("enabled Status = %q, want colored label", got)
+	}
+	// styled Bucket / FindingStatus carry a colored glyph + the label, like Status.
+	if got := st.Bucket("closed"); !strings.Contains(got, "✔") || !strings.Contains(got, "closed") || !strings.Contains(got, "\x1b[") {
+		t.Errorf("enabled Bucket = %q, want glyph + colored label", got)
+	}
+	if got := st.FindingStatus("open"); !strings.Contains(got, "○") || !strings.Contains(got, "open") || !strings.Contains(got, "\x1b[") {
+		t.Errorf("enabled FindingStatus = %q, want glyph + colored label", got)
+	}
+	// an empty finding status renders blank even when styled — no lone glyph in the cell.
+	if got := st.FindingStatus(""); got != "" {
+		t.Errorf("enabled empty FindingStatus = %q, want empty", got)
 	}
 }
 

@@ -658,6 +658,12 @@
           },
           "type": "array"
         },
+        "open_audits": {
+          "items": {
+            "$ref": "#/$defs/auditJSON"
+          },
+          "type": "array"
+        },
         "misfiled": {
           "type": "integer"
         },
@@ -1193,6 +1199,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.11)",
+  "title": "tskflwctl --json output (schema_version 1.12)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

@@ -26,3 +26,28 @@ func TestParseAuditBucket_InvalidWrapsValidation(t *testing.T) {
 		t.Errorf("invalid audit bucket must wrap ErrValidation, got %v", err)
 	}
 }
+
+// TestAudit_ResolvedAndPercent pins the finding rollup the bars draw from,
+// including the zero-findings guard (no divide-by-zero → 0%) and that the
+// percentage truncates like the epic rollup.
+func TestAudit_ResolvedAndPercent(t *testing.T) {
+	cases := []struct {
+		findings, open            int
+		wantResolved, wantPercent int
+	}{
+		{0, 0, 0, 0},   // no findings → 0%, not a panic
+		{4, 1, 3, 75},  // 3 of 4 resolved
+		{4, 0, 4, 100}, // all resolved
+		{4, 4, 0, 0},   // none resolved
+		{3, 1, 2, 66},  // integer truncation (66.6 → 66)
+	}
+	for _, c := range cases {
+		a := Audit{Findings: c.findings, OpenFindings: c.open}
+		if got := a.Resolved(); got != c.wantResolved {
+			t.Errorf("Resolved(findings=%d open=%d) = %d, want %d", c.findings, c.open, got, c.wantResolved)
+		}
+		if got := a.Percent(); got != c.wantPercent {
+			t.Errorf("Percent(findings=%d open=%d) = %d, want %d", c.findings, c.open, got, c.wantPercent)
+		}
+	}
+}

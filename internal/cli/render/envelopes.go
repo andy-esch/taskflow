@@ -62,6 +62,7 @@ type SummaryEnvelope struct {
 	Counts        []statusCountJSON    `json:"counts"`
 	InProgress    []taskJSON           `json:"in_progress"`
 	Epics         []epicJSON           `json:"epics"`
+	OpenAudits    []auditJSON          `json:"open_audits,omitempty"`
 	Misfiled      int                  `json:"misfiled"`
 	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
 }
