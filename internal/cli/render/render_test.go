@@ -219,6 +219,35 @@ func TestAuditsJSONAndHuman(t *testing.T) {
 	}
 }
 
+// TestAuditShowHuman_FindingTree: audit show renders meta + a status-grouped
+// finding tree (lifecycle order, glyph-coded) + the body, mirroring epic show.
+// A finding with no status must land in a trailing group, not vanish.
+func TestAuditShowHuman_FindingTree(t *testing.T) {
+	a := domain.Audit{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Date: "2026-06-01", Findings: 3, OpenFindings: 1}
+	findings := []domain.Finding{
+		{Code: "M1", Title: "done deal", Status: "fixed"},
+		{Code: "H1", Title: "still open", Status: "open"},
+		{Code: "L9", Title: "mystery"}, // missing status → grouped under (no status), not dropped
+	}
+	var out bytes.Buffer
+	if err := AuditShowHuman(&out, NewStyle(false), a, findings, "# body"); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	for _, want := range []string{"2026-06-01-x", "66%", "2/3", "├──", "open", "H1", "still open", "fixed", "M1", "(no status)", "L9", "mystery", "# body"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("audit show tree missing %q:\n%s", want, s)
+		}
+	}
+	// lifecycle order: the open group precedes the fixed group (despite input order).
+	if strings.Index(s, "still open") > strings.Index(s, "done deal") {
+		t.Errorf("open group should render before fixed:\n%s", s)
+	}
+	if strings.Contains(s, "\x1b[") {
+		t.Errorf("no-color audit show must be ANSI-free:\n%q", s)
+	}
+}
+
 func TestSummaryOutputs(t *testing.T) {
 	s := core.Summary{
 		Counts: []core.StatusCount{

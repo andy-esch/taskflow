@@ -216,8 +216,11 @@ func newAuditShowCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.AuditShowJSON(app.Out, audit, body)
 			}
+			// Parse findings from the RAW body for the status-grouped tree; the body
+			// passed to the renderer is the rendered (glamour/raw) markdown.
+			findings := domain.ParseFindings(body)
 			return app.paged(func(w io.Writer) error {
-				return render.AuditShowHuman(w, app.Style, audit, render.RenderBody(app.Style, body, app.markdownStyle, raw))
+				return render.AuditShowHuman(w, app.Style, audit, findings, render.RenderBody(app.Style, body, app.markdownStyle, raw))
 			})
 		},
 	}
