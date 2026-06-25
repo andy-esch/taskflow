@@ -6,6 +6,13 @@ Show an audit's metadata and body
 tskflwctl audit show <audit> [flags]
 ```
 
+### Examples
+
+```
+  tskflwctl audit show 2026-06-20-api-gateway
+  tskflwctl audit show   # pick from a list
+```
+
 ### Options
 
 ```

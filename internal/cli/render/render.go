@@ -98,7 +98,11 @@ func TasksJSON(w io.Writer, tasks []domain.Task, problems []domain.FileProblem) 
 // TaskShowHuman prints a task's metadata followed by its body.
 func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 	field := func(label, value string) {
-		fmt.Fprintf(w, "%s %s\n", st.Dim(fmt.Sprintf("%-12s", label+":")), value)
+		lbl := fmt.Sprintf("%-12s", label+":")
+		if st.width > 0 { // fit the value to the terminal (TTY only; piped stays full)
+			value = truncate(value, st.width-visibleWidth(lbl)-1)
+		}
+		fmt.Fprintf(w, "%s %s\n", st.Dim(lbl), value)
 	}
 	field("slug", st.Bold(t.Slug))
 	status := st.Status(t.Status)
@@ -374,7 +378,11 @@ func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []domain.FileProb
 // EpicShowHuman prints an epic, its tasks, and its body.
 func EpicShowHuman(w io.Writer, st Style, epic domain.Epic, tasks []domain.Task, body string) error {
 	field := func(label, value string) {
-		fmt.Fprintf(w, "%s %s\n", st.Dim(fmt.Sprintf("%-12s", label+":")), value)
+		lbl := fmt.Sprintf("%-12s", label+":")
+		if st.width > 0 { // fit the value to the terminal (TTY only; piped stays full)
+			value = truncate(value, st.width-visibleWidth(lbl)-1)
+		}
+		fmt.Fprintf(w, "%s %s\n", st.Dim(lbl), value)
 	}
 	field("id", st.Bold(epic.ID))
 	field("status", epic.Status)
@@ -411,9 +419,12 @@ func EpicShowHuman(w io.Writer, st Style, epic domain.Epic, tasks []domain.Task,
 			if len(grp) == 0 {
 				continue
 			}
-			sub := tree.Root(st.Status(s))
+			// Fit nodes to the terminal: a header sits at one indent level (~4 cells),
+			// a child at two (~8). Truncate ANSI-aware so a long slug can't overflow
+			// (tree.Width pads but won't cut an unbreakable token). Width 0 (piped) = full.
+			sub := tree.Root(fitNode(st, st.Status(s), 4))
 			for _, task := range grp {
-				sub.Child(st.Bold(task.Slug))
+				sub.Child(fitNode(st, st.Bold(task.Slug), 8))
 			}
 			tr.Child(sub)
 		}
@@ -459,7 +470,11 @@ var findingStatusOrder = []string{"open", "in-progress", "fixed", "landed", "def
 // already-rendered (glamour/raw) markdown.
 func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Finding, body string) error {
 	field := func(label, value string) {
-		fmt.Fprintf(w, "%s %s\n", st.Dim(fmt.Sprintf("%-9s", label+":")), value)
+		lbl := fmt.Sprintf("%-9s", label+":")
+		if st.width > 0 { // fit the value to the terminal (TTY only; piped stays full)
+			value = truncate(value, st.width-visibleWidth(lbl)-1)
+		}
+		fmt.Fprintf(w, "%s %s\n", st.Dim(lbl), value)
 	}
 	field("slug", st.Bold(a.Slug))
 	field("bucket", st.Bucket(string(a.Bucket)))
@@ -485,14 +500,17 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Fin
 			byStatus[key] = append(byStatus[key], f)
 		}
 		tr := tree.New()
+		// Fit nodes to the terminal width (ANSI-aware), accounting for the connector
+		// indent — header ~4 cells, child ~8 — so a long finding title can't overflow.
+		// Width 0 (piped) leaves them full.
 		addGroup := func(header string, grp []domain.Finding) {
-			sub := tree.Root(header)
+			sub := tree.Root(fitNode(st, header, 4))
 			for _, f := range grp {
 				child := st.Bold(f.Code)
 				if f.Title != "" {
 					child += "  " + f.Title
 				}
-				sub.Child(child)
+				sub.Child(fitNode(st, child, 8))
 			}
 			tr.Child(sub)
 		}

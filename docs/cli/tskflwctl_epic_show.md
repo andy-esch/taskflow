@@ -6,6 +6,13 @@ Show an epic and the tasks under it
 tskflwctl epic show <epic> [flags]
 ```
 
+### Examples
+
+```
+  tskflwctl epic show 01-api-gateway
+  tskflwctl epic show   # pick from a list
+```
+
 ### Options
 
 ```

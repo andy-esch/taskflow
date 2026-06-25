@@ -6,6 +6,13 @@ Set one or more frontmatter fields (validated, single atomic write)
 tskflwctl task set <task> [flags]
 ```
 
+### Examples
+
+```
+  tskflwctl task set add-retry-backoff --priority high
+  tskflwctl task set --priority high   # pick the task from a list
+```
+
 ### Options
 
 ```

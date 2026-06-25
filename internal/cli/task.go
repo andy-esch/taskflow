@@ -192,11 +192,16 @@ func newTaskShowCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "show <task>",
 		Short:             "Show a task's metadata and body",
-		Args:              cobra.ExactArgs(1),
+		Example:           "  tskflwctl task show add-retry-backoff\n  tskflwctl task show   # pick from a list",
+		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: app.completeTaskSlugs,
 		RunE: func(_ *cobra.Command, args []string) error {
-			task, body, err := app.Svc.ShowTask(args[0])
+			slug, err := app.resolveOne(args, "specify a task to show", "no tasks available", "Task to show", app.taskOptions)
+			if err != nil {
+				return err
+			}
+			task, body, err := app.Svc.ShowTask(slug)
 			if err != nil {
 				return err
 			}
@@ -223,10 +228,15 @@ func newTaskSetCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "set <task>",
 		Short:             "Set one or more frontmatter fields (validated, single atomic write)",
-		Args:              cobra.ExactArgs(1),
+		Example:           "  tskflwctl task set add-retry-backoff --priority high\n  tskflwctl task set --priority high   # pick the task from a list",
+		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.completeTaskSlugs,
 		RunE: func(c *cobra.Command, args []string) error {
+			slug, err := app.resolveOne(args, "specify a task to set", "no tasks available", "Task to set", app.taskOptions)
+			if err != nil {
+				return err
+			}
 			updates := map[string]any{}
 			if c.Flags().Changed("description") {
 				updates["description"] = description
@@ -275,13 +285,13 @@ func newTaskSetCmd(app *App) *cobra.Command {
 				if strings.TrimSpace(text) == "" {
 					return fmt.Errorf("%w: --body is empty (nothing to write)", domain.ErrValidation)
 				}
-				task, newBody, err := app.Svc.ReplaceBody(args[0], text, app.DryRun)
+				task, newBody, err := app.Svc.ReplaceBody(slug, text, app.DryRun)
 				if err != nil {
 					return err
 				}
 				return reportTaskMutation(app, task, newBody, "updated", "would update")
 			}
-			task, err := app.Svc.SetFields(args[0], updates, force, app.DryRun)
+			task, err := app.Svc.SetFields(slug, updates, force, app.DryRun)
 			if err != nil {
 				return err
 			}
@@ -333,7 +343,7 @@ func newTaskAppendCmd(app *App) *cobra.Command {
 		// --body is one line as typed; multi-line content comes from a file or stdin
 		// (a shell passes "\n" inside --body literally, it is not a newline).
 		Example:           "  tskflwctl task append my-task --body 'a one-line note'\n  printf '## Review\\n- looks good\\n' | tskflwctl task append my-task --body-file -",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.completeTaskSlugs,
 		RunE: func(c *cobra.Command, args []string) error {
@@ -344,7 +354,11 @@ func newTaskAppendCmd(app *App) *cobra.Command {
 			if strings.TrimSpace(text) == "" {
 				return fmt.Errorf("%w: nothing to append (provide --body, --body-file, or stdin via -)", domain.ErrValidation)
 			}
-			task, newBody, err := app.Svc.AppendBody(args[0], text, app.DryRun)
+			slug, err := app.resolveOne(args, "specify a task to append to", "no tasks available", "Task to append to", app.taskOptions)
+			if err != nil {
+				return err
+			}
+			task, newBody, err := app.Svc.AppendBody(slug, text, app.DryRun)
 			if err != nil {
 				return err
 			}

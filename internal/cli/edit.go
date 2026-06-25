@@ -44,7 +44,7 @@ func newTaskEditCmd(app *App) *cobra.Command {
 				value = args[0]
 			}
 			slug, err := app.fillSelect(value, "specify a task to edit",
-				"no tasks available to edit", "Task to edit", app.editOptions)
+				"no tasks available to edit", "Task to edit", app.taskOptions)
 			if err != nil {
 				return err
 			}

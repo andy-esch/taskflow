@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Demo GIFs (status/epic-show/audit) still show pre-symbology output; regenerate the assets/vhs tapes so README matches bars, finding glyphs, and the Open-audits dashboard section.
 effort: S
@@ -11,6 +11,7 @@ tags: [docs, tui]
 created: "2026-06-25"
 updated_at: "2026-06-25"
 started_at: "2026-06-25"
+completed_at: "2026-06-25"
 ---
 # Regenerate demo GIFs for the new progress + symbology output
 
@@ -69,3 +70,12 @@ Done in-repo:
 Remaining (needs `vhs`, not in the dev container — host/CI):
 - Run `just gifs` to record `tui.gif`, `status.gif`, `audit-show.gif`.
 - Optionally prune the now-unreferenced `help`/`epic-show`/`task-list` tapes + gifs.
+
+## Recorded + documented 2026-06-25
+
+- GIFs recorded (`tui.gif`, `status.gif`, `audit-show.gif`) against the demo fixture.
+- Added [`assets/README.md`](../../../assets/README.md) — a demos hub embedding the
+  three GIFs and pulling together the sub-READMEs ([`vhs/`](../../../assets/vhs/README.md)
+  recording + [`demo-planning/`](../../../assets/demo-planning/README.md) data); added
+  [`assets/demo-planning/README.md`](../../../assets/demo-planning/README.md); linked
+  the hub from the root README's Demos section.

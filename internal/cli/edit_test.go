@@ -49,12 +49,12 @@ func TestTaskEditBare_NonInteractive(t *testing.T) {
 }
 
 // TestTaskEditBare_Picker: bare `task edit` on a TTY resolves a slug through the
-// task picker (here a fake prompter), proving editOptions feeds the chooser.
+// task picker (here a fake prompter), proving taskOptions feeds the chooser.
 func TestTaskEditBare_Picker(t *testing.T) {
 	root := setupRepo(t) // alpha (ready-to-start), beta (in-progress)
 	f := &prompt.Fake{SelectAnswers: []string{"beta"}}
 	app := &App{Svc: core.NewService(store.NewFS(root)), Gate: prompt.NewGate(true), Prompt: f}
-	slug, err := app.fillSelect("", "specify a task to edit", "no tasks available to edit", "Task to edit", app.editOptions)
+	slug, err := app.fillSelect("", "specify a task to edit", "no tasks available to edit", "Task to edit", app.taskOptions)
 	if err != nil || slug != "beta" {
 		t.Fatalf("picker should resolve to beta, got %q %v", slug, err)
 	}

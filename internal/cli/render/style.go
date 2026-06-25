@@ -174,6 +174,26 @@ func visibleWidth(s string) int {
 	return ansi.StringWidth(s)
 }
 
+// fitNode truncates a pre-styled `show` tree node to the terminal width minus its
+// connector indent (~4 cells per level); width 0 (piped) leaves it full so output
+// stays lossless.
+func fitNode(st Style, s string, indent int) string {
+	if st.width <= 0 {
+		return s
+	}
+	return truncateCell(s, st.width-indent)
+}
+
+// truncateCell shortens s to max display cells with a trailing "…", ANSI-aware
+// (safe to cut a pre-styled string — unlike truncate, which bails on ANSI). Used
+// for `show` tree nodes, whose text carries color/bold.
+func truncateCell(s string, max int) string {
+	if max <= 1 || ansi.StringWidth(s) <= max {
+		return s
+	}
+	return ansi.Truncate(s, max, "…")
+}
+
 // truncate shortens a plain string to max display cells with a trailing "…".
 // Cells containing ANSI are returned unchanged (truncating them risks cutting
 // an escape); the last column is plain in practice.

@@ -20,10 +20,10 @@ status-grouped **finding tree**:
 | `tskflwctl status` — counts, in-progress, epic bars, open audits | ![status](./assets/status.gif) |
 | `tskflwctl audit show <id>` — segmented finding bar + finding tree | ![audit show](./assets/audit-show.gif) |
 
-Recorded with [vhs](https://github.com/charmbracelet/vhs) against the curated
-[`assets/demo-planning/`](./assets/demo-planning/) fixture; regenerate with `just
-gifs` (tapes in [`assets/vhs/`](./assets/vhs/) — vhs is a dev-only tool, not a
-build or runtime dependency).
+▸ **[All demos, how they're recorded, and the demo fixture →
+`assets/README.md`](./assets/README.md)** — rendered with
+[vhs](https://github.com/charmbracelet/vhs) against a curated planning tree;
+regenerate with `just gifs`.
 
 ## Map
 

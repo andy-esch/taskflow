@@ -6,6 +6,13 @@ Show a task's metadata and body
 tskflwctl task show <task> [flags]
 ```
 
+### Examples
+
+```
+  tskflwctl task show add-retry-backoff
+  tskflwctl task show   # pick from a list
+```
+
 ### Options
 
 ```

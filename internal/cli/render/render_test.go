@@ -251,6 +251,27 @@ func TestAuditShowHuman_FindingTree(t *testing.T) {
 	}
 }
 
+// TestEpicShowHuman_FitsWidth pins the width-fit: at a narrow Style width, the
+// metadata values AND the task tree are truncated so no line overflows the
+// terminal. Piped output (width 0) stays full — covered by the other show tests.
+func TestEpicShowHuman_FitsWidth(t *testing.T) {
+	st := NewStyle(false).WithWidth(40)
+	tasks := []domain.Task{{Slug: "a-very-long-task-slug-that-would-overflow-a-narrow-terminal", Status: domain.StatusReadyToStart}}
+	epic := domain.Epic{ID: "01-x", Status: "planning", Description: "A deliberately long epic description that must be truncated to the terminal width"}
+	var out bytes.Buffer
+	if err := EpicShowHuman(&out, st, epic, tasks, "# body"); err != nil {
+		t.Fatal(err)
+	}
+	for _, ln := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
+		if visibleWidth(ln) > 40 {
+			t.Errorf("line exceeds width 40 (%d): %q", visibleWidth(ln), ln)
+		}
+	}
+	if !strings.Contains(out.String(), "…") {
+		t.Errorf("expected a truncation ellipsis at width 40:\n%s", out.String())
+	}
+}
+
 func TestSummaryOutputs(t *testing.T) {
 	s := core.Summary{
 		Counts: []core.StatusCount{
