@@ -49,6 +49,15 @@ type TaskMutationEnvelope struct {
 	Body          string   `json:"body,omitempty"`
 }
 
+// EpicMutationEnvelope is `epic set --json`: the reloaded epic + dry_run. The
+// epic counterpart to TaskMutationEnvelope; it carries the epic meta (not a task)
+// and no body field (epic set is field-only — there's no `epic set --body`).
+type EpicMutationEnvelope struct {
+	SchemaVersion string       `json:"schema_version"`
+	DryRun        bool         `json:"dry_run"`
+	Epic          epicMetaJSON `json:"epic"`
+}
+
 // MovesEnvelope is the transition report (`task start --json`, etc.).
 type MovesEnvelope struct {
 	SchemaVersion string       `json:"schema_version"`
@@ -214,6 +223,7 @@ type jsonEnvelopes struct {
 	Tasks        TasksEnvelope        `json:"tasks"`
 	TaskShow     TaskShowEnvelope     `json:"task_show"`
 	TaskMutation TaskMutationEnvelope `json:"task_mutation"`
+	EpicMutation EpicMutationEnvelope `json:"epic_mutation"`
 	Moves        MovesEnvelope        `json:"moves"`
 	Summary      SummaryEnvelope      `json:"summary"`
 	Version      VersionEnvelope      `json:"version"`

@@ -15,12 +15,16 @@ import (
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
-// Inline field editing (the human face of `task set`): `e` opens a single form
-// panel listing the typed, editable task fields with what each means; the active
-// field's editor shows IN PLACE — an enum's options inline in its row, a long field
-// (description) in a taller word-wrapped box below the list. Submit fires
-// Service.SetFields (the SAME validated write `task set` uses), so the TUI is a
-// third mutation face that adds no new validation path. Status is absent by design
+// Inline field editing (the human face of `task set` / `epic set`): `e` opens a
+// single form panel listing the typed, editable fields with what each means; the
+// active field's editor shows IN PLACE — an enum's options inline in its row, a
+// long field (description) in a taller word-wrapped box below the list. Submit
+// fires the entity's validated write (Service.SetFields for a task,
+// Service.SetEpicFields for an epic — the SAME paths `task set`/`epic set` use),
+// so the TUI is a third mutation face that adds no new validation path. The two
+// entities differ only in their field set (epics have no effort/tier) and which
+// service write submit routes to (the menu carries an apply closure); the form,
+// widgets, and message flow are shared. Status is absent by design
 // (status==directory; that's the `m` action menu).
 
 // fieldKind selects the widget an editable field uses.
@@ -51,7 +55,7 @@ type editField struct {
 // the entity descriptor (domain.AuthoringFields), the same source `schema task`
 // shows, so they can't drift either.
 func editableFields(t domain.Task) []editField {
-	d := fieldDescs()
+	d := fieldDescs("task")
 	return []editField{
 		{key: "description", label: "description", desc: d["description"], kind: fieldLongText, current: t.Description},
 		{key: "priority", label: "priority", desc: d["priority"], kind: fieldEnum, options: []string{"high", "medium", "low"}, current: t.Priority},
@@ -61,10 +65,25 @@ func editableFields(t domain.Task) []editField {
 	}
 }
 
-// fieldDescs maps a task field name to its one-line meaning from the descriptor.
-func fieldDescs() map[string]string {
+// editableEpicFields are the typed epic fields the TUI edits in place, in form
+// order. Epics carry no effort/tier (those are task-only), and status moves via
+// the `m` action menu (`epic move`), so the set is description/priority/tags only.
+// Submit routes to SetEpicFields (the same write `epic set` uses); priority shares
+// the task enum, and tags ride as a comma-list the SetEpicFields coercion turns
+// into a YAML list — so the GUI and the agent face can't drift.
+func editableEpicFields(e domain.Epic) []editField {
+	d := fieldDescs("epic")
+	return []editField{
+		{key: "description", label: "description", desc: d["description"], kind: fieldLongText, current: e.Description},
+		{key: "priority", label: "priority", desc: d["priority"], kind: fieldEnum, options: []string{"high", "medium", "low"}, current: e.Priority},
+		{key: "tags", label: "tags", desc: d["tags"], kind: fieldText, current: strings.Join(e.Tags, ", ")},
+	}
+}
+
+// fieldDescs maps a kind's field name to its one-line meaning from the descriptor.
+func fieldDescs(kind string) map[string]string {
 	out := map[string]string{}
-	docs, _ := domain.AuthoringFields("task")
+	docs, _ := domain.AuthoringFields(kind)
 	for _, doc := range docs {
 		out[doc.Name] = doc.Description
 	}
@@ -86,6 +105,7 @@ type editMenu struct {
 	active  bool
 	slug    string
 	fields  []editField
+	apply   fieldSetter     // routes submit to the entity's write (SetFields / SetEpicFields)
 	cursor  int             // selected field
 	editing bool            // false: navigating fields; true: editing the selected one
 	input   textinput.Model // single-line text fields
@@ -94,8 +114,27 @@ type editMenu struct {
 	err     string          // last submit's validation error, shown until the next edit
 }
 
+// fieldSetter is the entity-specific write a submit fires: it persists key=value
+// on the entity and reports back via editedMsg (success → flash + reload) or
+// actionErrMsg (a core validation error → shown on the field). Storing it on the
+// menu is what makes the form entity-agnostic — task and epic differ only here and
+// in their field set (see setFieldCmd / setEpicFieldCmd).
+type fieldSetter func(svc *core.Service, slug, key, value string) tea.Cmd
+
 // open shows the form for a task.
 func (e *editMenu) open(t domain.Task) {
+	*e = newEditMenu(t.Slug, editableFields(t), setFieldCmd)
+}
+
+// openEpic shows the form for an epic. Same form + widgets as a task; only the
+// field set (no effort/tier) and the submit target (SetEpicFields) differ.
+func (e *editMenu) openEpic(ep domain.Epic) {
+	*e = newEditMenu(ep.ID, editableEpicFields(ep), setEpicFieldCmd)
+}
+
+// newEditMenu builds the form shell (the shared text widgets) for an entity's
+// slug + field set + submit route.
+func newEditMenu(slug string, fields []editField, apply fieldSetter) editMenu {
 	ti := textinput.New()
 	ti.CharLimit = 256
 	ti.SetWidth(36)
@@ -108,7 +147,7 @@ func (e *editMenu) open(t domain.Task) {
 	ta.SetHeight(4)
 	ta.KeyMap.InsertNewline.SetEnabled(false) // Enter submits; description stays one line
 
-	*e = editMenu{active: true, slug: t.Slug, fields: editableFields(t), input: ti, area: ta}
+	return editMenu{active: true, slug: slug, fields: fields, apply: apply, input: ti, area: ta}
 }
 
 func (e *editMenu) close() {
@@ -257,7 +296,7 @@ func (m *Model) handleEditKey(msg tea.KeyPressMsg) tea.Cmd {
 // (see the editedMsg/actionErrMsg handlers). The field stays focused meanwhile.
 func (m *Model) submitEdit() tea.Cmd {
 	m.edit.err = ""
-	return setFieldCmd(m.svc, m.edit.slug, m.edit.cur().key, m.edit.value())
+	return m.edit.apply(m.svc, m.edit.slug, m.edit.cur().key, m.edit.value())
 }
 
 // setCurrent updates the form's displayed value for a field after a confirmed
@@ -270,7 +309,7 @@ func (e *editMenu) setCurrent(key, val string) {
 	}
 }
 
-// setFieldCmd runs the field write off the event loop, reporting success
+// setFieldCmd runs a task field write off the event loop, reporting success
 // (editedMsg → flash + reload) or the core validation error (actionErrMsg → flash,
 // no reload). force=false, dryRun=false: a real, fully-validated set.
 func setFieldCmd(svc *core.Service, slug, key, value string) tea.Cmd {
@@ -279,6 +318,18 @@ func setFieldCmd(svc *core.Service, slug, key, value string) tea.Cmd {
 			return actionErrMsg{slug: slug, err: err}
 		}
 		return editedMsg{slug: slug, field: key, value: value}
+	}
+}
+
+// setEpicFieldCmd is setFieldCmd's epic twin: it routes through SetEpicFields (the
+// `epic set` write), reporting the same editedMsg/actionErrMsg so the form's flash,
+// reload, and on-field error handling are reused unchanged.
+func setEpicFieldCmd(svc *core.Service, id, key, value string) tea.Cmd {
+	return func() tea.Msg {
+		if _, err := svc.SetEpicFields(id, map[string]any{key: value}, false, false); err != nil {
+			return actionErrMsg{slug: id, err: err}
+		}
+		return editedMsg{slug: id, field: key, value: value}
 	}
 }
 

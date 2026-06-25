@@ -96,6 +96,102 @@ func (s *FS) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) {
 	return ep, nil
 }
 
+// SetEpicFields surgically updates frontmatter fields on an epic and writes the
+// file atomically in place. Unlike a task SetFields there is no status/directory
+// concern (epics live flat, status is a field), so no compare-and-swap re-resolve
+// is needed — the file never moves. Mirrors the task SetFields parse-before-commit
+// guard: an update whose result wouldn't reload is rejected with the file
+// untouched (ErrValidation, not a FileProblem — the user's update is bad, the file
+// on disk was never the cause).
+func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (domain.Epic, error) {
+	cands, err := markdownCandidates(s.epicsDir, "") // epics have no status/bucket dir
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	c, err := resolveID("epic", id, cands)
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	path := c.path
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Epic{}, fmt.Errorf("read epic %s: %w", path, err)
+	}
+	newContent, err := updateFrontmatter(content, updates)
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	// Parse before committing: never leave an unreloadable file on disk. Attribute
+	// a parse failure correctly — if the ORIGINAL already fails the same way, blame
+	// the file, not the user's update (mirrors the task SetFields path).
+	ep, err := parseEpic(newContent, path)
+	if err != nil {
+		if _, perr := parseEpic(content, path); perr != nil {
+			return domain.Epic{}, fmt.Errorf("%w: %s already has malformed frontmatter (not caused by this update): %v", domain.ErrValidation, path, perr)
+		}
+		return domain.Epic{}, fmt.Errorf("%w: update would not reload (%v); nothing was written", domain.ErrValidation, err)
+	}
+	if dryRun {
+		return ep, nil // validated end-to-end; only the write is skipped
+	}
+	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
+		return domain.Epic{}, err
+	}
+	return ep, nil
+}
+
+// EditEpic is the epic counterpart to EditTask: resolve id, hand the current file
+// content to edit (which runs the caller's $EDITOR), and accept the result only if
+// it still parses as an epic (parse-before-accept), reopening the editor on a
+// broken edit. Epics never move directories, so there is no compare-and-swap
+// concern — the file stays put. Returns the reloaded epic and whether it changed.
+func (s *FS) EditEpic(id string, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error) {
+	cands, err := markdownCandidates(s.epicsDir, "") // epics have no status/bucket dir
+	if err != nil {
+		return domain.Epic{}, false, err
+	}
+	c, err := resolveID("epic", id, cands)
+	if err != nil {
+		return domain.Epic{}, false, err
+	}
+	path := c.path
+	orig, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Epic{}, false, fmt.Errorf("read epic %s: %w", path, err)
+	}
+
+	current := string(orig)
+	var prevErr error
+	for {
+		edited, err := edit(current, prevErr)
+		if err != nil {
+			return domain.Epic{}, false, err
+		}
+		if edited == string(orig) {
+			// No net change. Surface a parse error if the file was already broken on
+			// disk (opened to inspect, saved unchanged) rather than report success.
+			ep, perr := parseEpic(orig, path)
+			if perr != nil {
+				return domain.Epic{}, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
+			}
+			return ep, false, nil
+		}
+		ep, perr := parseEpic([]byte(edited), path)
+		if perr != nil {
+			if edited == current {
+				// re-saved the same broken content → the user gave up
+				return domain.Epic{}, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
+			}
+			current, prevErr = edited, perr // reopen on the broken content
+			continue
+		}
+		if err := writeFileAtomic(path, []byte(edited), 0o644); err != nil {
+			return domain.Epic{}, false, fmt.Errorf("write epic %s: %w", path, err)
+		}
+		return ep, true, nil
+	}
+}
+
 func parseEpic(content []byte, path string) (domain.Epic, error) {
 	fm, _, err := splitFrontmatterStrict(content)
 	if err != nil {

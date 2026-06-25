@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Epics are write-once via the CLI (only new/list/show); add epic set (fields incl. status) + epic edit ($EDITOR), mirroring task set/edit + the picker.
 effort: M
@@ -11,6 +11,7 @@ tags: [cli]
 created: "2026-06-25"
 updated_at: "2026-06-25"
 started_at: "2026-06-25"
+completed_at: "2026-06-25"
 ---
 # Epic mutation: `epic set` + `epic edit` (parity with tasks)
 

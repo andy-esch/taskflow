@@ -42,6 +42,15 @@ type EpicStore interface {
 	// status is a field, not a directory, so the file stays put). dryRun runs every
 	// validation and returns the would-be epic without touching disk.
 	MoveEpic(id, status string, dryRun bool) (domain.Epic, error)
+	// SetEpicFields surgically updates non-status frontmatter fields on an epic in
+	// one atomic, validated write (status moves via MoveEpic). dryRun runs every
+	// validation and returns the would-be epic without touching disk.
+	SetEpicFields(id string, updates map[string]any, dryRun bool) (domain.Epic, error)
+	// EditEpic hands the current file content to edit (which runs the caller's
+	// editor) and accepts the result only if it still parses as an epic —
+	// parse-before-accept, looping on the editor for a broken edit. Reports whether
+	// the file changed. The epic counterpart to EditTask.
+	EditEpic(id string, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error)
 }
 
 // AuditStore is the audit-persistence port.

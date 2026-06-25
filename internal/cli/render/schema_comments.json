@@ -7,6 +7,7 @@
   "github.com/andy-esch/taskflow/internal/cli/render.CreatedItem": "CreatedItem is the created document inside CreatedEnvelope.",
   "github.com/andy-esch/taskflow/internal/cli/render.DoctorEnvelope": "DoctorEnvelope is `doctor --json`: the linkback audit result.",
   "github.com/andy-esch/taskflow/internal/cli/render.DoctorProblem": "DoctorProblem is one linkback inconsistency: the offending repo + a message.",
+  "github.com/andy-esch/taskflow/internal/cli/render.EpicMutationEnvelope": "EpicMutationEnvelope is `epic set --json`: the reloaded epic + dry_run.",
   "github.com/andy-esch/taskflow/internal/cli/render.EpicShowEnvelope": "EpicShowEnvelope is `epic show --json`.",
   "github.com/andy-esch/taskflow/internal/cli/render.EpicsEnvelope": "EpicsEnvelope is `epic list --json`.",
   "github.com/andy-esch/taskflow/internal/cli/render.ErrorEnvelope": "ErrorEnvelope is the failure payload emitted under --json (see cli.WriteError).",

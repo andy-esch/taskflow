@@ -985,6 +985,28 @@ func cmdJump(t *testing.T, m Model, word string) Model {
 	return drain(t, tm.(Model), cmd)
 }
 
+// TestModel_EditKeyOnAudit_FlashesEditorHint: e (the inline field editor, for
+// tasks and epics) on an audit — which has no field-level write — doesn't die as a
+// silent no-op; it flashes a hint pointing at E ($EDITOR), the actual way to edit
+// an audit.
+func TestModel_EditKeyOnAudit_FlashesEditorHint(t *testing.T) {
+	m := cmdJump(t, auditModel(t), "audits")
+	if m.cur().kind != entityAudits || m.selectedPath() == "" {
+		t.Fatalf("setup: want an audit selected on the audits tab, got tab=%q path=%q", m.cur().name, m.selectedPath())
+	}
+	tm, _ := m.Update(press("e"))
+	m = tm.(Model)
+	if m.edit.active {
+		t.Error("e must not open the task-only inline editor on an audit")
+	}
+	if m.flash == "" || !m.flashErr {
+		t.Errorf("e on an audit should flash a hint, not no-op silently; got flash=%q err=%v", m.flash, m.flashErr)
+	}
+	if !strings.Contains(m.flash, "E") {
+		t.Errorf("the hint should point at E ($EDITOR), got %q", m.flash)
+	}
+}
+
 func TestModel_AuditBucketCyclesAndFilters(t *testing.T) {
 	m := cmdJump(t, auditModel(t), "audits")
 	if m.cur().kind != entityAudits {

@@ -420,10 +420,18 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case key.Matches(msg, keys.Edit):
-		// Inline field edit via SetFields — task-only (status stays in the `m`
-		// menu); a no-op on epics/audits, which have no SetFields path in core.
+		// Inline field edit — tasks (SetFields) and epics (SetEpicFields), each with
+		// its own typed field set: tasks get description/priority/tags/effort/tier,
+		// epics description/priority/tags (no effort/tier; status moves in the `m`
+		// menu). Audits have no field-level write — they edit the whole file via the
+		// entity-agnostic `E` ($EDITOR) — so on an audit selection we point at `E`
+		// rather than dying as a silent no-op.
 		if t, ok := m.selectedTask(); ok {
 			m.edit.open(t)
+		} else if ep, ok := m.selectedEpic(); ok {
+			m.edit.openEpic(ep)
+		} else if m.selectedPath() != "" {
+			m.flash, m.flashErr = "no inline edit here — press E to edit in $EDITOR", true
 		}
 		return m, nil
 	case key.Matches(msg, keys.OpenEditor):
@@ -621,6 +629,16 @@ func (m Model) selectedTask() (domain.Task, bool) {
 		return it.t, true
 	}
 	return domain.Task{}, false
+}
+
+// selectedEpic returns the selected row as an epic — ok only on the epics tab.
+// Mirrors selectedTask; the `e` handler uses it to open the inline editor on an
+// epic (description/priority/tags via SetEpicFields).
+func (m Model) selectedEpic() (domain.Epic, bool) {
+	if it, ok := m.cur().list.SelectedItem().(epicItem); ok {
+		return it.es.Epic, true
+	}
+	return domain.Epic{}, false
 }
 
 // selectedLifecycle returns the selected row's id and current lifecycle state (a

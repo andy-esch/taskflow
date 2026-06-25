@@ -45,6 +45,12 @@ func (nopStore) CreateEpic(string, domain.Epic, string, bool) (domain.Epic, erro
 func (nopStore) MoveEpic(string, string, bool) (domain.Epic, error) {
 	return domain.Epic{}, nil
 }
+func (nopStore) SetEpicFields(string, map[string]any, bool) (domain.Epic, error) {
+	return domain.Epic{}, nil
+}
+func (nopStore) EditEpic(string, func(string, error) (string, error)) (domain.Epic, bool, error) {
+	return domain.Epic{}, false, nil
+}
 func (nopStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) { return nil, nil, nil }
 func (nopStore) GetAudit(string) (domain.Audit, string, error) {
 	return domain.Audit{}, "", domain.ErrNotFound
@@ -148,6 +154,31 @@ func (f *fakeStore) MoveEpic(id, status string, dryRun bool) (domain.Epic, error
 			}
 			return e, nil
 		}
+	}
+	return domain.Epic{}, domain.ErrNotFound
+}
+
+// SetEpicFields mirrors the real store: resolve the seeded epic and apply the
+// already-validated/coerced updates the Service hands down (description/priority/
+// tags), persisting unless dryRun. Unknown id is ErrNotFound, like the real store.
+func (f *fakeStore) SetEpicFields(id string, updates map[string]any, dryRun bool) (domain.Epic, error) {
+	for i, e := range f.epics {
+		if e.ID != id {
+			continue
+		}
+		if v, ok := updates["description"].(string); ok {
+			e.Description = v
+		}
+		if v, ok := updates["priority"].(string); ok {
+			e.Priority = v
+		}
+		if v, ok := updates["tags"].([]string); ok {
+			e.Tags = v
+		}
+		if !dryRun {
+			f.epics[i] = e
+		}
+		return e, nil
 	}
 	return domain.Epic{}, domain.ErrNotFound
 }
@@ -374,5 +405,90 @@ func TestService_MoveEpic_NotFound(t *testing.T) {
 	_, err := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}}).MoveEpic("ghost", "retired", false)
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("unknown epic should be ErrNotFound, got %v", err)
+	}
+}
+
+// TestService_SetEpicFields mirrors the SetFields tests: a valid field set lands,
+// a bad priority is ErrValidation (nothing written), an unknown id is ErrNotFound.
+func TestService_SetEpicFields(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active", Priority: "medium"}}}
+	svc := NewService(fs)
+
+	e, err := svc.SetEpicFields("e1", map[string]any{"priority": "high"}, false, false)
+	if err != nil {
+		t.Fatalf("setting a valid priority should succeed, got %v", err)
+	}
+	if e.Priority != "high" {
+		t.Errorf("returned epic priority = %q, want high", e.Priority)
+	}
+	if fs.epics[0].Priority != "high" {
+		t.Errorf("store not updated: %q", fs.epics[0].Priority)
+	}
+}
+
+func TestService_SetEpicFields_BadPriority(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active", Priority: "medium"}}}
+	_, err := NewService(fs).SetEpicFields("e1", map[string]any{"priority": "urgent"}, false, false)
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("an invalid priority should be ErrValidation, got %v", err)
+	}
+	if fs.epics[0].Priority != "medium" {
+		t.Errorf("nothing should change on a validation failure, got %q", fs.epics[0].Priority)
+	}
+}
+
+func TestService_SetEpicFields_UnknownEpic(t *testing.T) {
+	_, err := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}}).
+		SetEpicFields("ghost", map[string]any{"priority": "high"}, false, false)
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("unknown epic should be ErrNotFound, got %v", err)
+	}
+}
+
+// TestService_SetEpicFields_StatusRejected pins that status is NOT settable here —
+// it moves via `epic move`. Both the typed-flag-less escape hatch and a bare status
+// key are rejected before reaching the store.
+func TestService_SetEpicFields_StatusRejected(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}}
+	_, err := NewService(fs).SetEpicFields("e1", map[string]any{"status": "retired"}, false, false)
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("setting status via `set` should be ErrValidation (use `epic move`), got %v", err)
+	}
+	if fs.epics[0].Status != "active" {
+		t.Errorf("status must not change via set, got %q", fs.epics[0].Status)
+	}
+}
+
+// TestService_SetEpicFields_UnknownFieldNeedsForce mirrors the task contract: a key
+// outside the epic registry is rejected without --force, accepted with it.
+func TestService_SetEpicFields_UnknownFieldNeedsForce(t *testing.T) {
+	svc := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}})
+	if _, err := svc.SetEpicFields("e1", map[string]any{"owner": "me"}, false, false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("an unknown field without --force should be ErrValidation, got %v", err)
+	}
+	if _, err := svc.SetEpicFields("e1", map[string]any{"owner": "me"}, true, false); err != nil {
+		t.Errorf("--force should allow an unknown field, got %v", err)
+	}
+}
+
+func TestService_SetEpicFields_NoFields(t *testing.T) {
+	_, err := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}}).
+		SetEpicFields("e1", map[string]any{}, false, false)
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("no fields should be ErrValidation, got %v", err)
+	}
+}
+
+// EditEpic delegates to the store's editor loop; the in-memory fakeStore inherits
+// the nopStore EditEpic (returns a zero epic, unchanged), so this just pins the
+// pass-through wiring exists and reports "no change" cleanly.
+func TestService_EditEpic_PassThrough(t *testing.T) {
+	svc := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}})
+	_, changed, err := svc.EditEpic("e1", func(cur string, _ error) (string, error) { return cur, nil })
+	if err != nil {
+		t.Fatalf("EditEpic pass-through should not error, got %v", err)
+	}
+	if changed {
+		t.Errorf("nopStore EditEpic reports no change; got changed=true")
 	}
 }

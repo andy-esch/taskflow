@@ -46,7 +46,9 @@ import (
 // 1.13: every audit payload carries the finding-disposition tally the segmented
 // progress bar bands by — `in_progress_findings`, `done_findings` (fixed/landed),
 // `dropped_findings` (deferred/superseded/wontfix) — alongside `open_findings`.
-const SchemaVersion = "1.13"
+// 1.14: the `epic_mutation` envelope (`epic set`) added — the epic counterpart to
+// `task_mutation`; it carries dry_run + the reloaded epic (field-only, no body).
+const SchemaVersion = "1.14"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -684,6 +686,13 @@ func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body strin
 		Tasks:         jt,
 		Body:          body,
 	})
+}
+
+// EpicMutationJSON writes the result of an `epic set`: the reloaded epic + dry_run
+// (always present — a preview must be distinguishable from a real write). The epic
+// counterpart to TaskMutationJSON; field-only, so there's no body to echo.
+func EpicMutationJSON(w io.Writer, epic domain.Epic, dryRun bool) error {
+	return encodeJSON(w, EpicMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Epic: toEpicMeta(epic)})
 }
 
 // InitJSON reports the init result. The caller fills the envelope's named fields

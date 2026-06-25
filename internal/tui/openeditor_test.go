@@ -37,6 +37,27 @@ func TestOpenInEditor_Key(t *testing.T) {
 	}
 }
 
+// TestOpenInEditor_Epic: `E` is entity-agnostic — it acts on the selected row's
+// path, so it works on the epics tab too (the field-level inline `e` stays
+// task-only; this is the whole-file $EDITOR path). Pins epic parity for `E`.
+func TestOpenInEditor_Epic(t *testing.T) {
+	m := epicsTab(t, loaded(t, 120, 40))
+	if m.selectedID() != "01-test" {
+		t.Fatalf("setup: want the seeded epic selected, got %q", m.selectedID())
+	}
+	if m.selectedPath() == "" {
+		t.Fatal("an epic selection should have a file path for E to open")
+	}
+	tm, cmd := m.Update(press("E"))
+	mm := tm.(Model)
+	if cmd == nil {
+		t.Fatal("E on an epic selection should return an ExecProcess cmd")
+	}
+	if mm.flashErr {
+		t.Errorf("E on a valid epic should not flash an error; got %q", mm.flash)
+	}
+}
+
 // TestEditorClosed_Success_Reloads: returning from the editor (nil err) reloads
 // so any change shows, and clears any prior flash.
 func TestEditorClosed_Success_Reloads(t *testing.T) {
