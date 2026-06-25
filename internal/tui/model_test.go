@@ -583,6 +583,25 @@ func TestEntityDetailRenderers(t *testing.T) {
 	}
 }
 
+// TestAuditDetailFindingIndex pins the glyph-coded finding index the audit detail
+// renders above the prose body: one scannable line per finding (status glyph +
+// code + title), the audit analog of the epic detail's task list.
+func TestAuditDetailFindingIndex(t *testing.T) {
+	d := auditDetail{
+		a: domain.Audit{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Findings: 2, OpenFindings: 1},
+		body: "# Audit\n" +
+			"#### H1. retry waste  · **Status:** open\n\n" +
+			"#### M2. dead method  · **Status:** fixed\n",
+	}
+	meta := ansi.Strip(d.meta(70))
+	// each finding's code + title, glyph-coded by status (○ open, ✔ fixed).
+	for _, want := range []string{"○", "H1", "retry waste", "✔", "M2", "dead method"} {
+		if !strings.Contains(meta, want) {
+			t.Errorf("finding index missing %q:\n%s", want, meta)
+		}
+	}
+}
+
 // TestModel_LongTitleKeepsDetailBorder pins the chrome-corruption fix: a detail
 // title longer than the pane is truncated, not wrapped — so the pane keeps its
 // bottom border (two `╯`, one per pane) at the narrowest two-pane width.

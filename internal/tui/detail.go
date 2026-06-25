@@ -482,9 +482,9 @@ type auditDetail struct {
 func (d auditDetail) Title() string     { return d.a.Slug }
 func (d auditDetail) Path() string      { return d.a.Path }
 func (d auditDetail) rawBody() string   { return d.body }
-func (d auditDetail) meta(w int) string { return renderAuditMeta(d.a, w) }
+func (d auditDetail) meta(w int) string { return renderAuditMeta(d.a, d.body, w) }
 
-func renderAuditMeta(a domain.Audit, width int) string {
+func renderAuditMeta(a domain.Audit, body string, width int) string {
 	var b strings.Builder
 	tok := theme.Bucket(a.Bucket)
 	pct := a.Percent()
@@ -498,5 +498,20 @@ func renderAuditMeta(a domain.Audit, width int) string {
 	detailField(&b, "area", a.Area)
 	detailField(&b, "date", a.Date)
 	detailField(&b, "findings", progress)
+	// A glyph-coded finding index — status glyph + code + title, one scannable line
+	// each — mirroring the epic detail's task list. The body below renders the same
+	// findings as full prose; this is the at-a-glance, status-colored map of them
+	// (which the prose, with its **Status:** buried inline, doesn't give you).
+	if findings := domain.ParseFindings(body); len(findings) > 0 {
+		b.WriteString("\n")
+		for _, f := range findings {
+			ftok := theme.FindingStatus(f.Status)
+			line := fmt.Sprintf("  %s %s", fg(ftok.Color, ftok.Glyph), f.Code)
+			if f.Title != "" {
+				line += "  " + dim(truncate(f.Title, max1(width-len(f.Code)-6)))
+			}
+			b.WriteString(line + "\n")
+		}
+	}
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
 }

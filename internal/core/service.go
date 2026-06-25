@@ -70,11 +70,14 @@ type Summary struct {
 	Counts     []StatusCount        // every status in display order (count may be 0)
 	InProgress []domain.Task        // the in-progress working set
 	Epics      []EpicSummary        // epic rollups
+	OpenAudits []domain.Audit       // audits still in the open bucket (actionable work)
 	Misfiled   int                  // tasks whose status disagrees with their folder
 	Problems   []domain.FileProblem // unreadable files
 }
 
-// Summary composes a one-screen overview from a single scan of tasks + epics.
+// Summary composes a one-screen overview from a single scan of tasks + epics +
+// audits. Only OPEN audits are surfaced — the actionable subset, paralleling the
+// in-progress task working set (closed/deferred audits are done/parked).
 func (s *Service) Summary() (Summary, error) {
 	tasks, p1, err := s.store.ListTasks()
 	if err != nil {
@@ -83,6 +86,16 @@ func (s *Service) Summary() (Summary, error) {
 	epics, p2, err := s.store.ListEpics()
 	if err != nil {
 		return Summary{}, err
+	}
+	audits, p3, err := s.store.ListAudits()
+	if err != nil {
+		return Summary{}, err
+	}
+	var openAudits []domain.Audit
+	for _, a := range audits {
+		if a.Bucket == domain.AuditOpen {
+			openAudits = append(openAudits, a)
+		}
 	}
 	counts := map[domain.Status]int{}
 	var inProgress []domain.Task
@@ -104,8 +117,9 @@ func (s *Service) Summary() (Summary, error) {
 		Counts:     ordered,
 		InProgress: inProgress,
 		Epics:      rollupEpics(epics, tasks),
+		OpenAudits: openAudits,
 		Misfiled:   misfiled,
-		Problems:   append(p1, p2...),
+		Problems:   append(append(p1, p2...), p3...),
 	}, nil
 }
 
