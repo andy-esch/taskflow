@@ -116,6 +116,78 @@ func TestEpicList_JSONProjection(t *testing.T) {
 	}
 }
 
+// TestEpicMove pins the `epic move <id> <status>` verb: it surgically rewrites
+// the epic's status FIELD (no file moves), through the shared moves report.
+func TestEpicMove(t *testing.T) {
+	root := setupEpicRepo(t) // epic "demo", status active
+	out := runRoot(t, "-C", root, "epic", "move", "demo", "retired")
+	if !strings.Contains(out, "demo -> retired") {
+		t.Errorf("unexpected output: %q", out)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "epics", "demo.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "status: retired") || strings.Contains(string(b), "status: active") {
+		t.Errorf("status field not rewritten:\n%s", b)
+	}
+	// The file stays at epics/demo.md — epic status is a field, not a directory.
+	if _, err := os.Stat(filepath.Join(root, "epics", "demo.md")); err != nil {
+		t.Errorf("epic file should stay put after a move: %v", err)
+	}
+}
+
+// TestEpicMove_DryRun previews the move without writing.
+func TestEpicMove_DryRun(t *testing.T) {
+	root := setupEpicRepo(t)
+	original, err := os.ReadFile(filepath.Join(root, "epics", "demo.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := runRoot(t, "-C", root, "epic", "move", "demo", "retired", "--dry-run")
+	if !strings.Contains(out, "would move") {
+		t.Errorf("dry-run should say 'would move', got: %q", out)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "epics", "demo.md"))
+	if string(b) != string(original) {
+		t.Errorf("--dry-run must not write:\n%s", b)
+	}
+}
+
+// TestEpicMove_BadStatus_ExitCode pins exit 11 (validation) for an
+// out-of-vocabulary target status.
+func TestEpicMove_BadStatus_ExitCode(t *testing.T) {
+	root := setupEpicRepo(t)
+	_, err := runRootRC(t, "-C", root, "epic", "move", "demo", "bogus")
+	if err == nil {
+		t.Fatal("a bad target status should error")
+	}
+	if ExitCode(err) != 11 {
+		t.Errorf("want exit 11 (validation), got %d", ExitCode(err))
+	}
+}
+
+// TestComplete_EpicMove_StatusArg pins position-aware completion: epic ids for the
+// leading args, the closed epic-status set on the final (status) arg — never ids.
+func TestComplete_EpicMove_StatusArg(t *testing.T) {
+	root := setupEpicRepo(t) // epic "demo"
+	// Leading arg: epic ids offered, no statuses.
+	first := complete(t, "-C", root, "epic", "move", "")
+	if !has(first, "demo") {
+		t.Errorf("first arg should offer epic ids, got %v", first)
+	}
+	if has(first, "retired") {
+		t.Errorf("first arg must not offer statuses, got %v", first)
+	}
+	// Final (status) arg: the closed epic-status set is offered.
+	last := complete(t, "-C", root, "epic", "move", "demo", "")
+	for _, st := range []string{"active", "retired", "deprecated"} {
+		if !has(last, st) {
+			t.Errorf("status arg should offer %q, got %v", st, last)
+		}
+	}
+}
+
 func TestEpicShow(t *testing.T) {
 	root := setupEpicRepo(t)
 	out := runRoot(t, "-C", root, "epic", "show", "demo")

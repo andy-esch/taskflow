@@ -1,11 +1,22 @@
-## tskflwctl epic
+## tskflwctl epic move
 
-Work with epics
+Transition epic(s) to <status> (active|retired|deprecated)
+
+```
+tskflwctl epic move <epic>... <status> [flags]
+```
+
+### Examples
+
+```
+  tskflwctl epic move 18-tui retired
+  tskflwctl epic move 18-tui 20-cli deprecated --dry-run
+```
 
 ### Options
 
 ```
-  -h, --help   help for epic
+  -h, --help   help for move
 ```
 
 ### Options inherited from parent commands
@@ -23,9 +34,5 @@ Work with epics
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
-* [tskflwctl epic list](tskflwctl_epic_list.md)	 - List epics with task rollup
-* [tskflwctl epic move](tskflwctl_epic_move.md)	 - Transition epic(s) to <status> (active|retired|deprecated)
-* [tskflwctl epic new](tskflwctl_epic_new.md)	 - Create a new epic (auto-numbered NN-slug)
-* [tskflwctl epic show](tskflwctl_epic_show.md)	 - Show an epic and the tasks under it
+* [tskflwctl epic](tskflwctl_epic.md)	 - Work with epics
 

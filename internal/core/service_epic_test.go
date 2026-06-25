@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -39,6 +40,9 @@ func (nopStore) GetEpic(string) (domain.Epic, string, error) {
 	return domain.Epic{}, "", domain.ErrNotFound
 }
 func (nopStore) CreateEpic(string, domain.Epic, string, bool) (domain.Epic, error) {
+	return domain.Epic{}, nil
+}
+func (nopStore) MoveEpic(string, string, bool) (domain.Epic, error) {
 	return domain.Epic{}, nil
 }
 func (nopStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) { return nil, nil, nil }
@@ -131,6 +135,21 @@ func (f *fakeStore) GetEpic(id string) (domain.Epic, string, error) {
 		}
 	}
 	return domain.Epic{}, "", domain.ErrNotFound
+}
+
+// MoveEpic mirrors the real store's field rewrite: resolve the seeded epic, set
+// its status, and (unless dryRun) persist it back to the in-memory slice.
+func (f *fakeStore) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) {
+	for i, e := range f.epics {
+		if e.ID == id {
+			e.Status = status
+			if !dryRun {
+				f.epics[i] = e
+			}
+			return e, nil
+		}
+	}
+	return domain.Epic{}, domain.ErrNotFound
 }
 
 func TestService_ListEpics_Rollup(t *testing.T) {
@@ -319,5 +338,41 @@ func TestService_ShowEpic(t *testing.T) {
 	}
 	if epic.ID != "e1" || len(tasks) != 1 || tasks[0].Slug != "a" || body != "epic body" {
 		t.Errorf("ShowEpic wrong: %+v tasks=%v body=%q", epic, tasks, body)
+	}
+}
+
+// TestService_MoveEpic mirrors the MoveAudit tests: happy-path status change,
+// an out-of-vocabulary status → ErrValidation, an unknown id → ErrNotFound.
+func TestService_MoveEpic(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}}
+	svc := NewService(fs)
+
+	e, err := svc.MoveEpic("e1", "retired", false)
+	if err != nil {
+		t.Fatalf("active→retired should succeed, got %v", err)
+	}
+	if e.Status != "retired" {
+		t.Errorf("returned epic status = %q, want retired", e.Status)
+	}
+	if fs.epics[0].Status != "retired" {
+		t.Errorf("store not updated: %q", fs.epics[0].Status)
+	}
+}
+
+func TestService_MoveEpic_InvalidStatus(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}}
+	_, err := NewService(fs).MoveEpic("e1", "bogus", false)
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("invalid status should be ErrValidation, got %v", err)
+	}
+	if fs.epics[0].Status != "active" {
+		t.Errorf("nothing should change on a validation failure, got %q", fs.epics[0].Status)
+	}
+}
+
+func TestService_MoveEpic_NotFound(t *testing.T) {
+	_, err := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}}).MoveEpic("ghost", "retired", false)
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("unknown epic should be ErrNotFound, got %v", err)
 	}
 }

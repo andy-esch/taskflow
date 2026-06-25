@@ -38,6 +38,10 @@ type EpicStore interface {
 	ListEpics() ([]domain.Epic, []domain.FileProblem, error)
 	GetEpic(id string) (epic domain.Epic, body string, err error)
 	CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (domain.Epic, error)
+	// MoveEpic surgically rewrites an epic's `status` frontmatter field (epic
+	// status is a field, not a directory, so the file stays put). dryRun runs every
+	// validation and returns the would-be epic without touching disk.
+	MoveEpic(id, status string, dryRun bool) (domain.Epic, error)
 }
 
 // AuditStore is the audit-persistence port.

@@ -40,6 +40,17 @@ var auditTransitions = []transition{
 	{"defer", string(domain.AuditDeferred), false},
 }
 
+// epicTransitions are the epic status moves, mirroring `epic move <id> <status>`.
+// Unlike task/audit, epic status is a frontmatter FIELD not a directory, so the
+// move (svc.MoveEpic) rewrites the field in place — no file relocates. None of the
+// three is destructive (no archive-style y/n gate): retiring/deprecating an epic
+// is a reversible status flip, not a file move.
+var epicTransitions = []transition{
+	{"activate", "active", false},
+	{"retire", "retired", false},
+	{"deprecate", "deprecated", false},
+}
+
 // transitionFor resolves a `:`-command verb to its transition within a given
 // table (the active tab's), so verbs are scoped to the entity in view.
 func transitionFor(transitions []transition, verb string) (transition, bool) {

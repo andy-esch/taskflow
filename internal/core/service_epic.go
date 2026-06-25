@@ -139,6 +139,18 @@ func TaskRollup(tasks []domain.Task) (done, total, deprecated int) {
 	return done, total, deprecated
 }
 
+// MoveEpic transitions an epic to another status (active/retired/deprecated).
+// Epic status is a frontmatter field, not a directory, so this rewrites the field
+// in place — the file is never relocated. The status is validated against the
+// closed epic-status vocabulary; an unknown id is ErrNotFound, a bad status
+// ErrValidation. Mirrors MoveAudit (resolve → validate target → surgical write).
+func (s *Service) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) {
+	if err := domain.ValidateEpicStatus(status); err != nil {
+		return domain.Epic{}, err
+	}
+	return s.store.MoveEpic(id, status, dryRun)
+}
+
 // ShowEpic returns an epic, the tasks that belong to it, and its body.
 func (s *Service) ShowEpic(id string) (domain.Epic, []domain.Task, string, error) {
 	epic, body, err := s.store.GetEpic(id)

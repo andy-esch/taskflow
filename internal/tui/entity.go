@@ -227,6 +227,19 @@ func moveAudit(svc *core.Service, id string, tr transition) tea.Cmd {
 	}
 }
 
+// moveEpic applies an epic status transition (activate/retire/deprecate). Epic
+// status is a frontmatter field, not a directory, so MoveEpic rewrites it in place
+// — the file never moves. Success → movedMsg (flash + reload); failure →
+// actionErrMsg (red flash, no reload), matching the CLI.
+func moveEpic(svc *core.Service, id string, tr transition) tea.Cmd {
+	return func() tea.Msg {
+		if _, err := svc.MoveEpic(id, tr.to, false); err != nil {
+			return actionErrMsg{slug: id, err: err}
+		}
+		return movedMsg{slug: id, to: tr.to}
+	}
+}
+
 // newEntityTabs is the entity registry: the ordered set of browsable entities.
 func newEntityTabs() []*entityTab {
 	mk := func(d list.ItemDelegate) list.Model {
@@ -260,7 +273,9 @@ func newEntityTabs() []*entityTab {
 		{
 			kind: entityEpics, name: "epics", aliases: []string{"e", "epic"},
 			list: mk(epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
-			sortCols: epicSortCols, // no transitions: epics have no in-TUI lifecycle move
+			// Epic status is a frontmatter field, not a directory: the `m` menu / `:`
+			// verbs flip it via svc.MoveEpic (the file stays put), mirroring task/audit.
+			sortCols: epicSortCols, transitions: epicTransitions, applyMove: moveEpic,
 		},
 		{
 			kind: entityAudits, name: "audits", aliases: []string{"a", "audit"},

@@ -13,8 +13,44 @@ import (
 
 func newEpicCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "epic", Short: "Work with epics"}
-	cmd.AddCommand(newEpicNewCmd(app), newEpicListCmd(app), newEpicShowCmd(app))
+	cmd.AddCommand(newEpicNewCmd(app), newEpicListCmd(app), newEpicShowCmd(app), newEpicMoveCmd(app))
 	return cmd
+}
+
+// newEpicMoveCmd is the epic analog of `task move`: it transitions an epic to a
+// target status (active/retired/deprecated). Epic status is a frontmatter FIELD,
+// not a directory, so the move rewrites the field in place — no file is relocated
+// — but the verb name mirrors task/audit moves for UX parity. Runs through the
+// shared runMoves engine + the same `moves` JSON envelope.
+func newEpicMoveCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:         "move <epic>... <status>",
+		Short:       "Transition epic(s) to <status> (active|retired|deprecated)",
+		Example:     "  tskflwctl epic move 18-tui retired\n  tskflwctl epic move 18-tui 20-cli deprecated --dry-run",
+		Args:        cobra.MinimumNArgs(2),
+		Annotations: map[string]string{"safety": "mutating"},
+		// Position-aware: the final arg is a status from a small closed set, so it
+		// offers epic statuses there — never epic ids (which would actively mislead).
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			opts, directive := app.completeEpicIDs(cmd, args, toComplete)
+			if len(args) >= 1 {
+				opts = append(opts, domain.AllEpicStatuses()...)
+				if cobra.GetActiveHelpConfig(cmd) != "off" {
+					opts = cobra.AppendActiveHelp(opts, "the final argument is the target status")
+				}
+			}
+			return opts, directive
+		},
+		RunE: func(_ *cobra.Command, args []string) error {
+			status := args[len(args)-1]
+			if err := domain.ValidateEpicStatus(status); err != nil {
+				return err // wraps ErrValidation and lists the valid statuses
+			}
+			return runMoves(app, args[:len(args)-1], status,
+				func(id string) (domain.Epic, error) { return app.Svc.MoveEpic(id, status, app.DryRun) },
+				func(e domain.Epic) string { return e.ID })
+		},
+	}
 }
 
 func newEpicNewCmd(app *App) *cobra.Command {

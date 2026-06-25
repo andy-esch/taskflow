@@ -86,6 +86,10 @@ func (i epicItem) FilterValue() string {
 }
 func (i epicItem) id() string   { return i.es.Epic.ID }
 func (i epicItem) path() string { return i.es.Epic.Path }
+
+// lifecycleState is the epic's current status (active/retired/deprecated) — the
+// action menu drops the no-op transition that lands on it.
+func (i epicItem) lifecycleState() string { return i.es.Epic.Status }
 func (i epicItem) sortFields() sortFields {
 	// Epics have no tier/updated; priority + id (slug) carry the sort.
 	return sortFields{priorityRank: priorityRank(i.es.Epic.Priority), slug: i.es.Epic.ID}

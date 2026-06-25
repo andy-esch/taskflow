@@ -55,6 +55,47 @@ func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
 	return ep, string(body), nil
 }
 
+// MoveEpic surgically rewrites an epic's `status` frontmatter field. Unlike a
+// task/audit move, epic status is a FIELD not a directory, so the file stays put
+// — only the field is rewritten (unknown fields, comments, and key order survive).
+// Moving to the current status is an idempotent no-op write. Mirrors SetFields'
+// parse-before-commit guard: a status that wouldn't reload is rejected with the
+// file untouched.
+func (s *FS) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) {
+	if err := domain.ValidateEpicStatus(status); err != nil {
+		return domain.Epic{}, err
+	}
+	cands, err := markdownCandidates(s.epicsDir, "") // epics have no status/bucket dir
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	c, err := resolveID("epic", id, cands)
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	path := c.path
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Epic{}, fmt.Errorf("read epic %s: %w", path, err)
+	}
+	newContent, err := updateFrontmatter(content, map[string]any{"status": status})
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	// Parse before committing: never leave an unreloadable file on disk.
+	ep, err := parseEpic(newContent, path)
+	if err != nil {
+		return domain.Epic{}, fmt.Errorf("%w: update would not reload (%v); nothing was written", domain.ErrValidation, err)
+	}
+	if dryRun {
+		return ep, nil // validated end-to-end; only the write is skipped
+	}
+	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
+		return domain.Epic{}, err
+	}
+	return ep, nil
+}
+
 func parseEpic(content []byte, path string) (domain.Epic, error) {
 	fm, _, err := splitFrontmatterStrict(content)
 	if err != nil {
