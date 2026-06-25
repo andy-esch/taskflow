@@ -339,7 +339,7 @@ func TestSummaryHuman_NoAudits(t *testing.T) {
 func TestFixOutputs(t *testing.T) {
 	results := []domain.FixResult{{Path: "tasks/ready-to-start/a.md", Changes: []string{"tags: normalized to a YAML list"}}}
 	var out bytes.Buffer
-	if err := FixJSON(&out, results, nil, true); err != nil {
+	if err := FixJSON(&out, results, nil, nil, true); err != nil {
 		t.Fatal(err)
 	}
 	var got struct {
@@ -353,6 +353,10 @@ func TestFixOutputs(t *testing.T) {
 			Path    string `json:"path"`
 			Message string `json:"message"`
 		} `json:"unreadable"`
+		Remaining []struct {
+			Slug   string         `json:"slug"`
+			Issues []domain.Issue `json:"issues"`
+		} `json:"remaining"`
 	}
 	decodeStrict(t, out.Bytes(), &got)
 	if !got.DryRun || len(got.Fixed) != 1 {
@@ -361,16 +365,26 @@ func TestFixOutputs(t *testing.T) {
 	if got.Unreadable == nil {
 		t.Errorf("unreadable should be present (empty, not null) on a dry-run:\n%s", out.String())
 	}
+	if got.Remaining == nil {
+		t.Errorf("remaining should be present (empty, not null) on a dry-run:\n%s", out.String())
+	}
 
 	out.Reset()
-	FixHuman(&out, NewStyle(false), results, false)
+	FixHuman(&out, NewStyle(false), results, nil, false)
 	if !strings.Contains(out.String(), "a.md") {
 		t.Errorf("fix human output missing the path:\n%s", out.String())
 	}
 	out.Reset()
-	FixHuman(&out, NewStyle(false), nil, false)
+	FixHuman(&out, NewStyle(false), nil, nil, false)
 	if out.Len() == 0 {
 		t.Error("zero fixes should still print a confirmation")
+	}
+
+	// Leftover lint findings the pass couldn't repair surface after the fixed list.
+	out.Reset()
+	FixHuman(&out, NewStyle(false), results, []core.LintResult{{Slug: "01-e", Issues: []domain.Issue{{Field: "priority", Message: "missing"}}}}, false)
+	if !strings.Contains(out.String(), "could not auto-repair") || !strings.Contains(out.String(), "01-e") {
+		t.Errorf("fix human output should surface leftover lint findings:\n%s", out.String())
 	}
 }
 
@@ -392,12 +406,25 @@ func TestCreatedSlugNote(t *testing.T) {
 	if got := out.String(); got != "→ slug: wire-oauth-pkce-refresh\n" {
 		t.Errorf("diverging title should surface the slug, got %q", got)
 	}
-	// An everyday title — just case + spaces — is no surprise, so it's silent.
-	for _, clean := range []string{"Add retry backoff", "add-retry-backoff", "Multi-Entity Navigation"} {
+	// An everyday title — just case + spaces — is no surprise, so it's silent. The
+	// apostrophe and trailing-dot cases are silent too: Slugify drops apostrophes and
+	// trims trailing '.'/'-', so the note (whose naiveSlug mirrors those) must NOT
+	// over-fire on "don't" or "… backoff.".
+	for _, clean := range []string{
+		"Add retry backoff", "add-retry-backoff", "Multi-Entity Navigation",
+		"Don't break the build", "Fix the parser's edge case",
+		"Add retry backoff.", "Tidy up the config-",
+	} {
 		out.Reset()
 		CreatedSlugNote(&out, NewStyle(false), clean, domain.Slugify(clean))
 		if out.Len() != 0 {
 			t.Errorf("a no-surprise title (%q) should print nothing, got %q", clean, out.String())
 		}
+	}
+	// A genuinely-diverging title (a character turned into a word-break) still fires.
+	out.Reset()
+	CreatedSlugNote(&out, NewStyle(false), "Refactor: split the dispatcher", domain.Slugify("Refactor: split the dispatcher"))
+	if out.Len() == 0 {
+		t.Error("a title with a dropped colon should surface the slug")
 	}
 }

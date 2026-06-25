@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 
 	"charm.land/lipgloss/v2/tree"
 
@@ -48,7 +49,13 @@ import (
 // `dropped_findings` (deferred/superseded/wontfix) — alongside `open_findings`.
 // 1.14: the `epic_mutation` envelope (`epic set`) added — the epic counterpart to
 // `task_mutation`; it carries dry_run + the reloaded epic (field-only, no body).
-const SchemaVersion = "1.14"
+// 1.15: the schema contract carries `epic_fields` — the epic frontmatter registry
+// (sorted known epic field names), the epic counterpart to `task_fields`, so an
+// agent can discover the epic field set without parsing prose. The `fix` envelope
+// carries `remaining` — the lint findings `--fix` could NOT repair (report-only
+// epics, unfixable task issues), so a --json consumer learns the residual breakage
+// without re-running plain lint.
+const SchemaVersion = "1.15"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -355,12 +362,21 @@ func CreatedSlugNote(w io.Writer, st Style, title, slug string) {
 	fmt.Fprintf(w, "%s\n", st.Dim("→ slug: "+slug))
 }
 
-// naiveSlug is the "no surprise" slug: lowercase, with each run of whitespace
-// collapsed to a single hyphen. When Slugify's real output matches it, the only
-// transforms were the obvious ones (case + spaces) and the derivation needs no
-// note; when it differs, characters were dropped or reordered and the note fires.
+// naiveSlug is the "no surprise" slug: lowercase, apostrophes dropped (Slugify
+// vanishes them silently, so "don't" → dont is no surprise), each run of whitespace
+// collapsed to a single hyphen, and trailing '-'/'.' trimmed (Slugify trims them
+// too, so a trailing dot/space is no surprise either). When Slugify's real output
+// matches it, the only transforms were these obvious ones and the derivation needs
+// no note; when it differs, a character was genuinely turned into a word-break (a
+// colon, em-dash, arrow, …) and the note fires.
 func naiveSlug(title string) string {
-	return strings.Join(strings.Fields(strings.ToLower(title)), "-")
+	lowered := strings.Map(func(r rune) rune {
+		if r == '\'' || r == '’' || r == '‘' {
+			return -1 // drop apostrophes, mirroring Slugify
+		}
+		return unicode.ToLower(r)
+	}, title)
+	return strings.Trim(strings.Join(strings.Fields(lowered), "-"), "-.")
 }
 
 // CreatedJSON writes a versioned envelope for a newly created item; dry_run
@@ -601,8 +617,11 @@ func FindingsHuman(w io.Writer, st Style, fs []core.AuditFinding) error {
 	return nil
 }
 
-// FixHuman writes the auto-repairs applied (or proposed under --dry-run).
-func FixHuman(w io.Writer, st Style, results []domain.FixResult, dryRun bool) {
+// FixHuman writes the auto-repairs applied (or proposed under --dry-run), then the
+// leftover lint findings the pass could NOT repair (report-only epic issues,
+// unfixable task issues) — so a human sees the residual breakage `--fix` left
+// behind, not just what it touched. remaining is empty on a dry-run.
+func FixHuman(w io.Writer, st Style, results []domain.FixResult, remaining []core.LintResult, dryRun bool) {
 	verb := "fixed"
 	if dryRun {
 		verb = "would fix"
@@ -618,13 +637,20 @@ func FixHuman(w io.Writer, st Style, results []domain.FixResult, dryRun bool) {
 	} else {
 		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d file(s) %s", len(results), verb)))
 	}
+	// What's still wrong after the pass — same per-entity rendering plain `lint`
+	// uses (epics are report-only; some task issues aren't auto-fixable).
+	if len(remaining) > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Dim("could not auto-repair:"))
+		LintHuman(w, st, remaining, "item")
+	}
 }
 
-// FixJSON writes the structured fix report: what was repaired, plus any files
-// that still can't be read after the pass (empty on a dry-run, which writes
-// nothing) — so a --json consumer learns the residual breakage without parsing
-// the prose error.
-func FixJSON(w io.Writer, results []domain.FixResult, problems []domain.FileProblem, dryRun bool) error {
+// FixJSON writes the structured fix report: what was repaired (`fixed`), any files
+// that still can't be read after the pass (`unreadable`), and the per-entity lint
+// findings the pass could NOT repair (`remaining` — report-only epics, unfixable
+// task issues). All three are empty on a dry-run (which writes nothing) — so a
+// --json consumer learns the residual breakage without parsing the prose error.
+func FixJSON(w io.Writer, results []domain.FixResult, problems []domain.FileProblem, remaining []core.LintResult, dryRun bool) error {
 	// Empty (not null) for the array fields, so a consumer can len() without a nil
 	// check — and so the output validates against its own schema (type: array).
 	if problems == nil {
@@ -633,7 +659,15 @@ func FixJSON(w io.Writer, results []domain.FixResult, problems []domain.FileProb
 	if results == nil {
 		results = []domain.FixResult{}
 	}
-	return encodeJSON(w, FixEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results, Unreadable: problems})
+	rem := make([]lintTaskJSON, 0, len(remaining))
+	for _, r := range remaining {
+		issues := r.Issues
+		if issues == nil {
+			issues = []domain.Issue{} // empty, not null — the per-row issues are type: array too
+		}
+		rem = append(rem, lintTaskJSON{Slug: r.Slug, Issues: issues})
+	}
+	return encodeJSON(w, FixEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results, Unreadable: problems, Remaining: rem})
 }
 
 // ProblemsHuman writes per-file load problems (unreadable frontmatter).

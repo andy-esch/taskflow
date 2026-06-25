@@ -18,9 +18,9 @@ func fuzzyRepo(t *testing.T) *FS {
 	writeTask(t, root, "ready-to-start", "add-retry-backoff.md",
 		"---\nstatus: ready-to-start\ndescription: x\n---\n# t\n")
 	writeTask(t, root, "in-progress", "add-retry-jitter.md",
-		"---\nstatus: active\ndescription: x\n---\n# t\n")
+		"---\nstatus: in-progress\ndescription: x\n---\n# t\n")
 	writeTask(t, root, "in-progress", "polish.md",
-		"---\nstatus: active\ndescription: x\n---\n# t\n")
+		"---\nstatus: in-progress\ndescription: x\n---\n# t\n")
 	// "polish" is also a strict prefix of this one — exact must still win.
 	writeTask(t, root, "completed", "polish-batch.md",
 		"---\nstatus: completed\ndescription: x\n---\n# t\n")

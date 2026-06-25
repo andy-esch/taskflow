@@ -82,7 +82,7 @@ var entities = []Descriptor{
 		Kind: "epic",
 		Dir:  EpicsDir,
 		AuthoringFields: []FieldDoc{
-			{"status", "string", true, "One of: active | retired | deprecated.", "active"},
+			{"status", "string", true, fmt.Sprintf("One of: %s.", strings.Join(epicStatuses, " | ")), "active"},
 			{"description", "string", true, fmt.Sprintf("One-line goal (≤%d chars); required.", MaxDescriptionLen), "Replace the legacy ingest pipeline"},
 			{"priority", "string", false, "One of: high | medium | low.", "medium"},
 			{"tags", "list", false, "Topical tags.", "[infra]"},

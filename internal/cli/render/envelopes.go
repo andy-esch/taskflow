@@ -133,12 +133,16 @@ type FindingsEnvelope struct {
 	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
 }
 
-// FixEnvelope is `lint --fix --json`.
+// FixEnvelope is `lint --fix --json`. `remaining` carries the per-entity lint
+// findings the fix pass could NOT repair (report-only epic issues, unfixable task
+// issues) — the same slug+issues shape `lint --json` emits, so a --json consumer
+// learns what's still broken without re-running plain lint.
 type FixEnvelope struct {
 	SchemaVersion string               `json:"schema_version"`
 	DryRun        bool                 `json:"dry_run"`
 	Fixed         []domain.FixResult   `json:"fixed"`
 	Unreadable    []domain.FileProblem `json:"unreadable"`
+	Remaining     []lintTaskJSON       `json:"remaining"`
 }
 
 // LintEnvelope is `lint --json` and `audit lint --json` (the same per-entity

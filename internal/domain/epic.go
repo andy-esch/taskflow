@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -58,6 +59,17 @@ var knownEpicFields = map[string]bool{
 // epic. `epic set --set` rejects unknown keys unless forced (mirrors
 // KnownTaskField for tasks).
 func KnownEpicField(f string) bool { return knownEpicFields[f] }
+
+// KnownEpicFieldNames returns every frontmatter key the tool knows for an epic,
+// sorted for a stable schema dump (the epic analog of KnownTaskFieldNames).
+func KnownEpicFieldNames() []string {
+	names := make([]string, 0, len(knownEpicFields))
+	for f := range knownEpicFields {
+		names = append(names, f)
+	}
+	sort.Strings(names)
+	return names
+}
 
 // IsEpicListField reports whether an epic frontmatter key is stored as a YAML
 // list (only `tags`), so the `--set key=value` coercion writes a sequence rather

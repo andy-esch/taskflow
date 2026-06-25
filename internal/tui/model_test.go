@@ -613,7 +613,7 @@ func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
 	}
 	slug := "an-extremely-long-task-slug-well-past-the-detail-pane-inner-width"
 	if err := os.WriteFile(filepath.Join(dir, slug+".md"),
-		[]byte("---\nstatus: active\ndescription: x\n---\n# body\n"), 0o644); err != nil {
+		[]byte("---\nstatus: in-progress\ndescription: x\n---\n# body\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m := New(core.NewService(store.NewFS(root)))

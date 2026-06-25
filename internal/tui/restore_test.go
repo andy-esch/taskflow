@@ -73,7 +73,7 @@ func TestModel_ReloadDuringJumpKeepsTarget(t *testing.T) {
 		}
 	}
 	write("epics/01-x.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
-	write("tasks/in-progress/active-one.md", "---\nstatus: active\nepic: 01-x\ndescription: a\n---\n# a\n")
+	write("tasks/in-progress/active-one.md", "---\nstatus: in-progress\nepic: 01-x\ndescription: a\n---\n# a\n")
 	write("tasks/completed/done-one.md", "---\nstatus: completed\nepic: 01-x\ndescription: d\n---\n# d\n")
 
 	m := New(core.NewService(store.NewFS(root)))

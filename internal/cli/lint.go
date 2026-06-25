@@ -62,9 +62,9 @@ func runLintFix(app *App, dryRun bool) error {
 		// progress before surfacing the error, so the user can reconcile what landed.
 		if len(results) > 0 {
 			if app.JSON {
-				_ = render.FixJSON(app.Out, results, nil, dryRun)
+				_ = render.FixJSON(app.Out, results, nil, nil, dryRun)
 			} else {
-				render.FixHuman(app.Out, app.Style, results, dryRun)
+				render.FixHuman(app.Out, app.Style, results, nil, dryRun)
 			}
 		}
 		return err
@@ -73,30 +73,33 @@ func runLintFix(app *App, dryRun bool) error {
 	// post-fix state to re-lint.
 	if dryRun {
 		if app.JSON {
-			return render.FixJSON(app.Out, results, nil, dryRun)
+			return render.FixJSON(app.Out, results, nil, nil, dryRun)
 		}
-		render.FixHuman(app.Out, app.Style, results, dryRun)
+		render.FixHuman(app.Out, app.Style, results, nil, dryRun)
 		return nil
 	}
-	// The fixer only reports files it changed — a file it can't repair would
-	// otherwise exit 0 in silence, leaving the tree broken while claiming
-	// success. Re-lint and surface what's still wrong, with plain lint's exit.
-	_, problems, err := app.Svc.Lint()
+	// The fixer only reports files it changed — issues it can't repair (epics are
+	// report-only; some task issues aren't auto-fixable) and unreadable files would
+	// otherwise exit 0 in silence, leaving the tree broken while claiming success.
+	// Re-lint and surface BOTH the leftover results and problems, with plain lint's exit.
+	results2, problems, err := app.Svc.Lint()
 	if err != nil {
 		return err
 	}
 	if app.JSON {
-		// One envelope carrying both what was fixed and what couldn't be —
-		// a --json consumer must never parse the prose error to learn that.
-		if err := render.FixJSON(app.Out, results, problems, dryRun); err != nil {
+		// One envelope carrying what was fixed plus what couldn't be (leftover lint
+		// findings + unreadable files) — a --json consumer must never parse the prose
+		// error to learn that.
+		if err := render.FixJSON(app.Out, results, problems, results2, dryRun); err != nil {
 			return err
 		}
 	} else {
-		render.FixHuman(app.Out, app.Style, results, dryRun)
+		render.FixHuman(app.Out, app.Style, results, results2, dryRun)
 		render.ProblemsHuman(app.ErrOut, app.Style, problems)
 	}
-	if len(problems) > 0 {
-		return fmt.Errorf("%w: %d file(s) could not be auto-repaired", domain.ErrValidation, len(problems))
+	if len(results2)+len(problems) > 0 {
+		return fmt.Errorf("%w: %d item(s) still with issues, %d unreadable file(s)",
+			domain.ErrValidation, len(results2), len(problems))
 	}
 	return nil
 }

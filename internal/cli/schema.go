@@ -100,6 +100,7 @@ func runSchemaContract(app *App) error {
 		EpicStatuses: domain.AllEpicStatuses(),
 		AuditBuckets: buckets,
 		TaskFields:   fields,
+		EpicFields:   domain.KnownEpicFieldNames(),
 		ExitCodes:    codes,
 		Kinds:        domain.SchemaKinds(),
 	}
