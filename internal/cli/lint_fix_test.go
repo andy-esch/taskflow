@@ -15,7 +15,18 @@ func TestLintFix_DryRunThenFix(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(bad), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(bad, []byte("---\nstatus: ready-to-start\ndescription: A: B\ntags: x,y\n---\n# Bad\n"), 0o644); err != nil {
+	// The only issues are the two FIXABLE ones (an unquoted ':' in description, a
+	// comma-joined tags list); every required field is present, so the post-fix
+	// re-lint is clean and `lint --fix` exits 0 (Fix 1 keys the exit off the leftover
+	// findings — a tree the fixer fully repairs must still come back green).
+	if err := os.WriteFile(bad, []byte("---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ndescription: A: B\ntags: x,y\n---\n# Bad\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	epic := filepath.Join(root, "epics", "e1.md")
+	if err := os.MkdirAll(filepath.Dir(epic), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(epic, []byte("---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -28,7 +39,7 @@ func TestLintFix_DryRunThenFix(t *testing.T) {
 		t.Error("dry-run modified the file")
 	}
 
-	// real fix: writes; the file becomes readable.
+	// real fix: writes; the file becomes readable and the tree comes back lint-clean.
 	if out := runRoot(t, "-C", root, "lint", "--fix"); !strings.Contains(out, "fixed") {
 		t.Errorf("expected a fix report: %q", out)
 	}
@@ -74,6 +85,76 @@ func TestLintFix_UnrepairableFileExitsNonZero(t *testing.T) {
 	dry.SetErr(&out)
 	if err := dry.Execute(); err != nil {
 		t.Errorf("dry-run should not fail on unrepairable files: %v", err)
+	}
+}
+
+// TestLintFix_ReportOnlyEpicExitsNonZero pins Fix 1: `lint --fix` on a tree whose
+// ONLY issue is a report-only epic (an active epic missing required fields — never
+// auto-fixed, surfaced as a `result`, never a `problem`) must still exit 11 and
+// name the epic. The post-fix re-lint previously discarded `results`, so this tree
+// exited 0 in a false green: the fixer touched nothing, the unreadable list was
+// empty, and the leftover epic finding was dropped.
+func TestLintFix_ReportOnlyEpicExitsNonZero(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A clean task plus an active epic missing priority/description — the epic is the
+	// sole, fix-immune failure.
+	write("epics/e1.md", "---\nstatus: active\n---\n# E1\n")
+	write("tasks/ready-to-start/good.md",
+		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
+
+	var out bytes.Buffer
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd.SetArgs([]string{"-C", root, "lint", "--fix"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("lint --fix must fail when a report-only epic remains broken")
+	}
+	if ExitCode(err) != 11 {
+		t.Errorf("want exit 11, got %d (%v)", ExitCode(err), err)
+	}
+	o := out.String()
+	if !strings.Contains(o, "e1") {
+		t.Errorf("the leftover epic should be named in the output:\n%s", o)
+	}
+	if !strings.Contains(o, "could not auto-repair") {
+		t.Errorf("the human output should flag what --fix could not repair:\n%s", o)
+	}
+
+	// --json: the leftover epic finding must land in `remaining`, not only in the
+	// prose error — a --json consumer must never parse prose to learn it stayed broken.
+	out.Reset()
+	jc := NewRootCmd(strings.NewReader(""), &out, &out)
+	jc.SetArgs([]string{"-C", root, "lint", "--fix", "--json"})
+	jc.SetOut(&out)
+	jc.SetErr(&out)
+	if err := jc.Execute(); err == nil || ExitCode(err) != 11 {
+		t.Fatalf("want exit 11 for a report-only epic, got %v", err)
+	}
+	var env struct {
+		Remaining []struct {
+			Slug   string `json:"slug"`
+			Issues []struct {
+				Field   string `json:"field"`
+				Message string `json:"message"`
+			} `json:"issues"`
+		} `json:"remaining"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+		t.Fatalf("fix --json invalid: %v\n%s", err, out.String())
+	}
+	if len(env.Remaining) != 1 || env.Remaining[0].Slug != "e1" || len(env.Remaining[0].Issues) == 0 {
+		t.Errorf("remaining should carry the epic e1 + its issues, got %+v", env.Remaining)
 	}
 }
 

@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: planning
+status: active
 description: Traces, dashboards, and alerting across services.
 priority: medium
 tags: []

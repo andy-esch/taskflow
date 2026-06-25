@@ -211,7 +211,7 @@ func TestFillTags_GateOpen_PromptsAndParses(t *testing.T) {
 // exit-11 (the free-form tags prompt is TTY-only).
 func TestTaskNew_MissingTags_NonInteractive(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
@@ -225,7 +225,7 @@ func TestTaskNew_MissingTags_NonInteractive(t *testing.T) {
 // --description, run non-interactively, is exit-11 — the prompt is TTY-only.
 func TestTaskNew_StartMissingDescription_NonInteractive(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
@@ -240,7 +240,7 @@ func TestTaskNew_StartMissingDescription_NonInteractive(t *testing.T) {
 // is exit-11 validation — never a prompt, never a hang.
 func TestTaskNew_MissingEpic_NonInteractive(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)

@@ -1,5 +1,5 @@
 ---
-status: archived
+status: deprecated
 description: SUPERSEDED by 17-pm-go-cli — original over-ambitious taskflow vision (docker/pgvector/semantic/AI). Kept for history.
 created: 2026-02-04
 tags: [pm-tooling, archived, superseded]

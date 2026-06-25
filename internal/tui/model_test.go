@@ -33,7 +33,7 @@ func seedRepo(t *testing.T) string {
 	}
 	task("in-progress", "alpha", "the alpha task")
 	task("ready-to-start", "beta", "the beta task")
-	r.Epic("01-test.md", "---\nstatus: planning\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
+	r.Epic("01-test.md", "---\nstatus: active\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
 	r.Audit("open", "2026-06-01-thing.md", "---\narea: store\ndate: 2026-06-01\n---\n# Audit\n")
 	return r.Root
 }
@@ -537,7 +537,7 @@ func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
 
 func TestEntityDetailRenderers(t *testing.T) {
 	epic := epicDetail{
-		e:     domain.Epic{ID: "17-x", Status: "in-progress", Priority: "high"},
+		e:     domain.Epic{ID: "17-x", Status: "active", Priority: "high"},
 		tasks: []domain.Task{{Slug: "a", Status: domain.StatusCompleted}, {Slug: "b", Status: domain.StatusReadyToStart}},
 		body:  "# Epic body",
 	}
@@ -950,7 +950,7 @@ func TestModel_StatusViewViaCommand(t *testing.T) {
 func auditModel(t *testing.T) Model {
 	t.Helper()
 	r := testutil.NewRepo(t)
-	r.Epic("01-test.md", "---\nstatus: planning\ndescription: a test epic\n---\n# Test epic\n")
+	r.Epic("01-test.md", "---\nstatus: active\ndescription: a test epic\n---\n# Test epic\n")
 	r.Audit("open", "2026-06-01-open-a.md", "---\narea: store\ndate: 2026-06-01\n---\n# Open A\n")
 	r.Audit("closed", "2026-05-01-closed-a.md", "---\narea: cli\ndate: 2026-05-01\n---\n# Closed A\n")
 	r.Audit("deferred", "2026-04-01-deferred-a.md", "---\narea: tui\ndate: 2026-04-01\n---\n# Deferred A\n")
@@ -983,6 +983,28 @@ func cmdJump(t *testing.T, m Model, word string) Model {
 	}
 	tm, cmd := m.Update(press("enter"))
 	return drain(t, tm.(Model), cmd)
+}
+
+// TestModel_EditKeyOnAudit_FlashesEditorHint: e (the inline field editor, for
+// tasks and epics) on an audit — which has no field-level write — doesn't die as a
+// silent no-op; it flashes a hint pointing at E ($EDITOR), the actual way to edit
+// an audit.
+func TestModel_EditKeyOnAudit_FlashesEditorHint(t *testing.T) {
+	m := cmdJump(t, auditModel(t), "audits")
+	if m.cur().kind != entityAudits || m.selectedPath() == "" {
+		t.Fatalf("setup: want an audit selected on the audits tab, got tab=%q path=%q", m.cur().name, m.selectedPath())
+	}
+	tm, _ := m.Update(press("e"))
+	m = tm.(Model)
+	if m.edit.active {
+		t.Error("e must not open the task-only inline editor on an audit")
+	}
+	if m.flash == "" || !m.flashErr {
+		t.Errorf("e on an audit should flash a hint, not no-op silently; got flash=%q err=%v", m.flash, m.flashErr)
+	}
+	if !strings.Contains(m.flash, "E") {
+		t.Errorf("the hint should point at E ($EDITOR), got %q", m.flash)
+	}
 }
 
 func TestModel_AuditBucketCyclesAndFilters(t *testing.T) {

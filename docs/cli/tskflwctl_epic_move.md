@@ -1,28 +1,22 @@
-## tskflwctl epic new
+## tskflwctl epic move
 
-Create a new epic (auto-numbered NN-slug)
+Transition epic(s) to <status> (active|retired|deprecated)
 
 ```
-tskflwctl epic new <title> [flags]
+tskflwctl epic move <epic>... <status> [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl epic new "Billing overhaul" --description "Replace the legacy pipeline"
+  tskflwctl epic move 18-tui retired
+  tskflwctl epic move 18-tui 20-cli deprecated --dry-run
 ```
 
 ### Options
 
 ```
-      --body string          override the default body scaffold
-      --body-file string     read the body from a file, or - for stdin (replaces --body)
-      --description string   one-line description (required, <=200 chars)
-  -h, --help                 help for new
-      --priority string      high|medium|low (default "medium")
-      --status string        epic status: active|retired|deprecated (default "active")
-      --tags strings         comma-separated tags
-      --template string      body scaffold to use (default "default"); completes the available names
+  -h, --help   help for move
 ```
 
 ### Options inherited from parent commands

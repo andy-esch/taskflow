@@ -123,14 +123,16 @@ func (s *Service) Summary() (Summary, error) {
 	}, nil
 }
 
-// LintResult is the set of frontmatter issues for one task.
+// LintResult is the set of frontmatter issues for one entity (a task by slug, or
+// an epic by id — the Slug field carries whichever as the label).
 type LintResult struct {
 	Slug   string
 	Issues []domain.Issue
 }
 
-// Lint validates active tasks' frontmatter, joining against known epics for the
-// epic-existence check. Returns one LintResult per task with issues.
+// Lint validates active tasks' frontmatter (joining against known epics for the
+// epic-existence check) AND the epics themselves. Returns one LintResult per
+// task or epic with issues.
 func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	tasks, problems, err := s.store.ListTasks()
 	if err != nil {
@@ -170,13 +172,12 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	// signal; status==directory means the dirs are always distinct. (Tasks only:
 	// MoveAudit is an atomic rename, so audits have no such window.)
 	results = append(results, duplicateSlugIssues(tasks)...)
-	// Epic statuses are a closed vocabulary (see domain.ValidateEpicStatus);
-	// files predating the enum (or hand-edited ones) surface here.
+	// Epics get linted too: the same closed status vocabulary plus priority and a
+	// present description (a deprecated epic is spared the field nags — see
+	// domain.LintEpic). The epic id slots into Slug as the result's label.
 	for _, e := range epics {
-		if err := domain.ValidateEpicStatus(e.Status); err != nil {
-			results = append(results, LintResult{Slug: e.ID, Issues: []domain.Issue{
-				{Field: "status", Message: err.Error()},
-			}})
+		if issues := domain.LintEpic(e); len(issues) > 0 {
+			results = append(results, LintResult{Slug: e.ID, Issues: issues})
 		}
 	}
 	return results, problems, nil

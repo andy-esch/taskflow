@@ -412,7 +412,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, keys.Action):
 		// Lifecycle actions are registry-driven: open the menu for any entity that
-		// declares transitions (tasks: statuses; audits: buckets; epics: none).
+		// declares transitions (tasks: statuses; audits: buckets; epics: statuses —
+		// epicTransitions/moveEpic, which rewrite the status: field in place).
 		if cur := m.cur(); len(cur.transitions) > 0 {
 			if id, state, ok := m.selectedLifecycle(); ok {
 				m.action.open(id, cur.transitions, state)
@@ -420,10 +421,18 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case key.Matches(msg, keys.Edit):
-		// Inline field edit via SetFields — task-only (status stays in the `m`
-		// menu); a no-op on epics/audits, which have no SetFields path in core.
+		// Inline field edit — tasks (SetFields) and epics (SetEpicFields), each with
+		// its own typed field set: tasks get description/priority/tags/effort/tier,
+		// epics description/priority/tags (no effort/tier; status moves in the `m`
+		// menu). Audits have no field-level write — they edit the whole file via the
+		// entity-agnostic `E` ($EDITOR) — so on an audit selection we point at `E`
+		// rather than dying as a silent no-op.
 		if t, ok := m.selectedTask(); ok {
 			m.edit.open(t)
+		} else if ep, ok := m.selectedEpic(); ok {
+			m.edit.openEpic(ep)
+		} else if m.selectedPath() != "" {
+			m.flash, m.flashErr = "no inline edit here — press E to edit in $EDITOR", true
 		}
 		return m, nil
 	case key.Matches(msg, keys.OpenEditor):
@@ -623,10 +632,22 @@ func (m Model) selectedTask() (domain.Task, bool) {
 	return domain.Task{}, false
 }
 
+// selectedEpic returns the selected row as an epic — ok only on the epics tab.
+// Mirrors selectedTask; the `e` handler uses it to open the inline editor on an
+// epic (description/priority/tags via SetEpicFields).
+func (m Model) selectedEpic() (domain.Epic, bool) {
+	if it, ok := m.cur().list.SelectedItem().(epicItem); ok {
+		return it.es.Epic, true
+	}
+	return domain.Epic{}, false
+}
+
 // selectedLifecycle returns the selected row's id and current lifecycle state (a
-// task's status or an audit's bucket) for the action menu, or ok=false on an
-// entity without a lifecycle (epics) or an empty list. It asks the row via the
-// lifecycleItem interface, so the reducer needn't switch on concrete item types.
+// task's status, an audit's bucket, or an epic's status) for the action menu, or
+// ok=false on an empty list. Every entity now implements lifecycleState() (epics
+// via moveEpic, which rewrites the status: field in place rather than moving the
+// file), so it asks the row via the lifecycleItem interface, never switching on
+// concrete item types.
 func (m Model) selectedLifecycle() (id, state string, ok bool) {
 	if li, ok := m.cur().list.SelectedItem().(lifecycleItem); ok {
 		return li.id(), li.lifecycleState(), true

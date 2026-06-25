@@ -23,9 +23,11 @@ func TestLint_DuplicateSlug_Exit11(t *testing.T) {
 		}
 	}
 	// Both copies folder-matching (the Move-crash shape): only the duplicate is wrong.
+	// The seeded epic must itself be lint-clean (priority + description), or it would
+	// fail lint too and the duplicate wouldn't be the SOLE failure exit 11 keys off.
 	write("tasks/in-progress/dup.md", "---\nstatus: in-progress\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# Dup\n")
 	write("tasks/completed/dup.md", "---\nstatus: completed\n---\n# Dup\n")
-	write("epics/e1.md", "---\nstatus: in-progress\n---\n# E1\n")
+	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
 
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
@@ -42,6 +44,46 @@ func TestLint_DuplicateSlug_Exit11(t *testing.T) {
 	}
 }
 
+// TestLint_EpicSoleFailure pins the end-to-end epic-lint path: a clean task plus
+// an active epic missing its required fields makes `lint` exit 11 and name the
+// epic + its issue. Epics are report-only `results` (never `problems`), so this is
+// the path Fix 1 keys `lint --fix`'s exit off — the CLI seam must surface it.
+func TestLint_EpicSoleFailure(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The task is fully lint-clean; the epic is the SOLE failure (active, but missing
+	// the required priority + description).
+	write("epics/e1.md", "---\nstatus: active\n---\n# E1\n")
+	write("tasks/ready-to-start/good.md",
+		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
+
+	var out bytes.Buffer
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd.SetArgs([]string{"-C", root, "lint"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("an epic missing required fields should fail lint")
+	}
+	if ExitCode(err) != 11 {
+		t.Errorf("want exit 11 for a failing epic, got %d", ExitCode(err))
+	}
+	o := out.String()
+	if !strings.Contains(o, "e1") {
+		t.Errorf("lint should name the failing epic id:\n%s", o)
+	}
+	if !strings.Contains(o, "priority") && !strings.Contains(o, "description") {
+		t.Errorf("lint should name the epic's missing field:\n%s", o)
+	}
+}
+
 func TestLint_Clean(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, content string) {
@@ -53,7 +95,9 @@ func TestLint_Clean(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("epics/e1.md", "---\nstatus: in-progress\n---\n# E1\n")
+	// The epic must itself be lint-clean now (status + priority + description),
+	// or `lint` would flag it and never report a pass.
+	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
 	write("tasks/ready-to-start/good.md",
 		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
 

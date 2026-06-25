@@ -35,9 +35,11 @@ type entityItem interface {
 }
 
 // lifecycleItem is an entityItem with a mutable lifecycle state (a task's status,
-// an audit's bucket). The action menu reads it to drop the no-op transition;
-// entities without one (epics) simply don't implement it, so the reducer asks for
-// the state generically instead of switching on concrete item types.
+// an audit's bucket, an epic's status). The action menu reads it to drop the no-op
+// transition; every entity now implements it via lifecycleState(), so the reducer
+// asks for the state generically instead of switching on concrete item types. Epics
+// declare epicTransitions/moveEpic — they differ only in that the move rewrites a
+// frontmatter FIELD (status:) rather than moving the file between directories.
 type lifecycleItem interface {
 	entityItem
 	lifecycleState() string
@@ -67,9 +69,10 @@ type entityTab struct {
 
 	// Lifecycle (registry-driven, S4/M10): the transitions this entity offers and
 	// the move that applies one. Tasks declare status transitions (svc.Move); audits
-	// declare bucket transitions (svc.MoveAudit); epics declare none. The `m` menu
-	// and `:` verbs read these off the active tab, so lifecycle is no longer
-	// task-only plumbing in the reducer. nil transitions ⇒ no `m`/`:`-verb actions.
+	// declare bucket transitions (svc.MoveAudit); epics declare epicTransitions/moveEpic
+	// (the move rewrites the status: frontmatter FIELD rather than relocating the file).
+	// The `m` menu and `:` verbs read these off the active tab, so lifecycle is no
+	// longer task-only plumbing in the reducer. nil transitions ⇒ no `m`/`:`-verb actions.
 	transitions []transition
 	applyMove   func(svc *core.Service, id string, tr transition) tea.Cmd
 
@@ -227,6 +230,19 @@ func moveAudit(svc *core.Service, id string, tr transition) tea.Cmd {
 	}
 }
 
+// moveEpic applies an epic status transition (activate/retire/deprecate). Epic
+// status is a frontmatter field, not a directory, so MoveEpic rewrites it in place
+// — the file never moves. Success → movedMsg (flash + reload); failure →
+// actionErrMsg (red flash, no reload), matching the CLI.
+func moveEpic(svc *core.Service, id string, tr transition) tea.Cmd {
+	return func() tea.Msg {
+		if _, err := svc.MoveEpic(id, tr.to, false); err != nil {
+			return actionErrMsg{slug: id, err: err}
+		}
+		return movedMsg{slug: id, to: tr.to}
+	}
+}
+
 // newEntityTabs is the entity registry: the ordered set of browsable entities.
 func newEntityTabs() []*entityTab {
 	mk := func(d list.ItemDelegate) list.Model {
@@ -260,7 +276,9 @@ func newEntityTabs() []*entityTab {
 		{
 			kind: entityEpics, name: "epics", aliases: []string{"e", "epic"},
 			list: mk(epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
-			sortCols: epicSortCols, // no transitions: epics have no in-TUI lifecycle move
+			// Epic status is a frontmatter field, not a directory: the `m` menu / `:`
+			// verbs flip it via svc.MoveEpic (the file stays put), mirroring task/audit.
+			sortCols: epicSortCols, transitions: epicTransitions, applyMove: moveEpic,
 		},
 		{
 			kind: entityAudits, name: "audits", aliases: []string{"a", "audit"},

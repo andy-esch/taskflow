@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: planning
+status: active
 description: Backfill + schema migration for the events pipeline.
 priority: medium
 tags: []

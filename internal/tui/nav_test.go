@@ -163,7 +163,7 @@ func TestModel_FollowEscalatesToAllView(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("epics/01-x.md", "---\nstatus: planning\ndescription: e\n---\n# E\n")
+	write("epics/01-x.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	write("tasks/in-progress/active-one.md", "---\nstatus: in-progress\nepic: 01-x\ndescription: a\n---\n# a\n")
 	write("tasks/completed/done-one.md", "---\nstatus: completed\nepic: 01-x\ndescription: d\n---\n# d\n")
 

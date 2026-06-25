@@ -2,7 +2,10 @@ package render
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // TestJSONSchema_HasFieldDescriptions guards the field-description feature against
@@ -36,6 +39,37 @@ func TestJSONSchema_HasFieldDescriptions(t *testing.T) {
 			if props[f].Description == "" {
 				t.Errorf("$defs/%s/properties/%s should carry a field description", def, f)
 			}
+		}
+	}
+}
+
+// TestEpicStatusDescriptionMatchesVocab guards the one epic-status description that
+// can't be derived: epicMetaJSON.Status's `jsonschema:"description=…"` struct TAG
+// (dto.go) is a compile-time literal, so a future epic-vocab change would silently
+// leave it stale. Pin it to domain.AllEpicStatuses() so the drift fails loudly here.
+func TestEpicStatusDescriptionMatchesVocab(t *testing.T) {
+	b, err := JSONSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Defs map[string]struct {
+			Properties map[string]struct {
+				Description string `json:"description"`
+			} `json:"properties"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	desc := doc.Defs["epicMetaJSON"].Properties["status"].Description
+	if desc == "" {
+		t.Fatal("epicMetaJSON.status should carry a description tag")
+	}
+	for _, s := range domain.AllEpicStatuses() {
+		if !strings.Contains(desc, s) {
+			t.Errorf("epicMetaJSON.status description %q is missing epic status %q "+
+				"(dto.go's jsonschema tag drifted from domain.AllEpicStatuses())", desc, s)
 		}
 	}
 }

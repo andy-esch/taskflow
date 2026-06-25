@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: planning
+status: active
 description: A growable store of named task/epic/audit body templates — built-in + repo-local, chosen per project need by users/agents via --template.
 priority: medium
 tags: []

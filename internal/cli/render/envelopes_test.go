@@ -3,6 +3,7 @@ package render
 import (
 	"bytes"
 	"io"
+	"reflect"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -30,7 +31,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 	}
 
 	task := domain.Task{Slug: "alpha", Status: domain.StatusInProgress, Tier: 2, Tags: []string{"x"}}
-	epic := domain.Epic{ID: "e1", Status: "in-progress", Description: "d"}
+	epic := domain.Epic{ID: "e1", Status: "active", Description: "d"}
 	epicSum := core.EpicSummary{Epic: epic, Total: 2, Done: 1}
 
 	// Every envelope, validated against its own $defs entry — the whole --json
@@ -44,6 +45,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"TasksEnvelope", func(w io.Writer) error { return TasksJSON(w, []domain.Task{task}, nil) }},
 		{"TaskShowEnvelope", func(w io.Writer) error { return TaskShowJSON(w, task, "# body") }},
 		{"TaskMutationEnvelope", func(w io.Writer) error { return TaskMutationJSON(w, task, "# new body", true) }},
+		{"EpicMutationEnvelope", func(w io.Writer) error { return EpicMutationJSON(w, epic, true) }},
 		{"CreatedEnvelope", func(w io.Writer) error {
 			return CreatedJSON(w, "task", "alpha", "ready-to-start", "tasks/ready-to-start/alpha.md", false)
 		}},
@@ -78,7 +80,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return LintJSON(w, []core.LintResult{{Slug: "alpha", Issues: []domain.Issue{{Field: "epic", Message: "missing"}}}}, nil)
 		}},
 		{"FixEnvelope", func(w io.Writer) error {
-			return FixJSON(w, nil, nil, false) // the nil-slice path: must emit [] and validate
+			return FixJSON(w, nil, nil, nil, false) // the nil-slice path: must emit [] and validate
 		}},
 		{"InitEnvelope", func(w io.Writer) error {
 			return InitJSON(w, InitEnvelope{Mode: "scaffold", Root: "/root", Created: []string{"tasks"}})
@@ -89,9 +91,10 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"SchemaEnvelope", func(w io.Writer) error {
 			return SchemaJSON(w, SchemaContract{
 				Statuses:     []SchemaStatus{{Value: "in-progress", Active: true}},
-				EpicStatuses: []string{"in-progress"},
+				EpicStatuses: []string{"active"},
 				AuditBuckets: []string{"open"},
 				TaskFields:   []SchemaField{{Name: "tier", Type: "int"}},
+				EpicFields:   []string{"status", "description"},
 				ExitCodes:    []SchemaExitCode{{Code: 10, Name: "not-found"}},
 				Kinds:        []string{"task"},
 			})
@@ -106,14 +109,34 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				Templates:    []TemplateInfo{{Kind: "task", Name: "default", Description: "d"}},
 			})
 		}},
+		{"TemplatesEnvelope", func(w io.Writer) error {
+			return TemplatesJSON(w, []TemplateInfo{{Kind: "task", Name: "default", Description: "d"}})
+		}},
+		{"TemplateShowEnvelope", func(w io.Writer) error {
+			return TemplateShowJSON(w, TemplateInfo{Kind: "task", Name: "default", Description: "d"}, "# body")
+		}},
 		{"ErrorEnvelope", func(w io.Writer) error {
 			// Not emitted by a render func (cli.WriteError builds it) — marshal the
 			// named type directly to prove its schema matches.
 			return encodeJSON(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{Code: "not-found", Message: "task not found"}})
 		}},
 	}
-	if len(cases) != 19 {
-		t.Fatalf("expected all 19 envelopes covered, got %d", len(cases))
+	// Registry-derived coverage guard (replaces a brittle literal count): every
+	// envelope type the jsonEnvelopes registry pulls into the schema must have a
+	// case here, so a newly-added envelope can't be silently left unvalidated. The
+	// $defs key is the Go type name, which is also each case's `def`. ErrorEnvelope
+	// is built by cli.WriteError (not a render func) but is still a registered
+	// envelope with a case, so it's covered too.
+	covered := make(map[string]bool, len(cases))
+	for _, tc := range cases {
+		covered[tc.def] = true
+	}
+	rt := reflect.TypeOf(jsonEnvelopes{})
+	for i := range rt.NumField() {
+		def := rt.Field(i).Type.Name()
+		if !covered[def] {
+			t.Errorf("envelope %q is in the jsonEnvelopes registry but has no validation case", def)
+		}
 	}
 	for _, tc := range cases {
 		sch, err := c.Compile(id + "#/$defs/" + tc.def)

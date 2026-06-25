@@ -24,6 +24,24 @@ func TestTaskAuthoringFieldsMatchRegistry(t *testing.T) {
 	}
 }
 
+// TestEpicAuthoringFieldsMatchRegistry mirrors the task no-drift guard for epics:
+// every documented epic authoring field must be a real known epic field, so the
+// schema can never advertise an epic field the tool doesn't know.
+func TestEpicAuthoringFieldsMatchRegistry(t *testing.T) {
+	fields, err := AuthoringFields("epic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fields {
+		if !KnownEpicField(f.Name) {
+			t.Errorf("authoring field %q is not a known epic field", f.Name)
+		}
+		if f.Description == "" || f.Example == "" {
+			t.Errorf("field %q: description/example must be non-empty", f.Name)
+		}
+	}
+}
+
 func TestFieldType(t *testing.T) {
 	for name, want := range map[string]string{
 		"tier": "int", "autonomy_level": "int",

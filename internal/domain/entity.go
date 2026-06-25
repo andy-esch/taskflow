@@ -71,7 +71,7 @@ var entities = []Descriptor{
 			"status is the directory — set it with the lifecycle verbs (start/promote/complete/…), never in frontmatter.",
 			fmt.Sprintf("description is a single line, ≤%d characters.", MaxDescriptionLen),
 			"at least one tag is required at creation.",
-			"the slug is derived from the title; keep titles filename-safe.",
+			"the filename slug is derived from the title; any title is accepted (colons, dashes, arrows, …) and the full title is kept as the body H1.",
 		},
 		Templates: []NamedTemplate{
 			{DefaultTemplate, "Standard task scaffold: objective, acceptance criteria, out-of-scope, related epic.", taskBodyTemplate},
@@ -82,7 +82,7 @@ var entities = []Descriptor{
 		Kind: "epic",
 		Dir:  EpicsDir,
 		AuthoringFields: []FieldDoc{
-			{"status", "string", true, "One of: planning | in-progress | completed | archived.", "planning"},
+			{"status", "string", true, fmt.Sprintf("One of: %s.", strings.Join(epicStatuses, " | ")), "active"},
 			{"description", "string", true, fmt.Sprintf("One-line goal (≤%d chars); required.", MaxDescriptionLen), "Replace the legacy ingest pipeline"},
 			{"priority", "string", false, "One of: high | medium | low.", "medium"},
 			{"tags", "list", false, "Topical tags.", "[infra]"},

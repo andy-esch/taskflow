@@ -38,9 +38,9 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 	if err := domain.ValidateEpicStatus(p.Status); err != nil {
 		return domain.Epic{}, err
 	}
-	if err := domain.ValidateTitle(p.Title); err != nil {
-		return domain.Epic{}, err
-	}
+	// Any title is accepted: Slugify derives a filesystem-safe id while the full
+	// original title is preserved in the body H1. The empty-slug error below is the
+	// only hard guard — a title that slugifies to nothing.
 	slug := domain.Slugify(p.Title)
 	if slug == "" {
 		return domain.Epic{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
@@ -137,6 +137,95 @@ func TaskRollup(tasks []domain.Task) (done, total, deprecated int) {
 		}
 	}
 	return done, total, deprecated
+}
+
+// MoveEpic transitions an epic to another status (active/retired/deprecated).
+// Epic status is a frontmatter field, not a directory, so this rewrites the field
+// in place — the file is never relocated. The status is validated against the
+// closed epic-status vocabulary; an unknown id is ErrNotFound, a bad status
+// ErrValidation. Mirrors MoveAudit (resolve → validate target → surgical write).
+func (s *Service) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) {
+	if err := domain.ValidateEpicStatus(status); err != nil {
+		return domain.Epic{}, err
+	}
+	return s.store.MoveEpic(id, status, dryRun)
+}
+
+// SetEpicFields validates and applies non-status frontmatter updates to an epic
+// in a single atomic write — the epic analog of SetFields. Status is moved via
+// MoveEpic (`epic move`), not here; an attempt to set or unset it is rejected.
+//
+// Values arriving as strings from the `--set key=value` escape hatch are coerced
+// to the native type a known typed field needs (only `tags` is a list for epics)
+// before the store serializes them — otherwise the store would write a corrupting
+// !!str that the strict loader can't read back. Keys outside the epic registry are
+// rejected unless force is set (a typo'd field name must not silently persist). A
+// domain.UnsetField value removes the key. Unlike SetFields, no updated_at is
+// stamped — the Epic schema has no updated_at field and MoveEpic doesn't stamp
+// one either, so the two epic write paths stay consistent.
+func (s *Service) SetEpicFields(id string, updates map[string]any, force, dryRun bool) (domain.Epic, error) {
+	if len(updates) == 0 {
+		return domain.Epic{}, fmt.Errorf("%w: no fields given", domain.ErrValidation)
+	}
+	clean := make(map[string]any, len(updates))
+	for field, val := range updates {
+		if field == "status" {
+			return domain.Epic{}, fmt.Errorf("%w: epic status moves via `epic move`, not `set`", domain.ErrValidation)
+		}
+		if _, unset := val.(domain.UnsetField); unset {
+			// A typo'd field name must not silently no-op — gate unset on the registry
+			// too, mirroring the set path (and the task SetFields contract).
+			if !force && !domain.KnownEpicField(field) {
+				return domain.Epic{}, unknownEpicFieldErr(field)
+			}
+			clean[field] = val
+			continue
+		}
+		if !force && !domain.KnownEpicField(field) {
+			return domain.Epic{}, unknownEpicFieldErr(field)
+		}
+		coerced, err := coerceEpicField(field, val)
+		if err != nil {
+			return domain.Epic{}, err
+		}
+		if err := domain.ValidateEpicField(field, stringify(coerced)); err != nil {
+			return domain.Epic{}, err
+		}
+		clean[field] = coerced
+	}
+	return s.store.SetEpicFields(id, clean, dryRun)
+}
+
+// unknownEpicFieldErr is the shared rejection for an epic field outside the
+// registry, used by both the set and unset paths of SetEpicFields (the epic
+// counterpart to unknownFieldErr).
+func unknownEpicFieldErr(field string) error {
+	return fmt.Errorf(
+		"%w: unknown epic field %q (known fields only; use --force for a custom field)", domain.ErrValidation, field)
+}
+
+// coerceEpicField converts a string `--set` value into the native type its epic
+// field needs (only `tags` is a list). Values already of the right type (from
+// typed flags) and genuinely-custom fields pass through unchanged.
+func coerceEpicField(field string, val any) (any, error) {
+	str, isStr := val.(string)
+	if !isStr {
+		return val, nil // a typed flag already supplied the native type
+	}
+	if domain.IsEpicListField(field) {
+		return splitList(str), nil
+	}
+	return str, nil
+}
+
+// EditEpic opens an epic for whole-file editing — the human face of mutation,
+// complementing the field-level `epic set` (the epic counterpart to EditTask).
+// edit (run by the cli's $EDITOR layer) receives the current file content and
+// returns the new content; the store accepts it only if it still parses as an
+// epic, reopening the editor on a broken edit. Returns the reloaded epic and
+// whether anything changed.
+func (s *Service) EditEpic(id string, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error) {
+	return s.store.EditEpic(id, edit)
 }
 
 // ShowEpic returns an epic, the tasks that belong to it, and its body.

@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,7 +22,7 @@ func writeEpic(t *testing.T, root, name, content string) {
 func TestFS_ListEpics_NumericOrder(t *testing.T) {
 	root := t.TempDir()
 	for _, id := range []string{"09-i", "10-j", "100-k", "02-b"} {
-		writeEpic(t, root, id+".md", "---\nstatus: planning\n---\n# "+id+"\n")
+		writeEpic(t, root, id+".md", "---\nstatus: active\n---\n# "+id+"\n")
 	}
 	epics, _, err := NewFS(root).ListEpics()
 	if err != nil {
@@ -65,14 +66,14 @@ func TestFS_WatchPaths(t *testing.T) {
 
 func TestFS_ListEpics_And_GetEpic(t *testing.T) {
 	root := t.TempDir()
-	writeEpic(t, root, "17-x.md", "---\nstatus: in-progress\ndescription: x epic\ntags: [a]\n---\n# Epic X\nbody\n")
+	writeEpic(t, root, "17-x.md", "---\nstatus: active\ndescription: x epic\ntags: [a]\n---\n# Epic X\nbody\n")
 
 	fs := NewFS(root)
 	epics, _, err := fs.ListEpics()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(epics) != 1 || epics[0].ID != "17-x" || epics[0].Status != "in-progress" || epics[0].Description != "x epic" {
+	if len(epics) != 1 || epics[0].ID != "17-x" || epics[0].Status != "active" || epics[0].Description != "x epic" {
 		t.Fatalf("bad epics: %+v", epics)
 	}
 
@@ -85,6 +86,82 @@ func TestFS_ListEpics_And_GetEpic(t *testing.T) {
 	}
 
 	if _, _, err := fs.GetEpic("nope"); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("want ErrNotFound, got %v", err)
+	}
+}
+
+// TestFS_MoveEpic pins the surgical status-field rewrite: only `status` changes,
+// the file stays put (status is a FIELD, not a directory), and unknown fields,
+// key order, and the body all survive.
+func TestFS_MoveEpic(t *testing.T) {
+	root := t.TempDir()
+	writeEpic(t, root, "18-tui.md",
+		"---\nstatus: active\ndescription: tui epic\ncustom: keep\n---\n# TUI Epic\nbody\n")
+
+	ep, err := NewFS(root).MoveEpic("18-tui", "retired", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ep.ID != "18-tui" || ep.Status != "retired" {
+		t.Errorf("returned epic wrong: %+v", ep)
+	}
+
+	b, err := os.ReadFile(filepath.Join(root, "epics", "18-tui.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	if !strings.Contains(s, "status: retired") {
+		t.Errorf("status not rewritten:\n%s", s)
+	}
+	if strings.Contains(s, "status: active") {
+		t.Errorf("old status lingered:\n%s", s)
+	}
+	if !strings.Contains(s, "custom: keep") || !strings.Contains(s, "description: tui epic") {
+		t.Errorf("unknown/other fields lost (surgical write failed):\n%s", s)
+	}
+	if !strings.Contains(s, "# TUI Epic\nbody\n") {
+		t.Errorf("body not preserved:\n%s", s)
+	}
+}
+
+// TestFS_MoveEpic_InvalidStatus rejects an out-of-vocabulary status with the file
+// untouched.
+func TestFS_MoveEpic_InvalidStatus(t *testing.T) {
+	root := t.TempDir()
+	const original = "---\nstatus: active\ndescription: x\n---\n# X\n"
+	writeEpic(t, root, "18-tui.md", original)
+
+	if _, err := NewFS(root).MoveEpic("18-tui", "bogus", false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("invalid status should be ErrValidation, got %v", err)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "epics", "18-tui.md"))
+	if string(b) != original {
+		t.Errorf("file must be untouched on a rejected move:\n%s", b)
+	}
+}
+
+// TestFS_MoveEpic_DryRun validates end-to-end but skips the write.
+func TestFS_MoveEpic_DryRun(t *testing.T) {
+	root := t.TempDir()
+	const original = "---\nstatus: active\n---\n# X\n"
+	writeEpic(t, root, "18-tui.md", original)
+
+	ep, err := NewFS(root).MoveEpic("18-tui", "retired", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ep.Status != "retired" {
+		t.Errorf("dry-run should report the would-be status, got %q", ep.Status)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "epics", "18-tui.md"))
+	if string(b) != original {
+		t.Errorf("dry-run must not write:\n%s", b)
+	}
+}
+
+func TestFS_MoveEpic_NotFound(t *testing.T) {
+	if _, err := NewFS(t.TempDir()).MoveEpic("ghost", "retired", false); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 }

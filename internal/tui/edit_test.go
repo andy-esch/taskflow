@@ -11,6 +11,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // cleanTaskRepo seeds a lint-clean in-progress task "clean" (with tags, so the
@@ -27,7 +28,7 @@ func cleanTaskRepo(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	mk("epics/e1.md", "---\nstatus: in-progress\n---\n# E1\n")
+	mk("epics/e1.md", "---\nstatus: active\n---\n# E1\n")
 	mk("tasks/in-progress/clean.md",
 		"---\nstatus: in-progress\nepic: e1\ntier: 2\npriority: low\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# Clean\n")
 	return root
@@ -272,14 +273,66 @@ func TestModel_EditCancelNoWrite(t *testing.T) {
 	}
 }
 
-// TestModel_EditTasksOnly pins that inline edit is task-only (SetFields has no
-// epic/audit path): e is a no-op on a non-task tab.
-func TestModel_EditTasksOnly(t *testing.T) {
+// TestModel_EditEpicPriorityViaMenu mirrors TestModel_EditPriorityViaMenu for an
+// epic: e on the epics tab opens the SAME inline form (description/priority/tags —
+// no effort/tier), and applying priority=high routes through SetEpicFields, flashes
+// success, and reloads. This is the epic side of the inline `e` parity.
+func TestModel_EditEpicPriorityViaMenu(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Epic("01-e.md", "---\nstatus: active\ndescription: a goal\npriority: low\ntags: [x]\n---\n# Epic\n")
+	m := New(core.NewService(store.NewFS(r.Root)))
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = tm.(Model)
+	tm, _ = m.Update(m.Init()())
+	m = cmdJump(t, tm.(Model), "epics")
+	if m.cur().kind != entityEpics || m.selectedID() != "01-e" {
+		t.Fatalf("setup: want the epic selected on the epics tab, got tab=%q id=%q", m.cur().name, m.selectedID())
+	}
+
+	tm, _ = m.Update(press("e"))
+	m = tm.(Model)
+	if !m.edit.active {
+		t.Fatal("e should open the inline editor on an epic")
+	}
+	// The epic form must not offer effort/tier (those are task-only) or status.
+	for _, f := range m.edit.fields {
+		if f.key == "effort" || f.key == "tier" || f.key == "status" {
+			t.Errorf("epic editor must not offer %q", f.key)
+		}
+	}
+
+	m = editCursorTo(t, m, "priority")
+	tm, _ = m.Update(press("enter")) // begin editing the enum (starts on current "low")
+	m = enumCursorTo(t, tm.(Model), "high")
+	tm, cmd := m.Update(press("enter")) // apply (write in flight; still on the field)
+	m = tm.(Model)
+	if cmd == nil {
+		t.Fatal("apply should return a SetEpicFields command")
+	}
+	tm, _ = m.Update(cmd()) // run SetEpicFields → editedMsg
+	m = tm.(Model)
+	if !m.edit.active || m.edit.editing {
+		t.Error("a successful apply should return to the picker (open, not editing)")
+	}
+	if m.flash == "" || m.flashErr {
+		t.Errorf("expected a success flash, got %q (err=%v)", m.flash, m.flashErr)
+	}
+	epic, _, _, err := m.svc.ShowEpic("01-e")
+	if err != nil || epic.Priority != "high" {
+		t.Errorf("priority should be high after the edit: %q (%v)", epic.Priority, err)
+	}
+}
+
+// TestModel_EditNotOnAudits pins that the inline editor does NOT open on an audit
+// (the entity with no field-level write — it edits the whole file via E). Tasks and
+// epics edit fields in place; audits flash the E hint (see
+// TestModel_EditKeyOnAudit_FlashesEditorHint).
+func TestModel_EditNotOnAudits(t *testing.T) {
 	m := auditsTab(t, loaded(t, 120, 40))
 	tm, _ := m.Update(press("e"))
 	m = tm.(Model)
 	if m.edit.active {
-		t.Error("e must be a no-op on non-task entities")
+		t.Error("e must not open the inline editor on an audit")
 	}
 }
 

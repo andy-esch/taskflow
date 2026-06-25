@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: completed
+status: retired
 description: 'Structural follow-ups from the 2026-06-22 adversarial audit: entity-fan-out, god-file splits, TUI dispatch + core.Store port hardening.'
 priority: medium
 tags: []

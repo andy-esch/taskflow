@@ -106,8 +106,8 @@ func TestResolveAuditAndEpic_Fuzzy(t *testing.T) {
 		}
 	}
 	write("audits/open/2026-06-01-store-review.md", "---\narea: store\n---\n# A\n")
-	write("epics/17-pm-go-cli.md", "---\nstatus: planning\ndescription: e\n---\n# E\n")
-	write("epics/18-tui-browser.md", "---\nstatus: planning\ndescription: e\n---\n# E\n")
+	write("epics/17-pm-go-cli.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
+	write("epics/18-tui-browser.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	fs := NewFS(root)
 
 	if a, _, err := fs.GetAudit("store-review"); err != nil || a.Slug != "2026-06-01-store-review" {

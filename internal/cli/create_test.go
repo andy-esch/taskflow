@@ -19,7 +19,9 @@ func freshRepo(t *testing.T) string {
 
 func TestTaskNew_HappyPath(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	// The epic must itself be lint-clean (lint now validates epics too), so the
+	// closing `lint` below stays exit 0.
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\npriority: medium\ndescription: e1 goal\n---\n# E1\n")
 
 	out := runRoot(t, "-C", root, "task", "new", "My Brand New Task", "--epic", "e1", "--tags", "a,b")
 	if !strings.Contains(out, "created") {
@@ -47,7 +49,7 @@ func TestTaskNew_HappyPath(t *testing.T) {
 
 func TestTaskNew_Next(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	runRoot(t, "-C", root, "task", "new", "Soon", "--epic", "e1", "--tags", "x", "--description", "soon work", "--next")
 	if _, err := os.Stat(filepath.Join(root, "tasks", "next-up", "soon.md")); err != nil {
 		t.Errorf("--next should land in next-up/: %v", err)
@@ -59,7 +61,7 @@ func TestTaskNew_Next(t *testing.T) {
 // scaffold a file lint immediately rejects). Exit 11.
 func TestTaskNew_ActiveRequiresDescription(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	for _, flag := range []string{"--next", "--start"} {
 		var out bytes.Buffer
 		cmd := NewRootCmd(strings.NewReader(""), &out, &out)
@@ -72,7 +74,7 @@ func TestTaskNew_ActiveRequiresDescription(t *testing.T) {
 
 func TestTaskNew_Start(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	runRoot(t, "-C", root, "task", "new", "Start Me", "--epic", "e1", "--tags", "x", "--description", "start it", "--start")
 	path := filepath.Join(root, "tasks", "in-progress", "start-me.md")
 	b, err := os.ReadFile(path)
@@ -87,7 +89,7 @@ func TestTaskNew_Start(t *testing.T) {
 
 func TestTaskNew_BodyFile(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	bf := filepath.Join(t.TempDir(), "body.md")
 	mustWrite(t, bf, "\n# Custom\n\nfrom a file\n")
 	runRoot(t, "-C", root, "task", "new", "File Body", "--epic", "e1", "--tags", "x", "--body-file", bf)
@@ -102,7 +104,7 @@ func TestTaskNew_BodyFile(t *testing.T) {
 
 func TestTaskNew_BodyFileStdin(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetIn(strings.NewReader("\n# Piped\n\nfrom stdin\n"))
@@ -121,7 +123,7 @@ func TestTaskNew_BodyFileStdin(t *testing.T) {
 
 func TestTaskNew_MutuallyExclusiveFlags(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	for _, extra := range [][]string{
 		{"--next", "--start"},
 		{"--body", "x", "--body-file", "-"},
@@ -151,7 +153,7 @@ func TestTaskNew_UnknownEpic_Exit11(t *testing.T) {
 
 func TestTaskNew_RefusesClobber(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	runRoot(t, "-C", root, "task", "new", "Dup", "--epic", "e1", "--tags", "x")
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
@@ -176,7 +178,7 @@ func TestEpicNew(t *testing.T) {
 		t.Fatalf("epic not created (auto-number): %v", err)
 	}
 	s := string(b)
-	for _, want := range []string{"status: planning", "description: Overhaul payments", "priority: medium", "**Goal.**"} {
+	for _, want := range []string{"status: active", "description: Overhaul payments", "priority: medium", "**Goal.**"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("epic missing %q:\n%s", want, s)
 		}
@@ -231,7 +233,7 @@ func TestAuditNew(t *testing.T) {
 
 func TestTaskNew_RejectsSlugInAnotherBucket(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	runRoot(t, "-C", root, "task", "new", "Dup Task", "--epic", "e1", "--tags", "x")
 	runRoot(t, "-C", root, "task", "complete", "dup-task") // → completed/
 	// Re-creating the same title (slug now in completed/) refuses with exit 14.
@@ -429,7 +431,7 @@ func TestAuditNew_UnknownTemplateRejected(t *testing.T) {
 // it — the standard scaffold is written.
 func TestTaskNew_TemplateDefault(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n# E1\n")
 	runRoot(t, "-C", root, "task", "new", "Tmpl", "--epic", "e1", "--tags", "a", "--template", "default")
 	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "tmpl.md"))
 	if err != nil {
@@ -444,7 +446,7 @@ func TestTaskNew_TemplateDefault(t *testing.T) {
 // overriding it (--body) at once is a usage error, not a silent precedence pick.
 func TestCreate_TemplateAndBodyMutuallyExclusive(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	_, err := runRootRC(t, "-C", root, "task", "new", "X", "--epic", "e1", "--tags", "a", "--body", "hi", "--template", "default")
 	if err == nil {
 		t.Fatal("--body with --template should be rejected (mutually exclusive)")
@@ -456,7 +458,7 @@ func TestCreate_TemplateAndBodyMutuallyExclusive(t *testing.T) {
 // uses is filled by the create path. Guards create-path/descriptor key drift.
 func TestCreate_TemplateLeavesNoUnfilledPlaceholders(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n# E1\n")
 	runRoot(t, "-C", root, "task", "new", "T One", "--epic", "e1", "--tags", "a")
 	runRoot(t, "-C", root, "epic", "new", "E Two", "--description", "the goal")
 	runRoot(t, "-C", root, "audit", "new", "area-three", "--date", "2026-06-22")
@@ -485,7 +487,7 @@ func TestCreate_TemplateLeavesNoUnfilledPlaceholders(t *testing.T) {
 // every create command (previously only task was tested).
 func TestCreate_TemplatePerKind(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n# E1\n")
 	cases := []struct {
 		name string
 		ok   []string

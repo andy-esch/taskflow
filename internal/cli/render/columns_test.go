@@ -143,7 +143,7 @@ func TestWriteTablePlain_UpdatedFallsBackToCreated(t *testing.T) {
 func TestWriteTablePlain_EpicExtractors(t *testing.T) {
 	var b bytes.Buffer
 	WriteTablePlain(&b, EpicColumns(), []core.EpicSummary{{
-		Epic: domain.Epic{ID: "20-cli", Status: "planning", Priority: "medium", Description: "ux"},
+		Epic: domain.Epic{ID: "20-cli", Status: "active", Priority: "medium", Description: "ux"},
 		Done: 2, Total: 5,
 	}})
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
@@ -153,7 +153,7 @@ func TestWriteTablePlain_EpicExtractors(t *testing.T) {
 	if lines[0] != "id\tstatus\tpriority\tdone\ttotal\tdescription\tpercent\tdeprecated" {
 		t.Errorf("epic header: %q", lines[0])
 	}
-	if lines[1] != "20-cli\tplanning\tmedium\t2\t5\tux\t40\t0" {
+	if lines[1] != "20-cli\tactive\tmedium\t2\t5\tux\t40\t0" {
 		t.Errorf("epic row: %q", lines[1])
 	}
 }

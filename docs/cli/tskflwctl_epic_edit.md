@@ -1,28 +1,30 @@
-## tskflwctl epic new
+## tskflwctl epic edit
 
-Create a new epic (auto-numbered NN-slug)
+Open an epic in your editor (whole file; re-validated on save)
+
+### Synopsis
+
+Open the epic's markdown file in $VISUAL/$EDITOR (falling back to vi). On
+save the file is re-parsed: a frontmatter break (or a value the loader can't
+read) reopens the editor with the error rather than landing on disk — deeper
+field checks remain `lint`'s job. The human counterpart to `epic set`; agents
+and scripts should drive `set` (deterministic) instead.
 
 ```
-tskflwctl epic new <title> [flags]
+tskflwctl epic edit <epic> [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl epic new "Billing overhaul" --description "Replace the legacy pipeline"
+  tskflwctl epic edit 20-cli-ux
+  tskflwctl epic edit   # pick from a list
 ```
 
 ### Options
 
 ```
-      --body string          override the default body scaffold
-      --body-file string     read the body from a file, or - for stdin (replaces --body)
-      --description string   one-line description (required, <=200 chars)
-  -h, --help                 help for new
-      --priority string      high|medium|low (default "medium")
-      --status string        epic status: active|retired|deprecated (default "active")
-      --tags strings         comma-separated tags
-      --template string      body scaffold to use (default "default"); completes the available names
+  -h, --help   help for edit
 ```
 
 ### Options inherited from parent commands

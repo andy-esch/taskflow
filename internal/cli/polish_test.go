@@ -56,7 +56,7 @@ func TestShow_GlamourRendering(t *testing.T) {
 // JSON envelope.
 func TestCreate_LinksPathOnColor(t *testing.T) {
 	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: in-progress\n---\n# E1\n")
+	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n# E1\n")
 
 	on := runRoot(t, "-C", root, "task", "new", "Linky", "--epic", "e1", "--tags", "a", "--color=always")
 	if !strings.Contains(on, "\x1b]8;;file://") {

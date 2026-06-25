@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: planning
+status: active
 description: Rate limiting, auth, and pagination for the public API gateway.
 priority: medium
 tags: []

@@ -1,28 +1,28 @@
-## tskflwctl epic new
+## tskflwctl epic set
 
-Create a new epic (auto-numbered NN-slug)
+Set one or more epic frontmatter fields (validated, single atomic write)
 
 ```
-tskflwctl epic new <title> [flags]
+tskflwctl epic set <epic> [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl epic new "Billing overhaul" --description "Replace the legacy pipeline"
+  tskflwctl epic set 20-cli-ux --priority high
+  tskflwctl epic set --priority high   # pick the epic from a list
 ```
 
 ### Options
 
 ```
-      --body string          override the default body scaffold
-      --body-file string     read the body from a file, or - for stdin (replaces --body)
-      --description string   one-line description (required, <=200 chars)
-  -h, --help                 help for new
-      --priority string      high|medium|low (default "medium")
-      --status string        epic status: active|retired|deprecated (default "active")
+      --description string   one-line description (<=200 chars)
+      --force                allow --set of a field tskflwctl doesn't know
+  -h, --help                 help for set
+      --priority string      high|medium|low
+      --set stringArray      key=value (repeatable); known fields are typed+validated, unknown keys need --force
       --tags strings         comma-separated tags
-      --template string      body scaffold to use (default "default"); completes the available names
+      --unset stringArray    remove a frontmatter key (repeatable)
 ```
 
 ### Options inherited from parent commands

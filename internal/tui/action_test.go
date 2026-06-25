@@ -43,6 +43,11 @@ func TestTransitionTablesValidStates(t *testing.T) {
 			t.Errorf("audit transition %q -> %q is not a valid bucket", tr.verb, tr.to)
 		}
 	}
+	for _, tr := range epicTransitions {
+		if err := domain.ValidateEpicStatus(tr.to); err != nil {
+			t.Errorf("epic transition %q -> %q is not a valid epic status: %v", tr.verb, tr.to, err)
+		}
+	}
 }
 
 func TestValidTransitions(t *testing.T) {
@@ -204,7 +209,11 @@ func TestModel_CommandVerbMovesTask(t *testing.T) {
 	}
 }
 
-func TestModel_ActionMenuTasksOnly(t *testing.T) {
+// TestModel_ActionMenuOpensOnEpic pins that the action menu is now registry-driven
+// across entities: it opens on an epic (which declares status transitions), not
+// just tasks. (Historically the `m` menu was task-only; audits then epics gained
+// their own transition tables.) The full move flow lives in epic_action_test.go.
+func TestModel_ActionMenuOpensOnEpic(t *testing.T) {
 	m := loaded(t, 120, 40)
 	tm, cmd := m.Update(press("]")) // → epics
 	m = drain(t, tm.(Model), cmd)
@@ -213,8 +222,8 @@ func TestModel_ActionMenuTasksOnly(t *testing.T) {
 	}
 	tm, _ = m.Update(press("m"))
 	m = tm.(Model)
-	if m.action.active {
-		t.Error("the action menu is a no-op on non-task entities")
+	if !m.action.active {
+		t.Error("the action menu should open on an epic (epics now declare transitions)")
 	}
 }
 

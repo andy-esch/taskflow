@@ -137,6 +137,27 @@
       ],
       "description": "DoctorProblem is one linkback inconsistency: the offending repo + a message."
     },
+    "EpicMutationEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "epic": {
+          "$ref": "#/$defs/epicMetaJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "dry_run",
+        "epic"
+      ],
+      "description": "EpicMutationEnvelope is `epic set --json`: the reloaded epic + dry_run."
+    },
     "EpicShowEnvelope": {
       "properties": {
         "schema_version": {
@@ -316,6 +337,12 @@
             "$ref": "#/$defs/FileProblem"
           },
           "type": "array"
+        },
+        "remaining": {
+          "items": {
+            "$ref": "#/$defs/lintTaskJSON"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -324,7 +351,8 @@
         "schema_version",
         "dry_run",
         "fixed",
-        "unreadable"
+        "unreadable",
+        "remaining"
       ],
       "description": "FixEnvelope is `lint --fix --json`."
     },
@@ -509,6 +537,12 @@
           },
           "type": "array"
         },
+        "epic_fields": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "exit_codes": {
           "items": {
             "$ref": "#/$defs/SchemaExitCode"
@@ -530,6 +564,7 @@
         "epic_statuses",
         "audit_buckets",
         "task_fields",
+        "epic_fields",
         "exit_codes",
         "kinds"
       ],
@@ -894,7 +929,7 @@
         },
         "status": {
           "type": "string",
-          "description": "planning | in-progress | completed | archived"
+          "description": "active | retired | deprecated"
         },
         "description": {
           "type": "string",
@@ -946,7 +981,7 @@
         },
         "status": {
           "type": "string",
-          "description": "planning | in-progress | completed | archived"
+          "description": "active | retired | deprecated"
         },
         "description": {
           "type": "string",
@@ -1034,6 +1069,9 @@
         "task_mutation": {
           "$ref": "#/$defs/TaskMutationEnvelope"
         },
+        "epic_mutation": {
+          "$ref": "#/$defs/EpicMutationEnvelope"
+        },
         "moves": {
           "$ref": "#/$defs/MovesEnvelope"
         },
@@ -1095,6 +1133,7 @@
         "tasks",
         "task_show",
         "task_mutation",
+        "epic_mutation",
         "moves",
         "summary",
         "version",
@@ -1214,6 +1253,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.13)",
+  "title": "tskflwctl --json output (schema_version 1.15)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

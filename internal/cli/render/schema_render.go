@@ -36,6 +36,7 @@ type SchemaContract struct {
 	EpicStatuses []string         `json:"epic_statuses"`
 	AuditBuckets []string         `json:"audit_buckets"`
 	TaskFields   []SchemaField    `json:"task_fields"`
+	EpicFields   []string         `json:"epic_fields"`
 	ExitCodes    []SchemaExitCode `json:"exit_codes"`
 	Kinds        []string         `json:"kinds"`
 }
@@ -63,6 +64,7 @@ func SchemaHuman(w io.Writer, st Style, c SchemaContract) error {
 	for _, f := range c.TaskFields {
 		fmt.Fprintf(w, "  %-16s %s\n", f.Name, st.Dim(f.Type))
 	}
+	fmt.Fprintf(w, "\n%s: %s\n", st.Bold("Epic fields"), strings.Join(c.EpicFields, ", "))
 	fmt.Fprintf(w, "\n%s:\n", st.Bold("Exit codes"))
 	for _, e := range c.ExitCodes {
 		fmt.Fprintf(w, "  %-3d %s\n", e.Code, st.Dim(e.Name))

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: active
 description: A fixture epic for golden snapshots
 priority: high
 created: "2026-01-01"
