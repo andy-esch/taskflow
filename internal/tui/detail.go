@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
@@ -438,20 +439,9 @@ func renderEpicMeta(e domain.Epic, tasks []domain.Task, width int) string {
 	if len(e.Tags) > 0 {
 		detailField(&b, "tags", strings.Join(e.Tags, ", "))
 	}
-	// Mirror core.rollupEpics: deprecated (withdrawn) tasks leave the denominator
-	// (counted separately) so this matches the epic list / status percentage;
-	// everything else — incl. deferred — counts toward total.
-	done, total, deprecated := 0, 0, 0
-	for _, t := range tasks {
-		if t.Status == domain.StatusDeprecated {
-			deprecated++
-			continue
-		}
-		total++
-		if t.Status == domain.StatusCompleted {
-			done++
-		}
-	}
+	// Shared rollup (deprecated leaves the denominator, counted separately) so this
+	// matches epic list / status / epic show.
+	done, total, deprecated := core.TaskRollup(tasks)
 	pct := 0
 	if total > 0 {
 		pct = done * 100 / total

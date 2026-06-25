@@ -378,19 +378,9 @@ func EpicShowHuman(w io.Writer, st Style, epic domain.Epic, tasks []domain.Task,
 	if epic.Description != "" {
 		field("description", epic.Description)
 	}
-	// One pass for the rollup: deprecated tasks leave the denominator (counted
-	// separately in the tasks header), matching epic list / status / the TUI detail.
-	done, total, deprecated := 0, 0, 0
-	for _, t := range tasks {
-		if t.Status == domain.StatusDeprecated {
-			deprecated++
-			continue
-		}
-		total++
-		if t.Status == domain.StatusCompleted {
-			done++
-		}
-	}
+	// Shared rollup: deprecated tasks leave the denominator (counted separately in
+	// the tasks header), matching epic list / status / the TUI detail.
+	done, total, deprecated := core.TaskRollup(tasks)
 	pct := 0
 	if total > 0 {
 		pct = done * 100 / total

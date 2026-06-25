@@ -193,6 +193,24 @@ func TestService_ListEpics_ExcludesDeprecated(t *testing.T) {
 	}
 }
 
+// TestTaskRollup pins the shared counting rule the epic list/status, epic show,
+// and TUI epic detail all derive from — including the empty-input zero case.
+func TestTaskRollup(t *testing.T) {
+	if done, total, dep := TaskRollup(nil); done != 0 || total != 0 || dep != 0 {
+		t.Errorf("TaskRollup(nil) = %d,%d,%d, want 0,0,0", done, total, dep)
+	}
+	tasks := []domain.Task{
+		{Status: domain.StatusCompleted},
+		{Status: domain.StatusCompleted},
+		{Status: domain.StatusInProgress},
+		{Status: domain.StatusDeferred},   // stays in total, not done
+		{Status: domain.StatusDeprecated}, // excluded from total, counted separately
+	}
+	if done, total, dep := TaskRollup(tasks); done != 2 || total != 4 || dep != 1 {
+		t.Errorf("TaskRollup = done %d total %d deprecated %d, want 2 4 1", done, total, dep)
+	}
+}
+
 func TestService_NewTask_UnknownEpic(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
 	svc := NewService(fs)
