@@ -151,11 +151,47 @@ func (s Style) Bar(pct, width int) string {
 	return out
 }
 
+// SegmentBar renders an audit's finding breakdown as a stacked bar (done/active/
+// dropped bands over an open/empty track) via the shared progressbar package — the
+// same renderer the TUI uses, so the surfaces can't drift. Like Bar, it strips the
+// ANSI back to plain (distinct) glyphs when styling is off, keeping porcelain
+// byte-stable.
+func (s Style) SegmentBar(done, active, dropped, total, width int) string {
+	if width <= 0 {
+		width = 10
+	}
+	out := progressbar.RenderSegments(progressbar.Segments{Done: done, Active: active, Dropped: dropped, Total: total}, width)
+	if !s.on {
+		return ansi.Strip(out)
+	}
+	return out
+}
+
 // visibleWidth is the DISPLAY-CELL width of s ignoring ANSI escapes — so
 // colored cells align (tabwriter counts escape bytes) and wide runes
 // (CJK/emoji occupy two cells) don't shift columns the way a rune count did.
 func visibleWidth(s string) int {
 	return ansi.StringWidth(s)
+}
+
+// fitNode truncates a pre-styled `show` tree node to the terminal width minus its
+// connector indent (~4 cells per level); width 0 (piped) leaves it full so output
+// stays lossless.
+func fitNode(st Style, s string, indent int) string {
+	if st.width <= 0 {
+		return s
+	}
+	return truncateCell(s, st.width-indent)
+}
+
+// truncateCell shortens s to max display cells with a trailing "…", ANSI-aware
+// (safe to cut a pre-styled string — unlike truncate, which bails on ANSI). Used
+// for `show` tree nodes, whose text carries color/bold.
+func truncateCell(s string, max int) string {
+	if max <= 1 || ansi.StringWidth(s) <= max {
+		return s
+	}
+	return ansi.Truncate(s, max, "…")
 }
 
 // truncate shortens a plain string to max display cells with a trailing "…".

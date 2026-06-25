@@ -860,6 +860,18 @@
         "open_findings": {
           "type": "integer",
           "description": "findings whose status is open"
+        },
+        "in_progress_findings": {
+          "type": "integer",
+          "description": "findings whose status is in-progress"
+        },
+        "done_findings": {
+          "type": "integer",
+          "description": "findings whose status is fixed or landed (the bar's done band)"
+        },
+        "dropped_findings": {
+          "type": "integer",
+          "description": "findings whose status is deferred"
         }
       },
       "additionalProperties": false,
@@ -868,7 +880,10 @@
         "slug",
         "bucket",
         "findings",
-        "open_findings"
+        "open_findings",
+        "in_progress_findings",
+        "done_findings",
+        "dropped_findings"
       ]
     },
     "epicJSON": {
@@ -1199,6 +1214,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.12)",
+  "title": "tskflwctl --json output (schema_version 1.13)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

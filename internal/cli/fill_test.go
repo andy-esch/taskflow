@@ -72,6 +72,31 @@ func TestFillSelect_EmptyOptions_Errors(t *testing.T) {
 	}
 }
 
+// TestResolveOne pins the bare-invocation path shared by `<noun> show` / `task
+// set` / `task append`: a positional arg wins; otherwise it's the fillSelect
+// contract (gate open → picker, gate closed → exit-11).
+func TestResolveOne(t *testing.T) {
+	// A positional target short-circuits — no prompt, opts never gathered.
+	app := &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{}}
+	if got, err := app.resolveOne([]string{"slug-x"}, "req", "empty", "Pick", failOpts(t)); err != nil || got != "slug-x" {
+		t.Fatalf("resolveOne([slug]) = %q, %v; want slug-x", got, err)
+	}
+	// Bare + gate open → the picker fires and returns the choice.
+	f := &prompt.Fake{SelectAnswers: []string{"picked"}}
+	app = &App{Gate: prompt.NewGate(true), Prompt: f}
+	got, err := app.resolveOne(nil, "req", "empty", "Pick one", func() ([]prompt.Option, error) {
+		return []prompt.Option{{Label: "X", Value: "picked"}}, nil
+	})
+	if err != nil || got != "picked" {
+		t.Fatalf("resolveOne(picker) = %q, %v; want picked", got, err)
+	}
+	// Bare + gate closed (agent/pipe) → exit-11, opts never gathered.
+	app = &App{Gate: prompt.NewGate(false), Prompt: &prompt.Fake{}}
+	if _, err := app.resolveOne(nil, "specify a thing", "empty", "Pick", failOpts(t)); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("closed gate should wrap ErrValidation (exit 11), got %v", err)
+	}
+}
+
 // TestGateOpen pins the gate contract: prompting requires ALL of !--json,
 // !--no-input, stdin-TTY, and stderr-TTY — any one false closes it.
 func TestGateOpen(t *testing.T) {

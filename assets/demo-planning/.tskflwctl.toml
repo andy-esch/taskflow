@@ -1,0 +1,5 @@
+taskflow_root = "."
+tracked_repos = []
+
+[pager]
+enabled = false

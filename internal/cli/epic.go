@@ -131,11 +131,16 @@ func newEpicShowCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "show <epic>",
 		Short:             "Show an epic and the tasks under it",
-		Args:              cobra.ExactArgs(1),
+		Example:           "  tskflwctl epic show 01-api-gateway\n  tskflwctl epic show   # pick from a list",
+		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the id
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: app.completeEpicIDs,
 		RunE: func(_ *cobra.Command, args []string) error {
-			epic, tasks, body, err := app.Svc.ShowEpic(args[0])
+			id, err := app.resolveOne(args, "specify an epic to show", "no epics available", "Epic to show", app.epicOptions)
+			if err != nil {
+				return err
+			}
+			epic, tasks, body, err := app.Svc.ShowEpic(id)
 			if err != nil {
 				return err
 			}

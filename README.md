@@ -7,16 +7,23 @@ retired — see below), and it dogfoods on its own planning under
 
 ## Demos
 
-Recorded with [vhs](https://github.com/charmbracelet/vhs); regenerate with `just
-gifs` (tapes in [`assets/vhs/`](./assets/vhs/) — vhs is a dev-only tool, not a
-build or runtime dependency).
+The interactive TUI (`tskflwctl ui`) — tab across tasks, epics, and audits;
+status glyphs, epic rollup bars, and an audit's **segmented finding bar** over its
+status-grouped **finding tree**:
+
+![the tskflwctl TUI](./assets/tui.gif)
+
+…and the same vocabulary on the CLI:
 
 | | |
 | :-- | :-- |
-| `tskflwctl --help` | ![help](./assets/help.gif) |
-| `tskflwctl status` | ![status](./assets/status.gif) |
-| `tskflwctl epic show <id>` | ![epic show](./assets/epic-show.gif) |
-| `tskflwctl task list -o table -c …` | ![task list](./assets/task-list.gif) |
+| `tskflwctl status` — counts, in-progress, epic bars, open audits | ![status](./assets/status.gif) |
+| `tskflwctl audit show <id>` — segmented finding bar + finding tree | ![audit show](./assets/audit-show.gif) |
+
+▸ **[All demos, how they're recorded, and the demo fixture →
+`assets/README.md`](./assets/README.md)** — rendered with
+[vhs](https://github.com/charmbracelet/vhs) against a curated planning tree;
+regenerate with `just gifs`.
 
 ## Map
 

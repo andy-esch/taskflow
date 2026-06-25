@@ -10,6 +10,7 @@ tskflwctl audit defer <audit>... [flags]
 
 ```
   tskflwctl audit defer 2026-06-06-schemas-scripts
+  tskflwctl audit defer   # pick from a list
 ```
 
 ### Options

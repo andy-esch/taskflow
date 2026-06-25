@@ -136,6 +136,38 @@ func CountOpenFindings(fs []Finding) int {
 	return n
 }
 
+// FindingTally is the per-disposition finding breakdown the segmented progress
+// bar bands by. Open + Active + Done + Dropped ≤ len(findings): a finding with an
+// unrecognized or missing status (audit lint flags those) counts toward none, so
+// the bar's empty track absorbs it — still, correctly, "not done".
+type FindingTally struct {
+	Open    int // open
+	Active  int // in-progress
+	Done    int // fixed, landed
+	Dropped int // deferred, superseded, wontfix
+}
+
+// TallyFindings groups findings by disposition for the bar. The mapping is the
+// single source of "what each status means for progress": fixed/landed are done,
+// in-progress is active, deferred/superseded/wontfix are dropped (decided or
+// parked, not fixed), open is outstanding.
+func TallyFindings(fs []Finding) FindingTally {
+	var t FindingTally
+	for _, f := range fs {
+		switch strings.ToLower(strings.TrimSpace(f.Status)) {
+		case "open":
+			t.Open++
+		case "in-progress":
+			t.Active++
+		case "fixed", "landed":
+			t.Done++
+		case "deferred", "superseded", "wontfix":
+			t.Dropped++
+		}
+	}
+	return t
+}
+
 func field(re *regexp.Regexp, section string) string {
 	if m := re.FindStringSubmatch(section); m != nil {
 		return strings.TrimSpace(m[1])

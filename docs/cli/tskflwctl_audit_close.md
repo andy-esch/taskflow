@@ -10,6 +10,7 @@ tskflwctl audit close <audit>... [flags]
 
 ```
   tskflwctl audit close 2026-06-06-schemas-scripts
+  tskflwctl audit close   # pick from a list
 ```
 
 ### Options

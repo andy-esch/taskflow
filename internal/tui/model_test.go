@@ -572,7 +572,7 @@ func TestEntityDetailRenderers(t *testing.T) {
 	}
 
 	audit := auditDetail{
-		a:    domain.Audit{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Findings: 5, OpenFindings: 2},
+		a:    domain.Audit{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Findings: 5, OpenFindings: 2, DoneFindings: 3},
 		body: "# Audit body",
 	}
 	out = ansi.Strip(audit.meta(70) + "\n" + audit.rawBody())

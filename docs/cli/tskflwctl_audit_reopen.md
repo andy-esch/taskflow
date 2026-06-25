@@ -10,6 +10,7 @@ tskflwctl audit reopen <audit>... [flags]
 
 ```
   tskflwctl audit reopen 2026-06-06-schemas-scripts
+  tskflwctl audit reopen   # pick from a list
 ```
 
 ### Options

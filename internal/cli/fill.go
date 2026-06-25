@@ -148,10 +148,22 @@ func (a *App) transitionOptions(to domain.Status) func() ([]prompt.Option, error
 	}
 }
 
-// editOptions lists the active tasks as a picker source for a bare `task edit`.
-// An explicit slug resolves across every status regardless; the picker just
-// offers the working set so a human doesn't have to remember a slug.
-func (a *App) editOptions() ([]prompt.Option, error) {
+// resolveOne returns the single positional target, falling back to a picker on a
+// TTY when none was given (exit 11 non-interactively) — the bare-invocation twin of
+// fillSelect for the `<noun> show` / `task set` / `task append` commands, which take
+// at most one arg.
+func (a *App) resolveOne(args []string, requiredMsg, emptyMsg, title string, optsFn func() ([]prompt.Option, error)) (string, error) {
+	value := ""
+	if len(args) == 1 {
+		value = args[0]
+	}
+	return a.fillSelect(value, requiredMsg, emptyMsg, title, optsFn)
+}
+
+// taskOptions lists the active tasks as a picker source for a bare `task
+// edit/show/set/append`. An explicit slug resolves across every status regardless;
+// the picker just offers the working set so a human doesn't have to remember a slug.
+func (a *App) taskOptions() ([]prompt.Option, error) {
 	tasks, _, err := a.Svc.ListTasks(core.TaskFilter{})
 	if err != nil {
 		return nil, err
@@ -161,6 +173,39 @@ func (a *App) editOptions() ([]prompt.Option, error) {
 		opts = append(opts, labeledOption(t.Slug, t.Description))
 	}
 	return opts, nil
+}
+
+// auditOptions lists every audit (all buckets) as a picker source for a bare
+// `audit show`.
+func (a *App) auditOptions() ([]prompt.Option, error) {
+	audits, _, err := a.Svc.ListAudits("", true)
+	if err != nil {
+		return nil, err
+	}
+	opts := make([]prompt.Option, 0, len(audits))
+	for _, ad := range audits {
+		opts = append(opts, labeledOption(ad.Slug, ad.Area))
+	}
+	return opts, nil
+}
+
+// auditMoveOptions lists audits NOT already in bucket `to` — the picker for a bare
+// `audit close/reopen/defer`, mirroring transitionOptions(to) for the task verbs.
+func (a *App) auditMoveOptions(to domain.AuditBucket) func() ([]prompt.Option, error) {
+	return func() ([]prompt.Option, error) {
+		audits, _, err := a.Svc.ListAudits("", true)
+		if err != nil {
+			return nil, err
+		}
+		opts := make([]prompt.Option, 0, len(audits))
+		for _, ad := range audits {
+			if ad.Bucket == to {
+				continue
+			}
+			opts = append(opts, labeledOption(ad.Slug, ad.Area))
+		}
+		return opts, nil
+	}
 }
 
 // epicOptions lists epics as pickable options (id + description), for the

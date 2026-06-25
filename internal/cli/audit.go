@@ -205,11 +205,16 @@ func newAuditShowCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "show <audit>",
 		Short:             "Show an audit's metadata and body",
-		Args:              cobra.ExactArgs(1),
+		Example:           "  tskflwctl audit show 2026-06-20-api-gateway\n  tskflwctl audit show   # pick from a list",
+		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: app.completeAuditSlugs,
 		RunE: func(_ *cobra.Command, args []string) error {
-			audit, body, err := app.Svc.ShowAudit(args[0])
+			slug, err := app.resolveOne(args, "specify an audit to show", "no audits available", "Audit to show", app.auditOptions)
+			if err != nil {
+				return err
+			}
+			audit, body, err := app.Svc.ShowAudit(slug)
 			if err != nil {
 				return err
 			}
@@ -232,11 +237,20 @@ func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.
 	return &cobra.Command{
 		Use:               use + " <audit>...",
 		Short:             short,
-		Example:           "  tskflwctl audit " + use + " 2026-06-06-schemas-scripts",
-		Args:              cobra.MinimumNArgs(1),
+		Example:           "  tskflwctl audit " + use + " 2026-06-06-schemas-scripts\n  tskflwctl audit " + use + "   # pick from a list",
+		Args:              cobra.ArbitraryArgs, // bare → picker on a TTY; non-interactive needs ≥1 arg
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.auditCompleter(to), // don't offer audits already at `to`
 		RunE: func(_ *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				// Bare verb: pick an audit on a TTY; non-interactive → exit 11.
+				slug, err := app.fillSelect("", "specify at least one audit to "+use,
+					"no audits available to "+use, "Audit to "+use, app.auditMoveOptions(to))
+				if err != nil {
+					return err
+				}
+				args = []string{slug}
+			}
 			return runMoves(app, args, string(to),
 				func(slug string) (domain.Audit, error) { return app.Svc.MoveAudit(slug, to, app.DryRun) },
 				func(a domain.Audit) string { return a.Slug })
