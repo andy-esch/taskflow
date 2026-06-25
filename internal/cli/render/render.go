@@ -445,8 +445,16 @@ func AuditsJSON(w io.Writer, audits []domain.Audit, problems []domain.FileProble
 	return encodeJSON(w, payload)
 }
 
-// AuditShowHuman prints an audit's metadata and body.
-func AuditShowHuman(w io.Writer, st Style, a domain.Audit, body string) error {
+// findingStatusOrder renders the finding groups of `audit show` in lifecycle
+// order (active work first, terminal states last). A status outside the
+// vocabulary or missing entirely (audit lint flags those) sorts after these so
+// the tree never drops a finding.
+var findingStatusOrder = []string{"open", "in-progress", "fixed", "landed", "deferred", "superseded", "wontfix"}
+
+// AuditShowHuman prints an audit's metadata, a status-grouped finding tree, and
+// its body. findings is parsed from the raw body by the caller; body is the
+// already-rendered (glamour/raw) markdown.
+func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Finding, body string) error {
 	field := func(label, value string) {
 		fmt.Fprintf(w, "%s %s\n", st.Dim(fmt.Sprintf("%-9s", label+":")), value)
 	}
@@ -464,6 +472,49 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, body string) error {
 		progress += fmt.Sprintf("  (%d open)", a.OpenFindings)
 	}
 	field("findings", progress)
+	// A status-grouped finding tree (glyph + code + title), mirroring epic show's
+	// task tree — the CLI analog of the TUI audit detail's finding index. The
+	// --json envelope (AuditShowJSON) is unaffected.
+	if len(findings) > 0 {
+		byStatus := map[string][]domain.Finding{}
+		for _, f := range findings {
+			key := strings.ToLower(strings.TrimSpace(f.Status))
+			byStatus[key] = append(byStatus[key], f)
+		}
+		tr := tree.New()
+		addGroup := func(header string, grp []domain.Finding) {
+			sub := tree.Root(header)
+			for _, f := range grp {
+				child := st.Bold(f.Code)
+				if f.Title != "" {
+					child += "  " + f.Title
+				}
+				sub.Child(child)
+			}
+			tr.Child(sub)
+		}
+		done := map[string]bool{}
+		for _, s := range findingStatusOrder {
+			if grp := byStatus[s]; len(grp) > 0 {
+				addGroup(st.FindingStatus(s), grp)
+				done[s] = true
+			}
+		}
+		// Out-of-vocab / missing statuses, in first-appearance order — no finding dropped.
+		for _, f := range findings {
+			key := strings.ToLower(strings.TrimSpace(f.Status))
+			if done[key] {
+				continue
+			}
+			done[key] = true
+			header := st.FindingStatus(f.Status)
+			if key == "" {
+				header = st.Dim("(no status)")
+			}
+			addGroup(header, byStatus[key])
+		}
+		fmt.Fprintln(w, tr)
+	}
 	fmt.Fprintf(w, "\n%s", body)
 	return nil
 }
