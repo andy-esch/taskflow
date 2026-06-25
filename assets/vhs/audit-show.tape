@@ -1,12 +1,12 @@
-# Demo: the at-a-glance status dashboard — status counts, the in-progress set,
-# epic rollup bars, and the Open-audits section with its segmented finding bar.
+# Demo: `audit show` — the segmented finding bar (done / in-progress / dropped /
+# open, banded by distinct glyphs) above the status-grouped finding tree.
 # Regenerate with `just gifs`. Runs against the curated assets/demo-planning
 # fixture (cd is hidden so the recorded command stays clean).
-Output assets/status.gif
+Output assets/audit-show.gif
 Set Shell bash
 Set FontSize 16
 Set Width 1100
-Set Height 720
+Set Height 760
 Set Theme "Dracula"
 Set Padding 16
 
@@ -15,7 +15,7 @@ Type "cd assets/demo-planning && clear"
 Enter
 Show
 
-Type "tskflwctl status"
+Type "tskflwctl audit show 2026-06-20-api-gateway"
 Sleep 700ms
 Enter
-Sleep 4s
+Sleep 4.5s

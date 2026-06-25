@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: in-progress
 epic: 20-cli-ux-and-ergonomics
 description: Demo GIFs (status/epic-show/audit) still show pre-symbology output; regenerate the assets/vhs tapes so README matches bars, finding glyphs, and the Open-audits dashboard section.
 effort: S
@@ -9,6 +9,8 @@ priority: low
 autonomy_level: 3
 tags: [docs, tui]
 created: "2026-06-25"
+updated_at: "2026-06-25"
+started_at: "2026-06-25"
 ---
 # Regenerate demo GIFs for the new progress + symbology output
 
@@ -49,3 +51,21 @@ render via [vhs](https://github.com/charmbracelet/vhs). README embeds the GIFs
 
 The README's GIFs match what the tool prints today — bars, finding glyphs, and
 the Open-audits dashboard section all visible.
+
+## Prep landed 2026-06-25 (recording still owed)
+
+Decision: feature **TUI hero + status + audit show** (not the old four).
+
+Done in-repo:
+- Curated [`assets/demo-planning/`](../../../assets/demo-planning/) fixture — 3 epics
+  mid-progress (50/33/100%), 8 tasks across every status, one open audit whose
+  findings span fixed/landed/in-progress/open/deferred/wontfix (so the segmented
+  bar shows all bands) + one closed audit. Generated with the tool; lint-clean.
+- New tapes: `assets/vhs/tui.tape` (hero), `assets/vhs/audit-show.tape`; rewrote
+  `status.tape`. All `cd` (hidden) into the demo fixture so recorded commands stay clean.
+- README `## Demos` rewired: hero TUI gif + status + audit-show, with a note on the fixture.
+- `assets/vhs/README.md` updated.
+
+Remaining (needs `vhs`, not in the dev container — host/CI):
+- Run `just gifs` to record `tui.gif`, `status.gif`, `audit-show.gif`.
+- Optionally prune the now-unreferenced `help`/`epic-show`/`task-list` tapes + gifs.
