@@ -403,10 +403,11 @@ func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
 	}
 	rows := make([][]string, 0, len(audits))
 	for _, a := range audits {
-		findings := fmt.Sprintf("%d/%d open", a.OpenFindings, a.Findings)
-		rows = append(rows, []string{st.Bucket(string(a.Bucket)), st.Bold(a.Slug), findings, a.Area})
+		pct := a.Percent()
+		progress := fmt.Sprintf("%s %s %d/%d", st.Bar(pct, 8), st.Percent(pct), a.Resolved(), a.Findings)
+		rows = append(rows, []string{st.Bucket(string(a.Bucket)), st.Bold(a.Slug), progress, a.Area})
 	}
-	writeTable(w, st.width, []string{st.Dim("BUCKET"), st.Dim("AUDIT"), st.Dim("FINDINGS"), st.Dim("AREA")}, rows)
+	writeTable(w, st.width, []string{st.Dim("BUCKET"), st.Dim("AUDIT"), st.Dim("PROGRESS"), st.Dim("AREA")}, rows)
 	return nil
 }
 
@@ -433,7 +434,13 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, body string) error {
 	if a.Date != "" {
 		field("date", a.Date)
 	}
-	fmt.Fprintf(w, "%s %d (%d open)\n\n%s", st.Dim("findings:"), a.Findings, a.OpenFindings, body)
+	pct := a.Percent()
+	progress := fmt.Sprintf("%s %s  %d/%d", st.Bar(pct, 10), st.Percent(pct), a.Resolved(), a.Findings)
+	if a.OpenFindings > 0 {
+		progress += fmt.Sprintf("  (%d open)", a.OpenFindings)
+	}
+	field("findings", progress)
+	fmt.Fprintf(w, "\n%s", body)
 	return nil
 }
 
@@ -464,7 +471,7 @@ func FindingsHuman(w io.Writer, st Style, fs []core.AuditFinding) error {
 	}
 	rows := make([][]string, 0, len(fs))
 	for _, f := range fs {
-		rows = append(rows, []string{f.Status, st.Bold(f.Code), f.Audit, f.Effort, f.Urgency, f.Component, f.Title})
+		rows = append(rows, []string{st.FindingStatus(f.Status), st.Bold(f.Code), f.Audit, f.Effort, f.Urgency, f.Component, f.Title})
 	}
 	writeTable(w, st.width, []string{
 		st.Dim("STATUS"), st.Dim("CODE"), st.Dim("AUDIT"), st.Dim("EFFORT"),

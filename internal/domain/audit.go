@@ -46,3 +46,18 @@ type Audit struct {
 	Findings     int `yaml:"-"`
 	OpenFindings int `yaml:"-"`
 }
+
+// Resolved is the number of findings no longer open (Findings − OpenFindings) —
+// the audit analog of an epic's Done count. "Open" is the single not-yet-handled
+// state (see CountOpenFindings); everything else (in-progress, fixed, landed,
+// deferred, superseded, wontfix) counts as resolved for the rollup.
+func (a Audit) Resolved() int { return a.Findings - a.OpenFindings }
+
+// Percent is the share of findings resolved, 0–100 (0 when there are none) —
+// mirroring EpicSummary.Percent so both rollups (and their bars) read the same.
+func (a Audit) Percent() int {
+	if a.Findings == 0 {
+		return 0
+	}
+	return a.Resolved() * 100 / a.Findings
+}

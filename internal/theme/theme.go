@@ -5,7 +5,11 @@
 // maps Color to its own rendering tech.
 package theme
 
-import "github.com/andy-esch/taskflow/internal/domain"
+import (
+	"strings"
+
+	"github.com/andy-esch/taskflow/internal/domain"
+)
 
 // Color is a semantic 16-color slot. Each presenter maps it to its tech: the
 // CLI to an ANSI SGR code, the TUI to a lipgloss.Color.
@@ -66,17 +70,44 @@ func Status(s domain.Status) Token {
 	}
 }
 
-// Bucket maps an audit bucket to its color.
-func Bucket(b domain.AuditBucket) Color {
+// Bucket maps an audit bucket to its glyph + color. Like Status (and unlike the
+// old color-only mapping), the bucket carries a distinct *shape* so its state
+// survives a mono terminal / --color=never / colorblindness — and the glyphs are
+// shared with the task vocabulary where the concepts line up: ✔ green = done
+// (closed ≙ completed), ◌ gray = parked (deferred ≙ deferred).
+func Bucket(b domain.AuditBucket) Token {
 	switch b {
 	case domain.AuditOpen:
-		return ColorYellow
+		return Token{"◆", ColorYellow}
 	case domain.AuditClosed:
-		return ColorGreen
+		return Token{"✔", ColorGreen}
 	case domain.AuditDeferred:
-		return ColorGray
+		return Token{"◌", ColorGray}
 	default:
-		return ColorNone
+		return Token{"■", ColorNone}
+	}
+}
+
+// FindingStatus maps an audit finding's status to its glyph + color — the audit
+// analog of Status, drawing from the same vocabulary so a finding reads like a
+// task: ● active, ✔ done, ◌ parked, ✘ killed. The status set is finding.go's
+// (open · in-progress · fixed · landed · deferred · superseded · wontfix);
+// matching is case-insensitive. An empty/unknown status falls to the neutral dot
+// (audit lint flags those separately).
+func FindingStatus(s string) Token {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "open":
+		return Token{"○", ColorYellow}
+	case "in-progress":
+		return Token{"●", ColorYellow}
+	case "fixed", "landed":
+		return Token{"✔", ColorGreen}
+	case "deferred", "superseded":
+		return Token{"◌", ColorGray}
+	case "wontfix":
+		return Token{"✘", ColorRed}
+	default:
+		return Token{"•", ColorGray}
 	}
 }
 

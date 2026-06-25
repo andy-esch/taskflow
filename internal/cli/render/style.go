@@ -97,9 +97,27 @@ func (s Style) Status(st domain.Status) string {
 	return ansiCode(tok.Color) + tok.Glyph + " " + string(st) + ansiReset
 }
 
-// Bucket colors an audit bucket name.
+// Bucket renders an audit bucket: a colored glyph + name when styled (the shared
+// theme's shape carries the state), the plain name otherwise — mirroring Status,
+// so the porcelain path stays byte-stable.
 func (s Style) Bucket(b string) string {
-	return s.wrap(ansiCode(theme.Bucket(domain.AuditBucket(b))), b)
+	if !s.on {
+		return b
+	}
+	tok := theme.Bucket(domain.AuditBucket(b))
+	return ansiCode(tok.Color) + tok.Glyph + " " + b + ansiReset
+}
+
+// FindingStatus renders an audit finding's status the way Status renders a task
+// status — colored glyph + label when styled, plain label otherwise. An empty
+// status (a finding missing its **Status:**) renders as-is so the table cell
+// stays blank rather than showing a lone glyph.
+func (s Style) FindingStatus(status string) string {
+	if !s.on || status == "" {
+		return status
+	}
+	tok := theme.FindingStatus(status)
+	return ansiCode(tok.Color) + tok.Glyph + " " + status + ansiReset
 }
 
 // Priority colors a priority label.

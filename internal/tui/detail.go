@@ -486,10 +486,17 @@ func (d auditDetail) meta(w int) string { return renderAuditMeta(d.a, w) }
 
 func renderAuditMeta(a domain.Audit, width int) string {
 	var b strings.Builder
+	tok := theme.Bucket(a.Bucket)
+	pct := a.Percent()
+	progress := fmt.Sprintf("%s %s  %d/%d",
+		miniBar(pct, 12), fg(theme.Percent(pct), fmt.Sprintf("%d%%", pct)), a.Resolved(), a.Findings)
+	if a.OpenFindings > 0 {
+		progress += fmt.Sprintf("  (%d open)", a.OpenFindings)
+	}
 	detailField(&b, "audit", a.Slug)
-	detailField(&b, "bucket", fg(theme.Bucket(a.Bucket), string(a.Bucket)))
+	detailField(&b, "bucket", fg(tok.Color, tok.Glyph+" "+string(a.Bucket)))
 	detailField(&b, "area", a.Area)
 	detailField(&b, "date", a.Date)
-	detailField(&b, "findings", fmt.Sprintf("%d open / %d total", a.OpenFindings, a.Findings))
+	detailField(&b, "findings", progress)
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
 }

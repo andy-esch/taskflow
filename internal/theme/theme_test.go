@@ -46,16 +46,43 @@ func TestStatus(t *testing.T) {
 func TestBucket(t *testing.T) {
 	cases := []struct {
 		bucket domain.AuditBucket
+		glyph  string
 		color  Color
 	}{
-		{domain.AuditOpen, ColorYellow},
-		{domain.AuditClosed, ColorGreen},
-		{domain.AuditDeferred, ColorGray},
-		{domain.AuditBucket("weird"), ColorNone},
+		{domain.AuditOpen, "◆", ColorYellow},
+		{domain.AuditClosed, "✔", ColorGreen},
+		{domain.AuditDeferred, "◌", ColorGray},
+		{domain.AuditBucket("weird"), "■", ColorNone}, // default arm
 	}
 	for _, c := range cases {
-		if got := Bucket(c.bucket); got != c.color {
-			t.Errorf("Bucket(%q) = %d, want %d", c.bucket, got, c.color)
+		got := Bucket(c.bucket)
+		if got.Glyph != c.glyph || got.Color != c.color {
+			t.Errorf("Bucket(%q) = {%q,%d}, want {%q,%d}", c.bucket, got.Glyph, got.Color, c.glyph, c.color)
+		}
+	}
+}
+
+func TestFindingStatus(t *testing.T) {
+	cases := []struct {
+		status string
+		glyph  string
+		color  Color
+	}{
+		{"open", "○", ColorYellow},
+		{"in-progress", "●", ColorYellow},
+		{"fixed", "✔", ColorGreen},
+		{"landed", "✔", ColorGreen},
+		{"deferred", "◌", ColorGray},
+		{"superseded", "◌", ColorGray},
+		{"wontfix", "✘", ColorRed},
+		{"FIXED", "✔", ColorGreen}, // case-insensitive
+		{"", "•", ColorGray},       // default arm (missing status)
+		{"bogus", "•", ColorGray},
+	}
+	for _, c := range cases {
+		got := FindingStatus(c.status)
+		if got.Glyph != c.glyph || got.Color != c.color {
+			t.Errorf("FindingStatus(%q) = {%q,%d}, want {%q,%d}", c.status, got.Glyph, got.Color, c.glyph, c.color)
 		}
 	}
 }
