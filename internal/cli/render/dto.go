@@ -66,12 +66,18 @@ type auditJSON struct {
 	Date         string `json:"date,omitempty" jsonschema:"description=audit date YYYY-MM-DD"`
 	Findings     int    `json:"findings" jsonschema:"description=total findings parsed from the body"`
 	OpenFindings int    `json:"open_findings" jsonschema:"description=findings whose status is open"`
+	// The progress bar's disposition bands. open + in_progress + done + dropped ≤
+	// findings (an unrecognized/missing status counts toward none).
+	InProgressFindings int `json:"in_progress_findings" jsonschema:"description=findings whose status is in-progress"`
+	DoneFindings       int `json:"done_findings" jsonschema:"description=findings whose status is fixed or landed (the bar's done band)"`
+	DroppedFindings    int `json:"dropped_findings" jsonschema:"description=findings whose status is deferred, superseded, or wontfix"`
 }
 
 func auditToJSON(a domain.Audit) auditJSON {
 	return auditJSON{
 		Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date,
 		Findings: a.Findings, OpenFindings: a.OpenFindings,
+		InProgressFindings: a.ActiveFindings, DoneFindings: a.DoneFindings, DroppedFindings: a.DroppedFindings,
 	}
 }
 

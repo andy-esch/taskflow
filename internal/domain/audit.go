@@ -43,21 +43,29 @@ type Audit struct {
 	Area   string      `yaml:"area"`
 	Date   string      `yaml:"date"`
 
-	Findings     int `yaml:"-"`
-	OpenFindings int `yaml:"-"`
+	Findings int `yaml:"-"`
+	// Per-disposition finding tally (see TallyFindings), the segmented progress
+	// bar's source. Open + Active + Done + Dropped ≤ Findings (an unrecognized or
+	// missing status, which audit lint flags, counts toward none and falls into the
+	// bar's empty track). OpenFindings is kept for the JSON open_findings field, the
+	// `-c open` projection, and the "(N open)" detail suffix.
+	OpenFindings    int `yaml:"-"` // status: open
+	ActiveFindings  int `yaml:"-"` // status: in-progress
+	DoneFindings    int `yaml:"-"` // status: fixed, landed
+	DroppedFindings int `yaml:"-"` // status: deferred, superseded, wontfix
 }
 
-// Resolved is the number of findings no longer open (Findings − OpenFindings) —
-// the audit analog of an epic's Done count. "Open" is the single not-yet-handled
-// state (see CountOpenFindings); everything else (in-progress, fixed, landed,
-// deferred, superseded, wontfix) counts as resolved for the rollup.
-func (a Audit) Resolved() int { return a.Findings - a.OpenFindings }
+// Resolved is the bar's "done" count — findings fixed or landed (DoneFindings),
+// the audit analog of an epic's Done. Findings that are merely parked/dropped
+// (deferred, superseded, wontfix) or in-progress are NOT counted here; the
+// segmented bar shows those as their own bands.
+func (a Audit) Resolved() int { return a.DoneFindings }
 
-// Percent is the share of findings resolved, 0–100 (0 when there are none) —
-// mirroring EpicSummary.Percent so both rollups (and their bars) read the same.
+// Percent is the share of findings done (fixed/landed), 0–100 (0 when there are
+// none) — the segmented bar's headline number and its green band's reach.
 func (a Audit) Percent() int {
 	if a.Findings == 0 {
 		return 0
 	}
-	return a.Resolved() * 100 / a.Findings
+	return a.DoneFindings * 100 / a.Findings
 }

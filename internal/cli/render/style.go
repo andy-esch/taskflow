@@ -151,6 +151,22 @@ func (s Style) Bar(pct, width int) string {
 	return out
 }
 
+// SegmentBar renders an audit's finding breakdown as a stacked bar (done/active/
+// dropped bands over an open/empty track) via the shared progressbar package — the
+// same renderer the TUI uses, so the surfaces can't drift. Like Bar, it strips the
+// ANSI back to plain (distinct) glyphs when styling is off, keeping porcelain
+// byte-stable.
+func (s Style) SegmentBar(done, active, dropped, total, width int) string {
+	if width <= 0 {
+		width = 10
+	}
+	out := progressbar.RenderSegments(progressbar.Segments{Done: done, Active: active, Dropped: dropped, Total: total}, width)
+	if !s.on {
+		return ansi.Strip(out)
+	}
+	return out
+}
+
 // visibleWidth is the DISPLAY-CELL width of s ignoring ANSI escapes — so
 // colored cells align (tabwriter counts escape bytes) and wide runes
 // (CJK/emoji occupy two cells) don't shift columns the way a rune count did.

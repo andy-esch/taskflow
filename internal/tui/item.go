@@ -145,7 +145,7 @@ func (auditDelegate) Render(w io.Writer, m list.Model, index int, item list.Item
 	}
 	tok := theme.Bucket(it.a.Bucket)
 	pct := it.a.Percent()
-	bar := miniBar(pct, 8)
+	bar := segBar(it.a.DoneFindings, it.a.ActiveFindings, it.a.DroppedFindings, it.a.Findings, 8)
 	pctStr := fg(theme.Percent(pct), fmt.Sprintf("%3d%%", pct))
 	counts := fmt.Sprintf("%5s", fmt.Sprintf("%d/%d", it.a.Resolved(), it.a.Findings))
 	row(w, m, index, fmt.Sprintf("%s %s %s %s  %s  %s",

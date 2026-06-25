@@ -43,7 +43,10 @@ import (
 // 1.12: the `status` summary envelope carries `open_audits` — open-bucket audits
 // (the actionable subset) with the same finding rollup `audit list` reports;
 // omitted when there are none.
-const SchemaVersion = "1.12"
+// 1.13: every audit payload carries the finding-disposition tally the segmented
+// progress bar bands by — `in_progress_findings`, `done_findings` (fixed/landed),
+// `dropped_findings` (deferred/superseded/wontfix) — alongside `open_findings`.
+const SchemaVersion = "1.13"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -245,7 +248,7 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("Open audits (%d)", len(s.OpenAudits))))
 		rows := make([][]string, 0, len(s.OpenAudits))
 		for _, a := range s.OpenAudits {
-			bar := fmt.Sprintf("%s %s", st.Bar(a.Percent(), 10), st.Percent(a.Percent()))
+			bar := fmt.Sprintf("%s %s", st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10), st.Percent(a.Percent()))
 			rows = append(rows, []string{"  " + st.Bold(a.Slug), bar, fmt.Sprintf("%d/%d", a.Resolved(), a.Findings), a.Area})
 		}
 		writeTable(w, st.width, nil, rows)
@@ -427,8 +430,8 @@ func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
 	}
 	rows := make([][]string, 0, len(audits))
 	for _, a := range audits {
-		pct := a.Percent()
-		progress := fmt.Sprintf("%s %s %d/%d", st.Bar(pct, 8), st.Percent(pct), a.Resolved(), a.Findings)
+		bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 8)
+		progress := fmt.Sprintf("%s %s %d/%d", bar, st.Percent(a.Percent()), a.Resolved(), a.Findings)
 		rows = append(rows, []string{st.Bucket(string(a.Bucket)), st.Bold(a.Slug), progress, a.Area})
 	}
 	writeTable(w, st.width, []string{st.Dim("BUCKET"), st.Dim("AUDIT"), st.Dim("PROGRESS"), st.Dim("AREA")}, rows)
@@ -466,8 +469,8 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Fin
 	if a.Date != "" {
 		field("date", a.Date)
 	}
-	pct := a.Percent()
-	progress := fmt.Sprintf("%s %s  %d/%d", st.Bar(pct, 10), st.Percent(pct), a.Resolved(), a.Findings)
+	bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10)
+	progress := fmt.Sprintf("%s %s  %d/%d", bar, st.Percent(a.Percent()), a.Resolved(), a.Findings)
 	if a.OpenFindings > 0 {
 		progress += fmt.Sprintf("  (%d open)", a.OpenFindings)
 	}

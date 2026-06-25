@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Replace resolved = total − open (which counts deferred/dropped findings as done) with a per-status finding rollup so the audit bar tells the truth.
 effort: M
@@ -9,6 +9,9 @@ priority: low
 autonomy_level: 3
 tags: [audit, render]
 created: "2026-06-25"
+updated_at: "2026-06-25"
+started_at: "2026-06-25"
+completed_at: "2026-06-25"
 ---
 # Faithful segmented audit progress bar from per-status finding counts
 

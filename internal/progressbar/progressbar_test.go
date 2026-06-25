@@ -32,3 +32,23 @@ func TestRender_Gradient(t *testing.T) {
 		t.Errorf("a full bar should be a gradient (≥2 colors), got %d", len(distinct))
 	}
 }
+
+// TestRenderSegments_BandsAndWidth pins the stacked bar: distinct glyphs per band
+// (so it survives a mono terminal), exact width, and an all-empty bar for no findings.
+func TestRenderSegments_BandsAndWidth(t *testing.T) {
+	// 5 done, 1 active, 2 dropped, 2 open over width 10 → an exact, fully-banded split.
+	out := ansi.Strip(RenderSegments(Segments{Done: 5, Active: 1, Dropped: 2, Total: 10}, 10))
+	if out != "█████▓▒▒░░" {
+		t.Errorf("segmented bands = %q, want █████▓▒▒░░", out)
+	}
+	// width holds across sizes (apportionment sums to exactly width).
+	for _, w := range []int{1, 4, 8, 12, 20} {
+		if got := ansi.StringWidth(RenderSegments(Segments{Done: 3, Active: 1, Dropped: 2, Total: 9}, w)); got != w {
+			t.Errorf("RenderSegments width(%d) = %d, want %d", w, got, w)
+		}
+	}
+	// no findings → all empty track, no done/active/dropped bands.
+	if got := ansi.Strip(RenderSegments(Segments{Total: 0}, 6)); got != "░░░░░░" {
+		t.Errorf("empty audit bar = %q, want ░░░░░░", got)
+	}
+}

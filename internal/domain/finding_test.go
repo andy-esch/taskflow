@@ -93,3 +93,20 @@ func TestParseFindings_EmptyStatusBeforeBoldLabel(t *testing.T) {
 		t.Errorf("empty status before a bold label should be \"\", got %q", fs[0].Status)
 	}
 }
+
+// TestTallyFindings pins the status→disposition mapping the segmented bar bands
+// by, case-insensitively, with unrecognized/missing statuses counting toward none.
+func TestTallyFindings(t *testing.T) {
+	fs := []Finding{
+		{Status: "open"}, {Status: "open"},
+		{Status: "in-progress"},
+		{Status: "fixed"}, {Status: "landed"}, {Status: "FIXED"}, // case-insensitive → done
+		{Status: "deferred"}, {Status: "superseded"}, {Status: "wontfix"},
+		{Status: "bogus"}, {Status: ""}, // unrecognized / missing → counted toward none
+	}
+	got := TallyFindings(fs)
+	want := FindingTally{Open: 2, Active: 1, Done: 3, Dropped: 3}
+	if got != want {
+		t.Errorf("TallyFindings = %+v, want %+v", got, want)
+	}
+}

@@ -196,12 +196,15 @@ func TestAuditsJSONAndHuman(t *testing.T) {
 	var got struct {
 		SchemaVersion string `json:"schema_version"`
 		Audits        []struct {
-			Slug         string `json:"slug"`
-			Bucket       string `json:"bucket"`
-			Area         string `json:"area,omitempty"`
-			Date         string `json:"date,omitempty"`
-			Findings     int    `json:"findings"`
-			OpenFindings int    `json:"open_findings"`
+			Slug               string `json:"slug"`
+			Bucket             string `json:"bucket"`
+			Area               string `json:"area,omitempty"`
+			Date               string `json:"date,omitempty"`
+			Findings           int    `json:"findings"`
+			OpenFindings       int    `json:"open_findings"`
+			InProgressFindings int    `json:"in_progress_findings"`
+			DoneFindings       int    `json:"done_findings"`
+			DroppedFindings    int    `json:"dropped_findings"`
 		} `json:"audits"`
 		Unreadable []any `json:"unreadable,omitempty"`
 	}
@@ -223,7 +226,7 @@ func TestAuditsJSONAndHuman(t *testing.T) {
 // finding tree (lifecycle order, glyph-coded) + the body, mirroring epic show.
 // A finding with no status must land in a trailing group, not vanish.
 func TestAuditShowHuman_FindingTree(t *testing.T) {
-	a := domain.Audit{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Date: "2026-06-01", Findings: 3, OpenFindings: 1}
+	a := domain.Audit{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Date: "2026-06-01", Findings: 3, OpenFindings: 1, DoneFindings: 2}
 	findings := []domain.Finding{
 		{Code: "M1", Title: "done deal", Status: "fixed"},
 		{Code: "H1", Title: "still open", Status: "open"},
@@ -256,7 +259,7 @@ func TestSummaryOutputs(t *testing.T) {
 		},
 		InProgress: []domain.Task{{Slug: "alpha", Status: domain.StatusInProgress, Declared: domain.StatusInProgress}},
 		Epics:      []core.EpicSummary{{Epic: domain.Epic{ID: "01-x"}, Total: 2, Done: 1}},
-		OpenAudits: []domain.Audit{{Slug: "2026-06-01-audit-x", Bucket: domain.AuditOpen, Area: "store", Findings: 4, OpenFindings: 1}},
+		OpenAudits: []domain.Audit{{Slug: "2026-06-01-audit-x", Bucket: domain.AuditOpen, Area: "store", Findings: 4, OpenFindings: 1, DoneFindings: 3}},
 		Misfiled:   1,
 	}
 	var out bytes.Buffer

@@ -191,10 +191,14 @@ func parseAudit(content []byte, path string, bucket domain.AuditBucket) (domain.
 	a.Slug = strings.TrimSuffix(filepath.Base(path), ".md")
 	a.Path = path
 	a.Bucket = bucket
-	// The finding grammar (and "what counts as open") lives in the domain, so the
-	// store just counts what ParseFindings reports.
+	// The finding grammar (and "what each status means for progress") lives in the
+	// domain, so the store just records the tally ParseFindings + TallyFindings report.
 	findings := domain.ParseFindings(string(body))
+	tally := domain.TallyFindings(findings)
 	a.Findings = len(findings)
-	a.OpenFindings = domain.CountOpenFindings(findings)
+	a.OpenFindings = tally.Open
+	a.ActiveFindings = tally.Active
+	a.DoneFindings = tally.Done
+	a.DroppedFindings = tally.Dropped
 	return a, nil
 }
