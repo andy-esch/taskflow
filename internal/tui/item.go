@@ -129,8 +129,9 @@ func (i auditItem) sortFields() sortFields {
 	return sortFields{updated: i.a.Date, slug: i.a.Slug}
 }
 
-// auditDelegate renders one audit row: a bucket-colored marker, the slug, the
-// open/total finding count, and a dim area.
+// auditDelegate renders one audit row: a bucket glyph (state), then the same
+// rollup bar + colored percent + resolved/total the epic row uses, the slug, and
+// a dim area.
 type auditDelegate struct{}
 
 func (auditDelegate) Height() int                         { return 1 }
@@ -142,7 +143,11 @@ func (auditDelegate) Render(w io.Writer, m list.Model, index int, item list.Item
 	if !ok {
 		return
 	}
-	marker := fg(theme.Bucket(it.a.Bucket), "■")
-	findings := fmt.Sprintf("%d/%d open", it.a.OpenFindings, it.a.Findings)
-	row(w, m, index, fmt.Sprintf("%s %s  %s  %s", marker, it.a.Slug, findings, dim(it.a.Area)))
+	tok := theme.Bucket(it.a.Bucket)
+	pct := it.a.Percent()
+	bar := miniBar(pct, 8)
+	pctStr := fg(theme.Percent(pct), fmt.Sprintf("%3d%%", pct))
+	counts := fmt.Sprintf("%5s", fmt.Sprintf("%d/%d", it.a.Resolved(), it.a.Findings))
+	row(w, m, index, fmt.Sprintf("%s %s %s %s  %s  %s",
+		fg(tok.Color, tok.Glyph), bar, pctStr, counts, it.a.Slug, dim(it.a.Area)))
 }

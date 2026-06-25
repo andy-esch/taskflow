@@ -24,7 +24,8 @@ sides stay honest.
 
 - **`planning_repo` key** (new): in an impl repo's `.tskflwctl.toml`,
   `planning_repo = "../desirelines-planning"` — *allowed* to escape the tree
-  (relative or absolute; remote later). `taskflow_root` keeps its strict
+  (relative or absolute; remote backends are phase 2 — see **Remote backends**
+  below). `taskflow_root` keeps its strict
   in-tree meaning and typo guardrail; `planning_repo` wins when both are set.
 - **Validate-or-error**: `init` and discovery resolve the target and **error**
   if it isn't a real planning root (no `tasks/`).
@@ -70,3 +71,34 @@ Steps 1–2 are independently shippable and unblock the rest.
   every command is worse than no warning.
 - **docs-check gate**: every new flag/command requires
   `go run ./internal/tools/docgen -out docs/cli` + committing the result.
+
+## Remote backends (phase 2)
+
+The local phase (sibling-dir `planning_repo`, steps 1–6 above) is **shipped**.
+The "remote later" half — pointing `planning_repo` at a git remote, an object
+store, or a service — is scoped in the research doc:
+
+- `planning/research/2026-06-24-remote-planning-repos-backends-and-sync.md` —
+  backend & sync options, grounded in the current storage seam.
+- `planning/research/2026-06-24-task-storage-model-files-logs-or-versioned-db.md`
+  — the on-disk data model (status-as-directory vs frontmatter / event-log / DB).
+  Shares this work's root cause: state encoded in the path. Decide it *before*
+  locking the OCC shape.
+
+Headline: `core.Store` is a clean port (a backend swap leaves the Service +
+domain untouched), but **discovery** (root is a physical path everywhere),
+**write atomicity** (POSIX rename / `O_EXCL`), and **concurrency** are FS-coupled
+— and today's concurrency is *path*-CAS only, with **no content/hash check**
+(a concurrent same-file edit is last-writer-wins). The doc recommends a
+backend-agnostic **version-aware `Store` port** as the foundation (optimistic
+concurrency: read-version + `ifVersion`-on-write → `ErrConflict`), then
+**git-sync over a local cache** as the first real remote — with the git-touching
+kept *opt-in* so the "tool writes files, you commit" default survives. Object
+stores and a `serve` daemon are later forks. Open questions for the maintainer
+(chiefly: is "the tool never touches git" a hard line?) are listed at the end of
+the doc.
+
+The storage / read-model / OCC **foundation** this phase depends on is now its own
+(design-first) epic —
+[[24-data-model-evolution-stable-key-storage-read-model-content-occ]]; remote
+backends ride on top of it once that foundation is decided and built.

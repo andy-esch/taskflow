@@ -576,7 +576,7 @@ func TestEntityDetailRenderers(t *testing.T) {
 		body: "# Audit body",
 	}
 	out = ansi.Strip(audit.meta(70) + "\n" + audit.rawBody())
-	for _, want := range []string{"2026-06-01-x", "store", "2 open / 5 total", "Audit body"} {
+	for _, want := range []string{"2026-06-01-x", "store", "3/5", "60%", "2 open", "Audit body"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("audit detail missing %q:\n%s", want, out)
 		}
