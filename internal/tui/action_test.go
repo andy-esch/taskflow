@@ -244,6 +244,158 @@ func TestModel_ActionErrorFlashes(t *testing.T) {
 	}
 }
 
+// typeRunes feeds each rune of s as a printable keypress (the text-input path).
+func typeRunes(t *testing.T, m Model, s string) Model {
+	t.Helper()
+	for _, r := range s {
+		tm, _ := m.Update(press(string(r)))
+		m = tm.(Model)
+	}
+	return m
+}
+
+// TestModel_DeferPromptsForRevisitDate is the TUI parity for `task defer --until`:
+// selecting defer opens a revisit-date prompt (not an immediate move), and the
+// typed date is recorded on disk and confirmed in the flash.
+func TestModel_DeferPromptsForRevisitDate(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press("m"))
+	m = cursorTo(t, tm.(Model), "defer")
+	tm, _ = m.Update(press("enter"))
+	m = tm.(Model)
+	if !m.action.revisit {
+		t.Fatal("selecting defer should open the revisit-date prompt, not apply at once")
+	}
+	if task, _, _ := m.svc.ShowTask("alpha"); task.Status == domain.StatusDeferred {
+		t.Fatal("defer must not move the task before a date is entered")
+	}
+
+	m = typeRunes(t, m, "2026-09-01")
+	tm, cmd := m.Update(press("enter"))
+	m = tm.(Model)
+	if m.action.active {
+		t.Error("applying the date should close the menu")
+	}
+	if cmd == nil {
+		t.Fatal("entering the date should fire a defer command")
+	}
+	tm, _ = m.Update(cmd()) // run DeferTask → movedMsg
+	m = tm.(Model)
+
+	task, _, err := m.svc.ShowTask("alpha")
+	if err != nil || task.Status != domain.StatusDeferred {
+		t.Fatalf("alpha should be deferred: status=%s err=%v", task.Status, err)
+	}
+	if task.RevisitAt != "2026-09-01" {
+		t.Errorf("defer should record the revisit date, got %q", task.RevisitAt)
+	}
+	if !strings.Contains(m.flash, "2026-09-01") {
+		t.Errorf("flash should confirm the revisit date, got %q", m.flash)
+	}
+}
+
+// TestModel_DeferBlankParksIndefinitely pins that an empty revisit prompt defers
+// with no revisit_at (the snooze stays opt-in).
+func TestModel_DeferBlankParksIndefinitely(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press("m"))
+	m = cursorTo(t, tm.(Model), "defer")
+	tm, _ = m.Update(press("enter")) // open the prompt
+	m = tm.(Model)
+	tm, cmd := m.Update(press("enter")) // blank → apply
+	m = tm.(Model)
+	if cmd == nil {
+		t.Fatal("a blank date should still defer (park indefinitely)")
+	}
+	tm, _ = m.Update(cmd())
+	m = tm.(Model)
+	task, _, err := m.svc.ShowTask("alpha")
+	if err != nil || task.Status != domain.StatusDeferred {
+		t.Fatalf("alpha should be deferred: status=%s err=%v", task.Status, err)
+	}
+	if task.RevisitAt != "" {
+		t.Errorf("a blank revisit prompt must not set revisit_at, got %q", task.RevisitAt)
+	}
+}
+
+// TestModel_DeferBadDateShowsError pins that a malformed date keeps the prompt open
+// with an inline error and never moves the task.
+func TestModel_DeferBadDateShowsError(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press("m"))
+	m = cursorTo(t, tm.(Model), "defer")
+	tm, _ = m.Update(press("enter"))
+	m = typeRunes(t, tm.(Model), "soon")
+	tm, cmd := m.Update(press("enter"))
+	m = tm.(Model)
+	if cmd != nil {
+		t.Error("a bad date must not fire a defer")
+	}
+	if !m.action.revisit || m.action.dateErr == "" {
+		t.Errorf("a bad date should keep the prompt open with an error, got revisit=%v err=%q", m.action.revisit, m.action.dateErr)
+	}
+	if task, _, _ := m.svc.ShowTask("alpha"); task.Status == domain.StatusDeferred {
+		t.Error("a bad date must not move the task")
+	}
+}
+
+// TestModel_DeferEscReturnsToMenu pins that Esc from the date prompt returns to the
+// action menu (it was opened from the menu), rather than cancelling outright.
+func TestModel_DeferEscReturnsToMenu(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press("m"))
+	m = cursorTo(t, tm.(Model), "defer")
+	tm, _ = m.Update(press("enter"))
+	m = tm.(Model)
+	if !m.action.revisit {
+		t.Fatal("defer should open the revisit prompt")
+	}
+	tm, _ = m.Update(press("esc"))
+	m = tm.(Model)
+	if !m.action.active || m.action.revisit {
+		t.Errorf("esc from the date prompt should return to the menu, got active=%v revisit=%v", m.action.active, m.action.revisit)
+	}
+}
+
+// TestModel_CommandDeferPromptsForDate pins that the `:defer` verb also opens the
+// revisit prompt (cold, no menu open); Esc then closes it since there's no menu to
+// return to.
+func TestModel_CommandDeferPromptsForDate(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press(":"))
+	m = typeRunes(t, tm.(Model), "defer")
+	tm, _ = m.Update(press("enter")) // submit the command
+	m = tm.(Model)
+	if !m.action.revisit {
+		t.Fatal(":defer should open the revisit-date prompt")
+	}
+	tm, _ = m.Update(press("esc"))
+	m = tm.(Model)
+	if m.action.active {
+		t.Error("esc from a cold :defer prompt should close it (no menu to return to)")
+	}
+}
+
+// TestModel_AuditDeferSkipsRevisitPrompt pins that the revisit prompt is task-only:
+// an audit "defer" (a bucket move with no revisit date) still applies immediately.
+func TestModel_AuditDeferSkipsRevisitPrompt(t *testing.T) {
+	m := loaded(t, 120, 40)
+	m = auditsTab(t, m)
+	tm, _ := m.Update(press("m"))
+	m = cursorTo(t, tm.(Model), "defer")
+	tm, cmd := m.Update(press("enter"))
+	m = tm.(Model)
+	if m.action.revisit {
+		t.Error("audit defer must not open a revisit prompt")
+	}
+	if cmd == nil {
+		t.Fatal("audit defer should apply immediately")
+	}
+	if msg, ok := cmd().(movedMsg); !ok || msg.to != string(domain.AuditDeferred) {
+		t.Fatalf("expected an audit defer movedMsg, got %T %+v", cmd(), cmd())
+	}
+}
+
 // TestModel_ActionMenuFitsTerminal keeps the layout invariant with the menu open:
 // the overlay must not change the view height or overflow the width.
 func TestModel_ActionMenuFitsTerminal(t *testing.T) {

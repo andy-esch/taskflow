@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -24,8 +26,8 @@ type transition struct {
 // taskTransitions are the task status moves (the working-set lifecycle).
 var taskTransitions = []transition{
 	{"start", string(domain.StatusInProgress), false},
-	{"promote", string(domain.StatusNextUp), false},
-	{"demote", string(domain.StatusReadyToStart), false},
+	{"next", string(domain.StatusNextUp), false},
+	{"ready", string(domain.StatusReadyToStart), false},
 	{"complete", string(domain.StatusCompleted), false},
 	{"defer", string(domain.StatusDeferred), false},
 	{"deprecate", string(domain.StatusDeprecated), true},
@@ -85,6 +87,13 @@ type actionMenu struct {
 	options []transition // the rows (a single entry when a `:`-verb opened the confirm directly)
 	cursor  int
 	confirm bool // a destructive choice is awaiting y/n
+	// A task defer opens a revisit ("snooze until") sub-state instead of applying
+	// at once — the TUI face of the CLI's `task defer` date prompt. dateInput takes
+	// an absolute YYYY-MM-DD or a relative offset (2w/10d); dateErr shows a parse
+	// error in place (keeping what was typed) until the next keystroke.
+	revisit   bool
+	dateInput textinput.Model
+	dateErr   string
 }
 
 // open shows the transition menu for slug from state cur (its current status or
@@ -99,7 +108,34 @@ func (a *actionMenu) openConfirm(slug string, tr transition) {
 	*a = actionMenu{active: true, slug: slug, options: []transition{tr}, confirm: true}
 }
 
-func (a *actionMenu) close() { a.active = false }
+// beginRevisit switches the menu into the revisit-date sub-state for slug (also
+// usable cold, from a `:defer`/palette verb with no menu open) and focuses the
+// date input. Esc from here returns to the menu when one is open (options set),
+// else closes — see handleActionKey.
+func (a *actionMenu) beginRevisit(slug string) tea.Cmd {
+	a.active = true
+	a.slug = slug
+	a.confirm = false
+	a.revisit = true
+	a.dateErr = ""
+	ti := textinput.New()
+	ti.Prompt = ""
+	ti.Placeholder = "YYYY-MM-DD, or 2w / 10d · blank to skip"
+	ti.CharLimit = 32
+	ti.SetWidth(40)
+	a.dateInput = ti
+	// Focus the STORED field, not the local copy — textinput.Focus has a pointer
+	// receiver, so focusing `ti` here would leave a.dateInput unfocused and silently
+	// reject every keystroke.
+	return a.dateInput.Focus()
+}
+
+func (a *actionMenu) close() {
+	a.active = false
+	a.revisit = false
+	a.dateErr = ""
+	a.dateInput.Blur()
+}
 
 func (a *actionMenu) move(d int) {
 	if n := len(a.options); n > 0 {
@@ -123,6 +159,19 @@ var (
 // to composite over the body with overlay(). Clamped to (maxW, maxH).
 func (a actionMenu) view(maxW, maxH int) string {
 	slug := truncate(a.slug, max(maxW-8, 12))
+	if a.revisit {
+		var b strings.Builder
+		b.WriteString(actionHeading.Render("defer " + slug))
+		b.WriteString("\n\n")
+		b.WriteString("revisit date " + dim("(snooze until — optional)") + "\n")
+		b.WriteString(a.dateInput.View())
+		if a.dateErr != "" {
+			b.WriteString("\n" + fg(theme.ColorRed, a.dateErr))
+		}
+		box := actionBorder.Render(b.String())
+		hint := dim("⏎ apply · esc back · blank = no date")
+		return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, hint), maxW, maxH)
+	}
 	if a.confirm {
 		tr := a.selected()
 		q := fg(theme.ColorRed, tr.verb+"?") + " " + slug + dim(" → "+tr.to)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidateField_OK(t *testing.T) {
@@ -14,7 +15,8 @@ func TestValidateField_OK(t *testing.T) {
 		{"description", "a fine one-line description"},
 		{"effort", "anything goes"}, // unconstrained
 		{"tags", "unconstrained"},
-		{"audited", "2026-06-16"}, // routine-stamped audit date
+		{"audited", "2026-06-16"},    // routine-stamped audit date
+		{"revisit_at", "2026-09-01"}, // snooze-until date (a date field)
 	}
 	for _, c := range ok {
 		if err := ValidateField(c.field, c.value); err != nil {
@@ -35,6 +37,7 @@ func TestValidateField_Invalid(t *testing.T) {
 		{"created", "yesterday"},     // date fields must be YYYY-MM-DD
 		{"updated_at", "2026/06/09"}, // wrong separator
 		{"audited", "soon"},          // audited is a date field too
+		{"revisit_at", "next week"},  // revisit_at is a date field too
 	}
 	for _, c := range bad {
 		err := ValidateField(c.field, c.value)
@@ -67,6 +70,72 @@ func TestTypedValidators(t *testing.T) {
 		if err := bad(); !errors.Is(err, ErrValidation) {
 			t.Errorf("%s: want ErrValidation, got %v", name, err)
 		}
+	}
+}
+
+func TestIsRevisitDue(t *testing.T) {
+	now := time.Date(2026, 6, 26, 14, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name      string
+		revisitAt string
+		want      bool
+	}{
+		{"past is due", "2020-01-01", true},
+		{"yesterday is due", "2026-06-25", true},
+		{"today is due", "2026-06-26", true},
+		{"tomorrow not due", "2026-06-27", false},
+		{"future not due", "2099-01-01", false},
+		{"empty not due", "", false},
+		{"invalid not due", "next week", false},
+		{"wrong format not due", "2026/06/01", false},
+	}
+	for _, c := range cases {
+		if got := IsRevisitDue(c.revisitAt, now); got != c.want {
+			t.Errorf("%s: IsRevisitDue(%q) = %v, want %v", c.name, c.revisitAt, got, c.want)
+		}
+	}
+}
+
+func TestParseRevisitDate(t *testing.T) {
+	now := time.Date(2026, 6, 26, 14, 0, 0, 0, time.UTC) // a Friday
+	ok := []struct{ in, want string }{
+		{"", ""},                       // blank = park indefinitely
+		{"   ", ""},                    // whitespace-only is still blank
+		{"2026-09-01", "2026-09-01"},   // absolute date passes through
+		{" 2026-09-01 ", "2026-09-01"}, // trimmed
+		{"10d", "2026-07-06"},          // +10 days
+		{"10 days", "2026-07-06"},      // spaced + long unit
+		{"2w", "2026-07-10"},           // +2 weeks
+		{"3 weeks", "2026-07-17"},      // +21 days
+		{"0d", "2026-06-26"},           // today (due immediately)
+		{"1 DAY", "2026-06-27"},        // case-insensitive
+	}
+	for _, c := range ok {
+		got, err := ParseRevisitDate(c.in, now)
+		if err != nil {
+			t.Errorf("ParseRevisitDate(%q) errored: %v", c.in, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("ParseRevisitDate(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	// Anything that's neither an absolute date nor a recognized day/week offset is
+	// rejected — including month offsets, which are deliberately unsupported.
+	bad := []string{"next week", "soon", "2026/09/01", "2026-13-01", "w", "5", "-3d", "tomorrow", "1m", "2 months", "3mo"}
+	for _, in := range bad {
+		if _, err := ParseRevisitDate(in, now); !errors.Is(err, ErrValidation) {
+			t.Errorf("ParseRevisitDate(%q) = %v, want ErrValidation", in, err)
+		}
+	}
+}
+
+func TestRevisitAtIsKnownTaskField(t *testing.T) {
+	if !KnownTaskField("revisit_at") {
+		t.Error("revisit_at must be a known task field (settable via `task set`)")
+	}
+	if got := FieldType("revisit_at"); got != "date" {
+		t.Errorf("revisit_at FieldType = %q, want %q", got, "date")
 	}
 }
 

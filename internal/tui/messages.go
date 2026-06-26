@@ -12,8 +12,9 @@ import (
 // to is the destination as a string (a task status or an audit bucket), so one
 // message serves every entity's lifecycle.
 type movedMsg struct {
-	slug string
-	to   string
+	slug    string
+	to      string
+	revisit string // a defer's recorded revisit date, surfaced in the flash (empty otherwise)
 }
 
 // actionErrMsg reports a failed mutation; the model flashes it (red) without

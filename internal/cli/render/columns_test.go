@@ -120,13 +120,40 @@ func TestWriteTablePlain_TaskExtractors(t *testing.T) {
 	WriteTablePlain(&b, TaskColumns(), []domain.Task{{
 		Slug: "alpha", Status: domain.StatusInProgress, Tier: 2, Priority: "high",
 		Epic: "20-cli", Updated: "2026-06-19", Description: "do the thing",
+		RevisitAt: "2026-09-01",
 	}})
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
-	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription" {
+	// revisit_at is appended LAST (after description) so the pre-existing default
+	// columns kept their positions; a populated value lands in the trailing cell.
+	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at" {
 		t.Errorf("task header: %q", lines[0])
 	}
-	if lines[1] != "alpha\tin-progress\t2\thigh\t20-cli\t2026-06-19\tdo the thing" {
+	if lines[1] != "alpha\tin-progress\t2\thigh\t20-cli\t2026-06-19\tdo the thing\t2026-09-01" {
 		t.Errorf("task row: %q", lines[1])
+	}
+}
+
+// TestTaskRevisitAt_FlowsThroughCSVAndJSON pins that a SET revisit_at reaches the
+// CSV cell and the full --json payload — the extractor (columns.go) and the DTO
+// json tag (dto.go) are otherwise only ever exercised empty, so a broken
+// extractor or json tag would slip past the other render tests.
+func TestTaskRevisitAt_FlowsThroughCSVAndJSON(t *testing.T) {
+	task := domain.Task{Slug: "snz", Status: domain.StatusDeferred, Tags: []string{"x"}, RevisitAt: "2026-09-01"}
+
+	var cb bytes.Buffer
+	if err := WriteCSV(&cb, TaskColumns(), []domain.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(cb.String()); !strings.HasSuffix(got, ",2026-09-01") {
+		t.Errorf("csv row should end with the revisit_at cell:\n%s", got)
+	}
+
+	var jb bytes.Buffer
+	if err := TasksJSON(&jb, []domain.Task{task}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(jb.String(), `"revisit_at":"2026-09-01"`) {
+		t.Errorf("full --json should carry revisit_at:\n%s", jb.String())
 	}
 }
 
@@ -179,7 +206,7 @@ func TestWriteTablePlain_AuditExtractors(t *testing.T) {
 func TestWriteTablePlain_EmptyIsHeaderOnly(t *testing.T) {
 	var b bytes.Buffer
 	WriteTablePlain(&b, TaskColumns(), nil)
-	if got := strings.TrimSpace(b.String()); got != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription" {
+	if got := strings.TrimSpace(b.String()); got != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at" {
 		t.Errorf("empty table should be header-only, got %q", got)
 	}
 }
@@ -204,7 +231,7 @@ func TestWriteCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
-	if lines[0] != "slug,status,tier,priority,epic,updated,description" {
+	if lines[0] != "slug,status,tier,priority,epic,updated,description,revisit_at" {
 		t.Errorf("csv header: %q", lines[0])
 	}
 	// A cell containing a comma must be RFC 4180 quoted (this is exactly what

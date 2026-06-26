@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -152,6 +153,39 @@ func TestFillText_GateOpen_Prompts(t *testing.T) {
 	}
 	if len(f.Asked) != 1 || f.Asked[0] != "Description" {
 		t.Errorf("expected one text prompt with the title, got %v", f.Asked)
+	}
+}
+
+// TestFillRevisitDate_NoPromptPaths pins the agent contract for the optional
+// snooze date: an explicit --until (flagChanged) and a closed gate both return
+// the existing value WITHOUT prompting (an empty fake would error if called).
+func TestFillRevisitDate_NoPromptPaths(t *testing.T) {
+	now := time.Date(2026, 6, 26, 0, 0, 0, 0, time.UTC)
+
+	// --until given: keep it, never prompt.
+	app := &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{}}
+	if got, err := app.fillRevisitDate(true, "2026-09-01", now); err != nil || got != "2026-09-01" {
+		t.Fatalf("flag value should pass through unprompted, got %q %v", got, err)
+	}
+	// Off a TTY with no flag: no prompt, no date (park indefinitely).
+	app = &App{Gate: prompt.NewGate(false), Prompt: &prompt.Fake{}}
+	if got, err := app.fillRevisitDate(false, "", now); err != nil || got != "" {
+		t.Fatalf("closed gate should return empty unprompted, got %q %v", got, err)
+	}
+}
+
+// TestFillRevisitDate_GateOpenPromptsAndParses pins that on a TTY without --until
+// the prompt fires and a relative answer is parsed against the injected clock.
+func TestFillRevisitDate_GateOpenPromptsAndParses(t *testing.T) {
+	now := time.Date(2026, 6, 26, 0, 0, 0, 0, time.UTC)
+	f := &prompt.Fake{TextAnswers: []string{"2w"}}
+	app := &App{Gate: prompt.NewGate(true), Prompt: f}
+	got, err := app.fillRevisitDate(false, "", now)
+	if err != nil || got != "2026-07-10" {
+		t.Fatalf("relative '2w' should resolve to 2026-07-10, got %q %v", got, err)
+	}
+	if len(f.Asked) != 1 || !strings.Contains(f.Asked[0], "Revisit date") {
+		t.Errorf("expected one revisit-date prompt, got %v", f.Asked)
 	}
 }
 

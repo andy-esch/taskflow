@@ -201,7 +201,7 @@ lives in `cmd/tskflwctl/main_test.go`. `just test` + `just lint`.
 Substantially functional — the full create→update→move→lint loop runs without
 the Python prototype:
 - `init`, `completion` (command/flag/slug, status-aware), `lint` (+`--fix`/`--dry-run`)
-- `task new|list|show|set|edit|append|move|start|promote|demote|complete|defer|deprecate`
+- `task new|list|show|set|edit|append|move|start|next|ready|complete|defer|deprecate`
 - `epic new|list|show`, `audit list|show|findings|lint|close|reopen|defer`
 - `ui` — the Bubble Tea browser (epic 18): two-pane read-only browse of
   tasks/epics/audits, `:` jump, `/` filter, sort, status views, detail find, `?`

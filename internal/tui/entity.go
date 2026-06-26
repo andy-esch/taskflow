@@ -218,6 +218,19 @@ func moveTask(svc *core.Service, id string, tr transition) tea.Cmd {
 	}
 }
 
+// deferTaskCmd defers a task with an optional revisit ("snooze until") date — the
+// TUI face of `task defer [--until]`. An empty date parks the task indefinitely
+// (a plain Move); a non-empty one also records revisit_at. Mirrors moveTask's
+// success/failure reporting (movedMsg → flash + reload, actionErrMsg → flash).
+func deferTaskCmd(svc *core.Service, id, revisit string) tea.Cmd {
+	return func() tea.Msg {
+		if _, err := svc.DeferTask(id, revisit, false); err != nil {
+			return actionErrMsg{slug: id, err: err}
+		}
+		return movedMsg{slug: id, to: string(domain.StatusDeferred), revisit: revisit}
+	}
+}
+
 // moveAudit applies an audit bucket transition (close/reopen/defer). The store
 // refuses closing/deferring an audit with still-open findings (M4); that surfaces
 // as an actionErrMsg (red flash, no move), matching the CLI.

@@ -23,6 +23,7 @@ type taskJSON struct {
 	Autonomy    int      `json:"autonomy_level,omitempty" jsonschema:"description=how autonomously this can be done 1-5"`
 	Created     string   `json:"created,omitempty" jsonschema:"description=creation date YYYY-MM-DD"`
 	Updated     string   `json:"updated_at,omitempty" jsonschema:"description=last-modified date YYYY-MM-DD"`
+	RevisitAt   string   `json:"revisit_at,omitempty" jsonschema:"description=snooze-until date YYYY-MM-DD set by task defer --until"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
 	// Misfiled/Declared surface status≠folder drift to JSON consumers (agents
 	// are exactly who should detect it); declared_status only when misfiled.
@@ -35,7 +36,7 @@ func toJSON(t domain.Task) taskJSON {
 		Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
 		Description: t.Description, Effort: t.Effort, Tier: t.Tier,
 		Priority: t.Priority, Autonomy: t.Autonomy,
-		Created: t.Created, Updated: t.Updated, Tags: t.Tags,
+		Created: t.Created, Updated: t.Updated, RevisitAt: t.RevisitAt, Tags: t.Tags,
 	}
 	if t.Misfiled() {
 		j.Misfiled = true

@@ -102,7 +102,8 @@ tskflwctl task set <slug> --priority high --tags a,b
 tskflwctl task edit <slug>                          # open the whole file in $EDITOR (human; re-validated on save)
 echo "## Findings" | tskflwctl task append <slug> --body-file -  # add a section (agent; atomic)
 tskflwctl task set <slug> --body-file notes.md      # replace the body (agent; its own call)
-tskflwctl task start|promote|demote|complete|defer|deprecate <slug>...
+tskflwctl task start|next|ready|complete|defer|deprecate <slug>...   # defer takes --until <date>
+tskflwctl task defer <slug> --until 2026-09-01      # snooze (revisit_at); on a TTY, prompts for the date
 tskflwctl audit close|reopen|defer <slug>...
 
 # hygiene

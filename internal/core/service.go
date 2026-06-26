@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -72,6 +73,7 @@ type Summary struct {
 	Epics      []EpicSummary        // epic rollups
 	OpenAudits []domain.Audit       // audits still in the open bucket (actionable work)
 	Misfiled   int                  // tasks whose status disagrees with their folder
+	RevisitDue int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
 	Problems   []domain.FileProblem // unreadable files
 }
 
@@ -100,6 +102,8 @@ func (s *Service) Summary() (Summary, error) {
 	counts := map[domain.Status]int{}
 	var inProgress []domain.Task
 	misfiled := 0
+	revisitDue := 0
+	now := time.Now()
 	for _, t := range tasks {
 		counts[t.Status]++
 		if t.Status == domain.StatusInProgress {
@@ -107,6 +111,13 @@ func (s *Service) Summary() (Summary, error) {
 		}
 		if t.Misfiled() {
 			misfiled++
+		}
+		// Move clears revisit_at when a task leaves deferred, so a stray date on a
+		// non-deferred task is only possible via a manual `task set`/edit; either
+		// way the nudge stays scoped to tasks parked in deferred/ whose snooze date
+		// has arrived.
+		if t.Status == domain.StatusDeferred && domain.IsRevisitDue(t.RevisitAt, now) {
+			revisitDue++
 		}
 	}
 	ordered := make([]StatusCount, 0, len(domain.AllStatuses()))
@@ -119,6 +130,7 @@ func (s *Service) Summary() (Summary, error) {
 		Epics:      rollupEpics(epics, tasks),
 		OpenAudits: openAudits,
 		Misfiled:   misfiled,
+		RevisitDue: revisitDue,
 		Problems:   append(append(p1, p2...), p3...),
 	}, nil
 }

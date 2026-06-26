@@ -13,7 +13,11 @@ import (
 // isn't printed twice: the per-item ✘ line already carried the detail. Shared
 // by task and audit transitions so the loop + reporting policy live in exactly
 // one place.
-func runMoves[T any](app *App, slugs []string, status string, move func(slug string) (T, error), slugOf func(T) string) error {
+// An optional `decorate` callback fills extra MoveResult fields from the moved
+// item (e.g. defer surfaces the would-be/recorded revisit_at) without coupling
+// the shared loop to any one verb's payload; transitions that have nothing extra
+// to report omit it.
+func runMoves[T any](app *App, slugs []string, status string, move func(slug string) (T, error), slugOf func(T) string, decorate ...func(T, *render.MoveResult)) error {
 	var chosenErr error
 	failed := 0
 	results := make([]render.MoveResult, 0, len(slugs))
@@ -31,6 +35,9 @@ func runMoves[T any](app *App, slugs []string, status string, move func(slug str
 			}
 		} else {
 			res.Slug = slugOf(got)
+			for _, d := range decorate {
+				d(got, &res)
+			}
 		}
 		results = append(results, res)
 	}

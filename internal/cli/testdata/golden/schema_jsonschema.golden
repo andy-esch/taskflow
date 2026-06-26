@@ -472,6 +472,10 @@
         "to": {
           "type": "string"
         },
+        "revisit_at": {
+          "type": "string",
+          "description": "revisit (snooze-until) date recorded by task defer --until"
+        },
         "error": {
           "type": "string"
         }
@@ -702,6 +706,9 @@
         "misfiled": {
           "type": "integer"
         },
+        "revisit_due": {
+          "type": "integer"
+        },
         "unreadable": {
           "items": {
             "$ref": "#/$defs/FileProblem"
@@ -716,7 +723,8 @@
         "counts",
         "in_progress",
         "epics",
-        "misfiled"
+        "misfiled",
+        "revisit_due"
       ],
       "description": "SummaryEnvelope is `status --json`."
     },
@@ -1231,6 +1239,10 @@
           "type": "string",
           "description": "last-modified date YYYY-MM-DD"
         },
+        "revisit_at": {
+          "type": "string",
+          "description": "snooze-until date YYYY-MM-DD set by task defer --until"
+        },
         "tags": {
           "items": {
             "type": "string"
@@ -1253,6 +1265,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.15)",
+  "title": "tskflwctl --json output (schema_version 1.16)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

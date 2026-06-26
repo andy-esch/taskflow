@@ -28,7 +28,9 @@ We dogfood: drive this repo's planning with the tool itself.
 
 - **Create:** `./bin/tskflwctl task new "Title" --epic <id> [--next]` ·
   `epic new "Title" --description "..."` · `audit new <area> [--date]`.
-- **Lifecycle:** `task start|promote|demote|complete|defer|deprecate <slug>...`.
+- **Lifecycle:** `task start|next|ready|complete|defer|deprecate <slug>...` (verbs
+  name the destination status; `next`/`ready` replace the old promote/demote, which
+  still work as hidden aliases). `defer` takes `--until <YYYY-MM-DD>` (snooze).
 - **Read/edit:** `task list|show|set|edit|append`, `epic list|show`,
   `audit new|list|show|findings|lint|close|reopen|defer`. Two faces of mutation: **agent**
   (field-level `task set`; body via `task append` / `task set --body|--body-file`,

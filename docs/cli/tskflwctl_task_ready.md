@@ -1,22 +1,22 @@
-## tskflwctl task promote
+## tskflwctl task ready
 
-Move task(s) to next-up
+Move task(s) to ready-to-start
 
 ```
-tskflwctl task promote <task>... [flags]
+tskflwctl task ready <task>... [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl task promote my-task
-  tskflwctl task promote task-a task-b
+  tskflwctl task ready my-task
+  tskflwctl task ready task-a task-b
 ```
 
 ### Options
 
 ```
-  -h, --help   help for promote
+  -h, --help   help for ready
 ```
 
 ### Options inherited from parent commands

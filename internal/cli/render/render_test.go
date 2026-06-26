@@ -336,6 +336,64 @@ func TestSummaryHuman_NoAudits(t *testing.T) {
 	}
 }
 
+// TestSummary_RevisitDueNudge pins the snooze surface: a non-zero RevisitDue
+// renders the ⏰ nudge in the human dashboard and carries revisit_due in the JSON
+// envelope; zero renders no nudge.
+func TestSummary_RevisitDueNudge(t *testing.T) {
+	s := core.Summary{RevisitDue: 2}
+	var out bytes.Buffer
+	if err := SummaryHuman(&out, NewStyle(false), s); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "⏰ 2 deferred due to revisit") {
+		t.Errorf("expected revisit nudge in dashboard:\n%s", out.String())
+	}
+	out.Reset()
+	if err := SummaryJSON(&out, s); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"revisit_due":2`) {
+		t.Errorf("expected revisit_due:2 in summary json:\n%s", out.String())
+	}
+
+	// Zero: no nudge in the dashboard (the field is still always present in JSON).
+	out.Reset()
+	if err := SummaryHuman(&out, NewStyle(false), core.Summary{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "deferred due to revisit") {
+		t.Errorf("no revisit nudge expected when RevisitDue is 0:\n%s", out.String())
+	}
+}
+
+// TestMoves_RevisitAtReported pins that a per-item revisit_at (set by the defer
+// decorator on a real run AND on a --dry-run preview) shows in the human line and
+// rides the JSON move report — so a snooze is confirmed, not just the move.
+func TestMoves_RevisitAtReported(t *testing.T) {
+	results := []MoveResult{{Slug: "alpha", To: "deferred", RevisitAt: "2026-09-01"}}
+
+	var human bytes.Buffer
+	MovesHuman(&human, &human, NewStyle(false), results, true)
+	if got := human.String(); !strings.Contains(got, "would move alpha -> deferred") || !strings.Contains(got, "revisit 2026-09-01") {
+		t.Errorf("dry-run human move line should confirm the revisit date:\n%s", got)
+	}
+
+	var j bytes.Buffer
+	if err := MovesJSON(&j, results, true); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(j.String(), `"revisit_at":"2026-09-01"`) {
+		t.Errorf("move JSON should carry revisit_at:\n%s", j.String())
+	}
+
+	// A move with no revisit date (any other transition) omits it entirely.
+	var plain bytes.Buffer
+	MovesHuman(&plain, &plain, NewStyle(false), []MoveResult{{Slug: "beta", To: "next-up"}}, false)
+	if strings.Contains(plain.String(), "revisit") {
+		t.Errorf("a dateless move must not mention a revisit:\n%s", plain.String())
+	}
+}
+
 func TestFixOutputs(t *testing.T) {
 	results := []domain.FixResult{{Path: "tasks/ready-to-start/a.md", Changes: []string{"tags: normalized to a YAML list"}}}
 	var out bytes.Buffer
