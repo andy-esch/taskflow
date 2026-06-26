@@ -12,10 +12,11 @@ import (
 // TaskFilter narrows a task listing. Zero-valued fields are ignored. When no
 // explicit Status is given and All is false, only active tasks are returned.
 type TaskFilter struct {
-	Status string
-	Epic   string
-	Tag    string
-	All    bool
+	Status     string
+	Epic       string
+	Tag        string
+	All        bool
+	RevisitDue bool // only deferred tasks whose revisit_at (snooze-until) date has arrived
 }
 
 // ListTasks returns tasks matching the filter, plus any per-file load problems.
@@ -42,13 +43,21 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 	if err != nil {
 		return nil, nil, err
 	}
-	activeOnly := f.Status == "" && !f.All
+	// --revisit-due narrows to deferred tasks, so it opts out of the active-only
+	// default (deferred is inactive) just like an explicit --status does.
+	activeOnly := f.Status == "" && !f.All && !f.RevisitDue
+	now := s.now()
 	out := make([]domain.Task, 0, len(all))
 	for _, t := range all {
 		if activeOnly && !t.Status.IsActive() {
 			continue
 		}
 		if f.Status != "" && string(t.Status) != f.Status {
+			continue
+		}
+		// "Up for revisit" = parked in deferred AND the snooze date has arrived;
+		// implies the deferred scope and composes with --epic/--tag below.
+		if f.RevisitDue && (t.Status != domain.StatusDeferred || !domain.IsRevisitDue(t.RevisitAt, now)) {
 			continue
 		}
 		if f.Epic != "" && t.Epic != f.Epic {

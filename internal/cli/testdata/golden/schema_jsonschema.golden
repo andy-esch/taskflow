@@ -474,7 +474,7 @@
         },
         "revisit_at": {
           "type": "string",
-          "description": "revisit (snooze-until) date recorded by task defer --until"
+          "description": "revisit (snooze-until) date recorded by task defer"
         },
         "error": {
           "type": "string"
@@ -1241,7 +1241,7 @@
         },
         "revisit_at": {
           "type": "string",
-          "description": "snooze-until date YYYY-MM-DD set by task defer --until"
+          "description": "snooze-until date YYYY-MM-DD for a deferred task (set by task defer)"
         },
         "tags": {
           "items": {

@@ -86,6 +86,7 @@ tskflwctl audit new auth --template security  # pick a body scaffold (default|se
 
 # read
 tskflwctl task list                    # active tasks (--all / --status / --epic / --tag)
+tskflwctl task list --revisit-due      # deferred tasks whose snooze date has arrived
 tskflwctl task show <slug>
 tskflwctl epic list                    # rollup: done/total per epic
 tskflwctl audit list                   # open audits (--all / --closed / --deferred)

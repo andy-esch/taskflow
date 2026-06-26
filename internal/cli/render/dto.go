@@ -23,7 +23,7 @@ type taskJSON struct {
 	Autonomy    int      `json:"autonomy_level,omitempty" jsonschema:"description=how autonomously this can be done 1-5"`
 	Created     string   `json:"created,omitempty" jsonschema:"description=creation date YYYY-MM-DD"`
 	Updated     string   `json:"updated_at,omitempty" jsonschema:"description=last-modified date YYYY-MM-DD"`
-	RevisitAt   string   `json:"revisit_at,omitempty" jsonschema:"description=snooze-until date YYYY-MM-DD set by task defer --until"`
+	RevisitAt   string   `json:"revisit_at,omitempty" jsonschema:"description=snooze-until date YYYY-MM-DD for a deferred task (set by task defer)"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
 	// Misfiled/Declared surface status≠folder drift to JSON consumers (agents
 	// are exactly who should detect it); declared_status only when misfiled.

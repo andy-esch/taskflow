@@ -20,7 +20,7 @@ type Task struct {
 	Created     string   `yaml:"created"`
 	Updated     string   `yaml:"updated_at"`
 	StartedAt   string   `yaml:"started_at"`           // stamped when a task enters in-progress (incl. `new --start`)
-	RevisitAt   string   `yaml:"revisit_at,omitempty"` // optional "snooze until" date set by `task defer --until`
+	RevisitAt   string   `yaml:"revisit_at,omitempty"` // optional "snooze until" date for a deferred task (set by `task defer`)
 	Tags        []string `yaml:"tags"`
 }
 

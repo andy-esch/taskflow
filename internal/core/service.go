@@ -15,6 +15,7 @@ import (
 type Service struct {
 	store     Store
 	templates TemplateSource
+	now       func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
 }
 
 // Option configures a Service at construction. Functional options keep the common
@@ -33,10 +34,21 @@ func WithTemplateSource(src TemplateSource) Option {
 	}
 }
 
+// WithClock overrides the Service wall clock — injected so snooze/revisit queries
+// (the Summary `revisit_due` count and `task list --revisit-due`) compute "has the
+// revisit date arrived?" against a fixed time in tests. Defaults to time.Now.
+func WithClock(now func() time.Time) Option {
+	return func(s *Service) {
+		if now != nil {
+			s.now = now
+		}
+	}
+}
+
 // NewService wires the core to its store; templates default to the built-in
 // source unless WithTemplateSource overrides it.
 func NewService(store Store, opts ...Option) *Service {
-	s := &Service{store: store, templates: builtinTemplates{}}
+	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -103,7 +115,7 @@ func (s *Service) Summary() (Summary, error) {
 	var inProgress []domain.Task
 	misfiled := 0
 	revisitDue := 0
-	now := time.Now()
+	now := s.now()
 	for _, t := range tasks {
 		counts[t.Status]++
 		if t.Status == domain.StatusInProgress {

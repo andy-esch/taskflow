@@ -12,6 +12,7 @@ tskflwctl task list [flags]
   tskflwctl task list
   tskflwctl task list -q --tag tui | xargs tskflwctl task start
   tskflwctl task list -o table -c slug,status,epic
+  tskflwctl task list --revisit-due -q | xargs tskflwctl task next   # resume snoozed tasks now due
 ```
 
 ### Options
@@ -23,6 +24,7 @@ tskflwctl task list [flags]
   -h, --help              help for list
   -o, --output string     output format: human|json|name|table|csv
   -q, --quiet             ids only, one per line (alias for -o name)
+      --revisit-due       only deferred tasks whose revisit date has arrived (composes with --epic/--tag/-c)
       --status string     filter by status
       --tag string        filter by tag
 ```
