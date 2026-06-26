@@ -3,6 +3,7 @@ package tui
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
@@ -56,13 +57,26 @@ type editField struct {
 // shows, so they can't drift either.
 func editableFields(t domain.Task) []editField {
 	d := fieldDescs("task")
-	return []editField{
+	fields := []editField{
 		{key: "description", label: "description", desc: d["description"], kind: fieldLongText, current: t.Description},
 		{key: "priority", label: "priority", desc: d["priority"], kind: fieldEnum, options: []string{"high", "medium", "low"}, current: t.Priority},
 		{key: "tags", label: "tags", desc: d["tags"], kind: fieldText, current: strings.Join(t.Tags, ", ")},
 		{key: "effort", label: "effort", desc: d["effort"], kind: fieldText, current: t.Effort},
 		{key: "tier", label: "tier", desc: d["tier"], kind: fieldEnum, options: []string{"1", "2", "3", "4", "5"}, current: tierStr(t.Tier)},
 	}
+	// revisit_at is meaningful only while deferred (the snooze date is cleared on
+	// leaving deferred), so surface it for editing ONLY there — this is the in-place
+	// way to re-set a snooze date (the `m` menu can't, since defer→deferred is a
+	// no-op). Submit accepts an absolute date, a relative offset (2w/10d), or blank
+	// to clear — see submitEdit.
+	if t.Status == domain.StatusDeferred {
+		fields = append(fields, editField{
+			key: "revisit_at", label: "revisit",
+			desc: "snooze-until date: YYYY-MM-DD, or relative (2w / 10d); blank clears it",
+			kind: fieldText, current: t.RevisitAt,
+		})
+	}
+	return fields
 }
 
 // editableEpicFields are the typed epic fields the TUI edits in place, in form
@@ -296,7 +310,22 @@ func (m *Model) handleEditKey(msg tea.KeyPressMsg) tea.Cmd {
 // (see the editedMsg/actionErrMsg handlers). The field stays focused meanwhile.
 func (m *Model) submitEdit() tea.Cmd {
 	m.edit.err = ""
-	return m.edit.apply(m.svc, m.edit.slug, m.edit.cur().key, m.edit.value())
+	key, val := m.edit.cur().key, m.edit.value()
+	// revisit_at accepts the same input as the defer prompt — an absolute date OR a
+	// relative offset (2w/10d) — so editing a snooze matches setting one; blank
+	// clears it (back to indefinite). Everything else submits verbatim.
+	if key == "revisit_at" {
+		parsed, err := domain.ParseRevisitDate(val, time.Now())
+		if err != nil {
+			m.edit.err = err.Error() // keep what was typed, show the parse error in place
+			return nil
+		}
+		if parsed == "" {
+			return unsetFieldCmd(m.svc, m.edit.slug, key) // blank → clear the snooze
+		}
+		val = parsed
+	}
+	return m.edit.apply(m.svc, m.edit.slug, key, val)
 }
 
 // setCurrent updates the form's displayed value for a field after a confirmed
@@ -318,6 +347,18 @@ func setFieldCmd(svc *core.Service, slug, key, value string) tea.Cmd {
 			return actionErrMsg{slug: slug, err: err}
 		}
 		return editedMsg{slug: slug, field: key, value: value}
+	}
+}
+
+// unsetFieldCmd removes a frontmatter field (the inline-edit twin of `task set
+// --unset`), reporting the same editedMsg/actionErrMsg. Used when a revisit date is
+// blanked in the editor — clearing the snooze rather than writing an empty date.
+func unsetFieldCmd(svc *core.Service, slug, key string) tea.Cmd {
+	return func() tea.Msg {
+		if _, err := svc.SetFields(slug, map[string]any{key: domain.UnsetField{}}, false, false); err != nil {
+			return actionErrMsg{slug: slug, err: err}
+		}
+		return editedMsg{slug: slug, field: key, value: ""}
 	}
 }
 

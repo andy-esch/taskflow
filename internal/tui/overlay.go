@@ -61,7 +61,9 @@ func (helpModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return true, nil
 }
 
-func (helpModal) view(m *Model, w, h int) string { return helpBox(w, h, m.helpScroll, m.focus) }
+func (helpModal) view(m *Model, w, h int) string {
+	return helpBox(w, h, m.helpScroll, m.focus, m.cur().kind)
+}
 
 // actionModal is the `m` lifecycle action menu: vim-select a transition, Enter
 // applies it, a destructive choice gates on y/n.

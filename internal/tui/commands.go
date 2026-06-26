@@ -17,17 +17,18 @@ import (
 
 // --- tasks ---
 
-// loadTaskList reads the task list for the tab's current status view. The
-// default view ("") is the active working set (sorted in-progress→next-up→…);
-// "all" includes archived; any other value is an exact status filter. The view
-// is snapshotted here so a later change can't race this load.
+// loadTaskList reads the task list for the tab's current status view. The default
+// view ("") is the WORKING set — active work plus deferred (snoozed tasks stay in
+// view as reminders), hiding only completed/deprecated; "all" includes those
+// archived states; any other value is an exact status filter. The view is
+// snapshotted here so a later change can't race this load.
 func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 	view, gen := t.statusView, t.loadGen
 	return func() tea.Msg {
 		f := core.TaskFilter{}
 		switch view {
 		case "":
-			// active-only default
+			f.All = true // working view: load all, drop completed/deprecated below
 		case "all":
 			f.All = true
 		case "revisit":
@@ -41,7 +42,8 @@ func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 		}
 		switch view {
 		case "":
-			sortWorkingSet(tasks) // working-set order only for the default view
+			tasks = dropArchived(tasks) // working view excludes completed/deprecated
+			sortWorkingView(tasks)      // active first, then deferred (due-for-revisit leading)
 		case "revisit":
 			sortByRevisitDate(tasks) // oldest-overdue first
 		case string(domain.StatusDeferred):
@@ -154,6 +156,32 @@ func rankOf(s domain.Status) int {
 func sortWorkingSet(tasks []domain.Task) {
 	sort.SliceStable(tasks, func(i, j int) bool {
 		return rankOf(tasks[i].Status) < rankOf(tasks[j].Status)
+	})
+}
+
+// dropArchived removes completed/deprecated tasks — the genuinely "done" states —
+// from the working view. Deferred is NOT archived (it's "snoozed, come back"), so
+// it stays in view as a reminder.
+func dropArchived(tasks []domain.Task) []domain.Task {
+	out := tasks[:0]
+	for _, t := range tasks {
+		if t.Status != domain.StatusCompleted && t.Status != domain.StatusDeprecated {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// sortWorkingView orders the default view: active work first (by working-set rank),
+// then the deferred tail — and within deferred, the due-for-revisit ones lead, so a
+// fired snooze sits right under your active work instead of buried at the bottom.
+func sortWorkingView(tasks []domain.Task) {
+	sort.SliceStable(tasks, func(i, j int) bool {
+		ri, rj := rankOf(tasks[i].Status), rankOf(tasks[j].Status)
+		if ri != rj {
+			return ri < rj
+		}
+		return revisitDue(tasks[i]) && !revisitDue(tasks[j])
 	})
 }
 

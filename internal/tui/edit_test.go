@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -371,5 +372,90 @@ func TestModel_EditMenuComposites(t *testing.T) {
 		if !strings.Contains(v, want) {
 			t.Errorf("edit picker should show %q:\n%s", want, v)
 		}
+	}
+}
+
+// TestEditableFields_RevisitOnlyWhenDeferred pins that the snooze date is editable
+// in place ONLY for deferred tasks (the invariant: revisit_at ⟺ deferred).
+func TestEditableFields_RevisitOnlyWhenDeferred(t *testing.T) {
+	has := func(tk domain.Task) bool {
+		for _, f := range editableFields(tk) {
+			if f.key == "revisit_at" {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(domain.Task{Status: domain.StatusDeferred}) {
+		t.Error("a deferred task's edit form should include revisit_at")
+	}
+	if has(domain.Task{Status: domain.StatusInProgress}) {
+		t.Error("a non-deferred task's edit form must NOT include revisit_at")
+	}
+}
+
+// selectOverdue moves the cursor to the deferred 'overdue' task (row after the
+// active alpha) in a revisitRepo working view.
+func selectOverdue(t *testing.T, m Model) Model {
+	t.Helper()
+	tm, _ := m.Update(press("j"))
+	m = tm.(Model)
+	if m.selectedID() != "overdue" {
+		t.Fatalf("setup: want overdue selected, got %q", m.selectedID())
+	}
+	return m
+}
+
+// clearInput backspaces the focused text input empty (prefill is ≤10 chars).
+func clearInput(t *testing.T, m Model) Model {
+	t.Helper()
+	for i := 0; i < 16; i++ {
+		tm, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		m = tm.(Model)
+	}
+	return m
+}
+
+// TestModel_EditRevisitDate pins re-editing a deferred task's snooze in place:
+// `e` → revisit → type a new absolute date → it persists.
+func TestModel_EditRevisitDate(t *testing.T) {
+	m := loadedAt(t, revisitRepo(t), 120, 40)
+	m = selectOverdue(t, m)
+	tm, _ := m.Update(press("e"))
+	m = editCursorTo(t, tm.(Model), "revisit_at")
+	tm, _ = m.Update(press("enter")) // begin editing (prefilled 2020-01-01)
+	m = clearInput(t, tm.(Model))
+	for _, r := range "2030-05-05" {
+		tm, _ = m.Update(press(string(r)))
+		m = tm.(Model)
+	}
+	tm, cmd := m.Update(press("enter")) // submit
+	m = tm.(Model)
+	if cmd == nil {
+		t.Fatal("submit should return a SetFields command")
+	}
+	m.Update(cmd()) // run the write
+	if task, _, err := m.svc.ShowTask("overdue"); err != nil || task.RevisitAt != "2030-05-05" {
+		t.Errorf("revisit_at should update to 2030-05-05, got %q (%v)", task.RevisitAt, err)
+	}
+}
+
+// TestModel_EditRevisitDateBlankClears pins that blanking the snooze field clears
+// it (unset), parking the task indefinitely again.
+func TestModel_EditRevisitDateBlankClears(t *testing.T) {
+	m := loadedAt(t, revisitRepo(t), 120, 40)
+	m = selectOverdue(t, m)
+	tm, _ := m.Update(press("e"))
+	m = editCursorTo(t, tm.(Model), "revisit_at")
+	tm, _ = m.Update(press("enter"))
+	m = clearInput(t, tm.(Model))
+	tm, cmd := m.Update(press("enter")) // submit blank → clear
+	m = tm.(Model)
+	if cmd == nil {
+		t.Fatal("a blank revisit submit should return an unset command")
+	}
+	m.Update(cmd())
+	if task, _, _ := m.svc.ShowTask("overdue"); task.RevisitAt != "" {
+		t.Errorf("blanking revisit should clear it, got %q", task.RevisitAt)
 	}
 }

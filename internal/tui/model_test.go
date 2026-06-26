@@ -1152,7 +1152,7 @@ func TestModel_HelpScrollRevealsTail(t *testing.T) {
 	if v := ansi.Strip(m.View().Content); strings.Contains(v, "force-quit") {
 		t.Skip("terminal tall enough to show the tail without scrolling")
 	}
-	for i := 0; i < len(helpLines(m.focus)); i++ { // scroll past the clamp
+	for i := 0; i < len(helpLines(m.focus, m.cur().kind)); i++ { // scroll past the clamp
 		tm, _ = m.Update(press("j"))
 		m = tm.(Model)
 	}
