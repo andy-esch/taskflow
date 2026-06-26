@@ -3,15 +3,18 @@ package prompt
 import (
 	"errors"
 	"io"
+	"os"
 
 	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+	"golang.org/x/term"
 )
 
-// ttyPrompter is the real-terminal Prompter: list pickers use bubbles/list (the
-// same component the TUI browses with — see picker.go) where its filter/viewport
-// are battle-tested, and text inputs use huh (where there's no list and so no
-// filter quirk). Everything renders to out (stderr), so stdout stays a clean data
-// stream.
+// ttyPrompter is the real-terminal Prompter: both list pickers (huh.Select, rendered
+// inline below the prompt with a type-to-filter input) and text inputs (huh.Input) go
+// through huh, themed to match. Everything renders to out (stderr), so stdout stays a
+// clean data stream.
 type ttyPrompter struct {
 	in  io.Reader
 	out io.Writer
@@ -22,23 +25,37 @@ func NewTTY(in io.Reader, out io.Writer) Prompter {
 	return ttyPrompter{in: in, out: out}
 }
 
-// SelectOne picks one option from a fuzzy-filterable list (bubbles/list).
+// SelectOne picks one option from a filterable list rendered INLINE below the prompt
+// (huh.Select) — a "> " caret marks the current row, type to filter. Each label is
+// truncated to the terminal width so a long description stays on ONE line rather than
+// wrapping. Renders to out (stderr).
 func (p ttyPrompter) SelectOne(title string, opts []Option) (string, error) {
-	return runPicker(p.in, p.out, title, opts)
-}
-
-// Text reads a single line via huh (where it has no list-filter quirks), themed
-// to match the rest of the CLI.
-func (p ttyPrompter) Text(title, placeholder string) (string, error) {
+	width := promptWidth(p.out)
+	options := make([]huh.Option[string], len(opts))
+	for i, o := range opts {
+		label := o.Label
+		if width > 6 {
+			// Keep it one line: reserve the "> " caret + a small right margin.
+			label = ansi.Truncate(label, width-4, "…")
+		}
+		options[i] = huh.NewOption(label, o.Value)
+	}
+	// Cap the visible window so a long list stays a compact menu (huh scrolls the rest).
+	height := len(options)
+	if height > 10 {
+		height = 10
+	}
 	var v string
-	field := huh.NewInput().Title(title).Placeholder(placeholder).Value(&v)
+	field := huh.NewSelect[string]().
+		Title(title).
+		Options(options...).
+		Filtering(true).
+		Height(height).
+		Value(&v)
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithInput(p.in).
 		WithOutput(p.out).
-		// huh v2 themes are isDark-parameterized funcs; ThemeDracula matches the
-		// ThemeFunc signature, so wrap it and let huh supply isDark from its own
-		// (bubbletea v2) background detection.
-		WithTheme(huh.ThemeFunc(huh.ThemeDracula)).
+		WithTheme(pickerTheme()).
 		Run()
 	if errors.Is(err, huh.ErrUserAborted) {
 		return "", ErrAborted
@@ -47,4 +64,47 @@ func (p ttyPrompter) Text(title, placeholder string) (string, error) {
 		return "", err
 	}
 	return v, nil
+}
+
+// Text reads a single line via huh, themed to match the picker.
+func (p ttyPrompter) Text(title, placeholder string) (string, error) {
+	var v string
+	field := huh.NewInput().Title(title).Placeholder(placeholder).Value(&v)
+	err := huh.NewForm(huh.NewGroup(field)).
+		WithInput(p.in).
+		WithOutput(p.out).
+		WithTheme(pickerTheme()).
+		Run()
+	if errors.Is(err, huh.ErrUserAborted) {
+		return "", ErrAborted
+	}
+	if err != nil {
+		return "", err
+	}
+	return v, nil
+}
+
+// pickerTheme is the shared huh theme — Dracula, isDark-parameterized so huh supplies
+// it from its own (bubbletea v2) background detection — with a neon-purple selection
+// caret + current row. (The project's colors are inconsistent overall and want a
+// dedicated design pass; this is a deliberately local choice for the prompts.)
+func pickerTheme() huh.Theme {
+	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
+		s := huh.ThemeDracula(isDark)
+		purple := lipgloss.Color("#b026ff")
+		s.Focused.SelectSelector = s.Focused.SelectSelector.SetString("> ").Foreground(purple)
+		s.Focused.SelectedOption = s.Focused.SelectedOption.Foreground(purple).Bold(true)
+		return s
+	})
+}
+
+// promptWidth is the terminal width of out (the prompts render to stderr), or 80 when
+// it can't be detected (piped/redirected) — used to keep each option label on one line.
+func promptWidth(out io.Writer) int {
+	if f, ok := out.(*os.File); ok {
+		if w, _, err := term.GetSize(int(f.Fd())); err == nil && w > 0 {
+			return w
+		}
+	}
+	return 80
 }

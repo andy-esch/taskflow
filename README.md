@@ -252,3 +252,17 @@ selection. It **live-reloads** via `fsnotify` — edits from
 your editor or a CLI `task move` in another terminal show up within ~200ms,
 cursor preserved. See
 [`planning/epics/18-tui-bubble-tea-interactive-planning-browser.md`](./planning/epics/18-tui-bubble-tea-interactive-planning-browser.md).
+
+> **Clickable titles under tmux + Ghostty.** The detail-title link is correct OSC 8
+> and works in a bare terminal as-is; tmux needs two things.
+> **(1) Let tmux pass the hyperlink through** — tmux ≥ 3.4 with
+> `set -as terminal-features ',xterm-ghostty:hyperlinks'` (match your real `$TERM`),
+> then a full **`tmux kill-server`** — a `source-file` reload often does *not* apply
+> `terminal-features`. Confirm with `tmux info | grep -i hyperlink`.
+> **(2) Click through tmux's mouse capture** — with `mouse on`, open links via
+> **shift+cmd+click** (Shift bypasses tmux's grab; make sure Ghostty's
+> `mouse-shift-capture` isn't `true`), or `set -g mouse off` for plain cmd+click
+> (you lose tmux mouse scroll/select). Quick isolate, in a tmux pane:
+> `printf '\e]8;;https://example.com\e\\Click Me\e]8;;\e\\\n'` — if **Click Me** is
+> underlined, rendering already works and it's only the click modifier (step 2);
+> if it's plain text, tmux isn't passing OSC 8 yet (step 1).
