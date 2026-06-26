@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -101,6 +102,47 @@ func IsRevisitDue(revisitAt string, now time.Time) bool {
 	}
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	return !d.After(today)
+}
+
+// relativeDate matches a future offset typed at the interactive defer prompt: a
+// count and a unit of days or weeks, optionally space-separated (e.g. "10d",
+// "2 weeks"). Months are deliberately NOT supported — their calendar arithmetic
+// rolls month-end dates into the following month (Jan 31 + "1m" → Mar 3), and a
+// snooze only needs days/weeks granularity.
+var relativeDate = regexp.MustCompile(`^(\d+)\s*(d|day|days|w|week|weeks)$`)
+
+// ParseRevisitDate interprets a revisit ("snooze until") date typed at the
+// interactive defer prompt. It accepts EITHER an absolute YYYY-MM-DD (the same
+// form `--until` and `task set revisit_at=` take) OR a relative offset into the
+// future — a count plus a unit of days or weeks ("10d", "2w", "3 weeks"). A blank
+// input returns "" (no date — park the task indefinitely). now is injected so the
+// relative arithmetic stays deterministic in tests; the result is always a
+// validated YYYY-MM-DD string (or "").
+func ParseRevisitDate(input string, now time.Time) (string, error) {
+	s := strings.TrimSpace(input)
+	if s == "" {
+		return "", nil // blank = no revisit date
+	}
+	// An absolute date wins — it's the canonical form the field is stored in.
+	if _, err := time.Parse(time.DateOnly, s); err == nil {
+		return s, nil
+	}
+	// Otherwise a relative offset: <count><unit>, computed forward from now's day.
+	if m := relativeDate.FindStringSubmatch(strings.ToLower(s)); m != nil {
+		n, err := strconv.Atoi(m[1])
+		if err != nil { // unreachable for \d+, but keep the conversion honest
+			return "", fmt.Errorf("%w: revisit offset %q: %v", ErrValidation, input, err)
+		}
+		var d time.Time
+		switch m[2] {
+		case "d", "day", "days":
+			d = now.AddDate(0, 0, n)
+		case "w", "week", "weeks":
+			d = now.AddDate(0, 0, 7*n)
+		}
+		return d.Format(time.DateOnly), nil
+	}
+	return "", fmt.Errorf("%w: revisit date %q must be YYYY-MM-DD or a relative offset like 2w / 10d", ErrValidation, input)
 }
 
 // ValidateField checks a constrained frontmatter field from its string value —

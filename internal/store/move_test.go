@@ -50,6 +50,65 @@ func TestFS_Move_Idempotent(t *testing.T) {
 	}
 }
 
+// TestFS_Move_RevisitAt pins the revisit_at lifecycle at the store layer: a
+// re-defer (deferred->deferred, the idempotent no-op) KEEPS the snooze date, and
+// any move OUT of deferred CLEARS it while preserving the historical deferred_at.
+// The CLI tests only cover the promote path; this guards the load-bearing
+// from==to early-return (a reorder that cleared the date on re-defer would be
+// silent data loss otherwise) and the to-independent clear directly.
+func TestFS_Move_RevisitAt(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 6, 26, 0, 0, 0, 0, time.UTC)
+	fs := NewFS(root)
+	deferred := func(name string) {
+		writeTask(t, root, "deferred", name,
+			"---\nstatus: deferred\nrevisit_at: \"2026-09-01\"\ndeferred_at: \"2026-06-01\"\n---\n# X\n")
+	}
+	read := func(status, name string) string {
+		b, err := os.ReadFile(filepath.Join(root, "tasks", status, name))
+		if err != nil {
+			t.Fatalf("read %s/%s: %v", status, name, err)
+		}
+		return string(b)
+	}
+
+	// Re-defer (deferred -> deferred): idempotent no-op, snooze date untouched.
+	deferred("redefer.md")
+	task, err := fs.Move("redefer", domain.StatusDeferred, now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.RevisitAt != "2026-09-01" {
+		t.Errorf("re-defer should keep revisit_at, got %q", task.RevisitAt)
+	}
+	if !strings.Contains(read("deferred", "redefer.md"), "revisit_at") {
+		t.Error("re-defer must not strip revisit_at from disk")
+	}
+
+	// Leaving deferred clears the snooze date for ANY destination (resume via
+	// demote/promote, or archive via deprecate); deferred_at history survives.
+	for _, tc := range []struct {
+		to  domain.Status
+		dir string
+	}{
+		{domain.StatusReadyToStart, "ready-to-start"},
+		{domain.StatusDeprecated, "deprecated"},
+	} {
+		name := "leave-" + tc.dir + ".md"
+		deferred(name)
+		if _, err := fs.Move(strings.TrimSuffix(name, ".md"), tc.to, now, false); err != nil {
+			t.Fatalf("move to %s: %v", tc.to, err)
+		}
+		got := read(tc.dir, name)
+		if strings.Contains(got, "revisit_at") {
+			t.Errorf("leaving deferred -> %s should clear revisit_at:\n%s", tc.to, got)
+		}
+		if !strings.Contains(got, "deferred_at") {
+			t.Errorf("leaving deferred -> %s must keep historical deferred_at:\n%s", tc.to, got)
+		}
+	}
+}
+
 func TestFS_Move_NotFound(t *testing.T) {
 	_, err := NewFS(t.TempDir()).Move("nope", domain.StatusCompleted, time.Now(), false)
 	if !errors.Is(err, domain.ErrNotFound) {

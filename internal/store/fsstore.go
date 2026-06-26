@@ -131,6 +131,14 @@ func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun bool) (do
 	case domain.StatusDeferred:
 		updates["deferred_at"] = date
 	}
+	// revisit_at is a live "snooze until" intent that only makes sense while a
+	// task is parked in deferred. Leaving deferred (resume via promote/demote, or
+	// any other move) ends the snooze, so clear it — mirroring how entering a
+	// state stamps its date. (from==to is the idempotent no-op above, so a
+	// re-defer keeps the date; deleteMapNode is a no-op when none is set.)
+	if from == domain.StatusDeferred {
+		updates["revisit_at"] = domain.UnsetField{}
+	}
 
 	newContent, err := updateFrontmatter(content, updates)
 	if err != nil {

@@ -112,8 +112,10 @@ func (s *Service) Summary() (Summary, error) {
 		if t.Misfiled() {
 			misfiled++
 		}
-		// A revisit_at on a non-deferred task is harmless (we never auto-clear it);
-		// only nudge for tasks parked in deferred/ whose snooze date has arrived.
+		// Move clears revisit_at when a task leaves deferred, so a stray date on a
+		// non-deferred task is only possible via a manual `task set`/edit; either
+		// way the nudge stays scoped to tasks parked in deferred/ whose snooze date
+		// has arrived.
 		if t.Status == domain.StatusDeferred && domain.IsRevisitDue(t.RevisitAt, now) {
 			revisitDue++
 		}

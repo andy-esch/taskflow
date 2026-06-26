@@ -1,10 +1,17 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/andy-esch/taskflow/internal/cli/prompt"
+	"github.com/andy-esch/taskflow/internal/cli/render"
+	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/store"
 )
 
 // readTaskFile returns the raw contents of a task file at tasks/<status>/<name>.
@@ -75,11 +82,184 @@ func TestTaskDefer_UntilDryRun(t *testing.T) {
 	if !strings.Contains(out, "would move") {
 		t.Errorf("dry-run should preview the move, got:\n%s", out)
 	}
+	// The preview must actually confirm the would-be snooze date — not be
+	// indistinguishable from a bare `defer --dry-run`.
+	if !strings.Contains(out, "2026-09-01") {
+		t.Errorf("dry-run should preview the revisit date, got:\n%s", out)
+	}
 	// Nothing written: still in ready-to-start, not deferred.
 	if _, statErr := os.Stat(filepath.Join(root, "tasks", "ready-to-start", "alpha.md")); statErr != nil {
 		t.Errorf("dry-run must not move the task: %v", statErr)
 	}
 	notExist(t, filepath.Join(root, "tasks", "deferred", "alpha.md"))
+}
+
+// TestTaskDefer_UntilDryRunJSON pins the would-be revisit_at in the --json move
+// report on a dry-run preview (nothing written, but the date is surfaced).
+func TestTaskDefer_UntilDryRunJSON(t *testing.T) {
+	root := setupRepo(t)
+	out := runRoot(t, "-C", root, "--json", "task", "defer", "alpha", "--until", "2026-09-01", "--dry-run")
+	if !strings.Contains(out, `"revisit_at":"2026-09-01"`) {
+		t.Errorf("dry-run --json should carry the would-be revisit_at:\n%s", out)
+	}
+	notExist(t, filepath.Join(root, "tasks", "deferred", "alpha.md"))
+}
+
+// TestTaskDefer_MultipleSlugsUntil pins the batch-snooze contract: every slug
+// passed to a single `defer ... --until` gets the same revisit_at.
+func TestTaskDefer_MultipleSlugsUntil(t *testing.T) {
+	root := setupRepo(t) // alpha (ready-to-start) + beta (in-progress)
+	runRoot(t, "-C", root, "task", "defer", "alpha", "beta", "--until", "2026-09-01")
+	for _, name := range []string{"alpha", "beta"} {
+		got := readTaskFile(t, root, "deferred", name+".md")
+		if !strings.Contains(got, `revisit_at: "2026-09-01"`) {
+			t.Errorf("%s should carry the batch revisit date:\n%s", name, got)
+		}
+	}
+}
+
+// TestTaskDefer_RedeferKeepsDate pins the load-bearing from==to no-op: re-deferring
+// an already-deferred task without --until KEEPS the existing revisit_at instead of
+// wiping it (a bare re-defer is a Move no-op, and until=="" skips SetFields).
+func TestTaskDefer_RedeferKeepsDate(t *testing.T) {
+	root := setupRepo(t)
+	runRoot(t, "-C", root, "task", "defer", "alpha", "--until", "2026-09-01")
+	runRoot(t, "-C", root, "task", "defer", "alpha") // bare re-defer (gate closed in tests → no prompt)
+	got := readTaskFile(t, root, "deferred", "alpha.md")
+	if !strings.Contains(got, `revisit_at: "2026-09-01"`) {
+		t.Errorf("bare re-defer must keep the existing revisit_at:\n%s", got)
+	}
+}
+
+// TestTaskDefer_UntilJSONRealRun pins that a REAL (non-dry-run) --json defer
+// surfaces the recorded revisit_at, sourced from the written task (not just the
+// dry-run preview path).
+func TestTaskDefer_UntilJSONRealRun(t *testing.T) {
+	root := setupRepo(t)
+	out := runRoot(t, "-C", root, "--json", "task", "defer", "alpha", "--until", "2026-09-01")
+	if !strings.Contains(out, `"revisit_at":"2026-09-01"`) {
+		t.Errorf("real-run --json defer should carry revisit_at:\n%s", out)
+	}
+	if got := readTaskFile(t, root, "deferred", "alpha.md"); !strings.Contains(got, `revisit_at: "2026-09-01"`) {
+		t.Errorf("real run should persist revisit_at:\n%s", got)
+	}
+}
+
+// TestTaskDefer_InteractiveRelativeDate pins the relative-answer path end to end:
+// a "1w" typed at the prompt is computed against the command's clock (time.Now())
+// and persisted. The expected date is captured around Execute so a midnight tick
+// between the two clock reads can't flake it.
+func TestTaskDefer_InteractiveRelativeDate(t *testing.T) {
+	root := setupRepo(t)
+	f := &prompt.Fake{TextAnswers: []string{"1w"}}
+	var out bytes.Buffer
+	cmd := newDeferCmd(deferApp(root, f, &out))
+	cmd.SetArgs([]string{"alpha"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	before := time.Now().AddDate(0, 0, 7).Format(time.DateOnly)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("interactive relative defer: %v\n%s", err, out.String())
+	}
+	after := time.Now().AddDate(0, 0, 7).Format(time.DateOnly)
+
+	got := readTaskFile(t, root, "deferred", "alpha.md")
+	if !strings.Contains(got, `revisit_at: "`+before+`"`) && !strings.Contains(got, `revisit_at: "`+after+`"`) {
+		t.Errorf("relative '1w' should persist %s (or %s across a midnight tick):\n%s", before, after, got)
+	}
+}
+
+// TestTaskDefer_RevisitClearedOnResume pins that revisit_at is dropped when a task
+// leaves deferred (promote/demote to resume) — a stale snooze date must not ride
+// along onto a now-active task.
+func TestTaskDefer_RevisitClearedOnResume(t *testing.T) {
+	root := setupRepo(t)
+	runRoot(t, "-C", root, "task", "defer", "alpha", "--until", "2026-09-01")
+	if got := readTaskFile(t, root, "deferred", "alpha.md"); !strings.Contains(got, "revisit_at") {
+		t.Fatalf("precondition: deferred alpha should carry revisit_at:\n%s", got)
+	}
+	runRoot(t, "-C", root, "task", "promote", "alpha") // deferred -> next-up
+	got := readTaskFile(t, root, "next-up", "alpha.md")
+	if strings.Contains(got, "revisit_at") {
+		t.Errorf("leaving deferred should clear revisit_at:\n%s", got)
+	}
+}
+
+// deferApp builds an App wired for an interactive (TTY-equivalent) defer: a real
+// FS-backed service over root, the gate open, and a scripted prompter. It mirrors
+// the hand-built App pattern the epic/edit picker tests use.
+func deferApp(root string, p prompt.Prompter, out *bytes.Buffer) *App {
+	return &App{
+		Out: out, ErrOut: out, In: strings.NewReader(""),
+		Style:  render.NewStyle(false),
+		Gate:   prompt.NewGate(true),
+		Prompt: p,
+		Svc:    core.NewService(store.NewFS(root)),
+	}
+}
+
+// TestTaskDefer_InteractivePromptsForDate pins the new snooze UX: a defer on a TTY
+// without --until brings up a separate revisit-date prompt and records what the
+// user enters (here an absolute date).
+func TestTaskDefer_InteractivePromptsForDate(t *testing.T) {
+	root := setupRepo(t)
+	f := &prompt.Fake{TextAnswers: []string{"2026-09-01"}}
+	var out bytes.Buffer
+	cmd := newDeferCmd(deferApp(root, f, &out))
+	cmd.SetArgs([]string{"alpha"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("interactive defer: %v\n%s", err, out.String())
+	}
+	if len(f.Asked) != 1 || !strings.Contains(f.Asked[0], "Revisit date") {
+		t.Errorf("expected one revisit-date prompt, got %v", f.Asked)
+	}
+	got := readTaskFile(t, root, "deferred", "alpha.md")
+	if !strings.Contains(got, `revisit_at: "2026-09-01"`) {
+		t.Errorf("interactive defer should record the prompted date:\n%s", got)
+	}
+}
+
+// TestTaskDefer_InteractiveBlankSkipsDate pins that leaving the prompt blank parks
+// the task indefinitely (no revisit_at), so the snooze stays opt-in.
+func TestTaskDefer_InteractiveBlankSkipsDate(t *testing.T) {
+	root := setupRepo(t)
+	f := &prompt.Fake{TextAnswers: []string{"  "}} // blank/whitespace = skip
+	var out bytes.Buffer
+	cmd := newDeferCmd(deferApp(root, f, &out))
+	cmd.SetArgs([]string{"alpha"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("interactive defer (blank): %v\n%s", err, out.String())
+	}
+	if got := readTaskFile(t, root, "deferred", "alpha.md"); strings.Contains(got, "revisit_at") {
+		t.Errorf("a blank revisit prompt must not write revisit_at:\n%s", got)
+	}
+}
+
+// TestTaskDefer_FlagSkipsInteractivePrompt pins that an explicit --until bypasses
+// the prompt entirely (the flag-twin contract): the date is taken from the flag,
+// not asked for.
+func TestTaskDefer_FlagSkipsInteractivePrompt(t *testing.T) {
+	root := setupRepo(t)
+	f := &prompt.Fake{} // empty: any prompt call would error
+	var out bytes.Buffer
+	cmd := newDeferCmd(deferApp(root, f, &out))
+	cmd.SetArgs([]string{"alpha", "--until", "2026-09-01"})
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("defer --until on a TTY should not prompt: %v\n%s", err, out.String())
+	}
+	if len(f.Asked) != 0 {
+		t.Errorf("--until should bypass the revisit prompt, got prompts %v", f.Asked)
+	}
+	if got := readTaskFile(t, root, "deferred", "alpha.md"); !strings.Contains(got, `revisit_at: "2026-09-01"`) {
+		t.Errorf("--until value should be recorded:\n%s", got)
+	}
 }
 
 // TestTaskSet_RevisitAt pins that revisit_at rides the generic `task set` path for

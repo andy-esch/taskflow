@@ -9,7 +9,7 @@ tskflwctl task defer <task>... [flags]
 ### Examples
 
 ```
-  tskflwctl task defer my-task
+  tskflwctl task defer my-task                      # on a TTY, prompts for a revisit date
   tskflwctl task defer my-task --until 2026-09-01   # snooze until a date
   tskflwctl task defer task-a task-b
 ```

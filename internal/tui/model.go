@@ -9,6 +9,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
@@ -156,6 +157,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// A transition succeeded: flash it and reload so the relocated task shows in
 		// its new status (folder-authoritative), each tab's cursor preserved by id.
 		m.flash = fmt.Sprintf("moved %s → %s", msg.slug, msg.to)
+		if msg.revisit != "" {
+			m.flash += fmt.Sprintf(" (revisit %s)", msg.revisit)
+		}
 		m.flashErr = false
 		// The moved task leaves the active list (folder-authoritative); its
 		// disappearance on the reload below is expected, so don't let the post-reload
@@ -572,11 +576,7 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 			m.cmd.err = "select a row first"
 			return m, cmd
 		}
-		if tr.destructive {
-			m.action.openConfirm(id, tr) // gate even an explicit :deprecate
-			return m, nil
-		}
-		return m, m.cur().applyMove(m.svc, id, tr)
+		return m, m.beginTransition(id, tr) // confirm/revisit/apply per the verb
 	}
 	cmd := m.cmd.focus()
 	m.cmd.err = "unknown: " + word
@@ -588,6 +588,31 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 // mutates the model copy directly (the modal loop passes &m) and returns the cmd;
 // ForceQuit is handled by handleKey's preamble, ahead of the modal loop.
 func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
+	if m.action.revisit {
+		switch msg.String() {
+		case "enter":
+			date, err := domain.ParseRevisitDate(m.action.dateInput.Value(), time.Now())
+			if err != nil {
+				m.action.dateErr = err.Error() // keep what was typed, show the error
+				return nil
+			}
+			slug := m.action.slug
+			m.action.close()
+			return deferTaskCmd(m.svc, slug, date)
+		case "esc":
+			if len(m.action.options) > 0 {
+				m.action.revisit = false // came from the menu → return to it
+				m.action.dateInput.Blur()
+			} else {
+				m.action.close() // cold `:defer`/palette entry → nothing to return to
+			}
+			return nil
+		}
+		m.action.dateErr = "" // any keystroke clears the stale parse error
+		var cmd tea.Cmd
+		m.action.dateInput, cmd = m.action.dateInput.Update(msg)
+		return cmd
+	}
 	if m.action.confirm {
 		switch msg.String() {
 		case "y", "Y":
@@ -614,6 +639,11 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.action.confirm = true
 			return nil
 		}
+		// A task defer opens the revisit-date prompt instead of applying at once
+		// (the audit "defer" bucket has no revisit date, so it falls through).
+		if m.cur().kind == entityTasks && tr.to == string(domain.StatusDeferred) {
+			return m.action.beginRevisit(m.action.slug)
+		}
 		slug := m.action.slug
 		m.action.close()
 		return m.cur().applyMove(m.svc, slug, tr)
@@ -621,6 +651,21 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.action.close()
 	}
 	return nil
+}
+
+// beginTransition routes a chosen lifecycle transition for slug: a destructive
+// move opens the y/n confirm; the tasks-tab defer opens the revisit-date prompt
+// (mirroring the CLI snooze); everything else applies immediately. Shared by the
+// `:`-command and palette entry points so all three paths agree.
+func (m *Model) beginTransition(id string, tr transition) tea.Cmd {
+	if tr.destructive {
+		m.action.openConfirm(id, tr)
+		return nil
+	}
+	if m.cur().kind == entityTasks && tr.to == string(domain.StatusDeferred) {
+		return m.action.beginRevisit(id)
+	}
+	return m.cur().applyMove(m.svc, id, tr)
 }
 
 // selectedTask returns the selected row as a task — ok only on the tasks tab. Used
@@ -932,11 +977,7 @@ func (m *Model) runPaletteCommand(word string) tea.Cmd {
 			m.flash, m.flashErr = "select a row first to :"+word, true
 			return nil
 		}
-		if tr.destructive {
-			m.action.openConfirm(id, tr)
-			return nil
-		}
-		return m.cur().applyMove(m.svc, id, tr)
+		return m.beginTransition(id, tr) // confirm/revisit/apply per the verb
 	}
 	return nil
 }

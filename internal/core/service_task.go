@@ -119,7 +119,17 @@ func (s *Service) DeferTask(slug, until string, dryRun bool) (domain.Task, error
 		t.RevisitAt = until
 		return t, nil
 	}
-	return s.SetFields(slug, map[string]any{"revisit_at": until}, false, false)
+	// The Move above already persisted (file relocated into deferred/). This is a
+	// SECOND write, so the two halves aren't atomic: if SetFields fails here the
+	// task IS deferred but carries no revisit_at. Name that partial state in the
+	// error (keeping the sentinel via %w for the exit code) so the report doesn't
+	// read as "nothing happened" — a re-run of `task defer <slug> --until <date>`
+	// is an idempotent Move no-op then a clean SetFields, so retry recovers it.
+	out, err := s.SetFields(slug, map[string]any{"revisit_at": until}, false, false)
+	if err != nil {
+		return domain.Task{}, fmt.Errorf("%q deferred but revisit date %q not recorded (retry `task defer %s --until %s`): %w", slug, until, slug, until, err)
+	}
+	return out, nil
 }
 
 // SetFields validates and applies frontmatter updates to a task (stamping

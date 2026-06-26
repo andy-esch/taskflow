@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -436,25 +437,29 @@ func runTransition(app *App, to domain.Status, slugs []string) error {
 // newDeferCmd mirrors newTransitionCmd (bare verb → picker, ArbitraryArgs, the
 // move) but adds the optional --until snooze date: when set, each task is moved
 // to deferred AND has revisit_at recorded, so `status` can nudge you when the date
-// arrives. Without --until it's exactly the old `task defer` (park indefinitely).
-// The date is validated up front (so a bad date errors before anything moves) and
-// written through the same SetFields path `task set revisit_at=…` uses.
+// arrives. On a TTY without --until it brings up a separate prompt to choose a
+// revisit date (an absolute date or a relative offset like 2w/10d), so a human
+// deferring interactively is offered a snooze without remembering the flag; blank
+// skips it (park indefinitely), and off a TTY there's no prompt — exactly the old
+// agent `task defer`. The date is validated up front (a bad --until errors before
+// anything moves) and written through the same SetFields path `task set` uses.
 func newDeferCmd(app *App) *cobra.Command {
 	var until string
 	to := domain.StatusDeferred
 	cmd := &cobra.Command{
 		Use:   "defer <task>...",
 		Short: "Move task(s) to deferred (optionally with a revisit date)",
-		Example: "  tskflwctl task defer my-task\n" +
+		Example: "  tskflwctl task defer my-task                      # on a TTY, prompts for a revisit date\n" +
 			"  tskflwctl task defer my-task --until 2026-09-01   # snooze until a date\n" +
 			"  tskflwctl task defer task-a task-b",
 		Args:              cobra.ArbitraryArgs, // bare verb → picker on a TTY; non-interactive needs ≥1 arg
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.taskCompleter(to), // don't offer tasks already deferred
 		RunE: func(c *cobra.Command, args []string) error {
-			// Validate the revisit date BEFORE moving anything — a bad --until must
+			changed := c.Flags().Changed("until")
+			// Validate an explicit --until BEFORE moving anything — a bad date must
 			// fail fast (exit 11) and leave every task where it is.
-			if c.Flags().Changed("until") {
+			if changed {
 				if err := domain.ValidateDate(until); err != nil {
 					return err
 				}
@@ -467,9 +472,16 @@ func newDeferCmd(app *App) *cobra.Command {
 				}
 				args = []string{slug}
 			}
+			// After the task is chosen, offer a revisit date on a TTY (no-op off a
+			// TTY or when --until was given), so the same value drives every slug.
+			revisit, err := app.fillRevisitDate(changed, until, time.Now())
+			if err != nil {
+				return err
+			}
 			return runMoves(app, args, string(to),
-				func(slug string) (domain.Task, error) { return app.Svc.DeferTask(slug, until, app.DryRun) },
-				func(t domain.Task) string { return t.Slug })
+				func(slug string) (domain.Task, error) { return app.Svc.DeferTask(slug, revisit, app.DryRun) },
+				func(t domain.Task) string { return t.Slug },
+				func(t domain.Task, r *render.MoveResult) { r.RevisitAt = t.RevisitAt })
 		},
 	}
 	cmd.Flags().StringVar(&until, "until", "", "revisit date YYYY-MM-DD (snooze until); records revisit_at on each task")

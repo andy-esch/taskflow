@@ -472,6 +472,10 @@
         "to": {
           "type": "string"
         },
+        "revisit_at": {
+          "type": "string",
+          "description": "revisit (snooze-until) date recorded by task defer --until"
+        },
         "error": {
           "type": "string"
         }

@@ -9,7 +9,8 @@ priority: low
 autonomy_level: 3
 tags: [cli]
 created: "2026-06-25"
-updated_at: "2026-06-25"
+updated_at: "2026-06-26"
+deferred_at: "2026-06-26"
 ---
 # Add a mutable updated/modified timestamp to audits
 

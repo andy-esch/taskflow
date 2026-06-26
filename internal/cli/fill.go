@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
 	"github.com/andy-esch/taskflow/internal/core"
@@ -72,6 +73,27 @@ func (a *App) fillTags(tags []string, hintFn func() string) ([]string, error) {
 		return nil, fmt.Errorf("%w: at least one tag is required", domain.ErrValidation)
 	}
 	return parsed, nil
+}
+
+// fillRevisitDate resolves the snooze ("revisit until") date for a defer. Unlike
+// the required-input fills, the date is OPTIONAL — a defer with no date parks the
+// task indefinitely — so this is a soft offer, not the flag-twin contract: when
+// --until was given (flagChanged), or we're off a TTY (gate closed), the existing
+// value is returned unchanged, which keeps the agent/pipeline path identical to
+// before (no prompt, no revisit_at unless --until). On a TTY without --until it
+// brings up a separate prompt accepting an absolute YYYY-MM-DD or a relative
+// offset (e.g. 2w / 10d / 3 weeks); blank skips it. now is passed through to the
+// relative-date parser.
+func (a *App) fillRevisitDate(flagChanged bool, until string, now time.Time) (string, error) {
+	if flagChanged || !a.Gate.On() {
+		return until, nil
+	}
+	raw, err := a.Prompt.Text("Revisit date (snooze until — optional)",
+		"YYYY-MM-DD, or 2w / 10d / 3 weeks · blank to skip")
+	if err != nil {
+		return "", err
+	}
+	return domain.ParseRevisitDate(raw, now)
 }
 
 // parseTags splits a comma-separated string into trimmed, de-duplicated,

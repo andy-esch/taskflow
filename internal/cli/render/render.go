@@ -57,7 +57,9 @@ import (
 // without re-running plain lint.
 // 1.16: task payloads carry `revisit_at` — the optional snooze-until date set by
 // `task defer --until`; the `status` summary envelope carries `revisit_due` (the
-// count of deferred tasks whose revisit_at has arrived) alongside `misfiled`.
+// count of deferred tasks whose revisit_at has arrived) alongside `misfiled`; and
+// the move report (`task defer --json`) carries `revisit_at` per item so a preview
+// and the real run both confirm the snooze.
 const SchemaVersion = "1.16"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
@@ -165,9 +167,10 @@ func TaskMutationJSON(w io.Writer, t domain.Task, body string, dryRun bool) erro
 // state — a task status or an audit bucket — so the JSON key is the neutral
 // "to" rather than "status".
 type MoveResult struct {
-	Slug  string `json:"slug"`
-	To    string `json:"to"`
-	Error string `json:"error,omitempty"`
+	Slug      string `json:"slug"`
+	To        string `json:"to"`
+	RevisitAt string `json:"revisit_at,omitempty" jsonschema:"description=revisit (snooze-until) date recorded by task defer --until"`
+	Error     string `json:"error,omitempty"`
 }
 
 // MovesHuman prints one line per transition outcome ("would move" on a
@@ -183,7 +186,13 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 			// doesn't interleave errors into the data stream.
 			fmt.Fprintf(errw, "%s %s: %s\n", st.Red("✘"), st.Bold(r.Slug), r.Error)
 		} else {
-			fmt.Fprintf(out, "%s %s %s -> %s\n", st.Green("✔"), verb, st.Bold(r.Slug), r.To)
+			// A recorded/would-be revisit date (defer --until) is shown inline so the
+			// preview and the real run both confirm the snooze, not just the move.
+			revisit := ""
+			if r.RevisitAt != "" {
+				revisit = st.Dim(fmt.Sprintf(" (revisit %s)", r.RevisitAt))
+			}
+			fmt.Fprintf(out, "%s %s %s -> %s%s\n", st.Green("✔"), verb, st.Bold(r.Slug), r.To, revisit)
 		}
 	}
 }
