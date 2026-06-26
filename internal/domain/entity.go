@@ -68,7 +68,7 @@ var entities = []Descriptor{
 			{"tags", "list", true, "At least one topical tag (required at creation).", "[cli, core]"},
 		},
 		Conventions: []string{
-			"status is the directory — set it with the lifecycle verbs (start/promote/complete/…), never in frontmatter.",
+			"status is the directory — set it with the lifecycle verbs (start/next/complete/…), never in frontmatter.",
 			fmt.Sprintf("description is a single line, ≤%d characters.", MaxDescriptionLen),
 			"at least one tag is required at creation.",
 			"the filename slug is derived from the title; any title is accepted (colons, dashes, arrows, …) and the full title is kept as the body H1.",

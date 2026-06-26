@@ -53,7 +53,7 @@ func TestFS_Move_Idempotent(t *testing.T) {
 // TestFS_Move_RevisitAt pins the revisit_at lifecycle at the store layer: a
 // re-defer (deferred->deferred, the idempotent no-op) KEEPS the snooze date, and
 // any move OUT of deferred CLEARS it while preserving the historical deferred_at.
-// The CLI tests only cover the promote path; this guards the load-bearing
+// The CLI tests only cover the resume (next) path; this guards the load-bearing
 // from==to early-return (a reorder that cleared the date on re-defer would be
 // silent data loss otherwise) and the to-independent clear directly.
 func TestFS_Move_RevisitAt(t *testing.T) {
@@ -86,7 +86,7 @@ func TestFS_Move_RevisitAt(t *testing.T) {
 	}
 
 	// Leaving deferred clears the snooze date for ANY destination (resume via
-	// demote/promote, or archive via deprecate); deferred_at history survives.
+	// next/ready, or archive via deprecate); deferred_at history survives.
 	for _, tc := range []struct {
 		to  domain.Status
 		dir string

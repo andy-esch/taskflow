@@ -171,18 +171,33 @@ func TestTaskDefer_InteractiveRelativeDate(t *testing.T) {
 }
 
 // TestTaskDefer_RevisitClearedOnResume pins that revisit_at is dropped when a task
-// leaves deferred (promote/demote to resume) — a stale snooze date must not ride
-// along onto a now-active task.
+// leaves deferred (`task next`/`task ready` to resume) — a stale snooze date must
+// not ride along onto a now-active task.
 func TestTaskDefer_RevisitClearedOnResume(t *testing.T) {
 	root := setupRepo(t)
 	runRoot(t, "-C", root, "task", "defer", "alpha", "--until", "2026-09-01")
 	if got := readTaskFile(t, root, "deferred", "alpha.md"); !strings.Contains(got, "revisit_at") {
 		t.Fatalf("precondition: deferred alpha should carry revisit_at:\n%s", got)
 	}
-	runRoot(t, "-C", root, "task", "promote", "alpha") // deferred -> next-up
+	runRoot(t, "-C", root, "task", "next", "alpha") // deferred -> next-up
 	got := readTaskFile(t, root, "next-up", "alpha.md")
 	if strings.Contains(got, "revisit_at") {
 		t.Errorf("leaving deferred should clear revisit_at:\n%s", got)
+	}
+}
+
+// TestTaskTransition_DeprecatedAliases pins back-compat: the old promote/demote
+// verbs still move tasks (hidden + deprecation-warned) so existing scripts/muscle
+// memory don't break after the rename to next/ready.
+func TestTaskTransition_DeprecatedAliases(t *testing.T) {
+	root := setupRepo(t)
+	runRoot(t, "-C", root, "task", "promote", "alpha") // alias for `next`
+	if _, err := os.Stat(filepath.Join(root, "tasks", "next-up", "alpha.md")); err != nil {
+		t.Errorf("`task promote` alias should still move to next-up: %v", err)
+	}
+	runRoot(t, "-C", root, "task", "demote", "alpha") // alias for `ready`
+	if _, err := os.Stat(filepath.Join(root, "tasks", "ready-to-start", "alpha.md")); err != nil {
+		t.Errorf("`task demote` alias should still move to ready-to-start: %v", err)
 	}
 }
 

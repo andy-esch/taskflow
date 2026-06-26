@@ -47,15 +47,23 @@ func newTaskCmd(app *App) *cobra.Command {
 		newTaskAppendCmd(app),
 		newTaskMoveCmd(app),
 		// Explicit transition verbs over the internal move engine (no enum to
-		// hallucinate; per-verb intent). See the command spec.
+		// hallucinate; per-verb intent). Each verb NAMES its destination status
+		// rather than implying a rank — `next`/`ready` (not promote/demote), so a
+		// lateral status change never reads as a value judgment and "leaving
+		// deferred" isn't a weird "demote". See the command spec.
 		newTransitionCmd(app, "start", "Move task(s) to in-progress", domain.StatusInProgress),
-		newTransitionCmd(app, "promote", "Move task(s) to next-up", domain.StatusNextUp),
-		newTransitionCmd(app, "demote", "Move task(s) to ready-to-start", domain.StatusReadyToStart),
+		newTransitionCmd(app, "next", "Move task(s) to next-up", domain.StatusNextUp),
+		newTransitionCmd(app, "ready", "Move task(s) to ready-to-start", domain.StatusReadyToStart),
 		newTransitionCmd(app, "complete", "Move task(s) to completed", domain.StatusCompleted),
 		// defer has its own builder: it mirrors newTransitionCmd but adds the optional
 		// --until snooze date (revisit_at), so the move and the field-set share one verb.
 		newDeferCmd(app),
 		newTransitionCmd(app, "deprecate", "Move task(s) to deprecated", domain.StatusDeprecated),
+		// Hidden back-compat: the old hierarchy-flavored verbs still work (and warn)
+		// so existing scripts/muscle memory don't hard-break, but they're off the
+		// help surface so the dissonant names don't linger in the UI.
+		deprecatedTransitionCmd(app, "promote", "next", domain.StatusNextUp),
+		deprecatedTransitionCmd(app, "demote", "ready", domain.StatusReadyToStart),
 	)
 	return cmd
 }
@@ -425,6 +433,17 @@ func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Comm
 			return runTransition(app, to, args)
 		},
 	}
+}
+
+// deprecatedTransitionCmd builds a hidden back-compat alias for a renamed verb:
+// it behaves exactly like newTransitionCmd(oldVerb) but is hidden from help and
+// prints cobra's deprecation notice pointing at the new name. Lets `task promote`
+// keep working (with a nudge) after the rename to `task next`/`task ready`.
+func deprecatedTransitionCmd(app *App, oldVerb, newVerb string, to domain.Status) *cobra.Command {
+	cmd := newTransitionCmd(app, oldVerb, "Move task(s) to "+string(to), to)
+	cmd.Hidden = true
+	cmd.Deprecated = "use `task " + newVerb + "` (lifecycle verbs now name the destination status)"
+	return cmd
 }
 
 // runTransition moves each task to status `to`, via the shared runMoves report.

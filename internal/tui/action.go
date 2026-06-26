@@ -26,8 +26,8 @@ type transition struct {
 // taskTransitions are the task status moves (the working-set lifecycle).
 var taskTransitions = []transition{
 	{"start", string(domain.StatusInProgress), false},
-	{"promote", string(domain.StatusNextUp), false},
-	{"demote", string(domain.StatusReadyToStart), false},
+	{"next", string(domain.StatusNextUp), false},
+	{"ready", string(domain.StatusReadyToStart), false},
 	{"complete", string(domain.StatusCompleted), false},
 	{"defer", string(domain.StatusDeferred), false},
 	{"deprecate", string(domain.StatusDeprecated), true},

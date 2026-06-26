@@ -27,13 +27,13 @@ Work with tasks
 * [tskflwctl task append](tskflwctl_task_append.md)	 - Append a section to a task's body (atomic; agent-facing)
 * [tskflwctl task complete](tskflwctl_task_complete.md)	 - Move task(s) to completed
 * [tskflwctl task defer](tskflwctl_task_defer.md)	 - Move task(s) to deferred (optionally with a revisit date)
-* [tskflwctl task demote](tskflwctl_task_demote.md)	 - Move task(s) to ready-to-start
 * [tskflwctl task deprecate](tskflwctl_task_deprecate.md)	 - Move task(s) to deprecated
 * [tskflwctl task edit](tskflwctl_task_edit.md)	 - Open a task in your editor (whole file; re-validated on save)
 * [tskflwctl task list](tskflwctl_task_list.md)	 - List tasks (active by default)
 * [tskflwctl task move](tskflwctl_task_move.md)	 - Transition task(s) to <status> (generic escape hatch)
 * [tskflwctl task new](tskflwctl_task_new.md)	 - Create a new task (validated, handoff-ready scaffold)
-* [tskflwctl task promote](tskflwctl_task_promote.md)	 - Move task(s) to next-up
+* [tskflwctl task next](tskflwctl_task_next.md)	 - Move task(s) to next-up
+* [tskflwctl task ready](tskflwctl_task_ready.md)	 - Move task(s) to ready-to-start
 * [tskflwctl task set](tskflwctl_task_set.md)	 - Set one or more frontmatter fields (validated, single atomic write)
 * [tskflwctl task show](tskflwctl_task_show.md)	 - Show a task's metadata and body
 * [tskflwctl task start](tskflwctl_task_start.md)	 - Move task(s) to in-progress

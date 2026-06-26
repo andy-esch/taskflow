@@ -1,22 +1,22 @@
-## tskflwctl task demote
+## tskflwctl task next
 
-Move task(s) to ready-to-start
+Move task(s) to next-up
 
 ```
-tskflwctl task demote <task>... [flags]
+tskflwctl task next <task>... [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl task demote my-task
-  tskflwctl task demote task-a task-b
+  tskflwctl task next my-task
+  tskflwctl task next task-a task-b
 ```
 
 ### Options
 
 ```
-  -h, --help   help for demote
+  -h, --help   help for next
 ```
 
 ### Options inherited from parent commands
