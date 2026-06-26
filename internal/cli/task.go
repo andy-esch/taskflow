@@ -161,7 +161,7 @@ func newTaskListCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List tasks (active by default)",
-		Example:     "  tskflwctl task list\n  tskflwctl task list -q --tag tui | xargs tskflwctl task start\n  tskflwctl task list -o table -c slug,status,epic",
+		Example:     "  tskflwctl task list\n  tskflwctl task list -q --tag tui | xargs tskflwctl task start\n  tskflwctl task list -o table -c slug,status,epic\n  tskflwctl task list --revisit-due -q | xargs tskflwctl task next   # resume snoozed tasks now due",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -185,6 +185,7 @@ func newTaskListCmd(app *App) *cobra.Command {
 	cmd.Flags().StringVar(&filter.Epic, "epic", "", "filter by epic")
 	cmd.Flags().StringVar(&filter.Tag, "tag", "", "filter by tag")
 	cmd.Flags().BoolVar(&filter.All, "all", false, "include completed/deprecated/deferred")
+	cmd.Flags().BoolVar(&filter.RevisitDue, "revisit-due", false, "only deferred tasks whose revisit date has arrived (composes with --epic/--tag/-c)")
 	_ = cmd.RegisterFlagCompletionFunc("status", completeStatusValues)
 	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
 	return cmd

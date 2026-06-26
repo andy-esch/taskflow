@@ -358,7 +358,8 @@ func TestService_Summary(t *testing.T) {
 // TestService_Summary_RevisitDue pins the snooze nudge: only deferred tasks whose
 // revisit_at has arrived count toward RevisitDue. Uses a clearly-past date (always
 // due) and a clearly-future one (never due) so it stays robust against the wall
-// clock. A revisit_at on a non-deferred task is ignored (we never auto-clear it).
+// clock. A revisit_at on a non-deferred task is ignored by the count (Move clears
+// it on leaving deferred, so such a value only arises via a manual `task set`).
 func TestService_Summary_RevisitDue(t *testing.T) {
 	svc := NewService(&fakeStore{
 		tasks: []domain.Task{

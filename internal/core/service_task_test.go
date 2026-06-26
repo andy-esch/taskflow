@@ -109,3 +109,47 @@ func TestDeferTask_BareDeferSkipsSetFields(t *testing.T) {
 		t.Errorf("bare defer should Move once and never SetFields, got move=%d set=%d", st.moveCalls, st.setCalls)
 	}
 }
+
+// TestListTasks_RevisitDue pins the `task list --revisit-due` predicate: only
+// deferred tasks whose revisit_at is on or before the (injected) clock day are
+// returned — today counts as due, future/no-date don't, and a revisit_at on a
+// non-deferred task is ignored. It composes with the other filters.
+func TestListTasks_RevisitDue(t *testing.T) {
+	now := func() time.Time { return time.Date(2026, 6, 26, 0, 0, 0, 0, time.UTC) }
+	svc := NewService(&fakeStore{
+		tasks: []domain.Task{
+			{Slug: "due-past", Status: domain.StatusDeferred, RevisitAt: "2020-01-01", Tags: []string{"net"}},
+			{Slug: "due-today", Status: domain.StatusDeferred, RevisitAt: "2026-06-26", Tags: []string{"ui"}},
+			{Slug: "future", Status: domain.StatusDeferred, RevisitAt: "2099-01-01"},
+			{Slug: "no-date", Status: domain.StatusDeferred},
+			{Slug: "active", Status: domain.StatusReadyToStart, RevisitAt: "2020-01-01"}, // not deferred → excluded
+		},
+	}, WithClock(now))
+
+	// --revisit-due alone: the two deferred tasks whose snooze date has arrived
+	// (today is due), nothing else — and it bypasses the active-only default.
+	got, _, err := svc.ListTasks(TaskFilter{RevisitDue: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set := slugSet(got); len(set) != 2 || !set["due-past"] || !set["due-today"] {
+		t.Errorf("--revisit-due = %v, want {due-past, due-today}", set)
+	}
+
+	// Composes with --tag.
+	got, _, err = svc.ListTasks(TaskFilter{RevisitDue: true, Tag: "ui"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set := slugSet(got); len(set) != 1 || !set["due-today"] {
+		t.Errorf("--revisit-due --tag ui = %v, want {due-today}", set)
+	}
+}
+
+func slugSet(tasks []domain.Task) map[string]bool {
+	m := map[string]bool{}
+	for _, t := range tasks {
+		m[t.Slug] = true
+	}
+	return m
+}

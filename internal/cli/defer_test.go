@@ -301,3 +301,52 @@ func TestTaskSet_RevisitAt(t *testing.T) {
 		t.Errorf("task set --unset revisit_at should remove the field:\n%s", got)
 	}
 }
+
+// writeDeferred writes a deferred task fixture (optionally with a revisit_at) into
+// root's deferred bucket — for the `task list --revisit-due` filter tests.
+func writeDeferred(t *testing.T, root, name, revisitAt string) {
+	t.Helper()
+	fm := "---\nstatus: deferred\ndescription: " + name + "\ntags: [seed]\n"
+	if revisitAt != "" {
+		fm += "revisit_at: \"" + revisitAt + "\"\n"
+	}
+	fm += "---\n# " + name + "\n"
+	dir := filepath.Join(root, "tasks", "deferred")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(fm), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestTaskList_RevisitDue pins the focused triage query: --revisit-due lists only
+// deferred tasks whose revisit date has arrived (past date = always due; future =
+// never; no date = never), excludes active tasks, and feeds -q/--json. Past/future
+// dates keep it robust against the wall clock without injecting one.
+func TestTaskList_RevisitDue(t *testing.T) {
+	root := setupRepo(t)                            // alpha (ready-to-start) + beta (in-progress)
+	writeDeferred(t, root, "overdue", "2020-01-01") // due
+	writeDeferred(t, root, "later", "2099-01-01")   // not due
+	writeDeferred(t, root, "parked", "")            // indefinite, not due
+
+	// -q emits just the due slugs (ready for `| xargs task next`).
+	out := runRoot(t, "-C", root, "task", "list", "--revisit-due", "-q")
+	if !strings.Contains(out, "overdue") {
+		t.Errorf("--revisit-due should list the overdue task:\n%s", out)
+	}
+	for _, excluded := range []string{"later", "parked", "alpha", "beta"} {
+		if strings.Contains(out, excluded) {
+			t.Errorf("--revisit-due must exclude %q (not deferred-and-due):\n%s", excluded, out)
+		}
+	}
+
+	// --json returns the standard tasks envelope, narrowed to the due task.
+	js := runRoot(t, "-C", root, "--json", "task", "list", "--revisit-due")
+	if !strings.Contains(js, `"slug":"overdue"`) {
+		t.Errorf("--revisit-due --json should carry the due task:\n%s", js)
+	}
+	if strings.Contains(js, `"slug":"later"`) || strings.Contains(js, `"slug":"parked"`) {
+		t.Errorf("--revisit-due --json should exclude not-due deferred tasks:\n%s", js)
+	}
+}

@@ -56,7 +56,7 @@ import (
 // epics, unfixable task issues), so a --json consumer learns the residual breakage
 // without re-running plain lint.
 // 1.16: task payloads carry `revisit_at` — the optional snooze-until date set by
-// `task defer --until`; the `status` summary envelope carries `revisit_due` (the
+// `task defer`; the `status` summary envelope carries `revisit_due` (the
 // count of deferred tasks whose revisit_at has arrived) alongside `misfiled`; and
 // the move report (`task defer --json`) carries `revisit_at` per item so a preview
 // and the real run both confirm the snooze.
@@ -169,7 +169,7 @@ func TaskMutationJSON(w io.Writer, t domain.Task, body string, dryRun bool) erro
 type MoveResult struct {
 	Slug      string `json:"slug"`
 	To        string `json:"to"`
-	RevisitAt string `json:"revisit_at,omitempty" jsonschema:"description=revisit (snooze-until) date recorded by task defer --until"`
+	RevisitAt string `json:"revisit_at,omitempty" jsonschema:"description=revisit (snooze-until) date recorded by task defer"`
 	Error     string `json:"error,omitempty"`
 }
 
