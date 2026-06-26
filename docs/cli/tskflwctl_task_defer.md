@@ -1,6 +1,6 @@
 ## tskflwctl task defer
 
-Move task(s) to deferred
+Move task(s) to deferred (optionally with a revisit date)
 
 ```
 tskflwctl task defer <task>... [flags]
@@ -10,13 +10,15 @@ tskflwctl task defer <task>... [flags]
 
 ```
   tskflwctl task defer my-task
+  tskflwctl task defer my-task --until 2026-09-01   # snooze until a date
   tskflwctl task defer task-a task-b
 ```
 
 ### Options
 
 ```
-  -h, --help   help for defer
+  -h, --help           help for defer
+      --until string   revisit date YYYY-MM-DD (snooze until); records revisit_at on each task
 ```
 
 ### Options inherited from parent commands

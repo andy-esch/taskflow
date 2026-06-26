@@ -98,6 +98,30 @@ func (s *Service) Move(slug string, to domain.Status, dryRun bool) (domain.Task,
 	return s.store.Move(slug, to, time.Now(), dryRun)
 }
 
+// DeferTask moves a task to deferred and, when until is non-empty, records it as
+// the revisit_at ("snooze until") date — the two halves of `task defer --until`.
+// The date is set through the same validated, surgical SetFields path `task set`
+// uses, so it can't write a form the linter rejects; the caller validates the
+// date up front. A bare defer (empty until) is exactly Move(StatusDeferred).
+// dryRun previews the move without writing; the field would be set on the real
+// run, so the previewed task carries the would-be revisit_at for the report.
+func (s *Service) DeferTask(slug, until string, dryRun bool) (domain.Task, error) {
+	t, err := s.Move(slug, domain.StatusDeferred, dryRun)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	if until == "" {
+		return t, nil
+	}
+	if dryRun {
+		// Nothing was written, so the moved file isn't in deferred/ yet; reflect the
+		// would-be field in the preview without touching disk.
+		t.RevisitAt = until
+		return t, nil
+	}
+	return s.SetFields(slug, map[string]any{"revisit_at": until}, false, false)
+}
+
 // SetFields validates and applies frontmatter updates to a task (stamping
 // updated_at) in a single atomic write. On any invalid value it returns
 // ErrValidation and nothing is written.

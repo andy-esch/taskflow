@@ -122,9 +122,12 @@ func TestWriteTablePlain_TaskExtractors(t *testing.T) {
 		Epic: "20-cli", Updated: "2026-06-19", Description: "do the thing",
 	}})
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
-	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription" {
+	// revisit_at is appended LAST (after description) so the pre-existing default
+	// columns kept their positions; empty here (no snooze date on the fixture).
+	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at" {
 		t.Errorf("task header: %q", lines[0])
 	}
+	// The trailing tab for the empty revisit_at cell is stripped by TrimSpace above.
 	if lines[1] != "alpha\tin-progress\t2\thigh\t20-cli\t2026-06-19\tdo the thing" {
 		t.Errorf("task row: %q", lines[1])
 	}
@@ -179,7 +182,7 @@ func TestWriteTablePlain_AuditExtractors(t *testing.T) {
 func TestWriteTablePlain_EmptyIsHeaderOnly(t *testing.T) {
 	var b bytes.Buffer
 	WriteTablePlain(&b, TaskColumns(), nil)
-	if got := strings.TrimSpace(b.String()); got != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription" {
+	if got := strings.TrimSpace(b.String()); got != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at" {
 		t.Errorf("empty table should be header-only, got %q", got)
 	}
 }
@@ -204,7 +207,7 @@ func TestWriteCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
-	if lines[0] != "slug,status,tier,priority,epic,updated,description" {
+	if lines[0] != "slug,status,tier,priority,epic,updated,description,revisit_at" {
 		t.Errorf("csv header: %q", lines[0])
 	}
 	// A cell containing a comma must be RFC 4180 quoted (this is exactly what

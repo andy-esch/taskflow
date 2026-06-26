@@ -83,8 +83,24 @@ func ValidateDate(value string) error {
 }
 
 var dateFields = map[string]bool{
-	"created": true, "updated_at": true, "started_at": true,
+	"created": true, "updated_at": true, "started_at": true, "revisit_at": true,
 	"completed_at": true, "deprecated_at": true, "deferred_at": true, "audited": true,
+}
+
+// IsRevisitDue reports whether a deferred task's revisit ("snooze until") date
+// has arrived: revisitAt is on or before now's calendar day. An empty or invalid
+// date is never due (parking a task with no revisit date stays indefinite, and a
+// malformed value must not masquerade as overdue). now is injected so the
+// dashboard's "is it due?" comparison stays deterministic in tests. Compared as
+// calendar days so a date set for *today* nudges today, not only once it has
+// strictly passed.
+func IsRevisitDue(revisitAt string, now time.Time) bool {
+	d, err := time.Parse(time.DateOnly, revisitAt)
+	if err != nil {
+		return false
+	}
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	return !d.After(today)
 }
 
 // ValidateField checks a constrained frontmatter field from its string value —

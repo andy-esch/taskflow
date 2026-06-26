@@ -19,7 +19,8 @@ type Task struct {
 	Effort      string   `yaml:"effort"`
 	Created     string   `yaml:"created"`
 	Updated     string   `yaml:"updated_at"`
-	StartedAt   string   `yaml:"started_at"` // stamped when a task enters in-progress (incl. `new --start`)
+	StartedAt   string   `yaml:"started_at"`           // stamped when a task enters in-progress (incl. `new --start`)
+	RevisitAt   string   `yaml:"revisit_at,omitempty"` // optional "snooze until" date set by `task defer --until`
 	Tags        []string `yaml:"tags"`
 }
 

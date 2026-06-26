@@ -336,6 +336,36 @@ func TestSummaryHuman_NoAudits(t *testing.T) {
 	}
 }
 
+// TestSummary_RevisitDueNudge pins the snooze surface: a non-zero RevisitDue
+// renders the ⏰ nudge in the human dashboard and carries revisit_due in the JSON
+// envelope; zero renders no nudge.
+func TestSummary_RevisitDueNudge(t *testing.T) {
+	s := core.Summary{RevisitDue: 2}
+	var out bytes.Buffer
+	if err := SummaryHuman(&out, NewStyle(false), s); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "⏰ 2 deferred due to revisit") {
+		t.Errorf("expected revisit nudge in dashboard:\n%s", out.String())
+	}
+	out.Reset()
+	if err := SummaryJSON(&out, s); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"revisit_due":2`) {
+		t.Errorf("expected revisit_due:2 in summary json:\n%s", out.String())
+	}
+
+	// Zero: no nudge in the dashboard (the field is still always present in JSON).
+	out.Reset()
+	if err := SummaryHuman(&out, NewStyle(false), core.Summary{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "deferred due to revisit") {
+		t.Errorf("no revisit nudge expected when RevisitDue is 0:\n%s", out.String())
+	}
+}
+
 func TestFixOutputs(t *testing.T) {
 	results := []domain.FixResult{{Path: "tasks/ready-to-start/a.md", Changes: []string{"tags: normalized to a YAML list"}}}
 	var out bytes.Buffer

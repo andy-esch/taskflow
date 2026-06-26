@@ -69,6 +69,7 @@
   "github.com/andy-esch/taskflow/internal/domain.Status": "Status is a task lifecycle state.",
   "github.com/andy-esch/taskflow/internal/domain.Task": "Task is a planning task.",
   "github.com/andy-esch/taskflow/internal/domain.Task.Declared": "Declared is the status the frontmatter literally claimed. Status is the\nauthoritative one (its directory); the two diverge only when a file is\nmisfiled — see Misfiled.",
+  "github.com/andy-esch/taskflow/internal/domain.Task.RevisitAt": "optional \"snooze until\" date set by `task defer --until`",
   "github.com/andy-esch/taskflow/internal/domain.Task.StartedAt": "stamped when a task enters in-progress (incl. `new --start`)",
   "github.com/andy-esch/taskflow/internal/domain.UnsetField": "UnsetField is a sentinel value in a SetFields update map: the key is removed from the frontmatter instead of being assigned."
 }

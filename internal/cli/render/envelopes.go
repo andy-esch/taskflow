@@ -73,6 +73,7 @@ type SummaryEnvelope struct {
 	Epics         []epicJSON           `json:"epics"`
 	OpenAudits    []auditJSON          `json:"open_audits,omitempty"`
 	Misfiled      int                  `json:"misfiled"`
+	RevisitDue    int                  `json:"revisit_due"`
 	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
 }
 

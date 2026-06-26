@@ -41,11 +41,11 @@ func TestTaskList_Table(t *testing.T) {
 	if len(lines) < 2 {
 		t.Fatalf("-o table needs a header + ≥1 row:\n%q", out)
 	}
-	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription" {
+	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at" {
 		t.Errorf("-o table header wrong: %q", lines[0])
 	}
-	if cols := strings.Split(lines[1], "\t"); len(cols) != 7 {
-		t.Errorf("-o table row should have 7 tab-separated columns, got %d: %q", len(cols), lines[1])
+	if cols := strings.Split(lines[1], "\t"); len(cols) != 8 {
+		t.Errorf("-o table row should have 8 tab-separated columns, got %d: %q", len(cols), lines[1])
 	}
 }
 
@@ -128,7 +128,7 @@ func TestColumns_JSONProjection(t *testing.T) {
 func TestTable_EmptyIsHeaderOnly(t *testing.T) {
 	root := setupRepo(t) // alpha/beta have no tags, so --tag filters to empty
 	out := strings.TrimSpace(runRoot(t, "-C", root, "task", "list", "--tag", "zzz-none", "-o", "table"))
-	if out != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription" {
+	if out != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at" {
 		t.Errorf("empty -o table should be header-only, got %q", out)
 	}
 	if q := runRoot(t, "-C", root, "task", "list", "--tag", "zzz-none", "-q"); q != "" {
@@ -177,11 +177,11 @@ func TestTaskList_CSV(t *testing.T) {
 	root := setupRepo(t)
 	out := runRoot(t, "-C", root, "task", "list", "-o", "csv")
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if lines[0] != "slug,status,tier,priority,epic,updated,description" {
+	if lines[0] != "slug,status,tier,priority,epic,updated,description,revisit_at" {
 		t.Errorf("-o csv header wrong: %q", lines[0])
 	}
-	if cols := strings.Split(lines[1], ","); len(cols) != 7 {
-		t.Errorf("-o csv row should have 7 comma-separated columns, got %d: %q", len(cols), lines[1])
+	if cols := strings.Split(lines[1], ","); len(cols) != 8 {
+		t.Errorf("-o csv row should have 8 comma-separated columns, got %d: %q", len(cols), lines[1])
 	}
 	// -c projects csv too (csv is columnar, like table).
 	proj := runRoot(t, "-C", root, "task", "list", "-o", "csv", "-c", "slug,status")

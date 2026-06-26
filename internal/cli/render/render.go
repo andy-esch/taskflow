@@ -55,7 +55,10 @@ import (
 // carries `remaining` — the lint findings `--fix` could NOT repair (report-only
 // epics, unfixable task issues), so a --json consumer learns the residual breakage
 // without re-running plain lint.
-const SchemaVersion = "1.15"
+// 1.16: task payloads carry `revisit_at` — the optional snooze-until date set by
+// `task defer --until`; the `status` summary envelope carries `revisit_due` (the
+// count of deferred tasks whose revisit_at has arrived) alongside `misfiled`.
+const SchemaVersion = "1.16"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -267,6 +270,9 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		writeTable(w, st.width, nil, rows)
 	}
 
+	if s.RevisitDue > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⏰ %d deferred due to revisit (snooze date reached; `task promote`/`demote` to resume)", s.RevisitDue)))
+	}
 	if s.Misfiled > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (status ≠ folder; run `lint --fix`)", s.Misfiled)))
 	}
@@ -324,7 +330,7 @@ func SummaryJSON(w io.Writer, s core.Summary) error {
 	}
 	return encodeJSON(w, SummaryEnvelope{
 		SchemaVersion: SchemaVersion, Counts: counts, InProgress: inprog,
-		Epics: epics, OpenAudits: audits, Misfiled: s.Misfiled, Unreadable: s.Problems,
+		Epics: epics, OpenAudits: audits, Misfiled: s.Misfiled, RevisitDue: s.RevisitDue, Unreadable: s.Problems,
 	})
 }
 

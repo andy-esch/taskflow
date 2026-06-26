@@ -237,6 +237,10 @@ func TaskColumns() []Column[domain.Task] {
 			return t.Created
 		}},
 		{"description", "one-line summary", func(t domain.Task) string { return t.Description }},
+		// revisit_at is appended LAST so adding it doesn't shift the pre-existing
+		// default `task list -o table`/`csv` columns (description stays column 7);
+		// it's still `-c`-selectable in any position the caller asks.
+		{"revisit_at", "snooze-until date (deferred tasks)", func(t domain.Task) string { return t.RevisitAt }},
 	}
 }
 

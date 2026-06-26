@@ -355,6 +355,28 @@ func TestService_Summary(t *testing.T) {
 	}
 }
 
+// TestService_Summary_RevisitDue pins the snooze nudge: only deferred tasks whose
+// revisit_at has arrived count toward RevisitDue. Uses a clearly-past date (always
+// due) and a clearly-future one (never due) so it stays robust against the wall
+// clock. A revisit_at on a non-deferred task is ignored (we never auto-clear it).
+func TestService_Summary_RevisitDue(t *testing.T) {
+	svc := NewService(&fakeStore{
+		tasks: []domain.Task{
+			{Slug: "past-due", Status: domain.StatusDeferred, RevisitAt: "2020-01-01"},        // due
+			{Slug: "future", Status: domain.StatusDeferred, RevisitAt: "2099-01-01"},          // not due
+			{Slug: "no-date", Status: domain.StatusDeferred},                                  // indefinite, not due
+			{Slug: "active-past", Status: domain.StatusReadyToStart, RevisitAt: "2020-01-01"}, // not deferred → ignored
+		},
+	})
+	s, err := svc.Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.RevisitDue != 1 {
+		t.Errorf("RevisitDue = %d, want 1 (only the past-due deferred task)", s.RevisitDue)
+	}
+}
+
 func TestService_ShowEpic(t *testing.T) {
 	svc := NewService(&fakeStore{
 		epics: []domain.Epic{{ID: "e1"}},

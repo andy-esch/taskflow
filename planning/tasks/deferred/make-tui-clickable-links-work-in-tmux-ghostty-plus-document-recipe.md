@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: deferred
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: TUI OSC 8 clickable links work in bare terminals but not in tmux+ghostty. Apply terminal-features hyperlinks + tmux restart + shift-cmd-click; then document the recipe in the README.
 effort: Unknown
@@ -11,6 +11,7 @@ tags: [tui, docs]
 created: "2026-06-24"
 updated_at: "2026-06-25"
 started_at: "2026-06-25"
+deferred_at: "2026-06-25"
 ---
 ## Objective
 
