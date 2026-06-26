@@ -9,6 +9,7 @@ priority: low
 autonomy_level: 3
 tags: [cli]
 created: "2026-06-25"
+updated_at: "2026-06-25"
 ---
 # Add a mutable updated/modified timestamp to audits
 
@@ -47,3 +48,7 @@ that would bump this field).
 
 Editing/appending to an audit stamps a mutable `updated` field, the immutable
 `date` is untouched, and both surface in show/JSON.
+
+## Scope expansion 2026-06-25 — also epics
+
+The adversarial review flagged the same gap for epics: tasks carry `updated_at`, but `epic set`/`MoveEpic` stamp nothing and epics have no modified field either. Treat this as ONE decision across the non-task entities: do epics + audits get a mutable modification timestamp (bumped on set/move/edit/append), and what is it named (`updated_at` to match tasks)? Audit `date` stays immutable; this is a separate, mutable field.
