@@ -24,10 +24,14 @@ var statusViews = []statusView{
 }
 
 // statusViewAliases are extra `:` words that resolve to a canonical value but are
-// not part of the s/S cycle.
+// not part of the s/S cycle. "revisit" is a SYNTHETIC view (not a status): it
+// loads deferred tasks whose revisit date has arrived — the TUI mirror of
+// `task list --revisit-due` (see loadTaskList) — so it lives here, off the cycle
+// and outside the status-coverage guard.
 var statusViewAliases = []statusView{
 	{"working", ""},
 	{"working-set", ""},
+	{"revisit", "revisit"},
 }
 
 // auditViews is the audits tab's bucket axis — the s/S cycle order AND the `:`

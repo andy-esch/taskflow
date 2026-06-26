@@ -337,15 +337,15 @@ func TestSummaryHuman_NoAudits(t *testing.T) {
 }
 
 // TestSummary_RevisitDueNudge pins the snooze surface: a non-zero RevisitDue
-// renders the ⏰ nudge in the human dashboard and carries revisit_due in the JSON
-// envelope; zero renders no nudge.
+// renders the ↻ nudge (no emoji) in the human dashboard and carries revisit_due in
+// the JSON envelope; zero renders no nudge.
 func TestSummary_RevisitDueNudge(t *testing.T) {
 	s := core.Summary{RevisitDue: 2}
 	var out bytes.Buffer
 	if err := SummaryHuman(&out, NewStyle(false), s); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "⏰ 2 deferred due to revisit") {
+	if !strings.Contains(out.String(), "↻ 2 deferred due to revisit") {
 		t.Errorf("expected revisit nudge in dashboard:\n%s", out.String())
 	}
 	out.Reset()

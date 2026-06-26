@@ -59,9 +59,15 @@ func (taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 		return
 	}
 	tok := theme.Status(it.t.Status)
+	// One marker cell: a misfiled ⚠ (data-integrity warning) wins; otherwise a ↻
+	// when a deferred task's revisit (snooze) date has arrived — the per-row twin
+	// of the `:revisit` view, computed against the wall clock like the date.
 	marker := " "
-	if it.t.Misfiled() {
+	switch {
+	case it.t.Misfiled():
 		marker = fg(theme.ColorYellow, "⚠")
+	case revisitDue(it.t):
+		marker = fg(theme.ColorYellow, "↻")
 	}
 	date := theme.RelativeDate(theme.TaskDate(it.t))
 

@@ -280,7 +280,7 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 	}
 
 	if s.RevisitDue > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⏰ %d deferred due to revisit (snooze date reached; `task ready`/`task next` to resume)", s.RevisitDue)))
+		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("↻ %d deferred due to revisit (snooze date reached; `task ready`/`task next` to resume)", s.RevisitDue)))
 	}
 	if s.Misfiled > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (status ≠ folder; run `lint --fix`)", s.Misfiled)))

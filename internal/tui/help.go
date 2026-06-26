@@ -20,7 +20,7 @@ type helpSection struct {
 var helpSections = []helpSection{
 	{"Global", []helpEntry{
 		{"ctrl+p", "command palette — fuzzy jump to anything / run a command"},
-		{": ", "command / jump (entity, status, or verb)"},
+		{": ", "command / jump (entity, status, or verb; :revisit = deferred tasks now due)"},
 		{"/", "filter the list (slug, desc, tags)"},
 		{"F", "filter mode: fuzzy ⇄ substring (default fuzzy)"},
 		{"o / O", "cycle sort column / reverse"},

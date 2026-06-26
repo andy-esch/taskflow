@@ -2,6 +2,7 @@ package tui
 
 import (
 	"sort"
+	"time"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -29,6 +30,8 @@ func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 			// active-only default
 		case "all":
 			f.All = true
+		case "revisit":
+			f.RevisitDue = true // synthetic view: deferred tasks whose snooze date has arrived
 		default:
 			f.Status = view
 		}
@@ -36,8 +39,13 @@ func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 		if err != nil {
 			return errMsg{kind: entityTasks, gen: gen, err: err}
 		}
-		if view == "" {
+		switch view {
+		case "":
 			sortWorkingSet(tasks) // working-set order only for the default view
+		case "revisit":
+			sortByRevisitDate(tasks) // oldest-overdue first
+		case string(domain.StatusDeferred):
+			sortRevisitDueFirst(tasks) // browsing all deferred: the due ones lead
 		}
 		items := make([]list.Item, 0, len(tasks))
 		for _, t := range tasks {
@@ -146,5 +154,28 @@ func rankOf(s domain.Status) int {
 func sortWorkingSet(tasks []domain.Task) {
 	sort.SliceStable(tasks, func(i, j int) bool {
 		return rankOf(tasks[i].Status) < rankOf(tasks[j].Status)
+	})
+}
+
+// revisitDue reports whether a task is parked in deferred AND its revisit date has
+// arrived — the same predicate `task list --revisit-due` uses, evaluated against
+// the wall clock at load time (refreshed on every reload, like the relative dates).
+func revisitDue(t domain.Task) bool {
+	return t.Status == domain.StatusDeferred && domain.IsRevisitDue(t.RevisitAt, time.Now())
+}
+
+// sortRevisitDueFirst floats due-for-revisit deferred tasks to the top of the
+// `:deferred` view (stable otherwise), so a snooze that came due isn't buried.
+func sortRevisitDueFirst(tasks []domain.Task) {
+	sort.SliceStable(tasks, func(i, j int) bool {
+		return revisitDue(tasks[i]) && !revisitDue(tasks[j])
+	})
+}
+
+// sortByRevisitDate orders the `:revisit` view oldest-overdue first (every task
+// there is already due, so the date drives the order, not the marker).
+func sortByRevisitDate(tasks []domain.Task) {
+	sort.SliceStable(tasks, func(i, j int) bool {
+		return tasks[i].RevisitAt < tasks[j].RevisitAt
 	})
 }
