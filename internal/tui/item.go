@@ -27,8 +27,14 @@ func row(w io.Writer, m list.Model, index int, content string) {
 
 // --- tasks ---
 
-// taskItem adapts a domain.Task to a bubbles/list item.
-type taskItem struct{ t domain.Task }
+// taskItem adapts a domain.Task to a bubbles/list item. due is whether its revisit
+// (snooze) date has arrived — computed once at load against the service clock (see
+// loadTaskList), so the render path stays clock-free and a WithClock injection
+// reaches the marker too.
+type taskItem struct {
+	t   domain.Task
+	due bool
+}
 
 // FilterValue feeds the `/` fuzzy filter: slug, description, and tags so a tag
 // query (e.g. "/go") narrows the list (S2b broadened this from slug+desc).
@@ -60,13 +66,13 @@ func (taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 	}
 	tok := theme.Status(it.t.Status)
 	// One marker cell: a misfiled ⚠ (data-integrity warning) wins; otherwise a ↻
-	// when a deferred task's revisit (snooze) date has arrived — the per-row twin
-	// of the `:revisit` view, computed against the wall clock like the date.
+	// when a deferred task's revisit (snooze) date has arrived (it.due, set at load)
+	// — the per-row twin of the `:revisit` view.
 	marker := " "
 	switch {
 	case it.t.Misfiled():
 		marker = fg(theme.ColorYellow, "⚠")
-	case revisitDue(it.t):
+	case it.due:
 		marker = fg(theme.ColorYellow, "↻")
 	}
 	date := theme.RelativeDate(theme.TaskDate(it.t))

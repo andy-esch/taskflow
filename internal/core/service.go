@@ -55,6 +55,11 @@ func NewService(store Store, opts ...Option) *Service {
 	return s
 }
 
+// Now is the Service's wall clock (the injected one, default time.Now). Exposed so
+// the adapters compute snooze/revisit due-ness against the SAME clock the core
+// uses for its date stamps — a WithClock injection then governs everything.
+func (s *Service) Now() time.Time { return s.now() }
+
 // NewBuiltinTemplateService returns a Service backed only by the built-in
 // TemplateSource and no store — for the repo-less self-description surfaces
 // (`template list/show`, like `schema`). Only the template methods are safe to
@@ -128,7 +133,7 @@ func (s *Service) Summary() (Summary, error) {
 		// non-deferred task is only possible via a manual `task set`/edit; either
 		// way the nudge stays scoped to tasks parked in deferred/ whose snooze date
 		// has arrived.
-		if t.Status == domain.StatusDeferred && domain.IsRevisitDue(t.RevisitAt, now) {
+		if domain.IsTaskRevisitDue(t, now) {
 			revisitDue++
 		}
 	}

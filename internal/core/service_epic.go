@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -50,7 +49,7 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 		Description: p.Description,
 		Priority:    p.Priority,
 		Tags:        p.Tags,
-		Created:     time.Now().Format("2006-01-02"),
+		Created:     s.now().Format("2006-01-02"),
 	}
 	body := p.Body
 	if body == "" {

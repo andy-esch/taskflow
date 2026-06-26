@@ -40,18 +40,19 @@ func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 		if err != nil {
 			return errMsg{kind: entityTasks, gen: gen, err: err}
 		}
+		now := svc.Now() // one clock read drives both the sort and the per-row due flag
 		switch view {
 		case "":
 			tasks = dropArchived(tasks) // working view excludes completed/deprecated
-			sortWorkingView(tasks)      // active first, then deferred (due-for-revisit leading)
+			sortWorkingView(tasks, now) // active first, then deferred (due-for-revisit leading)
 		case "revisit":
 			sortByRevisitDate(tasks) // oldest-overdue first
 		case string(domain.StatusDeferred):
-			sortRevisitDueFirst(tasks) // browsing all deferred: the due ones lead
+			sortRevisitDueFirst(tasks, now) // browsing all deferred: the due ones lead
 		}
 		items := make([]list.Item, 0, len(tasks))
 		for _, t := range tasks {
-			items = append(items, taskItem{t})
+			items = append(items, taskItem{t: t, due: domain.IsTaskRevisitDue(t, now)})
 		}
 		return listLoadedMsg{kind: entityTasks, gen: gen, items: items, problems: problems}
 	}
@@ -153,15 +154,10 @@ func rankOf(s domain.Status) int {
 	return len(statusRank)
 }
 
-func sortWorkingSet(tasks []domain.Task) {
-	sort.SliceStable(tasks, func(i, j int) bool {
-		return rankOf(tasks[i].Status) < rankOf(tasks[j].Status)
-	})
-}
-
 // dropArchived removes completed/deprecated tasks — the genuinely "done" states —
 // from the working view. Deferred is NOT archived (it's "snoozed, come back"), so
-// it stays in view as a reminder.
+// it stays in view as a reminder. Filters in place (the slice is freshly returned
+// by ListTasks, so reusing its backing array is safe).
 func dropArchived(tasks []domain.Task) []domain.Task {
 	out := tasks[:0]
 	for _, t := range tasks {
@@ -175,28 +171,22 @@ func dropArchived(tasks []domain.Task) []domain.Task {
 // sortWorkingView orders the default view: active work first (by working-set rank),
 // then the deferred tail — and within deferred, the due-for-revisit ones lead, so a
 // fired snooze sits right under your active work instead of buried at the bottom.
-func sortWorkingView(tasks []domain.Task) {
+// now is the service clock, so "due" matches the marker and the core filter.
+func sortWorkingView(tasks []domain.Task, now time.Time) {
 	sort.SliceStable(tasks, func(i, j int) bool {
 		ri, rj := rankOf(tasks[i].Status), rankOf(tasks[j].Status)
 		if ri != rj {
 			return ri < rj
 		}
-		return revisitDue(tasks[i]) && !revisitDue(tasks[j])
+		return domain.IsTaskRevisitDue(tasks[i], now) && !domain.IsTaskRevisitDue(tasks[j], now)
 	})
-}
-
-// revisitDue reports whether a task is parked in deferred AND its revisit date has
-// arrived — the same predicate `task list --revisit-due` uses, evaluated against
-// the wall clock at load time (refreshed on every reload, like the relative dates).
-func revisitDue(t domain.Task) bool {
-	return t.Status == domain.StatusDeferred && domain.IsRevisitDue(t.RevisitAt, time.Now())
 }
 
 // sortRevisitDueFirst floats due-for-revisit deferred tasks to the top of the
 // `:deferred` view (stable otherwise), so a snooze that came due isn't buried.
-func sortRevisitDueFirst(tasks []domain.Task) {
+func sortRevisitDueFirst(tasks []domain.Task, now time.Time) {
 	sort.SliceStable(tasks, func(i, j int) bool {
-		return revisitDue(tasks[i]) && !revisitDue(tasks[j])
+		return domain.IsTaskRevisitDue(tasks[i], now) && !domain.IsTaskRevisitDue(tasks[j], now)
 	})
 }
 

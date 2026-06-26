@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -57,7 +56,7 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 		}
 		// "Up for revisit" = parked in deferred AND the snooze date has arrived;
 		// implies the deferred scope and composes with --epic/--tag below.
-		if f.RevisitDue && (t.Status != domain.StatusDeferred || !domain.IsRevisitDue(t.RevisitAt, now)) {
+		if f.RevisitDue && !domain.IsTaskRevisitDue(t, now) {
 			continue
 		}
 		if f.Epic != "" && t.Epic != f.Epic {
@@ -90,21 +89,21 @@ func (s *Service) EditTask(slug string, edit func(current string, prevErr error)
 // Frontmatter is preserved surgically and updated_at is stamped. Returns the
 // reloaded task and the resulting body.
 func (s *Service) ReplaceBody(slug, body string, dryRun bool) (domain.Task, string, error) {
-	return s.store.EditBody(slug, body, false, time.Now(), dryRun)
+	return s.store.EditBody(slug, body, false, s.now(), dryRun)
 }
 
 // AppendBody appends a section to a task's markdown body (`task append`),
 // separated by a blank line, in one atomic, validated write. Returns the reloaded
 // task and the resulting body.
 func (s *Service) AppendBody(slug, text string, dryRun bool) (domain.Task, string, error) {
-	return s.store.EditBody(slug, text, true, time.Now(), dryRun)
+	return s.store.EditBody(slug, text, true, s.now(), dryRun)
 }
 
 // Move transitions a task to the given status (lifecycle engine behind the
 // explicit verbs). Moving to the current status is an idempotent no-op.
 // dryRun validates everything and returns the would-be task without writing.
 func (s *Service) Move(slug string, to domain.Status, dryRun bool) (domain.Task, error) {
-	return s.store.Move(slug, to, time.Now(), dryRun)
+	return s.store.Move(slug, to, s.now(), dryRun)
 }
 
 // DeferTask moves a task to deferred and, when until is non-empty, records it as
@@ -200,7 +199,7 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 			}
 		}
 	}
-	withMeta["updated_at"] = time.Now().Format("2006-01-02")
+	withMeta["updated_at"] = s.now().Format("2006-01-02")
 	return s.store.SetFields(slug, withMeta, dryRun)
 }
 
@@ -329,7 +328,7 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 		Priority:    p.Priority,
 		Autonomy:    p.Autonomy,
 		Tags:        p.Tags,
-		Created:     time.Now().Format("2006-01-02"),
+		Created:     s.now().Format("2006-01-02"),
 	}
 	// `new` must not scaffold a file its own linter rejects: every active task needs
 	// tags, and a next-up/in-progress one needs a description. The same rule the

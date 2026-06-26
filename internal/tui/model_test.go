@@ -709,7 +709,7 @@ func TestModel_StaleListLoadDropped(t *testing.T) {
 		t.Fatalf("setup: want 2 items, got %d", n)
 	}
 	stale := listLoadedMsg{kind: entityTasks, gen: tab.loadGen - 1,
-		items: []list.Item{taskItem{domain.Task{Slug: "ghost", Status: domain.StatusInProgress}}}}
+		items: []list.Item{taskItem{t: domain.Task{Slug: "ghost", Status: domain.StatusInProgress}}}}
 	tm, _ := m.Update(stale)
 	m = tm.(Model)
 	if n := len(m.cur().list.Items()); n != 2 {
@@ -1096,7 +1096,7 @@ func TestStatusViewsCoverAllStatuses(t *testing.T) {
 }
 
 func TestTaskFilterValueIncludesTags(t *testing.T) {
-	it := taskItem{domain.Task{Slug: "x", Description: "desc", Tags: []string{"go", "cli"}}}
+	it := taskItem{t: domain.Task{Slug: "x", Description: "desc", Tags: []string{"go", "cli"}}}
 	fv := it.FilterValue()
 	for _, want := range []string{"x", "desc", "go", "cli"} {
 		if !strings.Contains(fv, want) {

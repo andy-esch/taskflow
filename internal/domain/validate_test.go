@@ -96,6 +96,27 @@ func TestIsRevisitDue(t *testing.T) {
 	}
 }
 
+func TestIsTaskRevisitDue(t *testing.T) {
+	now := time.Date(2026, 6, 26, 0, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name string
+		task Task
+		want bool
+	}{
+		{"deferred + past date", Task{Status: StatusDeferred, RevisitAt: "2020-01-01"}, true},
+		{"deferred + today", Task{Status: StatusDeferred, RevisitAt: "2026-06-26"}, true},
+		{"deferred + future date", Task{Status: StatusDeferred, RevisitAt: "2099-01-01"}, false},
+		{"deferred + no date", Task{Status: StatusDeferred}, false},
+		{"active + past date (never due — not deferred)", Task{Status: StatusInProgress, RevisitAt: "2020-01-01"}, false},
+		{"completed + past date", Task{Status: StatusCompleted, RevisitAt: "2020-01-01"}, false},
+	}
+	for _, c := range cases {
+		if got := IsTaskRevisitDue(c.task, now); got != c.want {
+			t.Errorf("%s: IsTaskRevisitDue = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestParseRevisitDate(t *testing.T) {
 	now := time.Date(2026, 6, 26, 14, 0, 0, 0, time.UTC) // a Friday
 	ok := []struct{ in, want string }{

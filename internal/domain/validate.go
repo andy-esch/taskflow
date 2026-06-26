@@ -104,6 +104,14 @@ func IsRevisitDue(revisitAt string, now time.Time) bool {
 	return !d.After(today)
 }
 
+// IsTaskRevisitDue reports whether a task is parked in deferred AND its revisit
+// ("snooze until") date has arrived — the single definition of "due for revisit",
+// shared by the status nudge, `task list --revisit-due`, and the TUI marker/view,
+// so the three can't drift. A revisit_at on a non-deferred task never counts.
+func IsTaskRevisitDue(t Task, now time.Time) bool {
+	return t.Status == StatusDeferred && IsRevisitDue(t.RevisitAt, now)
+}
+
 // relativeDate matches a future offset typed at the interactive defer prompt: a
 // count and a unit of days or weeks, optionally space-separated (e.g. "10d",
 // "2 weeks"). Months are deliberately NOT supported — their calendar arithmetic
