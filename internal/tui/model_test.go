@@ -709,7 +709,7 @@ func TestModel_StaleListLoadDropped(t *testing.T) {
 		t.Fatalf("setup: want 2 items, got %d", n)
 	}
 	stale := listLoadedMsg{kind: entityTasks, gen: tab.loadGen - 1,
-		items: []list.Item{taskItem{domain.Task{Slug: "ghost", Status: domain.StatusInProgress}}}}
+		items: []list.Item{taskItem{t: domain.Task{Slug: "ghost", Status: domain.StatusInProgress}}}}
 	tm, _ := m.Update(stale)
 	m = tm.(Model)
 	if n := len(m.cur().list.Items()); n != 2 {
@@ -1096,7 +1096,7 @@ func TestStatusViewsCoverAllStatuses(t *testing.T) {
 }
 
 func TestTaskFilterValueIncludesTags(t *testing.T) {
-	it := taskItem{domain.Task{Slug: "x", Description: "desc", Tags: []string{"go", "cli"}}}
+	it := taskItem{t: domain.Task{Slug: "x", Description: "desc", Tags: []string{"go", "cli"}}}
 	fv := it.FilterValue()
 	for _, want := range []string{"x", "desc", "go", "cli"} {
 		if !strings.Contains(fv, want) {
@@ -1152,7 +1152,7 @@ func TestModel_HelpScrollRevealsTail(t *testing.T) {
 	if v := ansi.Strip(m.View().Content); strings.Contains(v, "force-quit") {
 		t.Skip("terminal tall enough to show the tail without scrolling")
 	}
-	for i := 0; i < len(helpLines(m.focus)); i++ { // scroll past the clamp
+	for i := 0; i < len(helpLines(m.focus, m.cur().kind)); i++ { // scroll past the clamp
 		tm, _ = m.Update(press("j"))
 		m = tm.(Model)
 	}

@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -35,7 +34,7 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 	// is the only hard guard — an area that slugifies to nothing.
 	date := p.Date
 	if date == "" {
-		date = time.Now().Format("2006-01-02")
+		date = s.now().Format("2006-01-02")
 	}
 	if err := domain.ValidateDate(date); err != nil {
 		return domain.Audit{}, err

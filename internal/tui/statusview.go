@@ -11,9 +11,11 @@ type statusView struct {
 // statusViews is the single source of truth for task status views: the s/S cycle
 // order AND the `:` vocabulary both derive from it, so they can't drift. A test
 // (TestStatusViewsCoverAllStatuses) guards that it stays in sync with the domain
-// status set. "active" leads as the working-set default.
+// status set. "working" leads as the default: active work PLUS deferred (snoozed
+// tasks stay in view as reminders); only completed/deprecated are hidden by default
+// (see loadTaskList). "active" remains a back-compat alias for the same value.
 var statusViews = []statusView{
-	{"active", ""},
+	{"working", ""},
 	{"in-progress", "in-progress"},
 	{"next-up", "next-up"},
 	{"ready-to-start", "ready-to-start"},
@@ -24,10 +26,14 @@ var statusViews = []statusView{
 }
 
 // statusViewAliases are extra `:` words that resolve to a canonical value but are
-// not part of the s/S cycle.
+// not part of the s/S cycle. "revisit" is a SYNTHETIC view (not a status): it
+// loads deferred tasks whose revisit date has arrived — the TUI mirror of
+// `task list --revisit-due` (see loadTaskList) — so it lives here, off the cycle
+// and outside the status-coverage guard.
 var statusViewAliases = []statusView{
-	{"working", ""},
+	{"active", ""},
 	{"working-set", ""},
+	{"revisit", "revisit"},
 }
 
 // auditViews is the audits tab's bucket axis — the s/S cycle order AND the `:`

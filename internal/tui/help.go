@@ -26,7 +26,7 @@ var helpSections = []helpSection{
 		{"o / O", "cycle sort column / reverse"},
 		{"s / S", "cycle view: task status / audit bucket"},
 		{"m", "move — lifecycle (start/complete/defer/…); audits: close/reopen/defer; epics: activate/retire/deprecate"},
-		{"e", "edit fields in place — tasks: desc/priority/tags/effort/tier · epics: desc/priority/tags"},
+		{"e", "edit fields in place — tasks: desc/priority/tags/effort/tier (+revisit when deferred) · epics: desc/priority/tags"},
 		{"E", "open the whole file in $EDITOR (any entity; re-read on save)"},
 		{"f", "follow reference (task ⇄ epic)"},
 		{"ctrl+o", "jump back (follow history)"},
@@ -53,10 +53,22 @@ var helpSections = []helpSection{
 		{"R", "raw ⇄ pretty markdown"},
 		{"h / esc", "back to list (esc clears a find first)"},
 	}},
-	{"Notes", []helpEntry{
-		{"audits", "s/S or :open/:closed/:deferred/:all to switch bucket"},
-		{"find", "matches the rendered text on screen — R for the raw source"},
-	}},
+}
+
+// notesFor builds the context Notes for the ACTIVE entity — only that tab's view
+// vocabulary (tasks and audits each have a view axis; epics don't), plus the
+// generic find note. So the epics/tasks tabs never advertise audit views, and the
+// audits tab never shows task views (the `?` panel is page-specific, like the keys).
+func notesFor(kind entityKind) helpSection {
+	var entries []helpEntry
+	switch kind {
+	case entityTasks:
+		entries = append(entries, helpEntry{"views", "s/S or :working / :deferred / :revisit / :all"})
+	case entityAudits:
+		entries = append(entries, helpEntry{"views", "s/S or :open / :closed / :deferred / :all to switch bucket"})
+	}
+	entries = append(entries, helpEntry{"find", "matches the rendered text on screen — R for the raw source"})
+	return helpSection{"Notes", entries}
 }
 
 var (
@@ -70,7 +82,7 @@ var (
 // next, and Global LAST — global keys work everywhere, so they're the best-known
 // and least in need of surfacing in a context panel. The inactive pane's section
 // is hidden, so `?` shows what actually works right now.
-func helpSectionsFor(f focus) []helpSection {
+func helpSectionsFor(f focus, kind entityKind) []helpSection {
 	byTitle := make(map[string]helpSection, len(helpSections))
 	for _, s := range helpSections {
 		byTitle[s.title] = s
@@ -86,7 +98,7 @@ func helpSectionsFor(f focus) []helpSection {
 	} else {
 		add("List")
 	}
-	add("Notes")
+	out = append(out, notesFor(kind)) // page-specific: only the active tab's views
 	add("Global")
 	return out
 }
@@ -94,8 +106,8 @@ func helpSectionsFor(f focus) []helpSection {
 // helpLines builds the overlay's content lines (heading, sections, aligned
 // key→desc rows) for the current focus. Shared by helpBox (render) and the model's
 // scroll clamp, so both window the SAME content.
-func helpLines(f focus) []string {
-	sections := helpSectionsFor(f)
+func helpLines(f focus, kind entityKind) []string {
+	sections := helpSectionsFor(f, kind)
 	// Widest key column across the shown sections → aligned descriptions.
 	keyW := 0
 	for _, s := range sections {
@@ -120,8 +132,8 @@ func helpLines(f focus) []string {
 // When the content is taller than the box, scroll (clamped here, not in the
 // model — only render knows the box height) picks the visible window; j/k
 // scroll while the overlay is open.
-func helpBox(maxW, maxH, scroll int, f focus) string {
-	lines := helpLines(f)
+func helpBox(maxW, maxH, scroll int, f focus, kind entityKind) string {
+	lines := helpLines(f, kind)
 	const frameH = 2 // top+bottom border rows
 	if innerH := maxH - frameH; innerH > 0 && len(lines) > innerH {
 		maxScroll := len(lines) - innerH

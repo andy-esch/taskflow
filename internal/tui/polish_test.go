@@ -2,22 +2,23 @@ package tui
 
 import (
 	"testing"
+	"time"
 
 	"charm.land/lipgloss/v2"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// TestSortWorkingSet_UnknownStatusLast is the A4 guard the polish-batch acceptance
+// TestSortWorkingView_UnknownStatusLast is the A4 guard the polish-batch acceptance
 // requires: a foreign/legacy status (which the loader tolerates) must sort LAST in
-// the working set, not float up among in-progress work via a rank-0 map miss.
-func TestSortWorkingSet_UnknownStatusLast(t *testing.T) {
+// the working view, not float up among in-progress work via a rank-0 map miss.
+func TestSortWorkingView_UnknownStatusLast(t *testing.T) {
 	tasks := []domain.Task{
 		{Slug: "weird", Status: domain.Status("legacy-word")},
 		{Slug: "rts", Status: domain.StatusReadyToStart},
 		{Slug: "ip", Status: domain.StatusInProgress},
 	}
-	sortWorkingSet(tasks)
+	sortWorkingView(tasks, time.Now()) // no deferred tasks here, so the clock is irrelevant to the rank check
 	if tasks[0].Status != domain.StatusInProgress {
 		t.Errorf("in-progress should lead the working set, got %q", tasks[0].Status)
 	}

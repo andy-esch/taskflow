@@ -22,12 +22,14 @@ type deferStore struct {
 	lastSlug    string
 	lastUpdates map[string]any
 	dryRun      bool
+	moveNow     time.Time // the clock value Move was handed (to prove WithClock governs stamps)
 	setErr      error
 }
 
-func (s *deferStore) Move(slug string, to domain.Status, _ time.Time, dryRun bool) (domain.Task, error) {
+func (s *deferStore) Move(slug string, to domain.Status, now time.Time, dryRun bool) (domain.Task, error) {
 	s.moveCalls++
 	s.dryRun = dryRun
+	s.moveNow = now
 	return domain.Task{Slug: slug, Status: to}, nil
 }
 
@@ -152,4 +154,23 @@ func slugSet(tasks []domain.Task) map[string]bool {
 		m[t.Slug] = true
 	}
 	return m
+}
+
+// TestWithClock_GovernsWriteStamps pins the clock unification: an injected clock
+// drives the time handed to write paths (here store.Move's stamp time), not just
+// the revisit read paths — so WithClock makes date stamping deterministic too.
+func TestWithClock_GovernsWriteStamps(t *testing.T) {
+	fixed := time.Date(2031, 7, 8, 9, 0, 0, 0, time.UTC)
+	st := &deferStore{}
+	svc := NewService(st, WithClock(func() time.Time { return fixed }))
+
+	if _, err := svc.Move("x", domain.StatusInProgress, false); err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+	if !st.moveNow.Equal(fixed) {
+		t.Errorf("Move should stamp via the injected clock; got %v, want %v", st.moveNow, fixed)
+	}
+	if !svc.Now().Equal(fixed) {
+		t.Errorf("Service.Now() should expose the injected clock; got %v", svc.Now())
+	}
 }

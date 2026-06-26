@@ -1184,7 +1184,7 @@ func (m Model) helpMaxScroll() int {
 	if innerH <= 0 {
 		return 0
 	}
-	return max(len(helpLines(m.focus))-innerH, 0)
+	return max(len(helpLines(m.focus, m.cur().kind))-innerH, 0)
 }
 
 // renderBody is the pane layout: a loading note (or this tab's load error) until
