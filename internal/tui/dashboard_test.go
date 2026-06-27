@@ -299,6 +299,67 @@ func TestModel_DashboardInProgressShowsDateAligned(t *testing.T) {
 	}
 }
 
+// auditFindingsRepo writes an open audit with actionable findings (open +
+// in-progress) of mixed urgency/component, plus a "settled" open audit (every
+// finding resolved) that should read as ready-to-close.
+func auditFindingsRepo(t *testing.T) string {
+	t.Helper()
+	r := testutil.NewRepo(t)
+	r.Audit("open", "2026-06-27-arch.md",
+		"---\narea: arch\ndate: 2026-06-27\n---\n# Audit\n\n"+
+			"#### H1. fence event_time on writes  · **Status:** open\n"+
+			"**Component:** stravapipe / write paths · **Urgency:** acute\n\n"+
+			"#### M2. reconcile the two stores  · **Status:** in-progress\n"+
+			"**Component:** stravapipe / pubsub · **Urgency:** soon\n\n"+
+			"#### L3. drive a decision off delivery_attempt  · **Status:** in-progress\n"+
+			"**Component:** dispatcher · **Urgency:** eventually\n")
+	r.Audit("open", "2026-06-20-web.md",
+		"---\narea: web\ndate: 2026-06-20\n---\n# Audit\n\n"+
+			"#### S1. tidy imports  · **Status:** fixed\n**Component:** web · **Urgency:** soon\n")
+	return r.Root
+}
+
+// TestModel_DashboardAuditFindingsWidget pins the aggregated findings inbox: the
+// open/in-progress tallies, the by-urgency and by-area breakdowns, the acute
+// call-out, and the "ready to close" hygiene cue for the settled open audit.
+func TestModel_DashboardAuditFindingsWidget(t *testing.T) {
+	m := loadedDashAt(t, auditFindingsRepo(t), 120, 40)
+	v := ansi.Strip(m.View().Content)
+	for _, want := range []string{
+		"audit findings (1 open · 2 in progress)",
+		"by urgency:", "acute", "eventually",
+		"by area:", "stravapipe 2",
+		"H1 fence event_time on writes", // the acute finding, called out
+		"ready to close",                // the settled open audit
+	} {
+		if !strings.Contains(v, want) {
+			t.Errorf("dashboard should show %q:\n%s", want, v)
+		}
+	}
+}
+
+// TestModel_DashboardAcuteFindingJumpsToAudit pins that selecting the acute finding
+// row navigates to its parent audit.
+func TestModel_DashboardAcuteFindingJumpsToAudit(t *testing.T) {
+	m := loadedDashAt(t, auditFindingsRepo(t), 120, 40)
+	pos := -1
+	for i, idx := range m.dash.nav {
+		if tgt := m.dash.rows[idx].target; tgt != nil && tgt.kind == entityAudits && tgt.id == "2026-06-27-arch" {
+			pos = i
+		}
+	}
+	if pos < 0 {
+		t.Fatalf("the acute finding row should navigate to its audit:\n%s", ansi.Strip(m.View().Content))
+	}
+	m.dash.cursor = pos
+	tm, cmd := m.Update(press("enter"))
+	m = drain(t, tm.(Model), cmd)
+	if m.onDash || m.cur().kind != entityAudits || m.selectedID() != "2026-06-27-arch" {
+		t.Errorf("enter on the acute finding should jump to its audit, got onDash=%v tab=%q id=%q",
+			m.onDash, m.cur().name, m.selectedID())
+	}
+}
+
 // TestModel_DashboardRefreshesOnMutation pins that a reload (the `r` / fsnotify
 // path) refreshes the landing dashboard too — not just the entity tabs — so the
 // at-a-glance summary can't silently go stale while you're looking at it.

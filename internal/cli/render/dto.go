@@ -1,6 +1,7 @@
 package render
 
 import (
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -72,6 +73,9 @@ type auditJSON struct {
 	InProgressFindings int `json:"in_progress_findings" jsonschema:"description=findings whose status is in-progress"`
 	DoneFindings       int `json:"done_findings" jsonschema:"description=findings whose status is fixed or landed (the bar's done band)"`
 	DroppedFindings    int `json:"dropped_findings" jsonschema:"description=findings whose status is deferred, superseded, or wontfix"`
+	// ReadyToClose is true for an OPEN audit whose findings are all resolved/dropped
+	// (none open or in-progress) — a "ready to close" call-to-action.
+	ReadyToClose bool `json:"ready_to_close,omitempty" jsonschema:"description=true when an open audit has no open/in-progress findings left (ready to close)"`
 }
 
 func auditToJSON(a domain.Audit) auditJSON {
@@ -79,6 +83,7 @@ func auditToJSON(a domain.Audit) auditJSON {
 		Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date,
 		Findings: a.Findings, OpenFindings: a.OpenFindings,
 		InProgressFindings: a.ActiveFindings, DoneFindings: a.DoneFindings, DroppedFindings: a.DroppedFindings,
+		ReadyToClose: a.Bucket == domain.AuditOpen && a.Settled(),
 	}
 }
 
@@ -92,6 +97,44 @@ type findingJSON struct {
 	Component string `json:"component,omitempty" jsonschema:"description=component/subsystem"`
 	Effort    string `json:"effort,omitempty" jsonschema:"description=XS | S | M | L"`
 	Urgency   string `json:"urgency,omitempty" jsonschema:"description=acute | soon | eventually"`
+}
+
+func toFindingJSON(f core.AuditFinding) findingJSON {
+	return findingJSON{
+		Audit: f.Audit, Bucket: f.Bucket, Code: f.Code, Title: f.Title, Status: f.Status,
+		File: f.File, Component: f.Component, Effort: f.Effort, Urgency: f.Urgency,
+	}
+}
+
+// countByJSON is one bucket of a finding breakdown — an urgency value or a
+// top-level component, and its count.
+type countByJSON struct {
+	Key   string `json:"key" jsonschema:"description=the urgency value or top-level component"`
+	Count int    `json:"count" jsonschema:"description=actionable findings in this bucket"`
+}
+
+// findingsRollupJSON aggregates the actionable audit findings (status open or
+// in-progress) across all audits — the `status` summary's "audit findings" view.
+type findingsRollupJSON struct {
+	Open        int           `json:"open" jsonschema:"description=actionable findings with status open"`
+	InProgress  int           `json:"in_progress" jsonschema:"description=actionable findings with status in-progress"`
+	ByUrgency   []countByJSON `json:"by_urgency,omitempty" jsonschema:"description=breakdown by urgency (acute, soon, eventually first)"`
+	ByComponent []countByJSON `json:"by_component,omitempty" jsonschema:"description=breakdown by top-level component, most findings first"`
+	Acute       []findingJSON `json:"acute,omitempty" jsonschema:"description=the acute findings, listed for a call-out"`
+}
+
+func toFindingsRollup(r core.FindingsRollup) findingsRollupJSON {
+	out := findingsRollupJSON{Open: r.Open, InProgress: r.InProgress}
+	for _, c := range r.ByUrgency {
+		out.ByUrgency = append(out.ByUrgency, countByJSON{Key: c.Key, Count: c.Count})
+	}
+	for _, c := range r.ByComponent {
+		out.ByComponent = append(out.ByComponent, countByJSON{Key: c.Key, Count: c.Count})
+	}
+	for _, f := range r.Acute {
+		out.Acute = append(out.Acute, toFindingJSON(f))
+	}
+	return out
 }
 
 type lintTaskJSON struct {

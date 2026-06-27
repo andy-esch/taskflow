@@ -703,6 +703,9 @@
           },
           "type": "array"
         },
+        "findings": {
+          "$ref": "#/$defs/findingsRollupJSON"
+        },
         "misfiled": {
           "type": "integer"
         },
@@ -915,6 +918,10 @@
         "dropped_findings": {
           "type": "integer",
           "description": "findings whose status is deferred"
+        },
+        "ready_to_close": {
+          "type": "boolean",
+          "description": "true when an open audit has no open/in-progress findings left (ready to close)"
         }
       },
       "additionalProperties": false,
@@ -927,6 +934,24 @@
         "in_progress_findings",
         "done_findings",
         "dropped_findings"
+      ]
+    },
+    "countByJSON": {
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "the urgency value or top-level component"
+        },
+        "count": {
+          "type": "integer",
+          "description": "actionable findings in this bucket"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key",
+        "count"
       ]
     },
     "epicJSON": {
@@ -1064,6 +1089,45 @@
         "code",
         "title",
         "status"
+      ]
+    },
+    "findingsRollupJSON": {
+      "properties": {
+        "open": {
+          "type": "integer",
+          "description": "actionable findings with status open"
+        },
+        "in_progress": {
+          "type": "integer",
+          "description": "actionable findings with status in-progress"
+        },
+        "by_urgency": {
+          "items": {
+            "$ref": "#/$defs/countByJSON"
+          },
+          "type": "array",
+          "description": "breakdown by urgency (acute"
+        },
+        "by_component": {
+          "items": {
+            "$ref": "#/$defs/countByJSON"
+          },
+          "type": "array",
+          "description": "breakdown by top-level component"
+        },
+        "acute": {
+          "items": {
+            "$ref": "#/$defs/findingJSON"
+          },
+          "type": "array",
+          "description": "the acute findings"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "open",
+        "in_progress"
       ]
     },
     "jsonEnvelopes": {
@@ -1265,6 +1329,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.16)",
+  "title": "tskflwctl --json output (schema_version 1.17)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

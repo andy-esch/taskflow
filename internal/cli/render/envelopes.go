@@ -72,6 +72,7 @@ type SummaryEnvelope struct {
 	InProgress    []taskJSON           `json:"in_progress"`
 	Epics         []epicJSON           `json:"epics"`
 	OpenAudits    []auditJSON          `json:"open_audits,omitempty"`
+	Findings      *findingsRollupJSON  `json:"findings,omitempty"`
 	Misfiled      int                  `json:"misfiled"`
 	RevisitDue    int                  `json:"revisit_due"`
 	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`

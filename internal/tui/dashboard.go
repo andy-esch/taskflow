@@ -56,6 +56,7 @@ func (d *dashboard) setSummary(s core.Summary) {
 	var rows []dashRow
 	head := func(t string) { rows = append(rows, dashRow{text: dashHeading.Render(t)}) }
 	info := func(t string) { rows = append(rows, dashRow{text: dim("  " + t)}) }
+	line := func(t string) { rows = append(rows, dashRow{text: "  " + t}) } // info, but keeps its own colors
 	blank := func() { rows = append(rows, dashRow{}) }
 	nav := func(text string, tgt dashTarget) { t := tgt; rows = append(rows, dashRow{text: text, target: &t}) }
 	capList := func(n int) (shown, more int) {
@@ -136,6 +137,24 @@ func (d *dashboard) setSummary(s core.Summary) {
 		}
 	}
 
+	// Audit findings — the cross-audit actionable inbox (open/in-progress findings),
+	// triaged by urgency and by subsystem, with the rare acute ones called out. Each
+	// acute row jumps to its parent audit; the breakdown lines are read-only.
+	if fr := s.Findings; fr.Open+fr.InProgress > 0 {
+		blank()
+		head(fmt.Sprintf("audit findings (%d open · %d in progress)", fr.Open, fr.InProgress))
+		if len(fr.ByUrgency) > 0 {
+			line("by urgency:  " + urgencyLine(fr.ByUrgency))
+		}
+		if len(fr.ByComponent) > 0 {
+			line("by area:     " + componentLine(fr.ByComponent, 5))
+		}
+		for _, f := range fr.Acute {
+			label := strings.TrimSpace(f.Code + " " + f.Title)
+			nav(fg(theme.ColorRed, "⚠")+" "+label, dashTarget{kind: entityAudits, id: f.Audit})
+		}
+	}
+
 	// Needs attention — misfiled tasks, the open-audit queue, and unreadable files.
 	// Under a non-specific heading a bare count says nothing, so every row names its
 	// own category and wears its entity's glyph (the audit ◆ matches the audits tab);
@@ -151,6 +170,11 @@ func (d *dashboard) setSummary(s core.Summary) {
 	if n := len(s.OpenAudits); n > 0 {
 		tok := theme.Bucket(domain.AuditOpen)
 		nav(fg(tok.Color, tok.Glyph)+fmt.Sprintf(" %d open audit(s)", n), dashTarget{kind: entityAudits})
+		allClear = false
+	}
+	if ready := countSettled(s.OpenAudits); ready > 0 {
+		nav(fg(theme.ColorGreen, "✓")+fmt.Sprintf(" %d audit(s) ready to close (all findings resolved)", ready),
+			dashTarget{kind: entityAudits})
 		allClear = false
 	}
 	if len(s.Problems) > 0 {
@@ -172,6 +196,49 @@ func (d *dashboard) setSummary(s core.Summary) {
 		d.cursor = 0
 	}
 	d.loaded = true
+}
+
+// urgencyLine renders a finding-urgency breakdown ("⚠ 1 acute · 12 soon · 23
+// eventually"), coloring acute (red) and soon (yellow) so the sharp end stands out.
+func urgencyLine(cs []core.CountBy) string {
+	parts := make([]string, 0, len(cs))
+	for _, c := range cs {
+		seg := fmt.Sprintf("%d %s", c.Count, c.Key)
+		switch c.Key {
+		case "acute":
+			seg = fg(theme.ColorRed, "⚠ "+seg)
+		case "soon":
+			seg = fg(theme.ColorYellow, seg)
+		}
+		parts = append(parts, seg)
+	}
+	return strings.Join(parts, dim(" · "))
+}
+
+// componentLine renders the top-topN components by finding count ("stravapipe 14 ·
+// dispatcher 9 · …"), with a dim "+N more" tail when there are more.
+func componentLine(cs []core.CountBy, topN int) string {
+	parts := make([]string, 0, topN+1)
+	for i, c := range cs {
+		if i >= topN {
+			parts = append(parts, dim(fmt.Sprintf("+%d more", len(cs)-topN)))
+			break
+		}
+		parts = append(parts, fmt.Sprintf("%s %d", c.Key, c.Count))
+	}
+	return strings.Join(parts, dim(" · "))
+}
+
+// countSettled counts open audits with nothing left to work — every finding
+// resolved or dropped (see domain.Audit.Settled) — the "ready to close" call-out.
+func countSettled(audits []domain.Audit) int {
+	n := 0
+	for _, a := range audits {
+		if a.Settled() {
+			n++
+		}
+	}
+	return n
 }
 
 // epicsByRecent orders epics most-recently-updated first for the dashboard's
@@ -217,7 +284,7 @@ func (d dashboard) view(maxW, maxH int) string {
 	for i, r := range d.rows {
 		switch {
 		case r.target == nil:
-			lines[i] = r.text // heading / info, rendered with its own style + indent
+			lines[i] = truncate(r.text, max1(maxW)) // heading / info / breakdown line — width-safe
 		case i == cursorRow:
 			lines[i] = truncate(selectedStyle.Render("› ")+r.text, max1(maxW))
 		default:

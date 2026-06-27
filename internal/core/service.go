@@ -89,6 +89,7 @@ type Summary struct {
 	InProgress []domain.Task        // the in-progress working set
 	Epics      []EpicSummary        // epic rollups
 	OpenAudits []domain.Audit       // audits still in the open bucket (actionable work)
+	Findings   FindingsRollup       // actionable audit findings (open/in-progress) aggregated by urgency + component
 	Misfiled   int                  // tasks whose status disagrees with their folder
 	RevisitDue int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
 	Problems   []domain.FileProblem // unreadable files
@@ -141,11 +142,21 @@ func (s *Service) Summary() (Summary, error) {
 	for _, st := range domain.AllStatuses() {
 		ordered = append(ordered, StatusCount{Status: st, Count: counts[st]})
 	}
+	// Actionable audit findings (open / in-progress) across all audits, aggregated
+	// for the "audit findings" view. A second pass over the audit bodies — accepted
+	// at these scales (it's the same parse the TUI already runs per live reload), and
+	// finding status, not audit bucket, is what's actionable (an open-bucket audit
+	// can be all-superseded). QueryFindings' problems duplicate p3, so they're dropped.
+	findings, _, err := s.QueryFindings(FindingFilter{Status: []string{"open", "in-progress"}})
+	if err != nil {
+		return Summary{}, err
+	}
 	return Summary{
 		Counts:     ordered,
 		InProgress: inProgress,
 		Epics:      rollupEpics(epics, tasks),
 		OpenAudits: openAudits,
+		Findings:   rollupFindings(findings),
 		Misfiled:   misfiled,
 		RevisitDue: revisitDue,
 		Problems:   append(append(p1, p2...), p3...),

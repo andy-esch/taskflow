@@ -1,10 +1,115 @@
 package core
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+// CountBy is one bucket of a finding breakdown — a key (an urgency value or a
+// top-level component) and how many actionable findings fell in it.
+type CountBy struct {
+	Key   string
+	Count int
+}
+
+// FindingsRollup aggregates the ACTIONABLE audit findings (status open or
+// in-progress) across all audits — the dashboard / `status` "audit findings" view.
+// ByUrgency is in canonical order (acute, soon, eventually, then any others);
+// ByComponent is most-findings-first on the top-level component. Acute lists the
+// (rare, high-signal) acute findings for a call-out. Open+InProgress == total.
+type FindingsRollup struct {
+	Open        int
+	InProgress  int
+	ByUrgency   []CountBy
+	ByComponent []CountBy
+	Acute       []AuditFinding
+}
+
+// urgencyOrder is the canonical triage order; unknown/missing urgencies sort after.
+var urgencyOrder = []string{"acute", "soon", "eventually"}
+
+// rollupFindings aggregates a set of actionable findings by urgency and top-level
+// component, and collects the acute ones. Pure — the caller supplies the findings
+// (Summary queries status open/in-progress).
+func rollupFindings(fs []AuditFinding) FindingsRollup {
+	var r FindingsRollup
+	urg := map[string]int{}
+	comp := map[string]int{}
+	for _, f := range fs {
+		switch strings.ToLower(strings.TrimSpace(f.Status)) {
+		case "open":
+			r.Open++
+		case "in-progress":
+			r.InProgress++
+		}
+		u := strings.ToLower(strings.TrimSpace(f.Urgency))
+		if u == "" {
+			u = "unspecified"
+		}
+		urg[u]++
+		if u == "acute" {
+			r.Acute = append(r.Acute, f)
+		}
+		if c := topComponent(f.Component); c != "" {
+			comp[c]++
+		}
+	}
+	r.ByUrgency = orderedCounts(urg, urgencyOrder)
+	r.ByComponent = countsDesc(comp)
+	return r
+}
+
+// topComponent is the first segment of a finding's component path
+// ("stravapipe / write paths" → "stravapipe"), trimmed; "" when unset.
+func topComponent(component string) string {
+	c := strings.TrimSpace(component)
+	if i := strings.IndexByte(c, '/'); i >= 0 {
+		c = strings.TrimSpace(c[:i])
+	}
+	return c
+}
+
+// orderedCounts emits the known keys first (in `order`, skipping zeros), then any
+// extras by count desc then key asc.
+func orderedCounts(m map[string]int, order []string) []CountBy {
+	var out []CountBy
+	seen := map[string]bool{}
+	for _, k := range order {
+		if n := m[k]; n > 0 {
+			out = append(out, CountBy{Key: k, Count: n})
+			seen[k] = true
+		}
+	}
+	var extra []CountBy
+	for k, n := range m {
+		if !seen[k] {
+			extra = append(extra, CountBy{Key: k, Count: n})
+		}
+	}
+	sortCountsDesc(extra)
+	return append(out, extra...)
+}
+
+// countsDesc returns the map as counts sorted by count desc then key asc.
+func countsDesc(m map[string]int) []CountBy {
+	out := make([]CountBy, 0, len(m))
+	for k, n := range m {
+		out = append(out, CountBy{Key: k, Count: n})
+	}
+	sortCountsDesc(out)
+	return out
+}
+
+func sortCountsDesc(cs []CountBy) {
+	sort.SliceStable(cs, func(i, j int) bool {
+		if cs[i].Count != cs[j].Count {
+			return cs[i].Count > cs[j].Count
+		}
+		return cs[i].Key < cs[j].Key
+	})
+}
 
 // AuditFinding is one parsed finding plus the audit it belongs to, so a
 // cross-audit query result stays self-describing (which audit/bucket each hit

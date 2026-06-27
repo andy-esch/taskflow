@@ -69,3 +69,12 @@ func (a Audit) Percent() int {
 	}
 	return a.DoneFindings * 100 / a.Findings
 }
+
+// Settled reports whether every finding has reached a terminal disposition — done
+// (fixed/landed) or dropped (deferred/superseded/wontfix) — so an open audit has
+// nothing left to work and is a "ready to close" call-to-action. False when any
+// finding is still open/in-progress OR carries an unrecognized status (Done +
+// Dropped < Findings), and for an audit with no findings at all.
+func (a Audit) Settled() bool {
+	return a.Findings > 0 && a.DoneFindings+a.DroppedFindings == a.Findings
+}

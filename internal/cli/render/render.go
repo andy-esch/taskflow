@@ -60,7 +60,11 @@ import (
 // count of deferred tasks whose revisit_at has arrived) alongside `misfiled`; and
 // the move report (`task defer --json`) carries `revisit_at` per item so a preview
 // and the real run both confirm the snooze.
-const SchemaVersion = "1.16"
+// 1.17: the `status` summary envelope carries `findings` — the actionable audit
+// findings (open/in-progress) aggregated `by_urgency` and `by_component` with the
+// `acute` ones listed — and each open audit carries `ready_to_close` (true when it
+// has no open/in-progress findings left).
+const SchemaVersion = "1.17"
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -279,6 +283,21 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		writeTable(w, st.width, nil, rows)
 	}
 
+	// Audit findings — the actionable cross-audit inbox, triaged. Same source as the
+	// TUI dashboard's widget (core.Summary.Findings), so the two surfaces agree.
+	if fr := s.Findings; fr.Open+fr.InProgress > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("Audit findings (%d open · %d in progress)", fr.Open, fr.InProgress)))
+		if line := countByLine(st, fr.ByUrgency); line != "" {
+			fmt.Fprintf(w, "  %s  %s\n", st.Dim("by urgency"), line)
+		}
+		if line := countByLine(st, fr.ByComponent); line != "" {
+			fmt.Fprintf(w, "  %s  %s\n", st.Dim("by area  "), line)
+		}
+	}
+	if ready := settledCount(s.OpenAudits); ready > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Green(fmt.Sprintf("✓ %d audit(s) ready to close (all findings resolved; `audit close <slug>`)", ready)))
+	}
+
 	if s.RevisitDue > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("↻ %d deferred due to revisit (snooze date reached; `task ready`/`task next` to resume)", s.RevisitDue)))
 	}
@@ -300,6 +319,28 @@ func splitCounts(counts []core.StatusCount) (active, archived []core.StatusCount
 		}
 	}
 	return active, archived
+}
+
+// countByLine renders a finding breakdown ("1 acute · 12 soon · 23 eventually"),
+// the dim-separated counterpart of the dashboard's by-urgency / by-area lines.
+func countByLine(st Style, cs []core.CountBy) string {
+	parts := make([]string, 0, len(cs))
+	for _, c := range cs {
+		parts = append(parts, fmt.Sprintf("%d %s", c.Count, c.Key))
+	}
+	return strings.Join(parts, st.Dim(" · "))
+}
+
+// settledCount counts open audits with nothing left to work (see Audit.Settled) —
+// the "ready to close" call-to-action.
+func settledCount(audits []domain.Audit) int {
+	n := 0
+	for _, a := range audits {
+		if a.Settled() {
+			n++
+		}
+	}
+	return n
 }
 
 // countLine renders "3 next-up · 1 in-progress", skipping zero buckets.
@@ -337,9 +378,17 @@ func SummaryJSON(w io.Writer, s core.Summary) error {
 	for _, a := range s.OpenAudits {
 		audits = append(audits, auditToJSON(a))
 	}
+	// findings is omitted (nil) unless there's actionable audit work, paralleling
+	// open_audits — a repo with none sees no envelope change.
+	var findings *findingsRollupJSON
+	if fr := s.Findings; fr.Open+fr.InProgress > 0 {
+		f := toFindingsRollup(fr)
+		findings = &f
+	}
 	return encodeJSON(w, SummaryEnvelope{
 		SchemaVersion: SchemaVersion, Counts: counts, InProgress: inprog,
-		Epics: epics, OpenAudits: audits, Misfiled: s.Misfiled, RevisitDue: s.RevisitDue, Unreadable: s.Problems,
+		Epics: epics, OpenAudits: audits, Findings: findings,
+		Misfiled: s.Misfiled, RevisitDue: s.RevisitDue, Unreadable: s.Problems,
 	})
 }
 
@@ -606,10 +655,7 @@ func AuditShowJSON(w io.Writer, a domain.Audit, body string) error {
 func FindingsJSON(w io.Writer, fs []core.AuditFinding, problems []domain.FileProblem) error {
 	payload := FindingsEnvelope{SchemaVersion: SchemaVersion, Findings: make([]findingJSON, 0, len(fs)), Unreadable: problems}
 	for _, f := range fs {
-		payload.Findings = append(payload.Findings, findingJSON{
-			Audit: f.Audit, Bucket: f.Bucket, Code: f.Code, Title: f.Title, Status: f.Status,
-			File: f.File, Component: f.Component, Effort: f.Effort, Urgency: f.Urgency,
-		})
+		payload.Findings = append(payload.Findings, toFindingJSON(f))
 	}
 	return encodeJSON(w, payload)
 }
