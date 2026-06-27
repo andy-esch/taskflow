@@ -83,9 +83,12 @@ func New(svc *core.Service) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	load := m.cur().reload(m.svc, "")
-	if m.onDash {
-		load = loadDashboard(m.svc) // landing on the dashboard: load its summary, not a tab
+	// Load only the landing surface — the dashboard's summary or the active tab.
+	// Don't fire the tab loader when the dashboard is the landing: its result is
+	// discarded but the call still churns the tab's load generation / restore state.
+	load := loadDashboard(m.svc)
+	if !m.onDash {
+		load = m.cur().reload(m.svc, "")
 	}
 	if m.watch != nil {
 		return tea.Batch(load, waitForFS(m.watch))
@@ -98,7 +101,8 @@ func (m Model) Init() tea.Cmd {
 // — except the active tab, which always reloads: after a failed *initial* load
 // nothing is `loaded`, and `r` must still be able to recover the session.
 // This is the `r` / fsnotify path: a change from another process is reflected on
-// whichever tab you land on, not just the active one.
+// whichever surface — a tab or the dashboard — you've landed on, not just the
+// active tab.
 func (m *Model) reloadAll() tea.Cmd {
 	var cmds []tea.Cmd
 	for i, t := range m.tabs {
@@ -108,6 +112,12 @@ func (m *Model) reloadAll() tea.Cmd {
 		// markReload picks the restore id (a pending jump target, else the cursor);
 		// reload stamps it onto the load it fires.
 		cmds = append(cmds, t.reload(m.svc, t.markReload()))
+	}
+	// The dashboard reads the same files, so keep the landing screen live too —
+	// otherwise an fsnotify/`r` reload refreshes the (hidden) tabs while the summary
+	// you're actually looking at silently goes stale. Loaded eagerly in Init.
+	if m.dash.loaded {
+		cmds = append(cmds, loadDashboard(m.svc))
 	}
 	return tea.Batch(cmds...)
 }
@@ -161,10 +171,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleTabMsg(msg)
 
 	case dashLoadedMsg:
+		// Store the error durably (like a tab's loadErr) rather than flashing it: a
+		// flash clears on the next key, which would leave a never-loaded dashboard
+		// stuck on "loading…" with no clue why. renderBody/footer surface it instead —
+		// a failed *refresh* keeps the last good rows, a failed first load shows the
+		// error pane.
 		if msg.err != nil {
-			m.flash, m.flashErr = "dashboard: "+msg.err.Error(), true
+			m.dash.loadErr = msg.err
 			return m, nil
 		}
+		m.dash.loadErr = nil
 		m.dash.setSummary(msg.summary)
 		return m, nil
 
@@ -758,14 +774,22 @@ func (m *Model) switchTab(i int) tea.Cmd {
 	if i == m.active && !m.onDash {
 		return nil // already here (but leaving the dashboard to the active tab still re-renders)
 	}
-	m.onDash = false
-	m.active = i
-	m.focus = focusList
-	m.detail.clear()
+	m.exitDashboard(i)
 	if !m.cur().loaded {
 		return m.cur().reload(m.svc, "")
 	}
 	return m.refreshDetail()
+}
+
+// exitDashboard clears the landing-screen state and makes tab i active — the
+// shared half of every dashboard→tab transition (switchTab / leaveDashTo /
+// applyView / jumpTo all need it). Callers still own how tab i (re)loads: a
+// first-visit load, a view filter, or a cursor restore.
+func (m *Model) exitDashboard(i int) {
+	m.onDash = false
+	m.active = i
+	m.focus = focusList
+	m.detail.clear()
 }
 
 // handleDashKey drives the landing dashboard: j/k move the cursor over the
@@ -812,10 +836,7 @@ func (m *Model) enterDash() tea.Cmd {
 // switchTab it doesn't early-return on i == m.active — coming off the dashboard the
 // body changes even when the same tab was "active" underneath.
 func (m *Model) leaveDashTo(i int) tea.Cmd {
-	m.onDash = false
-	m.active = i
-	m.focus = focusList
-	m.detail.clear()
+	m.exitDashboard(i)
 	if !m.cur().loaded {
 		return m.cur().reload(m.svc, "")
 	}
@@ -823,9 +844,10 @@ func (m *Model) leaveDashTo(i int) tea.Cmd {
 }
 
 // dashJump leaves the dashboard for the selected row's target: a specific item
-// (jumpTo) or a whole view (applyView) on its entity's tab.
+// (jumpTo) or a whole view (applyView) on its entity's tab. Pure routing — jumpTo
+// and applyView each own the full dashboard→tab transition (see exitDashboard),
+// so this holds no half-set state of its own.
 func (m *Model) dashJump(tgt dashTarget) tea.Cmd {
-	m.onDash = false
 	if tgt.id != "" {
 		return m.jumpTo(tgt.kind, tgt.id)
 	}
@@ -1196,9 +1218,7 @@ func (m Model) resolveView(word string) (view string, tab int, ok bool) {
 // applyView switches to tab i, sets its view filter, and reloads — preserving the
 // cursor by id when the item survives into the new view.
 func (m *Model) applyView(i int, view string) tea.Cmd {
-	m.onDash = false
-	m.active = i
-	m.focus = focusList
+	m.exitDashboard(i)
 	tab := m.tabs[i]
 	restoreID := tab.markReload() // preserve the cursor across the view change
 	// Reset the active filter when switching views, matching jumpTo: otherwise a
@@ -1206,7 +1226,6 @@ func (m *Model) applyView(i int, view string) tea.Cmd {
 	// filter:foo and the view can look unexpectedly empty).
 	tab.list.ResetFilter()
 	tab.statusView = view
-	m.detail.clear()
 	return tab.reload(m.svc, restoreID)
 }
 
@@ -1333,7 +1352,12 @@ func (m Model) helpEntityKind() entityKind {
 // failure flagged in the footer instead.
 func (m Model) renderBody() string {
 	if m.onDash {
-		if !m.dash.loaded {
+		// Mirror the tab pattern: a failed first load shows the error pane; once it
+		// has loaded, a failed refresh keeps the stale rows (flagged in the footer).
+		switch {
+		case m.dash.loadErr != nil && !m.dash.loaded:
+			return m.pane(focusList, fg(theme.ColorRed, "error: "+m.dash.loadErr.Error()), m.width)
+		case !m.dash.loaded:
 			return m.pane(focusList, dim("loading…"), m.width)
 		}
 		return m.pane(focusList, m.dash.view(m.width-paneHFrame, m.paneOuterH-paneVFrame), m.width)
@@ -1478,9 +1502,14 @@ func (m Model) footer() string {
 		return truncate(m.detail.findStatus(), m.width)
 	}
 	// The dashboard isn't a list, so it gets its own hint line (no m/e/s/…), dimmed
-	// to match the tab footers below.
+	// to match the tab footers below. A failed refresh is flagged here (the rows
+	// shown are the last good load), mirroring the tab "reload failed" note.
 	if m.onDash {
-		return dim(truncate("↑↓ move · ⏎ open · ] tabs · : cmd · r refresh · ? help · q quit", m.width))
+		hint := "↑↓ move · ⏎ open · [ ] tabs · : cmd · r refresh · ? help · q quit"
+		if m.dash.loaded && m.dash.loadErr != nil {
+			hint = "⚠ refresh failed · " + hint
+		}
+		return dim(truncate(hint, m.width))
 	}
 	hints := ": cmd · / filter · m move · e edit · E editor · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
 	if m.focus == focusDetail {

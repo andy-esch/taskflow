@@ -134,6 +134,15 @@ Files split by concern:
   here per entity (tasks by status via `Move`, audits by bucket via `MoveAudit`,
   epics none), so adding Projects/ADRs later is a new registry entry — including
   any `a`-menu / `:`-verb actions — not a reducer edit.
+- **`dashboard.go`** — the landing **dashboard** (`tskflwctl ui` opens here): a
+  read-only composite of widgets over a single `core.Summary`, the in-app
+  counterpart of `status`. Deliberately **not** an `entityTab` — it has no list,
+  filter, sort, or lifecycle, so it carries its own small `dashboard` model plus a
+  `Model.onDash` flag rather than joining `m.tabs` (a `-1` `entityDashboard`
+  sentinel gives it `?`-help/title context without a tab slot). It's a *launch*
+  surface: each navigable row jumps to an item/view on a real tab via `dashJump`,
+  never mutating. Rule of thumb for new screens: a browsable list ⇒ a new
+  `entityTab`; a read-only orientation screen ⇒ the dashboard pattern.
 - **`commands.go` / `messages.go`** — the async load `tea.Cmd`s and the `tea.Msg`
   types they return (list loads, lazy detail loads, reload, errors).
 - **`detail.go` / `find.go` / `glamour.go`** — the right pane (a `viewport`): the
@@ -204,7 +213,7 @@ the Python prototype:
 - `task new|list|show|set|edit|append|move|start|next|ready|complete|defer|deprecate`
 - `epic new|list|show`, `audit list|show|findings|lint|close|reopen|defer`
 - `ui` — the Bubble Tea browser (epic 18): a landing **dashboard** (the in-app
-  counterpart of `status` — in-progress, due-for-revisit, epic rollups, health,
+  counterpart of `status` — in-progress, due-for-revisit, epic rollups, needs-attention,
   navigational) plus two-pane read-only browse of tasks/epics/audits,
   `:` jump, `/` filter, sort, status views, detail find, `?`
   help, `fsnotify` live reload, lifecycle mutations (`a` menu + `:` verbs), and

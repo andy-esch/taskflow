@@ -378,6 +378,37 @@ func TestService_Summary_RevisitDue(t *testing.T) {
 	}
 }
 
+// TestService_Summary_EpicLastUpdated pins the derived epic timestamp: epics have
+// no updated_at of their own, so it's the max updated_at across their tasks
+// (falling back to created), and "" for an epic with no tasks.
+func TestService_Summary_EpicLastUpdated(t *testing.T) {
+	svc := NewService(&fakeStore{
+		epics: []domain.Epic{{ID: "e1"}, {ID: "e2"}, {ID: "e3"}},
+		tasks: []domain.Task{
+			{Slug: "a", Epic: "e1", Updated: "2026-01-10"},
+			{Slug: "b", Epic: "e1", Updated: "2026-06-25"}, // newest in e1
+			{Slug: "c", Epic: "e2", Created: "2025-03-01"}, // no updated_at → created fallback
+		},
+	})
+	s, err := svc.Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]string{}
+	for _, es := range s.Epics {
+		by[es.Epic.ID] = es.LastUpdated
+	}
+	if by["e1"] != "2026-06-25" {
+		t.Errorf("e1 LastUpdated = %q, want the max updated_at 2026-06-25", by["e1"])
+	}
+	if by["e2"] != "2025-03-01" {
+		t.Errorf("e2 LastUpdated = %q, want the created fallback 2025-03-01", by["e2"])
+	}
+	if by["e3"] != "" {
+		t.Errorf("e3 (no tasks) LastUpdated = %q, want empty", by["e3"])
+	}
+}
+
 func TestService_ShowEpic(t *testing.T) {
 	svc := NewService(&fakeStore{
 		epics: []domain.Epic{{ID: "e1"}},

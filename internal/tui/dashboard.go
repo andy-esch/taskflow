@@ -2,11 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
@@ -15,7 +17,7 @@ import (
 // composite of read-only widgets rendered from one core.Summary, with a cursor
 // over the navigable rows. Selecting a row jumps into the relevant tab/view
 // (see Model.dashJump), so the dashboard never mutates — it orients and routes.
-// v1 widgets: in-progress · due-for-revisit · epic rollups · health. (A
+// v1 widgets: in-progress · due-for-revisit · epic rollups · needs-attention. (A
 // cross-cutting "goals" widget waits on the Projects entity.)
 
 // dashListCap bounds each list widget so the dashboard stays a glanceable summary;
@@ -41,10 +43,11 @@ type dashRow struct {
 
 // dashboard holds the rendered rows plus a cursor over the navigable ones.
 type dashboard struct {
-	loaded bool
-	rows   []dashRow
-	nav    []int // indices into rows that carry a target (selectable), in order
-	cursor int   // index into nav
+	loaded  bool
+	loadErr error // last Summary load failure; the rows below are the last good load (or none)
+	rows    []dashRow
+	nav     []int // indices into rows that carry a target (selectable), in order
+	cursor  int   // index into nav
 }
 
 // setSummary (re)builds the widget rows from a fresh core.Summary, recomputing the
@@ -62,15 +65,28 @@ func (d *dashboard) setSummary(s core.Summary) {
 		return n, 0
 	}
 
-	// In progress — the active work.
+	// In progress — the active work, each with how long since it was last touched
+	// (a staleness cue) in an aligned column, the slug last so it absorbs truncation.
 	head(fmt.Sprintf("in progress (%d)", len(s.InProgress)))
 	if len(s.InProgress) == 0 {
 		info("nothing in progress")
 	} else {
 		shown, more := capList(len(s.InProgress))
-		for _, t := range s.InProgress[:shown] {
+		vis := s.InProgress[:shown]
+		dates := make([]string, len(vis))
+		dateW := 0
+		for i, t := range vis {
+			dates[i] = theme.RelativeDate(theme.TaskDate(t)) // ASCII, so len == display width
+			dateW = max(dateW, len(dates[i]))
+		}
+		for i, t := range vis {
 			tok := theme.Status(t.Status)
-			nav(fg(tok.Color, tok.Glyph)+" "+t.Slug, dashTarget{kind: entityTasks, id: t.Slug})
+			cell := fg(tok.Color, tok.Glyph) + " "
+			if dateW > 0 { // blank (undated) cells still pad, so the slug column holds
+				cell += dim(fmt.Sprintf("%-*s", dateW, dates[i])) + "  "
+			}
+			cell += t.Slug
+			nav(cell, dashTarget{kind: entityTasks, id: t.Slug})
 		}
 		if more > 0 {
 			nav(dim(fmt.Sprintf("+%d more →", more)), dashTarget{kind: entityTasks, view: "in-progress"})
@@ -85,42 +101,63 @@ func (d *dashboard) setSummary(s core.Summary) {
 			dashTarget{kind: entityTasks, view: "revisit"})
 	}
 
-	// Epics — rollup progress.
+	// Epics — rollup progress, most-recently-touched first (the dashboard's "what
+	// moved lately" lens; the epics tab keeps its own sort). The counts and date are
+	// pre-measured and padded to a shared width so the columns line up; the epic id
+	// goes LAST, where width-truncation naturally falls and the date stays visible.
+	// The +N overflow still jumps to the full tab.
 	blank()
 	head("epics")
 	if len(s.Epics) == 0 {
 		info("no epics")
 	} else {
-		shown, more := capList(len(s.Epics))
-		for _, es := range s.Epics[:shown] {
+		epics := epicsByRecent(s.Epics)
+		shown, more := capList(len(epics))
+		vis := epics[:shown]
+		dates := make([]string, len(vis))
+		countsW, dateW := 0, 0
+		for i, es := range vis {
+			dates[i] = theme.RelativeDate(es.LastUpdated) // ASCII, so len == display width
+			countsW = max(countsW, len(rollupCounts(es.Done, es.Total, 0)))
+			dateW = max(dateW, len(dates[i]))
+		}
+		for i, es := range vis {
 			pct := es.Percent()
-			nav(fmt.Sprintf("%s %s  %d/%d  %s",
-				miniBar(pct, 8), fg(theme.Percent(pct), fmt.Sprintf("%3d%%", pct)), es.Done, es.Total, es.Epic.ID),
-				dashTarget{kind: entityEpics, id: es.Epic.ID})
+			row := fmt.Sprintf("%s %s  %s", miniBar(pct, 8),
+				fg(theme.Percent(pct), fmt.Sprintf("%3d%%", pct)), rollupCounts(es.Done, es.Total, countsW))
+			if dateW > 0 { // a blank (undated) cell still pads, so the id column holds
+				row += "  " + dim(fmt.Sprintf("%-*s", dateW, dates[i]))
+			}
+			row += "  " + es.Epic.ID
+			nav(row, dashTarget{kind: entityEpics, id: es.Epic.ID})
 		}
 		if more > 0 {
 			nav(dim(fmt.Sprintf("+%d more →", more)), dashTarget{kind: entityEpics})
 		}
 	}
 
-	// Health — what needs attention.
+	// Needs attention — misfiled tasks, the open-audit queue, and unreadable files.
+	// Under a non-specific heading a bare count says nothing, so every row names its
+	// own category and wears its entity's glyph (the audit ◆ matches the audits tab);
+	// "all clear" when there's nothing.
 	blank()
-	head("health")
-	healthy := true
+	head("needs attention")
+	allClear := true
 	if s.Misfiled > 0 {
-		nav(fg(theme.ColorYellow, "⚠")+fmt.Sprintf(" %d misfiled (status ≠ folder)", s.Misfiled),
+		nav(fg(theme.ColorYellow, "⚠")+fmt.Sprintf(" %d misfiled task(s) (status ≠ folder)", s.Misfiled),
 			dashTarget{kind: entityTasks, view: "all"})
-		healthy = false
+		allClear = false
 	}
-	if len(s.OpenAudits) > 0 {
-		nav(fmt.Sprintf("%d open audit(s)", len(s.OpenAudits)), dashTarget{kind: entityAudits})
-		healthy = false
+	if n := len(s.OpenAudits); n > 0 {
+		tok := theme.Bucket(domain.AuditOpen)
+		nav(fg(tok.Color, tok.Glyph)+fmt.Sprintf(" %d open audit(s)", n), dashTarget{kind: entityAudits})
+		allClear = false
 	}
 	if len(s.Problems) > 0 {
 		info(fg(theme.ColorRed, "!") + fmt.Sprintf(" %d unreadable file(s) (run lint)", len(s.Problems)))
-		healthy = false
+		allClear = false
 	}
-	if healthy {
+	if allClear {
 		info(fg(theme.ColorGreen, "✔") + " all clear")
 	}
 
@@ -135,6 +172,15 @@ func (d *dashboard) setSummary(s core.Summary) {
 		d.cursor = 0
 	}
 	d.loaded = true
+}
+
+// epicsByRecent orders epics most-recently-updated first for the dashboard's
+// recency lens. Stable, so equal dates keep core's order; undated epics ("" date)
+// sink to the bottom.
+func epicsByRecent(src []core.EpicSummary) []core.EpicSummary {
+	out := append([]core.EpicSummary(nil), src...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].LastUpdated > out[j].LastUpdated })
+	return out
 }
 
 // move steps the cursor over the navigable rows (wrapping).
@@ -155,8 +201,10 @@ func (d dashboard) selectedTarget() (dashTarget, bool) {
 	return dashTarget{}, false
 }
 
-// view renders the widgets into the body, the cursor row accented. v1 keeps the
-// content bounded (capped lists) rather than scrolling; the pane clamps the rest.
+// view renders the widgets into the body, the cursor row accented. v1 doesn't
+// scroll lists (each widget is capped); but the composed widgets can still overrun
+// a short terminal, so when they do the output is a window that keeps the cursor
+// row on screen — a selectable row must never be navigable-but-invisible.
 func (d dashboard) view(maxW, maxH int) string {
 	if !d.loaded {
 		return dim("loading…")
@@ -177,7 +225,24 @@ func (d dashboard) view(maxW, maxH int) string {
 		}
 	}
 	if maxH > 0 && len(lines) > maxH {
-		lines = lines[:maxH]
+		lines = scrollTo(lines, cursorRow, maxH)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// scrollTo returns the maxH-line window over lines that keeps the focused row
+// visible — centered when it can be, clamped at the ends. A negative focus (no
+// cursor) shows the top. Only called when len(lines) > maxH.
+func scrollTo(lines []string, focus, maxH int) []string {
+	start := 0
+	if focus >= 0 {
+		start = focus - maxH/2
+	}
+	if start > len(lines)-maxH {
+		start = len(lines) - maxH
+	}
+	if start < 0 {
+		start = 0
+	}
+	return lines[start : start+maxH]
 }
