@@ -62,6 +62,8 @@ var helpSections = []helpSection{
 func notesFor(kind entityKind) helpSection {
 	var entries []helpEntry
 	switch kind {
+	case entityDashboard:
+		entries = append(entries, helpEntry{"dashboard", "⏎ open the selected item · ] / [ to the tabs · r refresh"})
 	case entityTasks:
 		entries = append(entries, helpEntry{"views", "s/S or :working / :deferred / :revisit / :all"})
 	case entityAudits:

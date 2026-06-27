@@ -172,7 +172,8 @@ func (m *Model) jumpTo(kind entityKind, id string) tea.Cmd {
 	if i < 0 {
 		return nil
 	}
-	if i != m.active {
+	if i != m.active || m.onDash {
+		m.onDash = false // a jump always lands on an entity tab
 		m.active = i
 		m.focus = focusList
 		m.detail.clear()

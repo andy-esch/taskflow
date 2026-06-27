@@ -9,9 +9,10 @@ priority: medium
 autonomy_level: 3
 tags: [tui, docs]
 created: "2026-06-24"
-updated_at: "2026-06-25"
+updated_at: "2026-06-26"
 started_at: "2026-06-25"
 deferred_at: "2026-06-25"
+revisit_at: "2026-07-10"
 ---
 ## Objective
 

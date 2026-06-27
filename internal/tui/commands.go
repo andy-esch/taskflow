@@ -58,6 +58,18 @@ func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 	}
 }
 
+// loadDashboard reads the at-a-glance Summary for the landing screen (off the
+// event loop → dashLoadedMsg) — the same core.Summary the `status` command renders.
+func loadDashboard(svc *core.Service) tea.Cmd {
+	return func() tea.Msg {
+		s, err := svc.Summary()
+		if err != nil {
+			return dashLoadedMsg{err: err}
+		}
+		return dashLoadedMsg{summary: s}
+	}
+}
+
 func loadTaskDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
 		t, body, err := svc.ShowTask(id)

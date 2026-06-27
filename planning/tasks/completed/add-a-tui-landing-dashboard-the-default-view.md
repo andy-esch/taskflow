@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: A TUI landing Dashboard — the TUI counterpart of tskflwctl status — as the default view; mostly a render of core.Summary, with a larger-goals widget gated on the future Projects entity.
 effort: L
@@ -9,6 +9,9 @@ priority: medium
 autonomy_level: 3
 tags: [tui]
 created: "2026-06-26"
+updated_at: "2026-06-27"
+started_at: "2026-06-27"
+completed_at: "2026-06-27"
 ---
 
 # Add a TUI landing Dashboard (the default view)

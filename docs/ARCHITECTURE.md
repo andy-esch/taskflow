@@ -203,8 +203,10 @@ the Python prototype:
 - `init`, `completion` (command/flag/slug, status-aware), `lint` (+`--fix`/`--dry-run`)
 - `task new|list|show|set|edit|append|move|start|next|ready|complete|defer|deprecate`
 - `epic new|list|show`, `audit list|show|findings|lint|close|reopen|defer`
-- `ui` — the Bubble Tea browser (epic 18): two-pane read-only browse of
-  tasks/epics/audits, `:` jump, `/` filter, sort, status views, detail find, `?`
+- `ui` — the Bubble Tea browser (epic 18): a landing **dashboard** (the in-app
+  counterpart of `status` — in-progress, due-for-revisit, epic rollups, health,
+  navigational) plus two-pane read-only browse of tasks/epics/audits,
+  `:` jump, `/` filter, sort, status views, detail find, `?`
   help, `fsnotify` live reload, lifecycle mutations (`a` menu + `:` verbs), and
   glamour markdown with an `R` raw/pretty toggle (S0–S5 shipped; cross-link is the
   remaining sprint).

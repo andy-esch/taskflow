@@ -46,6 +46,8 @@ type Model struct {
 	focus   focus
 	tabs    []*entityTab
 	active  int
+	onDash  bool      // showing the landing dashboard (a non-list screen left of the tabs)
+	dash    dashboard // the landing screen's widgets (see dashboard.go)
 	detail  detailPane
 	cmd     commandBar
 	palette palette // the ctrl+p command palette (fuzzy launcher); see palette.go
@@ -73,6 +75,7 @@ func New(svc *core.Service) Model {
 	return Model{
 		svc: svc, focus: focusList,
 		tabs: newEntityTabs(), active: 0,
+		onDash: true, // the dashboard is the landing view; `]`/:tasks drops into work
 		detail: newDetailPane(theme.MarkdownStyleDark), cmd: newCommandBar(),
 		palette: newPalette(),
 		modals:  defaultModals(),
@@ -80,10 +83,14 @@ func New(svc *core.Service) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	if m.watch != nil {
-		return tea.Batch(m.cur().reload(m.svc, ""), waitForFS(m.watch))
+	load := m.cur().reload(m.svc, "")
+	if m.onDash {
+		load = loadDashboard(m.svc) // landing on the dashboard: load its summary, not a tab
 	}
-	return m.cur().reload(m.svc, "")
+	if m.watch != nil {
+		return tea.Batch(load, waitForFS(m.watch))
+	}
+	return load
 }
 
 // reloadAll re-fires the loader for every loaded tab, each preserving its own
@@ -152,6 +159,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tabMsg:
 		return m.handleTabMsg(msg)
+
+	case dashLoadedMsg:
+		if msg.err != nil {
+			m.flash, m.flashErr = "dashboard: "+msg.err.Error(), true
+			return m, nil
+		}
+		m.dash.setSummary(msg.summary)
+		return m, nil
 
 	case movedMsg:
 		// A transition succeeded: flash it and reload so the relocated task shows in
@@ -400,6 +415,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.detail.updateFind(msg)
 	}
 
+	// 2c. The dashboard (landing screen) owns its own keys — cursor + jump-to-entity
+	// plus a handful of globals. It's not a list, so the list-scoped hotkeys below
+	// (m/e/s/o/F/f/…) don't apply; routing here keeps them from acting on the hidden
+	// active tab's selection.
+	if m.onDash {
+		return m.handleDashKey(msg)
+	}
+
 	// 3. Global hotkeys.
 	switch {
 	case key.Matches(msg, keys.Quit):
@@ -459,9 +482,15 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Palette):
 		return m, m.openPalette()
 	case key.Matches(msg, keys.NextTab):
-		return m, m.switchTab((m.active + 1) % len(m.tabs))
+		if m.active == len(m.tabs)-1 {
+			return m, m.enterDash() // past the last tab wraps to the dashboard
+		}
+		return m, m.switchTab(m.active + 1)
 	case key.Matches(msg, keys.PrevTab):
-		return m, m.switchTab((m.active - 1 + len(m.tabs)) % len(m.tabs))
+		if m.active == 0 {
+			return m, m.enterDash() // before the first tab wraps to the dashboard
+		}
+		return m, m.switchTab(m.active - 1)
 	// Sort/status-view/filter-mode reshape the LIST, so they're list-scoped: gate
 	// them on list focus. Otherwise pressing e.g. `s` while reading the detail pane
 	// snaps focus back to the list, clears the detail, and triggers a reload —
@@ -555,11 +584,33 @@ func (m Model) afterSelectionChange(prev string, cmd tea.Cmd) (tea.Model, tea.Cm
 
 // dispatchCommand resolves the typed `:` word to an entity tab or a task status
 // view and applies it; an unknown word reopens the bar with an inline error.
+// isDashboardWord reports whether a `:`-command word selects the landing
+// dashboard (`:dashboard`, or the `:d` shorthand).
+func isDashboardWord(word string) bool { return word == "dashboard" || word == "d" }
+
+// commandHint lists the `:` commands matching what's typed so far (all of them on
+// an empty prompt) — inline discovery of the command vocabulary, narrowing as you
+// type. Uses the canonical command set (no short t/e/a aliases, to stay readable);
+// the footer dims and width-truncates it.
+func (m Model) commandHint() string {
+	cur := m.cmd.value()
+	var matches []string
+	for _, w := range m.paletteCommands() {
+		if strings.HasPrefix(w, cur) {
+			matches = append(matches, w)
+		}
+	}
+	return strings.Join(matches, " · ")
+}
+
 func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 	word := m.cmd.value()
 	m.cmd.blur()
 	if word == "" {
 		return m, nil
+	}
+	if isDashboardWord(word) {
+		return m, m.enterDash()
 	}
 	for i, t := range m.tabs {
 		if t.matches(word) {
@@ -704,9 +755,10 @@ func (m Model) selectedLifecycle() (id, state string, ok bool) {
 // on first visit, and (re)loads the selected item's detail. Per-tab cursors are
 // preserved because each tab owns its list.
 func (m *Model) switchTab(i int) tea.Cmd {
-	if i == m.active {
-		return nil
+	if i == m.active && !m.onDash {
+		return nil // already here (but leaving the dashboard to the active tab still re-renders)
 	}
+	m.onDash = false
 	m.active = i
 	m.focus = focusList
 	m.detail.clear()
@@ -714,6 +766,74 @@ func (m *Model) switchTab(i int) tea.Cmd {
 		return m.cur().reload(m.svc, "")
 	}
 	return m.refreshDetail()
+}
+
+// handleDashKey drives the landing dashboard: j/k move the cursor over the
+// navigable rows, ⏎/l jumps to the selected item or view, [ / ] move between the
+// dashboard and the tabs, and the usual globals (:, ctrl+p, ?, r, q) work. The
+// list-scoped hotkeys (m/e/s/o/F/f/…) don't apply — the dashboard isn't a list.
+func (m Model) handleDashKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case msg.String() == "j" || msg.String() == "down":
+		m.dash.move(1)
+	case msg.String() == "k" || msg.String() == "up":
+		m.dash.move(-1)
+	case msg.String() == "enter" || msg.String() == "l":
+		if tgt, ok := m.dash.selectedTarget(); ok {
+			return m, m.dashJump(tgt)
+		}
+	case key.Matches(msg, keys.NextTab):
+		return m, m.leaveDashTo(0) // ] → first tab
+	case key.Matches(msg, keys.PrevTab):
+		return m, m.leaveDashTo(len(m.tabs) - 1) // [ → last tab
+	case key.Matches(msg, keys.Command):
+		return m, m.cmd.focus()
+	case key.Matches(msg, keys.Palette):
+		return m, m.openPalette()
+	case key.Matches(msg, keys.Help):
+		m.showHelp = true
+	case key.Matches(msg, keys.Refresh):
+		return m, loadDashboard(m.svc)
+	case key.Matches(msg, keys.Quit):
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+// enterDash switches to the landing dashboard and refreshes its summary.
+func (m *Model) enterDash() tea.Cmd {
+	m.onDash = true
+	m.focus = focusList
+	m.detail.clear()
+	return loadDashboard(m.svc)
+}
+
+// leaveDashTo drops from the dashboard onto tab i (loading it if needed). Unlike
+// switchTab it doesn't early-return on i == m.active — coming off the dashboard the
+// body changes even when the same tab was "active" underneath.
+func (m *Model) leaveDashTo(i int) tea.Cmd {
+	m.onDash = false
+	m.active = i
+	m.focus = focusList
+	m.detail.clear()
+	if !m.cur().loaded {
+		return m.cur().reload(m.svc, "")
+	}
+	return m.refreshDetail()
+}
+
+// dashJump leaves the dashboard for the selected row's target: a specific item
+// (jumpTo) or a whole view (applyView) on its entity's tab.
+func (m *Model) dashJump(tgt dashTarget) tea.Cmd {
+	m.onDash = false
+	if tgt.id != "" {
+		return m.jumpTo(tgt.kind, tgt.id)
+	}
+	i := indexOfKind(m.tabs, tgt.kind)
+	if i < 0 {
+		return nil
+	}
+	return m.applyView(i, tgt.view)
 }
 
 // refreshDetail (re)loads the detail for the current selection, or settles the
@@ -850,6 +970,8 @@ func (m Model) commandOptions() []string {
 	for _, tr := range m.cur().transitions {
 		add(tr.verb)
 	}
+	add("dashboard")
+	add("d")
 	return opts
 }
 
@@ -906,6 +1028,7 @@ func (m Model) paletteCommands() []string {
 			out = append(out, w)
 		}
 	}
+	add("dashboard") // the landing screen (omit the :d shorthand — palette avoids near-dupes)
 	for _, t := range m.tabs {
 		add(t.name)
 		for _, w := range t.viewWords() {
@@ -963,6 +1086,9 @@ func (m *Model) runPaletteItem(it paletteItem) tea.Cmd {
 // since the palette has no command-bar line to re-focus. A verb acts on the
 // underlying selected row, exactly like `:`.
 func (m *Model) runPaletteCommand(word string) tea.Cmd {
+	if isDashboardWord(word) {
+		return m.enterDash()
+	}
 	for i, t := range m.tabs {
 		if t.matches(word) {
 			return m.switchTab(i)
@@ -1070,6 +1196,7 @@ func (m Model) resolveView(word string) (view string, tab int, ok bool) {
 // applyView switches to tab i, sets its view filter, and reloads — preserving the
 // cursor by id when the item survives into the new view.
 func (m *Model) applyView(i int, view string) tea.Cmd {
+	m.onDash = false
 	m.active = i
 	m.focus = focusList
 	tab := m.tabs[i]
@@ -1152,6 +1279,9 @@ func (m Model) View() tea.View {
 // name plus the current selection (or the active tab when nothing's selected), so
 // the entity you're on shows up in the terminal's tab bar.
 func (m Model) windowTitle() string {
+	if m.onDash {
+		return "tskflwctl · dashboard"
+	}
 	if id := m.selectedID(); id != "" {
 		return "tskflwctl · " + id
 	}
@@ -1184,7 +1314,16 @@ func (m Model) helpMaxScroll() int {
 	if innerH <= 0 {
 		return 0
 	}
-	return max(len(helpLines(m.focus, m.cur().kind))-innerH, 0)
+	return max(len(helpLines(m.focus, m.helpEntityKind()))-innerH, 0)
+}
+
+// helpEntityKind is the kind whose context notes the `?` panel shows — the active
+// tab's, or the dashboard sentinel when on the landing screen.
+func (m Model) helpEntityKind() entityKind {
+	if m.onDash {
+		return entityDashboard
+	}
+	return m.cur().kind
 }
 
 // renderBody is the pane layout: a loading note (or this tab's load error) until
@@ -1193,6 +1332,12 @@ func (m Model) helpMaxScroll() int {
 // tab that HAS loaded keeps its (stale) rows on a failed reload, with the
 // failure flagged in the footer instead.
 func (m Model) renderBody() string {
+	if m.onDash {
+		if !m.dash.loaded {
+			return m.pane(focusList, dim("loading…"), m.width)
+		}
+		return m.pane(focusList, m.dash.view(m.width-paneHFrame, m.paneOuterH-paneVFrame), m.width)
+	}
 	switch t := m.cur(); {
 	case t.loadErr != nil && !t.loaded:
 		return m.pane(focusList, fg(theme.ColorRed, "error: "+t.loadErr.Error()), m.width)
@@ -1285,18 +1430,28 @@ func max1(n int) int {
 	return n
 }
 
-// tabStrip renders the entity tabs (active accented), collapsing to a single
-// `[entity ▾]` chip under ~60 cols.
+// tabStrip renders the dashboard plus the entity tabs (active accented),
+// collapsing to a single `[name ▾]` chip under ~60 cols. The dashboard sits left
+// of the entity tabs as the landing surface.
 func (m Model) tabStrip() string {
 	if m.width < 60 {
-		return truncate(activeTab.Render("["+m.cur().name+" ▾]"), m.width)
+		name := "dashboard"
+		if !m.onDash {
+			name = m.cur().name
+		}
+		return truncate(activeTab.Render("["+name+" ▾]"), m.width)
 	}
-	parts := make([]string, len(m.tabs))
+	parts := make([]string, 0, len(m.tabs)+1)
+	if m.onDash {
+		parts = append(parts, activeTab.Render("dashboard"))
+	} else {
+		parts = append(parts, dim("dashboard"))
+	}
 	for i, t := range m.tabs {
-		if i == m.active {
-			parts[i] = activeTab.Render(t.name)
+		if !m.onDash && i == m.active {
+			parts = append(parts, activeTab.Render(t.name))
 		} else {
-			parts[i] = dim(t.name)
+			parts = append(parts, dim(t.name))
 		}
 	}
 	return truncate(strings.Join(parts, dim("  ·  ")), m.width)
@@ -1304,6 +1459,11 @@ func (m Model) tabStrip() string {
 
 func (m Model) footer() string {
 	if m.cmd.active {
+		// Surface the matching commands inline so `:` is self-documenting: the full
+		// vocabulary on an empty prompt, narrowing to the prefix as you type.
+		if hint := m.commandHint(); hint != "" {
+			return truncate(m.cmd.view()+dim("  "+hint), m.width)
+		}
 		return truncate(m.cmd.view(), m.width)
 	}
 	// A post-action result takes over the footer until the next key.
@@ -1316,6 +1476,11 @@ func (m Model) footer() string {
 	// The detail find input/status takes over the footer while searching a body.
 	if m.focus == focusDetail && (m.detail.finding() || m.detail.findActive()) {
 		return truncate(m.detail.findStatus(), m.width)
+	}
+	// The dashboard isn't a list, so it gets its own hint line (no m/e/s/…), dimmed
+	// to match the tab footers below.
+	if m.onDash {
+		return dim(truncate("↑↓ move · ⏎ open · ] tabs · : cmd · r refresh · ? help · q quit", m.width))
 	}
 	hints := ": cmd · / filter · m move · e edit · E editor · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
 	if m.focus == focusDetail {

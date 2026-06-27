@@ -26,8 +26,13 @@ func TestView_WindowTitleFallsBackToTab(t *testing.T) {
 	m := newModel(t) // not loaded → nothing selected
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = tm.(Model)
+	m.onDash = false // off the landing dashboard, onto a tab with no selection
 	if got := m.View().WindowTitle; got != "tskflwctl · "+m.cur().name {
 		t.Errorf("WindowTitle = %q, want %q", got, "tskflwctl · "+m.cur().name)
+	}
+	m.onDash = true
+	if got := m.View().WindowTitle; got != "tskflwctl · dashboard" {
+		t.Errorf("on the dashboard the title should be the dashboard, got %q", got)
 	}
 }
 

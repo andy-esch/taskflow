@@ -4,8 +4,16 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+// dashLoadedMsg carries the dashboard's core.Summary load (the landing screen's
+// data). A non-nil err flashes instead of populating the widgets.
+type dashLoadedMsg struct {
+	summary core.Summary
+	err     error
+}
 
 // movedMsg reports a successful lifecycle transition (S4). The model flashes a
 // confirmation and fires a reload so the relocated entity shows in its new state.

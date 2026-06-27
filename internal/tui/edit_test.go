@@ -40,8 +40,8 @@ func loadedAt(t *testing.T, root string, w, h int) Model {
 	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	m = tm.(Model)
-	tm, _ = m.Update(m.Init()())
-	return tm.(Model)
+	tm, _ = m.Update(m.Init()()) // landing dashboard load
+	return toTasks(t, tm.(Model))
 }
 
 // editCursorTo drives the field picker onto key via j-presses.
@@ -457,5 +457,43 @@ func TestModel_EditRevisitDateBlankClears(t *testing.T) {
 	m.Update(cmd())
 	if task, _, _ := m.svc.ShowTask("overdue"); task.RevisitAt != "" {
 		t.Errorf("blanking revisit should clear it, got %q", task.RevisitAt)
+	}
+}
+
+// headingCol returns the column of text in the first view line that contains it.
+func headingCol(view, text string) int {
+	for _, line := range strings.Split(view, "\n") {
+		if i := strings.Index(line, text); i >= 0 {
+			return i
+		}
+	}
+	return -1
+}
+
+// TestModel_EditBoxStaysPutOnError pins the layout fix: a validation error renders
+// inside the box, so the box doesn't shift horizontally when the error appears
+// (same editing state + input before/after; only the error toggles).
+func TestModel_EditBoxStaysPutOnError(t *testing.T) {
+	m := loadedAt(t, revisitRepo(t), 120, 40)
+	m = selectOverdue(t, m)
+	tm, _ := m.Update(press("e"))
+	m = editCursorTo(t, tm.(Model), "revisit_at")
+	tm, _ = m.Update(press("enter")) // begin editing
+	m = clearInput(t, tm.(Model))
+	for _, r := range "bad" { // an invalid date, not yet submitted (no error)
+		tm, _ = m.Update(press(string(r)))
+		m = tm.(Model)
+	}
+	before := headingCol(ansi.Strip(m.View().Content), "edit overdue")
+
+	tm, _ = m.Update(press("enter")) // submit invalid → validation error, field stays open
+	m = tm.(Model)
+	if m.edit.err == "" {
+		t.Fatal("expected a validation error for an invalid date")
+	}
+	after := headingCol(ansi.Strip(m.View().Content), "edit overdue")
+
+	if before < 0 || before != after {
+		t.Errorf("edit box shifted when the error appeared: heading col %d → %d", before, after)
 	}
 }
