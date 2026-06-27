@@ -101,6 +101,71 @@ func TestService_ListAudits_BucketFilters(t *testing.T) {
 	}
 }
 
+// TestService_ListAudits_RejectsUnknownBucket mirrors ListTasks' invalid-status
+// check (TestService_ListTasks_RejectsInvalidFilters): an unrecognized bucket is
+// ErrValidation, not a silently empty list an agent can't tell from an empty one.
+func TestService_ListAudits_RejectsUnknownBucket(t *testing.T) {
+	svc := NewService(&fakeStore{audits: []domain.Audit{{Slug: "a-open", Bucket: domain.AuditOpen}}})
+	if _, _, err := svc.ListAudits("bogus", false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("unknown bucket should be ErrValidation, got %v", err)
+	}
+}
+
+// countingAuditStore wraps fakeStore to count how each audit-read path is hit, so
+// a test can prove Summary reads every audit body exactly once (via the single
+// ListAuditsWithFindings sweep) and never re-reads through GetAuditByPath — the H2
+// regression guard.
+type countingAuditStore struct {
+	fakeStore
+	listWithFindings int            // ListAuditsWithFindings call count
+	byPath           map[string]int // GetAuditByPath reads, per path
+}
+
+func (c *countingAuditStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error) {
+	c.listWithFindings++
+	return c.fakeStore.ListAuditsWithFindings()
+}
+
+func (c *countingAuditStore) GetAuditByPath(path string) (domain.Audit, string, error) {
+	if c.byPath == nil {
+		c.byPath = map[string]int{}
+	}
+	c.byPath[path]++
+	return c.fakeStore.GetAuditByPath(path)
+}
+
+// TestService_Summary_ReadsEachAuditOnce pins H2: Summary computes the audit
+// tallies AND the findings rollup from ONE sweep of the audit bodies — it must
+// never re-read a body through GetAuditByPath the way it did before the fix.
+func TestService_Summary_ReadsEachAuditOnce(t *testing.T) {
+	store := &countingAuditStore{fakeStore: fakeStore{
+		audits: []domain.Audit{
+			{Slug: "2026-06-14-gateway", Path: "2026-06-14-gateway", Bucket: domain.AuditOpen},
+			{Slug: "2026-06-10-ingest", Path: "2026-06-10-ingest", Bucket: domain.AuditClosed},
+		},
+		auditBodies: map[string]string{
+			"2026-06-14-gateway": gatewayBody,
+			"2026-06-10-ingest":  ingestBody,
+		},
+	}}
+	s, err := NewService(store).Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One scan, zero re-reads.
+	if store.listWithFindings != 1 {
+		t.Errorf("ListAuditsWithFindings called %d times, want exactly 1", store.listWithFindings)
+	}
+	if len(store.byPath) != 0 {
+		t.Errorf("Summary must not re-read any audit via GetAuditByPath, got %v", store.byPath)
+	}
+	// And the rollup is still correct: S1 (gateway, open) + M1 (ingest, open) are
+	// actionable; H1 is fixed, so Open == 2 across the two audits.
+	if s.Findings.Open != 2 || s.Findings.InProgress != 0 {
+		t.Errorf("findings rollup wrong: open=%d in_progress=%d, want 2/0", s.Findings.Open, s.Findings.InProgress)
+	}
+}
+
 // TestService_NewTask_RequiresTags pins the D1 decision: `new` must not
 // scaffold a file its own linter rejects, so tags are required at creation.
 func TestService_NewTask_RequiresTags(t *testing.T) {

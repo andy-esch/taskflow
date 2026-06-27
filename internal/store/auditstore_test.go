@@ -62,6 +62,32 @@ func TestFS_FindingCounts_IgnoresFencesAndOpenIsh(t *testing.T) {
 	}
 }
 
+// TestFS_ListAuditsWithFindings pins the single-scan port (H2): it returns the
+// same per-audit tally ListAudits does AND the findings parsed from that same body
+// read, in document order — so Summary needs no GetAuditByPath re-read.
+func TestFS_ListAuditsWithFindings(t *testing.T) {
+	root := t.TempDir()
+	body := "# Audit\n\n#### H1. open thing  · **Status:** open\n\n#### M2. fixed thing  · **Status:** fixed 2026-01-01\n"
+	writeAudit(t, root, "open", "a.md", "---\narea: dispatcher\ndate: 2026-06-01\n---\n"+body)
+
+	got, problems, err := NewFS(root).ListAuditsWithFindings()
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("ListAuditsWithFindings: %v / %+v", err, problems)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 audit, got %d", len(got))
+	}
+	a := got[0]
+	// Tally is identical to ListAudits'.
+	if a.Audit.Slug != "a" || a.Audit.Findings != 2 || a.Audit.OpenFindings != 1 {
+		t.Errorf("audit tally wrong: %+v", a.Audit)
+	}
+	// Findings come back parsed, in document order (H1 then M2).
+	if len(a.Findings) != 2 || a.Findings[0].Code != "H1" || a.Findings[1].Code != "M2" {
+		t.Errorf("findings wrong: %+v", a.Findings)
+	}
+}
+
 func TestFS_MoveAudit(t *testing.T) {
 	root := t.TempDir()
 	// No open findings, so the bucket↔state invariant permits closing.

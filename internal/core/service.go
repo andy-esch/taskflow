@@ -107,14 +107,27 @@ func (s *Service) Summary() (Summary, error) {
 	if err != nil {
 		return Summary{}, err
 	}
-	audits, p3, err := s.store.ListAudits()
+	// One scan of every audit body serves BOTH the open-bucket list (audit-level
+	// tallies) AND the findings rollup below — the store hands back the findings it
+	// already parsed for the tally, so Summary never re-reads a body (the H2 fix).
+	audits, p3, err := s.store.ListAuditsWithFindings()
 	if err != nil {
 		return Summary{}, err
 	}
 	var openAudits []domain.Audit
+	var actionable []AuditFinding
 	for _, a := range audits {
-		if a.Bucket == domain.AuditOpen {
-			openAudits = append(openAudits, a)
+		if a.Audit.Bucket == domain.AuditOpen {
+			openAudits = append(openAudits, a.Audit)
+		}
+		// Actionable audit findings (open / in-progress) across ALL audits — finding
+		// status, not audit bucket, is what's actionable (an open-bucket audit can be
+		// all-superseded; a closed one shouldn't carry open findings but lint catches
+		// that). Same filter + (audit, document) order as QueryFindings would produce.
+		for _, fd := range a.Findings {
+			if isActionableFinding(fd) {
+				actionable = append(actionable, AuditFinding{Finding: fd, Audit: a.Audit.Slug, Bucket: string(a.Audit.Bucket)})
+			}
 		}
 	}
 	counts := map[domain.Status]int{}
@@ -142,21 +155,12 @@ func (s *Service) Summary() (Summary, error) {
 	for _, st := range domain.AllStatuses() {
 		ordered = append(ordered, StatusCount{Status: st, Count: counts[st]})
 	}
-	// Actionable audit findings (open / in-progress) across all audits, aggregated
-	// for the "audit findings" view. A second pass over the audit bodies — accepted
-	// at these scales (it's the same parse the TUI already runs per live reload), and
-	// finding status, not audit bucket, is what's actionable (an open-bucket audit
-	// can be all-superseded). QueryFindings' problems duplicate p3, so they're dropped.
-	findings, _, err := s.QueryFindings(FindingFilter{Status: []string{"open", "in-progress"}})
-	if err != nil {
-		return Summary{}, err
-	}
 	return Summary{
 		Counts:     ordered,
 		InProgress: inProgress,
 		Epics:      rollupEpics(epics, tasks),
 		OpenAudits: openAudits,
-		Findings:   rollupFindings(findings),
+		Findings:   rollupFindings(actionable),
 		Misfiled:   misfiled,
 		RevisitDue: revisitDue,
 		Problems:   append(append(p1, p2...), p3...),

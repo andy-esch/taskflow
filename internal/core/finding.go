@@ -30,6 +30,19 @@ type FindingsRollup struct {
 // urgencyOrder is the canonical triage order; unknown/missing urgencies sort after.
 var urgencyOrder = []string{"acute", "soon", "eventually"}
 
+// actionableStatuses is the finding-status subset Summary's rollup surfaces — the
+// work that is still outstanding. Kept beside the rollup so it stays the single
+// definition of "actionable" the dashboard / `status` filter on (it must agree
+// with what QueryFindings(Status:["open","in-progress"]) selects).
+var actionableStatuses = []string{"open", "in-progress"}
+
+// isActionableFinding reports whether a finding is open or in-progress — the
+// case-insensitive match QueryFindings applies, so the single-scan rollup in
+// Summary selects exactly the findings the old QueryFindings second pass did.
+func isActionableFinding(fd domain.Finding) bool {
+	return anyEqualFold(actionableStatuses, fd.Status)
+}
+
 // rollupFindings aggregates a set of actionable findings by urgency and top-level
 // component, and collects the acute ones. Pure — the caller supplies the findings
 // (Summary queries status open/in-progress).
