@@ -1,29 +1,32 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
-	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
-// errCodes is the single source of truth tying each domain sentinel to its exit
-// code and the stable machine name for the --json envelope. ExitCode and
-// errorCodeName both read it, so the code and its name can't drift apart.
+// errCodes is the CLI's error policy: it ties each domain error Class to its exit
+// code and the stable machine name for the --json envelope. The *classification*
+// (which Class an error is) now lives in domain.Classify, shared with the TUI and a
+// future web adapter (audit H4); this table is only the CLI-specific Class → code +
+// name mapping. ExitCode and errorCodeName both read it, so the code and its name
+// can't drift apart, and schema.go iterates it for the `exit_codes` contract — so
+// the order and names are part of the wire golden and must not change.
 // 12 (invalid-transition) is retired but reserved — see domain/errors.go.
 var errCodes = []struct {
-	err  error
-	code int
-	name string
+	class domain.Class
+	code  int
+	name  string
 }{
-	{domain.ErrNotFound, 10, "not-found"},
-	{domain.ErrValidation, 11, "validation"},
-	{domain.ErrAmbiguous, 13, "ambiguous"},
-	{domain.ErrConflict, 14, "conflict"},
+	{domain.ClassNotFound, 10, "not-found"},
+	{domain.ClassValidation, 11, "validation"},
+	{domain.ClassAmbiguous, 13, "ambiguous"},
+	{domain.ClassConflict, 14, "conflict"},
 }
 
 // ExitCode maps an error to a semantic exit code, so agents can route on the
@@ -35,8 +38,9 @@ func ExitCode(err error) int {
 	if errors.Is(err, prompt.ErrAborted) {
 		return 130 // 128 + SIGINT(2): the user interrupted a prompt with ctrl-c
 	}
+	class := domain.Classify(err)
 	for _, e := range errCodes {
-		if errors.Is(err, e.err) {
+		if e.class == class {
 			return e.code
 		}
 	}
@@ -70,10 +74,10 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 		fmt.Fprintln(w, "error:", err)
 		return
 	}
-	payload := render.ErrorEnvelope{SchemaVersion: render.SchemaVersion}
+	payload := wire.ErrorEnvelope{SchemaVersion: wire.SchemaVersion}
 	payload.Error.Code = errorCodeName(ExitCode(err))
 	payload.Error.Message = err.Error()
-	// Compact, like every other --json envelope (see render.encodeJSON): an agent
+	// Compact, like every other --json envelope (see wire.EncodeJSON): an agent
 	// parsing the failure shouldn't pay for indentation either.
-	_ = json.NewEncoder(w).Encode(payload)
+	_ = wire.EncodeJSON(w, payload)
 }

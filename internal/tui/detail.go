@@ -321,7 +321,7 @@ func (d *detailPane) scrollToCurrent() {
 	if len(d.find.matches) == 0 {
 		return
 	}
-	if target := d.find.matches[d.find.cur].line - 2; target > 0 {
+	if target := d.find.matches[d.find.cur].line - 2; target >= 0 {
 		d.vp.SetYOffset(target)
 	} else {
 		d.vp.GotoTop()

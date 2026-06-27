@@ -1,4 +1,4 @@
-package render
+package wire
 
 import (
 	"bytes"
@@ -29,7 +29,7 @@ func TestSchemaComments_NotStale(t *testing.T) {
 	defer func() { _ = os.Chdir(cwd) }()
 
 	r := new(jsonschema.Reflector)
-	for _, dir := range []string{"./internal/cli/render", "./internal/domain"} {
+	for _, dir := range []string{"./internal/wire", "./internal/domain"} {
 		if err := r.AddGoComments("github.com/andy-esch/taskflow", dir); err != nil {
 			t.Fatalf("AddGoComments(%s): %v", dir, err)
 		}
@@ -44,7 +44,7 @@ func TestSchemaComments_NotStale(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(append(regenerated, '\n'), schemaComments) {
-		t.Errorf("internal/cli/render/schema_comments.json is stale — run `go run ./internal/tools/schemacomments`")
+		t.Errorf("internal/wire/schema_comments.json is stale — run `go run ./internal/tools/schemacomments`")
 	}
 }
 

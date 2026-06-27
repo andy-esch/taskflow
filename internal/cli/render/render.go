@@ -1,10 +1,12 @@
-// Package render turns typed core results into output. It is the only place
-// that knows about presentation; the core stays presentation-agnostic. Human
-// output may use ANSI; JSON output never does.
+// Package render turns typed core results into CLI output. It owns the human
+// presentation (ANSI tables, lipgloss trees) and is a thin io.Writer wrapper over
+// the machine wire contract in internal/wire: each *JSON emit func builds a wire
+// envelope value (wire.ToXEnvelope) and encodes it, so the CLI and a future web
+// adapter serialize identical JSON. The wire format itself — envelopes, DTOs,
+// SchemaVersion, the JSON Schema — lives in wire, not here.
 package render
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -15,56 +17,13 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
-// SchemaVersion is the semver of the --json payloads — ONE version for the
-// whole CLI output schema, not per envelope (decided 2026-06-12). Adding a
-// field bumps the minor; renaming/removing bumps the major. Key naming rule:
-// JSON keys match the frontmatter keys exactly (`created`, `updated_at`).
-// 1.1: every CLI-settable field round-trips (effort, autonomy_level), and the
-// misfiled signal (previously human-output-only ⚠) is machine-readable.
-// 1.2: mutation envelopes carry dry_run:true under --dry-run previews.
-// 1.3: dry_run is always present on mutation envelopes (was omitted when false);
-// the fix report carries `unreadable` (files it couldn't repair).
-// 1.4: `schema` envelopes (the tool's self-description contract + per-kind
-// authoring guidance) added.
-// 1.5: the create envelope carries `status` (task status / epic status / audit
-// bucket); its `path` is now relative to the planning root in both human and
-// JSON modes (was absolute in JSON).
-// 1.6: the `findings` envelope (audit finding-level query) added.
-// 1.7: the `task_mutation` envelope (task set/append/set --body) added — it
-// carries dry_run and the resulting body, which `task_show` (a read) does not.
-// 1.8: the `init` envelope carries `mode` (scaffold|pointer) and `planning_repo`
-// (set in pointer mode), for `init --planning-repo`.
-// 1.9: the `doctor` envelope (planning_repo <-> tracked_repos linkback audit) added.
-// 1.10: the `init` envelope carries `linked_back` (pointer-mode auto-link-back
-// path) and `tracked` (scaffold-mode --track entries).
-// 1.11: epic rollups exclude deprecated (withdrawn) tasks from total/done; the
-// epic payload carries a separate `deprecated` count.
-// 1.12: the `status` summary envelope carries `open_audits` — open-bucket audits
-// (the actionable subset) with the same finding rollup `audit list` reports;
-// omitted when there are none.
-// 1.13: every audit payload carries the finding-disposition tally the segmented
-// progress bar bands by — `in_progress_findings`, `done_findings` (fixed/landed),
-// `dropped_findings` (deferred/superseded/wontfix) — alongside `open_findings`.
-// 1.14: the `epic_mutation` envelope (`epic set`) added — the epic counterpart to
-// `task_mutation`; it carries dry_run + the reloaded epic (field-only, no body).
-// 1.15: the schema contract carries `epic_fields` — the epic frontmatter registry
-// (sorted known epic field names), the epic counterpart to `task_fields`, so an
-// agent can discover the epic field set without parsing prose. The `fix` envelope
-// carries `remaining` — the lint findings `--fix` could NOT repair (report-only
-// epics, unfixable task issues), so a --json consumer learns the residual breakage
-// without re-running plain lint.
-// 1.16: task payloads carry `revisit_at` — the optional snooze-until date set by
-// `task defer`; the `status` summary envelope carries `revisit_due` (the
-// count of deferred tasks whose revisit_at has arrived) alongside `misfiled`; and
-// the move report (`task defer --json`) carries `revisit_at` per item so a preview
-// and the real run both confirm the snooze.
-// 1.17: the `status` summary envelope carries `findings` — the actionable audit
-// findings (open/in-progress) aggregated `by_urgency` and `by_component` with the
-// `acute` ones listed — and each open audit carries `ready_to_close` (true when it
-// has no open/in-progress findings left).
-const SchemaVersion = "1.17"
+// SchemaVersion re-exports the wire contract's version so existing CLI call sites
+// (exit.go's error envelope, the projection writer in columns.go) keep one import.
+// The canonical value + changelog live in internal/wire.
+const SchemaVersion = wire.SchemaVersion
 
 // TasksHuman writes a scannable table of tasks (empty input writes nothing).
 func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
@@ -106,11 +65,7 @@ func plural(n int, noun string) string {
 // per-file load problems so a JSON consumer never silently loses unreadable
 // files (mirrors LintJSON's `unreadable`).
 func TasksJSON(w io.Writer, tasks []domain.Task, problems []domain.FileProblem) error {
-	payload := TasksEnvelope{SchemaVersion: SchemaVersion, Tasks: make([]taskJSON, 0, len(tasks)), Unreadable: problems}
-	for _, t := range tasks {
-		payload.Tasks = append(payload.Tasks, toJSON(t))
-	}
-	return encodeJSON(w, payload)
+	return wire.EncodeJSON(w, wire.ToTasksEnvelope(tasks, problems))
 }
 
 // TaskShowHuman prints a task's metadata followed by its body.
@@ -155,7 +110,7 @@ func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 
 // TaskShowJSON writes a task plus its body.
 func TaskShowJSON(w io.Writer, t domain.Task, body string) error {
-	return encodeJSON(w, TaskShowEnvelope{SchemaVersion: SchemaVersion, Task: toJSON(t), Body: body})
+	return wire.EncodeJSON(w, wire.ToTaskShowEnvelope(t, body))
 }
 
 // TaskMutationJSON writes the result of a task mutation (`task set`/`append`/`set
@@ -164,18 +119,12 @@ func TaskShowJSON(w io.Writer, t domain.Task, body string) error {
 // commands (empty/omitted for field-only `set`). Distinct from TaskShowEnvelope so
 // the mutation-only dry_run never lands on the `task show` read type.
 func TaskMutationJSON(w io.Writer, t domain.Task, body string, dryRun bool) error {
-	return encodeJSON(w, TaskMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Task: toJSON(t), Body: body})
+	return wire.EncodeJSON(w, wire.ToTaskMutationEnvelope(t, body, dryRun))
 }
 
-// MoveResult is the per-item outcome of a transition. `To` is the destination
-// state — a task status or an audit bucket — so the JSON key is the neutral
-// "to" rather than "status".
-type MoveResult struct {
-	Slug      string `json:"slug"`
-	To        string `json:"to"`
-	RevisitAt string `json:"revisit_at,omitempty" jsonschema:"description=revisit (snooze-until) date recorded by task defer"`
-	Error     string `json:"error,omitempty"`
-}
+// MoveResult is the per-item outcome of a transition (the wire type), re-exported
+// so the CLI's move loop (moves.go) keeps building it through the render package.
+type MoveResult = wire.MoveResult
 
 // MovesHuman prints one line per transition outcome ("would move" on a
 // --dry-run preview).
@@ -204,27 +153,17 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 // MovesJSON writes the structured per-task transition report; dry_run marks a
 // preview (nothing was written).
 func MovesJSON(w io.Writer, results []MoveResult, dryRun bool) error {
-	if results == nil {
-		results = []MoveResult{} // empty, not null — schema is type: array (see FixJSON)
-	}
-	return encodeJSON(w, MovesEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Moves: results})
+	return wire.EncodeJSON(w, wire.ToMovesEnvelope(results, dryRun))
 }
 
-// encodeJSON writes the payload as compact (un-indented) JSON with a single
-// trailing newline. Machine output: pretty-printing is pure token cost for a
-// consumer that parses it. Off-tree consumers pipe through `jq .` to read it.
-func encodeJSON(w io.Writer, payload any) error {
-	enc := json.NewEncoder(w)
-	return enc.Encode(payload)
-}
+// DoctorProblem is one linkback inconsistency (the wire type), re-exported so the
+// CLI's doctor command keeps building it through the render package.
+type DoctorProblem = wire.DoctorProblem
 
 // DoctorJSON writes the linkback audit; problems is empty (not null) when the
 // links are consistent, so a consumer can len() it without a nil check.
 func DoctorJSON(w io.Writer, root string, problems []DoctorProblem) error {
-	if problems == nil {
-		problems = []DoctorProblem{}
-	}
-	return encodeJSON(w, DoctorEnvelope{SchemaVersion: SchemaVersion, Root: root, Problems: problems})
+	return wire.EncodeJSON(w, wire.ToDoctorEnvelope(root, problems))
 }
 
 // DoctorHuman writes the linkback audit: a ⚠ per problem (with a count footer),
@@ -357,39 +296,7 @@ func countLine(st Style, counts []core.StatusCount) string {
 
 // SummaryJSON writes the dashboard as a versioned envelope.
 func SummaryJSON(w io.Writer, s core.Summary) error {
-	counts := make([]statusCountJSON, 0, len(s.Counts))
-	for _, c := range s.Counts {
-		counts = append(counts, statusCountJSON{Status: string(c.Status), Count: c.Count})
-	}
-	inprog := make([]taskJSON, 0, len(s.InProgress))
-	for _, t := range s.InProgress {
-		inprog = append(inprog, toJSON(t))
-	}
-	epics := make([]epicJSON, 0, len(s.Epics))
-	for _, e := range s.Epics {
-		epics = append(epics, epicJSON{
-			epicMetaJSON: toEpicMeta(e.Epic),
-			Total:        e.Total, Done: e.Done, Percent: e.Percent(), Deprecated: e.Deprecated,
-		})
-	}
-	// open_audits is omitempty: absent unless there's actionable audit work, so a
-	// repo with none sees no envelope change (the human dashboard self-hides too).
-	audits := make([]auditJSON, 0, len(s.OpenAudits))
-	for _, a := range s.OpenAudits {
-		audits = append(audits, auditToJSON(a))
-	}
-	// findings is omitted (nil) unless there's actionable audit work, paralleling
-	// open_audits — a repo with none sees no envelope change.
-	var findings *findingsRollupJSON
-	if fr := s.Findings; fr.Open+fr.InProgress > 0 {
-		f := toFindingsRollup(fr)
-		findings = &f
-	}
-	return encodeJSON(w, SummaryEnvelope{
-		SchemaVersion: SchemaVersion, Counts: counts, InProgress: inprog,
-		Epics: epics, OpenAudits: audits, Findings: findings,
-		Misfiled: s.Misfiled, RevisitDue: s.RevisitDue, Unreadable: s.Problems,
-	})
+	return wire.EncodeJSON(w, wire.ToSummaryEnvelope(s))
 }
 
 // VersionHuman prints the CLI version.
@@ -399,7 +306,7 @@ func VersionHuman(w io.Writer, st Style, version string) {
 
 // VersionJSON writes the version in the standard envelope.
 func VersionJSON(w io.Writer, version string) error {
-	return encodeJSON(w, VersionEnvelope{SchemaVersion: SchemaVersion, Version: version})
+	return wire.EncodeJSON(w, wire.ToVersionEnvelope(version))
 }
 
 // CreatedHuman prints the path of a newly created file (or, under --dry-run,
@@ -448,7 +355,7 @@ func naiveSlug(title string) string {
 // status / epic status / audit bucket); path is relative to the planning root,
 // matching the human output.
 func CreatedJSON(w io.Writer, kind, id, status, path string, dryRun bool) error {
-	return encodeJSON(w, CreatedEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Created: CreatedItem{Kind: kind, ID: id, Status: status, Path: path}})
+	return wire.EncodeJSON(w, wire.ToCreatedEnvelope(kind, id, status, path, dryRun))
 }
 
 // EpicsHuman writes a table of epics with task rollup.
@@ -469,14 +376,7 @@ func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 // EpicsJSON writes a versioned envelope of epics with rollup, including any
 // per-file load problems (mirrors LintJSON's `unreadable`).
 func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []domain.FileProblem) error {
-	payload := EpicsEnvelope{SchemaVersion: SchemaVersion, Epics: make([]epicJSON, 0, len(epics)), Unreadable: problems}
-	for _, e := range epics {
-		payload.Epics = append(payload.Epics, epicJSON{
-			epicMetaJSON: toEpicMeta(e.Epic),
-			Total:        e.Total, Done: e.Done, Percent: e.Percent(), Deprecated: e.Deprecated,
-		})
-	}
-	return encodeJSON(w, payload)
+	return wire.EncodeJSON(w, wire.ToEpicsEnvelope(epics, problems))
 }
 
 // EpicShowHuman prints an epic, its tasks, and its body.
@@ -556,11 +456,7 @@ func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
 // AuditsJSON writes a versioned envelope of audits, including any per-file load
 // problems (mirrors LintJSON's `unreadable`).
 func AuditsJSON(w io.Writer, audits []domain.Audit, problems []domain.FileProblem) error {
-	payload := AuditsEnvelope{SchemaVersion: SchemaVersion, Audits: make([]auditJSON, 0, len(audits)), Unreadable: problems}
-	for _, a := range audits {
-		payload.Audits = append(payload.Audits, auditToJSON(a))
-	}
-	return encodeJSON(w, payload)
+	return wire.EncodeJSON(w, wire.ToAuditsEnvelope(audits, problems))
 }
 
 // findingStatusOrder renders the finding groups of `audit show` in lifecycle
@@ -646,18 +542,14 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Fin
 
 // AuditShowJSON writes an audit plus its body.
 func AuditShowJSON(w io.Writer, a domain.Audit, body string) error {
-	return encodeJSON(w, AuditShowEnvelope{SchemaVersion: SchemaVersion, Audit: auditToJSON(a), Body: body})
+	return wire.EncodeJSON(w, wire.ToAuditShowEnvelope(a, body))
 }
 
 // FindingsJSON writes the structured finding-query result: each parsed finding
 // tagged with its audit slug and bucket, so a cross-audit query stays
 // self-describing. Mirrors the list envelopes' `unreadable` for per-file problems.
 func FindingsJSON(w io.Writer, fs []core.AuditFinding, problems []domain.FileProblem) error {
-	payload := FindingsEnvelope{SchemaVersion: SchemaVersion, Findings: make([]findingJSON, 0, len(fs)), Unreadable: problems}
-	for _, f := range fs {
-		payload.Findings = append(payload.Findings, toFindingJSON(f))
-	}
-	return encodeJSON(w, payload)
+	return wire.EncodeJSON(w, wire.ToFindingsEnvelope(fs, problems))
 }
 
 // FindingsHuman writes a scannable table of findings (empty input writes nothing).
@@ -712,23 +604,7 @@ func FixHuman(w io.Writer, st Style, results []domain.FixResult, remaining []cor
 // task issues). All three are empty on a dry-run (which writes nothing) — so a
 // --json consumer learns the residual breakage without parsing the prose error.
 func FixJSON(w io.Writer, results []domain.FixResult, problems []domain.FileProblem, remaining []core.LintResult, dryRun bool) error {
-	// Empty (not null) for the array fields, so a consumer can len() without a nil
-	// check — and so the output validates against its own schema (type: array).
-	if problems == nil {
-		problems = []domain.FileProblem{}
-	}
-	if results == nil {
-		results = []domain.FixResult{}
-	}
-	rem := make([]lintTaskJSON, 0, len(remaining))
-	for _, r := range remaining {
-		issues := r.Issues
-		if issues == nil {
-			issues = []domain.Issue{} // empty, not null — the per-row issues are type: array too
-		}
-		rem = append(rem, lintTaskJSON{Slug: r.Slug, Issues: issues})
-	}
-	return encodeJSON(w, FixEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results, Unreadable: problems, Remaining: rem})
+	return wire.EncodeJSON(w, wire.ToFixEnvelope(results, problems, remaining, dryRun))
 }
 
 // ProblemsHuman writes per-file load problems (unreadable frontmatter).
@@ -755,49 +631,29 @@ func LintHuman(w io.Writer, st Style, results []core.LintResult, noun string) {
 
 // LintJSON writes the structured lint report: unreadable files + field issues.
 func LintJSON(w io.Writer, results []core.LintResult, problems []domain.FileProblem) error {
-	if problems == nil {
-		problems = []domain.FileProblem{} // empty, not null (see FixJSON) — schema is type: array
-	}
-	payload := LintEnvelope{SchemaVersion: SchemaVersion, Unreadable: problems, Issues: make([]lintTaskJSON, 0, len(results))}
-	for _, r := range results {
-		issues := r.Issues
-		if issues == nil {
-			issues = []domain.Issue{} // empty, not null — the per-row issues are type: array too
-		}
-		payload.Issues = append(payload.Issues, lintTaskJSON{Slug: r.Slug, Issues: issues})
-	}
-	return encodeJSON(w, payload)
+	return wire.EncodeJSON(w, wire.ToLintEnvelope(results, problems))
 }
 
 // EpicShowJSON writes an epic, its tasks, and its body.
 func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body string) error {
-	jt := make([]taskJSON, 0, len(tasks))
-	for _, t := range tasks {
-		jt = append(jt, toJSON(t))
-	}
-	return encodeJSON(w, EpicShowEnvelope{
-		SchemaVersion: SchemaVersion,
-		Epic:          toEpicMeta(epic),
-		Tasks:         jt,
-		Body:          body,
-	})
+	return wire.EncodeJSON(w, wire.ToEpicShowEnvelope(epic, tasks, body))
 }
 
 // EpicMutationJSON writes the result of an `epic set`: the reloaded epic + dry_run
 // (always present — a preview must be distinguishable from a real write). The epic
 // counterpart to TaskMutationJSON; field-only, so there's no body to echo.
 func EpicMutationJSON(w io.Writer, epic domain.Epic, dryRun bool) error {
-	return encodeJSON(w, EpicMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Epic: toEpicMeta(epic)})
+	return wire.EncodeJSON(w, wire.ToEpicMutationEnvelope(epic, dryRun))
 }
+
+// InitEnvelope is the `init --json` payload (the wire type), re-exported so the
+// CLI's init command keeps building it through the render package.
+type InitEnvelope = wire.InitEnvelope
 
 // InitJSON reports the init result. The caller fills the envelope's named fields
 // (mode/root/planning_repo/linked_back/tracked/created); InitJSON stamps the
 // schema_version and normalizes created to an empty array (not null) so a
 // consumer can len() it.
 func InitJSON(w io.Writer, e InitEnvelope) error {
-	e.SchemaVersion = SchemaVersion
-	if e.Created == nil {
-		e.Created = []string{}
-	}
-	return encodeJSON(w, e)
+	return wire.EncodeJSON(w, wire.NormalizeInitEnvelope(e))
 }

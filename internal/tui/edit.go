@@ -149,6 +149,9 @@ func (e *editMenu) openEpic(ep domain.Epic) {
 // newEditMenu builds the form shell (the shared text widgets) for an entity's
 // slug + field set + submit route.
 func newEditMenu(slug string, fields []editField, apply fieldSetter) editMenu {
+	if len(fields) == 0 {
+		return editMenu{} // an empty field set must not open a form, so cur() never indexes nil
+	}
 	ti := textinput.New()
 	ti.CharLimit = 256
 	ti.SetWidth(36)

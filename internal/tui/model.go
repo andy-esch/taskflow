@@ -223,14 +223,29 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.reloadAll()
 
 	case actionErrMsg:
-		// An inline-edit write failed: keep the field open with what was typed and
-		// show the validation error there, so the fix happens in place rather than
-		// the edit silently reverting. Other mutations (the action menu) flash.
-		if m.edit.active {
-			// Trim the "validation failed:" sentinel prefix — inline by the field, the
-			// bare reason ("at least one tag is required") reads cleaner.
-			m.edit.err = strings.TrimPrefix(msg.err.Error(), domain.ErrValidation.Error()+": ")
-			return m, nil
+		// A mutation failed. Route on the domain error class (shared with the CLI's
+		// exit-code mapping, audit H4) rather than painting every failure red:
+		//   - Conflict: the compare-and-swap saw the file change on disk under us
+		//     (another process moved/edited it). Retrying our stale write is wrong —
+		//     reload so the user acts on the current state. A stale inline editor is
+		//     closed first, since its prefilled values may no longer match the file.
+		//   - Validation (while editing): keep the field open with what was typed and
+		//     show the bare reason inline, so the fix happens in place. domain.Reason
+		//     strips the "validation failed:" prefix in one tested helper (no inline
+		//     string-trim coupling the TUI to the wrap format).
+		//   - Everything else: a red flash.
+		switch domain.Classify(msg.err) {
+		case domain.ClassConflict:
+			if m.edit.active {
+				m.edit.close()
+			}
+			m.flash, m.flashErr = "changed on disk — reloading", true
+			return m, m.reloadAll()
+		case domain.ClassValidation:
+			if m.edit.active {
+				m.edit.err = domain.Reason(msg.err) // bare reason, inline by the field
+				return m, nil
+			}
 		}
 		m.flash = msg.err.Error()
 		m.flashErr = true

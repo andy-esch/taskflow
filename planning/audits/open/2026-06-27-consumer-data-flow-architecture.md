@@ -13,7 +13,7 @@ Overall health is strong — the core/store boundary is clean, writes are atomic
 
 ## High
 
-#### H1. The JSON wire contract is trapped inside a sibling primary adapter  · **Status:** open
+#### H1. The JSON wire contract is trapped inside a sibling primary adapter  · **Status:** fixed
 **Component:** cli/render · **Effort:** L · **Urgency:** soon
 
 The entire machine wire format — envelopes, DTOs, `SchemaVersion` (`render.go:67`), `JSONSchema()` (`envelopes.go:257`), the embedded `schema_comments.json` — lives in `internal/cli/render`, the CLI's presentation adapter, and the DTO types/mappers (`taskJSON`, `auditToJSON`, `toFindingsRollup`) are **unexported** (`dto.go:13,81,126`). A future `tskflwctl serve` that wants the same JSON has only bad options: import `internal/cli/render` from the web adapter (a primary adapter importing a sibling primary adapter — the textbook hexagonal layering violation), or re-declare every envelope and drift from `SchemaVersion`/the goldens. The emit funcs are also `io.Writer`-shaped and version-stamping (`SummaryJSON(w, …)`), so an HTTP handler can't get a *value* to wrap in its own response without re-encoding through a buffer. The package doc claims render "is the only place that knows about presentation" — but a machine wire contract is an API, not presentation. Fix: extract the wire contract to a neutral leaf package (`internal/wire` / `internal/api`) depending only on `core`/`domain` — exported envelopes, DTO mappers, `SchemaVersion`, `JSONSchema()` — leaving the human renderers (`*Human`, `Style`, lipgloss) in `render`. Both `cli` and `web` then import `wire`.
@@ -28,7 +28,7 @@ The entire machine wire format — envelopes, DTOs, `SchemaVersion` (`render.go:
 
 "Verb name ↔ destination state" — the central lifecycle vocabulary — is written out twice with nothing tying the copies together. The CLI declares it inline as constructor args (`cli/task.go:54-66` `newTransitionCmd(…,domain.StatusInProgress)`, `cli/audit.go:22-24`); the TUI declares the same mappings as separate tables (`tui/action.go:27-34` `taskTransitions`, `:39-43`, `:50-54`). The `destructive` flag and verb labels exist *only* in the TUI table; the CLI has no equivalent. `core` already centralizes `AllStatuses()`/`AllAuditBuckets()`/`AllEpicStatuses()` — the verb mapping is the missing peer, and a web adapter needs exactly this table to render action buttons / map `POST /tasks/{slug}/transitions/{verb}`, becoming a third hand-written copy. Fix: promote one `[]Transition{Verb, To, Destructive}` per entity into `core`/`domain`; the CLI builds its command loop from it, the TUI tables become thin views of it, web reads it for routing.
 
-#### H4. Error classification is centralized for the CLI but reinvented as raw text in the TUI  · **Status:** open
+#### H4. Error classification is centralized for the CLI but reinvented as raw text in the TUI  · **Status:** fixed
 **Component:** core / tui · **Effort:** M · **Urgency:** soon
 
 The CLI has one good sentinel→outcome mapper: `cli/exit.go:31-44` maps `ErrNotFound/ErrValidation/ErrAmbiguous/ErrConflict` to exit codes + stable JSON `code` names via `errors.Is`. The TUI has **no** `errors.Is` classification at all — it flashes `msg.err.Error()` verbatim (`tui/model.go:235`) and reconstructs the inline-edit reason by string-stripping the sentinel prefix: `strings.TrimPrefix(msg.err.Error(), domain.ErrValidation.Error()+": ")` (`model.go:232`). That hack couples the TUI to the exact wrapping format and breaks the moment the message doesn't start with `"validation failed: "`. More importantly, the TUI cannot distinguish `ErrConflict` (the CAS "changed on disk during move", `store/fsstore.go:173,239` — which should prompt a *reload*) from `ErrValidation` (fix-in-place) from `ErrNotFound`; it paints them all red. The good mapper is locked in `package cli` where neither TUI nor web can import it without pulling cobra. Fix: move an `ErrorClass(err) → {NotFound, Validation, Ambiguous, Conflict, Unknown}` (over `errors.Is`) into `core`/`domain`; CLI maps class→exit code, web→HTTP status (404/409/422), TUI→{red flash, reload-and-retry, inline field error}. Delete the `TrimPrefix`.
@@ -112,17 +112,17 @@ Core correctly owns the *tally* (`FindingsRollup.ByUrgency`/`ByComponent` as `[]
 
 Descriptions come from inline `jsonschema:"description=…"` struct tags on the unexported projection DTOs (`dto.go:14-122`) AND the generated Go-doc map `schema_comments.json` for the exported envelopes/domain types — because `AddGoComments` skips unexported types. Two sources of truth for "the description of a schema field," selected by visibility; a known foot-gun guarded by `TestTaskJSONDescriptionTagMatchesCap`/`TestEpicStatusDescriptionMatchesVocab` precisely because a tag literal like `"<=200 chars"` can drift from `domain.MaxDescriptionLen`. Fix: when extracting the wire package (H1), make the envelope DTOs **exported** there so `AddGoComments` reads their doc comments — collapsing to one description source and retiring the drift-guard tests.
 
-#### L3. `actionMenu.selected()` / `editMenu.cur()` index without a bounds guard  · **Status:** open
+#### L3. `actionMenu.selected()` / `editMenu.cur()` index without a bounds guard  · **Status:** fixed
 **Component:** tui · **Effort:** XS · **Urgency:** eventually
 
 `move`/`optMove` are all guarded `if n := len(...); n > 0`, but `selected()` (`action.go:146` `a.options[a.cursor]`) and `cur()` (`edit.go:192` `e.fields[e.cursor]`) index directly. Safe today only as an emergent property of the data (every entity's transition table survives the no-op filter non-empty; edit forms always have ≥3 fields). A future entity whose only transition equals its current state makes `validTransitions` return `nil`, and the first `enter` panics (`model.go:686,704`). Fix: `open()` refuses to activate on empty options, or `selected()` returns `(transition, bool)`.
 
-#### L4. `setMapNode` unconditionally carries the old value node's comments onto its replacement  · **Status:** open
+#### L4. `setMapNode` unconditionally carries the old value node's comments onto its replacement  · **Status:** fixed
 **Component:** store · **Effort:** XS · **Urgency:** eventually
 
 On a surgical update, `setMapNode` copies the old node's `Head/Line/FootComment` onto the new node "so comments survive" (`store/frontmatter.go:186-197`) — correct for the common case, but an unconditional overwrite of the new node's (today empty) comment fields. If a field is set twice in one `updates` pass, or a future caller builds a value node *with* a comment, the carry clobbers it. Fix: only copy when the new node's corresponding field is empty, making "preserve, don't overwrite" explicit.
 
-#### L5. `scrollToCurrent` uses `> 0` where `>= 0` is intended  · **Status:** open
+#### L5. `scrollToCurrent` uses `> 0` where `>= 0` is intended  · **Status:** fixed
 **Component:** tui · **Effort:** XS · **Urgency:** eventually
 
 `detail.go:324`: `if target := …line - 2; target > 0 { SetYOffset(target) } else { GotoTop() }`. A match on line 2 yields `target == 0` and takes `GotoTop` — identical result, so harmless, but the boundary should be `>= 0` to match intent. Cosmetic; flagged only because it's the `> 0` vs `>= 0` class the audit scanned for (all other bounds math — the dashboard `scrollTo`, the `((x%n)+n)%n` wraps, every `Percent()` div guard — is correct).

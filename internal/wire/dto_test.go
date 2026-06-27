@@ -1,4 +1,4 @@
-package render
+package wire
 
 import (
 	"reflect"
@@ -14,13 +14,13 @@ import (
 // static literals). Every other copy (CLI flag help, schema authoring guidance)
 // is built from the constant; this test keeps the tag from silently drifting.
 func TestTaskJSONDescriptionTagMatchesCap(t *testing.T) {
-	f, ok := reflect.TypeOf(taskJSON{}).FieldByName("Description")
+	f, ok := reflect.TypeOf(TaskJSON{}).FieldByName("Description")
 	if !ok {
-		t.Fatal("taskJSON has no Description field")
+		t.Fatal("TaskJSON has no Description field")
 	}
 	tag := f.Tag.Get("jsonschema")
 	want := strconv.Itoa(domain.MaxDescriptionLen)
 	if !strings.Contains(tag, want) {
-		t.Errorf("taskJSON Description jsonschema tag %q must mention the cap %s — update the tag (and the schema golden) when MaxDescriptionLen changes", tag, want)
+		t.Errorf("TaskJSON Description jsonschema tag %q must mention the cap %s — update the tag (and the schema golden) when MaxDescriptionLen changes", tag, want)
 	}
 }
