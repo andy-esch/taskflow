@@ -25,6 +25,15 @@ func row(w io.Writer, m list.Model, index int, content string) {
 	fmt.Fprint(w, "  "+line)
 }
 
+// rollupCounts formats a done/total rollup right-justified to width (0 = natural
+// width). Shared by the epic + audit list rows and the dashboard's epics widget so
+// the "12/166"-style column lines up the same way on every surface, padded to the
+// widest value in its set rather than a fixed guess that a 3-digit total overflows.
+// Counts are ASCII, so a byte-width pad (%*s) is also the display width.
+func rollupCounts(done, total, width int) string {
+	return fmt.Sprintf("%*s", width, fmt.Sprintf("%d/%d", done, total))
+}
+
 // --- tasks ---
 
 // taskItem adapts a domain.Task to a bubbles/list item. due is whether its revisit
@@ -90,8 +99,13 @@ func (taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 
 // --- epics ---
 
-// epicItem adapts a core.EpicSummary (epic + rollup) to a list item.
-type epicItem struct{ es core.EpicSummary }
+// epicItem adapts a core.EpicSummary (epic + rollup) to a list item. countsW is
+// the done/total column width measured across the whole list at load (see
+// loadEpicList), so the delegate can pad to it without re-scanning siblings.
+type epicItem struct {
+	es      core.EpicSummary
+	countsW int
+}
 
 func (i epicItem) FilterValue() string {
 	return i.es.Epic.ID + " " + i.es.Epic.Description + " " + strings.Join(i.es.Epic.Tags, " ")
@@ -123,15 +137,19 @@ func (epicDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 	pct := it.es.Percent()
 	bar := miniBar(pct, 8)
 	pctStr := fg(theme.Percent(pct), fmt.Sprintf("%3d%%", pct))
-	counts := fmt.Sprintf("%5s", fmt.Sprintf("%d/%d", it.es.Done, it.es.Total))
+	counts := rollupCounts(it.es.Done, it.es.Total, it.countsW)
 	idAndDesc := it.es.Epic.ID + "  " + dim(it.es.Epic.Description)
 	row(w, m, index, fmt.Sprintf("%s %s %s  %s", bar, pctStr, counts, idAndDesc))
 }
 
 // --- audits ---
 
-// auditItem adapts a domain.Audit to a list item.
-type auditItem struct{ a domain.Audit }
+// auditItem adapts a domain.Audit to a list item. countsW is the resolved/total
+// column width measured across the list at load (see loadAuditList).
+type auditItem struct {
+	a       domain.Audit
+	countsW int
+}
 
 func (i auditItem) FilterValue() string { return i.a.Slug + " " + i.a.Area }
 func (i auditItem) id() string          { return i.a.Slug }
@@ -163,7 +181,7 @@ func (auditDelegate) Render(w io.Writer, m list.Model, index int, item list.Item
 	pct := it.a.Percent()
 	bar := segBar(it.a.DoneFindings, it.a.ActiveFindings, it.a.DroppedFindings, it.a.Findings, 8)
 	pctStr := fg(theme.Percent(pct), fmt.Sprintf("%3d%%", pct))
-	counts := fmt.Sprintf("%5s", fmt.Sprintf("%d/%d", it.a.Resolved(), it.a.Findings))
+	counts := rollupCounts(it.a.Resolved(), it.a.Findings, it.countsW)
 	row(w, m, index, fmt.Sprintf("%s %s %s %s  %s  %s",
 		fg(tok.Color, tok.Glyph), bar, pctStr, counts, it.a.Slug, dim(it.a.Area)))
 }

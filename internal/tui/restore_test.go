@@ -80,7 +80,7 @@ func TestModel_ReloadDuringJumpKeepsTarget(t *testing.T) {
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
-	m = tm.(Model)
+	m = toTasks(t, tm.(Model)) // default landing is the dashboard; drop onto tasks
 	if n := len(m.cur().list.Items()); n != 1 {
 		t.Fatalf("setup: working set should hide the completed task, got %d items", n)
 	}

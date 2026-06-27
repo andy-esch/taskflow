@@ -58,6 +58,18 @@ func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 	}
 }
 
+// loadDashboard reads the at-a-glance Summary for the landing screen (off the
+// event loop → dashLoadedMsg) — the same core.Summary the `status` command renders.
+func loadDashboard(svc *core.Service) tea.Cmd {
+	return func() tea.Msg {
+		s, err := svc.Summary()
+		if err != nil {
+			return dashLoadedMsg{err: err}
+		}
+		return dashLoadedMsg{summary: s}
+	}
+}
+
 func loadTaskDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
 		t, body, err := svc.ShowTask(id)
@@ -77,9 +89,13 @@ func loadEpicList(t *entityTab, svc *core.Service) tea.Cmd {
 		if err != nil {
 			return errMsg{kind: entityEpics, gen: gen, err: err}
 		}
+		countsW := 0 // measure the done/total column once so the rows line up
+		for _, es := range epics {
+			countsW = max(countsW, len(rollupCounts(es.Done, es.Total, 0)))
+		}
 		items := make([]list.Item, 0, len(epics))
 		for _, es := range epics {
-			items = append(items, epicItem{es})
+			items = append(items, epicItem{es: es, countsW: countsW})
 		}
 		return listLoadedMsg{kind: entityEpics, gen: gen, items: items, problems: problems}
 	}
@@ -115,9 +131,13 @@ func loadAuditList(t *entityTab, svc *core.Service) tea.Cmd {
 		if err != nil {
 			return errMsg{kind: entityAudits, gen: gen, err: err}
 		}
+		countsW := 0 // measure the resolved/total column once so the rows line up
+		for _, a := range audits {
+			countsW = max(countsW, len(rollupCounts(a.Resolved(), a.Findings, 0)))
+		}
 		items := make([]list.Item, 0, len(audits))
 		for _, a := range audits {
-			items = append(items, auditItem{a})
+			items = append(items, auditItem{a: a, countsW: countsW})
 		}
 		return listLoadedMsg{kind: entityAudits, gen: gen, items: items, problems: problems}
 	}

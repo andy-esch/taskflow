@@ -121,7 +121,7 @@ func TestModel_FollowGracefulDeadEnds(t *testing.T) {
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
-	m = tm.(Model)
+	m = toTasks(t, tm.(Model)) // default landing is the dashboard; drop onto tasks
 	tm, _ = m.Update(press("f"))
 	m = tm.(Model)
 	if !m.flashErr || !strings.Contains(m.flash, "no epic") {
@@ -171,7 +171,7 @@ func TestModel_FollowEscalatesToAllView(t *testing.T) {
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
-	m = tm.(Model)
+	m = toTasks(t, tm.(Model)) // default landing is the dashboard; drop onto tasks
 	if n := len(m.cur().list.Items()); n != 1 {
 		t.Fatalf("working set should hide the completed task, got %d items", n)
 	}
@@ -239,7 +239,7 @@ func TestModel_FollowDanglingEpicRef(t *testing.T) {
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
-	m = tm.(Model)
+	m = toTasks(t, tm.(Model)) // default landing is the dashboard; drop onto tasks
 	tm, cmd := m.Update(press("f"))
 	m = pump(t, tm.(Model), cmd, 8)
 	if m.cur().name != "epics" {

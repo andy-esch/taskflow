@@ -79,6 +79,10 @@ type EpicSummary struct {
 	Total      int
 	Done       int
 	Deprecated int
+	// LastUpdated is the most recent task activity in the epic (max updated_at,
+	// falling back to created) — epics carry no timestamp of their own, so "last
+	// touched" is derived from the work that belongs to them. "" when undated.
+	LastUpdated string
 }
 
 // Percent is the completed share of the epic's NON-deprecated tasks.
@@ -113,9 +117,30 @@ func rollupEpics(epics []domain.Epic, tasks []domain.Task) []EpicSummary {
 	out := make([]EpicSummary, len(epics))
 	for i, e := range epics {
 		done, total, deprecated := TaskRollup(byEpic[e.ID])
-		out[i] = EpicSummary{Epic: e, Total: total, Done: done, Deprecated: deprecated}
+		out[i] = EpicSummary{
+			Epic: e, Total: total, Done: done, Deprecated: deprecated,
+			LastUpdated: epicLastUpdated(byEpic[e.ID]),
+		}
 	}
 	return out
+}
+
+// epicLastUpdated is the most recent task activity in an epic — the max of its
+// tasks' updated_at (falling back to created when a task was never updated).
+// Dates are YYYY-MM-DD, which sorts correctly as a string. "" when the epic has
+// no dated tasks.
+func epicLastUpdated(tasks []domain.Task) string {
+	last := ""
+	for _, t := range tasks {
+		d := t.Updated
+		if d == "" {
+			d = t.Created
+		}
+		if d > last {
+			last = d
+		}
+	}
+	return last
 }
 
 // TaskRollup counts a task set for an epic-style progress rollup, in ONE place so

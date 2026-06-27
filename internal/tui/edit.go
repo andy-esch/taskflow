@@ -400,13 +400,15 @@ func (e editMenu) view(maxW, maxH int) string {
 	if e.editing && e.cur().kind == fieldLongText {
 		body += "\n\n" + editAreaBox.Render(e.area.View())
 	}
-	box := actionBorder.Render(body)
-	lines := []string{box}
+	// A validation error renders INSIDE the box (truncated to the inner width) so the
+	// box keeps its width and stays centered. Rendered BELOW the box, a wider error
+	// grew the composite and shifted the (left-aligned) box left as it re-centered.
 	if e.err != "" {
-		lines = append(lines, fg(theme.ColorRed, "✘ "+truncate(e.err, max(maxW-2, 8))))
+		body += "\n\n" + fg(theme.ColorRed, "✘ "+truncate(e.err, innerW))
 	}
-	lines = append(lines, e.hint())
-	return clampBox(lipgloss.JoinVertical(lipgloss.Left, lines...), maxW, maxH)
+	box := actionBorder.Render(body)
+	// Box + hint centered as one unit (matching the action menu), so neither moves.
+	return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, e.hint()), maxW, maxH)
 }
 
 // cell renders field i's value column: the inline editor when it's the one being

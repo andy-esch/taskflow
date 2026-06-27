@@ -22,7 +22,8 @@ func newCommandBar() commandBar {
 	ti := textinput.New()
 	ti.Prompt = ":"
 	ti.CharLimit = 32
-	ti.Placeholder = "tasks·epics·audits (t/e/a)"
+	// No placeholder: the footer lists the matching commands inline (commandHint),
+	// which is richer than a static hint and would otherwise read redundantly.
 	return commandBar{ti: ti}
 }
 

@@ -24,6 +24,10 @@ const (
 	entityAudits
 )
 
+// entityDashboard is a sentinel (not a real tab, never in m.tabs) so context
+// surfaces like the `?` help can render dashboard-specific notes.
+const entityDashboard entityKind = -1
+
 // entityItem is a list row that knows its own stable id (slug / epic id) and the
 // fields it can be sorted by, so the model can preserve the cursor, stale-guard
 // detail loads, and reorder lists generically across entities.

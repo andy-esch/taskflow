@@ -76,14 +76,30 @@ func newModel(t *testing.T) Model {
 	return New(core.NewService(store.NewFS(root)))
 }
 
-// loaded returns a model that's been sized and had its task load applied.
+// loaded returns a model sized, initialized, and dropped onto the tasks tab. The
+// landing view is the dashboard, but most tests target the tabs, so this settles
+// onto tasks; dashboard tests use loadedDash.
 func loaded(t *testing.T, w, h int) Model {
+	t.Helper()
+	return toTasks(t, loadedDash(t, w, h))
+}
+
+// loadedDash returns a model sized and initialized on the default landing
+// dashboard (its summary loaded).
+func loadedDash(t *testing.T, w, h int) Model {
 	t.Helper()
 	m := newModel(t)
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	m = tm.(Model)
-	tm, _ = m.Update(m.Init()()) // run loadTasks synchronously, feed result
+	tm, _ = m.Update(m.Init()()) // run the dashboard load synchronously, feed result
 	return tm.(Model)
+}
+
+// toTasks drops from the dashboard onto the tasks tab and settles its load.
+func toTasks(t *testing.T, m Model) Model {
+	t.Helper()
+	tm, cmd := m.Update(press("]")) // dashboard → first tab (tasks)
+	return drain(t, tm.(Model), cmd)
 }
 
 func press(s string) tea.KeyPressMsg {
@@ -250,6 +266,7 @@ func TestModel_FilterNarrows(t *testing.T) {
 	// Run the real program (teatest runs cmds in the runtime, so the list's async
 	// FilterMatchesMsg is actually applied) and inspect the final model.
 	tm := teatest.NewTestModel(t, newModel(t), teatest.WithInitialTermSize(120, 40))
+	tm.Send(press("]")) // drop off the landing dashboard onto tasks
 	// Wait for the async task load to render before filtering.
 	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
 		return bytes.Contains(b, []byte("beta"))
@@ -425,8 +442,8 @@ func TestModel_PerTabCursorPreserved(t *testing.T) {
 	if m.selectedID() != "beta" {
 		t.Fatalf("expected beta selected on tasks, got %q", m.selectedID())
 	}
-	// Cycle tasks → epics → audits → tasks, draining each load.
-	for i := 0; i < 3; i++ {
+	// Cycle tasks → epics → audits → dashboard → tasks, draining each load.
+	for i := 0; i < 4; i++ {
 		tm, cmd := m.Update(press("]"))
 		m = drain(t, tm.(Model), cmd)
 	}
@@ -518,11 +535,11 @@ func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
-	m = tm.(Model)
-	// :audits → an empty list.
-	tm, cmd := m.Update(press("]")) // → epics (also empty)
+	m = toTasks(t, tm.(Model)) // dashboard → tasks
+	// → audits (empty), via epics.
+	tm, cmd := m.Update(press("]")) // tasks → epics (also empty)
 	m = drain(t, tm.(Model), cmd)
-	tm, cmd = m.Update(press("]")) // → audits (empty)
+	tm, cmd = m.Update(press("]")) // epics → audits (empty)
 	m = drain(t, tm.(Model), cmd)
 	if m.cur().name != "audits" || len(m.cur().list.Items()) != 0 {
 		t.Fatalf("expected an empty audits tab, got %q with %d items", m.cur().name, len(m.cur().list.Items()))
@@ -620,7 +637,7 @@ func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 24}) // narrowest two-pane
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
-	m = tm.(Model)
+	m = toTasks(t, tm.(Model)) // default landing is the dashboard; drop onto tasks (two-pane)
 	tm, _ = m.Update(detailMsg{kind: entityTasks, id: slug, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: slug}, body: "body"}})
 	m = tm.(Model)
 
@@ -643,6 +660,10 @@ func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
 func TestModel_RecoversFromFailedInitialLoad(t *testing.T) {
 	m := newModel(t)
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = tm.(Model)
+	// Drop off the landing dashboard onto tasks (ignoring its load cmd) so the tasks
+	// tab is the active screen for the failed-initial-load path under test.
+	tm, _ = m.Update(press("]"))
 	m = tm.(Model)
 	// The initial load fails before anything is loaded.
 	tm, _ = m.Update(errMsg{kind: entityTasks, gen: m.cur().loadGen, err: domain.ErrNotFound})
@@ -1445,6 +1466,7 @@ func TestModel_ReloadWithBackgroundFilterApplied(t *testing.T) {
 // moving selection instead of showing the pre-filter item until j/k is pressed.
 func TestModel_DetailFollowsFilter(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(t), teatest.WithInitialTermSize(120, 40))
+	tm.Send(press("]")) // drop off the landing dashboard onto tasks
 	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
 		return bytes.Contains(b, []byte("beta"))
 	}, teatest.WithDuration(3*time.Second))
