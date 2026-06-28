@@ -1,11 +1,48 @@
 package tui
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/key"
 	"github.com/charmbracelet/x/ansi"
 )
+
+// TestKeyMapBindingsSelfDescribe pins the foundation of the derived help/footers:
+// EVERY keyMap binding must carry a WithHelp(key, desc). A new binding added without
+// one fails here (and would otherwise render blank in the `?` overlay), keeping the
+// keyMap the complete single source of the key vocabulary.
+func TestKeyMapBindingsSelfDescribe(t *testing.T) {
+	v := reflect.ValueOf(keys)
+	for i := 0; i < v.NumField(); i++ {
+		name := v.Type().Field(i).Name
+		b, ok := v.Field(i).Interface().(key.Binding)
+		if !ok {
+			continue // keyMap is all bindings today, but don't assume
+		}
+		if h := b.Help(); h.Key == "" || h.Desc == "" {
+			t.Errorf("keyMap.%s lacks WithHelp (key=%q desc=%q) — every binding must self-describe", name, h.Key, h.Desc)
+		}
+	}
+}
+
+// TestHelpAndFooterDeriveFromKeymap pins that the `?` overlay and the footers source
+// their key + description from the bindings (not re-typed literals): each binding's
+// own Help().Key/Desc appears verbatim, so a rebind in keys.go propagates to both.
+func TestHelpAndFooterDeriveFromKeymap(t *testing.T) {
+	overlay := strings.Join(helpLines(focusList, entityTasks, 200), "\n") // wide → no wrap
+	for _, b := range []key.Binding{keys.Zoom, keys.Action, keys.Palette, keys.Quit} {
+		if !strings.Contains(overlay, b.Help().Key) || !strings.Contains(overlay, b.Help().Desc) {
+			t.Errorf("? overlay should derive %q / %q from its binding", b.Help().Key, b.Help().Desc)
+		}
+	}
+	// The detail-footer fragment derives its keys from the bindings.
+	body := detailFooterBody()
+	if !strings.Contains(body, keys.RawToggle.Help().Key) || !strings.Contains(body, keys.Find.Help().Key) {
+		t.Errorf("detail footer should derive keys from the bindings: %q", body)
+	}
+}
 
 // TestHelpBoxFixedWidthAcrossScroll pins the fixed-width invariant across the cases a
 // single-width test missed: every line is EXACTLY contentW — at every scroll offset,
