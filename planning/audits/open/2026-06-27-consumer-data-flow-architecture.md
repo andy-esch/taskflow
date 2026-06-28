@@ -78,10 +78,22 @@ architecture, web), **deferred** pending the web effort (epic 19); revisit when
 
 ## Medium
 
-#### M1. The dashboard `setSummary` hand-rolls aligned columns that `writeTable` already provides  · **Status:** open
+#### M1. The dashboard `setSummary` hand-rolls aligned columns that `writeTable` already provides  · **Status:** fixed
 **Component:** tui · **Effort:** M · **Urgency:** eventually
 
 `tui/dashboard.go` `setSummary` (~145 lines) builds aligned multi-column rows (glyph·date·slug; bar·pct·counts·date·id) by pre-measuring the widest cell (`dateW`/`countsW`) and padding with `%-*s` by hand (`:78-91,118-134`), then concatenating into one `dashRow.text`. The CLI renders the same in-progress/epic widgets through `writeTable` (`render.go:257-272`), which does measurement/alignment/truncation generically; the same `countsW` pre-measure recurs in the TUI list loaders (`commands.go:92-95,134-137`). Column-alignment logic thus exists as a reusable writer on one side and open-coded per-widget on the other — exactly what drifts (see H5). Fix: factor the dashboard's rows into structured cells (or a shared column/alignment helper) so the layout is described once and rendered per-surface.
+
+**Resolution (2026-06-28, fixed):** the per-widget measure-then-pad logic is now two
+shared generic helpers in `internal/tui/column.go` — `relDateCells` (the aligned,
+dimmed relative-date column) and `countsWidth` (the done/total column width). The
+dashboard's in-progress + epics widgets AND the epic/audit list loaders (`commands.go`)
+all call them instead of hand-rolling `dateW`/`countsW` + `%-*s`, so the alignment is
+described once. Byte-identical render (dashboard tests unchanged); unit-tested
+(`TestRelDateCells`/`TestCountsWidth`). A full writeTable-style cell framework was
+deliberately not built — the dashboard rows are heterogeneous (fixed glyph/bar/pct
+cells, a right-justified counts column, a trailing id), so factoring the two
+genuinely-duplicated measured columns is the right scope; layout/separators stay
+per-widget.
 
 #### M2. The dashboard's epic ordering diverges from CLI `status` for identical data  · **Status:** fixed
 **Component:** core / cli / tui · **Effort:** S · **Urgency:** soon
@@ -131,10 +143,20 @@ param spec, tracked in epic-21 task
 
 Two small consistency leaks. (a) "deprecate is destructive" lives only in a TUI struct field (`action.go:33` `destructive:true`, gated by a y/n at `model.go:705-708`); the CLI `deprecate`/`complete` apply with no confirmation and no `--force`/`--yes`. (b) `core.Service` deliberately exposes an injectable clock `svc.Now()` (`service.go:61`) and the TUI uses it for due-ness (`commands.go:43`), but the revisit-date relative-offset parse reaches for wall-clock `time.Now()` at three sites — `cli/task.go:497`, `tui/edit.go:318`, `tui/model.go:661` — so "2w from now" is computed against a *different* clock than core stamps dates with, and a `WithClock` test or future "as-of" mode governs stamps but not offsets. Fix: carry `destructive` on the shared transition descriptor (H3); thread `svc.Now()` into the revisit-date parse at all three sites.
 
-#### M6. `model.go` is a 1537-line god-file mixing reducer, key dispatch, layout, palette, and all rendering  · **Status:** open
+#### M6. `model.go` is a 1537-line god-file mixing reducer, key dispatch, layout, palette, and all rendering  · **Status:** fixed
 **Component:** tui · **Effort:** M · **Urgency:** eventually
 
 `tui/model.go` (1537 lines; next-largest source is 803) holds `Model`, `Update`/`update`, `handleKey` (189 lines — the longest TUI function), the palette builders, sort/view cycling, layout math, and the whole `View`/`footer`/`tabStrip`/`pane` render stack. It's coherent and well-commented but is the file every TUI change touches. The seams already exist (sibling concerns are split into `overlay.go`/`nav.go`/`edit.go`/`dashboard.go`/`commands.go`). Fix: mechanically lift the render half (`View`/`renderBody`/`footer`/`tabStrip`/`pane`/`windowTitle`, ~250 lines) into `view.go` and the palette/command-dispatch cluster into `command_dispatch.go`. No behavior change.
+
+**Resolution (2026-06-28, fixed):** split mechanically, no behavior change. `model.go`
+dropped 1659 → 1065 lines: the render/layout half (`View`, `renderBody`, `footer`,
+`tabStrip`, `pane`, `recomputeLayout`, the detail-pane + help-scroll helpers, the
+footer builders) moved verbatim into `view.go` (380 lines), and the `:` command +
+`ctrl+p` palette cluster (`dispatchCommand`, the palette builders/handlers, command
+completion) into `command_dispatch.go` (235 lines). The reducer (`Update`/`handleKey`),
+navigation, selection, and sort/view cycling stay in `model.go`. Same package, so the
+cross-file calls are unchanged; the full TUI suite stays green and there's no golden
+churn.
 
 #### M7. `ListAudits` doesn't validate an unknown bucket — asymmetric with `ListTasks`, a latent web trap  · **Status:** fixed
 **Component:** core · **Effort:** XS · **Urgency:** soon
