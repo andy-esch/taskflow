@@ -9,6 +9,7 @@ priority: medium
 autonomy_level: 3
 tags: [cli, tui]
 created: "2026-06-25"
+updated_at: "2026-06-28"
 ---
 # Color/design overhaul: one coherent palette across every surface
 
@@ -90,3 +91,5 @@ was a deliberately-local stopgap pending this.)
 One documented palette; every surface (theme/render/tui/progressbar/prompt + huh/
 glamour) is consistent with it; and no stray color literals live outside the palette
 definition.
+
+**Progress 2026-06-28.** A chunk landed via the audit`s theme/glyph work (epic 21): the SEMANTIC tokens (status/bucket/liveness/finding) AND the cross-surface markers (⚠/↻/✓/✔/!) are now centralized in internal/theme as glyph+color tokens (theme.Status/Bucket/Liveness/FindingStatus/Marker*), with a glyph() helper, so the CLI render layer and the TUI draw the same decisions. STILL OPEN (the actual "one palette" overhaul): the chrome/structural colors remain scattered + hardcoded — progressbar`s neon hex, the picker`s purple, huh/glamour themes, and UI-chrome lipgloss colors (dashHeading, accent, helpHeading, actionHeading all bypass theme). Define one palette and route those through it.

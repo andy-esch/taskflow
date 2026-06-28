@@ -9,6 +9,57 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
+// AppendAuditBody appends markdown to an audit's body in one atomic, validated
+// write — the audit twin of EditBody's append mode (`audit append`). Unlike the task
+// path it does NOT stamp updated_at (audits have no such field; their date is the
+// immutable slug), so the frontmatter is preserved verbatim via replaceBody. It
+// parses before committing and compare-and-swaps against a concurrent bucket move;
+// dryRun runs every check but skips the write. Returns the reloaded audit and the
+// resulting (LF) body so a --json caller can echo what it wrote.
+func (s *FS) AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, string, error) {
+	path, bucket, err := s.resolveAudit(slug)
+	if err != nil {
+		return domain.Audit{}, "", err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Audit{}, "", fmt.Errorf("read audit %s: %w", path, err)
+	}
+	_, body, err := splitFrontmatterStrict(content)
+	if err != nil {
+		return domain.Audit{}, "", err // can't body-edit a file whose frontmatter won't parse
+	}
+
+	newContent, err := replaceBody(content, appendSection(string(body), text))
+	if err != nil {
+		return domain.Audit{}, "", err
+	}
+	// Echo the body exactly as it lands on disk (the file's line ending), so a --json
+	// caller's echoed body matches what `audit show --json` later returns.
+	_, storedBody := splitFrontmatter(newContent)
+	// Parse before committing: never leave an unreloadable file on disk.
+	a, err := parseAudit(newContent, path, bucket)
+	if err != nil {
+		return domain.Audit{}, "", fmt.Errorf("%w: %v", domain.ErrValidation, err)
+	}
+	if testHookBeforeBodyWrite != nil {
+		testHookBeforeBodyWrite()
+	}
+	// Compare-and-swap before the write: a concurrent `audit close`/`reopen`/`defer`
+	// may have relocated the file across buckets during the read→write gap; writing
+	// the original path would resurrect the slug in its old bucket.
+	if curPath, _, rerr := s.resolveAudit(slug); rerr != nil || curPath != path {
+		return domain.Audit{}, "", fmt.Errorf("audit %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
+	}
+	if dryRun {
+		return a, string(storedBody), nil
+	}
+	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
+		return domain.Audit{}, "", fmt.Errorf("write audit %s: %w", path, err)
+	}
+	return a, string(storedBody), nil
+}
+
 // EditBody replaces (appendMode=false) or appends to (true) a task's markdown
 // body, in one atomic, validated write — the agent face of body editing, beside
 // the human `task edit`. The frontmatter is preserved surgically (unknown keys,

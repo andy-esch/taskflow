@@ -99,3 +99,20 @@ func (s *Service) ShowAudit(slug string) (domain.Audit, string, error) {
 func (s *Service) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
 	return s.store.MoveAudit(slug, to, dryRun)
 }
+
+// EditAudit opens an audit for whole-file editing — the human face of mutation,
+// complementing the agent-facing `audit append` (the audit counterpart to EditTask).
+// The store accepts the save only if it still parses as an audit; the caller surfaces
+// finding-level lint (status vocab, bucket↔state) on the result. Returns the reloaded
+// audit and whether anything changed.
+func (s *Service) EditAudit(slug string, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error) {
+	return s.store.EditAudit(slug, edit)
+}
+
+// AppendAuditBody appends a section to an audit's markdown body (`audit append`) in
+// one atomic, validated write — the agent face of audit body editing, beside the
+// human EditAudit. Frontmatter is preserved verbatim (no updated_at on audits).
+// Returns the reloaded audit and the resulting body.
+func (s *Service) AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, string, error) {
+	return s.store.AppendAuditBody(slug, text, dryRun)
+}

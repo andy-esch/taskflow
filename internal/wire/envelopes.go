@@ -262,6 +262,22 @@ func ToAuditShowEnvelope(a domain.Audit, body string) AuditShowEnvelope {
 	return AuditShowEnvelope{SchemaVersion: SchemaVersion, Audit: ToAuditJSON(a), Body: body}
 }
 
+// AuditMutationEnvelope is `audit append --json`: the reloaded audit, dry_run, and
+// the resulting body — the audit counterpart to TaskMutationEnvelope.
+type AuditMutationEnvelope struct {
+	SchemaVersion string    `json:"schema_version"`
+	DryRun        bool      `json:"dry_run"`
+	Audit         AuditJSON `json:"audit"`
+	Body          string    `json:"body,omitempty"`
+}
+
+// ToAuditMutationEnvelope builds the `audit append` envelope value: the reloaded
+// audit, dry_run (always present — a preview must be distinguishable from a real
+// write), and the resulting body.
+func ToAuditMutationEnvelope(a domain.Audit, body string, dryRun bool) AuditMutationEnvelope {
+	return AuditMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Audit: ToAuditJSON(a), Body: body}
+}
+
 // FindingsEnvelope is `audit findings --json` (the finding-level query).
 type FindingsEnvelope struct {
 	SchemaVersion string               `json:"schema_version"`
@@ -453,28 +469,29 @@ type DoctorProblem struct {
 // jsonEnvelopes registers every envelope so a single Reflect pulls them all (and
 // their shared types) into one schema document's $defs.
 type jsonEnvelopes struct {
-	Tasks        TasksEnvelope        `json:"tasks"`
-	TaskShow     TaskShowEnvelope     `json:"task_show"`
-	TaskMutation TaskMutationEnvelope `json:"task_mutation"`
-	EpicMutation EpicMutationEnvelope `json:"epic_mutation"`
-	Moves        MovesEnvelope        `json:"moves"`
-	Summary      SummaryEnvelope      `json:"summary"`
-	Version      VersionEnvelope      `json:"version"`
-	Created      CreatedEnvelope      `json:"created"`
-	Epics        EpicsEnvelope        `json:"epics"`
-	EpicShow     EpicShowEnvelope     `json:"epic_show"`
-	Audits       AuditsEnvelope       `json:"audits"`
-	AuditShow    AuditShowEnvelope    `json:"audit_show"`
-	Findings     FindingsEnvelope     `json:"findings"`
-	Fix          FixEnvelope          `json:"fix"`
-	Lint         LintEnvelope         `json:"lint"`
-	Init         InitEnvelope         `json:"init"`
-	Doctor       DoctorEnvelope       `json:"doctor"`
-	Schema       SchemaEnvelope       `json:"schema"`
-	SchemaKind   SchemaKindEnvelope   `json:"schema_kind"`
-	Templates    TemplatesEnvelope    `json:"templates"`
-	TemplateShow TemplateShowEnvelope `json:"template_show"`
-	Error        ErrorEnvelope        `json:"error"`
+	Tasks         TasksEnvelope         `json:"tasks"`
+	TaskShow      TaskShowEnvelope      `json:"task_show"`
+	TaskMutation  TaskMutationEnvelope  `json:"task_mutation"`
+	EpicMutation  EpicMutationEnvelope  `json:"epic_mutation"`
+	Moves         MovesEnvelope         `json:"moves"`
+	Summary       SummaryEnvelope       `json:"summary"`
+	Version       VersionEnvelope       `json:"version"`
+	Created       CreatedEnvelope       `json:"created"`
+	Epics         EpicsEnvelope         `json:"epics"`
+	EpicShow      EpicShowEnvelope      `json:"epic_show"`
+	Audits        AuditsEnvelope        `json:"audits"`
+	AuditShow     AuditShowEnvelope     `json:"audit_show"`
+	AuditMutation AuditMutationEnvelope `json:"audit_mutation"`
+	Findings      FindingsEnvelope      `json:"findings"`
+	Fix           FixEnvelope           `json:"fix"`
+	Lint          LintEnvelope          `json:"lint"`
+	Init          InitEnvelope          `json:"init"`
+	Doctor        DoctorEnvelope        `json:"doctor"`
+	Schema        SchemaEnvelope        `json:"schema"`
+	SchemaKind    SchemaKindEnvelope    `json:"schema_kind"`
+	Templates     TemplatesEnvelope     `json:"templates"`
+	TemplateShow  TemplateShowEnvelope  `json:"template_show"`
+	Error         ErrorEnvelope         `json:"error"`
 }
 
 // Envelopes returns the reflect type of the registry so a coverage test can

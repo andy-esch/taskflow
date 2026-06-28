@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: next-up
+status: deprecated
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: 'Lower-priority outcomes of the dashboard adversarial review: chrome-color sweep, deferred onDash/widget-registry decisions, and remaining test gaps (Tier 1+2 already shipped on feat/dashboard-in-tui).'
 effort: M
@@ -9,6 +9,8 @@ priority: low
 autonomy_level: 3
 tags: [tui, review]
 created: "2026-06-27"
+updated_at: "2026-06-28"
+deprecated_at: "2026-06-28"
 ---
 # Dashboard review follow-ups (Tier 3 polish + deferred decisions)
 
@@ -83,3 +85,5 @@ The review flagged `dashboard.go` `nav` closure (`t := tgt; …&t`) as a
 "use-after-free of stack memory" / "all pointers alias the last `t`". **False
 positive** — reasoned from a C/C++ model. In Go each closure call gets a fresh `t`
 that escape-analysis heap-promotes; the code is correct and idiomatic. No change.
+
+**Deprecated 2026-06-28 (pruned).** Low-value holding task. Its substantive dashboard-review outcomes (Tier 1 bugs + Tier 2 cleanups + regression tests) already shipped on feat/dashboard-in-tui, and the dashboard has since gained M2 epic-order agreement, liveness, ready-to-close, and the M1 column helpers. What remained was "do opportunistically" polish, recorded decisions (preserved in docs/ARCHITECTURE.md), and a couple of minor dashboard test-coverage gaps. Disposition: the chrome-colors-bypass-theme item is subsumed by color-and-design-overhaul; the remaining test gaps + recorded decisions are consciously dropped as not worth a standing task. Nothing actionable is lost.

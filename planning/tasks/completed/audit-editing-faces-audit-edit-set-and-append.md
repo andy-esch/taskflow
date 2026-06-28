@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Audits lack the editing faces tasks have; add audit edit ($EDITOR), audit set (area/date), and audit append (add a finding), reusing the picker + editor infra.
 effort: M
@@ -9,7 +9,8 @@ priority: low
 autonomy_level: 3
 tags: [cli]
 created: "2026-06-25"
-updated_at: "2026-06-25"
+updated_at: "2026-06-28"
+completed_at: "2026-06-28"
 ---
 # Audit editing faces: `audit edit` + `audit set` + `audit append`
 
@@ -71,3 +72,5 @@ picker — so authoring/fixing an audit no longer means leaving the tool.
 ## Decision 2026-06-25 — drop 'audit set', date is immutable
 
 Scope to **audit edit + audit append only**. The audit 'date' (and 'area') ARE the slug (<date>-<area>), so they're immutable identity — there is no 'audit set' (the slug-rename problem dissolves). A mutable 'updated' timestamp is split into [[add-a-mutable-updated-timestamp-to-audits]]. Retitle/rescope this task to edit+append when picked up.
+
+**Completed 2026-06-28 — scoped to edit + append** (the `set` face was already dropped by the 2026-06-25 decision: an audit`s area/date ARE its slug = immutable identity). Shipped, mirroring the task/epic edit faces: store EditAudit (editor-loop, parse-before-accept, compare-and-swap against a concurrent bucket move) + AppendAuditBody (atomic; frontmatter preserved VERBATIM — no updated_at stamp, via a new no-stamp replaceBody, since audits have no such field); core delegators; CLI `audit edit` ($EDITOR, picker, rejects --dry-run, runs `audit lint` on the result and surfaces finding issues as a NON-blocking warning) + `audit append` (--body/--body-file/-, picker, --dry-run, --json). New `audit_mutation` wire envelope (schema_version 1.19→1.20). Pinned by TestEditAudit_*/TestAppendAuditBody_* (incl. the no-updated_at + frontmatter-preserved + dry-run checks); goldens/docs/schema_comments regenerated; build/vet/test/lint green.

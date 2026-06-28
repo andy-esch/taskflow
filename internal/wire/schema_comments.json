@@ -42,6 +42,7 @@
   "github.com/andy-esch/taskflow/internal/wire.AuditJSON": "AuditJSON is the wire shape of an audit inside the --json envelopes.",
   "github.com/andy-esch/taskflow/internal/wire.AuditJSON.InProgressFindings": "The progress bar's disposition bands. open + in_progress + done + dropped ≤\nfindings (an unrecognized/missing status counts toward none).",
   "github.com/andy-esch/taskflow/internal/wire.AuditJSON.ReadyToClose": "ReadyToClose is true for an OPEN audit whose findings are all resolved/dropped\n(none open or in-progress) — a \"ready to close\" call-to-action.",
+  "github.com/andy-esch/taskflow/internal/wire.AuditMutationEnvelope": "AuditMutationEnvelope is `audit append --json`: the reloaded audit, dry_run, and the resulting body — the audit counterpart to TaskMutationEnvelope.",
   "github.com/andy-esch/taskflow/internal/wire.AuditShowEnvelope": "AuditShowEnvelope is `audit show --json`.",
   "github.com/andy-esch/taskflow/internal/wire.AuditsEnvelope": "AuditsEnvelope is `audit list --json`.",
   "github.com/andy-esch/taskflow/internal/wire.CountByJSON": "CountByJSON is one bucket of a finding breakdown — an urgency value or a top-level component, and its count.",

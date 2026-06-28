@@ -59,6 +59,30 @@
       ],
       "description": "AuditJSON is the wire shape of an audit inside the --json envelopes."
     },
+    "AuditMutationEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "audit": {
+          "$ref": "#/$defs/AuditJSON"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "dry_run",
+        "audit"
+      ],
+      "description": "AuditMutationEnvelope is `audit append --json`: the reloaded audit, dry_run, and the resulting body — the audit counterpart to TaskMutationEnvelope."
+    },
     "AuditShowEnvelope": {
       "properties": {
         "schema_version": {
@@ -1295,6 +1319,9 @@
         "audit_show": {
           "$ref": "#/$defs/AuditShowEnvelope"
         },
+        "audit_mutation": {
+          "$ref": "#/$defs/AuditMutationEnvelope"
+        },
         "findings": {
           "$ref": "#/$defs/FindingsEnvelope"
         },
@@ -1341,6 +1368,7 @@
         "epic_show",
         "audits",
         "audit_show",
+        "audit_mutation",
         "findings",
         "fix",
         "lint",
@@ -1354,6 +1382,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.19)",
+  "title": "tskflwctl --json output (schema_version 1.20)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

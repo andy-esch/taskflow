@@ -13,10 +13,13 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// resolveBody returns the body to use when creating a document: --body verbatim,
-// or the contents of --body-file (a path, or "-" for stdin). The two flags are
-// mutually exclusive (enforced by the command), so at most one is set — this
-// kills the heredoc-in-command-substitution quoting hazard for long bodies.
+// resolveBody returns the body to use when creating or editing a document: --body
+// verbatim, or the contents of --body-file (a path, or "-" for stdin). The two flags
+// are mutually exclusive — every command that wires them up calls
+// MarkFlagsMutuallyExclusive("body", "body-file") — so at most one is set here. That
+// kills the heredoc-in-command-substitution quoting hazard for long bodies. (A new
+// body-taking command MUST mark them, or this precedence silently prefers
+// --body-file.)
 func resolveBody(cmd *cobra.Command, body, bodyFile string) (string, error) {
 	if bodyFile == "" {
 		return body, nil
@@ -350,6 +353,7 @@ func newTaskSetCmd(app *App) *cobra.Command {
 	cmd.Flags().BoolVar(&force, "force", false, "allow --set of a field tskflwctl doesn't know")
 	cmd.Flags().StringVar(&body, "body", "", "replace the markdown body (its own call — not combined with field flags)")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "replace the markdown body from a file (or - for stdin)")
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
 	return cmd
 }
@@ -406,6 +410,7 @@ func newTaskAppendCmd(app *App) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&body, "body", "", "markdown to append")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the markdown to append from a file (or - for stdin)")
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 
