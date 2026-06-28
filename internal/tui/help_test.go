@@ -7,52 +7,68 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// TestHelpBoxFixedWidthAcrossScroll pins the fix for the reported resize bug: the
-// overlay is a CONSTANT width — every line the same, and the same at any scroll
-// offset — instead of growing/shrinking to the widest currently-visible line.
+// TestHelpBoxFixedWidthAcrossScroll pins the fixed-width invariant across the cases a
+// single-width test missed: every line is EXACTLY contentW — at every scroll offset,
+// every kind, and every terminal width including narrow ones where the column can't
+// fit and the truncate backstop must keep rows from widening the box. Checked both at
+// the helpLines level (the real invariant) and the rendered-box level (uniform border).
 func TestHelpBoxFixedWidthAcrossScroll(t *testing.T) {
-	const maxW, maxH = 80, 16 // short enough that content overflows and scroll matters
-	lineWidths := func(scroll int) []int {
-		var ws []int
-		for _, ln := range strings.Split(helpBox(maxW, maxH, scroll, focusList, entityTasks), "\n") {
-			ws = append(ws, ansi.StringWidth(ln))
-		}
-		return ws
-	}
-	want := helpWidth(maxW) // the fixed outer width
-	for _, scroll := range []int{0, 3, 8} {
-		for i, w := range lineWidths(scroll) {
-			if w != want {
-				t.Fatalf("scroll %d line %d width = %d, want a constant %d (box resized)", scroll, i, w, want)
+	for _, kind := range []entityKind{entityTasks, entityEpics, entityAudits, entityDashboard} {
+		for _, maxW := range []int{20, 30, 47, 62, 120} { // 20/30 = narrow (backstop regime)
+			contentW := helpWidth(maxW) - helpHFrame
+			// Invariant 1 (the one the resize/clip bug violated): no composed line may
+			// exceed contentW — every line is forced to exactly contentW.
+			for _, ln := range helpLines(focusList, kind, contentW) {
+				if w := ansi.StringWidth(ln); w != contentW {
+					t.Errorf("kind=%d maxW=%d: line width %d, want exactly contentW %d: %q", kind, maxW, w, contentW, ansi.Strip(ln))
+				}
+			}
+			// Invariant 2: the rendered box is one constant width at every scroll.
+			want := helpWidth(maxW)
+			for _, scroll := range []int{0, 3, 9} {
+				for i, ln := range strings.Split(helpBox(maxW, 16, scroll, focusList, kind), "\n") {
+					if w := ansi.StringWidth(ln); w != want {
+						t.Errorf("kind=%d maxW=%d scroll=%d: box line %d width %d, want %d", kind, maxW, scroll, i, w, want)
+					}
+				}
 			}
 		}
 	}
 }
 
-// TestHelpWrapsLongDescriptions pins that an over-long description wraps within its
-// column (continuation lines indented under the description) instead of widening the
-// box. The `m`/`e` rows carry the longest descriptions.
+// TestHelpWrapsLongDescriptions proves long descriptions WRAP within their column
+// (rather than truncate or widen the box): a narrow content width yields strictly more
+// lines than a wide one, since several descriptions reflow to continuation lines. No
+// dependency on the exact wording of any entry, so a reworded description won't break it.
 func TestHelpWrapsLongDescriptions(t *testing.T) {
-	const maxW = 80
-	contentW := helpWidth(maxW) - helpHFrame
-	lines := helpLines(focusList, entityTasks, contentW)
-	wrapped := false
-	for _, ln := range lines {
-		if ansi.StringWidth(ln) > contentW {
-			t.Errorf("line exceeds the content width %d: %q (%d)", contentW, ln, ansi.StringWidth(ln))
-		}
+	wide := len(helpLines(focusList, entityTasks, 200))  // descriptions all fit on one line
+	narrow := len(helpLines(focusList, entityTasks, 40)) // several reflow to 2+ lines
+	if narrow <= wide {
+		t.Errorf("narrow help (%d lines) should wrap to MORE lines than wide (%d) — descriptions not wrapping", narrow, wide)
 	}
-	// The long `m` description must span more than one line (proof it wrapped, not
-	// truncated): a continuation line carries text but no key.
-	for i, ln := range lines {
-		if strings.Contains(ln, "lifecycle") && i+1 < len(lines) {
-			if next := strings.TrimSpace(ansi.Strip(lines[i+1])); next != "" && !strings.HasPrefix(next, "e ") {
-				wrapped = true
-			}
+}
+
+// TestSymbolsLegendIsPageSpecific pins that the glyph legend is context-specific like
+// the keys: each tab's Symbols section names its own vocabulary (statuses / liveness /
+// buckets+findings), not another tab's.
+func TestSymbolsLegendIsPageSpecific(t *testing.T) {
+	text := func(kind entityKind) string {
+		sec, _ := symbolsFor(kind)
+		var b strings.Builder
+		for _, e := range sec.entries {
+			b.WriteString(e.desc + "\n")
 		}
+		return b.String()
 	}
-	if !wrapped {
-		t.Error("the long 'm' description should wrap to a continuation line")
+	tasks, epics, audits := text(entityTasks), text(entityEpics), text(entityAudits)
+	if !strings.Contains(tasks, "misfiled") || strings.Contains(tasks, "liveness") {
+		t.Error("tasks legend should describe task markers, not epic liveness")
+	}
+	if !strings.Contains(epics, "dormant") || strings.Contains(epics, "finding:") {
+		t.Error("epics legend should describe liveness, not audit findings")
+	}
+	if !strings.Contains(audits, "finding:") || !strings.Contains(audits, "bucket") {
+		t.Error("audits legend should describe buckets + finding statuses")
 	}
 }
 

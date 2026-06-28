@@ -1241,14 +1241,30 @@ func TestModel_ZoomFullScreensDetail(t *testing.T) {
 		t.Fatalf("the split should show the list (alpha, beta):\n%s", v)
 	}
 
-	// z → full-screen detail: zoomed, single-pane, detail focused, list hidden.
+	// Load the current selection's detail with a unique marker, so we can prove the
+	// zoomed pane renders the DETAIL body (not an empty pane) — not just that the list
+	// vanished. `other` is the non-selected task, which must disappear when zoomed.
+	id := m.selectedID()
+	other := "beta"
+	if id == "beta" {
+		other = "alpha"
+	}
+	tm0, _ := m.Update(detailMsg{kind: entityTasks, id: id, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: id}, body: "ZOOMDETAILMARKER"}})
+	m = tm0.(Model)
+
+	// z → full-screen detail: zoomed, single-pane, detail focused; the list is hidden
+	// AND the detail body is shown full-width.
 	tm, _ := m.Update(press("z"))
 	m = tm.(Model)
 	if !m.zoom || m.twoPane || m.focus != focusDetail {
 		t.Errorf("z should full-screen the detail (zoom=%v twoPane=%v focus=%v)", m.zoom, m.twoPane, m.focus)
 	}
-	if v := ansi.Strip(m.View().Content); strings.Contains(v, "beta") {
-		t.Errorf("full-screen detail should hide the list (beta still visible):\n%s", v)
+	zoomedView := ansi.Strip(m.View().Content)
+	if strings.Contains(zoomedView, other) {
+		t.Errorf("full-screen detail should hide the list (%q still visible):\n%s", other, zoomedView)
+	}
+	if !strings.Contains(zoomedView, "ZOOMDETAILMARKER") {
+		t.Errorf("full-screen detail should render the detail body, not an empty pane:\n%s", zoomedView)
 	}
 
 	// z again → back to the split, list visible again.
@@ -1275,6 +1291,34 @@ func TestModel_ZoomFullScreensDetail(t *testing.T) {
 	m = drain(t, tm.(Model), cmd)
 	if m.zoom {
 		t.Error("switching tabs should drop full-screen")
+	}
+}
+
+// TestModel_ZoomSurvivesResize pins that a window resize while zoomed keeps the detail
+// full-screen — recomputeLayout reads m.zoom, so resizing (even down past the two-pane
+// threshold and back up) must not silently un-zoom or re-show the list.
+func TestModel_ZoomSurvivesResize(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press("z"))
+	m = tm.(Model)
+	if !m.zoom || m.twoPane {
+		t.Fatalf("setup: want zoomed single-pane (zoom=%v twoPane=%v)", m.zoom, m.twoPane)
+	}
+	for _, w := range []int{60, 200, 95} { // below the 90-col split threshold, way up, back wide
+		tm, _ = m.Update(tea.WindowSizeMsg{Width: w, Height: 40})
+		m = tm.(Model)
+		if !m.zoom || m.twoPane {
+			t.Errorf("resize to %d must keep full-screen (zoom=%v twoPane=%v)", w, m.zoom, m.twoPane)
+		}
+		if v := ansi.Strip(m.View().Content); strings.Contains(v, "beta") {
+			t.Errorf("resize to %d: the list must stay hidden while zoomed:\n%s", w, v)
+		}
+	}
+	// Unzoom restores the split at the current (wide) width.
+	tm, _ = m.Update(press("z"))
+	m = tm.(Model)
+	if m.zoom || !m.twoPane {
+		t.Errorf("unzoom after resize should restore the split (zoom=%v twoPane=%v)", m.zoom, m.twoPane)
 	}
 }
 

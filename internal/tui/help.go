@@ -61,10 +61,11 @@ var helpSections = []helpSection{
 
 // symbolsFor builds the glyph legend for the active screen — what the leading
 // status / liveness / bucket glyphs (and the ⚠/↻ markers) in the rows actually
-// mean, so a reader can decode the column without leaving the TUI. It's derived
-// from the SAME theme tokens the row delegates draw (theme.Status/Liveness/Bucket/
-// FindingStatus), so the legend can't drift from what's on screen. ok is false on a
-// screen with no glyph vocabulary of its own.
+// mean, so a reader can decode the column without leaving the TUI. The glyph rows
+// (tok) are sourced from the SAME theme tokens the row delegates draw
+// (theme.Status/Liveness/Bucket/FindingStatus), so THEY can't drift from what's on
+// screen; the marker/percent rows (mark) are hand-labeled and stay in sync by eye.
+// ok is false on a screen with no glyph vocabulary of its own.
 func symbolsFor(kind entityKind) (helpSection, bool) {
 	tok := func(t theme.Token, desc string) helpEntry { return helpEntry{fg(t.Color, t.Glyph), desc} }
 	mark := func(c theme.Color, glyph, desc string) helpEntry { return helpEntry{fg(c, glyph), desc} }
@@ -102,12 +103,16 @@ func symbolsFor(kind entityKind) (helpSection, bool) {
 			tok(theme.Liveness("fresh"), "fresh epic (no tasks yet)"),
 			tok(theme.Liveness("dormant"), "dormant epic (drained / quiet)"),
 			tok(theme.Bucket(domain.AuditOpen), "open audit"),
-			mark(theme.ColorGreen, "✓", "ready to close / done"),
+			// ✓ (U+2713) is the dashboard's "ready to close" badge, distinct from the ✔
+			// (U+2714) that means done/closed elsewhere — keep the glyph + label specific.
+			mark(theme.ColorGreen, "✓", "audit ready to close (findings resolved)"),
 			mark(theme.ColorYellow, "⚠", "needs attention (misfiled / non-conforming)"),
 			mark(theme.ColorYellow, "↻", "revisit (snooze) reached"),
 		)
 	}
-	// The completion-percent color band, shared by every rollup bar/percent.
+	// The completion-percent figure's color band — labels mirror theme.Percent
+	// (gray <34, yellow <100, green 100); keep them in sync. The rollup BAR uses a
+	// separate gradient (progressbar), so this describes the percent number's color.
 	e = append(e,
 		mark(theme.ColorGreen, "100%", "complete"),
 		mark(theme.ColorYellow, "34–99%", "in progress"),
@@ -169,7 +174,7 @@ func helpSectionsFor(f focus, kind entityKind) []helpSection {
 	for _, s := range helpSections {
 		byTitle[s.title] = s
 	}
-	out := make([]helpSection, 0, 3)
+	out := make([]helpSection, 0, 4) // active-pane keys + Symbols + Notes + Global
 	add := func(title string) {
 		if s, ok := byTitle[title]; ok {
 			out = append(out, s)
@@ -192,9 +197,11 @@ func helpSectionsFor(f focus, kind entityKind) []helpSection {
 // fixed content width: each row is a 2-space indent + the key column (aligned) + a
 // 2-space gap + a description that WORD-WRAPS within the remaining column, its
 // continuation lines indented to sit under the description (not the key). Every line
-// is padded to contentW so the box is a constant width across scroll. Shared by
-// helpBox (render) and the model's scroll clamp, so both window the SAME content —
-// callers MUST pass the same contentW (helpWidth(maxW)-helpHFrame).
+// is forced to EXACTLY contentW (truncate as the backstop, pad as the common case)
+// so the box is a constant width across scroll AND on a terminal too narrow to honor
+// the column layout. Shared by helpBox (render) and the model's scroll clamp, so both
+// window the SAME content — callers MUST pass the same contentW
+// (helpWidth(maxW)-helpHFrame).
 func helpLines(f focus, kind entityKind, contentW int) []string {
 	sections := helpSectionsFor(f, kind)
 	// Widest key column across the shown sections → aligned descriptions.
@@ -209,19 +216,23 @@ func helpLines(f focus, kind entityKind, contentW int) []string {
 	const indent, gap = 2, 2
 	descW := max(contentW-indent-keyW-gap, 8) // floor so wrapping stays sane on a narrow box
 	contIndent := strings.Repeat(" ", indent+keyW+gap)
-	pad := func(s string) string { return padRight(s, contentW) }
+	// fit forces a line to EXACTLY contentW. padRight handles the common (too-short)
+	// case; truncate is the backstop for when contentW can't fit indent+keyW+gap+descW
+	// (a terminal narrower than ~30 cols) — without it those rows would stay over-wide,
+	// the box would lose its uniform width, and the outer clamp would shear the border.
+	fit := func(s string) string { return padRight(truncate(s, contentW), contentW) }
 
-	lines := []string{pad(helpHeading.Render("Keys"))}
+	lines := []string{fit(helpHeading.Render("Keys"))}
 	for _, s := range sections {
-		lines = append(lines, pad(""), pad(dim(s.title)))
+		lines = append(lines, fit(""), fit(dim(s.title)))
 		for _, e := range s.entries {
 			keyPad := strings.Repeat(" ", max(keyW-lipgloss.Width(e.keys), 0))
 			// wrap reflows + right-pads each description line to descW (lipgloss Width),
 			// so the column stays rectangular and the rows align.
 			desc := strings.Split(wrap(e.desc, descW), "\n")
-			lines = append(lines, pad("  "+helpKeyStyle.Render(e.keys)+keyPad+"  "+desc[0]))
+			lines = append(lines, fit("  "+helpKeyStyle.Render(e.keys)+keyPad+"  "+desc[0]))
 			for _, cont := range desc[1:] {
-				lines = append(lines, pad(contIndent+cont))
+				lines = append(lines, fit(contIndent+cont))
 			}
 		}
 	}
