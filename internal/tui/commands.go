@@ -96,10 +96,7 @@ func loadEpicList(t *entityTab, svc *core.Service) tea.Cmd {
 		}
 		epics = filterEpicsByView(epics, view)
 		sortEpicsForView(epics, view)
-		countsW := 0 // measure the done/total column once so the rows line up
-		for _, es := range epics {
-			countsW = max(countsW, len(rollupCounts(es.Done, es.Total, 0)))
-		}
+		countsW := countsWidth(epics, func(es core.EpicSummary) (int, int) { return es.Done, es.Total })
 		items := make([]list.Item, 0, len(epics))
 		for _, es := range epics {
 			items = append(items, epicItem{es: es, countsW: countsW})
@@ -172,10 +169,7 @@ func loadAuditList(t *entityTab, svc *core.Service) tea.Cmd {
 		if err != nil {
 			return errMsg{kind: entityAudits, gen: gen, err: err}
 		}
-		countsW := 0 // measure the resolved/total column once so the rows line up
-		for _, a := range audits {
-			countsW = max(countsW, len(rollupCounts(a.Resolved(), a.Findings, 0)))
-		}
+		countsW := countsWidth(audits, func(a domain.Audit) (int, int) { return a.Resolved(), a.Findings })
 		items := make([]list.Item, 0, len(audits))
 		for _, a := range audits {
 			items = append(items, auditItem{a: a, countsW: countsW})
