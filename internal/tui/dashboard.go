@@ -73,17 +73,12 @@ func (d *dashboard) setSummary(s core.Summary) {
 	} else {
 		shown, more := capList(len(s.InProgress))
 		vis := s.InProgress[:shown]
-		dates := make([]string, len(vis))
-		dateW := 0
-		for i, t := range vis {
-			dates[i] = theme.RelativeDate(theme.TaskDate(t)) // ASCII, so len == display width
-			dateW = max(dateW, len(dates[i]))
-		}
+		dateCells := relDateCells(vis, theme.TaskDate)
 		for i, t := range vis {
 			tok := theme.Status(t.Status)
 			cell := fg(tok.Color, tok.Glyph) + " "
-			if dateW > 0 { // blank (undated) cells still pad, so the slug column holds
-				cell += dim(fmt.Sprintf("%-*s", dateW, dates[i])) + "  "
+			if dateCells[i] != "" { // a blank (undated) cell still pads, so the slug column holds
+				cell += dateCells[i] + "  "
 			}
 			cell += t.Slug
 			nav(cell, dashTarget{kind: entityTasks, id: t.Slug})
@@ -114,21 +109,16 @@ func (d *dashboard) setSummary(s core.Summary) {
 		epics := s.Epics
 		shown, more := capList(len(epics))
 		vis := epics[:shown]
-		dates := make([]string, len(vis))
-		countsW, dateW := 0, 0
-		for i, es := range vis {
-			dates[i] = theme.RelativeDate(es.LastUpdated) // ASCII, so len == display width
-			countsW = max(countsW, len(rollupCounts(es.Done, es.Total, 0)))
-			dateW = max(dateW, len(dates[i]))
-		}
+		countsW := countsWidth(vis, func(es core.EpicSummary) (int, int) { return es.Done, es.Total })
+		dateCells := relDateCells(vis, func(es core.EpicSummary) string { return es.LastUpdated })
 		for i, es := range vis {
 			pct := es.Percent()
 			// live-first, dormant dimmed; a ⚠ leads instead when the status is
 			// non-conforming (the same glyph the epics tab shows — see epicGlyph).
 			row := fmt.Sprintf("%s %s %s  %s", epicGlyph(es), miniBar(pct, 8),
 				fg(theme.Percent(pct), theme.PercentLabelPadded(pct)), rollupCounts(es.Done, es.Total, countsW))
-			if dateW > 0 { // a blank (undated) cell still pads, so the id column holds
-				row += "  " + dim(fmt.Sprintf("%-*s", dateW, dates[i]))
+			if dateCells[i] != "" { // a blank (undated) cell still pads, so the id column holds
+				row += "  " + dateCells[i]
 			}
 			id := es.Epic.ID
 			if !es.Live() { // dormant buckets recede on the dashboard too
