@@ -48,15 +48,33 @@ list row — genuinely different layouts, not drift). Output is byte-identical (
 unchanged), so non-breaking. Bar *widths* (8/10/12) are a deliberate per-context choice
 (roomier in a detail field than a status row), not drift, and intentionally left.
 
-#### H6. No `context.Context` on any core or store method  · **Status:** open
+#### H6. No `context.Context` on any core or store method  · **Status:** deferred
 **Component:** core / store · **Effort:** L · **Urgency:** soon
 
 No method on the `Store` ports, the ~27 `*Service` methods, or the `*FS` impls takes a `context.Context` (grep returns nothing). Fine for a CLI/TUI; a real liability for a web adapter, where an HTTP handler has no way to propagate request cancellation, deadlines, or tracing into a read/write — every call is unconditionally synchronous and uncancellable. The retrofit is broad but mechanical (thread `ctx` through the ports + Service + FS, gating `ReadFile`/`ReadDir` loops via `ctx.Err()` between files); the cost grows with every new call site, so doing it *before* web exists keeps the diff additive rather than a flag-day rewrite. Fix: add `ctx context.Context` as the first parameter to the port interfaces and `Service` methods now, even if the CLI passes `context.Background()` and the FS only checks `ctx.Err()` at loop boundaries.
 
-#### H7. `init` / `doctor` / `lint --fix` + repo discovery bypass `core.Service` and have no reusable seam  · **Status:** open
+**Resolution (2026-06-28, deferred):** this is pure web-readiness — the only non-web
+upside today is a Ctrl-C-cancels-a-scan nicety, and the retrofit is additive +
+mechanical, so deferring is cheap and waiting lets the real `serve` handler shape the
+seam rather than guessing at it now. Tracked as epic-21 task
+`thread-context.context-through-the-core-and-store-ports` (tags: architecture, web),
+**deferred** pending the web effort (epic 19, `tskflwctl serve`); revisit when that
+adapter is actually scoped. Deferred, not dropped: the diff grows only slowly with new
+call sites, so the cost of waiting stays low.
+
+#### H7. `init` / `doctor` / `lint --fix` + repo discovery bypass `core.Service` and have no reusable seam  · **Status:** deferred
 **Component:** cli / config · **Effort:** L · **Urgency:** eventually
 
 Real maintenance use cases live in the CLI adapter and `config`, not behind a port: `init` calls `config.Init/AddTrackedRepo/InitPointer/LinkBack` directly (`cli/init.go:103,109,152,159`); `doctor` calls `config.CheckLinks` (`cli/doctor.go`, duplicated in `cli/root.go:170` `warnLinks`); `lint --fix` calls `app.Fixer.FixFrontmatter` (`cli/lint.go:59`) over a port wired straight to the FS (`root.go:156`). Repo discovery + service construction also live CLI-side in `App.resolve()` (`root.go:142-159`), and the TUI is handed a built `Svc`+`Layout`, never the `*config.Config`. So a web adapter can reuse none of init/doctor/fix/discovery — it must re-import `config`, re-wire the `Fixer` port, and replicate `resolve()`. `doctor`'s double-sourcing is proof the logic wants a single home. Fix: lift "discover config → build store → build service" into a small reusable `Resolve(startDir) → Workspace{Cfg,Svc,Layout,Fixer}` both adapters call; promote `Doctor()`/`FixFrontmatter()` to `core.Service`; keep `init` (the repo-less case) as a cobra-free `config` function web can call.
+
+**Resolution (2026-06-28, deferred):** the present-day win — collapsing `doctor`'s
+double-sourced linkback check (`cli/doctor.go` vs `cli/root.go` `warnLinks`) — is
+small; the bulk (a reusable `Resolve()`→`Workspace` seam + promoting `Doctor()`/
+`FixFrontmatter()` to `core.Service`) only earns its keep once a second adapter exists
+to reuse it. Tracked as epic-21 task
+`reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli` (tags:
+architecture, web), **deferred** pending the web effort (epic 19); revisit when
+`tskflwctl serve` is scoped.
 
 ## Medium
 
@@ -65,10 +83,20 @@ Real maintenance use cases live in the CLI adapter and `config`, not behind a po
 
 `tui/dashboard.go` `setSummary` (~145 lines) builds aligned multi-column rows (glyph·date·slug; bar·pct·counts·date·id) by pre-measuring the widest cell (`dateW`/`countsW`) and padding with `%-*s` by hand (`:78-91,118-134`), then concatenating into one `dashRow.text`. The CLI renders the same in-progress/epic widgets through `writeTable` (`render.go:257-272`), which does measurement/alignment/truncation generically; the same `countsW` pre-measure recurs in the TUI list loaders (`commands.go:92-95,134-137`). Column-alignment logic thus exists as a reusable writer on one side and open-coded per-widget on the other — exactly what drifts (see H5). Fix: factor the dashboard's rows into structured cells (or a shared column/alignment helper) so the layout is described once and rendered per-surface.
 
-#### M2. The dashboard's epic ordering diverges from CLI `status` for identical data  · **Status:** open
+#### M2. The dashboard's epic ordering diverges from CLI `status` for identical data  · **Status:** fixed
 **Component:** core / cli / tui · **Effort:** S · **Urgency:** soon
 
 `core.Summary.Epics` arrives in store order. The TUI dashboard re-sorts it most-recently-touched-first (`dashboard.go:115` `epicsByRecent`, using `EpicSummary.LastUpdated`); CLI `status` renders the raw order (`render.go:264-272`). The stated contract is "the CLI `status` and the in-app dashboard show the same thing" (`dashboard.go:16-19`, `render.go` "so the two surfaces agree"), and `LastUpdated` was added to the core aggregate specifically for this lens — but only one of the two dashboards uses it. A web dashboard would have to guess which ordering is canonical. Fix: decide where recency ordering lives — either `core.Summary` returns `Epics` in dashboard order (entity tabs re-sort), or `epicsByRecent` becomes a shared helper both dashboards call.
+
+**Resolution (2026-06-28, fixed):** recency ordering now lives in the aggregate —
+`core.Summary.Epics` is returned most-recently-updated first (`epicsByRecent` in
+`internal/core/service_epic.go`, applied once in `Summary()`), so CLI `status` and the
+TUI dashboard read ONE order instead of each re-sorting. The TUI's local `epicsByRecent`
+is deleted; the entity list / `epic list` keep their own store order (via `rollupEpics`
+directly). Pinned by `TestService_Summary_EpicsByRecent`. The CLI `status` golden was
+unchanged (its fixture epics were already recency-ordered), so non-breaking. The rest of
+this finding's task cluster (M3, M9, L1) remains in epic-21 task
+`let-core-own-the-dashboard-aggregates-adapters-re-derive`.
 
 #### M3. Epic rollup percent is re-derived in the show/detail paths instead of `EpicSummary.Percent()`  · **Status:** open
 **Component:** core / cli / tui · **Effort:** S · **Urgency:** eventually
@@ -79,6 +107,16 @@ Real maintenance use cases live in the CLI adapter and `config`, not behind a po
 **Component:** core / cli / tui · **Effort:** M · **Urgency:** eventually
 
 "defer is a move that also carries an optional revisit date" is hardcoded per adapter: core's `DeferTask` is Move + SetFields with a documented non-atomic two-write hazard (`service_task.go:116-141`); the CLI forks a bespoke `newDeferCmd` separate from the generic `newTransitionCmd` (`cli/task.go:466-509`); the TUI hardcodes `tr.to == string(domain.StatusDeferred)` interception in two places (`tui/model.go:711,732`). The transition registry (H3) has no way to say "this transition collects an extra parameter," so each adapter branches on the literal `deferred`; web will add a fourth special-case. Fix: model the extra parameter on the transition descriptor (`Param *ParamSpec`) so adapters render "this verb wants a date" generically; longer term let the store record the revisit date *within* the Move write (it already builds the `updates` map at `fsstore.go:122-133`) so `DeferTask` is one atomic write.
+
+**Progress (2026-06-28):** the *atomicity* half is fixed — `DeferTask` is now ONE
+atomic write via a new `Store.Defer` port method; `internal/store/fsstore.go`'s shared
+`moveTask` records `revisit_at` inside the same relocation write (a re-defer rewrites it
+in place), replacing the Move-then-SetFields two-write hazard. The core also validates the
+date up front (the guard the old SetFields path gave for free). Pinned by `TestFS_Defer`
++ `TestDeferTask_*`. STILL OPEN (so this finding stays open): the structural special-casing
+of `defer` across the three adapters — that rides the shared transition registry's optional
+param spec, tracked in epic-21 task
+`promote-a-shared-transition-registry-to-core-verb-to-state-destructive-params`.
 
 #### M5. `deprecate` confirmation exists only in the TUI; relative revisit dates use wall-clock, not the injected clock  · **Status:** fixed
 **Component:** cli / tui · **Effort:** S · **Urgency:** soon
@@ -95,10 +133,22 @@ Two small consistency leaks. (a) "deprecate is destructive" lives only in a TUI 
 
 `ListTasks` validates `f.Status` up front so an unknown status returns `ErrValidation` rather than a silently-empty list that agents routing on exit codes can't distinguish (its own doc, `service_task.go:26-31`). `ListAudits(bucket, all)` (`service_audit.go:65-83`) does no such check — an unrecognized bucket falls through the `switch` and returns an empty slice with `nil` error. Unreachable today (callers pass boolean-derived buckets), but a web handler taking a `?bucket=` query param hits exactly the empty-vs-invalid ambiguity `ListTasks` was hardened against. Fix: mirror `ListTasks` — `if bucket != "" { if _, err := domain.ParseAuditBucket(bucket); err != nil { return nil,nil,err } }`.
 
-#### M8. The `Update` default fall-through routes any untagged async message to the active tab — invariant by comment only  · **Status:** open
+#### M8. The `Update` default fall-through routes any untagged async message to the active tab — invariant by comment only  · **Status:** fixed
 **Component:** tui · **Effort:** S · **Urgency:** eventually
 
 The reducer's default case forwards any unhandled `tea.Msg` to `m.cur().list` only (`tui/model.go:261-271`), documented as an INVARIANT ("a future background component with its own ticks must be tab-tagged, or this fall-through changed to broadcast"). The whole stale-load/gen architecture's safety rests on a contract enforced only by a comment, and the failure mode (a background tab's tick applied to the active tab) is silent and intermittent. Fix: make the contract executable — type-switch known passthrough messages explicitly and drop (`return m, nil`) on a genuinely unrecognized type, or route by embedded kind; at minimum add a test asserting an untagged list message never reaches a non-active tab.
+
+**Resolution (2026-06-28, fixed):** the invariant is now executable, not comment-only —
+`TestModel_UntaggedMsgRoutesToActiveTabOnly` (`internal/tui/model_test.go`) sends an
+untagged probe (an empty `list.FilterMatchesMsg`) and asserts only the *active* tab's list
+processes it, with background tabs' visible sets untouched. Mutation-tested: the assertion
+fails if the fall-through is changed to broadcast. The audit's heavier option —
+type-switching the known passthrough types and dropping the rest — was deliberately NOT
+taken: enumerating Bubble Tea's internal list/cursor/filter message types is fragile and
+would risk swallowing a blink/filter tick the active list legitimately needs, so the
+executable guard (plus the documented comment) is the right scope. The separate `model.go`
+split (M6) remains in epic-21 task
+`maintainability-and-latent-edge-hardening-model.go-split-routing-invariant`.
 
 #### M9. The "ready to close" / settled aggregate is duplicated across adapters over raw `OpenAudits`  · **Status:** open
 **Component:** core / cli / tui · **Effort:** S · **Urgency:** eventually
@@ -112,10 +162,19 @@ Core correctly owns the *tally* (`FindingsRollup.ByUrgency`/`ByComponent` as `[]
 
 ## Low
 
-#### L1. `FindingsRollup` is a presentation-shaped aggregate living as an intrinsic `Summary` field  · **Status:** open
+#### L1. `FindingsRollup` is a presentation-shaped aggregate living as an intrinsic `Summary` field  · **Status:** deferred
 **Component:** core · **Effort:** S · **Urgency:** eventually
 
 `FindingsRollup`'s ordering is display-driven — `ByUrgency` "canonical triage order (acute, soon, eventually)", `ByComponent` "most-findings-first", plus a hand-picked `Acute []AuditFinding` call-out (`finding.go:17-31,53-60`) — and it's a fixed field on `Summary` (`service.go:92`). Defensible (the tally is worth more than purity, and triage order is arguably domain logic), but `Summary` risks becoming "whatever the current dashboards need," and a web findings page wanting pagination/another sort would either reuse this fixed shape or call the composable `QueryFindings` and re-roll. Fix: keep it, but make it a `Service.FindingsRollup()` view-model that `Summary` *composes*, so web can roll up with its own filter — which also naturally enables the single-sweep fix in H2.
+
+**Resolution (2026-06-28, deferred):** defensible as-is — the tally is worth more than
+purity, triage order is arguably domain logic, and the H2 single-sweep it would enable
+already landed independently. Recasting `FindingsRollup` as a composed
+`Service.FindingsRollup()` view-model only earns its keep when a web findings page wants
+its own pagination/sort, so it's **deferred** pending the web effort (epic 19). Tracked as
+the deferred sub-item of epic-21 task
+`let-core-own-the-dashboard-aggregates-adapters-re-derive`; revisit when `tskflwctl serve`
+is scoped.
 
 #### L2. Schema field descriptions come from two sources chosen by export-visibility  · **Status:** wontfix
 **Component:** cli/render · **Effort:** S · **Urgency:** eventually
