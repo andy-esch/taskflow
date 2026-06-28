@@ -22,6 +22,35 @@ func decodeStrict(t *testing.T, data []byte, into any) {
 	}
 }
 
+// TestFindingStatusOrder_CoversRegistry pins the audit-show lifecycle order to the
+// domain registry. findingStatusOrder is a hand-ordered list (active work first,
+// terminal states last) — NOT alphabetical, so it can't just derive from
+// domain.FindingStatuses() — which makes it silently drift-prone: a status added to
+// the vocabulary but missing here would fall into the "unknown" group in `audit
+// show` instead of its lifecycle slot. Guard that the two cover the same SET, so
+// adding a finding status forces updating both.
+func TestFindingStatusOrder_CoversRegistry(t *testing.T) {
+	want := map[string]bool{}
+	for _, s := range domain.FindingStatuses() {
+		want[s] = true
+	}
+	got := map[string]bool{}
+	for _, s := range findingStatusOrder {
+		if got[s] {
+			t.Errorf("findingStatusOrder lists %q twice", s)
+		}
+		got[s] = true
+		if !want[s] {
+			t.Errorf("findingStatusOrder has %q, not a legal finding status", s)
+		}
+	}
+	for s := range want {
+		if !got[s] {
+			t.Errorf("finding status %q is in the registry but missing from findingStatusOrder (audit show would misgroup it)", s)
+		}
+	}
+}
+
 var sampleTasks = []domain.Task{
 	{Slug: "alpha", Status: domain.StatusInProgress, Declared: domain.StatusInProgress,
 		Epic: "e1", Description: "first task", Tier: 2, Priority: "high",

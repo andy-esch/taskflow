@@ -74,7 +74,11 @@ import (
 // these epics are flagged, not dropped), mirroring `misfiled` for tasks.
 // 1.20: the `audit_mutation` envelope (`audit append`) added — the audit counterpart
 // to `task_mutation`; it carries dry_run + the reloaded audit + the resulting body.
-const SchemaVersion = "1.20"
+// 1.21: the schema contract carries `finding_statuses` — the legal audit
+// finding-status vocabulary (open · in-progress · fixed · landed · deferred ·
+// superseded · wontfix), so an agent writing a finding discovers the status set
+// without parsing prose, the audit counterpart to `statuses`/`audit_buckets`.
+const SchemaVersion = "1.21"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

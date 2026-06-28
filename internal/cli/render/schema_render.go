@@ -50,6 +50,7 @@ func SchemaHuman(w io.Writer, st Style, c SchemaContract) error {
 	}
 	fmt.Fprintf(w, "\n%s: %s\n", st.Bold("Epic statuses"), strings.Join(c.EpicStatuses, ", "))
 	fmt.Fprintf(w, "%s: %s\n", st.Bold("Audit buckets"), strings.Join(c.AuditBuckets, ", "))
+	fmt.Fprintf(w, "%s: %s\n", st.Bold("Finding statuses"), strings.Join(c.FindingStatuses, ", "))
 	fmt.Fprintf(w, "%s:   %s\n", st.Bold("Doc kinds"), strings.Join(c.Kinds, ", "))
 	fmt.Fprintf(w, "\n%s:\n", st.Bold("Task fields"))
 	for _, f := range c.TaskFields {
