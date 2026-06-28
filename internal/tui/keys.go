@@ -16,6 +16,7 @@ type keyMap struct {
 	FindNext    key.Binding // n (detail: next match)
 	FindPrev    key.Binding // N (detail: previous match)
 	ToggleFocus key.Binding // tab
+	Zoom        key.Binding // z → full-screen the detail pane (toggle)
 	Command     key.Binding // : → entity command-jump
 	Palette     key.Binding // ctrl+p → fuzzy command palette (jump to anything / run a command)
 	PrevTab     key.Binding // [ → previous entity tab
@@ -49,6 +50,7 @@ var keys = keyMap{
 	FindNext:    key.NewBinding(key.WithKeys("n")),
 	FindPrev:    key.NewBinding(key.WithKeys("N")),
 	ToggleFocus: key.NewBinding(key.WithKeys("tab")),
+	Zoom:        key.NewBinding(key.WithKeys("z")),
 	Command:     key.NewBinding(key.WithKeys(":")),
 	Palette:     key.NewBinding(key.WithKeys("ctrl+p")),
 	PrevTab:     key.NewBinding(key.WithKeys("[")),

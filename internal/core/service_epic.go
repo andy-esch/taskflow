@@ -185,21 +185,24 @@ func epicsByRecent(epics []EpicSummary) []EpicSummary {
 	return out
 }
 
-// dashboardEpics is the landing-screen epic lens: only ACTIVE buckets (retired/
-// deprecated are history, not "what's live"), ordered live work first and then by
-// recency, so a cap'd dashboard fills with epics that have momentum and dormant
-// domains sink to the bottom. Layered on epicsByRecent: recency orders within each
+// dashboardEpics is the landing-screen epic lens: the live buckets, ordered live
+// work first and then by recency, so a cap'd dashboard fills with epics that have
+// momentum and dormant domains sink to the bottom. Visibility fails OPEN — it hides
+// only the known TERMINAL statuses (retired/deprecated via IsEpicArchived), so an
+// unknown/foreign/missing status (e.g. an epic ported from a repo that uses
+// planning/in-progress/completed) still shows and gets flagged elsewhere, rather
+// than silently vanishing. Layered on epicsByRecent: recency orders within each
 // liveness band, then a stable partition floats Live epics above dormant ones. The
 // epics TAB keeps the full roster (its own view axis reaches retired/deprecated);
 // this narrowing is dashboard-only, so `status` and the TUI dashboard still agree.
 func dashboardEpics(epics []EpicSummary) []EpicSummary {
-	active := make([]EpicSummary, 0, len(epics))
+	live := make([]EpicSummary, 0, len(epics))
 	for _, e := range epics {
-		if e.Epic.Status == domain.EpicStatusActive {
-			active = append(active, e)
+		if !domain.IsEpicArchived(e.Epic.Status) {
+			live = append(live, e)
 		}
 	}
-	out := epicsByRecent(active)
+	out := epicsByRecent(live)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Live() && !out[j].Live() })
 	return out
 }

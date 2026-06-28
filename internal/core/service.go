@@ -85,15 +85,16 @@ type StatusCount struct {
 
 // Summary is the at-a-glance project state for the dashboard.
 type Summary struct {
-	Counts       []StatusCount        // every status in display order (count may be 0)
-	InProgress   []domain.Task        // the in-progress working set
-	Epics        []EpicSummary        // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
-	OpenAudits   []domain.Audit       // audits still in the open bucket (actionable work)
-	ReadyToClose int                  // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
-	Findings     FindingsRollup       // actionable audit findings (open/in-progress) aggregated by urgency + component
-	Misfiled     int                  // tasks whose status disagrees with their folder
-	RevisitDue   int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
-	Problems     []domain.FileProblem // unreadable files
+	Counts        []StatusCount        // every status in display order (count may be 0)
+	InProgress    []domain.Task        // the in-progress working set
+	Epics         []EpicSummary        // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
+	OpenAudits    []domain.Audit       // audits still in the open bucket (actionable work)
+	ReadyToClose  int                  // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
+	Findings      FindingsRollup       // actionable audit findings (open/in-progress) aggregated by urgency + component
+	Misfiled      int                  // tasks whose status disagrees with their folder
+	RevisitDue    int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
+	BadEpicStatus int                  // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
+	Problems      []domain.FileProblem // unreadable files
 }
 
 // Summary composes a one-screen overview from a single scan of tasks + epics +
@@ -163,6 +164,15 @@ func (s *Service) Summary() (Summary, error) {
 	for _, st := range domain.AllStatuses() {
 		ordered = append(ordered, StatusCount{Status: st, Count: counts[st]})
 	}
+	// Epics with a status outside the canonical vocabulary are a fixable data problem
+	// (lint reports each by id); surface the count so the dashboard can nudge — these
+	// epics are NOT dropped (dashboardEpics fails open), just flagged.
+	badEpicStatus := 0
+	for _, e := range epics {
+		if !domain.IsKnownEpicStatus(e.Status) {
+			badEpicStatus++
+		}
+	}
 	return Summary{
 		Counts:     ordered,
 		InProgress: inProgress,
@@ -172,13 +182,14 @@ func (s *Service) Summary() (Summary, error) {
 		// Retired/deprecated epics and drained-dormant ordering are handled in
 		// dashboardEpics; the entity list / `epic list` keep the full roster in store
 		// order via rollupEpics directly.
-		Epics:        dashboardEpics(rollupEpics(epics, tasks)),
-		OpenAudits:   openAudits,
-		ReadyToClose: readyToClose,
-		Findings:     rollupFindings(actionable),
-		Misfiled:     misfiled,
-		RevisitDue:   revisitDue,
-		Problems:     append(append(p1, p2...), p3...),
+		Epics:         dashboardEpics(rollupEpics(epics, tasks)),
+		OpenAudits:    openAudits,
+		ReadyToClose:  readyToClose,
+		Findings:      rollupFindings(actionable),
+		Misfiled:      misfiled,
+		RevisitDue:    revisitDue,
+		BadEpicStatus: badEpicStatus,
+		Problems:      append(append(p1, p2...), p3...),
 	}, nil
 }
 

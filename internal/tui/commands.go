@@ -108,21 +108,22 @@ func loadEpicList(t *entityTab, svc *core.Service) tea.Cmd {
 	}
 }
 
-// filterEpicsByView narrows the roster to a status view: "" (default) keeps only
-// live domain buckets (active status), "all" keeps every status, any other value is
-// an exact status filter. The epic echo of loadTaskList's view switch, but on the
-// stored status FIELD (epics have no status directory).
+// filterEpicsByView narrows the roster to a status view: "" (default) is the LIVE
+// set — every epic that isn't a known terminal (retired/deprecated), so it fails
+// open on an unknown/foreign status rather than hiding it; "all" keeps everything;
+// any other value is an exact status filter (retired/deprecated). The epic echo of
+// loadTaskList's view switch, but on the stored status FIELD (epics live flat).
 func filterEpicsByView(epics []core.EpicSummary, view string) []core.EpicSummary {
 	if view == "all" {
 		return epics
 	}
-	want := view
-	if view == "" {
-		want = domain.EpicStatusActive
-	}
 	out := make([]core.EpicSummary, 0, len(epics))
 	for _, e := range epics {
-		if e.Epic.Status == want {
+		keep := e.Epic.Status == view // exact match for a named terminal view
+		if view == "" {               // live: anything not retired/deprecated
+			keep = !domain.IsEpicArchived(e.Epic.Status)
+		}
+		if keep {
 			out = append(out, e)
 		}
 	}

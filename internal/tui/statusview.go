@@ -51,15 +51,22 @@ var auditViews = []statusView{
 
 // epicViews is the epics tab's status axis — the s/S cycle order AND the `:`
 // vocabulary. Unlike tasks/audits the filter is on the stored status FIELD, not a
-// directory (epics live flat). "active" leads as the default (value "" = live domain
-// buckets only); retired/deprecated are reached via the cycle or `:all`. Within the
-// active default the list still floats dormant epics to the bottom and dims them
-// (loadEpicList / epicDelegate), so liveness reads without leaving the view.
+// directory (epics live flat). "live" leads as the default (value "" = every epic
+// that ISN'T a known terminal — so it fails open on unknown/foreign statuses rather
+// than hiding them); retired/deprecated are the exact terminal views; "all" spans
+// everything. Within the live default the list floats dormant epics to the bottom
+// and dims them (loadEpicList / epicDelegate), so liveness reads without leaving it.
 var epicViews = []statusView{
-	{"active", ""},
+	{"live", ""},
 	{"retired", "retired"},
 	{"deprecated", "deprecated"},
 	{"all", "all"},
+}
+
+// epicViewAliases are extra `:` words off the s/S cycle. "active" is back-compat for
+// the live default — in a conforming repo the live set IS the active epics.
+var epicViewAliases = []statusView{
+	{"active", ""},
 }
 
 // viewWords is the `:` Tab-completion vocabulary for a view axis (cycle + aliases).

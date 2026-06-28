@@ -127,6 +127,7 @@ type SummaryEnvelope struct {
 	Findings      *FindingsRollupJSON  `json:"findings,omitempty"`
 	Misfiled      int                  `json:"misfiled"`
 	RevisitDue    int                  `json:"revisit_due"`
+	BadEpicStatus int                  `json:"bad_epic_status"`
 	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
 }
 
@@ -160,7 +161,8 @@ func ToSummaryEnvelope(s core.Summary) SummaryEnvelope {
 	return SummaryEnvelope{
 		SchemaVersion: SchemaVersion, Counts: counts, InProgress: inprog,
 		Epics: epics, OpenAudits: audits, Findings: findings,
-		Misfiled: s.Misfiled, RevisitDue: s.RevisitDue, Unreadable: s.Problems,
+		Misfiled: s.Misfiled, RevisitDue: s.RevisitDue, BadEpicStatus: s.BadEpicStatus,
+		Unreadable: s.Problems,
 	}
 }
 

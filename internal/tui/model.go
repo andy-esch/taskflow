@@ -38,6 +38,7 @@ type Model struct {
 
 	width, height int
 	twoPane       bool
+	zoom          bool // full-screen the detail pane (z): hide the list, give detail the full width
 	listOuterW    int
 	detailOuterW  int
 	paneOuterH    int
@@ -457,9 +458,13 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// 3. Global hotkeys.
 	switch {
 	case key.Matches(msg, keys.Quit):
-		// q is a *context* quit: in single-pane drill the detail pane is a layer,
-		// so q pops back to the list (like Esc/h) instead of exiting the app.
+		// q is a *context* quit: full-screen detail and the single-pane drill are
+		// both layers, so q pops back (to the split / the list) rather than exiting.
 		// In two-pane, detail focus isn't a layer — q quits from either pane.
+		if m.zoom {
+			m.toggleZoom()
+			return m, nil
+		}
 		if m.focus == focusDetail && !m.twoPane {
 			m.setFocus(focusList)
 			return m, nil
@@ -543,6 +548,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.ToggleFocus):
 		m.toggleFocus()
 		return m, nil
+	case key.Matches(msg, keys.Zoom):
+		// Full-screen the detail pane (toggle). Entity-tab only — the dashboard
+		// routes its keys in handleDashKey above and never reaches here.
+		m.toggleZoom()
+		return m, nil
 	}
 
 	// 4. Focus-routed keys (list vs detail).
@@ -566,9 +576,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.detail.findNext(-1)
 		return m, nil
 	case key.Matches(msg, keys.Left), key.Matches(msg, keys.Back):
-		// First Esc/h clears an active find; a second leaves the detail pane.
+		// First Esc/h clears an active find; then it leaves full-screen (back to the
+		// split) or, in the split, returns focus to the list.
 		if m.detail.findActive() {
 			m.detail.clearFind()
+			return m, nil
+		}
+		if m.zoom {
+			m.toggleZoom() // exit full-screen back to the split (focus → list)
 			return m, nil
 		}
 		m.setFocus(focusList)
@@ -805,6 +820,18 @@ func (m *Model) exitDashboard(i int) {
 	m.active = i
 	m.focus = focusList
 	m.detail.clear()
+	m.unzoom() // a tab switch drops full-screen — the new tab opens on its list
+}
+
+// unzoom leaves full-screen detail and restores the layout, if zoomed. A no-op
+// otherwise. Used where the item/tab context changes out from under the zoom
+// (switching tabs, entering the dashboard) so it never strands a full-screen pane
+// over a just-cleared selection.
+func (m *Model) unzoom() {
+	if m.zoom {
+		m.zoom = false
+		m.recomputeLayout()
+	}
 }
 
 // handleDashKey drives the landing dashboard: j/k move the cursor over the
@@ -844,6 +871,7 @@ func (m *Model) enterDash() tea.Cmd {
 	m.onDash = true
 	m.focus = focusList
 	m.detail.clear()
+	m.unzoom() // the dashboard has no detail pane to full-screen
 	return loadDashboard(m.svc)
 }
 
@@ -917,11 +945,30 @@ func (m Model) isCurrentSelection(kind entityKind, id string) bool {
 func (m *Model) setFocus(f focus) { m.focus = f }
 
 func (m *Model) toggleFocus() {
+	if m.zoom { // only the detail pane is visible; tab returns to the split
+		m.toggleZoom()
+		return
+	}
 	if m.focus == focusList {
 		m.setFocus(focusDetail)
 	} else {
 		m.setFocus(focusList)
 	}
+}
+
+// toggleZoom flips the detail pane between its split share and full-screen. Zoomed,
+// the list is hidden and the detail takes the whole width (recomputeLayout reads
+// m.zoom); focus follows the visible pane — detail on the way in, list on the way
+// back to the split. Entity-tab only: the dashboard handles its own keys and never
+// reaches here.
+func (m *Model) toggleZoom() {
+	m.zoom = !m.zoom
+	if m.zoom {
+		m.setFocus(focusDetail)
+	} else {
+		m.setFocus(focusList)
+	}
+	m.recomputeLayout()
 }
 
 func (m Model) selectedID() string {
@@ -1264,7 +1311,9 @@ func (m *Model) recomputeLayout() {
 	// fit the pane's inner height exactly.
 	listH := max1(bodyH - paneVFrame - 1)
 	detailH := max1(bodyH - paneVFrame - titleH)
-	m.twoPane = m.width >= 90
+	// Zoom forces the single-pane path (detail full width); otherwise a wide terminal
+	// shows the list+detail split.
+	m.twoPane = m.width >= 90 && !m.zoom
 
 	var listInnerW int
 	if m.twoPane {
@@ -1341,14 +1390,16 @@ func (m Model) bodyView() string {
 
 // helpMaxScroll is the largest in-bounds scroll offset for the `?` overlay,
 // mirroring helpBox's window math: the box gets paneOuterH-2 (see bodyView) and
-// spends 2 of that on its border rows. The j/k handler clamps to this so
-// helpScroll can't run past the visible bottom (leaving k presses doing nothing).
+// spends 2 of that on its border rows. The line COUNT must match helpBox's, so it
+// wraps at the same content width (helpWidth(width-2): bodyView hands the modal
+// width-2). The j/k handler clamps to this so helpScroll can't run past the bottom.
 func (m Model) helpMaxScroll() int {
 	innerH := m.paneOuterH - 2 - 2 // box height (paneOuterH-2) minus top+bottom border
 	if innerH <= 0 {
 		return 0
 	}
-	return max(len(helpLines(m.focus, m.helpEntityKind()))-innerH, 0)
+	contentW := helpWidth(m.width-2) - helpHFrame
+	return max(len(helpLines(m.focus, m.helpEntityKind(), contentW))-innerH, 0)
 }
 
 // helpEntityKind is the kind whose context notes the `?` panel shows — the active
@@ -1382,6 +1433,9 @@ func (m Model) renderBody() string {
 		return m.pane(focusList, fg(theme.ColorRed, "error: "+t.loadErr.Error()), m.width)
 	case !t.loaded:
 		return m.pane(focusList, dim("loading…"), m.width)
+	}
+	if m.zoom { // full-screen: the detail pane takes the whole width (no list)
+		return m.detailPaneView()
 	}
 	listPane := m.pane(focusList, m.listPaneContent(), m.listOuterW)
 	switch {
@@ -1526,10 +1580,15 @@ func (m Model) footer() string {
 		}
 		return dim(truncate(hint, m.width))
 	}
-	hints := ": cmd · / filter · m move · e edit · E editor · s view · [ ] tabs · l/⏎ detail · ? help · q quit"
+	hints := ": cmd · / filter · m move · e edit · E editor · s view · [ ] tabs · l/⏎ detail · z full · ? help · q quit"
 	if m.focus == focusDetail {
-		hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc back · q quit"
-		if !m.twoPane {
+		hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · z full · h/esc back"
+		switch {
+		case m.zoom:
+			// Full-screen: the list is hidden, so name the way out and drop the keys
+			// (m/e/s/tabs) that only make sense beside the list.
+			hints = "full-screen · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · z/esc exit"
+		case !m.twoPane:
 			// Single-pane drill: q pops back to the list (context quit), so the
 			// hint must not promise it exits the app.
 			hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc/q back"

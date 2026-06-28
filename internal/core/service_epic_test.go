@@ -395,6 +395,38 @@ func TestService_Summary_RevisitDue(t *testing.T) {
 	}
 }
 
+// TestService_Summary_BadEpicStatus pins the conformance count: epics whose status
+// is outside the canonical vocabulary are tallied (so the dashboard can nudge) but
+// NOT dropped — they still appear in Summary.Epics (dashboardEpics fails open).
+func TestService_Summary_BadEpicStatus(t *testing.T) {
+	svc := NewService(&fakeStore{
+		epics: []domain.Epic{
+			{ID: "e1", Status: domain.EpicStatusActive},
+			{ID: "e2", Status: "planning"},    // non-canonical
+			{ID: "e3", Status: "in-progress"}, // non-canonical
+			{ID: "e4", Status: domain.EpicStatusRetired},
+		},
+	})
+	s, err := svc.Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.BadEpicStatus != 2 {
+		t.Errorf("BadEpicStatus = %d, want 2 (planning + in-progress)", s.BadEpicStatus)
+	}
+	// Fail-open: the non-canonical epics are still shown (only retired is hidden).
+	shown := map[string]bool{}
+	for _, es := range s.Epics {
+		shown[es.Epic.ID] = true
+	}
+	if !shown["e2"] || !shown["e3"] {
+		t.Errorf("non-canonical epics must still show on the dashboard; got %v", shown)
+	}
+	if shown["e4"] {
+		t.Errorf("retired epic e4 must be hidden from the dashboard; got %v", shown)
+	}
+}
+
 // TestService_Summary_EpicLastUpdated pins the derived epic timestamp: epics have
 // no updated_at of their own, so it's the max updated_at across their tasks
 // (falling back to created), and "" for an epic with no tasks.
@@ -645,15 +677,18 @@ func TestDashboardEpics(t *testing.T) {
 		{Epic: domain.Epic{ID: "working-old", Status: domain.EpicStatusActive}, Total: 3, Done: 1, LastUpdated: "2026-06-20"},
 		{Epic: domain.Epic{ID: "deprecated", Status: domain.EpicStatusDeprecated}, Total: 1, Done: 0, LastUpdated: "2026-06-26"},
 		{Epic: domain.Epic{ID: "working-new", Status: domain.EpicStatusActive}, Total: 4, Done: 0, LastUpdated: "2026-06-25"},
+		// A foreign/non-canonical status must FAIL OPEN — shown (and counted as a
+		// liveness band off its rollup), never silently dropped like the terminals.
+		{Epic: domain.Epic{ID: "foreign", Status: "planning"}, Total: 2, Done: 0, LastUpdated: "2026-06-29"},
 	}
 	got := dashboardEpics(in)
 	var ids []string
 	for _, e := range got {
 		ids = append(ids, e.Epic.ID)
 	}
-	// Live first (working-new before working-old by recency), then dormant last;
-	// retired + deprecated absent entirely.
-	want := []string{"working-new", "working-old", "dormant"}
+	// Live first by recency (foreign is newest), then dormant last; only the known
+	// terminals (retired + deprecated) are absent.
+	want := []string{"foreign", "working-new", "working-old", "dormant"}
 	if len(ids) != len(want) {
 		t.Fatalf("dashboardEpics ids = %v, want %v", ids, want)
 	}

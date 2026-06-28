@@ -61,6 +61,23 @@ func ValidateEpicStatus(s string) error {
 		ErrValidation, s, strings.Join(epicStatuses, ", "))
 }
 
+// IsKnownEpicStatus reports whether s is one of the canonical epic statuses. It's
+// the boolean form of ValidateEpicStatus (no error allocation), used by the read
+// surfaces to flag a non-conforming epic — e.g. one ported from a repo with a
+// different lifecycle vocabulary (planning/in-progress/completed) — without
+// rejecting it: the tool still lists, rolls up, and lets you fix it.
+func IsKnownEpicStatus(s string) bool { return ValidateEpicStatus(s) == nil }
+
+// IsEpicArchived reports whether an epic is in a closed/terminal state — retired
+// (finished) or deprecated (abandoned/replaced). This is the ONLY status check the
+// dashboard and the epics-tab default view hide on: visibility fails OPEN, so an
+// unknown/foreign/missing status reads as live (and gets flagged, not dropped)
+// rather than vanishing. Hiding the known terminals keeps a conforming repo's
+// behavior identical while a non-conforming one stays usable.
+func IsEpicArchived(s string) bool {
+	return s == EpicStatusRetired || s == EpicStatusDeprecated
+}
+
 // knownEpicFields is every frontmatter key tskflwctl itself reads or writes on an
 // epic — the epic analog of knownTaskFields. Mirrors the domain.Epic yaml tags;
 // `epic set --set` rejects keys outside it unless forced (a typo'd field name must

@@ -123,8 +123,9 @@ func (d *dashboard) setSummary(s core.Summary) {
 		}
 		for i, es := range vis {
 			pct := es.Percent()
-			tok := theme.Liveness(string(es.Liveness())) // live-first, dormant dimmed (Summary already filtered to active)
-			row := fmt.Sprintf("%s %s %s  %s", fg(tok.Color, tok.Glyph), miniBar(pct, 8),
+			// live-first, dormant dimmed; a ⚠ leads instead when the status is
+			// non-conforming (the same glyph the epics tab shows — see epicGlyph).
+			row := fmt.Sprintf("%s %s %s  %s", epicGlyph(es), miniBar(pct, 8),
 				fg(theme.Percent(pct), theme.PercentLabelPadded(pct)), rollupCounts(es.Done, es.Total, countsW))
 			if dateW > 0 { // a blank (undated) cell still pads, so the id column holds
 				row += "  " + dim(fmt.Sprintf("%-*s", dateW, dates[i]))
@@ -133,7 +134,7 @@ func (d *dashboard) setSummary(s core.Summary) {
 			if !es.Live() { // dormant buckets recede on the dashboard too
 				id = dim(id)
 			}
-			row += "  " + id
+			row += "  " + id + epicStatusNote(es)
 			nav(row, dashTarget{kind: entityEpics, id: es.Epic.ID})
 		}
 		if more > 0 {
@@ -179,6 +180,11 @@ func (d *dashboard) setSummary(s core.Summary) {
 	if s.ReadyToClose > 0 {
 		nav(fg(theme.ColorGreen, "✓")+fmt.Sprintf(" %d audit(s) ready to close (all findings resolved)", s.ReadyToClose),
 			dashTarget{kind: entityAudits})
+		allClear = false
+	}
+	if s.BadEpicStatus > 0 {
+		nav(fg(theme.ColorYellow, "⚠")+fmt.Sprintf(" %d epic(s) with unrecognized status (set active/retired/deprecated)", s.BadEpicStatus),
+			dashTarget{kind: entityEpics})
 		allClear = false
 	}
 	if len(s.Problems) > 0 {
