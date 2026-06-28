@@ -123,7 +123,7 @@ once per path and the percent rule isn't re-implemented. `EpicShowHuman` and the
 re-deriving inline. Output byte-identical (goldens unchanged); pinned by the updated
 `TestService_ShowEpic`.
 
-#### M4. `defer` (move + revisit date) is special-cased structurally in all three layers; `DeferTask` is non-atomic  · **Status:** open
+#### M4. `defer` (move + revisit date) is special-cased structurally in all three layers; `DeferTask` is non-atomic  · **Status:** deferred
 **Component:** core / cli / tui · **Effort:** M · **Urgency:** eventually
 
 "defer is a move that also carries an optional revisit date" is hardcoded per adapter: core's `DeferTask` is Move + SetFields with a documented non-atomic two-write hazard (`service_task.go:116-141`); the CLI forks a bespoke `newDeferCmd` separate from the generic `newTransitionCmd` (`cli/task.go:466-509`); the TUI hardcodes `tr.to == string(domain.StatusDeferred)` interception in two places (`tui/model.go:711,732`). The transition registry (H3) has no way to say "this transition collects an extra parameter," so each adapter branches on the literal `deferred`; web will add a fourth special-case. Fix: model the extra parameter on the transition descriptor (`Param *ParamSpec`) so adapters render "this verb wants a date" generically; longer term let the store record the revisit date *within* the Move write (it already builds the `updates` map at `fsstore.go:122-133`) so `DeferTask` is one atomic write.
@@ -133,10 +133,12 @@ atomic write via a new `Store.Defer` port method; `internal/store/fsstore.go`'s 
 `moveTask` records `revisit_at` inside the same relocation write (a re-defer rewrites it
 in place), replacing the Move-then-SetFields two-write hazard. The core also validates the
 date up front (the guard the old SetFields path gave for free). Pinned by `TestFS_Defer`
-+ `TestDeferTask_*`. STILL OPEN (so this finding stays open): the structural special-casing
-of `defer` across the three adapters — that rides the shared transition registry's optional
-param spec, tracked in epic-21 task
-`promote-a-shared-transition-registry-to-core-verb-to-state-destructive-params`.
++ `TestDeferTask_*`. The remaining half — the structural special-casing of `defer` across
+the three adapters — rides the shared transition registry's optional param spec and is
+**deferred** to the live epic-21 task
+`promote-a-shared-transition-registry-to-core-verb-to-state-destructive-params` (it's not a
+correctness gap, just per-adapter branching), so this finding is now terminal for the audit
+while the cleanup stays tracked.
 
 #### M5. `deprecate` confirmation exists only in the TUI; relative revisit dates use wall-clock, not the injected clock  · **Status:** fixed
 **Component:** cli / tui · **Effort:** S · **Urgency:** soon
@@ -217,10 +219,10 @@ unit-tested (`theme.TestBreakdown`). The structured JSON emit is untouched.
 purity, triage order is arguably domain logic, and the H2 single-sweep it would enable
 already landed independently. Recasting `FindingsRollup` as a composed
 `Service.FindingsRollup()` view-model only earns its keep when a web findings page wants
-its own pagination/sort, so it's **deferred** pending the web effort (epic 19). Tracked as
-the deferred sub-item of epic-21 task
-`let-core-own-the-dashboard-aggregates-adapters-re-derive`; revisit when `tskflwctl serve`
-is scoped.
+its own pagination/sort, so it's **deferred** pending the web effort (epic 19). Re-homed
+2026-06-28 (its original aggregates task completed) to the deferred epic-21 task
+`recast-findingsrollup-as-a-composed-service-view-model-for-web-pagination-sort`; revisit
+when `tskflwctl serve` is scoped.
 
 #### L2. Schema field descriptions come from two sources chosen by export-visibility  · **Status:** wontfix
 **Component:** cli/render · **Effort:** S · **Urgency:** eventually
