@@ -595,7 +595,7 @@ func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
 
 func TestEntityDetailRenderers(t *testing.T) {
 	epic := epicDetail{
-		e:     domain.Epic{ID: "17-x", Status: "active", Priority: "high"},
+		es:    core.EpicSummary{Epic: domain.Epic{ID: "17-x", Status: "active", Priority: "high"}, Done: 1, Total: 2},
 		tasks: []domain.Task{{Slug: "a", Status: domain.StatusCompleted}, {Slug: "b", Status: domain.StatusReadyToStart}},
 		body:  "# Epic body",
 	}
@@ -609,10 +609,10 @@ func TestEntityDetailRenderers(t *testing.T) {
 		t.Errorf("epic title = %q", epic.Title())
 	}
 
-	// Regression: the detail progress must exclude deprecated tasks from the
-	// denominator (mirroring the rollup / epic list), not divide by len(tasks).
+	// Regression: the detail progress renders the rollup (deprecated excluded from the
+	// denominator) that ShowEpic computes, not len(tasks). 2 done of 2 non-deprecated.
 	dep := epicDetail{
-		e: domain.Epic{ID: "18-x"},
+		es: core.EpicSummary{Epic: domain.Epic{ID: "18-x"}, Done: 2, Total: 2, Deprecated: 1},
 		tasks: []domain.Task{
 			{Slug: "a", Status: domain.StatusCompleted},
 			{Slug: "b", Status: domain.StatusCompleted},

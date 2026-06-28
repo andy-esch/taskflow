@@ -319,8 +319,8 @@ func TestModel_EditEpicPriorityViaMenu(t *testing.T) {
 		t.Errorf("expected a success flash, got %q (err=%v)", m.flash, m.flashErr)
 	}
 	epic, _, _, err := m.svc.ShowEpic("01-e")
-	if err != nil || epic.Priority != "high" {
-		t.Errorf("priority should be high after the edit: %q (%v)", epic.Priority, err)
+	if err != nil || epic.Epic.Priority != "high" {
+		t.Errorf("priority should be high after the edit: %q (%v)", epic.Epic.Priority, err)
 	}
 }
 

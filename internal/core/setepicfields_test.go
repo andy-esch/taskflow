@@ -32,15 +32,15 @@ func TestSetEpicFields_RoundTrip(t *testing.T) {
 	if _, err := svc.SetEpicFields("01-e", map[string]any{"priority": "high", "tags": "ui, cli"}, false, false); err != nil {
 		t.Fatalf("SetEpicFields rejected a valid update: %v", err)
 	}
-	epic, _, _, err := svc.ShowEpic("01-e")
+	es, _, _, err := svc.ShowEpic("01-e")
 	if err != nil {
 		t.Fatalf("epic no longer reloads after set (corrupted): %v", err)
 	}
-	if epic.Priority != "high" {
-		t.Errorf("priority = %q, want high", epic.Priority)
+	if es.Epic.Priority != "high" {
+		t.Errorf("priority = %q, want high", es.Epic.Priority)
 	}
-	if len(epic.Tags) != 2 || epic.Tags[0] != "ui" || epic.Tags[1] != "cli" {
-		t.Errorf("tags = %v, want [ui cli] (trimmed)", epic.Tags)
+	if len(es.Epic.Tags) != 2 || es.Epic.Tags[0] != "ui" || es.Epic.Tags[1] != "cli" {
+		t.Errorf("tags = %v, want [ui cli] (trimmed)", es.Epic.Tags)
 	}
 }
 
@@ -78,12 +78,12 @@ func TestSetEpicFields_BadPriorityNoWrite(t *testing.T) {
 	if _, err := svc.SetEpicFields("01-e", map[string]any{"priority": "urgent"}, false, false); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("want ErrValidation for a bad priority, got %v", err)
 	}
-	epic, _, _, err := svc.ShowEpic("01-e")
+	es, _, _, err := svc.ShowEpic("01-e")
 	if err != nil {
 		t.Fatalf("a rejected set must leave the epic readable, got: %v", err)
 	}
-	if epic.Priority != "medium" {
-		t.Errorf("priority changed despite a rejected set: %q", epic.Priority)
+	if es.Epic.Priority != "medium" {
+		t.Errorf("priority changed despite a rejected set: %q", es.Epic.Priority)
 	}
 }
 
@@ -98,8 +98,8 @@ func TestSetEpicFields_DryRun(t *testing.T) {
 		t.Errorf("dry-run should return the would-be epic (priority high), got %q", epic.Priority)
 	}
 	reloaded, _, _, _ := svc.ShowEpic("01-e")
-	if reloaded.Priority != "medium" {
-		t.Errorf("--dry-run must not write: priority is now %q", reloaded.Priority)
+	if reloaded.Epic.Priority != "medium" {
+		t.Errorf("--dry-run must not write: priority is now %q", reloaded.Epic.Priority)
 	}
 }
 
@@ -140,7 +140,7 @@ func TestEditEpic_RejectsBrokenSave(t *testing.T) {
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("a broken save kept broken should be ErrValidation, got %v", err)
 	}
-	if epic, _, _, e := svc.ShowEpic("01-e"); e != nil || epic.Description != "e" {
-		t.Errorf("a rejected edit must leave the epic intact, got epic=%+v err=%v", epic, e)
+	if es, _, _, e := svc.ShowEpic("01-e"); e != nil || es.Epic.Description != "e" {
+		t.Errorf("a rejected edit must leave the epic intact, got epic=%+v err=%v", es, e)
 	}
 }

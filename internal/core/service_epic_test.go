@@ -461,12 +461,14 @@ func TestService_ShowEpic(t *testing.T) {
 			{Slug: "b", Epic: "other"},
 		},
 	})
-	epic, tasks, body, err := svc.ShowEpic("e1")
+	es, tasks, body, err := svc.ShowEpic("e1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if epic.ID != "e1" || len(tasks) != 1 || tasks[0].Slug != "a" || body != "epic body" {
-		t.Errorf("ShowEpic wrong: %+v tasks=%v body=%q", epic, tasks, body)
+	// ShowEpic returns the rollup summary: e1 has one non-deprecated task (a), so the
+	// embedded epic id resolves and Total is 1 (b belongs to another epic).
+	if es.Epic.ID != "e1" || es.Total != 1 || len(tasks) != 1 || tasks[0].Slug != "a" || body != "epic body" {
+		t.Errorf("ShowEpic wrong: %+v tasks=%v body=%q", es, tasks, body)
 	}
 }
 

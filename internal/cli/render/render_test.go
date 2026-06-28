@@ -172,7 +172,8 @@ func TestEpicShowHuman_Tree(t *testing.T) {
 		{Slug: "gamma", Status: domain.StatusReadyToStart},
 		{Slug: "delta", Status: domain.StatusDeprecated},
 	}
-	if err := EpicShowHuman(&out, NewStyle(false), domain.Epic{ID: "e1", Status: "active"}, tasks, "# body"); err != nil {
+	es := core.EpicSummary{Epic: domain.Epic{ID: "e1", Status: "active"}, Done: 2, Total: 3, Deprecated: 1}
+	if err := EpicShowHuman(&out, NewStyle(false), es, tasks, "# body"); err != nil {
 		t.Fatal(err)
 	}
 	s := out.String()
@@ -259,7 +260,7 @@ func TestEpicShowHuman_FitsWidth(t *testing.T) {
 	tasks := []domain.Task{{Slug: "a-very-long-task-slug-that-would-overflow-a-narrow-terminal", Status: domain.StatusReadyToStart}}
 	epic := domain.Epic{ID: "01-x", Status: "active", Description: "A deliberately long epic description that must be truncated to the terminal width"}
 	var out bytes.Buffer
-	if err := EpicShowHuman(&out, st, epic, tasks, "# body"); err != nil {
+	if err := EpicShowHuman(&out, st, core.EpicSummary{Epic: epic, Total: 1}, tasks, "# body"); err != nil {
 		t.Fatal(err)
 	}
 	for _, ln := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
