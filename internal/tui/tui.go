@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
@@ -18,8 +19,13 @@ import (
 func Run(svc *core.Service, layout core.Layout) error {
 	m := New(svc)
 	// Resolve the terminal background ONCE, here, before the program starts
-	// reading input — querying it mid-program would race Bubble Tea's reader.
-	m.detail.glamStyle = theme.MarkdownStyleFor(lipgloss.HasDarkBackground(os.Stdin, os.Stdout))
+	// reading input — querying it mid-program would race Bubble Tea's reader. The
+	// same signal drives both the markdown style and the chrome palette: pick the
+	// background-appropriate palette for the (default) theme and apply it before
+	// the first render. Config-driven theme selection lands in a later task.
+	dark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	applyTheme(design.Default().For(dark))
+	m.detail.glamStyle = theme.MarkdownStyleFor(dark)
 	if w, err := newWatcher(layout.WatchPaths()); err == nil {
 		m.watch = w
 		defer func() { _ = w.close() }()

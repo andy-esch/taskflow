@@ -149,8 +149,8 @@ func notesFor(kind entityKind) helpSection {
 }
 
 var (
-	helpBorder   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("6")).Padding(0, 2)
-	helpHeading  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+	helpBorder   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.BorderActive.Color()).Padding(0, 2)
+	helpHeading  = lipgloss.NewStyle().Bold(true).Foreground(pal.Heading.Color())
 	helpKeyStyle = lipgloss.NewStyle().Bold(true)
 	// helpHFrame is the box's horizontal chrome (border + padding), derived from the
 	// style so a padding/border change can't desync the wrap width.

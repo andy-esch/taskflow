@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: 'New internal/design package: Hue{True,ANSI}, Palette (semantic+chrome+gradient), Theme registry; define neon-night (base16) + neon-day (Catppuccin Latte). Additive, no consumers yet.'
 effort: M
@@ -11,6 +11,7 @@ tags: [cli, tui, design]
 created: "2026-06-28"
 updated_at: "2026-06-28"
 started_at: "2026-06-28"
+completed_at: "2026-06-28"
 ---
 ## Objective
 Stand up `internal/design` as the single home for all concrete color decisions so every surface can later route through it. Additive only — nothing consumes it in this task. `internal/theme` stays untouched (domain-only semantic decisions).

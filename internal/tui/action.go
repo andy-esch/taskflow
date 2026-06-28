@@ -161,9 +161,9 @@ func (a actionMenu) selected() transition { return a.options[a.cursor] }
 func (a actionMenu) confirmOnly() bool { return len(a.options) == 1 }
 
 var (
-	actionBorder  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("6")).Padding(0, 2)
-	dangerBorder  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("1")).Padding(0, 2)
-	actionHeading = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+	actionBorder  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.BorderActive.Color()).Padding(0, 2)
+	dangerBorder  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.Danger.Color()).Padding(0, 2)
+	actionHeading = lipgloss.NewStyle().Bold(true).Foreground(pal.Heading.Color())
 )
 
 // view renders the menu (or confirm prompt) as a centered box + hint line, ready

@@ -23,7 +23,7 @@ import (
 // the overflow collapses into a "+N more →" row that jumps to the full tab.
 const dashListCap = 6
 
-var dashHeading = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+var dashHeading = lipgloss.NewStyle().Bold(true).Foreground(pal.Heading.Color())
 
 // dashTarget is where selecting a row navigates: a specific item (id set) via
 // jumpTo, or a whole view (view set) via applyView, on the named entity's tab.
