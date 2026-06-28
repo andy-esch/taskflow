@@ -35,6 +35,21 @@ func resolveBody(cmd *cobra.Command, body, bodyFile string) (string, error) {
 	return string(data), nil
 }
 
+// taskVerbHelp is the CLI-specific one-line help for each task lifecycle verb. The
+// verb→destination mapping itself lives in the shared registry
+// (domain.TaskTransitions()); this is the help text that registry deliberately
+// does NOT carry (it's presentation, not vocabulary). Keyed by verb so the two
+// can't fall out of step silently — newTaskCmd asserts every registry verb has an
+// entry here.
+var taskVerbHelp = map[string]string{
+	"start":     "Move task(s) to in-progress",
+	"next":      "Move task(s) to next-up",
+	"ready":     "Move task(s) to ready-to-start",
+	"complete":  "Move task(s) to completed",
+	"defer":     "Move task(s) to deferred (optionally with a revisit date)",
+	"deprecate": "Move task(s) to deprecated",
+}
+
 func newTaskCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "task", Short: "Work with tasks"}
 	cmd.AddCommand(
@@ -45,22 +60,33 @@ func newTaskCmd(app *App) *cobra.Command {
 		newTaskEditCmd(app),
 		newTaskAppendCmd(app),
 		newTaskMoveCmd(app),
-		// Explicit transition verbs over the internal move engine (no enum to
-		// hallucinate; per-verb intent). Each verb NAMES its destination status
-		// rather than implying a rank — `next`/`ready` (not promote/demote), so a
-		// lateral status change never reads as a value judgment and "leaving
-		// deferred" isn't a weird "demote". See the command spec.
-		newTransitionCmd(app, "start", "Move task(s) to in-progress", domain.StatusInProgress),
-		newTransitionCmd(app, "next", "Move task(s) to next-up", domain.StatusNextUp),
-		newTransitionCmd(app, "ready", "Move task(s) to ready-to-start", domain.StatusReadyToStart),
-		newTransitionCmd(app, "complete", "Move task(s) to completed", domain.StatusCompleted),
-		// defer has its own builder: it mirrors newTransitionCmd but adds the optional
-		// --until snooze date (revisit_at), so the move and the field-set share one verb.
-		newDeferCmd(app),
-		newTransitionCmd(app, "deprecate", "Move task(s) to deprecated", domain.StatusDeprecated),
-		// Hidden back-compat: the old hierarchy-flavored verbs still work (and warn)
-		// so existing scripts/muscle memory don't hard-break, but they're off the
-		// help surface so the dissonant names don't linger in the UI.
+	)
+	// Explicit transition verbs over the internal move engine (no enum to
+	// hallucinate; per-verb intent), built from the shared lifecycle registry so
+	// the verb→destination mapping has ONE source the TUI also reads. Each verb
+	// NAMES its destination status rather than implying a rank — `next`/`ready`
+	// (not promote/demote), so a lateral status change never reads as a value
+	// judgment and "leaving deferred" isn't a weird "demote". See the command spec.
+	for _, tr := range domain.TaskTransitions() {
+		short, ok := taskVerbHelp[tr.Verb]
+		if !ok {
+			// A new registry verb with no CLI help is a programming error caught the
+			// first time the command tree is built (every test, every run).
+			panic("cli: no help text for task transition verb " + tr.Verb)
+		}
+		if tr.Verb == "defer" {
+			// defer has its own builder: it mirrors newTransitionCmd but adds the
+			// optional --until snooze date (revisit_at), so the move and the field-set
+			// share one verb. (M4 follow-up: unify it through the registry's param spec.)
+			cmd.AddCommand(newDeferCmd(app))
+			continue
+		}
+		cmd.AddCommand(newTransitionCmd(app, tr.Verb, short, domain.Status(tr.To)))
+	}
+	// Hidden back-compat: the old hierarchy-flavored verbs still work (and warn)
+	// so existing scripts/muscle memory don't hard-break, but they're off the
+	// help surface so the dissonant names don't linger in the UI.
+	cmd.AddCommand(
 		deprecatedTransitionCmd(app, "promote", "next", domain.StatusNextUp),
 		deprecatedTransitionCmd(app, "demote", "ready", domain.StatusReadyToStart),
 	)

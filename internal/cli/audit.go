@@ -11,6 +11,16 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
+// auditVerbHelp is the CLI-specific one-line help for each audit lifecycle verb.
+// As with tasks, the verb→bucket mapping lives in the shared registry
+// (domain.AuditTransitions()) while this presentation text stays CLI-local; keyed
+// by verb so newAuditCmd can assert every registry verb has an entry.
+var auditVerbHelp = map[string]string{
+	"close":  "Move audit(s) to closed/",
+	"reopen": "Move audit(s) back to open/",
+	"defer":  "Move audit(s) to deferred/",
+}
+
 func newAuditCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "audit", Short: "Work with code audits"}
 	cmd.AddCommand(
@@ -19,10 +29,17 @@ func newAuditCmd(app *App) *cobra.Command {
 		newAuditShowCmd(app),
 		newAuditFindingsCmd(app),
 		newAuditLintCmd(app),
-		newAuditMoveCmd(app, "close", "Move audit(s) to closed/", domain.AuditClosed),
-		newAuditMoveCmd(app, "reopen", "Move audit(s) back to open/", domain.AuditOpen),
-		newAuditMoveCmd(app, "defer", "Move audit(s) to deferred/", domain.AuditDeferred),
 	)
+	// Bucket-move verbs from the shared lifecycle registry so the verb→destination
+	// mapping has ONE source the TUI also reads (the CLI ignores the registry's
+	// destructive flag — it stays non-interactive/scriptable, no confirm prompts).
+	for _, tr := range domain.AuditTransitions() {
+		short, ok := auditVerbHelp[tr.Verb]
+		if !ok {
+			panic("cli: no help text for audit transition verb " + tr.Verb)
+		}
+		cmd.AddCommand(newAuditMoveCmd(app, tr.Verb, short, domain.AuditBucket(tr.To)))
+	}
 	return cmd
 }
 
