@@ -1,7 +1,7 @@
 ---
 schema: 1
 status: ready-to-start
-epic: 20-cli-ux-and-ergonomics
+epic: 25-design-system-coherent-palette-and-selectable-themes
 description: Colors are scattered across theme, progressbar (neon hex), the picker (hardcoded purple), TUI lipgloss, huh, and glamour with no single palette. Define one palette and route every surface through it.
 effort: L
 tier: 3
@@ -10,6 +10,7 @@ autonomy_level: 3
 tags: [cli, tui]
 created: "2026-06-25"
 updated_at: "2026-06-28"
+blocked_by: [theme-discovery-commands-glamour-polish-and-a-second-theme]
 ---
 # Color/design overhaul: one coherent palette across every surface
 
@@ -93,3 +94,5 @@ glamour) is consistent with it; and no stray color literals live outside the pal
 definition.
 
 **Progress 2026-06-28.** A chunk landed via the audit`s theme/glyph work (epic 21): the SEMANTIC tokens (status/bucket/liveness/finding) AND the cross-surface markers (⚠/↻/✓/✔/!) are now centralized in internal/theme as glyph+color tokens (theme.Status/Bucket/Liveness/FindingStatus/Marker*), with a glyph() helper, so the CLI render layer and the TUI draw the same decisions. STILL OPEN (the actual "one palette" overhaul): the chrome/structural colors remain scattered + hardcoded — progressbar`s neon hex, the picker`s purple, huh/glamour themes, and UI-chrome lipgloss colors (dashHeading, accent, helpHeading, actionHeading all bypass theme). Define one palette and route those through it.
+
+**Research 2026-06-28.** Full audit + unification design: `planning/research/2026-06-28-color-palette-and-theming-overhaul.md`. Recommendation: adopt the **base16** standard (degrades slot==slot to the CLI's 16 ANSI colors); default neon theme `neon-night` ported from base16 *Synth Midnight Terminal Dark* (danger-red → Outrun `#FF4242` for contrast), light fallback `neon-day` ≈ Catppuccin Latte (`github.com/catppuccin/go` already in the graph). New `internal/design` package owns a truecolor `Palette`+`Theme` registry (`theme` stays domain-only); each token carries an explicit ANSI-16 anchor. `[theme]` config table mirrors `[pager]`. Scope locked to COLOR (glyphs/borders fixed). To be split into a sequenced task chain — see research §7.
