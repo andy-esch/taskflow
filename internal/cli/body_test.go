@@ -76,6 +76,22 @@ func TestTaskAppend_Empty_Errors(t *testing.T) {
 	}
 }
 
+// Passing both --body and --body-file is a usage error, not a silent precedence
+// pick (resolveBody would otherwise quietly prefer --body-file and drop --body).
+func TestTaskAppend_BodyAndBodyFile_Exclusive(t *testing.T) {
+	root := setupRepo(t)
+	if _, err := runRootRC(t, "-C", root, "task", "append", "alpha", "--body", "x", "--body-file", "-"); err == nil {
+		t.Fatal("`task append --body … --body-file -` should be rejected (mutually exclusive)")
+	}
+}
+
+func TestTaskSet_BodyAndBodyFile_Exclusive(t *testing.T) {
+	root := setupRepo(t)
+	if _, err := runRootRC(t, "-C", root, "task", "set", "alpha", "--body", "x", "--body-file", "-"); err == nil {
+		t.Fatal("`task set --body … --body-file -` should be rejected (mutually exclusive)")
+	}
+}
+
 // `task set --body` replaces the whole body.
 func TestTaskSet_BodyReplace(t *testing.T) {
 	root := setupRepo(t)

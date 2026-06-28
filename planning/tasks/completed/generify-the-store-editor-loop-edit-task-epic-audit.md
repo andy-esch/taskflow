@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: EditTask/EditEpic/EditAudit are near-verbatim resolve→loop→parse→CAS→write copies; fold the rule-of-three into one generic helper so the parse-before-accept + CAS contract lives once.
 effort: S
@@ -9,6 +9,8 @@ priority: low
 autonomy_level: 3
 tags: [store, refactor]
 created: "2026-06-28"
+updated_at: "2026-06-28"
+completed_at: "2026-06-28"
 ---
 # Generify the store editor-loop across `EditTask` / `EditEpic` / `EditAudit`
 
@@ -69,6 +71,20 @@ Relates to epic 21 (code-quality / architecture hardening).
   re-call the *same* resolve fn, not a captured path, or the guard rots.
 - `EditBody` / `AppendAuditBody` (in `body.go`) are a *different* shape (no
   interactive loop) — out of scope; don't try to fold those in.
+
+## Completed 2026-06-28
+
+Shipped as planned. New generic `editFile[T any](noun, path, orig, parse, recheck,
+edit)` in `store/edit.go` carries the whole loop (parse-before-accept, reopen-on-
+broken, give-up, unchanged-but-pre-broken, and the optional pre-write recheck).
+The three faces are now thin wrappers that supply a `parse` closure and a `recheck`
+closure: `EditTask`/`EditAudit` pass a re-resolve CAS guard (the relocation
+conflict message stays per-noun, baked into the closure); `EditEpic` passes
+`nil` (epics never move directories). The per-noun write-error wording is preserved
+via the `noun` param (`write task/epic/audit …`). Behaviour-preserving: every
+existing `TestEdit{Task,Epic,Audit}_*` (incl. the relocation/CAS conflict and
+broken→fixed-reopen cases) passes untouched; build/vet/test/lint green. `EditBody`/
+`AppendAuditBody` deliberately left alone (different shape, as scoped).
 
 ## Done when
 

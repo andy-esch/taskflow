@@ -377,6 +377,7 @@ func newAuditAppendCmd(app *App) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&body, "body", "", "markdown to append")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the markdown to append from a file (or - for stdin)")
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 

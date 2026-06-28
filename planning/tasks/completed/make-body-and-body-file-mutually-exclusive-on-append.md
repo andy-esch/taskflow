@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: --body/--body-file are marked exclusive only on `task new`; on `task append` and `audit append` passing both silently prefers --body-file. Enforce the exclusion on every body-taking command.
 effort: S
@@ -9,6 +9,8 @@ priority: low
 autonomy_level: 3
 tags: [cli]
 created: "2026-06-28"
+updated_at: "2026-06-28"
+completed_at: "2026-06-28"
 ---
 # Make `--body` / `--body-file` mutually exclusive on `task append` + `audit append`
 
@@ -67,3 +69,27 @@ Relates to epic 20 (CLI UX / ergonomics).
 
 `--body` + `--body-file` together is a uniform validation error on every command
 that takes a body, and `resolveBody`'s comment no longer overstates the guarantee.
+
+## Completed 2026-06-28 — chose the cobra-marking approach (option 1)
+
+Added `cmd.MarkFlagsMutuallyExclusive("body", "body-file")` to `task set`, `task
+append`, and `audit append` (the three body-taking commands that lacked it), so
+every such command now mirrors `task new`. Picked option 1 (cobra) over the
+resolveBody guard for **consistency with the established idiom** — `task new`
+already uses cobra, and a flag-usage conflict is conventionally a cobra usage error.
+
+**Exit-code note (supersedes the AC's "exit 11"):** cobra's mutual-exclusion error
+is a *usage* error → exit 1, the same code `task new` already returns for this
+class — NOT exit 11 (which is `ErrValidation`, the codebase's code for *content*
+validation). The draft AC over-specified exit 11; the real requirement — a clean,
+non-silent rejection, uniform across every body-taking command — is met, and the
+behaviour now matches `task new` exactly. (Forcing a semantic exit 11 here would
+mean routing through `resolveBody` AND re-marking `task new`'s flag trio to keep it
+uniform — a larger, lower-value consistency pass, deliberately not done.)
+
+`resolveBody`'s comment was rewritten to name the mechanism ("every command that
+wires them up calls MarkFlagsMutuallyExclusive…") and warn that a new body-taking
+command MUST mark them or the precedence silently prefers `--body-file`. Pinned by
+`TestTaskAppend_BodyAndBodyFile_Exclusive`, `TestTaskSet_BodyAndBodyFile_Exclusive`,
+and `TestAuditAppend_BodyAndBodyFile_Exclusive`. build/vet/test/lint green; no
+docs/goldens drift.

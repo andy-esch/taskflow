@@ -81,6 +81,15 @@ func TestAuditAppend_Empty_Errors(t *testing.T) {
 	}
 }
 
+// Passing both --body and --body-file to `audit append` is a usage error, not a
+// silent precedence pick — mirroring `task append`/`task new`.
+func TestAuditAppend_BodyAndBodyFile_Exclusive(t *testing.T) {
+	root := setupAuditRepo(t)
+	if _, err := runRootRC(t, "-C", root, "audit", "append", "o", "--body", "x", "--body-file", "-"); err == nil {
+		t.Fatal("`audit append --body … --body-file -` should be rejected (mutually exclusive)")
+	}
+}
+
 // `audit edit --dry-run` is rejected (it's interactive, no preview) — a safety flag
 // must never be a silent no-op.
 func TestAuditEdit_RejectsDryRun(t *testing.T) {

@@ -140,11 +140,10 @@ func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (doma
 	return ep, nil
 }
 
-// EditEpic is the epic counterpart to EditTask: resolve id, hand the current file
-// content to edit (which runs the caller's $EDITOR), and accept the result only if
-// it still parses as an epic (parse-before-accept), reopening the editor on a
-// broken edit. Epics never move directories, so there is no compare-and-swap
-// concern — the file stays put. Returns the reloaded epic and whether it changed.
+// EditEpic is the epic counterpart to EditTask: resolve id, read the file, and run
+// the shared editor-loop (parse-before-accept), accepting a save only if it still
+// parses as an epic. Epics never move directories, so there is no compare-and-swap
+// concern — recheck is nil. Returns the reloaded epic and whether it changed.
 func (s *FS) EditEpic(id string, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error) {
 	cands, err := markdownCandidates(s.epicsDir, "") // epics have no status/bucket dir
 	if err != nil {
@@ -159,37 +158,10 @@ func (s *FS) EditEpic(id string, edit func(current string, prevErr error) (strin
 	if err != nil {
 		return domain.Epic{}, false, fmt.Errorf("read epic %s: %w", path, err)
 	}
-
-	current := string(orig)
-	var prevErr error
-	for {
-		edited, err := edit(current, prevErr)
-		if err != nil {
-			return domain.Epic{}, false, err
-		}
-		if edited == string(orig) {
-			// No net change. Surface a parse error if the file was already broken on
-			// disk (opened to inspect, saved unchanged) rather than report success.
-			ep, perr := parseEpic(orig, path)
-			if perr != nil {
-				return domain.Epic{}, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
-			}
-			return ep, false, nil
-		}
-		ep, perr := parseEpic([]byte(edited), path)
-		if perr != nil {
-			if edited == current {
-				// re-saved the same broken content → the user gave up
-				return domain.Epic{}, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
-			}
-			current, prevErr = edited, perr // reopen on the broken content
-			continue
-		}
-		if err := writeFileAtomic(path, []byte(edited), 0o644); err != nil {
-			return domain.Epic{}, false, fmt.Errorf("write epic %s: %w", path, err)
-		}
-		return ep, true, nil
-	}
+	return editFile("epic", path, orig,
+		func(content []byte) (domain.Epic, error) { return parseEpic(content, path) },
+		nil, // epics never move directories — no compare-and-swap needed
+		edit)
 }
 
 func parseEpic(content []byte, path string) (domain.Epic, error) {
