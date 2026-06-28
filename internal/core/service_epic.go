@@ -117,13 +117,21 @@ func rollupEpics(epics []domain.Epic, tasks []domain.Task) []EpicSummary {
 	}
 	out := make([]EpicSummary, len(epics))
 	for i, e := range epics {
-		done, total, deprecated := TaskRollup(byEpic[e.ID])
-		out[i] = EpicSummary{
-			Epic: e, Total: total, Done: done, Deprecated: deprecated,
-			LastUpdated: epicLastUpdated(byEpic[e.ID]),
-		}
+		out[i] = rollupEpic(e, byEpic[e.ID])
 	}
 	return out
+}
+
+// rollupEpic builds one epic's summary from the tasks that belong to it — the
+// single place an EpicSummary is assembled (TaskRollup called once), so the
+// done/total/percent rule can't drift across the list/status path (rollupEpics)
+// and the show/detail path (ShowEpic, audit M3).
+func rollupEpic(e domain.Epic, its []domain.Task) EpicSummary {
+	done, total, deprecated := TaskRollup(its)
+	return EpicSummary{
+		Epic: e, Total: total, Done: done, Deprecated: deprecated,
+		LastUpdated: epicLastUpdated(its),
+	}
 }
 
 // epicsByRecent returns the rollups ordered most-recently-updated first — the
@@ -264,15 +272,17 @@ func (s *Service) EditEpic(id string, edit func(current string, prevErr error) (
 	return s.store.EditEpic(id, edit)
 }
 
-// ShowEpic returns an epic, the tasks that belong to it, and its body.
-func (s *Service) ShowEpic(id string) (domain.Epic, []domain.Task, string, error) {
+// ShowEpic returns an epic's rollup summary (so show/detail consume
+// EpicSummary.Percent()/Done/Total instead of re-deriving the rule — audit M3),
+// the tasks that belong to it, and its body.
+func (s *Service) ShowEpic(id string) (EpicSummary, []domain.Task, string, error) {
 	epic, body, err := s.store.GetEpic(id)
 	if err != nil {
-		return domain.Epic{}, nil, "", err
+		return EpicSummary{}, nil, "", err
 	}
 	tasks, _, err := s.store.ListTasks()
 	if err != nil {
-		return domain.Epic{}, nil, "", err
+		return EpicSummary{}, nil, "", err
 	}
 	var its []domain.Task
 	for _, t := range tasks {
@@ -280,5 +290,5 @@ func (s *Service) ShowEpic(id string) (domain.Epic, []domain.Task, string, error
 			its = append(its, t)
 		}
 	}
-	return epic, its, body, nil
+	return rollupEpic(epic, its), its, body, nil
 }

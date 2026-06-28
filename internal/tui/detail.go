@@ -421,17 +421,18 @@ func renderTaskMeta(t domain.Task, width int) string {
 // --- epic detail ---
 
 type epicDetail struct {
-	e     domain.Epic
+	es    core.EpicSummary
 	tasks []domain.Task
 	body  string
 }
 
-func (d epicDetail) Title() string     { return d.e.ID }
-func (d epicDetail) Path() string      { return d.e.Path }
+func (d epicDetail) Title() string     { return d.es.Epic.ID }
+func (d epicDetail) Path() string      { return d.es.Epic.Path }
 func (d epicDetail) rawBody() string   { return d.body }
-func (d epicDetail) meta(w int) string { return renderEpicMeta(d.e, d.tasks, w) }
+func (d epicDetail) meta(w int) string { return renderEpicMeta(d.es, d.tasks, w) }
 
-func renderEpicMeta(e domain.Epic, tasks []domain.Task, width int) string {
+func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int) string {
+	e := es.Epic
 	var b strings.Builder
 	detailField(&b, "epic", e.ID)
 	detailField(&b, "status", e.Status)
@@ -439,17 +440,13 @@ func renderEpicMeta(e domain.Epic, tasks []domain.Task, width int) string {
 	if len(e.Tags) > 0 {
 		detailField(&b, "tags", strings.Join(e.Tags, ", "))
 	}
-	// Shared rollup (deprecated leaves the denominator, counted separately) so this
-	// matches epic list / status / epic show.
-	done, total, deprecated := core.TaskRollup(tasks)
-	pct := 0
-	if total > 0 {
-		pct = done * 100 / total
-	}
+	// Rollup from the EpicSummary (computed once by ShowEpic; deprecated leaves the
+	// denominator, counted separately) so this matches epic list / status / epic show.
+	pct := es.Percent()
 	progress := fmt.Sprintf("%s %s  %s",
-		miniBar(pct, 12), fg(theme.Percent(pct), theme.PercentLabel(pct)), theme.Counts(done, total))
-	if deprecated > 0 {
-		progress += fmt.Sprintf("  (%d deprecated)", deprecated)
+		miniBar(pct, 12), fg(theme.Percent(pct), theme.PercentLabel(pct)), theme.Counts(es.Done, es.Total))
+	if es.Deprecated > 0 {
+		progress += fmt.Sprintf("  (%d deprecated)", es.Deprecated)
 	}
 	detailField(&b, "progress", progress)
 	if len(tasks) > 0 {
