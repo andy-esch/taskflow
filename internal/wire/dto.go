@@ -10,6 +10,13 @@ import (
 // domain types into these and returns an envelope that embeds them; keeping the
 // DTOs + mappers here lets both the CLI's emit funcs and a web adapter project the
 // same shape.
+//
+// Field schema descriptions live in the `jsonschema:"description=…"` struct tags —
+// the reflector's intended mechanism, and the one that yields a clean, precise
+// machine-facing string. A field's Go doc comment is godoc-only: where a tag is
+// present it wins, so a maintainer note in a comment never leaks into the wire
+// contract. (Type-level descriptions, by contrast, can only come from doc comments,
+// harvested into schema_comments.json.)
 
 // TaskJSON is the wire shape of a task inside the --json envelopes.
 type TaskJSON struct {

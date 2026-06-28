@@ -107,10 +107,22 @@ Core correctly owns the *tally* (`FindingsRollup.ByUrgency`/`ByComponent` as `[]
 
 `FindingsRollup`'s ordering is display-driven — `ByUrgency` "canonical triage order (acute, soon, eventually)", `ByComponent` "most-findings-first", plus a hand-picked `Acute []AuditFinding` call-out (`finding.go:17-31,53-60`) — and it's a fixed field on `Summary` (`service.go:92`). Defensible (the tally is worth more than purity, and triage order is arguably domain logic), but `Summary` risks becoming "whatever the current dashboards need," and a web findings page wanting pagination/another sort would either reuse this fixed shape or call the composable `QueryFindings` and re-roll. Fix: keep it, but make it a `Service.FindingsRollup()` view-model that `Summary` *composes*, so web can roll up with its own filter — which also naturally enables the single-sweep fix in H2.
 
-#### L2. Schema field descriptions come from two sources chosen by export-visibility  · **Status:** open
+#### L2. Schema field descriptions come from two sources chosen by export-visibility  · **Status:** wontfix
 **Component:** cli/render · **Effort:** S · **Urgency:** eventually
 
 Descriptions come from inline `jsonschema:"description=…"` struct tags on the unexported projection DTOs (`dto.go:14-122`) AND the generated Go-doc map `schema_comments.json` for the exported envelopes/domain types — because `AddGoComments` skips unexported types. Two sources of truth for "the description of a schema field," selected by visibility; a known foot-gun guarded by `TestTaskJSONDescriptionTagMatchesCap`/`TestEpicStatusDescriptionMatchesVocab` precisely because a tag literal like `"<=200 chars"` can drift from `domain.MaxDescriptionLen`. Fix: when extracting the wire package (H1), make the envelope DTOs **exported** there so `AddGoComments` reads their doc comments — collapsing to one description source and retiring the drift-guard tests.
+
+**Resolution (2026-06-28, wontfix):** investigated post-H1. The two "sources" are
+actually the right mechanism per scope — `jsonschema:"description=…"` tags for field
+descriptions (the reflector's intended mechanism, yielding clean machine strings) and
+doc comments for *type* descriptions. Verified the **tag deterministically wins** over
+a field's doc comment, so a maintainer note never leaks into the schema; there is no
+live conflict. Migrating field descriptions to doc comments was tested and *degrades*
+the output — invopop does not strip the field name, so a Go-idiomatic `// Slug is the…`
+renders as `"Slug is the…"` (verbose, prefixed) vs the tag's clean `"task identifier…"`;
+byte-identical output would require *non-idiomatic* comments, defeating the point. The
+drift-guard tests guard a real literal-vs-constant risk and are kept. Convention now
+documented in `internal/wire/dto.go`.
 
 #### L3. `actionMenu.selected()` / `editMenu.cur()` index without a bounds guard  · **Status:** fixed
 **Component:** tui · **Effort:** XS · **Urgency:** eventually
