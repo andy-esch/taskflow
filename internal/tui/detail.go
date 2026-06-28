@@ -446,8 +446,8 @@ func renderEpicMeta(e domain.Epic, tasks []domain.Task, width int) string {
 	if total > 0 {
 		pct = done * 100 / total
 	}
-	progress := fmt.Sprintf("%s %s  %d/%d",
-		miniBar(pct, 12), fg(theme.Percent(pct), fmt.Sprintf("%d%%", pct)), done, total)
+	progress := fmt.Sprintf("%s %s  %s",
+		miniBar(pct, 12), fg(theme.Percent(pct), theme.PercentLabel(pct)), theme.Counts(done, total))
 	if deprecated > 0 {
 		progress += fmt.Sprintf("  (%d deprecated)", deprecated)
 	}
@@ -478,9 +478,9 @@ func renderAuditMeta(a domain.Audit, body string, width int) string {
 	var b strings.Builder
 	tok := theme.Bucket(a.Bucket)
 	pct := a.Percent()
-	progress := fmt.Sprintf("%s %s  %d/%d",
+	progress := fmt.Sprintf("%s %s  %s",
 		segBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 12),
-		fg(theme.Percent(pct), fmt.Sprintf("%d%%", pct)), a.Resolved(), a.Findings)
+		fg(theme.Percent(pct), theme.PercentLabel(pct)), theme.Counts(a.Resolved(), a.Findings))
 	if a.OpenFindings > 0 {
 		progress += fmt.Sprintf("  (%d open)", a.OpenFindings)
 	}

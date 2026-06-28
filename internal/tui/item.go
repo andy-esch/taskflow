@@ -31,7 +31,7 @@ func row(w io.Writer, m list.Model, index int, content string) {
 // widest value in its set rather than a fixed guess that a 3-digit total overflows.
 // Counts are ASCII, so a byte-width pad (%*s) is also the display width.
 func rollupCounts(done, total, width int) string {
-	return fmt.Sprintf("%*s", width, fmt.Sprintf("%d/%d", done, total))
+	return fmt.Sprintf("%*s", width, theme.Counts(done, total))
 }
 
 // --- tasks ---
@@ -136,7 +136,7 @@ func (epicDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 	}
 	pct := it.es.Percent()
 	bar := miniBar(pct, 8)
-	pctStr := fg(theme.Percent(pct), fmt.Sprintf("%3d%%", pct))
+	pctStr := fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
 	counts := rollupCounts(it.es.Done, it.es.Total, it.countsW)
 	idAndDesc := it.es.Epic.ID + "  " + dim(it.es.Epic.Description)
 	row(w, m, index, fmt.Sprintf("%s %s %s  %s", bar, pctStr, counts, idAndDesc))
@@ -180,7 +180,7 @@ func (auditDelegate) Render(w io.Writer, m list.Model, index int, item list.Item
 	tok := theme.Bucket(it.a.Bucket)
 	pct := it.a.Percent()
 	bar := segBar(it.a.DoneFindings, it.a.ActiveFindings, it.a.DroppedFindings, it.a.Findings, 8)
-	pctStr := fg(theme.Percent(pct), fmt.Sprintf("%3d%%", pct))
+	pctStr := fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
 	counts := rollupCounts(it.a.Resolved(), it.a.Findings, it.countsW)
 	row(w, m, index, fmt.Sprintf("%s %s %s %s  %s  %s",
 		fg(tok.Color, tok.Glyph), bar, pctStr, counts, it.a.Slug, dim(it.a.Area)))

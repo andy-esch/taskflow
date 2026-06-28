@@ -125,7 +125,7 @@ func (d *dashboard) setSummary(s core.Summary) {
 		for i, es := range vis {
 			pct := es.Percent()
 			row := fmt.Sprintf("%s %s  %s", miniBar(pct, 8),
-				fg(theme.Percent(pct), fmt.Sprintf("%3d%%", pct)), rollupCounts(es.Done, es.Total, countsW))
+				fg(theme.Percent(pct), theme.PercentLabelPadded(pct)), rollupCounts(es.Done, es.Total, countsW))
 			if dateW > 0 { // a blank (undated) cell still pads, so the id column holds
 				row += "  " + dim(fmt.Sprintf("%-*s", dateW, dates[i]))
 			}

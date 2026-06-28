@@ -33,10 +33,20 @@ The entire machine wire format — envelopes, DTOs, `SchemaVersion` (`render.go:
 
 The CLI has one good sentinel→outcome mapper: `cli/exit.go:31-44` maps `ErrNotFound/ErrValidation/ErrAmbiguous/ErrConflict` to exit codes + stable JSON `code` names via `errors.Is`. The TUI has **no** `errors.Is` classification at all — it flashes `msg.err.Error()` verbatim (`tui/model.go:235`) and reconstructs the inline-edit reason by string-stripping the sentinel prefix: `strings.TrimPrefix(msg.err.Error(), domain.ErrValidation.Error()+": ")` (`model.go:232`). That hack couples the TUI to the exact wrapping format and breaks the moment the message doesn't start with `"validation failed: "`. More importantly, the TUI cannot distinguish `ErrConflict` (the CAS "changed on disk during move", `store/fsstore.go:173,239` — which should prompt a *reload*) from `ErrValidation` (fix-in-place) from `ErrNotFound`; it paints them all red. The good mapper is locked in `package cli` where neither TUI nor web can import it without pulling cobra. Fix: move an `ErrorClass(err) → {NotFound, Validation, Ambiguous, Conflict, Unknown}` (over `errors.Is`) into `core`/`domain`; CLI maps class→exit code, web→HTTP status (404/409/422), TUI→{red flash, reload-and-retry, inline field error}. Delete the `TrimPrefix`.
 
-#### H5. The "bar + percent + done/total" progress composite is hand-assembled 7-10× with drifting formats  · **Status:** open
+#### H5. The "bar + percent + done/total" progress composite is hand-assembled 7-10× with drifting formats  · **Status:** fixed
 **Component:** theme / render / tui · **Effort:** M · **Urgency:** soon
 
 The shared seams (`internal/theme`, `internal/progressbar`) cover the low-level primitives (glyph+color tokens, the bar render, `RelativeDate`) but stop *below* the composite line "`<bar> <pct%> <done>/<total>`", which is rebuilt by `fmt.Sprintf` at 7-10 sites that disagree: percent is `st.Percent()`→`%d%%` in the CLI (`style.go:130`), `%3d%%` in TUI rows/dashboard (`item.go:139,183`, `dashboard.go:128`), `%d%%` in TUI detail (`detail.go:450,483`) — so the same epic shows `7%` here and `  7%` there; done/total is inline `%d/%d` in the CLI but funnels through the column-measured `rollupCounts` in the TUI (`item.go:33`); bar width is a bare magic number differing by site (`10/8/10/8/8/10` CLI, `8/8/8/12/12` TUI). It is the single most-repeated read→render pattern and has no seam — three surfaces today, a fourth with web. Fix: one shared rollup-composite formatter beside the primitives (e.g. `theme.Rollup`/`progressbar.Progress(done,total,width)` owning the `%d%%` vs `%3d%%` and done/total justification); surfaces keep only color application (ANSI vs lipgloss).
+
+**Resolution (2026-06-28, fixed):** on inspection the differences were *small* — the
+bar (`progressbar.Render`) and the percent *color* (`theme.Percent`) were already
+shared; only the number *formats* drifted. Unified those into one place
+(`theme.PercentLabel` / `PercentLabelPadded` / `Counts`, `internal/theme/progress.go`),
+consumed at all ~10 sites; each surface keeps its own color (ANSI Style vs lipgloss)
+and the assembly is left per-context (a CLI table cell vs a `progress:` field vs a TUI
+list row — genuinely different layouts, not drift). Output is byte-identical (goldens
+unchanged), so non-breaking. Bar *widths* (8/10/12) are a deliberate per-context choice
+(roomier in a detail field than a status row), not drift, and intentionally left.
 
 #### H6. No `context.Context` on any core or store method  · **Status:** open
 **Component:** core / store · **Effort:** L · **Urgency:** soon
