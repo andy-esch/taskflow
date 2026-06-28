@@ -233,8 +233,8 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 			fmt.Fprintf(w, "  %s  %s\n", st.Dim("by area  "), line)
 		}
 	}
-	if ready := settledCount(s.OpenAudits); ready > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Green(fmt.Sprintf("✓ %d audit(s) ready to close (all findings resolved; `audit close <slug>`)", ready)))
+	if s.ReadyToClose > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Green(fmt.Sprintf("✓ %d audit(s) ready to close (all findings resolved; `audit close <slug>`)", s.ReadyToClose)))
 	}
 
 	if s.RevisitDue > 0 {
@@ -261,25 +261,12 @@ func splitCounts(counts []core.StatusCount) (active, archived []core.StatusCount
 }
 
 // countByLine renders a finding breakdown ("1 acute · 12 soon · 23 eventually"),
-// the dim-separated counterpart of the dashboard's by-urgency / by-area lines.
+// the dim-separated, uncolored counterpart of the dashboard's by-urgency / by-area
+// lines. Shares the iterate/format/join STRUCTURE with them via theme.Breakdown;
+// only this surface's plain segment format + dim separator differ (audit M10).
 func countByLine(st Style, cs []core.CountBy) string {
-	parts := make([]string, 0, len(cs))
-	for _, c := range cs {
-		parts = append(parts, fmt.Sprintf("%d %s", c.Count, c.Key))
-	}
-	return strings.Join(parts, st.Dim(" · "))
-}
-
-// settledCount counts open audits with nothing left to work (see Audit.Settled) —
-// the "ready to close" call-to-action.
-func settledCount(audits []domain.Audit) int {
-	n := 0
-	for _, a := range audits {
-		if a.Settled() {
-			n++
-		}
-	}
-	return n
+	return theme.Breakdown(cs, st.Dim(" · "), 0,
+		func(c core.CountBy) string { return fmt.Sprintf("%d %s", c.Count, c.Key) }, nil)
 }
 
 // countLine renders "3 next-up · 1 in-progress", skipping zero buckets.
@@ -379,8 +366,10 @@ func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []domain.FileProb
 	return wire.EncodeJSON(w, wire.ToEpicsEnvelope(epics, problems))
 }
 
-// EpicShowHuman prints an epic, its tasks, and its body.
-func EpicShowHuman(w io.Writer, st Style, epic domain.Epic, tasks []domain.Task, body string) error {
+// EpicShowHuman prints an epic, its tasks, and its body. The rollup arrives on the
+// EpicSummary (computed once by ShowEpic) rather than re-derived here — same rule
+// as epic list / status / the TUI detail (audit M3).
+func EpicShowHuman(w io.Writer, st Style, es core.EpicSummary, tasks []domain.Task, body string) error {
 	field := func(label, value string) {
 		lbl := fmt.Sprintf("%-12s", label+":")
 		if st.width > 0 { // fit the value to the terminal (TTY only; piped stays full)
@@ -388,24 +377,19 @@ func EpicShowHuman(w io.Writer, st Style, epic domain.Epic, tasks []domain.Task,
 		}
 		fmt.Fprintf(w, "%s %s\n", st.Dim(lbl), value)
 	}
-	field("id", st.Bold(epic.ID))
-	field("status", epic.Status)
-	if epic.Description != "" {
-		field("description", epic.Description)
+	field("id", st.Bold(es.Epic.ID))
+	field("status", es.Epic.Status)
+	if es.Epic.Description != "" {
+		field("description", es.Epic.Description)
 	}
-	// Shared rollup: deprecated tasks leave the denominator (counted separately in
-	// the tasks header), matching epic list / status / the TUI detail.
-	done, total, deprecated := core.TaskRollup(tasks)
-	pct := 0
-	if total > 0 {
-		pct = done * 100 / total
-	}
-	field("progress", fmt.Sprintf("%s %s  %s", st.Bar(pct, 10), st.Percent(pct), theme.Counts(done, total)))
+	// Deprecated tasks leave the denominator (counted separately in the tasks header).
+	pct := es.Percent()
+	field("progress", fmt.Sprintf("%s %s  %s", st.Bar(pct, 10), st.Percent(pct), theme.Counts(es.Done, es.Total)))
 	header := fmt.Sprintf("tasks (%d):", len(tasks))
-	if deprecated > 0 {
+	if es.Deprecated > 0 {
 		// Note the withdrawn count — those tasks are listed but excluded from the
 		// done/total rollup shown by `epic list`/`status`.
-		header = fmt.Sprintf("tasks (%d, %d deprecated — excluded from progress):", len(tasks), deprecated)
+		header = fmt.Sprintf("tasks (%d, %d deprecated — excluded from progress):", len(tasks), es.Deprecated)
 	}
 	fmt.Fprintf(w, "%s\n", st.Dim(header))
 	if len(tasks) > 0 {

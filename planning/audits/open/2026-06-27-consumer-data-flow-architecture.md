@@ -98,10 +98,18 @@ unchanged (its fixture epics were already recency-ordered), so non-breaking. The
 this finding's task cluster (M3, M9, L1) remains in epic-21 task
 `let-core-own-the-dashboard-aggregates-adapters-re-derive`.
 
-#### M3. Epic rollup percent is re-derived in the show/detail paths instead of `EpicSummary.Percent()`  · **Status:** open
+#### M3. Epic rollup percent is re-derived in the show/detail paths instead of `EpicSummary.Percent()`  · **Status:** fixed
 **Component:** core / cli / tui · **Effort:** S · **Urgency:** eventually
 
 `EpicSummary.Percent()` (`service_epic.go:89-94`) encapsulates the zero-guarded `Done*100/Total` rule, and the list/status paths use it — but the two show/detail paths bypass it: `render.go:498-503` (`EpicShowHuman`) and `tui/detail.go:444-450` (`renderEpicMeta`) both re-run `core.TaskRollup(tasks)` and re-implement the percent inline, because `ShowEpic` returns raw `(Epic, []Task)` not an `EpicSummary`. The "what counts as done / how percent is computed" domain rule now lives in three places and agrees only by discipline; a web epic-detail copies it a fourth time. Fix: have `ShowEpic` return an `EpicSummary` (or a small rollup struct) so all paths consume `Percent()`/`Done`/`Total` and `TaskRollup` is called once.
+
+**Resolution (2026-06-28, fixed):** `ShowEpic` now returns an `EpicSummary` (its
+rollup), assembled in one place — a new `rollupEpic(epic, tasks)` helper that both
+`rollupEpics` (list/status) and `ShowEpic` (show/detail) call, so `TaskRollup` runs
+once per path and the percent rule isn't re-implemented. `EpicShowHuman` and the TUI
+`renderEpicMeta` consume `es.Percent()`/`es.Done`/`es.Total`/`es.Deprecated` instead of
+re-deriving inline. Output byte-identical (goldens unchanged); pinned by the updated
+`TestService_ShowEpic`.
 
 #### M4. `defer` (move + revisit date) is special-cased structurally in all three layers; `DeferTask` is non-atomic  · **Status:** open
 **Component:** core / cli / tui · **Effort:** M · **Urgency:** eventually
@@ -150,15 +158,31 @@ executable guard (plus the documented comment) is the right scope. The separate 
 split (M6) remains in epic-21 task
 `maintainability-and-latent-edge-hardening-model.go-split-routing-invariant`.
 
-#### M9. The "ready to close" / settled aggregate is duplicated across adapters over raw `OpenAudits`  · **Status:** open
+#### M9. The "ready to close" / settled aggregate is duplicated across adapters over raw `OpenAudits`  · **Status:** fixed
 **Component:** core / cli / tui · **Effort:** S · **Urgency:** eventually
 
 `core.Summary` is a grab-bag of raw lists (`InProgress []Task`, `OpenAudits []Audit`) AND pre-baked aggregates (`Epics`, `FindingsRollup`). Because the raw side is exposed, both surfaces re-derive the same rollup off it: `settledCount` / `countSettled` (counting `OpenAudits` with `a.Settled()`) is implemented verbatim twice — `render.go:336-344` and `dashboard.go:233-242` — and the JSON path re-walks `OpenAudits` for per-audit `ready_to_close` (`render.go:376-387`). A summary that mixes "here are the rows, you aggregate" with "here is the aggregate" invites exactly this. Fix: push the settled/ready-to-close count into `Summary`/`FindingsRollup` so all three surfaces read a number; keep raw lists only where a surface genuinely renders per-item.
 
-#### M10. The `[]CountBy` breakdown line is re-formatted in three adapters (four with web)  · **Status:** open
+**Resolution (2026-06-28, fixed):** the settled count is now an aggregate —
+`Summary.ReadyToClose`, computed once in `Summary()` from the same audit sweep — and
+both the CLI (`render.go`) and TUI (`dashboard.go`) read it; the verbatim
+`settledCount`/`countSettled` helpers are deleted. The raw `OpenAudits` list stays (the
+surfaces still render per-audit rows), and the JSON per-audit `ready_to_close` walk is
+left as-is — a genuinely per-item render, not the duplicated count. Pinned by
+`TestService_Summary_ReadyToClose`; goldens unchanged.
+
+#### M10. The `[]CountBy` breakdown line is re-formatted in three adapters (four with web)  · **Status:** fixed
 **Component:** cli / tui · **Effort:** XS · **Urgency:** eventually
 
 Core correctly owns the *tally* (`FindingsRollup.ByUrgency`/`ByComponent` as `[]CountBy`, `finding.go:36-62`) — the right boundary — but the "N key · N key" join is re-implemented: `render.go:326` `countByLine` (plain, dim separators) vs `dashboard.go:203,220` `urgencyLine`/`componentLine` (acute red / soon yellow, `+N more` cap). The divergence is legitimately presentational, so don't over-merge; but factor the *structure* (iterate, format each `CountBy`, join, optional cap) into one helper taking a per-segment formatter + separator, so CLI/TUI/web supply only styling. Keep the structured JSON emit (`toFindingsRollup`) as-is.
+
+**Resolution (2026-06-28, fixed):** the iterate/format/join/cap STRUCTURE is now one
+generic `theme.Breakdown[T](items, sep, max, seg, more)`; `countByLine` (CLI),
+`urgencyLine` and `componentLine` (TUI) supply only their per-segment format, separator,
+and optional "+N more" cap — so the styling divergence the audit flagged as legitimate
+stays per-surface while the loop isn't re-rolled. The generic signature keeps `theme`
+free of a `core` import. Output unchanged (goldens green); the cap behavior is
+unit-tested (`theme.TestBreakdown`). The structured JSON emit is untouched.
 
 ## Low
 

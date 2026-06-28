@@ -111,6 +111,28 @@ func TestService_ListAudits_RejectsUnknownBucket(t *testing.T) {
 	}
 }
 
+// TestService_Summary_ReadyToClose pins audit M9: Summary counts the OPEN audits
+// that are settled (every finding resolved/dropped) ONCE, so the CLI and TUI
+// dashboards read s.ReadyToClose instead of each re-walking OpenAudits. A still-
+// active open audit and a settled but already-closed audit don't count.
+func TestService_Summary_ReadyToClose(t *testing.T) {
+	svc := NewService(&fakeStore{audits: []domain.Audit{
+		{Slug: "settled-open", Bucket: domain.AuditOpen, Findings: 3, DoneFindings: 2, DroppedFindings: 1}, // 2+1==3 → settled → counts
+		{Slug: "active-open", Bucket: domain.AuditOpen, Findings: 3, DoneFindings: 1, OpenFindings: 2},     // work remains → no
+		{Slug: "settled-closed", Bucket: domain.AuditClosed, Findings: 1, DoneFindings: 1},                 // settled but not open → no
+	}})
+	s, err := svc.Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.ReadyToClose != 1 {
+		t.Errorf("ReadyToClose = %d, want 1 (only the settled OPEN audit)", s.ReadyToClose)
+	}
+	if len(s.OpenAudits) != 2 { // the raw list still carries every open audit; only the count moved
+		t.Errorf("OpenAudits = %d, want 2", len(s.OpenAudits))
+	}
+}
+
 // countingAuditStore wraps fakeStore to count how each audit-read path is hit, so
 // a test can prove Summary reads every audit body exactly once (via the single
 // ListAuditsWithFindings sweep) and never re-reads through GetAuditByPath — the H2

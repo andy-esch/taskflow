@@ -111,7 +111,7 @@ func (m Model) followSelected() (tea.Model, tea.Cmd) {
 		// The epic's task list rides in the already-loaded detail content (the
 		// pane is stale-guarded, so a matching ID means current data).
 		ed, ok := m.detail.content.(epicDetail)
-		if !ok || ed.e.ID != id {
+		if !ok || ed.es.Epic.ID != id {
 			m.flash, m.flashErr = "references still loading…", true
 			return m, nil
 		}

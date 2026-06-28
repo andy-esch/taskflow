@@ -103,11 +103,11 @@ func loadEpicList(t *entityTab, svc *core.Service) tea.Cmd {
 
 func loadEpicDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
-		e, tasks, body, err := svc.ShowEpic(id)
+		es, tasks, body, err := svc.ShowEpic(id)
 		if err != nil {
 			return detailErrMsg{kind: entityEpics, id: id, err: err}
 		}
-		return detailMsg{kind: entityEpics, id: id, content: epicDetail{e: e, tasks: tasks, body: body}}
+		return detailMsg{kind: entityEpics, id: id, content: epicDetail{es: es, tasks: tasks, body: body}}
 	}
 }
 

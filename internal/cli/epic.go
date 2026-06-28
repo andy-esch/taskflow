@@ -307,15 +307,15 @@ func newEpicShowCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			epic, tasks, body, err := app.Svc.ShowEpic(id)
+			es, tasks, body, err := app.Svc.ShowEpic(id)
 			if err != nil {
 				return err
 			}
 			if app.JSON {
-				return render.EpicShowJSON(app.Out, epic, tasks, body)
+				return render.EpicShowJSON(app.Out, es.Epic, tasks, body)
 			}
 			return app.paged(func(w io.Writer) error {
-				return render.EpicShowHuman(w, app.Style, epic, tasks, render.RenderBody(app.Style, body, app.markdownStyle, raw))
+				return render.EpicShowHuman(w, app.Style, es, tasks, render.RenderBody(app.Style, body, app.markdownStyle, raw))
 			})
 		},
 	}
