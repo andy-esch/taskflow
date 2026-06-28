@@ -205,7 +205,7 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		rows := make([][]string, 0, len(s.Epics))
 		for _, e := range s.Epics {
 			bar := fmt.Sprintf("%s %s", st.Bar(e.Percent(), 10), st.Percent(e.Percent()))
-			rows = append(rows, []string{"  " + st.Bold(e.Epic.ID), bar, fmt.Sprintf("%d/%d", e.Done, e.Total), e.Epic.Description})
+			rows = append(rows, []string{"  " + st.Bold(e.Epic.ID), bar, theme.Counts(e.Done, e.Total), e.Epic.Description})
 		}
 		writeTable(w, st.width, nil, rows)
 	}
@@ -217,7 +217,7 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		rows := make([][]string, 0, len(s.OpenAudits))
 		for _, a := range s.OpenAudits {
 			bar := fmt.Sprintf("%s %s", st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10), st.Percent(a.Percent()))
-			rows = append(rows, []string{"  " + st.Bold(a.Slug), bar, fmt.Sprintf("%d/%d", a.Resolved(), a.Findings), a.Area})
+			rows = append(rows, []string{"  " + st.Bold(a.Slug), bar, theme.Counts(a.Resolved(), a.Findings), a.Area})
 		}
 		writeTable(w, st.width, nil, rows)
 	}
@@ -366,7 +366,7 @@ func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 	rows := make([][]string, 0, len(epics))
 	for _, e := range epics {
 		pct := e.Percent()
-		progress := fmt.Sprintf("%s %s %d/%d", st.Bar(pct, 8), st.Percent(pct), e.Done, e.Total)
+		progress := fmt.Sprintf("%s %s %s", st.Bar(pct, 8), st.Percent(pct), theme.Counts(e.Done, e.Total))
 		rows = append(rows, []string{st.Bold(e.Epic.ID), e.Epic.Status, progress, e.Epic.Description})
 	}
 	writeTable(w, st.width, []string{st.Dim("EPIC"), st.Dim("STATUS"), st.Dim("PROGRESS"), st.Dim("DESCRIPTION")}, rows)
@@ -400,7 +400,7 @@ func EpicShowHuman(w io.Writer, st Style, epic domain.Epic, tasks []domain.Task,
 	if total > 0 {
 		pct = done * 100 / total
 	}
-	field("progress", fmt.Sprintf("%s %s  %d/%d", st.Bar(pct, 10), st.Percent(pct), done, total))
+	field("progress", fmt.Sprintf("%s %s  %s", st.Bar(pct, 10), st.Percent(pct), theme.Counts(done, total)))
 	header := fmt.Sprintf("tasks (%d):", len(tasks))
 	if deprecated > 0 {
 		// Note the withdrawn count — those tasks are listed but excluded from the
@@ -446,7 +446,7 @@ func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
 	rows := make([][]string, 0, len(audits))
 	for _, a := range audits {
 		bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 8)
-		progress := fmt.Sprintf("%s %s %d/%d", bar, st.Percent(a.Percent()), a.Resolved(), a.Findings)
+		progress := fmt.Sprintf("%s %s %s", bar, st.Percent(a.Percent()), theme.Counts(a.Resolved(), a.Findings))
 		rows = append(rows, []string{st.Bucket(string(a.Bucket)), st.Bold(a.Slug), progress, a.Area})
 	}
 	writeTable(w, st.width, []string{st.Dim("BUCKET"), st.Dim("AUDIT"), st.Dim("PROGRESS"), st.Dim("AREA")}, rows)
@@ -485,7 +485,7 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Fin
 		field("date", a.Date)
 	}
 	bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10)
-	progress := fmt.Sprintf("%s %s  %d/%d", bar, st.Percent(a.Percent()), a.Resolved(), a.Findings)
+	progress := fmt.Sprintf("%s %s  %s", bar, st.Percent(a.Percent()), theme.Counts(a.Resolved(), a.Findings))
 	if a.OpenFindings > 0 {
 		progress += fmt.Sprintf("  (%d open)", a.OpenFindings)
 	}

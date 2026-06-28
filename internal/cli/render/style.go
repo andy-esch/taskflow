@@ -127,7 +127,7 @@ func (s Style) Priority(p string) string {
 
 // Percent colors a completion percentage: gray <34, yellow <100, green at 100.
 func (s Style) Percent(pct int) string {
-	return s.wrap(ansiCode(theme.Percent(pct)), fmt.Sprintf("%d%%", pct))
+	return s.wrap(ansiCode(theme.Percent(pct)), theme.PercentLabel(pct))
 }
 
 // Green / Red / Warn style status glyphs and success/error/warning text.
