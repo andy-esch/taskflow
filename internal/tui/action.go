@@ -17,30 +17,37 @@ import (
 // right entity, so the menu/`:`-verb machinery is entity-agnostic. Each entity
 // declares its own table in the registry (entity.go) rather than this being
 // task-only.
+//
+// The task/audit verb→state mappings now live in domain.TaskTransitions()/
+// domain.AuditTransitions() (the shared registry the CLI also reads); this local
+// shape is a thin TUI-facing view of domain.Transition, so the rest of action.go
+// (the menu render, the y/n confirm gate) is unchanged. Epics aren't in the
+// registry — they have no CLI verb vocabulary to share — so epicTransitions stays
+// declared inline below.
 type transition struct {
 	verb        string
 	to          string
 	destructive bool // requires a y/n confirm (an archiving move)
 }
 
-// taskTransitions are the task status moves (the working-set lifecycle).
-var taskTransitions = []transition{
-	{"start", string(domain.StatusInProgress), false},
-	{"next", string(domain.StatusNextUp), false},
-	{"ready", string(domain.StatusReadyToStart), false},
-	{"complete", string(domain.StatusCompleted), false},
-	{"defer", string(domain.StatusDeferred), false},
-	{"deprecate", string(domain.StatusDeprecated), true},
+// fromDomain maps the shared domain.Transition table to the TUI's local shape.
+func fromDomain(ts []domain.Transition) []transition {
+	out := make([]transition, len(ts))
+	for i, t := range ts {
+		out[i] = transition{verb: t.Verb, to: t.To, destructive: t.Destructive}
+	}
+	return out
 }
+
+// taskTransitions are the task status moves (the working-set lifecycle), sourced
+// from the shared domain registry so the CLI and TUI can't drift.
+var taskTransitions = fromDomain(domain.TaskTransitions())
 
 // auditTransitions are the audit bucket moves, mirroring `audit close/reopen/defer`.
 // close/defer to a non-open bucket are the ones the store guards on still-open
 // findings (M4) — that rejection surfaces as an actionErrMsg, which is correct.
-var auditTransitions = []transition{
-	{"close", string(domain.AuditClosed), false},
-	{"reopen", string(domain.AuditOpen), false},
-	{"defer", string(domain.AuditDeferred), false},
-}
+// Sourced from the shared domain registry (see taskTransitions).
+var auditTransitions = fromDomain(domain.AuditTransitions())
 
 // epicTransitions are the epic status moves, mirroring `epic move <id> <status>`.
 // Unlike task/audit, epic status is a frontmatter FIELD not a directory, so the
