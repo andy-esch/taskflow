@@ -39,8 +39,8 @@ func newFinder() finder {
 func (f finder) active() bool { return f.query != "" }
 
 var (
-	findMatch   = lipgloss.NewStyle().Background(lipgloss.Color("3")).Foreground(lipgloss.Color("0"))
-	findCurrent = lipgloss.NewStyle().Background(lipgloss.Color("11")).Foreground(lipgloss.Color("0")).Bold(true)
+	findMatch   = lipgloss.NewStyle().Background(pal.Match.Color()).Foreground(pal.MatchFg.Color())
+	findCurrent = lipgloss.NewStyle().Background(pal.MatchCurrent.Color()).Foreground(pal.MatchFg.Color()).Bold(true)
 )
 
 // foldMatches returns the [start,end) byte ranges in s of every case-insensitive

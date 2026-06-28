@@ -380,7 +380,7 @@ func setEpicFieldCmd(svc *core.Service, id, key, value string) tea.Cmd {
 
 var editAreaBox = lipgloss.NewStyle().
 	Border(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("8")).
+	BorderForeground(pal.BorderIdle.Color()).
 	Padding(0, 1)
 
 const editLabelW = 12 // field-label column

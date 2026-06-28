@@ -7,15 +7,25 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/progressbar"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
-// accent is the focus/selection accent (cyan), shared by the active pane border
-// and the active tab in the strip. lipgloss v2 Color is a func returning a
-// color.Color value (not a const string type), so this is a var.
-var accent = lipgloss.Color("6")
+// pal is the active palette every chrome style derives from. It defaults to the
+// neon theme's dark variant at package init — so the styles built below (and tests
+// that render without Run) have a real palette — and Run swaps in the background-
+// appropriate palette via applyTheme before the program starts. A package var (not
+// a Model field) because the chrome styles below and the free fns (fg/lipColor) are
+// already package-global; this routes every color through one palette without
+// threading it through every render call.
+var pal = design.Default().Dark
+
+// accent is the focus/selection accent, shared by the active pane border and the
+// active tab in the strip. lipgloss v2 Color is a func returning a color.Color
+// value (not a const string type), so this is a var.
+var accent = pal.Accent.Color()
 
 var (
 	selectedStyle = lipgloss.NewStyle().Bold(true)
@@ -24,34 +34,43 @@ var (
 
 	// Two focus signals: an accent border + a bold title on the focused pane.
 	paneActive   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent)
-	paneInactive = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8"))
+	paneInactive = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.BorderIdle.Color())
 
 	// Frame sizes derived from the pane style (not a hardcoded 2) so a future
-	// border/padding change can't silently desync sizing.
+	// border/padding change can't silently desync sizing. The border STYLE is
+	// theme-independent, so these stay valid when applyTheme recolors paneActive.
 	paneHFrame = paneActive.GetHorizontalFrameSize()
 	paneVFrame = paneActive.GetVerticalFrameSize()
 )
 
-// lipColor maps a semantic theme.Color to a lipgloss 16-color (the TUI's
-// rendering of the same status semantics the CLI renders as ANSI).
-func lipColor(c theme.Color) color.Color {
-	switch c {
-	case theme.ColorRed:
-		return lipgloss.Color("1")
-	case theme.ColorGreen:
-		return lipgloss.Color("2")
-	case theme.ColorYellow:
-		return lipgloss.Color("3")
-	case theme.ColorBlue:
-		return lipgloss.Color("4")
-	case theme.ColorCyan:
-		return lipgloss.Color("6")
-	case theme.ColorGray:
-		return lipgloss.Color("8")
-	default:
-		return lipgloss.Color("")
-	}
+// applyTheme repoints every package-global chrome style at palette p, recoloring
+// in place so each style keeps its structure (border, padding, bold) and the
+// frame-size derivations stay valid. Called once from Run with the background-
+// appropriate palette; a future live-retheme can call it again on a
+// BackgroundColorMsg. The styles assigned here are declared across sibling files
+// (dashHeading, helpBorder, …) but are package-scoped, so this is the single place
+// chrome color is decided — no stray literals.
+func applyTheme(p design.Palette) {
+	pal = p
+	accent = p.Accent.Color()
+	activeTab = activeTab.Foreground(accent)
+	paneActive = paneActive.BorderForeground(accent)
+	paneInactive = paneInactive.BorderForeground(p.BorderIdle.Color())
+	dashHeading = dashHeading.Foreground(p.Heading.Color())
+	helpBorder = helpBorder.BorderForeground(p.BorderActive.Color())
+	helpHeading = helpHeading.Foreground(p.Heading.Color())
+	actionBorder = actionBorder.BorderForeground(p.BorderActive.Color())
+	dangerBorder = dangerBorder.BorderForeground(p.Danger.Color())
+	actionHeading = actionHeading.Foreground(p.Heading.Color())
+	findMatch = findMatch.Background(p.Match.Color()).Foreground(p.MatchFg.Color())
+	findCurrent = findCurrent.Background(p.MatchCurrent.Color()).Foreground(p.MatchFg.Color())
+	editAreaBox = editAreaBox.BorderForeground(p.BorderIdle.Color())
 }
+
+// lipColor maps a semantic theme.Color to its concrete palette color — the TUI's
+// truecolor rendering of the same status semantics the CLI renders as ANSI. Reads
+// the active palette live, so it follows an applyTheme swap.
+func lipColor(c theme.Color) color.Color { return pal.Of(c).Color() }
 
 func fg(c theme.Color, s string) string {
 	return lipgloss.NewStyle().Foreground(lipColor(c)).Render(s)
