@@ -23,6 +23,9 @@ func (nopStore) GetTask(string) (domain.Task, string, error) {
 func (nopStore) Move(string, domain.Status, time.Time, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
+func (nopStore) Defer(string, string, time.Time, bool) (domain.Task, error) {
+	return domain.Task{}, nil
+}
 func (nopStore) SetFields(string, map[string]any, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }

@@ -19,6 +19,13 @@ type TaskStore interface {
 	// commit, collision/CAS checks) and returns the would-be result, but stops
 	// short of touching disk — so a dry-run that would fail fails identically.
 	Move(slug string, to domain.Status, now time.Time, dryRun bool) (domain.Task, error)
+	// Defer moves a task to deferred and, when until is non-empty, records it as
+	// revisit_at ("snooze until") in the SAME atomic write — so a deferred task can
+	// never be left without the snooze date it was deferred with (the lost-second-
+	// write hazard a Move-then-SetFields had). An empty until is exactly
+	// Move(StatusDeferred). The caller validates the date; the store writes it
+	// verbatim. Re-deferring an already-deferred task rewrites revisit_at in place.
+	Defer(slug, until string, now time.Time, dryRun bool) (domain.Task, error)
 	SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error)
 	CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error)
 	// EditTask hands the current file content to edit (which runs the caller's

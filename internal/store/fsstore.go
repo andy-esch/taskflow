@@ -104,6 +104,28 @@ func (s *FS) GetTask(slug string) (domain.Task, string, error) {
 // dates) and relocates the file to the target status directory. Moving to the
 // current status is an idempotent no-op.
 func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun bool) (domain.Task, error) {
+	return s.moveTask(slug, to, now, dryRun, nil)
+}
+
+// Defer moves a task to deferred and records `until` as revisit_at in the SAME
+// atomic write (the audit-M4 fix), so the relocation and the snooze date can't
+// land separately — a Move-then-SetFields could leave a task deferred without its
+// date if the second write failed. An empty until is a plain move to deferred;
+// re-deferring an already-deferred task rewrites revisit_at in place.
+func (s *FS) Defer(slug, until string, now time.Time, dryRun bool) (domain.Task, error) {
+	var extra map[string]any
+	if until != "" {
+		extra = map[string]any{"revisit_at": until}
+	}
+	return s.moveTask(slug, domain.StatusDeferred, now, dryRun, extra)
+}
+
+// moveTask is the shared engine behind Move and Defer: it ensures the task ends up
+// in the `to` status dir with the status/date stamps plus any `extra` frontmatter,
+// in ONE atomic write. A real transition (from != to) relocates the file; an
+// in-place rewrite (from == to, used by a re-defer that carries a new revisit_at)
+// overwrites the existing file. When nothing would change it's an idempotent no-op.
+func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool, extra map[string]any) (domain.Task, error) {
 	if !to.Valid() {
 		return domain.Task{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
 	}
@@ -115,29 +137,47 @@ func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun bool) (do
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("read task %s: %w", path, err)
 	}
-	if from == to { // idempotent no-op
-		return parseTask(content, path, to)
-	}
 
 	date := now.Format("2006-01-02")
-	updates := map[string]any{"status": string(to), "updated_at": date}
-	switch to {
-	case domain.StatusInProgress:
-		updates["started_at"] = date
-	case domain.StatusCompleted:
-		updates["completed_at"] = date
-	case domain.StatusDeprecated:
-		updates["deprecated_at"] = date
-	case domain.StatusDeferred:
-		updates["deferred_at"] = date
+	updates := map[string]any{}
+	if from != to {
+		// A real transition: stamp status, the activity date, and the destination's
+		// entry date.
+		updates["status"] = string(to)
+		updates["updated_at"] = date
+		switch to {
+		case domain.StatusInProgress:
+			updates["started_at"] = date
+		case domain.StatusCompleted:
+			updates["completed_at"] = date
+		case domain.StatusDeprecated:
+			updates["deprecated_at"] = date
+		case domain.StatusDeferred:
+			updates["deferred_at"] = date
+		}
+		// revisit_at is a live "snooze until" intent that only makes sense while a
+		// task is parked in deferred. Leaving deferred (resume via next/ready, or
+		// any other move) ends the snooze, so clear it — mirroring how entering a
+		// state stamps its date. (deleteMapNode is a no-op when none is set.) A
+		// re-defer (from==to==deferred) skips this branch, so an existing date is
+		// kept unless `extra` overwrites it below.
+		if from == domain.StatusDeferred {
+			updates["revisit_at"] = domain.UnsetField{}
+		}
 	}
-	// revisit_at is a live "snooze until" intent that only makes sense while a
-	// task is parked in deferred. Leaving deferred (resume via next/ready, or
-	// any other move) ends the snooze, so clear it — mirroring how entering a
-	// state stamps its date. (from==to is the idempotent no-op above, so a
-	// re-defer keeps the date; deleteMapNode is a no-op when none is set.)
-	if from == domain.StatusDeferred {
-		updates["revisit_at"] = domain.UnsetField{}
+	// extra (Defer's revisit_at) rides the same write. When the status isn't
+	// changing — a re-defer in place — it's the only field change, and we still
+	// stamp updated_at so the activity date advances like the field-set path does.
+	if len(extra) > 0 {
+		if from == to {
+			updates["updated_at"] = date
+		}
+		for k, v := range extra {
+			updates[k] = v
+		}
+	}
+	if len(updates) == 0 { // idempotent no-op (move to the same status, no extra)
+		return parseTask(content, path, to)
 	}
 
 	newContent, err := updateFrontmatter(content, updates)
@@ -182,8 +222,13 @@ func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun bool) (do
 	if err := writeFileAtomic(newPath, newContent, 0o644); err != nil {
 		return domain.Task{}, err
 	}
-	if err := os.Remove(path); err != nil {
-		return domain.Task{}, fmt.Errorf("remove old task file %s: %w", path, err)
+	// Relocation removes the old file last; an in-place rewrite (newPath == path,
+	// a re-defer) already overwrote it, so removing it would delete the file just
+	// written.
+	if newPath != path {
+		if err := os.Remove(path); err != nil {
+			return domain.Task{}, fmt.Errorf("remove old task file %s: %w", path, err)
+		}
 	}
 	return t, nil
 }

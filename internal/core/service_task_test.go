@@ -3,83 +3,94 @@ package core
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// deferStore drives DeferTask's two-phase Move-then-SetFields path in isolation:
-// Move always "succeeds" (records the call), and SetFields returns setErr — so a
-// test can simulate the partial-failure window where the file has already moved
-// into deferred/ but the revisit_at write fails. It records its calls so the test
-// can assert the ordering/contract, not just the returned error.
+// deferStore drives DeferTask's single atomic store.Defer call in isolation: it
+// records the call args (so a test can assert the contract) and can be made to
+// fail (deferErr) to prove the error propagates with its sentinel intact.
 type deferStore struct {
 	nopStore
-	moveCalls   int
-	setCalls    int
-	lastSlug    string
-	lastUpdates map[string]any
-	dryRun      bool
-	moveNow     time.Time // the clock value Move was handed (to prove WithClock governs stamps)
-	setErr      error
+	deferCalls int
+	lastSlug   string
+	lastUntil  string
+	dryRun     bool
+	deferNow   time.Time // the clock value Defer was handed (to prove WithClock governs stamps)
+	deferErr   error
 }
 
-func (s *deferStore) Move(slug string, to domain.Status, now time.Time, dryRun bool) (domain.Task, error) {
-	s.moveCalls++
-	s.dryRun = dryRun
-	s.moveNow = now
-	return domain.Task{Slug: slug, Status: to}, nil
-}
-
-func (s *deferStore) SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error) {
-	s.setCalls++
+func (s *deferStore) Defer(slug, until string, now time.Time, dryRun bool) (domain.Task, error) {
+	s.deferCalls++
 	s.lastSlug = slug
-	s.lastUpdates = updates
-	if s.setErr != nil {
-		return domain.Task{}, s.setErr
+	s.lastUntil = until
+	s.dryRun = dryRun
+	s.deferNow = now
+	if s.deferErr != nil {
+		return domain.Task{}, s.deferErr
 	}
-	return domain.Task{Slug: slug, Status: domain.StatusDeferred, RevisitAt: fmt.Sprint(updates["revisit_at"])}, nil
+	return domain.Task{Slug: slug, Status: domain.StatusDeferred, RevisitAt: until}, nil
 }
 
-// TestDeferTask_SetFieldsFailsAfterMove pins the non-atomic partial-failure
-// contract the adversarial review flagged: Move persists (file already in
-// deferred/) and then SetFields fails, so the task is deferred WITHOUT a
-// revisit_at. DeferTask must surface the failure, keep the underlying sentinel
-// (for the exit code), and name the partial state — not swallow it or report a
-// plain success.
-func TestDeferTask_SetFieldsFailsAfterMove(t *testing.T) {
-	st := &deferStore{setErr: fmt.Errorf("%w: write clobbered", domain.ErrConflict)}
+// TestDeferTask_AtomicSingleWrite pins the audit-M4 fix: a `defer --until` is ONE
+// store.Defer call carrying the date — not the old Move-then-SetFields two-write
+// path that could leave a task deferred without its revisit_at.
+func TestDeferTask_AtomicSingleWrite(t *testing.T) {
+	st := &deferStore{}
+	svc := NewService(st)
+
+	got, err := svc.DeferTask("alpha", "2026-09-01", false)
+	if err != nil {
+		t.Fatalf("DeferTask: %v", err)
+	}
+	if st.deferCalls != 1 {
+		t.Errorf("want exactly one atomic Defer call, got %d", st.deferCalls)
+	}
+	if st.lastSlug != "alpha" || st.lastUntil != "2026-09-01" || st.dryRun {
+		t.Errorf("Defer args = (%q, %q, dryRun=%v), want (alpha, 2026-09-01, false)", st.lastSlug, st.lastUntil, st.dryRun)
+	}
+	if got.RevisitAt != "2026-09-01" || got.Status != domain.StatusDeferred {
+		t.Errorf("result = (status %q, revisit %q), want (deferred, 2026-09-01)", got.Status, got.RevisitAt)
+	}
+}
+
+// TestDeferTask_PropagatesStoreError pins that a store.Defer failure surfaces with
+// its sentinel intact — the write is atomic, so a failure means nothing changed,
+// and the CLI still maps the sentinel to its exit code.
+func TestDeferTask_PropagatesStoreError(t *testing.T) {
+	st := &deferStore{deferErr: fmt.Errorf("%w: changed on disk", domain.ErrConflict)}
 	svc := NewService(st)
 
 	_, err := svc.DeferTask("alpha", "2026-09-01", false)
-	if err == nil {
-		t.Fatal("DeferTask must propagate a post-move SetFields failure, got nil")
-	}
-	// The sentinel survives the wrap, so the CLI still maps it to exit 14.
 	if !errors.Is(err, domain.ErrConflict) {
-		t.Errorf("wrapped error should keep the ErrConflict sentinel, got %v", err)
+		t.Errorf("error should keep the ErrConflict sentinel, got %v", err)
 	}
-	// The message names the partial state (deferred, date not recorded) so the
-	// report doesn't read as "nothing happened".
-	if msg := err.Error(); !strings.Contains(msg, "deferred") || !strings.Contains(msg, "not recorded") {
-		t.Errorf("error should describe the partial state, got %q", msg)
-	}
-	// Move ran (the file moved) and SetFields was attempted exactly once with the
-	// revisit_at update — the two-phase ordering the contract depends on.
-	if st.moveCalls != 1 || st.setCalls != 1 {
-		t.Errorf("want exactly one Move + one SetFields, got move=%d set=%d", st.moveCalls, st.setCalls)
-	}
-	if st.lastUpdates["revisit_at"] != "2026-09-01" {
-		t.Errorf("SetFields should carry the revisit_at update, got %v", st.lastUpdates)
+	if st.deferCalls != 1 {
+		t.Errorf("want exactly one Defer call, got %d", st.deferCalls)
 	}
 }
 
-// TestDeferTask_DryRunSkipsSecondWrite pins that --dry-run never reaches the
-// SetFields write yet still reflects the would-be revisit_at on the previewed
-// task (the field the move report surfaces).
-func TestDeferTask_DryRunSkipsSecondWrite(t *testing.T) {
+// TestDeferTask_ValidatesDate pins that a malformed --until fails up front
+// (ErrValidation) and never reaches the store — the guard the old SetFields path
+// gave for free, kept now that the atomic write bypasses SetFields.
+func TestDeferTask_ValidatesDate(t *testing.T) {
+	st := &deferStore{}
+	svc := NewService(st)
+
+	_, err := svc.DeferTask("alpha", "next-week", false)
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("a bad --until should be ErrValidation, got %v", err)
+	}
+	if st.deferCalls != 0 {
+		t.Errorf("a bad date must not reach the store, got %d Defer calls", st.deferCalls)
+	}
+}
+
+// TestDeferTask_DryRun pins that --dry-run reaches the store as a preview (no
+// write) and still reflects the would-be revisit_at on the returned task.
+func TestDeferTask_DryRun(t *testing.T) {
 	st := &deferStore{}
 	svc := NewService(st)
 
@@ -87,28 +98,25 @@ func TestDeferTask_DryRunSkipsSecondWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dry-run DeferTask: %v", err)
 	}
-	if st.setCalls != 0 {
-		t.Errorf("dry-run must not call SetFields, got %d calls", st.setCalls)
-	}
-	if !st.dryRun {
-		t.Error("dry-run flag should reach the store's Move")
+	if st.deferCalls != 1 || !st.dryRun {
+		t.Errorf("dry-run should reach Defer with dryRun=true, got calls=%d dryRun=%v", st.deferCalls, st.dryRun)
 	}
 	if got.RevisitAt != "2026-09-01" {
 		t.Errorf("dry-run preview should carry the would-be revisit_at, got %q", got.RevisitAt)
 	}
 }
 
-// TestDeferTask_BareDeferSkipsSetFields pins that a defer with no date is exactly
-// Move(deferred) — no second write, no revisit_at.
-func TestDeferTask_BareDeferSkipsSetFields(t *testing.T) {
+// TestDeferTask_BareDefer pins that a defer with no date is a plain move to
+// deferred — store.Defer with an empty until, no revisit_at.
+func TestDeferTask_BareDefer(t *testing.T) {
 	st := &deferStore{}
 	svc := NewService(st)
 
 	if _, err := svc.DeferTask("alpha", "", false); err != nil {
 		t.Fatalf("bare DeferTask: %v", err)
 	}
-	if st.moveCalls != 1 || st.setCalls != 0 {
-		t.Errorf("bare defer should Move once and never SetFields, got move=%d set=%d", st.moveCalls, st.setCalls)
+	if st.deferCalls != 1 || st.lastUntil != "" {
+		t.Errorf("bare defer should call Defer once with empty until, got calls=%d until=%q", st.deferCalls, st.lastUntil)
 	}
 }
 
@@ -157,18 +165,18 @@ func slugSet(tasks []domain.Task) map[string]bool {
 }
 
 // TestWithClock_GovernsWriteStamps pins the clock unification: an injected clock
-// drives the time handed to write paths (here store.Move's stamp time), not just
+// drives the time handed to write paths (here store.Defer's stamp time), not just
 // the revisit read paths — so WithClock makes date stamping deterministic too.
 func TestWithClock_GovernsWriteStamps(t *testing.T) {
 	fixed := time.Date(2031, 7, 8, 9, 0, 0, 0, time.UTC)
 	st := &deferStore{}
 	svc := NewService(st, WithClock(func() time.Time { return fixed }))
 
-	if _, err := svc.Move("x", domain.StatusInProgress, false); err != nil {
-		t.Fatalf("Move: %v", err)
+	if _, err := svc.DeferTask("x", "2031-09-01", false); err != nil {
+		t.Fatalf("DeferTask: %v", err)
 	}
-	if !st.moveNow.Equal(fixed) {
-		t.Errorf("Move should stamp via the injected clock; got %v, want %v", st.moveNow, fixed)
+	if !st.deferNow.Equal(fixed) {
+		t.Errorf("Defer should stamp via the injected clock; got %v, want %v", st.deferNow, fixed)
 	}
 	if !svc.Now().Equal(fixed) {
 		t.Errorf("Service.Now() should expose the injected clock; got %v", svc.Now())

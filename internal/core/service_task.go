@@ -107,37 +107,20 @@ func (s *Service) Move(slug string, to domain.Status, dryRun bool) (domain.Task,
 }
 
 // DeferTask moves a task to deferred and, when until is non-empty, records it as
-// the revisit_at ("snooze until") date — the two halves of `task defer --until`.
-// The date is set through the same validated, surgical SetFields path `task set`
-// uses, so it can't write a form the linter rejects; the caller validates the
-// date up front. A bare defer (empty until) is exactly Move(StatusDeferred).
-// dryRun previews the move without writing; the field would be set on the real
-// run, so the previewed task carries the would-be revisit_at for the report.
+// the revisit_at ("snooze until") date — the two halves of `task defer --until`,
+// written together in ONE atomic store operation (audit M4). A bare defer (empty
+// until) is exactly Move(StatusDeferred). dryRun previews the move (the store
+// reflects the would-be revisit_at on the returned task) without writing.
+//
+// The date is validated here so the contract holds for every adapter — the same
+// guard the old SetFields path applied, kept now that the write bypasses SetFields.
 func (s *Service) DeferTask(slug, until string, dryRun bool) (domain.Task, error) {
-	t, err := s.Move(slug, domain.StatusDeferred, dryRun)
-	if err != nil {
-		return domain.Task{}, err
+	if until != "" {
+		if err := domain.ValidateDate(until); err != nil {
+			return domain.Task{}, err
+		}
 	}
-	if until == "" {
-		return t, nil
-	}
-	if dryRun {
-		// Nothing was written, so the moved file isn't in deferred/ yet; reflect the
-		// would-be field in the preview without touching disk.
-		t.RevisitAt = until
-		return t, nil
-	}
-	// The Move above already persisted (file relocated into deferred/). This is a
-	// SECOND write, so the two halves aren't atomic: if SetFields fails here the
-	// task IS deferred but carries no revisit_at. Name that partial state in the
-	// error (keeping the sentinel via %w for the exit code) so the report doesn't
-	// read as "nothing happened" — a re-run of `task defer <slug> --until <date>`
-	// is an idempotent Move no-op then a clean SetFields, so retry recovers it.
-	out, err := s.SetFields(slug, map[string]any{"revisit_at": until}, false, false)
-	if err != nil {
-		return domain.Task{}, fmt.Errorf("%q deferred but revisit date %q not recorded (retry `task defer %s --until %s`): %w", slug, until, slug, until, err)
-	}
-	return out, nil
+	return s.store.Defer(slug, until, s.now(), dryRun)
 }
 
 // SetFields validates and applies frontmatter updates to a task (stamping
