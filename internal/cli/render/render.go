@@ -540,6 +540,13 @@ func AuditShowJSON(w io.Writer, a domain.Audit, body string) error {
 	return wire.EncodeJSON(w, wire.ToAuditShowEnvelope(a, body))
 }
 
+// AuditMutationJSON writes the result of `audit append`: the reloaded audit, dry_run
+// (always present — a preview must be distinguishable from a real write), and the
+// resulting body. The audit counterpart to TaskMutationJSON.
+func AuditMutationJSON(w io.Writer, a domain.Audit, body string, dryRun bool) error {
+	return wire.EncodeJSON(w, wire.ToAuditMutationEnvelope(a, body, dryRun))
+}
+
 // FindingsJSON writes the structured finding-query result: each parsed finding
 // tagged with its audit slug and bucket, so a cross-audit query stays
 // self-describing. Mirrors the list envelopes' `unreadable` for per-file problems.

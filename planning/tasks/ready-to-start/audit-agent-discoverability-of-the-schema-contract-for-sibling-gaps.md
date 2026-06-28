@@ -9,7 +9,7 @@ priority: low
 autonomy_level: 3
 tags: [cli]
 created: "2026-06-25"
-updated_at: "2026-06-26"
+updated_at: "2026-06-28"
 started_at: "2026-06-26"
 ---
 ## Objective
@@ -23,3 +23,5 @@ The 2026-06-25 adversarial review found two agent-discoverability/contract gaps 
 
 ## Notes
 Hardening, not urgent — the review closed the worst cases.
+
+**Status check 2026-06-28.** The two named findings (epic_fields missing from `schema --json`; the brittle envelope count-guard) are fixed — `schema audit` exists and `schema --json-schema` covers the envelopes. Open work is the sibling SWEEP only: audit-field discoverability in the JSON schema, other magic-count guards, and the missing no-drift tests.

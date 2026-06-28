@@ -72,7 +72,9 @@ import (
 // 1.19: the `status` summary envelope carries `bad_epic_status` — the count of
 // epics whose status is outside the canonical vocabulary (a fixable data problem;
 // these epics are flagged, not dropped), mirroring `misfiled` for tasks.
-const SchemaVersion = "1.19"
+// 1.20: the `audit_mutation` envelope (`audit append`) added — the audit counterpart
+// to `task_mutation`; it carries dry_run + the reloaded audit + the resulting body.
+const SchemaVersion = "1.20"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

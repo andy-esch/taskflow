@@ -68,3 +68,53 @@ func (s *FS) EditTask(slug string, edit func(current string, prevErr error) (str
 		return t, true, nil
 	}
 }
+
+// EditAudit is the audit twin of EditTask: resolve the audit, hand its file content
+// to edit (the caller's $EDITOR), and accept the result only if it still parses as
+// an audit (parse-before-accept), looping on a broken edit. The compare-and-swap
+// before the write guards against a concurrent `audit close`/`reopen`/`defer`
+// relocating the file across buckets during the (long) editor window. Returns the
+// reloaded audit and whether it changed. Finding-level lint (status vocab,
+// bucket↔state) is left to the caller, mirroring how task edit leaves field lint to
+// `lint` — the store only guarantees the file still parses.
+func (s *FS) EditAudit(slug string, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error) {
+	path, bucket, err := s.resolveAudit(slug)
+	if err != nil {
+		return domain.Audit{}, false, err
+	}
+	orig, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Audit{}, false, fmt.Errorf("read audit %s: %w", path, err)
+	}
+
+	current := string(orig)
+	var prevErr error
+	for {
+		edited, err := edit(current, prevErr)
+		if err != nil {
+			return domain.Audit{}, false, err
+		}
+		if edited == string(orig) {
+			a, perr := parseAudit(orig, path, bucket)
+			if perr != nil {
+				return domain.Audit{}, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
+			}
+			return a, false, nil
+		}
+		a, perr := parseAudit([]byte(edited), path, bucket)
+		if perr != nil {
+			if edited == current {
+				return domain.Audit{}, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
+			}
+			current, prevErr = edited, perr // reopen on the broken content
+			continue
+		}
+		if curPath, _, rerr := s.resolveAudit(slug); rerr != nil || curPath != path {
+			return domain.Audit{}, false, fmt.Errorf("audit %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
+		}
+		if err := writeFileAtomic(path, []byte(edited), 0o644); err != nil {
+			return domain.Audit{}, false, fmt.Errorf("write audit %s: %w", path, err)
+		}
+		return a, true, nil
+	}
+}

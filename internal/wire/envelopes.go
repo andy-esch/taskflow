@@ -262,6 +262,22 @@ func ToAuditShowEnvelope(a domain.Audit, body string) AuditShowEnvelope {
 	return AuditShowEnvelope{SchemaVersion: SchemaVersion, Audit: ToAuditJSON(a), Body: body}
 }
 
+// AuditMutationEnvelope is `audit append --json`: the reloaded audit, dry_run, and
+// the resulting body — the audit counterpart to TaskMutationEnvelope.
+type AuditMutationEnvelope struct {
+	SchemaVersion string    `json:"schema_version"`
+	DryRun        bool      `json:"dry_run"`
+	Audit         AuditJSON `json:"audit"`
+	Body          string    `json:"body,omitempty"`
+}
+
+// ToAuditMutationEnvelope builds the `audit append` envelope value: the reloaded
+// audit, dry_run (always present — a preview must be distinguishable from a real
+// write), and the resulting body.
+func ToAuditMutationEnvelope(a domain.Audit, body string, dryRun bool) AuditMutationEnvelope {
+	return AuditMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Audit: ToAuditJSON(a), Body: body}
+}
+
 // FindingsEnvelope is `audit findings --json` (the finding-level query).
 type FindingsEnvelope struct {
 	SchemaVersion string               `json:"schema_version"`

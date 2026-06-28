@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: next-up
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Derive a working/fresh/dormant liveness signal from the epic task rollup (no new stored status) so the TUI dashboard shows live epics bright, dims dormant ones, and hides retired/deprecated.
 effort: M
@@ -9,6 +9,8 @@ priority: medium
 autonomy_level: 3
 tags: [tui, epics, dashboard]
 created: "2026-06-28"
+updated_at: "2026-06-28"
+completed_at: "2026-06-28"
 ---
 # Epic liveness — derive working/dormant so the dashboard shows only live epics
 
@@ -81,3 +83,5 @@ auto-wakes to `working` the moment a task is filed against it; zero bookkeeping.
   completion state.
 - Staleness-by-date as a classifier input — `open`-count is the crisp signal;
   `LastUpdated` is used only for sort tiebreaking here.
+
+**Verified shipped & completed 2026-06-28.** Landed in commit fb2eb80 (PR #65, feat: epic liveness): core EpicSummary.Open()/Liveness()/Live() (service_epic.go) pinned by TestEpicSummary_Liveness; open + liveness on `epic list --json`; TUI active-default view + working-first sort + dormant dimming (statusview.go epicViews, commands.go filterEpicsByView/sortEpicsForView, item.go epicDelegate) + the ? legend. The task was just left at next-up after the work merged; closing it.

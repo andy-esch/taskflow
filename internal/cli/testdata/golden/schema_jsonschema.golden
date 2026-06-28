@@ -1354,6 +1354,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.19)",
+  "title": "tskflwctl --json output (schema_version 1.20)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

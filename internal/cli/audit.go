@@ -3,12 +3,14 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/editor"
 )
 
 // auditVerbHelp is the CLI-specific one-line help for each audit lifecycle verb.
@@ -27,6 +29,8 @@ func newAuditCmd(app *App) *cobra.Command {
 		newAuditNewCmd(app),
 		newAuditListCmd(app),
 		newAuditShowCmd(app),
+		newAuditEditCmd(app),
+		newAuditAppendCmd(app),
 		newAuditFindingsCmd(app),
 		newAuditLintCmd(app),
 	)
@@ -274,4 +278,118 @@ func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.
 				func(a domain.Audit) string { return a.Slug })
 		},
 	}
+}
+
+// newAuditEditCmd is the human face of audit mutation: open the audit file in the
+// user's editor and re-validate on save — the audit twin of `task edit`, complementing
+// the agent-facing `audit append`. The save is accepted only if it still parses
+// (parse-before-accept); once it lands, the findings are lint-checked and any issues
+// (a bad **Status:**, a bucket↔state drift a free-text edit can introduce) are surfaced
+// as a WARNING, not a hard error — lint is advisory here, like `task edit`'s misfiled flag.
+func newAuditEditCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "edit <audit>",
+		Short: "Open an audit in your editor (whole file; re-validated on save)",
+		Long: "Open the audit's markdown file in $VISUAL/$EDITOR (falling back to vi). On save\n" +
+			"the file is re-parsed: a frontmatter break reopens the editor with the error rather\n" +
+			"than landing on disk. The findings are then lint-checked and any issues (bad\n" +
+			"**Status:**, bucket↔state drift) are surfaced as a warning. The human counterpart\n" +
+			"to `audit append` (scriptable).",
+		Example:           "  tskflwctl audit edit 2026-06-20-api-gateway\n  tskflwctl audit edit   # pick from a list",
+		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeAuditSlugs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			// `edit` is interactive ($EDITOR on the whole file) with no preview: reject
+			// --dry-run rather than open an editor whose save is silently discarded.
+			if app.DryRun {
+				return fmt.Errorf("%w: `audit edit` has no --dry-run preview (it's interactive) — use `audit append --dry-run` for a non-interactive preview", domain.ErrValidation)
+			}
+			value := ""
+			if len(args) == 1 {
+				value = args[0]
+			}
+			slug, err := app.fillSelect(value, "specify an audit to edit",
+				"no audits available to edit", "Audit to edit", app.auditOptions)
+			if err != nil {
+				return err
+			}
+			if !app.Gate.On() {
+				return fmt.Errorf("%w: `audit edit` needs an interactive terminal — use `audit append` to add findings non-interactively", domain.ErrValidation)
+			}
+			audit, changed, err := app.Svc.EditAudit(slug, app.editViaEditor(editor.Resolve()))
+			if err != nil {
+				return err
+			}
+			if !changed {
+				fmt.Fprintln(app.Out, app.Style.Dim("no changes to "+audit.Slug))
+				return nil
+			}
+			fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), "updated", app.Style.Bold(audit.Slug))
+			// Re-validate findings (parse-before-accept only guaranteed the file loads):
+			// surface finding-level issues as a warning so a free-text slip doesn't land
+			// silently, but don't fail — the edit already happened and lint is advisory.
+			if results, _, lerr := app.Svc.LintAudits(slug); lerr == nil && len(results) > 0 {
+				fmt.Fprintf(app.ErrOut, "%s findings need attention (see `audit lint %s`):\n", app.Style.Warn("⚠"), slug)
+				render.LintHuman(app.ErrOut, app.Style, results, "audit")
+			}
+			return nil
+		},
+	}
+}
+
+// newAuditAppendCmd is the agent face of audit body editing: append a section
+// (typically a finding) to the body in one atomic, validated write — the scriptable
+// twin of `audit edit`, mirroring `task append`. Finding GRAMMAR correctness is left
+// to `audit lint` (raw markdown is appended), so a malformed finding lands but is
+// caught by lint rather than rejected inline.
+func newAuditAppendCmd(app *App) *cobra.Command {
+	var body, bodyFile string
+	cmd := &cobra.Command{
+		Use:   "append <audit>",
+		Short: "Append a section to an audit's body (atomic; agent-facing)",
+		Long: "Append markdown to the end of an audit's body in one atomic, validated write —\n" +
+			"the scriptable counterpart to `audit edit`, e.g. to add a finding section. Content\n" +
+			"comes from --body, --body-file, or stdin (--body-file -); a blank line separates it\n" +
+			"from the existing body. Finding grammar is left to `audit lint`.",
+		Example:           "  tskflwctl audit append my-audit --body '#### H1. Title  · **Status:** open'\n  printf '#### M3. ...\\n' | tskflwctl audit append my-audit --body-file -",
+		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeAuditSlugs,
+		RunE: func(c *cobra.Command, args []string) error {
+			text, err := resolveBody(c, body, bodyFile)
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(text) == "" {
+				return fmt.Errorf("%w: nothing to append (provide --body, --body-file, or stdin via -)", domain.ErrValidation)
+			}
+			slug, err := app.resolveOne(args, "specify an audit to append to", "no audits available", "Audit to append to", app.auditOptions)
+			if err != nil {
+				return err
+			}
+			audit, newBody, err := app.Svc.AppendAuditBody(slug, text, app.DryRun)
+			if err != nil {
+				return err
+			}
+			return reportAuditMutation(app, audit, newBody, "appended to", "would append to")
+		},
+	}
+	cmd.Flags().StringVar(&body, "body", "", "markdown to append")
+	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the markdown to append from a file (or - for stdin)")
+	return cmd
+}
+
+// reportAuditMutation renders the result of `audit append` — JSON envelope under
+// --json, else a one-line confirmation ("would …" on a --dry-run preview). The audit
+// counterpart to reportTaskMutation.
+func reportAuditMutation(app *App, audit domain.Audit, body, verb, dryVerb string) error {
+	if app.JSON {
+		return render.AuditMutationJSON(app.Out, audit, body, app.DryRun)
+	}
+	if app.DryRun {
+		verb = dryVerb
+	}
+	fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), verb, app.Style.Bold(audit.Slug))
+	return nil
 }

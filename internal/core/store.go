@@ -88,6 +88,16 @@ type AuditStore interface {
 	GetAuditByPath(path string) (audit domain.Audit, body string, err error)
 	MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error)
 	CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error)
+	// EditAudit hands the current file content to edit (the caller's editor) and
+	// accepts the result only if it still parses as an audit — parse-before-accept,
+	// looping on a broken edit. Reports whether the file changed. The audit
+	// counterpart to EditTask; finding-level lint is the caller's to surface.
+	EditAudit(slug string, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error)
+	// AppendAuditBody appends markdown to an audit's body in one atomic, validated
+	// write, preserving the frontmatter verbatim (audits have no updated_at to stamp).
+	// The agent face of audit body editing, beside EditAudit's editor. Returns the
+	// reloaded audit and the resulting body.
+	AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, string, error)
 }
 
 // Store is the use-case persistence port the Service depends on. It is
