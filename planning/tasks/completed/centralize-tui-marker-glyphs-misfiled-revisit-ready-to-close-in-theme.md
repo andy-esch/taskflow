@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: The misfiled/revisit/ready-to-close markers (⚠/↻/✓) are hand-typed in item.go, dashboard.go, and the help legend; promote them to theme tokens so all surfaces share one source.
 effort: S
@@ -9,6 +9,8 @@ priority: low
 autonomy_level: 3
 tags: [tui, theme, maintainability]
 created: "2026-06-28"
+updated_at: "2026-06-28"
+completed_at: "2026-06-28"
 ---
 ## Why
 
@@ -29,3 +31,5 @@ Promote the cross-surface markers to `theme` tokens (e.g. `theme.MarkerMisfiled`
 - Low priority / small: the current state is correct, just duplicated; this is a DRY + drift-proofing pass.
 - Natural sibling of the presentation-seam work (`shared-presentation-seam-for-the-bar-percent-counts-composite`, H5/M1/M10) — keeps semantic glyph+color decisions in `theme`.
 - Reconcile the `✓`/`✔` usage while here.
+
+**Completed 2026-06-28.** Promoted the cross-surface row/dashboard/legend markers to `theme` tokens: `MarkerWarn` (⚠), `MarkerRevisit` (↻), `MarkerReadyToClose` (✓ U+2713), `MarkerAllClear` (✔ U+2714), `MarkerUnreadable` (!) — glyph+color, like theme.Status/Bucket/Liveness. A new `glyph(theme.Token)` helper (style.go) renders them. item.go, dashboard.go, detail.go, and the `?` legend (help.go symbolsFor) now all draw from these tokens instead of re-typed literals — so the legend "can`t drift" property now covers markers too (the legend `mark` helper is left only for the percent-band text labels). The ✓/✔ reconciliation is now enforced: two deliberately-distinct named tokens (TestMarkers pins the distinction). Guards: TestLegendMarkersSourcedFromTheme + theme.TestMarkers. Byte-identical render (same glyphs/colors), no golden churn. OUT OF SCOPE (left as literals): the RED ⚠ alert (destructive-confirm, acute-finding callout, error displays) — a heterogeneous "danger/acute" concern, not the attention marker; and the action-result flash ✔/✘. The CLI render layer (render.go) still uses its own literal glyphs via Style methods — it could adopt theme.Marker* in a tiny followup (byte-identical), kept out to hold scope to the TUI.

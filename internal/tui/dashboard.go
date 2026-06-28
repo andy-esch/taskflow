@@ -97,7 +97,7 @@ func (d *dashboard) setSummary(s core.Summary) {
 	if s.RevisitDue > 0 {
 		blank()
 		head("due for revisit")
-		nav(fg(theme.ColorYellow, "↻")+fmt.Sprintf(" %d snoozed task(s) now due", s.RevisitDue),
+		nav(glyph(theme.MarkerRevisit)+fmt.Sprintf(" %d snoozed task(s) now due", s.RevisitDue),
 			dashTarget{kind: entityTasks, view: "revisit"})
 	}
 
@@ -168,31 +168,30 @@ func (d *dashboard) setSummary(s core.Summary) {
 	head("needs attention")
 	allClear := true
 	if s.Misfiled > 0 {
-		nav(fg(theme.ColorYellow, "⚠")+fmt.Sprintf(" %d misfiled task(s) (status ≠ folder)", s.Misfiled),
+		nav(glyph(theme.MarkerWarn)+fmt.Sprintf(" %d misfiled task(s) (status ≠ folder)", s.Misfiled),
 			dashTarget{kind: entityTasks, view: "all"})
 		allClear = false
 	}
 	if n := len(s.OpenAudits); n > 0 {
-		tok := theme.Bucket(domain.AuditOpen)
-		nav(fg(tok.Color, tok.Glyph)+fmt.Sprintf(" %d open audit(s)", n), dashTarget{kind: entityAudits})
+		nav(glyph(theme.Bucket(domain.AuditOpen))+fmt.Sprintf(" %d open audit(s)", n), dashTarget{kind: entityAudits})
 		allClear = false
 	}
 	if s.ReadyToClose > 0 {
-		nav(fg(theme.ColorGreen, "✓")+fmt.Sprintf(" %d audit(s) ready to close (all findings resolved)", s.ReadyToClose),
+		nav(glyph(theme.MarkerReadyToClose)+fmt.Sprintf(" %d audit(s) ready to close (all findings resolved)", s.ReadyToClose),
 			dashTarget{kind: entityAudits})
 		allClear = false
 	}
 	if s.BadEpicStatus > 0 {
-		nav(fg(theme.ColorYellow, "⚠")+fmt.Sprintf(" %d epic(s) with unrecognized status (set active/retired/deprecated)", s.BadEpicStatus),
+		nav(glyph(theme.MarkerWarn)+fmt.Sprintf(" %d epic(s) with unrecognized status (set active/retired/deprecated)", s.BadEpicStatus),
 			dashTarget{kind: entityEpics})
 		allClear = false
 	}
 	if len(s.Problems) > 0 {
-		info(fg(theme.ColorRed, "!") + fmt.Sprintf(" %d unreadable file(s) (run lint)", len(s.Problems)))
+		info(glyph(theme.MarkerUnreadable) + fmt.Sprintf(" %d unreadable file(s) (run lint)", len(s.Problems)))
 		allClear = false
 	}
 	if allClear {
-		info(fg(theme.ColorGreen, "✔") + " all clear")
+		info(glyph(theme.MarkerAllClear) + " all clear")
 	}
 
 	d.rows = rows

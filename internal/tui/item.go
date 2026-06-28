@@ -80,9 +80,9 @@ func (taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 	marker := " "
 	switch {
 	case it.t.Misfiled():
-		marker = fg(theme.ColorYellow, "⚠")
+		marker = glyph(theme.MarkerWarn)
 	case it.due:
-		marker = fg(theme.ColorYellow, "↻")
+		marker = glyph(theme.MarkerRevisit)
 	}
 	date := theme.RelativeDate(theme.TaskDate(it.t))
 
@@ -128,7 +128,7 @@ func (i epicItem) sortFields() sortFields {
 // audit row's bucket glyph.
 func epicGlyph(es core.EpicSummary) string {
 	if !domain.IsKnownEpicStatus(es.Epic.Status) {
-		return fg(theme.ColorYellow, "⚠")
+		return glyph(theme.MarkerWarn)
 	}
 	tok := theme.Liveness(string(es.Liveness()))
 	return fg(tok.Color, tok.Glyph)
