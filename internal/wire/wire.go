@@ -65,7 +65,11 @@ import (
 // findings (open/in-progress) aggregated `by_urgency` and `by_component` with the
 // `acute` ones listed — and each open audit carries `ready_to_close` (true when it
 // has no open/in-progress findings left).
-const SchemaVersion = "1.17"
+// 1.18: epic payloads carry `open` (not-yet-done tasks = total − done) and
+// `liveness` — the derived activity band (working | fresh | dormant) computed from
+// the rollup, not stored — so a consumer can foreground live domain buckets and
+// recede drained ones without re-deriving the rule.
+const SchemaVersion = "1.18"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

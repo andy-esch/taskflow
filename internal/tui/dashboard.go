@@ -123,12 +123,17 @@ func (d *dashboard) setSummary(s core.Summary) {
 		}
 		for i, es := range vis {
 			pct := es.Percent()
-			row := fmt.Sprintf("%s %s  %s", miniBar(pct, 8),
+			tok := theme.Liveness(string(es.Liveness())) // live-first, dormant dimmed (Summary already filtered to active)
+			row := fmt.Sprintf("%s %s %s  %s", fg(tok.Color, tok.Glyph), miniBar(pct, 8),
 				fg(theme.Percent(pct), theme.PercentLabelPadded(pct)), rollupCounts(es.Done, es.Total, countsW))
 			if dateW > 0 { // a blank (undated) cell still pads, so the id column holds
 				row += "  " + dim(fmt.Sprintf("%-*s", dateW, dates[i]))
 			}
-			row += "  " + es.Epic.ID
+			id := es.Epic.ID
+			if !es.Live() { // dormant buckets recede on the dashboard too
+				id = dim(id)
+			}
+			row += "  " + id
 			nav(row, dashTarget{kind: entityEpics, id: es.Epic.ID})
 		}
 		if more > 0 {

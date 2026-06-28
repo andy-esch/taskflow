@@ -21,14 +21,30 @@ type Epic struct {
 	Tags        []string `yaml:"tags"`
 }
 
-// epicStatuses is the closed epic-status vocabulary (decided 2026-06-25). An
-// epic is a long-lived domain category, not a task that marches to "done", so
-// the states answer "is this bucket live, finished, or dead", not "what stage":
-// active = live (organizing current or future work); retired = goals satisfied,
-// closed successfully, kept for history; deprecated = it wasn't useful or was
-// replaced (a superseded epic is deprecated with a "superseded by X" note in
-// its description, not a separate state).
-var epicStatuses = []string{"active", "retired", "deprecated"}
+// Epic status values — the closed, intent-level vocabulary (decided 2026-06-25).
+// An epic is a long-lived domain category, not a task that marches to "done", so
+// the states answer "is this bucket live, finished, or dead", not "what stage".
+// Crucially they do NOT track how busy the bucket is: an `active` epic may be
+// working (open tasks) or dormant (drained but still a valid domain). That
+// working/dormant distinction is a DERIVED signal computed from the task rollup
+// (see core.EpicSummary.Liveness), deliberately not a stored status, so a quiet
+// domain never needs hand-maintenance to stay correct.
+const (
+	// EpicStatusActive is a live domain bucket — organizing current or future work.
+	// The dashboard/epics-tab default view; refined at read time into working vs
+	// dormant liveness. Most epics live here for their whole life.
+	EpicStatusActive = "active"
+	// EpicStatusRetired means the goals were satisfied and the epic closed
+	// successfully — kept for history, not expected to take new work.
+	EpicStatusRetired = "retired"
+	// EpicStatusDeprecated means the epic wasn't useful or was replaced; a
+	// superseded epic is deprecated with a "superseded by X" note in its
+	// description rather than getting a separate state.
+	EpicStatusDeprecated = "deprecated"
+)
+
+// epicStatuses is the closed epic-status vocabulary, in declared order.
+var epicStatuses = []string{EpicStatusActive, EpicStatusRetired, EpicStatusDeprecated}
 
 // AllEpicStatuses returns the closed epic-status vocabulary, in declared order.
 func AllEpicStatuses() []string { return epicStatuses }

@@ -247,12 +247,20 @@
         "done": {
           "type": "integer"
         },
+        "open": {
+          "type": "integer",
+          "description": "Open is the pending workload (total − done); 0 = nothing in flight."
+        },
         "percent": {
           "type": "integer"
         },
         "deprecated": {
           "type": "integer",
-          "description": "withdrawn tasks, excluded from total/done"
+          "description": "Deprecated is the withdrawn tasks, excluded from total/done."
+        },
+        "liveness": {
+          "type": "string",
+          "description": "derived activity: working | fresh | dormant"
         }
       },
       "additionalProperties": false,
@@ -261,8 +269,10 @@
         "id",
         "total",
         "done",
+        "open",
         "percent",
-        "deprecated"
+        "deprecated",
+        "liveness"
       ],
       "description": "EpicJSON is epic list output: the shared meta (embedded, so `epic list` and `epic show` can't drift) plus the task rollup."
     },
@@ -1340,6 +1350,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.17)",
+  "title": "tskflwctl --json output (schema_version 1.18)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

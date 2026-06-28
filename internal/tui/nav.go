@@ -183,9 +183,10 @@ func (m *Model) jumpTo(kind entityKind, id string) tea.Cmd {
 	if tab.selectByID(id) {
 		return m.refreshDetail()
 	}
-	if kind == entityTasks && tab.statusView != "all" {
-		// The working set / a status view hides archived tasks an epic still
-		// lists — widen rather than fail (the chip shows view:all afterwards).
+	if tab.viewAxis != nil && tab.statusView != "all" {
+		// A non-default view hides rows the target may live in — the task working set
+		// hides archived tasks; the epics default hides retired/deprecated buckets —
+		// so widen to :all rather than fail (the chip shows view:all afterwards).
 		tab.statusView = "all"
 		m.flash, m.flashErr = fmt.Sprintf("showing :all to reach %s", id), false
 		return tab.reload(m.svc, id)

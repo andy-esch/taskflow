@@ -94,6 +94,46 @@ func (e EpicSummary) Percent() int {
 	return e.Done * 100 / e.Total
 }
 
+// Liveness is an epic's DERIVED activity band — read from its task rollup, never
+// stored. It refines the `active` status (a live domain bucket) into how busy that
+// bucket is right now, so a surface can foreground live work and recede quiet
+// domains without anyone hand-maintaining a status. Only meaningful for active
+// epics: a terminal (retired/deprecated) epic also computes a band, but callers
+// gate on status first (see dashboardEpics / the epics-tab view filter).
+type Liveness string
+
+const (
+	LivenessWorking Liveness = "working" // has open (pending/in-progress) tasks
+	LivenessFresh   Liveness = "fresh"   // declared bucket with no tasks filed yet
+	LivenessDormant Liveness = "dormant" // had tasks, all now done/withdrawn — quiet
+)
+
+// Open is the count of an epic's not-yet-done tasks. Total already excludes
+// withdrawn/deprecated tasks (see TaskRollup), so Open is the real pending workload;
+// 0 means nothing is in flight.
+func (e EpicSummary) Open() int { return e.Total - e.Done }
+
+// Liveness derives the activity band from the rollup (see the Liveness type):
+// working = open tasks remain; fresh = no tasks filed yet (a new bucket, kept
+// visible); dormant = had work, all of it now done/withdrawn. The Total>0 guard is
+// what separates a *drained* epic (dormant) from a brand-*new* one (fresh) — both
+// have zero open tasks, but only the new one should read as live.
+func (e EpicSummary) Liveness() Liveness {
+	switch {
+	case e.Open() > 0:
+		return LivenessWorking
+	case e.Total == 0:
+		return LivenessFresh
+	default:
+		return LivenessDormant
+	}
+}
+
+// Live reports whether the epic should read as foreground (working or fresh) rather
+// than a receded dormant bucket. The dashboard and the epics list both lead with
+// Live epics and dim the rest.
+func (e EpicSummary) Live() bool { return e.Liveness() != LivenessDormant }
+
 // ListEpics returns every epic with its task rollup (joined on the tasks'
 // `epic:` field), plus any per-file load problems from either scan.
 func (s *Service) ListEpics() ([]EpicSummary, []domain.FileProblem, error) {
@@ -142,6 +182,25 @@ func rollupEpic(e domain.Epic, its []domain.Task) EpicSummary {
 func epicsByRecent(epics []EpicSummary) []EpicSummary {
 	out := append([]EpicSummary(nil), epics...)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].LastUpdated > out[j].LastUpdated })
+	return out
+}
+
+// dashboardEpics is the landing-screen epic lens: only ACTIVE buckets (retired/
+// deprecated are history, not "what's live"), ordered live work first and then by
+// recency, so a cap'd dashboard fills with epics that have momentum and dormant
+// domains sink to the bottom. Layered on epicsByRecent: recency orders within each
+// liveness band, then a stable partition floats Live epics above dormant ones. The
+// epics TAB keeps the full roster (its own view axis reaches retired/deprecated);
+// this narrowing is dashboard-only, so `status` and the TUI dashboard still agree.
+func dashboardEpics(epics []EpicSummary) []EpicSummary {
+	active := make([]EpicSummary, 0, len(epics))
+	for _, e := range epics {
+		if e.Epic.Status == domain.EpicStatusActive {
+			active = append(active, e)
+		}
+	}
+	out := epicsByRecent(active)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Live() && !out[j].Live() })
 	return out
 }
 
