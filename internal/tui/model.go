@@ -9,7 +9,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
@@ -673,7 +672,7 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.action.revisit {
 		switch msg.String() {
 		case "enter":
-			date, err := domain.ParseRevisitDate(m.action.dateInput.Value(), time.Now())
+			date, err := domain.ParseRevisitDate(m.action.dateInput.Value(), m.svc.Now())
 			if err != nil {
 				m.action.dateErr = err.Error() // keep what was typed, show the error
 				return nil
