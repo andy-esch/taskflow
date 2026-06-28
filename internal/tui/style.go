@@ -94,13 +94,13 @@ func osc8(s, url string) string {
 // shared progressbar package — same constructor + neon palette the CLI status bar
 // uses, so the two surfaces can't drift. The % text beside the bar carries the
 // discrete completion tier color (theme.Percent).
-func miniBar(pct, width int) string { return progressbar.Render(pct, width) }
+func miniBar(pct, width int) string { return progressbar.Render(pct, width, pal) }
 
 // segBar renders an audit's finding breakdown as a stacked bar (done/active/
 // dropped over the open/empty track) via the shared progressbar package — the same
 // renderer the CLI uses (Style.SegmentBar), so the two surfaces can't drift.
 func segBar(done, active, dropped, total, width int) string {
-	return progressbar.RenderSegments(progressbar.Segments{Done: done, Active: active, Dropped: dropped, Total: total}, width)
+	return progressbar.RenderSegments(progressbar.Segments{Done: done, Active: active, Dropped: dropped, Total: total}, width, pal)
 }
 
 // statusText renders a colored glyph + status label.

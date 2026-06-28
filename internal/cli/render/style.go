@@ -7,54 +7,52 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/progressbar"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
-// ANSI SGR codes. Kept minimal and 16-color so they degrade well everywhere.
+// ANSI SGR attribute codes (structural, color-independent). The semantic colors
+// come from the active palette via sgr/ansiCode, not from literals here.
 const (
-	ansiReset  = "\x1b[0m"
-	ansiBold   = "\x1b[1m"
-	ansiDim    = "\x1b[2m"
-	ansiRed    = "\x1b[31m"
-	ansiGreen  = "\x1b[32m"
-	ansiYellow = "\x1b[33m"
-	ansiBlue   = "\x1b[34m"
-	ansiCyan   = "\x1b[36m"
-	ansiGray   = "\x1b[90m"
+	ansiReset = "\x1b[0m"
+	ansiBold  = "\x1b[1m"
+	ansiDim   = "\x1b[2m"
 )
 
-// ansiCode maps a semantic theme.Color to its ANSI SGR code ("" for none).
-func ansiCode(c theme.Color) string {
-	switch c {
-	case theme.ColorRed:
-		return ansiRed
-	case theme.ColorGreen:
-		return ansiGreen
-	case theme.ColorYellow:
-		return ansiYellow
-	case theme.ColorBlue:
-		return ansiBlue
-	case theme.ColorCyan:
-		return ansiCyan
-	case theme.ColorGray:
-		return ansiGray
-	default:
+// sgr renders a 0..15 palette ANSI slot as a foreground SGR code: 0..7 → 30..37,
+// 8..15 → 90..97 (the bright range). A negative slot (design.NoANSI) is "no color".
+func sgr(slot int) string {
+	switch {
+	case slot < 0:
 		return ""
+	case slot < 8:
+		return fmt.Sprintf("\x1b[%dm", 30+slot)
+	default:
+		return fmt.Sprintf("\x1b[%dm", 90+slot-8)
 	}
 }
+
+// ansiCode maps a semantic theme.Color to its ANSI SGR code via the active
+// palette's 16-color slot ("" for none). The slots are background-independent, so
+// the hand-written 16-color CLI output stays byte-stable across light/dark.
+func (s Style) ansiCode(c theme.Color) string { return sgr(s.palette.Of(c).ANSI) }
 
 // Style renders optional ANSI styling and carries the output width (0 = no
 // limit). The zero value is disabled (plain) with no width cap — so tests,
 // piped output, and the JSON path are never colored or truncated unless asked.
 type Style struct {
-	on    bool
-	width int
+	on      bool
+	width   int
+	palette design.Palette
 }
 
-// NewStyle returns a Style; enabled controls whether ANSI is emitted.
-func NewStyle(enabled bool) Style { return Style{on: enabled} }
+// NewStyle returns a Style; enabled controls whether ANSI is emitted. The palette
+// defaults to the project default theme's dark variant — the semantic ANSI slots
+// are background-independent, so this is safe regardless of terminal background;
+// config-driven theme selection wires a chosen palette in a later task.
+func NewStyle(enabled bool) Style { return Style{on: enabled, palette: design.Default().Dark} }
 
 // WithWidth returns a copy capped to a terminal width (0 leaves it uncapped, so
 // piped output keeps full-width rows).
@@ -94,7 +92,7 @@ func (s Style) Status(st domain.Status) string {
 		return string(st)
 	}
 	tok := theme.Status(st)
-	return ansiCode(tok.Color) + tok.Glyph + " " + string(st) + ansiReset
+	return s.ansiCode(tok.Color) + tok.Glyph + " " + string(st) + ansiReset
 }
 
 // Bucket renders an audit bucket: a colored glyph + name when styled (the shared
@@ -105,7 +103,7 @@ func (s Style) Bucket(b string) string {
 		return b
 	}
 	tok := theme.Bucket(domain.AuditBucket(b))
-	return ansiCode(tok.Color) + tok.Glyph + " " + b + ansiReset
+	return s.ansiCode(tok.Color) + tok.Glyph + " " + b + ansiReset
 }
 
 // FindingStatus renders an audit finding's status the way Status renders a task
@@ -117,23 +115,23 @@ func (s Style) FindingStatus(status string) string {
 		return status
 	}
 	tok := theme.FindingStatus(status)
-	return ansiCode(tok.Color) + tok.Glyph + " " + status + ansiReset
+	return s.ansiCode(tok.Color) + tok.Glyph + " " + status + ansiReset
 }
 
 // Priority colors a priority label.
 func (s Style) Priority(p string) string {
-	return s.wrap(ansiCode(theme.Priority(p)), p)
+	return s.wrap(s.ansiCode(theme.Priority(p)), p)
 }
 
 // Percent colors a completion percentage: gray <34, yellow <100, green at 100.
 func (s Style) Percent(pct int) string {
-	return s.wrap(ansiCode(theme.Percent(pct)), theme.PercentLabel(pct))
+	return s.wrap(s.ansiCode(theme.Percent(pct)), theme.PercentLabel(pct))
 }
 
 // Green / Red / Warn style status glyphs and success/error/warning text.
-func (s Style) Green(t string) string { return s.wrap(ansiGreen, t) }
-func (s Style) Red(t string) string   { return s.wrap(ansiRed, t) }
-func (s Style) Warn(t string) string  { return s.wrap(ansiYellow, t) }
+func (s Style) Green(t string) string { return s.wrap(s.ansiCode(theme.ColorGreen), t) }
+func (s Style) Red(t string) string   { return s.wrap(s.ansiCode(theme.ColorRed), t) }
+func (s Style) Warn(t string) string  { return s.wrap(s.ansiCode(theme.ColorYellow), t) }
 
 // Bar renders a width-char progress bar for pct (0–100) via the shared progressbar
 // package (same constructor + neon gradient the TUI's miniBar uses, so the two
@@ -144,7 +142,7 @@ func (s Style) Bar(pct, width int) string {
 	if width <= 0 {
 		width = 10
 	}
-	out := progressbar.Render(pct, width)
+	out := progressbar.Render(pct, width, s.palette)
 	if !s.on {
 		return ansi.Strip(out)
 	}
@@ -160,7 +158,7 @@ func (s Style) SegmentBar(done, active, dropped, total, width int) string {
 	if width <= 0 {
 		width = 10
 	}
-	out := progressbar.RenderSegments(progressbar.Segments{Done: done, Active: active, Dropped: dropped, Total: total}, width)
+	out := progressbar.RenderSegments(progressbar.Segments{Done: done, Active: active, Dropped: dropped, Total: total}, width, s.palette)
 	if !s.on {
 		return ansi.Strip(out)
 	}
