@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -122,6 +123,17 @@ func rollupEpics(epics []domain.Epic, tasks []domain.Task) []EpicSummary {
 			LastUpdated: epicLastUpdated(byEpic[e.ID]),
 		}
 	}
+	return out
+}
+
+// epicsByRecent returns the rollups ordered most-recently-updated first — the
+// dashboard's "what moved lately" lens. Stable, so equal dates keep rollupEpics'
+// (store) order; undated epics ("" LastUpdated) sink to the bottom. Summary applies
+// it so every dashboard surface reads epics in ONE order (audit M2); the order
+// lives here, in the aggregate, rather than being re-derived per adapter.
+func epicsByRecent(epics []EpicSummary) []EpicSummary {
+	out := append([]EpicSummary(nil), epics...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].LastUpdated > out[j].LastUpdated })
 	return out
 }
 

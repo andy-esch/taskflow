@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -102,17 +101,17 @@ func (d *dashboard) setSummary(s core.Summary) {
 			dashTarget{kind: entityTasks, view: "revisit"})
 	}
 
-	// Epics — rollup progress, most-recently-touched first (the dashboard's "what
-	// moved lately" lens; the epics tab keeps its own sort). The counts and date are
-	// pre-measured and padded to a shared width so the columns line up; the epic id
-	// goes LAST, where width-truncation naturally falls and the date stays visible.
-	// The +N overflow still jumps to the full tab.
+	// Epics — rollup progress in core.Summary's order (most-recently-touched first;
+	// the same order CLI `status` renders, so the two dashboards agree — audit M2).
+	// The counts and date are pre-measured and padded to a shared width so the columns
+	// line up; the epic id goes LAST, where width-truncation naturally falls and the
+	// date stays visible. The +N overflow still jumps to the full tab.
 	blank()
 	head("epics")
 	if len(s.Epics) == 0 {
 		info("no epics")
 	} else {
-		epics := epicsByRecent(s.Epics)
+		epics := s.Epics
 		shown, more := capList(len(epics))
 		vis := epics[:shown]
 		dates := make([]string, len(vis))
@@ -239,15 +238,6 @@ func countSettled(audits []domain.Audit) int {
 		}
 	}
 	return n
-}
-
-// epicsByRecent orders epics most-recently-updated first for the dashboard's
-// recency lens. Stable, so equal dates keep core's order; undated epics ("" date)
-// sink to the bottom.
-func epicsByRecent(src []core.EpicSummary) []core.EpicSummary {
-	out := append([]core.EpicSummary(nil), src...)
-	sort.SliceStable(out, func(i, j int) bool { return out[i].LastUpdated > out[j].LastUpdated })
-	return out
 }
 
 // move steps the cursor over the navigable rows (wrapping).
