@@ -69,15 +69,15 @@ var helpSections = []helpSection{
 }
 
 // symbolsFor builds the glyph legend for the active screen — what the leading
-// status / liveness / bucket glyphs (and the ⚠/↻ markers) in the rows actually
-// mean, so a reader can decode the column without leaving the TUI. The glyph rows
-// (tok) are sourced from the SAME theme tokens the row delegates draw
-// (theme.Status/Liveness/Bucket/FindingStatus), so THEY can't drift from what's on
-// screen; the marker/percent rows (mark) are hand-labeled and stay in sync by eye.
+// status / liveness / bucket glyphs (and the ⚠/↻/✓ markers) in the rows actually
+// mean, so a reader can decode the column without leaving the TUI. The glyph AND
+// marker rows (tok) are sourced from the SAME theme tokens the row delegates + the
+// dashboard draw (theme.Status/Liveness/Bucket/FindingStatus/Marker*), so they can't
+// drift from what's on screen; only the percent-band rows (mark) are hand-labeled.
 // ok is false on a screen with no glyph vocabulary of its own.
 func symbolsFor(kind entityKind) (helpSection, bool) {
 	tok := func(t theme.Token, desc string) helpEntry { return helpEntry{fg(t.Color, t.Glyph), desc} }
-	mark := func(c theme.Color, glyph, desc string) helpEntry { return helpEntry{fg(c, glyph), desc} }
+	mark := func(c theme.Color, label, desc string) helpEntry { return helpEntry{fg(c, label), desc} }
 	var e []helpEntry
 	switch kind {
 	case entityTasks:
@@ -85,15 +85,15 @@ func symbolsFor(kind entityKind) (helpSection, bool) {
 			e = append(e, tok(theme.Status(st), string(st)))
 		}
 		e = append(e,
-			mark(theme.ColorYellow, "⚠", "misfiled — status ≠ folder"),
-			mark(theme.ColorYellow, "↻", "revisit (snooze) date reached"),
+			tok(theme.MarkerWarn, "misfiled — status ≠ folder"),
+			tok(theme.MarkerRevisit, "revisit (snooze) date reached"),
 		)
 	case entityEpics:
 		e = append(e,
 			tok(theme.Liveness("working"), "working — live work in progress"),
 			tok(theme.Liveness("fresh"), "fresh — new epic, no tasks yet"),
 			tok(theme.Liveness("dormant"), "dormant — drained / quiet (id dimmed)"),
-			mark(theme.ColorYellow, "⚠", "non-conforming status (→ active/retired/deprecated)"),
+			tok(theme.MarkerWarn, "non-conforming status (→ active/retired/deprecated)"),
 		)
 	case entityAudits:
 		for _, b := range domain.AllAuditBuckets() {
@@ -112,11 +112,11 @@ func symbolsFor(kind entityKind) (helpSection, bool) {
 			tok(theme.Liveness("fresh"), "fresh epic (no tasks yet)"),
 			tok(theme.Liveness("dormant"), "dormant epic (drained / quiet)"),
 			tok(theme.Bucket(domain.AuditOpen), "open audit"),
-			// ✓ (U+2713) is the dashboard's "ready to close" badge, distinct from the ✔
-			// (U+2714) that means done/closed elsewhere — keep the glyph + label specific.
-			mark(theme.ColorGreen, "✓", "audit ready to close (findings resolved)"),
-			mark(theme.ColorYellow, "⚠", "needs attention (misfiled / non-conforming)"),
-			mark(theme.ColorYellow, "↻", "revisit (snooze) reached"),
+			// ✓ ready-to-close (U+2713) and the ✔ all-clear (U+2714) are deliberately
+			// distinct glyphs — both come from theme.Marker* so they can't drift.
+			tok(theme.MarkerReadyToClose, "audit ready to close (findings resolved)"),
+			tok(theme.MarkerWarn, "needs attention (misfiled / non-conforming)"),
+			tok(theme.MarkerRevisit, "revisit (snooze) reached"),
 		)
 	}
 	// The completion-percent figure's color band — labels mirror theme.Percent

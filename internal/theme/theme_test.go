@@ -150,3 +150,18 @@ func TestTaskDate(t *testing.T) {
 		t.Errorf("TaskDate falls back to Created, got %q", got)
 	}
 }
+
+// TestMarkers pins the cross-surface marker glyphs so a change is deliberate, and in
+// particular that ✓ (ready-to-close) and ✔ (all-clear / done) stay DISTINCT glyphs —
+// the reconciliation the legend review called for.
+func TestMarkers(t *testing.T) {
+	if MarkerReadyToClose.Glyph != "✓" || MarkerAllClear.Glyph != "✔" {
+		t.Errorf("ready-to-close=%q all-clear=%q, want ✓ (U+2713) / ✔ (U+2714)", MarkerReadyToClose.Glyph, MarkerAllClear.Glyph)
+	}
+	if MarkerReadyToClose.Glyph == MarkerAllClear.Glyph {
+		t.Error("✓ ready-to-close and ✔ all-clear must stay distinct glyphs")
+	}
+	if MarkerWarn.Glyph != "⚠" || MarkerRevisit.Glyph != "↻" || MarkerUnreadable.Glyph != "!" {
+		t.Errorf("marker glyphs drifted: warn=%q revisit=%q unreadable=%q", MarkerWarn.Glyph, MarkerRevisit.Glyph, MarkerUnreadable.Glyph)
+	}
+}

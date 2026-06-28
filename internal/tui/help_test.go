@@ -7,7 +7,30 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/andy-esch/taskflow/internal/theme"
 )
+
+// TestLegendMarkersSourcedFromTheme pins that the `?` legend draws its marker glyphs
+// from the theme.Marker* tokens (not re-typed literals), so the legend can't drift
+// from the rows + dashboard that draw the same markers from the same tokens.
+func TestLegendMarkersSourcedFromTheme(t *testing.T) {
+	has := func(kind entityKind, want string) bool {
+		sec, _ := symbolsFor(kind)
+		for _, e := range sec.entries {
+			if e.keys == want {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(entityTasks, glyph(theme.MarkerWarn)) || !has(entityTasks, glyph(theme.MarkerRevisit)) {
+		t.Error("tasks legend should draw the misfiled/revisit markers from theme.Marker*")
+	}
+	if !has(entityDashboard, glyph(theme.MarkerReadyToClose)) {
+		t.Error("dashboard legend should draw the ready-to-close marker from theme.MarkerReadyToClose")
+	}
+}
 
 // TestKeyMapBindingsSelfDescribe pins the foundation of the derived help/footers:
 // EVERY keyMap binding must carry a WithHelp(key, desc). A new binding added without

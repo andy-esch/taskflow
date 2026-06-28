@@ -57,6 +57,11 @@ func fg(c theme.Color, s string) string {
 	return lipgloss.NewStyle().Foreground(lipColor(c)).Render(s)
 }
 
+// glyph renders a theme Token (status / bucket / liveness / marker) as its colored
+// glyph — the shared shorthand for the fg(tok.Color, tok.Glyph) the rows + dashboard
+// repeat, so a marker is drawn from theme rather than a re-typed literal.
+func glyph(t theme.Token) string { return fg(t.Color, t.Glyph) }
+
 func dim(s string) string { return dimStyle.Render(s) }
 
 // osc8 wraps s in an OSC 8 terminal hyperlink to url, so supporting terminals make
