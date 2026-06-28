@@ -61,8 +61,16 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 }
 
 // ListAudits returns audits in the requested bucket (default: open), plus any
-// per-file load problems. bucket="" + all=false means open only.
+// per-file load problems. bucket="" + all=false means open only. An unknown
+// bucket is validated up front and returns ErrValidation rather than a silently
+// empty list, which agents routing on exit codes can't tell apart from an empty
+// bucket — mirroring ListTasks' status check.
 func (s *Service) ListAudits(bucket string, all bool) ([]domain.Audit, []domain.FileProblem, error) {
+	if bucket != "" {
+		if _, err := domain.ParseAuditBucket(bucket); err != nil {
+			return nil, nil, err
+		}
+	}
 	audits, problems, err := s.store.ListAudits()
 	if err != nil {
 		return nil, nil, err

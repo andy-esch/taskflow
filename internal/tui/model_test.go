@@ -688,6 +688,68 @@ func TestModel_RecoversFromFailedInitialLoad(t *testing.T) {
 	}
 }
 
+// TestModel_ConflictErrorTriggersReload pins audit H4's conflict routing: a
+// mutation that fails the compare-and-swap (the file changed on disk under us,
+// wrapping domain.ErrConflict) must reload — surfacing the current state — rather
+// than painting a bare red flash the user can't act on. An open inline editor is
+// closed (its prefilled values may no longer match the file).
+func TestModel_ConflictErrorTriggersReload(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press("e")) // open the inline editor on the selection
+	m = tm.(Model)
+	if !m.edit.active {
+		t.Fatal("setup: the inline editor should be open")
+	}
+	gen := m.cur().loadGen
+	conflict := fmt.Errorf("%q: %w", "in-progress", domain.ErrConflict)
+	tm, cmd := m.Update(actionErrMsg{slug: m.selectedID(), err: conflict})
+	m = tm.(Model)
+	if cmd == nil {
+		t.Fatal("a conflict error must produce a reload command, not just a flash")
+	}
+	if m.edit.active {
+		t.Error("a conflict (file changed on disk) should close the stale inline editor")
+	}
+	if !m.flashErr || !strings.Contains(m.flash, "changed on disk") {
+		t.Errorf("a conflict should flash a reload notice, got flash=%q err=%v", m.flash, m.flashErr)
+	}
+	// The reload command bumps the active tab's load generation — the observable
+	// proof a reload was fired (not a bare flash, which returns a nil cmd).
+	m = pump(t, m, cmd, 8)
+	if m.cur().loadGen <= gen {
+		t.Errorf("a conflict should reload (loadGen should advance past %d), got %d", gen, m.cur().loadGen)
+	}
+}
+
+// TestModel_ValidationErrorShowsBareReasonInline pins audit H4's validation
+// routing: a validation failure while editing shows the bare reason inline on the
+// field, with the "validation failed:" sentinel prefix stripped via domain.Reason
+// (not the old inline strings.TrimPrefix). The editor stays open so the fix happens
+// in place.
+func TestModel_ValidationErrorShowsBareReasonInline(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(press("e")) // open the inline editor
+	m = tm.(Model)
+	if !m.edit.active {
+		t.Fatal("setup: the inline editor should be open")
+	}
+	vErr := fmt.Errorf("%w: at least one tag is required", domain.ErrValidation)
+	tm, cmd := m.Update(actionErrMsg{slug: m.selectedID(), err: vErr})
+	m = tm.(Model)
+	if cmd != nil {
+		t.Error("a validation error while editing must not reload — the fix is in place")
+	}
+	if !m.edit.active {
+		t.Error("a validation error should keep the editor open for an in-place fix")
+	}
+	if m.edit.err != "at least one tag is required" {
+		t.Errorf("the inline error should be the bare reason (prefix stripped), got %q", m.edit.err)
+	}
+	if strings.Contains(m.edit.err, domain.ErrValidation.Error()) {
+		t.Errorf("the sentinel prefix must be stripped, got %q", m.edit.err)
+	}
+}
+
 // TestModel_LoadErrorIsPerTab pins that one tab's loader failing neither blanks
 // the other tabs nor loses the failing tab's last good rows (the failure is
 // flagged in the footer instead).

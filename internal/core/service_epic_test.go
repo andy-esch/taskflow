@@ -52,6 +52,9 @@ func (nopStore) EditEpic(string, func(string, error) (string, error)) (domain.Ep
 	return domain.Epic{}, false, nil
 }
 func (nopStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) { return nil, nil, nil }
+func (nopStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error) {
+	return nil, nil, nil
+}
 func (nopStore) GetAudit(string) (domain.Audit, string, error) {
 	return domain.Audit{}, "", domain.ErrNotFound
 }
@@ -107,6 +110,17 @@ func (f *fakeStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 }
 func (f *fakeStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 	return f.audits, nil, nil
+}
+
+// ListAuditsWithFindings mirrors the real store: one scan returning each seeded
+// audit alongside the findings parsed from its (slug-keyed) body — the single read
+// Summary's findings rollup now consumes instead of a GetAuditByPath re-read.
+func (f *fakeStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error) {
+	out := make([]AuditWithFindings, 0, len(f.audits))
+	for _, a := range f.audits {
+		out = append(out, AuditWithFindings{Audit: a, Findings: domain.ParseFindings(f.auditBodies[a.Slug])})
+	}
+	return out, nil, nil
 }
 func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 	for _, t := range f.tasks {

@@ -53,9 +53,25 @@ type EpicStore interface {
 	EditEpic(id string, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error)
 }
 
+// AuditWithFindings pairs an audit with the findings parsed from the SAME body
+// read that produced its tally — so a sweep that needs both the audit-level
+// counts and the per-finding rows reads each file once. ListAudits already parses
+// the findings to compute the tally bands and then discards them; this surfaces
+// them instead, in document order.
+type AuditWithFindings struct {
+	Audit    domain.Audit
+	Findings []domain.Finding
+}
+
 // AuditStore is the audit-persistence port.
 type AuditStore interface {
 	ListAudits() ([]domain.Audit, []domain.FileProblem, error)
+	// ListAuditsWithFindings is ListAudits' scan with the parsed findings kept
+	// alongside each audit, so Summary computes the audit tallies AND the findings
+	// rollup from a single read of every body instead of re-reading each one through
+	// GetAuditByPath. Same resilient-read contract: an unreadable file is a
+	// FileProblem, not fatal.
+	ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error)
 	GetAudit(slug string) (audit domain.Audit, body string, err error)
 	// GetAuditByPath reads one audit directly by its file path, deriving the
 	// bucket from the parent directory (the bucket==directory invariant) rather

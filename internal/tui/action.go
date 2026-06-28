@@ -99,7 +99,11 @@ type actionMenu struct {
 // open shows the transition menu for slug from state cur (its current status or
 // bucket), offering the given entity's transition table minus the no-op row.
 func (a *actionMenu) open(slug string, transitions []transition, cur string) {
-	*a = actionMenu{active: true, slug: slug, options: validTransitions(transitions, cur)}
+	opts := validTransitions(transitions, cur)
+	if len(opts) == 0 {
+		return // nothing to offer — don't open an empty menu, so selected() never indexes nil
+	}
+	*a = actionMenu{active: true, slug: slug, options: opts}
 }
 
 // openConfirm jumps straight to the y/n gate for one verb — used when a `:`

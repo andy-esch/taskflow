@@ -10,6 +10,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // sectionRe pulls the `## ` headings out of a scaffold body so the schema's
@@ -68,7 +69,7 @@ func newSchemaCmd(app *App) *cobra.Command {
 // machine output, consistent with `--json` (which the pager gate excludes); only
 // the human `schema` / `schema <kind>` docs page.
 func runJSONSchema(app *App) error {
-	schema, err := render.JSONSchema()
+	schema, err := wire.JSONSchema()
 	if err != nil {
 		return err
 	}

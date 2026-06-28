@@ -1,15 +1,71 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/andy-esch/taskflow/internal/cli/render/json-envelopes",
+  "$id": "https://github.com/andy-esch/taskflow/internal/wire/json-envelopes",
   "$ref": "#/$defs/jsonEnvelopes",
   "$defs": {
+    "AuditJSON": {
+      "properties": {
+        "slug": {
+          "type": "string",
+          "description": "audit identifier (filename without .md)"
+        },
+        "bucket": {
+          "type": "string",
+          "description": "open | closed | deferred — equals the audit's directory"
+        },
+        "area": {
+          "type": "string",
+          "description": "subsystem/topic audited"
+        },
+        "date": {
+          "type": "string",
+          "description": "audit date YYYY-MM-DD"
+        },
+        "findings": {
+          "type": "integer",
+          "description": "total findings parsed from the body"
+        },
+        "open_findings": {
+          "type": "integer",
+          "description": "findings whose status is open"
+        },
+        "in_progress_findings": {
+          "type": "integer",
+          "description": "findings whose status is in-progress"
+        },
+        "done_findings": {
+          "type": "integer",
+          "description": "findings whose status is fixed or landed (the bar's done band)"
+        },
+        "dropped_findings": {
+          "type": "integer",
+          "description": "findings whose status is deferred"
+        },
+        "ready_to_close": {
+          "type": "boolean",
+          "description": "true when an open audit has no open/in-progress findings left (ready to close)"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "bucket",
+        "findings",
+        "open_findings",
+        "in_progress_findings",
+        "done_findings",
+        "dropped_findings"
+      ],
+      "description": "AuditJSON is the wire shape of an audit inside the --json envelopes."
+    },
     "AuditShowEnvelope": {
       "properties": {
         "schema_version": {
           "type": "string"
         },
         "audit": {
-          "$ref": "#/$defs/auditJSON"
+          "$ref": "#/$defs/AuditJSON"
         },
         "body": {
           "type": "string"
@@ -31,7 +87,7 @@
         },
         "audits": {
           "items": {
-            "$ref": "#/$defs/auditJSON"
+            "$ref": "#/$defs/AuditJSON"
           },
           "type": "array"
         },
@@ -49,6 +105,25 @@
         "audits"
       ],
       "description": "AuditsEnvelope is `audit list --json`."
+    },
+    "CountByJSON": {
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "the urgency value or top-level component"
+        },
+        "count": {
+          "type": "integer",
+          "description": "actionable findings in this bucket"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key",
+        "count"
+      ],
+      "description": "CountByJSON is one bucket of a finding breakdown — an urgency value or a top-level component, and its count."
     },
     "CreatedEnvelope": {
       "properties": {
@@ -137,6 +212,97 @@
       ],
       "description": "DoctorProblem is one linkback inconsistency: the offending repo + a message."
     },
+    "EpicJSON": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "epic identifier (NN-slug)"
+        },
+        "status": {
+          "type": "string",
+          "description": "active | retired | deprecated"
+        },
+        "description": {
+          "type": "string",
+          "description": "one-line epic goal"
+        },
+        "priority": {
+          "type": "string",
+          "description": "high | medium | low"
+        },
+        "created": {
+          "type": "string",
+          "description": "creation date YYYY-MM-DD"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "topical tags"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "done": {
+          "type": "integer"
+        },
+        "percent": {
+          "type": "integer"
+        },
+        "deprecated": {
+          "type": "integer",
+          "description": "withdrawn tasks, excluded from total/done"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "total",
+        "done",
+        "percent",
+        "deprecated"
+      ],
+      "description": "EpicJSON is epic list output: the shared meta (embedded, so `epic list` and `epic show` can't drift) plus the task rollup."
+    },
+    "EpicMetaJSON": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "epic identifier (NN-slug)"
+        },
+        "status": {
+          "type": "string",
+          "description": "active | retired | deprecated"
+        },
+        "description": {
+          "type": "string",
+          "description": "one-line epic goal"
+        },
+        "priority": {
+          "type": "string",
+          "description": "high | medium | low"
+        },
+        "created": {
+          "type": "string",
+          "description": "creation date YYYY-MM-DD"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "topical tags"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "description": "EpicMetaJSON is the shared epic meta fields, embedded by EpicJSON (`epic list`) and emitted directly by `epic show` / `epic set`."
+    },
     "EpicMutationEnvelope": {
       "properties": {
         "schema_version": {
@@ -146,7 +312,7 @@
           "type": "boolean"
         },
         "epic": {
-          "$ref": "#/$defs/epicMetaJSON"
+          "$ref": "#/$defs/EpicMetaJSON"
         }
       },
       "additionalProperties": false,
@@ -164,11 +330,11 @@
           "type": "string"
         },
         "epic": {
-          "$ref": "#/$defs/epicMetaJSON"
+          "$ref": "#/$defs/EpicMetaJSON"
         },
         "tasks": {
           "items": {
-            "$ref": "#/$defs/taskJSON"
+            "$ref": "#/$defs/TaskJSON"
           },
           "type": "array"
         },
@@ -193,7 +359,7 @@
         },
         "epics": {
           "items": {
-            "$ref": "#/$defs/epicJSON"
+            "$ref": "#/$defs/EpicJSON"
           },
           "type": "array"
         },
@@ -292,6 +458,56 @@
       ],
       "description": "FileProblem is a non-fatal per-file load problem: the file was skipped, with an actionable message explaining what's wrong and how to fix it."
     },
+    "FindingJSON": {
+      "properties": {
+        "audit": {
+          "type": "string",
+          "description": "slug of the audit this finding belongs to"
+        },
+        "bucket": {
+          "type": "string",
+          "description": "the audit's bucket — open | closed | deferred"
+        },
+        "code": {
+          "type": "string",
+          "description": "finding code within the audit (H1/M2/S3…)"
+        },
+        "title": {
+          "type": "string",
+          "description": "finding title"
+        },
+        "status": {
+          "type": "string",
+          "description": "open | in-progress | fixed | landed | deferred | superseded | wontfix"
+        },
+        "file": {
+          "type": "string",
+          "description": "file:line the finding refers to"
+        },
+        "component": {
+          "type": "string",
+          "description": "component/subsystem"
+        },
+        "effort": {
+          "type": "string",
+          "description": "XS | S | M | L"
+        },
+        "urgency": {
+          "type": "string",
+          "description": "acute | soon | eventually"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "audit",
+        "bucket",
+        "code",
+        "title",
+        "status"
+      ],
+      "description": "FindingJSON is the wire shape of one audit finding."
+    },
     "FindingsEnvelope": {
       "properties": {
         "schema_version": {
@@ -299,7 +515,7 @@
         },
         "findings": {
           "items": {
-            "$ref": "#/$defs/findingJSON"
+            "$ref": "#/$defs/FindingJSON"
           },
           "type": "array"
         },
@@ -317,6 +533,46 @@
         "findings"
       ],
       "description": "FindingsEnvelope is `audit findings --json` (the finding-level query)."
+    },
+    "FindingsRollupJSON": {
+      "properties": {
+        "open": {
+          "type": "integer",
+          "description": "actionable findings with status open"
+        },
+        "in_progress": {
+          "type": "integer",
+          "description": "actionable findings with status in-progress"
+        },
+        "by_urgency": {
+          "items": {
+            "$ref": "#/$defs/CountByJSON"
+          },
+          "type": "array",
+          "description": "breakdown by urgency (acute"
+        },
+        "by_component": {
+          "items": {
+            "$ref": "#/$defs/CountByJSON"
+          },
+          "type": "array",
+          "description": "breakdown by top-level component"
+        },
+        "acute": {
+          "items": {
+            "$ref": "#/$defs/FindingJSON"
+          },
+          "type": "array",
+          "description": "the acute findings"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "open",
+        "in_progress"
+      ],
+      "description": "FindingsRollupJSON aggregates the actionable audit findings (status open or in-progress) across all audits — the `status` summary's \"audit findings\" view."
     },
     "FixEnvelope": {
       "properties": {
@@ -340,7 +596,7 @@
         },
         "remaining": {
           "items": {
-            "$ref": "#/$defs/lintTaskJSON"
+            "$ref": "#/$defs/LintTaskJSON"
           },
           "type": "array"
         }
@@ -450,7 +706,7 @@
         },
         "issues": {
           "items": {
-            "$ref": "#/$defs/lintTaskJSON"
+            "$ref": "#/$defs/LintTaskJSON"
           },
           "type": "array"
         }
@@ -463,6 +719,26 @@
         "issues"
       ],
       "description": "LintEnvelope is `lint --json` and `audit lint --json` (the same per-entity slug+issues shape backs both)."
+    },
+    "LintTaskJSON": {
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/Issue"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "issues"
+      ],
+      "description": "LintTaskJSON is one entity's lint result (slug + field issues), the shape the `lint` / `audit lint` / `fix --remaining` envelopes carry per entity."
     },
     "MoveResult": {
       "properties": {
@@ -674,6 +950,23 @@
       ],
       "description": "SchemaStatus is one task status and whether it is part of the working set."
     },
+    "StatusCountJSON": {
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "status",
+        "count"
+      ],
+      "description": "StatusCountJSON is one status bucket and its task count."
+    },
     "SummaryEnvelope": {
       "properties": {
         "schema_version": {
@@ -681,27 +974,30 @@
         },
         "counts": {
           "items": {
-            "$ref": "#/$defs/statusCountJSON"
+            "$ref": "#/$defs/StatusCountJSON"
           },
           "type": "array"
         },
         "in_progress": {
           "items": {
-            "$ref": "#/$defs/taskJSON"
+            "$ref": "#/$defs/TaskJSON"
           },
           "type": "array"
         },
         "epics": {
           "items": {
-            "$ref": "#/$defs/epicJSON"
+            "$ref": "#/$defs/EpicJSON"
           },
           "type": "array"
         },
         "open_audits": {
           "items": {
-            "$ref": "#/$defs/auditJSON"
+            "$ref": "#/$defs/AuditJSON"
           },
           "type": "array"
+        },
+        "findings": {
+          "$ref": "#/$defs/FindingsRollupJSON"
         },
         "misfiled": {
           "type": "integer"
@@ -728,6 +1024,75 @@
       ],
       "description": "SummaryEnvelope is `status --json`."
     },
+    "TaskJSON": {
+      "properties": {
+        "slug": {
+          "type": "string",
+          "description": "task identifier (filename without .md)"
+        },
+        "status": {
+          "type": "string",
+          "description": "lifecycle status — equals the task's directory under tasks/"
+        },
+        "epic": {
+          "type": "string",
+          "description": "id of the epic this task belongs to"
+        },
+        "description": {
+          "type": "string",
+          "description": "one-line summary (\u003c=200 chars)"
+        },
+        "effort": {
+          "type": "string",
+          "description": "free-form effort estimate"
+        },
+        "tier": {
+          "type": "integer",
+          "description": "importance 1 (highest) to 5 (lowest)"
+        },
+        "priority": {
+          "type": "string",
+          "description": "high | medium | low"
+        },
+        "autonomy_level": {
+          "type": "integer",
+          "description": "how autonomously this can be done 1-5"
+        },
+        "created": {
+          "type": "string",
+          "description": "creation date YYYY-MM-DD"
+        },
+        "updated_at": {
+          "type": "string",
+          "description": "last-modified date YYYY-MM-DD"
+        },
+        "revisit_at": {
+          "type": "string",
+          "description": "snooze-until date YYYY-MM-DD for a deferred task (set by task defer)"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "topical tags"
+        },
+        "misfiled": {
+          "type": "boolean",
+          "description": "Misfiled/Declared surface status≠folder drift to JSON consumers (agents\nare exactly who should detect it); declared_status only when misfiled."
+        },
+        "declared_status": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "status"
+      ],
+      "description": "TaskJSON is the wire shape of a task inside the --json envelopes."
+    },
     "TaskMutationEnvelope": {
       "properties": {
         "schema_version": {
@@ -737,7 +1102,7 @@
           "type": "boolean"
         },
         "task": {
-          "$ref": "#/$defs/taskJSON"
+          "$ref": "#/$defs/TaskJSON"
         },
         "body": {
           "type": "string"
@@ -758,7 +1123,7 @@
           "type": "string"
         },
         "task": {
-          "$ref": "#/$defs/taskJSON"
+          "$ref": "#/$defs/TaskJSON"
         },
         "body": {
           "type": "string"
@@ -780,7 +1145,7 @@
         },
         "tasks": {
           "items": {
-            "$ref": "#/$defs/taskJSON"
+            "$ref": "#/$defs/TaskJSON"
           },
           "type": "array"
         },
@@ -878,194 +1243,6 @@
       ],
       "description": "VersionEnvelope is `version --json`."
     },
-    "auditJSON": {
-      "properties": {
-        "slug": {
-          "type": "string",
-          "description": "audit identifier (filename without .md)"
-        },
-        "bucket": {
-          "type": "string",
-          "description": "open | closed | deferred — equals the audit's directory"
-        },
-        "area": {
-          "type": "string",
-          "description": "subsystem/topic audited"
-        },
-        "date": {
-          "type": "string",
-          "description": "audit date YYYY-MM-DD"
-        },
-        "findings": {
-          "type": "integer",
-          "description": "total findings parsed from the body"
-        },
-        "open_findings": {
-          "type": "integer",
-          "description": "findings whose status is open"
-        },
-        "in_progress_findings": {
-          "type": "integer",
-          "description": "findings whose status is in-progress"
-        },
-        "done_findings": {
-          "type": "integer",
-          "description": "findings whose status is fixed or landed (the bar's done band)"
-        },
-        "dropped_findings": {
-          "type": "integer",
-          "description": "findings whose status is deferred"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "slug",
-        "bucket",
-        "findings",
-        "open_findings",
-        "in_progress_findings",
-        "done_findings",
-        "dropped_findings"
-      ]
-    },
-    "epicJSON": {
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "epic identifier (NN-slug)"
-        },
-        "status": {
-          "type": "string",
-          "description": "active | retired | deprecated"
-        },
-        "description": {
-          "type": "string",
-          "description": "one-line epic goal"
-        },
-        "priority": {
-          "type": "string",
-          "description": "high | medium | low"
-        },
-        "created": {
-          "type": "string",
-          "description": "creation date YYYY-MM-DD"
-        },
-        "tags": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array",
-          "description": "topical tags"
-        },
-        "total": {
-          "type": "integer"
-        },
-        "done": {
-          "type": "integer"
-        },
-        "percent": {
-          "type": "integer"
-        },
-        "deprecated": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "id",
-        "total",
-        "done",
-        "percent",
-        "deprecated"
-      ]
-    },
-    "epicMetaJSON": {
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "epic identifier (NN-slug)"
-        },
-        "status": {
-          "type": "string",
-          "description": "active | retired | deprecated"
-        },
-        "description": {
-          "type": "string",
-          "description": "one-line epic goal"
-        },
-        "priority": {
-          "type": "string",
-          "description": "high | medium | low"
-        },
-        "created": {
-          "type": "string",
-          "description": "creation date YYYY-MM-DD"
-        },
-        "tags": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array",
-          "description": "topical tags"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "id"
-      ]
-    },
-    "findingJSON": {
-      "properties": {
-        "audit": {
-          "type": "string",
-          "description": "slug of the audit this finding belongs to"
-        },
-        "bucket": {
-          "type": "string",
-          "description": "the audit's bucket — open | closed | deferred"
-        },
-        "code": {
-          "type": "string",
-          "description": "finding code within the audit (H1/M2/S3…)"
-        },
-        "title": {
-          "type": "string",
-          "description": "finding title"
-        },
-        "status": {
-          "type": "string",
-          "description": "open | in-progress | fixed | landed | deferred | superseded | wontfix"
-        },
-        "file": {
-          "type": "string",
-          "description": "file:line the finding refers to"
-        },
-        "component": {
-          "type": "string",
-          "description": "component/subsystem"
-        },
-        "effort": {
-          "type": "string",
-          "description": "XS | S | M | L"
-        },
-        "urgency": {
-          "type": "string",
-          "description": "acute | soon | eventually"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "audit",
-        "bucket",
-        "code",
-        "title",
-        "status"
-      ]
-    },
     "jsonEnvelopes": {
       "properties": {
         "tasks": {
@@ -1161,110 +1338,8 @@
         "template_show",
         "error"
       ]
-    },
-    "lintTaskJSON": {
-      "properties": {
-        "slug": {
-          "type": "string"
-        },
-        "issues": {
-          "items": {
-            "$ref": "#/$defs/Issue"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "slug",
-        "issues"
-      ]
-    },
-    "statusCountJSON": {
-      "properties": {
-        "status": {
-          "type": "string"
-        },
-        "count": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "status",
-        "count"
-      ]
-    },
-    "taskJSON": {
-      "properties": {
-        "slug": {
-          "type": "string",
-          "description": "task identifier (filename without .md)"
-        },
-        "status": {
-          "type": "string",
-          "description": "lifecycle status — equals the task's directory under tasks/"
-        },
-        "epic": {
-          "type": "string",
-          "description": "id of the epic this task belongs to"
-        },
-        "description": {
-          "type": "string",
-          "description": "one-line summary (\u003c=200 chars)"
-        },
-        "effort": {
-          "type": "string",
-          "description": "free-form effort estimate"
-        },
-        "tier": {
-          "type": "integer",
-          "description": "importance 1 (highest) to 5 (lowest)"
-        },
-        "priority": {
-          "type": "string",
-          "description": "high | medium | low"
-        },
-        "autonomy_level": {
-          "type": "integer",
-          "description": "how autonomously this can be done 1-5"
-        },
-        "created": {
-          "type": "string",
-          "description": "creation date YYYY-MM-DD"
-        },
-        "updated_at": {
-          "type": "string",
-          "description": "last-modified date YYYY-MM-DD"
-        },
-        "revisit_at": {
-          "type": "string",
-          "description": "snooze-until date YYYY-MM-DD for a deferred task (set by task defer)"
-        },
-        "tags": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array",
-          "description": "topical tags"
-        },
-        "misfiled": {
-          "type": "boolean"
-        },
-        "declared_status": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "slug",
-        "status"
-      ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.16)",
+  "title": "tskflwctl --json output (schema_version 1.17)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

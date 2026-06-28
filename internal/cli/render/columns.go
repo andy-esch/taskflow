@@ -200,7 +200,7 @@ func ProjectedListJSON[T any](w io.Writer, listKey string, cols []Column[T], ite
 	if err != nil {
 		return err
 	}
-	b = append(b, '\n') // match encodeJSON's single trailing newline
+	b = append(b, '\n') // match wire.EncodeJSON's single trailing newline
 	_, err = w.Write(b)
 	return err
 }

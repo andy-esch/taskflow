@@ -1,15 +1,18 @@
-package render
+package wire
 
 import (
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// This file holds the unexported JSON DTOs and their mappers — the wire shape of
-// each entity inside the --json envelopes (envelopes.go). Each *JSON render func
-// maps domain types into these and marshals an envelope that embeds them; keeping
-// the DTOs + mappers here keeps render.go to the generic + list/show renderers.
+// This file holds the JSON DTOs and their mappers — the wire shape of each entity
+// inside the --json envelopes (envelopes.go). Each ToXEnvelope constructor maps
+// domain types into these and returns an envelope that embeds them; keeping the
+// DTOs + mappers here lets both the CLI's emit funcs and a web adapter project the
+// same shape.
 
-type taskJSON struct {
+// TaskJSON is the wire shape of a task inside the --json envelopes.
+type TaskJSON struct {
 	Slug   string `json:"slug" jsonschema:"description=task identifier (filename without .md)"`
 	Status string `json:"status" jsonschema:"description=lifecycle status — equals the task's directory under tasks/"`
 	Epic   string `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
@@ -31,8 +34,9 @@ type taskJSON struct {
 	Declared string `json:"declared_status,omitempty"`
 }
 
-func toJSON(t domain.Task) taskJSON {
-	j := taskJSON{
+// ToTaskJSON maps a domain task to its wire DTO.
+func ToTaskJSON(t domain.Task) TaskJSON {
+	j := TaskJSON{
 		Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
 		Description: t.Description, Effort: t.Effort, Tier: t.Tier,
 		Priority: t.Priority, Autonomy: t.Autonomy,
@@ -45,22 +49,32 @@ func toJSON(t domain.Task) taskJSON {
 	return j
 }
 
-type statusCountJSON struct {
+// StatusCountJSON is one status bucket and its task count.
+type StatusCountJSON struct {
 	Status string `json:"status"`
 	Count  int    `json:"count"`
 }
 
-// epicJSON is epic list output: the shared meta (embedded, so `epic list` and
+// EpicJSON is epic list output: the shared meta (embedded, so `epic list` and
 // `epic show` can't drift) plus the task rollup.
-type epicJSON struct {
-	epicMetaJSON
+type EpicJSON struct {
+	EpicMetaJSON
 	Total      int `json:"total"`
 	Done       int `json:"done"`
 	Percent    int `json:"percent"`
 	Deprecated int `json:"deprecated"` // withdrawn tasks, excluded from total/done
 }
 
-type auditJSON struct {
+// ToEpicJSON maps a core epic summary to the epic list/rollup DTO.
+func ToEpicJSON(e core.EpicSummary) EpicJSON {
+	return EpicJSON{
+		EpicMetaJSON: ToEpicMeta(e.Epic),
+		Total:        e.Total, Done: e.Done, Percent: e.Percent(), Deprecated: e.Deprecated,
+	}
+}
+
+// AuditJSON is the wire shape of an audit inside the --json envelopes.
+type AuditJSON struct {
 	Slug         string `json:"slug" jsonschema:"description=audit identifier (filename without .md)"`
 	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — equals the audit's directory"`
 	Area         string `json:"area,omitempty" jsonschema:"description=subsystem/topic audited"`
@@ -72,17 +86,23 @@ type auditJSON struct {
 	InProgressFindings int `json:"in_progress_findings" jsonschema:"description=findings whose status is in-progress"`
 	DoneFindings       int `json:"done_findings" jsonschema:"description=findings whose status is fixed or landed (the bar's done band)"`
 	DroppedFindings    int `json:"dropped_findings" jsonschema:"description=findings whose status is deferred, superseded, or wontfix"`
+	// ReadyToClose is true for an OPEN audit whose findings are all resolved/dropped
+	// (none open or in-progress) — a "ready to close" call-to-action.
+	ReadyToClose bool `json:"ready_to_close,omitempty" jsonschema:"description=true when an open audit has no open/in-progress findings left (ready to close)"`
 }
 
-func auditToJSON(a domain.Audit) auditJSON {
-	return auditJSON{
+// ToAuditJSON maps a domain audit to its wire DTO.
+func ToAuditJSON(a domain.Audit) AuditJSON {
+	return AuditJSON{
 		Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date,
 		Findings: a.Findings, OpenFindings: a.OpenFindings,
 		InProgressFindings: a.ActiveFindings, DoneFindings: a.DoneFindings, DroppedFindings: a.DroppedFindings,
+		ReadyToClose: a.Bucket == domain.AuditOpen && a.Settled(),
 	}
 }
 
-type findingJSON struct {
+// FindingJSON is the wire shape of one audit finding.
+type FindingJSON struct {
 	Audit     string `json:"audit" jsonschema:"description=slug of the audit this finding belongs to"`
 	Bucket    string `json:"bucket" jsonschema:"description=the audit's bucket — open | closed | deferred"`
 	Code      string `json:"code" jsonschema:"description=finding code within the audit (H1/M2/S3…)"`
@@ -94,12 +114,56 @@ type findingJSON struct {
 	Urgency   string `json:"urgency,omitempty" jsonschema:"description=acute | soon | eventually"`
 }
 
-type lintTaskJSON struct {
+// ToFindingJSON maps a core audit finding to its wire DTO.
+func ToFindingJSON(f core.AuditFinding) FindingJSON {
+	return FindingJSON{
+		Audit: f.Audit, Bucket: f.Bucket, Code: f.Code, Title: f.Title, Status: f.Status,
+		File: f.File, Component: f.Component, Effort: f.Effort, Urgency: f.Urgency,
+	}
+}
+
+// CountByJSON is one bucket of a finding breakdown — an urgency value or a
+// top-level component, and its count.
+type CountByJSON struct {
+	Key   string `json:"key" jsonschema:"description=the urgency value or top-level component"`
+	Count int    `json:"count" jsonschema:"description=actionable findings in this bucket"`
+}
+
+// FindingsRollupJSON aggregates the actionable audit findings (status open or
+// in-progress) across all audits — the `status` summary's "audit findings" view.
+type FindingsRollupJSON struct {
+	Open        int           `json:"open" jsonschema:"description=actionable findings with status open"`
+	InProgress  int           `json:"in_progress" jsonschema:"description=actionable findings with status in-progress"`
+	ByUrgency   []CountByJSON `json:"by_urgency,omitempty" jsonschema:"description=breakdown by urgency (acute, soon, eventually first)"`
+	ByComponent []CountByJSON `json:"by_component,omitempty" jsonschema:"description=breakdown by top-level component, most findings first"`
+	Acute       []FindingJSON `json:"acute,omitempty" jsonschema:"description=the acute findings, listed for a call-out"`
+}
+
+// ToFindingsRollup maps a core findings rollup to its wire DTO.
+func ToFindingsRollup(r core.FindingsRollup) FindingsRollupJSON {
+	out := FindingsRollupJSON{Open: r.Open, InProgress: r.InProgress}
+	for _, c := range r.ByUrgency {
+		out.ByUrgency = append(out.ByUrgency, CountByJSON{Key: c.Key, Count: c.Count})
+	}
+	for _, c := range r.ByComponent {
+		out.ByComponent = append(out.ByComponent, CountByJSON{Key: c.Key, Count: c.Count})
+	}
+	for _, f := range r.Acute {
+		out.Acute = append(out.Acute, ToFindingJSON(f))
+	}
+	return out
+}
+
+// LintTaskJSON is one entity's lint result (slug + field issues), the shape the
+// `lint` / `audit lint` / `fix --remaining` envelopes carry per entity.
+type LintTaskJSON struct {
 	Slug   string         `json:"slug"`
 	Issues []domain.Issue `json:"issues"`
 }
 
-type epicMetaJSON struct {
+// EpicMetaJSON is the shared epic meta fields, embedded by EpicJSON (`epic list`)
+// and emitted directly by `epic show` / `epic set`.
+type EpicMetaJSON struct {
 	ID          string   `json:"id" jsonschema:"description=epic identifier (NN-slug)"`
 	Status      string   `json:"status,omitempty" jsonschema:"description=active | retired | deprecated"`
 	Description string   `json:"description,omitempty" jsonschema:"description=one-line epic goal"`
@@ -108,10 +172,10 @@ type epicMetaJSON struct {
 	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
 }
 
-// toEpicMeta is the one place epic meta fields are mapped to JSON, shared by
-// `epic list` (embedded in epicJSON) and `epic show`.
-func toEpicMeta(e domain.Epic) epicMetaJSON {
-	return epicMetaJSON{
+// ToEpicMeta is the one place epic meta fields are mapped to JSON, shared by
+// `epic list` (embedded in EpicJSON) and `epic show`.
+func ToEpicMeta(e domain.Epic) EpicMetaJSON {
+	return EpicMetaJSON{
 		ID: e.ID, Status: e.Status, Description: e.Description,
 		Priority: e.Priority, Created: e.Created, Tags: e.Tags,
 	}

@@ -1,4 +1,4 @@
-package render
+package wire
 
 import (
 	"encoding/json"
@@ -9,9 +9,9 @@ import (
 )
 
 // TestJSONSchema_HasFieldDescriptions guards the field-description feature against
-// silently going inert (invopop's AddGoComments skips unexported projection types,
-// so descriptions come from jsonschema struct tags — if those are dropped the
-// schema reverts to no field descriptions and nothing else would catch it).
+// silently going inert (descriptions on the projection DTOs come from jsonschema
+// struct tags — if those are dropped the schema reverts to no field descriptions
+// and nothing else would catch it).
 func TestJSONSchema_HasFieldDescriptions(t *testing.T) {
 	b, err := JSONSchema()
 	if err != nil {
@@ -29,9 +29,9 @@ func TestJSONSchema_HasFieldDescriptions(t *testing.T) {
 	}
 	// The entity projections agents validate against must carry per-field descriptions.
 	want := map[string][]string{
-		"taskJSON":    {"slug", "status", "tier"},
-		"findingJSON": {"code", "status", "effort"},
-		"auditJSON":   {"bucket", "open_findings"},
+		"TaskJSON":    {"slug", "status", "tier"},
+		"FindingJSON": {"code", "status", "effort"},
+		"AuditJSON":   {"bucket", "open_findings"},
 	}
 	for def, fields := range want {
 		props := doc.Defs[def].Properties
@@ -44,7 +44,7 @@ func TestJSONSchema_HasFieldDescriptions(t *testing.T) {
 }
 
 // TestEpicStatusDescriptionMatchesVocab guards the one epic-status description that
-// can't be derived: epicMetaJSON.Status's `jsonschema:"description=…"` struct TAG
+// can't be derived: EpicMetaJSON.Status's `jsonschema:"description=…"` struct TAG
 // (dto.go) is a compile-time literal, so a future epic-vocab change would silently
 // leave it stale. Pin it to domain.AllEpicStatuses() so the drift fails loudly here.
 func TestEpicStatusDescriptionMatchesVocab(t *testing.T) {
@@ -62,13 +62,13 @@ func TestEpicStatusDescriptionMatchesVocab(t *testing.T) {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
-	desc := doc.Defs["epicMetaJSON"].Properties["status"].Description
+	desc := doc.Defs["EpicMetaJSON"].Properties["status"].Description
 	if desc == "" {
-		t.Fatal("epicMetaJSON.status should carry a description tag")
+		t.Fatal("EpicMetaJSON.status should carry a description tag")
 	}
 	for _, s := range domain.AllEpicStatuses() {
 		if !strings.Contains(desc, s) {
-			t.Errorf("epicMetaJSON.status description %q is missing epic status %q "+
+			t.Errorf("EpicMetaJSON.status description %q is missing epic status %q "+
 				"(dto.go's jsonschema tag drifted from domain.AllEpicStatuses())", desc, s)
 		}
 	}

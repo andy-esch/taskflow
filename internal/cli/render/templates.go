@@ -4,20 +4,19 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // TemplateInfo is one body template's listable metadata (kind/name/description),
-// populated by the cli for `template list`/`show`. The rendered body is carried
-// separately (TemplateShow*), since the list view never needs it.
-type TemplateInfo struct {
-	Kind        string `json:"kind"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
+// populated by the cli for `template list`/`show`. The wire type, re-exported so
+// the CLI keeps building it through the render package; the rendered body is
+// carried separately (TemplateShow*), since the list view never needs it.
+type TemplateInfo = wire.TemplateInfo
 
 // TemplatesJSON writes the `template list --json` envelope.
 func TemplatesJSON(w io.Writer, ts []TemplateInfo) error {
-	return encodeJSON(w, TemplatesEnvelope{SchemaVersion: SchemaVersion, Templates: ts})
+	return wire.EncodeJSON(w, wire.ToTemplatesEnvelope(ts))
 }
 
 // TemplatesHuman renders the template list as a kind / name / description table.
@@ -33,7 +32,7 @@ func TemplatesHuman(w io.Writer, st Style, ts []TemplateInfo) {
 
 // TemplateShowJSON writes the `template show --json` envelope.
 func TemplateShowJSON(w io.Writer, info TemplateInfo, body string) error {
-	return encodeJSON(w, TemplateShowEnvelope{SchemaVersion: SchemaVersion, Template: info, Body: body})
+	return wire.EncodeJSON(w, wire.ToTemplateShowEnvelope(info, body))
 }
 
 // TemplateShowHuman renders a single template: a header line then its body.

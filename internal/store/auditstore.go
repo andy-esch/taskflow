@@ -8,6 +8,7 @@ import (
 
 	yaml "go.yaml.in/yaml/v3"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -28,6 +29,28 @@ func (s *FS) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 		problems = append(problems, ps...)
 	}
 	return audits, problems, nil
+}
+
+// ListAuditsWithFindings is ListAudits' scan that also keeps the findings parsed
+// from each body (the same ParseFindings parseAudit already runs for the tally),
+// so Summary reads each audit once for both the tally and the findings rollup
+// instead of re-reading every body through GetAuditByPath.
+func (s *FS) ListAuditsWithFindings() ([]core.AuditWithFindings, []domain.FileProblem, error) {
+	var out []core.AuditWithFindings
+	var problems []domain.FileProblem
+	for _, bucket := range domain.AllAuditBuckets() {
+		dir := filepath.Join(s.auditsDir, bucket.Dir())
+		as, ps, err := scanDir(dir, func(path string, content []byte) (core.AuditWithFindings, error) {
+			a, findings, err := parseAuditWithFindings(content, path, bucket)
+			return core.AuditWithFindings{Audit: a, Findings: findings}, err
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		out = append(out, as...)
+		problems = append(problems, ps...)
+	}
+	return out, problems, nil
 }
 
 // GetAudit returns one audit plus its markdown body.
@@ -178,14 +201,23 @@ func (s *FS) resolveAudit(slug string) (path string, bucket domain.AuditBucket, 
 }
 
 func parseAudit(content []byte, path string, bucket domain.AuditBucket) (domain.Audit, error) {
+	a, _, err := parseAuditWithFindings(content, path, bucket)
+	return a, err
+}
+
+// parseAuditWithFindings parses an audit AND returns the findings it parsed to
+// compute the tally — so a sweep that needs both (Summary's findings rollup)
+// reuses the single ParseFindings call instead of re-reading the body. parseAudit
+// is the body-only wrapper for callers that just want the audit + its tally.
+func parseAuditWithFindings(content []byte, path string, bucket domain.AuditBucket) (domain.Audit, []domain.Finding, error) {
 	fm, body, err := splitFrontmatterStrict(content)
 	if err != nil {
-		return domain.Audit{}, err
+		return domain.Audit{}, nil, err
 	}
 	var a domain.Audit
 	if len(fm) > 0 {
 		if err := yaml.Unmarshal(fm, &a); err != nil {
-			return domain.Audit{}, fmt.Errorf("%w: %s", errBadFrontmatter, frontmatterError(fm, err))
+			return domain.Audit{}, nil, fmt.Errorf("%w: %s", errBadFrontmatter, frontmatterError(fm, err))
 		}
 	}
 	a.Slug = strings.TrimSuffix(filepath.Base(path), ".md")
@@ -200,5 +232,5 @@ func parseAudit(content []byte, path string, bucket domain.AuditBucket) (domain.
 	a.ActiveFindings = tally.Active
 	a.DoneFindings = tally.Done
 	a.DroppedFindings = tally.Dropped
-	return a, nil
+	return a, findings, nil
 }

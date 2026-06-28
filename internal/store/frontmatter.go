@@ -182,12 +182,22 @@ func documentMapping(doc *yaml.Node) (*yaml.Node, error) {
 
 // setMapNode replaces key's value node in place (preserving position) or
 // appends the key. Replacing the whole node lets a scalar become a list, etc.;
-// any comments attached to the old value node are carried onto the new one.
+// comments attached to the old value node are PRESERVED onto the new one — but
+// only where the new node doesn't already carry its own, so an intentional
+// comment on the replacement isn't clobbered.
 func setMapNode(mapping *yaml.Node, key string, val *yaml.Node) {
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
 		if mapping.Content[i].Value == key {
 			old := mapping.Content[i+1]
-			val.HeadComment, val.LineComment, val.FootComment = old.HeadComment, old.LineComment, old.FootComment
+			if val.HeadComment == "" {
+				val.HeadComment = old.HeadComment
+			}
+			if val.LineComment == "" {
+				val.LineComment = old.LineComment
+			}
+			if val.FootComment == "" {
+				val.FootComment = old.FootComment
+			}
 			mapping.Content[i+1] = val
 			return
 		}

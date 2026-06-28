@@ -3,7 +3,6 @@ package tui
 import (
 	"strconv"
 	"strings"
-	"time"
 
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
@@ -149,6 +148,9 @@ func (e *editMenu) openEpic(ep domain.Epic) {
 // newEditMenu builds the form shell (the shared text widgets) for an entity's
 // slug + field set + submit route.
 func newEditMenu(slug string, fields []editField, apply fieldSetter) editMenu {
+	if len(fields) == 0 {
+		return editMenu{} // an empty field set must not open a form, so cur() never indexes nil
+	}
 	ti := textinput.New()
 	ti.CharLimit = 256
 	ti.SetWidth(36)
@@ -315,7 +317,7 @@ func (m *Model) submitEdit() tea.Cmd {
 	// relative offset (2w/10d) — so editing a snooze matches setting one; blank
 	// clears it (back to indefinite). Everything else submits verbatim.
 	if key == "revisit_at" {
-		parsed, err := domain.ParseRevisitDate(val, time.Now())
+		parsed, err := domain.ParseRevisitDate(val, m.svc.Now())
 		if err != nil {
 			m.edit.err = err.Error() // keep what was typed, show the parse error in place
 			return nil

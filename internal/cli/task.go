@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -494,7 +493,7 @@ func newDeferCmd(app *App) *cobra.Command {
 			}
 			// After the task is chosen, offer a revisit date on a TTY (no-op off a
 			// TTY or when --until was given), so the same value drives every slug.
-			revisit, err := app.fillRevisitDate(changed, until, time.Now())
+			revisit, err := app.fillRevisitDate(changed, until, app.Svc.Now())
 			if err != nil {
 				return err
 			}
