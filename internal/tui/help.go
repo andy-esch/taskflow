@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/lipgloss/v2"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -18,44 +19,52 @@ type helpSection struct {
 	entries []helpEntry
 }
 
-// helpSections is the single source of truth for the `?` overlay. Keep it in sync
-// with keys.go and the focus-routed handlers in model.go.
+// he turns a keyMap binding into a help row, sourcing BOTH the displayed key and the
+// description from the binding's key.WithHelp — so the `?` overlay can't drift from
+// keys.go (the single source).
+func he(b key.Binding) helpEntry { return helpEntry{b.Help().Key, b.Help().Desc} }
+
+// helpSections derives the `?` overlay's keybinding rows from the keyMap (keys.go).
+// The only literal rows are keys with NO keyMap binding: the list/viewport's own
+// j/k + paging, and the list's `/` filter (keys.Find is the DETAIL find). The
+// focus-routed handlers in model.go still match the bindings; only the displayed
+// vocabulary now follows keys.go automatically.
 var helpSections = []helpSection{
 	{"Global", []helpEntry{
-		{"ctrl+p", "command palette — fuzzy jump to anything / run a command"},
-		{": ", "command / jump (entity, status, or verb)"},
-		{"/", "filter the list (slug, desc, tags)"},
-		{"F", "filter mode: fuzzy ⇄ substring (default fuzzy)"},
-		{"o / O", "cycle sort column / reverse"},
-		{"s / S", "cycle view: task status / audit bucket"},
-		{"m", "move — lifecycle (start/complete/defer/…); audits: close/reopen/defer; epics: activate/retire/deprecate"},
-		{"e", "edit fields in place — tasks: desc/priority/tags/effort/tier (+revisit when deferred) · epics: desc/priority/tags"},
-		{"E", "open the whole file in $EDITOR (any entity; re-read on save)"},
-		{"f", "follow reference (task ⇄ epic)"},
-		{"ctrl+o", "jump back (follow history)"},
-		{"y / Y", "copy slug / file path to clipboard"},
-		{"[ / ]", "previous / next tab"},
-		{"tab", "switch focus (list ⇄ detail)"},
-		{"z", "full-screen the detail pane (z/esc to exit)"},
-		{"r", "refresh from disk"},
-		{"? / esc", "toggle this help"},
-		{"q / ctrl+c", "quit / force-quit"},
+		he(keys.Palette),
+		he(keys.Command),
+		{"/", "filter the list (slug, desc, tags)"}, // the list's own filter (no keyMap binding)
+		he(keys.FilterMode),
+		he(keys.Sort), he(keys.SortRev),
+		he(keys.StatusView), he(keys.StatusRev),
+		he(keys.Action),
+		he(keys.Edit),
+		he(keys.OpenEditor),
+		he(keys.Follow),
+		he(keys.JumpBack),
+		he(keys.Yank), he(keys.YankPath),
+		he(keys.PrevTab), he(keys.NextTab),
+		he(keys.ToggleFocus),
+		he(keys.Zoom),
+		he(keys.Refresh),
+		he(keys.Help),
+		he(keys.Quit), he(keys.ForceQuit),
 	}},
 	{"List", []helpEntry{
 		{"j / k", "move down / up"},
 		{"g / G", "top / bottom"},
 		{"d / u", "page down / up (pgdn/pgup)"},
-		{"enter / l", "open detail"},
-		{"h", "back"},
+		he(keys.Right),
+		he(keys.Left),
 	}},
 	{"Detail", []helpEntry{
 		{"j / k", "scroll down / up"},
 		{"ctrl+d / u", "half-page down / up"},
-		{"g / G", "top / bottom"},
-		{"/", "find in body"},
-		{"n / N", "next / previous match"},
-		{"R", "raw ⇄ pretty markdown"},
-		{"h / esc", "back to list (esc clears a find first)"},
+		he(keys.Top), he(keys.Bottom),
+		he(keys.Find),
+		he(keys.FindNext), he(keys.FindPrev),
+		he(keys.RawToggle),
+		he(keys.Back),
 	}},
 }
 

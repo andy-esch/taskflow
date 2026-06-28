@@ -1550,6 +1550,27 @@ func (m Model) tabStrip() string {
 	return truncate(strings.Join(parts, dim("  ·  ")), m.width)
 }
 
+// keyHint renders a footer token "<key> <label>", the key sourced from its binding so
+// a rebind in keys.go reaches the footer too (the other place the key vocabulary is
+// shown). keyCombo does the same for a two-key pair ("[ ] tabs", "n/N match").
+func keyHint(b key.Binding, label string) string { return b.Help().Key + " " + label }
+func keyCombo(a, b key.Binding, sep, label string) string {
+	return a.Help().Key + sep + b.Help().Key + " " + label
+}
+
+// detailFooterBody is the footer fragment shared by every detail-pane footer (focused,
+// full-screen, single-pane drill), so the three variants compose it rather than each
+// repeating it.
+func detailFooterBody() string {
+	return strings.Join([]string{
+		keyHint(keys.Find, "find"),
+		keyCombo(keys.FindNext, keys.FindPrev, "/", "match"),
+		keyHint(keys.RawToggle, "raw/pretty"),
+		"j/k scroll", // viewport keys — no keyMap binding
+		keyCombo(keys.Top, keys.Bottom, "/", "top/bottom"),
+	}, " · ")
+}
+
 func (m Model) footer() string {
 	if m.cmd.active {
 		// Surface the matching commands inline so `:` is self-documenting: the full
@@ -1574,24 +1595,51 @@ func (m Model) footer() string {
 	// to match the tab footers below. A failed refresh is flagged here (the rows
 	// shown are the last good load), mirroring the tab "reload failed" note.
 	if m.onDash {
-		hint := "↑↓ move · ⏎ open · [ ] tabs · : cmd · r refresh · ? help · q quit"
+		line := strings.Join([]string{
+			"↑↓ move", "⏎ open",
+			keyCombo(keys.PrevTab, keys.NextTab, " ", "tabs"),
+			keyHint(keys.Command, "cmd"),
+			keyHint(keys.Refresh, "refresh"),
+			keyHint(keys.Help, "help"),
+			keyHint(keys.Quit, "quit"),
+		}, " · ")
 		if m.dash.loaded && m.dash.loadErr != nil {
-			hint = "⚠ refresh failed · " + hint
+			line = "⚠ refresh failed · " + line
 		}
-		return dim(truncate(hint, m.width))
+		return dim(truncate(line, m.width))
 	}
-	hints := ": cmd · / filter · m move · e edit · E editor · s view · [ ] tabs · l/⏎ detail · z full · ? help · q quit"
+	hints := strings.Join([]string{
+		keyHint(keys.Command, "cmd"),
+		"/ filter", // the list's own filter (no keyMap binding)
+		keyHint(keys.Action, "move"),
+		keyHint(keys.Edit, "edit"),
+		keyHint(keys.OpenEditor, "editor"),
+		keyHint(keys.StatusView, "view"),
+		keyCombo(keys.PrevTab, keys.NextTab, " ", "tabs"),
+		keyHint(keys.Right, "detail"),
+		keyHint(keys.Zoom, "full"),
+		keyHint(keys.Help, "help"),
+		keyHint(keys.Quit, "quit"),
+	}, " · ")
 	if m.focus == focusDetail {
-		hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · z full · h/esc back"
+		hints = strings.Join([]string{
+			keyHint(keys.Command, "cmd"), detailFooterBody(), keyHint(keys.Zoom, "full"),
+			keyCombo(keys.Left, keys.Back, "/", "back"),
+		}, " · ")
 		switch {
 		case m.zoom:
 			// Full-screen: the list is hidden, so name the way out and drop the keys
 			// (m/e/s/tabs) that only make sense beside the list.
-			hints = "full-screen · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · z/esc exit"
+			hints = strings.Join([]string{
+				"full-screen", detailFooterBody(), keys.Zoom.Help().Key + "/esc exit",
+			}, " · ")
 		case !m.twoPane:
 			// Single-pane drill: q pops back to the list (context quit), so the
 			// hint must not promise it exits the app.
-			hints = ": cmd · / find · n/N match · R raw/pretty · j/k scroll · g/G top/bottom · h/esc/q back"
+			hints = strings.Join([]string{
+				keyHint(keys.Command, "cmd"), detailFooterBody(),
+				keys.Left.Help().Key + "/" + keys.Back.Help().Key + "/" + keys.Quit.Help().Key + " back",
+			}, " · ")
 		}
 	}
 	if n := len(m.navStack); n > 0 {
