@@ -76,8 +76,9 @@ func newTaskCmd(app *App) *cobra.Command {
 		}
 		if tr.Verb == "defer" {
 			// defer has its own builder: it mirrors newTransitionCmd but adds the
-			// optional --until snooze date (revisit_at), so the move and the field-set
-			// share one verb. (M4 follow-up: unify it through the registry's param spec.)
+			// optional --until snooze date, which the core records atomically with the
+			// move (one store write — audit M4). (Remaining M4 follow-up: model the
+			// extra param on the transition registry so this isn't a bespoke builder.)
 			cmd.AddCommand(newDeferCmd(app))
 			continue
 		}
@@ -487,7 +488,7 @@ func runTransition(app *App, to domain.Status, slugs []string) error {
 // deferring interactively is offered a snooze without remembering the flag; blank
 // skips it (park indefinitely), and off a TTY there's no prompt — exactly the old
 // agent `task defer`. The date is validated up front (a bad --until errors before
-// anything moves) and written through the same SetFields path `task set` uses.
+// anything moves) and recorded in the SAME atomic write as the move (audit M4).
 func newDeferCmd(app *App) *cobra.Command {
 	var until string
 	to := domain.StatusDeferred

@@ -87,7 +87,7 @@ type StatusCount struct {
 type Summary struct {
 	Counts     []StatusCount        // every status in display order (count may be 0)
 	InProgress []domain.Task        // the in-progress working set
-	Epics      []EpicSummary        // epic rollups
+	Epics      []EpicSummary        // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
 	OpenAudits []domain.Audit       // audits still in the open bucket (actionable work)
 	Findings   FindingsRollup       // actionable audit findings (open/in-progress) aggregated by urgency + component
 	Misfiled   int                  // tasks whose status disagrees with their folder
@@ -158,7 +158,11 @@ func (s *Service) Summary() (Summary, error) {
 	return Summary{
 		Counts:     ordered,
 		InProgress: inProgress,
-		Epics:      rollupEpics(epics, tasks),
+		// Recency-ordered HERE so the dashboard's "what moved lately" lens is a
+		// property of the aggregate, not re-sorted per surface — the CLI `status`
+		// and the TUI dashboard then agree by construction (audit M2). The entity
+		// list / `epic list` keep their own store order via rollupEpics directly.
+		Epics:      epicsByRecent(rollupEpics(epics, tasks)),
 		OpenAudits: openAudits,
 		Findings:   rollupFindings(actionable),
 		Misfiled:   misfiled,

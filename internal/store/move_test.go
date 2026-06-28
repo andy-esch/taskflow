@@ -109,6 +109,80 @@ func TestFS_Move_RevisitAt(t *testing.T) {
 	}
 }
 
+// TestFS_Defer pins the audit-M4 atomic defer: a SINGLE Defer call relocates the
+// task into deferred/ AND stamps revisit_at + deferred_at in one write (no
+// Move-then-SetFields window), and a re-defer rewrites revisit_at in place.
+func TestFS_Defer(t *testing.T) {
+	root := t.TempDir()
+	writeTask(t, root, "ready-to-start", "alpha.md", "---\nstatus: ready-to-start\nepic: 01-x\n---\n# Alpha\n")
+	now := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+	fs := NewFS(root)
+	read := func(status, name string) string {
+		b, err := os.ReadFile(filepath.Join(root, "tasks", status, name))
+		if err != nil {
+			t.Fatalf("read %s/%s: %v", status, name, err)
+		}
+		return string(b)
+	}
+
+	task, err := fs.Defer("alpha", "2026-09-01", now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.Status != domain.StatusDeferred || task.RevisitAt != "2026-09-01" {
+		t.Errorf("deferred task = (status %q, revisit %q), want (deferred, 2026-09-01)", task.Status, task.RevisitAt)
+	}
+	// Old file gone; new file in deferred/ carries BOTH the snooze date and the
+	// deferred_at stamp — written together, so the two can't land separately.
+	if _, err := os.Stat(filepath.Join(root, "tasks", "ready-to-start", "alpha.md")); !os.IsNotExist(err) {
+		t.Error("old file should be gone")
+	}
+	got := read("deferred", "alpha.md")
+	if !strings.Contains(got, "status: deferred") || !strings.Contains(got, "2026-09-01") || !strings.Contains(got, "deferred_at") {
+		t.Errorf("deferred file should carry status + revisit_at + deferred_at in one write:\n%s", got)
+	}
+
+	// Re-defer with a NEW date: in-place rewrite (no relocation), revisit_at updated.
+	later := time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)
+	redeferred, err := fs.Defer("alpha", "2026-12-25", later, false)
+	if err != nil {
+		t.Fatalf("re-defer: %v", err)
+	}
+	if redeferred.RevisitAt != "2026-12-25" {
+		t.Errorf("re-defer should update revisit_at, got %q", redeferred.RevisitAt)
+	}
+	if got := read("deferred", "alpha.md"); !strings.Contains(got, "2026-12-25") || strings.Contains(got, "2026-09-01") {
+		t.Errorf("re-defer should replace the snooze date on disk:\n%s", got)
+	}
+}
+
+// TestFS_Defer_BareNoDate pins that a defer with no date is a plain move to
+// deferred — relocated, deferred_at stamped, and no revisit_at written.
+func TestFS_Defer_BareNoDate(t *testing.T) {
+	root := t.TempDir()
+	writeTask(t, root, "ready-to-start", "beta.md", "---\nstatus: ready-to-start\n---\n# Beta\n")
+	now := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+
+	task, err := NewFS(root).Defer("beta", "", now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.Status != domain.StatusDeferred || task.RevisitAt != "" {
+		t.Errorf("bare defer = (status %q, revisit %q), want (deferred, \"\")", task.Status, task.RevisitAt)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "tasks", "deferred", "beta.md"))
+	if err != nil {
+		t.Fatalf("read deferred/beta.md: %v", err)
+	}
+	got := string(b)
+	if strings.Contains(got, "revisit_at") {
+		t.Errorf("bare defer must not write revisit_at:\n%s", got)
+	}
+	if !strings.Contains(got, "deferred_at") {
+		t.Errorf("bare defer should stamp deferred_at:\n%s", got)
+	}
+}
+
 func TestFS_Move_NotFound(t *testing.T) {
 	_, err := NewFS(t.TempDir()).Move("nope", domain.StatusCompleted, time.Now(), false)
 	if !errors.Is(err, domain.ErrNotFound) {

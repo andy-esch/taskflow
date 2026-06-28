@@ -120,6 +120,47 @@ func press(s string) tea.KeyPressMsg {
 	}
 }
 
+// TestModel_UntaggedMsgRoutesToActiveTabOnly makes the reducer's default-case
+// INVARIANT executable (audit M8): an async message with no tab identity is
+// forwarded to the ACTIVE tab's list only — never broadcast to background tabs.
+// The probe is an empty list.FilterMatchesMsg: a filtered list that receives it
+// drops to zero visible items, so if the fall-through ever broadcast, a background
+// tab's visible set would collapse too. It must not.
+func TestModel_UntaggedMsgRoutesToActiveTabOnly(t *testing.T) {
+	m := loaded(t, 120, 40) // tasks active + loaded
+	// Make epics the active tab (and load it); tasks stays a loaded background tab.
+	tm, cmd := m.Update(press("]")) // tasks → epics
+	m = drain(t, tm.(Model), cmd)
+	if m.cur().kind != entityEpics {
+		t.Fatalf("setup: want epics active, got %v", m.cur().kind)
+	}
+	tasksIdx := indexOfKind(m.tabs, entityTasks)
+	epicsIdx := indexOfKind(m.tabs, entityEpics)
+
+	// Put BOTH lists into a filtered (non-empty) state so the probe is observable:
+	// a list only reflects an incoming FilterMatchesMsg once it's filtering.
+	m.tabs[tasksIdx].list.SetFilterText("task") // background; matches both task descriptions
+	m.tabs[epicsIdx].list.SetFilterText("test") // active; matches the one epic
+	bgBefore := len(m.tabs[tasksIdx].list.VisibleItems())
+	activeBefore := len(m.tabs[epicsIdx].list.VisibleItems())
+	if bgBefore == 0 || activeBefore == 0 {
+		t.Fatalf("setup: both tabs need visible matches, got bg=%d active=%d", bgBefore, activeBefore)
+	}
+
+	// An untagged async message: no tab identity, so the default fall-through alone
+	// decides where it lands. An empty FilterMatchesMsg zeroes whichever filtered
+	// list processes it.
+	res, _ := m.Update(list.FilterMatchesMsg{})
+	mm := res.(Model)
+
+	if got := len(mm.tabs[epicsIdx].list.VisibleItems()); got != 0 {
+		t.Errorf("active tab should receive the untagged message (visible → 0), got %d", got)
+	}
+	if got := len(mm.tabs[tasksIdx].list.VisibleItems()); got != bgBefore {
+		t.Errorf("background tab must NOT receive the untagged message: visible %d, want unchanged %d (fall-through broadcasting?)", got, bgBefore)
+	}
+}
+
 func TestModel_LoadsWorkingSetOrder(t *testing.T) {
 	m := loaded(t, 120, 40)
 	if !m.cur().loaded {

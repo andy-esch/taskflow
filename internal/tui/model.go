@@ -279,6 +279,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// holds today because background tabs never focus their FilterInput (so generate
 	// no blink/spinner ticks); a future background component with its own ticks must
 	// be tab-tagged, or this fall-through changed to broadcast (per-tab routeToTab).
+	// Guarded executably by TestModel_UntaggedMsgRoutesToActiveTabOnly (audit M8).
 	var cmd tea.Cmd
 	m.cur().list, cmd = m.cur().list.Update(msg)
 	return m, routeToTab(m.cur().kind, cmd)

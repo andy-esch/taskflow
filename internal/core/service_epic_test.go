@@ -23,6 +23,9 @@ func (nopStore) GetTask(string) (domain.Task, string, error) {
 func (nopStore) Move(string, domain.Status, time.Time, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
+func (nopStore) Defer(string, string, time.Time, bool) (domain.Task, error) {
+	return domain.Task{}, nil
+}
 func (nopStore) SetFields(string, map[string]any, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
@@ -420,6 +423,33 @@ func TestService_Summary_EpicLastUpdated(t *testing.T) {
 	}
 	if by["e3"] != "" {
 		t.Errorf("e3 (no tasks) LastUpdated = %q, want empty", by["e3"])
+	}
+}
+
+// TestService_Summary_EpicsByRecent pins audit M2: Summary returns epics
+// most-recently-updated first (undated last), so the CLI `status` and the TUI
+// dashboard render ONE shared order instead of each re-sorting. The input order is
+// deliberately scrambled to prove the aggregate — not a surface — does the sorting.
+func TestService_Summary_EpicsByRecent(t *testing.T) {
+	svc := NewService(&fakeStore{
+		epics: []domain.Epic{{ID: "stale"}, {ID: "untouched"}, {ID: "fresh"}},
+		tasks: []domain.Task{
+			{Slug: "a", Epic: "stale", Updated: "2026-01-01"},
+			{Slug: "b", Epic: "fresh", Updated: "2026-06-25"},
+			// "untouched" has no tasks → LastUpdated "" → sinks to the bottom.
+		},
+	})
+	s, err := svc.Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Epics) != 3 ||
+		s.Epics[0].Epic.ID != "fresh" || s.Epics[1].Epic.ID != "stale" || s.Epics[2].Epic.ID != "untouched" {
+		got := make([]string, len(s.Epics))
+		for i, es := range s.Epics {
+			got[i] = es.Epic.ID
+		}
+		t.Errorf("Summary epic order = %v, want [fresh stale untouched] (recency-first, undated last)", got)
 	}
 }
 
