@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/core"
@@ -19,15 +20,18 @@ func TestFilterEpicsByView(t *testing.T) {
 		epicSum("a-active", domain.EpicStatusActive, 1, 0),
 		epicSum("b-retired", domain.EpicStatusRetired, 1, 1),
 		epicSum("c-deprecated", domain.EpicStatusDeprecated, 1, 0),
+		epicSum("d-foreign", "planning", 1, 0), // non-canonical: must FAIL OPEN into the live view
 	}
 	cases := []struct {
 		view string
 		want []string
 	}{
-		{"", []string{"a-active"}},
+		// Default "live" view fails open: keeps active AND the foreign status, hides
+		// only the known terminals.
+		{"", []string{"a-active", "d-foreign"}},
 		{"retired", []string{"b-retired"}},
 		{"deprecated", []string{"c-deprecated"}},
-		{"all", []string{"a-active", "b-retired", "c-deprecated"}},
+		{"all", []string{"a-active", "b-retired", "c-deprecated", "d-foreign"}},
 	}
 	for _, c := range cases {
 		got := filterEpicsByView(in, c.view)
@@ -67,6 +71,32 @@ func TestSortEpicsForView(t *testing.T) {
 	sortEpicsForView(all, "all")
 	if got := ids(all); got[0] != "dormant" {
 		t.Errorf("non-default view must be left untouched, got %v", got)
+	}
+}
+
+// TestEpicGlyphAndNote pins the warning-triangle affordance: a non-conforming epic
+// leads with ⚠ and shows its offending status; a conforming one shows neither (just
+// its liveness glyph, no status note).
+func TestEpicGlyphAndNote(t *testing.T) {
+	foreign := core.EpicSummary{Epic: domain.Epic{ID: "x", Status: "planning"}, Total: 1}
+	if g := epicGlyph(foreign); !strings.Contains(g, "⚠") {
+		t.Errorf("non-conforming epic glyph = %q, want a ⚠", g)
+	}
+	if n := epicStatusNote(foreign); !strings.Contains(n, "planning") {
+		t.Errorf("non-conforming status note = %q, want it to name the bad status", n)
+	}
+
+	ok := core.EpicSummary{Epic: domain.Epic{ID: "y", Status: domain.EpicStatusActive}, Total: 1}
+	if g := epicGlyph(ok); strings.Contains(g, "⚠") {
+		t.Errorf("conforming epic glyph = %q, must not warn", g)
+	}
+	if n := epicStatusNote(ok); n != "" {
+		t.Errorf("conforming status note = %q, want empty", n)
+	}
+
+	// Empty status is non-conforming too, and renders the em-dash placeholder.
+	if n := epicStatusNote(core.EpicSummary{Epic: domain.Epic{ID: "z", Status: ""}}); !strings.Contains(n, "—") {
+		t.Errorf("empty status note = %q, want the — placeholder", n)
 	}
 }
 

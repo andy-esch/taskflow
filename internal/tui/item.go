@@ -121,10 +121,37 @@ func (i epicItem) sortFields() sortFields {
 	return sortFields{priorityRank: priorityRank(i.es.Epic.Priority), slug: i.es.Epic.ID}
 }
 
-// epicDelegate renders one epic row: a leading liveness glyph (working/fresh/
-// dormant), then a rollup bar + colored percent + done/total + the epic id and
-// description. The glyph mirrors the audit row's bucket glyph; a dormant (drained)
-// epic also dims its id so a quiet bucket recedes even on a mono terminal.
+// epicGlyph is the leading state glyph for an epic row, shared by the epics tab and
+// the dashboard so they read alike. A ⚠ when the status is non-conforming (outside
+// active/retired/deprecated) — a fixable data problem that takes priority over
+// liveness; otherwise the liveness band glyph (working/fresh/dormant), mirroring the
+// audit row's bucket glyph.
+func epicGlyph(es core.EpicSummary) string {
+	if !domain.IsKnownEpicStatus(es.Epic.Status) {
+		return fg(theme.ColorYellow, "⚠")
+	}
+	tok := theme.Liveness(string(es.Liveness()))
+	return fg(tok.Color, tok.Glyph)
+}
+
+// epicStatusNote annotates a non-conforming epic row with its offending status, so
+// the ⚠ says WHAT to fix (set active/retired/deprecated via the m-menu or `epic
+// move`). "" when the status conforms; "—" stands in for an empty status.
+func epicStatusNote(es core.EpicSummary) string {
+	if domain.IsKnownEpicStatus(es.Epic.Status) {
+		return ""
+	}
+	s := es.Epic.Status
+	if s == "" {
+		s = "—"
+	}
+	return "  " + fg(theme.ColorYellow, "status:"+s)
+}
+
+// epicDelegate renders one epic row: a leading glyph (liveness, or ⚠ for a
+// non-conforming status), then a rollup bar + colored percent + done/total + the
+// epic id and description. A dormant (drained) epic dims its id so a quiet bucket
+// recedes even on a mono terminal; a non-conforming one shows its raw status.
 type epicDelegate struct{}
 
 func (epicDelegate) Height() int                         { return 1 }
@@ -140,14 +167,13 @@ func (epicDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 	bar := miniBar(pct, 8)
 	pctStr := fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
 	counts := rollupCounts(it.es.Done, it.es.Total, it.countsW)
-	tok := theme.Liveness(string(it.es.Liveness()))
 	id := it.es.Epic.ID
 	if !it.es.Live() { // dormant buckets recede: the id dims like the description
 		id = dim(id)
 	}
-	idAndDesc := id + "  " + dim(it.es.Epic.Description)
+	idAndDesc := id + epicStatusNote(it.es) + "  " + dim(it.es.Epic.Description)
 	row(w, m, index, fmt.Sprintf("%s %s %s %s  %s",
-		fg(tok.Color, tok.Glyph), bar, pctStr, counts, idAndDesc))
+		epicGlyph(it.es), bar, pctStr, counts, idAndDesc))
 }
 
 // --- audits ---

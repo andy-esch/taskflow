@@ -4,6 +4,9 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // helpEntry is one key→description row in the help overlay.
@@ -33,6 +36,7 @@ var helpSections = []helpSection{
 		{"y / Y", "copy slug / file path to clipboard"},
 		{"[ / ]", "previous / next tab"},
 		{"tab", "switch focus (list ⇄ detail)"},
+		{"z", "full-screen the detail pane (z/esc to exit)"},
 		{"r", "refresh from disk"},
 		{"? / esc", "toggle this help"},
 		{"q / ctrl+c", "quit / force-quit"},
@@ -53,6 +57,63 @@ var helpSections = []helpSection{
 		{"R", "raw ⇄ pretty markdown"},
 		{"h / esc", "back to list (esc clears a find first)"},
 	}},
+}
+
+// symbolsFor builds the glyph legend for the active screen — what the leading
+// status / liveness / bucket glyphs (and the ⚠/↻ markers) in the rows actually
+// mean, so a reader can decode the column without leaving the TUI. It's derived
+// from the SAME theme tokens the row delegates draw (theme.Status/Liveness/Bucket/
+// FindingStatus), so the legend can't drift from what's on screen. ok is false on a
+// screen with no glyph vocabulary of its own.
+func symbolsFor(kind entityKind) (helpSection, bool) {
+	tok := func(t theme.Token, desc string) helpEntry { return helpEntry{fg(t.Color, t.Glyph), desc} }
+	mark := func(c theme.Color, glyph, desc string) helpEntry { return helpEntry{fg(c, glyph), desc} }
+	var e []helpEntry
+	switch kind {
+	case entityTasks:
+		for _, st := range domain.AllStatuses() {
+			e = append(e, tok(theme.Status(st), string(st)))
+		}
+		e = append(e,
+			mark(theme.ColorYellow, "⚠", "misfiled — status ≠ folder"),
+			mark(theme.ColorYellow, "↻", "revisit (snooze) date reached"),
+		)
+	case entityEpics:
+		e = append(e,
+			tok(theme.Liveness("working"), "working — live work in progress"),
+			tok(theme.Liveness("fresh"), "fresh — new epic, no tasks yet"),
+			tok(theme.Liveness("dormant"), "dormant — drained / quiet (id dimmed)"),
+			mark(theme.ColorYellow, "⚠", "non-conforming status (→ active/retired/deprecated)"),
+		)
+	case entityAudits:
+		for _, b := range domain.AllAuditBuckets() {
+			e = append(e, tok(theme.Bucket(b), string(b)+" bucket"))
+		}
+		e = append(e,
+			tok(theme.FindingStatus("open"), "finding: open"),
+			tok(theme.FindingStatus("in-progress"), "finding: in-progress"),
+			tok(theme.FindingStatus("fixed"), "finding: fixed / landed"),
+			tok(theme.FindingStatus("deferred"), "finding: deferred / superseded"),
+			tok(theme.FindingStatus("wontfix"), "finding: wontfix"),
+		)
+	default: // dashboard — a cross-entity screen, so the essentials of each widget
+		e = append(e,
+			tok(theme.Status(domain.StatusInProgress), "active / working (task in-progress · epic working)"),
+			tok(theme.Liveness("fresh"), "fresh epic (no tasks yet)"),
+			tok(theme.Liveness("dormant"), "dormant epic (drained / quiet)"),
+			tok(theme.Bucket(domain.AuditOpen), "open audit"),
+			mark(theme.ColorGreen, "✓", "ready to close / done"),
+			mark(theme.ColorYellow, "⚠", "needs attention (misfiled / non-conforming)"),
+			mark(theme.ColorYellow, "↻", "revisit (snooze) reached"),
+		)
+	}
+	// The completion-percent color band, shared by every rollup bar/percent.
+	e = append(e,
+		mark(theme.ColorGreen, "100%", "complete"),
+		mark(theme.ColorYellow, "34–99%", "in progress"),
+		mark(theme.ColorGray, "0–33%", "barely started"),
+	)
+	return helpSection{"Symbols", e}, true
 }
 
 // notesFor builds the context Notes for the ACTIVE entity — only that tab's view
@@ -77,7 +138,26 @@ var (
 	helpBorder   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("6")).Padding(0, 2)
 	helpHeading  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
 	helpKeyStyle = lipgloss.NewStyle().Bold(true)
+	// helpHFrame is the box's horizontal chrome (border + padding), derived from the
+	// style so a padding/border change can't desync the wrap width.
+	helpHFrame = helpBorder.GetHorizontalFrameSize()
 )
+
+// helpPrefWidth is the overlay's preferred outer width. The content WRAPS to this
+// (descriptions reflow within their column), so the box is a constant width as you
+// scroll — rather than resizing to whatever the widest currently-visible line is. It
+// narrows to fit a smaller terminal.
+const helpPrefWidth = 62
+
+// helpWidth is the overlay's outer width for a given available width: the preferred
+// width, clamped down to what fits. A pure function of maxW (not the scroll
+// position), which is what keeps the box from resizing as it scrolls.
+func helpWidth(maxW int) int {
+	if maxW > 0 && maxW < helpPrefWidth {
+		return maxW
+	}
+	return helpPrefWidth
+}
 
 // helpSectionsFor orders the panel by relevance to where you are: the active
 // pane's keys first (List on the list, Detail in the detail pane), general Notes
@@ -100,15 +180,22 @@ func helpSectionsFor(f focus, kind entityKind) []helpSection {
 	} else {
 		add("List")
 	}
+	if sym, ok := symbolsFor(kind); ok { // what the row glyphs mean, page-specific
+		out = append(out, sym)
+	}
 	out = append(out, notesFor(kind)) // page-specific: only the active tab's views
 	add("Global")
 	return out
 }
 
-// helpLines builds the overlay's content lines (heading, sections, aligned
-// key→desc rows) for the current focus. Shared by helpBox (render) and the model's
-// scroll clamp, so both window the SAME content.
-func helpLines(f focus, kind entityKind) []string {
+// helpLines builds the overlay's content lines for the current focus, laid out in a
+// fixed content width: each row is a 2-space indent + the key column (aligned) + a
+// 2-space gap + a description that WORD-WRAPS within the remaining column, its
+// continuation lines indented to sit under the description (not the key). Every line
+// is padded to contentW so the box is a constant width across scroll. Shared by
+// helpBox (render) and the model's scroll clamp, so both window the SAME content —
+// callers MUST pass the same contentW (helpWidth(maxW)-helpHFrame).
+func helpLines(f focus, kind entityKind, contentW int) []string {
 	sections := helpSectionsFor(f, kind)
 	// Widest key column across the shown sections → aligned descriptions.
 	keyW := 0
@@ -119,25 +206,36 @@ func helpLines(f focus, kind entityKind) []string {
 			}
 		}
 	}
-	lines := []string{helpHeading.Render("Keys")}
+	const indent, gap = 2, 2
+	descW := max(contentW-indent-keyW-gap, 8) // floor so wrapping stays sane on a narrow box
+	contIndent := strings.Repeat(" ", indent+keyW+gap)
+	pad := func(s string) string { return padRight(s, contentW) }
+
+	lines := []string{pad(helpHeading.Render("Keys"))}
 	for _, s := range sections {
-		lines = append(lines, "", dim(s.title))
+		lines = append(lines, pad(""), pad(dim(s.title)))
 		for _, e := range s.entries {
-			pad := strings.Repeat(" ", max(keyW-lipgloss.Width(e.keys), 0))
-			lines = append(lines, "  "+helpKeyStyle.Render(e.keys)+pad+"  "+e.desc)
+			keyPad := strings.Repeat(" ", max(keyW-lipgloss.Width(e.keys), 0))
+			// wrap reflows + right-pads each description line to descW (lipgloss Width),
+			// so the column stays rectangular and the rows align.
+			desc := strings.Split(wrap(e.desc, descW), "\n")
+			lines = append(lines, pad("  "+helpKeyStyle.Render(e.keys)+keyPad+"  "+desc[0]))
+			for _, cont := range desc[1:] {
+				lines = append(lines, pad(contIndent+cont))
+			}
 		}
 	}
 	return lines
 }
 
-// helpBox renders the keybinding panel, clamped to fit within (maxW, maxH).
-// When the content is taller than the box, scroll (clamped here, not in the
-// model — only render knows the box height) picks the visible window; j/k
-// scroll while the overlay is open.
+// helpBox renders the keybinding panel at a FIXED width (helpWidth(maxW)) so it
+// doesn't resize while scrolling, clamped to fit within (maxW, maxH). When the
+// content is taller than the box, scroll (clamped here, not in the model — only
+// render knows the box height) picks the visible window; j/k scroll while open.
 func helpBox(maxW, maxH, scroll int, f focus, kind entityKind) string {
-	lines := helpLines(f, kind)
-	const frameH = 2 // top+bottom border rows
-	if innerH := maxH - frameH; innerH > 0 && len(lines) > innerH {
+	lines := helpLines(f, kind, helpWidth(maxW)-helpHFrame)
+	const frameV = 2 // top+bottom border rows
+	if innerH := maxH - frameV; innerH > 0 && len(lines) > innerH {
 		maxScroll := len(lines) - innerH
 		scroll = min(max(scroll, 0), maxScroll)
 		lines = lines[scroll : scroll+innerH]

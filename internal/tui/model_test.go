@@ -1229,6 +1229,55 @@ func TestTaskFilterValueIncludesTags(t *testing.T) {
 	}
 }
 
+// TestModel_ZoomFullScreensDetail pins the z full-screen toggle: it hides the list
+// and gives the detail pane the whole width, esc/z return to the split, and any tab
+// switch drops it.
+func TestModel_ZoomFullScreensDetail(t *testing.T) {
+	m := loaded(t, 120, 40) // wide → two-pane split (list + detail side by side)
+	if !m.twoPane || m.zoom {
+		t.Fatalf("setup: want two-pane, not zoomed (twoPane=%v zoom=%v)", m.twoPane, m.zoom)
+	}
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "alpha") || !strings.Contains(v, "beta") {
+		t.Fatalf("the split should show the list (alpha, beta):\n%s", v)
+	}
+
+	// z → full-screen detail: zoomed, single-pane, detail focused, list hidden.
+	tm, _ := m.Update(press("z"))
+	m = tm.(Model)
+	if !m.zoom || m.twoPane || m.focus != focusDetail {
+		t.Errorf("z should full-screen the detail (zoom=%v twoPane=%v focus=%v)", m.zoom, m.twoPane, m.focus)
+	}
+	if v := ansi.Strip(m.View().Content); strings.Contains(v, "beta") {
+		t.Errorf("full-screen detail should hide the list (beta still visible):\n%s", v)
+	}
+
+	// z again → back to the split, list visible again.
+	tm, _ = m.Update(press("z"))
+	m = tm.(Model)
+	if m.zoom || !m.twoPane {
+		t.Errorf("a second z should restore the split (zoom=%v twoPane=%v)", m.zoom, m.twoPane)
+	}
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "beta") {
+		t.Errorf("the restored split should show the list again:\n%s", v)
+	}
+
+	// esc also exits full-screen.
+	tm, _ = m.Update(press("z"))
+	tm, _ = tm.(Model).Update(press("esc"))
+	m = tm.(Model)
+	if m.zoom {
+		t.Error("esc should exit full-screen")
+	}
+
+	// A tab switch drops full-screen so the new tab opens on its list.
+	tm, _ = m.Update(press("z"))
+	tm, cmd := tm.(Model).Update(press("]")) // → epics
+	m = drain(t, tm.(Model), cmd)
+	if m.zoom {
+		t.Error("switching tabs should drop full-screen")
+	}
+}
+
 func TestModel_HelpOverlayTogglesAndFloats(t *testing.T) {
 	// Short enough that the focus-filtered help still overflows its box, so j/k
 	// scrolling is exercised (context filtering hides the inactive pane's keys).
@@ -1239,8 +1288,13 @@ func TestModel_HelpOverlayTogglesAndFloats(t *testing.T) {
 		t.Fatal("? should open the help overlay")
 	}
 	v := ansi.Strip(m.View().Content)
-	if !strings.Contains(v, "Keys") || !strings.Contains(v, "filter the list") {
+	// The overlay leads with the active pane's keys and the glyph legend (both
+	// page-specific); Global scrolls below the fold at this short height.
+	if !strings.Contains(v, "Keys") || !strings.Contains(v, "open detail") {
 		t.Errorf("help overlay should list keybindings:\n%s", v)
+	}
+	if !strings.Contains(v, "Symbols") || !strings.Contains(v, "in-progress") {
+		t.Errorf("help overlay should include the glyph legend:\n%s", v)
 	}
 	// It floats: the underlying list (alpha) stays partially visible around the box.
 	if !strings.Contains(v, "alpha") {
@@ -1276,7 +1330,7 @@ func TestModel_HelpScrollRevealsTail(t *testing.T) {
 	if v := ansi.Strip(m.View().Content); strings.Contains(v, "force-quit") {
 		t.Skip("terminal tall enough to show the tail without scrolling")
 	}
-	for i := 0; i < len(helpLines(m.focus, m.cur().kind)); i++ { // scroll past the clamp
+	for i := 0; i < len(helpLines(m.focus, m.cur().kind, helpWidth(m.width-2)-helpHFrame)); i++ { // scroll past the clamp
 		tm, _ = m.Update(press("j"))
 		m = tm.(Model)
 	}

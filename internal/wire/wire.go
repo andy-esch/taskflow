@@ -69,7 +69,10 @@ import (
 // `liveness` — the derived activity band (working | fresh | dormant) computed from
 // the rollup, not stored — so a consumer can foreground live domain buckets and
 // recede drained ones without re-deriving the rule.
-const SchemaVersion = "1.18"
+// 1.19: the `status` summary envelope carries `bad_epic_status` — the count of
+// epics whose status is outside the canonical vocabulary (a fixable data problem;
+// these epics are flagged, not dropped), mirroring `misfiled` for tasks.
+const SchemaVersion = "1.19"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

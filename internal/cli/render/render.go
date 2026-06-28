@@ -243,6 +243,9 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 	if s.Misfiled > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (status ≠ folder; run `lint --fix`)", s.Misfiled)))
 	}
+	if s.BadEpicStatus > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d epic(s) with unrecognized status (set active/retired/deprecated; run `lint`)", s.BadEpicStatus)))
+	}
 	if len(s.Problems) > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable file(s) (run `lint`)", len(s.Problems))))
 	}
@@ -354,7 +357,15 @@ func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 	for _, e := range epics {
 		pct := e.Percent()
 		progress := fmt.Sprintf("%s %s %s", st.Bar(pct, 8), st.Percent(pct), theme.Counts(e.Done, e.Total))
-		rows = append(rows, []string{st.Bold(e.Epic.ID), e.Epic.Status, progress, e.Epic.Description})
+		status := e.Epic.Status
+		if !domain.IsKnownEpicStatus(e.Epic.Status) { // flag a fixable data problem inline
+			disp := e.Epic.Status
+			if disp == "" {
+				disp = "—"
+			}
+			status = st.Warn("⚠ " + disp)
+		}
+		rows = append(rows, []string{st.Bold(e.Epic.ID), status, progress, e.Epic.Description})
 	}
 	writeTable(w, st.width, []string{st.Dim("EPIC"), st.Dim("STATUS"), st.Dim("PROGRESS"), st.Dim("DESCRIPTION")}, rows)
 	return nil

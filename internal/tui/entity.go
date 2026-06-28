@@ -292,8 +292,8 @@ func newEntityTabs() []*entityTab {
 		},
 		{
 			kind: entityEpics, name: "epics", aliases: []string{"e", "epic"},
-			viewAxis: epicViews,
-			list:     mk(epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
+			viewAxis: epicViews, viewAliases: epicViewAliases,
+			list: mk(epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
 			// Epic status is a frontmatter field, not a directory: the `m` menu / `:`
 			// verbs flip it via svc.MoveEpic (the file stays put), mirroring task/audit.
 			sortCols: epicSortCols, transitions: epicTransitions, applyMove: moveEpic,
