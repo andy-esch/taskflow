@@ -121,8 +121,10 @@ func (i epicItem) sortFields() sortFields {
 	return sortFields{priorityRank: priorityRank(i.es.Epic.Priority), slug: i.es.Epic.ID}
 }
 
-// epicDelegate renders one epic row: a rollup bar + colored percent + done/total
-// + the epic id and description.
+// epicDelegate renders one epic row: a leading liveness glyph (working/fresh/
+// dormant), then a rollup bar + colored percent + done/total + the epic id and
+// description. The glyph mirrors the audit row's bucket glyph; a dormant (drained)
+// epic also dims its id so a quiet bucket recedes even on a mono terminal.
 type epicDelegate struct{}
 
 func (epicDelegate) Height() int                         { return 1 }
@@ -138,8 +140,14 @@ func (epicDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 	bar := miniBar(pct, 8)
 	pctStr := fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
 	counts := rollupCounts(it.es.Done, it.es.Total, it.countsW)
-	idAndDesc := it.es.Epic.ID + "  " + dim(it.es.Epic.Description)
-	row(w, m, index, fmt.Sprintf("%s %s %s  %s", bar, pctStr, counts, idAndDesc))
+	tok := theme.Liveness(string(it.es.Liveness()))
+	id := it.es.Epic.ID
+	if !it.es.Live() { // dormant buckets recede: the id dims like the description
+		id = dim(id)
+	}
+	idAndDesc := id + "  " + dim(it.es.Epic.Description)
+	row(w, m, index, fmt.Sprintf("%s %s %s %s  %s",
+		fg(tok.Color, tok.Glyph), bar, pctStr, counts, idAndDesc))
 }
 
 // --- audits ---

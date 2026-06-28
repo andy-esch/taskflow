@@ -342,7 +342,7 @@ func TestService_NewTask_Next(t *testing.T) {
 
 func TestService_Summary(t *testing.T) {
 	svc := NewService(&fakeStore{
-		epics: []domain.Epic{{ID: "e1"}},
+		epics: []domain.Epic{{ID: "e1", Status: domain.EpicStatusActive}},
 		tasks: []domain.Task{
 			{Slug: "a", Status: domain.StatusInProgress, Epic: "e1"},
 			{Slug: "b", Status: domain.StatusReadyToStart, Epic: "e1"},
@@ -400,7 +400,11 @@ func TestService_Summary_RevisitDue(t *testing.T) {
 // (falling back to created), and "" for an epic with no tasks.
 func TestService_Summary_EpicLastUpdated(t *testing.T) {
 	svc := NewService(&fakeStore{
-		epics: []domain.Epic{{ID: "e1"}, {ID: "e2"}, {ID: "e3"}},
+		epics: []domain.Epic{
+			{ID: "e1", Status: domain.EpicStatusActive},
+			{ID: "e2", Status: domain.EpicStatusActive},
+			{ID: "e3", Status: domain.EpicStatusActive},
+		},
 		tasks: []domain.Task{
 			{Slug: "a", Epic: "e1", Updated: "2026-01-10"},
 			{Slug: "b", Epic: "e1", Updated: "2026-06-25"}, // newest in e1
@@ -432,7 +436,11 @@ func TestService_Summary_EpicLastUpdated(t *testing.T) {
 // deliberately scrambled to prove the aggregate — not a surface — does the sorting.
 func TestService_Summary_EpicsByRecent(t *testing.T) {
 	svc := NewService(&fakeStore{
-		epics: []domain.Epic{{ID: "stale"}, {ID: "untouched"}, {ID: "fresh"}},
+		epics: []domain.Epic{
+			{ID: "stale", Status: domain.EpicStatusActive},
+			{ID: "untouched", Status: domain.EpicStatusActive},
+			{ID: "fresh", Status: domain.EpicStatusActive},
+		},
 		tasks: []domain.Task{
 			{Slug: "a", Epic: "stale", Updated: "2026-01-01"},
 			{Slug: "b", Epic: "fresh", Updated: "2026-06-25"},
@@ -590,5 +598,68 @@ func TestService_EditEpic_PassThrough(t *testing.T) {
 	}
 	if changed {
 		t.Errorf("nopStore EditEpic reports no change; got changed=true")
+	}
+}
+
+// TestEpicSummary_Liveness pins the derived activity classifier: working when open
+// tasks remain, fresh when no tasks are filed yet (a new bucket, kept live), dormant
+// only when the epic HAD work and it's all done/withdrawn. The Total>0 guard is what
+// separates a drained epic (dormant) from a brand-new one (fresh) — both have 0 open.
+func TestEpicSummary_Liveness(t *testing.T) {
+	cases := []struct {
+		name         string
+		total, done  int
+		wantOpen     int
+		wantLiveness Liveness
+		wantLive     bool
+	}{
+		{"open work → working", 3, 1, 2, LivenessWorking, true},
+		{"all done → dormant", 3, 3, 0, LivenessDormant, false},
+		{"no tasks → fresh", 0, 0, 0, LivenessFresh, true},
+		{"one open → working", 1, 0, 1, LivenessWorking, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			es := EpicSummary{Total: c.total, Done: c.done}
+			if got := es.Open(); got != c.wantOpen {
+				t.Errorf("Open() = %d, want %d", got, c.wantOpen)
+			}
+			if got := es.Liveness(); got != c.wantLiveness {
+				t.Errorf("Liveness() = %q, want %q", got, c.wantLiveness)
+			}
+			if got := es.Live(); got != c.wantLive {
+				t.Errorf("Live() = %v, want %v", got, c.wantLive)
+			}
+		})
+	}
+}
+
+// TestDashboardEpics pins the landing-screen lens: retired/deprecated epics are
+// dropped (history, not "what's live"); among the active ones, working/fresh float
+// above dormant, and recency orders within each band. The input is scrambled in both
+// status and recency to prove dashboardEpics — not the caller — does the work.
+func TestDashboardEpics(t *testing.T) {
+	in := []EpicSummary{
+		{Epic: domain.Epic{ID: "retired-recent", Status: domain.EpicStatusRetired}, Total: 2, Done: 1, LastUpdated: "2026-06-27"},
+		{Epic: domain.Epic{ID: "dormant", Status: domain.EpicStatusActive}, Total: 2, Done: 2, LastUpdated: "2026-06-28"},
+		{Epic: domain.Epic{ID: "working-old", Status: domain.EpicStatusActive}, Total: 3, Done: 1, LastUpdated: "2026-06-20"},
+		{Epic: domain.Epic{ID: "deprecated", Status: domain.EpicStatusDeprecated}, Total: 1, Done: 0, LastUpdated: "2026-06-26"},
+		{Epic: domain.Epic{ID: "working-new", Status: domain.EpicStatusActive}, Total: 4, Done: 0, LastUpdated: "2026-06-25"},
+	}
+	got := dashboardEpics(in)
+	var ids []string
+	for _, e := range got {
+		ids = append(ids, e.Epic.ID)
+	}
+	// Live first (working-new before working-old by recency), then dormant last;
+	// retired + deprecated absent entirely.
+	want := []string{"working-new", "working-old", "dormant"}
+	if len(ids) != len(want) {
+		t.Fatalf("dashboardEpics ids = %v, want %v", ids, want)
+	}
+	for i := range want {
+		if ids[i] != want[i] {
+			t.Fatalf("dashboardEpics ids = %v, want %v", ids, want)
+		}
 	}
 }

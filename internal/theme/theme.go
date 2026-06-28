@@ -111,6 +111,24 @@ func FindingStatus(s string) Token {
 	}
 }
 
+// Liveness maps an epic's derived activity band (core.EpicSummary.Liveness, passed
+// as its string value so theme stays domain-only) to a glyph + color. The shape
+// carries the state through a mono terminal: ● working (live work, like an active
+// task), ✦ fresh (a new bucket awaiting tasks), ○ dormant (drained and quiet). An
+// unknown value falls to the neutral dot.
+func Liveness(s string) Token {
+	switch s {
+	case "working":
+		return Token{"●", ColorYellow}
+	case "fresh":
+		return Token{"✦", ColorBlue}
+	case "dormant":
+		return Token{"○", ColorGray}
+	default:
+		return Token{"•", ColorGray}
+	}
+}
+
 // Priority maps a priority label to its color.
 func Priority(p string) Color {
 	switch p {

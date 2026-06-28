@@ -162,8 +162,8 @@ func (t *entityTab) viewWords() []string {
 // default) collapses the title row, giving the list one more visible row.
 func (t *entityTab) chip() string {
 	var parts []string
-	// Only axis-bearing tabs (tasks, audits) ever set statusView non-empty, so the
-	// non-default view shows here regardless of entity; the default ("") is silent.
+	// Only axis-bearing tabs (tasks, audits, epics) ever set statusView non-empty, so
+	// the non-default view shows here regardless of entity; the default ("") is silent.
 	if t.statusView != "" {
 		parts = append(parts, "view:"+t.statusView)
 	}
@@ -292,7 +292,8 @@ func newEntityTabs() []*entityTab {
 		},
 		{
 			kind: entityEpics, name: "epics", aliases: []string{"e", "epic"},
-			list: mk(epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
+			viewAxis: epicViews,
+			list:     mk(epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
 			// Epic status is a frontmatter field, not a directory: the `m` menu / `:`
 			// verbs flip it via svc.MoveEpic (the file stays put), mirroring task/audit.
 			sortCols: epicSortCols, transitions: epicTransitions, applyMove: moveEpic,

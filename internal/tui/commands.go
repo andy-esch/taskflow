@@ -82,13 +82,20 @@ func loadTaskDetail(svc *core.Service, id string) tea.Cmd {
 
 // --- epics ---
 
+// loadEpicList reads the epic roster for the tab's current status view. The default
+// view ("") is the live working set — only `active` domain buckets, with dormant
+// (drained) ones floated to the bottom so liveness reads at a glance; "all" spans
+// every status; any other value is an exact stored-status filter (retired/
+// deprecated). The view is snapshotted here so a later change can't race this load.
 func loadEpicList(t *entityTab, svc *core.Service) tea.Cmd {
-	gen := t.loadGen
+	view, gen := t.statusView, t.loadGen
 	return func() tea.Msg {
 		epics, problems, err := svc.ListEpics()
 		if err != nil {
 			return errMsg{kind: entityEpics, gen: gen, err: err}
 		}
+		epics = filterEpicsByView(epics, view)
+		sortEpicsForView(epics, view)
 		countsW := 0 // measure the done/total column once so the rows line up
 		for _, es := range epics {
 			countsW = max(countsW, len(rollupCounts(es.Done, es.Total, 0)))
@@ -99,6 +106,39 @@ func loadEpicList(t *entityTab, svc *core.Service) tea.Cmd {
 		}
 		return listLoadedMsg{kind: entityEpics, gen: gen, items: items, problems: problems}
 	}
+}
+
+// filterEpicsByView narrows the roster to a status view: "" (default) keeps only
+// live domain buckets (active status), "all" keeps every status, any other value is
+// an exact status filter. The epic echo of loadTaskList's view switch, but on the
+// stored status FIELD (epics have no status directory).
+func filterEpicsByView(epics []core.EpicSummary, view string) []core.EpicSummary {
+	if view == "all" {
+		return epics
+	}
+	want := view
+	if view == "" {
+		want = domain.EpicStatusActive
+	}
+	out := make([]core.EpicSummary, 0, len(epics))
+	for _, e := range epics {
+		if e.Epic.Status == want {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// sortEpicsForView floats live epics (working/fresh) above dormant ones in the
+// default view, so a drained bucket recedes without leaving the list — the epics-tab
+// echo of the dashboard's live-first lens. Stable, so the underlying store order is
+// preserved within each band. Non-default views (an exact status, or "all") keep
+// their order untouched.
+func sortEpicsForView(epics []core.EpicSummary, view string) {
+	if view != "" {
+		return
+	}
+	sort.SliceStable(epics, func(i, j int) bool { return epics[i].Live() && !epics[j].Live() })
 }
 
 func loadEpicDetail(svc *core.Service, id string) tea.Cmd {

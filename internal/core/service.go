@@ -166,11 +166,13 @@ func (s *Service) Summary() (Summary, error) {
 	return Summary{
 		Counts:     ordered,
 		InProgress: inProgress,
-		// Recency-ordered HERE so the dashboard's "what moved lately" lens is a
-		// property of the aggregate, not re-sorted per surface — the CLI `status`
-		// and the TUI dashboard then agree by construction (audit M2). The entity
-		// list / `epic list` keep their own store order via rollupEpics directly.
-		Epics:        epicsByRecent(rollupEpics(epics, tasks)),
+		// Active-only + live-first HERE so the dashboard's "what's live right now"
+		// lens is a property of the aggregate, not re-derived per surface — the CLI
+		// `status` and the TUI dashboard then agree by construction (audit M2).
+		// Retired/deprecated epics and drained-dormant ordering are handled in
+		// dashboardEpics; the entity list / `epic list` keep the full roster in store
+		// order via rollupEpics directly.
+		Epics:        dashboardEpics(rollupEpics(epics, tasks)),
 		OpenAudits:   openAudits,
 		ReadyToClose: readyToClose,
 		Findings:     rollupFindings(actionable),

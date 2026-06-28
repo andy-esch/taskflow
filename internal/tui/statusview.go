@@ -49,6 +49,19 @@ var auditViews = []statusView{
 	{"all", "all"},
 }
 
+// epicViews is the epics tab's status axis — the s/S cycle order AND the `:`
+// vocabulary. Unlike tasks/audits the filter is on the stored status FIELD, not a
+// directory (epics live flat). "active" leads as the default (value "" = live domain
+// buckets only); retired/deprecated are reached via the cycle or `:all`. Within the
+// active default the list still floats dormant epics to the bottom and dims them
+// (loadEpicList / epicDelegate), so liveness reads without leaving the view.
+var epicViews = []statusView{
+	{"active", ""},
+	{"retired", "retired"},
+	{"deprecated", "deprecated"},
+	{"all", "all"},
+}
+
 // viewWords is the `:` Tab-completion vocabulary for a view axis (cycle + aliases).
 func viewWords(views, aliases []statusView) []string {
 	words := make([]string, 0, len(views)+len(aliases))

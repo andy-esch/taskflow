@@ -62,6 +62,26 @@ func TestBucket(t *testing.T) {
 	}
 }
 
+func TestLiveness(t *testing.T) {
+	cases := []struct {
+		band  string
+		glyph string
+		color Color
+	}{
+		{"working", "●", ColorYellow},
+		{"fresh", "✦", ColorBlue},
+		{"dormant", "○", ColorGray},
+		{"", "•", ColorGray},      // default arm (unknown)
+		{"bogus", "•", ColorGray}, // default arm
+	}
+	for _, c := range cases {
+		got := Liveness(c.band)
+		if got.Glyph != c.glyph || got.Color != c.color {
+			t.Errorf("Liveness(%q) = {%q,%d}, want {%q,%d}", c.band, got.Glyph, got.Color, c.glyph, c.color)
+		}
+	}
+}
+
 func TestFindingStatus(t *testing.T) {
 	cases := []struct {
 		status string

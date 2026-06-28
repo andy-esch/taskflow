@@ -141,8 +141,10 @@ func TestEpicsJSONAndHuman(t *testing.T) {
 			Tags        []string `json:"tags,omitempty"`
 			Total       int      `json:"total"`
 			Done        int      `json:"done"`
+			Open        int      `json:"open"`
 			Percent     int      `json:"percent"`
 			Deprecated  int      `json:"deprecated"`
+			Liveness    string   `json:"liveness"`
 		} `json:"epics"`
 		Unreadable []any `json:"unreadable,omitempty"`
 	}

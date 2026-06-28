@@ -66,17 +66,23 @@ type StatusCountJSON struct {
 // `epic show` can't drift) plus the task rollup.
 type EpicJSON struct {
 	EpicMetaJSON
-	Total      int `json:"total"`
-	Done       int `json:"done"`
-	Percent    int `json:"percent"`
-	Deprecated int `json:"deprecated"` // withdrawn tasks, excluded from total/done
+	Total int `json:"total"`
+	Done  int `json:"done"`
+	// Open is the pending workload (total − done); 0 = nothing in flight.
+	Open    int `json:"open"`
+	Percent int `json:"percent"`
+	// Deprecated is the withdrawn tasks, excluded from total/done.
+	Deprecated int `json:"deprecated"`
+	// Liveness is the derived activity band — computed from the rollup, not stored.
+	Liveness string `json:"liveness" jsonschema:"description=derived activity: working | fresh | dormant"`
 }
 
 // ToEpicJSON maps a core epic summary to the epic list/rollup DTO.
 func ToEpicJSON(e core.EpicSummary) EpicJSON {
 	return EpicJSON{
 		EpicMetaJSON: ToEpicMeta(e.Epic),
-		Total:        e.Total, Done: e.Done, Percent: e.Percent(), Deprecated: e.Deprecated,
+		Total:        e.Total, Done: e.Done, Open: e.Open(), Percent: e.Percent(),
+		Deprecated: e.Deprecated, Liveness: string(e.Liveness()),
 	}
 }
 
