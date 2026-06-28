@@ -171,8 +171,8 @@ func (d *dashboard) setSummary(s core.Summary) {
 		nav(fg(tok.Color, tok.Glyph)+fmt.Sprintf(" %d open audit(s)", n), dashTarget{kind: entityAudits})
 		allClear = false
 	}
-	if ready := countSettled(s.OpenAudits); ready > 0 {
-		nav(fg(theme.ColorGreen, "✓")+fmt.Sprintf(" %d audit(s) ready to close (all findings resolved)", ready),
+	if s.ReadyToClose > 0 {
+		nav(fg(theme.ColorGreen, "✓")+fmt.Sprintf(" %d audit(s) ready to close (all findings resolved)", s.ReadyToClose),
 			dashTarget{kind: entityAudits})
 		allClear = false
 	}
@@ -199,9 +199,10 @@ func (d *dashboard) setSummary(s core.Summary) {
 
 // urgencyLine renders a finding-urgency breakdown ("⚠ 1 acute · 12 soon · 23
 // eventually"), coloring acute (red) and soon (yellow) so the sharp end stands out.
+// Shares the iterate/join STRUCTURE with the CLI's countByLine via theme.Breakdown;
+// only this surface's coloring differs (audit M10).
 func urgencyLine(cs []core.CountBy) string {
-	parts := make([]string, 0, len(cs))
-	for _, c := range cs {
+	return theme.Breakdown(cs, dim(" · "), 0, func(c core.CountBy) string {
 		seg := fmt.Sprintf("%d %s", c.Count, c.Key)
 		switch c.Key {
 		case "acute":
@@ -209,35 +210,16 @@ func urgencyLine(cs []core.CountBy) string {
 		case "soon":
 			seg = fg(theme.ColorYellow, seg)
 		}
-		parts = append(parts, seg)
-	}
-	return strings.Join(parts, dim(" · "))
+		return seg
+	}, nil)
 }
 
 // componentLine renders the top-topN components by finding count ("stravapipe 14 ·
 // dispatcher 9 · …"), with a dim "+N more" tail when there are more.
 func componentLine(cs []core.CountBy, topN int) string {
-	parts := make([]string, 0, topN+1)
-	for i, c := range cs {
-		if i >= topN {
-			parts = append(parts, dim(fmt.Sprintf("+%d more", len(cs)-topN)))
-			break
-		}
-		parts = append(parts, fmt.Sprintf("%s %d", c.Key, c.Count))
-	}
-	return strings.Join(parts, dim(" · "))
-}
-
-// countSettled counts open audits with nothing left to work — every finding
-// resolved or dropped (see domain.Audit.Settled) — the "ready to close" call-out.
-func countSettled(audits []domain.Audit) int {
-	n := 0
-	for _, a := range audits {
-		if a.Settled() {
-			n++
-		}
-	}
-	return n
+	return theme.Breakdown(cs, dim(" · "), topN,
+		func(c core.CountBy) string { return fmt.Sprintf("%s %d", c.Key, c.Count) },
+		func(remaining int) string { return dim(fmt.Sprintf("+%d more", remaining)) })
 }
 
 // move steps the cursor over the navigable rows (wrapping).

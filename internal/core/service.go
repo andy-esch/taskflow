@@ -85,14 +85,15 @@ type StatusCount struct {
 
 // Summary is the at-a-glance project state for the dashboard.
 type Summary struct {
-	Counts     []StatusCount        // every status in display order (count may be 0)
-	InProgress []domain.Task        // the in-progress working set
-	Epics      []EpicSummary        // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
-	OpenAudits []domain.Audit       // audits still in the open bucket (actionable work)
-	Findings   FindingsRollup       // actionable audit findings (open/in-progress) aggregated by urgency + component
-	Misfiled   int                  // tasks whose status disagrees with their folder
-	RevisitDue int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
-	Problems   []domain.FileProblem // unreadable files
+	Counts       []StatusCount        // every status in display order (count may be 0)
+	InProgress   []domain.Task        // the in-progress working set
+	Epics        []EpicSummary        // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
+	OpenAudits   []domain.Audit       // audits still in the open bucket (actionable work)
+	ReadyToClose int                  // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
+	Findings     FindingsRollup       // actionable audit findings (open/in-progress) aggregated by urgency + component
+	Misfiled     int                  // tasks whose status disagrees with their folder
+	RevisitDue   int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
+	Problems     []domain.FileProblem // unreadable files
 }
 
 // Summary composes a one-screen overview from a single scan of tasks + epics +
@@ -116,9 +117,16 @@ func (s *Service) Summary() (Summary, error) {
 	}
 	var openAudits []domain.Audit
 	var actionable []AuditFinding
+	readyToClose := 0
 	for _, a := range audits {
 		if a.Audit.Bucket == domain.AuditOpen {
 			openAudits = append(openAudits, a.Audit)
+			// "Ready to close" = an open audit with nothing left to work (every finding
+			// resolved or dropped). Counted once here from the same scan, so the CLI and
+			// TUI dashboards read s.ReadyToClose instead of each re-walking OpenAudits.
+			if a.Audit.Settled() {
+				readyToClose++
+			}
 		}
 		// Actionable audit findings (open / in-progress) across ALL audits — finding
 		// status, not audit bucket, is what's actionable (an open-bucket audit can be
@@ -162,12 +170,13 @@ func (s *Service) Summary() (Summary, error) {
 		// property of the aggregate, not re-sorted per surface — the CLI `status`
 		// and the TUI dashboard then agree by construction (audit M2). The entity
 		// list / `epic list` keep their own store order via rollupEpics directly.
-		Epics:      epicsByRecent(rollupEpics(epics, tasks)),
-		OpenAudits: openAudits,
-		Findings:   rollupFindings(actionable),
-		Misfiled:   misfiled,
-		RevisitDue: revisitDue,
-		Problems:   append(append(p1, p2...), p3...),
+		Epics:        epicsByRecent(rollupEpics(epics, tasks)),
+		OpenAudits:   openAudits,
+		ReadyToClose: readyToClose,
+		Findings:     rollupFindings(actionable),
+		Misfiled:     misfiled,
+		RevisitDue:   revisitDue,
+		Problems:     append(append(p1, p2...), p3...),
 	}, nil
 }
 
