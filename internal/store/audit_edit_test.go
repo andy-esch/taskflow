@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -113,5 +114,98 @@ func TestAppendAuditBody_UnknownSlug_NotFound(t *testing.T) {
 	fs, _ := auditEditRepo(t)
 	if _, _, err := fs.AppendAuditBody("nope", "x", false); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
+	}
+}
+
+// A broken edit reopens the editor on the broken content (parse-before-accept); a
+// follow-up fix lands. Mirrors TestEditTask_InvalidThenFixed_Reopens.
+func TestEditAudit_InvalidThenFixed_Reopens(t *testing.T) {
+	fs, path := auditEditRepo(t)
+	broken := "---\narea: store\n  bad: : indent\n---\n# x\n"
+	fixed := strings.Replace(auditEditSeed, "body", "recovered", 1)
+	calls := 0
+	a, changed, err := fs.EditAudit("2026-06-20-store", func(cur string, prevErr error) (string, error) {
+		calls++
+		if calls == 1 {
+			return broken, nil
+		}
+		if prevErr == nil {
+			t.Error("reopen should carry the parse error")
+		}
+		if cur != broken {
+			t.Errorf("reopen should show the broken content, got %q", cur)
+		}
+		return fixed, nil
+	})
+	if err != nil || !changed || calls != 2 {
+		t.Fatalf("expected a broken→fixed reopen (2 calls), got changed=%v calls=%d err=%v", changed, calls, err)
+	}
+	if a.Slug != "2026-06-20-store" || readFile(t, path) != fixed {
+		t.Error("the fixed content should land")
+	}
+}
+
+// No net change → no write, changed=false, the file untouched.
+func TestEditAudit_NoChange_DoesNotWrite(t *testing.T) {
+	fs, path := auditEditRepo(t)
+	info, _ := os.Stat(path)
+	_, changed, err := fs.EditAudit("2026-06-20-store", func(cur string, _ error) (string, error) { return cur, nil })
+	if err != nil || changed {
+		t.Fatalf("unchanged save: changed=%v err=%v", changed, err)
+	}
+	if readFile(t, path) != auditEditSeed {
+		t.Error("file should be untouched")
+	}
+	if after, _ := os.Stat(path); !after.ModTime().Equal(info.ModTime()) {
+		t.Error("an unchanged save should not rewrite the file")
+	}
+}
+
+// EditAudit's signature feature vs EditEpic: a concurrent bucket move (audit
+// close/reopen/defer) during the editor window is a compare-and-swap conflict, not a
+// silent resurrection of the slug at its old bucket. Mirrors the task relocation test.
+func TestEditAudit_RelocatedDuringEdit_Conflict(t *testing.T) {
+	fs, path := auditEditRepo(t)
+	moved := strings.Replace(path, "open", "closed", 1)
+	_, changed, err := fs.EditAudit("2026-06-20-store", func(cur string, _ error) (string, error) {
+		_ = os.MkdirAll(filepath.Dir(moved), 0o755)
+		_ = os.Rename(path, moved) // simulate a concurrent `audit close` mid-edit
+		return strings.Replace(cur, "body", "edited", 1), nil
+	})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("a relocation mid-edit should be ErrConflict, got %v", err)
+	}
+	if changed {
+		t.Error("a conflicted edit must not report a change")
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Error("the old path must not be resurrected")
+	}
+}
+
+// AppendAuditBody compare-and-swaps in the write window too: a bucket move there is a
+// conflict, never a resurrection. Mirrors TestEditBody_RelocatedDuringWrite_Conflict.
+func TestAppendAuditBody_RelocatedDuringWrite_Conflict(t *testing.T) {
+	fs, path := auditEditRepo(t)
+	moved := strings.Replace(path, "open", "closed", 1)
+	testHookBeforeBodyWrite = func() {
+		_ = os.MkdirAll(filepath.Dir(moved), 0o755)
+		_ = os.Rename(path, moved)
+	}
+	defer func() { testHookBeforeBodyWrite = nil }()
+	if _, _, err := fs.AppendAuditBody("2026-06-20-store", "x", false); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("a relocation in the write window should be ErrConflict, got %v", err)
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Error("the old path must not be resurrected")
+	}
+}
+
+// Appending to an audit whose frontmatter won't parse errors rather than mangling it.
+func TestAppendAuditBody_BrokenFrontmatter_Errors(t *testing.T) {
+	root := t.TempDir()
+	writeAudit(t, root, "open", "2026-06-20-broken.md", "---\narea: store\nno closing fence\n")
+	if _, _, err := NewFS(root).AppendAuditBody("2026-06-20-broken", "y", false); err == nil {
+		t.Fatal("appending to a file with unterminated frontmatter should error")
 	}
 }

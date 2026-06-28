@@ -34,7 +34,10 @@ func (s *FS) AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, stri
 	if err != nil {
 		return domain.Audit{}, "", err
 	}
+	// Echo the body exactly as it lands on disk (the file's line ending), so a --json
+	// caller's echoed body matches what `audit show --json` later returns.
 	_, storedBody := splitFrontmatter(newContent)
+	// Parse before committing: never leave an unreloadable file on disk.
 	a, err := parseAudit(newContent, path, bucket)
 	if err != nil {
 		return domain.Audit{}, "", fmt.Errorf("%w: %v", domain.ErrValidation, err)
@@ -42,6 +45,9 @@ func (s *FS) AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, stri
 	if testHookBeforeBodyWrite != nil {
 		testHookBeforeBodyWrite()
 	}
+	// Compare-and-swap before the write: a concurrent `audit close`/`reopen`/`defer`
+	// may have relocated the file across buckets during the read→write gap; writing
+	// the original path would resurrect the slug in its old bucket.
 	if curPath, _, rerr := s.resolveAudit(slug); rerr != nil || curPath != path {
 		return domain.Audit{}, "", fmt.Errorf("audit %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
 	}

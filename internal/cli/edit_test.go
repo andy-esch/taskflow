@@ -83,6 +83,37 @@ func TestEditViaEditor_RunsEditorOnTemp(t *testing.T) {
 	}
 }
 
+// `audit edit` re-lints after a save and warns (not blocks) when the free-text edit
+// leaves a finding malformed: parse-before-accept only guarantees the file reloads,
+// so a bad **Status:** lands but the post-edit lint flags it. This pins that
+// substance — an edit that introduces a bad status turns a clean lint dirty — which
+// is what the command's ⚠ warning surfaces.
+func TestAuditEdit_PostEditLintFlagsBadStatus(t *testing.T) {
+	root := setupAuditRepo(t) // audit "o": one open finding, lints clean
+	app := &App{Svc: core.NewService(store.NewFS(root)), In: strings.NewReader(""), Out: &bytes.Buffer{}, ErrOut: &bytes.Buffer{}}
+	if before, _, err := app.Svc.LintAudits("o"); err != nil || len(before) != 0 {
+		t.Fatalf("seed audit should lint clean (got %d issues, err %v)", len(before), err)
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fake-editor.sh")
+	// Append a finding with an INVALID status to whatever file the editor is handed.
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '#### X9. bad  · **Status:** bogus\\n' >> \"$1\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	audit, changed, err := app.Svc.EditAudit("o", app.editViaEditor(script))
+	if err != nil || !changed {
+		t.Fatalf("a parseable edit should land: changed=%v err=%v", changed, err)
+	}
+	results, _, err := app.Svc.LintAudits(audit.Slug)
+	if err != nil {
+		t.Fatalf("LintAudits: %v", err)
+	}
+	if len(results) == 0 {
+		t.Error("a bad **Status:** introduced by the edit should be flagged by the post-edit lint")
+	}
+}
+
 // A non-existent editor surfaces as ErrValidation (exit 11), not a panic.
 func TestEditViaEditor_BadEditor_ErrValidation(t *testing.T) {
 	app := &App{In: strings.NewReader(""), Out: &bytes.Buffer{}, ErrOut: &bytes.Buffer{}}

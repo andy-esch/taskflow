@@ -330,7 +330,7 @@ func newAuditEditCmd(app *App) *cobra.Command {
 			// surface finding-level issues as a warning so a free-text slip doesn't land
 			// silently, but don't fail — the edit already happened and lint is advisory.
 			if results, _, lerr := app.Svc.LintAudits(slug); lerr == nil && len(results) > 0 {
-				fmt.Fprintf(app.ErrOut, "%s findings need attention (see `audit lint %s`):\n", app.Style.Warn("⚠"), slug)
+				fmt.Fprintf(app.ErrOut, "%s findings need attention (see `audit lint %s`):\n", app.Style.Warn("⚠"), audit.Slug)
 				render.LintHuman(app.ErrOut, app.Style, results, "audit")
 			}
 			return nil

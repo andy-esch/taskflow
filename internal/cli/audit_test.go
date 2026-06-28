@@ -3,10 +3,13 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 func setupAuditRepo(t *testing.T) string {
@@ -25,6 +28,69 @@ func setupAuditRepo(t *testing.T) string {
 	write("audits/open/o.md", "---\narea: dispatcher\n---\n#### H1. t  · **Status:** open\n")
 	write("audits/closed/c.md", "---\narea: web\n---\n#### M1. t  · **Status:** fixed\n")
 	return root
+}
+
+// TestAuditAppend_JSON pins the `audit_mutation` --json envelope (the contract the
+// schema_version 1.20 bump is for): a parseable envelope with the reloaded audit,
+// dry_run=false, and the echoed resulting body.
+func TestAuditAppend_JSON(t *testing.T) {
+	root := setupAuditRepo(t)
+	out := runRoot(t, "-C", root, "--json", "audit", "append", "o", "--body", "#### M9. new  · **Status:** open")
+	var env struct {
+		SchemaVersion string `json:"schema_version"`
+		DryRun        bool   `json:"dry_run"`
+		Body          string `json:"body"`
+		Audit         struct {
+			Slug   string `json:"slug"`
+			Bucket string `json:"bucket"`
+		} `json:"audit"`
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("audit append --json is not a parseable envelope: %v\n%s", err, out)
+	}
+	if env.SchemaVersion == "" || env.Audit.Slug != "o" || env.Audit.Bucket != "open" {
+		t.Errorf("audit append --json envelope wrong:\n%s", out)
+	}
+	if env.DryRun {
+		t.Error("a real append should report dry_run=false")
+	}
+	if !strings.Contains(env.Body, "#### M9. new") {
+		t.Errorf("append --json should echo the resulting body:\n%s", out)
+	}
+}
+
+// --dry-run previews an audit append without writing.
+func TestAuditAppend_DryRun_NoWrite(t *testing.T) {
+	root := setupAuditRepo(t)
+	p := filepath.Join(root, "audits", "open", "o.md")
+	before, _ := os.ReadFile(p)
+	runRoot(t, "-C", root, "--dry-run", "audit", "append", "o", "--body", "#### NOPE.  · **Status:** open")
+	if after, _ := os.ReadFile(p); !bytes.Equal(before, after) {
+		t.Error("--dry-run audit append must not write")
+	}
+}
+
+// Empty append input is a clean validation error, not an empty write.
+func TestAuditAppend_Empty_Errors(t *testing.T) {
+	root := setupAuditRepo(t)
+	var out bytes.Buffer
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd.SetArgs([]string{"-C", root, "audit", "append", "o", "--body", "   "})
+	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("empty audit append should wrap ErrValidation (exit 11), got %v", err)
+	}
+}
+
+// `audit edit --dry-run` is rejected (it's interactive, no preview) — a safety flag
+// must never be a silent no-op.
+func TestAuditEdit_RejectsDryRun(t *testing.T) {
+	root := setupAuditRepo(t)
+	var out bytes.Buffer
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd.SetArgs([]string{"-C", root, "--dry-run", "audit", "edit", "o"})
+	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("`audit edit --dry-run` should be rejected with ErrValidation, got %v", err)
+	}
 }
 
 func TestAuditList_DefaultsToOpen(t *testing.T) {

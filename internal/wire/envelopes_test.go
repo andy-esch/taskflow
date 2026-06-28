@@ -75,6 +75,9 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"AuditShowEnvelope", func(w io.Writer) error {
 			return emit(w, ToAuditShowEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, "# body"))
 		}},
+		{"AuditMutationEnvelope", func(w io.Writer) error {
+			return emit(w, ToAuditMutationEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, "# new body", true))
+		}},
 		{"FindingsEnvelope", func(w io.Writer) error {
 			return emit(w, ToFindingsEnvelope([]core.AuditFinding{{
 				Finding: domain.Finding{Code: "S1", Title: "tighten the gateway", Status: "open", Effort: "S", Urgency: "soon"},
