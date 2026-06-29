@@ -77,11 +77,11 @@ func newTaskCmd(app *App) *cobra.Command {
 			// first time the command tree is built (every test, every run).
 			panic("cli: no help text for task transition verb " + tr.Verb)
 		}
-		if tr.Verb == "defer" {
-			// defer has its own builder: it mirrors newTransitionCmd but adds the
-			// optional --until snooze date, which the core records atomically with the
-			// move (one store write — audit M4). (Remaining M4 follow-up: model the
-			// extra param on the transition registry so this isn't a bespoke builder.)
+		if tr.Param == domain.ParamOptionalDate {
+			// A verb that takes an optional date (defer) has its own builder: it mirrors
+			// newTransitionCmd but adds the --until snooze flag, which the core records
+			// atomically with the move (one store write — audit M4). The registry's
+			// Param flag — not a hardcoded verb name — is what routes us here.
 			cmd.AddCommand(newDeferCmd(app))
 			continue
 		}

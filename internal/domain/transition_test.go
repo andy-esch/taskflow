@@ -12,7 +12,7 @@ func TestTaskTransitions(t *testing.T) {
 		{Verb: "next", To: string(StatusNextUp), Destructive: false},
 		{Verb: "ready", To: string(StatusReadyToStart), Destructive: false},
 		{Verb: "complete", To: string(StatusCompleted), Destructive: false},
-		{Verb: "defer", To: string(StatusDeferred), Destructive: false},
+		{Verb: "defer", To: string(StatusDeferred), Destructive: false, Param: ParamOptionalDate},
 		{Verb: "deprecate", To: string(StatusDeprecated), Destructive: true},
 	}
 	got := TaskTransitions()
@@ -29,6 +29,17 @@ func TestTaskTransitions(t *testing.T) {
 	for _, tr := range got {
 		if !Status(tr.To).Valid() {
 			t.Errorf("task transition %q -> %q is not a valid status", tr.Verb, tr.To)
+		}
+	}
+	// The optional-date param is the registry signal the CLI/TUI read instead of
+	// hardcoding "is this defer?": exactly `defer` carries it, nothing else.
+	for _, tr := range got {
+		wantParam := ParamNone
+		if tr.Verb == "defer" {
+			wantParam = ParamOptionalDate
+		}
+		if tr.Param != wantParam {
+			t.Errorf("task transition %q: Param = %v, want %v", tr.Verb, tr.Param, wantParam)
 		}
 	}
 }
@@ -54,6 +65,11 @@ func TestAuditTransitions(t *testing.T) {
 	for _, tr := range got {
 		if !AuditBucket(tr.To).Valid() {
 			t.Errorf("audit transition %q -> %q is not a valid bucket", tr.Verb, tr.To)
+		}
+		// Audits carry no optional date — `audit defer` is a plain bucket move (no
+		// revisit_at field). The param is deliberately task-only.
+		if tr.Param != ParamNone {
+			t.Errorf("audit transition %q should take no param, got %v", tr.Verb, tr.Param)
 		}
 	}
 }

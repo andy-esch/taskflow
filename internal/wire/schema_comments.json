@@ -38,6 +38,7 @@
   "github.com/andy-esch/taskflow/internal/domain.Task.RevisitAt": "optional \"snooze until\" date for a deferred task (set by `task defer`)",
   "github.com/andy-esch/taskflow/internal/domain.Task.StartedAt": "stamped when a task enters in-progress (incl. `new --start`)",
   "github.com/andy-esch/taskflow/internal/domain.Transition": "Transition is one lifecycle action: the verb a user names (from the CLI or the TUI action menu) mapped to the destination state it moves a document to.",
+  "github.com/andy-esch/taskflow/internal/domain.TransitionParam": "TransitionParam marks an optional argument a lifecycle verb accepts beyond the move itself.",
   "github.com/andy-esch/taskflow/internal/domain.UnsetField": "UnsetField is a sentinel value in a SetFields update map: the key is removed from the frontmatter instead of being assigned.",
   "github.com/andy-esch/taskflow/internal/wire.AuditJSON": "AuditJSON is the wire shape of an audit inside the --json envelopes.",
   "github.com/andy-esch/taskflow/internal/wire.AuditJSON.InProgressFindings": "The progress bar's disposition bands. open + in_progress + done + dropped ≤\nfindings (an unrecognized/missing status counts toward none).",

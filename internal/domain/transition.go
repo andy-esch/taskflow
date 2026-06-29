@@ -14,12 +14,28 @@ package domain
 //
 // One registry, two adapters: the CLI builds its per-verb commands from these
 // tables and the TUI's action menu is a thin view of them, so adding or renaming
-// a verb is a single edit here rather than a drift between surfaces.
+// a verb is a single edit here rather than a drift between surfaces. Param marks a
+// verb that takes an extra optional argument (the task defer's revisit date), so
+// adapters read it from the registry instead of hardcoding which verb is special.
 type Transition struct {
 	Verb        string
 	To          string
 	Destructive bool
+	Param       TransitionParam
 }
+
+// TransitionParam marks an optional argument a lifecycle verb accepts beyond the
+// move itself. Today the only non-None case is the task `defer`, which takes an
+// optional revisit (snooze) date. It is a typed marker, NOT a full param spec: the
+// registry declares THAT a verb takes a date so adapters stop hardcoding "is this
+// defer?", while HOW each collects it (a --until flag, a TUI date input) stays
+// adapter-specific. Add a value here if another verb ever grows a parameter.
+type TransitionParam int
+
+const (
+	ParamNone         TransitionParam = iota // takes only the target document(s)
+	ParamOptionalDate                        // an optional date — defer's revisit/snooze
+)
 
 // taskTransitions are the task status moves (the working-set lifecycle). Order is
 // the declared verb order both surfaces present: the CLI command list and the TUI
@@ -29,7 +45,7 @@ var taskTransitions = []Transition{
 	{Verb: "next", To: string(StatusNextUp), Destructive: false},
 	{Verb: "ready", To: string(StatusReadyToStart), Destructive: false},
 	{Verb: "complete", To: string(StatusCompleted), Destructive: false},
-	{Verb: "defer", To: string(StatusDeferred), Destructive: false},
+	{Verb: "defer", To: string(StatusDeferred), Destructive: false, Param: ParamOptionalDate},
 	{Verb: "deprecate", To: string(StatusDeprecated), Destructive: true},
 }
 

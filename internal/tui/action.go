@@ -25,16 +25,22 @@ import (
 // registry — they have no CLI verb vocabulary to share — so epicTransitions stays
 // declared inline below.
 type transition struct {
-	verb        string
-	to          string
-	destructive bool // requires a y/n confirm (an archiving move)
+	verb         string
+	to           string
+	destructive  bool // requires a y/n confirm (an archiving move)
+	optionalDate bool // takes an optional date before applying (the task defer's revisit prompt)
 }
 
 // fromDomain maps the shared domain.Transition table to the TUI's local shape.
 func fromDomain(ts []domain.Transition) []transition {
 	out := make([]transition, len(ts))
 	for i, t := range ts {
-		out[i] = transition{verb: t.Verb, to: t.To, destructive: t.Destructive}
+		out[i] = transition{
+			verb:         t.Verb,
+			to:           t.To,
+			destructive:  t.Destructive,
+			optionalDate: t.Param == domain.ParamOptionalDate,
+		}
 	}
 	return out
 }
@@ -55,9 +61,9 @@ var auditTransitions = fromDomain(domain.AuditTransitions())
 // three is destructive (no archive-style y/n gate): retiring/deprecating an epic
 // is a reversible status flip, not a file move.
 var epicTransitions = []transition{
-	{"activate", "active", false},
-	{"retire", "retired", false},
-	{"deprecate", "deprecated", false},
+	{verb: "activate", to: "active"},
+	{verb: "retire", to: "retired"},
+	{verb: "deprecate", to: "deprecated"},
 }
 
 // transitionFor resolves a `:`-command verb to its transition within a given
