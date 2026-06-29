@@ -254,7 +254,7 @@ func (s *Service) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) 
 	if err := domain.ValidateEpicStatus(status); err != nil {
 		return domain.Epic{}, err
 	}
-	return s.store.MoveEpic(id, status, dryRun)
+	return s.store.MoveEpic(id, status, s.now(), dryRun)
 }
 
 // SetEpicFields validates and applies non-status frontmatter updates to an epic
@@ -266,9 +266,8 @@ func (s *Service) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) 
 // before the store serializes them — otherwise the store would write a corrupting
 // !!str that the strict loader can't read back. Keys outside the epic registry are
 // rejected unless force is set (a typo'd field name must not silently persist). A
-// domain.UnsetField value removes the key. Unlike SetFields, no updated_at is
-// stamped — the Epic schema has no updated_at field and MoveEpic doesn't stamp
-// one either, so the two epic write paths stay consistent.
+// domain.UnsetField value removes the key. updated_at is stamped automatically (the
+// service injects it, mirroring SetFields), so a caller can't set or unset it.
 func (s *Service) SetEpicFields(id string, updates map[string]any, force, dryRun bool) (domain.Epic, error) {
 	if len(updates) == 0 {
 		return domain.Epic{}, fmt.Errorf("%w: no fields given", domain.ErrValidation)
@@ -277,6 +276,9 @@ func (s *Service) SetEpicFields(id string, updates map[string]any, force, dryRun
 	for field, val := range updates {
 		if field == "status" {
 			return domain.Epic{}, fmt.Errorf("%w: epic status moves via `epic move`, not `set`", domain.ErrValidation)
+		}
+		if field == "updated_at" {
+			return domain.Epic{}, fmt.Errorf("%w: updated_at is stamped automatically and cannot be set", domain.ErrValidation)
 		}
 		if _, unset := val.(domain.UnsetField); unset {
 			// A typo'd field name must not silently no-op — gate unset on the registry
@@ -299,6 +301,8 @@ func (s *Service) SetEpicFields(id string, updates map[string]any, force, dryRun
 		}
 		clean[field] = coerced
 	}
+	// Stamp the activity date like SetFields does, so any epic edit advances it.
+	clean["updated_at"] = s.now().Format("2006-01-02")
 	return s.store.SetEpicFields(id, clean, dryRun)
 }
 
@@ -331,7 +335,7 @@ func coerceEpicField(field string, val any) (any, error) {
 // epic, reopening the editor on a broken edit. Returns the reloaded epic and
 // whether anything changed.
 func (s *Service) EditEpic(id string, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error) {
-	return s.store.EditEpic(id, edit)
+	return s.store.EditEpic(id, s.now(), edit)
 }
 
 // ShowEpic returns an epic's rollup summary (so show/detail consume

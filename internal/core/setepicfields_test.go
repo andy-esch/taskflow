@@ -65,9 +65,10 @@ func TestSetEpicFields_Surgical(t *testing.T) {
 	if !strings.Contains(s, "description: nicer goal") {
 		t.Errorf("description not updated:\n%s", s)
 	}
-	// No updated_at is stamped — epics have no such field (consistent with MoveEpic).
-	if strings.Contains(s, "updated_at") {
-		t.Errorf("epic set must not stamp updated_at:\n%s", s)
+	// updated_at is stamped automatically (the seed has none, so its presence proves
+	// the stamp) — uniform with task set; the service injects the date.
+	if !strings.Contains(s, "updated_at:") || epic.Updated == "" {
+		t.Errorf("epic set should stamp updated_at:\n%s", s)
 	}
 }
 

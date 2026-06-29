@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 
@@ -61,7 +62,7 @@ func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
 // Moving to the current status is an idempotent no-op write. Mirrors SetFields'
 // parse-before-commit guard: a status that wouldn't reload is rejected with the
 // file untouched.
-func (s *FS) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) {
+func (s *FS) MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epic, error) {
 	if err := domain.ValidateEpicStatus(status); err != nil {
 		return domain.Epic{}, err
 	}
@@ -78,7 +79,14 @@ func (s *FS) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) {
 	if err != nil {
 		return domain.Epic{}, fmt.Errorf("read epic %s: %w", path, err)
 	}
-	newContent, err := updateFrontmatter(content, map[string]any{"status": status})
+	updates := map[string]any{"status": status}
+	// Stamp updated_at only on a real status change — a no-op move to the current
+	// status isn't an edit. cur is best-effort: a currently-unparseable epic that the
+	// move repairs counts as an edit and gets the stamp too.
+	if cur, perr := parseEpic(content, path); perr != nil || cur.Status != status {
+		updates["updated_at"] = now.Format("2006-01-02")
+	}
+	newContent, err := updateFrontmatter(content, updates)
 	if err != nil {
 		return domain.Epic{}, err
 	}
@@ -144,7 +152,7 @@ func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (doma
 // the shared editor-loop (parse-before-accept), accepting a save only if it still
 // parses as an epic. Epics never move directories, so there is no compare-and-swap
 // concern — recheck is nil. Returns the reloaded epic and whether it changed.
-func (s *FS) EditEpic(id string, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error) {
+func (s *FS) EditEpic(id string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error) {
 	cands, err := markdownCandidates(s.epicsDir, "") // epics have no status/bucket dir
 	if err != nil {
 		return domain.Epic{}, false, err
@@ -158,7 +166,7 @@ func (s *FS) EditEpic(id string, edit func(current string, prevErr error) (strin
 	if err != nil {
 		return domain.Epic{}, false, fmt.Errorf("read epic %s: %w", path, err)
 	}
-	return editFile("epic", path, orig,
+	return editFile("epic", path, orig, now,
 		func(content []byte) (domain.Epic, error) { return parseEpic(content, path) },
 		nil, // epics never move directories — no compare-and-swap needed
 		edit)

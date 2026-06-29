@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -105,6 +106,13 @@ func TestFS_MoveAudit(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "audits", "closed", "x.md")); err != nil {
 		t.Errorf("closed file missing: %v", err)
+	}
+	// A bucket move is a pure relocation — it touches neither frontmatter nor body, so
+	// it must NOT stamp updated_at (unlike edit/append). The directory carries the
+	// state change; the content date stays put.
+	moved, _ := os.ReadFile(filepath.Join(root, "audits", "closed", "x.md"))
+	if a.Updated != "" || strings.Contains(string(moved), "updated_at") {
+		t.Errorf("a bucket move must not stamp updated_at:\n%s", moved)
 	}
 }
 

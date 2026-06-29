@@ -32,7 +32,7 @@ func readFile(t *testing.T, path string) string {
 func TestEditTask_ValidEdit_Writes(t *testing.T) {
 	fs, path := editRepo(t)
 	want := strings.Replace(editSeed, "body", "edited body", 1)
-	task, changed, err := fs.EditTask("edit-me", func(cur string, _ error) (string, error) {
+	task, changed, err := fs.EditTask("edit-me", bodyNow, func(cur string, _ error) (string, error) {
 		if cur != editSeed {
 			t.Errorf("editor got unexpected current content:\n%q", cur)
 		}
@@ -47,8 +47,13 @@ func TestEditTask_ValidEdit_Writes(t *testing.T) {
 	if task.Slug != "edit-me" {
 		t.Errorf("reloaded task slug = %q", task.Slug)
 	}
-	if got := readFile(t, path); got != want {
-		t.Errorf("file not written:\n got %q\nwant %q", got, want)
+	got := readFile(t, path)
+	if !strings.Contains(got, "edited body") {
+		t.Errorf("the edit's body change should land:\n%s", got)
+	}
+	// An accepted edit stamps updated_at to now (2026-06-20) — uniform with set/append.
+	if task.Updated != "2026-06-20" || !strings.Contains(got, `updated_at: "2026-06-20"`) {
+		t.Errorf("an edit should stamp updated_at to now; task.Updated=%q\n%s", task.Updated, got)
 	}
 }
 
@@ -56,7 +61,7 @@ func TestEditTask_ValidEdit_Writes(t *testing.T) {
 func TestEditTask_NoChange_DoesNotWrite(t *testing.T) {
 	fs, path := editRepo(t)
 	info, _ := os.Stat(path)
-	_, changed, err := fs.EditTask("edit-me", func(cur string, _ error) (string, error) {
+	_, changed, err := fs.EditTask("edit-me", bodyNow, func(cur string, _ error) (string, error) {
 		return cur, nil // saved as-is
 	})
 	if err != nil {
@@ -80,7 +85,7 @@ func TestEditTask_InvalidThenFixed_Reopens(t *testing.T) {
 	broken := "---\nstatus: ready-to-start\ntier: not-an-int\n---\n# Title\n"
 	fixed := strings.Replace(editSeed, "body", "recovered", 1)
 	calls := 0
-	task, changed, err := fs.EditTask("edit-me", func(cur string, prevErr error) (string, error) {
+	task, changed, err := fs.EditTask("edit-me", bodyNow, func(cur string, prevErr error) (string, error) {
 		calls++
 		switch calls {
 		case 1:
@@ -107,8 +112,12 @@ func TestEditTask_InvalidThenFixed_Reopens(t *testing.T) {
 	if !changed || task.Slug != "edit-me" {
 		t.Errorf("expected a changed write, got changed=%v slug=%q", changed, task.Slug)
 	}
-	if got := readFile(t, path); got != fixed {
+	got := readFile(t, path)
+	if !strings.Contains(got, "recovered") {
 		t.Errorf("file should hold the fixed content, got %q", got)
+	}
+	if task.Updated != "2026-06-20" || !strings.Contains(got, `updated_at: "2026-06-20"`) {
+		t.Errorf("the fixed edit should stamp updated_at to now; task.Updated=%q\n%s", task.Updated, got)
 	}
 }
 
@@ -117,7 +126,7 @@ func TestEditTask_InvalidThenFixed_Reopens(t *testing.T) {
 func TestEditTask_GiveUpOnBroken_ErrValidation(t *testing.T) {
 	fs, path := editRepo(t)
 	broken := "---\nstatus: ready-to-start\ntier: not-an-int\n---\n# Title\n"
-	_, changed, err := fs.EditTask("edit-me", func(_ string, _ error) (string, error) {
+	_, changed, err := fs.EditTask("edit-me", bodyNow, func(_ string, _ error) (string, error) {
 		return broken, nil // same broken bytes every reopen → user gave up
 	})
 	if !errors.Is(err, domain.ErrValidation) {
@@ -135,7 +144,7 @@ func TestEditTask_GiveUpOnBroken_ErrValidation(t *testing.T) {
 func TestEditTask_EditorError_Propagates(t *testing.T) {
 	fs, path := editRepo(t)
 	sentinel := errors.New("editor exploded")
-	_, _, err := fs.EditTask("edit-me", func(string, error) (string, error) {
+	_, _, err := fs.EditTask("edit-me", bodyNow, func(string, error) (string, error) {
 		return "", sentinel
 	})
 	if !errors.Is(err, sentinel) {
@@ -151,7 +160,7 @@ func TestEditTask_EditorError_Propagates(t *testing.T) {
 func TestEditTask_RelocatedDuringEdit_Conflict(t *testing.T) {
 	fs, path := editRepo(t)
 	moved := strings.Replace(path, "ready-to-start", "in-progress", 1)
-	_, changed, err := fs.EditTask("edit-me", func(cur string, _ error) (string, error) {
+	_, changed, err := fs.EditTask("edit-me", bodyNow, func(cur string, _ error) (string, error) {
 		// Simulate a concurrent `task move` relocating the file mid-edit.
 		if err := os.MkdirAll(filepath.Dir(moved), 0o755); err != nil {
 			t.Fatal(err)
@@ -182,7 +191,7 @@ func TestEditTask_BrokenFileUnchanged_ErrValidation(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "broken.md", "---\nstatus: ready-to-start\ntier: not-an-int\n---\n# x\n")
 	fs := NewFS(root)
-	_, changed, err := fs.EditTask("broken", func(cur string, _ error) (string, error) {
+	_, changed, err := fs.EditTask("broken", bodyNow, func(cur string, _ error) (string, error) {
 		return cur, nil // opened to inspect, saved unchanged
 	})
 	if !errors.Is(err, domain.ErrValidation) {
@@ -199,7 +208,7 @@ func TestEditTask_BrokenFileUnchanged_ErrValidation(t *testing.T) {
 func TestEditTask_StatusDrift_ReportsMisfiled(t *testing.T) {
 	fs, _ := editRepo(t)
 	drifted := strings.Replace(editSeed, "status: ready-to-start", "status: completed", 1)
-	task, changed, err := fs.EditTask("edit-me", func(string, error) (string, error) {
+	task, changed, err := fs.EditTask("edit-me", bodyNow, func(string, error) (string, error) {
 		return drifted, nil
 	})
 	if err != nil || !changed {
@@ -217,7 +226,7 @@ func TestEditTask_StatusDrift_ReportsMisfiled(t *testing.T) {
 func TestEditTask_UnknownSlug_NotFound(t *testing.T) {
 	fs, _ := editRepo(t)
 	ran := false
-	_, _, err := fs.EditTask("nope", func(string, error) (string, error) {
+	_, _, err := fs.EditTask("nope", bodyNow, func(string, error) (string, error) {
 		ran = true
 		return "", nil
 	})

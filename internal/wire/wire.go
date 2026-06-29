@@ -78,7 +78,12 @@ import (
 // finding-status vocabulary (open · in-progress · fixed · landed · deferred ·
 // superseded · wontfix), so an agent writing a finding discovers the status set
 // without parsing prose, the audit counterpart to `statuses`/`audit_buckets`.
-const SchemaVersion = "1.21"
+// 1.22: epic and audit payloads carry `updated_at` — the entity's own last-edited
+// date, stamped by the tool on every content write (set/edit/append, and epic
+// status moves) the way tasks already are. For epics it is distinct from the
+// derived task-activity date; for audits it advances on edits while `date` stays
+// the immutable slug. A pure relocation (audit bucket move) does not change it.
+const SchemaVersion = "1.22"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

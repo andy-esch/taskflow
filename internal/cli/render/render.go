@@ -507,6 +507,9 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Fin
 	if a.Date != "" {
 		field("date", a.Date)
 	}
+	if a.Updated != "" {
+		field("updated", a.Updated)
+	}
 	bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10)
 	progress := fmt.Sprintf("%s %s  %s", bar, st.Percent(a.Percent()), theme.Counts(a.Resolved(), a.Findings))
 	if a.OpenFindings > 0 {

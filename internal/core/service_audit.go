@@ -106,13 +106,13 @@ func (s *Service) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (do
 // finding-level lint (status vocab, bucket↔state) on the result. Returns the reloaded
 // audit and whether anything changed.
 func (s *Service) EditAudit(slug string, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error) {
-	return s.store.EditAudit(slug, edit)
+	return s.store.EditAudit(slug, s.now(), edit)
 }
 
 // AppendAuditBody appends a section to an audit's markdown body (`audit append`) in
 // one atomic, validated write — the agent face of audit body editing, beside the
-// human EditAudit. Frontmatter is preserved verbatim (no updated_at on audits).
-// Returns the reloaded audit and the resulting body.
+// human EditAudit. Stamps updated_at (the audit's `date` stays immutable — it's the
+// slug). Returns the reloaded audit and the resulting body.
 func (s *Service) AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, string, error) {
-	return s.store.AppendAuditBody(slug, text, dryRun)
+	return s.store.AppendAuditBody(slug, text, s.now(), dryRun)
 }

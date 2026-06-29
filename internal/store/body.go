@@ -62,12 +62,12 @@ func writeBody[T any](
 }
 
 // AppendAuditBody appends markdown to an audit's body in one atomic, validated
-// write — the audit twin of EditBody's append mode (`audit append`). Unlike the task
-// path it does NOT stamp updated_at (audits have no such field; their date is the
-// immutable slug), so the frontmatter is preserved verbatim via replaceBody. The
-// shared write tail (parse-before-accept, compare-and-swap, dry-run, body echo) lives
-// in writeBody. Returns the reloaded audit and the resulting (LF) body.
-func (s *FS) AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, string, error) {
+// write — the audit twin of EditBody's append mode (`audit append`). It stamps
+// updated_at like the task path (audits now carry that field); the audit's `date`
+// stays untouched — that one is immutable, part of the slug. The shared write tail
+// (parse-before-accept, compare-and-swap, dry-run, body echo) lives in writeBody.
+// Returns the reloaded audit and the resulting (LF) body.
+func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error) {
 	path, bucket, err := s.resolveAudit(slug)
 	if err != nil {
 		return domain.Audit{}, "", err
@@ -80,9 +80,10 @@ func (s *FS) AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, stri
 	if err != nil {
 		return domain.Audit{}, "", err // can't body-edit a file whose frontmatter won't parse
 	}
+	updatedAt := now.Format("2006-01-02")
 	return writeBody(
 		"audit", path, content, appendSection(string(body), text),
-		replaceBody, // no updated_at stamp — audits have no such field
+		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
 		func(c []byte) (domain.Audit, error) { return parseAudit(c, path, bucket) },
 		func() error {
 			// A concurrent `audit close`/`reopen`/`defer` may have relocated the file

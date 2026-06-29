@@ -81,7 +81,7 @@ func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
 // accepts it only if it still parses as a task, reopening the editor on a broken
 // edit. Returns the reloaded task and whether anything changed.
 func (s *Service) EditTask(slug string, edit func(current string, prevErr error) (string, error)) (domain.Task, bool, error) {
-	return s.store.EditTask(slug, edit)
+	return s.store.EditTask(slug, s.now(), edit)
 }
 
 // ReplaceBody overwrites a task's markdown body in one atomic, validated write —
