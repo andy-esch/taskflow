@@ -60,7 +60,7 @@ type App struct {
 // blocks.
 func (a *App) setStyle() {
 	a.resolveTheme() // flag/env now; the [theme] config folds in once resolve() discovers it
-	a.Style = render.NewStyle(wantColor(a.Color, a.NoColor, a.Out)).WithWidth(terminalWidth(a.Out)).WithPalette(a.Th.Dark)
+	a.Style = render.NewStyle(wantColor(a.Color, a.NoColor, a.Out)).WithWidth(terminalWidth(a.Out)).WithTrueColor(trueColorCapable(a.Out)).WithPalette(a.Th.Dark)
 	noInput := a.NoInput || envEnabled("TSKFLW_NO_INPUT")
 	a.Gate = prompt.NewGate(gateOpen(a.JSON, noInput, isTerminalReader(a.In), isTerminal(a.ErrOut)))
 	a.Prompt = prompt.NewTTY(a.In, a.ErrOut, a.Th)
