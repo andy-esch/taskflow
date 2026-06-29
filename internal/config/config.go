@@ -30,6 +30,7 @@ type Config struct {
 	PlanningRepo string
 	TrackedRepos []string
 	Pager        PagerConfig
+	Theme        ThemeConfig
 }
 
 // PagerConfig is the `[pager]` table: whether to page long human output and which
@@ -41,6 +42,14 @@ type PagerConfig struct {
 	Command string
 }
 
+// ThemeConfig is the `[theme]` table: the color theme by name (empty → the
+// built-in default). A local-terminal concern like Pager, so it rides on whichever
+// config Discover lands on — not resolved across a planning_repo pointer. Plain
+// data (a name), no color types, so config stays dependency-light.
+type ThemeConfig struct {
+	Name string
+}
+
 // configFile mirrors the on-disk .tskflwctl.toml schema for a real TOML decode.
 // Defaults (taskflow_root ".", the rest empty) are applied by readConfigFile.
 type configFile struct {
@@ -48,12 +57,18 @@ type configFile struct {
 	PlanningRepo string        `toml:"planning_repo"`
 	TrackedRepos []string      `toml:"tracked_repos"`
 	Pager        pagerFileTOML `toml:"pager"`
+	Theme        themeFileTOML `toml:"theme"`
 }
 
 // pagerFileTOML is the `[pager]` table as decoded from disk.
 type pagerFileTOML struct {
 	Enabled *bool  `toml:"enabled"`
 	Command string `toml:"command"`
+}
+
+// themeFileTOML is the `[theme]` table as decoded from disk.
+type themeFileTOML struct {
+	Name string `toml:"name"`
 }
 
 // Discover walks up from start to find the planning root. At each level it
@@ -89,6 +104,7 @@ func Discover(start string) (*Config, error) {
 				PlanningRepo: cf.PlanningRepo,
 				TrackedRepos: cf.TrackedRepos,
 				Pager:        PagerConfig{Enabled: cf.Pager.Enabled, Command: cf.Pager.Command},
+				Theme:        ThemeConfig{Name: cf.Theme.Name},
 			}, nil
 		}
 		if isDir(filepath.Join(dir, domain.TasksDir)) {
@@ -272,6 +288,12 @@ tracked_repos = []
 # [pager]
 # enabled = true
 # command = "less -FRX"
+
+# [theme]: the color theme — a registered name, or "auto" for the default. Override
+# here, or with the --theme flag / TSKFLW_THEME env (precedence: flag > env > config).
+# An unrecognized name warns (to stderr) and falls back to the default.
+# [theme]
+# name = "neon"
 `
 
 // Init scaffolds the planning directory tree and writes the config file under

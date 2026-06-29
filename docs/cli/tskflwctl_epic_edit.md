@@ -38,6 +38,7 @@ tskflwctl epic edit <epic> [flags]
       --no-input       never prompt; missing required input is an error (for scripts/agents; also TSKFLW_NO_INPUT)
       --no-pager       do not pipe long human output through a pager
       --paginate       page long human output through $PAGER (on a TTY), even if disabled in config
+      --theme string   color theme name (overrides TSKFLW_THEME and [theme].name in config)
 ```
 
 ### SEE ALSO

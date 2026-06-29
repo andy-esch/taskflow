@@ -235,6 +235,38 @@ command = "bat -p"
 	})
 }
 
+// TestDiscover_ParsesTheme pins the [theme] table: the name rides through Discover
+// onto Config.Theme (empty when the table is absent → the default theme downstream).
+func TestDiscover_ParsesTheme(t *testing.T) {
+	t.Run("explicit name", func(t *testing.T) {
+		repo := t.TempDir()
+		mkdirs(t, filepath.Join(repo, "tasks"))
+		writeConfig(t, repo, `taskflow_root = "."
+[theme]
+name = "neon"
+`)
+		cfg, err := Discover(repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Theme.Name != "neon" {
+			t.Errorf("Theme.Name = %q, want %q", cfg.Theme.Name, "neon")
+		}
+	})
+	t.Run("absent table → empty name", func(t *testing.T) {
+		repo := t.TempDir()
+		mkdirs(t, filepath.Join(repo, "tasks"))
+		writeConfig(t, repo, `taskflow_root = "."`+"\n")
+		cfg, err := Discover(repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Theme.Name != "" {
+			t.Errorf("Theme.Name = %q, want empty when [theme] is absent", cfg.Theme.Name)
+		}
+	})
+}
+
 // TestDiscover_FollowsPlanningRepo pins the sanctioned out-of-tree escape:
 // planning_repo points discovery at an EXTERNAL planning repo (here a sibling),
 // which taskflow_root may not. The raw value still rides along for linkbacks.

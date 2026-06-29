@@ -49,14 +49,21 @@ type Style struct {
 }
 
 // NewStyle returns a Style; enabled controls whether ANSI is emitted. The palette
-// defaults to the project default theme's dark variant — the semantic ANSI slots
-// are background-independent, so this is safe regardless of terminal background;
-// config-driven theme selection wires a chosen palette in a later task.
+// defaults to the project default theme's dark variant (the semantic ANSI slots are
+// background-independent, so this is safe regardless of terminal background); the
+// CLI overrides it with the config-selected theme via WithPalette.
 func NewStyle(enabled bool) Style { return Style{on: enabled, palette: design.Default().Dark} }
 
 // WithWidth returns a copy capped to a terminal width (0 leaves it uncapped, so
 // piped output keeps full-width rows).
 func (s Style) WithWidth(w int) Style { s.width = w; return s }
+
+// WithPalette returns a copy that renders with palette p. The CLI passes the active
+// theme's DARK palette: the semantic 16-color ANSI slots are background-independent
+// (so styled CLI text is correct on any terminal), and the only background-varying
+// token — the bar gradient — stays the dark ramp (a light-terminal gradient is
+// deferred polish; see the neon-day validation task).
+func (s Style) WithPalette(p design.Palette) Style { s.palette = p; return s }
 
 func (s Style) wrap(code, text string) string {
 	if !s.on || text == "" || code == "" {

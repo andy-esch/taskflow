@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
@@ -16,6 +17,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
@@ -36,8 +38,10 @@ type App struct {
 	NoInput  bool   // never prompt; missing required input is an error (also TSKFLW_NO_INPUT)
 	NoPager  bool   // force paging off (--no-pager)
 	Paginate bool   // force paging on, TTY gate permitting (--paginate)
+	Theme    string // color theme name (--theme); overrides TSKFLW_THEME + [theme].name
 
 	Style  render.Style
+	Th     design.Theme    // the resolved active theme (flag > env > config > default)
 	Gate   prompt.Gate     // may we prompt? (resolved once, like Style)
 	Prompt prompt.Prompter // the human-recovery face (huh on a TTY)
 	Cfg    *config.Config
@@ -56,10 +60,37 @@ type App struct {
 // TSKFLW_NO_INPUT). Off a TTY the gate is closed, so the agent/pipeline path never
 // blocks.
 func (a *App) setStyle() {
-	a.Style = render.NewStyle(wantColor(a.Color, a.NoColor, a.Out)).WithWidth(terminalWidth(a.Out))
+	a.resolveTheme() // flag/env now; the [theme] config folds in once resolve() discovers it
+	a.Style = render.NewStyle(wantColor(a.Color, a.NoColor, a.Out)).WithWidth(terminalWidth(a.Out)).WithPalette(a.Th.Dark)
 	noInput := a.NoInput || envEnabled("TSKFLW_NO_INPUT")
 	a.Gate = prompt.NewGate(gateOpen(a.JSON, noInput, isTerminalReader(a.In), isTerminal(a.ErrOut)))
-	a.Prompt = prompt.NewTTY(a.In, a.ErrOut)
+	a.Prompt = prompt.NewTTY(a.In, a.ErrOut, a.Th)
+}
+
+// resolveTheme picks the active color theme by precedence: --theme flag >
+// TSKFLW_THEME env > [theme].name in config > the built-in default. An unknown name
+// degrades to the default (design.Lookup never errors), so a typo can't break a
+// command. Cfg may be nil (pre-discovery): config is simply skipped. Called once in
+// setStyle (flag/env) and again in resolve once Cfg is known.
+func (a *App) resolveTheme() {
+	cfgName := ""
+	if a.Cfg != nil {
+		cfgName = a.Cfg.Theme.Name
+	}
+	a.Th, _ = design.Lookup(themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName))
+}
+
+// themeName resolves the selected theme NAME by precedence — flag > env > config —
+// trimming each, and "" when none is set (which design.Lookup maps to the default).
+// Pure (no App/env access) so the precedence contract is unit-tested directly.
+func themeName(flag, env, cfgName string) string {
+	if s := strings.TrimSpace(flag); s != "" {
+		return s
+	}
+	if s := strings.TrimSpace(env); s != "" {
+		return s
+	}
+	return strings.TrimSpace(cfgName)
 }
 
 // NewRootCmd builds the command tree with explicit DI — no package globals.
@@ -69,7 +100,7 @@ func (a *App) setStyle() {
 // `--body-file -`), so a caller/test injects one reader and every input path
 // agrees — production passes os.Stdin.
 func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
-	app := &App{Out: out, ErrOut: errOut, In: in}
+	app := &App{Out: out, ErrOut: errOut, In: in, Th: design.Default()}
 
 	root := &cobra.Command{
 		Use:           "tskflwctl",
@@ -91,6 +122,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 				return err
 			}
 			app.warnLinks()
+			app.warnUnknownTheme()
 			return nil
 		},
 	}
@@ -108,6 +140,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.PersistentFlags().BoolVar(&app.NoInput, "no-input", false, "never prompt; missing required input is an error (for scripts/agents; also TSKFLW_NO_INPUT)")
 	root.PersistentFlags().BoolVar(&app.NoPager, "no-pager", false, "do not pipe long human output through a pager")
 	root.PersistentFlags().BoolVar(&app.Paginate, "paginate", false, "page long human output through $PAGER (on a TTY), even if disabled in config")
+	root.PersistentFlags().StringVar(&app.Theme, "theme", "", "color theme name (overrides TSKFLW_THEME and [theme].name in config)")
 
 	root.AddCommand(newInitCmd(app))
 	root.AddCommand(newVersionCmd(app))
@@ -149,6 +182,12 @@ func (a *App) resolve() error {
 		return err
 	}
 	a.Cfg = cfg
+	// The [theme].name can now participate in selection (lowest precedence, so this
+	// only changes anything when neither --theme nor TSKFLW_THEME pinned it). Re-skin
+	// the output Style + prompter so a config-selected theme takes effect.
+	a.resolveTheme()
+	a.Style = a.Style.WithPalette(a.Th.Dark)
+	a.Prompt = prompt.NewTTY(a.In, a.ErrOut, a.Th)
 	// One *FS satisfies all three core ports; the Service gets the use-case Store,
 	// the adapters get the narrow Fixer/Layout (see the App field comment).
 	fs := store.NewFS(cfg.Root)
@@ -169,6 +208,25 @@ func (a *App) warnLinks() {
 	}
 	for _, p := range config.CheckLinks(a.Cfg) {
 		fmt.Fprintf(a.ErrOut, "%s %s\n", a.Style.Warn("⚠"), p.Message)
+	}
+}
+
+// warnUnknownTheme emits one ⚠ to stderr when an explicitly-set theme name (flag /
+// env / config) didn't match a registered theme — so a typo, or a not-yet-supported
+// name like "none", isn't a silent fall-back to the default. Empty and "auto" mean
+// "the default" and are intentional, so they don't warn. stderr-only (so --json
+// stdout stays clean), and not called on the completion path.
+func (a *App) warnUnknownTheme() {
+	cfgName := ""
+	if a.Cfg != nil {
+		cfgName = a.Cfg.Theme.Name
+	}
+	name := themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName)
+	if name == "" || strings.EqualFold(name, "auto") {
+		return
+	}
+	if _, ok := design.Lookup(name); !ok {
+		fmt.Fprintf(a.ErrOut, "%s unknown theme %q; using %q\n", a.Style.Warn("⚠"), name, a.Th.Name)
 	}
 }
 
