@@ -30,7 +30,7 @@ func (nopStore) SetFields(string, map[string]any, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
 func (nopStore) CreateTask(domain.Task, string, bool) (domain.Task, error) { return domain.Task{}, nil }
-func (nopStore) EditTask(string, func(string, error) (string, error)) (domain.Task, bool, error) {
+func (nopStore) EditTask(string, time.Time, func(string, error) (string, error)) (domain.Task, bool, error) {
 	return domain.Task{}, false, nil
 }
 func (nopStore) EditBody(string, string, bool, time.Time, bool) (domain.Task, string, error) {
@@ -45,13 +45,13 @@ func (nopStore) GetEpic(string) (domain.Epic, string, error) {
 func (nopStore) CreateEpic(string, domain.Epic, string, bool) (domain.Epic, error) {
 	return domain.Epic{}, nil
 }
-func (nopStore) MoveEpic(string, string, bool) (domain.Epic, error) {
+func (nopStore) MoveEpic(string, string, time.Time, bool) (domain.Epic, error) {
 	return domain.Epic{}, nil
 }
 func (nopStore) SetEpicFields(string, map[string]any, bool) (domain.Epic, error) {
 	return domain.Epic{}, nil
 }
-func (nopStore) EditEpic(string, func(string, error) (string, error)) (domain.Epic, bool, error) {
+func (nopStore) EditEpic(string, time.Time, func(string, error) (string, error)) (domain.Epic, bool, error) {
 	return domain.Epic{}, false, nil
 }
 func (nopStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) { return nil, nil, nil }
@@ -70,10 +70,10 @@ func (nopStore) MoveAudit(string, domain.AuditBucket, bool) (domain.Audit, error
 func (nopStore) CreateAudit(domain.Audit, string, bool) (domain.Audit, error) {
 	return domain.Audit{}, nil
 }
-func (nopStore) EditAudit(string, func(string, error) (string, error)) (domain.Audit, bool, error) {
+func (nopStore) EditAudit(string, time.Time, func(string, error) (string, error)) (domain.Audit, bool, error) {
 	return domain.Audit{}, false, nil
 }
-func (nopStore) AppendAuditBody(string, string, bool) (domain.Audit, string, error) {
+func (nopStore) AppendAuditBody(string, string, time.Time, bool) (domain.Audit, string, error) {
 	return domain.Audit{}, "", nil
 }
 
@@ -168,7 +168,7 @@ func (f *fakeStore) GetEpic(id string) (domain.Epic, string, error) {
 
 // MoveEpic mirrors the real store's field rewrite: resolve the seeded epic, set
 // its status, and (unless dryRun) persist it back to the in-memory slice.
-func (f *fakeStore) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) {
+func (f *fakeStore) MoveEpic(id, status string, _ time.Time, dryRun bool) (domain.Epic, error) {
 	for i, e := range f.epics {
 		if e.ID == id {
 			e.Status = status

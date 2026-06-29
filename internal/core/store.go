@@ -30,9 +30,9 @@ type TaskStore interface {
 	CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error)
 	// EditTask hands the current file content to edit (which runs the caller's
 	// editor) and accepts the result only if it still parses as a task —
-	// parse-before-accept, looping on the editor for a broken edit. Reports
-	// whether the file changed.
-	EditTask(slug string, edit func(current string, prevErr error) (string, error)) (domain.Task, bool, error)
+	// parse-before-accept, looping on the editor for a broken edit. A changed save
+	// is stamped with updated_at (now); reports whether the file changed.
+	EditTask(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Task, bool, error)
 	// EditBody replaces (appendMode=false) or appends to (true) a task's markdown
 	// body in one atomic, validated write, preserving the frontmatter and stamping
 	// updated_at. The agent face of body editing, beside EditTask's editor. Returns
@@ -46,18 +46,21 @@ type EpicStore interface {
 	GetEpic(id string) (epic domain.Epic, body string, err error)
 	CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (domain.Epic, error)
 	// MoveEpic surgically rewrites an epic's `status` frontmatter field (epic
-	// status is a field, not a directory, so the file stays put). dryRun runs every
-	// validation and returns the would-be epic without touching disk.
-	MoveEpic(id, status string, dryRun bool) (domain.Epic, error)
+	// status is a field, not a directory, so the file stays put), stamping updated_at
+	// on a real status change. dryRun runs every validation and returns the would-be
+	// epic without touching disk.
+	MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epic, error)
 	// SetEpicFields surgically updates non-status frontmatter fields on an epic in
-	// one atomic, validated write (status moves via MoveEpic). dryRun runs every
-	// validation and returns the would-be epic without touching disk.
+	// one atomic, validated write (status moves via MoveEpic). updated_at is injected
+	// by the service. dryRun runs every validation and returns the would-be epic
+	// without touching disk.
 	SetEpicFields(id string, updates map[string]any, dryRun bool) (domain.Epic, error)
 	// EditEpic hands the current file content to edit (which runs the caller's
 	// editor) and accepts the result only if it still parses as an epic —
-	// parse-before-accept, looping on the editor for a broken edit. Reports whether
-	// the file changed. The epic counterpart to EditTask.
-	EditEpic(id string, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error)
+	// parse-before-accept, looping on the editor for a broken edit. A changed save is
+	// stamped with updated_at (now); reports whether the file changed. The epic
+	// counterpart to EditTask.
+	EditEpic(id string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error)
 }
 
 // AuditWithFindings pairs an audit with the findings parsed from the SAME body
@@ -90,14 +93,15 @@ type AuditStore interface {
 	CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error)
 	// EditAudit hands the current file content to edit (the caller's editor) and
 	// accepts the result only if it still parses as an audit — parse-before-accept,
-	// looping on a broken edit. Reports whether the file changed. The audit
-	// counterpart to EditTask; finding-level lint is the caller's to surface.
-	EditAudit(slug string, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error)
+	// looping on a broken edit. A changed save is stamped with updated_at (now);
+	// reports whether the file changed. The audit counterpart to EditTask;
+	// finding-level lint is the caller's to surface.
+	EditAudit(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error)
 	// AppendAuditBody appends markdown to an audit's body in one atomic, validated
-	// write, preserving the frontmatter verbatim (audits have no updated_at to stamp).
+	// write, stamping updated_at (the audit's `date` stays immutable — it's the slug).
 	// The agent face of audit body editing, beside EditAudit's editor. Returns the
 	// reloaded audit and the resulting body.
-	AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, string, error)
+	AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error)
 }
 
 // Store is the use-case persistence port the Service depends on. It is

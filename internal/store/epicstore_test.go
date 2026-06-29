@@ -98,7 +98,7 @@ func TestFS_MoveEpic(t *testing.T) {
 	writeEpic(t, root, "18-tui.md",
 		"---\nstatus: active\ndescription: tui epic\ncustom: keep\n---\n# TUI Epic\nbody\n")
 
-	ep, err := NewFS(root).MoveEpic("18-tui", "retired", false)
+	ep, err := NewFS(root).MoveEpic("18-tui", "retired", bodyNow, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,6 +123,25 @@ func TestFS_MoveEpic(t *testing.T) {
 	if !strings.Contains(s, "# TUI Epic\nbody\n") {
 		t.Errorf("body not preserved:\n%s", s)
 	}
+	// A real status change stamps updated_at (the seed had none) to now (2026-06-20).
+	if ep.Updated != "2026-06-20" || !strings.Contains(s, `updated_at: "2026-06-20"`) {
+		t.Errorf("a status move should stamp updated_at; ep.Updated=%q\n%s", ep.Updated, s)
+	}
+}
+
+// TestFS_MoveEpic_NoOp_NoStamp: moving to the CURRENT status isn't an edit — no
+// updated_at stamp (mirrors the "no bump on no-op" rule).
+func TestFS_MoveEpic_NoOp_NoStamp(t *testing.T) {
+	root := t.TempDir()
+	writeEpic(t, root, "18-tui.md", "---\nstatus: active\ndescription: x\n---\n# X\n")
+	ep, err := NewFS(root).MoveEpic("18-tui", "active", bodyNow, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := os.ReadFile(filepath.Join(root, "epics", "18-tui.md"))
+	if ep.Updated != "" || strings.Contains(string(s), "updated_at") {
+		t.Errorf("a no-op move (active→active) must not stamp updated_at:\n%s", s)
+	}
 }
 
 // TestFS_MoveEpic_InvalidStatus rejects an out-of-vocabulary status with the file
@@ -132,7 +151,7 @@ func TestFS_MoveEpic_InvalidStatus(t *testing.T) {
 	const original = "---\nstatus: active\ndescription: x\n---\n# X\n"
 	writeEpic(t, root, "18-tui.md", original)
 
-	if _, err := NewFS(root).MoveEpic("18-tui", "bogus", false); !errors.Is(err, domain.ErrValidation) {
+	if _, err := NewFS(root).MoveEpic("18-tui", "bogus", bodyNow, false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("invalid status should be ErrValidation, got %v", err)
 	}
 	b, _ := os.ReadFile(filepath.Join(root, "epics", "18-tui.md"))
@@ -147,7 +166,7 @@ func TestFS_MoveEpic_DryRun(t *testing.T) {
 	const original = "---\nstatus: active\n---\n# X\n"
 	writeEpic(t, root, "18-tui.md", original)
 
-	ep, err := NewFS(root).MoveEpic("18-tui", "retired", true)
+	ep, err := NewFS(root).MoveEpic("18-tui", "retired", bodyNow, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +180,7 @@ func TestFS_MoveEpic_DryRun(t *testing.T) {
 }
 
 func TestFS_MoveEpic_NotFound(t *testing.T) {
-	if _, err := NewFS(t.TempDir()).MoveEpic("ghost", "retired", false); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := NewFS(t.TempDir()).MoveEpic("ghost", "retired", bodyNow, false); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 }

@@ -91,7 +91,8 @@ type AuditJSON struct {
 	Slug         string `json:"slug" jsonschema:"description=audit identifier (filename without .md)"`
 	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — equals the audit's directory"`
 	Area         string `json:"area,omitempty" jsonschema:"description=subsystem/topic audited"`
-	Date         string `json:"date,omitempty" jsonschema:"description=audit date YYYY-MM-DD"`
+	Date         string `json:"date,omitempty" jsonschema:"description=audit date YYYY-MM-DD (immutable — part of the slug)"`
+	Updated      string `json:"updated_at,omitempty" jsonschema:"description=audit's own last-edited date YYYY-MM-DD (edit/append); a bucket move does not change it"`
 	Findings     int    `json:"findings" jsonschema:"description=total findings parsed from the body"`
 	OpenFindings int    `json:"open_findings" jsonschema:"description=findings whose status is open"`
 	// The progress bar's disposition bands. open + in_progress + done + dropped ≤
@@ -107,7 +108,7 @@ type AuditJSON struct {
 // ToAuditJSON maps a domain audit to its wire DTO.
 func ToAuditJSON(a domain.Audit) AuditJSON {
 	return AuditJSON{
-		Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date,
+		Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date, Updated: a.Updated,
 		Findings: a.Findings, OpenFindings: a.OpenFindings,
 		InProgressFindings: a.ActiveFindings, DoneFindings: a.DoneFindings, DroppedFindings: a.DroppedFindings,
 		ReadyToClose: a.Bucket == domain.AuditOpen && a.Settled(),
@@ -182,6 +183,7 @@ type EpicMetaJSON struct {
 	Description string   `json:"description,omitempty" jsonschema:"description=one-line epic goal"`
 	Priority    string   `json:"priority,omitempty" jsonschema:"description=high | medium | low"`
 	Created     string   `json:"created,omitempty" jsonschema:"description=creation date YYYY-MM-DD"`
+	Updated     string   `json:"updated_at,omitempty" jsonschema:"description=epic's own last-edited date YYYY-MM-DD (set/edit/status-move); distinct from derived task activity"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
 }
 
@@ -190,6 +192,6 @@ type EpicMetaJSON struct {
 func ToEpicMeta(e domain.Epic) EpicMetaJSON {
 	return EpicMetaJSON{
 		ID: e.ID, Status: e.Status, Description: e.Description,
-		Priority: e.Priority, Created: e.Created, Tags: e.Tags,
+		Priority: e.Priority, Created: e.Created, Updated: e.Updated, Tags: e.Tags,
 	}
 }

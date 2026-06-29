@@ -142,14 +142,6 @@ func replaceBodyStamped(content []byte, newBody, updatedAt string) ([]byte, erro
 	})
 }
 
-// replaceBody swaps a file's markdown body, preserving the frontmatter surgically
-// (unknown keys, comments, key order) and the file's line ending, with NO field
-// stamp. The audit body-append uses it (audits have no updated_at); the task body
-// paths use replaceBodyStamped, which is this plus the updated_at stamp.
-func replaceBody(content []byte, newBody string) ([]byte, error) {
-	return replaceBodyWith(content, newBody, nil)
-}
-
 // replaceBodyWith rebuilds a file from its (surgically-preserved) frontmatter and a
 // new body, optionally mutating the frontmatter mapping first (e.g. to stamp a date).
 func replaceBodyWith(content []byte, newBody string, mutate func(mapping *yaml.Node)) ([]byte, error) {

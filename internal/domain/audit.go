@@ -42,6 +42,11 @@ type Audit struct {
 	Bucket AuditBucket `yaml:"-"`
 	Area   string      `yaml:"area"`
 	Date   string      `yaml:"date"`
+	// Updated is the audit's own last-edited date (stamped by edit/append). Unlike
+	// Date — immutable, part of the slug — this advances on each content edit. A
+	// bucket move (close/reopen/defer) does NOT touch it: it changes no frontmatter or
+	// body, only the directory.
+	Updated string `yaml:"updated_at"`
 
 	Findings int `yaml:"-"`
 	// Per-disposition finding tally (see TallyFindings), the segmented progress

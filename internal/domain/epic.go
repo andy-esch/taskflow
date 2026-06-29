@@ -14,11 +14,15 @@ type Epic struct {
 	ID   string `yaml:"-"`
 	Path string `yaml:"-"`
 
-	Status      string   `yaml:"status"`
-	Description string   `yaml:"description"`
-	Priority    string   `yaml:"priority"`
-	Created     string   `yaml:"created"`
-	Tags        []string `yaml:"tags"`
+	Status      string `yaml:"status"`
+	Description string `yaml:"description"`
+	Priority    string `yaml:"priority"`
+	Created     string `yaml:"created"`
+	// Updated is the epic's own last-edited date (stamped by set/edit/status-move) —
+	// distinct from the DERIVED EpicSummary.LastUpdated (max member-task activity). A
+	// change to member tasks does NOT touch it.
+	Updated string   `yaml:"updated_at"`
+	Tags    []string `yaml:"tags"`
 }
 
 // Epic status values — the closed, intent-level vocabulary (decided 2026-06-25).

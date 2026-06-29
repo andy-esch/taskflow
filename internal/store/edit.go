@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -20,11 +21,17 @@ import (
 // skips that guard (epics never move directories). Returns the reloaded entity and
 // whether it changed.
 //
+// An accepted change has its updated_at stamped to `now` (surgically, preserving the
+// rest of the user's edit), so any editor edit advances the activity date the way the
+// set/append/move paths do — uniform across task/epic/audit, which all carry the
+// field. An unchanged save stamps nothing (no write).
+//
 // The fs and the editor stay decoupled: the store orchestrates resolve/parse/write;
 // the caller's edit callback owns the editor (a cli human-face concern).
 func editFile[T any](
 	noun, path string,
 	orig []byte,
+	now time.Time,
 	parse func(content []byte) (T, error),
 	recheck func() error,
 	edit func(current string, prevErr error) (string, error),
@@ -47,14 +54,26 @@ func editFile[T any](
 			}
 			return v, false, nil
 		}
-		v, perr := parse([]byte(edited))
-		if perr != nil {
+		// Parse-before-accept on the user's own content: a frontmatter break reopens
+		// the editor (or, re-saved unchanged, is a give-up) rather than landing.
+		if _, perr := parse([]byte(edited)); perr != nil {
 			if edited == current {
 				// re-saved the same broken content → the user gave up
 				return zero, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
 			}
 			current, prevErr = edited, perr // reopen on the broken content
 			continue
+		}
+		// Accepted. Stamp updated_at so any edit advances the activity date (uniform
+		// with set/append/move). The frontmatter just parsed, so the surgical stamp
+		// can't hit a structural break; re-parse the stamped form for the return value.
+		stamped, err := updateFrontmatter([]byte(edited), map[string]any{"updated_at": now.Format("2006-01-02")})
+		if err != nil {
+			return zero, false, err
+		}
+		v, perr := parse(stamped)
+		if perr != nil {
+			return zero, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
 		}
 		// Compare-and-swap before the write (mirrors SetFields/Move): the editor
 		// window is long, so a concurrent move may have relocated the file — writing
@@ -65,7 +84,7 @@ func editFile[T any](
 				return zero, false, err
 			}
 		}
-		if err := writeFileAtomic(path, []byte(edited), 0o644); err != nil {
+		if err := writeFileAtomic(path, stamped, 0o644); err != nil {
 			return zero, false, fmt.Errorf("write %s %s: %w", noun, path, err)
 		}
 		return v, true, nil
@@ -78,7 +97,7 @@ func editFile[T any](
 // file during the editor window (which would otherwise resurrect the slug in its
 // old status directory — a permanent ErrAmbiguous). Returns the reloaded task and
 // whether it changed.
-func (s *FS) EditTask(slug string, edit func(current string, prevErr error) (string, error)) (domain.Task, bool, error) {
+func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Task, bool, error) {
 	path, st, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, false, err
@@ -87,7 +106,7 @@ func (s *FS) EditTask(slug string, edit func(current string, prevErr error) (str
 	if err != nil {
 		return domain.Task{}, false, fmt.Errorf("read task %s: %w", path, err)
 	}
-	return editFile("task", path, orig,
+	return editFile("task", path, orig, now,
 		func(content []byte) (domain.Task, error) { return parseTask(content, path, st) },
 		func() error {
 			if curPath, _, rerr := s.resolve(slug); rerr != nil || curPath != path {
@@ -103,7 +122,7 @@ func (s *FS) EditTask(slug string, edit func(current string, prevErr error) (str
 // `defer` relocating the file across buckets during the editor window. Finding-level
 // lint (status vocab, bucket↔state) is left to the caller, mirroring how task edit
 // leaves field lint to `lint` — the store only guarantees the file still parses.
-func (s *FS) EditAudit(slug string, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error) {
+func (s *FS) EditAudit(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error) {
 	path, bucket, err := s.resolveAudit(slug)
 	if err != nil {
 		return domain.Audit{}, false, err
@@ -112,7 +131,7 @@ func (s *FS) EditAudit(slug string, edit func(current string, prevErr error) (st
 	if err != nil {
 		return domain.Audit{}, false, fmt.Errorf("read audit %s: %w", path, err)
 	}
-	return editFile("audit", path, orig,
+	return editFile("audit", path, orig, now,
 		func(content []byte) (domain.Audit, error) { return parseAudit(content, path, bucket) },
 		func() error {
 			if curPath, _, rerr := s.resolveAudit(slug); rerr != nil || curPath != path {

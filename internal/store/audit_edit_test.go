@@ -6,11 +6,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 const auditEditSeed = "---\narea: store\ndate: \"2026-06-20\"\n---\n# Audit\n\n#### H1. thing  · **Status:** open\n\nbody\n"
+
+// auditEditNow is deliberately LATER than the seed's immutable date (2026-06-20),
+// so a stamped updated_at is visibly distinct from the slug's date.
+var auditEditNow = time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 
 func auditEditRepo(t *testing.T) (*FS, string) {
 	t.Helper()
@@ -19,11 +24,12 @@ func auditEditRepo(t *testing.T) (*FS, string) {
 	return NewFS(root), filepath.Join(root, domain.AuditsDir, "open", "2026-06-20-store.md")
 }
 
-// EditAudit mirrors EditTask: a valid edit parses, writes atomically, reports changed.
+// EditAudit mirrors EditTask: a valid edit parses, writes atomically, reports changed,
+// and stamps updated_at — while the audit's `date` (its immutable slug) stays put.
 func TestEditAudit_ValidEdit_Writes(t *testing.T) {
 	fs, path := auditEditRepo(t)
 	want := strings.Replace(auditEditSeed, "body", "edited body", 1)
-	a, changed, err := fs.EditAudit("2026-06-20-store", func(cur string, _ error) (string, error) {
+	a, changed, err := fs.EditAudit("2026-06-20-store", auditEditNow, func(cur string, _ error) (string, error) {
 		if cur != auditEditSeed {
 			t.Errorf("editor got unexpected content:\n%q", cur)
 		}
@@ -35,8 +41,15 @@ func TestEditAudit_ValidEdit_Writes(t *testing.T) {
 	if a.Slug != "2026-06-20-store" || a.Bucket != domain.AuditOpen {
 		t.Errorf("reloaded audit wrong: %+v", a)
 	}
-	if got := readFile(t, path); got != want {
-		t.Errorf("file not written:\n got %q\nwant %q", got, want)
+	got := readFile(t, path)
+	if !strings.Contains(got, "edited body") {
+		t.Errorf("the edit's body change should land:\n%s", got)
+	}
+	if a.Updated != "2026-07-01" || !strings.Contains(got, `updated_at: "2026-07-01"`) {
+		t.Errorf("an audit edit should stamp updated_at to now; a.Updated=%q\n%s", a.Updated, got)
+	}
+	if a.Date != "2026-06-20" {
+		t.Errorf("the audit date is immutable (the slug); got %q", a.Date)
 	}
 }
 
@@ -45,7 +58,7 @@ func TestEditAudit_ValidEdit_Writes(t *testing.T) {
 func TestEditAudit_GiveUpOnBroken_ErrValidation(t *testing.T) {
 	fs, path := auditEditRepo(t)
 	broken := "---\narea: store\n  bad: : indent\n---\n# x\n"
-	_, changed, err := fs.EditAudit("2026-06-20-store", func(string, error) (string, error) {
+	_, changed, err := fs.EditAudit("2026-06-20-store", bodyNow, func(string, error) (string, error) {
 		return broken, nil // same broken bytes every reopen → user gave up
 	})
 	if !errors.Is(err, domain.ErrValidation) {
@@ -60,7 +73,7 @@ func TestEditAudit_GiveUpOnBroken_ErrValidation(t *testing.T) {
 func TestEditAudit_UnknownSlug_NotFound(t *testing.T) {
 	fs, _ := auditEditRepo(t)
 	ran := false
-	_, _, err := fs.EditAudit("nope", func(string, error) (string, error) { ran = true; return "", nil })
+	_, _, err := fs.EditAudit("nope", bodyNow, func(string, error) (string, error) { ran = true; return "", nil })
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
@@ -69,21 +82,21 @@ func TestEditAudit_UnknownSlug_NotFound(t *testing.T) {
 	}
 }
 
-// AppendAuditBody appends a section AND preserves the frontmatter — crucially WITHOUT
-// stamping updated_at (the task body path stamps it; audits have no such field, so
-// their date stays the immutable slug).
-func TestAppendAuditBody_AppendsNoUpdatedAtStamp(t *testing.T) {
+// AppendAuditBody appends a section, preserves the rest of the frontmatter, AND
+// stamps updated_at (uniform with the task body path) — while the audit's `date`
+// (its immutable slug) stays put.
+func TestAppendAuditBody_StampsUpdatedAt(t *testing.T) {
 	fs, path := auditEditRepo(t)
-	a, body, err := fs.AppendAuditBody("2026-06-20-store", "#### M2. new  · **Status:** open", false)
+	a, body, err := fs.AppendAuditBody("2026-06-20-store", "#### M2. new  · **Status:** open", auditEditNow, false)
 	if err != nil {
 		t.Fatalf("AppendAuditBody: %v", err)
 	}
 	got := readFile(t, path)
-	if strings.Contains(got, "updated_at") {
-		t.Errorf("audit append must NOT stamp updated_at:\n%s", got)
+	if a.Updated != "2026-07-01" || !strings.Contains(got, `updated_at: "2026-07-01"`) {
+		t.Errorf("audit append should stamp updated_at to now; a.Updated=%q\n%s", a.Updated, got)
 	}
 	if a.Area != "store" || a.Date != "2026-06-20" {
-		t.Errorf("frontmatter not preserved: area=%q date=%q", a.Area, a.Date)
+		t.Errorf("frontmatter not preserved (date is immutable): area=%q date=%q", a.Area, a.Date)
 	}
 	if !strings.Contains(got, "#### M2. new") || !strings.Contains(body, "#### M2. new") {
 		t.Errorf("appended section missing:\n%s", got)
@@ -97,7 +110,7 @@ func TestAppendAuditBody_AppendsNoUpdatedAtStamp(t *testing.T) {
 func TestAppendAuditBody_DryRun_NoWrite(t *testing.T) {
 	fs, path := auditEditRepo(t)
 	before := readFile(t, path)
-	_, body, err := fs.AppendAuditBody("2026-06-20-store", "PREVIEW", true)
+	_, body, err := fs.AppendAuditBody("2026-06-20-store", "PREVIEW", bodyNow, true)
 	if err != nil {
 		t.Fatalf("dry-run AppendAuditBody: %v", err)
 	}
@@ -112,7 +125,7 @@ func TestAppendAuditBody_DryRun_NoWrite(t *testing.T) {
 // Unknown slug → ErrNotFound, no write.
 func TestAppendAuditBody_UnknownSlug_NotFound(t *testing.T) {
 	fs, _ := auditEditRepo(t)
-	if _, _, err := fs.AppendAuditBody("nope", "x", false); !errors.Is(err, domain.ErrNotFound) {
+	if _, _, err := fs.AppendAuditBody("nope", "x", bodyNow, false); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }
@@ -124,7 +137,7 @@ func TestEditAudit_InvalidThenFixed_Reopens(t *testing.T) {
 	broken := "---\narea: store\n  bad: : indent\n---\n# x\n"
 	fixed := strings.Replace(auditEditSeed, "body", "recovered", 1)
 	calls := 0
-	a, changed, err := fs.EditAudit("2026-06-20-store", func(cur string, prevErr error) (string, error) {
+	a, changed, err := fs.EditAudit("2026-06-20-store", auditEditNow, func(cur string, prevErr error) (string, error) {
 		calls++
 		if calls == 1 {
 			return broken, nil
@@ -140,8 +153,12 @@ func TestEditAudit_InvalidThenFixed_Reopens(t *testing.T) {
 	if err != nil || !changed || calls != 2 {
 		t.Fatalf("expected a broken→fixed reopen (2 calls), got changed=%v calls=%d err=%v", changed, calls, err)
 	}
-	if a.Slug != "2026-06-20-store" || readFile(t, path) != fixed {
+	got := readFile(t, path)
+	if a.Slug != "2026-06-20-store" || !strings.Contains(got, "recovered") {
 		t.Error("the fixed content should land")
+	}
+	if a.Updated != "2026-07-01" || !strings.Contains(got, `updated_at: "2026-07-01"`) {
+		t.Errorf("the fixed edit should stamp updated_at; a.Updated=%q\n%s", a.Updated, got)
 	}
 }
 
@@ -149,7 +166,7 @@ func TestEditAudit_InvalidThenFixed_Reopens(t *testing.T) {
 func TestEditAudit_NoChange_DoesNotWrite(t *testing.T) {
 	fs, path := auditEditRepo(t)
 	info, _ := os.Stat(path)
-	_, changed, err := fs.EditAudit("2026-06-20-store", func(cur string, _ error) (string, error) { return cur, nil })
+	_, changed, err := fs.EditAudit("2026-06-20-store", bodyNow, func(cur string, _ error) (string, error) { return cur, nil })
 	if err != nil || changed {
 		t.Fatalf("unchanged save: changed=%v err=%v", changed, err)
 	}
@@ -167,7 +184,7 @@ func TestEditAudit_NoChange_DoesNotWrite(t *testing.T) {
 func TestEditAudit_RelocatedDuringEdit_Conflict(t *testing.T) {
 	fs, path := auditEditRepo(t)
 	moved := strings.Replace(path, "open", "closed", 1)
-	_, changed, err := fs.EditAudit("2026-06-20-store", func(cur string, _ error) (string, error) {
+	_, changed, err := fs.EditAudit("2026-06-20-store", bodyNow, func(cur string, _ error) (string, error) {
 		_ = os.MkdirAll(filepath.Dir(moved), 0o755)
 		_ = os.Rename(path, moved) // simulate a concurrent `audit close` mid-edit
 		return strings.Replace(cur, "body", "edited", 1), nil
@@ -193,7 +210,7 @@ func TestAppendAuditBody_RelocatedDuringWrite_Conflict(t *testing.T) {
 		_ = os.Rename(path, moved)
 	}
 	defer func() { testHookBeforeBodyWrite = nil }()
-	if _, _, err := fs.AppendAuditBody("2026-06-20-store", "x", false); !errors.Is(err, domain.ErrConflict) {
+	if _, _, err := fs.AppendAuditBody("2026-06-20-store", "x", bodyNow, false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a relocation in the write window should be ErrConflict, got %v", err)
 	}
 	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
@@ -205,7 +222,7 @@ func TestAppendAuditBody_RelocatedDuringWrite_Conflict(t *testing.T) {
 func TestAppendAuditBody_BrokenFrontmatter_Errors(t *testing.T) {
 	root := t.TempDir()
 	writeAudit(t, root, "open", "2026-06-20-broken.md", "---\narea: store\nno closing fence\n")
-	if _, _, err := NewFS(root).AppendAuditBody("2026-06-20-broken", "y", false); err == nil {
+	if _, _, err := NewFS(root).AppendAuditBody("2026-06-20-broken", "y", bodyNow, false); err == nil {
 		t.Fatal("appending to a file with unterminated frontmatter should error")
 	}
 }
