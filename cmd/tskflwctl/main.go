@@ -12,6 +12,8 @@ import (
 	"golang.org/x/term"
 
 	"github.com/andy-esch/taskflow/internal/cli"
+	"github.com/andy-esch/taskflow/internal/design"
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 func main() {
@@ -75,31 +77,42 @@ func useFang(args []string, stderrIsTTY bool) bool {
 	return stderrIsTTY
 }
 
-// repoColorScheme maps fang's help/error palette onto tskflwctl's own 16-color
-// ANSI scheme. internal/cli/render uses the same SGR colors (red 31, green 32,
-// yellow 33, blue 34, cyan 36, gray 90), so styled help/errors stay
-// terminal-theme-adaptive and visually consistent with `list`/`status`/the TUI
-// instead of fang's truecolor charmtone default. Palette indices: 1 red, 2 green,
-// 3 yellow, 4 blue, 6 cyan, 8 bright-black, 15 bright-white.
+// repoColorScheme maps fang's help/error palette onto the project's DEFAULT theme,
+// so styled help/errors carry the app's identity from the one palette — not hardcoded
+// literals or fang's truecolor charmtone default. fang's LightDarkFunc picks each
+// token's background-appropriate variant (so help/errors get light vs dark right —
+// more than the CLI body, which renders the dark palette); on a non-truecolor
+// terminal lipgloss downsamples to the nearest 16-color.
 //
-// fang's LightDarkFunc parameter is intentionally ignored: ANSI 16-color indices
-// are remapped by the terminal's own light/dark theme, so the scheme is already
-// background-adaptive without per-slot light/dark selection. (Wire it only if a
-// slot ever needs a truecolor value.)
-func repoColorScheme(lipgloss.LightDarkFunc) fang.ColorScheme {
+// fang renders chrome OUTSIDE the per-command theme resolution, so it always uses
+// Default(), never the --theme / [theme] selection. Help/errors are brand chrome,
+// not data, so that's an accepted limitation (threading the selected theme into fang
+// would be a follow-up).
+func repoColorScheme(ld lipgloss.LightDarkFunc) fang.ColorScheme {
+	d := design.Default()
+	// pick resolves token h to the detected terminal background via fang's func.
+	pick := func(h func(design.Palette) design.Hue) color.Color {
+		return ld(h(d.Light).Color(), h(d.Dark).Color())
+	}
+	sem := func(c theme.Color) func(design.Palette) design.Hue {
+		return func(p design.Palette) design.Hue { return p.Of(c) }
+	}
 	var (
-		def    = lipgloss.NoColor{} // terminal default foreground
-		red    = lipgloss.Color("1")
-		green  = lipgloss.Color("2")
-		yellow = lipgloss.Color("3")
-		blue   = lipgloss.Color("4")
-		cyan   = lipgloss.Color("6")
-		gray   = lipgloss.Color("8")
-		bright = lipgloss.Color("15")
+		def    = lipgloss.NoColor{} // terminal default foreground (body text)
+		accent = pick(func(p design.Palette) design.Hue { return p.Accent })
+		green  = pick(sem(theme.ColorGreen))
+		yellow = pick(sem(theme.ColorYellow))
+		blue   = pick(sem(theme.ColorBlue))
+		cyan   = pick(sem(theme.ColorCyan))
+		gray   = pick(sem(theme.ColorGray))
+		danger = pick(func(p design.Palette) design.Hue { return p.Danger })
+		// The error badge's foreground is a fixed high-contrast white — a universal
+		// "error" affordance, not a themeable color (the palette has no badge-fg token).
+		badgeFg = lipgloss.Color("15")
 	)
 	return fang.ColorScheme{
 		Base:           def,
-		Title:          cyan,   // section headers (USAGE / COMMANDS / FLAGS)
+		Title:          accent, // section headers (USAGE / COMMANDS / FLAGS) carry the theme accent
 		Command:        yellow, // subcommand names
 		Flag:           green,  // flag names
 		Program:        blue,   // the program name in the usage line
@@ -112,7 +125,7 @@ func repoColorScheme(lipgloss.LightDarkFunc) fang.ColorScheme {
 		Dash:           gray,
 		Help:           gray,
 		Codeblock:      gray,
-		ErrorHeader:    [2]color.Color{bright, red}, // bright-white on red badge
+		ErrorHeader:    [2]color.Color{badgeFg, danger}, // bright-white on a danger-red badge
 		ErrorDetails:   def,
 	}
 }

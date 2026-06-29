@@ -2,12 +2,16 @@ package main
 
 import (
 	"encoding/json"
+	"image/color"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/design"
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // buildBinary compiles the real tskflwctl once per test run. Everything else
@@ -180,11 +184,20 @@ func TestUseFang(t *testing.T) {
 // sets the accent slots, so a future fang ColorScheme change can't silently drop
 // our palette wiring.
 func TestRepoColorScheme(t *testing.T) {
-	cs := repoColorScheme(nil)
-	if cs.Title == nil || cs.Command == nil || cs.Flag == nil {
-		t.Fatal("repoColorScheme left accent colors unset")
+	// Simulate a dark terminal: the LightDarkFunc returns the dark variant.
+	dark := func(_, dark color.Color) color.Color { return dark }
+	cs := repoColorScheme(dark)
+	d := design.Default().Dark
+	if cs.Title != d.Accent.Color() {
+		t.Errorf("Title should be the theme accent (%v), got %v", d.Accent.Color(), cs.Title)
 	}
-	if cs.ErrorHeader[0] == nil || cs.ErrorHeader[1] == nil {
-		t.Fatal("repoColorScheme left the error badge unset")
+	if cs.Flag != d.Of(theme.ColorGreen).Color() {
+		t.Errorf("Flag should be the palette's green, got %v", cs.Flag)
+	}
+	if cs.ErrorHeader[1] != d.Danger.Color() {
+		t.Errorf("error badge bg should be the palette's danger, got %v", cs.ErrorHeader[1])
+	}
+	if cs.ErrorHeader[0] == nil || cs.Base == nil {
+		t.Fatal("badge fg / base left unset")
 	}
 }
