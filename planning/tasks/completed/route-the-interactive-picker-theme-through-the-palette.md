@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: Build the huh picker theme from the palette (Accent caret/selection) instead of the hardcoded neon-purple stopgap.
 effort: S
@@ -10,8 +10,9 @@ autonomy_level: 3
 tags: [cli, design]
 created: "2026-06-28"
 blocked_by: [design-package-foundation-palette-theme-registry-and-the-neon-default]
-updated_at: "2026-06-28"
+updated_at: "2026-06-29"
 started_at: "2026-06-28"
+completed_at: "2026-06-29"
 ---
 ## Objective
 Replace the picker's hardcoded `#b026ff` stopgap with the palette.
