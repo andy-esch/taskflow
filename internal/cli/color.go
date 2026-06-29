@@ -33,7 +33,9 @@ func wantColor(mode string, noColor bool, out io.Writer) bool {
 // trueColorCapable reports whether out's terminal advertises 24-bit color (via
 // colorprofile's COLORTERM/TERM detection). A CAPABILITY probe only — whether color
 // is emitted at all stays with wantColor; this just picks the depth (truecolor hue
-// vs the curated 16-color slot) for the semantic colors.
+// vs the curated 16-color slot) for the semantic colors. A non-TTY out is never
+// truecolor, so forced color to a pipe (--color=always > file) emits the 16-color
+// slots unless COLORTERM=truecolor is exported.
 func trueColorCapable(out io.Writer) bool {
 	return colorprofile.Detect(out, os.Environ()) == colorprofile.TrueColor
 }

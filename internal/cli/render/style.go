@@ -15,7 +15,7 @@ import (
 )
 
 // ANSI SGR attribute codes (structural, color-independent). The semantic colors
-// come from the active palette via sgr/ansiCode, not from literals here.
+// come from the active palette via sgr/colorSeq, not from literals here.
 const (
 	ansiReset = "\x1b[0m"
 	ansiBold  = "\x1b[1m"
@@ -35,12 +35,12 @@ func sgr(slot int) string {
 	}
 }
 
-// ansiCode maps a semantic theme.Color to its SGR code from the active palette: on a
+// colorSeq maps a semantic theme.Color to its SGR code from the active palette: on a
 // truecolor terminal the EXACT hue (\x1b[38;2;r;g;bm from the hex), so the theme
 // shows on every CLI surface; otherwise the curated 16-color slot (\x1b[3Xm), the
 // deliberate degradation target — not a runtime nearest-color guess. "" for the
 // no-color slot (design.NoANSI).
-func (s Style) ansiCode(c theme.Color) string {
+func (s Style) colorSeq(c theme.Color) string {
 	h := s.palette.Of(c)
 	if h.ANSI < 0 {
 		return "" // NoANSI — emit no color
@@ -71,7 +71,7 @@ func truecolorSeq(hex string) string {
 // piped output, and the JSON path are never colored or truncated unless asked.
 type Style struct {
 	on        bool
-	trueColor bool // emit truecolor hues (else the 16-color slot); see ansiCode
+	trueColor bool // emit truecolor hues (else the 16-color slot); see colorSeq
 	width     int
 	palette   design.Palette
 }
@@ -134,7 +134,7 @@ func (s Style) Status(st domain.Status) string {
 		return string(st)
 	}
 	tok := theme.Status(st)
-	return s.ansiCode(tok.Color) + tok.Glyph + " " + string(st) + ansiReset
+	return s.colorSeq(tok.Color) + tok.Glyph + " " + string(st) + ansiReset
 }
 
 // Bucket renders an audit bucket: a colored glyph + name when styled (the shared
@@ -145,7 +145,7 @@ func (s Style) Bucket(b string) string {
 		return b
 	}
 	tok := theme.Bucket(domain.AuditBucket(b))
-	return s.ansiCode(tok.Color) + tok.Glyph + " " + b + ansiReset
+	return s.colorSeq(tok.Color) + tok.Glyph + " " + b + ansiReset
 }
 
 // FindingStatus renders an audit finding's status the way Status renders a task
@@ -157,23 +157,23 @@ func (s Style) FindingStatus(status string) string {
 		return status
 	}
 	tok := theme.FindingStatus(status)
-	return s.ansiCode(tok.Color) + tok.Glyph + " " + status + ansiReset
+	return s.colorSeq(tok.Color) + tok.Glyph + " " + status + ansiReset
 }
 
 // Priority colors a priority label.
 func (s Style) Priority(p string) string {
-	return s.wrap(s.ansiCode(theme.Priority(p)), p)
+	return s.wrap(s.colorSeq(theme.Priority(p)), p)
 }
 
 // Percent colors a completion percentage: gray <34, yellow <100, green at 100.
 func (s Style) Percent(pct int) string {
-	return s.wrap(s.ansiCode(theme.Percent(pct)), theme.PercentLabel(pct))
+	return s.wrap(s.colorSeq(theme.Percent(pct)), theme.PercentLabel(pct))
 }
 
 // Green / Red / Warn style status glyphs and success/error/warning text.
-func (s Style) Green(t string) string { return s.wrap(s.ansiCode(theme.ColorGreen), t) }
-func (s Style) Red(t string) string   { return s.wrap(s.ansiCode(theme.ColorRed), t) }
-func (s Style) Warn(t string) string  { return s.wrap(s.ansiCode(theme.ColorYellow), t) }
+func (s Style) Green(t string) string { return s.wrap(s.colorSeq(theme.ColorGreen), t) }
+func (s Style) Red(t string) string   { return s.wrap(s.colorSeq(theme.ColorRed), t) }
+func (s Style) Warn(t string) string  { return s.wrap(s.colorSeq(theme.ColorYellow), t) }
 
 // Bar renders a width-char progress bar for pct (0–100) via the shared progressbar
 // package (same constructor + neon gradient the TUI's miniBar uses, so the two
