@@ -153,6 +153,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(newDoctorCmd(app))
 	root.AddCommand(newSchemaCmd(app))
 	root.AddCommand(newTemplateCmd(app))
+	root.AddCommand(newThemeCmd(app))
 	return root
 }
 

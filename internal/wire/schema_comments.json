@@ -88,5 +88,9 @@
   "github.com/andy-esch/taskflow/internal/wire.TemplateInfo": "TemplateInfo is one body template's listable metadata (kind/name/description), populated by the cli for `template list`/`show`.",
   "github.com/andy-esch/taskflow/internal/wire.TemplateShowEnvelope": "TemplateShowEnvelope is `template show --json` (a template's metadata + body).",
   "github.com/andy-esch/taskflow/internal/wire.TemplatesEnvelope": "TemplatesEnvelope is `template list --json`.",
+  "github.com/andy-esch/taskflow/internal/wire.ThemeEntry": "ThemeEntry is one color theme in `theme list --json`.",
+  "github.com/andy-esch/taskflow/internal/wire.ThemeEntry.Active": "the theme this invocation resolved to",
+  "github.com/andy-esch/taskflow/internal/wire.ThemeEntry.Default": "the built-in default",
+  "github.com/andy-esch/taskflow/internal/wire.ThemesEnvelope": "ThemesEnvelope is `theme list --json`.",
   "github.com/andy-esch/taskflow/internal/wire.VersionEnvelope": "VersionEnvelope is `version --json`."
 }

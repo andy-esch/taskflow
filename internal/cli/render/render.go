@@ -299,6 +299,34 @@ func VersionJSON(w io.Writer, version string) error {
 	return wire.EncodeJSON(w, wire.ToVersionEnvelope(version))
 }
 
+// ThemesHuman lists the color themes one per line, tagging the default and the
+// active one (the active name is bold).
+func ThemesHuman(w io.Writer, st Style, themes []wire.ThemeEntry) {
+	for _, t := range themes {
+		name := t.Name
+		if t.Active {
+			name = st.Bold(name)
+		}
+		var tags []string
+		if t.Default {
+			tags = append(tags, "default")
+		}
+		if t.Active {
+			tags = append(tags, "active")
+		}
+		if len(tags) > 0 {
+			fmt.Fprintf(w, "%s (%s)\n", name, strings.Join(tags, ", "))
+		} else {
+			fmt.Fprintln(w, name)
+		}
+	}
+}
+
+// ThemesJSON emits the `theme list --json` envelope.
+func ThemesJSON(w io.Writer, themes []wire.ThemeEntry) error {
+	return wire.EncodeJSON(w, wire.ToThemesEnvelope(themes))
+}
+
 // CreatedHuman prints the path of a newly created file (or, under --dry-run,
 // the path that WOULD be created).
 func CreatedHuman(w io.Writer, st Style, path string, dryRun bool) {

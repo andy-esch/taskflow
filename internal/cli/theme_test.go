@@ -52,3 +52,18 @@ func TestWarnUnknownTheme(t *testing.T) {
 		}
 	}
 }
+
+// TestThemeEntries: `theme list`'s rows — every registered theme, sorted, with the
+// default and the active one flagged.
+func TestThemeEntries(t *testing.T) {
+	got := themeEntries("catppuccin")
+	if len(got) != 2 || got[0].Name != "catppuccin" || got[1].Name != "neon" {
+		t.Fatalf("themeEntries = %+v, want [catppuccin, neon] (sorted)", got)
+	}
+	if !got[0].Active || got[1].Active {
+		t.Errorf("active flags wrong: catppuccin should be active, neon not: %+v", got)
+	}
+	if got[0].Default || !got[1].Default {
+		t.Errorf("default flags wrong: neon is the default, catppuccin is not: %+v", got)
+	}
+}

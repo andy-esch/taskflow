@@ -28,6 +28,7 @@ Local-first planning CLI (tasks, epics, audits) over markdown
 * [tskflwctl status](tskflwctl_status.md)	 - At-a-glance project dashboard (counts, in-progress, epic progress)
 * [tskflwctl task](tskflwctl_task.md)	 - Work with tasks
 * [tskflwctl template](tskflwctl_template.md)	 - List and inspect the body scaffolds `new --template` can use
+* [tskflwctl theme](tskflwctl_theme.md)	 - Inspect color themes
 * [tskflwctl ui](tskflwctl_ui.md)	 - Launch the interactive TUI (Bubble Tea)
 * [tskflwctl version](tskflwctl_version.md)	 - Print the tskflwctl version
 

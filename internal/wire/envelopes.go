@@ -177,6 +177,24 @@ func ToVersionEnvelope(version string) VersionEnvelope {
 	return VersionEnvelope{SchemaVersion: SchemaVersion, Version: version}
 }
 
+// ThemeEntry is one color theme in `theme list --json`.
+type ThemeEntry struct {
+	Name    string `json:"name"`
+	Active  bool   `json:"active"`  // the theme this invocation resolved to
+	Default bool   `json:"default"` // the built-in default
+}
+
+// ThemesEnvelope is `theme list --json`.
+type ThemesEnvelope struct {
+	SchemaVersion string       `json:"schema_version"`
+	Themes        []ThemeEntry `json:"themes"`
+}
+
+// ToThemesEnvelope builds the `theme list --json` envelope value.
+func ToThemesEnvelope(themes []ThemeEntry) ThemesEnvelope {
+	return ThemesEnvelope{SchemaVersion: SchemaVersion, Themes: themes}
+}
+
 // CreatedItem is the created document inside CreatedEnvelope.
 type CreatedItem struct {
 	Kind   string `json:"kind"`
