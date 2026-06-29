@@ -6,9 +6,10 @@ import (
 	"os"
 
 	"charm.land/huh/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/term"
+
+	"github.com/andy-esch/taskflow/internal/design"
 )
 
 // ttyPrompter is the real-terminal Prompter: both list pickers (huh.Select, rendered
@@ -84,16 +85,18 @@ func (p ttyPrompter) Text(title, placeholder string) (string, error) {
 	return v, nil
 }
 
-// pickerTheme is the shared huh theme — Dracula, isDark-parameterized so huh supplies
-// it from its own (bubbletea v2) background detection — with a neon-purple selection
-// caret + current row. (The project's colors are inconsistent overall and want a
-// dedicated design pass; this is a deliberately local choice for the prompts.)
+// pickerTheme is the shared huh theme — Dracula as the base, isDark-parameterized
+// so huh supplies it from its own (bubbletea v2) background detection — with the
+// selection caret + current row drawn in the shared palette's accent (the neon
+// signature), so the picker matches the CLI/TUI instead of carrying a local literal.
+// Config-driven theme selection (and any fuller huh-base migration) lands later;
+// this routes the one accent that was the stopgap.
 func pickerTheme() huh.Theme {
 	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		s := huh.ThemeDracula(isDark)
-		purple := lipgloss.Color("#b026ff")
-		s.Focused.SelectSelector = s.Focused.SelectSelector.SetString("> ").Foreground(purple)
-		s.Focused.SelectedOption = s.Focused.SelectedOption.Foreground(purple).Bold(true)
+		accent := design.Default().For(isDark).Accent.Color()
+		s.Focused.SelectSelector = s.Focused.SelectSelector.SetString("> ").Foreground(accent)
+		s.Focused.SelectedOption = s.Focused.SelectedOption.Foreground(accent).Bold(true)
 		return s
 	})
 }
