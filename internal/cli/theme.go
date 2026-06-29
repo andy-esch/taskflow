@@ -1,10 +1,16 @@
 package cli
 
 import (
+	"fmt"
+	"os"
+	"strings"
+
+	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/design"
+	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
@@ -26,6 +32,7 @@ func newThemeCmd(app *App) *cobra.Command {
 		},
 	}
 	cmd.AddCommand(newThemeListCmd(app))
+	cmd.AddCommand(newThemePreviewCmd(app))
 	return cmd
 }
 
@@ -42,6 +49,45 @@ func newThemeListCmd(app *App) *cobra.Command {
 				return render.ThemesJSON(app.Out, entries)
 			}
 			render.ThemesHuman(app.Out, app.Style, entries)
+			return nil
+		},
+	}
+}
+
+// newThemePreviewCmd renders a theme's palette — color swatches + a sample bar — for
+// the background-appropriate variant. With no arg it previews the active theme.
+func newThemePreviewCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:         "preview [name]",
+		Short:       "Preview a theme's palette (color swatches + a sample bar)",
+		Args:        cobra.MaximumNArgs(1),
+		Annotations: map[string]string{"safety": "read-only"},
+		RunE: func(_ *cobra.Command, args []string) error {
+			t := app.Th
+			if len(args) == 1 {
+				th, ok := design.Lookup(args[0])
+				if !ok {
+					return fmt.Errorf("%w: unknown theme %q (have: %s)",
+						domain.ErrNotFound, args[0], strings.Join(design.Names(), ", "))
+				}
+				t = th
+			}
+			// Query the terminal background (an OSC-11 round-trip) only on the HUMAN
+			// path with color on. --json stays deterministic (dark) — a machine
+			// consumer must not depend on the reviewer's terminal background.
+			dark := true
+			if !app.JSON && wantColor(app.Color, app.NoColor, app.Out) {
+				dark = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+			}
+			variant := "dark"
+			if !dark {
+				variant = "light"
+			}
+			pal := t.For(dark)
+			if app.JSON {
+				return render.ThemePreviewJSON(app.Out, t.Name, variant, pal)
+			}
+			render.ThemePreviewHuman(app.Out, app.Style, t.Name, variant, pal)
 			return nil
 		},
 	}

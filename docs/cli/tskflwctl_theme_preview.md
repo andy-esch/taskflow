@@ -1,11 +1,15 @@
-## tskflwctl theme
+## tskflwctl theme preview
 
-Inspect color themes
+Preview a theme's palette (color swatches + a sample bar)
+
+```
+tskflwctl theme preview [name] [flags]
+```
 
 ### Options
 
 ```
-  -h, --help   help for theme
+  -h, --help   help for preview
 ```
 
 ### Options inherited from parent commands
@@ -24,7 +28,5 @@ Inspect color themes
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
-* [tskflwctl theme list](tskflwctl_theme_list.md)	 - List the available color themes
-* [tskflwctl theme preview](tskflwctl_theme_preview.md)	 - Preview a theme's palette (color swatches + a sample bar)
+* [tskflwctl theme](tskflwctl_theme.md)	 - Inspect color themes
 

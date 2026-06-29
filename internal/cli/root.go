@@ -19,7 +19,6 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/store"
-	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // App is the dependency container. It is created empty by NewRootCmd and
@@ -231,15 +230,15 @@ func (a *App) warnUnknownTheme() {
 	}
 }
 
-// markdownStyle resolves the glamour style for `show` body rendering from the
-// terminal background (dracula on dark, light on light). Background detection is a
-// terminal concern, so it lives here rather than in the render layer. It is passed
-// to render.RenderBody as a LAZY provider (not called eagerly): HasDarkBackground
-// fires an OSC-11 terminal query that can stall on terminals that don't answer, so
-// it must run only when styled markdown is actually rendered — never on
-// --raw / --color=never / piped / empty-body, where the result would be discarded.
+// markdownStyle resolves the glamour style for `show` body rendering from the ACTIVE
+// theme's palette for the terminal background — the theme OWNS its markdown style, so
+// a theme can ship its own (e.g. catppuccin uses tokyo-night). Background detection is
+// a terminal concern, so it lives here rather than in the render layer. Passed to
+// render.RenderBody as a LAZY provider (not called eagerly): HasDarkBackground fires an
+// OSC-11 query that can stall, so it runs only when styled markdown is actually
+// rendered — never on --raw / --color=never / piped / empty-body.
 func (a *App) markdownStyle() string {
-	return theme.MarkdownStyleFor(lipgloss.HasDarkBackground(os.Stdin, os.Stdout))
+	return a.Th.For(lipgloss.HasDarkBackground(os.Stdin, os.Stdout)).Markdown
 }
 
 // rel renders path relative to the planning root for readable output, falling

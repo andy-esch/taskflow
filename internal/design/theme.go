@@ -104,9 +104,9 @@ var mochaDark = Palette{
 	Gradient: []Hue{
 		{"#cba6f7", 13}, // mauve
 		{"#89b4fa", 4},  // blue
-		{"#f5c2e7", 13}, // pink
+		{"#94e2d5", 6},  // teal — a distinct endpoint (pink collapsed onto mauve on 16-color)
 	},
-	Markdown: theme.MarkdownStyleDark,
+	Markdown: "tokyo-night", // a glamour standard style — pastel dark, a closer match to Catppuccin than dracula
 }
 
 var (

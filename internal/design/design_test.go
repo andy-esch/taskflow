@@ -158,4 +158,9 @@ func TestCatppuccinDarkSemanticSlots(t *testing.T) {
 	if a := p.Accent; a.Hex != "#cba6f7" { // mauve
 		t.Errorf("catppuccin accent = %q, want #cba6f7 (mauve)", a.Hex)
 	}
+	// The theme owns its glamour markdown style (the Theme.Markdown wiring); catppuccin
+	// ships tokyo-night, distinct from neon's dracula.
+	if p.Markdown != "tokyo-night" {
+		t.Errorf("catppuccin dark Markdown = %q, want tokyo-night", p.Markdown)
+	}
 }
