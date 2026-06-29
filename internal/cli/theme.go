@@ -20,8 +20,13 @@ import (
 // accurate there), without requiring one.
 func newThemeCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:         "theme",
-		Short:       "Inspect color themes",
+		Use:   "theme",
+		Short: "Inspect color themes",
+		Long: "Inspect color themes. Select one with --theme, the TSKFLW_THEME env, or the\n" +
+			"[theme] table in .tskflwctl.toml (precedence: flag > env > config).\n\n" +
+			"On a truecolor terminal the theme drives every colored surface — status glyphs,\n" +
+			"bars, the TUI, and the picker. On a 16-color terminal the semantic colors fall\n" +
+			"back to your terminal's own palette (so they look the same across themes there).",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		PersistentPreRunE: func(*cobra.Command, []string) error {

@@ -233,3 +233,31 @@ func TestWriteTable_NoClampWhenPiped(t *testing.T) {
 		t.Errorf("piped output (maxWidth=0) must not clamp the wide cell:\n%s", buf.String())
 	}
 }
+
+// TestStyle_TrueColor: with truecolor on, semantic colors emit the palette's exact
+// 24-bit hue; with it off, they degrade to the curated 16-color slot (in-progress is
+// yellow = slot 3). This is the School-2 "theme shows on every CLI surface" contract.
+func TestStyle_TrueColor(t *testing.T) {
+	pal := design.Default().Dark // neon
+	on := NewStyle(true).WithTrueColor(true).WithPalette(pal).Status(domain.StatusInProgress)
+	if !strings.Contains(on, "\x1b[38;2;") {
+		t.Errorf("truecolor Status emitted no 24-bit SGR: %q", on)
+	}
+	off := NewStyle(true).WithTrueColor(false).WithPalette(pal).Status(domain.StatusInProgress)
+	if strings.Contains(off, "\x1b[38;2;") {
+		t.Errorf("16-color Status must not emit 24-bit SGR: %q", off)
+	}
+	if !strings.Contains(off, "\x1b[33m") { // yellow slot
+		t.Errorf("16-color Status should use the curated slot 3 (yellow): %q", off)
+	}
+}
+
+// TestTruecolorSeq pins the hex→24-bit-SGR conversion (and the unparseable guard).
+func TestTruecolorSeq(t *testing.T) {
+	if got := truecolorSeq("#06ea61"); got != "\x1b[38;2;6;234;97m" {
+		t.Errorf("truecolorSeq(#06ea61) = %q, want \\x1b[38;2;6;234;97m", got)
+	}
+	if got := truecolorSeq("nope"); got != "" {
+		t.Errorf("unparseable hex should yield \"\", got %q", got)
+	}
+}

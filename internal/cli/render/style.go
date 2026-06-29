@@ -3,6 +3,7 @@ package render
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -34,35 +35,69 @@ func sgr(slot int) string {
 	}
 }
 
-// ansiCode maps a semantic theme.Color to its ANSI SGR code via the active
-// palette's 16-color slot ("" for none). The slots are background-independent, so
-// the hand-written 16-color CLI output stays byte-stable across light/dark.
-func (s Style) ansiCode(c theme.Color) string { return sgr(s.palette.Of(c).ANSI) }
+// ansiCode maps a semantic theme.Color to its SGR code from the active palette: on a
+// truecolor terminal the EXACT hue (\x1b[38;2;r;g;bm from the hex), so the theme
+// shows on every CLI surface; otherwise the curated 16-color slot (\x1b[3Xm), the
+// deliberate degradation target — not a runtime nearest-color guess. "" for the
+// no-color slot (design.NoANSI).
+func (s Style) ansiCode(c theme.Color) string {
+	h := s.palette.Of(c)
+	if h.ANSI < 0 {
+		return "" // NoANSI — emit no color
+	}
+	if s.trueColor {
+		if seq := truecolorSeq(h.Hex); seq != "" {
+			return seq
+		}
+	}
+	return sgr(h.ANSI)
+}
+
+// truecolorSeq is the 24-bit foreground SGR for a "#rrggbb" hex ("" if unparseable).
+func truecolorSeq(hex string) string {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return ""
+	}
+	v, err := strconv.ParseUint(hex, 16, 32)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("\x1b[38;2;%d;%d;%dm", (v>>16)&0xff, (v>>8)&0xff, v&0xff)
+}
 
 // Style renders optional ANSI styling and carries the output width (0 = no
 // limit). The zero value is disabled (plain) with no width cap — so tests,
 // piped output, and the JSON path are never colored or truncated unless asked.
 type Style struct {
-	on      bool
-	width   int
-	palette design.Palette
+	on        bool
+	trueColor bool // emit truecolor hues (else the 16-color slot); see ansiCode
+	width     int
+	palette   design.Palette
 }
 
 // NewStyle returns a Style; enabled controls whether ANSI is emitted. The palette
-// defaults to the project default theme's dark variant (the semantic ANSI slots are
-// background-independent, so this is safe regardless of terminal background); the
-// CLI overrides it with the config-selected theme via WithPalette.
+// defaults to the project default theme's dark variant; the CLI overrides it with
+// the config-selected theme via WithPalette, and picks truecolor vs the 16-color
+// slot via WithTrueColor.
 func NewStyle(enabled bool) Style { return Style{on: enabled, palette: design.Default().Dark} }
 
 // WithWidth returns a copy capped to a terminal width (0 leaves it uncapped, so
 // piped output keeps full-width rows).
 func (s Style) WithWidth(w int) Style { s.width = w; return s }
 
+// WithTrueColor returns a copy that emits the palette's truecolor hues for semantic
+// colors when tc is set (the terminal advertises 24-bit color); otherwise each
+// color degrades to its curated 16-color ANSI slot. Independent of on/off, which
+// stays gated by NewStyle's enabled flag.
+func (s Style) WithTrueColor(tc bool) Style { s.trueColor = tc; return s }
+
 // WithPalette returns a copy that renders with palette p. The CLI passes the active
-// theme's DARK palette: the semantic 16-color ANSI slots are background-independent
-// (so styled CLI text is correct on any terminal), and the only background-varying
-// token — the bar gradient — stays the dark ramp (a light-terminal gradient is
-// deferred polish; see the neon-day validation task).
+// theme's DARK palette: on a truecolor terminal the semantic HEXES render (so the
+// theme shows on every surface); on a 16-color terminal each degrades to its
+// background-independent ANSI slot. The dark hexes assume a dark background, so a
+// light-terminal pass (semantic hexes + the bar gradient) is deferred polish; see
+// the neon-day validation task.
 func (s Style) WithPalette(p design.Palette) Style { s.palette = p; return s }
 
 func (s Style) wrap(code, text string) string {

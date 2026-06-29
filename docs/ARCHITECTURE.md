@@ -59,8 +59,9 @@ the one-screen orientation for contributors.
   browser calling the **same** `core.Service`, never the store/fs. See the TUI
   section below.
 - **`internal/theme`** — dependency-free semantic tokens (status/bucket/priority
-  → glyph + a `Color` enum), imported by **both** `cli/render` (→ ANSI) and `tui`
-  (→ lipgloss), so "in-progress is a yellow ●" is decided in one place.
+  → glyph + a `Color` enum), imported by **both** `cli/render` (→ SGR: the theme's
+  truecolor hue, or a 16-color slot fallback) and `tui` (→ lipgloss), so
+  "in-progress is a yellow ●" is decided in one place.
 - **`internal/design`** — the concrete-color layer one level below `theme`: a
   `Palette` (the semantic enum → truecolor + a 16-color ANSI slot, plus chrome
   tokens — accent/borders/match/gradient) and a named-`Theme` registry (the neon

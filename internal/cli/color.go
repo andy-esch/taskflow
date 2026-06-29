@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/colorprofile"
 	"golang.org/x/term"
 )
 
@@ -27,6 +28,14 @@ func wantColor(mode string, noColor bool, out io.Writer) bool {
 		return false
 	}
 	return isTerminal(out)
+}
+
+// trueColorCapable reports whether out's terminal advertises 24-bit color (via
+// colorprofile's COLORTERM/TERM detection). A CAPABILITY probe only — whether color
+// is emitted at all stays with wantColor; this just picks the depth (truecolor hue
+// vs the curated 16-color slot) for the semantic colors.
+func trueColorCapable(out io.Writer) bool {
+	return colorprofile.Detect(out, os.Environ()) == colorprofile.TrueColor
 }
 
 // forceColorEnv reports an explicit "force color" request via the common env

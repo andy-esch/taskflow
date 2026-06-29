@@ -22,13 +22,12 @@ import (
 )
 
 // Hue is one palette color carried in BOTH techs from a single definition: the
-// truecolor Hex (the TUI / huh / glamour use it; lipgloss downsamples it for
-// low-color terminals) and an explicit ANSI slot for the CLI's hand-written SGR
-// path. The ANSI slot is a 0..15 color index (0..7 standard, 8..15 bright); the
-// CLI maps it to an SGR code, the TUI ignores it. Carrying the slot explicitly is
-// what keeps a neon hue degrading to a CHOSEN ANSI color rather than whatever a
-// runtime nearest-color search picks (a base16 scheme already names this mapping).
-// ANSI == NoANSI marks "no color" (the theme.ColorNone slot).
+// truecolor Hex and an explicit ANSI slot (a 0..15 color index, 0..7 standard /
+// 8..15 bright). The TUI and huh/glamour use the Hex (lipgloss downsamples it). The
+// CLI uses the Hex on a truecolor terminal and falls back to the ANSI slot on a
+// 16-color one — the slot is carried explicitly so a neon hue degrades to a CHOSEN
+// color rather than a runtime nearest-color guess (a base16 scheme already names
+// this mapping). ANSI == NoANSI marks "no color" (the theme.ColorNone slot).
 type Hue struct {
 	Hex  string // "#rrggbb"; "" when the slot carries no truecolor
 	ANSI int    // 0..15 color index, or NoANSI
@@ -48,9 +47,9 @@ type Palette struct {
 	// array) so a newly-added theme.Color can never silently index out of bounds.
 	Semantic map[theme.Color]Hue
 
-	// Chrome — structural tokens with no semantic meaning. The ANSI slot on these is
-	// currently UNUSED: only the Semantic slots' ANSI feeds the CLI's SGR path, while
-	// the TUI renders chrome in truecolor and lets lipgloss downsample.
+	// Chrome — structural tokens with no semantic meaning. Their ANSI slot is unused:
+	// the CLI colors only the Semantic slots (their Hex on truecolor terminals, their
+	// ANSI slot on 16-color ones), while the TUI renders chrome in truecolor.
 	Accent       Hue // focus/selection accent (the neon signature)
 	BorderActive Hue // focused pane / overlay border
 	BorderIdle   Hue // unfocused border
