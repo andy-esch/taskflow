@@ -16,7 +16,7 @@ import "github.com/andy-esch/taskflow/internal/theme"
 // neonDark — "neon-night". base16 Synth Midnight (+ Outrun red), near-black bg so
 // the accents glow.
 var neonDark = Palette{
-	Semantic: [semanticSlots]Hue{
+	Semantic: map[theme.Color]Hue{
 		theme.ColorNone:   {Hex: "", ANSI: NoANSI},
 		theme.ColorRed:    {Hex: "#FF4242", ANSI: 1}, // Outrun base08 (legible swap)
 		theme.ColorGreen:  {Hex: "#06ea61", ANSI: 2}, // base0B
@@ -25,10 +25,7 @@ var neonDark = Palette{
 		theme.ColorCyan:   {Hex: "#42fff9", ANSI: 6}, // base0C
 		theme.ColorGray:   {Hex: "#a3a5a6", ANSI: 8}, // base04 (bright black)
 	},
-	Fg:           Hue{"#c1c3c4", 7},  // base05
-	Dim:          Hue{"#a3a5a6", 8},  // base04
 	Accent:       Hue{"#ea5ce2", 13}, // base0E magenta -> bright magenta
-	Selected:     Hue{"#ea5ce2", 13},
 	BorderActive: Hue{"#ea5ce2", 13},
 	BorderIdle:   Hue{"#474849", 8}, // base03
 	Danger:       Hue{"#FF4242", 1},
@@ -45,22 +42,21 @@ var neonDark = Palette{
 	Markdown: theme.MarkdownStyleDark,
 }
 
-// neonLight — "neon-day". Catppuccin Latte; neon-by-day, legible on a light bg.
-// The sub-contrast accents (yellow/green) lean on the fixed glyphs, not text.
+// neonLight — "neon-day". Catppuccin-Latte-inspired, but the semantic accents are
+// DARKENED from Latte's defaults to clear WCAG AA (>=4.5:1) on the light bg:
+// statusText/priorityText color the LABEL text (not just the glyph), so the text
+// itself must be legible — and Latte's own green/yellow/teal fail AA at small size.
 var neonLight = Palette{
-	Semantic: [semanticSlots]Hue{
+	Semantic: map[theme.Color]Hue{
 		theme.ColorNone:   {Hex: "", ANSI: NoANSI},
-		theme.ColorRed:    {Hex: "#d20f39", ANSI: 1},
-		theme.ColorGreen:  {Hex: "#40a02b", ANSI: 2},
-		theme.ColorYellow: {Hex: "#df8e1d", ANSI: 3},
-		theme.ColorBlue:   {Hex: "#1e66f5", ANSI: 4},
-		theme.ColorCyan:   {Hex: "#179299", ANSI: 6}, // Latte teal
+		theme.ColorRed:    {Hex: "#d20f39", ANSI: 1}, // Latte red (4.8:1)
+		theme.ColorGreen:  {Hex: "#2e7d1f", ANSI: 2}, // darkened from Latte green for AA (4.6:1)
+		theme.ColorYellow: {Hex: "#8a6000", ANSI: 3}, // dark amber: AA-legible "yellow" on light (5.0:1)
+		theme.ColorBlue:   {Hex: "#2258cc", ANSI: 4}, // darkened from Latte blue for AA (5.6:1)
+		theme.ColorCyan:   {Hex: "#0e6e74", ANSI: 6}, // darkened Latte teal for AA (5.3:1)
 		theme.ColorGray:   {Hex: "#6c6f85", ANSI: 8}, // subtext0
 	},
-	Fg:           Hue{"#4c4f69", 0}, // text
-	Dim:          Hue{"#6c6f85", 8}, // subtext0
-	Accent:       Hue{"#8839ef", 5}, // mauve
-	Selected:     Hue{"#8839ef", 5},
+	Accent:       Hue{"#8839ef", 5}, // mauve (4.8:1)
 	BorderActive: Hue{"#8839ef", 5},
 	BorderIdle:   Hue{"#9ca0b0", 8}, // overlay0
 	Danger:       Hue{"#d20f39", 1},
