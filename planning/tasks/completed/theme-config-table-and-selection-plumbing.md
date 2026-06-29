@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: '[theme] config table (name=auto|preset|none, dark/light) mirroring [pager]; precedence --theme > env > config > auto; thread the chosen theme through App into render/tui/prompt.'
 effort: M
@@ -12,6 +12,7 @@ created: "2026-06-28"
 blocked_by: [route-tui-chrome-through-the-palette, route-progress-bars-and-the-cli-ansi-map-through-the-palette, route-the-interactive-picker-theme-through-the-palette]
 updated_at: "2026-06-29"
 started_at: "2026-06-29"
+completed_at: "2026-06-29"
 ---
 ## Objective
 Let users select a theme via config/env/flag, and feed it to every routed surface.
