@@ -17,13 +17,15 @@ import (
 // through huh, themed to match. Everything renders to out (stderr), so stdout stays a
 // clean data stream.
 type ttyPrompter struct {
-	in  io.Reader
-	out io.Writer
+	in    io.Reader
+	out   io.Writer
+	theme design.Theme
 }
 
-// NewTTY returns the interactive Prompter over the given input and output (stderr).
-func NewTTY(in io.Reader, out io.Writer) Prompter {
-	return ttyPrompter{in: in, out: out}
+// NewTTY returns the interactive Prompter over the given input and output (stderr),
+// skinned to theme th (the picker caret + current row use its accent).
+func NewTTY(in io.Reader, out io.Writer, th design.Theme) Prompter {
+	return ttyPrompter{in: in, out: out, theme: th}
 }
 
 // SelectOne picks one option from a filterable list rendered INLINE below the prompt
@@ -56,7 +58,7 @@ func (p ttyPrompter) SelectOne(title string, opts []Option) (string, error) {
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithInput(p.in).
 		WithOutput(p.out).
-		WithTheme(pickerTheme()).
+		WithTheme(p.pickerTheme()).
 		Run()
 	if errors.Is(err, huh.ErrUserAborted) {
 		return "", ErrAborted
@@ -74,7 +76,7 @@ func (p ttyPrompter) Text(title, placeholder string) (string, error) {
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithInput(p.in).
 		WithOutput(p.out).
-		WithTheme(pickerTheme()).
+		WithTheme(p.pickerTheme()).
 		Run()
 	if errors.Is(err, huh.ErrUserAborted) {
 		return "", ErrAborted
@@ -87,14 +89,12 @@ func (p ttyPrompter) Text(title, placeholder string) (string, error) {
 
 // pickerTheme is the shared huh theme — Dracula as the base, isDark-parameterized
 // so huh supplies it from its own (bubbletea v2) background detection — with the
-// selection caret + current row drawn in the shared palette's accent (the neon
-// signature), so the picker matches the CLI/TUI instead of carrying a local literal.
-// Config-driven theme selection (and any fuller huh-base migration) lands later;
-// this routes the one accent that was the stopgap.
-func pickerTheme() huh.Theme {
+// selection caret + current row drawn in the ACTIVE theme's accent, so the picker
+// matches the config-selected CLI/TUI theme instead of a local literal.
+func (p ttyPrompter) pickerTheme() huh.Theme {
 	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		s := huh.ThemeDracula(isDark)
-		accent := design.Default().For(isDark).Accent.Color()
+		accent := p.theme.For(isDark).Accent.Color()
 		s.Focused.SelectSelector = s.Focused.SelectSelector.SetString("> ").Foreground(accent)
 		s.Focused.SelectedOption = s.Focused.SelectedOption.Foreground(accent).Bold(true)
 		return s
