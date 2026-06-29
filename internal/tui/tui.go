@@ -8,7 +8,6 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
-	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // Run launches the TUI program over the given service. A filesystem watcher
@@ -25,7 +24,7 @@ func Run(svc *core.Service, layout core.Layout, th design.Theme) error {
 	// render.
 	dark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
 	applyTheme(th.For(dark))
-	m.detail.glamStyle = theme.MarkdownStyleFor(dark)
+	m.detail.glamStyle = th.For(dark).Markdown
 	if w, err := newWatcher(layout.WatchPaths()); err == nil {
 		m.watch = w
 		defer func() { _ = w.close() }()

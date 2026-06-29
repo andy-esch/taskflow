@@ -1271,6 +1271,102 @@
       ],
       "description": "TemplatesEnvelope is `template list --json`."
     },
+    "ThemeEntry": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "the theme this invocation resolved to"
+        },
+        "default": {
+          "type": "boolean",
+          "description": "the built-in default"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "active",
+        "default"
+      ],
+      "description": "ThemeEntry is one color theme in `theme list --json`."
+    },
+    "ThemePreviewEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "variant": {
+          "type": "string",
+          "description": "\"dark\" or \"light\""
+        },
+        "swatches": {
+          "items": {
+            "$ref": "#/$defs/ThemeSwatch"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "name",
+        "variant",
+        "swatches"
+      ],
+      "description": "ThemePreviewEnvelope is `theme preview --json` — a theme's palette as data."
+    },
+    "ThemeSwatch": {
+      "properties": {
+        "token": {
+          "type": "string",
+          "description": "the palette role (accent, red, green, …)"
+        },
+        "hex": {
+          "type": "string",
+          "description": "the truecolor value, \"#rrggbb\""
+        },
+        "ansi": {
+          "type": "integer",
+          "description": "the 16-color slot (0..15) the CLI degrades to"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "token",
+        "hex",
+        "ansi"
+      ],
+      "description": "ThemeSwatch is one named color in `theme preview --json`: its truecolor hex and its 16-color ANSI slot."
+    },
+    "ThemesEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "themes": {
+          "items": {
+            "$ref": "#/$defs/ThemeEntry"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "themes"
+      ],
+      "description": "ThemesEnvelope is `theme list --json`."
+    },
     "VersionEnvelope": {
       "properties": {
         "schema_version": {
@@ -1356,6 +1452,12 @@
         "template_show": {
           "$ref": "#/$defs/TemplateShowEnvelope"
         },
+        "themes": {
+          "$ref": "#/$defs/ThemesEnvelope"
+        },
+        "theme_preview": {
+          "$ref": "#/$defs/ThemePreviewEnvelope"
+        },
         "error": {
           "$ref": "#/$defs/ErrorEnvelope"
         }
@@ -1385,6 +1487,8 @@
         "schema_kind",
         "templates",
         "template_show",
+        "themes",
+        "theme_preview",
         "error"
       ]
     }

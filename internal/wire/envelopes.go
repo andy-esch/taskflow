@@ -177,6 +177,45 @@ func ToVersionEnvelope(version string) VersionEnvelope {
 	return VersionEnvelope{SchemaVersion: SchemaVersion, Version: version}
 }
 
+// ThemeEntry is one color theme in `theme list --json`.
+type ThemeEntry struct {
+	Name    string `json:"name"`
+	Active  bool   `json:"active"`  // the theme this invocation resolved to
+	Default bool   `json:"default"` // the built-in default
+}
+
+// ThemesEnvelope is `theme list --json`.
+type ThemesEnvelope struct {
+	SchemaVersion string       `json:"schema_version"`
+	Themes        []ThemeEntry `json:"themes"`
+}
+
+// ToThemesEnvelope builds the `theme list --json` envelope value.
+func ToThemesEnvelope(themes []ThemeEntry) ThemesEnvelope {
+	return ThemesEnvelope{SchemaVersion: SchemaVersion, Themes: themes}
+}
+
+// ThemeSwatch is one named color in `theme preview --json`: its truecolor hex and
+// its 16-color ANSI slot.
+type ThemeSwatch struct {
+	Token string `json:"token"` // the palette role (accent, red, green, …)
+	Hex   string `json:"hex"`   // the truecolor value, "#rrggbb"
+	ANSI  int    `json:"ansi"`  // the 16-color slot (0..15) the CLI degrades to
+}
+
+// ThemePreviewEnvelope is `theme preview --json` — a theme's palette as data.
+type ThemePreviewEnvelope struct {
+	SchemaVersion string        `json:"schema_version"`
+	Name          string        `json:"name"`
+	Variant       string        `json:"variant"` // "dark" or "light"
+	Swatches      []ThemeSwatch `json:"swatches"`
+}
+
+// ToThemePreviewEnvelope builds the `theme preview --json` envelope value.
+func ToThemePreviewEnvelope(name, variant string, swatches []ThemeSwatch) ThemePreviewEnvelope {
+	return ThemePreviewEnvelope{SchemaVersion: SchemaVersion, Name: name, Variant: variant, Swatches: swatches}
+}
+
 // CreatedItem is the created document inside CreatedEnvelope.
 type CreatedItem struct {
 	Kind   string `json:"kind"`
@@ -491,6 +530,8 @@ type jsonEnvelopes struct {
 	SchemaKind    SchemaKindEnvelope    `json:"schema_kind"`
 	Templates     TemplatesEnvelope     `json:"templates"`
 	TemplateShow  TemplateShowEnvelope  `json:"template_show"`
+	Themes        ThemesEnvelope        `json:"themes"`
+	ThemePreview  ThemePreviewEnvelope  `json:"theme_preview"`
 	Error         ErrorEnvelope         `json:"error"`
 }
 

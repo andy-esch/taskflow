@@ -33,17 +33,6 @@ const (
 	MarkdownStyleLight = "light"
 )
 
-// MarkdownStyleFor picks the markdown style for the terminal background. Each
-// caller resolves darkBG with its own background detection (the TUI once at
-// startup; the CLI per `show`) and feeds it here, so the mapping lives in one
-// place.
-func MarkdownStyleFor(darkBG bool) string {
-	if darkBG {
-		return MarkdownStyleDark
-	}
-	return MarkdownStyleLight
-}
-
 // Token is a glyph + color for an entity state.
 type Token struct {
 	Glyph string

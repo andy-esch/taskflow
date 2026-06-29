@@ -88,5 +88,15 @@
   "github.com/andy-esch/taskflow/internal/wire.TemplateInfo": "TemplateInfo is one body template's listable metadata (kind/name/description), populated by the cli for `template list`/`show`.",
   "github.com/andy-esch/taskflow/internal/wire.TemplateShowEnvelope": "TemplateShowEnvelope is `template show --json` (a template's metadata + body).",
   "github.com/andy-esch/taskflow/internal/wire.TemplatesEnvelope": "TemplatesEnvelope is `template list --json`.",
+  "github.com/andy-esch/taskflow/internal/wire.ThemeEntry": "ThemeEntry is one color theme in `theme list --json`.",
+  "github.com/andy-esch/taskflow/internal/wire.ThemeEntry.Active": "the theme this invocation resolved to",
+  "github.com/andy-esch/taskflow/internal/wire.ThemeEntry.Default": "the built-in default",
+  "github.com/andy-esch/taskflow/internal/wire.ThemePreviewEnvelope": "ThemePreviewEnvelope is `theme preview --json` — a theme's palette as data.",
+  "github.com/andy-esch/taskflow/internal/wire.ThemePreviewEnvelope.Variant": "\"dark\" or \"light\"",
+  "github.com/andy-esch/taskflow/internal/wire.ThemeSwatch": "ThemeSwatch is one named color in `theme preview --json`: its truecolor hex and its 16-color ANSI slot.",
+  "github.com/andy-esch/taskflow/internal/wire.ThemeSwatch.ANSI": "the 16-color slot (0..15) the CLI degrades to",
+  "github.com/andy-esch/taskflow/internal/wire.ThemeSwatch.Hex": "the truecolor value, \"#rrggbb\"",
+  "github.com/andy-esch/taskflow/internal/wire.ThemeSwatch.Token": "the palette role (accent, red, green, …)",
+  "github.com/andy-esch/taskflow/internal/wire.ThemesEnvelope": "ThemesEnvelope is `theme list --json`.",
   "github.com/andy-esch/taskflow/internal/wire.VersionEnvelope": "VersionEnvelope is `version --json`."
 }

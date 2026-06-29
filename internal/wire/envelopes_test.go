@@ -65,6 +65,12 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			}))
 		}},
 		{"VersionEnvelope", func(w io.Writer) error { return emit(w, ToVersionEnvelope("v0.6.0")) }},
+		{"ThemesEnvelope", func(w io.Writer) error {
+			return emit(w, ToThemesEnvelope([]ThemeEntry{{Name: "neon", Active: true, Default: true}}))
+		}},
+		{"ThemePreviewEnvelope", func(w io.Writer) error {
+			return emit(w, ToThemePreviewEnvelope("neon", "dark", []ThemeSwatch{{Token: "accent", Hex: "#ea5ce2", ANSI: 13}}))
+		}},
 		{"EpicsEnvelope", func(w io.Writer) error { return emit(w, ToEpicsEnvelope([]core.EpicSummary{epicSum}, nil)) }},
 		{"EpicShowEnvelope", func(w io.Writer) error {
 			return emit(w, ToEpicShowEnvelope(epic, []domain.Task{task}, "# body"))

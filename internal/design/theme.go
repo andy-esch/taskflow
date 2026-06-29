@@ -1,6 +1,10 @@
 package design
 
-import "github.com/andy-esch/taskflow/internal/theme"
+import (
+	"sort"
+
+	"github.com/andy-esch/taskflow/internal/theme"
+)
 
 // The built-in theme registry. Themes lean on ESTABLISHED schemes rather than
 // hand-rolled values: the dark default is the base16 "Synth Midnight Terminal
@@ -42,11 +46,13 @@ var neonDark = Palette{
 	Markdown: theme.MarkdownStyleDark,
 }
 
-// neonLight — "neon-day". Catppuccin-Latte-inspired, but the semantic accents are
-// DARKENED from Latte's defaults to clear WCAG AA (>=4.5:1) on the light bg:
+// latteAA is the shared LIGHT palette: Catppuccin Latte with the semantic accents
+// DARKENED from Latte's defaults to clear WCAG AA (>=4.5:1) on the light bg —
 // statusText/priorityText color the LABEL text (not just the glyph), so the text
-// itself must be legible — and Latte's own green/yellow/teal fail AA at small size.
-var neonLight = Palette{
+// itself must be legible, and Latte's own green/yellow/teal fail AA at small size.
+// Both the neon and catppuccin themes use it as their light variant (most terminals
+// run dark; the themes diverge on the dark side + the accent).
+var latteAA = Palette{
 	Semantic: map[theme.Color]Hue{
 		theme.ColorNone:   {Hex: "", ANSI: NoANSI},
 		theme.ColorRed:    {Hex: "#d20f39", ANSI: 1}, // Latte red (4.8:1)
@@ -73,17 +79,63 @@ var neonLight = Palette{
 	Markdown: theme.MarkdownStyleLight,
 }
 
-// neon is the default theme: neon-night (dark) + neon-day (light).
-var neon = Theme{Name: "neon", Dark: neonDark, Light: neonLight}
+// mochaDark — Catppuccin Mocha: the soft pastel dark variant, a deliberate contrast
+// to neon's synthwave. Canonical Catppuccin Mocha hexes; accent is mauve. ANSI slots
+// follow the same terminal convention as neon (mauve -> bright magenta 13).
+var mochaDark = Palette{
+	Semantic: map[theme.Color]Hue{
+		theme.ColorNone:   {Hex: "", ANSI: NoANSI},
+		theme.ColorRed:    {Hex: "#f38ba8", ANSI: 1}, // red
+		theme.ColorGreen:  {Hex: "#a6e3a1", ANSI: 2}, // green
+		theme.ColorYellow: {Hex: "#f9e2af", ANSI: 3}, // yellow
+		theme.ColorBlue:   {Hex: "#89b4fa", ANSI: 4}, // blue
+		theme.ColorCyan:   {Hex: "#89dceb", ANSI: 6}, // sky
+		theme.ColorGray:   {Hex: "#9399b2", ANSI: 8}, // overlay2
+	},
+	Accent:       Hue{"#cba6f7", 13}, // mauve
+	BorderActive: Hue{"#cba6f7", 13},
+	BorderIdle:   Hue{"#45475a", 8}, // surface1
+	Danger:       Hue{"#f38ba8", 1}, // red
+	Heading:      Hue{"#cba6f7", 13},
+	Match:        Hue{"#f9e2af", 3},  // yellow bg
+	MatchCurrent: Hue{"#cba6f7", 13}, // mauve bg for the current hit
+	MatchFg:      Hue{"#1e1e2e", 0},  // base — dark text over a highlight
+	Track:        Hue{"#313244", 8},  // surface0 empty track
+	Gradient: []Hue{
+		{"#cba6f7", 13}, // mauve
+		{"#89b4fa", 4},  // blue
+		{"#94e2d5", 6},  // teal — a distinct endpoint (pink collapsed onto mauve on 16-color)
+	},
+	Markdown: "tokyo-night", // a glamour standard style — pastel dark, a closer match to Catppuccin than dracula
+}
 
-// registry holds the built-in themes by name. A second theme lands in a later
-// task (it exercises the light-module path); for now neon is the only entry.
+var (
+	// neon is the default theme: neon-night (dark) + the AA Latte light.
+	neon = Theme{Name: "neon", Dark: neonDark, Light: latteAA}
+	// catppuccin is the established-library alternative: Mocha (dark) + the AA Latte
+	// light (Latte is Catppuccin's own light flavor).
+	catppuccin = Theme{Name: "catppuccin", Dark: mochaDark, Light: latteAA}
+)
+
+// registry holds the built-in themes by name.
 var registry = map[string]Theme{
-	neon.Name: neon,
+	neon.Name:       neon,
+	catppuccin.Name: catppuccin,
 }
 
 // Default is the project's default theme (neon / 80s).
 func Default() Theme { return neon }
+
+// Names returns the registered theme names, sorted — so `theme list` and its --json
+// output are byte-stable.
+func Names() []string {
+	out := make([]string, 0, len(registry))
+	for name := range registry {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
 
 // Lookup returns the named theme, or the default with ok=false when name is empty
 // or unknown — callers degrade to Default rather than erroring on a bad config.

@@ -113,3 +113,54 @@ func TestLookupDegrades(t *testing.T) {
 		t.Errorf("Lookup(nope) = {%q, %v}, want default {neon, false}", tm.Name, ok)
 	}
 }
+
+// Names is the enumeration `theme list` relies on: every registered theme, SORTED
+// (so the listing + its --json are byte-stable).
+func TestNames(t *testing.T) {
+	got := Names()
+	want := []string{"catppuccin", "neon"}
+	if len(got) != len(want) {
+		t.Fatalf("Names() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("Names()[%d] = %q, want %q (sorted)", i, got[i], want[i])
+		}
+	}
+}
+
+// The Catppuccin Mocha (dark) semantic slots — the second theme's contract — pinned
+// so a palette edit is a reviewed change.
+func TestCatppuccinDarkSemanticSlots(t *testing.T) {
+	tm, ok := Lookup("catppuccin")
+	if !ok {
+		t.Fatal("Lookup(catppuccin) not registered")
+	}
+	p := tm.Dark
+	cases := []struct {
+		name string
+		c    theme.Color
+		hex  string
+		ansi int
+	}{
+		{"red", theme.ColorRed, "#f38ba8", 1},
+		{"green", theme.ColorGreen, "#a6e3a1", 2},
+		{"yellow", theme.ColorYellow, "#f9e2af", 3},
+		{"blue", theme.ColorBlue, "#89b4fa", 4},
+		{"cyan", theme.ColorCyan, "#89dceb", 6},
+		{"gray", theme.ColorGray, "#9399b2", 8},
+	}
+	for _, tc := range cases {
+		if got := p.Of(tc.c); got.Hex != tc.hex || got.ANSI != tc.ansi {
+			t.Errorf("Of(%s) = {%q, %d}, want {%q, %d}", tc.name, got.Hex, got.ANSI, tc.hex, tc.ansi)
+		}
+	}
+	if a := p.Accent; a.Hex != "#cba6f7" { // mauve
+		t.Errorf("catppuccin accent = %q, want #cba6f7 (mauve)", a.Hex)
+	}
+	// The theme owns its glamour markdown style (the Theme.Markdown wiring); catppuccin
+	// ships tokyo-night, distinct from neon's dracula.
+	if p.Markdown != "tokyo-night" {
+		t.Errorf("catppuccin dark Markdown = %q, want tokyo-night", p.Markdown)
+	}
+}
