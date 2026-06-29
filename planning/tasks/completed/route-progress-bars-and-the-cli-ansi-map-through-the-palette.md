@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: progressbar gradient/track/segments and render.Style.ansiCode read the palette; pin neon-night's ANSI slots to today's SGR so stripped goldens stay byte-stable.
 effort: M
@@ -10,8 +10,9 @@ autonomy_level: 3
 tags: [cli, tui, design]
 created: "2026-06-28"
 blocked_by: [design-package-foundation-palette-theme-registry-and-the-neon-default]
-updated_at: "2026-06-28"
+updated_at: "2026-06-29"
 started_at: "2026-06-28"
+completed_at: "2026-06-29"
 ---
 ## Objective
 Route the rollup/segmented bars and the CLI's 16-color ANSI map through the palette, with no porcelain churn.

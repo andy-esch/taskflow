@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: Add theme list/preview; palette-select the glamour markdown style; land the deferred picker polish (slug accent/description dim); register a second named theme.
 effort: M
@@ -12,6 +12,7 @@ created: "2026-06-28"
 updated_at: "2026-06-29"
 blocked_by: [theme-config-table-and-selection-plumbing]
 started_at: "2026-06-29"
+completed_at: "2026-06-29"
 ---
 ## Objective
 Make themes discoverable and prove the registry with a second theme + the deferred polish.

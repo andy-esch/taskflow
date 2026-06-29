@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: 'Address the high-value findings from the T1-T4 adversarial review before T5: fang palette routing, ARCHITECTURE.md, panic-proof Of(), neon-day contrast, and contract/light tests.'
 effort: M
@@ -11,6 +11,7 @@ tags: [cli, tui, design]
 created: "2026-06-29"
 updated_at: "2026-06-29"
 started_at: "2026-06-29"
+completed_at: "2026-06-29"
 ---
 
 # Pre-T5 design hardening from the adversarial review
