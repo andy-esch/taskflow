@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: Convert the global lipgloss chrome vars (accent, pane/help/action/edit borders, dashHeading, find highlights) into palette-built styles; lipColor -> palette truecolor.
 effort: M
@@ -12,6 +12,7 @@ created: "2026-06-28"
 blocked_by: [design-package-foundation-palette-theme-registry-and-the-neon-default]
 updated_at: "2026-06-28"
 started_at: "2026-06-28"
+completed_at: "2026-06-28"
 ---
 ## Objective
 Make the TUI's structural chrome derive from the palette instead of scattered lipgloss literals.
