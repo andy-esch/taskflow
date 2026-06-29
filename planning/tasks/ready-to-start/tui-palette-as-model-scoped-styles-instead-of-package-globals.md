@@ -9,6 +9,7 @@ priority: low
 autonomy_level: 3
 tags: [tui, design]
 created: "2026-06-28"
+updated_at: "2026-06-29"
 ---
 ## Objective
 Replace the package-global `pal` + `applyTheme` (shipped in [[route-tui-chrome-through-the-palette]]) with a Model-owned palette + styles, so theming is per-instance rather than process-global.
@@ -27,3 +28,8 @@ No user-visible benefit today (single local TUI process). Value is unlocked by e
 
 ## Reference
 Design doc: `planning/research/2026-06-28-color-palette-and-theming-overhaul.md` (§5 recommended the Model-field shape). Supersedes the package-global stopgap.
+
+**Review follow-ups (2026-06-29).** The pre-T5 adversarial review converged on a concrete shape for this refactor and added one decision to fold in:
+
+- **`newChrome(p) chrome` constructor.** The shipped `applyTheme` hand-mirrors ~13 package-global chrome styles declared across 6 files; forget to add a new style to `applyTheme` and it silently renders default-dark — wrong only on light terminals (the hardest case to catch). Replace the globals with a `chrome` struct built by `newChrome(p design.Palette) chrome`; the compiler then forces every field to be palette-sourced, killing the silent-miss class. This is also exactly the shape this task wants (drop `chrome` onto the `Model`).
+- **Decide `Hue.ANSI` on the TUI low-color path.** The palette carries curated 16-color ANSI slots for chrome (accent=13, gradient 5/14/13) that NOTHING reads — the TUI feeds raw truecolor to lipgloss and lets it auto-downsample, so neon purple/pink can collapse to the same magenta on a 16-color terminal. Either honor `Hue.ANSI` on the TUI's low-color profile (controlled degradation), or formally drop chrome `Hue.ANSI` as dead data and document the reliance on lipgloss downsampling. Practical impact is low (semantic colors downsample fine), so it can ride with this refactor.

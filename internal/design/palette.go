@@ -41,22 +41,17 @@ const NoANSI = -1
 // An empty Hex yields lipgloss's no-color, so an unstyled slot renders plain.
 func (h Hue) Color() color.Color { return lipgloss.Color(h.Hex) }
 
-// semanticSlots is the count of theme.Color values (ColorNone..ColorGray).
-const semanticSlots = 7
-
 // Palette is every color decision for one theme on one background.
 type Palette struct {
 	// Semantic — one Hue per theme.Color slot, so the existing Status/Bucket/
-	// Priority/... tokens resolve to a concrete color through Of.
-	Semantic [semanticSlots]Hue
+	// Priority/... tokens resolve to a concrete color through Of. A map (not a fixed
+	// array) so a newly-added theme.Color can never silently index out of bounds.
+	Semantic map[theme.Color]Hue
 
-	// Foreground / dim body tones.
-	Fg  Hue
-	Dim Hue
-
-	// Chrome — structural tokens with no semantic meaning.
+	// Chrome — structural tokens with no semantic meaning. The ANSI slot on these is
+	// currently UNUSED: only the Semantic slots' ANSI feeds the CLI's SGR path, while
+	// the TUI renders chrome in truecolor and lets lipgloss downsample.
 	Accent       Hue // focus/selection accent (the neon signature)
-	Selected     Hue // selected-row foreground
 	BorderActive Hue // focused pane / overlay border
 	BorderIdle   Hue // unfocused border
 	Danger       Hue // destructive borders + labels
@@ -74,8 +69,14 @@ type Palette struct {
 	Markdown string
 }
 
-// Of resolves a semantic theme.Color to its palette Hue.
-func (p Palette) Of(c theme.Color) Hue { return p.Semantic[c] }
+// Of resolves a semantic theme.Color to its palette Hue. An unmapped slot (a new
+// theme.Color a palette hasn't filled) degrades to "no color" rather than panicking.
+func (p Palette) Of(c theme.Color) Hue {
+	if h, ok := p.Semantic[c]; ok {
+		return h
+	}
+	return Hue{ANSI: NoANSI}
+}
 
 // Theme is a named palette pair: the dark- and light-background variants. A theme
 // is selected by name; the active background (detected per surface) picks which

@@ -34,6 +34,42 @@ func TestNeonDarkSemanticSlots(t *testing.T) {
 	}
 }
 
+// The neon-DAY (light) semantic slots are the light-background path T5 exercises;
+// pin them so the AA-darkened accents (green/yellow/teal/blue chosen to clear WCAG
+// 4.5:1 on the Latte bg) can't silently drift back to Latte's failing defaults.
+func TestNeonLightSemanticSlots(t *testing.T) {
+	p := Default().Light
+	cases := []struct {
+		name string
+		c    theme.Color
+		hex  string
+		ansi int
+	}{
+		{"none", theme.ColorNone, "", NoANSI},
+		{"red", theme.ColorRed, "#d20f39", 1},
+		{"green", theme.ColorGreen, "#2e7d1f", 2},
+		{"yellow", theme.ColorYellow, "#8a6000", 3},
+		{"blue", theme.ColorBlue, "#2258cc", 4},
+		{"cyan", theme.ColorCyan, "#0e6e74", 6},
+		{"gray", theme.ColorGray, "#6c6f85", 8},
+	}
+	for _, tc := range cases {
+		got := p.Of(tc.c)
+		if got.Hex != tc.hex || got.ANSI != tc.ansi {
+			t.Errorf("light Of(%s) = {%q, %d}, want {%q, %d}", tc.name, got.Hex, got.ANSI, tc.hex, tc.ansi)
+		}
+	}
+}
+
+// Of must DEGRADE (not panic) on a theme.Color the palette never filled — the
+// reason Semantic is a map, not a fixed array. An unmapped slot renders plain.
+func TestOfUnknownColorDegrades(t *testing.T) {
+	// A value past the defined enum: a future theme.Color the literals haven't filled.
+	if got := Default().Dark.Of(theme.Color(99)); got.Hex != "" || got.ANSI != NoANSI {
+		t.Errorf("Of(unknown) = {%q, %d}, want plain {\"\", NoANSI}", got.Hex, got.ANSI)
+	}
+}
+
 // The accent is the neon signature (bright magenta) and must degrade to a chosen
 // ANSI slot, not a runtime guess.
 func TestNeonAccent(t *testing.T) {

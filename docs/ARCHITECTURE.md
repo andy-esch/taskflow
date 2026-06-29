@@ -59,8 +59,14 @@ the one-screen orientation for contributors.
   browser calling the **same** `core.Service`, never the store/fs. See the TUI
   section below.
 - **`internal/theme`** — dependency-free semantic tokens (status/bucket/priority
-  → glyph + color), imported by **both** `cli/render` (→ ANSI) and `tui`
+  → glyph + a `Color` enum), imported by **both** `cli/render` (→ ANSI) and `tui`
   (→ lipgloss), so "in-progress is a yellow ●" is decided in one place.
+- **`internal/design`** — the concrete-color layer one level below `theme`: a
+  `Palette` (the semantic enum → truecolor + a 16-color ANSI slot, plus chrome
+  tokens — accent/borders/match/gradient) and a named-`Theme` registry (the neon
+  default). Imports `theme` (keys its palette by the enum); `theme` must **never**
+  import `design`. Consumed by `cli/render`, `tui`, `cli/prompt`, and
+  `progressbar` — the one place a *hue* is chosen, as `theme` is for a *glyph*.
 - **`internal/config`** — discovers the planning root (walk up for tasks/;
   terminates at a `.git`/root boundary).
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
@@ -180,7 +186,8 @@ Files split by concern:
   stays in the store.
 - **`help.go`** — the `?` keybinding overlay (`helpSections` is the runtime
   source of truth for keys) composited over the body with `ansi.Cut`.
-- **`style.go` / `keys.go`** — lipgloss styles (delegating to `theme`) and the
+- **`style.go` / `keys.go`** — lipgloss styles (colors from `design`/`theme` via
+  the package-level `pal`, swapped once in `Run` by `applyTheme`) and the
   `key.Binding` map.
 
 **Layout discipline is load-bearing** (a clipped-top-border class of bug):

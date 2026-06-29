@@ -8,8 +8,35 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+// TestSGR pins the 16-color SGR contract: the palette's ANSI slots must map to the
+// EXACT codes the CLI emitted before the palette refactor (red=31 … gray=90), so
+// colored output stays byte-stable. NoANSI emits nothing; the bright range (8..15)
+// uses 90..97. This is the regression guard for the "byte-identical" claim.
+func TestSGR(t *testing.T) {
+	cases := []struct {
+		slot int
+		want string
+	}{
+		{design.NoANSI, ""},
+		{1, "\x1b[31m"},  // red
+		{2, "\x1b[32m"},  // green
+		{3, "\x1b[33m"},  // yellow
+		{4, "\x1b[34m"},  // blue
+		{6, "\x1b[36m"},  // cyan
+		{8, "\x1b[90m"},  // gray (bright black)
+		{13, "\x1b[95m"}, // bright magenta (the accent slot)
+		{15, "\x1b[97m"}, // bright white
+	}
+	for _, tc := range cases {
+		if got := sgr(tc.slot); got != tc.want {
+			t.Errorf("sgr(%d) = %q, want %q", tc.slot, got, tc.want)
+		}
+	}
+}
 
 func TestStyle_Disabled_IsPlain(t *testing.T) {
 	st := NewStyle(false)
