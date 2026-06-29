@@ -682,9 +682,10 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.action.confirm = true
 			return nil
 		}
-		// A task defer opens the revisit-date prompt instead of applying at once
-		// (the audit "defer" bucket has no revisit date, so it falls through).
-		if m.cur().kind == entityTasks && tr.to == string(domain.StatusDeferred) {
+		// A verb that takes an optional date (the task defer) opens the revisit-date
+		// prompt instead of applying at once; the registry's optionalDate flag — not a
+		// hardcoded destination — is what routes us here (the audit "defer" has no date).
+		if tr.optionalDate {
 			return m.action.beginRevisit(m.action.slug)
 		}
 		slug := m.action.slug
@@ -697,15 +698,16 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // beginTransition routes a chosen lifecycle transition for slug: a destructive
-// move opens the y/n confirm; the tasks-tab defer opens the revisit-date prompt
-// (mirroring the CLI snooze); everything else applies immediately. Shared by the
-// `:`-command and palette entry points so all three paths agree.
+// move opens the y/n confirm; a verb that takes an optional date (the defer) opens
+// the revisit-date prompt (mirroring the CLI snooze); everything else applies
+// immediately. Shared by the `:`-command and palette entry points so all three
+// paths agree.
 func (m *Model) beginTransition(id string, tr transition) tea.Cmd {
 	if tr.destructive {
 		m.action.openConfirm(id, tr)
 		return nil
 	}
-	if m.cur().kind == entityTasks && tr.to == string(domain.StatusDeferred) {
+	if tr.optionalDate {
 		return m.action.beginRevisit(id)
 	}
 	return m.cur().applyMove(m.svc, id, tr)

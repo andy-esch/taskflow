@@ -7,7 +7,7 @@ import "testing"
 // selected() is never reached on an empty slice.
 func TestActionMenu_EmptyDoesNotOpen(t *testing.T) {
 	var a actionMenu
-	a.open("slug", []transition{{"stay", "here", false}}, "here") // only verb lands on cur → filtered out
+	a.open("slug", []transition{{verb: "stay", to: "here"}}, "here") // only verb lands on cur → filtered out
 	if a.active {
 		t.Error("an action menu with no valid transitions must not open")
 	}
