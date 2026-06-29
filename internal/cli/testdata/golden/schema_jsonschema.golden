@@ -845,6 +845,12 @@
           },
           "type": "array"
         },
+        "finding_statuses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "task_fields": {
           "items": {
             "$ref": "#/$defs/SchemaField"
@@ -877,6 +883,7 @@
         "statuses",
         "epic_statuses",
         "audit_buckets",
+        "finding_statuses",
         "task_fields",
         "epic_fields",
         "exit_codes",
@@ -1382,6 +1389,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.20)",
+  "title": "tskflwctl --json output (schema_version 1.21)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

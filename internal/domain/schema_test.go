@@ -1,6 +1,10 @@
 package domain
 
-import "testing"
+import (
+	"reflect"
+	"strings"
+	"testing"
+)
 
 // TestTaskAuthoringFieldsMatchRegistry is the no-drift guard: every documented
 // task authoring field must be a real known field, and its declared type must
@@ -35,6 +39,36 @@ func TestEpicAuthoringFieldsMatchRegistry(t *testing.T) {
 	for _, f := range fields {
 		if !KnownEpicField(f.Name) {
 			t.Errorf("authoring field %q is not a known epic field", f.Name)
+		}
+		if f.Description == "" || f.Example == "" {
+			t.Errorf("field %q: description/example must be non-empty", f.Name)
+		}
+	}
+}
+
+// TestAuditAuthoringFieldsMatchStruct is the audit no-drift guard, mirroring the
+// task/epic ones. Audits have no settable-field map (area/date are immutable
+// identity — there is no `audit set`), so the registry they drift against is the
+// Audit struct's own yaml tags: every documented audit authoring field must be a
+// real persisted field, so `schema audit` can't advertise a field the tool won't
+// store. (Type isn't compared to FieldType the way the task guard does — FieldType
+// is a task-field utility; the epic guard skips it for the same reason.)
+func TestAuditAuthoringFieldsMatchStruct(t *testing.T) {
+	fields, err := AuthoringFields("audit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted := map[string]bool{}
+	rt := reflect.TypeOf(Audit{})
+	for i := range rt.NumField() {
+		name, _, _ := strings.Cut(rt.Field(i).Tag.Get("yaml"), ",")
+		if name != "" && name != "-" {
+			persisted[name] = true
+		}
+	}
+	for _, f := range fields {
+		if !persisted[f.Name] {
+			t.Errorf("audit authoring field %q is not a yaml field on domain.Audit", f.Name)
 		}
 		if f.Description == "" || f.Example == "" {
 			t.Errorf("field %q: description/example must be non-empty", f.Name)

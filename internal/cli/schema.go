@@ -97,13 +97,14 @@ func runSchemaContract(app *App) error {
 		codes = append(codes, render.SchemaExitCode{Code: e.code, Name: e.name})
 	}
 	c := render.SchemaContract{
-		Statuses:     statuses,
-		EpicStatuses: domain.AllEpicStatuses(),
-		AuditBuckets: buckets,
-		TaskFields:   fields,
-		EpicFields:   domain.KnownEpicFieldNames(),
-		ExitCodes:    codes,
-		Kinds:        domain.SchemaKinds(),
+		Statuses:        statuses,
+		EpicStatuses:    domain.AllEpicStatuses(),
+		AuditBuckets:    buckets,
+		FindingStatuses: domain.FindingStatuses(),
+		TaskFields:      fields,
+		EpicFields:      domain.KnownEpicFieldNames(),
+		ExitCodes:       codes,
+		Kinds:           domain.SchemaKinds(),
 	}
 	if app.JSON {
 		return render.SchemaJSON(app.Out, c)

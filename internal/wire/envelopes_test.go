@@ -98,13 +98,14 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"SchemaEnvelope", func(w io.Writer) error {
 			return emit(w, ToSchemaEnvelope(SchemaContract{
-				Statuses:     []SchemaStatus{{Value: "in-progress", Active: true}},
-				EpicStatuses: []string{"active"},
-				AuditBuckets: []string{"open"},
-				TaskFields:   []SchemaField{{Name: "tier", Type: "int"}},
-				EpicFields:   []string{"status", "description"},
-				ExitCodes:    []SchemaExitCode{{Code: 10, Name: "not-found"}},
-				Kinds:        []string{"task"},
+				Statuses:        []SchemaStatus{{Value: "in-progress", Active: true}},
+				EpicStatuses:    []string{"active"},
+				AuditBuckets:    []string{"open"},
+				FindingStatuses: []string{"open", "fixed"},
+				TaskFields:      []SchemaField{{Name: "tier", Type: "int"}},
+				EpicFields:      []string{"status", "description"},
+				ExitCodes:       []SchemaExitCode{{Code: 10, Name: "not-found"}},
+				Kinds:           []string{"task"},
 			}))
 		}},
 		{"SchemaKindEnvelope", func(w io.Writer) error {

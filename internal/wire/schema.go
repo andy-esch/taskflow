@@ -29,13 +29,14 @@ type SchemaExitCode struct {
 // SchemaContract is the global machine contract (`tskflwctl schema`): everything
 // an agent needs to drive the tool without parsing --help prose.
 type SchemaContract struct {
-	Statuses     []SchemaStatus   `json:"statuses"`
-	EpicStatuses []string         `json:"epic_statuses"`
-	AuditBuckets []string         `json:"audit_buckets"`
-	TaskFields   []SchemaField    `json:"task_fields"`
-	EpicFields   []string         `json:"epic_fields"`
-	ExitCodes    []SchemaExitCode `json:"exit_codes"`
-	Kinds        []string         `json:"kinds"`
+	Statuses        []SchemaStatus   `json:"statuses"`
+	EpicStatuses    []string         `json:"epic_statuses"`
+	AuditBuckets    []string         `json:"audit_buckets"`
+	FindingStatuses []string         `json:"finding_statuses"`
+	TaskFields      []SchemaField    `json:"task_fields"`
+	EpicFields      []string         `json:"epic_fields"`
+	ExitCodes       []SchemaExitCode `json:"exit_codes"`
+	Kinds           []string         `json:"kinds"`
 }
 
 // KindSchema is the per-kind authoring guidance (`tskflwctl schema <kind>`): how

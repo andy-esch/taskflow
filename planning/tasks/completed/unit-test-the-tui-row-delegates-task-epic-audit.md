@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: The task/epic/audit list-row delegates have no direct render test; the symbology pass made the rows richer (bars, glyphs) so a row regression would slip past CI. Add focused render tests.
 effort: S
@@ -9,6 +9,8 @@ priority: low
 autonomy_level: 3
 tags: [tui]
 created: "2026-06-25"
+updated_at: "2026-06-28"
+completed_at: "2026-06-28"
 ---
 # Unit-test the TUI row delegates (task / epic / audit)
 
@@ -51,3 +53,15 @@ Relates to epic 18 (TUI). Pre-existing gap for all three delegates, not just aud
 
 Each row delegate has a render test that would fail if the bar, glyph, or column
 order regressed — closing the coverage gap the symbology work highlighted.
+
+## Completed 2026-06-28
+
+Added `internal/tui/item_test.go` with a render test per delegate (`TestTaskDelegateRow`
++ a `_Misfiled` variant, `TestEpicDelegateRow`, `TestAuditDelegateRow`). Each builds a
+one-item `list.New(...)`, renders the row via `delegate.Render` (at index 1 so the
+shared "› " cursor is absent), strips ANSI, and asserts via an `assertColumns` helper
+that every column is present AND in left-to-right order — so a dropped glyph/bar OR a
+reordered column fails. The expected pieces are computed through the production
+helpers (`theme.Status/Bucket`, `epicGlyph`, `miniBar`/`segBar`, `theme.Counts`,
+`PercentLabelPadded`, `RelativeDate`), so the tests pin row LAYOUT without duplicating
+the glyph→colour decision table (theme's own tests cover that). build/vet/test/lint green.
