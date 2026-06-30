@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: Colors are scattered across theme, progressbar (neon hex), the picker (hardcoded purple), TUI lipgloss, huh, and glamour with no single palette. Define one palette and route every surface through it.
 effort: L
@@ -9,8 +9,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, tui]
 created: "2026-06-25"
-updated_at: "2026-06-28"
+updated_at: "2026-06-29"
 blocked_by: [theme-discovery-commands-glamour-polish-and-a-second-theme]
+completed_at: "2026-06-29"
 ---
 # Color/design overhaul: one coherent palette across every surface
 
