@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: 'Visual+contrast pass on the light palette beyond the AA text fix already landed: find-highlight pair, gradient, gray/borders. Pairs with T5 (light path).'
 effort: S
@@ -11,6 +11,7 @@ tags: [tui, design]
 created: "2026-06-29"
 updated_at: "2026-06-30"
 started_at: "2026-06-30"
+completed_at: "2026-06-30"
 ---
 ## Objective
 A proper visual + contrast pass on the neon-day (light) palette, beyond the AA text-color fix already landed in [[pre-t5-design-hardening-from-the-adversarial-review]].

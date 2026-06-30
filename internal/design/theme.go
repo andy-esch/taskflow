@@ -38,6 +38,7 @@ var neonDark = Palette{
 	MatchCurrent: Hue{"#ea5ce2", 13}, // accent bg for the current hit
 	MatchFg:      Hue{"#050608", 0},  // near-black text over a highlight
 	Track:        Hue{"#474849", 8},  // base03 empty track
+	Base:         Hue{"#050608", 0},  // Synth Midnight near-black bg
 	Gradient: []Hue{
 		{"#b026ff", 5},  // neon purple
 		{"#00e5ff", 14}, // neon cyan
@@ -76,6 +77,7 @@ var latteAA = Palette{
 	MatchCurrent: Hue{"#c9a6f8", 13}, // lightened mauve; dark text ~8:1
 	MatchFg:      Hue{"#1e1e2e", 0},  // near-black text over a (light) highlight
 	Track:        Hue{"#bcc0cc", 7},  // surface1
+	Base:         Hue{"#eff1f5", 15}, // Latte base (light bg)
 	Gradient: []Hue{
 		{"#8839ef", 5},  // mauve
 		{"#209fb5", 6},  // sapphire-ish
@@ -106,6 +108,7 @@ var mochaDark = Palette{
 	MatchCurrent: Hue{"#cba6f7", 13}, // mauve bg for the current hit
 	MatchFg:      Hue{"#1e1e2e", 0},  // base — dark text over a highlight
 	Track:        Hue{"#313244", 8},  // surface0 empty track
+	Base:         Hue{"#1e1e2e", 0},  // Mocha base bg
 	Gradient: []Hue{
 		{"#cba6f7", 13}, // mauve
 		{"#89b4fa", 4},  // blue

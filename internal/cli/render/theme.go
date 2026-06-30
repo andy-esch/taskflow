@@ -39,14 +39,11 @@ func themeSwatches(pal design.Palette) []themeSwatch {
 // byte-stable like every other surface.
 func ThemePreviewHuman(w io.Writer, st Style, name, variant string, pal design.Palette) {
 	fmt.Fprintf(w, "%s (%s)\n", st.Bold(name), variant)
-	// Paint the colored samples on the variant's INTENDED background (Latte base for
-	// light, a dark base for dark), not the reviewer's terminal bg — so the light
-	// palette's AA-darkened colors are judged against the bg they were tuned for. This
-	// is what makes `--variant light` faithful from a dark terminal.
-	canvas := lipgloss.Color("#1e1e2e")
-	if variant == "light" {
-		canvas = lipgloss.Color("#eff1f5")
-	}
+	// Paint the colored samples on the palette's INTENDED background (pal.Base), not
+	// the reviewer's terminal bg — so a palette's colors are judged against the bg
+	// they were tuned for. This is what makes `--variant light` faithful from a dark
+	// terminal (and vice-versa).
+	canvas := pal.Base.Color()
 	for _, sw := range themeSwatches(pal) {
 		if st.on {
 			block := lipgloss.NewStyle().Background(canvas).Foreground(sw.hue.Color()).Render("  ███  ")

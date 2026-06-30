@@ -2,12 +2,47 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/design"
+	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+// TestResolveVariant pins the `theme preview --variant` contract: dark/light are
+// explicit, "auto" detects only when allowed (else deterministic dark), and an
+// unknown value is an ErrValidation (exit 11). detectDark is stubbed so the test
+// never depends on a real terminal.
+func TestResolveVariant(t *testing.T) {
+	detectLight := func() bool { return false } // stand-in for a light terminal
+	cases := []struct {
+		name        string
+		flag        string
+		allowDetect bool
+		wantDark    bool
+		wantErr     bool
+	}{
+		{"explicit dark", "dark", true, true, false},
+		{"explicit light", "light", true, false, false},
+		{"auto detects when allowed", "auto", true, false, false}, // detect → light
+		{"auto is deterministic dark when not allowed", "auto", false, true, false},
+		{"unknown value errors", "lite", true, false, true},
+	}
+	for _, c := range cases {
+		dark, err := resolveVariant(c.flag, c.allowDetect, detectLight)
+		if (err != nil) != c.wantErr {
+			t.Errorf("%s: err=%v, wantErr=%v", c.name, err, c.wantErr)
+		}
+		if err == nil && dark != c.wantDark {
+			t.Errorf("%s: dark=%v, want %v", c.name, dark, c.wantDark)
+		}
+	}
+	if _, err := resolveVariant("nope", true, detectLight); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("unknown variant should wrap ErrValidation (exit 11), got %v", err)
+	}
+}
 
 // TestThemeName_Precedence pins the theme-selection contract — flag > env > config,
 // trimmed, "" when none set — which is the heart of T5. Pin it directly: observing

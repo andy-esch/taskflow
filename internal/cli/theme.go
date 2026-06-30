@@ -80,23 +80,14 @@ func newThemePreviewCmd(app *App) *cobra.Command {
 			}
 			// --variant forces a side (deterministic, so it works on any terminal and
 			// under --json — the way to preview the light palette from a dark terminal).
-			// "auto" keeps the old behavior: query the background (an OSC-11 round-trip)
+			// "auto" keeps the old behavior: detect the background (an OSC-11 round-trip)
 			// only on the HUMAN path with color on, else dark — so --json stays
 			// deterministic and never depends on the reviewer's terminal background.
-			var dark bool
-			switch variantFlag {
-			case "dark":
-				dark = true
-			case "light":
-				dark = false
-			case "auto":
-				dark = true
-				if !app.JSON && wantColor(app.Color, app.NoColor, app.Out) {
-					dark = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
-				}
-			default:
-				return fmt.Errorf("%w: --variant must be auto, dark, or light (got %q)",
-					domain.ErrValidation, variantFlag)
+			dark, err := resolveVariant(variantFlag,
+				!app.JSON && wantColor(app.Color, app.NoColor, app.Out),
+				func() bool { return lipgloss.HasDarkBackground(os.Stdin, os.Stdout) })
+			if err != nil {
+				return err
 			}
 			variant := "dark"
 			if !dark {
@@ -113,6 +104,27 @@ func newThemePreviewCmd(app *App) *cobra.Command {
 	cmd.Flags().StringVar(&variantFlag, "variant", "auto",
 		"which variant to preview: auto (detect from terminal), dark, or light")
 	return cmd
+}
+
+// resolveVariant maps the --variant flag to a dark/light choice. "dark"/"light" are
+// explicit and deterministic; "auto" defers to detectDark (the terminal background)
+// only when allowDetect is set (the human, color-on path) and is otherwise dark, so
+// --json and piped output stay deterministic. An unknown value is a validation error.
+func resolveVariant(flag string, allowDetect bool, detectDark func() bool) (bool, error) {
+	switch flag {
+	case "dark":
+		return true, nil
+	case "light":
+		return false, nil
+	case "auto":
+		if allowDetect {
+			return detectDark(), nil
+		}
+		return true, nil
+	default:
+		return false, fmt.Errorf("%w: --variant must be auto, dark, or light (got %q)",
+			domain.ErrValidation, flag)
+	}
 }
 
 // themeEntries builds the rows for `theme list`: every registered theme, flagged
