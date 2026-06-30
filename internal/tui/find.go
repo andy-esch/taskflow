@@ -6,7 +6,6 @@ import (
 	"unicode/utf8"
 
 	"charm.land/bubbles/v2/textinput"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -37,11 +36,6 @@ func newFinder() finder {
 }
 
 func (f finder) active() bool { return f.query != "" }
-
-var (
-	findMatch   = lipgloss.NewStyle().Background(pal.Match.Color()).Foreground(pal.MatchFg.Color())
-	findCurrent = lipgloss.NewStyle().Background(pal.MatchCurrent.Color()).Foreground(pal.MatchFg.Color()).Bold(true)
-)
 
 // foldMatches returns the [start,end) byte ranges in s of every case-insensitive
 // match of query. Comparison is rune-by-rune via unicode.ToLower, so a rune whose
@@ -80,7 +74,7 @@ func foldMatches(s, query string) [][2]int {
 // spans. The occurrence at byte offset curB0 gets the brighter "current" style
 // (pass -1 for none). occ are this line's [b0,b1) ranges, ascending; plain is the
 // ANSI-stripped line.
-func highlightLine(styled, plain string, occ [][2]int, curB0 int) string {
+func highlightLine(styled, plain string, occ [][2]int, curB0 int, st styles) string {
 	width := ansi.StringWidth(plain)
 	var b strings.Builder
 	prevCol := 0
@@ -88,9 +82,9 @@ func highlightLine(styled, plain string, occ [][2]int, curB0 int) string {
 		c0 := ansi.StringWidth(plain[:r[0]])
 		c1 := ansi.StringWidth(plain[:r[1]])
 		b.WriteString(ansi.Cut(styled, prevCol, c0)) // unchanged span keeps its styling
-		style := findMatch
+		style := st.findMatch
 		if r[0] == curB0 {
-			style = findCurrent
+			style = st.findCurrent
 		}
 		b.WriteString(style.Render(plain[r[0]:r[1]])) // the matched text, restyled
 		prevCol = c1

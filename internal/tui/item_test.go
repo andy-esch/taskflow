@@ -53,7 +53,7 @@ func assertColumns(t *testing.T, row string, parts ...string) {
 // A task row: status glyph, slug, relative date — in that order — and NO misfiled ⚠.
 func TestTaskDelegateRow(t *testing.T) {
 	task := domain.Task{Slug: "alpha", Status: domain.StatusInProgress, Updated: "2020-01-02"}
-	row := renderDelegateRow(t, taskDelegate{}, taskItem{t: task}, 80)
+	row := renderDelegateRow(t, taskDelegate{st: &testStyles}, taskItem{t: task}, 80)
 
 	wantDate := theme.RelativeDate(theme.TaskDate(task)) // computed the same way the row does
 	if wantDate == "" {
@@ -72,7 +72,7 @@ func TestTaskDelegateRow_Misfiled(t *testing.T) {
 	if !task.Misfiled() {
 		t.Fatal("setup: task should be misfiled")
 	}
-	row := renderDelegateRow(t, taskDelegate{}, taskItem{t: task}, 80)
+	row := renderDelegateRow(t, taskDelegate{st: &testStyles}, taskItem{t: task}, 80)
 	assertColumns(t, row, theme.Status(domain.StatusInProgress).Glyph, theme.MarkerWarn.Glyph, "beta")
 }
 
@@ -83,10 +83,10 @@ func TestEpicDelegateRow(t *testing.T) {
 		Epic:  domain.Epic{ID: "17-pm-go-cli", Status: "active", Description: "planning tool"},
 		Total: 4, Done: 1,
 	}
-	row := renderDelegateRow(t, epicDelegate{}, epicItem{es: es}, 80)
+	row := renderDelegateRow(t, epicDelegate{st: &testStyles}, epicItem{es: es}, 80)
 
-	wantGlyph := ansi.Strip(epicGlyph(es))                               // working-band glyph, via production logic
-	wantBar := ansi.Strip(miniBar(es.Percent(), 8))                      // the 8-cell rollup bar
+	wantGlyph := ansi.Strip(epicGlyph(es, testStyles))                   // working-band glyph, via production logic
+	wantBar := ansi.Strip(testStyles.miniBar(es.Percent(), 8))           // the 8-cell rollup bar
 	wantPct := strings.TrimSpace(theme.PercentLabelPadded(es.Percent())) // "25%"
 	wantCounts := theme.Counts(es.Done, es.Total)                        // "1/4"
 	assertColumns(t, row, wantGlyph, wantBar, wantPct, wantCounts, "17-pm-go-cli", "planning tool")
@@ -99,9 +99,9 @@ func TestAuditDelegateRow(t *testing.T) {
 		Slug: "2026-06-20-api", Area: "gateway", Bucket: domain.AuditOpen,
 		Findings: 4, DoneFindings: 1, ActiveFindings: 1, OpenFindings: 2,
 	}
-	row := renderDelegateRow(t, auditDelegate{}, auditItem{a: a}, 80)
+	row := renderDelegateRow(t, auditDelegate{st: &testStyles}, auditItem{a: a}, 80)
 
-	wantBar := ansi.Strip(segBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 8))
+	wantBar := ansi.Strip(testStyles.segBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 8))
 	wantPct := strings.TrimSpace(theme.PercentLabelPadded(a.Percent())) // "25%"
 	wantCounts := theme.Counts(a.Resolved(), a.Findings)                // "1/4"
 	assertColumns(t, row, theme.Bucket(domain.AuditOpen).Glyph, wantBar, wantPct, wantCounts, "2026-06-20-api", "gateway")

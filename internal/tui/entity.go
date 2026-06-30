@@ -260,8 +260,10 @@ func moveEpic(svc *core.Service, id string, tr transition) tea.Cmd {
 	}
 }
 
-// newEntityTabs is the entity registry: the ordered set of browsable entities.
-func newEntityTabs() []*entityTab {
+// newEntityTabs is the entity registry: the ordered set of browsable entities. st
+// is the Model's shared *styles, threaded into each list delegate so the rows
+// render through the same per-Model palette (and see a Run-time repopulation).
+func newEntityTabs(st *styles) []*entityTab {
 	mk := func(d list.ItemDelegate) list.Model {
 		l := list.New(nil, d, 0, 0)
 		// The title slot carries the S2b state chip (set each render from chip()),
@@ -287,13 +289,13 @@ func newEntityTabs() []*entityTab {
 		{
 			kind: entityTasks, name: "tasks", aliases: []string{"t", "task"},
 			viewAxis: statusViews, viewAliases: statusViewAliases,
-			list: mk(taskDelegate{}), loadList: loadTaskList, loadItem: loadTaskDetail,
+			list: mk(taskDelegate{st: st}), loadList: loadTaskList, loadItem: loadTaskDetail,
 			sortCols: taskSortCols, transitions: taskTransitions, applyMove: moveTask,
 		},
 		{
 			kind: entityEpics, name: "epics", aliases: []string{"e", "epic"},
 			viewAxis: epicViews, viewAliases: epicViewAliases,
-			list: mk(epicDelegate{}), loadList: loadEpicList, loadItem: loadEpicDetail,
+			list: mk(epicDelegate{st: st}), loadList: loadEpicList, loadItem: loadEpicDetail,
 			// Epic status is a frontmatter field, not a directory: the `m` menu / `:`
 			// verbs flip it via svc.MoveEpic (the file stays put), mirroring task/audit.
 			sortCols: epicSortCols, transitions: epicTransitions, applyMove: moveEpic,
@@ -301,7 +303,7 @@ func newEntityTabs() []*entityTab {
 		{
 			kind: entityAudits, name: "audits", aliases: []string{"a", "audit"},
 			viewAxis: auditViews,
-			list:     mk(auditDelegate{}), loadList: loadAuditList, loadItem: loadAuditDetail,
+			list:     mk(auditDelegate{st: st}), loadList: loadAuditList, loadItem: loadAuditDetail,
 			sortCols: auditSortCols, transitions: auditTransitions, applyMove: moveAudit,
 		},
 	}

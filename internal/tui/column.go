@@ -17,7 +17,7 @@ import (
 // dated the column is width 0 and every cell is "", so the caller drops it (a blank
 // cell among dated ones still pads, holding the next column). The dashboard's
 // in-progress + epics widgets share this rather than each pre-measuring a dateW.
-func relDateCells[T any](items []T, raw func(T) string) []string {
+func relDateCells[T any](items []T, raw func(T) string, st styles) []string {
 	cells := make([]string, len(items))
 	w := 0
 	for i, it := range items {
@@ -28,7 +28,7 @@ func relDateCells[T any](items []T, raw func(T) string) []string {
 		return cells // all undated → empty cells; the caller omits the column
 	}
 	for i := range cells {
-		cells[i] = dim(fmt.Sprintf("%-*s", w, cells[i]))
+		cells[i] = st.dim(fmt.Sprintf("%-*s", w, cells[i]))
 	}
 	return cells
 }

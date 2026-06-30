@@ -25,7 +25,7 @@ import (
 type detailContent interface {
 	Title() string
 	Path() string // the entity's on-disk file path (for the clickable detail title)
-	meta(width int) string
+	meta(width int, s styles) string
 	rawBody() string
 }
 
@@ -34,6 +34,11 @@ type detailContent interface {
 // toggle just swaps which is shown (no glamour recompile). pretty persists across
 // selections and tabs (the pane is a single Model field).
 type detailPane struct {
+	// st is the per-Model theming bundle, shared (pointer) with the root Model so a
+	// Run-time palette swap reaches the pane's colored renders (meta block, find
+	// highlight, error/loading notes) without rebuilding it.
+	st *styles
+
 	vp           viewport.Model
 	title        string
 	width        int
@@ -76,8 +81,8 @@ func (d *detailPane) prettyBody(md string) string {
 	return out
 }
 
-func newDetailPane(glamStyle string) detailPane {
-	return detailPane{vp: viewport.New(), find: newFinder(), pretty: true, glamStyle: glamStyle}
+func newDetailPane(st *styles, glamStyle string) detailPane {
+	return detailPane{st: st, vp: viewport.New(), find: newFinder(), pretty: true, glamStyle: glamStyle}
 }
 
 // render rebuilds both body compositions at the current width and points styled at
@@ -88,7 +93,7 @@ func (d *detailPane) render() {
 		d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 		return
 	}
-	meta := d.content.meta(d.width)
+	meta := d.content.meta(d.width, *d.st)
 	body := d.content.rawBody()
 	d.rawStyled = joinDetail(meta, wrap(body, d.width))
 	d.prettyStyled = joinDetail(meta, d.prettyBody(body))
@@ -138,7 +143,7 @@ func (d *detailPane) SetSize(w, h int) {
 		}
 		d.refreshFind()
 	case d.errMsg != "":
-		d.vp.SetContent(fg(theme.ColorRed, "⚠ "+d.errMsg))
+		d.vp.SetContent(d.st.fg(theme.ColorRed, "⚠ "+d.errMsg))
 	}
 }
 
@@ -179,7 +184,7 @@ func (d *detailPane) SetError(title, msg string) {
 	d.resetFind()
 	d.errMsg = msg
 	d.title = title
-	d.vp.SetContent(fg(theme.ColorRed, "⚠ "+msg))
+	d.vp.SetContent(d.st.fg(theme.ColorRed, "⚠ "+msg))
 	d.vp.GotoTop()
 	d.hasContent = true
 	d.loading = false
@@ -311,7 +316,7 @@ func (d *detailPane) refreshFind() {
 		if li == curLine {
 			cb = curB0
 		}
-		styled[li] = highlightLine(styled[li], plain[li], occ, cb)
+		styled[li] = highlightLine(styled[li], plain[li], occ, cb, *d.st)
 	}
 	d.vp.SetContent(strings.Join(styled, "\n"))
 }
@@ -338,12 +343,12 @@ func (d detailPane) findStatus() string {
 	if len(d.find.matches) > 0 {
 		pos = d.find.cur + 1
 	}
-	status := dim(fmt.Sprintf("/%s  [%d/%d]  n/N next/prev · esc clear", d.find.query, pos, len(d.find.matches)))
+	status := d.st.dim(fmt.Sprintf("/%s  [%d/%d]  n/N next/prev · esc clear", d.find.query, pos, len(d.find.matches)))
 	// Find runs per rendered line, so a query straddling a glamour wrap/reflow point
 	// reads as 0 matches in pretty mode even though it's there. When the raw render
 	// WOULD match, point at R so a real hit isn't mistaken for "not present" (L16).
 	if d.pretty && d.find.query != "" && len(d.find.matches) == 0 && rawHasMatch(d.rawStyled, d.find.query) {
-		status += dim(" · R: raw (match spans a wrap)")
+		status += d.st.dim(" · R: raw (match spans a wrap)")
 	}
 	return status
 }
@@ -363,18 +368,18 @@ func rawHasMatch(rawStyled, query string) bool {
 func (d detailPane) View() string {
 	switch {
 	case d.loading && !d.hasContent:
-		return dim("loading…")
+		return d.st.dim("loading…")
 	case !d.hasContent:
-		return dim("(nothing selected)")
+		return d.st.dim("(nothing selected)")
 	}
 	return d.vp.View()
 }
 
-func detailField(b *strings.Builder, label, val string) {
+func detailField(b *strings.Builder, label, val string, s styles) {
 	if val == "" {
 		return
 	}
-	fmt.Fprintf(b, "%s %s\n", dimStyle.Render(fmt.Sprintf("%-9s", label+":")), val)
+	fmt.Fprintf(b, "%s %s\n", s.dimStyle.Render(fmt.Sprintf("%-9s", label+":")), val)
 }
 
 func wrap(s string, width int) string {
@@ -391,29 +396,29 @@ type taskDetail struct {
 	body string
 }
 
-func (d taskDetail) Title() string     { return d.t.Slug }
-func (d taskDetail) Path() string      { return d.t.Path }
-func (d taskDetail) rawBody() string   { return d.body }
-func (d taskDetail) meta(w int) string { return renderTaskMeta(d.t, w) }
+func (d taskDetail) Title() string               { return d.t.Slug }
+func (d taskDetail) Path() string                { return d.t.Path }
+func (d taskDetail) rawBody() string             { return d.body }
+func (d taskDetail) meta(w int, s styles) string { return renderTaskMeta(d.t, w, s) }
 
 // renderTaskMeta formats a task's frontmatter field block (no body), wrapped to
 // width. The body is rendered separately by the pane (raw or glamour).
-func renderTaskMeta(t domain.Task, width int) string {
+func renderTaskMeta(t domain.Task, width int, s styles) string {
 	var b strings.Builder
-	detailField(&b, "status", statusText(t.Status))
-	detailField(&b, "epic", t.Epic)
-	detailField(&b, "priority", priorityText(t.Priority))
+	detailField(&b, "status", s.statusText(t.Status), s)
+	detailField(&b, "epic", t.Epic, s)
+	detailField(&b, "priority", s.priorityText(t.Priority), s)
 	if t.Tier != 0 {
-		detailField(&b, "tier", strconv.Itoa(t.Tier))
+		detailField(&b, "tier", strconv.Itoa(t.Tier), s)
 	}
 	if len(t.Tags) > 0 {
-		detailField(&b, "tags", strings.Join(t.Tags, ", "))
+		detailField(&b, "tags", strings.Join(t.Tags, ", "), s)
 	}
 	if t.Updated != "" {
-		detailField(&b, "updated", fmt.Sprintf("%s (%s)", t.Updated, theme.RelativeDate(t.Updated)))
+		detailField(&b, "updated", fmt.Sprintf("%s (%s)", t.Updated, theme.RelativeDate(t.Updated)), s)
 	}
 	if t.Misfiled() {
-		detailField(&b, theme.MarkerWarn.Glyph, fg(theme.MarkerWarn.Color, fmt.Sprintf("frontmatter says %q (folder wins)", t.Declared)))
+		detailField(&b, theme.MarkerWarn.Glyph, s.fg(theme.MarkerWarn.Color, fmt.Sprintf("frontmatter says %q (folder wins)", t.Declared)), s)
 	}
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
 }
@@ -426,34 +431,34 @@ type epicDetail struct {
 	body  string
 }
 
-func (d epicDetail) Title() string     { return d.es.Epic.ID }
-func (d epicDetail) Path() string      { return d.es.Epic.Path }
-func (d epicDetail) rawBody() string   { return d.body }
-func (d epicDetail) meta(w int) string { return renderEpicMeta(d.es, d.tasks, w) }
+func (d epicDetail) Title() string               { return d.es.Epic.ID }
+func (d epicDetail) Path() string                { return d.es.Epic.Path }
+func (d epicDetail) rawBody() string             { return d.body }
+func (d epicDetail) meta(w int, s styles) string { return renderEpicMeta(d.es, d.tasks, w, s) }
 
-func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int) string {
+func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int, s styles) string {
 	e := es.Epic
 	var b strings.Builder
-	detailField(&b, "epic", e.ID)
-	detailField(&b, "status", e.Status)
-	detailField(&b, "priority", priorityText(e.Priority))
+	detailField(&b, "epic", e.ID, s)
+	detailField(&b, "status", e.Status, s)
+	detailField(&b, "priority", s.priorityText(e.Priority), s)
 	if len(e.Tags) > 0 {
-		detailField(&b, "tags", strings.Join(e.Tags, ", "))
+		detailField(&b, "tags", strings.Join(e.Tags, ", "), s)
 	}
 	// Rollup from the EpicSummary (computed once by ShowEpic; deprecated leaves the
 	// denominator, counted separately) so this matches epic list / status / epic show.
 	pct := es.Percent()
 	progress := fmt.Sprintf("%s %s  %s",
-		miniBar(pct, 12), fg(theme.Percent(pct), theme.PercentLabel(pct)), theme.Counts(es.Done, es.Total))
+		s.miniBar(pct, 12), s.fg(theme.Percent(pct), theme.PercentLabel(pct)), theme.Counts(es.Done, es.Total))
 	if es.Deprecated > 0 {
 		progress += fmt.Sprintf("  (%d deprecated)", es.Deprecated)
 	}
-	detailField(&b, "progress", progress)
+	detailField(&b, "progress", progress, s)
 	if len(tasks) > 0 {
 		b.WriteString("\n")
 		for _, t := range tasks {
 			tok := theme.Status(t.Status)
-			fmt.Fprintf(&b, "  %s %s\n", fg(tok.Color, tok.Glyph), t.Slug)
+			fmt.Fprintf(&b, "  %s %s\n", s.fg(tok.Color, tok.Glyph), t.Slug)
 		}
 	}
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
@@ -466,26 +471,26 @@ type auditDetail struct {
 	body string
 }
 
-func (d auditDetail) Title() string     { return d.a.Slug }
-func (d auditDetail) Path() string      { return d.a.Path }
-func (d auditDetail) rawBody() string   { return d.body }
-func (d auditDetail) meta(w int) string { return renderAuditMeta(d.a, d.body, w) }
+func (d auditDetail) Title() string               { return d.a.Slug }
+func (d auditDetail) Path() string                { return d.a.Path }
+func (d auditDetail) rawBody() string             { return d.body }
+func (d auditDetail) meta(w int, s styles) string { return renderAuditMeta(d.a, d.body, w, s) }
 
-func renderAuditMeta(a domain.Audit, body string, width int) string {
+func renderAuditMeta(a domain.Audit, body string, width int, s styles) string {
 	var b strings.Builder
 	tok := theme.Bucket(a.Bucket)
 	pct := a.Percent()
 	progress := fmt.Sprintf("%s %s  %s",
-		segBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 12),
-		fg(theme.Percent(pct), theme.PercentLabel(pct)), theme.Counts(a.Resolved(), a.Findings))
+		s.segBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 12),
+		s.fg(theme.Percent(pct), theme.PercentLabel(pct)), theme.Counts(a.Resolved(), a.Findings))
 	if a.OpenFindings > 0 {
 		progress += fmt.Sprintf("  (%d open)", a.OpenFindings)
 	}
-	detailField(&b, "audit", a.Slug)
-	detailField(&b, "bucket", fg(tok.Color, tok.Glyph+" "+string(a.Bucket)))
-	detailField(&b, "area", a.Area)
-	detailField(&b, "date", a.Date)
-	detailField(&b, "findings", progress)
+	detailField(&b, "audit", a.Slug, s)
+	detailField(&b, "bucket", s.fg(tok.Color, tok.Glyph+" "+string(a.Bucket)), s)
+	detailField(&b, "area", a.Area, s)
+	detailField(&b, "date", a.Date, s)
+	detailField(&b, "findings", progress, s)
 	// A glyph-coded finding index — status glyph + code + title, one scannable line
 	// each — mirroring the epic detail's task list. The body below renders the same
 	// findings as full prose; this is the at-a-glance, status-colored map of them
@@ -494,9 +499,9 @@ func renderAuditMeta(a domain.Audit, body string, width int) string {
 		b.WriteString("\n")
 		for _, f := range findings {
 			ftok := theme.FindingStatus(f.Status)
-			line := fmt.Sprintf("  %s %s", fg(ftok.Color, ftok.Glyph), f.Code)
+			line := fmt.Sprintf("  %s %s", s.fg(ftok.Color, ftok.Glyph), f.Code)
 			if f.Title != "" {
-				line += "  " + dim(truncate(f.Title, max1(width-len(f.Code)-6)))
+				line += "  " + s.dim(truncate(f.Title, max1(width-len(f.Code)-6)))
 			}
 			b.WriteString(line + "\n")
 		}

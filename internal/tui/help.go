@@ -75,9 +75,9 @@ var helpSections = []helpSection{
 // dashboard draw (theme.Status/Liveness/Bucket/FindingStatus/Marker*), so they can't
 // drift from what's on screen; only the percent-band rows (mark) are hand-labeled.
 // ok is false on a screen with no glyph vocabulary of its own.
-func symbolsFor(kind entityKind) (helpSection, bool) {
-	tok := func(t theme.Token, desc string) helpEntry { return helpEntry{fg(t.Color, t.Glyph), desc} }
-	mark := func(c theme.Color, label, desc string) helpEntry { return helpEntry{fg(c, label), desc} }
+func symbolsFor(kind entityKind, s styles) (helpSection, bool) {
+	tok := func(t theme.Token, desc string) helpEntry { return helpEntry{s.fg(t.Color, t.Glyph), desc} }
+	mark := func(c theme.Color, label, desc string) helpEntry { return helpEntry{s.fg(c, label), desc} }
 	var e []helpEntry
 	switch kind {
 	case entityTasks:
@@ -148,14 +148,12 @@ func notesFor(kind entityKind) helpSection {
 	return helpSection{"Notes", entries}
 }
 
-var (
-	helpBorder   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.BorderActive.Color()).Padding(0, 2)
-	helpHeading  = lipgloss.NewStyle().Bold(true).Foreground(pal.Heading.Color())
-	helpKeyStyle = lipgloss.NewStyle().Bold(true)
-	// helpHFrame is the box's horizontal chrome (border + padding), derived from the
-	// style so a padding/border change can't desync the wrap width.
-	helpHFrame = helpBorder.GetHorizontalFrameSize()
-)
+// helpHFrame is the help box's horizontal chrome (border + padding), derived from
+// the box's STYLE so a padding/border change can't desync the wrap width. The
+// frame size is color-independent (it's the rounded border + Padding(0,2)), so it
+// stays a package var rather than per-Model state — only the box's COLOR is themed
+// (styles.helpBorder).
+var helpHFrame = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 2).GetHorizontalFrameSize()
 
 // helpPrefWidth is the overlay's preferred outer width. The content WRAPS to this
 // (descriptions reflow within their column), so the box is a constant width as you
@@ -178,7 +176,7 @@ func helpWidth(maxW int) int {
 // next, and Global LAST — global keys work everywhere, so they're the best-known
 // and least in need of surfacing in a context panel. The inactive pane's section
 // is hidden, so `?` shows what actually works right now.
-func helpSectionsFor(f focus, kind entityKind) []helpSection {
+func helpSectionsFor(f focus, kind entityKind, s styles) []helpSection {
 	byTitle := make(map[string]helpSection, len(helpSections))
 	for _, s := range helpSections {
 		byTitle[s.title] = s
@@ -194,7 +192,7 @@ func helpSectionsFor(f focus, kind entityKind) []helpSection {
 	} else {
 		add("List")
 	}
-	if sym, ok := symbolsFor(kind); ok { // what the row glyphs mean, page-specific
+	if sym, ok := symbolsFor(kind, s); ok { // what the row glyphs mean, page-specific
 		out = append(out, sym)
 	}
 	out = append(out, notesFor(kind)) // page-specific: only the active tab's views
@@ -211,12 +209,12 @@ func helpSectionsFor(f focus, kind entityKind) []helpSection {
 // the column layout. Shared by helpBox (render) and the model's scroll clamp, so both
 // window the SAME content — callers MUST pass the same contentW
 // (helpWidth(maxW)-helpHFrame).
-func helpLines(f focus, kind entityKind, contentW int) []string {
-	sections := helpSectionsFor(f, kind)
+func helpLines(f focus, kind entityKind, contentW int, s styles) []string {
+	sections := helpSectionsFor(f, kind, s)
 	// Widest key column across the shown sections → aligned descriptions.
 	keyW := 0
-	for _, s := range sections {
-		for _, e := range s.entries {
+	for _, sec := range sections {
+		for _, e := range sec.entries {
 			if w := lipgloss.Width(e.keys); w > keyW {
 				keyW = w
 			}
@@ -231,15 +229,15 @@ func helpLines(f focus, kind entityKind, contentW int) []string {
 	// the box would lose its uniform width, and the outer clamp would shear the border.
 	fit := func(s string) string { return padRight(truncate(s, contentW), contentW) }
 
-	lines := []string{fit(helpHeading.Render("Keys"))}
-	for _, s := range sections {
-		lines = append(lines, fit(""), fit(dim(s.title)))
-		for _, e := range s.entries {
+	lines := []string{fit(s.helpHeading.Render("Keys"))}
+	for _, sec := range sections {
+		lines = append(lines, fit(""), fit(s.dim(sec.title)))
+		for _, e := range sec.entries {
 			keyPad := strings.Repeat(" ", max(keyW-lipgloss.Width(e.keys), 0))
 			// wrap reflows + right-pads each description line to descW (lipgloss Width),
 			// so the column stays rectangular and the rows align.
 			desc := strings.Split(wrap(e.desc, descW), "\n")
-			lines = append(lines, fit("  "+helpKeyStyle.Render(e.keys)+keyPad+"  "+desc[0]))
+			lines = append(lines, fit("  "+s.helpKey.Render(e.keys)+keyPad+"  "+desc[0]))
 			for _, cont := range desc[1:] {
 				lines = append(lines, fit(contIndent+cont))
 			}
@@ -252,15 +250,15 @@ func helpLines(f focus, kind entityKind, contentW int) []string {
 // doesn't resize while scrolling, clamped to fit within (maxW, maxH). When the
 // content is taller than the box, scroll (clamped here, not in the model — only
 // render knows the box height) picks the visible window; j/k scroll while open.
-func helpBox(maxW, maxH, scroll int, f focus, kind entityKind) string {
-	lines := helpLines(f, kind, helpWidth(maxW)-helpHFrame)
+func helpBox(maxW, maxH, scroll int, f focus, kind entityKind, s styles) string {
+	lines := helpLines(f, kind, helpWidth(maxW)-helpHFrame, s)
 	const frameV = 2 // top+bottom border rows
 	if innerH := maxH - frameV; innerH > 0 && len(lines) > innerH {
 		maxScroll := len(lines) - innerH
 		scroll = min(max(scroll, 0), maxScroll)
 		lines = lines[scroll : scroll+innerH]
 	}
-	box := helpBorder.Render(strings.Join(lines, "\n"))
+	box := s.helpBorder.Render(strings.Join(lines, "\n"))
 	// Last-resort clamp so a tiny terminal can't make the box overflow the body.
 	return lipgloss.NewStyle().MaxWidth(maxW).MaxHeight(maxH).Render(box)
 }

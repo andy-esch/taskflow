@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
@@ -22,8 +20,6 @@ import (
 // dashListCap bounds each list widget so the dashboard stays a glanceable summary;
 // the overflow collapses into a "+N more →" row that jumps to the full tab.
 const dashListCap = 6
-
-var dashHeading = lipgloss.NewStyle().Bold(true).Foreground(pal.Heading.Color())
 
 // dashTarget is where selecting a row navigates: a specific item (id set) via
 // jumpTo, or a whole view (view set) via applyView, on the named entity's tab.
@@ -51,10 +47,10 @@ type dashboard struct {
 
 // setSummary (re)builds the widget rows from a fresh core.Summary, recomputing the
 // navigable set and clamping the cursor.
-func (d *dashboard) setSummary(s core.Summary) {
+func (d *dashboard) setSummary(s core.Summary, st styles) {
 	var rows []dashRow
-	head := func(t string) { rows = append(rows, dashRow{text: dashHeading.Render(t)}) }
-	info := func(t string) { rows = append(rows, dashRow{text: dim("  " + t)}) }
+	head := func(t string) { rows = append(rows, dashRow{text: st.dashHeading.Render(t)}) }
+	info := func(t string) { rows = append(rows, dashRow{text: st.dim("  " + t)}) }
 	line := func(t string) { rows = append(rows, dashRow{text: "  " + t}) } // info, but keeps its own colors
 	blank := func() { rows = append(rows, dashRow{}) }
 	nav := func(text string, tgt dashTarget) { t := tgt; rows = append(rows, dashRow{text: text, target: &t}) }
@@ -73,10 +69,10 @@ func (d *dashboard) setSummary(s core.Summary) {
 	} else {
 		shown, more := capList(len(s.InProgress))
 		vis := s.InProgress[:shown]
-		dateCells := relDateCells(vis, theme.TaskDate)
+		dateCells := relDateCells(vis, theme.TaskDate, st)
 		for i, t := range vis {
 			tok := theme.Status(t.Status)
-			cell := fg(tok.Color, tok.Glyph) + " "
+			cell := st.fg(tok.Color, tok.Glyph) + " "
 			if dateCells[i] != "" { // a blank (undated) cell still pads, so the slug column holds
 				cell += dateCells[i] + "  "
 			}
@@ -84,7 +80,7 @@ func (d *dashboard) setSummary(s core.Summary) {
 			nav(cell, dashTarget{kind: entityTasks, id: t.Slug})
 		}
 		if more > 0 {
-			nav(dim(fmt.Sprintf("+%d more →", more)), dashTarget{kind: entityTasks, view: "in-progress"})
+			nav(st.dim(fmt.Sprintf("+%d more →", more)), dashTarget{kind: entityTasks, view: "in-progress"})
 		}
 	}
 
@@ -92,7 +88,7 @@ func (d *dashboard) setSummary(s core.Summary) {
 	if s.RevisitDue > 0 {
 		blank()
 		head("due for revisit")
-		nav(glyph(theme.MarkerRevisit)+fmt.Sprintf(" %d snoozed task(s) now due", s.RevisitDue),
+		nav(st.glyph(theme.MarkerRevisit)+fmt.Sprintf(" %d snoozed task(s) now due", s.RevisitDue),
 			dashTarget{kind: entityTasks, view: "revisit"})
 	}
 
@@ -110,25 +106,25 @@ func (d *dashboard) setSummary(s core.Summary) {
 		shown, more := capList(len(epics))
 		vis := epics[:shown]
 		countsW := countsWidth(vis, func(es core.EpicSummary) (int, int) { return es.Done, es.Total })
-		dateCells := relDateCells(vis, func(es core.EpicSummary) string { return es.LastUpdated })
+		dateCells := relDateCells(vis, func(es core.EpicSummary) string { return es.LastUpdated }, st)
 		for i, es := range vis {
 			pct := es.Percent()
 			// live-first, dormant dimmed; a ⚠ leads instead when the status is
 			// non-conforming (the same glyph the epics tab shows — see epicGlyph).
-			row := fmt.Sprintf("%s %s %s  %s", epicGlyph(es), miniBar(pct, 8),
-				fg(theme.Percent(pct), theme.PercentLabelPadded(pct)), rollupCounts(es.Done, es.Total, countsW))
+			row := fmt.Sprintf("%s %s %s  %s", epicGlyph(es, st), st.miniBar(pct, 8),
+				st.fg(theme.Percent(pct), theme.PercentLabelPadded(pct)), rollupCounts(es.Done, es.Total, countsW))
 			if dateCells[i] != "" { // a blank (undated) cell still pads, so the id column holds
 				row += "  " + dateCells[i]
 			}
 			id := es.Epic.ID
 			if !es.Live() { // dormant buckets recede on the dashboard too
-				id = dim(id)
+				id = st.dim(id)
 			}
-			row += "  " + id + epicStatusNote(es)
+			row += "  " + id + epicStatusNote(es, st)
 			nav(row, dashTarget{kind: entityEpics, id: es.Epic.ID})
 		}
 		if more > 0 {
-			nav(dim(fmt.Sprintf("+%d more →", more)), dashTarget{kind: entityEpics})
+			nav(st.dim(fmt.Sprintf("+%d more →", more)), dashTarget{kind: entityEpics})
 		}
 	}
 
@@ -139,14 +135,14 @@ func (d *dashboard) setSummary(s core.Summary) {
 		blank()
 		head(fmt.Sprintf("audit findings (%d open · %d in progress)", fr.Open, fr.InProgress))
 		if len(fr.ByUrgency) > 0 {
-			line("by urgency:  " + urgencyLine(fr.ByUrgency))
+			line("by urgency:  " + urgencyLine(fr.ByUrgency, st))
 		}
 		if len(fr.ByComponent) > 0 {
-			line("by area:     " + componentLine(fr.ByComponent, 5))
+			line("by area:     " + componentLine(fr.ByComponent, 5, st))
 		}
 		for _, f := range fr.Acute {
 			label := strings.TrimSpace(f.Code + " " + f.Title)
-			nav(fg(theme.ColorRed, "⚠")+" "+label, dashTarget{kind: entityAudits, id: f.Audit})
+			nav(st.fg(theme.ColorRed, "⚠")+" "+label, dashTarget{kind: entityAudits, id: f.Audit})
 		}
 	}
 
@@ -158,30 +154,30 @@ func (d *dashboard) setSummary(s core.Summary) {
 	head("needs attention")
 	allClear := true
 	if s.Misfiled > 0 {
-		nav(glyph(theme.MarkerWarn)+fmt.Sprintf(" %d misfiled task(s) (status ≠ folder)", s.Misfiled),
+		nav(st.glyph(theme.MarkerWarn)+fmt.Sprintf(" %d misfiled task(s) (status ≠ folder)", s.Misfiled),
 			dashTarget{kind: entityTasks, view: "all"})
 		allClear = false
 	}
 	if n := len(s.OpenAudits); n > 0 {
-		nav(glyph(theme.Bucket(domain.AuditOpen))+fmt.Sprintf(" %d open audit(s)", n), dashTarget{kind: entityAudits})
+		nav(st.glyph(theme.Bucket(domain.AuditOpen))+fmt.Sprintf(" %d open audit(s)", n), dashTarget{kind: entityAudits})
 		allClear = false
 	}
 	if s.ReadyToClose > 0 {
-		nav(glyph(theme.MarkerReadyToClose)+fmt.Sprintf(" %d audit(s) ready to close (all findings resolved)", s.ReadyToClose),
+		nav(st.glyph(theme.MarkerReadyToClose)+fmt.Sprintf(" %d audit(s) ready to close (all findings resolved)", s.ReadyToClose),
 			dashTarget{kind: entityAudits})
 		allClear = false
 	}
 	if s.BadEpicStatus > 0 {
-		nav(glyph(theme.MarkerWarn)+fmt.Sprintf(" %d epic(s) with unrecognized status (set active/retired/deprecated)", s.BadEpicStatus),
+		nav(st.glyph(theme.MarkerWarn)+fmt.Sprintf(" %d epic(s) with unrecognized status (set active/retired/deprecated)", s.BadEpicStatus),
 			dashTarget{kind: entityEpics})
 		allClear = false
 	}
 	if len(s.Problems) > 0 {
-		info(glyph(theme.MarkerUnreadable) + fmt.Sprintf(" %d unreadable file(s) (run lint)", len(s.Problems)))
+		info(st.glyph(theme.MarkerUnreadable) + fmt.Sprintf(" %d unreadable file(s) (run lint)", len(s.Problems)))
 		allClear = false
 	}
 	if allClear {
-		info(glyph(theme.MarkerAllClear) + " all clear")
+		info(st.glyph(theme.MarkerAllClear) + " all clear")
 	}
 
 	d.rows = rows
@@ -201,14 +197,14 @@ func (d *dashboard) setSummary(s core.Summary) {
 // eventually"), coloring acute (red) and soon (yellow) so the sharp end stands out.
 // Shares the iterate/join STRUCTURE with the CLI's countByLine via theme.Breakdown;
 // only this surface's coloring differs (audit M10).
-func urgencyLine(cs []core.CountBy) string {
-	return theme.Breakdown(cs, dim(" · "), 0, func(c core.CountBy) string {
+func urgencyLine(cs []core.CountBy, st styles) string {
+	return theme.Breakdown(cs, st.dim(" · "), 0, func(c core.CountBy) string {
 		seg := fmt.Sprintf("%d %s", c.Count, c.Key)
 		switch c.Key {
 		case "acute":
-			seg = fg(theme.ColorRed, "⚠ "+seg)
+			seg = st.fg(theme.ColorRed, "⚠ "+seg)
 		case "soon":
-			seg = fg(theme.ColorYellow, seg)
+			seg = st.fg(theme.ColorYellow, seg)
 		}
 		return seg
 	}, nil)
@@ -216,10 +212,10 @@ func urgencyLine(cs []core.CountBy) string {
 
 // componentLine renders the top-topN components by finding count ("stravapipe 14 ·
 // dispatcher 9 · …"), with a dim "+N more" tail when there are more.
-func componentLine(cs []core.CountBy, topN int) string {
-	return theme.Breakdown(cs, dim(" · "), topN,
+func componentLine(cs []core.CountBy, topN int, st styles) string {
+	return theme.Breakdown(cs, st.dim(" · "), topN,
 		func(c core.CountBy) string { return fmt.Sprintf("%s %d", c.Key, c.Count) },
-		func(remaining int) string { return dim(fmt.Sprintf("+%d more", remaining)) })
+		func(remaining int) string { return st.dim(fmt.Sprintf("+%d more", remaining)) })
 }
 
 // move steps the cursor over the navigable rows (wrapping).
@@ -244,9 +240,9 @@ func (d dashboard) selectedTarget() (dashTarget, bool) {
 // scroll lists (each widget is capped); but the composed widgets can still overrun
 // a short terminal, so when they do the output is a window that keeps the cursor
 // row on screen — a selectable row must never be navigable-but-invisible.
-func (d dashboard) view(maxW, maxH int) string {
+func (d dashboard) view(st styles, maxW, maxH int) string {
 	if !d.loaded {
-		return dim("loading…")
+		return st.dim("loading…")
 	}
 	cursorRow := -1
 	if len(d.nav) > 0 {
@@ -258,7 +254,7 @@ func (d dashboard) view(maxW, maxH int) string {
 		case r.target == nil:
 			lines[i] = truncate(r.text, max1(maxW)) // heading / info / breakdown line — width-safe
 		case i == cursorRow:
-			lines[i] = truncate(selectedStyle.Render("› ")+r.text, max1(maxW))
+			lines[i] = truncate(st.selected.Render("› ")+r.text, max1(maxW))
 		default:
 			lines[i] = truncate("  "+r.text, max1(maxW))
 		}

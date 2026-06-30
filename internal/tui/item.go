@@ -16,10 +16,10 @@ import (
 // row renders one list line with the shared cursor convention: a "› " accent
 // marker when selected, two spaces otherwise, the content truncated to the list
 // width. Used by every entity delegate so rows look consistent across tabs.
-func row(w io.Writer, m list.Model, index int, content string) {
+func row(w io.Writer, m list.Model, index int, content string, st styles) {
 	line := truncate(content, max1(m.Width()-2))
 	if index == m.Index() {
-		fmt.Fprint(w, selectedStyle.Render("› "+line))
+		fmt.Fprint(w, st.selected.Render("› "+line))
 		return
 	}
 	fmt.Fprint(w, "  "+line)
@@ -62,17 +62,18 @@ func (i taskItem) sortFields() sortFields {
 
 // taskDelegate renders one task row: colored status glyph, a ⚠ if misfiled, the
 // slug, and a dim relative date — truncated to fit the list width.
-type taskDelegate struct{}
+type taskDelegate struct{ st *styles }
 
 func (taskDelegate) Height() int                         { return 1 }
 func (taskDelegate) Spacing() int                        { return 0 }
 func (taskDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
 
-func (taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+func (d taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	it, ok := item.(taskItem)
 	if !ok {
 		return
 	}
+	st := *d.st
 	tok := theme.Status(it.t.Status)
 	// One marker cell: a misfiled ⚠ (data-integrity warning) wins; otherwise a ↻
 	// when a deferred task's revisit (snooze) date has arrived (it.due, set at load)
@@ -80,9 +81,9 @@ func (taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 	marker := " "
 	switch {
 	case it.t.Misfiled():
-		marker = glyph(theme.MarkerWarn)
+		marker = st.glyph(theme.MarkerWarn)
 	case it.due:
-		marker = glyph(theme.MarkerRevisit)
+		marker = st.glyph(theme.MarkerRevisit)
 	}
 	date := theme.RelativeDate(theme.TaskDate(it.t))
 
@@ -94,7 +95,7 @@ func (taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Item)
 	// Pad by display cells, not bytes (%-*s) — a non-ASCII slug would otherwise
 	// shove the date column out of alignment.
 	slug := padRight(truncate(it.t.Slug, slugW), slugW)
-	row(w, m, index, fmt.Sprintf("%s %s %s  %s", fg(tok.Color, tok.Glyph), marker, slug, dim(date)))
+	row(w, m, index, fmt.Sprintf("%s %s %s  %s", st.fg(tok.Color, tok.Glyph), marker, slug, st.dim(date)), st)
 }
 
 // --- epics ---
@@ -126,18 +127,18 @@ func (i epicItem) sortFields() sortFields {
 // active/retired/deprecated) — a fixable data problem that takes priority over
 // liveness; otherwise the liveness band glyph (working/fresh/dormant), mirroring the
 // audit row's bucket glyph.
-func epicGlyph(es core.EpicSummary) string {
+func epicGlyph(es core.EpicSummary, st styles) string {
 	if !domain.IsKnownEpicStatus(es.Epic.Status) {
-		return glyph(theme.MarkerWarn)
+		return st.glyph(theme.MarkerWarn)
 	}
 	tok := theme.Liveness(string(es.Liveness()))
-	return fg(tok.Color, tok.Glyph)
+	return st.fg(tok.Color, tok.Glyph)
 }
 
 // epicStatusNote annotates a non-conforming epic row with its offending status, so
 // the ⚠ says WHAT to fix (set active/retired/deprecated via the m-menu or `epic
 // move`). "" when the status conforms; "—" stands in for an empty status.
-func epicStatusNote(es core.EpicSummary) string {
+func epicStatusNote(es core.EpicSummary, st styles) string {
 	if domain.IsKnownEpicStatus(es.Epic.Status) {
 		return ""
 	}
@@ -145,35 +146,36 @@ func epicStatusNote(es core.EpicSummary) string {
 	if s == "" {
 		s = "—"
 	}
-	return "  " + fg(theme.ColorYellow, "status:"+s)
+	return "  " + st.fg(theme.ColorYellow, "status:"+s)
 }
 
 // epicDelegate renders one epic row: a leading glyph (liveness, or ⚠ for a
 // non-conforming status), then a rollup bar + colored percent + done/total + the
 // epic id and description. A dormant (drained) epic dims its id so a quiet bucket
 // recedes even on a mono terminal; a non-conforming one shows its raw status.
-type epicDelegate struct{}
+type epicDelegate struct{ st *styles }
 
 func (epicDelegate) Height() int                         { return 1 }
 func (epicDelegate) Spacing() int                        { return 0 }
 func (epicDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
 
-func (epicDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+func (d epicDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	it, ok := item.(epicItem)
 	if !ok {
 		return
 	}
+	st := *d.st
 	pct := it.es.Percent()
-	bar := miniBar(pct, 8)
-	pctStr := fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
+	bar := st.miniBar(pct, 8)
+	pctStr := st.fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
 	counts := rollupCounts(it.es.Done, it.es.Total, it.countsW)
 	id := it.es.Epic.ID
 	if !it.es.Live() { // dormant buckets recede: the id dims like the description
-		id = dim(id)
+		id = st.dim(id)
 	}
-	idAndDesc := id + epicStatusNote(it.es) + "  " + dim(it.es.Epic.Description)
+	idAndDesc := id + epicStatusNote(it.es, st) + "  " + st.dim(it.es.Epic.Description)
 	row(w, m, index, fmt.Sprintf("%s %s %s %s  %s",
-		epicGlyph(it.es), bar, pctStr, counts, idAndDesc))
+		epicGlyph(it.es, st), bar, pctStr, counts, idAndDesc), st)
 }
 
 // --- audits ---
@@ -200,22 +202,23 @@ func (i auditItem) sortFields() sortFields {
 // auditDelegate renders one audit row: a bucket glyph (state), then the same
 // rollup bar + colored percent + resolved/total the epic row uses, the slug, and
 // a dim area.
-type auditDelegate struct{}
+type auditDelegate struct{ st *styles }
 
 func (auditDelegate) Height() int                         { return 1 }
 func (auditDelegate) Spacing() int                        { return 0 }
 func (auditDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
 
-func (auditDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+func (d auditDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	it, ok := item.(auditItem)
 	if !ok {
 		return
 	}
+	st := *d.st
 	tok := theme.Bucket(it.a.Bucket)
 	pct := it.a.Percent()
-	bar := segBar(it.a.DoneFindings, it.a.ActiveFindings, it.a.DroppedFindings, it.a.Findings, 8)
-	pctStr := fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
+	bar := st.segBar(it.a.DoneFindings, it.a.ActiveFindings, it.a.DroppedFindings, it.a.Findings, 8)
+	pctStr := st.fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
 	counts := rollupCounts(it.a.Resolved(), it.a.Findings, it.countsW)
 	row(w, m, index, fmt.Sprintf("%s %s %s %s  %s  %s",
-		fg(tok.Color, tok.Glyph), bar, pctStr, counts, it.a.Slug, dim(it.a.Area)))
+		st.fg(tok.Color, tok.Glyph), bar, pctStr, counts, it.a.Slug, st.dim(it.a.Area)), st)
 }

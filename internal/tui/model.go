@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/editor"
 	"github.com/andy-esch/taskflow/internal/listfilter"
@@ -33,6 +34,13 @@ const (
 // detail.
 type Model struct {
 	svc *core.Service
+
+	// st is the per-Model theming bundle (palette + chrome styles + color
+	// helpers). A POINTER, shared with the list delegates (item.go) so Run can
+	// repopulate it once after background detection and every surface — including
+	// the delegates — sees the swap without being rebuilt. New seeds it with the
+	// default dark palette so a Model rendered without Run (tests) still has color.
+	st *styles
 
 	width, height int
 	twoPane       bool
@@ -70,11 +78,16 @@ type Model struct {
 
 // New constructs the root model over the same *core.Service the CLI uses.
 func New(svc *core.Service) Model {
+	// One shared *styles, seeded with the default dark palette. The entity tabs'
+	// delegates take this same pointer (newEntityTabs), so Run repopulating *st
+	// after background detection reaches every list delegate without a rebuild.
+	st := &styles{}
+	*st = newStyles(design.Default().Dark)
 	return Model{
-		svc: svc, focus: focusList,
-		tabs: newEntityTabs(), active: 0,
+		svc: svc, focus: focusList, st: st,
+		tabs: newEntityTabs(st), active: 0,
 		onDash: true, // the dashboard is the landing view; `]`/:tasks drops into work
-		detail: newDetailPane(theme.MarkdownStyleDark), cmd: newCommandBar(),
+		detail: newDetailPane(st, theme.MarkdownStyleDark), cmd: newCommandBar(),
 		palette: newPalette(),
 		modals:  defaultModals(),
 	}
@@ -179,7 +192,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.dash.loadErr = nil
-		m.dash.setSummary(msg.summary)
+		m.dash.setSummary(msg.summary, *m.st)
 		return m, nil
 
 	case movedMsg:

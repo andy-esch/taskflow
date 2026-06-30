@@ -30,8 +30,8 @@ func (m *Model) recomputeLayout() {
 	// (the `••` dots), so a paginated list would overflow its pane and shove the
 	// footer/command bar off-screen. Reserve that line here so title+items+dots
 	// fit the pane's inner height exactly.
-	listH := max1(bodyH - paneVFrame - 1)
-	detailH := max1(bodyH - paneVFrame - titleH)
+	listH := max1(bodyH - m.st.paneVFrame - 1)
+	detailH := max1(bodyH - m.st.paneVFrame - titleH)
 	// Zoom forces the single-pane path (detail full width); otherwise a wide terminal
 	// shows the list+detail split.
 	m.twoPane = m.width >= 90 && !m.zoom
@@ -44,11 +44,11 @@ func (m *Model) recomputeLayout() {
 		}
 		m.listOuterW = listOuterW
 		m.detailOuterW = m.width - listOuterW
-		listInnerW = max1(listOuterW - paneHFrame)
-		m.detail.SetSize(max1(m.detailOuterW-paneHFrame), detailH)
+		listInnerW = max1(listOuterW - m.st.paneHFrame)
+		m.detail.SetSize(max1(m.detailOuterW-m.st.paneHFrame), detailH)
 	} else {
 		m.listOuterW, m.detailOuterW = m.width, m.width
-		listInnerW = max1(m.width - paneHFrame)
+		listInnerW = max1(m.width - m.st.paneHFrame)
 		m.detail.SetSize(listInnerW, detailH)
 	}
 	for _, t := range m.tabs {
@@ -120,7 +120,7 @@ func (m Model) helpMaxScroll() int {
 		return 0
 	}
 	contentW := helpWidth(m.width-2) - helpHFrame
-	return max(len(helpLines(m.focus, m.helpEntityKind(), contentW))-innerH, 0)
+	return max(len(helpLines(m.focus, m.helpEntityKind(), contentW, *m.st))-innerH, 0)
 }
 
 // helpEntityKind is the kind whose context notes the `?` panel shows — the active
@@ -143,17 +143,17 @@ func (m Model) renderBody() string {
 		// has loaded, a failed refresh keeps the stale rows (flagged in the footer).
 		switch {
 		case m.dash.loadErr != nil && !m.dash.loaded:
-			return m.pane(focusList, fg(theme.ColorRed, "error: "+m.dash.loadErr.Error()), m.width)
+			return m.pane(focusList, m.st.fg(theme.ColorRed, "error: "+m.dash.loadErr.Error()), m.width)
 		case !m.dash.loaded:
-			return m.pane(focusList, dim("loading…"), m.width)
+			return m.pane(focusList, m.st.dim("loading…"), m.width)
 		}
-		return m.pane(focusList, m.dash.view(m.width-paneHFrame, m.paneOuterH-paneVFrame), m.width)
+		return m.pane(focusList, m.dash.view(*m.st, m.width-m.st.paneHFrame, m.paneOuterH-m.st.paneVFrame), m.width)
 	}
 	switch t := m.cur(); {
 	case t.loadErr != nil && !t.loaded:
-		return m.pane(focusList, fg(theme.ColorRed, "error: "+t.loadErr.Error()), m.width)
+		return m.pane(focusList, m.st.fg(theme.ColorRed, "error: "+t.loadErr.Error()), m.width)
 	case !t.loaded:
-		return m.pane(focusList, dim("loading…"), m.width)
+		return m.pane(focusList, m.st.dim("loading…"), m.width)
 	}
 	if m.zoom { // full-screen: the detail pane takes the whole width (no list)
 		return m.detailPaneView()
@@ -194,9 +194,9 @@ func (m Model) listPaneContent() string {
 
 // detailPaneView composes the detail pane: a title line + the scrollable body.
 func (m Model) detailPaneView() string {
-	titleStyle := dimStyle
+	titleStyle := m.st.dimStyle
 	if m.focus == focusDetail {
-		titleStyle = selectedStyle
+		titleStyle = m.st.selected
 	}
 	// Truncate the title to the pane's inner width — an un-truncated long slug
 	// would wrap to a second row, growing the pane past its budget and clipping
@@ -230,9 +230,9 @@ func (m Model) detailTitle() string {
 // outerW-paneHFrame × paneOuterH-paneVFrame, the inner budget children are sized
 // to. Clamped to ≥1 so a tiny terminal never produces a negative-sized frame.
 func (m Model) pane(f focus, content string, outerW int) string {
-	border := paneInactive
+	border := m.st.paneInactive
 	if m.focus == f {
-		border = paneActive
+		border = m.st.paneActive
 	}
 	return border.Width(max1(outerW)).Height(max1(m.paneOuterH)).Render(content)
 }
@@ -253,22 +253,22 @@ func (m Model) tabStrip() string {
 		if !m.onDash {
 			name = m.cur().name
 		}
-		return truncate(activeTab.Render("["+name+" ▾]"), m.width)
+		return truncate(m.st.activeTab.Render("["+name+" ▾]"), m.width)
 	}
 	parts := make([]string, 0, len(m.tabs)+1)
 	if m.onDash {
-		parts = append(parts, activeTab.Render("dashboard"))
+		parts = append(parts, m.st.activeTab.Render("dashboard"))
 	} else {
-		parts = append(parts, dim("dashboard"))
+		parts = append(parts, m.st.dim("dashboard"))
 	}
 	for i, t := range m.tabs {
 		if !m.onDash && i == m.active {
-			parts = append(parts, activeTab.Render(t.name))
+			parts = append(parts, m.st.activeTab.Render(t.name))
 		} else {
-			parts = append(parts, dim(t.name))
+			parts = append(parts, m.st.dim(t.name))
 		}
 	}
-	return truncate(strings.Join(parts, dim("  ·  ")), m.width)
+	return truncate(strings.Join(parts, m.st.dim("  ·  ")), m.width)
 }
 
 // keyHint renders a footer token "<key> <label>", the key sourced from its binding so
@@ -297,16 +297,16 @@ func (m Model) footer() string {
 		// Surface the matching commands inline so `:` is self-documenting: the full
 		// vocabulary on an empty prompt, narrowing to the prefix as you type.
 		if hint := m.commandHint(); hint != "" {
-			return truncate(m.cmd.view()+dim("  "+hint), m.width)
+			return truncate(m.cmd.view(*m.st)+m.st.dim("  "+hint), m.width)
 		}
-		return truncate(m.cmd.view(), m.width)
+		return truncate(m.cmd.view(*m.st), m.width)
 	}
 	// A post-action result takes over the footer until the next key.
 	if m.flash != "" {
 		if m.flashErr {
-			return truncate(fg(theme.ColorRed, "✘ "+m.flash), m.width)
+			return truncate(m.st.fg(theme.ColorRed, "✘ "+m.flash), m.width)
 		}
-		return truncate(fg(theme.ColorGreen, "✔ "+m.flash), m.width)
+		return truncate(m.st.fg(theme.ColorGreen, "✔ "+m.flash), m.width)
 	}
 	// The detail find input/status takes over the footer while searching a body.
 	if m.focus == focusDetail && (m.detail.finding() || m.detail.findActive()) {
@@ -327,7 +327,7 @@ func (m Model) footer() string {
 		if m.dash.loaded && m.dash.loadErr != nil {
 			line = "⚠ refresh failed · " + line
 		}
-		return dim(truncate(line, m.width))
+		return m.st.dim(truncate(line, m.width))
 	}
 	hints := strings.Join([]string{
 		keyHint(keys.Command, "cmd"),
@@ -376,5 +376,5 @@ func (m Model) footer() string {
 	if m.watchOff {
 		hints = "live-reload off · " + hints
 	}
-	return dim(truncate(hints, m.width))
+	return m.st.dim(truncate(hints, m.width))
 }

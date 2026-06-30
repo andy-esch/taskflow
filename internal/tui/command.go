@@ -71,9 +71,9 @@ func (c *commandBar) complete(options []string) {
 	c.ti.CursorEnd()
 }
 
-func (c commandBar) view() string {
+func (c commandBar) view(s styles) string {
 	if c.err != "" {
-		return c.ti.View() + "  " + fg(theme.ColorRed, c.err)
+		return c.ti.View() + "  " + s.fg(theme.ColorRed, c.err)
 	}
 	return c.ti.View()
 }
