@@ -62,7 +62,8 @@ func newThemeListCmd(app *App) *cobra.Command {
 // newThemePreviewCmd renders a theme's palette — color swatches + a sample bar — for
 // the background-appropriate variant. With no arg it previews the active theme.
 func newThemePreviewCmd(app *App) *cobra.Command {
-	return &cobra.Command{
+	var variantFlag string
+	cmd := &cobra.Command{
 		Use:         "preview [name]",
 		Short:       "Preview a theme's palette (color swatches + a sample bar)",
 		Args:        cobra.MaximumNArgs(1),
@@ -77,12 +78,25 @@ func newThemePreviewCmd(app *App) *cobra.Command {
 				}
 				t = th
 			}
-			// Query the terminal background (an OSC-11 round-trip) only on the HUMAN
-			// path with color on. --json stays deterministic (dark) — a machine
-			// consumer must not depend on the reviewer's terminal background.
-			dark := true
-			if !app.JSON && wantColor(app.Color, app.NoColor, app.Out) {
-				dark = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+			// --variant forces a side (deterministic, so it works on any terminal and
+			// under --json — the way to preview the light palette from a dark terminal).
+			// "auto" keeps the old behavior: query the background (an OSC-11 round-trip)
+			// only on the HUMAN path with color on, else dark — so --json stays
+			// deterministic and never depends on the reviewer's terminal background.
+			var dark bool
+			switch variantFlag {
+			case "dark":
+				dark = true
+			case "light":
+				dark = false
+			case "auto":
+				dark = true
+				if !app.JSON && wantColor(app.Color, app.NoColor, app.Out) {
+					dark = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+				}
+			default:
+				return fmt.Errorf("%w: --variant must be auto, dark, or light (got %q)",
+					domain.ErrValidation, variantFlag)
 			}
 			variant := "dark"
 			if !dark {
@@ -96,6 +110,9 @@ func newThemePreviewCmd(app *App) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&variantFlag, "variant", "auto",
+		"which variant to preview: auto (detect from terminal), dark, or light")
+	return cmd
 }
 
 // themeEntries builds the rows for `theme list`: every registered theme, flagged

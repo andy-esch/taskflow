@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: detail pane's glamStyle is threaded separately (field assignment in Run, a 2nd th.For call) — the one theme element bypassing the shared styles struct; fold it in so a retheme touches one place
 effort: Unknown
@@ -11,6 +11,7 @@ tags: [design, tui, refactor]
 created: "2026-06-29"
 updated_at: "2026-06-30"
 started_at: "2026-06-30"
+completed_at: "2026-06-30"
 ---
 
 # fold glamour markdown style into the styles struct

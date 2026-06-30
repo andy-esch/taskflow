@@ -67,9 +67,14 @@ var latteAA = Palette{
 	BorderIdle:   Hue{"#9ca0b0", 8}, // overlay0
 	Danger:       Hue{"#d20f39", 1},
 	Heading:      Hue{"#8839ef", 5},
-	Match:        Hue{"#df8e1d", 3},
-	MatchCurrent: Hue{"#8839ef", 5},
-	MatchFg:      Hue{"#eff1f5", 15}, // base
+	// Find highlights are DARK-text-on-LIGHT-bg here (the highlighter-pen look on a
+	// light terminal) so one shared MatchFg clears AA on BOTH the amber match and the
+	// mauve current-hit. The earlier white MatchFg over the amber Match was ~2.3:1 —
+	// unreadable. MatchCurrent is a lightened Latte mauve (was the saturated #8839ef
+	// accent, which needed white text and so couldn't share a fg with the amber).
+	Match:        Hue{"#df8e1d", 3},  // amber (Latte yellow); dark text ~6.3:1
+	MatchCurrent: Hue{"#c9a6f8", 13}, // lightened mauve; dark text ~8:1
+	MatchFg:      Hue{"#1e1e2e", 0},  // near-black text over a (light) highlight
 	Track:        Hue{"#bcc0cc", 7},  // surface1
 	Gradient: []Hue{
 		{"#8839ef", 5},  // mauve

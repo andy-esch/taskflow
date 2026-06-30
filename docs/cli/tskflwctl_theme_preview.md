@@ -9,7 +9,8 @@ tskflwctl theme preview [name] [flags]
 ### Options
 
 ```
-  -h, --help   help for preview
+  -h, --help             help for preview
+      --variant string   which variant to preview: auto (detect from terminal), dark, or light (default "auto")
 ```
 
 ### Options inherited from parent commands

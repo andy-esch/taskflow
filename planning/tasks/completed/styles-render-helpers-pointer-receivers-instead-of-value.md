@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: styles is a ~10KB struct (13 lipgloss.Style fields); render helpers are value receivers copying it per call in hot row paths — switch to pointer receivers to match the *styles storage elsewhere
 effort: Unknown
@@ -11,6 +11,7 @@ tags: [design, tui, refactor]
 created: "2026-06-29"
 updated_at: "2026-06-30"
 started_at: "2026-06-30"
+completed_at: "2026-06-30"
 ---
 
 # styles render helpers: pointer receivers instead of value

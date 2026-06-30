@@ -39,13 +39,36 @@ func themeSwatches(pal design.Palette) []themeSwatch {
 // byte-stable like every other surface.
 func ThemePreviewHuman(w io.Writer, st Style, name, variant string, pal design.Palette) {
 	fmt.Fprintf(w, "%s (%s)\n", st.Bold(name), variant)
+	// Paint the colored samples on the variant's INTENDED background (Latte base for
+	// light, a dark base for dark), not the reviewer's terminal bg — so the light
+	// palette's AA-darkened colors are judged against the bg they were tuned for. This
+	// is what makes `--variant light` faithful from a dark terminal.
+	canvas := lipgloss.Color("#1e1e2e")
+	if variant == "light" {
+		canvas = lipgloss.Color("#eff1f5")
+	}
 	for _, sw := range themeSwatches(pal) {
 		if st.on {
-			block := lipgloss.NewStyle().Foreground(sw.hue.Color()).Render("███")
+			block := lipgloss.NewStyle().Background(canvas).Foreground(sw.hue.Color()).Render("  ███  ")
 			fmt.Fprintf(w, "  %s  %-7s %s\n", block, sw.token, sw.hue.Hex)
 		} else {
 			fmt.Fprintf(w, "  %-7s %s\n", sw.token, sw.hue.Hex)
 		}
+	}
+	// Chrome the foreground swatches can't show: the find highlight is a bg+fg PAIR
+	// (legibility depends on both), and borders are a frame color. Human-only — the
+	// JSON preview stays the semantic-swatch machine contract — this is the surface
+	// for eyeballing highlight/border legibility (notably the light palette) from any
+	// terminal, paired with `--variant`.
+	if st.on {
+		chip := func(label string, bg, fg design.Hue) string {
+			return lipgloss.NewStyle().Background(bg.Color()).Foreground(fg.Color()).Render(" " + label + " ")
+		}
+		fmt.Fprintf(w, "  find    %s %s\n", chip("match", pal.Match, pal.MatchFg), chip("current", pal.MatchCurrent, pal.MatchFg))
+		rule := func(h design.Hue) string {
+			return lipgloss.NewStyle().Background(canvas).Foreground(h.Color()).Render(" ────── ")
+		}
+		fmt.Fprintf(w, "  border  %s active  %s idle\n", rule(pal.BorderActive), rule(pal.BorderIdle))
 	}
 	bar := progressbar.Render(60, 24, pal)
 	if !st.on {
