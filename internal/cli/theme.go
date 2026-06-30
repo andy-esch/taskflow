@@ -62,7 +62,8 @@ func newThemeListCmd(app *App) *cobra.Command {
 // newThemePreviewCmd renders a theme's palette — color swatches + a sample bar — for
 // the background-appropriate variant. With no arg it previews the active theme.
 func newThemePreviewCmd(app *App) *cobra.Command {
-	return &cobra.Command{
+	var variantFlag string
+	cmd := &cobra.Command{
 		Use:         "preview [name]",
 		Short:       "Preview a theme's palette (color swatches + a sample bar)",
 		Args:        cobra.MaximumNArgs(1),
@@ -77,12 +78,16 @@ func newThemePreviewCmd(app *App) *cobra.Command {
 				}
 				t = th
 			}
-			// Query the terminal background (an OSC-11 round-trip) only on the HUMAN
-			// path with color on. --json stays deterministic (dark) — a machine
-			// consumer must not depend on the reviewer's terminal background.
-			dark := true
-			if !app.JSON && wantColor(app.Color, app.NoColor, app.Out) {
-				dark = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+			// --variant forces a side (deterministic, so it works on any terminal and
+			// under --json — the way to preview the light palette from a dark terminal).
+			// "auto" keeps the old behavior: detect the background (an OSC-11 round-trip)
+			// only on the HUMAN path with color on, else dark — so --json stays
+			// deterministic and never depends on the reviewer's terminal background.
+			dark, err := resolveVariant(variantFlag,
+				!app.JSON && wantColor(app.Color, app.NoColor, app.Out),
+				func() bool { return lipgloss.HasDarkBackground(os.Stdin, os.Stdout) })
+			if err != nil {
+				return err
 			}
 			variant := "dark"
 			if !dark {
@@ -95,6 +100,30 @@ func newThemePreviewCmd(app *App) *cobra.Command {
 			render.ThemePreviewHuman(app.Out, app.Style, t.Name, variant, pal)
 			return nil
 		},
+	}
+	cmd.Flags().StringVar(&variantFlag, "variant", "auto",
+		"which variant to preview: auto (detect from terminal), dark, or light")
+	return cmd
+}
+
+// resolveVariant maps the --variant flag to a dark/light choice. "dark"/"light" are
+// explicit and deterministic; "auto" defers to detectDark (the terminal background)
+// only when allowDetect is set (the human, color-on path) and is otherwise dark, so
+// --json and piped output stay deterministic. An unknown value is a validation error.
+func resolveVariant(flag string, allowDetect bool, detectDark func() bool) (bool, error) {
+	switch flag {
+	case "dark":
+		return true, nil
+	case "light":
+		return false, nil
+	case "auto":
+		if allowDetect {
+			return detectDark(), nil
+		}
+		return true, nil
+	default:
+		return false, fmt.Errorf("%w: --variant must be auto, dark, or light (got %q)",
+			domain.ErrValidation, flag)
 	}
 }
 

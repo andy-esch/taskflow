@@ -59,6 +59,7 @@ type Palette struct {
 	MatchCurrent Hue // current find match background
 	MatchFg      Hue // text drawn over a match highlight
 	Track        Hue // progress empty-track tone
+	Base         Hue // the terminal background this palette is tuned for (e.g. the theme-preview canvas)
 
 	// Gradient — the rollup bar fill stops (the deliberate truecolor exception;
 	// purple -> cyan -> pink). Degrades per-cell on low-color terminals.
