@@ -187,9 +187,10 @@ Files split by concern:
   stays in the store.
 - **`help.go`** — the `?` keybinding overlay (`helpSections` is the runtime
   source of truth for keys) composited over the body with `ansi.Cut`.
-- **`style.go` / `keys.go`** — lipgloss styles (colors from `design`/`theme` via
-  the package-level `pal`, swapped once in `Run` by `applyTheme`) and the
-  `key.Binding` map.
+- **`style.go` / `keys.go`** — the per-Model `styles` bundle (the active palette
+  plus every chrome lipgloss style and the color helpers, built by `newStyles`
+  from `design`/`theme`; the root Model holds a `*styles` the delegates share,
+  repopulated once in `Run` after background detection) and the `key.Binding` map.
 
 **Layout discipline is load-bearing** (a clipped-top-border class of bug):
 subtract the border frame before sizing children, guard `View` before the first

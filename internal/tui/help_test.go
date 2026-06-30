@@ -16,7 +16,7 @@ import (
 // from the rows + dashboard that draw the same markers from the same tokens.
 func TestLegendMarkersSourcedFromTheme(t *testing.T) {
 	has := func(kind entityKind, want string) bool {
-		sec, _ := symbolsFor(kind, testStyles)
+		sec, _ := symbolsFor(kind, &testStyles)
 		for _, e := range sec.entries {
 			if e.keys == want {
 				return true
@@ -54,7 +54,7 @@ func TestKeyMapBindingsSelfDescribe(t *testing.T) {
 // their key + description from the bindings (not re-typed literals): each binding's
 // own Help().Key/Desc appears verbatim, so a rebind in keys.go propagates to both.
 func TestHelpAndFooterDeriveFromKeymap(t *testing.T) {
-	overlay := strings.Join(helpLines(focusList, entityTasks, 200, testStyles), "\n") // wide → no wrap
+	overlay := strings.Join(helpLines(focusList, entityTasks, 200, &testStyles), "\n") // wide → no wrap
 	for _, b := range []key.Binding{keys.Zoom, keys.Action, keys.Palette, keys.Quit} {
 		if !strings.Contains(overlay, b.Help().Key) || !strings.Contains(overlay, b.Help().Desc) {
 			t.Errorf("? overlay should derive %q / %q from its binding", b.Help().Key, b.Help().Desc)
@@ -75,10 +75,10 @@ func TestHelpAndFooterDeriveFromKeymap(t *testing.T) {
 func TestHelpBoxFixedWidthAcrossScroll(t *testing.T) {
 	for _, kind := range []entityKind{entityTasks, entityEpics, entityAudits, entityDashboard} {
 		for _, maxW := range []int{20, 30, 47, 62, 120} { // 20/30 = narrow (backstop regime)
-			contentW := helpWidth(maxW) - helpHFrame
+			contentW := helpWidth(maxW) - testStyles.helpHFrame
 			// Invariant 1 (the one the resize/clip bug violated): no composed line may
 			// exceed contentW — every line is forced to exactly contentW.
-			for _, ln := range helpLines(focusList, kind, contentW, testStyles) {
+			for _, ln := range helpLines(focusList, kind, contentW, &testStyles) {
 				if w := ansi.StringWidth(ln); w != contentW {
 					t.Errorf("kind=%d maxW=%d: line width %d, want exactly contentW %d: %q", kind, maxW, w, contentW, ansi.Strip(ln))
 				}
@@ -86,7 +86,7 @@ func TestHelpBoxFixedWidthAcrossScroll(t *testing.T) {
 			// Invariant 2: the rendered box is one constant width at every scroll.
 			want := helpWidth(maxW)
 			for _, scroll := range []int{0, 3, 9} {
-				for i, ln := range strings.Split(helpBox(maxW, 16, scroll, focusList, kind, testStyles), "\n") {
+				for i, ln := range strings.Split(helpBox(maxW, 16, scroll, focusList, kind, &testStyles), "\n") {
 					if w := ansi.StringWidth(ln); w != want {
 						t.Errorf("kind=%d maxW=%d scroll=%d: box line %d width %d, want %d", kind, maxW, scroll, i, w, want)
 					}
@@ -101,8 +101,8 @@ func TestHelpBoxFixedWidthAcrossScroll(t *testing.T) {
 // lines than a wide one, since several descriptions reflow to continuation lines. No
 // dependency on the exact wording of any entry, so a reworded description won't break it.
 func TestHelpWrapsLongDescriptions(t *testing.T) {
-	wide := len(helpLines(focusList, entityTasks, 200, testStyles))  // descriptions all fit on one line
-	narrow := len(helpLines(focusList, entityTasks, 40, testStyles)) // several reflow to 2+ lines
+	wide := len(helpLines(focusList, entityTasks, 200, &testStyles))  // descriptions all fit on one line
+	narrow := len(helpLines(focusList, entityTasks, 40, &testStyles)) // several reflow to 2+ lines
 	if narrow <= wide {
 		t.Errorf("narrow help (%d lines) should wrap to MORE lines than wide (%d) — descriptions not wrapping", narrow, wide)
 	}
@@ -113,7 +113,7 @@ func TestHelpWrapsLongDescriptions(t *testing.T) {
 // buckets+findings), not another tab's.
 func TestSymbolsLegendIsPageSpecific(t *testing.T) {
 	text := func(kind entityKind) string {
-		sec, _ := symbolsFor(kind, testStyles)
+		sec, _ := symbolsFor(kind, &testStyles)
 		var b strings.Builder
 		for _, e := range sec.entries {
 			b.WriteString(e.desc + "\n")
@@ -138,8 +138,8 @@ func TestHelpContextDependent(t *testing.T) {
 	// A wide content width so descriptions don't wrap — this test checks which
 	// entries appear and their order, not the wrapping.
 	const wide = 120
-	list := strings.Join(helpLines(focusList, entityTasks, wide, testStyles), "\n")
-	detail := strings.Join(helpLines(focusDetail, entityTasks, wide, testStyles), "\n")
+	list := strings.Join(helpLines(focusList, entityTasks, wide, &testStyles), "\n")
+	detail := strings.Join(helpLines(focusDetail, entityTasks, wide, &testStyles), "\n")
 
 	if !strings.Contains(list, "open detail") { // a List-only entry
 		t.Error("list-focus help should include List keys")
@@ -183,14 +183,14 @@ func TestModel_HelpScrollClampedToVisibleMax(t *testing.T) {
 	}
 	// Count lines at the SAME content width helpMaxScroll/helpBox use, so the clamp
 	// and the line count agree under wrapping.
-	cw := helpWidth(m.width-2) - helpHFrame
+	cw := helpWidth(m.width-2) - testStyles.helpHFrame
 	maxScroll := m.helpMaxScroll()
-	if maxScroll <= 0 || maxScroll >= len(helpLines(m.focus, m.cur().kind, cw, testStyles)) {
-		t.Fatalf("test needs an overflowing overlay with a real clamp; helpMaxScroll=%d, lines=%d", maxScroll, len(helpLines(m.focus, m.cur().kind, cw, testStyles)))
+	if maxScroll <= 0 || maxScroll >= len(helpLines(m.focus, m.cur().kind, cw, &testStyles)) {
+		t.Fatalf("test needs an overflowing overlay with a real clamp; helpMaxScroll=%d, lines=%d", maxScroll, len(helpLines(m.focus, m.cur().kind, cw, &testStyles)))
 	}
 
 	// Press j well past the bottom — it must stop at the visible max.
-	for i := 0; i < len(helpLines(m.focus, m.cur().kind, cw, testStyles))+5; i++ {
+	for i := 0; i < len(helpLines(m.focus, m.cur().kind, cw, &testStyles))+5; i++ {
 		tm, _ := m.Update(press("j"))
 		m = tm.(Model)
 	}

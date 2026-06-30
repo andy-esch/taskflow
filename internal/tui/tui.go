@@ -28,11 +28,10 @@ func Run(svc *core.Service, layout core.Layout, th design.Theme) error {
 	// up the swap without being rebuilt — the crux of the per-Model theming. This runs
 	// before the first render, so every surface is colored correctly at startup. A
 	// future runtime retheme (on a BackgroundColorMsg) could repopulate *m.st the same
-	// way, but would ALSO need to refresh the surfaces that snapshot styles by value
-	// into cached strings (the dashboard's setSummary rows, the detail pane's rendered
-	// body) — those don't re-read *m.st until their next render.
+	// way, but would ALSO need to refresh the surfaces that render eagerly into cached
+	// strings (the dashboard's setSummary rows, the detail pane's rendered body) —
+	// those bake their output once and don't re-read *m.st until their next render.
 	*m.st = newStyles(th.For(dark))
-	m.detail.glamStyle = th.For(dark).Markdown
 	if w, err := newWatcher(layout.WatchPaths()); err == nil {
 		m.watch = w
 		defer func() { _ = w.close() }()

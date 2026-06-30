@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: repoColorScheme hardcodes lipgloss.Color(1..15) for fang help/errors — route through the palette ANSI slots (keeping 16-color) so it can't desync when T5 adds a theme.
 effort: S
@@ -9,8 +9,9 @@ priority: low
 autonomy_level: 3
 tags: [cli, design]
 created: "2026-06-29"
-updated_at: "2026-06-29"
+updated_at: "2026-06-30"
 started_at: "2026-06-29"
+completed_at: "2026-06-30"
 ---
 ## Objective
 Route `cmd/tskflwctl/main.go` `repoColorScheme` (fang help/error/manpage colors) through the design palette instead of the hardcoded `lipgloss.Color("1".."15")` literals — closing the last stray-literal surface the T1-T4 sweep missed.

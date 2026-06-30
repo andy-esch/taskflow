@@ -119,8 +119,8 @@ func (m Model) helpMaxScroll() int {
 	if innerH <= 0 {
 		return 0
 	}
-	contentW := helpWidth(m.width-2) - helpHFrame
-	return max(len(helpLines(m.focus, m.helpEntityKind(), contentW, *m.st))-innerH, 0)
+	contentW := helpWidth(m.width-2) - m.st.helpHFrame
+	return max(len(helpLines(m.focus, m.helpEntityKind(), contentW, m.st))-innerH, 0)
 }
 
 // helpEntityKind is the kind whose context notes the `?` panel shows — the active
@@ -147,7 +147,7 @@ func (m Model) renderBody() string {
 		case !m.dash.loaded:
 			return m.pane(focusList, m.st.dim("loading…"), m.width)
 		}
-		return m.pane(focusList, m.dash.view(*m.st, m.width-m.st.paneHFrame, m.paneOuterH-m.st.paneVFrame), m.width)
+		return m.pane(focusList, m.dash.view(m.st, m.width-m.st.paneHFrame, m.paneOuterH-m.st.paneVFrame), m.width)
 	}
 	switch t := m.cur(); {
 	case t.loadErr != nil && !t.loaded:
@@ -297,9 +297,9 @@ func (m Model) footer() string {
 		// Surface the matching commands inline so `:` is self-documenting: the full
 		// vocabulary on an empty prompt, narrowing to the prefix as you type.
 		if hint := m.commandHint(); hint != "" {
-			return truncate(m.cmd.view(*m.st)+m.st.dim("  "+hint), m.width)
+			return truncate(m.cmd.view(m.st)+m.st.dim("  "+hint), m.width)
 		}
-		return truncate(m.cmd.view(*m.st), m.width)
+		return truncate(m.cmd.view(m.st), m.width)
 	}
 	// A post-action result takes over the footer until the next key.
 	if m.flash != "" {

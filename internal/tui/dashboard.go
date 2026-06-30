@@ -47,7 +47,7 @@ type dashboard struct {
 
 // setSummary (re)builds the widget rows from a fresh core.Summary, recomputing the
 // navigable set and clamping the cursor.
-func (d *dashboard) setSummary(s core.Summary, st styles) {
+func (d *dashboard) setSummary(s core.Summary, st *styles) {
 	var rows []dashRow
 	head := func(t string) { rows = append(rows, dashRow{text: st.dashHeading.Render(t)}) }
 	info := func(t string) { rows = append(rows, dashRow{text: st.dim("  " + t)}) }
@@ -197,7 +197,7 @@ func (d *dashboard) setSummary(s core.Summary, st styles) {
 // eventually"), coloring acute (red) and soon (yellow) so the sharp end stands out.
 // Shares the iterate/join STRUCTURE with the CLI's countByLine via theme.Breakdown;
 // only this surface's coloring differs (audit M10).
-func urgencyLine(cs []core.CountBy, st styles) string {
+func urgencyLine(cs []core.CountBy, st *styles) string {
 	return theme.Breakdown(cs, st.dim(" · "), 0, func(c core.CountBy) string {
 		seg := fmt.Sprintf("%d %s", c.Count, c.Key)
 		switch c.Key {
@@ -212,7 +212,7 @@ func urgencyLine(cs []core.CountBy, st styles) string {
 
 // componentLine renders the top-topN components by finding count ("stravapipe 14 ·
 // dispatcher 9 · …"), with a dim "+N more" tail when there are more.
-func componentLine(cs []core.CountBy, topN int, st styles) string {
+func componentLine(cs []core.CountBy, topN int, st *styles) string {
 	return theme.Breakdown(cs, st.dim(" · "), topN,
 		func(c core.CountBy) string { return fmt.Sprintf("%s %d", c.Key, c.Count) },
 		func(remaining int) string { return st.dim(fmt.Sprintf("+%d more", remaining)) })
@@ -240,7 +240,7 @@ func (d dashboard) selectedTarget() (dashTarget, bool) {
 // scroll lists (each widget is capped); but the composed widgets can still overrun
 // a short terminal, so when they do the output is a window that keeps the cursor
 // row on screen — a selectable row must never be navigable-but-invisible.
-func (d dashboard) view(st styles, maxW, maxH int) string {
+func (d dashboard) view(st *styles, maxW, maxH int) string {
 	if !d.loaded {
 		return st.dim("loading…")
 	}

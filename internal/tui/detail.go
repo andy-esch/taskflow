@@ -25,7 +25,7 @@ import (
 type detailContent interface {
 	Title() string
 	Path() string // the entity's on-disk file path (for the clickable detail title)
-	meta(width int, s styles) string
+	meta(width int, s *styles) string
 	rawBody() string
 }
 
@@ -52,8 +52,6 @@ type detailPane struct {
 	hasContent   bool
 	find         finder
 
-	glamStyle string // glamour standard-style for the terminal background (set at startup)
-
 	glam           *glamour.TermRenderer // cached renderer, rebuilt only when width/style changes
 	glamW          int                   // the width glam was built for
 	glamStyleBuilt string                // the style glam was built for
@@ -67,12 +65,12 @@ func (d *detailPane) prettyBody(md string) string {
 	if strings.TrimSpace(md) == "" {
 		return ""
 	}
-	if d.glam == nil || d.glamW != d.width || d.glamStyleBuilt != d.glamStyle {
-		r, err := newGlamourRenderer(d.width, d.glamStyle)
+	if d.glam == nil || d.glamW != d.width || d.glamStyleBuilt != d.st.markdown {
+		r, err := newGlamourRenderer(d.width, d.st.markdown)
 		if err != nil {
 			return wrap(md, d.width)
 		}
-		d.glam, d.glamW, d.glamStyleBuilt = r, d.width, d.glamStyle
+		d.glam, d.glamW, d.glamStyleBuilt = r, d.width, d.st.markdown
 	}
 	out, ok := renderMarkdown(d.glam, md)
 	if !ok {
@@ -81,8 +79,8 @@ func (d *detailPane) prettyBody(md string) string {
 	return out
 }
 
-func newDetailPane(st *styles, glamStyle string) detailPane {
-	return detailPane{st: st, vp: viewport.New(), find: newFinder(), pretty: true, glamStyle: glamStyle}
+func newDetailPane(st *styles) detailPane {
+	return detailPane{st: st, vp: viewport.New(), find: newFinder(), pretty: true}
 }
 
 // render rebuilds both body compositions at the current width and points styled at
@@ -93,7 +91,7 @@ func (d *detailPane) render() {
 		d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 		return
 	}
-	meta := d.content.meta(d.width, *d.st)
+	meta := d.content.meta(d.width, d.st)
 	body := d.content.rawBody()
 	d.rawStyled = joinDetail(meta, wrap(body, d.width))
 	d.prettyStyled = joinDetail(meta, d.prettyBody(body))
@@ -316,7 +314,7 @@ func (d *detailPane) refreshFind() {
 		if li == curLine {
 			cb = curB0
 		}
-		styled[li] = highlightLine(styled[li], plain[li], occ, cb, *d.st)
+		styled[li] = highlightLine(styled[li], plain[li], occ, cb, d.st)
 	}
 	d.vp.SetContent(strings.Join(styled, "\n"))
 }
@@ -375,7 +373,7 @@ func (d detailPane) View() string {
 	return d.vp.View()
 }
 
-func detailField(b *strings.Builder, label, val string, s styles) {
+func detailField(b *strings.Builder, label, val string, s *styles) {
 	if val == "" {
 		return
 	}
@@ -396,14 +394,14 @@ type taskDetail struct {
 	body string
 }
 
-func (d taskDetail) Title() string               { return d.t.Slug }
-func (d taskDetail) Path() string                { return d.t.Path }
-func (d taskDetail) rawBody() string             { return d.body }
-func (d taskDetail) meta(w int, s styles) string { return renderTaskMeta(d.t, w, s) }
+func (d taskDetail) Title() string                { return d.t.Slug }
+func (d taskDetail) Path() string                 { return d.t.Path }
+func (d taskDetail) rawBody() string              { return d.body }
+func (d taskDetail) meta(w int, s *styles) string { return renderTaskMeta(d.t, w, s) }
 
 // renderTaskMeta formats a task's frontmatter field block (no body), wrapped to
 // width. The body is rendered separately by the pane (raw or glamour).
-func renderTaskMeta(t domain.Task, width int, s styles) string {
+func renderTaskMeta(t domain.Task, width int, s *styles) string {
 	var b strings.Builder
 	detailField(&b, "status", s.statusText(t.Status), s)
 	detailField(&b, "epic", t.Epic, s)
@@ -431,12 +429,12 @@ type epicDetail struct {
 	body  string
 }
 
-func (d epicDetail) Title() string               { return d.es.Epic.ID }
-func (d epicDetail) Path() string                { return d.es.Epic.Path }
-func (d epicDetail) rawBody() string             { return d.body }
-func (d epicDetail) meta(w int, s styles) string { return renderEpicMeta(d.es, d.tasks, w, s) }
+func (d epicDetail) Title() string                { return d.es.Epic.ID }
+func (d epicDetail) Path() string                 { return d.es.Epic.Path }
+func (d epicDetail) rawBody() string              { return d.body }
+func (d epicDetail) meta(w int, s *styles) string { return renderEpicMeta(d.es, d.tasks, w, s) }
 
-func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int, s styles) string {
+func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int, s *styles) string {
 	e := es.Epic
 	var b strings.Builder
 	detailField(&b, "epic", e.ID, s)
@@ -471,12 +469,12 @@ type auditDetail struct {
 	body string
 }
 
-func (d auditDetail) Title() string               { return d.a.Slug }
-func (d auditDetail) Path() string                { return d.a.Path }
-func (d auditDetail) rawBody() string             { return d.body }
-func (d auditDetail) meta(w int, s styles) string { return renderAuditMeta(d.a, d.body, w, s) }
+func (d auditDetail) Title() string                { return d.a.Slug }
+func (d auditDetail) Path() string                 { return d.a.Path }
+func (d auditDetail) rawBody() string              { return d.body }
+func (d auditDetail) meta(w int, s *styles) string { return renderAuditMeta(d.a, d.body, w, s) }
 
-func renderAuditMeta(a domain.Audit, body string, width int, s styles) string {
+func renderAuditMeta(a domain.Audit, body string, width int, s *styles) string {
 	var b strings.Builder
 	tok := theme.Bucket(a.Bucket)
 	pct := a.Percent()

@@ -599,7 +599,7 @@ func TestEntityDetailRenderers(t *testing.T) {
 		tasks: []domain.Task{{Slug: "a", Status: domain.StatusCompleted}, {Slug: "b", Status: domain.StatusReadyToStart}},
 		body:  "# Epic body",
 	}
-	out := ansi.Strip(epic.meta(70, testStyles) + "\n" + epic.rawBody())
+	out := ansi.Strip(epic.meta(70, &testStyles) + "\n" + epic.rawBody())
 	for _, want := range []string{"17-x", "1/2", "50%", "Epic body"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("epic detail missing %q:\n%s", want, out)
@@ -619,7 +619,7 @@ func TestEntityDetailRenderers(t *testing.T) {
 			{Slug: "c", Status: domain.StatusDeprecated},
 		},
 	}
-	depOut := ansi.Strip(dep.meta(70, testStyles))
+	depOut := ansi.Strip(dep.meta(70, &testStyles))
 	for _, want := range []string{"2/2", "100%", "1 deprecated"} {
 		if !strings.Contains(depOut, want) {
 			t.Errorf("epic detail should exclude deprecated (want %q):\n%s", want, depOut)
@@ -633,7 +633,7 @@ func TestEntityDetailRenderers(t *testing.T) {
 		a:    domain.Audit{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Findings: 5, OpenFindings: 2, DoneFindings: 3},
 		body: "# Audit body",
 	}
-	out = ansi.Strip(audit.meta(70, testStyles) + "\n" + audit.rawBody())
+	out = ansi.Strip(audit.meta(70, &testStyles) + "\n" + audit.rawBody())
 	for _, want := range []string{"2026-06-01-x", "store", "3/5", "60%", "2 open", "Audit body"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("audit detail missing %q:\n%s", want, out)
@@ -651,7 +651,7 @@ func TestAuditDetailFindingIndex(t *testing.T) {
 			"#### H1. retry waste  · **Status:** open\n\n" +
 			"#### M2. dead method  · **Status:** fixed\n",
 	}
-	meta := ansi.Strip(d.meta(70, testStyles))
+	meta := ansi.Strip(d.meta(70, &testStyles))
 	// each finding's code + title, glyph-coded by status (○ open, ✔ fixed).
 	for _, want := range []string{"○", "H1", "retry waste", "✔", "M2", "dead method"} {
 		if !strings.Contains(meta, want) {
@@ -1374,7 +1374,7 @@ func TestModel_HelpScrollRevealsTail(t *testing.T) {
 	if v := ansi.Strip(m.View().Content); strings.Contains(v, "force-quit") {
 		t.Skip("terminal tall enough to show the tail without scrolling")
 	}
-	for i := 0; i < len(helpLines(m.focus, m.cur().kind, helpWidth(m.width-2)-helpHFrame, testStyles)); i++ { // scroll past the clamp
+	for i := 0; i < len(helpLines(m.focus, m.cur().kind, helpWidth(m.width-2)-testStyles.helpHFrame, &testStyles)); i++ { // scroll past the clamp
 		tm, _ = m.Update(press("j"))
 		m = tm.(Model)
 	}
@@ -1499,7 +1499,7 @@ func TestHighlightLine(t *testing.T) {
 	plain := "● find me"
 	styled := lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("●") + " find me"
 	occ := foldMatches(plain, "find")
-	out := highlightLine(styled, plain, occ, occ[0][0], testStyles) // the lone match is current
+	out := highlightLine(styled, plain, occ, occ[0][0], &testStyles) // the lone match is current
 	if ansi.Strip(out) != plain {
 		t.Errorf("highlight must preserve the plain text, got %q", ansi.Strip(out))
 	}

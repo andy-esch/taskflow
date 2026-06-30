@@ -18,7 +18,6 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/editor"
 	"github.com/andy-esch/taskflow/internal/listfilter"
-	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 type focus int
@@ -87,7 +86,7 @@ func New(svc *core.Service) Model {
 		svc: svc, focus: focusList, st: st,
 		tabs: newEntityTabs(st), active: 0,
 		onDash: true, // the dashboard is the landing view; `]`/:tasks drops into work
-		detail: newDetailPane(st, theme.MarkdownStyleDark), cmd: newCommandBar(),
+		detail: newDetailPane(st), cmd: newCommandBar(),
 		palette: newPalette(),
 		modals:  defaultModals(),
 	}
@@ -192,7 +191,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.dash.loadErr = nil
-		m.dash.setSummary(msg.summary, *m.st)
+		m.dash.setSummary(msg.summary, m.st)
 		return m, nil
 
 	case movedMsg:

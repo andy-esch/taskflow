@@ -110,7 +110,7 @@ func (p *palette) refilter() {
 
 // view stacks the query over the candidate list in a bordered box, with a hint
 // line — clamped to the overlay budget (mirrors the action/follow modals).
-func (p palette) view(s styles, maxW, maxH int) string {
+func (p palette) view(s *styles, maxW, maxH int) string {
 	box := s.actionBorder.Render(lipgloss.JoinVertical(lipgloss.Left, p.input.View(), p.list.View()))
 	hint := s.dim("type to filter · ↑↓ select · ⏎ go · esc cancel")
 	return clampBox(lipgloss.JoinVertical(lipgloss.Left, box, hint), maxW, maxH)

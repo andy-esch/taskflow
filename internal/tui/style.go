@@ -46,11 +46,18 @@ type styles struct {
 
 	editAreaBox lipgloss.Style
 
-	// Frame sizes derived from the pane style (not a hardcoded 2) so a future
-	// border/padding change can't silently desync sizing. The border STYLE is
+	// markdown is the glamour standard-style name for the active theme+background
+	// (e.g. "dark"/"tokyo-night"). It lives here so the detail pane reads its glamour
+	// style from the same per-Model bundle as the chrome — one place to repopulate on
+	// a theme/background swap, not a separate field threaded on its own.
+	markdown string
+
+	// Frame sizes derived from their box styles (not a hardcoded 2) so a future
+	// border/padding change can't silently desync sizing. The border STYLES are
 	// theme-independent, so these stay valid across a palette swap.
 	paneHFrame int
 	paneVFrame int
+	helpHFrame int // help box horizontal chrome (border + padding), from helpBorder
 }
 
 // newStyles builds every chrome style (and the derived frame sizes) from palette
@@ -60,6 +67,7 @@ type styles struct {
 func newStyles(p design.Palette) styles {
 	accent := p.Accent.Color()
 	paneActive := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent)
+	helpBorder := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(p.BorderActive.Color()).Padding(0, 2)
 	return styles{
 		pal: p,
 
@@ -71,7 +79,7 @@ func newStyles(p design.Palette) styles {
 
 		dashHeading: lipgloss.NewStyle().Bold(true).Foreground(p.Heading.Color()),
 
-		helpBorder:  lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(p.BorderActive.Color()).Padding(0, 2),
+		helpBorder:  helpBorder,
 		helpHeading: lipgloss.NewStyle().Bold(true).Foreground(p.Heading.Color()),
 		helpKey:     lipgloss.NewStyle().Bold(true),
 
@@ -84,25 +92,28 @@ func newStyles(p design.Palette) styles {
 
 		editAreaBox: lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(p.BorderIdle.Color()).Padding(0, 1),
 
+		markdown: p.Markdown,
+
 		paneHFrame: paneActive.GetHorizontalFrameSize(),
 		paneVFrame: paneActive.GetVerticalFrameSize(),
+		helpHFrame: helpBorder.GetHorizontalFrameSize(),
 	}
 }
 
 // lipColor maps a semantic theme.Color to its concrete palette color — the TUI's
 // truecolor rendering of the same status semantics the CLI renders as ANSI.
-func (s styles) lipColor(c theme.Color) color.Color { return s.pal.Of(c).Color() }
+func (s *styles) lipColor(c theme.Color) color.Color { return s.pal.Of(c).Color() }
 
-func (s styles) fg(c theme.Color, str string) string {
+func (s *styles) fg(c theme.Color, str string) string {
 	return lipgloss.NewStyle().Foreground(s.lipColor(c)).Render(str)
 }
 
 // glyph renders a theme Token (status / bucket / liveness / marker) as its colored
 // glyph — the shared shorthand for the fg(tok.Color, tok.Glyph) the rows + dashboard
 // repeat, so a marker is drawn from theme rather than a re-typed literal.
-func (s styles) glyph(t theme.Token) string { return s.fg(t.Color, t.Glyph) }
+func (s *styles) glyph(t theme.Token) string { return s.fg(t.Color, t.Glyph) }
 
-func (s styles) dim(str string) string { return s.dimStyle.Render(str) }
+func (s *styles) dim(str string) string { return s.dimStyle.Render(str) }
 
 // osc8 wraps s in an OSC 8 terminal hyperlink to url, so supporting terminals make
 // it click-to-open (they typically underline it, which is the affordance). The TUI
@@ -115,23 +126,23 @@ func osc8(s, url string) string {
 // shared progressbar package — same constructor + neon palette the CLI status bar
 // uses, so the two surfaces can't drift. The % text beside the bar carries the
 // discrete completion tier color (theme.Percent).
-func (s styles) miniBar(pct, width int) string { return progressbar.Render(pct, width, s.pal) }
+func (s *styles) miniBar(pct, width int) string { return progressbar.Render(pct, width, s.pal) }
 
 // segBar renders an audit's finding breakdown as a stacked bar (done/active/
 // dropped over the open/empty track) via the shared progressbar package — the same
 // renderer the CLI uses (Style.SegmentBar), so the two surfaces can't drift.
-func (s styles) segBar(done, active, dropped, total, width int) string {
+func (s *styles) segBar(done, active, dropped, total, width int) string {
 	return progressbar.RenderSegments(progressbar.Segments{Done: done, Active: active, Dropped: dropped, Total: total}, width, s.pal)
 }
 
 // statusText renders a colored glyph + status label.
-func (s styles) statusText(st domain.Status) string {
+func (s *styles) statusText(st domain.Status) string {
 	tok := theme.Status(st)
 	return s.fg(tok.Color, tok.Glyph+" "+string(st))
 }
 
 // priorityText colors a priority label (empty stays empty).
-func (s styles) priorityText(p string) string {
+func (s *styles) priorityText(p string) string {
 	if p == "" {
 		return ""
 	}

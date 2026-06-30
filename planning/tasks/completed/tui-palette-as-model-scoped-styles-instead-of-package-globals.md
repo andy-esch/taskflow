@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: Package-global pal+applyTheme (from T2) -> Model-scoped palette/styles, for multi-session safety (wish/epic 19) and test isolation; fg/lipColor become methods. No visible change.
 effort: M
@@ -9,8 +9,9 @@ priority: low
 autonomy_level: 3
 tags: [tui, design]
 created: "2026-06-28"
-updated_at: "2026-06-29"
+updated_at: "2026-06-30"
 started_at: "2026-06-29"
+completed_at: "2026-06-30"
 ---
 ## Objective
 Replace the package-global `pal` + `applyTheme` (shipped in [[route-tui-chrome-through-the-palette]]) with a Model-owned palette + styles, so theming is per-instance rather than process-global.
