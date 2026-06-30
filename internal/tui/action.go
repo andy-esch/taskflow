@@ -166,54 +166,48 @@ func (a actionMenu) selected() transition { return a.options[a.cursor] }
 // no list to fall back to — so `n`/Esc closes it rather than returning to a menu.
 func (a actionMenu) confirmOnly() bool { return len(a.options) == 1 }
 
-var (
-	actionBorder  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.BorderActive.Color()).Padding(0, 2)
-	dangerBorder  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.Danger.Color()).Padding(0, 2)
-	actionHeading = lipgloss.NewStyle().Bold(true).Foreground(pal.Heading.Color())
-)
-
 // view renders the menu (or confirm prompt) as a centered box + hint line, ready
 // to composite over the body with overlay(). Clamped to (maxW, maxH).
-func (a actionMenu) view(maxW, maxH int) string {
+func (a actionMenu) view(s styles, maxW, maxH int) string {
 	slug := truncate(a.slug, max(maxW-8, 12))
 	if a.revisit {
 		var b strings.Builder
-		b.WriteString(actionHeading.Render("defer " + slug))
+		b.WriteString(s.actionHeading.Render("defer " + slug))
 		b.WriteString("\n\n")
-		b.WriteString("revisit date " + dim("(snooze until — optional)") + "\n")
+		b.WriteString("revisit date " + s.dim("(snooze until — optional)") + "\n")
 		b.WriteString(a.dateInput.View())
 		if a.dateErr != "" {
-			b.WriteString("\n" + fg(theme.ColorRed, a.dateErr))
+			b.WriteString("\n" + s.fg(theme.ColorRed, a.dateErr))
 		}
-		box := actionBorder.Render(b.String())
-		hint := dim("⏎ apply · esc back · blank = no date")
+		box := s.actionBorder.Render(b.String())
+		hint := s.dim("⏎ apply · esc back · blank = no date")
 		return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, hint), maxW, maxH)
 	}
 	if a.confirm {
 		tr := a.selected()
-		q := fg(theme.ColorRed, tr.verb+"?") + " " + slug + dim(" → "+tr.to)
+		q := s.fg(theme.ColorRed, tr.verb+"?") + " " + slug + s.dim(" → "+tr.to)
 		// Put the y/n prompt INSIDE the danger box and bold the keys — a dim hint
 		// below the box was easy to miss ("is it waiting on me?").
-		prompt := helpKeyStyle.Render("y") + " confirm   " + helpKeyStyle.Render("n") + "/" + helpKeyStyle.Render("esc") + " cancel"
-		box := dangerBorder.Render(q + "\n\n" + prompt)
+		prompt := s.helpKey.Render("y") + " confirm   " + s.helpKey.Render("n") + "/" + s.helpKey.Render("esc") + " cancel"
+		box := s.dangerBorder.Render(q + "\n\n" + prompt)
 		return clampBox(box, maxW, maxH)
 	}
 	var b strings.Builder
-	b.WriteString(actionHeading.Render("move " + slug))
+	b.WriteString(s.actionHeading.Render("move " + slug))
 	b.WriteString("\n\n")
 	for i, tr := range a.options {
-		label := tr.verb + dim(" → "+tr.to)
+		label := tr.verb + s.dim(" → "+tr.to)
 		if tr.destructive {
-			label += " " + fg(theme.ColorRed, "⚠")
+			label += " " + s.fg(theme.ColorRed, "⚠")
 		}
 		if i == a.cursor {
-			b.WriteString(selectedStyle.Render("› ") + label + "\n")
+			b.WriteString(s.selected.Render("› ") + label + "\n")
 		} else {
 			b.WriteString("  " + label + "\n")
 		}
 	}
-	box := actionBorder.Render(strings.TrimRight(b.String(), "\n"))
-	hint := dim("↑↓/jk select · ⏎ apply · esc cancel")
+	box := s.actionBorder.Render(strings.TrimRight(b.String(), "\n"))
+	hint := s.dim("↑↓/jk select · ⏎ apply · esc cancel")
 	return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, hint), maxW, maxH)
 }
 

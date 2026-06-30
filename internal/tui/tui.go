@@ -23,7 +23,15 @@ func Run(svc *core.Service, layout core.Layout, th design.Theme) error {
 	// selected theme's background-appropriate palette and apply it before the first
 	// render.
 	dark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
-	applyTheme(th.For(dark))
+	// Repopulate the SHARED styles in place with the background-appropriate palette.
+	// The list delegates hold this same pointer and deref it per render, so they pick
+	// up the swap without being rebuilt — the crux of the per-Model theming. This runs
+	// before the first render, so every surface is colored correctly at startup. A
+	// future runtime retheme (on a BackgroundColorMsg) could repopulate *m.st the same
+	// way, but would ALSO need to refresh the surfaces that snapshot styles by value
+	// into cached strings (the dashboard's setSummary rows, the detail pane's rendered
+	// body) — those don't re-read *m.st until their next render.
+	*m.st = newStyles(th.For(dark))
 	m.detail.glamStyle = th.For(dark).Markdown
 	if w, err := newWatcher(layout.WatchPaths()); err == nil {
 		m.watch = w

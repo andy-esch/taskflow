@@ -44,7 +44,7 @@ func TestGlamourBody(t *testing.T) {
 // TestDetailPane_GlamourRendererRebuildsOnStyle pins that the cached renderer is
 // keyed by style as well as width, so a background-driven style applies.
 func TestDetailPane_GlamourRendererRebuildsOnStyle(t *testing.T) {
-	d := newDetailPane("dark")
+	d := newDetailPane(&testStyles, "dark")
 	d.width = 60
 	d.prettyBody("# A")
 	r1 := d.glam

@@ -31,7 +31,7 @@ func TestSortWorkingView_UnknownStatusLast(t *testing.T) {
 // actually has — so cycling can't land on a no-op sort that shows a chip while
 // nothing reorders (the per-entity-columns fix).
 func TestPerEntitySortColumns(t *testing.T) {
-	tabs := newEntityTabs()
+	tabs := newEntityTabs(&testStyles)
 	has := func(cols []sortKey, k sortKey) bool {
 		for _, c := range cols {
 			if c == k {

@@ -12,7 +12,7 @@ import (
 func TestMiniBar_Width(t *testing.T) {
 	for _, w := range []int{1, 4, 8, 12, 20} {
 		for _, pct := range []int{-5, 0, 1, 33, 50, 99, 100, 150} {
-			if got := ansi.StringWidth(miniBar(pct, w)); got != w {
+			if got := ansi.StringWidth(testStyles.miniBar(pct, w)); got != w {
 				t.Errorf("miniBar(%d, %d) display width = %d, want %d", pct, w, got, w)
 			}
 		}

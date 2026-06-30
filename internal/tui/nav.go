@@ -49,21 +49,21 @@ func (f *followMenu) move(d int) {
 func (f followMenu) selected() domain.Task { return f.tasks[f.cursor] }
 
 // view renders the picker as a centered box + hint line for overlay().
-func (f followMenu) view(maxW, maxH int) string {
+func (f followMenu) view(s styles, maxW, maxH int) string {
 	var b strings.Builder
-	b.WriteString(actionHeading.Render("follow " + truncate(f.epicID, max(maxW-8, 12))))
+	b.WriteString(s.actionHeading.Render("follow " + truncate(f.epicID, max(maxW-8, 12))))
 	b.WriteString("\n\n")
 	for i, t := range f.tasks {
 		tok := theme.Status(t.Status)
-		label := fg(tok.Color, tok.Glyph) + " " + truncate(t.Slug, max(maxW-10, 12))
+		label := s.fg(tok.Color, tok.Glyph) + " " + truncate(t.Slug, max(maxW-10, 12))
 		if i == f.cursor {
-			b.WriteString(selectedStyle.Render("› ") + label + "\n")
+			b.WriteString(s.selected.Render("› ") + label + "\n")
 		} else {
 			b.WriteString("  " + label + "\n")
 		}
 	}
-	box := actionBorder.Render(strings.TrimRight(b.String(), "\n"))
-	hint := dim("↑↓/jk select · ⏎ follow · esc cancel")
+	box := s.actionBorder.Render(strings.TrimRight(b.String(), "\n"))
+	hint := s.dim("↑↓/jk select · ⏎ follow · esc cancel")
 	return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, hint), maxW, maxH)
 }
 

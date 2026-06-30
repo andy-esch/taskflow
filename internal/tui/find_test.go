@@ -11,7 +11,7 @@ import (
 // glamour wrap reads as 0 matches in pretty mode; when the raw render WOULD match,
 // findStatus points at R so a real hit isn't mistaken for "not present".
 func TestFindStatus_HintsRawWhenPrettyMisses(t *testing.T) {
-	d := detailPane{pretty: true, rawStyled: "the needle is here"}
+	d := detailPane{pretty: true, rawStyled: "the needle is here", st: &testStyles}
 	d.find.query = "needle" // no matches set → simulates the pretty-wrap miss
 
 	if got := ansi.Strip(d.findStatus()); !strings.Contains(got, "R: raw") {

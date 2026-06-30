@@ -378,52 +378,47 @@ func setEpicFieldCmd(svc *core.Service, id, key, value string) tea.Cmd {
 
 // --- view ---
 
-var editAreaBox = lipgloss.NewStyle().
-	Border(lipgloss.NormalBorder()).
-	BorderForeground(pal.BorderIdle.Color()).
-	Padding(0, 1)
-
 const editLabelW = 12 // field-label column
 
 // view renders the whole form (field list + the active field's inline editor) as a
 // centered box + hint, ready to composite over the body. Clamped to (maxW, maxH).
-func (e editMenu) view(maxW, maxH int) string {
+func (e editMenu) view(s styles, maxW, maxH int) string {
 	innerW := max(maxW-8, 28) // inside the box border + padding
 	var rows []string
 	for i, f := range e.fields {
 		marker := "  "
 		if i == e.cursor {
-			marker = selectedStyle.Render("› ")
+			marker = s.selected.Render("› ")
 		}
-		rows = append(rows, marker+padField(f.label, editLabelW)+"  "+e.cell(i, f, innerW))
+		rows = append(rows, marker+padField(f.label, editLabelW)+"  "+e.cell(s, i, f, innerW))
 	}
-	body := actionHeading.Render("edit "+truncate(e.slug, max(innerW-6, 8))) + "\n\n" + strings.Join(rows, "\n")
+	body := s.actionHeading.Render("edit "+truncate(e.slug, max(innerW-6, 8))) + "\n\n" + strings.Join(rows, "\n")
 	// The long-text field gets a roomy word-wrapped box below the list.
 	if e.editing && e.cur().kind == fieldLongText {
-		body += "\n\n" + editAreaBox.Render(e.area.View())
+		body += "\n\n" + s.editAreaBox.Render(e.area.View())
 	}
 	// A validation error renders INSIDE the box (truncated to the inner width) so the
 	// box keeps its width and stays centered. Rendered BELOW the box, a wider error
 	// grew the composite and shifted the (left-aligned) box left as it re-centered.
 	if e.err != "" {
-		body += "\n\n" + fg(theme.ColorRed, "✘ "+truncate(e.err, innerW))
+		body += "\n\n" + s.fg(theme.ColorRed, "✘ "+truncate(e.err, innerW))
 	}
-	box := actionBorder.Render(body)
+	box := s.actionBorder.Render(body)
 	// Box + hint centered as one unit (matching the action menu), so neither moves.
-	return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, e.hint()), maxW, maxH)
+	return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, e.hint(s)), maxW, maxH)
 }
 
 // cell renders field i's value column: the inline editor when it's the one being
 // edited, else the current value followed by its dim description.
-func (e editMenu) cell(i int, f editField, innerW int) string {
+func (e editMenu) cell(s styles, i int, f editField, innerW int) string {
 	editing := e.editing && i == e.cursor
 	switch {
 	case editing && f.kind == fieldEnum:
-		return enumInline(f.options, e.optCur)
+		return enumInline(f.options, e.optCur, s)
 	case editing && f.kind == fieldText:
 		return e.input.View()
 	case editing && f.kind == fieldLongText:
-		return dim("editing ↓")
+		return s.dim("editing ↓")
 	}
 	const valueW = 18
 	val := f.current
@@ -432,33 +427,33 @@ func (e editMenu) cell(i int, f editField, innerW int) string {
 	}
 	cell := padField(val, valueW)
 	if descW := innerW - editLabelW - valueW - 6; descW >= 8 && f.desc != "" {
-		cell += "  " + dim(truncate(f.desc, descW))
+		cell += "  " + s.dim(truncate(f.desc, descW))
 	}
 	return cell
 }
 
 // enumInline renders an enum's options on one line, the selected one bracketed +
 // accented — so choosing a value happens right in the field's row, not a new pane.
-func enumInline(opts []string, cur int) string {
+func enumInline(opts []string, cur int, s styles) string {
 	parts := make([]string, len(opts))
 	for i, o := range opts {
 		if i == cur {
-			parts[i] = selectedStyle.Render("‹" + o + "›")
+			parts[i] = s.selected.Render("‹" + o + "›")
 		} else {
-			parts[i] = dim(o)
+			parts[i] = s.dim(o)
 		}
 	}
 	return strings.Join(parts, " ")
 }
 
-func (e editMenu) hint() string {
+func (e editMenu) hint(s styles) string {
 	if !e.editing {
-		return dim("↑↓ field · ⏎ edit · esc cancel")
+		return s.dim("↑↓ field · ⏎ edit · esc cancel")
 	}
 	if e.cur().kind == fieldEnum {
-		return dim("←→/jk choose · ⏎ apply · esc back")
+		return s.dim("←→/jk choose · ⏎ apply · esc back")
 	}
-	return dim("⏎ apply · esc back")
+	return s.dim("⏎ apply · esc back")
 }
 
 // padField truncates s to width w (ANSI-aware) and right-pads with spaces so the
