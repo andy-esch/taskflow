@@ -79,23 +79,23 @@ func TestSortEpicsForView(t *testing.T) {
 // its liveness glyph, no status note).
 func TestEpicGlyphAndNote(t *testing.T) {
 	foreign := core.EpicSummary{Epic: domain.Epic{ID: "x", Status: "planning"}, Total: 1}
-	if g := epicGlyph(foreign, testStyles); !strings.Contains(g, "⚠") {
+	if g := epicGlyph(foreign, &testStyles); !strings.Contains(g, "⚠") {
 		t.Errorf("non-conforming epic glyph = %q, want a ⚠", g)
 	}
-	if n := epicStatusNote(foreign, testStyles); !strings.Contains(n, "planning") {
+	if n := epicStatusNote(foreign, &testStyles); !strings.Contains(n, "planning") {
 		t.Errorf("non-conforming status note = %q, want it to name the bad status", n)
 	}
 
 	ok := core.EpicSummary{Epic: domain.Epic{ID: "y", Status: domain.EpicStatusActive}, Total: 1}
-	if g := epicGlyph(ok, testStyles); strings.Contains(g, "⚠") {
+	if g := epicGlyph(ok, &testStyles); strings.Contains(g, "⚠") {
 		t.Errorf("conforming epic glyph = %q, must not warn", g)
 	}
-	if n := epicStatusNote(ok, testStyles); n != "" {
+	if n := epicStatusNote(ok, &testStyles); n != "" {
 		t.Errorf("conforming status note = %q, want empty", n)
 	}
 
 	// Empty status is non-conforming too, and renders the em-dash placeholder.
-	if n := epicStatusNote(core.EpicSummary{Epic: domain.Epic{ID: "z", Status: ""}}, testStyles); !strings.Contains(n, "—") {
+	if n := epicStatusNote(core.EpicSummary{Epic: domain.Epic{ID: "z", Status: ""}}, &testStyles); !strings.Contains(n, "—") {
 		t.Errorf("empty status note = %q, want the — placeholder", n)
 	}
 }

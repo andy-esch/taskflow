@@ -36,7 +36,7 @@ func (paletteModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return true, m.handlePaletteKey(msg)
 }
 
-func (paletteModal) view(m *Model, w, h int) string { return m.palette.view(*m.st, w, h) }
+func (paletteModal) view(m *Model, w, h int) string { return m.palette.view(m.st, w, h) }
 
 // helpModal is the `?` keybinding overlay: j/k scroll it (the content can outgrow
 // a short terminal); any other key dismisses it.
@@ -62,7 +62,7 @@ func (helpModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 }
 
 func (helpModal) view(m *Model, w, h int) string {
-	return helpBox(w, h, m.helpScroll, m.focus, m.helpEntityKind(), *m.st)
+	return helpBox(w, h, m.helpScroll, m.focus, m.helpEntityKind(), m.st)
 }
 
 // actionModal is the `m` lifecycle action menu: vim-select a transition, Enter
@@ -75,7 +75,7 @@ func (actionModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return true, m.handleActionKey(msg)
 }
 
-func (actionModal) view(m *Model, w, h int) string { return m.action.view(*m.st, w, h) }
+func (actionModal) view(m *Model, w, h int) string { return m.action.view(m.st, w, h) }
 
 // followModal is the `f` reference picker (an epic → its tasks).
 type followModal struct{}
@@ -86,7 +86,7 @@ func (followModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return true, m.handleFollowKey(msg)
 }
 
-func (followModal) view(m *Model, w, h int) string { return m.follow.view(*m.st, w, h) }
+func (followModal) view(m *Model, w, h int) string { return m.follow.view(m.st, w, h) }
 
 // editModal is the `e` inline field editor (the human face of `task set`).
 type editModal struct{}
@@ -97,4 +97,4 @@ func (editModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return true, m.handleEditKey(msg)
 }
 
-func (editModal) view(m *Model, w, h int) string { return m.edit.view(*m.st, w, h) }
+func (editModal) view(m *Model, w, h int) string { return m.edit.view(m.st, w, h) }

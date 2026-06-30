@@ -49,7 +49,7 @@ func (f *followMenu) move(d int) {
 func (f followMenu) selected() domain.Task { return f.tasks[f.cursor] }
 
 // view renders the picker as a centered box + hint line for overlay().
-func (f followMenu) view(s styles, maxW, maxH int) string {
+func (f followMenu) view(s *styles, maxW, maxH int) string {
 	var b strings.Builder
 	b.WriteString(s.actionHeading.Render("follow " + truncate(f.epicID, max(maxW-8, 12))))
 	b.WriteString("\n\n")

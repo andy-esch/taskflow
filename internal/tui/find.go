@@ -74,7 +74,7 @@ func foldMatches(s, query string) [][2]int {
 // spans. The occurrence at byte offset curB0 gets the brighter "current" style
 // (pass -1 for none). occ are this line's [b0,b1) ranges, ascending; plain is the
 // ANSI-stripped line.
-func highlightLine(styled, plain string, occ [][2]int, curB0 int, st styles) string {
+func highlightLine(styled, plain string, occ [][2]int, curB0 int, st *styles) string {
 	width := ansi.StringWidth(plain)
 	var b strings.Builder
 	prevCol := 0

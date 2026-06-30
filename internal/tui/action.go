@@ -168,7 +168,7 @@ func (a actionMenu) confirmOnly() bool { return len(a.options) == 1 }
 
 // view renders the menu (or confirm prompt) as a centered box + hint line, ready
 // to composite over the body with overlay(). Clamped to (maxW, maxH).
-func (a actionMenu) view(s styles, maxW, maxH int) string {
+func (a actionMenu) view(s *styles, maxW, maxH int) string {
 	slug := truncate(a.slug, max(maxW-8, 12))
 	if a.revisit {
 		var b strings.Builder

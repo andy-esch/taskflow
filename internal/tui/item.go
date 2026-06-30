@@ -16,7 +16,7 @@ import (
 // row renders one list line with the shared cursor convention: a "› " accent
 // marker when selected, two spaces otherwise, the content truncated to the list
 // width. Used by every entity delegate so rows look consistent across tabs.
-func row(w io.Writer, m list.Model, index int, content string, st styles) {
+func row(w io.Writer, m list.Model, index int, content string, st *styles) {
 	line := truncate(content, max1(m.Width()-2))
 	if index == m.Index() {
 		fmt.Fprint(w, st.selected.Render("› "+line))
@@ -73,7 +73,7 @@ func (d taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	if !ok {
 		return
 	}
-	st := *d.st
+	st := d.st
 	tok := theme.Status(it.t.Status)
 	// One marker cell: a misfiled ⚠ (data-integrity warning) wins; otherwise a ↻
 	// when a deferred task's revisit (snooze) date has arrived (it.due, set at load)
@@ -127,7 +127,7 @@ func (i epicItem) sortFields() sortFields {
 // active/retired/deprecated) — a fixable data problem that takes priority over
 // liveness; otherwise the liveness band glyph (working/fresh/dormant), mirroring the
 // audit row's bucket glyph.
-func epicGlyph(es core.EpicSummary, st styles) string {
+func epicGlyph(es core.EpicSummary, st *styles) string {
 	if !domain.IsKnownEpicStatus(es.Epic.Status) {
 		return st.glyph(theme.MarkerWarn)
 	}
@@ -138,7 +138,7 @@ func epicGlyph(es core.EpicSummary, st styles) string {
 // epicStatusNote annotates a non-conforming epic row with its offending status, so
 // the ⚠ says WHAT to fix (set active/retired/deprecated via the m-menu or `epic
 // move`). "" when the status conforms; "—" stands in for an empty status.
-func epicStatusNote(es core.EpicSummary, st styles) string {
+func epicStatusNote(es core.EpicSummary, st *styles) string {
 	if domain.IsKnownEpicStatus(es.Epic.Status) {
 		return ""
 	}
@@ -164,7 +164,7 @@ func (d epicDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	if !ok {
 		return
 	}
-	st := *d.st
+	st := d.st
 	pct := it.es.Percent()
 	bar := st.miniBar(pct, 8)
 	pctStr := st.fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
@@ -213,7 +213,7 @@ func (d auditDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	if !ok {
 		return
 	}
-	st := *d.st
+	st := d.st
 	tok := theme.Bucket(it.a.Bucket)
 	pct := it.a.Percent()
 	bar := st.segBar(it.a.DoneFindings, it.a.ActiveFindings, it.a.DroppedFindings, it.a.Findings, 8)

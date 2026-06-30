@@ -75,7 +75,7 @@ var helpSections = []helpSection{
 // dashboard draw (theme.Status/Liveness/Bucket/FindingStatus/Marker*), so they can't
 // drift from what's on screen; only the percent-band rows (mark) are hand-labeled.
 // ok is false on a screen with no glyph vocabulary of its own.
-func symbolsFor(kind entityKind, s styles) (helpSection, bool) {
+func symbolsFor(kind entityKind, s *styles) (helpSection, bool) {
 	tok := func(t theme.Token, desc string) helpEntry { return helpEntry{s.fg(t.Color, t.Glyph), desc} }
 	mark := func(c theme.Color, label, desc string) helpEntry { return helpEntry{s.fg(c, label), desc} }
 	var e []helpEntry
@@ -176,7 +176,7 @@ func helpWidth(maxW int) int {
 // next, and Global LAST — global keys work everywhere, so they're the best-known
 // and least in need of surfacing in a context panel. The inactive pane's section
 // is hidden, so `?` shows what actually works right now.
-func helpSectionsFor(f focus, kind entityKind, s styles) []helpSection {
+func helpSectionsFor(f focus, kind entityKind, s *styles) []helpSection {
 	byTitle := make(map[string]helpSection, len(helpSections))
 	for _, s := range helpSections {
 		byTitle[s.title] = s
@@ -209,7 +209,7 @@ func helpSectionsFor(f focus, kind entityKind, s styles) []helpSection {
 // the column layout. Shared by helpBox (render) and the model's scroll clamp, so both
 // window the SAME content — callers MUST pass the same contentW
 // (helpWidth(maxW)-helpHFrame).
-func helpLines(f focus, kind entityKind, contentW int, s styles) []string {
+func helpLines(f focus, kind entityKind, contentW int, s *styles) []string {
 	sections := helpSectionsFor(f, kind, s)
 	// Widest key column across the shown sections → aligned descriptions.
 	keyW := 0
@@ -250,7 +250,7 @@ func helpLines(f focus, kind entityKind, contentW int, s styles) []string {
 // doesn't resize while scrolling, clamped to fit within (maxW, maxH). When the
 // content is taller than the box, scroll (clamped here, not in the model — only
 // render knows the box height) picks the visible window; j/k scroll while open.
-func helpBox(maxW, maxH, scroll int, f focus, kind entityKind, s styles) string {
+func helpBox(maxW, maxH, scroll int, f focus, kind entityKind, s *styles) string {
 	lines := helpLines(f, kind, helpWidth(maxW)-helpHFrame, s)
 	const frameV = 2 // top+bottom border rows
 	if innerH := maxH - frameV; innerH > 0 && len(lines) > innerH {

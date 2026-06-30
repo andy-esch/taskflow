@@ -382,7 +382,7 @@ const editLabelW = 12 // field-label column
 
 // view renders the whole form (field list + the active field's inline editor) as a
 // centered box + hint, ready to composite over the body. Clamped to (maxW, maxH).
-func (e editMenu) view(s styles, maxW, maxH int) string {
+func (e editMenu) view(s *styles, maxW, maxH int) string {
 	innerW := max(maxW-8, 28) // inside the box border + padding
 	var rows []string
 	for i, f := range e.fields {
@@ -410,7 +410,7 @@ func (e editMenu) view(s styles, maxW, maxH int) string {
 
 // cell renders field i's value column: the inline editor when it's the one being
 // edited, else the current value followed by its dim description.
-func (e editMenu) cell(s styles, i int, f editField, innerW int) string {
+func (e editMenu) cell(s *styles, i int, f editField, innerW int) string {
 	editing := e.editing && i == e.cursor
 	switch {
 	case editing && f.kind == fieldEnum:
@@ -434,7 +434,7 @@ func (e editMenu) cell(s styles, i int, f editField, innerW int) string {
 
 // enumInline renders an enum's options on one line, the selected one bracketed +
 // accented — so choosing a value happens right in the field's row, not a new pane.
-func enumInline(opts []string, cur int, s styles) string {
+func enumInline(opts []string, cur int, s *styles) string {
 	parts := make([]string, len(opts))
 	for i, o := range opts {
 		if i == cur {
@@ -446,7 +446,7 @@ func enumInline(opts []string, cur int, s styles) string {
 	return strings.Join(parts, " ")
 }
 
-func (e editMenu) hint(s styles) string {
+func (e editMenu) hint(s *styles) string {
 	if !e.editing {
 		return s.dim("↑↓ field · ⏎ edit · esc cancel")
 	}

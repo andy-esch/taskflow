@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -13,7 +14,7 @@ import (
 // reuses its compiled renderer across selections at the same width, and only
 // rebuilds it when the width changes.
 func TestDetailPane_GlamourRendererCachedByWidth(t *testing.T) {
-	var d detailPane
+	d := detailPane{st: &testStyles}
 	d.width = 60
 	d.prettyBody("# A")
 	r1 := d.glam
@@ -44,14 +45,17 @@ func TestGlamourBody(t *testing.T) {
 // TestDetailPane_GlamourRendererRebuildsOnStyle pins that the cached renderer is
 // keyed by style as well as width, so a background-driven style applies.
 func TestDetailPane_GlamourRendererRebuildsOnStyle(t *testing.T) {
-	d := newDetailPane(&testStyles, "dark")
+	// A local styles bundle so mutating its markdown style is isolated from the
+	// shared testStyles (the pane reads its glamour style from st.markdown now).
+	st := newStyles(design.Default().Dark)
+	d := newDetailPane(&st)
 	d.width = 60
 	d.prettyBody("# A")
 	r1 := d.glam
 	if r1 == nil {
 		t.Fatal("a renderer should be cached after the first render")
 	}
-	d.glamStyle = "light"
+	st.markdown = "light"
 	d.prettyBody("# B") // style changed → rebuild
 	if d.glam == r1 {
 		t.Error("a style change must rebuild the renderer")

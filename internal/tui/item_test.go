@@ -85,7 +85,7 @@ func TestEpicDelegateRow(t *testing.T) {
 	}
 	row := renderDelegateRow(t, epicDelegate{st: &testStyles}, epicItem{es: es}, 80)
 
-	wantGlyph := ansi.Strip(epicGlyph(es, testStyles))                   // working-band glyph, via production logic
+	wantGlyph := ansi.Strip(epicGlyph(es, &testStyles))                  // working-band glyph, via production logic
 	wantBar := ansi.Strip(testStyles.miniBar(es.Percent(), 8))           // the 8-cell rollup bar
 	wantPct := strings.TrimSpace(theme.PercentLabelPadded(es.Percent())) // "25%"
 	wantCounts := theme.Counts(es.Done, es.Total)                        // "1/4"

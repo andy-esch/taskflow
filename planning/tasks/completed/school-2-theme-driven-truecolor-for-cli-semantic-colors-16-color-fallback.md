@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: CLI semantic glyph/status/percent colors emit the theme's truecolor hues on truecolor terminals (curated ANSI slot as 16-color fallback), so the theme shows on every CLI surface, not just bars/TUI.
 effort: M
@@ -9,8 +9,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, design]
 created: "2026-06-29"
-updated_at: "2026-06-29"
+updated_at: "2026-06-30"
 started_at: "2026-06-29"
+completed_at: "2026-06-30"
 ---
 ## Objective
 Make the CLI's **semantic** colors (status/finding glyphs, checkmarks, percent, priority, Green/Red/Warn) emit the active theme's **truecolor** hues on truecolor terminals, with the curated 16-color ANSI slot as the fallback. Today they always emit the 16-color slot, so the theme is invisible on the CLI glyphs (only the bars + TUI + picker show it). This is the "School 2 / holistic palette" decision — the theme should show on every surface.
