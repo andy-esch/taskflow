@@ -119,7 +119,7 @@ func (m Model) helpMaxScroll() int {
 	if innerH <= 0 {
 		return 0
 	}
-	contentW := helpWidth(m.width-2) - helpHFrame
+	contentW := helpWidth(m.width-2) - m.st.helpHFrame
 	return max(len(helpLines(m.focus, m.helpEntityKind(), contentW, m.st))-innerH, 0)
 }
 

@@ -52,11 +52,12 @@ type styles struct {
 	// a theme/background swap, not a separate field threaded on its own.
 	markdown string
 
-	// Frame sizes derived from the pane style (not a hardcoded 2) so a future
-	// border/padding change can't silently desync sizing. The border STYLE is
+	// Frame sizes derived from their box styles (not a hardcoded 2) so a future
+	// border/padding change can't silently desync sizing. The border STYLES are
 	// theme-independent, so these stay valid across a palette swap.
 	paneHFrame int
 	paneVFrame int
+	helpHFrame int // help box horizontal chrome (border + padding), from helpBorder
 }
 
 // newStyles builds every chrome style (and the derived frame sizes) from palette
@@ -66,6 +67,7 @@ type styles struct {
 func newStyles(p design.Palette) styles {
 	accent := p.Accent.Color()
 	paneActive := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent)
+	helpBorder := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(p.BorderActive.Color()).Padding(0, 2)
 	return styles{
 		pal: p,
 
@@ -77,7 +79,7 @@ func newStyles(p design.Palette) styles {
 
 		dashHeading: lipgloss.NewStyle().Bold(true).Foreground(p.Heading.Color()),
 
-		helpBorder:  lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(p.BorderActive.Color()).Padding(0, 2),
+		helpBorder:  helpBorder,
 		helpHeading: lipgloss.NewStyle().Bold(true).Foreground(p.Heading.Color()),
 		helpKey:     lipgloss.NewStyle().Bold(true),
 
@@ -94,6 +96,7 @@ func newStyles(p design.Palette) styles {
 
 		paneHFrame: paneActive.GetHorizontalFrameSize(),
 		paneVFrame: paneActive.GetVerticalFrameSize(),
+		helpHFrame: helpBorder.GetHorizontalFrameSize(),
 	}
 }
 

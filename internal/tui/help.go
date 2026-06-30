@@ -148,13 +148,6 @@ func notesFor(kind entityKind) helpSection {
 	return helpSection{"Notes", entries}
 }
 
-// helpHFrame is the help box's horizontal chrome (border + padding), derived from
-// the box's STYLE so a padding/border change can't desync the wrap width. The
-// frame size is color-independent (it's the rounded border + Padding(0,2)), so it
-// stays a package var rather than per-Model state — only the box's COLOR is themed
-// (styles.helpBorder).
-var helpHFrame = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 2).GetHorizontalFrameSize()
-
 // helpPrefWidth is the overlay's preferred outer width. The content WRAPS to this
 // (descriptions reflow within their column), so the box is a constant width as you
 // scroll — rather than resizing to whatever the widest currently-visible line is. It
@@ -208,7 +201,7 @@ func helpSectionsFor(f focus, kind entityKind, s *styles) []helpSection {
 // so the box is a constant width across scroll AND on a terminal too narrow to honor
 // the column layout. Shared by helpBox (render) and the model's scroll clamp, so both
 // window the SAME content — callers MUST pass the same contentW
-// (helpWidth(maxW)-helpHFrame).
+// (helpWidth(maxW)-s.helpHFrame).
 func helpLines(f focus, kind entityKind, contentW int, s *styles) []string {
 	sections := helpSectionsFor(f, kind, s)
 	// Widest key column across the shown sections → aligned descriptions.
@@ -251,7 +244,7 @@ func helpLines(f focus, kind entityKind, contentW int, s *styles) []string {
 // content is taller than the box, scroll (clamped here, not in the model — only
 // render knows the box height) picks the visible window; j/k scroll while open.
 func helpBox(maxW, maxH, scroll int, f focus, kind entityKind, s *styles) string {
-	lines := helpLines(f, kind, helpWidth(maxW)-helpHFrame, s)
+	lines := helpLines(f, kind, helpWidth(maxW)-s.helpHFrame, s)
 	const frameV = 2 // top+bottom border rows
 	if innerH := maxH - frameV; innerH > 0 && len(lines) > innerH {
 		maxScroll := len(lines) - innerH

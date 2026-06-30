@@ -75,7 +75,7 @@ func TestHelpAndFooterDeriveFromKeymap(t *testing.T) {
 func TestHelpBoxFixedWidthAcrossScroll(t *testing.T) {
 	for _, kind := range []entityKind{entityTasks, entityEpics, entityAudits, entityDashboard} {
 		for _, maxW := range []int{20, 30, 47, 62, 120} { // 20/30 = narrow (backstop regime)
-			contentW := helpWidth(maxW) - helpHFrame
+			contentW := helpWidth(maxW) - testStyles.helpHFrame
 			// Invariant 1 (the one the resize/clip bug violated): no composed line may
 			// exceed contentW — every line is forced to exactly contentW.
 			for _, ln := range helpLines(focusList, kind, contentW, &testStyles) {
@@ -183,7 +183,7 @@ func TestModel_HelpScrollClampedToVisibleMax(t *testing.T) {
 	}
 	// Count lines at the SAME content width helpMaxScroll/helpBox use, so the clamp
 	// and the line count agree under wrapping.
-	cw := helpWidth(m.width-2) - helpHFrame
+	cw := helpWidth(m.width-2) - testStyles.helpHFrame
 	maxScroll := m.helpMaxScroll()
 	if maxScroll <= 0 || maxScroll >= len(helpLines(m.focus, m.cur().kind, cw, &testStyles)) {
 		t.Fatalf("test needs an overflowing overlay with a real clamp; helpMaxScroll=%d, lines=%d", maxScroll, len(helpLines(m.focus, m.cur().kind, cw, &testStyles)))
