@@ -238,6 +238,198 @@ on your behalf. That raises the things you flagged:
 - **Does this converge with epic 19?** If a web companion is likely, Path C's
   server shape may be worth biasing toward sooner.
 
+## Update 2026-06-30 — the real enemy is *branching* the planning, not git
+
+A reframe that sharpens §4's git-stance tension and the epic-19 convergence.
+
+**The fork in the road.** You cannot have both "the branchy git tree is canonical"
+and "no reconciliation of mutable state." One has to give:
+
+- **Stop branching the planning** — keep git, but run planning on a single
+  timeline (a decoupled, trunk-only planning repo; epic 23's local phase already
+  enables it). Branch-divergence pain is largely an *artifact of co-location*:
+  planning diverges because it rides code's feature branches. Pull it into its own
+  repo, run it trunk-only, and that pressure evaporates — what's left is two writers
+  on one trunk, the OCC problem (version-CAS, easy), not the branch-merge problem
+  (hard). The cost is losing "this PR atomically flips its own task to done" — but
+  that property *is* the divergence source, so losing it is the point; code and
+  planning then join by **reference (task id), not co-location**.
+- **Stop making git canonical** — a service/DB is the source of truth, git a
+  derived read-only mirror (Path B/C, Dolt). The most direct
+  single-source-of-truth + web-UI story, at the cost of the "edit a markdown file
+  in a PR and it round-trips" identity. The exit ramp if the center of gravity
+  shifts to a team/web app — not the opening move.
+
+Both project goals — less merge friction *and* an out-of-terminal web UI — point at
+the *first* resolution: a single canonical trunk, not abandoning git.
+
+**Serve-owns-git dissolves the "the UI would have to provide git operations"
+worry.** The browser need not drive git, so the web UI need not expose it. In the
+Path C / epic 19 shape the `serve` daemon is the **single writer** to the
+trunk-only checkout *and* the concurrency authority: it reads/writes through
+`core.Service` with OCC and batches commits/pushes underneath (bot identity, or one
+squashed commit per sync). The web user edits a task and sees it save; git is an
+invisible server-side detail. The model then splits cleanly:
+
+- **Local CLI/TUI** keeps today's "tool writes files, you commit" stance —
+  git-native, offline, PR-able, unchanged.
+- **Hosted web** opts into the server driving git against the same trunk — exactly
+  §4's opt-in git-drive, with the server *also* owning concurrency, which is the
+  piece that lets git stay underneath without the UI ever speaking it.
+
+That makes §6's "is 'the tool never touches git' a hard line?" answerable: keep it
+hard *for the local default*; relax it *only* inside an opt-in server. The residual
+merge pain this addresses (concurrent edits to a file's mutable fields) and the
+content-vs-workflow-state split behind it are in the 2026-06-30 update of
+[[2026-06-24-task-storage-model-files-logs-or-versioned-db]].
+
+## Update 2026-06-30 — two writable authorities is the trap; "central as a git client" is the way out
+
+A deeper pass on §2 / §4 / §6: *how do you keep planning git-native AND update a
+central source live, without conflict?* Two candidate mechanisms came up; both fail
+the same way, and the failure points at the fix.
+
+**Root cause: dual authority.** Any design where git *and* a central store can each
+accept writes independently is a **sync problem** — drift, failed-apply log
+archaeology, and "which side wins?" are its permanent signature, not bugs you can
+tool away. The only escape is **one authority, with the other a pure derived
+function of it.** Judge every proposal by one test: *how many things can be written
+independently?* The answer has to be one.
+
+**Mechanism 1 — GitOps (CI applies changes to central).** Separate two things. The
+*messy* part — "apply a diff, watch it fail, read the GHA log, iterate" — is an
+artifact of framing it **imperatively**. Real GitOps **reconciles to desired
+state**: read git HEAD, make central *match* it, idempotently; re-running converges,
+so there's no failed-patch archaeology. But the *real* limit survives that fix:
+CI-applies-to-central only flows **git → central**. It buys a fast read projection,
+**not a web write path** — a web mutation still has to become a git commit by some
+other means. And it doesn't remove conflict; it delegates it to git's merge and lets
+central mirror the outcome. Fine — but only once git is already canonical.
+
+**Mechanism 2 — `tskflwctl apply` (write central, then commit on success).** A
+textbook **dual-write**, with the classic failure: the process dies (or the push
+fails) *between* the two writes and the stores disagree with no record of intent. A
+drift-detector GHA *detects* that; it can't *prevent* it, and remediation still needs
+a hand-picked winner. Making dual-write safe needs an **outbox / transaction-log**
+(durably record intent; a worker drives both sides to convergence) — heavy machinery
+for a planning tool. And "central-first, then commit" quietly makes **central the
+authority and git a lagging mirror**, which guts the git-native motivation (why is
+git hand-editable if it only trails?).
+
+**The fix is hiding inside Mechanism 2.** The drift exists only because "central" is
+assumed to be a *different kind of store* than git. Collapse that — make **central
+itself a git repo** — and:
+
+- `apply` becomes **pull → merge → commit → push**.
+- There is **one authority** (git); the "central store" is just *the canonical clone*.
+- Drift is **impossible by construction** — nothing of a different shape exists to
+  drift from; a "reconcile" is just `git pull`.
+- Conflicts route through the one mechanism built for them: git's **3-way merge**.
+
+So `apply` is already drift-free *the moment "central" is git, not a foreign DB.* The
+thing being reached for is just **the tool driving git sync**.
+
+**What it is, concretely: serve-owns-git (confirmed from a second angle).**
+
+- One **server owns the canonical clone** and is the single live writer: a read/write
+  API (web talks to it, no git in the browser), writes serialized through
+  `core.Service` with OCC, commits/pushes batched.
+- The **local CLI stays git-native** — edit files in your own clone, commit/push as
+  today. The server is just *another git client*, the privileged high-frequency one.
+- **Conflicts are made rare by data shape, not by avoiding git:** per-entity files +
+  stable paths + ULID identity ⇒ writers on *different* tasks never collide; the
+  high-churn field (`status`) is the candidate for an append-log so even same-task
+  flips concatenate. Live writes funnel through the one server, so human-vs-server
+  clashes are occasional and handled by ordinary `pull`.
+- **Residual cost (honest):** a human editing their own clone offline and pushing can
+  still conflict with the server — ordinary git, rare when the server is where live
+  activity flows. You don't escape git's conflict model; you shrink its surface until
+  it almost never fires.
+
+**CI / GHA — right role vs wrong role.** Good at **validation gates** on PRs (`lint`,
+`schema`, the docs-check gate) and rebuilding an **idempotent derived read cache**
+from HEAD (declarative, convergent, stateless). Bad at being the **transactional
+write path** (Mechanism 1) or the **drift remediator** (Mechanism 2) — those need a
+long-running serializer holding a working tree (a server), not a batch job firing
+after the fact and leaving logs to read.
+
+**Net (sharpens §6).** No mechanism makes two *writable* authorities cheap; that's the
+shape of the problem, not a tooling gap. "Git-native AND a central writable source,
+low-conflict" is reachable **only** by making the central thing a **git client, not a
+git peer** — one hosted git authority, a server as its privileged live writer + API,
+the CLI still git-native offline. This is the same serve-owns-git / version-CAS
+foundation §2–§5 land on, reached here from the dual-write angle. So §6's "sync
+trigger" and "git stance" resolve together: the *tool* drives git **only inside the
+opt-in server**; the local default stays "you commit."
+
+## Update 2026-06-30 — how web writes land: direct-to-trunk default, opt-in PR/approval escalation
+
+Given serve-owns-git, the open question is *how* the server's writes land in history —
+straight to trunk, or via PRs. The reframe that settles the default: **a PR is a
+branch.** PR-per-change reintroduces the divergence trunk-only was built to kill —
+canonical state forks into trunk vs the open PR(s), the UI must choose which it shows,
+two web edits to one task in two PRs conflict, PRs go stale and need rebasing. So the
+default leans *away* from PRs; the burden is on PRs to justify the cost.
+
+What people reach for PRs to get, decomposed — only one actually needs a PR:
+
+| Want | Need a PR? |
+| :-- | :-- |
+| **Validation** | **No** — the server validates inline (`core.Service` + OCC + lint), rejecting synchronously. The CI-validation gate belongs on the *human-pushes-files* local path (a hand edit can be invalid), not the server path (which can't emit invalid state). |
+| **Audit trail** | **No** — every commit already is the who/when/what; `git log` is the trail. Needs attribution, not PRs. |
+| **Review / approval** | The **only** PR-exclusive benefit — and only for *substantive* changes with an actual reviewer. |
+
+And the unlock: **review ≠ PR.** A gate is cleanest as an **in-server approval queue** —
+pending changes sit in the server's state; on approval it commits *straight to trunk*.
+You get the human gate with no branches, no divergence, no host-API coupling. A PR is
+one (costly) implementation of review; use a real PR only if you specifically want
+GitHub's review UI/discussion as the surface.
+
+Stakes are lower than the code instinct suggests: **"protect main" doesn't transfer to
+planning data.** A bad code commit breaks a build; a bad planning commit (wrong status
+flip, typo) breaks nothing and `git revert`s in a line. The thing that makes
+direct-to-main scary for code mostly evaporates here.
+
+### The two tiers
+
+- **Default — direct to trunk, no PR.** The high-frequency, low-controversy 95% (status
+  flips, field edits, snoozes). The server validates inline and commits,
+  **batched/squashed per session** for readable history, authored by a
+  **`tskflwctl-bot` identity with a `Co-authored-by:` trailer** naming the web user
+  (honest attribution, clean log). This is what preserves SSOT and the out-of-terminal
+  ease the web UI exists for.
+- **Escalation — explicit "propose for review," rare, opt-in.** Substantive changes
+  (re-scoping an epic, bulk restructuring). Default implementation: the **approval
+  queue** (commit-to-trunk-on-approve). Reach for a real **PR only** to get GitHub's
+  review UI — accepting that this is the one path where branching returns, so keep those
+  branches short-lived.
+
+### PR-tier merge policy (when a real PR is used)
+
+Require the feature branch be **rebased / up-to-date with main before merge**, so any
+conflict is resolved **on the branch, by the author, before it touches main** — main
+never sees a conflicted merge and stays linear. Land it as a **squash-merge** (one tidy
+commit per proposal, bot + `Co-authored-by` trailer). The principle this encodes:
+
+> **The cost of branching is borne by whoever opted into the branch.** The direct tier
+> stays frictionless; the brancher pays the reconciliation — acceptable *because* the
+> PR tier is the rare, deliberate path.
+
+Two honest consequences:
+
+- **Non-git web author** ⇒ the server must surface conflict resolution in the web UI (or
+  bounce: "this went stale against current state — re-apply?"). An **agent** author
+  handles it more gracefully — it just re-runs its change against fresh main. This
+  friction is fine for the opt-in tier, and is exactly *why the default must stay
+  direct-to-trunk*.
+- **Portability:** "require up-to-date before merge" is a GitHub branch-protection
+  feature; a bare / self-hosted remote enforces the same rule in server logic, not host
+  config.
+
+**Net:** web writes default to the single trunk timeline (SSOT intact); branching is
+opt-in, short-lived, and self-reconciling by the brancher. This resolves the "how do
+web writes land?" question the serve-owns-git model left open.
+
 ## Related
 
 - [[2026-06-24-task-storage-model-files-logs-or-versioned-db]] — the on-disk data
