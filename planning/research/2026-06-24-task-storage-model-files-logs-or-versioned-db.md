@@ -207,13 +207,61 @@ the only one that forces the harder, rename-aware OCC you'd then throw away.
 - **Stable IDs:** identity is the *slug/filename* today (no UUID, no `rename`
   verb). If you group by epic, an epic change becomes a rename — do you want an
   **immutable `id`** separate from the human slug so moves/renames never break
-  identity or cross-links?
+  identity or cross-links? → **Decided 2026-06-30:** yes — a 12-char time-sortable
+  id; references resolve on the id (see epic 24).
 - **Plain-git is sacred?** Is "just markdown in a normal git repo" a defining
   constraint (rules out Dolt), or a current convenience?
 - **History:** is an audit trail (who/when/what) a real goal (→ event log), or is
   current-state-only fine (git history already covers most of it)?
 - **Scale:** realistic ceiling on task count? (Decides whether the SQLite cache is
   ever worth it.)
+
+## Update 2026-06-30 — stable key committed; the residue it doesn't fix
+
+Two refinements from a follow-up review.
+
+**Stable key is committed** (the principle — see epic 24). Organizing entities by a
+stable key with `status` in frontmatter, retiring `status == directory` as the
+*authority*, is accepted as direction. What settled it: a stable key is the one
+choice that survives *any* later backend — it is exactly what becomes the primary
+key if storage ever moves to a database — so committing now is safe regardless of
+where storage lands. The **grouping** is **decided: flat** (epic membership is mutable, so dir-per-epic
+would make a reassignment a file move). The key's *form* is **decided (2026-06-30):
+a 12-char time-sortable id** (lowercase Crockford base32, ms-time + random —
+ULID-shaped but short), carried in an **id-led** filename (`<id>-<slug>.md`, so the
+filename sorts chronologically) with references resolving on the id prefix, chosen
+over a monotonic integer to decouple identity from the still-open branching decision
+(no allocation coordination ever). The link/lookup follow-up settled the on-disk
+shape as **Scheme 2** (readable, GitHub-clickable links, tool-cascaded on the rare
+rename) and applied it to all three entities (tasks / epics / audits). See epic 24.
+
+**What the stable key does NOT fix — the residue.** This spike framed the pain as
+"mutable state in the path," which the stable key removes (the rename/duplicate
+class is gone). But a second, independent pain survives: two branches that edit the
+*same stable file's* mutable fields (`status: in-progress` vs `status: complete`)
+still produce a genuine 3-way content conflict on merge. Stable keys kill
+rename-merges; they do nothing for **concurrent edits to mutable fields across
+divergent branches**. That residue is inherent to "the branchy git tree is
+canonical" — no layout change reaches it.
+
+**Content vs. workflow-state** explains why. A task file bundles two data kinds
+with opposite needs: **spec/intent** (title, objective, AC, sketch) is authored,
+stable, *wants* to evolve on the work's branch, and merges meaningfully — git is
+good at it; **workflow state** (`status`, timestamps, `defer-until`) is
+high-frequency, machine-flippable, has one correct current value, and a 3-way merge
+of it is meaningless — git is bad at it, and it is the source of nearly all merge
+friction. The residue is entirely the second kind forced through git's branching
+machinery, which adds nothing for it. Two consequences:
+
+- The derived **board/projection should not be committed** (regenerate /
+  git-ignore) — a committed board is pure workflow-state churn and a perpetual
+  conflict generator. Analysis, not yet a committed decision.
+- The fix for the residue is *not* a layout change but **not branching the
+  planning** (a decoupled, trunk-only planning repo) or, heavier, splitting the
+  volatile fields into a commute-friendly **append-log** (B1 scoped to just
+  `status`/timestamps, body left as plain markdown). The first is developed in the
+  2026-06-30 update of
+  [[2026-06-24-remote-planning-repos-backends-and-sync]].
 
 ## Related
 
