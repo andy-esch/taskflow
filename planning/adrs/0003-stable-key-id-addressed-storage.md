@@ -217,7 +217,17 @@ This ADR decides the *on-disk model only*. Related decisions live elsewhere.
 <!-- Append-only, dated entries added AFTER this ADR is accepted. Format:
      ### 2026-07-01 — <what changed and why> -->
 
-_None yet (still `proposed`)._
+### 2026-07-02 — id split finalized at 43/17; migration backfill-timestamp policy
+
+- **Bit split:** the "~44 bits time + ~16 bits random" in §3 is finalized as **43
+  time + 17 random** — sortable through ~year 2248, with 2× the same-ms
+  cross-process collision headroom. Length (12) and everything else in §3 unchanged.
+- **Migration backfill timestamp** (the §6 "exact transform" detail, now decided):
+  a backfilled id embeds the file's **`created:`** date; if absent, another
+  frontmatter date; if neither exists, the migration **errors** so the operator adds
+  the date key. Sub-day ordering uses a **random** low tail (no sequence state to
+  track), with **dedupe-and-regenerate** on the rare same-day collision. Landed as
+  the stateless `id.NewAt(unixMilli)`.
 
 ## Related
 
