@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/id"
 )
 
 // Service is the application core: framework-agnostic use cases over the ports.
@@ -16,6 +17,7 @@ type Service struct {
 	store     Store
 	templates TemplateSource
 	now       func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
+	newID     func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
 }
 
 // Option configures a Service at construction. Functional options keep the common
@@ -45,10 +47,22 @@ func WithClock(now func() time.Time) Option {
 	}
 }
 
+// WithIDGen overrides the stable-id generator the create paths mint from — injected
+// so a test that snapshots a *created file* gets a fixed id instead of a random one.
+// Defaults to id.New. Mirrors WithClock: the two non-deterministic create-time inputs,
+// time and identity, are both injectable.
+func WithIDGen(gen func() string) Option {
+	return func(s *Service) {
+		if gen != nil {
+			s.newID = gen
+		}
+	}
+}
+
 // NewService wires the core to its store; templates default to the built-in
 // source unless WithTemplateSource overrides it.
 func NewService(store Store, opts ...Option) *Service {
-	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now}
+	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New}
 	for _, opt := range opts {
 		opt(s)
 	}

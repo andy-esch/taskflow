@@ -48,6 +48,39 @@ func TestCreateTask_OrderQuotingClobber(t *testing.T) {
 	}
 }
 
+func TestCreateTask_IDRoundTrips(t *testing.T) {
+	fs := NewFS(t.TempDir())
+	// Alphanumeric and all-digit ids: the latter must survive YAML as a string, not
+	// be coerced to an int (which would drop the leading zero).
+	for _, wantID := range []string{"0abcdef12345", "012345678901"} {
+		task := domain.Task{
+			Slug: "t-" + wantID, ID: wantID, Status: domain.StatusReadyToStart, Epic: "e1",
+			Description: "d", Effort: "Unknown", Tier: 3, Priority: "medium",
+			Autonomy: 3, Tags: []string{"a"}, Created: "2026-07-02",
+		}
+		got, err := fs.CreateTask(task, "\n# x\n", false)
+		if err != nil {
+			t.Fatalf("%s: %v", wantID, err)
+		}
+		b, err := os.ReadFile(got.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// id is written in canonical position: after schema, before status.
+		sci, ii, sti := strings.Index(string(b), "schema:"), strings.Index(string(b), "id:"), strings.Index(string(b), "status:")
+		if sci < 0 || sci >= ii || ii >= sti {
+			t.Errorf("%s: id not in canonical position (schema<id<status):\n%s", wantID, b)
+		}
+		reparsed, _, err := fs.GetTask("t-" + wantID)
+		if err != nil {
+			t.Fatalf("%s: re-parse: %v", wantID, err)
+		}
+		if reparsed.ID != wantID {
+			t.Errorf("id did not round-trip: got %q want %q", reparsed.ID, wantID)
+		}
+	}
+}
+
 func TestCreateAudit_OpenBucketOrderClobber(t *testing.T) {
 	fs := NewFS(t.TempDir())
 	a := domain.Audit{Slug: "2026-06-16-dispatcher", Area: "dispatcher", Date: "2026-06-16"}
@@ -79,6 +112,32 @@ func TestCreateAudit_OpenBucketOrderClobber(t *testing.T) {
 	// Clobber refused with a conflict.
 	if _, err := fs.CreateAudit(a, "x", false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("clobber should be ErrConflict, got %v", err)
+	}
+}
+
+func TestCreateAudit_IDRoundTrips(t *testing.T) {
+	fs := NewFS(t.TempDir())
+	const wantID = "0abcdef12345"
+	a := domain.Audit{Slug: "2026-07-02-x", ID: wantID, Area: "x", Date: "2026-07-02"}
+	got, err := fs.CreateAudit(a, "\n# x\n", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(got.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// id in canonical position: after schema, before area.
+	sci, ii, ai := strings.Index(string(b), "schema:"), strings.Index(string(b), "id:"), strings.Index(string(b), "area:")
+	if sci < 0 || sci >= ii || ii >= ai {
+		t.Errorf("id not in canonical position (schema<id<area):\n%s", b)
+	}
+	reparsed, _, err := fs.GetAudit("2026-07-02-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reparsed.ID != wantID {
+		t.Errorf("audit id did not round-trip: got %q want %q", reparsed.ID, wantID)
 	}
 }
 

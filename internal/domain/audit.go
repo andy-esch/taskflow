@@ -40,8 +40,13 @@ type Audit struct {
 	Slug   string      `yaml:"-"`
 	Path   string      `yaml:"-"`
 	Bucket AuditBucket `yaml:"-"`
-	Area   string      `yaml:"area"`
-	Date   string      `yaml:"date"`
+
+	// ID is the stable 12-char identifier (ADR-0003), minted on create. Additive —
+	// see domain.Task.ID; empty on pre-rollout files.
+	ID string `yaml:"id"`
+
+	Area string `yaml:"area"`
+	Date string `yaml:"date"`
 	// Updated is the audit's own last-edited date (stamped by edit/append). Unlike
 	// Date — immutable, part of the slug — this advances on each content edit. A
 	// bucket move (close/reopen/defer) does NOT touch it: it changes no frontmatter or

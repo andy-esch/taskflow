@@ -45,6 +45,7 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 	}
 	a := domain.Audit{
 		Slug:   date + "-" + areaSlug,
+		ID:     s.newID(),
 		Bucket: domain.AuditOpen,
 		Area:   area,
 		Date:   date,

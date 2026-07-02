@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/id"
 )
 
 // deferStore drives DeferTask's single atomic store.Defer call in isolation: it
@@ -162,6 +163,49 @@ func slugSet(tasks []domain.Task) map[string]bool {
 		m[t.Slug] = true
 	}
 	return m
+}
+
+func TestNewTask_MintsValidID(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}}
+	svc := NewService(fs)
+	got, err := svc.NewTask(NewTaskParams{Title: "Add retry", Epic: "e1", Description: "d", Tags: []string{"net"}, Body: "# x\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !id.Valid(got.ID) {
+		t.Errorf("NewTask minted an invalid id: %q", got.ID)
+	}
+	// The id must reach CreateTask (be persisted), not just the returned value.
+	if len(fs.created) != 1 || fs.created[0].ID != got.ID {
+		t.Errorf("id not passed to CreateTask: created=%+v", fs.created)
+	}
+}
+
+func TestNewAudit_MintsValidID(t *testing.T) {
+	fs := &fakeStore{}
+	svc := NewService(fs)
+	got, err := svc.NewAudit(NewAuditParams{Area: "storage", Date: "2026-07-02", Body: "# x\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !id.Valid(got.ID) {
+		t.Errorf("NewAudit minted an invalid id: %q", got.ID)
+	}
+	if len(fs.createdAudits) != 1 || fs.createdAudits[0].ID != got.ID {
+		t.Errorf("id not passed to CreateAudit: created=%+v", fs.createdAudits)
+	}
+}
+
+func TestNewTask_UsesInjectedIDGen(t *testing.T) {
+	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
+	svc := NewService(fs, WithIDGen(func() string { return "0000000000zz" }))
+	got, err := svc.NewTask(NewTaskParams{Title: "x", Epic: "e1", Tags: []string{"a"}, Body: "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "0000000000zz" {
+		t.Errorf("NewTask ignored the injected id gen: got %q", got.ID)
+	}
 }
 
 // TestWithClock_GovernsWriteStamps pins the clock unification: an injected clock
