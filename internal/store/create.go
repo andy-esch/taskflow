@@ -67,6 +67,7 @@ func (s *FS) writeNewFile(dir, path string, content []byte, kind, id string, dry
 func taskFields(t domain.Task) []fmField {
 	fields := []fmField{
 		{"schema", domain.FileSchemaVersion},
+		{"id", t.ID},
 		{"status", string(t.Status)},
 		{"epic", t.Epic},
 		{"description", t.Description},
@@ -115,6 +116,7 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 func auditFields(a domain.Audit) []fmField {
 	return []fmField{
 		{"schema", domain.FileSchemaVersion},
+		{"id", a.ID},
 		{"area", a.Area},
 		{"date", a.Date},
 	}

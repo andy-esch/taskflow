@@ -303,6 +303,7 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	}
 	t := domain.Task{
 		Slug:        slug,
+		ID:          s.newID(),
 		Status:      status,
 		Epic:        p.Epic,
 		Description: p.Description,

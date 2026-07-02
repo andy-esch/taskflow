@@ -10,6 +10,12 @@ type Task struct {
 	// misfiled — see Misfiled.
 	Declared Status `yaml:"-"`
 
+	// ID is the stable 12-char identifier (ADR-0003), minted on create by the core
+	// service. Additive for now: written to new files but not yet resolved on,
+	// exposed in --json, or in the field registry — those land when the id moves
+	// into the filename (the stable-key layout change). Empty on pre-rollout files.
+	ID string `yaml:"id"`
+
 	Status      Status   `yaml:"status"`
 	Epic        string   `yaml:"epic"`
 	Description string   `yaml:"description"`
