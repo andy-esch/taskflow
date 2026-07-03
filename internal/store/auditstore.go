@@ -251,6 +251,7 @@ func parseAuditWithFindings(content []byte, path string, bucket domain.AuditBuck
 	// foreign frontmatter bucket falls back to the folder so the audit still lists.
 	a.FolderBucket = bucket
 	if !a.Bucket.Valid() {
+		a.BucketFellBack = true // frontmatter bucket missing/unrecognized — lint flags it
 		a.Bucket = bucket
 	}
 	// The finding grammar (and "what each status means for progress") lives in the

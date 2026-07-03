@@ -243,8 +243,10 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 			issues = domain.LintTask(t, validEpic)
 		} else {
 			// Archived tasks skip the field nags but still get the universal checks:
-			// status/folder drift and a missing stable id.
-			issues = append(domain.MisfiledIssues(t), domain.MissingIDIssue(t.ID)...)
+			// status/folder drift, a missing/unrecognized frontmatter status, and a
+			// missing stable id.
+			issues = append(domain.MisfiledIssues(t), domain.FrontmatterStatusIssues(t)...)
+			issues = append(issues, domain.MissingIDIssue(t.ID)...)
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})

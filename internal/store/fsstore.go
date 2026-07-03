@@ -375,6 +375,7 @@ func parseTask(content []byte, path string, dirStatus domain.Status) (domain.Tas
 	// folder governs as a fallback so the task still lists and resolves.
 	t.FolderStatus = dirStatus
 	if !t.Status.Valid() {
+		t.StatusFellBack = true // frontmatter status missing/unrecognized — lint flags it
 		t.Status = dirStatus
 	}
 	t.Slug = strings.TrimSuffix(filepath.Base(path), ".md")

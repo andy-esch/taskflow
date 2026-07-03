@@ -1,5 +1,6 @@
 ---
 id: 6fjangd7kvh3
+bucket: open
 area: fixture-area
 date: 2026-01-02
 ---

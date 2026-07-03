@@ -25,8 +25,8 @@ func setupAuditRepo(t *testing.T) string {
 		}
 	}
 	write("tasks/ready-to-start/.gitkeep", "") // so Discover anchors here
-	write("audits/open/o.md", "---\nid: 6fjangd7kvh1\narea: dispatcher\n---\n#### H1. t  · **Status:** open\n")
-	write("audits/closed/c.md", "---\nid: 6fjangd7kvh2\narea: web\n---\n#### M1. t  · **Status:** fixed\n")
+	write("audits/open/o.md", "---\nid: 6fjangd7kvh1\nbucket: open\narea: dispatcher\n---\n#### H1. t  · **Status:** open\n")
+	write("audits/closed/c.md", "---\nid: 6fjangd7kvh2\nbucket: closed\narea: web\n---\n#### M1. t  · **Status:** fixed\n")
 	return root
 }
 
@@ -172,5 +172,21 @@ func TestAuditList_ConflictingFlagsError(t *testing.T) {
 		if err := cmd.Execute(); err == nil {
 			t.Errorf("%v should error (mutually exclusive flags)", args)
 		}
+	}
+}
+
+// An audit with NO frontmatter bucket falls back to the folder but is flagged by lint.
+func TestAuditLint_FlagsMissingBucket(t *testing.T) {
+	root := setupAuditRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "audits", "open", "2026-06-17-nb.md"),
+		[]byte("---\nid: 6fjangd7kvcb\narea: x\ndate: 2026-06-17\n---\n# x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runRootRC(t, "-C", root, "audit", "lint")
+	if err == nil {
+		t.Error("audit lint must exit non-zero on a missing frontmatter bucket")
+	}
+	if !strings.Contains(out, "frontmatter bucket missing or unrecognized") {
+		t.Errorf("expected the missing-bucket flag:\n%s", out)
 	}
 }

@@ -44,6 +44,10 @@ type Audit struct {
 	// the authoritative one (frontmatter, ADR-0003 Phase A); the two diverge only when
 	// an audit is misfiled — see Misfiled.
 	FolderBucket AuditBucket `yaml:"-"`
+	// BucketFellBack is set by the store when the frontmatter bucket was missing or
+	// unrecognized, so Bucket is the folder fallback — lint flags it
+	// (FrontmatterBucketIssues).
+	BucketFellBack bool `yaml:"-"`
 
 	// ID is the stable 12-char identifier (ADR-0003), minted on create. Additive —
 	// see domain.Task.ID; empty on pre-rollout files.
