@@ -12,6 +12,7 @@ created: "2026-06-29"
 updated_at: "2026-06-30"
 started_at: "2026-06-29"
 completed_at: "2026-06-30"
+id: 6fh1b7w00s8r
 ---
 ## Objective
 Make the CLI's **semantic** colors (status/finding glyphs, checkmarks, percent, priority, Green/Red/Warn) emit the active theme's **truecolor** hues on truecolor terminals, with the curated 16-color ANSI slot as the fallback. Today they always emit the 16-color slot, so the theme is invisible on the CLI glyphs (only the bars + TUI + picker show it). This is the "School 2 / holistic palette" decision — the theme should show on every surface.

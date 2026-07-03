@@ -10,6 +10,7 @@ tags: [pm-tooling, go, data-integrity]
 created: "2026-06-09"
 completed_at: "2026-06-09"
 updated_at: "2026-06-09"
+id: 6fakbec01aap
 ---
 
 # Folder-authoritative status with misfiled detection

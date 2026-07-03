@@ -63,7 +63,7 @@ func TestLint_EpicSoleFailure(t *testing.T) {
 	// the required priority + description).
 	write("epics/e1.md", "---\nstatus: active\n---\n# E1\n")
 	write("tasks/ready-to-start/good.md",
-		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
+		"---\nid: 6fjangd7kvh0\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
 
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
@@ -99,7 +99,7 @@ func TestLint_Clean(t *testing.T) {
 	// or `lint` would flag it and never report a pass.
 	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
 	write("tasks/ready-to-start/good.md",
-		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
+		"---\nid: 6fjangd7kvh0\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
 
 	out := runRoot(t, "-C", root, "lint")
 	if !strings.Contains(out, "pass lint") {

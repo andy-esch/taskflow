@@ -11,6 +11,7 @@ tags: [render]
 created: "2026-06-22"
 updated_at: "2026-06-22"
 completed_at: "2026-06-22"
+id: 6fes83r03xm4
 ---
 # Render table width discipline for wide non-final columns
 

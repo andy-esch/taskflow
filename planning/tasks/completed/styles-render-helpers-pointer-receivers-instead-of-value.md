@@ -12,6 +12,7 @@ created: "2026-06-29"
 updated_at: "2026-06-30"
 started_at: "2026-06-30"
 completed_at: "2026-06-30"
+id: 6fh1b7w01zfa
 ---
 
 # styles render helpers: pointer receivers instead of value

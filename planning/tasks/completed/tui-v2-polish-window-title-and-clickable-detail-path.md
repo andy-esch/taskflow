@@ -11,6 +11,7 @@ tags: [tui, ux]
 created: "2026-06-24"
 updated_at: "2026-06-24"
 completed_at: "2026-06-24"
+id: 6ffdv9g00fy0
 ---
 
 # TUI v2 polish window title and clickable detail path

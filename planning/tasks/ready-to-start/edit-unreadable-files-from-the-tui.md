@@ -9,6 +9,7 @@ priority: medium
 autonomy_level: 3
 tags: [tui]
 created: "2026-06-24"
+id: 6ffdv9g01q40
 ---
 # Edit unreadable files from the TUI
 

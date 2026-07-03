@@ -13,6 +13,7 @@ blocked_by: [design-package-foundation-palette-theme-registry-and-the-neon-defau
 updated_at: "2026-06-29"
 started_at: "2026-06-28"
 completed_at: "2026-06-29"
+id: 6fgq1n003wty
 ---
 ## Objective
 Route the rollup/segmented bars and the CLI's 16-color ANSI map through the palette, with no porcelain churn.

@@ -11,6 +11,7 @@ tags: [cli, docs, json]
 created: "2026-06-22"
 updated_at: "2026-06-23"
 completed_at: "2026-06-23"
+id: 6fes83r03rfk
 ---
 # JSON envelopes + docs/schema regen
 

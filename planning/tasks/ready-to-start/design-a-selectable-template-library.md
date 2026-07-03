@@ -11,6 +11,7 @@ tags: [feature, templates, dx]
 created: "2026-06-22"
 started_at: "2026-06-22"
 updated_at: "2026-06-23"
+id: 6fes83r03rhs
 ---
 # Design a selectable template library
 

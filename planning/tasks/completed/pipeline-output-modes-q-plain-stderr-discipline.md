@@ -11,6 +11,7 @@ created: "2026-06-12"
 updated_at: "2026-06-19"
 started_at: "2026-06-19"
 completed_at: "2026-06-19"
+id: 6fbj870023xj
 ---
 # Pipeline output modes (`-q`, `--plain`, stderr discipline)
 

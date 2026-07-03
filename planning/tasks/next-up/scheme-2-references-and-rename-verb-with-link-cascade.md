@@ -9,6 +9,7 @@ priority: medium
 autonomy_level: 3
 tags: [core, cli]
 created: "2026-07-01"
+id: 6fhnydm021es
 ---
 
 # Scheme 2 references and rename verb with link cascade

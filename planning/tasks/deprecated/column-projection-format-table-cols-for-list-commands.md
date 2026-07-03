@@ -10,6 +10,7 @@ tags: [cli, output, dx]
 created: "2026-06-17"
 updated_at: "2026-06-19"
 deprecated_at: "2026-06-19"
+id: 6fd5r5c009vr
 ---
 
 # Column-projection: --format table(cols) for list commands

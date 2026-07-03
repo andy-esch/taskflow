@@ -11,6 +11,7 @@ created: "2026-06-12"
 updated_at: "2026-06-14"
 started_at: "2026-06-14"
 completed_at: "2026-06-14"
+id: 6fbj87000zs7
 ---
 # Binary releases via goreleaser
 

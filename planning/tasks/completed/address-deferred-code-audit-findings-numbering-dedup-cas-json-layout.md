@@ -11,6 +11,7 @@ created: "2026-06-13"
 updated_at: "2026-06-14"
 started_at: "2026-06-14"
 completed_at: "2026-06-14"
+id: 6fbwhsw024nr
 ---
 
 # Address deferred code-audit findings (numbering, dedup, CAS, JSON layout)

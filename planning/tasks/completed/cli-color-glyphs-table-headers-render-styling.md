@@ -10,6 +10,7 @@ tags: [pm-tooling, go, cli, ergonomics]
 created: "2026-06-09"
 completed_at: "2026-06-09"
 updated_at: "2026-06-09"
+id: 6fakbec017kj
 ---
 
 # CLI color, glyphs, table headers (render styling)

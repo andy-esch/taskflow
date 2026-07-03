@@ -12,6 +12,7 @@ created: "2026-06-25"
 updated_at: "2026-06-25"
 started_at: "2026-06-25"
 completed_at: "2026-06-25"
+id: 6ffr4wc021q2
 ---
 # Epic mutation: `epic set` + `epic edit` (parity with tasks)
 

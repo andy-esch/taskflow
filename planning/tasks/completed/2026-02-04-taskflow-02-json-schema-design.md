@@ -7,6 +7,7 @@ priority: high
 project: taskflow-bootstrap
 tags: [architecture, json, performance, schema]
 completed_at: 2026-02-04
+id: 6e2bwq002caa
 ---
 
 # TaskFlow 02: JSON Schema & Scalability Design

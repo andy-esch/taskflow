@@ -12,6 +12,7 @@ created: "2026-06-29"
 updated_at: "2026-06-29"
 started_at: "2026-06-29"
 completed_at: "2026-06-29"
+id: 6fh1b7w00hsk
 ---
 
 # Pre-T5 design hardening from the adversarial review

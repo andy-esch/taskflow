@@ -9,6 +9,7 @@ autonomy_level: 3
 tags: [planning-model, frontmatter, domain, draft]
 created: "2026-06-12"
 updated_at: "2026-06-21"
+id: 6fbj87001m03
 ---
 # Task readiness state (draft vs finalized) in frontmatter
 

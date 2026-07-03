@@ -11,6 +11,7 @@ tags: [config, security]
 created: "2026-06-22"
 updated_at: "2026-06-22"
 completed_at: "2026-06-22"
+id: 6fes83r00ztg
 ---
 # Config robustness symlink-safe discovery and TOML escapes
 

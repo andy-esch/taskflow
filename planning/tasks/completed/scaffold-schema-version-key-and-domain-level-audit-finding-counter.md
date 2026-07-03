@@ -11,6 +11,7 @@ created: "2026-06-14"
 updated_at: "2026-06-20"
 started_at: "2026-06-20"
 completed_at: "2026-06-20"
+id: 6fc6vcr02j4x
 ---
 
 # Scaffold schema-version key and domain-level audit finding counter

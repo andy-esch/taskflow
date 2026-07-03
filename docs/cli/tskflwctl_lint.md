@@ -1,6 +1,6 @@
 ## tskflwctl lint
 
-Validate active task and epic frontmatter (--fix auto-repairs tasks)
+Validate active task and epic frontmatter (--fix repairs tasks/audits and assigns missing ids)
 
 ```
 tskflwctl lint [flags]
@@ -17,7 +17,7 @@ tskflwctl lint [flags]
 ### Options
 
 ```
-      --fix    auto-repair task frontmatter (quote ':' values, normalize list fields); epics are reported, not fixed
+      --fix    auto-repair frontmatter: quote ':' values, normalize lists, realign task status, backfill missing task/audit ids; epics are text-only
   -h, --help   help for lint
 ```
 

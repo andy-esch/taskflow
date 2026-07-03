@@ -9,6 +9,7 @@ priority: low
 autonomy_level: 3
 tags: [docs]
 created: "2026-06-25"
+id: 6ffr4wc004k7
 ---
 ## Objective
 

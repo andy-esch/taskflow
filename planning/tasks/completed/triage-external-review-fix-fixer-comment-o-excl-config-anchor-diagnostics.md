@@ -10,6 +10,7 @@ tags: [pm-tooling, go, robustness]
 created: "2026-06-09"
 updated_at: "2026-06-09"
 completed_at: "2026-06-09"
+id: 6fakbec03cct
 ---
 
 # Triage external review: fix fixer-comment, O_EXCL, config anchor, diagnostics

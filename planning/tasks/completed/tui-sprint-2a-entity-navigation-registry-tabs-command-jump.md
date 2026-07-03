@@ -11,6 +11,7 @@ created: "2026-06-11"
 updated_at: "2026-06-11"
 started_at: "2026-06-11"
 completed_at: "2026-06-11"
+id: 6fb7ym401n1y
 ---
 
 # TUI sprint 2a entity navigation (registry, tabs, command-jump)

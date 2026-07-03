@@ -10,6 +10,7 @@ autonomy_level: 3
 tags: [cli, audit, core]
 created: "2026-06-21"
 updated_at: "2026-06-22"
+id: 6feeygw00jmx
 ---
 
 # Audit finding write surface — status write + candidate-list sync

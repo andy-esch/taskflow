@@ -99,6 +99,18 @@ backend already has one:
 | GCS | object generation | `ifGenerationMatch` / `ifGenerationNotMatch` |
 | `serve`/DB | row version | a transaction |
 
+> **Superseded (decided 2026-07-01 — see epic
+> [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]).** The
+> per-backend native tokens above were the early sketch. The decided design is **one
+> backend-agnostic whole-file content hash (SHA-256)** used for *every* backend. A git
+> **blob/commit SHA was explicitly rejected**: it fingerprints *committed* bytes and
+> misses uncommitted working-tree edits (the serve write window), so it would hand a
+> reader a token already stale against the file on disk. `mtime+size` was also rejected
+> (unreliable across machines/containers). The mechanism is unchanged from the row above
+> — reads return the hash as `version`, writes take `ifVersion` → `ErrConflict` — only
+> the token's *definition* is now fixed to a content hash. Tracked in
+> [[version-aware-occ-content-hash-token-and-plain-retry]].
+
 **Granularity is where git pulls ahead.** OCC can be *per-resource* (each task is
 its own file/object — a conflict only when two writers touch the *same* task) or
 *repo-level* (one version for the whole tree). Per-resource is the natural fit and

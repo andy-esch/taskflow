@@ -20,7 +20,8 @@ import (
 
 // TaskJSON is the wire shape of a task inside the --json envelopes.
 type TaskJSON struct {
-	Slug   string `json:"slug" jsonschema:"description=task identifier (filename without .md)"`
+	ID     string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key that survives slug and status changes; absent on tasks created before id assignment"`
+	Slug   string `json:"slug" jsonschema:"description=task slug (filename without .md) — the human handle"`
 	Status string `json:"status" jsonschema:"description=lifecycle status — equals the task's directory under tasks/"`
 	Epic   string `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
 	// The "<=200" cap can't be computed (struct tags are static literals) — the only
@@ -44,7 +45,7 @@ type TaskJSON struct {
 // ToTaskJSON maps a domain task to its wire DTO.
 func ToTaskJSON(t domain.Task) TaskJSON {
 	j := TaskJSON{
-		Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
+		ID: t.ID, Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
 		Description: t.Description, Effort: t.Effort, Tier: t.Tier,
 		Priority: t.Priority, Autonomy: t.Autonomy,
 		Created: t.Created, Updated: t.Updated, RevisitAt: t.RevisitAt, Tags: t.Tags,
@@ -88,7 +89,8 @@ func ToEpicJSON(e core.EpicSummary) EpicJSON {
 
 // AuditJSON is the wire shape of an audit inside the --json envelopes.
 type AuditJSON struct {
-	Slug         string `json:"slug" jsonschema:"description=audit identifier (filename without .md)"`
+	ID           string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key; absent on audits created before id assignment"`
+	Slug         string `json:"slug" jsonschema:"description=audit slug (filename without .md) — the human handle"`
 	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — equals the audit's directory"`
 	Area         string `json:"area,omitempty" jsonschema:"description=subsystem/topic audited"`
 	Date         string `json:"date,omitempty" jsonschema:"description=audit date YYYY-MM-DD (immutable — part of the slug)"`
@@ -108,7 +110,7 @@ type AuditJSON struct {
 // ToAuditJSON maps a domain audit to its wire DTO.
 func ToAuditJSON(a domain.Audit) AuditJSON {
 	return AuditJSON{
-		Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date, Updated: a.Updated,
+		ID: a.ID, Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date, Updated: a.Updated,
 		Findings: a.Findings, OpenFindings: a.OpenFindings,
 		InProgressFindings: a.ActiveFindings, DoneFindings: a.DoneFindings, DroppedFindings: a.DroppedFindings,
 		ReadyToClose: a.Bucket == domain.AuditOpen && a.Settled(),

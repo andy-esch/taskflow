@@ -9,6 +9,7 @@ tags: [ai, generation, architecture]
 deprecated_at: 2026-06-07
 deprecated_reason: Superseded by the scoped tskflwctl design (epic 17-pm-go-cli); old over-ambitious taskflow vision (docker/api/semantic/AI-gen) retired 2026-06-07. Research mined + kept.
 updated_at: 2026-06-07
+id: 6f9yr8m03aws
 ---
 
 # TaskFlow 09a: AI Task Generation Flow

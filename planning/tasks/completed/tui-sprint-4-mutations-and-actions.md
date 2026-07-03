@@ -11,6 +11,7 @@ created: "2026-06-10"
 updated_at: "2026-06-12"
 started_at: "2026-06-12"
 completed_at: "2026-06-12"
+id: 6faxn18000j6
 ---
 
 # TUI sprint 4 mutations and actions

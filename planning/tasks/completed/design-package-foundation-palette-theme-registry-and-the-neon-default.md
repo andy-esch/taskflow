@@ -12,6 +12,7 @@ created: "2026-06-28"
 updated_at: "2026-06-28"
 started_at: "2026-06-28"
 completed_at: "2026-06-28"
+id: 6fgq1n002skz
 ---
 ## Objective
 Stand up `internal/design` as the single home for all concrete color decisions so every surface can later route through it. Additive only — nothing consumes it in this task. `internal/theme` stays untouched (domain-only semantic decisions).

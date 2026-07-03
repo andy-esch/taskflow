@@ -10,6 +10,7 @@ tags: [tui, bubble-tea]
 created: "2026-06-10"
 updated_at: "2026-06-11"
 deprecated_at: "2026-06-11"
+id: 6faxn1802k3e
 ---
 
 # TUI sprint 2 multi-entity navigation and search

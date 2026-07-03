@@ -10,6 +10,7 @@ tags: [pm-tooling, go, refactor]
 created: "2026-06-09"
 completed_at: "2026-06-09"
 updated_at: "2026-06-09"
+id: 6fakbec00ahf
 ---
 
 # Triage Go-idiom review: typed validators, Status.IsActive, date format

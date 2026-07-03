@@ -71,7 +71,19 @@ func LintTask(t Task, validEpic func(string) bool) []Issue {
 	}
 
 	issues = append(issues, MisfiledIssues(t)...)
+	issues = append(issues, MissingIDIssue(t.ID)...)
 	return issues
+}
+
+// MissingIDIssue flags an entity (task or audit) that has no stable id yet — the
+// pre-assignment state a one-time `lint --fix` backfills (ADR-0003). Applies in
+// ANY status: an archived task still needs a stable key for links and reopening,
+// so — like MisfiledIssues — it's checked outside the active-only field block.
+func MissingIDIssue(id string) []Issue {
+	if strings.TrimSpace(id) != "" {
+		return nil
+	}
+	return []Issue{{Field: "id", Message: "missing stable id — `lint --fix` assigns one"}}
 }
 
 // LintEpic returns the frontmatter issues for an epic. Mirrors LintTask, but

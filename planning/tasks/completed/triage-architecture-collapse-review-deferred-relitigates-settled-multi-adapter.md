@@ -10,6 +10,7 @@ tags: [pm-tooling, architecture, docs]
 created: "2026-06-09"
 updated_at: "2026-06-09"
 completed_at: "2026-06-09"
+id: 6fakbec02ctt
 ---
 
 # Triage architecture-collapse review (deferred: relitigates settled multi-adapter design)

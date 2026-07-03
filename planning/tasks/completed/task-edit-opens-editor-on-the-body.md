@@ -11,6 +11,7 @@ created: "2026-06-12"
 updated_at: "2026-06-20"
 started_at: "2026-06-20"
 completed_at: "2026-06-20"
+id: 6fbj87000pys
 ---
 # `task edit` — open $EDITOR on the body
 

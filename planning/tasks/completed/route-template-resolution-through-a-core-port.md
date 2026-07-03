@@ -11,6 +11,7 @@ tags: [architecture, templates, dx]
 created: "2026-06-22"
 updated_at: "2026-06-22"
 completed_at: "2026-06-22"
+id: 6fes83r02bfk
 ---
 # Route template resolution through a core port
 

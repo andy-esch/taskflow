@@ -11,6 +11,7 @@ created: "2026-06-10"
 updated_at: "2026-06-11"
 started_at: "2026-06-10"
 completed_at: "2026-06-10"
+id: 6faxn1800wd1
 ---
 
 # TUI sprint 1 read-only two-pane task browser

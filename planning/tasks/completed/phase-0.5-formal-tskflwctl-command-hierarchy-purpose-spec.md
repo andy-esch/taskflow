@@ -10,6 +10,7 @@ tags: [pm-tooling, go, cli, spec, architecture]
 created: 2026-06-06
 updated_at: "2026-06-09"
 completed_at: "2026-06-09"
+id: 6f9menr03f1y
 ---
 
 # Phase 0.5: formal tskflwctl command hierarchy + purpose spec

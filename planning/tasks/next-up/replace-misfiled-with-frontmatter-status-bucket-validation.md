@@ -9,6 +9,7 @@ priority: medium
 autonomy_level: 3
 tags: [core]
 created: "2026-07-01"
+id: 6fhnydm034th
 ---
 
 # Replace Misfiled with frontmatter status/bucket validation

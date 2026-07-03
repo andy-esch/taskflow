@@ -10,6 +10,7 @@ autonomy_level: 3
 tags: [core, storage]
 created: "2026-07-01"
 updated_at: "2026-07-02"
+id: 6fhnydm03edq
 ---
 
 # Flatten layout: status/bucket to frontmatter, retire status-equals-directory

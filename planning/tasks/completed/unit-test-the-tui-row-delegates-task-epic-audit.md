@@ -11,6 +11,7 @@ tags: [tui]
 created: "2026-06-25"
 updated_at: "2026-06-28"
 completed_at: "2026-06-28"
+id: 6ffr4wc03tgb
 ---
 # Unit-test the TUI row delegates (task / epic / audit)
 

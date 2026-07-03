@@ -11,6 +11,7 @@ created: 2026-06-08
 started_at: 2026-06-08
 updated_at: 2026-06-08
 completed_at: 2026-06-08
+id: 6fa91vg02na1
 ---
 
 # Shell autocomplete: command + dynamic task/audit/epic slug completion

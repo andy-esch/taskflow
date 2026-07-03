@@ -7,6 +7,7 @@ priority: high
 project: taskflow-bootstrap
 tags: [architecture, protobuf, json-schema, contracts]
 completed_at: 2026-02-04
+id: 6e2bwq0037wm
 ---
 
 # TaskFlow 00: Schema & Contracts Strategy

@@ -9,6 +9,7 @@ priority: low
 autonomy_level: 3
 tags: [cli, design]
 created: "2026-06-29"
+id: 6fh1b7w02nyb
 ---
 ## Objective
 Render interactive-picker rows two-tone: the **slug in the theme accent**, the **description dimmed** (the "slug one color / description another" idea; two-line optional). Deferred from [[theme-discovery-commands-glamour-polish-and-a-second-theme]] (T6).

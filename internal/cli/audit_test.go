@@ -25,8 +25,8 @@ func setupAuditRepo(t *testing.T) string {
 		}
 	}
 	write("tasks/ready-to-start/.gitkeep", "") // so Discover anchors here
-	write("audits/open/o.md", "---\narea: dispatcher\n---\n#### H1. t  · **Status:** open\n")
-	write("audits/closed/c.md", "---\narea: web\n---\n#### M1. t  · **Status:** fixed\n")
+	write("audits/open/o.md", "---\nid: 6fjangd7kvh1\narea: dispatcher\n---\n#### H1. t  · **Status:** open\n")
+	write("audits/closed/c.md", "---\nid: 6fjangd7kvh2\narea: web\n---\n#### M1. t  · **Status:** fixed\n")
 	return root
 }
 

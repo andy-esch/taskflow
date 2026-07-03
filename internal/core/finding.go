@@ -199,7 +199,9 @@ func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, e
 		problems []domain.FileProblem
 	)
 	check := func(a domain.Audit, body string) {
-		if iss := domain.LintFindings(string(a.Bucket), domain.ParseFindings(body)); len(iss) > 0 {
+		iss := domain.LintFindings(string(a.Bucket), domain.ParseFindings(body))
+		iss = append(iss, domain.MissingIDIssue(a.ID)...) // audits get a stable id too
+		if len(iss) > 0 {
 			results = append(results, LintResult{Slug: a.Slug, Issues: iss})
 		}
 	}

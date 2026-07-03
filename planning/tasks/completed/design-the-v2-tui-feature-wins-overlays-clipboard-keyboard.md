@@ -12,6 +12,7 @@ created: "2026-06-23"
 updated_at: "2026-06-23"
 started_at: "2026-06-23"
 completed_at: "2026-06-23"
+id: 6ff3hpm014y3
 ---
 # Design the v2 TUI feature wins (overlays / clipboard / cursor / keyboard)
 

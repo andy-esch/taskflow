@@ -11,6 +11,7 @@ created: "2026-06-11"
 started_at: "2026-06-13"
 updated_at: "2026-06-13"
 completed_at: "2026-06-13"
+id: 6fb7ym40100g
 ---
 
 # TUI: cross-link navigation between epics and tasks

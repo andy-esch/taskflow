@@ -12,6 +12,7 @@ created: "2026-06-22"
 updated_at: "2026-06-23"
 started_at: "2026-06-23"
 completed_at: "2026-06-23"
+id: 6fes83r035p9
 ---
 # Linkback integrity — ambient warnings + `doctor`
 

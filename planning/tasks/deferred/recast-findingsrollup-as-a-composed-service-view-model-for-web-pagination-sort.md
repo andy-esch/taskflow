@@ -11,6 +11,7 @@ tags: [architecture, core, web]
 created: "2026-06-28"
 updated_at: "2026-06-28"
 deferred_at: "2026-06-28"
+id: 6fgq1n002whs
 ---
 ## Why
 

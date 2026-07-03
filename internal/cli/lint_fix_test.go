@@ -48,6 +48,58 @@ func TestLintFix_DryRunThenFix(t *testing.T) {
 	}
 }
 
+// TestLintFix_BackfillsMissingID pins the ADR-0003 backfill: plain lint flags a
+// pre-id task, `--fix` mints one from its created date, and the tree comes back
+// clean with the id visible in --json.
+func TestLintFix_BackfillsMissingID(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
+	// Fully valid EXCEPT it predates ids (no id: field).
+	write("tasks/ready-to-start/t.md", "---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n")
+
+	// Plain lint flags the missing id (and exits non-zero).
+	out, err := runRootRC(t, "-C", root, "lint")
+	if err == nil {
+		t.Error("plain lint must flag a missing id")
+	}
+	if !strings.Contains(out, "missing stable id") {
+		t.Errorf("expected a missing-id finding, got: %q", out)
+	}
+
+	// --fix backfills it.
+	if fixOut := runRoot(t, "-C", root, "lint", "--fix"); !strings.Contains(fixOut, "fixed") {
+		t.Errorf("expected a fix report: %q", fixOut)
+	}
+
+	// The task now carries an id, visible in --json.
+	var got struct {
+		Task struct {
+			ID string `json:"id"`
+		} `json:"task"`
+	}
+	showOut := runRoot(t, "-C", root, "task", "show", "t", "--json")
+	if err := json.Unmarshal([]byte(showOut), &got); err != nil {
+		t.Fatalf("task show --json invalid: %v\n%s", err, showOut)
+	}
+	if got.Task.ID == "" {
+		t.Errorf("id should be backfilled, got empty:\n%s", showOut)
+	}
+
+	// And plain lint is clean again.
+	if _, err := runRootRC(t, "-C", root, "lint"); err != nil {
+		t.Errorf("lint should pass after the backfill, got: %v", err)
+	}
+}
+
 // TestLintFix_UnrepairableFileExitsNonZero pins B4: a file the fixer can't
 // repair must be surfaced with a non-zero exit — `lint --fix` previously said
 // nothing and exited 0, leaving the tree broken while claiming success.

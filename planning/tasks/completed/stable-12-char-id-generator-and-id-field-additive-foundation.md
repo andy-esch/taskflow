@@ -12,6 +12,7 @@ created: "2026-07-01"
 updated_at: "2026-07-02"
 started_at: "2026-07-01"
 completed_at: "2026-07-02"
+id: 6fhnydm02bgf
 ---
 
 # Stable 12-char id: generator and id field (additive foundation)

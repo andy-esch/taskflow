@@ -10,6 +10,7 @@ tags: [cli, agents, json, draft]
 created: "2026-06-12"
 updated_at: "2026-06-16"
 completed_at: "2026-06-16"
+id: 6fbj87003e4g
 ---
 # `schema` command for agent self-discovery
 
