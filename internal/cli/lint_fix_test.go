@@ -100,6 +100,67 @@ func TestLintFix_BackfillsMissingID(t *testing.T) {
 	}
 }
 
+// TestLintFix_UnrepairableIDMessage pins the post-fix messaging: a task the
+// backfiller can't date (no date field, no YYYY-MM-DD filename prefix) survives
+// `--fix`, and the "could not auto-repair" output must state the actionable remedy
+// (add a created date) rather than plain lint's misleading "assigns one".
+func TestLintFix_UnrepairableIDMessage(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
+	// Completed (archived, so only the universal id check applies), no date field,
+	// and a non-date-prefixed filename — nothing for the backfiller to date an id from.
+	write("tasks/completed/nodate.md", "---\nstatus: completed\nepic: e1\n---\n# ND\n")
+
+	out, err := runRootRC(t, "-C", root, "lint", "--fix")
+	if err == nil {
+		t.Fatal("lint --fix must fail when an id can't be minted")
+	}
+	if !strings.Contains(out, "could not auto-repair") {
+		t.Errorf("expected a could-not-auto-repair section:\n%s", out)
+	}
+	if !strings.Contains(out, "no date to mint an id from") {
+		t.Errorf("expected the actionable remedy message:\n%s", out)
+	}
+	if strings.Contains(out, "assigns one") {
+		t.Errorf("the misleading post-fix wording leaked:\n%s", out)
+	}
+}
+
+// TestLintFix_InvalidFrontmatterFailsLoud pins the contract: a task file with no
+// `---` block fails loudly (the file is named, the valid shape is described, and
+// `schema task` is pointed to) rather than being misreported as a fixable "missing
+// id" — `lint --fix` must not attempt to synthesize frontmatter for it.
+func TestLintFix_InvalidFrontmatterFailsLoud(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "tasks", "completed", "no-fence.md")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("# Just a heading\n\nnotes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runRootRC(t, "-C", root, "lint", "--fix")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("want exit 11 for invalid frontmatter, got %v", err)
+	}
+	if !strings.Contains(out, "no-fence.md") || !strings.Contains(out, "missing frontmatter") || !strings.Contains(out, "schema task") {
+		t.Errorf("expected a loud, shape-naming problem:\n%s", out)
+	}
+	if strings.Contains(out, "missing stable id") || strings.Contains(out, "no date to mint") {
+		t.Errorf("invalid frontmatter must not be misreported as a missing id:\n%s", out)
+	}
+}
+
 // TestLintFix_UnrepairableFileExitsNonZero pins B4: a file the fixer can't
 // repair must be surfaced with a non-zero exit — `lint --fix` previously said
 // nothing and exited 0, leaving the tree broken while claiming success.

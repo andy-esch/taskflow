@@ -86,6 +86,12 @@ func MissingIDIssue(id string) []Issue {
 	return []Issue{{Field: "id", Message: "missing stable id — `lint --fix` assigns one"}}
 }
 
+// UnrepairedIDMessage restates a missing-id finding that survived `lint --fix`:
+// the backfiller found no date to mint an id from (no created/…/deprecated_at
+// field and no YYYY-MM-DD filename prefix), so plain lint's "assigns one" wording
+// would misdirect — the fix already ran. The fix flow swaps in this remedy.
+const UnrepairedIDMessage = "no date to mint an id from — add a `created: YYYY-MM-DD` field (or a YYYY-MM-DD- filename prefix), then re-run `lint --fix`"
+
 // LintEpic returns the frontmatter issues for an epic. Mirrors LintTask, but
 // epics have no validEpic dependency (they're the join target, not a referrer)
 // and no status-directory drift (status is a flat frontmatter field, not a

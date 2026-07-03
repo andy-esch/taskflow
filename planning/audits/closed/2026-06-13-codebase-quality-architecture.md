@@ -330,7 +330,7 @@ break — if the on-disk layout ever changes, these go stale silently.
 (`store.WatchDirs(root)`), shared by both. Low priority.
 
 #### L9. Stale doc references
-**Status:** partially fixed (2026-06-13)
+**Status:** deferred (2026-06-13)
 **Severity:** Low · **Files:** `internal/tui/model.go:36`, `CLAUDE.md` (sentinel list), `render.go` `CreatedJSON:318-332`
 
 *Resolution:* (a) `Model.root` comment corrected, and (b) `ErrInvalidTransition`

@@ -173,6 +173,27 @@ func TestFixFrontmatter_BackfillsFromLifecycleStamp(t *testing.T) {
 	}
 }
 
+// TestFixFrontmatter_BackfillsFromFilenameDate: a historical task with no date
+// field in its frontmatter still gets an id, dated from the YYYY-MM-DD prefix on
+// its file name — the fallback that lets pre-`created` tasks self-repair instead
+// of stalling under "could not auto-repair".
+func TestFixFrontmatter_BackfillsFromFilenameDate(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, domain.TasksDir, "completed", "2025-10-19-legacy.md")
+	seedFile(t, p, "---\nstatus: completed\nepic: e1\ntags: [x]\n---\n# Legacy\n")
+
+	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+		t.Fatal(err)
+	}
+	got := frontmatterID(t, p)
+	if !id.Valid(got) {
+		t.Errorf("filename-dated task id %q is not valid", got)
+	}
+	if d := id.Time(got).UTC().Format("2006-01-02"); d != "2025-10-19" {
+		t.Errorf("id time = %s, want 2025-10-19 (from the filename prefix)", d)
+	}
+}
+
 func TestMintUniqueID_RetriesPastCollisions(t *testing.T) {
 	seen := map[string]bool{"AAA": true} // AAA already taken
 	calls := 0
