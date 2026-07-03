@@ -416,7 +416,7 @@ func renderTaskMeta(t domain.Task, width int, s *styles) string {
 		detailField(&b, "updated", fmt.Sprintf("%s (%s)", t.Updated, theme.RelativeDate(t.Updated)), s)
 	}
 	if t.Misfiled() {
-		detailField(&b, theme.MarkerWarn.Glyph, s.fg(theme.MarkerWarn.Color, fmt.Sprintf("frontmatter says %q (folder wins)", t.Declared)), s)
+		detailField(&b, theme.MarkerWarn.Glyph, s.fg(theme.MarkerWarn.Color, fmt.Sprintf("filed in %s/ (frontmatter wins)", t.FolderStatus)), s)
 	}
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
 }

@@ -141,7 +141,7 @@ func MisfiledIssues(t Task) []Issue {
 	}
 	return []Issue{{
 		Field: "status",
-		Message: fmt.Sprintf("frontmatter says %q but file is in %s/ — folder wins; `lint --fix` realigns it",
-			t.Declared, t.Status),
+		Message: fmt.Sprintf("frontmatter says %q but file is in %s/ — frontmatter wins; `lint --fix` moves it",
+			t.Status, t.FolderStatus),
 	}}
 }

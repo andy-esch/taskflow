@@ -16,12 +16,18 @@ import (
 
 // FixFrontmatter walks every task, epic, and audit file and applies safe repairs:
 // text-level frontmatter normalization (quote unquoted-colon values, normalize
-// list fields), realigning a drifted task status to its folder, and — for tasks
-// and audits — backfilling a missing stable id (ADR-0003), minted from the
-// entity's own date so it sorts near its real age. Epics keep their NN-slug
-// identity and are text-normalized only. When dryRun is true nothing is written.
+// list fields), relocating a misfiled task to the folder its frontmatter status
+// names (ADR-0003 Phase A: frontmatter is authoritative, so the fix MOVES the file
+// rather than rewriting the status), and — for tasks and audits — backfilling a
+// missing stable id, minted from the entity's own date so it sorts near its real
+// age. Epics keep their NN-slug identity and are text-normalized only. Misfiled
+// moves are collected during the walk and applied after it, so the fix never
+// mutates a directory it is still iterating. When dryRun is true nothing is written.
 func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	var results []domain.FixResult
+	// Misfiled tasks are relocated AFTER the walk (moving a file mid-iteration would
+	// disturb the ReadDir loop it lives in); collected here, applied below.
+	var moves []plannedMove
 	// Every id already on disk, so a backfill never re-mints one; mintUniqueID adds
 	// each id it assigns, so same-date entities in this run stay distinct too.
 	seen := s.knownIDs()
@@ -43,12 +49,6 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 				return fmt.Errorf("read %s: %w", path, err)
 			}
 			fixed, changes := fixFrontmatterText(content)
-			if dirStatus != "" {
-				if realigned, ok := realignStatus(fixed, dirStatus); ok {
-					fixed = realigned
-					changes = append(changes, fmt.Sprintf("status: realigned to folder %q", dirStatus))
-				}
-			}
 			if backfill {
 				withID, ok, err := backfillMissingID(fixed, e.Name(), seen)
 				if err != nil {
@@ -57,6 +57,20 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 				if ok {
 					fixed = withID
 					changes = append(changes, "id: assigned (was missing)")
+				}
+			}
+			// A misfiled task (frontmatter names a valid status that isn't its folder)
+			// is repaired by MOVING the file to match the authority — the fixed content
+			// (text + id repairs) rides along. Collected now, relocated after the walk.
+			if dirStatus != "" {
+				if target, ok := misfiledTarget(fixed, dirStatus); ok {
+					moves = append(moves, plannedMove{
+						from:    path,
+						to:      filepath.Join(s.tasksDir, target.Dir(), e.Name()),
+						content: fixed,
+						changes: append(changes, fmt.Sprintf("status: moved to %s/ to match frontmatter", target)),
+					})
+					continue
 				}
 			}
 			if len(changes) == 0 {
@@ -88,6 +102,39 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 		if err := fixDir(filepath.Join(s.auditsDir, b.Dir()), "", true); err != nil { // audits: text + id backfill
 			return results, err
 		}
+	}
+	// Apply the misfiled-task relocations now the walk is done. A file already at the
+	// target is a real slug collision — skip it (the file stays put, and the re-lint's
+	// duplicate-slug check surfaces the pair) rather than clobber the occupant.
+	taken := map[string]bool{} // targets claimed this run, so a dry-run preview matches the real one
+	for _, mv := range moves {
+		// Skip if the target is occupied — on disk (a pre-existing file) OR by an earlier
+		// pending move this run (two same-slug misfiles racing for one dir). The loser
+		// stays misfiled for the re-lint / dup-slug check; because a dry-run touches
+		// neither disk nor the loser's source, `taken` keeps the preview honest.
+		if taken[mv.to] {
+			continue
+		}
+		if _, err := os.Stat(mv.to); err == nil {
+			continue // target occupied — leave misfiled for the re-lint to flag
+		} else if !os.IsNotExist(err) {
+			return results, fmt.Errorf("stat %s: %w", mv.to, err)
+		}
+		taken[mv.to] = true
+		if !dryRun {
+			if err := os.MkdirAll(filepath.Dir(mv.to), 0o755); err != nil {
+				return results, fmt.Errorf("mkdir %s: %w", filepath.Dir(mv.to), err)
+			}
+			// Write the target first, then remove the source — a crash between the two
+			// leaves a recoverable duplicate (dup-slug lint), never a lost file.
+			if err := writeFileAtomic(mv.to, mv.content, 0o644); err != nil {
+				return results, err
+			}
+			if err := os.Remove(mv.from); err != nil {
+				return results, fmt.Errorf("remove old file %s: %w", mv.from, err)
+			}
+		}
+		results = append(results, domain.FixResult{Path: mv.from, Changes: mv.changes})
 	}
 	// Sweep the tool's own crash-orphaned temp files (housekeeping). Only on a real
 	// run — a dry-run previews repairs and must write/remove nothing. The age +
@@ -229,24 +276,29 @@ func mintUniqueID(millis int64, seen map[string]bool, gen func(int64) string) (s
 	return "", false
 }
 
-// realignStatus rewrites a task's frontmatter status to dirStatus when the
-// declared status is a *valid* but different status (the misfiled case). A
-// foreign/invalid status word is left untouched — the folder governs anyway —
-// and an unparseable file is skipped (the text fixer handles those).
-func realignStatus(content []byte, dirStatus domain.Status) ([]byte, bool) {
+// plannedMove is a misfiled task's relocation, deferred until the walk finishes.
+// content carries any text/id repairs so they ride along with the move.
+type plannedMove struct {
+	from, to string
+	content  []byte
+	changes  []string
+}
+
+// misfiledTarget returns the status directory a task belongs in when its frontmatter
+// names a *valid* status that disagrees with its current folder (dirStatus) — i.e.
+// the file is misfiled and should be relocated to match the authority (ADR-0003
+// Phase A). It's a no-op (ok=false) when the frontmatter status is missing/foreign
+// (the folder governs as a fallback), already agrees with the folder, or won't parse.
+func misfiledTarget(content []byte, dirStatus domain.Status) (domain.Status, bool) {
 	fm, _ := splitFrontmatter(content)
 	var t domain.Task
 	if len(fm) == 0 || yaml.Unmarshal(fm, &t) != nil {
-		return content, false
+		return "", false
 	}
 	if !t.Status.Valid() || t.Status == dirStatus {
-		return content, false
+		return "", false
 	}
-	out, err := updateFrontmatter(content, map[string]any{"status": string(dirStatus)})
-	if err != nil {
-		return content, false
-	}
-	return out, true
+	return t.Status, true
 }
 
 // fixFrontmatterText normalizes a file's frontmatter at the TEXT level — it must

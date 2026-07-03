@@ -22,15 +22,15 @@ func TestService_Lint(t *testing.T) {
 		},
 		tasks: []domain.Task{
 			// Clean active task: no issues.
-			{ID: "6fjangd7kvh1", Slug: "clean", Status: domain.StatusInProgress, Declared: domain.StatusInProgress,
+			{ID: "6fjangd7kvh1", Slug: "clean", Status: domain.StatusInProgress, FolderStatus: domain.StatusInProgress,
 				Epic: "e1", Description: "fine", Tags: []string{"go"}, Tier: 3, Priority: "medium",
 				Effort: "Unknown", Created: "2026-06-12"},
 			// Active with a dangling epic + missing fields: full lint applies.
-			{Slug: "dangling", Status: domain.StatusReadyToStart, Declared: domain.StatusReadyToStart,
+			{Slug: "dangling", Status: domain.StatusReadyToStart, FolderStatus: domain.StatusReadyToStart,
 				Epic: "ghost", Description: "d", Tags: []string{"x"}, Tier: 3, Priority: "medium"},
 			// Archived: only misfiled drift is reported, not missing fields.
-			{Slug: "archived-misfiled", Status: domain.StatusCompleted, Declared: domain.StatusInProgress},
-			{ID: "6fjangd7kvh2", Slug: "archived-clean", Status: domain.StatusCompleted, Declared: domain.StatusCompleted},
+			{Slug: "archived-misfiled", Status: domain.StatusCompleted, FolderStatus: domain.StatusInProgress},
+			{ID: "6fjangd7kvh2", Slug: "archived-clean", Status: domain.StatusCompleted, FolderStatus: domain.StatusCompleted},
 		},
 		problems: []domain.FileProblem{{Path: "x.md", Message: "broken"}},
 	})

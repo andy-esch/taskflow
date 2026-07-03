@@ -184,6 +184,23 @@ func TestSetFields_RejectsUpdatedAt(t *testing.T) {
 	}
 }
 
+// status is not a settable field — a change relocates the file, so it must route
+// through the lifecycle verbs, not an in-place `set` (which would desync the mirror
+// dir from the authoritative frontmatter). Rejected on both the set and unset paths.
+func TestSetFields_RejectsStatus(t *testing.T) {
+	svc := setFieldsRepo(t)
+	if _, err := svc.SetFields("t", map[string]any{"status": "completed"}, false, false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("setting status should be ErrValidation, got %v", err)
+	}
+	if _, err := svc.SetFields("t", map[string]any{"status": domain.UnsetField{}}, false, false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("unsetting status should be ErrValidation, got %v", err)
+	}
+	// --force must not bypass it either (status is structurally special, not a typo).
+	if _, err := svc.SetFields("t", map[string]any{"status": "completed"}, true, false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("--force must not allow setting status, got %v", err)
+	}
+}
+
 // TestSetFields_ListCoercionAgreesWithFix pins the M5 unification: writing a
 // registry list field via `--set` produces the same form `lint --fix` wants,
 // so the tool no longer generates drift its own fixer then repairs.

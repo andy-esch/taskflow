@@ -5,10 +5,11 @@ package domain
 type Task struct {
 	Slug string `yaml:"-"`
 	Path string `yaml:"-"`
-	// Declared is the status the frontmatter literally claimed. Status is the
-	// authoritative one (its directory); the two diverge only when a file is
-	// misfiled — see Misfiled.
-	Declared Status `yaml:"-"`
+	// FolderStatus is the status the file's directory implies (the mirror). Status
+	// is the authoritative one (frontmatter, ADR-0003 Phase A); the two diverge only
+	// when a file is misfiled — the directory hasn't caught up to a frontmatter
+	// status change. See Misfiled.
+	FolderStatus Status `yaml:"-"`
 
 	// ID is the stable 12-char identifier (ADR-0003), minted on create by the core
 	// service. Additive for now: written to new files but not yet resolved on,
@@ -30,10 +31,12 @@ type Task struct {
 	Tags        []string `yaml:"tags"`
 }
 
-// Misfiled reports whether the frontmatter declared a *recognized* status that
-// disagrees with the file's directory (the authoritative Status). A foreign or
-// invalid status word (e.g. legacy "superseded") is not misfiled — the folder
-// simply governs.
+// Misfiled reports whether the file sits in a directory that disagrees with its
+// authoritative (frontmatter) status — the mirror is stale and the file should be
+// moved to match. Guarded on a valid FolderStatus so a Task with no folder context
+// (e.g. one built in a test, or before parseTask records the directory) is never
+// misfiled; a frontmatter word that names no recognized status falls back to the
+// folder in parseTask, so those arrive here equal and aren't misfiled either.
 func (t Task) Misfiled() bool {
-	return t.Declared.Valid() && t.Declared != t.Status
+	return t.FolderStatus.Valid() && t.Status != t.FolderStatus
 }

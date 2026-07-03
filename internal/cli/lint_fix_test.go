@@ -100,6 +100,37 @@ func TestLintFix_BackfillsMissingID(t *testing.T) {
 	}
 }
 
+// `lint --fix` relocates a misfiled task (frontmatter authoritative) to its status
+// dir — end to end, confirming the CLI reports the move and the tree comes back clean.
+func TestLintFix_RelocatesMisfiledTask(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
+	// Misfiled: physically in ready-to-start/, frontmatter says completed.
+	write("tasks/ready-to-start/m.md", "---\nid: 6fjangd7kvbc\nstatus: completed\n---\n# m\n")
+
+	if out := runRoot(t, "-C", root, "lint", "--fix"); !strings.Contains(out, "moved to completed/") {
+		t.Errorf("expected a relocation report: %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "tasks", "completed", "m.md")); err != nil {
+		t.Errorf("file should be relocated to completed/: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "tasks", "ready-to-start", "m.md")); !os.IsNotExist(err) {
+		t.Error("file should be gone from ready-to-start/")
+	}
+	if _, err := runRootRC(t, "-C", root, "lint"); err != nil {
+		t.Errorf("lint should be clean after the relocation: %v", err)
+	}
+}
+
 // TestLintFix_UnrepairableIDMessage pins the post-fix messaging: a task the
 // backfiller can't date (no date field, no YYYY-MM-DD filename prefix) survives
 // `--fix`, and the "could not auto-repair" output must state the actionable remedy

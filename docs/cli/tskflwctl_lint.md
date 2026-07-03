@@ -17,7 +17,7 @@ tskflwctl lint [flags]
 ### Options
 
 ```
-      --fix    auto-repair frontmatter: quote ':' values, normalize lists, realign task status, backfill missing task/audit ids; epics are text-only
+      --fix    auto-repair frontmatter: quote ':' values, normalize lists, relocate a misfiled task to its status dir, backfill missing task/audit ids; epics are text-only
   -h, --help   help for lint
 ```
 

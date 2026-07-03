@@ -89,7 +89,13 @@ import (
 // 1.24: task and audit payloads carry `id` — the stable immutable key minted on
 // create (survives slug/status changes), the task/audit counterpart to an epic's
 // `id`; omitted on entities created before id assignment (pre-migration).
-const SchemaVersion = "1.24"
+// 1.25: task `status` is now AUTHORITATIVE from frontmatter, not the directory
+// (ADR-0003 Phase A). `misfiled`/`declared_status` inverted meaning: `misfiled` = the
+// file's directory disagrees with its (authoritative) frontmatter status, and
+// `declared_status` now carries the stale mirror DIRECTORY the file sits in (was: the
+// frontmatter's claimed status). A file whose directory lags is repaired by `lint
+// --fix` MOVING it to match, not by rewriting the status.
+const SchemaVersion = "1.25"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

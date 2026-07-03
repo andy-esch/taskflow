@@ -203,8 +203,9 @@ func TestEditTask_BrokenFileUnchanged_ErrValidation(t *testing.T) {
 }
 
 // Editing the frontmatter status away from the directory is a misfile, not an
-// error: the write lands, the directory stays the source of truth, and the
-// returned task reports the drift (the cli warns on it).
+// error: the write lands, frontmatter becomes the authority (Status reflects the
+// edit), the folder is the stale mirror, and the returned task reports the drift
+// (the cli warns on it, pointing at `lint --fix`/the verbs to relocate).
 func TestEditTask_StatusDrift_ReportsMisfiled(t *testing.T) {
 	fs, _ := editRepo(t)
 	drifted := strings.Replace(editSeed, "status: ready-to-start", "status: completed", 1)
@@ -217,8 +218,11 @@ func TestEditTask_StatusDrift_ReportsMisfiled(t *testing.T) {
 	if !task.Misfiled() {
 		t.Error("editing status away from the directory should yield a misfiled task")
 	}
-	if string(task.Status) != "ready-to-start" {
-		t.Errorf("the directory stays the source of truth, got status %q", task.Status)
+	if string(task.Status) != "completed" {
+		t.Errorf("frontmatter is authoritative, want status completed, got %q", task.Status)
+	}
+	if string(task.FolderStatus) != "ready-to-start" {
+		t.Errorf("the folder should be recorded as the mirror, got %q", task.FolderStatus)
 	}
 }
 

@@ -1143,7 +1143,7 @@
         },
         "status": {
           "type": "string",
-          "description": "lifecycle status — equals the task's directory under tasks/"
+          "description": "lifecycle status — authoritative"
         },
         "epic": {
           "type": "string",
@@ -1190,10 +1190,11 @@
         },
         "misfiled": {
           "type": "boolean",
-          "description": "Misfiled/Declared surface status≠folder drift to JSON consumers (agents\nare exactly who should detect it); declared_status only when misfiled."
+          "description": "true when the file's directory disagrees with its authoritative frontmatter status (the mirror is stale; lint --fix relocates it)"
         },
         "declared_status": {
-          "type": "string"
+          "type": "string",
+          "description": "the status directory a misfiled file physically sits in (the stale mirror); absent unless misfiled"
         }
       },
       "additionalProperties": false,
@@ -1563,6 +1564,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.24)",
+  "title": "tskflwctl --json output (schema_version 1.25)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

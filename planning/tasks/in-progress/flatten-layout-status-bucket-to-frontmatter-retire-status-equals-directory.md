@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: next-up
+status: in-progress
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: Move status/bucket into frontmatter as source of truth and flatten tasks/audits to one dir each (id-led filenames); update store, layout, WatchPaths, resolution, completion. Per ADR-0003.
 effort: Unknown
@@ -11,6 +11,7 @@ tags: [core, storage]
 created: "2026-07-01"
 updated_at: "2026-07-03"
 id: 6fhnydm03edq
+started_at: "2026-07-03"
 ---
 # Flatten the layout — Phase A: frontmatter-authoritative status/bucket (keep the dirs)
 
@@ -123,16 +124,25 @@ frontmatter, and drift/ambiguity messages must show the authoritative value.
 
 ## Sequenced implementation (each step builds green + is revertible)
 
-1. **Tasks read from frontmatter.** Flip `parseTask` (frontmatter → Status; dir →
-   FolderStatus mirror); invert `Task.Misfiled()`; `resolve` returns the frontmatter
-   status. Nothing else changes (moves still relocate).
-2. **Invert the fixer.** `realignStatus` *moves the file* to the frontmatter's dir
-   (collect-then-apply, outside the walk); make it coexist with the id-backfill walk;
-   re-point lint messages.
-3. **Lock the mutation invariant.** Reject `status` via `SetFields`; confirm `task
-   set` can't set it.
-4. **Contract + presentation.** Redefine `misfiled`/`declared_status`, bump
-   `schema_version` + changelog, flip render/TUI/summary wording; regen goldens + docs.
+1. **[done] Tasks read from frontmatter.** `parseTask` reads Status from frontmatter,
+   records the dir as `FolderStatus`, falls back to the folder when the frontmatter
+   status is invalid; `Task.Misfiled()` inverted. (`resolve` stays folder-returning —
+   see the review corrections; changing it would disable misfiled detection.)
+2. **[done] Invert the fixer.** `realignStatus` → `misfiledTarget`; a misfiled file is
+   MOVED to the frontmatter's dir (collect-then-apply, collision-guarded incl. pending
+   moves, coexists with the id-backfill walk); lint messages re-pointed.
+3. **[done] Lock the mutation invariant.** `SetFields` rejects `status` (set + unset);
+   `moveTask` derives `from` from the frontmatter (no-op only when nothing-to-write AND
+   already-filed, else it relocates — no spurious re-stamp).
+4. **Contract + presentation. ⚠ DON'T MISS `declared_status`:** it inverted meaning in
+   step 1 (it now carries the *folder* value, not the frontmatter's). This step MUST:
+   keep the field name but **redefine its doc + `jsonschema` tag** (it still wrongly says
+   `Status` "equals the task's directory under tasks/"); **bump `schema_version` +
+   changelog** so a consumer sees the flip; and **fix `render_test.go`'s envelope
+   assertion**, which today passes only because the fixture's `Status`/`FolderStatus`
+   were swapped in lockstep (a tautology, not a semantics check). Then flip
+   render/TUI/summary wording, assert the `task edit`/render warning strings (currently
+   unasserted), and regen goldens + docs.
 5. **Audits: the field.** Add `bucket:` to the struct; `CreateAudit` writes
    `bucket: open`.
 6. **Audits: backfill + authority.** `lint --fix` repair backfills `bucket: <dir>`;
@@ -171,3 +181,99 @@ the Misfiled concept (Phase A only inverts it — there's no dir to disagree onc
 ## Related
 - Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
 - ADR [[0003-stable-key-id-addressed-storage]] §2, §4 (and §6 migration for Phase B)
+
+## Code review corrections (2026-07-03)
+
+An external review of the step-1 diff corroborated the plan's remaining steps (2–7)
+and the `lint --fix` data-loss risk — no new blockers, but three corrections to fold
+in when executing:
+
+- **Do NOT change `resolve`/`resolveAudit` to return the frontmatter status** (the
+  review's headline "fix" — it's wrong). Their return feeds `parseTask`/`parseAudit`
+  as the *folder* argument (recorded as `FolderStatus`); returning frontmatter there
+  makes `FolderStatus == Status` always and **silently disables misfiled detection**.
+  The move no-op trap (#7) is real, but the fix is local to the movers: derive
+  `moveTask`/`MoveAudit`'s `from` from the file's **parsed frontmatter** (both already
+  read the content right after resolve), not from `resolve`'s folder value. `resolve`
+  stays folder-returning.
+- **Step 3 is live, not just defense-in-depth:** `status` is a `KnownTaskField`, so
+  `task set status=X` currently writes it **in place** (SetFields' `case "status"`
+  only blocks the *unset* path) — a real tool-driven drift vector today. Step 3 must
+  reject `status`/`bucket` on the SET path too, and replace the now-stale message
+  "status is the directory — use `task <verb>`/`task move`" (service_task.go:148).
+- **Step 4 add:** `TaskJSON.Status`'s jsonschema tag still reads "equals the task's
+  directory under tasks/" (dto.go) — now inaccurate; fix it alongside the
+  `declared_status` redefinition + `schema_version` bump.
+
+## Code review findings (Second Pass — 2026-07-03)
+
+Following the implementation of Step 2 (Fixer inversion), a second code review pass was conducted.
+
+### Verification of Step 2 (Inverted Fixer)
+- **Correctness:** The implementation in [fix.go](file:///Users/andyeschbacher/git/andy-esch/taskflow/internal/store/fix.go) successfully redirects the status realigner to perform moves (`moves []plannedMove`) instead of editing the frontmatter status in-place.
+- **Safety:** The moves are safely collected during the walk and applied sequentially *after* the directory traversal completes. This avoids mutate-while-iterating directory traversal bugs.
+- **Collision Guard:** File relocations safely skip execution if the target path is already occupied, avoiding clobbering other files and leaving the drift to be surfaced via duplicate-slug lints.
+- **Robustness:** Writes the new file atomically before deleting the source, preventing data loss in a crash.
+
+### Remaining Tasks & Actions
+
+1. **Move No-Op Trap (Step 7):** As noted in the corrections, the movers (`moveTask`/`MoveAudit`) must be updated to derive `from` by parsing the frontmatter status/bucket directly from the file content (which is already read immediately after resolving the path), rather than relying on the folder value from `resolve`.
+2. **Audit Support (Steps 5 & 6):** Audit buckets are still entirely directory-bound. We need to:
+   - Change `domain.Audit.Bucket` yaml tag from `yaml:"-"` to `yaml:"bucket"`.
+   - Update `parseAudit` and `GetAuditByPath` to prioritize the frontmatter bucket.
+   - Update `MoveAudit` to rewrite the frontmatter bucket field during relocations.
+   - Add `Audit.Misfiled()` check + lint.
+3. **SetFields Invariants (Step 3):** Lock down `SetFields` to reject both setting and unsetting of `status` and `bucket` fields at the store-level, and update the CLI error message.
+4. **Metadata & Schema (Step 4):** Redefine `TaskJSON.Status` jsonschema description in `dto.go` and bump `SchemaVersion` to `1.25` in `internal/wire/wire.go` with changelog comments.
+5. **Documentation (Step 7):** Update `ARCHITECTURE.md` to document the frontmatter-authoritative mirror design.
+
+## Adversarial review (steps 1–3, 2026-07-03) — fixes + carries
+
+Ran 5 finder agents over the 1–3 diff (2 died on API errors; 3 returned, with
+convergent signal). Fixed in this pass:
+- **moveTask no-op on a misfiled file (HIGH, two finders):** the no-op passed `to`
+  as the folder → mislabeled `FolderStatus`/`Misfiled()` on the return AND stranded a
+  misfiled file whose frontmatter already matched `to`. Now `folder` is kept separate;
+  the no-op fires only when nothing-to-write AND already-correctly-filed, else the file
+  is relocated (opportunistic repair, no spurious re-stamp). Pinned + smoked.
+- **fix.go two-pending-moves to one target (LOW):** added a `taken` set so the
+  collision guard covers pending moves — dry-run preview now matches the real run.
+- **Added coverage:** active-frontmatter-in-archived-folder gets full field lint;
+  CLI `lint --fix` relocation end-to-end.
+
+Carried forward (valid, not step-1–3 defects):
+- **Step 4 MUST:** `declared_status` inverted meaning in step 1 but the wire contract
+  wasn't versioned — bump `schema_version`, redefine the field + its jsonschema tag
+  ("equals the directory" is now false), and fix `render_test.go`'s envelope assertion,
+  which currently passes only because the fixture's Status/FolderStatus were swapped in
+  lockstep (a tautology, not a semantics check).
+- **completion.go still buckets by directory** — a *misfiled* task shows in the wrong
+  completion list (correct for well-filed trees, stale until `lint --fix`). Mirror-based
+  by nature; decide fix-now (read frontmatter per candidate) vs leave to Phase B.
+- **New lint idea:** flag a frontmatter `status:` that is missing or unrecognized
+  (today it silently falls back to the folder — same as the old model, so not a
+  regression). Fits epic [[27-agent-code-review-on-tasks-structured-review-loop]] / the
+  frontmatter-schema validation epic.
+
+## Code review findings (Third Pass — 2026-07-03)
+
+Following the implementation of Step 4 (Contract & Presentation updates) and the fixes for the move no-op trap and fix collision guards, a third code review pass was conducted.
+
+### Verification of Step 4 & Fixes
+- **Wire Contract Alignment:** `wire.SchemaVersion` is successfully bumped to `"1.25"` in [wire.go](file:///Users/andyeschbacher/git/andy-esch/taskflow/internal/wire/wire.go#L92). The DTO jsonschema descriptions and doc comments for `status`, `misfiled`, and `declared_status` are fully aligned with the inverted semantics (frontmatter is authority, folder is mirror).
+- **Golden Files:** All JSON golden test fixtures have been successfully regenerated to match version `"1.25"` and the updated schema tags. All tests pass cleanly.
+- **Wording Updates:** Rendering and TUI layers successfully display the corrected "folder ≠ status" phrasing.
+- **Move No-Op Patch:** `moveTask` correctly evaluates transition status (`from`) against frontmatter while utilizing the folder status to determine if a relocation is needed (opportunistic repair). This ensures files are relocated correctly even when the target status matches the current frontmatter.
+- **Fix Collision Guard:** The `taken` map correctly prevents same-slug misfiled files from colliding during `lint --fix` in both dry-runs and real-runs.
+
+### Remaining Tasks & Actions
+
+1. **Audit Support (Steps 5 & 6):** Audits are still fully directory-bound. The next focus should be:
+   - Make `domain.Audit.Bucket` serializable (`yaml:"bucket"` instead of `yaml:"-"`).
+   - Update `parseAudit`/`GetAuditByPath` to use frontmatter bucket.
+   - Update `MoveAudit` to rewrite the frontmatter bucket field during relocation.
+   - Implement `Audit.Misfiled()` + audit lint.
+   - Re-point findings validation gate to frontmatter bucket.
+2. **SetFields Invariants (Step 3 - defense-in-depth):** While the service-layer correctly guards `status` writes, the store-level mutator `FS.SetFields` in [fsstore.go](file:///Users/andyeschbacher/git/andy-esch/taskflow/internal/store/fsstore.go) does not yet reject `status` or `bucket` keys. Adding this block at the store-level ensures the invariant cannot be bypassed.
+3. **Documentation (Step 7):** Update `ARCHITECTURE.md` to reflect that directories are mirrors and frontmatter is the read authority.
+

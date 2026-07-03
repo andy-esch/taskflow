@@ -353,7 +353,7 @@ func TestService_Summary(t *testing.T) {
 			{Slug: "a", Status: domain.StatusInProgress, Epic: "e1"},
 			{Slug: "b", Status: domain.StatusReadyToStart, Epic: "e1"},
 			{Slug: "c", Status: domain.StatusCompleted, Epic: "e1"},
-			{Slug: "d", Status: domain.StatusCompleted, Declared: domain.StatusReadyToStart}, // misfiled, no epic
+			{Slug: "d", Status: domain.StatusCompleted, FolderStatus: domain.StatusReadyToStart}, // misfiled, no epic
 		},
 	})
 	s, err := svc.Summary()

@@ -48,7 +48,7 @@ func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
 	writeTable(w, st.width, []string{st.Dim("STATUS"), st.Dim("TASK"), st.Dim("UPDATED"), st.Dim("DESCRIPTION")}, rows)
 	fmt.Fprintf(w, "\n%s\n", st.Dim(plural(len(tasks), "task")))
 	if misfiled > 0 {
-		fmt.Fprintf(w, "%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (status ≠ folder; run `lint --fix` to realign)", misfiled)))
+		fmt.Fprintf(w, "%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (folder ≠ status; run `lint --fix` to relocate)", misfiled)))
 	}
 	return nil
 }
@@ -80,7 +80,7 @@ func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 	field("slug", st.Bold(t.Slug))
 	status := st.Status(t.Status)
 	if t.Misfiled() {
-		status += "  " + st.Warn(fmt.Sprintf("⚠ frontmatter says %q", t.Declared))
+		status += "  " + st.Warn(fmt.Sprintf("⚠ filed in %s/", t.FolderStatus))
 	}
 	field("status", status)
 	if t.Epic != "" {
@@ -241,7 +241,7 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("↻ %d deferred due to revisit (snooze date reached; `task ready`/`task next` to resume)", s.RevisitDue)))
 	}
 	if s.Misfiled > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (status ≠ folder; run `lint --fix`)", s.Misfiled)))
+		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (folder ≠ status; run `lint --fix`)", s.Misfiled)))
 	}
 	if s.BadEpicStatus > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d epic(s) with unrecognized status (set active/retired/deprecated; run `lint`)", s.BadEpicStatus)))
