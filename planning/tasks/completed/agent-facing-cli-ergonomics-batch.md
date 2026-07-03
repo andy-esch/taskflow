@@ -11,6 +11,7 @@ created: "2026-06-12"
 started_at: "2026-06-20"
 updated_at: "2026-06-20"
 completed_at: "2026-06-20"
+id: 6fbj87000anh
 ---
 # Agent-facing CLI ergonomics batch
 

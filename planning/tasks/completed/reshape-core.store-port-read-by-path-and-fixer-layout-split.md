@@ -11,6 +11,7 @@ tags: [architecture, performance]
 created: "2026-06-22"
 updated_at: "2026-06-22"
 completed_at: "2026-06-22"
+id: 6fes83r01325
 ---
 # Reshape core.Store port read-by-path and Fixer Layout split
 

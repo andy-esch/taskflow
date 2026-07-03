@@ -12,6 +12,7 @@ created: "2026-06-28"
 updated_at: "2026-06-30"
 started_at: "2026-06-29"
 completed_at: "2026-06-30"
+id: 6fgq1n00054d
 ---
 ## Objective
 Replace the package-global `pal` + `applyTheme` (shipped in [[route-tui-chrome-through-the-palette]]) with a Model-owned palette + styles, so theming is per-instance rather than process-global.

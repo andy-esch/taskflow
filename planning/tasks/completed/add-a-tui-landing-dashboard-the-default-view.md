@@ -12,6 +12,7 @@ created: "2026-06-26"
 updated_at: "2026-06-27"
 started_at: "2026-06-27"
 completed_at: "2026-06-27"
+id: 6fg2ef802k6s
 ---
 
 # Add a TUI landing Dashboard (the default view)

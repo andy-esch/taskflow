@@ -11,6 +11,7 @@ tags: [tui, theme, maintainability]
 created: "2026-06-28"
 updated_at: "2026-06-28"
 completed_at: "2026-06-28"
+id: 6fgq1n003892
 ---
 ## Why
 

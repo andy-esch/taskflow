@@ -11,6 +11,7 @@ tags: [cli]
 created: "2026-06-28"
 updated_at: "2026-06-28"
 completed_at: "2026-06-28"
+id: 6fgq1n0006p2
 ---
 # Make `--body` / `--body-file` mutually exclusive on `task append` + `audit append`
 

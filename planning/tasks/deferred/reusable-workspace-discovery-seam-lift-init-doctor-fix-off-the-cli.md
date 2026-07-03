@@ -11,6 +11,7 @@ tags: [architecture, web]
 created: "2026-06-27"
 updated_at: "2026-06-28"
 deferred_at: "2026-06-28"
+id: 6fgcr2403sjn
 ---
 Audit 2026-06-27-consumer-data-flow-architecture H7. init/doctor/lint --fix + repo discovery bypass core.Service and live CLI-side (root.go resolve, config.* calls), so TUI/web cannot reuse them. Extract 'discover config -> build store -> build service' into a shared Resolve()->Workspace; promote Doctor()/FixFrontmatter() to core.Service; keep init as a cobra-free config function.
 

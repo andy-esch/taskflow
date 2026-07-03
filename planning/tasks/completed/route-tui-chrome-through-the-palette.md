@@ -13,6 +13,7 @@ blocked_by: [design-package-foundation-palette-theme-registry-and-the-neon-defau
 updated_at: "2026-06-28"
 started_at: "2026-06-28"
 completed_at: "2026-06-28"
+id: 6fgq1n0016kj
 ---
 ## Objective
 Make the TUI's structural chrome derive from the palette instead of scattered lipgloss literals.

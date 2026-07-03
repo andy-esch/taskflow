@@ -10,6 +10,7 @@ tags: [pm-tooling, go, cli, ergonomics]
 created: "2026-06-09"
 updated_at: "2026-06-09"
 completed_at: "2026-06-09"
+id: 6fakbec0073w
 ---
 
 # Relative dates and width-aware truncation in task list

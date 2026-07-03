@@ -11,6 +11,7 @@ tags: [store, robustness]
 created: "2026-06-22"
 updated_at: "2026-06-22"
 completed_at: "2026-06-22"
+id: 6fes83r03s90
 ---
 # Crash-recovery signal guard and duplicate-slug repair
 

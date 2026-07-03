@@ -11,6 +11,7 @@ created: "2026-06-11"
 updated_at: "2026-06-11"
 started_at: "2026-06-11"
 completed_at: "2026-06-11"
+id: 6fb7ym400n5q
 ---
 
 # TUI sprint 2b search, status views, and interactive sort

@@ -11,6 +11,7 @@ created: "2026-06-11"
 updated_at: "2026-06-13"
 started_at: "2026-06-12"
 completed_at: "2026-06-13"
+id: 6fb7ym4017sj
 ---
 
 # TUI: glamour markdown rendering with raw/pretty toggle

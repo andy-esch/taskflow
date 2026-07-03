@@ -32,7 +32,7 @@ func setFieldsRepoFS(t *testing.T) (*core.Service, *store.FS) {
 	r := testutil.NewRepo(t)
 	r.Epic("01-e.md", "---\nstatus: active\ndescription: e\n---\n# e\n")
 	r.Task("ready-to-start", "t.md",
-		"---\nstatus: ready-to-start\nepic: 01-e\ndescription: t\ntier: 3\ntags: [seed]\n---\n# t\n")
+		"---\nid: 6fjangd7kvh7\nstatus: ready-to-start\nepic: 01-e\ndescription: t\ntier: 3\ntags: [seed]\n---\n# t\n")
 	fs := store.NewFS(r.Root)
 	return core.NewService(fs), fs
 }

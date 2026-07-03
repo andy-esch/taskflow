@@ -86,7 +86,10 @@ import (
 // 1.23: the `board` envelope (`board --json`) added — the active-work view, tasks
 // grouped by their active status (next-up · ready-to-start · in-progress), each
 // row the same TaskJSON as `task list`.
-const SchemaVersion = "1.23"
+// 1.24: task and audit payloads carry `id` — the stable immutable key minted on
+// create (survives slug/status changes), the task/audit counterpart to an epic's
+// `id`; omitted on entities created before id assignment (pre-migration).
+const SchemaVersion = "1.24"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

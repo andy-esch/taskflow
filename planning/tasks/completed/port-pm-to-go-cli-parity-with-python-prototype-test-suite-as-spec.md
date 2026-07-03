@@ -11,6 +11,7 @@ created: 2026-06-06
 started_at: 2026-06-07
 updated_at: "2026-06-12"
 completed_at: "2026-06-12"
+id: 6f9menr01nsd
 ---
 
 # Port pm to Go CLI (parity with Python prototype + test suite as spec)

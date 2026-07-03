@@ -7,7 +7,7 @@ import (
 
 func cleanTask() Task {
 	return Task{
-		Slug: "good", Status: StatusReadyToStart, Epic: "e1",
+		ID: "6fjangd7kvh0", Slug: "good", Status: StatusReadyToStart, Epic: "e1",
 		Tier: 2, Priority: "high", Effort: "2h", Created: "2026-01-01",
 		Tags: []string{"a"},
 	}

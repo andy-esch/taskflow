@@ -22,7 +22,7 @@ func TestService_Lint(t *testing.T) {
 		},
 		tasks: []domain.Task{
 			// Clean active task: no issues.
-			{Slug: "clean", Status: domain.StatusInProgress, Declared: domain.StatusInProgress,
+			{ID: "6fjangd7kvh1", Slug: "clean", Status: domain.StatusInProgress, Declared: domain.StatusInProgress,
 				Epic: "e1", Description: "fine", Tags: []string{"go"}, Tier: 3, Priority: "medium",
 				Effort: "Unknown", Created: "2026-06-12"},
 			// Active with a dangling epic + missing fields: full lint applies.
@@ -30,7 +30,7 @@ func TestService_Lint(t *testing.T) {
 				Epic: "ghost", Description: "d", Tags: []string{"x"}, Tier: 3, Priority: "medium"},
 			// Archived: only misfiled drift is reported, not missing fields.
 			{Slug: "archived-misfiled", Status: domain.StatusCompleted, Declared: domain.StatusInProgress},
-			{Slug: "archived-clean", Status: domain.StatusCompleted, Declared: domain.StatusCompleted},
+			{ID: "6fjangd7kvh2", Slug: "archived-clean", Status: domain.StatusCompleted, Declared: domain.StatusCompleted},
 		},
 		problems: []domain.FileProblem{{Path: "x.md", Message: "broken"}},
 	})

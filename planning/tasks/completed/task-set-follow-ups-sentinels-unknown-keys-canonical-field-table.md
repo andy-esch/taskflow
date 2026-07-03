@@ -11,6 +11,7 @@ created: "2026-06-12"
 updated_at: "2026-06-12"
 started_at: "2026-06-12"
 completed_at: "2026-06-12"
+id: 6fbj87001d81
 ---
 # `task set` follow-ups (sentinels, unknown keys, canonical field table)
 

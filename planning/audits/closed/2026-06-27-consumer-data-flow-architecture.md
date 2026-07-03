@@ -2,6 +2,7 @@
 schema: 1
 area: consumer-data-flow-architecture
 date: "2026-06-27"
+id: 6fgcr24022z8
 ---
 # Architectural audit — multi-consumer data flow (CLI · TUI · future Web)
 

@@ -12,6 +12,7 @@ created: "2026-06-25"
 updated_at: "2026-06-25"
 started_at: "2026-06-25"
 completed_at: "2026-06-25"
+id: 6ffr4wc03za4
 ---
 # Faithful segmented audit progress bar from per-status finding counts
 

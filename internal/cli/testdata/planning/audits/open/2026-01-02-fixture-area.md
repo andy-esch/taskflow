@@ -1,4 +1,5 @@
 ---
+id: 6fjangd7kvh3
 area: fixture-area
 date: 2026-01-02
 ---

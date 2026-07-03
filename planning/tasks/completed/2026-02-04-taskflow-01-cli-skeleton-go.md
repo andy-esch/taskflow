@@ -7,6 +7,7 @@ priority: high
 project: taskflow-bootstrap
 tags: [cli, python, architecture]
 completed_at: 2026-02-04
+id: 6e2bwq000zs4
 ---
 
 # TaskFlow 01: CLI Skeleton (Go)

@@ -242,7 +242,9 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		if t.Status.IsActive() {
 			issues = domain.LintTask(t, validEpic)
 		} else {
-			issues = domain.MisfiledIssues(t)
+			// Archived tasks skip the field nags but still get the universal checks:
+			// status/folder drift and a missing stable id.
+			issues = append(domain.MisfiledIssues(t), domain.MissingIDIssue(t.ID)...)
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})

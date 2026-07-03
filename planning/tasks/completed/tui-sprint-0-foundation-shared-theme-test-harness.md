@@ -11,6 +11,7 @@ created: "2026-06-10"
 updated_at: "2026-06-10"
 started_at: "2026-06-10"
 completed_at: "2026-06-10"
+id: 6faxn1802tph
 ---
 
 # TUI sprint 0 foundation, shared theme, test harness

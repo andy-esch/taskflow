@@ -27,8 +27,8 @@ func findingsRepo() *fakeStore {
 		// Keying Path to the slug lets the slug-keyed auditBodies map serve both
 		// GetAudit (single-audit) and GetAuditByPath (the cross-audit sweep).
 		audits: []domain.Audit{
-			{Slug: "2026-06-14-gateway", Path: "2026-06-14-gateway", Bucket: domain.AuditOpen},
-			{Slug: "2026-06-10-ingest", Path: "2026-06-10-ingest", Bucket: domain.AuditClosed},
+			{ID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Path: "2026-06-14-gateway", Bucket: domain.AuditOpen},
+			{ID: "6fjangd7kvh6", Slug: "2026-06-10-ingest", Path: "2026-06-10-ingest", Bucket: domain.AuditClosed},
 		},
 		auditBodies: map[string]string{
 			"2026-06-14-gateway": gatewayBody,
@@ -130,7 +130,7 @@ func TestQueryFindings_EmptyTokenDoesNotOverMatch(t *testing.T) {
 
 func TestLintAudits_MultipleIssues(t *testing.T) {
 	fs := &fakeStore{
-		audits:      []domain.Audit{{Slug: "a", Path: "a", Bucket: domain.AuditClosed}},
+		audits:      []domain.Audit{{ID: "6fjangd7kvh8", Slug: "a", Path: "a", Bucket: domain.AuditClosed}},
 		auditBodies: map[string]string{"a": "#### S1. t\n**Status:** opne\n\n#### M1. t\n**Status:** open\n"},
 	}
 	// closed audit: S1 has a typo'd status + M1 is still open → 2 issues.

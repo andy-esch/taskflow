@@ -10,6 +10,7 @@ tags: [pm-tooling, go, robustness]
 created: "2026-06-09"
 completed_at: "2026-06-09"
 updated_at: "2026-06-09"
+id: 6fakbec01wyt
 ---
 
 # Triage agent-readiness review: conflict markers, slug safety, parser fuzzing

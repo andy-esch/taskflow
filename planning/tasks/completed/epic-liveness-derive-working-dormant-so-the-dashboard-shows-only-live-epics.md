@@ -11,6 +11,7 @@ tags: [tui, epics, dashboard]
 created: "2026-06-28"
 updated_at: "2026-06-28"
 completed_at: "2026-06-28"
+id: 6fgq1n002kg5
 ---
 # Epic liveness — derive working/dormant so the dashboard shows only live epics
 

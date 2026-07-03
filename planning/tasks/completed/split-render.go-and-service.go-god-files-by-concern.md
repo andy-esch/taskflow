@@ -11,6 +11,7 @@ tags: [maintainability, refactor]
 created: "2026-06-22"
 updated_at: "2026-06-22"
 completed_at: "2026-06-22"
+id: 6fes83r0319k
 ---
 # Split render.go and service.go god-files by concern
 

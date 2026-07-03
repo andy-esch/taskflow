@@ -8,6 +8,7 @@ priority: low
 autonomy_level: 3
 tags: [web, architecture, research]
 created: "2026-06-13"
+id: 6fbwhsw00a4b
 ---
 
 # Research doc: web companion directions (serve, shared core, GitHub-backed store)

@@ -12,6 +12,7 @@ created: "2026-06-29"
 updated_at: "2026-06-30"
 started_at: "2026-06-30"
 completed_at: "2026-06-30"
+id: 6fh1b7w02xwd
 ---
 ## Objective
 A proper visual + contrast pass on the neon-day (light) palette, beyond the AA text-color fix already landed in [[pre-t5-design-hardening-from-the-adversarial-review]].

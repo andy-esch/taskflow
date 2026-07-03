@@ -9,6 +9,7 @@ priority: medium
 autonomy_level: 3
 tags: [api-contract, templates, dx]
 created: "2026-06-22"
+id: 6fes83r00c8b
 ---
 # Template list output modes and source provenance
 

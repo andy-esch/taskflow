@@ -5,9 +5,13 @@
   "$defs": {
     "AuditJSON": {
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "stable identifier — the immutable key; absent on audits created before id assignment"
+        },
         "slug": {
           "type": "string",
-          "description": "audit identifier (filename without .md)"
+          "description": "audit slug (filename without .md) — the human handle"
         },
         "bucket": {
           "type": "string",
@@ -1129,9 +1133,13 @@
     },
     "TaskJSON": {
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "stable identifier — the immutable key that survives slug and status changes; absent on tasks created before id assignment"
+        },
         "slug": {
           "type": "string",
-          "description": "task identifier (filename without .md)"
+          "description": "task slug (filename without .md) — the human handle"
         },
         "status": {
           "type": "string",
@@ -1555,6 +1563,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.23)",
+  "title": "tskflwctl --json output (schema_version 1.24)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

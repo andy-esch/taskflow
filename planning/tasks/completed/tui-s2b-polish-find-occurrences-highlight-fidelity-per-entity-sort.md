@@ -11,6 +11,7 @@ created: "2026-06-11"
 updated_at: "2026-06-12"
 started_at: "2026-06-12"
 completed_at: "2026-06-12"
+id: 6fb7ym4023q0
 ---
 
 # TUI S2b polish: find occurrences, highlight fidelity, per-entity sort

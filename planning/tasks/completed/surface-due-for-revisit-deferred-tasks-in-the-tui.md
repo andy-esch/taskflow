@@ -12,6 +12,7 @@ created: "2026-06-26"
 updated_at: "2026-06-26"
 started_at: "2026-06-26"
 completed_at: "2026-06-26"
+id: 6fg2ef8014ev
 ---
 
 # Surface "due for revisit" deferred tasks in the TUI

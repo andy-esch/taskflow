@@ -11,6 +11,7 @@ created: "2026-06-12"
 updated_at: "2026-06-16"
 started_at: "2026-06-16"
 completed_at: "2026-06-16"
+id: 6fbj87002cyz
 ---
 
 # TUI: audit bucket-view axis (closed/deferred reachable in-TUI)

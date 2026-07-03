@@ -11,6 +11,7 @@ created: 2026-06-06
 updated_at: 2026-06-07
 started_at: 2026-06-07
 completed_at: 2026-06-07
+id: 6f9menr02b25
 ---
 
 # Go CLI foundation: layout, core/store/cli boundary, DI, test+lint harness

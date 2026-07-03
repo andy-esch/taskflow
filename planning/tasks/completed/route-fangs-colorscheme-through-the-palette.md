@@ -12,6 +12,7 @@ created: "2026-06-29"
 updated_at: "2026-06-30"
 started_at: "2026-06-29"
 completed_at: "2026-06-30"
+id: 6fh1b7w00ysw
 ---
 ## Objective
 Route `cmd/tskflwctl/main.go` `repoColorScheme` (fang help/error/manpage colors) through the design palette instead of the hardcoded `lipgloss.Color("1".."15")` literals — closing the last stray-literal surface the T1-T4 sweep missed.

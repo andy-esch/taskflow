@@ -7,6 +7,7 @@ priority: high
 project: taskflow-bootstrap
 tags: [architecture, monorepo, tooling]
 completed_at: 2026-02-04
+id: 6e2bwq002670
 ---
 
 # TaskFlow 00: Monorepo Structure Design

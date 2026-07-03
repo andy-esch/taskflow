@@ -11,6 +11,7 @@ tags: [tui, review]
 created: "2026-06-27"
 updated_at: "2026-06-28"
 deprecated_at: "2026-06-28"
+id: 6fgcr2403km8
 ---
 # Dashboard review follow-ups (Tier 3 polish + deferred decisions)
 

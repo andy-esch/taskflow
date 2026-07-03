@@ -11,6 +11,7 @@ tags: [cli]
 created: "2026-06-25"
 updated_at: "2026-06-28"
 completed_at: "2026-06-28"
+id: 6ffr4wc01thc
 ---
 # Audit editing faces: `audit edit` + `audit set` + `audit append`
 

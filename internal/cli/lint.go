@@ -13,7 +13,7 @@ func newLintCmd(app *App) *cobra.Command {
 	var fix bool
 	cmd := &cobra.Command{
 		Use:     "lint",
-		Short:   "Validate active task and epic frontmatter (--fix auto-repairs tasks)",
+		Short:   "Validate active task and epic frontmatter (--fix repairs tasks/audits and assigns missing ids)",
 		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --json",
 		Args:    cobra.NoArgs,
 		// Read-only by default; --fix opts into mutation explicitly.
@@ -25,7 +25,7 @@ func newLintCmd(app *App) *cobra.Command {
 			return runLint(app)
 		},
 	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair task frontmatter (quote ':' values, normalize list fields); epics are reported, not fixed")
+	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter: quote ':' values, normalize lists, realign task status, backfill missing task/audit ids; epics are text-only")
 	return cmd
 }
 

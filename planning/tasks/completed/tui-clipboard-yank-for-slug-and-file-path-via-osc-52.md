@@ -12,6 +12,7 @@ created: "2026-06-23"
 updated_at: "2026-06-23"
 started_at: "2026-06-23"
 completed_at: "2026-06-23"
+id: 6ff3hpm00jr3
 ---
 
 # TUI clipboard yank for slug and file path via OSC 52

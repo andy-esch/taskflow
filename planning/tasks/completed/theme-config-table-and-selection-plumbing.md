@@ -13,6 +13,7 @@ blocked_by: [route-tui-chrome-through-the-palette, route-progress-bars-and-the-c
 updated_at: "2026-06-29"
 started_at: "2026-06-29"
 completed_at: "2026-06-29"
+id: 6fgq1n0006y3
 ---
 ## Objective
 Let users select a theme via config/env/flag, and feed it to every routed surface.

@@ -9,6 +9,7 @@ priority: medium
 autonomy_level: 3
 tags: [tui, ux]
 created: "2026-06-23"
+id: 6ff3hpm03h86
 ---
 
 # TUI live light dark re-theme via BackgroundColorMsg

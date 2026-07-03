@@ -2,14 +2,15 @@
 schema: 1
 status: next-up
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
-description: 'Throwaway script: assign ids, rename files, move status/bucket to frontmatter, rewrite refs. Hard cutover; run on a copy and commit; git is the undo. Per ADR-0003 section 6.'
+description: 'Throwaway script for the destructive cutover only: id-led renames, status/bucket to frontmatter, ref rewrites. Run on a copy; git is the undo. id-assignment split to its own lint --fix task.'
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
 tags: [migration, storage]
 created: "2026-07-01"
-updated_at: "2026-07-02"
+updated_at: "2026-07-03"
+id: 6fhnydm029gt
 ---
 
 # One-time migration script (this repo + desirelines)

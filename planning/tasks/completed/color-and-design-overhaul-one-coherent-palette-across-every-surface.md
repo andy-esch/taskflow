@@ -12,6 +12,7 @@ created: "2026-06-25"
 updated_at: "2026-06-29"
 blocked_by: [theme-discovery-commands-glamour-polish-and-a-second-theme]
 completed_at: "2026-06-29"
+id: 6ffr4wc01gtv
 ---
 # Color/design overhaul: one coherent palette across every surface
 

@@ -15,9 +15,9 @@ func TestLint_DuplicateSlug(t *testing.T) {
 		tasks: []domain.Task{
 			// Same slug in two dirs; both archived + folder-matching (the Move-crash
 			// shape), so neither has per-field lint noise — the only issue is the dup.
-			{Slug: "dup", Status: domain.StatusCompleted, Declared: domain.StatusCompleted},
-			{Slug: "dup", Status: domain.StatusDeprecated, Declared: domain.StatusDeprecated},
-			{Slug: "solo", Status: domain.StatusCompleted, Declared: domain.StatusCompleted},
+			{ID: "6fjangd7kvh3", Slug: "dup", Status: domain.StatusCompleted, Declared: domain.StatusCompleted},
+			{ID: "6fjangd7kvh3", Slug: "dup", Status: domain.StatusDeprecated, Declared: domain.StatusDeprecated},
+			{ID: "6fjangd7kvh4", Slug: "solo", Status: domain.StatusCompleted, Declared: domain.StatusCompleted},
 		},
 	})
 	results, _, err := svc.Lint()

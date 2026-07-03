@@ -11,6 +11,7 @@ created: "2026-06-14"
 started_at: "2026-06-14"
 updated_at: "2026-06-14"
 completed_at: "2026-06-14"
+id: 6fc6vcr00hs7
 ---
 
 # Consolidate planning-tree layout into one domain source (completion globs)

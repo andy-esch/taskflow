@@ -11,6 +11,7 @@ created: "2026-06-12"
 updated_at: "2026-06-12"
 started_at: "2026-06-12"
 completed_at: "2026-06-12"
+id: 6fbj870025yw
 ---
 # Align `task new` scaffold with `lint`
 

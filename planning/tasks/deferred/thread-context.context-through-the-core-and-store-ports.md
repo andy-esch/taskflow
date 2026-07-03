@@ -11,6 +11,7 @@ tags: [architecture, web]
 created: "2026-06-27"
 updated_at: "2026-06-28"
 deferred_at: "2026-06-28"
+id: 6fgcr24023yr
 ---
 Audit 2026-06-27-consumer-data-flow-architecture H6. No core/store method takes a context.Context; a web adapter has no cancellation/deadline/tracing path. Add ctx as the first param to the Store ports + Service methods (CLI passes Background, FS checks ctx.Err() at ReadDir/ReadFile loop boundaries). Additive now, flag-day rewrite later.
 

@@ -10,6 +10,7 @@ tags: [go, tui, polish]
 created: "2026-06-12"
 updated_at: "2026-06-12"
 completed_at: "2026-06-12"
+id: 6fbj87003qwr
 ---
 # TUI review polish batch (sort rank, help drift, width, audit scope)
 

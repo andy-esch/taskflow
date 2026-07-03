@@ -10,6 +10,7 @@ tags: [pm-tooling, migration, yaml, data-integrity]
 created: 2026-06-07
 updated_at: "2026-06-09"
 completed_at: "2026-06-09"
+id: 6f9yr8m03xc4
 ---
 
 # Strict-YAML frontmatter: fix pm serialize quoting + backfill invalid values

@@ -11,6 +11,7 @@ tags: [tui, architecture]
 created: "2026-06-22"
 updated_at: "2026-06-22"
 completed_at: "2026-06-22"
+id: 6fes83r01nc2
 ---
 # Make TUI lifecycle action machinery registry-driven
 

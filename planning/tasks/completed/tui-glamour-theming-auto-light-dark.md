@@ -11,6 +11,7 @@ created: "2026-06-12"
 started_at: "2026-06-14"
 updated_at: "2026-06-14"
 completed_at: "2026-06-14"
+id: 6fbj87002ex5
 ---
 
 # TUI glamour theming auto light dark

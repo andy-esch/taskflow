@@ -10,6 +10,7 @@ tags: [pm-tooling, go, robustness, docs]
 created: "2026-06-09"
 updated_at: "2026-06-09"
 completed_at: "2026-06-09"
+id: 6fakbec00fke
 ---
 
 # Harden create-loop and fill docs (post-pm-retirement review)

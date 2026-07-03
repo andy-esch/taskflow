@@ -11,15 +11,21 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/id"
 )
 
-// FixFrontmatter walks every task and epic file and applies safe repairs:
+// FixFrontmatter walks every task, epic, and audit file and applies safe repairs:
 // text-level frontmatter normalization (quote unquoted-colon values, normalize
-// list fields) and — for task files, where the folder is known — realigning a
-// drifted status field to the folder. When dryRun is true nothing is written.
+// list fields), realigning a drifted task status to its folder, and — for tasks
+// and audits — backfilling a missing stable id (ADR-0003), minted from the
+// entity's own date so it sorts near its real age. Epics keep their NN-slug
+// identity and are text-normalized only. When dryRun is true nothing is written.
 func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	var results []domain.FixResult
-	fixDir := func(dir string, dirStatus domain.Status) error {
+	// Every id already on disk, so a backfill never re-mints one; mintUniqueID adds
+	// each id it assigns, so same-date entities in this run stay distinct too.
+	seen := s.knownIDs()
+	fixDir := func(dir string, dirStatus domain.Status, backfill bool) error {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -43,6 +49,16 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 					changes = append(changes, fmt.Sprintf("status: realigned to folder %q", dirStatus))
 				}
 			}
+			if backfill {
+				withID, ok, err := backfillMissingID(fixed, seen)
+				if err != nil {
+					return err
+				}
+				if ok {
+					fixed = withID
+					changes = append(changes, "id: assigned (was missing)")
+				}
+			}
 			if len(changes) == 0 {
 				continue
 			}
@@ -57,16 +73,21 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	}
 
 	// On a mid-run write failure, return the results accumulated so far ALONGSIDE
-	// the error: files in earlier status dirs may already be repaired, and the
-	// caller must be able to report that partial progress rather than discard it
-	// (atomic writes mean each file is whole; only the run is incomplete).
+	// the error: files in earlier dirs may already be repaired, and the caller must
+	// be able to report that partial progress rather than discard it (atomic writes
+	// mean each file is whole; only the run is incomplete).
 	for _, st := range domain.AllStatuses() {
-		if err := fixDir(filepath.Join(s.tasksDir, st.Dir()), st); err != nil {
+		if err := fixDir(filepath.Join(s.tasksDir, st.Dir()), st, true); err != nil {
 			return results, err
 		}
 	}
-	if err := fixDir(s.epicsDir, ""); err != nil { // epics: text-level only
+	if err := fixDir(s.epicsDir, "", false); err != nil { // epics: text-level only, keep NN-slug identity
 		return results, err
+	}
+	for _, b := range domain.AllAuditBuckets() {
+		if err := fixDir(filepath.Join(s.auditsDir, b.Dir()), "", true); err != nil { // audits: text + id backfill
+			return results, err
+		}
 	}
 	// Sweep the tool's own crash-orphaned temp files (housekeeping). Only on a real
 	// run — a dry-run previews repairs and must write/remove nothing. The age +
@@ -78,6 +99,9 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 		for _, st := range domain.AllStatuses() {
 			dirs = append(dirs, filepath.Join(s.tasksDir, st.Dir()))
 		}
+		for _, b := range domain.AllAuditBuckets() {
+			dirs = append(dirs, filepath.Join(s.auditsDir, b.Dir()))
+		}
 		for _, dir := range dirs {
 			for _, p := range sweepStaleTemps(dir, now) {
 				results = append(results, domain.FixResult{Path: p, Changes: []string{"removed stale temp orphan"}})
@@ -85,6 +109,104 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 		}
 	}
 	return results, nil
+}
+
+// knownIDs gathers every stable id already assigned across tasks and audits so a
+// backfill never mints a duplicate. Best-effort: a listing error yields a partial
+// set — mintUniqueID's per-run tracking still prevents new-vs-new collisions.
+func (s *FS) knownIDs() map[string]bool {
+	seen := map[string]bool{}
+	if tasks, _, err := s.ListTasks(); err == nil {
+		for _, t := range tasks {
+			if t.ID != "" {
+				seen[t.ID] = true
+			}
+		}
+	}
+	if audits, _, err := s.ListAudits(); err == nil {
+		for _, a := range audits {
+			if a.ID != "" {
+				seen[a.ID] = true
+			}
+		}
+	}
+	return seen
+}
+
+// backfillMissingID appends a stable id to a file whose frontmatter lacks one,
+// timestamping it from the entity's own date — created, else the audit slug date,
+// else any activity/lifecycle stamp (updated_at, then started/completed/deferred/
+// deprecated_at) — so a backfilled id sorts near the entity's real age. It's a
+// no-op (ok=false) when the file already has an id, has no usable date at all, or
+// won't parse — the re-lint after `--fix` re-flags any id still missing. seen
+// dedups against every id already present or assigned this run.
+func backfillMissingID(content []byte, seen map[string]bool) ([]byte, bool, error) {
+	fm, _ := splitFrontmatter(content)
+	if len(fm) == 0 {
+		return content, false, nil
+	}
+	var meta struct {
+		ID         string `yaml:"id"`
+		Created    string `yaml:"created"`
+		Date       string `yaml:"date"`
+		Updated    string `yaml:"updated_at"`
+		Started    string `yaml:"started_at"`
+		Completed  string `yaml:"completed_at"`
+		Deferred   string `yaml:"deferred_at"`
+		Deprecated string `yaml:"deprecated_at"`
+	}
+	if yaml.Unmarshal(fm, &meta) != nil {
+		return content, false, nil // unparseable — the text fixer / re-lint handles it
+	}
+	if strings.TrimSpace(meta.ID) != "" {
+		return content, false, nil // already has one
+	}
+	// Preference: birth date first, then the last-activity/lifecycle stamps — an
+	// archived task may carry only a completed_at/deprecated_at, which still dates
+	// the id better than nothing.
+	millis, ok := firstDateMillis(meta.Created, meta.Date, meta.Updated,
+		meta.Started, meta.Completed, meta.Deferred, meta.Deprecated)
+	if !ok {
+		return content, false, nil // no usable date to derive the id's timestamp from
+	}
+	newID, ok := mintUniqueID(millis, seen, id.NewAt)
+	if !ok {
+		return content, false, nil
+	}
+	out, err := updateFrontmatter(content, map[string]any{"id": newID})
+	if err != nil {
+		return nil, false, err
+	}
+	return out, true, nil
+}
+
+// firstDateMillis returns the UTC-midnight Unix millis of the first parseable
+// YYYY-MM-DD among candidates (in preference order), false when none parse.
+func firstDateMillis(candidates ...string) (int64, bool) {
+	for _, d := range candidates {
+		if d = strings.TrimSpace(d); d == "" {
+			continue
+		}
+		if t, err := time.Parse("2006-01-02", d); err == nil {
+			return t.UnixMilli(), true
+		}
+	}
+	return 0, false
+}
+
+// mintUniqueID mints an id stamped at millis, re-rolling until it avoids every id
+// in seen. id.NewAt is stateless-random, so each retry re-rolls the 17-bit tail;
+// the cap guards a pathological generator (unreachable with real entropy). The
+// returned id is recorded in seen.
+func mintUniqueID(millis int64, seen map[string]bool, gen func(int64) string) (string, bool) {
+	for i := 0; i < 64; i++ {
+		v := gen(millis)
+		if !seen[v] {
+			seen[v] = true
+			return v, true
+		}
+	}
+	return "", false
 }
 
 // realignStatus rewrites a task's frontmatter status to dirStatus when the

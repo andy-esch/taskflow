@@ -13,6 +13,7 @@ updated_at: "2026-06-29"
 blocked_by: [theme-config-table-and-selection-plumbing]
 started_at: "2026-06-29"
 completed_at: "2026-06-29"
+id: 6fgq1n00235z
 ---
 ## Objective
 Make themes discoverable and prove the registry with a second theme + the deferred polish.

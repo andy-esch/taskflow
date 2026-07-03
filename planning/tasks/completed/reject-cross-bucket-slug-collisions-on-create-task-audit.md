@@ -11,6 +11,7 @@ created: "2026-06-16"
 updated_at: "2026-06-17"
 started_at: "2026-06-17"
 completed_at: "2026-06-17"
+id: 6fcvejg03y38
 ---
 
 # Reject cross-bucket slug collisions on create (task/audit)
