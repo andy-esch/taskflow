@@ -338,6 +338,9 @@ func parseTask(content []byte, path string, dirStatus domain.Status) (domain.Tas
 	if err != nil {
 		return domain.Task{}, err
 	}
+	if fm == nil {
+		return domain.Task{}, missingFrontmatterErr("task", "status, epic, tier, priority, effort, created, tags; see `tskflwctl schema task`")
+	}
 	var t domain.Task
 	if len(fm) > 0 {
 		if err := yaml.Unmarshal(fm, &t); err != nil {

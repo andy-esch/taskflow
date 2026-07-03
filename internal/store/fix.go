@@ -50,7 +50,7 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 				}
 			}
 			if backfill {
-				withID, ok, err := backfillMissingID(fixed, seen)
+				withID, ok, err := backfillMissingID(fixed, e.Name(), seen)
 				if err != nil {
 					return err
 				}
@@ -134,13 +134,15 @@ func (s *FS) knownIDs() map[string]bool {
 }
 
 // backfillMissingID appends a stable id to a file whose frontmatter lacks one,
-// timestamping it from the entity's own date — created, else the audit slug date,
-// else any activity/lifecycle stamp (updated_at, then started/completed/deferred/
-// deprecated_at) — so a backfilled id sorts near the entity's real age. It's a
-// no-op (ok=false) when the file already has an id, has no usable date at all, or
-// won't parse — the re-lint after `--fix` re-flags any id still missing. seen
+// timestamping it from the entity's own date so a backfilled id sorts near its
+// real age. Date sources, in preference order: the created field, then date, then
+// the activity/lifecycle stamps (updated_at, then started/completed/deferred/
+// deprecated_at), and finally a YYYY-MM-DD prefix on the file name (the historical
+// task/audit naming convention) when the frontmatter carries no date at all. It's
+// a no-op (ok=false) when the file already has an id, has no usable date anywhere,
+// or won't parse — the re-lint after `--fix` re-flags any id still missing. seen
 // dedups against every id already present or assigned this run.
-func backfillMissingID(content []byte, seen map[string]bool) ([]byte, bool, error) {
+func backfillMissingID(content []byte, filename string, seen map[string]bool) ([]byte, bool, error) {
 	fm, _ := splitFrontmatter(content)
 	if len(fm) == 0 {
 		return content, false, nil
@@ -167,7 +169,12 @@ func backfillMissingID(content []byte, seen map[string]bool) ([]byte, bool, erro
 	millis, ok := firstDateMillis(meta.Created, meta.Date, meta.Updated,
 		meta.Started, meta.Completed, meta.Deferred, meta.Deprecated)
 	if !ok {
-		return content, false, nil // no usable date to derive the id's timestamp from
+		// No frontmatter date — fall back to a YYYY-MM-DD prefix on the file name,
+		// the historical task/audit naming convention, before giving up.
+		millis, ok = firstDateMillis(dateFromFilename(filename))
+	}
+	if !ok {
+		return content, false, nil // no usable date anywhere to derive the id's timestamp from
 	}
 	newID, ok := mintUniqueID(millis, seen, id.NewAt)
 	if !ok {
@@ -178,6 +185,19 @@ func backfillMissingID(content []byte, seen map[string]bool) ([]byte, bool, erro
 		return nil, false, err
 	}
 	return out, true, nil
+}
+
+// dateFromFilename returns the leading YYYY-MM-DD of a date-prefixed file name
+// (e.g. "2025-10-19-slug.md"), or "" when the name doesn't begin with one — the
+// filename-date fallback backfillMissingID uses when the frontmatter has no date.
+func dateFromFilename(name string) string {
+	if len(name) < 10 {
+		return ""
+	}
+	if _, err := time.Parse("2006-01-02", name[:10]); err != nil {
+		return ""
+	}
+	return name[:10]
 }
 
 // firstDateMillis returns the UTC-midnight Unix millis of the first parseable

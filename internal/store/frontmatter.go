@@ -61,6 +61,17 @@ func splitFrontmatterStrict(content []byte) (frontmatter, body []byte, err error
 	return fm, body, nil
 }
 
+// missingFrontmatterErr reports an entity file with NO `---` block at all —
+// fence-less, or a malformed opening fence (like `---"`) that isn't recognized as
+// one. Distinct from an unterminated fence (splitFrontmatterStrict) and from
+// unparseable YAML (both have a block; this has none). The parsers fail here
+// rather than read the file as an empty entity, which downstream would misreport
+// as a weaker issue (e.g. merely "missing id"). shape names the valid frontmatter
+// so the message describes the fix without attempting one.
+func missingFrontmatterErr(kind, shape string) error {
+	return fmt.Errorf("%w: missing frontmatter — a %s must open with a `---` YAML block (%s)", errBadFrontmatter, kind, shape)
+}
+
 // detectLineEnding returns the file's dominant line ending, so a surgical edit
 // re-emits the frontmatter in the style the file already uses — a CRLF file
 // must not come back with a mixed-ending (LF frontmatter / CRLF body) diff.

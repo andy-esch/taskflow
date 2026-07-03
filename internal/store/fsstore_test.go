@@ -2,6 +2,7 @@ package store
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -55,5 +56,31 @@ func TestFS_ListTasks_StatusFromDirWhenMissing(t *testing.T) {
 	}
 	if len(tasks) != 1 || tasks[0].Status != "completed" {
 		t.Fatalf("got %+v", tasks)
+	}
+}
+
+// TestFS_ListTasks_MissingFrontmatterIsLoud: a fence-less file (or a malformed
+// opening fence like `---"`) is surfaced as a loud FileProblem naming the valid
+// shape — not silently parsed as an empty task, which downstream would misreport
+// as merely "missing id".
+func TestFS_ListTasks_MissingFrontmatterIsLoud(t *testing.T) {
+	root := t.TempDir()
+	writeTask(t, root, "completed", "no-fence.md", "# Just a heading\n\nnotes\n")
+	writeTask(t, root, "completed", "bad-fence.md", "---\"\nstatus: completed\nepic: 01-x\n---\n# X\n")
+
+	tasks, problems, err := NewFS(root).ListTasks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("a file with no valid frontmatter must not parse as a task, got %+v", tasks)
+	}
+	if len(problems) != 2 {
+		t.Fatalf("want 2 loud problems, got %d: %+v", len(problems), problems)
+	}
+	for _, p := range problems {
+		if !strings.Contains(p.Message, "missing frontmatter") || !strings.Contains(p.Message, "schema task") {
+			t.Errorf("problem should name the valid shape, got %q", p.Message)
+		}
 	}
 }
