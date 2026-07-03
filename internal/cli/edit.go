@@ -63,12 +63,12 @@ func newTaskEditCmd(app *App) *cobra.Command {
 				return nil
 			}
 			fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), "updated", app.Style.Bold(task.Slug))
-			// status == directory: editing the frontmatter `status:` can't move a
-			// task (and `lint --fix` would revert it). Flag the drift and point at the
-			// verb that actually changes status, rather than letting it land silently.
+			// Frontmatter status is authoritative (Phase A), but editing `status:` here
+			// doesn't relocate the mirror file — so the task is now misfiled until moved.
+			// Flag the drift and point at what relocates it (`lint --fix`, or the verbs).
 			if task.Misfiled() {
-				fmt.Fprintf(app.ErrOut, "%s frontmatter says status: %q but the file is in %q — use `task move`/`task <verb>` to change status\n",
-					app.Style.Warn("⚠"), task.Declared, task.Status)
+				fmt.Fprintf(app.ErrOut, "%s status is now %q but the file is still in %q/ — run `lint --fix` (or `task move`/`task <verb>`) to relocate it\n",
+					app.Style.Warn("⚠"), task.Status, task.FolderStatus)
 			}
 			return nil
 		},

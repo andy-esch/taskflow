@@ -64,17 +64,18 @@ func TestLintTask_BadDate(t *testing.T) {
 }
 
 func TestMisfiledIssues(t *testing.T) {
-	// A recognized status that disagrees with the folder is flagged.
-	if got := MisfiledIssues(Task{Status: StatusCompleted, Declared: StatusReadyToStart}); len(got) == 0 {
-		t.Error("expected a misfiled issue for ready-to-start in completed/")
+	// The directory disagrees with the authoritative (frontmatter) status → flagged.
+	if got := MisfiledIssues(Task{Status: StatusReadyToStart, FolderStatus: StatusCompleted}); len(got) == 0 {
+		t.Error("expected a misfiled issue for a ready-to-start task filed in completed/")
 	}
-	// A foreign/legacy status word is tolerated (folder governs).
-	if got := MisfiledIssues(Task{Status: StatusCompleted, Declared: Status("superseded")}); len(got) != 0 {
+	// Directory matches the status → not misfiled. (A foreign frontmatter word falls
+	// back to the folder in parseTask, so it arrives here with Status == FolderStatus.)
+	if got := MisfiledIssues(Task{Status: StatusCompleted, FolderStatus: StatusCompleted}); len(got) != 0 {
 		t.Errorf("foreign status should not be flagged: %+v", got)
 	}
-	// Agreement is clean.
-	if got := MisfiledIssues(Task{Status: StatusCompleted, Declared: StatusCompleted}); len(got) != 0 {
-		t.Errorf("matching status should not be flagged: %+v", got)
+	// A Task with no folder context (FolderStatus unset) is never misfiled.
+	if got := MisfiledIssues(Task{Status: StatusCompleted}); len(got) != 0 {
+		t.Errorf("a task with no folder context should not be flagged: %+v", got)
 	}
 }
 

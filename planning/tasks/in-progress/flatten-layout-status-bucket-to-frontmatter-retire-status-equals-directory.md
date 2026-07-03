@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: next-up
+status: in-progress
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: Move status/bucket into frontmatter as source of truth and flatten tasks/audits to one dir each (id-led filenames); update store, layout, WatchPaths, resolution, completion. Per ADR-0003.
 effort: Unknown
@@ -11,6 +11,7 @@ tags: [core, storage]
 created: "2026-07-01"
 updated_at: "2026-07-03"
 id: 6fhnydm03edq
+started_at: "2026-07-03"
 ---
 # Flatten the layout — Phase A: frontmatter-authoritative status/bucket (keep the dirs)
 
@@ -171,3 +172,26 @@ the Misfiled concept (Phase A only inverts it — there's no dir to disagree onc
 ## Related
 - Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
 - ADR [[0003-stable-key-id-addressed-storage]] §2, §4 (and §6 migration for Phase B)
+
+## Code review corrections (2026-07-03)
+
+An external review of the step-1 diff corroborated the plan's remaining steps (2–7)
+and the `lint --fix` data-loss risk — no new blockers, but three corrections to fold
+in when executing:
+
+- **Do NOT change `resolve`/`resolveAudit` to return the frontmatter status** (the
+  review's headline "fix" — it's wrong). Their return feeds `parseTask`/`parseAudit`
+  as the *folder* argument (recorded as `FolderStatus`); returning frontmatter there
+  makes `FolderStatus == Status` always and **silently disables misfiled detection**.
+  The move no-op trap (#7) is real, but the fix is local to the movers: derive
+  `moveTask`/`MoveAudit`'s `from` from the file's **parsed frontmatter** (both already
+  read the content right after resolve), not from `resolve`'s folder value. `resolve`
+  stays folder-returning.
+- **Step 3 is live, not just defense-in-depth:** `status` is a `KnownTaskField`, so
+  `task set status=X` currently writes it **in place** (SetFields' `case "status"`
+  only blocks the *unset* path) — a real tool-driven drift vector today. Step 3 must
+  reject `status`/`bucket` on the SET path too, and replace the now-stale message
+  "status is the directory — use `task <verb>`/`task move`" (service_task.go:148).
+- **Step 4 add:** `TaskJSON.Status`'s jsonschema tag still reads "equals the task's
+  directory under tasks/" (dto.go) — now inaccurate; fix it alongside the
+  `declared_status` redefinition + `schema_version` bump.

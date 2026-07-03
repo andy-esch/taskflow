@@ -347,11 +347,14 @@ func parseTask(content []byte, path string, dirStatus domain.Status) (domain.Tas
 			return domain.Task{}, fmt.Errorf("%w: %s", errBadFrontmatter, frontmatterError(fm, err))
 		}
 	}
-	// The directory is the source of truth for status — always. The frontmatter
-	// value is kept as Declared so drift (a misfiled file) can be surfaced, but
-	// it never overrides where the file physically lives.
-	t.Declared = t.Status
-	t.Status = dirStatus
+	// Frontmatter status is the authority (ADR-0003 Phase A); the directory is a
+	// mirror, recorded as FolderStatus so drift (a misfiled file) can be surfaced.
+	// When frontmatter names no recognized status (missing, or a legacy word), the
+	// folder governs as a fallback so the task still lists and resolves.
+	t.FolderStatus = dirStatus
+	if !t.Status.Valid() {
+		t.Status = dirStatus
+	}
 	t.Slug = strings.TrimSuffix(filepath.Base(path), ".md")
 	t.Path = path
 	return t, nil

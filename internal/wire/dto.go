@@ -52,7 +52,7 @@ func ToTaskJSON(t domain.Task) TaskJSON {
 	}
 	if t.Misfiled() {
 		j.Misfiled = true
-		j.Declared = string(t.Declared)
+		j.Declared = string(t.FolderStatus)
 	}
 	return j
 }

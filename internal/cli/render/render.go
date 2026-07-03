@@ -80,7 +80,7 @@ func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 	field("slug", st.Bold(t.Slug))
 	status := st.Status(t.Status)
 	if t.Misfiled() {
-		status += "  " + st.Warn(fmt.Sprintf("⚠ frontmatter says %q", t.Declared))
+		status += "  " + st.Warn(fmt.Sprintf("⚠ filed in %s/", t.FolderStatus))
 	}
 	field("status", status)
 	if t.Epic != "" {

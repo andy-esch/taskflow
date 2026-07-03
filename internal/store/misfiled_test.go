@@ -8,7 +8,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-func TestParseTask_FolderIsAuthoritative(t *testing.T) {
+func TestParseTask_FrontmatterIsAuthoritative(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "completed", "drifted.md", "---\nstatus: ready-to-start\n---\n# x\n") // misfiled
 	writeTask(t, root, "completed", "legacy.md", "---\nstatus: superseded\n---\n# x\n")      // foreign vocab
@@ -23,12 +23,16 @@ func TestParseTask_FolderIsAuthoritative(t *testing.T) {
 		by[tk.Slug] = tk
 	}
 
-	if m := by["drifted"]; m.Status != domain.StatusCompleted || m.Declared != domain.StatusReadyToStart || !m.Misfiled() {
-		t.Errorf("drifted: status=%q declared=%q misfiled=%v (want completed/ready-to-start/true)",
-			m.Status, m.Declared, m.Misfiled())
+	// Frontmatter wins: the file in completed/ declaring ready-to-start reads as
+	// ready-to-start, with the folder captured as the (stale) mirror → misfiled.
+	if m := by["drifted"]; m.Status != domain.StatusReadyToStart || m.FolderStatus != domain.StatusCompleted || !m.Misfiled() {
+		t.Errorf("drifted: status=%q folder=%q misfiled=%v (want ready-to-start/completed/true)",
+			m.Status, m.FolderStatus, m.Misfiled())
 	}
+	// A foreign/legacy word isn't a valid status, so the folder governs as a fallback
+	// and the file is not misfiled.
 	if l := by["legacy"]; l.Status != domain.StatusCompleted || l.Misfiled() {
-		t.Errorf("legacy foreign vocab should not be misfiled: status=%q misfiled=%v", l.Status, l.Misfiled())
+		t.Errorf("legacy foreign vocab should fall back to the folder: status=%q misfiled=%v", l.Status, l.Misfiled())
 	}
 	if c := by["clean"]; c.Misfiled() {
 		t.Errorf("clean task wrongly flagged misfiled")

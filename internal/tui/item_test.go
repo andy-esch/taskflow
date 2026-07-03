@@ -65,10 +65,10 @@ func TestTaskDelegateRow(t *testing.T) {
 	}
 }
 
-// A misfiled task (declared status ≠ its directory) shows the ⚠ marker between the
+// A misfiled task (frontmatter status ≠ its directory) shows the ⚠ marker between the
 // status glyph and the slug — the data-integrity cue.
 func TestTaskDelegateRow_Misfiled(t *testing.T) {
-	task := domain.Task{Slug: "beta", Status: domain.StatusInProgress, Declared: domain.StatusReadyToStart, Updated: "2020-01-02"}
+	task := domain.Task{Slug: "beta", Status: domain.StatusInProgress, FolderStatus: domain.StatusReadyToStart, Updated: "2020-01-02"}
 	if !task.Misfiled() {
 		t.Fatal("setup: task should be misfiled")
 	}

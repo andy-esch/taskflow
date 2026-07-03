@@ -52,10 +52,10 @@ func TestFindingStatusOrder_CoversRegistry(t *testing.T) {
 }
 
 var sampleTasks = []domain.Task{
-	{Slug: "alpha", Status: domain.StatusInProgress, Declared: domain.StatusInProgress,
+	{Slug: "alpha", Status: domain.StatusInProgress, FolderStatus: domain.StatusInProgress,
 		Epic: "e1", Description: "first task", Tier: 2, Priority: "high",
 		Created: "2026-06-01", Updated: "2026-06-10", Tags: []string{"go", "cli"}},
-	{Slug: "beta", Status: domain.StatusReadyToStart, Declared: domain.StatusCompleted}, // misfiled
+	{Slug: "beta", Status: domain.StatusReadyToStart, FolderStatus: domain.StatusCompleted}, // misfiled
 }
 
 func TestTasksJSON_Envelope(t *testing.T) {
@@ -310,7 +310,7 @@ func TestSummaryOutputs(t *testing.T) {
 			{Status: domain.StatusInProgress, Count: 2},
 			{Status: domain.StatusCompleted, Count: 5},
 		},
-		InProgress: []domain.Task{{Slug: "alpha", Status: domain.StatusInProgress, Declared: domain.StatusInProgress}},
+		InProgress: []domain.Task{{Slug: "alpha", Status: domain.StatusInProgress, FolderStatus: domain.StatusInProgress}},
 		Epics:      []core.EpicSummary{{Epic: domain.Epic{ID: "01-x"}, Total: 2, Done: 1}},
 		OpenAudits: []domain.Audit{{Slug: "2026-06-01-audit-x", Bucket: domain.AuditOpen, Area: "store", Findings: 4, OpenFindings: 1, DoneFindings: 3}},
 		Misfiled:   1,

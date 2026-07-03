@@ -351,10 +351,11 @@ func TestAuditNew_RefusesClobber(t *testing.T) {
 
 func TestList_MisfiledMarker(t *testing.T) {
 	root := freshRepo(t)
-	// A file in ready-to-start/ (active, so it shows) whose frontmatter claims a
-	// different recognized status → misfiled, marked with ⚠.
+	// A file in ready-to-start/ whose frontmatter claims a different (active) status:
+	// the frontmatter wins (in-progress, so it shows), the folder is the stale mirror
+	// → misfiled, marked with ⚠.
 	mustWrite(t, filepath.Join(root, "tasks", "ready-to-start", "drift.md"),
-		"---\nstatus: completed\nepic: e\ndescription: d\ntier: 3\npriority: low\neffort: x\ncreated: 2026-06-09\ntags: [a]\n---\n# x\n")
+		"---\nstatus: in-progress\nepic: e\ndescription: d\ntier: 3\npriority: low\neffort: x\ncreated: 2026-06-09\ntags: [a]\n---\n# x\n")
 	out := runRoot(t, "-C", root, "task", "list")
 	if !strings.Contains(out, "⚠") {
 		t.Errorf("expected a ⚠ misfiled marker:\n%q", out)
@@ -366,10 +367,10 @@ func TestList_MisfiledMarker(t *testing.T) {
 
 func TestLint_FlagsMisfiledArchivedTask(t *testing.T) {
 	root := freshRepo(t)
-	// A completed/ file with a stale active status — archived, so field lint is
-	// skipped, but the drift must still surface.
-	mustWrite(t, filepath.Join(root, "tasks", "completed", "old.md"),
-		"---\nstatus: in-progress\n---\n# x\n")
+	// A deprecated/ file whose frontmatter says completed — archived either way, so
+	// field lint is skipped, but the dir/frontmatter drift must still surface.
+	mustWrite(t, filepath.Join(root, "tasks", "deprecated", "old.md"),
+		"---\nid: 6fjangd7kvh9\nstatus: completed\n---\n# x\n")
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint"})
@@ -377,7 +378,7 @@ func TestLint_FlagsMisfiledArchivedTask(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected lint to fail on a misfiled archived task")
 	}
-	if !strings.Contains(out.String(), "old") || !strings.Contains(out.String(), "folder") {
+	if !strings.Contains(out.String(), "old") || !strings.Contains(out.String(), "moves it") {
 		t.Errorf("expected a misfiled report for 'old':\n%s", out.String())
 	}
 }
