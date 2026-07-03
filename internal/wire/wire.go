@@ -83,7 +83,10 @@ import (
 // status moves) the way tasks already are. For epics it is distinct from the
 // derived task-activity date; for audits it advances on edits while `date` stays
 // the immutable slug. A pure relocation (audit bucket move) does not change it.
-const SchemaVersion = "1.22"
+// 1.23: the `board` envelope (`board --json`) added — the active-work view, tasks
+// grouped by their active status (next-up · ready-to-start · in-progress), each
+// row the same TaskJSON as `task list`.
+const SchemaVersion = "1.23"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

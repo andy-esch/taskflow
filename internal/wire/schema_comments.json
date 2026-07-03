@@ -50,6 +50,8 @@
   "github.com/andy-esch/taskflow/internal/wire.AuditMutationEnvelope": "AuditMutationEnvelope is `audit append --json`: the reloaded audit, dry_run, and the resulting body — the audit counterpart to TaskMutationEnvelope.",
   "github.com/andy-esch/taskflow/internal/wire.AuditShowEnvelope": "AuditShowEnvelope is `audit show --json`.",
   "github.com/andy-esch/taskflow/internal/wire.AuditsEnvelope": "AuditsEnvelope is `audit list --json`.",
+  "github.com/andy-esch/taskflow/internal/wire.BoardColumnJSON": "BoardColumnJSON is one status column of the board.",
+  "github.com/andy-esch/taskflow/internal/wire.BoardEnvelope": "BoardEnvelope is `board --json`: the active-work pipeline, tasks grouped by status.",
   "github.com/andy-esch/taskflow/internal/wire.CountByJSON": "CountByJSON is one bucket of a finding breakdown — an urgency value or a top-level component, and its count.",
   "github.com/andy-esch/taskflow/internal/wire.CreatedEnvelope": "CreatedEnvelope is `task/epic/audit new --json`.",
   "github.com/andy-esch/taskflow/internal/wire.CreatedItem": "CreatedItem is the created document inside CreatedEnvelope.",

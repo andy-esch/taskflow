@@ -30,6 +30,20 @@ var allStatuses = []Status{
 // AllStatuses returns every lifecycle status, in display order.
 func AllStatuses() []Status { return allStatuses }
 
+// ActiveStatuses returns the active-pipeline statuses (those Status.IsActive
+// reports) in display order — the working set a pipeline/board view iterates. It's
+// AllStatuses filtered by IsActive, so "the active set" has one definition and one
+// order, owned here in the domain rather than re-derived per use case.
+func ActiveStatuses() []Status {
+	out := make([]Status, 0, len(allStatuses))
+	for _, st := range allStatuses {
+		if st.IsActive() {
+			out = append(out, st)
+		}
+	}
+	return out
+}
+
 // ParseStatus validates s and returns the typed Status. The failure wraps
 // ErrValidation (exit 11 at the CLI) and enumerates the valid statuses — a typo
 // must be a loud error, not a silently empty result.

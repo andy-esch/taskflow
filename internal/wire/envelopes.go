@@ -43,6 +43,33 @@ func ToTasksEnvelope(tasks []domain.Task, problems []domain.FileProblem) TasksEn
 	return e
 }
 
+// BoardEnvelope is `board --json`: the active-work pipeline, tasks grouped by status.
+type BoardEnvelope struct {
+	SchemaVersion string               `json:"schema_version"`
+	Columns       []BoardColumnJSON    `json:"columns"`
+	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+}
+
+// BoardColumnJSON is one status column of the board.
+type BoardColumnJSON struct {
+	Status string     `json:"status"`
+	Tasks  []TaskJSON `json:"tasks"`
+}
+
+// ToBoardEnvelope builds the `board --json` envelope value: each active status a
+// column, tasks projected to the same TaskJSON as `task list`.
+func ToBoardEnvelope(b core.Board) BoardEnvelope {
+	e := BoardEnvelope{SchemaVersion: SchemaVersion, Columns: make([]BoardColumnJSON, 0, len(b.Columns)), Unreadable: b.Problems}
+	for _, c := range b.Columns {
+		col := BoardColumnJSON{Status: string(c.Status), Tasks: make([]TaskJSON, 0, len(c.Tasks))}
+		for _, t := range c.Tasks {
+			col.Tasks = append(col.Tasks, ToTaskJSON(t))
+		}
+		e.Columns = append(e.Columns, col)
+	}
+	return e
+}
+
 // TaskShowEnvelope is `task show --json`.
 type TaskShowEnvelope struct {
 	SchemaVersion string   `json:"schema_version"`
@@ -509,6 +536,7 @@ type DoctorProblem struct {
 // their shared types) into one schema document's $defs.
 type jsonEnvelopes struct {
 	Tasks         TasksEnvelope         `json:"tasks"`
+	Board         BoardEnvelope         `json:"board"`
 	TaskShow      TaskShowEnvelope      `json:"task_show"`
 	TaskMutation  TaskMutationEnvelope  `json:"task_mutation"`
 	EpicMutation  EpicMutationEnvelope  `json:"epic_mutation"`

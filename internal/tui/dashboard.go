@@ -9,7 +9,8 @@ import (
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
-// The dashboard is the TUI's landing screen — the in-app counterpart of
+// The dashboard is the TUI's landing screen — labeled "Overview" to users (the
+// internal identifiers keep the shorter "dash" name) and the in-app counterpart of
 // `tskflwctl status`. It's NOT an entityTab (no list/filter/sort); it's a
 // composite of read-only widgets rendered from one core.Summary, with a cursor
 // over the navigable rows. Selecting a row jumps into the relevant tab/view

@@ -34,7 +34,7 @@ func TestModel_DashboardIsDefaultLanding(t *testing.T) {
 		t.Fatal("the TUI should land on the dashboard by default")
 	}
 	v := ansi.Strip(m.View().Content)
-	for _, want := range []string{"dashboard", "in progress", "epics", "needs attention"} {
+	for _, want := range []string{"overview", "in progress", "epics", "needs attention"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("dashboard view should show %q:\n%s", want, v)
 		}
@@ -88,7 +88,7 @@ func TestModel_DashboardRevisitRowOpensView(t *testing.T) {
 // TestModel_DashboardCommand pins the :dashboard / :d commands (the dashboard tab
 // is otherwise `:`-unreachable) — both return to the landing screen from a tab.
 func TestModel_DashboardCommand(t *testing.T) {
-	for _, word := range []string{"dashboard", "d"} {
+	for _, word := range []string{"overview", "o"} {
 		m := loaded(t, 120, 40) // starts on the tasks tab
 		if m.onDash {
 			t.Fatal("setup: should be on a tab, not the dashboard")
@@ -107,7 +107,7 @@ func TestModel_CommandHintListsCommands(t *testing.T) {
 	tm, _ := m.Update(press(":"))
 	m = tm.(Model)
 	all := m.commandHint()
-	for _, w := range []string{"dashboard", "tasks", "revisit"} {
+	for _, w := range []string{"overview", "tasks", "revisit"} {
 		if !strings.Contains(all, w) {
 			t.Errorf("empty `:` hint should list %q, got %q", w, all)
 		}
