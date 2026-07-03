@@ -55,8 +55,8 @@ type Audit struct {
 	Date   string      `yaml:"date"`
 	// Updated is the audit's own last-edited date (stamped by edit/append). Unlike
 	// Date — immutable, part of the slug — this advances on each content edit. A
-	// bucket move (close/reopen/defer) does NOT touch it: it changes no frontmatter or
-	// body, only the directory.
+	// bucket move (close/reopen/defer) rewrites the `bucket:` frontmatter and relocates
+	// the file, but does NOT touch this stamp.
 	Updated string `yaml:"updated_at"`
 
 	Findings int `yaml:"-"`

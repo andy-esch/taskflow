@@ -110,3 +110,41 @@ func TestMoveAudit_WritesBucketFrontmatter(t *testing.T) {
 		t.Errorf("MoveAudit must rewrite the bucket frontmatter:\n%s", b)
 	}
 }
+
+// lint --fix must NOT relocate a misfiled audit into a non-open bucket while it still has
+// open findings — that would create the bucket↔state violation MoveAudit refuses (and the
+// re-lint could never repair). It stays put, flagged.
+func TestFixFrontmatter_MisfiledAuditWithOpenFindings_NotRelocated(t *testing.T) {
+	root := t.TempDir()
+	writeAudit(t, root, "open", "2026-01-02-of.md",
+		"---\nid: 6fjjt6s9ttz4\nbucket: closed\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** open\n")
+
+	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(root + "/audits/open/2026-01-02-of.md"); err != nil {
+		t.Errorf("audit with open findings must not be relocated into closed/: %v", err)
+	}
+	if _, err := os.Stat(root + "/audits/closed/2026-01-02-of.md"); !os.IsNotExist(err) {
+		t.Error("no closed/ copy should be created (bucket↔state gate)")
+	}
+}
+
+// A foreign/legacy bucket word is NOT clobbered by the backfill — only a truly absent
+// bucket is filled (a bad value is the re-lint's job to surface, not the repair's to eat).
+func TestFixFrontmatter_ForeignBucketNotClobbered(t *testing.T) {
+	root := t.TempDir()
+	writeAudit(t, root, "open", "2026-01-02-fb.md",
+		"---\nid: 6fjjt6s9ttz5\nbucket: archived\narea: x\ndate: 2026-01-02\n---\n# x\n")
+
+	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(root + "/audits/open/2026-01-02-fb.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "bucket: archived") {
+		t.Errorf("a foreign bucket word must not be overwritten by backfill:\n%s", b)
+	}
+}
