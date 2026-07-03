@@ -289,6 +289,36 @@ func SummaryJSON(w io.Writer, s core.Summary) error {
 	return wire.EncodeJSON(w, wire.ToSummaryEnvelope(s))
 }
 
+// BoardHuman renders the active-work board: one section per status (with its
+// count), each a table of tasks (slug · priority · description). The active-work
+// counterpart of SummaryHuman's aggregation dashboard.
+func BoardHuman(w io.Writer, st Style, b core.Board) error {
+	for i, c := range b.Columns {
+		if i > 0 {
+			fmt.Fprintln(w)
+		}
+		fmt.Fprintf(w, "%s %s\n", st.Status(c.Status), st.Dim(fmt.Sprintf("(%d)", len(c.Tasks))))
+		if len(c.Tasks) == 0 {
+			fmt.Fprintf(w, "  %s\n", st.Dim("(none)"))
+			continue
+		}
+		rows := make([][]string, 0, len(c.Tasks))
+		for _, t := range c.Tasks {
+			rows = append(rows, []string{"  " + st.Bold(t.Slug), st.Priority(t.Priority), t.Description})
+		}
+		writeTable(w, st.width, nil, rows)
+	}
+	if len(b.Problems) > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable file(s) (run `lint`)", len(b.Problems))))
+	}
+	return nil
+}
+
+// BoardJSON writes the active-work board as a versioned envelope.
+func BoardJSON(w io.Writer, b core.Board) error {
+	return wire.EncodeJSON(w, wire.ToBoardEnvelope(b))
+}
+
 // VersionHuman prints the CLI version.
 func VersionHuman(w io.Writer, st Style, version string) {
 	fmt.Fprintf(w, "%s %s\n", st.Bold("tskflwctl"), version)

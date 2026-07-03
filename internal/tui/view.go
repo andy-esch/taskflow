@@ -84,7 +84,7 @@ func (m Model) View() tea.View {
 // the entity you're on shows up in the terminal's tab bar.
 func (m Model) windowTitle() string {
 	if m.onDash {
-		return "tskflwctl · dashboard"
+		return "tskflwctl · " + overviewName
 	}
 	if id := m.selectedID(); id != "" {
 		return "tskflwctl · " + id
@@ -249,7 +249,7 @@ func max1(n int) int {
 // of the entity tabs as the landing surface.
 func (m Model) tabStrip() string {
 	if m.width < 60 {
-		name := "dashboard"
+		name := overviewName
 		if !m.onDash {
 			name = m.cur().name
 		}
@@ -257,9 +257,9 @@ func (m Model) tabStrip() string {
 	}
 	parts := make([]string, 0, len(m.tabs)+1)
 	if m.onDash {
-		parts = append(parts, m.st.activeTab.Render("dashboard"))
+		parts = append(parts, m.st.activeTab.Render(overviewName))
 	} else {
-		parts = append(parts, m.st.dim("dashboard"))
+		parts = append(parts, m.st.dim(overviewName))
 	}
 	for i, t := range m.tabs {
 		if !m.onDash && i == m.active {

@@ -31,7 +31,7 @@ func TestView_WindowTitleFallsBackToTab(t *testing.T) {
 		t.Errorf("WindowTitle = %q, want %q", got, "tskflwctl · "+m.cur().name)
 	}
 	m.onDash = true
-	if got := m.View().WindowTitle; got != "tskflwctl · dashboard" {
+	if got := m.View().WindowTitle; got != "tskflwctl · overview" {
 		t.Errorf("on the dashboard the title should be the dashboard, got %q", got)
 	}
 }

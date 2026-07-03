@@ -134,6 +134,52 @@
       ],
       "description": "AuditsEnvelope is `audit list --json`."
     },
+    "BoardColumnJSON": {
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/TaskJSON"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "status",
+        "tasks"
+      ],
+      "description": "BoardColumnJSON is one status column of the board."
+    },
+    "BoardEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/BoardColumnJSON"
+          },
+          "type": "array"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "columns"
+      ],
+      "description": "BoardEnvelope is `board --json`: the active-work pipeline, tasks grouped by status."
+    },
     "CountByJSON": {
       "properties": {
         "key": {
@@ -1401,6 +1447,9 @@
         "tasks": {
           "$ref": "#/$defs/TasksEnvelope"
         },
+        "board": {
+          "$ref": "#/$defs/BoardEnvelope"
+        },
         "task_show": {
           "$ref": "#/$defs/TaskShowEnvelope"
         },
@@ -1478,6 +1527,7 @@
       "type": "object",
       "required": [
         "tasks",
+        "board",
         "task_show",
         "task_mutation",
         "epic_mutation",
@@ -1505,6 +1555,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.22)",
+  "title": "tskflwctl --json output (schema_version 1.23)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

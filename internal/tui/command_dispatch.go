@@ -11,9 +11,9 @@ import (
 
 // dispatchCommand resolves the typed `:` word to an entity tab or a task status
 // view and applies it; an unknown word reopens the bar with an inline error.
-// isDashboardWord reports whether a `:`-command word selects the landing
-// dashboard (`:dashboard`, or the `:d` shorthand).
-func isDashboardWord(word string) bool { return word == "dashboard" || word == "d" }
+// isOverviewWord reports whether a `:`-command word selects the landing
+// overview (`:overview`, or the `:o` shorthand).
+func isOverviewWord(word string) bool { return word == overviewName || word == "o" }
 
 // commandHint lists the `:` commands matching what's typed so far (all of them on
 // an empty prompt) — inline discovery of the command vocabulary, narrowing as you
@@ -36,7 +36,7 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 	if word == "" {
 		return m, nil
 	}
-	if isDashboardWord(word) {
+	if isOverviewWord(word) {
 		return m, m.enterDash()
 	}
 	for i, t := range m.tabs {
@@ -96,8 +96,8 @@ func (m Model) commandOptions() []string {
 	for _, tr := range m.cur().transitions {
 		add(tr.verb)
 	}
-	add("dashboard")
-	add("d")
+	add(overviewName)
+	add("o") // the :o shorthand (matches isOverviewWord); completion offers it, palette omits it
 	return opts
 }
 
@@ -154,7 +154,7 @@ func (m Model) paletteCommands() []string {
 			out = append(out, w)
 		}
 	}
-	add("dashboard") // the landing screen (omit the :d shorthand — palette avoids near-dupes)
+	add(overviewName) // the landing screen (omit the :o shorthand — palette avoids near-dupes)
 	for _, t := range m.tabs {
 		add(t.name)
 		for _, w := range t.viewWords() {
@@ -212,7 +212,7 @@ func (m *Model) runPaletteItem(it paletteItem) tea.Cmd {
 // since the palette has no command-bar line to re-focus. A verb acts on the
 // underlying selected row, exactly like `:`.
 func (m *Model) runPaletteCommand(word string) tea.Cmd {
-	if isDashboardWord(word) {
+	if isOverviewWord(word) {
 		return m.enterDash()
 	}
 	for i, t := range m.tabs {

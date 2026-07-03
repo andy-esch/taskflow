@@ -48,6 +48,9 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		emit func(io.Writer) error
 	}{
 		{"TasksEnvelope", func(w io.Writer) error { return emit(w, ToTasksEnvelope([]domain.Task{task}, nil)) }},
+		{"BoardEnvelope", func(w io.Writer) error {
+			return emit(w, ToBoardEnvelope(core.Board{Columns: []core.BoardColumn{{Status: domain.StatusInProgress, Tasks: []domain.Task{task}}}}))
+		}},
 		{"TaskShowEnvelope", func(w io.Writer) error { return emit(w, ToTaskShowEnvelope(task, "# body")) }},
 		{"TaskMutationEnvelope", func(w io.Writer) error { return emit(w, ToTaskMutationEnvelope(task, "# new body", true)) }},
 		{"EpicMutationEnvelope", func(w io.Writer) error { return emit(w, ToEpicMutationEnvelope(epic, true)) }},
