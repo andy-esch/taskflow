@@ -104,14 +104,15 @@ func bucketFromPath(path string) (domain.AuditBucket, error) {
 	return bucket, nil
 }
 
-// MoveAudit relocates an audit to another bucket (close/reopen/defer). Moving to
-// the current bucket is an idempotent no-op. The bucket directory is the state,
-// so only the file moves (no frontmatter rewrite).
+// MoveAudit relocates an audit to another bucket (close/reopen/defer) and rewrites its
+// authoritative `bucket:` frontmatter to match (ADR-0003 Phase A). Moving to the bucket
+// it already declares, when the file is already there, is an idempotent no-op; a
+// misfiled audit (folder ≠ frontmatter bucket) is relocated to match without a rewrite.
 func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
 	if !to.Valid() {
 		return domain.Audit{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
 	}
-	path, from, err := s.resolveAudit(slug)
+	path, folder, err := s.resolveAudit(slug)
 	if err != nil {
 		return domain.Audit{}, err
 	}
@@ -119,24 +120,15 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	if err != nil {
 		return domain.Audit{}, fmt.Errorf("read audit %s: %w", path, err)
 	}
-	if from == to {
-		return parseAudit(content, path, to)
+	// `from` is the AUTHORITATIVE bucket (frontmatter), not the folder resolve returned;
+	// `folder` is the mirror, kept to decide whether a relocation is still owed.
+	from := folder
+	if cur, perr := parseAudit(content, path, folder); perr == nil {
+		from = cur.Bucket
 	}
-	// Destination filename from the RESOLVED path, never the query (fuzzy
-	// resolution must not rename the file to the abbreviation).
-	canonical := strings.TrimSuffix(filepath.Base(path), ".md")
-	newDir := filepath.Join(s.auditsDir, to.Dir())
-	newPath := filepath.Join(newDir, canonical+".md")
-	// Parse before the rename: a malformed file must fail with the audit still
-	// in its original bucket, not move and then report failure.
-	a, err := parseAudit(content, newPath, to)
-	if err != nil {
-		return domain.Audit{}, err
-	}
-	// Bucket↔state invariant (the same rule `audit lint` enforces): a non-open
-	// bucket must have no still-open findings. Refuse the move rather than write a
-	// state the tool's own linter immediately rejects — resolve or defer the
-	// findings first. Runs before the dry-run return so a preview fails identically.
+	// Bucket↔state invariant (the same rule `audit lint` enforces): a non-open bucket
+	// must have no still-open findings. Refuse rather than write a state the linter
+	// immediately rejects. Runs before the dry-run return so a preview fails identically.
 	if to != domain.AuditOpen {
 		_, body := splitFrontmatter(content)
 		if open := domain.CountOpenFindings(domain.ParseFindings(string(body))); open > 0 {
@@ -145,24 +137,53 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 				domain.ErrValidation, slug, open, to)
 		}
 	}
+	// A true no-op writes nothing AND needs no relocation — already in the target dir with
+	// the target bucket. A misfiled audit whose frontmatter already equals `to` still
+	// relocates (folder ≠ to), carrying its frontmatter verbatim.
+	if from == to && folder == to {
+		return parseAudit(content, path, folder)
+	}
+	newContent := content
+	if from != to {
+		newContent, err = updateFrontmatter(content, map[string]any{"bucket": string(to)})
+		if err != nil {
+			return domain.Audit{}, err
+		}
+	}
+	// Destination filename from the RESOLVED path, never the query (fuzzy resolution
+	// must not rename the file to the abbreviation).
+	canonical := strings.TrimSuffix(filepath.Base(path), ".md")
+	newDir := filepath.Join(s.auditsDir, to.Dir())
+	newPath := filepath.Join(newDir, canonical+".md")
+	// Parse before committing: a file that wouldn't read back fails with nothing moved.
+	a, err := parseAudit(newContent, newPath, to)
+	if err != nil {
+		return domain.Audit{}, err
+	}
 	if dryRun {
-		return a, nil // resolved + parsed; only the rename is skipped
+		return a, nil // resolved + parsed; only the write is skipped
 	}
 	if testHookBeforeMoveAuditWrite != nil {
 		testHookBeforeMoveAuditWrite()
 	}
-	// Re-resolve immediately before the rename (compare-and-swap), like Move/
-	// SetFields: a concurrent relocation may have already moved this slug to another
-	// bucket, so renaming from the now-stale path would fail with a generic error
-	// (exit 1) instead of the exit-14 retry signal. Fail cleanly with nothing moved.
+	// Re-resolve immediately before the write (compare-and-swap): a concurrent relocation
+	// may have already moved this slug, so writing from the stale path would leave a
+	// duplicate. Fail cleanly with nothing moved (exit-14 retry signal).
 	if curPath, _, err := s.resolveAudit(slug); err != nil || curPath != path {
 		return domain.Audit{}, fmt.Errorf("audit %q changed on disk during move; retry: %w", slug, domain.ErrConflict)
 	}
 	if err := os.MkdirAll(newDir, 0o755); err != nil {
 		return domain.Audit{}, fmt.Errorf("mkdir %s: %w", newDir, err)
 	}
-	if err := os.Rename(path, newPath); err != nil {
-		return domain.Audit{}, fmt.Errorf("move audit: %w", err)
+	// Write the target first, then remove the source — a crash between leaves a
+	// recoverable duplicate, never a lost file (mirrors task Move).
+	if err := writeFileAtomic(newPath, newContent, 0o644); err != nil {
+		return domain.Audit{}, err
+	}
+	if newPath != path {
+		if err := os.Remove(path); err != nil {
+			return domain.Audit{}, fmt.Errorf("remove old audit file %s: %w", path, err)
+		}
 	}
 	return a, nil
 }
@@ -225,7 +246,13 @@ func parseAuditWithFindings(content []byte, path string, bucket domain.AuditBuck
 	}
 	a.Slug = strings.TrimSuffix(filepath.Base(path), ".md")
 	a.Path = path
-	a.Bucket = bucket
+	// Frontmatter bucket is the authority (ADR-0003 Phase A); the directory is a mirror,
+	// recorded as FolderBucket so drift (a misfiled audit) can be surfaced. A missing or
+	// foreign frontmatter bucket falls back to the folder so the audit still lists.
+	a.FolderBucket = bucket
+	if !a.Bucket.Valid() {
+		a.Bucket = bucket
+	}
 	// The finding grammar (and "what each status means for progress") lives in the
 	// domain, so the store just records the tally ParseFindings + TallyFindings report.
 	findings := domain.ParseFindings(string(body))

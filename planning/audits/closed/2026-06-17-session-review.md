@@ -2,6 +2,7 @@
 area: session-review
 date: "2026-06-17"
 id: 6fd5r5c001d1
+bucket: closed
 ---
 
 # Audit: session-review — 2026-06-17

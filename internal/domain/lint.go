@@ -145,3 +145,17 @@ func MisfiledIssues(t Task) []Issue {
 			t.Status, t.FolderStatus),
 	}}
 }
+
+// AuditMisfiledIssues reports the bucket/folder mismatch for an audit, if any — the
+// audit analog of MisfiledIssues (frontmatter bucket is authoritative; a stale folder
+// is the drift).
+func AuditMisfiledIssues(a Audit) []Issue {
+	if !a.Misfiled() {
+		return nil
+	}
+	return []Issue{{
+		Field: "bucket",
+		Message: fmt.Sprintf("frontmatter says %q but file is in %s/ — frontmatter wins; `lint --fix` moves it",
+			a.Bucket, a.FolderBucket),
+	}}
+}

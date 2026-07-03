@@ -31,7 +31,7 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	// Every id already on disk, so a backfill never re-mints one; mintUniqueID adds
 	// each id it assigns, so same-date entities in this run stay distinct too.
 	seen := s.knownIDs()
-	fixDir := func(dir string, dirStatus domain.Status, backfill bool) error {
+	fixDir := func(dir string, dirStatus domain.Status, auditBucket domain.AuditBucket, backfill bool) error {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -73,6 +73,28 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 					continue
 				}
 			}
+			// Audits: backfill a missing `bucket:` frontmatter (the pre-Phase-A state,
+			// where bucket was dir-only), then relocate a misfiled audit (frontmatter
+			// bucket ≠ its folder) to match — same collect-then-apply as tasks.
+			if auditBucket != "" {
+				withBucket, ok, err := backfillMissingBucket(fixed, auditBucket)
+				if err != nil {
+					return err
+				}
+				if ok {
+					fixed = withBucket
+					changes = append(changes, "bucket: assigned (was missing)")
+				}
+				if target, ok := auditMisfiledTarget(fixed, auditBucket); ok {
+					moves = append(moves, plannedMove{
+						from:    path,
+						to:      filepath.Join(s.auditsDir, target.Dir(), e.Name()),
+						content: fixed,
+						changes: append(changes, fmt.Sprintf("bucket: moved to %s/ to match frontmatter", target)),
+					})
+					continue
+				}
+			}
 			if len(changes) == 0 {
 				continue
 			}
@@ -91,15 +113,15 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	// be able to report that partial progress rather than discard it (atomic writes
 	// mean each file is whole; only the run is incomplete).
 	for _, st := range domain.AllStatuses() {
-		if err := fixDir(filepath.Join(s.tasksDir, st.Dir()), st, true); err != nil {
+		if err := fixDir(filepath.Join(s.tasksDir, st.Dir()), st, "", true); err != nil {
 			return results, err
 		}
 	}
-	if err := fixDir(s.epicsDir, "", false); err != nil { // epics: text-level only, keep NN-slug identity
+	if err := fixDir(s.epicsDir, "", "", false); err != nil { // epics: text-level only, keep NN-slug identity
 		return results, err
 	}
 	for _, b := range domain.AllAuditBuckets() {
-		if err := fixDir(filepath.Join(s.auditsDir, b.Dir()), "", true); err != nil { // audits: text + id backfill
+		if err := fixDir(filepath.Join(s.auditsDir, b.Dir()), "", b, true); err != nil { // audits: text + id + bucket backfill + misfiled relocation
 			return results, err
 		}
 	}
@@ -299,6 +321,48 @@ func misfiledTarget(content []byte, dirStatus domain.Status) (domain.Status, boo
 		return "", false
 	}
 	return t.Status, true
+}
+
+// backfillMissingBucket adds `bucket: <dir>` to an audit whose frontmatter lacks a
+// recognized bucket — the pre-Phase-A state, where bucket was dir-only. A no-op
+// (ok=false) when the frontmatter already names a valid bucket, or the file won't parse.
+func backfillMissingBucket(content []byte, dirBucket domain.AuditBucket) ([]byte, bool, error) {
+	fm, _ := splitFrontmatter(content)
+	if len(fm) == 0 {
+		return content, false, nil
+	}
+	var meta struct {
+		Bucket domain.AuditBucket `yaml:"bucket"`
+	}
+	if yaml.Unmarshal(fm, &meta) != nil {
+		return content, false, nil
+	}
+	if meta.Bucket.Valid() {
+		return content, false, nil // already has one
+	}
+	out, err := updateFrontmatter(content, map[string]any{"bucket": string(dirBucket)})
+	if err != nil {
+		return nil, false, err
+	}
+	return out, true, nil
+}
+
+// auditMisfiledTarget returns the bucket dir an audit belongs in when its frontmatter
+// names a valid bucket that disagrees with its folder (dirBucket) — a misfiled audit to
+// relocate. A no-op when the frontmatter bucket is missing/foreign (the folder governs)
+// or already agrees.
+func auditMisfiledTarget(content []byte, dirBucket domain.AuditBucket) (domain.AuditBucket, bool) {
+	fm, _ := splitFrontmatter(content)
+	var meta struct {
+		Bucket domain.AuditBucket `yaml:"bucket"`
+	}
+	if len(fm) == 0 || yaml.Unmarshal(fm, &meta) != nil {
+		return "", false
+	}
+	if !meta.Bucket.Valid() || meta.Bucket == dirBucket {
+		return "", false
+	}
+	return meta.Bucket, true
 }
 
 // fixFrontmatterText normalizes a file's frontmatter at the TEXT level — it must

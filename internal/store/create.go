@@ -117,6 +117,7 @@ func auditFields(a domain.Audit) []fmField {
 	return []fmField{
 		{"schema", domain.FileSchemaVersion},
 		{"id", a.ID},
+		{"bucket", string(a.Bucket)},
 		{"area", a.Area},
 		{"date", a.Date},
 	}

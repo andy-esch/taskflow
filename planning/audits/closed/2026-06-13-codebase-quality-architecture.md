@@ -2,6 +2,7 @@
 area: codebase (cli, core, store, domain, tui, theme, render)
 date: "2026-06-13"
 id: 6fbwhsw01mm7
+bucket: closed
 ---
 
 # Audit: code quality & architecture — tskflwctl

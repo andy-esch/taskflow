@@ -1,0 +1,66 @@
+---
+schema: 1
+id: 6fjjpfg16ss5
+status: ready-to-start
+epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
+description: 'lint --fix misfiled-move: 3 dup-slug-gated edges — chained moves skip order-dependently, dry-run diverges from real, a skipped move drops text/id repairs. Non-destructive. From Phase-A review.'
+effort: Unknown
+tier: 3
+priority: medium
+autonomy_level: 3
+tags: [core, storage]
+created: "2026-07-03"
+updated_at: "2026-07-03"
+---
+# Harden lint --fix misfiled-move for dup-slug edge cases
+
+## Objective
+
+The Phase-A `lint --fix` misfiled-move (store/fix.go — collect `plannedMove` during
+the walk, apply after) has three low-severity edge cases, all gated behind an
+already-dup-slug-broken tree (the same slug in two status dirs, itself flagged by
+`duplicateSlugIssues`). Non-destructive: a second `lint --fix` converges. Surfaced by
+the Phase-A adversarial review (2026-07-03); deferred from the flatten task to keep the
+1–4 PR low-risk.
+
+## The three edges (store/fix.go)
+
+1. **Chained-move skip (order-dependent).** When file A's target dir is occupied by
+   file B (same slug) that is itself scheduled to move away, applying A first sees B
+   still on disk → skips A as "occupied," even though B will vacate. Whether the chain
+   resolves depends on `AllStatuses()` walk order.
+2. **Dry-run ≠ real run for chains.** The real run removes an applied move's source
+   (freeing a slot a later move can claim); the dry-run removes nothing, so the later
+   move sees the slot occupied and is skipped. `lint --fix --dry-run` thus previews a
+   different move set than `lint --fix` performs — contradicting the `taken`-map
+   comment's "so a dry-run preview matches the real one."
+3. **Skipped move drops the file's text/id repairs.** Text-normalization + id-backfill
+   for a misfiled file are folded into `plannedMove.content` and only written if the
+   move applies. If the move is skipped (target occupied), those valid in-place repairs
+   are discarded — the file stays both misfiled AND unrepaired until the collision is
+   resolved.
+
+## Recommended fix
+
+- **Decouple in-place repairs from the relocation.** Write text/id repairs to the
+  source *during* the walk (so they persist regardless of the move), and make the move
+  a pure relocation applied after. Fixes #3 directly.
+- **Compute occupancy against the planned final state, not live disk.** A target is
+  "occupied" only if a file is there AND it is not itself a pending-move source; order
+  the applies (or reserve targets) so a chain resolves deterministically and the
+  dry-run matches. Fixes #1 and #2.
+- Tests: chained same-slug moves converge in one pass, deterministically; dry-run
+  preview == real run for a chain; a skipped move still persists the file's id/text
+  repairs.
+
+## Out of scope / notes
+
+- All three require a same-slug-in-two-dirs collision, which `duplicateSlugIssues`
+  already flags — the user is told to resolve the dup first. Non-destructive.
+- Don't reintroduce the mutate-while-iterating hazard: any relocation still applies
+  after the walk completes.
+
+## Related
+
+- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
+- [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]] (Phase A) — where the misfiled-move was introduced.
