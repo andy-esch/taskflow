@@ -252,6 +252,12 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 // SetFields surgically updates frontmatter fields on a task (no status/dir
 // change) and writes the file atomically in place.
 func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error) {
+	// Defense-in-depth: a status change relocates the file, so it must go through Move,
+	// never an in-place field write (the core SetFields already rejects it). A direct
+	// store caller writing status here would desync the mirror dir from the frontmatter.
+	if _, ok := updates["status"]; ok {
+		return domain.Task{}, fmt.Errorf("%w: status is not a settable field — use Move", domain.ErrValidation)
+	}
 	path, st, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, err

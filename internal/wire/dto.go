@@ -22,7 +22,7 @@ import (
 type TaskJSON struct {
 	ID     string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key that survives slug and status changes; absent on tasks created before id assignment"`
 	Slug   string `json:"slug" jsonschema:"description=task slug (filename without .md) — the human handle"`
-	Status string `json:"status" jsonschema:"description=lifecycle status — equals the task's directory under tasks/"`
+	Status string `json:"status" jsonschema:"description=lifecycle status — authoritative, read from frontmatter (ADR-0003); may differ from the directory on a misfiled file"`
 	Epic   string `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
 	// The "<=200" cap can't be computed (struct tags are static literals) — the only
 	// hardcoded copy of domain.MaxDescriptionLen left. Kept honest by
@@ -36,10 +36,12 @@ type TaskJSON struct {
 	Updated     string   `json:"updated_at,omitempty" jsonschema:"description=last-modified date YYYY-MM-DD"`
 	RevisitAt   string   `json:"revisit_at,omitempty" jsonschema:"description=snooze-until date YYYY-MM-DD for a deferred task (set by task defer)"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
-	// Misfiled/Declared surface status≠folder drift to JSON consumers (agents
-	// are exactly who should detect it); declared_status only when misfiled.
-	Misfiled bool   `json:"misfiled,omitempty"`
-	Declared string `json:"declared_status,omitempty"`
+	// Misfiled/Declared surface folder≠frontmatter drift to JSON consumers (agents
+	// are exactly who should detect it). declared_status carries the stale mirror
+	// DIRECTORY the file sits in (not the frontmatter's claim — that IS status now),
+	// present only when misfiled.
+	Misfiled bool   `json:"misfiled,omitempty" jsonschema:"description=true when the file's directory disagrees with its authoritative frontmatter status (the mirror is stale; lint --fix relocates it)"`
+	Declared string `json:"declared_status,omitempty" jsonschema:"description=the status directory a misfiled file physically sits in (the stale mirror); absent unless misfiled"`
 }
 
 // ToTaskJSON maps a domain task to its wire DTO.

@@ -254,3 +254,26 @@ Carried forward (valid, not step-1–3 defects):
   (today it silently falls back to the folder — same as the old model, so not a
   regression). Fits epic [[27-agent-code-review-on-tasks-structured-review-loop]] / the
   frontmatter-schema validation epic.
+
+## Code review findings (Third Pass — 2026-07-03)
+
+Following the implementation of Step 4 (Contract & Presentation updates) and the fixes for the move no-op trap and fix collision guards, a third code review pass was conducted.
+
+### Verification of Step 4 & Fixes
+- **Wire Contract Alignment:** `wire.SchemaVersion` is successfully bumped to `"1.25"` in [wire.go](file:///Users/andyeschbacher/git/andy-esch/taskflow/internal/wire/wire.go#L92). The DTO jsonschema descriptions and doc comments for `status`, `misfiled`, and `declared_status` are fully aligned with the inverted semantics (frontmatter is authority, folder is mirror).
+- **Golden Files:** All JSON golden test fixtures have been successfully regenerated to match version `"1.25"` and the updated schema tags. All tests pass cleanly.
+- **Wording Updates:** Rendering and TUI layers successfully display the corrected "folder ≠ status" phrasing.
+- **Move No-Op Patch:** `moveTask` correctly evaluates transition status (`from`) against frontmatter while utilizing the folder status to determine if a relocation is needed (opportunistic repair). This ensures files are relocated correctly even when the target status matches the current frontmatter.
+- **Fix Collision Guard:** The `taken` map correctly prevents same-slug misfiled files from colliding during `lint --fix` in both dry-runs and real-runs.
+
+### Remaining Tasks & Actions
+
+1. **Audit Support (Steps 5 & 6):** Audits are still fully directory-bound. The next focus should be:
+   - Make `domain.Audit.Bucket` serializable (`yaml:"bucket"` instead of `yaml:"-"`).
+   - Update `parseAudit`/`GetAuditByPath` to use frontmatter bucket.
+   - Update `MoveAudit` to rewrite the frontmatter bucket field during relocation.
+   - Implement `Audit.Misfiled()` + audit lint.
+   - Re-point findings validation gate to frontmatter bucket.
+2. **SetFields Invariants (Step 3 - defense-in-depth):** While the service-layer correctly guards `status` writes, the store-level mutator `FS.SetFields` in [fsstore.go](file:///Users/andyeschbacher/git/andy-esch/taskflow/internal/store/fsstore.go) does not yet reject `status` or `bucket` keys. Adding this block at the store-level ensures the invariant cannot be bypassed.
+3. **Documentation (Step 7):** Update `ARCHITECTURE.md` to reflect that directories are mirrors and frontmatter is the read authority.
+

@@ -16,12 +16,12 @@ the one-screen orientation for contributors.
 
 - **`internal/domain`** — entities + invariants (`Task`, `Status`). No fs, no
   cobra logic (the one pragmatic concession: `Task`/`Epic`/`Audit` carry a `Path`
-  the store stamps, so callers can locate the source file). The directory **is**
-  the authoritative status (the read path always
-  uses the folder); the frontmatter value is kept as `Task.Declared` only to
-  detect drift. A *recognized* status that disagrees with its folder is
-  "misfiled" — flagged by `lint` (and `lint --fix` realigns it), shown with a
-  `⚠` in `task list`/`show`. A foreign/legacy status word is tolerated.
+  the store stamps, so callers can locate the source file). Frontmatter **is** the
+  authoritative status (ADR-0003 Phase A); the directory is a lock-step mirror,
+  recorded as `Task.FolderStatus` to detect drift. A file whose folder disagrees
+  with its *recognized* frontmatter status is "misfiled" — flagged by `lint` (and
+  `lint --fix` **moves** it to match), shown with a `⚠` in `task list`/`show`. A
+  foreign/legacy status word falls back to the folder.
   Per-entity metadata — the top-level dir, authoring fields, conventions, and
   body scaffold for `task`/`epic`/`audit` — lives in **one registry** (`entity.go`'s
   `Descriptor`); `SchemaKinds`/`AuthoringFields`/`Conventions`/`BodyTemplate` read

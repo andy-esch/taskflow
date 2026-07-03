@@ -8,8 +8,9 @@ import (
 	"strings"
 )
 
-// Status is a task lifecycle state. It is identical to the directory name a
-// task file lives in; the "status == directory" invariant lives here.
+// Status is a task lifecycle state; its string value is also the directory name a
+// task file mirrors into. The authoritative value now lives in frontmatter (ADR-0003
+// Phase A) — the directory is a lock-step mirror, not the source of truth.
 type Status string
 
 // The lifecycle states, in display order.

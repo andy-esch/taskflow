@@ -283,7 +283,7 @@ func duplicateSlugIssues(tasks []domain.Task) []LintResult {
 			groups[t.Slug] = g
 			order = append(order, t.Slug)
 		}
-		g.statuses = append(g.statuses, string(t.Status))
+		g.statuses = append(g.statuses, string(t.FolderStatus)) // the physical dirs, not the (authoritative) frontmatter status
 	}
 	var out []LintResult
 	for _, slug := range order {

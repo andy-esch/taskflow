@@ -93,10 +93,11 @@ func TestTasksJSON_Envelope(t *testing.T) {
 	if len(got.Tasks) != 2 || got.Tasks[0].Slug != "alpha" || got.Tasks[0].Tier != 2 {
 		t.Errorf("tasks payload wrong: %+v", got.Tasks)
 	}
-	// The misfiled signal (status ≠ folder) must be machine-readable — agents
-	// are exactly the consumers who should detect drift (schema 1.1).
-	if !got.Tasks[1].Misfiled || got.Tasks[1].Declared != "completed" {
-		t.Errorf("misfiled task must carry misfiled+declared_status: %+v", got.Tasks[1])
+	// The misfiled signal must be machine-readable, and the two status fields must carry
+	// DIFFERENT values: `status` is the authoritative frontmatter value, `declared_status`
+	// the stale mirror directory (agents are the consumers who detect drift — schema 1.1).
+	if beta := got.Tasks[1]; !beta.Misfiled || beta.Status != "ready-to-start" || beta.Declared != "completed" {
+		t.Errorf("misfiled task must carry status=frontmatter (ready-to-start) + declared_status=folder (completed): %+v", beta)
 	}
 	if len(got.Unreadable) != 1 || got.Unreadable[0].Path != "bad.md" {
 		t.Errorf("unreadable files must be included: %+v", got.Unreadable)

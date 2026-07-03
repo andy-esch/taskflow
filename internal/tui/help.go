@@ -85,7 +85,7 @@ func symbolsFor(kind entityKind, s *styles) (helpSection, bool) {
 			e = append(e, tok(theme.Status(st), string(st)))
 		}
 		e = append(e,
-			tok(theme.MarkerWarn, "misfiled — status ≠ folder"),
+			tok(theme.MarkerWarn, "misfiled — folder ≠ status"),
 			tok(theme.MarkerRevisit, "revisit (snooze) date reached"),
 		)
 	case entityEpics:
