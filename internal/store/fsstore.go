@@ -338,12 +338,8 @@ func parseTask(content []byte, path string, dirStatus domain.Status) (domain.Tas
 	if err != nil {
 		return domain.Task{}, err
 	}
-	// No `---` block at all (fence-less file, or a malformed opening fence like
-	// `---"` that isn't recognized as one). Fail loudly here rather than parse it
-	// as an empty task and misreport it downstream as merely "missing id" — the
-	// message names the valid shape instead of attempting a repair.
 	if fm == nil {
-		return domain.Task{}, fmt.Errorf("%w: missing frontmatter — a task must open with a `---` YAML block (status, epic, tier, priority, effort, created, tags; see `tskflwctl schema task`)", errBadFrontmatter)
+		return domain.Task{}, missingFrontmatterErr("task", "status, epic, tier, priority, effort, created, tags; see `tskflwctl schema task`")
 	}
 	var t domain.Task
 	if len(fm) > 0 {

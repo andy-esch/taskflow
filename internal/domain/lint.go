@@ -83,8 +83,14 @@ func MissingIDIssue(id string) []Issue {
 	if strings.TrimSpace(id) != "" {
 		return nil
 	}
-	return []Issue{{Field: "id", Message: "missing stable id — `lint --fix` assigns one"}}
+	return []Issue{{Field: "id", Message: MissingIDMessage}}
 }
+
+// MissingIDMessage is the plain-lint wording for an entity with no stable id yet —
+// before `--fix` has had a chance to backfill one. Exported so the fix flow can
+// recognize this exact finding among leftovers and restate it (see
+// UnrepairedIDMessage) without matching on the loosely-shared "id" field.
+const MissingIDMessage = "missing stable id — `lint --fix` assigns one"
 
 // UnrepairedIDMessage restates a missing-id finding that survived `lint --fix`:
 // the backfiller found no date to mint an id from (no created/…/deprecated_at

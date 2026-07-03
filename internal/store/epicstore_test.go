@@ -16,6 +16,25 @@ func writeEpic(t *testing.T, root, name, content string) {
 	testutil.Write(t, filepath.Join(root, domain.EpicsDir, name), content)
 }
 
+// TestFS_ListEpics_MissingFrontmatterIsLoud: a fence-less epic file is surfaced
+// as a loud FileProblem naming the valid shape, not silently read as an empty
+// epic (which would only trip a vaguer "invalid status" downstream).
+func TestFS_ListEpics_MissingFrontmatterIsLoud(t *testing.T) {
+	root := t.TempDir()
+	writeEpic(t, root, "01-x.md", "# Just a heading\n\nno frontmatter here\n")
+
+	epics, problems, err := NewFS(root).ListEpics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(epics) != 0 {
+		t.Errorf("a fence-less epic must not parse as an epic, got %+v", epics)
+	}
+	if len(problems) != 1 || !strings.Contains(problems[0].Message, "missing frontmatter") || !strings.Contains(problems[0].Message, "schema epic") {
+		t.Errorf("want one loud, shape-naming problem, got %+v", problems)
+	}
+}
+
 // TestFS_ListEpics_NumericOrder pins that epics come back ordered by their NN-
 // number, not lexically — so 100 sorts after 99 (and 10 after 9), which a string
 // compare of the zero-padded id gets wrong.

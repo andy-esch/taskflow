@@ -16,6 +16,25 @@ func writeAudit(t *testing.T, root, bucket, name, content string) {
 	testutil.Write(t, filepath.Join(root, domain.AuditsDir, bucket, name), content)
 }
 
+// TestFS_ListAudits_MissingFrontmatterIsLoud: a fence-less audit file is surfaced
+// as a loud FileProblem naming the valid shape, not silently read as an empty
+// audit (empty area/date) that slips through.
+func TestFS_ListAudits_MissingFrontmatterIsLoud(t *testing.T) {
+	root := t.TempDir()
+	writeAudit(t, root, "open", "notes.md", "# Some audit notes\n\nno frontmatter\n")
+
+	audits, problems, err := NewFS(root).ListAudits()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(audits) != 0 {
+		t.Errorf("a fence-less audit must not parse as an audit, got %+v", audits)
+	}
+	if len(problems) != 1 || !strings.Contains(problems[0].Message, "missing frontmatter") || !strings.Contains(problems[0].Message, "schema audit") {
+		t.Errorf("want one loud, shape-naming problem, got %+v", problems)
+	}
+}
+
 func TestFS_ListAudits_FindingCounts(t *testing.T) {
 	root := t.TempDir()
 	body := "# Audit\n\n#### H1. thing  · **Status:** open\n\nblah\n\n#### M2. other  · **Status:** fixed 2026-01-01\n"

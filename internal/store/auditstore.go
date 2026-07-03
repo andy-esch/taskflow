@@ -214,6 +214,9 @@ func parseAuditWithFindings(content []byte, path string, bucket domain.AuditBuck
 	if err != nil {
 		return domain.Audit{}, nil, err
 	}
+	if fm == nil {
+		return domain.Audit{}, nil, missingFrontmatterErr("audit", "area, date; see `tskflwctl schema audit`")
+	}
 	var a domain.Audit
 	if len(fm) > 0 {
 		if err := yaml.Unmarshal(fm, &a); err != nil {

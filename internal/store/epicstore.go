@@ -177,6 +177,9 @@ func parseEpic(content []byte, path string) (domain.Epic, error) {
 	if err != nil {
 		return domain.Epic{}, err
 	}
+	if fm == nil {
+		return domain.Epic{}, missingFrontmatterErr("epic", "status, priority, description; see `tskflwctl schema epic`")
+	}
 	var ep domain.Epic
 	if len(fm) > 0 {
 		if err := yaml.Unmarshal(fm, &ep); err != nil {

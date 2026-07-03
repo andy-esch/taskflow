@@ -194,6 +194,45 @@ func TestFixFrontmatter_BackfillsFromFilenameDate(t *testing.T) {
 	}
 }
 
+// TestFixFrontmatter_FrontmatterDateBeatsFilename: when a task has BOTH a
+// frontmatter date and a date-prefixed filename, the id is timestamped from the
+// frontmatter date — the filename is only a fallback, never an override.
+func TestFixFrontmatter_FrontmatterDateBeatsFilename(t *testing.T) {
+	root := t.TempDir()
+	// Filename says 2025-10-19; frontmatter created says 2026-01-05 — created wins.
+	p := filepath.Join(root, domain.TasksDir, "completed", "2025-10-19-x.md")
+	seedFile(t, p, "---\nstatus: completed\nepic: e1\ncreated: 2026-01-05\ntags: [x]\n---\n# X\n")
+
+	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+		t.Fatal(err)
+	}
+	got := frontmatterID(t, p)
+	if d := id.Time(got).UTC().Format("2006-01-02"); d != "2026-01-05" {
+		t.Errorf("id time = %s, want 2026-01-05 (frontmatter created, not the filename)", d)
+	}
+}
+
+func TestDateFromFilename(t *testing.T) {
+	cases := []struct{ name, want string }{
+		{"2025-10-19-slug.md", "2025-10-19"},
+		{"2026-01-05-x.md", "2026-01-05"},
+		{"2025-10-19.md", "2025-10-19"}, // date is the whole stem
+		{"refactor-dispatcher.md", ""},  // no date prefix
+		{"pants-6d.md", ""},             // no date prefix
+		{"2025-13-01-bad-month.md", ""}, // month out of range
+		{"2025-10-32-bad-day.md", ""},   // day out of range
+		{"2025-1-05-unpadded.md", ""},   // not zero-padded → not YYYY-MM-DD
+		{"short.md", ""},                // shorter than 10 chars
+		{"", ""},                        // empty
+		{"2025-10-19", "2025-10-19"},    // no extension, exactly 10 chars
+	}
+	for _, c := range cases {
+		if got := dateFromFilename(c.name); got != c.want {
+			t.Errorf("dateFromFilename(%q) = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 func TestMintUniqueID_RetriesPastCollisions(t *testing.T) {
 	seen := map[string]bool{"AAA": true} // AAA already taken
 	calls := 0

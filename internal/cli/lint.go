@@ -88,11 +88,12 @@ func runLintFix(app *App, dryRun bool) error {
 	}
 	// A missing-id finding that OUTLIVED the fix pass means the backfiller had no
 	// date to mint from; plain lint's "`lint --fix` assigns one" wording misleads
-	// now that --fix has run. Restate those (and only those) with the actionable
-	// remedy — for both the human and --json renders below.
+	// now that --fix has run. Restate those (and only those — match the exact
+	// finding, not just the "id" field) with the actionable remedy, for both the
+	// human and --json renders below.
 	for i := range results2 {
 		for j := range results2[i].Issues {
-			if results2[i].Issues[j].Field == "id" {
+			if results2[i].Issues[j].Field == "id" && results2[i].Issues[j].Message == domain.MissingIDMessage {
 				results2[i].Issues[j].Message = domain.UnrepairedIDMessage
 			}
 		}
