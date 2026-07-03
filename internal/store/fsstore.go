@@ -129,13 +129,23 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 	if !to.Valid() {
 		return domain.Task{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
 	}
-	path, from, err := s.resolve(slug)
+	path, folder, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, err
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("read task %s: %w", path, err)
+	}
+	// `from` is the AUTHORITATIVE status (frontmatter, ADR-0003 Phase A), not the folder
+	// resolve returned — so the transition is computed against what the task really is.
+	// They differ only on a misfiled file, where `folder` is a stale mirror; keep both:
+	// `from` drives the transition, `folder` decides whether a relocation is still owed
+	// and labels the no-op return. An unparseable file keeps the folder value (the move
+	// re-parses and fails cleanly below).
+	from := folder
+	if cur, perr := parseTask(content, path, folder); perr == nil {
+		from = cur.Status
 	}
 
 	date := now.Format("2006-01-02")
@@ -176,13 +186,19 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 			updates[k] = v
 		}
 	}
-	if len(updates) == 0 { // idempotent no-op (move to the same status, no extra)
-		return parseTask(content, path, to)
+	// A true no-op writes nothing AND needs no relocation — the file is already in the
+	// target dir. A misfiled file (folder != to) with no frontmatter change still needs
+	// to MOVE to match its authoritative status, so it falls through with empty updates
+	// (a pure relocation that carries the frontmatter verbatim, no spurious re-stamp).
+	if len(updates) == 0 && folder == to {
+		return parseTask(content, path, folder)
 	}
-
-	newContent, err := updateFrontmatter(content, updates)
-	if err != nil {
-		return domain.Task{}, err
+	newContent := content
+	if len(updates) > 0 {
+		newContent, err = updateFrontmatter(content, updates)
+		if err != nil {
+			return domain.Task{}, err
+		}
 	}
 	// Parse before committing: if the updated content wouldn't read back, fail
 	// with nothing on disk changed. Parsing *after* the move reported failure on

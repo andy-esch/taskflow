@@ -383,6 +383,29 @@ func TestLint_FlagsMisfiledArchivedTask(t *testing.T) {
 	}
 }
 
+// A file in an archived folder whose frontmatter names an ACTIVE status is
+// authoritatively active — so it gets the full field lint (not the archived skip),
+// on top of the misfiled drift. Pins the active/archived split now keying off
+// frontmatter (ADR-0003 Phase A).
+func TestLint_ActiveFrontmatterInArchivedFolder(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "tasks", "completed", "x.md"),
+		"---\nid: 6fjangd7kvbb\nstatus: in-progress\n---\n# x\n")
+	var out bytes.Buffer
+	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd.SetArgs([]string{"-C", root, "lint"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected lint to fail on an active misfiled task")
+	}
+	s := out.String()
+	// The full active-field lint fires (missing epic/tier/…) AND the misfile is flagged.
+	for _, want := range []string{"epic", "tier", "moves it"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("expected %q in the active-frontmatter lint output:\n%s", want, s)
+		}
+	}
+}
+
 func TestEpicNew_RequiresDescription(t *testing.T) {
 	root := freshRepo(t)
 	var out bytes.Buffer

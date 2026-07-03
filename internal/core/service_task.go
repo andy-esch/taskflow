@@ -142,10 +142,15 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 	}
 	withMeta := make(map[string]any, len(updates)+1)
 	for field, val := range updates {
+		// status isn't a settable field: a status change relocates the file (frontmatter
+		// is authoritative — ADR-0003 Phase A — but the mirror dir must move with it, and
+		// SetFields writes in place). Route it through the lifecycle verbs, or the dir and
+		// frontmatter silently desync. Rejected on both the set and unset paths.
+		if field == "status" {
+			return domain.Task{}, fmt.Errorf("%w: status changes relocate the file — use `task <verb>`/`task move`, not `set`", domain.ErrValidation)
+		}
 		if _, unset := val.(domain.UnsetField); unset {
 			switch field {
-			case "status":
-				return domain.Task{}, fmt.Errorf("%w: status is the directory — use `task <verb>`/`task move`", domain.ErrValidation)
 			case "updated_at":
 				return domain.Task{}, fmt.Errorf("%w: updated_at is stamped automatically and cannot be unset", domain.ErrValidation)
 			}
