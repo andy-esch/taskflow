@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: 'Generalize path-CAS into version-CAS: reads return a content hash, writes take ifVersion and return ErrConflict; internal auto-retry for field-level set/append/move. Per epic 24.'
 effort: Unknown
@@ -12,9 +12,35 @@ created: "2026-07-01"
 id: 6fhnydm02wxd
 updated_at: "2026-07-04"
 started_at: "2026-07-04"
+completed_at: "2026-07-04"
 ---
 
 # Version-aware OCC: content-hash token and plain retry
+
+## Progress & pivots (2026-07-04)
+
+**Status: implementation complete (steps 1–7); ready to close.** Green throughout —
+store + core suites, vet, golangci-lint (0 issues), live smoke. Two small items are
+tracked separately so they outlive this task: the dry-run↔CAS consistency decision
+([[normalize-dry-run-vs-version-cas-ordering-across-store-writes]]) and hardening
+fix.go's relocations ([[harden-lint-fix-misfiled-move-for-dup-slug-edge-cases]]).
+
+Pivots taken vs the original plan:
+- **The token is fully INTERNAL — the `core.Store` port never changed.** The hybrid
+  (tool-carries-the-token) decision means reads don't return a `version` and writes
+  don't take an `ifVersion` at the port; the write methods self-source
+  `hashContent(content)` and check it internally. So **step 2 (port-threading)
+  collapsed into step 3** — no fake/call-site churn. Port-level exposure is deferred to
+  `serve` (epic 19).
+- **A shared `verifyUnchanged` GUARD, not a `casWrite`-that-writes.** The write shapes
+  differ (in-place vs write-then-remove relocate), so the reusable piece is the
+  pre-write precondition; each site keeps its own write.
+- **Canonical-slug re-resolve (review-driven, pre-existing bug fix).** The guard
+  re-resolves by the canonical slug, not the caller's raw fuzzy query — else a
+  concurrently-created same-prefix file made the re-resolve `ErrAmbiguous` → a spurious
+  conflict on an unmodified file. Found by an independent review; fixed once for all sites.
+- **Epic writers GAINED a guard they never had** (MoveEpic/SetEpicFields/EditEpic were
+  silent last-write-wins) — a bonus beyond parity.
 
 ## Objective
 
@@ -162,11 +188,13 @@ decisions, each with its prior-art anchor:
    `editFile`'s recheck closure calling `verifyUnchanged`); a mismatch is `ErrConflict`
    (exit 14), no retry (there is no retry wrapper on edit). Epic in-place CAS added. Pinned
    by `TestEditTask_ConflictsOnConcurrentContentEdit`.
-6. **Creates: document the `ifVersion == ""` mapping.** Confirm `createFileAtomic`'s
-   `O_EXCL` already *is* `If-None-Match: *`; wire it into the `casWrite` vocabulary so the
-   contract is uniform (little/no code change).
-7. **Docs.** A short store/OCC note (ARCHITECTURE or a store doc): the version token, the
-   hybrid surface, the strong-hash rationale, exit 14. No `schema`/`--json` doc changes.
+6. **[done] Creates: document the `ifVersion == ""` mapping.** `createFileAtomic`'s
+   `O_EXCL` IS `If-None-Match: *` (create-must-not-exist) — documented on the helper, so
+   the create path needs no separate `verifyUnchanged`.
+7. **[done] Docs.** OCC note added to `docs/ARCHITECTURE.md`'s `internal/store` bullet: the
+   version token (strong SHA-256, on-read, never stored), the internal/hybrid surface,
+   auto-retry in core.Service, exit 14, HTTP deferred to epic 19. No `schema`/`--json`
+   doc changes.
 
 ## Test pins (before it's "done")
 
