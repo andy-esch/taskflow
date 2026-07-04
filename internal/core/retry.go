@@ -14,20 +14,28 @@ import (
 // are a handful of cron agents, not a thundering herd.
 const defaultMaxRetries = 4
 
-// defaultRetrySleep waits before retry `attempt` (1-based): capped exponential backoff with
-// FULL jitter, scaled to the microsecond reality of local-FS contention (not the seconds of
-// a network service). The point isn't to wait long — it's to DE-CORRELATE cron writers that
-// woke on the same schedule and would otherwise collide every round (AWS's backoff-and-
-// jitter result). Injected via WithRetry so tests run instantly and deterministically.
-func defaultRetrySleep(attempt int) {
+// retryBackoff is the delay before retry `attempt` (1-based): capped exponential backoff
+// with FULL jitter — a value uniformly in [0, min(base·2^(attempt-1), cap)). Pure (no
+// sleep) so the bound + overflow guard are unit-testable without waiting. The raw shift
+// wraps for an absurd attempt (only reachable via a huge injected maxRetries); the
+// `d <= 0 || d > capDelay` guard catches any wrap, and `rand.Int63n`'s arg is thus always
+// > 0 (never panics).
+func retryBackoff(attempt int) time.Duration {
 	const base = 2 * time.Millisecond
 	const capDelay = 50 * time.Millisecond
 	d := base << (attempt - 1)
-	if d <= 0 || d > capDelay { // overflow guard + cap
+	if d <= 0 || d > capDelay {
 		d = capDelay
 	}
-	time.Sleep(time.Duration(rand.Int63n(int64(d)))) // full jitter: sleep in [0, d)
+	return time.Duration(rand.Int63n(int64(d)))
 }
+
+// defaultRetrySleep sleeps retryBackoff(attempt), scaled to the microsecond reality of
+// local-FS contention (not the seconds of a network service). The point isn't to wait long
+// — it's to DE-CORRELATE cron writers that woke on the same schedule and would otherwise
+// collide every round (AWS's backoff-and-jitter result). Injected via WithRetry so tests
+// run instantly and deterministically.
+func defaultRetrySleep(attempt int) { time.Sleep(retryBackoff(attempt)) }
 
 // WithRetry overrides the OCC auto-retry policy — injected so tests drive the loop
 // deterministically (a no-op sleep) and pin the bound. A negative maxRetries or a nil
