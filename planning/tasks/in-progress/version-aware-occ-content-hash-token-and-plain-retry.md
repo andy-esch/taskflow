@@ -124,32 +124,32 @@ decisions, each with its prior-art anchor:
    the acceptance criteria never ask to surface it). Huge scope-limiter — resist the urge.
 7. **List methods stay unchanged.** `ListTasks`/`ListAudits`/`ListEpics` are bulk display
    reads, not RMW entry points. Only the single-entity `Get*` reads return a `version`.
-8. **The port ripples, but mechanically.** Adding a `version` return to `GetTask`/
-   `GetAudit`/`GetEpic` touches the `Store` interface + every fake in tests + the call
-   sites. Budget for it; it's noise, not risk. (Interpretation to confirm — see the
-   open decision below — the field-op *write* signatures do NOT grow a caller `ifVersion`;
-   only the `casWrite` primitive and the wide-window `Edit*`/create paths carry it.)
+8. **The `core.Store` port does NOT change** (see Resolved decision). The token is
+   internal to package `store`; the field ops self-source it and the edit path captures it
+   internally, so no port method grows a `version`/`ifVersion` param and no fake needs
+   touching. Port-level exposure waits for `serve` (epic 19).
 
 ## Sequenced implementation (each step builds green + is revertible)
 
-1. **Hash + `casWrite` primitive (no behavior change).** Add `hashContent([]byte) string`
-   (`crypto/sha256` → hex) in the store package. Add the single internal guard
-   `casWrite(slug, path, newContent, ifVersion, relocate…)` that: re-resolves the slug
-   (conflict if gone/moved — preserves today's `curPath != path`), re-reads + re-hashes
-   the source (conflict if `≠ ifVersion`, when ifVersion non-empty), then does the write.
-   Unit-test the guard in isolation with a seam hook. Nothing calls it yet.
-2. **Reads return `version`.** `GetTask` (fsstore.go:86), `GetAudit` (auditstore.go:57),
-   `GetEpic` (epicstore.go:37) return `version = hashContent(bytes)`. Thread through the
-   `TaskStore`/`AuditStore`/`EpicStore` port + fakes + call sites (callers ignore it for
-   now). Green, no behavior change. (Document: consumed by the human-edit capture and the
-   future serve/`If-Match`; available to any wide-window caller.)
-3. **Route the existing writes through `casWrite`.** Replace the 7 duplicated re-resolve
-   blocks (moveTask, SetFields, MoveAudit, and the `editFile`/`writeBody` recheck closures
-   for EditTask/EditAudit/EditBody/AppendAuditBody) with the one primitive, sourcing
-   `ifVersion` from the bytes the method itself just read (narrow-window self-check).
-   Behavior is identical to today PLUS in-place-edit detection. Keep every existing
-   concurrency test green; extend the `testHookBefore*Write` seams to interleave a
-   concurrent *content* edit (not just a relocation) and assert `ErrConflict`.
+1. **[done] Hash + `verifyUnchanged` guard (no behavior change).** Added
+   `hashContent([]byte) string` (`crypto/sha256` → hex) + the single internal guard
+   `verifyUnchanged(resolve, slug, path, ifVersion, noun, op)` that re-resolves the slug
+   (conflict if gone/moved — preserves today's `curPath != path`) and re-reads + re-hashes
+   the source (conflict if `≠ ifVersion`, when non-empty). Unit-tested in isolation. The
+   per-site *write* stays in each method (in-place vs relocate differ); the guard is the
+   shared precondition.
+2. **[folded into 3 — see Resolved decision] Version on reads is INTERNAL.** No
+   `core.Store` port change: the write methods self-source `hashContent(content)` from the
+   bytes they already read. Port-level `version` returns are deferred to `serve` (epic 19).
+3. **[in progress — task sites done] Route the existing writes through `verifyUnchanged`.**
+   Replace the 7 duplicated re-resolve blocks (✓ moveTask, ✓ SetFields via `s.resolvePath`;
+   remaining: MoveAudit, and the `editFile`/`writeBody` recheck closures for
+   EditTask/EditAudit/EditBody/AppendAuditBody) with the one guard, sourcing `ifVersion`
+   from the bytes the method itself just read (narrow-window self-check). Also add the guard
+   to the three epic writers (MoveEpic/SetEpicFields/EditEpic), which have none today.
+   Behavior is identical PLUS in-place-edit detection. Keep every concurrency test green;
+   extend the `testHookBefore*Write` seams to interleave a concurrent *content* edit (done
+   for task move/set) and assert `ErrConflict`.
 4. **Class (a) auto-retry.** Wrap the field-level ops in the bounded, jittered retry loop.
    Decide placement — **recommend core.Service** (owns re-apply semantics; one loop reused
    by CLI + TUI + future serve) wrapping the store call; on `ErrConflict` re-read → re-
@@ -199,13 +199,16 @@ decisions, each with its prior-art anchor:
       they edited a specific version and should see the clash.
 - [ ] Existing path-CAS behavior (concurrent-move detection) is preserved.
 
-## Open decision to confirm before coding
+## Resolved decision (2026-07-04): the token is fully internal
 
-The spec says "Store writes accept `ifVersion`." Read literally that is *every* write
-method; the hybrid (and every surveyed system with a scripting surface) instead keeps
-`ifVersion` on the **primitive + wide-window paths** and has the field ops source it
-internally + retry — otherwise agents reimplement the RMW loop the task exists to remove.
-Plan assumes the hybrid reading. Flagging it as the one interpretation worth a nod.
+Confirmed the **hybrid** reading, and its consequence: **the token never touches the
+`core.Store` port** — not on reads, not on writes. The write methods `os.ReadFile` the
+file anyway, so they self-source `ifVersion = hashContent(content)`; the retry re-calls on
+`ErrConflict` with no token; the human `edit` captures the version inside `EditTask`.
+Nothing in-tree consumes a `version` *returned* from `GetTask`/`GetAudit`/`GetEpic`, so
+that port-level exposure is **deferred to `serve`/HTTP** (epic 19). Net: step 2's
+port-threading collapses into step 3, and the `core.Store` interface + its fakes stay
+untouched.
 
 ## Out of scope
 

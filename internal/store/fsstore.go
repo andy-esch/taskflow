@@ -229,12 +229,13 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 	if testHookBeforeMoveWrite != nil {
 		testHookBeforeMoveWrite()
 	}
-	// Re-resolve immediately before the write (compare-and-swap), like SetFields:
-	// a concurrent Move may have already relocated this slug, so writing the new
-	// file would leave a duplicate across two status dirs (a permanent
-	// ErrAmbiguous). Fail cleanly with nothing written instead.
-	if curPath, _, err := s.resolve(slug); err != nil || curPath != path {
-		return domain.Task{}, fmt.Errorf("task %q changed on disk during move; retry: %w", slug, domain.ErrConflict)
+	// Version-CAS immediately before the write: verifyUnchanged re-resolves (a concurrent
+	// Move relocated the slug → writing the new file would leave a duplicate across two
+	// status dirs, a permanent ErrAmbiguous) AND re-hashes the source (a concurrent
+	// in-place edit — content the path-CAS alone silently allowed to clobber). Either way
+	// fail cleanly with nothing written. ifVersion is the hash of the bytes read above.
+	if err := verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "move"); err != nil {
+		return domain.Task{}, err
 	}
 	// Write the updated content atomically into the *target* status dir, then
 	// remove the old file last. A crash between the two leaves both files (a
@@ -305,13 +306,13 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 	if testHookBeforeSetFieldsWrite != nil {
 		testHookBeforeSetFieldsWrite()
 	}
-	// Re-resolve immediately before the write (compare-and-swap): a concurrent
-	// Move may have relocated the file, and renaming onto the *original* path
-	// would resurrect the slug in its old status directory — a permanent
-	// ErrAmbiguous with no repair tooling. Atomicity alone only guards against
-	// torn writes, not lost updates.
-	if curPath, _, err := s.resolve(slug); err != nil || curPath != path {
-		return domain.Task{}, fmt.Errorf("task %q changed on disk during update; retry: %w", slug, domain.ErrConflict)
+	// Version-CAS immediately before the write: verifyUnchanged re-resolves (a concurrent
+	// Move relocated the file → renaming onto the original path would resurrect the slug
+	// in its old status dir, a permanent ErrAmbiguous) AND re-hashes the source (a
+	// concurrent in-place edit the path-CAS alone missed). Atomicity guards only torn
+	// writes, not lost updates. ifVersion is the hash of the bytes read above.
+	if err := verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "update"); err != nil {
+		return domain.Task{}, err
 	}
 	if dryRun {
 		return t, nil // validated end-to-end; only the write is skipped
@@ -347,6 +348,13 @@ func (s *FS) resolve(slug string) (path string, status domain.Status, err error)
 		return "", "", err
 	}
 	return c.path, domain.Status(c.dir), nil
+}
+
+// resolvePath is s.resolve reduced to (path, error) — the adapter the version-CAS guard
+// (verifyUnchanged) takes, so the guard stays entity-agnostic across tasks and audits.
+func (s *FS) resolvePath(slug string) (string, error) {
+	p, _, err := s.resolve(slug)
+	return p, err
 }
 
 // taskCandidates lists every task file as a resolution candidate (the dir name
