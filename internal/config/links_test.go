@@ -37,6 +37,30 @@ func TestCheckLinks_SubdirPlanningLayout(t *testing.T) {
 	}
 }
 
+// TestCheckLinks_SubdirPlanning_ImplPointsAtRepoRoot regresses the desirelines case: a
+// planning repo with taskflow_root="planning" whose tracked impl points its planning_repo at
+// the REPO ROOT (not the taskflow_root subdir) must link cleanly. The planning-side check must
+// accept the impl naming either the repo (Dir) or the subdir (Root) — comparing only against
+// Root falsely flagged "points its planning_repo elsewhere".
+func TestCheckLinks_SubdirPlanning_ImplPointsAtRepoRoot(t *testing.T) {
+	parent := t.TempDir()
+	plan := filepath.Join(parent, "plan")
+	mustMkdir(t, filepath.Join(plan, "planning", "tasks")) // entities under plan/planning
+	writeConfig(t, plan, "taskflow_root = \"planning\"\ntracked_repos = [\"../impl\"]\n")
+	impl := filepath.Join(parent, "impl")
+	mustMkdir(t, impl)
+	// Write the impl config directly: its planning_repo names the planning REPO ROOT
+	// (../plan). This is a valid LEGACY pointer — created by InitPointer back when tasks/
+	// sat at the root, before an isolation moved them under taskflow_root. Discover still
+	// resolves it (it reads plan's config + taskflow_root); the link check must accept it.
+	// (InitPointer can't recreate it now — it rejects a target with no tasks/ directly under
+	// it — so the config is written by hand here to mirror the real desirelines state.)
+	writeConfig(t, impl, "planning_repo = \"../plan\"\n")
+	if p := linksAt(t, plan); len(p) != 0 {
+		t.Errorf("planning side must accept an impl that points at the repo root, got %v", p)
+	}
+}
+
 // linksAt discovers cfg at dir and returns CheckLinks(cfg).
 func linksAt(t *testing.T, dir string) []LinkProblem {
 	t.Helper()

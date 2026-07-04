@@ -229,6 +229,19 @@ This ADR decides the *on-disk model only*. Related decisions live elsewhere.
   track), with **dedupe-and-regenerate** on the rare same-day collision. Landed as
   the stateless `id.NewAt(unixMilli)`.
 
+### 2026-07-04 — epics keep their `NN` prefix as their stable key (revises §3/§4/§5 for epics)
+
+Grounding the flatten against the real `desirelines-planning` repo revised the "**all three**
+entities get a 12-char id" decision **for epics only**. Epics carry no id today (0/17), are
+`NN-<slug>.md`, and are referenced by ~644 tasks as `epic: NN-<slug>`. Since the `NN` prefix
+is *already* a stable, human-meaningful key (epics aren't renamed to a different number) and
+`epic:` refs resolve on it cleanly, minting 12-char ids for epics buys little and would force
+rewriting ~644 refs. **Decision: the epic `NN` prefix IS the epic's stable key — epics keep
+`NN-<slug>.md` and refs stay `epic: NN-<slug>`.** Tasks and audits are unchanged (12-char
+id-led per §3/§4). So the flatten (§4) and migration (§6) apply to **tasks + audits only**;
+epics are already flat and stable. The §-153 data-model table's "epics → `id` (replaces
+`NN`)" row is superseded by this entry.
+
 ## Related
 
 - Home epic & the open-questions index:
