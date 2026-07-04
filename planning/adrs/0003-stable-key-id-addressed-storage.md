@@ -242,6 +242,40 @@ id-led per §3/§4). So the flatten (§4) and migration (§6) apply to **tasks +
 epics are already flat and stable. The §-153 data-model table's "epics → `id` (replaces
 `NN`)" row is superseded by this entry.
 
+### 2026-07-04 — carveout contract: what the flat scan does with non-entity files
+
+Grounding the flatten surfaced that a flat scanned bucket is a *pollution surface* —
+`markdownCandidates` builds resolution candidates from filenames only, so any stray `.md`
+(e.g. `audits/HOWTO-execute.md`) becomes a fuzzy-match candidate and a listing problem. This
+amends §4 (id-led flat filenames) with the rule for **non-entity files inside a scanned
+bucket**. Decided in
+[[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]]; built as part
+of [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]].
+
+- **Entity = a filename-shape test.** A file directly in a scanned bucket is an entity iff its
+  name leads with a valid stable key — `<id>-` (tasks/audits, the 12-char id, `id.Valid()`) or
+  `NN-` (epics). A *positive* signal, so a real entity that lost its frontmatter still fails
+  loud (a broken entity), while a non-id-led file is simply not one.
+- **Strays error, reusing the existing channel.** A non-entity `.md` in a bucket is a
+  `FileProblem` ("not an entity — move to `meta/` or delete") on the same resilient-read channel
+  that already carries malformed files (surfaced in list/lint/board, non-fatal, excluded from
+  entity data and `--json`). No new severity tier and **no `schema_version` bump** for carveouts.
+- **Resolution gates on the same shape.** `markdownCandidates` excludes non-id-led names from
+  candidacy, so a stray can never win a fuzzy match or shadow a real entity, and `show <stray>`
+  is a clean `ErrNotFound`. (Erroring on the listing side alone does not fix resolution
+  pollution — this gate is the actual fix.)
+- **`meta/` — the sanctioned home.** A single top-level `planning/meta/` (never scanned; the
+  tool scans only `tasks/`/`epics/`/`audits/`) holds non-entity material, free internal
+  structure (`meta/routines/`, `meta/HOWTO-execute.md`). Standardized — a hardcoded name, no
+  config `ignore`/dotfile — to start. Ignore-only for now; a subtree like `meta/routines/` may
+  be promoted to a scanned entity type later with zero file moves.
+- **One carve.** A bucket-root `README.md` is silently ignored (GitHub renders it as the
+  folder's landing page).
+
+The *full* "what is a valid entity / valid frontmatter" contract is
+[[26-frontmatter-schema-declared-validation-contract]]'s to formalize; this amendment fixes the
+narrow layout-hygiene rule the flatten needs now.
+
 ## Related
 
 - Home epic & the open-questions index:

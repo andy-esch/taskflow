@@ -173,3 +173,28 @@ copy first, and commit the pre-migration tree so git is a clean undo.
   [[scheme-2-references-and-rename-verb-with-link-cascade]] (id-prefix refs, rename cascade)
 - Built on: [[version-aware-occ-content-hash-token-and-plain-retry]] — the in-place write keeps
   its OCC + flock; the dual-file window it guarded is gone once moves stop relocating.
+
+## Carveout folded in (2026-07-04)
+
+The curation-carveout design is settled
+([[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]]) and its
+implementation **collapses into this task** rather than shipping separately — the "strays just
+error + reuse `FileProblem`" decision reduced it to the id-parsing predicate this flatten
+already needs.
+
+Fold into the sequenced steps:
+
+- **Steps 1-2 (flat scan + resolution):** gate `markdownCandidates` on filename shape — a file
+  whose name is not id-/`NN`-led is **not** a resolution candidate (so it cannot win a fuzzy
+  match / shadow a real entity) and parses to a `FileProblem` on the listing side ("not an
+  entity - move to `meta/` or delete"). Same `id.Valid()` slice as trap #2, used to skip
+  instead of only error. **This is the actual flat-scan-pollution fix** — erroring on the
+  listing side alone does NOT stop resolution pollution.
+- **New small store bits:** a reserved top-level `meta/` folder constant (ignored, never
+  scanned) + a `README.md` carve (a bucket-root `README.md` is silently ignored, GitHub landing
+  page). Everything else non-entity errors.
+- **Migration (companion task):** sweeps existing loose files into `meta/` — see
+  [[one-time-migration-script-this-repo-desirelines]].
+
+Net: no new warning tier, no `schema_version` bump for carveouts — strays ride the existing
+`FileProblem` channel.

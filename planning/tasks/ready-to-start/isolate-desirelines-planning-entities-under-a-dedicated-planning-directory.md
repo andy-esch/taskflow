@@ -10,6 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [migration, planning]
 created: "2026-07-04"
+updated_at: "2026-07-04"
 ---
 
 # Isolate desirelines-planning entities under a dedicated planning/ directory
@@ -89,3 +90,17 @@ the undo**.
 - Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
 - De-risks [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]]
   (Phase B) and [[one-time-migration-script-this-repo-desirelines]].
+
+## Decision (2026-07-04) — resolves step 7 (the stray HOWTO)
+
+Step 7 left `audits/HOWTO-execute.md` handling open ("relocate it, or rely on the Phase B
+fix — decide"). The carveout decision
+([[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]]) settles it:
+**move it to a top-level `planning/meta/`** as part of this isolate move, rather than leaving
+it in `planning/audits/`.
+
+- This is the **first place the `meta/` convention appears** — it is just an unscanned sibling
+  folder (the tool only scans `tasks/`/`epics/`/`audits/`), so it is safe pre-flatten and needs
+  no code.
+- Doing it here means the flatten's migration sweep has one less loose file to handle.
+- Same treatment for any routine specs currently loose near the entity dirs -> `meta/routines/`.
