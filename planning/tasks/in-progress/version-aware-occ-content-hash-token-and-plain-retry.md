@@ -1,0 +1,235 @@
+---
+schema: 1
+status: in-progress
+epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
+description: 'Generalize path-CAS into version-CAS: reads return a content hash, writes take ifVersion and return ErrConflict; internal auto-retry for field-level set/append/move. Per epic 24.'
+effort: Unknown
+tier: 3
+priority: medium
+autonomy_level: 3
+tags: [core, storage]
+created: "2026-07-01"
+id: 6fhnydm02wxd
+updated_at: "2026-07-04"
+started_at: "2026-07-04"
+---
+
+# Version-aware OCC: content-hash token and plain retry
+
+## Objective
+
+Generalize the store's path-CAS into a **version-CAS**: reads return a `version`,
+writes take an `ifVersion` precondition and fail with `ErrConflict` (exit 14) on
+mismatch. This makes the existing conflict guard honest for *content* edits, not just
+concurrent moves, and is the backend-agnostic foundation every later backend (git-sync,
+object store, `serve`) rides on.
+
+The version token is a **whole-file content hash (SHA-256)** — decided under epic 24
+(2026-07-01) and **content-hash only**. A git **blob/commit SHA is explicitly not used**:
+it fingerprints *committed* bytes and misses uncommitted working-tree edits (the serve
+write window), so it would yield a token already stale against the file on disk.
+`mtime+size` is also rejected (unreliable across machines/containers — a real risk with
+the cron agents). Cost is ~zero: the read-modify-write already reads the file.
+
+## Design — grounded in prior art (research 2026-07-04)
+
+The whole approach maps 1:1 onto HTTP preconditions (RFC 9110 §13.1) and onto how
+etcd / CouchDB / S3-conditional-writes / Git-ref-CAS / Firestore actually work. Locked
+decisions, each with its prior-art anchor:
+
+- **The token is hashed ON READ and NEVER stored in the file.** A `version:` frontmatter
+  field would be self-referential (the token changes the very bytes it certifies) — the
+  classic trap the "ETag without a version column" pattern exists to dodge. So: compute
+  `sha256(raw file bytes)` when read; never persist it. (This corrects an early
+  research draft that proposed stamping `version:` — wrong for this spec.)
+- **Strong validator, not weak.** Whole-file byte equality is HTTP's *strong* comparison
+  (`If-Match`). For a lost-update guard that is exactly right — a normalized/"weak" token
+  would let two writers who changed *different* fields both believe they're safe and
+  silently drop one. Do NOT normalize-before-hash.
+- **SHA-256 stays cryptographic.** The token *is* the safety check, so a collision is a
+  silent lost update, and cron agents write attacker-influenceable text (task
+  titles/bodies). Non-crypto hashes (xxHash/wyhash) are a correctness bug here, not an
+  optimization. If body hashing ever shows on a profile, BLAKE3 is the drop-in (same
+  256-bit safety, faster) — not now; `crypto/sha256` is stdlib, zero deps.
+- **`ifVersion` vocabulary mirrors RFC 9110 exactly:** `ifVersion == "<hash>"` → strong
+  `If-Match` (write iff unchanged); `ifVersion == ""` → `If-None-Match: *` → the
+  create-must-not-exist / `O_EXCL` case (which `createFileAtomic` already is — creates
+  need no new code, just the documented mapping); no precondition → unconditional write.
+  Keeps the future HTTP surface (epic 19) a rename, not a redesign.
+- **Version-CAS *subsumes* path-CAS; keep both checks in one guard.** Today's re-resolve
+  (`curPath != path`) catches a concurrent *relocation*; the content hash catches a
+  concurrent *in-place edit*. A move changes both, so a single guard —
+  "re-resolve → conflict if moved/gone, then re-hash the source → conflict if hash ≠
+  ifVersion" — is a strict superset of the current guard. Path-CAS is NOT deleted (it
+  still guards the resurrect-in-old-dir hazard on in-place writes); it's absorbed.
+- **HYBRID surface — one internal CAS primitive, two entry points** (the fork the
+  research settled). Every surveyed system uses a uniform CAS *primitive* but splits
+  *ergonomics* along scriptable-vs-human:
+  - **Class (a) — scriptable field ops** (`task set`/`append`/`move`/`defer`, `audit
+    append`/`move`, `epic set`/`move`): a **bounded internal auto-retry** loop
+    (Firestore's `runTransaction` model). The caller supplies **no** version — forcing an
+    agent to fetch+thread `--if-version` would make it reimplement the very read-modify-
+    write we're centralizing. Each spin re-reads, re-derives the change on the fresh
+    bytes, and CAS-writes; on `ErrConflict` it re-spins, bounded, then surfaces exit 14.
+  - **Class (b) — human whole-file `edit`** (`task`/`audit`/`epic edit`): capture the
+    version at open (before `$EDITOR`), pass it as `ifVersion` to a **single-shot** write;
+    a mismatch surfaces `ErrConflict` with **no retry** (CouchDB/S3/Git model — you edited
+    a specific version; silently rebasing your edit onto someone else's is wrong).
+  - Both call the **same** `casWrite` primitive, so there is exactly one conflict-check
+    code path (the correctness win of uniformity) without inflicting explicit tokens on
+    every agent call.
+- **Plain retry is safe even for the non-idempotent `append` — because the check is
+  fail-BEFORE-mutate.** `writeFileAtomic` (temp+rename) means a write either fully lands
+  (no error → no retry) or not at all; the CAS verify sits immediately before the rename.
+  So a retry only fires when our write did *not* land, and it re-appends onto freshly-read
+  bytes exactly once. No idempotency keys needed (those solve lost-ack-after-commit in
+  distributed systems — not a local synchronous rename).
+- **Bounded retry + full jitter** (AWS backoff-and-jitter). Two cron agents on the same
+  schedule collide *every* round under pure backoff; jitter de-correlates them. Constants
+  scale WAY down from the networked-DB literature — local renames are microseconds, so a
+  ms-range base + small cap + a hard bound (~4) then a loud exit-14. Make the sleep/jitter
+  and bound **injectable** (like `s.now()`) so tests are deterministic.
+
+## Traps / footguns / rakes (read before writing code)
+
+1. **The verify→rename window is real and local-FS-specific.** "Compare hash" and
+   "rename" are not one syscall. Re-read + re-hash the source *immediately* before the
+   rename, and accept a residual window: it's why class (a) needs the retry *loop* (treat
+   a landing between verify and rename as a CAS miss and spin) and why class (b) can still
+   occasionally surface a late conflict (fine — the human re-edits). Don't assume "I
+   hashed it three lines ago" is safe under concurrent cron writers.
+2. **Hash the RAW on-disk bytes, identically on read and on re-verify** — never the
+   parsed/re-serialized form. The read side (`GetTask` etc.) and the write side's
+   pre-rename verify must feed byte-identical input to `sha256`, or every write
+   self-conflicts.
+3. **Spurious conflicts = a writer-stability bug, not a token problem.** If our own
+   frontmatter writer ever reorders keys or churns whitespace, whole-file hashing fires
+   false conflicts and inflates the retry rate. The fix is the CLAUDE.md "surgical edit,
+   preserve key order/comments/unknown fields" discipline — NOT weakening the token.
+   Add a round-trip test: read → no-op write path must not change bytes.
+4. **`ErrConflict` (retry) vs `ErrAmbiguous` (don't).** The move dual-file window
+   (write-new-then-remove-old; fsstore.go:246→~254, auditstore.go:184→~191) can, on a
+   crash, leave a duplicate slug → `ErrAmbiguous`, which is a *recoverable* state repaired
+   by `lint`, NOT a transient conflict. Auto-retry must fire on `ErrConflict` ONLY;
+   `ErrAmbiguous` propagates. version-CAS does not change this window — don't try to
+   "fix" it here (it's Phase-B / OCC-adjacent but out of scope).
+5. **Epics currently have NO write guard** (MoveEpic epicstore.go:65, SetEpicFields:114,
+   EditEpic:155 — no re-resolve, because epics never relocate). version-CAS *adds*
+   in-place-edit protection they lack today (concurrent epic edits are silently
+   last-write-wins right now). This is a genuine improvement, not just parity — include
+   epics.
+6. **Don't grow `--json`/wire.** The `version` token is INTERNAL to store/core for this
+   task; the HTTP `ETag`/`If-Match` surface is epic 19. So NO `version` field in
+   TaskJSON/AuditJSON/EpicMetaJSON, NO `SchemaVersion` bump, NO golden churn (confirmed:
+   the acceptance criteria never ask to surface it). Huge scope-limiter — resist the urge.
+7. **List methods stay unchanged.** `ListTasks`/`ListAudits`/`ListEpics` are bulk display
+   reads, not RMW entry points. Only the single-entity `Get*` reads return a `version`.
+8. **The port ripples, but mechanically.** Adding a `version` return to `GetTask`/
+   `GetAudit`/`GetEpic` touches the `Store` interface + every fake in tests + the call
+   sites. Budget for it; it's noise, not risk. (Interpretation to confirm — see the
+   open decision below — the field-op *write* signatures do NOT grow a caller `ifVersion`;
+   only the `casWrite` primitive and the wide-window `Edit*`/create paths carry it.)
+
+## Sequenced implementation (each step builds green + is revertible)
+
+1. **Hash + `casWrite` primitive (no behavior change).** Add `hashContent([]byte) string`
+   (`crypto/sha256` → hex) in the store package. Add the single internal guard
+   `casWrite(slug, path, newContent, ifVersion, relocate…)` that: re-resolves the slug
+   (conflict if gone/moved — preserves today's `curPath != path`), re-reads + re-hashes
+   the source (conflict if `≠ ifVersion`, when ifVersion non-empty), then does the write.
+   Unit-test the guard in isolation with a seam hook. Nothing calls it yet.
+2. **Reads return `version`.** `GetTask` (fsstore.go:86), `GetAudit` (auditstore.go:57),
+   `GetEpic` (epicstore.go:37) return `version = hashContent(bytes)`. Thread through the
+   `TaskStore`/`AuditStore`/`EpicStore` port + fakes + call sites (callers ignore it for
+   now). Green, no behavior change. (Document: consumed by the human-edit capture and the
+   future serve/`If-Match`; available to any wide-window caller.)
+3. **Route the existing writes through `casWrite`.** Replace the 7 duplicated re-resolve
+   blocks (moveTask, SetFields, MoveAudit, and the `editFile`/`writeBody` recheck closures
+   for EditTask/EditAudit/EditBody/AppendAuditBody) with the one primitive, sourcing
+   `ifVersion` from the bytes the method itself just read (narrow-window self-check).
+   Behavior is identical to today PLUS in-place-edit detection. Keep every existing
+   concurrency test green; extend the `testHookBefore*Write` seams to interleave a
+   concurrent *content* edit (not just a relocation) and assert `ErrConflict`.
+4. **Class (a) auto-retry.** Wrap the field-level ops in the bounded, jittered retry loop.
+   Decide placement — **recommend core.Service** (owns re-apply semantics; one loop reused
+   by CLI + TUI + future serve) wrapping the store call; on `ErrConflict` re-read → re-
+   derive → retry, bounded, injectable jitter, then surface exit 14. For each op define
+   "re-apply on fresh read": `set` = re-merge the same field updates; `append` = re-append
+   the same text to the fresh body; `move`/`defer` = re-derive `from` from fresh
+   frontmatter (already idempotent — a re-run that finds the target status is a no-op).
+   Pin the **append-no-double-apply** test explicitly.
+5. **Class (b) `edit` surfaces the conflict.** `EditTask`/`EditAudit`/`EditEpic` capture
+   the version at the pre-editor read and pass it as `ifVersion` to the single-shot
+   `casWrite`; a mismatch is `ErrConflict` (exit 14), no retry. Add epic in-place CAS here
+   (it had none). Pin: a concurrent write during the editor window → exit 14, not a silent
+   clobber.
+6. **Creates: document the `ifVersion == ""` mapping.** Confirm `createFileAtomic`'s
+   `O_EXCL` already *is* `If-None-Match: *`; wire it into the `casWrite` vocabulary so the
+   contract is uniform (little/no code change).
+7. **Docs.** A short store/OCC note (ARCHITECTURE or a store doc): the version token, the
+   hybrid surface, the strong-hash rationale, exit 14. No `schema`/`--json` doc changes.
+
+## Test pins (before it's "done")
+
+- `hashContent` is stable across a read → no-op → read round-trip (writer-stability guard).
+- `casWrite` returns `ErrConflict` on (a) a concurrent relocation and (b) a concurrent
+  in-place content edit; succeeds when the source is untouched.
+- Field op (`set`/`append`/`move`) auto-retries and SUCCEEDS after ONE concurrent edit
+  (via the write hook), within the bound.
+- **`append` under retry does not double-apply** (the key idempotency test): a conflict
+  that fires before the write, then a successful retry, leaves the text appended once.
+- Retry bound exhausted (persistent contention) surfaces `ErrConflict` / exit 14 — loud,
+  not a spin.
+- `edit` path surfaces `ErrConflict` (no retry) on a concurrent write during the editor.
+- Epic in-place edit conflict is now detected (was last-write-wins).
+- `ifVersion == ""` create collision → `ErrConflict`; existing path-CAS move-detection
+  tests stay green (subsumed, not regressed).
+
+## Acceptance criteria
+
+- [ ] Store reads return an opaque `version` = **SHA-256 of the file's current bytes**
+      (working-tree/live content), never a git blob SHA.
+- [ ] Store writes accept `ifVersion` (at the `casWrite` primitive + the wide-window
+      edit/create paths); on mismatch return `domain.ErrConflict` (exit 14), the *same*
+      sentinel today's path-CAS produces. `ifVersion == ""` means create-must-not-exist
+      (the `O_EXCL` case).
+- [ ] Scriptable field-level mutations (`set` / `append` / `move`) do a **bounded internal
+      auto-retry** (re-read → re-apply → rewrite) so agents don't each reimplement it.
+- [ ] The **human whole-file `edit`** path surfaces `ErrConflict` instead of retrying —
+      they edited a specific version and should see the clash.
+- [ ] Existing path-CAS behavior (concurrent-move detection) is preserved.
+
+## Open decision to confirm before coding
+
+The spec says "Store writes accept `ifVersion`." Read literally that is *every* write
+method; the hybrid (and every surveyed system with a scripting surface) instead keeps
+`ifVersion` on the **primitive + wide-window paths** and has the field ops source it
+internally + retry — otherwise agents reimplement the RMW loop the task exists to remove.
+Plan assumes the hybrid reading. Flagging it as the one interpretation worth a nod.
+
+## Out of scope
+
+- **Merge / conflict-resolution UX** — plain retry only (per epic 24); "assist a merge"
+  is deferred.
+- **The HTTP `ETag` / `If-Match` / 412 surface** — that's the web adapter (epic
+  [[19-web-companion-apps-over-a-shared-core]]), which *carries* this content-hash token
+  over HTTP; it is not defined here. **No `version` in `--json`/wire, no `SchemaVersion`
+  bump** in this task.
+- **Git-sync / remote backends** — this task is the local FS implementation of the
+  version-CAS foundation; remotes supply their own preconditions on top of the same port.
+- **Closing the move dual-file window** (crash → duplicate slug) — a pre-existing
+  recoverable-via-lint state, unchanged by OCC; not this task's to fix.
+
+## Related
+
+- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
+- [[2026-06-24-remote-planning-repos-backends-and-sync]] — §2 sync/OCC context (its
+  per-backend token table is superseded by this content-hash decision).
+- Epic [[19-web-companion-apps-over-a-shared-core]] — the HTTP surface over this token.
+
+### Prior-art anchors (research 2026-07-04)
+RFC 9110 §13.1 (If-Match/If-None-Match/412, strong vs weak); etcd Txn mod_revision;
+CouchDB `_rev`/409 + PouchDB delta-vs-full retry; AWS S3 conditional writes (If-Match /
+If-None-Match, 2024) + redrive; Git `update-ref` old-oid CAS / `--force-with-lease`;
+Firestore `runTransaction` internal bounded retry → `ABORTED`; AWS exponential-backoff-
+and-jitter (full jitter); ABA-immunity of whole-content hashing.
