@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fjjx9czpd7z
-status: ready-to-start
+status: deprecated
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: AuditJSON lacks misfiled/declared_bucket, so a --json consumer can't detect a misfiled audit (tasks expose them). Add them + bump schema_version — the audit analog of the 1.25 task contract.
 effort: Unknown
@@ -10,9 +10,15 @@ priority: medium
 autonomy_level: 3
 tags: [schema, wire]
 created: "2026-07-03"
-updated_at: "2026-07-03"
+updated_at: "2026-07-04"
+deprecated_at: "2026-07-04"
 ---
 # Audit JSON parity: misfiled/declared_bucket in AuditJSON
+
+> **Deprecated 2026-07-04 — mooted by Phase B.** The flatten retires the `misfiled`/
+> `declared` concept entirely (no folder to disagree once the layout is flat), so adding
+> `misfiled`/`declared_bucket` to `AuditJSON` now would be write-then-delete. If a derived
+> by-bucket view ever needs a drift signal post-flatten, revisit then.
 
 ## Objective
 
