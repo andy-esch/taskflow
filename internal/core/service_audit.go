@@ -98,7 +98,9 @@ func (s *Service) ShowAudit(slug string) (domain.Audit, string, error) {
 
 // MoveAudit relocates an audit to another bucket (close/reopen/defer).
 func (s *Service) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
-	return s.store.MoveAudit(slug, to, dryRun)
+	return retryOnConflict(s, dryRun, func() (domain.Audit, error) {
+		return s.store.MoveAudit(slug, to, dryRun)
+	})
 }
 
 // EditAudit opens an audit for whole-file editing — the human face of mutation,
@@ -115,5 +117,14 @@ func (s *Service) EditAudit(slug string, edit func(current string, prevErr error
 // human EditAudit. Stamps updated_at (the audit's `date` stays immutable — it's the
 // slug). Returns the reloaded audit and the resulting body.
 func (s *Service) AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, string, error) {
-	return s.store.AppendAuditBody(slug, text, s.now(), dryRun)
+	now := s.now()
+	type res struct {
+		audit domain.Audit
+		body  string
+	}
+	r, err := retryOnConflict(s, dryRun, func() (res, error) {
+		a, b, e := s.store.AppendAuditBody(slug, text, now, dryRun)
+		return res{a, b}, e
+	})
+	return r.audit, r.body, err
 }

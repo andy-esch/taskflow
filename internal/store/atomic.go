@@ -77,6 +77,10 @@ func syncDir(dir string) {
 // O_CREATE|O_EXCL flag rather than a hard link — hard links are restricted on
 // many container/network/VM mounts. A crash mid-write can leave a partial *new*
 // file (cleaned up on a write error here); it never corrupts an existing one.
+//
+// This exclusive create IS the version-CAS `ifVersion == ""` precondition —
+// create-must-not-exist (HTTP `If-None-Match: *`): a losing create fails here rather
+// than clobbering the winner, so a create path needs no separate verifyUnchanged.
 func createFileAtomic(path string, data []byte, perm os.FileMode) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
 	if err != nil {

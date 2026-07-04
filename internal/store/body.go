@@ -27,6 +27,7 @@ func writeBody[T any](
 	newBody string,
 	transform func(content []byte, newBody string) ([]byte, error),
 	parse func(content []byte) (T, error),
+	lock func() (func(), error),
 	recheck func() error,
 	dryRun bool,
 ) (T, string, error) {
@@ -46,6 +47,13 @@ func writeBody[T any](
 	if testHookBeforeBodyWrite != nil {
 		testHookBeforeBodyWrite()
 	}
+	// Serialize the verify→write critical section (flock) so the CAS is atomic — no
+	// cooperating writer can slip a rename between our verify and ours.
+	unlock, lockErr := lock()
+	if lockErr != nil {
+		return zero, "", lockErr
+	}
+	defer unlock()
 	// Compare-and-swap before the write (mirrors SetFields/Move): a concurrent move
 	// may have relocated the file during the read→write gap; writing the original
 	// path would resurrect the slug in its old directory.
@@ -85,13 +93,10 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 		"audit", path, content, appendSection(string(body), text),
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
 		func(c []byte) (domain.Audit, error) { return parseAudit(c, path, bucket) },
+		s.writeLock,
+		// A concurrent bucket move (relocate) OR in-place edit during the read→write gap.
 		func() error {
-			// A concurrent `audit close`/`reopen`/`defer` may have relocated the file
-			// across buckets; writing the original path would resurrect the old bucket.
-			if curPath, _, rerr := s.resolveAudit(slug); rerr != nil || curPath != path {
-				return fmt.Errorf("audit %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
-			}
-			return nil
+			return verifyUnchanged(s.resolveAuditPath, slug, path, hashContent(content), "audit", "edit")
 		},
 		dryRun,
 	)
@@ -124,12 +129,8 @@ func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun 
 		"task", path, content, newBody,
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
 		func(c []byte) (domain.Task, error) { return parseTask(c, path, st) },
-		func() error {
-			if curPath, _, rerr := s.resolve(slug); rerr != nil || curPath != path {
-				return fmt.Errorf("task %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
-			}
-			return nil
-		},
+		s.writeLock,
+		func() error { return verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "edit") },
 		dryRun,
 	)
 }

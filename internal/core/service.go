@@ -14,10 +14,12 @@ import (
 // It has no fs and no cobra, so it is testable in isolation and reused by both
 // primary adapters (the cli and the tui).
 type Service struct {
-	store     Store
-	templates TemplateSource
-	now       func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
-	newID     func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
+	store      Store
+	templates  TemplateSource
+	now        func() time.Time  // wall clock, injectable for deterministic snooze/revisit queries
+	newID      func() string     // stable-id mint (default id.New), injectable so created-file tests are deterministic
+	maxRetries int               // bounded OCC auto-retry for scriptable mutations (see retryOnConflict / WithRetry)
+	retrySleep func(attempt int) // backoff+jitter before a retry; injectable so tests run instantly
 }
 
 // Option configures a Service at construction. Functional options keep the common
@@ -62,7 +64,7 @@ func WithIDGen(gen func() string) Option {
 // NewService wires the core to its store; templates default to the built-in
 // source unless WithTemplateSource overrides it.
 func NewService(store Store, opts ...Option) *Service {
-	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New}
+	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New, maxRetries: defaultMaxRetries, retrySleep: defaultRetrySleep}
 	for _, opt := range opts {
 		opt(s)
 	}

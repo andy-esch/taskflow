@@ -33,6 +33,7 @@ func editFile[T any](
 	orig []byte,
 	now time.Time,
 	parse func(content []byte) (T, error),
+	lock func() (func(), error),
 	recheck func() error,
 	edit func(current string, prevErr error) (string, error),
 ) (T, bool, error) {
@@ -75,6 +76,14 @@ func editFile[T any](
 		if perr != nil {
 			return zero, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
 		}
+		// Take the write lock only NOW — after the (long, interactive) editor returned and
+		// the edit parsed — so the flock covers just the brief verify→write, never the whole
+		// editor session. It makes the CAS atomic against cooperating writers.
+		unlock, lockErr := lock()
+		if lockErr != nil {
+			return zero, false, lockErr
+		}
+		defer unlock()
 		// Compare-and-swap before the write (mirrors SetFields/Move): the editor
 		// window is long, so a concurrent move may have relocated the file — writing
 		// to the original path would resurrect the slug in its old directory.
@@ -106,14 +115,13 @@ func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prev
 	if err != nil {
 		return domain.Task{}, false, fmt.Errorf("read task %s: %w", path, err)
 	}
+	ifVersion := hashContent(orig)
 	return editFile("task", path, orig, now,
 		func(content []byte) (domain.Task, error) { return parseTask(content, path, st) },
-		func() error {
-			if curPath, _, rerr := s.resolve(slug); rerr != nil || curPath != path {
-				return fmt.Errorf("task %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
-			}
-			return nil
-		},
+		s.writeLock,
+		// Version-CAS across the (long) editor window: conflict if the file relocated (a
+		// concurrent `task move` → resurrect hazard) OR its content changed under us.
+		func() error { return verifyUnchanged(s.resolvePath, slug, path, ifVersion, "task", "edit") },
 		edit)
 }
 
@@ -131,13 +139,10 @@ func (s *FS) EditAudit(slug string, now time.Time, edit func(current string, pre
 	if err != nil {
 		return domain.Audit{}, false, fmt.Errorf("read audit %s: %w", path, err)
 	}
+	ifVersion := hashContent(orig)
 	return editFile("audit", path, orig, now,
 		func(content []byte) (domain.Audit, error) { return parseAudit(content, path, bucket) },
-		func() error {
-			if curPath, _, rerr := s.resolveAudit(slug); rerr != nil || curPath != path {
-				return fmt.Errorf("audit %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
-			}
-			return nil
-		},
+		s.writeLock,
+		func() error { return verifyUnchanged(s.resolveAuditPath, slug, path, ifVersion, "audit", "edit") },
 		edit)
 }

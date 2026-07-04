@@ -98,6 +98,20 @@ func (s *FS) MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epi
 	if dryRun {
 		return ep, nil // validated end-to-end; only the write is skipped
 	}
+	if testHookBeforeEpicWrite != nil {
+		testHookBeforeEpicWrite()
+	}
+	// Serialize the verify→write critical section (flock) so the version-CAS is atomic.
+	unlock, err := s.writeLock()
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	defer unlock()
+	// Version-CAS: an epic never relocates, so this catches a concurrent in-place edit (a
+	// protection epic writes lacked entirely before). ifVersion = hash of bytes read above.
+	if err := verifyUnchanged(s.resolveEpicPath, id, path, hashContent(content), "epic", "update"); err != nil {
+		return domain.Epic{}, err
+	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
 		return domain.Epic{}, err
 	}
@@ -106,8 +120,9 @@ func (s *FS) MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epi
 
 // SetEpicFields surgically updates frontmatter fields on an epic and writes the
 // file atomically in place. Unlike a task SetFields there is no status/directory
-// concern (epics live flat, status is a field), so no compare-and-swap re-resolve
-// is needed — the file never moves. Mirrors the task SetFields parse-before-commit
+// concern (epics live flat, status is a field), so there's no relocation to guard —
+// but the version-CAS still catches a concurrent in-place edit. Mirrors the task
+// SetFields parse-before-commit
 // guard: an update whose result wouldn't reload is rejected with the file
 // untouched (ErrValidation, not a FileProblem — the user's update is bad, the file
 // on disk was never the cause).
@@ -142,6 +157,19 @@ func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (doma
 	if dryRun {
 		return ep, nil // validated end-to-end; only the write is skipped
 	}
+	if testHookBeforeEpicWrite != nil {
+		testHookBeforeEpicWrite()
+	}
+	// Serialize the verify→write critical section (flock) so the version-CAS is atomic.
+	unlock, err := s.writeLock()
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	defer unlock()
+	// Version-CAS: catches a concurrent in-place edit during the read→write window.
+	if err := verifyUnchanged(s.resolveEpicPath, id, path, hashContent(content), "epic", "update"); err != nil {
+		return domain.Epic{}, err
+	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
 		return domain.Epic{}, err
 	}
@@ -150,8 +178,9 @@ func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (doma
 
 // EditEpic is the epic counterpart to EditTask: resolve id, read the file, and run
 // the shared editor-loop (parse-before-accept), accepting a save only if it still
-// parses as an epic. Epics never move directories, so there is no compare-and-swap
-// concern — recheck is nil. Returns the reloaded epic and whether it changed.
+// parses as an epic. Epics never move directories, so there's no relocation to guard,
+// but the version-CAS recheck still catches a concurrent edit during the editor window.
+// Returns the reloaded epic and whether it changed.
 func (s *FS) EditEpic(id string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error) {
 	cands, err := markdownCandidates(s.epicsDir, "") // epics have no status/bucket dir
 	if err != nil {
@@ -166,10 +195,31 @@ func (s *FS) EditEpic(id string, now time.Time, edit func(current string, prevEr
 	if err != nil {
 		return domain.Epic{}, false, fmt.Errorf("read epic %s: %w", path, err)
 	}
+	ifVersion := hashContent(orig)
 	return editFile("epic", path, orig, now,
 		func(content []byte) (domain.Epic, error) { return parseEpic(content, path) },
-		nil, // epics never move directories — no compare-and-swap needed
+		s.writeLock,
+		func() error { return verifyUnchanged(s.resolveEpicPath, id, path, ifVersion, "epic", "edit") },
 		edit)
+}
+
+// testHookBeforeEpicWrite runs just before MoveEpic/SetEpicFields' version-CAS check, so
+// a test can interleave a concurrent edit in the read→write window. Nil in production.
+var testHookBeforeEpicWrite func()
+
+// resolveEpicPath resolves an epic id to its file path — the (path, error) adapter the
+// version-CAS guard takes. Epics live flat, so this never sees a relocation; the guard's
+// content hash is what catches a concurrent in-place epic edit.
+func (s *FS) resolveEpicPath(id string) (string, error) {
+	cands, err := markdownCandidates(s.epicsDir, "")
+	if err != nil {
+		return "", err
+	}
+	c, err := resolveID("epic", id, cands)
+	if err != nil {
+		return "", err
+	}
+	return c.path, nil
 }
 
 func parseEpic(content []byte, path string) (domain.Epic, error) {

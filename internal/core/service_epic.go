@@ -254,7 +254,10 @@ func (s *Service) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) 
 	if err := domain.ValidateEpicStatus(status); err != nil {
 		return domain.Epic{}, err
 	}
-	return s.store.MoveEpic(id, status, s.now(), dryRun)
+	now := s.now()
+	return retryOnConflict(s, dryRun, func() (domain.Epic, error) {
+		return s.store.MoveEpic(id, status, now, dryRun)
+	})
 }
 
 // SetEpicFields validates and applies non-status frontmatter updates to an epic
@@ -303,7 +306,9 @@ func (s *Service) SetEpicFields(id string, updates map[string]any, force, dryRun
 	}
 	// Stamp the activity date like SetFields does, so any epic edit advances it.
 	clean["updated_at"] = s.now().Format("2006-01-02")
-	return s.store.SetEpicFields(id, clean, dryRun)
+	return retryOnConflict(s, dryRun, func() (domain.Epic, error) {
+		return s.store.SetEpicFields(id, clean, dryRun)
+	})
 }
 
 // unknownEpicFieldErr is the shared rejection for an epic field outside the
