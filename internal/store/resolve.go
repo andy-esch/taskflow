@@ -77,6 +77,42 @@ func markdownCandidates(dir, dirName string) ([]candidate, error) {
 	return out, nil
 }
 
+// flatCandidates lists every id-led entity file in ONE flat directory as a
+// resolution candidate, parsing `<id>-<slug>.md` via splitFlatName so the id and
+// slug become separate resolution keys. It is the flat-layout counterpart to
+// markdownCandidates' per-status/bucket scan (ADR-0003 §4).
+//
+// A file whose name is not id-led — a non-entity carveout (`HOWTO-execute.md`,
+// `README.md`, or a stray) — is skipped, so it is never a resolution candidate.
+// That is the read-side of the carveout gate (ADR-0003 amendment 2026-07-04); the
+// loud "not an entity" FileProblem for a stray is the *listing* side's job, not
+// resolution's.
+func flatCandidates(dir string) ([]candidate, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read dir %s: %w", dir, err)
+	}
+	var out []candidate
+	for _, e := range entries {
+		if !markdownDoc(e) {
+			continue
+		}
+		entityID, slug, ok := splitFlatName(strings.TrimSuffix(e.Name(), ".md"))
+		if !ok {
+			continue // not id-led — the carveout gate
+		}
+		out = append(out, candidate{
+			id:   entityID,
+			slug: slug,
+			path: filepath.Join(dir, e.Name()),
+		})
+	}
+	return out, nil
+}
+
 // Fuzzy slug resolution: the keyboard-economy companion to tab-completion.
 // An exact id always wins; otherwise a unique case-insensitive prefix, then a
 // unique case-insensitive substring, resolves. Ambiguity is explicit — more
@@ -87,9 +123,10 @@ func markdownCandidates(dir, dirName string) ([]candidate, error) {
 // directory name ("" for epics) — shown in ambiguity messages, and convertible
 // back to the typed status/bucket by the status==directory invariant.
 type candidate struct {
-	id   string
+	id   string // resolution key: an epic/legacy stem, or the 12-char stable id under the flat layout
+	slug string // human slug (flat tasks/audits) — a second resolution key; "" for epics and legacy candidates
 	path string
-	dir  string
+	dir  string // status/bucket mirror ("" for epics, and for flat entities); retained through the cutover
 }
 
 // validQueryName rejects queries that could escape the planning tree when
@@ -113,18 +150,24 @@ func resolveID(kind, query string, cands []candidate) (candidate, error) {
 		if cands[i].id != cands[j].id {
 			return cands[i].id < cands[j].id
 		}
+		if cands[i].slug != cands[j].slug {
+			return cands[i].slug < cands[j].slug
+		}
 		return cands[i].dir < cands[j].dir
 	})
 	q := strings.ToLower(query)
-	tiers := []func(id string) bool{
-		func(id string) bool { return id == query || strings.ToLower(id) == q },
-		func(id string) bool { return strings.HasPrefix(strings.ToLower(id), q) },
-		func(id string) bool { return strings.Contains(strings.ToLower(id), q) },
+	tiers := []func(key string) bool{
+		func(key string) bool { return key == query || strings.ToLower(key) == q },
+		func(key string) bool { return strings.HasPrefix(strings.ToLower(key), q) },
+		func(key string) bool { return strings.Contains(strings.ToLower(key), q) },
 	}
 	for _, match := range tiers {
 		var hits []candidate
 		for _, c := range cands {
-			if match(c.id) {
+			// Under the flat layout a task/audit resolves on either its stable id
+			// (a prefix) or its human slug; epic/legacy candidates carry only id
+			// (slug ""), so this stays their single-key match unchanged.
+			if match(c.id) || (c.slug != "" && match(c.slug)) {
 				hits = append(hits, c)
 			}
 		}
@@ -162,10 +205,14 @@ func slugCollision(slug string, cands []candidate) string {
 func describeCandidates(cands []candidate) string {
 	parts := make([]string, len(cands))
 	for i, c := range cands {
-		if c.dir == "" {
-			parts[i] = c.id
-		} else {
+		switch {
+		case c.dir != "":
 			parts[i] = fmt.Sprintf("%s (%s)", c.id, c.dir)
+		case c.slug != "":
+			// Flat entities carry no dir; show slug + id so a dup-slug ambiguity is retypable by id.
+			parts[i] = fmt.Sprintf("%s (%s)", c.slug, c.id)
+		default:
+			parts[i] = c.id
 		}
 	}
 	return strings.Join(parts, ", ")
