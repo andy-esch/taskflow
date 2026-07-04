@@ -3,7 +3,7 @@ schema: 1
 id: 6fjjpfg16ss5
 status: ready-to-start
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
-description: 'lint --fix misfiled-move: 3 dup-slug-gated edges — chained moves skip order-dependently, dry-run diverges from real, a skipped move drops text/id repairs. Non-destructive. From Phase-A review.'
+description: 'Narrowed post-Phase-B: route fix.go writes through the version-CAS write-lock (lint --fix is an unguarded second writer). The misfiled-move dup-slug edges are mooted by the flatten.'
 effort: Unknown
 tier: 3
 priority: medium
@@ -13,6 +13,13 @@ created: "2026-07-03"
 updated_at: "2026-07-03"
 ---
 # Harden lint --fix misfiled-move for dup-slug edge cases
+
+> **Narrowed 2026-07-04.** Phase B moots the original scope — the misfiled-move and the
+> dup-slug class both disappear once the layout is flat + id-led (no folder to be misfiled
+> against; id-led filenames are unique). The ONE surviving, Phase-B-independent concern:
+> **`fix.go`'s writes/relocations bypass the version-CAS write-lock** (flagged during the OCC
+> work) — `lint --fix` is a second writer that can clobber a concurrent edit. That's the real
+> remaining work here; the dup-slug edges below are historical context.
 
 ## Objective
 

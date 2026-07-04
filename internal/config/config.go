@@ -576,7 +576,14 @@ func checkTrackedRepo(cfg *Config, tr string) (LinkProblem, bool) {
 	if icf.PlanningRepo == "" {
 		return LinkProblem{tr, fmt.Sprintf("tracked repo %q does not point back (no planning_repo)", tr)}, true
 	}
-	if resolveRepoPath(implDir, icf.PlanningRepo) != resolveRepoPath(cfg.Root, ".") {
+	// The impl's planning_repo may name EITHER the planning repo (cfg.Dir — where the
+	// .tskflwctl.toml lives) or the taskflow_root subdir it resolves to (cfg.Root); both
+	// unambiguously identify this planning repo. Accept either. Checking only one falsely
+	// reports "points elsewhere" for the other convention once taskflow_root is set (then
+	// Root != Dir: only-Root missed a repo-root pointer — the desirelines case — and
+	// only-Dir would break an impl that points at the subdir).
+	target := resolveRepoPath(implDir, icf.PlanningRepo)
+	if target != resolveRepoPath(cfg.Dir, ".") && target != resolveRepoPath(cfg.Root, ".") {
 		return LinkProblem{tr, fmt.Sprintf("tracked repo %q points its planning_repo elsewhere, not here", tr)}, true
 	}
 	return LinkProblem{}, false

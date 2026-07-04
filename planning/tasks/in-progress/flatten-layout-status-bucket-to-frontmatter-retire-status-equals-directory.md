@@ -24,6 +24,41 @@ plus [[version-aware-occ-content-hash-token-and-plain-retry]], all merged. Re-sc
 **Phase B**: the irreversible cutover that deletes the directory mirror entirely. Its slug and
 description already fit Phase B.
 
+## Grounding & decisions (2026-07-04 — real code + the desirelines audit)
+
+Two grounding passes (the actual taskflow store code + a full audit of the real
+`desirelines-planning` repo, 819 files) reshaped the plan. Corrections to the first draft:
+
+- **DECISION — epics stay `NN`-keyed (not id-led).** Epics carry no 12-char id (0/17); they
+  are `NN-<slug>.md` and ~644 tasks reference them as `epic: NN-<slug>`. Forcing ids on epics
+  would mean rewriting those 644 refs. Decided: **the `NN` prefix IS the epic's stable key;
+  refs stay `NN-<slug>`.** So **Phase B flattens TASKS + AUDITS only**; epics are untouched
+  (already flat, already stable). Amends ADR-0003 ("all three get 12-char ids").
+- **CODE footguns (must handle in the flatten):**
+  - `markdownCandidates` builds resolution candidates **from filenames only** (no frontmatter
+    read), so a stray non-entity `.md` (e.g. `audits/HOWTO-execute.md`) becomes a candidate and
+    **pollutes resolution**. The flat scan MUST skip non-frontmatter files. (Listing already
+    tolerates them via `FileProblem`; resolution does not.)
+  - `parseTask`/`parseAudit` derive the slug as `basename − .md`; on `<id>-<slug>.md` they must
+    **slice the fixed 12-char id off the front** (`id.Valid()` gates it) or the slug is wrong.
+    `slugCollision` (compares `candidate.id == slug`) needs the same split.
+  - Reuse `fix.go`'s `backfillMissingID` (id from `created`/`date`/lifecycle/filename-date) for
+    the few audits still missing an id.
+- **DESIRELINES data hazards (the migration must handle):**
+  - **122 files (16%) carry entity↔entity relative-path links** through the status/bucket dirs
+    — flattening changes every one of those paths → **the dominant migration job** (plus 63
+    wikilink files). Scheme-2 owns it.
+  - **75 audits missing `bucket:`** (backfill from dir); **3 audits missing `id:`** (mint from
+    `date:`); **1 undated deprecated task** that's a stale duplicate of a dated one → resolve
+    by hand; a few non-standard `status:` values (`done`/`complete`/`blocked`/`planning`) to
+    canonicalize. 100% of existing ids valid; 0 id/case/symlink collisions.
+- **RECOMMENDED pre-step — isolate under `planning/`.** desirelines scatters entities at the
+  repo root next to ~10 ancillary dirs; the flatten amplifies the clobbering risk (a 648-file
+  flat `tasks/` at root). Move entities under a dedicated visible `planning/` dir first
+  (config-only, no new code, decoupled from Phase B):
+  [[isolate-desirelines-planning-entities-under-a-dedicated-planning-directory]]. Also takes
+  the ancillary dirs + the stray HOWTO out of the tool's scope.
+
 ## Objective
 
 Flatten `tasks/<status>/<slug>.md` and `audits/<bucket>/<slug>.md` to ONE dir each with
@@ -36,8 +71,9 @@ coordinates with scheme-2 references + rename.
 
 ## Target state
 
-- `tasks/<id>-<slug>.md`, `audits/<id>-<slug>.md`, `epics/<id>-<slug>.md` — **epics are
-  already flat, the template** (`markdownCandidates(dir, "")`).
+- `tasks/<id>-<slug>.md`, `audits/<id>-<slug>.md` — id-led. **Epics keep `NN-<slug>.md`**
+  (their `NN` is their stable key; refs stay `epic: NN-<slug>` — see the grounding decision),
+  so the flatten touches tasks + audits only.
 - Resolution: **id is the primary key** (filename leads with it) — id-prefix, then slug (the
   trailing part), then fuzzy, over ONE dir.
 - `task move`/`start`/… = an in-place `status:` frontmatter edit (exactly what `MoveEpic`
