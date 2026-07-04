@@ -109,11 +109,13 @@ tskflwctl audit close|reopen|defer <slug>...
 
 # hygiene
 tskflwctl lint                         # validate active task frontmatter
-tskflwctl lint --fix                   # auto-repair (quote colons, normalize lists)
+tskflwctl lint --fix                   # auto-repair (normalize, relocate misfiled, backfill ids)
 ```
 
-A task's `status:` **is** its directory (`tasks/<status>/`); lifecycle verbs move
-the file and stamp dates atomically. Errors carry semantic exit codes — `10`
+A task's `status:` is authoritative in frontmatter; `tasks/<status>/` is a
+lock-step mirror of it. Lifecycle verbs change the status and relocate the file,
+stamping dates atomically (`lint --fix` re-syncs a hand-edited drift). Errors
+carry semantic exit codes — `10`
 not-found, `11` validation, `13` ambiguous, `14`
 conflict (e.g. a name already taken).
 

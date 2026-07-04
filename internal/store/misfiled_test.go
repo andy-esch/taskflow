@@ -157,3 +157,32 @@ func TestMove_RelocatesMisfiledWithoutRestamp(t *testing.T) {
 		t.Errorf("moving to the already-current status must not re-stamp started_at:\n%s", b)
 	}
 }
+
+// Moving a task to the status its folder already implies, when the frontmatter status is
+// MISSING (parseTask fell back to the folder), HEALS the frontmatter: the explicit verb
+// writes the value lint was flagging. No relocation (already there), no entry-date stamp
+// (not a real transition) — just the missing status made explicit, so the flag clears.
+func TestMove_HealsFellBackStatus(t *testing.T) {
+	root := t.TempDir()
+	// No frontmatter status → parseTask falls back to the folder (completed) and flags it.
+	writeTask(t, root, "completed", "h.md", "---\nid: 6fjangd7kvah\nepic: e1\n---\n# x\n")
+
+	task, err := NewFS(root).Move("h", domain.StatusCompleted, time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.StatusFellBack {
+		t.Error("after healing, the reloaded task should no longer report a fell-back status")
+	}
+	b, err := os.ReadFile(root + "/tasks/completed/h.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "status: completed") {
+		t.Errorf("moving to the fell-back status must write the missing frontmatter:\n%s", b)
+	}
+	// The status didn't actually change, so no entry date is stamped.
+	if strings.Contains(string(b), "completed_at") {
+		t.Errorf("healing a missing status must not stamp an entry date:\n%s", b)
+	}
+}

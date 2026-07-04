@@ -124,3 +124,29 @@ func TestLint_Dirty_Exit11(t *testing.T) {
 		t.Errorf("expected an issues report, got: %q", out.String())
 	}
 }
+
+// A task with NO frontmatter status falls back to the folder (still lists) but is flagged
+// — frontmatter is now authoritative, so a missing/foreign status is a real defect.
+func TestLint_FlagsMissingFrontmatterStatus(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: e\n---\n# E1\n")
+	write("tasks/next-up/x.md",
+		"---\nid: 6fjangd7kvca\nepic: e1\ntier: 3\npriority: high\neffort: x\ncreated: 2026-06-09\ntags: [a]\ndescription: d\n---\n# x\n")
+
+	out, err := runRootRC(t, "-C", root, "lint")
+	if err == nil {
+		t.Error("lint must exit non-zero on a missing frontmatter status")
+	}
+	if !strings.Contains(out, "frontmatter status missing or unrecognized") {
+		t.Errorf("expected the missing-status flag:\n%s", out)
+	}
+}

@@ -44,6 +44,10 @@ type Audit struct {
 	// the authoritative one (frontmatter, ADR-0003 Phase A); the two diverge only when
 	// an audit is misfiled — see Misfiled.
 	FolderBucket AuditBucket `yaml:"-"`
+	// BucketFellBack is set by the store when the frontmatter bucket was missing or
+	// unrecognized, so Bucket is the folder fallback — lint flags it
+	// (FrontmatterBucketIssues).
+	BucketFellBack bool `yaml:"-"`
 
 	// ID is the stable 12-char identifier (ADR-0003), minted on create. Additive —
 	// see domain.Task.ID; empty on pre-rollout files.
@@ -55,8 +59,8 @@ type Audit struct {
 	Date   string      `yaml:"date"`
 	// Updated is the audit's own last-edited date (stamped by edit/append). Unlike
 	// Date — immutable, part of the slug — this advances on each content edit. A
-	// bucket move (close/reopen/defer) does NOT touch it: it changes no frontmatter or
-	// body, only the directory.
+	// bucket move (close/reopen/defer) rewrites the `bucket:` frontmatter and relocates
+	// the file, but does NOT touch this stamp.
 	Updated string `yaml:"updated_at"`
 
 	Findings int `yaml:"-"`

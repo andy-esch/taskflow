@@ -10,6 +10,10 @@ type Task struct {
 	// when a file is misfiled — the directory hasn't caught up to a frontmatter
 	// status change. See Misfiled.
 	FolderStatus Status `yaml:"-"`
+	// StatusFellBack is set by the store when the frontmatter status was missing or
+	// unrecognized, so Status above is the folder fallback rather than a real
+	// frontmatter value — lint flags it (FrontmatterStatusIssues).
+	StatusFellBack bool `yaml:"-"`
 
 	// ID is the stable 12-char identifier (ADR-0003), minted on create by the core
 	// service. Additive for now: written to new files but not yet resolved on,

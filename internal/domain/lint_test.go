@@ -79,6 +79,26 @@ func TestMisfiledIssues(t *testing.T) {
 	}
 }
 
+func TestFrontmatterStatusIssues(t *testing.T) {
+	// A fell-back frontmatter status (missing or unrecognized) is flagged.
+	if got := FrontmatterStatusIssues(Task{StatusFellBack: true}); len(got) == 0 {
+		t.Error("a fell-back frontmatter status must be flagged")
+	}
+	// A valid frontmatter status (no fallback) is clean.
+	if got := FrontmatterStatusIssues(Task{Status: StatusReadyToStart}); len(got) != 0 {
+		t.Errorf("a valid frontmatter status must not be flagged: %+v", got)
+	}
+}
+
+func TestFrontmatterBucketIssues(t *testing.T) {
+	if got := FrontmatterBucketIssues(Audit{BucketFellBack: true}); len(got) == 0 {
+		t.Error("a fell-back frontmatter bucket must be flagged")
+	}
+	if got := FrontmatterBucketIssues(Audit{Bucket: AuditOpen}); len(got) != 0 {
+		t.Errorf("a valid frontmatter bucket must not be flagged: %+v", got)
+	}
+}
+
 func cleanEpic() Epic {
 	return Epic{ID: "20-good", Status: "active", Priority: "high", Description: "a goal"}
 }

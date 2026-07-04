@@ -86,13 +86,20 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 					changes = append(changes, "bucket: assigned (was missing)")
 				}
 				if target, ok := auditMisfiledTarget(fixed, auditBucket); ok {
-					moves = append(moves, plannedMove{
-						from:    path,
-						to:      filepath.Join(s.auditsDir, target.Dir(), e.Name()),
-						content: fixed,
-						changes: append(changes, fmt.Sprintf("bucket: moved to %s/ to match frontmatter", target)),
-					})
-					continue
+					// Only relocate when the target bucket would accept it: a non-open
+					// bucket must have no open findings (the invariant MoveAudit enforces).
+					// Relocating into a gate-violating state would leave a tree the linter
+					// rejects and can't repair, so leave it misfiled for the re-lint to flag.
+					_, body := splitFrontmatter(fixed)
+					if target == domain.AuditOpen || domain.CountOpenFindings(domain.ParseFindings(string(body))) == 0 {
+						moves = append(moves, plannedMove{
+							from:    path,
+							to:      filepath.Join(s.auditsDir, target.Dir(), e.Name()),
+							content: fixed,
+							changes: append(changes, fmt.Sprintf("bucket: moved to %s/ to match frontmatter", target)),
+						})
+						continue
+					}
 				}
 			}
 			if len(changes) == 0 {
@@ -337,8 +344,11 @@ func backfillMissingBucket(content []byte, dirBucket domain.AuditBucket) ([]byte
 	if yaml.Unmarshal(fm, &meta) != nil {
 		return content, false, nil
 	}
-	if meta.Bucket.Valid() {
-		return content, false, nil // already has one
+	if strings.TrimSpace(string(meta.Bucket)) != "" {
+		// Present already — valid, or a foreign/legacy word we must NOT clobber (backfill
+		// is for a truly ABSENT bucket; a bad value is the re-lint's / replace-misfiled's
+		// job to surface, not this repair's to silently overwrite).
+		return content, false, nil
 	}
 	out, err := updateFrontmatter(content, map[string]any{"bucket": string(dirBucket)})
 	if err != nil {

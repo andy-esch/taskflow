@@ -18,9 +18,6 @@ func LintTask(t Task, validEpic func(string) bool) []Issue {
 	var issues []Issue
 	add := func(field, msg string) { issues = append(issues, Issue{Field: field, Message: msg}) }
 
-	if t.Status == "" {
-		add("status", "missing")
-	}
 	switch {
 	case t.Epic == "":
 		add("epic", "missing")
@@ -71,8 +68,21 @@ func LintTask(t Task, validEpic func(string) bool) []Issue {
 	}
 
 	issues = append(issues, MisfiledIssues(t)...)
+	issues = append(issues, FrontmatterStatusIssues(t)...)
 	issues = append(issues, MissingIDIssue(t.ID)...)
 	return issues
+}
+
+// FrontmatterStatusIssues flags a task whose frontmatter `status` was missing or named
+// no recognized status — now that frontmatter is the authority (ADR-0003 Phase A) that's
+// a real defect; the folder only silently covered for it (parseTask fell back). Applies
+// in ANY status (an archived task's broken status surfaces too, beside MisfiledIssues),
+// and is fail-open: the task still lists and resolves via the fallback, it's just flagged.
+func FrontmatterStatusIssues(t Task) []Issue {
+	if !t.StatusFellBack {
+		return nil
+	}
+	return []Issue{{Field: "status", Message: "frontmatter status missing or unrecognized — set it with the lifecycle verb for its state (`task start`/`next`/`ready`/`complete`/`deprecate`)"}}
 }
 
 // MissingIDIssue flags an entity (task or audit) that has no stable id yet — the
@@ -158,4 +168,15 @@ func AuditMisfiledIssues(a Audit) []Issue {
 		Message: fmt.Sprintf("frontmatter says %q but file is in %s/ — frontmatter wins; `lint --fix` moves it",
 			a.Bucket, a.FolderBucket),
 	}}
+}
+
+// FrontmatterBucketIssues flags an audit whose frontmatter `bucket` was missing or named
+// no recognized bucket — the audit analog of FrontmatterStatusIssues. Fail-open (the
+// folder fallback still lists it). `lint --fix` backfills a MISSING bucket; a foreign
+// value it leaves for this flag to surface.
+func FrontmatterBucketIssues(a Audit) []Issue {
+	if !a.BucketFellBack {
+		return nil
+	}
+	return []Issue{{Field: "bucket", Message: "frontmatter bucket missing or unrecognized — set it with `audit close`/`reopen`/`defer` (`lint --fix` backfills a missing one)"}}
 }

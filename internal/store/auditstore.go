@@ -123,8 +123,10 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	// `from` is the AUTHORITATIVE bucket (frontmatter), not the folder resolve returned;
 	// `folder` is the mirror, kept to decide whether a relocation is still owed.
 	from := folder
+	fellBack := false
 	if cur, perr := parseAudit(content, path, folder); perr == nil {
 		from = cur.Bucket
+		fellBack = cur.BucketFellBack
 	}
 	// Bucket↔state invariant (the same rule `audit lint` enforces): a non-open bucket
 	// must have no still-open findings. Refuse rather than write a state the linter
@@ -139,12 +141,14 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	}
 	// A true no-op writes nothing AND needs no relocation — already in the target dir with
 	// the target bucket. A misfiled audit whose frontmatter already equals `to` still
-	// relocates (folder ≠ to), carrying its frontmatter verbatim.
-	if from == to && folder == to {
+	// relocates (folder ≠ to). And when the frontmatter bucket fell back to the folder
+	// (missing/unrecognized), this explicit verb writes it to heal the frontmatter even
+	// though the bucket isn't changing.
+	if from == to && folder == to && !fellBack {
 		return parseAudit(content, path, folder)
 	}
 	newContent := content
-	if from != to {
+	if from != to || fellBack {
 		newContent, err = updateFrontmatter(content, map[string]any{"bucket": string(to)})
 		if err != nil {
 			return domain.Audit{}, err
@@ -251,6 +255,7 @@ func parseAuditWithFindings(content []byte, path string, bucket domain.AuditBuck
 	// foreign frontmatter bucket falls back to the folder so the audit still lists.
 	a.FolderBucket = bucket
 	if !a.Bucket.Valid() {
+		a.BucketFellBack = true // frontmatter bucket missing/unrecognized — lint flags it
 		a.Bucket = bucket
 	}
 	// The finding grammar (and "what each status means for progress") lives in the
