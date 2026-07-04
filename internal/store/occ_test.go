@@ -2,8 +2,11 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -234,5 +237,54 @@ func TestAppendAuditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "note: CHANGED") || strings.Contains(string(b), "M9. new") {
 		t.Errorf("the losing append must not clobber the concurrent edit:\n%s", b)
+	}
+}
+
+// TestConcurrentAppends_NoLostUpdates is the regression test for the flock write-lock: real
+// concurrent goroutines append to the SAME file, and every write that reports success must
+// land exactly once. Without the lock the verify→write window (widened by the temp-file
+// fsync) lets writers silently clobber each other — landed < success. With it, a race is a
+// DETECTED conflict the writer retries, so nothing is lost. (The hook-based tests can't
+// exercise this: the hook bypasses the lock; only a genuine race does.)
+func TestConcurrentAppends_NoLostUpdates(t *testing.T) {
+	root := t.TempDir()
+	writeTask(t, root, "ready-to-start", "race.md",
+		"---\nid: 6fjangd7kvrc\nstatus: ready-to-start\nepic: e1\n---\n# body\n")
+	fs := NewFS(root)
+
+	const N = 8
+	var wg sync.WaitGroup
+	var succ int64
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			// Retry on conflict (mirrors core.Service's auto-retry), with a small backoff so
+			// N goroutines don't livelock. The store itself doesn't retry — that's core's job.
+			for attempt := 0; attempt < 300; attempt++ {
+				if _, _, err := fs.EditBody("race", fmt.Sprintf("marker-%d", i), true, time.Unix(0, 0), false); err == nil {
+					atomic.AddInt64(&succ, 1)
+					return
+				} else if !errors.Is(err, domain.ErrConflict) {
+					t.Errorf("writer %d: unexpected error: %v", i, err)
+					return
+				}
+				time.Sleep(time.Millisecond)
+			}
+			t.Errorf("writer %d exhausted retries (livelock?)", i)
+		}(i)
+	}
+	wg.Wait()
+
+	b, err := os.ReadFile(root + "/tasks/ready-to-start/race.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	landed := int64(strings.Count(string(b), "marker-"))
+	if landed != succ {
+		t.Errorf("lost/duplicated updates under concurrency: %d markers landed but %d writes reported success", landed, succ)
+	}
+	if succ != N {
+		t.Errorf("want all %d concurrent writers to land, got %d", N, succ)
 	}
 }

@@ -57,9 +57,13 @@ the one-screen orientation for contributors.
   before committing, re-resolves the file by its **canonical** slug and re-hashes it
   against the content read at the start of the op (`verifyUnchanged` in `cas.go` — a
   strong whole-file SHA-256 computed on read, **never stored**), so a concurrent
-  relocation OR in-place edit is `ErrConflict` (exit 14). The token is **internal**:
-  scriptable mutations auto-retry it in `core.Service` (bounded + jittered, so agents
-  don't reimplement the loop), the human `edit` surfaces the conflict, and creates map
+  relocation OR in-place edit is `ErrConflict` (exit 14). A repo-wide advisory `flock`
+  (`writeLock`, unix; a no-op stub elsewhere) serializes the verify→write so that CAS is
+  *atomic* — without it two writers both pass their verify before either renames and the
+  later silently clobbers the earlier (the verify→rename window, widened by the temp fsync).
+  The token is **internal**: scriptable mutations auto-retry it in `core.Service` (bounded +
+  jittered, so agents don't reimplement the loop), the human `edit` surfaces the conflict
+  (no retry, and the lock is held only for the write, never the editor session), and creates map
   the empty precondition onto `createFileAtomic`'s `O_EXCL`. Exposing it over HTTP
   (`If-Match`) is the web adapter's job (epic 19), not the FS store's.
 - **`internal/cli`** — a primary adapter: the cobra tree.
@@ -246,5 +250,5 @@ actionable frontmatter errors, agent safety annotations.
 Remaining (see `planning/`): `adr`/`project` groups, the audit finding-*write*
 surface (`audit finding --status`/`sync`; the read surface — `audit findings`
 query + `audit lint` — shipped), reporting views (`stats`/`index`/`tags`),
-`track`, `schema --type cli`, advisory `flock`, interactive `init` wizard. Out of
+`track`, `schema --type cli`, interactive `init` wizard. Out of
 scope by a long shot: MCP / semantic engine / pgvector.

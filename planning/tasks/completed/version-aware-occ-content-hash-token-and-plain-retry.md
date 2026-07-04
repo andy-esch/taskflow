@@ -19,11 +19,24 @@ completed_at: "2026-07-04"
 
 ## Progress & pivots (2026-07-04)
 
-**Status: implementation complete (steps 1–7); ready to close.** Green throughout —
-store + core suites, vet, golangci-lint (0 issues), live smoke. Two small items are
-tracked separately so they outlive this task: the dry-run↔CAS consistency decision
+**Status: implementation complete (steps 1–7).** Green throughout — store + core suites,
+vet, golangci-lint (0 issues), live smoke. Two small items are tracked separately so they
+outlive this task: the dry-run↔CAS consistency decision
 ([[normalize-dry-run-vs-version-cas-ordering-across-store-writes]]) and hardening
 fix.go's relocations ([[harden-lint-fix-misfiled-move-for-dup-slug-edge-cases]]).
+
+**⚠ Post-"completion" critical fix (2026-07-04): the flock write-lock.** A concurrency
+*smoke test* (16 processes appending to one file) exposed a serious bug the four review
+passes missed: version-CAS alone did NOT prevent lost updates — 8–12 of 16 concurrent
+writes silently clobbered each other with ZERO conflicts, because the verify→write wasn't
+atomic (the verify→rename window, widened to ms by the temp-file fsync — both writers pass
+their verify before either renames). Fixed by the planned **advisory `flock`** (`writeLock`,
+repo-wide, unix; no-op stub elsewhere) around the verify→write critical section, making the
+CAS atomic; the existing retry then heals the now-*detected* conflicts. Post-fix smoke:
+LOST=0 (0 of N lost), a couple of surfaced exit-14s under 16-way contention (correct).
+Regression pinned by `store.TestConcurrentAppends_NoLostUpdates` (fails without the lock).
+Lesson: the hook-based tests only exercised a concurrent edit landing *before* verify (the
+detectable case); nothing tested the between-verify-and-rename window until the smoke did.
 
 Pivots taken vs the original plan:
 - **The token is fully INTERNAL — the `core.Store` port never changed.** The hybrid

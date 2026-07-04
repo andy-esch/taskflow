@@ -170,6 +170,12 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	if testHookBeforeMoveAuditWrite != nil {
 		testHookBeforeMoveAuditWrite()
 	}
+	// Serialize the verify→write critical section (flock) so the version-CAS is atomic.
+	unlock, err := s.writeLock()
+	if err != nil {
+		return domain.Audit{}, err
+	}
+	defer unlock()
 	// Version-CAS before the write: verifyUnchanged re-resolves (a concurrent relocation
 	// moved this slug → writing from the stale path would leave a duplicate) AND re-hashes
 	// the source (a concurrent in-place edit). Fail cleanly with nothing moved (exit-14

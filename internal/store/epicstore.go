@@ -101,6 +101,12 @@ func (s *FS) MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epi
 	if testHookBeforeEpicWrite != nil {
 		testHookBeforeEpicWrite()
 	}
+	// Serialize the verify→write critical section (flock) so the version-CAS is atomic.
+	unlock, err := s.writeLock()
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	defer unlock()
 	// Version-CAS: an epic never relocates, so this catches a concurrent in-place edit (a
 	// protection epic writes lacked entirely before). ifVersion = hash of bytes read above.
 	if err := verifyUnchanged(s.resolveEpicPath, id, path, hashContent(content), "epic", "update"); err != nil {
@@ -154,6 +160,12 @@ func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (doma
 	if testHookBeforeEpicWrite != nil {
 		testHookBeforeEpicWrite()
 	}
+	// Serialize the verify→write critical section (flock) so the version-CAS is atomic.
+	unlock, err := s.writeLock()
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	defer unlock()
 	// Version-CAS: catches a concurrent in-place edit during the read→write window.
 	if err := verifyUnchanged(s.resolveEpicPath, id, path, hashContent(content), "epic", "update"); err != nil {
 		return domain.Epic{}, err
@@ -186,6 +198,7 @@ func (s *FS) EditEpic(id string, now time.Time, edit func(current string, prevEr
 	ifVersion := hashContent(orig)
 	return editFile("epic", path, orig, now,
 		func(content []byte) (domain.Epic, error) { return parseEpic(content, path) },
+		s.writeLock,
 		func() error { return verifyUnchanged(s.resolveEpicPath, id, path, ifVersion, "epic", "edit") },
 		edit)
 }

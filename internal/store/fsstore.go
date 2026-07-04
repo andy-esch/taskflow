@@ -23,6 +23,7 @@ var errBadFrontmatter = fmt.Errorf("%w: malformed frontmatter", domain.ErrValida
 // FS reads/writes a planning tree: tasks at <root>/tasks/<status>/<slug>.md
 // and epics at <root>/epics/<id>.md.
 type FS struct {
+	root      string // the planning root; the write-lock (flock) is taken on this dir
 	tasksDir  string
 	epicsDir  string
 	auditsDir string
@@ -40,6 +41,7 @@ var (
 // NewFS returns a store rooted at a planning directory (the dir holding tasks/).
 func NewFS(root string) *FS {
 	return &FS{
+		root:      root,
 		tasksDir:  filepath.Join(root, domain.TasksDir),
 		epicsDir:  filepath.Join(root, domain.EpicsDir),
 		auditsDir: filepath.Join(root, domain.AuditsDir),
@@ -229,6 +231,13 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 	if testHookBeforeMoveWrite != nil {
 		testHookBeforeMoveWrite()
 	}
+	// Serialize the verify→write critical section (flock) so the version-CAS is atomic — no
+	// cooperating writer can land a rename between our verify and our own.
+	unlock, err := s.writeLock()
+	if err != nil {
+		return domain.Task{}, err
+	}
+	defer unlock()
 	// Version-CAS immediately before the write: verifyUnchanged re-resolves (a concurrent
 	// Move relocated the slug → writing the new file would leave a duplicate across two
 	// status dirs, a permanent ErrAmbiguous) AND re-hashes the source (a concurrent
@@ -306,6 +315,12 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 	if testHookBeforeSetFieldsWrite != nil {
 		testHookBeforeSetFieldsWrite()
 	}
+	// Serialize the verify→write critical section (flock) so the version-CAS is atomic.
+	unlock, err := s.writeLock()
+	if err != nil {
+		return domain.Task{}, err
+	}
+	defer unlock()
 	// Version-CAS immediately before the write: verifyUnchanged re-resolves (a concurrent
 	// Move relocated the file → renaming onto the original path would resurrect the slug
 	// in its old status dir, a permanent ErrAmbiguous) AND re-hashes the source (a
