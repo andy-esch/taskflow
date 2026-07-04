@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -23,8 +25,9 @@ func hashContent(b []byte) string {
 }
 
 // verifyUnchanged is the version-CAS precondition shared by every write: called
-// immediately before the write, it re-resolves the slug and re-reads the source to
-// confirm nothing raced us between the read-and-transform and the write. It returns
+// immediately before the write, it re-resolves the file (by its canonical slug, not the
+// caller's raw fuzzy query) and re-reads the source to confirm nothing raced us between
+// the read-and-transform and the write. It returns
 // domain.ErrConflict (exit 14 — the same sentinel today's path-CAS produces) when the
 // file either:
 //
@@ -45,7 +48,14 @@ func verifyUnchanged(resolve func(string) (string, error), slug, path, ifVersion
 	conflict := func() error {
 		return fmt.Errorf("%s %q changed on disk during %s; retry: %w", noun, slug, op, domain.ErrConflict)
 	}
-	curPath, err := resolve(slug)
+	// Re-resolve by the CANONICAL slug (the resolved file's basename), never the caller's
+	// raw query: re-running a fuzzy/partial query could newly match a concurrently-created
+	// same-prefix file and return ErrAmbiguous, which we'd read as a conflict — a spurious
+	// rejection of an edit to a file that never changed. The canonical slug matches
+	// exactly (resolveID is exact-first) and deterministically, so only a genuine move or
+	// dup of THIS file trips the path check.
+	canonical := strings.TrimSuffix(filepath.Base(path), ".md")
+	curPath, err := resolve(canonical)
 	if err != nil || curPath != path {
 		return conflict()
 	}
@@ -54,10 +64,13 @@ func verifyUnchanged(resolve func(string) (string, error), slug, path, ifVersion
 	}
 	cur, err := os.ReadFile(curPath)
 	if err != nil {
-		// The file resolved a beat ago but won't read now — it changed under us; treat
-		// it as a conflict (retryable), consistent with how the path-CAS treats a
-		// resolve error, rather than surfacing a raw I/O error to the caller.
-		return conflict()
+		// A vanished file is a genuine conflict (it changed under us → retry). Any OTHER
+		// read failure — permission, I/O, fd exhaustion — is a real error the caller must
+		// see, not be misled into retrying a "changed on disk" conflict that isn't one.
+		if os.IsNotExist(err) {
+			return conflict()
+		}
+		return fmt.Errorf("re-read %s %q: %w", noun, slug, err)
 	}
 	if hashContent(cur) != ifVersion {
 		return conflict()

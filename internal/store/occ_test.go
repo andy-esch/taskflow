@@ -161,3 +161,78 @@ func TestEditTask_ConflictsOnConcurrentContentEdit(t *testing.T) {
 		t.Errorf("the human's edit must be rejected, the concurrent edit survive:\n%s", b)
 	}
 }
+
+// Regression guard: a concurrent creation of an UNRELATED same-prefix file must NOT
+// spuriously conflict. verifyUnchanged re-resolves by the canonical slug (exact), not the
+// caller's fuzzy query, so a new "billing-*" task can't make "billing" ambiguous and
+// reject an edit to a file that never changed. (Independent review finding #1.)
+func TestSetFields_FuzzyQueryDoesNotSpuriouslyConflict(t *testing.T) {
+	root := t.TempDir()
+	writeTask(t, root, "ready-to-start", "billing-system.md",
+		"---\nid: 6fjangd7kvf1\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# b\n")
+	fs := NewFS(root)
+
+	orig := testHookBeforeSetFieldsWrite
+	defer func() { testHookBeforeSetFieldsWrite = orig }()
+	testHookBeforeSetFieldsWrite = func() {
+		// A cron agent creates an unrelated same-prefix task mid-write — this would make the
+		// FUZZY query "billing" ambiguous, but the canonical re-resolve is unaffected.
+		writeTask(t, root, "ready-to-start", "billing-gateway.md",
+			"---\nid: 6fjangd7kvf2\nstatus: ready-to-start\nepic: e1\n---\n# g\n")
+		testHookBeforeSetFieldsWrite = orig
+	}
+	if _, err := fs.SetFields("billing", map[string]any{"priority": "low"}, false); err != nil {
+		t.Fatalf("an unrelated concurrent same-prefix creation must NOT conflict; got %v", err)
+	}
+	if b, _ := os.ReadFile(root + "/tasks/ready-to-start/billing-system.md"); !strings.Contains(string(b), "priority: low") {
+		t.Errorf("the edit should have landed:\n%s", b)
+	}
+}
+
+// MoveEpic conflict coverage (resolveEpicPath + the move path; distinct from SetEpicFields).
+func TestMoveEpic_ConflictsOnConcurrentContentEdit(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(root+"/epics", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p := root + "/epics/98-y.md"
+	if err := os.WriteFile(p, []byte("---\nstatus: active\npriority: high\ndescription: e\n---\n# E\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fs := NewFS(root)
+
+	orig := testHookBeforeEpicWrite
+	defer func() { testHookBeforeEpicWrite = orig }()
+	testHookBeforeEpicWrite = func() {
+		_ = os.WriteFile(p, []byte("---\nstatus: active\npriority: high\ndescription: CHANGED\n---\n# E\n"), 0o644)
+		testHookBeforeEpicWrite = orig
+	}
+	if _, err := fs.MoveEpic("98-y", "deprecated", time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("a concurrent edit during an epic move must conflict, got %v", err)
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "description: CHANGED") || strings.Contains(string(b), "status: deprecated") {
+		t.Errorf("the losing epic move must not clobber the concurrent edit:\n%s", b)
+	}
+}
+
+// AppendAuditBody conflict coverage (resolveAuditPath + writeBody; distinct from EditBody).
+func TestAppendAuditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
+	root := t.TempDir()
+	writeAudit(t, root, "open", "2026-01-02-ab.md",
+		"---\nid: 6fjjt6s9ttab\nbucket: open\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** open\n")
+	fs := NewFS(root)
+	p := root + "/audits/open/2026-01-02-ab.md"
+
+	orig := testHookBeforeBodyWrite
+	defer func() { testHookBeforeBodyWrite = orig }()
+	testHookBeforeBodyWrite = func() {
+		_ = os.WriteFile(p, []byte("---\nid: 6fjjt6s9ttab\nbucket: open\narea: x\ndate: 2026-01-02\nnote: CHANGED\n---\n#### H1. t  · **Status:** open\n"), 0o644)
+		testHookBeforeBodyWrite = orig
+	}
+	if _, _, err := fs.AppendAuditBody("2026-01-02-ab", "#### M9. new  · **Status:** open", time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("a concurrent edit during an audit append must conflict, got %v", err)
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "note: CHANGED") || strings.Contains(string(b), "M9. new") {
+		t.Errorf("the losing append must not clobber the concurrent edit:\n%s", b)
+	}
+}

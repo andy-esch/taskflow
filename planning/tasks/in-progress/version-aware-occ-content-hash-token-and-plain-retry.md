@@ -183,6 +183,25 @@ decisions, each with its prior-art anchor:
 - `ifVersion == ""` create collision → `ErrConflict`; existing path-CAS move-detection
   tests stay green (subsumed, not regressed).
 
+## Review outcomes (2026-07-04 — steps 1/3/5)
+
+Adversarial (3 finders) + a fully independent external review. Net: the concurrency core is
+sound; NO HIGH finder alarm survived verification — "dryRun regression" (ordering byte-
+identical to main), "no-op epic move fails" (that's lost-update prevention working), "stranded
+dual-move clobber" (dup-slug → ErrAmbiguous guard; and out of scope), "wrong-file clobber"
+(the `curPath != path` check) all rejected with evidence. Acted on:
+- **[fixed] Canonical-slug re-resolve** (independent CRITICAL, pre-existing): `verifyUnchanged`
+  re-resolved the raw fuzzy query, so a concurrently-created same-prefix file made it
+  ErrAmbiguous → a spurious conflict on an unmodified file (`task edit billing` fails when a
+  `billing-*` task appears mid-edit). Now re-resolves the canonical (exact) slug — one fix for
+  all 10 sites. Guarded by `TestSetFields_FuzzyQueryDoesNotSpuriouslyConflict`.
+- **[fixed] IO errors no longer masked as conflicts**: only `os.IsNotExist` → conflict; a real
+  read error (EACCES/EIO) propagates.
+- **[decide] dryRun ↔ CAS is inconsistent** (pre-existing): in-place writers (SetFields,
+  writeBody) run the CAS on dry-run; the movers/epics skip it. Pick one philosophy; low stakes.
+- **[follow-up] fix.go relocations are unguarded** — fold a version check into
+  [[harden-lint-fix-misfiled-move-for-dup-slug-edge-cases]].
+
 ## Acceptance criteria
 
 - [ ] Store reads return an opaque `version` = **SHA-256 of the file's current bytes**
