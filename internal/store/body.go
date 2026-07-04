@@ -85,13 +85,9 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 		"audit", path, content, appendSection(string(body), text),
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
 		func(c []byte) (domain.Audit, error) { return parseAudit(c, path, bucket) },
+		// A concurrent bucket move (relocate) OR in-place edit during the read→write gap.
 		func() error {
-			// A concurrent `audit close`/`reopen`/`defer` may have relocated the file
-			// across buckets; writing the original path would resurrect the old bucket.
-			if curPath, _, rerr := s.resolveAudit(slug); rerr != nil || curPath != path {
-				return fmt.Errorf("audit %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
-			}
-			return nil
+			return verifyUnchanged(s.resolveAuditPath, slug, path, hashContent(content), "audit", "edit")
 		},
 		dryRun,
 	)
@@ -124,12 +120,7 @@ func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun 
 		"task", path, content, newBody,
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
 		func(c []byte) (domain.Task, error) { return parseTask(c, path, st) },
-		func() error {
-			if curPath, _, rerr := s.resolve(slug); rerr != nil || curPath != path {
-				return fmt.Errorf("task %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
-			}
-			return nil
-		},
+		func() error { return verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "edit") },
 		dryRun,
 	)
 }

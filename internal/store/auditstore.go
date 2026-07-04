@@ -170,11 +170,12 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	if testHookBeforeMoveAuditWrite != nil {
 		testHookBeforeMoveAuditWrite()
 	}
-	// Re-resolve immediately before the write (compare-and-swap): a concurrent relocation
-	// may have already moved this slug, so writing from the stale path would leave a
-	// duplicate. Fail cleanly with nothing moved (exit-14 retry signal).
-	if curPath, _, err := s.resolveAudit(slug); err != nil || curPath != path {
-		return domain.Audit{}, fmt.Errorf("audit %q changed on disk during move; retry: %w", slug, domain.ErrConflict)
+	// Version-CAS before the write: verifyUnchanged re-resolves (a concurrent relocation
+	// moved this slug → writing from the stale path would leave a duplicate) AND re-hashes
+	// the source (a concurrent in-place edit). Fail cleanly with nothing moved (exit-14
+	// retry signal). ifVersion = hash of the bytes read above.
+	if err := verifyUnchanged(s.resolveAuditPath, slug, path, hashContent(content), "audit", "move"); err != nil {
+		return domain.Audit{}, err
 	}
 	if err := os.MkdirAll(newDir, 0o755); err != nil {
 		return domain.Audit{}, fmt.Errorf("mkdir %s: %w", newDir, err)
@@ -196,6 +197,13 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 // compare-and-swap re-resolve — the seam tests use to interleave a concurrent
 // relocation. Nil outside tests (mirrors testHookBeforeMoveWrite).
 var testHookBeforeMoveAuditWrite func()
+
+// resolveAuditPath is s.resolveAudit reduced to (path, error) — the adapter the
+// version-CAS guard (verifyUnchanged) takes.
+func (s *FS) resolveAuditPath(slug string) (string, error) {
+	p, _, err := s.resolveAudit(slug)
+	return p, err
+}
 
 // auditCandidates lists every audit file across all buckets as a resolution
 // candidate (the dir name IS the bucket). Shared by resolveAudit and the

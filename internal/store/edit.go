@@ -106,14 +106,12 @@ func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prev
 	if err != nil {
 		return domain.Task{}, false, fmt.Errorf("read task %s: %w", path, err)
 	}
+	ifVersion := hashContent(orig)
 	return editFile("task", path, orig, now,
 		func(content []byte) (domain.Task, error) { return parseTask(content, path, st) },
-		func() error {
-			if curPath, _, rerr := s.resolve(slug); rerr != nil || curPath != path {
-				return fmt.Errorf("task %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
-			}
-			return nil
-		},
+		// Version-CAS across the (long) editor window: conflict if the file relocated (a
+		// concurrent `task move` → resurrect hazard) OR its content changed under us.
+		func() error { return verifyUnchanged(s.resolvePath, slug, path, ifVersion, "task", "edit") },
 		edit)
 }
 
@@ -131,13 +129,9 @@ func (s *FS) EditAudit(slug string, now time.Time, edit func(current string, pre
 	if err != nil {
 		return domain.Audit{}, false, fmt.Errorf("read audit %s: %w", path, err)
 	}
+	ifVersion := hashContent(orig)
 	return editFile("audit", path, orig, now,
 		func(content []byte) (domain.Audit, error) { return parseAudit(content, path, bucket) },
-		func() error {
-			if curPath, _, rerr := s.resolveAudit(slug); rerr != nil || curPath != path {
-				return fmt.Errorf("audit %q changed on disk during edit; retry: %w", slug, domain.ErrConflict)
-			}
-			return nil
-		},
+		func() error { return verifyUnchanged(s.resolveAuditPath, slug, path, ifVersion, "audit", "edit") },
 		edit)
 }

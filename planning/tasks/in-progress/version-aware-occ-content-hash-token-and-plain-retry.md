@@ -141,15 +141,13 @@ decisions, each with its prior-art anchor:
 2. **[folded into 3 — see Resolved decision] Version on reads is INTERNAL.** No
    `core.Store` port change: the write methods self-source `hashContent(content)` from the
    bytes they already read. Port-level `version` returns are deferred to `serve` (epic 19).
-3. **[in progress — task sites done] Route the existing writes through `verifyUnchanged`.**
-   Replace the 7 duplicated re-resolve blocks (✓ moveTask, ✓ SetFields via `s.resolvePath`;
-   remaining: MoveAudit, and the `editFile`/`writeBody` recheck closures for
-   EditTask/EditAudit/EditBody/AppendAuditBody) with the one guard, sourcing `ifVersion`
-   from the bytes the method itself just read (narrow-window self-check). Also add the guard
-   to the three epic writers (MoveEpic/SetEpicFields/EditEpic), which have none today.
-   Behavior is identical PLUS in-place-edit detection. Keep every concurrency test green;
-   extend the `testHookBefore*Write` seams to interleave a concurrent *content* edit (done
-   for task move/set) and assert `ErrConflict`.
+3. **[done] Route the existing writes through `verifyUnchanged`.** All write sites now
+   route through the one guard, sourcing `ifVersion` from the bytes each method just read:
+   tasks (moveTask, SetFields, EditTask, EditBody), audits (MoveAudit, EditAudit,
+   AppendAuditBody), and the three epic writers (MoveEpic/SetEpicFields/EditEpic — which
+   had NO guard before; they gain in-place-edit protection). Adapters: `resolvePath`,
+   `resolveAuditPath`, `resolveEpicPath`. Behavior identical PLUS in-place-edit detection;
+   6 hook/callback-interleaved tests assert `ErrConflict` across every surface.
 4. **Class (a) auto-retry.** Wrap the field-level ops in the bounded, jittered retry loop.
    Decide placement — **recommend core.Service** (owns re-apply semantics; one loop reused
    by CLI + TUI + future serve) wrapping the store call; on `ErrConflict` re-read → re-
@@ -158,11 +156,11 @@ decisions, each with its prior-art anchor:
    the same text to the fresh body; `move`/`defer` = re-derive `from` from fresh
    frontmatter (already idempotent — a re-run that finds the target status is a no-op).
    Pin the **append-no-double-apply** test explicitly.
-5. **Class (b) `edit` surfaces the conflict.** `EditTask`/`EditAudit`/`EditEpic` capture
-   the version at the pre-editor read and pass it as `ifVersion` to the single-shot
-   `casWrite`; a mismatch is `ErrConflict` (exit 14), no retry. Add epic in-place CAS here
-   (it had none). Pin: a concurrent write during the editor window → exit 14, not a silent
-   clobber.
+5. **[done — landed with step 3] Class (b) `edit` surfaces the conflict.**
+   `EditTask`/`EditAudit`/`EditEpic` capture the version at the pre-editor read (via
+   `editFile`'s recheck closure calling `verifyUnchanged`); a mismatch is `ErrConflict`
+   (exit 14), no retry (there is no retry wrapper on edit). Epic in-place CAS added. Pinned
+   by `TestEditTask_ConflictsOnConcurrentContentEdit`.
 6. **Creates: document the `ifVersion == ""` mapping.** Confirm `createFileAtomic`'s
    `O_EXCL` already *is* `If-None-Match: *`; wire it into the `casWrite` vocabulary so the
    contract is uniform (little/no code change).
