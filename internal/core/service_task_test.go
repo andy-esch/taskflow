@@ -57,19 +57,20 @@ func TestDeferTask_AtomicSingleWrite(t *testing.T) {
 	}
 }
 
-// TestDeferTask_PropagatesStoreError pins that a store.Defer failure surfaces with
-// its sentinel intact — the write is atomic, so a failure means nothing changed,
-// and the CLI still maps the sentinel to its exit code.
+// TestDeferTask_PropagatesStoreError pins that a NON-conflict store.Defer failure surfaces
+// with its sentinel intact and is NOT retried — the write is atomic, so a failure means
+// nothing changed, and the CLI still maps the sentinel to its exit code. (ErrConflict is the
+// one error that IS retried; that path is covered by TestRetry_ExhaustionSurfacesConflict.)
 func TestDeferTask_PropagatesStoreError(t *testing.T) {
-	st := &deferStore{deferErr: fmt.Errorf("%w: changed on disk", domain.ErrConflict)}
+	st := &deferStore{deferErr: fmt.Errorf("%w: bad frontmatter", domain.ErrValidation)}
 	svc := NewService(st)
 
 	_, err := svc.DeferTask("alpha", "2026-09-01", false)
-	if !errors.Is(err, domain.ErrConflict) {
-		t.Errorf("error should keep the ErrConflict sentinel, got %v", err)
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("error should keep its sentinel, got %v", err)
 	}
 	if st.deferCalls != 1 {
-		t.Errorf("want exactly one Defer call, got %d", st.deferCalls)
+		t.Errorf("a non-conflict error must not be retried; want exactly one Defer call, got %d", st.deferCalls)
 	}
 }
 

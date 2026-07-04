@@ -96,14 +96,26 @@ func (s *Service) ReplaceBody(slug, body string, dryRun bool) (domain.Task, stri
 // separated by a blank line, in one atomic, validated write. Returns the reloaded
 // task and the resulting body.
 func (s *Service) AppendBody(slug, text string, dryRun bool) (domain.Task, string, error) {
-	return s.store.EditBody(slug, text, true, s.now(), dryRun)
+	now := s.now()
+	type res struct {
+		task domain.Task
+		body string
+	}
+	r, err := retryOnConflict(s, dryRun, func() (res, error) {
+		t, b, e := s.store.EditBody(slug, text, true, now, dryRun)
+		return res{t, b}, e
+	})
+	return r.task, r.body, err
 }
 
 // Move transitions a task to the given status (lifecycle engine behind the
 // explicit verbs). Moving to the current status is an idempotent no-op.
 // dryRun validates everything and returns the would-be task without writing.
 func (s *Service) Move(slug string, to domain.Status, dryRun bool) (domain.Task, error) {
-	return s.store.Move(slug, to, s.now(), dryRun)
+	now := s.now()
+	return retryOnConflict(s, dryRun, func() (domain.Task, error) {
+		return s.store.Move(slug, to, now, dryRun)
+	})
 }
 
 // DeferTask moves a task to deferred and, when until is non-empty, records it as
@@ -120,7 +132,10 @@ func (s *Service) DeferTask(slug, until string, dryRun bool) (domain.Task, error
 			return domain.Task{}, err
 		}
 	}
-	return s.store.Defer(slug, until, s.now(), dryRun)
+	now := s.now()
+	return retryOnConflict(s, dryRun, func() (domain.Task, error) {
+		return s.store.Defer(slug, until, now, dryRun)
+	})
 }
 
 // SetFields validates and applies frontmatter updates to a task (stamping
@@ -188,7 +203,9 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 		}
 	}
 	withMeta["updated_at"] = s.now().Format("2006-01-02")
-	return s.store.SetFields(slug, withMeta, dryRun)
+	return retryOnConflict(s, dryRun, func() (domain.Task, error) {
+		return s.store.SetFields(slug, withMeta, dryRun)
+	})
 }
 
 // unknownFieldErr is the shared rejection for a field outside the registry, used

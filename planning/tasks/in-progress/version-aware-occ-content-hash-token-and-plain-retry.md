@@ -148,14 +148,15 @@ decisions, each with its prior-art anchor:
    had NO guard before; they gain in-place-edit protection). Adapters: `resolvePath`,
    `resolveAuditPath`, `resolveEpicPath`. Behavior identical PLUS in-place-edit detection;
    6 hook/callback-interleaved tests assert `ErrConflict` across every surface.
-4. **Class (a) auto-retry.** Wrap the field-level ops in the bounded, jittered retry loop.
-   Decide placement — **recommend core.Service** (owns re-apply semantics; one loop reused
-   by CLI + TUI + future serve) wrapping the store call; on `ErrConflict` re-read → re-
-   derive → retry, bounded, injectable jitter, then surface exit 14. For each op define
-   "re-apply on fresh read": `set` = re-merge the same field updates; `append` = re-append
-   the same text to the fresh body; `move`/`defer` = re-derive `from` from fresh
-   frontmatter (already idempotent — a re-run that finds the target status is a no-op).
-   Pin the **append-no-double-apply** test explicitly.
+4. **[done] Class (a) auto-retry.** `retryOnConflict` (core/retry.go) wraps the eight
+   scriptable ops (task set/append/move/defer, audit move/append, epic move/set) in
+   core.Service: on `ErrConflict` it re-calls the store's self-contained RMW (re-read →
+   re-derive → rewrite), bounded (`defaultMaxRetries=4`) with capped-exponential + full-
+   jitter backoff (`defaultRetrySleep`, injectable via `WithRetry` so tests are instant),
+   then surfaces exit 14. Dry-runs aren't retried; non-conflict errors pass through. Safe
+   for append because the CAS fails pre-write (re-appends onto fresh content exactly once).
+   Tests: heal-after-N, exhaustion→ErrConflict, dry-run-not-retried, non-conflict-
+   passthrough, append-retries.
 5. **[done — landed with step 3] Class (b) `edit` surfaces the conflict.**
    `EditTask`/`EditAudit`/`EditEpic` capture the version at the pre-editor read (via
    `editFile`'s recheck closure calling `verifyUnchanged`); a mismatch is `ErrConflict`
