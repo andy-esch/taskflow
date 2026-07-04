@@ -111,6 +111,31 @@ func TestMoveAudit_WritesBucketFrontmatter(t *testing.T) {
 	}
 }
 
+// audit reopen on an audit whose bucket frontmatter is MISSING (it fell back to the folder
+// open) HEALS the frontmatter — writing bucket: open even though the bucket isn't changing,
+// clearing the flag lint raised. No relocation (already in open/).
+func TestMoveAudit_HealsFellBackBucket(t *testing.T) {
+	root := t.TempDir()
+	// No bucket frontmatter → falls back to the folder (open) and is flagged.
+	writeAudit(t, root, "open", "2026-01-02-h.md",
+		"---\nid: 6fjjt6s9ttz6\narea: x\ndate: 2026-01-02\n---\n# a\n")
+
+	a, err := NewFS(root).MoveAudit("2026-01-02-h", domain.AuditOpen, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.BucketFellBack {
+		t.Error("after healing, the reloaded audit should no longer report a fell-back bucket")
+	}
+	b, err := os.ReadFile(root + "/audits/open/2026-01-02-h.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "bucket: open") {
+		t.Errorf("reopen must write the missing bucket frontmatter:\n%s", b)
+	}
+}
+
 // lint --fix must NOT relocate a misfiled audit into a non-open bucket while it still has
 // open findings — that would create the bucket↔state violation MoveAudit refuses (and the
 // re-lint could never repair). It stays put, flagged.

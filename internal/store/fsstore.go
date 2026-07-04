@@ -144,8 +144,10 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 	// and labels the no-op return. An unparseable file keeps the folder value (the move
 	// re-parses and fails cleanly below).
 	from := folder
+	fellBack := false
 	if cur, perr := parseTask(content, path, folder); perr == nil {
 		from = cur.Status
+		fellBack = cur.StatusFellBack
 	}
 
 	date := now.Format("2006-01-02")
@@ -174,6 +176,12 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 		if from == domain.StatusDeferred {
 			updates["revisit_at"] = domain.UnsetField{}
 		}
+	} else if fellBack {
+		// The status isn't changing, but the frontmatter status was missing or
+		// unrecognized (it fell back to the folder) — this explicit verb writes the value,
+		// healing the frontmatter. Not a transition, so no entry-date stamp is added.
+		updates["status"] = string(to)
+		updates["updated_at"] = date
 	}
 	// extra (Defer's revisit_at) rides the same write. When the status isn't
 	// changing — a re-defer in place — it's the only field change, and we still
