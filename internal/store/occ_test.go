@@ -240,6 +240,28 @@ func TestAppendAuditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	}
 }
 
+// A dry-run must not enter the write critical section — it takes neither the lock nor the
+// version-CAS (both write-time concerns), consistent with the movers. Pinned by asserting the
+// pre-write hook never fires on a dry-run (normalize-dry-run-vs-version-cas-ordering).
+func TestSetFields_DryRunSkipsWriteCriticalSection(t *testing.T) {
+	root := t.TempDir()
+	writeTask(t, root, "ready-to-start", "d.md",
+		"---\nid: 6fjangd7kvd1\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# d\n")
+	fs := NewFS(root)
+
+	fired := false
+	orig := testHookBeforeSetFieldsWrite
+	defer func() { testHookBeforeSetFieldsWrite = orig }()
+	testHookBeforeSetFieldsWrite = func() { fired = true }
+
+	if _, err := fs.SetFields("d", map[string]any{"priority": "low"}, true); err != nil { // dryRun=true
+		t.Fatalf("dry-run should validate + preview without error: %v", err)
+	}
+	if fired {
+		t.Error("a dry-run must not enter the write critical section (the pre-write hook fired)")
+	}
+}
+
 // TestConcurrentAppends_NoLostUpdates is the regression test for the flock write-lock: real
 // concurrent goroutines append to the SAME file, and every write that reports success must
 // land exactly once. Without the lock the verify→write window (widened by the temp-file

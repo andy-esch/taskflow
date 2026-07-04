@@ -1,17 +1,23 @@
 ---
 schema: 1
 status: active
-description: 'Rework the on-disk data model: a stable-key layout with status in frontmatter not the directory, a shared core read-model/projection, and content-aware OCC. Design-first epic; decisions made (ADRs 0003/0004); projection-shape is the last open piece.'
+description: 'Rework the on-disk data model: a stable-key layout with status in frontmatter not the directory, a shared core read-model/projection, and content-aware OCC. Decisions made (ADRs 0003/0004); id + Phase-A + read-model + OCC shipped — the flat id-led layout (Phase B) is the remaining capstone.'
 priority: medium
 tags: [storage, architecture, core]
 created: "2026-06-24"
 ---
 # Data-model evolution — stable-key storage, shared read-model, content OCC
 
-**Status: design-first. NOT ready to implement.** This epic collects a cluster of
-intertwined decisions surfaced by two spikes; most of the load-bearing choices are
-still **open** (see *Open questions*). The first task here is to *close those
-decisions*, not to write storage code.
+**Status (2026-07-04): implementation well underway — the decisions are closed.** The
+design-first phase is over: every load-bearing choice below is decided (see the `[x]`
+items + ADR-0003). **Shipped + merged (7/13):** the stable 12-char id + backfill, the
+machine contract, **frontmatter-authoritative status/bucket** (Phase A — dirs kept as a
+lock-step mirror), the shared `core` read-model + **`board`** command, and
+**version-aware OCC** (whole-file content-hash CAS + advisory `flock` + bounded
+auto-retry). **Remaining capstone:** **Phase B** — the flat, id-led layout that retires
+`status == directory` entirely
+([[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]]), its
+one-time migration, and the Scheme-2 reference rewrites.
 
 ## Why this exists (the convergence)
 
@@ -189,9 +195,9 @@ they landed together.
       commits `BOARD.md` back to `main` is a *second automated writer* that fights
       ADR-0004's single-writer model + branch protection (plus loop/permission gotchas),
       and it is machinery serve would obsolete.
-- [ ] **Still open — the projection's exact shape** (sections, grouping, sort, fields)
-      and where it lives in `core` (generalize `Summary()`). The real remaining design
-      work and the load-bearing part.
+- [x] **Projection shape — shipped 2026-07** as the `core` read-model + `board` command
+      (`core-read-model-projection-and-board`). The as-built shape is the baseline;
+      further section/sort/field refinement is incremental, not a blocker.
 
 **Concurrency (OCC)**
 - [x] Version token — **decided 2026-07-01: a whole-file content hash** (SHA-256).
@@ -245,14 +251,11 @@ they landed together.
 
 ## Tentative phasing (a sequence, not a commitment)
 
-1. **Decision consolidation** — resolve the open questions into a chosen design.
-   This is the real first task; gate it before any storage code. *Drafted as
-   [[0003-stable-key-id-addressed-storage]] (proposed) — the identity/layout half;
-   board / OCC / migration still open below.*
-2. **Read-model / projection + board** — independent of the storage change; ships a
-   `board` command and proves the web read-model.
-3. **Stable-key layout + version-aware OCC** — together (layout shapes OCC); needs a
-   migration path.
+1. **[done] Decision consolidation** — resolved into ADR-0003/0004.
+2. **[done] Read-model / projection + board** — the `board` command ships (fresh on demand).
+3. **Stable-key layout + version-aware OCC** — **OCC done** (content-hash CAS + flock +
+   bounded retry); **the flat id-led layout (Phase B) is the remaining piece**, with the
+   `one-time-migration-script` + `scheme-2-references` companions as its migration path.
 4. **Payoffs (separate epics):** remote backends (epic 23 ph2), `serve` read
    endpoint (epic 19) — both ride on 2–3.
 

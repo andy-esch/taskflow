@@ -312,6 +312,12 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 	if err := domain.ActiveTaskFieldErr(t); err != nil {
 		return domain.Task{}, err
 	}
+	// A dry-run is a preview: it ran every validation above but writes nothing, so it takes
+	// neither the write lock nor the version-CAS (both write-time concerns) — consistent
+	// with the movers, which also return before locking/verifying on a dry-run.
+	if dryRun {
+		return t, nil
+	}
 	if testHookBeforeSetFieldsWrite != nil {
 		testHookBeforeSetFieldsWrite()
 	}
@@ -328,9 +334,6 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 	// writes, not lost updates. ifVersion is the hash of the bytes read above.
 	if err := verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "update"); err != nil {
 		return domain.Task{}, err
-	}
-	if dryRun {
-		return t, nil // validated end-to-end; only the write is skipped
 	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
 		return domain.Task{}, err
