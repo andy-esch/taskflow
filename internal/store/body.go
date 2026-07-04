@@ -44,6 +44,11 @@ func writeBody[T any](
 	if err != nil {
 		return zero, "", fmt.Errorf("%w: %v", domain.ErrValidation, err)
 	}
+	// A dry-run previews without writing, so it takes neither the lock nor the version-CAS
+	// (write-time concerns) — consistent with the movers.
+	if dryRun {
+		return v, string(storedBody), nil
+	}
 	if testHookBeforeBodyWrite != nil {
 		testHookBeforeBodyWrite()
 	}
@@ -59,9 +64,6 @@ func writeBody[T any](
 	// path would resurrect the slug in its old directory.
 	if err := recheck(); err != nil {
 		return zero, "", err
-	}
-	if dryRun {
-		return v, string(storedBody), nil
 	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
 		return zero, "", fmt.Errorf("write %s %s: %w", noun, path, err)
