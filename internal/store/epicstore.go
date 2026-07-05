@@ -35,7 +35,7 @@ func (s *FS) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 // GetEpic returns one epic plus its markdown body. The id resolves exact
 // first, then fuzzy (unique prefix/substring), like task and audit slugs.
 func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
-	cands, err := markdownCandidates(s.epicsDir, "") // epics have no status/bucket dir
+	cands, err := epicCandidates(s.epicsDir) // epics have no status/bucket dir
 	if err != nil {
 		return domain.Epic{}, "", err
 	}
@@ -66,7 +66,7 @@ func (s *FS) MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epi
 	if err := domain.ValidateEpicStatus(status); err != nil {
 		return domain.Epic{}, err
 	}
-	cands, err := markdownCandidates(s.epicsDir, "") // epics have no status/bucket dir
+	cands, err := epicCandidates(s.epicsDir) // epics have no status/bucket dir
 	if err != nil {
 		return domain.Epic{}, err
 	}
@@ -127,7 +127,7 @@ func (s *FS) MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epi
 // untouched (ErrValidation, not a FileProblem — the user's update is bad, the file
 // on disk was never the cause).
 func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (domain.Epic, error) {
-	cands, err := markdownCandidates(s.epicsDir, "") // epics have no status/bucket dir
+	cands, err := epicCandidates(s.epicsDir) // epics have no status/bucket dir
 	if err != nil {
 		return domain.Epic{}, err
 	}
@@ -182,7 +182,7 @@ func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (doma
 // but the version-CAS recheck still catches a concurrent edit during the editor window.
 // Returns the reloaded epic and whether it changed.
 func (s *FS) EditEpic(id string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error) {
-	cands, err := markdownCandidates(s.epicsDir, "") // epics have no status/bucket dir
+	cands, err := epicCandidates(s.epicsDir) // epics have no status/bucket dir
 	if err != nil {
 		return domain.Epic{}, false, err
 	}
@@ -211,7 +211,7 @@ var testHookBeforeEpicWrite func()
 // version-CAS guard takes. Epics live flat, so this never sees a relocation; the guard's
 // content hash is what catches a concurrent in-place epic edit.
 func (s *FS) resolveEpicPath(id string) (string, error) {
-	cands, err := markdownCandidates(s.epicsDir, "")
+	cands, err := epicCandidates(s.epicsDir)
 	if err != nil {
 		return "", err
 	}

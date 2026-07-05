@@ -61,10 +61,13 @@ func scanDir[T any](dir string, parse func(path string, content []byte) (T, erro
 	return out, problems, nil
 }
 
-// markdownCandidates lists every regular .md file in dir as a resolution
-// candidate, tagging each with dirName (the status/bucket, "" for epics). The
-// shared body of the task/epic/audit candidate gatherers.
-func markdownCandidates(dir, dirName string) ([]candidate, error) {
+// epicCandidates lists every epic file (epics/<stem>.md) as a resolution candidate —
+// the whole filename stem is the key, resolved on its NN prefix (or a substring).
+// Epics keep human-named stems (usually NN-<slug>, but legacy names exist), so there
+// is no machine-id gate as for flat tasks/audits: a README landing page is skipped,
+// and any other non-epic file is caught at parse time (parseEpic fails loud on a file
+// with no frontmatter).
+func epicCandidates(dir string) ([]candidate, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -83,7 +86,6 @@ func markdownCandidates(dir, dirName string) ([]candidate, error) {
 		out = append(out, candidate{
 			id:   strings.TrimSuffix(e.Name(), ".md"),
 			path: filepath.Join(dir, e.Name()),
-			dir:  dirName,
 		})
 	}
 	return out, nil
