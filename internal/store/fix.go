@@ -31,7 +31,7 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	// Every id already on disk, so a backfill never re-mints one; mintUniqueID adds
 	// each id it assigns, so same-date entities in this run stay distinct too.
 	seen := s.knownIDs()
-	fixDir := func(dir string, dirStatus domain.Status, auditBucket domain.AuditBucket, backfill bool) error {
+	fixDir := func(dir string, auditBucket domain.AuditBucket, backfill bool) error {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -57,20 +57,6 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 				if ok {
 					fixed = withID
 					changes = append(changes, "id: assigned (was missing)")
-				}
-			}
-			// A misfiled task (frontmatter names a valid status that isn't its folder)
-			// is repaired by MOVING the file to match the authority — the fixed content
-			// (text + id repairs) rides along. Collected now, relocated after the walk.
-			if dirStatus != "" {
-				if target, ok := misfiledTarget(fixed, dirStatus); ok {
-					moves = append(moves, plannedMove{
-						from:    path,
-						to:      filepath.Join(s.tasksDir, target.Dir(), e.Name()),
-						content: fixed,
-						changes: append(changes, fmt.Sprintf("status: moved to %s/ to match frontmatter", target)),
-					})
-					continue
 				}
 			}
 			// Audits: backfill a missing `bucket:` frontmatter (the pre-Phase-A state,
@@ -119,16 +105,17 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	// the error: files in earlier dirs may already be repaired, and the caller must
 	// be able to report that partial progress rather than discard it (atomic writes
 	// mean each file is whole; only the run is incomplete).
-	for _, st := range domain.AllStatuses() {
-		if err := fixDir(filepath.Join(s.tasksDir, st.Dir()), st, "", true); err != nil {
-			return results, err
-		}
+	// Tasks are flat (ADR-0003 §4): one dir, and no misfiled relocation — there is no
+	// folder to be misfiled against (a bad status is lint-flagged, not moved). Text
+	// normalization + id-backfill still apply.
+	if err := fixDir(s.tasksDir, "", true); err != nil {
+		return results, err
 	}
-	if err := fixDir(s.epicsDir, "", "", false); err != nil { // epics: text-level only, keep NN-slug identity
+	if err := fixDir(s.epicsDir, "", false); err != nil { // epics: text-level only, keep NN-slug identity
 		return results, err
 	}
 	for _, b := range domain.AllAuditBuckets() {
-		if err := fixDir(filepath.Join(s.auditsDir, b.Dir()), "", b, true); err != nil { // audits: text + id + bucket backfill + misfiled relocation
+		if err := fixDir(filepath.Join(s.auditsDir, b.Dir()), b, true); err != nil { // audits: text + id + bucket backfill + misfiled relocation
 			return results, err
 		}
 	}
@@ -311,23 +298,6 @@ type plannedMove struct {
 	from, to string
 	content  []byte
 	changes  []string
-}
-
-// misfiledTarget returns the status directory a task belongs in when its frontmatter
-// names a *valid* status that disagrees with its current folder (dirStatus) — i.e.
-// the file is misfiled and should be relocated to match the authority (ADR-0003
-// Phase A). It's a no-op (ok=false) when the frontmatter status is missing/foreign
-// (the folder governs as a fallback), already agrees with the folder, or won't parse.
-func misfiledTarget(content []byte, dirStatus domain.Status) (domain.Status, bool) {
-	fm, _ := splitFrontmatter(content)
-	var t domain.Task
-	if len(fm) == 0 || yaml.Unmarshal(fm, &t) != nil {
-		return "", false
-	}
-	if !t.Status.Valid() || t.Status == dirStatus {
-		return "", false
-	}
-	return t.Status, true
 }
 
 // backfillMissingBucket adds `bucket: <dir>` to an audit whose frontmatter lacks a

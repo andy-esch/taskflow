@@ -17,6 +17,22 @@ func freshRepo(t *testing.T) string {
 	return root
 }
 
+// taskPath resolves the flat id-led file a CLI-created task landed at
+// (tasks/<minted-id>-<slug>.md). The id is minted at create time, so the file is
+// found by its slug suffix rather than a precomputed path; status lives in the
+// frontmatter, not the path (ADR-0003 §4).
+func taskPath(t *testing.T, root, slug string) string {
+	t.Helper()
+	m, err := filepath.Glob(filepath.Join(root, "tasks", "*-"+slug+".md"))
+	if err != nil {
+		t.Fatalf("glob task %q: %v", slug, err)
+	}
+	if len(m) != 1 {
+		t.Fatalf("expected exactly one task file for %q, got %v", slug, m)
+	}
+	return m[0]
+}
+
 func TestTaskNew_HappyPath(t *testing.T) {
 	root := freshRepo(t)
 	// The epic must itself be lint-clean (lint now validates epics too), so the
@@ -27,7 +43,7 @@ func TestTaskNew_HappyPath(t *testing.T) {
 	if !strings.Contains(out, "created") {
 		t.Errorf("unexpected output: %q", out)
 	}
-	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "my-brand-new-task.md"))
+	b, err := os.ReadFile(taskPath(t, root, "my-brand-new-task"))
 	if err != nil {
 		t.Fatalf("task file not created: %v", err)
 	}
@@ -51,8 +67,12 @@ func TestTaskNew_Next(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	runRoot(t, "-C", root, "task", "new", "Soon", "--epic", "e1", "--tags", "x", "--description", "soon work", "--next")
-	if _, err := os.Stat(filepath.Join(root, "tasks", "next-up", "soon.md")); err != nil {
-		t.Errorf("--next should land in next-up/: %v", err)
+	b, err := os.ReadFile(taskPath(t, root, "soon"))
+	if err != nil {
+		t.Fatalf("--next task not created: %v", err)
+	}
+	if !strings.Contains(string(b), "status: next-up") {
+		t.Errorf("--next should be born next-up in frontmatter:\n%s", b)
 	}
 }
 
@@ -76,10 +96,12 @@ func TestTaskNew_Start(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
 	runRoot(t, "-C", root, "task", "new", "Start Me", "--epic", "e1", "--tags", "x", "--description", "start it", "--start")
-	path := filepath.Join(root, "tasks", "in-progress", "start-me.md")
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(taskPath(t, root, "start-me"))
 	if err != nil {
-		t.Fatalf("--start should land in in-progress/: %v", err)
+		t.Fatalf("--start task not created: %v", err)
+	}
+	if !strings.Contains(string(b), "status: in-progress") {
+		t.Errorf("--start should be born in-progress in frontmatter:\n%s", b)
 	}
 	// A task born in-progress carries started_at, like one moved there.
 	if !strings.Contains(string(b), "started_at:") {
@@ -93,7 +115,7 @@ func TestTaskNew_BodyFile(t *testing.T) {
 	bf := filepath.Join(t.TempDir(), "body.md")
 	mustWrite(t, bf, "\n# Custom\n\nfrom a file\n")
 	runRoot(t, "-C", root, "task", "new", "File Body", "--epic", "e1", "--tags", "x", "--body-file", bf)
-	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "file-body.md"))
+	b, err := os.ReadFile(taskPath(t, root, "file-body"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +134,7 @@ func TestTaskNew_BodyFileStdin(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "piped-body.md"))
+	b, err := os.ReadFile(taskPath(t, root, "piped-body"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,22 +170,6 @@ func TestTaskNew_UnknownEpic_Exit11(t *testing.T) {
 	}
 	if ExitCode(err) != 11 {
 		t.Errorf("want exit 11, got %d", ExitCode(err))
-	}
-}
-
-func TestTaskNew_RefusesClobber(t *testing.T) {
-	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
-	runRoot(t, "-C", root, "task", "new", "Dup", "--epic", "e1", "--tags", "x")
-	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
-	cmd.SetArgs([]string{"-C", root, "task", "new", "Dup", "--epic", "e1", "--tags", "x"})
-	err := cmd.Execute()
-	if err == nil {
-		t.Fatal("expected refusal to clobber an existing task")
-	}
-	if ExitCode(err) != 14 {
-		t.Errorf("clobber should exit 14 (conflict), got %d", ExitCode(err))
 	}
 }
 
@@ -228,24 +234,6 @@ func TestAuditNew(t *testing.T) {
 	runRoot(t, "-C", root, "audit", "close", "2026-06-16-dispatcher")
 	if _, err := os.Stat(filepath.Join(root, "audits", "closed", "2026-06-16-dispatcher.md")); err != nil {
 		t.Errorf("close should move the audit to closed/: %v", err)
-	}
-}
-
-func TestTaskNew_RejectsSlugInAnotherBucket(t *testing.T) {
-	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n")
-	runRoot(t, "-C", root, "task", "new", "Dup Task", "--epic", "e1", "--tags", "x")
-	runRoot(t, "-C", root, "task", "complete", "dup-task") // → completed/
-	// Re-creating the same title (slug now in completed/) refuses with exit 14.
-	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
-	cmd.SetArgs([]string{"-C", root, "task", "new", "Dup Task", "--epic", "e1", "--tags", "x"})
-	if err := cmd.Execute(); err == nil || ExitCode(err) != 14 {
-		t.Errorf("cross-bucket slug collision should exit 14, got %v", err)
-	}
-	// The slug still resolves — no second file was created.
-	if show := runRoot(t, "-C", root, "task", "show", "dup-task"); !strings.Contains(show, "dup-task") {
-		t.Errorf("dup-task should still resolve to a single file: %q", show)
 	}
 }
 
@@ -349,63 +337,6 @@ func TestAuditNew_RefusesClobber(t *testing.T) {
 	}
 }
 
-func TestList_MisfiledMarker(t *testing.T) {
-	root := freshRepo(t)
-	// A file in ready-to-start/ whose frontmatter claims a different (active) status:
-	// the frontmatter wins (in-progress, so it shows), the folder is the stale mirror
-	// → misfiled, marked with ⚠.
-	mustWrite(t, filepath.Join(root, "tasks", "ready-to-start", "drift.md"),
-		"---\nstatus: in-progress\nepic: e\ndescription: d\ntier: 3\npriority: low\neffort: x\ncreated: 2026-06-09\ntags: [a]\n---\n# x\n")
-	out := runRoot(t, "-C", root, "task", "list")
-	if !strings.Contains(out, "⚠") {
-		t.Errorf("expected a ⚠ misfiled marker:\n%q", out)
-	}
-	if !strings.Contains(out, "misfiled") {
-		t.Errorf("expected a misfiled footer note:\n%q", out)
-	}
-}
-
-func TestLint_FlagsMisfiledArchivedTask(t *testing.T) {
-	root := freshRepo(t)
-	// A deprecated/ file whose frontmatter says completed — archived either way, so
-	// field lint is skipped, but the dir/frontmatter drift must still surface.
-	mustWrite(t, filepath.Join(root, "tasks", "deprecated", "old.md"),
-		"---\nid: 6fjangd7kvh9\nstatus: completed\n---\n# x\n")
-	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
-	cmd.SetArgs([]string{"-C", root, "lint"})
-	err := cmd.Execute()
-	if err == nil {
-		t.Fatal("expected lint to fail on a misfiled archived task")
-	}
-	if !strings.Contains(out.String(), "old") || !strings.Contains(out.String(), "moves it") {
-		t.Errorf("expected a misfiled report for 'old':\n%s", out.String())
-	}
-}
-
-// A file in an archived folder whose frontmatter names an ACTIVE status is
-// authoritatively active — so it gets the full field lint (not the archived skip),
-// on top of the misfiled drift. Pins the active/archived split now keying off
-// frontmatter (ADR-0003 Phase A).
-func TestLint_ActiveFrontmatterInArchivedFolder(t *testing.T) {
-	root := freshRepo(t)
-	mustWrite(t, filepath.Join(root, "tasks", "completed", "x.md"),
-		"---\nid: 6fjangd7kvbb\nstatus: in-progress\n---\n# x\n")
-	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
-	cmd.SetArgs([]string{"-C", root, "lint"})
-	if err := cmd.Execute(); err == nil {
-		t.Fatal("expected lint to fail on an active misfiled task")
-	}
-	s := out.String()
-	// The full active-field lint fires (missing epic/tier/…) AND the misfile is flagged.
-	for _, want := range []string{"epic", "tier", "moves it"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("expected %q in the active-frontmatter lint output:\n%s", want, s)
-		}
-	}
-}
-
 func TestEpicNew_RequiresDescription(t *testing.T) {
 	root := freshRepo(t)
 	var out bytes.Buffer
@@ -457,7 +388,7 @@ func TestTaskNew_TemplateDefault(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n# E1\n")
 	runRoot(t, "-C", root, "task", "new", "Tmpl", "--epic", "e1", "--tags", "a", "--template", "default")
-	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "tmpl.md"))
+	b, err := os.ReadFile(taskPath(t, root, "tmpl"))
 	if err != nil {
 		t.Fatalf("task not created: %v", err)
 	}
@@ -487,8 +418,12 @@ func TestCreate_TemplateLeavesNoUnfilledPlaceholders(t *testing.T) {
 	runRoot(t, "-C", root, "epic", "new", "E Two", "--description", "the goal")
 	runRoot(t, "-C", root, "audit", "new", "area-three", "--date", "2026-06-22")
 
+	taskFiles, _ := filepath.Glob(filepath.Join(root, "tasks", "*-t-one.md")) // flat: id-led filename
+	if len(taskFiles) != 1 {
+		t.Fatalf("expected 1 task file, got %v", taskFiles)
+	}
 	paths := []string{
-		filepath.Join(root, "tasks", "ready-to-start", "t-one.md"),
+		taskFiles[0],
 		filepath.Join(root, "audits", "open", "2026-06-22-area-three.md"),
 	}
 	epics, _ := filepath.Glob(filepath.Join(root, "epics", "*-e-two.md")) // auto-numbered NN-e-two

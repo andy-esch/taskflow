@@ -7,21 +7,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func TestLintFix_DryRunThenFix(t *testing.T) {
 	root := t.TempDir()
-	bad := filepath.Join(root, "tasks", "ready-to-start", "bad.md")
-	if err := os.MkdirAll(filepath.Dir(bad), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	// The only issues are the two FIXABLE ones (an unquoted ':' in description, a
 	// comma-joined tags list); every required field is present, so the post-fix
 	// re-lint is clean and `lint --fix` exits 0 (Fix 1 keys the exit off the leftover
 	// findings — a tree the fixer fully repairs must still come back green).
-	if err := os.WriteFile(bad, []byte("---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ndescription: A: B\ntags: x,y\n---\n# Bad\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	bad, badContent := testutil.TaskFixture(root, "ready-to-start", "bad.md",
+		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ndescription: A: B\ntags: x,y\n---\n# Bad\n")
+	testutil.Write(t, bad, badContent)
 	epic := filepath.Join(root, "epics", "e1.md")
 	if err := os.MkdirAll(filepath.Dir(epic), 0o755); err != nil {
 		t.Fatal(err)
@@ -63,8 +61,11 @@ func TestLintFix_BackfillsMissingID(t *testing.T) {
 		}
 	}
 	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
-	// Fully valid EXCEPT it predates ids (no id: field).
-	write("tasks/ready-to-start/t.md", "---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n")
+	// Fully valid EXCEPT it predates ids (no id: field). It lands at a flat id-led
+	// path via its filename slug, but carries no id: field to backfill.
+	tPath, tContent := testutil.TaskFixture(root, "ready-to-start", "t.md",
+		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n")
+	testutil.Write(t, tPath, tContent)
 
 	// Plain lint flags the missing id (and exits non-zero).
 	out, err := runRootRC(t, "-C", root, "lint")
@@ -100,37 +101,6 @@ func TestLintFix_BackfillsMissingID(t *testing.T) {
 	}
 }
 
-// `lint --fix` relocates a misfiled task (frontmatter authoritative) to its status
-// dir — end to end, confirming the CLI reports the move and the tree comes back clean.
-func TestLintFix_RelocatesMisfiledTask(t *testing.T) {
-	root := t.TempDir()
-	write := func(rel, content string) {
-		p := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
-	// Misfiled: physically in ready-to-start/, frontmatter says completed.
-	write("tasks/ready-to-start/m.md", "---\nid: 6fjangd7kvbc\nstatus: completed\n---\n# m\n")
-
-	if out := runRoot(t, "-C", root, "lint", "--fix"); !strings.Contains(out, "moved to completed/") {
-		t.Errorf("expected a relocation report: %q", out)
-	}
-	if _, err := os.Stat(filepath.Join(root, "tasks", "completed", "m.md")); err != nil {
-		t.Errorf("file should be relocated to completed/: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(root, "tasks", "ready-to-start", "m.md")); !os.IsNotExist(err) {
-		t.Error("file should be gone from ready-to-start/")
-	}
-	if _, err := runRootRC(t, "-C", root, "lint"); err != nil {
-		t.Errorf("lint should be clean after the relocation: %v", err)
-	}
-}
-
 // TestLintFix_UnrepairableIDMessage pins the post-fix messaging: a task the
 // backfiller can't date (no date field, no YYYY-MM-DD filename prefix) survives
 // `--fix`, and the "could not auto-repair" output must state the actionable remedy
@@ -149,7 +119,9 @@ func TestLintFix_UnrepairableIDMessage(t *testing.T) {
 	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
 	// Completed (archived, so only the universal id check applies), no date field,
 	// and a non-date-prefixed filename — nothing for the backfiller to date an id from.
-	write("tasks/completed/nodate.md", "---\nstatus: completed\nepic: e1\n---\n# ND\n")
+	ndPath, ndContent := testutil.TaskFixture(root, "completed", "nodate.md",
+		"---\nstatus: completed\nepic: e1\n---\n# ND\n")
+	testutil.Write(t, ndPath, ndContent)
 
 	out, err := runRootRC(t, "-C", root, "lint", "--fix")
 	if err == nil {
@@ -172,13 +144,9 @@ func TestLintFix_UnrepairableIDMessage(t *testing.T) {
 // id" — `lint --fix` must not attempt to synthesize frontmatter for it.
 func TestLintFix_InvalidFrontmatterFailsLoud(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, "tasks", "completed", "no-fence.md")
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(p, []byte("# Just a heading\n\nnotes\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	// A fence-less body stays a loud FileProblem; it lands at a flat id-led path.
+	p := filepath.Join(root, "tasks", testutil.TaskID("no-fence")+"-no-fence.md")
+	testutil.Write(t, p, "# Just a heading\n\nnotes\n")
 
 	out, err := runRootRC(t, "-C", root, "lint", "--fix")
 	if err == nil || ExitCode(err) != 11 {
@@ -197,14 +165,9 @@ func TestLintFix_InvalidFrontmatterFailsLoud(t *testing.T) {
 // nothing and exited 0, leaving the tree broken while claiming success.
 func TestLintFix_UnrepairableFileExitsNonZero(t *testing.T) {
 	root := t.TempDir()
-	broken := filepath.Join(root, "tasks", "ready-to-start", "broken.md")
-	if err := os.MkdirAll(filepath.Dir(broken), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// Unterminated frontmatter: nothing the text fixer can do with it.
-	if err := os.WriteFile(broken, []byte("---\nstatus: ready-to-start\n# no closing fence\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	// Unterminated frontmatter: nothing the text fixer can do with it; flat id-led path.
+	broken := filepath.Join(root, "tasks", testutil.TaskID("broken")+"-broken.md")
+	testutil.Write(t, broken, "---\nstatus: ready-to-start\n# no closing fence\n")
 
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
@@ -252,8 +215,9 @@ func TestLintFix_ReportOnlyEpicExitsNonZero(t *testing.T) {
 	// A clean task plus an active epic missing priority/description — the epic is the
 	// sole, fix-immune failure.
 	write("epics/e1.md", "---\nstatus: active\n---\n# E1\n")
-	write("tasks/ready-to-start/good.md",
+	goodPath, goodContent := testutil.TaskFixture(root, "ready-to-start", "good.md",
 		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
+	testutil.Write(t, goodPath, goodContent)
 
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
@@ -308,13 +272,9 @@ func TestLintFix_ReportOnlyEpicExitsNonZero(t *testing.T) {
 // stayed broken.
 func TestLintFix_JSONReportsUnreadable(t *testing.T) {
 	root := t.TempDir()
-	broken := filepath.Join(root, "tasks", "ready-to-start", "broken.md")
-	if err := os.MkdirAll(filepath.Dir(broken), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(broken, []byte("---\nstatus: ready-to-start\n# no closing fence\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	// Unterminated frontmatter: unrepairable; flat id-led path.
+	broken := filepath.Join(root, "tasks", testutil.TaskID("broken")+"-broken.md")
+	testutil.Write(t, broken, "---\nstatus: ready-to-start\n# no closing fence\n")
 
 	// stdout carries the fix envelope; the error is returned (not written, since
 	// the root silences errors), so the buffer holds only the JSON report.

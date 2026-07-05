@@ -3,8 +3,6 @@ package tui
 import (
 	"bytes"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -248,7 +246,7 @@ func TestModel_Responsive(t *testing.T) {
 func TestModel_BodyErrorDoesNotBrick(t *testing.T) {
 	m := loaded(t, 120, 40)
 	slug := m.selectedID()
-	// An ambiguous-slug (duplicate across dirs) body error must not blank the UI.
+	// An ambiguous-id (a prefix matching multiple files) body error must not blank the UI.
 	tm, _ := m.Update(detailErrMsg{kind: entityTasks, id: slug, gen: m.detailGen, err: domain.ErrAmbiguous})
 	m = tm.(Model)
 	if m.cur().loadErr != nil {
@@ -500,19 +498,13 @@ func TestModel_PerTabCursorPreserved(t *testing.T) {
 // paginate at a small height (its `••` dots render one line beyond SetHeight).
 func seedManyTasks(t *testing.T, n int) string {
 	t.Helper()
-	root := t.TempDir()
-	dir := filepath.Join(root, "tasks", "ready-to-start")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	r := testutil.NewRepo(t)
 	for i := 0; i < n; i++ {
 		slug := fmt.Sprintf("task-%02d", i)
 		body := fmt.Sprintf("---\nstatus: ready-to-start\ndescription: task %d\n---\n# %s\n", i, slug)
-		if err := os.WriteFile(filepath.Join(dir, slug+".md"), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		r.Task("ready-to-start", slug+".md", body)
 	}
-	return root
+	return r.Root
 }
 
 // TestModel_ChromeVisibleWhenListPaginates pins the footer/tab-strip-cropping
@@ -563,16 +555,9 @@ func TestModel_CommandAliases(t *testing.T) {
 
 func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
 	// A repo with tasks but no audits dir → the audits tab loads empty.
-	root := t.TempDir()
-	dir := filepath.Join(root, "tasks", "ready-to-start")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "only.md"),
-		[]byte("---\nstatus: ready-to-start\ndescription: x\n---\n# only\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	m := New(core.NewService(store.NewFS(root)))
+	r := testutil.NewRepo(t)
+	r.Task("ready-to-start", "only.md", "---\nstatus: ready-to-start\ndescription: x\n---\n# only\n")
+	m := New(core.NewService(store.NewFS(r.Root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -664,17 +649,10 @@ func TestAuditDetailFindingIndex(t *testing.T) {
 // title longer than the pane is truncated, not wrapped — so the pane keeps its
 // bottom border (two `╯`, one per pane) at the narrowest two-pane width.
 func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "tasks", "in-progress")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	r := testutil.NewRepo(t)
 	slug := "an-extremely-long-task-slug-well-past-the-detail-pane-inner-width"
-	if err := os.WriteFile(filepath.Join(dir, slug+".md"),
-		[]byte("---\nstatus: in-progress\ndescription: x\n---\n# body\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	m := New(core.NewService(store.NewFS(root)))
+	r.Task("in-progress", slug+".md", "---\nstatus: in-progress\ndescription: x\n---\n# body\n")
+	m := New(core.NewService(store.NewFS(r.Root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 24}) // narrowest two-pane
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())

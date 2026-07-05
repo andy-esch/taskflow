@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // SetFields now conflicts on a concurrent IN-PLACE content edit (same path, different
@@ -21,7 +23,7 @@ func TestSetFields_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeTask(t, root, "ready-to-start", "c.md",
 		"---\nid: 6fjangd7kvc1\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# c\n")
 	fs := NewFS(root)
-	p := root + "/tasks/ready-to-start/c.md"
+	p := filepath.Join(root, "tasks", testutil.TaskID("c")+"-c.md")
 
 	orig := testHookBeforeSetFieldsWrite
 	defer func() { testHookBeforeSetFieldsWrite = orig }()
@@ -47,7 +49,7 @@ func TestMove_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeTask(t, root, "ready-to-start", "m.md",
 		"---\nid: 6fjangd7kvm1\nstatus: ready-to-start\nepic: e1\n---\n# m\n")
 	fs := NewFS(root)
-	p := root + "/tasks/ready-to-start/m.md"
+	p := filepath.Join(root, "tasks", testutil.TaskID("m")+"-m.md")
 
 	orig := testHookBeforeMoveWrite
 	defer func() { testHookBeforeMoveWrite = orig }()
@@ -60,11 +62,14 @@ func TestMove_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place edit during a move must conflict, got %v", err)
 	}
-	if _, err := os.Stat(root + "/tasks/in-progress/m.md"); !os.IsNotExist(err) {
-		t.Error("the losing move must not create the target file")
-	}
-	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "m EDITED") {
+	// The move is an in-place frontmatter edit now — the file never relocates. The losing
+	// move must leave the concurrent edit intact and NOT flip status to in-progress.
+	b, _ := os.ReadFile(p)
+	if !strings.Contains(string(b), "m EDITED") {
 		t.Errorf("the concurrent edit must survive at the source:\n%s", b)
+	}
+	if !strings.Contains(string(b), "status: ready-to-start") || strings.Contains(string(b), "status: in-progress") {
+		t.Errorf("the losing move must not change the status:\n%s", b)
 	}
 }
 
@@ -127,7 +132,7 @@ func TestEditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeTask(t, root, "ready-to-start", "b.md",
 		"---\nid: 6fjangd7kvb1\nstatus: ready-to-start\nepic: e1\n---\n# b\n")
 	fs := NewFS(root)
-	p := root + "/tasks/ready-to-start/b.md"
+	p := filepath.Join(root, "tasks", testutil.TaskID("b")+"-b.md")
 
 	orig := testHookBeforeBodyWrite
 	defer func() { testHookBeforeBodyWrite = orig }()
@@ -150,7 +155,7 @@ func TestEditTask_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeTask(t, root, "ready-to-start", "e.md",
 		"---\nid: 6fjangd7kve1\nstatus: ready-to-start\nepic: e1\n---\n# e\n")
 	fs := NewFS(root)
-	p := root + "/tasks/ready-to-start/e.md"
+	p := filepath.Join(root, "tasks", testutil.TaskID("e")+"-e.md")
 
 	edit := func(current string, prevErr error) (string, error) {
 		// A concurrent writer lands a change while the human is "in $EDITOR".
@@ -187,7 +192,7 @@ func TestSetFields_FuzzyQueryDoesNotSpuriouslyConflict(t *testing.T) {
 	if _, err := fs.SetFields("billing", map[string]any{"priority": "low"}, false); err != nil {
 		t.Fatalf("an unrelated concurrent same-prefix creation must NOT conflict; got %v", err)
 	}
-	if b, _ := os.ReadFile(root + "/tasks/ready-to-start/billing-system.md"); !strings.Contains(string(b), "priority: low") {
+	if b, _ := os.ReadFile(filepath.Join(root, "tasks", testutil.TaskID("billing-system")+"-billing-system.md")); !strings.Contains(string(b), "priority: low") {
 		t.Errorf("the edit should have landed:\n%s", b)
 	}
 }
@@ -298,7 +303,7 @@ func TestConcurrentAppends_NoLostUpdates(t *testing.T) {
 	}
 	wg.Wait()
 
-	b, err := os.ReadFile(root + "/tasks/ready-to-start/race.md")
+	b, err := os.ReadFile(filepath.Join(root, "tasks", testutil.TaskID("race")+"-race.md"))
 	if err != nil {
 		t.Fatal(err)
 	}

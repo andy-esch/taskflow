@@ -40,7 +40,7 @@ func TestComplete_TaskSlugs_IncludesMalformed(t *testing.T) {
 	root := setupRepo(t) // alpha (ready-to-start), beta (in-progress)
 	// A file whose frontmatter doesn't parse must still complete — you complete
 	// it precisely to go fix it. (No YAML is parsed for completion.)
-	mustWrite(t, filepath.Join(root, "tasks", "ready-to-start", "broken.md"), "tags: a,b,c NOT yaml\n")
+	mustWrite(t, filepath.Join(root, "tasks", testutil.TaskID("broken")+"-broken.md"), "tags: a,b,c NOT yaml\n")
 
 	got := complete(t, "-C", root, "task", "show", "")
 	for _, want := range []string{"alpha", "beta", "broken"} {

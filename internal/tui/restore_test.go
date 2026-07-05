@@ -11,6 +11,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // TestEntityTab_MarkReloadCarriesPendingTarget pins the core of the M6 fix: a
@@ -73,8 +74,17 @@ func TestModel_ReloadDuringJumpKeepsTarget(t *testing.T) {
 		}
 	}
 	write("epics/01-x.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
-	write("tasks/in-progress/active-one.md", "---\nstatus: in-progress\nepic: 01-x\ndescription: a\n---\n# a\n")
-	write("tasks/completed/done-one.md", "---\nstatus: completed\nepic: 01-x\ndescription: d\n---\n# d\n")
+	writeTaskFixture := func(status, name, content string) {
+		p, out := testutil.TaskFixture(root, status, name, content)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(out), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeTaskFixture("in-progress", "active-one.md", "---\nstatus: in-progress\nepic: 01-x\ndescription: a\n---\n# a\n")
+	writeTaskFixture("completed", "done-one.md", "---\nstatus: completed\nepic: 01-x\ndescription: d\n---\n# d\n")
 
 	m := New(core.NewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})

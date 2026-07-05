@@ -13,6 +13,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func setupEpicRepo(t *testing.T) string {
@@ -28,8 +29,12 @@ func setupEpicRepo(t *testing.T) string {
 		}
 	}
 	write("epics/demo.md", "---\nstatus: active\ndescription: demo epic\n---\n# Demo Epic\n")
-	write("tasks/ready-to-start/a.md", "---\nstatus: ready-to-start\nepic: demo\n---\n# A\n")
-	write("tasks/completed/b.md", "---\nstatus: completed\nepic: demo\n---\n# B\n")
+	writeTask := func(status, name, content string) {
+		path, out := testutil.TaskFixture(root, status, name, content)
+		testutil.Write(t, path, out)
+	}
+	writeTask("ready-to-start", "a.md", "---\nstatus: ready-to-start\nepic: demo\n---\n# A\n")
+	writeTask("completed", "b.md", "---\nstatus: completed\nepic: demo\n---\n# B\n")
 	return root
 }
 

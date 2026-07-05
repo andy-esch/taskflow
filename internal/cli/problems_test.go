@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func TestTaskList_ReportsBadFileButShowsGood(t *testing.T) {
@@ -19,8 +21,8 @@ func TestTaskList_ReportsBadFileButShowsGood(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("tasks/ready-to-start/good.md", "---\nstatus: ready-to-start\ndescription: ok\n---\n# Good\n")
-	write("tasks/ready-to-start/bad.md", "---\nstatus: ready-to-start\ntags: a,b,c\n---\n# Bad\n")
+	write("tasks/"+testutil.TaskID("good")+"-good.md", "---\nstatus: ready-to-start\ndescription: ok\n---\n# Good\n")
+	write("tasks/"+testutil.TaskID("bad")+"-bad.md", "---\nstatus: ready-to-start\ntags: a,b,c\n---\n# Bad\n")
 
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)

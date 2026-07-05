@@ -10,6 +10,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/id"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func seedFile(t *testing.T, path, content string) {
@@ -53,8 +54,8 @@ const idlessTask = "---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: hi
 // timestamped from its created date.
 func TestFixFrontmatter_BackfillsMissingTaskID(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, domain.TasksDir, "ready-to-start", "t.md")
-	seedFile(t, p, idlessTask)
+	p, out := testutil.TaskFixture(root, "ready-to-start", "t.md", idlessTask)
+	seedFile(t, p, out)
 
 	results, err := NewFS(root).FixFrontmatter(false)
 	if err != nil {
@@ -95,8 +96,8 @@ func TestFixFrontmatter_BackfillsMissingAuditID(t *testing.T) {
 // TestFixFrontmatter_KeepsExistingID: a file that already has an id is untouched.
 func TestFixFrontmatter_KeepsExistingID(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, domain.TasksDir, "ready-to-start", "t.md")
-	seedFile(t, p, "---\nid: 6fjangd7kvh0\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n")
+	p, out := testutil.TaskFixture(root, "ready-to-start", "t.md", "---\nid: 6fjangd7kvh0\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n")
+	seedFile(t, p, out)
 
 	results, err := NewFS(root).FixFrontmatter(false)
 	if err != nil {
@@ -115,8 +116,8 @@ func TestFixFrontmatter_KeepsExistingID(t *testing.T) {
 // than invent one.
 func TestFixFrontmatter_SkipsBackfillWithoutDate(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, domain.TasksDir, "ready-to-start", "t.md")
-	seedFile(t, p, "---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ntags: [a]\n---\n# T\n")
+	p, out := testutil.TaskFixture(root, "ready-to-start", "t.md", "---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ntags: [a]\n---\n# T\n")
+	seedFile(t, p, out)
 
 	results, err := NewFS(root).FixFrontmatter(false)
 	if err != nil {
@@ -137,14 +138,16 @@ func TestFixFrontmatter_SkipsBackfillWithoutDate(t *testing.T) {
 // NewAt alone could produce.
 func TestFixFrontmatter_DistinctIDsForSameDate(t *testing.T) {
 	root := t.TempDir()
-	seedFile(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "a.md"), idlessTask)
-	seedFile(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "b.md"), idlessTask)
+	pa, outA := testutil.TaskFixture(root, "ready-to-start", "a.md", idlessTask)
+	pb, outB := testutil.TaskFixture(root, "ready-to-start", "b.md", idlessTask)
+	seedFile(t, pa, outA)
+	seedFile(t, pb, outB)
 
 	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
 		t.Fatal(err)
 	}
-	a := frontmatterID(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "a.md"))
-	b := frontmatterID(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "b.md"))
+	a := frontmatterID(t, pa)
+	b := frontmatterID(t, pb)
 	if a == "" || b == "" {
 		t.Fatalf("both tasks should get ids, got %q and %q", a, b)
 	}
@@ -158,8 +161,8 @@ func TestFixFrontmatter_DistinctIDsForSameDate(t *testing.T) {
 // the fallback that predated tasks like taskflow-00 would otherwise miss.
 func TestFixFrontmatter_BackfillsFromLifecycleStamp(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, domain.TasksDir, "completed", "old.md")
-	seedFile(t, p, "---\nstatus: completed\nepic: e1\ntier: 1\npriority: high\ncompleted_at: 2026-02-04\ntags: [x]\n---\n# Old\n")
+	p, out := testutil.TaskFixture(root, "completed", "old.md", "---\nstatus: completed\nepic: e1\ntier: 1\npriority: high\ncompleted_at: 2026-02-04\ntags: [x]\n---\n# Old\n")
+	seedFile(t, p, out)
 
 	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
 		t.Fatal(err)
@@ -170,45 +173,6 @@ func TestFixFrontmatter_BackfillsFromLifecycleStamp(t *testing.T) {
 	}
 	if d := id.Time(got).UTC().Format("2006-01-02"); d != "2026-02-04" {
 		t.Errorf("id time = %s, want 2026-02-04 (from completed_at)", d)
-	}
-}
-
-// TestFixFrontmatter_BackfillsFromFilenameDate: a historical task with no date
-// field in its frontmatter still gets an id, dated from the YYYY-MM-DD prefix on
-// its file name — the fallback that lets pre-`created` tasks self-repair instead
-// of stalling under "could not auto-repair".
-func TestFixFrontmatter_BackfillsFromFilenameDate(t *testing.T) {
-	root := t.TempDir()
-	p := filepath.Join(root, domain.TasksDir, "completed", "2025-10-19-legacy.md")
-	seedFile(t, p, "---\nstatus: completed\nepic: e1\ntags: [x]\n---\n# Legacy\n")
-
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
-		t.Fatal(err)
-	}
-	got := frontmatterID(t, p)
-	if !id.Valid(got) {
-		t.Errorf("filename-dated task id %q is not valid", got)
-	}
-	if d := id.Time(got).UTC().Format("2006-01-02"); d != "2025-10-19" {
-		t.Errorf("id time = %s, want 2025-10-19 (from the filename prefix)", d)
-	}
-}
-
-// TestFixFrontmatter_FrontmatterDateBeatsFilename: when a task has BOTH a
-// frontmatter date and a date-prefixed filename, the id is timestamped from the
-// frontmatter date — the filename is only a fallback, never an override.
-func TestFixFrontmatter_FrontmatterDateBeatsFilename(t *testing.T) {
-	root := t.TempDir()
-	// Filename says 2025-10-19; frontmatter created says 2026-01-05 — created wins.
-	p := filepath.Join(root, domain.TasksDir, "completed", "2025-10-19-x.md")
-	seedFile(t, p, "---\nstatus: completed\nepic: e1\ncreated: 2026-01-05\ntags: [x]\n---\n# X\n")
-
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
-		t.Fatal(err)
-	}
-	got := frontmatterID(t, p)
-	if d := id.Time(got).UTC().Format("2006-01-02"); d != "2026-01-05" {
-		t.Errorf("id time = %s, want 2026-01-05 (frontmatter created, not the filename)", d)
 	}
 }
 

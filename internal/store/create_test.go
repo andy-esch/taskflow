@@ -13,7 +13,7 @@ import (
 func TestCreateTask_OrderQuotingClobber(t *testing.T) {
 	fs := NewFS(t.TempDir())
 	task := domain.Task{
-		Slug: "demo", Status: domain.StatusReadyToStart, Epic: "e1",
+		Slug: "demo", ID: "0abcdef12345", Status: domain.StatusReadyToStart, Epic: "e1",
 		Description: "has a colon: yes", Effort: "Unknown", Tier: 3,
 		Priority: "medium", Autonomy: 3, Tags: []string{"a", "b"}, Created: "2026-06-08",
 	}
@@ -138,31 +138,6 @@ func TestCreateAudit_IDRoundTrips(t *testing.T) {
 	}
 	if reparsed.ID != wantID {
 		t.Errorf("audit id did not round-trip: got %q want %q", reparsed.ID, wantID)
-	}
-}
-
-func TestCreateTask_RejectsSlugInAnotherBucket(t *testing.T) {
-	fs := NewFS(t.TempDir())
-	mk := func(status domain.Status) domain.Task {
-		return domain.Task{
-			Slug: "dup", Status: status, Epic: "e", Description: "d", Effort: "x",
-			Tier: 3, Priority: "low", Autonomy: 3, Tags: []string{"a"}, Created: "2026-06-17",
-		}
-	}
-	if _, err := fs.CreateTask(mk(domain.StatusCompleted), "\n# x\n", false); err != nil {
-		t.Fatal(err)
-	}
-	// Same slug, different status dir → ErrConflict (not just a same-path clobber).
-	if _, err := fs.CreateTask(mk(domain.StatusReadyToStart), "\n# x\n", false); !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("cross-bucket slug should be ErrConflict, got %v", err)
-	}
-	// The dry-run path enforces it too.
-	if _, err := fs.CreateTask(mk(domain.StatusReadyToStart), "x", true); !errors.Is(err, domain.ErrConflict) {
-		t.Errorf("dry-run cross-bucket should be ErrConflict, got %v", err)
-	}
-	// And the slug still resolves to the single file — never became ambiguous.
-	if _, _, err := fs.GetTask("dup"); err != nil {
-		t.Errorf("slug should resolve unambiguously, got %v", err)
 	}
 }
 

@@ -3,11 +3,11 @@ package store
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 const editSeed = "---\nstatus: ready-to-start\ndescription: original\ntier: 2\n---\n# Title\n\nbody\n"
@@ -16,7 +16,8 @@ func editRepo(t *testing.T) (*FS, string) {
 	t.Helper()
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "edit-me.md", editSeed)
-	return NewFS(root), filepath.Join(root, domain.TasksDir, "ready-to-start", "edit-me.md")
+	path, _ := testutil.TaskFixture(root, "ready-to-start", "edit-me.md", editSeed)
+	return NewFS(root), path
 }
 
 func readFile(t *testing.T, path string) string {
@@ -155,33 +156,27 @@ func TestEditTask_EditorError_Propagates(t *testing.T) {
 	}
 }
 
-// A concurrent relocation during the (long) editor window is a compare-and-swap
-// conflict, not a silent resurrection of the slug at its old path.
-func TestEditTask_RelocatedDuringEdit_Conflict(t *testing.T) {
+// A concurrent in-place edit during the (long) editor window is a compare-and-swap
+// conflict: the stale editor's save is rejected, and the concurrent write survives.
+func TestEditTask_ConcurrentEditDuringEdit_Conflict(t *testing.T) {
 	fs, path := editRepo(t)
-	moved := strings.Replace(path, "ready-to-start", "in-progress", 1)
+	concurrent := strings.Replace(editSeed, "body", "concurrent", 1)
 	_, changed, err := fs.EditTask("edit-me", bodyNow, func(cur string, _ error) (string, error) {
-		// Simulate a concurrent `task move` relocating the file mid-edit.
-		if err := os.MkdirAll(filepath.Dir(moved), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Rename(path, moved); err != nil {
+		// Simulate a concurrent write landing on the same file mid-edit.
+		if err := os.WriteFile(path, []byte(concurrent), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		return strings.Replace(cur, "body", "edited", 1), nil
 	})
 	if !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("expected ErrConflict when the file is relocated mid-edit, got %v", err)
+		t.Fatalf("expected ErrConflict when the file changes mid-edit, got %v", err)
 	}
 	if changed {
 		t.Error("a conflicted edit must not report a change")
 	}
-	// The relocated file keeps its content; nothing was resurrected at the old path.
-	if got := readFile(t, moved); !strings.Contains(got, "body") || strings.Contains(got, "edited") {
-		t.Errorf("relocated file should be untouched by the aborted edit, got %q", got)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("the old path must not be resurrected, stat err = %v", err)
+	// The concurrent write survives; the stale editor's save was not applied.
+	if got := readFile(t, path); !strings.Contains(got, "concurrent") || strings.Contains(got, "edited") {
+		t.Errorf("concurrent write should survive the aborted edit, got %q", got)
 	}
 }
 
@@ -202,27 +197,23 @@ func TestEditTask_BrokenFileUnchanged_ErrValidation(t *testing.T) {
 	}
 }
 
-// Editing the frontmatter status away from the directory is a misfile, not an
-// error: the write lands, frontmatter becomes the authority (Status reflects the
-// edit), the folder is the stale mirror, and the returned task reports the drift
-// (the cli warns on it, pointing at `lint --fix`/the verbs to relocate).
-func TestEditTask_StatusDrift_ReportsMisfiled(t *testing.T) {
-	fs, _ := editRepo(t)
-	drifted := strings.Replace(editSeed, "status: ready-to-start", "status: completed", 1)
+// Editing the frontmatter status away from the seeded status is an ordinary,
+// authoritative in-place edit under the flat layout: the write lands, and Status
+// reflects the edit (there is no folder to drift from, so no misfile).
+func TestEditTask_StatusEdit_Writes(t *testing.T) {
+	fs, path := editRepo(t)
+	edited := strings.Replace(editSeed, "status: ready-to-start", "status: completed", 1)
 	task, changed, err := fs.EditTask("edit-me", bodyNow, func(string, error) (string, error) {
-		return drifted, nil
+		return edited, nil
 	})
 	if err != nil || !changed {
-		t.Fatalf("status drift is a misfile, not an error: changed=%v err=%v", changed, err)
-	}
-	if !task.Misfiled() {
-		t.Error("editing status away from the directory should yield a misfiled task")
+		t.Fatalf("a status edit is an ordinary write: changed=%v err=%v", changed, err)
 	}
 	if string(task.Status) != "completed" {
 		t.Errorf("frontmatter is authoritative, want status completed, got %q", task.Status)
 	}
-	if string(task.FolderStatus) != "ready-to-start" {
-		t.Errorf("the folder should be recorded as the mirror, got %q", task.FolderStatus)
+	if got := readFile(t, path); !strings.Contains(got, "status: completed") {
+		t.Errorf("the status edit should land in the file at its flat path, got %q", got)
 	}
 }
 

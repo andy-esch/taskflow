@@ -8,12 +8,13 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // New scaffolds stamp the reserved schema-version key, written first.
 func TestCreate_StampsSchemaVersion(t *testing.T) {
 	fs := NewFS(t.TempDir())
-	taskC, err := fs.CreateTask(domain.Task{Slug: "t", Status: domain.StatusReadyToStart, Epic: "e1", Tags: []string{"x"}, Created: "2026-01-01"}, "# T\n", false)
+	taskC, err := fs.CreateTask(domain.Task{ID: "0abcdef23456", Slug: "t", Status: domain.StatusReadyToStart, Epic: "e1", Tags: []string{"x"}, Created: "2026-01-01"}, "# T\n", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,12 +40,14 @@ func TestCreate_StampsSchemaVersion(t *testing.T) {
 }
 
 // A file carrying the reserved schema key parses (the loader ignores it) and both
-// a surgical field edit and a relocating move preserve it — it is reserved, not a
-// managed field.
+// a surgical field edit and an in-place move preserve it — it is reserved, not a
+// managed field. Under the flat layout the file path never changes; a move only
+// rewrites the status in frontmatter.
 func TestSchemaVersion_ParsesAndSurvivesEdits(t *testing.T) {
 	root := t.TempDir()
 	seed := "---\nschema: 1\nstatus: ready-to-start\ndescription: d\ntier: 2\ntags: [seed]\n---\n# T\n\nbody\n"
 	writeTask(t, root, "ready-to-start", "keep.md", seed)
+	path := filepath.Join(root, domain.TasksDir, testutil.TaskID("keep")+"-keep.md")
 	fs := NewFS(root)
 
 	if _, _, err := fs.GetTask("keep"); err != nil {
@@ -53,14 +56,18 @@ func TestSchemaVersion_ParsesAndSurvivesEdits(t *testing.T) {
 	if _, err := fs.SetFields("keep", map[string]any{"tier": 3}, false); err != nil {
 		t.Fatal(err)
 	}
-	if got := readFile(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "keep.md")); !strings.Contains(got, "schema: 1") {
+	if got := readFile(t, path); !strings.Contains(got, "schema: 1") {
 		t.Errorf("SetFields dropped the reserved schema key:\n%s", got)
 	}
 	if _, err := fs.Move("keep", domain.StatusInProgress, bodyNow, false); err != nil {
 		t.Fatal(err)
 	}
-	if got := readFile(t, filepath.Join(root, domain.TasksDir, "in-progress", "keep.md")); !strings.Contains(got, "schema: 1") {
+	got := readFile(t, path)
+	if !strings.Contains(got, "schema: 1") {
 		t.Errorf("Move dropped the reserved schema key:\n%s", got)
+	}
+	if !strings.Contains(got, "status: in-progress") {
+		t.Errorf("Move should rewrite status in frontmatter in place:\n%s", got)
 	}
 }
 
@@ -70,7 +77,7 @@ func TestSchemaVersion_SurvivesBodyEdit(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "keep.md", "---\nschema: 1\nstatus: ready-to-start\ndescription: d\n---\n# T\n\nbody\n")
 	fs := NewFS(root)
-	path := filepath.Join(root, domain.TasksDir, "ready-to-start", "keep.md")
+	path := filepath.Join(root, domain.TasksDir, testutil.TaskID("keep")+"-keep.md")
 
 	if _, _, err := fs.EditBody("keep", "## Notes\n- x", true, bodyNow, false); err != nil { // append
 		t.Fatal(err)

@@ -37,8 +37,8 @@ func TestFS_SetFields_RejectsEmptyTagsOnActiveTask(t *testing.T) {
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("emptying tags on an active task must be rejected, got %v", err)
 	}
-	if got := readFile(t, filepath.Join(root, "tasks", "ready-to-start", "alpha.md")); !strings.Contains(got, "seed") {
-		t.Errorf("a rejected SetFields must not have written:\n%s", got)
+	if tk, _, _ := NewFS(root).GetTask("alpha"); len(tk.Tags) != 1 || tk.Tags[0] != "seed" {
+		t.Errorf("a rejected SetFields must not have written (tags=%v)", tk.Tags)
 	}
 }
 

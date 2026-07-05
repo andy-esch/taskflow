@@ -45,19 +45,6 @@ func TestFS_ListTasks(t *testing.T) {
 	}
 }
 
-func TestFS_ListTasks_StatusFromDirWhenMissing(t *testing.T) {
-	root := t.TempDir()
-	// No status in frontmatter → directory is the source of truth.
-	writeTask(t, root, "completed", "gamma.md", "---\ndescription: g\n---\n# Gamma\n")
-	tasks, _, err := NewFS(root).ListTasks()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(tasks) != 1 || tasks[0].Status != "completed" {
-		t.Fatalf("got %+v", tasks)
-	}
-}
-
 // TestFS_ListTasks_MissingFrontmatterIsLoud: a fence-less file (or a malformed
 // opening fence like `---"`) is surfaced as a loud FileProblem naming the valid
 // shape — not silently parsed as an empty task, which downstream would misreport

@@ -57,9 +57,9 @@ func TestFS_ListEpics_NumericOrder(t *testing.T) {
 	}
 }
 
-// TestFS_WatchPaths covers the directory set exposed for the TUI watcher: it must
-// be derived from the domain enums (one source of layout truth), so every status
-// and bucket subdir is present under the right parent.
+// TestFS_WatchPaths covers the directory set exposed for the TUI watcher. Tasks are
+// flat now (ADR-0003 §4), so the tasks dir itself is the only task watch path — no
+// per-status subdirs; audits are still bucketed, so their bucket subdirs remain.
 func TestFS_WatchPaths(t *testing.T) {
 	root := filepath.Join("x", "plan")
 	got := map[string]bool{}
@@ -72,8 +72,8 @@ func TestFS_WatchPaths(t *testing.T) {
 		}
 	}
 	for _, st := range domain.AllStatuses() {
-		if !got[filepath.Join(root, "tasks", st.Dir())] {
-			t.Errorf("WatchPaths missing status dir %q", st.Dir())
+		if got[filepath.Join(root, "tasks", st.Dir())] {
+			t.Errorf("WatchPaths should NOT include a per-status task dir %q under the flat layout", st.Dir())
 		}
 	}
 	for _, b := range domain.AllAuditBuckets() {

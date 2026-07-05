@@ -9,7 +9,20 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/id"
+	"github.com/andy-esch/taskflow/internal/store"
 )
+
+// flatSlug returns the human slug of a flat task filename stem `<id>-<slug>` by
+// slicing the fixed 12-char id, or "" when the name is not id-led (a README/stray,
+// not a completion candidate). Parse-free — it reads only the filename, so a task
+// with malformed frontmatter still completes (you complete it precisely to fix it).
+func flatSlug(stem string) string {
+	if len(stem) > id.Length+1 && stem[id.Length] == '-' && id.Valid(stem[:id.Length]) {
+		return stem[id.Length+1:]
+	}
+	return ""
+}
 
 // completeFunc is cobra's ValidArgsFunction shape.
 type completeFunc = func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective)
@@ -123,14 +136,35 @@ func (a *App) taskCompleter(exclude domain.Status) completeFunc {
 		if !ok {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		var pats []string
-		for _, st := range domain.AllStatuses() {
-			if st == exclude {
+		// Status lives in frontmatter under the flat layout (ADR-0003 §4), so honoring
+		// `exclude` means parsing — but only when a status-aware verb asks for it.
+		// Malformed files (absent from ListTasks) are never excluded: you complete them
+		// precisely to fix them.
+		excluded := map[string]bool{}
+		if exclude != "" {
+			tasks, _, _ := store.NewFS(root).ListTasks()
+			for _, tk := range tasks {
+				if tk.Status == exclude {
+					excluded[tk.Slug] = true
+				}
+			}
+		}
+		matches, _ := filepath.Glob(filepath.Join(root, domain.TasksDir, "*.md"))
+		taken := make(map[string]bool, len(args))
+		for _, arg := range args {
+			taken[arg] = true
+		}
+		var out []string
+		for _, m := range matches {
+			slug := flatSlug(strings.TrimSuffix(filepath.Base(m), ".md"))
+			if slug == "" || taken[slug] || excluded[slug] || !strings.HasPrefix(slug, toComplete) {
 				continue
 			}
-			pats = append(pats, filepath.Join(root, domain.TasksDir, st.Dir(), "*.md"))
+			taken[slug] = true
+			out = append(out, slug)
 		}
-		return slugsFromGlobs(pats, toComplete, args), cobra.ShellCompDirectiveNoFileComp
+		sort.Strings(out)
+		return out, cobra.ShellCompDirectiveNoFileComp
 	}
 }
 

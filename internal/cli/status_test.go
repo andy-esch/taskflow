@@ -2,9 +2,10 @@ package cli
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // M3 (2026-06-22 audit): status must exit non-zero when files are unreadable,
@@ -13,8 +14,9 @@ import (
 func TestStatus_ExitsNonZeroOnUnreadableFiles(t *testing.T) {
 	root := setupRepo(t)
 	// tier as a quoted string fails the strict decode → a FileProblem.
-	mustWrite(t, filepath.Join(root, "tasks", "ready-to-start", "broken.md"),
+	path, out := testutil.TaskFixture(root, "ready-to-start", "broken.md",
 		"---\nstatus: ready-to-start\ntier: \"4\"\n---\n# Broken\n")
+	mustWrite(t, path, out)
 	out, err := runRootRC(t, "-C", root, "status")
 	if err == nil {
 		t.Fatal("status must exit non-zero when a file is unreadable")
