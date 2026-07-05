@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // H1: a malformed file on the single-item read path must classify as
@@ -92,21 +93,22 @@ func TestWriteFileAtomic_PreservesExistingMode(t *testing.T) {
 	}
 }
 
-// M5: an audit relocated between MoveAudit's resolve and its rename must produce
-// ErrConflict (exit 14 retry signal) with no duplicate left behind — the audit
-// sibling of the task SetFields/Move compare-and-swap guard.
-func TestFS_MoveAudit_ConflictsWhenMovedConcurrently(t *testing.T) {
+// M5: an audit whose bytes change in place between MoveAudit's resolve and its
+// write must produce ErrConflict (exit 14 retry signal) with the concurrent edit
+// intact — the audit sibling of the task SetFields/Move compare-and-swap guard.
+// Under the flat layout a move is a pure in-place frontmatter edit (no relocation),
+// so the race is a concurrent content edit, not a bucket relocation.
+func TestFS_MoveAudit_ConflictsWhenEditedConcurrently(t *testing.T) {
 	root := t.TempDir()
-	writeAudit(t, root, "open", "a1.md", "---\narea: store\ndate: \"2026-06-01\"\n---\n# Audit: store\n")
+	path, out := testutil.AuditFixture(root, "open", "a1.md",
+		"---\narea: store\ndate: \"2026-06-01\"\n---\n# Audit: store\n")
+	testutil.Write(t, path, out)
 	fs := NewFS(root)
 
-	openPath := filepath.Join(root, "audits", "open", "a1.md")
-	closedDir := filepath.Join(root, "audits", "closed")
+	const concurrent = "---\nbucket: open\narea: store\ndate: \"2026-06-01\"\ntier: raced\n---\n# Audit: store\n"
 	testHookBeforeMoveAuditWrite = func() {
-		if err := os.MkdirAll(closedDir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Rename(openPath, filepath.Join(closedDir, "a1.md")); err != nil {
+		// A concurrent in-place edit lands between this move's resolve and write.
+		if err := os.WriteFile(path, []byte(concurrent), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -114,24 +116,29 @@ func TestFS_MoveAudit_ConflictsWhenMovedConcurrently(t *testing.T) {
 
 	_, err := fs.MoveAudit("a1", domain.AuditDeferred, false)
 	if !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("want ErrConflict for a concurrently-moved audit, got %v", err)
+		t.Fatalf("want ErrConflict for a concurrently-edited audit, got %v", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(root, "audits", "deferred", "a1.md")); statErr == nil {
-		t.Error("a conflicted audit move must not write into the target bucket")
+	if b, _ := os.ReadFile(path); string(b) != concurrent {
+		t.Error("a conflicted audit move must not clobber the concurrent edit")
 	}
 }
 
 // M4: closing/deferring an audit that still has open findings must be refused
-// (the bucket↔state invariant `audit lint` enforces), with nothing moved.
+// (the bucket↔state invariant `audit lint` enforces), with nothing written.
 func TestFS_MoveAudit_RejectsOpenFindings(t *testing.T) {
 	root := t.TempDir()
-	writeAudit(t, root, "open", "x.md", "---\narea: a\n---\n#### H1. t  · **Status:** open\n")
+	path, out := testutil.AuditFixture(root, "open", "x.md", "---\narea: a\n---\n#### H1. t  · **Status:** open\n")
+	testutil.Write(t, path, out)
 	_, err := NewFS(root).MoveAudit("x", domain.AuditClosed, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("closing an audit with open findings must be rejected, got %v", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(root, "audits", "open", "x.md")); statErr != nil {
-		t.Error("a rejected move must leave the audit in its original bucket")
+	// Under the flat layout the file never relocates — a rejected move leaves the
+	// audit untouched at its original flat path with its bucket frontmatter intact.
+	if b, readErr := os.ReadFile(path); readErr != nil {
+		t.Error("a rejected move must leave the audit at its original flat path")
+	} else if !strings.Contains(string(b), "bucket: open") {
+		t.Errorf("a rejected move must not change the audit's bucket frontmatter: %q", b)
 	}
 	// Deferring (also a non-open bucket) is refused for the same reason.
 	if _, err := NewFS(root).MoveAudit("x", domain.AuditDeferred, false); !errors.Is(err, domain.ErrValidation) {

@@ -33,6 +33,22 @@ func taskPath(t *testing.T, root, slug string) string {
 	return m[0]
 }
 
+// auditPath resolves the flat id-led file a CLI-created audit landed at
+// (audits/<minted-id>-<slug>.md). Like taskPath, the id is minted at create time,
+// so the file is found by its slug suffix; bucket lives in the frontmatter, not
+// the path (ADR-0003 §4).
+func auditPath(t *testing.T, root, slug string) string {
+	t.Helper()
+	m, err := filepath.Glob(filepath.Join(root, "audits", "*-"+slug+".md"))
+	if err != nil {
+		t.Fatalf("glob audit %q: %v", slug, err)
+	}
+	if len(m) != 1 {
+		t.Fatalf("expected exactly one audit file for %q, got %v", slug, m)
+	}
+	return m[0]
+}
+
 func TestTaskNew_HappyPath(t *testing.T) {
 	root := freshRepo(t)
 	// The epic must itself be lint-clean (lint now validates epics too), so the
@@ -197,9 +213,10 @@ func TestAuditNew(t *testing.T) {
 	if !strings.Contains(out, "created") {
 		t.Errorf("unexpected output: %q", out)
 	}
-	b, err := os.ReadFile(filepath.Join(root, "audits", "open", "2026-06-16-dispatcher.md"))
+	auditFile := auditPath(t, root, "2026-06-16-dispatcher")
+	b, err := os.ReadFile(auditFile)
 	if err != nil {
-		t.Fatalf("audit file not created in open/: %v", err)
+		t.Fatalf("audit file not created: %v", err)
 	}
 	s := string(b)
 	for _, want := range []string{
@@ -230,10 +247,18 @@ func TestAuditNew(t *testing.T) {
 	if len(lst.Audits) != 1 || lst.Audits[0].Findings != 0 {
 		t.Errorf("fresh audit should list once with 0 findings, got %+v", lst.Audits)
 	}
-	// Lifecycle round-trips through the CLI: close moves it to closed/.
+	// Lifecycle round-trips through the CLI: close is an in-place frontmatter edit —
+	// the file stays at its original flat path, only its bucket: flips to closed.
 	runRoot(t, "-C", root, "audit", "close", "2026-06-16-dispatcher")
-	if _, err := os.Stat(filepath.Join(root, "audits", "closed", "2026-06-16-dispatcher.md")); err != nil {
-		t.Errorf("close should move the audit to closed/: %v", err)
+	if _, err := os.Stat(auditFile); err != nil {
+		t.Errorf("close must be in-place — the file must stay at its original flat path: %v", err)
+	}
+	cb, err := os.ReadFile(auditFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(cb), "bucket: closed") {
+		t.Errorf("close must flip the frontmatter bucket to closed:\n%s", cb)
 	}
 }
 
@@ -241,7 +266,7 @@ func TestAuditNew_BodyOverride(t *testing.T) {
 	root := freshRepo(t)
 	runRoot(t, "-C", root, "audit", "new", "dispatcher", "--date", "2026-06-17",
 		"--body", "\n# Custom\n\nhand-written body\n")
-	b, err := os.ReadFile(filepath.Join(root, "audits", "open", "2026-06-17-dispatcher.md"))
+	b, err := os.ReadFile(auditPath(t, root, "2026-06-17-dispatcher"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +281,7 @@ func TestAuditNew_BodyFile(t *testing.T) {
 	bf := filepath.Join(t.TempDir(), "body.md")
 	mustWrite(t, bf, "\n# Custom\n\naudit body from a file\n")
 	runRoot(t, "-C", root, "audit", "new", "dispatcher", "--date", "2026-06-17", "--body-file", bf)
-	b, err := os.ReadFile(filepath.Join(root, "audits", "open", "2026-06-17-dispatcher.md"))
+	b, err := os.ReadFile(auditPath(t, root, "2026-06-17-dispatcher"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,9 +335,15 @@ func TestAuditNew_JSONEnvelope(t *testing.T) {
 	if env.DryRun || env.Created.Kind != "audit" || env.Created.ID != "2026-06-16-arch-data-flow" {
 		t.Errorf("envelope wrong: %+v", env)
 	}
-	// status = the audit bucket; path is relative to the planning root (not absolute).
-	if env.Created.Status != "open" || env.Created.Path != "audits/open/2026-06-16-arch-data-flow.md" {
-		t.Errorf("envelope status/path wrong: %+v", env.Created)
+	// status = the audit bucket; path is the flat id-led file relative to the
+	// planning root (audits/<minted-id>-<slug>.md, no bucket subdir).
+	if env.Created.Status != "open" {
+		t.Errorf("envelope status wrong: %+v", env.Created)
+	}
+	if !strings.HasPrefix(env.Created.Path, "audits/") ||
+		!strings.HasSuffix(env.Created.Path, "-2026-06-16-arch-data-flow.md") ||
+		strings.Contains(env.Created.Path, "audits/open/") {
+		t.Errorf("envelope path should be flat id-led, got: %q", env.Created.Path)
 	}
 }
 
@@ -323,17 +354,6 @@ func TestAuditNew_BadDate_Exit11(t *testing.T) {
 	cmd.SetArgs([]string{"-C", root, "audit", "new", "x", "--date", "06-16-2026"})
 	if err := cmd.Execute(); err == nil || ExitCode(err) != 11 {
 		t.Errorf("a malformed date should exit 11 (validation), got %v", err)
-	}
-}
-
-func TestAuditNew_RefusesClobber(t *testing.T) {
-	root := freshRepo(t)
-	runRoot(t, "-C", root, "audit", "new", "dispatcher", "--date", "2026-06-16")
-	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
-	cmd.SetArgs([]string{"-C", root, "audit", "new", "dispatcher", "--date", "2026-06-16"})
-	if err := cmd.Execute(); err == nil || ExitCode(err) != 14 {
-		t.Errorf("clobber should exit 14 (conflict), got %v", err)
 	}
 }
 
@@ -354,7 +374,7 @@ func TestEpicNew_RequiresDescription(t *testing.T) {
 func TestAuditNew_SecurityTemplate(t *testing.T) {
 	root := freshRepo(t)
 	runRoot(t, "-C", root, "audit", "new", "auth", "--date", "2026-06-22", "--template", "security")
-	b, err := os.ReadFile(filepath.Join(root, "audits", "open", "2026-06-22-auth.md"))
+	b, err := os.ReadFile(auditPath(t, root, "2026-06-22-auth"))
 	if err != nil {
 		t.Fatalf("security audit not created: %v", err)
 	}
@@ -424,7 +444,7 @@ func TestCreate_TemplateLeavesNoUnfilledPlaceholders(t *testing.T) {
 	}
 	paths := []string{
 		taskFiles[0],
-		filepath.Join(root, "audits", "open", "2026-06-22-area-three.md"),
+		auditPath(t, root, "2026-06-22-area-three"),
 	}
 	epics, _ := filepath.Glob(filepath.Join(root, "epics", "*-e-two.md")) // auto-numbered NN-e-two
 	if len(epics) != 1 {

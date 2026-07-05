@@ -25,13 +25,10 @@ import (
 // mutates a directory it is still iterating. When dryRun is true nothing is written.
 func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	var results []domain.FixResult
-	// Misfiled tasks are relocated AFTER the walk (moving a file mid-iteration would
-	// disturb the ReadDir loop it lives in); collected here, applied below.
-	var moves []plannedMove
 	// Every id already on disk, so a backfill never re-mints one; mintUniqueID adds
 	// each id it assigns, so same-date entities in this run stay distinct too.
 	seen := s.knownIDs()
-	fixDir := func(dir string, auditBucket domain.AuditBucket, backfill bool) error {
+	fixDir := func(dir string, backfill bool) error {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -59,35 +56,6 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 					changes = append(changes, "id: assigned (was missing)")
 				}
 			}
-			// Audits: backfill a missing `bucket:` frontmatter (the pre-Phase-A state,
-			// where bucket was dir-only), then relocate a misfiled audit (frontmatter
-			// bucket ≠ its folder) to match — same collect-then-apply as tasks.
-			if auditBucket != "" {
-				withBucket, ok, err := backfillMissingBucket(fixed, auditBucket)
-				if err != nil {
-					return err
-				}
-				if ok {
-					fixed = withBucket
-					changes = append(changes, "bucket: assigned (was missing)")
-				}
-				if target, ok := auditMisfiledTarget(fixed, auditBucket); ok {
-					// Only relocate when the target bucket would accept it: a non-open
-					// bucket must have no open findings (the invariant MoveAudit enforces).
-					// Relocating into a gate-violating state would leave a tree the linter
-					// rejects and can't repair, so leave it misfiled for the re-lint to flag.
-					_, body := splitFrontmatter(fixed)
-					if target == domain.AuditOpen || domain.CountOpenFindings(domain.ParseFindings(string(body))) == 0 {
-						moves = append(moves, plannedMove{
-							from:    path,
-							to:      filepath.Join(s.auditsDir, target.Dir(), e.Name()),
-							content: fixed,
-							changes: append(changes, fmt.Sprintf("bucket: moved to %s/ to match frontmatter", target)),
-						})
-						continue
-					}
-				}
-			}
 			if len(changes) == 0 {
 				continue
 			}
@@ -101,56 +69,19 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 		return nil
 	}
 
-	// On a mid-run write failure, return the results accumulated so far ALONGSIDE
-	// the error: files in earlier dirs may already be repaired, and the caller must
-	// be able to report that partial progress rather than discard it (atomic writes
-	// mean each file is whole; only the run is incomplete).
-	// Tasks are flat (ADR-0003 §4): one dir, and no misfiled relocation — there is no
-	// folder to be misfiled against (a bad status is lint-flagged, not moved). Text
-	// normalization + id-backfill still apply.
-	if err := fixDir(s.tasksDir, "", true); err != nil {
+	// Tasks and audits are both flat (ADR-0003 §4): one dir each, no misfiled relocation
+	// (a bad status/bucket is lint-flagged, not moved). Text normalization + id-backfill
+	// apply to both; epics are text-level only (they keep their NN-slug identity). On a
+	// mid-run write failure the results so far are returned ALONGSIDE the error, since
+	// earlier files may already be repaired (atomic writes mean each file is whole).
+	if err := fixDir(s.tasksDir, true); err != nil {
 		return results, err
 	}
-	if err := fixDir(s.epicsDir, "", false); err != nil { // epics: text-level only, keep NN-slug identity
+	if err := fixDir(s.epicsDir, false); err != nil {
 		return results, err
 	}
-	for _, b := range domain.AllAuditBuckets() {
-		if err := fixDir(filepath.Join(s.auditsDir, b.Dir()), b, true); err != nil { // audits: text + id + bucket backfill + misfiled relocation
-			return results, err
-		}
-	}
-	// Apply the misfiled-task relocations now the walk is done. A file already at the
-	// target is a real slug collision — skip it (the file stays put, and the re-lint's
-	// duplicate-slug check surfaces the pair) rather than clobber the occupant.
-	taken := map[string]bool{} // targets claimed this run, so a dry-run preview matches the real one
-	for _, mv := range moves {
-		// Skip if the target is occupied — on disk (a pre-existing file) OR by an earlier
-		// pending move this run (two same-slug misfiles racing for one dir). The loser
-		// stays misfiled for the re-lint / dup-slug check; because a dry-run touches
-		// neither disk nor the loser's source, `taken` keeps the preview honest.
-		if taken[mv.to] {
-			continue
-		}
-		if _, err := os.Stat(mv.to); err == nil {
-			continue // target occupied — leave misfiled for the re-lint to flag
-		} else if !os.IsNotExist(err) {
-			return results, fmt.Errorf("stat %s: %w", mv.to, err)
-		}
-		taken[mv.to] = true
-		if !dryRun {
-			if err := os.MkdirAll(filepath.Dir(mv.to), 0o755); err != nil {
-				return results, fmt.Errorf("mkdir %s: %w", filepath.Dir(mv.to), err)
-			}
-			// Write the target first, then remove the source — a crash between the two
-			// leaves a recoverable duplicate (dup-slug lint), never a lost file.
-			if err := writeFileAtomic(mv.to, mv.content, 0o644); err != nil {
-				return results, err
-			}
-			if err := os.Remove(mv.from); err != nil {
-				return results, fmt.Errorf("remove old file %s: %w", mv.from, err)
-			}
-		}
-		results = append(results, domain.FixResult{Path: mv.from, Changes: mv.changes})
+	if err := fixDir(s.auditsDir, true); err != nil {
+		return results, err
 	}
 	// Sweep the tool's own crash-orphaned temp files (housekeeping). Only on a real
 	// run — a dry-run previews repairs and must write/remove nothing. The age +
@@ -290,59 +221,6 @@ func mintUniqueID(millis int64, seen map[string]bool, gen func(int64) string) (s
 		}
 	}
 	return "", false
-}
-
-// plannedMove is a misfiled task's relocation, deferred until the walk finishes.
-// content carries any text/id repairs so they ride along with the move.
-type plannedMove struct {
-	from, to string
-	content  []byte
-	changes  []string
-}
-
-// backfillMissingBucket adds `bucket: <dir>` to an audit whose frontmatter lacks a
-// recognized bucket — the pre-Phase-A state, where bucket was dir-only. A no-op
-// (ok=false) when the frontmatter already names a valid bucket, or the file won't parse.
-func backfillMissingBucket(content []byte, dirBucket domain.AuditBucket) ([]byte, bool, error) {
-	fm, _ := splitFrontmatter(content)
-	if len(fm) == 0 {
-		return content, false, nil
-	}
-	var meta struct {
-		Bucket domain.AuditBucket `yaml:"bucket"`
-	}
-	if yaml.Unmarshal(fm, &meta) != nil {
-		return content, false, nil
-	}
-	if strings.TrimSpace(string(meta.Bucket)) != "" {
-		// Present already — valid, or a foreign/legacy word we must NOT clobber (backfill
-		// is for a truly ABSENT bucket; a bad value is the re-lint's / replace-misfiled's
-		// job to surface, not this repair's to silently overwrite).
-		return content, false, nil
-	}
-	out, err := updateFrontmatter(content, map[string]any{"bucket": string(dirBucket)})
-	if err != nil {
-		return nil, false, err
-	}
-	return out, true, nil
-}
-
-// auditMisfiledTarget returns the bucket dir an audit belongs in when its frontmatter
-// names a valid bucket that disagrees with its folder (dirBucket) — a misfiled audit to
-// relocate. A no-op when the frontmatter bucket is missing/foreign (the folder governs)
-// or already agrees.
-func auditMisfiledTarget(content []byte, dirBucket domain.AuditBucket) (domain.AuditBucket, bool) {
-	fm, _ := splitFrontmatter(content)
-	var meta struct {
-		Bucket domain.AuditBucket `yaml:"bucket"`
-	}
-	if len(fm) == 0 || yaml.Unmarshal(fm, &meta) != nil {
-		return "", false
-	}
-	if !meta.Bucket.Valid() || meta.Bucket == dirBucket {
-		return "", false
-	}
-	return meta.Bucket, true
 }
 
 // fixFrontmatterText normalizes a file's frontmatter at the TEXT level — it must

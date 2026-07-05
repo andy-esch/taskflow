@@ -196,22 +196,6 @@ func resolveID(kind, query string, cands []candidate) (candidate, error) {
 	return candidate{}, fmt.Errorf("%s %q: %w", kind, query, domain.ErrNotFound)
 }
 
-// slugCollision reports the directory a `<slug>.md` already occupies among cands
-// (an exact-id match), or "" if the slug is free across them. The create path
-// uses it to reject a slug that already lives in ANOTHER status dir / audit
-// bucket: writeNewFile's O_EXCL only guards the single target path, so without
-// this a `task new`/`audit new` could mint a second file with the same slug and
-// make every later resolve of it ErrAmbiguous. Best-effort (a scan, not atomic)
-// — fine for a single-user CLI, like the epic auto-numbering race.
-func slugCollision(slug string, cands []candidate) string {
-	for _, c := range cands {
-		if c.id == slug {
-			return c.dir
-		}
-	}
-	return ""
-}
-
 // describeCandidates renders an ambiguity list — "a (in-progress), b (open)" —
 // so the error itself is enough to retype an unambiguous name.
 func describeCandidates(cands []candidate) string {

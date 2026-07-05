@@ -13,7 +13,8 @@ import (
 
 func writeAudit(t *testing.T, root, bucket, name, content string) {
 	t.Helper()
-	testutil.Write(t, filepath.Join(root, domain.AuditsDir, bucket, name), content)
+	path, out := testutil.AuditFixture(root, bucket, name, content)
+	testutil.Write(t, path, out)
 }
 
 // TestFS_ListAudits_MissingFrontmatterIsLoud: a fence-less audit file is surfaced
@@ -112,6 +113,9 @@ func TestFS_MoveAudit(t *testing.T) {
 	root := t.TempDir()
 	// No open findings, so the bucket↔state invariant permits closing.
 	writeAudit(t, root, "open", "x.md", "---\narea: a\n---\n#### H1. t  · **Status:** fixed\n")
+	// Under the flat layout the file lives at audits/<id>-x.md and never moves; close
+	// is an in-place frontmatter edit.
+	wantPath := filepath.Join(root, "audits", testutil.TaskID("x")+"-x.md")
 
 	a, err := NewFS(root).MoveAudit("x", domain.AuditClosed, false)
 	if err != nil {
@@ -120,16 +124,20 @@ func TestFS_MoveAudit(t *testing.T) {
 	if a.Bucket != domain.AuditClosed {
 		t.Errorf("bucket = %s", a.Bucket)
 	}
-	if _, err := os.Stat(filepath.Join(root, "audits", "open", "x.md")); !os.IsNotExist(err) {
-		t.Error("old file should be gone")
+	// The path is unchanged — no relocation between buckets under flat.
+	if a.Path != wantPath {
+		t.Errorf("path moved: got %q want %q", a.Path, wantPath)
 	}
-	if _, err := os.Stat(filepath.Join(root, "audits", "closed", "x.md")); err != nil {
-		t.Errorf("closed file missing: %v", err)
+	if _, err := os.Stat(wantPath); err != nil {
+		t.Errorf("audit file missing at its original flat path: %v", err)
 	}
-	// A bucket move is a pure relocation — it touches neither frontmatter nor body, so
-	// it must NOT stamp updated_at (unlike edit/append). The directory carries the
-	// state change; the content date stays put.
-	moved, _ := os.ReadFile(filepath.Join(root, "audits", "closed", "x.md"))
+	// The bucket change lands in the authoritative frontmatter.
+	moved, _ := os.ReadFile(wantPath)
+	if !strings.Contains(string(moved), "bucket: closed") {
+		t.Errorf("frontmatter bucket not rewritten to closed:\n%s", moved)
+	}
+	// A bucket move is a pure frontmatter bucket rewrite — it touches neither the body
+	// nor any activity date, so it must NOT stamp updated_at (unlike edit/append).
 	if a.Updated != "" || strings.Contains(string(moved), "updated_at") {
 		t.Errorf("a bucket move must not stamp updated_at:\n%s", moved)
 	}
@@ -142,7 +150,8 @@ func TestFS_GetAudit_NotFound(t *testing.T) {
 }
 
 // TestFS_GetAuditByPath pins M16: a read-by-path returns the same audit+body as
-// GetAudit and derives the bucket from the parent directory (not the frontmatter).
+// GetAudit and derives the bucket from the frontmatter (authoritative under the flat
+// layout — there is no parent-directory bucket).
 func TestFS_GetAuditByPath(t *testing.T) {
 	root := t.TempDir()
 	body := "# Audit\n\n#### H1. t  · **Status:** open\n"
@@ -161,7 +170,7 @@ func TestFS_GetAuditByPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	if a.Slug != "2026-06-01-x" || a.Bucket != domain.AuditDeferred || a.Area != "dispatcher" {
-		t.Errorf("metadata wrong (bucket must come from the parent dir): %+v", a)
+		t.Errorf("metadata wrong (bucket must come from the frontmatter): %+v", a)
 	}
 	if a.Findings != 1 || a.OpenFindings != 1 {
 		t.Errorf("findings=%d open=%d, want 1/1", a.Findings, a.OpenFindings)
@@ -169,16 +178,5 @@ func TestFS_GetAuditByPath(t *testing.T) {
 	// Body matches the GetAudit (slug-resolved) read of the same file.
 	if _, slugBody, err := fs.GetAudit("2026-06-01-x"); err != nil || gotBody != slugBody {
 		t.Errorf("by-path body diverges from by-slug: %q vs %q (%v)", gotBody, slugBody, err)
-	}
-}
-
-// TestFS_GetAuditByPath_RejectsNonBucketDir pins that a path outside
-// audits/<bucket>/ is rejected (ErrValidation), not silently mis-bucketed.
-func TestFS_GetAuditByPath_RejectsNonBucketDir(t *testing.T) {
-	root := t.TempDir()
-	stray := filepath.Join(root, "audits", "bogus", "x.md")
-	testutil.Write(t, stray, "---\narea: a\n---\n# x\n")
-	if _, _, err := NewFS(root).GetAuditByPath(stray); !errors.Is(err, domain.ErrValidation) {
-		t.Errorf("want ErrValidation for a non-bucket parent dir, got %v", err)
 	}
 }

@@ -177,14 +177,34 @@ func (a *App) auditCompleter(exclude domain.AuditBucket) completeFunc {
 		if !ok {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		var pats []string
-		for _, b := range domain.AllAuditBuckets() {
-			if b == exclude {
+		// Bucket lives in frontmatter under the flat layout, so honoring `exclude` means
+		// parsing — only when a bucket-aware verb asks. Malformed audits (absent from
+		// ListAudits) are never excluded.
+		excluded := map[string]bool{}
+		if exclude != "" {
+			audits, _, _ := store.NewFS(root).ListAudits()
+			for _, au := range audits {
+				if au.Bucket == exclude {
+					excluded[au.Slug] = true
+				}
+			}
+		}
+		matches, _ := filepath.Glob(filepath.Join(root, domain.AuditsDir, "*.md"))
+		taken := make(map[string]bool, len(args))
+		for _, arg := range args {
+			taken[arg] = true
+		}
+		var out []string
+		for _, m := range matches {
+			slug := flatSlug(strings.TrimSuffix(filepath.Base(m), ".md"))
+			if slug == "" || taken[slug] || excluded[slug] || !strings.HasPrefix(slug, toComplete) {
 				continue
 			}
-			pats = append(pats, filepath.Join(root, domain.AuditsDir, b.Dir(), "*.md"))
+			taken[slug] = true
+			out = append(out, slug)
 		}
-		return slugsFromGlobs(pats, toComplete, args), cobra.ShellCompDirectiveNoFileComp
+		sort.Strings(out)
+		return out, cobra.ShellCompDirectiveNoFileComp
 	}
 }
 

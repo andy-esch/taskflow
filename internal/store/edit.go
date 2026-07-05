@@ -131,7 +131,7 @@ func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prev
 // lint (status vocab, bucket↔state) is left to the caller, mirroring how task edit
 // leaves field lint to `lint` — the store only guarantees the file still parses.
 func (s *FS) EditAudit(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error) {
-	path, bucket, err := s.resolveAudit(slug)
+	path, err := s.resolveAudit(slug)
 	if err != nil {
 		return domain.Audit{}, false, err
 	}
@@ -141,7 +141,7 @@ func (s *FS) EditAudit(slug string, now time.Time, edit func(current string, pre
 	}
 	ifVersion := hashContent(orig)
 	return editFile("audit", path, orig, now,
-		func(content []byte) (domain.Audit, error) { return parseAudit(content, path, bucket) },
+		func(content []byte) (domain.Audit, error) { return parseAudit(content, path) },
 		s.writeLock,
 		func() error { return verifyUnchanged(s.resolveAuditPath, slug, path, ifVersion, "audit", "edit") },
 		edit)

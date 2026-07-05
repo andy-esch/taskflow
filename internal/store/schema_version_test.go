@@ -22,7 +22,7 @@ func TestCreate_StampsSchemaVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auditC, err := fs.CreateAudit(domain.Audit{Slug: "2026-01-01-a", Area: "a", Date: "2026-01-01"}, "# A\n", false)
+	auditC, err := fs.CreateAudit(domain.Audit{ID: "0abcdef34567", Slug: "2026-01-01-a", Area: "a", Date: "2026-01-01"}, "# A\n", false)
 	if err != nil {
 		t.Fatal(err)
 	}

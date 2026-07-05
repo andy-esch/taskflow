@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func setupAuditRepo(t *testing.T) string {
@@ -24,9 +25,13 @@ func setupAuditRepo(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	write("tasks/ready-to-start/.gitkeep", "") // so Discover anchors here
-	write("audits/open/o.md", "---\nid: 6fjangd7kvh1\nbucket: open\narea: dispatcher\n---\n#### H1. t  · **Status:** open\n")
-	write("audits/closed/c.md", "---\nid: 6fjangd7kvh2\nbucket: closed\narea: web\n---\n#### M1. t  · **Status:** fixed\n")
+	write("tasks/.gitkeep", "") // so Discover anchors here
+	audit := func(bucket, name, content string) {
+		p, out := testutil.AuditFixture(root, bucket, name, content)
+		testutil.Write(t, p, out)
+	}
+	audit("open", "o.md", "---\nid: 6fjangd7kvh1\nbucket: open\narea: dispatcher\n---\n#### H1. t  · **Status:** open\n")
+	audit("closed", "c.md", "---\nid: 6fjangd7kvh2\nbucket: closed\narea: web\n---\n#### M1. t  · **Status:** fixed\n")
 	return root
 }
 
@@ -62,7 +67,7 @@ func TestAuditAppend_JSON(t *testing.T) {
 // --dry-run previews an audit append without writing.
 func TestAuditAppend_DryRun_NoWrite(t *testing.T) {
 	root := setupAuditRepo(t)
-	p := filepath.Join(root, "audits", "open", "o.md")
+	p := filepath.Join(root, "audits", testutil.TaskID("o")+"-o.md")
 	before, _ := os.ReadFile(p)
 	runRoot(t, "-C", root, "--dry-run", "audit", "append", "o", "--body", "#### NOPE.  · **Status:** open")
 	if after, _ := os.ReadFile(p); !bytes.Equal(before, after) {
@@ -128,18 +133,28 @@ func TestAuditList_All(t *testing.T) {
 	}
 }
 
-func TestAuditClose_MovesBucket(t *testing.T) {
+// Closing an audit is an IN-PLACE frontmatter edit under the flat layout: the file
+// path never changes, only its `bucket:` flips open→closed.
+func TestAuditClose_ChangesBucketInPlace(t *testing.T) {
 	root := setupAuditRepo(t)
 	// A clean audit (no open findings) closes fine — `o` carries an open finding
 	// and is covered by TestAuditClose_RejectsOpenFindings below.
-	mustWrite(t, filepath.Join(root, "audits", "open", "clean.md"),
-		"---\narea: clean\n---\n#### H1. t  · **Status:** fixed\n")
+	p := filepath.Join(root, "audits", testutil.TaskID("clean")+"-clean.md")
+	mustWrite(t, p,
+		"---\nid: "+testutil.TaskID("clean")+"\nbucket: open\narea: clean\n---\n#### H1. t  · **Status:** fixed\n")
 	out := runRoot(t, "-C", root, "audit", "close", "clean")
 	if !strings.Contains(out, "clean -> closed") {
 		t.Errorf("unexpected output: %q", out)
 	}
-	if _, err := os.Stat(filepath.Join(root, "audits", "closed", "clean.md")); err != nil {
-		t.Errorf("audit not moved to closed: %v", err)
+	if _, err := os.Stat(p); err != nil {
+		t.Errorf("close must be in-place — the file must stay at its original flat path: %v", err)
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "bucket: closed") {
+		t.Errorf("close must flip the frontmatter bucket to closed:\n%s", b)
 	}
 }
 
@@ -151,8 +166,13 @@ func TestAuditClose_RejectsOpenFindings(t *testing.T) {
 	if _, err := runRootRC(t, "-C", root, "audit", "close", "o"); err == nil {
 		t.Fatal("closing an audit with open findings must be rejected")
 	}
-	if _, err := os.Stat(filepath.Join(root, "audits", "open", "o.md")); err != nil {
-		t.Errorf("a rejected close must leave the audit in open/: %v", err)
+	p := filepath.Join(root, "audits", testutil.TaskID("o")+"-o.md")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("a rejected close must leave the audit file untouched: %v", err)
+	}
+	if !strings.Contains(string(b), "bucket: open") {
+		t.Errorf("a rejected close must leave the frontmatter bucket open:\n%s", b)
 	}
 }
 
@@ -175,10 +195,11 @@ func TestAuditList_ConflictingFlagsError(t *testing.T) {
 	}
 }
 
-// An audit with NO frontmatter bucket falls back to the folder but is flagged by lint.
+// An id-led audit with NO frontmatter bucket still lists (raw bucket) but is flagged by lint.
 func TestAuditLint_FlagsMissingBucket(t *testing.T) {
 	root := setupAuditRepo(t)
-	if err := os.WriteFile(filepath.Join(root, "audits", "open", "2026-06-17-nb.md"),
+	nb := filepath.Join(root, "audits", testutil.TaskID("2026-06-17-nb")+"-2026-06-17-nb.md")
+	if err := os.WriteFile(nb,
 		[]byte("---\nid: 6fjangd7kvcb\narea: x\ndate: 2026-06-17\n---\n# x\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

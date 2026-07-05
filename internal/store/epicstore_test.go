@@ -57,9 +57,9 @@ func TestFS_ListEpics_NumericOrder(t *testing.T) {
 	}
 }
 
-// TestFS_WatchPaths covers the directory set exposed for the TUI watcher. Tasks are
-// flat now (ADR-0003 §4), so the tasks dir itself is the only task watch path — no
-// per-status subdirs; audits are still bucketed, so their bucket subdirs remain.
+// TestFS_WatchPaths covers the directory set exposed for the TUI watcher. Tasks and
+// audits are both flat now (ADR-0003 §4), so each entity dir is the sole watch path
+// for its kind — no per-status or per-bucket subdirs.
 func TestFS_WatchPaths(t *testing.T) {
 	root := filepath.Join("x", "plan")
 	got := map[string]bool{}
@@ -77,8 +77,8 @@ func TestFS_WatchPaths(t *testing.T) {
 		}
 	}
 	for _, b := range domain.AllAuditBuckets() {
-		if !got[filepath.Join(root, "audits", b.Dir())] {
-			t.Errorf("WatchPaths missing audit bucket %q", b.Dir())
+		if got[filepath.Join(root, "audits", b.Dir())] {
+			t.Errorf("WatchPaths should NOT include a per-bucket audit dir %q under the flat layout", b.Dir())
 		}
 	}
 }

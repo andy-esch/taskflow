@@ -60,14 +60,10 @@ func NewFS(root string) *FS {
 // this lives here rather than being reconstructed by the TUI watcher (which
 // would otherwise duplicate the `tasks/<status>` / `audits/<bucket>` convention).
 func (s *FS) WatchPaths() []string {
-	// Tasks are flat (ADR-0003 §4): the tasksDir itself is their only watch path,
-	// so a status change — now an in-place frontmatter write — still fires. Audits
-	// are still bucketed until their own flatten slice, so their subdirs remain.
-	dirs := []string{s.epicsDir, s.tasksDir, s.auditsDir}
-	for _, b := range domain.AllAuditBuckets() {
-		dirs = append(dirs, filepath.Join(s.auditsDir, b.Dir()))
-	}
-	return dirs
+	// Tasks and audits are both flat now (ADR-0003 §4): each entity dir is the only
+	// watch path for its kind — a status/bucket change is an in-place frontmatter write
+	// that fires on the parent dir. Epics were always flat.
+	return []string{s.epicsDir, s.tasksDir, s.auditsDir}
 }
 
 // ListTasks scans every status directory and parses each task's frontmatter.

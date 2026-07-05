@@ -79,7 +79,7 @@ func TestMoveAudit_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeAudit(t, root, "open", "2026-01-02-x.md",
 		"---\nid: 6fjjt6s9ttx1\nbucket: open\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** fixed\n")
 	fs := NewFS(root)
-	p := root + "/audits/open/2026-01-02-x.md"
+	p := filepath.Join(root, "audits", testutil.TaskID("2026-01-02-x")+"-2026-01-02-x.md")
 
 	orig := testHookBeforeMoveAuditWrite
 	defer func() { testHookBeforeMoveAuditWrite = orig }()
@@ -90,9 +90,8 @@ func TestMoveAudit_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	if _, err := fs.MoveAudit("2026-01-02-x", domain.AuditClosed, false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place edit during an audit move must conflict, got %v", err)
 	}
-	if _, err := os.Stat(root + "/audits/closed/2026-01-02-x.md"); !os.IsNotExist(err) {
-		t.Error("the losing move must not create the target file")
-	}
+	// The move is in-place under the flat layout — the file never relocates; the losing
+	// move must leave the concurrent edit intact at the source.
 	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "note: CHANGED") {
 		t.Errorf("the concurrent edit must survive at the source:\n%s", b)
 	}
@@ -229,7 +228,7 @@ func TestAppendAuditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeAudit(t, root, "open", "2026-01-02-ab.md",
 		"---\nid: 6fjjt6s9ttab\nbucket: open\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** open\n")
 	fs := NewFS(root)
-	p := root + "/audits/open/2026-01-02-ab.md"
+	p := filepath.Join(root, "audits", testutil.TaskID("2026-01-02-ab")+"-2026-01-02-ab.md")
 
 	orig := testHookBeforeBodyWrite
 	defer func() { testHookBeforeBodyWrite = orig }()

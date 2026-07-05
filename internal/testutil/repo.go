@@ -45,6 +45,18 @@ func TaskFixture(root, status, name, content string) (path, out string) {
 	return filepath.Join(root, domain.TasksDir, TaskID(slug)+"-"+name), content
 }
 
+// AuditFixture is TaskFixture's audit twin: it maps the old dir-as-bucket fixture
+// convention onto the flat layout — audits/<id>-<slug>.md — injecting the dir bucket
+// into the frontmatter when it declares none (bucket is authoritative in frontmatter
+// now, ADR-0003 §4).
+func AuditFixture(root, bucket, name, content string) (path, out string) {
+	slug := strings.TrimSuffix(name, ".md")
+	if strings.HasPrefix(content, "---\n") && !strings.Contains(content, "bucket:") {
+		content = "---\nbucket: " + bucket + "\n" + content[len("---\n"):]
+	}
+	return filepath.Join(root, domain.AuditsDir, TaskID(slug)+"-"+name), content
+}
+
 // Write writes content to path, creating parent dirs. Fatal on error.
 func Write(t *testing.T, path, content string) {
 	t.Helper()
@@ -82,9 +94,11 @@ func (r *Repo) Epic(name, content string) *Repo {
 	return r
 }
 
-// Audit writes audits/<bucket>/<name>.
+// Audit writes a flat audit fixture audits/<id>-<name> (see AuditFixture); bucket is
+// injected into the frontmatter when the content declares none.
 func (r *Repo) Audit(bucket, name, content string) *Repo {
-	Write(r.t, filepath.Join(r.Root, domain.AuditsDir, bucket, name), content)
+	path, out := AuditFixture(r.Root, bucket, name, content)
+	Write(r.t, path, out)
 	return r
 }
 

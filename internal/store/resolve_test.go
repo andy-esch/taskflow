@@ -115,7 +115,8 @@ func TestResolveAuditAndEpic_Fuzzy(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("audits/open/2026-06-01-store-review.md", "---\narea: store\n---\n# A\n")
+	auditPath, auditContent := testutil.AuditFixture(root, "open", "2026-06-01-store-review.md", "---\narea: store\n---\n# A\n")
+	testutil.Write(t, auditPath, auditContent)
 	write("epics/17-pm-go-cli.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	write("epics/18-tui-browser.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	fs := NewFS(root)
@@ -135,7 +136,7 @@ func TestResolveAuditAndEpic_Fuzzy(t *testing.T) {
 // "**Status:** Open" counts as open (the guard still blocks "opened").
 func TestParseAudit_StatusCaseInsensitive(t *testing.T) {
 	body := "---\narea: x\n---\n# A\n\n#### H1. Finding\n**Status:** Open\n\n#### H2. Other\n**Status:** opened-question\n"
-	a, err := parseAudit([]byte(body), "audits/open/a.md", domain.AuditOpen)
+	a, err := parseAudit([]byte(body), "audits/0abcdef23456-a.md")
 	if err != nil {
 		t.Fatal(err)
 	}

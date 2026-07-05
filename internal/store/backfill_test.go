@@ -8,7 +8,6 @@ import (
 
 	yaml "go.yaml.in/yaml/v3"
 
-	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/id"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -78,8 +77,8 @@ func TestFixFrontmatter_BackfillsMissingTaskID(t *testing.T) {
 // date (they carry no `created`).
 func TestFixFrontmatter_BackfillsMissingAuditID(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, domain.AuditsDir, "open", "2026-01-02-x.md")
-	seedFile(t, p, "---\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** open\n")
+	p, out := testutil.AuditFixture(root, "open", "2026-01-02-x.md", "---\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** open\n")
+	seedFile(t, p, out)
 
 	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
 		t.Fatal(err)

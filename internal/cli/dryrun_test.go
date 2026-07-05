@@ -7,15 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-)
 
-// notExist asserts a path was NOT created/changed on disk by a dry run.
-func notExist(t *testing.T, path string) {
-	t.Helper()
-	if _, err := os.Stat(path); err == nil {
-		t.Errorf("--dry-run wrote to disk: %s exists", path)
-	}
-}
+	"github.com/andy-esch/taskflow/internal/testutil"
+)
 
 // noTaskFile asserts no flat id-led task file (tasks/<id>-<slug>.md) landed for
 // slug — the dry-run equivalent of notExist under the flat layout, where the id is
@@ -155,16 +149,24 @@ func TestDryRun_EpicNewAndAuditMove(t *testing.T) {
 		}
 	}
 
-	// Audit move: seed an open audit, dry-run close it.
-	mustWrite(t, filepath.Join(root, "audits", "open", "2026-06-01-x.md"), "---\narea: store\n---\n# A\n")
+	// Audit close is an in-place frontmatter edit under the flat layout — the file
+	// path never changes, only its `bucket:` flips (ADR-0003 §4). A dry-run previews
+	// that flip and writes nothing: the file stays at its original flat path with its
+	// frontmatter bucket unchanged (still open). Seed a clean audit (no open findings)
+	// so the close is permitted and reaches the preview.
+	auditPath := filepath.Join(root, "audits", testutil.TaskID("2026-06-01-x")+"-2026-06-01-x.md")
+	mustWrite(t, auditPath, "---\nid: "+testutil.TaskID("2026-06-01-x")+"\nbucket: open\narea: store\n---\n#### H1. t  · **Status:** fixed\n")
+	before, _ := os.ReadFile(auditPath)
 	out = runRoot(t, "-C", root, "audit", "close", "2026-06-01-x", "--dry-run")
 	if !strings.Contains(out, "would move") {
 		t.Errorf("dry-run audit close should preview, got %q", out)
 	}
-	if _, err := os.Stat(filepath.Join(root, "audits", "open", "2026-06-01-x.md")); err != nil {
-		t.Error("dry-run audit close must leave the file in open/")
+	if _, err := os.Stat(auditPath); err != nil {
+		t.Error("dry-run audit close must leave the file at its original flat path")
 	}
-	notExist(t, filepath.Join(root, "audits", "closed", "2026-06-01-x.md"))
+	if after, _ := os.ReadFile(auditPath); string(before) != string(after) {
+		t.Error("dry-run audit close must not flip the frontmatter bucket on disk")
+	}
 }
 
 func TestDryRun_Init(t *testing.T) {

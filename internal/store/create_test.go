@@ -83,15 +83,15 @@ func TestCreateTask_IDRoundTrips(t *testing.T) {
 
 func TestCreateAudit_OpenBucketOrderClobber(t *testing.T) {
 	fs := NewFS(t.TempDir())
-	a := domain.Audit{Slug: "2026-06-16-dispatcher", Area: "dispatcher", Date: "2026-06-16"}
+	a := domain.Audit{ID: "0abcdef45678", Slug: "2026-06-16-dispatcher", Area: "dispatcher", Date: "2026-06-16"}
 
 	got, err := fs.CreateAudit(a, "\n# Audit\n", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// New audits land in the open bucket.
-	if base := filepath.Base(filepath.Dir(got.Path)); base != "open" {
-		t.Errorf("audit created under %q/, want open/", base)
+	// Flat layout: the audit lives directly under audits/ (bucket is frontmatter, open).
+	if base := filepath.Base(filepath.Dir(got.Path)); base != "audits" {
+		t.Errorf("audit created under %q/, want audits/", base)
 	}
 	if got.Bucket != domain.AuditOpen {
 		t.Errorf("created audit bucket = %q, want open", got.Bucket)
@@ -138,24 +138,6 @@ func TestCreateAudit_IDRoundTrips(t *testing.T) {
 	}
 	if reparsed.ID != wantID {
 		t.Errorf("audit id did not round-trip: got %q want %q", reparsed.ID, wantID)
-	}
-}
-
-func TestCreateAudit_RejectsSlugInAnotherBucket(t *testing.T) {
-	fs := NewFS(t.TempDir())
-	a := domain.Audit{Slug: "2026-06-17-x", Area: "x", Date: "2026-06-17"}
-	if _, err := fs.CreateAudit(a, "\n# A\n", false); err != nil {
-		t.Fatal(err)
-	}
-	// Move it out of open/, then a new open create with the same slug must conflict.
-	if _, err := fs.MoveAudit("2026-06-17-x", domain.AuditClosed, false); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := fs.CreateAudit(a, "x", false); !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("a slug in closed/ should block a new open create, got %v", err)
-	}
-	if _, _, err := fs.GetAudit("2026-06-17-x"); err != nil {
-		t.Errorf("slug should resolve to the single (closed) file, got %v", err)
 	}
 }
 
