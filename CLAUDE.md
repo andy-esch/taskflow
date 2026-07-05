@@ -20,8 +20,9 @@ its own work.
 populated in `PersistentPreRunE` (no globals), all output through injected
 `io.Writer`, `--json` everywhere with a `schema_version`, the core never touches
 fs/cobra, and **`status`/`bucket` is authoritative in frontmatter** (ADR-0003
-Phase A — the `tasks/<status>/` · `audits/<bucket>/` directory is a lock-step
-*mirror*, not the source of truth). The TUI never touches the store —
+§4 — tasks/audits are stored **flat and id-led**, `tasks/<id>-<slug>.md` ·
+`audits/<id>-<slug>.md`; there is no status/bucket directory, epics stay
+`NN-<slug>`). The TUI never touches the store —
 it reads through `core.Service` as `tea.Cmd`s (no I/O in `Update`/`View`).
 
 ## Planning workflow — use `tskflwctl`, not `pm`
@@ -53,10 +54,13 @@ We dogfood: drive this repo's planning with the tool itself.
   anywhere, no planning repo needed.
 - **Hygiene:** `tskflwctl lint` (`--fix` to auto-repair). Keep `planning/`
   lint-clean.
-- Tasks live in `planning/tasks/<status>/`, a **mirror** of the authoritative
-  `status:` frontmatter — change status with the lifecycle verbs (never a
-  hand-edit), and `lint --fix` relocates a drifted file to match. Every active
-  task needs a one-line `description`.
+- Tasks live **flat** in `planning/tasks/` as `<id>-<slug>.md`; `status:` is
+  authoritative in frontmatter (no mirror directory) — change status with the
+  lifecycle verbs (never a hand-edit), which edit frontmatter **in place** (no file
+  move). `lint` **flags** a missing/unrecognized status rather than relocating
+  anything; a non-id-led `.md` under `tasks/`/`audits/` is a `FileProblem` —
+  non-entity files belong in `meta/`. Every active task needs a one-line
+  `description`.
 - **`pm` (Python) is gone** — it was the prototype `tskflwctl` was ported from;
   it and its tests now live only in git history. The Go suite is the spec.
 
