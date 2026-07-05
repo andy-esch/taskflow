@@ -1,23 +1,25 @@
 ---
 schema: 1
 status: active
-description: 'Rework the on-disk data model: a stable-key layout with status in frontmatter not the directory, a shared core read-model/projection, and content-aware OCC. Decisions made (ADRs 0003/0004); id + Phase-A + read-model + OCC shipped — the flat id-led layout (Phase B) is the remaining capstone.'
+description: 'Rework the on-disk data model: a stable-key layout with status in frontmatter not the directory, a shared core read-model/projection, and content-aware OCC. Decisions made (ADRs 0003/0004); id + read-model + OCC + the flat id-led layout (Phase B, migrated both repos) all shipped — Scheme-2 reference rewrites plus a few hardening follow-ups remain.'
 priority: medium
 tags: [storage, architecture, core]
 created: "2026-06-24"
 ---
 # Data-model evolution — stable-key storage, shared read-model, content OCC
 
-**Status (2026-07-04): implementation well underway — the decisions are closed.** The
-design-first phase is over: every load-bearing choice below is decided (see the `[x]`
-items + ADR-0003). **Shipped + merged (7/13):** the stable 12-char id + backfill, the
-machine contract, **frontmatter-authoritative status/bucket** (Phase A — dirs kept as a
-lock-step mirror), the shared `core` read-model + **`board`** command, and
-**version-aware OCC** (whole-file content-hash CAS + advisory `flock` + bounded
-auto-retry). **Remaining capstone:** **Phase B** — the flat, id-led layout that retires
+**Status (2026-07-05): Phase B landed — the flatten is done.** The design-first phase is
+long over (every load-bearing choice below is decided — see the `[x]` items + ADR-0003).
+**Shipped + merged:** the stable 12-char id + backfill, the machine contract,
+**frontmatter-authoritative status/bucket**, the shared `core` read-model + **`board`**
+command, **version-aware OCC** (whole-file content-hash CAS + advisory `flock` + bounded
+auto-retry), and the capstone — **Phase B, the flat id-led layout** that retires
 `status == directory` entirely
-([[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]]), its
-one-time migration, and the Scheme-2 reference rewrites.
+([[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]]), migrated
+across both this repo and desirelines. **Remaining:** the **Scheme-2 reference rewrites**
+([[scheme-2-references-and-rename-verb-with-link-cascade]] — wikilinks→markdown, a `rename`
+verb with link cascade, dangler lint, id-prefix epic refs) plus small hardening follow-ups
+(route `lint --fix` through the write-lock; complete id-prefixes in shell completion).
 
 ## Why this exists (the convergence)
 
@@ -253,9 +255,10 @@ they landed together.
 
 1. **[done] Decision consolidation** — resolved into ADR-0003/0004.
 2. **[done] Read-model / projection + board** — the `board` command ships (fresh on demand).
-3. **Stable-key layout + version-aware OCC** — **OCC done** (content-hash CAS + flock +
-   bounded retry); **the flat id-led layout (Phase B) is the remaining piece**, with the
-   `one-time-migration-script` + `scheme-2-references` companions as its migration path.
+3. **Stable-key layout + version-aware OCC** — **done**: OCC (content-hash CAS + flock +
+   bounded retry) and **the flat id-led layout (Phase B)** shipped, migrated across both
+   repos. **Scheme-2 references** (wikilinks→markdown, `rename` + link cascade, dangler
+   lint, id-prefix epic refs) is the remaining companion.
 4. **Payoffs (separate epics):** remote backends (epic 23 ph2), `serve` read
    endpoint (epic 19) — both ride on 2–3.
 
