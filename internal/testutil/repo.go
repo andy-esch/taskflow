@@ -32,6 +32,20 @@ func TaskID(seed string) string {
 	return string(b)
 }
 
+// frontmatterKeyed reports whether the frontmatter block (between the opening and
+// closing `---` fences) declares key — so prose in the body that happens to contain
+// "status:"/"bucket:" doesn't suppress the fixture's status/bucket injection.
+func frontmatterKeyed(content, key string) bool {
+	if !strings.HasPrefix(content, "---\n") {
+		return false
+	}
+	body := content[len("---\n"):]
+	if end := strings.Index(body, "\n---"); end >= 0 {
+		body = body[:end]
+	}
+	return strings.Contains(body, key)
+}
+
 // TaskFixture is the flatten migration shim: it maps the old dir-as-status fixture
 // convention (a `status` dir + a `name.md`) onto the flat layout — a stable id-led
 // path tasks/<id>-<slug>.md, and, when the frontmatter block declares no status,
@@ -39,7 +53,7 @@ func TaskID(seed string) string {
 // ADR-0003 §4). A fence-less body is left untouched (it stays a loud FileProblem).
 func TaskFixture(root, status, name, content string) (path, out string) {
 	slug := strings.TrimSuffix(name, ".md")
-	if strings.HasPrefix(content, "---\n") && !strings.Contains(content, "status:") {
+	if strings.HasPrefix(content, "---\n") && !frontmatterKeyed(content, "status:") {
 		content = "---\nstatus: " + status + "\n" + content[len("---\n"):]
 	}
 	return filepath.Join(root, domain.TasksDir, TaskID(slug)+"-"+name), content
@@ -51,7 +65,7 @@ func TaskFixture(root, status, name, content string) (path, out string) {
 // now, ADR-0003 §4).
 func AuditFixture(root, bucket, name, content string) (path, out string) {
 	slug := strings.TrimSuffix(name, ".md")
-	if strings.HasPrefix(content, "---\n") && !strings.Contains(content, "bucket:") {
+	if strings.HasPrefix(content, "---\n") && !frontmatterKeyed(content, "bucket:") {
 		content = "---\nbucket: " + bucket + "\n" + content[len("---\n"):]
 	}
 	return filepath.Join(root, domain.AuditsDir, TaskID(slug)+"-"+name), content

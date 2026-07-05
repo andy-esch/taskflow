@@ -42,6 +42,37 @@ func TestSetFields_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	}
 }
 
+// TestVerifyUnchanged_SlugEqualsAnotherID: a task whose SLUG is exactly another task's
+// stable id must not lock that other task out of writes. The version-CAS re-resolve is
+// exact-id (resolveExactID), so it returns the one file with that id — not the slug-
+// collision sibling — instead of a spurious ErrAmbiguous that would ErrConflict every
+// future write to the id-named file.
+func TestVerifyUnchanged_SlugEqualsAnotherID(t *testing.T) {
+	root := t.TempDir()
+	tasks := filepath.Join(root, "tasks")
+	if err := os.MkdirAll(tasks, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const collide = "6fjangd7kvc1" // a valid 12-char id we ALSO use as task B's slug
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(tasks, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Task A: id == collide, slug "alpha".
+	write(collide+"-alpha.md",
+		"---\nid: "+collide+"\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: a\n---\n# A\n")
+	// Task B: a different id, but its SLUG is exactly A's id.
+	write("6fjangd7kvb2-"+collide+".md",
+		"---\nid: 6fjangd7kvb2\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: b\n---\n# B\n")
+
+	// A write to Task A runs verifyUnchanged, which re-resolves A's id (== collide). The
+	// exact-id resolve returns A alone, so the write lands — no spurious conflict/lockout.
+	if _, err := NewFS(root).SetFields("alpha", map[string]any{"priority": "low"}, false); err != nil {
+		t.Fatalf("a sibling whose slug equals A's id must not lock A out of writes: %v", err)
+	}
+}
+
 // Move conflicts on a concurrent in-place edit of the source during the move, leaving the
 // concurrent edit intact and no file at the target (nothing moved).
 func TestMove_ConflictsOnConcurrentContentEdit(t *testing.T) {

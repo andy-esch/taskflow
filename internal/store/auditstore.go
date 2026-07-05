@@ -141,10 +141,19 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 // relocation. Nil outside tests (mirrors testHookBeforeMoveWrite).
 var testHookBeforeMoveAuditWrite func()
 
-// resolveAuditPath is s.resolveAudit reduced to (path, error) — the adapter the
-// version-CAS guard (verifyUnchanged) takes.
-func (s *FS) resolveAuditPath(slug string) (string, error) {
-	return s.resolveAudit(slug)
+// resolveAuditPath re-resolves an audit by its EXACT stable id for the version-CAS
+// guard (verifyUnchanged) — exact-id, never the fuzzy id-OR-slug match resolveAudit uses,
+// so a sibling audit whose slug equals this file's id can't lock it (see resolveExactID).
+func (s *FS) resolveAuditPath(id string) (string, error) {
+	cands, err := s.auditCandidates()
+	if err != nil {
+		return "", err
+	}
+	c, err := resolveExactID(cands, id)
+	if err != nil {
+		return "", err
+	}
+	return c.path, nil
 }
 
 // auditCandidates lists every flat audit file (audits/<id>-<slug>.md) as a

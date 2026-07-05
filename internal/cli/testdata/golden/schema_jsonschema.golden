@@ -15,7 +15,7 @@
         },
         "bucket": {
           "type": "string",
-          "description": "open | closed | deferred — equals the audit's directory"
+          "description": "open | closed | deferred — authoritative"
         },
         "area": {
           "type": "string",

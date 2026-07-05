@@ -8,10 +8,11 @@ import (
 )
 
 // standardEpicNameRe matches the epic filename convention NN-<slug> (a zero-padded
-// number, 2+ digits, then a dash). Epics are ordered by that number (epicNum) and
-// read consistently when every stem carries it; a name without it still lists and
-// resolves (fail-open) but is lint-flagged (EpicNameIssue).
-var standardEpicNameRe = regexp.MustCompile(`^\d{2,}-`)
+// number, 2+ digits, a dash, then a non-empty slug). Epics are ordered by that number
+// (epicNum) and read consistently when every stem carries it; a name without it — or
+// with an empty slug (`01-`) — still lists and resolves (fail-open) but is lint-flagged
+// (EpicNameIssue).
+var standardEpicNameRe = regexp.MustCompile(`^\d{2,}-.`)
 
 // EpicNameIssue flags an epic whose filename stem does not follow the NN-<slug>
 // convention. Fail-open, like FrontmatterStatusIssues: the epic is untouched and

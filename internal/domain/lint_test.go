@@ -90,8 +90,8 @@ func TestEpicNameIssue(t *testing.T) {
 			t.Errorf("%q is a valid NN- name, must not be flagged: %+v", ok, got)
 		}
 	}
-	// Non-NN names are flagged (fail-open: flagged, not dropped).
-	for _, bad := range []string{"taskflow-v1-core", "demo", "e1", "1-unpadded"} {
+	// Non-NN names are flagged (fail-open: flagged, not dropped) — including an empty slug.
+	for _, bad := range []string{"taskflow-v1-core", "demo", "e1", "1-unpadded", "01-", "01"} {
 		if got := EpicNameIssue(bad); len(got) == 0 {
 			t.Errorf("%q is not NN-<slug> and must be flagged", bad)
 		}

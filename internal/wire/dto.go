@@ -83,7 +83,7 @@ func ToEpicJSON(e core.EpicSummary) EpicJSON {
 type AuditJSON struct {
 	ID           string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key; absent on audits created before id assignment"`
 	Slug         string `json:"slug" jsonschema:"description=audit slug (filename without .md) — the human handle"`
-	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — equals the audit's directory"`
+	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — authoritative, read from frontmatter (ADR-0003 §4)"`
 	Area         string `json:"area,omitempty" jsonschema:"description=subsystem/topic audited"`
 	Date         string `json:"date,omitempty" jsonschema:"description=audit date YYYY-MM-DD (immutable — part of the slug)"`
 	Updated      string `json:"updated_at,omitempty" jsonschema:"description=audit's own last-edited date YYYY-MM-DD (edit/append); a bucket move does not change it"`

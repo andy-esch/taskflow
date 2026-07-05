@@ -43,7 +43,7 @@ func scanDir[T any](dir string, parse func(path string, content []byte) (T, erro
 		if !markdownDoc(e) {
 			continue
 		}
-		if e.Name() == readmeFile {
+		if strings.EqualFold(e.Name(), readmeFile) {
 			continue // a README landing page is silently ignored — the carveout README carve
 		}
 		path := filepath.Join(dir, e.Name())
@@ -80,7 +80,7 @@ func epicCandidates(dir string) ([]candidate, error) {
 		if !markdownDoc(e) {
 			continue
 		}
-		if e.Name() == readmeFile {
+		if strings.EqualFold(e.Name(), readmeFile) {
 			continue // a README landing page is not a resolution candidate — parity with scanDir's carve
 		}
 		out = append(out, candidate{
@@ -192,6 +192,29 @@ func resolveID(kind, query string, cands []candidate) (candidate, error) {
 		}
 	}
 	return candidate{}, fmt.Errorf("%s %q: %w", kind, query, domain.ErrNotFound)
+}
+
+// resolveExactID finds the ONE candidate whose stable id equals id exactly — the key
+// the version-CAS re-resolve (verifyUnchanged) needs. Unlike resolveID it never matches
+// on the human slug, so a same-named sibling — a task whose SLUG happens to equal this
+// file's id — can't turn the guard into a spurious ErrAmbiguous that would lock the file
+// out of every future write. A genuine duplicate id on disk stays an ambiguity (a real
+// problem the guard should surface as a conflict); no match is ErrNotFound (it vanished).
+func resolveExactID(cands []candidate, id string) (candidate, error) {
+	var hit candidate
+	found := false
+	for _, c := range cands {
+		if c.id == id {
+			if found {
+				return candidate{}, domain.ErrAmbiguous
+			}
+			hit, found = c, true
+		}
+	}
+	if !found {
+		return candidate{}, domain.ErrNotFound
+	}
+	return hit, nil
 }
 
 // describeCandidates renders an ambiguity list — "add-retry (6f…a3b), add-retry (6f…c1d)" —

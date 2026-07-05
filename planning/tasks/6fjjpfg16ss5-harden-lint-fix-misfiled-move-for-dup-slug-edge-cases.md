@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [core, storage]
 created: "2026-07-03"
-updated_at: "2026-07-03"
+updated_at: "2026-07-05"
 ---
 # Harden lint --fix misfiled-move for dup-slug edge cases
 
@@ -71,3 +71,11 @@ the Phase-A adversarial review (2026-07-03); deferred from the flatten task to k
 
 - Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
 - [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]] (Phase A) — where the misfiled-move was introduced.
+
+## Re-confirmed by adversarial review (2026-07-05)
+
+A whole-branch adversarial review independently flagged this as **CRITICAL**: `FixFrontmatter`
+(`lint --fix`) writes via `writeFileAtomic` without `s.writeLock()` or the `verifyUnchanged`
+OCC check, so a concurrent `task move`/`edit`/`set` and a `lint --fix` can silently
+lost-update each other. Low real-world exposure (single-user local CLI) but real — the fix
+is to route fix.go's writes through the same write-lock + CAS the other write paths use.

@@ -83,11 +83,10 @@ type AuditStore interface {
 	// FileProblem, not fatal.
 	ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error)
 	GetAudit(slug string) (audit domain.Audit, body string, err error)
-	// GetAuditByPath reads one audit directly by its file path, deriving the
-	// bucket from the parent directory (the bucket==directory invariant) rather
-	// than re-resolving the slug across every bucket dir. The finding/lint sweeps
-	// use this to read each audit ListAudits already located exactly once, instead
-	// of an O(N^2) re-resolve+re-read per audit.
+	// GetAuditByPath reads one audit directly by its file path (bucket read from
+	// frontmatter, ADR-0003 §4) rather than re-resolving the slug. The finding/lint
+	// sweeps use this to read each audit ListAudits already located exactly once,
+	// instead of an O(N^2) re-resolve+re-read per audit.
 	GetAuditByPath(path string) (audit domain.Audit, body string, err error)
 	MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error)
 	CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error)

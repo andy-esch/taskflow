@@ -317,8 +317,16 @@ func (s *FS) resolve(slug string) (string, error) {
 
 // resolvePath is s.resolve reduced to (path, error) — the adapter the version-CAS guard
 // (verifyUnchanged) takes, so the guard stays entity-agnostic across tasks and audits.
-func (s *FS) resolvePath(slug string) (string, error) {
-	return s.resolve(slug)
+func (s *FS) resolvePath(id string) (string, error) {
+	cands, err := s.taskCandidates()
+	if err != nil {
+		return "", err
+	}
+	c, err := resolveExactID(cands, id)
+	if err != nil {
+		return "", err
+	}
+	return c.path, nil
 }
 
 // taskCandidates lists every flat task file as a resolution candidate — id-led, with
