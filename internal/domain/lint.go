@@ -171,12 +171,11 @@ func AuditMisfiledIssues(a Audit) []Issue {
 }
 
 // FrontmatterBucketIssues flags an audit whose frontmatter `bucket` was missing or named
-// no recognized bucket — the audit analog of FrontmatterStatusIssues. Fail-open (the
-// folder fallback still lists it). `lint --fix` backfills a MISSING bucket; a foreign
-// value it leaves for this flag to surface.
+// no recognized bucket — the audit analog of FrontmatterStatusIssues. Fail-open: the audit
+// still lists (with BucketFellBack set); clear it by setting the bucket via a lifecycle verb.
 func FrontmatterBucketIssues(a Audit) []Issue {
 	if !a.BucketFellBack {
 		return nil
 	}
-	return []Issue{{Field: "bucket", Message: "frontmatter bucket missing or unrecognized — set it with `audit close`/`reopen`/`defer` (`lint --fix` backfills a missing one)"}}
+	return []Issue{{Field: "bucket", Message: "frontmatter bucket missing or unrecognized — set it with `audit close`/`reopen`/`defer`"}}
 }

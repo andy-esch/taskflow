@@ -16,13 +16,11 @@ import (
 
 // FixFrontmatter walks every task, epic, and audit file and applies safe repairs:
 // text-level frontmatter normalization (quote unquoted-colon values, normalize
-// list fields), relocating a misfiled task to the folder its frontmatter status
-// names (ADR-0003 Phase A: frontmatter is authoritative, so the fix MOVES the file
-// rather than rewriting the status), and — for tasks and audits — backfilling a
-// missing stable id, minted from the entity's own date so it sorts near its real
-// age. Epics keep their NN-slug identity and are text-normalized only. Misfiled
-// moves are collected during the walk and applied after it, so the fix never
-// mutates a directory it is still iterating. When dryRun is true nothing is written.
+// list fields) and — for tasks and audits — backfilling a missing stable id,
+// minted from the entity's own date so it sorts near its real age. Epics keep
+// their NN-slug identity and are text-normalized only. Under the flat layout
+// (ADR-0003 §4) there is no relocation: a bad status/bucket is lint-flagged, not
+// moved. When dryRun is true nothing is written.
 func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	var results []domain.FixResult
 	// Every id already on disk, so a backfill never re-mints one; mintUniqueID adds
@@ -89,14 +87,10 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	// file; the .md scan filter already hides these, so this just keeps the tree tidy.
 	if !dryRun {
 		now := time.Now()
-		dirs := []string{s.epicsDir}
-		for _, st := range domain.AllStatuses() {
-			dirs = append(dirs, filepath.Join(s.tasksDir, st.Dir()))
-		}
-		for _, b := range domain.AllAuditBuckets() {
-			dirs = append(dirs, filepath.Join(s.auditsDir, b.Dir()))
-		}
-		for _, dir := range dirs {
+		// Flat entity dirs (ADR-0003 §4): temps land directly in tasks/, epics/, audits/,
+		// where writeFileAtomic/createFileAtomic stage them (os.CreateTemp uses the target
+		// file's dir) — there are no per-status/bucket subdirs to sweep anymore.
+		for _, dir := range []string{s.tasksDir, s.epicsDir, s.auditsDir} {
 			for _, p := range sweepStaleTemps(dir, now) {
 				results = append(results, domain.FixResult{Path: p, Changes: []string{"removed stale temp orphan"}})
 			}

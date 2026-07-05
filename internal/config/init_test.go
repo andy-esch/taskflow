@@ -305,7 +305,7 @@ func TestInit(t *testing.T) {
 		t.Fatal("expected dirs/config to be created")
 	}
 
-	for _, d := range []string{"tasks/ready-to-start", "tasks/deferred", "epics", "projects", "audits/open"} {
+	for _, d := range []string{"tasks", "epics", "projects", "audits"} {
 		if !isDir(filepath.Join(root, filepath.FromSlash(d))) {
 			t.Errorf("missing dir %s", d)
 		}
@@ -330,23 +330,27 @@ func TestInit(t *testing.T) {
 	}
 }
 
-// TestInitScaffoldsEveryStatusAndBucket is the sync guard: `init` must create a
-// directory for every domain status and audit bucket, so adding one to the enum
-// can't silently ship with init not scaffolding it (while the watcher already
-// watches it). Derives expectations from the same enums Init does.
-func TestInitScaffoldsEveryStatusAndBucket(t *testing.T) {
+// TestInitScaffoldsEntityDirs pins the flat layout (ADR-0003 §4): `init` creates the
+// entity parents (tasks/epics/audits/projects) and NO per-status or per-bucket subdirs
+// (the flat store never reads them; a file dropped in one would be invisible).
+func TestInitScaffoldsEntityDirs(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Init(root, false); err != nil {
 		t.Fatal(err)
 	}
+	for _, d := range []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ProjectsDir} {
+		if !isDir(filepath.Join(root, d)) {
+			t.Errorf("init did not scaffold %s/", d)
+		}
+	}
 	for _, st := range domain.AllStatuses() {
-		if !isDir(filepath.Join(root, "tasks", st.Dir())) {
-			t.Errorf("init did not scaffold tasks/%s", st.Dir())
+		if isDir(filepath.Join(root, "tasks", st.Dir())) {
+			t.Errorf("init should NOT scaffold a per-status dir tasks/%s under the flat layout", st.Dir())
 		}
 	}
 	for _, b := range domain.AllAuditBuckets() {
-		if !isDir(filepath.Join(root, "audits", b.Dir())) {
-			t.Errorf("init did not scaffold audits/%s", b.Dir())
+		if isDir(filepath.Join(root, "audits", b.Dir())) {
+			t.Errorf("init should NOT scaffold a per-bucket dir audits/%s under the flat layout", b.Dir())
 		}
 	}
 }
@@ -358,8 +362,7 @@ func TestInitGitkeepsEveryDir(t *testing.T) {
 	if _, err := Init(root, false); err != nil {
 		t.Fatal(err)
 	}
-	for _, d := range append(domain.TaskStatusDirs(),
-		append([]string{domain.EpicsDir, domain.ProjectsDir}, domain.AuditBucketDirs()...)...) {
+	for _, d := range []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ProjectsDir} {
 		keep := filepath.Join(root, filepath.FromSlash(d), ".gitkeep")
 		if !fileExists(keep) {
 			t.Errorf("init did not write %s/.gitkeep", d)
@@ -371,7 +374,7 @@ func TestInitGitkeepsEveryDir(t *testing.T) {
 // but lack .gitkeep adds the keep (repairs older trees).
 func TestInitRetrofitsGitkeep(t *testing.T) {
 	root := t.TempDir()
-	dir := filepath.Join(root, "tasks", "ready-to-start")
+	dir := filepath.Join(root, "tasks")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +388,7 @@ func TestInitRetrofitsGitkeep(t *testing.T) {
 	// The keep is reported as created even though the dir itself already existed.
 	var sawKeep bool
 	for _, c := range created {
-		if c == "tasks/ready-to-start/.gitkeep" {
+		if c == "tasks/.gitkeep" {
 			sawKeep = true
 		}
 	}

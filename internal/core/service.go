@@ -254,14 +254,8 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})
 		}
 	}
-	// Duplicate slug across status dirs: a Ctrl-C in Move's write-then-remove
-	// window (or a stray hand-copy) leaves the same slug in two dirs, which makes
-	// every later resolve(slug) return ErrAmbiguous — the task can't be shown,
-	// moved, or set by name. Both copies are listed (different dirs), so group by
-	// slug and flag any with >1. Surfaced loudly here because there's no other
-	// signal; status==directory means the dirs are always distinct. (Tasks only:
-	// MoveAudit is an atomic rename, so audits have no such window.)
-	results = append(results, duplicateSlugIssues(tasks)...)
+	// (Duplicate-slug lint retired with the flat layout: id-led filenames are unique by
+	// construction, and duplicate SLUGS are now legal — resolved by id, ambiguous by slug.)
 	// Epics get linted too: the same closed status vocabulary plus priority and a
 	// present description (a deprecated epic is spared the field nags — see
 	// domain.LintEpic). The epic id slots into Slug as the result's label.
@@ -271,37 +265,6 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		}
 	}
 	return results, problems, nil
-}
-
-// duplicateSlugIssues flags any slug that appears in more than one status dir,
-// reporting the buckets it occupies. Deterministic: groups in first-seen order
-// (tasks arrive in status-dir order), so the output is stable across runs.
-func duplicateSlugIssues(tasks []domain.Task) []LintResult {
-	type group struct{ statuses []string }
-	groups := map[string]*group{}
-	var order []string
-	for _, t := range tasks {
-		g, ok := groups[t.Slug]
-		if !ok {
-			g = &group{}
-			groups[t.Slug] = g
-			order = append(order, t.Slug)
-		}
-		g.statuses = append(g.statuses, string(t.FolderStatus)) // the physical dirs, not the (authoritative) frontmatter status
-	}
-	var out []LintResult
-	for _, slug := range order {
-		g := groups[slug]
-		if len(g.statuses) < 2 {
-			continue
-		}
-		out = append(out, LintResult{Slug: slug, Issues: []domain.Issue{{
-			Field: "slug",
-			Message: fmt.Sprintf("duplicate: same slug in %d dirs (%s); resolve is ambiguous until you remove the wrong copy",
-				len(g.statuses), strings.Join(g.statuses, ", ")),
-		}}})
-	}
-	return out
 }
 
 func hasTag(tags []string, want string) bool {

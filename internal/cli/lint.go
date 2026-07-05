@@ -25,7 +25,7 @@ func newLintCmd(app *App) *cobra.Command {
 			return runLint(app)
 		},
 	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter: quote ':' values, normalize lists, relocate a misfiled task to its status dir, backfill missing task/audit ids; epics are text-only")
+	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter: quote ':' values, normalize lists, backfill missing task/audit ids; epics are text-only")
 	return cmd
 }
 

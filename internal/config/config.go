@@ -315,13 +315,10 @@ func Init(root string, dryRun bool) ([]string, error) {
 				domain.ErrConflict, ConfigFile, cf.PlanningRepo)
 		}
 	}
-	// Derive the task-status and audit-bucket dirs from the domain layout helpers
-	// so a new status/bucket is scaffolded automatically — a hardcoded list would
-	// silently drift (init not creating a dir the watcher already watches).
-	// Guarded by TestInitScaffoldsEveryStatusAndBucket.
-	dirs := domain.TaskStatusDirs()
-	dirs = append(dirs, domain.EpicsDir, domain.ProjectsDir)
-	dirs = append(dirs, domain.AuditBucketDirs()...)
+	// Flat layout (ADR-0003 §4): scaffold only the entity parents — no per-status or
+	// per-bucket subdirs. The flat store never reads them, and a `.md` dropped into one
+	// would be invisible to the scan (a silent data-loss trap).
+	dirs := []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ProjectsDir}
 	var created []string
 	for _, d := range dirs {
 		p := filepath.Join(root, filepath.FromSlash(d))
