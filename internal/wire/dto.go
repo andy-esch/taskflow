@@ -36,12 +36,6 @@ type TaskJSON struct {
 	Updated     string   `json:"updated_at,omitempty" jsonschema:"description=last-modified date YYYY-MM-DD"`
 	RevisitAt   string   `json:"revisit_at,omitempty" jsonschema:"description=snooze-until date YYYY-MM-DD for a deferred task (set by task defer)"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
-	// Misfiled/Declared surface folder≠frontmatter drift to JSON consumers (agents
-	// are exactly who should detect it). declared_status carries the stale mirror
-	// DIRECTORY the file sits in (not the frontmatter's claim — that IS status now),
-	// present only when misfiled.
-	Misfiled bool   `json:"misfiled,omitempty" jsonschema:"description=true when the file's directory disagrees with its authoritative frontmatter status (the mirror is stale; lint --fix relocates it)"`
-	Declared string `json:"declared_status,omitempty" jsonschema:"description=the status directory a misfiled file physically sits in (the stale mirror); absent unless misfiled"`
 }
 
 // ToTaskJSON maps a domain task to its wire DTO.
@@ -51,10 +45,6 @@ func ToTaskJSON(t domain.Task) TaskJSON {
 		Description: t.Description, Effort: t.Effort, Tier: t.Tier,
 		Priority: t.Priority, Autonomy: t.Autonomy,
 		Created: t.Created, Updated: t.Updated, RevisitAt: t.RevisitAt, Tags: t.Tags,
-	}
-	if t.Misfiled() {
-		j.Misfiled = true
-		j.Declared = string(t.FolderStatus)
 	}
 	return j
 }

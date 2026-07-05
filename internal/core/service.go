@@ -107,7 +107,6 @@ type Summary struct {
 	OpenAudits    []domain.Audit       // audits still in the open bucket (actionable work)
 	ReadyToClose  int                  // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
 	Findings      FindingsRollup       // actionable audit findings (open/in-progress) aggregated by urgency + component
-	Misfiled      int                  // tasks whose status disagrees with their folder
 	RevisitDue    int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
 	BadEpicStatus int                  // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
 	Problems      []domain.FileProblem // unreadable files
@@ -157,16 +156,12 @@ func (s *Service) Summary() (Summary, error) {
 	}
 	counts := map[domain.Status]int{}
 	var inProgress []domain.Task
-	misfiled := 0
 	revisitDue := 0
 	now := s.now()
 	for _, t := range tasks {
 		counts[t.Status]++
 		if t.Status == domain.StatusInProgress {
 			inProgress = append(inProgress, t)
-		}
-		if t.Misfiled() {
-			misfiled++
 		}
 		// Move clears revisit_at when a task leaves deferred, so a stray date on a
 		// non-deferred task is only possible via a manual `task set`/edit; either
@@ -202,7 +197,6 @@ func (s *Service) Summary() (Summary, error) {
 		OpenAudits:    openAudits,
 		ReadyToClose:  readyToClose,
 		Findings:      rollupFindings(actionable),
-		Misfiled:      misfiled,
 		RevisitDue:    revisitDue,
 		BadEpicStatus: badEpicStatus,
 		Problems:      append(append(p1, p2...), p3...),
@@ -244,11 +238,9 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		if t.Status.IsActive() {
 			issues = domain.LintTask(t, validEpic)
 		} else {
-			// Archived tasks skip the field nags but still get the universal checks:
-			// status/folder drift, a missing/unrecognized frontmatter status, and a
-			// missing stable id.
-			issues = append(domain.MisfiledIssues(t), domain.FrontmatterStatusIssues(t)...)
-			issues = append(issues, domain.MissingIDIssue(t.ID)...)
+			// Archived tasks skip the field nags but still get the universal checks: a
+			// missing/unrecognized frontmatter status, and a missing stable id.
+			issues = append(domain.FrontmatterStatusIssues(t), domain.MissingIDIssue(t.ID)...)
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})

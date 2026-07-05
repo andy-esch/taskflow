@@ -361,7 +361,6 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 	if !t.Status.Valid() {
 		t.StatusFellBack = true
 	}
-	t.FolderStatus = t.Status // vestigial mirror: no folder under flat (Misfiled() stays false)
 	t.Slug = slug
 	t.Path = path
 	return t, nil

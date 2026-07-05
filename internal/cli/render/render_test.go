@@ -52,10 +52,10 @@ func TestFindingStatusOrder_CoversRegistry(t *testing.T) {
 }
 
 var sampleTasks = []domain.Task{
-	{Slug: "alpha", Status: domain.StatusInProgress, FolderStatus: domain.StatusInProgress,
+	{Slug: "alpha", Status: domain.StatusInProgress,
 		Epic: "e1", Description: "first task", Tier: 2, Priority: "high",
 		Created: "2026-06-01", Updated: "2026-06-10", Tags: []string{"go", "cli"}},
-	{Slug: "beta", Status: domain.StatusReadyToStart, FolderStatus: domain.StatusCompleted}, // misfiled
+	{Slug: "beta", Status: domain.StatusReadyToStart},
 }
 
 func TestTasksJSON_Envelope(t *testing.T) {
@@ -78,8 +78,6 @@ func TestTasksJSON_Envelope(t *testing.T) {
 			Created     string   `json:"created,omitempty"`
 			Updated     string   `json:"updated_at,omitempty"`
 			Tags        []string `json:"tags,omitempty"`
-			Misfiled    bool     `json:"misfiled,omitempty"`
-			Declared    string   `json:"declared_status,omitempty"`
 		} `json:"tasks"`
 		Unreadable []struct {
 			Path    string `json:"path"`
@@ -93,24 +91,21 @@ func TestTasksJSON_Envelope(t *testing.T) {
 	if len(got.Tasks) != 2 || got.Tasks[0].Slug != "alpha" || got.Tasks[0].Tier != 2 {
 		t.Errorf("tasks payload wrong: %+v", got.Tasks)
 	}
-	// The misfiled signal must be machine-readable, and the two status fields must carry
-	// DIFFERENT values: `status` is the authoritative frontmatter value, `declared_status`
-	// the stale mirror directory (agents are the consumers who detect drift — schema 1.1).
-	if beta := got.Tasks[1]; !beta.Misfiled || beta.Status != "ready-to-start" || beta.Declared != "completed" {
-		t.Errorf("misfiled task must carry status=frontmatter (ready-to-start) + declared_status=folder (completed): %+v", beta)
+	if beta := got.Tasks[1]; beta.Slug != "beta" || beta.Status != "ready-to-start" {
+		t.Errorf("second task payload wrong: %+v", beta)
 	}
 	if len(got.Unreadable) != 1 || got.Unreadable[0].Path != "bad.md" {
 		t.Errorf("unreadable files must be included: %+v", got.Unreadable)
 	}
 }
 
-func TestTasksHuman_TableAndMisfiledFlag(t *testing.T) {
+func TestTasksHuman_Table(t *testing.T) {
 	var out bytes.Buffer
 	if err := TasksHuman(&out, NewStyle(false), sampleTasks); err != nil {
 		t.Fatal(err)
 	}
 	s := out.String()
-	for _, want := range []string{"alpha", "beta", "first task", "2 tasks", "⚠ 1 misfiled"} {
+	for _, want := range []string{"alpha", "beta", "first task", "2 tasks"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("human output missing %q:\n%s", want, s)
 		}
@@ -311,10 +306,9 @@ func TestSummaryOutputs(t *testing.T) {
 			{Status: domain.StatusInProgress, Count: 2},
 			{Status: domain.StatusCompleted, Count: 5},
 		},
-		InProgress: []domain.Task{{Slug: "alpha", Status: domain.StatusInProgress, FolderStatus: domain.StatusInProgress}},
+		InProgress: []domain.Task{{Slug: "alpha", Status: domain.StatusInProgress}},
 		Epics:      []core.EpicSummary{{Epic: domain.Epic{ID: "01-x"}, Total: 2, Done: 1}},
 		OpenAudits: []domain.Audit{{Slug: "2026-06-01-audit-x", Bucket: domain.AuditOpen, Area: "store", Findings: 4, OpenFindings: 1, DoneFindings: 3}},
-		Misfiled:   1,
 	}
 	var out bytes.Buffer
 	if err := SummaryJSON(&out, s); err != nil {

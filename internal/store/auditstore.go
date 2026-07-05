@@ -205,7 +205,6 @@ func parseAuditWithFindings(content []byte, path string) (domain.Audit, []domain
 	if !a.Bucket.Valid() {
 		a.BucketFellBack = true
 	}
-	a.FolderBucket = a.Bucket // vestigial mirror: no folder under flat
 	// The finding grammar (and "what each status means for progress") lives in the
 	// domain, so the store just records the tally ParseFindings + TallyFindings report.
 	findings := domain.ParseFindings(string(body))

@@ -63,22 +63,6 @@ func TestLintTask_BadDate(t *testing.T) {
 	}
 }
 
-func TestMisfiledIssues(t *testing.T) {
-	// The directory disagrees with the authoritative (frontmatter) status → flagged.
-	if got := MisfiledIssues(Task{Status: StatusReadyToStart, FolderStatus: StatusCompleted}); len(got) == 0 {
-		t.Error("expected a misfiled issue for a ready-to-start task filed in completed/")
-	}
-	// Directory matches the status → not misfiled. (A foreign frontmatter word falls
-	// back to the folder in parseTask, so it arrives here with Status == FolderStatus.)
-	if got := MisfiledIssues(Task{Status: StatusCompleted, FolderStatus: StatusCompleted}); len(got) != 0 {
-		t.Errorf("foreign status should not be flagged: %+v", got)
-	}
-	// A Task with no folder context (FolderStatus unset) is never misfiled.
-	if got := MisfiledIssues(Task{Status: StatusCompleted}); len(got) != 0 {
-		t.Errorf("a task with no folder context should not be flagged: %+v", got)
-	}
-}
-
 func TestFrontmatterStatusIssues(t *testing.T) {
 	// A fell-back frontmatter status (missing or unrecognized) is flagged.
 	if got := FrontmatterStatusIssues(Task{StatusFellBack: true}); len(got) == 0 {

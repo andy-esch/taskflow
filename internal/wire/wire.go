@@ -90,12 +90,12 @@ import (
 // create (survives slug/status changes), the task/audit counterpart to an epic's
 // `id`; omitted on entities created before id assignment (pre-migration).
 // 1.25: task `status` is now AUTHORITATIVE from frontmatter, not the directory
-// (ADR-0003 Phase A). `misfiled`/`declared_status` inverted meaning: `misfiled` = the
-// file's directory disagrees with its (authoritative) frontmatter status, and
-// `declared_status` now carries the stale mirror DIRECTORY the file sits in (was: the
-// frontmatter's claimed status). A file whose directory lags is repaired by `lint
-// --fix` MOVING it to match, not by rewriting the status.
-const SchemaVersion = "1.25"
+// (ADR-0003 Phase A). `misfiled`/`declared_status` inverted meaning to surface
+// directory drift.
+// 1.26: retired the task `misfiled`/`declared_status` fields and the `status` summary
+// `misfiled` count — the flat, id-led layout (ADR-0003 §4) removes the directory mirror
+// entirely, so a task/audit can never be misfiled (status/bucket live only in frontmatter).
+const SchemaVersion = "1.26"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

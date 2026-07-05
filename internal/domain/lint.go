@@ -67,17 +67,15 @@ func LintTask(t Task, validEpic func(string) bool) []Issue {
 		}
 	}
 
-	issues = append(issues, MisfiledIssues(t)...)
 	issues = append(issues, FrontmatterStatusIssues(t)...)
 	issues = append(issues, MissingIDIssue(t.ID)...)
 	return issues
 }
 
-// FrontmatterStatusIssues flags a task whose frontmatter `status` was missing or named
-// no recognized status — now that frontmatter is the authority (ADR-0003 Phase A) that's
-// a real defect; the folder only silently covered for it (parseTask fell back). Applies
-// in ANY status (an archived task's broken status surfaces too, beside MisfiledIssues),
-// and is fail-open: the task still lists and resolves via the fallback, it's just flagged.
+// FrontmatterStatusIssues flags a task whose frontmatter `status` is missing or names no
+// recognized status — under the flat layout (ADR-0003 §4) frontmatter is the sole
+// authority, so that's a real defect with no directory to cover for it. Applies in ANY
+// status, and is fail-open: the task still lists (with its raw status), it's just flagged.
 func FrontmatterStatusIssues(t Task) []Issue {
 	if !t.StatusFellBack {
 		return nil
@@ -88,7 +86,7 @@ func FrontmatterStatusIssues(t Task) []Issue {
 // MissingIDIssue flags an entity (task or audit) that has no stable id yet — the
 // pre-assignment state a one-time `lint --fix` backfills (ADR-0003). Applies in
 // ANY status: an archived task still needs a stable key for links and reopening,
-// so — like MisfiledIssues — it's checked outside the active-only field block.
+// so — like FrontmatterStatusIssues — it's checked outside the active-only field block.
 func MissingIDIssue(id string) []Issue {
 	if strings.TrimSpace(id) != "" {
 		return nil
@@ -124,8 +122,7 @@ func LintEpic(e Epic) []Issue {
 		add("status", err.Error())
 	}
 	// A deprecated epic is dead/withdrawn — stop at the status check, don't nag
-	// about the active-only fields below (mirrors MisfiledIssues-only for
-	// archived tasks).
+	// about the active-only fields below (as archived tasks are spared them).
 	if e.Status == "deprecated" {
 		return issues
 	}
@@ -140,34 +137,6 @@ func LintEpic(e Epic) []Issue {
 		add("description", "missing")
 	}
 	return issues
-}
-
-// MisfiledIssues reports the status/folder mismatch for a task, if any. It is
-// separate from the active-only field checks so archived tasks (completed/…)
-// can still be flagged for drift without nagging about missing fields.
-func MisfiledIssues(t Task) []Issue {
-	if !t.Misfiled() {
-		return nil
-	}
-	return []Issue{{
-		Field: "status",
-		Message: fmt.Sprintf("frontmatter says %q but file is in %s/ — frontmatter wins; `lint --fix` moves it",
-			t.Status, t.FolderStatus),
-	}}
-}
-
-// AuditMisfiledIssues reports the bucket/folder mismatch for an audit, if any — the
-// audit analog of MisfiledIssues (frontmatter bucket is authoritative; a stale folder
-// is the drift).
-func AuditMisfiledIssues(a Audit) []Issue {
-	if !a.Misfiled() {
-		return nil
-	}
-	return []Issue{{
-		Field: "bucket",
-		Message: fmt.Sprintf("frontmatter says %q but file is in %s/ — frontmatter wins; `lint --fix` moves it",
-			a.Bucket, a.FolderBucket),
-	}}
 }
 
 // FrontmatterBucketIssues flags an audit whose frontmatter `bucket` was missing or named

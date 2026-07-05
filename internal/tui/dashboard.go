@@ -154,11 +154,6 @@ func (d *dashboard) setSummary(s core.Summary, st *styles) {
 	blank()
 	head("needs attention")
 	allClear := true
-	if s.Misfiled > 0 {
-		nav(st.glyph(theme.MarkerWarn)+fmt.Sprintf(" %d misfiled task(s) (folder ≠ status)", s.Misfiled),
-			dashTarget{kind: entityTasks, view: "all"})
-		allClear = false
-	}
 	if n := len(s.OpenAudits); n > 0 {
 		nav(st.glyph(theme.Bucket(domain.AuditOpen))+fmt.Sprintf(" %d open audit(s)", n), dashTarget{kind: entityAudits})
 		allClear = false

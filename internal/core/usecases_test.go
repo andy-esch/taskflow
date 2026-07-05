@@ -22,15 +22,15 @@ func TestService_Lint(t *testing.T) {
 		},
 		tasks: []domain.Task{
 			// Clean active task: no issues.
-			{ID: "6fjangd7kvh1", Slug: "clean", Status: domain.StatusInProgress, FolderStatus: domain.StatusInProgress,
+			{ID: "6fjangd7kvh1", Slug: "clean", Status: domain.StatusInProgress,
 				Epic: "e1", Description: "fine", Tags: []string{"go"}, Tier: 3, Priority: "medium",
 				Effort: "Unknown", Created: "2026-06-12"},
 			// Active with a dangling epic + missing fields: full lint applies.
-			{Slug: "dangling", Status: domain.StatusReadyToStart, FolderStatus: domain.StatusReadyToStart,
+			{Slug: "dangling", Status: domain.StatusReadyToStart,
 				Epic: "ghost", Description: "d", Tags: []string{"x"}, Tier: 3, Priority: "medium"},
-			// Archived: only misfiled drift is reported, not missing fields.
-			{Slug: "archived-misfiled", Status: domain.StatusCompleted, FolderStatus: domain.StatusInProgress},
-			{ID: "6fjangd7kvh2", Slug: "archived-clean", Status: domain.StatusCompleted, FolderStatus: domain.StatusCompleted},
+			// Archived: the universal checks apply (this one lacks an id), but NOT the field nags.
+			{Slug: "archived-noid", Status: domain.StatusCompleted},
+			{ID: "6fjangd7kvh2", Slug: "archived-clean", Status: domain.StatusCompleted},
 		},
 		problems: []domain.FileProblem{{Path: "x.md", Message: "broken"}},
 	})
@@ -56,8 +56,8 @@ func TestService_Lint(t *testing.T) {
 	if !strings.Contains(got["dangling"], "epic") {
 		t.Errorf("dangling epic should be flagged, got %q", got["dangling"])
 	}
-	if got["archived-misfiled"] == "" {
-		t.Error("an archived misfiled task should still be flagged")
+	if !strings.Contains(got["archived-noid"], "id") {
+		t.Errorf("an archived task with no id should be flagged, got %q", got["archived-noid"])
 	}
 	if _, ok := got["archived-clean"]; ok {
 		t.Error("a clean archived task must not be nagged about missing fields")
