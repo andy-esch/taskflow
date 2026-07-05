@@ -16,14 +16,14 @@ func TestService_Lint(t *testing.T) {
 	svc := NewService(&fakeStore{
 		epics: []domain.Epic{
 			// Valid epic the tasks join against.
-			{ID: "e1", Status: "active", Priority: "medium", Description: "the epic"},
+			{ID: "01-e1", Status: "active", Priority: "medium", Description: "the epic"},
 			// Bad epic: a typo'd status surfaces as its own LintResult (keyed by id).
-			{ID: "e2-bad", Status: "bogus", Priority: "medium", Description: "d"},
+			{ID: "02-bad", Status: "bogus", Priority: "medium", Description: "d"},
 		},
 		tasks: []domain.Task{
 			// Clean active task: no issues.
 			{ID: "6fjangd7kvh1", Slug: "clean", Status: domain.StatusInProgress,
-				Epic: "e1", Description: "fine", Tags: []string{"go"}, Tier: 3, Priority: "medium",
+				Epic: "01-e1", Description: "fine", Tags: []string{"go"}, Tier: 3, Priority: "medium",
 				Effort: "Unknown", Created: "2026-06-12"},
 			// Active with a dangling epic + missing fields: full lint applies.
 			{Slug: "dangling", Status: domain.StatusReadyToStart,
@@ -63,11 +63,11 @@ func TestService_Lint(t *testing.T) {
 		t.Error("a clean archived task must not be nagged about missing fields")
 	}
 	// Epics are linted too: the bad-status epic surfaces as a result keyed by id.
-	if !strings.Contains(got["e2-bad"], "status") {
-		t.Errorf("bad epic status should be flagged, got %q", got["e2-bad"])
+	if !strings.Contains(got["02-bad"], "status") {
+		t.Errorf("bad epic status should be flagged, got %q", got["02-bad"])
 	}
-	if _, ok := got["e1"]; ok {
-		t.Errorf("the valid epic must not be flagged: %q", got["e1"])
+	if _, ok := got["01-e1"]; ok {
+		t.Errorf("the valid epic must not be flagged: %q", got["01-e1"])
 	}
 }
 
@@ -312,8 +312,8 @@ func TestService_NewAudit(t *testing.T) {
 // fully valid (status/priority/description) so only the typo'd one is flagged.
 func TestService_Lint_FlagsInvalidEpicStatus(t *testing.T) {
 	svc := NewService(&fakeStore{epics: []domain.Epic{
-		{ID: "good", Status: "active", Priority: "medium", Description: "a goal"},
-		{ID: "weird", Status: "bananas", Priority: "medium", Description: "a goal"},
+		{ID: "01-good", Status: "active", Priority: "medium", Description: "a goal"},
+		{ID: "02-weird", Status: "bananas", Priority: "medium", Description: "a goal"},
 	}})
 	results, _, err := svc.Lint()
 	if err != nil {
@@ -323,7 +323,7 @@ func TestService_Lint_FlagsInvalidEpicStatus(t *testing.T) {
 	for _, r := range results {
 		flagged = append(flagged, r.Slug)
 	}
-	if len(flagged) != 1 || flagged[0] != "weird" {
+	if len(flagged) != 1 || flagged[0] != "02-weird" {
 		t.Errorf("only the invalid epic status should be flagged, got %v", flagged)
 	}
 }

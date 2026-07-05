@@ -24,8 +24,8 @@ func TestLegendMarkersSourcedFromTheme(t *testing.T) {
 		}
 		return false
 	}
-	if !has(entityTasks, testStyles.glyph(theme.MarkerWarn)) || !has(entityTasks, testStyles.glyph(theme.MarkerRevisit)) {
-		t.Error("tasks legend should draw the misfiled/revisit markers from theme.Marker*")
+	if !has(entityTasks, testStyles.glyph(theme.MarkerRevisit)) {
+		t.Error("tasks legend should draw the revisit marker from theme.Marker*")
 	}
 	if !has(entityDashboard, testStyles.glyph(theme.MarkerReadyToClose)) {
 		t.Error("dashboard legend should draw the ready-to-close marker from theme.MarkerReadyToClose")
@@ -121,7 +121,7 @@ func TestSymbolsLegendIsPageSpecific(t *testing.T) {
 		return b.String()
 	}
 	tasks, epics, audits := text(entityTasks), text(entityEpics), text(entityAudits)
-	if !strings.Contains(tasks, "misfiled") || strings.Contains(tasks, "liveness") {
+	if !strings.Contains(tasks, "revisit") || strings.Contains(tasks, "liveness") {
 		t.Error("tasks legend should describe task markers, not epic liveness")
 	}
 	if !strings.Contains(epics, "dormant") || strings.Contains(epics, "finding:") {

@@ -30,8 +30,8 @@ func setupAuditRepo(t *testing.T) string {
 		p, out := testutil.AuditFixture(root, bucket, name, content)
 		testutil.Write(t, p, out)
 	}
-	audit("open", "o.md", "---\nid: 6fjangd7kvh1\nbucket: open\narea: dispatcher\n---\n#### H1. t  · **Status:** open\n")
-	audit("closed", "c.md", "---\nid: 6fjangd7kvh2\nbucket: closed\narea: web\n---\n#### M1. t  · **Status:** fixed\n")
+	audit("open", "o.md", "---\nid: "+testutil.TaskID("o")+"\nbucket: open\narea: dispatcher\n---\n#### H1. t  · **Status:** open\n")
+	audit("closed", "c.md", "---\nid: "+testutil.TaskID("c")+"\nbucket: closed\narea: web\n---\n#### M1. t  · **Status:** fixed\n")
 	return root
 }
 

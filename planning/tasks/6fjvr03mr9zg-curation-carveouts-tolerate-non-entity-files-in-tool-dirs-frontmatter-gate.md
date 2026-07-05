@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [core, storage, config]
 created: "2026-07-04"
-updated_at: "2026-07-04"
+updated_at: "2026-07-05"
 completed_at: "2026-07-04"
 ---
 
@@ -181,3 +181,12 @@ Filename gate in `markdownCandidates` + `README.md` carve + a clearer parse-erro
 - **ADR-worthy:** "what makes a file an entity" (the filename classifier) + the stray-file
   contract belong in a short ADR, coordinated with epic
   [[26-frontmatter-schema-declared-validation-contract]].
+
+## Epic analog implemented in Phase B (2026-07-05)
+
+Beyond the decided design (README silently carved; any other non-id-led `.md` in a
+scanned dir is a loud `FileProblem` → "move it to `meta/`"; non-`.md` files ignored;
+`meta/` is the sanctioned home), the **epic** carveout shipped: `EpicNameIssue` flags a
+non-`NN-<slug>` epic filename **fail-open** (still lists/resolves, mirroring
+`StatusFellBack`) rather than dropping it. The one legacy non-NN epic was renamed
+`00-taskflow-v1-core` first, so the real tree stays lint-clean.

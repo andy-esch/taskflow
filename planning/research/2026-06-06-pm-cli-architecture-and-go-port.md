@@ -224,7 +224,7 @@ change** — same markdown + frontmatter the Python tool reads.
   monorepo-structure-proposal, workspaces-vs-root-modules,
   ai-interaction-interfaces, ai-provider-abstraction,
   configuration-and-onboarding-flow, documentation-integration-strategy,
-  ai-file-editing-strategy) + `planning/epics/taskflow-v1-core.md`.
+  ai-file-editing-strategy) + `planning/epics/00-taskflow-v1-core.md`.
 - [go-cli-comparison](https://github.com/gschauer/go-cli-comparison) ·
   [Choosing a Go CLI Library](https://mt165.co.uk/blog/golang-cli-library/) ·
   [charmbracelet/fang](https://github.com/charmbracelet/fang) ·

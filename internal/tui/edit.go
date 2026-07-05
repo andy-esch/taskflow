@@ -24,8 +24,8 @@ import (
 // so the TUI is a third mutation face that adds no new validation path. The two
 // entities differ only in their field set (epics have no effort/tier) and which
 // service write submit routes to (the menu carries an apply closure); the form,
-// widgets, and message flow are shared. Status is absent by design
-// (status==directory; that's the `m` action menu).
+// widgets, and message flow are shared. Status is absent by design — it moves
+// through the lifecycle action menu (`m`), not a field edit.
 
 // fieldKind selects the widget an editable field uses.
 type fieldKind int

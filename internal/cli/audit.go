@@ -285,7 +285,7 @@ func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.
 // the agent-facing `audit append`. The save is accepted only if it still parses
 // (parse-before-accept); once it lands, the findings are lint-checked and any issues
 // (a bad **Status:**, a bucket↔state drift a free-text edit can introduce) are surfaced
-// as a WARNING, not a hard error — lint is advisory here, like `task edit`'s misfiled flag.
+// as a WARNING, not a hard error — lint is advisory here, like `task edit`'s re-lint flag.
 func newAuditEditCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "edit <audit>",

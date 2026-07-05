@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [core, storage]
 created: "2026-07-03"
-updated_at: "2026-07-03"
+updated_at: "2026-07-05"
 started_at: "2026-07-03"
 completed_at: "2026-07-03"
 ---
@@ -50,3 +50,12 @@ migration script.
 
 - Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
 - ADR [[0003-stable-key-id-addressed-storage]] section 6 + the backfill-timestamp amendment
+
+## Superseded by filename-backfill (2026-07-05, Phase B)
+
+Post-flatten every entity file is id-led, so `lint --fix` now backfills a missing
+frontmatter `id:` **from the filename** (the canonical key resolveID/CAS match on)
+instead of minting one from a date. The whole date-mint apparatus this task added
+(`firstDateMillis`/`mintUniqueID`/`dateFromFilename`/`knownIDs` + `UnrepairedIDMessage`
++ its restatement) was deleted (~125 LOC), and a new drift lint (`IDDriftIssue`) guards
+filename-vs-frontmatter id agreement.

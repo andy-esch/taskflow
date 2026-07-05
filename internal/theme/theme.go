@@ -120,7 +120,7 @@ func Liveness(s string) Token {
 
 // Markers are fixed glyph+color tokens for cross-surface annotations that aren't
 // keyed by a domain value (unlike Status/Bucket/Liveness/FindingStatus): the
-// misfiled / non-conforming attention ⚠, the revisit ↻, an audit's "ready to close"
+// non-conforming status attention ⚠, the revisit ↻, an audit's "ready to close"
 // ✓, the all-clear ✔, and the unreadable-file !. Exposed so the row delegates, the
 // dashboard, and the `?` legend draw ONE glyph+color per concept instead of re-typing
 // them — and so the legend can't drift from the rows. ✓ (ready-to-close, U+2713) and

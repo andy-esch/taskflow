@@ -147,7 +147,8 @@ func (d *dashboard) setSummary(s core.Summary, st *styles) {
 		}
 	}
 
-	// Needs attention — misfiled tasks, the open-audit queue, and unreadable files.
+	// Needs attention — the open/ready-to-close audit queue, epics with a non-conforming
+	// status, and unreadable files.
 	// Under a non-specific heading a bare count says nothing, so every row names its
 	// own category and wears its entity's glyph (the audit ◆ matches the audits tab);
 	// "all clear" when there's nothing.

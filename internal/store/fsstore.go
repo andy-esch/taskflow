@@ -321,8 +321,8 @@ func (s *FS) resolvePath(slug string) (string, error) {
 	return s.resolve(slug)
 }
 
-// taskCandidates lists every task file as a resolution candidate (the dir name
-// IS the status, per the status==directory invariant).
+// taskCandidates lists every flat task file as a resolution candidate — id-led, with
+// status read from frontmatter (there is no status directory under the flat layout).
 func (s *FS) taskCandidates() ([]candidate, error) {
 	return flatCandidates(s.tasksDir)
 }
@@ -335,7 +335,7 @@ func (s *FS) taskCandidates() ([]candidate, error) {
 // is skipped silently.
 func parseTask(content []byte, path string) (domain.Task, error) {
 	base := filepath.Base(path)
-	_, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
+	fnID, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
 	if !ok {
 		return domain.Task{}, fmt.Errorf("%w: %q has no leading id — move it to meta/ or delete it", errNotEntity, base)
 	}
@@ -362,6 +362,7 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 		t.StatusFellBack = true
 	}
 	t.Slug = slug
+	t.FilenameID = fnID
 	t.Path = path
 	return t, nil
 }

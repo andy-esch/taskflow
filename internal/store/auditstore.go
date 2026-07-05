@@ -66,10 +66,9 @@ func (s *FS) GetAuditByPath(path string) (domain.Audit, string, error) {
 	return a, string(body), nil
 }
 
-// MoveAudit relocates an audit to another bucket (close/reopen/defer) and rewrites its
-// authoritative `bucket:` frontmatter to match (ADR-0003 Phase A). Moving to the bucket
-// it already declares, when the file is already there, is an idempotent no-op; a
-// misfiled audit (folder ≠ frontmatter bucket) is relocated to match without a rewrite.
+// MoveAudit changes an audit's bucket (close/reopen/defer) by rewriting its authoritative
+// `bucket:` frontmatter in place — under the flat layout (ADR-0003 §4) there is no bucket
+// directory to move between. Moving to the bucket it already declares is an idempotent no-op.
 func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
 	if !to.Valid() {
 		return domain.Audit{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
@@ -180,7 +179,7 @@ func parseAudit(content []byte, path string) (domain.Audit, error) {
 // is the body-only wrapper for callers that just want the audit + its tally.
 func parseAuditWithFindings(content []byte, path string) (domain.Audit, []domain.Finding, error) {
 	base := filepath.Base(path)
-	_, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
+	fnID, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
 	if !ok {
 		return domain.Audit{}, nil, fmt.Errorf("%w: %q has no leading id — move it to meta/ or delete it", errNotEntity, base)
 	}
@@ -198,6 +197,7 @@ func parseAuditWithFindings(content []byte, path string) (domain.Audit, []domain
 		}
 	}
 	a.Slug = slug
+	a.FilenameID = fnID
 	a.Path = path
 	// Bucket is authoritative in frontmatter (ADR-0003 §4). There is no directory to fall
 	// back to under the flat layout, but an id-led file with a missing/unrecognized bucket

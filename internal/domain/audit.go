@@ -2,9 +2,9 @@ package domain
 
 import "fmt"
 
-// AuditBucket is an audit's lifecycle state; its string value is also the directory
-// an audit mirrors into (audits/<bucket>/). The authoritative value now lives in
-// frontmatter (ADR-0003 Phase A) — the directory is a lock-step mirror. Findings have
+// AuditBucket is an audit's lifecycle state, authoritative in frontmatter (ADR-0003
+// §4). Under the flat, id-led layout there is no bucket directory — the value stands
+// on its own in the file; a missing/unrecognized one is lint-flagged. Findings have
 // their own per-finding status inside the body; the audit-level state is the bucket.
 type AuditBucket string
 
@@ -49,6 +49,11 @@ type Audit struct {
 	// ID is the stable 12-char identifier (ADR-0003 §3): it leads the flat filename
 	// (audits/<id>-<slug>.md) and is the primary resolution key.
 	ID string `yaml:"id"`
+
+	// FilenameID is that same id as parsed from the flat filename's leading field
+	// (set by the store via splitFlatName) — the canonical key; the frontmatter `id:`
+	// above must equal it, and lint flags drift (IDDriftIssue). Derived, not frontmatter.
+	FilenameID string `yaml:"-"`
 
 	// Bucket is the audit's lifecycle state — authoritative, read from frontmatter.
 	Bucket AuditBucket `yaml:"bucket"`

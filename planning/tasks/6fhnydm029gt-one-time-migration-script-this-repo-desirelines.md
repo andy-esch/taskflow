@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: next-up
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: 'Throwaway script for the destructive cutover only: id-led renames, status/bucket to frontmatter, ref rewrites. Run on a copy; git is the undo. id-assignment split to its own lint --fix task.'
 effort: Unknown
@@ -9,8 +9,9 @@ priority: medium
 autonomy_level: 3
 tags: [migration, storage]
 created: "2026-07-01"
-updated_at: "2026-07-04"
+updated_at: "2026-07-05"
 id: 6fhnydm029gt
+completed_at: "2026-07-05"
 ---
 
 # One-time migration script (this repo + desirelines)
@@ -52,3 +53,17 @@ cutover, so buckets start clean:
 Open (migration-author's call, not blocking): the exact `meta/` substructure — flat
 (`meta/HOWTO-execute.md`) vs grouped by origin (`meta/audits/...`). "Free internal structure"
 was the decision; pick per file.
+
+## Ran (2026-07-05)
+
+`internal/tools/flatmigrate` (committed) was built and run on both planning trees from
+clean git worktrees — dry-run-previewed and verified byte-identical on throwaway copies
+first:
+
+- **this repo:** 199 renames (0 ids minted, 0 status/bucket backfilled), lint clean.
+- **desirelines:** 727 renames + 103 relative-link rewrites + `audits/HOWTO-execute.md`
+  → `meta/`; 4 pre-existing non-standard statuses (done/complete/superseded/blocked)
+  normalized by hand (preserving historical timestamps); `routines/` references repointed.
+  Lint clean.
+
+Git is the undo (one churn commit each). Done.

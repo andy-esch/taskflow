@@ -18,9 +18,9 @@ func TestLintFix_DryRunThenFix(t *testing.T) {
 	// re-lint is clean and `lint --fix` exits 0 (Fix 1 keys the exit off the leftover
 	// findings — a tree the fixer fully repairs must still come back green).
 	bad, badContent := testutil.TaskFixture(root, "ready-to-start", "bad.md",
-		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ndescription: A: B\ntags: x,y\n---\n# Bad\n")
+		"---\nstatus: ready-to-start\nepic: 01-e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ndescription: A: B\ntags: x,y\n---\n# Bad\n")
 	testutil.Write(t, bad, badContent)
-	epic := filepath.Join(root, "epics", "e1.md")
+	epic := filepath.Join(root, "epics", "01-e1.md")
 	if err := os.MkdirAll(filepath.Dir(epic), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -60,11 +60,11 @@ func TestLintFix_BackfillsMissingID(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
+	write("epics/01-e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
 	// Fully valid EXCEPT it predates ids (no id: field). It lands at a flat id-led
 	// path via its filename slug, but carries no id: field to backfill.
 	tPath, tContent := testutil.TaskFixture(root, "ready-to-start", "t.md",
-		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n")
+		"---\nstatus: ready-to-start\nepic: 01-e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n")
 	testutil.Write(t, tPath, tContent)
 
 	// Plain lint flags the missing id (and exits non-zero).
@@ -101,11 +101,11 @@ func TestLintFix_BackfillsMissingID(t *testing.T) {
 	}
 }
 
-// TestLintFix_UnrepairableIDMessage pins the post-fix messaging: a task the
-// backfiller can't date (no date field, no YYYY-MM-DD filename prefix) survives
-// `--fix`, and the "could not auto-repair" output must state the actionable remedy
-// (add a created date) rather than plain lint's misleading "assigns one".
-func TestLintFix_UnrepairableIDMessage(t *testing.T) {
+// TestLintFix_BackfillsDatelessFromFilename: a completed, dateless, non-date-prefixed
+// task was "unrepairable" pre-flatten (nothing to mint an id from). Post-flatten the id
+// already leads the flat filename, so `--fix` backfills it from there and the tree lints
+// clean — no date required, and no "could not auto-repair" leftovers.
+func TestLintFix_BackfillsDatelessFromFilename(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, content string) {
 		p := filepath.Join(root, filepath.FromSlash(rel))
@@ -116,25 +116,21 @@ func TestLintFix_UnrepairableIDMessage(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
-	// Completed (archived, so only the universal id check applies), no date field,
-	// and a non-date-prefixed filename — nothing for the backfiller to date an id from.
+	write("epics/01-e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
 	ndPath, ndContent := testutil.TaskFixture(root, "completed", "nodate.md",
-		"---\nstatus: completed\nepic: e1\n---\n# ND\n")
+		"---\nstatus: completed\nepic: 01-e1\n---\n# ND\n")
 	testutil.Write(t, ndPath, ndContent)
 
 	out, err := runRootRC(t, "-C", root, "lint", "--fix")
-	if err == nil {
-		t.Fatal("lint --fix must fail when an id can't be minted")
+	if err != nil {
+		t.Fatalf("lint --fix should repair a dateless task from its filename, got err %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "could not auto-repair") {
-		t.Errorf("expected a could-not-auto-repair section:\n%s", out)
+	if strings.Contains(out, "could not auto-repair") {
+		t.Errorf("nothing should be left unrepaired:\n%s", out)
 	}
-	if !strings.Contains(out, "no date to mint an id from") {
-		t.Errorf("expected the actionable remedy message:\n%s", out)
-	}
-	if strings.Contains(out, "assigns one") {
-		t.Errorf("the misleading post-fix wording leaked:\n%s", out)
+	// The backfilled id is exactly the one that already led the flat filename.
+	if b, _ := os.ReadFile(ndPath); !strings.Contains(string(b), "id: "+testutil.TaskID("nodate")) {
+		t.Errorf("id should be backfilled from the filename:\n%s", b)
 	}
 }
 
@@ -214,9 +210,9 @@ func TestLintFix_ReportOnlyEpicExitsNonZero(t *testing.T) {
 	}
 	// A clean task plus an active epic missing priority/description — the epic is the
 	// sole, fix-immune failure.
-	write("epics/e1.md", "---\nstatus: active\n---\n# E1\n")
+	write("epics/01-e1.md", "---\nstatus: active\n---\n# E1\n")
 	goodPath, goodContent := testutil.TaskFixture(root, "ready-to-start", "good.md",
-		"---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
+		"---\nstatus: ready-to-start\nepic: 01-e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
 	testutil.Write(t, goodPath, goodContent)
 
 	var out bytes.Buffer
@@ -261,8 +257,8 @@ func TestLintFix_ReportOnlyEpicExitsNonZero(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
 		t.Fatalf("fix --json invalid: %v\n%s", err, out.String())
 	}
-	if len(env.Remaining) != 1 || env.Remaining[0].Slug != "e1" || len(env.Remaining[0].Issues) == 0 {
-		t.Errorf("remaining should carry the epic e1 + its issues, got %+v", env.Remaining)
+	if len(env.Remaining) != 1 || env.Remaining[0].Slug != "01-e1" || len(env.Remaining[0].Issues) == 0 {
+		t.Errorf("remaining should carry the epic 01-e1 + its issues, got %+v", env.Remaining)
 	}
 }
 

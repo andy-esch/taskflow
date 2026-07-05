@@ -231,9 +231,10 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 
 	var results []LintResult
 	for _, t := range tasks {
-		// Active tasks get the full field lint; archived tasks are only checked
-		// for status/folder drift (no point nagging about missing fields on a
-		// completed item, but a misfiled one should still surface).
+		// Active tasks get the full field lint; archived tasks are only checked for the
+		// universal defects (missing/unrecognized frontmatter status, missing or drifted
+		// id) — no point nagging about missing fields on a completed item, but a bad
+		// status/id should still surface.
 		var issues []domain.Issue
 		if t.Status.IsActive() {
 			issues = domain.LintTask(t, validEpic)
@@ -241,6 +242,7 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 			// Archived tasks skip the field nags but still get the universal checks: a
 			// missing/unrecognized frontmatter status, and a missing stable id.
 			issues = append(domain.FrontmatterStatusIssues(t), domain.MissingIDIssue(t.ID)...)
+			issues = append(issues, domain.IDDriftIssue(t.ID, t.FilenameID)...)
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})

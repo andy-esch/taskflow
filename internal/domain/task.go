@@ -15,6 +15,12 @@ type Task struct {
 	// (tasks/<id>-<slug>.md) and is the primary resolution key.
 	ID string `yaml:"id"`
 
+	// FilenameID is that same id as parsed from the flat filename's leading field
+	// (set by the store via splitFlatName). It is the canonical key resolveID/CAS
+	// match on; the frontmatter `id:` above is a co-located copy that must equal it,
+	// and lint flags any drift (IDDriftIssue). Derived, not frontmatter.
+	FilenameID string `yaml:"-"`
+
 	Status      Status   `yaml:"status"`
 	Epic        string   `yaml:"epic"`
 	Description string   `yaml:"description"`

@@ -133,14 +133,13 @@ func flatCandidates(dir string) ([]candidate, error) {
 // than one match at the winning tier returns ErrAmbiguous listing the
 // candidates — and matching is deterministic (candidates are sorted).
 
-// candidate is one resolvable id and where it lives. dir is the status/bucket
-// directory name ("" for epics) — shown in ambiguity messages, and convertible
-// back to the typed status/bucket by the status==directory invariant.
+// candidate is one resolvable id and where it lives. Under the flat layout there is no
+// status/bucket directory (status/bucket live in frontmatter, ADR-0003 §4), so a
+// candidate is just its resolution keys and path.
 type candidate struct {
 	id   string // resolution key: an epic/legacy stem, or the 12-char stable id under the flat layout
 	slug string // human slug (flat tasks/audits) — a second resolution key; "" for epics and legacy candidates
 	path string
-	dir  string // status/bucket mirror ("" for epics, and for flat entities); retained through the cutover
 }
 
 // validQueryName rejects queries that could escape the planning tree when
@@ -164,10 +163,7 @@ func resolveID(kind, query string, cands []candidate) (candidate, error) {
 		if cands[i].id != cands[j].id {
 			return cands[i].id < cands[j].id
 		}
-		if cands[i].slug != cands[j].slug {
-			return cands[i].slug < cands[j].slug
-		}
-		return cands[i].dir < cands[j].dir
+		return cands[i].slug < cands[j].slug
 	})
 	q := strings.ToLower(query)
 	tiers := []func(key string) bool{
@@ -198,18 +194,17 @@ func resolveID(kind, query string, cands []candidate) (candidate, error) {
 	return candidate{}, fmt.Errorf("%s %q: %w", kind, query, domain.ErrNotFound)
 }
 
-// describeCandidates renders an ambiguity list — "a (in-progress), b (open)" —
-// so the error itself is enough to retype an unambiguous name.
+// describeCandidates renders an ambiguity list — "add-retry (6f…a3b), add-retry (6f…c1d)" —
+// so the error itself is enough to retype an unambiguous name (by id).
 func describeCandidates(cands []candidate) string {
 	parts := make([]string, len(cands))
 	for i, c := range cands {
 		switch {
-		case c.dir != "":
-			parts[i] = fmt.Sprintf("%s (%s)", c.id, c.dir)
 		case c.slug != "":
-			// Flat entities carry no dir; show slug + id so a dup-slug ambiguity is retypable by id.
+			// Flat entities: show slug + id so a dup-slug ambiguity is retypable by id.
 			parts[i] = fmt.Sprintf("%s (%s)", c.slug, c.id)
 		default:
+			// Epic/legacy candidates carry only an id (no slug).
 			parts[i] = c.id
 		}
 	}

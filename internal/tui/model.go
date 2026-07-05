@@ -195,14 +195,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case movedMsg:
-		// A transition succeeded: flash it and reload so the relocated task shows in
-		// its new status (folder-authoritative), each tab's cursor preserved by id.
+		// A transition succeeded: flash it and reload so the moved task shows in its
+		// new status (frontmatter-authoritative), each tab's cursor preserved by id.
 		m.flash = fmt.Sprintf("moved %s → %s", msg.slug, msg.to)
 		if msg.revisit != "" {
 			m.flash += fmt.Sprintf(" (revisit %s)", msg.revisit)
 		}
 		m.flashErr = false
-		// The moved task leaves the active list (folder-authoritative); its
+		// The moved task leaves the active list (its frontmatter status changed); its
 		// disappearance on the reload below is expected, so don't let the post-reload
 		// restore mistake it for a dangling reference and overwrite this success.
 		m.movedAway = msg.slug
@@ -224,8 +224,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editorClosedMsg:
 		// The external $EDITOR (`E`) exited. A launch failure flashes; otherwise the
 		// editor may have changed the file, so reload — each tab's cursor preserved by
-		// id. status==dir, so a frontmatter `status:` edit can't move the file; it'll
-		// show as misfiled on reload, exactly as the CLI's `task edit` flags it.
+		// id. Status lives in frontmatter (no dir move), so a `status:` edit just
+		// updates the task's state on reload — or is lint-flagged if unrecognized,
+		// exactly as the CLI's `task edit` re-lint surfaces it.
 		if msg.err != nil {
 			m.flash, m.flashErr = "editor: "+msg.err.Error(), true
 			return m, nil

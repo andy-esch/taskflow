@@ -22,7 +22,7 @@ import (
 type TaskJSON struct {
 	ID     string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key that survives slug and status changes; absent on tasks created before id assignment"`
 	Slug   string `json:"slug" jsonschema:"description=task slug (filename without .md) — the human handle"`
-	Status string `json:"status" jsonschema:"description=lifecycle status — authoritative, read from frontmatter (ADR-0003); may differ from the directory on a misfiled file"`
+	Status string `json:"status" jsonschema:"description=lifecycle status — authoritative, read from frontmatter (ADR-0003 §4)"`
 	Epic   string `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
 	// The "<=200" cap can't be computed (struct tags are static literals) — the only
 	// hardcoded copy of domain.MaxDescriptionLen left. Kept honest by

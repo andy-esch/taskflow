@@ -11,21 +11,17 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/andy-esch/taskflow/internal/domain"
-	"github.com/andy-esch/taskflow/internal/id"
 )
 
 // FixFrontmatter walks every task, epic, and audit file and applies safe repairs:
 // text-level frontmatter normalization (quote unquoted-colon values, normalize
-// list fields) and — for tasks and audits — backfilling a missing stable id,
-// minted from the entity's own date so it sorts near its real age. Epics keep
-// their NN-slug identity and are text-normalized only. Under the flat layout
-// (ADR-0003 §4) there is no relocation: a bad status/bucket is lint-flagged, not
-// moved. When dryRun is true nothing is written.
+// list fields) and — for tasks and audits — backfilling a missing stable id from
+// the id that already leads the flat filename (ADR-0003 §4), so the frontmatter
+// copy can never drift from the name. Epics keep their NN-slug identity and are
+// text-normalized only. Under the flat layout there is no relocation: a bad
+// status/bucket is lint-flagged, not moved. When dryRun is true nothing is written.
 func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	var results []domain.FixResult
-	// Every id already on disk, so a backfill never re-mints one; mintUniqueID adds
-	// each id it assigns, so same-date entities in this run stay distinct too.
-	seen := s.knownIDs()
 	fixDir := func(dir string, backfill bool) error {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -45,7 +41,7 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 			}
 			fixed, changes := fixFrontmatterText(content)
 			if backfill {
-				withID, ok, err := backfillMissingID(fixed, e.Name(), seen)
+				withID, ok, err := backfillMissingID(fixed, e.Name())
 				if err != nil {
 					return err
 				}
@@ -99,51 +95,19 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	return results, nil
 }
 
-// knownIDs gathers every stable id already assigned across tasks and audits so a
-// backfill never mints a duplicate. Best-effort: a listing error yields a partial
-// set — mintUniqueID's per-run tracking still prevents new-vs-new collisions.
-func (s *FS) knownIDs() map[string]bool {
-	seen := map[string]bool{}
-	if tasks, _, err := s.ListTasks(); err == nil {
-		for _, t := range tasks {
-			if t.ID != "" {
-				seen[t.ID] = true
-			}
-		}
-	}
-	if audits, _, err := s.ListAudits(); err == nil {
-		for _, a := range audits {
-			if a.ID != "" {
-				seen[a.ID] = true
-			}
-		}
-	}
-	return seen
-}
-
-// backfillMissingID appends a stable id to a file whose frontmatter lacks one,
-// timestamping it from the entity's own date so a backfilled id sorts near its
-// real age. Date sources, in preference order: the created field, then date, then
-// the activity/lifecycle stamps (updated_at, then started/completed/deferred/
-// deprecated_at), and finally a YYYY-MM-DD prefix on the file name (the historical
-// task/audit naming convention) when the frontmatter carries no date at all. It's
-// a no-op (ok=false) when the file already has an id, has no usable date anywhere,
-// or won't parse — the re-lint after `--fix` re-flags any id still missing. seen
-// dedups against every id already present or assigned this run.
-func backfillMissingID(content []byte, filename string, seen map[string]bool) ([]byte, bool, error) {
+// backfillMissingID fills a task/audit's frontmatter `id:` from the id that already
+// leads its flat filename (<id>-<slug>.md) when the frontmatter carries none — the
+// canonical key resolveID/CAS match on, so the two can never drift (IDDriftIssue).
+// It's a no-op (ok=false) when the file already has an id, is unparseable, or has a
+// name that is not id-led — a non-entity stray the scan gate flags for the operator
+// to move to meta/ (minting an id into its frontmatter wouldn't make it an entity).
+func backfillMissingID(content []byte, filename string) ([]byte, bool, error) {
 	fm, _ := splitFrontmatter(content)
 	if len(fm) == 0 {
 		return content, false, nil
 	}
 	var meta struct {
-		ID         string `yaml:"id"`
-		Created    string `yaml:"created"`
-		Date       string `yaml:"date"`
-		Updated    string `yaml:"updated_at"`
-		Started    string `yaml:"started_at"`
-		Completed  string `yaml:"completed_at"`
-		Deferred   string `yaml:"deferred_at"`
-		Deprecated string `yaml:"deprecated_at"`
+		ID string `yaml:"id"`
 	}
 	if yaml.Unmarshal(fm, &meta) != nil {
 		return content, false, nil // unparseable — the text fixer / re-lint handles it
@@ -151,70 +115,15 @@ func backfillMissingID(content []byte, filename string, seen map[string]bool) ([
 	if strings.TrimSpace(meta.ID) != "" {
 		return content, false, nil // already has one
 	}
-	// Preference: birth date first, then the last-activity/lifecycle stamps — an
-	// archived task may carry only a completed_at/deprecated_at, which still dates
-	// the id better than nothing.
-	millis, ok := firstDateMillis(meta.Created, meta.Date, meta.Updated,
-		meta.Started, meta.Completed, meta.Deferred, meta.Deprecated)
+	fnID, _, ok := splitFlatName(strings.TrimSuffix(filename, ".md"))
 	if !ok {
-		// No frontmatter date — fall back to a YYYY-MM-DD prefix on the file name,
-		// the historical task/audit naming convention, before giving up.
-		millis, ok = firstDateMillis(dateFromFilename(filename))
+		return content, false, nil // not id-led — a stray, not an entity to backfill
 	}
-	if !ok {
-		return content, false, nil // no usable date anywhere to derive the id's timestamp from
-	}
-	newID, ok := mintUniqueID(millis, seen, id.NewAt)
-	if !ok {
-		return content, false, nil
-	}
-	out, err := updateFrontmatter(content, map[string]any{"id": newID})
+	out, err := updateFrontmatter(content, map[string]any{"id": fnID})
 	if err != nil {
 		return nil, false, err
 	}
 	return out, true, nil
-}
-
-// dateFromFilename returns the leading YYYY-MM-DD of a date-prefixed file name
-// (e.g. "2025-10-19-slug.md"), or "" when the name doesn't begin with one — the
-// filename-date fallback backfillMissingID uses when the frontmatter has no date.
-func dateFromFilename(name string) string {
-	if len(name) < 10 {
-		return ""
-	}
-	if _, err := time.Parse("2006-01-02", name[:10]); err != nil {
-		return ""
-	}
-	return name[:10]
-}
-
-// firstDateMillis returns the UTC-midnight Unix millis of the first parseable
-// YYYY-MM-DD among candidates (in preference order), false when none parse.
-func firstDateMillis(candidates ...string) (int64, bool) {
-	for _, d := range candidates {
-		if d = strings.TrimSpace(d); d == "" {
-			continue
-		}
-		if t, err := time.Parse("2006-01-02", d); err == nil {
-			return t.UnixMilli(), true
-		}
-	}
-	return 0, false
-}
-
-// mintUniqueID mints an id stamped at millis, re-rolling until it avoids every id
-// in seen. id.NewAt is stateless-random, so each retry re-rolls the 17-bit tail;
-// the cap guards a pathological generator (unreachable with real entropy). The
-// returned id is recorded in seen.
-func mintUniqueID(millis int64, seen map[string]bool, gen func(int64) string) (string, bool) {
-	for i := 0; i < 64; i++ {
-		v := gen(millis)
-		if !seen[v] {
-			seen[v] = true
-			return v, true
-		}
-	}
-	return "", false
 }
 
 // fixFrontmatterText normalizes a file's frontmatter at the TEXT level — it must

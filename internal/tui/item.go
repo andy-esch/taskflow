@@ -60,8 +60,9 @@ func (i taskItem) sortFields() sortFields {
 	return sortFields{priorityRank: priorityRank(i.t.Priority), updated: i.t.Updated, tier: i.t.Tier, slug: i.t.Slug}
 }
 
-// taskDelegate renders one task row: colored status glyph, a ⚠ if misfiled, the
-// slug, and a dim relative date — truncated to fit the list width.
+// taskDelegate renders one task row: colored status glyph, a ↻ marker when a
+// deferred task's revisit date has arrived, the slug, and a dim relative date —
+// truncated to fit the list width.
 type taskDelegate struct{ st *styles }
 
 func (taskDelegate) Height() int                         { return 1 }

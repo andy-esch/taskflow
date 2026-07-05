@@ -83,6 +83,38 @@ func TestFrontmatterBucketIssues(t *testing.T) {
 	}
 }
 
+func TestEpicNameIssue(t *testing.T) {
+	// NN-<slug> names (any digit width) are clean.
+	for _, ok := range []string{"00-taskflow-v1-core", "01-backend", "27-x", "100-scale"} {
+		if got := EpicNameIssue(ok); len(got) != 0 {
+			t.Errorf("%q is a valid NN- name, must not be flagged: %+v", ok, got)
+		}
+	}
+	// Non-NN names are flagged (fail-open: flagged, not dropped).
+	for _, bad := range []string{"taskflow-v1-core", "demo", "e1", "1-unpadded"} {
+		if got := EpicNameIssue(bad); len(got) == 0 {
+			t.Errorf("%q is not NN-<slug> and must be flagged", bad)
+		}
+	}
+}
+
+func TestIDDriftIssue(t *testing.T) {
+	// The frontmatter id and the filename id disagree — flagged.
+	if got := IDDriftIssue("6fjangd7kvzz", "6fjangd7kvaa"); len(got) == 0 {
+		t.Error("a frontmatter id that disagrees with the filename id must be flagged")
+	}
+	// Matching ids (the post-flatten norm) — clean.
+	if got := IDDriftIssue("6fjangd7kvaa", "6fjangd7kvaa"); len(got) != 0 {
+		t.Errorf("matching ids must not be flagged: %+v", got)
+	}
+	// An empty or whitespace-only side is left to MissingIDIssue, not double-reported here.
+	for _, blank := range []string{"", "   "} {
+		if got := IDDriftIssue(blank, "6fjangd7kvaa"); len(got) != 0 {
+			t.Errorf("a blank frontmatter id (%q) is MissingIDIssue's job, not drift: %+v", blank, got)
+		}
+	}
+}
+
 func cleanEpic() Epic {
 	return Epic{ID: "20-good", Status: "active", Priority: "high", Description: "a goal"}
 }

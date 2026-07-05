@@ -32,7 +32,7 @@ everything that uses the old set.
   `completed`).
 - **deprecated** — thought it'd be useful, wasn't, or was replaced (folds the old
   `archived`; a **superseded** epic is just `deprecated` with a "superseded by X"
-  note in its description — e.g. `taskflow-v1-core` — NOT a separate state).
+  note in its description — e.g. `00-taskflow-v1-core` — NOT a separate state).
 
 Old → new migration map: `planning`→active, `in-progress`→active,
 `completed`→retired, `archived`→deprecated.

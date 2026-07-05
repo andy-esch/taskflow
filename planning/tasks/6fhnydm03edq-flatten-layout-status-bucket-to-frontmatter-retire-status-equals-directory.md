@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: Move status/bucket into frontmatter as source of truth and flatten tasks/audits to one dir each (id-led filenames); update store, layout, WatchPaths, resolution, completion. Per ADR-0003.
 effort: Unknown
@@ -9,9 +9,10 @@ priority: high
 autonomy_level: 3
 tags: [core, storage]
 created: "2026-07-01"
-updated_at: "2026-07-04"
+updated_at: "2026-07-05"
 id: 6fhnydm03edq
 started_at: "2026-07-03"
+completed_at: "2026-07-05"
 ---
 # Flatten the layout — Phase B: id-led flat files, retire status == directory
 
@@ -198,3 +199,26 @@ Fold into the sequenced steps:
 
 Net: no new warning tier, no `schema_version` bump for carveouts — strays ride the existing
 `FileProblem` channel.
+
+## Landed (2026-07-05) — all 8 steps + follow-ups shipped
+
+Phase B is complete. All 8 sequenced steps landed green (build/test/lint); the
+directory-mirror concept is fully deleted (Misfiled/FolderStatus/*FellBack-fallback,
+misfiled wire fields, schema_version 1.25→1.26, goldens + docs regenerated).
+
+- **Migration run** on both planning trees — this repo (199 renames, byte-identical)
+  and desirelines (727 renames + 103 link rewrites + HOWTO→meta sweep); both lint clean.
+  See [[one-time-migration-script-this-repo-desirelines]].
+- **Docs** (step 8): ARCHITECTURE.md + CLAUDE.md retired the `status == directory` mirror
+  language; desirelines `routines/` repointed to the flat / `meta/` paths.
+- **Follow-ups (post-migration, unblocked by it):**
+  - **Trap #2 (filename-id vs frontmatter-id drift):** a drift lint (`IDDriftIssue`) now
+    flags a frontmatter `id:` that disagrees with the filename; `lint --fix` backfills a
+    missing id FROM the filename (canonical), letting the date-mint backfill machinery be
+    deleted. Simplified [[backfill-ids-into-existing-tasks-and-audits-via-lint-fix]].
+  - **Epic NN- carveout gate:** fail-open lint flag for a non-`NN-<slug>` epic; the one
+    legacy non-NN epic was renamed `00-taskflow-v1-core`. Folds into
+    [[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]].
+
+Remaining (own task, not blocking): scheme-2 wikilink→markdown + rename-verb + dangler
+lint — [[scheme-2-references-and-rename-verb-with-link-cascade]].

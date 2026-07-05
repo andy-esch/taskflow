@@ -1,6 +1,6 @@
 ---
 status: deprecated
-epic: taskflow-v1-core
+epic: 00-taskflow-v1-core
 effort: 1-2 hours
 tier: 2
 priority: medium

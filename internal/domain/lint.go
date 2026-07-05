@@ -2,9 +2,26 @@ package domain
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
+
+// standardEpicNameRe matches the epic filename convention NN-<slug> (a zero-padded
+// number, 2+ digits, then a dash). Epics are ordered by that number (epicNum) and
+// read consistently when every stem carries it; a name without it still lists and
+// resolves (fail-open) but is lint-flagged (EpicNameIssue).
+var standardEpicNameRe = regexp.MustCompile(`^\d{2,}-`)
+
+// EpicNameIssue flags an epic whose filename stem does not follow the NN-<slug>
+// convention. Fail-open, like FrontmatterStatusIssues: the epic is untouched and
+// still usable, the name is just called out for a rename.
+func EpicNameIssue(id string) []Issue {
+	if standardEpicNameRe.MatchString(id) {
+		return nil
+	}
+	return []Issue{{Field: "filename", Message: fmt.Sprintf("epic filename %q should be NN-<slug> (a zero-padded number) — rename it so epics order consistently", id)}}
+}
 
 // Issue is a single frontmatter lint finding.
 type Issue struct {
@@ -69,6 +86,7 @@ func LintTask(t Task, validEpic func(string) bool) []Issue {
 
 	issues = append(issues, FrontmatterStatusIssues(t)...)
 	issues = append(issues, MissingIDIssue(t.ID)...)
+	issues = append(issues, IDDriftIssue(t.ID, t.FilenameID)...)
 	return issues
 }
 
@@ -94,17 +112,26 @@ func MissingIDIssue(id string) []Issue {
 	return []Issue{{Field: "id", Message: MissingIDMessage}}
 }
 
-// MissingIDMessage is the plain-lint wording for an entity with no stable id yet —
-// before `--fix` has had a chance to backfill one. Exported so the fix flow can
-// recognize this exact finding among leftovers and restate it (see
-// UnrepairedIDMessage) without matching on the loosely-shared "id" field.
-const MissingIDMessage = "missing stable id — `lint --fix` assigns one"
+// IDDriftIssue flags a frontmatter `id:` that disagrees with the id in the flat
+// filename (filenameID — the canonical key resolveID/CAS match on). Post-flatten the
+// two are minted together and kept in lock-step, so a hand-edit to one but not the
+// other is a silent drift that would make the frontmatter id lie about the file it
+// names — surfaced in ANY status, like MissingIDIssue. An empty side is left to
+// MissingIDIssue / the id-led scan gate, not double-reported here.
+func IDDriftIssue(frontmatterID, filenameID string) []Issue {
+	// A blank or whitespace-only frontmatter id is MissingIDIssue's job (it trims too),
+	// so defer to it rather than double-reporting the same file as both missing AND drifted.
+	if strings.TrimSpace(frontmatterID) == "" || filenameID == "" || frontmatterID == filenameID {
+		return nil
+	}
+	return []Issue{{Field: "id", Message: fmt.Sprintf("frontmatter id %q disagrees with the filename id %q — rename the file or fix the field", frontmatterID, filenameID)}}
+}
 
-// UnrepairedIDMessage restates a missing-id finding that survived `lint --fix`:
-// the backfiller found no date to mint an id from (no created/…/deprecated_at
-// field and no YYYY-MM-DD filename prefix), so plain lint's "assigns one" wording
-// would misdirect — the fix already ran. The fix flow swaps in this remedy.
-const UnrepairedIDMessage = "no date to mint an id from — add a `created: YYYY-MM-DD` field (or a YYYY-MM-DD- filename prefix), then re-run `lint --fix`"
+// MissingIDMessage is the lint wording for an id-led entity whose frontmatter `id:`
+// is absent — a copy of the id already in its filename that `lint --fix` fills in
+// (backfillMissingID). Post-flatten the filename always carries the id, so --fix can
+// always repair this; there is no "unrepairable id" state to restate.
+const MissingIDMessage = "missing stable id — `lint --fix` assigns one"
 
 // LintEpic returns the frontmatter issues for an epic. Mirrors LintTask, but
 // epics have no validEpic dependency (they're the join target, not a referrer)
@@ -116,6 +143,10 @@ func LintEpic(e Epic) []Issue {
 	var issues []Issue
 	add := func(field, msg string) { issues = append(issues, Issue{Field: field, Message: msg}) }
 
+	// Always (like the status check): the filename must follow the NN-<slug>
+	// convention. Applies regardless of active/deprecated, since a stray-named epic
+	// mis-orders the roster either way.
+	issues = append(issues, EpicNameIssue(e.ID)...)
 	// Always: the status must be in the closed vocabulary. Files predating the
 	// enum (or hand-edited ones) surface here regardless of active/deprecated.
 	if err := ValidateEpicStatus(e.Status); err != nil {
