@@ -368,7 +368,11 @@ func removeEmptySubdirs(dir string) {
 			continue
 		}
 		sub := filepath.Join(dir, e.Name())
-		_ = os.Remove(filepath.Join(sub, ".gitkeep"))
+		// Drop known cruft so an otherwise-drained status/bucket dir can be removed;
+		// a subdir that still holds real files is left for the operator to inspect.
+		for _, cruft := range []string{".gitkeep", ".DS_Store"} {
+			_ = os.Remove(filepath.Join(sub, cruft))
+		}
 		_ = os.Remove(sub) // no-op unless now empty
 	}
 }
