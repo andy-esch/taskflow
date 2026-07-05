@@ -2,9 +2,25 @@ package domain
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
+
+// epicNumberRe matches the leading number of an epic id/stem (`24` in `24-data-model-x`).
+var epicNumberRe = regexp.MustCompile(`^\d+`)
+
+// EpicRefKey is the stable key an `epic:` reference resolves on: the leading NN number
+// of the id/stem (ADR-0003 "Scheme 2" — the slug suffix travels for readability but is
+// NOT matched, so re-titling an epic never orphans the tasks that point at it). A ref
+// with no leading number keys on its whole self — an exact-match fallback for a legacy
+// non-NN stem.
+func EpicRefKey(ref string) string {
+	if n := epicNumberRe.FindString(ref); n != "" {
+		return n
+	}
+	return ref
+}
 
 // Epic is a long-lived domain goal. Tasks reference it by ID via their
 // `epic:` field. Epics live flat in epics/<id>.md (no status directories;

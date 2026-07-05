@@ -64,8 +64,9 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 }
 
 func epicExists(epics []domain.Epic, id string) bool {
+	key := domain.EpicRefKey(id)
 	for _, e := range epics {
-		if e.ID == id {
+		if domain.EpicRefKey(e.ID) == key {
 			return true
 		}
 	}
@@ -153,11 +154,12 @@ func (s *Service) ListEpics() ([]EpicSummary, []domain.FileProblem, error) {
 func rollupEpics(epics []domain.Epic, tasks []domain.Task) []EpicSummary {
 	byEpic := make(map[string][]domain.Task, len(epics))
 	for _, t := range tasks {
-		byEpic[t.Epic] = append(byEpic[t.Epic], t)
+		k := domain.EpicRefKey(t.Epic)
+		byEpic[k] = append(byEpic[k], t)
 	}
 	out := make([]EpicSummary, len(epics))
 	for i, e := range epics {
-		out[i] = rollupEpic(e, byEpic[e.ID])
+		out[i] = rollupEpic(e, byEpic[domain.EpicRefKey(e.ID)])
 	}
 	return out
 }
@@ -356,8 +358,9 @@ func (s *Service) ShowEpic(id string) (EpicSummary, []domain.Task, string, error
 		return EpicSummary{}, nil, "", err
 	}
 	var its []domain.Task
+	key := domain.EpicRefKey(epic.ID) // join on the resolved epic's NN key, not the raw query
 	for _, t := range tasks {
-		if t.Epic == id {
+		if domain.EpicRefKey(t.Epic) == key {
 			its = append(its, t)
 		}
 	}

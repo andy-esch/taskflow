@@ -233,6 +233,38 @@ func TestService_ListEpics_Rollup(t *testing.T) {
 	}
 }
 
+// TestService_EpicRollup_ResolvesOnNNPrefix pins the Scheme-2 join: an `epic:` ref
+// resolves on the leading NN, so a task pointing at a stale slug (or a bare NN) still
+// rolls up onto the epic — in both ListEpics and ShowEpic's roster (the fix for the
+// empty-roster-on-prefix bug).
+func TestService_EpicRollup_ResolvesOnNNPrefix(t *testing.T) {
+	svc := NewService(&fakeStore{
+		epics: []domain.Epic{{ID: "24-data-model", Status: "active"}},
+		tasks: []domain.Task{
+			{Slug: "a", Epic: "24-data-model", Status: domain.StatusCompleted},
+			{Slug: "b", Epic: "24-old-slug", Status: domain.StatusReadyToStart}, // slug drifted; same NN
+			{Slug: "c", Epic: "24", Status: domain.StatusReadyToStart},          // bare NN ref
+		},
+	})
+
+	sums, _, err := svc.ListEpics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sums) != 1 || sums[0].Total != 3 || sums[0].Done != 1 {
+		t.Fatalf("rollup should join all 3 refs by NN key, got %+v", sums)
+	}
+
+	// ShowEpic's roster joins the same way (this string-mismatch was the empty-roster bug).
+	_, its, _, err := svc.ShowEpic("24-data-model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(its) != 3 {
+		t.Errorf("ShowEpic roster should join all 3 refs, got %d", len(its))
+	}
+}
+
 // TestService_ListEpics_ExcludesDeprecated: deprecated (withdrawn) tasks leave
 // total/done and are counted separately in Deprecated; deferred ("not now")
 // stays in total as real pending work.
