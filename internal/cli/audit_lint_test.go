@@ -4,26 +4,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // A dirty audit (a closed audit with a still-open finding) makes `audit lint`
 // exit 11 — the agent-routable contract, mirroring `lint`.
 func TestAuditLint_DirtyExits11(t *testing.T) {
 	root := setupRepo(t)
-	dir := filepath.Join(root, "audits", "closed")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	body := "---\narea: x\ndate: 2026-01-01\n---\n#### S1. t\n**Status:** open\n"
-	if err := os.WriteFile(filepath.Join(dir, "2026-01-01-x.md"), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	p, content := testutil.AuditFixture(root, "closed", "2026-01-01-x.md", body)
+	testutil.Write(t, p, content)
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "audit", "lint"})
@@ -46,13 +40,8 @@ func TestAuditLint_CleanPasses(t *testing.T) {
 // audit lint --json emits the shared lint envelope with per-audit finding issues.
 func TestAuditLint_JSON(t *testing.T) {
 	root := setupRepo(t)
-	dir := filepath.Join(root, "audits", "closed")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "2026-01-01-x.md"), []byte("---\narea: x\ndate: 2026-01-01\n---\n#### S1. t\n**Status:** opne\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	p, content := testutil.AuditFixture(root, "closed", "2026-01-01-x.md", "---\narea: x\ndate: 2026-01-01\n---\n#### S1. t\n**Status:** opne\n")
+	testutil.Write(t, p, content)
 	out, err := runRootRC(t, "-C", root, "--json", "audit", "lint")
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("dirty audit lint --json should still exit 11, got %v", err)

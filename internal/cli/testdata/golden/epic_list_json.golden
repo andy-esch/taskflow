@@ -1,1 +1,1 @@
-{"schema_version":"1.25","epics":[{"id":"01-fixture-epic","status":"active","description":"A fixture epic for golden snapshots","priority":"high","created":"2026-01-01","tags":["fixture"],"total":3,"done":1,"open":2,"percent":33,"deprecated":0,"liveness":"working"}]}
+{"schema_version":"1.26","epics":[{"id":"01-fixture-epic","status":"active","description":"A fixture epic for golden snapshots","priority":"high","created":"2026-01-01","tags":["fixture"],"total":3,"done":1,"open":2,"percent":33,"deprecated":0,"liveness":"working"}]}

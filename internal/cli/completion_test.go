@@ -40,7 +40,7 @@ func TestComplete_TaskSlugs_IncludesMalformed(t *testing.T) {
 	root := setupRepo(t) // alpha (ready-to-start), beta (in-progress)
 	// A file whose frontmatter doesn't parse must still complete — you complete
 	// it precisely to go fix it. (No YAML is parsed for completion.)
-	mustWrite(t, filepath.Join(root, "tasks", "ready-to-start", "broken.md"), "tags: a,b,c NOT yaml\n")
+	mustWrite(t, filepath.Join(root, "tasks", testutil.TaskID("broken")+"-broken.md"), "tags: a,b,c NOT yaml\n")
 
 	got := complete(t, "-C", root, "task", "show", "")
 	for _, want := range []string{"alpha", "beta", "broken"} {
@@ -71,7 +71,8 @@ func TestComplete_TaskSlugs_DropsAlreadyTyped(t *testing.T) {
 
 func TestComplete_AuditAndEpic(t *testing.T) {
 	root := setupRepo(t)
-	mustWrite(t, filepath.Join(root, "audits", "open", "aud-sec.md"), "---\narea: x\n---\n")
+	auditPath, auditContent := testutil.AuditFixture(root, "open", "aud-sec.md", "---\narea: x\n---\n")
+	mustWrite(t, auditPath, auditContent)
 	mustWrite(t, filepath.Join(root, "epics", "17-pm.md"), "---\nstatus: active\n---\n")
 
 	if got := complete(t, "-C", root, "audit", "close", ""); !has(got, "aud-sec") {
@@ -97,8 +98,10 @@ func TestComplete_StatusAware_TaskTransitions(t *testing.T) {
 
 func TestComplete_StatusAware_AuditBuckets(t *testing.T) {
 	root := setupRepo(t)
-	mustWrite(t, filepath.Join(root, "audits", "open", "o.md"), "---\narea: x\n---\n")
-	mustWrite(t, filepath.Join(root, "audits", "closed", "c.md"), "---\narea: y\n---\n")
+	openPath, openContent := testutil.AuditFixture(root, "open", "o.md", "---\narea: x\n---\n")
+	mustWrite(t, openPath, openContent)
+	closedPath, closedContent := testutil.AuditFixture(root, "closed", "c.md", "---\narea: y\n---\n")
+	mustWrite(t, closedPath, closedContent)
 
 	// `close` → closed: should NOT offer the already-closed c.
 	if got := complete(t, "-C", root, "audit", "close", ""); !has(got, "o") || has(got, "c") {

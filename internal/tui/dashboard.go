@@ -147,18 +147,14 @@ func (d *dashboard) setSummary(s core.Summary, st *styles) {
 		}
 	}
 
-	// Needs attention — misfiled tasks, the open-audit queue, and unreadable files.
+	// Needs attention — the open/ready-to-close audit queue, epics with a non-conforming
+	// status, and unreadable files.
 	// Under a non-specific heading a bare count says nothing, so every row names its
 	// own category and wears its entity's glyph (the audit ◆ matches the audits tab);
 	// "all clear" when there's nothing.
 	blank()
 	head("needs attention")
 	allClear := true
-	if s.Misfiled > 0 {
-		nav(st.glyph(theme.MarkerWarn)+fmt.Sprintf(" %d misfiled task(s) (folder ≠ status)", s.Misfiled),
-			dashTarget{kind: entityTasks, view: "all"})
-		allClear = false
-	}
 	if n := len(s.OpenAudits); n > 0 {
 		nav(st.glyph(theme.Bucket(domain.AuditOpen))+fmt.Sprintf(" %d open audit(s)", n), dashTarget{kind: entityAudits})
 		allClear = false

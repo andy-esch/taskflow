@@ -50,7 +50,7 @@ func assertColumns(t *testing.T, row string, parts ...string) {
 	}
 }
 
-// A task row: status glyph, slug, relative date — in that order — and NO misfiled ⚠.
+// A task row: status glyph, slug, relative date — in that order.
 func TestTaskDelegateRow(t *testing.T) {
 	task := domain.Task{Slug: "alpha", Status: domain.StatusInProgress, Updated: "2020-01-02"}
 	row := renderDelegateRow(t, taskDelegate{st: &testStyles}, taskItem{t: task}, 80)
@@ -60,20 +60,6 @@ func TestTaskDelegateRow(t *testing.T) {
 		t.Fatal("setup: expected a non-empty relative date")
 	}
 	assertColumns(t, row, theme.Status(domain.StatusInProgress).Glyph, "alpha", wantDate)
-	if strings.Contains(row, theme.MarkerWarn.Glyph) {
-		t.Errorf("a well-filed task should not show the misfiled ⚠:\n%q", row)
-	}
-}
-
-// A misfiled task (frontmatter status ≠ its directory) shows the ⚠ marker between the
-// status glyph and the slug — the data-integrity cue.
-func TestTaskDelegateRow_Misfiled(t *testing.T) {
-	task := domain.Task{Slug: "beta", Status: domain.StatusInProgress, FolderStatus: domain.StatusReadyToStart, Updated: "2020-01-02"}
-	if !task.Misfiled() {
-		t.Fatal("setup: task should be misfiled")
-	}
-	row := renderDelegateRow(t, taskDelegate{st: &testStyles}, taskItem{t: task}, 80)
-	assertColumns(t, row, theme.Status(domain.StatusInProgress).Glyph, theme.MarkerWarn.Glyph, "beta")
 }
 
 // An epic row: liveness glyph, rollup bar, colored percent, done/total, id, dim

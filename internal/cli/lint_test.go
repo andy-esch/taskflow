@@ -6,43 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
-
-// TestLint_DuplicateSlug_Exit11 pins M11 end-to-end: the same slug in two status
-// dirs (the Ctrl-C-in-Move leftover) makes `lint` exit 11 and name both dirs, so
-// the otherwise-silent permanent ErrAmbiguous is discoverable and hand-repairable.
-func TestLint_DuplicateSlug_Exit11(t *testing.T) {
-	root := t.TempDir()
-	write := func(rel, content string) {
-		p := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	// Both copies folder-matching (the Move-crash shape): only the duplicate is wrong.
-	// The seeded epic must itself be lint-clean (priority + description), or it would
-	// fail lint too and the duplicate wouldn't be the SOLE failure exit 11 keys off.
-	write("tasks/in-progress/dup.md", "---\nstatus: in-progress\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# Dup\n")
-	write("tasks/completed/dup.md", "---\nstatus: completed\n---\n# Dup\n")
-	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
-
-	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
-	cmd.SetArgs([]string{"-C", root, "lint"})
-	err := cmd.Execute()
-	if err == nil {
-		t.Fatal("a duplicate slug should fail lint")
-	}
-	if ExitCode(err) != 11 {
-		t.Errorf("want exit 11 for a duplicate slug, got %d", ExitCode(err))
-	}
-	if o := out.String(); !strings.Contains(o, "duplicate") || !strings.Contains(o, "dup") {
-		t.Errorf("lint should name the duplicate slug:\n%s", o)
-	}
-}
 
 // TestLint_EpicSoleFailure pins the end-to-end epic-lint path: a clean task plus
 // an active epic missing its required fields makes `lint` exit 11 and name the
@@ -61,9 +27,10 @@ func TestLint_EpicSoleFailure(t *testing.T) {
 	}
 	// The task is fully lint-clean; the epic is the SOLE failure (active, but missing
 	// the required priority + description).
-	write("epics/e1.md", "---\nstatus: active\n---\n# E1\n")
-	write("tasks/ready-to-start/good.md",
-		"---\nid: 6fjangd7kvh0\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
+	write("epics/01-e1.md", "---\nstatus: active\n---\n# E1\n")
+	goodPath, goodOut := testutil.TaskFixture(root, "ready-to-start", "good.md",
+		"---\nid: "+testutil.TaskID("good")+"\nstatus: ready-to-start\nepic: 01-e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
+	testutil.Write(t, goodPath, goodOut)
 
 	var out bytes.Buffer
 	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
@@ -97,13 +64,45 @@ func TestLint_Clean(t *testing.T) {
 	}
 	// The epic must itself be lint-clean now (status + priority + description),
 	// or `lint` would flag it and never report a pass.
-	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
-	write("tasks/ready-to-start/good.md",
-		"---\nid: 6fjangd7kvh0\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
+	write("epics/01-e1.md", "---\nstatus: active\npriority: high\ndescription: the epic\n---\n# E1\n")
+	goodPath, goodOut := testutil.TaskFixture(root, "ready-to-start", "good.md",
+		"---\nid: "+testutil.TaskID("good")+"\nstatus: ready-to-start\nepic: 01-e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-01\ntags: [a]\n---\n# Good\n")
+	testutil.Write(t, goodPath, goodOut)
 
 	out := runRoot(t, "-C", root, "lint")
 	if !strings.Contains(out, "pass lint") {
 		t.Errorf("expected pass, got: %q", out)
+	}
+}
+
+// TestLint_FlagsNonNNEpicFailOpen pins the epic NN- gate end-to-end: a non-NN-<slug>
+// epic is lint-flagged (exit 11, naming the convention) yet STILL lists/resolves — the
+// fail-open contract, not a dropped FileProblem.
+func TestLint_FlagsNonNNEpicFailOpen(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("tasks/.gitkeep", "") // anchor discovery
+	// Otherwise lint-clean (status/priority/description) so the NN- name is the sole issue.
+	write("epics/legacy-epic.md", "---\nstatus: active\npriority: high\ndescription: the goal\n---\n# Legacy\n")
+
+	out, err := runRootRC(t, "-C", root, "lint")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("a non-NN epic must fail lint (exit 11), got %v", err)
+	}
+	if !strings.Contains(out, "legacy-epic") || !strings.Contains(out, "NN-") {
+		t.Errorf("lint should name the epic and the NN- convention:\n%s", out)
+	}
+	// Fail-open: still lists/resolves despite the flag.
+	if list := runRoot(t, "-C", root, "epic", "list", "-q"); !strings.Contains(list, "legacy-epic") {
+		t.Errorf("a non-NN epic must still list (fail-open), got:\n%s", list)
 	}
 }
 
@@ -125,8 +124,9 @@ func TestLint_Dirty_Exit11(t *testing.T) {
 	}
 }
 
-// A task with NO frontmatter status falls back to the folder (still lists) but is flagged
-// — frontmatter is now authoritative, so a missing/foreign status is a real defect.
+// A task with NO frontmatter status still lists (raw status) but is flagged —
+// frontmatter is authoritative under the flat layout, so a missing/unrecognized
+// status is a real defect (StatusFellBack), not a silent folder fallback.
 func TestLint_FlagsMissingFrontmatterStatus(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, content string) {
@@ -138,9 +138,13 @@ func TestLint_FlagsMissingFrontmatterStatus(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("epics/e1.md", "---\nstatus: active\npriority: high\ndescription: e\n---\n# E1\n")
-	write("tasks/next-up/x.md",
-		"---\nid: 6fjangd7kvca\nepic: e1\ntier: 3\npriority: high\neffort: x\ncreated: 2026-06-09\ntags: [a]\ndescription: d\n---\n# x\n")
+	write("epics/01-e1.md", "---\nstatus: active\npriority: high\ndescription: e\n---\n# E1\n")
+	// A raw flat id-led path with NO status in frontmatter (TaskFixture would inject
+	// one; here the missing status is the whole point).
+	xPath := filepath.Join(root, "tasks", testutil.TaskID("x")+"-x.md")
+	testutil.Write(t,
+		xPath,
+		"---\nid: 6fjangd7kvca\nepic: 01-e1\ntier: 3\npriority: high\neffort: x\ncreated: 2026-06-09\ntags: [a]\ndescription: d\n---\n# x\n")
 
 	out, err := runRootRC(t, "-C", root, "lint")
 	if err == nil {
@@ -148,5 +152,35 @@ func TestLint_FlagsMissingFrontmatterStatus(t *testing.T) {
 	}
 	if !strings.Contains(out, "frontmatter status missing or unrecognized") {
 		t.Errorf("expected the missing-status flag:\n%s", out)
+	}
+}
+
+// TestLint_FlagsArchivedTaskIDDrift verifies that archived tasks with a drifted ID
+// in the frontmatter vs the filename are flagged by lint.
+func TestLint_FlagsArchivedTaskIDDrift(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("epics/01-e1.md", "---\nstatus: active\npriority: high\ndescription: e\n---\n# E1\n")
+
+	tID := testutil.TaskID("drifted")
+	xPath := filepath.Join(root, "tasks", tID+"-drifted.md")
+	testutil.Write(t,
+		xPath,
+		"---\nid: differentid12\nstatus: completed\nepic: 01-e1\ntier: 3\npriority: high\neffort: x\ncreated: 2026-06-09\ntags: [a]\ndescription: d\n---\n# drifted\n")
+
+	out, err := runRootRC(t, "-C", root, "lint")
+	if err == nil {
+		t.Error("lint must exit non-zero on a drifted task ID")
+	}
+	if !strings.Contains(out, "disagrees with the filename id") {
+		t.Errorf("expected the id-drift flag:\n%s", out)
 	}
 }

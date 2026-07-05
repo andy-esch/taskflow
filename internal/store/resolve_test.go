@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // fuzzyRepo seeds slugs chosen to exercise every resolution tier.
@@ -56,8 +57,9 @@ func TestResolve_FuzzyTiers(t *testing.T) {
 		t.Fatalf("ambiguous prefix should be ErrAmbiguous, got %v", err)
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "add-retry-backoff (ready-to-start)") ||
-		!strings.Contains(msg, "add-retry-jitter (in-progress)") {
+	// Flat candidates carry no status dir; the ambiguity list is `slug (id)`.
+	if !strings.Contains(msg, "add-retry-backoff") ||
+		!strings.Contains(msg, "add-retry-jitter") {
 		t.Errorf("the error should list located candidates, got %q", msg)
 	}
 	if strings.Index(msg, "add-retry-backoff") > strings.Index(msg, "add-retry-jitter") {
@@ -77,6 +79,8 @@ func TestResolve_FuzzyTiers(t *testing.T) {
 
 // TestMove_FuzzyKeepsCanonicalSlug pins the rename trap: moving by an
 // abbreviation must keep the file's full slug, not rename it to the query.
+// Under the flat layout the file never relocates — it stays at its original
+// id-led path and only its frontmatter status changes in place.
 func TestMove_FuzzyKeepsCanonicalSlug(t *testing.T) {
 	fs := fuzzyRepo(t)
 	task, err := fs.Move("backoff", domain.StatusInProgress, time.Now(), false)
@@ -86,10 +90,16 @@ func TestMove_FuzzyKeepsCanonicalSlug(t *testing.T) {
 	if task.Slug != "add-retry-backoff" {
 		t.Errorf("the returned task should carry the canonical slug, got %q", task.Slug)
 	}
-	if _, statErr := os.Stat(filepath.Join(fs.tasksDir, "in-progress", "add-retry-backoff.md")); statErr != nil {
-		t.Error("the moved file must keep its canonical filename")
+	canonical := filepath.Join(fs.tasksDir, testutil.TaskID("add-retry-backoff")+"-add-retry-backoff.md")
+	body, statErr := os.ReadFile(canonical)
+	if statErr != nil {
+		t.Fatal("the moved file must stay at its canonical flat path")
 	}
-	if _, statErr := os.Stat(filepath.Join(fs.tasksDir, "in-progress", "backoff.md")); statErr == nil {
+	if !strings.Contains(string(body), "status: in-progress") {
+		t.Errorf("the frontmatter status should change in place, got:\n%s", body)
+	}
+	abbrev := filepath.Join(fs.tasksDir, testutil.TaskID("backoff")+"-backoff.md")
+	if _, statErr := os.Stat(abbrev); statErr == nil {
 		t.Error("the file must NOT be renamed to the abbreviation")
 	}
 }
@@ -105,7 +115,8 @@ func TestResolveAuditAndEpic_Fuzzy(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("audits/open/2026-06-01-store-review.md", "---\narea: store\n---\n# A\n")
+	auditPath, auditContent := testutil.AuditFixture(root, "open", "2026-06-01-store-review.md", "---\narea: store\n---\n# A\n")
+	testutil.Write(t, auditPath, auditContent)
 	write("epics/17-pm-go-cli.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	write("epics/18-tui-browser.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	fs := NewFS(root)
@@ -125,7 +136,7 @@ func TestResolveAuditAndEpic_Fuzzy(t *testing.T) {
 // "**Status:** Open" counts as open (the guard still blocks "opened").
 func TestParseAudit_StatusCaseInsensitive(t *testing.T) {
 	body := "---\narea: x\n---\n# A\n\n#### H1. Finding\n**Status:** Open\n\n#### H2. Other\n**Status:** opened-question\n"
-	a, err := parseAudit([]byte(body), "audits/open/a.md", domain.AuditOpen)
+	a, err := parseAudit([]byte(body), "audits/0abcdef23456-a.md")
 	if err != nil {
 		t.Fatal(err)
 	}

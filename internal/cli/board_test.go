@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func TestBoard_Smoke(t *testing.T) {
@@ -28,7 +30,7 @@ func TestBoard_Smoke(t *testing.T) {
 func TestBoard_ExitsNonZeroOnUnreadableFiles(t *testing.T) {
 	root := setupRepo(t)
 	// A quoted-string tier fails the strict decode → a FileProblem.
-	mustWrite(t, filepath.Join(root, "tasks", "ready-to-start", "broken.md"),
+	mustWrite(t, filepath.Join(root, "tasks", testutil.TaskID("broken")+"-broken.md"),
 		"---\nstatus: ready-to-start\ntier: \"4\"\n---\n# Broken\n")
 	out, err := runRootRC(t, "-C", root, "board")
 	if err == nil {

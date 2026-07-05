@@ -78,7 +78,7 @@ func writeBody[T any](
 // (parse-before-accept, compare-and-swap, dry-run, body echo) lives in writeBody.
 // Returns the reloaded audit and the resulting (LF) body.
 func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error) {
-	path, bucket, err := s.resolveAudit(slug)
+	path, err := s.resolveAudit(slug)
 	if err != nil {
 		return domain.Audit{}, "", err
 	}
@@ -94,7 +94,7 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 	return writeBody(
 		"audit", path, content, appendSection(string(body), text),
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
-		func(c []byte) (domain.Audit, error) { return parseAudit(c, path, bucket) },
+		func(c []byte) (domain.Audit, error) { return parseAudit(c, path) },
 		s.writeLock,
 		// A concurrent bucket move (relocate) OR in-place edit during the read→write gap.
 		func() error {
@@ -110,7 +110,7 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 // comments, and key order survive) and updated_at is stamped. The shared write tail
 // lives in writeBody. Returns the reloaded task and the resulting (LF) body.
 func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error) {
-	path, st, err := s.resolve(slug)
+	path, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, "", err
 	}
@@ -130,7 +130,7 @@ func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun 
 	return writeBody(
 		"task", path, content, newBody,
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
-		func(c []byte) (domain.Task, error) { return parseTask(c, path, st) },
+		func(c []byte) (domain.Task, error) { return parseTask(c, path) },
 		s.writeLock,
 		func() error { return verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "edit") },
 		dryRun,

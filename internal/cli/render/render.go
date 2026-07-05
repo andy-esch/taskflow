@@ -31,13 +31,8 @@ func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
 		return nil
 	}
 	rows := make([][]string, 0, len(tasks))
-	misfiled := 0
 	for _, t := range tasks {
 		status := st.Status(t.Status)
-		if t.Misfiled() {
-			misfiled++
-			status = st.Warn("⚠ ") + status
-		}
 		updated := t.Updated
 		if updated == "" {
 			updated = t.Created
@@ -47,9 +42,6 @@ func TasksHuman(w io.Writer, st Style, tasks []domain.Task) error {
 	}
 	writeTable(w, st.width, []string{st.Dim("STATUS"), st.Dim("TASK"), st.Dim("UPDATED"), st.Dim("DESCRIPTION")}, rows)
 	fmt.Fprintf(w, "\n%s\n", st.Dim(plural(len(tasks), "task")))
-	if misfiled > 0 {
-		fmt.Fprintf(w, "%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (folder ≠ status; run `lint --fix` to relocate)", misfiled)))
-	}
 	return nil
 }
 
@@ -78,11 +70,7 @@ func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 		fmt.Fprintf(w, "%s %s\n", st.Dim(lbl), value)
 	}
 	field("slug", st.Bold(t.Slug))
-	status := st.Status(t.Status)
-	if t.Misfiled() {
-		status += "  " + st.Warn(fmt.Sprintf("⚠ filed in %s/", t.FolderStatus))
-	}
-	field("status", status)
+	field("status", st.Status(t.Status))
 	if t.Epic != "" {
 		field("epic", t.Epic)
 	}
@@ -239,9 +227,6 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 
 	if s.RevisitDue > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("↻ %d deferred due to revisit (snooze date reached; `task ready`/`task next` to resume)", s.RevisitDue)))
-	}
-	if s.Misfiled > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d misfiled (folder ≠ status; run `lint --fix`)", s.Misfiled)))
 	}
 	if s.BadEpicStatus > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d epic(s) with unrecognized status (set active/retired/deprecated; run `lint`)", s.BadEpicStatus)))

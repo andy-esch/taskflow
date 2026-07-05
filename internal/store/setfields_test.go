@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/testutil"
 	yaml "go.yaml.in/yaml/v3"
 )
 
@@ -26,7 +27,7 @@ func TestFS_SetFields(t *testing.T) {
 		t.Errorf("task not updated: %+v", task)
 	}
 
-	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "alpha.md"))
+	b, err := os.ReadFile(filepath.Join(root, "tasks", testutil.TaskID("alpha")+"-alpha.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +64,7 @@ func TestFS_SetFields_RejectsUnreloadable(t *testing.T) {
 	root := t.TempDir()
 	const original = "---\nstatus: ready-to-start\ntier: 2\n---\n# Alpha\nbody\n"
 	writeTask(t, root, "ready-to-start", "alpha.md", original)
-	path := filepath.Join(root, "tasks", "ready-to-start", "alpha.md")
+	path := filepath.Join(root, "tasks", testutil.TaskID("alpha")+"-alpha.md")
 
 	// tier as a string serializes to `tier: "4"` (!!str), which the strict Task
 	// loader can't read back into an int.

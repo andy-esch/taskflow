@@ -10,6 +10,12 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
+// readmeFile is the one non-entity name a flat entity scan ignores silently
+// (GitHub renders it as the folder's landing page). Every OTHER non-id-led file is
+// a loud FileProblem — the carveout gate (ADR-0003 amendment 2026-07-04). Checked in
+// scanDir (entity-agnostic) so it holds for tasks, epics, and audits alike.
+const readmeFile = "README.md"
+
 // markdownDoc reports whether a directory entry is the shape every store scan
 // accepts: a regular `.md` file. Requiring a *regular* file (not just non-dir)
 // rejects symlinks, so a planted `x.md` link can't be followed out of the
@@ -37,6 +43,9 @@ func scanDir[T any](dir string, parse func(path string, content []byte) (T, erro
 		if !markdownDoc(e) {
 			continue
 		}
+		if strings.EqualFold(e.Name(), readmeFile) {
+			continue // a README landing page is silently ignored — the carveout README carve
+		}
 		path := filepath.Join(dir, e.Name())
 		content, err := os.ReadFile(path)
 		if err != nil {
@@ -52,10 +61,13 @@ func scanDir[T any](dir string, parse func(path string, content []byte) (T, erro
 	return out, problems, nil
 }
 
-// markdownCandidates lists every regular .md file in dir as a resolution
-// candidate, tagging each with dirName (the status/bucket, "" for epics). The
-// shared body of the task/epic/audit candidate gatherers.
-func markdownCandidates(dir, dirName string) ([]candidate, error) {
+// epicCandidates lists every epic file (epics/<stem>.md) as a resolution candidate —
+// the whole filename stem is the key, resolved on its NN prefix (or a substring).
+// Epics keep human-named stems (usually NN-<slug>, but legacy names exist), so there
+// is no machine-id gate as for flat tasks/audits: a README landing page is skipped,
+// and any other non-epic file is caught at parse time (parseEpic fails loud on a file
+// with no frontmatter).
+func epicCandidates(dir string) ([]candidate, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -68,10 +80,48 @@ func markdownCandidates(dir, dirName string) ([]candidate, error) {
 		if !markdownDoc(e) {
 			continue
 		}
+		if strings.EqualFold(e.Name(), readmeFile) {
+			continue // a README landing page is not a resolution candidate — parity with scanDir's carve
+		}
 		out = append(out, candidate{
 			id:   strings.TrimSuffix(e.Name(), ".md"),
 			path: filepath.Join(dir, e.Name()),
-			dir:  dirName,
+		})
+	}
+	return out, nil
+}
+
+// flatCandidates lists every id-led entity file in ONE flat directory as a
+// resolution candidate, parsing `<id>-<slug>.md` via splitFlatName so the id and
+// slug become separate resolution keys. It is the flat-layout counterpart to
+// markdownCandidates' per-status/bucket scan (ADR-0003 §4).
+//
+// A file whose name is not id-led — a non-entity carveout (`HOWTO-execute.md`,
+// `README.md`, or a stray) — is skipped, so it is never a resolution candidate.
+// That is the read-side of the carveout gate (ADR-0003 amendment 2026-07-04); the
+// loud "not an entity" FileProblem for a stray is the *listing* side's job, not
+// resolution's.
+func flatCandidates(dir string) ([]candidate, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read dir %s: %w", dir, err)
+	}
+	var out []candidate
+	for _, e := range entries {
+		if !markdownDoc(e) {
+			continue
+		}
+		entityID, slug, ok := splitFlatName(strings.TrimSuffix(e.Name(), ".md"))
+		if !ok {
+			continue // not id-led — the carveout gate
+		}
+		out = append(out, candidate{
+			id:   entityID,
+			slug: slug,
+			path: filepath.Join(dir, e.Name()),
 		})
 	}
 	return out, nil
@@ -83,13 +133,13 @@ func markdownCandidates(dir, dirName string) ([]candidate, error) {
 // than one match at the winning tier returns ErrAmbiguous listing the
 // candidates — and matching is deterministic (candidates are sorted).
 
-// candidate is one resolvable id and where it lives. dir is the status/bucket
-// directory name ("" for epics) — shown in ambiguity messages, and convertible
-// back to the typed status/bucket by the status==directory invariant.
+// candidate is one resolvable id and where it lives. Under the flat layout there is no
+// status/bucket directory (status/bucket live in frontmatter, ADR-0003 §4), so a
+// candidate is just its resolution keys and path.
 type candidate struct {
-	id   string
+	id   string // resolution key: an epic/legacy stem, or the 12-char stable id under the flat layout
+	slug string // human slug (flat tasks/audits) — a second resolution key; "" for epics and legacy candidates
 	path string
-	dir  string
 }
 
 // validQueryName rejects queries that could escape the planning tree when
@@ -113,18 +163,21 @@ func resolveID(kind, query string, cands []candidate) (candidate, error) {
 		if cands[i].id != cands[j].id {
 			return cands[i].id < cands[j].id
 		}
-		return cands[i].dir < cands[j].dir
+		return cands[i].slug < cands[j].slug
 	})
 	q := strings.ToLower(query)
-	tiers := []func(id string) bool{
-		func(id string) bool { return id == query || strings.ToLower(id) == q },
-		func(id string) bool { return strings.HasPrefix(strings.ToLower(id), q) },
-		func(id string) bool { return strings.Contains(strings.ToLower(id), q) },
+	tiers := []func(key string) bool{
+		func(key string) bool { return key == query || strings.ToLower(key) == q },
+		func(key string) bool { return strings.HasPrefix(strings.ToLower(key), q) },
+		func(key string) bool { return strings.Contains(strings.ToLower(key), q) },
 	}
 	for _, match := range tiers {
 		var hits []candidate
 		for _, c := range cands {
-			if match(c.id) {
+			// Under the flat layout a task/audit resolves on either its stable id
+			// (a prefix) or its human slug; epic/legacy candidates carry only id
+			// (slug ""), so this stays their single-key match unchanged.
+			if match(c.id) || (c.slug != "" && match(c.slug)) {
 				hits = append(hits, c)
 			}
 		}
@@ -141,31 +194,41 @@ func resolveID(kind, query string, cands []candidate) (candidate, error) {
 	return candidate{}, fmt.Errorf("%s %q: %w", kind, query, domain.ErrNotFound)
 }
 
-// slugCollision reports the directory a `<slug>.md` already occupies among cands
-// (an exact-id match), or "" if the slug is free across them. The create path
-// uses it to reject a slug that already lives in ANOTHER status dir / audit
-// bucket: writeNewFile's O_EXCL only guards the single target path, so without
-// this a `task new`/`audit new` could mint a second file with the same slug and
-// make every later resolve of it ErrAmbiguous. Best-effort (a scan, not atomic)
-// — fine for a single-user CLI, like the epic auto-numbering race.
-func slugCollision(slug string, cands []candidate) string {
+// resolveExactID finds the ONE candidate whose stable id equals id exactly — the key
+// the version-CAS re-resolve (verifyUnchanged) needs. Unlike resolveID it never matches
+// on the human slug, so a same-named sibling — a task whose SLUG happens to equal this
+// file's id — can't turn the guard into a spurious ErrAmbiguous that would lock the file
+// out of every future write. A genuine duplicate id on disk stays an ambiguity (a real
+// problem the guard should surface as a conflict); no match is ErrNotFound (it vanished).
+func resolveExactID(cands []candidate, id string) (candidate, error) {
+	var hit candidate
+	found := false
 	for _, c := range cands {
-		if c.id == slug {
-			return c.dir
+		if c.id == id {
+			if found {
+				return candidate{}, domain.ErrAmbiguous
+			}
+			hit, found = c, true
 		}
 	}
-	return ""
+	if !found {
+		return candidate{}, domain.ErrNotFound
+	}
+	return hit, nil
 }
 
-// describeCandidates renders an ambiguity list — "a (in-progress), b (open)" —
-// so the error itself is enough to retype an unambiguous name.
+// describeCandidates renders an ambiguity list — "add-retry (6f…a3b), add-retry (6f…c1d)" —
+// so the error itself is enough to retype an unambiguous name (by id).
 func describeCandidates(cands []candidate) string {
 	parts := make([]string, len(cands))
 	for i, c := range cands {
-		if c.dir == "" {
+		switch {
+		case c.slug != "":
+			// Flat entities: show slug + id so a dup-slug ambiguity is retypable by id.
+			parts[i] = fmt.Sprintf("%s (%s)", c.slug, c.id)
+		default:
+			// Epic/legacy candidates carry only an id (no slug).
 			parts[i] = c.id
-		} else {
-			parts[i] = fmt.Sprintf("%s (%s)", c.id, c.dir)
 		}
 	}
 	return strings.Join(parts, ", ")

@@ -107,7 +107,6 @@ type Summary struct {
 	OpenAudits    []domain.Audit       // audits still in the open bucket (actionable work)
 	ReadyToClose  int                  // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
 	Findings      FindingsRollup       // actionable audit findings (open/in-progress) aggregated by urgency + component
-	Misfiled      int                  // tasks whose status disagrees with their folder
 	RevisitDue    int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
 	BadEpicStatus int                  // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
 	Problems      []domain.FileProblem // unreadable files
@@ -157,16 +156,12 @@ func (s *Service) Summary() (Summary, error) {
 	}
 	counts := map[domain.Status]int{}
 	var inProgress []domain.Task
-	misfiled := 0
 	revisitDue := 0
 	now := s.now()
 	for _, t := range tasks {
 		counts[t.Status]++
 		if t.Status == domain.StatusInProgress {
 			inProgress = append(inProgress, t)
-		}
-		if t.Misfiled() {
-			misfiled++
 		}
 		// Move clears revisit_at when a task leaves deferred, so a stray date on a
 		// non-deferred task is only possible via a manual `task set`/edit; either
@@ -202,7 +197,6 @@ func (s *Service) Summary() (Summary, error) {
 		OpenAudits:    openAudits,
 		ReadyToClose:  readyToClose,
 		Findings:      rollupFindings(actionable),
-		Misfiled:      misfiled,
 		RevisitDue:    revisitDue,
 		BadEpicStatus: badEpicStatus,
 		Problems:      append(append(p1, p2...), p3...),
@@ -237,31 +231,25 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 
 	var results []LintResult
 	for _, t := range tasks {
-		// Active tasks get the full field lint; archived tasks are only checked
-		// for status/folder drift (no point nagging about missing fields on a
-		// completed item, but a misfiled one should still surface).
+		// Active tasks get the full field lint; archived tasks are only checked for the
+		// universal defects (missing/unrecognized frontmatter status, missing or drifted
+		// id) — no point nagging about missing fields on a completed item, but a bad
+		// status/id should still surface.
 		var issues []domain.Issue
 		if t.Status.IsActive() {
 			issues = domain.LintTask(t, validEpic)
 		} else {
-			// Archived tasks skip the field nags but still get the universal checks:
-			// status/folder drift, a missing/unrecognized frontmatter status, and a
-			// missing stable id.
-			issues = append(domain.MisfiledIssues(t), domain.FrontmatterStatusIssues(t)...)
-			issues = append(issues, domain.MissingIDIssue(t.ID)...)
+			// Archived tasks skip the field nags but still get the universal checks: a
+			// missing/unrecognized frontmatter status, and a missing stable id.
+			issues = append(domain.FrontmatterStatusIssues(t), domain.MissingIDIssue(t.ID)...)
+			issues = append(issues, domain.IDDriftIssue(t.ID, t.FilenameID)...)
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})
 		}
 	}
-	// Duplicate slug across status dirs: a Ctrl-C in Move's write-then-remove
-	// window (or a stray hand-copy) leaves the same slug in two dirs, which makes
-	// every later resolve(slug) return ErrAmbiguous — the task can't be shown,
-	// moved, or set by name. Both copies are listed (different dirs), so group by
-	// slug and flag any with >1. Surfaced loudly here because there's no other
-	// signal; status==directory means the dirs are always distinct. (Tasks only:
-	// MoveAudit is an atomic rename, so audits have no such window.)
-	results = append(results, duplicateSlugIssues(tasks)...)
+	// (Duplicate-slug lint retired with the flat layout: id-led filenames are unique by
+	// construction, and duplicate SLUGS are now legal — resolved by id, ambiguous by slug.)
 	// Epics get linted too: the same closed status vocabulary plus priority and a
 	// present description (a deprecated epic is spared the field nags — see
 	// domain.LintEpic). The epic id slots into Slug as the result's label.
@@ -271,37 +259,6 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		}
 	}
 	return results, problems, nil
-}
-
-// duplicateSlugIssues flags any slug that appears in more than one status dir,
-// reporting the buckets it occupies. Deterministic: groups in first-seen order
-// (tasks arrive in status-dir order), so the output is stable across runs.
-func duplicateSlugIssues(tasks []domain.Task) []LintResult {
-	type group struct{ statuses []string }
-	groups := map[string]*group{}
-	var order []string
-	for _, t := range tasks {
-		g, ok := groups[t.Slug]
-		if !ok {
-			g = &group{}
-			groups[t.Slug] = g
-			order = append(order, t.Slug)
-		}
-		g.statuses = append(g.statuses, string(t.FolderStatus)) // the physical dirs, not the (authoritative) frontmatter status
-	}
-	var out []LintResult
-	for _, slug := range order {
-		g := groups[slug]
-		if len(g.statuses) < 2 {
-			continue
-		}
-		out = append(out, LintResult{Slug: slug, Issues: []domain.Issue{{
-			Field: "slug",
-			Message: fmt.Sprintf("duplicate: same slug in %d dirs (%s); resolve is ambiguous until you remove the wrong copy",
-				len(g.statuses), strings.Join(g.statuses, ", ")),
-		}}})
-	}
-	return out
 }
 
 func hasTag(tags []string, want string) bool {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // SetFields now conflicts on a concurrent IN-PLACE content edit (same path, different
@@ -21,7 +23,7 @@ func TestSetFields_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeTask(t, root, "ready-to-start", "c.md",
 		"---\nid: 6fjangd7kvc1\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# c\n")
 	fs := NewFS(root)
-	p := root + "/tasks/ready-to-start/c.md"
+	p := filepath.Join(root, "tasks", testutil.TaskID("c")+"-c.md")
 
 	orig := testHookBeforeSetFieldsWrite
 	defer func() { testHookBeforeSetFieldsWrite = orig }()
@@ -40,6 +42,37 @@ func TestSetFields_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	}
 }
 
+// TestVerifyUnchanged_SlugEqualsAnotherID: a task whose SLUG is exactly another task's
+// stable id must not lock that other task out of writes. The version-CAS re-resolve is
+// exact-id (resolveExactID), so it returns the one file with that id — not the slug-
+// collision sibling — instead of a spurious ErrAmbiguous that would ErrConflict every
+// future write to the id-named file.
+func TestVerifyUnchanged_SlugEqualsAnotherID(t *testing.T) {
+	root := t.TempDir()
+	tasks := filepath.Join(root, "tasks")
+	if err := os.MkdirAll(tasks, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const collide = "6fjangd7kvc1" // a valid 12-char id we ALSO use as task B's slug
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(tasks, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Task A: id == collide, slug "alpha".
+	write(collide+"-alpha.md",
+		"---\nid: "+collide+"\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: a\n---\n# A\n")
+	// Task B: a different id, but its SLUG is exactly A's id.
+	write("6fjangd7kvb2-"+collide+".md",
+		"---\nid: 6fjangd7kvb2\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: b\n---\n# B\n")
+
+	// A write to Task A runs verifyUnchanged, which re-resolves A's id (== collide). The
+	// exact-id resolve returns A alone, so the write lands — no spurious conflict/lockout.
+	if _, err := NewFS(root).SetFields("alpha", map[string]any{"priority": "low"}, false); err != nil {
+		t.Fatalf("a sibling whose slug equals A's id must not lock A out of writes: %v", err)
+	}
+}
+
 // Move conflicts on a concurrent in-place edit of the source during the move, leaving the
 // concurrent edit intact and no file at the target (nothing moved).
 func TestMove_ConflictsOnConcurrentContentEdit(t *testing.T) {
@@ -47,7 +80,7 @@ func TestMove_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeTask(t, root, "ready-to-start", "m.md",
 		"---\nid: 6fjangd7kvm1\nstatus: ready-to-start\nepic: e1\n---\n# m\n")
 	fs := NewFS(root)
-	p := root + "/tasks/ready-to-start/m.md"
+	p := filepath.Join(root, "tasks", testutil.TaskID("m")+"-m.md")
 
 	orig := testHookBeforeMoveWrite
 	defer func() { testHookBeforeMoveWrite = orig }()
@@ -60,11 +93,14 @@ func TestMove_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place edit during a move must conflict, got %v", err)
 	}
-	if _, err := os.Stat(root + "/tasks/in-progress/m.md"); !os.IsNotExist(err) {
-		t.Error("the losing move must not create the target file")
-	}
-	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "m EDITED") {
+	// The move is an in-place frontmatter edit now — the file never relocates. The losing
+	// move must leave the concurrent edit intact and NOT flip status to in-progress.
+	b, _ := os.ReadFile(p)
+	if !strings.Contains(string(b), "m EDITED") {
 		t.Errorf("the concurrent edit must survive at the source:\n%s", b)
+	}
+	if !strings.Contains(string(b), "status: ready-to-start") || strings.Contains(string(b), "status: in-progress") {
+		t.Errorf("the losing move must not change the status:\n%s", b)
 	}
 }
 
@@ -74,7 +110,7 @@ func TestMoveAudit_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeAudit(t, root, "open", "2026-01-02-x.md",
 		"---\nid: 6fjjt6s9ttx1\nbucket: open\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** fixed\n")
 	fs := NewFS(root)
-	p := root + "/audits/open/2026-01-02-x.md"
+	p := filepath.Join(root, "audits", testutil.TaskID("2026-01-02-x")+"-2026-01-02-x.md")
 
 	orig := testHookBeforeMoveAuditWrite
 	defer func() { testHookBeforeMoveAuditWrite = orig }()
@@ -85,9 +121,8 @@ func TestMoveAudit_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	if _, err := fs.MoveAudit("2026-01-02-x", domain.AuditClosed, false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place edit during an audit move must conflict, got %v", err)
 	}
-	if _, err := os.Stat(root + "/audits/closed/2026-01-02-x.md"); !os.IsNotExist(err) {
-		t.Error("the losing move must not create the target file")
-	}
+	// The move is in-place under the flat layout — the file never relocates; the losing
+	// move must leave the concurrent edit intact at the source.
 	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "note: CHANGED") {
 		t.Errorf("the concurrent edit must survive at the source:\n%s", b)
 	}
@@ -127,7 +162,7 @@ func TestEditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeTask(t, root, "ready-to-start", "b.md",
 		"---\nid: 6fjangd7kvb1\nstatus: ready-to-start\nepic: e1\n---\n# b\n")
 	fs := NewFS(root)
-	p := root + "/tasks/ready-to-start/b.md"
+	p := filepath.Join(root, "tasks", testutil.TaskID("b")+"-b.md")
 
 	orig := testHookBeforeBodyWrite
 	defer func() { testHookBeforeBodyWrite = orig }()
@@ -150,7 +185,7 @@ func TestEditTask_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeTask(t, root, "ready-to-start", "e.md",
 		"---\nid: 6fjangd7kve1\nstatus: ready-to-start\nepic: e1\n---\n# e\n")
 	fs := NewFS(root)
-	p := root + "/tasks/ready-to-start/e.md"
+	p := filepath.Join(root, "tasks", testutil.TaskID("e")+"-e.md")
 
 	edit := func(current string, prevErr error) (string, error) {
 		// A concurrent writer lands a change while the human is "in $EDITOR".
@@ -187,7 +222,7 @@ func TestSetFields_FuzzyQueryDoesNotSpuriouslyConflict(t *testing.T) {
 	if _, err := fs.SetFields("billing", map[string]any{"priority": "low"}, false); err != nil {
 		t.Fatalf("an unrelated concurrent same-prefix creation must NOT conflict; got %v", err)
 	}
-	if b, _ := os.ReadFile(root + "/tasks/ready-to-start/billing-system.md"); !strings.Contains(string(b), "priority: low") {
+	if b, _ := os.ReadFile(filepath.Join(root, "tasks", testutil.TaskID("billing-system")+"-billing-system.md")); !strings.Contains(string(b), "priority: low") {
 		t.Errorf("the edit should have landed:\n%s", b)
 	}
 }
@@ -224,7 +259,7 @@ func TestAppendAuditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	writeAudit(t, root, "open", "2026-01-02-ab.md",
 		"---\nid: 6fjjt6s9ttab\nbucket: open\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** open\n")
 	fs := NewFS(root)
-	p := root + "/audits/open/2026-01-02-ab.md"
+	p := filepath.Join(root, "audits", testutil.TaskID("2026-01-02-ab")+"-2026-01-02-ab.md")
 
 	orig := testHookBeforeBodyWrite
 	defer func() { testHookBeforeBodyWrite = orig }()
@@ -298,7 +333,7 @@ func TestConcurrentAppends_NoLostUpdates(t *testing.T) {
 	}
 	wg.Wait()
 
-	b, err := os.ReadFile(root + "/tasks/ready-to-start/race.md")
+	b, err := os.ReadFile(filepath.Join(root, "tasks", testutil.TaskID("race")+"-race.md"))
 	if err != nil {
 		t.Fatal(err)
 	}

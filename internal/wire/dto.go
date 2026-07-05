@@ -22,7 +22,7 @@ import (
 type TaskJSON struct {
 	ID     string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key that survives slug and status changes; absent on tasks created before id assignment"`
 	Slug   string `json:"slug" jsonschema:"description=task slug (filename without .md) — the human handle"`
-	Status string `json:"status" jsonschema:"description=lifecycle status — authoritative, read from frontmatter (ADR-0003); may differ from the directory on a misfiled file"`
+	Status string `json:"status" jsonschema:"description=lifecycle status — authoritative, read from frontmatter (ADR-0003 §4)"`
 	Epic   string `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
 	// The "<=200" cap can't be computed (struct tags are static literals) — the only
 	// hardcoded copy of domain.MaxDescriptionLen left. Kept honest by
@@ -36,12 +36,6 @@ type TaskJSON struct {
 	Updated     string   `json:"updated_at,omitempty" jsonschema:"description=last-modified date YYYY-MM-DD"`
 	RevisitAt   string   `json:"revisit_at,omitempty" jsonschema:"description=snooze-until date YYYY-MM-DD for a deferred task (set by task defer)"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
-	// Misfiled/Declared surface folder≠frontmatter drift to JSON consumers (agents
-	// are exactly who should detect it). declared_status carries the stale mirror
-	// DIRECTORY the file sits in (not the frontmatter's claim — that IS status now),
-	// present only when misfiled.
-	Misfiled bool   `json:"misfiled,omitempty" jsonschema:"description=true when the file's directory disagrees with its authoritative frontmatter status (the mirror is stale; lint --fix relocates it)"`
-	Declared string `json:"declared_status,omitempty" jsonschema:"description=the status directory a misfiled file physically sits in (the stale mirror); absent unless misfiled"`
 }
 
 // ToTaskJSON maps a domain task to its wire DTO.
@@ -51,10 +45,6 @@ func ToTaskJSON(t domain.Task) TaskJSON {
 		Description: t.Description, Effort: t.Effort, Tier: t.Tier,
 		Priority: t.Priority, Autonomy: t.Autonomy,
 		Created: t.Created, Updated: t.Updated, RevisitAt: t.RevisitAt, Tags: t.Tags,
-	}
-	if t.Misfiled() {
-		j.Misfiled = true
-		j.Declared = string(t.FolderStatus)
 	}
 	return j
 }
@@ -93,7 +83,7 @@ func ToEpicJSON(e core.EpicSummary) EpicJSON {
 type AuditJSON struct {
 	ID           string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key; absent on audits created before id assignment"`
 	Slug         string `json:"slug" jsonschema:"description=audit slug (filename without .md) — the human handle"`
-	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — equals the audit's directory"`
+	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — authoritative, read from frontmatter (ADR-0003 §4)"`
 	Area         string `json:"area,omitempty" jsonschema:"description=subsystem/topic audited"`
 	Date         string `json:"date,omitempty" jsonschema:"description=audit date YYYY-MM-DD (immutable — part of the slug)"`
 	Updated      string `json:"updated_at,omitempty" jsonschema:"description=audit's own last-edited date YYYY-MM-DD (edit/append); a bucket move does not change it"`

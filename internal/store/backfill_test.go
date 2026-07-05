@@ -3,13 +3,12 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
-	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 
-	"github.com/andy-esch/taskflow/internal/domain"
-	"github.com/andy-esch/taskflow/internal/id"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func seedFile(t *testing.T, path, content string) {
@@ -38,6 +37,17 @@ func frontmatterID(t *testing.T, path string) string {
 	return m.ID
 }
 
+// filenameID is the id-prefix of a flat <id>-<slug>.md file — the canonical id a
+// backfill copies into the frontmatter.
+func filenameID(t *testing.T, path string) string {
+	t.Helper()
+	fnID, _, ok := splitFlatName(strings.TrimSuffix(filepath.Base(path), ".md"))
+	if !ok {
+		t.Fatalf("fixture %s is not id-led", path)
+	}
+	return fnID
+}
+
 func changesHave(changes []string, want string) bool {
 	for _, c := range changes {
 		if c == want {
@@ -49,12 +59,12 @@ func changesHave(changes []string, want string) bool {
 
 const idlessTask = "---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n"
 
-// TestFixFrontmatter_BackfillsMissingTaskID: a task with no id gets a valid one,
-// timestamped from its created date.
+// TestFixFrontmatter_BackfillsMissingTaskID: a task with no frontmatter id gets the
+// id that already leads its flat filename — no fresh mint, so the two agree.
 func TestFixFrontmatter_BackfillsMissingTaskID(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, domain.TasksDir, "ready-to-start", "t.md")
-	seedFile(t, p, idlessTask)
+	p, out := testutil.TaskFixture(root, "ready-to-start", "t.md", idlessTask)
+	seedFile(t, p, out)
 
 	results, err := NewFS(root).FixFrontmatter(false)
 	if err != nil {
@@ -63,40 +73,31 @@ func TestFixFrontmatter_BackfillsMissingTaskID(t *testing.T) {
 	if len(results) != 1 || !changesHave(results[0].Changes, "id: assigned (was missing)") {
 		t.Fatalf("expected one id-assigned change, got %+v", results)
 	}
-	got := frontmatterID(t, p)
-	if !id.Valid(got) {
-		t.Errorf("backfilled id %q is not a valid id", got)
-	}
-	// The id's timestamp derives from created, not from now.
-	if d := id.Time(got).UTC().Format("2006-01-02"); d != "2026-01-05" {
-		t.Errorf("backfilled id time = %s, want 2026-01-05 (the created date)", d)
+	if got := frontmatterID(t, p); got != filenameID(t, p) {
+		t.Errorf("backfilled id %q must equal the filename id %q", got, filenameID(t, p))
 	}
 }
 
-// TestFixFrontmatter_BackfillsMissingAuditID: audits derive the id from their slug
-// date (they carry no `created`).
+// TestFixFrontmatter_BackfillsMissingAuditID: audits get the same filename-sourced id.
 func TestFixFrontmatter_BackfillsMissingAuditID(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, domain.AuditsDir, "open", "2026-01-02-x.md")
-	seedFile(t, p, "---\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** open\n")
+	p, out := testutil.AuditFixture(root, "open", "2026-01-02-x.md", "---\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** open\n")
+	seedFile(t, p, out)
 
 	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
 		t.Fatal(err)
 	}
-	got := frontmatterID(t, p)
-	if !id.Valid(got) {
-		t.Errorf("audit id %q is not valid", got)
-	}
-	if d := id.Time(got).UTC().Format("2006-01-02"); d != "2026-01-02" {
-		t.Errorf("audit id time = %s, want 2026-01-02 (the slug date)", d)
+	if got := frontmatterID(t, p); got != filenameID(t, p) {
+		t.Errorf("audit backfilled id %q must equal the filename id %q", got, filenameID(t, p))
 	}
 }
 
 // TestFixFrontmatter_KeepsExistingID: a file that already has an id is untouched.
 func TestFixFrontmatter_KeepsExistingID(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, domain.TasksDir, "ready-to-start", "t.md")
-	seedFile(t, p, "---\nid: 6fjangd7kvh0\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n")
+	existing := testutil.TaskID("t") // matches the flat filename, so no drift
+	p, out := testutil.TaskFixture(root, "ready-to-start", "t.md", "---\nid: "+existing+"\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n")
+	seedFile(t, p, out)
 
 	results, err := NewFS(root).FixFrontmatter(false)
 	if err != nil {
@@ -105,18 +106,34 @@ func TestFixFrontmatter_KeepsExistingID(t *testing.T) {
 	if len(results) != 0 {
 		t.Errorf("a task that already has an id needs no fix, got %+v", results)
 	}
-	if got := frontmatterID(t, p); got != "6fjangd7kvh0" {
-		t.Errorf("existing id must be preserved, got %q", got)
+	if got := frontmatterID(t, p); got != existing {
+		t.Errorf("existing id must be preserved, got %q want %q", got, existing)
 	}
 }
 
-// TestFixFrontmatter_SkipsBackfillWithoutDate: with no date to derive a timestamp
-// from, the fix leaves the id missing (the re-lint after --fix re-flags it) rather
-// than invent one.
-func TestFixFrontmatter_SkipsBackfillWithoutDate(t *testing.T) {
+// TestFixFrontmatter_BackfillsWithoutDate: the id comes from the filename, so a task
+// carrying no date field at all is still backfilled (the old date-mint path needed
+// one; the flat filename always has the id).
+func TestFixFrontmatter_BackfillsWithoutDate(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, domain.TasksDir, "ready-to-start", "t.md")
-	seedFile(t, p, "---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ntags: [a]\n---\n# T\n")
+	p, out := testutil.TaskFixture(root, "ready-to-start", "t.md", "---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ntags: [a]\n---\n# T\n")
+	seedFile(t, p, out)
+
+	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+		t.Fatal(err)
+	}
+	if got := frontmatterID(t, p); got != filenameID(t, p) {
+		t.Errorf("a dateless task is still backfilled from the filename: got %q, want %q", got, filenameID(t, p))
+	}
+}
+
+// TestFixFrontmatter_SkipsStrayWithoutIDLedName: a non-id-led .md (a stray the scan
+// gate flags) is left alone — minting an id into its frontmatter wouldn't make it an
+// entity, so backfill no-ops and the file stays a FileProblem for the operator.
+func TestFixFrontmatter_SkipsStrayWithoutIDLedName(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "tasks", "not-an-entity.md")
+	seedFile(t, p, idlessTask)
 
 	results, err := NewFS(root).FixFrontmatter(false)
 	if err != nil {
@@ -124,158 +141,10 @@ func TestFixFrontmatter_SkipsBackfillWithoutDate(t *testing.T) {
 	}
 	for _, r := range results {
 		if changesHave(r.Changes, "id: assigned (was missing)") {
-			t.Errorf("a dateless task must not be backfilled: %+v", r)
+			t.Errorf("a non-id-led stray must not be backfilled: %+v", r)
 		}
 	}
 	if got := frontmatterID(t, p); got != "" {
-		t.Errorf("expected no id assigned, got %q", got)
-	}
-}
-
-// TestFixFrontmatter_DistinctIDsForSameDate: two id-less tasks that share a created
-// date still get distinct ids — the run-level dedup covers the 17-bit-tail collision
-// NewAt alone could produce.
-func TestFixFrontmatter_DistinctIDsForSameDate(t *testing.T) {
-	root := t.TempDir()
-	seedFile(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "a.md"), idlessTask)
-	seedFile(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "b.md"), idlessTask)
-
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
-		t.Fatal(err)
-	}
-	a := frontmatterID(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "a.md"))
-	b := frontmatterID(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "b.md"))
-	if a == "" || b == "" {
-		t.Fatalf("both tasks should get ids, got %q and %q", a, b)
-	}
-	if a == b {
-		t.Errorf("same-date tasks must get distinct ids, both = %s", a)
-	}
-}
-
-// TestFixFrontmatter_BackfillsFromLifecycleStamp: an archived task carrying only a
-// completed_at (no created/updated_at) still gets an id, dated from that stamp —
-// the fallback that predated tasks like taskflow-00 would otherwise miss.
-func TestFixFrontmatter_BackfillsFromLifecycleStamp(t *testing.T) {
-	root := t.TempDir()
-	p := filepath.Join(root, domain.TasksDir, "completed", "old.md")
-	seedFile(t, p, "---\nstatus: completed\nepic: e1\ntier: 1\npriority: high\ncompleted_at: 2026-02-04\ntags: [x]\n---\n# Old\n")
-
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
-		t.Fatal(err)
-	}
-	got := frontmatterID(t, p)
-	if !id.Valid(got) {
-		t.Errorf("archived task id %q is not valid", got)
-	}
-	if d := id.Time(got).UTC().Format("2006-01-02"); d != "2026-02-04" {
-		t.Errorf("id time = %s, want 2026-02-04 (from completed_at)", d)
-	}
-}
-
-// TestFixFrontmatter_BackfillsFromFilenameDate: a historical task with no date
-// field in its frontmatter still gets an id, dated from the YYYY-MM-DD prefix on
-// its file name — the fallback that lets pre-`created` tasks self-repair instead
-// of stalling under "could not auto-repair".
-func TestFixFrontmatter_BackfillsFromFilenameDate(t *testing.T) {
-	root := t.TempDir()
-	p := filepath.Join(root, domain.TasksDir, "completed", "2025-10-19-legacy.md")
-	seedFile(t, p, "---\nstatus: completed\nepic: e1\ntags: [x]\n---\n# Legacy\n")
-
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
-		t.Fatal(err)
-	}
-	got := frontmatterID(t, p)
-	if !id.Valid(got) {
-		t.Errorf("filename-dated task id %q is not valid", got)
-	}
-	if d := id.Time(got).UTC().Format("2006-01-02"); d != "2025-10-19" {
-		t.Errorf("id time = %s, want 2025-10-19 (from the filename prefix)", d)
-	}
-}
-
-// TestFixFrontmatter_FrontmatterDateBeatsFilename: when a task has BOTH a
-// frontmatter date and a date-prefixed filename, the id is timestamped from the
-// frontmatter date — the filename is only a fallback, never an override.
-func TestFixFrontmatter_FrontmatterDateBeatsFilename(t *testing.T) {
-	root := t.TempDir()
-	// Filename says 2025-10-19; frontmatter created says 2026-01-05 — created wins.
-	p := filepath.Join(root, domain.TasksDir, "completed", "2025-10-19-x.md")
-	seedFile(t, p, "---\nstatus: completed\nepic: e1\ncreated: 2026-01-05\ntags: [x]\n---\n# X\n")
-
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
-		t.Fatal(err)
-	}
-	got := frontmatterID(t, p)
-	if d := id.Time(got).UTC().Format("2006-01-02"); d != "2026-01-05" {
-		t.Errorf("id time = %s, want 2026-01-05 (frontmatter created, not the filename)", d)
-	}
-}
-
-func TestDateFromFilename(t *testing.T) {
-	cases := []struct{ name, want string }{
-		{"2025-10-19-slug.md", "2025-10-19"},
-		{"2026-01-05-x.md", "2026-01-05"},
-		{"2025-10-19.md", "2025-10-19"}, // date is the whole stem
-		{"refactor-dispatcher.md", ""},  // no date prefix
-		{"pants-6d.md", ""},             // no date prefix
-		{"2025-13-01-bad-month.md", ""}, // month out of range
-		{"2025-10-32-bad-day.md", ""},   // day out of range
-		{"2025-1-05-unpadded.md", ""},   // not zero-padded → not YYYY-MM-DD
-		{"short.md", ""},                // shorter than 10 chars
-		{"", ""},                        // empty
-		{"2025-10-19", "2025-10-19"},    // no extension, exactly 10 chars
-	}
-	for _, c := range cases {
-		if got := dateFromFilename(c.name); got != c.want {
-			t.Errorf("dateFromFilename(%q) = %q, want %q", c.name, got, c.want)
-		}
-	}
-}
-
-func TestMintUniqueID_RetriesPastCollisions(t *testing.T) {
-	seen := map[string]bool{"AAA": true} // AAA already taken
-	calls := 0
-	gen := func(int64) string {
-		calls++
-		if calls < 3 {
-			return "AAA" // collide twice, then yield a fresh one
-		}
-		return "BBB"
-	}
-	got, ok := mintUniqueID(0, seen, gen)
-	if !ok || got != "BBB" {
-		t.Fatalf("want BBB after retrying past collisions, got %q ok=%v", got, ok)
-	}
-	if !seen["BBB"] {
-		t.Error("the assigned id must be recorded in seen so later files avoid it")
-	}
-	if calls != 3 {
-		t.Errorf("want 3 generator calls (2 collisions + 1 hit), got %d", calls)
-	}
-}
-
-func TestMintUniqueID_GivesUpOnPathologicalGenerator(t *testing.T) {
-	got, ok := mintUniqueID(0, map[string]bool{"X": true}, func(int64) string { return "X" })
-	if ok || got != "" {
-		t.Errorf("a generator that always collides must give up, got %q ok=%v", got, ok)
-	}
-}
-
-func TestFirstDateMillis_Preference(t *testing.T) {
-	if _, ok := firstDateMillis("", "", ""); ok {
-		t.Error("no dates → not ok")
-	}
-	if _, ok := firstDateMillis("not-a-date", ""); ok {
-		t.Error("an unparseable date → not ok")
-	}
-	// The first PARSEABLE candidate wins (created preferred over updated_at).
-	ms, ok := firstDateMillis("", "2026-01-02", "2026-03-04")
-	if !ok {
-		t.Fatal("a valid date should parse")
-	}
-	want, _ := time.Parse("2006-01-02", "2026-01-02")
-	if ms != want.UnixMilli() {
-		t.Errorf("got %d, want %d (first parseable candidate)", ms, want.UnixMilli())
+		t.Errorf("expected no id assigned to a stray, got %q", got)
 	}
 }

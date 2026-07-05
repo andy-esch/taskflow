@@ -9,19 +9,26 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
-func TestTaskStart_MovesFile(t *testing.T) {
+func TestTaskStart_ChangesStatusInPlace(t *testing.T) {
 	root := setupRepo(t)
+	path := filepath.Join(root, "tasks", testutil.TaskID("alpha")+"-alpha.md")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("alpha fixture missing: %v", err)
+	}
 	out := runRoot(t, "-C", root, "task", "start", "alpha")
 	if !strings.Contains(out, "alpha -> in-progress") {
 		t.Errorf("unexpected output: %q", out)
 	}
-	if _, err := os.Stat(filepath.Join(root, "tasks", "in-progress", "alpha.md")); err != nil {
-		t.Errorf("alpha not in in-progress: %v", err)
+	// Flat layout: the file path never changes; status is an in-place frontmatter edit.
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("alpha no longer at original path: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "tasks", "ready-to-start", "alpha.md")); !os.IsNotExist(err) {
-		t.Error("alpha still in ready-to-start")
+	if !strings.Contains(string(b), "status: in-progress") {
+		t.Errorf("alpha frontmatter status not updated:\n%s", b)
 	}
 }
 

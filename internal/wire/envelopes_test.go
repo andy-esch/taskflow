@@ -36,9 +36,8 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 	}
 
 	task := domain.Task{Slug: "alpha", Status: domain.StatusInProgress, Tier: 2, Tags: []string{"x"}}
-	// A misfiled task so the populated misfiled/declared_status shape (the redefined
-	// 1.25 fields) is actually validated against the schema, not just the clean shape.
-	misfiled := domain.Task{Slug: "beta", Status: domain.StatusReadyToStart, FolderStatus: domain.StatusCompleted, Tier: 3, Tags: []string{"y"}}
+	// A second task so a multi-item TasksEnvelope is validated against the schema.
+	beta := domain.Task{Slug: "beta", Status: domain.StatusReadyToStart, Tier: 3, Tags: []string{"y"}}
 	epic := domain.Epic{ID: "e1", Status: "active", Description: "d"}
 	epicSum := core.EpicSummary{Epic: epic, Total: 2, Done: 1}
 
@@ -50,7 +49,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		def  string
 		emit func(io.Writer) error
 	}{
-		{"TasksEnvelope", func(w io.Writer) error { return emit(w, ToTasksEnvelope([]domain.Task{task, misfiled}, nil)) }},
+		{"TasksEnvelope", func(w io.Writer) error { return emit(w, ToTasksEnvelope([]domain.Task{task, beta}, nil)) }},
 		{"BoardEnvelope", func(w io.Writer) error {
 			return emit(w, ToBoardEnvelope(core.Board{Columns: []core.BoardColumn{{Status: domain.StatusInProgress, Tasks: []domain.Task{task}}}}))
 		}},

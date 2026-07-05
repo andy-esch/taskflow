@@ -12,27 +12,33 @@ import (
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
-// readTaskFile returns the raw contents of a task file at tasks/<status>/<name>.
+// readTaskFile returns the raw contents of a task file. Under the flat layout a
+// task lives at its stable id-led path tasks/<id>-<slug>.md regardless of status
+// (status is authoritative in frontmatter; lifecycle verbs are in-place edits),
+// so the status argument is ignored and kept only for call-site readability.
 func readTaskFile(t *testing.T, root, status, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(root, "tasks", status, name))
+	_ = status
+	slug := strings.TrimSuffix(name, ".md")
+	path := filepath.Join(root, "tasks", testutil.TaskID(slug)+"-"+slug+".md")
+	b, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read %s/%s: %v", status, name, err)
+		t.Fatalf("read %s: %v", name, err)
 	}
 	return string(b)
 }
 
 // TestTaskDefer_Until pins the snooze path: `task defer <slug> --until <date>`
-// moves the task to deferred/ AND records revisit_at; a bare defer (no --until)
-// is unchanged (no revisit_at written).
+// flips the task's frontmatter status to deferred (in place) AND records
+// revisit_at; a bare defer (no --until) is unchanged (no revisit_at written).
 func TestTaskDefer_Until(t *testing.T) {
 	root := setupRepo(t)
 	runRoot(t, "-C", root, "task", "defer", "alpha", "--until", "2026-09-01")
 
-	// Moved out of ready-to-start, into deferred/.
-	notExist(t, filepath.Join(root, "tasks", "ready-to-start", "alpha.md"))
+	// In-place status flip to deferred, revisit_at recorded (no relocation).
 	got := readTaskFile(t, root, "deferred", "alpha.md")
 	if !strings.Contains(got, `revisit_at: "2026-09-01"`) {
 		t.Errorf("deferred task should carry revisit_at:\n%s", got)
@@ -64,11 +70,14 @@ func TestTaskDefer_BadDateExit11(t *testing.T) {
 	if ExitCode(err) != 11 {
 		t.Errorf("want exit 11 for a bad date, got %d (%v)", ExitCode(err), err)
 	}
-	// Nothing moved: alpha is still in ready-to-start, not deferred.
-	if _, statErr := os.Stat(filepath.Join(root, "tasks", "ready-to-start", "alpha.md")); statErr != nil {
-		t.Errorf("a bad date must not move the task: %v", statErr)
+	// Nothing changed: alpha's frontmatter status is still ready-to-start.
+	got := readTaskFile(t, root, "ready-to-start", "alpha.md")
+	if !strings.Contains(got, "status: ready-to-start") {
+		t.Errorf("a bad date must not change the task's status:\n%s", got)
 	}
-	notExist(t, filepath.Join(root, "tasks", "deferred", "alpha.md"))
+	if strings.Contains(got, "revisit_at") {
+		t.Errorf("a bad date must not write revisit_at:\n%s", got)
+	}
 }
 
 // TestTaskDefer_UntilDryRun pins the preview: --dry-run previews the snooze
@@ -87,11 +96,14 @@ func TestTaskDefer_UntilDryRun(t *testing.T) {
 	if !strings.Contains(out, "2026-09-01") {
 		t.Errorf("dry-run should preview the revisit date, got:\n%s", out)
 	}
-	// Nothing written: still in ready-to-start, not deferred.
-	if _, statErr := os.Stat(filepath.Join(root, "tasks", "ready-to-start", "alpha.md")); statErr != nil {
-		t.Errorf("dry-run must not move the task: %v", statErr)
+	// Nothing written: frontmatter status still ready-to-start, no revisit_at.
+	got := readTaskFile(t, root, "ready-to-start", "alpha.md")
+	if !strings.Contains(got, "status: ready-to-start") {
+		t.Errorf("dry-run must not change the task's status:\n%s", got)
 	}
-	notExist(t, filepath.Join(root, "tasks", "deferred", "alpha.md"))
+	if strings.Contains(got, "revisit_at") {
+		t.Errorf("dry-run must not write revisit_at:\n%s", got)
+	}
 }
 
 // TestTaskDefer_UntilDryRunJSON pins the would-be revisit_at in the --json move
@@ -102,7 +114,10 @@ func TestTaskDefer_UntilDryRunJSON(t *testing.T) {
 	if !strings.Contains(out, `"revisit_at":"2026-09-01"`) {
 		t.Errorf("dry-run --json should carry the would-be revisit_at:\n%s", out)
 	}
-	notExist(t, filepath.Join(root, "tasks", "deferred", "alpha.md"))
+	// Nothing written: frontmatter status still ready-to-start.
+	if got := readTaskFile(t, root, "ready-to-start", "alpha.md"); !strings.Contains(got, "status: ready-to-start") {
+		t.Errorf("dry-run must not change the task's status:\n%s", got)
+	}
 }
 
 // TestTaskDefer_MultipleSlugsUntil pins the batch-snooze contract: every slug
@@ -187,17 +202,18 @@ func TestTaskDefer_RevisitClearedOnResume(t *testing.T) {
 }
 
 // TestTaskTransition_DeprecatedAliases pins back-compat: the old promote/demote
-// verbs still move tasks (hidden + deprecation-warned) so existing scripts/muscle
-// memory don't break after the rename to next/ready.
+// verbs still transition tasks (hidden + deprecation-warned) so existing
+// scripts/muscle memory don't break after the rename to next/ready. Transitions
+// are in-place frontmatter edits now, so we assert the status field, not a move.
 func TestTaskTransition_DeprecatedAliases(t *testing.T) {
 	root := setupRepo(t)
 	runRoot(t, "-C", root, "task", "promote", "alpha") // alias for `next`
-	if _, err := os.Stat(filepath.Join(root, "tasks", "next-up", "alpha.md")); err != nil {
-		t.Errorf("`task promote` alias should still move to next-up: %v", err)
+	if got := readTaskFile(t, root, "next-up", "alpha.md"); !strings.Contains(got, "status: next-up") {
+		t.Errorf("`task promote` alias should still set status next-up:\n%s", got)
 	}
 	runRoot(t, "-C", root, "task", "demote", "alpha") // alias for `ready`
-	if _, err := os.Stat(filepath.Join(root, "tasks", "ready-to-start", "alpha.md")); err != nil {
-		t.Errorf("`task demote` alias should still move to ready-to-start: %v", err)
+	if got := readTaskFile(t, root, "ready-to-start", "alpha.md"); !strings.Contains(got, "status: ready-to-start") {
+		t.Errorf("`task demote` alias should still set status ready-to-start:\n%s", got)
 	}
 }
 
@@ -302,8 +318,9 @@ func TestTaskSet_RevisitAt(t *testing.T) {
 	}
 }
 
-// writeDeferred writes a deferred task fixture (optionally with a revisit_at) into
-// root's deferred bucket — for the `task list --revisit-due` filter tests.
+// writeDeferred writes a deferred task fixture (optionally with a revisit_at) at
+// its flat id-led path — for the `task list --revisit-due` filter tests. Status
+// lives in frontmatter; the flat layout has no per-status directory.
 func writeDeferred(t *testing.T, root, name, revisitAt string) {
 	t.Helper()
 	fm := "---\nstatus: deferred\ndescription: " + name + "\ntags: [seed]\n"
@@ -311,13 +328,8 @@ func writeDeferred(t *testing.T, root, name, revisitAt string) {
 		fm += "revisit_at: \"" + revisitAt + "\"\n"
 	}
 	fm += "---\n# " + name + "\n"
-	dir := filepath.Join(root, "tasks", "deferred")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(fm), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	path, out := testutil.TaskFixture(root, "deferred", name+".md", fm)
+	testutil.Write(t, path, out)
 }
 
 // TestTaskList_RevisitDue pins the focused triage query: --revisit-due lists only

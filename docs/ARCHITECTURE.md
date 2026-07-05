@@ -17,11 +17,14 @@ the one-screen orientation for contributors.
 - **`internal/domain`** — entities + invariants (`Task`, `Status`). No fs, no
   cobra logic (the one pragmatic concession: `Task`/`Epic`/`Audit` carry a `Path`
   the store stamps, so callers can locate the source file). Frontmatter **is** the
-  authoritative status (ADR-0003 Phase A); the directory is a lock-step mirror,
-  recorded as `Task.FolderStatus` to detect drift. A file whose folder disagrees
-  with its *recognized* frontmatter status is "misfiled" — flagged by `lint` (and
-  `lint --fix` **moves** it to match), shown with a `⚠` in `task list`/`show`. A
-  foreign/legacy status word falls back to the folder.
+  authoritative status/bucket (ADR-0003 §4): tasks and audits are stored **flat and
+  id-led** — `tasks/<id>-<slug>.md`, `audits/<id>-<slug>.md` — with no status/bucket
+  directory to mirror or drift against (epics keep `NN-<slug>`). A file whose
+  frontmatter status is missing or unrecognized is **listed but flagged** by `lint`
+  (`StatusFellBack`; shown with a `⚠` in `task list`/`show`), never moved or dropped;
+  a non-id-led `.md` in a scanned dir is a loud `FileProblem` ("move it to `meta/`")
+  — except `README.md`, silently carved. `meta/` is the sanctioned home for
+  non-entity files.
   Per-entity metadata — the top-level dir, authoring fields, conventions, and
   body scaffold for `task`/`epic`/`audit` — lives in **one registry** (`entity.go`'s
   `Descriptor`); `SchemaKinds`/`AuthoringFields`/`Conventions`/`BodyTemplate` read
@@ -47,17 +50,17 @@ the one-screen orientation for contributors.
   and `Layout` (watch-path layout) — so a second `Store` and the test fakes don't
   carry them. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
-  `<root>/tasks/<status>/<slug>.md`. Splits frontmatter with a zero-dep byte
+  `<root>/tasks/<id>-<slug>.md` (flat, id-led). Splits frontmatter with a zero-dep byte
   scanner; parses YAML with `go.yaml.in/yaml/v3`. One `*FS` satisfies all three
   ports (`var _ core.Store/Fixer/Layout = (*FS)(nil)`): the Service gets the
   use-case `Store`, the CLI's `lint --fix` and the TUI watcher get the narrow
   `Fixer`/`Layout` wired directly. It owns the *layout* knowledge — `WatchPaths()`
   hands the TUI watcher its dir set so the path convention isn't reconstructed
   outside the store. Concurrency is **version-CAS** (epic 24): every write, just
-  before committing, re-resolves the file by its **canonical** slug and re-hashes it
+  before committing, re-resolves the file by its **id** and re-hashes it
   against the content read at the start of the op (`verifyUnchanged` in `cas.go` — a
   strong whole-file SHA-256 computed on read, **never stored**), so a concurrent
-  relocation OR in-place edit is `ErrConflict` (exit 14). A repo-wide advisory `flock`
+  in-place edit is `ErrConflict` (exit 14). A repo-wide advisory `flock`
   (`writeLock`, unix; a no-op stub elsewhere) serializes the verify→write so that CAS is
   *atomic* — without it two writers both pass their verify before either renames and the
   later silently clobbers the earlier (the verify→rename window, widened by the temp fsync).

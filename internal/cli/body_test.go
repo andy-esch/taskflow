@@ -10,10 +10,13 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
+// alphaPath is the flat id-led path setupRepo's TaskFixture writes alpha to
+// (tasks/<id>-alpha.md); status lives in frontmatter, not the path.
 func alphaPath(root string) string {
-	return filepath.Join(root, "tasks", "ready-to-start", "alpha.md")
+	return filepath.Join(root, domain.TasksDir, testutil.TaskID("alpha")+"-alpha.md")
 }
 
 // `task append` adds a section to the body through the tool, atomically.

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // TestResolveInitTarget pins init's mode decision (the flag-twin): the flag
@@ -197,7 +198,7 @@ func TestTaskSet(t *testing.T) {
 	if !strings.Contains(out, "updated alpha") {
 		t.Errorf("unexpected output: %q", out)
 	}
-	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "alpha.md"))
+	b, err := os.ReadFile(filepath.Join(root, "tasks", testutil.TaskID("alpha")+"-alpha.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +227,7 @@ func TestTaskSet_ArbitraryKeyValue(t *testing.T) {
 	if !strings.Contains(out, "updated alpha") {
 		t.Errorf("unexpected output: %q", out)
 	}
-	b, err := os.ReadFile(filepath.Join(root, "tasks", "ready-to-start", "alpha.md"))
+	b, err := os.ReadFile(filepath.Join(root, "tasks", testutil.TaskID("alpha")+"-alpha.md"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,7 +25,7 @@ func newLintCmd(app *App) *cobra.Command {
 			return runLint(app)
 		},
 	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter: quote ':' values, normalize lists, relocate a misfiled task to its status dir, backfill missing task/audit ids; epics are text-only")
+	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter: quote ':' values, normalize lists, backfill missing task/audit ids; epics are text-only")
 	return cmd
 }
 
@@ -85,18 +85,6 @@ func runLintFix(app *App, dryRun bool) error {
 	results2, problems, err := app.Svc.Lint()
 	if err != nil {
 		return err
-	}
-	// A missing-id finding that OUTLIVED the fix pass means the backfiller had no
-	// date to mint from; plain lint's "`lint --fix` assigns one" wording misleads
-	// now that --fix has run. Restate those (and only those — match the exact
-	// finding, not just the "id" field) with the actionable remedy, for both the
-	// human and --json renders below.
-	for i := range results2 {
-		for j := range results2[i].Issues {
-			if results2[i].Issues[j].Field == "id" && results2[i].Issues[j].Message == domain.MissingIDMessage {
-				results2[i].Issues[j].Message = domain.UnrepairedIDMessage
-			}
-		}
 	}
 	if app.JSON {
 		// One envelope carrying what was fixed plus what couldn't be (leftover lint

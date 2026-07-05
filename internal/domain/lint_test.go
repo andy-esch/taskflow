@@ -63,22 +63,6 @@ func TestLintTask_BadDate(t *testing.T) {
 	}
 }
 
-func TestMisfiledIssues(t *testing.T) {
-	// The directory disagrees with the authoritative (frontmatter) status → flagged.
-	if got := MisfiledIssues(Task{Status: StatusReadyToStart, FolderStatus: StatusCompleted}); len(got) == 0 {
-		t.Error("expected a misfiled issue for a ready-to-start task filed in completed/")
-	}
-	// Directory matches the status → not misfiled. (A foreign frontmatter word falls
-	// back to the folder in parseTask, so it arrives here with Status == FolderStatus.)
-	if got := MisfiledIssues(Task{Status: StatusCompleted, FolderStatus: StatusCompleted}); len(got) != 0 {
-		t.Errorf("foreign status should not be flagged: %+v", got)
-	}
-	// A Task with no folder context (FolderStatus unset) is never misfiled.
-	if got := MisfiledIssues(Task{Status: StatusCompleted}); len(got) != 0 {
-		t.Errorf("a task with no folder context should not be flagged: %+v", got)
-	}
-}
-
 func TestFrontmatterStatusIssues(t *testing.T) {
 	// A fell-back frontmatter status (missing or unrecognized) is flagged.
 	if got := FrontmatterStatusIssues(Task{StatusFellBack: true}); len(got) == 0 {
@@ -96,6 +80,38 @@ func TestFrontmatterBucketIssues(t *testing.T) {
 	}
 	if got := FrontmatterBucketIssues(Audit{Bucket: AuditOpen}); len(got) != 0 {
 		t.Errorf("a valid frontmatter bucket must not be flagged: %+v", got)
+	}
+}
+
+func TestEpicNameIssue(t *testing.T) {
+	// NN-<slug> names (any digit width) are clean.
+	for _, ok := range []string{"00-taskflow-v1-core", "01-backend", "27-x", "100-scale"} {
+		if got := EpicNameIssue(ok); len(got) != 0 {
+			t.Errorf("%q is a valid NN- name, must not be flagged: %+v", ok, got)
+		}
+	}
+	// Non-NN names are flagged (fail-open: flagged, not dropped) — including an empty slug.
+	for _, bad := range []string{"taskflow-v1-core", "demo", "e1", "1-unpadded", "01-", "01"} {
+		if got := EpicNameIssue(bad); len(got) == 0 {
+			t.Errorf("%q is not NN-<slug> and must be flagged", bad)
+		}
+	}
+}
+
+func TestIDDriftIssue(t *testing.T) {
+	// The frontmatter id and the filename id disagree — flagged.
+	if got := IDDriftIssue("6fjangd7kvzz", "6fjangd7kvaa"); len(got) == 0 {
+		t.Error("a frontmatter id that disagrees with the filename id must be flagged")
+	}
+	// Matching ids (the post-flatten norm) — clean.
+	if got := IDDriftIssue("6fjangd7kvaa", "6fjangd7kvaa"); len(got) != 0 {
+		t.Errorf("matching ids must not be flagged: %+v", got)
+	}
+	// An empty or whitespace-only side is left to MissingIDIssue, not double-reported here.
+	for _, blank := range []string{"", "   "} {
+		if got := IDDriftIssue(blank, "6fjangd7kvaa"); len(got) != 0 {
+			t.Errorf("a blank frontmatter id (%q) is MissingIDIssue's job, not drift: %+v", blank, got)
+		}
 	}
 }
 

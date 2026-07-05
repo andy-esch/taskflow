@@ -3,15 +3,18 @@ package store
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
-const auditEditSeed = "---\narea: store\ndate: \"2026-06-20\"\n---\n# Audit\n\n#### H1. thing  · **Status:** open\n\nbody\n"
+// auditEditSeed carries an explicit `bucket:` so AuditFixture writes it verbatim
+// (bucket is authoritative in frontmatter under the flat layout, ADR-0003 §4) —
+// the editor-content assertions below compare against these exact bytes.
+const auditEditSeed = "---\nbucket: open\narea: store\ndate: \"2026-06-20\"\n---\n# Audit\n\n#### H1. thing  · **Status:** open\n\nbody\n"
 
 // auditEditNow is deliberately LATER than the seed's immutable date (2026-06-20),
 // so a stamped updated_at is visibly distinct from the slug's date.
@@ -20,8 +23,9 @@ var auditEditNow = time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 func auditEditRepo(t *testing.T) (*FS, string) {
 	t.Helper()
 	root := t.TempDir()
-	writeAudit(t, root, "open", "2026-06-20-store.md", auditEditSeed)
-	return NewFS(root), filepath.Join(root, domain.AuditsDir, "open", "2026-06-20-store.md")
+	path, out := testutil.AuditFixture(root, "open", "2026-06-20-store.md", auditEditSeed)
+	testutil.Write(t, path, out)
+	return NewFS(root), path
 }
 
 // EditAudit mirrors EditTask: a valid edit parses, writes atomically, reports changed,
@@ -178,50 +182,49 @@ func TestEditAudit_NoChange_DoesNotWrite(t *testing.T) {
 	}
 }
 
-// EditAudit's signature feature vs EditEpic: a concurrent bucket move (audit
-// close/reopen/defer) during the editor window is a compare-and-swap conflict, not a
-// silent resurrection of the slug at its old bucket. Mirrors the task relocation test.
-func TestEditAudit_RelocatedDuringEdit_Conflict(t *testing.T) {
+// EditAudit compare-and-swaps: a concurrent in-place edit during the editor window
+// (audit close/reopen/defer now rewrite the frontmatter in place — the path never
+// changes under the flat layout) is a version conflict, not a silent clobber of the
+// winning edit. Mirrors the task edit CAS test.
+func TestEditAudit_EditedDuringEdit_Conflict(t *testing.T) {
 	fs, path := auditEditRepo(t)
-	moved := strings.Replace(path, "open", "closed", 1)
 	_, changed, err := fs.EditAudit("2026-06-20-store", bodyNow, func(cur string, _ error) (string, error) {
-		_ = os.MkdirAll(filepath.Dir(moved), 0o755)
-		_ = os.Rename(path, moved) // simulate a concurrent `audit close` mid-edit
+		// Simulate a concurrent `audit close` mid-edit: an in-place frontmatter rewrite.
+		testutil.Write(t, path, strings.Replace(cur, "bucket: open", "bucket: closed", 1))
 		return strings.Replace(cur, "body", "edited", 1), nil
 	})
 	if !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("a relocation mid-edit should be ErrConflict, got %v", err)
+		t.Fatalf("a concurrent in-place edit should be ErrConflict, got %v", err)
 	}
 	if changed {
 		t.Error("a conflicted edit must not report a change")
 	}
-	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
-		t.Error("the old path must not be resurrected")
+	if got := readFile(t, path); !strings.Contains(got, "bucket: closed") || strings.Contains(got, "edited body") {
+		t.Errorf("the losing edit must not clobber the concurrent in-place edit:\n%s", got)
 	}
 }
 
-// AppendAuditBody compare-and-swaps in the write window too: a bucket move there is a
-// conflict, never a resurrection. Mirrors TestEditBody_RelocatedDuringWrite_Conflict.
-func TestAppendAuditBody_RelocatedDuringWrite_Conflict(t *testing.T) {
+// AppendAuditBody compare-and-swaps in the write window too: a concurrent in-place edit
+// there is a conflict, never a clobber. Mirrors TestAppendAuditBody_ConflictsOnConcurrentContentEdit.
+func TestAppendAuditBody_EditedDuringWrite_Conflict(t *testing.T) {
 	fs, path := auditEditRepo(t)
-	moved := strings.Replace(path, "open", "closed", 1)
 	testHookBeforeBodyWrite = func() {
-		_ = os.MkdirAll(filepath.Dir(moved), 0o755)
-		_ = os.Rename(path, moved)
+		testutil.Write(t, path, strings.Replace(auditEditSeed, "bucket: open", "bucket: closed", 1))
 	}
 	defer func() { testHookBeforeBodyWrite = nil }()
 	if _, _, err := fs.AppendAuditBody("2026-06-20-store", "x", bodyNow, false); !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("a relocation in the write window should be ErrConflict, got %v", err)
+		t.Fatalf("a concurrent in-place edit in the write window should be ErrConflict, got %v", err)
 	}
-	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
-		t.Error("the old path must not be resurrected")
+	if got := readFile(t, path); !strings.Contains(got, "bucket: closed") {
+		t.Errorf("the losing append must not clobber the concurrent in-place edit:\n%s", got)
 	}
 }
 
 // Appending to an audit whose frontmatter won't parse errors rather than mangling it.
 func TestAppendAuditBody_BrokenFrontmatter_Errors(t *testing.T) {
 	root := t.TempDir()
-	writeAudit(t, root, "open", "2026-06-20-broken.md", "---\narea: store\nno closing fence\n")
+	path, out := testutil.AuditFixture(root, "open", "2026-06-20-broken.md", "---\narea: store\nno closing fence\n")
+	testutil.Write(t, path, out)
 	if _, _, err := NewFS(root).AppendAuditBody("2026-06-20-broken", "y", bodyNow, false); err == nil {
 		t.Fatal("appending to a file with unterminated frontmatter should error")
 	}

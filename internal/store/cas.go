@@ -54,7 +54,15 @@ func verifyUnchanged(resolve func(string) (string, error), slug, path, ifVersion
 	// rejection of an edit to a file that never changed. The canonical slug matches
 	// exactly (resolveID is exact-first) and deterministically, so only a genuine move or
 	// dup of THIS file trips the path check.
+	// Re-resolve by a key the resolver actually matches: for a flat, id-led entity
+	// (`<id>-<slug>`) that is the stable id — the full stem matches neither the id
+	// nor the slug candidate key. For a bucketed audit or an epic (basename not
+	// id-led) the full stem IS the resolution key. Either way it matches THIS file
+	// exactly and deterministically.
 	canonical := strings.TrimSuffix(filepath.Base(path), ".md")
+	if entityID, _, ok := splitFlatName(canonical); ok {
+		canonical = entityID
+	}
 	curPath, err := resolve(canonical)
 	if err != nil || curPath != path {
 		return conflict()

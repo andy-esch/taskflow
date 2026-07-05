@@ -353,7 +353,7 @@ func TestService_Summary(t *testing.T) {
 			{Slug: "a", Status: domain.StatusInProgress, Epic: "e1"},
 			{Slug: "b", Status: domain.StatusReadyToStart, Epic: "e1"},
 			{Slug: "c", Status: domain.StatusCompleted, Epic: "e1"},
-			{Slug: "d", Status: domain.StatusCompleted, FolderStatus: domain.StatusReadyToStart}, // misfiled, no epic
+			{Slug: "d", Status: domain.StatusCompleted}, // no epic
 		},
 	})
 	s, err := svc.Summary()
@@ -369,9 +369,6 @@ func TestService_Summary(t *testing.T) {
 	}
 	if len(s.InProgress) != 1 || s.InProgress[0].Slug != "a" {
 		t.Errorf("in-progress wrong: %+v", s.InProgress)
-	}
-	if s.Misfiled != 1 {
-		t.Errorf("misfiled = %d, want 1", s.Misfiled)
 	}
 	if len(s.Epics) != 1 || s.Epics[0].Total != 3 || s.Epics[0].Done != 1 {
 		t.Errorf("epic rollup wrong: %+v", s.Epics)

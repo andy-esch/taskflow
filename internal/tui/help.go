@@ -85,7 +85,6 @@ func symbolsFor(kind entityKind, s *styles) (helpSection, bool) {
 			e = append(e, tok(theme.Status(st), string(st)))
 		}
 		e = append(e,
-			tok(theme.MarkerWarn, "misfiled — folder ≠ status"),
 			tok(theme.MarkerRevisit, "revisit (snooze) date reached"),
 		)
 	case entityEpics:
@@ -115,7 +114,7 @@ func symbolsFor(kind entityKind, s *styles) (helpSection, bool) {
 			// ✓ ready-to-close (U+2713) and the ✔ all-clear (U+2714) are deliberately
 			// distinct glyphs — both come from theme.Marker* so they can't drift.
 			tok(theme.MarkerReadyToClose, "audit ready to close (findings resolved)"),
-			tok(theme.MarkerWarn, "needs attention (misfiled / non-conforming)"),
+			tok(theme.MarkerWarn, "needs attention (non-conforming status)"),
 			tok(theme.MarkerRevisit, "revisit (snooze) reached"),
 		)
 	}

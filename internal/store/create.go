@@ -84,28 +84,26 @@ func taskFields(t domain.Task) []fmField {
 	return fields
 }
 
-// CreateTask writes a new task file under tasks/<status>/<slug>.md. It refuses
-// to clobber an existing file. The slug and status are taken from t.
+// CreateTask writes a new task file at tasks/<id>-<slug>.md (flat, id-led per
+// ADR-0003 §4). It refuses to clobber an existing file; the slug, id, and status
+// are taken from t.
 func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error) {
 	if t.Slug == "" {
 		return domain.Task{}, fmt.Errorf("%w: empty task slug", domain.ErrValidation)
 	}
-	// Reject a slug already living in ANY status dir, not just the target — two
-	// files sharing a slug make every later resolve of it ErrAmbiguous.
-	cands, err := s.taskCandidates()
-	if err != nil {
-		return domain.Task{}, err
+	if t.ID == "" {
+		return domain.Task{}, fmt.Errorf("%w: task has no id", domain.ErrValidation)
 	}
-	if occ := slugCollision(t.Slug, cands); occ != "" {
-		return domain.Task{}, fmt.Errorf("task %q already exists in %s/: %w", t.Slug, occ, domain.ErrConflict)
-	}
-	dir := filepath.Join(s.tasksDir, t.Status.Dir())
-	path := filepath.Join(dir, t.Slug+".md")
+	// The id makes the flat filename unique, so writeNewFile's O_EXCL is the whole
+	// collision guard — no cross-dir slug scan. A duplicate slug (distinct id) is
+	// allowed under the flat layout and stays resolvable by id.
+	stem := t.ID + "-" + t.Slug
+	path := filepath.Join(s.tasksDir, stem+".md")
 	content, err := buildFile(taskFields(t), body)
 	if err != nil {
 		return domain.Task{}, err
 	}
-	if err := s.writeNewFile(dir, path, content, "task", t.Slug, dryRun); err != nil {
+	if err := s.writeNewFile(s.tasksDir, path, content, "task", stem, dryRun); err != nil {
 		return domain.Task{}, err
 	}
 	t.Path = path
@@ -123,29 +121,25 @@ func auditFields(a domain.Audit) []fmField {
 	}
 }
 
-// CreateAudit writes a new audit file under audits/open/<slug>.md. New audits
-// always start in the open bucket. It refuses to clobber an existing file.
+// CreateAudit writes a new audit at audits/<id>-<slug>.md (flat, id-led per
+// ADR-0003 §4). New audits always start in the open bucket; it refuses to clobber.
 func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error) {
 	if a.Slug == "" {
 		return domain.Audit{}, fmt.Errorf("%w: empty audit slug", domain.ErrValidation)
 	}
-	// Reject a slug already in ANY bucket, not just open/ — a slug in closed/ or
-	// deferred/ would otherwise resolve ambiguously after this create.
-	cands, err := s.auditCandidates()
-	if err != nil {
-		return domain.Audit{}, err
+	if a.ID == "" {
+		return domain.Audit{}, fmt.Errorf("%w: audit has no id", domain.ErrValidation)
 	}
-	if occ := slugCollision(a.Slug, cands); occ != "" {
-		return domain.Audit{}, fmt.Errorf("audit %q already exists in %s/: %w", a.Slug, occ, domain.ErrConflict)
-	}
+	// The id makes the flat filename unique, so writeNewFile's O_EXCL is the whole
+	// collision guard — a duplicate slug (distinct id) is allowed, resolved by id.
 	a.Bucket = domain.AuditOpen
-	dir := filepath.Join(s.auditsDir, a.Bucket.Dir())
-	path := filepath.Join(dir, a.Slug+".md")
+	stem := a.ID + "-" + a.Slug
+	path := filepath.Join(s.auditsDir, stem+".md")
 	content, err := buildFile(auditFields(a), body)
 	if err != nil {
 		return domain.Audit{}, err
 	}
-	if err := s.writeNewFile(dir, path, content, "audit", a.Slug, dryRun); err != nil {
+	if err := s.writeNewFile(s.auditsDir, path, content, "audit", stem, dryRun); err != nil {
 		return domain.Audit{}, err
 	}
 	a.Path = path

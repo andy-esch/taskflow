@@ -20,6 +20,12 @@ import (
 // write paths (SetFields/EditBody) already produce — agents route on the code.
 var errBadFrontmatter = fmt.Errorf("%w: malformed frontmatter", domain.ErrValidation)
 
+// errNotEntity marks a file whose name is not id-led — a non-entity left in a flat
+// entity directory (the carveout gate, ADR-0003 amendment 2026-07-04). It wraps
+// ErrValidation so the listing surfaces it as a FileProblem, distinct from a broken
+// entity (a real, id-led file whose frontmatter is malformed).
+var errNotEntity = fmt.Errorf("%w: not an entity file", domain.ErrValidation)
+
 // FS reads/writes a planning tree: tasks at <root>/tasks/<status>/<slug>.md
 // and epics at <root>/epics/<id>.md.
 type FS struct {
@@ -54,39 +60,24 @@ func NewFS(root string) *FS {
 // this lives here rather than being reconstructed by the TUI watcher (which
 // would otherwise duplicate the `tasks/<status>` / `audits/<bucket>` convention).
 func (s *FS) WatchPaths() []string {
-	dirs := []string{s.epicsDir, s.tasksDir, s.auditsDir}
-	for _, st := range domain.AllStatuses() {
-		dirs = append(dirs, filepath.Join(s.tasksDir, st.Dir()))
-	}
-	for _, b := range domain.AllAuditBuckets() {
-		dirs = append(dirs, filepath.Join(s.auditsDir, b.Dir()))
-	}
-	return dirs
+	// Tasks and audits are both flat now (ADR-0003 §4): each entity dir is the only
+	// watch path for its kind — a status/bucket change is an in-place frontmatter write
+	// that fires on the parent dir. Epics were always flat.
+	return []string{s.epicsDir, s.tasksDir, s.auditsDir}
 }
 
 // ListTasks scans every status directory and parses each task's frontmatter.
 // A file with unreadable frontmatter is skipped and reported as a FileProblem
 // (so one bad file doesn't blind the whole listing); err is only for fatal I/O.
 func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
-	var tasks []domain.Task
-	var problems []domain.FileProblem
-	for _, st := range domain.AllStatuses() {
-		dir := filepath.Join(s.tasksDir, st.Dir())
-		ts, ps, err := scanDir(dir, func(path string, content []byte) (domain.Task, error) {
-			return parseTask(content, path, st)
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		tasks = append(tasks, ts...)
-		problems = append(problems, ps...)
-	}
-	return tasks, problems, nil
+	return scanDir(s.tasksDir, func(path string, content []byte) (domain.Task, error) {
+		return parseTask(content, path)
+	})
 }
 
 // GetTask returns a single task plus its markdown body.
 func (s *FS) GetTask(slug string) (domain.Task, string, error) {
-	path, st, err := s.resolve(slug)
+	path, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, "", err
 	}
@@ -94,7 +85,7 @@ func (s *FS) GetTask(slug string) (domain.Task, string, error) {
 	if err != nil {
 		return domain.Task{}, "", fmt.Errorf("read task %s: %w", path, err)
 	}
-	t, err := parseTask(content, path, st)
+	t, err := parseTask(content, path)
 	if err != nil {
 		return domain.Task{}, "", fmt.Errorf("%s: %w", path, err)
 	}
@@ -131,7 +122,7 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 	if !to.Valid() {
 		return domain.Task{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
 	}
-	path, folder, err := s.resolve(slug)
+	path, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, err
 	}
@@ -139,18 +130,13 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("read task %s: %w", path, err)
 	}
-	// `from` is the AUTHORITATIVE status (frontmatter, ADR-0003 Phase A), not the folder
-	// resolve returned — so the transition is computed against what the task really is.
-	// They differ only on a misfiled file, where `folder` is a stale mirror; keep both:
-	// `from` drives the transition, `folder` decides whether a relocation is still owed
-	// and labels the no-op return. An unparseable file keeps the folder value (the move
-	// re-parses and fails cleanly below).
-	from := folder
-	fellBack := false
-	if cur, perr := parseTask(content, path, folder); perr == nil {
-		from = cur.Status
-		fellBack = cur.StatusFellBack
+	// Under the flat layout status lives only in frontmatter (ADR-0003 §4) — there is
+	// no directory to disagree with it, so a move is a pure in-place frontmatter edit.
+	cur, err := parseTask(content, path)
+	if err != nil {
+		return domain.Task{}, err
 	}
+	from := cur.Status
 
 	date := now.Format("2006-01-02")
 	updates := map[string]any{}
@@ -178,12 +164,6 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 		if from == domain.StatusDeferred {
 			updates["revisit_at"] = domain.UnsetField{}
 		}
-	} else if fellBack {
-		// The status isn't changing, but the frontmatter status was missing or
-		// unrecognized (it fell back to the folder) — this explicit verb writes the value,
-		// healing the frontmatter. Not a transition, so no entry-date stamp is added.
-		updates["status"] = string(to)
-		updates["updated_at"] = date
 	}
 	// extra (Defer's revisit_at) rides the same write. When the status isn't
 	// changing — a re-defer in place — it's the only field change, and we still
@@ -196,32 +176,18 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 			updates[k] = v
 		}
 	}
-	// A true no-op writes nothing AND needs no relocation — the file is already in the
-	// target dir. A misfiled file (folder != to) with no frontmatter change still needs
-	// to MOVE to match its authoritative status, so it falls through with empty updates
-	// (a pure relocation that carries the frontmatter verbatim, no spurious re-stamp).
-	if len(updates) == 0 && folder == to {
-		return parseTask(content, path, folder)
+	// No-op: a move to the current status with no extra field changes.
+	if len(updates) == 0 {
+		return cur, nil
 	}
-	newContent := content
-	if len(updates) > 0 {
-		newContent, err = updateFrontmatter(content, updates)
-		if err != nil {
-			return domain.Task{}, err
-		}
+	newContent, err := updateFrontmatter(content, updates)
+	if err != nil {
+		return domain.Task{}, err
 	}
-	// Parse before committing: if the updated content wouldn't read back, fail
-	// with nothing on disk changed. Parsing *after* the move reported failure on
-	// a move that had already happened — a phantom failure a retrying caller
-	// (or agent) would act on.
-	//
-	// The destination filename comes from the RESOLVED path, never the query:
-	// with fuzzy resolution, `task complete retr` must not rename the file to
-	// retr.md.
-	canonical := strings.TrimSuffix(filepath.Base(path), ".md")
-	newDir := filepath.Join(s.tasksDir, to.Dir())
-	newPath := filepath.Join(newDir, canonical+".md")
-	t, err := parseTask(newContent, newPath, to)
+	// Parse before committing: if the updated content wouldn't read back, fail with
+	// nothing on disk changed. The file path never changes — a move is an in-place
+	// frontmatter edit under the flat layout (no relocation, no dual-file window).
+	t, err := parseTask(newContent, path)
 	if err != nil {
 		return domain.Task{}, err
 	}
@@ -231,38 +197,20 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 	if testHookBeforeMoveWrite != nil {
 		testHookBeforeMoveWrite()
 	}
-	// Serialize the verify→write critical section (flock) so the version-CAS is atomic — no
-	// cooperating writer can land a rename between our verify and our own.
+	// Serialize the verify→write critical section (flock) so the version-CAS is atomic.
 	unlock, err := s.writeLock()
 	if err != nil {
 		return domain.Task{}, err
 	}
 	defer unlock()
-	// Version-CAS immediately before the write: verifyUnchanged re-resolves (a concurrent
-	// Move relocated the slug → writing the new file would leave a duplicate across two
-	// status dirs, a permanent ErrAmbiguous) AND re-hashes the source (a concurrent
-	// in-place edit — content the path-CAS alone silently allowed to clobber). Either way
-	// fail cleanly with nothing written. ifVersion is the hash of the bytes read above.
+	// Version-CAS immediately before the write: re-hash the source so a concurrent
+	// in-place edit is caught. The flat layout has no relocation, so content drift is
+	// the only hazard; fail cleanly with nothing written.
 	if err := verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "move"); err != nil {
 		return domain.Task{}, err
 	}
-	// Write the updated content atomically into the *target* status dir, then
-	// remove the old file last. A crash between the two leaves both files (a
-	// recoverable duplicate), never one whose frontmatter status disagrees with
-	// its directory — so the status==directory invariant is never broken.
-	if err := os.MkdirAll(newDir, 0o755); err != nil {
-		return domain.Task{}, fmt.Errorf("mkdir %s: %w", newDir, err)
-	}
-	if err := writeFileAtomic(newPath, newContent, 0o644); err != nil {
+	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
 		return domain.Task{}, err
-	}
-	// Relocation removes the old file last; an in-place rewrite (newPath == path,
-	// a re-defer) already overwrote it, so removing it would delete the file just
-	// written.
-	if newPath != path {
-		if err := os.Remove(path); err != nil {
-			return domain.Task{}, fmt.Errorf("remove old task file %s: %w", path, err)
-		}
 	}
 	return t, nil
 }
@@ -276,7 +224,7 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 	if _, ok := updates["status"]; ok {
 		return domain.Task{}, fmt.Errorf("%w: status is not a settable field — use Move", domain.ErrValidation)
 	}
-	path, st, err := s.resolve(slug)
+	path, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, err
 	}
@@ -293,13 +241,13 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 	// YAML type), reject without writing rather than corrupt the source of truth.
 	// The error is a *validation* failure (the update is bad, exit 11) — not a
 	// file problem; the message must not blame a file that was never touched.
-	t, err := parseTask(newContent, path, st)
+	t, err := parseTask(newContent, path)
 	if err != nil {
 		// Attribute the failure correctly: if the ORIGINAL file already fails to
 		// parse the same way (e.g. pre-existing duplicate keys — a merge artifact
 		// updateFrontmatter rewrites only the first of), blame the file, not the
 		// user's update. Otherwise it's the update that wouldn't reload.
-		if _, perr := parseTask(content, path, st); perr != nil {
+		if _, perr := parseTask(content, path); perr != nil {
 			return domain.Task{}, fmt.Errorf("%w: %s already has malformed frontmatter (not caused by this update): %v", domain.ErrValidation, path, perr)
 		}
 		return domain.Task{}, fmt.Errorf("%w: update would not reload (%v); nothing was written", domain.ErrValidation, err)
@@ -351,45 +299,54 @@ var testHookBeforeSetFieldsWrite func()
 // Nil outside tests.
 var testHookBeforeMoveWrite func()
 
-// resolve finds the file and current status for a slug — exact first, then
-// fuzzy (unique case-insensitive prefix, then substring) via resolveID, so a
-// half-remembered name works anywhere a slug is accepted. Ambiguity (including
-// the same slug in two status dirs) is an explicit ErrAmbiguous listing the
-// candidates.
-func (s *FS) resolve(slug string) (path string, status domain.Status, err error) {
+// resolve finds a task file by slug — exact first, then fuzzy (unique
+// case-insensitive prefix, then substring) via resolveID, matching on the stable
+// id or the human slug. Under the flat layout it returns just the path; status is
+// read from the file's frontmatter, not its (now absent) directory.
+func (s *FS) resolve(slug string) (string, error) {
 	cands, err := s.taskCandidates()
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	c, err := resolveID("task", slug, cands)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-	return c.path, domain.Status(c.dir), nil
+	return c.path, nil
 }
 
 // resolvePath is s.resolve reduced to (path, error) — the adapter the version-CAS guard
 // (verifyUnchanged) takes, so the guard stays entity-agnostic across tasks and audits.
-func (s *FS) resolvePath(slug string) (string, error) {
-	p, _, err := s.resolve(slug)
-	return p, err
-}
-
-// taskCandidates lists every task file as a resolution candidate (the dir name
-// IS the status, per the status==directory invariant).
-func (s *FS) taskCandidates() ([]candidate, error) {
-	var out []candidate
-	for _, st := range domain.AllStatuses() {
-		cs, err := markdownCandidates(filepath.Join(s.tasksDir, st.Dir()), st.Dir())
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, cs...)
+func (s *FS) resolvePath(id string) (string, error) {
+	cands, err := s.taskCandidates()
+	if err != nil {
+		return "", err
 	}
-	return out, nil
+	c, err := resolveExactID(cands, id)
+	if err != nil {
+		return "", err
+	}
+	return c.path, nil
 }
 
-func parseTask(content []byte, path string, dirStatus domain.Status) (domain.Task, error) {
+// taskCandidates lists every flat task file as a resolution candidate — id-led, with
+// status read from frontmatter (there is no status directory under the flat layout).
+func (s *FS) taskCandidates() ([]candidate, error) {
+	return flatCandidates(s.tasksDir)
+}
+
+// parseTask reads a flat task file (`<id>-<slug>.md`) into a domain.Task. The slug
+// comes from the id-led filename (splitFlatName); status is read purely from
+// frontmatter — under the flat layout (ADR-0003 §4) there is no directory to fall
+// back to, so a missing/unknown status is a hard read problem (flatten trap #3), and
+// a non-id-led filename is a carveout stray (errNotEntity) — except a README, which
+// is skipped silently.
+func parseTask(content []byte, path string) (domain.Task, error) {
+	base := filepath.Base(path)
+	fnID, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
+	if !ok {
+		return domain.Task{}, fmt.Errorf("%w: %q has no leading id — move it to meta/ or delete it", errNotEntity, base)
+	}
 	fm, _, err := splitFrontmatterStrict(content)
 	if err != nil {
 		return domain.Task{}, err
@@ -403,16 +360,17 @@ func parseTask(content []byte, path string, dirStatus domain.Status) (domain.Tas
 			return domain.Task{}, fmt.Errorf("%w: %s", errBadFrontmatter, frontmatterError(fm, err))
 		}
 	}
-	// Frontmatter status is the authority (ADR-0003 Phase A); the directory is a
-	// mirror, recorded as FolderStatus so drift (a misfiled file) can be surfaced.
-	// When frontmatter names no recognized status (missing, or a legacy word), the
-	// folder governs as a fallback so the task still lists and resolves.
-	t.FolderStatus = dirStatus
+	// Status is authoritative in frontmatter (ADR-0003 §4). There is no directory to
+	// fall back to under the flat layout, but an id-led file with a missing/unrecognized
+	// status is still a real task: it LISTS with its raw status and is FLAGGED by lint
+	// (StatusFellBack), rather than dropped as a hard read problem — and a lifecycle verb
+	// heals it (moveTask writes a valid status). A non-id-led stray is already rejected
+	// above; a file with no frontmatter block at all remains a loud FileProblem.
 	if !t.Status.Valid() {
-		t.StatusFellBack = true // frontmatter status missing/unrecognized — lint flags it
-		t.Status = dirStatus
+		t.StatusFellBack = true
 	}
-	t.Slug = strings.TrimSuffix(filepath.Base(path), ".md")
+	t.Slug = slug
+	t.FilenameID = fnID
 	t.Path = path
 	return t, nil
 }

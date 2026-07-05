@@ -2,10 +2,10 @@ package store
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/testutil"
 	yaml "go.yaml.in/yaml/v3"
 )
 
@@ -83,8 +83,8 @@ func TestFixFrontmatterText_Idempotent(t *testing.T) {
 
 func TestFS_FixFrontmatter_DryRunThenWrite(t *testing.T) {
 	root := t.TempDir()
-	writeTask(t, root, "ready-to-start", "bad.md", "---\nstatus: ready-to-start\ntags: a,b\n---\n# B\n")
-	path := filepath.Join(root, "tasks", "ready-to-start", "bad.md")
+	path, out := testutil.TaskFixture(root, "ready-to-start", "bad.md", "---\nstatus: ready-to-start\ntags: a,b\n---\n# B\n")
+	testutil.Write(t, path, out)
 
 	res, err := NewFS(root).FixFrontmatter(true) // dry-run
 	if err != nil {

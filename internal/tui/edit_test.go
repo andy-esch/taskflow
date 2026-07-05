@@ -30,8 +30,9 @@ func cleanTaskRepo(t *testing.T) string {
 		}
 	}
 	mk("epics/e1.md", "---\nstatus: active\n---\n# E1\n")
-	mk("tasks/in-progress/clean.md",
+	path, out := testutil.TaskFixture(root, "in-progress", "clean.md",
 		"---\nstatus: in-progress\nepic: e1\ntier: 2\npriority: low\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# Clean\n")
+	testutil.Write(t, path, out)
 	return root
 }
 
@@ -259,7 +260,7 @@ func TestModel_EditTagsCoercedToList(t *testing.T) {
 // file is untouched.
 func TestModel_EditCancelNoWrite(t *testing.T) {
 	root := cleanTaskRepo(t)
-	path := filepath.Join(root, "tasks", "in-progress", "clean.md")
+	path, _ := testutil.TaskFixture(root, "in-progress", "clean.md", "")
 	before, _ := os.ReadFile(path)
 	m := loadedAt(t, root, 120, 40)
 	tm, _ := m.Update(press("e"))

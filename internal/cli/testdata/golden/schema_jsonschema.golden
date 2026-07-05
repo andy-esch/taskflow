@@ -15,7 +15,7 @@
         },
         "bucket": {
           "type": "string",
-          "description": "open | closed | deferred — equals the audit's directory"
+          "description": "open | closed | deferred — authoritative"
         },
         "area": {
           "type": "string",
@@ -1102,9 +1102,6 @@
         "findings": {
           "$ref": "#/$defs/FindingsRollupJSON"
         },
-        "misfiled": {
-          "type": "integer"
-        },
         "revisit_due": {
           "type": "integer"
         },
@@ -1125,7 +1122,6 @@
         "counts",
         "in_progress",
         "epics",
-        "misfiled",
         "revisit_due",
         "bad_epic_status"
       ],
@@ -1187,14 +1183,6 @@
           },
           "type": "array",
           "description": "topical tags"
-        },
-        "misfiled": {
-          "type": "boolean",
-          "description": "true when the file's directory disagrees with its authoritative frontmatter status (the mirror is stale; lint --fix relocates it)"
-        },
-        "declared_status": {
-          "type": "string",
-          "description": "the status directory a misfiled file physically sits in (the stale mirror); absent unless misfiled"
         }
       },
       "additionalProperties": false,
@@ -1564,6 +1552,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.25)",
+  "title": "tskflwctl --json output (schema_version 1.26)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

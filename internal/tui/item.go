@@ -60,8 +60,9 @@ func (i taskItem) sortFields() sortFields {
 	return sortFields{priorityRank: priorityRank(i.t.Priority), updated: i.t.Updated, tier: i.t.Tier, slug: i.t.Slug}
 }
 
-// taskDelegate renders one task row: colored status glyph, a ⚠ if misfiled, the
-// slug, and a dim relative date — truncated to fit the list width.
+// taskDelegate renders one task row: colored status glyph, a ↻ marker when a
+// deferred task's revisit date has arrived, the slug, and a dim relative date —
+// truncated to fit the list width.
 type taskDelegate struct{ st *styles }
 
 func (taskDelegate) Height() int                         { return 1 }
@@ -75,14 +76,10 @@ func (d taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	}
 	st := d.st
 	tok := theme.Status(it.t.Status)
-	// One marker cell: a misfiled ⚠ (data-integrity warning) wins; otherwise a ↻
-	// when a deferred task's revisit (snooze) date has arrived (it.due, set at load)
-	// — the per-row twin of the `:revisit` view.
+	// One marker cell: a ↻ when a deferred task's revisit (snooze) date has arrived
+	// (it.due, set at load) — the per-row twin of the `:revisit` view.
 	marker := " "
-	switch {
-	case it.t.Misfiled():
-		marker = st.glyph(theme.MarkerWarn)
-	case it.due:
+	if it.due {
 		marker = st.glyph(theme.MarkerRevisit)
 	}
 	date := theme.RelativeDate(theme.TaskDate(it.t))

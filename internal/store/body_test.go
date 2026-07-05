@@ -1,14 +1,11 @@
 package store
 
 import (
-	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 var bodyNow = time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
@@ -61,11 +58,12 @@ func TestEditBody_PreservesUnknownKeys(t *testing.T) {
 	root := t.TempDir()
 	seed := "---\nstatus: ready-to-start\ncustom_field: keep-me\ndescription: d\n---\n# B\n\nold\n"
 	writeTask(t, root, "ready-to-start", "u.md", seed)
+	path, _ := testutil.TaskFixture(root, "ready-to-start", "u.md", seed)
 	fs := NewFS(root)
 	if _, _, err := fs.EditBody("u", "# B\n\nnew", false, bodyNow, false); err != nil {
 		t.Fatalf("EditBody: %v", err)
 	}
-	got := readFile(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "u.md"))
+	got := readFile(t, path)
 	if !strings.Contains(got, "custom_field: keep-me") {
 		t.Errorf("unknown key must survive a body edit:\n%s", got)
 	}
@@ -102,11 +100,12 @@ func TestEditBody_CRLFRoundTrip(t *testing.T) {
 			root := t.TempDir()
 			crlf := strings.ReplaceAll("---\nstatus: ready-to-start\ndescription: old\n---\n# Alpha\n\nbody\n", "\n", "\r\n")
 			writeTask(t, root, "ready-to-start", "alpha.md", crlf)
+			path, _ := testutil.TaskFixture(root, "ready-to-start", "alpha.md", crlf)
 			fs := NewFS(root)
 			if err := tc.edit(fs); err != nil {
 				t.Fatal(err)
 			}
-			b := readFile(t, filepath.Join(root, domain.TasksDir, "ready-to-start", "alpha.md"))
+			b := readFile(t, path)
 			if lone := strings.Count(b, "\n") - strings.Count(b, "\r\n"); lone != 0 {
 				t.Errorf("CRLF file came back with %d bare-LF endings (mixed):\n%q", lone, b)
 			}
@@ -130,24 +129,6 @@ func TestAppendSection_Edges(t *testing.T) {
 		if got := appendSection(c.old, c.add); got != c.want {
 			t.Errorf("case %d: appendSection(%q, %q) = %q, want %q", i, c.old, c.add, got, c.want)
 		}
-	}
-}
-
-// A relocation in the write window (forced via the test hook) is a compare-and-swap
-// conflict, not a resurrection of the slug at its old path.
-func TestEditBody_RelocatedDuringWrite_Conflict(t *testing.T) {
-	fs, path := editRepo(t)
-	moved := strings.Replace(path, "ready-to-start", "in-progress", 1)
-	testHookBeforeBodyWrite = func() {
-		_ = os.MkdirAll(filepath.Dir(moved), 0o755)
-		_ = os.Rename(path, moved)
-	}
-	defer func() { testHookBeforeBodyWrite = nil }()
-	if _, _, err := fs.EditBody("edit-me", "# new body", false, bodyNow, false); !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("relocation during the write window should be ErrConflict, got %v", err)
-	}
-	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
-		t.Errorf("the old path must not be resurrected")
 	}
 }
 

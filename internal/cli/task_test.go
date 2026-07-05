@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // setupRepo builds a temporary planning tree and returns its root.
@@ -14,13 +16,8 @@ func setupRepo(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	write := func(status, name, content string) {
-		dir := filepath.Join(root, "tasks", status)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		path, out := testutil.TaskFixture(root, status, name, content)
+		testutil.Write(t, path, out)
 	}
 	write("ready-to-start", "alpha.md", "---\nstatus: ready-to-start\ndescription: alpha\ntags: [seed]\n---\n# Alpha\n")
 	write("in-progress", "beta.md", "---\nstatus: in-progress\ndescription: beta\ntags: [seed]\n---\n# Beta\n")

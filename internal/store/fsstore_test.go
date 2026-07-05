@@ -1,17 +1,16 @@
 package store
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func writeTask(t *testing.T, root, status, name, content string) {
 	t.Helper()
-	testutil.Write(t, filepath.Join(root, domain.TasksDir, status, name), content)
+	path, out := testutil.TaskFixture(root, status, name, content)
+	testutil.Write(t, path, out)
 }
 
 func TestFS_ListTasks(t *testing.T) {
@@ -43,19 +42,6 @@ func TestFS_ListTasks(t *testing.T) {
 	}
 	if !seen["ready-to-start"] || !seen["in-progress"] {
 		t.Errorf("missing statuses, saw: %v", seen)
-	}
-}
-
-func TestFS_ListTasks_StatusFromDirWhenMissing(t *testing.T) {
-	root := t.TempDir()
-	// No status in frontmatter → directory is the source of truth.
-	writeTask(t, root, "completed", "gamma.md", "---\ndescription: g\n---\n# Gamma\n")
-	tasks, _, err := NewFS(root).ListTasks()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(tasks) != 1 || tasks[0].Status != "completed" {
-		t.Fatalf("got %+v", tasks)
 	}
 }
 
