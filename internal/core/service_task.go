@@ -280,6 +280,9 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	if !epicExists(epics, p.Epic) {
 		return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, p.Epic)
 	}
+	// Store and link the epic's canonical stem (resolved on the NN key), so a bare NN or
+	// a stale slug the caller passed becomes the epic's current, readable `<NN>-<slug>`.
+	p.Epic = canonicalEpic(epics, p.Epic)
 	// Defaults for zero-valued fields live here so EVERY caller — not just the CLI
 	// flags — produces a valid, lint-clean task; the CLI flag defaults stay as
 	// help-text hints. (A second adapter calling NewTask without replicating them

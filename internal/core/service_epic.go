@@ -73,6 +73,20 @@ func epicExists(epics []domain.Epic, id string) bool {
 	return false
 }
 
+// canonicalEpic returns the full `<NN>-<slug>` stem of the epic that ref points at
+// (resolved on the NN key), so a new task stores and links the epic's current, readable
+// stem even when the caller passed a bare NN or a stale slug. Falls back to ref when none
+// matches (callers gate on epicExists first).
+func canonicalEpic(epics []domain.Epic, ref string) string {
+	key := domain.EpicRefKey(ref)
+	for _, e := range epics {
+		if domain.EpicRefKey(e.ID) == key {
+			return e.ID
+		}
+	}
+	return ref
+}
+
 // EpicSummary is an epic plus its task rollup. Total/Done/Percent exclude
 // deprecated (withdrawn) tasks; Deprecated counts them separately so a consumer
 // can still surface "N withdrawn" without dragging the percentage.

@@ -66,7 +66,7 @@ func TestTaskNew_HappyPath(t *testing.T) {
 	s := string(b)
 	for _, want := range []string{
 		"status: ready-to-start", "epic: 01-e1", "tier: 3", "priority: medium",
-		"effort: Unknown", "## Acceptance criteria", "Epic [[01-e1]]",
+		"effort: Unknown", "## Acceptance criteria", "Epic [01-e1](../epics/01-e1.md)",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("created task missing %q:\n%s", want, s)

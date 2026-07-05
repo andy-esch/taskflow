@@ -68,7 +68,7 @@ var entities = []Descriptor{
 			{"tags", "list", true, "At least one topical tag (required at creation).", "[cli, core]"},
 		},
 		Conventions: []string{
-			"status lives in frontmatter (authoritative) but is changed only via the lifecycle verbs (start/next/complete/…), which move the file to match — don't edit it directly.",
+			"status lives in frontmatter (authoritative) and is changed only via the lifecycle verbs (start/next/complete/…), which edit it in place — don't edit it directly.",
 			fmt.Sprintf("description is a single line, ≤%d characters.", MaxDescriptionLen),
 			"at least one tag is required at creation.",
 			"the filename slug is derived from the title; any title is accepted (colons, dashes, arrows, …) and the full title is kept as the body H1.",
@@ -246,7 +246,7 @@ const taskBodyTemplate = `
 
 ## Related
 
-- Epic [[{{epic}}]]
+- Epic [{{epic}}](../epics/{{epic}}.md)
 `
 
 const epicBodyTemplate = `
