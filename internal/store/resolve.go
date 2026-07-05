@@ -10,6 +10,12 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
+// readmeFile is the one non-entity name a flat entity scan ignores silently
+// (GitHub renders it as the folder's landing page). Every OTHER non-id-led file is
+// a loud FileProblem — the carveout gate (ADR-0003 amendment 2026-07-04). Checked in
+// scanDir (entity-agnostic) so it holds for tasks, epics, and audits alike.
+const readmeFile = "README.md"
+
 // markdownDoc reports whether a directory entry is the shape every store scan
 // accepts: a regular `.md` file. Requiring a *regular* file (not just non-dir)
 // rejects symlinks, so a planted `x.md` link can't be followed out of the
@@ -36,6 +42,9 @@ func scanDir[T any](dir string, parse func(path string, content []byte) (T, erro
 	for _, e := range entries {
 		if !markdownDoc(e) {
 			continue
+		}
+		if e.Name() == readmeFile {
+			continue // a README landing page is silently ignored — the carveout README carve
 		}
 		path := filepath.Join(dir, e.Name())
 		content, err := os.ReadFile(path)
@@ -67,6 +76,9 @@ func markdownCandidates(dir, dirName string) ([]candidate, error) {
 	for _, e := range entries {
 		if !markdownDoc(e) {
 			continue
+		}
+		if e.Name() == readmeFile {
+			continue // a README landing page is not a resolution candidate — parity with scanDir's carve
 		}
 		out = append(out, candidate{
 			id:   strings.TrimSuffix(e.Name(), ".md"),

@@ -110,7 +110,7 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 // comments, and key order survive) and updated_at is stamped. The shared write tail
 // lives in writeBody. Returns the reloaded task and the resulting (LF) body.
 func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error) {
-	path, st, err := s.resolve(slug)
+	path, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, "", err
 	}
@@ -130,7 +130,7 @@ func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun 
 	return writeBody(
 		"task", path, content, newBody,
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
-		func(c []byte) (domain.Task, error) { return parseTask(c, path, st) },
+		func(c []byte) (domain.Task, error) { return parseTask(c, path) },
 		s.writeLock,
 		func() error { return verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "edit") },
 		dryRun,

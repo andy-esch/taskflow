@@ -1,17 +1,16 @@
 package store
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func writeTask(t *testing.T, root, status, name, content string) {
 	t.Helper()
-	testutil.Write(t, filepath.Join(root, domain.TasksDir, status, name), content)
+	path, out := testutil.TaskFixture(root, status, name, content)
+	testutil.Write(t, path, out)
 }
 
 func TestFS_ListTasks(t *testing.T) {

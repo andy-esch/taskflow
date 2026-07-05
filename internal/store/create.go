@@ -84,28 +84,26 @@ func taskFields(t domain.Task) []fmField {
 	return fields
 }
 
-// CreateTask writes a new task file under tasks/<status>/<slug>.md. It refuses
-// to clobber an existing file. The slug and status are taken from t.
+// CreateTask writes a new task file at tasks/<id>-<slug>.md (flat, id-led per
+// ADR-0003 §4). It refuses to clobber an existing file; the slug, id, and status
+// are taken from t.
 func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error) {
 	if t.Slug == "" {
 		return domain.Task{}, fmt.Errorf("%w: empty task slug", domain.ErrValidation)
 	}
-	// Reject a slug already living in ANY status dir, not just the target — two
-	// files sharing a slug make every later resolve of it ErrAmbiguous.
-	cands, err := s.taskCandidates()
-	if err != nil {
-		return domain.Task{}, err
+	if t.ID == "" {
+		return domain.Task{}, fmt.Errorf("%w: task has no id", domain.ErrValidation)
 	}
-	if occ := slugCollision(t.Slug, cands); occ != "" {
-		return domain.Task{}, fmt.Errorf("task %q already exists in %s/: %w", t.Slug, occ, domain.ErrConflict)
-	}
-	dir := filepath.Join(s.tasksDir, t.Status.Dir())
-	path := filepath.Join(dir, t.Slug+".md")
+	// The id makes the flat filename unique, so writeNewFile's O_EXCL is the whole
+	// collision guard — no cross-dir slug scan. A duplicate slug (distinct id) is
+	// allowed under the flat layout and stays resolvable by id.
+	stem := t.ID + "-" + t.Slug
+	path := filepath.Join(s.tasksDir, stem+".md")
 	content, err := buildFile(taskFields(t), body)
 	if err != nil {
 		return domain.Task{}, err
 	}
-	if err := s.writeNewFile(dir, path, content, "task", t.Slug, dryRun); err != nil {
+	if err := s.writeNewFile(s.tasksDir, path, content, "task", stem, dryRun); err != nil {
 		return domain.Task{}, err
 	}
 	t.Path = path
