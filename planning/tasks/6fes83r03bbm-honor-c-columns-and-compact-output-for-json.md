@@ -26,7 +26,7 @@ An agent pattern-matches "machine-readable ⇒ `--json`" and pays for every
 row when it wanted three fields.
 
 This builds directly on the completed
-[[consolidate-output-flags-into-output-and-columns]], which gave the list
+[consolidate-output-flags-into-output-and-columns](6fdtbb401htr-consolidate-output-flags-into-output-and-columns.md), which gave the list
 commands `-o/--output` + a completable `-c/--columns` projection — but only for
 `table`/`csv`. This task extends that projection to the format agents actually
 parse, and stops pretty-printing for machines.
@@ -52,8 +52,8 @@ parse, and stops pretty-printing for machines.
 
 ## Related
 
-- Extends [[consolidate-output-flags-into-output-and-columns]] (table/csv `-c`).
-- Epic [[20-cli-ux-and-ergonomics]] (output modes, column projection).
+- Extends [consolidate-output-flags-into-output-and-columns](6fdtbb401htr-consolidate-output-flags-into-output-and-columns.md) (table/csv `-c`).
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md) (output modes, column projection).
 
 ## Resolution (2026-06-22)
 

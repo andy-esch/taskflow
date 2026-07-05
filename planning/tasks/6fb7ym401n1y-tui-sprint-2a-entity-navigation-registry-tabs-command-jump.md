@@ -17,8 +17,8 @@ id: 6fb7ym401n1y
 # TUI sprint 2a entity navigation (registry, tabs, command-jump)
 
 > ℹ️ **Proposed S2 split (filed this session).** The original
-> [[tui-sprint-2-multi-entity-navigation-and-search]] grew large, so it's split
-> into 2a (this — structure) and [[tui-sprint-2b-search-status-views-and-interactive-sort]]
+> [tui-sprint-2-multi-entity-navigation-and-search](6faxn1802k3e-tui-sprint-2-multi-entity-navigation-and-search.md) grew large, so it's split
+> into 2a (this — structure) and [tui-sprint-2b-search-status-views-and-interactive-sort](6fb7ym400n5q-tui-sprint-2b-search-status-views-and-interactive-sort.md)
 > (refinement). The implementing agent should confirm the seam at sprint start;
 > the original task is deprecated, not lost.
 
@@ -28,7 +28,7 @@ The structural half of S2: make the browser **multi-entity**. Build the registry
 + switching surface that everything in 2b (filter/sort/status-views) then
 operates on. After this you can move between tasks/epics/audits; after 2b you can
 search/sort/scope within them. Decisions in
-[[18-tui-bubble-tea-interactive-planning-browser]].
+[18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).
 
 ## Scope
 
@@ -120,10 +120,10 @@ strip — left as-is to keep the `/` filter prompt working; tidy in S2b.
   detail renderers (rollup %, finding counts) had no direct test.
 
 Out-of-scope findings folded forward:
-[[tui-sprint-2b-search-status-views-and-interactive-sort]] (redundant list title,
-filter-to-empty stale detail), [[tui-sprint-3-fsnotify-live-reload]] (reload all
+[tui-sprint-2b-search-status-views-and-interactive-sort](6fb7ym400n5q-tui-sprint-2b-search-status-views-and-interactive-sort.md) (redundant list title,
+filter-to-empty stale detail), [tui-sprint-3-fsnotify-live-reload](6faxn1800qb2-tui-sprint-3-fsnotify-live-reload.md) (reload all
 loaded tabs, not just the active one),
-[[clirender-polish-batch-audit-flags-color-tty-wide-char-width]] (dedup the
+[clirender-polish-batch-audit-flags-color-tty-wide-char-width](6fb7ym4038pj-clirender-polish-batch-audit-flags-color-tty-wide-char-width.md) (dedup the
 progress-bar math into `theme.BarFill`).
 
 ### Second review pass — two subagents (2026-06-11)
@@ -154,7 +154,7 @@ every finding re-verified before acting. Fixed in-scope:
 - Marked `Model.root` as reserved-for-S3 (was an unexplained unread field).
 
 Low-severity findings folded to
-[[tui-sprint-2b-search-status-views-and-interactive-sort]] (debounce detail
+[tui-sprint-2b-search-status-views-and-interactive-sort](6fb7ym400n5q-tui-sprint-2b-search-status-views-and-interactive-sort.md) (debounce detail
 loads, alias-aware Tab-completion, epic-rollup computed twice). Reviewers
 confirmed clean: boundary hygiene (no `store`/fs in non-test TUI code), the
 value-receiver/pointer-helper mutation pattern, the async stale guards, layout
@@ -162,7 +162,7 @@ math, and key-routing gating order.
 
 ## Dependencies / ordering
 
-- Lands before [[tui-sprint-2b-search-status-views-and-interactive-sort]] (2b's
+- Lands before [tui-sprint-2b-search-status-views-and-interactive-sort](6fb7ym400n5q-tui-sprint-2b-search-status-views-and-interactive-sort.md) (2b's
   filter-chip, status views, and per-entity sort assume the registry + per-entity
   lists exist).
 - Independent of S3 (live reload) and S4 (mutations).
@@ -176,6 +176,6 @@ math, and key-routing gating order.
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
-- Sibling [[tui-sprint-2b-search-status-views-and-interactive-sort]]
-- Supersedes (with 2b) [[tui-sprint-2-multi-entity-navigation-and-search]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
+- Sibling [tui-sprint-2b-search-status-views-and-interactive-sort](6fb7ym400n5q-tui-sprint-2b-search-status-views-and-interactive-sort.md)
+- Supersedes (with 2b) [tui-sprint-2-multi-entity-navigation-and-search](6faxn1802k3e-tui-sprint-2-multi-entity-navigation-and-search.md)

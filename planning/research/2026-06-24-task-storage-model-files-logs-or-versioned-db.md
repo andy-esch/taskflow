@@ -261,15 +261,15 @@ machinery, which adds nothing for it. Two consequences:
   volatile fields into a commute-friendly **append-log** (B1 scoped to just
   `status`/timestamps, body left as plain markdown). The first is developed in the
   2026-06-30 update of
-  [[2026-06-24-remote-planning-repos-backends-and-sync]].
+  [2026-06-24-remote-planning-repos-backends-and-sync](2026-06-24-remote-planning-repos-backends-and-sync.md).
 
 ## Related
 
 - **Home: epic
-  [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]** — this
+  [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)** — this
   spike feeds its decisions (it's design-first; the open questions above are its).
-- [[2026-06-24-remote-planning-repos-backends-and-sync]] — remote backends + the
+- [2026-06-24-remote-planning-repos-backends-and-sync](2026-06-24-remote-planning-repos-backends-and-sync.md) — remote backends + the
   version-aware `Store` port (OCC). Same root cause: state encoded in the path.
-- Epic [[23-point-an-impl-repo-at-an-external-planning-repo]].
+- Epic [23-point-an-impl-repo-at-an-external-planning-repo](../epics/23-point-an-impl-repo-at-an-external-planning-repo.md).
 - Today's invariant: `status == directory` (CLAUDE.md; `store/layout.go`,
   `Misfiled()`), which option A3 would relax (frontmatter becomes source of truth).

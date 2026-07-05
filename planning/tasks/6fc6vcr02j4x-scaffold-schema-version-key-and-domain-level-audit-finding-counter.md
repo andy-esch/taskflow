@@ -19,7 +19,7 @@ id: 6fc6vcr02j4x
 ## Objective
 
 Two small forward-compat items deferred from
-[[put-storage-layout-knowledge-back-behind-the-port]] (its item #4). Both are
+[put-storage-layout-knowledge-back-behind-the-port](6fbj87001q7p-put-storage-layout-knowledge-back-behind-the-port.md) (its item #4). Both are
 "cheap while in here" cleanups that were out of scope for the layout work but
 worth doing on their own. Independent of each other — split if it reads cleaner.
 
@@ -35,7 +35,7 @@ worth doing on their own. Independent of each other — split if it reads cleane
    in `domain` and the store just calls it.
 
    > **Note (2026-06-17): item #2 is being subsumed by
-   > [[audit-finding-level-operations-query-write-lint-sync]].** That task needs
+   > [audit-finding-level-operations-query-write-lint-sync](6fd5r5c03v5y-audit-finding-level-operations-query-write-lint-sync.md).** That task needs
    > a full per-finding parser (`domain.ParseFindings`); the counts fall out of
    > it, so the count-move should be built there as part of `ParseFindings`
    > rather than a standalone `CountFindings`. Take item #2 there; item #1 (the
@@ -48,7 +48,7 @@ worth doing on their own. Independent of each other — split if it reads cleane
       (the key is optional on read, surgical edits preserve it).
 - [x] ~~`domain.CountFindings`~~ — **done as `domain.ParseFindings` +
       `CountOpenFindings`** (2026-06-17) in
-      [[audit-finding-level-operations-query-write-lint-sync]] item 1, exactly as
+      [audit-finding-level-operations-query-write-lint-sync](6fd5r5c03v5y-audit-finding-level-operations-query-write-lint-sync.md) item 1, exactly as
       this task's Note predicted: fence-aware, table-tested, `auditstore.go` now
       derives both counts from it and the regexes are gone from the store.
 - [x] `go build/test/vet` green; `gofmt` clean.
@@ -77,7 +77,7 @@ create→lint→start→complete keeps it.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
-- Item #4 from [[put-storage-layout-knowledge-back-behind-the-port]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
+- Item #4 from [put-storage-layout-knowledge-back-behind-the-port](6fbj87001q7p-put-storage-layout-knowledge-back-behind-the-port.md)
 - Touches `internal/domain/`, `internal/store/auditstore.go`,
   `internal/store/create.go`, `internal/config/config.go`

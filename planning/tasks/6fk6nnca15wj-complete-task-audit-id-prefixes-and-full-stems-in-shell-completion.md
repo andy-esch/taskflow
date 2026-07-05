@@ -29,7 +29,7 @@ updated_at: "2026-07-05"
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
 
 ## Finding (adversarial review, 2026-07-05)
 

@@ -7,7 +7,7 @@ tags: [pm-tooling, archived, superseded]
 
 # Epic: TaskFlow v1 Core — ⛔ SUPERSEDED
 
-> **Superseded 2026-06-07 by [[17-pm-go-cli]]** (`planning/epics/17-pm-go-cli.md`).
+> **Superseded 2026-06-07 by [17-pm-go-cli](17-pm-go-cli.md)** (`planning/epics/17-pm-go-cli.md`).
 > This was the original, over-ambitious vision (Dockerized semantic engine,
 > pgvector, MCP, AI generation). The scoped design — CLI-first, single static
 > binary, **no intelligence layer** — lives in **17-pm-go-cli** + the

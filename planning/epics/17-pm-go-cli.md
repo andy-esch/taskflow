@@ -39,11 +39,11 @@ edit`/`append`, the published JSON Schema, and a golden + subprocess test harnes
 
 **What was *not* ported, and where it went** (so nothing dangles):
 - **`adr` / `project` groups** → a *separate* direction, **not** the port: proposed
-  in [[0001-adopt-adrs]] / [[0002-adopt-projects]]; spawns its own epic when accepted.
+  in [0001-adopt-adrs](../adrs/0001-adopt-adrs.md) / [0002-adopt-projects](../adrs/0002-adopt-projects.md); spawns its own epic when accepted.
 - **Audit finding-level surface** → the *read* half (parser, `audit findings` query,
   `audit lint`) shipped here; the *write* half (`audit finding --status`, `audit
   sync`) is carved to
-  [[audit-finding-write-surface-status-write-and-candidate-list-sync]] — a feature,
+  [audit-finding-write-surface-status-write-and-candidate-list-sync](../tasks/6feeygw00jmx-audit-finding-write-surface-status-write-and-candidate-list-sync.md) — a feature,
   blocked on an external grammar, not pm parity.
 - **`task-readiness-state`** → a new planning-*model* idea, moved to epic 20 as a
   draft (not pm parity).
@@ -108,14 +108,14 @@ Settled across the three research docs (`research/2026-06-06-{pm-cli-architectur
 ## Build sequence
 
 1. **Phase 0.5 — command spec**
-   [[phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec]]: finalize
+   [phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec](../tasks/6f9menr03f1y-phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec.md): finalize
    the build-to spec. *(Don't rely on the Python tests alone — incomplete.)*
 2. **Foundation**
-   [[go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness]]:
+   [go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness](../tasks/6f9menr02b25-go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness.md):
    layout, core/store/cli boundary, DI, golden-file + lint harness; prove
    one vertical slice (`task list`).
 3. **Port**
-   [[port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec]]:
+   [port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](../tasks/6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md):
    `init` + core commands (task/epic/adr/project) + the `audit` group, to spec.
 4. **TUI preview** (Bubble Tea) — later phase, over the same core.
 
@@ -157,10 +157,10 @@ rather than greenfield, stripped to the fence below.
   (incorporates the taskflow spike's findings under the scope fence).
 - `research/2026-06-06-go-cli-foundation-architecture.md` — the code
   foundation (layout, primary/secondary-adapter split, DI, test harness).
-  **Build [[go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness]]
+  **Build [go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness](../tasks/6f9menr02b25-go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness.md)
   first**, then port commands onto it.
 - `research/2026-06-06-tskflwctl-command-spec.md` — the Phase 0.5 formal
-  command spec ([[phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec]]).
+  command spec ([phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec](../tasks/6f9menr03f1y-phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec.md)).
 - `../taskflow/` — the prior Go spike to bootstrap from (cobra/viper/Bubble
   Tea skeleton, Pattern-C layout, `planning/research/`).
 - `research/sqlite-vs-markdown-for-pm-system.md` — prior pm-architecture

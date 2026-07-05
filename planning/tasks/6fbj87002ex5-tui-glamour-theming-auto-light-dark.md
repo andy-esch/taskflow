@@ -43,5 +43,5 @@ the body matches the rest of the TUI. Deferred from S5 (out-of-scope: theming).
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
-- Follows [[tui-glamour-markdown-rendering-with-rawpretty-toggle]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
+- Follows [tui-glamour-markdown-rendering-with-rawpretty-toggle](6fb7ym4017sj-tui-glamour-markdown-rendering-with-rawpretty-toggle.md)

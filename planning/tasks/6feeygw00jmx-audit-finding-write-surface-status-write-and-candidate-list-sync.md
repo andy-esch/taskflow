@@ -15,7 +15,7 @@ id: 6feeygw00jmx
 
 # Audit finding write surface — status write + candidate-list sync
 
-> Carved out of [[audit-finding-level-operations-query-write-lint-sync]] (its
+> Carved out of [audit-finding-level-operations-query-write-lint-sync](6fd5r5c03v5y-audit-finding-level-operations-query-write-lint-sync.md) (its
 > items 3 + 5) on 2026-06-21. The finding **read** surface — `ParseFindings`,
 > `audit findings` (query), `audit lint` — shipped and closed out epic 17. This is
 > the finding **write** surface, a *feature*, **not** part of retiring Python `pm`,
@@ -41,7 +41,7 @@ marked `⏳`) is conceptually a lint check, but it needs the candidate-list pars
    rewrite one finding's `**Status:**` line, byte-preserving the rest of the body
    (atomic write, `--dry-run`, exit codes), stamping the cheat-sheet format. On
    `--status fixed`, append the resolution block. The interactive prompt face is
-   [[interactive-prompt-layer-gh-style-pickers]]; here it's the non-TTY append.
+   [interactive-prompt-layer-gh-style-pickers](6fbj870019vt-interactive-prompt-layer-gh-style-pickers.md); here it's the non-TTY append.
 2. **`audit sync <slug>`** — re-derive the candidate-list `✅⚠️⏳⛔` symbols from the
    finding `**Status:**` lines (atomic, `--dry-run`).
 3. **Candidate-list drift check** — folded into `audit lint`: a finding whose status
@@ -88,8 +88,8 @@ desirelines-specific "merged to `main`" gloss). Decide during implementation.
 
 ## Related
 
-- Source: [[audit-finding-level-operations-query-write-lint-sync]] (items 3+5).
+- Source: [audit-finding-level-operations-query-write-lint-sync](6fd5r5c03v5y-audit-finding-level-operations-query-write-lint-sync.md) (items 3+5).
 - Format source: desirelines `audits/HOWTO-execute.md` (transcribed into the grammar
   section above on 2026-06-21; reachable in-workspace — no longer a blocker).
-- Interactive resolution-block prompt: [[interactive-prompt-layer-gh-style-pickers]].
-- Epic [[20-cli-ux-and-ergonomics]].
+- Interactive resolution-block prompt: [interactive-prompt-layer-gh-style-pickers](6fbj870019vt-interactive-prompt-layer-gh-style-pickers.md).
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md).

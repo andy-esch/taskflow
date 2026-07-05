@@ -42,7 +42,7 @@ S2b's `/` find highlights by line index over the rendered content. Glamour reflo
 and indents, so: (a) match line indices differ between raw and pretty — recompute
 matches on toggle; (b) the "rebuild matched line from stripped text" highlight drops
 glamour styling on matched lines (the #4 issue in
-[[tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort]], amplified).
+[tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort](6fb7ym4023q0-tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort.md), amplified).
 Coordinate with that task — ideally land the ANSI-aware highlighter first.
 
 ## Acceptance criteria
@@ -105,13 +105,13 @@ now pinned to a commit — the CI `govulncheck` step will start covering these o
 pushed.
 
 **Deferred (per out-of-scope):** custom glamour theme + light/dark auto-style →
-[[tui-glamour-theming-auto-light-dark]]; epic/audit bodies use the same path but no
+[tui-glamour-theming-auto-light-dark](6fbj87002ex5-tui-glamour-theming-auto-light-dark.md); epic/audit bodies use the same path but no
 per-entity markdown features.
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
-- Interacts with [[tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
+- Interacts with [tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort](6fb7ym4023q0-tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort.md)
 
 ## Coordination note from the container agent (2026-06-12, pre-start)
 

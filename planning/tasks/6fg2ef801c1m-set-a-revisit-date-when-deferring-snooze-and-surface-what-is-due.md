@@ -33,7 +33,7 @@ whose date has arrived, so deferred work resurfaces instead of being forgotten.
 - The `status` dashboard already shows active counts + in-progress + epics + open
   audits — a natural place to nudge "N deferred due to revisit."
 - Surfaced 2026-06-26 right after deferring
-  [[make-tui-clickable-links-work-in-tmux-ghostty-plus-document-recipe]].
+  [make-tui-clickable-links-work-in-tmux-ghostty-plus-document-recipe](6ffdv9g03jkf-make-tui-clickable-links-work-in-tmux-ghostty-plus-document-recipe.md).
 
 ## Acceptance criteria
 
@@ -68,7 +68,7 @@ whose date has arrived, so deferred work resurfaces instead of being forgotten.
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]].
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md).
 
 ## Done when
 

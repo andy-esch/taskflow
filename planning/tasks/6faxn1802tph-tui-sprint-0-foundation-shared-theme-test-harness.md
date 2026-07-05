@@ -20,7 +20,7 @@ id: 6faxn1802tph
 
 De-risk everything: prove the TUI-as-second-adapter wiring end-to-end with a
 minimal model, extract the shared theme, and stand up the test harness — before
-any real UI. See [[18-tui-bubble-tea-interactive-planning-browser]] for the
+any real UI. See [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md) for the
 locked architecture/decisions.
 
 ## Scope
@@ -71,4 +71,4 @@ locked architecture/decisions.
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)

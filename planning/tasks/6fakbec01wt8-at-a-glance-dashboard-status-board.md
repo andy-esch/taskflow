@@ -57,5 +57,5 @@ board is the explicit `status` command (trivial to add bare-root later).
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; builds on the render styling
-  [[cli-color-glyphs-table-headers-render-styling]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); builds on the render styling
+  [cli-color-glyphs-table-headers-render-styling](6fakbec017kj-cli-color-glyphs-table-headers-render-styling.md).

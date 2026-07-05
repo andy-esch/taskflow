@@ -24,7 +24,7 @@ De-drafted. Resolutions:
   second version number.
 - `-q/--quiet` (ids-only) and the stderr-discipline sweep stand as written.
 - The gcloud-style `--format table(col1,col2,…)` column projection is **split
-  out** to [[column-projection-format-table-cols-for-list-commands]] (reused by
+  out** to [column-projection-format-table-cols-for-list-commands](6fd5r5c009vr-column-projection-format-table-cols-for-list-commands.md) (reused by
   the audit-findings query).
 
 ## Objective
@@ -53,11 +53,11 @@ are for eyes; these are for pipes.
   stability is covered by the same version or documented separately, and
   record it where SchemaVersion is documented.
 - Item 3 changes observable behavior of the just-shipped transition summary
-  ([[json-and-output-contract-fidelity]], completed) — coordinate so the
+  ([json-and-output-contract-fidelity](6fbj8700122m-json-and-output-contract-fidelity.md), completed) — coordinate so the
   smoke test and any user scripts are updated deliberately, not silently.
 - A future `events` NDJSON change-stream (noted in the design discussion as
   a differentiator, NOT filed) would build on the watcher port work in
-  [[put-storage-layout-knowledge-back-behind-the-port]] — keep this task's
+  [put-storage-layout-knowledge-back-behind-the-port](6fbj87001q7p-put-storage-layout-knowledge-back-behind-the-port.md) — keep this task's
   scope clear of it.
 
 ## Acceptance criteria
@@ -77,11 +77,11 @@ are for eyes; these are for pipes.
   exclusive with `--json`; new `render/pipeline.go`). Move failures routed to
   stderr (`MovesHuman` now takes out+errw). README "Pipelines" section (decision
   table + xargs/jq/awk recipes). The `--format table(cols)` projection is its own
-  task ([[column-projection-format-table-cols-for-list-commands]]). 5 new tests;
+  task ([column-projection-format-table-cols-for-list-commands](6fd5r5c009vr-column-projection-format-table-cols-for-list-commands.md)). 5 new tests;
   suite + lint green.
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]] ·
-  [[column-projection-format-table-cols-for-list-commands]] ·
-  [[2026-06-12-pending-decisions]] (D7).
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md) ·
+  [column-projection-format-table-cols-for-list-commands](6fd5r5c009vr-column-projection-format-table-cols-for-list-commands.md) ·
+  [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md) (D7).

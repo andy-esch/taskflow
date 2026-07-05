@@ -31,6 +31,6 @@ id: 6fh1b7w01zfa
 
 ## Related
 
-- Epic [[25-design-system-coherent-palette-and-selectable-themes]]
+- Epic [25-design-system-coherent-palette-and-selectable-themes](../epics/25-design-system-coherent-palette-and-selectable-themes.md)
 
 **Done 2026-06-30.** Flipped all `styles` render helpers (lipColor/fg/glyph/dim/miniBar/segBar/statusText/priorityText) from value to pointer receivers, and every free fn/method that took `s styles`/`st styles` by value (view/cell/hint/enumInline/meta/renderTaskMeta·EpicMeta·AuditMeta/detailField/helpLines/helpBox/symbolsFor/helpSectionsFor/relDateCells/highlightLine/row/epicGlyph/epicStatusNote/setSummary/urgencyLine/componentLine/dash.view/palette·action·follow·edit·command.view) now takes `*styles`. Call sites drop the `*d.st`/`*m.st` value-derefs (e.g. `st := d.st`); tests pass `&testStyles`. No more ~10KB struct copy per render call; coherent with the `*styles` storage on Model/delegates/detailPane. Behavior unchanged — gofmt/vet/full `go test ./...` green.

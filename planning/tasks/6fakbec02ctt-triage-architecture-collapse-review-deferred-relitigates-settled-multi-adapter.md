@@ -47,5 +47,5 @@ why not collapse them)" so the question stops reopening.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; the prior idiom-review triage is
-  [[triage-go-idiom-review-typed-validators-status.isactive-date-format]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); the prior idiom-review triage is
+  [triage-go-idiom-review-typed-validators-status.isactive-date-format](6fakbec00ahf-triage-go-idiom-review-typed-validators-status.isactive-date-format.md).

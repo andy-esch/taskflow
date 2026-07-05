@@ -45,6 +45,6 @@ machine-chunkable command reference).
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
-- Pairs with [[publish-json-schema-for-the-json-envelopes]] (the machine contract;
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
+- Pairs with [publish-json-schema-for-the-json-envelopes](6fdtbb400n8x-publish-json-schema-for-the-json-envelopes.md) (the machine contract;
   this is the human/agent prose reference).

@@ -20,7 +20,7 @@ and a proposed `--columns`/`--format` are four flags answering one question —
 "what shape is the output?" — plus a mutual-exclusion matrix between them, and it
 only grows (csv, etc.). Consolidate the **format** axis into a single
 `-o/--output` flag and keep **projection** as one orthogonal, completable
-`-c/--columns` flag. This supersedes [[column-projection-format-table-cols-for-list-commands]]
+`-c/--columns` flag. This supersedes [column-projection-format-table-cols-for-list-commands](6fd5r5c009vr-column-projection-format-table-cols-for-list-commands.md)
 (projection becomes `-c`, not a `table(...)` value DSL). Only `--json` has
 shipped, so this is a clean replace — `-q`/`--plain` never released.
 
@@ -108,8 +108,8 @@ this so it isn't "fixed" later.
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
-- Supersedes [[column-projection-format-table-cols-for-list-commands]]
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
+- Supersedes [column-projection-format-table-cols-for-list-commands](6fd5r5c009vr-column-projection-format-table-cols-for-list-commands.md)
 - Builds on the shipped-but-unreleased `-q`/`--plain` work
-  ([[pipeline-output-modes-q-plain-stderr-discipline]]) and its `renderList`
+  ([pipeline-output-modes-q-plain-stderr-discipline](6fbj870023xj-pipeline-output-modes-q-plain-stderr-discipline.md)) and its `renderList`
   helper.

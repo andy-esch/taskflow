@@ -16,7 +16,7 @@ id: 6fbj87000rt6
 # Repair the CI lint gate and local test parity
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([[2026-06-12-critical-code-review-multi-lens]], findings H3/M20 + the
+> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), findings H3/M20 + the
 > -race drift). H3 was hand-verified: `.github/workflows/ci.yml:47` installs
 > `golangci-lint@v1.64.5` while `.golangci.yml` declares `version: "2"` —
 > v1 cannot parse v2 configs, so the repo's own "all three green" definition
@@ -47,7 +47,7 @@ id: 6fbj87000rt6
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `.github/workflows/ci.yml`, `Justfile`, possibly `.golangci.yml`.
 ## Progress (2026-06-12)
 

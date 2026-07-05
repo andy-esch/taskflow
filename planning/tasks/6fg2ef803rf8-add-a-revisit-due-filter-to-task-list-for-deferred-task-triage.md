@@ -66,5 +66,5 @@ render/JSON paths the codebase keeps in one place.
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
-- Follows [[set-a-revisit-date-when-deferring-snooze-and-surface-what-is-due]]
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
+- Follows [set-a-revisit-date-when-deferring-snooze-and-surface-what-is-due](6fg2ef801c1m-set-a-revisit-date-when-deferring-snooze-and-surface-what-is-due.md)

@@ -44,7 +44,7 @@ Close out the machine-readable surface and the docs-check gate.
 
 ## Related
 
-- [[23-point-an-impl-repo-at-an-external-planning-repo]].
+- [23-point-an-impl-repo-at-an-external-planning-repo](../epics/23-point-an-impl-repo-at-an-external-planning-repo.md).
 
 ## Inbound from review (2026-06-23)
 

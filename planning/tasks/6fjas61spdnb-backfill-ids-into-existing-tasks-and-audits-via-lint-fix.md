@@ -42,14 +42,14 @@ migration script.
 ## Out of scope
 
 - The destructive cutover (id-led renames, status/bucket → frontmatter, ref
-  rewrites) — stays in [[one-time-migration-script-this-repo-desirelines]].
+  rewrites) — stays in [one-time-migration-script-this-repo-desirelines](6fhnydm029gt-one-time-migration-script-this-repo-desirelines.md).
 - The pre-existing audit finding-status typo ("partially") in the
   codebase-quality-architecture audit — a separate data fix.
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- ADR [[0003-stable-key-id-addressed-storage]] section 6 + the backfill-timestamp amendment
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- ADR [0003-stable-key-id-addressed-storage](../adrs/0003-stable-key-id-addressed-storage.md) section 6 + the backfill-timestamp amendment
 
 ## Superseded by filename-backfill (2026-07-05, Phase B)
 

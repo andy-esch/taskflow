@@ -44,5 +44,5 @@ drop the current session.
 ## Related
 
 - Research: GnixAij "Fix Clickable Hyperlinks in Tmux With Ghostty"; tmux 3.4 CHANGES; ghostty #11907 / #9108.
-- Built in [[tui-v2-polish-window-title-and-clickable-detail-path]].
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]].
+- Built in [tui-v2-polish-window-title-and-clickable-detail-path](6ffdv9g00fy0-tui-v2-polish-window-title-and-clickable-detail-path.md).
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).

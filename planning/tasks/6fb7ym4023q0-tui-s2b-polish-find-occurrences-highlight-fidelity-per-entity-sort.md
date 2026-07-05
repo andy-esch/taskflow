@@ -73,13 +73,13 @@ thought than a sprint-close patch. Each is independent — pick up à la carte.
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
-- Follows [[tui-sprint-2b-search-status-views-and-interactive-sort]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
+- Follows [tui-sprint-2b-search-status-views-and-interactive-sort](6fb7ym400n5q-tui-sprint-2b-search-status-views-and-interactive-sort.md)
 
 ## Closure (2026-06-12)
 
 Completed as the merged single pass (absorbing
-[[tui-review-polish-batch-sort-rank-help-drift-width-audit-scope]]), built
+[tui-review-polish-batch-sort-rank-help-drift-width-audit-scope](6fbj87003qwr-tui-review-polish-batch-sort-rank-help-drift-width-audit-scope.md)), built
 across two agents: the macOS agent implemented (a) the find rewrite —
 occurrence-level n/N (`matchPos`), rune-by-rune `foldMatches` that never
 indexes a folded copy (U+0130-safe, regression-tested), `highlightLine`

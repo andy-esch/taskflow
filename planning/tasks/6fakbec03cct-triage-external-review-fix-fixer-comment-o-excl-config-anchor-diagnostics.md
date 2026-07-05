@@ -68,5 +68,5 @@ findings, and reject the off-the-mark ones with a recorded rationale.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; follows
-  [[harden-create-loop-and-fill-docs-post-pm-retirement-review]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); follows
+  [harden-create-loop-and-fill-docs-post-pm-retirement-review](6fakbec00fke-harden-create-loop-and-fill-docs-post-pm-retirement-review.md).

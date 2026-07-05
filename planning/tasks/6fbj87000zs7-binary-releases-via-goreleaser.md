@@ -79,7 +79,7 @@ cloning or building. Two channels, both should work when this lands:
 
 - **D11 (no license)** — defused by the GitHub-only decision; remains only as
   a tripwire if the repo ever goes public.
-- **Repaired CI gate** — [[repair-ci-lint-gate-and-local-test-parity]] is
+- **Repaired CI gate** — [repair-ci-lint-gate-and-local-test-parity](6fbj87000rt6-repair-ci-lint-gate-and-local-test-parity.md) is
   **completed**, so the dependency is cleared; `release.yml` is a second,
   independent workflow (separate from `ci.yml`).
 - **One version-stamping scheme** — both the Justfile build (`git describe` →
@@ -113,9 +113,9 @@ lean on the CLI lightly), but it's the logical follow-on.
 
 ## Related
 
-- Epic [[17-pm-go-cli]] · [[2026-06-12-pending-decisions]] (D11) ·
-  [[repair-ci-lint-gate-and-local-test-parity]] ·
-  [[2026-06-11-critical-review-and-polish-research]] (Tier 3: distribution
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md) (D11) ·
+  [repair-ci-lint-gate-and-local-test-parity](6fbj87000rt6-repair-ci-lint-gate-and-local-test-parity.md) ·
+  [2026-06-11-critical-review-and-polish-research](../research/2026-06-11-critical-review-and-polish-research.md) (Tier 3: distribution
   funnel).
 
 ## Progress Log

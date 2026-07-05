@@ -48,6 +48,6 @@ always-current command reference and a machine-validatable output contract.
 
 ## Out of scope
 
-- The readiness axis ([[task-readiness-state-draft-vs-finalized-in-frontmatter]])
+- The readiness axis ([task-readiness-state-draft-vs-finalized-in-frontmatter](../tasks/6fbj87001m03-task-readiness-state-draft-vs-finalized-in-frontmatter.md))
   — a planning-model change, deferred and tracked separately.
 - The web companion (epic 19) and anything that alters the core domain model.

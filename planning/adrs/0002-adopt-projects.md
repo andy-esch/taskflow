@@ -9,9 +9,9 @@ superseded_by: null
 
 # ADR-0002: Adopt Projects — cross-cutting groupings of tasks
 
-> Follows the ADR format established in [[0001-adopt-adrs]]. Depends on it: this is a
+> Follows the ADR format established in [0001-adopt-adrs](0001-adopt-adrs.md). Depends on it: this is a
 > decision recorded *using* the convention 0001 introduces. Design rationale and the
-> cross-tool product survey are in [[2026-06-20-adrs-and-projects-format-design]].
+> cross-tool product survey are in [2026-06-20-adrs-and-projects-format-design](../research/2026-06-20-adrs-and-projects-format-design.md).
 
 ## Context and Problem Statement
 
@@ -26,7 +26,7 @@ that initiative to done?"
 The singular `project:` tag from the `pm` prototype tried to fill this but was never
 used (0 tasks carry it; `projects/` is empty in both repos), and its lone command was
 a stub referencing a non-existent verb. So there is **no migration cost** — a clean
-slate to model the concept properly, scoped here per [[0001-adopt-adrs]]'s opt-in
+slate to model the concept properly, scoped here per [0001-adopt-adrs](0001-adopt-adrs.md)'s opt-in
 principle (a repo that doesn't need cross-cutting initiatives never creates
 `planning/projects/`).
 
@@ -160,8 +160,8 @@ _None yet (still `proposed`)._
 
 ## Related
 
-- Format & convention this builds on: [[0001-adopt-adrs]].
-- Design rationale & cross-tool survey: [[2026-06-20-adrs-and-projects-format-design]].
+- Format & convention this builds on: [0001-adopt-adrs](0001-adopt-adrs.md).
+- Design rationale & cross-tool survey: [2026-06-20-adrs-and-projects-format-design](../research/2026-06-20-adrs-and-projects-format-design.md).
 - Project model origin (orthogonal axes, membership-on-task, no `related_epics`):
-  [[2026-06-06-project-concept-cross-cutting-initiatives]].
-- Command spec (the `project` group): [[2026-06-06-tskflwctl-command-spec]].
+  [2026-06-06-project-concept-cross-cutting-initiatives](../research/2026-06-06-project-concept-cross-cutting-initiatives.md).
+- Command spec (the `project` group): [2026-06-06-tskflwctl-command-spec](../research/2026-06-06-tskflwctl-command-spec.md).

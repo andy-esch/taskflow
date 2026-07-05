@@ -62,7 +62,7 @@ lists into a linked graph you can walk, k9s/vim-style.
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
 - Reuses the `overlay()` helper from the S2b `?` modal (if the peek option lands)
 
 ## Closure (2026-06-13)

@@ -31,4 +31,4 @@ id: 6ff3hpm00jr3
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)

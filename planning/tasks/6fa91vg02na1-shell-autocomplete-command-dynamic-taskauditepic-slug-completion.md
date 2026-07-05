@@ -113,5 +113,5 @@ added; full suite + lint green. All acceptance criteria + fast-follow complete.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; follows the
-  [[port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec]] work.
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); follows the
+  [port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md) work.

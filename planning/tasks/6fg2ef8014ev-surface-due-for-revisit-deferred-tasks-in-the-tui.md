@@ -30,7 +30,7 @@ next-up → ready-to-start); deferred tasks only appear via `:deferred` / `:all`
 the `s`/`S` cycle. That drives the one remaining open decision below.
 
 Scope note: the on-open SUMMARY/banner idea graduated to its own concept — a TUI
-landing Dashboard (see [[add-a-tui-landing-dashboard-the-default-view]]). THIS task
+landing Dashboard (see [add-a-tui-landing-dashboard-the-default-view](6fg2ef802k6s-add-a-tui-landing-dashboard-the-default-view.md)). THIS task
 is just the per-row surfacing inside the views where deferred tasks live.
 
 ## Resolved decisions
@@ -72,14 +72,14 @@ is just the per-row surfacing inside the views where deferred tasks live.
 ## Out of scope
 
 - The on-open summary/banner and any "pulse"/overview — that is the Dashboard task
-  [[add-a-tui-landing-dashboard-the-default-view]].
+  [add-a-tui-landing-dashboard-the-default-view](6fg2ef802k6s-add-a-tui-landing-dashboard-the-default-view.md).
 - Auto-resuming due tasks — the snooze stays surface-only; resume is manual
   (`task next` / `task ready`).
 - Changing how `revisit_at` is set or cleared (already shipped).
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
-- TUI mirror of [[add-a-revisit-due-filter-to-task-list-for-deferred-task-triage]]
-- Builds on [[set-a-revisit-date-when-deferring-snooze-and-surface-what-is-due]]
-- Summary/banner concept moved to [[add-a-tui-landing-dashboard-the-default-view]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
+- TUI mirror of [add-a-revisit-due-filter-to-task-list-for-deferred-task-triage](6fg2ef803rf8-add-a-revisit-due-filter-to-task-list-for-deferred-task-triage.md)
+- Builds on [set-a-revisit-date-when-deferring-snooze-and-surface-what-is-due](6fg2ef801c1m-set-a-revisit-date-when-deferring-snooze-and-surface-what-is-due.md)
+- Summary/banner concept moved to [add-a-tui-landing-dashboard-the-default-view](6fg2ef802k6s-add-a-tui-landing-dashboard-the-default-view.md)

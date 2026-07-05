@@ -66,31 +66,31 @@ render concepts). Epic 17 is the CLI port; this is the interactive front-end.
 
 ## Sprint roadmap
 
-- **S0 — foundation** [[tui-sprint-0-foundation-shared-theme-test-harness]]:
+- **S0 — foundation** [tui-sprint-0-foundation-shared-theme-test-harness](../tasks/6faxn1802tph-tui-sprint-0-foundation-shared-theme-test-harness.md):
   clear the stub, extract `theme`, add `ui` command + model skeleton + resize +
   `q`, async-load one task list, test harness. *Proves the adapter wiring.*
-- **S1 — read-only browser** [[tui-sprint-1-read-only-two-pane-task-browser]]:
+- **S1 — read-only browser** [tui-sprint-1-read-only-two-pane-task-browser](../tasks/6faxn1800wd1-tui-sprint-1-read-only-two-pane-task-browser.md):
   two-pane tasks list + detail (frontmatter + body via `ShowTask`), vim nav,
   focus highlight, lazy body + spinner, responsive, empty/no-repo states,
   manual `r` refresh.
 - **S2 — multi-entity + search** *(split 2026-06-11; the original
-  [[tui-sprint-2-multi-entity-navigation-and-search]] grew large)*:
+  [tui-sprint-2-multi-entity-navigation-and-search](../tasks/6faxn1802k3e-tui-sprint-2-multi-entity-navigation-and-search.md) grew large)*:
   - **S2a — entity navigation**
-    [[tui-sprint-2a-entity-navigation-registry-tabs-command-jump]]: entity
+    [tui-sprint-2a-entity-navigation-registry-tabs-command-jump](../tasks/6fb7ym401n1y-tui-sprint-2a-entity-navigation-registry-tabs-command-jump.md): entity
     registry + `:` jump + tab strip (tasks/epics/audits), per-entity lists.
   - **S2b — search, views & sort**
-    [[tui-sprint-2b-search-status-views-and-interactive-sort]]: `/` filter +
+    [tui-sprint-2b-search-status-views-and-interactive-sort](../tasks/6fb7ym400n5q-tui-sprint-2b-search-status-views-and-interactive-sort.md): `/` filter +
     persistent chip, `:` status/archived views, interactive sort, detail vim find.
-- **S3 — live reload** [[tui-sprint-3-fsnotify-live-reload]]: fsnotify watch
+- **S3 — live reload** [tui-sprint-3-fsnotify-live-reload](../tasks/6faxn1800qb2-tui-sprint-3-fsnotify-live-reload.md): fsnotify watch
   (debounced) → reload preserving cursor by slug. (~½–1 day; plumb the
   `reloadMsg` in S1.)
-- **S4 — mutations** [[tui-sprint-4-mutations-and-actions]]: lifecycle via
+- **S4 — mutations** [tui-sprint-4-mutations-and-actions](../tasks/6faxn18000j6-tui-sprint-4-mutations-and-actions.md): lifecycle via
   `Service.Move`/`SetFields` with confirmation; reconsider multi-select then.
-- **S5 — pretty markdown** [[tui-glamour-markdown-rendering-with-rawpretty-toggle]]:
+- **S5 — pretty markdown** [tui-glamour-markdown-rendering-with-rawpretty-toggle](../tasks/6fb7ym4017sj-tui-glamour-markdown-rendering-with-rawpretty-toggle.md):
   glamour-render the body (cached, never in `View()`) with an `R` raw/pretty toggle.
-- **S6 — cross-link navigation** [[tui-cross-link-navigation-between-epics-and-tasks]]:
+- **S6 — cross-link navigation** [tui-cross-link-navigation-between-epics-and-tasks](../tasks/6fb7ym40100g-tui-cross-link-navigation-between-epics-and-tasks.md):
   follow epic↔task references with a jump + back-stack (body wikilinks/peek deferred).
-- **Polish** [[tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort]]:
+- **Polish** [tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort](../tasks/6fb7ym4023q0-tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort.md):
   S2b fresh-eyes follow-ups (occurrence-level find, highlight fidelity, per-entity sort).
 
 ## References
@@ -104,7 +104,7 @@ render concepts). Epic 17 is the CLI port; this is the interactive front-end.
   k9s/lazygit/gh-dash/gitui; Bubble Tea architecture/testing). Includes the
   **Layout discipline** checklist (audited 2026-06-11) every pane must follow —
   locked by `TestModel_ViewFitsTerminal`.
-- Epic [[17-pm-go-cli]] (the CLI port this builds on).
+- Epic [17-pm-go-cli](17-pm-go-cli.md) (the CLI port this builds on).
 
 ## Out of scope
 

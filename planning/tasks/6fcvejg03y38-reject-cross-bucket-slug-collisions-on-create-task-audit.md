@@ -82,7 +82,7 @@ Small items surfaced reviewing the `audit new` work — cheap to fold in here:
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Surfaced by the `audit new` parity work (commit b98dfbd) and its review sweep.
 - Touches `internal/store/create.go` (`writeNewFile` + the per-entity Create*),
   `internal/store/resolve.go`/`auditstore.go` (candidate enumeration).

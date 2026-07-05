@@ -31,6 +31,6 @@ id: 6fh1b7w00zhg
 
 ## Related
 
-- Epic [[25-design-system-coherent-palette-and-selectable-themes]]
+- Epic [25-design-system-coherent-palette-and-selectable-themes](../epics/25-design-system-coherent-palette-and-selectable-themes.md)
 
 **Done 2026-06-30.** Added a `markdown string` field to the `styles` struct, set in `newStyles` from `p.Markdown`. The detail pane now reads its glamour style from `d.st.markdown` (dropped its own `glamStyle` field + the `newDetailPane(st, glamStyle)` param). `tui.Run` no longer sets `m.detail.glamStyle` separately — the existing `*m.st = newStyles(th.For(dark))` now carries the markdown style too, so a theme/background swap touches one place. Glamour tests reworked: the style-rebuild test mutates a local `newStyles(...)` bundle (isolated from shared testStyles). gofmt/vet/full test green.

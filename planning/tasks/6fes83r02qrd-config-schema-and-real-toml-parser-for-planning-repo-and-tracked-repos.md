@@ -44,5 +44,5 @@ string **array**. This epic adds two new keys (`planning_repo` scalar +
 
 ## Related
 
-- Foundation for the rest of [[23-point-an-impl-repo-at-an-external-planning-repo]].
+- Foundation for the rest of [23-point-an-impl-repo-at-an-external-planning-repo](../epics/23-point-an-impl-repo-at-an-external-planning-repo.md).
 - Unblocks discovery (next task).

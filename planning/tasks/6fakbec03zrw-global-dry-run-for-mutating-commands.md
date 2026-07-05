@@ -51,7 +51,7 @@ Mutations to cover: `task move` + the six transition verbs, `task set`,
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; raised in the agent-readiness / sync-resilience review.
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); raised in the agent-readiness / sync-resilience review.
   Sibling of the deferred advisory-`flock` work.
 
 ## Closure (2026-06-13)

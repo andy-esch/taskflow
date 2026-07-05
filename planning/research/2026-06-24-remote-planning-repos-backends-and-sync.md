@@ -100,7 +100,7 @@ backend already has one:
 | `serve`/DB | row version | a transaction |
 
 > **Superseded (decided 2026-07-01 — see epic
-> [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]).** The
+> [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)).** The
 > per-backend native tokens above were the early sketch. The decided design is **one
 > backend-agnostic whole-file content hash (SHA-256)** used for *every* backend. A git
 > **blob/commit SHA was explicitly rejected**: it fingerprints *committed* bytes and
@@ -109,7 +109,7 @@ backend already has one:
 > (unreliable across machines/containers). The mechanism is unchanged from the row above
 > — reads return the hash as `version`, writes take `ifVersion` → `ErrConflict` — only
 > the token's *definition* is now fixed to a content hash. Tracked in
-> [[version-aware-occ-content-hash-token-and-plain-retry]].
+> [version-aware-occ-content-hash-token-and-plain-retry](../tasks/6fhnydm02wxd-version-aware-occ-content-hash-token-and-plain-retry.md).
 
 **Granularity is where git pulls ahead.** OCC can be *per-resource* (each task is
 its own file/object — a conflict only when two writers touch the *same* task) or
@@ -293,7 +293,7 @@ That makes §6's "is 'the tool never touches git' a hard line?" answerable: keep
 hard *for the local default*; relax it *only* inside an opt-in server. The residual
 merge pain this addresses (concurrent edits to a file's mutable fields) and the
 content-vs-workflow-state split behind it are in the 2026-06-30 update of
-[[2026-06-24-task-storage-model-files-logs-or-versioned-db]].
+[2026-06-24-task-storage-model-files-logs-or-versioned-db](2026-06-24-task-storage-model-files-logs-or-versioned-db.md).
 
 ## Update 2026-06-30 — two writable authorities is the trap; "central as a git client" is the way out
 
@@ -444,13 +444,13 @@ web writes land?" question the serve-owns-git model left open.
 
 ## Related
 
-- [[2026-06-24-task-storage-model-files-logs-or-versioned-db]] — the on-disk data
+- [2026-06-24-task-storage-model-files-logs-or-versioned-db](2026-06-24-task-storage-model-files-logs-or-versioned-db.md) — the on-disk data
   model (status-as-directory vs frontmatter/log/DB). Same root cause as the OCC
   work here: mutable state encoded in the path. Decide it *before* locking OCC's
   shape.
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]] — the
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md) — the
   storage / read-model / OCC foundation this remote work rides on.
-- Epic [[23-point-an-impl-repo-at-an-external-planning-repo]] (local phase, done).
+- Epic [23-point-an-impl-repo-at-an-external-planning-repo](../epics/23-point-an-impl-repo-at-an-external-planning-repo.md) (local phase, done).
 - Epic 19 — web companion / shared core (Path C convergence).
 - Storage seam: `core.Store` (internal/core/store.go), `store/atomic.go`,
   config discovery (internal/config/config.go).

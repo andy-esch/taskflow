@@ -81,6 +81,6 @@ forcing one.
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
 - Builds on the substring filter added for the CLI picker in
-  [[interactive-prompt-layer-gh-style-pickers]].
+  [interactive-prompt-layer-gh-style-pickers](6fbj870019vt-interactive-prompt-layer-gh-style-pickers.md).

@@ -75,9 +75,9 @@ body-editing commands.
 ## Out of scope
 
 - The body replace/append behavior itself (shipped in
-  [[agent-facing-cli-ergonomics-batch]]).
+  [agent-facing-cli-ergonomics-batch](6fbj87000anh-agent-facing-cli-ergonomics-batch.md)).
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]] ·
-  [[agent-facing-cli-ergonomics-batch]] · [[publish-json-schema-for-the-json-envelopes]].
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md) ·
+  [agent-facing-cli-ergonomics-batch](6fbj87000anh-agent-facing-cli-ergonomics-batch.md) · [publish-json-schema-for-the-json-envelopes](6fdtbb400n8x-publish-json-schema-for-the-json-envelopes.md).

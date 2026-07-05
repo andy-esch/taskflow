@@ -27,7 +27,7 @@ edits/lifecycle moves are dated without disturbing the immutable audit `date`.
 
 Split out from the audit-editing work (the `audit date should be immutable; a
 modified date is not` decision, 2026-06-25). Sibling:
-[[audit-editing-faces-audit-edit-set-and-append]] (which adds `audit edit`/`append`
+[audit-editing-faces-audit-edit-set-and-append](6ffr4wc01thc-audit-editing-faces-audit-edit-set-and-append.md) (which adds `audit edit`/`append`
 that would bump this field).
 
 ## Acceptance criteria

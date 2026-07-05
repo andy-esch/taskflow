@@ -39,7 +39,7 @@ ones, skip the off-scope.
 ## Spun off (meaningful, more work)
 
 - **Global `--dry-run` for mutating commands** →
-  [[global-dry-run-for-mutating-commands]] (ready-to-start).
+  [global-dry-run-for-mutating-commands](6fakbec03zrw-global-dry-run-for-mutating-commands.md) (ready-to-start).
 
 ## Skipped (off-scope / low value — with rationale)
 
@@ -61,5 +61,5 @@ ones, skip the off-scope.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; follows
-  [[triage-go-idiom-review-typed-validators-status.isactive-date-format]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); follows
+  [triage-go-idiom-review-typed-validators-status.isactive-date-format](6fakbec00ahf-triage-go-idiom-review-typed-validators-status.isactive-date-format.md).

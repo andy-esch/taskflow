@@ -78,7 +78,7 @@ contract half (A) tells an agent *what values are valid*; the authoring half
 ## ⚠️ Conflicts to resolve before starting
 
 - **`schema` was explicitly descoped** when the port task closed (see the
-  closure note in [[port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec]],
+  closure note in [port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md),
   completed) — this draft proposes reversing that. Planning should confirm
   the reversal rather than inherit it silently.
 - The old pm `schema` had different semantics (frontmatter schema dump);
@@ -116,8 +116,8 @@ like A:
 - **Per-entity coverage:** task first; epic/audit have their own (smaller)
   scaffolds and field sets — confirm the same command shape extends cleanly.
 - **Interaction with in-flight schema changes:** if the readiness axis
-  ([[task-readiness-state-draft-vs-finalized-in-frontmatter]]) or the scaffold
-  version key ([[scaffold-schema-version-key-and-domain-level-audit-finding-counter]])
+  ([task-readiness-state-draft-vs-finalized-in-frontmatter](6fbj87001m03-task-readiness-state-draft-vs-finalized-in-frontmatter.md)) or the scaffold
+  version key ([scaffold-schema-version-key-and-domain-level-audit-finding-counter](6fc6vcr02j4x-scaffold-schema-version-key-and-domain-level-audit-finding-counter.md))
   land, B's field list and sections must reflect them — sequence accordingly.
 
 ## Acceptance criteria (draft)
@@ -134,10 +134,10 @@ like A:
 
 ## Related
 
-- Epic [[17-pm-go-cli]] · [[2026-06-12-pending-decisions]] (D7/D9) ·
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md) (D7/D9) ·
   `internal/domain/fields.go` (field registry to enrich) ·
   `internal/core/service.go` (the `task new` body scaffold = section source).
 - Authoring half (B) interacts with
-  [[scaffold-schema-version-key-and-domain-level-audit-finding-counter]] and
-  [[task-readiness-state-draft-vs-finalized-in-frontmatter]] (both add
+  [scaffold-schema-version-key-and-domain-level-audit-finding-counter](6fc6vcr02j4x-scaffold-schema-version-key-and-domain-level-audit-finding-counter.md) and
+  [task-readiness-state-draft-vs-finalized-in-frontmatter](6fbj87001m03-task-readiness-state-draft-vs-finalized-in-frontmatter.md) (both add
   fields/sections the guidance must reflect).

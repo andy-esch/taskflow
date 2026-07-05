@@ -28,7 +28,7 @@ is this epic's read side in embryo: **one `core` projection** of planning state
 `BOARD.md`, the TUI board, a CLI `board`, and here as a JSON/HTTP read endpoint.
 So `serve`'s read path is "expose the projection," not new logic; writes funnel
 through `core.Service` with the version-aware OCC (see
-[[2026-06-24-remote-planning-repos-backends-and-sync]]).
+[2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md)).
 Building the board (epic 23 / storage spike) is a down payment on this epic.
 
 ## Current aim (2026-07)
@@ -46,7 +46,7 @@ Sharpened from the earlier "explore everything" framing:
   snapshot, and staleness is the specific thing this UI must not have.
 
 The tier ladder (serve → hosted single-user → WASM) from
-[[research-doc-web-companion-directions-serve-shared-core-github-backed-store]]
+[research-doc-web-companion-directions-serve-shared-core-github-backed-store](../tasks/6fbwhsw00a4b-research-doc-web-companion-directions-serve-shared-core-github-backed-store.md)
 still holds; we are committing to tier 1 with tier 2 (hosted, still single-user)
 as the deliberate next rung. WASM stays a curiosity.
 
@@ -87,8 +87,8 @@ is caught on the next pull, not instantly; acceptable for single-user.
 
 "Tasks content matching" — making a write apply only if the task hasn't changed
 underneath the writer — is **already scoped as
-[[version-aware-occ-content-hash-token-and-plain-retry]] under epic
-[[24-data-model-evolution-stable-key-storage-read-model-content-occ]]**. This epic
+[version-aware-occ-content-hash-token-and-plain-retry](../tasks/6fhnydm02wxd-version-aware-occ-content-hash-token-and-plain-retry.md) under epic
+[24-data-model-evolution-stable-key-storage-read-model-content-occ](24-data-model-evolution-stable-key-storage-read-model-content-occ.md)**. This epic
 does **not** own that work; it *consumes* it and adds the HTTP surface:
 
 - **The version token is a content-hash, canonically — everywhere.** Epic 24
@@ -189,7 +189,7 @@ all confined to the GitHub `core.Store` implementation:
   `rank` frontmatter field, or accept "sorted by priority then age, no manual order."
   This is a data-model change → coordinate with epic 24 if we want it.
 - **Serve-owns-git for the hosted rung.** The sync research
-  ([[2026-06-24-remote-planning-repos-backends-and-sync]]) lands on the server as a
+  ([2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md)) lands on the server as a
   single privileged git client (writes serialized through `core.Service` + OCC,
   commits batched under a `tskflwctl-bot` identity with a `Co-authored-by` trailer).
   For single-user this is nearly free; confirm we want the hosted server to drive git
@@ -212,7 +212,7 @@ To be filed under this epic once the shape is agreed:
    headline slice.*
 4. **Write path + OCC surface** — `POST /tasks/{slug}/move` (and field edits) through
    `core.Service`, `If-Match`/412, optimistic UI. Depends on / stopgaps
-   [[version-aware-occ-content-hash-token-and-plain-retry]].
+   [version-aware-occ-content-hash-token-and-plain-retry](../tasks/6fhnydm02wxd-version-aware-occ-content-hash-token-and-plain-retry.md).
 5. **CSRF + body limits + config** — the browser trust-boundary hardening.
 6. *(tier 2, later)* **GitHub-backed `core.Store`** — go-github + caching transport +
    singleflight + ratelimit, in its own package.
@@ -239,7 +239,7 @@ Backing for the stack choices above:
 
 - **Multi-user / multi-tenant** — single-user throughout; no org/permission model.
 - **OCC/version-CAS mechanism itself** — owned by epic
-  [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]; this epic
+  [24-data-model-evolution-stable-key-storage-read-model-content-occ](24-data-model-evolution-stable-key-storage-read-model-content-occ.md); this epic
   only adds the HTTP `ETag`/`If-Match` surface over it.
 - **WASM client** — kept as a noted tier, not pursued.
 - **The module split** — stay one module with `internal/` seams until a real external
@@ -249,12 +249,12 @@ Backing for the stack choices above:
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]] — OCC /
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](24-data-model-evolution-stable-key-storage-read-model-content-occ.md) — OCC /
   version-CAS this epic's write path consumes.
-- [[version-aware-occ-content-hash-token-and-plain-retry]] — the OCC task itself.
-- [[2026-06-24-remote-planning-repos-backends-and-sync]] — serve-owns-git, freshness,
+- [version-aware-occ-content-hash-token-and-plain-retry](../tasks/6fhnydm02wxd-version-aware-occ-content-hash-token-and-plain-retry.md) — the OCC task itself.
+- [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md) — serve-owns-git, freshness,
   single-writer sync (Path C convergence).
-- [[2026-06-24-task-storage-model-files-logs-or-versioned-db]] — content-vs-workflow-
+- [2026-06-24-task-storage-model-files-logs-or-versioned-db](../research/2026-06-24-task-storage-model-files-logs-or-versioned-db.md) — content-vs-workflow-
   state split behind the OCC shape.
 - `docs/ARCHITECTURE.md` — ports-and-adapters layout `serve` becomes a third adapter of.
 - `internal/core/store.go` — the `Store` port a GitHub adapter would implement.

@@ -15,7 +15,7 @@ completed_at: "2026-06-30"
 id: 6fh1b7w02xwd
 ---
 ## Objective
-A proper visual + contrast pass on the neon-day (light) palette, beyond the AA text-color fix already landed in [[pre-t5-design-hardening-from-the-adversarial-review]].
+A proper visual + contrast pass on the neon-day (light) palette, beyond the AA text-color fix already landed in [pre-t5-design-hardening-from-the-adversarial-review](6fh1b7w00hsk-pre-t5-design-hardening-from-the-adversarial-review.md).
 
 ## Context
 The light palette (Catppuccin-Latte-inspired) was never visually validated. The hardening pass darkened the four semantic TEXT accents (green/yellow/teal/blue) to clear WCAG AA (>=4.5:1) on the Latte bg — but other light tokens still need review:

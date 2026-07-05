@@ -31,6 +31,6 @@ id: 6ff3hpm02xcd
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
 
 Done: epic show renders a status-grouped lipgloss/v2 tree (rootless; node text pre-styled by st so --color is honored, connectors plain → ANSI-free under --color=never; --json untouched). First real lipgloss/v2 use in render. Test: TestEpicShowHuman_Tree.

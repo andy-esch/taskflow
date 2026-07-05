@@ -104,7 +104,7 @@ fine future add for living-doc lifecycle scripts — noted, not built.) Rolled a
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
-- Complements [[auto-generate-cli-reference-docs-with-a-ci-sync-check]] (both are
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
+- Complements [auto-generate-cli-reference-docs-with-a-ci-sync-check](6fdtbb403ba4-auto-generate-cli-reference-docs-with-a-ci-sync-check.md) (both are
   CI-enforced contracts) and would lock the byte-stable output from
-  [[consolidate-output-flags-into-output-and-columns]].
+  [consolidate-output-flags-into-output-and-columns](6fdtbb401htr-consolidate-output-flags-into-output-and-columns.md).

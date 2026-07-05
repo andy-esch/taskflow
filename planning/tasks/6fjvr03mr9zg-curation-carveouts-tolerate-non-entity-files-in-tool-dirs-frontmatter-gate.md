@@ -46,7 +46,7 @@ is a **flatten prerequisite** — at minimum the flat scan must skip non-entity 
 - `scanDir` + `parseTask/Audit/Epic`: a no-frontmatter `.md` → `FileProblem` (listing noise),
   NOT a silent skip. A frontmatter'd-but-malformed file → also a `FileProblem` (a real error).
 - **No ignore mechanism exists** (no `.tskflwctlignore`, no `ignore` config key) — confirmed.
-- Config already supports `taskflow_root` (the [[isolate-desirelines-planning-entities-under-a-dedicated-planning-directory]] approach puts entities in a dedicated dir — the "out of scope entirely" answer for whole *directories*).
+- Config already supports `taskflow_root` (the [isolate-desirelines-planning-entities-under-a-dedicated-planning-directory](6fjvdf9t848k-isolate-desirelines-planning-entities-under-a-dedicated-planning-directory.md) approach puts entities in a dedicated dir — the "out of scope entirely" answer for whole *directories*).
 
 ## The crux — these files are NOT all the same (a use-case spectrum)
 
@@ -56,7 +56,7 @@ The design must decide a mechanism **per category** — and whether one mechanis
    to `list`/`show`/`lint`), coexisting freely in an entity dir.
 2. **Recurring routines** — `routines/*.md` specs (Claude Code fires them server-side; the spec
    produces an audit). Want: **maybe** ignored, **maybe** a first-class entity
-   ([[spike-routines-as-a-first-class-entity-routine-audit-lineage]]), **maybe** a companion.
+   ([spike-routines-as-a-first-class-entity-routine-audit-lineage](6fjw1d2jm6e9-spike-routines-as-a-first-class-entity-routine-audit-lineage.md)), **maybe** a companion.
 3. **Per-entity companion files** — epic 27's **Shape B**: a task's code-review findings stored
    as a **separate linked file** (`target_task: <slug>`); or a routine's execute-doc. Want:
    **ASSOCIATED with an entity** — tracked-and-linked, not ignored, not a top-level entity.
@@ -94,14 +94,14 @@ Weigh these candidate mechanisms (mix-and-match is fair):
 
 ## Cross-references
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- **Hard prerequisite for** [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]] (the flat-scan pollution).
-- Use case: [[spike-routines-as-a-first-class-entity-routine-audit-lineage]] (category 2 — ignore vs first-class).
-- **Coordinate with epic [[27-agent-code-review-on-tasks-structured-review-loop]]** — its Shape A
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- **Hard prerequisite for** [flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md) (the flat-scan pollution).
+- Use case: [spike-routines-as-a-first-class-entity-routine-audit-lineage](6fjw1d2jm6e9-spike-routines-as-a-first-class-entity-routine-audit-lineage.md) (category 2 — ignore vs first-class).
+- **Coordinate with epic [27-agent-code-review-on-tasks-structured-review-loop](../epics/27-agent-code-review-on-tasks-structured-review-loop.md)** — its Shape A
   (in-file `## Review` section) vs Shape B (a separate linked review file) *is* the category-3
   question; decide the carveout/companion model and 27's storage shape together.
-- Complementary approach: [[isolate-desirelines-planning-entities-under-a-dedicated-planning-directory]] (category 4 — whole dirs out of scope).
-- Epic [[26-frontmatter-schema-declared-validation-contract]] — a declared schema is where
+- Complementary approach: [isolate-desirelines-planning-entities-under-a-dedicated-planning-directory](6fjvdf9t848k-isolate-desirelines-planning-entities-under-a-dedicated-planning-directory.md) (category 4 — whole dirs out of scope).
+- Epic [26-frontmatter-schema-declared-validation-contract](../epics/26-frontmatter-schema-declared-validation-contract.md) — a declared schema is where
   "what makes a file an entity" would be formalized; the frontmatter-gate leans on it.
 
 ## Decision (2026-07-04) — carveout model resolved (design-first outcome)
@@ -180,7 +180,7 @@ Filename gate in `markdownCandidates` + `README.md` carve + a clearer parse-erro
   **tracked** -> an entity (Shape B); throwaway notes -> `meta/`.
 - **ADR-worthy:** "what makes a file an entity" (the filename classifier) + the stray-file
   contract belong in a short ADR, coordinated with epic
-  [[26-frontmatter-schema-declared-validation-contract]].
+  [26-frontmatter-schema-declared-validation-contract](../epics/26-frontmatter-schema-declared-validation-contract.md).
 
 ## Epic analog implemented in Phase B (2026-07-05)
 

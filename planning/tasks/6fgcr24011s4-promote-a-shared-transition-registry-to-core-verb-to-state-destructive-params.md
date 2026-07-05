@@ -27,7 +27,7 @@ All three audit findings are now closed:
   `TaskTransitions()`/`AuditTransitions()` are the one verb→state table; the CLI
   builds its verb commands from them and the TUI action menu is a thin
   `fromDomain(...)` view. (Epics stay TUI-local by design — they have no CLI verb
-  vocabulary yet; folding them in belongs with [[epic-lifecycle-named-verbs-epic-retire-deprecate-activate]].)
+  vocabulary yet; folding them in belongs with [epic-lifecycle-named-verbs-epic-retire-deprecate-activate](6ffr4wc01d26-epic-lifecycle-named-verbs-epic-retire-deprecate-activate.md).)
 - **M5 (destructive-confirm) — landed earlier (in main).** `Transition.Destructive`
   lives in the registry and flows to the TUI's y/n gate via `fromDomain`; the
   non-interactive CLI ignores it. The clock-consistency half also already landed.

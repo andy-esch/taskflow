@@ -41,7 +41,7 @@ deliberately deferred so it isn't lost before the next polish pass.
   — but so are `style.go` (`accent`), `help.go` (`helpHeading`), `action.go`
   (`actionHeading`). This is pre-existing debt, not new. Worth a *single* sweep to
   route UI-chrome colors through a `theme.ColorAccent`-style constant (likely an
-  epic [[21-code-quality-architecture-hardening]] item), not a one-file patch.
+  epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md) item), not a one-file patch.
 - **`dashJump` silently no-ops on a missing tab** (`indexOfKind < 0` → `return nil`).
   Harmless today (only the three hardcoded entity kinds are targeted). Add a
   defensive flash once Projects/ADRs tabs land so a registry/tab mismatch is visible.

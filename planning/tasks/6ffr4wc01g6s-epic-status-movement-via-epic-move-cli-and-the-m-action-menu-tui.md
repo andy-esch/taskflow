@@ -38,7 +38,7 @@ the TUI action menu. Targets the new `active / retired / deprecated` vocabulary.
   `epicItem` already has `lifecycleState()` (its current status) for dropping the
   no-op transition.
 
-Was split out of [[epic-mutation-add-epic-set-and-epic-edit]] (which keeps the
+Was split out of [epic-mutation-add-epic-set-and-epic-edit](6ffr4wc021q2-epic-mutation-add-epic-set-and-epic-edit.md) (which keeps the
 NON-status field/body faces). Both surfaces in one pass so they stay consistent.
 
 ## Acceptance criteria

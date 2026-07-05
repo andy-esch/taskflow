@@ -15,9 +15,9 @@ long over (every load-bearing choice below is decided — see the `[x]` items + 
 command, **version-aware OCC** (whole-file content-hash CAS + advisory `flock` + bounded
 auto-retry), and the capstone — **Phase B, the flat id-led layout** that retires
 `status == directory` entirely
-([[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]]), migrated
+([flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](../tasks/6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md)), migrated
 across both this repo and desirelines. **Remaining:** the **Scheme-2 reference rewrites**
-([[scheme-2-references-and-rename-verb-with-link-cascade]] — wikilinks→markdown, a `rename`
+([scheme-2-references-and-rename-verb-with-link-cascade](../tasks/6fhnydm021es-scheme-2-references-and-rename-verb-with-link-cascade.md) — wikilinks→markdown, a `rename`
 verb with link cascade, dangler lint, id-prefix epic refs) plus small hardening follow-ups
 (route `lint --fix` through the write-lock; complete id-prefixes in shell completion).
 

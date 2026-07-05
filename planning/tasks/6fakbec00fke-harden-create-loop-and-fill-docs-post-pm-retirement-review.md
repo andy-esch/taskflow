@@ -56,5 +56,5 @@ flagged, and fill the doc gaps (notably: the repo had no `CLAUDE.md`).
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; follows
-  [[add-create-verbs-task-new-and-epic-new]] and the autocomplete work.
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); follows
+  [add-create-verbs-task-new-and-epic-new](6fa91vg03g4z-add-create-verbs-task-new-and-epic-new.md) and the autocomplete work.

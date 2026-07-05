@@ -77,7 +77,7 @@ Old → new migration map: `planning`→active, `in-progress`→active,
   re-record would show (cosmetic — note it, don't re-record here).
 - Don't conflate epic status with the **rollup %** (that's task-status based and
   orthogonal) — no rollup logic should change.
-- Blocks the `epic set`/`edit` task ([[epic-mutation-add-epic-set-and-epic-edit]]),
+- Blocks the `epic set`/`edit` task ([epic-mutation-add-epic-set-and-epic-edit](6ffr4wc021q2-epic-mutation-add-epic-set-and-epic-edit.md)),
   which should target this vocab.
 
 ## Done when

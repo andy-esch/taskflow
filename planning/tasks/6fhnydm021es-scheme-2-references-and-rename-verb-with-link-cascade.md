@@ -57,5 +57,17 @@ re-titles an entity while cascading its inbound links, with `lint` flagging dang
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- Follows [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]] (Phase B).
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- Follows [flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md) (Phase B).
+
+## Pieces 2a + 2b landed (2026-07-05)
+
+Body cross-links are now GitHub-clickable relative-path markdown:
+- **2a (scaffold):** `task new` stores the epic's canonical `<NN>-<slug>` stem (resolved on
+  the NN key) and the template emits `- Epic [<stem>](../epics/<stem>.md)` instead of `[[…]]`.
+- **2b (migration):** `internal/tools/wikimigrate` converted existing `[[slug]]` wikilinks to
+  relative-path markdown across both planning trees — taskflow (531 links / 173 files) and
+  desirelines (309 / 115). Byte-safe, 0 broken; placeholders + danglers left untouched (the
+  danglers are what piece 4's lint will flag).
+
+Remaining: piece 3 (rename verb with link cascade) + piece 4 (dangler lint).

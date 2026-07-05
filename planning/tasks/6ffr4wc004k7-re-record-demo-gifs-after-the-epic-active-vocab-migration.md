@@ -22,4 +22,4 @@ The epic-vocab migration changed epic statuses to active/retired/deprecated, so 
 
 ## Notes
 
-Needs the `vhs` tool (host/CI, not in the dev container). Runs against [[regenerate-demo-gifs-for-the-new-progress-and-symbology-output]]'s assets/demo-planning fixture.
+Needs the `vhs` tool (host/CI, not in the dev container). Runs against [regenerate-demo-gifs-for-the-new-progress-and-symbology-output](6ffr4wc010sj-regenerate-demo-gifs-for-the-new-progress-and-symbology-output.md)'s assets/demo-planning fixture.

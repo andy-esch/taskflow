@@ -100,8 +100,8 @@ no new dep.
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]] (extends S4 mutations
-  [[tui-sprint-4-mutations-and-actions]]).
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md) (extends S4 mutations
+  [tui-sprint-4-mutations-and-actions](6faxn18000j6-tui-sprint-4-mutations-and-actions.md)).
 - Mutation faces: `task set` (agent/field-level) vs `task edit` (`$EDITOR`/human)
   — this is the TUI's in-place field face over the same `SetFields`.
 - `internal/tui/action.go` (the `a` lifecycle menu this sits beside);

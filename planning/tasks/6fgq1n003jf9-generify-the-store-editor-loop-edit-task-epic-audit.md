@@ -37,7 +37,7 @@ the subtle, security-relevant part — is defined and tested in exactly one plac
 
 Surfaced by the 2026-06-28 adversarial review of the audit-edit work
 (`audit edit` / `audit append`, shipped in
-[[audit-editing-faces-audit-edit-set-and-append]]). The reviewer flagged the
+[audit-editing-faces-audit-edit-set-and-append](6ffr4wc01thc-audit-editing-faces-audit-edit-set-and-append.md)). The reviewer flagged the
 editor-loop as the rule-of-three: it was a copy when there were two faces (task,
 epic); `EditAudit` made it three. Deliberately deferred out of that PR's scope
 (don't refactor shared infra inside a feature PR), filed here.

@@ -55,7 +55,7 @@ Plan: `planning/research/2026-06-23-tui-v2-migration-plan.md`.
 ## Related
 - Plan: `planning/research/2026-06-23-tui-v2-migration-plan.md`; decision
   `planning/research/2026-06-23-lipgloss-v2-charm-ecosystem.md`.
-- [[18-tui-bubble-tea-interactive-planning-browser]].
+- [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).
 
 ## OSC-11 spike result (2026-06-23)
 

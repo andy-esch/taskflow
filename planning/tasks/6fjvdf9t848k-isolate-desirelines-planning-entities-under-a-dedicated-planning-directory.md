@@ -80,7 +80,7 @@ the undo**.
 ## Out of scope
 
 - The **flatten** itself (id-led filenames, retire status==directory) — that's Phase B
-  ([[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]]); this move
+  ([flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md)); this move
   is deliberately layout-preserving and can ship first.
 - The **122-file entity↔entity relative-link rewrite** — preserved by this move, rewritten by
   the flatten migration.
@@ -88,15 +88,15 @@ the undo**.
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- De-risks [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]]
-  (Phase B) and [[one-time-migration-script-this-repo-desirelines]].
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- De-risks [flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md)
+  (Phase B) and [one-time-migration-script-this-repo-desirelines](6fhnydm029gt-one-time-migration-script-this-repo-desirelines.md).
 
 ## Decision (2026-07-04) — resolves step 7 (the stray HOWTO)
 
 Step 7 left `audits/HOWTO-execute.md` handling open ("relocate it, or rely on the Phase B
 fix — decide"). The carveout decision
-([[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]]) settles it:
+([curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate](6fjvr03mr9zg-curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate.md)) settles it:
 **move it to a top-level `planning/meta/`** as part of this isolate move, rather than leaving
 it in `planning/audits/`.
 

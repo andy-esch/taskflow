@@ -12,7 +12,7 @@ related_tasks:
 # pm CLI architecture: command hierarchy, Go framework, and port strategy
 
 **Goal.** The Python `bin/pm` is a prototype; the real tool is a Go CLI
-(epic [[17-pm-go-cli]]). This doc decides the command hierarchy, the Go
+(epic [17-pm-go-cli](../epics/17-pm-go-cli.md)). This doc decides the command hierarchy, the Go
 framework, the data model, and the port strategy. It is design input —
 implementation lives in epic 17.
 
@@ -162,7 +162,7 @@ change** — same markdown + frontmatter the Python tool reads.
 > **Code architecture / layout / patterns live in the companion doc:**
 > `research/2026-06-06-go-cli-foundation-architecture.md` (primary/secondary
 > adapter split over a shared core, DI/no-globals, testing harness). Build
-> the foundation first ([[go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness]]),
+> the foundation first ([go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness](../tasks/6f9menr02b25-go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness.md)),
 > then port commands onto it.
 
 - **Bootstrap from taskflow** (cobra skeleton + Pattern C), stripped to the

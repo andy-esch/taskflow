@@ -20,7 +20,7 @@ id: 6faxn1800wd1
 
 The v1 milestone: a genuinely usable read-only task browser — list + preview +
 vim navigation. Decisions/architecture in
-[[18-tui-bubble-tea-interactive-planning-browser]].
+[18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).
 
 ## Scope
 
@@ -108,4 +108,4 @@ vim navigation. Decisions/architecture in
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)

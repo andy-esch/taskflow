@@ -63,7 +63,7 @@ different question than GitHub discoverability, but worth a line.
       BOARD.md alternative as a baseline comparison
 - [ ] Doc recommends a first concrete slice (likely `tskflwctl serve`, read-only) and
       what it would prove
-- [ ] Follow-up tasks proposed under epic [[19-web-companion-apps-over-a-shared-core]]
+- [ ] Follow-up tasks proposed under epic [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md)
 
 ## Out of scope
 
@@ -73,6 +73,6 @@ different question than GitHub discoverability, but worth a line.
 
 ## Related
 
-- Epic [[19-web-companion-apps-over-a-shared-core]]
+- Epic [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md)
 - `docs/ARCHITECTURE.md` — ports-and-adapters layout this builds on
 - `internal/core/store.go` — the `Store` port a GitHub adapter would implement

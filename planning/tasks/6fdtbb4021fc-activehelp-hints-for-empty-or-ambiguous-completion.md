@@ -47,5 +47,5 @@ Gate each behind `cobra.GetActiveHelpConfig(cmd) != "off"` so users can disable.
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
-- Complements [[interactive-prompt-layer-gh-style-pickers]] (the TTY picker face).
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
+- Complements [interactive-prompt-layer-gh-style-pickers](6fbj870019vt-interactive-prompt-layer-gh-style-pickers.md) (the TTY picker face).

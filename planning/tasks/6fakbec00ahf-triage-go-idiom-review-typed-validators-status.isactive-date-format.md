@@ -62,5 +62,5 @@ reject the ceremony with rationale.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; follows
-  [[triage-external-review-fix-fixer-comment-o-excl-config-anchor-diagnostics]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); follows
+  [triage-external-review-fix-fixer-comment-o-excl-config-anchor-diagnostics](6fakbec03cct-triage-external-review-fix-fixer-comment-o-excl-config-anchor-diagnostics.md).

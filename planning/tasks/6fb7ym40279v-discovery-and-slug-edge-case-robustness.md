@@ -51,7 +51,7 @@ own-line config comments), but each is a cheap, correct hardening.
    (outside quotes) before extracting the value.
 
 Folded in from the 2026-06-12 review
-([[2026-06-12-critical-code-review-multi-lens]], findings B2/M2 + a slug low —
+([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), findings B2/M2 + a slug low —
 same files, same theme):
 
 4. **`configuredRoot` doesn't enforce the containment its comment promises**
@@ -86,7 +86,7 @@ same files, same theme):
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `internal/domain/slug.go`, `internal/config/config.go`.
 
 ## Closure (2026-06-13)
@@ -99,7 +99,7 @@ quote treated as unset; table-tested); B2 containment (an escaping
 taskflow_root is a loud error); M2 planning-root validation (a configured
 root without tasks/ errors instead of presenting an empty project that
 `task new` would fork); slug path-separator rejection landed inside the
-shared resolver (see [[fuzzypartial-slug-resolution]]).
+shared resolver (see [fuzzypartial-slug-resolution](6fakbec0252f-fuzzypartial-slug-resolution.md)).
 
 ### Addendum (2026-06-13, same day)
 

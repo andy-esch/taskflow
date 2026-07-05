@@ -22,8 +22,8 @@ completed_at: "2026-07-04"
 **Status: implementation complete (steps 1–7).** Green throughout — store + core suites,
 vet, golangci-lint (0 issues), live smoke. Two small items are tracked separately so they
 outlive this task: the dry-run↔CAS consistency decision
-([[normalize-dry-run-vs-version-cas-ordering-across-store-writes]]) and hardening
-fix.go's relocations ([[harden-lint-fix-misfiled-move-for-dup-slug-edge-cases]]).
+([normalize-dry-run-vs-version-cas-ordering-across-store-writes](6fjt7rm1p50q-normalize-dry-run-vs-version-cas-ordering-across-store-writes.md)) and hardening
+fix.go's relocations ([harden-lint-fix-misfiled-move-for-dup-slug-edge-cases](6fjjpfg16ss5-harden-lint-fix-misfiled-move-for-dup-slug-edge-cases.md)).
 
 **⚠ Post-"completion" critical fix (2026-07-04): the flock write-lock.** A concurrency
 *smoke test* (16 processes appending to one file) exposed a serious bug the four review
@@ -242,7 +242,7 @@ dual-move clobber" (dup-slug → ErrAmbiguous guard; and out of scope), "wrong-f
 - **[decide] dryRun ↔ CAS is inconsistent** (pre-existing): in-place writers (SetFields,
   writeBody) run the CAS on dry-run; the movers/epics skip it. Pick one philosophy; low stakes.
 - **[follow-up] fix.go relocations are unguarded** — fold a version check into
-  [[harden-lint-fix-misfiled-move-for-dup-slug-edge-cases]].
+  [harden-lint-fix-misfiled-move-for-dup-slug-edge-cases](6fjjpfg16ss5-harden-lint-fix-misfiled-move-for-dup-slug-edge-cases.md).
 
 ## Acceptance criteria
 
@@ -274,7 +274,7 @@ untouched.
 - **Merge / conflict-resolution UX** — plain retry only (per epic 24); "assist a merge"
   is deferred.
 - **The HTTP `ETag` / `If-Match` / 412 surface** — that's the web adapter (epic
-  [[19-web-companion-apps-over-a-shared-core]]), which *carries* this content-hash token
+  [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md)), which *carries* this content-hash token
   over HTTP; it is not defined here. **No `version` in `--json`/wire, no `SchemaVersion`
   bump** in this task.
 - **Git-sync / remote backends** — this task is the local FS implementation of the
@@ -284,10 +284,10 @@ untouched.
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- [[2026-06-24-remote-planning-repos-backends-and-sync]] — §2 sync/OCC context (its
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md) — §2 sync/OCC context (its
   per-backend token table is superseded by this content-hash decision).
-- Epic [[19-web-companion-apps-over-a-shared-core]] — the HTTP surface over this token.
+- Epic [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md) — the HTTP surface over this token.
 
 ### Prior-art anchors (research 2026-07-04)
 RFC 9110 §13.1 (If-Match/If-None-Match/412, strong vs weak); etcd Txn mod_revision;

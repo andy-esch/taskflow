@@ -74,8 +74,8 @@ atomic, JSON, picker — so an epic is no longer write-once.
 
 ## Decision 2026-06-25 — depends on the new epic vocab
 
-BLOCKED ON [[redefine-epic-status-model-to-active-retired-deprecated-and-migrate]]: target the new active/retired/deprecated vocabulary, not the old set. Command shape: 'epic set --status retired' (+ --priority/--description/--tags) is the path — named lifecycle verbs (epic retire/deprecate) are a possible later nicety, NOT in this task.
+BLOCKED ON [redefine-epic-status-model-to-active-retired-deprecated-and-migrate](6ffr4wc03yjk-redefine-epic-status-model-to-active-retired-deprecated-and-migrate.md): target the new active/retired/deprecated vocabulary, not the old set. Command shape: 'epic set --status retired' (+ --priority/--description/--tags) is the path — named lifecycle verbs (epic retire/deprecate) are a possible later nicety, NOT in this task.
 
 ## Decision 2026-06-25 — status movement split out
 
-Status movement (active/retired/deprecated) is now [[epic-status-movement-via-epic-move-cli-and-the-m-action-menu-tui]] (a real 'epic move' verb + the TUI 'm' action menu + completion, mirroring task/audit). So THIS task is **non-status fields + body only**: 'epic set <id> --priority|--description|--tags' (NO --status) + 'epic edit [id]' ($EDITOR). Plus TUI parity for field-edit ('e') and $EDITOR ('E') if tasks have them.
+Status movement (active/retired/deprecated) is now [epic-status-movement-via-epic-move-cli-and-the-m-action-menu-tui](6ffr4wc01g6s-epic-status-movement-via-epic-move-cli-and-the-m-action-menu-tui.md) (a real 'epic move' verb + the TUI 'm' action menu + completion, mirroring task/audit). So THIS task is **non-status fields + body only**: 'epic set <id> --priority|--description|--tags' (NO --status) + 'epic edit [id]' ($EDITOR). Plus TUI parity for field-edit ('e') and $EDITOR ('E') if tasks have them.

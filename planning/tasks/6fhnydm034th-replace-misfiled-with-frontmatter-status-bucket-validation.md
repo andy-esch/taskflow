@@ -52,5 +52,5 @@ epic-status model.
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]] — the flat layout (Phase B) needs this (no folder fallback once flat), and owns the Misfiled removal.
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- [flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md) — the flat layout (Phase B) needs this (no folder fallback once flat), and owns the Misfiled removal.

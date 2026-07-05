@@ -12,14 +12,14 @@ superseded_by: null
 > ✔ **Accepted 2026-07-01 — finalized.** The decision sections below are frozen; add
 > new information only under `## Amendments`. Reverse via a superseding ADR.
 
-> Follows the ADR format established in [[0001-adopt-adrs]]. This is the
+> Follows the ADR format established in [0001-adopt-adrs](0001-adopt-adrs.md). This is the
 > **decision-consolidation** step for epic
-> [[24-data-model-evolution-stable-key-storage-read-model-content-occ]] — it ratifies
+> [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md) — it ratifies
 > the *identity + layout* cluster the epic and its two spikes converged on over
 > 2026-06-30, and explicitly bounds what it does **not** decide (branching/SSOT,
 > `serve`, OCC token, board, migration — see *Out of scope*). Full rationale lives in
-> [[2026-06-24-task-storage-model-files-logs-or-versioned-db]] and
-> [[2026-06-24-remote-planning-repos-backends-and-sync]]; this ADR is the citable
+> [2026-06-24-task-storage-model-files-logs-or-versioned-db](../research/2026-06-24-task-storage-model-files-logs-or-versioned-db.md) and
+> [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md); this ADR is the citable
 > conclusion.
 
 ## Context and Problem Statement
@@ -170,7 +170,7 @@ This ADR decides the *on-disk model only*. Related decisions live elsewhere.
 **Decided since (elsewhere):**
 
 - **Branching / single-source-of-truth model** and the **web-write landing model** —
-  decided in [[0004-single-source-of-truth-serve-owns-git]] (serve-owns-git).
+  decided in [0004-single-source-of-truth-serve-owns-git](0004-single-source-of-truth-serve-owns-git.md) (serve-owns-git).
 - **OCC version token + conflict UX** — decided in epic 24 (whole-file content hash +
   plain retry).
 
@@ -249,8 +249,8 @@ Grounding the flatten surfaced that a flat scanned bucket is a *pollution surfac
 (e.g. `audits/HOWTO-execute.md`) becomes a fuzzy-match candidate and a listing problem. This
 amends §4 (id-led flat filenames) with the rule for **non-entity files inside a scanned
 bucket**. Decided in
-[[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]]; built as part
-of [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]].
+[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate](../tasks/6fjvr03mr9zg-curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate.md); built as part
+of [flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](../tasks/6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md).
 
 - **Entity = a filename-shape test.** A file directly in a scanned bucket is an entity iff its
   name leads with a valid stable key — `<id>-` (tasks/audits, the 12-char id, `id.Valid()`) or
@@ -273,15 +273,15 @@ of [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]
   folder's landing page).
 
 The *full* "what is a valid entity / valid frontmatter" contract is
-[[26-frontmatter-schema-declared-validation-contract]]'s to formalize; this amendment fixes the
+[26-frontmatter-schema-declared-validation-contract](../epics/26-frontmatter-schema-declared-validation-contract.md)'s to formalize; this amendment fixes the
 narrow layout-hygiene rule the flatten needs now.
 
 ## Related
 
 - Home epic & the open-questions index:
-  [[24-data-model-evolution-stable-key-storage-read-model-content-occ]].
+  [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md).
 - Storage-model rationale (paradigm, organizing key, the residue):
-  [[2026-06-24-task-storage-model-files-logs-or-versioned-db]].
+  [2026-06-24-task-storage-model-files-logs-or-versioned-db](../research/2026-06-24-task-storage-model-files-logs-or-versioned-db.md).
 - Sync / concurrency & the branching/SSOT fork (deferred here):
-  [[2026-06-24-remote-planning-repos-backends-and-sync]].
-- ADR format this follows: [[0001-adopt-adrs]].
+  [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md).
+- ADR format this follows: [0001-adopt-adrs](0001-adopt-adrs.md).

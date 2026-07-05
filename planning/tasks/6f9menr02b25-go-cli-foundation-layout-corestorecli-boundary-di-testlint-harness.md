@@ -90,7 +90,7 @@ DI architecture and proved it end-to-end on taskflow's own planning data.
 - **Real-data finding:** the relocated foundation task's `description` had an
   unquoted `:` → invalid YAML the no-PyYAML Python `pm` wrote and never
   validated. tskflwctl's strict YAML correctly rejected it. Fixed the file;
-  logged [[strict-yaml-frontmatter-fix-pm-serialize-quoting-backfill-invalid-values]].
+  logged [strict-yaml-frontmatter-fix-pm-serialize-quoting-backfill-invalid-values](6f9yr8m03xc4-strict-yaml-frontmatter-fix-pm-serialize-quoting-backfill-invalid-values.md).
 
 **Deferred to the port task (not this foundation):** transition verbs + `move`,
 `set` with flags, `audit`/`epic`/`project` groups, `init`, atomic writes +
@@ -100,13 +100,13 @@ gosec/wrapcheck lint parity.
 ## Out of scope
 
 - Porting the full command set (that's
-  [[port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec]]).
+  [port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md)).
 - The TUI (`internal/tui` is seeded but not built).
 - Anything in the intelligence layer (MCP/RAG/brain — out by a long shot).
 
 ## Related
 
-- Epic [[17-pm-go-cli]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md).
 - `research/2026-06-06-go-cli-foundation-architecture.md` — the design.
-- [[port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec]] —
+- [port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md) —
   the command port that builds on this foundation.

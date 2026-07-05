@@ -15,10 +15,10 @@ completed_at: "2026-06-30"
 id: 6fgq1n00054d
 ---
 ## Objective
-Replace the package-global `pal` + `applyTheme` (shipped in [[route-tui-chrome-through-the-palette]]) with a Model-owned palette + styles, so theming is per-instance rather than process-global.
+Replace the package-global `pal` + `applyTheme` (shipped in [route-tui-chrome-through-the-palette](6fgq1n0016kj-route-tui-chrome-through-the-palette.md)) with a Model-owned palette + styles, so theming is per-instance rather than process-global.
 
 ## Why (the robustness case)
-- **Multi-session safety:** package globals are shared process-wide; a `wish`/SSH server (epic [[19-web-companion-apps-over-a-shared-core]]) serving concurrent sessions would have one session's `applyTheme` clobber the others'. A Model-scoped palette is per-session by construction — and aligns with the repo's DI/no-globals architecture rule.
+- **Multi-session safety:** package globals are shared process-wide; a `wish`/SSH server (epic [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md)) serving concurrent sessions would have one session's `applyTheme` clobber the others'. A Model-scoped palette is per-session by construction — and aligns with the repo's DI/no-globals architecture rule.
 - **Test isolation:** a global can't render light- and dark-themed models in one process without racing; Model-scoped styles unlock themed-output assertions + `t.Parallel()`.
 
 ## Scope

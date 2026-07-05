@@ -31,7 +31,7 @@ id: 6ffr4wc00c6g
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
 
 ## What's left
 

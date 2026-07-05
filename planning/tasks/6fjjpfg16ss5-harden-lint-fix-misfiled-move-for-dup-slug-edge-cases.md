@@ -69,8 +69,8 @@ the Phase-A adversarial review (2026-07-03); deferred from the flatten task to k
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]] (Phase A) — where the misfiled-move was introduced.
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- [flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md) (Phase A) — where the misfiled-move was introduced.
 
 ## Re-confirmed by adversarial review (2026-07-05)
 

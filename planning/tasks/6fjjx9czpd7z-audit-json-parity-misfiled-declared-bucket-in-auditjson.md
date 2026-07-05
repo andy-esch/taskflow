@@ -42,5 +42,5 @@ Close the parity — the audit analog of the 1.25 task contract.
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]] (Phase A) — where audit bucket became authoritative; this is the wire-contract half deferred from step 6.
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- [flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md) (Phase A) — where audit bucket became authoritative; this is the wire-contract half deferred from step 6.

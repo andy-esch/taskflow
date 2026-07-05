@@ -21,7 +21,7 @@ id: 6faxn1800qb2
 Auto-refresh the TUI when files change on disk (CLI/agent edits, git pulls) —
 the `reloadMsg` path was plumbed in S1; this wires the source. (~½–1 day; the
 hard parts are debounce + cursor preservation, not fsnotify itself.) See
-[[18-tui-bubble-tea-interactive-planning-browser]].
+[18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).
 
 ## Scope
 
@@ -83,4 +83,4 @@ hard parts are debounce + cursor preservation, not fsnotify itself.) See
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)

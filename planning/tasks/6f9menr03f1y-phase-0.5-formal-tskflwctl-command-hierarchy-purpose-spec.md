@@ -68,7 +68,7 @@ The spec did its job: the foundation + port were built directly against it.
 
 ## Related
 
-- Epic [[17-pm-go-cli]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md).
 - `research/2026-06-06-tskflwctl-command-spec.md` — the spec.
-- [[go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness]] ·
-  [[port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec]].
+- [go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness](6f9menr02b25-go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness.md) ·
+  [port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md).

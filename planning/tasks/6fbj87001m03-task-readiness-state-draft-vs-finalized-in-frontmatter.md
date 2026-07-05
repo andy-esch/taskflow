@@ -60,7 +60,7 @@ first-class, tool-visible concept so:
       in-progress? next-up → in-progress specifically (per the originating
       idea)? Hard error vs warning vs `--force` escape?
 - [ ] **Exit code:** a readiness gate is the first REAL transition rule —
-      D3 ([[2026-06-12-pending-decisions]]) retired exit code 12
+      D3 ([2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md)) retired exit code 12
       (invalid-transition) but left it *reserved*. Does this feature
       un-retire 12, or is it a plain validation failure (11)?
 - [ ] **Is the open-questions count authoritative for the gate, or the
@@ -84,7 +84,7 @@ first-class, tool-visible concept so:
       as a search convenience or go?
 - [ ] **Registry impact:** new field joins `domain/fields.go` (known fields,
       maybe an enum like epic status) and the future
-      [[schema-command-for-agent-self-discovery]] output.
+      [schema-command-for-agent-self-discovery](6fbj87003e4g-schema-command-for-agent-self-discovery.md) output.
 
 ## ⚠️ Conflicts to resolve before starting
 
@@ -106,7 +106,7 @@ first-class, tool-visible concept so:
 
 ## Related
 
-- Epic [[17-pm-go-cli]] · [[2026-06-12-pending-decisions]] (D3) ·
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md) (D3) ·
   the four 2026-06-12 draft tasks (motivating instances) ·
   `internal/store/auditstore.go` (content-derived counting precedent) ·
   `internal/domain/fields.go` (field registry).

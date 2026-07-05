@@ -86,7 +86,7 @@ was a deliberately-local stopgap pending this.)
 
 ## Related
 
-- The picker stopgap: [[render-the-interactive-picker-inline-not-full-screen-alt-screen]]
+- The picker stopgap: [render-the-interactive-picker-inline-not-full-screen-alt-screen](6ffr4wc00dsr-render-the-interactive-picker-inline-not-full-screen-alt-screen.md)
 - The symbology/segmented-bar work that established the current `theme` decisions.
 
 ## Done when

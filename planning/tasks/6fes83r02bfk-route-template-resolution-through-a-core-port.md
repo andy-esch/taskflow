@@ -45,4 +45,4 @@ not a CLI refactor.
 
 ## Related
 
-- Sequenced before/with step 4 of [[design-a-selectable-template-library]].
+- Sequenced before/with step 4 of [design-a-selectable-template-library](6fes83r03rhs-design-a-selectable-template-library.md).

@@ -26,10 +26,10 @@ rules, schema, lifecycle moves, audit commands, validation).
 
 ## Blocked on (do not start until)
 
-- [[phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec]] — the
+- [phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec](6f9menr03f1y-phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec.md) — the
   formal command spec is the build-to contract (Python tests are
   incomplete); port to *it*, not just to parity.
-- [[go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness]]
+- [go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness](6f9menr02b25-go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness.md)
   — the rock-solid foundation (layout, core/store/cli boundary, DI, test +
   lint harness) must land first; commands port *onto* it.
 - [[rethink-pm-command-hierarchy-pm-noun-verb-research-cli-best-practices]]
@@ -260,11 +260,11 @@ envelope; interactive `init` wizard. Filed as their own tasks: global
 
 ## Related
 
-- Epic [[17-pm-go-cli]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md).
 
 ## Closure note (2026-06-12)
 
-Completed per decision D12 in [[2026-06-12-pending-decisions]]. The port has
+Completed per decision D12 in [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md). The port has
 been the working tool for days (README/ARCHITECTURE declare the loop done; the
 planning corpus is self-hosted on it). Unchecked boxes are deliberate
 descopes, not unfinished work:

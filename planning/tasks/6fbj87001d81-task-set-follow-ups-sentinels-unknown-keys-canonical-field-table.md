@@ -16,9 +16,9 @@ id: 6fbj87001d81
 # `task set` follow-ups (sentinels, unknown keys, canonical field table)
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([[2026-06-12-critical-code-review-multi-lens]], findings M4/M5 + B1
+> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), findings M4/M5 + B1
 > residuals). Direct follow-ups to the just-completed
-> [[harden-task-set-against-silent-frontmatter-corruption]]. Item 2 was
+> [harden-task-set-against-silent-frontmatter-corruption](6fb7ym4008ma-harden-task-set-against-silent-frontmatter-corruption.md). Item 2 was
 > demonstrated live while filing these tasks: `task set <t> --set
 > bogus_field=1` exits 0, writes the junk key, `lint` never flags it, and
 > there is no way to remove it through the tool.
@@ -60,7 +60,7 @@ id: 6fbj87001d81
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `internal/core/service.go`, `internal/store/fsstore.go`,
   `internal/store/diagnose.go`, `internal/domain/`.
 ## Closure (2026-06-12)

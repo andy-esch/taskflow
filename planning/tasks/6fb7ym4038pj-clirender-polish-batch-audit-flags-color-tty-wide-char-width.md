@@ -25,7 +25,7 @@ id: 6fb7ym4038pj
 
 A grab-bag of low-severity CLI/render correctness nits, batched. Some overlap
 the "follow-up cleanup" already noted in
-[[port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec]] (audit
+[port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md) (audit
 regex over-matching, etc.).
 
 1. **`audit list` flags aren't mutually exclusive** (`internal/cli/audit.go:31`).
@@ -74,7 +74,7 @@ regex over-matching, etc.).
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `internal/cli/audit.go`, `internal/store/auditstore.go`,
   `internal/cli/color.go`, `internal/cli/render/style.go`,
   `internal/domain/validate.go`, `internal/theme/`, `internal/tui/style.go`.

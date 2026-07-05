@@ -45,13 +45,13 @@ agent/pipeline contract — every visual nicety is TTY-gated, raw under `--json`
    effort, its own sprint. Upside beyond polish: it **consolidates the two
    lipgloss majors** the fang adoption introduces (TUI on v1 + fang on v2) onto a
    single v2, retiring that debt. `lipgloss/v2 compat` eases the port. Cross-ref
-   epic [[18-tui-bubble-tea-interactive-planning-browser]].
+   epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).
 
 **Adjacent charm tooling:**
 
 5. **`charmbracelet/wish`** — serve the existing TUI over SSH with ~zero new UI
    code. Already noted in the web-companion research; cross-ref epic
-   [[19-web-companion-apps-over-a-shared-core]].
+   [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md).
 6. **`vhs`** — script terminal GIFs of help/TUI/`status` for the README + the
    generated CLI docs. Tooling, not a runtime dep. Cheap docs win.
 7. **`charmbracelet/log`** — styled structured logging. *Considered, likely
@@ -72,7 +72,7 @@ agent/pipeline contract — every visual nicety is TTY-gated, raw under `--json`
 
 - Any implementation (this is capture-and-decide).
 - The fang adoption itself — that's
-  [[evaluate-fang-for-styled-help-errors-and-manpages]]; this task assumes its
+  [evaluate-fang-for-styled-help-errors-and-manpages](6fdtbb4037bs-evaluate-fang-for-styled-help-errors-and-manpages.md); this task assumes its
   dependency graph as the starting point.
 - Domain-model / machine-contract changes.
 
@@ -80,11 +80,11 @@ agent/pipeline contract — every visual nicety is TTY-gated, raw under `--json`
 
 - Source: `planning/research/2026-06-21-fang-evaluation-spike.md` (the spike that
   surfaced lipgloss v2 + bubbletea v2 availability).
-- Epic [[20-cli-ux-and-ergonomics]] · TUI epic
-  [[18-tui-bubble-tea-interactive-planning-browser]] · web epic
-  [[19-web-companion-apps-over-a-shared-core]].
-- Sibling human-face work: [[evaluate-fang-for-styled-help-errors-and-manpages]],
-  [[glamour-render-markdown-bodies-in-show]].
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md) · TUI epic
+  [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md) · web epic
+  [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md).
+- Sibling human-face work: [evaluate-fang-for-styled-help-errors-and-manpages](6fdtbb4037bs-evaluate-fang-for-styled-help-errors-and-manpages.md),
+  [glamour-render-markdown-bodies-in-show](6fdtbb40306e-glamour-render-markdown-bodies-in-show.md).
 
 ## Decision (2026-06-23)
 

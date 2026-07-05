@@ -29,7 +29,7 @@ updated_at: "2026-07-05"
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
 
 ## Finding (adversarial review, 2026-07-05)
 

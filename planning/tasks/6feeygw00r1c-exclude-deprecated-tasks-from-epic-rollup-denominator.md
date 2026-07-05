@@ -52,7 +52,7 @@ when accumulating `Total` (and they're already not counted in `Done`).
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]].
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md).
 - Surfaced 2026-06-21 reviewing the board (epic 18's confusing 16/17).
 - `internal/core/service.go` (the `EpicSummary` rollup helper);
   `internal/cli/render/render.go` (renders `done/total`).

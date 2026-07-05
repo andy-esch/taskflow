@@ -52,5 +52,5 @@ the drift (it shows up when reading legacy/pm repos cross-repo).
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; builds on the M2 crash-safe `Move` and the color work
-  [[cli-color-glyphs-table-headers-render-styling]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); builds on the M2 crash-safe `Move` and the color work
+  [cli-color-glyphs-table-headers-render-styling](6fakbec017kj-cli-color-glyphs-table-headers-render-styling.md).

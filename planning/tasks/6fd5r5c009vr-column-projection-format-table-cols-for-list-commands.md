@@ -29,4 +29,4 @@ id: 6fd5r5c009vr
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)

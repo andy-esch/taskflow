@@ -6,7 +6,7 @@ tags: [tui, design, decision, lipgloss-v2]
 
 # v2 TUI feature wins — adopt/decline decisions
 
-Design output for [[design-the-v2-tui-feature-wins-overlays-clipboard-keyboard]].
+Design output for [design-the-v2-tui-feature-wins-overlays-clipboard-keyboard](../tasks/6ff3hpm014y3-design-the-v2-tui-feature-wins-overlays-clipboard-keyboard.md).
 The charm-v2 migration unlocked capabilities that the migration plan parked in a
 "needs-scoping" bucket. This weighs each against a **real** TUI need and decides
 adopt / decline / defer. Every capability below was verified present in our pinned
@@ -38,7 +38,7 @@ The latter two are independent of the layers work, so they can land in any order
 ## Clipboard — DONE
 
 `tea.SetClipboard` (OSC52) + a native-tool fallback (`pbcopy`/`wl-copy`/`xclip`/…).
-Shipped as [[tui-clipboard-yank-for-slug-and-file-path-via-osc-52]] (`y` = slug,
+Shipped as [tui-clipboard-yank-for-slug-and-file-path-via-osc-52](../tasks/6ff3hpm00jr3-tui-clipboard-yank-for-slug-and-file-path-via-osc-52.md) (`y` = slug,
 `Y` = path). Lesson banked in code: OSC52 alone is unreliable (many terminals
 ignore it), so native-first is the right default; OSC52 is the SSH fallback.
 Possible future nicety (not filed): yank the rendered detail body, or a
@@ -145,4 +145,4 @@ depends on the layers work):
 - Verified against the module cache: `bubbletea/v2@v2.0.7` (`tea.go` View struct,
   `mouse.go`, `keyboard.go`, `clipboard.go`), `lipgloss/v2@v2.0.4`
   (`canvas.go`, `layer.go`).
-- [[2026-06-23-tui-v2-migration-plan]] · [[2026-06-23-lipgloss-v2-charm-ecosystem]].
+- [2026-06-23-tui-v2-migration-plan](2026-06-23-tui-v2-migration-plan.md) · [2026-06-23-lipgloss-v2-charm-ecosystem](2026-06-23-lipgloss-v2-charm-ecosystem.md).

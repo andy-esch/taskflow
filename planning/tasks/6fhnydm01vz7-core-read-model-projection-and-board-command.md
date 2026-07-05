@@ -51,5 +51,5 @@ downstream epic-24 tasks).
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- ADR [[0003-stable-key-id-addressed-storage]] — projection-shape question
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- ADR [0003-stable-key-id-addressed-storage](../adrs/0003-stable-key-id-addressed-storage.md) — projection-shape question
