@@ -8,18 +8,21 @@ created: "2026-06-24"
 ---
 # Data-model evolution — stable-key storage, shared read-model, content OCC
 
-**Status (2026-07-05): Phase B landed — the flatten is done.** The design-first phase is
-long over (every load-bearing choice below is decided — see the `[x]` items + ADR-0003).
-**Shipped + merged:** the stable 12-char id + backfill, the machine contract,
+**Status (2026-07-06): the load-bearing work is DONE.** Every load-bearing choice is decided
+(`[x]` items + ADR-0003) and shipped: the stable 12-char id + backfill, the machine contract,
 **frontmatter-authoritative status/bucket**, the shared `core` read-model + **`board`**
-command, **version-aware OCC** (whole-file content-hash CAS + advisory `flock` + bounded
-auto-retry), and the capstone — **Phase B, the flat id-led layout** that retires
-`status == directory` entirely
-([flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](../tasks/6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md)), migrated
-across both this repo and desirelines. **Remaining:** the **Scheme-2 reference rewrites**
-([scheme-2-references-and-rename-verb-with-link-cascade](../tasks/6fhnydm021es-scheme-2-references-and-rename-verb-with-link-cascade.md) — wikilinks→markdown, a `rename`
-verb with link cascade, dangler lint, id-prefix epic refs) plus small hardening follow-ups
-(route `lint --fix` through the write-lock; complete id-prefixes in shell completion).
+command, **version-aware OCC** (content-hash CAS + `flock` + bounded retry), the capstone
+**Phase B flat id-led layout** (migrated across this repo + desirelines), and **Scheme 2** —
+body `[[wikilinks]]` → GitHub-clickable relative-path markdown (a one-time `wikimigrate` run),
+epic refs resolving on the NN key, a `rename` verb with inbound-link cascade, and `lint
+--links` dangler checking. **Three adversarial-review passes** (external + internal fan-out)
+and **two hardening tasks** (route `lint --fix` through the write-lock; id-prefix/stem shell
+completion) also landed. **Remaining is low-priority polish only:** markdown-structure-aware
+link handling
+([make-rename-cascade-dangler-lint-markdown-structure-aware](../tasks/6fka8khkb3jv-make-rename-cascade-dangler-lint-markdown-structure-aware.md)),
+a duplicate-NN-epic lint
+([lint-flags-duplicate-nn-epics](../tasks/6fka8khn9sd2-lint-flags-duplicate-nn-epics.md)),
+and the routines spike. A **release (next tag v0.14.0)** is a natural cut here.
 
 ## Why this exists (the convergence)
 
@@ -256,9 +259,9 @@ they landed together.
 1. **[done] Decision consolidation** — resolved into ADR-0003/0004.
 2. **[done] Read-model / projection + board** — the `board` command ships (fresh on demand).
 3. **Stable-key layout + version-aware OCC** — **done**: OCC (content-hash CAS + flock +
-   bounded retry) and **the flat id-led layout (Phase B)** shipped, migrated across both
-   repos. **Scheme-2 references** (wikilinks→markdown, `rename` + link cascade, dangler
-   lint, id-prefix epic refs) is the remaining companion.
+   bounded retry), **the flat id-led layout (Phase B)**, and **Scheme-2 references**
+   (wikilinks→markdown, `rename` + link cascade, `lint --links` danglers, id-prefix epic
+   refs) all shipped + migrated across both repos.
 4. **Payoffs (separate epics):** remote backends (epic 23 ph2), `serve` read
    endpoint (epic 19) — both ride on 2–3.
 
