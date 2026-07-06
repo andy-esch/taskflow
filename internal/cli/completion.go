@@ -24,6 +24,57 @@ func flatSlug(stem string) string {
 	return ""
 }
 
+// flatCompletions returns the completion candidates among the id-led .md files in matches,
+// honoring the flat layout's resolution model (ADR-0003 §4): a task/audit resolves on its
+// slug OR its id prefix. So it offers the human slug when it uniquely matches toComplete,
+// but falls back to the full `<id>-<slug>` stem when the slug is a DUPLICATE (to keep the
+// suggestion unambiguous) or when toComplete is an id-prefix / full stem (which the bare
+// slug can't match). excluded is keyed by slug; already-typed args are dropped by either form.
+func flatCompletions(matches []string, toComplete string, excluded map[string]bool, args []string) []string {
+	taken := map[string]bool{}
+	for _, arg := range args {
+		taken[arg] = true // a stem/id typed on the command line
+		if s := flatSlug(arg); s != "" {
+			taken[s] = true // …and its slug form
+		}
+	}
+	stems := make([]string, 0, len(matches))
+	slugCount := map[string]int{}
+	for _, m := range matches {
+		stem := strings.TrimSuffix(filepath.Base(m), ".md")
+		if flatSlug(stem) != "" {
+			stems = append(stems, stem)
+			slugCount[flatSlug(stem)]++
+		}
+	}
+	var out []string
+	offer := func(v string) {
+		if v == "" || taken[v] {
+			return
+		}
+		taken[v] = true
+		out = append(out, v)
+	}
+	for _, stem := range stems {
+		slug := flatSlug(stem)
+		if excluded[slug] {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(slug, toComplete):
+			if slugCount[slug] == 1 {
+				offer(slug) // unique slug → the readable form
+			} else {
+				offer(stem) // duplicate slug → disambiguate by the id-led stem
+			}
+		case strings.HasPrefix(stem, toComplete):
+			offer(stem) // an id-prefix or full-stem query the bare slug can't match
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // completeFunc is cobra's ValidArgsFunction shape.
 type completeFunc = func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective)
 
@@ -150,21 +201,7 @@ func (a *App) taskCompleter(exclude domain.Status) completeFunc {
 			}
 		}
 		matches, _ := filepath.Glob(filepath.Join(root, domain.TasksDir, "*.md"))
-		taken := make(map[string]bool, len(args))
-		for _, arg := range args {
-			taken[arg] = true
-		}
-		var out []string
-		for _, m := range matches {
-			slug := flatSlug(strings.TrimSuffix(filepath.Base(m), ".md"))
-			if slug == "" || taken[slug] || excluded[slug] || !strings.HasPrefix(slug, toComplete) {
-				continue
-			}
-			taken[slug] = true
-			out = append(out, slug)
-		}
-		sort.Strings(out)
-		return out, cobra.ShellCompDirectiveNoFileComp
+		return flatCompletions(matches, toComplete, excluded, args), cobra.ShellCompDirectiveNoFileComp
 	}
 }
 
@@ -190,21 +227,7 @@ func (a *App) auditCompleter(exclude domain.AuditBucket) completeFunc {
 			}
 		}
 		matches, _ := filepath.Glob(filepath.Join(root, domain.AuditsDir, "*.md"))
-		taken := make(map[string]bool, len(args))
-		for _, arg := range args {
-			taken[arg] = true
-		}
-		var out []string
-		for _, m := range matches {
-			slug := flatSlug(strings.TrimSuffix(filepath.Base(m), ".md"))
-			if slug == "" || taken[slug] || excluded[slug] || !strings.HasPrefix(slug, toComplete) {
-				continue
-			}
-			taken[slug] = true
-			out = append(out, slug)
-		}
-		sort.Strings(out)
-		return out, cobra.ShellCompDirectiveNoFileComp
+		return flatCompletions(matches, toComplete, excluded, args), cobra.ShellCompDirectiveNoFileComp
 	}
 }
 

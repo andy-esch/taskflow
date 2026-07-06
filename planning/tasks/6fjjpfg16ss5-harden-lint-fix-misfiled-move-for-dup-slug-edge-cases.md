@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fjjpfg16ss5
-status: ready-to-start
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: 'Narrowed post-Phase-B: route fix.go writes through the version-CAS write-lock (lint --fix is an unguarded second writer). The misfiled-move dup-slug edges are mooted by the flatten.'
 effort: Unknown
@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [core, storage]
 created: "2026-07-03"
-updated_at: "2026-07-05"
+updated_at: "2026-07-06"
+completed_at: "2026-07-06"
 ---
 # Harden lint --fix misfiled-move for dup-slug edge cases
 
@@ -79,3 +80,11 @@ A whole-branch adversarial review independently flagged this as **CRITICAL**: `F
 OCC check, so a concurrent `task move`/`edit`/`set` and a `lint --fix` can silently
 lost-update each other. Low real-world exposure (single-user local CLI) but real — the fix
 is to route fix.go's writes through the same write-lock + CAS the other write paths use.
+
+## Landed (2026-07-06)
+
+`FixFrontmatter` (`lint --fix`) now takes the repo write-lock (`s.writeLock()`) for the whole
+non-dry-run pass — reads happen inside the lock too, so each file's read→fix→write is atomic
+against the other write paths (move/set/edit) and can't clobber a concurrent agent write.
+Dry runs read only, so they stay lock-free. (No version-CAS needed: holding the lock across
+the read makes the read→write window uninterruptible by another tool writer.)

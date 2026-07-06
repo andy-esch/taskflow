@@ -141,3 +141,50 @@ func TestComplete_Templates(t *testing.T) {
 		t.Errorf("template list --kind completion: %v", got)
 	}
 }
+
+// TestFlatCompletions pins the flat-layout completion model: a unique slug completes to
+// the readable slug, an id-prefix / full stem completes to the stem, a DUPLICATE slug
+// disambiguates to the id-led stems, and an already-typed arg (by slug or stem) is dropped.
+func TestFlatCompletions(t *testing.T) {
+	matches := []string{
+		"6fjangd7kva1-alpha.md",
+		"6fjangd7kvb2-beta.md",
+		"6fjangd7kvc3-dup.md", // dup slug
+		"6fjangd7kvd4-dup.md", // dup slug
+		"README.md",           // not id-led → ignored
+	}
+	get := func(toComplete string, args ...string) []string {
+		return flatCompletions(matches, toComplete, map[string]bool{}, args)
+	}
+	has := func(got []string, want ...string) bool {
+		if len(got) != len(want) {
+			return false
+		}
+		set := map[string]bool{}
+		for _, g := range got {
+			set[g] = true
+		}
+		for _, w := range want {
+			if !set[w] {
+				return false
+			}
+		}
+		return true
+	}
+
+	if got := get("al"); !has(got, "alpha") {
+		t.Errorf("unique slug-prefix should offer the slug, got %v", got)
+	}
+	if got := get("6fjangd7kvb2"); !has(got, "6fjangd7kvb2-beta") {
+		t.Errorf("id-prefix should offer the full stem, got %v", got)
+	}
+	if got := get("dup"); !has(got, "6fjangd7kvc3-dup", "6fjangd7kvd4-dup") {
+		t.Errorf("a duplicate slug should disambiguate to both stems, got %v", got)
+	}
+	if got := get("al", "alpha"); len(got) != 0 {
+		t.Errorf("an already-typed slug must not be re-offered, got %v", got)
+	}
+	if got := get("6fjangd7kvb2", "6fjangd7kvb2-beta"); len(got) != 0 {
+		t.Errorf("an already-typed stem must not be re-offered, got %v", got)
+	}
+}
