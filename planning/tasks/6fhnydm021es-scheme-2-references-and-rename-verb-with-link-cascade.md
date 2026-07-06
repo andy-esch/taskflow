@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: Resolve epic refs on the id prefix; convert body cross-links from wikilinks to standard relative-path markdown; add a rename verb that cascades inbound links; lint flags danglers. Per ADR-0003.
 effort: Unknown
@@ -12,6 +12,7 @@ created: "2026-07-01"
 id: 6fhnydm021es
 updated_at: "2026-07-05"
 started_at: "2026-07-05"
+completed_at: "2026-07-05"
 ---
 # Scheme 2 references and rename verb with link cascade
 
@@ -71,3 +72,20 @@ Body cross-links are now GitHub-clickable relative-path markdown:
   danglers are what piece 4's lint will flag).
 
 Remaining: piece 3 (rename verb with link cascade) + piece 4 (dangler lint).
+
+## Pieces 3 + 4 landed — scheme-2 complete (2026-07-05)
+
+- **3 (rename verb):** `tskflwctl task rename <task> "<new title>"` — derives a new slug
+  (12-char id kept), rewrites the body H1, and cascades every inbound relative-path markdown
+  link across the tree to the new filename (freshening a link whose display text was the old
+  slug). Write-locked, not CAS'd (a rare, deliberate op). `store.RenameTask` + tests + docgen.
+- **4 (dangler lint):** opt-in `tskflwctl lint --links` — flags any body `[..](path.md)`
+  whose target file is missing (exit 11), skipping external + placeholder links. A narrow
+  `core.Linter` port wired to the FS like `Fixer`. Default `lint` is unchanged, so the cron
+  routines' gate stays clean despite a tree's pre-existing danglers.
+
+All four pieces done; the `epic show <NN>` roster bug is retired.
+
+Follow-up (not blocking): ~86 pre-existing markdown danglers across both planning trees
+(stale old-layout paths, typo'd slugs, deleted refs) a future `lint --links` sweep could
+clean up; and `rename` for audits/epics (task-only today).

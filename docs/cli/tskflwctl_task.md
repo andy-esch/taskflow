@@ -35,6 +35,7 @@ Work with tasks
 * [tskflwctl task new](tskflwctl_task_new.md)	 - Create a new task (validated, handoff-ready scaffold)
 * [tskflwctl task next](tskflwctl_task_next.md)	 - Move task(s) to next-up
 * [tskflwctl task ready](tskflwctl_task_ready.md)	 - Move task(s) to ready-to-start
+* [tskflwctl task rename](tskflwctl_task_rename.md)	 - Re-title a task (new slug, id kept) and cascade its inbound body links
 * [tskflwctl task set](tskflwctl_task_set.md)	 - Set one or more frontmatter fields (validated, single atomic write)
 * [tskflwctl task show](tskflwctl_task_show.md)	 - Show a task's metadata and body
 * [tskflwctl task start](tskflwctl_task_start.md)	 - Move task(s) to in-progress

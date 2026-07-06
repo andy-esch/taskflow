@@ -38,6 +38,11 @@ type TaskStore interface {
 	// updated_at. The agent face of body editing, beside EditTask's editor. Returns
 	// the reloaded task and the resulting body (so a --json caller can echo it).
 	EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error)
+	// RenameTask re-titles a task: a new slug from newTitle, the file renamed (id kept),
+	// the body H1 rewritten, and every inbound relative-path markdown link across the tree
+	// repointed to the new filename. Returns the reloaded task and the count of links
+	// repointed. Multi-file + write-locked but not version-CAS'd (a rare deliberate op).
+	RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, error)
 }
 
 // EpicStore is the epic-persistence port.
@@ -121,6 +126,14 @@ type Fixer interface {
 	// FixFrontmatter applies safe text-level frontmatter repairs across all
 	// task and epic files (or previews them when dryRun is true).
 	FixFrontmatter(dryRun bool) ([]domain.FixResult, error)
+}
+
+// Linter is the cross-link integrity port. Like Fixer it's an fs/text operation, not a
+// core use case, so `lint --links` wires it directly to the FS rather than through the
+// Service.
+type Linter interface {
+	// DanglingLinks reports every body markdown link whose target .md file is missing.
+	DanglingLinks() ([]domain.FileProblem, error)
 }
 
 // Layout is the on-disk-layout port: the directory set a filesystem watcher must

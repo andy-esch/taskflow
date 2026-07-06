@@ -62,6 +62,7 @@ func newTaskCmd(app *App) *cobra.Command {
 		newTaskSetCmd(app),
 		newTaskEditCmd(app),
 		newTaskAppendCmd(app),
+		newTaskRenameCmd(app),
 		newTaskMoveCmd(app),
 	)
 	// Explicit transition verbs over the internal move engine (no enum to
@@ -371,6 +372,43 @@ func reportTaskMutation(app *App, task domain.Task, body, verb, dryVerb string) 
 	}
 	fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), verb, app.Style.Bold(task.Slug))
 	return nil
+}
+
+// newTaskRenameCmd is the Scheme-2 `rename` verb: re-title a task (a new slug from the
+// title; the 12-char id — the stable key — is kept), rewrite the body H1, and cascade
+// every inbound relative-path markdown link across the planning tree to the new filename.
+func newTaskRenameCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:         "rename <task> <new-title>",
+		Short:       "Re-title a task (new slug, id kept) and cascade its inbound body links",
+		Args:        cobra.ExactArgs(2),
+		Annotations: map[string]string{"safety": "mutating"},
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) == 0 {
+				return app.completeTaskSlugs(cmd, args, toComplete)
+			}
+			return nil, cobra.ShellCompDirectiveNoFileComp // the title is free text
+		},
+		RunE: func(_ *cobra.Command, args []string) error {
+			task, cascade, err := app.Svc.RenameTask(args[0], args[1], app.DryRun)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return render.TaskMutationJSON(app.Out, task, "", app.DryRun)
+			}
+			verb := "renamed to"
+			if app.DryRun {
+				verb = "would rename to"
+			}
+			fmt.Fprintf(app.Out, "%s %s %s", app.Style.Green("✔"), verb, app.Style.Bold(task.Slug))
+			if cascade > 0 {
+				fmt.Fprintf(app.Out, " %s", app.Style.Dim(fmt.Sprintf("(%d inbound link(s) repointed)", cascade)))
+			}
+			fmt.Fprintln(app.Out)
+			return nil
+		},
+	}
 }
 
 // newTaskAppendCmd is the scriptable counterpart to `task edit`: append markdown

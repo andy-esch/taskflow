@@ -36,6 +36,9 @@ func (nopStore) EditTask(string, time.Time, func(string, error) (string, error))
 func (nopStore) EditBody(string, string, bool, time.Time, bool) (domain.Task, string, error) {
 	return domain.Task{}, "", nil
 }
+func (nopStore) RenameTask(string, string, bool) (domain.Task, int, error) {
+	return domain.Task{}, 0, nil
+}
 func (nopStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return nil, nil, nil
 }

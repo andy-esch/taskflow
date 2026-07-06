@@ -360,3 +360,10 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	}
 	return s.store.CreateTask(t, body, p.DryRun)
 }
+
+// RenameTask re-titles a task (new slug from newTitle, id kept) and cascades its inbound
+// body links across the planning tree — see store.RenameTask. Returns the reloaded task
+// and the count of inbound links repointed.
+func (s *Service) RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, error) {
+	return s.store.RenameTask(slug, newTitle, dryRun)
+}
