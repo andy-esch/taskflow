@@ -59,7 +59,9 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 		if f.RevisitDue && !domain.IsTaskRevisitDue(t, now) {
 			continue
 		}
-		if f.Epic != "" && t.Epic != f.Epic {
+		// Match on the epic NN key, not the raw string — so `--epic 24-data-model` finds a
+		// task whose ref is a bare `24` or a stale slug, mirroring the rollup/validation join.
+		if f.Epic != "" && domain.EpicRefKey(t.Epic) != domain.EpicRefKey(f.Epic) {
 			continue
 		}
 		if f.Tag != "" && !hasTag(t.Tags, f.Tag) {
@@ -200,6 +202,9 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 			if !epicExists(epics, epic) {
 				return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, epic)
 			}
+			// Store the epic's canonical stem (as NewTask does), so `set --set epic=24` and
+			// `new --epic 24` leave the same readable `<NN>-<slug>` ref, not a bare NN.
+			withMeta["epic"] = canonicalEpic(epics, epic)
 		}
 	}
 	withMeta["updated_at"] = s.now().Format("2006-01-02")

@@ -62,6 +62,42 @@ func TestRenameTask_RenamesAndCascades(t *testing.T) {
 	}
 }
 
+// TestRenameTask_CrossDirSameNameLeftAlone: a link is repointed only if it RESOLVES to the
+// renamed file — a same-basename file in a different directory (and links to it) are left
+// untouched (the cross-dir-collision fix).
+func TestRenameTask_CrossDirSameNameLeftAlone(t *testing.T) {
+	root, _, _ := renameRepo(t)
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A DIFFERENT file sharing task A's basename, and a task C linking to THAT one.
+	write("research/6fjangd7kva1-old.md", "# a research doc\n")
+	cPath := "tasks/6fjangd7kvc3-c.md"
+	write(cPath, "---\nid: 6fjangd7kvc3\nstatus: ready-to-start\nepic: 01-e\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\n---\n# C\n\nElsewhere: [old](../research/6fjangd7kva1-old.md).\n")
+
+	_, cascade, err := NewFS(root).RenameTask("old", "New Title", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only task B's link (to tasks/…old.md) cascades; task C's link to research/…old.md doesn't.
+	if cascade != 1 {
+		t.Errorf("only a link to the ACTUAL renamed file should cascade, got %d", cascade)
+	}
+	c, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(cPath)))
+	if !contains(c, "../research/6fjangd7kva1-old.md") {
+		t.Errorf("a same-named file in another dir must be left untouched:\n%s", c)
+	}
+	if _, err := os.Stat(filepath.Join(root, "research", "6fjangd7kva1-old.md")); err != nil {
+		t.Error("the cross-dir same-name file must not be renamed/removed")
+	}
+}
+
 func TestRenameTask_DryRunTouchesNothing(t *testing.T) {
 	root, aPath, bPath := renameRepo(t)
 	aBefore, _ := os.ReadFile(aPath)

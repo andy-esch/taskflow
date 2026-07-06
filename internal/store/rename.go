@@ -72,7 +72,7 @@ func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, e
 		if isTarget {
 			content = replaceFirstH1(content, newTitle)
 		}
-		rewritten, n := repointLinks(content, oldName, newName, oldSlug, newSlug)
+		rewritten, n := repointLinks(content, filepath.Dir(p), oldPath, oldName, newName, oldSlug, newSlug)
 		switch {
 		case isTarget:
 			renamedContent = rewritten
@@ -116,29 +116,36 @@ func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, e
 	return t, cascade, nil
 }
 
-// repointLinks rewrites every markdown link whose target basename is oldName to newName,
-// freshening a link whose display text was exactly oldSlug to newSlug. Returns the new
-// content and the count of links repointed. A no-op (0) when the name is unchanged.
-func repointLinks(content []byte, oldName, newName, oldSlug, newSlug string) ([]byte, int) {
+// repointLinks rewrites every markdown link that RESOLVES to oldPath (relative to
+// sourceDir — the file the link lives in) so its filename becomes newName, freshening a
+// link whose display text was the old slug or full stem. Matching by resolved path, not
+// bare basename, means a same-named file in a different directory is left untouched. A
+// trailing #fragment or ?query is split off before resolving and re-appended. Returns the
+// new content and the count of links repointed; a no-op (0) when the name is unchanged.
+func repointLinks(content []byte, sourceDir, oldPath, oldName, newName, oldSlug, newSlug string) ([]byte, int) {
 	if oldName == newName {
 		return content, 0
 	}
+	oldStem, newStem := strings.TrimSuffix(oldName, ".md"), strings.TrimSuffix(newName, ".md")
 	n := 0
 	out := mdLinkRe.ReplaceAllFunc(content, func(m []byte) []byte {
 		sub := mdLinkRe.FindSubmatch(m)
 		display, target := string(sub[1]), string(sub[2])
-		linkPath, anchor := target, ""
-		if i := strings.IndexByte(linkPath, '#'); i >= 0 {
-			linkPath, anchor = linkPath[:i], linkPath[i:]
+		linkPath, suffix := target, ""
+		if i := strings.IndexAny(linkPath, "#?"); i >= 0 {
+			linkPath, suffix = linkPath[:i], linkPath[i:]
 		}
-		if filepath.Base(linkPath) != oldName {
+		if linkPath == "" || filepath.Clean(filepath.Join(sourceDir, filepath.FromSlash(linkPath))) != oldPath {
 			return m
 		}
 		n++
-		if display == oldSlug {
+		switch display {
+		case oldSlug:
 			display = newSlug
+		case oldStem:
+			display = newStem
 		}
-		return []byte("[" + display + "](" + linkPath[:len(linkPath)-len(oldName)] + newName + anchor + ")")
+		return []byte("[" + display + "](" + linkPath[:len(linkPath)-len(oldName)] + newName + suffix + ")")
 	})
 	return out, n
 }

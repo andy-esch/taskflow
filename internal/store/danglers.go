@@ -37,7 +37,7 @@ func (s *FS) DanglingLinks() ([]domain.FileProblem, error) {
 		for _, m := range mdLinkRe.FindAllSubmatch(content, -1) {
 			target := string(m[2])
 			link := target
-			if i := strings.IndexByte(link, '#'); i >= 0 {
+			if i := strings.IndexAny(link, "#?"); i >= 0 { // strip a #fragment or ?query
 				link = link[:i]
 			}
 			if !strings.HasSuffix(link, ".md") { // only local .md cross-references
@@ -49,7 +49,13 @@ func (s *FS) DanglingLinks() ([]domain.FileProblem, error) {
 			if strings.ContainsAny(link, "…<>{}") { // a template placeholder, not a real path
 				continue
 			}
-			if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(link))); os.IsNotExist(err) {
+			resolved := filepath.Clean(filepath.Join(dir, filepath.FromSlash(link)))
+			// Skip a link that escapes the planning root — not a planning cross-reference,
+			// and no business stat-ing files outside the tree.
+			if rel, err := filepath.Rel(s.root, resolved); err != nil || strings.HasPrefix(rel, "..") {
+				continue
+			}
+			if _, err := os.Stat(resolved); os.IsNotExist(err) {
 				out = append(out, domain.FileProblem{Path: p, Message: "body link to missing file: " + target})
 			}
 		}
