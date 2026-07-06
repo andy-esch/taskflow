@@ -6,8 +6,8 @@ tags: [cli, ux, fang, spike, decision]
 
 # Fang evaluation spike — findings & decision
 
-Spike for [[evaluate-fang-for-styled-help-errors-and-manpages]] (epic
-[[20-cli-ux-and-ergonomics]]). Branch `spike/fang-eval`, worktree-isolated. The
+Spike for [evaluate-fang-for-styled-help-errors-and-manpages](../tasks/6fdtbb4037bs-evaluate-fang-for-styled-help-errors-and-manpages.md) (epic
+[20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)). Branch `spike/fang-eval`, worktree-isolated. The
 question: adopt `charmbracelet/fang` to upgrade the human face (styled help,
 errors, manpages) **without** touching the agent/machine contract.
 
@@ -135,7 +135,7 @@ clean.
 - [ ] Decide on the description title-casing: accept it, or skip fang help and use
       fang for errors+man only.
 - [ ] Route the manpage angle here (supersedes the man note in
-      [[auto-generate-cli-reference-docs-with-a-ci-sync-check]]); wire `man` into
+      [auto-generate-cli-reference-docs-with-a-ci-sync-check](../tasks/6fdtbb403ba4-auto-generate-cli-reference-docs-with-a-ci-sync-check.md)); wire `man` into
       goreleaser if shipping manpages.
 - [ ] Pin fang + lipgloss/v2 exactly; add a renovate/CI note re: beta churn.
 
@@ -173,7 +173,7 @@ agent/pipeline contract, ranked by value-for-effort:
 Bigger UI/rendering ideas the now-present **lipgloss v2** (`table`/`tree`/`list`)
 and the **stable bubbletea v2 / bubbles v2** unlock are *not* part of this
 human-face task. Captured separately as
-[[explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements]] (epic 20), covering:
+[explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements](../tasks/6feeygw02vzb-explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements.md) (epic 20), covering:
 lipgloss/v2 `tree` for `epic show`/planning hierarchy, `table` for list output
 (gated, golden-test risk), `list` for audit/candidate lists; a **bubbletea v2 +
 lipgloss v2 migration of the TUI** (epic 18) that would also *consolidate* the

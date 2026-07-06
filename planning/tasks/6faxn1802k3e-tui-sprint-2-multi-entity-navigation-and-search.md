@@ -17,9 +17,9 @@ id: 6faxn1802k3e
 
 > 🔀 **Deprecated 2026-06-11 — split into two stages** (this session) because the
 > scope grew large. Superseded by:
-> - [[tui-sprint-2a-entity-navigation-registry-tabs-command-jump]] — structure
+> - [tui-sprint-2a-entity-navigation-registry-tabs-command-jump](6fb7ym401n1y-tui-sprint-2a-entity-navigation-registry-tabs-command-jump.md) — structure
 >   (registry, tabs, `:` command-jump, per-entity lists).
-> - [[tui-sprint-2b-search-status-views-and-interactive-sort]] — refinement
+> - [tui-sprint-2b-search-status-views-and-interactive-sort](6fb7ym400n5q-tui-sprint-2b-search-status-views-and-interactive-sort.md) — refinement
 >   (`/` filter + chip, status views, interactive sort, detail vim find).
 >
 > The full scope below is preserved verbatim as the source for the split; the
@@ -28,7 +28,7 @@ id: 6faxn1802k3e
 ## Objective
 
 Make the browser multi-entity and searchable. (Refine at sprint start with S0/S1
-learnings.) See [[18-tui-bubble-tea-interactive-planning-browser]].
+learnings.) See [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).
 
 ## Scope
 
@@ -80,4 +80,4 @@ learnings.) See [[18-tui-bubble-tea-interactive-planning-browser]].
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)

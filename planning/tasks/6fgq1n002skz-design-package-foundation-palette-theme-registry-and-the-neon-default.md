@@ -25,4 +25,4 @@ Stand up `internal/design` as the single home for all concrete color decisions s
 `internal/design` exists with palette/theme types + the two named themes + a pinning test; `build/test/lint` green; no other package imports it yet.
 
 ## Reference
-Design doc §2,§3,§5 — `planning/research/2026-06-28-color-palette-and-theming-overhaul.md`. Umbrella: [[color-and-design-overhaul-one-coherent-palette-across-every-surface]].
+Design doc §2,§3,§5 — `planning/research/2026-06-28-color-palette-and-theming-overhaul.md`. Umbrella: [color-and-design-overhaul-one-coherent-palette-across-every-surface](6ffr4wc01gtv-color-and-design-overhaul-one-coherent-palette-across-every-surface.md).

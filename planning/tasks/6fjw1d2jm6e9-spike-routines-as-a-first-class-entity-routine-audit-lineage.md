@@ -35,7 +35,7 @@ lineage **in the planning repo**. Claude Code fires it; tskflwctl tracks what it
 
 - **Routines as an entity type** (like tasks/epics/audits): `planning/routines/*.md` with a
   routine schema; `tskflwctl routine list/show`. (Contrast with the near-term
-  [[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]] path, which
+  [curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate](6fjvr03mr9zg-curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate.md) path, which
   merely *tolerates* untracked routine files — this would *manage* them.)
 - **The linkage:** an audit carries a `routine:` frontmatter field (like `epic:`), so
   `audit list --routine weekly-code-audit`, a "last run / next due" view, and a routine→its
@@ -53,7 +53,7 @@ lineage **in the planning repo**. Claude Code fires it; tskflwctl tracks what it
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]] (nearest home;
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md) (nearest home;
   likely deserves its own epic if pursued)
-- Near-term counterpart: [[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]]
+- Near-term counterpart: [curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate](6fjvr03mr9zg-curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate.md)
 - Grounded by the desirelines `routines/` ↔ `audits/HOWTO-execute.md` ↔ audit-output workflow.

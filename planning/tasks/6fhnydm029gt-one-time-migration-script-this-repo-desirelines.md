@@ -30,14 +30,14 @@ completed_at: "2026-07-05"
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
 
 Backfill-timestamp policy (decided 2026-07-02, ADR-0003 amendment): embed the file's created: date; if absent use another frontmatter date; if neither exists, ERROR so the operator adds the date key. Sub-day ordering = a random low tail via id.NewAt(unixMilli) (stateless, no sequence counter), with dedupe-and-regenerate on the rare same-day id collision.
 
 ## Coordination note (2026-07-04) — sweep loose files into `meta/`
 
 Added by the carveout decision
-([[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]]).
+([curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate](6fjvr03mr9zg-curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate.md)).
 The flat scan errors on any non-entity `.md` left in a scanned bucket (a stray becomes a
 `FileProblem`; `README.md` is the one carve). So the one-time migration must **sweep known
 loose files out of the entity buckets into a top-level `planning/meta/`** as part of the

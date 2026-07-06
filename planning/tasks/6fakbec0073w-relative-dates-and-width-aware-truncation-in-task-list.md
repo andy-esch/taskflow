@@ -45,6 +45,6 @@ the color/glyph work.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; follows
-  [[cli-color-glyphs-table-headers-render-styling]]; unblocks the recency/stale
-  parts of [[at-a-glance-dashboard-status-board]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); follows
+  [cli-color-glyphs-table-headers-render-styling](6fakbec017kj-cli-color-glyphs-table-headers-render-styling.md); unblocks the recency/stale
+  parts of [at-a-glance-dashboard-status-board](6fakbec01wt8-at-a-glance-dashboard-status-board.md).

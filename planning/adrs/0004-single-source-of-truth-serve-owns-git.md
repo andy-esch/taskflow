@@ -9,11 +9,11 @@ superseded_by: null
 
 # ADR-0004: Single source of truth — git canonical, one live writer (serve-owns-git)
 
-> Follows the ADR format established in [[0001-adopt-adrs]]. Builds on
-> [[0003-stable-key-id-addressed-storage]], which fixed the *on-disk* model and
+> Follows the ADR format established in [0001-adopt-adrs](0001-adopt-adrs.md). Builds on
+> [0003-stable-key-id-addressed-storage](0003-stable-key-id-addressed-storage.md), which fixed the *on-disk* model and
 > deliberately left *sync / single-source-of-truth* to this ADR (ADR-0003's identity is
 > coordination-free precisely so it doesn't presuppose this decision). Full rationale:
-> [[2026-06-24-remote-planning-repos-backends-and-sync]].
+> [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md).
 
 ## Context and Problem Statement
 
@@ -151,12 +151,12 @@ _None yet (still `proposed`)._
 ## Related
 
 - Sync / concurrency rationale, the dual-authority trap, and the web-write thread:
-  [[2026-06-24-remote-planning-repos-backends-and-sync]].
-- The on-disk model this builds on: [[0003-stable-key-id-addressed-storage]].
+  [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md).
+- The on-disk model this builds on: [0003-stable-key-id-addressed-storage](0003-stable-key-id-addressed-storage.md).
 - Decoupled-planning-repo foundation (local phase shipped): epic
-  [[23-point-an-impl-repo-at-an-external-planning-repo]].
+  [23-point-an-impl-repo-at-an-external-planning-repo](../epics/23-point-an-impl-repo-at-an-external-planning-repo.md).
 - Web companion (the `serve` surface this enables): epic
-  [[19-web-companion-apps-over-a-shared-core]].
+  [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md).
 - Storage / identity / OCC foundation:
-  [[24-data-model-evolution-stable-key-storage-read-model-content-occ]].
-- ADR format this follows: [[0001-adopt-adrs]].
+  [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md).
+- ADR format this follows: [0001-adopt-adrs](0001-adopt-adrs.md).

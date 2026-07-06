@@ -16,7 +16,7 @@ id: 6fbj87001q7p
 # Put storage-layout knowledge back behind the port
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([[2026-06-12-critical-code-review-multi-lens]], finding M15 + doc-drift
+> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), finding M15 + doc-drift
 > lows). The hexagonal import graph verified clean; these are the two spots
 > where *layout* knowledge escaped the store, plus doc drift to sweep.
 
@@ -68,6 +68,6 @@ id: 6fbj87001q7p
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `internal/tui/watch.go`, `internal/cli/ui.go`,
   `internal/config/config.go`, `internal/core/`, `docs/ARCHITECTURE.md`.

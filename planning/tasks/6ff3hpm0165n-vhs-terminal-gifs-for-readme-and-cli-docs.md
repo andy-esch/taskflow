@@ -30,6 +30,6 @@ id: 6ff3hpm0165n
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
 
 Authored: assets/vhs/{help,status,epic-show,task-list}.tape + assets/vhs/README.md, a 'just gifs' recipe (build → run each tape with ./bin on PATH), and a README Demos section. vhs isn't in the container (not a build/runtime dep), so the GIFs themselves are generated on a vhs-equipped host/CI via 'just gifs' — README image links populate then.

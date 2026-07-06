@@ -1,23 +1,28 @@
 ---
 schema: 1
 status: active
-description: 'Rework the on-disk data model: a stable-key layout with status in frontmatter not the directory, a shared core read-model/projection, and content-aware OCC. Decisions made (ADRs 0003/0004); id + Phase-A + read-model + OCC shipped — the flat id-led layout (Phase B) is the remaining capstone.'
+description: 'Rework the on-disk data model: a stable-key layout with status in frontmatter not the directory, a shared core read-model/projection, and content-aware OCC. Decisions made (ADRs 0003/0004); id + read-model + OCC + the flat id-led layout (Phase B, migrated both repos) all shipped — Scheme-2 reference rewrites plus a few hardening follow-ups remain.'
 priority: medium
 tags: [storage, architecture, core]
 created: "2026-06-24"
 ---
 # Data-model evolution — stable-key storage, shared read-model, content OCC
 
-**Status (2026-07-04): implementation well underway — the decisions are closed.** The
-design-first phase is over: every load-bearing choice below is decided (see the `[x]`
-items + ADR-0003). **Shipped + merged (7/13):** the stable 12-char id + backfill, the
-machine contract, **frontmatter-authoritative status/bucket** (Phase A — dirs kept as a
-lock-step mirror), the shared `core` read-model + **`board`** command, and
-**version-aware OCC** (whole-file content-hash CAS + advisory `flock` + bounded
-auto-retry). **Remaining capstone:** **Phase B** — the flat, id-led layout that retires
-`status == directory` entirely
-([[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]]), its
-one-time migration, and the Scheme-2 reference rewrites.
+**Status (2026-07-06): the load-bearing work is DONE.** Every load-bearing choice is decided
+(`[x]` items + ADR-0003) and shipped: the stable 12-char id + backfill, the machine contract,
+**frontmatter-authoritative status/bucket**, the shared `core` read-model + **`board`**
+command, **version-aware OCC** (content-hash CAS + `flock` + bounded retry), the capstone
+**Phase B flat id-led layout** (migrated across this repo + desirelines), and **Scheme 2** —
+body `[[wikilinks]]` → GitHub-clickable relative-path markdown (a one-time `wikimigrate` run),
+epic refs resolving on the NN key, a `rename` verb with inbound-link cascade, and `lint
+--links` dangler checking. **Three adversarial-review passes** (external + internal fan-out)
+and **two hardening tasks** (route `lint --fix` through the write-lock; id-prefix/stem shell
+completion) also landed. **Remaining is low-priority polish only:** markdown-structure-aware
+link handling
+([make-rename-cascade-dangler-lint-markdown-structure-aware](../tasks/6fka8khkb3jv-make-rename-cascade-dangler-lint-markdown-structure-aware.md)),
+a duplicate-NN-epic lint
+([lint-flags-duplicate-nn-epics](../tasks/6fka8khn9sd2-lint-flags-duplicate-nn-epics.md)),
+and the routines spike. A **release (next tag v0.14.0)** is a natural cut here.
 
 ## Why this exists (the convergence)
 
@@ -253,9 +258,10 @@ they landed together.
 
 1. **[done] Decision consolidation** — resolved into ADR-0003/0004.
 2. **[done] Read-model / projection + board** — the `board` command ships (fresh on demand).
-3. **Stable-key layout + version-aware OCC** — **OCC done** (content-hash CAS + flock +
-   bounded retry); **the flat id-led layout (Phase B) is the remaining piece**, with the
-   `one-time-migration-script` + `scheme-2-references` companions as its migration path.
+3. **Stable-key layout + version-aware OCC** — **done**: OCC (content-hash CAS + flock +
+   bounded retry), **the flat id-led layout (Phase B)**, and **Scheme-2 references**
+   (wikilinks→markdown, `rename` + link cascade, `lint --links` danglers, id-prefix epic
+   refs) all shipped + migrated across both repos.
 4. **Payoffs (separate epics):** remote backends (epic 23 ph2), `serve` read
    endpoint (epic 19) — both ride on 2–3.
 

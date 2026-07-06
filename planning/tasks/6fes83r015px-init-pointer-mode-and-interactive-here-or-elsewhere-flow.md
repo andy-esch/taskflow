@@ -48,8 +48,8 @@ scaffolds the full tree — exactly what you don't want in an impl repo.
 
 ## Related
 
-- [[23-point-an-impl-repo-at-an-external-planning-repo]].
-- Interactive primitives mirror [[20-cli-ux-and-ergonomics]].
+- [23-point-an-impl-repo-at-an-external-planning-repo](../epics/23-point-an-impl-repo-at-an-external-planning-repo.md).
+- Interactive primitives mirror [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md).
 
 ## Review hardening (2026-06-23)
 

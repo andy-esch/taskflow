@@ -31,4 +31,4 @@ Small, non-blocking cleanups surfaced by the post-v2 adversarial review (2026-06
 ## Related
 
 - Audit precedent: `planning/audits/closed/2026-06-13-codebase-quality-architecture.md` (the cap dual-source finding).
-- Epic [[21-code-quality-architecture-hardening]].
+- Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md).

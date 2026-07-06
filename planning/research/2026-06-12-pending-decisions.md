@@ -11,7 +11,7 @@ Fill in `Decision:` lines (or reply in chat with `D1: A, D2: B, …`). Each
 decision unblocks the task named with it.
 
 ## D1 — `task new` ↔ `lint` tags contract
-Task: [[align-task-new-scaffold-with-lint]] (H4). A fresh scaffold fails the
+Task: [align-task-new-scaffold-with-lint](../tasks/6fbj870025yw-align-task-new-scaffold-with-lint.md) (H4). A fresh scaffold fails the
 tool's own lint (`tags: missing`).
 - **A (recommended):** require `--tags` at creation — loud, explicit, matches
   the repo's own convention that every task is tagged.
@@ -19,7 +19,7 @@ tool's own lint (`tags: missing`).
 Decision:
 
 ## D2 — Epic status vocabulary
-Task: [[reject-invalid-list-filters-and-epic-statuses]] (M9, the deferred
+Task: [reject-invalid-list-filters-and-epic-statuses](../tasks/6fbj8700133t-reject-invalid-list-filters-and-epic-statuses.md) (M9, the deferred
 half). `epic new --status bananas` currently writes free text.
 - **A (recommended):** closed enum from the values already in use —
   `planning | in-progress | completed | archived` — validated in `NewEpic`,
@@ -28,7 +28,7 @@ half). `epic new --status bananas` currently writes free text.
 Decision:
 
 ## D3 — Exit code 12 / transition rules
-Task: [[implement-or-retire-exit-code-12-transition-rules]] (M16).
+Task: [implement-or-retire-exit-code-12-transition-rules](../tasks/6fbj87000sz5-implement-or-retire-exit-code-12-transition-rules.md) (M16).
 `ErrInvalidTransition` is documented but unreachable.
 - **A (recommended):** retire it — delete the sentinel, the exit-code mapping,
   and the README/ARCHITECTURE rows (codes 13/14 keep their numbers). Current
@@ -37,7 +37,7 @@ Task: [[implement-or-retire-exit-code-12-transition-rules]] (M16).
 Decision:
 
 ## D4 — Unknown `--set` keys
-Task: [[task-set-follow-ups-sentinels-unknown-keys-canonical-field-table]].
+Task: [task-set-follow-ups-sentinels-unknown-keys-canonical-field-table](../tasks/6fbj87001d81-task-set-follow-ups-sentinels-unknown-keys-canonical-field-table.md).
 A typo'd key is silently written today (demonstrated live), lint never flags
 it, and there's no way to remove it through the tool.
 - **A (recommended):** error on keys outside the known field set, with
@@ -62,7 +62,7 @@ Same task as D4. The value validates, then is silently clobbered by the stamp.
 Decision:
 
 ## D7 — JSON schema versioning strategy
-Task: [[json-and-output-contract-fidelity]]. One global `SchemaVersion`
+Task: [json-and-output-contract-fidelity](../tasks/6fbj8700122m-json-and-output-contract-fidelity.md). One global `SchemaVersion`
 ("1.0") is stamped into ~10 different payload shapes.
 - **A (recommended):** keep one global version, documented as "the CLI output
   schema"; bump the minor once when the round-trip fields land.
@@ -77,7 +77,7 @@ Same task as D7.
 Decision:
 
 ## D9 — Machine-readable errors under `--json`
-Task: [[agent-facing-cli-ergonomics-batch]] (its headline item).
+Task: [agent-facing-cli-ergonomics-batch](../tasks/6fbj87000anh-agent-facing-cli-ergonomics-batch.md) (its headline item).
 - **A (recommended):** on failure with `--json`, emit a JSON error envelope
   (`{"schema_version", "error": {"code", "message"}}`) to **stderr**; stdout
   stays empty on failure. Codes reuse the exit-code vocabulary
@@ -86,7 +86,7 @@ Task: [[agent-facing-cli-ergonomics-batch]] (its headline item).
 Decision:
 
 ## D10 — The retired Python prototype (`bin/pm`, `tests/test_pm.py`)
-Task: [[repo-hygiene-batch]] (M19). Docs call `tests/test_pm.py` the kept
+Task: [repo-hygiene-batch](../tasks/6fbj870038d6-repo-hygiene-batch.md) (M19). Docs call `tests/test_pm.py` the kept
 historical spec, but it isn't in git; `bin/pm` is.
 - **A (recommended):** delete both relics and update README/CLAUDE.md — the Go
   suite is the spec now and the port epic is at 70%+ with parity shipped.
@@ -94,14 +94,14 @@ historical spec, but it isn't in git; `bin/pm` is.
 Decision:
 
 ## D11 — LICENSE
-Task: [[repo-hygiene-batch]]. The module path is public-shaped
+Task: [repo-hygiene-batch](../tasks/6fbj870038d6-repo-hygiene-batch.md). The module path is public-shaped
 (`github.com/andy-esch/taskflow`); there's no license file.
 - **C:** intentionally unlicensed for now (private project).
 
 Decision:
 
 ## D12 — Close the two stale in-progress tasks?
-Task: [[repo-hygiene-batch]]. `port-pm-to-go-cli…` and
+Task: [repo-hygiene-batch](../tasks/6fbj870038d6-repo-hygiene-batch.md). `port-pm-to-go-cli…` and
 `tui-sprint-3-fsnotify-live-reload` both look shipped.
 - **A (recommended):** yes — verify their remaining checklist items and
   `task complete` both.
@@ -113,6 +113,6 @@ All twelve decisions were executed on 2026-06-12 — D1–D10/D12 as recommended
 D11 as chosen (no license for now). Implementation details live in the
 closure notes of the respective task files (now under `tasks/completed/`);
 the only decision-adjacent work still open is the remainder of
-[[agent-facing-cli-ergonomics-batch]] (body-file/body-edit/create-envelope)
+[agent-facing-cli-ergonomics-batch](../tasks/6fbj87000anh-agent-facing-cli-ergonomics-batch.md) (body-file/body-edit/create-envelope)
 and confirming the repaired CI gate on the first push
-([[repair-ci-lint-gate-and-local-test-parity]]).
+([repair-ci-lint-gate-and-local-test-parity](../tasks/6fbj87000rt6-repair-ci-lint-gate-and-local-test-parity.md)).

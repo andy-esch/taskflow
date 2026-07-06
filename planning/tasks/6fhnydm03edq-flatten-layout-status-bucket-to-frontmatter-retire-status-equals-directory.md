@@ -21,7 +21,7 @@ completed_at: "2026-07-05"
 **Plan only — not started.** This task was originally the *Phase A* umbrella; that scope
 (frontmatter-authoritative status/bucket with the dirs kept as a lock-step mirror) shipped
 piecemeal under the sibling tasks (`replace-misfiled`, audits-authoritative, machine-contract)
-plus [[version-aware-occ-content-hash-token-and-plain-retry]], all merged. Re-scoped here to
+plus [version-aware-occ-content-hash-token-and-plain-retry](6fhnydm02wxd-version-aware-occ-content-hash-token-and-plain-retry.md), all merged. Re-scoped here to
 **Phase B**: the irreversible cutover that deletes the directory mirror entirely. Its slug and
 description already fit Phase B.
 
@@ -57,7 +57,7 @@ Two grounding passes (the actual taskflow store code + a full audit of the real
   repo root next to ~10 ancillary dirs; the flatten amplifies the clobbering risk (a 648-file
   flat `tasks/` at root). Move entities under a dedicated visible `planning/` dir first
   (config-only, no new code, decoupled from Phase B):
-  [[isolate-desirelines-planning-entities-under-a-dedicated-planning-directory]]. Also takes
+  [isolate-desirelines-planning-entities-under-a-dedicated-planning-directory](6fjvdf9t848k-isolate-desirelines-planning-entities-under-a-dedicated-planning-directory.md). Also takes
   the ancillary dirs + the stray HOWTO out of the tool's scope.
 
 ## Objective
@@ -168,17 +168,17 @@ copy first, and commit the pre-migration tree so git is a clean undo.
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- ADR [[0003-stable-key-id-addressed-storage]] §2, §4, §6 (migration)
-- Companion: [[one-time-migration-script-this-repo-desirelines]] (the data cutover) ·
-  [[scheme-2-references-and-rename-verb-with-link-cascade]] (id-prefix refs, rename cascade)
-- Built on: [[version-aware-occ-content-hash-token-and-plain-retry]] — the in-place write keeps
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- ADR [0003-stable-key-id-addressed-storage](../adrs/0003-stable-key-id-addressed-storage.md) §2, §4, §6 (migration)
+- Companion: [one-time-migration-script-this-repo-desirelines](6fhnydm029gt-one-time-migration-script-this-repo-desirelines.md) (the data cutover) ·
+  [scheme-2-references-and-rename-verb-with-link-cascade](6fhnydm021es-scheme-2-references-and-rename-verb-with-link-cascade.md) (id-prefix refs, rename cascade)
+- Built on: [version-aware-occ-content-hash-token-and-plain-retry](6fhnydm02wxd-version-aware-occ-content-hash-token-and-plain-retry.md) — the in-place write keeps
   its OCC + flock; the dual-file window it guarded is gone once moves stop relocating.
 
 ## Carveout folded in (2026-07-04)
 
 The curation-carveout design is settled
-([[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]]) and its
+([curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate](6fjvr03mr9zg-curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate.md)) and its
 implementation **collapses into this task** rather than shipping separately — the "strays just
 error + reuse `FileProblem`" decision reduced it to the id-parsing predicate this flatten
 already needs.
@@ -195,7 +195,7 @@ Fold into the sequenced steps:
   scanned) + a `README.md` carve (a bucket-root `README.md` is silently ignored, GitHub landing
   page). Everything else non-entity errors.
 - **Migration (companion task):** sweeps existing loose files into `meta/` — see
-  [[one-time-migration-script-this-repo-desirelines]].
+  [one-time-migration-script-this-repo-desirelines](6fhnydm029gt-one-time-migration-script-this-repo-desirelines.md).
 
 Net: no new warning tier, no `schema_version` bump for carveouts — strays ride the existing
 `FileProblem` channel.
@@ -208,17 +208,17 @@ misfiled wire fields, schema_version 1.25→1.26, goldens + docs regenerated).
 
 - **Migration run** on both planning trees — this repo (199 renames, byte-identical)
   and desirelines (727 renames + 103 link rewrites + HOWTO→meta sweep); both lint clean.
-  See [[one-time-migration-script-this-repo-desirelines]].
+  See [one-time-migration-script-this-repo-desirelines](6fhnydm029gt-one-time-migration-script-this-repo-desirelines.md).
 - **Docs** (step 8): ARCHITECTURE.md + CLAUDE.md retired the `status == directory` mirror
   language; desirelines `routines/` repointed to the flat / `meta/` paths.
 - **Follow-ups (post-migration, unblocked by it):**
   - **Trap #2 (filename-id vs frontmatter-id drift):** a drift lint (`IDDriftIssue`) now
     flags a frontmatter `id:` that disagrees with the filename; `lint --fix` backfills a
     missing id FROM the filename (canonical), letting the date-mint backfill machinery be
-    deleted. Simplified [[backfill-ids-into-existing-tasks-and-audits-via-lint-fix]].
+    deleted. Simplified [backfill-ids-into-existing-tasks-and-audits-via-lint-fix](6fjas61spdnb-backfill-ids-into-existing-tasks-and-audits-via-lint-fix.md).
   - **Epic NN- carveout gate:** fail-open lint flag for a non-`NN-<slug>` epic; the one
     legacy non-NN epic was renamed `00-taskflow-v1-core`. Folds into
-    [[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]].
+    [curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate](6fjvr03mr9zg-curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate.md).
 
 Remaining (own task, not blocking): scheme-2 wikilink→markdown + rename-verb + dangler
-lint — [[scheme-2-references-and-rename-verb-with-link-cascade]].
+lint — [scheme-2-references-and-rename-verb-with-link-cascade](6fhnydm021es-scheme-2-references-and-rename-verb-with-link-cascade.md).

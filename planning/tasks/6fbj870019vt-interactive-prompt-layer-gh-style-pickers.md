@@ -78,7 +78,7 @@ directly (no TTY needed).
 **Build order:** gate + `task new --epic` picker first (flagship, establishes the
 pattern + contract test); then bare-transition pickers; then `--description`/title
 text; the **tags picker**; **item 4 (ambiguity) stays deferred** (blocked on
-[[fuzzypartial-slug-resolution]]). _Done so far (2026-06-19): foundation + epic
+[fuzzypartial-slug-resolution](6fakbec0252f-fuzzypartial-slug-resolution.md)). _Done so far (2026-06-19): foundation + epic
 picker + all six bare-transition pickers, contract-tested._
 
 **Tags (D1 resolved 2026-06-19 — prompt on a TTY):** tags are **free-form**, not a
@@ -115,13 +115,13 @@ for missing required input, never a requirement** — TTY detection picks the
 
 ## ⚠️ Conflicts to resolve before starting
 
-- **[[fuzzypartial-slug-resolution]] owns resolution semantics** (exact >
+- **[fuzzypartial-slug-resolution](6fakbec0252f-fuzzypartial-slug-resolution.md) owns resolution semantics** (exact >
   unique prefix > unique substring; explicit ErrAmbiguous with candidates).
   Item 4 here is a *presentation layer on its output* — sequence that task
   first, and if anything here implies different resolution behavior, that
   task wins.
 - **D1 interplay:** the tags picker changes the *felt* contract of
-  [[align-task-new-scaffold-with-lint]] (completed) for humans. Confirm the
+  [align-task-new-scaffold-with-lint](6fbj870025yw-align-task-new-scaffold-with-lint.md) (completed) for humans. Confirm the
   team wants prompt-instead-of-error before building.
 - Epic fit: filed under 17 by default, but 17 is the port epic and nearly
   done — planning should decide whether interactive UX warrants its own epic.
@@ -145,12 +145,12 @@ picker. Pickers run on **bubbles/list** (substring filter, alt-screen) behind th
 `Prompter` port; text on huh. Gate + `--no-input` + the `fillSelect`/`fillText`/
 `fillTags` helpers enforce the contract; hardened via a two-agent adversarial
 review (fixed a Unicode-filter panic + a SIGINT→130 mapping). **Deferred:** item 4
-(ambiguity, blocked on [[fuzzypartial-slug-resolution]]); a richer
+(ambiguity, blocked on [fuzzypartial-slug-resolution](6fakbec0252f-fuzzypartial-slug-resolution.md)); a richer
 multiselect-of-suggestions for tags; the TUI filter toggle
-([[toggle-tui-list-filter-between-fuzzy-and-substring]]).
+([toggle-tui-list-filter-between-fuzzy-and-substring](6fdtbb403y0c-toggle-tui-list-filter-between-fuzzy-and-substring.md)).
 
 ## Related
 
-- Epic [[17-pm-go-cli]] · builds on [[fuzzypartial-slug-resolution]] ·
-  see [[2026-06-12-pending-decisions]] (D1) and the 2026-06-12 design
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · builds on [fuzzypartial-slug-resolution](6fakbec0252f-fuzzypartial-slug-resolution.md) ·
+  see [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md) (D1) and the 2026-06-12 design
   discussion in session notes.

@@ -46,4 +46,4 @@ guidance change, shippable independently of the JSON-projection work.
 ## Related
 
 - Companion to the JSON projection work (this epic).
-- Epic [[20-cli-ux-and-ergonomics]].
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md).

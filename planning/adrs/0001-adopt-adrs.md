@@ -15,8 +15,8 @@ superseded_by: null
 > architecture decisions") makes. This file is the format's first instance; the
 > eventual `adr new` template must match it, pinned by a golden-file test so the two
 > can't drift. Design rationale and the best-practice survey behind it live in
-> [[2026-06-20-adrs-and-projects-format-design]]. **Projects** — the cross-cutting
-> grouping concept — are a separate decision in [[0002-adopt-projects]], built on the
+> [2026-06-20-adrs-and-projects-format-design](../research/2026-06-20-adrs-and-projects-format-design.md). **Projects** — the cross-cutting
+> grouping concept — are a separate decision in [0002-adopt-projects](0002-adopt-projects.md), built on the
 > format this ADR establishes.
 
 ## Context and Problem Statement
@@ -61,7 +61,7 @@ reflexive (see Decision → *Opt-in*). Supporting the type ≠ requiring its use
 ## Decision
 
 Adopt **ADR** as an optional planning type with the format, lifecycle, and layout
-below. (Projects are decided separately in [[0002-adopt-projects]].)
+below. (Projects are decided separately in [0002-adopt-projects](0002-adopt-projects.md).)
 
 ### Format
 
@@ -164,14 +164,14 @@ superseded_by: null       # an ADR id when superseded, else null
   one local planning tree as a group — it does **not** track files across repos — so
   ADRs live *with* the planning docs, full stop (no configurable dir, no impl-repo
   split). This supersedes the earlier command-spec idea of writing ADRs to "the impl
-  repo's ADR dir" ([[2026-06-06-tskflwctl-command-spec]]).
+  repo's ADR dir" ([2026-06-06-tskflwctl-command-spec](../research/2026-06-06-tskflwctl-command-spec.md)).
 - **Numbering allocation** (race without git or locks): scan `planning/adrs/NNNN-*.md`
   for the max, attempt an **exclusive create** of `max+1` (the existing
   `createFileAtomic` / `O_EXCL`); on collision, re-scan and retry. No `flock` needed.
 
 ## Cross-linking
 
-ADR-related links only (Projects' links are in [[0002-adopt-projects]]):
+ADR-related links only (Projects' links are in [0002-adopt-projects](0002-adopt-projects.md)):
 
 | Link | Field / form | On | Validated |
 | :-- | :-- | :-- | :-- |
@@ -225,8 +225,8 @@ _None yet (still `proposed`)._
 
 ## Related
 
-- Design rationale & best-practice survey: [[2026-06-20-adrs-and-projects-format-design]].
-- Follow-up — Projects: [[0002-adopt-projects]].
+- Design rationale & best-practice survey: [2026-06-20-adrs-and-projects-format-design](../research/2026-06-20-adrs-and-projects-format-design.md).
+- Follow-up — Projects: [0002-adopt-projects](0002-adopt-projects.md).
 - Command spec (the `adr` group; its impl-repo location line is superseded here):
-  [[2026-06-06-tskflwctl-command-spec]].
+  [2026-06-06-tskflwctl-command-spec](../research/2026-06-06-tskflwctl-command-spec.md).
 - Format lineage: Michael Nygard's ADRs + MADR (Markdown Any Decision Records).

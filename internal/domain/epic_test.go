@@ -2,6 +2,26 @@ package domain
 
 import "testing"
 
+// TestEpicRefKey pins the Scheme-2 rule: an `epic:` reference resolves on its leading
+// NN number, so a drifted slug still matches the epic (and a legacy non-NN stem falls
+// back to exact-match on the whole string).
+func TestEpicRefKey(t *testing.T) {
+	cases := []struct{ ref, want string }{
+		{"24-data-model-x", "24"},
+		{"24-renamed-later", "24"}, // same epic despite a different slug
+		{"24", "24"},
+		{"00-taskflow-v1-core", "00"},
+		{"100-scale", "100"},
+		{"taskflow-v1-core", "taskflow-v1-core"}, // no NN → whole-string fallback
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := EpicRefKey(c.ref); got != c.want {
+			t.Errorf("EpicRefKey(%q) = %q, want %q", c.ref, got, c.want)
+		}
+	}
+}
+
 // TestIsEpicArchived pins the ONLY statuses the dashboard/epics-tab default hides:
 // the two known terminals. Everything else (active, foreign, empty) is non-archived
 // so visibility fails open.

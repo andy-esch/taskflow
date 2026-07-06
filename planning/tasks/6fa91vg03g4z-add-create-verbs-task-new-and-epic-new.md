@@ -83,5 +83,5 @@ the Go CLI can now run the full create→update→move→lint loop without pm.**
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; unblocks dropping Python `pm` for the daily loop
-  ([[port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec]]).
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); unblocks dropping Python `pm` for the daily loop
+  ([port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md)).

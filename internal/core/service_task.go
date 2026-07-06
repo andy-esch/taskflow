@@ -59,7 +59,9 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 		if f.RevisitDue && !domain.IsTaskRevisitDue(t, now) {
 			continue
 		}
-		if f.Epic != "" && t.Epic != f.Epic {
+		// Match on the epic NN key, not the raw string — so `--epic 24-data-model` finds a
+		// task whose ref is a bare `24` or a stale slug, mirroring the rollup/validation join.
+		if f.Epic != "" && domain.EpicRefKey(t.Epic) != domain.EpicRefKey(f.Epic) {
 			continue
 		}
 		if f.Tag != "" && !hasTag(t.Tags, f.Tag) {
@@ -200,6 +202,9 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 			if !epicExists(epics, epic) {
 				return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, epic)
 			}
+			// Store the epic's canonical stem (as NewTask does), so `set --set epic=24` and
+			// `new --epic 24` leave the same readable `<NN>-<slug>` ref, not a bare NN.
+			withMeta["epic"] = canonicalEpic(epics, epic)
 		}
 	}
 	withMeta["updated_at"] = s.now().Format("2006-01-02")
@@ -280,6 +285,9 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	if !epicExists(epics, p.Epic) {
 		return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, p.Epic)
 	}
+	// Store and link the epic's canonical stem (resolved on the NN key), so a bare NN or
+	// a stale slug the caller passed becomes the epic's current, readable `<NN>-<slug>`.
+	p.Epic = canonicalEpic(epics, p.Epic)
 	// Defaults for zero-valued fields live here so EVERY caller — not just the CLI
 	// flags — produces a valid, lint-clean task; the CLI flag defaults stay as
 	// help-text hints. (A second adapter calling NewTask without replicating them
@@ -356,4 +364,11 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 		body = renderTemplate(tmpl, map[string]string{"title": p.Title, "epic": p.Epic})
 	}
 	return s.store.CreateTask(t, body, p.DryRun)
+}
+
+// RenameTask re-titles a task (new slug from newTitle, id kept) and cascades its inbound
+// body links across the planning tree — see store.RenameTask. Returns the reloaded task
+// and the count of inbound links repointed.
+func (s *Service) RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, error) {
+	return s.store.RenameTask(slug, newTitle, dryRun)
 }

@@ -100,5 +100,5 @@ the doc.
 
 The storage / read-model / OCC **foundation** this phase depends on is now its own
 (design-first) epic —
-[[24-data-model-evolution-stable-key-storage-read-model-content-occ]]; remote
+[24-data-model-evolution-stable-key-storage-read-model-content-occ](24-data-model-evolution-stable-key-storage-read-model-content-occ.md); remote
 backends ride on top of it once that foundation is decided and built.

@@ -115,7 +115,7 @@ for "the valid shape."
 - Epic 23 (external planning repo) — schema extension/override (Q12).
 - Settled input: the **carveout contract** — what makes a file an entity (a filename-shape
   classifier), stray files as `FileProblem`s, and the `meta/` folder — is decided in
-  [[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]] and recorded as
+  [curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate](../tasks/6fjvr03mr9zg-curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate.md) and recorded as
   an ADR-0003 amendment (2026-07-04). Fold it into this epic's "valid entity" formalization.
 - Prior art in-repo: `domain.LintTask`, `domain.MissingIDIssue`,
   `store.parseTask`'s loud missing-frontmatter failure, `schema --json-schema`.

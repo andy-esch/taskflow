@@ -62,6 +62,6 @@ help.go; tests in model_test.go. Suite + lint + vet green.
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
-- Follows [[tui-review-polish-batch-sort-rank-help-drift-width-audit-scope]] (which
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
+- Follows [tui-review-polish-batch-sort-rank-help-drift-width-audit-scope](6fbj87003qwr-tui-review-polish-batch-sort-rank-help-drift-width-audit-scope.md) (which
   added the interim scope note)

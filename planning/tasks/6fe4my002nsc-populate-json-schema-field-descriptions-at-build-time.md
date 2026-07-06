@@ -18,7 +18,7 @@ id: 6fe4my002nsc
 
 ## Objective
 
-`schema --json-schema` (shipped in [[publish-json-schema-for-the-json-envelopes]])
+`schema --json-schema` (shipped in [publish-json-schema-for-the-json-envelopes](6fdtbb400n8x-publish-json-schema-for-the-json-envelopes.md))
 emits structure, types, and `required` for every `--json` envelope, but every
 field's `description` is empty. invopop can fill descriptions from Go doc
 comments via `Reflector.AddGoComments(pkg, path)` — but that reads the **source
@@ -67,8 +67,8 @@ embedded comments don't match the source.
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]] ·
-  [[publish-json-schema-for-the-json-envelopes]] (where this was deferred).
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md) ·
+  [publish-json-schema-for-the-json-envelopes](6fdtbb400n8x-publish-json-schema-for-the-json-envelopes.md) (where this was deferred).
 
 ## Correction (2026-06-21, adversarial review)
 

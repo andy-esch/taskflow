@@ -20,7 +20,7 @@ id: 6fd5r5c03v5y
 > dogfooding `tskflwctl` to pick + work a tranche on `desirelines-planning`
 > (audit `2026-06-14-simplify-apigateway`). The friction it hit is the
 > mirror image of a known gap: the **audit finding-level surface was specced
-> in [[2026-06-06-tskflwctl-command-spec]] and explicitly *deferred* during
+> in [2026-06-06-tskflwctl-command-spec](../research/2026-06-06-tskflwctl-command-spec.md) and explicitly *deferred* during
 > the Go port** ("Deferred (audit finding-level): `status`/`fixed`/`landed`/
 > `followup`/`sync` … `findings`/`stats`") and never re-filed. This task is
 > that deferred surface, scoped to the four items the feedback grounded in
@@ -50,7 +50,7 @@ Extend the finding model from *count* to *parse*. A `domain.Finding` struct —
 code (`H1`/`M2`/`S1`), title, status, effort, urgency, component, file:line,
 and the body offsets needed for surgical status edits. This is the natural
 extension of the `domain.CountFindings(body) (total, open int)` move already
-planned in [[scaffold-schema-version-key-and-domain-level-audit-finding-counter]]
+planned in [scaffold-schema-version-key-and-domain-level-audit-finding-counter](6fc6vcr02j4x-scaffold-schema-version-key-and-domain-level-audit-finding-counter.md)
 (its item #2) — fold the two: build `domain.ParseFindings(body) []Finding`
 and derive the counts from it, so the counting invariant and the parse share
 one fence-aware, table-tested code path.
@@ -80,7 +80,7 @@ format the human currently has to remember: `in-progress (since YYYY-MM-DD)`,
 `fixed YYYY-MM-DD (PR #N)` when `--pr` is given, etc. On `--status fixed`,
 prompt for / append the 1–3 line resolution block HOWTO mandates but nothing
 enforces (the interactive *face* of that prompt belongs to
-[[interactive-prompt-layer-gh-style-pickers]]; the non-interactive append +
+[interactive-prompt-layer-gh-style-pickers](6fbj870019vt-interactive-prompt-layer-gh-style-pickers.md); the non-interactive append +
 format stamping is core and lives here). Edits go through the atomic /
 surgical-write discipline (`store/atomic.go`) — the rest of the audit body is
 byte-preserved, like `task set` preserves frontmatter. Specced as
@@ -118,11 +118,11 @@ both falling out of the parser:
       code exclusion, the `open-ish`/`openness` guards, missing optional
       fields); `auditstore.go` counts derive from it; the regex-only counter
       no longer lives in the store. (Subsumes the item-#2 half of
-      [[scaffold-schema-version-key-and-domain-level-audit-finding-counter]].)
+      [scaffold-schema-version-key-and-domain-level-audit-finding-counter](6fc6vcr02j4x-scaffold-schema-version-key-and-domain-level-audit-finding-counter.md).)
 - [x] `audit findings` filters on status/effort/urgency/component, single- and
       cross-audit, with a stable `--json` per-finding schema (`schema_version`).
 - [→] `audit finding <slug> <code> --status …` (item 3) — **carved out** to
-      [[audit-finding-write-surface-status-write-and-candidate-list-sync]]; it's a
+      [audit-finding-write-surface-status-write-and-candidate-list-sync](6feeygw00jmx-audit-finding-write-surface-status-write-and-candidate-list-sync.md); it's a
       feature, not pm parity, and is blocked on the external HOWTO format.
 - [x] Audits are linted (status vocabulary + missing status + bucket==state) —
       standalone `audit lint [<slug>]`; reuses the `LintResult`/`--json` lint
@@ -140,7 +140,7 @@ both falling out of the parser:
   `CountOpenFindings`, fence-aware and table-tested. `store/auditstore.go` now
   derives both counts from it and the finding regexes are gone from the store —
   one grammar in the domain. This subsumes the item-#2 half of
-  [[scaffold-schema-version-key-and-domain-level-audit-finding-counter]] (close
+  [scaffold-schema-version-key-and-domain-level-audit-finding-counter](6fc6vcr02j4x-scaffold-schema-version-key-and-domain-level-audit-finding-counter.md) (close
   that half there). **Caveat:** the struct is *read*-shaped — it carries no body
   offsets, so the item-3 surgical `--status` write still needs a small extension
   (offset/section spans) before it can rewrite a line in place. Items 2–5 remain;
@@ -171,7 +171,7 @@ both falling out of the parser:
   still-open findings (bucket↔state). `LintHuman` took a `noun` param so the footer
   reads "audit(s)". Tests: domain + core + cli (dirty→exit 11, clean→0).
   **Items 3 (write) + 5 (sync) carved into
-  [[audit-finding-write-surface-status-write-and-candidate-list-sync]]** — they're a
+  [audit-finding-write-surface-status-write-and-candidate-list-sync](6feeygw00jmx-audit-finding-write-surface-status-write-and-candidate-list-sync.md)** — they're a
   feature (and item 3 is blocked on the external HOWTO), not part of retiring `pm`,
   so they don't gate the port. The parser + query + lint **are** the port's
   finding-level deliverable, so this task is complete.
@@ -186,14 +186,14 @@ both falling out of the parser:
 - Changing the finding grammar or the cheat-sheet vocabulary — this parses
   and validates the *existing* contract, it doesn't redesign it.
 - The interactive picker/prompt UX for the resolution block — that's
-  [[interactive-prompt-layer-gh-style-pickers]]; here it's a non-TTY append.
+  [interactive-prompt-layer-gh-style-pickers](6fbj870019vt-interactive-prompt-layer-gh-style-pickers.md); here it's a non-TTY append.
 
 ## Note — the audit `status:` frontmatter (feedback #4, NOT in scope here)
 
 The feedback also flagged `status: completed` on audit frontmatter as
 overloaded/misleading. **For this tool that's already resolved:** `audit new`
 writes only `area` + `date` (no status field) and directory==bucket is the
-audit-level state, exactly as [[2026-06-06-tskflwctl-command-spec]]
+audit-level state, exactly as [2026-06-06-tskflwctl-command-spec](../research/2026-06-06-tskflwctl-command-spec.md)
 recommends. The `status: completed` the feedback hit is a **desirelines**
 artifact (legacy / routine-generated audits) — the fix lives there (routine
 audit-generator + back-fill + HOWTO), not in tskflwctl. The only tool-side
@@ -202,13 +202,13 @@ key on an audit as drift.
 
 ## Related
 
-- Epic [[17-pm-go-cli]] — this is the port's deferred finding-level tail.
-- Source spec: [[2026-06-06-tskflwctl-command-spec]] (`audit` table:
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) — this is the port's deferred finding-level tail.
+- Source spec: [2026-06-06-tskflwctl-command-spec](../research/2026-06-06-tskflwctl-command-spec.md) (`audit` table:
   `status` / `findings` / `lint` / `sync`; "Open gap — audit frontmatter").
 - Parser dependency / fold:
-  [[scaffold-schema-version-key-and-domain-level-audit-finding-counter]] (#2).
+  [scaffold-schema-version-key-and-domain-level-audit-finding-counter](6fc6vcr02j4x-scaffold-schema-version-key-and-domain-level-audit-finding-counter.md) (#2).
 - Resolution-block prompt (interactive face):
-  [[interactive-prompt-layer-gh-style-pickers]].
+  [interactive-prompt-layer-gh-style-pickers](6fbj870019vt-interactive-prompt-layer-gh-style-pickers.md).
 - Grammar contract: `desirelines-planning/audits/HOWTO-execute.md`.
 - Touches `internal/domain/` (new `Finding` + `ParseFindings`),
   `internal/store/auditstore.go`, `internal/core/service.go`,

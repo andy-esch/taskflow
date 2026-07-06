@@ -58,5 +58,5 @@ color decision), and add a **`--raw`** escape hatch for humans who want the sour
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
-- Sibling human-face work: [[evaluate-fang-for-styled-help-errors-and-manpages]]
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
+- Sibling human-face work: [evaluate-fang-for-styled-help-errors-and-manpages](6fdtbb4037bs-evaluate-fang-for-styled-help-errors-and-manpages.md)

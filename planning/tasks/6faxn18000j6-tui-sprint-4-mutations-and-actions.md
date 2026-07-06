@@ -19,7 +19,7 @@ id: 6faxn18000j6
 ## Objective
 
 Turn the browser into a doer — trigger lifecycle from the TUI, reusing the async
-+ reload plumbing. See [[18-tui-bubble-tea-interactive-planning-browser]].
++ reload plumbing. See [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).
 
 ## Design (locked 2026-06-12) — dual surface
 
@@ -100,4 +100,4 @@ Built on the concurrency-hardened base from the interim TUI rewrite
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)

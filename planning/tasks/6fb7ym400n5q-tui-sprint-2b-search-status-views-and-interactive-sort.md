@@ -17,8 +17,8 @@ id: 6fb7ym400n5q
 # TUI sprint 2b search, status views, and interactive sort
 
 > ℹ️ **Proposed S2 split (filed this session).** Second half of the original
-> [[tui-sprint-2-multi-entity-navigation-and-search]], which grew large. Builds
-> on [[tui-sprint-2a-entity-navigation-registry-tabs-command-jump]] (the registry
+> [tui-sprint-2-multi-entity-navigation-and-search](6faxn1802k3e-tui-sprint-2-multi-entity-navigation-and-search.md), which grew large. Builds
+> on [tui-sprint-2a-entity-navigation-registry-tabs-command-jump](6fb7ym401n1y-tui-sprint-2a-entity-navigation-registry-tabs-command-jump.md) (the registry
 > + per-entity lists). The implementing agent should confirm scope at sprint
 > start; the original task is deprecated, not lost.
 
@@ -27,7 +27,7 @@ id: 6fb7ym400n5q
 The refinement half of S2: search, scope, and sort **within** the current
 entity's list (plus find within a task body). 2a lets you move between entities;
 this makes each list usable at scale. Decisions in
-[[18-tui-bubble-tea-interactive-planning-browser]].
+[18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).
 
 ## Scope
 
@@ -63,7 +63,7 @@ this makes each list usable at scale. Decisions in
 
 ## Dependencies / ordering
 
-- Requires [[tui-sprint-2a-entity-navigation-registry-tabs-command-jump]] (the
+- Requires [tui-sprint-2a-entity-navigation-registry-tabs-command-jump](6fb7ym401n1y-tui-sprint-2a-entity-navigation-registry-tabs-command-jump.md) (the
   registry, per-entity lists, and the `:` input surface).
 - Independent of S3/S4.
 
@@ -143,6 +143,6 @@ blocks S2b acceptance.
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
-- Sibling [[tui-sprint-2a-entity-navigation-registry-tabs-command-jump]]
-- Supersedes (with 2a) [[tui-sprint-2-multi-entity-navigation-and-search]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
+- Sibling [tui-sprint-2a-entity-navigation-registry-tabs-command-jump](6fb7ym401n1y-tui-sprint-2a-entity-navigation-registry-tabs-command-jump.md)
+- Supersedes (with 2a) [tui-sprint-2-multi-entity-navigation-and-search](6faxn1802k3e-tui-sprint-2-multi-entity-navigation-and-search.md)

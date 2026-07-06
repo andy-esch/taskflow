@@ -46,7 +46,7 @@ pieces need more:
 - **Epic rollups** — done/total per epic (`Summary.Epics`).
 - **Due for revisit** — deferred tasks whose revisit date has arrived
   (`Summary.RevisitDue` + the list). This absorbs the "banner" idea from
-  [[surface-due-for-revisit-deferred-tasks-in-the-tui]].
+  [surface-due-for-revisit-deferred-tasks-in-the-tui](6fg2ef8014ev-surface-due-for-revisit-deferred-tasks-in-the-tui.md).
 - **Health** — misfiled + open audits + lint state.
 - **Larger goals (GATED on Projects)** — cross-cutting clusters of completed +
   in-progress toward a goal.
@@ -79,10 +79,10 @@ pieces need more:
 - Mutations from the Dashboard (v1 is navigational / read-only).
 - The Projects entity itself (its own design/epic) — only the goals widget depends on it.
 - The per-row revisit marker + sort + `:revisit` view — those live in
-  [[surface-due-for-revisit-deferred-tasks-in-the-tui]].
+  [surface-due-for-revisit-deferred-tasks-in-the-tui](6fg2ef8014ev-surface-due-for-revisit-deferred-tasks-in-the-tui.md).
 
 ## Related
 
-- Epic [[18-tui-bubble-tea-interactive-planning-browser]]
+- Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
 - TUI counterpart of the `status` command (`core.Summary` / `SummaryHuman`)
-- Absorbs the summary/banner from [[surface-due-for-revisit-deferred-tasks-in-the-tui]]
+- Absorbs the summary/banner from [surface-due-for-revisit-deferred-tasks-in-the-tui](6fg2ef8014ev-surface-due-for-revisit-deferred-tasks-in-the-tui.md)

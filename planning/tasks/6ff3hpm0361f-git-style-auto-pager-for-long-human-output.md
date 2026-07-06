@@ -75,6 +75,6 @@ you), `R` = keep our ANSI colors, `X` = don't clobber scrollback.
 
 ## Related
 - Surfaced 2026-06-23 from the `epic show` tree work
-  ([[epic-show-lipgloss-v2-tree-rendering]]).
+  ([epic-show-lipgloss-v2-tree-rendering](6ff3hpm02xcd-epic-show-lipgloss-v2-tree-rendering.md)).
 - Pattern precedent: `gateOpen` / the color + prompt TTY-gating in
-  `internal/cli/color.go`. Epic [[20-cli-ux-and-ergonomics]].
+  `internal/cli/color.go`. Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md).

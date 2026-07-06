@@ -72,7 +72,7 @@ matching the schema + the "empty not null" convention.
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
 - Extends the agent contract started by the `schema` command
-  ([[schema-command-for-agent-self-discovery]]).
-- Pairs with [[auto-generate-cli-reference-docs-with-a-ci-sync-check]].
+  ([schema-command-for-agent-self-discovery](6fbj87003e4g-schema-command-for-agent-self-discovery.md)).
+- Pairs with [auto-generate-cli-reference-docs-with-a-ci-sync-check](6fdtbb403ba4-auto-generate-cli-reference-docs-with-a-ci-sync-check.md).

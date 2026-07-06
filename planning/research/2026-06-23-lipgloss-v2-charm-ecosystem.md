@@ -6,9 +6,9 @@ tags: [cli, ux, tui, lipgloss, bubbletea, research, decision]
 
 # lipgloss v2 / charm-ecosystem UI options — findings & decision
 
-Capture-and-decide for [[explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements]]
-(epic [[20-cli-ux-and-ergonomics]]). Builds on the
-[[2026-06-21-fang-evaluation-spike]] (fang landed → `charm.land/lipgloss/v2`
+Capture-and-decide for [explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements](../tasks/6feeygw02vzb-explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements.md)
+(epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)). Builds on the
+[2026-06-21-fang-evaluation-spike](2026-06-21-fang-evaluation-spike.md) (fang landed → `charm.land/lipgloss/v2`
 v2.0.4 is already in the module graph). **No code here — options + a recommended
 first slice.** Governing rule (epic 20): never compromise the agent/pipeline
 contract — every visual nicety is TTY-gated and raw under `--json`/pipe.
@@ -21,7 +21,7 @@ contract — every visual nicety is TTY-gated and raw under `--json`/pipe.
 - **Decline / defer:** `table` for list output (machine-contract + golden risk for
   ~0 value — the porcelain `-o table` already exists); `list` bullets (minor);
   `charmbracelet/log` (would muddy the `--json`/stderr discipline); `wish` →
-  belongs to epic [[19-web-companion-apps-over-a-shared-core]], not here.
+  belongs to epic [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md), not here.
 - **Scope as its own epic-18 sprint (NOT here):** migrate the TUI to bubbletea
   v2 + bubbles v2 + lipgloss v2. Big but mechanical, and it pays down real debt
   (consolidates the two lipgloss majors, gets the new renderer, and removes a
@@ -88,7 +88,7 @@ worth a sprint):*
 
 **5. `wish` (TUI over SSH) — ↪️ DEFER to epic 19.** Real (serve the TUI over SSH
 with ~zero new UI code; v2's renderer makes it cheaper), but it's a web-companion
-direction. Cross-ref [[19-web-companion-apps-over-a-shared-core]]; don't open here.
+direction. Cross-ref [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md); don't open here.
 
 **6. `vhs` (terminal GIFs for docs) — ✅ GREENLIGHT (small).** Script GIFs of
 `--help`/`status`/the TUI for the README + generated CLI docs. Tooling, **not a

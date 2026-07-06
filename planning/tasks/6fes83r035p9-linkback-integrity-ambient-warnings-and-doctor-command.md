@@ -52,7 +52,7 @@ on-demand audit.
 
 ## Related
 
-- [[23-point-an-impl-repo-at-an-external-planning-repo]].
+- [23-point-an-impl-repo-at-an-external-planning-repo](../epics/23-point-an-impl-repo-at-an-external-planning-repo.md).
 
 ## Review hardening (2026-06-23)
 

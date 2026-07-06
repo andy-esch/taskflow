@@ -184,3 +184,36 @@ func TestLint_FlagsArchivedTaskIDDrift(t *testing.T) {
 		t.Errorf("expected the id-drift flag:\n%s", out)
 	}
 }
+
+// TestLint_LinksFlagsDangler pins the opt-in Scheme-2 dangler check: plain `lint` ignores
+// body links, but `lint --links` flags a markdown link whose target file is missing (exit
+// 11) while leaving external and resolvable links alone.
+func TestLint_LinksFlagsDangler(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("epics/01-e.md", "---\nstatus: active\npriority: high\ndescription: e\n---\n# E\n")
+	p, out := testutil.TaskFixture(root, "ready-to-start", "a.md",
+		"---\nid: "+testutil.TaskID("a")+"\nstatus: ready-to-start\nepic: 01-e\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# A\n\nDead: [gone](6fjangd7kvzz-gone.md). Ext: [x](https://e.com/x.md).\n")
+	testutil.Write(t, p, out)
+
+	// Plain lint passes — body links aren't checked by default (routines stay clean).
+	if _, err := runRootRC(t, "-C", root, "lint"); err != nil {
+		t.Fatalf("plain lint should pass (danglers not checked): %v", err)
+	}
+	// --links flags the missing local link (exit 11), not the external one.
+	o, err := runRootRC(t, "-C", root, "lint", "--links")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("lint --links should flag the dangler (exit 11), got %v", err)
+	}
+	if !strings.Contains(o, "6fjangd7kvzz-gone.md") || strings.Contains(o, "e.com") {
+		t.Errorf("should flag only the missing local link:\n%s", o)
+	}
+}

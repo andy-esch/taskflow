@@ -16,7 +16,7 @@ id: 6fbj870038d6
 # Repo hygiene batch
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([[2026-06-12-critical-code-review-multi-lens]], finding M19 + hygiene
+> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), finding M19 + hygiene
 > lows). Mostly deletions and doc truth-keeping; one git decision for the
 > human.
 
@@ -26,7 +26,7 @@ id: 6fbj870038d6
    at the repo root (untracked, empty). Without the root `.tskflwctl.toml`,
    walk-up discovery anchors to this empty skeleton instead of `planning/` —
    the misconfigured-root trap materialized. `rmdir` them. (Discovery-side
-   guard is tracked in [[discovery-and-slug-edge-case-robustness]].)
+   guard is tracked in [discovery-and-slug-edge-case-robustness](6fb7ym40279v-discovery-and-slug-edge-case-robustness.md).)
 2. **M19 — Docs point at a spec that is not in git.** README/CLAUDE.md say
    `tests/test_pm.py` is "kept as the historical executable spec", but only
    `bin/pm` is tracked — `tests/` is untracked, so a fresh clone loses it.
@@ -39,8 +39,8 @@ id: 6fbj870038d6
    abandoned pre-rewrite design, and `bin/` is ignored while `bin/pm` is
    tracked inside it. Prune to match reality.
 5. **Stale in-progress tasks:**
-   [[port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec]] and
-   [[tui-sprint-3-fsnotify-live-reload]] both look shipped (the latter in
+   [port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md) and
+   [tui-sprint-3-fsnotify-live-reload](6faxn1800qb2-tui-sprint-3-fsnotify-live-reload.md) both look shipped (the latter in
    `f76254a`). Verify remaining checklist items, then `task complete` them.
 
 ## Acceptance criteria
@@ -52,7 +52,7 @@ id: 6fbj870038d6
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `.gitignore`, `README.md`, `CLAUDE.md`, `planning/tasks/`.
 ## Closure (2026-06-12)
 

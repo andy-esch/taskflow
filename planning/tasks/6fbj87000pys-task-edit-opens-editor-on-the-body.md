@@ -20,7 +20,7 @@ id: 6fbj87000pys
 De-drafted. Resolutions:
 - **Human/agent faces stay split** — this owns the human face (`$EDITOR`); the
   agent face (`--body-file`/stdin, body replace/append) stays in
-  [[agent-facing-cli-ergonomics-batch]]. Agents won't use `$EDITOR`.
+  [agent-facing-cli-ergonomics-batch](6fbj87000anh-agent-facing-cli-ergonomics-batch.md). Agents won't use `$EDITOR`.
 - Edit the **whole file** (git-`commit`-style) with **parse-before-accept on
   save** — a frontmatter break or unknown key is caught and the editor reopened
   / file restored.
@@ -40,7 +40,7 @@ tool's validated/atomic write path exists to avoid. Close the gap git-style:
 
 ## ⚠️ Conflicts to resolve before starting
 
-- **[[agent-facing-cli-ergonomics-batch]] already owns the body-editing
+- **[agent-facing-cli-ergonomics-batch](6fbj87000anh-agent-facing-cli-ergonomics-batch.md) already owns the body-editing
   gap** (its remaining items: `--body-file`/stdin on `task new`, body
   replace/append through the tool). This draft is the *human face* of the
   same gap. Planning should either fold this into that task or split
@@ -97,5 +97,5 @@ tool's validated/atomic write path exists to avoid. Close the gap git-style:
 
 ## Related
 
-- Epic [[17-pm-go-cli]] · [[agent-facing-cli-ergonomics-batch]] (the agent face:
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · [agent-facing-cli-ergonomics-batch](6fbj87000anh-agent-facing-cli-ergonomics-batch.md) (the agent face:
   `--body-file`/stdin, body replace/append — still open).

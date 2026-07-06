@@ -79,5 +79,5 @@ that would be normalized away.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Builds on the 2026-06-13 `Slugify` allowlist rewrite (`internal/domain/slug.go`).

@@ -43,4 +43,4 @@ not build here.
 
 ## Related
 - Plan: `planning/research/2026-06-23-tui-v2-migration-plan.md`.
-- [[18-tui-bubble-tea-interactive-planning-browser]].
+- [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).

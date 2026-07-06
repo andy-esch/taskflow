@@ -48,7 +48,7 @@ is the *sanctioned* escape: when set, discovery follows it out of the tree.
 
 ## Related
 
-- [[23-point-an-impl-repo-at-an-external-planning-repo]].
+- [23-point-an-impl-repo-at-an-external-planning-repo](../epics/23-point-an-impl-repo-at-an-external-planning-repo.md).
 
 ## Resolution (2026-06-22)
 

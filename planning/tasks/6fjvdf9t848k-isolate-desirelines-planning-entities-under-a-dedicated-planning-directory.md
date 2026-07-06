@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fjvdf9t848k
-status: ready-to-start
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: Move desirelines-planning tasks/epics/audits under a dedicated planning/ dir (taskflow_root=planning) to isolate tool entities from ancillary dirs. De-risks the flatten; independent of Phase B.
 effort: Unknown
@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [migration, planning]
 created: "2026-07-04"
-updated_at: "2026-07-04"
+updated_at: "2026-07-05"
+completed_at: "2026-07-05"
 ---
 
 # Isolate desirelines-planning entities under a dedicated planning/ directory
@@ -79,7 +80,7 @@ the undo**.
 ## Out of scope
 
 - The **flatten** itself (id-led filenames, retire status==directory) — that's Phase B
-  ([[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]]); this move
+  ([flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md)); this move
   is deliberately layout-preserving and can ship first.
 - The **122-file entity↔entity relative-link rewrite** — preserved by this move, rewritten by
   the flatten migration.
@@ -87,15 +88,15 @@ the undo**.
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- De-risks [[flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory]]
-  (Phase B) and [[one-time-migration-script-this-repo-desirelines]].
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- De-risks [flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory](6fhnydm03edq-flatten-layout-status-bucket-to-frontmatter-retire-status-equals-directory.md)
+  (Phase B) and [one-time-migration-script-this-repo-desirelines](6fhnydm029gt-one-time-migration-script-this-repo-desirelines.md).
 
 ## Decision (2026-07-04) — resolves step 7 (the stray HOWTO)
 
 Step 7 left `audits/HOWTO-execute.md` handling open ("relocate it, or rely on the Phase B
 fix — decide"). The carveout decision
-([[curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate]]) settles it:
+([curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate](6fjvr03mr9zg-curation-carveouts-tolerate-non-entity-files-in-tool-dirs-frontmatter-gate.md)) settles it:
 **move it to a top-level `planning/meta/`** as part of this isolate move, rather than leaving
 it in `planning/audits/`.
 
@@ -104,3 +105,14 @@ it in `planning/audits/`.
   no code.
 - Doing it here means the flatten's migration sweep has one less loose file to handle.
 - Same treatment for any routine specs currently loose near the entity dirs -> `meta/routines/`.
+
+## Verified complete (2026-07-05)
+
+All acceptance criteria hold in `desirelines-planning`:
+- `tasks/`/`epics/`/`audits/` live under `planning/`; root-level entity dirs are gone.
+- `.tskflwctl.toml`: `taskflow_root = "planning"`, `tracked_repos = ["../desirelines", "../desirelines-deploy"]` (resolve).
+- `tskflwctl lint` passes from the repo root (discovery via the toml).
+- The stray `HOWTO-execute.md` landed in `planning/meta/` per the carveout decision.
+
+Shipped ahead of Phase B as the layout-preserving de-risk it was scoped to be; the flatten
+then ran inside `planning/`.

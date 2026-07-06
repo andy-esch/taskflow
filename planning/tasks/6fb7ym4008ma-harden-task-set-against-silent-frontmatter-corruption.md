@@ -115,6 +115,6 @@ TUI" → reused by both shipped adapters).
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `internal/core/service.go` (`SetFields`), `internal/cli/task.go`
   (`--set` loop), `internal/domain/validate.go`.

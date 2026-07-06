@@ -44,7 +44,7 @@ real drift or robustness gap. Do them as independent commits.
       `toEpicMeta` helper, so `epic list`, `epic show`, and the dashboard share one
       meta shape (rollup additive). (`cli/render/render.go`)
 - [x] **L8 — layout duplication.** Resolved as part of
-      [[put-storage-layout-knowledge-back-behind-the-port]] (M15a): the store now
+      [put-storage-layout-knowledge-back-behind-the-port](6fbj87001q7p-put-storage-layout-knowledge-back-behind-the-port.md) (M15a): the store now
       owns `WatchPaths()` and the TUI consumes it. (Completion globbing is the
       documented, service-free exception and was left as-is.)
 - [~] **M6 (optional) — `SetFields` bool params.** **WONTFIX** (judgment call):
@@ -61,5 +61,5 @@ real drift or robustness gap. Do them as independent commits.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Audit: `planning/audits/open/2026-06-13-codebase-quality-architecture.md`

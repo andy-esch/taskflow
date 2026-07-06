@@ -51,6 +51,6 @@ glamour-rendering `show`, which loses raw-text fidelity + adds a heavy dep).
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; caps the color/formatting line that began with
-  [[cli-color-glyphs-table-headers-render-styling]] and
-  [[relative-dates-and-width-aware-truncation-in-task-list]].
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); caps the color/formatting line that began with
+  [cli-color-glyphs-table-headers-render-styling](6fakbec017kj-cli-color-glyphs-table-headers-render-styling.md) and
+  [relative-dates-and-width-aware-truncation-in-task-list](6fakbec0073w-relative-dates-and-width-aware-truncation-in-task-list.md).

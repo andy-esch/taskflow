@@ -16,7 +16,7 @@ id: 6fbj870025yw
 # Align `task new` scaffold with `lint`
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([[2026-06-12-critical-code-review-multi-lens]], finding H4). Hand-verified
+> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), finding H4). Hand-verified
 > live: in a fresh `init` repo, `epic new` + `task new --epic … --description d`
 > + `lint` exits 11 with `tags: missing`.
 
@@ -44,7 +44,7 @@ pairings so no second mismatch is lurking.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `internal/cli/task.go`, `internal/core/service.go` (lint rules),
   docs/README examples.
 ## Closure (2026-06-12)

@@ -31,7 +31,7 @@ id: 6fhnydm02bgf
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
 
 Implementation complete (pending review/merge).
 

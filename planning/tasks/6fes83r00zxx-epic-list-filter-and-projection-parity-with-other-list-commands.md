@@ -18,8 +18,8 @@ id: 6fes83r00zxx
 
 **Source.** Product feedback (2026-06-22) from an AI agent driving `tskflwctl`.
 The other list commands got `-o/--output`, `-c/--columns`, and `-q` (ids-only)
-via the completed [[consolidate-output-flags-into-output-and-columns]] and
-[[pipeline-output-modes-q-plain-stderr-discipline]] — but `epic list` was left
+via the completed [consolidate-output-flags-into-output-and-columns](6fdtbb401htr-consolidate-output-flags-into-output-and-columns.md) and
+[pipeline-output-modes-q-plain-stderr-discipline](6fbj870023xj-pipeline-output-modes-q-plain-stderr-discipline.md) — but `epic list` was left
 behind. So an agent that reaches for `epic list` (instead of the right
 `epic show <id>`) pays for **all** epics' full rollup with no way to project or
 filter. The agent's note: "`epic show` was exactly right, but if an agent does
@@ -45,5 +45,5 @@ reach for `epic list` there's no `--id`/`--columns`/`-q`."
 
 ## Related
 
-- Parity with [[consolidate-output-flags-into-output-and-columns]].
-- Epic [[20-cli-ux-and-ergonomics]].
+- Parity with [consolidate-output-flags-into-output-and-columns](6fdtbb401htr-consolidate-output-flags-into-output-and-columns.md).
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md).

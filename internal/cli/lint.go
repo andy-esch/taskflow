@@ -10,11 +10,11 @@ import (
 )
 
 func newLintCmd(app *App) *cobra.Command {
-	var fix bool
+	var fix, links bool
 	cmd := &cobra.Command{
 		Use:     "lint",
 		Short:   "Validate active task and epic frontmatter (--fix repairs tasks/audits and assigns missing ids)",
-		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --json",
+		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --links\n  tskflwctl lint --json",
 		Args:    cobra.NoArgs,
 		// Read-only by default; --fix opts into mutation explicitly.
 		Annotations: map[string]string{"safety": "read-only"},
@@ -22,17 +22,28 @@ func newLintCmd(app *App) *cobra.Command {
 			if fix {
 				return runLintFix(app, app.DryRun) // --dry-run is the persistent flag (root.go)
 			}
-			return runLint(app)
+			return runLint(app, links)
 		},
 	}
 	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter: quote ':' values, normalize lists, backfill missing task/audit ids; epics are text-only")
+	cmd.Flags().BoolVar(&links, "links", false, "also check body cross-links: flag any [..](path.md) whose target file is missing (opt-in — a tree can carry pre-existing danglers)")
 	return cmd
 }
 
-func runLint(app *App) error {
+func runLint(app *App, links bool) error {
 	results, problems, err := app.Svc.Lint()
 	if err != nil {
 		return err
+	}
+	// --links adds cross-reference integrity: a body link to a missing file surfaces as a
+	// FileProblem, flowing through the same render + exit path. Opt-in, since a tree can
+	// accumulate pre-existing danglers that would otherwise noise up the default gate.
+	if links {
+		danglers, err := app.Linter.DanglingLinks()
+		if err != nil {
+			return err
+		}
+		problems = append(problems, danglers...)
 	}
 	if app.JSON {
 		if err := render.LintJSON(app.Out, results, problems); err != nil {

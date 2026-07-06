@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fk6nnca15wj
-status: ready-to-start
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: Shell completion offers bare slugs only; the flat layout also resolves by id-prefix/stem and allows dup slugs — id-prefix typing yields nothing and dup-slugs can't be disambiguated.
 effort: Unknown
@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [cli, completion, flatten-followup]
 created: "2026-07-05"
-updated_at: "2026-07-05"
+updated_at: "2026-07-06"
+completed_at: "2026-07-06"
 ---
 
 # Complete task/audit id-prefixes and full stems in shell completion
@@ -29,7 +30,7 @@ updated_at: "2026-07-05"
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
 
 ## Finding (adversarial review, 2026-07-05)
 
@@ -45,3 +46,11 @@ Gaps under the flat layout (ADR-0003 §4):
 
 Fix: match completion against the full stem too (id-prefix + slug); key `taken` via `flatSlug`.
 Adjacent to the scheme-2 id-prefix reference work.
+
+## Landed (2026-07-06)
+
+Shared `flatCompletions` helper (used by both task + audit completers): matches `toComplete`
+against the slug OR the full `<id>-<slug>` stem, so **id-prefix / full-stem** typing now
+completes (was slug-only → zero candidates). A **duplicate slug** disambiguates to the id-led
+stems instead of a single ambiguous slug; and the already-typed `taken` set keys on both the
+slug and the stem, so a stem-typed arg is correctly excluded. +unit test.

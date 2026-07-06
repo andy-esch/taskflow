@@ -36,7 +36,7 @@ full-screen:
 Alt-screen was a deliberate choice ("keeps the picker from scrolling the
 surrounding output, restored cleanly on exit") — so the refinement must preserve a
 **clean teardown** without it. It was built by the completed
-[[interactive-prompt-layer-gh-style-pickers]]; this is its ergonomic follow-up.
+[interactive-prompt-layer-gh-style-pickers](6fbj870019vt-interactive-prompt-layer-gh-style-pickers.md); this is its ergonomic follow-up.
 The bubbles/list component was chosen over `huh.Select` because huh's own filter
 misbehaved — so keep bubbles/list, just render it inline.
 

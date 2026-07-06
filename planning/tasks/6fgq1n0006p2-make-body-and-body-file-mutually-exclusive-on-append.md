@@ -33,7 +33,7 @@ regardless of which command calls it) — and correct the comment to match.
 ## Context
 
 Pre-existing; surfaced by the 2026-06-28 adversarial review of the audit-edit
-work ([[audit-editing-faces-audit-edit-set-and-append]]) — `audit append`
+work ([audit-editing-faces-audit-edit-set-and-append](6ffr4wc01thc-audit-editing-faces-audit-edit-set-and-append.md)) — `audit append`
 inherited the gap by mirroring `task append`. Touches the shared task path, so it
 was filed rather than folded into that feature PR.
 

@@ -7,9 +7,9 @@ tags: [cli, tui, ux, theme, color, lipgloss, research, decision]
 # Color/design overhaul — one palette, established themes, a neon default
 
 Research + audit for
-[[color-and-design-overhaul-one-coherent-palette-across-every-surface]] (epic
-[[20-cli-ux-and-ergonomics]]). Builds on [[2026-06-23-lipgloss-v2-charm-ecosystem]],
-[[2026-06-21-fang-evaluation-spike]], and [[2026-06-10-tui-design-decisions]].
+[color-and-design-overhaul-one-coherent-palette-across-every-surface](../tasks/6ffr4wc01gtv-color-and-design-overhaul-one-coherent-palette-across-every-surface.md) (epic
+[20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)). Builds on [2026-06-23-lipgloss-v2-charm-ecosystem](2026-06-23-lipgloss-v2-charm-ecosystem.md),
+[2026-06-21-fang-evaluation-spike](2026-06-21-fang-evaluation-spike.md), and [2026-06-10-tui-design-decisions](2026-06-10-tui-design-decisions.md).
 Four parallel research lenses (internal audit, external theme libraries, Charm v2
 theming mechanics, UX/accessibility) + source-verified against the module cache.
 **No code here — the map, the options, and a recommended shape + sequence.**
@@ -163,7 +163,7 @@ already, though (next section).
   `Blend1D/2D`, `Lighten/Darken/Complementary`).
 - **fang v1** (direct dep): `fang.ColorScheme` is itself a "struct of named
   colors" fed via `WithColorSchemeFunc` — prior art for the pattern, and the
-  [[2026-06-21-fang-evaluation-spike]] already flagged feeding our theme into it.
+  [2026-06-21-fang-evaluation-spike](2026-06-21-fang-evaluation-spike.md) already flagged feeding our theme into it.
 
 ---
 
@@ -308,7 +308,7 @@ upstream progress docs):
 - **lipgloss/TUI** — `Foreground(p.Accent.True)` etc. (already the `tui/style.go`
   pattern). Light/dark via `tea.BackgroundColorMsg` → `lipgloss.LightDark(isDark)`
   (this also enables the deferred live re-theme task,
-  [[tui-live-light-dark-re-theme-via-backgroundcolormsg]]).
+  [tui-live-light-dark-re-theme-via-backgroundcolormsg](../tasks/6ff3hpm03h86-tui-live-light-dark-re-theme-via-backgroundcolormsg.md)).
 - **huh/picker** — build a full `*huh.Styles` from the palette inside
   `huh.ThemeFunc(func(isDark bool)...)` (the `isDark` flag is exactly where to
   pick `For(isDark)`); set `Focused.SelectSelector`/`SelectedOption` from
@@ -400,7 +400,7 @@ to a model field is invisible to them.
    `resolve()`, thread through the three seams. The hardcoded `Default()` from
    steps 2-4 becomes config-selected.
 6. **Add named themes + land the deferred picker polish** (slug in `Accent`,
-   description in `Dim` — the [[render-the-interactive-picker-inline-not-full-screen-alt-screen]]
+   description in `Dim` — the [render-the-interactive-picker-inline-not-full-screen-alt-screen](../tasks/6ffr4wc00dsr-render-the-interactive-picker-inline-not-full-screen-alt-screen.md)
    stopgap's debt) against the real palette. Optionally finish glamour/huh onto
    the palette.
 

@@ -17,7 +17,7 @@ related_research:
 
 # ADRs & Projects: format design and decision record
 
-Rationale behind [[0001-adopt-adrs]] and [[0002-adopt-projects]]. It synthesizes
+Rationale behind [0001-adopt-adrs](../adrs/0001-adopt-adrs.md) and [0002-adopt-projects](../adrs/0002-adopt-projects.md). It synthesizes
 three research streams — (1) online ADR best practices, (2) cross-tool product
 research on "Project / initiative" types, (3) a house-style mining of
 `taskflow/planning/` and `desirelines-planning/` — into two **generic** document
@@ -265,9 +265,9 @@ decision (Considered Option C in ADR-0001). Supporting the type ≠ requiring it
 
 ## References
 
-- ADRs: [[0001-adopt-adrs]] · [[0002-adopt-projects]].
-- Project model origin: [[2026-06-06-project-concept-cross-cutting-initiatives]].
-- Command spec (`adr` / `project` groups): [[2026-06-06-tskflwctl-command-spec]].
+- ADRs: [0001-adopt-adrs](../adrs/0001-adopt-adrs.md) · [0002-adopt-projects](../adrs/0002-adopt-projects.md).
+- Project model origin: [2026-06-06-project-concept-cross-cutting-initiatives](2026-06-06-project-concept-cross-cutting-initiatives.md).
+- Command spec (`adr` / `project` groups): [2026-06-06-tskflwctl-command-spec](2026-06-06-tskflwctl-command-spec.md).
 - ADR lineage: Nygard (cognitect.com/blog/2011/11/15/documenting-architecture-decisions),
   MADR (adr.github.io/madr), Tyree & Akerman (IEEE Software 2005), adr-tools
   (github.com/npryce/adr-tools), Joel Parker Henderson

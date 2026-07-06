@@ -50,6 +50,6 @@ pipes and agents stay plain.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]; the keyboard-ergonomics sibling is
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md); the keyboard-ergonomics sibling is
   [[fuzzy-partial-slug-resolution]]; the at-a-glance view is
-  [[at-a-glance-dashboard-status-board]].
+  [at-a-glance-dashboard-status-board](6fakbec01wt8-at-a-glance-dashboard-status-board.md).

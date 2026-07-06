@@ -1,12 +1,12 @@
 # Dashboard extension ideas (research)
 
-Date: 2026-06-27 · Epic: [[18-tui-bubble-tea-interactive-planning-browser]]
+Date: 2026-06-27 · Epic: [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
 
 Pragmatic ways to extend the TUI landing **dashboard** beyond its v1 widgets
 (in-progress · due-for-revisit · epic rollups · needs-attention). Grounded in what
 `core.Service` and the data model already expose, so each idea is tagged by how
 much new plumbing it needs. Companion to the deferred items in
-[[dashboard-review-follow-ups-tier-3-polish-and-deferred-decisions]].
+[dashboard-review-follow-ups-tier-3-polish-and-deferred-decisions](../tasks/6fgcr2403km8-dashboard-review-follow-ups-tier-3-polish-and-deferred-decisions.md).
 
 ## Lay of the land — what's cheap vs what needs plumbing
 
@@ -145,7 +145,7 @@ audits):**
   (decode the known field + stamp it on Move→completed). Small but a prerequisite.
 - **No move history** → no real burndown/cycle-time without an event log or git-log
   parsing (out of scope; relates to epic
-  [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]).
+  [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)).
 - **List fields** (`dependencies`/`blocks`/`blocked_by`/`related_tasks`/`projects`/
   `adrs`) are validated in the schema but **not decoded into structs** → any
   "blockers"/dependency widget needs domain plumbing first.
@@ -157,6 +157,6 @@ audits):**
   `planning/tasks/completed/add-a-tui-landing-dashboard-the-default-view.md`.
 - `onDash` bool → screen-enum refactor was **decided against**; widget-registry
   refactor deferred until 5–6 widgets — see
-  [[dashboard-review-follow-ups-tier-3-polish-and-deferred-decisions]].
+  [dashboard-review-follow-ups-tier-3-polish-and-deferred-decisions](../tasks/6fgcr2403km8-dashboard-review-follow-ups-tier-3-polish-and-deferred-decisions.md).
 - External-planning (`planning_repo`/`tracked_repos`/`doctor`) is **shipped** for
   local/sibling repos; remote backends are epic-24 territory.

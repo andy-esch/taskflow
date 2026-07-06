@@ -49,16 +49,16 @@ help/error rendering and our machine contract is non-negotiable.
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
-- Sibling human-face work: [[glamour-render-markdown-bodies-in-show]]
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
+- Sibling human-face work: [glamour-render-markdown-bodies-in-show](6fdtbb40306e-glamour-render-markdown-bodies-in-show.md)
 - fang's `man` overlaps the manpage angle noted in
-  [[auto-generate-cli-reference-docs-with-a-ci-sync-check]].
+  [auto-generate-cli-reference-docs-with-a-ci-sync-check](6fdtbb403ba4-auto-generate-cli-reference-docs-with-a-ci-sync-check.md).
 
 ## Decision (2026-06-21): ADOPTED
 
 Evaluated via a worktree spike (`spike/fang-eval`), then shipped on branch
 `feat/fang-styled-cli`. Findings + cons + the in-scope follow-ups live in
-[[2026-06-21-fang-evaluation-spike]].
+[2026-06-21-fang-evaluation-spike](../research/2026-06-21-fang-evaluation-spike.md).
 
 **Outcome:** the central risk (a lipgloss v2 *bump* on the TUI) was a non-issue —
 v1 and v2 coexist (different module paths), so the TUI is untouched; and lipgloss
@@ -74,4 +74,4 @@ roff manpages via `internal/tools/mangen` + goreleaser archive wiring, `just man
 **Knowingly accepted:** fang title-cases help descriptions/headers (hardcoded,
 not configurable). **Deferred:** `WithNotifySignal` (needs prompt-abort
 interaction check) and the broader lipgloss-v2 UI ideas →
-[[explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements]].
+[explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements](6feeygw02vzb-explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements.md).

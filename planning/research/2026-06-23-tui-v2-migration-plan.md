@@ -6,9 +6,9 @@ tags: [tui, ux, perf, bubbletea, lipgloss, migration, plan]
 
 # TUI → charm v2 migration + perf wins — sprint plan
 
-Greenlit from [[2026-06-23-lipgloss-v2-charm-ecosystem]]: move the TUI to charm
+Greenlit from [2026-06-23-lipgloss-v2-charm-ecosystem](2026-06-23-lipgloss-v2-charm-ecosystem.md): move the TUI to charm
 **v2** (bubbletea v2 + bubbles v2 + lipgloss v2) and harvest the perf + feature
-wins. Epic [[18-tui-bubble-tea-interactive-planning-browser]]. This is the
+wins. Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md). This is the
 *scoping* — the win taxonomy (what's free vs simpler-code vs needs-design), each
 mapped to a concrete tskflwctl need, plus the task breakdown. Governing rule
 (epic 20) still holds: the agent/pipeline machine contract is sacrosanct — the
@@ -59,7 +59,7 @@ the human/TTY face.
   unambiguous keybindings.
 
 ### D. Deferred / declined (recorded so they're not re-litigated)
-- **`wish`** (SSH-served TUI) → epic [[19-web-companion-apps-over-a-shared-core]].
+- **`wish`** (SSH-served TUI) → epic [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md).
 - `table`/`list` reskins of CLI output, `charmbracelet/log` → declined in the
   ecosystem doc.
 
@@ -89,7 +89,7 @@ contained; **glamour** v1.0.0 — confirm a v2-compatible release before the por
    keyboard: connect each to a need, propose build tasks (the bucket-C scoping).
 
 ## Cross-refs
-- Source decision: [[2026-06-23-lipgloss-v2-charm-ecosystem]] ·
-  [[2026-06-21-fang-evaluation-spike]].
-- Epics: [[18-tui-bubble-tea-interactive-planning-browser]] ·
-  [[20-cli-ux-and-ergonomics]] · [[19-web-companion-apps-over-a-shared-core]].
+- Source decision: [2026-06-23-lipgloss-v2-charm-ecosystem](2026-06-23-lipgloss-v2-charm-ecosystem.md) ·
+  [2026-06-21-fang-evaluation-spike](2026-06-21-fang-evaluation-spike.md).
+- Epics: [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md) ·
+  [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md) · [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md).

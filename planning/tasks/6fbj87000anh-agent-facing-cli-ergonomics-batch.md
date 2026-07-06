@@ -18,8 +18,8 @@ id: 6fbj87000anh
 > ⚠️ **Externally proposed — filed 2026-06-12** from an agent dogfooding
 > session (filing ~15 review tasks through `tskflwctl`). These are the
 > friction points that actually bit, in rough impact order. Complements
-> [[global-dry-run-for-mutating-commands]] and
-> [[json-and-output-contract-fidelity]].
+> [global-dry-run-for-mutating-commands](6fakbec03zrw-global-dry-run-for-mutating-commands.md) and
+> [json-and-output-contract-fidelity](6fbj8700122m-json-and-output-contract-fidelity.md).
 
 ## Objective
 
@@ -49,18 +49,18 @@ id: 6fbj87000anh
    says "arbitrary key=value" with no hint that tier/tags/epic are typed,
    validated, and coerced while other keys pass through raw. One paragraph
    in the long help (and the unknown-key warning tracked in
-   [[task-set-follow-ups-sentinels-unknown-keys-canonical-field-table]])
+   [task-set-follow-ups-sentinels-unknown-keys-canonical-field-table](6fbj87001d81-task-set-follow-ups-sentinels-unknown-keys-canonical-field-table.md))
    makes the contract legible to agents.
 6. **`task new --start` (create-and-start shortcut).** *Added 2026-06-17 from
    the same dogfooding feedback that filed
-   [[audit-finding-level-operations-query-write-lint-sync]].* `task new` has
+   [audit-finding-level-operations-query-write-lint-sync](6fd5r5c03v5y-audit-finding-level-operations-query-write-lint-sync.md).* `task new` has
    `--next` (→ next-up) but no way to land straight in in-progress, so an
    agent that knows it's working the task immediately pays a `task new` +
    `task start` round-trip. Add `--start` (mirrors `--next`; mutually
    exclusive with it) that scaffolds directly into `in-progress`. One
    `domain.Status` switch in `NewTask` (`service.go` already branches `Next`).
    Minor caveat: mildly tensions with the draft readiness-gate idea
-   ([[task-readiness-state-draft-vs-finalized-in-frontmatter]]) — a `--start`
+   ([task-readiness-state-draft-vs-finalized-in-frontmatter](6fbj87001m03-task-readiness-state-draft-vs-finalized-in-frontmatter.md)) — a `--start`
    that skips a future "draft can't be started" gate — but that gate is
    undecided and this is the autonomous-agent path, so it's additive for now.
 
@@ -84,7 +84,7 @@ precise ("160 > 150").
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `cmd/tskflwctl/main.go`, `internal/cli/`, `internal/cli/render/`,
   `README.md`.
 ## Progress (2026-06-12)
@@ -140,7 +140,7 @@ now done.
 
 ## Note (2026-06-12)
 
-A draft task ([[task-edit-opens-editor-on-the-body]]) proposes the *human*
+A draft task ([task-edit-opens-editor-on-the-body](6fbj87000pys-task-edit-opens-editor-on-the-body.md)) proposes the *human*
 face of the body-editing gap this batch owns (items 2–3: --body-file, body
 replace/append). Planning needs to pick one owner before either starts —
 this batch's framing takes precedence; the draft defers here.

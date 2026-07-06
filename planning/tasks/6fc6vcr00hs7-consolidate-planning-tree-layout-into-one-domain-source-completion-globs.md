@@ -19,7 +19,7 @@ id: 6fc6vcr00hs7
 ## Objective
 
 Finish the layout-consolidation started in
-[[put-storage-layout-knowledge-back-behind-the-port]]. That work made
+[put-storage-layout-knowledge-back-behind-the-port](6fbj87001q7p-put-storage-layout-knowledge-back-behind-the-port.md). That work made
 `store.WatchPaths()` the canonical dir set and had `config.Init` derive its dirs
 from `domain.AllStatuses()`/`AllAuditBuckets()`. But `cli/completion.go` is still
 a third place that encodes the tree shape — it globs `tasks/<status>`,
@@ -49,7 +49,7 @@ subdir enumeration down into `domain`, where all three consumers can share it.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
-- Completes the layout thread from [[put-storage-layout-knowledge-back-behind-the-port]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
+- Completes the layout thread from [put-storage-layout-knowledge-back-behind-the-port](6fbj87001q7p-put-storage-layout-knowledge-back-behind-the-port.md)
 - Touches `internal/domain/`, `internal/cli/completion.go`,
   `internal/config/config.go`, `internal/store/fsstore.go`

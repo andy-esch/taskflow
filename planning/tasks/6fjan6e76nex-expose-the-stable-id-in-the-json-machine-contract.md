@@ -42,10 +42,10 @@ decoupled from the storage flatten.
 
 - Retiring the `status == directory` invariant in CLAUDE.md / ARCHITECTURE /
   README — stays coupled to the flatten (the other half of
-  [[machine-contract-and-docs-for-id-flat-schema-version-bump]]).
+  [machine-contract-and-docs-for-id-flat-schema-version-bump](6fhnydm01hdg-machine-contract-and-docs-for-id-flat-schema-version-bump.md)).
 - Epics — already expose `id` (their NN-slug identity); no short-id there.
 
 ## Related
 
-- Epic [[24-data-model-evolution-stable-key-storage-read-model-content-occ]]
-- ADR [[0003-stable-key-id-addressed-storage]]
+- Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
+- ADR [0003-stable-key-id-addressed-storage](../adrs/0003-stable-key-id-addressed-storage.md)

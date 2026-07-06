@@ -16,7 +16,7 @@ id: 6fbj8700133t
 # Reject invalid list filters and epic statuses
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([[2026-06-12-critical-code-review-multi-lens]], findings H5/M9). For the
+> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), findings H5/M9). For the
 > stated agent audience routing on exit codes, silent-empty-on-typo is
 > actively dangerous: a misspelled status is indistinguishable from an empty
 > bucket.
@@ -47,7 +47,7 @@ id: 6fbj8700133t
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `internal/cli/task.go`, `internal/cli/epic.go`,
   `internal/core/service.go`, `internal/domain/`.
 ## Progress (2026-06-12)

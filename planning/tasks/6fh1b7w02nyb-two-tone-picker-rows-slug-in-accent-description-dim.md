@@ -12,7 +12,7 @@ created: "2026-06-29"
 id: 6fh1b7w02nyb
 ---
 ## Objective
-Render interactive-picker rows two-tone: the **slug in the theme accent**, the **description dimmed** (the "slug one color / description another" idea; two-line optional). Deferred from [[theme-discovery-commands-glamour-polish-and-a-second-theme]] (T6).
+Render interactive-picker rows two-tone: the **slug in the theme accent**, the **description dimmed** (the "slug one color / description another" idea; two-line optional). Deferred from [theme-discovery-commands-glamour-polish-and-a-second-theme](6fgq1n00235z-theme-discovery-commands-glamour-polish-and-a-second-theme.md) (T6).
 
 ## Why it was deferred (the fragility)
 `prompt.Option` is `{Label, Value string}` and `SelectOne` hands the label to `huh.Select`. huh re-styles **every row** through its own `Option` / `SelectedOption` styles (`Foreground(accent).Bold` on the current row) — applied OVER the whole label. So embedding per-part ANSI inside the label gets overridden (especially on the selected row, which huh paints entirely in the accent), and huh's width/truncation is ANSI-sensitive. Reliable two-tone needs care + visual iteration, not a blind change.
@@ -24,4 +24,4 @@ Render interactive-picker rows two-tone: the **slug in the theme accent**, the *
 - Pull the accent/dim from the active theme (the prompter already holds `design.Theme`).
 
 ## Reference
-Deferred picker polish from T6; the picker accent caret/selection already lands via [[route-the-interactive-picker-theme-through-the-palette]] (T4). Update the callers that build picker labels (grep `prompt.Option` / `SelectOne`).
+Deferred picker polish from T6; the picker accent caret/selection already lands via [route-the-interactive-picker-theme-through-the-palette](6fgq1n000pca-route-the-interactive-picker-theme-through-the-palette.md) (T4). Update the callers that build picker labels (grep `prompt.Option` / `SelectOne`).

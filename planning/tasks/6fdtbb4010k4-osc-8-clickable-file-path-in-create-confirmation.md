@@ -50,4 +50,4 @@ byte-identical plain text. gh does this.
 
 ## Related
 
-- Epic [[20-cli-ux-and-ergonomics]]
+- Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)

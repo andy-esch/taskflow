@@ -16,7 +16,7 @@ id: 6fbj8700021f
 # Core and render test depth
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([[2026-06-12-critical-code-review-multi-lens]], finding M18 + testing
+> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), finding M18 + testing
 > lows). The seams already exist — this is cheap coverage of the
 > architectural center, not new infrastructure.
 
@@ -41,7 +41,7 @@ store 80.2%, tui 79.3%, domain 85.9%.
    `init → epic new → task new → start → complete → lint`, assert codes.
 4. **Behavioral edge tests:** CRLF round-trip with value assertions (fuzz
    seeds only assert no-panic today — pairs with
-   [[store-write-path-hardening]]); a unicode slug/description case.
+   [store-write-path-hardening](6fbj87000m0a-store-write-path-hardening.md)); a unicode slug/description case.
 5. **Shared fixture builder:** four hand-rolled "build a planning tree"
    helpers across packages (`store/fsstore_test.go`, `cli/task_test.go`,
    `store/epicstore_test.go`, `core/setfields_coercion_test.go`) — extract
@@ -59,7 +59,7 @@ store 80.2%, tui 79.3%, domain 85.9%.
 
 ## Related
 
-- Epic [[17-pm-go-cli]]
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md)
 - Touches `internal/core/`, `internal/cli/render/`, `cmd/tskflwctl/`,
   test files across packages.
 ## Progress (2026-06-12)
@@ -71,7 +71,7 @@ pins each JSON schema) plus human-output assertions; golden *files* were
 judged unnecessary given the decode-assert approach, revisit if desired.
 Built-binary smoke suite added (`cmd/tskflwctl/main_test.go`): real process
 exit codes 0/10/11, stderr `error:` contract, version stamp. CRLF behavioral
-test landed with [[store-write-path-hardening]].
+test landed with [store-write-path-hardening](6fbj87000m0a-store-write-path-hardening.md).
 
 ## Progress (2026-06-14)
 

@@ -16,4 +16,4 @@ id: 6ffr4wc01d26
 Optional: named epic lifecycle verbs (`epic retire`/`deprecate`/`activate`) as sugar over `epic move <status>`, mirroring the task verbs (start/complete/...). 
 
 ## Why low priority
-`epic move <id> <status>` + the TUI `m` action menu already cover status movement fully. Named verbs are pure ergonomics over an existing path. Deferred from [[epic-mutation-add-epic-set-and-epic-edit]]. Pick up only if the shortcut is wanted.
+`epic move <id> <status>` + the TUI `m` action menu already cover status movement fully. Named verbs are pure ergonomics over an existing path. Deferred from [epic-mutation-add-epic-set-and-epic-edit](6ffr4wc021q2-epic-mutation-add-epic-set-and-epic-edit.md). Pick up only if the shortcut is wanted.

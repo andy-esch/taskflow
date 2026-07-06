@@ -225,9 +225,9 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	problems = append(problems, ep2...)
 	valid := make(map[string]bool, len(epics))
 	for _, e := range epics {
-		valid[e.ID] = true
+		valid[domain.EpicRefKey(e.ID)] = true
 	}
-	validEpic := func(id string) bool { return valid[id] }
+	validEpic := func(id string) bool { return valid[domain.EpicRefKey(id)] }
 
 	var results []LintResult
 	for _, t := range tasks {
