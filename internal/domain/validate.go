@@ -83,10 +83,8 @@ func ValidateDate(value string) error {
 	return nil
 }
 
-var dateFields = map[string]bool{
-	"created": true, "updated_at": true, "started_at": true, "revisit_at": true,
-	"completed_at": true, "deprecated_at": true, "deferred_at": true, "audited": true,
-}
+// dateFields (the YAML "date" typed keys) is derived from the taskFields registry
+// in fields.go, alongside the other per-type sets.
 
 // IsRevisitDue reports whether a deferred task's revisit ("snooze until") date
 // has arrived: revisitAt is on or before now's calendar day. An empty or invalid

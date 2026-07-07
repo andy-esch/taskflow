@@ -2,7 +2,7 @@
 schema: 1
 id: 6fjw1d2jm6e9
 status: ready-to-start
-epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
+epic: 28-first-class-entities-new-planning-nouns
 description: 'Explore routines as a first-class entity tracking the routine<->audit lineage (audit gets a routine: field; audit list --routine). Complements Claude Code''s scheduler; maybe its own epic.'
 effort: Unknown
 tier: 3
@@ -10,6 +10,7 @@ priority: low
 autonomy_level: 3
 tags: [core, design]
 created: "2026-07-04"
+updated_at: "2026-07-07"
 ---
 
 # Spike: routines as a first-class entity + routine↔audit lineage
