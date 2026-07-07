@@ -41,7 +41,7 @@ Transform the current `pm` script concept into a robust, dockerized application 
 
 ### Phase 0: Foundation (Monorepo & Standards)
 - `taskflow-00-monorepo-structure.md` - Pattern C (Hybrid Standard), single Go/Python modules.
-- `taskflow-00-schema-contracts.md` - ✅ [Implemented](./contracts/README.md). Protobuf as source of truth.
+- `taskflow-00-schema-contracts.md` - ✅ Implemented (`./contracts/README.md` — dead link, disused). Protobuf as source of truth.
 - `taskflow-00-documentation-standards.md` - Definitions (Project vs Epic), Style Guide.
 - `taskflow-00-naming-and-terminology.md` - "Semantic Engine", "Fast Path".
 - `taskflow-00-cross-repo-context.md` - Config schema for split repositories.

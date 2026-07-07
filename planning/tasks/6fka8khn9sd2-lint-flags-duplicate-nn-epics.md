@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fka8khn9sd2
-status: ready-to-start
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: Two epics sharing a leading NN co-mingle tasks in the rollup and canonicalEpic silently picks the first; lint should flag duplicate NN keys (an invalid state nothing currently enforces).
 effort: Unknown
@@ -10,7 +10,9 @@ priority: low
 autonomy_level: 3
 tags: [core, lint, scheme-2-followup]
 created: "2026-07-06"
-updated_at: "2026-07-06"
+updated_at: "2026-07-07"
+started_at: "2026-07-06"
+completed_at: "2026-07-07"
 ---
 
 # Lint flags duplicate-NN epics

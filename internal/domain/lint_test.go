@@ -225,3 +225,21 @@ func TestLintTask_DescriptionLengthInRunes(t *testing.T) {
 		t.Errorf("a %d-rune description (over the cap) should be flagged too long", MaxDescriptionLen+1)
 	}
 }
+
+// TestDuplicateEpicNNIssues: epics sharing a leading NN are each flagged (naming the
+// colliding peer); a unique NN is left alone.
+func TestDuplicateEpicNNIssues(t *testing.T) {
+	got := DuplicateEpicNNIssues([]string{"01-billing", "01-invoicing", "02-solo"})
+	if len(got) != 2 {
+		t.Fatalf("both epics sharing NN 01 should be flagged, got %d: %+v", len(got), got)
+	}
+	if _, ok := got["02-solo"]; ok {
+		t.Errorf("a unique NN key must not be flagged: %q", got["02-solo"].Message)
+	}
+	if !strings.Contains(got["01-billing"].Message, "01-invoicing") {
+		t.Errorf("the issue should name the colliding peer, got %q", got["01-billing"].Message)
+	}
+	if !strings.Contains(got["01-invoicing"].Message, "01-billing") {
+		t.Errorf("the issue should name the colliding peer, got %q", got["01-invoicing"].Message)
+	}
+}

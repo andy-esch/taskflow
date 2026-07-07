@@ -252,9 +252,20 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	// construction, and duplicate SLUGS are now legal — resolved by id, ambiguous by slug.)
 	// Epics get linted too: the same closed status vocabulary plus priority and a
 	// present description (a deprecated epic is spared the field nags — see
-	// domain.LintEpic). The epic id slots into Slug as the result's label.
+	// domain.LintEpic), plus a cross-epic duplicate-NN-key guard (two epics on one NN
+	// co-mingle their tasks and resolve ambiguously). The epic id slots into Slug as
+	// the result's label.
+	epicIDs := make([]string, len(epics))
+	for i, e := range epics {
+		epicIDs[i] = e.ID
+	}
+	dupNN := domain.DuplicateEpicNNIssues(epicIDs)
 	for _, e := range epics {
-		if issues := domain.LintEpic(e); len(issues) > 0 {
+		issues := domain.LintEpic(e)
+		if iss, ok := dupNN[e.ID]; ok {
+			issues = append(issues, iss)
+		}
+		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: e.ID, Issues: issues})
 		}
 	}

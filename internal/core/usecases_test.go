@@ -352,3 +352,32 @@ func TestService_NewEpic(t *testing.T) {
 		t.Errorf("created epic wrong: %+v", e)
 	}
 }
+
+// TestService_Lint_FlagsDuplicateEpicNN: two epics sharing a leading NN are both flagged by
+// default lint (an invalid state — their tasks co-mingle and epic refs resolve ambiguously);
+// a unique-NN epic is left clean.
+func TestService_Lint_FlagsDuplicateEpicNN(t *testing.T) {
+	svc := NewService(&fakeStore{
+		epics: []domain.Epic{
+			{ID: "01-billing", Status: "active", Priority: "medium", Description: "d"},
+			{ID: "01-invoicing", Status: "active", Priority: "medium", Description: "d"},
+			{ID: "02-solo", Status: "active", Priority: "medium", Description: "d"},
+		},
+	})
+	results, _, err := svc.Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, r := range results {
+		for _, i := range r.Issues {
+			got[r.Slug] += i.Field + ": " + i.Message + "; "
+		}
+	}
+	if !strings.Contains(got["01-billing"], "duplicate epic NN") || !strings.Contains(got["01-invoicing"], "duplicate epic NN") {
+		t.Errorf("both NN-01 epics should be flagged, got %q / %q", got["01-billing"], got["01-invoicing"])
+	}
+	if strings.Contains(got["02-solo"], "duplicate") {
+		t.Errorf("a unique-NN epic must not be flagged: %q", got["02-solo"])
+	}
+}

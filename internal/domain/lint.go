@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -28,6 +29,42 @@ func EpicNameIssue(id string) []Issue {
 type Issue struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
+}
+
+// DuplicateEpicNNIssues flags epics that share a leading NN key. Two epics on the same key
+// (e.g. `01-a`, `01-b`) co-mingle their tasks in the rollup and canonicalEpic silently
+// resolves an `epic:` ref to the first — an invalid state nothing else enforces. Returns one
+// issue per colliding epic, keyed by epic id (nothing for a unique key). Fail-open, like the
+// other epic checks: the epics still list and resolve, the clash is just called out for a
+// renumber. It's cross-epic (needs the whole set), so it lives here, not in per-epic LintEpic.
+func DuplicateEpicNNIssues(epicIDs []string) map[string]Issue {
+	byKey := make(map[string][]string, len(epicIDs))
+	for _, id := range epicIDs {
+		key := EpicRefKey(id)
+		byKey[key] = append(byKey[key], id)
+	}
+	out := make(map[string]Issue)
+	for key, ids := range byKey {
+		if len(ids) < 2 {
+			continue
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			peers := make([]string, 0, len(ids)-1)
+			for _, other := range ids {
+				if other != id {
+					peers = append(peers, other)
+				}
+			}
+			out[id] = Issue{
+				Field: "filename",
+				Message: fmt.Sprintf(
+					"duplicate epic NN key %q (shared with %s) — tasks co-mingle in the rollup and epic refs resolve to the first; give each epic a unique number",
+					key, strings.Join(peers, ", ")),
+			}
+		}
+	}
+	return out
 }
 
 // LintTask returns the frontmatter issues for an (active) task. validEpic

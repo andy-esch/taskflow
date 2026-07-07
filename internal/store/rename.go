@@ -5,13 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
-
-// mdLinkRe matches a markdown link `[display](target)` — the Scheme-2 body-link form.
-var mdLinkRe = regexp.MustCompile(`\[([^\]]*)\]\(([^)]+)\)`)
 
 // firstH1Re matches the first ATX H1 line (`# title`) in a body.
 var firstH1Re = regexp.MustCompile(`(?m)^# .*$`)
@@ -41,6 +39,17 @@ func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, e
 	}
 	oldName, newName := id+"-"+oldSlug+".md", id+"-"+newSlug+".md"
 	newPath := filepath.Join(filepath.Dir(oldPath), newName)
+
+	// Refuse to rename onto an existing file: the write loop below would silently
+	// clobber it. newPath shares the id, so a collision means a duplicate-id sibling
+	// already exists — fail loud on that corrupt state rather than destroy the file.
+	if newPath != oldPath {
+		if _, err := os.Stat(newPath); err == nil {
+			return domain.Task{}, 0, fmt.Errorf("%w: target filename already exists: %s", domain.ErrConflict, newName)
+		} else if !os.IsNotExist(err) {
+			return domain.Task{}, 0, fmt.Errorf("stat target %s: %w", newPath, err)
+		}
+	}
 
 	// Build every edit in one tree walk: the renamed file gets its H1 rewritten (and any
 	// self-links repointed); every other file gets its inbound links repointed.
@@ -116,10 +125,11 @@ func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, e
 	return t, cascade, nil
 }
 
-// repointLinks rewrites every markdown link that RESOLVES to oldPath (relative to
-// sourceDir — the file the link lives in) so its filename becomes newName, freshening a
-// link whose display text was the old slug or full stem. Matching by resolved path, not
-// bare basename, means a same-named file in a different directory is left untouched. A
+// repointLinks rewrites every markdown link — inline or reference-style — that RESOLVES to
+// oldPath (relative to sourceDir — the file the link lives in) so its filename becomes
+// newName, freshening an inline link whose display text was the old slug or full stem.
+// Matching by resolved path, not bare basename, means a same-named file in a different
+// directory is left untouched; links inside fenced code blocks (examples) are skipped. A
 // trailing #fragment or ?query is split off before resolving and re-appended. Returns the
 // new content and the count of links repointed; a no-op (0) when the name is unchanged.
 func repointLinks(content []byte, sourceDir, oldPath, oldName, newName, oldSlug, newSlug string) ([]byte, int) {
@@ -127,27 +137,44 @@ func repointLinks(content []byte, sourceDir, oldPath, oldName, newName, oldSlug,
 		return content, 0
 	}
 	oldStem, newStem := strings.TrimSuffix(oldName, ".md"), strings.TrimSuffix(newName, ".md")
+	// Collect non-overlapping (target, and optionally display) edits, then splice once.
+	type edit struct {
+		start, end int
+		repl       string
+	}
+	var edits []edit
 	n := 0
-	out := mdLinkRe.ReplaceAllFunc(content, func(m []byte) []byte {
-		sub := mdLinkRe.FindSubmatch(m)
-		display, target := string(sub[1]), string(sub[2])
-		linkPath, suffix := target, ""
+	for _, r := range scanLinks(content) {
+		linkPath, suffix := r.target, ""
 		if i := strings.IndexAny(linkPath, "#?"); i >= 0 {
 			linkPath, suffix = linkPath[:i], linkPath[i:]
 		}
 		if linkPath == "" || filepath.Clean(filepath.Join(sourceDir, filepath.FromSlash(linkPath))) != oldPath {
-			return m
+			continue
 		}
 		n++
-		switch display {
-		case oldSlug:
-			display = newSlug
-		case oldStem:
-			display = newStem
+		edits = append(edits, edit{r.tStart, r.tEnd, linkPath[:len(linkPath)-len(oldName)] + newName + suffix})
+		if r.inline { // a reference-style [label]: key is not display text — never rewrite it
+			switch r.display {
+			case oldSlug:
+				edits = append(edits, edit{r.dStart, r.dEnd, newSlug})
+			case oldStem:
+				edits = append(edits, edit{r.dStart, r.dEnd, newStem})
+			}
 		}
-		return []byte("[" + display + "](" + linkPath[:len(linkPath)-len(oldName)] + newName + suffix + ")")
-	})
-	return out, n
+	}
+	if n == 0 {
+		return content, 0
+	}
+	sort.Slice(edits, func(i, j int) bool { return edits[i].start < edits[j].start })
+	out := make([]byte, 0, len(content))
+	last := 0
+	for _, e := range edits {
+		out = append(out, content[last:e.start]...)
+		out = append(out, e.repl...)
+		last = e.end
+	}
+	return append(out, content[last:]...), n
 }
 
 // replaceFirstH1 rewrites the FIRST `# …` line of content to `# newTitle` (the re-title).

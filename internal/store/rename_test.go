@@ -128,5 +128,64 @@ func TestRenameTask_EmptyTitleRejected(t *testing.T) {
 	}
 }
 
+// TestRenameTask_TargetCollisionRefused: renaming onto a filename that already exists must
+// fail loud (ErrConflict) rather than silently clobber it — the write loop would otherwise
+// overwrite the pre-existing same-id file. Nothing on disk changes.
+func TestRenameTask_TargetCollisionRefused(t *testing.T) {
+	root, aPath, _ := renameRepo(t)
+	// A stray file occupying task A's would-be target name (same id, different slug).
+	takenPath := filepath.Join(root, "tasks", "6fjangd7kva1-taken.md")
+	if err := os.WriteFile(takenPath, []byte("# do not clobber\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	aBefore, _ := os.ReadFile(aPath)
+
+	if _, _, err := NewFS(root).RenameTask("old", "Taken", false); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("rename onto an existing target must be ErrConflict, got %v", err)
+	}
+	// The source is untouched and the pre-existing target is intact.
+	if a, _ := os.ReadFile(aPath); !equal(a, aBefore) {
+		t.Error("source file must be unchanged on a refused rename")
+	}
+	if got, _ := os.ReadFile(takenPath); !contains(got, "do not clobber") {
+		t.Error("pre-existing target file must not be overwritten")
+	}
+}
+
+// TestRenameTask_RefStyleAndFencedExamples: the cascade repoints a reference-style link to
+// the renamed file but leaves an inline example link inside a fenced code block untouched.
+func TestRenameTask_RefStyleAndFencedExamples(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("epics/01-e.md", "---\nstatus: active\npriority: high\ndescription: e\n---\n# E\n")
+	write("tasks/6fjangd7kva1-old.md", "---\nid: 6fjangd7kva1\nstatus: ready-to-start\nepic: 01-e\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\n---\n# Old Title\n\nbody.\n")
+	bPath := filepath.Join(root, "tasks", "6fjangd7kvb2-b.md")
+	write("tasks/6fjangd7kvb2-b.md", "---\nid: 6fjangd7kvb2\nstatus: ready-to-start\nepic: 01-e\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\n---\n# B\n\n"+
+		"Ref: see the [old task][a].\n\n[a]: 6fjangd7kva1-old.md\n\nExample:\n\n```\n[old](6fjangd7kva1-old.md)\n```\n")
+
+	_, cascade, err := NewFS(root).RenameTask("old", "Renamed", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cascade != 1 {
+		t.Errorf("only the reference-style link should cascade (fenced example skipped), got %d", cascade)
+	}
+	b, _ := os.ReadFile(bPath)
+	if !contains(b, "[a]: 6fjangd7kva1-renamed.md") {
+		t.Errorf("reference-style link target not repointed:\n%s", b)
+	}
+	if !contains(b, "[old](6fjangd7kva1-old.md)") {
+		t.Errorf("an inline example inside a code fence must be left untouched:\n%s", b)
+	}
+}
+
 func contains(b []byte, sub string) bool { return strings.Contains(string(b), sub) }
 func equal(a, b []byte) bool             { return bytes.Equal(a, b) }

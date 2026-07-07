@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fka8khkb3jv
-status: ready-to-start
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: 'repointLinks/DanglingLinks use a naive inline-link regex — they miss reference-style [ref]: x.md links and false-positive on links inside fenced code blocks. Make both markdown-aware.'
 effort: Unknown
@@ -11,6 +11,8 @@ autonomy_level: 3
 tags: [core, cli, scheme-2-followup]
 created: "2026-07-06"
 updated_at: "2026-07-06"
+started_at: "2026-07-06"
+completed_at: "2026-07-06"
 ---
 
 # Make rename cascade + dangler lint markdown-structure-aware
