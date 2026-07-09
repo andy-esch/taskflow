@@ -76,6 +76,25 @@ func TestAuditAuthoringFieldsMatchStruct(t *testing.T) {
 	}
 }
 
+// TestTaskFieldsMatchStruct is the no-drift guard fields.go asks for: every
+// modelled task frontmatter field (a domain.Task yaml tag) except the store-managed
+// `id` must be a known task field, so adding a struct field forces a taskFields
+// registry row. The reverse deliberately does NOT hold — many known fields
+// (completed_at, related_tasks, projects, …) are preserved but not modelled on the
+// struct, so this only checks struct ⊆ registry.
+func TestTaskFieldsMatchStruct(t *testing.T) {
+	rt := reflect.TypeOf(Task{})
+	for i := range rt.NumField() {
+		name, _, _ := strings.Cut(rt.Field(i).Tag.Get("yaml"), ",")
+		if name == "" || name == "-" || name == "id" {
+			continue // derived fields and the store-managed id aren't settable known fields
+		}
+		if !KnownTaskField(name) {
+			t.Errorf("Task struct frontmatter field %q is not in the taskFields registry", name)
+		}
+	}
+}
+
 func TestFieldType(t *testing.T) {
 	for name, want := range map[string]string{
 		"tier": "int", "autonomy_level": "int",
