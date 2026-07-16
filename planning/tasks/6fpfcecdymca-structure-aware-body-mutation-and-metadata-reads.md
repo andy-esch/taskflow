@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fpfcecdymca
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: 'Structure-aware body mutation + metadata reads (task log/ac, task path/info, show --section): the read-only cluster shipped'
 effort: Unknown
@@ -12,6 +12,7 @@ tags: [cli, agents, ux, dx]
 created: "2026-07-15"
 started_at: "2026-07-15"
 updated_at: "2026-07-16"
+completed_at: "2026-07-16"
 ---
 > ⚠️ **Externally proposed — filed 2026-07-15** from a second agent dogfooding
 > session — the sequel to
@@ -70,10 +71,10 @@ so the next agent finds them without dogfooding-by-discovery.
 
 ## Acceptance criteria
 
-- [ ] `task log <slug> --body|--body-file -` appends a dated bullet under
-      `## Progress Log`, creating the section only when absent — never a
-      duplicate header. Atomic; `--json` returns the task envelope; `--dry-run`
-      previews.
+- [x] `task log` (item 1) **spun off** to its own task —
+      [task-log-append-a-dated-progress-log-entry](6fpnn6zk157b-task-log-append-a-dated-progress-log-entry.md)
+      — because it is blocked on the canonical progress-section decision, not just
+      unstarted. Tracked and designed there rather than holding this batch open.
 - [x] `task ac <slug> --list` numbers the criteria; `--check <n>`/`--uncheck <n>`
       flip the box atomically, preserving surrounding body; `--json` supported.
 - [x] `task path <slug>` prints the absolute file path and nothing else.
@@ -277,3 +278,18 @@ guard so misconfiguration is loud, not a false positive:
 Tests: domain (malformed variants · no-false-positives · multiple sections · fence-aware
 · out-of-section), store (`ListTasksWithBodies` carries bodies), core (Lint flags it via
 the body scan), CLI (`lint --json` surfaces it end-to-end). Full suite + lint green.
+
+## Progress (2026-07-16) — batch complete; `task log` spun off
+
+Closing this batch. Three of the four items shipped and are on branch
+`feat/various-read-modalities` (PR #106): `task ac` (item 2), `task path`/`info`
+(item 3), and section reads (item 4) — plus the epic/audit parity and the
+acceptance-criteria lint guard that grew out of review.
+
+Item 1 (`task log`) is **spun off** to
+[task-log-append-a-dated-progress-log-entry](6fpnn6zk157b-task-log-append-a-dated-progress-log-entry.md):
+it's blocked on the canonical progress-section-shape decision (single `## Progress
+Log` + dated bullets vs this repo's per-entry `## Progress (date)` headings), so it
+gets its own home with the decision + design captured, rather than holding this batch
+open. This batch's responsibility — the structure-aware read/write surface — is
+discharged.
