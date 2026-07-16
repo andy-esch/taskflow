@@ -95,7 +95,14 @@ import (
 // 1.26: retired the task `misfiled`/`declared_status` fields and the `status` summary
 // `misfiled` count — the flat, id-led layout (ADR-0003 §4) removes the directory mirror
 // entirely, so a task/audit can never be misfiled (status/bucket live only in frontmatter).
-const SchemaVersion = "1.26"
+// 1.27: the `task_info` envelope (`task info` — token-cheap metadata read: path +
+// triage fields + acceptance-criteria tally `ac:{checked,total}`, no body) and the
+// `path` envelope (`task path --json` — the resolved absolute file path) added.
+// 1.28: the `audit_info` envelope (`audit info` — token-cheap audit metadata: path +
+// bucket + finding disposition tally `findings:{total,open,in_progress,done,dropped}`,
+// no body; the audit counterpart to `task_info`) added. The `path` envelope now also
+// backs `epic path` / `audit path` (unchanged shape).
+const SchemaVersion = "1.28"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

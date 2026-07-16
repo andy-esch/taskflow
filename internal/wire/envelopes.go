@@ -82,6 +82,44 @@ func ToTaskShowEnvelope(t domain.Task, body string) TaskShowEnvelope {
 	return TaskShowEnvelope{SchemaVersion: SchemaVersion, Task: ToTaskJSON(t), Body: body}
 }
 
+// TaskInfoEnvelope wraps `task info --json` — the token-cheap task metadata read
+// (file path + triage fields + acceptance tally, no body).
+type TaskInfoEnvelope struct {
+	SchemaVersion string       `json:"schema_version"`
+	TaskInfo      TaskInfoJSON `json:"task_info"`
+}
+
+// ToTaskInfoEnvelope builds the `task info --json` envelope value.
+func ToTaskInfoEnvelope(t domain.Task, ac domain.ACCount, path string) TaskInfoEnvelope {
+	return TaskInfoEnvelope{SchemaVersion: SchemaVersion, TaskInfo: ToTaskInfoJSON(t, ac, path)}
+}
+
+// PathEnvelope wraps `task path --json` — just the resolved absolute file path
+// (the plain form prints the bare path for piping, e.g. `$EDITOR "$(… task path
+// x)"`; --json wraps it so the contract's "schema_version everywhere" holds).
+type PathEnvelope struct {
+	SchemaVersion string `json:"schema_version"`
+	Path          string `json:"path" jsonschema:"description=absolute path to the entity's markdown file"`
+}
+
+// ToPathEnvelope builds the `<entity> path --json` envelope value (task/epic/audit
+// path all emit this — just the resolved absolute file path).
+func ToPathEnvelope(path string) PathEnvelope {
+	return PathEnvelope{SchemaVersion: SchemaVersion, Path: path}
+}
+
+// AuditInfoEnvelope wraps `audit info --json` — the token-cheap audit metadata read
+// (path + bucket + finding tally, no body), the audit counterpart to TaskInfoEnvelope.
+type AuditInfoEnvelope struct {
+	SchemaVersion string        `json:"schema_version"`
+	AuditInfo     AuditInfoJSON `json:"audit_info"`
+}
+
+// ToAuditInfoEnvelope builds the `audit info --json` envelope value.
+func ToAuditInfoEnvelope(a domain.Audit, path string) AuditInfoEnvelope {
+	return AuditInfoEnvelope{SchemaVersion: SchemaVersion, AuditInfo: ToAuditInfoJSON(a, path)}
+}
+
 // TaskMutationEnvelope is `task set` / `task append` / `task set --body` under
 // --json: the reloaded task, dry_run, and (for the body commands) the resulting
 // body. Separate from TaskShowEnvelope so the mutation-only dry_run stays off the
@@ -537,6 +575,8 @@ type jsonEnvelopes struct {
 	Tasks         TasksEnvelope         `json:"tasks"`
 	Board         BoardEnvelope         `json:"board"`
 	TaskShow      TaskShowEnvelope      `json:"task_show"`
+	TaskInfo      TaskInfoEnvelope      `json:"task_info"`
+	Path          PathEnvelope          `json:"path"`
 	TaskMutation  TaskMutationEnvelope  `json:"task_mutation"`
 	EpicMutation  EpicMutationEnvelope  `json:"epic_mutation"`
 	Moves         MovesEnvelope         `json:"moves"`
@@ -547,6 +587,7 @@ type jsonEnvelopes struct {
 	EpicShow      EpicShowEnvelope      `json:"epic_show"`
 	Audits        AuditsEnvelope        `json:"audits"`
 	AuditShow     AuditShowEnvelope     `json:"audit_show"`
+	AuditInfo     AuditInfoEnvelope     `json:"audit_info"`
 	AuditMutation AuditMutationEnvelope `json:"audit_mutation"`
 	Findings      FindingsEnvelope      `json:"findings"`
 	Fix           FixEnvelope           `json:"fix"`

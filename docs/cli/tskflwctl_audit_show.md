@@ -10,14 +10,17 @@ tskflwctl audit show <audit> [flags]
 
 ```
   tskflwctl audit show 2026-06-20-api-gateway
-  tskflwctl audit show   # pick from a list
+  tskflwctl audit show 2026-06-20-api-gateway --section findings
+  tskflwctl audit show 2026-06-20-api-gateway --frontmatter-only
 ```
 
 ### Options
 
 ```
-  -h, --help   help for show
-      --raw    print the raw markdown body (skip rendering)
+      --frontmatter-only   show only the metadata, skipping the body
+  -h, --help               help for show
+      --raw                print the raw markdown body (skip rendering)
+      --section string     show only the body section whose heading matches this name (e.g. acceptance, progress)
 ```
 
 ### Options inherited from parent commands

@@ -15,6 +15,10 @@ import (
 type TaskStore interface {
 	ListTasks() ([]domain.Task, []domain.FileProblem, error)
 	GetTask(slug string) (task domain.Task, body string, err error)
+	// ResolveTaskPath returns a task's file path from its slug/id WITHOUT parsing —
+	// so `task path` works even on a file whose frontmatter won't parse (the case
+	// where you most need the path, to open and repair it).
+	ResolveTaskPath(slug string) (string, error)
 	// Mutators take dryRun: true runs EVERY validation (resolve, parse-before-
 	// commit, collision/CAS checks) and returns the would-be result, but stops
 	// short of touching disk — so a dry-run that would fail fails identically.
@@ -49,6 +53,9 @@ type TaskStore interface {
 type EpicStore interface {
 	ListEpics() ([]domain.Epic, []domain.FileProblem, error)
 	GetEpic(id string) (epic domain.Epic, body string, err error)
+	// ResolveEpicPath returns an epic's file path from its id, parse-free (see
+	// ResolveTaskPath).
+	ResolveEpicPath(id string) (string, error)
 	CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (domain.Epic, error)
 	// MoveEpic surgically rewrites an epic's `status` frontmatter field (epic
 	// status is a field, not a directory, so the file stays put), stamping updated_at
@@ -88,6 +95,9 @@ type AuditStore interface {
 	// FileProblem, not fatal.
 	ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error)
 	GetAudit(slug string) (audit domain.Audit, body string, err error)
+	// ResolveAuditPath returns an audit's file path from its slug/id, parse-free
+	// (see ResolveTaskPath).
+	ResolveAuditPath(slug string) (string, error)
 	// GetAuditByPath reads one audit directly by its file path (bucket read from
 	// frontmatter, ADR-0003 §4) rather than re-resolving the slug. The finding/lint
 	// sweeps use this to read each audit ListAudits already located exactly once,

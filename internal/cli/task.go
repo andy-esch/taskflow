@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -59,6 +60,8 @@ func newTaskCmd(app *App) *cobra.Command {
 		newTaskNewCmd(app),
 		newTaskListCmd(app),
 		newTaskShowCmd(app),
+		newTaskInfoCmd(app),
+		newTaskPathCmd(app),
 		newTaskSetCmd(app),
 		newTaskEditCmd(app),
 		newTaskAppendCmd(app),
@@ -231,11 +234,15 @@ func completeStatusValues(*cobra.Command, []string, string) ([]string, cobra.She
 }
 
 func newTaskShowCmd(app *App) *cobra.Command {
-	var raw bool
+	var (
+		raw     bool
+		section string
+		fmOnly  bool
+	)
 	cmd := &cobra.Command{
 		Use:               "show <task>",
 		Short:             "Show a task's metadata and body",
-		Example:           "  tskflwctl task show add-retry-backoff\n  tskflwctl task show   # pick from a list",
+		Example:           "  tskflwctl task show add-retry-backoff\n  tskflwctl task show add-retry-backoff --section acceptance\n  tskflwctl task show add-retry-backoff --frontmatter-only",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: app.completeTaskSlugs,
@@ -248,16 +255,109 @@ func newTaskShowCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// --section / --frontmatter-only narrow the body an agent has to read:
+			// one named section, or none at all. Both narrow the SAME body the full
+			// view emits, so the task metadata (and the --json envelope shape) are
+			// unchanged — only Body shrinks.
+			body, err = narrowBody("task", slug, body, section, fmOnly)
+			if err != nil {
+				return err
+			}
 			if app.JSON {
 				return render.TaskShowJSON(app.Out, task, body)
 			}
 			return app.paged(func(w io.Writer) error {
+				if fmOnly { // metadata block only — skip the (empty) body render entirely
+					return render.TaskShowHuman(w, app.Style, task, "")
+				}
 				return render.TaskShowHuman(w, app.Style, task, render.RenderBody(app.Style, body, app.markdownStyle, raw))
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&raw, "raw", false, "print the raw markdown body (skip rendering)")
+	addBodyScopeFlags(cmd, &section, &fmOnly)
 	return cmd
+}
+
+// newTaskInfoCmd is the token-cheap metadata read: where the file lives plus the
+// triage fields and acceptance-criteria tally, WITHOUT the body `task show`
+// carries. `--json` is the machine path (`{path,status,epic,ac:{checked,total}}`);
+// the human face is a small aligned block.
+func newTaskInfoCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:               "info <task>",
+		Short:             "Show a task's metadata + file path + acceptance tally (no body)",
+		Example:           "  tskflwctl task info add-retry-backoff\n  tskflwctl task info add-retry-backoff --json",
+		Args:              cobra.MaximumNArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeTaskSlugs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			slug, err := app.resolveOne(args, "specify a task", "no tasks available", "Task", app.taskOptions)
+			if err != nil {
+				return err
+			}
+			task, body, err := app.Svc.ShowTask(slug)
+			if err != nil {
+				return err
+			}
+			ac := domain.CountAcceptanceCriteria(body)
+			path := absPath(task.Path)
+			if app.JSON {
+				return render.TaskInfoJSON(app.Out, task, ac, path)
+			}
+			render.TaskInfoHuman(app.Out, app.Style, task, ac, path)
+			return nil
+		},
+	}
+}
+
+// newTaskPathCmd prints just the absolute path to a task's file — the minimal,
+// pipe-friendly accessor (`$EDITOR "$(tskflwctl task path x)"`) that replaces
+// globbing `find` on the id-led `<id>-<slug>.md` filename. It resolves the path
+// WITHOUT parsing (Svc.TaskPath), so it still works on a file with broken
+// frontmatter — exactly when you need the path to go fix it. `--json` wraps it so
+// the "schema_version everywhere" contract holds; plain prints the bare path.
+func newTaskPathCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:               "path <task>",
+		Short:             "Print the absolute path to a task's file",
+		Example:           "  tskflwctl task path add-retry-backoff\n  $EDITOR \"$(tskflwctl task path add-retry-backoff)\"",
+		Args:              cobra.MaximumNArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeTaskSlugs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			slug, err := app.resolveOne(args, "specify a task", "no tasks available", "Task", app.taskOptions)
+			if err != nil {
+				return err
+			}
+			p, err := app.Svc.TaskPath(slug)
+			if err != nil {
+				return err
+			}
+			return emitPath(app, absPath(p))
+		},
+	}
+}
+
+// emitPath writes a resolved file path: the `path` --json envelope, or the bare
+// path for piping. Shared by task/epic/audit path.
+func emitPath(app *App, path string) error {
+	if app.JSON {
+		return render.PathJSON(app.Out, path)
+	}
+	fmt.Fprintln(app.Out, path)
+	return nil
+}
+
+// absPath makes a store path absolute so `task path`/`task info` emit a path that
+// resolves from anywhere, regardless of how the planning root was configured
+// (relative config root, -C, etc.). A failure to absolutize (never expected for a
+// real file) falls back to the store path rather than erroring a read.
+func absPath(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
 }
 
 func newTaskSetCmd(app *App) *cobra.Command {

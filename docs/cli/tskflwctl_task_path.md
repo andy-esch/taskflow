@@ -1,26 +1,22 @@
-## tskflwctl task show
+## tskflwctl task path
 
-Show a task's metadata and body
+Print the absolute path to a task's file
 
 ```
-tskflwctl task show <task> [flags]
+tskflwctl task path <task> [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl task show add-retry-backoff
-  tskflwctl task show add-retry-backoff --section acceptance
-  tskflwctl task show add-retry-backoff --frontmatter-only
+  tskflwctl task path add-retry-backoff
+  $EDITOR "$(tskflwctl task path add-retry-backoff)"
 ```
 
 ### Options
 
 ```
-      --frontmatter-only   show only the metadata, skipping the body
-  -h, --help               help for show
-      --raw                print the raw markdown body (skip rendering)
-      --section string     show only the body section whose heading matches this name (e.g. acceptance, progress)
+  -h, --help   help for path
 ```
 
 ### Options inherited from parent commands

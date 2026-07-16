@@ -10,14 +10,17 @@ tskflwctl epic show <epic> [flags]
 
 ```
   tskflwctl epic show 01-api-gateway
-  tskflwctl epic show   # pick from a list
+  tskflwctl epic show 01-api-gateway --section goal
+  tskflwctl epic show 01-api-gateway --frontmatter-only
 ```
 
 ### Options
 
 ```
-  -h, --help   help for show
-      --raw    print the raw markdown body (skip rendering)
+      --frontmatter-only   show only the metadata, skipping the body
+  -h, --help               help for show
+      --raw                print the raw markdown body (skip rendering)
+      --section string     show only the body section whose heading matches this name (e.g. acceptance, progress)
 ```
 
 ### Options inherited from parent commands

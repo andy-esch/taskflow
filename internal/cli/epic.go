@@ -17,9 +17,34 @@ func newEpicCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "epic", Short: "Work with epics"}
 	cmd.AddCommand(
 		newEpicNewCmd(app), newEpicListCmd(app), newEpicShowCmd(app),
+		newEpicPathCmd(app),
 		newEpicSetCmd(app), newEpicEditCmd(app), newEpicMoveCmd(app),
 	)
 	return cmd
+}
+
+// newEpicPathCmd prints just the absolute path to an epic's file — the epic
+// counterpart to `task path`, parse-free so it works on a broken file too.
+func newEpicPathCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:               "path <epic>",
+		Short:             "Print the absolute path to an epic's file",
+		Example:           "  tskflwctl epic path 01-api-gateway\n  $EDITOR \"$(tskflwctl epic path 01-api-gateway)\"",
+		Args:              cobra.MaximumNArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeEpicIDs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			id, err := app.resolveOne(args, "specify an epic", "no epics available", "Epic", app.epicOptions)
+			if err != nil {
+				return err
+			}
+			p, err := app.Svc.EpicPath(id)
+			if err != nil {
+				return err
+			}
+			return emitPath(app, absPath(p))
+		},
+	}
 }
 
 // newEpicSetCmd is the agent face of epic mutation: field-level, atomic, validated,
@@ -294,11 +319,15 @@ func filterEpicsByStatus(epics []core.EpicSummary, status string) []core.EpicSum
 }
 
 func newEpicShowCmd(app *App) *cobra.Command {
-	var raw bool
+	var (
+		raw     bool
+		section string
+		fmOnly  bool
+	)
 	cmd := &cobra.Command{
 		Use:               "show <epic>",
 		Short:             "Show an epic and the tasks under it",
-		Example:           "  tskflwctl epic show 01-api-gateway\n  tskflwctl epic show   # pick from a list",
+		Example:           "  tskflwctl epic show 01-api-gateway\n  tskflwctl epic show 01-api-gateway --section goal\n  tskflwctl epic show 01-api-gateway --frontmatter-only",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the id
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: app.completeEpicIDs,
@@ -311,14 +340,25 @@ func newEpicShowCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// --section / --frontmatter-only narrow the epic's markdown body only; the
+			// metadata + task roster always show.
+			body, err = narrowBody("epic", id, body, section, fmOnly)
+			if err != nil {
+				return err
+			}
 			if app.JSON {
 				return render.EpicShowJSON(app.Out, es.Epic, tasks, body)
 			}
 			return app.paged(func(w io.Writer) error {
-				return render.EpicShowHuman(w, app.Style, es, tasks, render.RenderBody(app.Style, body, app.markdownStyle, raw))
+				rendered := ""
+				if body != "" { // --frontmatter-only → no body render (and no trailing blank line)
+					rendered = render.RenderBody(app.Style, body, app.markdownStyle, raw)
+				}
+				return render.EpicShowHuman(w, app.Style, es, tasks, rendered)
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&raw, "raw", false, "print the raw markdown body (skip rendering)")
+	addBodyScopeFlags(cmd, &section, &fmOnly)
 	return cmd
 }

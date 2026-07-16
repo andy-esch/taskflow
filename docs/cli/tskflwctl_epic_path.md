@@ -1,26 +1,22 @@
-## tskflwctl task show
+## tskflwctl epic path
 
-Show a task's metadata and body
+Print the absolute path to an epic's file
 
 ```
-tskflwctl task show <task> [flags]
+tskflwctl epic path <epic> [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl task show add-retry-backoff
-  tskflwctl task show add-retry-backoff --section acceptance
-  tskflwctl task show add-retry-backoff --frontmatter-only
+  tskflwctl epic path 01-api-gateway
+  $EDITOR "$(tskflwctl epic path 01-api-gateway)"
 ```
 
 ### Options
 
 ```
-      --frontmatter-only   show only the metadata, skipping the body
-  -h, --help               help for show
-      --raw                print the raw markdown body (skip rendering)
-      --section string     show only the body section whose heading matches this name (e.g. acceptance, progress)
+  -h, --help   help for path
 ```
 
 ### Options inherited from parent commands
@@ -39,5 +35,5 @@ tskflwctl task show <task> [flags]
 
 ### SEE ALSO
 
-* [tskflwctl task](tskflwctl_task.md)	 - Work with tasks
+* [tskflwctl epic](tskflwctl_epic.md)	 - Work with epics
 

@@ -54,6 +54,13 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToBoardEnvelope(core.Board{Columns: []core.BoardColumn{{Status: domain.StatusInProgress, Tasks: []domain.Task{task}}}}))
 		}},
 		{"TaskShowEnvelope", func(w io.Writer) error { return emit(w, ToTaskShowEnvelope(task, "# body")) }},
+		{"TaskInfoEnvelope", func(w io.Writer) error {
+			return emit(w, ToTaskInfoEnvelope(task, domain.ACCount{Checked: 1, Total: 3}, "/root/tasks/alpha.md"))
+		}},
+		{"PathEnvelope", func(w io.Writer) error { return emit(w, ToPathEnvelope("/root/tasks/alpha.md")) }},
+		{"AuditInfoEnvelope", func(w io.Writer) error {
+			return emit(w, ToAuditInfoEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 3, OpenFindings: 1, ActiveFindings: 1, DoneFindings: 1}, "/root/audits/x.md"))
+		}},
 		{"TaskMutationEnvelope", func(w io.Writer) error { return emit(w, ToTaskMutationEnvelope(task, "# new body", true)) }},
 		{"EpicMutationEnvelope", func(w io.Writer) error { return emit(w, ToEpicMutationEnvelope(epic, true)) }},
 		{"CreatedEnvelope", func(w io.Writer) error {

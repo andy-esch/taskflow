@@ -77,6 +77,12 @@ func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
 	return s.store.GetTask(slug)
 }
 
+// TaskPath resolves a task's file path without reading or parsing it — the seam
+// for `task path`, which must work even on a file with broken frontmatter.
+func (s *Service) TaskPath(slug string) (string, error) {
+	return s.store.ResolveTaskPath(slug)
+}
+
 // EditTask opens a task for whole-file editing — the human face of mutation,
 // complementing the field-level `task set`. edit (run by the cli's $EDITOR layer)
 // receives the current file content and returns the new content; the store

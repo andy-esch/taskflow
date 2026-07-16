@@ -30,9 +30,11 @@ Work with code audits
 * [tskflwctl audit defer](tskflwctl_audit_defer.md)	 - Move audit(s) to deferred/
 * [tskflwctl audit edit](tskflwctl_audit_edit.md)	 - Open an audit in your editor (whole file; re-validated on save)
 * [tskflwctl audit findings](tskflwctl_audit_findings.md)	 - Query findings across audits (or one) by status/effort/urgency/component
+* [tskflwctl audit info](tskflwctl_audit_info.md)	 - Show an audit's metadata + file path + finding tally (no body)
 * [tskflwctl audit lint](tskflwctl_audit_lint.md)	 - Validate audit findings (status vocabulary, missing status, bucket↔state)
 * [tskflwctl audit list](tskflwctl_audit_list.md)	 - List audits (open by default)
 * [tskflwctl audit new](tskflwctl_audit_new.md)	 - Create a new audit (open bucket, scaffolded findings)
+* [tskflwctl audit path](tskflwctl_audit_path.md)	 - Print the absolute path to an audit's file
 * [tskflwctl audit reopen](tskflwctl_audit_reopen.md)	 - Move audit(s) back to open/
 * [tskflwctl audit show](tskflwctl_audit_show.md)	 - Show an audit's metadata and body
 
