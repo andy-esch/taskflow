@@ -177,18 +177,44 @@ func resolveRoot(dir string, cf configFile) (string, error) {
 // resolvePlanningRepo resolves planning_repo relative to the config dir (an
 // absolute value is used as-is) and validates it is a real planning root. Unlike
 // taskflow_root, it is ALLOWED to escape dir's tree — that is the entire point
-// of pointing an impl repo at an external planning repo. A target without tasks/
-// is a loud error (the "require + validate" contract), never a clean empty tree.
+// of pointing an impl repo at an external planning repo.
+//
+// The target names a planning REPO, which is not necessarily the planning ROOT:
+// when it carries its own config, THAT config's taskflow_root decides the root, so
+// a pointer at the repo root resolves the same tree `-C <target>` would (the
+// subdir layout: entities under planning/). Pointing straight at the subdir keeps
+// working — both spellings name the same planning repo, which is exactly what
+// checkTrackedRepo already accepts. A target that is neither is a loud error (the
+// "require + validate" contract), never a clean empty tree.
 func resolvePlanningRepo(dir, planningRepo string) (string, error) {
 	root := filepath.FromSlash(planningRepo)
 	if !filepath.IsAbs(root) {
 		root = filepath.Join(dir, root)
 	}
 	root = filepath.Clean(root)
+	if cfgPath := filepath.Join(root, ConfigFile); fileExists(cfgPath) {
+		cf, err := readConfigFile(cfgPath)
+		if err != nil {
+			return "", err
+		}
+		// A target that is ITSELF a pointer is a chain: not followed, because it
+		// would need loop detection and leaves "where does my data live" unanswerable
+		// from one config. Loud, naming the real target so the fix is mechanical.
+		if cf.PlanningRepo != "" {
+			return "", fmt.Errorf(
+				"%w: planning_repo %q points at %s, which is itself a pointer (planning_repo = %q) — chains aren't followed; point at the planning repo directly",
+				domain.ErrValidation, planningRepo, root, cf.PlanningRepo)
+		}
+		target, err := configuredRoot(root, cf.TaskflowRoot)
+		if err != nil {
+			return "", fmt.Errorf("planning_repo %q: %w", planningRepo, err)
+		}
+		return evalOr(target), nil
+	}
 	if !isDir(filepath.Join(root, domain.TasksDir)) {
 		return "", fmt.Errorf(
-			"%w: planning_repo %q points at %s, which has no tasks/ — run `tskflwctl init` there first",
-			domain.ErrValidation, planningRepo, root)
+			"%w: planning_repo %q points at %s, which is not a planning repo (no tasks/ there, and no %s naming one via taskflow_root) — run `tskflwctl init` there first",
+			domain.ErrValidation, planningRepo, root, ConfigFile)
 	}
 	// Resolve symlinks so Root is PHYSICAL, matching the in-tree branch (Discover
 	// evalOr's dir, which configuredRoot inherits). The linkback work compares
@@ -538,10 +564,11 @@ func CheckLinks(cfg *Config) []LinkProblem {
 // this impl in its tracked_repos.
 func checkBackLink(cfg *Config) []LinkProblem {
 	me := resolveRepoPath(cfg.Dir, ".")
-	planningRoot := resolveRepoPath(cfg.Dir, cfg.PlanningRepo)
-	// Find the planning repo's config wherever it lives (root or a taskflow_root
-	// ancestor) — NOT just at the root, which a subdir layout would miss.
-	pdir, pcf, ok := configForRoot(planningRoot)
+	// cfg.Root is the RESOLVED planning root (resolvePlanningRepo already followed
+	// the pointer, including the target's own taskflow_root). Re-resolving the raw
+	// pointer here instead would hand configForRoot a repo root rather than the
+	// root it governs, and a subdir layout would then falsely report "no config".
+	pdir, pcf, ok := configForRoot(cfg.Root)
 	if !ok {
 		return []LinkProblem{{cfg.PlanningRepo, fmt.Sprintf(
 			"planning repo %q has no %s, so it can't track this repo back", cfg.PlanningRepo, ConfigFile)}}

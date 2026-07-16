@@ -310,6 +310,53 @@ func TestDiscover_PlanningRepoMustBeValid(t *testing.T) {
 	}
 }
 
+// TestDiscover_PlanningRepoHonorsTargetTaskflowRoot regresses the desirelines
+// break: a pointer at the planning REPO ROOT whose entities live under a
+// taskflow_root subdir must resolve to that subdir — the same tree `-C <target>`
+// finds. Resolution used to demand tasks/ directly under the target, so every
+// command from the impl repo died with "has no tasks/" even though the target's
+// own config said where the root was.
+func TestDiscover_PlanningRepoHonorsTargetTaskflowRoot(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	plan := filepath.Join(parent, "plan")
+	mkdirs(t, impl, filepath.Join(plan, "planning", "tasks"))
+	writeConfig(t, plan, "taskflow_root = \"planning\"\n")
+
+	// Pointing at the repo root: the target's config names the root.
+	writeConfig(t, impl, "planning_repo = \"../plan\"\n")
+	cfg, err := Discover(impl)
+	if err != nil {
+		t.Fatalf("a pointer at the repo root should follow its taskflow_root, got %v", err)
+	}
+	if want := eval(t, filepath.Join(plan, "planning")); cfg.Root != want {
+		t.Errorf("Root = %q, want the target's taskflow_root subdir %q", cfg.Root, want)
+	}
+	// Pointing straight at the subdir names the same repo and must still work.
+	writeConfig(t, impl, "planning_repo = \"../plan/planning\"\n")
+	if cfg, err := Discover(impl); err != nil || cfg.Root != eval(t, filepath.Join(plan, "planning")) {
+		t.Errorf("a pointer at the root subdir should keep resolving, got %v / %v", cfg, err)
+	}
+}
+
+// TestDiscover_PlanningRepoChainRejected: a pointer at a repo that is ITSELF a
+// pointer is a loud error, not a followed chain (no loop detection, and the data's
+// location stops being answerable from one config).
+func TestDiscover_PlanningRepoChainRejected(t *testing.T) {
+	parent := t.TempDir()
+	impl := filepath.Join(parent, "impl")
+	mid := filepath.Join(parent, "mid")
+	planning := filepath.Join(parent, "planning")
+	mkdirs(t, impl, mid, filepath.Join(planning, "tasks"))
+	writeConfig(t, impl, "planning_repo = \"../mid\"\n")
+	writeConfig(t, mid, "planning_repo = \"../planning\"\n")
+
+	_, err := Discover(impl)
+	if err == nil || !strings.Contains(err.Error(), "chains aren't followed") {
+		t.Errorf("a pointer chain must be a loud error, got %v", err)
+	}
+}
+
 // TestDiscover_PlanningRepoVsTaskflowRoot pins precedence: planning_repo wins
 // over a default taskflow_root, but a NON-default taskflow_root alongside it is a
 // loud conflict (two roots), not a silent override.
