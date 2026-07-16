@@ -25,15 +25,18 @@ Work with tasks
 ### SEE ALSO
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
+* [tskflwctl task ac](tskflwctl_task_ac.md)	 - List a task's acceptance criteria, or check/uncheck one by index
 * [tskflwctl task append](tskflwctl_task_append.md)	 - Append a section to a task's body (atomic; agent-facing)
 * [tskflwctl task complete](tskflwctl_task_complete.md)	 - Move task(s) to completed
 * [tskflwctl task defer](tskflwctl_task_defer.md)	 - Move task(s) to deferred (optionally with a revisit date)
 * [tskflwctl task deprecate](tskflwctl_task_deprecate.md)	 - Move task(s) to deprecated
 * [tskflwctl task edit](tskflwctl_task_edit.md)	 - Open a task in your editor (whole file; re-validated on save)
+* [tskflwctl task info](tskflwctl_task_info.md)	 - Show a task's metadata + file path + acceptance tally (no body)
 * [tskflwctl task list](tskflwctl_task_list.md)	 - List tasks (active by default)
 * [tskflwctl task move](tskflwctl_task_move.md)	 - Transition task(s) to <status> (generic escape hatch)
 * [tskflwctl task new](tskflwctl_task_new.md)	 - Create a new task (validated, handoff-ready scaffold)
 * [tskflwctl task next](tskflwctl_task_next.md)	 - Move task(s) to next-up
+* [tskflwctl task path](tskflwctl_task_path.md)	 - Print the absolute path to a task's file
 * [tskflwctl task ready](tskflwctl_task_ready.md)	 - Move task(s) to ready-to-start
 * [tskflwctl task rename](tskflwctl_task_rename.md)	 - Re-title a task (new slug, id kept) and cascade its inbound body links
 * [tskflwctl task set](tskflwctl_task_set.md)	 - Set one or more frontmatter fields (validated, single atomic write)

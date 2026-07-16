@@ -60,15 +60,25 @@ func TasksJSON(w io.Writer, tasks []domain.Task, problems []domain.FileProblem) 
 	return wire.EncodeJSON(w, wire.ToTasksEnvelope(tasks, problems))
 }
 
-// TaskShowHuman prints a task's metadata followed by its body.
-func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
-	field := func(label, value string) {
-		lbl := fmt.Sprintf("%-12s", label+":")
-		if st.width > 0 { // fit the value to the terminal (TTY only; piped stays full)
+// fieldPrinter returns a key/value line writer for a metadata block: a dim,
+// width-padded label then the value. When fit is true the value is trimmed to the
+// terminal width on a TTY (the browse views — long descriptions shouldn't wrap);
+// when false it prints in full — the `info` reads keep the whole value (their
+// `path` is meant to be copy-pasted, so truncating it would defeat the command).
+// Piped output is never trimmed either way. Shared so field rendering can't drift.
+func fieldPrinter(w io.Writer, st Style, labelWidth int, fit bool) func(label, value string) {
+	return func(label, value string) {
+		lbl := fmt.Sprintf("%-*s", labelWidth, label+":")
+		if fit && st.width > 0 {
 			value = truncate(value, st.width-visibleWidth(lbl)-1)
 		}
 		fmt.Fprintf(w, "%s %s\n", st.Dim(lbl), value)
 	}
+}
+
+// TaskShowHuman prints a task's metadata followed by its body.
+func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
+	field := fieldPrinter(w, st, 12, true)
 	field("slug", st.Bold(t.Slug))
 	field("status", st.Status(t.Status))
 	if t.Epic != "" {
@@ -92,13 +102,83 @@ func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 	if t.Updated != "" {
 		field("updated", fmt.Sprintf("%s %s", t.Updated, st.Dim("("+theme.RelativeDate(t.Updated)+")")))
 	}
-	fmt.Fprintf(w, "\n%s", body)
+	// Only emit the body block when there is one — a metadata-only view
+	// (`--frontmatter-only`, or a genuinely empty body) must not leave a trailing
+	// blank line under the fields.
+	if body != "" {
+		fmt.Fprintf(w, "\n%s", body)
+	}
 	return nil
 }
 
 // TaskShowJSON writes a task plus its body.
 func TaskShowJSON(w io.Writer, t domain.Task, body string) error {
 	return wire.EncodeJSON(w, wire.ToTaskShowEnvelope(t, body))
+}
+
+// TaskInfoJSON writes the token-cheap task metadata read (`task info --json`):
+// path + triage fields + the acceptance-criteria tally, no body.
+func TaskInfoJSON(w io.Writer, t domain.Task, ac domain.ACCount, path string) error {
+	return wire.EncodeJSON(w, wire.ToTaskInfoEnvelope(t, ac, path))
+}
+
+// TaskInfoHuman prints task metadata as an aligned key/value block (the human face
+// of `task info`): where the file is, the fields an agent triages on, and the
+// acceptance-criteria progress as "checked/total".
+func TaskInfoHuman(w io.Writer, st Style, t domain.Task, ac domain.ACCount, path string) {
+	field := fieldPrinter(w, st, 9, false)
+	field("slug", st.Bold(t.Slug))
+	field("status", st.Status(t.Status))
+	if t.Epic != "" {
+		field("epic", t.Epic)
+	}
+	field("ac", fmt.Sprintf("%d/%d", ac.Checked, ac.Total))
+	field("path", path)
+}
+
+// AuditInfoJSON writes the token-cheap audit metadata read (`audit info --json`):
+// path + bucket + finding tally, no body.
+func AuditInfoJSON(w io.Writer, a domain.Audit, path string) error {
+	return wire.EncodeJSON(w, wire.ToAuditInfoEnvelope(a, path))
+}
+
+// AuditInfoHuman prints audit metadata as an aligned key/value block: bucket and
+// the finding disposition tally (the audit analogue of a task's acceptance tally).
+func AuditInfoHuman(w io.Writer, st Style, a domain.Audit, path string) {
+	field := fieldPrinter(w, st, 9, false)
+	field("slug", st.Bold(a.Slug))
+	field("bucket", string(a.Bucket))
+	field("findings", fmt.Sprintf("%d total · %d open · %d in-progress · %d done · %d dropped",
+		a.Findings, a.OpenFindings, a.ActiveFindings, a.DoneFindings, a.DroppedFindings))
+	field("path", path)
+}
+
+// AcceptanceJSON writes `task ac --list --json`: the task's acceptance criteria.
+func AcceptanceJSON(w io.Writer, slug string, cs []domain.Criterion) error {
+	return wire.EncodeJSON(w, wire.ToAcceptanceEnvelope(slug, cs))
+}
+
+// AcceptanceHuman prints the numbered acceptance checklist ("[x]  1. text"), the
+// list an agent then flips by index. Empty prints a dim note.
+func AcceptanceHuman(w io.Writer, st Style, cs []domain.Criterion) {
+	if len(cs) == 0 {
+		fmt.Fprintln(w, st.Dim("no acceptance criteria"))
+		return
+	}
+	for _, c := range cs {
+		box := "[ ]"
+		mark := st.Dim(box)
+		if c.Checked {
+			box = "[x]"
+			mark = st.Green(box)
+		}
+		fmt.Fprintf(w, "%s %s %s\n", mark, st.Dim(fmt.Sprintf("%2d.", c.Index)), c.Text)
+	}
+}
+
+// PathJSON writes just the resolved absolute path (`task/epic/audit path --json`).
+func PathJSON(w io.Writer, path string) error {
+	return wire.EncodeJSON(w, wire.ToPathEnvelope(path))
 }
 
 // TaskMutationJSON writes the result of a task mutation (`task set`/`append`/`set
@@ -472,7 +552,11 @@ func EpicShowHuman(w io.Writer, st Style, es core.EpicSummary, tasks []domain.Ta
 		}
 		fmt.Fprintln(w, tr)
 	}
-	fmt.Fprintf(w, "\n%s", body)
+	// Skip the body block when empty (--frontmatter-only, or no body) so no trailing
+	// blank line is left under the roster/finding tree — as TaskShowHuman does.
+	if body != "" {
+		fmt.Fprintf(w, "\n%s", body)
+	}
 	return nil
 }
 
@@ -577,7 +661,11 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Fin
 		}
 		fmt.Fprintln(w, tr)
 	}
-	fmt.Fprintf(w, "\n%s", body)
+	// Skip the body block when empty (--frontmatter-only, or no body) so no trailing
+	// blank line is left under the roster/finding tree — as TaskShowHuman does.
+	if body != "" {
+		fmt.Fprintf(w, "\n%s", body)
+	}
 	return nil
 }
 

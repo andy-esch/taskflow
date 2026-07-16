@@ -10,14 +10,17 @@ tskflwctl task show <task> [flags]
 
 ```
   tskflwctl task show add-retry-backoff
-  tskflwctl task show   # pick from a list
+  tskflwctl task show add-retry-backoff --section acceptance
+  tskflwctl task show add-retry-backoff --frontmatter-only
 ```
 
 ### Options
 
 ```
-  -h, --help   help for show
-      --raw    print the raw markdown body (skip rendering)
+      --frontmatter-only   show only the metadata, skipping the body
+  -h, --help               help for show
+      --raw                print the raw markdown body (skip rendering)
+      --section string     show only the body section whose heading matches this name (e.g. acceptance, progress)
 ```
 
 ### Options inherited from parent commands

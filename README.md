@@ -87,9 +87,15 @@ tskflwctl audit new auth --template security  # pick a body scaffold (default|se
 # read
 tskflwctl task list                    # active tasks (--all / --status / --epic / --tag)
 tskflwctl task list --revisit-due      # deferred tasks whose snooze date has arrived
-tskflwctl task show <slug>
+tskflwctl task show <slug>             # metadata + body (--section <name> / --frontmatter-only to narrow)
+tskflwctl task info <slug> --json      # token-cheap metadata: path, status, epic, ac:{checked,total} (no body)
+tskflwctl task path <slug>             # just the absolute file path — $EDITOR "$(tskflwctl task path <slug>)"
 tskflwctl epic list                    # rollup: done/total per epic
+tskflwctl epic show <id> --section goal # epic body section (or --frontmatter-only); epic path <id> for the file
 tskflwctl audit list                   # open audits (--all / --closed / --deferred)
+tskflwctl audit show <slug> --section findings  # audit body section (or --frontmatter-only)
+tskflwctl audit info <slug> --json     # token-cheap: path, bucket, findings:{total,open,in_progress,done,dropped}
+tskflwctl audit path <slug>            # just the absolute file path (like task path)
 tskflwctl audit findings --status open --effort XS,S --json  # query findings across audits
 tskflwctl audit lint                   # validate finding status vocab + missing status + bucket↔state
 tskflwctl schema                       # the tool's contract for agents (statuses, fields, codes)
@@ -103,6 +109,7 @@ tskflwctl task set <slug> --priority high --tags a,b
 tskflwctl task edit <slug>                          # open the whole file in $EDITOR (human; re-validated on save)
 echo "## Findings" | tskflwctl task append <slug> --body-file -  # add a section (agent; atomic)
 tskflwctl task set <slug> --body-file notes.md      # replace the body (agent; its own call)
+tskflwctl task ac <slug>                            # numbered acceptance criteria; --check/--uncheck <n> to flip one
 tskflwctl task start|next|ready|complete|defer|deprecate <slug>...   # defer takes --until <date>
 tskflwctl task defer <slug> --until 2026-09-01      # snooze (revisit_at); on a TTY, prompts for the date
 tskflwctl audit close|reopen|defer <slug>...

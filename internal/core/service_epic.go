@@ -380,3 +380,9 @@ func (s *Service) ShowEpic(id string) (EpicSummary, []domain.Task, string, error
 	}
 	return rollupEpic(epic, its), its, body, nil
 }
+
+// EpicPath resolves an epic's file path without reading or parsing it — the seam
+// for `epic path` (parse-free, like TaskPath).
+func (s *Service) EpicPath(id string) (string, error) {
+	return s.store.ResolveEpicPath(id)
+}

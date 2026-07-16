@@ -3,6 +3,99 @@
   "$id": "https://github.com/andy-esch/taskflow/internal/wire/json-envelopes",
   "$ref": "#/$defs/jsonEnvelopes",
   "$defs": {
+    "ACJSON": {
+      "properties": {
+        "checked": {
+          "type": "integer",
+          "description": "acceptance criteria currently checked (- [x])"
+        },
+        "total": {
+          "type": "integer",
+          "description": "total acceptance criteria in the task's acceptance-criteria section"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "checked",
+        "total"
+      ],
+      "description": "ACJSON is a task's acceptance-criteria checkbox tally (the `ac` field of `task info`): how many criteria are checked out of the total."
+    },
+    "AcceptanceEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "acceptance": {
+          "items": {
+            "$ref": "#/$defs/CriterionJSON"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "slug",
+        "acceptance"
+      ],
+      "description": "AcceptanceEnvelope wraps `task ac --list --json` — a task's acceptance criteria with their checked state (the list an agent flips by index)."
+    },
+    "AuditInfoEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "audit_info": {
+          "$ref": "#/$defs/AuditInfoJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "audit_info"
+      ],
+      "description": "AuditInfoEnvelope wraps `audit info --json` — the token-cheap audit metadata read (path + bucket + finding tally, no body), the audit counterpart to TaskInfoEnvelope."
+    },
+    "AuditInfoJSON": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "stable identifier — absent on audits created before id assignment"
+        },
+        "slug": {
+          "type": "string",
+          "description": "audit slug (filename without .md)"
+        },
+        "bucket": {
+          "type": "string",
+          "description": "open | closed | deferred — authoritative from frontmatter (ADR-0003 §4)"
+        },
+        "path": {
+          "type": "string",
+          "description": "absolute path to the audit's markdown file"
+        },
+        "findings": {
+          "$ref": "#/$defs/FindingsTallyJSON",
+          "description": "finding disposition tally"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "bucket",
+        "path",
+        "findings"
+      ],
+      "description": "AuditInfoJSON is the token-cheap metadata read for an audit (`audit info`): where the file lives, its bucket, and the finding tally — no body."
+    },
     "AuditJSON": {
       "properties": {
         "id": {
@@ -248,6 +341,30 @@
         "path"
       ],
       "description": "CreatedItem is the created document inside CreatedEnvelope."
+    },
+    "CriterionJSON": {
+      "properties": {
+        "index": {
+          "type": "integer",
+          "description": "1-based position of the criterion in the acceptance section"
+        },
+        "checked": {
+          "type": "boolean",
+          "description": "whether the checkbox is checked (- [x])"
+        },
+        "text": {
+          "type": "string",
+          "description": "the criterion text — the first line after the checkbox"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "index",
+        "checked",
+        "text"
+      ],
+      "description": "CriterionJSON is one acceptance-criteria checkbox for `task ac --list --json` — the list an agent then flips by index with `task ac --check/--uncheck`."
     },
     "DoctorEnvelope": {
       "properties": {
@@ -670,6 +787,40 @@
       ],
       "description": "FindingsRollupJSON aggregates the actionable audit findings (status open or in-progress) across all audits — the `status` summary's \"audit findings\" view."
     },
+    "FindingsTallyJSON": {
+      "properties": {
+        "total": {
+          "type": "integer",
+          "description": "total findings parsed from the audit body"
+        },
+        "open": {
+          "type": "integer",
+          "description": "findings whose status is open"
+        },
+        "in_progress": {
+          "type": "integer",
+          "description": "findings whose status is in-progress"
+        },
+        "done": {
+          "type": "integer",
+          "description": "findings whose status is fixed or landed"
+        },
+        "dropped": {
+          "type": "integer",
+          "description": "findings whose status is deferred"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "total",
+        "open",
+        "in_progress",
+        "done",
+        "dropped"
+      ],
+      "description": "FindingsTallyJSON is an audit's finding disposition tally (the `findings` field of `audit info`) — the audit analogue of a task's acceptance-criteria tally."
+    },
     "FixEnvelope": {
       "properties": {
         "schema_version": {
@@ -883,6 +1034,24 @@
         "moves"
       ],
       "description": "MovesEnvelope is the transition report (`task start --json`, etc.)."
+    },
+    "PathEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "absolute path to the entity's markdown file"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "path"
+      ],
+      "description": "PathEnvelope wraps `task path --json` — just the resolved absolute file path (the plain form prints the bare path for piping, e.g."
     },
     "SchemaEnvelope": {
       "properties": {
@@ -1126,6 +1295,60 @@
         "bad_epic_status"
       ],
       "description": "SummaryEnvelope is `status --json`."
+    },
+    "TaskInfoEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "task_info": {
+          "$ref": "#/$defs/TaskInfoJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "task_info"
+      ],
+      "description": "TaskInfoEnvelope wraps `task info --json` — the token-cheap task metadata read (file path + triage fields + acceptance tally, no body)."
+    },
+    "TaskInfoJSON": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "stable identifier — absent on tasks created before id assignment"
+        },
+        "slug": {
+          "type": "string",
+          "description": "task slug (filename without .md)"
+        },
+        "status": {
+          "type": "string",
+          "description": "lifecycle status — authoritative from frontmatter (ADR-0003 §4)"
+        },
+        "epic": {
+          "type": "string",
+          "description": "id of the epic this task belongs to"
+        },
+        "path": {
+          "type": "string",
+          "description": "absolute path to the task's markdown file"
+        },
+        "ac": {
+          "$ref": "#/$defs/ACJSON",
+          "description": "acceptance-criteria checkbox tally"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "status",
+        "path",
+        "ac"
+      ],
+      "description": "TaskInfoJSON is the token-cheap metadata read for a task (`task info`): where the file lives plus the fields an agent triages on and the acceptance-criteria tally, WITHOUT the body — the machine counterpart to `task path` that avoids the full `task show` payload."
     },
     "TaskJSON": {
       "properties": {
@@ -1450,6 +1673,15 @@
         "task_show": {
           "$ref": "#/$defs/TaskShowEnvelope"
         },
+        "task_info": {
+          "$ref": "#/$defs/TaskInfoEnvelope"
+        },
+        "acceptance": {
+          "$ref": "#/$defs/AcceptanceEnvelope"
+        },
+        "path": {
+          "$ref": "#/$defs/PathEnvelope"
+        },
         "task_mutation": {
           "$ref": "#/$defs/TaskMutationEnvelope"
         },
@@ -1479,6 +1711,9 @@
         },
         "audit_show": {
           "$ref": "#/$defs/AuditShowEnvelope"
+        },
+        "audit_info": {
+          "$ref": "#/$defs/AuditInfoEnvelope"
         },
         "audit_mutation": {
           "$ref": "#/$defs/AuditMutationEnvelope"
@@ -1526,6 +1761,9 @@
         "tasks",
         "board",
         "task_show",
+        "task_info",
+        "acceptance",
+        "path",
         "task_mutation",
         "epic_mutation",
         "moves",
@@ -1536,6 +1774,7 @@
         "epic_show",
         "audits",
         "audit_show",
+        "audit_info",
         "audit_mutation",
         "findings",
         "fix",
@@ -1552,6 +1791,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.26)",
+  "title": "tskflwctl --json output (schema_version 1.29)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

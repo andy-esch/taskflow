@@ -71,6 +71,33 @@ func TestService_Lint(t *testing.T) {
 	}
 }
 
+// Lint is body-aware for active tasks: an acceptance-criteria misconfiguration
+// (here a botched checkbox) surfaces via the ListTasksWithBodies scan.
+func TestService_Lint_FlagsMalformedAcceptance(t *testing.T) {
+	svc := NewService(&fakeStore{
+		epics: []domain.Epic{{ID: "01-e1", Status: "active", Priority: "medium", Description: "e"}},
+		tasks: []domain.Task{{ID: "6fjangd7kvh1", Slug: "t", Status: domain.StatusInProgress,
+			Epic: "01-e1", Description: "d", Tags: []string{"x"}, Tier: 3, Priority: "medium",
+			Effort: "Unknown", Created: "2026-06-12"}},
+		taskBodies: map[string]string{"t": "## Acceptance criteria\n\n- [] botched\n"},
+	})
+	results, _, err := svc.Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, r := range results {
+		for _, i := range r.Issues {
+			if i.Field == "acceptance" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("Lint should flag the malformed acceptance checkbox via ListTasksWithBodies, got %+v", results)
+	}
+}
+
 func TestService_ListAudits_BucketFilters(t *testing.T) {
 	svc := NewService(&fakeStore{audits: []domain.Audit{
 		{Slug: "a-open", Bucket: domain.AuditOpen},

@@ -96,6 +96,12 @@ func (s *Service) ShowAudit(slug string) (domain.Audit, string, error) {
 	return s.store.GetAudit(slug)
 }
 
+// AuditPath resolves an audit's file path without reading or parsing it — the seam
+// for `audit path` (parse-free, like TaskPath).
+func (s *Service) AuditPath(slug string) (string, error) {
+	return s.store.ResolveAuditPath(slug)
+}
+
 // MoveAudit relocates an audit to another bucket (close/reopen/defer).
 func (s *Service) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
 	return retryOnConflict(s, dryRun, func() (domain.Audit, error) {

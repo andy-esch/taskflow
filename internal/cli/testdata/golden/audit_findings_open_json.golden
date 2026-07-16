@@ -1,1 +1,1 @@
-{"schema_version":"1.26","findings":[{"audit":"2026-01-02-fixture-area","bucket":"open","code":"S1","title":"Tighten the fixture gateway","status":"open","component":"fixturepipe","effort":"S","urgency":"soon"}]}
+{"schema_version":"1.29","findings":[{"audit":"2026-01-02-fixture-area","bucket":"open","code":"S1","title":"Tighten the fixture gateway","status":"open","component":"fixturepipe","effort":"S","urgency":"soon"}]}

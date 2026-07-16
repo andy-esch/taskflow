@@ -49,6 +49,84 @@ func ToTaskJSON(t domain.Task) TaskJSON {
 	return j
 }
 
+// ACJSON is a task's acceptance-criteria checkbox tally (the `ac` field of
+// `task info`): how many criteria are checked out of the total.
+type ACJSON struct {
+	Checked int `json:"checked" jsonschema:"description=acceptance criteria currently checked (- [x])"`
+	Total   int `json:"total" jsonschema:"description=total acceptance criteria in the task's acceptance-criteria section"`
+}
+
+// TaskInfoJSON is the token-cheap metadata read for a task (`task info`): where
+// the file lives plus the fields an agent triages on and the acceptance-criteria
+// tally, WITHOUT the body — the machine counterpart to `task path` that avoids the
+// full `task show` payload.
+type TaskInfoJSON struct {
+	ID     string `json:"id,omitempty" jsonschema:"description=stable identifier — absent on tasks created before id assignment"`
+	Slug   string `json:"slug" jsonschema:"description=task slug (filename without .md)"`
+	Status string `json:"status" jsonschema:"description=lifecycle status — authoritative from frontmatter (ADR-0003 §4)"`
+	Epic   string `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
+	Path   string `json:"path" jsonschema:"description=absolute path to the task's markdown file"`
+	AC     ACJSON `json:"ac" jsonschema:"description=acceptance-criteria checkbox tally"`
+}
+
+// ToTaskInfoJSON maps a task + its acceptance tally + resolved path to the info DTO.
+func ToTaskInfoJSON(t domain.Task, ac domain.ACCount, path string) TaskInfoJSON {
+	return TaskInfoJSON{
+		ID: t.ID, Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
+		Path: path, AC: ACJSON{Checked: ac.Checked, Total: ac.Total},
+	}
+}
+
+// CriterionJSON is one acceptance-criteria checkbox for `task ac --list --json` —
+// the list an agent then flips by index with `task ac --check/--uncheck`.
+type CriterionJSON struct {
+	Index   int    `json:"index" jsonschema:"description=1-based position of the criterion in the acceptance section"`
+	Checked bool   `json:"checked" jsonschema:"description=whether the checkbox is checked (- [x])"`
+	Text    string `json:"text" jsonschema:"description=the criterion text — the first line after the checkbox"`
+}
+
+// ToCriteriaJSON maps the domain criteria to their wire DTOs (never nil — an empty
+// acceptance list marshals to []).
+func ToCriteriaJSON(cs []domain.Criterion) []CriterionJSON {
+	out := make([]CriterionJSON, len(cs))
+	for i, c := range cs {
+		out[i] = CriterionJSON{Index: c.Index, Checked: c.Checked, Text: c.Text}
+	}
+	return out
+}
+
+// FindingsTallyJSON is an audit's finding disposition tally (the `findings` field
+// of `audit info`) — the audit analogue of a task's acceptance-criteria tally.
+type FindingsTallyJSON struct {
+	Total      int `json:"total" jsonschema:"description=total findings parsed from the audit body"`
+	Open       int `json:"open" jsonschema:"description=findings whose status is open"`
+	InProgress int `json:"in_progress" jsonschema:"description=findings whose status is in-progress"`
+	Done       int `json:"done" jsonschema:"description=findings whose status is fixed or landed"`
+	Dropped    int `json:"dropped" jsonschema:"description=findings whose status is deferred, superseded, or wontfix"`
+}
+
+// AuditInfoJSON is the token-cheap metadata read for an audit (`audit info`): where
+// the file lives, its bucket, and the finding tally — no body.
+type AuditInfoJSON struct {
+	ID       string            `json:"id,omitempty" jsonschema:"description=stable identifier — absent on audits created before id assignment"`
+	Slug     string            `json:"slug" jsonschema:"description=audit slug (filename without .md)"`
+	Bucket   string            `json:"bucket" jsonschema:"description=open | closed | deferred — authoritative from frontmatter (ADR-0003 §4)"`
+	Path     string            `json:"path" jsonschema:"description=absolute path to the audit's markdown file"`
+	Findings FindingsTallyJSON `json:"findings" jsonschema:"description=finding disposition tally"`
+}
+
+// ToAuditInfoJSON maps an audit (whose disposition tally is populated on load) + its
+// resolved path to the info DTO.
+func ToAuditInfoJSON(a domain.Audit, path string) AuditInfoJSON {
+	return AuditInfoJSON{
+		ID: a.ID, Slug: a.Slug, Bucket: string(a.Bucket), Path: path,
+		Findings: FindingsTallyJSON{
+			Total: a.Findings, Open: a.OpenFindings, InProgress: a.ActiveFindings,
+			Done: a.DoneFindings, Dropped: a.DroppedFindings,
+		},
+	}
+}
+
 // StatusCountJSON is one status bucket and its task count.
 type StatusCountJSON struct {
 	Status string `json:"status"`

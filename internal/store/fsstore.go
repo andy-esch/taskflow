@@ -75,6 +75,20 @@ func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 	})
 }
 
+// ListTasksWithBodies is ListTasks' scan with each task's body kept alongside (one
+// pass), so lint's acceptance-criteria checks read every file once — the task twin of
+// ListAuditsWithFindings.
+func (s *FS) ListTasksWithBodies() ([]core.TaskWithBody, []domain.FileProblem, error) {
+	return scanDir(s.tasksDir, func(path string, content []byte) (core.TaskWithBody, error) {
+		t, err := parseTask(content, path)
+		if err != nil {
+			return core.TaskWithBody{}, err
+		}
+		_, body := splitFrontmatter(content)
+		return core.TaskWithBody{Task: t, Body: string(body)}, nil
+	})
+}
+
 // GetTask returns a single task plus its markdown body.
 func (s *FS) GetTask(slug string) (domain.Task, string, error) {
 	path, err := s.resolve(slug)

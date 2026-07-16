@@ -29,6 +29,8 @@ func newAuditCmd(app *App) *cobra.Command {
 		newAuditNewCmd(app),
 		newAuditListCmd(app),
 		newAuditShowCmd(app),
+		newAuditInfoCmd(app),
+		newAuditPathCmd(app),
 		newAuditEditCmd(app),
 		newAuditAppendCmd(app),
 		newAuditFindingsCmd(app),
@@ -223,11 +225,15 @@ func newAuditLintCmd(app *App) *cobra.Command {
 }
 
 func newAuditShowCmd(app *App) *cobra.Command {
-	var raw bool
+	var (
+		raw     bool
+		section string
+		fmOnly  bool
+	)
 	cmd := &cobra.Command{
 		Use:               "show <audit>",
 		Short:             "Show an audit's metadata and body",
-		Example:           "  tskflwctl audit show 2026-06-20-api-gateway\n  tskflwctl audit show   # pick from a list",
+		Example:           "  tskflwctl audit show 2026-06-20-api-gateway\n  tskflwctl audit show 2026-06-20-api-gateway --section findings\n  tskflwctl audit show 2026-06-20-api-gateway --frontmatter-only",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: app.completeAuditSlugs,
@@ -240,19 +246,85 @@ func newAuditShowCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// --section / --frontmatter-only narrow the audit's markdown body only; the
+			// metadata + finding tree always show. Parse findings from the FULL body so
+			// the tree is unaffected by a narrowed view.
+			findings := domain.ParseFindings(body)
+			body, err = narrowBody("audit", slug, body, section, fmOnly)
+			if err != nil {
+				return err
+			}
 			if app.JSON {
 				return render.AuditShowJSON(app.Out, audit, body)
 			}
-			// Parse findings from the RAW body for the status-grouped tree; the body
-			// passed to the renderer is the rendered (glamour/raw) markdown.
-			findings := domain.ParseFindings(body)
 			return app.paged(func(w io.Writer) error {
-				return render.AuditShowHuman(w, app.Style, audit, findings, render.RenderBody(app.Style, body, app.markdownStyle, raw))
+				rendered := ""
+				if body != "" { // --frontmatter-only → no body render (and no trailing blank line)
+					rendered = render.RenderBody(app.Style, body, app.markdownStyle, raw)
+				}
+				return render.AuditShowHuman(w, app.Style, audit, findings, rendered)
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&raw, "raw", false, "print the raw markdown body (skip rendering)")
+	addBodyScopeFlags(cmd, &section, &fmOnly)
 	return cmd
+}
+
+// newAuditInfoCmd is the token-cheap audit metadata read: file path, bucket, and
+// the finding disposition tally (the audit analogue of `task info`'s acceptance
+// tally), WITHOUT the body. `--json` is the machine path.
+func newAuditInfoCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:               "info <audit>",
+		Short:             "Show an audit's metadata + file path + finding tally (no body)",
+		Example:           "  tskflwctl audit show 2026-06-20-api-gateway --frontmatter-only\n  tskflwctl audit info 2026-06-20-api-gateway --json",
+		Args:              cobra.MaximumNArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeAuditSlugs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			slug, err := app.resolveOne(args, "specify an audit", "no audits available", "Audit", app.auditOptions)
+			if err != nil {
+				return err
+			}
+			// ShowAudit populates the disposition tally on load (parseAudit), so no
+			// re-parse is needed for the counts.
+			audit, _, err := app.Svc.ShowAudit(slug)
+			if err != nil {
+				return err
+			}
+			path := absPath(audit.Path)
+			if app.JSON {
+				return render.AuditInfoJSON(app.Out, audit, path)
+			}
+			render.AuditInfoHuman(app.Out, app.Style, audit, path)
+			return nil
+		},
+	}
+}
+
+// newAuditPathCmd prints just the absolute path to an audit's file — the audit
+// counterpart to `task path`, parse-free so it works on a broken file too.
+func newAuditPathCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:               "path <audit>",
+		Short:             "Print the absolute path to an audit's file",
+		Example:           "  tskflwctl audit path 2026-06-20-api-gateway\n  $EDITOR \"$(tskflwctl audit path 2026-06-20-api-gateway)\"",
+		Args:              cobra.MaximumNArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeAuditSlugs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			slug, err := app.resolveOne(args, "specify an audit", "no audits available", "Audit", app.auditOptions)
+			if err != nil {
+				return err
+			}
+			p, err := app.Svc.AuditPath(slug)
+			if err != nil {
+				return err
+			}
+			return emitPath(app, absPath(p))
+		},
+	}
 }
 
 func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.Command {

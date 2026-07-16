@@ -20,6 +20,12 @@ func (nopStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) { retur
 func (nopStore) GetTask(string) (domain.Task, string, error) {
 	return domain.Task{}, "", domain.ErrNotFound
 }
+func (nopStore) ListTasksWithBodies() ([]TaskWithBody, []domain.FileProblem, error) {
+	return nil, nil, nil
+}
+func (nopStore) ResolveTaskPath(string) (string, error)  { return "", domain.ErrNotFound }
+func (nopStore) ResolveEpicPath(string) (string, error)  { return "", domain.ErrNotFound }
+func (nopStore) ResolveAuditPath(string) (string, error) { return "", domain.ErrNotFound }
 func (nopStore) Move(string, domain.Status, time.Time, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
@@ -94,6 +100,7 @@ type fakeStore struct {
 	auditCreateBodies []string             // bodies passed to CreateAudit (parallel to createdAudits)
 	epicCreateBodies  []string             // bodies passed to CreateEpic
 	auditBodies       map[string]string    // slug → body, for GetAudit (finding queries)
+	taskBodies        map[string]string    // slug → body, for ListTasksWithBodies (acceptance lint)
 }
 
 func (f *fakeStore) GetAudit(slug string) (domain.Audit, string, error) {
@@ -119,6 +126,13 @@ func (f *fakeStore) GetAuditByPath(path string) (domain.Audit, string, error) {
 
 func (f *fakeStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 	return f.tasks, f.problems, nil
+}
+func (f *fakeStore) ListTasksWithBodies() ([]TaskWithBody, []domain.FileProblem, error) {
+	out := make([]TaskWithBody, len(f.tasks))
+	for i, t := range f.tasks {
+		out[i] = TaskWithBody{Task: t, Body: f.taskBodies[t.Slug]}
+	}
+	return out, f.problems, nil
 }
 func (f *fakeStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 	return f.audits, nil, nil

@@ -29,6 +29,7 @@ Work with epics
 * [tskflwctl epic list](tskflwctl_epic_list.md)	 - List epics with task rollup
 * [tskflwctl epic move](tskflwctl_epic_move.md)	 - Transition epic(s) to <status> (active|retired|deprecated)
 * [tskflwctl epic new](tskflwctl_epic_new.md)	 - Create a new epic (auto-numbered NN-slug)
+* [tskflwctl epic path](tskflwctl_epic_path.md)	 - Print the absolute path to an epic's file
 * [tskflwctl epic set](tskflwctl_epic_set.md)	 - Set one or more epic frontmatter fields (validated, single atomic write)
 * [tskflwctl epic show](tskflwctl_epic_show.md)	 - Show an epic and the tasks under it
 
