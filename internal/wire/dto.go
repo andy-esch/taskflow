@@ -77,6 +77,24 @@ func ToTaskInfoJSON(t domain.Task, ac domain.ACCount, path string) TaskInfoJSON 
 	}
 }
 
+// CriterionJSON is one acceptance-criteria checkbox for `task ac --list --json` —
+// the list an agent then flips by index with `task ac --check/--uncheck`.
+type CriterionJSON struct {
+	Index   int    `json:"index" jsonschema:"description=1-based position of the criterion in the acceptance section"`
+	Checked bool   `json:"checked" jsonschema:"description=whether the checkbox is checked (- [x])"`
+	Text    string `json:"text" jsonschema:"description=the criterion text — the first line after the checkbox"`
+}
+
+// ToCriteriaJSON maps the domain criteria to their wire DTOs (never nil — an empty
+// acceptance list marshals to []).
+func ToCriteriaJSON(cs []domain.Criterion) []CriterionJSON {
+	out := make([]CriterionJSON, len(cs))
+	for i, c := range cs {
+		out[i] = CriterionJSON{Index: c.Index, Checked: c.Checked, Text: c.Text}
+	}
+	return out
+}
+
 // FindingsTallyJSON is an audit's finding disposition tally (the `findings` field
 // of `audit info`) — the audit analogue of a task's acceptance-criteria tally.
 type FindingsTallyJSON struct {

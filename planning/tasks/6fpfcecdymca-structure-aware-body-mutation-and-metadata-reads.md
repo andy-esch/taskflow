@@ -74,7 +74,7 @@ so the next agent finds them without dogfooding-by-discovery.
       `## Progress Log`, creating the section only when absent — never a
       duplicate header. Atomic; `--json` returns the task envelope; `--dry-run`
       previews.
-- [ ] `task ac <slug> --list` numbers the criteria; `--check <n>`/`--uncheck <n>`
+- [x] `task ac <slug> --list` numbers the criteria; `--check <n>`/`--uncheck <n>`
       flip the box atomically, preserving surrounding body; `--json` supported.
 - [x] `task path <slug>` prints the absolute file path and nothing else.
 - [x] `task info <slug> --json` returns `{path, status, epic,
@@ -227,3 +227,53 @@ real ones:
 Reviewer PASSED lenses 1–3, 5, 6, 8 (narrowing-under-`--json`, parse-free resolution,
 tally trust, port churn, section semantics, completion claims) and un-checked no boxes.
 Full suite + lint green; goldens + docs regenerated.
+
+## Progress (2026-07-16) — `task ac` shipped (item 2)
+
+The acceptance-criteria checkbox CLI — the fast-follow — is done, closing item 2
+(checked off with the command itself):
+
+- **`task ac <slug>`** (default / `--list`) — numbered acceptance checklist;
+  `--json` returns the new `acceptance` envelope `[{index,checked,text}]` (schema
+  1.28 → 1.29).
+- **`task ac <slug> --check <n>` / `--uncheck <n>`** — flip one criterion by
+  1-based index (substring matching deliberately not offered). The flip rewrites
+  only that checkbox's `[ ]`/`[x]` char and routes through the atomic,
+  frontmatter-preserving `EditBody` path; `--json` returns the `task_mutation`
+  envelope. Idempotent: flipping to the current state is a no-op with no write (no
+  spurious `updated_at` bump); `--dry-run` previews; out-of-range / no-AC-section →
+  ErrValidation (exit 11).
+
+Reuses the fence-aware AC enumerator (`scanAcceptanceCheckboxes`) that already
+backs `task info`'s tally — one parser, three consumers (count, list, flip).
+Verified surgical end-to-end: a `--check`→`--uncheck` round-trip restores the file
+byte-for-byte. Tests: domain (list/flip/uncheck/idempotent/out-of-range/no-section)
++ CLI (list, list --json, flip-file, frontmatter-preserved, dry-run, no-op,
+mutual-exclusion, mutation envelope). Golden `task_acceptance_json` added (the
+fixture task gained an acceptance section, so `task_info`'s tally is now a real
+1/2). docgen + comment map + README updated. Full suite + lint green.
+
+**Remaining:** only `task log` (item 1) — still parked pending the canonical
+Progress-section shape decision.
+
+## Progress (2026-07-16) — misconfiguration guard for acceptance criteria
+
+Raised in review: the `ac:` tally / `task ac` key off "a heading containing 'acceptance'
++ well-formed checkboxes", so a misconfigured task made them silently lie. Added a lint
+guard so misconfiguration is loud, not a false positive:
+
+- **`lint` now flags** (a) a botched checkbox in the acceptance section that the scanner
+  silently drops (`[]`, `[ x]`, `[  ]` — blanks/x/X but not the canonical
+  `[ ]`/`[x]`/`[X]`), and (b) more than one acceptance section (only the first is used).
+- **Deliberately conservative** — `[1]` citations, `[-]` partial markers, and
+  `[text](url)` links are NOT flagged (a false positive would break lint-clean on legit
+  content). Verified the real corpus stays lint-clean.
+- **Architecture:** `domain.LintAcceptanceCriteria(body)` (fence-aware, reuses the AC
+  scanner's model) wired through a new `ListTasksWithBodies` store scan — the task twin
+  of `ListAuditsWithFindings`, so lint reads every body ONCE (no O(N²) re-resolve). The
+  write path already guarded (out-of-range / no-section → exit 11); this closes the read
+  path.
+
+Tests: domain (malformed variants · no-false-positives · multiple sections · fence-aware
+· out-of-section), store (`ListTasksWithBodies` carries bodies), core (Lint flags it via
+the body scan), CLI (`lint --json` surfaces it end-to-end). Full suite + lint green.

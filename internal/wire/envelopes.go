@@ -120,6 +120,20 @@ func ToAuditInfoEnvelope(a domain.Audit, path string) AuditInfoEnvelope {
 	return AuditInfoEnvelope{SchemaVersion: SchemaVersion, AuditInfo: ToAuditInfoJSON(a, path)}
 }
 
+// AcceptanceEnvelope wraps `task ac --list --json` — a task's acceptance criteria
+// with their checked state (the list an agent flips by index). A flip
+// (`--check`/`--uncheck`) instead returns a task_mutation envelope (it edits the body).
+type AcceptanceEnvelope struct {
+	SchemaVersion string          `json:"schema_version"`
+	Slug          string          `json:"slug"`
+	Acceptance    []CriterionJSON `json:"acceptance"`
+}
+
+// ToAcceptanceEnvelope builds the `task ac --list --json` envelope value.
+func ToAcceptanceEnvelope(slug string, cs []domain.Criterion) AcceptanceEnvelope {
+	return AcceptanceEnvelope{SchemaVersion: SchemaVersion, Slug: slug, Acceptance: ToCriteriaJSON(cs)}
+}
+
 // TaskMutationEnvelope is `task set` / `task append` / `task set --body` under
 // --json: the reloaded task, dry_run, and (for the body commands) the resulting
 // body. Separate from TaskShowEnvelope so the mutation-only dry_run stays off the
@@ -576,6 +590,7 @@ type jsonEnvelopes struct {
 	Board         BoardEnvelope         `json:"board"`
 	TaskShow      TaskShowEnvelope      `json:"task_show"`
 	TaskInfo      TaskInfoEnvelope      `json:"task_info"`
+	Acceptance    AcceptanceEnvelope    `json:"acceptance"`
 	Path          PathEnvelope          `json:"path"`
 	TaskMutation  TaskMutationEnvelope  `json:"task_mutation"`
 	EpicMutation  EpicMutationEnvelope  `json:"epic_mutation"`

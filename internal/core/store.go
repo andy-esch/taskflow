@@ -14,6 +14,11 @@ import (
 // and report unreadable files instead of dying on the first one.
 type TaskStore interface {
 	ListTasks() ([]domain.Task, []domain.FileProblem, error)
+	// ListTasksWithBodies is ListTasks' scan with each task's markdown body kept
+	// alongside, so a body-aware pass (lint's acceptance-criteria checks) reads every
+	// file once instead of re-resolving each slug through GetTask. Same resilient-read
+	// contract: an unreadable file is a FileProblem, not fatal.
+	ListTasksWithBodies() ([]TaskWithBody, []domain.FileProblem, error)
 	GetTask(slug string) (task domain.Task, body string, err error)
 	// ResolveTaskPath returns a task's file path from its slug/id WITHOUT parsing —
 	// so `task path` works even on a file whose frontmatter won't parse (the case
@@ -83,6 +88,13 @@ type EpicStore interface {
 type AuditWithFindings struct {
 	Audit    domain.Audit
 	Findings []domain.Finding
+}
+
+// TaskWithBody is a task plus its markdown body, kept together by
+// ListTasksWithBodies so lint's body-aware checks read each file once.
+type TaskWithBody struct {
+	Task domain.Task
+	Body string
 }
 
 // AuditStore is the audit-persistence port.

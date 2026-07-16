@@ -214,7 +214,7 @@ type LintResult struct {
 // epic-existence check) AND the epics themselves. Returns one LintResult per
 // task or epic with issues.
 func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
-	tasks, problems, err := s.store.ListTasks()
+	tasks, problems, err := s.store.ListTasksWithBodies()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -230,7 +230,8 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	validEpic := func(id string) bool { return valid[domain.EpicRefKey(id)] }
 
 	var results []LintResult
-	for _, t := range tasks {
+	for _, tb := range tasks {
+		t := tb.Task
 		// Active tasks get the full field lint; archived tasks are only checked for the
 		// universal defects (missing/unrecognized frontmatter status, missing or drifted
 		// id) — no point nagging about missing fields on a completed item, but a bad
@@ -238,6 +239,9 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		var issues []domain.Issue
 		if t.Status.IsActive() {
 			issues = domain.LintTask(t, validEpic)
+			// Body-aware: acceptance-criteria misconfigurations that would make the
+			// tally / `task ac` lie (botched checkbox, multiple acceptance sections).
+			issues = append(issues, domain.LintAcceptanceCriteria(tb.Body)...)
 		} else {
 			// Archived tasks skip the field nags but still get the universal checks: a
 			// missing/unrecognized frontmatter status, and a missing stable id.

@@ -83,6 +83,37 @@ func (s *Service) TaskPath(slug string) (string, error) {
 	return s.store.ResolveTaskPath(slug)
 }
 
+// AcceptanceCriteria lists a task's acceptance criteria (read-only, for `task ac
+// --list`). Returns the canonical slug (for the envelope) and the ordered criteria.
+func (s *Service) AcceptanceCriteria(slug string) (string, []domain.Criterion, error) {
+	t, body, err := s.store.GetTask(slug)
+	if err != nil {
+		return "", nil, err
+	}
+	return t.Slug, domain.ListAcceptanceCriteria(body), nil
+}
+
+// SetAcceptanceCriterion flips a task's nth (1-based) acceptance-criteria checkbox and
+// writes the result through the atomic, frontmatter-preserving body-replace path
+// (EditBody). Returns the reloaded task, the resulting body, and whether anything
+// changed — false means the criterion was already in the target state, so no write was
+// performed (and updated_at is not bumped).
+func (s *Service) SetAcceptanceCriterion(slug string, n int, checked, dryRun bool) (domain.Task, string, bool, error) {
+	t, body, err := s.store.GetTask(slug)
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	newBody, err := domain.SetAcceptanceCriterion(body, n, checked)
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	if newBody == body {
+		return t, body, false, nil // already in the target state — no write
+	}
+	rt, rb, err := s.store.EditBody(slug, newBody, false, s.now(), dryRun)
+	return rt, rb, true, err
+}
+
 // EditTask opens a task for whole-file editing — the human face of mutation,
 // complementing the field-level `task set`. edit (run by the cli's $EDITOR layer)
 // receives the current file content and returns the new content; the store

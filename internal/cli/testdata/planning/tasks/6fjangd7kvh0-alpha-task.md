@@ -14,3 +14,8 @@ updated_at: "2026-01-03"
 # Alpha Task
 
 Body for the alpha fixture task.
+
+## Acceptance criteria
+
+- [x] the first criterion is done
+- [ ] the second criterion is not

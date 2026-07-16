@@ -102,7 +102,10 @@ import (
 // bucket + finding disposition tally `findings:{total,open,in_progress,done,dropped}`,
 // no body; the audit counterpart to `task_info`) added. The `path` envelope now also
 // backs `epic path` / `audit path` (unchanged shape).
-const SchemaVersion = "1.28"
+// 1.29: the `acceptance` envelope (`task ac --list` — a task's acceptance criteria,
+// each `{index, checked, text}`, the list an agent flips by index) added. A flip
+// (`task ac --check/--uncheck`) returns the existing `task_mutation` envelope.
+const SchemaVersion = "1.29"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

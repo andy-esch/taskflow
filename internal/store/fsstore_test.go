@@ -13,6 +13,25 @@ func writeTask(t *testing.T, root, status, name, content string) {
 	testutil.Write(t, path, out)
 }
 
+// TestFS_ListTasksWithBodies pins the body-carrying scan (the task twin of
+// ListAuditsWithFindings): each task returns with its markdown body — which the
+// acceptance-criteria lint reads — alongside the frontmatter ListTasks parses.
+func TestFS_ListTasksWithBodies(t *testing.T) {
+	root := t.TempDir()
+	writeTask(t, root, "ready-to-start", "a.md", "---\nstatus: ready-to-start\nepic: e1\ntags: [x]\n---\n# A\n\n## Acceptance criteria\n\n- [x] done\n")
+
+	got, problems, err := NewFS(root).ListTasksWithBodies()
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("ListTasksWithBodies: %v / %+v", err, problems)
+	}
+	if len(got) != 1 || got[0].Task.Slug != "a" {
+		t.Fatalf("want 1 task 'a', got %+v", got)
+	}
+	if !strings.Contains(got[0].Body, "## Acceptance criteria") || !strings.Contains(got[0].Body, "- [x] done") {
+		t.Errorf("body not carried through the scan:\n%q", got[0].Body)
+	}
+}
+
 func TestFS_ListTasks(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "alpha.md",

@@ -22,6 +22,30 @@
       ],
       "description": "ACJSON is a task's acceptance-criteria checkbox tally (the `ac` field of `task info`): how many criteria are checked out of the total."
     },
+    "AcceptanceEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "acceptance": {
+          "items": {
+            "$ref": "#/$defs/CriterionJSON"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "slug",
+        "acceptance"
+      ],
+      "description": "AcceptanceEnvelope wraps `task ac --list --json` — a task's acceptance criteria with their checked state (the list an agent flips by index)."
+    },
     "AuditInfoEnvelope": {
       "properties": {
         "schema_version": {
@@ -317,6 +341,30 @@
         "path"
       ],
       "description": "CreatedItem is the created document inside CreatedEnvelope."
+    },
+    "CriterionJSON": {
+      "properties": {
+        "index": {
+          "type": "integer",
+          "description": "1-based position of the criterion in the acceptance section"
+        },
+        "checked": {
+          "type": "boolean",
+          "description": "whether the checkbox is checked (- [x])"
+        },
+        "text": {
+          "type": "string",
+          "description": "the criterion text — the first line after the checkbox"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "index",
+        "checked",
+        "text"
+      ],
+      "description": "CriterionJSON is one acceptance-criteria checkbox for `task ac --list --json` — the list an agent then flips by index with `task ac --check/--uncheck`."
     },
     "DoctorEnvelope": {
       "properties": {
@@ -1628,6 +1676,9 @@
         "task_info": {
           "$ref": "#/$defs/TaskInfoEnvelope"
         },
+        "acceptance": {
+          "$ref": "#/$defs/AcceptanceEnvelope"
+        },
         "path": {
           "$ref": "#/$defs/PathEnvelope"
         },
@@ -1711,6 +1762,7 @@
         "board",
         "task_show",
         "task_info",
+        "acceptance",
         "path",
         "task_mutation",
         "epic_mutation",
@@ -1739,6 +1791,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.28)",
+  "title": "tskflwctl --json output (schema_version 1.29)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

@@ -153,6 +153,29 @@ func AuditInfoHuman(w io.Writer, st Style, a domain.Audit, path string) {
 	field("path", path)
 }
 
+// AcceptanceJSON writes `task ac --list --json`: the task's acceptance criteria.
+func AcceptanceJSON(w io.Writer, slug string, cs []domain.Criterion) error {
+	return wire.EncodeJSON(w, wire.ToAcceptanceEnvelope(slug, cs))
+}
+
+// AcceptanceHuman prints the numbered acceptance checklist ("[x]  1. text"), the
+// list an agent then flips by index. Empty prints a dim note.
+func AcceptanceHuman(w io.Writer, st Style, cs []domain.Criterion) {
+	if len(cs) == 0 {
+		fmt.Fprintln(w, st.Dim("no acceptance criteria"))
+		return
+	}
+	for _, c := range cs {
+		box := "[ ]"
+		mark := st.Dim(box)
+		if c.Checked {
+			box = "[x]"
+			mark = st.Green(box)
+		}
+		fmt.Fprintf(w, "%s %s %s\n", mark, st.Dim(fmt.Sprintf("%2d.", c.Index)), c.Text)
+	}
+}
+
 // PathJSON writes just the resolved absolute path (`task/epic/audit path --json`).
 func PathJSON(w io.Writer, path string) error {
 	return wire.EncodeJSON(w, wire.ToPathEnvelope(path))

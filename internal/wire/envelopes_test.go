@@ -58,6 +58,9 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToTaskInfoEnvelope(task, domain.ACCount{Checked: 1, Total: 3}, "/root/tasks/alpha.md"))
 		}},
 		{"PathEnvelope", func(w io.Writer) error { return emit(w, ToPathEnvelope("/root/tasks/alpha.md")) }},
+		{"AcceptanceEnvelope", func(w io.Writer) error {
+			return emit(w, ToAcceptanceEnvelope("alpha", []domain.Criterion{{Index: 1, Checked: true, Text: "done"}, {Index: 2, Checked: false, Text: "todo"}}))
+		}},
 		{"AuditInfoEnvelope", func(w io.Writer) error {
 			return emit(w, ToAuditInfoEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 3, OpenFindings: 1, ActiveFindings: 1, DoneFindings: 1}, "/root/audits/x.md"))
 		}},

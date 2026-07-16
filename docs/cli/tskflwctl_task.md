@@ -25,6 +25,7 @@ Work with tasks
 ### SEE ALSO
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
+* [tskflwctl task ac](tskflwctl_task_ac.md)	 - List a task's acceptance criteria, or check/uncheck one by index
 * [tskflwctl task append](tskflwctl_task_append.md)	 - Append a section to a task's body (atomic; agent-facing)
 * [tskflwctl task complete](tskflwctl_task_complete.md)	 - Move task(s) to completed
 * [tskflwctl task defer](tskflwctl_task_defer.md)	 - Move task(s) to deferred (optionally with a revisit date)

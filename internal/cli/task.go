@@ -62,6 +62,7 @@ func newTaskCmd(app *App) *cobra.Command {
 		newTaskShowCmd(app),
 		newTaskInfoCmd(app),
 		newTaskPathCmd(app),
+		newTaskAcCmd(app),
 		newTaskSetCmd(app),
 		newTaskEditCmd(app),
 		newTaskAppendCmd(app),
@@ -347,6 +348,79 @@ func emitPath(app *App, path string) error {
 	}
 	fmt.Fprintln(app.Out, path)
 	return nil
+}
+
+// newTaskAcCmd lists a task's acceptance criteria, or flips one by index — the CLI
+// for close-out edits that otherwise force a hand-edit of `- [ ]` → `- [x]`.
+// Index-based (`--list` to number them, then `--check 3`) is the robust form;
+// substring matching is deliberately not offered. A flip goes through the atomic,
+// frontmatter-preserving body-replace path and returns the task_mutation envelope.
+func newTaskAcCmd(app *App) *cobra.Command {
+	var check, uncheck int
+	var list bool
+	cmd := &cobra.Command{
+		Use:   "ac <task>",
+		Short: "List a task's acceptance criteria, or check/uncheck one by index",
+		Long: "List a task's acceptance criteria — the checkboxes under its " +
+			"`## Acceptance criteria` section — or flip one by 1-based index. Run with no " +
+			"flags (or --list) to number them, then --check <n> / --uncheck <n> to tick or " +
+			"clear one. Matching is index-based, not substring, for robustness. A flip " +
+			"rewrites only that one checkbox (the rest of the file is preserved), is atomic, " +
+			"and is idempotent — flipping to the current state writes nothing. Checkboxes in " +
+			"fenced code blocks are ignored, and a missing section or out-of-range index is a " +
+			"validation error (exit 11).",
+		Example:           "  tskflwctl task ac add-retry-backoff             # numbered list\n  tskflwctl task ac add-retry-backoff --check 3   # tick criterion 3\n  tskflwctl task ac add-retry-backoff --uncheck 3",
+		Args:              cobra.MaximumNArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"}, // --check/--uncheck write; --list reads
+		ValidArgsFunction: app.completeTaskSlugs,
+		RunE: func(c *cobra.Command, args []string) error {
+			slug, err := app.resolveOne(args, "specify a task", "no tasks available", "Task", app.taskOptions)
+			if err != nil {
+				return err
+			}
+			// No --check/--uncheck → the list view (the default; --list is explicit).
+			if !c.Flags().Changed("check") && !c.Flags().Changed("uncheck") {
+				canon, cs, err := app.Svc.AcceptanceCriteria(slug)
+				if err != nil {
+					return err
+				}
+				if app.JSON {
+					return render.AcceptanceJSON(app.Out, canon, cs)
+				}
+				render.AcceptanceHuman(app.Out, app.Style, cs)
+				return nil
+			}
+			checked := c.Flags().Changed("check")
+			idx := check
+			if !checked {
+				idx = uncheck
+			}
+			task, body, changed, err := app.Svc.SetAcceptanceCriterion(slug, idx, checked, app.DryRun)
+			if err != nil {
+				return err
+			}
+			if !changed && !app.JSON { // already in the target state — say so, no write
+				state := "checked"
+				if !checked {
+					state = "unchecked"
+				}
+				fmt.Fprintf(app.Out, "%s criterion %d is already %s\n", app.Style.Dim("•"), idx, state)
+				return nil
+			}
+			verb, dryVerb := "checked", "would check"
+			if !checked {
+				verb, dryVerb = "unchecked", "would uncheck"
+			}
+			return reportTaskMutation(app, task, body, verb, dryVerb)
+		},
+	}
+	cmd.Flags().BoolVar(&list, "list", false, "list the acceptance criteria (the default)")
+	cmd.Flags().IntVar(&check, "check", 0, "check the criterion at this 1-based index")
+	cmd.Flags().IntVar(&uncheck, "uncheck", 0, "uncheck the criterion at this 1-based index")
+	cmd.MarkFlagsMutuallyExclusive("check", "uncheck")
+	cmd.MarkFlagsMutuallyExclusive("list", "check")
+	cmd.MarkFlagsMutuallyExclusive("list", "uncheck")
+	return cmd
 }
 
 // absPath makes a store path absolute so `task path`/`task info` emit a path that
