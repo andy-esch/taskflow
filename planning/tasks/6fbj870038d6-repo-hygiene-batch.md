@@ -59,7 +59,5 @@ id: 6fbj870038d6
 Per decisions D10/D11/D12: `bin/pm` + `tests/test_pm.py` deleted (git history
 `39f1b83` keeps them; README/CLAUDE.md updated to say so); stray empty
 top-level `tasks/ epics/ audits/ projects/` skeleton removed; `.gitignore`
-rewritten to Go reality (dead Python/Docker sections gone). LICENSE
-intentionally **not** added (D11: private for now) — revisit before any public
-release. Stale tasks `port-pm-…` and `tui-sprint-3-…` verified and completed
+rewritten to Go reality (dead Python/Docker sections gone). LICENSE intentionally **not** added (D11: private for now) — revisit before any public release (Superseded: MIT License added on 2026-07-17 in preparation for public release). Stale tasks `port-pm-…` and `tui-sprint-3-…` verified and completed
 (closure note in the port task explains the descoped adr/schema items).

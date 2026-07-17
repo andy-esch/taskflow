@@ -39,14 +39,13 @@ regenerate with `just gifs`.
 Distribution is **GitHub Releases only** — three paths, no Homebrew/external channels:
 
 ```bash
-# 1) Prebuilt binary (no Go toolchain). The repo is private, so use gh (it
-#    handles auth); pick your platform: darwin/linux × amd64/arm64.
+# 1) Prebuilt binary (no Go toolchain). Download from GitHub Releases
+#    or use the github CLI (gh); pick your platform: darwin/linux × amd64/arm64.
 gh release download -R andy-esch/taskflow -p "*linux_arm64*"
 tar xzf tskflwctl_*_linux_arm64.tar.gz && ./tskflwctl version
 
-# 2) go install from source (needs Go + git auth to the private repo)
-GOPRIVATE=github.com/andy-esch/* \
-  go install github.com/andy-esch/taskflow/cmd/tskflwctl@latest   # or @vX.Y.Z
+# 2) go install from source (needs Go toolchain)
+go install github.com/andy-esch/taskflow/cmd/tskflwctl@latest   # or @vX.Y.Z
 
 # 3) From a checkout
 just install            # → go install onto $PATH (version-stamped)

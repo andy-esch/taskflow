@@ -98,7 +98,7 @@ Task: [repo-hygiene-batch](../tasks/6fbj870038d6-repo-hygiene-batch.md). The mod
 (`github.com/andy-esch/taskflow`); there's no license file.
 - **C:** intentionally unlicensed for now (private project).
 
-Decision:
+Decision: Option C chosen on 2026-06-12. (Superseded on 2026-07-17: licensed under MIT in preparation for public release).
 
 ## D12 — Close the two stale in-progress tasks?
 Task: [repo-hygiene-batch](../tasks/6fbj870038d6-repo-hygiene-batch.md). `port-pm-to-go-cli…` and
@@ -110,7 +110,7 @@ Task: [repo-hygiene-batch](../tasks/6fbj870038d6-repo-hygiene-batch.md). `port-p
 ## Outcome (same day)
 
 All twelve decisions were executed on 2026-06-12 — D1–D10/D12 as recommended,
-D11 as chosen (no license for now). Implementation details live in the
+D11 as chosen (no license for now; later licensed under MIT on 2026-07-17 for public release). Implementation details live in the
 closure notes of the respective task files (now under `tasks/completed/`);
 the only decision-adjacent work still open is the remainder of
 [agent-facing-cli-ergonomics-batch](../tasks/6fbj87000anh-agent-facing-cli-ergonomics-batch.md) (body-file/body-edit/create-envelope)
