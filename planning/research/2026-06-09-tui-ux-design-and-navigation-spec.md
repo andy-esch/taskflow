@@ -51,7 +51,7 @@ The TUI maintains a stable double-pane Miller Column grid layout:
 │                                        ││                                                  │
 └────────────────────────────────────────┘└──────────────────────────────────────────────────┘
 ┌─ Command Output / Status ──────────────────────────────────────────────────────────────────┐
-│ 🤖 Ready. Loaded 19 tasks and 3 epics from /Users/andyeschbacher/git/andy-esch/taskflow.    │
+│ 🤖 Ready. Loaded 19 tasks and 3 epics from /path/to/taskflow.                               │
 ├────────────────────────────────────────────────────────────────────────────────────────────┤
 │ [Tab] Cycle Tab  [j/k] Move  [h/l] Focus Preview  [Space] Select  [/] Search  [q] Quit     │
 └────────────────────────────────────────────────────────────────────────────────────────────┘
