@@ -1,19 +1,21 @@
 ---
 schema: 1
+id: 6fq4mk17py29
 status: completed
 epic: 01-api-gateway
-description: Token-bucket limiter on the gateway edge.
+description: Verify the mTLS peer before honoring forwarded identity.
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
 tags: [api]
-created: "2026-06-25"
-updated_at: "2026-06-25"
-completed_at: "2026-06-25"
+created: "2026-07-17"
+started_at: "2026-07-17"
+updated_at: "2026-07-17"
+completed_at: "2026-07-17"
 ---
 
-# Add rate limiting
+# Wire auth middleware
 
 ## Objective
 
@@ -29,4 +31,4 @@ completed_at: "2026-06-25"
 
 ## Related
 
-- Epic [[01-api-gateway]]
+- Epic [01-api-gateway](../epics/01-api-gateway.md)

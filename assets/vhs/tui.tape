@@ -18,6 +18,10 @@ Type "tskflwctl ui"
 Enter
 Sleep 2.5s
 
+# Tasks tab — status glyphs across the roster
+Type "]"
+Sleep 2s
+
 # Epics tab — neon rollup bars per epic
 Type "]"
 Sleep 2.5s

@@ -1,15 +1,15 @@
 ---
 schema: 1
 status: active
-description: 'Public API edge: auth, rate limiting, request validation.'
-priority: high
-tags: [api, gateway]
+description: 'Full-text search: an inverted index and typeahead.'
+priority: low
+tags: [search]
 created: "2026-07-17"
 ---
 
-# API Gateway
+# Search Indexing
 
-**Goal.** Public API edge: auth, rate limiting, request validation.
+**Goal.** Full-text search: an inverted index and typeahead.
 
 ## Why this is its own epic
 

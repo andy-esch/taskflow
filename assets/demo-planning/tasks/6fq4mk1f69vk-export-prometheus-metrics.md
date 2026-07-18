@@ -1,19 +1,21 @@
 ---
 schema: 1
+id: 6fq4mk1f69vk
 status: completed
 epic: 02-observability
-description: OpenTelemetry spans on every handler.
+description: Golden-signal metrics at the /metrics endpoint.
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
-tags: [obs]
-created: "2026-06-25"
-updated_at: "2026-06-25"
-completed_at: "2026-06-25"
+tags: [metrics]
+created: "2026-07-17"
+started_at: "2026-07-17"
+updated_at: "2026-07-17"
+completed_at: "2026-07-17"
 ---
 
-# Emit request traces
+# Export prometheus metrics
 
 ## Objective
 
@@ -29,4 +31,4 @@ completed_at: "2026-06-25"
 
 ## Related
 
-- Epic [[02-observability]]
+- Epic [02-observability](../epics/02-observability.md)

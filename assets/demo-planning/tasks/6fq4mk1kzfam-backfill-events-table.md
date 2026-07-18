@@ -1,16 +1,18 @@
 ---
 schema: 1
+id: 6fq4mk1kzfam
 status: completed
 epic: 03-data-pipeline
-description: One-off backfill of the new events schema.
+description: Resume backfill from the last watermark.
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
 tags: [data]
-created: "2026-06-25"
-updated_at: "2026-06-25"
-completed_at: "2026-06-25"
+created: "2026-07-17"
+started_at: "2026-07-17"
+completed_at: "2026-07-17"
+updated_at: "2026-07-17"
 ---
 
 # Backfill events table
@@ -29,4 +31,4 @@ completed_at: "2026-06-25"
 
 ## Related
 
-- Epic [[03-data-pipeline]]
+- Epic [03-data-pipeline](../epics/03-data-pipeline.md)

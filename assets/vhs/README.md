@@ -22,6 +22,10 @@ in-progress / open / deferred / wontfix (so the segmented bar shows all its
 bands). Regenerate the fixture itself by re-running the `tskflwctl epic/task/audit
 new` commands, or edit the markdown in place.
 
-`help.tape`, `epic-show.tape`, and `task-list.tape` are earlier demos not
-currently linked from the README — keep or prune as you like; `just gifs` still
-renders them.
+`help.tape`, `epic-show.tape`, and `task-list.tape` are gallery demos linked from
+[`assets/README.md`](../README.md), not the hero README — keep or prune as you
+like; `just gifs` still renders them. `epic-show.tape` also shows **Tab
+completion** of the epic id: it runs under `zsh` (not `bash`) and sources
+`tskflwctl completion zsh` off-camera first, because macOS ships bash 3.2, which
+is too old for cobra's bash completion. VHS gives every shell the same `> `
+prompt, so it still matches the other demos.

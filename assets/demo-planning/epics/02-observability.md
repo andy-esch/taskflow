@@ -1,15 +1,15 @@
 ---
 schema: 1
 status: active
-description: Traces, dashboards, and alerting across services.
+description: Golden-signal metrics, traces, and alerting for the platform.
 priority: medium
-tags: []
-created: "2026-06-25"
+tags: [metrics, tracing]
+created: "2026-07-17"
 ---
 
 # Observability
 
-**Goal.** Traces, dashboards, and alerting across services.
+**Goal.** Golden-signal metrics, traces, and alerting for the platform.
 
 ## Why this is its own epic
 

@@ -1,17 +1,18 @@
 ---
 schema: 1
+id: 6fq4mk1py50t
 status: ready-to-start
-epic: 01-api-gateway
-description: Cursor pagination for the collection routes.
+epic: 03-data-pipeline
+description: Partition the events table by ingest day.
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
-tags: [api]
-created: "2026-06-25"
+tags: [data]
+created: "2026-07-17"
 ---
 
-# Paginate list endpoints
+# Partition by day
 
 ## Objective
 
@@ -27,4 +28,4 @@ created: "2026-06-25"
 
 ## Related
 
-- Epic [[01-api-gateway]]
+- Epic [03-data-pipeline](../epics/03-data-pipeline.md)

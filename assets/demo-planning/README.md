@@ -12,9 +12,9 @@ It's a self-contained planning root (`taskflow_root = "."` in
 
 | | Contents | Shows off |
 | :-- | :-- | :-- |
-| **Epics** | `01-api-gateway` (50%), `02-observability` (33%), `03-data-pipeline` (100%) | the rollup bars at a spread of completion |
-| **Tasks** | 8 across every active + archived status (in-progress, next-up, ready, completed, deferred) | the status glyphs and the dashboard's count line |
-| **Audits** | one **open** (`2026-06-20-api-gateway`) + one **closed** (`2026-06-10-data-pipeline`) | the bucket glyphs and the Open-audits dashboard section |
+| **Epics** | `01-api-gateway` (75%), `02-observability` (50%), `03-data-pipeline` (25%), `04-search-indexing` (0%) | the rollup bars at a spread of completion |
+| **Tasks** | 14 across every active + archived status (in-progress, next-up, ready, completed, deferred) | the status glyphs and the dashboard's count line |
+| **Audits** | one **open** (`2026-06-20-api-gateway`, 8 findings) + one **closed** (`2026-06-10-data-pipeline`) | the bucket glyphs and the Open-audits dashboard section |
 
 The open audit's eight findings deliberately span **fixed · landed ·
 in-progress · open · deferred · wontfix**, so the **segmented finding bar** shows

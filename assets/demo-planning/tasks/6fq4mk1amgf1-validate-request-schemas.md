@@ -1,19 +1,21 @@
 ---
 schema: 1
+id: 6fq4mk1amgf1
 status: completed
 epic: 01-api-gateway
-description: JWT validation + scopes on protected routes.
+description: Reject malformed payloads at the router.
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
-tags: [api, auth]
-created: "2026-06-25"
-completed_at: "2026-06-25"
-updated_at: "2026-06-25"
+tags: [api]
+created: "2026-07-17"
+started_at: "2026-07-17"
+updated_at: "2026-07-17"
+completed_at: "2026-07-17"
 ---
 
-# Wire auth middleware
+# Validate request schemas
 
 ## Objective
 
@@ -29,4 +31,4 @@ updated_at: "2026-06-25"
 
 ## Related
 
-- Epic [[01-api-gateway]]
+- Epic [01-api-gateway](../epics/01-api-gateway.md)

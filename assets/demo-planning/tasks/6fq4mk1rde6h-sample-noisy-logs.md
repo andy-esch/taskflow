@@ -1,16 +1,18 @@
 ---
 schema: 1
+id: 6fq4mk1rde6h
 status: deferred
-epic: 02-observability
-description: Drop 90% of healthy-path logs.
+epic: 03-data-pipeline
+description: Sample high-volume debug logs before storage.
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
-tags: [obs]
-created: "2026-06-25"
-updated_at: "2026-06-25"
-deferred_at: "2026-06-25"
+tags: [logs]
+created: "2026-07-17"
+updated_at: "2026-07-17"
+deferred_at: "2026-07-17"
+revisit_at: "2026-09-01"
 ---
 
 # Sample noisy logs
@@ -29,4 +31,4 @@ deferred_at: "2026-06-25"
 
 ## Related
 
-- Epic [[02-observability]]
+- Epic [03-data-pipeline](../epics/03-data-pipeline.md)

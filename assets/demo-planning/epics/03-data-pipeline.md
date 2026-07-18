@@ -1,15 +1,15 @@
 ---
 schema: 1
 status: active
-description: Backfill + schema migration for the events pipeline.
+description: Event ingestion, dedupe, and warehouse backfill.
 priority: medium
-tags: []
-created: "2026-06-25"
+tags: [data, etl]
+created: "2026-07-17"
 ---
 
-# Data pipeline
+# Data Pipeline
 
-**Goal.** Backfill + schema migration for the events pipeline.
+**Goal.** Event ingestion, dedupe, and warehouse backfill.
 
 ## Why this is its own epic
 
