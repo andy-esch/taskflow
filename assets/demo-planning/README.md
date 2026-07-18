@@ -1,9 +1,11 @@
 # Demo planning fixture
 
 A small, **curated** planning tree the demo GIFs ([`../`](../)) record against —
-authored to show `tskflwctl`'s symbology off in one screen, rather than recording
-this repo's own [`planning/`](../../planning/) (whose audits are all closed, so the
-open-audit section and the segmented bar wouldn't appear).
+a **bike-workshop** project board (touring repairs, gravel upgrades, a BMX neon
+paint job, a fixed-gear build) authored to show `tskflwctl`'s symbology off in
+one screen, rather than recording this repo's own [`planning/`](../../planning/)
+(whose audits are all closed, so the open-audit section and the segmented bar
+wouldn't appear).
 
 It's a self-contained planning root (`taskflow_root = "."` in
 [`.tskflwctl.toml`](./.tskflwctl.toml)); the tapes `cd` into it.
@@ -12,9 +14,9 @@ It's a self-contained planning root (`taskflow_root = "."` in
 
 | | Contents | Shows off |
 | :-- | :-- | :-- |
-| **Epics** | `01-api-gateway` (50%), `02-observability` (33%), `03-data-pipeline` (100%) | the rollup bars at a spread of completion |
-| **Tasks** | 8 across every active + archived status (in-progress, next-up, ready, completed, deferred) | the status glyphs and the dashboard's count line |
-| **Audits** | one **open** (`2026-06-20-api-gateway`) + one **closed** (`2026-06-10-data-pipeline`) | the bucket glyphs and the Open-audits dashboard section |
+| **Epics** | `01-touring-bike-repairs` (75%), `02-gravel-bike-upgrades` (50%), `03-bmx-neon-paint-job` (25%), `04-fixed-gear-build` (0%) | the rollup bars at a spread of completion |
+| **Tasks** | 14 across every active + archived status (in-progress, next-up, ready, completed, deferred), each with a fleshed-out objective + acceptance criteria | the status glyphs, the dashboard's count line, and the `task ac` tally |
+| **Audits** | one **open** (`2026-06-20-pre-tour-inspection`, 8 findings) + one **closed** (`2026-06-10-wheel-build-qc`) | the bucket glyphs and the Open-audits dashboard section |
 
 The open audit's eight findings deliberately span **fixed · landed ·
 in-progress · open · deferred · wontfix**, so the **segmented finding bar** shows
