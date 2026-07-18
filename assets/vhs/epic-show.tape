@@ -19,7 +19,7 @@ Show
 
 # Type a short prefix, Tab to complete the full id, then run it.
 Type "tskflwctl epic show 18-tui"
-Sleep 500ms
+Sleep 400ms
 Tab
 Sleep 1.2s
 Enter

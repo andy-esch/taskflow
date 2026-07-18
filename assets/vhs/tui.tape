@@ -16,23 +16,23 @@ Show
 
 Type "tskflwctl ui"
 Enter
-Sleep 2.5s
+Sleep 1.5s
 
 # Tasks tab — status glyphs across the roster
 Type "]"
-Sleep 2s
+Sleep 1s
 
 # Epics tab — neon rollup bars per epic
 Type "]"
-Sleep 2.5s
+Sleep 1.5s
 
 # Audits tab — bucket glyph + the segmented finding bar
 Type "]"
-Sleep 2s
+Sleep 1s
 
 # open the selected audit — segmented bar + the status-grouped finding tree
 Enter
-Sleep 3.5s
+Sleep 1.5s
 
 Type "q"
 Sleep 750ms
