@@ -1,8 +1,7 @@
 # taskflow
 
 Home of **`tskflwctl`** — a local-first planning CLI over markdown+frontmatter
-task/epic/audit files. It's the Go port of the Python `pm` prototype (now
-retired — see below), and it dogfoods on its own planning under
+task/epic/audit files. It dogfoods on its own planning under
 [`planning/`](./planning/).
 
 ## Demos
@@ -19,6 +18,7 @@ status-grouped **finding tree**:
 | :-- | :-- |
 | `tskflwctl status` — counts, in-progress, epic bars, open audits | ![status](./assets/status.gif) |
 | `tskflwctl audit show <id>` — segmented finding bar + finding tree | ![audit show](./assets/audit-show.gif) |
+| `tskflwctl task new` with no `--epic` — on a TTY it prompts: an epic picker, then tags | ![epic picker](./assets/picker.gif) |
 
 ▸ **[All demos, how they're recorded, and the demo fixture →
 `assets/README.md`](./assets/README.md)** — rendered with
@@ -75,11 +75,11 @@ tskflwctl init                         # scaffold a planning tree here
 tskflwctl status                       # at-a-glance board: counts, in-progress, epic progress
 
 # create
-tskflwctl task new "Add retry backoff" --epic 17-pm-go-cli --tags net
-tskflwctl task new "Triage flake" --epic 17-pm-go-cli --tags ci --description "is CI red?" --start  # straight to in-progress (--next/--start need --description)
-echo "$BODY" | tskflwctl task new "Long writeup" --epic 17-pm-go-cli --tags x --body-file -  # body from stdin/file
+tskflwctl task new "Add retry backoff" --epic <epic-id> --tags net
+tskflwctl task new "Triage flake" --epic <epic-id> --tags ci --description "is CI red?" --start  # straight to in-progress (--next/--start need --description)
+echo "$BODY" | tskflwctl task new "Long writeup" --epic <epic-id> --tags x --body-file -  # body from stdin/file
 tskflwctl epic new "Billing overhaul" --description "Replace legacy pipeline"
-tskflwctl audit new dispatcher          # → audits/open/YYYY-MM-DD-dispatcher.md (--date to override)
+tskflwctl audit new dispatcher          # → audits/<id>-YYYY-MM-DD-dispatcher.md (--date to override)
 tskflwctl audit new auth --template security  # pick a body scaffold (default|security); --template is shell-completable
 
 # read
@@ -114,15 +114,15 @@ tskflwctl audit close|reopen|defer <slug>...
 
 # hygiene
 tskflwctl lint                         # validate active task frontmatter
-tskflwctl lint --fix                   # auto-repair (normalize, relocate misfiled, backfill ids)
+tskflwctl lint --fix                   # auto-repair frontmatter (quote ':' values, normalize lists, backfill ids)
 ```
 
-A task's `status:` is authoritative in frontmatter; `tasks/<status>/` is a
-lock-step mirror of it. Lifecycle verbs change the status and relocate the file,
-stamping dates atomically (`lint --fix` re-syncs a hand-edited drift). Errors
-carry semantic exit codes — `10`
-not-found, `11` validation, `13` ambiguous, `14`
-conflict (e.g. a name already taken).
+Tasks and audits are stored flat and id-led (`tasks/<id>-<slug>.md`,
+`audits/<id>-<slug>.md`); `status:` / `bucket:` is authoritative in frontmatter,
+with no mirror directory. Lifecycle verbs edit that field in place and stamp the
+dates atomically — no file moves (`lint --fix` re-normalizes a hand-edited
+drift). Errors carry semantic exit codes — `10` not-found, `11` validation, `13`
+ambiguous, `14` conflict (e.g. a name already taken).
 
 **Body templates.** Each kind ships named body scaffolds; `task/epic/audit new
 --template <name>` picks one (omit it for `default`). Names are shell-completable
@@ -196,13 +196,6 @@ output stays byte-identical. Program precedence: `TSKFLW_PAGER` → `[pager].com
 (in `.tskflwctl.toml`) → `$PAGER` → `less -FRX`. On/off: `--no-pager` → `--paginate`
 → `[pager].enabled` → default on.
 
-### `pm` is retired
-
-The Python prototype (`bin/pm`) this tool was ported from is **gone** —
-`tskflwctl` covers the full create → update → move → lint loop, and the Go
-test suite is the executable spec now. The prototype and its tests live only
-in git history (last at commit `39f1b83`) if archaeology is ever needed.
-
 ## Shell completion
 
 `tskflwctl` ships cobra-generated completion for bash/zsh/fish. For zsh:
@@ -236,8 +229,7 @@ a file's frontmatter is malformed).
 - `just fmt` — gofmt + lint formatting
 - `just tidy` — `go mod tidy`
 
-Design rationale lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) and
-[`planning/epics/17-pm-go-cli.md`](./planning/epics/17-pm-go-cli.md).
+Design rationale lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ### Interactive TUI (`tskflwctl ui`)
 

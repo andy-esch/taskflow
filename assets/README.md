@@ -26,6 +26,16 @@ open) above the status-grouped **finding tree**.
 
 ![tskflwctl audit show](./audit-show.gif)
 
+## Interactive pickers (`task new` with no `--epic`)
+
+On a TTY, a missing required input **prompts** instead of erroring: `task new`
+without `--epic` opens a type-to-filter epic picker, then a free-text tags
+prompt. Off a TTY (a pipe, `--json`, `--no-input`) the same command fails with
+the flag to pass — so nothing interactive can block a script. Prompts render to
+stderr, so stdout stays a clean data stream.
+
+![task new epic picker](./picker.gif)
+
 ---
 
 ## How they're made
