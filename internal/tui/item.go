@@ -214,8 +214,12 @@ func (d auditDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	tok := theme.Bucket(it.a.Bucket)
 	pct := it.a.Percent()
 	bar := st.segBar(it.a.DoneFindings, it.a.ActiveFindings, it.a.DroppedFindings, it.a.Findings, 8)
-	pctStr := st.fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
+	pctStr := st.fg(theme.Percent(pct), theme.AuditPercentLabelPadded(pct))
 	counts := rollupCounts(it.a.Resolved(), it.a.Findings, it.countsW)
-	row(w, m, index, fmt.Sprintf("%s %s %s %s  %s  %s",
-		st.fg(tok.Color, tok.Glyph), bar, pctStr, counts, it.a.Slug, st.dim(it.a.Area)), st)
+	line := fmt.Sprintf("%s %s %s %s  %s  %s",
+		st.fg(tok.Color, tok.Glyph), bar, pctStr, counts, it.a.Slug, st.dim(it.a.Area))
+	if it.a.ReadyToClose() {
+		line += "  " + st.fg(theme.ColorGreen, "✔ ready to close")
+	}
+	row(w, m, index, line, st)
 }

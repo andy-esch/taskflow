@@ -100,3 +100,9 @@ func (a Audit) Percent() int {
 func (a Audit) Settled() bool {
 	return a.Findings > 0 && a.DoneFindings+a.DroppedFindings == a.Findings
 }
+
+// ReadyToClose is the call-to-action shared by the --json envelope (ready_to_close)
+// and the human progress line: an OPEN audit that is Settled has no findings left
+// to work and can be closed. A closed/deferred audit is not "ready to close" (it is
+// already off the open board), so this is false there regardless of Settled.
+func (a Audit) ReadyToClose() bool { return a.Bucket == AuditOpen && a.Settled() }

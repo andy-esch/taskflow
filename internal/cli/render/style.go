@@ -170,6 +170,13 @@ func (s Style) Percent(pct int) string {
 	return s.wrap(s.colorSeq(theme.Percent(pct)), theme.PercentLabel(pct))
 }
 
+// AuditPercent colors an audit's fixed-share percent on the same gray/yellow/green
+// tiers as Percent, but labels it "N% fixed" (theme.AuditPercentLabel) so the
+// number reads as the fixed share, not overall triage.
+func (s Style) AuditPercent(pct int) string {
+	return s.wrap(s.colorSeq(theme.Percent(pct)), theme.AuditPercentLabel(pct))
+}
+
 // Green / Red / Warn style status glyphs and success/error/warning text.
 func (s Style) Green(t string) string { return s.wrap(s.colorSeq(theme.ColorGreen), t) }
 func (s Style) Red(t string) string   { return s.wrap(s.colorSeq(theme.ColorRed), t) }

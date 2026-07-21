@@ -250,6 +250,56 @@ func TestAuditsJSONAndHuman(t *testing.T) {
 	}
 }
 
+// TestAuditProgressDistinguishesTriaged: the headline number must tell one story
+// with the bar. A fully-triaged open audit (all superseded, 0 fixed) reads
+// "0% fixed" like an untouched one, so the "ready to close" marker is what sets
+// them apart; an untouched audit shows neither the marker nor a fixed share.
+func TestAuditProgressDistinguishesTriaged(t *testing.T) {
+	triaged := domain.Audit{Slug: "2026-06-01-triaged", Bucket: domain.AuditOpen, Area: "store", Findings: 2, DroppedFindings: 2}
+	untouched := domain.Audit{Slug: "2026-06-01-untouched", Bucket: domain.AuditOpen, Area: "store", Findings: 2, OpenFindings: 2}
+
+	var out bytes.Buffer
+	if err := AuditsHuman(&out, NewStyle(false), []domain.Audit{triaged, untouched}); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	var triagedLine, untouchedLine string
+	for _, ln := range lines {
+		switch {
+		case strings.Contains(ln, "triaged"):
+			triagedLine = ln
+		case strings.Contains(ln, "untouched"):
+			untouchedLine = ln
+		}
+	}
+	if !strings.Contains(triagedLine, "0% fixed") {
+		t.Errorf("triaged audit should label its share %q:\n%s", "0% fixed", triagedLine)
+	}
+	if !strings.Contains(triagedLine, "ready to close") {
+		t.Errorf("fully-triaged open audit should be flagged ready to close:\n%s", triagedLine)
+	}
+	if strings.Contains(untouchedLine, "ready to close") {
+		t.Errorf("untouched audit must NOT be flagged ready to close:\n%s", untouchedLine)
+	}
+
+	// audit show: an open audit with open findings keeps the "(N open)" note; a
+	// settled one gets the ready-to-close marker instead.
+	out.Reset()
+	if err := AuditShowHuman(&out, NewStyle(false), untouched, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if s := out.String(); !strings.Contains(s, "(2 open)") || strings.Contains(s, "ready to close") {
+		t.Errorf("audit show for an untouched audit should note (2 open), not ready to close:\n%s", s)
+	}
+	out.Reset()
+	if err := AuditShowHuman(&out, NewStyle(false), triaged, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if s := out.String(); !strings.Contains(s, "ready to close") || strings.Contains(s, "open)") {
+		t.Errorf("audit show for a triaged audit should be ready to close, no open note:\n%s", s)
+	}
+}
+
 // TestAuditShowHuman_FindingTree: audit show renders meta + a status-grouped
 // finding tree (lifecycle order, glyph-coded) + the body, mirroring epic show.
 // A finding with no status must land in a trailing group, not vanish.

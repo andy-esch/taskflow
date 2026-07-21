@@ -183,7 +183,7 @@ func ToAuditJSON(a domain.Audit) AuditJSON {
 		ID: a.ID, Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date, Updated: a.Updated,
 		Findings: a.Findings, OpenFindings: a.OpenFindings,
 		InProgressFindings: a.ActiveFindings, DoneFindings: a.DoneFindings, DroppedFindings: a.DroppedFindings,
-		ReadyToClose: a.Bucket == domain.AuditOpen && a.Settled(),
+		ReadyToClose: a.ReadyToClose(),
 	}
 }
 

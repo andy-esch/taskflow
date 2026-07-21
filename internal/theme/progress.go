@@ -17,6 +17,16 @@ func PercentLabel(pct int) string { return fmt.Sprintf("%d%%", pct) }
 // "100%") so it aligns in hand-laid-out columns / rows.
 func PercentLabelPadded(pct int) string { return fmt.Sprintf("%3d%%", pct) }
 
+// AuditPercentLabel qualifies an audit's percent as the FIXED share — "0% fixed"
+// — so a bare number can't be misread as overall progress. An epic's percent is
+// unambiguous (done/total), but an audit bands four dispositions: a fully-triaged
+// audit is legitimately 0% fixed yet ready to close, so its number names its unit.
+func AuditPercentLabel(pct int) string { return fmt.Sprintf("%d%% fixed", pct) }
+
+// AuditPercentLabelPadded is AuditPercentLabel right-justified to 3 percent digits
+// ("  0% fixed", "100% fixed") so audit list rows align.
+func AuditPercentLabelPadded(pct int) string { return fmt.Sprintf("%3d%% fixed", pct) }
+
 // Counts renders a done/total rollup ("7/12"). Width-justification for aligned
 // columns is the caller's concern (CLI tables pad cells; the TUI measures + pads).
 func Counts(done, total int) string { return fmt.Sprintf("%d/%d", done, total) }

@@ -477,8 +477,11 @@ func renderAuditMeta(a domain.Audit, body string, width int, s *styles) string {
 	pct := a.Percent()
 	progress := fmt.Sprintf("%s %s  %s",
 		s.segBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 12),
-		s.fg(theme.Percent(pct), theme.PercentLabel(pct)), theme.Counts(a.Resolved(), a.Findings))
-	if a.OpenFindings > 0 {
+		s.fg(theme.Percent(pct), theme.AuditPercentLabel(pct)), theme.Counts(a.Resolved(), a.Findings))
+	switch {
+	case a.ReadyToClose():
+		progress += "  " + s.fg(theme.ColorGreen, "✔ ready to close")
+	case a.OpenFindings > 0:
 		progress += fmt.Sprintf("  (%d open)", a.OpenFindings)
 	}
 	detailField(&b, "audit", a.Slug, s)

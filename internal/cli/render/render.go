@@ -284,8 +284,12 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("Open audits (%d)", len(s.OpenAudits))))
 		rows := make([][]string, 0, len(s.OpenAudits))
 		for _, a := range s.OpenAudits {
-			bar := fmt.Sprintf("%s %s", st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10), st.Percent(a.Percent()))
-			rows = append(rows, []string{"  " + st.Bold(a.Slug), bar, theme.Counts(a.Resolved(), a.Findings), a.Area})
+			bar := fmt.Sprintf("%s %s", st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10), st.AuditPercent(a.Percent()))
+			counts := theme.Counts(a.Resolved(), a.Findings)
+			if note := auditStateNote(st, a, false); note != "" {
+				counts += "  " + note
+			}
+			rows = append(rows, []string{"  " + st.Bold(a.Slug), bar, counts, a.Area})
 		}
 		writeTable(w, st.width, nil, rows)
 	}
@@ -560,6 +564,24 @@ func EpicShowHuman(w io.Writer, st Style, es core.EpicSummary, tasks []domain.Ta
 	return nil
 }
 
+// auditStateNote is the trailing call-to-action on an audit's progress line, kept
+// in one place so the list / show / dashboard surfaces can't drift. An open,
+// fully-triaged audit is flagged "✔ ready to close" (green) on every surface — the
+// distinguisher that keeps a settled audit (full bar, 0% fixed) from reading like an
+// untouched one. detail=true (single-audit views) additionally shows the routine
+// "(N open)" while findings remain; list rows omit that to stay scannable. Returns
+// "" (no leading space) when there is nothing to note.
+func auditStateNote(st Style, a domain.Audit, detail bool) string {
+	switch {
+	case a.ReadyToClose():
+		return st.Green("✔ ready to close")
+	case detail && a.OpenFindings > 0:
+		return fmt.Sprintf("(%d open)", a.OpenFindings)
+	default:
+		return ""
+	}
+}
+
 // AuditsHuman writes a table of audits with finding counts.
 func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
 	if len(audits) == 0 {
@@ -568,7 +590,10 @@ func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
 	rows := make([][]string, 0, len(audits))
 	for _, a := range audits {
 		bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 8)
-		progress := fmt.Sprintf("%s %s %s", bar, st.Percent(a.Percent()), theme.Counts(a.Resolved(), a.Findings))
+		progress := fmt.Sprintf("%s %s %s", bar, st.AuditPercent(a.Percent()), theme.Counts(a.Resolved(), a.Findings))
+		if note := auditStateNote(st, a, false); note != "" {
+			progress += "  " + note
+		}
 		rows = append(rows, []string{st.Bucket(string(a.Bucket)), st.Bold(a.Slug), progress, a.Area})
 	}
 	writeTable(w, st.width, []string{st.Dim("BUCKET"), st.Dim("AUDIT"), st.Dim("PROGRESS"), st.Dim("AREA")}, rows)
@@ -610,9 +635,9 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Fin
 		field("updated", a.Updated)
 	}
 	bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10)
-	progress := fmt.Sprintf("%s %s  %s", bar, st.Percent(a.Percent()), theme.Counts(a.Resolved(), a.Findings))
-	if a.OpenFindings > 0 {
-		progress += fmt.Sprintf("  (%d open)", a.OpenFindings)
+	progress := fmt.Sprintf("%s %s  %s", bar, st.AuditPercent(a.Percent()), theme.Counts(a.Resolved(), a.Findings))
+	if note := auditStateNote(st, a, true); note != "" {
+		progress += "  " + note
 	}
 	field("findings", progress)
 	// A status-grouped finding tree (glyph + code + title), mirroring epic show's
