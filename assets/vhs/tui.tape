@@ -34,5 +34,9 @@ Sleep 1s
 Enter
 Sleep 1.5s
 
+# scroll down
+Down 10
+Sleep 0.8s
+
 Type "q"
 Sleep 750ms
