@@ -146,6 +146,44 @@ func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit
 	return a, nil
 }
 
+// researchFields is the canonical frontmatter order for a new research doc. Thin by
+// design: no status/bucket (research has no lifecycle) and no cross-references. tags
+// and description are written even when empty so the keys are visible to fill in.
+func researchFields(r domain.Research) []fmField {
+	return []fmField{
+		{"schema", domain.FileSchemaVersion},
+		{"id", r.ID},
+		{"created", r.Created},
+		{"description", r.Description},
+		{"tags", r.Tags},
+	}
+}
+
+// CreateResearch writes a new research doc at research/<id>-<slug>.md (flat, id-led
+// per ADR-0003 §4). It refuses to clobber; the slug and id are taken from r. The id is
+// minted from r.Created by the caller (core), so ids stay chronological.
+func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (domain.Research, error) {
+	if r.Slug == "" {
+		return domain.Research{}, fmt.Errorf("%w: empty research slug", domain.ErrValidation)
+	}
+	if r.ID == "" {
+		return domain.Research{}, fmt.Errorf("%w: research doc has no id", domain.ErrValidation)
+	}
+	// The id makes the flat filename unique, so writeNewFile's O_EXCL is the whole
+	// collision guard — a duplicate slug (distinct id) is allowed, resolved by id.
+	stem := r.ID + "-" + r.Slug
+	path := filepath.Join(s.researchDir, stem+".md")
+	content, err := buildFile(researchFields(r), body)
+	if err != nil {
+		return domain.Research{}, err
+	}
+	if err := s.writeNewFile(s.researchDir, path, content, "research doc", stem, dryRun); err != nil {
+		return domain.Research{}, err
+	}
+	r.Path = path
+	return r, nil
+}
+
 var epicNumRe = regexp.MustCompile(`^(\d+)-`)
 
 // epicNum parses the leading NN- number from an epic id (0 if absent). Epics are

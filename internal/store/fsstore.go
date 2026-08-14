@@ -29,10 +29,11 @@ var errNotEntity = fmt.Errorf("%w: not an entity file", domain.ErrValidation)
 // FS reads/writes a planning tree: tasks at <root>/tasks/<status>/<slug>.md
 // and epics at <root>/epics/<id>.md.
 type FS struct {
-	root      string // the planning root; the write-lock (flock) is taken on this dir
-	tasksDir  string
-	epicsDir  string
-	auditsDir string
+	root        string // the planning root; the write-lock (flock) is taken on this dir
+	tasksDir    string
+	epicsDir    string
+	auditsDir   string
+	researchDir string
 }
 
 // Compile-time assertions that FS satisfies the core ports. The use-case Store is
@@ -47,23 +48,22 @@ var (
 // NewFS returns a store rooted at a planning directory (the dir holding tasks/).
 func NewFS(root string) *FS {
 	return &FS{
-		root:      root,
-		tasksDir:  filepath.Join(root, domain.TasksDir),
-		epicsDir:  filepath.Join(root, domain.EpicsDir),
-		auditsDir: filepath.Join(root, domain.AuditsDir),
+		root:        root,
+		tasksDir:    filepath.Join(root, domain.TasksDir),
+		epicsDir:    filepath.Join(root, domain.EpicsDir),
+		auditsDir:   filepath.Join(root, domain.AuditsDir),
+		researchDir: filepath.Join(root, domain.ResearchDir),
 	}
 }
 
 // WatchPaths is the set of leaf directories a filesystem watcher must observe to
-// catch every task/epic/audit change: the three entity parents plus each
-// task-status and audit-bucket subdir. The store owns the on-disk layout, so
-// this lives here rather than being reconstructed by the TUI watcher (which
-// would otherwise duplicate the `tasks/<status>` / `audits/<bucket>` convention).
+// catch every entity change. The store owns the on-disk layout, so this lives here
+// rather than being reconstructed by the TUI watcher.
 func (s *FS) WatchPaths() []string {
-	// Tasks and audits are both flat now (ADR-0003 §4): each entity dir is the only
-	// watch path for its kind — a status/bucket change is an in-place frontmatter write
-	// that fires on the parent dir. Epics were always flat.
-	return []string{s.epicsDir, s.tasksDir, s.auditsDir}
+	// Every entity dir is flat (ADR-0003 §4): each is the only watch path for its kind —
+	// a status/bucket change is an in-place frontmatter write that fires on the parent
+	// dir. Epics were always flat; research has no lifecycle to change at all.
+	return []string{s.epicsDir, s.tasksDir, s.auditsDir, s.researchDir}
 }
 
 // ListTasks scans every status directory and parses each task's frontmatter.

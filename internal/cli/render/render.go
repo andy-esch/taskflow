@@ -606,6 +606,65 @@ func AuditsJSON(w io.Writer, audits []domain.Audit, problems []domain.FileProble
 	return wire.EncodeJSON(w, wire.ToAuditsEnvelope(audits, problems))
 }
 
+// ResearchHuman prints the research corpus as a date-led table. There is no status or
+// progress column — research has no lifecycle and nothing to be "done" — so the date is
+// the organizing signal and the description carries the meaning.
+func ResearchHuman(w io.Writer, st Style, docs []domain.Research) error {
+	if len(docs) == 0 {
+		return nil
+	}
+	rows := make([][]string, 0, len(docs))
+	for _, r := range docs {
+		desc := r.Description
+		if desc == "" { // the migrated corpus has none; show the gap rather than a blank cell
+			desc = st.Dim("—")
+		}
+		rows = append(rows, []string{r.Created, st.Bold(r.Slug), desc})
+	}
+	writeTable(w, st.width, []string{st.Dim("CREATED"), st.Dim("RESEARCH"), st.Dim("DESCRIPTION")}, rows)
+	return nil
+}
+
+// ResearchJSON writes a versioned envelope of research docs, including any per-file
+// load problems.
+func ResearchJSON(w io.Writer, docs []domain.Research, problems []domain.FileProblem) error {
+	return wire.EncodeJSON(w, wire.ToResearchListEnvelope(docs, problems))
+}
+
+// ResearchShowHuman prints a research doc's metadata and body. body is the
+// already-rendered (glamour/raw) markdown.
+func ResearchShowHuman(w io.Writer, st Style, r domain.Research, body string) error {
+	field := func(label, value string) {
+		lbl := fmt.Sprintf("%-13s", label+":")
+		if st.width > 0 { // fit the value to the terminal (TTY only; piped stays full)
+			value = truncate(value, st.width-visibleWidth(lbl)-1)
+		}
+		fmt.Fprintf(w, "%s %s\n", st.Dim(lbl), value)
+	}
+	field("slug", st.Bold(r.Slug))
+	if r.Created != "" {
+		field("created", r.Created)
+	}
+	if len(r.Tags) > 0 {
+		field("tags", strings.Join(r.Tags, ", "))
+	}
+	if r.Description != "" {
+		field("description", r.Description)
+	}
+	if r.Updated != "" {
+		field("updated", r.Updated)
+	}
+	if body != "" {
+		fmt.Fprintf(w, "\n%s", body)
+	}
+	return nil
+}
+
+// ResearchShowJSON writes one research doc plus its body.
+func ResearchShowJSON(w io.Writer, r domain.Research, body string) error {
+	return wire.EncodeJSON(w, wire.ToResearchShowEnvelope(r, body))
+}
+
 // findingStatusOrder renders the finding groups of `audit show` in lifecycle
 // order (active work first, terminal states last). A status outside the
 // vocabulary or missing entirely (audit lint flags those) sorts after these so

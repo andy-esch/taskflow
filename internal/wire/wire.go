@@ -105,7 +105,14 @@ import (
 // 1.29: the `acceptance` envelope (`task ac --list` — a task's acceptance criteria,
 // each `{index, checked, text}`, the list an agent flips by index) added. A flip
 // (`task ac --check/--uncheck`) returns the existing `task_mutation` envelope.
-const SchemaVersion = "1.29"
+// 1.30: `research` added as a document kind (epic 28) — it appears in the schema
+// contract's `kinds` and `template list`, and brings the `research_list` /
+// `research_show` envelopes. The shape is deliberately thin, and the ABSENCES are
+// contract: a research doc has no `status`/`bucket` (it has no lifecycle — a later doc
+// supersedes an earlier one; a decision needing a lifecycle is an ADR) and no
+// `epic`/`tasks` (provenance stays body links, so there is no rollup to consume). `id`
+// is minted from `created`, so ordering by id is ordering by authorship date.
+const SchemaVersion = "1.30"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

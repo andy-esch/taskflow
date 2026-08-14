@@ -177,6 +177,28 @@ type AuditJSON struct {
 	ReadyToClose bool `json:"ready_to_close,omitempty" jsonschema:"description=true when an open audit has no open/in-progress findings left (ready to close)"`
 }
 
+// ResearchJSON is the wire DTO for a research doc. Thin by design and the omissions
+// are the contract: there is no `status`/`bucket` (research has no lifecycle) and no
+// `epic`/`tasks` (provenance is a body concern, not frontmatter) — see domain.Research.
+// An agent discovering this shape should read "snapshot, ordered by date", not
+// "work item".
+type ResearchJSON struct {
+	ID          string   `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key, minted from created so lexical id order is authorship order"`
+	Slug        string   `json:"slug" jsonschema:"description=research slug (filename without the leading id) — the human handle"`
+	Created     string   `json:"created,omitempty" jsonschema:"description=date the research was done YYYY-MM-DD; the id is minted from it"`
+	Description string   `json:"description,omitempty" jsonschema:"description=one-line summary of what was explored"`
+	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
+	Updated     string   `json:"updated_at,omitempty" jsonschema:"description=doc's own last-edited date YYYY-MM-DD; created stays immutable"`
+}
+
+// ToResearchJSON maps a domain research doc to its wire DTO.
+func ToResearchJSON(r domain.Research) ResearchJSON {
+	return ResearchJSON{
+		ID: r.ID, Slug: r.Slug, Created: r.Created,
+		Description: r.Description, Tags: r.Tags, Updated: r.Updated,
+	}
+}
+
 // ToAuditJSON maps a domain audit to its wire DTO.
 func ToAuditJSON(a domain.Audit) AuditJSON {
 	return AuditJSON{

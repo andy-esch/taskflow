@@ -130,8 +130,20 @@ type AuditStore interface {
 	AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error)
 }
 
+// ResearchStore is the research-persistence port. The narrowest entity port: research
+// has no lifecycle (so no Move) and no cross-references (so nothing to resolve), which
+// leaves scan, read, path, and create.
+type ResearchStore interface {
+	ListResearch() ([]domain.Research, []domain.FileProblem, error)
+	GetResearch(slug string) (research domain.Research, body string, err error)
+	// ResolveResearchPath returns a doc's file path from its slug/id, parse-free
+	// (see ResolveTaskPath).
+	ResolveResearchPath(slug string) (string, error)
+	CreateResearch(r domain.Research, body string, dryRun bool) (domain.Research, error)
+}
+
 // Store is the use-case persistence port the Service depends on. It is
-// deliberately narrow: only the task/epic/audit use cases live here. The two
+// deliberately narrow: only the task/epic/audit/research use cases live here. The two
 // fs/text operations that aren't use cases (frontmatter repair, watch-path
 // layout) are split into Fixer/Layout below so a second Store implementation —
 // and the test fakes — don't pay for methods the core never calls.
@@ -139,6 +151,7 @@ type Store interface {
 	TaskStore
 	EpicStore
 	AuditStore
+	ResearchStore
 }
 
 // Fixer is the frontmatter-repair port. It is an fs/text operation, not a core

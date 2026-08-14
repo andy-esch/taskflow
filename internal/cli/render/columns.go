@@ -280,6 +280,18 @@ func FindingColumns() []Column[core.AuditFinding] {
 }
 
 // AuditColumns is the projectable column set for `audit list` (slug first).
+// ResearchColumns are the projectable columns for `research list -o table/csv` and
+// `--json -c`. No status/bucket column exists because research has no lifecycle.
+func ResearchColumns() []Column[domain.Research] {
+	return []Column[domain.Research]{
+		{"slug", "research identifier", func(r domain.Research) string { return r.Slug }},
+		{"created", "date the research was done", func(r domain.Research) string { return r.Created }},
+		{"description", "one-line summary", func(r domain.Research) string { return r.Description }},
+		{"tags", "topical tags", func(r domain.Research) string { return strings.Join(r.Tags, ",") }},
+		{"id", "stable identifier", func(r domain.Research) string { return r.ID }},
+	}
+}
+
 func AuditColumns() []Column[domain.Audit] {
 	return []Column[domain.Audit]{
 		{"slug", "audit identifier", func(a domain.Audit) string { return a.Slug }},

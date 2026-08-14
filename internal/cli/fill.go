@@ -211,6 +211,21 @@ func (a *App) auditOptions() ([]prompt.Option, error) {
 	return opts, nil
 }
 
+// researchOptions is the picker roster for a bare `research show`/`research path`.
+// Labeled by description (research has no status/bucket to show), newest first —
+// ListResearch's own order.
+func (a *App) researchOptions() ([]prompt.Option, error) {
+	docs, _, err := a.Svc.ListResearch("")
+	if err != nil {
+		return nil, err
+	}
+	opts := make([]prompt.Option, 0, len(docs))
+	for _, r := range docs {
+		opts = append(opts, labeledOption(r.Slug, r.Description))
+	}
+	return opts, nil
+}
+
 // auditMoveOptions lists audits NOT already in bucket `to` — the picker for a bare
 // `audit close/reopen/defer`, mirroring transitionOptions(to) for the task verbs.
 func (a *App) auditMoveOptions(to domain.AuditBucket) func() ([]prompt.Option, error) {

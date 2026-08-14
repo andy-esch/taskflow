@@ -85,6 +85,16 @@ func (nopStore) EditAudit(string, time.Time, func(string, error) (string, error)
 func (nopStore) AppendAuditBody(string, string, time.Time, bool) (domain.Audit, string, error) {
 	return domain.Audit{}, "", nil
 }
+func (nopStore) ListResearch() ([]domain.Research, []domain.FileProblem, error) {
+	return nil, nil, nil
+}
+func (nopStore) GetResearch(string) (domain.Research, string, error) {
+	return domain.Research{}, "", domain.ErrNotFound
+}
+func (nopStore) ResolveResearchPath(string) (string, error) { return "", domain.ErrNotFound }
+func (nopStore) CreateResearch(domain.Research, string, bool) (domain.Research, error) {
+	return domain.Research{}, nil
+}
 
 // fakeStore is an in-memory Store for pure core unit tests; it overrides only
 // the read/create methods its tests touch (the rest come from nopStore).
