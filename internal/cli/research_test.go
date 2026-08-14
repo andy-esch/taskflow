@@ -85,7 +85,7 @@ func TestResearchList_NewestFirstAndJSON(t *testing.T) {
 		t.Errorf("--json order = %q first, want newer-work", env.Research[0].Slug)
 	}
 	// Ids are minted from created, so id order matches date order.
-	if !(env.Research[1].ID < env.Research[0].ID) {
+	if env.Research[1].ID >= env.Research[0].ID {
 		t.Errorf("id order must follow created order: %+v", env.Research)
 	}
 	if env.SchemaVersion == "" {

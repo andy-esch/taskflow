@@ -52,7 +52,7 @@ func TestNewResearch_IDMintedFromCreatedNotNow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !(older.ID < newer.ID) {
+	if older.ID >= newer.ID {
 		t.Errorf("id order must follow created order: %q (2026-01-03) should sort before %q (2026-06-23)", older.ID, newer.ID)
 	}
 	// And the id genuinely decodes back to the created date, not to the clock. Compared

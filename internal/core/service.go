@@ -14,15 +14,15 @@ import (
 // It has no fs and no cobra, so it is testable in isolation and reused by both
 // primary adapters (the cli and the tui).
 type Service struct {
-	store      Store
-	templates  TemplateSource
-	now        func() time.Time  // wall clock, injectable for deterministic snooze/revisit queries
-	newID      func() string     // stable-id mint (default id.New), injectable so created-file tests are deterministic
+	store     Store
+	templates TemplateSource
+	now       func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
+	newID     func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
 	// newIDAt mints an id stamped with a GIVEN time (default id.NewAt) — for an entity
 	// whose id must encode its own declared date rather than "now", so lexical id order
 	// stays authorship order. Research uses it (its id is minted from `created`, which
 	// may be backdated); tasks/audits/epics mint at creation time via newID.
-	newIDAt func(unixMilli int64) string
+	newIDAt    func(unixMilli int64) string
 	maxRetries int               // bounded OCC auto-retry for scriptable mutations (see retryOnConflict / WithRetry)
 	retrySleep func(attempt int) // backoff+jitter before a retry; injectable so tests run instantly
 }
