@@ -284,6 +284,20 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 			results = append(results, LintResult{Slug: e.ID, Issues: issues})
 		}
 	}
+	// Research is linted too (epic 28). There is no active/archived split to gate on —
+	// research has no lifecycle, so every doc gets the same short check. Its per-file
+	// load problems (a non-id-led file, unreadable frontmatter) join the same
+	// `unreadable` bucket tasks and epics use.
+	docs, rp, err := s.store.ListResearch()
+	if err != nil {
+		return nil, nil, err
+	}
+	problems = append(problems, rp...)
+	for _, r := range docs {
+		if issues := domain.LintResearch(r); len(issues) > 0 {
+			results = append(results, LintResult{Slug: r.Slug, Issues: issues})
+		}
+	}
 	return results, problems, nil
 }
 
