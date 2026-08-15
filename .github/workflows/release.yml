@@ -33,6 +33,10 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+          # Match ci.yml: build released binaries with the newest 1.26 patch rather
+          # than whatever the runner image happens to ship, so a release never carries
+          # stdlib vulnerabilities CI has already been fixed against.
+          check-latest: true
           cache-dependency-path: go.sum
 
       - name: Run goreleaser
