@@ -1,22 +1,34 @@
-## tskflwctl status
+## tskflwctl research list
 
-At-a-glance project dashboard (counts, in-progress, epic progress)
+List research docs (newest first)
+
+### Synopsis
+
+List the research corpus, newest first.
+
+Unlike task/audit list there is no default-view filter — research has no status,
+so the whole corpus is the listing.
 
 ```
-tskflwctl status [flags]
+tskflwctl research list [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl status
-  tskflwctl status --json
+  tskflwctl research list
+  tskflwctl research list --tag tui
+  tskflwctl research list --json -c slug,created,description
 ```
 
 ### Options
 
 ```
-  -h, --help   help for status
+  -c, --columns strings   select columns for -o table/csv/json, comma-separated (implies -o table); available: slug,created,description,tags,id
+  -h, --help              help for list
+  -o, --output string     output format: human|json|name|table|csv
+  -q, --quiet             ids only, one per line (alias for -o name)
+      --tag string        only docs carrying this tag
 ```
 
 ### Options inherited from parent commands
@@ -35,5 +47,5 @@ tskflwctl status [flags]
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl research](tskflwctl_research.md)	 - Work with research docs
 

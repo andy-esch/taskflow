@@ -1,22 +1,11 @@
-## tskflwctl status
+## tskflwctl research
 
-At-a-glance project dashboard (counts, in-progress, epic progress)
-
-```
-tskflwctl status [flags]
-```
-
-### Examples
-
-```
-  tskflwctl status
-  tskflwctl status --json
-```
+Work with research docs
 
 ### Options
 
 ```
-  -h, --help   help for status
+  -h, --help   help for research
 ```
 
 ### Options inherited from parent commands
@@ -36,4 +25,8 @@ tskflwctl status [flags]
 ### SEE ALSO
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl research list](tskflwctl_research_list.md)	 - List research docs (newest first)
+* [tskflwctl research new](tskflwctl_research_new.md)	 - Create a new research doc
+* [tskflwctl research path](tskflwctl_research_path.md)	 - Print the absolute path to a research doc's file
+* [tskflwctl research show](tskflwctl_research_show.md)	 - Show a research doc's metadata and body
 

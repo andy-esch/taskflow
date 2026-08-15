@@ -24,7 +24,7 @@ Work with epics
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
 * [tskflwctl epic edit](tskflwctl_epic_edit.md)	 - Open an epic in your editor (whole file; re-validated on save)
 * [tskflwctl epic list](tskflwctl_epic_list.md)	 - List epics with task rollup
 * [tskflwctl epic move](tskflwctl_epic_move.md)	 - Transition epic(s) to <status> (active|retired|deprecated)

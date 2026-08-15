@@ -1,22 +1,25 @@
-## tskflwctl status
+## tskflwctl research show
 
-At-a-glance project dashboard (counts, in-progress, epic progress)
+Show a research doc's metadata and body
 
 ```
-tskflwctl status [flags]
+tskflwctl research show <research> [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl status
-  tskflwctl status --json
+  tskflwctl research show lipgloss-v2-charm-ecosystem
+  tskflwctl research show tui-design-decisions --section findings
 ```
 
 ### Options
 
 ```
-  -h, --help   help for status
+      --frontmatter-only   show only the metadata, no body
+  -h, --help               help for show
+      --raw                print the body as raw markdown (no styling)
+      --section string     show only this body section (## heading, case-insensitive)
 ```
 
 ### Options inherited from parent commands
@@ -35,5 +38,5 @@ tskflwctl status [flags]
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl research](tskflwctl_research.md)	 - Work with research docs
 

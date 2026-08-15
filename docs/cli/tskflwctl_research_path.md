@@ -1,22 +1,22 @@
-## tskflwctl status
+## tskflwctl research path
 
-At-a-glance project dashboard (counts, in-progress, epic progress)
+Print the absolute path to a research doc's file
 
 ```
-tskflwctl status [flags]
+tskflwctl research path <research> [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl status
-  tskflwctl status --json
+  tskflwctl research path tui-design-decisions
+  $EDITOR "$(tskflwctl research path tui-design-decisions)"
 ```
 
 ### Options
 
 ```
-  -h, --help   help for status
+  -h, --help   help for path
 ```
 
 ### Options inherited from parent commands
@@ -35,5 +35,5 @@ tskflwctl status [flags]
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl research](tskflwctl_research.md)	 - Work with research docs
 

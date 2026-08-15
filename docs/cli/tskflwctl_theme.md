@@ -33,7 +33,7 @@ back to your terminal's own palette (so they look the same across themes there).
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
 * [tskflwctl theme list](tskflwctl_theme_list.md)	 - List the available color themes
 * [tskflwctl theme preview](tskflwctl_theme_preview.md)	 - Preview a theme's palette (color swatches + a sample bar)
 
