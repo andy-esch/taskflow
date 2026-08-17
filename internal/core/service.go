@@ -14,10 +14,15 @@ import (
 // It has no fs and no cobra, so it is testable in isolation and reused by both
 // primary adapters (the cli and the tui).
 type Service struct {
-	store      Store
-	templates  TemplateSource
-	now        func() time.Time  // wall clock, injectable for deterministic snooze/revisit queries
-	newID      func() string     // stable-id mint (default id.New), injectable so created-file tests are deterministic
+	store     Store
+	templates TemplateSource
+	now       func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
+	newID     func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
+	// newIDAt mints an id stamped with a GIVEN time (default id.NewAt) — for an entity
+	// whose id must encode its own declared date rather than "now", so lexical id order
+	// stays authorship order. Research uses it (its id is minted from `created`, which
+	// may be backdated); tasks/audits/epics mint at creation time via newID.
+	newIDAt    func(unixMilli int64) string
 	maxRetries int               // bounded OCC auto-retry for scriptable mutations (see retryOnConflict / WithRetry)
 	retrySleep func(attempt int) // backoff+jitter before a retry; injectable so tests run instantly
 }
@@ -53,10 +58,16 @@ func WithClock(now func() time.Time) Option {
 // so a test that snapshots a *created file* gets a fixed id instead of a random one.
 // Defaults to id.New. Mirrors WithClock: the two non-deterministic create-time inputs,
 // time and identity, are both injectable.
+//
+// It overrides BOTH id seams: the date-stamped mint (newIDAt, used by research) is
+// wrapped to ignore the timestamp and return gen() too, so one injection makes every
+// create path deterministic — a test snapshotting a created research doc doesn't need
+// to know which seam that kind happens to use.
 func WithIDGen(gen func() string) Option {
 	return func(s *Service) {
 		if gen != nil {
 			s.newID = gen
+			s.newIDAt = func(int64) string { return gen() }
 		}
 	}
 }
@@ -64,7 +75,7 @@ func WithIDGen(gen func() string) Option {
 // NewService wires the core to its store; templates default to the built-in
 // source unless WithTemplateSource overrides it.
 func NewService(store Store, opts ...Option) *Service {
-	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New, maxRetries: defaultMaxRetries, retrySleep: defaultRetrySleep}
+	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New, newIDAt: id.NewAt, maxRetries: defaultMaxRetries, retrySleep: defaultRetrySleep}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -271,6 +282,20 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: e.ID, Issues: issues})
+		}
+	}
+	// Research is linted too (epic 28). There is no active/archived split to gate on —
+	// research has no lifecycle, so every doc gets the same short check. Its per-file
+	// load problems (a non-id-led file, unreadable frontmatter) join the same
+	// `unreadable` bucket tasks and epics use.
+	docs, rp, err := s.store.ListResearch()
+	if err != nil {
+		return nil, nil, err
+	}
+	problems = append(problems, rp...)
+	for _, r := range docs {
+		if issues := domain.LintResearch(r); len(issues) > 0 {
+			results = append(results, LintResult{Slug: r.Slug, Issues: issues})
 		}
 	}
 	return results, problems, nil

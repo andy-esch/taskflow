@@ -13,7 +13,7 @@ func newLintCmd(app *App) *cobra.Command {
 	var fix, links bool
 	cmd := &cobra.Command{
 		Use:     "lint",
-		Short:   "Validate active task and epic frontmatter (--fix repairs tasks/audits and assigns missing ids)",
+		Short:   "Validate active task, epic, and research frontmatter (--fix repairs tasks/audits and assigns missing ids)",
 		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --links\n  tskflwctl lint --json",
 		Args:    cobra.NoArgs,
 		// Read-only by default; --fix opts into mutation explicitly.

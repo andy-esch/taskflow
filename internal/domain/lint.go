@@ -171,6 +171,35 @@ func IDDriftIssue(frontmatterID, filenameID string) []Issue {
 // always repair this; there is no "unrepairable id" state to restate.
 const MissingIDMessage = "missing stable id — `lint --fix` assigns one"
 
+// LintResearch returns the frontmatter issues for a research doc — the shortest lint
+// in the package, because research has the thinnest contract (epic 28). There is no
+// status vocabulary to validate (research has no lifecycle) and no cross-reference to
+// resolve (provenance is body links), so what's left is: the id must be present and
+// agree with the filename, and `created` must be a real date — it is required because
+// the id is minted from it, so a missing or malformed one breaks the chronological
+// ordering the whole corpus is read by.
+//
+// description and tags are deliberately NOT nagged about: both are optional, and the
+// migrated corpus has no descriptions at all, so requiring one would flag 28 files for
+// something no author can recover.
+func LintResearch(r Research) []Issue {
+	var issues []Issue
+	issues = append(issues, MissingIDIssue(r.ID)...)
+	issues = append(issues, IDDriftIssue(r.ID, r.FilenameID)...)
+	switch {
+	case strings.TrimSpace(r.Created) == "":
+		issues = append(issues, Issue{Field: "created", Message: "missing created date — required (the stable id is minted from it)"})
+	default:
+		if err := ValidateDate(r.Created); err != nil {
+			issues = append(issues, Issue{Field: "created", Message: err.Error()})
+		}
+	}
+	if err := ValidateDescription(r.Description); err != nil {
+		issues = append(issues, Issue{Field: "description", Message: err.Error()})
+	}
+	return issues
+}
+
 // LintEpic returns the frontmatter issues for an epic. Mirrors LintTask, but
 // epics have no validEpic dependency (they're the join target, not a referrer)
 // and no status-directory drift (status is a flat frontmatter field, not a

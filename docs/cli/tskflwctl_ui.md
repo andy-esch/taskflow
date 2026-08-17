@@ -34,5 +34,5 @@ tskflwctl ui [flags]
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
 

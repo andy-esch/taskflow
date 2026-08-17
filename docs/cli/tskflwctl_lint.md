@@ -1,6 +1,6 @@
 ## tskflwctl lint
 
-Validate active task and epic frontmatter (--fix repairs tasks/audits and assigns missing ids)
+Validate active task, epic, and research frontmatter (--fix repairs tasks/audits and assigns missing ids)
 
 ```
 tskflwctl lint [flags]
@@ -39,5 +39,5 @@ tskflwctl lint [flags]
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
 

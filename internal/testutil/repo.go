@@ -71,6 +71,14 @@ func AuditFixture(root, bucket, name, content string) (path, out string) {
 	return filepath.Join(root, domain.AuditsDir, TaskID(slug)+"-"+name), content
 }
 
+// ResearchFixture places a research doc at research/<id>-<slug>.md with a
+// deterministic id. Unlike TaskFixture/AuditFixture it injects nothing into the
+// frontmatter: research has no status or bucket to make authoritative.
+func ResearchFixture(root, name, content string) (path, out string) {
+	slug := strings.TrimSuffix(name, ".md")
+	return filepath.Join(root, domain.ResearchDir, TaskID(slug)+"-"+name), content
+}
+
 // Write writes content to path, creating parent dirs. Fatal on error.
 func Write(t *testing.T, path, content string) {
 	t.Helper()

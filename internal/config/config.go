@@ -344,7 +344,7 @@ func Init(root string, dryRun bool) ([]string, error) {
 	// Flat layout (ADR-0003 §4): scaffold only the entity parents — no per-status or
 	// per-bucket subdirs. The flat store never reads them, and a `.md` dropped into one
 	// would be invisible to the scan (a silent data-loss trap).
-	dirs := []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ProjectsDir}
+	dirs := []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ResearchDir, domain.ProjectsDir}
 	var created []string
 	for _, d := range dirs {
 		p := filepath.Join(root, filepath.FromSlash(d))

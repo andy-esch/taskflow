@@ -113,6 +113,25 @@ var entities = []Descriptor{
 		},
 		Placeholders: []Placeholder{{"area", "<area>"}, {"date", "<date>"}},
 	},
+	{
+		Kind: "research",
+		Dir:  ResearchDir,
+		AuthoringFields: []FieldDoc{
+			{"created", "date", true, "Date the research was done, YYYY-MM-DD (defaults to today); the id is minted from it, so ids sort chronologically.", "2026-08-14"},
+			{"description", "string", false, fmt.Sprintf("One line summarizing what was explored (≤%d chars).", MaxDescriptionLen), "Compared three theming libraries for the TUI"},
+			{"tags", "list", false, "Topical tags.", "[tui, color]"},
+		},
+		Conventions: []string{
+			"research has NO status and NO lifecycle verbs — a later doc supersedes an earlier one. A decision that needs a lifecycle is an ADR, not research.",
+			"research carries no `epic:`/`tasks:` fields — link to entities from the body with ordinary relative-path links instead.",
+			"created is required; the id is minted from it (ADR-0003 §3), so lexical id order is authorship order.",
+			"the filename slug is derived from the title; the full title is kept as the body H1.",
+		},
+		Templates: []NamedTemplate{
+			{DefaultTemplate, "Standard research scaffold: question, findings, recommendation.", researchBodyTemplate},
+		},
+		Placeholders: []Placeholder{{"title", "<title>"}, {"date", "<date>"}},
+	},
 }
 
 // Descriptors returns the entity registry (read-only copy) in schema/display
@@ -147,7 +166,7 @@ func AuthoringFields(kind string) ([]FieldDoc, error) {
 	if d, ok := descriptorFor(kind); ok {
 		return d.AuthoringFields, nil
 	}
-	return nil, fmt.Errorf("%w: unknown kind %q (task|epic|audit)", ErrValidation, kind)
+	return nil, fmt.Errorf("%w: unknown kind %q (%s)", ErrValidation, kind, strings.Join(SchemaKinds(), "|"))
 }
 
 // Conventions returns the short, factual authoring rules for a kind — the
@@ -166,7 +185,7 @@ func Conventions(kind string) []string {
 func LookupTemplate(kind, name string) (NamedTemplate, error) {
 	d, ok := descriptorFor(kind)
 	if !ok {
-		return NamedTemplate{}, fmt.Errorf("%w: unknown kind %q (task|epic|audit)", ErrValidation, kind)
+		return NamedTemplate{}, fmt.Errorf("%w: unknown kind %q (%s)", ErrValidation, kind, strings.Join(SchemaKinds(), "|"))
 	}
 	if name == "" {
 		name = DefaultTemplate
@@ -205,7 +224,7 @@ func TemplatesFor(kind string) ([]NamedTemplate, error) {
 	if d, ok := descriptorFor(kind); ok {
 		return append([]NamedTemplate(nil), d.Templates...), nil
 	}
-	return nil, fmt.Errorf("%w: unknown kind %q (task|epic|audit)", ErrValidation, kind)
+	return nil, fmt.Errorf("%w: unknown kind %q (%s)", ErrValidation, kind, strings.Join(SchemaKinds(), "|"))
 }
 
 // TemplateNames lists the body-template names a kind offers (default first), for
@@ -281,6 +300,31 @@ const auditBodyTemplate = "\n# Audit: {{area}} — {{date}}\n\n" +
 	"## Candidate tasks\n\n" +
 	"<!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do -->\n\n" +
 	"- ⏳ `tskflwctl task new \"<title>\" --epic <id> --tags <tag>` — <one line>\n"
+
+// researchBodyTemplate is the research scaffold. It opens with the QUESTION rather
+// than a status line: a research doc is an exploration snapshot, so what it was asking
+// (and what it concluded) is the durable part. "As of {{date}}" is baked into the
+// recommendation heading to keep the snapshot framing visible in the doc itself —
+// nothing here expires or needs re-flipping, because research has no lifecycle.
+const researchBodyTemplate = `
+# {{title}}
+
+## Question
+
+<what was being decided or explored — one short paragraph>
+
+## Findings
+
+<what the investigation turned up; sources, measurements, trade-offs>
+
+## Recommendation (as of {{date}})
+
+<the shape recommended, and what would change the call>
+
+## Related
+
+- <links to the tasks/epics this informs, or to earlier research it builds on>
+`
 
 // auditSecurityBodyTemplate is the `security` audit scaffold: the same finding
 // grammar as the default (a fenced example, so a fresh audit counts zero findings)

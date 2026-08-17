@@ -104,7 +104,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 
 	root := &cobra.Command{
 		Use:           "tskflwctl",
-		Short:         "Local-first planning CLI (tasks, epics, audits) over markdown",
+		Short:         "Local-first planning CLI (tasks, epics, audits, research) over markdown",
 		Version:       versionString(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -150,6 +150,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(newTaskCmd(app))
 	root.AddCommand(newEpicCmd(app))
 	root.AddCommand(newAuditCmd(app))
+	root.AddCommand(newResearchCmd(app))
 	root.AddCommand(newLintCmd(app))
 	root.AddCommand(newDoctorCmd(app))
 	root.AddCommand(newSchemaCmd(app))

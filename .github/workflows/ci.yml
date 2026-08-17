@@ -26,6 +26,13 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+          # Without this, setup-go keeps the runner image's PREINSTALLED Go when it
+          # satisfies the "1.26" range, instead of fetching the newest patch. That
+          # silently pins CI to a stale patch release — which govulncheck then reports
+          # as stdlib vulnerabilities (GO-2026-6218/6088/5942/4970, all fixed in
+          # 1.26.5/1.26.6, while the image still shipped 1.26.4). Tracking the latest
+          # patch is the point of a vulnerability gate, so always check.
+          check-latest: true
           cache-dependency-path: go.sum
 
       - name: Download dependencies

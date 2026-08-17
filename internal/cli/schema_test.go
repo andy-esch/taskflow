@@ -79,7 +79,7 @@ func TestSchemaContract_JSON(t *testing.T) {
 		t.Errorf("task_fields should cover the whole registry: got %d want %d",
 			len(c.TaskFields), len(domain.KnownTaskFieldNames()))
 	}
-	if len(c.ExitCodes) == 0 || len(c.Kinds) != 3 {
+	if len(c.ExitCodes) == 0 || len(c.Kinds) != len(domain.SchemaKinds()) {
 		t.Errorf("contract missing exit codes / kinds: %+v %+v", c.ExitCodes, c.Kinds)
 	}
 }

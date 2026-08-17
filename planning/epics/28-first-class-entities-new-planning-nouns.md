@@ -28,6 +28,9 @@ the existing entities use:
 - **routines** — a first-class entity tracking the routine↔audit lineage (audit
   gets a `routine:` field; `audit list --routine`); complements Claude Code's
   scheduler. Tenant #1 (the spike moved here from epic 24).
+- **research** — the existing `planning/research/` corpus given a frontmatter
+  contract, a read surface, and queryable `epic:`/`tasks:` provenance —
+  *without* a lifecycle (ADR-0001 draws that line at ADRs). Tenant #2.
 - **projects** — a grouping above/beside epics (TBD).
 - **ADRs as tracked entities** — decisions as first-class, queryable records
   rather than freeform docs (TBD).

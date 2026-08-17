@@ -379,6 +379,35 @@ func ToAuditShowEnvelope(a domain.Audit, body string) AuditShowEnvelope {
 	return AuditShowEnvelope{SchemaVersion: SchemaVersion, Audit: ToAuditJSON(a), Body: body}
 }
 
+// ResearchListEnvelope is `research list --json`.
+type ResearchListEnvelope struct {
+	SchemaVersion string               `json:"schema_version"`
+	Research      []ResearchJSON       `json:"research"`
+	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+}
+
+// ToResearchListEnvelope builds the `research list --json` envelope value, including
+// any per-file load problems.
+func ToResearchListEnvelope(docs []domain.Research, problems []domain.FileProblem) ResearchListEnvelope {
+	e := ResearchListEnvelope{SchemaVersion: SchemaVersion, Research: make([]ResearchJSON, 0, len(docs)), Unreadable: problems}
+	for _, r := range docs {
+		e.Research = append(e.Research, ToResearchJSON(r))
+	}
+	return e
+}
+
+// ResearchShowEnvelope is `research show --json`.
+type ResearchShowEnvelope struct {
+	SchemaVersion string       `json:"schema_version"`
+	Research      ResearchJSON `json:"research"`
+	Body          string       `json:"body"`
+}
+
+// ToResearchShowEnvelope builds the `research show --json` envelope value (doc + body).
+func ToResearchShowEnvelope(r domain.Research, body string) ResearchShowEnvelope {
+	return ResearchShowEnvelope{SchemaVersion: SchemaVersion, Research: ToResearchJSON(r), Body: body}
+}
+
 // AuditMutationEnvelope is `audit append --json`: the reloaded audit, dry_run, and
 // the resulting body — the audit counterpart to TaskMutationEnvelope.
 type AuditMutationEnvelope struct {

@@ -13,3 +13,6 @@ func (s *FS) ResolveEpicPath(id string) (string, error) { return s.resolveEpicPa
 
 // ResolveAuditPath returns an audit's file path from its slug/id, parse-free.
 func (s *FS) ResolveAuditPath(slug string) (string, error) { return s.resolveAudit(slug) }
+
+// ResolveResearchPath returns a research doc's file path from its slug/id, parse-free.
+func (s *FS) ResolveResearchPath(slug string) (string, error) { return s.resolveResearch(slug) }
