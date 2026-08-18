@@ -90,6 +90,15 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"EpicShowEnvelope", func(w io.Writer) error {
 			return emit(w, ToEpicShowEnvelope(epic, []domain.Task{task}, "# body"))
 		}},
+		{"ResearchListEnvelope", func(w io.Writer) error {
+			return emit(w, ToResearchListEnvelope([]domain.Research{
+				{ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23", Description: "Weighed three libs", Tags: []string{"tui"}},
+			}, nil))
+		}},
+		{"ResearchShowEnvelope", func(w io.Writer) error {
+			return emit(w, ToResearchShowEnvelope(
+				domain.Research{ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23"}, "# body"))
+		}},
 		{"AuditsEnvelope", func(w io.Writer) error {
 			return emit(w, ToAuditsEnvelope([]domain.Audit{{Slug: "x", Bucket: domain.AuditOpen, Findings: 1, OpenFindings: 1}}, nil))
 		}},

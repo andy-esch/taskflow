@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1c0wj3qah2
-status: next-up
+status: completed
 epic: 28-first-class-entities-new-planning-nouns
 description: research list/show --json have no $defs in schema --json-schema; the envelope coverage guard only checks registered-but-unvalidated, never declared-but-unregistered.
 effort: Unknown
@@ -10,6 +10,9 @@ priority: high
 autonomy_level: 3
 tags: [wire, contract]
 created: "2026-08-18"
+updated_at: "2026-08-18"
+started_at: "2026-08-18"
+completed_at: "2026-08-18"
 ---
 
 # Register the research envelopes in the JSON schema, and make the coverage guard bidirectional
