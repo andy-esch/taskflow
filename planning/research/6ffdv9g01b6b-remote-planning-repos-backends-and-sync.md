@@ -1,6 +1,9 @@
 ---
-status: reference
+schema: 1
+id: 6ffdv9g01b6b
 created: "2026-06-24"
+description: ""
+status: reference
 tags: [config, storage, sync, remote, concurrency, epic-23]
 ---
 
@@ -293,7 +296,7 @@ That makes §6's "is 'the tool never touches git' a hard line?" answerable: keep
 hard *for the local default*; relax it *only* inside an opt-in server. The residual
 merge pain this addresses (concurrent edits to a file's mutable fields) and the
 content-vs-workflow-state split behind it are in the 2026-06-30 update of
-[2026-06-24-task-storage-model-files-logs-or-versioned-db](2026-06-24-task-storage-model-files-logs-or-versioned-db.md).
+[task-storage-model-files-logs-or-versioned-db](6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db.md).
 
 ## Update 2026-06-30 — two writable authorities is the trap; "central as a git client" is the way out
 
@@ -444,7 +447,7 @@ web writes land?" question the serve-owns-git model left open.
 
 ## Related
 
-- [2026-06-24-task-storage-model-files-logs-or-versioned-db](2026-06-24-task-storage-model-files-logs-or-versioned-db.md) — the on-disk data
+- [task-storage-model-files-logs-or-versioned-db](6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db.md) — the on-disk data
   model (status-as-directory vs frontmatter/log/DB). Same root cause as the OCC
   work here: mutable state encoded in the path. Decide it *before* locking OCC's
   shape.

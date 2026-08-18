@@ -1,12 +1,15 @@
 ---
+schema: 1
+id: 6fbj87003qrn
+created: "2026-06-12"
+description: ""
 status: reference
-created: 2026-06-12
 tags: [review, code-quality, architecture, tui, cli, testing, reference]
 ---
 
 # Critical code review — multi-lens (2026-06-12)
 
-A follow-up to [2026-06-11-critical-review-and-polish-research](2026-06-11-critical-review-and-polish-research.md). Five
+A follow-up to [critical-review-and-polish-research](6fb7ym4006j2-critical-review-and-polish-research.md). Five
 parallel reviewers, each with a different lens — core/store correctness, CLI
 code+UX, TUI code+UX, architecture, and testing/tooling/hygiene — all briefed
 on yesterday's findings so they verified rather than re-reported them. Every

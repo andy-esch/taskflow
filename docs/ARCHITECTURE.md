@@ -212,7 +212,7 @@ subtract the border frame before sizing children, guard `View` before the first
 `WindowSizeMsg`, truncate (never wrap) anything fed to a `Join`, and clamp the
 composed view to the terminal. `TestModel_ViewFitsTerminal` locks the invariant
 (View height == terminal height; no line wider than the terminal). The full
-checklist is in `planning/research/2026-06-10-tui-design-decisions.md`.
+checklist is in `planning/research/6faxn1800y6n-tui-design-decisions.md`.
 
 ## Testing
 Three layers for the CLI/core: pure domain/core units (incl. a `fakeStore` for

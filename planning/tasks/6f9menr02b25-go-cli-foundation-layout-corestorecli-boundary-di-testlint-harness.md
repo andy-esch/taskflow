@@ -22,7 +22,7 @@ Stand up a **rock-solid, idiomatic-Go foundation** for the pm CLI in the
 reused `../taskflow` repo, *before* porting any commands. Reuse taskflow's
 good parts (stack, Pattern-C bones) but get the architecture right — the
 thing taskflow skipped. Design spec:
-`research/2026-06-06-go-cli-foundation-architecture.md`.
+`research/6f9menr00zk0-go-cli-foundation-architecture.md`.
 
 ## Design (from the research doc)
 
@@ -107,6 +107,6 @@ gosec/wrapcheck lint parity.
 ## Related
 
 - Epic [17-pm-go-cli](../epics/17-pm-go-cli.md).
-- `research/2026-06-06-go-cli-foundation-architecture.md` — the design.
+- `research/6f9menr00zk0-go-cli-foundation-architecture.md` — the design.
 - [port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md) —
   the command port that builds on this foundation.

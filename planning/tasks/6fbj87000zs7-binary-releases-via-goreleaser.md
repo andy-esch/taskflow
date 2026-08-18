@@ -113,9 +113,9 @@ lean on the CLI lightly), but it's the logical follow-on.
 
 ## Related
 
-- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md) (D11) ·
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · [pending-decisions](../research/6fbj87001f35-pending-decisions.md) (D11) ·
   [repair-ci-lint-gate-and-local-test-parity](6fbj87000rt6-repair-ci-lint-gate-and-local-test-parity.md) ·
-  [2026-06-11-critical-review-and-polish-research](../research/2026-06-11-critical-review-and-polish-research.md) (Tier 3: distribution
+  [critical-review-and-polish-research](../research/6fb7ym4006j2-critical-review-and-polish-research.md) (Tier 3: distribution
   funnel).
 
 ## Progress Log

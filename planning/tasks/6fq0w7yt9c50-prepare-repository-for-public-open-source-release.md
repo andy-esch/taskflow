@@ -24,10 +24,10 @@ Transition the repository from a private project to a public open-source project
 ## Acceptance criteria
 
 - [ ] Add an open-source license file (`LICENSE`), selecting a permissive license like MIT as requested.
-- [ ] Clean up local path references `/Users/andyeschbacher/...` inside `planning/research/2026-06-09-tui-ux-design-and-navigation-spec.md` and replace with a generic path.
+- [ ] Clean up local path references `/Users/andyeschbacher/...` inside `planning/research/6fakbec02jvw-tui-ux-design-and-navigation-spec.md` and replace with a generic path.
 - [ ] Update `README.md` to remove instructions about private repository setups (e.g. references to `GOPRIVATE` and authenticated release downloads via `gh`).
 - [ ] Add `.claude/` to `.gitignore` to prevent any local assistant/permissions settings from being committed.
-- [ ] Update any references in planning files referring to the repository being unlicensed or private (e.g. `planning/research/2026-06-12-pending-decisions.md` and `planning/tasks/6fbj870038d6-repo-hygiene-batch.md`).
+- [ ] Update any references in planning files referring to the repository being unlicensed or private (e.g. `planning/research/6fbj87001f35-pending-decisions.md` and `planning/tasks/6fbj870038d6-repo-hygiene-batch.md`).
 
 ## Out of scope
 

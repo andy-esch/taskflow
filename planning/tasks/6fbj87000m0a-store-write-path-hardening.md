@@ -16,8 +16,8 @@ id: 6fbj87000m0a
 # Store write-path hardening
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), findings M1/M3 + B3/B4
-> carried from [2026-06-11-critical-review-and-polish-research](../research/2026-06-11-critical-review-and-polish-research.md)). These are
+> ([critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md), findings M1/M3 + B3/B4
+> carried from [critical-review-and-polish-research](../research/6fb7ym4006j2-critical-review-and-polish-research.md)). These are
 > the data-safety siblings of the in-progress
 > [harden-task-set-against-silent-frontmatter-corruption](6fb7ym4008ma-harden-task-set-against-silent-frontmatter-corruption.md) — same
 > parse-before-commit principle, more call sites.

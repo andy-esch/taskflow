@@ -1,3 +1,11 @@
+---
+schema: 1
+id: 6dr29v0030dy
+created: "2026-01-03"
+description: ""
+tags: []
+---
+
 # Research: TaskFlow Monorepo Structure
 
 **Status**: Proposal

@@ -1,6 +1,9 @@
 ---
-status: reference
+schema: 1
+id: 6feeygw022td
 created: "2026-06-21"
+description: ""
+status: reference
 tags: [cli, ux, fang, spike, decision]
 ---
 

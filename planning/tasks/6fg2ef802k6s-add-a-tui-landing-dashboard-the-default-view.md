@@ -35,7 +35,7 @@ pieces need more:
   `updated_at` / `completed_at`.
 - **Larger goals / cross-cutting clusters** — needs the **Projects** entity
   (groupings that span epics; see
-  `planning/research/2026-06-20-adrs-and-projects-format-design.md`). GATED — ship
+  `planning/research/6fe4my001bdk-adrs-and-projects-format-design.md`). GATED — ship
   everything else before Projects lands.
 
 ## Proposed widgets

@@ -78,9 +78,9 @@ The local phase (sibling-dir `planning_repo`, steps 1–6 above) is **shipped**.
 The "remote later" half — pointing `planning_repo` at a git remote, an object
 store, or a service — is scoped in the research doc:
 
-- `planning/research/2026-06-24-remote-planning-repos-backends-and-sync.md` —
+- `planning/research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md` —
   backend & sync options, grounded in the current storage seam.
-- `planning/research/2026-06-24-task-storage-model-files-logs-or-versioned-db.md`
+- `planning/research/6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db.md`
   — the on-disk data model (status-as-directory vs frontmatter / event-log / DB).
   Shares this work's root cause: state encoded in the path. Decide it *before*
   locking the OCC shape.

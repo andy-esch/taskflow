@@ -16,7 +16,7 @@ id: 6fbj87001ds3
 # TUI filter × reload correctness
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), findings H2 + A1 + the
+> ([critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md), findings H2 + A1 + the
 > cursor-restore loss). Merge-blocker for `feat/tui-multi-entity-navigation`:
 > all three are interactions between `/` filtering and the new
 > watcher-triggered `reloadAll`.

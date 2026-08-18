@@ -35,6 +35,6 @@ A floating fuzzy launcher (⌘P / Telescope style) over a single index of **all 
 
 ## Related
 
-- Design: `planning/research/2026-06-23-tui-v2-feature-wins-decisions.md` (layers/overlays adopt decision).
+- Design: `planning/research/6ff3hpm000vp-tui-v2-feature-wins-decisions.md` (layers/overlays adopt decision).
 - Reuses: `internal/listfilter`, `bubbles/list` (see `internal/cli/prompt/picker.go`), the modal registry + `jumpTo`/dispatch in `internal/tui`.
 - Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).

@@ -22,9 +22,9 @@ id: 6fbj87003qwr
 > debatable items are at the bottom.
 
 > ⚠️ **Externally proposed — needs independent review before implementing.**
-> Low-severity items from [2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md)
+> Low-severity items from [critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md)
 > (plus still-open A4/A5 from
-> [2026-06-11-critical-review-and-polish-research](../research/2026-06-11-critical-review-and-polish-research.md)). The implementing agent
+> [critical-review-and-polish-research](../research/6fb7ym4006j2-critical-review-and-polish-research.md)). The implementing agent
 > should decide which earn their change. Partially adjacent to
 > [tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort](6fb7ym4023q0-tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort.md) —
 > coordinate, do not duplicate.

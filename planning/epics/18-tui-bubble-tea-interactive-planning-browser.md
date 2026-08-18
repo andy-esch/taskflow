@@ -95,10 +95,10 @@ render concepts). Epic 17 is the CLI port; this is the interactive front-end.
 
 ## References
 
-- `research/2026-06-09-tui-ux-design-and-navigation-spec.md` — the input UX spec
+- `research/6fakbec02jvw-tui-ux-design-and-navigation-spec.md` — the input UX spec
   (good bones; over-reached on Projects-tab + multi-select — superseded by the
   decisions above).
-- `research/2026-06-10-tui-design-decisions.md` — the **build reference**
+- `research/6faxn1800y6n-tui-design-decisions.md` — the **build reference**
   (full keybinding matrix, package structure, bubbles verdicts, testing,
   footguns), distilled from two 2026-06-10 research agents (UX patterns from
   k9s/lazygit/gh-dash/gitui; Bubble Tea architecture/testing). Includes the

@@ -1,4 +1,9 @@
 ---
+schema: 1
+id: 6f9menr01s85
+created: "2026-06-06"
+description: ""
+tags: []
 date: 2026-06-06
 topic: Projects as first-class cross-cutting initiatives
 purpose: Design `project` as an optional, cross-domain grouping of tasks (orthogonal to epics), and surface the open gaps before implementing.
@@ -102,7 +107,7 @@ filters tasks by membership (+ combine with `--status` for "what's left").
 
 ## References
 
-- `research/2026-06-06-tskflwctl-command-spec.md` (the `project` group).
+- `research/6f9menr01t1n-tskflwctl-command-spec.md` (the `project` group).
 - `AI_README.md` "Hierarchy" section (needs the orthogonal-axes rewrite).
 - `bin/pm` `cmd_project_list` (the stub to replace) + `OPTIONAL_FIELDS`
   (`project` → `projects`).

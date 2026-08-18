@@ -16,8 +16,8 @@ id: 6fbj87003c8e
 # TUI reload robustness
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), findings M12/M13/M14 +
-> still-open A2/A5 from [2026-06-11-critical-review-and-polish-research](../research/2026-06-11-critical-review-and-polish-research.md)).
+> ([critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md), findings M12/M13/M14 +
+> still-open A2/A5 from [critical-review-and-polish-research](../research/6fb7ym4006j2-critical-review-and-polish-research.md)).
 > Robustness of the watcher/reload plumbing — real bugs, but none blocks the
 > branch the way the filter cluster does.
 

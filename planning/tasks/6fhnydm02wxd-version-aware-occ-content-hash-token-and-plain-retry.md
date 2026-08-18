@@ -285,7 +285,7 @@ untouched.
 ## Related
 
 - Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md)
-- [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md) — §2 sync/OCC context (its
+- [remote-planning-repos-backends-and-sync](../research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md) — §2 sync/OCC context (its
   per-backend token table is superseded by this content-hash decision).
 - Epic [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md) — the HTTP surface over this token.
 

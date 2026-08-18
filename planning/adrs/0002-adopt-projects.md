@@ -11,7 +11,7 @@ superseded_by: null
 
 > Follows the ADR format established in [0001-adopt-adrs](0001-adopt-adrs.md). Depends on it: this is a
 > decision recorded *using* the convention 0001 introduces. Design rationale and the
-> cross-tool product survey are in [2026-06-20-adrs-and-projects-format-design](../research/2026-06-20-adrs-and-projects-format-design.md).
+> cross-tool product survey are in [adrs-and-projects-format-design](../research/6fe4my001bdk-adrs-and-projects-format-design.md).
 
 ## Context and Problem Statement
 
@@ -161,7 +161,7 @@ _None yet (still `proposed`)._
 ## Related
 
 - Format & convention this builds on: [0001-adopt-adrs](0001-adopt-adrs.md).
-- Design rationale & cross-tool survey: [2026-06-20-adrs-and-projects-format-design](../research/2026-06-20-adrs-and-projects-format-design.md).
+- Design rationale & cross-tool survey: [adrs-and-projects-format-design](../research/6fe4my001bdk-adrs-and-projects-format-design.md).
 - Project model origin (orthogonal axes, membership-on-task, no `related_epics`):
-  [2026-06-06-project-concept-cross-cutting-initiatives](../research/2026-06-06-project-concept-cross-cutting-initiatives.md).
-- Command spec (the `project` group): [2026-06-06-tskflwctl-command-spec](../research/2026-06-06-tskflwctl-command-spec.md).
+  [project-concept-cross-cutting-initiatives](../research/6f9menr01s85-project-concept-cross-cutting-initiatives.md).
+- Command spec (the `project` group): [tskflwctl-command-spec](../research/6f9menr01t1n-tskflwctl-command-spec.md).

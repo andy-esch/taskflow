@@ -60,4 +60,4 @@ task is the north-star/definition-of-done, gated on the chain's tail.
 
 ## Reference
 
-Full audit + design: `planning/research/2026-06-28-color-palette-and-theming-overhaul.md`.
+Full audit + design: `planning/research/6fgq1n001pwm-color-palette-and-theming-overhaul.md`.

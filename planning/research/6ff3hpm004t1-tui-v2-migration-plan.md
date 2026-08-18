@@ -1,12 +1,15 @@
 ---
-status: reference
+schema: 1
+id: 6ff3hpm004t1
 created: "2026-06-23"
+description: ""
+status: reference
 tags: [tui, ux, perf, bubbletea, lipgloss, migration, plan]
 ---
 
 # TUI → charm v2 migration + perf wins — sprint plan
 
-Greenlit from [2026-06-23-lipgloss-v2-charm-ecosystem](2026-06-23-lipgloss-v2-charm-ecosystem.md): move the TUI to charm
+Greenlit from [lipgloss-v2-charm-ecosystem](6ff3hpm0100s-lipgloss-v2-charm-ecosystem.md): move the TUI to charm
 **v2** (bubbletea v2 + bubbles v2 + lipgloss v2) and harvest the perf + feature
 wins. Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md). This is the
 *scoping* — the win taxonomy (what's free vs simpler-code vs needs-design), each
@@ -89,7 +92,7 @@ contained; **glamour** v1.0.0 — confirm a v2-compatible release before the por
    keyboard: connect each to a need, propose build tasks (the bucket-C scoping).
 
 ## Cross-refs
-- Source decision: [2026-06-23-lipgloss-v2-charm-ecosystem](2026-06-23-lipgloss-v2-charm-ecosystem.md) ·
-  [2026-06-21-fang-evaluation-spike](2026-06-21-fang-evaluation-spike.md).
+- Source decision: [lipgloss-v2-charm-ecosystem](6ff3hpm0100s-lipgloss-v2-charm-ecosystem.md) ·
+  [fang-evaluation-spike](6feeygw022td-fang-evaluation-spike.md).
 - Epics: [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md) ·
   [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md) · [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md).

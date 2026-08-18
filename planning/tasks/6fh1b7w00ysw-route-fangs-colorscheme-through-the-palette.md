@@ -30,7 +30,7 @@ The pre-T5 adversarial review flagged `repoColorScheme` as the largest stray-lit
 - When T5's selected theme is available, feed that theme's palette through.
 
 ## Reference
-Review finding F1 (completeness lens). Design doc: `planning/research/2026-06-28-color-palette-and-theming-overhaul.md`.
+Review finding F1 (completeness lens). Design doc: `planning/research/6fgq1n001pwm-color-palette-and-theming-overhaul.md`.
 
 **Done 2026-06-29 (branch feat/fang-palette).** repoColorScheme now derives fang's help/error colors from design.Default() via fang's LightDarkFunc — the hardcoded lipgloss.Color(1..15) literals are gone (only the error-badge white #15 remains, a fixed contrast affordance, not a themeable color). This was the LAST CLI surface bypassing the palette, so 'every surface' is now met. Verified: build/vet/full test green; TestRepoColorScheme pins Title=accent / Flag=green / badge-bg=danger from the palette.
 

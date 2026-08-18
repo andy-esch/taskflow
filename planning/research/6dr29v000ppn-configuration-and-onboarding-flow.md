@@ -1,3 +1,11 @@
+---
+schema: 1
+id: 6dr29v000ppn
+created: "2026-01-03"
+description: ""
+tags: []
+---
+
 # Research: Configuration & Onboarding Flow
 
 **Status**: Proposal

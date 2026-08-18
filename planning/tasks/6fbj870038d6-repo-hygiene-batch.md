@@ -16,7 +16,7 @@ id: 6fbj870038d6
 # Repo hygiene batch
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), finding M19 + hygiene
+> ([critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md), finding M19 + hygiene
 > lows). Mostly deletions and doc truth-keeping; one git decision for the
 > human.
 

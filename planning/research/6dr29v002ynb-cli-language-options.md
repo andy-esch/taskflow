@@ -1,3 +1,11 @@
+---
+schema: 1
+id: 6dr29v002ynb
+created: "2026-01-03"
+description: ""
+tags: []
+---
+
 # Research: CLI Language & Distribution for TaskFlow
 
 **Status**: Proposal

@@ -1,3 +1,11 @@
+---
+schema: 1
+id: 6dr29v001290
+created: "2026-01-03"
+description: ""
+tags: []
+---
+
 # Research: Hybrid Search Architecture (Direct vs. API)
 
 **Status**: Proposal

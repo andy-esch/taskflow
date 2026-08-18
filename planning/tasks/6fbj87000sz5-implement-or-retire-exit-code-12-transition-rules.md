@@ -16,7 +16,7 @@ id: 6fbj87000sz5
 # Implement or retire exit code 12 (transition rules)
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), finding M16). This is a
+> ([critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md), finding M16). This is a
 > *decision* task first: a dead documented contract is worse than no
 > contract for the scripting agents it targets.
 
@@ -50,7 +50,7 @@ Decide, then do one of:
   `internal/cli/exit.go`, `README.md`, `docs/ARCHITECTURE.md`.
 ## Decision + closure (2026-06-12)
 
-**Retired** (decision D3 in [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md)): no transition
+**Retired** (decision D3 in [pending-decisions](../research/6fbj87001f35-pending-decisions.md)): no transition
 rules exist and the dogfooded workflow moves tasks freely, so the sentinel was
 a dead documented contract. `ErrInvalidTransition`, the exit-code mapping, and
 the README/ARCHITECTURE rows are gone; 13/14 keep their numbers and 12 stays

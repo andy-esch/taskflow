@@ -19,7 +19,7 @@ id: 6ff3hpm00wy5
 The foundation for the v2 sprint. Move `internal/tui` (~7k LOC, all v1) to
 bubbletea v2 + bubbles v2 + lipgloss v2, and consolidate `internal/cli/render`
 onto lipgloss v2 so the v1 major is fully retired (fang already brought v2 in).
-Plan: `planning/research/2026-06-23-tui-v2-migration-plan.md`.
+Plan: `planning/research/6ff3hpm004t1-tui-v2-migration-plan.md`.
 
 ## Why (beyond keeping current)
 - **Perf, broad:** v1 ships a package-level `init()` that pings the terminal
@@ -53,12 +53,12 @@ Plan: `planning/research/2026-06-23-tui-v2-migration-plan.md`.
 - The harvest tasks (progress bars, the designed feature wins) — they depend on this.
 
 ## Related
-- Plan: `planning/research/2026-06-23-tui-v2-migration-plan.md`; decision
-  `planning/research/2026-06-23-lipgloss-v2-charm-ecosystem.md`.
+- Plan: `planning/research/6ff3hpm004t1-tui-v2-migration-plan.md`; decision
+  `planning/research/6ff3hpm0100s-lipgloss-v2-charm-ecosystem.md`.
 - [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).
 
 ## OSC-11 spike result (2026-06-23)
 
-Step-1 spike done: `planning/research/2026-06-23-osc11-startup-latency-spike.md`. The mechanism IS present in our pinned deps (bubbletea v1.3.10 tea_init.go init() → lipgloss.HasDarkBackground() → termenv, OSCTimeout=5s) and fires on every invocation (bubbletea in the import graph). BUT it's hard TTY-gated: termenv short-circuits `if !o.isTTY()` before the query, so agents/pipes/redirects/CI pay nothing (measured non-TTY startup 7–32ms). The up-to-5s worst case is interactive-TTY-only AND only on terminals that don't answer OSC-11.
+Step-1 spike done: `planning/research/6ff3hpm02x9p-osc11-startup-latency-spike.md`. The mechanism IS present in our pinned deps (bubbletea v1.3.10 tea_init.go init() → lipgloss.HasDarkBackground() → termenv, OSCTimeout=5s) and fires on every invocation (bubbletea in the import graph). BUT it's hard TTY-gated: termenv short-circuits `if !o.isTTY()` before the query, so agents/pipes/redirects/CI pay nothing (measured non-TTY startup 7–32ms). The up-to-5s worst case is interactive-TTY-only AND only on terminals that don't answer OSC-11.
 
 **Re-rank:** OSC-11 is a real-but-NICHE bonus (helps some interactive users), NOT a headline/agent-wide perf win. The migration's primary justifications stand: consolidate the two lipgloss majors + the v2 feature wins (progress bars/layers/clipboard) + the new renderer. No clean v1 interim fix — v2 is the fix.

@@ -1,4 +1,9 @@
 ---
+schema: 1
+id: 6f9menr01t1n
+created: "2026-06-06"
+description: ""
+tags: []
 date: 2026-06-06
 topic: tskflwctl — formal command hierarchy + purpose spec (Phase 0.5)
 purpose: The build-to command spec for the Go CLI. Full noun-verb tree with per-command purpose, flags, and output. Python pm is a starting point, not the whole contract.
@@ -194,7 +199,7 @@ First-class like epics: `projects/<slug>.md` (slug-only) + a validated
 `projects:` list on tasks. Frontmatter: `status` ∈ {unstarted, in-progress,
 complete, abandoned}, nullable `created`/`ended`, `description`, `tags` (no
 owner, no related_epics). Design:
-`research/2026-06-06-project-concept-cross-cutting-initiatives.md`.
+`research/6f9menr01s85-project-concept-cross-cutting-initiatives.md`.
 
 | Command | Purpose |
 |---|---|
@@ -278,14 +283,14 @@ Make `tskflwctl` machine-operable, not just human-runnable:
   collides with the open/closed/deferred bucket; make the directory the
   audit-level state. (Bucket-audits task + HOWTO + routine generator.)
 - **`project` design gaps** — see
-  `research/2026-06-06-project-concept-cross-cutting-initiatives.md`.
+  `research/6f9menr01s85-project-concept-cross-cutting-initiatives.md`.
 - **Where each new concept is built first** — prototype in Python `pm`
   (cheap iteration) vs straight into `tskflwctl`? (Per-concept call.)
 
 ## References
 
-- `research/2026-06-06-pm-cli-architecture-and-go-port.md` (§2 hierarchy).
-- `research/2026-06-06-go-cli-foundation-architecture.md` (foundation).
+- `research/6f9menr00j2a-pm-cli-architecture-and-go-port.md` (§2 hierarchy).
+- `research/6f9menr00zk0-go-cli-foundation-architecture.md` (foundation).
 - `bin/pm` + `tests/test_pm.py` (the prototype inventory/spec).
 - `tasks/ready-to-start/bucket-audits-into-openclosed-and-ship-pm-audit-cli.md`
   (the `audit` surface).
