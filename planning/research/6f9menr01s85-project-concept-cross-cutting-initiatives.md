@@ -107,7 +107,7 @@ filters tasks by membership (+ combine with `--status` for "what's left").
 
 ## References
 
-- `research/2026-06-06-tskflwctl-command-spec.md` (the `project` group).
+- `research/6f9menr01t1n-tskflwctl-command-spec.md` (the `project` group).
 - `AI_README.md` "Hierarchy" section (needs the orthogonal-axes rewrite).
 - `bin/pm` `cmd_project_list` (the stub to replace) + `OPTIONAL_FIELDS`
   (`project` → `projects`).

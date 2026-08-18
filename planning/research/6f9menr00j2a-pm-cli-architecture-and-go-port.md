@@ -59,21 +59,21 @@ substantial** and several decisions are directly reusable.
 `cmd/`+`internal/`, `contracts/` proto, `services/` for the Python brain).
 
 **Decisions worth keeping (within our fence):**
-- **Go + cobra + Bubble Tea** for CLI + TUI (`planning/research/cli-language-options.md`):
+- **Go + cobra + Bubble Tea** for CLI + TUI (`planning/research/6dr29v002ynb-cli-language-options.md`):
   single static binary, sub-10ms start, gh/kubectl-class ergonomics.
   Validates our framework direction — it's settled prior art, not a fresh
   bet.
-- **JSON fast-index** (`hybrid-search-architecture.md`): read one
+- **JSON fast-index** (`6dr29v001290-hybrid-search-architecture.md`): read one
   `planning-index.json` for `list`/`filter` instead of scanning N files.
   **Secondary / Optional Path:** Since we are dealing with local data,
   Go's concurrency should be fast enough to avoid caching for now. Keep the
   index as an optional performance path, and only prioritize it once we
   move to remote sources (e.g., GitHub Issues) where network latency
   makes caching mandatory.
-- **Pattern C / no Go workspaces** (`monorepo-structure-proposal.md`,
-  `workspaces-vs-root-modules.md`): one root `go.mod`, no `go.work` for a
+- **Pattern C / no Go workspaces** (`6dr29v0030dy-monorepo-structure-proposal.md`,
+  `6dr29v00057x-workspaces-vs-root-modules.md`): one root `go.mod`, no `go.work` for a
   single binary.
-- **Config + onboarding** (`configuration-and-onboarding-flow.md`): borrow
+- **Config + onboarding** (`6dr29v000ppn-configuration-and-onboarding-flow.md`): borrow
   the `init`-wizard idea. A **planning repo** holds all planning data
   (single-repo) and records `tracked_repos` = the 1..N code repos it plans
   *for* (metadata/anchoring; e.g. desirelines-planning → desirelines +
@@ -82,10 +82,10 @@ substantial** and several decisions are directly reusable.
 
 **Decisions to DEFER (out of fence, captured for later):** the thin-client
 + Python brain split, pgvector hybrid search, MCP server vs context-broker
-(`ai-interaction-interfaces.md`), LiteLLM provider abstraction
-(`ai-provider-abstraction.md`), living-docs generation
-(`documentation-integration-strategy.md`), AI block-diff file editing
-(`ai-file-editing-strategy.md`). Good thinking — none of it now.
+(`6dr29v002ezx-ai-interaction-interfaces.md`), LiteLLM provider abstraction
+(`6dr29v003x29-ai-provider-abstraction.md`), living-docs generation
+(`6dr29v001r9w-documentation-integration-strategy.md`), AI block-diff file editing
+(`6dr29v001vfc-ai-file-editing-strategy.md`). Good thinking — none of it now.
 
 **Bootstrap, don't greenfield:** epic 17 should start from taskflow's
 cobra skeleton + Pattern C layout rather than from scratch — but strip it
@@ -165,7 +165,7 @@ change** — same markdown + frontmatter the Python tool reads.
 ## 6. Port strategy
 
 > **Code architecture / layout / patterns live in the companion doc:**
-> `research/2026-06-06-go-cli-foundation-architecture.md` (primary/secondary
+> `research/6f9menr00zk0-go-cli-foundation-architecture.md` (primary/secondary
 > adapter split over a shared core, DI/no-globals, testing harness). Build
 > the foundation first ([go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness](../tasks/6f9menr02b25-go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness.md)),
 > then port commands onto it.

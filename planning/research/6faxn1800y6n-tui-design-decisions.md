@@ -13,7 +13,7 @@ Distilled from two research agents (UX patterns: k9s/lazygit/gh-dash/gitui;
 Bubble Tea architecture/testing) on 2026-06-10. The *decisions* live in epic
 [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md); this is the **how-to-build**
 reference for the sprint tasks. Supersedes the over-reaching parts of
-`2026-06-09-tui-ux-design-and-navigation-spec.md` (Projects-tab, multi-select).
+`6fakbec02jvw-tui-ux-design-and-navigation-spec.md` (Projects-tab, multi-select).
 
 ## Keybinding scheme (vim-first, locked)
 

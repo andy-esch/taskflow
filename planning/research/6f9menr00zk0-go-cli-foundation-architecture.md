@@ -17,7 +17,7 @@ related_tasks:
 
 **Goal.** Reuse the `../taskflow` repo, but stand the Go pm CLI on a
 foundation that's rock-solid and idiomatic *before* porting commands.
-Companion to `research/2026-06-06-pm-cli-architecture-and-go-port.md` (that
+Companion to `research/6f9menr00j2a-pm-cli-architecture-and-go-port.md` (that
 doc = hierarchy/framework/scope; this doc = *how the code is structured*).
 
 > **Naming (decided 2026-06-06):** the Go binary is **`tskflwctl`**
@@ -285,7 +285,7 @@ the perf phase), and the direct `ui→tui` wiring (rebuild over the core).
   (`packages/{dispatcher,apigateway}`: `cmd/ adapters/ ports/ internal/
   config/ pkg/`, `ports/portstest`, compile-time assertions).
 - `../taskflow/` (skeleton + `planning/research/`).
-- `research/2026-06-06-pm-cli-architecture-and-go-port.md` (companion).
+- `research/6f9menr00j2a-pm-cli-architecture-and-go-port.md` (companion).
 - [Standard Go Project Layout](https://github.com/golang-standards/project-layout)
   · [Three Dots Labs — Clean Architecture in Go](https://threedots.tech/post/introducing-clean-architecture/)
 - Frontmatter: stdlib `gopkg.in/yaml.v3` `yaml.Node` for surgical writes +

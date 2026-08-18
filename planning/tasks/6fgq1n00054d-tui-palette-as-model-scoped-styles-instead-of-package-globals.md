@@ -30,7 +30,7 @@ Replace the package-global `pal` + `applyTheme` (shipped in [route-tui-chrome-th
 No user-visible benefit today (single local TUI process). Value is unlocked by epic 19 (wish/multi-session) and helps the live-retheme task. Tier 4 / low.
 
 ## Reference
-Design doc: `planning/research/2026-06-28-color-palette-and-theming-overhaul.md` (§5 recommended the Model-field shape). Supersedes the package-global stopgap.
+Design doc: `planning/research/6fgq1n001pwm-color-palette-and-theming-overhaul.md` (§5 recommended the Model-field shape). Supersedes the package-global stopgap.
 
 **Review follow-ups (2026-06-29).** The pre-T5 adversarial review converged on a concrete shape for this refactor and added one decision to fold in:
 

@@ -43,8 +43,8 @@ read-model/projection** (board → TUI / CLI / web), and guard writes with
 **content-aware optimistic concurrency**.
 
 Spikes:
-- `planning/research/2026-06-24-task-storage-model-files-logs-or-versioned-db.md`
-- `planning/research/2026-06-24-remote-planning-repos-backends-and-sync.md`
+- `planning/research/6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db.md`
+- `planning/research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md`
 
 ## Direction so far (leans, NOT final)
 

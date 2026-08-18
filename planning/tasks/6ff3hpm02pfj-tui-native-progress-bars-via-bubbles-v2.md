@@ -36,5 +36,5 @@ bubbles v2 `progress` component — **net code deletion**, less to maintain.
 - The v2 migration (bubbles v2 must be in the module graph).
 
 ## Related
-- Plan: `planning/research/2026-06-23-tui-v2-migration-plan.md`.
+- Plan: `planning/research/6ff3hpm004t1-tui-v2-migration-plan.md`.
 - [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).

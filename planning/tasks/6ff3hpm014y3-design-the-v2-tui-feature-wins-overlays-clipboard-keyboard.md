@@ -42,5 +42,5 @@ not build here.
 - The v2 migration.
 
 ## Related
-- Plan: `planning/research/2026-06-23-tui-v2-migration-plan.md`.
+- Plan: `planning/research/6ff3hpm004t1-tui-v2-migration-plan.md`.
 - [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).

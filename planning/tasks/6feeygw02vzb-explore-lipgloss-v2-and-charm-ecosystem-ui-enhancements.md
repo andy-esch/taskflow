@@ -18,7 +18,7 @@ id: 6feeygw02vzb
 
 Capture the UI/rendering enhancements that become cheap **once fang lands and
 `lipgloss/v2` is in the module graph** (it now is — stable v2.0.4 — via the fang
-spike, see `planning/research/2026-06-21-fang-evaluation-spike.md`). lipgloss v2
+spike, see `planning/research/6feeygw022td-fang-evaluation-spike.md`). lipgloss v2
 ships `table`/`tree`/`list` sub-packages, and **bubbletea v2 / bubbles v2 are now
 stable (v2.1.0)**. This is a *capture-and-decide* task — enumerate options with a
 recommendation; do not build here. Governing rule (epic 20): never compromise the
@@ -78,7 +78,7 @@ agent/pipeline contract — every visual nicety is TTY-gated, raw under `--json`
 
 ## Related
 
-- Source: `planning/research/2026-06-21-fang-evaluation-spike.md` (the spike that
+- Source: `planning/research/6feeygw022td-fang-evaluation-spike.md` (the spike that
   surfaced lipgloss v2 + bubbletea v2 availability).
 - Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md) · TUI epic
   [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md) · web epic
@@ -88,7 +88,7 @@ agent/pipeline contract — every visual nicety is TTY-gated, raw under `--json`
 
 ## Decision (2026-06-23)
 
-Full writeup: `planning/research/2026-06-23-lipgloss-v2-charm-ecosystem.md`.
+Full writeup: `planning/research/6ff3hpm0100s-lipgloss-v2-charm-ecosystem.md`.
 
 - **Greenlight (small, low-risk):** lipgloss/v2 `tree` for `epic show` (recommended FIRST slice — net-new human surface, no goldens to break, v2 already in the graph); `vhs` doc GIFs (tooling, not a runtime dep).
 - **Decline/defer:** `table` for list output (machine-contract + golden risk for ~0 value); `list` bullets (minor); `charmbracelet/log` (muddies the --json/stderr contract); `wish` → epic 19.

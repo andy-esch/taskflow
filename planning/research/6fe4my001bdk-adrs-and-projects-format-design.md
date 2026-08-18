@@ -16,8 +16,8 @@ related_adrs:
   - ADR-0001
   - ADR-0002
 related_research:
-  - 2026-06-06-project-concept-cross-cutting-initiatives.md
-  - 2026-06-06-tskflwctl-command-spec.md
+  - 6f9menr01s85-project-concept-cross-cutting-initiatives.md
+  - 6f9menr01t1n-tskflwctl-command-spec.md
 ---
 
 # ADRs & Projects: format design and decision record

@@ -82,7 +82,7 @@ much new plumbing it needs. Companion to the deferred items in
   free-form today).
 - **Projects / "goals" widget** — the marquee cross-cutting-progress widget, but
   **blocked**: the Projects entity is designed (ADR-0002,
-  `planning/research/2026-06-20-adrs-and-projects-format-design.md`) and unbuilt.
+  `planning/research/6fe4my001bdk-adrs-and-projects-format-design.md`) and unbuilt.
   Build the entity first; the widget is then a Tier-1 render.
 
 ## Chosen first build — Findings inbox (audit breakdown, aggregated)

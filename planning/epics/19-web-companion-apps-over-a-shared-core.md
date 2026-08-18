@@ -22,7 +22,7 @@ projection / board (below).
 ## Read model / projection (convergence)
 
 The generated **board** scoped in
-`planning/research/2026-06-24-task-storage-model-files-logs-or-versioned-db.md`
+`planning/research/6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db.md`
 is this epic's read side in embryo: **one `core` projection** of planning state
 (`core.Summary()` is today's seed), rendered by every adapter — a committed
 `BOARD.md`, the TUI board, a CLI `board`, and here as a JSON/HTTP read endpoint.

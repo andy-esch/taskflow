@@ -153,13 +153,13 @@ rather than greenfield, stripped to the fence below.
 
 - [[rethink-pm-command-hierarchy-pm-noun-verb-research-cli-best-practices]]
   — the design input (hierarchy + Go framework + port strategy).
-- `research/2026-06-06-pm-cli-architecture-and-go-port.md` — research doc
+- `research/6f9menr00j2a-pm-cli-architecture-and-go-port.md` — research doc
   (incorporates the taskflow spike's findings under the scope fence).
-- `research/2026-06-06-go-cli-foundation-architecture.md` — the code
+- `research/6f9menr00zk0-go-cli-foundation-architecture.md` — the code
   foundation (layout, primary/secondary-adapter split, DI, test harness).
   **Build [go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness](../tasks/6f9menr02b25-go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness.md)
   first**, then port commands onto it.
-- `research/2026-06-06-tskflwctl-command-spec.md` — the Phase 0.5 formal
+- `research/6f9menr01t1n-tskflwctl-command-spec.md` — the Phase 0.5 formal
   command spec ([phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec](../tasks/6f9menr03f1y-phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec.md)).
 - `../taskflow/` — the prior Go spike to bootstrap from (cobra/viper/Bubble
   Tea skeleton, Pattern-C layout, `planning/research/`).

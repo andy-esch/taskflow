@@ -25,7 +25,7 @@ contract* (acknowledged incomplete).
 
 ## Status
 
-First draft written: `research/2026-06-06-tskflwctl-command-spec.md` (full
+First draft written: `research/6f9menr01t1n-tskflwctl-command-spec.md` (full
 noun-verb tree for task/audit/epic/adr + cross-cutting, global flags,
 deliberate departures from pm, and open design questions). This task is
 **iterate-to-done** on that doc.
@@ -69,6 +69,6 @@ The spec did its job: the foundation + port were built directly against it.
 ## Related
 
 - Epic [17-pm-go-cli](../epics/17-pm-go-cli.md).
-- `research/2026-06-06-tskflwctl-command-spec.md` — the spec.
+- `research/6f9menr01t1n-tskflwctl-command-spec.md` — the spec.
 - [go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness](6f9menr02b25-go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness.md) ·
   [port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec](6f9menr01nsd-port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md).
