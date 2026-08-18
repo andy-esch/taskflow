@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1dnqxefhtz
-status: next-up
+status: completed
 epic: 28-first-class-entities-new-planning-nouns
 description: set/append succeed on a doc the read path rejects, writing a block with no id and no created; also LintResearch validates created with ValidateDate not ValidateMintableDate.
 effort: Unknown
@@ -10,6 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [store, domain]
 created: "2026-08-18"
+updated_at: "2026-08-18"
+completed_at: "2026-08-18"
 ---
 
 # The research write paths accept a file the read path rejects, and fabricate incomplete frontmatter

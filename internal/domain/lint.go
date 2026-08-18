@@ -190,7 +190,11 @@ func LintResearch(r Research) []Issue {
 	case strings.TrimSpace(r.Created) == "":
 		issues = append(issues, Issue{Field: "created", Message: "missing created date — required (the stable id is minted from it)"})
 	default:
-		if err := ValidateDate(r.Created); err != nil {
+		// ValidateMintableDate, not ValidateDate: `research edit` is whole-file editing and
+		// so is the ONE path that can change `created` (set protects it). A hand-edited
+		// out-of-range date would leave the id unable to encode it, silently breaking the
+		// id-order-is-date-order property — the same hole the create path already guards.
+		if err := ValidateMintableDate(r.Created); err != nil {
 			issues = append(issues, Issue{Field: "created", Message: err.Error()})
 		}
 	}
@@ -245,4 +249,42 @@ func FrontmatterBucketIssues(a Audit) []Issue {
 		return nil
 	}
 	return []Issue{{Field: "bucket", Message: "frontmatter bucket missing or unrecognized — set it with `audit close`/`reopen`/`defer`"}}
+}
+
+// DuplicateIDIssues flags entities that share a stable id. Two docs on one id are
+// unresolvable by id (ErrAmbiguous) and — worse — both become UNWRITABLE, because the
+// write paths' CAS re-resolve also goes ambiguous and surfaces as a retryable conflict
+// that can never clear. Returns one issue per colliding entity, keyed by id; nothing for
+// a unique set. Fail-open, like the other cross-entity checks: the docs still list, the
+// clash is called out.
+//
+// The old duplicate lint was retired when the flat layout landed, on the reasoning that
+// "id-led filenames are unique by construction" — true of FILENAMES, not of ids: a
+// duplicate id on a different slug is a different filename. Research is where this bites,
+// because its ids are minted from a day-precision date, so same-day docs share one random
+// tail (ADR-0003 §3).
+//
+// It is cross-entity (it needs the whole set), so it lives here rather than in a per-doc
+// lint. Keyed by id, and each issue names the peers, so the operator can rename one.
+func DuplicateIDIssues(ids []string) map[string]Issue {
+	byID := make(map[string][]string, len(ids))
+	for _, id := range ids {
+		if strings.TrimSpace(id) == "" {
+			continue // a missing id is MissingIDIssue's job, not a duplicate
+		}
+		byID[id] = append(byID[id], id)
+	}
+	out := make(map[string]Issue)
+	for id, group := range byID {
+		if len(group) < 2 {
+			continue
+		}
+		out[id] = Issue{
+			Field: "id",
+			Message: fmt.Sprintf(
+				"duplicate stable id %q shared by %d docs — both are unresolvable by id and unwritable (the write CAS goes ambiguous); rename one file and its frontmatter id",
+				id, len(group)),
+		}
+	}
+	return out
 }

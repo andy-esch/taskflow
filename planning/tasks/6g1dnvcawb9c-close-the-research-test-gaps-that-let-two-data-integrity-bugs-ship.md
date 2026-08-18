@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1dnvcawb9c
-status: next-up
+status: completed
 epic: 28-first-class-entities-new-planning-nouns
 description: '13 of 30 mutations survived the suite: the CAS, flock, retryOnConflict, research edit, and the mintable-date seam are untested, plus five tests assert less than their names claim.'
 effort: Unknown
@@ -10,6 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [testing, core]
 created: "2026-08-18"
+updated_at: "2026-08-18"
+completed_at: "2026-08-18"
 ---
 
 # Close the research test gaps that let two data-integrity bugs ship

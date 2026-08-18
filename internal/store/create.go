@@ -169,8 +169,24 @@ func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (domain
 	if r.ID == "" {
 		return domain.Research{}, fmt.Errorf("%w: research doc has no id", domain.ErrValidation)
 	}
-	// The id makes the flat filename unique, so writeNewFile's O_EXCL is the whole
-	// collision guard — a duplicate slug (distinct id) is allowed, resolved by id.
+	// O_EXCL alone is NOT the whole collision guard here, contrary to what the task and
+	// audit create paths can assume. Research ids are minted from a DAY (ADR-0003 §3), so
+	// every doc sharing a `created` date draws from the same random tail — and a duplicate
+	// id on a DIFFERENT slug is a different path, which O_EXCL never sees. Two docs sharing
+	// an id are unresolvable by id and, worse, both become unwritable: the write paths'
+	// CAS re-resolve returns ErrAmbiguous, which surfaces as a retryable conflict forever.
+	// So check the id against what is already on disk. Cheap: researchCandidates is a
+	// ReadDir + filename split, no parsing.
+	cands, err := s.researchCandidates()
+	if err != nil {
+		return domain.Research{}, err
+	}
+	for _, c := range cands {
+		if c.id == r.ID {
+			return domain.Research{}, fmt.Errorf("research id %q already used by %q: %w",
+				r.ID, filepath.Base(c.path), domain.ErrConflict)
+		}
+	}
 	stem := r.ID + "-" + r.Slug
 	path := filepath.Join(s.researchDir, stem+".md")
 	content, err := buildFile(researchFields(r), body)

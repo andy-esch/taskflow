@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -66,7 +67,6 @@ func (s *Service) NewResearch(p NewResearchParams) (domain.Research, error) {
 	}
 	r := domain.Research{
 		Slug:        slug,
-		ID:          s.newIDAt(day.UnixMilli()),
 		Created:     created,
 		Description: strings.TrimSpace(p.Description),
 		Tags:        p.Tags,
@@ -79,8 +79,31 @@ func (s *Service) NewResearch(p NewResearchParams) (domain.Research, error) {
 		}
 		body = renderTemplate(tmpl, map[string]string{"title": title, "date": created})
 	}
-	return s.store.CreateResearch(r, body, p.DryRun)
+	// Mint, then REGENERATE on a collision with an id already on disk. Minting is keyed on
+	// a day, so same-day docs all draw from one 2^17 random tail — id.NewAt's own doc
+	// requires callers to dedupe, and the store reports a clash as ErrConflict. Bounded:
+	// with a fixed injected generator (WithIDGen) every attempt collides, so give up and
+	// surface the conflict rather than spin.
+	var lastErr error
+	for attempt := 0; attempt < maxIDMintAttempts; attempt++ {
+		r.ID = s.newIDAt(day.UnixMilli())
+		got, err := s.store.CreateResearch(r, body, p.DryRun)
+		if err == nil {
+			return got, nil
+		}
+		if !errors.Is(err, domain.ErrConflict) {
+			return domain.Research{}, err
+		}
+		lastErr = err
+	}
+	return domain.Research{}, lastErr
 }
+
+// maxIDMintAttempts bounds the regenerate-on-collision loop in NewResearch. A real
+// collision has probability 2^-17 per same-day pair, so a second attempt effectively
+// always succeeds; the bound exists for the degenerate case of a fixed injected id
+// generator, where every attempt collides and spinning would hang.
+const maxIDMintAttempts = 8
 
 // ListResearch returns every research doc, newest first, plus any per-file load
 // problems. There is no status/bucket to filter on, so unlike ListTasks/ListAudits

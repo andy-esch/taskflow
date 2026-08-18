@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -94,5 +95,30 @@ func TestRepresentable_MillisEdges(t *testing.T) {
 		if got := id.Representable(tc.ms); got != tc.valid {
 			t.Errorf("Representable(%d) = %v, want %v", tc.ms, got, tc.valid)
 		}
+	}
+}
+
+// `research edit` is whole-file editing, so it is the one path that can change `created`
+// (set protects it). Lint must therefore apply the MINTABLE range, not just the date
+// shape — otherwise a hand-edited out-of-range date leaves the id unable to encode it.
+func TestLintResearch_FlagsUnmintableCreated(t *testing.T) {
+	r := Research{ID: "6dr29v000aaa", FilenameID: "6dr29v000aaa", Created: "1026-06-15"}
+	issues := LintResearch(r)
+	if len(issues) == 0 {
+		t.Fatal("an out-of-range created must be a lint issue")
+	}
+	var found bool
+	for _, i := range issues {
+		if i.Field == "created" && strings.Contains(i.Message, "outside the range") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("want the mintable-range message, got %+v", issues)
+	}
+	// A representable date is still clean.
+	r.Created = "2026-06-15"
+	if issues := LintResearch(r); len(issues) != 0 {
+		t.Errorf("a representable date must lint clean, got %+v", issues)
 	}
 }

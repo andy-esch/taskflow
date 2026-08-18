@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1dnnfgyjap
-status: next-up
+status: completed
 epic: 28-first-class-entities-new-planning-nouns
 description: core.NewResearch never dedupes a same-day id collision; both colliding docs then become permanently unwritable with a futile retry message and no lint diagnostic.
 effort: Unknown
@@ -10,6 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [core, domain]
 created: "2026-08-18"
+updated_at: "2026-08-18"
+completed_at: "2026-08-18"
 ---
 
 # Duplicate stable ids brick research docs, silently and unrecoverably

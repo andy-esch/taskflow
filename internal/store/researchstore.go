@@ -119,6 +119,15 @@ func (s *FS) SetResearchFields(slug string, updates map[string]any, dryRun bool)
 	if err != nil {
 		return domain.Research{}, fmt.Errorf("read research %s: %w", path, err)
 	}
+	// Refuse a doc with no frontmatter block, exactly as GetResearch does. updateFrontmatter
+	// would otherwise CREATE one, producing a doc whose only key is the field just set — no
+	// id, no `created`. The parse-before-commit check below can't catch it, because that
+	// fabricated content parses fine; the defect is that it shouldn't exist.
+	if fm, _, ferr := splitFrontmatterStrict(content); ferr != nil {
+		return domain.Research{}, ferr
+	} else if fm == nil {
+		return domain.Research{}, missingFrontmatterErr("research doc", "created; see `tskflwctl schema research`")
+	}
 	newContent, err := updateFrontmatter(content, updates)
 	if err != nil {
 		return domain.Research{}, err
@@ -135,6 +144,9 @@ func (s *FS) SetResearchFields(slug string, updates map[string]any, dryRun bool)
 	}
 	if dryRun {
 		return r, nil // validated end-to-end; only the write is skipped
+	}
+	if testHookBeforeResearchWrite != nil {
+		testHookBeforeResearchWrite()
 	}
 	unlock, err := s.writeLock()
 	if err != nil {
@@ -189,9 +201,18 @@ func (s *FS) AppendResearchBody(slug, text string, now time.Time, dryRun bool) (
 	if err != nil {
 		return domain.Research{}, "", fmt.Errorf("read research %s: %w", path, err)
 	}
-	_, body, err := splitFrontmatterStrict(content)
+	fm, body, err := splitFrontmatterStrict(content)
 	if err != nil {
 		return domain.Research{}, "", err // can't body-edit a file whose frontmatter won't parse
+	}
+	// A write must not be MORE permissive than a read. splitFrontmatterStrict returns a nil
+	// block (not an error) for a file with no `---` fence, and documentMapping would then
+	// happily CREATE one — so without this guard an append to a frontmatter-less doc
+	// succeeds and writes a block whose only key is `updated_at`, leaving the doc with no
+	// id and no `created` (the anchor its id is minted from) and its prose `**Created**:`
+	// stranded in the body. GetResearch rejects that same file, so the write path has to.
+	if fm == nil {
+		return domain.Research{}, "", missingFrontmatterErr("research doc", "created; see `tskflwctl schema research`")
 	}
 	entityID, _, _ := splitFlatName(strings.TrimSuffix(filepath.Base(path), ".md"))
 	updatedAt := now.Format("2006-01-02")
@@ -206,3 +227,10 @@ func (s *FS) AppendResearchBody(slug, text string, now time.Time, dryRun bool) (
 		dryRun,
 	)
 }
+
+// testHookBeforeResearchWrite runs between SetResearchFields' validation and its
+// compare-and-swap check, so a test can interleave a concurrent write into that exact
+// window (the seam tasks/epics already have — testHookBeforeSetFieldsWrite,
+// testHookBeforeEpicWrite). Without it the version-CAS is unreachable from a test, which
+// is how research shipped with the CAS entirely uncovered. nil in production.
+var testHookBeforeResearchWrite func()
