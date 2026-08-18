@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1c0zpgeejk
-status: ready-to-start
+status: completed
 epic: 28-first-class-entities-new-planning-nouns
 description: research/ was never added to FixFrontmatter or sweepStaleTemps, so lint promises an id repair --fix won't do and temp orphans linger; plus 'matches 3 researchs'.
 effort: Unknown
@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, core]
 created: "2026-08-18"
+updated_at: "2026-08-18"
+started_at: "2026-08-18"
+completed_at: "2026-08-18"
 ---
 
 # Extend lint --fix and the temp sweep to research, and fix the mass-noun plural

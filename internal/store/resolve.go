@@ -187,8 +187,8 @@ func resolveID(kind, query string, cands []candidate) (candidate, error) {
 		case 1:
 			return hits[0], nil
 		default:
-			return candidate{}, fmt.Errorf("%q matches %d %ss: %s: %w",
-				query, len(hits), kind, describeCandidates(hits), domain.ErrAmbiguous)
+			return candidate{}, fmt.Errorf("%q matches %d %s: %s: %w",
+				query, len(hits), domain.PluralKind(kind), describeCandidates(hits), domain.ErrAmbiguous)
 		}
 	}
 	return candidate{}, fmt.Errorf("%s %q: %w", kind, query, domain.ErrNotFound)

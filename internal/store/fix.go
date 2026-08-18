@@ -88,16 +88,22 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	if err := fixDir(s.auditsDir, true); err != nil {
 		return results, err
 	}
+	// Research is id-led like tasks/audits, so the same id-backfill applies — and lint's
+	// MissingIDMessage tells the user "`lint --fix` assigns one", which was a dead end
+	// for research until this dir was included.
+	if err := fixDir(s.researchDir, true); err != nil {
+		return results, err
+	}
 	// Sweep the tool's own crash-orphaned temp files (housekeeping). Only on a real
 	// run — a dry-run previews repairs and must write/remove nothing. The age +
 	// prefix guards in sweepStaleTemps keep it from touching a live write or a user
 	// file; the .md scan filter already hides these, so this just keeps the tree tidy.
 	if !dryRun {
 		now := time.Now()
-		// Flat entity dirs (ADR-0003 §4): temps land directly in tasks/, epics/, audits/,
+		// Flat entity dirs (ADR-0003 §4): temps land directly in tasks/, epics/, audits/, research/,
 		// where writeFileAtomic/createFileAtomic stage them (os.CreateTemp uses the target
 		// file's dir) — there are no per-status/bucket subdirs to sweep anymore.
-		for _, dir := range []string{s.tasksDir, s.epicsDir, s.auditsDir} {
+		for _, dir := range []string{s.tasksDir, s.epicsDir, s.auditsDir, s.researchDir} {
 			for _, p := range sweepStaleTemps(dir, now) {
 				results = append(results, domain.FixResult{Path: p, Changes: []string{"removed stale temp orphan"}})
 			}
