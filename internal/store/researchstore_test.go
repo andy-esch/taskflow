@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
@@ -185,4 +186,66 @@ func TestFS_WatchPaths_IncludesResearch(t *testing.T) {
 		}
 	}
 	t.Errorf("WatchPaths missing %q: %+v", want, NewFS(root).WatchPaths())
+}
+
+// lint's MissingIDMessage promises "`lint --fix` assigns one". That was a dead end for
+// research until researchDir joined the fixer's dir list, so assert the repair really
+// happens rather than trusting the message.
+func TestFS_FixFrontmatter_BackfillsResearchID(t *testing.T) {
+	root := t.TempDir()
+	stem := testutil.TaskID("no-id") + "-no-id.md"
+	testutil.Write(t, filepath.Join(root, domain.ResearchDir, stem), "---\nschema: 1\ncreated: \"2026-01-03\"\n---\n# No id\n")
+	fs := NewFS(root)
+
+	results, err := fs.FixFrontmatter(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || !strings.Contains(strings.Join(results[0].Changes, ","), "id") {
+		t.Fatalf("want one id-backfill result, got %+v", results)
+	}
+	// And the backfilled id is the filename's id (the canonical key), so no drift.
+	docs, problems, err := fs.ListResearch()
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("err=%v problems=%+v", err, problems)
+	}
+	if len(docs) != 1 || docs[0].ID != testutil.TaskID("no-id") {
+		t.Errorf("id = %q, want the filename id %q", docs[0].ID, testutil.TaskID("no-id"))
+	}
+	if len(domain.LintResearch(docs[0])) != 0 {
+		t.Errorf("doc should lint clean after --fix, got %+v", domain.LintResearch(docs[0]))
+	}
+}
+
+// createFileAtomic stages its temp in the TARGET dir, so a crashed `research new` leaves
+// an orphan in research/ — which the sweep skipped until researchDir was added.
+func TestFS_FixFrontmatter_SweepsResearchTempOrphan(t *testing.T) {
+	root := t.TempDir()
+	orphan := filepath.Join(root, domain.ResearchDir, ".tskflwctl-crashed.tmp")
+	testutil.Write(t, orphan, "partial")
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(orphan, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Errorf("aged temp orphan in research/ should be swept, stat err = %v", err)
+	}
+}
+
+// A fresh temp (a concurrent write in flight) must NOT be swept.
+func TestFS_FixFrontmatter_LeavesFreshResearchTemp(t *testing.T) {
+	root := t.TempDir()
+	fresh := filepath.Join(root, domain.ResearchDir, ".tskflwctl-inflight.tmp")
+	testutil.Write(t, fresh, "in flight")
+
+	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Errorf("a fresh temp must survive the sweep: %v", err)
+	}
 }

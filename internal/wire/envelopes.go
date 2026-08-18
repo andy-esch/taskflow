@@ -634,6 +634,8 @@ type jsonEnvelopes struct {
 	AuditInfo     AuditInfoEnvelope     `json:"audit_info"`
 	AuditMutation AuditMutationEnvelope `json:"audit_mutation"`
 	Findings      FindingsEnvelope      `json:"findings"`
+	ResearchList  ResearchListEnvelope  `json:"research_list"`
+	ResearchShow  ResearchShowEnvelope  `json:"research_show"`
 	Fix           FixEnvelope           `json:"fix"`
 	Lint          LintEnvelope          `json:"lint"`
 	Init          InitEnvelope          `json:"init"`

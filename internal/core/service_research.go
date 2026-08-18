@@ -42,7 +42,10 @@ func (s *Service) NewResearch(p NewResearchParams) (domain.Research, error) {
 	if created == "" {
 		created = s.now().Format("2006-01-02")
 	}
-	if err := domain.ValidateDate(created); err != nil {
+	// ValidateMintableDate, not ValidateDate: the id is minted from this date, so it must
+	// also be inside the range an id can encode — otherwise the timestamp wraps and the
+	// doc sorts wrongly forever, with no other symptom.
+	if err := domain.ValidateMintableDate(created); err != nil {
 		return domain.Research{}, err
 	}
 	if err := domain.ValidateDescription(p.Description); err != nil {

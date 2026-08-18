@@ -161,3 +161,25 @@ func TestResearchNew_DryRunWritesNothing(t *testing.T) {
 		t.Errorf("dry run wrote files: %v", m)
 	}
 }
+
+// The ambiguous-match error is user-facing prose: "research" is a mass noun, so it must
+// not read "matches 2 researchs".
+func TestResearchShow_AmbiguousWordingIsNotResearchs(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "research", "new", "Dup doc", "--created", "2026-02-02")
+	runRoot(t, "-C", root, "research", "new", "Dup doc", "--created", "2026-02-02")
+
+	out, err := runRootRC(t, "-C", root, "research", "show", "dup-doc")
+	if err == nil {
+		t.Fatal("a duplicate slug must be ambiguous")
+	}
+	// The ambiguity surfaces as the returned error (the exit-code path), not on the
+	// output stream, so assert against both to stay honest about where it lands.
+	msg := err.Error() + out
+	if strings.Contains(msg, "researchs") {
+		t.Errorf("mass-noun plural is wrong:\n%s", msg)
+	}
+	if !strings.Contains(msg, "matches 2 research docs") {
+		t.Errorf("want 'matches 2 research docs', got:\n%s", msg)
+	}
+}

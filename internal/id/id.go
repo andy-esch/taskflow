@@ -76,6 +76,25 @@ func New() string {
 	return encode(v)
 }
 
+// MaxMillis is the largest Unix-millisecond timestamp the time field can hold — the
+// top of the representable range, ~2248-09-26. Beyond it a timestamp overflows timeBits
+// and wraps to a SMALL value, and below zero it wraps to a huge one; either way the
+// resulting id sorts wrongly, which silently breaks the "lexical order is chronological
+// order" contract this package exists to provide.
+const MaxMillis = int64(1)<<timeBits - 1
+
+// Representable reports whether unixMilli survives the 43-bit time field intact, i.e.
+// whether NewAt(unixMilli) will produce an id that orders correctly against its peers.
+//
+// NewAt deliberately does NOT enforce this — it stays a total function so callers can
+// mint without error handling — so a caller minting from USER-SUPPLIED dates must check
+// first. A date-typo (`1026-…`, `9026-…`) is otherwise accepted and mis-orders the entity
+// permanently with no diagnostic; domain.ValidateMintableDate is the guard that closes
+// that path.
+func Representable(unixMilli int64) bool {
+	return unixMilli >= 0 && unixMilli <= MaxMillis
+}
+
 // NewAt returns an id stamped with a specific time (Unix milliseconds) and a
 // random tail. Unlike New it is STATELESS — it never touches the process monotonic
 // counter — so it is for minting ids for *known* entities out of natural time

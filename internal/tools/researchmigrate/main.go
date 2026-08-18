@@ -209,6 +209,13 @@ func dateMillis(date string) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("unparseable date %q: %w", date, err)
 	}
+	// A recovered date can be nonsense (a mistyped prose `**Created**:`, a stray
+	// four-digit number). Outside the encodable range the minted id would wrap and sort
+	// wrongly, so fail the whole run rather than bake a silently mis-ordered id.
+	if !idpkg.Representable(t.UnixMilli()) {
+		return 0, fmt.Errorf("date %q is outside the range a stable id can encode (%s to %s) — fix the date and re-run",
+			date, domain.MintableDateMin, domain.MintableDateMax)
+	}
 	return t.UnixMilli(), nil
 }
 

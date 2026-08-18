@@ -19,8 +19,9 @@ import (
 // task's status: the per-status/bucket subdirs stay derived from the status/bucket
 // enums via layout.go's TaskStatusDirs/AuditBucketDirs.
 type Descriptor struct {
-	Kind            string          // the `schema <kind>` word: task | epic | audit
-	Dir             string          // top-level planning dir (TasksDir / EpicsDir / AuditsDir)
+	Kind            string          // the `schema <kind>` word: task | epic | audit | research
+	Plural          string          // the plural for user-facing prose; NOT Kind+"s" — "research" is a mass noun
+	Dir             string          // top-level planning dir (TasksDir / EpicsDir / AuditsDir / ResearchDir)
 	AuthoringFields []FieldDoc      // frontmatter a drafter fills in (not tool-managed stamps)
 	Conventions     []string        // short, factual "how to write it" rules
 	Templates       []NamedTemplate // body scaffolds offered for this kind; the one named DefaultTemplate is used when --template is omitted
@@ -56,8 +57,9 @@ type Placeholder struct {
 // render funcs — see the Descriptor doc).
 var entities = []Descriptor{
 	{
-		Kind: "task",
-		Dir:  TasksDir,
+		Kind:   "task",
+		Plural: "tasks",
+		Dir:    TasksDir,
 		AuthoringFields: []FieldDoc{
 			{"epic", "string", true, "ID of the epic this task belongs to; must already exist.", "17-pm-go-cli"},
 			{"description", "string", false, fmt.Sprintf("One line summarizing the task (≤%d chars); required once next-up/in-progress.", MaxDescriptionLen), "Add retry backoff to the Strava webhook"},
@@ -79,8 +81,9 @@ var entities = []Descriptor{
 		Placeholders: []Placeholder{{"title", "<title>"}, {"epic", "<epic-id>"}},
 	},
 	{
-		Kind: "epic",
-		Dir:  EpicsDir,
+		Kind:   "epic",
+		Plural: "epics",
+		Dir:    EpicsDir,
 		AuthoringFields: []FieldDoc{
 			{"status", "string", true, fmt.Sprintf("One of: %s.", strings.Join(epicStatuses, " | ")), "active"},
 			{"description", "string", true, fmt.Sprintf("One-line goal (≤%d chars); required.", MaxDescriptionLen), "Replace the legacy ingest pipeline"},
@@ -97,8 +100,9 @@ var entities = []Descriptor{
 		Placeholders: []Placeholder{{"title", "<title>"}, {"description", "<description>"}},
 	},
 	{
-		Kind: "audit",
-		Dir:  AuditsDir,
+		Kind:   "audit",
+		Plural: "audits",
+		Dir:    AuditsDir,
 		AuthoringFields: []FieldDoc{
 			{"area", "string", true, "Subsystem or topic audited; slugified into the filename.", "dispatcher"},
 			{"date", "date", true, "Audit date, YYYY-MM-DD (defaults to today).", "2026-06-16"},
@@ -114,10 +118,11 @@ var entities = []Descriptor{
 		Placeholders: []Placeholder{{"area", "<area>"}, {"date", "<date>"}},
 	},
 	{
-		Kind: "research",
-		Dir:  ResearchDir,
+		Kind:   "research",
+		Plural: "research docs",
+		Dir:    ResearchDir,
 		AuthoringFields: []FieldDoc{
-			{"created", "date", true, "Date the research was done, YYYY-MM-DD (defaults to today); the id is minted from it, so ids sort chronologically.", "2026-08-14"},
+			{"created", "date", true, fmt.Sprintf("Date the research was done, YYYY-MM-DD (defaults to today); the id is minted from it, so ids sort chronologically. Must be %s–%s, the range an id can encode.", MintableDateMin, MintableDateMax), "2026-08-14"},
 			{"description", "string", false, fmt.Sprintf("One line summarizing what was explored (≤%d chars).", MaxDescriptionLen), "Compared three theming libraries for the TUI"},
 			{"tags", "list", false, "Topical tags.", "[tui, color]"},
 		},
@@ -353,3 +358,15 @@ const auditSecurityBodyTemplate = "\n# Security audit: {{area}} — {{date}}\n\n
 	"## Candidate tasks\n\n" +
 	"<!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do -->\n\n" +
 	"- ⏳ `tskflwctl task new \"<title>\" --epic <id> --tags security` — <one line>\n"
+
+// PluralKind returns the plural of a document kind for user-facing prose (an
+// ambiguous-match error listing candidates, say). Suffixing "s" is wrong for a mass
+// noun — "research" would become "researchs" — so the plural is declared per kind on
+// the Descriptor. An unregistered kind falls back to kind+"s", which is right for the
+// regular nouns a future entity is likely to add.
+func PluralKind(kind string) string {
+	if d, ok := descriptorFor(kind); ok && d.Plural != "" {
+		return d.Plural
+	}
+	return kind + "s"
+}

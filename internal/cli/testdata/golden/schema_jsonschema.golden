@@ -1053,6 +1053,90 @@
       ],
       "description": "PathEnvelope wraps `task path --json` — just the resolved absolute file path (the plain form prints the bare path for piping, e.g."
     },
+    "ResearchJSON": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "stable identifier — the immutable key"
+        },
+        "slug": {
+          "type": "string",
+          "description": "research slug (filename without the leading id) — the human handle"
+        },
+        "created": {
+          "type": "string",
+          "description": "date the research was done YYYY-MM-DD; the id is minted from it"
+        },
+        "description": {
+          "type": "string",
+          "description": "one-line summary of what was explored"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "topical tags"
+        },
+        "updated_at": {
+          "type": "string",
+          "description": "doc's own last-edited date YYYY-MM-DD; created stays immutable"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug"
+      ],
+      "description": "ResearchJSON is the wire DTO for a research doc."
+    },
+    "ResearchListEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "research": {
+          "items": {
+            "$ref": "#/$defs/ResearchJSON"
+          },
+          "type": "array"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "research"
+      ],
+      "description": "ResearchListEnvelope is `research list --json`."
+    },
+    "ResearchShowEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "research": {
+          "$ref": "#/$defs/ResearchJSON"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "research",
+        "body"
+      ],
+      "description": "ResearchShowEnvelope is `research show --json`."
+    },
     "SchemaEnvelope": {
       "properties": {
         "schema_version": {
@@ -1721,6 +1805,12 @@
         "findings": {
           "$ref": "#/$defs/FindingsEnvelope"
         },
+        "research_list": {
+          "$ref": "#/$defs/ResearchListEnvelope"
+        },
+        "research_show": {
+          "$ref": "#/$defs/ResearchShowEnvelope"
+        },
         "fix": {
           "$ref": "#/$defs/FixEnvelope"
         },
@@ -1777,6 +1867,8 @@
         "audit_info",
         "audit_mutation",
         "findings",
+        "research_list",
+        "research_show",
         "fix",
         "lint",
         "init",
