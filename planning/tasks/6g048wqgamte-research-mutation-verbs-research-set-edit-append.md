@@ -35,15 +35,15 @@ way to backfill them today.
 
 ## Acceptance criteria
 
-- [ ] `research set <slug> --description/--tags` (+ `--set key=value` / `--unset`),
+- [x] `research set <slug> --description/--tags` (+ `--set key=value` / `--unset`),
       surgical: unknown keys, comments, and key order preserved.
-- [ ] `research edit <slug>` — `$EDITOR` on the whole file, parse-before-accept, loops
+- [x] `research edit <slug>` — `$EDITOR` on the whole file, parse-before-accept, loops
       on a broken edit; stamps `updated_at` on a changed save.
-- [ ] `research append <slug>` — body append in one atomic validated write, stamping
+- [x] `research append <slug>` — body append in one atomic validated write, stamping
       `updated_at` (`created` stays immutable — the id is minted from it).
-- [ ] `created` is NOT settable via `set`: the id encodes it, so changing one silently
+- [x] `created` is NOT settable via `set`: the id encodes it, so changing one silently
       desynchronizes them. Reject with `ErrValidation` naming why.
-- [ ] Ports added to `core.ResearchStore`; `--json` mutation envelope mirrors
+- [x] Ports added to `core.ResearchStore`; `--json` mutation envelope mirrors
       `task_mutation` / `audit_mutation`; `schema_version` bumped.
 
 ## Out of scope
