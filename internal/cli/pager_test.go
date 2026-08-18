@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 func boolp(b bool) *bool { return &b }
@@ -172,4 +173,50 @@ func TestPagerProgram(t *testing.T) {
 			t.Errorf("= %q, want %q", got, "delta")
 		}
 	})
+	t.Run("home [pager].command over $PAGER", func(t *testing.T) {
+		t.Setenv("TSKFLW_PAGER", "")
+		t.Setenv("PAGER", "more")
+		app := &App{User: &userconfig.Config{Pager: userconfig.PagerConfig{Command: "bat"}}}
+		if got := app.pagerProgram(); got != "bat" {
+			t.Errorf("= %q, want %q", got, "bat")
+		}
+	})
+	t.Run("repo [pager].command over home", func(t *testing.T) {
+		t.Setenv("TSKFLW_PAGER", "")
+		t.Setenv("PAGER", "")
+		app := &App{Cfg: cfgCmd("bat"), User: &userconfig.Config{Pager: userconfig.PagerConfig{Command: "delta"}}}
+		if got := app.pagerProgram(); got != "bat" {
+			t.Errorf("= %q, want %q", got, "bat")
+		}
+	})
+}
+
+// TestPagerWanted_Tiers pins the field-by-field merge: an unset `enabled` at one tier
+// must DEFER to the next rather than assert the default, which is the entire reason
+// Enabled is a *bool at both tiers.
+func TestPagerWanted_Tiers(t *testing.T) {
+	yes, no := true, false
+	repo := func(b *bool) *config.Config { return &config.Config{Pager: config.PagerConfig{Enabled: b}} }
+	home := func(b *bool) *userconfig.Config {
+		return &userconfig.Config{Pager: userconfig.PagerConfig{Enabled: b}}
+	}
+	cases := []struct {
+		name string
+		app  *App
+		want bool
+	}{
+		{"nothing set → on", &App{}, true},
+		{"home off, repo unset → off", &App{User: home(&no)}, false},
+		{"home on, repo unset → on", &App{User: home(&yes)}, true},
+		{"repo off wins over home on", &App{Cfg: repo(&no), User: home(&yes)}, false},
+		{"repo on wins over home off", &App{Cfg: repo(&yes), User: home(&no)}, true},
+		{"repo unset defers to home off", &App{Cfg: repo(nil), User: home(&no)}, false},
+		{"--no-pager beats every config", &App{NoPager: true, Cfg: repo(&yes), User: home(&yes)}, false},
+		{"--paginate beats config off", &App{Paginate: true, Cfg: repo(&no)}, true},
+	}
+	for _, c := range cases {
+		if got := c.app.pagerWanted(); got != c.want {
+			t.Errorf("%s: pagerWanted() = %v, want %v", c.name, got, c.want)
+		}
+	}
 }

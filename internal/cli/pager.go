@@ -67,28 +67,42 @@ func (a *App) pagerActive() bool {
 
 // pagerWanted is the on/off decision without the TTY/machine gate (so it is unit-
 // testable on its own). Precedence mirrors git: --no-pager (off) > --paginate (on)
-// > [pager].enabled > default on.
+// > repo [pager].enabled > home [pager].enabled > default on. The tiers merge
+// field-by-field: a nil Enabled means "unset here", so it defers to the tier below
+// rather than asserting the default — which is the whole reason it is a *bool.
 func (a *App) pagerWanted() bool {
 	switch {
 	case a.NoPager:
 		return false
 	case a.Paginate:
 		return true
-	default:
-		return a.Cfg == nil || a.Cfg.Pager.Enabled == nil || *a.Cfg.Pager.Enabled
 	}
+	if a.Cfg != nil && a.Cfg.Pager.Enabled != nil {
+		return *a.Cfg.Pager.Enabled
+	}
+	if a.User != nil && a.User.Pager.Enabled != nil {
+		return *a.User.Pager.Enabled
+	}
+	return true
 }
 
 // pagerProgram resolves the pager command string, mirroring git's
-// GIT_PAGER > core.pager > PAGER > less: TSKFLW_PAGER > [pager].command > $PAGER >
-// "less -FRX" (F = skip the pager if it fits one screen, R = keep ANSI colors,
-// X = leave the scrollback intact).
+// GIT_PAGER > core.pager > PAGER > less: TSKFLW_PAGER > repo [pager].command >
+// home [pager].command > $PAGER > "less -FRX" (F = skip the pager if it fits one
+// screen, R = keep ANSI colors, X = leave the scrollback intact). Both config tiers
+// beat the generic $PAGER, the same way git's core.pager beats it — an explicit
+// choice for THIS tool outranks a shell-wide default.
 func (a *App) pagerProgram() string {
 	if v := strings.TrimSpace(os.Getenv("TSKFLW_PAGER")); v != "" {
 		return v
 	}
 	if a.Cfg != nil {
 		if v := strings.TrimSpace(a.Cfg.Pager.Command); v != "" {
+			return v
+		}
+	}
+	if a.User != nil {
+		if v := strings.TrimSpace(a.User.Pager.Command); v != "" {
 			return v
 		}
 	}

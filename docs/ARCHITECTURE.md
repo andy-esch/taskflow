@@ -84,7 +84,21 @@ the one-screen orientation for contributors.
   import `design`. Consumed by `cli/render`, `tui`, `cli/prompt`, and
   `progressbar` — the one place a *hue* is chosen, as `theme` is for a *glyph*.
 - **`internal/config`** — discovers the planning root (walk up for tasks/;
-  terminates at a `.git`/root boundary).
+  terminates at a `.git`/root boundary). **Repo-scoped**, and deliberately does not
+  import `userconfig`.
+- **`internal/userconfig`** — the *user*-scoped (home) tier: terminal preferences
+  that belong to a person rather than a repo (`[theme]`, `[pager]`), read from
+  `$TSKFLW_CONFIG_HOME` / `$XDG_CONFIG_HOME/tskflwctl` / `~/.config/tskflwctl`
+  (**not** `os.UserConfigDir()`, which is `~/Library/Application Support` on darwin).
+  Precedence is flag > env > repo config > **user config** > default, merged
+  **field-by-field** — a nil `Pager.Enabled` means "unset here, defer down", which is
+  why it is a `*bool` at both tiers. Loaded in `setStyle` (not `resolve`) because
+  `init`/`doctor`/`completion` skip discovery yet still need a theme. A missing file
+  is normal; a malformed one **warns and degrades** rather than failing — the
+  deliberate opposite of the repo config, where a bad marker is fatal because guessing
+  there would fork the data. Because `config` never imports this package, home-scope
+  data physically cannot influence planning-root discovery — an invariant the compiler
+  enforces rather than one the reader has to remember.
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
   `internal/cli` (`root.go`), which it calls.
 

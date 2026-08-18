@@ -310,13 +310,15 @@ taskflow_root = "."
 tracked_repos = []
 
 # [pager]: page long human output (show/schema) through $PAGER on a TTY, like git.
-# Never affects piped/--json output. Override the program or turn it off here.
+# Never affects piped/--json output. Override the program or turn it off here — this
+# file wins over the same table in ~/.config/tskflwctl/config.toml.
 # [pager]
 # enabled = true
 # command = "less -FRX"
 
 # [theme]: the color theme — a registered name, or "auto" for the default. Override
-# here, or with the --theme flag / TSKFLW_THEME env (precedence: flag > env > config).
+# here, or with the --theme flag / TSKFLW_THEME env. Precedence:
+# flag > env > this file > ~/.config/tskflwctl/config.toml > the built-in default.
 # An unrecognized name warns (to stderr) and falls back to the default.
 # [theme]
 # name = "neon"

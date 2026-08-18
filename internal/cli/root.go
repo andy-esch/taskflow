@@ -19,6 +19,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 // App is the dependency container. It is created empty by NewRootCmd and
@@ -40,11 +41,15 @@ type App struct {
 	Theme    string // color theme name (--theme); overrides TSKFLW_THEME + [theme].name
 
 	Style  render.Style
-	Th     design.Theme    // the resolved active theme (flag > env > config > default)
+	Th     design.Theme    // the resolved active theme (flag > env > repo config > user config > default)
 	Gate   prompt.Gate     // may we prompt? (resolved once, like Style)
 	Prompt prompt.Prompter // the human-recovery face (huh on a TTY)
 	Cfg    *config.Config
-	Svc    *core.Service
+	// User is the home-scope config (theme/pager preferences that belong to a
+	// person, not a repo). Always non-nil after setStyle; the zero value means
+	// "nothing set here" and every field falls through to the tier below.
+	User *userconfig.Config
+	Svc  *core.Service
 	// Fixer/Layout/Linter are the narrow fs/text ports that aren't core use cases:
 	// `lint --fix` calls Fixer, the TUI watcher reads Layout, and `lint --links` calls
 	// Linter — none route through the Service (see core.Fixer/core.Layout/core.Linter).
@@ -60,11 +65,30 @@ type App struct {
 // TSKFLW_NO_INPUT). Off a TTY the gate is closed, so the agent/pipeline path never
 // blocks.
 func (a *App) setStyle() {
-	a.resolveTheme() // flag/env now; the [theme] config folds in once resolve() discovers it
+	// The home config loads HERE, not in resolve(): init/doctor/completion override
+	// PersistentPreRunE and skip resolve() entirely, but they all run setStyle and
+	// they all need the theme. Loading it downstream would mean `init` outside a
+	// planning repo silently ignored your theme.
+	userErr := a.loadUserConfig()
+	a.resolveTheme() // flag/env/home now; the repo [theme] folds in once resolve() discovers it
 	a.Style = render.NewStyle(wantColor(a.Color, a.NoColor, a.Out)).WithWidth(terminalWidth(a.Out)).WithTrueColor(trueColorCapable(a.Out)).WithPalette(a.Th.Dark)
 	noInput := a.NoInput || envEnabled("TSKFLW_NO_INPUT")
 	a.Gate = prompt.NewGate(gateOpen(a.JSON, noInput, isTerminalReader(a.In), isTerminal(a.ErrOut)))
 	a.Prompt = prompt.NewTTY(a.In, a.ErrOut, a.Th)
+	// Warned only after the Style exists, so the ⚠ is themed like every other
+	// warning. Never fatal — see userconfig.Load.
+	if userErr != nil {
+		fmt.Fprintf(a.ErrOut, "%s ignoring user config: %v\n", a.Style.Warn("⚠"), userErr)
+	}
+}
+
+// loadUserConfig populates a.User, which is left as an empty (usable) config when
+// none exists or it can't be read. The error is returned rather than printed so the
+// caller can warn once the Style is built.
+func (a *App) loadUserConfig() error {
+	uc, err := userconfig.Load()
+	a.User = uc
+	return err
 }
 
 // resolveTheme picks the active color theme by precedence: --theme flag >
@@ -77,20 +101,30 @@ func (a *App) resolveTheme() {
 	if a.Cfg != nil {
 		cfgName = a.Cfg.Theme.Name
 	}
-	a.Th, _ = design.Lookup(themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName))
+	userName := ""
+	if a.User != nil {
+		userName = a.User.Theme.Name
+	}
+	a.Th, _ = design.Lookup(themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName, userName))
 }
 
-// themeName resolves the selected theme NAME by precedence — flag > env > config —
-// trimming each, and "" when none is set (which design.Lookup maps to the default).
-// Pure (no App/env access) so the precedence contract is unit-tested directly.
-func themeName(flag, env, cfgName string) string {
+// themeName resolves the selected theme NAME by precedence — flag > env > repo
+// config > home config — trimming each, and "" when none is set (which design.Lookup
+// maps to the default). The repo tier beats the home tier so a project can still pin
+// a theme for everyone working in it, while the home tier is what a person sets once
+// for their own terminal. Pure (no App/env access) so the precedence contract is
+// unit-tested directly.
+func themeName(flag, env, cfgName, userName string) string {
 	if s := strings.TrimSpace(flag); s != "" {
 		return s
 	}
 	if s := strings.TrimSpace(env); s != "" {
 		return s
 	}
-	return strings.TrimSpace(cfgName)
+	if s := strings.TrimSpace(cfgName); s != "" {
+		return s
+	}
+	return strings.TrimSpace(userName)
 }
 
 // NewRootCmd builds the command tree with explicit DI — no package globals.
@@ -216,16 +250,20 @@ func (a *App) warnLinks() {
 }
 
 // warnUnknownTheme emits one ⚠ to stderr when an explicitly-set theme name (flag /
-// env / config) didn't match a registered theme — so a typo, or a not-yet-supported
-// name like "none", isn't a silent fall-back to the default. Empty and "auto" mean
-// "the default" and are intentional, so they don't warn. stderr-only (so --json
-// stdout stays clean), and not called on the completion path.
+// env / repo config / home config) didn't match a registered theme — so a typo, or a
+// not-yet-supported name like "none", isn't a silent fall-back to the default. Empty
+// and "auto" mean "the default" and are intentional, so they don't warn. stderr-only
+// (so --json stdout stays clean), and not called on the completion path.
 func (a *App) warnUnknownTheme() {
 	cfgName := ""
 	if a.Cfg != nil {
 		cfgName = a.Cfg.Theme.Name
 	}
-	name := themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName)
+	userName := ""
+	if a.User != nil {
+		userName = a.User.Theme.Name
+	}
+	name := themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName, userName)
 	if name == "" || strings.EqualFold(name, "auto") {
 		return
 	}

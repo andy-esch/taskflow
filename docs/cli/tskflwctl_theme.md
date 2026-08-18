@@ -5,7 +5,9 @@ Inspect color themes
 ### Synopsis
 
 Inspect color themes. Select one with --theme, the TSKFLW_THEME env, or the
-[theme] table in .tskflwctl.toml (precedence: flag > env > config).
+[theme] table in .tskflwctl.toml, or the same table in the user config at
+~/.config/tskflwctl/config.toml (precedence: flag > env > repo config >
+user config).
 
 On a truecolor terminal the theme drives every colored surface — status glyphs,
 bars, the TUI, and the picker. On a 16-color terminal the semantic colors fall
