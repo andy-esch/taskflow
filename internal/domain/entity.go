@@ -117,7 +117,7 @@ var entities = []Descriptor{
 		Kind: "research",
 		Dir:  ResearchDir,
 		AuthoringFields: []FieldDoc{
-			{"created", "date", true, "Date the research was done, YYYY-MM-DD (defaults to today); the id is minted from it, so ids sort chronologically.", "2026-08-14"},
+			{"created", "date", true, fmt.Sprintf("Date the research was done, YYYY-MM-DD (defaults to today); the id is minted from it, so ids sort chronologically. Must be %s–%s, the range an id can encode.", MintableDateMin, MintableDateMax), "2026-08-14"},
 			{"description", "string", false, fmt.Sprintf("One line summarizing what was explored (≤%d chars).", MaxDescriptionLen), "Compared three theming libraries for the TUI"},
 			{"tags", "list", false, "Topical tags.", "[tui, color]"},
 		},

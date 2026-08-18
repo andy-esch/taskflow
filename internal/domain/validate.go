@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/andy-esch/taskflow/internal/id"
 )
 
 // MaxDescriptionLen is the frontmatter description cap, in characters.
@@ -74,6 +76,41 @@ func ActiveTaskFieldErr(t Task) error {
 	}
 	return nil
 }
+
+// ValidateMintableDate checks a YYYY-MM-DD date that a stable id will be MINTED FROM
+// (ADR-0003 §3) — stricter than ValidateDate, which only checks the shape.
+//
+// An id carries 43 bits of Unix milliseconds, so only 1970-01-01 through ~2248-09-26
+// round-trips. Outside that window the timestamp wraps — a pre-1970 date becomes a huge
+// value and sorts last, a post-range date wraps toward zero and sorts first — silently
+// destroying the property that makes a backdated id useful: that sorting by id sorts by
+// authorship date. A plausible year typo (`1026-06-15` for `2026-06-15`) is exactly the
+// input that trips it, so the check is worth its weight.
+//
+// Only minting callers need this. A date that is merely STORED (a task's `created`, an
+// audit's `date`) has no such constraint and keeps using ValidateDate.
+func ValidateMintableDate(value string) error {
+	if err := ValidateDate(value); err != nil {
+		return err
+	}
+	t, err := time.Parse(time.DateOnly, value)
+	if err != nil { // unreachable: ValidateDate already parsed it
+		return fmt.Errorf("%w: must be YYYY-MM-DD, got %q", ErrValidation, value)
+	}
+	if !id.Representable(t.UnixMilli()) {
+		return fmt.Errorf("%w: date %q is outside the range a stable id can encode (%s to %s) — a date this far out is almost always a typo",
+			ErrValidation, value, MintableDateMin, MintableDateMax)
+	}
+	return nil
+}
+
+// The inclusive bounds ValidateMintableDate enforces, as dates — derived from
+// id.MaxMillis so the prose and the check can't drift, and exported so the authoring
+// docs (`schema research`) can state the window instead of restating a magic year.
+var (
+	MintableDateMin = time.UnixMilli(0).UTC().Format(time.DateOnly)
+	MintableDateMax = time.UnixMilli(id.MaxMillis).UTC().Format(time.DateOnly)
+)
 
 // ValidateDate checks a YYYY-MM-DD date string.
 func ValidateDate(value string) error {
