@@ -2,9 +2,10 @@
 schema: 1
 id: 6fgq1n001pwm
 created: "2026-06-28"
-description: ""
+description: Research and audit behind one coherent palette and selectable themes across every surface
 status: reference
 tags: [cli, tui, ux, theme, color, lipgloss, research, decision]
+updated_at: "2026-08-18"
 ---
 
 # Color/design overhaul — one palette, established themes, a neon default

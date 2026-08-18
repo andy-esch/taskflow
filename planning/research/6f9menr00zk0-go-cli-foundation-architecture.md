@@ -2,7 +2,7 @@
 schema: 1
 id: 6f9menr00zk0
 created: "2026-06-06"
-description: ""
+description: Layout, architecture, and patterns for the Go CLI foundation before porting commands
 tags: []
 date: 2026-06-06
 topic: Go CLI foundation — layout, architecture, and patterns for the pm port
@@ -11,6 +11,7 @@ status: in-progress
 related_tasks:
   - port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md
   - rethink-pm-command-hierarchy-pm-noun-verb-research-cli-best-practices.md
+updated_at: "2026-08-18"
 ---
 
 # Go CLI foundation: layout, architecture, patterns

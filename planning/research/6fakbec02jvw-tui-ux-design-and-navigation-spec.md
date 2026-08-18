@@ -2,9 +2,10 @@
 schema: 1
 id: 6fakbec02jvw
 created: "2026-06-09"
-description: ""
+description: Keyboard-driven TUI design system and sprint roadmap for the interactive browser
 status: proposal
 tags: [tui, ux, bubble-tea, design-spec]
+updated_at: "2026-08-18"
 ---
 
 # TUI UX Design and Navigation Specification

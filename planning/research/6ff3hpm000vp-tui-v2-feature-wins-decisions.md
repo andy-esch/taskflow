@@ -2,9 +2,10 @@
 schema: 1
 id: 6ff3hpm000vp
 created: "2026-06-23"
-description: ""
+description: 'Adopt/decline decisions for v2 TUI features: overlays, clipboard, keyboard'
 status: reference
 tags: [tui, design, decision, lipgloss-v2]
+updated_at: "2026-08-18"
 ---
 
 # v2 TUI feature wins — adopt/decline decisions

@@ -2,8 +2,9 @@
 schema: 1
 id: 6dr29v00057x
 created: "2026-01-03"
-description: ""
+description: Whether to use Go workspaces or a single root module; recommends one root go.mod
 tags: []
+updated_at: "2026-08-18"
 ---
 
 # Research: Workspaces vs. Root Modules for TaskFlow

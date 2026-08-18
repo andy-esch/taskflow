@@ -2,9 +2,10 @@
 schema: 1
 id: 6ff3hpm02x9p
 created: "2026-06-23"
-description: ""
+description: Measures OSC-11 terminal background query cost at TUI startup
 status: reference
 tags: [tui, perf, bubbletea, spike, decision]
+updated_at: "2026-08-18"
 ---
 
 # OSC-11 startup-latency spike — is tskflwctl exposed?

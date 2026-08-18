@@ -2,8 +2,9 @@
 schema: 1
 id: 6dr29v003x29
 created: "2026-01-03"
-description: ""
+description: Provider-agnostic AI architecture so OpenAI, Anthropic, Gemini, or local models are pluggable
 tags: []
+updated_at: "2026-08-18"
 ---
 
 # Research: AI Provider Abstraction Architecture

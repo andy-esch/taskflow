@@ -2,8 +2,9 @@
 schema: 1
 id: 6dr29v001290
 created: "2026-01-03"
-description: ""
+description: 'Split query path: simple listing served directly by the CLI, smart search via an API'
 tags: []
+updated_at: "2026-08-18"
 ---
 
 # Research: Hybrid Search Architecture (Direct vs. API)

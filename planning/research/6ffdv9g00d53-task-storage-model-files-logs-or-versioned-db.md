@@ -2,9 +2,10 @@
 schema: 1
 id: 6ffdv9g00d53
 created: "2026-06-24"
-description: ""
+description: Whether tasks stay flat files or move to an append log or versioned DB; feeds the OCC work
 status: reference
 tags: [storage, data-model, git, merge, occ, epic-23]
+updated_at: "2026-08-18"
 ---
 
 # Task storage model — files, logs, or a versioned DB

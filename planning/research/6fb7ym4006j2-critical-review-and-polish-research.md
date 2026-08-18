@@ -2,9 +2,10 @@
 schema: 1
 id: 6fb7ym4006j2
 created: "2026-06-11"
-description: ""
+description: Fresh-eyes engineering review of the CLI plus competitive research on polish
 status: reference
 tags: [review, tui, core, polish, adoption, reference]
+updated_at: "2026-08-18"
 ---
 
 # Critical review & "make it shine" research

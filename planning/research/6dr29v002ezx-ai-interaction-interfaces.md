@@ -2,8 +2,9 @@
 schema: 1
 id: 6dr29v002ezx
 created: "2026-01-03"
-description: ""
+description: Shell-invocation vs MCP server vs context broker as the AI's interface to the tool
 tags: []
+updated_at: "2026-08-18"
 ---
 
 # Research: AI Interaction Interfaces (MCP vs API)
