@@ -84,4 +84,4 @@ are for eyes; these are for pipes.
 
 - Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md) ·
   [column-projection-format-table-cols-for-list-commands](6fd5r5c009vr-column-projection-format-table-cols-for-list-commands.md) ·
-  [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md) (D7).
+  [pending-decisions](../research/6fbj87001f35-pending-decisions.md) (D7).

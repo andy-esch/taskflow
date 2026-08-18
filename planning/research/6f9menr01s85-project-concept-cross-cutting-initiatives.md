@@ -1,4 +1,9 @@
 ---
+schema: 1
+id: 6f9menr01s85
+created: "2026-06-06"
+description: ""
+tags: []
 date: 2026-06-06
 topic: Projects as first-class cross-cutting initiatives
 purpose: Design `project` as an optional, cross-domain grouping of tasks (orthogonal to epics), and surface the open gaps before implementing.

@@ -1,6 +1,9 @@
 ---
-status: reference
+schema: 1
+id: 6fgq1n001pwm
 created: "2026-06-28"
+description: ""
+status: reference
 tags: [cli, tui, ux, theme, color, lipgloss, research, decision]
 ---
 
@@ -8,8 +11,8 @@ tags: [cli, tui, ux, theme, color, lipgloss, research, decision]
 
 Research + audit for
 [color-and-design-overhaul-one-coherent-palette-across-every-surface](../tasks/6ffr4wc01gtv-color-and-design-overhaul-one-coherent-palette-across-every-surface.md) (epic
-[20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)). Builds on [2026-06-23-lipgloss-v2-charm-ecosystem](2026-06-23-lipgloss-v2-charm-ecosystem.md),
-[2026-06-21-fang-evaluation-spike](2026-06-21-fang-evaluation-spike.md), and [2026-06-10-tui-design-decisions](2026-06-10-tui-design-decisions.md).
+[20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)). Builds on [lipgloss-v2-charm-ecosystem](6ff3hpm0100s-lipgloss-v2-charm-ecosystem.md),
+[fang-evaluation-spike](6feeygw022td-fang-evaluation-spike.md), and [tui-design-decisions](6faxn1800y6n-tui-design-decisions.md).
 Four parallel research lenses (internal audit, external theme libraries, Charm v2
 theming mechanics, UX/accessibility) + source-verified against the module cache.
 **No code here — the map, the options, and a recommended shape + sequence.**
@@ -163,7 +166,7 @@ already, though (next section).
   `Blend1D/2D`, `Lighten/Darken/Complementary`).
 - **fang v1** (direct dep): `fang.ColorScheme` is itself a "struct of named
   colors" fed via `WithColorSchemeFunc` — prior art for the pattern, and the
-  [2026-06-21-fang-evaluation-spike](2026-06-21-fang-evaluation-spike.md) already flagged feeding our theme into it.
+  [fang-evaluation-spike](6feeygw022td-fang-evaluation-spike.md) already flagged feeding our theme into it.
 
 ---
 

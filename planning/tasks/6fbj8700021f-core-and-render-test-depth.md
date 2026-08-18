@@ -16,7 +16,7 @@ id: 6fbj8700021f
 # Core and render test depth
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), finding M18 + testing
+> ([critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md), finding M18 + testing
 > lows). The seams already exist — this is cheap coverage of the
 > architectural center, not new infrastructure.
 

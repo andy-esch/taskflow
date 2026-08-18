@@ -1,3 +1,11 @@
+---
+schema: 1
+id: 6dr29v002ezx
+created: "2026-01-03"
+description: ""
+tags: []
+---
+
 # Research: AI Interaction Interfaces (MCP vs API)
 
 **Status**: Proposal

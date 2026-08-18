@@ -1,6 +1,9 @@
 ---
-status: reference
+schema: 1
+id: 6ff3hpm02x9p
 created: "2026-06-23"
+description: ""
+status: reference
 tags: [tui, perf, bubbletea, spike, decision]
 ---
 
@@ -90,4 +93,4 @@ included** — porting the TUI without retiring huh would have left the init in 
 ## Sources
 - `bubbletea@v1.3.10/tea_init.go`, `lipgloss@v1.1.1/renderer.go`,
   `termenv@v0.16.0/{termenv.go,output.go,termenv_unix.go}` (module cache).
-- [2026-06-23-tui-v2-migration-plan](2026-06-23-tui-v2-migration-plan.md) · [2026-06-23-lipgloss-v2-charm-ecosystem](2026-06-23-lipgloss-v2-charm-ecosystem.md).
+- [tui-v2-migration-plan](6ff3hpm004t1-tui-v2-migration-plan.md) · [lipgloss-v2-charm-ecosystem](6ff3hpm0100s-lipgloss-v2-charm-ecosystem.md).

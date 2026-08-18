@@ -16,7 +16,7 @@ id: 6fbj870025yw
 # Align `task new` scaffold with `lint`
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), finding H4). Hand-verified
+> ([critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md), finding H4). Hand-verified
 > live: in a fresh `init` repo, `epic new` + `task new --epic … --description d`
 > + `lint` exits 11 with `tags: missing`.
 

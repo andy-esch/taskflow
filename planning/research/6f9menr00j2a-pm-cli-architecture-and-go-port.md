@@ -1,4 +1,9 @@
 ---
+schema: 1
+id: 6f9menr00j2a
+created: "2026-06-06"
+description: ""
+tags: []
 date: 2026-06-06
 topic: pm CLI architecture — command hierarchy, Go framework, Python→Go port
 purpose: Decide the noun-verb hierarchy + Go CLI framework + port strategy before building the Go pm (epic 17). Design input for the port.

@@ -18,8 +18,8 @@ superseded_by: null
 > the *identity + layout* cluster the epic and its two spikes converged on over
 > 2026-06-30, and explicitly bounds what it does **not** decide (branching/SSOT,
 > `serve`, OCC token, board, migration — see *Out of scope*). Full rationale lives in
-> [2026-06-24-task-storage-model-files-logs-or-versioned-db](../research/2026-06-24-task-storage-model-files-logs-or-versioned-db.md) and
-> [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md); this ADR is the citable
+> [task-storage-model-files-logs-or-versioned-db](../research/6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db.md) and
+> [remote-planning-repos-backends-and-sync](../research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md); this ADR is the citable
 > conclusion.
 
 ## Context and Problem Statement
@@ -281,7 +281,7 @@ narrow layout-hygiene rule the flatten needs now.
 - Home epic & the open-questions index:
   [24-data-model-evolution-stable-key-storage-read-model-content-occ](../epics/24-data-model-evolution-stable-key-storage-read-model-content-occ.md).
 - Storage-model rationale (paradigm, organizing key, the residue):
-  [2026-06-24-task-storage-model-files-logs-or-versioned-db](../research/2026-06-24-task-storage-model-files-logs-or-versioned-db.md).
+  [task-storage-model-files-logs-or-versioned-db](../research/6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db.md).
 - Sync / concurrency & the branching/SSOT fork (deferred here):
-  [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md).
+  [remote-planning-repos-backends-and-sync](../research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md).
 - ADR format this follows: [0001-adopt-adrs](0001-adopt-adrs.md).

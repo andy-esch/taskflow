@@ -51,7 +51,7 @@ own-line config comments), but each is a cheap, correct hardening.
    (outside quotes) before extracting the value.
 
 Folded in from the 2026-06-12 review
-([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), findings B2/M2 + a slug low —
+([critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md), findings B2/M2 + a slug low —
 same files, same theme):
 
 4. **`configuredRoot` doesn't enforce the containment its comment promises**

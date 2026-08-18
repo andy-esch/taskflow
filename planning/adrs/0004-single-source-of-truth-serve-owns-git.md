@@ -13,7 +13,7 @@ superseded_by: null
 > [0003-stable-key-id-addressed-storage](0003-stable-key-id-addressed-storage.md), which fixed the *on-disk* model and
 > deliberately left *sync / single-source-of-truth* to this ADR (ADR-0003's identity is
 > coordination-free precisely so it doesn't presuppose this decision). Full rationale:
-> [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md).
+> [remote-planning-repos-backends-and-sync](../research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md).
 
 ## Context and Problem Statement
 
@@ -151,7 +151,7 @@ _None yet (still `proposed`)._
 ## Related
 
 - Sync / concurrency rationale, the dual-authority trap, and the web-write thread:
-  [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md).
+  [remote-planning-repos-backends-and-sync](../research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md).
 - The on-disk model this builds on: [0003-stable-key-id-addressed-storage](0003-stable-key-id-addressed-storage.md).
 - Decoupled-planning-repo foundation (local phase shipped): epic
   [23-point-an-impl-repo-at-an-external-planning-repo](../epics/23-point-an-impl-repo-at-an-external-planning-repo.md).

@@ -1,4 +1,9 @@
 ---
+schema: 1
+id: 6f9menr01t1n
+created: "2026-06-06"
+description: ""
+tags: []
 date: 2026-06-06
 topic: tskflwctl — formal command hierarchy + purpose spec (Phase 0.5)
 purpose: The build-to command spec for the Go CLI. Full noun-verb tree with per-command purpose, flags, and output. Python pm is a starting point, not the whole contract.

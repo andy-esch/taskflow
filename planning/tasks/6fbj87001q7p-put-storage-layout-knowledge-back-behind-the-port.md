@@ -16,7 +16,7 @@ id: 6fbj87001q7p
 # Put storage-layout knowledge back behind the port
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), finding M15 + doc-drift
+> ([critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md), finding M15 + doc-drift
 > lows). The hexagonal import graph verified clean; these are the two spots
 > where *layout* knowledge escaped the store, plus doc drift to sweep.
 

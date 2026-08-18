@@ -1,6 +1,9 @@
 ---
+schema: 1
+id: 6fakbec02jvw
+created: "2026-06-09"
+description: ""
 status: proposal
-created: 2026-06-09
 tags: [tui, ux, bubble-tea, design-spec]
 ---
 

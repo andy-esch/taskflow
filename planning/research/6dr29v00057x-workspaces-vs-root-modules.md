@@ -1,3 +1,11 @@
+---
+schema: 1
+id: 6dr29v00057x
+created: "2026-01-03"
+description: ""
+tags: []
+---
+
 # Research: Workspaces vs. Root Modules for TaskFlow
 
 **Status**: Proposal / Education

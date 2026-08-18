@@ -16,7 +16,7 @@ id: 6fbj8700122m
 # `--json` and output contract fidelity
 
 > ⚠️ **Externally proposed — filed from the 2026-06-12 review**
-> ([2026-06-12-critical-code-review-multi-lens](../research/2026-06-12-critical-code-review-multi-lens.md), findings M7/M8/M10/M11 +
+> ([critical-code-review-multi-lens](../research/6fbj87003qrn-critical-code-review-multi-lens.md), findings M7/M8/M10/M11 +
 > output lows). Theme: agents are the stated `--json` audience, and the
 > machine output is currently *less* informative than the human output.
 

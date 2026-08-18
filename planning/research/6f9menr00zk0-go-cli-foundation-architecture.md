@@ -1,4 +1,9 @@
 ---
+schema: 1
+id: 6f9menr00zk0
+created: "2026-06-06"
+description: ""
+tags: []
 date: 2026-06-06
 topic: Go CLI foundation — layout, architecture, and patterns for the pm port
 purpose: Define a rock-solid, idiomatic-Go foundation (code architecture, layout, patterns, testing) to build the pm CLI on, reusing the taskflow repo. Companion to the CLI-architecture research.

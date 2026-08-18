@@ -1,6 +1,9 @@
 ---
+schema: 1
+id: 6faxn1800y6n
+created: "2026-06-10"
+description: ""
 status: reference
-created: 2026-06-10
 tags: [tui, bubble-tea, ux, reference]
 ---
 

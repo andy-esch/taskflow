@@ -1,6 +1,9 @@
 ---
-status: reference
+schema: 1
+id: 6ff3hpm000vp
 created: "2026-06-23"
+description: ""
+status: reference
 tags: [tui, design, decision, lipgloss-v2]
 ---
 
@@ -145,4 +148,4 @@ depends on the layers work):
 - Verified against the module cache: `bubbletea/v2@v2.0.7` (`tea.go` View struct,
   `mouse.go`, `keyboard.go`, `clipboard.go`), `lipgloss/v2@v2.0.4`
   (`canvas.go`, `layer.go`).
-- [2026-06-23-tui-v2-migration-plan](2026-06-23-tui-v2-migration-plan.md) · [2026-06-23-lipgloss-v2-charm-ecosystem](2026-06-23-lipgloss-v2-charm-ecosystem.md).
+- [tui-v2-migration-plan](6ff3hpm004t1-tui-v2-migration-plan.md) · [lipgloss-v2-charm-ecosystem](6ff3hpm0100s-lipgloss-v2-charm-ecosystem.md).

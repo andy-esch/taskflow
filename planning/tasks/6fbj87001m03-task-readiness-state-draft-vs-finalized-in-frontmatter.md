@@ -60,7 +60,7 @@ first-class, tool-visible concept so:
       in-progress? next-up → in-progress specifically (per the originating
       idea)? Hard error vs warning vs `--force` escape?
 - [ ] **Exit code:** a readiness gate is the first REAL transition rule —
-      D3 ([2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md)) retired exit code 12
+      D3 ([pending-decisions](../research/6fbj87001f35-pending-decisions.md)) retired exit code 12
       (invalid-transition) but left it *reserved*. Does this feature
       un-retire 12, or is it a plain validation failure (11)?
 - [ ] **Is the open-questions count authoritative for the gate, or the
@@ -106,7 +106,7 @@ first-class, tool-visible concept so:
 
 ## Related
 
-- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md) (D3) ·
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · [pending-decisions](../research/6fbj87001f35-pending-decisions.md) (D3) ·
   the four 2026-06-12 draft tasks (motivating instances) ·
   `internal/store/auditstore.go` (content-derived counting precedent) ·
   `internal/domain/fields.go` (field registry).

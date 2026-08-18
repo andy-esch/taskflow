@@ -20,7 +20,7 @@ id: 6fd5r5c03v5y
 > dogfooding `tskflwctl` to pick + work a tranche on `desirelines-planning`
 > (audit `2026-06-14-simplify-apigateway`). The friction it hit is the
 > mirror image of a known gap: the **audit finding-level surface was specced
-> in [2026-06-06-tskflwctl-command-spec](../research/2026-06-06-tskflwctl-command-spec.md) and explicitly *deferred* during
+> in [tskflwctl-command-spec](../research/6f9menr01t1n-tskflwctl-command-spec.md) and explicitly *deferred* during
 > the Go port** ("Deferred (audit finding-level): `status`/`fixed`/`landed`/
 > `followup`/`sync` … `findings`/`stats`") and never re-filed. This task is
 > that deferred surface, scoped to the four items the feedback grounded in
@@ -193,7 +193,7 @@ both falling out of the parser:
 The feedback also flagged `status: completed` on audit frontmatter as
 overloaded/misleading. **For this tool that's already resolved:** `audit new`
 writes only `area` + `date` (no status field) and directory==bucket is the
-audit-level state, exactly as [2026-06-06-tskflwctl-command-spec](../research/2026-06-06-tskflwctl-command-spec.md)
+audit-level state, exactly as [tskflwctl-command-spec](../research/6f9menr01t1n-tskflwctl-command-spec.md)
 recommends. The `status: completed` the feedback hit is a **desirelines**
 artifact (legacy / routine-generated audits) — the fix lives there (routine
 audit-generator + back-fill + HOWTO), not in tskflwctl. The only tool-side
@@ -203,7 +203,7 @@ key on an audit as drift.
 ## Related
 
 - Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) — this is the port's deferred finding-level tail.
-- Source spec: [2026-06-06-tskflwctl-command-spec](../research/2026-06-06-tskflwctl-command-spec.md) (`audit` table:
+- Source spec: [tskflwctl-command-spec](../research/6f9menr01t1n-tskflwctl-command-spec.md) (`audit` table:
   `status` / `findings` / `lint` / `sync`; "Open gap — audit frontmatter").
 - Parser dependency / fold:
   [scaffold-schema-version-key-and-domain-level-audit-finding-counter](6fc6vcr02j4x-scaffold-schema-version-key-and-domain-level-audit-finding-counter.md) (#2).

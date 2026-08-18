@@ -134,7 +134,7 @@ like A:
 
 ## Related
 
-- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md) (D7/D9) ·
+- Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · [pending-decisions](../research/6fbj87001f35-pending-decisions.md) (D7/D9) ·
   `internal/domain/fields.go` (field registry to enrich) ·
   `internal/core/service.go` (the `task new` body scaffold = section source).
 - Authoring half (B) interacts with

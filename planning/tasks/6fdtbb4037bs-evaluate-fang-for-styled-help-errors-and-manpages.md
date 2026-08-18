@@ -58,7 +58,7 @@ help/error rendering and our machine contract is non-negotiable.
 
 Evaluated via a worktree spike (`spike/fang-eval`), then shipped on branch
 `feat/fang-styled-cli`. Findings + cons + the in-scope follow-ups live in
-[2026-06-21-fang-evaluation-spike](../research/2026-06-21-fang-evaluation-spike.md).
+[fang-evaluation-spike](../research/6feeygw022td-fang-evaluation-spike.md).
 
 **Outcome:** the central risk (a lipgloss v2 *bump* on the TUI) was a non-issue —
 v1 and v2 coexist (different module paths), so the TUI is untouched; and lipgloss

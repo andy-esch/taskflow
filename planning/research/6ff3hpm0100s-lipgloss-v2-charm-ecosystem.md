@@ -1,6 +1,9 @@
 ---
-status: reference
+schema: 1
+id: 6ff3hpm0100s
 created: "2026-06-23"
+description: ""
+status: reference
 tags: [cli, ux, tui, lipgloss, bubbletea, research, decision]
 ---
 
@@ -8,7 +11,7 @@ tags: [cli, ux, tui, lipgloss, bubbletea, research, decision]
 
 Capture-and-decide for [explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements](../tasks/6feeygw02vzb-explore-lipgloss-v2-and-charm-ecosystem-ui-enhancements.md)
 (epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)). Builds on the
-[2026-06-21-fang-evaluation-spike](2026-06-21-fang-evaluation-spike.md) (fang landed → `charm.land/lipgloss/v2`
+[fang-evaluation-spike](6feeygw022td-fang-evaluation-spike.md) (fang landed → `charm.land/lipgloss/v2`
 v2.0.4 is already in the module graph). **No code here — options + a recommended
 first slice.** Governing rule (epic 20): never compromise the agent/pipeline
 contract — every visual nicety is TTY-gated and raw under `--json`/pipe.

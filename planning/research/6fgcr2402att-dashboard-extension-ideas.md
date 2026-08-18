@@ -1,3 +1,11 @@
+---
+schema: 1
+id: 6fgcr2402att
+created: "2026-06-27"
+description: ""
+tags: []
+---
+
 # Dashboard extension ideas (research)
 
 Date: 2026-06-27 · Epic: [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)

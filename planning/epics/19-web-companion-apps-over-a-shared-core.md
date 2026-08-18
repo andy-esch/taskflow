@@ -28,7 +28,7 @@ is this epic's read side in embryo: **one `core` projection** of planning state
 `BOARD.md`, the TUI board, a CLI `board`, and here as a JSON/HTTP read endpoint.
 So `serve`'s read path is "expose the projection," not new logic; writes funnel
 through `core.Service` with the version-aware OCC (see
-[2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md)).
+[remote-planning-repos-backends-and-sync](../research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md)).
 Building the board (epic 23 / storage spike) is a down payment on this epic.
 
 ## Current aim (2026-07)
@@ -189,7 +189,7 @@ all confined to the GitHub `core.Store` implementation:
   `rank` frontmatter field, or accept "sorted by priority then age, no manual order."
   This is a data-model change → coordinate with epic 24 if we want it.
 - **Serve-owns-git for the hosted rung.** The sync research
-  ([2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md)) lands on the server as a
+  ([remote-planning-repos-backends-and-sync](../research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md)) lands on the server as a
   single privileged git client (writes serialized through `core.Service` + OCC,
   commits batched under a `tskflwctl-bot` identity with a `Co-authored-by` trailer).
   For single-user this is nearly free; confirm we want the hosted server to drive git
@@ -252,9 +252,9 @@ Backing for the stack choices above:
 - Epic [24-data-model-evolution-stable-key-storage-read-model-content-occ](24-data-model-evolution-stable-key-storage-read-model-content-occ.md) — OCC /
   version-CAS this epic's write path consumes.
 - [version-aware-occ-content-hash-token-and-plain-retry](../tasks/6fhnydm02wxd-version-aware-occ-content-hash-token-and-plain-retry.md) — the OCC task itself.
-- [2026-06-24-remote-planning-repos-backends-and-sync](../research/2026-06-24-remote-planning-repos-backends-and-sync.md) — serve-owns-git, freshness,
+- [remote-planning-repos-backends-and-sync](../research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md) — serve-owns-git, freshness,
   single-writer sync (Path C convergence).
-- [2026-06-24-task-storage-model-files-logs-or-versioned-db](../research/2026-06-24-task-storage-model-files-logs-or-versioned-db.md) — content-vs-workflow-
+- [task-storage-model-files-logs-or-versioned-db](../research/6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db.md) — content-vs-workflow-
   state split behind the OCC shape.
 - `docs/ARCHITECTURE.md` — ports-and-adapters layout `serve` becomes a third adapter of.
 - `internal/core/store.go` — the `Store` port a GitHub adapter would implement.

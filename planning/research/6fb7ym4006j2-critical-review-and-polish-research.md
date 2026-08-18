@@ -1,6 +1,9 @@
 ---
+schema: 1
+id: 6fb7ym4006j2
+created: "2026-06-11"
+description: ""
 status: reference
-created: 2026-06-11
 tags: [review, tui, core, polish, adoption, reference]
 ---
 

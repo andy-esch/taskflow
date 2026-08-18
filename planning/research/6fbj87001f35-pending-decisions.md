@@ -1,6 +1,9 @@
 ---
+schema: 1
+id: 6fbj87001f35
+created: "2026-06-12"
+description: ""
 status: reference
-created: 2026-06-12
 tags: [decisions, review, reference]
 ---
 

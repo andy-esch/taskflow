@@ -152,5 +152,5 @@ multiselect-of-suggestions for tags; the TUI filter toggle
 ## Related
 
 - Epic [17-pm-go-cli](../epics/17-pm-go-cli.md) · builds on [fuzzypartial-slug-resolution](6fakbec0252f-fuzzypartial-slug-resolution.md) ·
-  see [2026-06-12-pending-decisions](../research/2026-06-12-pending-decisions.md) (D1) and the 2026-06-12 design
+  see [pending-decisions](../research/6fbj87001f35-pending-decisions.md) (D1) and the 2026-06-12 design
   discussion in session notes.
