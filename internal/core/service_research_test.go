@@ -176,3 +176,97 @@ func slugsOf(docs []domain.Research) []string {
 	}
 	return out
 }
+
+// setStore records what SetResearchFields hands the store.
+type setStore struct {
+	nopStore
+	got map[string]any
+}
+
+func (f *setStore) SetResearchFields(_ string, updates map[string]any, _ bool) (domain.Research, error) {
+	f.got = updates
+	return domain.Research{Slug: "x"}, nil
+}
+
+// `created` is the one field that must never be writable: the id is minted from it, so a
+// change in place would leave the pair desynced with no way to detect it later.
+func TestSetResearchFields_ProtectedFields(t *testing.T) {
+	svc := NewService(&setStore{}, WithClock(fixedClock("2026-08-18")))
+	for _, field := range []string{"created", "id", "schema", "updated_at"} {
+		t.Run(field, func(t *testing.T) {
+			_, err := svc.SetResearchFields("x", map[string]any{field: "whatever"}, false, false)
+			if !errors.Is(err, domain.ErrValidation) {
+				t.Fatalf("setting %s must be ErrValidation, got %v", field, err)
+			}
+			if !strings.Contains(err.Error(), field) {
+				t.Errorf("error should name the field: %v", err)
+			}
+		})
+		// Protected on the UNSET path too — removing created is as damaging as changing it.
+		t.Run(field+" unset", func(t *testing.T) {
+			_, err := svc.SetResearchFields("x", map[string]any{field: domain.UnsetField{}}, false, false)
+			if !errors.Is(err, domain.ErrValidation) {
+				t.Errorf("unsetting %s must be ErrValidation, got %v", field, err)
+			}
+		})
+	}
+}
+
+func TestSetResearchFields_UnknownFieldNeedsForce(t *testing.T) {
+	store := &setStore{}
+	svc := NewService(store, WithClock(fixedClock("2026-08-18")))
+
+	if _, err := svc.SetResearchFields("x", map[string]any{"bogus": "1"}, false, false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("unknown field without --force must be ErrValidation, got %v", err)
+	}
+	if _, err := svc.SetResearchFields("x", map[string]any{"bogus": "1"}, true, false); err != nil {
+		t.Errorf("--force should allow it: %v", err)
+	}
+	if store.got["bogus"] != "1" {
+		t.Errorf("forced field not passed through: %+v", store.got)
+	}
+}
+
+// tags is the only list field, so `--set tags=a,b` must become a sequence rather than a
+// single corrupting string.
+func TestSetResearchFields_CoercesTagsToList(t *testing.T) {
+	store := &setStore{}
+	svc := NewService(store, WithClock(fixedClock("2026-08-18")))
+
+	if _, err := svc.SetResearchFields("x", map[string]any{"tags": "a,b"}, false, false); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := store.got["tags"].([]string)
+	if !ok || len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Errorf("tags = %#v, want []string{a,b}", store.got["tags"])
+	}
+}
+
+// updated_at is stamped by the service so every adapter gets it.
+func TestSetResearchFields_StampsUpdatedAt(t *testing.T) {
+	store := &setStore{}
+	svc := NewService(store, WithClock(fixedClock("2026-08-18")))
+
+	if _, err := svc.SetResearchFields("x", map[string]any{"description": "d"}, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if store.got["updated_at"] != "2026-08-18" {
+		t.Errorf("updated_at = %v, want the clock's date", store.got["updated_at"])
+	}
+}
+
+func TestSetResearchFields_RejectsEmptyUpdate(t *testing.T) {
+	svc := NewService(&setStore{}, WithClock(fixedClock("2026-08-18")))
+	if _, err := svc.SetResearchFields("x", nil, false, false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("no fields must be ErrValidation, got %v", err)
+	}
+}
+
+// A too-long description is caught in core, so every adapter inherits the rule.
+func TestSetResearchFields_ValidatesDescription(t *testing.T) {
+	svc := NewService(&setStore{}, WithClock(fixedClock("2026-08-18")))
+	long := strings.Repeat("x", domain.MaxDescriptionLen+1)
+	if _, err := svc.SetResearchFields("x", map[string]any{"description": long}, false, false); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("over-long description must be ErrValidation, got %v", err)
+	}
+}

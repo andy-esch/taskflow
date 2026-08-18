@@ -183,3 +183,125 @@ func TestResearchShow_AmbiguousWordingIsNotResearchs(t *testing.T) {
 		t.Errorf("want 'matches 2 research docs', got:\n%s", msg)
 	}
 }
+
+func TestResearchSet_UpdatesFieldsSurgically(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "research", "new", "Theming libs", "--created", "2026-06-23")
+	path := researchPath(t, root, "theming-libs")
+	// A vestigial key like the legacy corpus carries, added by hand.
+	orig, _ := os.ReadFile(path)
+	if err := os.WriteFile(path, []byte(strings.Replace(string(orig), "tags: []", "tags: []\nstatus: reference", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runRoot(t, "-C", root, "research", "set", "theming-libs", "--description", "Weighed three libs", "--tags", "tui,color")
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(got)
+	for _, want := range []string{"description: Weighed three libs", "tags: [tui, color]", "status: reference", "updated_at:"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q after set:\n%s", want, s)
+		}
+	}
+	// created is untouched, and so is the id it was minted from.
+	if !strings.Contains(s, `created: "2026-06-23"`) {
+		t.Errorf("created must not change:\n%s", s)
+	}
+}
+
+// `created` is immutable because the id encodes it — the single most important guard on
+// this command, so it is asserted at the CLI boundary too.
+func TestResearchSet_CreatedIsNotSettable(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "research", "new", "Doc", "--created", "2026-06-23")
+
+	out, err := runRootRC(t, "-C", root, "research", "set", "doc", "--set", "created=2020-01-01")
+	if err == nil {
+		t.Fatal("setting created must fail")
+	}
+	msg := err.Error() + out
+	if !strings.Contains(msg, "created") || !strings.Contains(msg, "id") {
+		t.Errorf("error should explain the id/created coupling: %s", msg)
+	}
+	// And the file is unchanged.
+	got, _ := os.ReadFile(researchPath(t, root, "doc"))
+	if !strings.Contains(string(got), `created: "2026-06-23"`) {
+		t.Errorf("created changed despite the refusal:\n%s", got)
+	}
+}
+
+func TestResearchAppend_AddsToBodyAndStamps(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "research", "new", "Doc", "--created", "2026-06-23")
+
+	runRoot(t, "-C", root, "research", "append", "doc", "--body", "## Addendum\n\nlipgloss v2 shipped.")
+
+	got, _ := os.ReadFile(researchPath(t, root, "doc"))
+	s := string(got)
+	if !strings.Contains(s, "## Addendum") || !strings.Contains(s, "## Question") {
+		t.Errorf("append should add to the body, not replace it:\n%s", s)
+	}
+	if !strings.Contains(s, "updated_at:") {
+		t.Errorf("append should stamp updated_at:\n%s", s)
+	}
+}
+
+// `research edit` is interactive with no preview, so it must refuse --dry-run rather than
+// open an editor whose save is silently discarded.
+func TestResearchEdit_RejectsDryRunAndNonTTY(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "research", "new", "Doc")
+
+	if _, err := runRootRC(t, "-C", root, "--dry-run", "research", "edit", "doc"); err == nil {
+		t.Error("`research edit --dry-run` must be rejected")
+	}
+	// Non-interactive (test harness has no TTY): must point at the scriptable path.
+	out, err := runRootRC(t, "-C", root, "research", "edit", "doc")
+	if err == nil {
+		t.Fatal("`research edit` without a TTY must be rejected")
+	}
+	if msg := err.Error() + out; !strings.Contains(msg, "research set") && !strings.Contains(msg, "research append") {
+		t.Errorf("error should point at the non-interactive alternative: %s", msg)
+	}
+}
+
+func TestResearchSet_DryRunWritesNothing(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "research", "new", "Doc", "--created", "2026-06-23")
+	path := researchPath(t, root, "doc")
+	before, _ := os.ReadFile(path)
+
+	runRoot(t, "-C", root, "--dry-run", "research", "set", "doc", "--description", "preview only")
+
+	after, _ := os.ReadFile(path)
+	if string(before) != string(after) {
+		t.Errorf("--dry-run wrote to disk:\n%s", after)
+	}
+}
+
+// The mutation envelope must carry dry_run so a preview is distinguishable from a write.
+func TestResearchSet_JSONEnvelope(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "research", "new", "Doc", "--created", "2026-06-23")
+
+	js := runRoot(t, "-C", root, "--dry-run", "research", "set", "doc", "--description", "d", "--json")
+	var env struct {
+		SchemaVersion string `json:"schema_version"`
+		DryRun        bool   `json:"dry_run"`
+		Research      struct {
+			Slug, Description string
+		} `json:"research"`
+	}
+	if err := json.Unmarshal([]byte(js), &env); err != nil {
+		t.Fatalf("invalid --json: %v\n%s", err, js)
+	}
+	if !env.DryRun {
+		t.Errorf("dry_run must be true for a preview: %s", js)
+	}
+	if env.Research.Slug != "doc" || env.SchemaVersion == "" {
+		t.Errorf("envelope wrong: %s", js)
+	}
+}

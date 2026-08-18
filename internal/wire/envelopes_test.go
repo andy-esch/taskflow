@@ -101,6 +101,10 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToResearchShowEnvelope(
 				domain.Research{ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23"}, "# body"))
 		}},
+		{"ResearchMutationEnvelope", func(w io.Writer) error {
+			return emit(w, ToResearchMutationEnvelope(
+				domain.Research{ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23", Updated: "2026-08-18"}, "# new body", true))
+		}},
 		{"AuditsEnvelope", func(w io.Writer) error {
 			return emit(w, ToAuditsEnvelope([]domain.Audit{{Slug: "x", Bucket: domain.AuditOpen, Findings: 1, OpenFindings: 1}}, nil))
 		}},

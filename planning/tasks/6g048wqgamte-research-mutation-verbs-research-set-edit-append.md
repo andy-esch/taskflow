@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g048wqgamte
-status: ready-to-start
+status: completed
 epic: 28-first-class-entities-new-planning-nouns
 description: 'Give research the agent+human mutation faces every other entity has: field-level set, editor-based edit, body append; created stays immutable (the id encodes it).'
 effort: Unknown
@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, core]
 created: "2026-08-14"
+updated_at: "2026-08-18"
+started_at: "2026-08-18"
+completed_at: "2026-08-18"
 ---
 
 # Research mutation verbs — `research set` / `edit` / `append`

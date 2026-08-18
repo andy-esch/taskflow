@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 
@@ -87,4 +88,121 @@ func parseResearch(content []byte, path string) (domain.Research, error) {
 	r.FilenameID = fnID
 	r.Path = path
 	return r, nil
+}
+
+// resolveResearchPathExact re-resolves a research doc by its EXACT stable id for the
+// version-CAS guard (verifyUnchanged) — never the fuzzy id-OR-slug match resolveResearch
+// uses, so a sibling doc whose slug equals this file's id can't lock it (see
+// resolveExactID). Mirrors resolveAuditPath.
+func (s *FS) resolveResearchPathExact(entityID string) (string, error) {
+	cands, err := s.researchCandidates()
+	if err != nil {
+		return "", err
+	}
+	c, err := resolveExactID(cands, entityID)
+	if err != nil {
+		return "", err
+	}
+	return c.path, nil
+}
+
+// SetResearchFields surgically updates frontmatter fields on a research doc in one
+// atomic, validated write. Unknown keys, comments, and key order survive (the vestigial
+// `status: reference` on the legacy corpus rides along untouched). The service injects
+// updated_at; protected fields are rejected before we get here.
+func (s *FS) SetResearchFields(slug string, updates map[string]any, dryRun bool) (domain.Research, error) {
+	path, err := s.resolveResearch(slug)
+	if err != nil {
+		return domain.Research{}, err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Research{}, fmt.Errorf("read research %s: %w", path, err)
+	}
+	newContent, err := updateFrontmatter(content, updates)
+	if err != nil {
+		return domain.Research{}, err
+	}
+	// Parse before committing: never leave an unreloadable file on disk. Attribute a
+	// parse failure correctly — if the ORIGINAL already fails the same way, blame the
+	// file, not the user's update (mirrors the task/epic SetFields paths).
+	r, err := parseResearch(newContent, path)
+	if err != nil {
+		if _, perr := parseResearch(content, path); perr != nil {
+			return domain.Research{}, fmt.Errorf("%w: %s already has malformed frontmatter (not caused by this update): %v", domain.ErrValidation, path, perr)
+		}
+		return domain.Research{}, fmt.Errorf("%w: update would not reload (%v); nothing was written", domain.ErrValidation, err)
+	}
+	if dryRun {
+		return r, nil // validated end-to-end; only the write is skipped
+	}
+	unlock, err := s.writeLock()
+	if err != nil {
+		return domain.Research{}, err
+	}
+	defer unlock()
+	// Version-CAS: catches a concurrent in-place edit during the read→write window.
+	// Keyed on the FILENAME id, the canonical resolution key.
+	if err := verifyUnchanged(s.resolveResearchPathExact, r.FilenameID, path, hashContent(content), "research doc", "update"); err != nil {
+		return domain.Research{}, err
+	}
+	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
+		return domain.Research{}, err
+	}
+	return r, nil
+}
+
+// EditResearch is the research counterpart to EditAudit: resolve, read, and run the
+// shared editor loop (parse-before-accept), accepting a save only if it still parses as
+// a research doc. Research never moves (no lifecycle), so there is no relocation to
+// guard, but the version-CAS recheck still catches a concurrent edit during the editor
+// window. Returns the reloaded doc and whether it changed.
+func (s *FS) EditResearch(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Research, bool, error) {
+	path, err := s.resolveResearch(slug)
+	if err != nil {
+		return domain.Research{}, false, err
+	}
+	orig, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Research{}, false, fmt.Errorf("read research %s: %w", path, err)
+	}
+	entityID, _, _ := splitFlatName(strings.TrimSuffix(filepath.Base(path), ".md"))
+	ifVersion := hashContent(orig)
+	return editFile("research doc", path, orig, now,
+		func(content []byte) (domain.Research, error) { return parseResearch(content, path) },
+		s.writeLock,
+		func() error {
+			return verifyUnchanged(s.resolveResearchPathExact, entityID, path, ifVersion, "research doc", "edit")
+		},
+		edit)
+}
+
+// AppendResearchBody appends markdown to a research doc's body in one atomic, validated
+// write, stamping updated_at. `created` stays immutable — the id is minted from it. The
+// agent face of body editing, beside EditResearch's editor.
+func (s *FS) AppendResearchBody(slug, text string, now time.Time, dryRun bool) (domain.Research, string, error) {
+	path, err := s.resolveResearch(slug)
+	if err != nil {
+		return domain.Research{}, "", err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Research{}, "", fmt.Errorf("read research %s: %w", path, err)
+	}
+	_, body, err := splitFrontmatterStrict(content)
+	if err != nil {
+		return domain.Research{}, "", err // can't body-edit a file whose frontmatter won't parse
+	}
+	entityID, _, _ := splitFlatName(strings.TrimSuffix(filepath.Base(path), ".md"))
+	updatedAt := now.Format("2006-01-02")
+	return writeBody(
+		"research doc", path, content, appendSection(string(body), text),
+		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
+		func(c []byte) (domain.Research, error) { return parseResearch(c, path) },
+		s.writeLock,
+		func() error {
+			return verifyUnchanged(s.resolveResearchPathExact, entityID, path, hashContent(content), "research doc", "edit")
+		},
+		dryRun,
+	)
 }

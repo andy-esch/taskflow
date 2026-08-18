@@ -1,5 +1,7 @@
 package domain
 
+import "sort"
+
 // Research is a research document: an exploration snapshot, true as of its date.
 //
 // It is deliberately the THINNEST entity in the registry, and the omissions are
@@ -51,4 +53,76 @@ type Research struct {
 	// Updated is the doc's own last-edited date (stamped by edit/append), distinct
 	// from the immutable Created.
 	Updated string `yaml:"updated_at"`
+}
+
+// knownResearchFields is the frontmatter keys the tool recognizes for a research doc,
+// DERIVED from the registry's AuthoringFields plus the tool-managed stamps — so a field
+// added to the research Descriptor becomes settable without a second list to keep in
+// sync (the epic-28 charter: a noun's fields ride one registry).
+var knownResearchFields = func() map[string]bool {
+	m := map[string]bool{"schema": true, "id": true, "updated_at": true}
+	fields, err := AuthoringFields("research")
+	if err != nil { // unreachable: "research" is a registered kind
+		panic("domain: research kind missing from the entity registry")
+	}
+	for _, f := range fields {
+		m[f.Name] = true
+	}
+	return m
+}()
+
+// KnownResearchField reports whether f is a frontmatter key the tool knows for a
+// research doc. `research set` gates on it (unless --force) so a typo'd key can't be
+// silently persisted.
+func KnownResearchField(f string) bool { return knownResearchFields[f] }
+
+// KnownResearchFieldNames returns every known research frontmatter key, sorted — the
+// research analog of KnownEpicFieldNames, for a stable schema dump and error text.
+func KnownResearchFieldNames() []string {
+	names := make([]string, 0, len(knownResearchFields))
+	for f := range knownResearchFields {
+		names = append(names, f)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// IsResearchListField reports whether a research key is stored as a YAML list (only
+// `tags`), so `--set key=value` writes a sequence instead of a corrupting !!str.
+func IsResearchListField(f string) bool { return f == "tags" }
+
+// ProtectedResearchField reports whether a field must not be written through
+// `research set`, and why. Returning the REASON (not just a bool) keeps the explanation
+// next to the rule, so every adapter surfaces the same wording.
+//
+// `created` is the interesting one: the stable id is minted FROM it (ADR-0003 §3), so
+// changing it in place would leave the id encoding one date and the field claiming
+// another — silently breaking the id-order-is-date-order invariant for that doc, with
+// no way to detect it later. Re-dating a research doc means creating a new one.
+func ProtectedResearchField(field string) (string, bool) {
+	switch field {
+	case "created":
+		return "created is encoded in the stable id (ADR-0003 §3) — changing it would desync the two; create a new doc instead", true
+	case "id":
+		return "id is the immutable key and must match the filename — rename the file instead", true
+	case "schema":
+		return "schema is the on-disk format version, managed by the tool", true
+	case "updated_at":
+		return "updated_at is stamped automatically", true
+	}
+	return "", false
+}
+
+// ValidateResearchField checks a constrained research frontmatter field from its string
+// form — the research analog of ValidateEpicField.
+func ValidateResearchField(field, value string) error {
+	switch field {
+	case "description":
+		return ValidateDescription(value)
+	case "created":
+		// Unreachable via `research set` (ProtectedResearchField rejects it first), but
+		// correct here so any other writer gets the mintable-range rule, not just the shape.
+		return ValidateMintableDate(value)
+	}
+	return nil
 }

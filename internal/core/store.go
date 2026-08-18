@@ -140,6 +140,19 @@ type ResearchStore interface {
 	// (see ResolveTaskPath).
 	ResolveResearchPath(slug string) (string, error)
 	CreateResearch(r domain.Research, body string, dryRun bool) (domain.Research, error)
+	// SetResearchFields surgically updates frontmatter fields in one atomic, validated
+	// write. updated_at is injected by the service; `created` is rejected upstream (the
+	// id encodes it). dryRun runs every validation without touching disk.
+	SetResearchFields(slug string, updates map[string]any, dryRun bool) (domain.Research, error)
+	// EditResearch hands the current file content to edit (which runs the caller's
+	// editor) and accepts the result only if it still parses as a research doc —
+	// parse-before-accept, looping on a broken edit. A changed save is stamped with
+	// updated_at (now); reports whether the file changed.
+	EditResearch(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Research, bool, error)
+	// AppendResearchBody appends markdown to a doc's body in one atomic, validated
+	// write, stamping updated_at (`created` stays immutable — the id is minted from it).
+	// The agent face of body editing, beside EditResearch's editor.
+	AppendResearchBody(slug, text string, now time.Time, dryRun bool) (domain.Research, string, error)
 }
 
 // Store is the use-case persistence port the Service depends on. It is

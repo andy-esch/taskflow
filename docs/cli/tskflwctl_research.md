@@ -25,8 +25,11 @@ Work with research docs
 ### SEE ALSO
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl research append](tskflwctl_research_append.md)	 - Append a section to a research doc's body (atomic; agent-facing)
+* [tskflwctl research edit](tskflwctl_research_edit.md)	 - Open a research doc in your editor (whole file; re-validated on save)
 * [tskflwctl research list](tskflwctl_research_list.md)	 - List research docs (newest first)
 * [tskflwctl research new](tskflwctl_research_new.md)	 - Create a new research doc
 * [tskflwctl research path](tskflwctl_research_path.md)	 - Print the absolute path to a research doc's file
+* [tskflwctl research set](tskflwctl_research_set.md)	 - Set one or more frontmatter fields (validated, single atomic write)
 * [tskflwctl research show](tskflwctl_research_show.md)	 - Show a research doc's metadata and body
 
