@@ -3,22 +3,28 @@ schema: 1
 id: 6g0fzhbtk0gy
 status: next-up
 epic: 29-multi-space-planning-a-home-registry-and-the-atlas
-description: 'Add the [[space]] array to the home config plus space list|add|forget. Registry stays advisory: nothing in it may change what Discover resolves from a cwd. Schema is provisional.'
+description: 'Add the [[space]] array to spaces.toml plus space list|add|forget. Registry stays advisory: nothing in it may change what Discover resolves from a cwd. Vocabulary settled; entry schema is not.'
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
 tags: [config, cli, multi-repo]
 created: "2026-08-15"
+updated_at: "2026-08-19"
 ---
 # Space registry model and the `space` verbs (list/add/forget)
 
 ## Objective
 
 Add the `[[space]]` array to the home config plus the CLI surface to manage it: the
-user-level record of which planning repos exist on this machine. Names and schema
-are **provisional** — see the epic's sketch; this task is where they get tested
-against reality.
+user-level record of which planning repos exist on this machine.
+
+The **vocabulary is settled** (`space` / `atlas`, decided 2026-08-18 — see
+[decide-the-multi-space-vocabulary](6g1erb0p5893-decide-the-multi-space-vocabulary-blocks-slice-2.md)),
+so `[[space]]`, `space list|add|forget`, and `--space` are the committed spellings. The
+**schema** below is still where the remaining calls get made — id collision policy, entry
+ordering, and whether `space.id` becomes a durable minted identity (see the 2026-08-18
+note at the end).
 
 ## Notes
 
@@ -71,4 +77,53 @@ exactly; deleting the file costs convenience, never data or addressability.
 ## Related
 
 - Epic [29-multi-space-planning-a-home-registry-and-the-atlas](../epics/29-multi-space-planning-a-home-registry-and-the-atlas.md)
-- Sketch: [2026-08-15-multi-space-home-registry-and-the-atlas](../research/2026-08-15-multi-space-home-registry-and-the-atlas.md)
+- Sketch: [6g0ajre026c6-multi-space-home-registry-and-the-atlas](../research/6g0ajre026c6-multi-space-home-registry-and-the-atlas.md)
+
+### 2026-08-18 — inherited decision from audit H1
+
+Audit 2026-07-24 H1 (the `workspace` read + receipt) deliberately defined a
+workspace's identity as its **absolute resolved planning root** — enough to prove which
+tree a mutation touched, but it does NOT survive moving the repo.
+
+`space.id` here is the natural home for a **durable** identity if one is wanted: an id
+minted into the planning repo's own `.tskflwctl.toml` at `init`, which a registry entry
+then references instead of matching on path. That would also make `moved` detection
+trivial and honest rather than a heuristic (open fork 6).
+
+Decide it with this task, not separately — the alternative is inventing two identities
+for the same thing. If a durable id is adopted, `wire.WorkspaceJSON` should carry it too
+so the two surfaces agree.
+
+### 2026-08-19 — the identity decision now has a fourth consumer, and a hard case
+
+[worktrees-and-relative-paths-in-cross-repo-planning](../research/6g1emag02srv-worktrees-and-relative-paths-in-cross-repo-planning.md)
+demonstrated that a committed relative `planning_repo` can **silently resolve to an
+unrelated planning repo** when the checkout is not where the path assumed — no warning,
+no error, every mutation landing in the wrong tree. Absolute paths are no escape; they
+break on every other machine.
+
+The only fix that closes it in the general case is **layer C**: mint a durable id into a
+planning repo's own committed `.tskflwctl.toml`, have pointers record it alongside the
+path, and **verify it after following the path**. Path = hint, id = assertion.
+
+That is the same primitive as `space.id`, which now has **four** consumers:
+
+1. linkback verification (epic 23),
+2. `--space` selection (the wrong-repo guard that replaced `--expect-root`),
+3. the `workspace` object on mutation receipts,
+4. `moved` detection in the registry (open fork 6).
+
+**So this task's identity choice is load-bearing well beyond the registry.** Deciding
+`space.id` as a *path-keyed* identity does not merely make `moved` detection a
+heuristic — it leaves the silent-wrong-tree hazard permanently open and the registry
+inherits exactly the fragility the research doc documents.
+
+Concretely, to settle here:
+
+- Is `space.id` the **minted durable id** read from the target repo's config, or a
+  local label keyed to a path?
+- If durable: where is it minted (`init`), how are the ~2 existing repos backfilled
+  (`lint --fix`? `doctor`?), and does `wire.WorkspaceJSON` carry it so the receipt and
+  the registry agree?
+- If not durable: record explicitly that the wrong-tree hazard is accepted, so it is a
+  decision rather than an omission.

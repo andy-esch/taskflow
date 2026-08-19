@@ -186,8 +186,8 @@ func PathJSON(w io.Writer, path string) error {
 // distinguishable from a real write), and the resulting body for the body-editing
 // commands (empty/omitted for field-only `set`). Distinct from TaskShowEnvelope so
 // the mutation-only dry_run never lands on the `task show` read type.
-func TaskMutationJSON(w io.Writer, t domain.Task, body string, dryRun bool) error {
-	return wire.EncodeJSON(w, wire.ToTaskMutationEnvelope(t, body, dryRun))
+func TaskMutationJSON(w io.Writer, t domain.Task, body string, dryRun bool, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToTaskMutationEnvelope(t, body, dryRun, ws))
 }
 
 // MoveResult is the per-item outcome of a transition (the wire type), re-exported
@@ -220,8 +220,8 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 
 // MovesJSON writes the structured per-task transition report; dry_run marks a
 // preview (nothing was written).
-func MovesJSON(w io.Writer, results []MoveResult, dryRun bool) error {
-	return wire.EncodeJSON(w, wire.ToMovesEnvelope(results, dryRun))
+func MovesJSON(w io.Writer, results []MoveResult, dryRun bool, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToMovesEnvelope(results, dryRun, ws))
 }
 
 // DoctorProblem is one linkback inconsistency (the wire type), re-exported so the
@@ -398,6 +398,31 @@ func VersionJSON(w io.Writer, version string) error {
 	return wire.EncodeJSON(w, wire.ToVersionEnvelope(version))
 }
 
+// WorkspaceJSON emits the `workspace --json` envelope.
+func WorkspaceJSON(w io.Writer, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToWorkspaceEnvelope(ws))
+}
+
+// WorkspaceHuman writes the resolved planning tree as aligned key/value lines,
+// leading with the root (the thing you actually want to eyeball) and calling out a
+// pointer resolution explicitly — that is the case where the directory you are
+// standing in is NOT the tree you would change.
+func WorkspaceHuman(w io.Writer, st Style, ws wire.WorkspaceJSON) {
+	fmt.Fprintf(w, "%s %s\n", st.Dim("root:  "), st.Bold(ws.PlanningRoot))
+	if ws.ConfigPath != "" {
+		fmt.Fprintf(w, "%s %s\n", st.Dim("config:"), ws.ConfigPath)
+	}
+	switch ws.Source {
+	case wire.WorkspaceSourcePointer:
+		fmt.Fprintf(w, "%s %s\n", st.Dim("source:"),
+			st.Warn("pointer — planning lives in another repo, not this directory"))
+	case wire.WorkspaceSourceConfig:
+		fmt.Fprintf(w, "%s %s\n", st.Dim("source:"), "config marker in this tree")
+	default:
+		fmt.Fprintf(w, "%s %s\n", st.Dim("source:"), "discovered (no config marker)")
+	}
+}
+
 // ThemesHuman lists the color themes one per line, tagging the default and the
 // active one (the active name is bold).
 func ThemesHuman(w io.Writer, st Style, themes []wire.ThemeEntry) {
@@ -471,8 +496,8 @@ func naiveSlug(title string) string {
 // marks a preview (nothing was written). status is the new item's status (task
 // status / epic status / audit bucket); path is relative to the planning root,
 // matching the human output.
-func CreatedJSON(w io.Writer, kind, id, status, path string, dryRun bool) error {
-	return wire.EncodeJSON(w, wire.ToCreatedEnvelope(kind, id, status, path, dryRun))
+func CreatedJSON(w io.Writer, kind, id, slug, status, path string, dryRun bool, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToCreatedEnvelope(kind, id, slug, status, path, dryRun, ws))
 }
 
 // EpicsHuman writes a table of epics with task rollup.
@@ -761,8 +786,8 @@ func AuditShowJSON(w io.Writer, a domain.Audit, body string) error {
 // AuditMutationJSON writes the result of `audit append`: the reloaded audit, dry_run
 // (always present — a preview must be distinguishable from a real write), and the
 // resulting body. The audit counterpart to TaskMutationJSON.
-func AuditMutationJSON(w io.Writer, a domain.Audit, body string, dryRun bool) error {
-	return wire.EncodeJSON(w, wire.ToAuditMutationEnvelope(a, body, dryRun))
+func AuditMutationJSON(w io.Writer, a domain.Audit, body string, dryRun bool, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToAuditMutationEnvelope(a, body, dryRun, ws))
 }
 
 // FindingsJSON writes the structured finding-query result: each parsed finding
@@ -823,8 +848,8 @@ func FixHuman(w io.Writer, st Style, results []domain.FixResult, remaining []cor
 // findings the pass could NOT repair (`remaining` — report-only epics, unfixable
 // task issues). All three are empty on a dry-run (which writes nothing) — so a
 // --json consumer learns the residual breakage without parsing the prose error.
-func FixJSON(w io.Writer, results []domain.FixResult, problems []domain.FileProblem, remaining []core.LintResult, dryRun bool) error {
-	return wire.EncodeJSON(w, wire.ToFixEnvelope(results, problems, remaining, dryRun))
+func FixJSON(w io.Writer, results []domain.FixResult, problems []domain.FileProblem, remaining []core.LintResult, dryRun bool, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToFixEnvelope(results, problems, remaining, dryRun, ws))
 }
 
 // ProblemsHuman writes per-file load problems (unreadable frontmatter).
@@ -862,8 +887,8 @@ func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body strin
 // EpicMutationJSON writes the result of an `epic set`: the reloaded epic + dry_run
 // (always present — a preview must be distinguishable from a real write). The epic
 // counterpart to TaskMutationJSON; field-only, so there's no body to echo.
-func EpicMutationJSON(w io.Writer, epic domain.Epic, dryRun bool) error {
-	return wire.EncodeJSON(w, wire.ToEpicMutationEnvelope(epic, dryRun))
+func EpicMutationJSON(w io.Writer, epic domain.Epic, dryRun bool, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToEpicMutationEnvelope(epic, dryRun, ws))
 }
 
 // InitEnvelope is the `init --json` payload (the wire type), re-exported so the

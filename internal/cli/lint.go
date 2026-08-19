@@ -73,7 +73,7 @@ func runLintFix(app *App, dryRun bool) error {
 		// progress before surfacing the error, so the user can reconcile what landed.
 		if len(results) > 0 {
 			if app.JSON {
-				_ = render.FixJSON(app.Out, results, nil, nil, dryRun)
+				_ = render.FixJSON(app.Out, results, nil, nil, dryRun, app.workspace())
 			} else {
 				render.FixHuman(app.Out, app.Style, results, nil, dryRun)
 			}
@@ -84,7 +84,7 @@ func runLintFix(app *App, dryRun bool) error {
 	// post-fix state to re-lint.
 	if dryRun {
 		if app.JSON {
-			return render.FixJSON(app.Out, results, nil, nil, dryRun)
+			return render.FixJSON(app.Out, results, nil, nil, dryRun, app.workspace())
 		}
 		render.FixHuman(app.Out, app.Style, results, nil, dryRun)
 		return nil
@@ -101,7 +101,7 @@ func runLintFix(app *App, dryRun bool) error {
 		// One envelope carrying what was fixed plus what couldn't be (leftover lint
 		// findings + unreadable files) — a --json consumer must never parse the prose
 		// error to learn that.
-		if err := render.FixJSON(app.Out, results, problems, results2, dryRun); err != nil {
+		if err := render.FixJSON(app.Out, results, problems, results2, dryRun, app.workspace()); err != nil {
 			return err
 		}
 	} else {

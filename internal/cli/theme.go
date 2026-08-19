@@ -23,16 +23,18 @@ func newThemeCmd(app *App) *cobra.Command {
 		Use:   "theme",
 		Short: "Inspect color themes",
 		Long: "Inspect color themes. Select one with --theme, the TSKFLW_THEME env, or the\n" +
-			"[theme] table in .tskflwctl.toml (precedence: flag > env > config).\n\n" +
+			"[theme] table in .tskflwctl.toml, or the same table in the user config at\n" +
+			"~/.config/tskflwctl/config.toml (precedence: flag > env > repo config >\n" +
+			"user config).\n\n" +
 			"On a truecolor terminal the theme drives every colored surface — status glyphs,\n" +
 			"bars, the TUI, and the picker. On a 16-color terminal the semantic colors fall\n" +
 			"back to your terminal's own palette (so they look the same across themes there).",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
-		PersistentPreRunE: func(*cobra.Command, []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			app.setStyle()
 			_ = app.resolve() // best-effort: pick up [theme] config in a repo; harmless outside one
-			app.warnUnknownTheme()
+			app.warnPresentation(cmd)
 			return nil
 		},
 	}

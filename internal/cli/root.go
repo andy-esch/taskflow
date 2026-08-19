@@ -19,6 +19,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 // App is the dependency container. It is created empty by NewRootCmd and
@@ -40,11 +41,19 @@ type App struct {
 	Theme    string // color theme name (--theme); overrides TSKFLW_THEME + [theme].name
 
 	Style  render.Style
-	Th     design.Theme    // the resolved active theme (flag > env > config > default)
+	Th     design.Theme    // the resolved active theme (flag > env > repo config > user config > default)
 	Gate   prompt.Gate     // may we prompt? (resolved once, like Style)
 	Prompt prompt.Prompter // the human-recovery face (huh on a TTY)
 	Cfg    *config.Config
-	Svc    *core.Service
+	// User is the home-scope config (theme/pager preferences that belong to a
+	// person, not a repo). Always non-nil after setStyle; the zero value means
+	// "nothing set here" and every field falls through to the tier below.
+	User *userconfig.Config
+	// userCfgErr is deferred, not printed at load time: the warning needs the Style
+	// (built at the end of setStyle) AND must be suppressed on the completion path,
+	// which only the command's own hook knows about. warnPresentation emits it.
+	userCfgErr error
+	Svc        *core.Service
 	// Fixer/Layout/Linter are the narrow fs/text ports that aren't core use cases:
 	// `lint --fix` calls Fixer, the TUI watcher reads Layout, and `lint --links` calls
 	// Linter — none route through the Service (see core.Fixer/core.Layout/core.Linter).
@@ -60,11 +69,58 @@ type App struct {
 // TSKFLW_NO_INPUT). Off a TTY the gate is closed, so the agent/pipeline path never
 // blocks.
 func (a *App) setStyle() {
-	a.resolveTheme() // flag/env now; the [theme] config folds in once resolve() discovers it
+	// The home config loads HERE, not in resolve(): init/doctor/completion override
+	// PersistentPreRunE and skip resolve() entirely, but they all run setStyle and
+	// they all need the theme. Loading it downstream would mean `init` outside a
+	// planning repo silently ignored your theme.
+	userErr := a.loadUserConfig()
+	a.resolveTheme() // flag/env/home now; the repo [theme] folds in once resolve() discovers it
 	a.Style = render.NewStyle(wantColor(a.Color, a.NoColor, a.Out)).WithWidth(terminalWidth(a.Out)).WithTrueColor(trueColorCapable(a.Out)).WithPalette(a.Th.Dark)
 	noInput := a.NoInput || envEnabled("TSKFLW_NO_INPUT")
 	a.Gate = prompt.NewGate(gateOpen(a.JSON, noInput, isTerminalReader(a.In), isTerminal(a.ErrOut)))
 	a.Prompt = prompt.NewTTY(a.In, a.ErrOut, a.Th)
+	// Recorded, NOT printed here: see warnPresentation.
+	a.userCfgErr = userErr
+}
+
+// loadUserConfig populates a.User, which is left as an empty (usable) config when
+// none exists or it can't be read. The error is returned rather than printed so the
+// caller can warn once the Style is built.
+func (a *App) loadUserConfig() error {
+	uc, err := userconfig.Load()
+	a.User = uc
+	return err
+}
+
+// warnPresentation emits every ⚠ that belongs to the presentation layer, in one
+// place. Two constraints force it to be its own step rather than living in setStyle:
+// the warnings need the Style (built at the end of setStyle) and, for the theme, the
+// repo config that only resolve() discovers; and they must NEVER fire on the shell
+// completion path, which only the command's own hook can tell us about.
+//
+// Every PersistentPreRunE that calls setStyle must call this too. Commands that work
+// outside a planning repo should use styleOnlyPreRun rather than hand-rolling the
+// pair — `init`, `doctor` and `version` each silently dropped the theme warning by
+// hand-rolling it (audit 2026-08-18-multi-space-config-foundation, M2 + L2).
+func (a *App) warnPresentation(cmd *cobra.Command) {
+	// Completion output is consumed by the shell; a stray ⚠ on stderr is noise at
+	// best and corrupts the display at worst. Same rule warnUnknownTheme already had.
+	if cmd != nil && isCompletionCommand(cmd) {
+		return
+	}
+	if a.userCfgErr != nil {
+		fmt.Fprintf(a.ErrOut, "%s ignoring user config: %v\n", a.Style.Warn("⚠"), a.userCfgErr)
+	}
+	a.warnUnknownTheme()
+}
+
+// styleOnlyPreRun is the PersistentPreRunE for commands that must run ANYWHERE, with
+// no planning repo required (`version`, `init`, `schema`): resolve presentation, emit
+// its warnings, skip discovery entirely.
+func (a *App) styleOnlyPreRun(cmd *cobra.Command, _ []string) error {
+	a.setStyle()
+	a.warnPresentation(cmd)
+	return nil
 }
 
 // resolveTheme picks the active color theme by precedence: --theme flag >
@@ -77,20 +133,30 @@ func (a *App) resolveTheme() {
 	if a.Cfg != nil {
 		cfgName = a.Cfg.Theme.Name
 	}
-	a.Th, _ = design.Lookup(themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName))
+	userName := ""
+	if a.User != nil {
+		userName = a.User.Theme.Name
+	}
+	a.Th, _ = design.Lookup(themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName, userName))
 }
 
-// themeName resolves the selected theme NAME by precedence — flag > env > config —
-// trimming each, and "" when none is set (which design.Lookup maps to the default).
-// Pure (no App/env access) so the precedence contract is unit-tested directly.
-func themeName(flag, env, cfgName string) string {
+// themeName resolves the selected theme NAME by precedence — flag > env > repo
+// config > home config — trimming each, and "" when none is set (which design.Lookup
+// maps to the default). The repo tier beats the home tier so a project can still pin
+// a theme for everyone working in it, while the home tier is what a person sets once
+// for their own terminal. Pure (no App/env access) so the precedence contract is
+// unit-tested directly.
+func themeName(flag, env, cfgName, userName string) string {
 	if s := strings.TrimSpace(flag); s != "" {
 		return s
 	}
 	if s := strings.TrimSpace(env); s != "" {
 		return s
 	}
-	return strings.TrimSpace(cfgName)
+	if s := strings.TrimSpace(cfgName); s != "" {
+		return s
+	}
+	return strings.TrimSpace(userName)
 }
 
 // NewRootCmd builds the command tree with explicit DI — no package globals.
@@ -122,7 +188,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 				return err
 			}
 			app.warnLinks()
-			app.warnUnknownTheme()
+			app.warnPresentation(cmd)
 			return nil
 		},
 	}
@@ -153,6 +219,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(newResearchCmd(app))
 	root.AddCommand(newLintCmd(app))
 	root.AddCommand(newDoctorCmd(app))
+	root.AddCommand(newWorkspaceCmd(app))
 	root.AddCommand(newSchemaCmd(app))
 	root.AddCommand(newTemplateCmd(app))
 	root.AddCommand(newThemeCmd(app))
@@ -216,16 +283,20 @@ func (a *App) warnLinks() {
 }
 
 // warnUnknownTheme emits one ⚠ to stderr when an explicitly-set theme name (flag /
-// env / config) didn't match a registered theme — so a typo, or a not-yet-supported
-// name like "none", isn't a silent fall-back to the default. Empty and "auto" mean
-// "the default" and are intentional, so they don't warn. stderr-only (so --json
-// stdout stays clean), and not called on the completion path.
+// env / repo config / home config) didn't match a registered theme — so a typo, or a
+// not-yet-supported name like "none", isn't a silent fall-back to the default. Empty
+// and "auto" mean "the default" and are intentional, so they don't warn. stderr-only
+// (so --json stdout stays clean), and not called on the completion path.
 func (a *App) warnUnknownTheme() {
 	cfgName := ""
 	if a.Cfg != nil {
 		cfgName = a.Cfg.Theme.Name
 	}
-	name := themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName)
+	userName := ""
+	if a.User != nil {
+		userName = a.User.Theme.Name
+	}
+	name := themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName, userName)
 	if name == "" || strings.EqualFold(name, "auto") {
 		return
 	}

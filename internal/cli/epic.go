@@ -114,7 +114,7 @@ func newEpicSetCmd(app *App) *cobra.Command {
 // The epic counterpart to reportTaskMutation (field-only — no body to echo).
 func reportEpicMutation(app *App, epic domain.Epic) error {
 	if app.JSON {
-		return render.EpicMutationJSON(app.Out, epic, app.DryRun)
+		return render.EpicMutationJSON(app.Out, epic, app.DryRun, app.workspace())
 	}
 	verb := "updated"
 	if app.DryRun {
@@ -233,7 +233,7 @@ func newEpicNewCmd(app *App) *cobra.Command {
 				return err
 			}
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "epic", e.ID, e.Status, app.rel(e.Path), app.DryRun)
+				return render.CreatedJSON(app.Out, "epic", e.ID, e.ID, e.Status, app.rel(e.Path), app.DryRun, app.workspace())
 			}
 			render.CreatedHuman(app.Out, app.Style, app.linkPath(e.Path), app.DryRun)
 			render.CreatedSlugNote(app.Out, app.Style, p.Title, e.ID)

@@ -69,14 +69,19 @@ func TestDryRun_TaskNew(t *testing.T) {
 	var env struct {
 		DryRun  bool `json:"dry_run"`
 		Created struct {
-			ID, Status, Path string
+			ID, Slug, Status, Path string
 		} `json:"created"`
 	}
 	if err := json.Unmarshal([]byte(js), &env); err != nil {
 		t.Fatalf("dry-run --json invalid: %v\n%s", err, js)
 	}
-	if !env.DryRun || env.Created.ID != "json-preview" {
+	if !env.DryRun || env.Created.Slug != "json-preview" {
 		t.Errorf("dry-run envelope wrong: %+v", env)
+	}
+	// A dry run still mints the id it WOULD use, and it must lead the would-be path —
+	// otherwise a preview tells an agent a different handle than the real create.
+	if !strings.HasPrefix(env.Created.Path, "tasks/"+env.Created.ID+"-") {
+		t.Errorf("created.id %q must lead the would-be filename %q", env.Created.ID, env.Created.Path)
 	}
 	// status = the would-be task status (authoritative in frontmatter); the flat
 	// path is tasks/<minted-id>-json-preview.md, relative to the planning root — no

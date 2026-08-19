@@ -74,7 +74,7 @@ func newAuditNewCmd(app *App) *cobra.Command {
 				return err
 			}
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "audit", a.Slug, string(a.Bucket), app.rel(a.Path), app.DryRun)
+				return render.CreatedJSON(app.Out, "audit", a.ID, a.Slug, string(a.Bucket), app.rel(a.Path), app.DryRun, app.workspace())
 			}
 			render.CreatedHuman(app.Out, app.Style, app.linkPath(a.Path), app.DryRun)
 			render.CreatedSlugNote(app.Out, app.Style, p.Area, a.Slug)
@@ -458,7 +458,7 @@ func newAuditAppendCmd(app *App) *cobra.Command {
 // counterpart to reportTaskMutation.
 func reportAuditMutation(app *App, audit domain.Audit, body, verb, dryVerb string) error {
 	if app.JSON {
-		return render.AuditMutationJSON(app.Out, audit, body, app.DryRun)
+		return render.AuditMutationJSON(app.Out, audit, body, app.DryRun, app.workspace())
 	}
 	if app.DryRun {
 		verb = dryVerb

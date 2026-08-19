@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g0fz5c2x5t4
-status: next-up
+status: completed
 epic: 29-multi-space-planning-a-home-registry-and-the-atlas
 description: 'A user-scoped config.toml under XDG (not os.UserConfigDir), env-overridable for tests, adding the tier theme/pager always wanted: flag > env > repo > home > default. Useful alone.'
 effort: Unknown
@@ -10,6 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [config, cli]
 created: "2026-08-15"
+updated_at: "2026-08-18"
+completed_at: "2026-08-18"
 ---
 
 # Home-level user config: XDG location, env override, theme/pager precedence

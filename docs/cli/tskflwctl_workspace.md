@@ -1,22 +1,36 @@
-## tskflwctl theme
+## tskflwctl workspace
 
-Inspect color themes
+Print the planning tree this directory resolves to
 
 ### Synopsis
 
-Inspect color themes. Select one with --theme, the TSKFLW_THEME env, or the
-[theme] table in .tskflwctl.toml, or the same table in the user config at
-~/.config/tskflwctl/config.toml (precedence: flag > env > repo config >
-user config).
+Print the planning tree a command run from here would read and write.
 
-On a truecolor terminal the theme drives every colored surface — status glyphs,
-bars, the TUI, and the picker. On a 16-color terminal the semantic colors fall
-back to your terminal's own palette (so they look the same across themes there).
+External-planning routing is deliberately transparent: a repo whose
+.tskflwctl.toml carries a planning_repo resolves into ANOTHER repo, so the
+directory you are standing in is not necessarily the tree you would change.
+This reports the resolved root, the config that selected it, and which
+mechanism won — cheaply, before a mutation rather than after.
+
+EXPERIMENTAL: this command and the `workspace` object on mutation receipts
+may change shape while the multi-space work settles. Pin `schema_version`
+if you script against it.
+
+```
+tskflwctl workspace [flags]
+```
+
+### Examples
+
+```
+  tskflwctl workspace
+  tskflwctl workspace --json
+```
 
 ### Options
 
 ```
-  -h, --help   help for theme
+  -h, --help   help for workspace
 ```
 
 ### Options inherited from parent commands
@@ -36,6 +50,4 @@ back to your terminal's own palette (so they look the same across themes there).
 ### SEE ALSO
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
-* [tskflwctl theme list](tskflwctl_theme_list.md)	 - List the available color themes
-* [tskflwctl theme preview](tskflwctl_theme_preview.md)	 - Preview a theme's palette (color swatches + a sample bar)
 

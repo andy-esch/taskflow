@@ -6,7 +6,26 @@ version: "2"
 
 linters:
   default: standard
+  enable:
+    - depguard
   settings:
+    depguard:
+      rules:
+        # The repo-scoped config must never consult the home-scoped one: planning-root
+        # discovery has to stay a pure function of the cwd, or `--space`-style handles
+        # and a user's preferences file could silently move where data is read from.
+        # docs/ARCHITECTURE.md states this as an invariant; without a rule it is only a
+        # convention, since nothing structurally prevents the import (audit
+        # 2026-08-18-multi-space-config-foundation, L1).
+        config-must-not-read-home-scope:
+          files:
+            - "**/internal/config/*.go"
+          deny:
+            - pkg: github.com/andy-esch/taskflow/internal/userconfig
+              desc: >-
+                internal/config is repo-scoped; home-scope data must not influence
+                planning-root discovery. Read the user config in the cli adapter and
+                pass what you need down.
     errcheck:
       # CLI output writes (to stdout/stderr) have no actionable error path.
       exclude-functions:

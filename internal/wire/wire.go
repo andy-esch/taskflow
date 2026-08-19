@@ -112,7 +112,21 @@ import (
 // supersedes an earlier one; a decision needing a lifecycle is an ADR) and no
 // `epic`/`tasks` (provenance stays body links, so there is no rollup to consume). `id`
 // is minted from `created`, so ordering by id is ordering by authorship date.
-const SchemaVersion = "1.30"
+// 1.31: every MUTATION envelope (task_mutation, epic_mutation, moves, created,
+// audit_mutation, fix) gained a `workspace` object — {planning_root, config_path,
+// source: pointer|config|discovered} — and a new `workspace` envelope backs the
+// `workspace` command. Additive: no existing field changed. It exists because
+// external-planning routing (epic 23) means the directory you run in is not
+// necessarily the tree you write to, so a receipt has to say which one it was
+// (audit 2026-07-24-ai-agent-cli-ergonomics, H1).
+// 1.32: `created.id` now carries the STABLE id and `created.slug` is added alongside.
+// Previously `created.id` carried the mutable SLUG — a defect, not a deliberate
+// contract: every other DTO already distinguished the two, so `new --json` was the one
+// command where an agent captured the wrong handle, on exactly the command where
+// capturing the durable one matters most (audit 2026-07-24-ai-agent-cli-ergonomics, H2).
+// CONSUMERS: anything that stored `created.id` as a reference held a slug and must
+// re-read. Epic ids are unchanged — an epic's identity has always been its NN-slug.
+const SchemaVersion = "1.32"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

@@ -143,14 +143,16 @@ type TaskMutationEnvelope struct {
 	DryRun        bool     `json:"dry_run"`
 	Task          TaskJSON `json:"task"`
 	Body          string   `json:"body,omitempty"`
+	// Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.
+	Workspace WorkspaceJSON `json:"workspace"`
 }
 
 // ToTaskMutationEnvelope builds the `task set`/`append`/`set --body` envelope
 // value: the reloaded task, dry_run (always present — a preview must be
 // distinguishable from a real write), and the resulting body for the body-editing
 // commands (empty/omitted for field-only `set`).
-func ToTaskMutationEnvelope(t domain.Task, body string, dryRun bool) TaskMutationEnvelope {
-	return TaskMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Task: ToTaskJSON(t), Body: body}
+func ToTaskMutationEnvelope(t domain.Task, body string, dryRun bool, ws WorkspaceJSON) TaskMutationEnvelope {
+	return TaskMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Task: ToTaskJSON(t), Body: body, Workspace: ws}
 }
 
 // EpicMutationEnvelope is `epic set --json`: the reloaded epic + dry_run. The
@@ -160,13 +162,15 @@ type EpicMutationEnvelope struct {
 	SchemaVersion string       `json:"schema_version"`
 	DryRun        bool         `json:"dry_run"`
 	Epic          EpicMetaJSON `json:"epic"`
+	// Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.
+	Workspace WorkspaceJSON `json:"workspace"`
 }
 
 // ToEpicMutationEnvelope builds the `epic set --json` envelope value: the reloaded
 // epic + dry_run (always present — a preview must be distinguishable from a real
 // write). Field-only, so there's no body to echo.
-func ToEpicMutationEnvelope(epic domain.Epic, dryRun bool) EpicMutationEnvelope {
-	return EpicMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Epic: ToEpicMeta(epic)}
+func ToEpicMutationEnvelope(epic domain.Epic, dryRun bool, ws WorkspaceJSON) EpicMutationEnvelope {
+	return EpicMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Epic: ToEpicMeta(epic), Workspace: ws}
 }
 
 // MoveResult is the per-item outcome of a transition. `To` is the destination
@@ -184,16 +188,18 @@ type MovesEnvelope struct {
 	SchemaVersion string       `json:"schema_version"`
 	DryRun        bool         `json:"dry_run"`
 	Moves         []MoveResult `json:"moves"`
+	// Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.
+	Workspace WorkspaceJSON `json:"workspace"`
 }
 
 // ToMovesEnvelope builds the per-task transition report; dry_run marks a preview
 // (nothing was written). Nil results normalize to an empty (not null) array so the
 // output validates against its own schema (type: array).
-func ToMovesEnvelope(results []MoveResult, dryRun bool) MovesEnvelope {
+func ToMovesEnvelope(results []MoveResult, dryRun bool, ws WorkspaceJSON) MovesEnvelope {
 	if results == nil {
 		results = []MoveResult{}
 	}
-	return MovesEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Moves: results}
+	return MovesEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Moves: results, Workspace: ws}
 }
 
 // SummaryEnvelope is `status --json`.
@@ -242,6 +248,46 @@ func ToSummaryEnvelope(s core.Summary) SummaryEnvelope {
 		RevisitDue: s.RevisitDue, BadEpicStatus: s.BadEpicStatus,
 		Unreadable: s.Problems,
 	}
+}
+
+// WorkspaceJSON identifies the planning tree a command resolved to.
+//
+// It exists because external-planning routing is deliberately transparent: a command
+// run in an implementation repo follows `.tskflwctl.toml` into a sibling planning
+// repo (epic 23). Ergonomic for a human who knows where they are — a wrong-repository
+// WRITE hazard for an agent with a stale working directory, or for the same slug
+// living in two planning trees. Carrying this on a receipt lets a caller prove which
+// tree it just changed without a second read
+// (audit 2026-07-24-ai-agent-cli-ergonomics, H1).
+//
+// PlanningRoot is the ABSOLUTE, symlink-resolved root — the identity that matters for
+// "did I write where I meant to". ConfigPath is the marker that selected it (empty
+// when discovery fell back to a bare tasks/ dir), and Source says which mechanism
+// won, so a surprising resolution is self-explaining rather than needing a bug report.
+type WorkspaceJSON struct {
+	PlanningRoot string `json:"planning_root"`
+	ConfigPath   string `json:"config_path,omitempty"`
+	Source       string `json:"source" jsonschema:"description=how the root was selected: pointer|config|discovered"`
+}
+
+// Workspace source values. `pointer` means a planning_repo key routed here from
+// another repo — the case worth noticing, since the cwd is NOT the planning tree.
+const (
+	WorkspaceSourcePointer    = "pointer"
+	WorkspaceSourceConfig     = "config"
+	WorkspaceSourceDiscovered = "discovered"
+)
+
+// WorkspaceEnvelope is `workspace --json`: the cheap read that answers "which
+// planning tree would a mutation hit from here?" before running one.
+type WorkspaceEnvelope struct {
+	SchemaVersion string        `json:"schema_version"`
+	Workspace     WorkspaceJSON `json:"workspace"`
+}
+
+// ToWorkspaceEnvelope builds the `workspace --json` envelope value.
+func ToWorkspaceEnvelope(ws WorkspaceJSON) WorkspaceEnvelope {
+	return WorkspaceEnvelope{SchemaVersion: SchemaVersion, Workspace: ws}
 }
 
 // VersionEnvelope is `version --json`.
@@ -296,8 +342,14 @@ func ToThemePreviewEnvelope(name, variant string, swatches []ThemeSwatch) ThemeP
 
 // CreatedItem is the created document inside CreatedEnvelope.
 type CreatedItem struct {
-	Kind   string `json:"kind"`
-	ID     string `json:"id"`
+	Kind string `json:"kind"`
+	// ID is the STABLE identifier (ADR-0003 §3) — the 12-char key that leads the
+	// filename for task/audit/research, and the NN-slug for an epic, whose identity
+	// has always been its number. This is the handle to store: it survives renames.
+	ID string `json:"id"`
+	// Slug is the HUMAN, mutable name — it changes when the entity is renamed, so it
+	// is for display and for typing at a prompt, never for saving as a reference.
+	Slug   string `json:"slug"`
 	Status string `json:"status"`
 	Path   string `json:"path"`
 }
@@ -307,13 +359,15 @@ type CreatedEnvelope struct {
 	SchemaVersion string      `json:"schema_version"`
 	DryRun        bool        `json:"dry_run"`
 	Created       CreatedItem `json:"created"`
+	// Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.
+	Workspace WorkspaceJSON `json:"workspace"`
 }
 
 // ToCreatedEnvelope builds the `new --json` envelope value; dry_run marks a preview
 // (nothing was written). status is the new item's status (task status / epic status
 // / audit bucket); path is relative to the planning root.
-func ToCreatedEnvelope(kind, id, status, path string, dryRun bool) CreatedEnvelope {
-	return CreatedEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Created: CreatedItem{Kind: kind, ID: id, Status: status, Path: path}}
+func ToCreatedEnvelope(kind, id, slug, status, path string, dryRun bool, ws WorkspaceJSON) CreatedEnvelope {
+	return CreatedEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Created: CreatedItem{Kind: kind, ID: id, Slug: slug, Status: status, Path: path}, Workspace: ws}
 }
 
 // EpicsEnvelope is `epic list --json`.
@@ -415,13 +469,15 @@ type AuditMutationEnvelope struct {
 	DryRun        bool      `json:"dry_run"`
 	Audit         AuditJSON `json:"audit"`
 	Body          string    `json:"body,omitempty"`
+	// Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.
+	Workspace WorkspaceJSON `json:"workspace"`
 }
 
 // ToAuditMutationEnvelope builds the `audit append` envelope value: the reloaded
 // audit, dry_run (always present — a preview must be distinguishable from a real
 // write), and the resulting body.
-func ToAuditMutationEnvelope(a domain.Audit, body string, dryRun bool) AuditMutationEnvelope {
-	return AuditMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Audit: ToAuditJSON(a), Body: body}
+func ToAuditMutationEnvelope(a domain.Audit, body string, dryRun bool, ws WorkspaceJSON) AuditMutationEnvelope {
+	return AuditMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Audit: ToAuditJSON(a), Body: body, Workspace: ws}
 }
 
 // FindingsEnvelope is `audit findings --json` (the finding-level query).
@@ -451,6 +507,8 @@ type FixEnvelope struct {
 	Fixed         []domain.FixResult   `json:"fixed"`
 	Unreadable    []domain.FileProblem `json:"unreadable"`
 	Remaining     []LintTaskJSON       `json:"remaining"`
+	// Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.
+	Workspace WorkspaceJSON `json:"workspace"`
 }
 
 // ToFixEnvelope builds the structured fix report value: what was repaired
@@ -458,7 +516,7 @@ type FixEnvelope struct {
 // per-entity lint findings the pass could NOT repair (`remaining`). The array
 // fields normalize to empty (not null) so a consumer can len() them and the output
 // validates against its own schema (type: array).
-func ToFixEnvelope(results []domain.FixResult, problems []domain.FileProblem, remaining []core.LintResult, dryRun bool) FixEnvelope {
+func ToFixEnvelope(results []domain.FixResult, problems []domain.FileProblem, remaining []core.LintResult, dryRun bool, ws WorkspaceJSON) FixEnvelope {
 	if problems == nil {
 		problems = []domain.FileProblem{}
 	}
@@ -473,7 +531,7 @@ func ToFixEnvelope(results []domain.FixResult, problems []domain.FileProblem, re
 		}
 		rem = append(rem, LintTaskJSON{Slug: r.Slug, Issues: issues})
 	}
-	return FixEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results, Unreadable: problems, Remaining: rem}
+	return FixEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results, Unreadable: problems, Remaining: rem, Workspace: ws}
 }
 
 // LintEnvelope is `lint --json` and `audit lint --json` (the same per-entity
@@ -626,6 +684,7 @@ type jsonEnvelopes struct {
 	Moves         MovesEnvelope         `json:"moves"`
 	Summary       SummaryEnvelope       `json:"summary"`
 	Version       VersionEnvelope       `json:"version"`
+	Workspace     WorkspaceEnvelope     `json:"workspace"`
 	Created       CreatedEnvelope       `json:"created"`
 	Epics         EpicsEnvelope         `json:"epics"`
 	EpicShow      EpicShowEnvelope      `json:"epic_show"`

@@ -24,7 +24,7 @@ requires.
 
 ### High
 
-#### H1. Mutations neither assert nor return the resolved planning workspace  · **Status:** open
+#### H1. Mutations neither assert nor return the resolved planning workspace  · **Status:** fixed
 
 **File:** internal/cli/root.go; internal/wire/envelopes.go | **Component:** discovery / wire
 **Effort:** M · **Urgency:** acute
@@ -49,7 +49,52 @@ dry-run receipt. Add an optional `--expect-root` or `--expect-workspace` precond
 that fails with exit 14 before writing when routing resolves elsewhere. Keep human
 output terse; this is primarily a machine-contract field.
 
-#### H2. Create JSON calls a mutable slug `id` after the stable-ID migration  · **Status:** open
+**Resolution (2026-08-18, fixed).** Three parts, in the order the finding framed them:
+
+1. **The cheap read** — `tskflwctl workspace` (human + `--json`) reports `planning_root`,
+   `config_path`, and a `source` of `pointer|config|discovered`. A `pointer` resolution is
+   called out explicitly in human output, since that is the case where the directory you
+   stand in is not the tree you would change.
+2. **The guard** — *built, then deliberately reverted the same day.* See the amendment
+   below.
+3. **The receipts** — every mutation and dry-run envelope (`task set`/`append`,
+   `epic set`, transitions, `*  new`, `audit` mutations, `lint --fix`) now carries a
+   `workspace` object. Registered in `jsonEnvelopes`, so `schema --json-schema` describes
+   it and the goldens pin it.
+
+**Scoped deliberately:** "a stable workspace identity" is the **absolute resolved root**,
+not a minted durable id. A minted id that survives a move is a real question, but it belongs
+with epic 29's `space.id` rather than being invented twice — noted there.
+
+**Amendment (2026-08-18) — the `--expect-root` precondition was reverted on ergonomic
+review.** It shipped, was reviewed against the wider flag surface, and removed. The
+recommendation asked for an assertion flag; building it showed the mechanism costs more than
+it buys:
+
+- **Two coordinate systems, one shape.** `-C` takes a directory to *stand in*;
+  `--expect-root` took the *resolved planning root*. `-C <impl> --expect-root <impl>` failed
+  — the flags describe "the same repo" with different values, and nothing on the command
+  line said so.
+- **Relative values resolved against process cwd, not `-C`.** The same argv succeeded from
+  one directory and failed from another, in a flag whose whole point is determinism.
+- **`--expect-root .` failed in this repo**, because `taskflow_root` is `planning/`. The most
+  natural invocation was wrong in the layout we dogfood.
+
+The deeper reason: **explicit selection is the assertion.** `--space <id>` (epic 29) names a
+tree by durable id, so it cannot resolve to the wrong one — the hazard is removed at its
+source rather than checked afterwards. No comparable CLI (`git -C`, `kubectl --context`,
+`gh --repo`, `docker --context`) carries an assert flag; they all rely on explicit selection.
+
+**What still closes this finding:** the `workspace` read (before) and the `workspace` object
+on every mutation receipt (after) — both shipped, both flag-free. The finding's core claim,
+that a mutation cannot prove which tree it changed, is fully addressed.
+
+**Carried forward:** the *pre-write* guarantee now rides on `--space` and is tracked on
+[global-space-flag](../tasks/6g1erb0p5893-decide-the-multi-space-vocabulary-blocks-slice-2.md)'s
+sibling task `global-space-flag-run-any-command-against-a-registered-space`. Until that ships
+there is no precondition mechanism — an accepted, recorded gap, not an oversight.
+
+#### H2. Create JSON calls a mutable slug `id` after the stable-ID migration  · **Status:** fixed
 
 **File:** internal/cli/task.go:157; internal/cli/audit.go:77; internal/wire/envelopes.go:297-316 | **Component:** wire contract
 **Effort:** S · **Urgency:** acute
@@ -69,6 +114,31 @@ only on the command where capturing the new immutable handle matters most.
 `t.ID` / `a.ID` plus their slugs, bump the wire schema, and add contract tests
 asserting the ID matches the filename prefix and a subsequent `task info <id>` /
 `audit info <id>` lookup. Epic IDs can keep their existing NN-slug identity.
+
+**Resolution (2026-08-19, fixed).** Reproduced exactly as reported: `created.id` was
+`agent-create-envelope-probe` while the path revealed the real id `6g1fj6av7whg`.
+`CreatedItem` now carries **both** — `id` is the stable minted key, `slug` is the human,
+mutable name — and the four call sites pass `t.ID/t.Slug`, `a.ID/a.Slug`, `r.ID/r.Slug`.
+Epic ids are unchanged: an epic's identity has always been its `NN-slug`, so it passes
+the same value for both, stated explicitly at the call site rather than left to the
+reader.
+
+**Wire version.** Bumped to **1.32**, treated as a *defect fix* rather than a breaking
+redesign: every other DTO already distinguished id from slug, so `new --json` was the
+outlier, not the contract. The changelog comment says so loudly, including that any
+consumer which stored `created.id` as a reference was holding a slug and must re-read.
+
+**Also corrected here: 1.31 was missing.** The H1 work added a `workspace` object to
+every mutation envelope plus a new `workspace` envelope without bumping the version — so
+`schema --json-schema` briefly emitted a schema that `1.30` never described. Recorded as
+1.31 (additive) before 1.32 landed, keeping the changelog's additive-vs-semantic
+distinction intact.
+
+**Tests.** The two tests that pinned the old behavior (`TestAuditNew_JSONEnvelope`,
+`TestDryRun_TaskNew`) now assert the id leads the filename and differs from the slug.
+`TestCreatedID_IsTheDurableHandle` goes further than the recommendation and round-trips
+it: create → `task info <id>` → **rename** → `task info <id>` still resolves. Asserting
+the filename prefix alone would not have proven the handle actually works.
 
 #### H3. Non-idempotent mutations have no replay identity after an unknown outcome  · **Status:** open
 

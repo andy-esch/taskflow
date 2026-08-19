@@ -173,6 +173,10 @@
         },
         "body": {
           "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON",
+          "description": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON."
         }
       },
       "additionalProperties": false,
@@ -180,7 +184,8 @@
       "required": [
         "schema_version",
         "dry_run",
-        "audit"
+        "audit",
+        "workspace"
       ],
       "description": "AuditMutationEnvelope is `audit append --json`: the reloaded audit, dry_run, and the resulting body — the audit counterpart to TaskMutationEnvelope."
     },
@@ -306,6 +311,10 @@
         },
         "created": {
           "$ref": "#/$defs/CreatedItem"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON",
+          "description": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON."
         }
       },
       "additionalProperties": false,
@@ -313,7 +322,8 @@
       "required": [
         "schema_version",
         "dry_run",
-        "created"
+        "created",
+        "workspace"
       ],
       "description": "CreatedEnvelope is `task/epic/audit new --json`."
     },
@@ -323,7 +333,12 @@
           "type": "string"
         },
         "id": {
-          "type": "string"
+          "type": "string",
+          "description": "ID is the STABLE identifier (ADR-0003 §3) — the 12-char key that leads the\nfilename for task/audit/research, and the NN-slug for an epic, whose identity\nhas always been its number. This is the handle to store: it survives renames."
+        },
+        "slug": {
+          "type": "string",
+          "description": "Slug is the HUMAN, mutable name — it changes when the entity is renamed, so it\nis for display and for typing at a prompt, never for saving as a reference."
         },
         "status": {
           "type": "string"
@@ -337,6 +352,7 @@
       "required": [
         "kind",
         "id",
+        "slug",
         "status",
         "path"
       ],
@@ -526,6 +542,10 @@
         },
         "epic": {
           "$ref": "#/$defs/EpicMetaJSON"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON",
+          "description": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON."
         }
       },
       "additionalProperties": false,
@@ -533,7 +553,8 @@
       "required": [
         "schema_version",
         "dry_run",
-        "epic"
+        "epic",
+        "workspace"
       ],
       "description": "EpicMutationEnvelope is `epic set --json`: the reloaded epic + dry_run."
     },
@@ -846,6 +867,10 @@
             "$ref": "#/$defs/LintTaskJSON"
           },
           "type": "array"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON",
+          "description": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON."
         }
       },
       "additionalProperties": false,
@@ -855,7 +880,8 @@
         "dry_run",
         "fixed",
         "unreadable",
-        "remaining"
+        "remaining",
+        "workspace"
       ],
       "description": "FixEnvelope is `lint --fix --json`."
     },
@@ -1024,6 +1050,10 @@
             "$ref": "#/$defs/MoveResult"
           },
           "type": "array"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON",
+          "description": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON."
         }
       },
       "additionalProperties": false,
@@ -1031,7 +1061,8 @@
       "required": [
         "schema_version",
         "dry_run",
-        "moves"
+        "moves",
+        "workspace"
       ],
       "description": "MovesEnvelope is the transition report (`task start --json`, etc.)."
     },
@@ -1513,6 +1544,10 @@
         },
         "body": {
           "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON",
+          "description": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON."
         }
       },
       "additionalProperties": false,
@@ -1520,7 +1555,8 @@
       "required": [
         "schema_version",
         "dry_run",
-        "task"
+        "task",
+        "workspace"
       ],
       "description": "TaskMutationEnvelope is `task set` / `task append` / `task set --body` under --json: the reloaded task, dry_run, and (for the body commands) the resulting body."
     },
@@ -1746,6 +1782,44 @@
       ],
       "description": "VersionEnvelope is `version --json`."
     },
+    "WorkspaceEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "workspace"
+      ],
+      "description": "WorkspaceEnvelope is `workspace --json`: the cheap read that answers \"which planning tree would a mutation hit from here?\" before running one."
+    },
+    "WorkspaceJSON": {
+      "properties": {
+        "planning_root": {
+          "type": "string"
+        },
+        "config_path": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "how the root was selected: pointer|config|discovered"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "planning_root",
+        "source"
+      ],
+      "description": "WorkspaceJSON identifies the planning tree a command resolved to."
+    },
     "jsonEnvelopes": {
       "properties": {
         "tasks": {
@@ -1780,6 +1854,9 @@
         },
         "version": {
           "$ref": "#/$defs/VersionEnvelope"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceEnvelope"
         },
         "created": {
           "$ref": "#/$defs/CreatedEnvelope"
@@ -1859,6 +1936,7 @@
         "moves",
         "summary",
         "version",
+        "workspace",
         "created",
         "epics",
         "epic_show",
@@ -1883,6 +1961,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.30)",
+  "title": "tskflwctl --json output (schema_version 1.32)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

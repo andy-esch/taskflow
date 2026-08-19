@@ -33,4 +33,5 @@ Local-first planning CLI (tasks, epics, audits, research) over markdown
 * [tskflwctl theme](tskflwctl_theme.md)	 - Inspect color themes
 * [tskflwctl ui](tskflwctl_ui.md)	 - Launch the interactive TUI (Bubble Tea)
 * [tskflwctl version](tskflwctl_version.md)	 - Print the tskflwctl version
+* [tskflwctl workspace](tskflwctl_workspace.md)	 - Print the planning tree this directory resolves to
 

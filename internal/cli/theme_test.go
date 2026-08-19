@@ -44,26 +44,31 @@ func TestResolveVariant(t *testing.T) {
 	}
 }
 
-// TestThemeName_Precedence pins the theme-selection contract — flag > env > config,
-// trimmed, "" when none set — which is the heart of T5. Pin it directly: observing
-// it via the resolved Theme is impossible while only one theme is registered (every
-// name Lookups to the default).
+// TestThemeName_Precedence pins the theme-selection contract — flag > env > repo
+// config > home config, trimmed, "" when none set — which is the heart of T5. Pin it
+// directly: observing it via the resolved Theme is impossible while only one theme is
+// registered (every name Lookups to the default). All four tiers are covered,
+// including the repo-beats-home rule (a project can pin a theme for everyone working
+// in it; the home tier is what a person sets once for their own terminal).
 func TestThemeName_Precedence(t *testing.T) {
 	cases := []struct {
-		name           string
-		flag, env, cfg string
-		want           string
+		name                 string
+		flag, env, cfg, user string
+		want                 string
 	}{
-		{"flag wins over env+config", "flagt", "envt", "cfgt", "flagt"},
-		{"env over config", "", "envt", "cfgt", "envt"},
-		{"config when no flag/env", "", "", "cfgt", "cfgt"},
-		{"none → empty (default downstream)", "", "", "", ""},
-		{"blank flag falls through to config", "   ", "", "cfgt", "cfgt"},
-		{"value is trimmed", " neon ", "", "", "neon"},
+		{"flag wins over all", "flagt", "envt", "cfgt", "usert", "flagt"},
+		{"env over repo+home", "", "envt", "cfgt", "usert", "envt"},
+		{"repo config over home", "", "", "cfgt", "usert", "cfgt"},
+		{"home when nothing above it", "", "", "", "usert", "usert"},
+		{"none → empty (default downstream)", "", "", "", "", ""},
+		{"blank flag falls through to repo config", "   ", "", "cfgt", "", "cfgt"},
+		{"blank repo config falls through to home", "", "", "   ", "usert", "usert"},
+		{"value is trimmed", " neon ", "", "", "", "neon"},
+		{"home value is trimmed", "", "", "", " neon ", "neon"},
 	}
 	for _, c := range cases {
-		if got := themeName(c.flag, c.env, c.cfg); got != c.want {
-			t.Errorf("%s: themeName(%q,%q,%q) = %q, want %q", c.name, c.flag, c.env, c.cfg, got, c.want)
+		if got := themeName(c.flag, c.env, c.cfg, c.user); got != c.want {
+			t.Errorf("%s: themeName(%q,%q,%q,%q) = %q, want %q", c.name, c.flag, c.env, c.cfg, c.user, got, c.want)
 		}
 	}
 }
