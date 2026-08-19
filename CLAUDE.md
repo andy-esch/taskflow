@@ -1,7 +1,7 @@
 # taskflow — Claude Code guide
 
 This repo is **`tskflwctl`**, a local-first planning CLI (Go) over
-markdown+frontmatter task/epic/audit files. It **self-hosts its own planning**
+markdown+frontmatter task/epic/audit/research files. It **self-hosts its own planning**
 under `planning/`. Two hats: the Go implementation, and the planning that tracks
 its own work.
 
@@ -20,9 +20,9 @@ its own work.
 populated in `PersistentPreRunE` (no globals), all output through injected
 `io.Writer`, `--json` everywhere with a `schema_version`, the core never touches
 fs/cobra, and **`status`/`bucket` is authoritative in frontmatter** (ADR-0003
-§4 — tasks/audits are stored **flat and id-led**, `tasks/<id>-<slug>.md` ·
-`audits/<id>-<slug>.md`; there is no status/bucket directory, epics stay
-`NN-<slug>`). The TUI never touches the store —
+§4 — tasks/audits/research are stored **flat and id-led**, `tasks/<id>-<slug>.md` ·
+`audits/<id>-<slug>.md` · `research/<id>-<slug>.md`; there is no status/bucket
+directory, epics stay `NN-<slug>`, and research has no status at all). The TUI never touches the store —
 it reads through `core.Service` as `tea.Cmd`s (no I/O in `Update`/`View`).
 
 ## Planning workflow — use `tskflwctl`, not `pm`
@@ -30,12 +30,15 @@ it reads through `core.Service` as `tea.Cmd`s (no I/O in `Update`/`View`).
 We dogfood: drive this repo's planning with the tool itself.
 
 - **Create:** `./bin/tskflwctl task new "Title" --epic <id> [--next]` ·
-  `epic new "Title" --description "..."` · `audit new <area> [--date]`.
+  `epic new "Title" --description "..."` · `audit new <area> [--date]` ·
+  `research new "Title" [--created <date>]` (the id is minted from `created`).
 - **Lifecycle:** `task start|next|ready|complete|defer|deprecate <slug>...` (verbs
   name the destination status; `next`/`ready` replace the old promote/demote, which
   still work as hidden aliases). `defer` takes `--until <YYYY-MM-DD>` (snooze).
 - **Read/edit:** `task list|show|set|edit|append`, `epic list|show`,
-  `audit new|list|show|findings|lint|close|reopen|defer`. Two faces of mutation: **agent**
+  `audit new|list|show|findings|lint|close|reopen|defer`,
+  `research new|list|show|path|set|edit|append` (no lifecycle verbs — research has no
+  status). Two faces of mutation: **agent**
   (field-level `task set`; body via `task append` / `task set --body|--body-file`,
   all scriptable + atomic) vs **human** (`task edit` — $EDITOR on the whole file,
   re-validated on save).
@@ -49,7 +52,7 @@ We dogfood: drive this repo's planning with the tool itself.
   projection is a string-valued column **view** (like `-o table`/`csv`); only
   full `--json` validates against `schema --json-schema`.
 - **Self-describe (agents):** `schema` (contract: statuses, field registry,
-  exit codes) · `schema task|epic|audit` (authoring guidance) ·
+  exit codes) · `schema task|epic|audit|research` (authoring guidance) ·
   `schema --json-schema` (Draft 2020-12 schema for the `--json` envelopes). Runs
   anywhere, no planning repo needed.
 - **Hygiene:** `tskflwctl lint` (`--fix` to auto-repair). Keep `planning/`
@@ -58,7 +61,7 @@ We dogfood: drive this repo's planning with the tool itself.
   authoritative in frontmatter (no mirror directory) — change status with the
   lifecycle verbs (never a hand-edit), which edit frontmatter **in place** (no file
   move). `lint` **flags** a missing/unrecognized status rather than relocating
-  anything; a non-id-led `.md` under `tasks/`/`audits/` is a `FileProblem` —
+  anything; a non-id-led `.md` under `tasks/`/`audits/`/`research/` is a `FileProblem` —
   non-entity files belong in `meta/`. Every active task needs a one-line
   `description`.
 - **`pm` (Python) is gone** — it was the prototype `tskflwctl` was ported from;

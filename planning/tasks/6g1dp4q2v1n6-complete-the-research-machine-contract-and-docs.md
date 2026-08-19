@@ -80,7 +80,7 @@ helper.
       `schema_comments.json` and the goldens.
 - [x] All six prose lists corrected, ideally sourced from `domain.SchemaKinds()` where the
       string is assembled at runtime so they cannot drift again.
-- [ ] README gains a research command block; its opening line and CLAUDE.md's `schema`
+- [x] README gains a research command block; its opening line and CLAUDE.md's `schema`
       line include research.
 - [ ] `ResearchShowHuman` uses `fieldPrinter`.
 
