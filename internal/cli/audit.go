@@ -74,7 +74,7 @@ func newAuditNewCmd(app *App) *cobra.Command {
 				return err
 			}
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "audit", a.Slug, string(a.Bucket), app.rel(a.Path), app.DryRun, app.workspace())
+				return render.CreatedJSON(app.Out, "audit", a.ID, a.Slug, string(a.Bucket), app.rel(a.Path), app.DryRun, app.workspace())
 			}
 			render.CreatedHuman(app.Out, app.Style, app.linkPath(a.Path), app.DryRun)
 			render.CreatedSlugNote(app.Out, app.Style, p.Area, a.Slug)

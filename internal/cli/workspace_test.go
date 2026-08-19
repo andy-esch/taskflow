@@ -103,3 +103,49 @@ func TestMutationReceipt_CarriesWorkspace(t *testing.T) {
 
 // strconvQuote is strconv.Quote without the import churn in this file.
 func strconvQuote(s string) string { return `"` + strings.ReplaceAll(s, `\`, `\\`) + `"` }
+
+// TestCreatedID_IsTheDurableHandle is the H2 contract: `new --json` must hand back an
+// id you can still resolve later, not the slug (which changes on rename). Asserting
+// the filename prefix alone would be weak — the point is that the id WORKS as a
+// lookup key, so this round-trips it through `info` and then renames the entity and
+// looks it up again.
+func TestCreatedID_IsTheDurableHandle(t *testing.T) {
+	root := testutil.NewRepo(t).
+		Epic("e1.md", "---\nstatus: active\ndescription: e\n---\n# E1\n").
+		Task("ready-to-start", "seed.md", "---\nstatus: ready-to-start\ndescription: seed\nepic: e1\ntags: [x]\n---\n").Root
+
+	out, errOut, err := runIn(t, root, "--json", "task", "new", "Durable Handle", "--epic", "e1", "--tags", "x")
+	if err != nil {
+		t.Fatalf("task new: %v\n%s%s", err, out, errOut)
+	}
+	var env struct {
+		Created struct{ ID, Slug, Path string } `json:"created"`
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("decode: %v\n%s", err, out)
+	}
+	c := env.Created
+	if c.ID == "" || c.ID == c.Slug {
+		t.Fatalf("created.id must be the minted id, not the slug: id=%q slug=%q", c.ID, c.Slug)
+	}
+	if !strings.HasPrefix(c.Path, "tasks/"+c.ID+"-") {
+		t.Errorf("created.id %q must lead the filename %q", c.ID, c.Path)
+	}
+
+	// The id resolves as a handle right away...
+	if out, errOut, err := runIn(t, root, "task", "info", c.ID); err != nil {
+		t.Fatalf("created.id must resolve via `task info`: %v\n%s%s", err, out, errOut)
+	}
+
+	// ...and, unlike the slug, still resolves after a rename. This is the whole
+	// reason the field matters: an agent that stored the slug would now be broken.
+	if out, errOut, err := runIn(t, root, "task", "rename", c.Slug, "renamed-handle"); err != nil {
+		t.Fatalf("rename: %v\n%s%s", err, out, errOut)
+	}
+	if out, errOut, err := runIn(t, root, "task", "info", c.ID); err != nil {
+		t.Errorf("created.id must survive a rename: %v\n%s%s", err, out, errOut)
+	}
+	if _, _, err := runIn(t, root, "task", "info", c.Slug); err == nil {
+		t.Log("note: the old slug still resolves after rename — id is still the safer handle")
+	}
+}

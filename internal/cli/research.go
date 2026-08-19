@@ -59,7 +59,7 @@ func newResearchNewCmd(app *App) *cobra.Command {
 			if app.JSON {
 				// No status/bucket to report — research has none; the empty state field keeps
 				// the shared created envelope's shape.
-				return render.CreatedJSON(app.Out, "research", r.Slug, "", app.rel(r.Path), app.DryRun, app.workspace())
+				return render.CreatedJSON(app.Out, "research", r.ID, r.Slug, "", app.rel(r.Path), app.DryRun, app.workspace())
 			}
 			render.CreatedHuman(app.Out, app.Style, app.linkPath(r.Path), app.DryRun)
 			render.CreatedSlugNote(app.Out, app.Style, p.Title, r.Slug)

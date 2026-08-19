@@ -342,8 +342,14 @@ func ToThemePreviewEnvelope(name, variant string, swatches []ThemeSwatch) ThemeP
 
 // CreatedItem is the created document inside CreatedEnvelope.
 type CreatedItem struct {
-	Kind   string `json:"kind"`
-	ID     string `json:"id"`
+	Kind string `json:"kind"`
+	// ID is the STABLE identifier (ADR-0003 §3) — the 12-char key that leads the
+	// filename for task/audit/research, and the NN-slug for an epic, whose identity
+	// has always been its number. This is the handle to store: it survives renames.
+	ID string `json:"id"`
+	// Slug is the HUMAN, mutable name — it changes when the entity is renamed, so it
+	// is for display and for typing at a prompt, never for saving as a reference.
+	Slug   string `json:"slug"`
 	Status string `json:"status"`
 	Path   string `json:"path"`
 }
@@ -360,8 +366,8 @@ type CreatedEnvelope struct {
 // ToCreatedEnvelope builds the `new --json` envelope value; dry_run marks a preview
 // (nothing was written). status is the new item's status (task status / epic status
 // / audit bucket); path is relative to the planning root.
-func ToCreatedEnvelope(kind, id, status, path string, dryRun bool, ws WorkspaceJSON) CreatedEnvelope {
-	return CreatedEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Created: CreatedItem{Kind: kind, ID: id, Status: status, Path: path}, Workspace: ws}
+func ToCreatedEnvelope(kind, id, slug, status, path string, dryRun bool, ws WorkspaceJSON) CreatedEnvelope {
+	return CreatedEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Created: CreatedItem{Kind: kind, ID: id, Slug: slug, Status: status, Path: path}, Workspace: ws}
 }
 
 // EpicsEnvelope is `epic list --json`.

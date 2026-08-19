@@ -154,7 +154,7 @@ func newTaskNewCmd(app *App) *cobra.Command {
 				return err
 			}
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "task", t.Slug, string(t.Status), app.rel(t.Path), app.DryRun, app.workspace())
+				return render.CreatedJSON(app.Out, "task", t.ID, t.Slug, string(t.Status), app.rel(t.Path), app.DryRun, app.workspace())
 			}
 			render.CreatedHuman(app.Out, app.Style, app.linkPath(t.Path), app.DryRun)
 			render.CreatedSlugNote(app.Out, app.Style, p.Title, t.Slug)

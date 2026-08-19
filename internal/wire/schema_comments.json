@@ -74,6 +74,8 @@
   "github.com/andy-esch/taskflow/internal/wire.CreatedEnvelope": "CreatedEnvelope is `task/epic/audit new --json`.",
   "github.com/andy-esch/taskflow/internal/wire.CreatedEnvelope.Workspace": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.",
   "github.com/andy-esch/taskflow/internal/wire.CreatedItem": "CreatedItem is the created document inside CreatedEnvelope.",
+  "github.com/andy-esch/taskflow/internal/wire.CreatedItem.ID": "ID is the STABLE identifier (ADR-0003 §3) — the 12-char key that leads the\nfilename for task/audit/research, and the NN-slug for an epic, whose identity\nhas always been its number. This is the handle to store: it survives renames.",
+  "github.com/andy-esch/taskflow/internal/wire.CreatedItem.Slug": "Slug is the HUMAN, mutable name — it changes when the entity is renamed, so it\nis for display and for typing at a prompt, never for saving as a reference.",
   "github.com/andy-esch/taskflow/internal/wire.CriterionJSON": "CriterionJSON is one acceptance-criteria checkbox for `task ac --list --json` — the list an agent then flips by index with `task ac --check/--uncheck`.",
   "github.com/andy-esch/taskflow/internal/wire.DoctorEnvelope": "DoctorEnvelope is `doctor --json`: the linkback audit result.",
   "github.com/andy-esch/taskflow/internal/wire.DoctorProblem": "DoctorProblem is one linkback inconsistency: the offending repo + a message.",

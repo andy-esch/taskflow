@@ -333,7 +333,12 @@
           "type": "string"
         },
         "id": {
-          "type": "string"
+          "type": "string",
+          "description": "ID is the STABLE identifier (ADR-0003 §3) — the 12-char key that leads the\nfilename for task/audit/research, and the NN-slug for an epic, whose identity\nhas always been its number. This is the handle to store: it survives renames."
+        },
+        "slug": {
+          "type": "string",
+          "description": "Slug is the HUMAN, mutable name — it changes when the entity is renamed, so it\nis for display and for typing at a prompt, never for saving as a reference."
         },
         "status": {
           "type": "string"
@@ -347,6 +352,7 @@
       "required": [
         "kind",
         "id",
+        "slug",
         "status",
         "path"
       ],
@@ -1955,6 +1961,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.30)",
+  "title": "tskflwctl --json output (schema_version 1.32)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

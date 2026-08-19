@@ -94,7 +94,7 @@ that a mutation cannot prove which tree it changed, is fully addressed.
 sibling task `global-space-flag-run-any-command-against-a-registered-space`. Until that ships
 there is no precondition mechanism — an accepted, recorded gap, not an oversight.
 
-#### H2. Create JSON calls a mutable slug `id` after the stable-ID migration  · **Status:** open
+#### H2. Create JSON calls a mutable slug `id` after the stable-ID migration  · **Status:** fixed
 
 **File:** internal/cli/task.go:157; internal/cli/audit.go:77; internal/wire/envelopes.go:297-316 | **Component:** wire contract
 **Effort:** S · **Urgency:** acute
@@ -114,6 +114,31 @@ only on the command where capturing the new immutable handle matters most.
 `t.ID` / `a.ID` plus their slugs, bump the wire schema, and add contract tests
 asserting the ID matches the filename prefix and a subsequent `task info <id>` /
 `audit info <id>` lookup. Epic IDs can keep their existing NN-slug identity.
+
+**Resolution (2026-08-19, fixed).** Reproduced exactly as reported: `created.id` was
+`agent-create-envelope-probe` while the path revealed the real id `6g1fj6av7whg`.
+`CreatedItem` now carries **both** — `id` is the stable minted key, `slug` is the human,
+mutable name — and the four call sites pass `t.ID/t.Slug`, `a.ID/a.Slug`, `r.ID/r.Slug`.
+Epic ids are unchanged: an epic's identity has always been its `NN-slug`, so it passes
+the same value for both, stated explicitly at the call site rather than left to the
+reader.
+
+**Wire version.** Bumped to **1.32**, treated as a *defect fix* rather than a breaking
+redesign: every other DTO already distinguished id from slug, so `new --json` was the
+outlier, not the contract. The changelog comment says so loudly, including that any
+consumer which stored `created.id` as a reference was holding a slug and must re-read.
+
+**Also corrected here: 1.31 was missing.** The H1 work added a `workspace` object to
+every mutation envelope plus a new `workspace` envelope without bumping the version — so
+`schema --json-schema` briefly emitted a schema that `1.30` never described. Recorded as
+1.31 (additive) before 1.32 landed, keeping the changelog's additive-vs-semantic
+distinction intact.
+
+**Tests.** The two tests that pinned the old behavior (`TestAuditNew_JSONEnvelope`,
+`TestDryRun_TaskNew`) now assert the id leads the filename and differs from the slug.
+`TestCreatedID_IsTheDurableHandle` goes further than the recommendation and round-trips
+it: create → `task info <id>` → **rename** → `task info <id>` still resolves. Asserting
+the filename prefix alone would not have proven the handle actually works.
 
 #### H3. Non-idempotent mutations have no replay identity after an unknown outcome  · **Status:** open
 

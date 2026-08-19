@@ -69,7 +69,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"EpicMutationEnvelope", func(w io.Writer) error { return emit(w, ToEpicMutationEnvelope(epic, true, WorkspaceJSON{})) }},
 		{"CreatedEnvelope", func(w io.Writer) error {
-			return emit(w, ToCreatedEnvelope("task", "alpha", "ready-to-start", "tasks/ready-to-start/alpha.md", false, WorkspaceJSON{}))
+			return emit(w, ToCreatedEnvelope("task", "6fsa428vc2mm", "alpha", "ready-to-start", "tasks/6fsa428vc2mm-alpha.md", false, WorkspaceJSON{}))
 		}},
 		{"MovesEnvelope", func(w io.Writer) error {
 			return emit(w, ToMovesEnvelope([]MoveResult{{Slug: "alpha", To: "in-progress"}}, false, WorkspaceJSON{}))

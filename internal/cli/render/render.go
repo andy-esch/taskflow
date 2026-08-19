@@ -496,8 +496,8 @@ func naiveSlug(title string) string {
 // marks a preview (nothing was written). status is the new item's status (task
 // status / epic status / audit bucket); path is relative to the planning root,
 // matching the human output.
-func CreatedJSON(w io.Writer, kind, id, status, path string, dryRun bool, ws wire.WorkspaceJSON) error {
-	return wire.EncodeJSON(w, wire.ToCreatedEnvelope(kind, id, status, path, dryRun, ws))
+func CreatedJSON(w io.Writer, kind, id, slug, status, path string, dryRun bool, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToCreatedEnvelope(kind, id, slug, status, path, dryRun, ws))
 }
 
 // EpicsHuman writes a table of epics with task rollup.

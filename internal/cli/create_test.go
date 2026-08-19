@@ -326,14 +326,23 @@ func TestAuditNew_JSONEnvelope(t *testing.T) {
 	var env struct {
 		DryRun  bool `json:"dry_run"`
 		Created struct {
-			Kind, ID, Status, Path string
+			Kind, ID, Slug, Status, Path string
 		} `json:"created"`
 	}
 	if err := json.Unmarshal([]byte(js), &env); err != nil {
 		t.Fatalf("audit new --json invalid: %v\n%s", err, js)
 	}
-	if env.DryRun || env.Created.Kind != "audit" || env.Created.ID != "2026-06-16-arch-data-flow" {
+	if env.DryRun || env.Created.Kind != "audit" || env.Created.Slug != "2026-06-16-arch-data-flow" {
 		t.Errorf("envelope wrong: %+v", env)
+	}
+	// id is the STABLE handle, not the slug: it must be the filename's leading field,
+	// so an agent that stores created.id keeps a reference that survives a rename
+	// (audit 2026-07-24, H2).
+	if !strings.HasPrefix(env.Created.Path, "audits/"+env.Created.ID+"-") {
+		t.Errorf("created.id %q must lead the filename %q", env.Created.ID, env.Created.Path)
+	}
+	if env.Created.ID == env.Created.Slug {
+		t.Errorf("created.id must be the minted id, not the slug (got %q for both)", env.Created.ID)
 	}
 	// status = the audit bucket; path is the flat id-led file relative to the
 	// planning root (audits/<minted-id>-<slug>.md, no bucket subdir).
