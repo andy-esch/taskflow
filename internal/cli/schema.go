@@ -20,7 +20,7 @@ var sectionRe = regexp.MustCompile(`(?m)^##\s+(.+)$`)
 func newSchemaCmd(app *App) *cobra.Command {
 	var jsonSchema bool
 	cmd := &cobra.Command{
-		Use:   "schema [task|epic|audit]",
+		Use:   "schema [" + strings.Join(domain.SchemaKinds(), "|") + "]",
 		Short: "Describe the tool's contract + per-kind authoring guidance (for agents)",
 		Long: "For triage, lead with the terse path: `epic show <id>` for an epic's task\n" +
 			"roster, and `task list -o table -c slug,status,description` for a compact,\n" +
@@ -92,6 +92,10 @@ func runSchemaContract(app *App) error {
 	for _, name := range domain.KnownTaskFieldNames() {
 		fields = append(fields, render.SchemaField{Name: name, Type: domain.FieldType(name)})
 	}
+	researchFields := make([]render.SchemaField, 0, len(domain.KnownResearchFieldNames()))
+	for _, name := range domain.KnownResearchFieldNames() {
+		researchFields = append(researchFields, render.SchemaField{Name: name, Type: domain.FieldType(name)})
+	}
 	codes := make([]render.SchemaExitCode, 0, len(errCodes))
 	for _, e := range errCodes {
 		codes = append(codes, render.SchemaExitCode{Code: e.code, Name: e.name})
@@ -103,6 +107,7 @@ func runSchemaContract(app *App) error {
 		FindingStatuses: domain.FindingStatuses(),
 		TaskFields:      fields,
 		EpicFields:      domain.KnownEpicFieldNames(),
+		ResearchFields:  researchFields,
 		ExitCodes:       codes,
 		Kinds:           domain.SchemaKinds(),
 	}

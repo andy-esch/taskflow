@@ -354,7 +354,7 @@ type CreatedItem struct {
 	Path   string `json:"path"`
 }
 
-// CreatedEnvelope is `task/epic/audit new --json`.
+// CreatedEnvelope is `<entity> new --json` — task, epic, audit, and research all emit it.
 type CreatedEnvelope struct {
 	SchemaVersion string      `json:"schema_version"`
 	DryRun        bool        `json:"dry_run"`

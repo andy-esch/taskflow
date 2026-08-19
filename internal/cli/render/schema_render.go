@@ -57,11 +57,18 @@ func SchemaHuman(w io.Writer, st Style, c SchemaContract) error {
 		fmt.Fprintf(w, "  %-16s %s\n", f.Name, st.Dim(f.Type))
 	}
 	fmt.Fprintf(w, "\n%s: %s\n", st.Bold("Epic fields"), strings.Join(c.EpicFields, ", "))
+	// Research fields render inline like epics' (there are four, not twenty-odd), but with
+	// types, matching what research_fields carries in --json.
+	rf := make([]string, 0, len(c.ResearchFields))
+	for _, f := range c.ResearchFields {
+		rf = append(rf, f.Name+" ("+f.Type+")")
+	}
+	fmt.Fprintf(w, "\n%s: %s\n", st.Bold("Research fields"), strings.Join(rf, ", "))
 	fmt.Fprintf(w, "\n%s:\n", st.Bold("Exit codes"))
 	for _, e := range c.ExitCodes {
 		fmt.Fprintf(w, "  %-3d %s\n", e.Code, st.Dim(e.Name))
 	}
-	fmt.Fprintf(w, "\n%s\n", st.Dim("`tskflwctl schema <task|epic|audit>` for per-kind authoring guidance."))
+	fmt.Fprintf(w, "\n%s\n", st.Dim("`tskflwctl schema <"+strings.Join(c.Kinds, "|")+">` for per-kind authoring guidance."))
 	return nil
 }
 

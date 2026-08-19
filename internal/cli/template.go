@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // newTemplateCmd is the body-template discovery surface: `template list` and
@@ -54,7 +57,7 @@ func newTemplateListCmd(app *App) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&kind, "kind", "", "restrict to one kind (task|epic|audit)")
+	cmd.Flags().StringVar(&kind, "kind", "", "restrict to one kind ("+strings.Join(domain.SchemaKinds(), "|")+")")
 	_ = cmd.RegisterFlagCompletionFunc("kind", completeKinds)
 	return cmd
 }

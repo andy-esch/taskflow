@@ -198,8 +198,12 @@ func coerceResearchField(field string, val any) any {
 }
 
 func unknownResearchFieldErr(field string) error {
-	return fmt.Errorf("%w: unknown research field %q (known: %s) — use --force to set it anyway",
-		domain.ErrValidation, field, strings.Join(domain.KnownResearchFieldNames(), ", "))
+	// Advertise the SETTABLE fields, not every recognized one. Listing recognized keys named
+	// `created`/`updated_at` here would point the caller at fields the write path then
+	// refuses as protected — the one message whose job is to teach the field set would be
+	// teaching it wrong.
+	return fmt.Errorf("%w: unknown research field %q (settable: %s) — use --force to set it anyway",
+		domain.ErrValidation, field, strings.Join(domain.SettableResearchFields(), ", "))
 }
 
 // EditResearch opens a research doc for whole-file editing — the human face of mutation,

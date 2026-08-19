@@ -325,7 +325,7 @@
         "created",
         "workspace"
       ],
-      "description": "CreatedEnvelope is `task/epic/audit new --json`."
+      "description": "CreatedEnvelope is `\u003centity\u003e new --json` — task, epic, audit, and research all emit it."
     },
     "CreatedItem": {
       "properties": {
@@ -1238,6 +1238,13 @@
           },
           "type": "array"
         },
+        "research_fields": {
+          "items": {
+            "$ref": "#/$defs/SchemaField"
+          },
+          "type": "array",
+          "description": "ResearchFields mirrors TaskFields for research docs. Added because `research set`\ngates unknown keys on a field registry, and without this an agent had to trigger an\nerror and parse prose to learn the set — the same reason epic_fields was added when\n`epic set` landed. Which of these are WRITABLE is narrower: see `schema research`,\nwhose conventions name the protected ones."
+        },
         "exit_codes": {
           "items": {
             "$ref": "#/$defs/SchemaExitCode"
@@ -1261,6 +1268,7 @@
         "finding_statuses",
         "task_fields",
         "epic_fields",
+        "research_fields",
         "exit_codes",
         "kinds"
       ],
@@ -1994,6 +2002,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.33)",
+  "title": "tskflwctl --json output (schema_version 1.34)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

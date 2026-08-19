@@ -134,7 +134,13 @@ import (
 // minted from it, so changing one would desync the pair. Like every other mutation
 // envelope since 1.31, it carries a `workspace` object naming the planning tree the
 // receipt describes.
-const SchemaVersion = "1.33"
+// 1.34: the schema contract carries `research_fields` — the research frontmatter keys
+// and their YAML types, mirroring `task_fields`. Added for the same reason `epic_fields`
+// was added at 1.15 when `epic set` landed: `research set` gates unknown keys on a field
+// registry, so without this an agent had to trigger an error and parse prose to learn the
+// set. Note RECOGNIZED is wider than WRITABLE — only description and tags can be set; the
+// per-kind conventions in `schema research` name the protected ones.
+const SchemaVersion = "1.34"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

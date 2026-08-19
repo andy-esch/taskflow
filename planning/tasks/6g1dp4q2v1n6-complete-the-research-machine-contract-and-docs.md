@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1dp4q2v1n6
-status: ready-to-start
+status: in-progress
 epic: 28-first-class-entities-new-planning-nouns
 description: schema --json lacks research_fields, the known-field list advertises unsettable keys, the JSON Schema falsely claims research edit --json, six prose lists and the README omit research.
 effort: Unknown
@@ -10,6 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [contract, docs]
 created: "2026-08-18"
+started_at: "2026-08-19"
+updated_at: "2026-08-19"
 ---
 
 # Complete the research machine contract and docs
@@ -70,13 +72,13 @@ helper.
 
 ## Acceptance criteria
 
-- [ ] `research_fields` in the schema contract, shaped like `epic_fields`, with a wire
+- [x] `research_fields` in the schema contract, shaped like `epic_fields`, with a wire
       changelog entry and a version bump if the envelope shape changes.
-- [ ] `knownResearchFields` no longer seeds protected stamps; the advertised list contains
+- [x] `knownResearchFields` no longer seeds protected stamps; the advertised list contains
       only settable keys.
-- [ ] The envelope doc comment names only the commands that actually emit it; regenerate
+- [x] The envelope doc comment names only the commands that actually emit it; regenerate
       `schema_comments.json` and the goldens.
-- [ ] All six prose lists corrected, ideally sourced from `domain.SchemaKinds()` where the
+- [x] All six prose lists corrected, ideally sourced from `domain.SchemaKinds()` where the
       string is assembled at runtime so they cannot drift again.
 - [ ] README gains a research command block; its opening line and CLAUDE.md's `schema`
       line include research.

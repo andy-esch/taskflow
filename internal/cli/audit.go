@@ -187,7 +187,7 @@ func newAuditLintCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "lint [audit]",
 		Short: "Validate audit findings (status vocabulary, missing status, bucket↔state)",
-		Long: "Lint audit findings — the audit analog of `lint` (which covers tasks/epics).\n" +
+		Long: "Lint audit findings — the audit analog of `lint` (which covers tasks, epics, and research).\n" +
 			"Checks every finding has a legal **Status:** (catching typos a free-text edit\n" +
 			"allows) and that a non-open audit has no still-open findings. With no argument\n" +
 			"it lints every audit; with a slug, just that one. Exit 11 when issues are found.",
