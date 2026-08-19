@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -269,4 +270,97 @@ func TestSetResearchFields_ValidatesDescription(t *testing.T) {
 	if _, err := svc.SetResearchFields("x", map[string]any{"description": long}, false, false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("over-long description must be ErrValidation, got %v", err)
 	}
+}
+
+// collidingStore reports ErrConflict for any id already in `taken`, mirroring the real
+// store's duplicate-id refusal, and records every id it was offered.
+type collidingStore struct {
+	nopStore
+	taken    map[string]bool
+	offered  []string
+	accepted string
+}
+
+func (f *collidingStore) CreateResearch(r domain.Research, _ string, _ bool) (domain.Research, error) {
+	f.offered = append(f.offered, r.ID)
+	if f.taken[r.ID] {
+		return domain.Research{}, fmt.Errorf("research id %q already used: %w", r.ID, domain.ErrConflict)
+	}
+	f.accepted = r.ID
+	return r, nil
+}
+
+// The headline fix: minting is keyed on a DAY, so same-day docs share one 2^17 random
+// tail. A clash must be REGENERATED, not returned — two docs on one id are unresolvable
+// and both become unwritable.
+func TestNewResearch_RegeneratesOnIDCollision(t *testing.T) {
+	store := &collidingStore{taken: map[string]bool{"aaaaaaaaaaaa": true}}
+	// First mint collides, second is fresh.
+	seq := []string{"aaaaaaaaaaaa", "bbbbbbbbbbbb"}
+	i := 0
+	svc := NewService(store, WithClock(fixedClock("2026-08-18")), WithIDGen(func() string {
+		id := seq[min(i, len(seq)-1)]
+		i++
+		return id
+	}))
+
+	got, err := svc.NewResearch(NewResearchParams{Title: "Doc", Created: "2026-01-03"})
+	if err != nil {
+		t.Fatalf("a collision must be regenerated, not surfaced: %v", err)
+	}
+	if got.ID != "bbbbbbbbbbbb" {
+		t.Errorf("id = %q, want the regenerated one", got.ID)
+	}
+	if len(store.offered) != 2 {
+		t.Errorf("want 2 mint attempts (collide then succeed), got %v", store.offered)
+	}
+}
+
+// The loop must be BOUNDED: a fixed injected generator collides every time, and spinning
+// would hang the command rather than fail it.
+func TestNewResearch_CollisionLoopIsBounded(t *testing.T) {
+	store := &collidingStore{taken: map[string]bool{"aaaaaaaaaaaa": true}}
+	svc := NewService(store, WithClock(fixedClock("2026-08-18")),
+		WithIDGen(func() string { return "aaaaaaaaaaaa" }))
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := svc.NewResearch(NewResearchParams{Title: "Doc", Created: "2026-01-03"})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, domain.ErrConflict) {
+			t.Errorf("an unresolvable collision must surface as ErrConflict, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("NewResearch hung on a permanently colliding id generator")
+	}
+	if len(store.offered) != maxIDMintAttempts {
+		t.Errorf("want exactly %d bounded attempts, got %d", maxIDMintAttempts, len(store.offered))
+	}
+}
+
+// A non-conflict error must NOT be retried — only a collision is regenerable.
+func TestNewResearch_DoesNotRetryNonConflictErrors(t *testing.T) {
+	store := &failingStore{err: fmt.Errorf("disk on fire")}
+	svc := NewService(store, WithClock(fixedClock("2026-08-18")))
+
+	if _, err := svc.NewResearch(NewResearchParams{Title: "Doc"}); err == nil {
+		t.Fatal("want the store error surfaced")
+	}
+	if store.calls != 1 {
+		t.Errorf("a non-conflict error must not be retried, got %d calls", store.calls)
+	}
+}
+
+type failingStore struct {
+	nopStore
+	err   error
+	calls int
+}
+
+func (f *failingStore) CreateResearch(domain.Research, string, bool) (domain.Research, error) {
+	f.calls++
+	return domain.Research{}, f.err
 }

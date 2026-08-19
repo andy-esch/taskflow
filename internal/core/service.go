@@ -293,8 +293,20 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		return nil, nil, err
 	}
 	problems = append(problems, rp...)
+	// Cross-doc: a duplicate stable id makes BOTH docs unresolvable by id and unwritable,
+	// and nothing else reports it (the create path now refuses one, but a hand-edit or an
+	// older tool version can still produce it). Keyed by id, so each colliding doc gets it.
+	researchIDs := make([]string, 0, len(docs))
 	for _, r := range docs {
-		if issues := domain.LintResearch(r); len(issues) > 0 {
+		researchIDs = append(researchIDs, r.FilenameID)
+	}
+	dupIDs := domain.DuplicateIDIssues(researchIDs)
+	for _, r := range docs {
+		issues := domain.LintResearch(r)
+		if iss, ok := dupIDs[r.FilenameID]; ok {
+			issues = append(issues, iss)
+		}
+		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: r.Slug, Issues: issues})
 		}
 	}

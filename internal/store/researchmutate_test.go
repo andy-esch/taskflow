@@ -37,10 +37,14 @@ func TestFS_SetResearchFields_PreservesUnknownKeysAndOrder(t *testing.T) {
 	}
 	raw, _ := os.ReadFile(got.Path)
 	s := string(raw)
-	for _, want := range []string{"# a comment the tool must not eat", "status: reference", "topic: something bespoke", "description: now described"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("surgical edit lost %q:\n%s", want, s)
-		}
+	// Byte-exact on the whole frontmatter block. A `strings.Contains` per key passes even if
+	// every key is REORDERED, which is half of what this test's name promises — verified by
+	// mutation: reversing the key order in updateFrontmatter slipped past the old assertion.
+	wantFM := "---\nschema: 1\nid: " + testutil.TaskID("legacy") + "\ncreated: \"2026-01-03\"\n" +
+		"# a comment the tool must not eat\nstatus: reference\ntopic: something bespoke\ntags: [old]\n" +
+		"description: now described\n---\n"
+	if !strings.HasPrefix(s, wantFM) {
+		t.Errorf("frontmatter not preserved byte-for-byte (comments, unknown keys, and ORDER).\ngot:\n%s\nwant prefix:\n%s", s, wantFM)
 	}
 	// Body untouched.
 	if !strings.Contains(s, "# Legacy\n\nbody\n") {
@@ -84,13 +88,22 @@ func TestFS_SetResearchFields_RefusesUnreloadableUpdate(t *testing.T) {
 	path := researchFixture(t, root, "doc.md", "---\nschema: 1\nid: "+testutil.TaskID("doc")+"\ncreated: \"2026-01-03\"\n---\n# Doc\n")
 	before, _ := os.ReadFile(path)
 
-	// A tags value that can't round-trip as a list breaks the parse.
-	_, err := NewFS(root).SetResearchFields("doc", map[string]any{"tags": "[unclosed"}, false)
+	// A scalar written into the list-typed `tags` cannot unmarshal, so the reload fails.
+	// No t.Skip: a skip here would silently retire the guard behind a green suite.
+	_, err := NewFS(root).SetResearchFields("doc", map[string]any{"tags": "not-a-list"}, false)
 	if err == nil {
-		t.Skip("this value round-trips fine; the guard is exercised by the epic/task suites")
+		t.Fatal("an update that makes the file unreloadable must be refused")
 	}
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("want ErrValidation, got %v", err)
+	}
+	// The ATTRIBUTION is the point: blame the update, not the (valid) file. Both branches
+	// wrap ErrValidation, so only the message distinguishes them.
+	if !strings.Contains(err.Error(), "would not reload") {
+		t.Errorf("must blame the update, not the file: %v", err)
+	}
+	if strings.Contains(err.Error(), "not caused by this update") {
+		t.Errorf("wrongly blamed the file for a valid original: %v", err)
 	}
 	after, _ := os.ReadFile(path)
 	if string(before) != string(after) {
@@ -142,5 +155,138 @@ func TestFS_AppendResearchBody_RefusesBrokenFrontmatter(t *testing.T) {
 
 	if _, _, err := NewFS(root).AppendResearchBody("bad", "## X", time.Now(), false); err == nil {
 		t.Error("appending to a doc with malformed frontmatter must fail, not half-write")
+	}
+}
+
+// A duplicate id on a DIFFERENT slug is a different filename, so writeNewFile's O_EXCL
+// never sees it — the store must check the id explicitly. Two docs on one id are
+// unresolvable by id AND both become unwritable (the write CAS goes ambiguous), so this
+// has to be refused at create.
+func TestFS_CreateResearch_RefusesDuplicateID(t *testing.T) {
+	root := t.TempDir()
+	fs := NewFS(root)
+	const shared = "6dr29v000zzr"
+	if _, err := fs.CreateResearch(domain.Research{Slug: "alpha", ID: shared, Created: "2026-01-03"}, "# A\n", false); err != nil {
+		t.Fatal(err)
+	}
+
+	// Same id, DIFFERENT slug -> different path, so only an explicit id check catches it.
+	_, err := fs.CreateResearch(domain.Research{Slug: "beta", ID: shared, Created: "2026-01-03"}, "# B\n", false)
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("a duplicate id must be ErrConflict, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "alpha") {
+		t.Errorf("the error should name the doc already holding the id: %v", err)
+	}
+	// And nothing was written.
+	if m, _ := filepath.Glob(filepath.Join(root, domain.ResearchDir, "*beta*")); len(m) != 0 {
+		t.Errorf("a refused create must write nothing, found %v", m)
+	}
+}
+
+// The dry-run path must apply the same check — a preview that would fail must fail.
+func TestFS_CreateResearch_DuplicateIDRefusedOnDryRun(t *testing.T) {
+	root := t.TempDir()
+	fs := NewFS(root)
+	const shared = "6dr29v000zzr"
+	if _, err := fs.CreateResearch(domain.Research{Slug: "alpha", ID: shared, Created: "2026-01-03"}, "# A\n", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fs.CreateResearch(domain.Research{Slug: "beta", ID: shared, Created: "2026-01-03"}, "# B\n", true); !errors.Is(err, domain.ErrConflict) {
+		t.Errorf("dry run must refuse a duplicate id too, got %v", err)
+	}
+}
+
+// A write must not be more permissive than a read. splitFrontmatterStrict returns a nil
+// block (not an error) for a fence-less file, and updateFrontmatter/documentMapping would
+// CREATE one — so without a guard these succeed and leave the doc with no id and no
+// `created`. This is exactly the shape the migration reported for 10 legacy docs.
+func TestFS_ResearchWritePaths_RefuseFrontmatterlessDoc(t *testing.T) {
+	body := "# Legacy doc\n\n**Created**: 2026-01-03\n\nprose\n"
+	cases := []struct {
+		name  string
+		write func(*FS) error
+	}{
+		{"SetResearchFields", func(fs *FS) error {
+			_, err := fs.SetResearchFields("legacy", map[string]any{"description": "d"}, false)
+			return err
+		}},
+		{"AppendResearchBody", func(fs *FS) error {
+			_, _, err := fs.AppendResearchBody("legacy", "## Added", time.Now(), false)
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := researchFixture(t, root, "legacy.md", body)
+
+			err := tc.write(NewFS(root))
+			if err == nil {
+				t.Fatal("writing to a frontmatter-less doc must be refused, not fabricate a block")
+			}
+			if !errors.Is(err, domain.ErrValidation) {
+				t.Errorf("want ErrValidation (exit 11), got %v", err)
+			}
+			if !strings.Contains(err.Error(), "missing frontmatter") {
+				t.Errorf("error should name the real problem: %v", err)
+			}
+			got, _ := os.ReadFile(path)
+			if string(got) != body {
+				t.Errorf("a refused write must leave the file byte-identical:\n%s", got)
+			}
+		})
+	}
+}
+
+// The version-CAS: a concurrent in-place edit landing between our validation and our write
+// must lose, not clobber. This is the guarantee the code comments promise and that nothing
+// covered — deleting the verifyUnchanged call left the entire suite green.
+func TestFS_SetResearchFields_ConcurrentEditConflicts(t *testing.T) {
+	root := t.TempDir()
+	fmBase := "---\nschema: 1\nid: " + testutil.TaskID("doc") + "\ncreated: \"2026-01-03\"\n"
+	path := researchFixture(t, root, "doc.md", fmBase+"description: original\n---\n# Doc\n")
+	fs := NewFS(root)
+
+	orig := testHookBeforeResearchWrite
+	defer func() { testHookBeforeResearchWrite = orig }()
+	testHookBeforeResearchWrite = func() {
+		// A different writer lands an in-place edit in the read->write window.
+		_ = os.WriteFile(path, []byte(fmBase+"description: CHANGED BY OTHER\n---\n# Doc\n"), 0o644)
+		testHookBeforeResearchWrite = orig // fire once
+	}
+
+	_, err := fs.SetResearchFields("doc", map[string]any{"description": "mine"}, false)
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("a concurrent in-place edit must conflict (exit 14), got %v", err)
+	}
+	got, _ := os.ReadFile(path)
+	if !strings.Contains(string(got), "CHANGED BY OTHER") || strings.Contains(string(got), "mine") {
+		t.Errorf("the losing write must not clobber the concurrent edit:\n%s", got)
+	}
+}
+
+// The same guarantee on the body path (AppendResearchBody goes through writeBody, whose
+// recheck closure is the research CAS).
+func TestFS_AppendResearchBody_ConcurrentEditConflicts(t *testing.T) {
+	root := t.TempDir()
+	fmBase := "---\nschema: 1\nid: " + testutil.TaskID("doc") + "\ncreated: \"2026-01-03\"\n---\n"
+	path := researchFixture(t, root, "doc.md", fmBase+"# Doc\n\noriginal\n")
+	fs := NewFS(root)
+
+	orig := testHookBeforeBodyWrite
+	defer func() { testHookBeforeBodyWrite = orig }()
+	testHookBeforeBodyWrite = func() {
+		_ = os.WriteFile(path, []byte(fmBase+"# Doc\n\nCHANGED BY OTHER\n"), 0o644)
+		testHookBeforeBodyWrite = orig
+	}
+
+	_, _, err := fs.AppendResearchBody("doc", "## Mine", time.Now(), false)
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("a concurrent edit during append must conflict, got %v", err)
+	}
+	got, _ := os.ReadFile(path)
+	if !strings.Contains(string(got), "CHANGED BY OTHER") || strings.Contains(string(got), "## Mine") {
+		t.Errorf("the losing append must not clobber:\n%s", got)
 	}
 }

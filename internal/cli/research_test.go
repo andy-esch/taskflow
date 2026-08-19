@@ -255,8 +255,14 @@ func TestResearchEdit_RejectsDryRunAndNonTTY(t *testing.T) {
 	root := freshRepo(t)
 	runRoot(t, "-C", root, "research", "new", "Doc")
 
-	if _, err := runRootRC(t, "-C", root, "--dry-run", "research", "edit", "doc"); err == nil {
-		t.Error("`research edit --dry-run` must be rejected")
+	// Assert the MESSAGE names dry-run: the harness has no TTY, so the Gate check errors
+	// anyway and a bare "did it error?" assertion passes even with the guard deleted.
+	dryOut, dryErr := runRootRC(t, "-C", root, "--dry-run", "research", "edit", "doc")
+	if dryErr == nil {
+		t.Fatal("`research edit --dry-run` must be rejected")
+	}
+	if msg := dryErr.Error() + dryOut; !strings.Contains(msg, "dry-run") {
+		t.Errorf("the refusal must name --dry-run, not just any error: %s", msg)
 	}
 	// Non-interactive (test harness has no TTY): must point at the scriptable path.
 	out, err := runRootRC(t, "-C", root, "research", "edit", "doc")
@@ -303,5 +309,53 @@ func TestResearchSet_JSONEnvelope(t *testing.T) {
 	}
 	if env.Research.Slug != "doc" || env.SchemaVersion == "" {
 		t.Errorf("envelope wrong: %s", js)
+	}
+}
+
+// Pins that `research new` uses the MINTABLE-range validator, not just the date shape.
+// Without this, swapping ValidateMintableDate for ValidateDate in NewResearch leaves the
+// whole suite green — the domain-level boundary tests can't see which one the caller uses,
+// and a malformed-date case like "2026-6-3" is rejected by both so it can't distinguish.
+func TestResearchNew_RejectsUnmintableCreated(t *testing.T) {
+	root := freshRepo(t)
+	for _, date := range []string{"1026-06-15", "9026-06-15", "1969-12-31"} {
+		out, err := runRootRC(t, "-C", root, "research", "new", "Doc "+date, "--created", date)
+		if err == nil {
+			t.Errorf("--created %s is outside the encodable range and must be rejected", date)
+			continue
+		}
+		if msg := err.Error() + out; !strings.Contains(msg, "outside the range") {
+			t.Errorf("--created %s: want the mintable-range error, got %s", date, msg)
+		}
+	}
+	// A shape-valid, in-range date still works.
+	runRoot(t, "-C", root, "research", "new", "Fine", "--created", "2026-06-23")
+}
+
+// The three input guards on `research set`/`append`, none of which were exercised.
+func TestResearchSet_InputGuards(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "research", "new", "Doc")
+
+	cases := []struct {
+		name, wantMsg string
+		args          []string
+	}{
+		{"--set without =", "key=value", []string{"research", "set", "doc", "--set", "novalue"}},
+		{"--set with empty key", "key=value", []string{"research", "set", "doc", "--set", "=v"}},
+		{"same key set and unset", "both set and unset", []string{"research", "set", "doc", "--description", "x", "--unset", "description"}},
+		{"unknown key on unset", "unknown research field", []string{"research", "set", "doc", "--unset", "bogsu"}},
+		{"empty append body", "nothing to append", []string{"research", "append", "doc", "--body", "   "}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := runRootRC(t, append([]string{"-C", root}, tc.args...)...)
+			if err == nil {
+				t.Fatalf("%s must be rejected", tc.name)
+			}
+			if msg := err.Error() + out; !strings.Contains(msg, tc.wantMsg) {
+				t.Errorf("want %q in the error, got %s", tc.wantMsg, msg)
+			}
+		})
 	}
 }
