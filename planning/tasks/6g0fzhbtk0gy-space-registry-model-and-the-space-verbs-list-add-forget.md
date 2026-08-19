@@ -3,7 +3,7 @@ schema: 1
 id: 6g0fzhbtk0gy
 status: next-up
 epic: 29-multi-space-planning-a-home-registry-and-the-atlas
-description: 'Add the [[space]] array to the home config plus space list|add|forget. Registry stays advisory: nothing in it may change what Discover resolves from a cwd. Schema is provisional.'
+description: 'Add the [[space]] array to spaces.toml plus space list|add|forget. Registry stays advisory: nothing in it may change what Discover resolves from a cwd. Vocabulary settled; entry schema is not.'
 effort: Unknown
 tier: 3
 priority: medium
@@ -17,9 +17,14 @@ updated_at: "2026-08-18"
 ## Objective
 
 Add the `[[space]]` array to the home config plus the CLI surface to manage it: the
-user-level record of which planning repos exist on this machine. Names and schema
-are **provisional** — see the epic's sketch; this task is where they get tested
-against reality.
+user-level record of which planning repos exist on this machine.
+
+The **vocabulary is settled** (`space` / `atlas`, decided 2026-08-18 — see
+[decide-the-multi-space-vocabulary](6g1erb0p5893-decide-the-multi-space-vocabulary-blocks-slice-2.md)),
+so `[[space]]`, `space list|add|forget`, and `--space` are the committed spellings. The
+**schema** below is still where the remaining calls get made — id collision policy, entry
+ordering, and whether `space.id` becomes a durable minted identity (see the 2026-08-18
+note at the end).
 
 ## Notes
 

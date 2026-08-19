@@ -1,24 +1,28 @@
 ---
 schema: 1
 status: active
-description: 'Explore multi-space planning: a home registry of planning repos, a --space handle for any command, and a cross-space TUI board (the atlas). Design-first — naming, schema, and scope are all open.'
+description: 'Multi-space planning: a home registry of planning repos, a --space handle for any command, and a cross-space TUI board (the atlas). Vocabulary locked; whether the board ships is decided at step 3.'
 priority: low
 tags: [config, cli, tui, multi-repo]
 created: "2026-08-15"
+updated_at: "2026-08-18"
 ---
 
 # Multi-space planning: a home registry and the atlas
 
-**Goal.** Explore multi-space planning: a home registry of planning repos, a
-`--space` handle for any command, and a cross-space TUI board (the atlas).
-Design-first — naming, schema, and scope are all open.
+**Goal.** Multi-space planning: a home registry of planning repos, a `--space`
+handle for any command, and a cross-space TUI board (the atlas).
 
-> **Nothing is decided.** The sketch is
-> [6g0ajre026c6-multi-space-home-registry-and-the-atlas](../research/6g0ajre026c6-multi-space-home-registry-and-the-atlas.md)
-> — a directionally-correct direction, not a design. Names (`space`, `atlas`),
-> the config location and schema, the registration policy, and whether the TUI
-> board is built at all are open questions, enumerated at the end of that doc. An
-> ADR gets written **if and when** the shape settles, not before.
+> **Vocabulary locked 2026-08-18: `space` (one registered planning repo) ·
+> `atlas` (the whole set).** See
+> [decide-the-multi-space-vocabulary-blocks-slice-2](../tasks/6g1erb0p5893-decide-the-multi-space-vocabulary-blocks-slice-2.md)
+> for the rejected alternatives, so it is not relitigated.
+>
+> **Still open:** the registration policy details, and — deliberately — **whether
+> the TUI board is built at all** (step 3 below). The sketch is
+> [multi-space-home-registry-and-the-atlas](../research/6g0ajre026c6-multi-space-home-registry-and-the-atlas.md);
+> its remaining forks are enumerated at the end. An ADR gets written if and when
+> the whole shape settles, not before.
 
 ## The itch
 
@@ -40,7 +44,7 @@ it links the repos of one product, which is a different axis from "one user's
 several products" — and stretching its keys to cover this would put an impl repo
 in a peer product's config.
 
-## Shape (all provisional)
+## Shape
 
 - A home config under `$XDG_CONFIG_HOME/tskflwctl/`, in **two files**: a
   hand-edited `config.toml` the tool only ever reads (which gives
@@ -73,7 +77,7 @@ The cheap independently-useful parts first, the expensive commitment last:
 
 ## Out of scope
 
-- **Any ADR or irreversible naming commitment** until step 3.
+- **Any ADR** until step 3 — the vocabulary is settled, the overall model is not.
 - The atlas's visual design — card layout, accent derivation, the cross-space
   rail. Sketched, not specified.
 - `space scan` (walking the filesystem for planning repos).

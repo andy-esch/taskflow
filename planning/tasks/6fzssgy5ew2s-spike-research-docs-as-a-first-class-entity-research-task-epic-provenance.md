@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fzssgy5ew2s
-status: in-progress
+status: completed
 epic: 28-first-class-entities-new-planning-nouns
 description: 'Explore research as a first-class noun: frontmatter contract, research new|list|show, and epic:/tasks: cross-refs for provenance rollups — without adding a lifecycle (ADR-0001 tension).'
 effort: Unknown
@@ -10,8 +10,9 @@ priority: low
 autonomy_level: 3
 tags: [core, design]
 created: "2026-08-13"
-updated_at: "2026-08-14"
+updated_at: "2026-08-18"
 started_at: "2026-08-14"
+completed_at: "2026-08-18"
 ---
 
 # Spike: research docs as a first-class entity + research↔task/epic provenance

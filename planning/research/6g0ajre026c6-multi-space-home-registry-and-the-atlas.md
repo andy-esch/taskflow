@@ -32,8 +32,9 @@ to scan; the bar here is to carry the TUI's existing visual language rather than
 a table of paths.
 
 This is an exploration, not a design: names, file locations, schema, and screen shapes
-were all provisional when written. Where later work settled one of them, it is marked
-inline with a date.
+were all provisional when written. Several have since been settled — the vocabulary, the
+two-file config layout, the package boundary — and each is marked inline with a date. The
+rest still stands as a lean, not a commitment.
 
 ## Findings
 
@@ -69,12 +70,16 @@ stretched: an impl repo has no business appearing in a peer product's config.
 Project as a cross-cutting initiative *inside* one planning repo, and a second, outer
 meaning for the same word would be the worst available ambiguity.
 
-The lean, both replaceable: a **space** is one registered planning repo, the unit you
-switch between; the **atlas** is the whole set, and the name of the TUI screen over
-it. The split is deliberate — the item noun turns up everywhere (config keys, a
-`--space` flag, error strings, docs) so it wants to be short and plain, while the
-collective turns up once, on a screen, and can carry the flavor. Also considered:
-`orbit`/`constellation`, `station`/`bridge`, `space`/`universe`.
+The lean at the time — **settled 2026-08-18, unchanged**: a **space** is one registered
+planning repo, the unit you switch between; the **atlas** is the whole set, and the name
+of the TUI screen over it. The split is deliberate — the item noun turns up everywhere
+(config keys, a `--space` flag, error strings, docs) so it wants to be short and plain,
+while the collective turns up once, on a screen, and can carry the flavor. Also
+considered and rejected: `orbit`/`constellation` (an orbit is a path, not a place),
+`station`/`bridge` (heavy for "a directory"; `bridge` collides with the networking and
+git senses), `space`/`universe` (grandiose for three repos). Full rationale and the
+accepted cost — `space` sitting next to `core.Workspace` — are recorded in
+[decide-the-multi-space-vocabulary](../tasks/6g1erb0p5893-decide-the-multi-space-vocabulary-blocks-slice-2.md).
 
 Regardless of the skin, the **internal type is `Workspace`** (the resolved config +
 store + service bundle for one root) — the vocabulary the deferred seam task already
@@ -272,9 +277,10 @@ Ideas worth keeping:
 
 ### Open forks
 
-1. **Naming.** `space`/`atlas` is a lean, not a decision. Does `space` survive contact
-   with `--space`, `[[space]]`, and a year of error messages? Is `atlas` still good on
-   the tenth look, or does it read as decoration?
+1. ~~**Naming.**~~ **Settled 2026-08-18: `space` / `atlas`** — see the naming section
+   above. The accepted cost is `space`'s overlap with `core.Workspace`; if it ever
+   grates, the item noun is a rename of one TOML key, one flag, and one command group,
+   and the durable data (`id`, `path`) is unaffected.
 2. **Is the cross-space board the point, or is `--space` the point?** Plausible that
    the flag plus a cross-space `status --all` delivers most of the value, and the board
    is a nice-to-have that costs a `model.go` refactor.
@@ -317,8 +323,8 @@ baked into a config schema by then.
 > harness. Two decisions from the sketch were settled during it — two files rather than
 > one, and a separate package so `internal/config` cannot import home-scope data (now
 > enforced by a `depguard` rule). Reviewed adversarially in
-> audit 2026-08-18-multi-space-config-foundation. Naming remains provisional; nothing
-> shipped depends on it.
+> audit 2026-08-18-multi-space-config-foundation. The vocabulary was locked the same
+> day (`space` / `atlas`), so slice 2 is unblocked.
 
 ## Related
 
