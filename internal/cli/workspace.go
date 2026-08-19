@@ -1,20 +1,19 @@
 package cli
 
 import (
-	"fmt"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
-	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // newWorkspaceCmd is the cheap read that answers "which planning tree would a
-// mutation hit from here?" — the pre-flight companion to --expect-root
-// (audit 2026-07-24-ai-agent-cli-ergonomics, H1).
+// mutation hit from here?" — the pre-flight half of audit
+// 2026-07-24-ai-agent-cli-ergonomics H1, whose after-the-fact half is the `workspace`
+// object on every mutation receipt.
 func newWorkspaceCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "workspace",
@@ -25,7 +24,7 @@ func newWorkspaceCmd(app *App) *cobra.Command {
 			"directory you are standing in is not necessarily the tree you would change.\n" +
 			"This reports the resolved root, the config that selected it, and which\n" +
 			"mechanism won — cheaply, before a mutation rather than after.",
-		Example:     "  tskflwctl workspace\n  tskflwctl workspace --json\n  tskflwctl task complete foo --expect-root \"$(tskflwctl workspace --json | jq -r .workspace.planning_root)\"",
+		Example:     "  tskflwctl workspace\n  tskflwctl workspace --json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -61,34 +60,11 @@ func (a *App) workspace() wire.WorkspaceJSON {
 	return ws
 }
 
-// checkExpectedRoot enforces --expect-root BEFORE anything is written: if the
-// resolved planning tree is not the one the caller asserted, fail with ErrConflict
-// (exit 14, the same code a CAS clash uses — "the world is not what you assumed").
-//
-// Comparison is on PHYSICAL paths, so a relative spelling, an absolute one, and a
-// symlinked checkout of the same tree all match; only a genuinely different tree
-// fails. Empty means the caller made no assertion and nothing is checked.
-func (a *App) checkExpectedRoot() error {
-	if a.ExpectRoot == "" {
-		return nil
-	}
-	if a.Cfg == nil {
-		return fmt.Errorf("%w: --expect-root given but no planning repo resolved", domain.ErrConflict)
-	}
-	want, got := physicalPath(a.ExpectRoot), physicalPath(a.Cfg.Root)
-	if want != got {
-		return fmt.Errorf(
-			"%w: --expect-root %s but this directory resolves to %s — refusing to touch the wrong planning tree",
-			domain.ErrConflict, want, got)
-	}
-	return nil
-}
-
 // physicalPath resolves p to an absolute, symlink-free path so two spellings of the
 // same directory compare equal. A path that does not exist yet degrades to its
-// lexical absolute form rather than erroring — the comparison is still meaningful,
-// and a bogus --expect-root should fail as a MISMATCH (with both paths shown), not as
-// an opaque stat error.
+// lexical absolute form rather than erroring: a path we cannot stat is still worth
+// reporting as the resolved root, and an opaque stat error here would be less useful
+// than the path itself.
 func physicalPath(p string) string {
 	abs, err := filepath.Abs(p)
 	if err != nil {

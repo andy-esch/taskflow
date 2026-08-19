@@ -10,6 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [cli, multi-repo]
 created: "2026-08-15"
+updated_at: "2026-08-18"
 ---
 # Global `--space` flag: run any command against a registered space
 
@@ -54,3 +55,31 @@ the value, the board's cost can be re-decided honestly.
 
 - Epic [29-multi-space-planning-a-home-registry-and-the-atlas](../epics/29-multi-space-planning-a-home-registry-and-the-atlas.md)
 - Sketch: [6g0ajre026c6-multi-space-home-registry-and-the-atlas](../research/6g0ajre026c6-multi-space-home-registry-and-the-atlas.md)
+
+### 2026-08-18 — this flag is now the wrong-repo write guard
+
+Audit 2026-07-24 H1 originally shipped a separate `--expect-root` precondition. It was
+**reverted on ergonomic review**: it took the *resolved planning root* while `-C` takes a
+*directory to stand in*, so `-C <impl> --expect-root <impl>` failed, relative values
+resolved against process cwd rather than `-C`, and `--expect-root .` failed in this repo's
+own `planning/` layout. Three flags in "which repo" space, and the assertion had the worst
+ergonomics of the three. Full rationale in the audit's amendment.
+
+**The design position that replaced it: explicit selection IS the assertion.** Naming a
+tree by durable id cannot resolve to the wrong one, so the hazard is removed at its source
+instead of checked afterwards. That is how every comparable CLI does it — `git -C`,
+`kubectl --context`, `gh --repo`, `docker --context` — none carries an assert flag.
+
+**So this task now carries a safety obligation, not just an ergonomic one:**
+
+- `--space` and `-C` are **mutually exclusive** — two answers to one question. Erroring on
+  both is not pedantry; it is what keeps "which tree" unambiguous.
+- A `--space <id>` whose registry entry no longer resolves to a planning root must be a
+  **loud error, never a silent fallback to cwd discovery**. Falling back would reintroduce
+  exactly the hazard this replaces.
+- Consider whether `--space` should also reject an id whose recorded path has drifted from
+  where it now resolves (registry staleness), rather than following it blindly.
+
+**Until this ships there is no pre-write precondition at all** — the `workspace` read and
+the receipt field cover proof, not prevention. That gap is accepted and recorded on the
+audit finding; it is the main reason this task is worth doing early in slice 2.

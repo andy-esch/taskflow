@@ -39,11 +39,6 @@ type App struct {
 	NoPager  bool   // force paging off (--no-pager)
 	Paginate bool   // force paging on, TTY gate permitting (--paginate)
 	Theme    string // color theme name (--theme); overrides TSKFLW_THEME + [theme].name
-	// ExpectRoot is the caller's assertion about WHICH planning tree this invocation
-	// should resolve to. Empty means no assertion. Checked in resolve(), before any
-	// command body runs, so a wrong-tree write is refused rather than reported
-	// (audit 2026-07-24-ai-agent-cli-ergonomics, H1).
-	ExpectRoot string
 
 	Style  render.Style
 	Th     design.Theme    // the resolved active theme (flag > env > repo config > user config > default)
@@ -212,8 +207,6 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.PersistentFlags().BoolVar(&app.NoPager, "no-pager", false, "do not pipe long human output through a pager")
 	root.PersistentFlags().BoolVar(&app.Paginate, "paginate", false, "page long human output through $PAGER (on a TTY), even if disabled in config")
 	root.PersistentFlags().StringVar(&app.Theme, "theme", "", "color theme name (overrides TSKFLW_THEME and [theme].name in config)")
-	root.PersistentFlags().StringVar(&app.ExpectRoot, "expect-root", "",
-		"fail (exit 14) unless this directory resolves to this planning root — a wrong-repo write guard for agents")
 
 	root.AddCommand(newInitCmd(app))
 	root.AddCommand(newVersionCmd(app))
@@ -259,11 +252,6 @@ func (a *App) resolve() error {
 		return err
 	}
 	a.Cfg = cfg
-	// Before anything else uses the resolved tree: if the caller asserted which one it
-	// should be, a mismatch stops here — ahead of every read AND every write.
-	if err := a.checkExpectedRoot(); err != nil {
-		return err
-	}
 	// The [theme].name can now participate in selection (lowest precedence, so this
 	// only changes anything when neither --theme nor TSKFLW_THEME pinned it). Re-skin
 	// the output Style + prompter so a config-selected theme takes effect.

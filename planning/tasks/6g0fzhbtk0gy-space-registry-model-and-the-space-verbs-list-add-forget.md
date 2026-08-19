@@ -81,7 +81,7 @@ exactly; deleting the file costs convenience, never data or addressability.
 
 ### 2026-08-18 — inherited decision from audit H1
 
-Audit 2026-07-24 H1 (`--expect-root` + `workspace`) shipped and deliberately defined a
+Audit 2026-07-24 H1 (the `workspace` read + receipt) deliberately defined a
 workspace's identity as its **absolute resolved planning root** — enough to prove which
 tree a mutation touched, but it does NOT survive moving the repo.
 

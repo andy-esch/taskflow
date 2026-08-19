@@ -55,11 +55,8 @@ output terse; this is primarily a machine-contract field.
    `config_path`, and a `source` of `pointer|config|discovered`. A `pointer` resolution is
    called out explicitly in human output, since that is the case where the directory you
    stand in is not the tree you would change.
-2. **The guard** — a global `--expect-root` compared on PHYSICAL paths, enforced in
-   `App.resolve()` so it runs ahead of *every* command body. A mismatch is `ErrConflict`
-   (exit 14, matching the CAS "world is not what you assumed" code) and nothing is written;
-   `TestExpectRoot_MismatchRefusesBeforeWriting` asserts the target file is byte-identical
-   afterwards, since reporting the wrong root after the fact would be too late.
+2. **The guard** — *built, then deliberately reverted the same day.* See the amendment
+   below.
 3. **The receipts** — every mutation and dry-run envelope (`task set`/`append`,
    `epic set`, transitions, `*  new`, `audit` mutations, `lint --fix`) now carries a
    `workspace` object. Registered in `jsonEnvelopes`, so `schema --json-schema` describes
@@ -68,6 +65,34 @@ output terse; this is primarily a machine-contract field.
 **Scoped deliberately:** "a stable workspace identity" is the **absolute resolved root**,
 not a minted durable id. A minted id that survives a move is a real question, but it belongs
 with epic 29's `space.id` rather than being invented twice — noted there.
+
+**Amendment (2026-08-18) — the `--expect-root` precondition was reverted on ergonomic
+review.** It shipped, was reviewed against the wider flag surface, and removed. The
+recommendation asked for an assertion flag; building it showed the mechanism costs more than
+it buys:
+
+- **Two coordinate systems, one shape.** `-C` takes a directory to *stand in*;
+  `--expect-root` took the *resolved planning root*. `-C <impl> --expect-root <impl>` failed
+  — the flags describe "the same repo" with different values, and nothing on the command
+  line said so.
+- **Relative values resolved against process cwd, not `-C`.** The same argv succeeded from
+  one directory and failed from another, in a flag whose whole point is determinism.
+- **`--expect-root .` failed in this repo**, because `taskflow_root` is `planning/`. The most
+  natural invocation was wrong in the layout we dogfood.
+
+The deeper reason: **explicit selection is the assertion.** `--space <id>` (epic 29) names a
+tree by durable id, so it cannot resolve to the wrong one — the hazard is removed at its
+source rather than checked afterwards. No comparable CLI (`git -C`, `kubectl --context`,
+`gh --repo`, `docker --context`) carries an assert flag; they all rely on explicit selection.
+
+**What still closes this finding:** the `workspace` read (before) and the `workspace` object
+on every mutation receipt (after) — both shipped, both flag-free. The finding's core claim,
+that a mutation cannot prove which tree it changed, is fully addressed.
+
+**Carried forward:** the *pre-write* guarantee now rides on `--space` and is tracked on
+[global-space-flag](../tasks/6g1erb0p5893-decide-the-multi-space-vocabulary-blocks-slice-2.md)'s
+sibling task `global-space-flag-run-any-command-against-a-registered-space`. Until that ships
+there is no precondition mechanism — an accepted, recorded gap, not an oversight.
 
 #### H2. Create JSON calls a mutable slug `id` after the stable-ID migration  · **Status:** open
 
