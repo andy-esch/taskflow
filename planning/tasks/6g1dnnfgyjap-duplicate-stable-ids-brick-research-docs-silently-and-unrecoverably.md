@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [core, domain]
 created: "2026-08-18"
-updated_at: "2026-08-18"
+updated_at: "2026-08-19"
 completed_at: "2026-08-18"
 ---
 
@@ -52,13 +52,13 @@ odds, silent onset, unrecoverable.
 
 ## Acceptance criteria
 
-- [ ] `NewResearch` regenerates on a clash against ids ALREADY ON DISK, not just within
+- [x] `NewResearch` regenerates on a clash against ids ALREADY ON DISK, not just within
       one process — the on-disk set is the collision domain, since minting is per-command.
-- [ ] A duplicate id is a lint finding (it is currently invisible to `lint`), so an id
+- [x] A duplicate id is a lint finding (it is currently invisible to `lint`), so an id
       that slips in by any route is diagnosable rather than silent.
-- [ ] Test: two docs forced onto the same id (injected id generator) — creation is
+- [x] Test: two docs forced onto the same id (injected id generator) — creation is
       rejected or deduped, and if one exists on disk lint reports it.
-- [ ] Consider whether `CreateResearch` should reject a colliding id at the store layer
+- [x] Consider whether `CreateResearch` should reject a colliding id at the store layer
       too, as the last line of defence for a direct store caller.
 
 ## Out of scope

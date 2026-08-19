@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [cli, core]
 created: "2026-08-18"
-updated_at: "2026-08-18"
+updated_at: "2026-08-19"
 started_at: "2026-08-18"
 completed_at: "2026-08-18"
 ---
@@ -62,12 +62,12 @@ suffixing — the registry is the natural home, and projects/routines land next.
 
 ## Acceptance criteria
 
-- [ ] `FixFrontmatter` covers `research/`: text normalization + id backfill, so the
+- [x] `FixFrontmatter` covers `research/`: text normalization + id backfill, so the
       `lint --fix` the message promises actually repairs a missing research id.
-- [ ] `sweepStaleTemps` covers `research/`; an aged orphan there is removed and reported.
-- [ ] Ambiguous-match wording is correct for research, from a per-kind plural rather than
+- [x] `sweepStaleTemps` covers `research/`; an aged orphan there is removed and reported.
+- [x] Ambiguous-match wording is correct for research, from a per-kind plural rather than
       `%ss`.
-- [ ] Tests for all three (the fixer ones as store tests, the wording as a CLI assertion).
+- [x] Tests for all three (the fixer ones as store tests, the wording as a CLI assertion).
 
 ## Related
 

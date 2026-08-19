@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [core, domain]
 created: "2026-08-18"
-updated_at: "2026-08-18"
+updated_at: "2026-08-19"
 started_at: "2026-08-18"
 completed_at: "2026-08-18"
 ---
@@ -47,16 +47,16 @@ accepted and the doc is mis-ordered permanently. `id.NewAt`'s own doc comment no
 
 ## Acceptance criteria
 
-- [ ] A date outside the representable window is rejected with `ErrValidation` (exit 11)
+- [x] A date outside the representable window is rejected with `ErrValidation` (exit 11)
       naming the window — at the same seam that already validates the date, so every
       caller inherits it rather than each minting site remembering.
-- [ ] The boundaries are pinned by test: 1970-01-01 and the last representable day are
+- [x] The boundaries are pinned by test: 1970-01-01 and the last representable day are
       accepted; the days either side are rejected.
-- [ ] `internal/tools/researchmigrate` gets the same guard (it mints from arbitrary
+- [x] `internal/tools/researchmigrate` gets the same guard (it mints from arbitrary
       recovered dates, including a prose `**Created**:` that could be mistyped).
-- [ ] The window is documented where an author will see it — the `created` field doc in
+- [x] The window is documented where an author will see it — the `created` field doc in
       the research Descriptor, so `schema research` states it.
-- [ ] A property/fuzz-style test asserts that for in-range dates, sorting by id equals
+- [x] A property/fuzz-style test asserts that for in-range dates, sorting by id equals
       sorting by created.
 
 ## Out of scope
