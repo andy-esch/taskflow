@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [config, cli, multi-repo]
 created: "2026-08-15"
-updated_at: "2026-08-18"
+updated_at: "2026-08-19"
 ---
 # Space registry model and the `space` verbs (list/add/forget)
 
@@ -93,3 +93,37 @@ trivial and honest rather than a heuristic (open fork 6).
 Decide it with this task, not separately — the alternative is inventing two identities
 for the same thing. If a durable id is adopted, `wire.WorkspaceJSON` should carry it too
 so the two surfaces agree.
+
+### 2026-08-19 — the identity decision now has a fourth consumer, and a hard case
+
+[worktrees-and-relative-paths-in-cross-repo-planning](../research/6g1emag02srv-worktrees-and-relative-paths-in-cross-repo-planning.md)
+demonstrated that a committed relative `planning_repo` can **silently resolve to an
+unrelated planning repo** when the checkout is not where the path assumed — no warning,
+no error, every mutation landing in the wrong tree. Absolute paths are no escape; they
+break on every other machine.
+
+The only fix that closes it in the general case is **layer C**: mint a durable id into a
+planning repo's own committed `.tskflwctl.toml`, have pointers record it alongside the
+path, and **verify it after following the path**. Path = hint, id = assertion.
+
+That is the same primitive as `space.id`, which now has **four** consumers:
+
+1. linkback verification (epic 23),
+2. `--space` selection (the wrong-repo guard that replaced `--expect-root`),
+3. the `workspace` object on mutation receipts,
+4. `moved` detection in the registry (open fork 6).
+
+**So this task's identity choice is load-bearing well beyond the registry.** Deciding
+`space.id` as a *path-keyed* identity does not merely make `moved` detection a
+heuristic — it leaves the silent-wrong-tree hazard permanently open and the registry
+inherits exactly the fragility the research doc documents.
+
+Concretely, to settle here:
+
+- Is `space.id` the **minted durable id** read from the target repo's config, or a
+  local label keyed to a path?
+- If durable: where is it minted (`init`), how are the ~2 existing repos backfilled
+  (`lint --fix`? `doctor`?), and does `wire.WorkspaceJSON` carry it so the receipt and
+  the registry agree?
+- If not durable: record explicitly that the wrong-tree hazard is accepted, so it is a
+  decision rather than an omission.

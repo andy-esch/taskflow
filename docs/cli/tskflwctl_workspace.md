@@ -12,6 +12,10 @@ directory you are standing in is not necessarily the tree you would change.
 This reports the resolved root, the config that selected it, and which
 mechanism won — cheaply, before a mutation rather than after.
 
+EXPERIMENTAL: this command and the `workspace` object on mutation receipts
+may change shape while the multi-space work settles. Pin `schema_version`
+if you script against it.
+
 ```
 tskflwctl workspace [flags]
 ```

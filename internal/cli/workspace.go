@@ -23,10 +23,16 @@ func newWorkspaceCmd(app *App) *cobra.Command {
 			".tskflwctl.toml carries a planning_repo resolves into ANOTHER repo, so the\n" +
 			"directory you are standing in is not necessarily the tree you would change.\n" +
 			"This reports the resolved root, the config that selected it, and which\n" +
-			"mechanism won — cheaply, before a mutation rather than after.",
-		Example:     "  tskflwctl workspace\n  tskflwctl workspace --json",
-		Args:        cobra.NoArgs,
-		Annotations: map[string]string{"safety": "read-only"},
+			"mechanism won — cheaply, before a mutation rather than after.\n\n" +
+			"EXPERIMENTAL: this command and the `workspace` object on mutation receipts\n" +
+			"may change shape while the multi-space work settles. Pin `schema_version`\n" +
+			"if you script against it.",
+		Example: "  tskflwctl workspace\n  tskflwctl workspace --json",
+		Args:    cobra.NoArgs,
+		// stability is declarative today (nothing reads it yet) but it is where a
+		// `schema --type cli` surface would pick this up, so it is recorded next to
+		// safety rather than living only in prose.
+		Annotations: map[string]string{"safety": "read-only", "stability": "experimental"},
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ws := app.workspace()
 			if app.JSON {
