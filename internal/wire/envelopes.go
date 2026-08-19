@@ -462,9 +462,15 @@ func ToResearchShowEnvelope(r domain.Research, body string) ResearchShowEnvelope
 	return ResearchShowEnvelope{SchemaVersion: SchemaVersion, Research: ToResearchJSON(r), Body: body}
 }
 
-// ResearchMutationEnvelope is `research set` / `research append` / `research edit`
-// --json: the reloaded doc, dry_run, and (for a body write) the resulting body — the
-// research counterpart to TaskMutationEnvelope / AuditMutationEnvelope.
+// ResearchMutationEnvelope is `research set` / `research append` --json: the reloaded
+// doc, dry_run, and (for a body write) the resulting body — the research counterpart to
+// TaskMutationEnvelope / AuditMutationEnvelope.
+//
+// NOT `research edit`. That command is interactive and prints a plain confirmation even
+// under --json, exactly like `task edit` / `audit edit` / `epic edit` — a deliberate
+// gap, not an omission. This comment is harvested into schema_comments.json and shipped
+// inside `schema --json-schema`, so naming a command here that emits nothing would make
+// the published contract lie to an agent.
 type ResearchMutationEnvelope struct {
 	SchemaVersion string       `json:"schema_version"`
 	DryRun        bool         `json:"dry_run"`
