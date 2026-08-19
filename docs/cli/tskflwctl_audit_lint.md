@@ -4,7 +4,7 @@ Validate audit findings (status vocabulary, missing status, bucket↔state)
 
 ### Synopsis
 
-Lint audit findings — the audit analog of `lint` (which covers tasks/epics).
+Lint audit findings — the audit analog of `lint` (which covers tasks, epics, and research).
 Checks every finding has a legal **Status:** (catching typos a free-text edit
 allows) and that a non-open audit has no still-open findings. With no argument
 it lints every audit; with a slug, just that one. Exit 11 when issues are found.

@@ -59,8 +59,17 @@ type Research struct {
 // DERIVED from the registry's AuthoringFields plus the tool-managed stamps — so a field
 // added to the research Descriptor becomes settable without a second list to keep in
 // sync (the epic-28 charter: a noun's fields ride one registry).
+// knownResearchFields is every frontmatter key the tool RECOGNIZES for a research doc:
+// the registry's AuthoringFields plus `updated_at`, the one tool-managed stamp research
+// carries. Deriving from the registry means a field added to the Descriptor is recognized
+// without a second list to keep in sync.
+//
+// `id` and `schema` are deliberately absent, matching KnownTaskFieldNames (which also
+// omits both while including updated_at) — they are storage machinery, not frontmatter an
+// author reasons about, and ProtectedResearchField rejects them before this set is ever
+// consulted.
 var knownResearchFields = func() map[string]bool {
-	m := map[string]bool{"schema": true, "id": true, "updated_at": true}
+	m := map[string]bool{"updated_at": true}
 	fields, err := AuthoringFields("research")
 	if err != nil { // unreachable: "research" is a registered kind
 		panic("domain: research kind missing from the entity registry")
@@ -73,14 +82,32 @@ var knownResearchFields = func() map[string]bool {
 
 // KnownResearchField reports whether f is a frontmatter key the tool knows for a
 // research doc. `research set` gates on it (unless --force) so a typo'd key can't be
-// silently persisted.
+// silently persisted. RECOGNIZED is not the same as SETTABLE — see SettableResearchFields.
 func KnownResearchField(f string) bool { return knownResearchFields[f] }
 
-// KnownResearchFieldNames returns every known research frontmatter key, sorted — the
-// research analog of KnownEpicFieldNames, for a stable schema dump and error text.
+// KnownResearchFieldNames returns every recognized research frontmatter key, sorted — the
+// research analog of KnownTaskFieldNames, and what `schema --json`'s research_fields is
+// built from.
 func KnownResearchFieldNames() []string {
 	names := make([]string, 0, len(knownResearchFields))
 	for f := range knownResearchFields {
+		names = append(names, f)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// SettableResearchFields returns the keys `research set` will actually WRITE, sorted:
+// recognized minus protected. Distinct from KnownResearchFieldNames because most
+// recognized keys can't be set — `created` is encoded in the id and `updated_at` is
+// stamped — so a caller offering choices (an error message listing alternatives, a TUI
+// edit menu) must use this, or it advertises fields the write path then refuses.
+func SettableResearchFields() []string {
+	names := make([]string, 0, len(knownResearchFields))
+	for f := range knownResearchFields {
+		if _, protected := ProtectedResearchField(f); protected {
+			continue
+		}
 		names = append(names, f)
 	}
 	sort.Strings(names)

@@ -129,7 +129,8 @@ var entities = []Descriptor{
 		Conventions: []string{
 			"research has NO status and NO lifecycle verbs — a later doc supersedes an earlier one. A decision that needs a lifecycle is an ADR, not research.",
 			"research carries no `epic:`/`tasks:` fields — link to entities from the body with ordinary relative-path links instead.",
-			"created is required; the id is minted from it (ADR-0003 §3), so lexical id order is authorship order.",
+			"created is required; the id is minted from it (ADR-0003 §3), so lexical id order is authorship order — and it is therefore NOT settable via `research set`: re-dating a doc means creating a new one.",
+			"only description and tags are writable; created, id, schema, and updated_at are tool-managed (`research set` refuses them, each with its reason).",
 			"the filename slug is derived from the title; the full title is kept as the body H1.",
 		},
 		Templates: []NamedTemplate{

@@ -17,7 +17,7 @@ tskflwctl template list [flags]
 
 ```
   -h, --help          help for list
-      --kind string   restrict to one kind (task|epic|audit)
+      --kind string   restrict to one kind (task|epic|audit|research)
 ```
 
 ### Options inherited from parent commands

@@ -1,6 +1,6 @@
 ## tskflwctl lint
 
-Validate active task, epic, and research frontmatter (--fix repairs tasks/audits and assigns missing ids)
+Validate active task, epic, and research frontmatter (--fix repairs tasks/audits/research and assigns missing ids)
 
 ```
 tskflwctl lint [flags]
@@ -18,7 +18,7 @@ tskflwctl lint [flags]
 ### Options
 
 ```
-      --fix     auto-repair frontmatter: quote ':' values, normalize lists, backfill missing task/audit ids; epics are text-only
+      --fix     auto-repair frontmatter: quote ':' values, normalize lists, backfill missing task/audit/research ids; epics are text-only
   -h, --help    help for lint
       --links   also check body cross-links: flag any [..](path.md) whose target file is missing (opt-in — a tree can carry pre-existing danglers)
 ```

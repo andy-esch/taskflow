@@ -24,7 +24,7 @@ Local-first planning CLI (tasks, epics, audits, research) over markdown
 * [tskflwctl doctor](tskflwctl_doctor.md)	 - Audit planning_repo <-> tracked_repos linkback integrity
 * [tskflwctl epic](tskflwctl_epic.md)	 - Work with epics
 * [tskflwctl init](tskflwctl_init.md)	 - Scaffold a planning tree here, or point at an external planning repo
-* [tskflwctl lint](tskflwctl_lint.md)	 - Validate active task, epic, and research frontmatter (--fix repairs tasks/audits and assigns missing ids)
+* [tskflwctl lint](tskflwctl_lint.md)	 - Validate active task, epic, and research frontmatter (--fix repairs tasks/audits/research and assigns missing ids)
 * [tskflwctl research](tskflwctl_research.md)	 - Work with research docs
 * [tskflwctl schema](tskflwctl_schema.md)	 - Describe the tool's contract + per-kind authoring guidance (for agents)
 * [tskflwctl status](tskflwctl_status.md)	 - At-a-glance project dashboard (counts, in-progress, epic progress)

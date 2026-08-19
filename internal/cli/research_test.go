@@ -359,3 +359,57 @@ func TestResearchSet_InputGuards(t *testing.T) {
 		})
 	}
 }
+
+// An agent must be able to DISCOVER research's field set from the contract instead of
+// triggering an error and parsing prose — the reason epic_fields was added when `epic set`
+// landed. research_fields shipped missing for two releases.
+func TestSchema_ExposesResearchFields(t *testing.T) {
+	js := runRoot(t, "schema", "--json")
+	var c struct {
+		ResearchFields []struct{ Name, Type string } `json:"research_fields"`
+		TaskFields     []struct{ Name, Type string } `json:"task_fields"`
+	}
+	if err := json.Unmarshal([]byte(js), &c); err != nil {
+		t.Fatalf("invalid schema --json: %v", err)
+	}
+	if len(c.ResearchFields) == 0 {
+		t.Fatal("schema --json must expose research_fields")
+	}
+	got := map[string]string{}
+	for _, f := range c.ResearchFields {
+		got[f.Name] = f.Type
+	}
+	// Types matter: an agent writing `--set tags=a,b` needs to know it's a list.
+	for name, typ := range map[string]string{"created": "date", "description": "string", "tags": "list", "updated_at": "date"} {
+		if got[name] != typ {
+			t.Errorf("research_fields[%s] = %q, want %q", name, got[name], typ)
+		}
+	}
+	// Same inclusion rule as task_fields: storage machinery stays out.
+	for _, absent := range []string{"id", "schema"} {
+		if _, ok := got[absent]; ok {
+			t.Errorf("research_fields must not carry %q (task_fields doesn't either)", absent)
+		}
+	}
+}
+
+// The unknown-field error is the other half of discovery, and it must name only fields the
+// write path will accept — previously it listed created/id/schema/updated_at, all refused.
+func TestResearchSet_UnknownFieldErrorListsOnlySettable(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "research", "new", "Doc")
+
+	out, err := runRootRC(t, "-C", root, "research", "set", "doc", "--set", "tier=2")
+	if err == nil {
+		t.Fatal("an unknown field must be rejected without --force")
+	}
+	msg := err.Error() + out
+	if !strings.Contains(msg, "settable: description, tags") {
+		t.Errorf("want only the settable fields advertised, got: %s", msg)
+	}
+	for _, protected := range []string{"created", "updated_at", "schema"} {
+		if strings.Contains(msg, protected+",") || strings.Contains(msg, ", "+protected) {
+			t.Errorf("error advertises protected field %q, which set refuses: %s", protected, msg)
+		}
+	}
+}

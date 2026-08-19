@@ -50,10 +50,16 @@ preserved unknown key. Decide: strip it in a cleanup pass, or formally declare i
 is option C above and reopens ADR-0001). Leaving it indefinitely is also a choice — it is
 currently harmless but it *looks* like a field the tool honors, which is misleading.
 
-### 3. `description` is empty across the whole migrated corpus
+### 3. ~~`description` is empty across the whole migrated corpus~~ — RESOLVED 2026-08-19
 
-Unrecoverable at migration time, so all 28 docs show `—` in `research list`. Options:
-derive from each H1, hand-write them, or accept the gap. Wants
+Backfilled by hand via `research set --description`, each written from the doc's H1 and
+opening prose rather than paraphrasing its slug. `research list` now shows a real summary
+for every doc (0 of 30 missing, including two authored since). Nothing left to decide here;
+kept for the record because it was one of the three questions this task was opened on.
+
+The original framing, for context: unrecoverable at migration time, so all 28 docs showed
+`—` in `research list`. Options were to derive from each H1, hand-write them, or accept the
+gap. It wanted
 [research-mutation-verbs-research-set-edit-append](6g048wqgamte-research-mutation-verbs-research-set-edit-append.md) first, for a scriptable way to backfill.
 
 ## Acceptance criteria

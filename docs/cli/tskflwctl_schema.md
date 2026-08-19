@@ -20,7 +20,7 @@ envelopes so an agent can validate the tool's output. Everything is derived
 from the tool's own types and data.
 
 ```
-tskflwctl schema [task|epic|audit] [flags]
+tskflwctl schema [task|epic|audit|research] [flags]
 ```
 
 ### Examples

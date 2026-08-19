@@ -13,7 +13,7 @@ func newLintCmd(app *App) *cobra.Command {
 	var fix, links bool
 	cmd := &cobra.Command{
 		Use:     "lint",
-		Short:   "Validate active task, epic, and research frontmatter (--fix repairs tasks/audits and assigns missing ids)",
+		Short:   "Validate active task, epic, and research frontmatter (--fix repairs tasks/audits/research and assigns missing ids)",
 		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --links\n  tskflwctl lint --json",
 		Args:    cobra.NoArgs,
 		// Read-only by default; --fix opts into mutation explicitly.
@@ -25,7 +25,7 @@ func newLintCmd(app *App) *cobra.Command {
 			return runLint(app, links)
 		},
 	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter: quote ':' values, normalize lists, backfill missing task/audit ids; epics are text-only")
+	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter: quote ':' values, normalize lists, backfill missing task/audit/research ids; epics are text-only")
 	cmd.Flags().BoolVar(&links, "links", false, "also check body cross-links: flag any [..](path.md) whose target file is missing (opt-in — a tree can carry pre-existing danglers)")
 	return cmd
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// FixFrontmatter walks every task, epic, and audit file and applies safe repairs:
+// FixFrontmatter walks every task, epic, audit, and research file and applies safe repairs:
 // text-level frontmatter normalization (quote unquoted-colon values, normalize
 // list fields) and — for tasks and audits — backfilling a missing stable id from
 // the id that already leads the flat filename (ADR-0003 §4), so the frontmatter
