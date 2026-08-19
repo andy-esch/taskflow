@@ -32,8 +32,8 @@ func newVersionCmd(app *App) *cobra.Command {
 		Short:       "Print the tskflwctl version",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
-		// Works anywhere — no planning repo needed; just set up styling.
-		PersistentPreRunE: func(*cobra.Command, []string) error { app.setStyle(); return nil },
+		// Works anywhere — no planning repo needed; styling + its warnings only.
+		PersistentPreRunE: app.styleOnlyPreRun,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if app.JSON {
 				return render.VersionJSON(app.Out, versionString())

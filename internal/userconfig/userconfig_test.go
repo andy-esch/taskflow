@@ -3,6 +3,7 @@ package userconfig
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -38,6 +39,31 @@ func TestDir_Precedence(t *testing.T) {
 		want := filepath.Join("/xdg", AppDir)
 		if err != nil || got != want {
 			t.Errorf("Dir() = %q, %v; want %q", got, err, want)
+		}
+	})
+	t.Run("relative DirEnv is made absolute", func(t *testing.T) {
+		t.Setenv(DirEnv, "relcfg")
+		got, err := Dir()
+		if err != nil {
+			t.Fatalf("Dir: %v", err)
+		}
+		if !filepath.IsAbs(got) {
+			t.Errorf("Dir() = %q, want an absolute path — a cwd-relative config dir makes the same environment behave differently per directory", got)
+		}
+		wd, _ := os.Getwd()
+		if want := filepath.Join(wd, "relcfg"); got != want {
+			t.Errorf("Dir() = %q, want %q", got, want)
+		}
+	})
+	t.Run("relative XDG_CONFIG_HOME is IGNORED per the XDG spec", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv(DirEnv, "")
+		t.Setenv("XDG_CONFIG_HOME", "relxdg")
+		t.Setenv("HOME", home)
+		got, err := Dir()
+		want := filepath.Join(home, ".config", AppDir)
+		if err != nil || got != want {
+			t.Errorf("Dir() = %q, %v; want the ~/.config fallback %q (the spec says a non-absolute XDG_CONFIG_HOME must be ignored, not repaired)", got, err, want)
 		}
 	})
 	t.Run("~/.config fallback", func(t *testing.T) {
@@ -131,5 +157,80 @@ func TestLoad_Malformed(t *testing.T) {
 	}
 	if cfg.Theme.Name != "" || cfg.Pager.Enabled != nil {
 		t.Errorf("malformed file should degrade to the zero config, got %+v", cfg)
+	}
+}
+
+// TestLoad_NoHomeDirIsSilent pins the M1 contract: an unresolvable home directory
+// (minimal containers, daemons, some CI) is not a problem worth reporting — there is
+// no preferences file to miss, so the empty config is the complete answer. Reporting
+// it would put a ⚠ on every command in those environments, which the user cannot act
+// on. A file that EXISTS but is broken still errors (TestLoad_Malformed).
+func TestLoad_NoHomeDirIsSilent(t *testing.T) {
+	t.Setenv(DirEnv, "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", "")
+	if _, err := Dir(); err == nil {
+		t.Skip("this platform still resolves a home dir without $HOME; nothing to assert")
+	}
+	cfg, err := Load()
+	if err != nil {
+		t.Errorf("an unresolvable home dir must degrade silently, got error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("Load must never return a nil config")
+	}
+	if cfg.Path != "" || cfg.Theme.Name != "" {
+		t.Errorf("want the zero config, got %+v", cfg)
+	}
+}
+
+// TestLoad_BrokenSymlinkIsReported separates the two things ENOENT can mean. A
+// missing file is silence; a symlink whose target is gone is a real problem for this
+// audience specifically — people who commit their config typically symlink it out of
+// a dotfiles repo that may not be mounted, and silence there looks like "my settings
+// stopped working for no reason".
+func TestLoad_BrokenSymlinkIsReported(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, FileName)
+	if err := os.Symlink(filepath.Join(dir, "nowhere", "config.toml"), link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	t.Setenv(DirEnv, dir)
+
+	cfg, err := Load()
+	if err == nil {
+		t.Fatal("a dangling config symlink must be reported, not treated as an absent file")
+	}
+	if !strings.Contains(err.Error(), "broken symlink") {
+		t.Errorf("error should name the cause, got %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("Load must never return a nil config, even on error")
+	}
+}
+
+// TestGuardTestIsolation_FiresWithoutIsolation pins the M5 fix: pinning DirEnv in one
+// package's TestMain protects only that package, so the real-home fallback refuses to
+// run under `go test` at all. Without this, a future package that reaches userconfig
+// would silently read the developer's own ~/.config and pass locally while behaving
+// differently elsewhere — a failure with no symptom.
+func TestGuardTestIsolation_FiresWithoutIsolation(t *testing.T) {
+	t.Setenv(DirEnv, "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	// HOME deliberately NOT touched: this is exactly what an unisolated package looks
+	// like from in here.
+	if os.Getenv("HOME") != startupHome {
+		t.Skip("HOME already differs from process start; the guard cannot be exercised")
+	}
+	if _, err := Dir(); err == nil {
+		t.Fatal("Dir() must refuse the real-home fallback under test")
+	} else if !strings.Contains(err.Error(), DirEnv) {
+		t.Errorf("the error must name the env var that fixes it, got %v", err)
+	}
+	// Load still degrades quietly — a guard failure is a Dir() error like any other,
+	// and Load's contract is that an unresolvable dir yields the empty config.
+	cfg, err := Load()
+	if err != nil || cfg == nil || cfg.Theme.Name != "" {
+		t.Errorf("Load should stay silent and empty, got cfg=%+v err=%v", cfg, err)
 	}
 }

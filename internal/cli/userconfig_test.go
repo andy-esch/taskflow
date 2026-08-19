@@ -79,3 +79,56 @@ func TestUserConfig_AbsentIsSilent(t *testing.T) {
 		t.Errorf("an absent user config must be silent, got %q", out.String())
 	}
 }
+
+// TestUserConfig_SilentOnCompletionPath pins the M2 fix. Completion output is
+// consumed by the shell, so a stray ⚠ is noise at best and corrupts the display at
+// worst — the same rule warnUnknownTheme already followed and the user-config warning
+// originally ignored.
+func TestUserConfig_SilentOnCompletionPath(t *testing.T) {
+	homeConfig(t, "[theme\nname = ") // malformed: would warn on a normal run
+
+	var out, errOut bytes.Buffer
+	cmd := NewRootCmd(strings.NewReader(""), &out, &errOut)
+	cmd.SetArgs([]string{"__complete", "task", ""})
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("completion must not fail: %v", err)
+	}
+	if strings.Contains(errOut.String(), "ignoring user config") {
+		t.Errorf("no warning may reach the completion path, got:\n%s", errOut.String())
+	}
+}
+
+// TestWarnPresentation_ReachesStyleOnlyCommands pins the L2 fix. version / init /
+// schema / doctor / theme each override PersistentPreRunE to run without a planning
+// repo; before the shared seam, all but `theme` silently dropped the theme warning,
+// so an unrecognized name in a user config went unreported on exactly the commands a
+// new user runs first.
+func TestWarnPresentation_ReachesStyleOnlyCommands(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, userconfig.FileName),
+		[]byte("[theme]\nname = \"nope-not-a-theme\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, args := range [][]string{
+		{"version"},
+		{"schema"},
+		{"theme", "list"},
+		{"init", "--dry-run", "--path", filepath.Join(dir, "probe")},
+	} {
+		t.Setenv(userconfig.DirEnv, dir)
+		var out, errOut bytes.Buffer
+		cmd := NewRootCmd(strings.NewReader(""), &out, &errOut)
+		cmd.SetArgs(args)
+		cmd.SetOut(&out)
+		cmd.SetErr(&errOut)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out.String())
+		}
+		if !strings.Contains(errOut.String(), "unknown theme") {
+			t.Errorf("%v: an unrecognized theme must be reported here too, got stderr:\n%s", args, errOut.String())
+		}
+	}
+}

@@ -49,7 +49,11 @@ type App struct {
 	// person, not a repo). Always non-nil after setStyle; the zero value means
 	// "nothing set here" and every field falls through to the tier below.
 	User *userconfig.Config
-	Svc  *core.Service
+	// userCfgErr is deferred, not printed at load time: the warning needs the Style
+	// (built at the end of setStyle) AND must be suppressed on the completion path,
+	// which only the command's own hook knows about. warnPresentation emits it.
+	userCfgErr error
+	Svc        *core.Service
 	// Fixer/Layout/Linter are the narrow fs/text ports that aren't core use cases:
 	// `lint --fix` calls Fixer, the TUI watcher reads Layout, and `lint --links` calls
 	// Linter — none route through the Service (see core.Fixer/core.Layout/core.Linter).
@@ -75,11 +79,8 @@ func (a *App) setStyle() {
 	noInput := a.NoInput || envEnabled("TSKFLW_NO_INPUT")
 	a.Gate = prompt.NewGate(gateOpen(a.JSON, noInput, isTerminalReader(a.In), isTerminal(a.ErrOut)))
 	a.Prompt = prompt.NewTTY(a.In, a.ErrOut, a.Th)
-	// Warned only after the Style exists, so the ⚠ is themed like every other
-	// warning. Never fatal — see userconfig.Load.
-	if userErr != nil {
-		fmt.Fprintf(a.ErrOut, "%s ignoring user config: %v\n", a.Style.Warn("⚠"), userErr)
-	}
+	// Recorded, NOT printed here: see warnPresentation.
+	a.userCfgErr = userErr
 }
 
 // loadUserConfig populates a.User, which is left as an empty (usable) config when
@@ -89,6 +90,37 @@ func (a *App) loadUserConfig() error {
 	uc, err := userconfig.Load()
 	a.User = uc
 	return err
+}
+
+// warnPresentation emits every ⚠ that belongs to the presentation layer, in one
+// place. Two constraints force it to be its own step rather than living in setStyle:
+// the warnings need the Style (built at the end of setStyle) and, for the theme, the
+// repo config that only resolve() discovers; and they must NEVER fire on the shell
+// completion path, which only the command's own hook can tell us about.
+//
+// Every PersistentPreRunE that calls setStyle must call this too. Commands that work
+// outside a planning repo should use styleOnlyPreRun rather than hand-rolling the
+// pair — `init`, `doctor` and `version` each silently dropped the theme warning by
+// hand-rolling it (audit 2026-08-18-multi-space-config-foundation, M2 + L2).
+func (a *App) warnPresentation(cmd *cobra.Command) {
+	// Completion output is consumed by the shell; a stray ⚠ on stderr is noise at
+	// best and corrupts the display at worst. Same rule warnUnknownTheme already had.
+	if cmd != nil && isCompletionCommand(cmd) {
+		return
+	}
+	if a.userCfgErr != nil {
+		fmt.Fprintf(a.ErrOut, "%s ignoring user config: %v\n", a.Style.Warn("⚠"), a.userCfgErr)
+	}
+	a.warnUnknownTheme()
+}
+
+// styleOnlyPreRun is the PersistentPreRunE for commands that must run ANYWHERE, with
+// no planning repo required (`version`, `init`, `schema`): resolve presentation, emit
+// its warnings, skip discovery entirely.
+func (a *App) styleOnlyPreRun(cmd *cobra.Command, _ []string) error {
+	a.setStyle()
+	a.warnPresentation(cmd)
+	return nil
 }
 
 // resolveTheme picks the active color theme by precedence: --theme flag >
@@ -156,7 +188,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 				return err
 			}
 			app.warnLinks()
-			app.warnUnknownTheme()
+			app.warnPresentation(cmd)
 			return nil
 		},
 	}

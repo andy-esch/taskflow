@@ -25,7 +25,7 @@ would be a second consumer of exactly this seam, and would want `Resolve() → W
 per space rather than one CLI-side `resolve()`. See epic
 [29-multi-space-planning-a-home-registry-and-the-atlas](../epics/29-multi-space-planning-a-home-registry-and-the-atlas.md)
 and its sketch
-[2026-08-15-multi-space-home-registry-and-the-atlas](../research/2026-08-15-multi-space-home-registry-and-the-atlas.md).
+[6g0ajre026c6-multi-space-home-registry-and-the-atlas](../research/6g0ajre026c6-multi-space-home-registry-and-the-atlas.md).
 
 **Staying deferred** — epic 29 is an undecided direction, not a commitment, and its
 sequencing deliberately puts the CLI-only slice first so the seam isn't needed until

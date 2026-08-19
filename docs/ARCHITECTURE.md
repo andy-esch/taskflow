@@ -96,9 +96,11 @@ the one-screen orientation for contributors.
   `init`/`doctor`/`completion` skip discovery yet still need a theme. A missing file
   is normal; a malformed one **warns and degrades** rather than failing — the
   deliberate opposite of the repo config, where a bad marker is fatal because guessing
-  there would fork the data. Because `config` never imports this package, home-scope
-  data physically cannot influence planning-root discovery — an invariant the compiler
-  enforces rather than one the reader has to remember.
+  there would fork the data. `config` never imports this package, so home-scope data
+  cannot influence planning-root discovery — a layering rule, kept honest by a
+  `depguard` rule in `.golangci.yml` rather than by memory. (The compiler alone would
+  not catch it: nothing structurally prevents the import, so `just lint` is what makes
+  the claim true.)
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
   `internal/cli` (`root.go`), which it calls.
 

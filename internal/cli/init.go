@@ -33,7 +33,7 @@ func newInitCmd(app *App) *cobra.Command {
 		// elsewhere prompt is TTY-gated (Gate.On()), so a headless agent/pipe never
 		// hangs: with --planning-repo it goes straight to pointer mode, otherwise it
 		// falls back to the full scaffold (today's non-interactive behavior).
-		PersistentPreRunE: func(*cobra.Command, []string) error { app.setStyle(); return nil },
+		PersistentPreRunE: app.styleOnlyPreRun,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			abs, err := filepath.Abs(path)
 			if err != nil {

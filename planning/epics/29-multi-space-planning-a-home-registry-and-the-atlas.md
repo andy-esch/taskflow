@@ -14,7 +14,7 @@ created: "2026-08-15"
 Design-first — naming, schema, and scope are all open.
 
 > **Nothing is decided.** The sketch is
-> [2026-08-15-multi-space-home-registry-and-the-atlas](../research/2026-08-15-multi-space-home-registry-and-the-atlas.md)
+> [6g0ajre026c6-multi-space-home-registry-and-the-atlas](../research/6g0ajre026c6-multi-space-home-registry-and-the-atlas.md)
 > — a directionally-correct direction, not a design. Names (`space`, `atlas`),
 > the config location and schema, the registration policy, and whether the TUI
 > board is built at all are open questions, enumerated at the end of that doc. An
@@ -42,9 +42,11 @@ in a peer product's config.
 
 ## Shape (all provisional)
 
-- A home config at `$XDG_CONFIG_HOME/tskflwctl/config.toml` whose first citizen
-  is a `[[space]]` registry — and which also gives `[theme]`/`[pager]` the
-  user-level tier their own doc comments describe.
+- A home config under `$XDG_CONFIG_HOME/tskflwctl/`, in **two files**: a
+  hand-edited `config.toml` the tool only ever reads (which gives
+  `[theme]`/`[pager]` the user-level tier their own doc comments describe —
+  **shipped**, slice 1), plus a tool-owned `spaces.toml` holding the `[[space]]`
+  registry, rewritten wholesale so no surgical array-of-tables editor is needed.
 - The registry stays **advisory**: nothing in it may change what `Discover`
   resolves from a cwd. No home config ⇒ today's behavior exactly.
 - `init` auto-registers best-effort (warns, never fails — the `LinkBack`

@@ -24,7 +24,14 @@ func newDoctorCmd(app *App) *cobra.Command {
 		// Own PreRunE: resolve the repo but SKIP the root's ambient ⚠ link warning —
 		// doctor reports the same findings on stdout (with an exit code), so the
 		// stderr warning would just duplicate them.
-		PersistentPreRunE: func(*cobra.Command, []string) error { app.setStyle(); return app.resolve() },
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			app.setStyle()
+			err := app.resolve()
+			// After resolve so a repo [theme] participates; the ambient link ⚠ stays
+			// suppressed (this command reports those findings on stdout itself).
+			app.warnPresentation(cmd)
+			return err
+		},
 		RunE: func(_ *cobra.Command, _ []string) error {
 			links := config.CheckLinks(app.Cfg)
 			problems := make([]render.DoctorProblem, len(links))

@@ -31,10 +31,10 @@ func newThemeCmd(app *App) *cobra.Command {
 			"back to your terminal's own palette (so they look the same across themes there).",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
-		PersistentPreRunE: func(*cobra.Command, []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			app.setStyle()
 			_ = app.resolve() // best-effort: pick up [theme] config in a repo; harmless outside one
-			app.warnUnknownTheme()
+			app.warnPresentation(cmd)
 			return nil
 		},
 	}
