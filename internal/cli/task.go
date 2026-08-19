@@ -154,7 +154,7 @@ func newTaskNewCmd(app *App) *cobra.Command {
 				return err
 			}
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "task", t.Slug, string(t.Status), app.rel(t.Path), app.DryRun)
+				return render.CreatedJSON(app.Out, "task", t.Slug, string(t.Status), app.rel(t.Path), app.DryRun, app.workspace())
 			}
 			render.CreatedHuman(app.Out, app.Style, app.linkPath(t.Path), app.DryRun)
 			render.CreatedSlugNote(app.Out, app.Style, p.Title, t.Slug)
@@ -539,7 +539,7 @@ func newTaskSetCmd(app *App) *cobra.Command {
 // caller phrase the action ("updated"/"would update", "appended to"/…).
 func reportTaskMutation(app *App, task domain.Task, body, verb, dryVerb string) error {
 	if app.JSON {
-		return render.TaskMutationJSON(app.Out, task, body, app.DryRun)
+		return render.TaskMutationJSON(app.Out, task, body, app.DryRun, app.workspace())
 	}
 	if app.DryRun {
 		verb = dryVerb
@@ -569,7 +569,7 @@ func newTaskRenameCmd(app *App) *cobra.Command {
 				return err
 			}
 			if app.JSON {
-				return render.TaskMutationJSON(app.Out, task, "", app.DryRun)
+				return render.TaskMutationJSON(app.Out, task, "", app.DryRun, app.workspace())
 			}
 			verb := "renamed to"
 			if app.DryRun {

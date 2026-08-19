@@ -10,6 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [config, cli, multi-repo]
 created: "2026-08-15"
+updated_at: "2026-08-18"
 ---
 # Space registry model and the `space` verbs (list/add/forget)
 
@@ -72,3 +73,18 @@ exactly; deleting the file costs convenience, never data or addressability.
 
 - Epic [29-multi-space-planning-a-home-registry-and-the-atlas](../epics/29-multi-space-planning-a-home-registry-and-the-atlas.md)
 - Sketch: [6g0ajre026c6-multi-space-home-registry-and-the-atlas](../research/6g0ajre026c6-multi-space-home-registry-and-the-atlas.md)
+
+### 2026-08-18 — inherited decision from audit H1
+
+Audit 2026-07-24 H1 (`--expect-root` + `workspace`) shipped and deliberately defined a
+workspace's identity as its **absolute resolved planning root** — enough to prove which
+tree a mutation touched, but it does NOT survive moving the repo.
+
+`space.id` here is the natural home for a **durable** identity if one is wanted: an id
+minted into the planning repo's own `.tskflwctl.toml` at `init`, which a registry entry
+then references instead of matching on path. That would also make `moved` detection
+trivial and honest rather than a heuristic (open fork 6).
+
+Decide it with this task, not separately — the alternative is inventing two identities
+for the same thing. If a durable id is adopted, `wire.WorkspaceJSON` should carry it too
+so the two surfaces agree.

@@ -42,7 +42,7 @@ func runMoves[T any](app *App, slugs []string, status string, move func(slug str
 		results = append(results, res)
 	}
 	if app.JSON {
-		if err := render.MovesJSON(app.Out, results, app.DryRun); err != nil {
+		if err := render.MovesJSON(app.Out, results, app.DryRun, app.workspace()); err != nil {
 			return err
 		}
 	} else {

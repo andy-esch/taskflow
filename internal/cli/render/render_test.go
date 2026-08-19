@@ -8,6 +8,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // decodeStrict pins each JSON envelope's shape: DisallowUnknownFields means a
@@ -456,7 +457,7 @@ func TestMoves_RevisitAtReported(t *testing.T) {
 	}
 
 	var j bytes.Buffer
-	if err := MovesJSON(&j, results, true); err != nil {
+	if err := MovesJSON(&j, results, true, wire.WorkspaceJSON{}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(j.String(), `"revisit_at":"2026-09-01"`) {
@@ -474,7 +475,7 @@ func TestMoves_RevisitAtReported(t *testing.T) {
 func TestFixOutputs(t *testing.T) {
 	results := []domain.FixResult{{Path: "tasks/ready-to-start/a.md", Changes: []string{"tags: normalized to a YAML list"}}}
 	var out bytes.Buffer
-	if err := FixJSON(&out, results, nil, nil, true); err != nil {
+	if err := FixJSON(&out, results, nil, nil, true, wire.WorkspaceJSON{PlanningRoot: "/tmp/p", Source: wire.WorkspaceSourceConfig}); err != nil {
 		t.Fatal(err)
 	}
 	var got struct {
@@ -492,6 +493,9 @@ func TestFixOutputs(t *testing.T) {
 			Slug   string         `json:"slug"`
 			Issues []domain.Issue `json:"issues"`
 		} `json:"remaining"`
+		// Every mutation receipt carries the planning tree it describes, so a caller
+		// can prove which one it changed (audit 2026-07-24, H1).
+		Workspace wire.WorkspaceJSON `json:"workspace"`
 	}
 	decodeStrict(t, out.Bytes(), &got)
 	if !got.DryRun || len(got.Fixed) != 1 {

@@ -1,22 +1,33 @@
-## tskflwctl epic move
+## tskflwctl workspace
 
-Transition epic(s) to <status> (active|retired|deprecated)
+Print the planning tree this directory resolves to
+
+### Synopsis
+
+Print the planning tree a command run from here would read and write.
+
+External-planning routing is deliberately transparent: a repo whose
+.tskflwctl.toml carries a planning_repo resolves into ANOTHER repo, so the
+directory you are standing in is not necessarily the tree you would change.
+This reports the resolved root, the config that selected it, and which
+mechanism won — cheaply, before a mutation rather than after.
 
 ```
-tskflwctl epic move <epic>... <status> [flags]
+tskflwctl workspace [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl epic move 18-tui retired
-  tskflwctl epic move 18-tui 20-cli deprecated --dry-run
+  tskflwctl workspace
+  tskflwctl workspace --json
+  tskflwctl task complete foo --expect-root "$(tskflwctl workspace --json | jq -r .workspace.planning_root)"
 ```
 
 ### Options
 
 ```
-  -h, --help   help for move
+  -h, --help   help for workspace
 ```
 
 ### Options inherited from parent commands
@@ -36,5 +47,5 @@ tskflwctl epic move <epic>... <status> [flags]
 
 ### SEE ALSO
 
-* [tskflwctl epic](tskflwctl_epic.md)	 - Work with epics
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
 

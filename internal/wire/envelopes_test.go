@@ -64,13 +64,15 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"AuditInfoEnvelope", func(w io.Writer) error {
 			return emit(w, ToAuditInfoEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 3, OpenFindings: 1, ActiveFindings: 1, DoneFindings: 1}, "/root/audits/x.md"))
 		}},
-		{"TaskMutationEnvelope", func(w io.Writer) error { return emit(w, ToTaskMutationEnvelope(task, "# new body", true)) }},
-		{"EpicMutationEnvelope", func(w io.Writer) error { return emit(w, ToEpicMutationEnvelope(epic, true)) }},
+		{"TaskMutationEnvelope", func(w io.Writer) error {
+			return emit(w, ToTaskMutationEnvelope(task, "# new body", true, WorkspaceJSON{}))
+		}},
+		{"EpicMutationEnvelope", func(w io.Writer) error { return emit(w, ToEpicMutationEnvelope(epic, true, WorkspaceJSON{})) }},
 		{"CreatedEnvelope", func(w io.Writer) error {
-			return emit(w, ToCreatedEnvelope("task", "alpha", "ready-to-start", "tasks/ready-to-start/alpha.md", false))
+			return emit(w, ToCreatedEnvelope("task", "alpha", "ready-to-start", "tasks/ready-to-start/alpha.md", false, WorkspaceJSON{}))
 		}},
 		{"MovesEnvelope", func(w io.Writer) error {
-			return emit(w, ToMovesEnvelope([]MoveResult{{Slug: "alpha", To: "in-progress"}}, false))
+			return emit(w, ToMovesEnvelope([]MoveResult{{Slug: "alpha", To: "in-progress"}}, false, WorkspaceJSON{}))
 		}},
 		{"SummaryEnvelope", func(w io.Writer) error {
 			return emit(w, ToSummaryEnvelope(core.Summary{
@@ -106,7 +108,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToAuditShowEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, "# body"))
 		}},
 		{"AuditMutationEnvelope", func(w io.Writer) error {
-			return emit(w, ToAuditMutationEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, "# new body", true))
+			return emit(w, ToAuditMutationEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, "# new body", true, WorkspaceJSON{}))
 		}},
 		{"FindingsEnvelope", func(w io.Writer) error {
 			return emit(w, ToFindingsEnvelope([]core.AuditFinding{{
@@ -118,7 +120,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToLintEnvelope([]core.LintResult{{Slug: "alpha", Issues: []domain.Issue{{Field: "epic", Message: "missing"}}}}, nil))
 		}},
 		{"FixEnvelope", func(w io.Writer) error {
-			return emit(w, ToFixEnvelope(nil, nil, nil, false)) // the nil-slice path: must emit [] and validate
+			return emit(w, ToFixEnvelope(nil, nil, nil, false, WorkspaceJSON{})) // the nil-slice path: must emit [] and validate
 		}},
 		{"InitEnvelope", func(w io.Writer) error {
 			return emit(w, NormalizeInitEnvelope(InitEnvelope{Mode: "scaffold", Root: "/root", Created: []string{"tasks"}}))
@@ -153,6 +155,11 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"TemplateShowEnvelope", func(w io.Writer) error {
 			return emit(w, ToTemplateShowEnvelope(TemplateInfo{Kind: "task", Name: "default", Description: "d"}, "# body"))
+		}},
+		{"WorkspaceEnvelope", func(w io.Writer) error {
+			return emit(w, ToWorkspaceEnvelope(WorkspaceJSON{
+				PlanningRoot: "/repo/planning", ConfigPath: "/repo/.tskflwctl.toml", Source: WorkspaceSourcePointer,
+			}))
 		}},
 		{"ErrorEnvelope", func(w io.Writer) error {
 			// Built by cli.WriteError (not a constructor here) — marshal the named type
