@@ -59,11 +59,16 @@ changelog:
   use: github
   sort: asc
   filters:
+    # Anchored patterns must allow a conventional-commit SCOPE. `^chore:` does not match
+    # `chore(planning):` — after `chore` comes `(`, not `:` — and this repo scopes almost
+    # everything, so the unscoped forms silently excluded nothing. v0.16.1's notes carried
+    # a `chore(planning):` planning write-up as a result. `\(.*\)?` keeps both forms
+    # matching, so `docs:` and `docs(cli):` are both dropped.
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
-      - "^ci:"
+      - "^docs(\\(.*\\))?:"
+      - "^test(\\(.*\\))?:"
+      - "^chore(\\(.*\\))?:"
+      - "^ci(\\(.*\\))?:"
 
 release:
   github:
