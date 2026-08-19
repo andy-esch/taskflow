@@ -107,6 +107,7 @@
   "github.com/andy-esch/taskflow/internal/wire.ResearchJSON": "ResearchJSON is the wire DTO for a research doc.",
   "github.com/andy-esch/taskflow/internal/wire.ResearchListEnvelope": "ResearchListEnvelope is `research list --json`.",
   "github.com/andy-esch/taskflow/internal/wire.ResearchMutationEnvelope": "ResearchMutationEnvelope is `research set` / `research append` / `research edit` --json: the reloaded doc, dry_run, and (for a body write) the resulting body — the research counterpart to TaskMutationEnvelope / AuditMutationEnvelope.",
+  "github.com/andy-esch/taskflow/internal/wire.ResearchMutationEnvelope.Workspace": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.\nEvery mutation envelope carries it (1.31); research is not an exception just\nbecause its verbs landed later.",
   "github.com/andy-esch/taskflow/internal/wire.ResearchShowEnvelope": "ResearchShowEnvelope is `research show --json`.",
   "github.com/andy-esch/taskflow/internal/wire.SchemaContract": "SchemaContract is the global machine contract (`tskflwctl schema`): everything an agent needs to drive the tool without parsing --help prose.",
   "github.com/andy-esch/taskflow/internal/wire.SchemaEnvelope": "SchemaEnvelope is `schema --json` (the global contract).",

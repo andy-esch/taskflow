@@ -688,8 +688,8 @@ func ResearchShowHuman(w io.Writer, st Style, r domain.Research, body string) er
 // ResearchMutationJSON writes the result of `research set` / `research append`: the
 // reloaded doc, dry_run (always present — a preview must be distinguishable from a real
 // write), and the resulting body. The research counterpart to TaskMutationJSON.
-func ResearchMutationJSON(w io.Writer, r domain.Research, body string, dryRun bool) error {
-	return wire.EncodeJSON(w, wire.ToResearchMutationEnvelope(r, body, dryRun))
+func ResearchMutationJSON(w io.Writer, r domain.Research, body string, dryRun bool, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToResearchMutationEnvelope(r, body, dryRun, ws))
 }
 
 // ResearchShowJSON writes one research doc plus its body.

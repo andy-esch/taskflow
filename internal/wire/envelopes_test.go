@@ -103,7 +103,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"ResearchMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToResearchMutationEnvelope(
-				domain.Research{ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23", Updated: "2026-08-18"}, "# new body", true))
+				domain.Research{ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23", Updated: "2026-08-18"}, "# new body", true, WorkspaceJSON{}))
 		}},
 		{"AuditsEnvelope", func(w io.Writer) error {
 			return emit(w, ToAuditsEnvelope([]domain.Audit{{Slug: "x", Bucket: domain.AuditOpen, Findings: 1, OpenFindings: 1}}, nil))
@@ -207,5 +207,47 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		if err := sch.Validate(inst); err != nil {
 			t.Errorf("%s output does NOT validate against its own schema:\n%v", tc.def, err)
 		}
+	}
+}
+
+// TestMutationEnvelopes_CarryWorkspace pins the 1.31 contract structurally: a receipt
+// for a WRITE must name the planning tree it wrote to, so a caller can prove which one
+// it changed without a second read (audit 2026-07-24-ai-agent-cli-ergonomics, H1).
+//
+// `dry_run` is the marker for "this is a mutation receipt" — it appears on nothing
+// else, precisely because a preview must be distinguishable from a real write.
+//
+// This is a registry-driven guard rather than one more per-entity assertion because
+// the gap it catches is one of OMISSION. `research set` shipped without a workspace
+// object purely because its verbs were authored before 1.31 existed; it compiled, its
+// tests passed, its envelope was registered, and it had a validation case. Nothing
+// else in the suite could have noticed.
+func TestMutationEnvelopes_CarryWorkspace(t *testing.T) {
+	// InitEnvelope is the one deliberate exemption: `init` CREATES the planning tree,
+	// so there is no resolved workspace while it runs (it skips discovery entirely),
+	// and it already reports the root it made via its own Root/PlanningRepo fields.
+	exempt := map[string]string{
+		"InitEnvelope": "init creates the tree, so there is no resolved workspace; it reports Root itself",
+	}
+
+	rt := reflect.TypeOf(Envelopes())
+	checked := 0
+	for i := range rt.NumField() {
+		et := rt.Field(i).Type
+		if _, isMutation := et.FieldByName("DryRun"); !isMutation {
+			continue
+		}
+		if _, ok := exempt[et.Name()]; ok {
+			continue
+		}
+		checked++
+		if _, ok := et.FieldByName("Workspace"); !ok {
+			t.Errorf("%s carries dry_run (so it is a mutation receipt) but has no Workspace field — "+
+				"every write receipt must name the planning tree it changed; add it, or add a "+
+				"documented exemption here", et.Name())
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no mutation envelopes were checked — the dry_run heuristic has stopped working")
 	}
 }

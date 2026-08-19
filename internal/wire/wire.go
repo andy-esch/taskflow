@@ -131,7 +131,9 @@ import (
 // reloaded doc, and the resulting body for a body write. Research gained the two faces
 // of mutation the other entities have: field-level `set` (agent) and whole-file `edit`
 // (human), plus `append`. `created` is deliberately NOT settable — the stable id is
-// minted from it, so changing one would desync the pair.
+// minted from it, so changing one would desync the pair. Like every other mutation
+// envelope since 1.31, it carries a `workspace` object naming the planning tree the
+// receipt describes.
 const SchemaVersion = "1.33"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single

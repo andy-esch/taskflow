@@ -1160,6 +1160,10 @@
         },
         "body": {
           "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON",
+          "description": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.\nEvery mutation envelope carries it (1.31); research is not an exception just\nbecause its verbs landed later."
         }
       },
       "additionalProperties": false,
@@ -1167,7 +1171,8 @@
       "required": [
         "schema_version",
         "dry_run",
-        "research"
+        "research",
+        "workspace"
       ],
       "description": "ResearchMutationEnvelope is `research set` / `research append` / `research edit` --json: the reloaded doc, dry_run, and (for a body write) the resulting body — the research counterpart to TaskMutationEnvelope / AuditMutationEnvelope."
     },

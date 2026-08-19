@@ -470,13 +470,17 @@ type ResearchMutationEnvelope struct {
 	DryRun        bool         `json:"dry_run"`
 	Research      ResearchJSON `json:"research"`
 	Body          string       `json:"body,omitempty"`
+	// Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.
+	// Every mutation envelope carries it (1.31); research is not an exception just
+	// because its verbs landed later.
+	Workspace WorkspaceJSON `json:"workspace"`
 }
 
 // ToResearchMutationEnvelope builds the research mutation envelope value: the reloaded
 // doc, dry_run (ALWAYS present — a preview must be distinguishable from a real write),
 // and the resulting body when the mutation touched it.
-func ToResearchMutationEnvelope(r domain.Research, body string, dryRun bool) ResearchMutationEnvelope {
-	return ResearchMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Research: ToResearchJSON(r), Body: body}
+func ToResearchMutationEnvelope(r domain.Research, body string, dryRun bool, ws WorkspaceJSON) ResearchMutationEnvelope {
+	return ResearchMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Research: ToResearchJSON(r), Body: body, Workspace: ws}
 }
 
 // AuditMutationEnvelope is `audit append --json`: the reloaded audit, dry_run, and

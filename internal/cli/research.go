@@ -177,7 +177,7 @@ func newResearchAppendCmd(app *App) *cobra.Command {
 // else a styled one-line confirmation. body is "" for a field-only `set`.
 func reportResearchMutation(app *App, r domain.Research, body, verb, dryVerb string) error {
 	if app.JSON {
-		return render.ResearchMutationJSON(app.Out, r, body, app.DryRun)
+		return render.ResearchMutationJSON(app.Out, r, body, app.DryRun, app.workspace())
 	}
 	if app.DryRun {
 		verb = dryVerb
