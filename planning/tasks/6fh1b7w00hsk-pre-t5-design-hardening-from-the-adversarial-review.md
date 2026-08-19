@@ -21,10 +21,6 @@ id: 6fh1b7w00hsk
 
 <why / what — one short paragraph>
 
-## Acceptance criteria
-
-- [ ] <observable outcome>
-
 ## Out of scope
 
 - <explicitly excluded>

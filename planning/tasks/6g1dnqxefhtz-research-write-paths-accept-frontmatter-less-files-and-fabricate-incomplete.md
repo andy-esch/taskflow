@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [store, domain]
 created: "2026-08-18"
-updated_at: "2026-08-18"
+updated_at: "2026-08-19"
 completed_at: "2026-08-18"
 ---
 
@@ -54,13 +54,13 @@ same guarantee: a research doc always carries an id and a representable `created
 
 ## Acceptance criteria
 
-- [ ] `SetResearchFields` and `AppendResearchBody` REFUSE a doc with no frontmatter block,
+- [x] `SetResearchFields` and `AppendResearchBody` REFUSE a doc with no frontmatter block,
       with the same shape-naming error the read path gives — a write must not be more
       permissive than a read.
-- [ ] Refusal is `ErrValidation` (exit 11) and writes nothing.
-- [ ] `LintResearch` uses `ValidateMintableDate` for `created`, so an out-of-range date
+- [x] Refusal is `ErrValidation` (exit 11) and writes nothing.
+- [x] `LintResearch` uses `ValidateMintableDate` for `created`, so an out-of-range date
       introduced by `research edit` is flagged.
-- [ ] Tests for both, including that the file is byte-unchanged after a refusal.
+- [x] Tests for both, including that the file is byte-unchanged after a refusal.
 
 ## Note on scope
 

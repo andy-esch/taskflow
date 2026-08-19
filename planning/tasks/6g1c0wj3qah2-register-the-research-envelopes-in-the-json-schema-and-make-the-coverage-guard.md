@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [wire, contract]
 created: "2026-08-18"
-updated_at: "2026-08-18"
+updated_at: "2026-08-19"
 started_at: "2026-08-18"
 completed_at: "2026-08-18"
 ---
@@ -49,16 +49,16 @@ register it in the first place.
 
 ## Acceptance criteria
 
-- [ ] `ResearchListEnvelope` + `ResearchShowEnvelope` registered in `jsonEnvelopes`, with
+- [x] `ResearchListEnvelope` + `ResearchShowEnvelope` registered in `jsonEnvelopes`, with
       schema descriptions (re-run `internal/tools/schemacomments`).
-- [ ] `research list --json` and `research show --json` output validates against its own
+- [x] `research list --json` and `research show --json` output validates against its own
       `$defs` entry, via a case in the existing table.
-- [ ] **The guard becomes bidirectional**: a test enumerates every `type <X>Envelope
+- [x] **The guard becomes bidirectional**: a test enumerates every `type <X>Envelope
       struct` declared in `internal/wire` (parse the package with `go/ast` rather than
       reflection, which cannot enumerate unreferenced types) and fails if one is absent
       from `jsonEnvelopes`. This is the durable fix — it protects the projects/routines/ADR
       nouns that come next.
-- [ ] Goldens regenerated (`schema_jsonschema.golden` grows the two defs).
+- [x] Goldens regenerated (`schema_jsonschema.golden` grows the two defs).
 
 ## Open question
 

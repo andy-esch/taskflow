@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [testing, core]
 created: "2026-08-18"
-updated_at: "2026-08-18"
+updated_at: "2026-08-19"
 completed_at: "2026-08-18"
 ---
 
@@ -68,13 +68,13 @@ more than they check.
 
 ## Acceptance criteria
 
-- [ ] Research OCC/conflict test at the store layer and a `retryOnConflict` test in core.
-- [ ] A `research edit` test file covering parse-before-accept, reopen-on-error, no-change,
+- [x] Research OCC/conflict test at the store layer and a `retryOnConflict` test in core.
+- [x] A `research edit` test file covering parse-before-accept, reopen-on-error, no-change,
       and success.
-- [ ] A CLI case pinning that `research new` rejects an out-of-range `--created`.
-- [ ] The five weak assertions above fixed, each verified to FAIL against the mutation
+- [x] A CLI case pinning that `research new` rejects an out-of-range `--created`.
+- [x] The five weak assertions above fixed, each verified to FAIL against the mutation
       that previously survived.
-- [ ] Coverage for the unset-path force gate and the three CLI input guards.
+- [x] Coverage for the unset-path force gate and the three CLI input guards.
 
 ## Related
 

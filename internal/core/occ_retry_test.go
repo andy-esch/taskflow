@@ -13,12 +13,14 @@ import (
 // winning. It counts calls so a test can assert how many attempts the retry made.
 type conflictStore struct {
 	nopStore
-	conflicts      int   // number of leading calls that return ErrConflict
-	failErr        error // if non-nil, returned instead of ErrConflict (non-conflict passthrough)
-	setCalls       int
-	bodyCalls      int
-	auditMoveCalls int
-	auditBodyCalls int
+	conflicts         int   // number of leading calls that return ErrConflict
+	failErr           error // if non-nil, returned instead of ErrConflict (non-conflict passthrough)
+	setCalls          int
+	bodyCalls         int
+	auditMoveCalls    int
+	auditBodyCalls    int
+	researchSetCalls  int
+	researchBodyCalls int
 }
 
 func (c *conflictStore) errFor(n int) error {
@@ -46,6 +48,15 @@ func (c *conflictStore) MoveAudit(slug string, _ domain.AuditBucket, _ bool) (do
 func (c *conflictStore) AppendAuditBody(slug, text string, _ time.Time, _ bool) (domain.Audit, string, error) {
 	c.auditBodyCalls++
 	return domain.Audit{Slug: slug}, text, c.errFor(c.auditBodyCalls)
+}
+
+func (c *conflictStore) SetResearchFields(slug string, _ map[string]any, _ bool) (domain.Research, error) {
+	c.researchSetCalls++
+	return domain.Research{Slug: slug}, c.errFor(c.researchSetCalls)
+}
+func (c *conflictStore) AppendResearchBody(slug, text string, _ time.Time, _ bool) (domain.Research, string, error) {
+	c.researchBodyCalls++
+	return domain.Research{Slug: slug}, text, c.errFor(c.researchBodyCalls)
 }
 
 // noopSleep is a WithRetry sleep that returns instantly, so retry tests don't wait.
@@ -145,5 +156,43 @@ func TestRetryBackoff_BoundedAndPanicFree(t *testing.T) {
 		if d := retryBackoff(attempt); d < 0 || d >= capDelay {
 			t.Fatalf("retryBackoff(%d) = %v, want within [0, %v)", attempt, d, capDelay)
 		}
+	}
+}
+
+// Research rides the same entity-agnostic retry helper, so a transient version-CAS loss must
+// heal for `research set` / `research append` exactly as it does for tasks and audits. Added
+// because the research write paths shipped with NO retry coverage at all: unwrapping both
+// retryOnConflict calls in service_research.go left the whole suite green.
+func TestRetry_SetResearchFieldsRetries(t *testing.T) {
+	cs := &conflictStore{conflicts: 2}
+	svc := NewService(cs, WithRetry(4, noopSleep))
+	if _, err := svc.SetResearchFields("r", map[string]any{"description": "d"}, false, false); err != nil {
+		t.Fatalf("SetResearchFields should heal transient conflicts: %v", err)
+	}
+	if cs.researchSetCalls != 3 {
+		t.Errorf("want 3 store calls (1 + 2 retries), got %d", cs.researchSetCalls)
+	}
+}
+
+func TestRetry_AppendResearchBodyRetries(t *testing.T) {
+	cs := &conflictStore{conflicts: 1}
+	svc := NewService(cs, WithRetry(4, noopSleep))
+	if _, _, err := svc.AppendResearchBody("r", "more", false); err != nil {
+		t.Fatalf("AppendResearchBody should heal a transient conflict: %v", err)
+	}
+	if cs.researchBodyCalls != 2 {
+		t.Errorf("want 2 store calls (1 + 1 retry), got %d", cs.researchBodyCalls)
+	}
+}
+
+// A dry run must not retry — it never writes, so a conflict from it is not transient.
+func TestRetry_ResearchDryRunNotRetried(t *testing.T) {
+	cs := &conflictStore{conflicts: 3}
+	svc := NewService(cs, WithRetry(4, noopSleep))
+	if _, err := svc.SetResearchFields("r", map[string]any{"description": "d"}, false, true); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("want the conflict surfaced, got %v", err)
+	}
+	if cs.researchSetCalls != 1 {
+		t.Errorf("a dry run must be attempted once, got %d calls", cs.researchSetCalls)
 	}
 }

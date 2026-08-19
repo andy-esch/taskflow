@@ -21,10 +21,6 @@ completed_at: "2026-07-07"
 
 <why / what — one short paragraph>
 
-## Acceptance criteria
-
-- [ ] <observable outcome>
-
 ## Out of scope
 
 - <explicitly excluded>
