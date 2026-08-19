@@ -1,7 +1,8 @@
 # tskflwctl architecture
 
 A local-first planning CLI over markdown+frontmatter. Design rationale lives in
-`planning/research/2026-06-06-*` and `planning/epics/17-pm-go-cli.md`; this is
+[`planning/research/`](../planning/research/) (`tskflwctl research list` to browse)
+and [`planning/epics/17-pm-go-cli.md`](../planning/epics/17-pm-go-cli.md); this is
 the one-screen orientation for contributors.
 
 ## The rule: CLI/TUI are primary adapters over a shared core; the filesystem is a secondary adapter
@@ -15,11 +16,12 @@ the one-screen orientation for contributors.
 ```
 
 - **`internal/domain`** — entities + invariants (`Task`, `Status`). No fs, no
-  cobra logic (the one pragmatic concession: `Task`/`Epic`/`Audit` carry a `Path`
-  the store stamps, so callers can locate the source file). Frontmatter **is** the
-  authoritative status/bucket (ADR-0003 §4): tasks and audits are stored **flat and
-  id-led** — `tasks/<id>-<slug>.md`, `audits/<id>-<slug>.md` — with no status/bucket
-  directory to mirror or drift against (epics keep `NN-<slug>`). A file whose
+  cobra logic (the one pragmatic concession: `Task`/`Epic`/`Audit`/`Research` carry a
+  `Path` the store stamps, so callers can locate the source file). Frontmatter **is** the
+  authoritative status/bucket (ADR-0003 §4): tasks, audits, and research are stored
+  **flat and id-led** — `tasks/<id>-<slug>.md`, `audits/<id>-<slug>.md`,
+  `research/<id>-<slug>.md` — with no status/bucket directory to mirror or drift against
+  (epics keep `NN-<slug>`; research has no status at all, so nothing to mirror). A file whose
   frontmatter status is missing or unrecognized is **listed but flagged** by `lint`
   (`StatusFellBack`; shown with a `⚠` in `task list`/`show`), never moved or dropped;
   a non-id-led `.md` in a scanned dir is a loud `FileProblem` ("move it to `meta/`")

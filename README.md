@@ -1,7 +1,7 @@
 # taskflow
 
 Home of **`tskflwctl`** — a local-first planning CLI over markdown+frontmatter
-task/epic/audit files. It dogfoods on its own planning under
+task/epic/audit/research files. It dogfoods on its own planning under
 [`planning/`](./planning/).
 
 ## Demos
@@ -81,6 +81,8 @@ echo "$BODY" | tskflwctl task new "Long writeup" --epic <epic-id> --tags x --bod
 tskflwctl epic new "Billing overhaul" --description "Replace legacy pipeline"
 tskflwctl audit new dispatcher          # → audits/<id>-YYYY-MM-DD-dispatcher.md (--date to override)
 tskflwctl audit new auth --template security  # pick a body scaffold (default|security); --template is shell-completable
+tskflwctl research new "Compare theming libs" --tags tui --description "Weighed three libs"
+tskflwctl research new "Storage options" --created 2026-06-24  # backdate: the id is minted from --created
 
 # read
 tskflwctl task list                    # active tasks (--all / --status / --epic / --tag)
@@ -96,6 +98,8 @@ tskflwctl audit info <slug> --json     # token-cheap: path, bucket, findings:{to
 tskflwctl audit path <slug>            # just the absolute file path (like task path)
 tskflwctl audit findings --status open --effort XS,S --json  # query findings across audits
 tskflwctl audit lint                   # validate finding status vocab + missing status + bucket↔state
+tskflwctl research list                # the whole corpus, newest first (--tag to filter)
+tskflwctl research show <slug>         # metadata + body (--section / --frontmatter-only; research path <slug> for the file)
 tskflwctl schema                       # the tool's contract for agents (statuses, fields, codes)
 tskflwctl schema task --json           # how to author a task: sections, fields, conventions
 tskflwctl template list                # body scaffolds `new --template` can use (--kind to filter)
@@ -111,20 +115,30 @@ tskflwctl task ac <slug>                            # numbered acceptance criter
 tskflwctl task start|next|ready|complete|defer|deprecate <slug>...   # defer takes --until <date>
 tskflwctl task defer <slug> --until 2026-09-01      # snooze (revisit_at); on a TTY, prompts for the date
 tskflwctl audit close|reopen|defer <slug>...
+tskflwctl research set <slug> --description "…" --tags a,b   # settable fields only; `schema research` lists them
+tskflwctl research edit|append <slug>                        # same human/agent pair as task edit|append
 
 # hygiene
-tskflwctl lint                         # validate active task frontmatter
+tskflwctl lint                         # validate active task, epic, and research frontmatter
 tskflwctl lint --fix                   # auto-repair frontmatter (quote ':' values, normalize lists, backfill ids)
 ```
 
-Tasks and audits are stored flat and id-led (`tasks/<id>-<slug>.md`,
-`audits/<id>-<slug>.md`); `status:` / `bucket:` is authoritative in frontmatter,
-with no mirror directory. Lifecycle verbs edit that field in place and stamp the
-dates atomically — no file moves (`lint --fix` re-normalizes a hand-edited
-drift). Errors carry semantic exit codes — `10` not-found, `11` validation, `13`
-ambiguous, `14` conflict (e.g. a name already taken).
+Tasks, audits, and research are stored flat and id-led (`tasks/<id>-<slug>.md`,
+`audits/<id>-<slug>.md`, `research/<id>-<slug>.md`); `status:` / `bucket:` is
+authoritative in frontmatter, with no mirror directory. Lifecycle verbs edit that
+field in place and stamp the dates atomically — no file moves (`lint --fix`
+re-normalizes a hand-edited drift). Errors carry semantic exit codes — `10`
+not-found, `11` validation, `13` ambiguous, `14` conflict (e.g. a name already taken).
 
-**Body templates.** Each kind ships named body scaffolds; `task/epic/audit new
+**Research** is the thinnest kind, and the omissions are the point: no status and
+no lifecycle verbs (a later doc supersedes an earlier one — a decision that needs a
+lifecycle is an [ADR](./planning/adrs/)), and no `epic:` field, so provenance is
+ordinary body links rather than a rollup. Its id is minted from `created`, so
+listing by id lists by authorship date; that also makes `created` un-settable.
+See [`ADR-0001`](./planning/adrs/0001-adopt-adrs.md) for the research/ADR boundary
+and `tskflwctl schema research` for the fields.
+
+**Body templates.** Each kind ships named body scaffolds; `<entity> new
 --template <name>` picks one (omit it for `default`). Names are shell-completable
 and an unknown one fails with exit `11` listing what's available. `audit` ships a
 `security` template (threat model + checklist) alongside `default`. `--template` is
