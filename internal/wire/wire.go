@@ -126,7 +126,15 @@ import (
 // capturing the durable one matters most (audit 2026-07-24-ai-agent-cli-ergonomics, H2).
 // CONSUMERS: anything that stored `created.id` as a reference held a slug and must
 // re-read. Epic ids are unchanged — an epic's identity has always been its NN-slug.
-const SchemaVersion = "1.32"
+// 1.33: the `research_mutation` envelope (`research set` / `research append`) added —
+// the research counterpart to `task_mutation`/`audit_mutation`, carrying dry_run, the
+// reloaded doc, and the resulting body for a body write. Research gained the two faces
+// of mutation the other entities have: field-level `set` (agent) and whole-file `edit`
+// (human), plus `append`. `created` is deliberately NOT settable — the stable id is
+// minted from it, so changing one would desync the pair. Like every other mutation
+// envelope since 1.31, it carries a `workspace` object naming the planning tree the
+// receipt describes.
+const SchemaVersion = "1.33"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

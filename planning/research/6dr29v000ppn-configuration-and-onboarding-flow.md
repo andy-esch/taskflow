@@ -2,8 +2,9 @@
 schema: 1
 id: 6dr29v000ppn
 created: "2026-01-03"
-description: ""
+description: Designs the per-project config file and first-run onboarding flow
 tags: []
+updated_at: "2026-08-18"
 ---
 
 # Research: Configuration & Onboarding Flow

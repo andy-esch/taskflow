@@ -2,9 +2,10 @@
 schema: 1
 id: 6ff3hpm004t1
 created: "2026-06-23"
-description: ""
+description: Sprint plan for moving the TUI to charm v2 plus the associated perf wins
 status: reference
 tags: [tui, ux, perf, bubbletea, lipgloss, migration, plan]
+updated_at: "2026-08-18"
 ---
 
 # TUI → charm v2 migration + perf wins — sprint plan

@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g048wqgamte
-status: ready-to-start
+status: completed
 epic: 28-first-class-entities-new-planning-nouns
 description: 'Give research the agent+human mutation faces every other entity has: field-level set, editor-based edit, body append; created stays immutable (the id encodes it).'
 effort: Unknown
@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, core]
 created: "2026-08-14"
+updated_at: "2026-08-18"
+started_at: "2026-08-18"
+completed_at: "2026-08-18"
 ---
 
 # Research mutation verbs — `research set` / `edit` / `append`
@@ -32,15 +35,15 @@ way to backfill them today.
 
 ## Acceptance criteria
 
-- [ ] `research set <slug> --description/--tags` (+ `--set key=value` / `--unset`),
+- [x] `research set <slug> --description/--tags` (+ `--set key=value` / `--unset`),
       surgical: unknown keys, comments, and key order preserved.
-- [ ] `research edit <slug>` — `$EDITOR` on the whole file, parse-before-accept, loops
+- [x] `research edit <slug>` — `$EDITOR` on the whole file, parse-before-accept, loops
       on a broken edit; stamps `updated_at` on a changed save.
-- [ ] `research append <slug>` — body append in one atomic validated write, stamping
+- [x] `research append <slug>` — body append in one atomic validated write, stamping
       `updated_at` (`created` stays immutable — the id is minted from it).
-- [ ] `created` is NOT settable via `set`: the id encodes it, so changing one silently
+- [x] `created` is NOT settable via `set`: the id encodes it, so changing one silently
       desynchronizes them. Reject with `ErrValidation` naming why.
-- [ ] Ports added to `core.ResearchStore`; `--json` mutation envelope mirrors
+- [x] Ports added to `core.ResearchStore`; `--json` mutation envelope mirrors
       `task_mutation` / `audit_mutation`; `schema_version` bumped.
 
 ## Out of scope

@@ -2,9 +2,10 @@
 schema: 1
 id: 6fbj87001f35
 created: "2026-06-12"
-description: ""
+description: Open questions blocking queued tasks, each with options and a recommendation
 status: reference
 tags: [decisions, review, reference]
+updated_at: "2026-08-18"
 ---
 
 # Pending decisions from the 2026-06-12 review

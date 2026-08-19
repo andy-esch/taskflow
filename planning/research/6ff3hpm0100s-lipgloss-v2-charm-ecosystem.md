@@ -2,9 +2,10 @@
 schema: 1
 id: 6ff3hpm0100s
 created: "2026-06-23"
-description: ""
+description: Capture-and-decide on lipgloss v2 and the wider charm ecosystem UI options
 status: reference
 tags: [cli, ux, tui, lipgloss, bubbletea, research, decision]
+updated_at: "2026-08-18"
 ---
 
 # lipgloss v2 / charm-ecosystem UI options — findings & decision

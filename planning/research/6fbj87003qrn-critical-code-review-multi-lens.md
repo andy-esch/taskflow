@@ -2,9 +2,10 @@
 schema: 1
 id: 6fbj87003qrn
 created: "2026-06-12"
-description: ""
+description: Five parallel reviewers, each a different lens, over the CLI codebase
 status: reference
 tags: [review, code-quality, architecture, tui, cli, testing, reference]
+updated_at: "2026-08-18"
 ---
 
 # Critical code review — multi-lens (2026-06-12)

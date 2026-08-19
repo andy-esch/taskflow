@@ -2,7 +2,7 @@
 schema: 1
 id: 6f9menr01t1n
 created: "2026-06-06"
-description: ""
+description: The formal noun-verb command surface the Go CLI was built to (Phase 0.5)
 tags: []
 date: 2026-06-06
 topic: tskflwctl — formal command hierarchy + purpose spec (Phase 0.5)
@@ -11,6 +11,7 @@ status: in-progress
 related_tasks:
   - phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec.md
   - go-cli-foundation-layout-corestorecli-boundary-di-testlint-harness.md
+updated_at: "2026-08-18"
 ---
 
 # tskflwctl command spec (Phase 0.5)

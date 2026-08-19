@@ -2,7 +2,7 @@
 schema: 1
 id: 6f9menr01s85
 created: "2026-06-06"
-description: ""
+description: Projects as optional cross-cutting initiatives, orthogonal to an epic's domain home
 tags: []
 date: 2026-06-06
 topic: Projects as first-class cross-cutting initiatives
@@ -11,6 +11,7 @@ status: in-progress
 related_tasks:
   - tighten-pm-cli-ergonomics.md
   - phase-0.5-formal-tskflwctl-command-hierarchy-purpose-spec.md
+updated_at: "2026-08-18"
 ---
 
 # Projects: optional, cross-cutting initiatives

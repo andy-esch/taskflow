@@ -119,3 +119,85 @@ func (s *Service) ShowResearch(slug string) (domain.Research, string, error) {
 func (s *Service) ResearchPath(slug string) (string, error) {
 	return s.store.ResolveResearchPath(slug)
 }
+
+// SetResearchFields updates frontmatter fields on a research doc (`research set`) — the
+// agent face of mutation, beside the human EditResearch. updated_at is stamped here so
+// every adapter gets it. force accepts a key the tool doesn't know (mirroring task/epic
+// set), which is how the legacy corpus's vestigial `status: reference` stays reachable.
+//
+// Protected fields are rejected with the reason from the domain, so the CLI, a future
+// TUI action, and any other adapter all explain the refusal identically.
+func (s *Service) SetResearchFields(slug string, updates map[string]any, force, dryRun bool) (domain.Research, error) {
+	if len(updates) == 0 {
+		return domain.Research{}, fmt.Errorf("%w: no fields given", domain.ErrValidation)
+	}
+	clean := make(map[string]any, len(updates)+1)
+	for field, val := range updates {
+		if reason, protected := domain.ProtectedResearchField(field); protected {
+			return domain.Research{}, fmt.Errorf("%w: %s cannot be set — %s", domain.ErrValidation, field, reason)
+		}
+		if _, unset := val.(domain.UnsetField); unset {
+			// A typo'd key must not silently no-op — gate unset on the registry too,
+			// mirroring the set path (and the task/epic contract).
+			if !force && !domain.KnownResearchField(field) {
+				return domain.Research{}, unknownResearchFieldErr(field)
+			}
+			clean[field] = val
+			continue
+		}
+		if !force && !domain.KnownResearchField(field) {
+			return domain.Research{}, unknownResearchFieldErr(field)
+		}
+		coerced := coerceResearchField(field, val)
+		if err := domain.ValidateResearchField(field, stringify(coerced)); err != nil {
+			return domain.Research{}, err
+		}
+		clean[field] = coerced
+	}
+	clean["updated_at"] = s.now().Format("2006-01-02")
+	return retryOnConflict(s, dryRun, func() (domain.Research, error) {
+		return s.store.SetResearchFields(slug, clean, dryRun)
+	})
+}
+
+// coerceResearchField turns a string `--set key=value` into the field's native YAML
+// type. Only `tags` is a list; everything else stays a scalar. A value that already
+// arrived typed (from a typed flag) passes through.
+func coerceResearchField(field string, val any) any {
+	str, isStr := val.(string)
+	if !isStr {
+		return val
+	}
+	if domain.IsResearchListField(field) {
+		return splitList(str)
+	}
+	return str
+}
+
+func unknownResearchFieldErr(field string) error {
+	return fmt.Errorf("%w: unknown research field %q (known: %s) — use --force to set it anyway",
+		domain.ErrValidation, field, strings.Join(domain.KnownResearchFieldNames(), ", "))
+}
+
+// EditResearch opens a research doc for whole-file editing — the human face of mutation,
+// complementing the agent-facing `research set`/`research append`. The store accepts the
+// save only if it still parses. Returns the reloaded doc and whether anything changed.
+func (s *Service) EditResearch(slug string, edit func(current string, prevErr error) (string, error)) (domain.Research, bool, error) {
+	return s.store.EditResearch(slug, s.now(), edit)
+}
+
+// AppendResearchBody appends a section to a research doc's body (`research append`) in
+// one atomic, validated write — the agent face of body editing. Stamps updated_at;
+// `created` stays immutable because the id is minted from it.
+func (s *Service) AppendResearchBody(slug, text string, dryRun bool) (domain.Research, string, error) {
+	now := s.now()
+	type res struct {
+		doc  domain.Research
+		body string
+	}
+	r, err := retryOnConflict(s, dryRun, func() (res, error) {
+		d, b, e := s.store.AppendResearchBody(slug, text, now, dryRun)
+		return res{d, b}, e
+	})
+	return r.doc, r.body, err
+}

@@ -2,8 +2,9 @@
 schema: 1
 id: 6dr29v001vfc
 created: "2026-01-03"
-description: ""
+description: Whole-file rewrite vs block diffs for AI-driven file edits, and the reliability trade-off
 tags: []
+updated_at: "2026-08-18"
 ---
 
 # Research: AI File Editing Strategy (Diffs vs. Direct)

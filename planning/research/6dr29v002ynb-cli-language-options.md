@@ -2,8 +2,9 @@
 schema: 1
 id: 6dr29v002ynb
 created: "2026-01-03"
-description: ""
+description: Language and distribution choice for the CLI; weighs Python startup cost against a Go binary
 tags: []
+updated_at: "2026-08-18"
 ---
 
 # Research: CLI Language & Distribution for TaskFlow

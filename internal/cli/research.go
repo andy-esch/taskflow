@@ -1,20 +1,23 @@
 package cli
 
 import (
+	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/editor"
 )
 
-// The research command surface is deliberately smaller than task/audit: new, list,
-// show, path. There are no lifecycle verbs (research has no status — epic 28) and no
-// `set`, because there are no cross-reference fields to maintain; a research doc is
-// edited as prose, so `research path` + $EDITOR is the edit story for now.
+// The research command surface is deliberately smaller than task/audit: there are no
+// lifecycle verbs, because research has no status (epic 28). It does carry the two faces
+// of mutation every other entity has — agent (`set`, `append`: field/body level,
+// scriptable, atomic) and human (`edit`: $EDITOR on the whole file, re-validated on save).
 func newResearchCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "research", Short: "Work with research docs"}
 	cmd.AddCommand(
@@ -22,8 +25,165 @@ func newResearchCmd(app *App) *cobra.Command {
 		newResearchListCmd(app),
 		newResearchShowCmd(app),
 		newResearchPathCmd(app),
+		newResearchSetCmd(app),
+		newResearchEditCmd(app),
+		newResearchAppendCmd(app),
 	)
 	return cmd
+}
+
+func newResearchSetCmd(app *App) *cobra.Command {
+	var (
+		description         string
+		tags, extra, unsets []string
+		force               bool
+	)
+	cmd := &cobra.Command{
+		Use:   "set <research>",
+		Short: "Set one or more frontmatter fields (validated, single atomic write)",
+		Long: "Update a research doc's frontmatter in one atomic, validated write. Unknown keys,\n" +
+			"comments, and key order are preserved.\n\n" +
+			"`created` cannot be set: the stable id is minted from it, so changing one would\n" +
+			"desync the pair and break the id-order-is-date-order property. Re-dating a doc\n" +
+			"means creating a new one.",
+		Example:           "  tskflwctl research set theming-libs --description \"Weighed three TUI theming libs\"\n  tskflwctl research set theming-libs --tags tui,color",
+		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeResearchSlugs,
+		RunE: func(c *cobra.Command, args []string) error {
+			slug, err := app.resolveOne(args, "specify a research doc to set", "no research docs available", "Research doc to set", app.researchOptions)
+			if err != nil {
+				return err
+			}
+			updates := map[string]any{}
+			if c.Flags().Changed("description") {
+				updates["description"] = description
+			}
+			if c.Flags().Changed("tags") {
+				updates["tags"] = tags
+			}
+			for _, kv := range extra {
+				k, v, ok := strings.Cut(kv, "=")
+				if !ok || k == "" {
+					return fmt.Errorf("%w: --set expects key=value, got %q", domain.ErrValidation, kv)
+				}
+				updates[k] = v
+			}
+			for _, k := range unsets {
+				if _, dup := updates[k]; dup {
+					return fmt.Errorf("%w: %q is both set and unset", domain.ErrValidation, k)
+				}
+				updates[k] = domain.UnsetField{}
+			}
+			r, err := app.Svc.SetResearchFields(slug, updates, force, app.DryRun)
+			if err != nil {
+				return err
+			}
+			return reportResearchMutation(app, r, "", "updated", "would update")
+		},
+	}
+	cmd.Flags().StringVar(&description, "description", "", fmt.Sprintf("one-line description (<=%d chars)", domain.MaxDescriptionLen))
+	cmd.Flags().StringSliceVar(&tags, "tags", nil, "comma-separated tags")
+	cmd.Flags().StringArrayVar(&extra, "set", nil,
+		"key=value (repeatable); known fields are typed+validated, unknown keys need --force")
+	cmd.Flags().StringArrayVar(&unsets, "unset", nil, "remove a frontmatter key (repeatable)")
+	cmd.Flags().BoolVar(&force, "force", false, "allow --set of a field tskflwctl doesn't know")
+	return cmd
+}
+
+func newResearchEditCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "edit <research>",
+		Short: "Open a research doc in your editor (whole file; re-validated on save)",
+		Long: "Open the doc's markdown file in $VISUAL/$EDITOR (falling back to vi). On save the\n" +
+			"file is re-parsed: a frontmatter break reopens the editor with the error rather than\n" +
+			"landing on disk. The human counterpart to `research set` / `research append`.",
+		Example:           "  tskflwctl research edit theming-libs\n  tskflwctl research edit   # pick from a list",
+		Args:              cobra.MaximumNArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeResearchSlugs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			// `edit` is interactive with no preview: reject --dry-run rather than open an
+			// editor whose save is silently discarded.
+			if app.DryRun {
+				return fmt.Errorf("%w: `research edit` has no --dry-run preview (it's interactive) — use `research set --dry-run` or `research append --dry-run`", domain.ErrValidation)
+			}
+			value := ""
+			if len(args) == 1 {
+				value = args[0]
+			}
+			slug, err := app.fillSelect(value, "specify a research doc to edit",
+				"no research docs available to edit", "Research doc to edit", app.researchOptions)
+			if err != nil {
+				return err
+			}
+			if !app.Gate.On() {
+				return fmt.Errorf("%w: `research edit` needs an interactive terminal — use `research set`/`research append` non-interactively", domain.ErrValidation)
+			}
+			r, changed, err := app.Svc.EditResearch(slug, app.editViaEditor(editor.Resolve()))
+			if err != nil {
+				return err
+			}
+			if !changed {
+				fmt.Fprintln(app.Out, app.Style.Dim("no changes to "+r.Slug))
+				return nil
+			}
+			fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), "updated", app.Style.Bold(r.Slug))
+			return nil
+		},
+	}
+}
+
+func newResearchAppendCmd(app *App) *cobra.Command {
+	var body, bodyFile string
+	cmd := &cobra.Command{
+		Use:   "append <research>",
+		Short: "Append a section to a research doc's body (atomic; agent-facing)",
+		Long: "Append markdown to the end of a research doc's body in one atomic, validated write —\n" +
+			"the scriptable counterpart to `research edit`. Content comes from --body, --body-file,\n" +
+			"or stdin (--body-file -); a blank line separates it from the existing body.\n\n" +
+			"Stamps updated_at. `created` stays immutable — the id is minted from it.",
+		Example:           "  tskflwctl research append theming-libs --body \"## Addendum\\n\\nlipgloss v2 shipped.\"\n  cat notes.md | tskflwctl research append theming-libs --body-file -",
+		Args:              cobra.MaximumNArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeResearchSlugs,
+		RunE: func(c *cobra.Command, args []string) error {
+			text, err := resolveBody(c, body, bodyFile)
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(text) == "" {
+				return fmt.Errorf("%w: nothing to append (provide --body, --body-file, or stdin via -)", domain.ErrValidation)
+			}
+			slug, err := app.resolveOne(args, "specify a research doc to append to", "no research docs available", "Research doc to append to", app.researchOptions)
+			if err != nil {
+				return err
+			}
+			r, newBody, err := app.Svc.AppendResearchBody(slug, text, app.DryRun)
+			if err != nil {
+				return err
+			}
+			return reportResearchMutation(app, r, newBody, "appended to", "would append to")
+		},
+	}
+	cmd.Flags().StringVar(&body, "body", "", "markdown to append")
+	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read the markdown to append from a file (or - for stdin)")
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
+	return cmd
+}
+
+// reportResearchMutation writes the standard research-mutation result: the
+// research_mutation JSON envelope (carrying dry_run + the resulting body) under --json,
+// else a styled one-line confirmation. body is "" for a field-only `set`.
+func reportResearchMutation(app *App, r domain.Research, body, verb, dryVerb string) error {
+	if app.JSON {
+		return render.ResearchMutationJSON(app.Out, r, body, app.DryRun, app.workspace())
+	}
+	if app.DryRun {
+		verb = dryVerb
+	}
+	fmt.Fprintf(app.Out, "%s %s %s\n", app.Style.Green("✔"), verb, app.Style.Bold(r.Slug))
+	return nil
 }
 
 func newResearchNewCmd(app *App) *cobra.Command {

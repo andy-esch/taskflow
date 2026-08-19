@@ -2,7 +2,7 @@
 schema: 1
 id: 6fe4my001bdk
 created: "2026-06-20"
-description: ""
+description: Rationale behind adopting ADRs and Projects, with the generic templates for each
 tags: []
 date: "2026-06-20"
 topic: Generic ADR and Project document formats for tskflwctl
@@ -18,6 +18,7 @@ related_adrs:
 related_research:
   - 6f9menr01s85-project-concept-cross-cutting-initiatives.md
   - 6f9menr01t1n-tskflwctl-command-spec.md
+updated_at: "2026-08-18"
 ---
 
 # ADRs & Projects: format design and decision record

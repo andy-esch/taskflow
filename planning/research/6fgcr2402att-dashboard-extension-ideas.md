@@ -2,8 +2,9 @@
 schema: 1
 id: 6fgcr2402att
 created: "2026-06-27"
-description: ""
+description: Pragmatic extensions to the TUI landing dashboard
 tags: []
+updated_at: "2026-08-18"
 ---
 
 # Dashboard extension ideas (research)

@@ -2,7 +2,7 @@
 schema: 1
 id: 6f9menr00j2a
 created: "2026-06-06"
-description: ""
+description: Command hierarchy, Go framework choice, and port strategy for replacing the pm prototype
 tags: []
 date: 2026-06-06
 topic: pm CLI architecture — command hierarchy, Go framework, Python→Go port
@@ -12,6 +12,7 @@ related_tasks:
   - rethink-pm-command-hierarchy-pm-noun-verb-research-cli-best-practices.md
   - port-pm-to-go-cli-parity-with-python-prototype-test-suite-as-spec.md
   - bucket-audits-into-openclosed-and-ship-pm-audit-cli.md
+updated_at: "2026-08-18"
 ---
 
 # pm CLI architecture: command hierarchy, Go framework, and port strategy

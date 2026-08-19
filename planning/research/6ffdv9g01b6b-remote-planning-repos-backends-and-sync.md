@@ -2,9 +2,10 @@
 schema: 1
 id: 6ffdv9g01b6b
 created: "2026-06-24"
-description: ""
+description: Options for remote planning repos, storage backends, and sync beyond the local sibling repo
 status: reference
 tags: [config, storage, sync, remote, concurrency, epic-23]
+updated_at: "2026-08-18"
 ---
 
 # Remote planning repos — backends & sync (epic-23 phase 2)

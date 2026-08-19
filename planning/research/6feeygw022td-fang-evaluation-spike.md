@@ -2,9 +2,10 @@
 schema: 1
 id: 6feeygw022td
 created: "2026-06-21"
-description: ""
+description: Whether to adopt fang for styled help, errors, and manpages; findings and decision
 status: reference
 tags: [cli, ux, fang, spike, decision]
+updated_at: "2026-08-18"
 ---
 
 # Fang evaluation spike — findings & decision

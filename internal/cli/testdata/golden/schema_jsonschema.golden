@@ -1147,6 +1147,35 @@
       ],
       "description": "ResearchListEnvelope is `research list --json`."
     },
+    "ResearchMutationEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "research": {
+          "$ref": "#/$defs/ResearchJSON"
+        },
+        "body": {
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON",
+          "description": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.\nEvery mutation envelope carries it (1.31); research is not an exception just\nbecause its verbs landed later."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "dry_run",
+        "research",
+        "workspace"
+      ],
+      "description": "ResearchMutationEnvelope is `research set` / `research append` / `research edit` --json: the reloaded doc, dry_run, and (for a body write) the resulting body — the research counterpart to TaskMutationEnvelope / AuditMutationEnvelope."
+    },
     "ResearchShowEnvelope": {
       "properties": {
         "schema_version": {
@@ -1888,6 +1917,9 @@
         "research_show": {
           "$ref": "#/$defs/ResearchShowEnvelope"
         },
+        "research_mutation": {
+          "$ref": "#/$defs/ResearchMutationEnvelope"
+        },
         "fix": {
           "$ref": "#/$defs/FixEnvelope"
         },
@@ -1947,6 +1979,7 @@
         "findings",
         "research_list",
         "research_show",
+        "research_mutation",
         "fix",
         "lint",
         "init",
@@ -1961,6 +1994,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.32)",
+  "title": "tskflwctl --json output (schema_version 1.33)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

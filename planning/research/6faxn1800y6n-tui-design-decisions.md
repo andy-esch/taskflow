@@ -2,9 +2,10 @@
 schema: 1
 id: 6faxn1800y6n
 created: "2026-06-10"
-description: ""
+description: Distilled TUI decisions and build reference from k9s/lazygit/gh-dash plus Bubble Tea patterns
 status: reference
 tags: [tui, bubble-tea, ux, reference]
+updated_at: "2026-08-18"
 ---
 
 # TUI design decisions & build reference

@@ -2,8 +2,9 @@
 schema: 1
 id: 6dr29v001r9w
 created: "2026-01-03"
-description: ""
+description: How the tool should index, generate, and enhance a project's docs/
 tags: []
+updated_at: "2026-08-18"
 ---
 
 # Research: TaskFlow's Role in Documentation
