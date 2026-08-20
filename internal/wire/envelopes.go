@@ -325,6 +325,63 @@ type ThemeEntry struct {
 	Default bool   `json:"default"` // the built-in default
 }
 
+// SpaceEntry is one registered planning repo in `space list --json`.
+//
+// ID and VerifyID answer different questions and neither substitutes for the other: ID is
+// the LOCAL label that addresses this checkout (what `--space` takes), VerifyID is the
+// target repo's DURABLE id, which every worktree of that repo shares. State is the
+// resolved health of the entry — see the space diagnosis work.
+type SpaceEntry struct {
+	ID       string `json:"id"`
+	Path     string `json:"path"`
+	VerifyID string `json:"verify_id,omitempty"`
+	Label    string `json:"label,omitempty"`
+	Added    string `json:"added,omitempty"`
+	State    string `json:"state" jsonschema:"description=ok|missing|not-a-repo|unreadable"`
+	// Root is where the entry resolves to, present only when State is ok. It is the
+	// PLANNING root, which for a pointer repo is in a different repo than Path.
+	Root string `json:"root,omitempty"`
+	// Detail explains a non-ok State in one line, so a caller need not re-derive it.
+	Detail string `json:"detail,omitempty"`
+}
+
+// Space entry states. `ok` is the only one that carries a Root.
+const (
+	SpaceStateOK         = "ok"
+	SpaceStateMissing    = "missing"
+	SpaceStateNotARepo   = "not-a-repo"
+	SpaceStateUnreadable = "unreadable"
+)
+
+// SpacesEnvelope is `space list --json`.
+type SpacesEnvelope struct {
+	SchemaVersion string       `json:"schema_version"`
+	Spaces        []SpaceEntry `json:"spaces"`
+}
+
+// ToSpacesEnvelope builds the `space list --json` envelope value. A nil slice normalizes
+// to an empty array so the output validates against its own schema (type: array).
+func ToSpacesEnvelope(spaces []SpaceEntry) SpacesEnvelope {
+	if spaces == nil {
+		spaces = []SpaceEntry{}
+	}
+	return SpacesEnvelope{SchemaVersion: SchemaVersion, Spaces: spaces}
+}
+
+// SpaceMutationEnvelope is `space add` / `space forget --json`: what changed, and the
+// entry it concerned.
+type SpaceMutationEnvelope struct {
+	SchemaVersion string     `json:"schema_version"`
+	DryRun        bool       `json:"dry_run"`
+	Changed       bool       `json:"changed" jsonschema:"description=false when the call was a no-op (already registered / not found)"`
+	Space         SpaceEntry `json:"space"`
+}
+
+// ToSpaceMutationEnvelope builds the `space add`/`forget` envelope value.
+func ToSpaceMutationEnvelope(s SpaceEntry, changed, dryRun bool) SpaceMutationEnvelope {
+	return SpaceMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Changed: changed, Space: s}
+}
+
 // ThemesEnvelope is `theme list --json`.
 type ThemesEnvelope struct {
 	SchemaVersion string       `json:"schema_version"`
@@ -729,6 +786,8 @@ type jsonEnvelopes struct {
 	Summary       SummaryEnvelope          `json:"summary"`
 	Version       VersionEnvelope          `json:"version"`
 	Workspace     WorkspaceEnvelope        `json:"workspace"`
+	Spaces        SpacesEnvelope           `json:"spaces"`
+	SpaceMutation SpaceMutationEnvelope    `json:"space_mutation"`
 	Created       CreatedEnvelope          `json:"created"`
 	Epics         EpicsEnvelope            `json:"epics"`
 	EpicShow      EpicShowEnvelope         `json:"epic_show"`

@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/testutil"
+	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 // complete runs the hidden __complete driver in-process and returns the
@@ -118,6 +120,37 @@ func TestComplete_OutsideRepo_Quiet(t *testing.T) {
 	got := complete(t, "-C", bare, "task", "show", "")
 	if len(got) != 0 {
 		t.Errorf("expected no candidates outside a repo, got %v", got)
+	}
+}
+
+// TestComplete_SpaceIDsOutsideRepo pins that registry labels are shell-addressable even
+// when cwd has no planning tree. Prefix filtering and malformed-registry tolerance both
+// stay independent of repo discovery.
+func TestComplete_SpaceIDsOutsideRepo(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(userconfig.DirEnv, dir)
+	for _, s := range []userconfig.Space{
+		{ID: "taskflow", Path: t.TempDir()},
+		{ID: "desirelines", Path: t.TempDir()},
+	} {
+		if _, _, err := userconfig.AddSpace(s, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bare := t.TempDir()
+	if got := complete(t, "-C", bare, "space", "forget", "ta"); !has(got, "taskflow") || has(got, "desirelines") {
+		t.Errorf("space completion should prefix-filter registry ids outside a repo: %v", got)
+	}
+
+	path, err := userconfig.SpacesPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("[[space]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := complete(t, "-C", bare, "space", "forget", ""); len(got) != 0 {
+		t.Errorf("malformed registry should degrade completion to silence, got %v", got)
 	}
 }
 
