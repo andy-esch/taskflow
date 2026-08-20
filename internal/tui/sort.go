@@ -27,6 +27,10 @@ var (
 	taskSortCols  = []sortKey{sortDefault, sortPriority, sortUpdated, sortTier, sortSlug}
 	epicSortCols  = []sortKey{sortDefault, sortPriority, sortSlug}
 	auditSortCols = []sortKey{sortDefault, sortUpdated, sortSlug}
+	// Research: created (the loader default) → updated → slug. No priority/tier, and
+	// deliberately no separate "created" key — sortDefault already IS created-descending,
+	// so one would reorder nothing while showing a sort chip.
+	researchSortCols = []sortKey{sortDefault, sortUpdated, sortSlug}
 )
 
 // sortArrow shows the column's *actual* direction (not just default-vs-reversed):

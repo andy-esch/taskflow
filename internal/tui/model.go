@@ -1,7 +1,7 @@
 // Package tui is the second primary adapter: an interactive Bubble Tea front-end
 // over the same core.Service the CLI uses. It never touches the store/fs — every
 // read runs as a tea.Cmd against the service (commands.go), so Update and View
-// stay I/O-free. Entities (tasks/epics/audits) are declared in a registry
+// stay I/O-free. Entities (tasks/epics/audits/research) are declared in a registry
 // (entity.go); the lists live-reload via fsnotify (watch.go). See
 // docs/ARCHITECTURE.md for the subsystem map.
 package tui
@@ -27,7 +27,7 @@ const (
 	focusDetail
 )
 
-// Model is the root TUI model: a multi-entity browser (tasks/epics/audits) over
+// Model is the root TUI model: a multi-entity browser (tasks/epics/audits/research) over
 // the core service. A tab strip + `:` command-jump switch the active entity; each
 // entity keeps its own list (and cursor). The right pane shows the selection's
 // detail.
@@ -966,7 +966,7 @@ func (m Model) yank(text, label string) (tea.Model, tea.Cmd) {
 // path as editing it in another terminal, which the fsnotify watcher already
 // handles — and reloads on return (via editorClosedMsg) so the change shows at
 // once, instant even when the watcher is off (the debounce coalesces the
-// duplicate fs event). It works on any entity (tasks/epics/audits) and from
+// duplicate fs event). It works on any entity (tasks/epics/audits/research) and from
 // either pane, since it acts on the selected row's path.
 func (m Model) openInEditor() (tea.Model, tea.Cmd) {
 	path := m.selectedPath()

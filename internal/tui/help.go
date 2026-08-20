@@ -130,7 +130,7 @@ func symbolsFor(kind entityKind, s *styles) (helpSection, bool) {
 }
 
 // notesFor builds the context Notes for the ACTIVE entity — only that tab's view
-// vocabulary (tasks and audits each have a view axis; epics don't), plus the
+// vocabulary (tasks and audits each have a view axis; epics and research don't), plus the
 // generic find note. So the epics/tasks tabs never advertise audit views, and the
 // audits tab never shows task views (the `?` panel is page-specific, like the keys).
 func notesFor(kind entityKind) helpSection {

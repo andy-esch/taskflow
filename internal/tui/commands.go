@@ -252,3 +252,31 @@ func sortByRevisitDate(tasks []domain.Task) {
 		return tasks[i].RevisitAt < tasks[j].RevisitAt
 	})
 }
+
+// loadResearchList loads the whole corpus. Unlike tasks/audits there is no view axis to
+// snapshot — research has no status, so there is no working-set-vs-all distinction and
+// `s`/`S` are inert on this tab. Order is the service's: newest first, slug-tiebroken.
+func loadResearchList(t *entityTab, svc *core.Service) tea.Cmd {
+	gen := t.loadGen
+	return func() tea.Msg {
+		docs, problems, err := svc.ListResearch("")
+		if err != nil {
+			return errMsg{kind: entityResearch, gen: gen, err: err}
+		}
+		items := make([]list.Item, 0, len(docs))
+		for _, r := range docs {
+			items = append(items, researchItem{r: r})
+		}
+		return listLoadedMsg{kind: entityResearch, gen: gen, items: items, problems: problems}
+	}
+}
+
+func loadResearchDetail(svc *core.Service, id string) tea.Cmd {
+	return func() tea.Msg {
+		r, body, err := svc.ShowResearch(id)
+		if err != nil {
+			return detailErrMsg{kind: entityResearch, id: id, err: err}
+		}
+		return detailMsg{kind: entityResearch, id: id, content: researchDetail{r: r, body: body}}
+	}
+}

@@ -223,3 +223,54 @@ func (d auditDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	}
 	row(w, m, index, line, st)
 }
+
+// researchItem is one row of the research tab. Research has no lifecycle, so unlike
+// task/audit items it exposes no lifecycleState — the `m` action menu is inert here,
+// which the model already handles by checking len(transitions) before opening it.
+type researchItem struct {
+	r domain.Research
+}
+
+// FilterValue spans slug, description, and tags: the corpus is browsed by topic, so `/`
+// has to reach a doc by what it's ABOUT, not just what the file is called.
+func (i researchItem) FilterValue() string {
+	return i.r.Slug + " " + i.r.Description + " " + strings.Join(i.r.Tags, " ")
+}
+func (i researchItem) id() string   { return i.r.Slug }
+func (i researchItem) path() string { return i.r.Path }
+
+func (i researchItem) sortFields() sortFields {
+	// Research sorts by created (the loader's default order), updated, and slug — no
+	// priority/tier, and no status axis. `updated` falls back to created for a doc never
+	// edited, matching the CLI's `updated` column, so a fresh doc never sinks to the
+	// bottom of the updated sort.
+	updated := i.r.Updated
+	if updated == "" {
+		updated = i.r.Created
+	}
+	return sortFields{updated: updated, slug: i.r.Slug}
+}
+
+// researchDelegate renders one research row: the created date as the organizing column
+// (research has no status glyph or progress bar — nothing to show), then the slug and a
+// dim description. Deliberately the plainest row in the TUI; the entity is a snapshot
+// list, not a work board.
+type researchDelegate struct{ st *styles }
+
+func (researchDelegate) Height() int                         { return 1 }
+func (researchDelegate) Spacing() int                        { return 0 }
+func (researchDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
+
+func (d researchDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	it, ok := item.(researchItem)
+	if !ok {
+		return
+	}
+	st := d.st
+	desc := it.r.Description
+	if desc == "" {
+		desc = "—" // a doc with no summary: show the gap rather than a ragged blank
+	}
+	line := fmt.Sprintf("%s  %s  %s", st.dim(it.r.Created), it.r.Slug, st.dim(desc))
+	row(w, m, index, line, st)
+}
