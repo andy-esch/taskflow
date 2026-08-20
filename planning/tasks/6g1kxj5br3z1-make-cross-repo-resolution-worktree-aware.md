@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1kxj5br3z1
-status: in-progress
+status: completed
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
 description: Worktrees look like untracked impl repos, so 4 dirs warn on every command. Resolve a worktree to its canonical checkout for both linkback and relative planning_repo resolution.
 effort: Unknown
@@ -12,6 +12,7 @@ tags: [config, multi-repo, git]
 created: "2026-08-19"
 updated_at: "2026-08-19"
 started_at: "2026-08-19"
+completed_at: "2026-08-19"
 ---
 # Make cross-repo resolution worktree-aware
 

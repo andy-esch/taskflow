@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1m8mc8p46h
-status: ready-to-start
+status: completed
 epic: 29-multi-space-planning-a-home-registry-and-the-atlas
 description: Settle what identifies a planning repo before the registry schema is written. Gates --space's write guard, linkback verification, the workspace receipt, and moved detection.
 effort: Unknown
@@ -11,6 +11,7 @@ autonomy_level: 3
 tags: [design, config, multi-repo]
 created: "2026-08-19"
 updated_at: "2026-08-19"
+completed_at: "2026-08-19"
 ---
 # Decide `space.id` identity: durable minted id vs path-keyed
 
@@ -56,12 +57,83 @@ warning and no error.
 - Is the id per **planning repo** only, or does an impl repo get one too? Only the
   planning repo needs identity for the four consumers above — resist widening.
 
+## Decision (2026-08-19)
+
+**Two identities, not one.** Chosen by andy-esch. The original framing — durable *vs*
+path-keyed — was a false dichotomy: a committed id is shared by every worktree of a repo,
+so it identifies the **repo**, never the **checkout**. They do different jobs and both are
+adopted.
+
+| | what it is | what it answers |
+| --- | --- | --- |
+| **path** | the registry entry's location | *which working tree* — unique per checkout |
+| **durable id** | minted into the planning repo's **committed** `.tskflwctl.toml` | *which repo* — survives moves, shared by worktrees |
+
+**Path is the address. Id is the assertion.**
+
+### 1. `--space <X>` takes the LOCAL LABEL
+
+```toml
+[[space]]
+id        = "taskflow"                  # local label — the address
+path      = "~/git/andy-esch/taskflow"
+verify_id = "6g1durable0aa"             # the assertion, checked after resolving
+```
+
+The label addresses a **checkout**, which the durable id cannot: every worktree of a repo
+carries the same committed id, so `--space <durable-id>` would be ambiguous the moment a
+worktree exists. Labels are also typable; ids are not.
+
+### 2. Verification is OPT-IN per pointer, and strict once opted in
+
+```
+pointer has id + target matches   → proceed
+pointer has id + target differs   → exit 14 (ErrConflict)
+pointer has id + target has NONE  → exit 14
+pointer has NO id (legacy)        → today's behavior, unchanged
+```
+
+**"Missing also fails" is the load-bearing case, not an edge case.** The decoy scenario
+that motivated this — an unrelated planning repo sitting where a committed relative path
+lands — is a repo with *no id at all*. Tolerating a missing target id would leave the
+original hazard wide open while appearing to close it.
+
+Legacy pointers resolving unchanged is what keeps this non-breaking: nothing fails until a
+pointer opts in by recording an id.
+
+### 3. Settled without needing a call
+
+- **Planning repos only.** All four consumers (linkback verification, `--space`, the
+  `workspace` receipt, `moved` detection) concern the planning tree. An impl repo would
+  carry a committed id with no consumer — resist widening.
+- **`init` mints; `doctor` / `lint --fix` backfills.** The established pattern here, and
+  only two repos need it.
+- **`wire.WorkspaceJSON` carries the durable id**, so the receipt and the registry agree.
+  Additive, and `workspace` is marked EXPERIMENTAL precisely so its shape can still move —
+  cheap now, awkward once consumers pin it.
+
+### What this unblocks and dissolves
+
+- The registry schema can now be written ([space-registry-model](6g0fzhbtk0gy-space-registry-model-and-the-space-verbs-list-add-forget.md)).
+- `--space` becomes a real guard rather than a convention
+  ([global-space-flag](6g0fzk8mazrc-global-space-flag-run-any-command-against-a-registered-space.md)).
+- Audit 2026-08-19 **M2 largely dissolves**: whichever base a relative `planning_repo`
+  resolves against, a wrong target now fails loudly instead of binding silently
+  ([decide-how-a-relative-planning-repo-resolves](6g1sb9keb5c9-decide-how-a-relative-planning-repo-resolves-from-a-worktree-branch.md)).
+- `moved` detection becomes honest rather than a filename heuristic.
+
+### Accepted cost
+
+`init` writes an id into a **committed** file, so it appears in diffs for everyone working
+in that repo, and the two existing planning repos need a backfill. Accepted knowingly: it
+is the only mechanism that closes the silent wrong-tree bind in the general case.
+
 ## Acceptance criteria
 
-- [ ] The choice is recorded here with its rejected alternative and the accepted cost
-- [ ] If durable: minting, backfill, and missing-id behavior are specified
-- [ ] The registry task's schema section is updated to match
-- [ ] Whether `WorkspaceJSON` carries it is decided either way
+- [x] The choice is recorded here with its rejected alternative and the accepted cost
+- [x] If durable: minting, backfill, and missing-id behavior are specified
+- [x] The registry task's schema section is updated to match
+- [x] Whether `WorkspaceJSON` carries it is decided either way
 
 ## Out of scope
 
