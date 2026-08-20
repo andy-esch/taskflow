@@ -631,6 +631,8 @@ func insertTopLevelKey(text, line string) string {
 func pointerConfigTOML(planningRepo, targetID string) string {
 	out := fmt.Sprintf("# tskflwctl planning config — this repo's planning lives in another repo.\n"+
 		"# planning_repo: the external planning repo, relative to this file (or absolute).\n"+
+		"# In a git worktree a RELATIVE value resolves against the canonical checkout, not the\n"+
+		"# worktree, so it means the same thing from every checkout of this repo.\n"+
 		"planning_repo = %q\n", planningRepo)
 	if targetID == "" {
 		return out

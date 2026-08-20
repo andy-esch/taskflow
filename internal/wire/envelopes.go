@@ -270,13 +270,25 @@ type WorkspaceJSON struct {
 	// every worktree of the repo (it lives in a committed file). Omitted for a repo that
 	// predates the mint. Pair it with PlanningRoot, never substitute: the id names the
 	// repo, the path names the checkout.
-	RepoID     string `json:"repo_id,omitempty"`
+	RepoID string `json:"repo_id,omitempty"`
+	// Branch and Checkout identify WHICH working tree, where RepoID identifies which repo:
+	// every worktree of a repo shares one id, so two of them are told apart only by these.
+	// Both omitted when the tree is not in a git repo, which is a normal way to keep
+	// planning. Checkout is "base" or "worktree".
+	Branch     string `json:"branch,omitempty"`
+	Checkout   string `json:"checkout,omitempty" jsonschema:"description=base|worktree"`
 	ConfigPath string `json:"config_path,omitempty"`
 	Source     string `json:"source" jsonschema:"description=how the root was selected: pointer|config|discovered"`
 }
 
 // Workspace source values. `pointer` means a planning_repo key routed here from
 // another repo — the case worth noticing, since the cwd is NOT the planning tree.
+// Checkout values: a linked git worktree, or the repo's base checkout.
+const (
+	WorkspaceCheckoutBase     = "base"
+	WorkspaceCheckoutWorktree = "worktree"
+)
+
 const (
 	WorkspaceSourcePointer    = "pointer"
 	WorkspaceSourceConfig     = "config"

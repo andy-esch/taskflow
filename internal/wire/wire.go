@@ -145,7 +145,11 @@ import (
 // Additive, and omitted for a repo that predates the mint. It names the REPO; planning_root
 // names the CHECKOUT, and every worktree of a repo shares one id — so the two are paired,
 // never substituted.
-const SchemaVersion = "1.35"
+// 1.36: `workspace.branch` and `workspace.checkout` ("base"|"worktree") added. RepoID
+// names the repo and every worktree of it shares one, so these are what tell two working
+// trees apart — their directory names are often near-identical. Additive, and both omitted
+// when the planning tree is not in a git repo at all.
+const SchemaVersion = "1.36"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

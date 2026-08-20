@@ -1,10 +1,11 @@
 ---
 schema: 1
 status: active
-description: Point an impl repo at an external planning repo (planning_repo) + reverse tracked_repos, init pointer mode, and linkback integrity (warnings + doctor)
+description: Point an impl repo at an external planning repo (planning_repo) + tracked_repos, init pointer mode, linkback integrity, worktree-aware resolution, and durable ids a pointer verifies.
 priority: medium
 tags: [config, cli, multi-repo]
 created: "2026-06-22"
+updated_at: "2026-08-20"
 ---
 # Decoupled planning — point an impl repo at an external planning repo
 

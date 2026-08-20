@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -58,14 +59,9 @@ func anchorDir(dir string) string {
 // it belongs to. ok is false when dir is not a linked worktree, or when the repository
 // has no working tree to point at (the bare + worktrees-only layout).
 func canonicalCheckout(dir string) (string, bool) {
-	gitPath := filepath.Join(dir, ".git")
-	info, err := os.Lstat(gitPath)
-	if err != nil || info.IsDir() {
+	gitDir, linked := gitDirFor(dir)
+	if !linked {
 		return "", false // no .git, or a normal checkout — already canonical
-	}
-	gitDir, ok := readGitDirFile(gitPath, dir)
-	if !ok {
-		return "", false
 	}
 	// <repo-git-dir>/worktrees/<name> — and ONLY that shape. The segment must be the
 	// second-to-last component; a repo that merely lives under a directory called
@@ -100,6 +96,68 @@ func canonicalCheckout(dir string) (string, bool) {
 		return "", false // the main checkout was moved or deleted
 	}
 	return evalOr(checkout), true
+}
+
+// gitDirFor locates dir's git directory. linked is true only when dir's `.git` is a FILE
+// (a worktree, a submodule, or --separate-git-dir); a plain `.git` directory returns the
+// directory itself with linked=false, since it is already canonical.
+func gitDirFor(dir string) (gitDir string, linked bool) {
+	gitPath := filepath.Join(dir, ".git")
+	info, err := os.Lstat(gitPath)
+	if err != nil {
+		return "", false
+	}
+	if info.IsDir() {
+		return gitPath, false
+	}
+	p, ok := readGitDirFile(gitPath, dir)
+	if !ok {
+		return "", false
+	}
+	return p, true
+}
+
+// Checkout describes the git checkout a directory sits in, for surfaces that must
+// distinguish two working trees of one repo — they differ only by branch, and their
+// directory names are often near-identical (`-wt-go-mod`, `-wt-tf-cleanup`).
+//
+// Everything is empty/false when dir is not in a git repo at all, which is a perfectly
+// normal way to keep planning: report nothing rather than erroring.
+type Checkout struct {
+	Branch     string // branch name, or a short sha when HEAD is detached
+	IsWorktree bool   // a LINKED worktree rather than the repo's base checkout
+}
+
+// DescribeCheckout reads dir's branch and whether it is a linked worktree, without
+// invoking git: `HEAD` is a file, and a linked worktree keeps its OWN under
+// `<common>/worktrees/<name>/HEAD` — which the gitdir already points at.
+func DescribeCheckout(dir string) Checkout {
+	gitDir, linked := gitDirFor(dir)
+	if gitDir == "" {
+		return Checkout{}
+	}
+	// Only a `/worktrees/<name>` gitdir is a linked worktree; --separate-git-dir and
+	// submodules are their own base checkouts (see canonicalCheckout).
+	isWorktree := linked && filepath.Base(filepath.Dir(filepath.Clean(gitDir))) == worktreesSegment
+	return Checkout{Branch: headBranch(gitDir), IsWorktree: isWorktree}
+}
+
+// headBranch reads a git dir's HEAD: `ref: refs/heads/<branch>` yields the branch, and a
+// bare sha (detached) yields its short form — enough to identify the checkout in a header
+// without pretending it has a name.
+func headBranch(gitDir string) string {
+	b, err := os.ReadFile(filepath.Join(gitDir, "HEAD"))
+	if err != nil {
+		return ""
+	}
+	head := strings.TrimSpace(string(b))
+	if ref, ok := strings.CutPrefix(head, "ref:"); ok {
+		return path.Base(strings.TrimSpace(ref))
+	}
+	if len(head) > 12 {
+		return head[:12]
+	}
+	return head
 }
 
 // readGitDirFile reads the `gitdir:` line from a `.git` FILE. A relative value is

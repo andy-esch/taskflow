@@ -391,6 +391,14 @@ an answer you already have. Conversely, if epic 19's `serve` work starts first, 
 becomes urgent: "a space is a local directory" would be the wrong abstraction to have
 baked into a config schema by then.
 
+> **Progress note, 2026-08-20.** Slice 2's two prerequisites are now *implemented*, not
+> just decided. The vocabulary is locked (`space` / `atlas`), and identity shipped in epic
+> 23: `init` mints a durable id into a planning repo's committed config, and a pointer that
+> records `planning_repo_id` verifies it after resolving. So a registry entry's `verify_id`
+> now references something real rather than a hypothetical. Also shipped: worktree-aware
+> resolution, which means the atlas's "group by repo, select the checkout" design needs no
+> committed id for grouping — the common gitdir does it for free.
+>
 > **Progress note, 2026-08-18.** Slice 1 shipped (commit `86e3e1d` + follow-ups):
 > `internal/userconfig`, four-tier theme/pager precedence, and the test-isolation
 > harness. Two decisions from the sketch were settled during it — two files rather than

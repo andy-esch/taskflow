@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1s5m46g1bf
-status: next-up
+status: completed
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
 description: workspace cannot distinguish two worktrees of one repo, which differ only by branch. Report the branch and base-vs-worktree, surfacing the non-default case.
 effort: Unknown
@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, git, multi-repo]
 created: "2026-08-19"
+updated_at: "2026-08-20"
+started_at: "2026-08-20"
+completed_at: "2026-08-20"
 ---
 # Report the checkout's branch in `workspace` and receipts
 
@@ -51,12 +54,12 @@ and serves a board that does not exist yet.
 
 ## Acceptance criteria
 
-- [ ] `workspace` reports the branch (short sha when detached) and whether the checkout
+- [x] `workspace` reports the branch (short sha when detached) and whether the checkout
       is base or a linked worktree
-- [ ] A non-git planning root reports neither and does not error
-- [ ] Whether `WorkspaceJSON` carries them is decided; if yes, schema bumped + goldens
-- [ ] No git binary is invoked
-- [ ] `just test` + `just lint` green
+- [x] A non-git planning root reports neither and does not error
+- [x] Whether `WorkspaceJSON` carries them is decided; if yes, schema bumped + goldens
+- [x] No git binary is invoked
+- [x] `just test` + `just lint` green
 
 ## Related
 

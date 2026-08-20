@@ -92,7 +92,7 @@ Deliberately **not** applied to `resolvePlanningRepo`: pointing at a planning wo
 legitimate, and a planning worktree resolves to its own tree by design. Tests:
 `TestWorktree_LinkBackRecordsCanonicalCheckout`, `TestWorktree_TolerantOfWorktreePathAlreadyRecorded`.
 
-#### M2. Semantic collision when worktree branch modifies relative `planning_repo`  · **Status:** deferred
+#### M2. Semantic collision when worktree branch modifies relative `planning_repo`  · **Status:** wontfix
 
 **File:** `internal/config/config.go:193-197` | **Component:** config
 **Effort:** M · **Urgency:** eventually
@@ -116,6 +116,13 @@ Sequenced **with** the `space.id` identity decision: if pointers verify a durabl
 resolving, the dangerous outcome becomes a loud error regardless of which base was used, which
 dissolves most of this without adding a `./` vs `../` rule. Deciding it first risks shipping a
 rule that identity verification then makes redundant.
+
+**Closed wontfix (2026-08-20).** Identity verification shipped, which was the coupling this
+was deferred on. The dangerous outcome — a silent bind to an unrelated planning repo — is now
+`ErrConflict` for any opted-in pointer, on a mismatched id *and* on a target with no id. What
+remains is a clearer error, not a wrong result, so the `./` vs `../` prefix rule is
+unnecessary. The anchoring is instead documented in the pointer config the tool writes, where
+a reader of `.tskflwctl.toml` will find it.
 
 #### M3. `appendTrackedRepo` deduplication fails for worktree paths against canonical checkouts  · **Status:** fixed
 

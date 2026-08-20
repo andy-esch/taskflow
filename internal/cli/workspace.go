@@ -56,6 +56,20 @@ func (a *App) workspace() wire.WorkspaceJSON {
 		RepoID:       a.Cfg.ID,
 		Source:       wire.WorkspaceSourceDiscovered,
 	}
+	// The CHECKOUT is the repo the config lives in, not the planning root inside it: a
+	// `taskflow_root = "./planning"` layout puts no `.git` beside the entities. Fall back
+	// to Root when discovery found a bare tasks/ dir with no config anchoring it.
+	checkoutDir := a.Cfg.Dir
+	if checkoutDir == "" {
+		checkoutDir = a.Cfg.Root
+	}
+	if c := config.DescribeCheckout(checkoutDir); c.Branch != "" || c.IsWorktree {
+		ws.Branch = c.Branch
+		ws.Checkout = wire.WorkspaceCheckoutBase
+		if c.IsWorktree {
+			ws.Checkout = wire.WorkspaceCheckoutWorktree
+		}
+	}
 	if a.Cfg.Dir != "" {
 		ws.ConfigPath = physicalPath(filepath.Join(a.Cfg.Dir, config.ConfigFile))
 		ws.Source = wire.WorkspaceSourceConfig

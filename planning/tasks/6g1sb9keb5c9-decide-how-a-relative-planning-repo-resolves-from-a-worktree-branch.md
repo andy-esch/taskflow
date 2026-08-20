@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1sb9keb5c9
-status: next-up
+status: deprecated
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
 description: A worktree branch that edits planning_repo takes its value from the worktree but its base from the canonical checkout. Decide, or let layer C identity verification dissolve it.
 effort: Unknown
@@ -10,7 +10,8 @@ priority: low
 autonomy_level: 3
 tags: [config, multi-repo, design]
 created: "2026-08-19"
-updated_at: "2026-08-19"
+updated_at: "2026-08-20"
+deprecated_at: "2026-08-20"
 ---
 # Decide how a relative `planning_repo` resolves from a worktree branch
 
@@ -86,3 +87,32 @@ correctness one, so the `./` vs `../` prefix rule is very likely unnecessary.
 **Recommendation: close as wontfix once id verification ships**, documenting the base-anchoring
 behavior where a reader of `.tskflwctl.toml` will find it. Left open until then so the
 dependency is visible.
+
+### 2026-08-20 — closing: the premise arrived
+
+Identity verification shipped (epic 23, merged as `feat/workspace-ids`), which was the
+condition this task was waiting on. Re-checking the finding against the shipped behavior:
+
+- **The dangerous outcome is gone for any opted-in pointer.** A relative `planning_repo`
+  that resolves to an unrelated repo now fails with `ErrConflict` (exit 14) — on a
+  mismatched id *and* on a target carrying no id, which is the shape a decoy actually has.
+  It cannot silently bind, regardless of which base the path resolved against.
+- **What remains is a confusing error, not a correctness bug.** A worktree branch whose
+  pointer is worktree-relative still resolves against the canonical checkout and fails —
+  now with an id-mismatch message that names both ids, rather than quietly using the wrong
+  tree.
+- **So the `./` vs `../` prefix rule is unnecessary.** It would add a subtle distinction to
+  a file most users never open, to disambiguate a case that is now loud anyway. `./x` and
+  `x` behaving differently would be its own trap.
+
+**Documented rather than changed:** `pointerConfigTOML` now states the anchoring in the
+config it writes — *"In a git worktree a RELATIVE value resolves against the canonical
+checkout, not the worktree, so it means the same thing from every checkout of this repo."*
+That is where a reader of `.tskflwctl.toml` will actually look. The rule is also in
+`docs/ARCHITECTURE.md` and in `internal/config/worktree.go`'s package comment.
+
+**One new behavior worth knowing**, surfaced by the fix rather than by this finding:
+changing `planning_repo` on a branch now also requires updating `planning_repo_id`, or
+resolution fails. That is arguably correct — it forces the change to be intentional — but
+nobody has hit it yet. If it proves annoying, the fix is a better error message, not
+weaker verification.
