@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -168,7 +169,7 @@ func TestSpaceForget_RemovesOnlyRegistryEntry(t *testing.T) {
 func TestSpaceList_ReportsMissingEntry(t *testing.T) {
 	spaceConfigHome(t)
 	missing := filepath.Join(t.TempDir(), "gone")
-	if _, _, err := userconfig.AddSpace(userconfig.Space{ID: "missing", Path: missing}); err != nil {
+	if _, _, err := userconfig.AddSpace(userconfig.Space{ID: "missing", Path: missing}, false); err != nil {
 		t.Fatal(err)
 	}
 	out, errOut, err := runIn(t, t.TempDir(), "space", "list", "--json")
@@ -194,7 +195,7 @@ func TestSpaceRegistry_DoesNotAffectDiscover(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := userconfig.AddSpace(userconfig.Space{ID: "other", Path: other}); err != nil {
+	if _, _, err := userconfig.AddSpace(userconfig.Space{ID: "other", Path: other}, false); err != nil {
 		t.Fatal(err)
 	}
 	after, err := config.Discover(local)
@@ -203,5 +204,92 @@ func TestSpaceRegistry_DoesNotAffectDiscover(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, after) {
 		t.Errorf("registry changed local discovery:\nbefore=%+v\nafter=%+v", before, after)
+	}
+}
+
+// TestSpaceMutations_DryRunUsesRegistryRules regresses the review finding at the
+// command boundary. A preview is a plan of the real mutation: an existing physical path
+// is unchanged, a label collision is still a conflict, and a new entry carries the date
+// it would persist. Add and forget previews leave the registry byte-for-byte untouched.
+func TestSpaceMutations_DryRunUsesRegistryRules(t *testing.T) {
+	home := spaceConfigHome(t)
+	registered := initializedSpaceRepo(t)
+	conflicting := initializedSpaceRepo(t)
+	fresh := initializedSpaceRepo(t)
+	if out, errOut, err := runIn(t, registered, "space", "add", "--id", "registered"); err != nil {
+		t.Fatalf("register fixture: %v\n%s%s", err, out, errOut)
+	}
+	registryPath := filepath.Join(home, userconfig.SpacesFile)
+	before, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, errOut, err := runIn(t, registered, "space", "add", "--id", "alias", "--dry-run", "--json")
+	if err != nil {
+		t.Fatalf("same-path preview: %v\n%s%s", err, out, errOut)
+	}
+	var unchanged wire.SpaceMutationEnvelope
+	if err := json.Unmarshal([]byte(out), &unchanged); err != nil {
+		t.Fatal(err)
+	}
+	if !unchanged.DryRun || unchanged.Changed || unchanged.Space.ID != "registered" {
+		t.Errorf("same-path preview must report the real no-op: %+v", unchanged)
+	}
+
+	out, errOut, err = runIn(t, t.TempDir(), "space", "add", conflicting, "--id", "registered", "--dry-run", "--json")
+	if err == nil || ExitCode(err) != 14 {
+		t.Fatalf("collision preview must exit 14, got err=%v code=%d\n%s%s", err, ExitCode(err), out, errOut)
+	}
+
+	out, errOut, err = runIn(t, t.TempDir(), "space", "add", fresh, "--id", "fresh", "--dry-run", "--json")
+	if err != nil {
+		t.Fatalf("new-entry preview: %v\n%s%s", err, out, errOut)
+	}
+	var added wire.SpaceMutationEnvelope
+	if err := json.Unmarshal([]byte(out), &added); err != nil {
+		t.Fatal(err)
+	}
+	if !added.DryRun || !added.Changed || added.Space.ID != "fresh" || added.Space.Added == "" {
+		t.Errorf("new-entry preview must report the exact would-be entry: %+v", added)
+	}
+
+	out, errOut, err = runIn(t, t.TempDir(), "space", "forget", "registered", "--dry-run", "--json")
+	if err != nil {
+		t.Fatalf("forget preview: %v\n%s%s", err, out, errOut)
+	}
+	var forgotten wire.SpaceMutationEnvelope
+	if err := json.Unmarshal([]byte(out), &forgotten); err != nil {
+		t.Fatal(err)
+	}
+	if !forgotten.DryRun || !forgotten.Changed || forgotten.Space.ID != "registered" {
+		t.Errorf("forget preview must report its exact target: %+v", forgotten)
+	}
+
+	after, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("dry-run changed spaces.toml:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// TestSpaceRegistryErrors_AreClassifiedByCause pins the adapter boundary: malformed
+// hand-edited registry content is validation, label reuse is conflict (covered above),
+// and an operational error keeps its identity and generic exit code.
+func TestSpaceRegistryErrors_AreClassifiedByCause(t *testing.T) {
+	home := spaceConfigHome(t)
+	if err := os.WriteFile(filepath.Join(home, userconfig.SpacesFile), []byte("[[space]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, err := runIn(t, t.TempDir(), "space", "list")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("malformed registry must exit 11, got err=%v code=%d\n%s%s", err, ExitCode(err), out, errOut)
+	}
+
+	operational := errors.New("disk unavailable")
+	if got := classifySpaceRegistryError(operational); got != operational || ExitCode(got) != 1 {
+		t.Errorf("operational error was reclassified: got=%v code=%d", got, ExitCode(got))
 	}
 }

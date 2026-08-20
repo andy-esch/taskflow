@@ -195,3 +195,11 @@ planning repo, and broken entries that remain listed. The JSON envelope registry
 schema comments, machine-contract goldens, and CLI reference are updated for schema 1.37.
 Focused tests also compare `config.Discover` before and after populating the registry to pin
 the advisory invariant directly.
+
+### 2026-08-20 — adversarial review amendment
+
+The post-implementation review found and closed four correctness gaps. Add and forget dry-runs now execute the same snapshot planning and validation as real mutations, so path dedup is a true no-op, label collisions remain conflicts, previews return the exact would-be entry, and neither creates or rewrites the registry. Add/forget read-modify-write transactions now take the same directory-level Unix flock pattern already used by the repository store, eliminating cooperating-writer lost updates and stale decoded-index edits on the darwin/linux release targets.
+
+Surgical forget scanning is now quote-aware for TOML headers, so a hash inside a quoted key cannot hide an unrelated following table; ambiguous blank/comment trivia before the next table and trailing file comments are preserved. Registry content/collision errors are typed at the userconfig boundary and mapped to validation/conflict by the CLI, while filesystem and lock failures retain generic operational status. Regressions cover CLI preview semantics and byte-for-byte no-write behavior, malformed registry classification, quoted-table/comment preservation, and concurrent additions with no lost entries.
+
+No new decision follow-up is needed: the cross-platform lock choice follows the repository existing lock design and published darwin/linux target set. Durable verify_id enforcement and fuller health diagnosis remain owned by their existing follow-up tasks rather than being widened into this task.

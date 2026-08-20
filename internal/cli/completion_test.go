@@ -133,7 +133,7 @@ func TestComplete_SpaceIDsOutsideRepo(t *testing.T) {
 		{ID: "taskflow", Path: t.TempDir()},
 		{ID: "desirelines", Path: t.TempDir()},
 	} {
-		if _, _, err := userconfig.AddSpace(s); err != nil {
+		if _, _, err := userconfig.AddSpace(s, false); err != nil {
 			t.Fatal(err)
 		}
 	}

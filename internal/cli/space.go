@@ -108,7 +108,7 @@ func newSpaceForgetCmd(app *App) *cobra.Command {
 func loadSpaceEntries() ([]wire.SpaceEntry, error) {
 	spaces, err := userconfig.Spaces()
 	if err != nil {
-		return nil, err
+		return nil, classifySpaceRegistryError(err)
 	}
 	out := make([]wire.SpaceEntry, 0, len(spaces))
 	for _, s := range spaces {
@@ -173,42 +173,44 @@ func runSpaceAdd(app *App, target, id string) error {
 		Path:     userconfig.TildePath(repoDir),
 		VerifyID: cfg.ID,
 	}
-	if app.DryRun {
-		return reportSpaceChange(app, resolveSpace(space), true, "would register")
-	}
-	added, existing, err := userconfig.AddSpace(space)
+	added, existing, err := userconfig.AddSpace(space, app.DryRun)
 	if err != nil {
-		return fmt.Errorf("%w: %s", domain.ErrValidation, err.Error())
+		return classifySpaceRegistryError(err)
 	}
 	if !added {
 		return reportSpaceChange(app, resolveSpace(existing), false, "already registered as")
 	}
-	return reportSpaceChange(app, resolveSpace(existing), true, "registered")
+	verb := "registered"
+	if app.DryRun {
+		verb = "would register"
+	}
+	return reportSpaceChange(app, resolveSpace(existing), true, verb)
 }
 
 func runSpaceForget(app *App, id string) error {
-	spaces, err := userconfig.Spaces()
+	removed, existing, err := userconfig.ForgetSpace(id, app.DryRun)
 	if err != nil {
-		return err
+		return classifySpaceRegistryError(err)
 	}
-	var found *userconfig.Space
-	for i := range spaces {
-		if spaces[i].ID == id {
-			found = &spaces[i]
-			break
-		}
-	}
-	if found == nil {
+	if !removed {
 		return fmt.Errorf("%w: no space named %q — `space list` shows the registered ones", domain.ErrNotFound, id)
 	}
+	verb := "forgot"
 	if app.DryRun {
-		return reportSpaceChange(app, resolveSpace(*found), true, "would forget")
+		verb = "would forget"
 	}
-	removed, err := userconfig.ForgetSpace(id)
-	if err != nil {
-		return err
+	return reportSpaceChange(app, resolveSpace(existing), true, verb)
+}
+
+func classifySpaceRegistryError(err error) error {
+	switch {
+	case errors.Is(err, userconfig.ErrSpaceIDConflict):
+		return fmt.Errorf("%w: %s", domain.ErrConflict, err.Error())
+	case errors.Is(err, userconfig.ErrInvalidRegistry):
+		return fmt.Errorf("%w: %s", domain.ErrValidation, err.Error())
+	default:
+		return err // permission/I/O/lock failures are operational, not bad user input
 	}
-	return reportSpaceChange(app, resolveSpace(*found), removed, "forgot")
 }
 
 // reportSpaceChange emits the mutation receipt in whichever face is active.

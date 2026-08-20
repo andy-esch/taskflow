@@ -1,9 +1,12 @@
 package userconfig
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -30,7 +33,7 @@ func TestSpaces_MissingFileIsNormal(t *testing.T) {
 func TestAddSpace_DedupsOnPhysicalPath(t *testing.T) {
 	spaceHome(t)
 	repo := t.TempDir()
-	if added, _, err := AddSpace(Space{ID: "a", Path: repo}); err != nil || !added {
+	if added, _, err := AddSpace(Space{ID: "a", Path: repo}, false); err != nil || !added {
 		t.Fatalf("first add: %v / %v", added, err)
 	}
 	// a relative spelling of the same directory
@@ -45,7 +48,7 @@ func TestAddSpace_DedupsOnPhysicalPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	added, existing, err := AddSpace(Space{ID: "b", Path: spelling})
+	added, existing, err := AddSpace(Space{ID: "b", Path: spelling}, false)
 	if err != nil {
 		t.Fatalf("re-add: %v", err)
 	}
@@ -59,7 +62,7 @@ func TestAddSpace_DedupsOnPhysicalPath(t *testing.T) {
 	if err := os.Symlink(repo, link); err != nil {
 		t.Fatal(err)
 	}
-	added, existing, err = AddSpace(Space{ID: "via-link", Path: link})
+	added, existing, err = AddSpace(Space{ID: "via-link", Path: link}, false)
 	if err != nil || added || existing.ID != "a" {
 		t.Fatalf("a symlink spelling must dedup to a: added=%v existing=%q err=%v", added, existing.ID, err)
 	}
@@ -71,10 +74,10 @@ func TestAddSpace_DedupsOnPhysicalPath(t *testing.T) {
 func TestAddSpace_SharedVerifyIDIsAllowed(t *testing.T) {
 	spaceHome(t)
 	a, b := t.TempDir(), t.TempDir()
-	if _, _, err := AddSpace(Space{ID: "main", Path: a, VerifyID: "shared0000aa"}); err != nil {
+	if _, _, err := AddSpace(Space{ID: "main", Path: a, VerifyID: "shared0000aa"}, false); err != nil {
 		t.Fatal(err)
 	}
-	added, _, err := AddSpace(Space{ID: "wt", Path: b, VerifyID: "shared0000aa"})
+	added, _, err := AddSpace(Space{ID: "wt", Path: b, VerifyID: "shared0000aa"}, false)
 	if err != nil || !added {
 		t.Fatalf("two checkouts of one repo must both register: added=%v err=%v", added, err)
 	}
@@ -87,11 +90,35 @@ func TestAddSpace_SharedVerifyIDIsAllowed(t *testing.T) {
 // something like `taskflow-2` that nobody chose.
 func TestAddSpace_LabelCollisionRefused(t *testing.T) {
 	spaceHome(t)
-	if _, _, err := AddSpace(Space{ID: "dup", Path: t.TempDir()}); err != nil {
+	if _, _, err := AddSpace(Space{ID: "dup", Path: t.TempDir()}, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := AddSpace(Space{ID: "dup", Path: t.TempDir()}); err == nil {
-		t.Error("a second space claiming the same label must be refused")
+	if _, _, err := AddSpace(Space{ID: "dup", Path: t.TempDir()}, false); !errors.Is(err, ErrSpaceIDConflict) {
+		t.Errorf("a second space claiming the same label must return ErrSpaceIDConflict, got %v", err)
+	}
+}
+
+// TestAddSpace_DryRunUsesRealValidation regresses the review finding: dry-run must plan
+// against the registry snapshot, not report changed=true before path dedup / id-collision
+// checks. A new preview includes the date it would write and leaves no file behind.
+func TestAddSpace_DryRunUsesRealValidation(t *testing.T) {
+	dir := spaceHome(t)
+	repo := t.TempDir()
+	added, preview, err := AddSpace(Space{ID: "preview", Path: repo}, true)
+	if err != nil || !added || preview.Added == "" {
+		t.Fatalf("new dry-run plan: added=%v preview=%+v err=%v", added, preview, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, SpacesFile)); !os.IsNotExist(err) {
+		t.Errorf("dry-run created a registry, stat err=%v", err)
+	}
+	if _, _, err := AddSpace(Space{ID: "real", Path: repo}, false); err != nil {
+		t.Fatal(err)
+	}
+	if added, existing, err := AddSpace(Space{ID: "alias", Path: repo}, true); err != nil || added || existing.ID != "real" {
+		t.Errorf("same-path dry-run must be the real no-op: added=%v existing=%+v err=%v", added, existing, err)
+	}
+	if _, _, err := AddSpace(Space{ID: "real", Path: t.TempDir()}, true); !errors.Is(err, ErrSpaceIDConflict) {
+		t.Errorf("dry-run must detect the real label collision, got %v", err)
 	}
 }
 
@@ -103,10 +130,10 @@ func TestForgetSpace_OnlyDropsTheEntry(t *testing.T) {
 	if err := os.WriteFile(marker, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := AddSpace(Space{ID: "gone", Path: repo}); err != nil {
+	if _, _, err := AddSpace(Space{ID: "gone", Path: repo}, false); err != nil {
 		t.Fatal(err)
 	}
-	removed, err := ForgetSpace("gone")
+	removed, _, err := ForgetSpace("gone", false)
 	if err != nil || !removed {
 		t.Fatalf("forget: %v / %v", removed, err)
 	}
@@ -116,7 +143,7 @@ func TestForgetSpace_OnlyDropsTheEntry(t *testing.T) {
 	if _, err := os.Stat(marker); err != nil {
 		t.Error("forgetting must NOT touch the repo on disk")
 	}
-	if again, _ := ForgetSpace("gone"); again {
+	if again, _, _ := ForgetSpace("gone", false); again {
 		t.Error("forgetting an absent id should report no change, not fail")
 	}
 }
@@ -127,7 +154,7 @@ func TestForgetSpace_OnlyDropsTheEntry(t *testing.T) {
 func TestSpaceWrites_PreserveInsertionOrderAndRoundTrip(t *testing.T) {
 	dir := spaceHome(t)
 	for _, id := range []string{"zeta", "alpha", "mid"} {
-		if _, _, err := AddSpace(Space{ID: id, Path: t.TempDir()}); err != nil {
+		if _, _, err := AddSpace(Space{ID: id, Path: t.TempDir()}, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -181,7 +208,7 @@ text = "unrelated table survives"
 	if err := os.WriteFile(path, []byte(original), 0o640); err != nil {
 		t.Fatal(err)
 	}
-	if added, _, err := AddSpace(Space{ID: "gamma", Path: t.TempDir(), Added: "2026-08-20"}); err != nil || !added {
+	if added, _, err := AddSpace(Space{ID: "gamma", Path: t.TempDir(), Added: "2026-08-20"}, false); err != nil || !added {
 		t.Fatalf("add gamma: added=%v err=%v", added, err)
 	}
 	afterAdd, err := os.ReadFile(path)
@@ -195,7 +222,7 @@ text = "unrelated table survives"
 		t.Errorf("atomic edit should preserve file mode 0640, got %v / %v", fi, err)
 	}
 
-	if removed, err := ForgetSpace("alpha"); err != nil || !removed {
+	if removed, _, err := ForgetSpace("alpha", false); err != nil || !removed {
 		t.Fatalf("forget alpha: removed=%v err=%v", removed, err)
 	}
 	afterForget, err := os.ReadFile(path)
@@ -226,6 +253,104 @@ text = "unrelated table survives"
 	}
 }
 
+// TestForgetSpace_PreservesQuotedFollowingTable is the adversarial regression for the
+// review finding. '#' inside a quoted TOML table key is data, not a comment; missing that
+// boundary made forget delete the unrelated table through EOF. Its comment prelude is
+// preserved too because ownership of inter-table comments is ambiguous.
+func TestForgetSpace_PreservesQuotedFollowingTable(t *testing.T) {
+	dir := spaceHome(t)
+	path := filepath.Join(dir, SpacesFile)
+	original := `schema_version = 1
+
+[[space]]
+id = "alpha"
+path = "/tmp/alpha"
+
+# documentation for the archive table
+["notes#archive"] # quoted hash is part of the key
+text = "must survive"
+`
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	removed, _, err := ForgetSpace("alpha", false)
+	if err != nil || !removed {
+		t.Fatalf("forget alpha: removed=%v err=%v", removed, err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(b)
+	for _, want := range []string{
+		"# documentation for the archive table",
+		`["notes#archive"] # quoted hash is part of the key`,
+		`text = "must survive"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("forget dropped unrelated TOML %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, `id = "alpha"`) {
+		t.Errorf("forgotten entry remains:\n%s", text)
+	}
+	if got, err := Spaces(); err != nil || len(got) != 0 {
+		t.Errorf("result must remain valid registry TOML: %v / %v", got, err)
+	}
+}
+
+// TestConcurrentAddSpace_NoLostUpdates exercises the real cross-process lock primitive
+// with independent file descriptors in concurrent goroutines. Every successful add must
+// survive; atomic rename alone would let last-writer-wins snapshots silently drop entries.
+func TestConcurrentAddSpace_NoLostUpdates(t *testing.T) {
+	spaceHome(t)
+	const count = 12
+	paths := make([]string, count)
+	for i := range paths {
+		paths[i] = t.TempDir()
+	}
+	start := make(chan struct{})
+	errs := make(chan error, count)
+	var wg sync.WaitGroup
+	for i := range count {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			added, _, err := AddSpace(Space{ID: fmt.Sprintf("space-%02d", i), Path: paths[i]}, false)
+			if err != nil {
+				errs <- err
+				return
+			}
+			if !added {
+				errs <- fmt.Errorf("space-%02d unexpectedly reported a no-op", i)
+			}
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+	spaces, err := Spaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(spaces) != count {
+		t.Fatalf("lost concurrent registry updates: got %d entries, want %d: %v", len(spaces), count, spaces)
+	}
+	seen := make(map[string]bool, count)
+	for _, space := range spaces {
+		seen[space.ID] = true
+	}
+	for i := range count {
+		if id := fmt.Sprintf("space-%02d", i); !seen[id] {
+			t.Errorf("concurrent add lost %s", id)
+		}
+	}
+}
+
 // TestSpaceWrites_FollowRegistrySymlink protects the dotfiles use case. Atomic rename
 // targets the symlink's destination; it must not replace spaces.toml with a regular file.
 func TestSpaceWrites_FollowRegistrySymlink(t *testing.T) {
@@ -238,7 +363,7 @@ func TestSpaceWrites_FollowRegistrySymlink(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := AddSpace(Space{ID: "linked", Path: t.TempDir()}); err != nil {
+	if _, _, err := AddSpace(Space{ID: "linked", Path: t.TempDir()}, false); err != nil {
 		t.Fatal(err)
 	}
 	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
