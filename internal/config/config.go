@@ -478,7 +478,10 @@ func LinkBack(implDir, planningRepo string, dryRun bool) (string, error) {
 	if !ok {
 		return "", nil
 	}
-	rel, err := filepath.Rel(pdir, evalOr(implDir))
+	// Record the CANONICAL checkout, never the worktree that happened to run init:
+	// worktrees are created and deleted constantly, so a worktree entry rots the moment
+	// it is removed — and it made the tool warn about a link it had just written itself.
+	rel, err := filepath.Rel(pdir, anchorDir(evalOr(implDir)))
 	if err != nil {
 		return "", err
 	}
@@ -537,7 +540,13 @@ func resolveRepoPath(dir, p string) string {
 		// as tracked, in both directions (see worktree.go). A no-op off a worktree.
 		p = filepath.Join(anchorDir(dir), p)
 	}
-	return evalOr(filepath.Clean(p))
+	// Anchor the RESULT as well: an entry may NAME a worktree
+	// (tracked_repos = ["../impl-wt"], which `init --planning-repo` run from a worktree
+	// used to record), and both sides of a comparison must reduce to the same repo or
+	// the check reports a one-sided link against data the tool itself wrote. Deliberately
+	// NOT done in resolvePlanningRepo: pointing at a planning worktree is legitimate, and
+	// a planning worktree resolves to its own tree by design.
+	return anchorDir(evalOr(filepath.Clean(p)))
 }
 
 // LinkProblem is one linkback inconsistency between an impl repo's planning_repo

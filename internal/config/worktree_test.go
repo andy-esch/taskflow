@@ -222,3 +222,70 @@ func writeFile(t *testing.T, path, content string) {
 		t.Fatal(err)
 	}
 }
+
+// TestWorktree_LinkBackRecordsCanonicalCheckout pins the M1 root cause: running
+// `init --planning-repo` FROM a worktree used to record the worktree's own path in
+// tracked_repos — after which every command from that worktree warned that it was not
+// tracked. The tool wrote the bad state and then complained about it.
+//
+// Worktrees are also ephemeral, so a worktree entry rots the moment it is removed.
+func TestWorktree_LinkBackRecordsCanonicalCheckout(t *testing.T) {
+	parent := t.TempDir()
+	plan, impl, wt := implWithWorktree(t, parent)
+
+	if _, err := LinkBack(wt, "../planning", false); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(plan, ConfigFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), filepath.Base(wt)) {
+		t.Errorf("link-back recorded the WORKTREE path; it must record the canonical checkout:\n%s", b)
+	}
+	if !strings.Contains(string(b), filepath.Base(impl)) {
+		t.Errorf("link-back should name the canonical checkout %q:\n%s", filepath.Base(impl), b)
+	}
+	if p := linksAt(t, wt); len(p) != 0 {
+		t.Errorf("the worktree must not warn about a link the tool just wrote, got %v", p)
+	}
+}
+
+// TestWorktree_TolerantOfWorktreePathAlreadyRecorded is the other half of M1: existing
+// configs may already name a worktree (written by the old behavior, or by hand). Both
+// sides of the comparison must reduce to the same repo, so such an entry still counts
+// as tracked rather than warning forever.
+func TestWorktree_TolerantOfWorktreePathAlreadyRecorded(t *testing.T) {
+	parent := t.TempDir()
+	plan, _, wt := implWithWorktree(t, parent)
+
+	rel, err := filepath.Rel(plan, wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeConfig(t, plan, "taskflow_root = \".\"\ntracked_repos = [\""+filepath.ToSlash(rel)+"\"]\n")
+
+	if p := linksAt(t, wt); len(p) != 0 {
+		t.Errorf("a tracked_repos entry naming the worktree must still count as tracked, got %v", p)
+	}
+}
+
+// TestAnchorDir_SeparateGitDirWorktreeDegrades pins H1 as a LIMITATION, not a bug. A
+// --separate-git-dir repo has a working tree, but nothing on disk says where: its config
+// has `bare = false` and no `core.worktree`, and `git worktree list` reports the git
+// directory as the main worktree. Degrading is the only honest answer, so this test
+// exists to stop someone "fixing" it into a wrong guess.
+func TestAnchorDir_SeparateGitDirWorktreeDegrades(t *testing.T) {
+	parent := t.TempDir()
+	main := filepath.Join(parent, "main")
+	gitDir := filepath.Join(parent, "main.git")
+	git(t, parent, "init", "-q", "--separate-git-dir="+gitDir, main)
+	git(t, main, "commit", "-q", "--allow-empty", "-m", "i")
+	wt := filepath.Join(parent, "main-wt")
+	git(t, main, "worktree", "add", "-q", wt, "-b", "wtb")
+
+	if got := anchorDir(wt); got != wt {
+		t.Errorf("anchorDir = %q, want %q unchanged — the main working tree of a\n"+
+			"--separate-git-dir repo is not recorded anywhere, so guessing would be worse", got, wt)
+	}
+}

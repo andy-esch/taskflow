@@ -79,9 +79,19 @@ func canonicalCheckout(dir string) (string, bool) {
 		return "", false // --separate-git-dir, or a submodule
 	}
 	repoGitDir = filepath.Dir(repoGitDir)
-	// The working tree is the parent of a `.git` DIRECTORY. A bare repo's git dir is
-	// not named `.git` and has no working tree, so there is nothing to anchor to and
-	// the caller keeps the worktree's own directory.
+	// Accept only the conventional layout, where the working tree is the parent of a
+	// `.git` DIRECTORY. Two other layouts reach here and BOTH are genuinely
+	// unresolvable, not merely unhandled:
+	//
+	//   - a bare repo (`repo.git/worktrees/<name>`) has no working tree at all;
+	//   - `git init --separate-git-dir` HAS a working tree, but nothing on disk records
+	//     where it is. Its config carries `bare = false` and no `core.worktree`, and
+	//     `git worktree list` itself reports the GIT DIRECTORY as the main worktree.
+	//     Git cannot find it either.
+	//
+	// So degrading — the caller keeps the worktree's own directory — is the correct
+	// answer for both, not a gap to close later
+	// (audit 2026-08-19-worktree-aware-resolution, H1).
 	if filepath.Base(repoGitDir) != ".git" {
 		return "", false
 	}
