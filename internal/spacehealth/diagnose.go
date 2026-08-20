@@ -1,0 +1,177 @@
+// Package spacehealth owns the read-only health projection of the home space registry.
+// Keeping diagnosis here gives the CLI doctor/list commands and a future TUI one answer
+// for the same path instead of letting each adapter reinterpret discovery failures.
+package spacehealth
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/userconfig"
+)
+
+// Kind is the stable diagnosis vocabulary for one registered space.
+type Kind string
+
+const (
+	KindOK         Kind = "ok"
+	KindEmpty      Kind = "empty"
+	KindMissing    Kind = "missing"
+	KindNotARepo   Kind = "not-a-repo"
+	KindUnreadable Kind = "unreadable"
+	KindMismatch   Kind = "mismatch"
+)
+
+// SpaceProblem is the complete diagnosis of one registry entry. Despite the name, OK and
+// empty entries are included so every consumer receives one typed record per space.
+// Message explains the state; Remedy is populated only when a person can repair it.
+type SpaceProblem struct {
+	Space   userconfig.Space
+	Kind    Kind
+	Root    string
+	Message string
+	Remedy  string
+}
+
+// Broken reports whether this diagnosis should make doctor exit non-zero. An empty
+// planning repo is healthy and addressable; it is information, not a failure.
+func (p SpaceProblem) Broken() bool {
+	return p.Kind != KindOK && p.Kind != KindEmpty
+}
+
+// DiagnoseRegistry reads and diagnoses the home registry. Entry failures are returned as
+// data and never stop the sweep; err is reserved for a registry file that cannot itself be
+// read or decoded. The function is read-only and never forgets or repairs anything.
+func DiagnoseRegistry() ([]SpaceProblem, error) {
+	spaces, err := userconfig.Spaces()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SpaceProblem, 0, len(spaces))
+	for _, space := range spaces {
+		out = append(out, DiagnoseSpace(space))
+	}
+	return out, nil
+}
+
+// DiagnoseSpace diagnoses one already-loaded entry. It is useful for mutation receipts
+// and explicit --space selection, which need the shared rules without re-reading the
+// registry or requiring that a dry-run preview already exist there.
+func DiagnoseSpace(space userconfig.Space) SpaceProblem {
+	p := SpaceProblem{Space: space}
+	dir := userconfig.ExpandTilde(space.Path)
+	info, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			p.Kind = KindMissing
+			p.Message = "not found at " + space.Path
+			p.Remedy = forgetAndReadd(space.ID)
+			return p
+		}
+		p.Kind = KindUnreadable
+		p.Message = firstLine(fmt.Sprintf("cannot inspect %s: %v", space.Path, err))
+		p.Remedy = "check the path permissions, or `space forget " + space.ID + "`"
+		return p
+	}
+	if !info.IsDir() {
+		p.Kind = KindNotARepo
+		p.Message = "path is not a directory"
+		p.Remedy = forgetAndReadd(space.ID)
+		return p
+	}
+	// Discover's existence helpers intentionally collapse stat failures to false. Probe the
+	// registered directory directly first so a permission failure is not mislabeled as an
+	// ordinary uninitialized directory.
+	if _, err := os.ReadDir(dir); err != nil {
+		p.Kind = KindUnreadable
+		p.Message = firstLine(fmt.Sprintf("cannot read %s: %v", space.Path, err))
+		p.Remedy = "check the path permissions, or `space forget " + space.ID + "`"
+		return p
+	}
+
+	cfg, err := config.Discover(dir)
+	if err != nil {
+		p.Kind = KindNotARepo
+		p.Message = "no planning repo here"
+		p.Remedy = "run `tskflwctl init` there, or `space forget " + space.ID + "`"
+		if errorsIsConfigFailure(err) {
+			p.Kind = KindUnreadable
+			p.Message = firstLine(err.Error())
+			p.Remedy = "repair the repo config, or `space forget " + space.ID + "`"
+		}
+		return p
+	}
+	p.Root = cfg.Root
+	if space.VerifyID != "" && cfg.ID != space.VerifyID {
+		p.Kind = KindMismatch
+		if cfg.ID == "" {
+			p.Message = fmt.Sprintf("resolved repo carries no id; registry expects %q", space.VerifyID)
+		} else {
+			p.Message = fmt.Sprintf("resolved repo id %q does not match registry verify_id %q", cfg.ID, space.VerifyID)
+		}
+		p.Remedy = "restore the intended checkout at this path, or " + forgetAndReadd(space.ID)
+		return p
+	}
+
+	empty, err := planningRootEmpty(cfg.Root)
+	if err != nil {
+		p.Kind = KindUnreadable
+		p.Message = firstLine(err.Error())
+		p.Remedy = "check the planning-tree permissions, or `space forget " + space.ID + "`"
+		return p
+	}
+	if empty {
+		p.Kind = KindEmpty
+		p.Message = "no planning entities yet"
+		return p
+	}
+	p.Kind = KindOK
+	return p
+}
+
+// errorsIsConfigFailure distinguishes a present-but-invalid planning config/pointer from
+// the ordinary discovery miss, whose error intentionally has no domain classification.
+func errorsIsConfigFailure(err error) bool {
+	class := domain.Classify(err)
+	return class == domain.ClassValidation || class == domain.ClassConflict
+}
+
+func planningRootEmpty(root string) (bool, error) {
+	for _, dir := range []string{
+		domain.TasksDir,
+		domain.EpicsDir,
+		domain.AuditsDir,
+		domain.ResearchDir,
+		domain.ProjectsDir,
+	} {
+		path := filepath.Join(root, dir)
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return false, fmt.Errorf("read %s: %w", path, err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".md") {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
+}
+
+func forgetAndReadd(id string) string {
+	return "`space forget " + id + "`, then `space add <new-path> --id " + id + "`"
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}

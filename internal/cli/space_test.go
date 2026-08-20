@@ -41,7 +41,7 @@ func decodeSpaces(t *testing.T, text string) wire.SpacesEnvelope {
 
 // TestSpaceAddAndList_JSON exercises the public surface end-to-end. Adding from a nested
 // directory stores the repo marker directory, carries the durable verification id, and
-// list reports an explicit healthy state plus the global JSON schema version.
+// list reports an explicit healthy-empty state plus the global JSON schema version.
 func TestSpaceAddAndList_JSON(t *testing.T) {
 	spaceConfigHome(t)
 	repo := initializedSpaceRepo(t)
@@ -77,7 +77,7 @@ func TestSpaceAddAndList_JSON(t *testing.T) {
 	if env.SchemaVersion != wire.SchemaVersion || len(env.Spaces) != 1 {
 		t.Fatalf("unexpected list envelope: %+v", env)
 	}
-	if got := env.Spaces[0]; got.ID != "primary" || got.Path != mutation.Space.Path || got.State != wire.SpaceStateOK {
+	if got := env.Spaces[0]; got.ID != "primary" || got.Path != mutation.Space.Path || got.State != wire.SpaceStateEmpty || got.Root == "" {
 		t.Errorf("listed space = %+v", got)
 	}
 
@@ -85,7 +85,7 @@ func TestSpaceAddAndList_JSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("human space list: %v\n%s%s", err, human, errOut)
 	}
-	for _, want := range []string{"primary", "ok", mutation.Space.Path} {
+	for _, want := range []string{"primary", "empty", "no planning entities yet", mutation.Space.Path} {
 		if !strings.Contains(human, want) {
 			t.Errorf("human list must show id, state, and path; missing %q:\n%s", want, human)
 		}
@@ -180,8 +180,37 @@ func TestSpaceList_ReportsMissingEntry(t *testing.T) {
 	if len(env.Spaces) != 1 || env.Spaces[0].State != wire.SpaceStateMissing {
 		t.Fatalf("missing entry diagnosis = %+v", env.Spaces)
 	}
+	if env.Spaces[0].Detail == "" || env.Spaces[0].Remedy == "" {
+		t.Errorf("broken entry must explain itself and its repair: %+v", env.Spaces[0])
+	}
 	if spaces, err := userconfig.Spaces(); err != nil || len(spaces) != 1 {
 		t.Errorf("listing auto-removed the broken entry: %v / %v", spaces, err)
+	}
+}
+
+// TestSpaceList_ReportsDurableIDMismatch is the mechanical wrong-repo diagnosis. The
+// path still resolves, but the registry assertion names a different durable repo; list
+// must remain successful while making the conflict and repair explicit.
+func TestSpaceList_ReportsDurableIDMismatch(t *testing.T) {
+	spaceConfigHome(t)
+	repo := initializedSpaceRepo(t)
+	if _, _, err := userconfig.AddSpace(userconfig.Space{
+		ID: "drifted", Path: repo, VerifyID: "6gwrongid000",
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, err := runIn(t, t.TempDir(), "space", "list", "--json")
+	if err != nil {
+		t.Fatalf("mismatched entry must remain listable: %v\n%s%s", err, out, errOut)
+	}
+	env := decodeSpaces(t, out)
+	if len(env.Spaces) != 1 {
+		t.Fatalf("spaces = %+v", env.Spaces)
+	}
+	entry := env.Spaces[0]
+	if entry.State != wire.SpaceStateMismatch || entry.Root == "" ||
+		!strings.Contains(entry.Detail, "does not match") || entry.Remedy == "" {
+		t.Errorf("mismatch diagnosis = %+v", entry)
 	}
 }
 
@@ -204,6 +233,25 @@ func TestSpaceRegistry_DoesNotAffectDiscover(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, after) {
 		t.Errorf("registry changed local discovery:\nbefore=%+v\nafter=%+v", before, after)
+	}
+}
+
+// TestBrokenSpace_DoesNotBlockOrdinaryCommands pins the advisory boundary at the command
+// surface. Only list/doctor inspect registry health; a dead entry cannot prevent work in
+// the healthy cwd-anchored planning repo.
+func TestBrokenSpace_DoesNotBlockOrdinaryCommands(t *testing.T) {
+	spaceConfigHome(t)
+	local := initializedSpaceRepo(t)
+	missing := filepath.Join(t.TempDir(), "gone")
+	if _, _, err := userconfig.AddSpace(userconfig.Space{ID: "missing", Path: missing}, false); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, err := runIn(t, local, "task", "list", "--json")
+	if err != nil {
+		t.Fatalf("broken home entry blocked an ordinary command: %v\n%s%s", err, out, errOut)
+	}
+	if spaces, err := userconfig.Spaces(); err != nil || len(spaces) != 1 {
+		t.Errorf("ordinary command mutated registry: spaces=%v err=%v", spaces, err)
 	}
 }
 

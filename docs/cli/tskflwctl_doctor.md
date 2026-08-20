@@ -1,13 +1,14 @@
 ## tskflwctl doctor
 
-Audit planning_repo <-> tracked_repos linkback integrity
+Audit linkback integrity and the home space registry
 
 ### Synopsis
 
 Audit the cross-repo links: an impl repo's planning_repo pointer should be
 matched by the planning repo tracking it back, and every tracked_repos entry
-should exist and point its planning_repo back here. Reports each inconsistency
-and exits non-zero when any is found — usable as a CI gate.
+should exist and point its planning_repo back here. Also diagnose every home
+space-registry entry. Reports each inconsistency and exits non-zero when any
+is found — usable as a CI gate; nothing is repaired or forgotten.
 
 ```
 tskflwctl doctor [flags]

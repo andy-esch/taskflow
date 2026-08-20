@@ -30,7 +30,7 @@ regenerate with `just gifs`.
 | Path | Purpose |
 | :--- | :--- |
 | **[`cmd/tskflwctl/`](./cmd/tskflwctl/)** | The CLI entrypoint (thin composition root). |
-| **[`internal/`](./internal/)** | `domain` (pure) · `core` (use cases) · `store` (markdown adapter) · `cli` (cobra) · `tui` (Bubble Tea) · `theme` (shared glyphs/colors) · `config`. |
+| **[`internal/`](./internal/)** | `domain` (pure) · `core` (use cases) · `store` (markdown adapter) · `cli` (cobra) · `tui` (Bubble Tea) · `config`/`userconfig` · `spacehealth`. |
 | **[`planning/`](./planning/)** | This repo's own epics, tasks, and research (self-hosted). |
 | **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** | One-screen orientation: the primary/secondary-adapter design. |
 
@@ -124,6 +124,30 @@ tskflwctl research edit|append <slug>                        # same human/agent 
 tskflwctl lint                         # validate active task, epic, and research frontmatter
 tskflwctl lint --fix                   # auto-repair frontmatter (quote ':' values, normalize lists, backfill ids)
 ```
+
+### Multiple planning repos
+
+The home space registry is an advisory inventory of the planning repos on this machine.
+It lives at `$XDG_CONFIG_HOME/tskflwctl/spaces.toml`, falling back to
+`~/.config/tskflwctl/spaces.toml`, separate from both the repo-local `.tskflwctl.toml` and
+the hand-edited home `config.toml`. Registering a space never changes ordinary cwd/`-C`
+discovery, and forgetting one never touches its repo.
+
+```bash
+tskflwctl space add                         # register the current planning repo
+tskflwctl space add ../other --id other     # or name another checkout explicitly
+tskflwctl space list                        # ok/empty plus actionable broken states
+tskflwctl space list --json                 # schema-versioned inventory for agents
+tskflwctl doctor                            # linkback + space-registry health audit
+tskflwctl space forget other --dry-run      # preview; the repo itself is never deleted
+tskflwctl space forget other
+```
+
+Registration is currently explicit: `init` does not auto-register, and selecting a space
+does not yet replace `-C`. That makes it safe to register a full setup now as inventory;
+the planned global `--space <id>` will later make those same labels command targets.
+`TSKFLW_CONFIG_HOME` overrides the home-config directory, which is useful for an isolated
+trial before populating the real registry.
 
 Tasks, audits, and research are stored flat and id-led (`tasks/<id>-<slug>.md`,
 `audits/<id>-<slug>.md`, `research/<id>-<slug>.md`); `status:` / `bucket:` is

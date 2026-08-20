@@ -154,7 +154,10 @@ import (
 // is the local label that addresses a checkout, `verify_id` the target repo's durable id,
 // which every worktree of that repo shares and so can never be the address. The registry
 // is advisory: it changes nothing about how a cwd resolves.
-const SchemaVersion = "1.37"
+// 1.38: registered-space health became one typed projection shared by `space list` and
+// `doctor`: empty/mismatch states plus remedies on SpaceEntry, and a registry section on
+// DoctorEnvelope.
+const SchemaVersion = "1.38"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

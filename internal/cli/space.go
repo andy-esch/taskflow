@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/spacehealth"
 	"github.com/andy-esch/taskflow/internal/userconfig"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
@@ -38,8 +38,11 @@ func newSpaceCmd(app *App) *cobra.Command {
 
 func newSpaceListCmd(app *App) *cobra.Command {
 	return &cobra.Command{
-		Use:         "list",
-		Short:       "List the registered planning repos and whether each still resolves",
+		Use:   "list",
+		Short: "List registered planning repos with their current health",
+		Long: "List every registered planning repo and diagnose it without changing the registry.\n\n" +
+			"Healthy repos are `ok` or `empty`. Missing paths, non-repos, unreadable configs,\n" +
+			"and durable-id mismatches stay listed with a remedy; none is auto-forgotten.",
 		Example:     "  tskflwctl space list\n  tskflwctl space list --json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
@@ -104,42 +107,26 @@ func newSpaceForgetCmd(app *App) *cobra.Command {
 
 // loadSpaceEntries reads the registry and resolves each entry's current state. A broken
 // entry is REPORTED, never dropped and never fatal: the registry describes what you told
-// it about, and a repo that has moved is information, not an error.
+// it about, and a missing or mismatched repo is information, not an error.
 func loadSpaceEntries() ([]wire.SpaceEntry, error) {
-	spaces, err := userconfig.Spaces()
+	diagnoses, err := spacehealth.DiagnoseRegistry()
 	if err != nil {
 		return nil, classifySpaceRegistryError(err)
 	}
-	out := make([]wire.SpaceEntry, 0, len(spaces))
-	for _, s := range spaces {
-		out = append(out, resolveSpace(s))
+	out := make([]wire.SpaceEntry, 0, len(diagnoses))
+	for _, diagnosis := range diagnoses {
+		out = append(out, spaceEntry(diagnosis))
 	}
 	return out, nil
 }
 
-// resolveSpace diagnoses one entry by attempting the same discovery a command run there
-// would do. Deliberately tolerant — every failure becomes a State + Detail, never an error.
-func resolveSpace(s userconfig.Space) wire.SpaceEntry {
+func spaceEntry(diagnosis spacehealth.SpaceProblem) wire.SpaceEntry {
+	s := diagnosis.Space
 	e := wire.SpaceEntry{
 		ID: s.ID, Path: s.Path, VerifyID: s.VerifyID, Label: s.Label, Added: s.Added,
+		State: string(diagnosis.Kind), Root: diagnosis.Root,
+		Detail: diagnosis.Message, Remedy: diagnosis.Remedy,
 	}
-	dir := userconfig.ExpandTilde(s.Path)
-	if !dirExists(dir) {
-		e.State, e.Detail = wire.SpaceStateMissing, "not found at "+s.Path
-		return e
-	}
-	cfg, err := config.Discover(dir)
-	if err != nil {
-		e.State = wire.SpaceStateNotARepo
-		e.Detail = "no planning repo here — run `tskflwctl init` there, or `space forget " + s.ID + "`"
-		if errors.Is(err, domain.ErrConflict) || errors.Is(err, domain.ErrValidation) {
-			// A config that exists but does not resolve is a DIFFERENT problem from an
-			// un-inited directory, and the message already says which.
-			e.State, e.Detail = wire.SpaceStateUnreadable, firstLine(err.Error())
-		}
-		return e
-	}
-	e.State, e.Root = wire.SpaceStateOK, cfg.Root
 	return e
 }
 
@@ -178,13 +165,13 @@ func runSpaceAdd(app *App, target, id string) error {
 		return classifySpaceRegistryError(err)
 	}
 	if !added {
-		return reportSpaceChange(app, resolveSpace(existing), false, "already registered as")
+		return reportSpaceChange(app, spaceEntry(spacehealth.DiagnoseSpace(existing)), false, "already registered as")
 	}
 	verb := "registered"
 	if app.DryRun {
 		verb = "would register"
 	}
-	return reportSpaceChange(app, resolveSpace(existing), true, verb)
+	return reportSpaceChange(app, spaceEntry(spacehealth.DiagnoseSpace(existing)), true, verb)
 }
 
 func runSpaceForget(app *App, id string) error {
@@ -199,7 +186,7 @@ func runSpaceForget(app *App, id string) error {
 	if app.DryRun {
 		verb = "would forget"
 	}
-	return reportSpaceChange(app, resolveSpace(existing), true, verb)
+	return reportSpaceChange(app, spaceEntry(spacehealth.DiagnoseSpace(existing)), true, verb)
 }
 
 func classifySpaceRegistryError(err error) error {
@@ -238,17 +225,4 @@ func validateSpaceID(id string) error {
 		return fmt.Errorf("%w: space label %q may not contain spaces, quotes or path separators", domain.ErrValidation, id)
 	}
 	return nil
-}
-
-// dirExists reports whether p is an existing directory.
-func dirExists(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.IsDir()
-}
-
-func firstLine(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i]
-	}
-	return s
 }

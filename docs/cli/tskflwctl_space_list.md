@@ -1,6 +1,13 @@
 ## tskflwctl space list
 
-List the registered planning repos and whether each still resolves
+List registered planning repos with their current health
+
+### Synopsis
+
+List every registered planning repo and diagnose it without changing the registry.
+
+Healthy repos are `ok` or `empty`. Missing paths, non-repos, unreadable configs,
+and durable-id mismatches stay listed with a remedy; none is auto-forgotten.
 
 ```
 tskflwctl space list [flags]

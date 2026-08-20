@@ -130,7 +130,14 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, NormalizeInitEnvelope(InitEnvelope{Mode: "scaffold", Root: "/root", Created: []string{"tasks"}}))
 		}},
 		{"DoctorEnvelope", func(w io.Writer) error {
-			return emit(w, ToDoctorEnvelope("/root", []DoctorProblem{{Repo: "../impl", Message: "one-sided link"}}))
+			return emit(w, ToDoctorEnvelope(
+				"/root",
+				[]DoctorProblem{{Repo: "../impl", Message: "one-sided link"}},
+				DoctorRegistry{Checked: 2, Problems: []DoctorSpaceProblem{{
+					ID: "missing", Path: "~/git/missing", Kind: SpaceStateMissing,
+					Message: "not found", Remedy: "forget or re-add",
+				}}},
+			))
 		}},
 		{"SchemaEnvelope", func(w io.Writer) error {
 			return emit(w, ToSchemaEnvelope(SchemaContract{
@@ -167,7 +174,10 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			}))
 		}},
 		{"SpacesEnvelope", func(w io.Writer) error {
-			return emit(w, ToSpacesEnvelope([]SpaceEntry{{ID: "taskflow", Path: "~/git/taskflow", State: SpaceStateOK, Root: "/repo/planning"}}))
+			return emit(w, ToSpacesEnvelope([]SpaceEntry{{
+				ID: "taskflow", Path: "~/git/taskflow", State: SpaceStateMismatch,
+				Root: "/repo/planning", Detail: "wrong repo", Remedy: "re-register",
+			}}))
 		}},
 		{"SpaceMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToSpaceMutationEnvelope(

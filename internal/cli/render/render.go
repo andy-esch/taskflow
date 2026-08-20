@@ -228,23 +228,44 @@ func MovesJSON(w io.Writer, results []MoveResult, dryRun bool, ws wire.Workspace
 // CLI's doctor command keeps building it through the render package.
 type DoctorProblem = wire.DoctorProblem
 
-// DoctorJSON writes the linkback audit; problems is empty (not null) when the
-// links are consistent, so a consumer can len() it without a nil check.
-func DoctorJSON(w io.Writer, root string, problems []DoctorProblem) error {
-	return wire.EncodeJSON(w, wire.ToDoctorEnvelope(root, problems))
+// DoctorJSON writes the linkback and registry audits. Problem arrays are empty (not null)
+// when healthy, so a consumer can len() them without a nil check.
+func DoctorJSON(w io.Writer, root string, problems []DoctorProblem, registry wire.DoctorRegistry) error {
+	return wire.EncodeJSON(w, wire.ToDoctorEnvelope(root, problems, registry))
 }
 
-// DoctorHuman writes the linkback audit: a ⚠ per problem (with a count footer),
-// or a ✔ when the links are consistent.
-func DoctorHuman(w io.Writer, st Style, problems []DoctorProblem) {
+// DoctorHuman writes separate linkback and registry sections, then one combined problem
+// footer. Empty planning repos are healthy and therefore absent from registry.Problems.
+func DoctorHuman(w io.Writer, st Style, problems []DoctorProblem, registry wire.DoctorRegistry) {
+	fmt.Fprintf(w, "%s\n", st.Bold("Linkbacks"))
 	if len(problems) == 0 {
-		fmt.Fprintf(w, "%s linkback consistent\n", st.Green("✔"))
-		return
+		fmt.Fprintf(w, "  %s consistent\n", st.Green("✔"))
+	} else {
+		for _, p := range problems {
+			fmt.Fprintf(w, "  %s %s\n", st.Warn("⚠"), p.Message)
+		}
 	}
-	for _, p := range problems {
-		fmt.Fprintf(w, "%s %s\n", st.Warn("⚠"), p.Message)
+
+	fmt.Fprintf(w, "\n%s\n", st.Bold("Space registry"))
+	switch {
+	case registry.Checked == 0:
+		fmt.Fprintf(w, "  %s no spaces registered\n", st.Dim("·"))
+	case len(registry.Problems) == 0:
+		fmt.Fprintf(w, "  %s %s healthy\n", st.Green("✔"), plural(registry.Checked, "registered space"))
+	default:
+		for _, p := range registry.Problems {
+			fmt.Fprintf(w, "  %s %s  %s\n", st.Warn("⚠"), st.Bold(p.ID), st.Warn(p.Kind))
+			fmt.Fprintf(w, "      %s\n", p.Message)
+			if p.Remedy != "" {
+				fmt.Fprintf(w, "      %s %s\n", st.Dim("remedy:"), p.Remedy)
+			}
+		}
 	}
-	fmt.Fprintf(w, "\n%s\n", st.Dim(plural(len(problems), "linkback problem")))
+
+	total := len(problems) + len(registry.Problems)
+	if total > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Dim(plural(total, "doctor problem")))
+	}
 }
 
 // SummaryHuman renders the at-a-glance dashboard.
@@ -926,7 +947,7 @@ func SpacesJSON(w io.Writer, spaces []wire.SpaceEntry) error {
 }
 
 // SpacesHuman lists the registry one space per line: a state glyph, the label, where it
-// points, and — for anything not ok — what is wrong and what to do about it.
+// points, and — for a broken entry — what is wrong and what to do about it.
 //
 // A broken entry is shown DIMMED alongside the healthy ones rather than hidden or turned
 // into an error. The registry describes what you told it about; a repo that moved is
@@ -948,9 +969,19 @@ func SpacesHuman(w io.Writer, st Style, spaces []wire.SpaceEntry) {
 			fmt.Fprintf(w, "%s %s  %-10s  %s\n", st.Green("●"), st.Bold(id), st.Green(s.State), st.Dim(s.Path))
 			continue
 		}
+		if s.State == wire.SpaceStateEmpty {
+			fmt.Fprintf(w, "%s %s  %-10s  %s\n", st.Green("○"), st.Bold(id), st.Dim(s.State), st.Dim(s.Path))
+			if s.Detail != "" {
+				fmt.Fprintf(w, "    %s %s\n", st.Dim("↳"), st.Dim(s.Detail))
+			}
+			continue
+		}
 		fmt.Fprintf(w, "%s %s  %-10s  %s\n", st.Warn("○"), st.Dim(id), st.Warn(s.State), st.Dim(s.Path))
 		if s.Detail != "" {
 			fmt.Fprintf(w, "    %s %s\n", st.Warn("↳"), st.Dim(s.Detail))
+		}
+		if s.Remedy != "" {
+			fmt.Fprintf(w, "      %s %s\n", st.Dim("remedy:"), st.Dim(s.Remedy))
 		}
 	}
 	if broken := countBrokenSpaces(spaces); broken > 0 {
@@ -958,11 +989,11 @@ func SpacesHuman(w io.Writer, st Style, spaces []wire.SpaceEntry) {
 	}
 }
 
-// countBrokenSpaces counts entries that did not resolve.
+// countBrokenSpaces counts actionable entries; an empty repo resolved successfully.
 func countBrokenSpaces(spaces []wire.SpaceEntry) int {
 	n := 0
 	for _, s := range spaces {
-		if s.State != wire.SpaceStateOK {
+		if s.State != wire.SpaceStateOK && s.State != wire.SpaceStateEmpty {
 			n++
 		}
 	}
@@ -982,7 +1013,7 @@ func SpaceMutationHuman(w io.Writer, st Style, e wire.SpaceEntry, changed bool, 
 		mark = st.Dim("·")
 	}
 	fmt.Fprintf(w, "%s %s %s %s\n", mark, verb, st.Bold(e.ID), st.Dim(e.Path))
-	if e.State == wire.SpaceStateOK && e.Root != "" {
+	if (e.State == wire.SpaceStateOK || e.State == wire.SpaceStateEmpty) && e.Root != "" {
 		fmt.Fprintf(w, "    %s %s\n", st.Dim("planning root"), e.Root)
 	} else if e.Detail != "" {
 		fmt.Fprintf(w, "    %s %s\n", st.Warn("⚠"), e.Detail)

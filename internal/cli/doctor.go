@@ -8,16 +8,19 @@ import (
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/spacehealth"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 func newDoctorCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "doctor",
-		Short: "Audit planning_repo <-> tracked_repos linkback integrity",
+		Short: "Audit linkback integrity and the home space registry",
 		Long: "Audit the cross-repo links: an impl repo's planning_repo pointer should be\n" +
 			"matched by the planning repo tracking it back, and every tracked_repos entry\n" +
-			"should exist and point its planning_repo back here. Reports each inconsistency\n" +
-			"and exits non-zero when any is found — usable as a CI gate.",
+			"should exist and point its planning_repo back here. Also diagnose every home\n" +
+			"space-registry entry. Reports each inconsistency and exits non-zero when any\n" +
+			"is found — usable as a CI gate; nothing is repaired or forgotten.",
 		Example:     "  tskflwctl doctor\n  tskflwctl doctor --json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
@@ -38,15 +41,33 @@ func newDoctorCmd(app *App) *cobra.Command {
 			for i, p := range links {
 				problems[i] = render.DoctorProblem{Repo: p.Repo, Message: p.Message}
 			}
+			diagnoses, err := spacehealth.DiagnoseRegistry()
+			if err != nil {
+				return classifySpaceRegistryError(err)
+			}
+			registry := wire.DoctorRegistry{Checked: len(diagnoses)}
+			for _, diagnosis := range diagnoses {
+				if !diagnosis.Broken() {
+					continue
+				}
+				registry.Problems = append(registry.Problems, wire.DoctorSpaceProblem{
+					ID: diagnosis.Space.ID, Path: diagnosis.Space.Path, Kind: string(diagnosis.Kind),
+					Message: diagnosis.Message, Remedy: diagnosis.Remedy,
+				})
+			}
 			if app.JSON {
-				if err := render.DoctorJSON(app.Out, app.Cfg.Root, problems); err != nil {
+				if err := render.DoctorJSON(app.Out, app.Cfg.Root, problems, registry); err != nil {
 					return err
 				}
 			} else {
-				render.DoctorHuman(app.Out, app.Style, problems)
+				render.DoctorHuman(app.Out, app.Style, problems, registry)
 			}
-			if len(problems) > 0 {
-				return fmt.Errorf("%w: %d linkback problem(s)", domain.ErrValidation, len(problems))
+			total := len(problems) + len(registry.Problems)
+			if total > 0 {
+				return fmt.Errorf(
+					"%w: %d doctor problem(s) (%d linkback, %d registered space)",
+					domain.ErrValidation, total, len(problems), len(registry.Problems),
+				)
 			}
 			return nil
 		},

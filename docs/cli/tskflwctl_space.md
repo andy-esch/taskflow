@@ -36,5 +36,5 @@ existed, and deleting it costs convenience — never data, never addressability.
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
 * [tskflwctl space add](tskflwctl_space_add.md)	 - Register a planning repo (defaults to the current directory)
 * [tskflwctl space forget](tskflwctl_space_forget.md)	 - Drop a space from the registry (the repo itself is untouched)
-* [tskflwctl space list](tskflwctl_space_list.md)	 - List the registered planning repos and whether each still resolves
+* [tskflwctl space list](tskflwctl_space_list.md)	 - List registered planning repos with their current health
 
