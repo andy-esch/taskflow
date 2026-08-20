@@ -288,6 +288,15 @@ func ResearchColumns() []Column[domain.Research] {
 		{"created", "date the research was done", func(r domain.Research) string { return r.Created }},
 		{"description", "one-line summary", func(r domain.Research) string { return r.Description }},
 		{"tags", "topical tags", func(r domain.Research) string { return strings.Join(r.Tags, ",") }},
+		// Falls back to created when never edited, matching the task `updated` column: a doc
+		// written once has been "last touched" on its created date, and an empty cell here
+		// would sort last under an updated sort for no good reason.
+		{"updated", "last-updated date", func(r domain.Research) string {
+			if r.Updated != "" {
+				return r.Updated
+			}
+			return r.Created
+		}},
 		{"id", "stable identifier", func(r domain.Research) string { return r.ID }},
 	}
 }

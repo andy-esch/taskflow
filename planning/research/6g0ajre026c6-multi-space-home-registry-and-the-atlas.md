@@ -4,6 +4,7 @@ id: 6g0ajre026c6
 created: "2026-08-15"
 description: Explores a home-scoped registry of planning repos (spaces), a --space handle for any command, and a cross-space TUI board (the atlas) — plus the existing seams to reuse and the open forks.
 tags: [config, cli, tui, multi-repo, design]
+updated_at: "2026-08-20"
 ---
 
 # Multi-space: home registry and the atlas
