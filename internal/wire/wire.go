@@ -140,7 +140,12 @@ import (
 // registry, so without this an agent had to trigger an error and parse prose to learn the
 // set. Note RECOGNIZED is wider than WRITABLE — only description and tags can be set; the
 // per-kind conventions in `schema research` name the protected ones.
-const SchemaVersion = "1.34"
+// 1.35: `workspace.repo_id` added — the planning repo's durable identity, minted into its
+// committed config by `init` and verified by a pointer that records `planning_repo_id`.
+// Additive, and omitted for a repo that predates the mint. It names the REPO; planning_root
+// names the CHECKOUT, and every worktree of a repo shares one id — so the two are paired,
+// never substituted.
+const SchemaVersion = "1.35"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

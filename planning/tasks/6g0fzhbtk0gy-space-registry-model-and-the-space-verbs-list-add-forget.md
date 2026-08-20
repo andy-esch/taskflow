@@ -153,3 +153,19 @@ ordering** in the file.
 **Dedup gains a second axis.** Two entries may now share a `verify_id` (two checkouts of one
 repo) — which is legitimate and must not be collapsed. Dedup on **physical path**, never on
 `verify_id`.
+
+### 2026-08-19 — labels must be shell-completable, and that is part of why they won
+
+`--space <label>` should complete from the registry, like every other addressable property
+here (`completion.go` already does command / flag / status-aware slug completion).
+
+This is a second, independent argument for the label over the durable id as the address:
+a completion menu of `taskflow · desirelines · dotfiles` is usable, whereas one of
+`6g1durable0aa · 6g1kzy4pgt2f` is not — the ids are not recognizable even when shown.
+Completability is a property of the *address*, and it should be treated as a requirement of
+this task, not a nicety bolted on later.
+
+Constraint to carry over from `completion.go`: completion funcs do their own forgiving
+discovery and must **not** fail outside a planning repo. Registry completion reads the home
+config, which exists independently of any planning repo, so `--space` should complete even
+where nothing else does.

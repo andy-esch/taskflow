@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1sqcn5an7h
-status: ready-to-start
+status: in-progress
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
 description: 'Implement the identity decision: init mints a durable id into a planning repo''s committed config; a pointer that records it verifies after resolving, failing loudly on mismatch or missing.'
 effort: Unknown
@@ -10,6 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [config, multi-repo, correctness]
 created: "2026-08-19"
+updated_at: "2026-08-19"
+started_at: "2026-08-19"
 ---
 # Mint and verify a durable planning-repo id
 
@@ -61,14 +63,14 @@ pointer has NO id (legacy)        → today's behavior, unchanged
 
 ## Acceptance criteria
 
-- [ ] `init` mints an id into a scaffolded planning repo's config
-- [ ] A planning repo without one can be backfilled, and the backfill is idempotent
-- [ ] `init --planning-repo` records `planning_repo_id` from the target
-- [ ] All four verification rows above are covered by tests, including **missing → exit 14**
-- [ ] A legacy pointer (no id) resolves exactly as today, silently — regression test
-- [ ] The decoy scenario from the research doc now fails loudly instead of binding
-- [ ] `WorkspaceJSON` carries the id; schema bumped, goldens regenerated
-- [ ] `just test` + `just lint` green
+- [x] `init` mints an id into a scaffolded planning repo's config
+- [x] A planning repo without one can be backfilled, and the backfill is idempotent
+- [x] `init --planning-repo` records `planning_repo_id` from the target
+- [x] All four verification rows above are covered by tests, including **missing → exit 14**
+- [x] A legacy pointer (no id) resolves exactly as today, silently — regression test
+- [x] The decoy scenario from the research doc now fails loudly instead of binding
+- [x] `WorkspaceJSON` carries the id; schema bumped, goldens regenerated
+- [x] `just test` + `just lint` green
 
 ## Out of scope
 

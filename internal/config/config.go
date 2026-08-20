@@ -11,6 +11,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/id"
 )
 
 // Config records where the planning data lives (the "taskflow root": the dir
@@ -25,8 +26,11 @@ import (
 // anchor planning_repo/tracked_repos resolve against, and this repo's identity
 // for linkback. It is empty when discovery fell back to a bare tasks/ dir.
 type Config struct {
-	Root         string
-	Dir          string
+	Root string
+	Dir  string
+	// ID is the durable identity of the planning repo this resolved to, when it carries
+	// one. Empty for a repo that predates the mint — never an error, and never inferred.
+	ID           string
 	PlanningRepo string
 	TrackedRepos []string
 	Pager        PagerConfig
@@ -53,11 +57,18 @@ type ThemeConfig struct {
 // configFile mirrors the on-disk .tskflwctl.toml schema for a real TOML decode.
 // Defaults (taskflow_root ".", the rest empty) are applied by readConfigFile.
 type configFile struct {
-	TaskflowRoot string        `toml:"taskflow_root"`
-	PlanningRepo string        `toml:"planning_repo"`
-	TrackedRepos []string      `toml:"tracked_repos"`
-	Pager        pagerFileTOML `toml:"pager"`
-	Theme        themeFileTOML `toml:"theme"`
+	TaskflowRoot string `toml:"taskflow_root"`
+	// ID is this PLANNING repo's durable identity (ADR-0003's philosophy applied to the
+	// repo itself): minted once, committed, and unchanged by a move. Empty in a pointer
+	// config and in any repo predating the mint — absence is legal and silent.
+	ID string `toml:"id"`
+	// PlanningRepoID is the id the pointer EXPECTS its target to carry. Recording it is
+	// what opts a pointer into verification; empty means legacy, resolve as before.
+	PlanningRepoID string        `toml:"planning_repo_id"`
+	PlanningRepo   string        `toml:"planning_repo"`
+	TrackedRepos   []string      `toml:"tracked_repos"`
+	Pager          pagerFileTOML `toml:"pager"`
+	Theme          themeFileTOML `toml:"theme"`
 }
 
 // pagerFileTOML is the `[pager]` table as decoded from disk.
@@ -99,8 +110,11 @@ func Discover(start string) (*Config, error) {
 			// resolveRoot already followed/validated planning_repo into Root; the
 			// raw planning_repo + tracked_repos ride along for the linkback checks.
 			return &Config{
-				Root:         root,
-				Dir:          dir,
+				Root: root,
+				Dir:  dir,
+				// The id of the tree we RESOLVED to: this repo's own when in-tree, the
+				// pointed-at repo's when following a pointer.
+				ID:           resolvedID(cf, root),
 				PlanningRepo: cf.PlanningRepo,
 				TrackedRepos: cf.TrackedRepos,
 				Pager:        PagerConfig{Enabled: cf.Pager.Enabled, Command: cf.Pager.Command},
@@ -171,7 +185,7 @@ func resolveRoot(dir string, cf configFile) (string, error) {
 			"%w: %s sets both planning_repo (%q) and taskflow_root (%q), which name different roots — keep one",
 			domain.ErrConflict, ConfigFile, cf.PlanningRepo, cf.TaskflowRoot)
 	}
-	return resolvePlanningRepo(dir, cf.PlanningRepo)
+	return resolvePlanningRepo(dir, cf.PlanningRepo, cf.PlanningRepoID)
 }
 
 // resolvePlanningRepo resolves planning_repo relative to the config dir (an
@@ -186,7 +200,7 @@ func resolveRoot(dir string, cf configFile) (string, error) {
 // working — both spellings name the same planning repo, which is exactly what
 // checkTrackedRepo already accepts. A target that is neither is a loud error (the
 // "require + validate" contract), never a clean empty tree.
-func resolvePlanningRepo(dir, planningRepo string) (string, error) {
+func resolvePlanningRepo(dir, planningRepo, wantID string) (string, error) {
 	root := filepath.FromSlash(planningRepo)
 	if !filepath.IsAbs(root) {
 		// planning_repo points OUT of the repo and is committed, so it travels to
@@ -213,6 +227,9 @@ func resolvePlanningRepo(dir, planningRepo string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("planning_repo %q: %w", planningRepo, err)
 		}
+		if err := verifyPlanningRepoID(planningRepo, root, wantID, cf.ID); err != nil {
+			return "", err
+		}
 		return evalOr(target), nil
 	}
 	if !isDir(filepath.Join(root, domain.TasksDir)) {
@@ -220,11 +237,59 @@ func resolvePlanningRepo(dir, planningRepo string) (string, error) {
 			"%w: planning_repo %q points at %s, which is not a planning repo (no tasks/ there, and no %s naming one via taskflow_root) — run `tskflwctl init` there first",
 			domain.ErrValidation, planningRepo, root, ConfigFile)
 	}
+	// A config-less planning repo (bare tasks/ dir) carries no id, so an opted-in pointer
+	// must fail here for the same reason it fails on a mismatch — see verifyPlanningRepoID.
+	if err := verifyPlanningRepoID(planningRepo, root, wantID, ""); err != nil {
+		return "", err
+	}
 	// Resolve symlinks so Root is PHYSICAL, matching the in-tree branch (Discover
 	// evalOr's dir, which configuredRoot inherits). The linkback work compares
 	// physical paths, so a symlinked external planning repo must not leave Root
 	// logical here. evalOr falls back to the lexical path if it can't resolve.
 	return evalOr(root), nil
+}
+
+// verifyPlanningRepoID enforces the opt-in identity check. wantID empty means the pointer
+// never opted in: resolve exactly as before, silently — that is what keeps every existing
+// config working and is why a missing id is NOT warned about.
+//
+// Once a pointer does record an id, BOTH a mismatch and a MISSING target id are fatal. The
+// missing case is the load-bearing one, not an edge: the hazard this exists to close is an
+// unrelated planning repo sitting where a committed relative path happens to land, and such
+// a repo has no id at all. Tolerating that would leave the hole open while looking closed.
+func verifyPlanningRepoID(planningRepo, root, wantID, gotID string) error {
+	if wantID == "" || wantID == gotID {
+		return nil
+	}
+	if gotID == "" {
+		return fmt.Errorf(
+			"%w: planning_repo %q resolved to %s, which carries no id — this pointer expects %q; "+
+				"run `tskflwctl init` there to mint one, or remove planning_repo_id to opt out",
+			domain.ErrConflict, planningRepo, root, wantID)
+	}
+	return fmt.Errorf(
+		"%w: planning_repo %q resolved to %s, whose id is %q but this pointer expects %q — "+
+			"refusing to use a different planning repo",
+		domain.ErrConflict, planningRepo, root, gotID, wantID)
+}
+
+// resolvedID is the durable id of the tree a config resolved to: its own for an in-tree
+// layout, the target's when the config is a pointer.
+func resolvedID(cf configFile, root string) string {
+	if cf.PlanningRepo == "" {
+		return cf.ID
+	}
+	return planningRepoID(root)
+}
+
+// planningRepoID returns the durable id of the planning repo governing root, or "" when it
+// has no config or no id yet. Never an error: absence is legal everywhere.
+func planningRepoID(root string) string {
+	_, cf, ok := configForRoot(root)
+	if !ok {
+		return ""
+	}
+	return cf.ID
 }
 
 // configForRoot finds the .tskflwctl.toml that GOVERNS the planning root at
@@ -306,9 +371,20 @@ const ConfigFile = ".tskflwctl.toml"
 // planning tree is still git-committable (git won't track empty directories).
 const gitKeep = ".gitkeep"
 
+// defaultConfigTOMLWith renders the scaffold config carrying a freshly minted durable id.
+// The id is COMMITTED on purpose: it identifies the repo, so it must travel with the repo
+// rather than living on one machine (see `id` in configFile).
+func defaultConfigTOMLWith(mintedID string) string {
+	return fmt.Sprintf(defaultConfigTOML, mintedID)
+}
+
 const defaultConfigTOML = `# tskflwctl planning config — also the marker that anchors discovery.
 # taskflow_root: planning dir relative to this file (default ".").
 taskflow_root = "."
+# id: this planning repo's durable identity. Minted once and committed, so a pointer in
+# another repo can verify it reached the tree it meant even if paths move. Do not edit or
+# copy it into another repo — two repos sharing an id defeats the check.
+id = %q
 # tracked_repos: impl repos this planning repo tracks (managed by ` + "`init --track`" + ` /
 # the auto-link-back from ` + "`init --planning-repo`" + `).
 tracked_repos = []
@@ -385,13 +461,61 @@ func Init(root string, dryRun bool) ([]string, error) {
 		}
 		return created, nil
 	}
-	switch err := writeFileExclusive(cfg, []byte(defaultConfigTOML), 0o644); {
+	switch err := writeFileExclusive(cfg, []byte(defaultConfigTOMLWith(id.New())), 0o644); {
 	case err == nil:
 		created = append(created, ConfigFile)
+		return created, nil
 	case !os.IsExist(err):
 		return created, fmt.Errorf("write config: %w", err)
 	}
+	// The config already existed. Re-running init REPAIRS a scaffold repo (it is how a
+	// missing .gitkeep is restored), so backfill a durable id the same way — that is the
+	// migration path for every repo predating the mint, with no new command surface.
+	added, err := backfillID(cfg)
+	if err != nil {
+		return created, err
+	}
+	if added {
+		created = append(created, ConfigFile+" (id)")
+	}
 	return created, nil
+}
+
+// backfillID adds a durable id to an existing SCAFFOLD config that lacks one. A pointer
+// config is left alone: the id identifies a planning repo, and a pointer is not one.
+// Idempotent — a config that already has an id is untouched.
+func backfillID(cfgPath string) (bool, error) {
+	cf, err := readConfigFile(cfgPath)
+	if err != nil || cf.ID != "" || cf.PlanningRepo != "" {
+		return false, err
+	}
+	b, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return false, err
+	}
+	out := insertTopLevelKey(string(b), fmt.Sprintf("id = %q", id.New()))
+	if err := writeFileAtomic(cfgPath, []byte(out), 0o644); err != nil {
+		return false, fmt.Errorf("backfill id: %w", err)
+	}
+	return true, nil
+}
+
+// insertTopLevelKey splices a `key = value` line into TOML text at top level — BEFORE the
+// first table header, so it can never be swallowed into a `[pager]`/`[theme]` table and
+// silently become a sub-key. Appends at the end when the file has no tables.
+func insertTopLevelKey(text, line string) string {
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(strings.TrimSpace(l), "[") {
+			out := append([]string{}, lines[:i]...)
+			out = append(out, line, "")
+			return strings.Join(append(out, lines[i:]...), "\n")
+		}
+	}
+	if !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	return text + line + "\n"
 }
 
 // pointerConfigTOML renders the POINTER config InitPointer writes: the marker
@@ -399,10 +523,20 @@ func Init(root string, dryRun bool) ([]string, error) {
 // scaffolding a tree here. The path is stored as the user gave it (relative or
 // absolute) so it stays portable; discovery resolves it relative to this file.
 // %q yields a valid TOML basic string for the common path cases.
-func pointerConfigTOML(planningRepo string) string {
-	return fmt.Sprintf("# tskflwctl planning config — this repo's planning lives in another repo.\n"+
+func pointerConfigTOML(planningRepo, targetID string) string {
+	out := fmt.Sprintf("# tskflwctl planning config — this repo's planning lives in another repo.\n"+
 		"# planning_repo: the external planning repo, relative to this file (or absolute).\n"+
 		"planning_repo = %q\n", planningRepo)
+	if targetID == "" {
+		return out
+	}
+	// Recording the target's id is what OPTS THIS POINTER IN to verification: from here on
+	// a resolution that lands somewhere else — or somewhere with no id — is a loud error
+	// rather than a silent bind to whatever happened to sit at that relative path.
+	return out + fmt.Sprintf(
+		"# planning_repo_id: the target's durable id, verified after resolving. Remove it to\n"+
+			"# opt out of the check; a mismatch fails rather than writing to the wrong tree.\n"+
+			"planning_repo_id = %q\n", targetID)
 }
 
 // InitPointer writes a POINTER config under dir (`.tskflwctl.toml` with a
@@ -415,9 +549,14 @@ func InitPointer(dir, planningRepo string, dryRun bool) ([]string, error) {
 	if strings.TrimSpace(planningRepo) == "" {
 		return nil, fmt.Errorf("%w: planning_repo path is required", domain.ErrValidation)
 	}
-	if _, err := resolvePlanningRepo(dir, planningRepo); err != nil {
+	// No expectation yet — this is where one gets established. Resolve first (the
+	// "require + validate" contract), then read the target's id so the pointer we write
+	// opts into verification from its first use.
+	planningRoot, err := resolvePlanningRepo(dir, planningRepo, "")
+	if err != nil {
 		return nil, err // not a planning root → loud, nothing written
 	}
+	targetID := planningRepoID(planningRoot)
 	cfg := filepath.Join(dir, ConfigFile)
 	// An existing config: same target → idempotent no-op; a DIFFERENT target (a
 	// re-point) or a scaffold config (a mode switch) → refuse, so a corrected typo
@@ -442,7 +581,7 @@ func InitPointer(dir, planningRepo string, dryRun bool) ([]string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
-	if err := writeFileExclusive(cfg, []byte(pointerConfigTOML(planningRepo)), 0o644); err != nil {
+	if err := writeFileExclusive(cfg, []byte(pointerConfigTOML(planningRepo, targetID)), 0o644); err != nil {
 		if os.IsExist(err) {
 			return nil, nil // O_EXCL race: a config appeared just now — treat as no-op
 		}
@@ -467,7 +606,7 @@ func AddTrackedRepo(dir, repoPath string, dryRun bool) (bool, error) {
 // planning repo without a config yet is a SILENT no-op (returns ""), as is an
 // already-recorded repo. On a fresh link it returns the back-link path written.
 func LinkBack(implDir, planningRepo string, dryRun bool) (string, error) {
-	planningRoot, err := resolvePlanningRepo(implDir, planningRepo)
+	planningRoot, err := resolvePlanningRepo(implDir, planningRepo, "")
 	if err != nil {
 		return "", err
 	}

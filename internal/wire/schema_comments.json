@@ -141,5 +141,6 @@
   "github.com/andy-esch/taskflow/internal/wire.ThemesEnvelope": "ThemesEnvelope is `theme list --json`.",
   "github.com/andy-esch/taskflow/internal/wire.VersionEnvelope": "VersionEnvelope is `version --json`.",
   "github.com/andy-esch/taskflow/internal/wire.WorkspaceEnvelope": "WorkspaceEnvelope is `workspace --json`: the cheap read that answers \"which planning tree would a mutation hit from here?\" before running one.",
-  "github.com/andy-esch/taskflow/internal/wire.WorkspaceJSON": "WorkspaceJSON identifies the planning tree a command resolved to."
+  "github.com/andy-esch/taskflow/internal/wire.WorkspaceJSON": "WorkspaceJSON identifies the planning tree a command resolved to.",
+  "github.com/andy-esch/taskflow/internal/wire.WorkspaceJSON.RepoID": "RepoID is the planning repo's DURABLE identity — stable across moves, and shared by\nevery worktree of the repo (it lives in a committed file). Omitted for a repo that\npredates the mint. Pair it with PlanningRoot, never substitute: the id names the\nrepo, the path names the checkout."
 }
