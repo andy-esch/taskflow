@@ -142,5 +142,6 @@
   "github.com/andy-esch/taskflow/internal/wire.VersionEnvelope": "VersionEnvelope is `version --json`.",
   "github.com/andy-esch/taskflow/internal/wire.WorkspaceEnvelope": "WorkspaceEnvelope is `workspace --json`: the cheap read that answers \"which planning tree would a mutation hit from here?\" before running one.",
   "github.com/andy-esch/taskflow/internal/wire.WorkspaceJSON": "WorkspaceJSON identifies the planning tree a command resolved to.",
+  "github.com/andy-esch/taskflow/internal/wire.WorkspaceJSON.Branch": "Branch and Checkout identify WHICH working tree, where RepoID identifies which repo:\nevery worktree of a repo shares one id, so two of them are told apart only by these.\nBoth omitted when the tree is not in a git repo, which is a normal way to keep\nplanning. Checkout is \"base\" or \"worktree\".",
   "github.com/andy-esch/taskflow/internal/wire.WorkspaceJSON.RepoID": "RepoID is the planning repo's DURABLE identity — stable across moves, and shared by\nevery worktree of the repo (it lives in a committed file). Omitted for a repo that\npredates the mint. Pair it with PlanningRoot, never substitute: the id names the\nrepo, the path names the checkout."
 }

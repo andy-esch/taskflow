@@ -1,1 +1,1 @@
-{"schema_version":"1.35","slug":"alpha-task","acceptance":[{"index":1,"checked":true,"text":"the first criterion is done"},{"index":2,"checked":false,"text":"the second criterion is not"}]}
+{"schema_version":"1.36","slug":"alpha-task","acceptance":[{"index":1,"checked":true,"text":"the first criterion is done"},{"index":2,"checked":false,"text":"the second criterion is not"}]}

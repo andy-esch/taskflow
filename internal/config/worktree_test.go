@@ -289,3 +289,52 @@ func TestAnchorDir_SeparateGitDirWorktreeDegrades(t *testing.T) {
 			"--separate-git-dir repo is not recorded anywhere, so guessing would be worse", got, wt)
 	}
 }
+
+// TestDescribeCheckout covers the branch/worktree read the atlas card header needs: two
+// checkouts of one repo share a repo id and often have near-identical directory names, so
+// the branch is the only thing that tells them apart.
+func TestDescribeCheckout(t *testing.T) {
+	parent := t.TempDir()
+	repo := filepath.Join(parent, "repo")
+	mustMkdir(t, repo)
+	git(t, repo, "init", "-q", "-b", "trunk", ".")
+	git(t, repo, "commit", "-q", "--allow-empty", "-m", "i")
+
+	t.Run("base checkout reports its branch", func(t *testing.T) {
+		c := DescribeCheckout(repo)
+		if c.Branch != "trunk" {
+			t.Errorf("branch = %q, want trunk", c.Branch)
+		}
+		if c.IsWorktree {
+			t.Error("the base checkout must not be reported as a worktree")
+		}
+	})
+
+	t.Run("linked worktree reports its own branch", func(t *testing.T) {
+		wt := filepath.Join(parent, "wt")
+		git(t, repo, "worktree", "add", "-q", wt, "-b", "feature")
+		c := DescribeCheckout(wt)
+		if c.Branch != "feature" {
+			t.Errorf("branch = %q, want feature — a worktree keeps its OWN HEAD", c.Branch)
+		}
+		if !c.IsWorktree {
+			t.Error("a linked worktree must be flagged as one")
+		}
+	})
+
+	t.Run("detached HEAD reports a short sha", func(t *testing.T) {
+		det := filepath.Join(parent, "det")
+		git(t, repo, "worktree", "add", "-q", "--detach", det)
+		c := DescribeCheckout(det)
+		if c.Branch == "" || len(c.Branch) > 12 {
+			t.Errorf("detached HEAD should report a short sha, got %q", c.Branch)
+		}
+	})
+
+	t.Run("not a git repo reports nothing, never errors", func(t *testing.T) {
+		c := DescribeCheckout(t.TempDir())
+		if c.Branch != "" || c.IsWorktree {
+			t.Errorf("a non-git dir must report nothing, got %+v", c)
+		}
+	})
+}

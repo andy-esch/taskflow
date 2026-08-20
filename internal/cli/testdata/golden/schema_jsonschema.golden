@@ -1845,6 +1845,14 @@
           "type": "string",
           "description": "RepoID is the planning repo's DURABLE identity — stable across moves, and shared by\nevery worktree of the repo (it lives in a committed file). Omitted for a repo that\npredates the mint. Pair it with PlanningRoot, never substitute: the id names the\nrepo, the path names the checkout."
         },
+        "branch": {
+          "type": "string",
+          "description": "Branch and Checkout identify WHICH working tree, where RepoID identifies which repo:\nevery worktree of a repo shares one id, so two of them are told apart only by these.\nBoth omitted when the tree is not in a git repo, which is a normal way to keep\nplanning. Checkout is \"base\" or \"worktree\"."
+        },
+        "checkout": {
+          "type": "string",
+          "description": "base|worktree"
+        },
         "config_path": {
           "type": "string"
         },
@@ -2006,6 +2014,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.35)",
+  "title": "tskflwctl --json output (schema_version 1.36)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }
