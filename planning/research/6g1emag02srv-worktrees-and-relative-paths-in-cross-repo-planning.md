@@ -150,6 +150,41 @@ If `space.id` is decided as a *path-keyed* identity rather than a minted durable
 C becomes unavailable and finding 2 stays open permanently — the registry would inherit
 exactly the fragility this documents. That decision and this one are the same decision.
 
+## Progress — shipped 2026-08-20
+
+All four layers landed, in two merges (`feat/worktree-handling-for-spaces`,
+`feat/workspace-ids`). Recording it here so the Recommendation above reads as history
+rather than a plan.
+
+| layer | status |
+| --- | --- |
+| **A** worktree-aware linkback | **shipped** — `anchorDir` in `internal/config/worktree.go` |
+| **B** resolve out-of-tree paths from the canonical checkout | **shipped** — same helper, wired into `resolvePlanningRepo` and `resolveRepoPath` |
+| **C** identity, not paths | **shipped** — `init` mints a durable `id`; a pointer recording `planning_repo_id` verifies after resolving |
+| **D** registry recovery | **not built** — waits on the space registry (epic 29) |
+
+**The rule that came out of implementing A/B** turned out to be cleaner than "worktrees are
+special", and is worth carrying forward: *which side of the repo boundary a path points at
+decides what it resolves against.* `taskflow_root` is in-tree and anchors to the config
+file's own dir; `planning_repo` and `tracked_repos` point outward and anchor to the
+canonical checkout. Now stated in `docs/ARCHITECTURE.md`.
+
+**What testing changed about the plan:**
+
+- `.git`-as-a-file has **three** causes and only one is a worktree. `--separate-git-dir`
+  and submodules must be left alone; the discriminator is a `/worktrees/<name>` segment.
+- A worktree of the **planning** repo must NOT be redirected — it edits its own tree. The
+  original framing would have written to a different checkout than the user stood in.
+- The main working tree of a `--separate-git-dir` repo is **not recorded anywhere**; `git
+  worktree list` reports the git dir itself. Degrading is the only honest behavior
+  (audit 2026-08-19 H1, wontfix).
+- Verification had to fail on a **missing** target id, not only a mismatch: the decoy that
+  motivated layer C is a repo with no id at all.
+
+**Still open:** layer D, and whether a pointer changing `planning_repo` on a branch should
+also have to update `planning_repo_id` (it must today, which forces intentionality but
+nobody has hit it yet).
+
 ## Related
 
 - The hazard this extends, and the observability that exposed it: audit
