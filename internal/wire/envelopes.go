@@ -266,8 +266,13 @@ func ToSummaryEnvelope(s core.Summary) SummaryEnvelope {
 // won, so a surprising resolution is self-explaining rather than needing a bug report.
 type WorkspaceJSON struct {
 	PlanningRoot string `json:"planning_root"`
-	ConfigPath   string `json:"config_path,omitempty"`
-	Source       string `json:"source" jsonschema:"description=how the root was selected: pointer|config|discovered"`
+	// RepoID is the planning repo's DURABLE identity — stable across moves, and shared by
+	// every worktree of the repo (it lives in a committed file). Omitted for a repo that
+	// predates the mint. Pair it with PlanningRoot, never substitute: the id names the
+	// repo, the path names the checkout.
+	RepoID     string `json:"repo_id,omitempty"`
+	ConfigPath string `json:"config_path,omitempty"`
+	Source     string `json:"source" jsonschema:"description=how the root was selected: pointer|config|discovered"`
 }
 
 // Workspace source values. `pointer` means a planning_repo key routed here from

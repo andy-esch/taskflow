@@ -10,6 +10,7 @@ priority: low
 autonomy_level: 3
 tags: [config, multi-repo, design]
 created: "2026-08-19"
+updated_at: "2026-08-19"
 ---
 # Decide how a relative `planning_repo` resolves from a worktree branch
 
@@ -65,3 +66,23 @@ redundant.
 
 - Audit [2026-08-19-worktree-aware-resolution](../audits/6g1s9jpzr1yk-2026-08-19-worktree-aware-resolution.md) M2
 - [decide-space.id-identity](6g1m8mc8p46h-decide-space.id-identity-durable-minted-id-vs-path-keyed.md)
+
+### 2026-08-19 — largely dissolved by the identity decision
+
+The durable-id decision landed in the "adopt" direction
+([decide-space.id-identity](6g1m8mc8p46h-decide-space.id-identity-durable-minted-id-vs-path-keyed.md)),
+which was the coupling this task was waiting on.
+
+With a pointer recording `planning_repo_id` and verification failing on **mismatch or a
+missing target id**, the *dangerous* outcome here — a relative path silently binding to an
+unrelated planning repo next to the main checkout — becomes a loud `exit 14` regardless of
+which base the path resolved against.
+
+What remains is only the **confusing-error** case: a worktree branch whose pointer is
+worktree-relative still resolves against the canonical checkout and fails, now with a clear
+id-mismatch message rather than a silent bind. That is a documentation question, not a
+correctness one, so the `./` vs `../` prefix rule is very likely unnecessary.
+
+**Recommendation: close as wontfix once id verification ships**, documenting the base-anchoring
+behavior where a reader of `.tskflwctl.toml` will find it. Left open until then so the
+dependency is visible.

@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1s9jpzr1yk
-bucket: open
+bucket: closed
 area: worktree-aware-resolution
 date: "2026-08-19"
 ---
@@ -92,7 +92,7 @@ Deliberately **not** applied to `resolvePlanningRepo`: pointing at a planning wo
 legitimate, and a planning worktree resolves to its own tree by design. Tests:
 `TestWorktree_LinkBackRecordsCanonicalCheckout`, `TestWorktree_TolerantOfWorktreePathAlreadyRecorded`.
 
-#### M2. Semantic collision when worktree branch modifies relative `planning_repo`  · **Status:** open
+#### M2. Semantic collision when worktree branch modifies relative `planning_repo`  · **Status:** deferred
 
 **File:** `internal/config/config.go:193-197` | **Component:** config
 **Effort:** M · **Urgency:** eventually
@@ -108,6 +108,14 @@ root = filepath.Join(anchorDir(dir), root)
 The value is taken from the worktree branch config, but the base path is substituted with the canonical checkout directory.
 
 **Recommendation:** Document this boundary semantic clearly, or validate whether relative `planning_repo` paths starting with `./` (in-tree or relative-descendant) should resolve against `dir` while `../` escapes anchor to canonical checkouts.
+
+**Deferred (2026-08-19) — tracked, and deliberately coupled.** Filed as
+[decide-how-a-relative-planning-repo-resolves-from-a-worktree-branch](../tasks/6g1sb9keb5c9-decide-how-a-relative-planning-repo-resolves-from-a-worktree-branch.md).
+Rare (needs a deliberate per-branch pointer edit) but the bad outcome is a silent wrong-tree bind.
+Sequenced **with** the `space.id` identity decision: if pointers verify a durable id after
+resolving, the dangerous outcome becomes a loud error regardless of which base was used, which
+dissolves most of this without adding a `./` vs `../` rule. Deciding it first risks shipping a
+rule that identity verification then makes redundant.
 
 #### M3. `appendTrackedRepo` deduplication fails for worktree paths against canonical checkouts  · **Status:** fixed
 
@@ -127,7 +135,7 @@ anchored, only the base — and fixed by the same one-line change to `resolveRep
 `init --track ../impl-wt` against a config already listing `../impl` now collapses to a single
 entry instead of duplicating the repository.
 
-#### L1. Redundant un-cached filesystem reads and stats during `CheckLinks` iteration  · **Status:** open
+#### L1. Redundant un-cached filesystem reads and stats during `CheckLinks` iteration  · **Status:** deferred
 
 **File:** `internal/config/worktree.go:60-93`, `internal/config/config.go:590-615` | **Component:** config / perf
 **Effort:** XS · **Urgency:** eventually
@@ -135,6 +143,13 @@ entry instead of duplicating the repository.
 `canonicalCheckout` performs multiple disk I/O operations (`os.Lstat`, `os.ReadFile`, `os.Stat`, `filepath.EvalSymlinks`) without caching results. In `CheckLinks`, `resolveRepoPath` is called multiple times per tracked repository in a loop (e.g. 4 times per entry). For a planning repo tracking 10 repositories, this triggers 40+ stats and reads on every command during `warnLinks`.
 
 **Recommendation:** Memoize `canonicalCheckout` within a package-level run or structure `CheckLinks` to resolve each directory once.
+
+**Deferred (2026-08-19) — measured, not assumed.** Filed as
+[cache-worktree-anchoring-if-it-ever-shows-up-in-a-profile](../tasks/6g1sbcbfb4mk-cache-worktree-anchoring-if-it-ever-shows-up-in-a-profile.md).
+Timed after the change (10 runs each): `task list` 45.3 ms, `doctor` 8.1 ms — and `doctor` is the
+linkback-heavy path AND the cheapest command measured, so the extra syscalls are well below noise.
+Caching now would add invalidation questions (worktrees appear and vanish mid-session) for no
+measured gain. Triggers that would change the call are recorded on the task.
 
 ## What is solid (checked, deliberately not findings)
 

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/term"
@@ -32,6 +33,50 @@ func NewTTY(in io.Reader, out io.Writer, th design.Theme) Prompter {
 // (huh.Select) — a "> " caret marks the current row, type to filter. Each label is
 // truncated to the terminal width so a long description stays on ONE line rather than
 // wrapping. Renders to out (stderr).
+// abortKeyMap is huh's default bindings with ESC added to Quit.
+//
+// huh binds Quit to ctrl+c ALONE, so a prompt could only be escaped with an interrupt —
+// which reads as "something went wrong" for what is just changing your mind. The downstream
+// handling was already correct (ErrAborted → a quiet "aborted", exit 130); only the binding
+// was missing, and this package's own doc comment already promised esc.
+//
+// ctrl+c is kept so muscle memory still works. Where filtering is on, huh's field consumes
+// esc first to clear an active filter, so esc quits once the filter is empty — the
+// conventional layering, not a conflict.
+func abortKeyMap() *huh.KeyMap {
+	km := huh.NewDefaultKeyMap()
+	km.Quit = key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "cancel"))
+	return km
+}
+
+// selectMenuMax is the longest list shown without scrolling; selectFilterMin is the
+// shortest list a filter input earns its place on.
+const (
+	selectMenuMax   = 10
+	selectFilterMin = 8
+)
+
+// selectLayout decides a Select's window height (0 = let huh size it) and whether to show
+// a filter input, from the number of options.
+//
+// Both defaults were wrong before, and visibly so on a two-option menu:
+//
+//   - HEIGHT. huh's Height counts the TITLE, not just the rows (updateViewportSize
+//     subtracts the title's height from it), so passing Height(len(options)) left room for
+//     len(options)-1 rows and silently hid the last choice. Its unset branch already sizes
+//     the viewport to the options, so the fix is to set nothing unless the list is long
+//     enough to actually need capping.
+//   - FILTERING. A filter input on a two-item menu is noise that reads as a free-text
+//     field — you cannot type your way to an answer that is right there. Reserve it for
+//     lists long enough that scanning is the slow part.
+func selectLayout(n int) (height int, filtering bool) {
+	if n > selectMenuMax {
+		// +1 for the title line huh charges against Height.
+		height = selectMenuMax + 1
+	}
+	return height, n >= selectFilterMin
+}
+
 func (p ttyPrompter) SelectOne(title string, opts []Option) (string, error) {
 	width := promptWidth(p.out)
 	options := make([]huh.Option[string], len(opts))
@@ -43,22 +88,21 @@ func (p ttyPrompter) SelectOne(title string, opts []Option) (string, error) {
 		}
 		options[i] = huh.NewOption(label, o.Value)
 	}
-	// Cap the visible window so a long list stays a compact menu (huh scrolls the rest).
-	height := len(options)
-	if height > 10 {
-		height = 10
-	}
+	height, filtering := selectLayout(len(options))
 	var v string
 	field := huh.NewSelect[string]().
 		Title(title).
 		Options(options...).
-		Filtering(true).
-		Height(height).
+		Filtering(filtering).
 		Value(&v)
+	if height > 0 {
+		field = field.Height(height)
+	}
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithInput(p.in).
 		WithOutput(p.out).
 		WithTheme(p.pickerTheme()).
+		WithKeyMap(abortKeyMap()).
 		Run()
 	if errors.Is(err, huh.ErrUserAborted) {
 		return "", ErrAborted
@@ -77,6 +121,7 @@ func (p ttyPrompter) Text(title, placeholder string) (string, error) {
 		WithInput(p.in).
 		WithOutput(p.out).
 		WithTheme(p.pickerTheme()).
+		WithKeyMap(abortKeyMap()).
 		Run()
 	if errors.Is(err, huh.ErrUserAborted) {
 		return "", ErrAborted

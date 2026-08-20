@@ -127,3 +127,45 @@ Concretely, to settle here:
   the registry agree?
 - If not durable: record explicitly that the wrong-tree hazard is accepted, so it is a
   decision rather than an omission.
+
+### 2026-08-19 — identity settled; the entry schema is now decided
+
+[decide-space.id-identity](6g1m8mc8p46h-decide-space.id-identity-durable-minted-id-vs-path-keyed.md)
+is closed. **Two identities**: path addresses the checkout, a durable committed id asserts
+the repo. The entry shape is therefore:
+
+```toml
+[[space]]
+id        = "taskflow"                  # LOCAL LABEL — the address, what --space takes
+path      = "~/git/andy-esch/taskflow"  # the repo dir, not the resolved planning root
+verify_id = "6g1durable0aa"             # the target repo's durable id, checked after resolving
+label     = "tskflwctl"                 # optional display name
+accent    = "cyan"                      # optional
+added     = "2026-08-19"
+```
+
+`id` is a **local label**, not the durable id: every worktree of a repo shares one committed
+id, so a durable id cannot address a specific checkout — and labels are typable.
+
+Still open in this task (unchanged): **collision policy** on a derived label, and **entry
+ordering** in the file.
+
+**Dedup gains a second axis.** Two entries may now share a `verify_id` (two checkouts of one
+repo) — which is legitimate and must not be collapsed. Dedup on **physical path**, never on
+`verify_id`.
+
+### 2026-08-19 — labels must be shell-completable, and that is part of why they won
+
+`--space <label>` should complete from the registry, like every other addressable property
+here (`completion.go` already does command / flag / status-aware slug completion).
+
+This is a second, independent argument for the label over the durable id as the address:
+a completion menu of `taskflow · desirelines · dotfiles` is usable, whereas one of
+`6g1durable0aa · 6g1kzy4pgt2f` is not — the ids are not recognizable even when shown.
+Completability is a property of the *address*, and it should be treated as a requirement of
+this task, not a nicety bolted on later.
+
+Constraint to carry over from `completion.go`: completion funcs do their own forgiving
+discovery and must **not** fail outside a planning repo. Registry completion reads the home
+config, which exists independently of any planning repo, so `--space` should complete even
+where nothing else does.

@@ -82,7 +82,7 @@ func TestCheckLinks_Consistent(t *testing.T) {
 	impl := filepath.Join(parent, "impl")
 	mustMkdir(t, filepath.Join(planning, "tasks"))
 	mustMkdir(t, impl)
-	if _, err := Init(planning, false); err != nil {
+	if _, err := Init(planning, "", false); err != nil {
 		t.Fatal(err)
 	}
 	// Point via an ABSOLUTE path; link-back stores the relative form — physical
@@ -109,7 +109,7 @@ func TestCheckLinks_OneSided(t *testing.T) {
 	impl := filepath.Join(parent, "impl")
 	mustMkdir(t, filepath.Join(planning, "tasks"))
 	mustMkdir(t, impl)
-	if _, err := Init(planning, false); err != nil {
+	if _, err := Init(planning, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := InitPointer(impl, "../planning", false); err != nil { // no link-back
@@ -131,7 +131,7 @@ func TestCheckLinks_PlanningSide(t *testing.T) {
 	parent := t.TempDir()
 	planning := filepath.Join(parent, "planning")
 	mustMkdir(t, filepath.Join(planning, "tasks"))
-	if _, err := Init(planning, false); err != nil {
+	if _, err := Init(planning, "", false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -147,7 +147,7 @@ func TestCheckLinks_PlanningSide(t *testing.T) {
 	// no-planning_repo: tracked repo is itself a scaffold (no pointer back).
 	other := filepath.Join(parent, "other")
 	mustMkdir(t, filepath.Join(other, "tasks"))
-	if _, err := Init(other, false); err != nil {
+	if _, err := Init(other, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := AddTrackedRepo(planning, "../other", false); err != nil {
@@ -156,7 +156,7 @@ func TestCheckLinks_PlanningSide(t *testing.T) {
 	// points-elsewhere: tracked impl points at a DIFFERENT planning repo.
 	elsewhere := filepath.Join(parent, "elsewhere")
 	mustMkdir(t, filepath.Join(elsewhere, "tasks"))
-	if _, err := Init(elsewhere, false); err != nil {
+	if _, err := Init(elsewhere, "", false); err != nil {
 		t.Fatal(err)
 	}
 	impl := filepath.Join(parent, "impl")
@@ -189,7 +189,7 @@ func TestCheckLinks_PlanningSide(t *testing.T) {
 func TestCheckLinks_NoLinks(t *testing.T) {
 	repo := t.TempDir()
 	mustMkdir(t, filepath.Join(repo, "tasks"))
-	if _, err := Init(repo, false); err != nil {
+	if _, err := Init(repo, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if p := linksAt(t, repo); len(p) != 0 {

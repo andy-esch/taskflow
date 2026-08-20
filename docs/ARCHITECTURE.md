@@ -87,7 +87,16 @@ the one-screen orientation for contributors.
   `progressbar` — the one place a *hue* is chosen, as `theme` is for a *glyph*.
 - **`internal/config`** — discovers the planning root (walk up for tasks/;
   terminates at a `.git`/root boundary). **Repo-scoped**, and deliberately does not
-  import `userconfig`.
+  import `userconfig`. It also owns cross-repo *identity and placement*: `init`
+  scaffolds a tree (at the root or a `taskflow_root` subdir) and mints a **durable id**
+  into the repo's committed config; a `planning_repo` pointer that records
+  `planning_repo_id` **verifies it after resolving**, so a mismatch — or a target with
+  no id — is `ErrConflict` rather than a silent bind to whatever sat at that relative
+  path. Which side of the repo boundary a config path points at decides what it resolves
+  against: `taskflow_root` is in-tree and anchors to the config file's own dir, while
+  `planning_repo`/`tracked_repos` point outward and anchor to the **canonical checkout**,
+  so a committed relative path means the same thing from every git worktree
+  (`worktree.go`).
 - **`internal/userconfig`** — the *user*-scoped (home) tier: terminal preferences
   that belong to a person rather than a repo (`[theme]`, `[pager]`), read from
   `$TSKFLW_CONFIG_HOME` / `$XDG_CONFIG_HOME/tskflwctl` / `~/.config/tskflwctl`

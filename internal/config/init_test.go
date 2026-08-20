@@ -125,7 +125,7 @@ func TestInitPointer_ModeCollision(t *testing.T) {
 	}
 	// A scaffold config + pointer init → ErrConflict (mode switch refused).
 	scaf := filepath.Join(parent, "scaf")
-	if _, err := Init(scaf, false); err != nil {
+	if _, err := Init(scaf, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := InitPointer(scaf, "../planning-a", false); err == nil || !errors.Is(err, domain.ErrConflict) {
@@ -144,7 +144,7 @@ func TestInit_RefusesOverPointer(t *testing.T) {
 	if _, err := InitPointer(impl, "../planning", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Init(impl, false); err == nil || !errors.Is(err, domain.ErrConflict) {
+	if _, err := Init(impl, "", false); err == nil || !errors.Is(err, domain.ErrConflict) {
 		t.Errorf("scaffold over a pointer config should be ErrConflict, got %v", err)
 	}
 	if isDir(filepath.Join(impl, "tasks")) {
@@ -157,7 +157,7 @@ func TestAddTrackedRepo(t *testing.T) {
 	parent := t.TempDir()
 	planning := filepath.Join(parent, "planning")
 	mustMkdir(t, filepath.Join(planning, "tasks"))
-	if _, err := Init(planning, false); err != nil {
+	if _, err := Init(planning, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if added, err := AddTrackedRepo(planning, "../impl-a", false); err != nil || !added {
@@ -204,7 +204,7 @@ func TestLinkBack(t *testing.T) {
 	planning := filepath.Join(parent, "desirelines-planning")
 	mustMkdir(t, impl)
 	mustMkdir(t, filepath.Join(planning, "tasks"))
-	if _, err := Init(planning, false); err != nil {
+	if _, err := Init(planning, "", false); err != nil {
 		t.Fatal(err)
 	}
 	back, err := LinkBack(impl, "../desirelines-planning", false)
@@ -269,7 +269,7 @@ func TestAddTrackedRepo_BracketInPath(t *testing.T) {
 	parent := t.TempDir()
 	planning := filepath.Join(parent, "planning")
 	mustMkdir(t, filepath.Join(planning, "tasks"))
-	if _, err := Init(planning, false); err != nil {
+	if _, err := Init(planning, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := AddTrackedRepo(planning, "../imp]l", false); err != nil {
@@ -297,7 +297,7 @@ func mustMkdir(t *testing.T, p string) {
 func TestInit(t *testing.T) {
 	root := t.TempDir()
 
-	created, err := Init(root, false)
+	created, err := Init(root, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestInit(t *testing.T) {
 	}
 
 	// Idempotent: a second run creates nothing.
-	again, err := Init(root, false)
+	again, err := Init(root, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func TestInit(t *testing.T) {
 // (the flat store never reads them; a file dropped in one would be invisible).
 func TestInitScaffoldsEntityDirs(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Init(root, false); err != nil {
+	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
 	for _, d := range []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ProjectsDir} {
@@ -359,7 +359,7 @@ func TestInitScaffoldsEntityDirs(t *testing.T) {
 // dir, so an empty planning tree is git-committable.
 func TestInitGitkeepsEveryDir(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Init(root, false); err != nil {
+	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
 	for _, d := range []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ProjectsDir} {
@@ -378,7 +378,7 @@ func TestInitRetrofitsGitkeep(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	created, err := Init(root, false)
+	created, err := Init(root, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,5 +429,44 @@ func TestDiscover_FallsBackToTasksDir(t *testing.T) {
 	cfg, err := Discover(root)
 	if err != nil || cfg.Root != eval(t, root) {
 		t.Errorf("fallback discovery = %+v, %v", cfg, err)
+	}
+}
+
+// TestInit_GitkeepOnlyInEmptyDirs regresses a real littering: re-running init in a
+// populated repo dropped a .gitkeep into every entity dir, including ones full of files.
+// The placeholder exists to make an EMPTY dir committable; anywhere else it is noise that
+// will never do anything, and it showed up as spurious additions in a real diff.
+func TestInit_GitkeepOnlyInEmptyDirs(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Init(root, "", false); err != nil {
+		t.Fatal(err)
+	}
+	// a fresh scaffold: every dir is empty, so every dir gets one
+	if _, err := os.Stat(filepath.Join(root, domain.TasksDir, gitKeep)); err != nil {
+		t.Fatalf("an empty dir should keep its placeholder: %v", err)
+	}
+
+	// populate tasks/ and drop its placeholder, as a real repo looks
+	if err := os.Remove(filepath.Join(root, domain.TasksDir, gitKeep)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, domain.TasksDir, "abc-x.md"), []byte("---\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Init(root, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, domain.TasksDir, gitKeep)); err == nil {
+		t.Error("a populated dir must NOT get a .gitkeep back")
+	}
+	// ...while a still-empty one is repaired
+	if err := os.Remove(filepath.Join(root, domain.EpicsDir, gitKeep)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Init(root, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, domain.EpicsDir, gitKeep)); err != nil {
+		t.Errorf("an empty dir missing its placeholder should still be repaired: %v", err)
 	}
 }

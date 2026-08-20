@@ -2,5 +2,7 @@
 taskflow_root = "./planning"
 tracked_repos = []
 
+id = "6g1xbp8fvcrm"
+
 [pager]
 enabled = true # default

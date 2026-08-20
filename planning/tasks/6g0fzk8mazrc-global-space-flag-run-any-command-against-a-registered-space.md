@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [cli, multi-repo]
 created: "2026-08-15"
-updated_at: "2026-08-18"
+updated_at: "2026-08-19"
 ---
 # Global `--space` flag: run any command against a registered space
 
@@ -83,3 +83,22 @@ instead of checked afterwards. That is how every comparable CLI does it — `git
 **Until this ships there is no pre-write precondition at all** — the `workspace` read and
 the receipt field cover proof, not prevention. That gap is accepted and recorded on the
 audit finding; it is the main reason this task is worth doing early in slice 2.
+
+### 2026-08-19 — the guard is now mechanical, not conventional
+
+Identity settled: `--space <label>` selects a registry entry, and the entry's `verify_id` is
+checked against the resolved repo's committed id **after** resolving. So "naming a tree
+cannot resolve to the wrong one" stops being a convention and becomes an enforced check.
+
+Verification contract (opt-in per pointer, strict once opted in):
+
+```
+entry has verify_id + target matches   → proceed
+entry has verify_id + target differs   → exit 14 (ErrConflict)
+entry has verify_id + target has NONE  → exit 14
+entry has NO verify_id (legacy)        → today's behavior
+```
+
+This supersedes the earlier note's worry: a `--space` whose entry has drifted no longer needs
+a bespoke staleness rule — the id mismatch *is* the staleness detection, and it fails loudly.
+The "never silently fall back to cwd discovery" requirement stands unchanged.

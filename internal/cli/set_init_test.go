@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
+	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
@@ -18,24 +19,24 @@ import (
 func TestResolveInitTarget(t *testing.T) {
 	// --planning-repo set → pointer outright, no prompt.
 	app := &App{Gate: prompt.NewGate(false), Prompt: &prompt.Fake{}}
-	if p, repo, err := app.resolveInitTarget("../planning", true); err != nil || !p || repo != "../planning" {
+	if p, repo, _, err := app.resolveInitTarget(t.TempDir(), "../planning", true, "", false); err != nil || !p || repo != "../planning" {
 		t.Errorf("flag should force pointer mode: %v %q %v", p, repo, err)
 	}
 	// Headless (gate off), no flag → scaffold; empty Fake would error if prompted.
 	app = &App{Gate: prompt.NewGate(false), Prompt: &prompt.Fake{}}
-	if p, _, err := app.resolveInitTarget("", false); err != nil || p {
-		t.Errorf("headless no-flag should be scaffold: pointer=%v err=%v", p, err)
+	if p, _, root, err := app.resolveInitTarget(t.TempDir(), "", false, "", false); err != nil || p || root != "" {
+		t.Errorf("headless no-flag should be scaffold at the repo root: pointer=%v root=%q err=%v", p, root, err)
 	}
 	// TTY, choose "here" → scaffold.
-	app = &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{SelectAnswers: []string{"here"}}}
-	if p, _, err := app.resolveInitTarget("", false); err != nil || p {
-		t.Errorf(`"here" should be scaffold: pointer=%v err=%v`, p, err)
+	app = &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{SelectAnswers: []string{"here", "planning"}}}
+	if p, _, root, err := app.resolveInitTarget(t.TempDir(), "", false, "", false); err != nil || p || root != "planning" {
+		t.Errorf(`"here" then "planning" should scaffold into planning/: pointer=%v root=%q err=%v`, p, root, err)
 	}
 	// TTY, choose "elsewhere" then type a path → pointer.
 	app = &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{
 		SelectAnswers: []string{"elsewhere"}, TextAnswers: []string{"../planning"},
 	}}
-	if p, repo, err := app.resolveInitTarget("", false); err != nil || !p || repo != "../planning" {
+	if p, repo, _, err := app.resolveInitTarget(t.TempDir(), "", false, "", false); err != nil || !p || repo != "../planning" {
 		t.Errorf(`"elsewhere" should be pointer with the typed path: %v %q %v`, p, repo, err)
 	}
 }
@@ -292,5 +293,58 @@ func TestInit_ThenList(t *testing.T) {
 	// list should now work (and be empty) without a "not a planning repo" error.
 	if listOut := runRoot(t, "-C", root, "task", "list"); listOut != "" {
 		t.Errorf("expected empty list, got %q", listOut)
+	}
+}
+
+// TestResolveInitTarget_TaskflowRootPlacement pins the second prompt, added because "here"
+// used to always mean the repo ROOT — the config-at-root/tree-in-a-subdir layout tskflwctl
+// itself uses was unreachable, and typing `planning/` at the elsewhere prompt failed with
+// "run tskflwctl init there first".
+func TestResolveInitTarget_TaskflowRootPlacement(t *testing.T) {
+	t.Run("the flag skips both prompts", func(t *testing.T) {
+		app := &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{}} // empty Fake errors if asked
+		p, _, root, err := app.resolveInitTarget(t.TempDir(), "", false, "planning", true)
+		if err != nil || p || root != "planning" {
+			t.Errorf("explicit --taskflow-root should not prompt: pointer=%v root=%q err=%v", p, root, err)
+		}
+	})
+	t.Run("choosing the root yields the root", func(t *testing.T) {
+		app := &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{SelectAnswers: []string{"here", "."}}}
+		_, _, root, err := app.resolveInitTarget(t.TempDir(), "", false, "", false)
+		if err != nil || root != "." {
+			t.Errorf("root choice = %q, %v", root, err)
+		}
+	})
+	t.Run("custom falls through to free text", func(t *testing.T) {
+		app := &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{
+			SelectAnswers: []string{"here", "custom"}, TextAnswers: []string{"docs/planning"},
+		}}
+		_, _, root, err := app.resolveInitTarget(t.TempDir(), "", false, "", false)
+		if err != nil || root != "docs/planning" {
+			t.Errorf("custom choice = %q, %v", root, err)
+		}
+	})
+}
+
+// TestResolveInitTarget_ExistingRepoSkipsPlacement pins the repair-vs-create distinction.
+// In an already-initialized repo the placement question is settled: two of the three menu
+// answers would be refused as data-forking and the third is a no-op, so asking at all is
+// worse than not asking. init falls through to the repair path, which REPORTS the layout.
+func TestResolveInitTarget_ExistingRepoSkipsPlacement(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := config.Init(dir, "planning", false); err != nil {
+		t.Fatal(err)
+	}
+	// An empty Fake errors if prompted at all — so this passing IS the assertion.
+	app := &App{Gate: prompt.NewGate(true), Prompt: &prompt.Fake{SelectAnswers: []string{"here"}}}
+	pointer, _, root, err := app.resolveInitTarget(dir, "", false, "", false)
+	if err != nil {
+		t.Fatalf("re-init in an existing repo must not fail: %v", err)
+	}
+	if pointer {
+		t.Error("an existing scaffold repo should stay in scaffold mode")
+	}
+	if root != "" {
+		t.Errorf("no opinion should be returned so Init adopts the existing root, got %q", root)
 	}
 }

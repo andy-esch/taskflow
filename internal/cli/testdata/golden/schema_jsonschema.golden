@@ -1841,6 +1841,10 @@
         "planning_root": {
           "type": "string"
         },
+        "repo_id": {
+          "type": "string",
+          "description": "RepoID is the planning repo's DURABLE identity — stable across moves, and shared by\nevery worktree of the repo (it lives in a committed file). Omitted for a repo that\npredates the mint. Pair it with PlanningRoot, never substitute: the id names the\nrepo, the path names the checkout."
+        },
         "config_path": {
           "type": "string"
         },
@@ -2002,6 +2006,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.34)",
+  "title": "tskflwctl --json output (schema_version 1.35)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }
