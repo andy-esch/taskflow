@@ -71,7 +71,9 @@ commands take `--dry-run` to preview the write (full validation runs; nothing
 is written) — except the interactive `task edit`, which has no preview.
 
 ```bash
-tskflwctl init                         # scaffold a planning tree here
+tskflwctl init                         # scaffold a planning tree here (prompts for placement)
+tskflwctl init --taskflow-root planning  # ...or put it in a subdir, config at the repo root
+tskflwctl init --planning-repo ../x-planning  # point at an external planning repo instead
 tskflwctl status                       # at-a-glance board: counts, in-progress, epic progress
 
 # create

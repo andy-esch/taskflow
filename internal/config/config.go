@@ -368,6 +368,13 @@ func fileExists(p string) bool {
 // ConfigFile is the per-repo config filename written by Init.
 const ConfigFile = ".tskflwctl.toml"
 
+// isEmptyDir reports whether p holds no entries. A read failure answers "not empty", so a
+// permissions hiccup never causes a stray write.
+func isEmptyDir(p string) bool {
+	entries, err := os.ReadDir(p)
+	return err == nil && len(entries) == 0
+}
+
 // gitKeep is the placeholder Init drops in each scaffolded dir so an empty
 // planning tree is still git-committable (git won't track empty directories).
 const gitKeep = ".gitkeep"
@@ -462,11 +469,12 @@ func Init(dir, taskflowRoot string, dryRun bool) ([]string, error) {
 			}
 			created = append(created, d)
 		}
-		// A .gitkeep makes the (otherwise empty) dir git-committable. Written if
-		// absent even when the dir already exists, so re-running init also repairs
-		// a tree scaffolded before this existed.
+		// A .gitkeep makes an EMPTY dir git-committable, so it is only written when the
+		// dir is actually empty. Re-running init still repairs a tree scaffolded before
+		// this existed, but a populated dir needs no placeholder — writing one there
+		// littered real repos with files that will never do anything.
 		keep := filepath.Join(p, gitKeep)
-		if !fileExists(keep) {
+		if !fileExists(keep) && isEmptyDir(p) {
 			if !dryRun {
 				if err := os.WriteFile(keep, nil, 0o644); err != nil {
 					return created, fmt.Errorf("write %s: %w", keep, err)

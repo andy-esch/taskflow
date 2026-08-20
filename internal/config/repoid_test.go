@@ -257,3 +257,58 @@ func TestInitPointer_BackfillWaitsForTargetID(t *testing.T) {
 		t.Errorf("must not invent an id, got %q", cf.PlanningRepoID)
 	}
 }
+
+// TestDescribe covers the read surface `init` uses to REPORT an existing setup instead of
+// re-asking settled questions. It must never error and never guess: a dir with no config
+// is simply "not initialized".
+func TestDescribe(t *testing.T) {
+	t.Run("no config", func(t *testing.T) {
+		if _, ok := Describe(t.TempDir()); ok {
+			t.Error("a dir with no config must report not-initialized")
+		}
+	})
+
+	t.Run("scaffold reports its root and id", func(t *testing.T) {
+		root := t.TempDir()
+		if _, err := Init(root, "planning", false); err != nil {
+			t.Fatal(err)
+		}
+		d, ok := Describe(root)
+		if !ok {
+			t.Fatal("an initialized repo should describe")
+		}
+		if d.TaskflowRoot != "./planning" {
+			t.Errorf("taskflow_root = %q, want ./planning", d.TaskflowRoot)
+		}
+		if d.ID == "" {
+			t.Error("a scaffolded repo carries a durable id")
+		}
+		if d.PlanningRepo != "" {
+			t.Errorf("a scaffold is not a pointer, got planning_repo %q", d.PlanningRepo)
+		}
+	})
+
+	t.Run("pointer reports its target and whether it verifies", func(t *testing.T) {
+		plan, impl, planID := planningAndPointer(t)
+		d, ok := Describe(impl)
+		if !ok {
+			t.Fatal("a pointer repo should describe")
+		}
+		if d.PlanningRepo != "../planning" {
+			t.Errorf("planning_repo = %q", d.PlanningRepo)
+		}
+		if d.PlanningRepoID != planID {
+			t.Errorf("planning_repo_id = %q, want %q — this is what tells a user the pointer verifies",
+				d.PlanningRepoID, planID)
+		}
+		_ = plan
+	})
+
+	t.Run("a malformed config degrades to not-initialized", func(t *testing.T) {
+		dir := t.TempDir()
+		writeConfig(t, dir, "this is not = valid toml [[[\n")
+		if _, ok := Describe(dir); ok {
+			t.Error("an unreadable config must not be reported as a described layout")
+		}
+	})
+}

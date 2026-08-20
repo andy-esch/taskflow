@@ -431,3 +431,42 @@ func TestDiscover_FallsBackToTasksDir(t *testing.T) {
 		t.Errorf("fallback discovery = %+v, %v", cfg, err)
 	}
 }
+
+// TestInit_GitkeepOnlyInEmptyDirs regresses a real littering: re-running init in a
+// populated repo dropped a .gitkeep into every entity dir, including ones full of files.
+// The placeholder exists to make an EMPTY dir committable; anywhere else it is noise that
+// will never do anything, and it showed up as spurious additions in a real diff.
+func TestInit_GitkeepOnlyInEmptyDirs(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Init(root, "", false); err != nil {
+		t.Fatal(err)
+	}
+	// a fresh scaffold: every dir is empty, so every dir gets one
+	if _, err := os.Stat(filepath.Join(root, domain.TasksDir, gitKeep)); err != nil {
+		t.Fatalf("an empty dir should keep its placeholder: %v", err)
+	}
+
+	// populate tasks/ and drop its placeholder, as a real repo looks
+	if err := os.Remove(filepath.Join(root, domain.TasksDir, gitKeep)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, domain.TasksDir, "abc-x.md"), []byte("---\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Init(root, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, domain.TasksDir, gitKeep)); err == nil {
+		t.Error("a populated dir must NOT get a .gitkeep back")
+	}
+	// ...while a still-empty one is repaired
+	if err := os.Remove(filepath.Join(root, domain.EpicsDir, gitKeep)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Init(root, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, domain.EpicsDir, gitKeep)); err != nil {
+		t.Errorf("an empty dir missing its placeholder should still be repaired: %v", err)
+	}
+}

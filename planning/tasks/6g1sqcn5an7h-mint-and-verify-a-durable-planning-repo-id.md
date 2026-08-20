@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1sqcn5an7h
-status: in-progress
+status: completed
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
 description: 'Implement the identity decision: init mints a durable id into a planning repo''s committed config; a pointer that records it verifies after resolving, failing loudly on mismatch or missing.'
 effort: Unknown
@@ -10,8 +10,9 @@ priority: high
 autonomy_level: 3
 tags: [config, multi-repo, correctness]
 created: "2026-08-19"
-updated_at: "2026-08-19"
+updated_at: "2026-08-20"
 started_at: "2026-08-19"
+completed_at: "2026-08-20"
 ---
 # Mint and verify a durable planning-repo id
 
