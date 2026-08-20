@@ -71,7 +71,10 @@ func newSpaceAddCmd(app *App) *cobra.Command {
 		Args:        cobra.MaximumNArgs(1),
 		Annotations: map[string]string{"safety": "mutating"},
 		RunE: func(_ *cobra.Command, args []string) error {
-			target := "."
+			target, err := app.startDir()
+			if err != nil {
+				return err
+			}
 			if len(args) == 1 {
 				target = args[0]
 			}
@@ -89,9 +92,10 @@ func newSpaceForgetCmd(app *App) *cobra.Command {
 		Long: "Remove an entry from the registry.\n\n" +
 			"This never touches the repo on disk — forgetting is a registry edit, not a\n" +
 			"deletion, so a space can always be re-added with `space add`.",
-		Example:     "  tskflwctl space forget old-thing",
-		Args:        cobra.ExactArgs(1),
-		Annotations: map[string]string{"safety": "mutating"},
+		Example:           "  tskflwctl space forget old-thing",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: completeSpaceIDs,
 		RunE: func(_ *cobra.Command, args []string) error {
 			return runSpaceForget(app, args[0])
 		},
@@ -150,15 +154,23 @@ func runSpaceAdd(app *App, target, id string) error {
 	if err != nil {
 		return err
 	}
+	// Store the repo directory — the place carrying .tskflwctl.toml — rather than the
+	// exact subdirectory the user happened to name or the resolved planning root. A pointer
+	// repo therefore stays registered as the pointer checkout, and ordinary discovery does
+	// the routing when it is used later.
+	repoDir := cfg.Dir
+	if repoDir == "" {
+		repoDir = cfg.Root // config-less bare tasks/ tree: root is the only repo anchor
+	}
 	if id == "" {
-		id = defaultSpaceID(abs)
+		id = defaultSpaceID(repoDir)
 	}
 	if err := validateSpaceID(id); err != nil {
 		return err
 	}
 	space := userconfig.Space{
 		ID:       id,
-		Path:     userconfig.TildePath(abs),
+		Path:     userconfig.TildePath(repoDir),
 		VerifyID: cfg.ID,
 	}
 	if app.DryRun {

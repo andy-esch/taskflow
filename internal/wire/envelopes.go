@@ -786,6 +786,8 @@ type jsonEnvelopes struct {
 	Summary       SummaryEnvelope          `json:"summary"`
 	Version       VersionEnvelope          `json:"version"`
 	Workspace     WorkspaceEnvelope        `json:"workspace"`
+	Spaces        SpacesEnvelope           `json:"spaces"`
+	SpaceMutation SpaceMutationEnvelope    `json:"space_mutation"`
 	Created       CreatedEnvelope          `json:"created"`
 	Epics         EpicsEnvelope            `json:"epics"`
 	EpicShow      EpicShowEnvelope         `json:"epic_show"`

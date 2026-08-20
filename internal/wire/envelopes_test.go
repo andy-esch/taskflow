@@ -166,6 +166,13 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				PlanningRoot: "/repo/planning", ConfigPath: "/repo/.tskflwctl.toml", Source: WorkspaceSourcePointer,
 			}))
 		}},
+		{"SpacesEnvelope", func(w io.Writer) error {
+			return emit(w, ToSpacesEnvelope([]SpaceEntry{{ID: "taskflow", Path: "~/git/taskflow", State: SpaceStateOK, Root: "/repo/planning"}}))
+		}},
+		{"SpaceMutationEnvelope", func(w io.Writer) error {
+			return emit(w, ToSpaceMutationEnvelope(
+				SpaceEntry{ID: "taskflow", Path: "~/git/taskflow", State: SpaceStateOK, Root: "/repo/planning"}, true, false))
+		}},
 		{"ErrorEnvelope", func(w io.Writer) error {
 			// Built by cli.WriteError (not a constructor here) — marshal the named type
 			// directly to prove its schema matches.
@@ -224,11 +231,12 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 // tests passed, its envelope was registered, and it had a validation case. Nothing
 // else in the suite could have noticed.
 func TestMutationEnvelopes_CarryWorkspace(t *testing.T) {
-	// InitEnvelope is the one deliberate exemption: `init` CREATES the planning tree,
-	// so there is no resolved workspace while it runs (it skips discovery entirely),
-	// and it already reports the root it made via its own Root/PlanningRepo fields.
+	// These commands deliberately mutate without an existing resolved workspace: init
+	// creates one, while space add/forget edits the home-scoped advisory registry rather
+	// than any planning tree. Both receipts report their actual target directly.
 	exempt := map[string]string{
-		"InitEnvelope": "init creates the tree, so there is no resolved workspace; it reports Root itself",
+		"InitEnvelope":          "init creates the tree, so there is no resolved workspace; it reports Root itself",
+		"SpaceMutationEnvelope": "space add/forget edits the home registry, not a planning tree; Space.Path names its target",
 	}
 
 	rt := reflect.TypeOf(Envelopes())

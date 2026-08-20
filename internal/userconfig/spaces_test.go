@@ -33,9 +33,16 @@ func TestAddSpace_DedupsOnPhysicalPath(t *testing.T) {
 	if added, _, err := AddSpace(Space{ID: "a", Path: repo}); err != nil || !added {
 		t.Fatalf("first add: %v / %v", added, err)
 	}
-	// a different spelling of the same directory
-	spelling := filepath.Join(repo, "sub", "..")
+	// a relative spelling of the same directory
 	if err := os.MkdirAll(filepath.Join(repo, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	spelling, err := filepath.Rel(cwd, filepath.Join(repo, "sub", ".."))
+	if err != nil {
 		t.Fatal(err)
 	}
 	added, existing, err := AddSpace(Space{ID: "b", Path: spelling})
@@ -47,6 +54,14 @@ func TestAddSpace_DedupsOnPhysicalPath(t *testing.T) {
 	}
 	if existing.ID != "a" {
 		t.Errorf("should report the existing entry, got %q", existing.ID)
+	}
+	link := filepath.Join(t.TempDir(), "repo-link")
+	if err := os.Symlink(repo, link); err != nil {
+		t.Fatal(err)
+	}
+	added, existing, err = AddSpace(Space{ID: "via-link", Path: link})
+	if err != nil || added || existing.ID != "a" {
+		t.Fatalf("a symlink spelling must dedup to a: added=%v existing=%q err=%v", added, existing.ID, err)
 	}
 }
 
@@ -106,10 +121,10 @@ func TestForgetSpace_OnlyDropsTheEntry(t *testing.T) {
 	}
 }
 
-// TestWriteSpaces_SortedAndRoundTrips: the file is tool-owned, so entries are sorted by
-// label — there is no human ordering intent to preserve, and a stable order keeps diffs
-// from churning when an unrelated space is added.
-func TestWriteSpaces_SortedAndRoundTrips(t *testing.T) {
+// TestSpaceWrites_PreserveInsertionOrderAndRoundTrip pins the ordering decision:
+// registrations stay in insertion order. Re-sorting a hand-edited array of tables would
+// move comments with surprising entries and violate the surgical-write contract.
+func TestSpaceWrites_PreserveInsertionOrderAndRoundTrip(t *testing.T) {
 	dir := spaceHome(t)
 	for _, id := range []string{"zeta", "alpha", "mid"} {
 		if _, _, err := AddSpace(Space{ID: id, Path: t.TempDir()}); err != nil {
@@ -124,8 +139,8 @@ func TestWriteSpaces_SortedAndRoundTrips(t *testing.T) {
 	for _, s := range got {
 		ids = append(ids, s.ID)
 	}
-	if strings.Join(ids, ",") != "alpha,mid,zeta" {
-		t.Errorf("entries should be sorted by label, got %v", ids)
+	if strings.Join(ids, ",") != "zeta,alpha,mid" {
+		t.Errorf("entries should retain insertion order, got %v", ids)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, SpacesFile))
 	if err != nil {
@@ -134,8 +149,104 @@ func TestWriteSpaces_SortedAndRoundTrips(t *testing.T) {
 	if !strings.Contains(string(b), "schema_version") {
 		t.Error("the registry should carry its on-disk schema version")
 	}
-	if !strings.Contains(string(b), "MANAGED BY THE TOOL") {
-		t.Error("the file should say it is tool-owned, since hand edits are not preserved")
+	if !strings.Contains(string(b), "comments and unknown keys survive") {
+		t.Error("the generated header should document the surgical editing contract")
+	}
+}
+
+// TestSpaceWrites_AreSurgical is the central persistence contract. Adding appends to the
+// original bytes; forgetting removes only the selected table. Top-level metadata, comments,
+// key order, unknown entry keys, and unrelated tables all survive.
+func TestSpaceWrites_AreSurgical(t *testing.T) {
+	dir := spaceHome(t)
+	path := filepath.Join(dir, SpacesFile)
+	original := `# hand-written registry header
+schema_version = 1 # keep this inline comment
+owner = "andy"      # unknown top-level key
+
+[[space]] # first
+path = "/tmp/alpha" # deliberately before id
+id = "alpha"
+mystery = "keep me"
+
+[[space]]
+# beta's comment
+id = "beta"
+path = "/tmp/beta"
+custom_beta = 42 # unknown entry key
+
+[notes]
+text = "unrelated table survives"
+`
+	if err := os.WriteFile(path, []byte(original), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if added, _, err := AddSpace(Space{ID: "gamma", Path: t.TempDir(), Added: "2026-08-20"}); err != nil || !added {
+		t.Fatalf("add gamma: added=%v err=%v", added, err)
+	}
+	afterAdd, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(afterAdd), original) {
+		t.Errorf("add must preserve every existing byte and append one table:\n%s", afterAdd)
+	}
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o640 {
+		t.Errorf("atomic edit should preserve file mode 0640, got %v / %v", fi, err)
+	}
+
+	if removed, err := ForgetSpace("alpha"); err != nil || !removed {
+		t.Fatalf("forget alpha: removed=%v err=%v", removed, err)
+	}
+	afterForget, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(afterForget)
+	for _, want := range []string{
+		"# hand-written registry header",
+		"schema_version = 1 # keep this inline comment",
+		`owner = "andy"      # unknown top-level key`,
+		"# beta's comment",
+		`id = "beta"`,
+		"custom_beta = 42 # unknown entry key",
+		`text = "unrelated table survives"`,
+		`id = "gamma"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("forget dropped preserved content %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, `id = "alpha"`) || strings.Contains(text, `mystery = "keep me"`) {
+		t.Errorf("the forgotten entry should be the only removed block:\n%s", text)
+	}
+	got, err := Spaces()
+	if err != nil || len(got) != 2 || got[0].ID != "beta" || got[1].ID != "gamma" {
+		t.Errorf("edited registry must still decode in retained order, got %v / %v", got, err)
+	}
+}
+
+// TestSpaceWrites_FollowRegistrySymlink protects the dotfiles use case. Atomic rename
+// targets the symlink's destination; it must not replace spaces.toml with a regular file.
+func TestSpaceWrites_FollowRegistrySymlink(t *testing.T) {
+	dir := spaceHome(t)
+	target := filepath.Join(t.TempDir(), "committed-spaces.toml")
+	if err := os.WriteFile(target, []byte(initialSpacesText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, SpacesFile)
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := AddSpace(Space{ID: "linked", Path: t.TempDir()}); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("registry symlink was replaced: %v / %v", fi, err)
+	}
+	b, err := os.ReadFile(target)
+	if err != nil || !strings.Contains(string(b), `id = "linked"`) {
+		t.Errorf("symlink target was not edited: %v\n%s", err, b)
 	}
 }
 

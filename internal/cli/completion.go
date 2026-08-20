@@ -11,6 +11,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/id"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 // flatSlug returns the human slug of a flat task filename stem `<id>-<slug>` by
@@ -77,6 +78,29 @@ func flatCompletions(matches []string, toComplete string, excluded map[string]bo
 
 // completeFunc is cobra's ValidArgsFunction shape.
 type completeFunc = func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective)
+
+// completeSpaceIDs offers the registry's local labels without consulting cwd discovery.
+// The registry exists independently of a planning repo, so this stays useful from any
+// directory. A missing or malformed registry degrades to no candidates: completion must
+// never turn a configuration problem into shell noise.
+func completeSpaceIDs(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	spaces, err := userconfig.Spaces()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	taken := make(map[string]bool, len(args))
+	for _, arg := range args {
+		taken[arg] = true
+	}
+	var out []string
+	for _, space := range spaces {
+		if !taken[space.ID] && strings.HasPrefix(space.ID, toComplete) {
+			out = append(out, space.ID)
+		}
+	}
+	sort.Strings(out)
+	return out, cobra.ShellCompDirectiveNoFileComp
+}
 
 // activeHelpArg is a ValidArgsFunction for a free-form positional (a title/area):
 // it offers no candidates and suppresses file completion (which only misleads

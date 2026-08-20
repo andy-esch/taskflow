@@ -945,10 +945,13 @@ func SpacesHuman(w io.Writer, st Style, spaces []wire.SpaceEntry) {
 	for _, s := range spaces {
 		id := fmt.Sprintf("%-*s", width, s.ID)
 		if s.State == wire.SpaceStateOK {
-			fmt.Fprintf(w, "%s %s  %s\n", st.Green("●"), st.Bold(id), st.Dim(s.Path))
+			fmt.Fprintf(w, "%s %s  %-10s  %s\n", st.Green("●"), st.Bold(id), st.Green(s.State), st.Dim(s.Path))
 			continue
 		}
-		fmt.Fprintf(w, "%s %s  %s\n", st.Warn("○"), st.Dim(id), st.Dim(s.Detail))
+		fmt.Fprintf(w, "%s %s  %-10s  %s\n", st.Warn("○"), st.Dim(id), st.Warn(s.State), st.Dim(s.Path))
+		if s.Detail != "" {
+			fmt.Fprintf(w, "    %s %s\n", st.Warn("↳"), st.Dim(s.Detail))
+		}
 	}
 	if broken := countBrokenSpaces(spaces); broken > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Dim(plural(broken, "space")+" not resolving — `space forget <id>` drops an entry; the repo is untouched"))
