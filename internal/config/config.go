@@ -189,7 +189,11 @@ func resolveRoot(dir string, cf configFile) (string, error) {
 func resolvePlanningRepo(dir, planningRepo string) (string, error) {
 	root := filepath.FromSlash(planningRepo)
 	if !filepath.IsAbs(root) {
-		root = filepath.Join(dir, root)
+		// planning_repo points OUT of the repo and is committed, so it travels to
+		// every worktree. Anchor it at the canonical checkout, so `../planning` means
+		// the same thing from a worktree as from the main checkout (see worktree.go).
+		// Non-worktrees anchor to themselves, so this is a no-op for them.
+		root = filepath.Join(anchorDir(dir), root)
 	}
 	root = filepath.Clean(root)
 	if cfgPath := filepath.Join(root, ConfigFile); fileExists(cfgPath) {
@@ -527,7 +531,11 @@ func appendTrackedRepo(dir, entry string, dryRun bool) (bool, error) {
 func resolveRepoPath(dir, p string) string {
 	p = filepath.FromSlash(p)
 	if !filepath.IsAbs(p) {
-		p = filepath.Join(dir, p)
+		// Every caller resolves an OUT-OF-TREE reference — a tracked_repos entry, or
+		// this repo's own identity for comparison against one. Anchoring at the
+		// canonical checkout is what lets a worktree of a tracked repo be recognized
+		// as tracked, in both directions (see worktree.go). A no-op off a worktree.
+		p = filepath.Join(anchorDir(dir), p)
 	}
 	return evalOr(filepath.Clean(p))
 }

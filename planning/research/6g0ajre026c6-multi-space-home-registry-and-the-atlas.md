@@ -258,6 +258,79 @@ Ideas worth keeping:
   *card*.
 - **The switcher rides `ctrl+p` / `:`** rather than claiming new keys on day one.
 
+### Worktrees on the board — refined 2026-08-19
+
+A card is **one planning repo**, not one registered path. Where a repo has several
+worktrees, the card offers them as selectable *variants* rather than becoming several
+cards. Settled while stress-testing, after the worktree/relative-path findings
+([worktrees-and-relative-paths-in-cross-repo-planning](6g1emag02srv-worktrees-and-relative-paths-in-cross-repo-planning.md)).
+
+**Scope: worktrees only.** Arbitrary other copies of a repo — second clones, rsynced
+directories — are explicitly *out of scope*. That bound is what makes the rest cheap.
+
+**Grouping is free.** Every checkout of a repo derives the same **common gitdir**: read
+`.git` (a dir for the base checkout, a file for a worktree), and for the file case strip
+the `/worktrees/<name>` suffix from its `gitdir:`. Verified across a base checkout and two
+worktrees — identical key.
+
+This matters for sequencing: grouping needs **no committed repo id**, so the board does
+NOT block on layer C. (Layer C still earns its keep for the wrong-tree guard, which is a
+resolution-correctness concern, not a rendering one. Grouping across *clones* would have
+required it — dropping clones from scope is what removed the dependency.)
+
+**Discovery is free too.** Worktrees never register. They are enumerated live from a
+registered checkout by reading `<common-gitdir>/worktrees/*/gitdir` — no git binary, no
+subprocess. A stale worktree is self-evident: its path does not exist. `desirelines-planning`
+carries exactly one such entry today (`/workspace/dl-sweepport`), which is the shape a
+dead variant takes.
+
+That answers the original worry directly: worktrees are **derived** from a registered
+checkout, so nothing new needs registering and the registry gains no corpses.
+
+#### Card shape
+
+```
+┌ desirelines (~/git/andy-esch/desirelines) ┐
+│ epics                                     │
+│    .....                                  │
+├───────────────────────────────────────────┤
+│ [3 worktrees found]                       │
+└───────────────────────────────────────────┘
+```
+
+- **The path lives in the header.** It is the only thing distinguishing two variants that
+  otherwise render identically.
+- **The branch belongs there too.** Worktrees of one repo differ by branch, and their
+  paths are often near-identical (`-wt-go-mod`, `-wt-tf-cleanup`). Note `workspace` does
+  not report the branch today — that gap is now load-bearing for this header.
+- **Always default to the base worktree**, with a visible marker for it, so "am I on the
+  default?" is answerable at a glance rather than from memory.
+- **`[N worktrees found]` is a discovery affordance, not N more cards.** One card per
+  repo is the whole point.
+
+#### Friction on a selected variant
+
+Mutating through a *selected* non-base variant requires a warning + confirmation. Two
+refinements that the naive version gets wrong:
+
+- **It needs a headless counterpart.** `Gate.On()` opens only on a TTY, and off a TTY the
+  gate is closed so agents never block — so a confirmation implemented purely as a prompt
+  would silently no-op for exactly the caller most likely to get this wrong. Shape:
+  confirm on a TTY, **refuse** off one, with an explicit flag to proceed.
+- **Attach the friction to the SELECTION, not to worktree-ness.** The hazard is
+  *forgetting you switched* on the board. When the cwd simply *is* a worktree, the user is
+  deliberately there and no confirmation is warranted — and gating that case would put a
+  prompt on every `task complete` in a taskflow feature branch, since this repo
+  self-hosts its planning. A prompt that fires constantly is one you reflex through,
+  which costs you the one time it matters.
+
+#### Where this is most valuable
+
+Chiefly the **self-hosted** case. A decoupled planning repo run trunk-only (ADR-0004)
+rarely has meaningfully divergent worktrees; taskflow, with `taskflow_root = "./planning"`,
+has a different planning tree on every branch. Local divergence is real and expected;
+a hosted/served deployment is where it would show up most sharply.
+
 ### Costs, booked honestly
 
 - **A real TUI refactor.** `Model` holds one service today; per-space state that
