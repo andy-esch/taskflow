@@ -67,17 +67,22 @@ The cheap independently-useful parts first, the expensive commitment last:
 
 1. **Home config** — location, load/save, env override, theme/pager precedence.
    Useful on its own, commits to nothing.
-2. **Registry + CLI** — `space list|add|forget`, `--space`, `init`
+2. **Decide `space.id` identity** — durable minted id vs path-keyed. Pulled out as
+   its own step because it gates four consumers and carries a safety property: the
+   `--space` write guard rests on "naming a tree cannot resolve to the wrong one",
+   which a path-keyed id cannot promise. See
+   [decide-space.id-identity](../tasks/6g1m8mc8p46h-decide-space.id-identity-durable-minted-id-vs-path-keyed.md).
+3. **Registry + CLI** — `space list|add|forget`, `--space`, `init`
    auto-register, `doctor` section, `status --all`. No TUI risk.
-3. **Re-decide.** Having lived on the CLI half, is the board still wanted? It is
+4. **Re-decide.** Having lived on the CLI half, is the board still wanted? It is
    plausible that `--space` + `status --all` is most of the value.
-4. Only if yes: the `Resolve() → Workspace` seam
+5. Only if yes: the `Resolve() → Workspace` seam
    ([6fgcr2403sjn](../tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md),
    currently deferred), the `spaceSession` refactor, the atlas, the switcher.
 
 ## Out of scope
 
-- **Any ADR** until step 3 — the vocabulary is settled, the overall model is not.
+- **Any ADR** until step 4 — the vocabulary is settled, the overall model is not.
 - The atlas's visual design — card layout, accent derivation, the cross-space
   rail. Sketched, not specified.
 - `space scan` (walking the filesystem for planning repos).

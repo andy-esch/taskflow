@@ -10,6 +10,7 @@ priority: low
 autonomy_level: 3
 tags: [core, design]
 created: "2026-08-14"
+updated_at: "2026-08-19"
 ---
 
 # Formalize the research frontmatter contract
@@ -76,3 +77,41 @@ gap. It wanted
 - Epic [28-first-class-entities-new-planning-nouns](../epics/28-first-class-entities-new-planning-nouns.md)
 - Epic [26-frontmatter-schema-declared-validation-contract](../epics/26-frontmatter-schema-declared-validation-contract.md) — the registry any new field should ride
 - [ADR-0001](../adrs/0001-adopt-adrs.md) — the research/ADR boundary this must not blur
+
+### 2026-08-19 — measured scope, post-v0.16.0
+
+The description backfill shipped, so that half is done: **0 of 30** research docs have an
+empty `description`. What remains is a single, countable defect.
+
+**18 of 30 docs still carry a `status:` field that is not in the research contract**
+(`schema research` declares `created` / `description` / `tags` only). The values are
+incoherent, which is the point — they are fossils from before research had a contract:
+
+| value | count |
+| --- | --- |
+| `reference` | 12 |
+| `in-progress` | 4 |
+| `proposed` | 2 |
+| `unstarted` | 1 |
+| `proposal` | 1 |
+
+`in-progress` and `unstarted` are especially wrong: research **has no lifecycle** by
+design (ADR-0001 — a later doc supersedes an earlier one; a decision needing a lifecycle
+is an ADR). A doc claiming to be "in-progress" contradicts the entity's defining
+property.
+
+**`lint` does not flag any of them today** — unknown frontmatter keys are preserved and
+tolerated. So this is invisible until someone reads a file.
+
+The real decision this task has to make is therefore **not** "delete 18 fields", it is:
+
+- Does `lint` learn to flag unknown keys for research (and if so, only research, or every
+  entity)? That is a policy change with blast radius beyond this corpus — the surgical-
+  preservation rule exists so hand-written fields survive.
+- Or is this a one-shot cleanup with no lint change, accepting that the next stray key is
+  equally invisible?
+- If flagged: warn or error? `lint --fix`-able, or hand-edit only?
+
+Note the overlap with epic 26 (declared frontmatter validation contract) — that epic is
+where "which fields are legal per entity" is supposed to become declarative. Doing an
+ad-hoc unknown-key check here could pre-empt or contradict it; check before building.
