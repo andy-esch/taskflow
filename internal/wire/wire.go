@@ -149,7 +149,12 @@ import (
 // names the repo and every worktree of it shares one, so these are what tell two working
 // trees apart — their directory names are often near-identical. Additive, and both omitted
 // when the planning tree is not in a git repo at all.
-const SchemaVersion = "1.36"
+// 1.37: the `spaces` and `space_mutation` envelopes added — the home-scoped registry of
+// known planning repos (`space list|add|forget`). An entry carries BOTH identities: `id`
+// is the local label that addresses a checkout, `verify_id` the target repo's durable id,
+// which every worktree of that repo shares and so can never be the address. The registry
+// is advisory: it changes nothing about how a cwd resolves.
+const SchemaVersion = "1.37"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

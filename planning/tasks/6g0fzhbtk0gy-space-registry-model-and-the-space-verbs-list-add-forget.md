@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g0fzhbtk0gy
-status: next-up
+status: in-progress
 epic: 29-multi-space-planning-a-home-registry-and-the-atlas
 description: 'Add the [[space]] array to spaces.toml plus space list|add|forget. Registry stays advisory: nothing in it may change what Discover resolves from a cwd. Vocabulary settled; entry schema is not.'
 effort: Unknown
@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [config, cli, multi-repo]
 created: "2026-08-15"
-updated_at: "2026-08-19"
+updated_at: "2026-08-20"
+started_at: "2026-08-20"
 ---
 # Space registry model and the `space` verbs (list/add/forget)
 

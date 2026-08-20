@@ -919,3 +919,69 @@ type InitEnvelope = wire.InitEnvelope
 func InitJSON(w io.Writer, e InitEnvelope) error {
 	return wire.EncodeJSON(w, wire.NormalizeInitEnvelope(e))
 }
+
+// SpacesJSON emits the `space list --json` envelope.
+func SpacesJSON(w io.Writer, spaces []wire.SpaceEntry) error {
+	return wire.EncodeJSON(w, wire.ToSpacesEnvelope(spaces))
+}
+
+// SpacesHuman lists the registry one space per line: a state glyph, the label, where it
+// points, and — for anything not ok — what is wrong and what to do about it.
+//
+// A broken entry is shown DIMMED alongside the healthy ones rather than hidden or turned
+// into an error. The registry describes what you told it about; a repo that moved is
+// information, and the list is the place you would go to fix it.
+func SpacesHuman(w io.Writer, st Style, spaces []wire.SpaceEntry) {
+	if len(spaces) == 0 {
+		fmt.Fprintf(w, "%s no spaces registered — `tskflwctl space add` in a planning repo\n", st.Dim("·"))
+		return
+	}
+	width := 0
+	for _, s := range spaces {
+		if n := len(s.ID); n > width {
+			width = n
+		}
+	}
+	for _, s := range spaces {
+		id := fmt.Sprintf("%-*s", width, s.ID)
+		if s.State == wire.SpaceStateOK {
+			fmt.Fprintf(w, "%s %s  %s\n", st.Green("●"), st.Bold(id), st.Dim(s.Path))
+			continue
+		}
+		fmt.Fprintf(w, "%s %s  %s\n", st.Warn("○"), st.Dim(id), st.Dim(s.Detail))
+	}
+	if broken := countBrokenSpaces(spaces); broken > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Dim(plural(broken, "space")+" not resolving — `space forget <id>` drops an entry; the repo is untouched"))
+	}
+}
+
+// countBrokenSpaces counts entries that did not resolve.
+func countBrokenSpaces(spaces []wire.SpaceEntry) int {
+	n := 0
+	for _, s := range spaces {
+		if s.State != wire.SpaceStateOK {
+			n++
+		}
+	}
+	return n
+}
+
+// SpaceMutationJSON emits the `space add`/`forget --json` envelope.
+func SpaceMutationJSON(w io.Writer, e wire.SpaceEntry, changed, dryRun bool) error {
+	return wire.EncodeJSON(w, wire.ToSpaceMutationEnvelope(e, changed, dryRun))
+}
+
+// SpaceMutationHuman reports what `space add`/`forget` did. A no-op says so plainly
+// rather than claiming a change, so re-running is legibly idempotent.
+func SpaceMutationHuman(w io.Writer, st Style, e wire.SpaceEntry, changed bool, verb string) {
+	mark := st.Green("✔")
+	if !changed {
+		mark = st.Dim("·")
+	}
+	fmt.Fprintf(w, "%s %s %s %s\n", mark, verb, st.Bold(e.ID), st.Dim(e.Path))
+	if e.State == wire.SpaceStateOK && e.Root != "" {
+		fmt.Fprintf(w, "    %s %s\n", st.Dim("planning root"), e.Root)
+	} else if e.Detail != "" {
+		fmt.Fprintf(w, "    %s %s\n", st.Warn("⚠"), e.Detail)
+	}
+}
