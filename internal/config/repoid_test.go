@@ -23,7 +23,7 @@ func idOf(t *testing.T, dir string) string {
 // TestInit_MintsDurableID: a scaffolded planning repo carries an id from birth.
 func TestInit_MintsDurableID(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Init(root, false); err != nil {
+	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if idOf(t, root) == "" {
@@ -36,7 +36,7 @@ func TestInit_MintsDurableID(t *testing.T) {
 // predating the mint gets an id — no new command surface.
 func TestInit_BackfillsMissingID(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Init(root, false); err != nil {
+	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
 	// strip the id, as a pre-mint repo would be
@@ -55,14 +55,14 @@ func TestInit_BackfillsMissingID(t *testing.T) {
 		t.Fatal("precondition: the id should be gone")
 	}
 
-	if _, err := Init(root, false); err != nil {
+	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
 	first := idOf(t, root)
 	if first == "" {
 		t.Fatal("re-running init must backfill a missing id")
 	}
-	if _, err := Init(root, false); err != nil {
+	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if again := idOf(t, root); again != first {
@@ -91,7 +91,7 @@ func planningAndPointer(t *testing.T) (plan, impl, planID string) {
 	t.Helper()
 	parent := t.TempDir()
 	plan = filepath.Join(parent, "planning")
-	if _, err := Init(plan, false); err != nil {
+	if _, err := Init(plan, "", false); err != nil {
 		t.Fatal(err)
 	}
 	impl = filepath.Join(parent, "impl")
@@ -125,7 +125,7 @@ func TestVerify_MismatchAndMissingBothFail(t *testing.T) {
 	t.Run("a different repo is refused", func(t *testing.T) {
 		plan, impl, _ := planningAndPointer(t)
 		decoy := plan + "-decoy"
-		if _, err := Init(decoy, false); err != nil {
+		if _, err := Init(decoy, "", false); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Rename(plan, plan+"-moved"); err != nil {
@@ -172,7 +172,7 @@ func TestVerify_LegacyPointerIsSilent(t *testing.T) {
 	}
 	// ...and swap the target for an entirely different planning repo.
 	decoy := plan + "-decoy"
-	if _, err := Init(decoy, false); err != nil {
+	if _, err := Init(decoy, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.RemoveAll(plan); err != nil {
@@ -188,5 +188,72 @@ func TestVerify_LegacyPointerIsSilent(t *testing.T) {
 	}
 	if cfg.ID == "" {
 		t.Error("Config.ID should still report the resolved tree's id")
+	}
+}
+
+// TestInitPointer_BackfillsExistingPointer closes the migration gap reported from real use:
+// `init --planning-repo` on a repo that ALREADY had a pointer returned "already
+// initialized" and did nothing, so there was no way to opt an existing pointer into
+// verification short of deleting its config. Re-running init is the migration path for
+// pointers exactly as it is for scaffold configs.
+func TestInitPointer_BackfillsExistingPointer(t *testing.T) {
+	parent := t.TempDir()
+	plan := filepath.Join(parent, "planning")
+	if _, err := Init(plan, "", false); err != nil {
+		t.Fatal(err)
+	}
+	impl := filepath.Join(parent, "impl")
+	mustMkdir(t, impl)
+
+	// a pointer as written BEFORE durable ids existed: target, no expectation
+	writeConfig(t, impl, "planning_repo = \"../planning\"\n")
+	if cf, _ := readConfigFile(filepath.Join(impl, ConfigFile)); cf.PlanningRepoID != "" {
+		t.Fatal("precondition: the legacy pointer should carry no id")
+	}
+
+	created, err := InitPointer(impl, "../planning", false)
+	if err != nil {
+		t.Fatalf("re-init on an existing pointer must not error: %v", err)
+	}
+	if len(created) == 0 {
+		t.Error("re-init must report the backfill, not silently claim 'already initialized'")
+	}
+	cf, err := readConfigFile(filepath.Join(impl, ConfigFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cf.PlanningRepoID != idOf(t, plan) {
+		t.Errorf("planning_repo_id = %q, want the target's id %q", cf.PlanningRepoID, idOf(t, plan))
+	}
+	if cf.PlanningRepo != "../planning" {
+		t.Errorf("the existing target must be preserved, got %q", cf.PlanningRepo)
+	}
+
+	// idempotent: a second run changes nothing
+	again, err := InitPointer(impl, "../planning", false)
+	if err != nil || len(again) != 0 {
+		t.Errorf("a second re-init must be a no-op, got %v / %v", again, err)
+	}
+}
+
+// TestInitPointer_BackfillWaitsForTargetID: if the TARGET has no id yet, there is nothing
+// to record. Never invent one — the id must be the target's own, minted there.
+func TestInitPointer_BackfillWaitsForTargetID(t *testing.T) {
+	parent := t.TempDir()
+	plan := filepath.Join(parent, "planning")
+	mustMkdir(t, filepath.Join(plan, domain.TasksDir)) // bare tasks/, no config, no id
+	impl := filepath.Join(parent, "impl")
+	mustMkdir(t, impl)
+	writeConfig(t, impl, "planning_repo = \"../planning\"\n")
+
+	created, err := InitPointer(impl, "../planning", false)
+	if err != nil {
+		t.Fatalf("must not error when the target has no id yet: %v", err)
+	}
+	if len(created) != 0 {
+		t.Errorf("nothing to record, so nothing should be reported, got %v", created)
+	}
+	if cf, _ := readConfigFile(filepath.Join(impl, ConfigFile)); cf.PlanningRepoID != "" {
+		t.Errorf("must not invent an id, got %q", cf.PlanningRepoID)
 	}
 }

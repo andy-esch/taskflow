@@ -125,7 +125,7 @@ func TestInitPointer_ModeCollision(t *testing.T) {
 	}
 	// A scaffold config + pointer init → ErrConflict (mode switch refused).
 	scaf := filepath.Join(parent, "scaf")
-	if _, err := Init(scaf, false); err != nil {
+	if _, err := Init(scaf, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := InitPointer(scaf, "../planning-a", false); err == nil || !errors.Is(err, domain.ErrConflict) {
@@ -144,7 +144,7 @@ func TestInit_RefusesOverPointer(t *testing.T) {
 	if _, err := InitPointer(impl, "../planning", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Init(impl, false); err == nil || !errors.Is(err, domain.ErrConflict) {
+	if _, err := Init(impl, "", false); err == nil || !errors.Is(err, domain.ErrConflict) {
 		t.Errorf("scaffold over a pointer config should be ErrConflict, got %v", err)
 	}
 	if isDir(filepath.Join(impl, "tasks")) {
@@ -157,7 +157,7 @@ func TestAddTrackedRepo(t *testing.T) {
 	parent := t.TempDir()
 	planning := filepath.Join(parent, "planning")
 	mustMkdir(t, filepath.Join(planning, "tasks"))
-	if _, err := Init(planning, false); err != nil {
+	if _, err := Init(planning, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if added, err := AddTrackedRepo(planning, "../impl-a", false); err != nil || !added {
@@ -204,7 +204,7 @@ func TestLinkBack(t *testing.T) {
 	planning := filepath.Join(parent, "desirelines-planning")
 	mustMkdir(t, impl)
 	mustMkdir(t, filepath.Join(planning, "tasks"))
-	if _, err := Init(planning, false); err != nil {
+	if _, err := Init(planning, "", false); err != nil {
 		t.Fatal(err)
 	}
 	back, err := LinkBack(impl, "../desirelines-planning", false)
@@ -269,7 +269,7 @@ func TestAddTrackedRepo_BracketInPath(t *testing.T) {
 	parent := t.TempDir()
 	planning := filepath.Join(parent, "planning")
 	mustMkdir(t, filepath.Join(planning, "tasks"))
-	if _, err := Init(planning, false); err != nil {
+	if _, err := Init(planning, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := AddTrackedRepo(planning, "../imp]l", false); err != nil {
@@ -297,7 +297,7 @@ func mustMkdir(t *testing.T, p string) {
 func TestInit(t *testing.T) {
 	root := t.TempDir()
 
-	created, err := Init(root, false)
+	created, err := Init(root, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestInit(t *testing.T) {
 	}
 
 	// Idempotent: a second run creates nothing.
-	again, err := Init(root, false)
+	again, err := Init(root, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func TestInit(t *testing.T) {
 // (the flat store never reads them; a file dropped in one would be invisible).
 func TestInitScaffoldsEntityDirs(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Init(root, false); err != nil {
+	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
 	for _, d := range []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ProjectsDir} {
@@ -359,7 +359,7 @@ func TestInitScaffoldsEntityDirs(t *testing.T) {
 // dir, so an empty planning tree is git-committable.
 func TestInitGitkeepsEveryDir(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Init(root, false); err != nil {
+	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
 	for _, d := range []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ProjectsDir} {
@@ -378,7 +378,7 @@ func TestInitRetrofitsGitkeep(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	created, err := Init(root, false)
+	created, err := Init(root, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

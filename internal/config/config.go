@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -374,13 +375,13 @@ const gitKeep = ".gitkeep"
 // defaultConfigTOMLWith renders the scaffold config carrying a freshly minted durable id.
 // The id is COMMITTED on purpose: it identifies the repo, so it must travel with the repo
 // rather than living on one machine (see `id` in configFile).
-func defaultConfigTOMLWith(mintedID string) string {
-	return fmt.Sprintf(defaultConfigTOML, mintedID)
+func defaultConfigTOMLWith(taskflowRoot, mintedID string) string {
+	return fmt.Sprintf(defaultConfigTOML, taskflowRoot, mintedID)
 }
 
 const defaultConfigTOML = `# tskflwctl planning config — also the marker that anchors discovery.
 # taskflow_root: planning dir relative to this file (default ".").
-taskflow_root = "."
+taskflow_root = %q
 # id: this planning repo's durable identity. Minted once and committed, so a pointer in
 # another repo can verify it reached the tree it meant even if paths move. Do not edit or
 # copy it into another repo — two repos sharing an id defeats the check.
@@ -407,12 +408,21 @@ tracked_repos = []
 // Init scaffolds the planning directory tree and writes the config file under
 // root. It is idempotent: existing dirs/config are left untouched. Returns the
 // relative paths created (empty if nothing was needed).
-func Init(root string, dryRun bool) ([]string, error) {
+// An EMPTY taskflowRoot means "the caller has no opinion": adopt whatever an existing
+// config already declares, and fall back to the repo root only when creating. That
+// distinction is load-bearing — treating empty as an explicit "." made a bare `init` in any
+// subdir-layout repo (this one included) fail the fork guard against its own config.
+func Init(dir, taskflowRoot string, dryRun bool) ([]string, error) {
+	explicit := strings.TrimSpace(taskflowRoot) != ""
+	taskflowRoot, err := normalizeTaskflowRoot(taskflowRoot)
+	if err != nil {
+		return nil, err
+	}
 	// Refuse to scaffold a local tree over an existing POINTER config: discovery
 	// would follow the pointer and the new tree would be orphaned/forked data (the
 	// "don't fork the data" non-negotiable). Re-initializing a SCAFFOLD repo is
 	// fine — it repairs .gitkeeps — so only a planning_repo config is refused.
-	if cfgPath := filepath.Join(root, ConfigFile); fileExists(cfgPath) {
+	if cfgPath := filepath.Join(dir, ConfigFile); fileExists(cfgPath) {
 		cf, err := readConfigFile(cfgPath)
 		if err != nil {
 			return nil, err
@@ -422,7 +432,21 @@ func Init(root string, dryRun bool) ([]string, error) {
 				"%w: %s points at an external planning repo (planning_repo=%q) — remove it to scaffold a local tree",
 				domain.ErrConflict, ConfigFile, cf.PlanningRepo)
 		}
+		// An EXISTING config's taskflow_root always wins. Adopt it when the caller had no
+		// opinion (a plain re-run, which is the repair path); refuse only an EXPLICIT
+		// request to scaffold somewhere else, which would leave two trees in one repo and
+		// let discovery pick the other — the same fork this function refuses for pointers.
+		existing, _ := normalizeTaskflowRoot(cf.TaskflowRoot)
+		if !explicit {
+			taskflowRoot = existing
+		} else if existing != taskflowRoot {
+			return nil, fmt.Errorf(
+				"%w: %s already scaffolds its planning at %q — re-running with %q would fork the data; "+
+					"edit taskflow_root by hand if you mean to move it",
+				domain.ErrConflict, ConfigFile, existing, taskflowRoot)
+		}
 	}
+	root := filepath.Join(dir, filepath.FromSlash(taskflowRoot))
 	// Flat layout (ADR-0003 §4): scaffold only the entity parents — no per-status or
 	// per-bucket subdirs. The flat store never reads them, and a `.md` dropped into one
 	// would be invisible to the scan (a silent data-loss trap).
@@ -451,7 +475,7 @@ func Init(root string, dryRun bool) ([]string, error) {
 			created = append(created, d+"/"+gitKeep)
 		}
 	}
-	cfg := filepath.Join(root, ConfigFile)
+	cfg := filepath.Join(dir, ConfigFile)
 	// Exclusive create instead of exists-then-write: a concurrent init must not
 	// clobber a config the other process just wrote (idempotency falls out of
 	// O_EXCL rather than a racy stat).
@@ -461,7 +485,7 @@ func Init(root string, dryRun bool) ([]string, error) {
 		}
 		return created, nil
 	}
-	switch err := writeFileExclusive(cfg, []byte(defaultConfigTOMLWith(id.New())), 0o644); {
+	switch err := writeFileExclusive(cfg, []byte(defaultConfigTOMLWith(taskflowRoot, id.New())), 0o644); {
 	case err == nil:
 		created = append(created, ConfigFile)
 		return created, nil
@@ -479,6 +503,79 @@ func Init(root string, dryRun bool) ([]string, error) {
 		created = append(created, ConfigFile+" (id)")
 	}
 	return created, nil
+}
+
+// Description is what an already-initialized directory declares, for surfaces that want to
+// SHOW the current setup rather than ask about it again.
+type Description struct {
+	TaskflowRoot   string // the planning dir this repo scaffolds into
+	ID             string // its durable id, empty if it predates the mint
+	PlanningRepo   string // set when this is a POINTER config, not a scaffold
+	PlanningRepoID string // the id such a pointer verifies against
+}
+
+// Describe reports an existing config's layout. ok is false when dir has no config yet —
+// i.e. when init would CREATE rather than REPAIR, which is the only case where asking
+// where to put things is a real question.
+func Describe(dir string) (Description, bool) {
+	path := filepath.Join(dir, ConfigFile)
+	if !fileExists(path) {
+		return Description{}, false
+	}
+	cf, err := readConfigFile(path)
+	if err != nil {
+		return Description{}, false
+	}
+	root, _ := normalizeTaskflowRoot(cf.TaskflowRoot)
+	return Description{
+		TaskflowRoot:   root,
+		ID:             cf.ID,
+		PlanningRepo:   cf.PlanningRepo,
+		PlanningRepoID: cf.PlanningRepoID,
+	}, true
+}
+
+// normalizeTaskflowRoot canonicalizes the requested planning-dir (empty → "."), and
+// rejects anything that escapes the repo. taskflow_root is the IN-TREE key by contract —
+// configuredRoot enforces that at read time, so accepting an escaping value at init would
+// only write a config the tool then refuses to read.
+func normalizeTaskflowRoot(rel string) (string, error) {
+	rel = strings.TrimSpace(rel)
+	if rel == "" {
+		rel = "."
+	}
+	clean := path.Clean(filepath.ToSlash(rel))
+	if clean == "." {
+		return ".", nil
+	}
+	if filepath.IsAbs(rel) || clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf(
+			"%w: taskflow_root %q must stay inside the repo — use --planning-repo to point at another repo",
+			domain.ErrValidation, rel)
+	}
+	return "./" + strings.TrimPrefix(clean, "./"), nil
+}
+
+// backfillPointerID records the target's id in an existing POINTER config that lacks one,
+// opting it into verification. A no-op when the pointer already carries an id, or when the
+// target has none to record yet (mint it there first — never invent one here, since the id
+// must be the target's own).
+func backfillPointerID(cfgPath string, existing configFile, targetID string, dryRun bool) (bool, error) {
+	if existing.PlanningRepoID != "" || targetID == "" {
+		return false, nil
+	}
+	if dryRun {
+		return true, nil
+	}
+	b, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return false, err
+	}
+	out := insertTopLevelKey(string(b), fmt.Sprintf("planning_repo_id = %q", targetID))
+	if err := writeFileAtomic(cfgPath, []byte(out), 0o644); err != nil {
+		return false, fmt.Errorf("backfill planning_repo_id: %w", err)
+	}
+	return true, nil
 }
 
 // backfillID adds a durable id to an existing SCAFFOLD config that lacks one. A pointer
@@ -570,6 +667,17 @@ func InitPointer(dir, planningRepo string, dryRun bool) ([]string, error) {
 			return nil, fmt.Errorf(
 				"%w: %s already exists here — remove it to re-init (or edit it to change the target)",
 				domain.ErrConflict, ConfigFile)
+		}
+		// Same target, but the pointer may predate durable ids. Backfill the expectation
+		// so re-running init is the migration path for pointers, exactly as it is for
+		// scaffold configs — without it there was NO way to opt an existing pointer in
+		// short of deleting and recreating its config.
+		added, err := backfillPointerID(cfg, existing, targetID, dryRun)
+		if err != nil {
+			return nil, err
+		}
+		if added {
+			return []string{ConfigFile + " (planning_repo_id)"}, nil
 		}
 		return nil, nil // unchanged
 	}

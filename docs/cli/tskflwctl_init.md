@@ -10,7 +10,7 @@ tskflwctl init [flags]
 
 ```
   tskflwctl init
-  tskflwctl init --path ./planning
+  tskflwctl init --taskflow-root planning
   tskflwctl init --planning-repo ../desirelines-planning
 ```
 
@@ -21,6 +21,7 @@ tskflwctl init [flags]
       --no-link-back           pointer mode: don't add this repo to the planning repo's tracked_repos
       --path string            directory to initialize (default ".")
       --planning-repo string   point this repo at an external planning repo (relative to --path, or absolute): writes a pointer config, no tree
+      --taskflow-root string   scaffold the planning tree in this subdirectory instead of the repo root (sets taskflow_root; e.g. planning)
       --track strings          record an impl repo this planning repo tracks (repeatable; scaffold mode only)
 ```
 
