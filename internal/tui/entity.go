@@ -73,9 +73,16 @@ type entityTab struct {
 	loadList func(*entityTab, *core.Service) tea.Cmd // reads the tab's statusView
 	loadItem func(svc *core.Service, id string) tea.Cmd
 	loaded   bool
-	loadGen  int   // bumped per reload; stale list results/errors are dropped by gen
-	loadErr  error // this tab's last list-load failure (nil after a successful load)
-	problems []domain.FileProblem
+	// loadOrder is the items exactly as the loader produced them, before any interactive
+	// sort. Every sort is computed FROM this rather than from the list's current slice:
+	// sortItems reorders in place, so sorting the already-sorted slice made sorts
+	// cumulative and left sortDefault — which by definition does not reorder — unable to
+	// restore the loader's order. Cycling `o` all the way round then silently kept
+	// whichever column ran last.
+	loadOrder []list.Item
+	loadGen   int   // bumped per reload; stale list results/errors are dropped by gen
+	loadErr   error // this tab's last list-load failure (nil after a successful load)
+	problems  []domain.FileProblem
 
 	// Lifecycle (registry-driven, S4/M10): the transitions this entity offers and
 	// the move that applies one. Tasks declare status transitions (svc.Move); audits
