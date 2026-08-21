@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/userconfig"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
@@ -154,7 +155,7 @@ func TestSpaceList_GroupsDirectAndPointerEntryPoints(t *testing.T) {
 	if len(env.Spaces) != 3 {
 		t.Fatalf("spaces = %+v", env.Spaces)
 	}
-	wantRoles := []string{wire.SpaceRolePointer, wire.SpaceRoleDirect, wire.SpaceRolePointer}
+	wantRoles := []core.SpaceRole{wire.SpaceRolePointer, wire.SpaceRoleDirect, wire.SpaceRolePointer}
 	planningID := env.Spaces[0].PlanningID
 	if planningID == "" {
 		t.Fatal("grouped entries have no derived planning_id")

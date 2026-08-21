@@ -127,18 +127,22 @@ type Summary struct {
 // audits. Only OPEN audits are surfaced — the actionable subset, paralleling the
 // in-progress task working set (closed/deferred audits are done/parked).
 func (s *Service) Summary() (Summary, error) {
-	tasks, p1, err := s.store.ListTasks()
+	return summarize(s.store, s.now())
+}
+
+func summarize(store SummaryStore, now time.Time) (Summary, error) {
+	tasks, p1, err := store.ListTasks()
 	if err != nil {
 		return Summary{}, err
 	}
-	epics, p2, err := s.store.ListEpics()
+	epics, p2, err := store.ListEpics()
 	if err != nil {
 		return Summary{}, err
 	}
 	// One scan of every audit body serves BOTH the open-bucket list (audit-level
 	// tallies) AND the findings rollup below — the store hands back the findings it
 	// already parsed for the tally, so Summary never re-reads a body (the H2 fix).
-	audits, p3, err := s.store.ListAuditsWithFindings()
+	audits, p3, err := store.ListAuditsWithFindings()
 	if err != nil {
 		return Summary{}, err
 	}
@@ -168,7 +172,6 @@ func (s *Service) Summary() (Summary, error) {
 	counts := map[domain.Status]int{}
 	var inProgress []domain.Task
 	revisitDue := 0
-	now := s.now()
 	for _, t := range tasks {
 		counts[t.Status]++
 		if t.Status == domain.StatusInProgress {

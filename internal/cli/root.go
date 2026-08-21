@@ -22,6 +22,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/spacehealth"
+	"github.com/andy-esch/taskflow/internal/spacestore"
 	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
@@ -63,6 +64,10 @@ type App struct {
 	// receipts so an explicit cross-repo write cannot hide how its target was chosen.
 	selectedSpace string
 	Svc           *core.Service
+	// SpaceOverviewSvc is the repo-independent, read-only application service behind
+	// `status --all`. It reads through a consumer-owned port so another primary adapter
+	// can reuse the same grouping, selection, and failure-isolation rules.
+	SpaceOverviewSvc *core.SpaceOverviewService
 	// ConfigSvc is the framework-free configuration application core shared by
 	// Cobra, both TUI contexts, and future adapters.
 	ConfigSvc *core.ConfigurationService
@@ -182,31 +187,16 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 		Out: out, ErrOut: errOut, In: in, Th: design.Default(),
 		ConfigSvc: core.NewConfigurationService(configstore.New(),
 			core.WithConfigurationThemes(design.Names())),
+		SpaceOverviewSvc: core.NewSpaceOverviewService(spacestore.New()),
 	}
 
 	root := &cobra.Command{
-		Use:           "tskflwctl",
-		Short:         "Local-first planning CLI (tasks, epics, audits, research) over markdown",
-		Version:       versionString(),
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
-			app.setStyle()
-			// Shell completion ('__complete') runs this hook too. Outside a
-			// planning repo, resolve() errors — which would abort completion.
-			// Stay silent there; completion funcs do their own forgiving
-			// discovery (see completion.go).
-			if isCompletionCommand(cmd) {
-				_ = app.resolve()
-				return nil
-			}
-			if err := app.resolve(); err != nil {
-				return err
-			}
-			app.warnLinks()
-			app.warnPresentation(cmd)
-			return nil
-		},
+		Use:               "tskflwctl",
+		Short:             "Local-first planning CLI (tasks, epics, audits, research) over markdown",
+		Version:           versionString(),
+		SilenceUsage:      true,
+		SilenceErrors:     true,
+		PersistentPreRunE: app.repoPreRun,
 	}
 	// Cobra's own output (help, usage errors, completion scripts) must follow
 	// the injected writers too, or it leaks to os.Stdout/os.Stderr and escapes
@@ -244,6 +234,26 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(newTemplateCmd(app))
 	root.AddCommand(newThemeCmd(app))
 	return root
+}
+
+// repoPreRun is the default command hook: resolve presentation and the current
+// planning repo. Commands that can work without a current repo override it with
+// styleOnlyPreRun or their own conditional hook.
+func (a *App) repoPreRun(cmd *cobra.Command, _ []string) error {
+	a.setStyle()
+	// Shell completion ('__complete') runs this hook too. Outside a planning repo,
+	// resolve() errors — which would abort completion. Stay silent there; completion
+	// funcs do their own forgiving discovery (see completion.go).
+	if isCompletionCommand(cmd) {
+		_ = a.resolve()
+		return nil
+	}
+	if err := a.resolve(); err != nil {
+		return err
+	}
+	a.warnLinks()
+	a.warnPresentation(cmd)
+	return nil
 }
 
 // startDir is the single source of the discovery start directory. An explicit --space
@@ -350,6 +360,13 @@ func (a *App) resolve() error {
 	if err != nil {
 		return err
 	}
+	return a.resolveFrom(start)
+}
+
+// resolveFrom constructs current-repo dependencies from an explicit start path. Splitting
+// it from startDir lets `status --all` implement its empty-registry compatibility fallback
+// without letting ambient TSKFLW_SPACE turn an all-spaces request into a named selection.
+func (a *App) resolveFrom(start string) error {
 	cfg, err := config.Discover(start)
 	if err != nil {
 		return err

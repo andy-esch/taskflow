@@ -1738,6 +1738,26 @@
       ],
       "description": "SpaceEntry is one registered entry point in `space list --json`."
     },
+    "SpaceInProgressJSON": {
+      "properties": {
+        "space": {
+          "type": "string"
+        },
+        "planning_id": {
+          "type": "string"
+        },
+        "task": {
+          "$ref": "#/$defs/TaskJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "space",
+        "task"
+      ],
+      "description": "SpaceInProgressJSON identifies the logical space beside one task in the combined cross-space working set."
+    },
     "SpaceMutationEnvelope": {
       "properties": {
         "schema_version": {
@@ -1764,6 +1784,38 @@
       ],
       "description": "SpaceMutationEnvelope is `space add` / `space forget --json`: what changed, and the entry it concerned."
     },
+    "SpaceSummaryJSON": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "planning_id": {
+          "type": "string"
+        },
+        "selected_entry_point": {
+          "type": "string"
+        },
+        "entry_points": {
+          "items": {
+            "$ref": "#/$defs/SpaceEntry"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "$ref": "#/$defs/SummaryJSON"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "entry_points"
+      ],
+      "description": "SpaceSummaryJSON is one logical planning space in StatusAllEnvelope."
+    },
     "SpacesEnvelope": {
       "properties": {
         "schema_version": {
@@ -1783,6 +1835,33 @@
         "spaces"
       ],
       "description": "SpacesEnvelope is `space list --json`."
+    },
+    "StatusAllEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "spaces": {
+          "items": {
+            "$ref": "#/$defs/SpaceSummaryJSON"
+          },
+          "type": "array"
+        },
+        "in_progress": {
+          "items": {
+            "$ref": "#/$defs/SpaceInProgressJSON"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "spaces",
+        "in_progress"
+      ],
+      "description": "StatusAllEnvelope is `status --all --json`: one summary per logical planning identity plus the combined in-progress working set across those spaces."
     },
     "StatusCountJSON": {
       "properties": {
@@ -1856,7 +1935,60 @@
         "revisit_due",
         "bad_epic_status"
       ],
-      "description": "SummaryEnvelope is `status --json`."
+      "description": "SummaryEnvelope is `status --json`: the shared dashboard payload with the one top-level schema version required of every machine envelope."
+    },
+    "SummaryJSON": {
+      "properties": {
+        "counts": {
+          "items": {
+            "$ref": "#/$defs/StatusCountJSON"
+          },
+          "type": "array"
+        },
+        "in_progress": {
+          "items": {
+            "$ref": "#/$defs/TaskJSON"
+          },
+          "type": "array"
+        },
+        "epics": {
+          "items": {
+            "$ref": "#/$defs/EpicJSON"
+          },
+          "type": "array"
+        },
+        "open_audits": {
+          "items": {
+            "$ref": "#/$defs/AuditJSON"
+          },
+          "type": "array"
+        },
+        "findings": {
+          "$ref": "#/$defs/FindingsRollupJSON"
+        },
+        "revisit_due": {
+          "type": "integer"
+        },
+        "bad_epic_status": {
+          "type": "integer"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "counts",
+        "in_progress",
+        "epics",
+        "revisit_due",
+        "bad_epic_status"
+      ],
+      "description": "SummaryJSON is the reusable, versionless dashboard payload."
     },
     "TaskInfoEnvelope": {
       "properties": {
@@ -2315,6 +2447,9 @@
         "summary": {
           "$ref": "#/$defs/SummaryEnvelope"
         },
+        "status_all": {
+          "$ref": "#/$defs/StatusAllEnvelope"
+        },
         "version": {
           "$ref": "#/$defs/VersionEnvelope"
         },
@@ -2413,6 +2548,7 @@
         "epic_mutation",
         "moves",
         "summary",
+        "status_all",
         "version",
         "workspace",
         "config",
@@ -2444,6 +2580,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.41)",
+  "title": "tskflwctl --json output (schema_version 1.42)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

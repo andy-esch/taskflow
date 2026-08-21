@@ -245,7 +245,7 @@ type ConfigurationProblem struct {
 type RegistryProblem struct {
 	ID      string
 	Path    string
-	Kind    string
+	Kind    SpaceState
 	Message string
 	Remedy  string
 }

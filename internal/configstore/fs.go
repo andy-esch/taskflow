@@ -132,7 +132,7 @@ func (f *FS) DiagnoseConfiguration(start string) (core.ConfigurationDiagnosis, e
 			continue
 		}
 		diagnosis.Registry.Problems = append(diagnosis.Registry.Problems, core.RegistryProblem{
-			ID: space.Space.ID, Path: space.Space.Path, Kind: string(space.Kind),
+			ID: space.Space.ID, Path: space.Space.Path, Kind: core.SpaceState(space.Kind),
 			Message: space.Message, Remedy: space.Remedy,
 		})
 	}
