@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g0fzk8mazrc
-status: next-up
+status: completed
 epic: 29-multi-space-planning-a-home-registry-and-the-atlas
 description: --space <id> (and TSKFLW_SPACE) resolves any command against a registered repo instead of the cwd. Small change to App.resolve(); also the cross-repo handle agents lack today.
 effort: Unknown
@@ -10,7 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, multi-repo]
 created: "2026-08-15"
-updated_at: "2026-08-19"
+updated_at: "2026-08-21"
+started_at: "2026-08-21"
+completed_at: "2026-08-21"
 ---
 # Global `--space` flag: run any command against a registered space
 
@@ -43,13 +45,13 @@ the value, the board's cost can be re-decided honestly.
 
 ## Acceptance criteria
 
-- [ ] `--space <id>` resolves any command against the labeled registered entry point,
+- [x] `--space <id>` resolves any command against the labeled registered entry point,
   `-C`-style, even when another label shares its planning identity
-- [ ] `TSKFLW_SPACE` honored at lower precedence than the flag
-- [ ] `--space` + `-C` together is a clear error
-- [ ] Unknown id → exit 10 with the known ids listed
-- [ ] Completion offers registered ids and stays silent outside a planning repo
-- [ ] `just test` + `just lint` green
+- [x] `TSKFLW_SPACE` honored at lower precedence than the flag
+- [x] `--space` + `-C` together is a clear error
+- [x] Unknown id → exit 10 with the known ids listed
+- [x] Completion offers registered ids and stays silent outside a planning repo
+- [x] `just test` + `just lint` green
 
 ## Out of scope
 
@@ -107,3 +109,21 @@ entry has NO verify_id (legacy)        → today's behavior
 This supersedes the earlier note's worry: a `--space` whose entry has drifted no longer needs
 a bespoke staleness rule — the id mismatch *is* the staleness detection, and it fails loudly.
 The "never silently fall back to cwd discovery" requirement stands unchanged.
+
+## Implementation notes (2026-08-21)
+
+Shipped global `--space` plus `TSKFLW_SPACE` through the shared `App` start-directory
+seam, so ordinary CLI reads and writes, configuration commands, TUI launch context, and
+entity completion all resolve the exact registered entry point. Explicit `-C` wins over
+an ambient environment selection; an explicit `--space` plus `-C` is a validation error.
+Unknown labels enumerate known labels, broken entries reuse `spacehealth` diagnosis,
+registry verify-id mismatch exits as conflict, and explicit selection never falls back to
+cwd or built-in-only template behavior.
+
+Workspace reads and every machine mutation receipt now carry the local selector as
+`workspace.space`, distinct from durable `repo_id`; the additive wire contract is schema
+version 1.41. Direct and pointer labels sharing one planning identity, environment and
+flag precedence, duplicate labels, missing and mismatched entries, completion, and receipt
+provenance are covered. Race-enabled full tests, golangci-lint, module tidiness, planning
+lint, generated docs, schema comments, goldens, diff hygiene, and real-registry read-only
+smoke checks are green.

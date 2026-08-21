@@ -266,6 +266,10 @@ func ToSummaryEnvelope(s core.Summary) SummaryEnvelope {
 // won, so a surprising resolution is self-explaining rather than needing a bug report.
 type WorkspaceJSON struct {
 	PlanningRoot string `json:"planning_root"`
+	// Space is the LOCAL registry label that explicitly selected this entry point via
+	// --space or TSKFLW_SPACE. It is omitted for ordinary -C/cwd discovery. Unlike
+	// RepoID it is machine-local and checkout-specific; the two must not be conflated.
+	Space string `json:"space,omitempty"`
 	// RepoID is the planning repo's DURABLE identity — stable across moves, and shared by
 	// every worktree of the repo (it lives in a committed file). Omitted for a repo that
 	// predates the mint. Pair it with PlanningRoot, never substitute: the id names the

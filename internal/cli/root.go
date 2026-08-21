@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -19,6 +20,8 @@ import (
 	"github.com/andy-esch/taskflow/internal/configstore"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
+	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/spacehealth"
 	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
@@ -34,6 +37,7 @@ type App struct {
 	JSON     bool
 	DryRun   bool // preview mutations: full validation, no writes
 	Chdir    string
+	Space    string // registered entry-point label (--space); explicit alternative to Chdir
 	Color    string // auto | always | never
 	NoColor  bool   // alias for --color=never
 	NoInput  bool   // never prompt; missing required input is an error (also TSKFLW_NO_INPUT)
@@ -54,7 +58,11 @@ type App struct {
 	// (built at the end of setStyle) AND must be suppressed on the completion path,
 	// which only the command's own hook knows about. warnPresentation emits it.
 	userCfgErr error
-	Svc        *core.Service
+	// selectedSpace records the local registry label that selected this invocation's
+	// entry point. Empty means ordinary -C/cwd discovery. It is carried onto workspace
+	// receipts so an explicit cross-repo write cannot hide how its target was chosen.
+	selectedSpace string
+	Svc           *core.Service
 	// ConfigSvc is the framework-free configuration application core shared by
 	// Cobra, both TUI contexts, and future adapters.
 	ConfigSvc *core.ConfigurationService
@@ -208,7 +216,9 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.SetErr(errOut)
 	root.PersistentFlags().BoolVar(&app.JSON, "json", false, "machine-readable JSON output")
 	root.PersistentFlags().BoolVar(&app.DryRun, "dry-run", false, "preview the mutation without writing (validation still runs)")
-	root.PersistentFlags().StringVarP(&app.Chdir, "chdir", "C", "", "anchor to the planning repo at this path")
+	root.PersistentFlags().StringVarP(&app.Chdir, "chdir", "C", "", "anchor to the planning repo at this path (conflicts with --space)")
+	root.PersistentFlags().StringVar(&app.Space, "space", "", "select a registered entry point by label (also TSKFLW_SPACE; conflicts with -C)")
+	_ = root.RegisterFlagCompletionFunc("space", completeSpaceIDs)
 	root.PersistentFlags().StringVar(&app.Color, "color", "auto", "colorize output: auto|always|never")
 	root.PersistentFlags().BoolVar(&app.NoColor, "no-color", false, "disable colored output (alias for --color=never)")
 	root.PersistentFlags().BoolVar(&app.NoInput, "no-input", false, "never prompt; missing required input is an error (for scripts/agents; also TSKFLW_NO_INPUT)")
@@ -236,18 +246,101 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	return root
 }
 
-// startDir is the single source of the discovery start directory: --chdir if
-// given, else the cwd. resolve() (fatal) and completion's planningRoot() (forgiving)
-// share it so the "where do we start discovery" contract can't drift between them.
+// startDir is the single source of the discovery start directory. An explicit --space
+// selects the exact registered entry point; -C selects a path; otherwise TSKFLW_SPACE
+// may select an entry point before falling back to cwd. resolve() (fatal), config/TUI
+// adapters, and completion's planningRoot() (forgiving) share it so the "where do we
+// start discovery" contract can't drift between consumers.
 func (a *App) startDir() (string, error) {
+	spaceFlag := strings.TrimSpace(a.Space)
+	if a.Chdir != "" && spaceFlag != "" {
+		return "", fmt.Errorf("%w: --space and -C are two answers to one question; pass one", domain.ErrValidation)
+	}
 	if a.Chdir != "" {
+		// An explicit path flag overrides an ambient TSKFLW_SPACE. This follows the
+		// ordinary flag-over-environment rule and gives scripts a way to pin a path
+		// without having to sanitize the parent environment first.
+		a.selectedSpace = ""
 		return a.Chdir, nil
 	}
+	spaceID := spaceFlag
+	if spaceID == "" {
+		spaceID = strings.TrimSpace(os.Getenv("TSKFLW_SPACE"))
+	}
+	if spaceID != "" {
+		start, err := registeredSpaceStart(spaceID)
+		if err != nil {
+			return "", err
+		}
+		a.selectedSpace = spaceID
+		return start, nil
+	}
+	a.selectedSpace = ""
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("getwd: %w", err)
 	}
 	return wd, nil
+}
+
+// wantsSpace distinguishes an explicit registry selection from ordinary best-effort cwd
+// discovery. Commands such as template/theme may ignore an ordinary discovery miss, but
+// must never swallow an unknown or broken --space and silently fall back to local data.
+func (a *App) wantsSpace() bool {
+	if strings.TrimSpace(a.Space) != "" {
+		return true
+	}
+	return a.Chdir == "" && strings.TrimSpace(os.Getenv("TSKFLW_SPACE")) != ""
+}
+
+// registeredSpaceStart resolves one local registry label into the exact recorded entry
+// point. It diagnoses that entry before returning it: explicit selection is also the
+// wrong-repo guard, so a missing, unreadable, or identity-mismatched target must fail
+// loudly and can never fall back to cwd discovery.
+func registeredSpaceStart(id string) (string, error) {
+	spaces, err := userconfig.Spaces()
+	if err != nil {
+		return "", classifySpaceRegistryError(err)
+	}
+	var selected *userconfig.Space
+	for i := range spaces {
+		space := &spaces[i]
+		if space.ID != id {
+			continue
+		}
+		if selected != nil {
+			return "", fmt.Errorf("%w: invalid space registry: space %q appears more than once", domain.ErrValidation, id)
+		}
+		selected = space
+	}
+	if selected != nil {
+		problem := spacehealth.DiagnoseSpace(*selected)
+		if problem.Broken() {
+			return "", selectedSpaceProblem(problem)
+		}
+		return userconfig.ExpandTilde(selected.Path), nil
+	}
+	known := make([]string, 0, len(spaces))
+	for _, space := range spaces {
+		known = append(known, space.ID)
+	}
+	sort.Strings(known)
+	if len(known) == 0 {
+		return "", fmt.Errorf("%w: unknown space %q — none are registered; run `space add`", domain.ErrNotFound, id)
+	}
+	return "", fmt.Errorf("%w: unknown space %q — known: %s", domain.ErrNotFound, id, strings.Join(known, ", "))
+}
+
+func selectedSpaceProblem(problem spacehealth.SpaceProblem) error {
+	sentinel := domain.ErrNotFound
+	if problem.Kind == spacehealth.KindMismatch {
+		sentinel = domain.ErrConflict
+	}
+	message := fmt.Sprintf("registered space %q: %s", problem.Space.ID, problem.Message)
+	if problem.Remedy != "" {
+		message += "; " + problem.Remedy
+	}
+	return fmt.Errorf("%w: %s", sentinel, message)
 }
 
 // resolve discovers the planning repo and constructs the service. Runs once,

@@ -161,7 +161,11 @@ import (
 // identity, so one planning space can have multiple machine-readable entry points.
 // 1.40: the `config` and `config_migration` envelopes added — resolved repository/user
 // scopes, per-value provenance, pending migrations, and deterministic migration receipts.
-const SchemaVersion = "1.40"
+// 1.41: `workspace.space` added — the machine-local registry label that explicitly
+// selected an invocation through `--space` / `TSKFLW_SPACE`. Additive and omitted for
+// ordinary -C/cwd discovery. `space` names an entry point; `repo_id` remains the durable
+// planning identity shared by all of that repo's checkouts.
+const SchemaVersion = "1.41"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

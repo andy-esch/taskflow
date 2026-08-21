@@ -141,9 +141,10 @@ the one-screen orientation for contributors.
   and remedy per registered checkout. Its `Group` projection treats a durable planning id
   as one logical space and the registered paths as entry points; legacy healthy entries
   fall back to physical planning root, while broken id-less entries stay isolated. Both
-  `space list` and `doctor` consume the diagnoses, and future `status --all`/`--space`/TUI
-  work must reuse the same projection rather than reinterpret discovery errors. It never
-  repairs, removes, or adds relationship metadata to registry data.
+  `space list`, `doctor`, and explicit CLI `--space` selection consume the diagnoses;
+  future `status --all`/TUI work must reuse the same projection rather than reinterpret
+  discovery errors. It never repairs, removes, or adds relationship metadata to registry
+  data.
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
   `internal/cli` (`root.go`), which it calls.
 

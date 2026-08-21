@@ -21,10 +21,11 @@ import (
 // one table, leaving comments, key order, unknown keys, and every other entry byte-for-byte
 // intact. Writes are atomic.
 //
-// The registry is ADVISORY: nothing here may change what config.Discover resolves from a
-// given cwd. A machine with no spaces.toml behaves exactly as it did before one existed,
-// and deleting the file costs convenience, never data or addressability. (internal/config
-// does not import this package, so that is enforced rather than remembered.)
+// The registry is ADVISORY: ordinary cwd discovery never consults it. Only an explicit
+// primary-adapter selection such as CLI --space opts into a registered entry point. A
+// machine with no spaces.toml therefore behaves exactly as it did before one existed,
+// and deleting the file costs convenience, never data. (internal/config does not import
+// this package, so ambient discovery independence is enforced rather than remembered.)
 
 // SpacesFile is the registry filename, beside config.toml.
 const SpacesFile = "spaces.toml"

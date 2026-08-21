@@ -8,9 +8,9 @@ The spaces registry records which repo checkouts enter each planning space, so
 they can be addressed by name instead of by path. Direct planning checkouts and
 implementation pointers with the same durable planning id form one logical space.
 
-It is ADVISORY: nothing in it changes what a command run in a directory
-resolves to. With no registry, everything behaves exactly as it did before one
-existed, and deleting it costs convenience — never data, never addressability.
+It is ADVISORY: ordinary cwd discovery never consults it. Select an entry point
+explicitly with --space (or TSKFLW_SPACE); without that opt-in, a machine with no
+registry behaves exactly as before. Deleting it costs convenience — never data.
 
 ### Options
 
@@ -21,7 +21,7 @@ existed, and deleting it costs convenience — never data, never addressability.
 ### Options inherited from parent commands
 
 ```
-  -C, --chdir string   anchor to the planning repo at this path
+  -C, --chdir string   anchor to the planning repo at this path (conflicts with --space)
       --color string   colorize output: auto|always|never (default "auto")
       --dry-run        preview the mutation without writing (validation still runs)
       --json           machine-readable JSON output
@@ -29,6 +29,7 @@ existed, and deleting it costs convenience — never data, never addressability.
       --no-input       never prompt; missing required input is an error (for scripts/agents; also TSKFLW_NO_INPUT)
       --no-pager       do not pipe long human output through a pager
       --paginate       page long human output through $PAGER (on a TTY), even if disabled in config
+      --space string   select a registered entry point by label (also TSKFLW_SPACE; conflicts with -C)
       --theme string   color theme name (overrides TSKFLW_THEME and [theme].name in config)
 ```
 
