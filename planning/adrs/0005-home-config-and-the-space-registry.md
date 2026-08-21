@@ -80,7 +80,9 @@ Adopt a **home config** whose first citizen is a **space registry**.
 
 ### 1. Vocabulary: space (the one), atlas (the all)
 
-- A **space** is one registered planning repo — the unit you switch between.
+- A **space** is one durable planning identity — the unit summarized once in cross-space
+  views. A registered path is an **entry point** into it: either the direct planning
+  checkout or a repo whose `planning_repo` points there.
 - The **atlas** is the whole set, and the name of the TUI screen over it.
 - **Not "project"** — ADR-0002 owns that word for cross-cutting initiatives inside a
   space. The two live at different scopes and must never share a noun.
@@ -139,6 +141,10 @@ added     = "2026-08-20"
 - **`verify_id` is the resolved planning repo's durable committed id.** Worktrees share
   it, so it cannot address a checkout; it instead detects a path that now resolves to the
   wrong tree. Path is the hint, `verify_id` the assertion.
+- **Grouping is derived, never persisted.** Registry rows with the same `verify_id` form
+  one logical space; discovery supplies `direct`/`pointer` role. The local `id` remains the
+  address of one exact entry point. No parent, child, role, or group field is copied into
+  `spaces.toml`, where it could drift from repo config.
 - **Dedup on PHYSICAL paths** (`Abs` + `EvalSymlinks`), reusing the same helper
   `tracked_repos` already dedups with, so `../x`, an absolute path, and a symlinked
   checkout collapse to one entry.
@@ -208,10 +214,13 @@ dashboard-like screen: read-only, orients and routes, never mutates. It is **not
 
 - It becomes the landing screen **only when more than one space is registered**. With zero
   or one, `ui` opens today's Overview — no regression for single-repo use.
-- Each space's `core.Summary` loads as **its own `tea.Cmd`**; cards render as skeletons and
+- Each logical space's `core.Summary` loads **once as its own `tea.Cmd`**; cards render as skeletons and
   fill in as they land. This preserves the non-negotiable (no I/O in `Update`/`View`), keeps
   the screen fast with many spaces, and makes one slow or broken repo a slow or broken
   *card*.
+- A card offers its registered direct/pointer entry points and later-discovered worktrees
+  as checkout choices. Selecting one changes execution context, not the planning identity
+  or the summary shown on the card.
 - The **switcher** rides existing surfaces — the `ctrl+p` command palette and the `:`
   command bar — rather than claiming new keys on day one.
 
@@ -253,7 +262,8 @@ dashboard-like screen: read-only, orients and routes, never mutates. It is **not
 - **Persisted per-space stats / caching.** Skeleton cards that fill in are honest; cached
   numbers lie. Revisit only if load time proves it necessary.
 - **Non-local spaces** (a remote or served planning repo). That is ADR-0004's `serve`
-  territory; a `space` is a local path until then.
+  territory; the present entry points are local paths, while the logical identity model
+  deliberately does not equate a space with one path.
 - **Per-space theming.** `accent` is a card identity cue, not a theme override.
 
 ## Amendments

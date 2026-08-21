@@ -23,9 +23,10 @@ import (
 func newSpaceCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "space",
-		Short: "Manage the registry of planning repos on this machine",
-		Long: "The spaces registry records which planning repos exist on this machine, so\n" +
-			"they can be addressed by name instead of by path.\n\n" +
+		Short: "Manage planning spaces and their registered entry points",
+		Long: "The spaces registry records which repo checkouts enter each planning space, so\n" +
+			"they can be addressed by name instead of by path. Direct planning checkouts and\n" +
+			"implementation pointers with the same durable planning id form one logical space.\n\n" +
 			"It is ADVISORY: nothing in it changes what a command run in a directory\n" +
 			"resolves to. With no registry, everything behaves exactly as it did before one\n" +
 			"existed, and deleting it costs convenience — never data, never addressability.",
@@ -39,22 +40,25 @@ func newSpaceCmd(app *App) *cobra.Command {
 func newSpaceListCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List registered planning repos with their current health",
-		Long: "List every registered planning repo and diagnose it without changing the registry.\n\n" +
+		Short: "List planning spaces, entry points, and current health",
+		Long: "List every registered planning entry point and diagnose it without changing the registry.\n\n" +
+			"Registered paths that resolve to the same durable planning identity are grouped as\n" +
+			"entry points. The first direct checkout anchors a group when one is registered;\n" +
+			"indentation means shared planning data, not filesystem ownership.\n\n" +
 			"Healthy repos are `ok` or `empty`. Missing paths, non-repos, unreadable configs,\n" +
 			"and durable-id mismatches stay listed with a remedy; none is auto-forgotten.",
 		Example:     "  tskflwctl space list\n  tskflwctl space list --json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
-			entries, err := loadSpaceEntries()
+			diagnoses, err := loadSpaceDiagnoses()
 			if err != nil {
 				return err
 			}
 			if app.JSON {
-				return render.SpacesJSON(app.Out, entries)
+				return render.SpacesJSON(app.Out, spaceEntries(diagnoses))
 			}
-			render.SpacesHuman(app.Out, app.Style, entries)
+			render.SpacesHuman(app.Out, app.Style, spaceGroups(spacehealth.Group(diagnoses)))
 			return nil
 		},
 	}
@@ -64,8 +68,8 @@ func newSpaceAddCmd(app *App) *cobra.Command {
 	var id string
 	cmd := &cobra.Command{
 		Use:   "add [path]",
-		Short: "Register a planning repo (defaults to the current directory)",
-		Long: "Register a planning repo so it can be addressed by name.\n\n" +
+		Short: "Register a planning entry point (defaults to the current directory)",
+		Long: "Register a direct planning checkout or implementation pointer as an entry point.\n\n" +
 			"The path is VALIDATED as a planning repo before anything is written, so a typo\n" +
 			"fails with nothing left behind. Registering the same path twice is a no-op —\n" +
 			"identity is the physical directory, so relative, absolute and symlinked\n" +
@@ -84,14 +88,14 @@ func newSpaceAddCmd(app *App) *cobra.Command {
 			return runSpaceAdd(app, target, id)
 		},
 	}
-	cmd.Flags().StringVar(&id, "id", "", "label to address this space by (default: the directory name)")
+	cmd.Flags().StringVar(&id, "id", "", "label to address this entry point by (default: the directory name)")
 	return cmd
 }
 
 func newSpaceForgetCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "forget <id>",
-		Short: "Drop a space from the registry (the repo itself is untouched)",
+		Short: "Drop an entry point from the registry (the repo itself is untouched)",
 		Long: "Remove an entry from the registry.\n\n" +
 			"This never touches the repo on disk — forgetting is a registry edit, not a\n" +
 			"deletion, so a space can always be re-added with `space add`.",
@@ -105,25 +109,38 @@ func newSpaceForgetCmd(app *App) *cobra.Command {
 	}
 }
 
-// loadSpaceEntries reads the registry and resolves each entry's current state. A broken
+// loadSpaceDiagnoses reads the registry and resolves each entry's current state. A broken
 // entry is REPORTED, never dropped and never fatal: the registry describes what you told
 // it about, and a missing or mismatched repo is information, not an error.
-func loadSpaceEntries() ([]wire.SpaceEntry, error) {
+func loadSpaceDiagnoses() ([]spacehealth.SpaceProblem, error) {
 	diagnoses, err := spacehealth.DiagnoseRegistry()
 	if err != nil {
 		return nil, classifySpaceRegistryError(err)
 	}
+	return diagnoses, nil
+}
+
+func spaceEntries(diagnoses []spacehealth.SpaceProblem) []wire.SpaceEntry {
 	out := make([]wire.SpaceEntry, 0, len(diagnoses))
 	for _, diagnosis := range diagnoses {
 		out = append(out, spaceEntry(diagnosis))
 	}
-	return out, nil
+	return out
+}
+
+func spaceGroups(groups []spacehealth.SpaceGroup) [][]wire.SpaceEntry {
+	out := make([][]wire.SpaceEntry, 0, len(groups))
+	for _, group := range groups {
+		out = append(out, spaceEntries(group.Entries))
+	}
+	return out
 }
 
 func spaceEntry(diagnosis spacehealth.SpaceProblem) wire.SpaceEntry {
 	s := diagnosis.Space
 	e := wire.SpaceEntry{
-		ID: s.ID, Path: s.Path, VerifyID: s.VerifyID, Label: s.Label, Added: s.Added,
+		ID: s.ID, Path: s.Path, VerifyID: s.VerifyID, PlanningID: diagnosis.PlanningID,
+		Role: string(diagnosis.Role), Label: s.Label, Added: s.Added,
 		State: string(diagnosis.Kind), Root: diagnosis.Root,
 		Detail: diagnosis.Message, Remedy: diagnosis.Remedy,
 	}

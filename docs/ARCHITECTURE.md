@@ -117,9 +117,13 @@ the one-screen orientation for contributors.
   the claim true.)
 - **`internal/spacehealth`** — the read-only projection over `userconfig.Space` plus
   repo-scoped `config.Discover`: one typed diagnosis (`ok`, `empty`, `missing`,
-  `not-a-repo`, `unreadable`, `mismatch`) and remedy per registered checkout. Both
-  `space list` and `doctor` consume it, and a future `--space`/TUI must do the same rather
-  than reinterpret discovery errors. It never repairs or removes registry data.
+  `not-a-repo`, `unreadable`, `mismatch`), derived role (`direct`/`pointer`/`unknown`),
+  and remedy per registered checkout. Its `Group` projection treats a durable planning id
+  as one logical space and the registered paths as entry points; legacy healthy entries
+  fall back to physical planning root, while broken id-less entries stay isolated. Both
+  `space list` and `doctor` consume the diagnoses, and future `status --all`/`--space`/TUI
+  work must reuse the same projection rather than reinterpret discovery errors. It never
+  repairs, removes, or adds relationship metadata to registry data.
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
   `internal/cli` (`root.go`), which it calls.
 

@@ -1,10 +1,14 @@
 ## tskflwctl space list
 
-List registered planning repos with their current health
+List planning spaces, entry points, and current health
 
 ### Synopsis
 
-List every registered planning repo and diagnose it without changing the registry.
+List every registered planning entry point and diagnose it without changing the registry.
+
+Registered paths that resolve to the same durable planning identity are grouped as
+entry points. The first direct checkout anchors a group when one is registered;
+indentation means shared planning data, not filesystem ownership.
 
 Healthy repos are `ok` or `empty`. Missing paths, non-repos, unreadable configs,
 and durable-id mismatches stay listed with a remedy; none is auto-forgotten.
@@ -42,5 +46,5 @@ tskflwctl space list [flags]
 
 ### SEE ALSO
 
-* [tskflwctl space](tskflwctl_space.md)	 - Manage the registry of planning repos on this machine
+* [tskflwctl space](tskflwctl_space.md)	 - Manage planning spaces and their registered entry points
 

@@ -16,8 +16,8 @@ updated_at: "2026-08-19"
 
 ## Objective
 
-Give every command a handle to another planning repo without a `cd`: `--space <id>`
-(plus `TSKFLW_SPACE`) looks the id up in the registry and discovers from **there**
+Give every command a handle to another planning entry point without a `cd`:
+`--space <id>` (plus `TSKFLW_SPACE`) looks the local label up in the registry and discovers from **there**
 instead of the cwd. Small change to `App.resolve()`, disproportionate payoff — it is
 also the cross-repo handle agents currently lack.
 
@@ -34,12 +34,17 @@ the value, the board's cost can be re-decided honestly.
   produces, not a raw `Discover` error.
 - Shell completion for `--space` off the registry (the completion funcs already do
   their own forgiving discovery, so this must not break outside a planning repo).
+- A registry label addresses one exact **entry point**, not the logical planning id. Two
+  labels may share `planning_id` while intentionally selecting different checkouts; both
+  verify and resolve to the same planning data. Receipts should retain the selected label
+  or path so the execution context is not hidden by grouping.
 - Must not perturb the advisory invariant: with no `--space` and no home config,
   resolution is byte-for-byte today's.
 
 ## Acceptance criteria
 
-- [ ] `--space <id>` resolves any command against the registered repo, `-C`-style
+- [ ] `--space <id>` resolves any command against the labeled registered entry point,
+  `-C`-style, even when another label shares its planning identity
 - [ ] `TSKFLW_SPACE` honored at lower precedence than the flag
 - [ ] `--space` + `-C` together is a clear error
 - [ ] Unknown id → exit 10 with the known ids listed

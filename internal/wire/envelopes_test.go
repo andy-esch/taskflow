@@ -175,13 +175,13 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"SpacesEnvelope", func(w io.Writer) error {
 			return emit(w, ToSpacesEnvelope([]SpaceEntry{{
-				ID: "taskflow", Path: "~/git/taskflow", State: SpaceStateMismatch,
+				ID: "taskflow", Path: "~/git/taskflow", PlanningID: "6gplan", Role: SpaceRoleDirect, State: SpaceStateMismatch,
 				Root: "/repo/planning", Detail: "wrong repo", Remedy: "re-register",
 			}}))
 		}},
 		{"SpaceMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToSpaceMutationEnvelope(
-				SpaceEntry{ID: "taskflow", Path: "~/git/taskflow", State: SpaceStateOK, Root: "/repo/planning"}, true, false))
+				SpaceEntry{ID: "taskflow", Path: "~/git/taskflow", PlanningID: "6gplan", Role: SpaceRoleDirect, State: SpaceStateOK, Root: "/repo/planning"}, true, false))
 		}},
 		{"ErrorEnvelope", func(w io.Writer) error {
 			// Built by cli.WriteError (not a constructor here) — marshal the named type

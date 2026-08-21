@@ -86,9 +86,10 @@ error: --space and -C are two answers to one question; pass one
 
 **`space` (item) · `atlas` (collective).** Chosen by andy-esch.
 
-- **`space`** is one registered planning repo — the TOML key (`[[space]]`), the global
+- **`space`** is one planning repo/identity — the TOML key (`[[space]]`), the global
   flag (`--space`), the env var (`TSKFLW_SPACE`), and the command noun
-  (`space list|add|forget`).
+  (`space list|add|forget`). The 2026-08-20 refinement below distinguishes the logical
+  space from the registry rows that enter it.
 - **`atlas`** is the whole set, and the name of the TUI screen over it (slice 3+).
 
 Rationale: it reads best in the lines that matter — `--space desirelines` and
@@ -107,6 +108,16 @@ same register — `Workspace` is the internal resolved bundle, `space` is the us
 registered repo — and the alternative was a worse item noun to protect a type name no
 user ever sees. If it grates in a year, the item noun is a rename of one TOML key, one
 flag, and one command group; the durable data (`id`, `path`) is unaffected.
+
+### 2026-08-20 refinement — space identity vs registry entry
+
+The noun is unchanged; its referent is now more precise. A **space is one durable
+planning identity**, while each `[[space]]` row is a locally addressable **entry point**
+(a direct planning checkout or a repo whose config points there). Several rows may
+therefore belong to one space. This follows from the shipped config model: the planning
+repo's `id` and its pointers' `planning_repo_id` are the same natural grouping key. The
+distinction prevents `status --all` and the atlas from counting one task tree several
+times without changing any accepted CLI spelling.
 
 ## Acceptance criteria
 

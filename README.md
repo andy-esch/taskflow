@@ -127,25 +127,29 @@ tskflwctl lint --fix                   # auto-repair frontmatter (quote ':' valu
 
 ### Multiple planning repos
 
-The home space registry is an advisory inventory of the planning repos on this machine.
+The home space registry is an advisory inventory of planning entry points on this machine.
 It lives at `$XDG_CONFIG_HOME/tskflwctl/spaces.toml`, falling back to
 `~/.config/tskflwctl/spaces.toml`, separate from both the repo-local `.tskflwctl.toml` and
-the hand-edited home `config.toml`. Registering a space never changes ordinary cwd/`-C`
-discovery, and forgetting one never touches its repo.
+the hand-edited home `config.toml`. Entry points that resolve to the same durable planning
+id form one logical space: a direct planning checkout and its implementation-repo pointers
+are grouped rather than presented as duplicate plans. The relationship is derived from the
+repo configs; `spaces.toml` does not duplicate parent/child state. Registering an entry point
+never changes ordinary cwd/`-C` discovery, and forgetting one never touches its repo.
 
 ```bash
-tskflwctl space add                         # register the current planning repo
+tskflwctl space add                         # register the current checkout as an entry point
 tskflwctl space add ../other --id other     # or name another checkout explicitly
-tskflwctl space list                        # ok/empty plus actionable broken states
-tskflwctl space list --json                 # schema-versioned inventory for agents
+tskflwctl space list                        # grouped spaces + entry-point health
+tskflwctl space list --json                 # flat entries with role + planning_id
 tskflwctl doctor                            # linkback + space-registry health audit
 tskflwctl space forget other --dry-run      # preview; the repo itself is never deleted
 tskflwctl space forget other
 ```
 
-Registration is currently explicit: `init` does not auto-register, and selecting a space
-does not yet replace `-C`. That makes it safe to register a full setup now as inventory;
-the planned global `--space <id>` will later make those same labels command targets.
+Registration is currently explicit: `init` does not auto-register, and selecting an entry
+point does not yet replace `-C`. That makes it safe to register a full setup now as
+inventory; the planned global `--space <id>` will later make those same local labels exact
+checkout targets, even when several labels share one planning identity.
 `TSKFLW_CONFIG_HOME` overrides the home-config directory, which is useful for an isolated
 trial before populating the real registry.
 

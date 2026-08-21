@@ -23,12 +23,18 @@ building a screen for.
 
 ## Notes
 
-- Per-space `core.Summary` over the registry, rendered as a compact per-space block
+- One `core.Summary` per **logical planning identity**, using the shared
+  `spacehealth.Group` projection rather than iterating registry rows. A direct planning
+  checkout plus two registered implementation pointers is one block and contributes each
+  task once, not three times. Use a healthy direct entry point when available, otherwise
+  the first healthy entry in registry order.
+- Render each summary as a compact per-space block
   plus a **combined in-progress list** with a space badge on each row. The combined
   list is the hypothesis worth testing: cards orient, but the rail may be the real
   payload.
-- Broken spaces render their diagnosis inline (from the health task) rather than
-  failing the command — one dead entry must not cost you the other three.
+- Broken entry points render their diagnosis within their logical space (from the health
+  projection) rather than failing the command. A group remains loadable through another
+  healthy entry point; one dead path must not cost the other spaces.
 - `--json` carries a `schema_version` and an array of per-space envelopes; goldens
   regenerated (`go test ./internal/cli -update`).
 - Reads only. No writes, no registration side effects.
@@ -36,8 +42,10 @@ building a screen for.
 
 ## Acceptance criteria
 
-- [ ] `status --all` summarizes every registered space plus a combined in-progress list
-- [ ] A broken space shows its diagnosis inline; the command still exits 0
+- [ ] `status --all` summarizes every logical planning identity plus a combined
+  in-progress list, without duplicate tasks from pointer/direct entry points
+- [ ] A broken entry point shows its diagnosis inline; the command still exits 0 and a
+  group with another healthy entry remains summarized
 - [ ] No registry / no spaces → falls back to today's single-repo `status` output
 - [ ] `--json` envelope with `schema_version`; goldens regenerated
 - [ ] `just test` + `just lint` green

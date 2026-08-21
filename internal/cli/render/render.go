@@ -946,58 +946,84 @@ func SpacesJSON(w io.Writer, spaces []wire.SpaceEntry) error {
 	return wire.EncodeJSON(w, wire.ToSpacesEnvelope(spaces))
 }
 
-// SpacesHuman lists the registry one space per line: a state glyph, the label, where it
-// points, and — for a broken entry — what is wrong and what to do about it.
+// SpacesHuman lists the registry one logical planning space at a time. Each inner slice is
+// a group of registered entry points produced by spacehealth.Group. A direct checkout, if
+// present, anchors the human tree; the remaining entry points retain registry order.
 //
 // A broken entry is shown DIMMED alongside the healthy ones rather than hidden or turned
 // into an error. The registry describes what you told it about; a repo that moved is
 // information, and the list is the place you would go to fix it.
-func SpacesHuman(w io.Writer, st Style, spaces []wire.SpaceEntry) {
-	if len(spaces) == 0 {
+func SpacesHuman(w io.Writer, st Style, groups [][]wire.SpaceEntry) {
+	if len(groups) == 0 {
 		fmt.Fprintf(w, "%s no spaces registered — `tskflwctl space add` in a planning repo\n", st.Dim("·"))
 		return
 	}
 	width := 0
-	for _, s := range spaces {
-		if n := len(s.ID); n > width {
-			width = n
-		}
-	}
-	for _, s := range spaces {
-		id := fmt.Sprintf("%-*s", width, s.ID)
-		if s.State == wire.SpaceStateOK {
-			fmt.Fprintf(w, "%s %s  %-10s  %s\n", st.Green("●"), st.Bold(id), st.Green(s.State), st.Dim(s.Path))
-			continue
-		}
-		if s.State == wire.SpaceStateEmpty {
-			fmt.Fprintf(w, "%s %s  %-10s  %s\n", st.Green("○"), st.Bold(id), st.Dim(s.State), st.Dim(s.Path))
-			if s.Detail != "" {
-				fmt.Fprintf(w, "    %s %s\n", st.Dim("↳"), st.Dim(s.Detail))
+	for _, group := range groups {
+		for _, s := range group {
+			if n := len(s.ID); n > width {
+				width = n
 			}
-			continue
-		}
-		fmt.Fprintf(w, "%s %s  %-10s  %s\n", st.Warn("○"), st.Dim(id), st.Warn(s.State), st.Dim(s.Path))
-		if s.Detail != "" {
-			fmt.Fprintf(w, "    %s %s\n", st.Warn("↳"), st.Dim(s.Detail))
-		}
-		if s.Remedy != "" {
-			fmt.Fprintf(w, "      %s %s\n", st.Dim("remedy:"), st.Dim(s.Remedy))
 		}
 	}
-	if broken := countBrokenSpaces(spaces); broken > 0 {
+	broken := 0
+	for _, group := range groups {
+		entries := preferredSpaceEntryFirst(group)
+		for i, s := range entries {
+			prefix := ""
+			detailIndent := "    "
+			if i > 0 {
+				prefix = "  ├─ "
+				if i == len(entries)-1 {
+					prefix = "  └─ "
+				}
+				detailIndent = "      "
+			}
+			renderSpaceEntry(w, st, s, width, prefix, detailIndent)
+			if s.State != wire.SpaceStateOK && s.State != wire.SpaceStateEmpty {
+				broken++
+			}
+		}
+	}
+	if broken > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Dim(plural(broken, "space")+" not resolving — `space forget <id>` drops an entry; the repo is untouched"))
 	}
 }
 
-// countBrokenSpaces counts actionable entries; an empty repo resolved successfully.
-func countBrokenSpaces(spaces []wire.SpaceEntry) int {
-	n := 0
-	for _, s := range spaces {
-		if s.State != wire.SpaceStateOK && s.State != wire.SpaceStateEmpty {
-			n++
+func preferredSpaceEntryFirst(entries []wire.SpaceEntry) []wire.SpaceEntry {
+	for i, entry := range entries {
+		if entry.Role != wire.SpaceRoleDirect || i == 0 {
+			continue
 		}
+		ordered := make([]wire.SpaceEntry, 0, len(entries))
+		ordered = append(ordered, entry)
+		ordered = append(ordered, entries[:i]...)
+		ordered = append(ordered, entries[i+1:]...)
+		return ordered
 	}
-	return n
+	return entries
+}
+
+func renderSpaceEntry(w io.Writer, st Style, s wire.SpaceEntry, width int, prefix, detailIndent string) {
+	id := fmt.Sprintf("%-*s", width, s.ID)
+	if s.State == wire.SpaceStateOK {
+		fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Green("●"), st.Bold(id), st.Green(s.State), st.Dim(s.Path))
+		return
+	}
+	if s.State == wire.SpaceStateEmpty {
+		fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Green("○"), st.Bold(id), st.Dim(s.State), st.Dim(s.Path))
+		if s.Detail != "" {
+			fmt.Fprintf(w, "%s%s %s\n", detailIndent, st.Dim("↳"), st.Dim(s.Detail))
+		}
+		return
+	}
+	fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Warn("○"), st.Dim(id), st.Warn(s.State), st.Dim(s.Path))
+	if s.Detail != "" {
+		fmt.Fprintf(w, "%s%s %s\n", detailIndent, st.Warn("↳"), st.Dim(s.Detail))
+	}
+	if s.Remedy != "" {
+		fmt.Fprintf(w, "%s  %s %s\n", detailIndent, st.Dim("remedy:"), st.Dim(s.Remedy))
+	}
 }
 
 // SpaceMutationJSON emits the `space add`/`forget --json` envelope.

@@ -26,15 +26,40 @@ const (
 	KindMismatch   Kind = "mismatch"
 )
 
+// Role describes how a registered path reaches its planning tree. It is derived from
+// repo config, never persisted in spaces.toml: a direct entry owns the planning tree,
+// while a pointer entry reaches one through planning_repo. Unknown is honest for an
+// entry whose missing or unreadable config cannot be inspected.
+type Role string
+
+const (
+	RoleDirect  Role = "direct"
+	RolePointer Role = "pointer"
+	RoleUnknown Role = "unknown"
+)
+
 // SpaceProblem is the complete diagnosis of one registry entry. Despite the name, OK and
 // empty entries are included so every consumer receives one typed record per space.
 // Message explains the state; Remedy is populated only when a person can repair it.
 type SpaceProblem struct {
-	Space   userconfig.Space
-	Kind    Kind
-	Root    string
-	Message string
-	Remedy  string
+	Space userconfig.Space
+	Kind  Kind
+	Role  Role
+	// PlanningID is the durable identity this entry belongs to. The registry's
+	// verify_id wins because it is the intended identity even when the path has drifted;
+	// a successfully discovered id supplies it for legacy registry entries.
+	PlanningID string
+	Root       string
+	Message    string
+	Remedy     string
+}
+
+// SpaceGroup is one logical planning space and all registered paths that enter it.
+// Entries retain registry order. PlanningID is empty only for legacy id-less trees and
+// broken entries that have no retained identity assertion.
+type SpaceGroup struct {
+	PlanningID string
+	Entries    []SpaceProblem
 }
 
 // Broken reports whether this diagnosis should make doctor exit non-zero. An empty
@@ -58,11 +83,31 @@ func DiagnoseRegistry() ([]SpaceProblem, error) {
 	return out, nil
 }
 
+// Group projects registry diagnoses into logical planning spaces. A durable planning id
+// is the preferred key. Legacy healthy entries fall back to their physical resolved root;
+// broken id-less entries remain isolated so unrelated failures can never collapse into one
+// apparent space. Both group order and entry order follow registry insertion order.
+func Group(problems []SpaceProblem) []SpaceGroup {
+	groups := make([]SpaceGroup, 0, len(problems))
+	byKey := make(map[string]int, len(problems))
+	for i, problem := range problems {
+		key := groupKey(problem, i)
+		groupIndex, exists := byKey[key]
+		if !exists {
+			groupIndex = len(groups)
+			byKey[key] = groupIndex
+			groups = append(groups, SpaceGroup{PlanningID: problem.PlanningID})
+		}
+		groups[groupIndex].Entries = append(groups[groupIndex].Entries, problem)
+	}
+	return groups
+}
+
 // DiagnoseSpace diagnoses one already-loaded entry. It is useful for mutation receipts
 // and explicit --space selection, which need the shared rules without re-reading the
 // registry or requiring that a dry-run preview already exist there.
 func DiagnoseSpace(space userconfig.Space) SpaceProblem {
-	p := SpaceProblem{Space: space}
+	p := SpaceProblem{Space: space, Role: RoleUnknown, PlanningID: space.VerifyID}
 	dir := userconfig.ExpandTilde(space.Path)
 	info, err := os.Stat(dir)
 	if err != nil {
@@ -106,6 +151,14 @@ func DiagnoseSpace(space userconfig.Space) SpaceProblem {
 		return p
 	}
 	p.Root = cfg.Root
+	if cfg.PlanningRepo == "" {
+		p.Role = RoleDirect
+	} else {
+		p.Role = RolePointer
+	}
+	if p.PlanningID == "" {
+		p.PlanningID = cfg.ID
+	}
 	if space.VerifyID != "" && cfg.ID != space.VerifyID {
 		p.Kind = KindMismatch
 		if cfg.ID == "" {
@@ -131,6 +184,19 @@ func DiagnoseSpace(space userconfig.Space) SpaceProblem {
 	}
 	p.Kind = KindOK
 	return p
+}
+
+func groupKey(problem SpaceProblem, index int) string {
+	if problem.PlanningID != "" {
+		return "id:" + problem.PlanningID
+	}
+	if problem.Root != "" {
+		return "root:" + problem.Root
+	}
+	// Include the index as well as the local label: Group also accepts synthetic slices
+	// in tests and future adapters, where duplicate labels are possible even though a
+	// valid persisted registry rejects them.
+	return fmt.Sprintf("entry:%d:%s", index, problem.Space.ID)
 }
 
 // errorsIsConfigFailure distinguishes a present-but-invalid planning config/pointer from

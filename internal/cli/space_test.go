@@ -122,6 +122,69 @@ func TestSpaceAdd_PointerStoresPointerRepo(t *testing.T) {
 	}
 }
 
+func TestSpaceList_GroupsDirectAndPointerEntryPoints(t *testing.T) {
+	spaceConfigHome(t)
+	planning := initializedSpaceRepo(t)
+	implementation := t.TempDir()
+	deployment := t.TempDir()
+	if _, err := config.InitPointer(implementation, planning, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.InitPointer(deployment, planning, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, fixture := range []struct {
+		id   string
+		path string
+	}{
+		{id: "desirelines", path: implementation},
+		{id: "desirelines-planning", path: planning},
+		{id: "desirelines-deploy", path: deployment},
+	} {
+		if out, errOut, err := runIn(t, t.TempDir(), "space", "add", fixture.path, "--id", fixture.id); err != nil {
+			t.Fatalf("add %s: %v\n%s%s", fixture.id, err, out, errOut)
+		}
+	}
+
+	out, errOut, err := runIn(t, t.TempDir(), "space", "list", "--json")
+	if err != nil {
+		t.Fatalf("JSON list: %v\n%s%s", err, out, errOut)
+	}
+	env := decodeSpaces(t, out)
+	if len(env.Spaces) != 3 {
+		t.Fatalf("spaces = %+v", env.Spaces)
+	}
+	wantRoles := []string{wire.SpaceRolePointer, wire.SpaceRoleDirect, wire.SpaceRolePointer}
+	planningID := env.Spaces[0].PlanningID
+	if planningID == "" {
+		t.Fatal("grouped entries have no derived planning_id")
+	}
+	for i, entry := range env.Spaces {
+		if entry.Role != wantRoles[i] || entry.PlanningID != planningID {
+			t.Errorf("entry %d = %+v, want role %q and planning id %q", i, entry, wantRoles[i], planningID)
+		}
+	}
+	// JSON remains in registry order. Human output alone promotes the direct checkout
+	// to the group's anchor, with the pointers visibly nested beneath it.
+	if env.Spaces[0].ID != "desirelines" || env.Spaces[1].ID != "desirelines-planning" {
+		t.Errorf("flat JSON lost registry order: %+v", env.Spaces)
+	}
+
+	human, errOut, err := runIn(t, t.TempDir(), "space", "list", "--color=never")
+	if err != nil {
+		t.Fatalf("human list: %v\n%s%s", err, human, errOut)
+	}
+	planningAt := strings.Index(human, "desirelines-planning")
+	implementationAt := strings.Index(human, "desirelines ")
+	deploymentAt := strings.Index(human, "desirelines-deploy")
+	if planningAt < 0 || implementationAt < planningAt || deploymentAt < implementationAt {
+		t.Errorf("direct checkout did not anchor the grouped tree:\n%s", human)
+	}
+	if !strings.Contains(human, "  ├─ ") || !strings.Contains(human, "  └─ ") {
+		t.Errorf("grouped entry points need tree connectors:\n%s", human)
+	}
+}
+
 // TestSpaceAdd_InvalidPathLeavesNoRegistry proves validation happens before the first
 // home-scope write. A bad explicit path must not even create spaces.toml.
 func TestSpaceAdd_InvalidPathLeavesNoRegistry(t *testing.T) {

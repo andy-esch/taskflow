@@ -325,19 +325,23 @@ type ThemeEntry struct {
 	Default bool   `json:"default"` // the built-in default
 }
 
-// SpaceEntry is one registered planning repo in `space list --json`.
+// SpaceEntry is one registered entry point in `space list --json`.
 //
 // ID and VerifyID answer different questions and neither substitutes for the other: ID is
 // the LOCAL label that addresses this checkout (what `--space` takes), VerifyID is the
-// target repo's DURABLE id, which every worktree of that repo shares. State is the
-// resolved health of the entry — see the space diagnosis work.
+// target repo's DURABLE id assertion recorded in the registry. PlanningID is the derived
+// logical-space identity: VerifyID when present, otherwise a successfully discovered id.
+// Role says whether this path owns that planning tree or points to it. State is the resolved
+// health of the entry — see the space diagnosis work.
 type SpaceEntry struct {
-	ID       string `json:"id"`
-	Path     string `json:"path"`
-	VerifyID string `json:"verify_id,omitempty"`
-	Label    string `json:"label,omitempty"`
-	Added    string `json:"added,omitempty"`
-	State    string `json:"state" jsonschema:"description=ok|empty|missing|not-a-repo|unreadable|mismatch"`
+	ID         string `json:"id"`
+	Path       string `json:"path"`
+	VerifyID   string `json:"verify_id,omitempty"`
+	PlanningID string `json:"planning_id,omitempty"`
+	Role       string `json:"role" jsonschema:"description=direct|pointer|unknown"`
+	Label      string `json:"label,omitempty"`
+	Added      string `json:"added,omitempty"`
+	State      string `json:"state" jsonschema:"description=ok|empty|missing|not-a-repo|unreadable|mismatch"`
 	// Root is where the entry resolves to, present for ok/empty/mismatch. It is the
 	// PLANNING root, which for a pointer repo is in a different repo than Path.
 	Root string `json:"root,omitempty"`
@@ -356,6 +360,14 @@ const (
 	SpaceStateNotARepo   = "not-a-repo"
 	SpaceStateUnreadable = "unreadable"
 	SpaceStateMismatch   = "mismatch"
+)
+
+// Space entry roles. Role is derived from the registered repo's config and is unknown
+// only when a broken entry cannot be inspected.
+const (
+	SpaceRoleDirect  = "direct"
+	SpaceRolePointer = "pointer"
+	SpaceRoleUnknown = "unknown"
 )
 
 // SpacesEnvelope is `space list --json`.

@@ -13,7 +13,7 @@ updated_at: "2026-08-18"
 **Goal.** Multi-space planning: a home registry of planning repos, a `--space`
 handle for any command, and a cross-space TUI board (the atlas).
 
-> **Vocabulary locked 2026-08-18: `space` (one registered planning repo) ·
+> **Vocabulary locked 2026-08-18: `space` (one durable planning identity) ·
 > `atlas` (the whole set).** See
 > [decide-the-multi-space-vocabulary-blocks-slice-2](../tasks/6g1erb0p5893-decide-the-multi-space-vocabulary-blocks-slice-2.md)
 > for the rejected alternatives, so it is not relitigated.
@@ -58,8 +58,13 @@ in a peer product's config.
   the board with a keypress to keep it.
 - Broken entries are diagnosed and never auto-removed, via a `SpaceProblem`
   shared by `doctor` and the TUI — the `LinkProblem` pattern one scope up.
+- A registry row is an **entry point**, not necessarily a separate space. Rows with
+  the same resolved durable planning id — a direct planning checkout and its
+  implementation pointers — form one logical space. The grouping is derived from repo
+  config, never persisted as parent/child registry state.
 - The atlas is a dashboard-like screen (not an `entityTab`), cards rather than a
-  list, per-card async summaries, landing only when >1 space is registered.
+  list, one card/summary per planning identity, and registered entry points selectable
+  within the card. It lands only when >1 logical space is registered.
 
 ## Sequencing
 
@@ -89,5 +94,6 @@ The cheap independently-useful parts first, the expensive commitment last:
 - Persisted per-space stats. Skeleton cards that fill in are honest; cached
   numbers lie.
 - Non-local spaces (a served/remote planning repo) — that is ADR-0004's `serve`
-  territory, and it may eventually invalidate "a space is a local path."
+  territory. Defining a space by planning identity rather than one local path leaves
+  room for that later transport without deciding it now.
 - Per-space theming. `accent` would be a card identity cue, not a theme override.

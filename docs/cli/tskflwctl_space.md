@@ -1,11 +1,12 @@
 ## tskflwctl space
 
-Manage the registry of planning repos on this machine
+Manage planning spaces and their registered entry points
 
 ### Synopsis
 
-The spaces registry records which planning repos exist on this machine, so
-they can be addressed by name instead of by path.
+The spaces registry records which repo checkouts enter each planning space, so
+they can be addressed by name instead of by path. Direct planning checkouts and
+implementation pointers with the same durable planning id form one logical space.
 
 It is ADVISORY: nothing in it changes what a command run in a directory
 resolves to. With no registry, everything behaves exactly as it did before one
@@ -34,7 +35,7 @@ existed, and deleting it costs convenience — never data, never addressability.
 ### SEE ALSO
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
-* [tskflwctl space add](tskflwctl_space_add.md)	 - Register a planning repo (defaults to the current directory)
-* [tskflwctl space forget](tskflwctl_space_forget.md)	 - Drop a space from the registry (the repo itself is untouched)
-* [tskflwctl space list](tskflwctl_space_list.md)	 - List registered planning repos with their current health
+* [tskflwctl space add](tskflwctl_space_add.md)	 - Register a planning entry point (defaults to the current directory)
+* [tskflwctl space forget](tskflwctl_space_forget.md)	 - Drop an entry point from the registry (the repo itself is untouched)
+* [tskflwctl space list](tskflwctl_space_list.md)	 - List planning spaces, entry points, and current health
 

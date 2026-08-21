@@ -27,7 +27,7 @@ Local-first planning CLI (tasks, epics, audits, research) over markdown
 * [tskflwctl lint](tskflwctl_lint.md)	 - Validate active task, epic, and research frontmatter (--fix repairs tasks/audits/research and assigns missing ids)
 * [tskflwctl research](tskflwctl_research.md)	 - Work with research docs
 * [tskflwctl schema](tskflwctl_schema.md)	 - Describe the tool's contract + per-kind authoring guidance (for agents)
-* [tskflwctl space](tskflwctl_space.md)	 - Manage the registry of planning repos on this machine
+* [tskflwctl space](tskflwctl_space.md)	 - Manage planning spaces and their registered entry points
 * [tskflwctl status](tskflwctl_status.md)	 - At-a-glance project dashboard (counts, in-progress, epic progress)
 * [tskflwctl task](tskflwctl_task.md)	 - Work with tasks
 * [tskflwctl template](tskflwctl_template.md)	 - List and inspect the body scaffolds `new --template` can use

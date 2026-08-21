@@ -1,10 +1,10 @@
 ## tskflwctl space add
 
-Register a planning repo (defaults to the current directory)
+Register a planning entry point (defaults to the current directory)
 
 ### Synopsis
 
-Register a planning repo so it can be addressed by name.
+Register a direct planning checkout or implementation pointer as an entry point.
 
 The path is VALIDATED as a planning repo before anything is written, so a typo
 fails with nothing left behind. Registering the same path twice is a no-op —
@@ -27,7 +27,7 @@ tskflwctl space add [path] [flags]
 
 ```
   -h, --help        help for add
-      --id string   label to address this space by (default: the directory name)
+      --id string   label to address this entry point by (default: the directory name)
 ```
 
 ### Options inherited from parent commands
@@ -46,5 +46,5 @@ tskflwctl space add [path] [flags]
 
 ### SEE ALSO
 
-* [tskflwctl space](tskflwctl_space.md)	 - Manage the registry of planning repos on this machine
+* [tskflwctl space](tskflwctl_space.md)	 - Manage planning spaces and their registered entry points
 
