@@ -50,7 +50,13 @@ the one-screen orientation for contributors.
   the *use-case* port the `Service` depends on; the two fs/text operations that
   aren't use cases live in narrow sibling ports — `Fixer` (frontmatter repair)
   and `Layout` (watch-path layout) — so a second `Store` and the test fakes don't
-  carry them. Pure; unit-testable without fs.
+  carry them. `SpaceOverviewService` is the repo-independent cross-space use case:
+  it reads logical registry groups through `SpaceOverviewStore`, selects one healthy
+  entry point per identity, and opens only the narrow read-only `SummaryStore` needed
+  for a dashboard scan. Roles and states are typed core vocabulary and entry health is
+  derived from state, so an adapter cannot claim that a missing checkout is healthy.
+  Per-space failures remain data in the projection; the CLI renders the complete sweep
+  before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
   `<root>/tasks/<id>-<slug>.md` (flat, id-led). Splits frontmatter with a zero-dep byte
   scanner; parses YAML with `go.yaml.in/yaml/v3`. One `*FS` satisfies all three
@@ -145,6 +151,11 @@ the one-screen orientation for contributors.
   future `status --all`/TUI work must reuse the same projection rather than reinterpret
   discovery errors. It never repairs, removes, or adds relationship metadata to registry
   data.
+- **`internal/spacestore`** — the composite filesystem secondary adapter for
+  `core.SpaceOverviewStore`. It is the only cross-space layer that translates
+  `spacehealth.Group` into neutral core values and opens a Markdown summary reader for a
+  selected planning root. Cobra consumes `core.SpaceOverview`; a future atlas or served
+  adapter can call the same service without importing registry/discovery packages.
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
   `internal/cli` (`root.go`), which it calls.
 

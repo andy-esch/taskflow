@@ -10,6 +10,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/spacehealth"
 	"github.com/andy-esch/taskflow/internal/userconfig"
@@ -140,8 +141,8 @@ func spaceEntry(diagnosis spacehealth.SpaceProblem) wire.SpaceEntry {
 	s := diagnosis.Space
 	e := wire.SpaceEntry{
 		ID: s.ID, Path: s.Path, VerifyID: s.VerifyID, PlanningID: diagnosis.PlanningID,
-		Role: string(diagnosis.Role), Label: s.Label, Added: s.Added,
-		State: string(diagnosis.Kind), Root: diagnosis.Root,
+		Role: core.SpaceRole(diagnosis.Role), Label: s.Label, Added: s.Added,
+		State: core.SpaceState(diagnosis.Kind), Root: diagnosis.Root,
 		Detail: diagnosis.Message, Remedy: diagnosis.Remedy,
 	}
 	return e

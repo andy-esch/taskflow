@@ -202,9 +202,16 @@ func ToMovesEnvelope(results []MoveResult, dryRun bool, ws WorkspaceJSON) MovesE
 	return MovesEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Moves: results, Workspace: ws}
 }
 
-// SummaryEnvelope is `status --json`.
+// SummaryEnvelope is `status --json`: the shared dashboard payload with the one
+// top-level schema version required of every machine envelope.
 type SummaryEnvelope struct {
-	SchemaVersion string               `json:"schema_version"`
+	SchemaVersion string `json:"schema_version"`
+	SummaryJSON
+}
+
+// SummaryJSON is the reusable, versionless dashboard payload. StatusAllEnvelope embeds
+// one beneath each logical space while owning the schema version at its top level.
+type SummaryJSON struct {
 	Counts        []StatusCountJSON    `json:"counts"`
 	InProgress    []TaskJSON           `json:"in_progress"`
 	Epics         []EpicJSON           `json:"epics"`
@@ -215,8 +222,8 @@ type SummaryEnvelope struct {
 	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
 }
 
-// ToSummaryEnvelope builds the `status --json` dashboard envelope value.
-func ToSummaryEnvelope(s core.Summary) SummaryEnvelope {
+// ToSummaryJSON builds the reusable dashboard payload.
+func ToSummaryJSON(s core.Summary) SummaryJSON {
 	counts := make([]StatusCountJSON, 0, len(s.Counts))
 	for _, c := range s.Counts {
 		counts = append(counts, StatusCountJSON{Status: string(c.Status), Count: c.Count})
@@ -242,11 +249,85 @@ func ToSummaryEnvelope(s core.Summary) SummaryEnvelope {
 		f := ToFindingsRollup(fr)
 		findings = &f
 	}
-	return SummaryEnvelope{
-		SchemaVersion: SchemaVersion, Counts: counts, InProgress: inprog,
+	return SummaryJSON{
+		Counts: counts, InProgress: inprog,
 		Epics: epics, OpenAudits: audits, Findings: findings,
 		RevisitDue: s.RevisitDue, BadEpicStatus: s.BadEpicStatus,
 		Unreadable: s.Problems,
+	}
+}
+
+// ToSummaryEnvelope builds the `status --json` dashboard envelope value.
+func ToSummaryEnvelope(s core.Summary) SummaryEnvelope {
+	return SummaryEnvelope{SchemaVersion: SchemaVersion, SummaryJSON: ToSummaryJSON(s)}
+}
+
+// StatusAllEnvelope is `status --all --json`: one summary per logical planning
+// identity plus the combined in-progress working set across those spaces.
+type StatusAllEnvelope struct {
+	SchemaVersion string                `json:"schema_version"`
+	Spaces        []SpaceSummaryJSON    `json:"spaces"`
+	InProgress    []SpaceInProgressJSON `json:"in_progress"`
+}
+
+// SpaceSummaryJSON is one logical planning space in StatusAllEnvelope. EntryPoints
+// includes healthy and broken registered checkouts. Summary is absent only when the group
+// could not be loaded; Error then explains the group-local failure.
+type SpaceSummaryJSON struct {
+	ID                 string       `json:"id"`
+	PlanningID         string       `json:"planning_id,omitempty"`
+	SelectedEntryPoint string       `json:"selected_entry_point,omitempty"`
+	EntryPoints        []SpaceEntry `json:"entry_points"`
+	Summary            *SummaryJSON `json:"summary,omitempty"`
+	Error              string       `json:"error,omitempty"`
+}
+
+// SpaceInProgressJSON identifies the logical space beside one task in the combined
+// cross-space working set.
+type SpaceInProgressJSON struct {
+	Space      string   `json:"space"`
+	PlanningID string   `json:"planning_id,omitempty"`
+	Task       TaskJSON `json:"task"`
+}
+
+// ToStatusAllEnvelope builds the machine contract from the adapter-neutral overview.
+func ToStatusAllEnvelope(overview core.SpaceOverview) StatusAllEnvelope {
+	spaces := make([]SpaceSummaryJSON, 0, len(overview.Spaces))
+	for _, space := range overview.Spaces {
+		entryPoints := make([]SpaceEntry, 0, len(space.Entries))
+		for _, entry := range space.Entries {
+			entryPoints = append(entryPoints, ToSpaceEntry(entry))
+		}
+		item := SpaceSummaryJSON{
+			ID: space.ID, PlanningID: space.PlanningID, EntryPoints: entryPoints,
+			Error: space.LoadError,
+		}
+		if space.Selected != nil {
+			item.SelectedEntryPoint = space.Selected.ID
+		}
+		if space.Summary != nil {
+			summary := ToSummaryJSON(*space.Summary)
+			item.Summary = &summary
+		}
+		spaces = append(spaces, item)
+	}
+	inProgress := make([]SpaceInProgressJSON, 0, len(overview.InProgress))
+	for _, item := range overview.InProgress {
+		inProgress = append(inProgress, SpaceInProgressJSON{
+			Space: item.SpaceID, PlanningID: item.PlanningID, Task: ToTaskJSON(item.Task),
+		})
+	}
+	return StatusAllEnvelope{SchemaVersion: SchemaVersion, Spaces: spaces, InProgress: inProgress}
+}
+
+// ToSpaceEntry maps the core's adapter-neutral entry point into the shared wire shape
+// used by both `space list --json` and `status --all --json`.
+func ToSpaceEntry(entry core.SpaceEntryPoint) SpaceEntry {
+	return SpaceEntry{
+		ID: entry.ID, Path: entry.Path, VerifyID: entry.VerifyID,
+		PlanningID: entry.PlanningID, Role: entry.Role, Label: entry.Label,
+		Added: entry.Added, State: entry.State, Root: entry.Root,
+		Detail: entry.Detail, Remedy: entry.Remedy,
 	}
 }
 
@@ -463,14 +544,14 @@ type ThemeEntry struct {
 // Role says whether this path owns that planning tree or points to it. State is the resolved
 // health of the entry — see the space diagnosis work.
 type SpaceEntry struct {
-	ID         string `json:"id"`
-	Path       string `json:"path"`
-	VerifyID   string `json:"verify_id,omitempty"`
-	PlanningID string `json:"planning_id,omitempty"`
-	Role       string `json:"role" jsonschema:"description=direct|pointer|unknown"`
-	Label      string `json:"label,omitempty"`
-	Added      string `json:"added,omitempty"`
-	State      string `json:"state" jsonschema:"description=ok|empty|missing|not-a-repo|unreadable|mismatch"`
+	ID         string          `json:"id"`
+	Path       string          `json:"path"`
+	VerifyID   string          `json:"verify_id,omitempty"`
+	PlanningID string          `json:"planning_id,omitempty"`
+	Role       core.SpaceRole  `json:"role" jsonschema:"description=direct|pointer|unknown"`
+	Label      string          `json:"label,omitempty"`
+	Added      string          `json:"added,omitempty"`
+	State      core.SpaceState `json:"state" jsonschema:"description=ok|empty|missing|not-a-repo|unreadable|mismatch"`
 	// Root is where the entry resolves to, present for ok/empty/mismatch. It is the
 	// PLANNING root, which for a pointer repo is in a different repo than Path.
 	Root string `json:"root,omitempty"`
@@ -483,20 +564,20 @@ type SpaceEntry struct {
 // Space entry states. Resolved states (ok/empty/mismatch) carry a Root; only missing,
 // not-a-repo, unreadable, and mismatch are broken.
 const (
-	SpaceStateOK         = "ok"
-	SpaceStateEmpty      = "empty"
-	SpaceStateMissing    = "missing"
-	SpaceStateNotARepo   = "not-a-repo"
-	SpaceStateUnreadable = "unreadable"
-	SpaceStateMismatch   = "mismatch"
+	SpaceStateOK         = core.SpaceStateOK
+	SpaceStateEmpty      = core.SpaceStateEmpty
+	SpaceStateMissing    = core.SpaceStateMissing
+	SpaceStateNotARepo   = core.SpaceStateNotARepo
+	SpaceStateUnreadable = core.SpaceStateUnreadable
+	SpaceStateMismatch   = core.SpaceStateMismatch
 )
 
 // Space entry roles. Role is derived from the registered repo's config and is unknown
 // only when a broken entry cannot be inspected.
 const (
-	SpaceRoleDirect  = "direct"
-	SpaceRolePointer = "pointer"
-	SpaceRoleUnknown = "unknown"
+	SpaceRoleDirect  = core.SpaceRoleDirect
+	SpaceRolePointer = core.SpaceRolePointer
+	SpaceRoleUnknown = core.SpaceRoleUnknown
 )
 
 // SpacesEnvelope is `space list --json`.
@@ -931,11 +1012,11 @@ type DoctorRegistry struct {
 
 // DoctorSpaceProblem is one actionable registered-space diagnosis.
 type DoctorSpaceProblem struct {
-	ID      string `json:"id"`
-	Path    string `json:"path"`
-	Kind    string `json:"kind"`
-	Message string `json:"message"`
-	Remedy  string `json:"remedy"`
+	ID      string          `json:"id"`
+	Path    string          `json:"path"`
+	Kind    core.SpaceState `json:"kind"`
+	Message string          `json:"message"`
+	Remedy  string          `json:"remedy"`
 }
 
 // jsonEnvelopes registers every envelope so a single Reflect pulls them all (and
@@ -951,6 +1032,7 @@ type jsonEnvelopes struct {
 	EpicMutation  EpicMutationEnvelope     `json:"epic_mutation"`
 	Moves         MovesEnvelope            `json:"moves"`
 	Summary       SummaryEnvelope          `json:"summary"`
+	StatusAll     StatusAllEnvelope        `json:"status_all"`
 	Version       VersionEnvelope          `json:"version"`
 	Workspace     WorkspaceEnvelope        `json:"workspace"`
 	Config        ConfigEnvelope           `json:"config"`

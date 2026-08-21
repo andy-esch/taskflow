@@ -1,13 +1,16 @@
 ---
-status: proposed
+status: superseded
 date: "2026-06-20"
 deciders: [andy-esch]
 tags: [adr, planning-model, project]
 supersedes: []
-superseded_by: null
+superseded_by: ADR-0006
 ---
 
 # ADR-0002: Adopt Projects — cross-cutting groupings of tasks
+
+> ⚠️ **Superseded (2026-08-21) by [ADR-0006 (Adopt Threads as Task DAGs)](0006-adopt-threads-as-task-dags.md).**
+> The flat project model is generalized and replaced by DAG-structured workflow Threads.
 
 > Follows the ADR format established in [0001-adopt-adrs](0001-adopt-adrs.md). Depends on it: this is a
 > decision recorded *using* the convention 0001 introduces. Design rationale and the

@@ -254,7 +254,7 @@ func DoctorHuman(w io.Writer, st Style, problems []DoctorProblem, registry wire.
 		fmt.Fprintf(w, "  %s %s healthy\n", st.Green("✔"), plural(registry.Checked, "registered space"))
 	default:
 		for _, p := range registry.Problems {
-			fmt.Fprintf(w, "  %s %s  %s\n", st.Warn("⚠"), st.Bold(p.ID), st.Warn(p.Kind))
+			fmt.Fprintf(w, "  %s %s  %s\n", st.Warn("⚠"), st.Bold(p.ID), st.Warn(string(p.Kind)))
 			fmt.Fprintf(w, "      %s\n", p.Message)
 			if p.Remedy != "" {
 				fmt.Fprintf(w, "      %s %s\n", st.Dim("remedy:"), p.Remedy)
@@ -266,117 +266,6 @@ func DoctorHuman(w io.Writer, st Style, problems []DoctorProblem, registry wire.
 	if total > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Dim(plural(total, "doctor problem")))
 	}
-}
-
-// SummaryHuman renders the at-a-glance dashboard.
-func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
-	// Status counts — active line, then archived line, only non-zero buckets.
-	active, archived := splitCounts(s.Counts)
-	fmt.Fprintf(w, "%s\n", st.Bold("Tasks"))
-	if line := countLine(st, active); line != "" {
-		fmt.Fprintf(w, "  %s  %s\n", st.Dim("active  "), line)
-	}
-	if line := countLine(st, archived); line != "" {
-		fmt.Fprintf(w, "  %s  %s\n", st.Dim("archived"), line)
-	}
-
-	if len(s.InProgress) > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("In progress (%d)", len(s.InProgress))))
-		rows := make([][]string, 0, len(s.InProgress))
-		for _, t := range s.InProgress {
-			rows = append(rows, []string{"  " + st.Bold(t.Slug), st.Dim(theme.RelativeDate(theme.TaskDate(t))), t.Description})
-		}
-		writeTable(w, st.width, nil, rows)
-	}
-
-	if len(s.Epics) > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Bold("Epics"))
-		rows := make([][]string, 0, len(s.Epics))
-		for _, e := range s.Epics {
-			bar := fmt.Sprintf("%s %s", st.Bar(e.Percent(), 10), st.Percent(e.Percent()))
-			rows = append(rows, []string{"  " + st.Bold(e.Epic.ID), bar, theme.Counts(e.Done, e.Total), e.Epic.Description})
-		}
-		writeTable(w, st.width, nil, rows)
-	}
-
-	// Only open audits, only when there are any — the actionable subset, rendered
-	// with the same bar treatment as epics so the dashboard reads from one vocabulary.
-	if len(s.OpenAudits) > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("Open audits (%d)", len(s.OpenAudits))))
-		rows := make([][]string, 0, len(s.OpenAudits))
-		for _, a := range s.OpenAudits {
-			bar := fmt.Sprintf("%s %s", st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10), st.AuditPercent(a.Percent()))
-			counts := theme.Counts(a.Resolved(), a.Findings)
-			if note := auditStateNote(st, a, false); note != "" {
-				counts += "  " + note
-			}
-			rows = append(rows, []string{"  " + st.Bold(a.Slug), bar, counts, a.Area})
-		}
-		writeTable(w, st.width, nil, rows)
-	}
-
-	// Audit findings — the actionable cross-audit inbox, triaged. Same source as the
-	// TUI dashboard's widget (core.Summary.Findings), so the two surfaces agree.
-	if fr := s.Findings; fr.Open+fr.InProgress > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("Audit findings (%d open · %d in progress)", fr.Open, fr.InProgress)))
-		if line := countByLine(st, fr.ByUrgency); line != "" {
-			fmt.Fprintf(w, "  %s  %s\n", st.Dim("by urgency"), line)
-		}
-		if line := countByLine(st, fr.ByComponent); line != "" {
-			fmt.Fprintf(w, "  %s  %s\n", st.Dim("by area  "), line)
-		}
-	}
-	if s.ReadyToClose > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Green(fmt.Sprintf("✓ %d audit(s) ready to close (all findings resolved; `audit close <slug>`)", s.ReadyToClose)))
-	}
-
-	if s.RevisitDue > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("↻ %d deferred due to revisit (snooze date reached; `task ready`/`task next` to resume)", s.RevisitDue)))
-	}
-	if s.BadEpicStatus > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d epic(s) with unrecognized status (set active/retired/deprecated; run `lint`)", s.BadEpicStatus)))
-	}
-	if len(s.Problems) > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable file(s) (run `lint`)", len(s.Problems))))
-	}
-	return nil
-}
-
-func splitCounts(counts []core.StatusCount) (active, archived []core.StatusCount) {
-	for _, c := range counts {
-		if c.Status.IsActive() {
-			active = append(active, c)
-		} else {
-			archived = append(archived, c)
-		}
-	}
-	return active, archived
-}
-
-// countByLine renders a finding breakdown ("1 acute · 12 soon · 23 eventually"),
-// the dim-separated, uncolored counterpart of the dashboard's by-urgency / by-area
-// lines. Shares the iterate/format/join STRUCTURE with them via theme.Breakdown;
-// only this surface's plain segment format + dim separator differ (audit M10).
-func countByLine(st Style, cs []core.CountBy) string {
-	return theme.Breakdown(cs, st.Dim(" · "), 0,
-		func(c core.CountBy) string { return fmt.Sprintf("%d %s", c.Count, c.Key) }, nil)
-}
-
-// countLine renders "3 next-up · 1 in-progress", skipping zero buckets.
-func countLine(st Style, counts []core.StatusCount) string {
-	var parts []string
-	for _, c := range counts {
-		if c.Count == 0 {
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("%d %s", c.Count, st.Status(c.Status)))
-	}
-	return strings.Join(parts, st.Dim(" · "))
-}
-
-// SummaryJSON writes the dashboard as a versioned envelope.
-func SummaryJSON(w io.Writer, s core.Summary) error {
-	return wire.EncodeJSON(w, wire.ToSummaryEnvelope(s))
 }
 
 // BoardHuman renders the active-work board: one section per status (with its
@@ -1010,17 +899,17 @@ func preferredSpaceEntryFirst(entries []wire.SpaceEntry) []wire.SpaceEntry {
 func renderSpaceEntry(w io.Writer, st Style, s wire.SpaceEntry, width int, prefix, detailIndent string) {
 	id := fmt.Sprintf("%-*s", width, s.ID)
 	if s.State == wire.SpaceStateOK {
-		fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Green("●"), st.Bold(id), st.Green(s.State), st.Dim(s.Path))
+		fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Green("●"), st.Bold(id), st.Green(string(s.State)), st.Dim(s.Path))
 		return
 	}
 	if s.State == wire.SpaceStateEmpty {
-		fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Green("○"), st.Bold(id), st.Dim(s.State), st.Dim(s.Path))
+		fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Green("○"), st.Bold(id), st.Dim(string(s.State)), st.Dim(s.Path))
 		if s.Detail != "" {
 			fmt.Fprintf(w, "%s%s %s\n", detailIndent, st.Dim("↳"), st.Dim(s.Detail))
 		}
 		return
 	}
-	fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Warn("○"), st.Dim(id), st.Warn(s.State), st.Dim(s.Path))
+	fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Warn("○"), st.Dim(id), st.Warn(string(s.State)), st.Dim(s.Path))
 	if s.Detail != "" {
 		fmt.Fprintf(w, "%s%s %s\n", detailIndent, st.Warn("↳"), st.Dim(s.Detail))
 	}

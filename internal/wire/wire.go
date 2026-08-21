@@ -165,7 +165,12 @@ import (
 // selected an invocation through `--space` / `TSKFLW_SPACE`. Additive and omitted for
 // ordinary -C/cwd discovery. `space` names an entry point; `repo_id` remains the durable
 // planning identity shared by all of that repo's checkouts.
-const SchemaVersion = "1.41"
+// 1.42: the `status_all` envelope (`status --all --json`) added — one summary per
+// logical planning identity, its registered entry-point diagnoses, the healthy entry
+// point selected for reading, and a combined space-badged in-progress working set. The
+// envelope owns one top-level schema_version; nested summaries reuse the versionless
+// SummaryJSON payload rather than pretending to be independent envelopes.
+const SchemaVersion = "1.42"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

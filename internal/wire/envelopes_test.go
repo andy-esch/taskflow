@@ -81,6 +81,24 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				Epics:      []core.EpicSummary{epicSum},
 			}))
 		}},
+		{"StatusAllEnvelope", func(w io.Writer) error {
+			summary := core.Summary{
+				Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
+				InProgress: []domain.Task{task},
+			}
+			return emit(w, ToStatusAllEnvelope(core.SpaceOverview{
+				Spaces: []core.SpaceSummary{{
+					ID: "planning", PlanningID: "6gplan",
+					Selected: &core.SpaceEntryPoint{ID: "planning", Role: core.SpaceRoleDirect, State: core.SpaceStateOK},
+					Entries: []core.SpaceEntryPoint{
+						{ID: "implementation", Path: "/repo/impl", PlanningID: "6gplan", Role: core.SpaceRolePointer, State: core.SpaceStateMissing},
+						{ID: "planning", Path: "/repo/planning", PlanningID: "6gplan", Role: core.SpaceRoleDirect, State: core.SpaceStateOK, Root: "/repo/planning"},
+					},
+					Summary: &summary,
+				}},
+				InProgress: []core.SpaceInProgress{{SpaceID: "planning", PlanningID: "6gplan", Task: task}},
+			}))
+		}},
 		{"VersionEnvelope", func(w io.Writer) error { return emit(w, ToVersionEnvelope("v0.6.0")) }},
 		{"ThemesEnvelope", func(w io.Writer) error {
 			return emit(w, ToThemesEnvelope([]ThemeEntry{{Name: "neon", Active: true, Default: true}}))

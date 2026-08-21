@@ -167,6 +167,15 @@ type Store interface {
 	ResearchStore
 }
 
+// SummaryStore is the narrow read port required by one dashboard scan. Store satisfies
+// it, while cross-space status can ask its adapter for only these methods: the overview is
+// read-only by construction, not merely by a primary-adapter annotation.
+type SummaryStore interface {
+	ListTasks() ([]domain.Task, []domain.FileProblem, error)
+	ListEpics() ([]domain.Epic, []domain.FileProblem, error)
+	ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error)
+}
+
 // Fixer is the frontmatter-repair port. It is an fs/text operation, not a core
 // use case, so it sits beside Store rather than inside it; the CLI's `lint --fix`
 // wires it directly to the FS instead of routing through the Service.
