@@ -9,11 +9,11 @@ superseded_by: null
 
 # ADR-0005: A home config and the space registry — many planning repos, one atlas
 
-> **Implementation status (2026-08-20):** home config, the separate `spaces.toml`
-> registry, `space list|add|forget`, and shared list/doctor health diagnosis are shipped.
-> Global `--space`, `init` auto-registration, `status --all`, and any atlas UI remain
-> planned. The ADR is still proposed because the final TUI commitment is deliberately
-> deferred until the CLI half has been used.
+> **Implementation status (2026-08-21):** home config, the separate `spaces.toml`
+> registry, `space list|add|forget`, shared list/doctor health diagnosis, and global
+> `--space`/`TSKFLW_SPACE` selection are shipped. `init` auto-registration,
+> `status --all`, and any atlas UI remain planned. The ADR is still proposed because the
+> final TUI commitment is deliberately deferred until the CLI half has been used.
 
 > Follows the ADR format established in [0001-adopt-adrs](0001-adopt-adrs.md). Extends the
 > cross-repo config model of epic
@@ -159,10 +159,10 @@ discovery is untouched: same walk-up, same `.tskflwctl.toml` precedence, same `.
 boundary. A machine with no home config behaves **exactly** as today, and deleting the
 file loses only convenience, never data or addressability.
 
-The registry is planned to add one *opt-in* entry point: `--space <id>` (and
-`TSKFLW_SPACE`) will resolve a label to a path, verify the target's durable id, and discover
-from **there** instead of the cwd. Until that task ships, ordinary commands continue to
-use cwd/`-C`; the shipped registry is inventory and health data only.
+The registry adds one *opt-in* entry point: `--space <id>` (and `TSKFLW_SPACE`) resolves
+a label to its exact registered path, verifies the target's durable id, and discovers from
+**there** instead of the cwd. A broken or mismatched entry fails loudly; it never falls
+back to cwd discovery. Ordinary commands without the selector continue to use cwd/`-C`.
 
 ### 6. Registration: explicit now; `init` auto-registration planned
 

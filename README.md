@@ -65,10 +65,11 @@ the binaries as workflow artifacts without minting a Release.
 
 ## Daily workflow
 
-`tskflwctl` anchors to the nearest planning repo (walks up for `tasks/`; `-C` to
-override). All commands take `--json` for scripting/agents, and mutating
-commands take `--dry-run` to preview the write (full validation runs; nothing
-is written) — interactive editors have no preview and reject `--dry-run`.
+`tskflwctl` anchors to the nearest planning repo (walks up for `tasks/`; use `-C` for
+a path or `--space <label>` for a registered entry point). All commands take `--json`
+for scripting/agents, and mutating commands take `--dry-run` to preview the write
+(full validation runs; nothing is written) — interactive editors have no preview and
+reject `--dry-run`.
 
 ```bash
 tskflwctl init                         # scaffold a planning tree here (prompts for placement)
@@ -145,6 +146,9 @@ tskflwctl space add                         # register the current checkout as a
 tskflwctl space add ../other --id other     # or name another checkout explicitly
 tskflwctl space list                        # grouped spaces + entry-point health
 tskflwctl space list --json                 # flat entries with role + planning_id
+tskflwctl --space other status              # run against that exact registered entry point
+tskflwctl --space other task list --json    # works from any directory
+TSKFLW_SPACE=other tskflwctl workspace      # environment twin; receipt names the selector
 tskflwctl config doctor                     # linkback + space-registry health audit
 tskflwctl space forget other --dry-run      # preview; the repo itself is never deleted
 tskflwctl space forget other
@@ -153,10 +157,11 @@ tskflwctl space forget other
 The former top-level `tskflwctl doctor` remains as a hidden compatibility alias for
 the current minor-release window; new usage should prefer `config doctor`.
 
-Registration is currently explicit: `init` does not auto-register, and selecting an entry
-point does not yet replace `-C`. That makes it safe to register a full setup now as
-inventory; the planned global `--space <id>` will later make those same local labels exact
-checkout targets, even when several labels share one planning identity.
+Registration is currently explicit: `init` does not auto-register. `--space <label>` and
+its `TSKFLW_SPACE` twin make those local labels exact checkout targets now, even when
+several labels share one planning identity. `--space` and `-C` are mutually exclusive;
+an unknown, broken, or durable-id-mismatched entry fails loudly rather than falling back
+to cwd discovery. Machine mutation receipts carry the selected label as `workspace.space`.
 `TSKFLW_CONFIG_HOME` overrides the home-config directory, which is useful for an isolated
 trial before populating the real registry.
 
@@ -296,9 +301,9 @@ autoload -Uz compinit && compinit
 
 Other shells: `just completion bash` / `just completion fish` print the script
 to stdout (see `tskflwctl completion --help`). Completion covers the command
-tree, flags, **and** task/audit/epic slugs — e.g. `task show <TAB>`,
-`audit close <TAB>`, `epic show <TAB>` offer the real slugs (and still work when
-a file's frontmatter is malformed).
+tree, flags, registered `--space` labels, **and** task/audit/epic/research slugs —
+e.g. `task show <TAB>`, `audit close <TAB>`, `epic show <TAB>` offer the real slugs
+(and still work when a file's frontmatter is malformed).
 
 ## Development
 
