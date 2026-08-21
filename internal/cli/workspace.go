@@ -53,6 +53,7 @@ func (a *App) workspace() wire.WorkspaceJSON {
 	}
 	ws := wire.WorkspaceJSON{
 		PlanningRoot: physicalPath(a.Cfg.Root),
+		Space:        a.selectedSpace,
 		RepoID:       a.Cfg.ID,
 		Source:       wire.WorkspaceSourceDiscovered,
 	}

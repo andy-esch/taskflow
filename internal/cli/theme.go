@@ -33,7 +33,11 @@ func newThemeCmd(app *App) *cobra.Command {
 		Annotations: map[string]string{"safety": "read-only"},
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			app.setStyle()
-			_ = app.resolve() // best-effort: pick up [theme] config in a repo; harmless outside one
+			// Ordinary cwd discovery is best-effort, but an explicit space selection
+			// is an address assertion and therefore cannot silently fall back.
+			if err := app.resolve(); err != nil && app.wantsSpace() {
+				return err
+			}
 			app.warnPresentation(cmd)
 			return nil
 		},

@@ -28,6 +28,11 @@ func newTemplateCmd(app *App) *cobra.Command {
 			// layer on; when absent, fall back to the built-in source so the
 			// built-in scaffolds still resolve anywhere.
 			if err := app.resolve(); err != nil {
+				// Repo discovery is optional; an explicit registry selection is not. A
+				// typo or drifted --space must never turn into a built-in-only success.
+				if app.wantsSpace() {
+					return err
+				}
 				app.Svc = core.NewBuiltinTemplateService()
 			}
 			return nil

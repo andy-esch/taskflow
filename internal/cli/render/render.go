@@ -430,6 +430,9 @@ func WorkspaceJSON(w io.Writer, ws wire.WorkspaceJSON) error {
 // standing in is NOT the tree you would change.
 func WorkspaceHuman(w io.Writer, st Style, ws wire.WorkspaceJSON) {
 	fmt.Fprintf(w, "%s %s\n", st.Dim("root:  "), st.Bold(ws.PlanningRoot))
+	if ws.Space != "" {
+		fmt.Fprintf(w, "%s %s\n", st.Dim("space: "), st.Bold(ws.Space))
+	}
 	if ws.Branch != "" {
 		// A linked worktree is the case worth noticing: two checkouts of one repo differ
 		// ONLY by branch, and their directory names are often near-identical. The base

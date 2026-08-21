@@ -27,9 +27,9 @@ func newSpaceCmd(app *App) *cobra.Command {
 		Long: "The spaces registry records which repo checkouts enter each planning space, so\n" +
 			"they can be addressed by name instead of by path. Direct planning checkouts and\n" +
 			"implementation pointers with the same durable planning id form one logical space.\n\n" +
-			"It is ADVISORY: nothing in it changes what a command run in a directory\n" +
-			"resolves to. With no registry, everything behaves exactly as it did before one\n" +
-			"existed, and deleting it costs convenience — never data, never addressability.",
+			"It is ADVISORY: ordinary cwd discovery never consults it. Select an entry point\n" +
+			"explicitly with --space (or TSKFLW_SPACE); without that opt-in, a machine with no\n" +
+			"registry behaves exactly as before. Deleting it costs convenience — never data.",
 		Annotations:       map[string]string{"safety": "read-only"},
 		PersistentPreRunE: app.styleOnlyPreRun,
 	}
