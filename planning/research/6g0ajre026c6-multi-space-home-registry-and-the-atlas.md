@@ -428,6 +428,16 @@ baked into a config schema by then.
 > now references something real rather than a hypothetical. Also shipped: worktree-aware
 > resolution, which means the atlas's "group by repo, select the checkout" design needs no
 > committed id for grouping — the common gitdir does it for free.
+
+> **Progress note, 2026-08-21.** The CLI experiment is now concrete: `status --all`
+> returns one compact summary per durable planning identity and one space-badged
+> in-progress rail. It reuses `spacehealth.Group`, prefers a healthy direct checkout,
+> falls back to a healthy pointer, and leaves dead entry-point diagnoses inside the
+> affected group without failing the sweep. The orchestration lives in
+> `core.SpaceOverviewService` behind a read-only consumer-owned port, so an atlas or
+> served adapter can consume the same projection. A smoke run over six registered entry
+> points produced four logical summaries and five in-progress rows; the rail remains the
+> strongest evidence for the feature, while the compact summaries were useful context.
 >
 > **Progress note, 2026-08-18.** Slice 1 shipped (commit `86e3e1d` + follow-ups):
 > `internal/userconfig`, four-tier theme/pager precedence, and the test-isolation

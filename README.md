@@ -80,6 +80,7 @@ tskflwctl config migrate --dry-run     # preview safe config/id upgrades; omit f
 tskflwctl config edit                  # typed theme/pager editor (human TTY only)
 tskflwctl config doctor                # linkback + home space-registry health
 tskflwctl status                       # at-a-glance board: counts, in-progress, epic progress
+tskflwctl status --all                 # compact summaries + one in-progress rail across spaces
 
 # create
 tskflwctl task new "Add retry backoff" --epic <epic-id> --tags net
@@ -147,6 +148,8 @@ tskflwctl space add ../other --id other     # or name another checkout explicitl
 tskflwctl space list                        # grouped spaces + entry-point health
 tskflwctl space list --json                 # flat entries with role + planning_id
 tskflwctl --space other status              # run against that exact registered entry point
+tskflwctl status --all                      # all logical spaces + combined in-progress work
+tskflwctl status --all --json               # one versioned envelope: per-space summaries + diagnoses
 tskflwctl --space other task list --json    # works from any directory
 TSKFLW_SPACE=other tskflwctl workspace      # environment twin; receipt names the selector
 tskflwctl config doctor                     # linkback + space-registry health audit
@@ -162,6 +165,13 @@ its `TSKFLW_SPACE` twin make those local labels exact checkout targets now, even
 several labels share one planning identity. `--space` and `-C` are mutually exclusive;
 an unknown, broken, or durable-id-mismatched entry fails loudly rather than falling back
 to cwd discovery. Machine mutation receipts carry the selected label as `workspace.space`.
+`status --all` is the registry-wide exception to cwd anchoring: it runs from anywhere,
+loads each logical planning identity once (healthy direct checkout first, then the first
+healthy pointer), and keeps broken entry-point diagnoses inline without failing healthy
+spaces. Registry health remains informational, but unreadable planning files or a selected
+tree that cannot be loaded produce a non-zero partial-failure exit after every available
+summary has rendered. With no registered spaces it emits the ordinary single-repo `status`
+output.
 `TSKFLW_CONFIG_HOME` overrides the home-config directory, which is useful for an isolated
 trial before populating the real registry.
 

@@ -5,7 +5,7 @@ description: 'Multi-space planning: a home registry of planning repos, a --space
 priority: low
 tags: [config, cli, tui, multi-repo]
 created: "2026-08-15"
-updated_at: "2026-08-18"
+updated_at: "2026-08-21"
 ---
 
 # Multi-space planning: a home registry and the atlas
@@ -50,12 +50,13 @@ in a peer product's config.
   hand-edited `config.toml` the tool only ever reads (which gives
   `[theme]`/`[pager]` the user-level tier their own doc comments describe —
   **shipped**, slice 1), plus a tool-owned `spaces.toml` holding the `[[space]]`
-  registry, rewritten wholesale so no surgical array-of-tables editor is needed.
+  registry. Registry mutations are atomic and surgical so comments, unknown keys, and
+  untouched entries survive.
 - The registry stays **advisory**: nothing in it may change what `Discover`
   resolves from a cwd. No home config ⇒ today's behavior exactly.
-- `init` auto-registers best-effort (warns, never fails — the `LinkBack`
-  pattern); `space add` for existing repos; an unregistered current repo shows in
-  the board with a keypress to keep it.
+- Registration is explicit through shipped `space add`; best-effort `init`
+  auto-registration remains a planned follow-up (the `LinkBack` pattern). An
+  unregistered current repo on a future board remains a design possibility.
 - Broken entries are diagnosed and never auto-removed, via a `SpaceProblem`
   shared by `doctor` and the TUI — the `LinkProblem` pattern one scope up.
 - A registry row is an **entry point**, not necessarily a separate space. Rows with
@@ -78,7 +79,9 @@ The cheap independently-useful parts first, the expensive commitment last:
    which a path-keyed id cannot promise. See
    [decide-space.id-identity](../tasks/6g1m8mc8p46h-decide-space.id-identity-durable-minted-id-vs-path-keyed.md).
 3. **Registry + CLI** — `space list|add|forget`, `--space`, `init`
-   auto-register, `doctor` section, `status --all`. No TUI risk.
+   auto-register, `doctor` section, `status --all`. No TUI risk. Everything except
+   init auto-registration is now implemented; `status --all` is the first live test of
+   whether the atlas adds enough value.
 4. **Re-decide.** Having lived on the CLI half, is the board still wanted? It is
    plausible that `--space` + `status --all` is most of the value.
 5. Only if yes: the `Resolve() → Workspace` seam
