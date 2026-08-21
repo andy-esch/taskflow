@@ -16,6 +16,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/configstore"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/store"
@@ -54,6 +55,9 @@ type App struct {
 	// which only the command's own hook knows about. warnPresentation emits it.
 	userCfgErr error
 	Svc        *core.Service
+	// ConfigSvc is the framework-free configuration application core shared by
+	// Cobra, both TUI contexts, and future adapters.
+	ConfigSvc *core.ConfigurationService
 	// Fixer/Layout/Linter are the narrow fs/text ports that aren't core use cases:
 	// `lint --fix` calls Fixer, the TUI watcher reads Layout, and `lint --links` calls
 	// Linter — none route through the Service (see core.Fixer/core.Layout/core.Linter).
@@ -166,7 +170,11 @@ func themeName(flag, env, cfgName, userName string) string {
 // `--body-file -`), so a caller/test injects one reader and every input path
 // agrees — production passes os.Stdin.
 func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
-	app := &App{Out: out, ErrOut: errOut, In: in, Th: design.Default()}
+	app := &App{
+		Out: out, ErrOut: errOut, In: in, Th: design.Default(),
+		ConfigSvc: core.NewConfigurationService(configstore.New(),
+			core.WithConfigurationThemes(design.Names())),
+	}
 
 	root := &cobra.Command{
 		Use:           "tskflwctl",
@@ -218,7 +226,8 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(newAuditCmd(app))
 	root.AddCommand(newResearchCmd(app))
 	root.AddCommand(newLintCmd(app))
-	root.AddCommand(newDoctorCmd(app))
+	root.AddCommand(newConfigCmd(app))
+	root.AddCommand(newDoctorCmd(app)) // hidden compatibility forwarding command
 	root.AddCommand(newWorkspaceCmd(app))
 	root.AddCommand(newSpaceCmd(app))
 	root.AddCommand(newSchemaCmd(app))

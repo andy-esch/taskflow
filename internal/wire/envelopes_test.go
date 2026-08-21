@@ -173,6 +173,27 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				PlanningRoot: "/repo/planning", ConfigPath: "/repo/.tskflwctl.toml", Source: WorkspaceSourcePointer,
 			}))
 		}},
+		{"ConfigEnvelope", func(w io.Writer) error {
+			enabled := false
+			return emit(w, ToConfigEnvelope(core.ConfigurationSnapshot{
+				Repository: core.RepositoryConfiguration{
+					Path: "/repo/.tskflwctl.toml", PlanningRoot: "/repo/planning", Mode: core.ConfigModeScaffold,
+					TrackedRepos: []string{}, PendingMigration: []core.ConfigurationMigrationKind{},
+				},
+				User: core.UserConfiguration{Path: "/home/me/.config/tskflwctl/config.toml", PagerEnabled: &enabled},
+				Effective: core.EffectiveConfiguration{
+					Theme:        core.EffectiveString{Value: "neon", Source: core.ConfigSourceDefault},
+					PagerEnabled: core.EffectiveBool{Value: false, Source: core.ConfigSourceUser},
+					PagerCommand: core.EffectiveString{Value: "less -FRX", Source: core.ConfigSourceDefault},
+				},
+			}))
+		}},
+		{"ConfigMigrationEnvelope", func(w io.Writer) error {
+			return emit(w, ToConfigMigrationEnvelope(core.ConfigurationMigration{
+				ConfigPath: "/repo/.tskflwctl.toml", Mode: core.ConfigModeScaffold, DryRun: true,
+				Steps: []core.ConfigurationMigrationStep{{Kind: core.ConfigurationMigrationRepoID, Key: "id", Value: "6gid"}},
+			}, WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig}))
+		}},
 		{"SpacesEnvelope", func(w io.Writer) error {
 			return emit(w, ToSpacesEnvelope([]SpaceEntry{{
 				ID: "taskflow", Path: "~/git/taskflow", PlanningID: "6gplan", Role: SpaceRoleDirect, State: SpaceStateMismatch,

@@ -7,6 +7,8 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/andy-esch/taskflow/internal/configui"
 )
 
 // dispatchCommand resolves the typed `:` word to an entity tab or a task status
@@ -38,6 +40,9 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 	}
 	if isOverviewWord(word) {
 		return m, m.enterDash()
+	}
+	if word == "config" {
+		return m, m.openConfig()
 	}
 	for i, t := range m.tabs {
 		if t.matches(word) {
@@ -98,6 +103,7 @@ func (m Model) commandOptions() []string {
 	}
 	add(overviewName)
 	add("o") // the :o shorthand (matches isOverviewWord); completion offers it, palette omits it
+	add("config")
 	return opts
 }
 
@@ -155,6 +161,7 @@ func (m Model) paletteCommands() []string {
 		}
 	}
 	add(overviewName) // the landing screen (omit the :o shorthand — palette avoids near-dupes)
+	add("config")
 	for _, t := range m.tabs {
 		add(t.name)
 		for _, w := range t.viewWords() {
@@ -215,6 +222,9 @@ func (m *Model) runPaletteCommand(word string) tea.Cmd {
 	if isOverviewWord(word) {
 		return m.enterDash()
 	}
+	if word == "config" {
+		return m.openConfig()
+	}
 	for i, t := range m.tabs {
 		if t.matches(word) {
 			return m.switchTab(i)
@@ -232,4 +242,38 @@ func (m *Model) runPaletteCommand(word string) tea.Cmd {
 		return m.beginTransition(id, tr) // confirm/revisit/apply per the verb
 	}
 	return nil
+}
+
+// configEditorMsg keeps commands emitted by the embedded editor namespaced, just
+// as tabMsg prevents async list messages from reaching the wrong primary adapter.
+type configEditorMsg struct{ msg tea.Msg }
+
+func routeToConfig(cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		msg := cmd()
+		if msg == nil {
+			return nil
+		}
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			wrapped := make([]tea.Cmd, len(batch))
+			for i, child := range batch {
+				wrapped[i] = routeToConfig(child)
+			}
+			return tea.BatchMsg(wrapped)
+		}
+		return configEditorMsg{msg: msg}
+	}
+}
+
+func (m *Model) openConfig() tea.Cmd {
+	if m.configSvc == nil {
+		m.flash, m.flashErr = "configuration is unavailable in this session", true
+		return nil
+	}
+	m.configEditor = configui.New(m.configSvc, m.configStart, m.configOverrides, m.configDark)
+	m.configOpen = true
+	return routeToConfig(m.configEditor.Init())
 }

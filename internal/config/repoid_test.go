@@ -31,10 +31,9 @@ func TestInit_MintsDurableID(t *testing.T) {
 	}
 }
 
-// TestInit_BackfillsMissingID pins the migration path. Re-running init already repairs a
-// scaffold repo (it is how a missing .gitkeep is restored), so it is also how every repo
-// predating the mint gets an id — no new command surface.
-func TestInit_BackfillsMissingID(t *testing.T) {
+// TestMigrate_BackfillsMissingID pins the lifecycle split: init repairs scaffold
+// directories but does not alter an existing config; Migrate owns the id backfill.
+func TestMigrate_BackfillsMissingID(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
@@ -58,12 +57,26 @@ func TestInit_BackfillsMissingID(t *testing.T) {
 	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
-	first := idOf(t, root)
-	if first == "" {
-		t.Fatal("re-running init must backfill a missing id")
+	if got := idOf(t, root); got != "" {
+		t.Fatalf("re-running init must not migrate config, got id %q", got)
 	}
-	if _, err := Init(root, "", false); err != nil {
+	result, err := migrateWithIDGen(root, false, func() string { return "6g245fixedid" })
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(result.Steps) != 1 || result.Steps[0].Kind != MigrationRepoID {
+		t.Fatalf("migration steps = %+v", result.Steps)
+	}
+	first := idOf(t, root)
+	if first != "6g245fixedid" {
+		t.Fatalf("migration id = %q", first)
+	}
+	againResult, err := Migrate(root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(againResult.Steps) != 0 {
+		t.Fatalf("second migration must be a no-op, got %+v", againResult.Steps)
 	}
 	if again := idOf(t, root); again != first {
 		t.Errorf("backfill must be idempotent: %q then %q", first, again)
@@ -191,12 +204,9 @@ func TestVerify_LegacyPointerIsSilent(t *testing.T) {
 	}
 }
 
-// TestInitPointer_BackfillsExistingPointer closes the migration gap reported from real use:
-// `init --planning-repo` on a repo that ALREADY had a pointer returned "already
-// initialized" and did nothing, so there was no way to opt an existing pointer into
-// verification short of deleting its config. Re-running init is the migration path for
-// pointers exactly as it is for scaffold configs.
-func TestInitPointer_BackfillsExistingPointer(t *testing.T) {
+// TestMigrate_BackfillsExistingPointer closes the migration gap reported from real use
+// while keeping bootstrap and maintenance separate.
+func TestMigrate_BackfillsExistingPointer(t *testing.T) {
 	parent := t.TempDir()
 	plan := filepath.Join(parent, "planning")
 	if _, err := Init(plan, "", false); err != nil {
@@ -215,8 +225,15 @@ func TestInitPointer_BackfillsExistingPointer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-init on an existing pointer must not error: %v", err)
 	}
-	if len(created) == 0 {
-		t.Error("re-init must report the backfill, not silently claim 'already initialized'")
+	if len(created) != 0 {
+		t.Errorf("re-init must not migrate the config, got %v", created)
+	}
+	result, err := Migrate(impl, false)
+	if err != nil {
+		t.Fatalf("migrate existing pointer: %v", err)
+	}
+	if len(result.Steps) != 1 || result.Steps[0].Kind != MigrationPlanningRepoID {
+		t.Fatalf("migration steps = %+v", result.Steps)
 	}
 	cf, err := readConfigFile(filepath.Join(impl, ConfigFile))
 	if err != nil {
@@ -229,10 +246,80 @@ func TestInitPointer_BackfillsExistingPointer(t *testing.T) {
 		t.Errorf("the existing target must be preserved, got %q", cf.PlanningRepo)
 	}
 
-	// idempotent: a second run changes nothing
-	again, err := InitPointer(impl, "../planning", false)
-	if err != nil || len(again) != 0 {
-		t.Errorf("a second re-init must be a no-op, got %v / %v", again, err)
+	// idempotent: a second migration changes nothing
+	again, err := Migrate(impl, false)
+	if err != nil || len(again.Steps) != 0 {
+		t.Errorf("a second migration must be a no-op, got %v / %v", again, err)
+	}
+}
+
+func TestMigrate_DryRunReportsPostStateWithoutWriting(t *testing.T) {
+	root := t.TempDir()
+	mustMkdir(t, filepath.Join(root, domain.TasksDir))
+	writeConfig(t, root, "# keep me\ntaskflow_root = \".\"\n\n[theme]\nname = \"neon\"\n")
+	before, err := os.ReadFile(filepath.Join(root, ConfigFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := migrateWithIDGen(root, true, func() string { return "6g245dryrunid" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.DryRun || len(result.Steps) != 1 || result.Steps[0].Value != "6g245dryrunid" {
+		t.Fatalf("dry-run result = %+v", result)
+	}
+	after, err := os.ReadFile(filepath.Join(root, ConfigFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("dry-run changed the file:\n%s", after)
+	}
+}
+
+func TestMigrate_LegacyPointerRequiresTargetMigrationFirst(t *testing.T) {
+	parent := t.TempDir()
+	plan := filepath.Join(parent, "planning")
+	mustMkdir(t, filepath.Join(plan, domain.TasksDir))
+	writeConfig(t, plan, "taskflow_root = \".\"\n")
+	impl := filepath.Join(parent, "impl")
+	mustMkdir(t, impl)
+	writeConfig(t, impl, "planning_repo = \"../planning\"\n")
+
+	pending, err := PendingMigrations(impl)
+	if err != nil || len(pending) != 1 || pending[0] != MigrationPlanningRepoID {
+		t.Fatalf("pending=%v err=%v", pending, err)
+	}
+	before, _ := os.ReadFile(filepath.Join(impl, ConfigFile))
+	if _, err := Migrate(impl, true); err == nil || !strings.Contains(err.Error(), "config migrate") {
+		t.Fatalf("pointer migration should name the target-first remedy: %v", err)
+	}
+	if after, _ := os.ReadFile(filepath.Join(impl, ConfigFile)); string(after) != string(before) {
+		t.Fatal("failed pointer migration changed the config")
+	}
+}
+
+func TestMigrate_PreservesExistingTOMLText(t *testing.T) {
+	root := t.TempDir()
+	mustMkdir(t, filepath.Join(root, domain.TasksDir))
+	writeConfig(t, root, "# keep me\nunknown = \"value\"\ntaskflow_root = \".\"\n\n[theme]\nname = \"neon\"\n")
+
+	if _, err := migrateWithIDGen(root, false, func() string { return "6g245fixedid" }); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, ConfigFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, want := range []string{"# keep me", `unknown = "value"`, `[theme]`, `name = "neon"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("migration dropped %q:\n%s", want, s)
+		}
+	}
+	if strings.Index(s, `id = "6g245fixedid"`) > strings.Index(s, "[theme]") {
+		t.Errorf("id landed inside a table:\n%s", s)
 	}
 }
 

@@ -22,13 +22,22 @@ import (
 // the overflow collapses into a "+N more →" row that jumps to the full tab.
 const dashListCap = 6
 
-// dashTarget is where selecting a row navigates: a specific item (id set) via
-// jumpTo, or a whole view (view set) via applyView, on the named entity's tab.
+// dashTarget is what selecting a row opens: normally a specific item (id set) via
+// jumpTo or a whole view (view set) via applyView on the named entity's tab. The
+// configuration target opens the separately injected Config/About capability.
 type dashTarget struct {
-	kind entityKind
-	id   string
-	view string
+	action dashTargetAction
+	kind   entityKind
+	id     string
+	view   string
 }
+
+type dashTargetAction uint8
+
+const (
+	dashNavigateEntity dashTargetAction = iota
+	dashOpenConfiguration
+)
 
 // dashRow is one rendered line. A nil target is a heading/info line (not
 // selectable); a non-nil target is a navigable row.
@@ -48,7 +57,7 @@ type dashboard struct {
 
 // setSummary (re)builds the widget rows from a fresh core.Summary, recomputing the
 // navigable set and clamping the cursor.
-func (d *dashboard) setSummary(s core.Summary, st *styles) {
+func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool) {
 	var rows []dashRow
 	head := func(t string) { rows = append(rows, dashRow{text: st.dashHeading.Render(t)}) }
 	info := func(t string) { rows = append(rows, dashRow{text: st.dim("  " + t)}) }
@@ -175,6 +184,15 @@ func (d *dashboard) setSummary(s core.Summary, st *styles) {
 	}
 	if allClear {
 		info(st.glyph(theme.MarkerAllClear) + " all clear")
+	}
+
+	// Workspace — a visible route into the shared Config/About editor. Keep this
+	// capability-aware: New(svc) remains a valid read-only/embedded TUI, while the
+	// production composition root injects ConfigurationService and gets the entry.
+	if configAvailable {
+		blank()
+		head("workspace")
+		nav("Configuration / About →", dashTarget{action: dashOpenConfiguration})
 	}
 
 	d.rows = rows

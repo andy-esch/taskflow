@@ -6,13 +6,26 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
-	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/domain"
-	"github.com/andy-esch/taskflow/internal/spacehealth"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
+// newDoctorCmd preserves the historical top-level spelling without spending a visible
+// root-help slot. config doctor is canonical; both route through the same command builder
+// and configuration service, so output and exit behavior cannot drift.
 func newDoctorCmd(app *App) *cobra.Command {
+	cmd := newDoctorCommand(app)
+	cmd.Hidden = true
+	return cmd
+}
+
+func newConfigDoctorCmd(app *App) *cobra.Command {
+	cmd := newDoctorCommand(app)
+	cmd.Example = "  tskflwctl config doctor\n  tskflwctl config doctor --json"
+	return cmd
+}
+
+func newDoctorCommand(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Audit linkback integrity and the home space registry",
@@ -36,27 +49,27 @@ func newDoctorCmd(app *App) *cobra.Command {
 			return err
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
-			links := config.CheckLinks(app.Cfg)
-			problems := make([]render.DoctorProblem, len(links))
-			for i, p := range links {
-				problems[i] = render.DoctorProblem{Repo: p.Repo, Message: p.Message}
+			start, err := app.startDir()
+			if err != nil {
+				return err
 			}
-			diagnoses, err := spacehealth.DiagnoseRegistry()
+			diagnosis, err := app.ConfigSvc.Diagnose(start)
 			if err != nil {
 				return classifySpaceRegistryError(err)
 			}
-			registry := wire.DoctorRegistry{Checked: len(diagnoses)}
-			for _, diagnosis := range diagnoses {
-				if !diagnosis.Broken() {
-					continue
-				}
+			problems := make([]render.DoctorProblem, len(diagnosis.Problems))
+			for i, p := range diagnosis.Problems {
+				problems[i] = render.DoctorProblem{Repo: p.Repo, Message: p.Message}
+			}
+			registry := wire.DoctorRegistry{Checked: diagnosis.Registry.Checked}
+			for _, problem := range diagnosis.Registry.Problems {
 				registry.Problems = append(registry.Problems, wire.DoctorSpaceProblem{
-					ID: diagnosis.Space.ID, Path: diagnosis.Space.Path, Kind: string(diagnosis.Kind),
-					Message: diagnosis.Message, Remedy: diagnosis.Remedy,
+					ID: problem.ID, Path: problem.Path, Kind: problem.Kind,
+					Message: problem.Message, Remedy: problem.Remedy,
 				})
 			}
 			if app.JSON {
-				if err := render.DoctorJSON(app.Out, app.Cfg.Root, problems, registry); err != nil {
+				if err := render.DoctorJSON(app.Out, diagnosis.Root, problems, registry); err != nil {
 					return err
 				}
 			} else {

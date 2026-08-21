@@ -68,12 +68,16 @@ the binaries as workflow artifacts without minting a Release.
 `tskflwctl` anchors to the nearest planning repo (walks up for `tasks/`; `-C` to
 override). All commands take `--json` for scripting/agents, and mutating
 commands take `--dry-run` to preview the write (full validation runs; nothing
-is written) — except the interactive `task edit`, which has no preview.
+is written) — interactive editors have no preview and reject `--dry-run`.
 
 ```bash
 tskflwctl init                         # scaffold a planning tree here (prompts for placement)
 tskflwctl init --taskflow-root planning  # ...or put it in a subdir, config at the repo root
 tskflwctl init --planning-repo ../x-planning  # point at an external planning repo instead
+tskflwctl config show                  # raw repo/user scopes + effective values and sources
+tskflwctl config migrate --dry-run     # preview safe config/id upgrades; omit flag to apply
+tskflwctl config edit                  # typed theme/pager editor (human TTY only)
+tskflwctl config doctor                # linkback + home space-registry health
 tskflwctl status                       # at-a-glance board: counts, in-progress, epic progress
 
 # create
@@ -106,7 +110,7 @@ tskflwctl schema                       # the tool's contract for agents (statuse
 tskflwctl schema task --json           # how to author a task: sections, fields, conventions
 tskflwctl template list                # body scaffolds `new --template` can use (--kind to filter)
 tskflwctl template show audit security # inspect a template's rendered body (--json for the envelope)
-tskflwctl ui                           # interactive Bubble Tea browser (tasks/epics/audits)
+tskflwctl ui                           # Bubble Tea browser; :config opens Config/About
 
 # update + lifecycle
 tskflwctl task set <slug> --priority high --tags a,b
@@ -130,7 +134,7 @@ tskflwctl lint --fix                   # auto-repair frontmatter (quote ':' valu
 The home space registry is an advisory inventory of planning entry points on this machine.
 It lives at `$XDG_CONFIG_HOME/tskflwctl/spaces.toml`, falling back to
 `~/.config/tskflwctl/spaces.toml`, separate from both the repo-local `.tskflwctl.toml` and
-the hand-edited home `config.toml`. Entry points that resolve to the same durable planning
+the user-preference `config.toml`. Entry points that resolve to the same durable planning
 id form one logical space: a direct planning checkout and its implementation-repo pointers
 are grouped rather than presented as duplicate plans. The relationship is derived from the
 repo configs; `spaces.toml` does not duplicate parent/child state. Registering an entry point
@@ -141,10 +145,13 @@ tskflwctl space add                         # register the current checkout as a
 tskflwctl space add ../other --id other     # or name another checkout explicitly
 tskflwctl space list                        # grouped spaces + entry-point health
 tskflwctl space list --json                 # flat entries with role + planning_id
-tskflwctl doctor                            # linkback + space-registry health audit
+tskflwctl config doctor                     # linkback + space-registry health audit
 tskflwctl space forget other --dry-run      # preview; the repo itself is never deleted
 tskflwctl space forget other
 ```
+
+The former top-level `tskflwctl doctor` remains as a hidden compatibility alias for
+the current minor-release window; new usage should prefer `config doctor`.
 
 Registration is currently explicit: `init` does not auto-register, and selecting an entry
 point does not yet replace `-C`. That makes it safe to register a full setup now as
@@ -152,6 +159,38 @@ inventory; the planned global `--space <id>` will later make those same local la
 checkout targets, even when several labels share one planning identity.
 `TSKFLW_CONFIG_HOME` overrides the home-config directory, which is useful for an isolated
 trial before populating the real registry.
+
+### Configuration lifecycle
+
+`init` is bootstrap-only: it creates a new local planning tree or a pointer to an
+external planning repo. Running bare `init` where `.tskflwctl.toml` already exists reports
+the current topology and exits without changing it. If an older file needs a durable
+`id` or `planning_repo_id`, it points to the explicit, idempotent migration instead:
+
+```bash
+tskflwctl config migrate --dry-run    # exact planned keys and values; writes nothing
+tskflwctl config migrate              # atomic, comment-preserving application
+tskflwctl config migrate              # current files are a byte-for-byte no-op
+```
+
+For a legacy pointer whose planning target also lacks an `id`, migrate the target first,
+then the implementation repo. Relative `planning_repo` spelling, comments, unknown keys,
+and key order are preserved.
+
+`config show` keeps the raw repository and user scopes separate, then prints the effective
+theme and pager values with their provenance. Theme precedence is `--theme` →
+`TSKFLW_THEME` → repository config → user config → built-in default. Pager-command
+precedence is `TSKFLW_PAGER` → repository config → user config → `$PAGER` → `less -FRX`;
+pager enablement is controlled by `--no-pager` / `--paginate`, then repository config,
+then user config, then the default.
+
+`config edit` is a typed TTY interface rather than a raw TOML editor. It starts in user
+scope; press `s` to choose an explicit repository override. Theme changes repaint the
+existing palette preview before save, pager enablement remains inherit/on/off, and `u`
+removes the selected override to restore inheritance. Durable IDs, planning topology,
+and `spaces.toml` are deliberately read-only there. The Config/About entry on the
+`tskflwctl ui` Overview screen (also available as `:config` and in `?` help) embeds the
+same component and uses the same application service and writer.
 
 Tasks, audits, and research are stored flat and id-led (`tasks/<id>-<slug>.md`,
 `audits/<id>-<slug>.md`, `research/<id>-<slug>.md`); `status:` / `bucket:` is
@@ -236,9 +275,8 @@ Ctrl-C out of a prompt exits **130** (the SIGINT convention) with a quiet
 
 Long human output pages the same way: `show` / `schema` pipe through a pager (like
 git) **only on a TTY** — never under a pipe, `--json`, or `--no-input`, so machine
-output stays byte-identical. Program precedence: `TSKFLW_PAGER` → `[pager].command`
-(in `.tskflwctl.toml`) → `$PAGER` → `less -FRX`. On/off: `--no-pager` → `--paginate`
-→ `[pager].enabled` → default on.
+output stays byte-identical. See `config show` for the effective pager command,
+enablement, and the source of each value.
 
 ## Shell completion
 

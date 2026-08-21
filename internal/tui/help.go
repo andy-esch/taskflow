@@ -25,14 +25,16 @@ type helpSection struct {
 func he(b key.Binding) helpEntry { return helpEntry{b.Help().Key, b.Help().Desc} }
 
 // helpSections derives the `?` overlay's keybinding rows from the keyMap (keys.go).
-// The only literal rows are keys with NO keyMap binding: the list/viewport's own
-// j/k + paging, and the list's `/` filter (keys.Find is the DETAIL find). The
-// focus-routed handlers in model.go still match the bindings; only the displayed
-// vocabulary now follows keys.go automatically.
+// The only literal rows are interactions with NO keyMap binding: the
+// list/viewport's own j/k + paging, the list's `/` filter (keys.Find is the DETAIL
+// find), and named `:` commands such as :config. The focus-routed handlers in
+// model.go still match the bindings; the displayed key vocabulary follows keys.go
+// automatically.
 var helpSections = []helpSection{
 	{"Global", []helpEntry{
 		he(keys.Palette),
 		he(keys.Command),
+		{":config", "open Configuration / About for this space"},
 		{"/", "filter the list (slug, desc, tags)"}, // the list's own filter (no keyMap binding)
 		he(keys.FilterMode),
 		he(keys.Sort), he(keys.SortRev),

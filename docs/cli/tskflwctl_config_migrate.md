@@ -1,30 +1,28 @@
-## tskflwctl doctor
+## tskflwctl config migrate
 
-Audit linkback integrity and the home space registry
+Apply safe, idempotent configuration upgrades
 
 ### Synopsis
 
-Audit the cross-repo links: an impl repo's planning_repo pointer should be
-matched by the planning repo tracking it back, and every tracked_repos entry
-should exist and point its planning_repo back here. Also diagnose every home
-space-registry entry. Reports each inconsistency and exits non-zero when any
-is found — usable as a CI gate; nothing is repaired or forgotten.
+Apply safe configuration upgrades such as minting a missing planning-repo id
+or recording planning_repo_id on a legacy external pointer. The edit is atomic
+and preserves comments, ordering, relative path spelling, and unknown keys.
 
 ```
-tskflwctl doctor [flags]
+tskflwctl config migrate [flags]
 ```
 
 ### Examples
 
 ```
-  tskflwctl doctor
-  tskflwctl doctor --json
+  tskflwctl config migrate --dry-run
+  tskflwctl config migrate --json
 ```
 
 ### Options
 
 ```
-  -h, --help   help for doctor
+  -h, --help   help for migrate
 ```
 
 ### Options inherited from parent commands
@@ -43,5 +41,5 @@ tskflwctl doctor [flags]
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl config](tskflwctl_config.md)	 - Inspect, migrate, diagnose, and edit configuration
 

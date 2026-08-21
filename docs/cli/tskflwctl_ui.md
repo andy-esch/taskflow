@@ -2,6 +2,12 @@
 
 Launch the interactive TUI (Bubble Tea)
 
+### Synopsis
+
+Browse and update planning entities in the full-screen TUI. Open the shared
+Config/About editor from Overview, with `:config`, or from the command palette; writes
+use the same typed application service as `tskflwctl config edit`.
+
 ```
 tskflwctl ui [flags]
 ```

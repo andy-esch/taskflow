@@ -65,9 +65,15 @@ func PhysicalPath(p string) string {
 }
 
 // writeFileAtomic writes via a temp file + rename, so a crash mid-write cannot leave a
-// half-written registry. Mirrors store/atomic.go's contract for the planning tree.
+// half-written config. Existing permissions survive, and a symlink is followed so a
+// dotfiles-managed config keeps being a symlink instead of being replaced by the temp
+// file. Mirrors store/atomic.go's contract for the planning tree.
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
+	destination, perm, err := atomicWriteDestination(path, perm)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(destination)
 	tmp, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
 		return err
@@ -88,5 +94,26 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 	if err := os.Chmod(name, perm); err != nil {
 		return err
 	}
-	return os.Rename(name, path)
+	return os.Rename(name, destination)
+}
+
+func atomicWriteDestination(path string, fallback os.FileMode) (string, os.FileMode, error) {
+	destination := path
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			resolved, err := filepath.EvalSymlinks(path)
+			if err != nil {
+				return "", 0, err
+			}
+			destination = resolved
+		}
+	} else if !os.IsNotExist(err) {
+		return "", 0, err
+	}
+	if info, err := os.Stat(destination); err == nil {
+		fallback = info.Mode().Perm()
+	} else if !os.IsNotExist(err) {
+		return "", 0, err
+	}
+	return destination, fallback, nil
 }

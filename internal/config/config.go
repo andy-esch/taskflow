@@ -500,16 +500,10 @@ func Init(dir, taskflowRoot string, dryRun bool) ([]string, error) {
 	case !os.IsExist(err):
 		return created, fmt.Errorf("write config: %w", err)
 	}
-	// The config already existed. Re-running init REPAIRS a scaffold repo (it is how a
-	// missing .gitkeep is restored), so backfill a durable id the same way — that is the
-	// migration path for every repo predating the mint, with no new command surface.
-	added, err := backfillID(cfg)
-	if err != nil {
-		return created, err
-	}
-	if added {
-		created = append(created, ConfigFile+" (id)")
-	}
+	// Existing configuration is maintenance, not bootstrap. Init may still repair the
+	// scaffold directories above, but schema upgrades and durable-id backfills belong to
+	// Migrate. Keeping the write paths separate makes a bare re-run predictable and lets
+	// every primary adapter use the same migration use case.
 	return created, nil
 }
 
@@ -589,16 +583,19 @@ func backfillPointerID(cfgPath string, existing configFile, targetID string, dry
 // backfillID adds a durable id to an existing SCAFFOLD config that lacks one. A pointer
 // config is left alone: the id identifies a planning repo, and a pointer is not one.
 // Idempotent — a config that already has an id is untouched.
-func backfillID(cfgPath string) (bool, error) {
+func backfillID(cfgPath, mintedID string, dryRun bool) (bool, error) {
 	cf, err := readConfigFile(cfgPath)
 	if err != nil || cf.ID != "" || cf.PlanningRepo != "" {
 		return false, err
+	}
+	if dryRun {
+		return true, nil
 	}
 	b, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return false, err
 	}
-	out := insertTopLevelKey(string(b), fmt.Sprintf("id = %q", id.New()))
+	out := insertTopLevelKey(string(b), fmt.Sprintf("id = %q", mintedID))
 	if err := writeFileAtomic(cfgPath, []byte(out), 0o644); err != nil {
 		return false, fmt.Errorf("backfill id: %w", err)
 	}
@@ -678,18 +675,9 @@ func InitPointer(dir, planningRepo string, dryRun bool) ([]string, error) {
 				"%w: %s already exists here — remove it to re-init (or edit it to change the target)",
 				domain.ErrConflict, ConfigFile)
 		}
-		// Same target, but the pointer may predate durable ids. Backfill the expectation
-		// so re-running init is the migration path for pointers, exactly as it is for
-		// scaffold configs — without it there was NO way to opt an existing pointer in
-		// short of deleting and recreating its config.
-		added, err := backfillPointerID(cfg, existing, targetID, dryRun)
-		if err != nil {
-			return nil, err
-		}
-		if added {
-			return []string{ConfigFile + " (planning_repo_id)"}, nil
-		}
-		return nil, nil // unchanged
+		// Same target is an idempotent no-op. Durable-id backfills are deliberately
+		// owned by Migrate rather than hidden inside a bootstrap command.
+		return nil, nil
 	}
 	if dryRun {
 		return []string{ConfigFile}, nil
@@ -774,6 +762,23 @@ func appendTrackedRepo(dir, entry string, dryRun bool) (bool, error) {
 	}
 	if dryRun {
 		return true, nil
+	}
+	unlock, err := writeLock(dir)
+	if err != nil {
+		return false, err
+	}
+	defer unlock()
+	// Re-read and re-deduplicate while locked. This shares a critical section with
+	// config migration and preference edits, preventing one surgical writer from
+	// atomically replacing a different writer's just-landed change.
+	cf, err = readConfigFile(cfgPath)
+	if err != nil {
+		return false, err
+	}
+	for _, existing := range cf.TrackedRepos {
+		if resolveRepoPath(dir, existing) == target {
+			return false, nil
+		}
 	}
 	data, err := os.ReadFile(cfgPath)
 	if err != nil {
@@ -973,10 +978,16 @@ func tomlStringArray(items []string) string {
 }
 
 // writeFileAtomic overwrites path atomically (temp in the same dir + rename), so a
-// crash mid-write never leaves a truncated config. (The store has the same idea;
-// config can't import store, so the few lines are inlined — cf. writeFileExclusive.)
+// crash mid-write never leaves a truncated config. Existing permissions survive, and
+// a symlink is followed so a dotfiles-managed config keeps being a symlink instead of
+// being replaced by the temp file. (The store has the same idea; config can't import
+// store, so the few lines are inlined — cf. writeFileExclusive.)
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".tskflwctl-*.tmp")
+	destination, perm, err := atomicWriteDestination(path, perm)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(destination), ".tskflwctl-*.tmp")
 	if err != nil {
 		return err
 	}
@@ -990,10 +1001,38 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 		_ = tmp.Close()
 		return err
 	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, path)
+	return os.Rename(tmpName, destination)
+}
+
+// atomicWriteDestination resolves the actual file an atomic rename should replace and
+// carries forward its permission bits. Lstat is intentional: Stat alone would hide that
+// path is a symlink, and renaming to path would replace the link rather than its target.
+func atomicWriteDestination(path string, fallback os.FileMode) (string, os.FileMode, error) {
+	destination := path
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			resolved, err := filepath.EvalSymlinks(path)
+			if err != nil {
+				return "", 0, fmt.Errorf("resolve config symlink %s: %w", path, err)
+			}
+			destination = resolved
+		}
+	} else if !os.IsNotExist(err) {
+		return "", 0, fmt.Errorf("inspect config path %s: %w", path, err)
+	}
+	if info, err := os.Stat(destination); err == nil {
+		fallback = info.Mode().Perm()
+	} else if !os.IsNotExist(err) {
+		return "", 0, fmt.Errorf("inspect config destination %s: %w", destination, err)
+	}
+	return destination, fallback, nil
 }
 
 // writeFileExclusive creates a new file with O_EXCL semantics. (The store's

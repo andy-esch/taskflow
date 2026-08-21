@@ -159,7 +159,9 @@ import (
 // DoctorEnvelope.
 // 1.39: registered paths expose their derived direct/pointer role and logical planning
 // identity, so one planning space can have multiple machine-readable entry points.
-const SchemaVersion = "1.39"
+// 1.40: the `config` and `config_migration` envelopes added — resolved repository/user
+// scopes, per-value provenance, pending migrations, and deterministic migration receipts.
+const SchemaVersion = "1.40"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

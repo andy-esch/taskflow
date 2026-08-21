@@ -15,7 +15,7 @@ import (
 // about. Several rows may share one durable planning identity; grouping and direct/pointer
 // roles are derived by spacehealth rather than persisted here.
 //
-// It lives in its OWN file, separate from the hand-edited config.toml, because registry
+// It lives in its OWN file, separate from the user-preference config.toml, because registry
 // mutations should never risk a person's presentation settings. The registry is still
 // inspectable and hand-editable: `space add` appends one table and `space forget` removes
 // one table, leaving comments, key order, unknown keys, and every other entry byte-for-byte
@@ -242,7 +242,7 @@ func lockRegistryForWrite(path string) (func(), error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
-	return registryWriteLock(dir)
+	return userConfigWriteLock(dir)
 }
 
 // appendSpaceToText adds exactly one canonical [[space]] table at EOF. Existing text is
@@ -418,19 +418,5 @@ func writeRegistryText(path, text string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
 	}
-	// A dotfiles-managed registry is commonly a symlink. Follow it instead of atomically
-	// replacing the link itself; the target still receives the temp-file + rename write.
-	destination := path
-	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		resolved, err := filepath.EvalSymlinks(path)
-		if err != nil {
-			return fmt.Errorf("resolve %s: %w", path, err)
-		}
-		destination = resolved
-	}
-	perm := os.FileMode(0o644)
-	if fi, err := os.Stat(destination); err == nil {
-		perm = fi.Mode().Perm()
-	}
-	return writeFileAtomic(destination, []byte(text), perm)
+	return writeFileAtomic(path, []byte(text), 0o644)
 }
