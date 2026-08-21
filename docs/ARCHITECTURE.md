@@ -98,7 +98,8 @@ the one-screen orientation for contributors.
   so a committed relative path means the same thing from every git worktree
   (`worktree.go`).
 - **`internal/userconfig`** — the *user*-scoped (home) tier: terminal preferences
-  that belong to a person rather than a repo (`[theme]`, `[pager]`), read from
+  that belong to a person rather than a repo (`[theme]`, `[pager]`) plus the separate
+  advisory `spaces.toml` registry, read from
   `$TSKFLW_CONFIG_HOME` / `$XDG_CONFIG_HOME/tskflwctl` / `~/.config/tskflwctl`
   (**not** `os.UserConfigDir()`, which is `~/Library/Application Support` on darwin).
   Precedence is flag > env > repo config > **user config** > default, merged
@@ -107,11 +108,22 @@ the one-screen orientation for contributors.
   `init`/`doctor`/`completion` skip discovery yet still need a theme. A missing file
   is normal; a malformed one **warns and degrades** rather than failing — the
   deliberate opposite of the repo config, where a bad marker is fatal because guessing
-  there would fork the data. `config` never imports this package, so home-scope data
+  there would fork the data. Registry mutations are atomic, surgical TOML edits and take
+  a directory-level Unix `flock`, so concurrent cooperating writers cannot lose entries;
+  comments and unknown keys survive. `config` never imports this package, so home-scope data
   cannot influence planning-root discovery — a layering rule, kept honest by a
   `depguard` rule in `.golangci.yml` rather than by memory. (The compiler alone would
   not catch it: nothing structurally prevents the import, so `just lint` is what makes
   the claim true.)
+- **`internal/spacehealth`** — the read-only projection over `userconfig.Space` plus
+  repo-scoped `config.Discover`: one typed diagnosis (`ok`, `empty`, `missing`,
+  `not-a-repo`, `unreadable`, `mismatch`), derived role (`direct`/`pointer`/`unknown`),
+  and remedy per registered checkout. Its `Group` projection treats a durable planning id
+  as one logical space and the registered paths as entry points; legacy healthy entries
+  fall back to physical planning root, while broken id-less entries stay isolated. Both
+  `space list` and `doctor` consume the diagnoses, and future `status --all`/`--space`/TUI
+  work must reuse the same projection rather than reinterpret discovery errors. It never
+  repairs, removes, or adds relationship metadata to registry data.
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
   `internal/cli` (`root.go`), which it calls.
 

@@ -395,6 +395,9 @@
             "$ref": "#/$defs/DoctorProblem"
           },
           "type": "array"
+        },
+        "registry": {
+          "$ref": "#/$defs/DoctorRegistry"
         }
       },
       "additionalProperties": false,
@@ -402,9 +405,10 @@
       "required": [
         "schema_version",
         "root",
-        "problems"
+        "problems",
+        "registry"
       ],
-      "description": "DoctorEnvelope is `doctor --json`: the linkback audit result."
+      "description": "DoctorEnvelope is `doctor --json`: the repo-local linkback audit plus the home space registry audit."
     },
     "DoctorProblem": {
       "properties": {
@@ -422,6 +426,55 @@
         "message"
       ],
       "description": "DoctorProblem is one linkback inconsistency: the offending repo + a message."
+    },
+    "DoctorRegistry": {
+      "properties": {
+        "checked": {
+          "type": "integer"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/DoctorSpaceProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "checked",
+        "problems"
+      ],
+      "description": "DoctorRegistry is the home-registry section of doctor output."
+    },
+    "DoctorSpaceProblem": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "remedy": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "path",
+        "kind",
+        "message",
+        "remedy"
+      ],
+      "description": "DoctorSpaceProblem is one actionable registered-space diagnosis."
     },
     "EpicJSON": {
       "properties": {
@@ -1385,6 +1438,13 @@
         "verify_id": {
           "type": "string"
         },
+        "planning_id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "description": "direct|pointer|unknown"
+        },
         "label": {
           "type": "string"
         },
@@ -1393,15 +1453,19 @@
         },
         "state": {
           "type": "string",
-          "description": "ok|missing|not-a-repo|unreadable"
+          "description": "ok|empty|missing|not-a-repo|unreadable|mismatch"
         },
         "root": {
           "type": "string",
-          "description": "Root is where the entry resolves to, present only when State is ok. It is the\nPLANNING root, which for a pointer repo is in a different repo than Path."
+          "description": "Root is where the entry resolves to, present for ok/empty/mismatch. It is the\nPLANNING root, which for a pointer repo is in a different repo than Path."
         },
         "detail": {
           "type": "string",
           "description": "Detail explains a non-ok State in one line, so a caller need not re-derive it."
+        },
+        "remedy": {
+          "type": "string",
+          "description": "Remedy is an actionable repair for a broken entry. Empty/ok spaces omit it."
         }
       },
       "additionalProperties": false,
@@ -1409,9 +1473,10 @@
       "required": [
         "id",
         "path",
+        "role",
         "state"
       ],
-      "description": "SpaceEntry is one registered planning repo in `space list --json`."
+      "description": "SpaceEntry is one registered entry point in `space list --json`."
     },
     "SpaceMutationEnvelope": {
       "properties": {
@@ -2107,6 +2172,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.37)",
+  "title": "tskflwctl --json output (schema_version 1.39)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

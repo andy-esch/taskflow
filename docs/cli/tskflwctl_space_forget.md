@@ -1,6 +1,6 @@
 ## tskflwctl space forget
 
-Drop a space from the registry (the repo itself is untouched)
+Drop an entry point from the registry (the repo itself is untouched)
 
 ### Synopsis
 
@@ -41,5 +41,5 @@ tskflwctl space forget <id> [flags]
 
 ### SEE ALSO
 
-* [tskflwctl space](tskflwctl_space.md)	 - Manage the registry of planning repos on this machine
+* [tskflwctl space](tskflwctl_space.md)	 - Manage planning spaces and their registered entry points
 

@@ -228,23 +228,44 @@ func MovesJSON(w io.Writer, results []MoveResult, dryRun bool, ws wire.Workspace
 // CLI's doctor command keeps building it through the render package.
 type DoctorProblem = wire.DoctorProblem
 
-// DoctorJSON writes the linkback audit; problems is empty (not null) when the
-// links are consistent, so a consumer can len() it without a nil check.
-func DoctorJSON(w io.Writer, root string, problems []DoctorProblem) error {
-	return wire.EncodeJSON(w, wire.ToDoctorEnvelope(root, problems))
+// DoctorJSON writes the linkback and registry audits. Problem arrays are empty (not null)
+// when healthy, so a consumer can len() them without a nil check.
+func DoctorJSON(w io.Writer, root string, problems []DoctorProblem, registry wire.DoctorRegistry) error {
+	return wire.EncodeJSON(w, wire.ToDoctorEnvelope(root, problems, registry))
 }
 
-// DoctorHuman writes the linkback audit: a ⚠ per problem (with a count footer),
-// or a ✔ when the links are consistent.
-func DoctorHuman(w io.Writer, st Style, problems []DoctorProblem) {
+// DoctorHuman writes separate linkback and registry sections, then one combined problem
+// footer. Empty planning repos are healthy and therefore absent from registry.Problems.
+func DoctorHuman(w io.Writer, st Style, problems []DoctorProblem, registry wire.DoctorRegistry) {
+	fmt.Fprintf(w, "%s\n", st.Bold("Linkbacks"))
 	if len(problems) == 0 {
-		fmt.Fprintf(w, "%s linkback consistent\n", st.Green("✔"))
-		return
+		fmt.Fprintf(w, "  %s consistent\n", st.Green("✔"))
+	} else {
+		for _, p := range problems {
+			fmt.Fprintf(w, "  %s %s\n", st.Warn("⚠"), p.Message)
+		}
 	}
-	for _, p := range problems {
-		fmt.Fprintf(w, "%s %s\n", st.Warn("⚠"), p.Message)
+
+	fmt.Fprintf(w, "\n%s\n", st.Bold("Space registry"))
+	switch {
+	case registry.Checked == 0:
+		fmt.Fprintf(w, "  %s no spaces registered\n", st.Dim("·"))
+	case len(registry.Problems) == 0:
+		fmt.Fprintf(w, "  %s %s healthy\n", st.Green("✔"), plural(registry.Checked, "registered space"))
+	default:
+		for _, p := range registry.Problems {
+			fmt.Fprintf(w, "  %s %s  %s\n", st.Warn("⚠"), st.Bold(p.ID), st.Warn(p.Kind))
+			fmt.Fprintf(w, "      %s\n", p.Message)
+			if p.Remedy != "" {
+				fmt.Fprintf(w, "      %s %s\n", st.Dim("remedy:"), p.Remedy)
+			}
+		}
 	}
-	fmt.Fprintf(w, "\n%s\n", st.Dim(plural(len(problems), "linkback problem")))
+
+	total := len(problems) + len(registry.Problems)
+	if total > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Dim(plural(total, "doctor problem")))
+	}
 }
 
 // SummaryHuman renders the at-a-glance dashboard.
@@ -925,48 +946,84 @@ func SpacesJSON(w io.Writer, spaces []wire.SpaceEntry) error {
 	return wire.EncodeJSON(w, wire.ToSpacesEnvelope(spaces))
 }
 
-// SpacesHuman lists the registry one space per line: a state glyph, the label, where it
-// points, and — for anything not ok — what is wrong and what to do about it.
+// SpacesHuman lists the registry one logical planning space at a time. Each inner slice is
+// a group of registered entry points produced by spacehealth.Group. A direct checkout, if
+// present, anchors the human tree; the remaining entry points retain registry order.
 //
 // A broken entry is shown DIMMED alongside the healthy ones rather than hidden or turned
 // into an error. The registry describes what you told it about; a repo that moved is
 // information, and the list is the place you would go to fix it.
-func SpacesHuman(w io.Writer, st Style, spaces []wire.SpaceEntry) {
-	if len(spaces) == 0 {
+func SpacesHuman(w io.Writer, st Style, groups [][]wire.SpaceEntry) {
+	if len(groups) == 0 {
 		fmt.Fprintf(w, "%s no spaces registered — `tskflwctl space add` in a planning repo\n", st.Dim("·"))
 		return
 	}
 	width := 0
-	for _, s := range spaces {
-		if n := len(s.ID); n > width {
-			width = n
+	for _, group := range groups {
+		for _, s := range group {
+			if n := len(s.ID); n > width {
+				width = n
+			}
 		}
 	}
-	for _, s := range spaces {
-		id := fmt.Sprintf("%-*s", width, s.ID)
-		if s.State == wire.SpaceStateOK {
-			fmt.Fprintf(w, "%s %s  %-10s  %s\n", st.Green("●"), st.Bold(id), st.Green(s.State), st.Dim(s.Path))
-			continue
-		}
-		fmt.Fprintf(w, "%s %s  %-10s  %s\n", st.Warn("○"), st.Dim(id), st.Warn(s.State), st.Dim(s.Path))
-		if s.Detail != "" {
-			fmt.Fprintf(w, "    %s %s\n", st.Warn("↳"), st.Dim(s.Detail))
+	broken := 0
+	for _, group := range groups {
+		entries := preferredSpaceEntryFirst(group)
+		for i, s := range entries {
+			prefix := ""
+			detailIndent := "    "
+			if i > 0 {
+				prefix = "  ├─ "
+				if i == len(entries)-1 {
+					prefix = "  └─ "
+				}
+				detailIndent = "      "
+			}
+			renderSpaceEntry(w, st, s, width, prefix, detailIndent)
+			if s.State != wire.SpaceStateOK && s.State != wire.SpaceStateEmpty {
+				broken++
+			}
 		}
 	}
-	if broken := countBrokenSpaces(spaces); broken > 0 {
+	if broken > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Dim(plural(broken, "space")+" not resolving — `space forget <id>` drops an entry; the repo is untouched"))
 	}
 }
 
-// countBrokenSpaces counts entries that did not resolve.
-func countBrokenSpaces(spaces []wire.SpaceEntry) int {
-	n := 0
-	for _, s := range spaces {
-		if s.State != wire.SpaceStateOK {
-			n++
+func preferredSpaceEntryFirst(entries []wire.SpaceEntry) []wire.SpaceEntry {
+	for i, entry := range entries {
+		if entry.Role != wire.SpaceRoleDirect || i == 0 {
+			continue
 		}
+		ordered := make([]wire.SpaceEntry, 0, len(entries))
+		ordered = append(ordered, entry)
+		ordered = append(ordered, entries[:i]...)
+		ordered = append(ordered, entries[i+1:]...)
+		return ordered
 	}
-	return n
+	return entries
+}
+
+func renderSpaceEntry(w io.Writer, st Style, s wire.SpaceEntry, width int, prefix, detailIndent string) {
+	id := fmt.Sprintf("%-*s", width, s.ID)
+	if s.State == wire.SpaceStateOK {
+		fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Green("●"), st.Bold(id), st.Green(s.State), st.Dim(s.Path))
+		return
+	}
+	if s.State == wire.SpaceStateEmpty {
+		fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Green("○"), st.Bold(id), st.Dim(s.State), st.Dim(s.Path))
+		if s.Detail != "" {
+			fmt.Fprintf(w, "%s%s %s\n", detailIndent, st.Dim("↳"), st.Dim(s.Detail))
+		}
+		return
+	}
+	fmt.Fprintf(w, "%s%s %s  %-10s  %s\n", prefix, st.Warn("○"), st.Dim(id), st.Warn(s.State), st.Dim(s.Path))
+	if s.Detail != "" {
+		fmt.Fprintf(w, "%s%s %s\n", detailIndent, st.Warn("↳"), st.Dim(s.Detail))
+	}
+	if s.Remedy != "" {
+		fmt.Fprintf(w, "%s  %s %s\n", detailIndent, st.Dim("remedy:"), st.Dim(s.Remedy))
+	}
 }
 
 // SpaceMutationJSON emits the `space add`/`forget --json` envelope.
@@ -982,7 +1039,7 @@ func SpaceMutationHuman(w io.Writer, st Style, e wire.SpaceEntry, changed bool, 
 		mark = st.Dim("·")
 	}
 	fmt.Fprintf(w, "%s %s %s %s\n", mark, verb, st.Bold(e.ID), st.Dim(e.Path))
-	if e.State == wire.SpaceStateOK && e.Root != "" {
+	if (e.State == wire.SpaceStateOK || e.State == wire.SpaceStateEmpty) && e.Root != "" {
 		fmt.Fprintf(w, "    %s %s\n", st.Dim("planning root"), e.Root)
 	} else if e.Detail != "" {
 		fmt.Fprintf(w, "    %s %s\n", st.Warn("⚠"), e.Detail)

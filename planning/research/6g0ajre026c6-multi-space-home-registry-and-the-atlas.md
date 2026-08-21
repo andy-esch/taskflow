@@ -70,9 +70,10 @@ stretched: an impl repo has no business appearing in a peer product's config.
 Project as a cross-cutting initiative *inside* one planning repo, and a second, outer
 meaning for the same word would be the worst available ambiguity.
 
-The lean at the time — **settled 2026-08-18, unchanged**: a **space** is one registered
-planning repo, the unit you switch between; the **atlas** is the whole set, and the name
-of the TUI screen over it. The split is deliberate — the item noun turns up everywhere
+The lean at the time — **settled 2026-08-18, refined 2026-08-20**: a **space** is one
+durable planning identity; a registered direct or pointer checkout is an **entry point**
+into it; the **atlas** is the whole set, and the name of the TUI screen over it. The split
+is deliberate — the item noun turns up everywhere
 (config keys, a `--space` flag, error strings, docs) so it wants to be short and plain,
 while the collective turns up once, on a screen, and can carry the flavor. Also
 considered and rejected: `orbit`/`constellation` (an orbit is a path, not a place),
@@ -252,21 +253,50 @@ Ideas worth keeping:
   rail answers the question that genuinely can't be asked today.
 - **Land only when >1 space is registered** — with zero or one, `ui` opens today's
   Overview, so single-repo use is untouched.
-- **Per-card async loading**: each space's `core.Summary` as its own `tea.Cmd`,
+- **Per-card async loading**: each logical space's `core.Summary` once as its own `tea.Cmd`,
   skeletons that fill in. Keeps the no-I/O-in-`Update`/`View` non-negotiable, keeps
   the screen fast with many spaces, and makes one slow or broken repo a slow or broken
   *card*.
 - **The switcher rides `ctrl+p` / `:`** rather than claiming new keys on day one.
 
+### Planning identity and entry points — refined 2026-08-20
+
+Real registration exposed a case the first sketch collapsed: `desirelines-planning` is
+the direct planning checkout, while `desirelines` and `desirelines-deploy` are separate
+implementation repos whose configs point to it. Three registry paths do **not** represent
+three plans, summaries, or atlas cards.
+
+Modern configs already encode the complete relationship. The direct repo carries
+`id = "…"`; pointers carry the same value as `planning_repo_id = "…"`; registry rows
+record it as `verify_id`. Therefore:
+
+- one durable planning id = one logical space, one summary, one atlas card;
+- each registry row remains a locally labeled entry point, because `--space <label>`
+  must select an exact checkout rather than an abstract identity;
+- `direct` / `pointer` role is derived from repo discovery, never copied into
+  `spaces.toml`; broken entries retain their intended group through `verify_id` and use
+  `unknown` when their role cannot be inspected;
+- human `space list` may use a tree with the direct checkout as the preferred anchor,
+  but the indentation means “shares planning data,” not parent/child filesystem ownership;
+- JSON stays flat and carries derived `planning_id` + `role`, while `status --all` and the
+  atlas consume the shared grouped projection.
+
+This is the same conceptual rule the worktree design was reaching for — **one plan, one
+card** — but durable ids generalize it across independently registered repos. Worktree
+enumeration remains live/derived and nests under the selected entry point; it does not add
+registry rows.
+
 ### Worktrees on the board — refined 2026-08-19
 
-A card is **one planning repo**, not one registered path. Where a repo has several
+A card is **one planning identity**, not one registered path. Where an entry point has several
 worktrees, the card offers them as selectable *variants* rather than becoming several
 cards. Settled while stress-testing, after the worktree/relative-path findings
 ([worktrees-and-relative-paths-in-cross-repo-planning](6g1emag02srv-worktrees-and-relative-paths-in-cross-repo-planning.md)).
 
-**Scope: worktrees only.** Arbitrary other copies of a repo — second clones, rsynced
-directories — are explicitly *out of scope*. That bound is what makes the rest cheap.
+**Worktree discovery remains scoped to worktrees only.** Arbitrary other copies of a repo
+— second clones, rsynced directories — are not discovered automatically. Explicitly
+registered copies that carry the same durable planning id can still join the identity
+group; their local registry labels distinguish their checkouts.
 
 **Grouping is free.** Every checkout of a repo derives the same **common gitdir**: read
 `.git` (a dir for the base checkout, a file for a worktree), and for the file case strip

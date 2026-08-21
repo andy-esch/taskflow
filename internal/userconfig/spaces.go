@@ -11,7 +11,9 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// The space registry: which planning repos this machine knows about.
+// The space registry: which local entry points into planning spaces this machine knows
+// about. Several rows may share one durable planning identity; grouping and direct/pointer
+// roles are derived by spacehealth rather than persisted here.
 //
 // It lives in its OWN file, separate from the hand-edited config.toml, because registry
 // mutations should never risk a person's presentation settings. The registry is still
@@ -39,14 +41,15 @@ var (
 	ErrSpaceIDConflict = errors.New("space label conflict")
 )
 
-// Space is one registered planning repo.
+// Space is one registered entry point into a planning repo.
 //
 // The two identities do different jobs and neither substitutes for the other:
 //
 //	ID       a LOCAL label — the address. Unique per checkout, typable, completable,
 //	         and what `--space` takes.
-//	VerifyID the target repo's DURABLE id (config.Describe → ID) — the assertion.
-//	         Shared by every worktree of a repo, so it can never be the address.
+//	VerifyID the target repo's DURABLE id (config.Describe → ID) — the assertion and
+//	         natural logical-space grouping key. Shared by every entry point and
+//	         worktree of a planning repo, so it can never be the address.
 //
 // Path is the repo directory (where .tskflwctl.toml lives), not the resolved planning
 // root: registration then means one thing whether the repo scaffolds a tree or points at

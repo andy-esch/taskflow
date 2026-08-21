@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/userconfig"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // linkedPair scaffolds a planning repo and an impl pointing at it. linkBack
@@ -92,5 +95,49 @@ func TestDoctor_NoAmbientDoubleWarn(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "one-sided") {
 		t.Errorf("doctor should report the problem on stdout:\n%q", out.String())
+	}
+}
+
+// TestDoctor_RegistrySection proves the home registry is audited beside linkbacks. A
+// missing entry is actionable and exits 11; an empty but valid planning repo is healthy,
+// remains counted, and does not appear in the problem array.
+func TestDoctor_RegistrySection(t *testing.T) {
+	spaceConfigHome(t)
+	root := initializedSpaceRepo(t)
+	empty := initializedSpaceRepo(t)
+	missing := filepath.Join(t.TempDir(), "gone")
+	for _, space := range []userconfig.Space{
+		{ID: "empty", Path: empty},
+		{ID: "missing", Path: missing},
+	} {
+		if added, _, err := userconfig.AddSpace(space, false); err != nil || !added {
+			t.Fatalf("register %s: added=%v err=%v", space.ID, added, err)
+		}
+	}
+
+	out, err := runRootRC(t, "-C", root, "doctor", "--json")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("broken registry should exit 11, got err=%v code=%d\n%s", err, ExitCode(err), out)
+	}
+	var env wire.DoctorEnvelope
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("decode doctor json: %v\n%s", err, out)
+	}
+	if env.Registry.Checked != 2 || len(env.Registry.Problems) != 1 {
+		t.Fatalf("registry audit = %+v", env.Registry)
+	}
+	problem := env.Registry.Problems[0]
+	if problem.ID != "missing" || problem.Kind != wire.SpaceStateMissing || problem.Remedy == "" {
+		t.Errorf("missing-space diagnosis = %+v", problem)
+	}
+	spaces, readErr := userconfig.Spaces()
+	if readErr != nil || len(spaces) != 2 {
+		t.Errorf("doctor auto-forgot an entry: spaces=%v err=%v", spaces, readErr)
+	}
+
+	human, humanErr := runRootRC(t, "-C", root, "doctor", "--color=never")
+	if humanErr == nil || !strings.Contains(human, "Space registry") ||
+		!strings.Contains(human, "missing") || !strings.Contains(human, "remedy:") {
+		t.Errorf("human registry diagnosis missing: err=%v\n%s", humanErr, human)
 	}
 }

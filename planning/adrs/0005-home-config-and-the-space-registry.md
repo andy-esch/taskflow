@@ -9,6 +9,12 @@ superseded_by: null
 
 # ADR-0005: A home config and the space registry — many planning repos, one atlas
 
+> **Implementation status (2026-08-20):** home config, the separate `spaces.toml`
+> registry, `space list|add|forget`, and shared list/doctor health diagnosis are shipped.
+> Global `--space`, `init` auto-registration, `status --all`, and any atlas UI remain
+> planned. The ADR is still proposed because the final TUI commitment is deliberately
+> deferred until the CLI half has been used.
+
 > Follows the ADR format established in [0001-adopt-adrs](0001-adopt-adrs.md). Extends the
 > cross-repo config model of epic
 > [23-point-an-impl-repo-at-an-external-planning-repo](../epics/23-point-an-impl-repo-at-an-external-planning-repo.md)
@@ -54,9 +60,10 @@ outer meaning for the same word would be the worst kind of ambiguity.
   product's repos, not a user's products), and aliases can't produce a cross-repo view —
   which is the actual ask. Rejected as the end state; it stays the fallback for anyone who
   never registers anything.
-- **B — A home-level registry + a user config (chosen).** One user-scoped TOML holding the
-  set of known planning repos, plus the user-level tier the terminal-concern settings
-  (`[theme]`, `[pager]`) have always wanted. Additive, inspectable, dotfile-committable.
+- **B — A home-level registry + a user config (chosen).** Two user-scoped TOML files: a
+  hand-edited config for terminal concerns (`[theme]`, `[pager]`) and a tool-managed
+  registry of known planning repos. Additive, inspectable, dotfile-committable, and a
+  registry mutation cannot re-encode a person's presentation settings.
 - **C — Elect one planning repo as the "hub" and keep the index there.** No new file
   location, no `$HOME` writes. Rejected: there is no natural hub, it makes one peer repo
   arbitrarily special, and cloning that repo onto a second machine would drag a
@@ -73,7 +80,9 @@ Adopt a **home config** whose first citizen is a **space registry**.
 
 ### 1. Vocabulary: space (the one), atlas (the all)
 
-- A **space** is one registered planning repo — the unit you switch between.
+- A **space** is one durable planning identity — the unit summarized once in cross-space
+  views. A registered path is an **entry point** into it: either the direct planning
+  checkout or a repo whose `planning_repo` points there.
 - The **atlas** is the whole set, and the name of the TUI screen over it.
 - **Not "project"** — ADR-0002 owns that word for cross-cutting initiatives inside a
   space. The two live at different scopes and must never share a noun.
@@ -83,7 +92,11 @@ Adopt a **home config** whose first citizen is a **space registry**.
 
 ### 2. Location: XDG, explicitly not `os.UserConfigDir()`
 
-`$XDG_CONFIG_HOME/tskflwctl/config.toml`, falling back to `~/.config/tskflwctl/config.toml`.
+Two files under `$XDG_CONFIG_HOME/tskflwctl/`, falling back to
+`~/.config/tskflwctl/`:
+
+- `config.toml` — hand-edited user presentation settings; the tool only reads it.
+- `spaces.toml` — the tool-managed, still hand-inspectable space registry.
 
 Go's `os.UserConfigDir()` returns `~/Library/Application Support` on darwin — wrong for a
 dotfile-friendly CLI whose users commit their config. The path is **overridable by env**
@@ -104,27 +117,34 @@ on its own merits before any registry exists.
 
 ### 4. Schema
 
+`config.toml` and `spaces.toml` are deliberately separate. The registry shape is:
+
 ```toml
 schema_version = 1
 
-[theme]
-name = "neon"
-
 [[space]]
-id     = "taskflow"                    # stable key; how you address it
-path   = "~/git/andy-esch/taskflow"    # the repo dir, NOT the resolved planning root
-label  = "tskflwctl"                   # optional display name
-accent = "cyan"                        # optional; else derived deterministically from id
-added  = "2026-08-15"
+id        = "taskflow"                  # local label; how this checkout is addressed
+path      = "~/git/andy-esch/taskflow"  # repo dir, NOT the resolved planning root
+verify_id = "6g1durable0aa"             # durable id of the resolved planning repo
+label     = "tskflwctl"                 # optional display name
+accent    = "cyan"                      # optional; else derived deterministically
+added     = "2026-08-20"
 ```
 
 - **`path` anchors at the repo (the `.tskflwctl.toml` dir), never the resolved root.**
   Registration is then *one* concept for both config modes: a pointer repo registered by
   path resolves through its `planning_repo` to the real planning root via ordinary
   discovery. Epic 23 compatibility falls out for free.
-- **`id` is a stable key**, defaulted from the dir basename (ADR-0003's identity
-  philosophy: address by a durable key, not by a path that moves). Collisions are resolved
-  at registration time, never silently.
+- **`id` is a local, shell-completable label**, defaulted from the checkout directory's
+  basename. Label collisions are refused and require an explicit `--id`; the tool never
+  invents a suffix. Multiple worktrees of one repo need distinct labels.
+- **`verify_id` is the resolved planning repo's durable committed id.** Worktrees share
+  it, so it cannot address a checkout; it instead detects a path that now resolves to the
+  wrong tree. Path is the hint, `verify_id` the assertion.
+- **Grouping is derived, never persisted.** Registry rows with the same `verify_id` form
+  one logical space; discovery supplies `direct`/`pointer` role. The local `id` remains the
+  address of one exact entry point. No parent, child, role, or group field is copied into
+  `spaces.toml`, where it could drift from repo config.
 - **Dedup on PHYSICAL paths** (`Abs` + `EvalSymlinks`), reusing the same helper
   `tracked_repos` already dedups with, so `../x`, an absolute path, and a symlinked
   checkout collapse to one entry.
@@ -139,19 +159,20 @@ discovery is untouched: same walk-up, same `.tskflwctl.toml` precedence, same `.
 boundary. A machine with no home config behaves **exactly** as today, and deleting the
 file loses only convenience, never data or addressability.
 
-The registry adds one *opt-in* entry point: `--space <id>` (and `TSKFLW_SPACE`) resolves an
-id to a path and discovers from **there** instead of the cwd — so any command can run
-against another space without a `cd`, which also gives agents a cross-repo handle.
+The registry is planned to add one *opt-in* entry point: `--space <id>` (and
+`TSKFLW_SPACE`) will resolve a label to a path, verify the target's durable id, and discover
+from **there** instead of the cwd. Until that task ships, ordinary commands continue to
+use cwd/`-C`; the shipped registry is inventory and health data only.
 
-### 6. Registration: `init` auto-registers, best-effort
+### 6. Registration: explicit now; `init` auto-registration planned
 
-- **`init` appends a `[[space]]`** after a successful scaffold or pointer init, reported as
-  one more `+` line in its existing output. It is **best-effort, exactly like `LinkBack`**:
-  an unwritable or missing `$HOME` warns to stderr and never fails the init. Opt out with
-  `--no-register` / `TSKFLW_NO_REGISTER=1` (mirroring `--no-link-back`).
 - **`space add [path]`** registers an existing repo, validated through discovery **before**
   anything is written — the "require + error, leave nothing behind" contract `InitPointer`
   already follows.
+- **Today registration is explicit.** A separate planned task will make `init` append a
+  `[[space]]` after a successful scaffold or pointer init. That side write will be
+  best-effort like `LinkBack`, with `--no-register` / `TSKFLW_NO_REGISTER=1`; those flags
+  do not exist until that task ships.
 - **The atlas shows an unregistered current repo** dimmed, tagged `· not registered`, with
   a keypress to keep it. Discoverable without writing to `$HOME` behind your back.
 - **Explicitly rejected: auto-registering any repo you happen to run in.** A read-only
@@ -167,10 +188,13 @@ Paths rot: repos move, get deleted, get un-inited. Generalize epic 23's `LinkPro
 | --- | --- | --- | --- |
 | `ok` | discovery succeeds | full card | enter |
 | `missing` | path gone | dimmed, "not found at ~/…" | forget · repoint |
-| `moved` | gone, but a same-named planning repo found nearby | dimmed, "moved to …?" | accept |
 | `not-a-repo` | exists, no marker | dimmed, "no `.tskflwctl.toml` — init here?" | init · forget |
 | `unreadable` | TOML / permission error | dimmed, verbatim parse error | `$EDITOR` · forget |
 | `empty` | valid, zero entities | normal card, "no tasks yet" | enter anyway |
+| `mismatch` | path resolves, but its durable id differs from `verify_id` | dimmed, expected/found ids | restore · forget/re-add |
+
+No nearby-filesystem scan guesses where a missing repo moved. A truthful `missing` with an
+explicit forget/re-add remedy is safer than accepting a same-named but unrelated checkout.
 
 Three invariants make this delightful rather than nagging:
 
@@ -190,10 +214,13 @@ dashboard-like screen: read-only, orients and routes, never mutates. It is **not
 
 - It becomes the landing screen **only when more than one space is registered**. With zero
   or one, `ui` opens today's Overview — no regression for single-repo use.
-- Each space's `core.Summary` loads as **its own `tea.Cmd`**; cards render as skeletons and
+- Each logical space's `core.Summary` loads **once as its own `tea.Cmd`**; cards render as skeletons and
   fill in as they land. This preserves the non-negotiable (no I/O in `Update`/`View`), keeps
   the screen fast with many spaces, and makes one slow or broken repo a slow or broken
   *card*.
+- A card offers its registered direct/pointer entry points and later-discovered worktrees
+  as checkout choices. Selecting one changes execution context, not the planning identity
+  or the summary shown on the card.
 - The **switcher** rides existing surfaces — the `ctrl+p` command palette and the `:`
   command bar — rather than claiming new keys on day one.
 
@@ -235,7 +262,8 @@ dashboard-like screen: read-only, orients and routes, never mutates. It is **not
 - **Persisted per-space stats / caching.** Skeleton cards that fill in are honest; cached
   numbers lie. Revisit only if load time proves it necessary.
 - **Non-local spaces** (a remote or served planning repo). That is ADR-0004's `serve`
-  territory; a `space` is a local path until then.
+  territory; the present entry points are local paths, while the logical identity model
+  deliberately does not equate a space with one path.
 - **Per-space theming.** `accent` is a card identity cue, not a theme override.
 
 ## Amendments

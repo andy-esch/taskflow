@@ -325,32 +325,49 @@ type ThemeEntry struct {
 	Default bool   `json:"default"` // the built-in default
 }
 
-// SpaceEntry is one registered planning repo in `space list --json`.
+// SpaceEntry is one registered entry point in `space list --json`.
 //
 // ID and VerifyID answer different questions and neither substitutes for the other: ID is
 // the LOCAL label that addresses this checkout (what `--space` takes), VerifyID is the
-// target repo's DURABLE id, which every worktree of that repo shares. State is the
-// resolved health of the entry — see the space diagnosis work.
+// target repo's DURABLE id assertion recorded in the registry. PlanningID is the derived
+// logical-space identity: VerifyID when present, otherwise a successfully discovered id.
+// Role says whether this path owns that planning tree or points to it. State is the resolved
+// health of the entry — see the space diagnosis work.
 type SpaceEntry struct {
-	ID       string `json:"id"`
-	Path     string `json:"path"`
-	VerifyID string `json:"verify_id,omitempty"`
-	Label    string `json:"label,omitempty"`
-	Added    string `json:"added,omitempty"`
-	State    string `json:"state" jsonschema:"description=ok|missing|not-a-repo|unreadable"`
-	// Root is where the entry resolves to, present only when State is ok. It is the
+	ID         string `json:"id"`
+	Path       string `json:"path"`
+	VerifyID   string `json:"verify_id,omitempty"`
+	PlanningID string `json:"planning_id,omitempty"`
+	Role       string `json:"role" jsonschema:"description=direct|pointer|unknown"`
+	Label      string `json:"label,omitempty"`
+	Added      string `json:"added,omitempty"`
+	State      string `json:"state" jsonschema:"description=ok|empty|missing|not-a-repo|unreadable|mismatch"`
+	// Root is where the entry resolves to, present for ok/empty/mismatch. It is the
 	// PLANNING root, which for a pointer repo is in a different repo than Path.
 	Root string `json:"root,omitempty"`
 	// Detail explains a non-ok State in one line, so a caller need not re-derive it.
 	Detail string `json:"detail,omitempty"`
+	// Remedy is an actionable repair for a broken entry. Empty/ok spaces omit it.
+	Remedy string `json:"remedy,omitempty"`
 }
 
-// Space entry states. `ok` is the only one that carries a Root.
+// Space entry states. Resolved states (ok/empty/mismatch) carry a Root; only missing,
+// not-a-repo, unreadable, and mismatch are broken.
 const (
 	SpaceStateOK         = "ok"
+	SpaceStateEmpty      = "empty"
 	SpaceStateMissing    = "missing"
 	SpaceStateNotARepo   = "not-a-repo"
 	SpaceStateUnreadable = "unreadable"
+	SpaceStateMismatch   = "mismatch"
+)
+
+// Space entry roles. Role is derived from the registered repo's config and is unknown
+// only when a broken entry cannot be inspected.
+const (
+	SpaceRoleDirect  = "direct"
+	SpaceRolePointer = "pointer"
+	SpaceRoleUnknown = "unknown"
 )
 
 // SpacesEnvelope is `space list --json`.
@@ -747,28 +764,47 @@ type ErrorEnvelope struct {
 	Error         ErrorItem `json:"error"`
 }
 
-// DoctorEnvelope is `doctor --json`: the linkback audit result. Problems is
-// empty (not null) when the planning_repo <-> tracked_repos links are consistent.
+// DoctorEnvelope is `doctor --json`: the repo-local linkback audit plus the home space
+// registry audit. Both problem arrays are empty rather than null when healthy.
 type DoctorEnvelope struct {
 	SchemaVersion string          `json:"schema_version"`
 	Root          string          `json:"root"`
 	Problems      []DoctorProblem `json:"problems"`
+	Registry      DoctorRegistry  `json:"registry"`
 }
 
-// ToDoctorEnvelope builds the `doctor --json` envelope value; problems normalizes
-// to empty (not null) when the links are consistent, so a consumer can len() it
-// without a nil check.
-func ToDoctorEnvelope(root string, problems []DoctorProblem) DoctorEnvelope {
+// ToDoctorEnvelope builds the `doctor --json` envelope value and normalizes both problem
+// collections to empty arrays, so a consumer can len() either without a nil check.
+func ToDoctorEnvelope(root string, problems []DoctorProblem, registry DoctorRegistry) DoctorEnvelope {
 	if problems == nil {
 		problems = []DoctorProblem{}
 	}
-	return DoctorEnvelope{SchemaVersion: SchemaVersion, Root: root, Problems: problems}
+	if registry.Problems == nil {
+		registry.Problems = []DoctorSpaceProblem{}
+	}
+	return DoctorEnvelope{SchemaVersion: SchemaVersion, Root: root, Problems: problems, Registry: registry}
 }
 
 // DoctorProblem is one linkback inconsistency: the offending repo + a message.
 type DoctorProblem struct {
 	Repo    string `json:"repo"`
 	Message string `json:"message"`
+}
+
+// DoctorRegistry is the home-registry section of doctor output. Checked includes healthy
+// and empty entries; Problems contains only broken entries.
+type DoctorRegistry struct {
+	Checked  int                  `json:"checked"`
+	Problems []DoctorSpaceProblem `json:"problems"`
+}
+
+// DoctorSpaceProblem is one actionable registered-space diagnosis.
+type DoctorSpaceProblem struct {
+	ID      string `json:"id"`
+	Path    string `json:"path"`
+	Kind    string `json:"kind"`
+	Message string `json:"message"`
+	Remedy  string `json:"remedy"`
 }
 
 // jsonEnvelopes registers every envelope so a single Reflect pulls them all (and
