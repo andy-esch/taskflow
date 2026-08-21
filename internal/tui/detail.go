@@ -506,3 +506,33 @@ func renderAuditMeta(a domain.Audit, body string, width int, s *styles) string {
 	}
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
 }
+
+type researchDetail struct {
+	r    domain.Research
+	body string
+}
+
+func (d researchDetail) Title() string                { return d.r.Slug }
+func (d researchDetail) Path() string                 { return d.r.Path }
+func (d researchDetail) rawBody() string              { return d.body }
+func (d researchDetail) meta(w int, s *styles) string { return renderResearchMeta(d.r, w, s) }
+
+// renderResearchMeta is the thinnest metadata block in the TUI, and deliberately so:
+// research has no status, no bucket, and no progress to summarize, so there is nothing to
+// render but the handles you'd use to find it again. `updated` is omitted when it equals
+// created — repeating the same date twice reads as a bug, not as information.
+func renderResearchMeta(r domain.Research, _ int, s *styles) string {
+	var b strings.Builder
+	detailField(&b, "research", r.Slug, s)
+	detailField(&b, "created", r.Created, s)
+	if r.Updated != "" && r.Updated != r.Created {
+		detailField(&b, "updated", r.Updated, s)
+	}
+	if r.Description != "" {
+		detailField(&b, "description", r.Description, s)
+	}
+	if len(r.Tags) > 0 {
+		detailField(&b, "tags", strings.Join(r.Tags, ", "), s)
+	}
+	return b.String()
+}

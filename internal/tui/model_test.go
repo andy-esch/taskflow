@@ -33,6 +33,11 @@ func seedRepo(t *testing.T) string {
 	task("ready-to-start", "beta", "the beta task")
 	r.Epic("01-test.md", "---\nstatus: active\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
 	r.Audit("open", "2026-06-01-thing.md", "---\narea: store\ndate: 2026-06-01\n---\n# Audit\n")
+	// Two research docs, deliberately differing on every sortable axis: created order and
+	// slug order disagree, and only one carries updated_at — so the `o`-cycle tests can
+	// tell the three sorts apart instead of all three producing the same list.
+	r.Research("zeta-doc.md", "---\nschema: 1\ncreated: \"2026-06-10\"\ndescription: the zeta research\ntags: [tui]\n---\n# Zeta\n\nbody\n")
+	r.Research("alpha-doc.md", "---\nschema: 1\ncreated: \"2026-06-02\"\nupdated_at: \"2026-07-01\"\ndescription: the alpha research\ntags: [cli]\n---\n# Alpha\n\nbody\n")
 	return r.Root
 }
 
@@ -481,8 +486,10 @@ func TestModel_PerTabCursorPreserved(t *testing.T) {
 	if m.selectedID() != "beta" {
 		t.Fatalf("expected beta selected on tasks, got %q", m.selectedID())
 	}
-	// Cycle tasks → epics → audits → dashboard → tasks, draining each load.
-	for i := 0; i < 4; i++ {
+	// Cycle all the way round — every tab plus the dashboard — and back to tasks,
+	// draining each load. Derived from the tab count, not hardcoded, so adding an entity
+	// doesn't silently turn this into a partial cycle that asserts the wrong landing tab.
+	for i := 0; i < len(m.tabs)+1; i++ {
 		tm, cmd := m.Update(press("]"))
 		m = drain(t, tm.(Model), cmd)
 	}

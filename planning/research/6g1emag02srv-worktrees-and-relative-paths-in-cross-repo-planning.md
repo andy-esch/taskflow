@@ -4,6 +4,7 @@ id: 6g1emag02srv
 created: "2026-08-19"
 description: 'Two ways cross-repo resolution goes wrong: worktrees look like untracked repos (constant noise), and a committed relative planning_repo can silently resolve to an unrelated planning tree.'
 tags: [config, multi-repo, git, worktree, correctness]
+updated_at: "2026-08-20"
 ---
 # Worktrees and relative paths in cross-repo planning
 

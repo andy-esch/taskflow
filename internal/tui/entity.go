@@ -22,6 +22,7 @@ const (
 	entityTasks entityKind = iota
 	entityEpics
 	entityAudits
+	entityResearch
 )
 
 // entityDashboard is a sentinel (not a real tab, never in m.tabs) so context
@@ -310,6 +311,16 @@ func newEntityTabs(st *styles) []*entityTab {
 			viewAxis: auditViews,
 			list:     mk(auditDelegate{st: st}), loadList: loadAuditList, loadItem: loadAuditDetail,
 			sortCols: auditSortCols, transitions: auditTransitions, applyMove: moveAudit,
+		},
+		{
+			// Research is the only AXIS-LESS, LIFECYCLE-LESS tab: no viewAxis (nothing to
+			// filter by — research has no status), and no transitions/applyMove (no verbs to
+			// move it between). Both are already guarded — cycleView returns early on an
+			// empty axis and the `m` menu checks len(transitions) — so the reducer needs no
+			// research-specific branch.
+			kind: entityResearch, name: "research", aliases: []string{"r"},
+			list: mk(researchDelegate{st: st}), loadList: loadResearchList, loadItem: loadResearchDetail,
+			sortCols: researchSortCols,
 		},
 	}
 }

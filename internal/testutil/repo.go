@@ -124,6 +124,14 @@ func (r *Repo) Audit(bucket, name, content string) *Repo {
 	return r
 }
 
+// Research writes a flat research fixture research/<id>-<name> (see ResearchFixture).
+// Nothing is injected: research has no status or bucket to make authoritative.
+func (r *Repo) Research(name, content string) *Repo {
+	path, out := ResearchFixture(r.Root, name, content)
+	Write(r.t, path, out)
+	return r
+}
+
 // File writes an arbitrary slash-relative path under the root.
 func (r *Repo) File(rel, content string) *Repo {
 	Write(r.t, filepath.Join(r.Root, filepath.FromSlash(rel)), content)

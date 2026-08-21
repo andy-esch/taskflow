@@ -148,7 +148,7 @@ func (m Model) paletteIndex() []paletteItem {
 
 // paletteCommands is the canonical command words for the palette: tab names, each
 // tab's view words, and the active tab's verbs. Unlike commandOptions (which feeds
-// `:` Tab-completion), it omits the short aliases (t/e/a, task/epic/audit) — in a
+// `:` Tab-completion), it omits the short aliases (t/e/a/r, task/epic/audit) — in a
 // fuzzy list they'd surface as near-duplicate rows, the exact clutter the palette
 // exists to avoid.
 func (m Model) paletteCommands() []string {

@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g048yn6z6s3
-status: ready-to-start
+status: in-progress
 epic: 28-first-class-entities-new-planning-nouns
 description: Add a research tab + detail view to the TUI (read-only, through core.Service as tea.Cmds); the entity landed CLI-only.
 effort: Unknown
@@ -10,6 +10,8 @@ priority: low
 autonomy_level: 3
 tags: [tui]
 created: "2026-08-14"
+updated_at: "2026-08-20"
+started_at: "2026-08-20"
 ---
 
 # TUI surface for research docs
@@ -30,15 +32,15 @@ have doubled its size for a surface nobody had asked for yet.
 
 ## Acceptance criteria
 
-- [ ] A research list view, newest-first (matching `ListResearch`'s order), with the
+- [x] A research list view, newest-first (matching `ListResearch`'s order), with the
       created date as the organizing column — no status/progress column, since research
       has neither.
-- [ ] A detail view rendering the doc body.
-- [ ] Reached through `core.Service` as `tea.Cmd`s — **no store access from the TUI, and
+- [x] A detail view rendering the doc body.
+- [x] Reached through `core.Service` as `tea.Cmd`s — **no store access from the TUI, and
       no I/O in `Update`/`View`** (the standing architectural rule).
-- [ ] `research/` is already in `WatchPaths`, so confirm the watcher reloads the tab on
+- [x] `research/` is already in `WatchPaths`, so confirm the watcher reloads the tab on
       a doc added at runtime.
-- [ ] Nav/help/keybinding text updated for the new tab.
+- [x] Nav/help/keybinding text updated for the new tab.
 
 ## Out of scope
 
