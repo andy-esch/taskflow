@@ -22,8 +22,12 @@ func newInitCmd(app *App) *cobra.Command {
 		noLinkBack   bool
 	)
 	cmd := &cobra.Command{
-		Use:         "init",
-		Short:       "Scaffold a planning tree here, or point at an external planning repo",
+		Use:   "init",
+		Short: "Scaffold a planning tree here, or point at an external planning repo",
+		Long: "Bootstrap a new planning topology: either scaffold a local planning tree or\n" +
+			"point this repository at an existing external planning repo. Bare init against\n" +
+			"an existing configuration reports its topology without changing it; use\n" +
+			"`tskflwctl config migrate` for safe configuration upgrades.",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "mutating"},
 		Example: "  tskflwctl init\n" +
@@ -40,6 +44,12 @@ func newInitCmd(app *App) *cobra.Command {
 			abs, err := filepath.Abs(path)
 			if err != nil {
 				return err
+			}
+			// A bare init against an existing config is an identity read, never a hidden
+			// migration or a scaffold attempt. Explicit topology flags retain their existing
+			// validation paths; only the natural re-run takes this lifecycle handoff.
+			if existing, ok := config.Describe(abs); ok && !initTopologyFlagsChanged(cmd, tracks) {
+				return runInitExisting(app, abs, existing)
 			}
 			pointer, repo, chosenRoot, err := app.resolveInitTarget(
 				abs, planningRepo, cmd.Flags().Changed("planning-repo"), taskflowRoot, cmd.Flags().Changed("taskflow-root"))
@@ -74,6 +84,40 @@ func newInitCmd(app *App) *cobra.Command {
 	cmd.Flags().BoolVar(&noLinkBack, "no-link-back", false,
 		"pointer mode: don't add this repo to the planning repo's tracked_repos")
 	return cmd
+}
+
+func initTopologyFlagsChanged(cmd *cobra.Command, tracks []string) bool {
+	return cmd.Flags().Changed("planning-repo") || cmd.Flags().Changed("taskflow-root") ||
+		cmd.Flags().Changed("no-link-back") || len(tracks) > 0
+}
+
+func runInitExisting(app *App, abs string, description config.Description) error {
+	pending, err := config.PendingMigrations(abs)
+	if err != nil {
+		return err
+	}
+	mode := "scaffold"
+	if description.PlanningRepo != "" {
+		mode = "pointer"
+	}
+	pendingNames := make([]string, len(pending))
+	for i, migration := range pending {
+		pendingNames[i] = string(migration)
+	}
+	if app.JSON {
+		return render.InitJSON(app.Out, render.InitEnvelope{
+			DryRun: app.DryRun, Mode: mode, Root: abs,
+			PlanningRepo: description.PlanningRepo, AlreadyInitialized: true,
+			PendingMigrations: pendingNames,
+		})
+	}
+	fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)
+	printLayout(app, abs)
+	if len(pendingNames) > 0 {
+		fmt.Fprintf(app.Out, "\n%s configuration update available: %s\n", app.Style.Warn("⚠"), strings.Join(pendingNames, ", "))
+		fmt.Fprintln(app.Out, app.Style.Dim("→ tskflwctl config migrate"))
+	}
+	return nil
 }
 
 // resolveInitTarget decides init's mode (the flag-twin pattern) AND, for scaffold mode,
@@ -207,7 +251,7 @@ func printLayout(app *App, dir string) {
 	if d.PlanningRepo != "" {
 		row("planning repo", d.PlanningRepo)
 		if d.PlanningRepoID == "" {
-			row("verifies", app.Style.Dim("no — run init again once the target has an id"))
+			row("verifies", app.Style.Dim("no — run `tskflwctl config migrate`"))
 		} else {
 			row("verifies", d.PlanningRepoID)
 		}
@@ -215,7 +259,7 @@ func printLayout(app *App, dir string) {
 	}
 	row("planning tree", d.TaskflowRoot)
 	if d.ID == "" {
-		row("durable id", app.Style.Dim("none yet — re-run init to mint one"))
+		row("durable id", app.Style.Dim("none yet — run `tskflwctl config migrate`"))
 	} else {
 		row("durable id", d.ID)
 	}

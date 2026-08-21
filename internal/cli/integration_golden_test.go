@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 // fixtureRepo is the committed, date-stable planning tree the golden snapshots run
@@ -34,6 +36,22 @@ func redactFixtureRoot(t *testing.T) func(string) string {
 	}
 }
 
+// redactConfigShow normalizes both repository and home config paths. TestMain pins
+// the latter to a random temp directory so tests never read a developer's real home.
+func redactConfigShow(t *testing.T) func(string) string {
+	t.Helper()
+	redactRoot := redactFixtureRoot(t)
+	home, err := userconfig.Dir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	home = filepath.ToSlash(home)
+	return func(s string) string {
+		s = redactRoot(s)
+		return strings.ReplaceAll(s, home, "<CONFIG_HOME>")
+	}
+}
+
 // TestGolden_MachineContract locks the byte-stable machine surfaces against the
 // committed fixture: a --json envelope, the csv/name shapes, or the schema contract
 // changing shape trips a diff. The in-process runRoot tests prove the *logic*;
@@ -41,6 +59,7 @@ func redactFixtureRoot(t *testing.T) func(string) string {
 // identical to the binary's); main.go wiring is covered by the subprocess smoke.
 func TestGolden_MachineContract(t *testing.T) {
 	redact := redactFixtureRoot(t)
+	redactConfig := redactConfigShow(t)
 	cases := []struct {
 		name   string
 		args   []string
@@ -60,6 +79,7 @@ func TestGolden_MachineContract(t *testing.T) {
 		{"epic_show_json", []string{"-C", fixtureRepo, "epic", "show", "01-fixture-epic", "--json"}, nil},
 		{"status_json", []string{"-C", fixtureRepo, "status", "--json"}, nil},
 		{"board_json", []string{"-C", fixtureRepo, "board", "--json"}, nil},
+		{"config_show_json", []string{"-C", fixtureRepo, "config", "show", "--json"}, redactConfig},
 		// audit info emits an absolute path → redact the fixture root (pins
 		// schema_version + bucket + finding tally shape).
 		{"audit_info_json", []string{"-C", fixtureRepo, "audit", "info", "2026-01-02-fixture-area", "--json"}, redact},

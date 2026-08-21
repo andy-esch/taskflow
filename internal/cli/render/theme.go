@@ -8,30 +8,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/design"
-	"github.com/andy-esch/taskflow/internal/progressbar"
-	"github.com/andy-esch/taskflow/internal/theme"
+	"github.com/andy-esch/taskflow/internal/themepreview"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
-
-// themeSwatch is one named color in a theme preview.
-type themeSwatch struct {
-	token string
-	hue   design.Hue
-}
-
-// themeSwatches is the fixed, ordered set of tokens a preview shows: the accent
-// (the theme's signature) and the six semantic colors.
-func themeSwatches(pal design.Palette) []themeSwatch {
-	return []themeSwatch{
-		{"accent", pal.Accent},
-		{"red", pal.Of(theme.ColorRed)},
-		{"green", pal.Of(theme.ColorGreen)},
-		{"yellow", pal.Of(theme.ColorYellow)},
-		{"blue", pal.Of(theme.ColorBlue)},
-		{"cyan", pal.Of(theme.ColorCyan)},
-		{"gray", pal.Of(theme.ColorGray)},
-	}
-}
 
 // ThemePreviewHuman renders a palette as a swatch grid: a truecolor block + hex per
 // token, plus a sample gradient bar. When styling is off (piped / --color=never) it
@@ -44,12 +23,12 @@ func ThemePreviewHuman(w io.Writer, st Style, name, variant string, pal design.P
 	// they were tuned for. This is what makes `--variant light` faithful from a dark
 	// terminal (and vice-versa).
 	canvas := pal.Base.Color()
-	for _, sw := range themeSwatches(pal) {
+	for _, sw := range themepreview.Swatches(pal) {
 		if st.on {
-			block := lipgloss.NewStyle().Background(canvas).Foreground(sw.hue.Color()).Render("  ███  ")
-			fmt.Fprintf(w, "  %s  %-7s %s\n", block, sw.token, sw.hue.Hex)
+			block := lipgloss.NewStyle().Background(canvas).Foreground(sw.Hue.Color()).Render("  ███  ")
+			fmt.Fprintf(w, "  %s  %-7s %s\n", block, sw.Token, sw.Hue.Hex)
 		} else {
-			fmt.Fprintf(w, "  %-7s %s\n", sw.token, sw.hue.Hex)
+			fmt.Fprintf(w, "  %-7s %s\n", sw.Token, sw.Hue.Hex)
 		}
 	}
 	// Chrome the foreground swatches can't show: the find highlight is a bg+fg PAIR
@@ -67,7 +46,7 @@ func ThemePreviewHuman(w io.Writer, st Style, name, variant string, pal design.P
 		}
 		fmt.Fprintf(w, "  border  %s active  %s idle\n", rule(pal.BorderActive), rule(pal.BorderIdle))
 	}
-	bar := progressbar.Render(60, 24, pal)
+	bar := themepreview.Bar(pal, 24)
 	if !st.on {
 		bar = ansi.Strip(bar)
 	}
@@ -76,10 +55,10 @@ func ThemePreviewHuman(w io.Writer, st Style, name, variant string, pal design.P
 
 // ThemePreviewJSON emits a theme's palette swatches as the machine form.
 func ThemePreviewJSON(w io.Writer, name, variant string, pal design.Palette) error {
-	sw := themeSwatches(pal)
+	sw := themepreview.Swatches(pal)
 	entries := make([]wire.ThemeSwatch, len(sw))
 	for i, s := range sw {
-		entries[i] = wire.ThemeSwatch{Token: s.token, Hex: s.hue.Hex, ANSI: s.hue.ANSI}
+		entries[i] = wire.ThemeSwatch{Token: s.Token, Hex: s.Hue.Hex, ANSI: s.Hue.ANSI}
 	}
 	return wire.EncodeJSON(w, wire.ToThemePreviewEnvelope(name, variant, entries))
 }

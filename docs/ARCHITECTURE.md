@@ -73,8 +73,9 @@ the one-screen orientation for contributors.
   (`If-Match`) is the web adapter's job (epic 19), not the FS store's.
 - **`internal/cli`** — a primary adapter: the cobra tree.
 - **`internal/tui`** — the *second* primary adapter (shipped): a Bubble Tea
-  browser calling the **same** `core.Service`, never the store/fs. See the TUI
-  section below.
+  browser calling the **same** `core.Service`, never the store/fs. Its Config/About
+  overlay embeds `internal/configui` and calls `core.ConfigurationService`, so it
+  also shares the configuration application seam with Cobra. See the TUI section below.
 - **`internal/theme`** — dependency-free semantic tokens (status/bucket/priority
   → glyph + a `Color` enum), imported by **both** `cli/render` (→ SGR: the theme's
   truecolor hue, or a 16-color slot fallback) and `tui` (→ lipgloss), so
@@ -85,6 +86,9 @@ the one-screen orientation for contributors.
   default). Imports `theme` (keys its palette by the enum); `theme` must **never**
   import `design`. Consumed by `cli/render`, `tui`, `cli/prompt`, and
   `progressbar` — the one place a *hue* is chosen, as `theme` is for a *glyph*.
+- **`internal/themepreview`** — the canonical ordered projection of a design palette
+  into semantic swatches and a sample gradient. CLI theme preview and the live config
+  editor own different layouts but review the same tokens and renderer.
 - **`internal/config`** — discovers the planning root (walk up for tasks/;
   terminates at a `.git`/root boundary). **Repo-scoped**, and deliberately does not
   import `userconfig`. It also owns cross-repo *identity and placement*: `init`
@@ -97,6 +101,12 @@ the one-screen orientation for contributors.
   `planning_repo`/`tracked_repos` point outward and anchor to the **canonical checkout**,
   so a committed relative path means the same thing from every git worktree
   (`worktree.go`).
+  `init` only bootstraps a new topology. Safe upgrades to existing configs live in
+  the explicit, idempotent `config.Migrate` path: direct `id` and pointer
+  `planning_repo_id` backfills are surgical, atomic, and dry-run from the same result
+  model used by apply output. Migration, typed preferences, and tracked-repo linkbacks
+  share a config-directory Unix `flock` and re-read inside it, preventing cooperating
+  writers from atomically replacing one another's unrelated edits.
 - **`internal/userconfig`** — the *user*-scoped (home) tier: terminal preferences
   that belong to a person rather than a repo (`[theme]`, `[pager]`) plus the separate
   advisory `spaces.toml` registry, read from
@@ -108,13 +118,23 @@ the one-screen orientation for contributors.
   `init`/`doctor`/`completion` skip discovery yet still need a theme. A missing file
   is normal; a malformed one **warns and degrades** rather than failing — the
   deliberate opposite of the repo config, where a bad marker is fatal because guessing
-  there would fork the data. Registry mutations are atomic, surgical TOML edits and take
-  a directory-level Unix `flock`, so concurrent cooperating writers cannot lose entries;
+  there would fork the data. Preference and registry mutations are atomic, surgical TOML
+  edits and take one directory-level Unix `flock`, so concurrent cooperating writers cannot lose changes;
   comments and unknown keys survive. `config` never imports this package, so home-scope data
   cannot influence planning-root discovery — a layering rule, kept honest by a
   `depguard` rule in `.golangci.yml` rather than by memory. (The compiler alone would
   not catch it: nothing structurally prevents the import, so `just lint` is what makes
   the claim true.)
+- **`internal/configstore`** — the composite filesystem secondary adapter for the
+  consumer-owned `core.ConfigurationStore` port. It combines repo discovery/migration,
+  user preferences, link diagnosis, and registry diagnosis into neutral core DTOs;
+  neither Cobra nor Bubble Tea imports those storage packages to implement a config
+  use case.
+- **`internal/configui`** — one focused Bubble Tea primary adapter, runnable by
+  `config edit` or embedded in `tskflwctl ui`. It exposes only typed presentation
+  preferences, defaults writes to user scope, requires an explicit repository scope,
+  and leaves IDs/topology/registry state read-only. Its asynchronous commands call
+  `core.ConfigurationService`; it never edits TOML.
 - **`internal/spacehealth`** — the read-only projection over `userconfig.Space` plus
   repo-scoped `config.Discover`: one typed diagnosis (`ok`, `empty`, `missing`,
   `not-a-repo`, `unreadable`, `mismatch`), derived role (`direct`/`pointer`/`unknown`),
@@ -137,6 +157,10 @@ the one-screen orientation for contributors.
   `render.TasksHuman`/`TasksJSON`. `--json` is a global flag; JSON carries a
   semver `schema_version` and never emits ANSI.
 - **The core never touches the fs or cobra.**
+- **Ports live with their consumer.** `core.ConfigurationStore` carries neutral
+  configuration entities and is implemented by `configstore.FS`; CLI, focused TUI,
+  full TUI, and a future served adapter all call `ConfigurationService` rather than
+  importing filesystem configuration packages.
 
 ## Why these boundaries (and why not collapse them)
 Reviews periodically suggest folding the packages together ("Go favors fewer

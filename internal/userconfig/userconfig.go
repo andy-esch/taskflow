@@ -29,9 +29,9 @@ const (
 	// AppDir is the per-application subdirectory under the XDG config home.
 	AppDir = "tskflwctl"
 
-	// FileName is the hand-edited user config. It is READ but never written by the
-	// tool, so comments and key order are the user's to keep. (Tool-owned home state
-	// gets its own file rather than editing this one.)
+	// FileName is the user preference config. It may be hand-edited or changed through
+	// the typed config editor; surgical writes preserve comments and key order.
+	// Tool-owned registry state still gets its own file rather than mixing schemas.
 	FileName = "config.toml"
 
 	// DirEnv overrides the whole config directory. Not a nicety: the test suite is

@@ -13,6 +13,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andy-esch/taskflow/internal/configui"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -33,6 +34,16 @@ const (
 // detail.
 type Model struct {
 	svc *core.Service
+	// Configuration is a separate application use case and port from planning
+	// entities. When injected, the reusable configui primary adapter is mounted as
+	// a modal Config/About surface; tests and consumers that only need browsing may
+	// continue to construct New(svc) without it.
+	configSvc       *core.ConfigurationService
+	configStart     string
+	configOverrides core.ConfigurationOverrides
+	configDark      bool
+	configOpen      bool
+	configEditor    configui.Editor
 
 	// st is the per-Model theming bundle (palette + chrome styles + color
 	// helpers). A POINTER, shared with the list delegates (item.go) so Run can
@@ -75,14 +86,27 @@ type Model struct {
 	detailGen int      // bumped per detail request; orders concurrent loads for the same id
 }
 
+// Option adds an optional application capability to the main TUI.
+type Option func(*Model)
+
+// WithConfiguration mounts the shared Config/About editor over the configuration
+// service. Filesystem details remain behind that service's store port.
+func WithConfiguration(svc *core.ConfigurationService, start string, overrides core.ConfigurationOverrides) Option {
+	return func(m *Model) {
+		m.configSvc = svc
+		m.configStart = start
+		m.configOverrides = overrides
+	}
+}
+
 // New constructs the root model over the same *core.Service the CLI uses.
-func New(svc *core.Service) Model {
+func New(svc *core.Service, opts ...Option) Model {
 	// One shared *styles, seeded with the default dark palette. The entity tabs'
 	// delegates take this same pointer (newEntityTabs), so Run repopulating *st
 	// after background detection reaches every list delegate without a rebuild.
 	st := &styles{}
 	*st = newStyles(design.Default().Dark)
-	return Model{
+	m := Model{
 		svc: svc, focus: focusList, st: st,
 		tabs: newEntityTabs(st), active: 0,
 		onDash: true, // the dashboard is the landing view; `]`/:tasks drops into work
@@ -90,6 +114,10 @@ func New(svc *core.Service) Model {
 		palette: newPalette(),
 		modals:  defaultModals(),
 	}
+	for _, opt := range opts {
+		opt(&m)
+	}
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
@@ -158,6 +186,18 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 
+	case configEditorMsg:
+		if !m.configOpen {
+			return m, nil
+		}
+		next, cmd := m.configEditor.Update(msg.msg)
+		m.configEditor = next.(configui.Editor)
+		if m.configEditor.Closed() {
+			m.configOpen = false
+			return m, nil
+		}
+		return m, routeToConfig(cmd)
+
 	case listLoadedMsg:
 		return m.handleListLoaded(msg)
 
@@ -191,7 +231,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.dash.loadErr = nil
-		m.dash.setSummary(msg.summary, m.st)
+		m.dash.setSummary(msg.summary, m.st, m.configSvc != nil)
 		return m, nil
 
 	case movedMsg:
@@ -847,11 +887,19 @@ func (m *Model) leaveDashTo(i int) tea.Cmd {
 	return m.refreshDetail()
 }
 
-// dashJump leaves the dashboard for the selected row's target: a specific item
-// (jumpTo) or a whole view (applyView) on its entity's tab. Pure routing — jumpTo
-// and applyView each own the full dashboard→tab transition (see exitDashboard),
-// so this holds no half-set state of its own.
+// dashJump opens the selected row's target. Configuration stays on the dashboard
+// beneath its modal; entity targets leave for a specific item (jumpTo) or a whole
+// view (applyView). jumpTo and applyView each own the full dashboard→tab transition
+// (see exitDashboard), so this holds no half-set navigation state of its own.
 func (m *Model) dashJump(tgt dashTarget) tea.Cmd {
+	switch tgt.action {
+	case dashOpenConfiguration:
+		return m.openConfig()
+	case dashNavigateEntity:
+		// Continue through the ordinary entity routing below.
+	default:
+		return nil // fail closed if a future target is rendered without a route
+	}
 	if tgt.id != "" {
 		return m.jumpTo(tgt.kind, tgt.id)
 	}

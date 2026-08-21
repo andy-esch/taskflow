@@ -1,6 +1,10 @@
 package tui
 
-import tea "charm.land/bubbletea/v2"
+import (
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/andy-esch/taskflow/internal/configui"
+)
 
 // modal is a floating overlay layer (the `?` help panel, the `m` action menu, the
 // `f` follow picker): while active it owns every key and floats a box over the
@@ -20,11 +24,31 @@ type modal interface {
 	view(m *Model, w, h int) string
 }
 
-// defaultModals is the overlay registry in precedence order — help, action menu,
-// follow picker, inline field editor, then the command palette. The first active
+// defaultModals is the overlay registry in precedence order — help, Config/About,
+// action menu, follow picker, inline field editor, then the command palette. The first active
 // modal owns the key and the floated box. Adding one is a struct + an entry here (M14).
 func defaultModals() []modal {
-	return []modal{helpModal{}, actionModal{}, followModal{}, editModal{}, paletteModal{}}
+	return []modal{helpModal{}, configModal{}, actionModal{}, followModal{}, editModal{}, paletteModal{}}
+}
+
+// configModal embeds the same typed editor used by `config edit`.
+type configModal struct{}
+
+func (configModal) active(m *Model) bool { return m.configOpen }
+
+func (configModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
+	next, cmd := m.configEditor.Update(msg)
+	m.configEditor = next.(configui.Editor)
+	if m.configEditor.Closed() {
+		m.configOpen = false
+		return true, nil
+	}
+	return true, routeToConfig(cmd)
+}
+
+func (configModal) view(m *Model, w, h int) string {
+	m.configEditor.SetSize(w, h)
+	return m.configEditor.Content(w, h)
 }
 
 // paletteModal is the ctrl+p command palette (fuzzy launcher); see palette.go.

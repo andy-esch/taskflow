@@ -282,6 +282,257 @@
       ],
       "description": "BoardEnvelope is `board --json`: the active-work pipeline, tasks grouped by status."
     },
+    "ConfigBoolValueJSON": {
+      "properties": {
+        "value": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string",
+          "description": "flag|repository|user|default"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "value",
+        "source"
+      ]
+    },
+    "ConfigEffectiveJSON": {
+      "properties": {
+        "theme": {
+          "$ref": "#/$defs/ConfigStringValueJSON"
+        },
+        "pager_enabled": {
+          "$ref": "#/$defs/ConfigBoolValueJSON"
+        },
+        "pager_command": {
+          "$ref": "#/$defs/ConfigStringValueJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "theme",
+        "pager_enabled",
+        "pager_command"
+      ]
+    },
+    "ConfigEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/ConfigRepositoryJSON"
+        },
+        "user": {
+          "$ref": "#/$defs/ConfigUserJSON"
+        },
+        "effective": {
+          "$ref": "#/$defs/ConfigEffectiveJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "repository",
+        "user",
+        "effective"
+      ],
+      "description": "ConfigEnvelope is `config` / `config show --json`: raw repository and user scopes beside the effective presentation values and their provenance."
+    },
+    "ConfigMigrationEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "config_path": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "description": "scaffold|pointer"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/ConfigMigrationStepJSON"
+          },
+          "type": "array"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "dry_run",
+        "changed",
+        "config_path",
+        "mode",
+        "steps",
+        "workspace"
+      ],
+      "description": "ConfigMigrationEnvelope is `config migrate --json`: the exact planned/applied changes."
+    },
+    "ConfigMigrationStepJSON": {
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "repo-id|planning-repo-id"
+        },
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind",
+        "key",
+        "value"
+      ]
+    },
+    "ConfigPagerJSON": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "command": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConfigRepositoryJSON": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "dir": {
+          "type": "string"
+        },
+        "planning_root": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "description": "scaffold|pointer|discovered"
+        },
+        "taskflow_root": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "planning_repo": {
+          "type": "string"
+        },
+        "planning_repo_id": {
+          "type": "string"
+        },
+        "tracked_repos": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "theme": {
+          "$ref": "#/$defs/ConfigThemeJSON"
+        },
+        "pager": {
+          "$ref": "#/$defs/ConfigPagerJSON"
+        },
+        "pending_migrations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "migration_warning": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "planning_root",
+        "mode",
+        "tracked_repos",
+        "theme",
+        "pager",
+        "pending_migrations"
+      ]
+    },
+    "ConfigStringValueJSON": {
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "flag|environment|repository|user|default"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "value",
+        "source"
+      ]
+    },
+    "ConfigThemeJSON": {
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConfigUserJSON": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "theme": {
+          "$ref": "#/$defs/ConfigThemeJSON"
+        },
+        "pager": {
+          "$ref": "#/$defs/ConfigPagerJSON"
+        },
+        "warning": {
+          "type": "string"
+        },
+        "registry_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "exists",
+        "theme",
+        "pager"
+      ]
+    },
     "CountByJSON": {
       "properties": {
         "key": {
@@ -985,6 +1236,15 @@
           "type": "array"
         },
         "created": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "already_initialized": {
+          "type": "boolean"
+        },
+        "pending_migrations": {
           "items": {
             "type": "string"
           },
@@ -2057,6 +2317,12 @@
         "workspace": {
           "$ref": "#/$defs/WorkspaceEnvelope"
         },
+        "config": {
+          "$ref": "#/$defs/ConfigEnvelope"
+        },
+        "config_migration": {
+          "$ref": "#/$defs/ConfigMigrationEnvelope"
+        },
         "spaces": {
           "$ref": "#/$defs/SpacesEnvelope"
         },
@@ -2145,6 +2411,8 @@
         "summary",
         "version",
         "workspace",
+        "config",
+        "config_migration",
         "spaces",
         "space_mutation",
         "created",
@@ -2172,6 +2440,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.39)",
+  "title": "tskflwctl --json output (schema_version 1.40)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

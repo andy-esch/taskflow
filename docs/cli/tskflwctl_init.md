@@ -2,6 +2,13 @@
 
 Scaffold a planning tree here, or point at an external planning repo
 
+### Synopsis
+
+Bootstrap a new planning topology: either scaffold a local planning tree or
+point this repository at an existing external planning repo. Bare init against
+an existing configuration reports its topology without changing it; use
+`tskflwctl config migrate` for safe configuration upgrades.
+
 ```
 tskflwctl init [flags]
 ```

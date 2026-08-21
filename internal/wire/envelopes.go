@@ -307,6 +307,131 @@ func ToWorkspaceEnvelope(ws WorkspaceJSON) WorkspaceEnvelope {
 	return WorkspaceEnvelope{SchemaVersion: SchemaVersion, Workspace: ws}
 }
 
+// ConfigEnvelope is `config` / `config show --json`: raw repository and user scopes
+// beside the effective presentation values and their provenance.
+type ConfigEnvelope struct {
+	SchemaVersion string               `json:"schema_version"`
+	Repository    ConfigRepositoryJSON `json:"repository"`
+	User          ConfigUserJSON       `json:"user"`
+	Effective     ConfigEffectiveJSON  `json:"effective"`
+}
+
+type ConfigRepositoryJSON struct {
+	Path              string          `json:"path,omitempty"`
+	Dir               string          `json:"dir,omitempty"`
+	PlanningRoot      string          `json:"planning_root"`
+	Mode              string          `json:"mode" jsonschema:"description=scaffold|pointer|discovered"`
+	TaskflowRoot      string          `json:"taskflow_root,omitempty"`
+	ID                string          `json:"id,omitempty"`
+	PlanningRepo      string          `json:"planning_repo,omitempty"`
+	PlanningRepoID    string          `json:"planning_repo_id,omitempty"`
+	TrackedRepos      []string        `json:"tracked_repos"`
+	Theme             ConfigThemeJSON `json:"theme"`
+	Pager             ConfigPagerJSON `json:"pager"`
+	PendingMigrations []string        `json:"pending_migrations"`
+	MigrationWarning  string          `json:"migration_warning,omitempty"`
+}
+
+type ConfigUserJSON struct {
+	Path         string          `json:"path,omitempty"`
+	Exists       bool            `json:"exists"`
+	Theme        ConfigThemeJSON `json:"theme"`
+	Pager        ConfigPagerJSON `json:"pager"`
+	Warning      string          `json:"warning,omitempty"`
+	RegistryPath string          `json:"registry_path,omitempty"`
+}
+
+type ConfigThemeJSON struct {
+	Name string `json:"name,omitempty"`
+}
+
+type ConfigPagerJSON struct {
+	Enabled *bool  `json:"enabled,omitempty"`
+	Command string `json:"command,omitempty"`
+}
+
+type ConfigEffectiveJSON struct {
+	Theme        ConfigStringValueJSON `json:"theme"`
+	PagerEnabled ConfigBoolValueJSON   `json:"pager_enabled"`
+	PagerCommand ConfigStringValueJSON `json:"pager_command"`
+}
+
+type ConfigStringValueJSON struct {
+	Value  string `json:"value"`
+	Source string `json:"source" jsonschema:"description=flag|environment|repository|user|default"`
+}
+
+type ConfigBoolValueJSON struct {
+	Value  bool   `json:"value"`
+	Source string `json:"source" jsonschema:"description=flag|repository|user|default"`
+}
+
+func ToConfigEnvelope(snapshot core.ConfigurationSnapshot) ConfigEnvelope {
+	repo := snapshot.Repository
+	user := snapshot.User
+	pending := make([]string, 0, len(repo.PendingMigration))
+	for _, migration := range repo.PendingMigration {
+		pending = append(pending, string(migration))
+	}
+	tracked := append([]string{}, repo.TrackedRepos...)
+	if tracked == nil {
+		tracked = []string{}
+	}
+	return ConfigEnvelope{
+		SchemaVersion: SchemaVersion,
+		Repository: ConfigRepositoryJSON{
+			Path: repo.Path, Dir: repo.Dir, PlanningRoot: repo.PlanningRoot,
+			Mode: string(repo.Mode), TaskflowRoot: repo.TaskflowRoot, ID: repo.ID,
+			PlanningRepo: repo.PlanningRepo, PlanningRepoID: repo.PlanningRepoID,
+			TrackedRepos:      tracked,
+			Theme:             ConfigThemeJSON{Name: repo.ThemeName},
+			Pager:             ConfigPagerJSON{Enabled: repo.PagerEnabled, Command: repo.PagerCommand},
+			PendingMigrations: pending, MigrationWarning: repo.MigrationWarning,
+		},
+		User: ConfigUserJSON{
+			Path: user.Path, Exists: user.Exists, Theme: ConfigThemeJSON{Name: user.ThemeName},
+			Pager:   ConfigPagerJSON{Enabled: user.PagerEnabled, Command: user.PagerCommand},
+			Warning: user.Warning, RegistryPath: user.RegistryPath,
+		},
+		Effective: ConfigEffectiveJSON{
+			Theme:        ConfigStringValueJSON{Value: snapshot.Effective.Theme.Value, Source: string(snapshot.Effective.Theme.Source)},
+			PagerEnabled: ConfigBoolValueJSON{Value: snapshot.Effective.PagerEnabled.Value, Source: string(snapshot.Effective.PagerEnabled.Source)},
+			PagerCommand: ConfigStringValueJSON{Value: snapshot.Effective.PagerCommand.Value, Source: string(snapshot.Effective.PagerCommand.Source)},
+		},
+	}
+}
+
+// ConfigMigrationEnvelope is `config migrate --json`: the exact planned/applied
+// changes. Steps is empty on an already-current configuration.
+type ConfigMigrationEnvelope struct {
+	SchemaVersion string                    `json:"schema_version"`
+	DryRun        bool                      `json:"dry_run"`
+	Changed       bool                      `json:"changed"`
+	ConfigPath    string                    `json:"config_path"`
+	Mode          string                    `json:"mode" jsonschema:"description=scaffold|pointer"`
+	Steps         []ConfigMigrationStepJSON `json:"steps"`
+	Workspace     WorkspaceJSON             `json:"workspace"`
+}
+
+type ConfigMigrationStepJSON struct {
+	Kind  string `json:"kind" jsonschema:"description=repo-id|planning-repo-id"`
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func ToConfigMigrationEnvelope(migration core.ConfigurationMigration, workspace WorkspaceJSON) ConfigMigrationEnvelope {
+	steps := make([]ConfigMigrationStepJSON, 0, len(migration.Steps))
+	for _, step := range migration.Steps {
+		steps = append(steps, ConfigMigrationStepJSON{
+			Kind: string(step.Kind), Key: step.Key, Value: step.Value,
+		})
+	}
+	return ConfigMigrationEnvelope{
+		SchemaVersion: SchemaVersion, DryRun: migration.DryRun, Changed: migration.Changed(),
+		ConfigPath: migration.ConfigPath, Mode: string(migration.Mode), Steps: steps, Workspace: workspace,
+	}
+}
+
 // VersionEnvelope is `version --json`.
 type VersionEnvelope struct {
 	SchemaVersion string `json:"schema_version"`
@@ -685,14 +810,16 @@ func ToLintEnvelope(results []core.LintResult, problems []domain.FileProblem) Li
 // mode auto-link-back (empty when none was written). Tracked is the entries
 // `--track` added to this planning repo's tracked_repos (scaffold mode).
 type InitEnvelope struct {
-	SchemaVersion string   `json:"schema_version"`
-	DryRun        bool     `json:"dry_run"`
-	Mode          string   `json:"mode"`
-	Root          string   `json:"root"`
-	PlanningRepo  string   `json:"planning_repo,omitempty"`
-	LinkedBack    string   `json:"linked_back,omitempty"`
-	Tracked       []string `json:"tracked,omitempty"`
-	Created       []string `json:"created"`
+	SchemaVersion      string   `json:"schema_version"`
+	DryRun             bool     `json:"dry_run"`
+	Mode               string   `json:"mode"`
+	Root               string   `json:"root"`
+	PlanningRepo       string   `json:"planning_repo,omitempty"`
+	LinkedBack         string   `json:"linked_back,omitempty"`
+	Tracked            []string `json:"tracked,omitempty"`
+	Created            []string `json:"created"`
+	AlreadyInitialized bool     `json:"already_initialized,omitempty"`
+	PendingMigrations  []string `json:"pending_migrations,omitempty"`
 }
 
 // NormalizeInitEnvelope stamps the schema_version and normalizes created to an
@@ -822,6 +949,8 @@ type jsonEnvelopes struct {
 	Summary       SummaryEnvelope          `json:"summary"`
 	Version       VersionEnvelope          `json:"version"`
 	Workspace     WorkspaceEnvelope        `json:"workspace"`
+	Config        ConfigEnvelope           `json:"config"`
+	ConfigMigrate ConfigMigrationEnvelope  `json:"config_migration"`
 	Spaces        SpacesEnvelope           `json:"spaces"`
 	SpaceMutation SpaceMutationEnvelope    `json:"space_mutation"`
 	Created       CreatedEnvelope          `json:"created"`

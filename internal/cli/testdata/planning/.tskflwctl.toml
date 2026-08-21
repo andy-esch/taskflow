@@ -1,0 +1,11 @@
+# Stable configured planning space for byte-golden CLI contracts.
+taskflow_root = "."
+id = "6fjangd7kvhz"
+tracked_repos = []
+
+[theme]
+name = "catppuccin"
+
+[pager]
+enabled = false
+command = "delta"

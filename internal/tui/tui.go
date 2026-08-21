@@ -15,14 +15,15 @@ import (
 // start, the browser still runs and `r` refreshes manually — with a footer note
 // so the degradation isn't silent. Layout is the narrow on-disk-layout port (the
 // CLI injects the FS); reads still flow through the service as tea.Cmds.
-func Run(svc *core.Service, layout core.Layout, th design.Theme) error {
-	m := New(svc)
+func Run(svc *core.Service, layout core.Layout, th design.Theme, opts ...Option) error {
+	m := New(svc, opts...)
 	// Resolve the terminal background ONCE, here, before the program starts
 	// reading input — querying it mid-program would race Bubble Tea's reader. The
 	// same signal drives both the markdown style and the chrome palette: pick the
 	// selected theme's background-appropriate palette and apply it before the first
 	// render.
 	dark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	m.configDark = dark
 	// Repopulate the SHARED styles in place with the background-appropriate palette.
 	// The list delegates hold this same pointer and deref it per render, so they pick
 	// up the swap without being rebuilt — the crux of the per-Model theming. This runs
