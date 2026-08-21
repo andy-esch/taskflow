@@ -366,6 +366,9 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	// A successful load clears the tab's error so a transient failure (e.g. the
 	// planning dir briefly unreadable) recovers on the next `r`/reload.
 	tab.loadErr = nil
+	// Keep the loader's order before sorting: it is the base every later sort (and
+	// sortDefault) is computed from. Copied, since sortItems reorders in place.
+	tab.loadOrder = append([]list.Item(nil), msg.items...)
 	sortItems(msg.items, tab.sortKey, tab.sortRev) // honor the tab's sort across reloads
 	// SetItems' refilter is async — route its FilterMatchesMsg back to THIS tab,
 	// and keep the cursor restore pending until the matches land (selectByID sees
@@ -987,7 +990,13 @@ func (m Model) openInEditor() (tea.Model, tea.Cmd) {
 func (m *Model) applySortToCurrent() tea.Cmd {
 	t := m.cur()
 	id := m.selectedID()
-	items := t.list.Items()
+	// Sort a COPY of the loader's order, never the list's current slice: sortItems
+	// reorders in place, so re-sorting the already-sorted slice compounds (and left
+	// sortDefault unable to undo anything).
+	items := append([]list.Item(nil), t.loadOrder...)
+	if len(items) == 0 {
+		items = t.list.Items() // no load recorded yet (e.g. a test driving sort directly)
+	}
 	sortItems(items, t.sortKey, t.sortRev)
 	cmd := routeToTab(t.kind, t.list.SetItems(items))
 	t.selectByID(id)
