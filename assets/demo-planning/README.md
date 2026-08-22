@@ -10,6 +10,11 @@ wouldn't appear).
 It's a self-contained planning root (`taskflow_root = "."` in
 [`.tskflwctl.toml`](./.tskflwctl.toml)); the tapes `cd` into it.
 
+It also carries a durable `id`, and [`../demo-bike-shop/`](../demo-bike-shop/) points at
+it. That pair is what gives the atlas a card with **two entry points** — see
+[`atlas.tape`](../vhs/atlas.tape). Nothing else in this tree depends on either, so the
+four single-tree tapes are unaffected.
+
 ## What's here, and why
 
 | | Contents | Shows off |
@@ -17,6 +22,7 @@ It's a self-contained planning root (`taskflow_root = "."` in
 | **Epics** | `01-touring-bike-repairs` (75%), `02-gravel-bike-upgrades` (50%), `03-bmx-neon-paint-job` (25%), `04-fixed-gear-build` (0%) | the rollup bars at a spread of completion |
 | **Tasks** | 14 across every active + archived status (in-progress, next-up, ready, completed, deferred), each with a fleshed-out objective + acceptance criteria | the status glyphs, the dashboard's count line, and the `task ac` tally |
 | **Audits** | one **open** (`2026-06-20-pre-tour-inspection`, 8 findings) + one **closed** (`2026-06-10-wheel-build-qc`) | the bucket glyphs and the Open-audits dashboard section |
+| **Research** | 2 docs (cable-actuated disc brakes; powder coating a previously painted frame) | the research tab, which shipped after this fixture was first authored |
 
 The open audit's eight findings deliberately span **fixed · landed ·
 in-progress · open · deferred · wontfix**, so the **segmented finding bar** shows

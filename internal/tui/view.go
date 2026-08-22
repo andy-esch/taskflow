@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
@@ -152,7 +153,7 @@ func (m Model) helpEntityKind() entityKind {
 // failure flagged in the footer instead.
 func (m Model) renderBody() string {
 	if m.onAtlas {
-		return m.pane(focusList, m.atlas.view(m.st, m.workspace,
+		return m.pane(focusList, m.atlas.view(m.st, m.currentForAtlas(),
 			m.width-m.st.paneHFrame, m.paneOuterH-m.st.paneVFrame), m.width)
 	}
 	if m.onDash {
@@ -294,6 +295,18 @@ func (m Model) tabStrip() string {
 		}
 	}
 	return truncate(strings.Join(parts, m.st.dim("  ·  ")), m.width)
+}
+
+// currentForAtlas is the workspace the atlas marks "current". Until a space has been
+// chosen, that is deliberately none of them: the seeded workspace is scaffolding to keep
+// the browser's surfaces live, not a place the user is. Marking a card current while the
+// chip reads `atlas` would make the same frame claim both that no space is open and that
+// one is. The zero workspace matches no card, so the badge simply stays off.
+func (m Model) currentForAtlas() core.Workspace {
+	if !m.spaceChosen {
+		return core.Workspace{}
+	}
+	return m.workspace
 }
 
 // spaceName labels the chip that says WHICH space the browser is showing. Launched

@@ -12,6 +12,12 @@ bars, and an audit's **segmented finding bar** over its status-grouped **finding
 
 ![the tskflwctl TUI](./assets/tui.gif)
 
+Run it from outside any planning repo and it opens the **atlas** instead — one card per
+planning identity, every registered entry point beneath it, and navigation into a space
+and back without restarting:
+
+![the tskflwctl atlas](./assets/atlas.gif)
+
 …and the same vocabulary on the CLI:
 
 | | |
@@ -178,7 +184,7 @@ spaces. Registry health remains informational, but unreadable planning files or 
 tree that cannot be loaded produce a non-zero partial-failure exit after every available
 summary has rendered. With no registered spaces it emits the ordinary single-repo `status`
 output.
-The same grouped projection now powers the TUI atlas. Standing in a planning repo,
+The same grouped projection now powers the [TUI atlas](#demos). Standing in a planning repo,
 `tskflwctl ui` opens that repo; run it anywhere else and it lands on the atlas instead,
 opening a registered space behind it so every surface stays live — the top rail reads
 `[atlas]` rather than naming a space you have not chosen. `j`/`k` select a space,

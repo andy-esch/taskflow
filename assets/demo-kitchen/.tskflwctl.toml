@@ -1,0 +1,24 @@
+# tskflwctl planning config — also the marker that anchors discovery.
+# taskflow_root: planning dir relative to this file (default ".").
+taskflow_root = "."
+# id: this planning repo's durable identity. Minted once and committed, so a pointer in
+# another repo can verify it reached the tree it meant even if paths move. Do not edit or
+# copy it into another repo — two repos sharing an id defeats the check.
+id = "6g2phe0xb9jt"
+# tracked_repos: impl repos this planning repo tracks (managed by `init --track` /
+# the auto-link-back from `init --planning-repo`).
+tracked_repos = []
+
+# [pager]: page long human output (show/schema) through $PAGER on a TTY, like git.
+# Never affects piped/--json output. Override the program or turn it off here — this
+# file wins over the same table in ~/.config/tskflwctl/config.toml.
+# [pager]
+# enabled = true
+# command = "less -FRX"
+
+# [theme]: the color theme — a registered name, or "auto" for the default. Override
+# here, or with the --theme flag / TSKFLW_THEME env. Precedence:
+# flag > env > this file > ~/.config/tskflwctl/config.toml > the built-in default.
+# An unrecognized name warns (to stderr) and falls back to the default.
+# [theme]
+# name = "neon"
