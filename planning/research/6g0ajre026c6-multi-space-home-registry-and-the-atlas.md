@@ -4,7 +4,7 @@ id: 6g0ajre026c6
 created: "2026-08-15"
 description: Explores a home-scoped registry of planning repos (spaces), a --space handle for any command, and a cross-space TUI board (the atlas) — plus the existing seams to reuse and the open forks.
 tags: [config, cli, tui, multi-repo, design]
-updated_at: "2026-08-20"
+updated_at: "2026-08-22"
 ---
 
 # Multi-space: home registry and the atlas
@@ -432,13 +432,18 @@ baked into a config schema by then.
 
 > **Progress note, 2026-08-21.** The CLI experiment is now concrete: `status --all`
 > returns one compact summary per durable planning identity and one space-badged
-> in-progress rail. It reuses `spacehealth.Group`, prefers a healthy direct checkout,
-> falls back to a healthy pointer, and leaves dead entry-point diagnoses inside the
-> affected group without failing the sweep. The orchestration lives in
-> `core.SpaceOverviewService` behind a read-only consumer-owned port, so an atlas or
-> served adapter can consume the same projection. A smoke run over six registered entry
-> points produced four logical summaries and five in-progress rows; the rail remains the
-> strongest evidence for the feature, while the compact summaries were useful context.
+> in-progress rail. It reused the then-current `spacehealth.Group`, preferred a healthy
+> direct checkout, fell back to a healthy pointer, and left dead entry-point diagnoses
+> inside the affected group without failing the sweep. A smoke run over six registered
+> entry points produced four logical summaries and five in-progress rows; the rail remains
+> the strongest evidence for the feature, while the compact summaries were useful context.
+>
+> **Progress note, 2026-08-22.** The registry architecture is now consolidated behind
+> `core.SpaceRegistryService`: catalog grouping, explicit selection, mutations,
+> completion, and doctor share one core projection and consumer-owned port.
+> `core.SpaceOverviewService` composes that catalog with a separate read-only planning-tree
+> opener, so an atlas or served adapter can reuse it without importing home-registry
+> storage. The August 21 behavior and wire output are unchanged.
 >
 > **Progress note, 2026-08-18.** Slice 1 shipped (commit `86e3e1d` + follow-ups):
 > `internal/userconfig`, four-tier theme/pager precedence, and the test-isolation

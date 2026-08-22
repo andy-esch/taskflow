@@ -5,7 +5,7 @@ description: 'Multi-space planning: a home registry of planning repos, a --space
 priority: low
 tags: [config, cli, tui, multi-repo]
 created: "2026-08-15"
-updated_at: "2026-08-21"
+updated_at: "2026-08-22"
 ---
 
 # Multi-space planning: a home registry and the atlas
@@ -80,8 +80,10 @@ The cheap independently-useful parts first, the expensive commitment last:
    [decide-space.id-identity](../tasks/6g1m8mc8p46h-decide-space.id-identity-durable-minted-id-vs-path-keyed.md).
 3. **Registry + CLI** — `space list|add|forget`, `--space`, `init`
    auto-register, `doctor` section, `status --all`. No TUI risk. Everything except
-   init auto-registration is now implemented; `status --all` is the first live test of
-   whether the atlas adds enough value.
+   init auto-registration is now implemented. Registry catalog, grouping, selection,
+   mutation, completion, and diagnosis share `core.SpaceRegistryService`; planning-tree
+   opening remains separate. `status --all` is the first live test of whether the atlas
+   adds enough value.
 4. **Re-decide.** Having lived on the CLI half, is the board still wanted? It is
    plausible that `--space` + `status --all` is most of the value.
 5. Only if yes: the `Resolve() → Workspace` seam

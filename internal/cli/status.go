@@ -45,7 +45,7 @@ func newStatusCmd(app *App) *cobra.Command {
 			}
 			overview, err := app.SpaceOverviewSvc.Overview()
 			if err != nil {
-				return classifySpaceRegistryError(err)
+				return err
 			}
 			if len(overview.Spaces) == 0 {
 				start := app.Chdir

@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [cli, multi-repo, tui, config]
 created: "2026-08-20"
 started_at: "2026-08-20"
-updated_at: "2026-08-20"
+updated_at: "2026-08-22"
 completed_at: "2026-08-20"
 ---
 
@@ -72,8 +72,9 @@ points or variants on that card, never duplicate cards.
 
 ## Completion
 
-Implemented the derived `spacehealth.Group` projection and entry roles without changing
-the registry schema. Human `space list` now promotes a direct checkout to the top of a
+Implemented the derived grouping projection and entry roles without changing the
+registry schema. (The projection now lives in `core.SpaceRegistryService.Catalog`.) Human
+`space list` promotes a direct checkout to the top of a
 compact tree and nests every other registered entry point that shares its planning id;
 machine output remains a flat, insertion-ordered array with `planning_id` and `role` under
 schema version 1.39.
@@ -84,6 +85,10 @@ labels. Legacy rows derive a newly available config id, id-less healthy repos fa
 physical planning root, and broken entries retain grouping through `verify_id` without
 inventing a role. Full race tests pass, golangci-lint reports zero issues, planning lint is
 clean, CLI docs/schema comments/goldens are regenerated, and `git diff --check` is clean.
+
+Architecture follow-up (2026-08-22): grouping policy now lives in
+`core.SpaceRegistryService.Catalog`; `spacehealth` remains the filesystem diagnosis helper
+behind `spacestore`. The behavior and wire contract described above are unchanged.
 
 ## Out of scope
 

@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [cli, multi-repo]
 created: "2026-08-15"
-updated_at: "2026-08-21"
+updated_at: "2026-08-22"
 started_at: "2026-08-21"
 completed_at: "2026-08-21"
 ---
@@ -26,8 +26,8 @@ building a screen for.
 
 ## Notes
 
-- One `core.Summary` per **logical planning identity**, using the shared
-  `spacehealth.Group` projection rather than iterating registry rows. A direct planning
+- One `core.Summary` per **logical planning identity**, using the shared core catalog
+  projection rather than iterating registry rows. A direct planning
   checkout plus two registered implementation pointers is one block and contributes each
   task once, not three times. Use a healthy direct entry point when available, otherwise
   the first healthy entry in registry order.
@@ -72,8 +72,9 @@ Implemented `status --all` as the read-only cross-space CLI projection.
 `core.SpaceOverviewService` owns grouping orchestration, healthy-direct/first-healthy
 selection, one shared as-of clock, per-group failure isolation, and the combined
 in-progress set through consumer-owned `SpaceOverviewStore` and `SummaryStore` ports.
-`internal/spacestore` is the filesystem adapter and reuses `spacehealth.Group`, so Cobra
-does not reinterpret registry identity or diagnosis.
+`internal/spacestore` is the filesystem adapter; the reusable
+`core.SpaceRegistryService` supplies its grouped catalog, so Cobra does not reinterpret
+registry identity or diagnosis.
 
 Human output is one compact block per durable planning identity plus a space-badged
 in-progress rail. Broken entry points and late summary-load failures remain inline data
@@ -88,6 +89,12 @@ array. The outer envelope owns the one schema version; its nested summaries reus
 versionless `SummaryJSON` payload. Schema comments, JSON Schema, machine goldens,
 generated CLI reference, README, architecture notes, epic state, and the atlas research
 progress note were updated.
+
+Architecture follow-up (2026-08-22): `SpaceOverviewService` now composes the reusable
+`SpaceRegistryService` catalog with a separate planning-tree opener. Registry grouping no
+longer belongs to `spacehealth` or the overview store; output and selection policy remain
+unchanged.
+
 End-to-end tests cover direct/pointer deduplication, broken alternate diagnosis,
 cross-space badges, empty-registry fallback, scope conflict, and the byte golden; core
 tests cover selection and group-local load isolation.

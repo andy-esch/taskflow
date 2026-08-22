@@ -8,10 +8,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/id"
 	"github.com/andy-esch/taskflow/internal/store"
-	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 // flatSlug returns the human slug of a flat task filename stem `<id>-<slug>` by
@@ -83,23 +83,25 @@ type completeFunc = func(*cobra.Command, []string, string) ([]string, cobra.Shel
 // The registry exists independently of a planning repo, so this stays useful from any
 // directory. A missing or malformed registry degrades to no candidates: completion must
 // never turn a configuration problem into shell noise.
-func completeSpaceIDs(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	spaces, err := userconfig.Spaces()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	taken := make(map[string]bool, len(args))
-	for _, arg := range args {
-		taken[arg] = true
-	}
-	var out []string
-	for _, space := range spaces {
-		if !taken[space.ID] && strings.HasPrefix(space.ID, toComplete) {
-			out = append(out, space.ID)
+func completeSpaceIDs(registry *core.SpaceRegistryService) completeFunc {
+	return func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		catalog, err := registry.Catalog()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
+		taken := make(map[string]bool, len(args))
+		for _, arg := range args {
+			taken[arg] = true
+		}
+		var out []string
+		for _, space := range catalog.Entries {
+			if !taken[space.ID] && strings.HasPrefix(space.ID, toComplete) {
+				out = append(out, space.ID)
+			}
+		}
+		sort.Strings(out)
+		return out, cobra.ShellCompDirectiveNoFileComp
 	}
-	sort.Strings(out)
-	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
 // activeHelpArg is a ValidArgsFunction for a free-form positional (a title/area):

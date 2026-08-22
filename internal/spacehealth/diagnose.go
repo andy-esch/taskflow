@@ -1,6 +1,6 @@
-// Package spacehealth owns the read-only health projection of the home space registry.
-// Keeping diagnosis here gives the CLI doctor/list commands and a future TUI one answer
-// for the same path instead of letting each adapter reinterpret discovery failures.
+// Package spacehealth diagnoses the filesystem health of home-registry entries. The
+// spacestore adapter translates this storage/discovery vocabulary into core values for
+// application consumers.
 package spacehealth
 
 import (
@@ -54,20 +54,6 @@ type SpaceProblem struct {
 	Remedy     string
 }
 
-// SpaceGroup is one logical planning space and all registered paths that enter it.
-// Entries retain registry order. PlanningID is empty only for legacy id-less trees and
-// broken entries that have no retained identity assertion.
-type SpaceGroup struct {
-	PlanningID string
-	Entries    []SpaceProblem
-}
-
-// Broken reports whether this diagnosis should make doctor exit non-zero. An empty
-// planning repo is healthy and addressable; it is information, not a failure.
-func (p SpaceProblem) Broken() bool {
-	return p.Kind != KindOK && p.Kind != KindEmpty
-}
-
 // DiagnoseRegistry reads and diagnoses the home registry. Entry failures are returned as
 // data and never stop the sweep; err is reserved for a registry file that cannot itself be
 // read or decoded. The function is read-only and never forgets or repairs anything.
@@ -81,26 +67,6 @@ func DiagnoseRegistry() ([]SpaceProblem, error) {
 		out = append(out, DiagnoseSpace(space))
 	}
 	return out, nil
-}
-
-// Group projects registry diagnoses into logical planning spaces. A durable planning id
-// is the preferred key. Legacy healthy entries fall back to their physical resolved root;
-// broken id-less entries remain isolated so unrelated failures can never collapse into one
-// apparent space. Both group order and entry order follow registry insertion order.
-func Group(problems []SpaceProblem) []SpaceGroup {
-	groups := make([]SpaceGroup, 0, len(problems))
-	byKey := make(map[string]int, len(problems))
-	for i, problem := range problems {
-		key := groupKey(problem, i)
-		groupIndex, exists := byKey[key]
-		if !exists {
-			groupIndex = len(groups)
-			byKey[key] = groupIndex
-			groups = append(groups, SpaceGroup{PlanningID: problem.PlanningID})
-		}
-		groups[groupIndex].Entries = append(groups[groupIndex].Entries, problem)
-	}
-	return groups
 }
 
 // DiagnoseSpace diagnoses one already-loaded entry. It is useful for mutation receipts
@@ -184,19 +150,6 @@ func DiagnoseSpace(space userconfig.Space) SpaceProblem {
 	}
 	p.Kind = KindOK
 	return p
-}
-
-func groupKey(problem SpaceProblem, index int) string {
-	if problem.PlanningID != "" {
-		return "id:" + problem.PlanningID
-	}
-	if problem.Root != "" {
-		return "root:" + problem.Root
-	}
-	// Include the index as well as the local label: Group also accepts synthetic slices
-	// in tests and future adapters, where duplicate labels are possible even though a
-	// valid persisted registry rejects them.
-	return fmt.Sprintf("entry:%d:%s", index, problem.Space.ID)
 }
 
 // errorsIsConfigFailure distinguishes a present-but-invalid planning config/pointer from

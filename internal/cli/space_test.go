@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -400,8 +399,4 @@ func TestSpaceRegistryErrors_AreClassifiedByCause(t *testing.T) {
 		t.Fatalf("malformed registry must exit 11, got err=%v code=%d\n%s%s", err, ExitCode(err), out, errOut)
 	}
 
-	operational := errors.New("disk unavailable")
-	if got := classifySpaceRegistryError(operational); got != operational || ExitCode(got) != 1 {
-		t.Errorf("operational error was reclassified: got=%v code=%d", got, ExitCode(got))
-	}
 }

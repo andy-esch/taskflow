@@ -1,5 +1,5 @@
 // Package configstore is the filesystem secondary adapter for core's configuration
-// service. It composes repo config, user config, link health, and registry health without
+// service. It composes repo config, user config, and link health without
 // allowing the repo-scoped discovery package to depend on home-scoped state.
 package configstore
 
@@ -12,7 +12,6 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
-	"github.com/andy-esch/taskflow/internal/spacehealth"
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
@@ -122,25 +121,8 @@ func (f *FS) DiagnoseConfiguration(start string) (core.ConfigurationDiagnosis, e
 			Repo: problem.Repo, Message: problem.Message,
 		})
 	}
-	spaces, err := spacehealth.DiagnoseRegistry()
-	if err != nil {
-		return core.ConfigurationDiagnosis{}, err
-	}
-	diagnosis.Registry.Checked = len(spaces)
-	for _, space := range spaces {
-		if !space.Broken() {
-			continue
-		}
-		diagnosis.Registry.Problems = append(diagnosis.Registry.Problems, core.RegistryProblem{
-			ID: space.Space.ID, Path: space.Space.Path, Kind: core.SpaceState(space.Kind),
-			Message: space.Message, Remedy: space.Remedy,
-		})
-	}
 	if diagnosis.Problems == nil {
 		diagnosis.Problems = []core.ConfigurationProblem{}
-	}
-	if diagnosis.Registry.Problems == nil {
-		diagnosis.Registry.Problems = []core.RegistryProblem{}
 	}
 	return diagnosis, nil
 }
