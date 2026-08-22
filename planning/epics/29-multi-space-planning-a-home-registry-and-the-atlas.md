@@ -54,8 +54,9 @@ in a peer product's config.
   untouched entries survive.
 - The registry stays **advisory**: nothing in it may change what `Discover`
   resolves from a cwd. No home config ⇒ today's behavior exactly.
-- Registration is explicit through shipped `space add`; best-effort `init`
-  auto-registration remains a planned follow-up (the `LinkBack` pattern). An
+- Registration is explicit for existing checkouts through `space add`; fresh scaffold and
+  pointer `init` runs auto-register best-effort (the `LinkBack` pattern), with
+  `--no-register` / `TSKFLW_NO_REGISTER=1` as the opt-out. An
   unregistered current repo on a future board remains a design possibility.
 - Broken entries are diagnosed and never auto-removed, via a `SpaceProblem`
   shared by `doctor` and the TUI — the `LinkProblem` pattern one scope up.
@@ -78,12 +79,12 @@ The cheap independently-useful parts first, the expensive commitment last:
    `--space` write guard rests on "naming a tree cannot resolve to the wrong one",
    which a path-keyed id cannot promise. See
    [decide-space.id-identity](../tasks/6g1m8mc8p46h-decide-space.id-identity-durable-minted-id-vs-path-keyed.md).
-3. **Registry + CLI** — `space list|add|forget`, `--space`, `init`
-   auto-register, `doctor` section, `status --all`. No TUI risk. Everything except
-   init auto-registration is now implemented. Registry catalog, grouping, selection,
-   mutation, completion, and diagnosis share `core.SpaceRegistryService`; planning-tree
-   opening remains separate. `status --all` is the first live test of whether the atlas
-   adds enough value.
+3. **Registry + CLI** — `space list|add|forget`, `--space`, best-effort fresh-`init`
+   auto-registration, `doctor` section, and `status --all` are implemented. No TUI risk.
+   Registry catalog, grouping, selection, mutation, completion, diagnosis, and the narrow
+   already-initialized registration use case share `core.SpaceRegistryService`;
+   planning-tree opening remains separate. `status --all` is the first live test of
+   whether the atlas adds enough value.
 4. **Re-decide.** Having lived on the CLI half, is the board still wanted? It is
    plausible that `--space` + `status --all` is most of the value.
 5. Only if yes: the `Resolve() → Workspace` seam

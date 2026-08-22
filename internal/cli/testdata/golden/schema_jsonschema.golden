@@ -1249,6 +1249,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "registration": {
+          "$ref": "#/$defs/InitRegistrationJSON"
         }
       },
       "additionalProperties": false,
@@ -1261,6 +1264,34 @@
         "created"
       ],
       "description": "InitEnvelope is `init --json`."
+    },
+    "InitRegistrationJSON": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "verify_id": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "path",
+        "changed",
+        "dry_run"
+      ],
+      "description": "InitRegistrationJSON is the best-effort home-registry receipt attached when init creates a fresh config."
     },
     "Issue": {
       "properties": {
@@ -2580,6 +2611,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.42)",
+  "title": "tskflwctl --json output (schema_version 1.43)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

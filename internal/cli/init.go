@@ -10,6 +10,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -20,19 +21,23 @@ func newInitCmd(app *App) *cobra.Command {
 		planningRepo string
 		tracks       []string
 		noLinkBack   bool
+		noRegister   bool
 	)
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Scaffold a planning tree here, or point at an external planning repo",
 		Long: "Bootstrap a new planning topology: either scaffold a local planning tree or\n" +
-			"point this repository at an existing external planning repo. Bare init against\n" +
-			"an existing configuration reports its topology without changing it; use\n" +
+			"point this repository at an existing external planning repo. A fresh config is\n" +
+			"registered as a machine-local space best-effort; use --no-register to opt out.\n" +
+			"Bare init against an existing configuration reports its topology without\n" +
+			"changing it; use\n" +
 			"`tskflwctl config migrate` for safe configuration upgrades.",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "mutating"},
 		Example: "  tskflwctl init\n" +
 			"  tskflwctl init --taskflow-root planning\n" +
-			"  tskflwctl init --planning-repo ../desirelines-planning",
+			"  tskflwctl init --planning-repo ../desirelines-planning\n" +
+			"  tskflwctl init --no-register",
 		// init may scaffold a NEW planning repo, so it must NOT require an existing
 		// one — its own PersistentPreRunE overrides the root's resolve() (skips
 		// discovery) and just sets up styling + the Gate/Prompter. The here-vs-
@@ -51,6 +56,7 @@ func newInitCmd(app *App) *cobra.Command {
 			if existing, ok := config.Describe(abs); ok && !initTopologyFlagsChanged(cmd, tracks) {
 				return runInitExisting(app, abs, existing)
 			}
+			register := !noRegister && !envEnabled("TSKFLW_NO_REGISTER")
 			pointer, repo, chosenRoot, err := app.resolveInitTarget(
 				abs, planningRepo, cmd.Flags().Changed("planning-repo"), taskflowRoot, cmd.Flags().Changed("taskflow-root"))
 			if err != nil {
@@ -64,14 +70,14 @@ func newInitCmd(app *App) *cobra.Command {
 				if cmd.Flags().Changed("taskflow-root") {
 					return fmt.Errorf("%w: --taskflow-root places a tree scaffolded HERE; it can't combine with --planning-repo (pointer mode, no tree)", domain.ErrValidation)
 				}
-				return runInitPointer(app, abs, repo, !noLinkBack)
+				return runInitPointer(app, abs, repo, !noLinkBack, register)
 			}
 			// --no-link-back is pointer-only; reject it in scaffold mode for symmetry
 			// with the --track guard above (don't silently ignore a misused flag).
 			if cmd.Flags().Changed("no-link-back") {
 				return fmt.Errorf("%w: --no-link-back only applies with --planning-repo (pointer mode)", domain.ErrValidation)
 			}
-			return runInitScaffold(app, abs, chosenRoot, tracks)
+			return runInitScaffold(app, abs, chosenRoot, tracks, register)
 		},
 	}
 	cmd.Flags().StringVar(&path, "path", ".", "directory to initialize")
@@ -83,6 +89,8 @@ func newInitCmd(app *App) *cobra.Command {
 		"record an impl repo this planning repo tracks (repeatable; scaffold mode only)")
 	cmd.Flags().BoolVar(&noLinkBack, "no-link-back", false,
 		"pointer mode: don't add this repo to the planning repo's tracked_repos")
+	cmd.Flags().BoolVar(&noRegister, "no-register", false,
+		"don't add a freshly initialized repo to this machine's space registry (also TSKFLW_NO_REGISTER)")
 	return cmd
 }
 
@@ -187,11 +195,12 @@ func (a *App) promptTaskflowRoot() (string, error) {
 
 // runInitScaffold writes a full planning tree + config under abs, then records
 // any --track impl repos in its tracked_repos (deduped, surgical).
-func runInitScaffold(app *App, abs, taskflowRoot string, tracks []string) error {
-	created, err := config.Init(abs, taskflowRoot, app.DryRun)
+func runInitScaffold(app *App, abs, taskflowRoot string, tracks []string, register bool) error {
+	result, err := config.Init(abs, taskflowRoot, app.DryRun)
 	if err != nil {
 		return err
 	}
+	created := result.Created
 	var tracked []string
 	for _, tr := range tracks {
 		added, err := config.AddTrackedRepo(abs, tr, app.DryRun)
@@ -202,10 +211,16 @@ func runInitScaffold(app *App, abs, taskflowRoot string, tracks []string) error 
 			tracked = append(tracked, tr)
 		}
 	}
+	registration, registrationErr := registerInitializedSpace(app, result, register)
 	if app.JSON {
-		return render.InitJSON(app.Out, render.InitEnvelope{
+		warnInitRegistration(app, abs, registrationErr)
+		envelope := render.InitEnvelope{
 			DryRun: app.DryRun, Mode: "scaffold", Root: abs, Tracked: tracked, Created: created,
-		})
+		}
+		if registration != nil {
+			envelope.Registration = render.InitRegistration(*registration)
+		}
+		return render.InitJSON(app.Out, envelope)
 	}
 	if len(created) == 0 && len(tracked) == 0 {
 		fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)
@@ -228,7 +243,11 @@ func runInitScaffold(app *App, abs, taskflowRoot string, tracks []string) error 
 	for _, tr := range tracked {
 		fmt.Fprintf(app.Out, "  %s tracks %s\n", app.Style.Dim("+"), app.Style.Bold(tr))
 	}
+	if registration != nil {
+		render.InitRegistrationHuman(app.Out, app.Style, *registration)
+	}
 	printLayout(app, abs)
+	warnInitRegistration(app, abs, registrationErr)
 	if len(created) > 0 {
 		fmt.Fprintf(app.Out, "\n%s\n", app.Style.Dim(`→ next: tskflwctl epic new "Title" --description "..."`))
 	}
@@ -268,16 +287,18 @@ func printLayout(app *App, dir string) {
 // runInitPointer writes a pointer config under abs (no tree), validating the
 // external planning repo first, then (unless opted out) links back by recording
 // this repo in the planning repo's tracked_repos.
-func runInitPointer(app *App, abs, planningRepo string, linkBack bool) error {
-	created, err := config.InitPointer(abs, planningRepo, app.DryRun)
+func runInitPointer(app *App, abs, planningRepo string, linkBack, register bool) error {
+	result, err := config.InitPointer(abs, planningRepo, app.DryRun)
 	if err != nil {
 		return err
 	}
+	created := result.Created
 	var back string
 	var linkErr error
 	if linkBack {
 		back, linkErr = config.LinkBack(abs, planningRepo, app.DryRun)
 	}
+	registration, registrationErr := registerInitializedSpace(app, result, register)
 	// Link-back is best-effort: the pointer config is already written, so a hiccup
 	// (e.g. the planning repo isn't writable) warns rather than fails the init. The
 	// warning goes to stderr, after the success line, so it never corrupts --json
@@ -286,31 +307,26 @@ func runInitPointer(app *App, abs, planningRepo string, linkBack bool) error {
 		if linkErr != nil {
 			fmt.Fprintf(app.ErrOut, "%s link-back skipped: %v\n", app.Style.Warn("⚠"), linkErr)
 		}
+		warnInitRegistration(app, abs, registrationErr)
 	}
 	if app.JSON {
 		warn()
-		return render.InitJSON(app.Out, render.InitEnvelope{
-			DryRun: app.DryRun, Mode: "pointer", Root: abs, PlanningRepo: planningRepo, LinkedBack: back, Created: created,
-		})
+		envelope := render.InitEnvelope{
+			DryRun: app.DryRun, Mode: "pointer", Root: abs, PlanningRepo: planningRepo,
+			LinkedBack: back, Created: created,
+		}
+		if registration != nil {
+			envelope.Registration = render.InitRegistration(*registration)
+		}
+		return render.InitJSON(app.Out, envelope)
 	}
 	if len(created) > 0 {
-		// A pre-existing pointer that only gained planning_repo_id is a BACKFILL, not a
-		// fresh init — saying "pointed X at Y" would misreport what changed.
-		if backfilled := len(created) == 1 && strings.Contains(created[0], "planning_repo_id"); backfilled {
-			verb := "recorded"
-			if app.DryRun {
-				verb = "would record"
-			}
-			fmt.Fprintf(app.Out, "%s %s planning_repo_id for %s — this pointer now verifies its target\n",
-				app.Style.Green("✔"), verb, app.Style.Bold(planningRepo))
-		} else {
-			verb := "pointed"
-			if app.DryRun {
-				verb = "would point"
-			}
-			fmt.Fprintf(app.Out, "%s %s %s at planning repo %s\n",
-				app.Style.Green("✔"), verb, app.Style.Bold(abs), app.Style.Bold(planningRepo))
+		verb := "pointed"
+		if app.DryRun {
+			verb = "would point"
 		}
+		fmt.Fprintf(app.Out, "%s %s %s at planning repo %s\n",
+			app.Style.Green("✔"), verb, app.Style.Bold(abs), app.Style.Bold(planningRepo))
 	} else {
 		fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)
 	}
@@ -323,9 +339,38 @@ func runInitPointer(app *App, abs, planningRepo string, linkBack bool) error {
 		fmt.Fprintf(app.Out, "  %s %s — %s now tracks this repo as %s\n",
 			app.Style.Dim("+"), verb, app.Style.Bold(planningRepo), app.Style.Bold(back))
 	}
+	if registration != nil {
+		render.InitRegistrationHuman(app.Out, app.Style, *registration)
+	}
 	warn()
 	if len(created) > 0 {
 		fmt.Fprintf(app.Out, "\n%s\n", app.Style.Dim("→ next: run tskflwctl from here — planning resolves to the pointed repo"))
 	}
 	return nil
+}
+
+func registerInitializedSpace(
+	app *App, result config.InitResult, enabled bool,
+) (*core.SpaceRegistrationReceipt, error) {
+	if !enabled || !result.ConfigCreated {
+		return nil, nil
+	}
+	receipt, err := app.SpaceSvc.RegisterInitialized(
+		result.ConfigDir, result.PlanningID, app.DryRun,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &receipt, nil
+}
+
+func warnInitRegistration(app *App, path string, err error) {
+	if err == nil {
+		return
+	}
+	fmt.Fprintf(app.ErrOut,
+		"%s space registration skipped: %v — after resolving it, run "+
+			"`tskflwctl space add %q` (use `--id my-space` if the label is taken)\n",
+		app.Style.Warn("⚠"), err, path,
+	)
 }

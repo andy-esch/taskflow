@@ -191,7 +191,11 @@ adapter capabilities rather than leaked persistence.
   `planning_repo`/`tracked_repos` point outward and anchor to the **canonical checkout**,
   so a committed relative path means the same thing from every git worktree
   (`worktree.go`).
-  `init` only bootstraps a new topology. Safe upgrades to existing configs live in
+  `init` only bootstraps a new topology. Its typed `InitResult` reports whether this call
+  created the config plus the checkout directory and durable planning id; the CLI may then
+  ask `SpaceRegistryService.RegisterInitialized` to perform a separate, best-effort home
+  registration without importing `userconfig` into repo-scoped config. Safe upgrades to
+  existing configs live in
   the explicit, idempotent `config.Migrate` path: direct `id` and pointer
   `planning_repo_id` backfills are surgical, atomic, and dry-run from the same result
   model used by apply output. Migration, typed preferences, and tracked-repo linkbacks
@@ -237,7 +241,8 @@ adapter capabilities rather than leaked persistence.
   It is the only layer that translates `userconfig`/`spacehealth` records into neutral
   core entries, performs planning-checkout preparation, classifies registry persistence
   errors, and opens a Markdown summary reader. `core.SpaceRegistryService` owns catalog
-  grouping, explicit selection, label policy, and mutation receipts; CLI, completion,
+  grouping, explicit selection, label policy, ordinary mutation receipts, and the narrow
+  already-initialized-checkout registration used by `init`; CLI, completion,
   doctor, `status --all`, and future primary adapters consume that same boundary.
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
   `internal/cli` (`root.go`), which it calls.
@@ -402,15 +407,15 @@ application seams; it is no longer architecture held in reserve for a hypothetic
   and writes remain asynchronous commands over core services; production TUI code does
   not open planning/config stores.
 - The configuration and cross-space features have dedicated core services and composite
-  filesystem adapters. `SpaceOverviewService` is reusable now; registry list/selection/
-  mutation still needs the explicitly tracked application-boundary consolidation before
-  an atlas or served adapter consumes it.
+  filesystem adapters. `SpaceRegistryService` owns catalog/selection/mutation policy and
+  `SpaceOverviewService` owns cross-space summaries; Cobra is one primary adapter over
+  both rather than the owner of either use case.
 - Writes use atomic replacement/exclusive create, a repo-wide lock, content-version CAS,
   bounded retry for agent mutations, and parse-before-accept editor loops. Machine output
   is a versioned `internal/wire` contract with generated JSON Schema and golden coverage.
 
-The next architecture work is intentionally trigger-based. Consolidate the space registry
-through its ready task. Activate reusable workspace discovery only when an atlas or served
-adapter needs to open arbitrary trees; thread `context.Context` when an HTTP request path
-exists; reshape findings pagination when a web findings view is scoped. Until those
-triggers occur, package movement or speculative interfaces are out of scope.
+The next architecture work is intentionally trigger-based. Activate reusable workspace
+discovery only when an atlas or served adapter needs to open arbitrary trees; thread
+`context.Context` when an HTTP request path exists; reshape findings pagination when a web
+findings view is scoped. Until those triggers occur, package movement or speculative
+interfaces are out of scope.

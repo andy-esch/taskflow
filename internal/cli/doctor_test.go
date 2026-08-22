@@ -22,8 +22,8 @@ func linkedPair(t *testing.T, linkBack bool) (planning, impl string) {
 	if err := os.MkdirAll(impl, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runRoot(t, "init", "--path", planning)
-	args := []string{"init", "--path", impl, "--planning-repo", "../planning"}
+	runRoot(t, "init", "--path", planning, "--no-register")
+	args := []string{"init", "--path", impl, "--planning-repo", "../planning", "--no-register"}
 	if !linkBack {
 		args = append(args, "--no-link-back")
 	}

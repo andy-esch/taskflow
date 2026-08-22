@@ -127,6 +127,49 @@ func TestSpaceRegistryAdd_PreparesDefaultsValidatesThenMutates(t *testing.T) {
 	}
 }
 
+func TestSpaceRegistryRegisterInitialized_ReusesAddPolicyWithoutDiscovery(t *testing.T) {
+	store := &fakeSpaceRegistryStore{
+		addEntry:   SpaceEntryPoint{ID: "my-plan", Path: "~/repos/My-Plan", VerifyID: "plan-id"},
+		addChanged: true,
+	}
+	receipt, err := NewSpaceRegistryService(store).RegisterInitialized(
+		"/repos/My-Plan", "plan-id", true,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.preparePath != "" {
+		t.Fatalf("RegisterInitialized unexpectedly discovered %q", store.preparePath)
+	}
+	wantRegistration := SpaceRegistration{
+		ID: "my-plan", Checkout: "/repos/My-Plan", VerifyID: "plan-id",
+	}
+	if !reflect.DeepEqual(store.added, wantRegistration) || !store.dryRun {
+		t.Fatalf("AddSpace = %+v, dry=%v; want %+v, dry=true", store.added, store.dryRun, wantRegistration)
+	}
+	wantReceipt := SpaceRegistrationReceipt{
+		ID: "my-plan", Path: "~/repos/My-Plan", VerifyID: "plan-id", Changed: true, DryRun: true,
+	}
+	if !reflect.DeepEqual(receipt, wantReceipt) {
+		t.Fatalf("receipt = %+v, want %+v", receipt, wantReceipt)
+	}
+}
+
+func TestSpaceRegistryRegisterInitialized_RejectsStalePhysicalPathIdentity(t *testing.T) {
+	store := &fakeSpaceRegistryStore{
+		addEntry: SpaceEntryPoint{
+			ID: "old-plan", Path: "~/repos/plan", VerifyID: "old-id",
+		},
+	}
+	_, err := NewSpaceRegistryService(store).RegisterInitialized("/repos/plan", "new-id", false)
+	if domain.Classify(err) != domain.ClassConflict || !strings.Contains(err.Error(), "space forget") {
+		t.Fatalf("stale path error = %v", err)
+	}
+	if store.added.Checkout != "/repos/plan" {
+		t.Fatalf("AddSpace candidate = %+v", store.added)
+	}
+}
+
 func TestSpaceRegistryOperations_PreserveAdapterErrorsAndForgetContract(t *testing.T) {
 	want := errors.New("disk unavailable")
 	if _, err := NewSpaceRegistryService(&fakeSpaceRegistryStore{listErr: want}).Catalog(); !errors.Is(err, want) {
@@ -141,5 +184,5 @@ func TestSpaceRegistryOperations_PreserveAdapterErrorsAndForgetContract(t *testi
 }
 
 func coreRegistration(path string) SpaceRegistration {
-	return SpaceRegistration{Path: path, VerifyID: "plan-id"}
+	return SpaceRegistration{Checkout: path, VerifyID: "plan-id"}
 }

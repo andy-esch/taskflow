@@ -52,7 +52,7 @@ func TestInit_Pointer(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(parent, "planning", "tasks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	out := runRoot(t, "init", "--path", impl, "--planning-repo", "../planning", "--json")
+	out := runRoot(t, "init", "--path", impl, "--planning-repo", "../planning", "--json", "--no-register")
 	var got struct {
 		Mode         string   `json:"mode"`
 		PlanningRepo string   `json:"planning_repo"`
@@ -76,7 +76,7 @@ func TestInit_Pointer(t *testing.T) {
 // dedups repeated flags).
 func TestInit_Track(t *testing.T) {
 	planning := filepath.Join(t.TempDir(), "planning")
-	runRoot(t, "init", "--path", planning, "--track", "../impl-a", "--track", "../impl-a")
+	runRoot(t, "init", "--path", planning, "--track", "../impl-a", "--track", "../impl-a", "--no-register")
 	b, err := os.ReadFile(filepath.Join(planning, ".tskflwctl.toml"))
 	if err != nil {
 		t.Fatal(err)
@@ -95,9 +95,9 @@ func TestInit_LinkBack(t *testing.T) {
 	if err := os.MkdirAll(impl, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runRoot(t, "init", "--path", planning) // scaffold the planning repo
+	runRoot(t, "init", "--path", planning, "--no-register") // scaffold the planning repo
 
-	runRoot(t, "init", "--path", impl, "--planning-repo", "../planning")
+	runRoot(t, "init", "--path", impl, "--planning-repo", "../planning", "--no-register")
 	if b, _ := os.ReadFile(filepath.Join(planning, ".tskflwctl.toml")); !strings.Contains(string(b), `"../impl"`) {
 		t.Errorf("auto-link-back should record the impl in planning's tracked_repos:\n%s", b)
 	}
@@ -106,7 +106,7 @@ func TestInit_LinkBack(t *testing.T) {
 	if err := os.MkdirAll(other, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runRoot(t, "init", "--path", other, "--planning-repo", "../planning", "--no-link-back")
+	runRoot(t, "init", "--path", other, "--planning-repo", "../planning", "--no-link-back", "--no-register")
 	if b, _ := os.ReadFile(filepath.Join(planning, ".tskflwctl.toml")); strings.Contains(string(b), `"../other"`) {
 		t.Errorf("--no-link-back must not record the impl:\n%s", b)
 	}
@@ -120,8 +120,8 @@ func TestInit_PointerJSON_LinkedBack(t *testing.T) {
 	if err := os.MkdirAll(impl, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runRoot(t, "init", "--path", filepath.Join(parent, "planning"))
-	out := runRoot(t, "init", "--path", impl, "--planning-repo", "../planning", "--json")
+	runRoot(t, "init", "--path", filepath.Join(parent, "planning"), "--no-register")
+	out := runRoot(t, "init", "--path", impl, "--planning-repo", "../planning", "--json", "--no-register")
 	var env struct {
 		Mode       string `json:"mode"`
 		LinkedBack string `json:"linked_back"`
@@ -136,7 +136,7 @@ func TestInit_PointerJSON_LinkedBack(t *testing.T) {
 	if err := os.MkdirAll(impl2, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if out2 := runRoot(t, "init", "--path", impl2, "--planning-repo", "../planning", "--no-link-back", "--json"); strings.Contains(out2, "linked_back") {
+	if out2 := runRoot(t, "init", "--path", impl2, "--planning-repo", "../planning", "--no-link-back", "--json", "--no-register"); strings.Contains(out2, "linked_back") {
 		t.Errorf("--no-link-back should omit linked_back:\n%s", out2)
 	}
 }
@@ -144,7 +144,7 @@ func TestInit_PointerJSON_LinkedBack(t *testing.T) {
 // TestInit_ScaffoldJSON_Tracked: scaffold-mode --json reports --track entries.
 func TestInit_ScaffoldJSON_Tracked(t *testing.T) {
 	planning := filepath.Join(t.TempDir(), "planning")
-	out := runRoot(t, "init", "--path", planning, "--track", "../impl-a", "--json")
+	out := runRoot(t, "init", "--path", planning, "--track", "../impl-a", "--json", "--no-register")
 	var env struct {
 		Mode    string   `json:"mode"`
 		Tracked []string `json:"tracked"`
@@ -161,7 +161,7 @@ func TestInit_ScaffoldJSON_Tracked(t *testing.T) {
 // in scaffold mode (symmetry with the --track guard).
 func TestInit_NoLinkBackScaffoldConflict(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := runRootRC(t, "init", "--path", dir, "--no-link-back"); err == nil || ExitCode(err) != 11 {
+	if _, err := runRootRC(t, "init", "--path", dir, "--no-link-back", "--no-register"); err == nil || ExitCode(err) != 11 {
 		t.Fatalf("--no-link-back without --planning-repo should exit 11, got %v", err)
 	}
 }
@@ -176,7 +176,7 @@ func TestInit_TrackPointerConflict(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(parent, "planning", "tasks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runRootRC(t, "init", "--path", impl, "--planning-repo", "../planning", "--track", "../x"); err == nil || ExitCode(err) != 11 {
+	if _, err := runRootRC(t, "init", "--path", impl, "--planning-repo", "../planning", "--track", "../x", "--no-register"); err == nil || ExitCode(err) != 11 {
 		t.Fatalf("--track + --planning-repo should exit 11, got %v", err)
 	}
 }
@@ -185,7 +185,7 @@ func TestInit_TrackPointerConflict(t *testing.T) {
 // and writes nothing.
 func TestInit_Pointer_BadTarget(t *testing.T) {
 	impl := t.TempDir()
-	if _, err := runRootRC(t, "init", "--path", impl, "--planning-repo", "../nope"); err == nil || ExitCode(err) != 11 {
+	if _, err := runRootRC(t, "init", "--path", impl, "--planning-repo", "../nope", "--no-register"); err == nil || ExitCode(err) != 11 {
 		t.Fatalf("a bad planning-repo target should exit 11, got %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(impl, ".tskflwctl.toml")); !os.IsNotExist(err) {
@@ -286,7 +286,7 @@ func TestTaskSet_NoFields_Errors(t *testing.T) {
 
 func TestInit_ThenList(t *testing.T) {
 	root := t.TempDir()
-	out := runRoot(t, "init", "--path", root)
+	out := runRoot(t, "init", "--path", root, "--no-register")
 	if !strings.Contains(out, "initialized") {
 		t.Errorf("unexpected init output: %q", out)
 	}

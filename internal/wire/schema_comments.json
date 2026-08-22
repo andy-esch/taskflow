@@ -109,6 +109,7 @@
   "github.com/andy-esch/taskflow/internal/wire.FixEnvelope": "FixEnvelope is `lint --fix --json`.",
   "github.com/andy-esch/taskflow/internal/wire.FixEnvelope.Workspace": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.",
   "github.com/andy-esch/taskflow/internal/wire.InitEnvelope": "InitEnvelope is `init --json`.",
+  "github.com/andy-esch/taskflow/internal/wire.InitRegistrationJSON": "InitRegistrationJSON is the best-effort home-registry receipt attached when init creates a fresh config.",
   "github.com/andy-esch/taskflow/internal/wire.KindSchema": "KindSchema is the per-kind authoring guidance (`tskflwctl schema \u003ckind\u003e`): how to compose a well-formed document of that kind.",
   "github.com/andy-esch/taskflow/internal/wire.LintEnvelope": "LintEnvelope is `lint --json` and `audit lint --json` (the same per-entity slug+issues shape backs both).",
   "github.com/andy-esch/taskflow/internal/wire.LintTaskJSON": "LintTaskJSON is one entity's lint result (slug + field issues), the shape the `lint` / `audit lint` / `fix --remaining` envelopes carry per entity.",

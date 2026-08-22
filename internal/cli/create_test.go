@@ -13,7 +13,7 @@ import (
 func freshRepo(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	runRoot(t, "init", "--path", root)
+	runRoot(t, "init", "--path", root, "--no-register")
 	return root
 }
 

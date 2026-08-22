@@ -30,7 +30,7 @@ func TestFSRegistryAdapter_PreparesListsAndMutatesThroughCoreValues(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prepared.Path != userconfig.TildePath(cfg.Dir) || prepared.VerifyID != cfg.ID {
+	if prepared.Checkout != cfg.Dir || prepared.VerifyID != cfg.ID {
 		t.Fatalf("prepared = %+v, config = %+v", prepared, cfg)
 	}
 
@@ -47,7 +47,7 @@ func TestFSRegistryAdapter_PreparesListsAndMutatesThroughCoreValues(t *testing.T
 		t.Fatalf("catalog = %+v", catalog)
 	}
 	entry := catalog.Entries[0]
-	if entry.ID != "primary" || entry.Path != prepared.Path || entry.Checkout != cfg.Dir ||
+	if entry.ID != "primary" || entry.Path != userconfig.TildePath(prepared.Checkout) || entry.Checkout != cfg.Dir ||
 		entry.VerifyID != cfg.ID || entry.PlanningID != cfg.ID || entry.Role != core.SpaceRoleDirect ||
 		entry.State != core.SpaceStateEmpty {
 		t.Fatalf("entry = %+v", entry)

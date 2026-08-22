@@ -65,11 +65,12 @@ type SpaceCatalog struct {
 	Groups  []SpaceGroup
 }
 
-// SpaceRegistration is a validated planning checkout prepared by the secondary adapter.
-// The service supplies ID after applying its defaulting and validation policy.
+// SpaceRegistration is a validated planning checkout prepared by the secondary adapter
+// or by a preceding application use case. The service supplies ID after applying its
+// defaulting and validation policy; the persistence adapter owns stored path spelling.
 type SpaceRegistration struct {
 	ID       string
-	Path     string
+	Checkout string
 	VerifyID string
 }
 
@@ -78,4 +79,16 @@ type SpaceMutation struct {
 	Entry   SpaceEntryPoint
 	Changed bool
 	DryRun  bool
+}
+
+// SpaceRegistrationReceipt is the stable result of registering a checkout that a
+// different application use case has already initialized and validated. It deliberately
+// omits diagnosed topology: during a dry-run the prospective config does not exist yet,
+// so role, root, and health would be misleading.
+type SpaceRegistrationReceipt struct {
+	ID       string
+	Path     string
+	VerifyID string
+	Changed  bool
+	DryRun   bool
 }

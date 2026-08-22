@@ -225,7 +225,7 @@ func TestMigrate_BackfillsExistingPointer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-init on an existing pointer must not error: %v", err)
 	}
-	if len(created) != 0 {
+	if len(created.Created) != 0 {
 		t.Errorf("re-init must not migrate the config, got %v", created)
 	}
 	result, err := Migrate(impl, false)
@@ -337,7 +337,7 @@ func TestInitPointer_BackfillWaitsForTargetID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("must not error when the target has no id yet: %v", err)
 	}
-	if len(created) != 0 {
+	if len(created.Created) != 0 {
 		t.Errorf("nothing to record, so nothing should be reported, got %v", created)
 	}
 	if cf, _ := readConfigFile(filepath.Join(impl, ConfigFile)); cf.PlanningRepoID != "" {

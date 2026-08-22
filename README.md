@@ -72,9 +72,10 @@ for scripting/agents, and mutating commands take `--dry-run` to preview the writ
 reject `--dry-run`.
 
 ```bash
-tskflwctl init                         # scaffold a planning tree here (prompts for placement)
+tskflwctl init                         # scaffold here and register this checkout as a space
 tskflwctl init --taskflow-root planning  # ...or put it in a subdir, config at the repo root
 tskflwctl init --planning-repo ../x-planning  # point at an external planning repo instead
+tskflwctl init --no-register           # bootstrap only; leave this machine's registry alone
 tskflwctl config show                  # raw repo/user scopes + effective values and sources
 tskflwctl config migrate --dry-run     # preview safe config/id upgrades; omit flag to apply
 tskflwctl config edit                  # typed theme/pager editor (human TTY only)
@@ -160,9 +161,14 @@ tskflwctl space forget other
 The former top-level `tskflwctl doctor` remains as a hidden compatibility alias for
 the current minor-release window; new usage should prefer `config doctor`.
 
-Registration is currently explicit: `init` does not auto-register. `--space <label>` and
-its `TSKFLW_SPACE` twin make those local labels exact checkout targets now, even when
-several labels share one planning identity. `--space` and `-C` are mutually exclusive;
+Fresh scaffold and pointer `init` runs register their checkout automatically, using the
+directory that contains `.tskflwctl.toml` rather than a nested planning root. Registration
+is best-effort: a registry conflict or filesystem failure warns on stderr but never rolls
+back or fails the new topology. Use `--no-register` or `TSKFLW_NO_REGISTER=1` to opt out;
+use `space add` for an existing checkout, because bare `init` and `config migrate` never
+silently mutate home state. `--space <label>` and its `TSKFLW_SPACE` twin make those local
+labels exact checkout targets now, even when several labels share one planning identity.
+`--space` and `-C` are mutually exclusive;
 an unknown, broken, or durable-id-mismatched entry fails loudly rather than falling back
 to cwd discovery. Machine mutation receipts carry the selected label as `workspace.space`.
 `status --all` is the registry-wide exception to cwd anchoring: it runs from anywhere,

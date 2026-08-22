@@ -23,7 +23,7 @@ func TestInitPointer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitPointer: %v", err)
 	}
-	if len(created) != 1 || created[0] != ConfigFile {
+	if len(created.Created) != 1 || created.Created[0] != ConfigFile {
 		t.Errorf("should create only the config, got %v", created)
 	}
 	b, err := os.ReadFile(filepath.Join(impl, ConfigFile))
@@ -42,7 +42,7 @@ func TestInitPointer(t *testing.T) {
 		t.Errorf("Discover should follow the pointer to %q, got %v / %v", planning, cfg, err)
 	}
 	// Idempotent: a second call writes nothing.
-	if again, err := InitPointer(impl, "../planning", false); err != nil || len(again) != 0 {
+	if again, err := InitPointer(impl, "../planning", false); err != nil || len(again.Created) != 0 {
 		t.Errorf("re-init should be a no-op, got %v / %v", again, err)
 	}
 }
@@ -68,12 +68,77 @@ func TestInitPointer_DryRun(t *testing.T) {
 	mustMkdir(t, impl)
 	mustMkdir(t, filepath.Join(parent, "planning", "tasks"))
 	created, err := InitPointer(impl, "../planning", true)
-	if err != nil || len(created) != 1 {
+	if err != nil || len(created.Created) != 1 {
 		t.Fatalf("dry-run should report the config, got %v / %v", created, err)
 	}
 	if fileExists(filepath.Join(impl, ConfigFile)) {
 		t.Error("dry-run must not write the config")
 	}
+}
+
+func TestInitResults_CarryFreshConfigIdentityWithoutClaimingExistingConfig(t *testing.T) {
+	t.Run("scaffold apply and no-op", func(t *testing.T) {
+		root := t.TempDir()
+		result, err := Init(root, "planning", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		description, ok := Describe(root)
+		if !ok || !result.ConfigCreated || result.ConfigDir != initConfigDir(root) ||
+			result.PlanningID == "" || result.PlanningID != description.ID {
+			t.Fatalf("result = %+v, description = %+v, ok=%v", result, description, ok)
+		}
+		again, err := Init(root, "", false)
+		if err != nil || again.ConfigCreated || again.PlanningID != result.PlanningID {
+			t.Fatalf("existing result = %+v, err=%v", again, err)
+		}
+	})
+
+	t.Run("scaffold preview", func(t *testing.T) {
+		root := filepath.Join(t.TempDir(), "prospective")
+		result, err := Init(root, "", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !result.ConfigCreated || result.PlanningID == "" || result.ConfigDir != initConfigDir(root) {
+			t.Fatalf("dry-run result = %+v", result)
+		}
+		if fileExists(filepath.Join(root, ConfigFile)) {
+			t.Fatal("dry-run wrote the prospective config")
+		}
+	})
+
+	t.Run("preview resolves an existing symlink ancestor", func(t *testing.T) {
+		realParent := t.TempDir()
+		alias := filepath.Join(t.TempDir(), "alias")
+		if err := os.Symlink(realParent, alias); err != nil {
+			t.Skipf("symlink unavailable: %v", err)
+		}
+		prospective := filepath.Join(alias, "repo")
+		result, err := Init(prospective, "", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := filepath.Join(evalOr(realParent), "repo"); result.ConfigDir != want {
+			t.Fatalf("preview ConfigDir = %q, want physical prospective path %q", result.ConfigDir, want)
+		}
+	})
+
+	t.Run("pointer carries target identity", func(t *testing.T) {
+		parent := t.TempDir()
+		planning := filepath.Join(parent, "planning")
+		if _, err := Init(planning, "", false); err != nil {
+			t.Fatal(err)
+		}
+		impl := filepath.Join(parent, "impl")
+		result, err := InitPointer(impl, "../planning", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !result.ConfigCreated || result.ConfigDir != initConfigDir(impl) || result.PlanningID != idOf(t, planning) {
+			t.Fatalf("pointer dry-run result = %+v", result)
+		}
+	})
 }
 
 // TestInitPointer_CreatesMissingDir: pointer mode creates a missing --path dir
@@ -86,7 +151,7 @@ func TestInitPointer_CreatesMissingDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitPointer should create a missing dir, got %v", err)
 	}
-	if len(created) != 1 || !fileExists(filepath.Join(impl, ConfigFile)) {
+	if len(created.Created) != 1 || !fileExists(filepath.Join(impl, ConfigFile)) {
 		t.Errorf("pointer config not written into the created dir: %v", created)
 	}
 	// A bad target must NOT create the dir (validation precedes mkdir).
@@ -113,7 +178,7 @@ func TestInitPointer_ModeCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Same target → idempotent no-op.
-	if again, err := InitPointer(impl, "../planning-a", false); err != nil || len(again) != 0 {
+	if again, err := InitPointer(impl, "../planning-a", false); err != nil || len(again.Created) != 0 {
 		t.Errorf("same-target re-init should be a no-op, got %v / %v", again, err)
 	}
 	// Different target → ErrConflict, original preserved.
@@ -301,7 +366,7 @@ func TestInit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(created) == 0 {
+	if len(created.Created) == 0 {
 		t.Fatal("expected dirs/config to be created")
 	}
 
@@ -325,7 +390,7 @@ func TestInit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(again) != 0 {
+	if len(again.Created) != 0 {
 		t.Errorf("second Init created %v, want none", again)
 	}
 }
@@ -387,7 +452,7 @@ func TestInitRetrofitsGitkeep(t *testing.T) {
 	}
 	// The keep is reported as created even though the dir itself already existed.
 	var sawKeep bool
-	for _, c := range created {
+	for _, c := range created.Created {
 		if c == "tasks/.gitkeep" {
 			sawKeep = true
 		}

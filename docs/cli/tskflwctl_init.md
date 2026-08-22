@@ -5,8 +5,10 @@ Scaffold a planning tree here, or point at an external planning repo
 ### Synopsis
 
 Bootstrap a new planning topology: either scaffold a local planning tree or
-point this repository at an existing external planning repo. Bare init against
-an existing configuration reports its topology without changing it; use
+point this repository at an existing external planning repo. A fresh config is
+registered as a machine-local space best-effort; use --no-register to opt out.
+Bare init against an existing configuration reports its topology without
+changing it; use
 `tskflwctl config migrate` for safe configuration upgrades.
 
 ```
@@ -19,6 +21,7 @@ tskflwctl init [flags]
   tskflwctl init
   tskflwctl init --taskflow-root planning
   tskflwctl init --planning-repo ../desirelines-planning
+  tskflwctl init --no-register
 ```
 
 ### Options
@@ -26,6 +29,7 @@ tskflwctl init [flags]
 ```
   -h, --help                   help for init
       --no-link-back           pointer mode: don't add this repo to the planning repo's tracked_repos
+      --no-register            don't add a freshly initialized repo to this machine's space registry (also TSKFLW_NO_REGISTER)
       --path string            directory to initialize (default ".")
       --planning-repo string   point this repo at an external planning repo (relative to --path, or absolute): writes a pointer config, no tree
       --taskflow-root string   scaffold the planning tree in this subdirectory instead of the repo root (sets taskflow_root; e.g. planning)

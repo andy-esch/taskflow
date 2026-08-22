@@ -128,7 +128,7 @@ func TestInitExistingLegacyPointerHandsOffToConfigMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out := runRoot(t, "init", "--path", impl, "--color=never")
+	out := runRoot(t, "init", "--path", impl, "--color=never", "--no-register")
 	if !strings.Contains(out, "already initialized") || !strings.Contains(out, "config migrate") {
 		t.Fatalf("init should hand off to migration:\n%s", out)
 	}
@@ -159,7 +159,7 @@ func TestInitExistingDirectReportsWithoutMigrating(t *testing.T) {
 	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out := runRoot(t, "init", "--path", repo, "--color=never")
+	out := runRoot(t, "init", "--path", repo, "--color=never", "--no-register")
 	if !strings.Contains(out, "already initialized") || !strings.Contains(out, "repo-id") || !strings.Contains(out, "config migrate") {
 		t.Fatalf("legacy direct init should report the migration handoff:\n%s", out)
 	}
@@ -167,7 +167,7 @@ func TestInitExistingDirectReportsWithoutMigrating(t *testing.T) {
 		t.Fatal("bare init migrated a direct config")
 	}
 	runRoot(t, "-C", repo, "config", "migrate")
-	out = runRoot(t, "init", "--path", repo, "--color=never")
+	out = runRoot(t, "init", "--path", repo, "--color=never", "--no-register")
 	if strings.Contains(out, "configuration update available") {
 		t.Fatalf("current direct init reported a migration:\n%s", out)
 	}

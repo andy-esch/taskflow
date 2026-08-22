@@ -116,7 +116,7 @@ func TestWarnPresentation_ReachesStyleOnlyCommands(t *testing.T) {
 		{"version"},
 		{"schema"},
 		{"theme", "list"},
-		{"init", "--dry-run", "--path", filepath.Join(dir, "probe")},
+		{"init", "--dry-run", "--path", filepath.Join(dir, "probe"), "--no-register"},
 	} {
 		t.Setenv(userconfig.DirEnv, dir)
 		var out, errOut bytes.Buffer

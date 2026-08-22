@@ -535,6 +535,29 @@ func TestProblemsHuman(t *testing.T) {
 	}
 }
 
+func TestInitRegistrationReceipt_HumanAndJSONGolden(t *testing.T) {
+	receipt := core.SpaceRegistrationReceipt{
+		ID: "planning", Path: "~/git/planning", VerifyID: "6gplan", Changed: true, DryRun: true,
+	}
+	var out bytes.Buffer
+	if err := InitJSON(&out, InitEnvelope{
+		DryRun: true, Mode: "scaffold", Root: "/repo", Created: []string{".tskflwctl.toml"},
+		Registration: InitRegistration(receipt),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	wantJSON := `{"schema_version":"` + SchemaVersion + `","dry_run":true,"mode":"scaffold","root":"/repo","created":[".tskflwctl.toml"],"registration":{"id":"planning","path":"~/git/planning","verify_id":"6gplan","changed":true,"dry_run":true}}` + "\n"
+	if got := out.String(); got != wantJSON {
+		t.Fatalf("init JSON receipt drifted:\ngot  %s\nwant %s", got, wantJSON)
+	}
+
+	out.Reset()
+	InitRegistrationHuman(&out, NewStyle(false), receipt)
+	if got, want := out.String(), "  + would register space planning — ~/git/planning\n"; got != want {
+		t.Fatalf("init human receipt = %q, want %q", got, want)
+	}
+}
+
 // TestCreatedSlugNote pins the surfaced-slug UX: a title whose slug diverges
 // beyond the obvious (filename-hostile chars dropped) gets a "→ slug: <slug>"
 // line so the derivation isn't silent, while an everyday title (only lowercased +
