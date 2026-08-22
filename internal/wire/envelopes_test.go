@@ -145,7 +145,12 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToFixEnvelope(nil, nil, nil, false, WorkspaceJSON{})) // the nil-slice path: must emit [] and validate
 		}},
 		{"InitEnvelope", func(w io.Writer) error {
-			return emit(w, NormalizeInitEnvelope(InitEnvelope{Mode: "scaffold", Root: "/root", Created: []string{"tasks"}}))
+			return emit(w, NormalizeInitEnvelope(InitEnvelope{
+				Mode: "scaffold", Root: "/root", Created: []string{"tasks"},
+				Registration: ToInitRegistrationJSON(core.SpaceRegistrationReceipt{
+					ID: "root", Path: "/root", VerifyID: "6gplan", Changed: true,
+				}),
+			}))
 		}},
 		{"DoctorEnvelope", func(w io.Writer) error {
 			return emit(w, ToDoctorEnvelope(

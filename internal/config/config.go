@@ -349,6 +349,34 @@ func evalOr(p string) string {
 	return p
 }
 
+// initConfigDir returns an absolute physical spelling even when the final directory does
+// not exist yet (the normal pointer/scaffold dry-run case). EvalSymlinks cannot resolve a
+// missing leaf, so walk to the nearest existing ancestor, resolve that, then restore the
+// prospective suffix. This keeps preview and apply registry receipts on the same checkout
+// path when an ancestor is a symlink.
+func initConfigDir(dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return evalOr(dir)
+	}
+	cursor := abs
+	var suffix []string
+	for {
+		if resolved, err := filepath.EvalSymlinks(cursor); err == nil {
+			for i := len(suffix) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, suffix[i])
+			}
+			return resolved
+		}
+		parent := filepath.Dir(cursor)
+		if parent == cursor {
+			return abs
+		}
+		suffix = append(suffix, filepath.Base(cursor))
+		cursor = parent
+	}
+}
+
 // exists reports whether path exists as anything (file or directory).
 func exists(p string) bool {
 	_, err := os.Stat(p)
@@ -412,18 +440,30 @@ tracked_repos = []
 # name = "neon"
 `
 
+// InitResult describes the topology bootstrap independently of any machine-local
+// registration that a primary adapter may choose to perform afterward. PlanningID is the
+// durable id written (or prospectively written during dry-run), and ConfigCreated says
+// whether this call owns that config creation rather than merely repairing an existing
+// scaffold.
+type InitResult struct {
+	Created       []string
+	ConfigDir     string
+	PlanningID    string
+	ConfigCreated bool
+}
+
 // Init scaffolds the planning directory tree and writes the config file under
-// root. It is idempotent: existing dirs/config are left untouched. Returns the
-// relative paths created (empty if nothing was needed).
+// root. It is idempotent: existing dirs/config are left untouched.
 // An EMPTY taskflowRoot means "the caller has no opinion": adopt whatever an existing
 // config already declares, and fall back to the repo root only when creating. That
 // distinction is load-bearing — treating empty as an explicit "." made a bare `init` in any
 // subdir-layout repo (this one included) fail the fork guard against its own config.
-func Init(dir, taskflowRoot string, dryRun bool) ([]string, error) {
+func Init(dir, taskflowRoot string, dryRun bool) (InitResult, error) {
+	result := InitResult{ConfigDir: initConfigDir(dir)}
 	explicit := strings.TrimSpace(taskflowRoot) != ""
 	taskflowRoot, err := normalizeTaskflowRoot(taskflowRoot)
 	if err != nil {
-		return nil, err
+		return result, err
 	}
 	// Refuse to scaffold a local tree over an existing POINTER config: discovery
 	// would follow the pointer and the new tree would be orphaned/forked data (the
@@ -432,10 +472,11 @@ func Init(dir, taskflowRoot string, dryRun bool) ([]string, error) {
 	if cfgPath := filepath.Join(dir, ConfigFile); fileExists(cfgPath) {
 		cf, err := readConfigFile(cfgPath)
 		if err != nil {
-			return nil, err
+			return result, err
 		}
+		result.PlanningID = cf.ID
 		if cf.PlanningRepo != "" {
-			return nil, fmt.Errorf(
+			return result, fmt.Errorf(
 				"%w: %s points at an external planning repo (planning_repo=%q) — remove it to scaffold a local tree",
 				domain.ErrConflict, ConfigFile, cf.PlanningRepo)
 		}
@@ -447,7 +488,7 @@ func Init(dir, taskflowRoot string, dryRun bool) ([]string, error) {
 		if !explicit {
 			taskflowRoot = existing
 		} else if existing != taskflowRoot {
-			return nil, fmt.Errorf(
+			return result, fmt.Errorf(
 				"%w: %s already scaffolds its planning at %q — re-running with %q would fork the data; "+
 					"edit taskflow_root by hand if you mean to move it",
 				domain.ErrConflict, ConfigFile, existing, taskflowRoot)
@@ -458,16 +499,15 @@ func Init(dir, taskflowRoot string, dryRun bool) ([]string, error) {
 	// per-bucket subdirs. The flat store never reads them, and a `.md` dropped into one
 	// would be invisible to the scan (a silent data-loss trap).
 	dirs := []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ResearchDir, domain.ProjectsDir}
-	var created []string
 	for _, d := range dirs {
 		p := filepath.Join(root, filepath.FromSlash(d))
 		if !isDir(p) {
 			if !dryRun {
 				if err := os.MkdirAll(p, 0o755); err != nil {
-					return created, fmt.Errorf("mkdir %s: %w", p, err)
+					return result, fmt.Errorf("mkdir %s: %w", p, err)
 				}
 			}
-			created = append(created, d)
+			result.Created = append(result.Created, d)
 		}
 		// A .gitkeep makes an EMPTY dir git-committable, so it is only written when the
 		// dir is actually empty. Re-running init still repairs a tree scaffolded before
@@ -477,34 +517,53 @@ func Init(dir, taskflowRoot string, dryRun bool) ([]string, error) {
 		if !fileExists(keep) && isEmptyDir(p) {
 			if !dryRun {
 				if err := os.WriteFile(keep, nil, 0o644); err != nil {
-					return created, fmt.Errorf("write %s: %w", keep, err)
+					return result, fmt.Errorf("write %s: %w", keep, err)
 				}
 			}
-			created = append(created, d+"/"+gitKeep)
+			result.Created = append(result.Created, d+"/"+gitKeep)
 		}
 	}
 	cfg := filepath.Join(dir, ConfigFile)
+	// An existing configuration is maintenance, not bootstrap. Init may still repair the
+	// scaffold directories above, but schema upgrades and durable-id backfills belong to
+	// Migrate. Keeping the write paths separate makes a bare re-run predictable and lets
+	// every primary adapter use the same migration use case.
+	if fileExists(cfg) {
+		if result.PlanningID == "" {
+			cf, err := readConfigFile(cfg)
+			if err != nil {
+				return result, err
+			}
+			result.PlanningID = cf.ID
+		}
+		return result, nil
+	}
+	mintedID := id.New()
+	result.PlanningID = mintedID
 	// Exclusive create instead of exists-then-write: a concurrent init must not
 	// clobber a config the other process just wrote (idempotency falls out of
 	// O_EXCL rather than a racy stat).
 	if dryRun {
-		if !fileExists(cfg) {
-			created = append(created, ConfigFile)
-		}
-		return created, nil
+		result.Created = append(result.Created, ConfigFile)
+		result.ConfigCreated = true
+		return result, nil
 	}
-	switch err := writeFileExclusive(cfg, []byte(defaultConfigTOMLWith(taskflowRoot, id.New())), 0o644); {
+	switch err := writeFileExclusive(cfg, []byte(defaultConfigTOMLWith(taskflowRoot, mintedID)), 0o644); {
 	case err == nil:
-		created = append(created, ConfigFile)
-		return created, nil
+		result.ConfigDir = initConfigDir(dir)
+		result.Created = append(result.Created, ConfigFile)
+		result.ConfigCreated = true
+		return result, nil
 	case !os.IsExist(err):
-		return created, fmt.Errorf("write config: %w", err)
+		return result, fmt.Errorf("write config: %w", err)
 	}
-	// Existing configuration is maintenance, not bootstrap. Init may still repair the
-	// scaffold directories above, but schema upgrades and durable-id backfills belong to
-	// Migrate. Keeping the write paths separate makes a bare re-run predictable and lets
-	// every primary adapter use the same migration use case.
-	return created, nil
+	// O_EXCL race: a config appeared after the absence check. We did not create it, so the
+	// caller must not infer authority to register it. Report its durable id when readable.
+	result.PlanningID = ""
+	if cf, readErr := readConfigFile(cfg); readErr == nil {
+		result.PlanningID = cf.ID
+	}
+	return result, nil
 }
 
 // Description is what an already-initialized directory declares, for surfaces that want to
@@ -648,19 +707,22 @@ func pointerConfigTOML(planningRepo, targetID string) string {
 // elsewhere. The target is validated as a real planning root BEFORE anything is
 // written (the "require + error" contract via the same resolvePlanningRepo
 // discovery uses), so a typo'd path fails loudly with nothing left behind.
-// Idempotent via O_EXCL: an existing config is left untouched (returns empty).
-func InitPointer(dir, planningRepo string, dryRun bool) ([]string, error) {
+// Idempotent via O_EXCL: an existing config is left untouched and ConfigCreated remains
+// false.
+func InitPointer(dir, planningRepo string, dryRun bool) (InitResult, error) {
+	result := InitResult{ConfigDir: initConfigDir(dir)}
 	if strings.TrimSpace(planningRepo) == "" {
-		return nil, fmt.Errorf("%w: planning_repo path is required", domain.ErrValidation)
+		return result, fmt.Errorf("%w: planning_repo path is required", domain.ErrValidation)
 	}
 	// No expectation yet — this is where one gets established. Resolve first (the
 	// "require + validate" contract), then read the target's id so the pointer we write
 	// opts into verification from its first use.
 	planningRoot, err := resolvePlanningRepo(dir, planningRepo, "")
 	if err != nil {
-		return nil, err // not a planning root → loud, nothing written
+		return result, err // not a planning root → loud, nothing written
 	}
 	targetID := planningRepoID(planningRoot)
+	result.PlanningID = targetID
 	cfg := filepath.Join(dir, ConfigFile)
 	// An existing config: same target → idempotent no-op; a DIFFERENT target (a
 	// re-point) or a scaffold config (a mode switch) → refuse, so a corrected typo
@@ -668,32 +730,37 @@ func InitPointer(dir, planningRepo string, dryRun bool) ([]string, error) {
 	if fileExists(cfg) {
 		existing, err := readConfigFile(cfg)
 		if err != nil {
-			return nil, err
+			return result, err
 		}
 		if existing.PlanningRepo != planningRepo {
-			return nil, fmt.Errorf(
+			return result, fmt.Errorf(
 				"%w: %s already exists here — remove it to re-init (or edit it to change the target)",
 				domain.ErrConflict, ConfigFile)
 		}
 		// Same target is an idempotent no-op. Durable-id backfills are deliberately
 		// owned by Migrate rather than hidden inside a bootstrap command.
-		return nil, nil
+		return result, nil
 	}
 	if dryRun {
-		return []string{ConfigFile}, nil
+		result.Created = []string{ConfigFile}
+		result.ConfigCreated = true
+		return result, nil
 	}
 	// Create the target dir if missing — parity with scaffold Init (which MkdirAll's
 	// the tree); done only after the target validates, so a bad path leaves nothing.
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("mkdir %s: %w", dir, err)
+		return result, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
+	result.ConfigDir = initConfigDir(dir)
 	if err := writeFileExclusive(cfg, []byte(pointerConfigTOML(planningRepo, targetID)), 0o644); err != nil {
 		if os.IsExist(err) {
-			return nil, nil // O_EXCL race: a config appeared just now — treat as no-op
+			return result, nil // O_EXCL race: a config appeared just now — treat as no-op
 		}
-		return nil, fmt.Errorf("write config: %w", err)
+		return result, fmt.Errorf("write config: %w", err)
 	}
-	return []string{ConfigFile}, nil
+	result.Created = []string{ConfigFile}
+	result.ConfigCreated = true
+	return result, nil
 }
 
 // AddTrackedRepo records repoPath in the tracked_repos of the planning config in

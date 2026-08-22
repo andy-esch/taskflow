@@ -53,13 +53,13 @@ func (f *FS) PrepareSpace(path string) (core.SpaceRegistration, error) {
 		repoDir = cfg.Root
 	}
 	return core.SpaceRegistration{
-		Path: userconfig.TildePath(repoDir), VerifyID: cfg.ID,
+		Checkout: repoDir, VerifyID: cfg.ID,
 	}, nil
 }
 
 func (f *FS) AddSpace(registration core.SpaceRegistration, dryRun bool) (core.SpaceEntryPoint, bool, error) {
 	added, existing, err := userconfig.AddSpace(userconfig.Space{
-		ID: registration.ID, Path: registration.Path, VerifyID: registration.VerifyID,
+		ID: registration.ID, Path: userconfig.TildePath(registration.Checkout), VerifyID: registration.VerifyID,
 	}, dryRun)
 	if err != nil {
 		return core.SpaceEntryPoint{}, false, classifyRegistryError(err)

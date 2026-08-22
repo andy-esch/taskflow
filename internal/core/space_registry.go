@@ -93,8 +93,43 @@ func (s *SpaceRegistryService) Add(path, id string, dryRun bool) (SpaceMutation,
 	if err != nil {
 		return SpaceMutation{}, err
 	}
+	return s.add(registration, id, dryRun)
+}
+
+// RegisterInitialized registers a checkout that a preceding bootstrap use case has
+// already validated. This keeps config bootstrapping independent of the home registry
+// while still routing registry policy and mutation through this one application boundary.
+func (s *SpaceRegistryService) RegisterInitialized(
+	checkout, verifyID string, dryRun bool,
+) (SpaceRegistrationReceipt, error) {
+	mutation, err := s.add(SpaceRegistration{Checkout: checkout, VerifyID: verifyID}, "", dryRun)
+	if err != nil {
+		return SpaceRegistrationReceipt{}, err
+	}
+	// A physical-path match normally makes registration idempotent. For a freshly
+	// initialized checkout, however, a different stored verification id means the path was
+	// reused for a different planning identity. Never turn that safety failure into an
+	// "already registered" receipt or silently rewrite the assertion; require the explicit
+	// forget/add repair so the old identity cannot be rebound by bootstrap.
+	if !mutation.Changed && verifyID != "" && mutation.Entry.VerifyID != verifyID {
+		return SpaceRegistrationReceipt{}, fmt.Errorf(
+			"%w: checkout %q is already registered as %q with verify_id %q, not %q; "+
+				"run `space forget %q`, then `space add %q --id %q`",
+			domain.ErrConflict, checkout, mutation.Entry.ID, mutation.Entry.VerifyID, verifyID,
+			mutation.Entry.ID, checkout, mutation.Entry.ID,
+		)
+	}
+	return SpaceRegistrationReceipt{
+		ID: mutation.Entry.ID, Path: mutation.Entry.Path,
+		VerifyID: mutation.Entry.VerifyID, Changed: mutation.Changed, DryRun: mutation.DryRun,
+	}, nil
+}
+
+func (s *SpaceRegistryService) add(
+	registration SpaceRegistration, id string, dryRun bool,
+) (SpaceMutation, error) {
 	if id == "" {
-		id = defaultSpaceID(registration.Path)
+		id = defaultSpaceID(registration.Checkout)
 	}
 	if err := validateSpaceID(id); err != nil {
 		return SpaceMutation{}, err

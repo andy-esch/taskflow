@@ -176,7 +176,7 @@ func TestDryRun_EpicNewAndAuditMove(t *testing.T) {
 
 func TestDryRun_Init(t *testing.T) {
 	root := t.TempDir()
-	out := runRoot(t, "init", "--path", root, "--dry-run")
+	out := runRoot(t, "init", "--path", root, "--dry-run", "--no-register")
 	if !strings.Contains(out, "would initialize") {
 		t.Errorf("dry-run init should preview, got %q", out)
 	}

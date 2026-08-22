@@ -170,7 +170,10 @@ import (
 // point selected for reading, and a combined space-badged in-progress working set. The
 // envelope owns one top-level schema_version; nested summaries reuse the versionless
 // SummaryJSON payload rather than pretending to be independent envelopes.
-const SchemaVersion = "1.42"
+// 1.43: fresh `init --json` receipts may include `registration`, describing the
+// best-effort machine-local space registration (including preview vs applied and whether
+// the physical checkout was already registered).
+const SchemaVersion = "1.43"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

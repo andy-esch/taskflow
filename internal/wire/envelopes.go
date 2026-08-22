@@ -893,23 +893,44 @@ func ToLintEnvelope(results []core.LintResult, problems []domain.FileProblem) Li
 // tree); PlanningRepo is set only in pointer mode. LinkedBack is the
 // planning→impl path recorded in the planning repo's tracked_repos by pointer-
 // mode auto-link-back (empty when none was written). Tracked is the entries
-// `--track` added to this planning repo's tracked_repos (scaffold mode).
+// `--track` added to this planning repo's tracked_repos (scaffold mode). Registration is
+// present only when a fresh config's best-effort home-registry step succeeded or previewed.
 type InitEnvelope struct {
-	SchemaVersion      string   `json:"schema_version"`
-	DryRun             bool     `json:"dry_run"`
-	Mode               string   `json:"mode"`
-	Root               string   `json:"root"`
-	PlanningRepo       string   `json:"planning_repo,omitempty"`
-	LinkedBack         string   `json:"linked_back,omitempty"`
-	Tracked            []string `json:"tracked,omitempty"`
-	Created            []string `json:"created"`
-	AlreadyInitialized bool     `json:"already_initialized,omitempty"`
-	PendingMigrations  []string `json:"pending_migrations,omitempty"`
+	SchemaVersion      string                `json:"schema_version"`
+	DryRun             bool                  `json:"dry_run"`
+	Mode               string                `json:"mode"`
+	Root               string                `json:"root"`
+	PlanningRepo       string                `json:"planning_repo,omitempty"`
+	LinkedBack         string                `json:"linked_back,omitempty"`
+	Tracked            []string              `json:"tracked,omitempty"`
+	Created            []string              `json:"created"`
+	AlreadyInitialized bool                  `json:"already_initialized,omitempty"`
+	PendingMigrations  []string              `json:"pending_migrations,omitempty"`
+	Registration       *InitRegistrationJSON `json:"registration,omitempty"`
+}
+
+// InitRegistrationJSON is the best-effort home-registry receipt attached when init
+// creates a fresh config. It contains only facts that remain honest in dry-run mode;
+// diagnosed topology is omitted because the prospective config does not exist yet.
+type InitRegistrationJSON struct {
+	ID       string `json:"id"`
+	Path     string `json:"path"`
+	VerifyID string `json:"verify_id,omitempty"`
+	Changed  bool   `json:"changed"`
+	DryRun   bool   `json:"dry_run"`
+}
+
+// ToInitRegistrationJSON maps the framework-free application receipt onto the wire
+// contract used by CLI and future primary adapters.
+func ToInitRegistrationJSON(r core.SpaceRegistrationReceipt) *InitRegistrationJSON {
+	return &InitRegistrationJSON{
+		ID: r.ID, Path: r.Path, VerifyID: r.VerifyID, Changed: r.Changed, DryRun: r.DryRun,
+	}
 }
 
 // NormalizeInitEnvelope stamps the schema_version and normalizes created to an
 // empty array (not null) so a consumer can len() it. The caller fills the named
-// fields (mode/root/planning_repo/linked_back/tracked/created); the wire package
+// fields (mode/root/planning_repo/linked_back/tracked/created/registration); the wire package
 // owns the version + the array-emptiness invariant.
 func NormalizeInitEnvelope(e InitEnvelope) InitEnvelope {
 	e.SchemaVersion = SchemaVersion

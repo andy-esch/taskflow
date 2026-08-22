@@ -169,12 +169,12 @@ func TestInit_JSON(t *testing.T) {
 		}
 		return got.Root, got.Created
 	}
-	gotRoot, created := decode(runRoot(t, "init", "--path", root, "--json"))
+	gotRoot, created := decode(runRoot(t, "init", "--path", root, "--json", "--no-register"))
 	if gotRoot != root || len(created) == 0 {
 		t.Errorf("first init should report created paths at %q: %v", root, created)
 	}
 	// Idempotent re-run: created is an empty array, never null.
-	out := runRoot(t, "init", "--path", root, "--json")
+	out := runRoot(t, "init", "--path", root, "--json", "--no-register")
 	if _, created := decode(out); created == nil || len(created) != 0 {
 		t.Errorf("re-init should report an empty created array:\n%s", out)
 	}

@@ -819,6 +819,23 @@ func EpicMutationJSON(w io.Writer, epic domain.Epic, dryRun bool, ws wire.Worksp
 // CLI's init command keeps building it through the render package.
 type InitEnvelope = wire.InitEnvelope
 
+// InitRegistration converts the reusable application receipt for the init envelope.
+func InitRegistration(r core.SpaceRegistrationReceipt) *wire.InitRegistrationJSON {
+	return wire.ToInitRegistrationJSON(r)
+}
+
+// InitRegistrationHuman writes the one-line machine-local registry receipt that follows
+// a fresh topology bootstrap.
+func InitRegistrationHuman(w io.Writer, st Style, r core.SpaceRegistrationReceipt) {
+	verb := "registered space"
+	if !r.Changed {
+		verb = "already registered space"
+	} else if r.DryRun {
+		verb = "would register space"
+	}
+	fmt.Fprintf(w, "  %s %s %s — %s\n", st.Dim("+"), verb, st.Bold(r.ID), r.Path)
+}
+
 // InitJSON reports the init result. The caller fills the envelope's named fields
 // (mode/root/planning_repo/linked_back/tracked/created); InitJSON stamps the
 // schema_version and normalizes created to an empty array (not null) so a
