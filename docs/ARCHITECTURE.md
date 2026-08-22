@@ -15,6 +15,87 @@ the one-screen orientation for contributors.
   └──────────────┘      └──────────────────┘         └──────────────────┘
 ```
 
+## Current package map and dependency direction
+
+Reviewed against the production import graph on 2026-08-21 (`go list` over
+`./internal/...`). The diagram above is the rule of thumb; these are the actual
+packages that implement it:
+
+| Role | Packages | Current inward dependencies |
+| --- | --- | --- |
+| Foundations | `internal/id`, `internal/tomledit`, `internal/editor`, `internal/listfilter` | Standard library or their focused third-party primitive only |
+| Domain | `internal/domain` | `internal/id` |
+| Application | `internal/core` | `internal/domain`, `internal/id` |
+| Neutral machine contract | `internal/wire` | `internal/core`, `internal/domain` |
+| Planning/config secondary adapters | `internal/store`, `internal/config`, `internal/userconfig`, `internal/spacehealth`, `internal/configstore`, `internal/spacestore` | Consumer-owned `core` ports and/or the narrower domain/config adapters they compose |
+| Primary adapters | `internal/cli`, `internal/tui`, `internal/configui` | `core`/`domain` values, `wire`, and presentation utilities; only the CLI composition root constructs secondary adapters |
+| Presentation utilities | `internal/theme`, `internal/design`, `internal/progressbar`, `internal/themepreview`, `internal/cli/render`, `internal/cli/prompt` | Semantic values and UI libraries, never planning/config persistence |
+| Test/tool support | `internal/testutil`, `internal/tools/*` | Concrete dependencies appropriate to a test fixture or one-off executable; not runtime layers |
+
+The important direct adapter graph is concrete rather than symmetrical:
+
+```text
+domain      -> id
+core        -> domain, id
+wire        -> core, domain
+store       -> core, domain, id
+config      -> domain, id, tomledit
+userconfig  -> tomledit
+spacehealth -> config, domain, userconfig
+configstore -> core, config, spacehealth, userconfig
+spacestore  -> core, spacehealth, store
+configui    -> core + presentation utilities
+tui         -> core, domain, configui + presentation/process utilities
+cli/render  -> core, domain, wire + presentation utilities
+cli         -> composition of the application, primary adapters, and secondary adapters
+```
+
+### Enforced fitness rules
+
+`.golangci.yml` makes the stable part of that direction executable for production
+files:
+
+- `internal/domain` may import only `internal/id` from this repository.
+- `internal/core` may import only `internal/domain` and `internal/id` from this
+  repository. Ports therefore stay with their application consumer; an adapter
+  implements them without becoming a core dependency.
+- `internal/wire` may import only `internal/core` and `internal/domain`, keeping the
+  machine contract neutral rather than tied to Cobra, Bubble Tea, or filesystem TOML.
+- `internal/tui`, `internal/configui`, `internal/cli/render`, and
+  `internal/cli/prompt` cannot import the planning/config secondary adapters or sibling
+  primary adapters. The one deliberate primary-adapter composition is the full TUI
+  embedding the focused `configui` model.
+- `internal/config` cannot import home-scoped `internal/userconfig`; cwd discovery
+  remains independent of a user's registry and preferences.
+
+Tests are excluded from the production adapter rule because UI integration tests
+deliberately construct `store.FS` instances under `t.TempDir()`. That is test
+composition, not runtime dependency direction.
+
+### Composition-root exception and current direct adapter imports
+
+`internal/cli/*.go` is deliberately not constrained like its `render` and `prompt`
+subpackages. It is today's composition root: `NewRootCmd` constructs
+`configstore.FS`/`spacestore.FS`, repo resolution constructs `store.FS`, and the `ui`
+commands launch `tui`/`configui`. Forbidding those imports would move wiring without
+improving the boundary.
+
+The 2026-08-21 audit of direct primary-to-secondary edges classified the remaining
+ones as follows:
+
+| Edge | Classification | Disposition |
+| --- | --- | --- |
+| `cli -> configstore`, `cli -> spacestore`, `cli -> store` construction | Composition root | Intentional; secondary adapters are injected into consumer-owned core ports. |
+| `cli -> store` through `Fixer`, `Linter`, `Layout`, and completion | Narrow fs/text adapter capability | Intentional today; these are not planning use cases. The broader reusable workspace decision is tracked separately. |
+| `cli -> config` for discovery/init/maintenance | Adapter orchestration | Existing deferred [`reusable-workspace-discovery-seam`](../planning/tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md); activate when atlas or web needs the same workspace opening path. |
+| `cli -> userconfig` / `cli -> spacehealth` for registry operations and selection | Tracked application-boundary debt | [`establish-one-reusable-space-registry-application-boundary`](../planning/tasks/6g28rv8jm1g7-establish-one-reusable-space-registry-application-boundary.md). |
+| `tui -> configui` | Focused primary-adapter composition | Intentional: the full TUI embeds the same configuration editor launched by `config edit`. |
+| `tui -> editor` / `os/exec` | Narrow process/terminal capability | Intentional; planning data still flows only through `core.Service`. |
+
+No new architecture task is needed for these edges: the two material seams already
+have explicit trigger-scoped work, and the remaining edges are composition or narrow
+adapter capabilities rather than leaked persistence.
+
 - **`internal/domain`** — entities + invariants (`Task`, `Status`). No fs, no
   cobra logic (the one pragmatic concession: `Task`/`Epic`/`Audit`/`Research` carry a
   `Path` the store stamps, so callers can locate the source file). Frontmatter **is** the
@@ -28,7 +109,7 @@ the one-screen orientation for contributors.
   — except `README.md`, silently carved. `meta/` is the sanctioned home for
   non-entity files.
   Per-entity metadata — the top-level dir, authoring fields, conventions, and
-  body scaffold for `task`/`epic`/`audit` — lives in **one registry** (`entity.go`'s
+  body scaffold for `task`/`epic`/`audit`/`research` — lives in **one registry** (`entity.go`'s
   `Descriptor`); `SchemaKinds`/`AuthoringFields`/`Conventions`/`BodyTemplate` read
   that table instead of parallel `switch kind` blocks, so a kind's schema/scaffold
   surface is a registry entry, not a per-layer edit. Honest remaining fan-out for a
@@ -37,20 +118,21 @@ the one-screen orientation for contributors.
   is generic `scanDir[T]`, resolution generic `resolveID`), its `core.Service` use
   cases, a cli command, and render + TUI *display* delegates (a Human/JSON formatter
   — column layout is the generic `Column[T]`/`WriteTablePlain` — plus an `entityTab`
-  entry + row delegate). That residual is the cost of a **typed** domain whose three
+  entry + row delegate). That residual is the cost of a **typed** domain whose four
   entities have genuinely different shapes (tasks: status/tier/priority; epics:
-  rollups; audits: findings/buckets); the generics remove the *mechanics*, not the
+  rollups; audits: findings/buckets; research: dated, taggable, no lifecycle); the generics remove the *mechanics*, not the
   per-entity shape. What IS collapsed: the metadata fan-out into the descriptor
   (M1), and TUI *lifecycle* (the `a` menu + `:` verbs) into each entity's transition
   table (M10), so an entity opts into close/move actions by declaring transitions,
   not by editing the reducer. A further data-driven persistence/render collapse
-  isn't pursued — for three heterogeneous entities it trades clarity for machinery.
+  isn't pursued — for four heterogeneous entities it trades clarity for machinery.
 - **`internal/core`** — use cases (`Service`) + the ports it needs, defined here
-  at the consumer. `Store` (composed of `TaskStore`/`EpicStore`/`AuditStore`) is
-  the *use-case* port the `Service` depends on; the two fs/text operations that
-  aren't use cases live in narrow sibling ports — `Fixer` (frontmatter repair)
-  and `Layout` (watch-path layout) — so a second `Store` and the test fakes don't
-  carry them. `SpaceOverviewService` is the repo-independent cross-space use case:
+  at the consumer. `Store` (composed of
+  `TaskStore`/`EpicStore`/`AuditStore`/`ResearchStore`) is the *use-case* port the
+  `Service` depends on; the three fs/text operations that aren't use cases live in
+  narrow sibling ports — `Fixer` (frontmatter repair), `Linter` (link integrity),
+  and `Layout` (watch paths) — so a second `Store` and the test fakes don't carry
+  them. `SpaceOverviewService` is the repo-independent cross-space use case:
   it reads logical registry groups through `SpaceOverviewStore`, selects one healthy
   entry point per identity, and opens only the narrow read-only `SummaryStore` needed
   for a dashboard scan. Roles and states are typed core vocabulary and entry health is
@@ -59,10 +141,10 @@ the one-screen orientation for contributors.
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
   `<root>/tasks/<id>-<slug>.md` (flat, id-led). Splits frontmatter with a zero-dep byte
-  scanner; parses YAML with `go.yaml.in/yaml/v3`. One `*FS` satisfies all three
-  ports (`var _ core.Store/Fixer/Layout = (*FS)(nil)`): the Service gets the
-  use-case `Store`, the CLI's `lint --fix` and the TUI watcher get the narrow
-  `Fixer`/`Layout` wired directly. It owns the *layout* knowledge — `WatchPaths()`
+  scanner; parses YAML with `go.yaml.in/yaml/v3`. One `*FS` satisfies all four
+  interfaces (`var _ core.Store/Fixer/Linter/Layout = (*FS)(nil)`): the Service gets
+  the use-case `Store`; CLI lint and the TUI watcher get the narrow
+  `Fixer`/`Linter`/`Layout` wired directly. It owns the *layout* knowledge — `WatchPaths()`
   hands the TUI watcher its dir set so the path convention isn't reconstructed
   outside the store. Concurrency is **version-CAS** (epic 24): every write, just
   before committing, re-resolves the file by its **id** and re-hashes it
@@ -82,7 +164,7 @@ the one-screen orientation for contributors.
   browser calling the **same** `core.Service`, never the store/fs. Its Config/About
   overlay embeds `internal/configui` and calls `core.ConfigurationService`, so it
   also shares the configuration application seam with Cobra. See the TUI section below.
-- **`internal/theme`** — dependency-free semantic tokens (status/bucket/priority
+- **`internal/theme`** — presentation-framework-free semantic tokens (status/bucket/priority
   → glyph + a `Color` enum), imported by **both** `cli/render` (→ SGR: the theme's
   truecolor hue, or a 16-color slot fallback) and `tui` (→ lipgloss), so
   "in-progress is a yellow ●" is decided in one place.
@@ -147,8 +229,8 @@ the one-screen orientation for contributors.
   and remedy per registered checkout. Its `Group` projection treats a durable planning id
   as one logical space and the registered paths as entry points; legacy healthy entries
   fall back to physical planning root, while broken id-less entries stay isolated. Both
-  `space list`, `doctor`, and explicit CLI `--space` selection consume the diagnoses;
-  future `status --all`/TUI work must reuse the same projection rather than reinterpret
+  `space list`, `doctor`, explicit CLI `--space` selection, and `status --all` consume
+  the diagnoses; future TUI work must reuse the same projection rather than reinterpret
   discovery errors. It never repairs, removes, or adds relationship metadata to registry
   data.
 - **`internal/spacestore`** — the composite filesystem secondary adapter for
@@ -224,12 +306,12 @@ Files split by concern:
 
 - **`model.go`** — the root `Model` + the `Update` reducer and `View`. Owns the
   tab set, focus (list ⇄ detail), window size, and key routing.
-- **`entity.go`** — the **entity registry**: tasks/epics/audits as `*entityTab`s,
+- **`entity.go`** — the **entity registry**: tasks/epics/audits/research as `*entityTab`s,
   each owning its own `list.Model`, cursor, loaders, list-scoped state (status
   view, sort, filter restore), and its **lifecycle table** (the transitions it
   offers + an `applyMove`). Read/browse is keybinding-free; lifecycle is declared
   here per entity (tasks by status via `Move`, audits by bucket via `MoveAudit`,
-  epics none), so adding Projects/ADRs later is a new registry entry — including
+  epics and research none), so adding Projects/ADRs later is a new registry entry — including
   any `a`-menu / `:`-verb actions — not a reducer edit.
 - **`dashboard.go`** — the landing **dashboard** (`tskflwctl ui` opens here): a
   read-only composite of widgets over a single `core.Summary`, the in-app
@@ -305,28 +387,29 @@ The CLI also has **golden snapshots** of the byte-stable machine contract (the
 `./...`). The single subprocess smoke layer (real binary, exit codes, lifecycle)
 lives in `cmd/tskflwctl/main_test.go`. `just test` + `just lint`.
 
-## Status (2026-06-11)
-Substantially functional — the full create→update→move→lint loop runs without
-the Python prototype:
-- `init`, `completion` (command/flag/slug, status-aware), `lint` (+`--fix`/`--dry-run`)
-- `task new|list|show|set|edit|append|move|start|next|ready|complete|defer|deprecate`
-- `epic new|list|show`, `audit list|show|findings|lint|close|reopen|defer`
-- `ui` — the Bubble Tea browser (epic 18): a landing **dashboard** (the in-app
-  counterpart of `status` — in-progress, due-for-revisit, epic rollups, needs-attention,
-  navigational) plus two-pane read-only browse of tasks/epics/audits,
-  `:` jump, `/` filter, sort, status views, detail find, `?`
-  help, `fsnotify` live reload, lifecycle mutations (`a` menu + `:` verbs), and
-  glamour markdown with an `R` raw/pretty toggle (S0–S5 shipped; cross-link is the
-  remaining sprint).
+## Status (2026-08-21)
 
-Throughout: explicit noun-verb, semantic exit codes (`10` not-found · `11`
-validation · `13` ambiguous · `14` conflict), atomic
-writes (`writeFileAtomic` overwrite, `createFileAtomic` exclusive) + surgical
-`yaml.v3` edits, `--json` everywhere (`schema_version`), resilient reads with
-actionable frontmatter errors, agent safety annotations.
+The layered shape now has two substantial primary consumers and several reusable
+application seams; it is no longer architecture held in reserve for a hypothetical UI:
 
-Remaining (see `planning/`): `adr`/`project` groups, the audit finding-*write*
-surface (`audit finding --status`/`sync`; the read surface — `audit findings`
-query + `audit lint` — shipped), reporting views (`stats`/`index`/`tags`),
-`track`, `schema --type cli`, interactive `init` wizard. Out of
-scope by a long shot: MCP / semantic engine / pgvector.
+- The CLI exposes full task lifecycle and body mutation, epic/audit/research authoring,
+  schema and wire discovery, configuration lifecycle, planning-space registry verbs,
+  global `--space` selection, and the cross-space `status --all` overview.
+- The Bubble Tea app provides its dashboard plus task/epic/audit/research tabs,
+  filtering/sorting/find, structured navigation, task and audit lifecycle actions,
+  task field editing, filesystem reloads, and the embedded configuration editor. Reads
+  and writes remain asynchronous commands over core services; production TUI code does
+  not open planning/config stores.
+- The configuration and cross-space features have dedicated core services and composite
+  filesystem adapters. `SpaceOverviewService` is reusable now; registry list/selection/
+  mutation still needs the explicitly tracked application-boundary consolidation before
+  an atlas or served adapter consumes it.
+- Writes use atomic replacement/exclusive create, a repo-wide lock, content-version CAS,
+  bounded retry for agent mutations, and parse-before-accept editor loops. Machine output
+  is a versioned `internal/wire` contract with generated JSON Schema and golden coverage.
+
+The next architecture work is intentionally trigger-based. Consolidate the space registry
+through its ready task. Activate reusable workspace discovery only when an atlas or served
+adapter needs to open arbitrary trees; thread `context.Context` when an HTTP request path
+exists; reshape findings pagination when a web findings view is scoped. Until those
+triggers occur, package movement or speculative interfaces are out of scope.

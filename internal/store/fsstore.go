@@ -42,6 +42,7 @@ type FS struct {
 var (
 	_ core.Store  = (*FS)(nil)
 	_ core.Fixer  = (*FS)(nil)
+	_ core.Linter = (*FS)(nil)
 	_ core.Layout = (*FS)(nil)
 )
 
