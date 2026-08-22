@@ -11,6 +11,93 @@ linters:
   settings:
     depguard:
       rules:
+        # Production domain code is the innermost planning layer. Stable-id parsing and
+        # minting is its one internal dependency; application, presentation, discovery,
+        # and persistence packages must depend toward domain, never the reverse.
+        domain-stays-inward:
+          files:
+            - "**/internal/domain/*.go"
+            - "!$test"
+          list-mode: lax
+          allow:
+            - github.com/andy-esch/taskflow/internal/id
+          deny:
+            - pkg: github.com/andy-esch/taskflow/internal
+              desc: >-
+                internal/domain may depend only on internal/id. Keep planning entities
+                and invariants independent of application and adapter packages.
+
+        # The application layer owns use cases and the ports they consume. It may use
+        # domain values and the stable-id primitive, but it must not know which adapter
+        # (filesystem, Cobra, Bubble Tea, or machine wire) satisfies or presents them.
+        core-owns-ports-not-adapters:
+          files:
+            - "**/internal/core/*.go"
+            - "!$test"
+          list-mode: lax
+          allow:
+            - github.com/andy-esch/taskflow/internal/domain
+            - github.com/andy-esch/taskflow/internal/id
+          deny:
+            - pkg: github.com/andy-esch/taskflow/internal
+              desc: >-
+                internal/core may depend only on internal/domain and internal/id.
+                Define consumer-owned ports here and inject adapter implementations.
+
+        # Wire is the neutral machine contract shared by adapters. Depending on core
+        # result models and domain values is deliberate; depending on a human UI or a
+        # filesystem/config adapter would make the contract adapter-specific again.
+        wire-stays-adapter-neutral:
+          files:
+            - "**/internal/wire/*.go"
+            - "!$test"
+          list-mode: lax
+          allow:
+            - github.com/andy-esch/taskflow/internal/core
+            - github.com/andy-esch/taskflow/internal/domain
+          deny:
+            - pkg: github.com/andy-esch/taskflow/internal
+              desc: >-
+                internal/wire may depend only on internal/core and internal/domain.
+                Keep the machine contract reusable by CLI, TUI, and future adapters.
+
+        # Presentation packages consume application ports and neutral values; they do
+        # not discover planning roots or open persistence adapters. Tests are excluded
+        # because integration-style UI tests deliberately construct a real store in a
+        # temporary directory. internal/cli/*.go is also deliberately absent: that
+        # package is today's composition root and is allowed to construct adapters and
+        # launch the TUIs. Its render/prompt subpackages are covered here.
+        primary-adapters-use-application-seams:
+          files:
+            - "**/internal/tui/*.go"
+            - "**/internal/configui/*.go"
+            - "**/internal/cli/render/*.go"
+            - "**/internal/cli/prompt/*.go"
+            - "!$test"
+          list-mode: lax
+          allow:
+            # The full TUI intentionally embeds the focused configuration TUI.
+            - github.com/andy-esch/taskflow/internal/configui
+          deny:
+            - pkg: github.com/andy-esch/taskflow/internal/cli
+              desc: primary adapters must not import the Cobra adapter
+            - pkg: github.com/andy-esch/taskflow/internal/tui
+              desc: focused presentation packages must not import the full TUI
+            - pkg: github.com/andy-esch/taskflow/internal/config
+              desc: primary adapters must use core ports instead of repo discovery
+            - pkg: github.com/andy-esch/taskflow/internal/configstore
+              desc: primary adapters must not open the configuration filesystem adapter
+            - pkg: github.com/andy-esch/taskflow/internal/spacehealth
+              desc: primary adapters must use a core space projection
+            - pkg: github.com/andy-esch/taskflow/internal/spacestore
+              desc: primary adapters must not open the cross-space filesystem adapter
+            - pkg: github.com/andy-esch/taskflow/internal/store
+              desc: primary adapters must use core services and ports, not the Markdown store
+            - pkg: github.com/andy-esch/taskflow/internal/tomledit
+              desc: primary adapters must not edit configuration storage directly
+            - pkg: github.com/andy-esch/taskflow/internal/userconfig
+              desc: primary adapters must use a core seam instead of home-scoped storage
+
         # The repo-scoped config must never consult the home-scoped one: planning-root
         # discovery has to stay a pure function of the cwd, or `--space`-style handles
         # and a user's preferences file could silently move where data is read from.

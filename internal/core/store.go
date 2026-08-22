@@ -156,10 +156,11 @@ type ResearchStore interface {
 }
 
 // Store is the use-case persistence port the Service depends on. It is
-// deliberately narrow: only the task/epic/audit/research use cases live here. The two
-// fs/text operations that aren't use cases (frontmatter repair, watch-path
-// layout) are split into Fixer/Layout below so a second Store implementation —
-// and the test fakes — don't pay for methods the core never calls.
+// deliberately narrow: only the task/epic/audit/research use cases live here. The three
+// fs/text operations that aren't use cases (frontmatter repair, link checks,
+// and watch-path layout) are split into Fixer/Linter/Layout below so a second
+// Store implementation — and the test fakes — don't pay for methods the core
+// never calls.
 type Store interface {
 	TaskStore
 	EpicStore
