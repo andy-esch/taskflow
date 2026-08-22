@@ -110,7 +110,7 @@ func TestModel_ActionMenuMovesTask(t *testing.T) {
 	tm, _ := m.Update(press("m"))
 	m = tm.(Model)
 	if !m.action.active {
-		t.Fatal("a should open the action menu on a task")
+		t.Fatal("m should open the action menu on a task")
 	}
 	for _, tr := range m.action.options {
 		if tr.verb == "start" {

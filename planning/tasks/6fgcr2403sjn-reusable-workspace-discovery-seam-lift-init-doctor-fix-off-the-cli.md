@@ -30,3 +30,16 @@ and its sketch
 **Staying deferred** — epic 29 is an undecided direction, not a commitment, and its
 sequencing deliberately puts the CLI-only slice first so the seam isn't needed until
 the TUI board is actually chosen. Recorded here only so the trigger isn't lost.
+
+### 2026-08-22 — atlas trigger fired; narrow feature work split out
+
+The atlas is now a committed direction because its purpose is navigation from the
+cross-space view into a selected local planning space. The workspace-opening portion of
+this task is therefore active as
+[establish-reusable-workspace-opening-for-atlas-navigation](6g2jhr31f14p-establish-reusable-workspace-opening-for-atlas-navigation.md).
+
+This older audit task stays deferred rather than silently growing into the atlas task.
+Its remaining `doctor` / `lint --fix` promotion still has no second primary-adapter
+consumer, and pulling those operations into the atlas foundation would widen the feature
+without helping navigation. Revisit that remainder when a served adapter or another
+actual consumer needs those maintenance use cases.

@@ -51,7 +51,7 @@ whose remedy changes a boundary rather than one feature's behavior.
 
 | Deferred work | Activate when | Why not before |
 | --- | --- | --- |
-| [`Resolve() -> Workspace`](../tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md) | The atlas or served adapter must open arbitrary planning trees, or a second adapter needs init/doctor/fix | Today Cobra is the only workspace composition root; moving the wiring alone adds indirection. |
+| [`Resolve() -> Workspace`](../tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md) | A second adapter needs init/doctor/fix | The atlas trigger fired on 2026-08-22 and its narrow workspace-opening portion moved to epic 29; this row now tracks only the unneeded maintenance-use-case remainder. |
 | [`context.Context` through core/store`](../tasks/6fgcr24023yr-thread-context.context-through-the-core-and-store-ports.md) | A served HTTP request path needs cancellation, deadlines, or tracing | CLI/TUI calls are local and bounded; the broad mechanical retrofit should follow the real request boundary. |
 | [`FindingsRollup` web view model](../tasks/6fgq1n002whs-recast-findingsrollup-as-a-composed-service-view-model-for-web-pagination-sort.md) | A web findings page needs independent pagination/filter/sort | Existing CLI/TUI summary consumers already share the required aggregate. |
 | [Worktree-anchor cache](../tasks/6g1sbcbfb4mk-cache-worktree-anchoring-if-it-ever-shows-up-in-a-profile.md) | A profile of `status --all` or another loop implicates it | Current measurements put the repeated stats below noise; caching creates invalidation state. |

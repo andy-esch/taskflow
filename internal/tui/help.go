@@ -35,6 +35,7 @@ var helpSections = []helpSection{
 		he(keys.Palette),
 		he(keys.Command),
 		{":config", "open Configuration / About for this space"},
+		he(keys.Atlas),
 		{"/", "filter the list (slug, desc, tags)"}, // the list's own filter (no keyMap binding)
 		he(keys.FilterMode),
 		he(keys.Sort), he(keys.SortRev),
@@ -70,6 +71,18 @@ var helpSections = []helpSection{
 	}},
 }
 
+var atlasHelpSection = helpSection{"Global", []helpEntry{
+	he(keys.Palette),
+	he(keys.Command),
+	{":config", "open Configuration / About for the current space"},
+	he(keys.Atlas),
+	{keys.Sort.Help().Key, "cycle order: name → activity → registered"},
+	{keys.SortRev.Help().Key, "reverse the current atlas order"},
+	he(keys.Refresh),
+	he(keys.Help),
+	he(keys.Quit), he(keys.ForceQuit),
+}}
+
 // symbolsFor builds the glyph legend for the active screen — what the leading
 // status / liveness / bucket glyphs (and the ⚠/↻/✓ markers) in the rows actually
 // mean, so a reader can decode the column without leaving the TUI. The glyph AND
@@ -82,6 +95,8 @@ func symbolsFor(kind entityKind, s *styles) (helpSection, bool) {
 	mark := func(c theme.Color, label, desc string) helpEntry { return helpEntry{s.fg(c, label), desc} }
 	var e []helpEntry
 	switch kind {
+	case entityAtlas:
+		return helpSection{}, false
 	case entityTasks:
 		for _, st := range domain.AllStatuses() {
 			e = append(e, tok(theme.Status(st), string(st)))
@@ -138,6 +153,8 @@ func symbolsFor(kind entityKind, s *styles) (helpSection, bool) {
 func notesFor(kind entityKind) helpSection {
 	var entries []helpEntry
 	switch kind {
+	case entityAtlas:
+		return helpSection{"Notes", []helpEntry{{atlasName, "j/k choose a space · h/l choose an entry point · ⏎ enter · o order · O reverse · a/esc return"}}}
 	case entityDashboard:
 		entries = append(entries, helpEntry{overviewName, "⏎ open the selected item · ] / [ to the tabs · r refresh"})
 	case entityTasks:
@@ -171,6 +188,9 @@ func helpWidth(maxW int) int {
 // and least in need of surfacing in a context panel. The inactive pane's section
 // is hidden, so `?` shows what actually works right now.
 func helpSectionsFor(f focus, kind entityKind, s *styles) []helpSection {
+	if kind == entityAtlas {
+		return []helpSection{notesFor(kind), atlasHelpSection}
+	}
 	byTitle := make(map[string]helpSection, len(helpSections))
 	for _, s := range helpSections {
 		byTitle[s.title] = s

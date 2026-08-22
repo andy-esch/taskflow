@@ -385,9 +385,10 @@ a hosted/served deployment is where it would show up most sharply.
    above. The accepted cost is `space`'s overlap with `core.Workspace`; if it ever
    grates, the item noun is a rename of one TOML key, one flag, and one command group,
    and the durable data (`id`, `path`) is unaffected.
-2. **Is the cross-space board the point, or is `--space` the point?** Plausible that
-   the flag plus a cross-space `status --all` delivers most of the value, and the board
-   is a nice-to-have that costs a `model.go` refactor.
+2. ~~**Is the cross-space board the point, or is `--space` the point?**~~ **Settled
+   2026-08-22: build the board.** The CLI surfaces are independently useful, but the
+   desired behavior is navigation from the atlas into a space without leaving the TUI;
+   `status --all` cannot provide that interaction.
 3. **Registry vs. `tracked_repos` overlap.** Both record "other repos." Kept separate
    here on the argument that they're different axes (one user's products vs. one
    product's repos) — but is that distinction obvious to anyone but its author?
@@ -401,26 +402,32 @@ a hosted/served deployment is where it would show up most sharply.
    local path, so `space` as "a local directory" may be the wrong long-run
    abstraction. Deliberately not answered here.
 
-## Recommendation (as of 2026-08-15)
+## Recommendation (updated 2026-08-22)
 
-Proceed in slices ordered so the cheap, independently-useful parts come first and the
-expensive commitment comes last — and **re-decide at step 3** rather than treating the
-board as a foregone conclusion:
+The cheap, independently-useful slices shipped first, the planned decision point was
+reached, and the local atlas is now implemented:
 
 1. **Home config** — location, load/save, env override, `theme`/`pager` precedence.
    Useful on its own, commits to no multi-space vocabulary at all.
 2. **Registry + CLI** — `space list|add|forget`, `--space`, `init` auto-register, a
    `doctor` section, `status --all`. Pure CLI, fully testable, no TUI risk.
-3. **Re-decide.** Having lived on the CLI half, is the board still wanted?
-4. Only if yes: the `Resolve() → Workspace` seam, the `spaceSession` refactor, the
-   atlas, the switcher.
+3. **Re-decide — yes.** The board earns its cost through reversible TUI navigation,
+   not by rendering the same overview more decoratively.
+4. **Atlas — shipped.** A narrow reusable workspace-opening boundary now supports the
+   `spaceSession` refactor, atlas cards, entry-point selection, ordering, and switcher.
 
-**What would change the call.** If step 2 lands and `--space` + `status --all` already
-answers "what am I in the middle of, anywhere?", the board is decoration and steps 3–4
-should be dropped — the `model.go` split is too large a cost for a nicer rendering of
-an answer you already have. Conversely, if epic 19's `serve` work starts first, fork 7
-becomes urgent: "a space is a local directory" would be the wrong abstraction to have
-baked into a config schema by then.
+**Decision rationale.** `status --all` answers "what am I in the middle of, anywhere?"
+but does not let the user enter that planning context and continue working. The atlas is
+therefore a navigation surface, not a decorative duplicate. A served adapter would still
+make fork 7 urgent: the first implementation remains explicitly local and must not bake
+local paths into the durable definition of a space.
+
+> **Progress note, 2026-08-22.** The local atlas slice is implemented. It groups cards by
+> planning identity, exposes direct/pointer entry points and their paths, navigates into a
+> checkout through the reusable workspace boundary, restores checkout-specific TUI state,
+> and watches only the active tree. Atlas chrome follows home/global theme precedence;
+> name/activity/registration ordering is a reversible in-session choice. Remote spaces,
+> scan/discovery, and persisted ordering remain deliberately uncommitted.
 
 > **Progress note, 2026-08-20.** Slice 2's two prerequisites are now *implemented*, not
 > just decided. The vocabulary is locked (`space` / `atlas`), and identity shipped in epic

@@ -19,6 +19,7 @@ type keyMap struct {
 	Zoom        key.Binding // z → full-screen the detail pane (toggle)
 	Command     key.Binding // : → entity command-jump
 	Palette     key.Binding // ctrl+p → fuzzy command palette (jump to anything / run a command)
+	Atlas       key.Binding // a → cross-space atlas / return to current space
 	PrevTab     key.Binding // [ → previous entity tab
 	NextTab     key.Binding // ] → next entity tab
 	Sort        key.Binding // o → cycle sort column
@@ -58,6 +59,7 @@ var keys = keyMap{
 	Zoom:        key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "full-screen the detail pane (z/esc to exit)")),
 	Command:     key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "command / jump (entity, status, or verb)")),
 	Palette:     key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "command palette — fuzzy jump to anything / run a command")),
+	Atlas:       key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "open atlas / return to current space")),
 	PrevTab:     key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous tab")),
 	NextTab:     key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next tab")),
 	Sort:        key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "cycle sort column")),

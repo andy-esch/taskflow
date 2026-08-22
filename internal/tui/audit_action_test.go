@@ -37,7 +37,7 @@ func TestModel_ActionMenuMovesAudit(t *testing.T) {
 	tm, _ := m.Update(press("m"))
 	m = tm.(Model)
 	if !m.action.active {
-		t.Fatal("a should open the action menu on an audit")
+		t.Fatal("m should open the action menu on an audit")
 	}
 	// Open audit: reopen (→open) is the no-op row and dropped; close + defer remain.
 	offered := map[string]bool{}
