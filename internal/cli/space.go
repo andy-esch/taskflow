@@ -1,20 +1,10 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
-	"path/filepath"
-	"strings"
-
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
-	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
-	"github.com/andy-esch/taskflow/internal/domain"
-	"github.com/andy-esch/taskflow/internal/spacehealth"
-	"github.com/andy-esch/taskflow/internal/userconfig"
-	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // newSpaceCmd is the `space` group: the home-scoped registry of planning repos on this
@@ -52,14 +42,14 @@ func newSpaceListCmd(app *App) *cobra.Command {
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
-			diagnoses, err := loadSpaceDiagnoses()
+			catalog, err := app.SpaceSvc.Catalog()
 			if err != nil {
 				return err
 			}
 			if app.JSON {
-				return render.SpacesJSON(app.Out, spaceEntries(diagnoses))
+				return render.SpacesJSON(app.Out, catalog.Entries)
 			}
-			render.SpacesHuman(app.Out, app.Style, spaceGroups(spacehealth.Group(diagnoses)))
+			render.SpacesHuman(app.Out, app.Style, catalog.Groups)
 			return nil
 		},
 	}
@@ -103,144 +93,45 @@ func newSpaceForgetCmd(app *App) *cobra.Command {
 		Example:           "  tskflwctl space forget old-thing",
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"safety": "mutating"},
-		ValidArgsFunction: completeSpaceIDs,
+		ValidArgsFunction: completeSpaceIDs(app.SpaceSvc),
 		RunE: func(_ *cobra.Command, args []string) error {
 			return runSpaceForget(app, args[0])
 		},
 	}
 }
 
-// loadSpaceDiagnoses reads the registry and resolves each entry's current state. A broken
-// entry is REPORTED, never dropped and never fatal: the registry describes what you told
-// it about, and a missing or mismatched repo is information, not an error.
-func loadSpaceDiagnoses() ([]spacehealth.SpaceProblem, error) {
-	diagnoses, err := spacehealth.DiagnoseRegistry()
-	if err != nil {
-		return nil, classifySpaceRegistryError(err)
-	}
-	return diagnoses, nil
-}
-
-func spaceEntries(diagnoses []spacehealth.SpaceProblem) []wire.SpaceEntry {
-	out := make([]wire.SpaceEntry, 0, len(diagnoses))
-	for _, diagnosis := range diagnoses {
-		out = append(out, spaceEntry(diagnosis))
-	}
-	return out
-}
-
-func spaceGroups(groups []spacehealth.SpaceGroup) [][]wire.SpaceEntry {
-	out := make([][]wire.SpaceEntry, 0, len(groups))
-	for _, group := range groups {
-		out = append(out, spaceEntries(group.Entries))
-	}
-	return out
-}
-
-func spaceEntry(diagnosis spacehealth.SpaceProblem) wire.SpaceEntry {
-	s := diagnosis.Space
-	e := wire.SpaceEntry{
-		ID: s.ID, Path: s.Path, VerifyID: s.VerifyID, PlanningID: diagnosis.PlanningID,
-		Role: core.SpaceRole(diagnosis.Role), Label: s.Label, Added: s.Added,
-		State: core.SpaceState(diagnosis.Kind), Root: diagnosis.Root,
-		Detail: diagnosis.Message, Remedy: diagnosis.Remedy,
-	}
-	return e
-}
-
 func runSpaceAdd(app *App, target, id string) error {
-	abs, err := filepath.Abs(target)
+	mutation, err := app.SpaceSvc.Add(target, id, app.DryRun)
 	if err != nil {
 		return err
 	}
-	// Validate BEFORE writing: the "require + error, leave nothing behind" contract that
-	// `init --planning-repo` already follows.
-	cfg, err := config.Discover(abs)
-	if err != nil {
-		return err
-	}
-	// Store the repo directory — the place carrying .tskflwctl.toml — rather than the
-	// exact subdirectory the user happened to name or the resolved planning root. A pointer
-	// repo therefore stays registered as the pointer checkout, and ordinary discovery does
-	// the routing when it is used later.
-	repoDir := cfg.Dir
-	if repoDir == "" {
-		repoDir = cfg.Root // config-less bare tasks/ tree: root is the only repo anchor
-	}
-	if id == "" {
-		id = defaultSpaceID(repoDir)
-	}
-	if err := validateSpaceID(id); err != nil {
-		return err
-	}
-	space := userconfig.Space{
-		ID:       id,
-		Path:     userconfig.TildePath(repoDir),
-		VerifyID: cfg.ID,
-	}
-	added, existing, err := userconfig.AddSpace(space, app.DryRun)
-	if err != nil {
-		return classifySpaceRegistryError(err)
-	}
-	if !added {
-		return reportSpaceChange(app, spaceEntry(spacehealth.DiagnoseSpace(existing)), false, "already registered as")
+	if !mutation.Changed {
+		return reportSpaceChange(app, mutation, "already registered as")
 	}
 	verb := "registered"
 	if app.DryRun {
 		verb = "would register"
 	}
-	return reportSpaceChange(app, spaceEntry(spacehealth.DiagnoseSpace(existing)), true, verb)
+	return reportSpaceChange(app, mutation, verb)
 }
 
 func runSpaceForget(app *App, id string) error {
-	removed, existing, err := userconfig.ForgetSpace(id, app.DryRun)
+	mutation, err := app.SpaceSvc.Forget(id, app.DryRun)
 	if err != nil {
-		return classifySpaceRegistryError(err)
-	}
-	if !removed {
-		return fmt.Errorf("%w: no space named %q — `space list` shows the registered ones", domain.ErrNotFound, id)
+		return err
 	}
 	verb := "forgot"
 	if app.DryRun {
 		verb = "would forget"
 	}
-	return reportSpaceChange(app, spaceEntry(spacehealth.DiagnoseSpace(existing)), true, verb)
-}
-
-func classifySpaceRegistryError(err error) error {
-	switch {
-	case errors.Is(err, userconfig.ErrSpaceIDConflict):
-		return fmt.Errorf("%w: %s", domain.ErrConflict, err.Error())
-	case errors.Is(err, userconfig.ErrInvalidRegistry):
-		return fmt.Errorf("%w: %s", domain.ErrValidation, err.Error())
-	default:
-		return err // permission/I/O/lock failures are operational, not bad user input
-	}
+	return reportSpaceChange(app, mutation, verb)
 }
 
 // reportSpaceChange emits the mutation receipt in whichever face is active.
-func reportSpaceChange(app *App, e wire.SpaceEntry, changed bool, verb string) error {
+func reportSpaceChange(app *App, mutation core.SpaceMutation, verb string) error {
 	if app.JSON {
-		return render.SpaceMutationJSON(app.Out, e, changed, app.DryRun)
+		return render.SpaceMutationJSON(app.Out, mutation)
 	}
-	render.SpaceMutationHuman(app.Out, app.Style, e, changed, verb)
-	return nil
-}
-
-// defaultSpaceID derives a label from the directory name — the thing a person would call
-// the repo anyway. Collisions are refused at registration (see AddSpace), never silently
-// suffixed, so an accidental clash is visible rather than producing `taskflow-2`.
-func defaultSpaceID(dir string) string {
-	return strings.ToLower(filepath.Base(filepath.Clean(dir)))
-}
-
-// validateSpaceID keeps a label usable as a command-line word and a completion candidate.
-func validateSpaceID(id string) error {
-	if id == "" {
-		return fmt.Errorf("%w: a space needs a label; pass --id", domain.ErrValidation)
-	}
-	if strings.ContainsAny(id, " \t/\\\"'") {
-		return fmt.Errorf("%w: space label %q may not contain spaces, quotes or path separators", domain.ErrValidation, id)
-	}
+	render.SpaceMutationHuman(app.Out, app.Style, mutation, verb)
 	return nil
 }

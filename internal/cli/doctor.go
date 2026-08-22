@@ -55,7 +55,7 @@ func newDoctorCommand(app *App) *cobra.Command {
 			}
 			diagnosis, err := app.ConfigSvc.Diagnose(start)
 			if err != nil {
-				return classifySpaceRegistryError(err)
+				return err
 			}
 			problems := make([]render.DoctorProblem, len(diagnosis.Problems))
 			for i, p := range diagnosis.Problems {

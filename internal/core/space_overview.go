@@ -7,13 +7,10 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// SpaceOverviewStore is the secondary-adapter port for cross-space status. The
-// application core owns entry-point selection and summary composition; the adapter owns
-// the machine-local registry, discovery, and construction of a Store for one planning
-// root. Keeping those details behind this port lets Cobra, Bubble Tea, and a future
-// served adapter consume the same SpaceOverview use case.
+// SpaceOverviewStore is the narrow secondary-adapter port for opening one planning tree.
+// Registry cataloging is deliberately supplied by SpaceRegistryService instead of being
+// folded into this filesystem capability.
 type SpaceOverviewStore interface {
-	ListSpaceGroups() ([]SpaceGroup, error)
 	OpenPlanningStore(root string) (SummaryStore, error)
 }
 
@@ -46,28 +43,29 @@ type SpaceOverview struct {
 // stores. It is deliberately separate from Service: a single-tree Service remains usable
 // without any home registry, while this use case works from anywhere on the machine.
 type SpaceOverviewService struct {
-	store SpaceOverviewStore
-	now   func() time.Time
+	registry *SpaceRegistryService
+	store    SpaceOverviewStore
+	now      func() time.Time
 }
 
-func NewSpaceOverviewService(store SpaceOverviewStore) *SpaceOverviewService {
-	return &SpaceOverviewService{store: store, now: time.Now}
+func NewSpaceOverviewService(registry *SpaceRegistryService, store SpaceOverviewStore) *SpaceOverviewService {
+	return &SpaceOverviewService{registry: registry, store: store, now: time.Now}
 }
 
 // Overview returns one summary per logical planning identity. Registry decode/read
 // errors are fatal because no trustworthy group list exists. Entry-point and per-tree
 // read failures stay inside their group so one dead checkout never hides healthy spaces.
 func (s *SpaceOverviewService) Overview() (SpaceOverview, error) {
-	groups, err := s.store.ListSpaceGroups()
+	catalog, err := s.registry.Catalog()
 	if err != nil {
 		return SpaceOverview{}, err
 	}
 	overview := SpaceOverview{
-		Spaces:     make([]SpaceSummary, 0, len(groups)),
+		Spaces:     make([]SpaceSummary, 0, len(catalog.Groups)),
 		InProgress: []SpaceInProgress{},
 	}
 	asOf := s.now()
-	for _, group := range groups {
+	for _, group := range catalog.Groups {
 		space := summarizeSpaceGroup(group, s.store, asOf)
 		overview.Spaces = append(overview.Spaces, space)
 		if space.Summary == nil {

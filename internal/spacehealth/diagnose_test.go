@@ -66,13 +66,11 @@ func TestDiagnoseRegistry_AllSupportedStates(t *testing.T) {
 		if problem.Kind != kind {
 			t.Errorf("%s kind=%q, want %q: %+v", id, problem.Kind, kind, problem)
 		}
-		if problem.Broken() != (kind != KindOK && kind != KindEmpty) {
-			t.Errorf("%s Broken()=%v for kind %q", id, problem.Broken(), kind)
-		}
+		broken := kind != KindOK && kind != KindEmpty
 		if kind != KindOK && problem.Message == "" {
 			t.Errorf("%s has no diagnosis message: %+v", id, problem)
 		}
-		if problem.Broken() && problem.Remedy == "" {
+		if broken && problem.Remedy == "" {
 			t.Errorf("%s has no remedy: %+v", id, problem)
 		}
 	}
@@ -94,100 +92,6 @@ func TestDiagnoseRegistry_MissingFileIsHealthyEmptyRegistry(t *testing.T) {
 	got, err := DiagnoseRegistry()
 	if err != nil || len(got) != 0 {
 		t.Fatalf("missing registry: got=%v err=%v", got, err)
-	}
-}
-
-func TestGroup_DirectAndPointerEntriesSharePlanningIdentity(t *testing.T) {
-	planning := initializedRepo(t)
-	firstPointer := t.TempDir()
-	secondPointer := t.TempDir()
-	if _, err := config.InitPointer(firstPointer, planning, false); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := config.InitPointer(secondPointer, planning, false); err != nil {
-		t.Fatal(err)
-	}
-
-	resolved, err := config.Discover(planning)
-	if err != nil {
-		t.Fatal(err)
-	}
-	problems := []SpaceProblem{
-		DiagnoseSpace(userconfig.Space{ID: "impl", Path: firstPointer, VerifyID: resolved.ID}),
-		DiagnoseSpace(userconfig.Space{ID: "planning", Path: planning, VerifyID: resolved.ID}),
-		DiagnoseSpace(userconfig.Space{ID: "deploy", Path: secondPointer, VerifyID: resolved.ID}),
-	}
-
-	groups := Group(problems)
-	if len(groups) != 1 {
-		t.Fatalf("groups = %+v, want one planning identity", groups)
-	}
-	if groups[0].PlanningID != resolved.ID || len(groups[0].Entries) != 3 {
-		t.Fatalf("group = %+v", groups[0])
-	}
-	wantRoles := []Role{RolePointer, RoleDirect, RolePointer}
-	for i, want := range wantRoles {
-		if got := groups[0].Entries[i].Role; got != want {
-			t.Errorf("entry %d role = %q, want %q", i, got, want)
-		}
-		if got := groups[0].Entries[i].PlanningID; got != resolved.ID {
-			t.Errorf("entry %d planning id = %q, want %q", i, got, resolved.ID)
-		}
-	}
-}
-
-func TestGroup_PointerOnlyBrokenAndLegacyFallbacks(t *testing.T) {
-	planning := initializedRepo(t)
-	resolved, err := config.Discover(planning)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pointerA := t.TempDir()
-	pointerB := t.TempDir()
-	if _, err := config.InitPointer(pointerA, planning, false); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := config.InitPointer(pointerB, planning, false); err != nil {
-		t.Fatal(err)
-	}
-	missing := filepath.Join(t.TempDir(), "missing")
-
-	// The two pointers prove a direct checkout need not itself be registered. The
-	// missing entry proves verify_id retains group membership after its path rots.
-	problems := []SpaceProblem{
-		DiagnoseSpace(userconfig.Space{ID: "pointer-a", Path: pointerA}),
-		DiagnoseSpace(userconfig.Space{ID: "missing", Path: missing, VerifyID: resolved.ID}),
-		DiagnoseSpace(userconfig.Space{ID: "pointer-b", Path: pointerB}),
-	}
-	groups := Group(problems)
-	if len(groups) != 1 || len(groups[0].Entries) != 3 {
-		t.Fatalf("pointer-only group with retained broken identity = %+v", groups)
-	}
-	if problems[0].PlanningID != resolved.ID || problems[0].Role != RolePointer {
-		t.Errorf("legacy registry entry did not derive pointer identity: %+v", problems[0])
-	}
-	if problems[1].Role != RoleUnknown || problems[1].PlanningID != resolved.ID {
-		t.Errorf("broken entry lost its honest role or intended identity: %+v", problems[1])
-	}
-
-	// A config-less tasks tree has no durable id. Its direct checkout and a legacy
-	// pointer still group by the physical resolved root; unrelated broken entries do not.
-	idless := t.TempDir()
-	if err := os.Mkdir(filepath.Join(idless, domain.TasksDir), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	legacyPointer := t.TempDir()
-	if _, err := config.InitPointer(legacyPointer, idless, false); err != nil {
-		t.Fatal(err)
-	}
-	legacy := Group([]SpaceProblem{
-		DiagnoseSpace(userconfig.Space{ID: "idless", Path: idless}),
-		DiagnoseSpace(userconfig.Space{ID: "idless-pointer", Path: legacyPointer}),
-		DiagnoseSpace(userconfig.Space{ID: "gone-a", Path: filepath.Join(t.TempDir(), "gone")}),
-		DiagnoseSpace(userconfig.Space{ID: "gone-b", Path: filepath.Join(t.TempDir(), "gone")}),
-	})
-	if len(legacy) != 3 || len(legacy[0].Entries) != 2 {
-		t.Fatalf("legacy fallback groups = %+v, want root pair plus two isolated failures", legacy)
 	}
 }
 

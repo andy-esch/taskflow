@@ -17,7 +17,7 @@ the one-screen orientation for contributors.
 
 ## Current package map and dependency direction
 
-Reviewed against the production import graph on 2026-08-21 (`go list` over
+Reviewed against the production import graph on 2026-08-22 (`go list` over
 `./internal/...`). The diagram above is the rule of thumb; these are the actual
 packages that implement it:
 
@@ -42,8 +42,8 @@ store       -> core, domain, id
 config      -> domain, id, tomledit
 userconfig  -> tomledit
 spacehealth -> config, domain, userconfig
-configstore -> core, config, spacehealth, userconfig
-spacestore  -> core, spacehealth, store
+configstore -> core, config, userconfig
+spacestore  -> config, core, domain, spacehealth, store, userconfig
 configui    -> core + presentation utilities
 tui         -> core, domain, configui + presentation/process utilities
 cli/render  -> core, domain, wire + presentation utilities
@@ -88,7 +88,7 @@ ones as follows:
 | `cli -> configstore`, `cli -> spacestore`, `cli -> store` construction | Composition root | Intentional; secondary adapters are injected into consumer-owned core ports. |
 | `cli -> store` through `Fixer`, `Linter`, `Layout`, and completion | Narrow fs/text adapter capability | Intentional today; these are not planning use cases. The broader reusable workspace decision is tracked separately. |
 | `cli -> config` for discovery/init/maintenance | Adapter orchestration | Existing deferred [`reusable-workspace-discovery-seam`](../planning/tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md); activate when atlas or web needs the same workspace opening path. |
-| `cli -> userconfig` / `cli -> spacehealth` for registry operations and selection | Tracked application-boundary debt | [`establish-one-reusable-space-registry-application-boundary`](../planning/tasks/6g28rv8jm1g7-establish-one-reusable-space-registry-application-boundary.md). |
+| `cli -> userconfig` for initial presentation-preference loading | Adapter orchestration | Intentional today; registry catalog, selection, mutations, completion, and diagnosis all use `core.SpaceRegistryService`. |
 | `tui -> configui` | Focused primary-adapter composition | Intentional: the full TUI embeds the same configuration editor launched by `config edit`. |
 | `tui -> editor` / `os/exec` | Narrow process/terminal capability | Intentional; planning data still flows only through `core.Service`. |
 
@@ -132,11 +132,13 @@ adapter capabilities rather than leaked persistence.
   `Service` depends on; the three fs/text operations that aren't use cases live in
   narrow sibling ports — `Fixer` (frontmatter repair), `Linter` (link integrity),
   and `Layout` (watch paths) — so a second `Store` and the test fakes don't carry
-  them. `SpaceOverviewService` is the repo-independent cross-space use case:
-  it reads logical registry groups through `SpaceOverviewStore`, selects one healthy
-  entry point per identity, and opens only the narrow read-only `SummaryStore` needed
-  for a dashboard scan. Roles and states are typed core vocabulary and entry health is
-  derived from state, so an adapter cannot claim that a missing checkout is healthy.
+  them. `SpaceRegistryService` owns the repo-independent catalog, grouping, explicit
+  selection, label policy, and mutation receipts through `SpaceRegistryStore`.
+  `SpaceOverviewService` composes that catalog with `SpaceOverviewStore`, whose only job
+  is opening the narrow read-only `SummaryStore` needed for a dashboard scan, then selects
+  one healthy entry point per identity. Roles and states are typed core vocabulary and
+  entry health is derived from state, so an adapter cannot claim that a missing checkout
+  is healthy.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
@@ -215,9 +217,10 @@ adapter capabilities rather than leaked persistence.
   the claim true.)
 - **`internal/configstore`** — the composite filesystem secondary adapter for the
   consumer-owned `core.ConfigurationStore` port. It combines repo discovery/migration,
-  user preferences, link diagnosis, and registry diagnosis into neutral core DTOs;
-  neither Cobra nor Bubble Tea imports those storage packages to implement a config
-  use case.
+  user preferences, and link diagnosis into neutral core DTOs. `ConfigurationService`
+  composes registry diagnosis from `SpaceRegistryService`, keeping the repo-scoped port
+  independent of the home registry; neither Cobra nor Bubble Tea imports those storage
+  packages to implement a config use case.
 - **`internal/configui`** — one focused Bubble Tea primary adapter, runnable by
   `config edit` or embedded in `tskflwctl ui`. It exposes only typed presentation
   preferences, defaults writes to user scope, requires an explicit repository scope,
@@ -226,18 +229,16 @@ adapter capabilities rather than leaked persistence.
 - **`internal/spacehealth`** — the read-only projection over `userconfig.Space` plus
   repo-scoped `config.Discover`: one typed diagnosis (`ok`, `empty`, `missing`,
   `not-a-repo`, `unreadable`, `mismatch`), derived role (`direct`/`pointer`/`unknown`),
-  and remedy per registered checkout. Its `Group` projection treats a durable planning id
-  as one logical space and the registered paths as entry points; legacy healthy entries
-  fall back to physical planning root, while broken id-less entries stay isolated. Both
-  `space list`, `doctor`, explicit CLI `--space` selection, and `status --all` consume
-  the diagnoses; future TUI work must reuse the same projection rather than reinterpret
-  discovery errors. It never repairs, removes, or adds relationship metadata to registry
-  data.
+  and remedy per registered checkout. It is a storage/discovery helper of `spacestore`,
+  not an application contract; primary adapters consume the resulting core projection.
+  It never repairs, removes, groups, or adds relationship metadata to registry data.
 - **`internal/spacestore`** — the composite filesystem secondary adapter for
-  `core.SpaceOverviewStore`. It is the only cross-space layer that translates
-  `spacehealth.Group` into neutral core values and opens a Markdown summary reader for a
-  selected planning root. Cobra consumes `core.SpaceOverview`; a future atlas or served
-  adapter can call the same service without importing registry/discovery packages.
+  `core.SpaceRegistryStore` and the narrower `core.SpaceOverviewStore` tree-opening port.
+  It is the only layer that translates `userconfig`/`spacehealth` records into neutral
+  core entries, performs planning-checkout preparation, classifies registry persistence
+  errors, and opens a Markdown summary reader. `core.SpaceRegistryService` owns catalog
+  grouping, explicit selection, label policy, and mutation receipts; CLI, completion,
+  doctor, `status --all`, and future primary adapters consume that same boundary.
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
   `internal/cli` (`root.go`), which it calls.
 

@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 type fakeConfigurationStore struct {
 	state     ConfigurationState
@@ -111,5 +114,33 @@ func TestConfigurationSnapshotAutoKeepsItsProvenance(t *testing.T) {
 	}
 	if got := snapshot.Effective.Theme; got.Value != "neon" || got.Source != ConfigSourceRepository {
 		t.Fatalf("auto theme = %+v, want resolved default with repository provenance", got)
+	}
+}
+
+func TestConfigurationDiagnose_ComposesSharedRegistryVocabulary(t *testing.T) {
+	configStore := &fakeConfigurationStore{diagnosis: ConfigurationDiagnosis{
+		Root: "/planning", Problems: []ConfigurationProblem{{Repo: "../impl", Message: "missing linkback"}},
+	}}
+	registry := NewSpaceRegistryService(&fakeSpaceRegistryStore{entries: []SpaceEntryPoint{
+		{ID: "healthy", State: SpaceStateEmpty},
+		{ID: "gone", Path: "~/gone", State: SpaceStateMissing, Detail: "not found", Remedy: "re-add"},
+		{ID: "wrong", Path: "~/wrong", State: SpaceStateMismatch, Detail: "id mismatch", Remedy: "restore"},
+	}})
+	diagnosis, err := NewConfigurationService(configStore, WithSpaceRegistry(registry)).Diagnose(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diagnosis.Registry.Checked != 3 {
+		t.Fatalf("checked = %d", diagnosis.Registry.Checked)
+	}
+	want := []RegistryProblem{
+		{ID: "gone", Path: "~/gone", Kind: SpaceStateMissing, Message: "not found", Remedy: "re-add"},
+		{ID: "wrong", Path: "~/wrong", Kind: SpaceStateMismatch, Message: "id mismatch", Remedy: "restore"},
+	}
+	if !reflect.DeepEqual(diagnosis.Registry.Problems, want) {
+		t.Fatalf("registry problems = %+v, want %+v", diagnosis.Registry.Problems, want)
+	}
+	if diagnosis.ProblemCount() != 3 {
+		t.Fatalf("problem count = %d", diagnosis.ProblemCount())
 	}
 }

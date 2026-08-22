@@ -9,15 +9,9 @@ import (
 )
 
 type fakeSpaceOverviewStore struct {
-	groups  []SpaceGroup
-	listErr error
 	stores  map[string]SummaryStore
 	openErr map[string]error
 	opened  []string
-}
-
-func (f *fakeSpaceOverviewStore) ListSpaceGroups() ([]SpaceGroup, error) {
-	return f.groups, f.listErr
 }
 
 func (f *fakeSpaceOverviewStore) OpenPlanningStore(root string) (SummaryStore, error) {
@@ -29,24 +23,26 @@ func (f *fakeSpaceOverviewStore) OpenPlanningStore(root string) (SummaryStore, e
 }
 
 func TestSpaceOverview_PrefersHealthyDirectAndCombinesInProgress(t *testing.T) {
-	source := &fakeSpaceOverviewStore{
-		groups: []SpaceGroup{
+	registry := NewSpaceRegistryService(&fakeSpaceRegistryStore{
+		entries: flattenSpaceGroups([]SpaceGroup{
 			{PlanningID: "plan-a", Entries: []SpaceEntryPoint{
-				{ID: "impl-a", Role: SpaceRolePointer, State: SpaceStateOK, Root: "/pointer-a"},
-				{ID: "planning-a", Role: SpaceRoleDirect, State: SpaceStateOK, Root: "/direct-a"},
+				{ID: "impl-a", PlanningID: "plan-a", Role: SpaceRolePointer, State: SpaceStateOK, Root: "/pointer-a"},
+				{ID: "planning-a", PlanningID: "plan-a", Role: SpaceRoleDirect, State: SpaceStateOK, Root: "/direct-a"},
 			}},
 			{PlanningID: "plan-b", Entries: []SpaceEntryPoint{
-				{ID: "broken-direct", Role: SpaceRoleDirect, State: SpaceStateMissing, Root: "/broken-b"},
-				{ID: "impl-b", Role: SpaceRolePointer, State: SpaceStateEmpty, Root: "/pointer-b"},
+				{ID: "broken-direct", PlanningID: "plan-b", Role: SpaceRoleDirect, State: SpaceStateMissing, Root: "/broken-b"},
+				{ID: "impl-b", PlanningID: "plan-b", Role: SpaceRolePointer, State: SpaceStateEmpty, Root: "/pointer-b"},
 			}},
-		},
+		}),
+	})
+	source := &fakeSpaceOverviewStore{
 		stores: map[string]SummaryStore{
 			"/direct-a":  &fakeStore{tasks: []domain.Task{{Slug: "a", Status: domain.StatusInProgress}}},
 			"/pointer-b": &fakeStore{tasks: []domain.Task{{Slug: "b", Status: domain.StatusInProgress}}},
 		},
 	}
 
-	overview, err := NewSpaceOverviewService(source).Overview()
+	overview, err := NewSpaceOverviewService(registry, source).Overview()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,19 +58,19 @@ func TestSpaceOverview_PrefersHealthyDirectAndCombinesInProgress(t *testing.T) {
 }
 
 func TestSpaceOverview_IsolatesBrokenAndUnreadableGroups(t *testing.T) {
+	registry := NewSpaceRegistryService(&fakeSpaceRegistryStore{entries: []SpaceEntryPoint{
+		{ID: "gone", PlanningID: "gone", State: SpaceStateMissing},
+		{ID: "raced", PlanningID: "raced", State: SpaceStateOK, Root: "/raced"},
+		{ID: "healthy", PlanningID: "healthy", State: SpaceStateOK, Root: "/healthy"},
+	}})
 	source := &fakeSpaceOverviewStore{
-		groups: []SpaceGroup{
-			{PlanningID: "gone", Entries: []SpaceEntryPoint{{ID: "gone", State: SpaceStateMissing}}},
-			{PlanningID: "raced", Entries: []SpaceEntryPoint{{ID: "raced", State: SpaceStateOK, Root: "/raced"}}},
-			{PlanningID: "healthy", Entries: []SpaceEntryPoint{{ID: "healthy", State: SpaceStateOK, Root: "/healthy"}}},
-		},
 		stores: map[string]SummaryStore{
 			"/healthy": &fakeStore{tasks: []domain.Task{{Slug: "working", Status: domain.StatusInProgress}}},
 		},
 		openErr: map[string]error{"/raced": errors.New("checkout disappeared")},
 	}
 
-	overview, err := NewSpaceOverviewService(source).Overview()
+	overview, err := NewSpaceOverviewService(registry, source).Overview()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,8 +100,17 @@ func TestSpaceState_HealthyIsDerivedFromResolvedState(t *testing.T) {
 
 func TestSpaceOverview_RegistryFailureIsFatal(t *testing.T) {
 	want := errors.New("bad registry")
-	_, err := NewSpaceOverviewService(&fakeSpaceOverviewStore{listErr: want}).Overview()
+	registry := NewSpaceRegistryService(&fakeSpaceRegistryStore{listErr: want})
+	_, err := NewSpaceOverviewService(registry, &fakeSpaceOverviewStore{}).Overview()
 	if !errors.Is(err, want) {
 		t.Fatalf("Overview error = %v, want %v", err, want)
 	}
+}
+
+func flattenSpaceGroups(groups []SpaceGroup) []SpaceEntryPoint {
+	var entries []SpaceEntryPoint
+	for _, group := range groups {
+		entries = append(entries, group.Entries...)
+	}
+	return entries
 }

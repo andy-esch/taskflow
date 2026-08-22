@@ -5,7 +5,7 @@ description: 'Keep the multi-adapter core honest with enforceable dependency dir
 priority: medium
 tags: [architecture, quality]
 created: "2026-06-22"
-updated_at: "2026-08-21"
+updated_at: "2026-08-22"
 ---
 
 # Code quality & architecture hardening
@@ -34,16 +34,15 @@ whose remedy changes a boundary rather than one feature's behavior.
   reducer and god-file pressure found in the original audit.
 - Planning writes have lock-backed CAS, atomic create/replace, resilient one-pass reads,
   generic editor loops, and compile-time interface assertions for the concrete store.
-- Configuration editing and cross-space status now have reusable core services over
-  consumer-owned ports. The CLI and both TUI contexts already exercise those seams.
+- Configuration editing, the space registry, and cross-space status now have reusable
+  core services over consumer-owned ports. Registry catalog, selection, mutation,
+  completion, and diagnosis share one application boundary; opening a planning tree
+  remains a separate capability.
+- Focused dependency fitness checks enforce the domain, core, wire, and primary-adapter
+  boundaries documented in `docs/ARCHITECTURE.md`.
 
 ## Live work
 
-- [`codify-package-dependency-fitness-rules-and-refresh-the-architecture-baseline`](../tasks/6g28rv8j9d9p-codify-package-dependency-fitness-rules-and-refresh-the-architecture-baseline.md)
-  records the actual package graph and turns its stable inward rules into lint checks.
-- [`establish-one-reusable-space-registry-application-boundary`](../tasks/6g28rv8jm1g7-establish-one-reusable-space-registry-application-boundary.md)
-  is the one consolidation currently earned by multiple registry consumers. It must stay
-  separate from opening a planning workspace.
 - The remaining ready tasks are bounded correctness or maintainability findings (BOM and
   block-scalar handling, migration fidelity, error classification, test-stream fidelity,
   and top-level audit lint), not a mandate for a package rewrite.

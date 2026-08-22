@@ -22,8 +22,9 @@ type ConfigurationStore interface {
 // adapters. It contains precedence and validation; it knows no Cobra, Bubble Tea, TOML,
 // environment variables, or filesystem paths beyond the values returned by its port.
 type ConfigurationService struct {
-	store       ConfigurationStore
-	knownThemes map[string]struct{}
+	store         ConfigurationStore
+	spaceRegistry *SpaceRegistryService
+	knownThemes   map[string]struct{}
 }
 
 // ConfigurationOption supplies application policy without coupling core to a
@@ -41,6 +42,14 @@ func WithConfigurationThemes(names []string) ConfigurationOption {
 				s.knownThemes[name] = struct{}{}
 			}
 		}
+	}
+}
+
+// WithSpaceRegistry composes home-registry diagnosis into configuration doctor without
+// coupling the repo-configuration store to home-scoped persistence.
+func WithSpaceRegistry(registry *SpaceRegistryService) ConfigurationOption {
+	return func(s *ConfigurationService) {
+		s.spaceRegistry = registry
 	}
 }
 
@@ -269,7 +278,36 @@ func (d ConfigurationDiagnosis) ProblemCount() int {
 }
 
 func (s *ConfigurationService) Diagnose(start string) (ConfigurationDiagnosis, error) {
-	return s.store.DiagnoseConfiguration(start)
+	diagnosis, err := s.store.DiagnoseConfiguration(start)
+	if err != nil {
+		return ConfigurationDiagnosis{}, err
+	}
+	if diagnosis.Problems == nil {
+		diagnosis.Problems = []ConfigurationProblem{}
+	}
+	if s.spaceRegistry == nil {
+		if diagnosis.Registry.Problems == nil {
+			diagnosis.Registry.Problems = []RegistryProblem{}
+		}
+		return diagnosis, nil
+	}
+	catalog, err := s.spaceRegistry.Catalog()
+	if err != nil {
+		return ConfigurationDiagnosis{}, err
+	}
+	diagnosis.Registry = RegistryDiagnosis{
+		Checked: len(catalog.Entries), Problems: []RegistryProblem{},
+	}
+	for _, entry := range catalog.Entries {
+		if entry.Healthy() {
+			continue
+		}
+		diagnosis.Registry.Problems = append(diagnosis.Registry.Problems, RegistryProblem{
+			ID: entry.ID, Path: entry.Path, Kind: entry.State,
+			Message: entry.Detail, Remedy: entry.Remedy,
+		})
+	}
+	return diagnosis, nil
 }
 
 type ConfigScope string

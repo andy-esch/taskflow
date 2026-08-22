@@ -31,12 +31,16 @@ func (s SpaceState) Healthy() bool {
 // ID is the machine-local address; PlanningID is the durable identity shared by every
 // entry point into the same planning tree.
 type SpaceEntryPoint struct {
-	ID         string
-	Path       string
+	ID   string
+	Path string
+	// Checkout is the resolved local path used to enter this registered checkout.
+	// Path retains the persisted, human-facing spelling (including ~) for output.
+	Checkout   string
 	VerifyID   string
 	PlanningID string
 	Role       SpaceRole
 	Label      string
+	Accent     string
 	Added      string
 	State      SpaceState
 	Root       string
@@ -51,4 +55,27 @@ func (e SpaceEntryPoint) Healthy() bool { return e.State.Healthy() }
 type SpaceGroup struct {
 	PlanningID string
 	Entries    []SpaceEntryPoint
+}
+
+// SpaceCatalog is one registry snapshot in its two useful projections. Entries retain
+// registry order for machine output and completion; Groups retain first-seen group and
+// entry order for cross-space consumers.
+type SpaceCatalog struct {
+	Entries []SpaceEntryPoint
+	Groups  []SpaceGroup
+}
+
+// SpaceRegistration is a validated planning checkout prepared by the secondary adapter.
+// The service supplies ID after applying its defaulting and validation policy.
+type SpaceRegistration struct {
+	ID       string
+	Path     string
+	VerifyID string
+}
+
+// SpaceMutation is the reusable receipt for a registry add or forget operation.
+type SpaceMutation struct {
+	Entry   SpaceEntryPoint
+	Changed bool
+	DryRun  bool
 }

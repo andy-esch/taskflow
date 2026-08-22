@@ -833,26 +833,25 @@ func InitJSON(w io.Writer, e InitEnvelope) error {
 	return wire.EncodeJSON(w, wire.NormalizeInitEnvelope(e))
 }
 
-// SpacesJSON emits the `space list --json` envelope.
-func SpacesJSON(w io.Writer, spaces []wire.SpaceEntry) error {
-	return wire.EncodeJSON(w, wire.ToSpacesEnvelope(spaces))
+// SpacesJSON emits the `space list --json` envelope from the shared core projection.
+func SpacesJSON(w io.Writer, spaces []core.SpaceEntryPoint) error {
+	return wire.EncodeJSON(w, wire.ToSpacesEnvelope(spaceWireEntries(spaces)))
 }
 
-// SpacesHuman lists the registry one logical planning space at a time. Each inner slice is
-// a group of registered entry points produced by spacehealth.Group. A direct checkout, if
-// present, anchors the human tree; the remaining entry points retain registry order.
+// SpacesHuman lists the registry one logical planning space at a time. A direct checkout,
+// if present, anchors the human tree; the remaining entry points retain registry order.
 //
 // A broken entry is shown DIMMED alongside the healthy ones rather than hidden or turned
 // into an error. The registry describes what you told it about; a repo that moved is
 // information, and the list is the place you would go to fix it.
-func SpacesHuman(w io.Writer, st Style, groups [][]wire.SpaceEntry) {
+func SpacesHuman(w io.Writer, st Style, groups []core.SpaceGroup) {
 	if len(groups) == 0 {
 		fmt.Fprintf(w, "%s no spaces registered — `tskflwctl space add` in a planning repo\n", st.Dim("·"))
 		return
 	}
 	width := 0
 	for _, group := range groups {
-		for _, s := range group {
+		for _, s := range group.Entries {
 			if n := len(s.ID); n > width {
 				width = n
 			}
@@ -860,7 +859,7 @@ func SpacesHuman(w io.Writer, st Style, groups [][]wire.SpaceEntry) {
 	}
 	broken := 0
 	for _, group := range groups {
-		entries := preferredSpaceEntryFirst(group)
+		entries := preferredSpaceEntryFirst(spaceWireEntries(group.Entries))
 		for i, s := range entries {
 			prefix := ""
 			detailIndent := "    "
@@ -919,15 +918,18 @@ func renderSpaceEntry(w io.Writer, st Style, s wire.SpaceEntry, width int, prefi
 }
 
 // SpaceMutationJSON emits the `space add`/`forget --json` envelope.
-func SpaceMutationJSON(w io.Writer, e wire.SpaceEntry, changed, dryRun bool) error {
-	return wire.EncodeJSON(w, wire.ToSpaceMutationEnvelope(e, changed, dryRun))
+func SpaceMutationJSON(w io.Writer, mutation core.SpaceMutation) error {
+	return wire.EncodeJSON(w, wire.ToSpaceMutationEnvelope(
+		wire.ToSpaceEntry(mutation.Entry), mutation.Changed, mutation.DryRun,
+	))
 }
 
 // SpaceMutationHuman reports what `space add`/`forget` did. A no-op says so plainly
 // rather than claiming a change, so re-running is legibly idempotent.
-func SpaceMutationHuman(w io.Writer, st Style, e wire.SpaceEntry, changed bool, verb string) {
+func SpaceMutationHuman(w io.Writer, st Style, mutation core.SpaceMutation, verb string) {
+	e := wire.ToSpaceEntry(mutation.Entry)
 	mark := st.Green("✔")
-	if !changed {
+	if !mutation.Changed {
 		mark = st.Dim("·")
 	}
 	fmt.Fprintf(w, "%s %s %s %s\n", mark, verb, st.Bold(e.ID), st.Dim(e.Path))
@@ -936,4 +938,12 @@ func SpaceMutationHuman(w io.Writer, st Style, e wire.SpaceEntry, changed bool, 
 	} else if e.Detail != "" {
 		fmt.Fprintf(w, "    %s %s\n", st.Warn("⚠"), e.Detail)
 	}
+}
+
+func spaceWireEntries(entries []core.SpaceEntryPoint) []wire.SpaceEntry {
+	out := make([]wire.SpaceEntry, 0, len(entries))
+	for _, entry := range entries {
+		out = append(out, wire.ToSpaceEntry(entry))
+	}
+	return out
 }

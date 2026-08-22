@@ -12,8 +12,9 @@ import (
 )
 
 // The space registry: which local entry points into planning spaces this machine knows
-// about. Several rows may share one durable planning identity; grouping and direct/pointer
-// roles are derived by spacehealth rather than persisted here.
+// about. Several rows may share one durable planning identity; direct/pointer roles are
+// diagnosed by spacehealth and grouping is application policy in core, never persisted
+// here.
 //
 // It lives in its OWN file, separate from the user-preference config.toml, because registry
 // mutations should never risk a person's presentation settings. The registry is still
