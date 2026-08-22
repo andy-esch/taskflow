@@ -131,7 +131,7 @@ three cursor positions.
 
 ---
 
-#### H3. Broken symlink `spaces.toml` silently masks registry data as empty rather than reporting error  · **Status:** open
+#### H3. Broken symlink `spaces.toml` silently masks registry data as empty rather than reporting error  · **Status:** fixed
 
 **File:** `internal/userconfig/spaces.go:100-119` | **Component:** userconfig
 **Effort:** XS · **Urgency:** acute
@@ -152,6 +152,17 @@ task. The atlas is what raises its cost: the failure mode used to be a short `sp
 it is now a TUI that says "No spaces registered. Run `tskflwctl space add <path>`" and
 invites the user to re-register spaces they still have, after which `space add` would
 write a fresh registry over the dangling link.
+
+**Fixed 2026-08-22.** The probe is now `brokenSymlinkError`, extracted from `Load` so both
+of this package's files share one implementation and one explanation rather than a copy;
+`readRegistry` calls it on the ENOENT path. Verified with the real binary against a
+dangling registry link: `space list`, `status --all`, and `doctor` all report
+`broken symlink -> <target>` and exit 1 instead of showing an empty registry, and
+`space add` now REFUSES rather than writing a fresh file over the link — which was the
+step that made the loss permanent. A genuinely absent registry is still silently empty,
+and a symlink whose target exists still reads through. Tests:
+`TestSpaces_BrokenRegistrySymlinkIsReportedNotReadAsEmpty`,
+`TestSpaces_AbsentRegistryStaysSilentlyEmpty`, `TestSpaces_HealthyRegistrySymlinkReadsThrough`.
 
 ---
 
@@ -386,7 +397,8 @@ so the old rule is not re-derived from it.
 ## Candidate tasks
 
 **Fixed on the `feat/atlas-tui` branch** (H1, H2, M1, M5, L1, L2, L3, L4) — each has a
-regression test; see the finding for what changed and why.
+regression test; see the finding for what changed and why. **H3 followed on main**
+(2026-08-22), clearing the last `acute` finding in the repo.
 
 **Open, tracked on epic 29** (un-retired 2026-08-22, since the atlas surface is
 unfinished):
@@ -394,4 +406,4 @@ unfinished):
 - ⏳ `6g2nnkffgyeg` [Render the cross-space in-progress rail in the atlas](../tasks/6g2nnkffgyeg-render-the-cross-space-in-progress-rail-in-the-atlas.md) — M3, the highest-value gap.
 - ⏳ `6g2nnkfk1em1` [Show branch and worktree badges on atlas entry points](../tasks/6g2nnkfk1em1-show-branch-and-worktree-badges-on-atlas-entry-points.md) — M2.
 - ⏳ `6g2nnmmwp1gd` [Live-filter the atlas space list](../tasks/6g2nnmmwp1gd-live-filter-the-atlas-space-list.md) — M4.
-- ⏳ `6g2nnp5tkaaj` [Detect a broken symlink in the spaces registry loader](../tasks/6g2nnp5tkaaj-detect-a-broken-symlink-in-the-spaces-registry-loader.md) — H3; pre-existing, in a file this branch does not touch.
+- ✅ `6g2nnp5tkaaj` [Detect a broken symlink in the spaces registry loader](../tasks/6g2nnp5tkaaj-detect-a-broken-symlink-in-the-spaces-registry-loader.md) — H3, completed 2026-08-22.
