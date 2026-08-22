@@ -582,13 +582,7 @@ func ResearchJSON(w io.Writer, docs []domain.Research, problems []domain.FilePro
 // ResearchShowHuman prints a research doc's metadata and body. body is the
 // already-rendered (glamour/raw) markdown.
 func ResearchShowHuman(w io.Writer, st Style, r domain.Research, body string) error {
-	field := func(label, value string) {
-		lbl := fmt.Sprintf("%-13s", label+":")
-		if st.width > 0 { // fit the value to the terminal (TTY only; piped stays full)
-			value = truncate(value, st.width-visibleWidth(lbl)-1)
-		}
-		fmt.Fprintf(w, "%s %s\n", st.Dim(lbl), value)
-	}
+	field := fieldPrinter(w, st, 13, true)
 	field("slug", st.Bold(r.Slug))
 	if r.Created != "" {
 		field("created", r.Created)
@@ -600,7 +594,7 @@ func ResearchShowHuman(w io.Writer, st Style, r domain.Research, body string) er
 		field("description", r.Description)
 	}
 	if r.Updated != "" {
-		field("updated", r.Updated)
+		field("updated", fmt.Sprintf("%s %s", r.Updated, st.Dim("("+theme.RelativeDate(r.Updated)+")")))
 	}
 	if body != "" {
 		fmt.Fprintf(w, "\n%s", body)

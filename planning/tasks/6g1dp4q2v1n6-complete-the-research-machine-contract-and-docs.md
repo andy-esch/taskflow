@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1dp4q2v1n6
-status: in-progress
+status: completed
 epic: 28-first-class-entities-new-planning-nouns
 description: schema --json lacks research_fields, the known-field list advertises unsettable keys, the JSON Schema falsely claims research edit --json, six prose lists and the README omit research.
 effort: Unknown
@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [contract, docs]
 created: "2026-08-18"
 started_at: "2026-08-19"
-updated_at: "2026-08-19"
+updated_at: "2026-08-21"
+completed_at: "2026-08-21"
 ---
 
 # Complete the research machine contract and docs
@@ -82,9 +83,22 @@ helper.
       string is assembled at runtime so they cannot drift again.
 - [x] README gains a research command block; its opening line and CLAUDE.md's `schema`
       line include research.
-- [ ] `ResearchShowHuman` uses `fieldPrinter`.
+- [x] `ResearchShowHuman` uses `fieldPrinter`.
 
 ## Related
 
 - Epic [28-first-class-entities-new-planning-nouns](../epics/28-first-class-entities-new-planning-nouns.md)
 - Found by an independent adversarial architecture/contract review, 2026-08-18
+
+## Closure (2026-08-21)
+
+The final renderer cleanup now routes `ResearchShowHuman` through the shared
+`fieldPrinter`, retaining the research view's 13-cell label width and TTY-only value
+fitting. Its `updated` field also carries the same relative-date context as task show.
+A focused regression test covers the complete metadata block, body preservation,
+relative-date suffix, and narrow-terminal fitting.
+
+The earlier schema, field-registry, generated-contract, prose-list, README, CLAUDE.md,
+and architecture-documentation changes remain in place. Full validation passed with the
+race detector (`just test`), `golangci-lint` (`just lint`), planning lint, and
+`git diff --check`.

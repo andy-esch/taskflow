@@ -8,6 +8,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/theme"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
@@ -248,6 +249,46 @@ func TestAuditsJSONAndHuman(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "2026-06-01-x") || !strings.Contains(out.String(), "store") {
 		t.Errorf("audits human output wrong:\n%s", out.String())
+	}
+}
+
+func TestResearchShowHuman_FieldsRelativeDateAndFitWidth(t *testing.T) {
+	r := domain.Research{
+		Slug:        "space-registry",
+		Created:     "2026-08-15",
+		Updated:     "2026-08-20",
+		Description: "A deliberately long research description that must fit a narrow terminal",
+		Tags:        []string{"config", "multi-repo"},
+	}
+
+	var out bytes.Buffer
+	if err := ResearchShowHuman(&out, NewStyle(false), r, "# body"); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"space-registry",
+		"2026-08-15",
+		"config, multi-repo",
+		r.Description,
+		"2026-08-20 (" + theme.RelativeDate(r.Updated) + ")",
+		"# body",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("research show missing %q:\n%s", want, out.String())
+		}
+	}
+
+	out.Reset()
+	if err := ResearchShowHuman(&out, NewStyle(false).WithWidth(40), r, ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
+		if visibleWidth(line) > 40 {
+			t.Errorf("metadata line exceeds width 40 (%d): %q", visibleWidth(line), line)
+		}
+	}
+	if !strings.Contains(out.String(), "…") {
+		t.Errorf("expected the long research description to be truncated:\n%s", out.String())
 	}
 }
 

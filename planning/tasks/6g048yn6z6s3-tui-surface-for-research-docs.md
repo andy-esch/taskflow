@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g048yn6z6s3
-status: in-progress
+status: completed
 epic: 28-first-class-entities-new-planning-nouns
 description: Add a research tab + detail view to the TUI (read-only, through core.Service as tea.Cmds); the entity landed CLI-only.
 effort: Unknown
@@ -10,8 +10,9 @@ priority: low
 autonomy_level: 3
 tags: [tui]
 created: "2026-08-14"
-updated_at: "2026-08-20"
+updated_at: "2026-08-21"
 started_at: "2026-08-20"
+completed_at: "2026-08-21"
 ---
 
 # TUI surface for research docs
