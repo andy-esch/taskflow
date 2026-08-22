@@ -398,3 +398,56 @@ func TestTildePath_RoundTrip(t *testing.T) {
 		t.Error("~user forms are deliberately unsupported and must pass through unchanged")
 	}
 }
+
+// A dangling registry symlink must not read as "no spaces registered". The two are the
+// same ENOENT but opposite situations: one means nothing was ever registered, the other
+// means everything registered is temporarily out of reach — and answering the second with
+// the first invites re-registering spaces that still exist, after which the next
+// `space add` writes a fresh registry over the dangling link.
+func TestSpaces_BrokenRegistrySymlinkIsReportedNotReadAsEmpty(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(DirEnv, home)
+	target := filepath.Join(t.TempDir(), "unmounted-dotfiles", SpacesFile)
+	if err := os.Symlink(target, filepath.Join(home, SpacesFile)); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	spaces, err := Spaces()
+	if err == nil {
+		t.Fatalf("Spaces() = %v, nil — a dangling registry symlink must be reported", spaces)
+	}
+	if !strings.Contains(err.Error(), "broken symlink") || !strings.Contains(err.Error(), target) {
+		t.Fatalf("error = %q, want it to name the broken link and its target", err.Error())
+	}
+	if spaces != nil {
+		t.Fatalf("Spaces() returned %v alongside the error; the registry is unknown, not empty", spaces)
+	}
+}
+
+// A registry that genuinely does not exist is still the ordinary, silent case: a machine
+// that has never run `space add` must behave exactly as it did before the file existed.
+func TestSpaces_AbsentRegistryStaysSilentlyEmpty(t *testing.T) {
+	t.Setenv(DirEnv, t.TempDir())
+	spaces, err := Spaces()
+	if err != nil || len(spaces) != 0 {
+		t.Fatalf("Spaces() = %v, %v; want the silent empty registry", spaces, err)
+	}
+}
+
+// A symlink whose target IS present is an ordinary readable registry — the dotfiles setup
+// working as intended, which the probe must not flag.
+func TestSpaces_HealthyRegistrySymlinkReadsThrough(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(DirEnv, home)
+	dotfiles := t.TempDir()
+	real := filepath.Join(dotfiles, SpacesFile)
+	if err := os.WriteFile(real, []byte("schema_version = 1\n\n[[space]]\n  id = \"linked\"\n  path = \"~/git/linked\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(home, SpacesFile)); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	spaces, err := Spaces()
+	if err != nil || len(spaces) != 1 || spaces[0].ID != "linked" {
+		t.Fatalf("Spaces() = %v, %v; want the linked registry read through", spaces, err)
+	}
+}

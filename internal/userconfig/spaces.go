@@ -102,6 +102,13 @@ func readRegistry(path string) (string, []Space, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// A dangling registry symlink must never read as "no spaces registered": that
+			// invites re-registering spaces the user still has, and the next `space add`
+			// would write a fresh registry straight over the dangling link, making the
+			// loss permanent. Same probe, same reasoning, as the preferences file.
+			if err := brokenSymlinkError(path); err != nil {
+				return "", nil, err
+			}
 			return initialSpacesText, nil, nil
 		}
 		return "", nil, fmt.Errorf("read %s: %w", path, err)

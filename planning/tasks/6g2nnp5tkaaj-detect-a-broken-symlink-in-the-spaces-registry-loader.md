@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g2nnp5tkaaj
-status: ready-to-start
+status: completed
 epic: 29-multi-space-planning-a-home-registry-and-the-atlas
 description: Port userconfig.go's Lstat probe into spaces.go so an unmounted dotfiles symlink reports an error instead of an empty registry.
 effort: XS
@@ -11,6 +11,8 @@ autonomy_level: 3
 tags: [userconfig, integrity, bug]
 created: "2026-08-22"
 updated_at: "2026-08-22"
+started_at: "2026-08-22"
+completed_at: "2026-08-22"
 ---
 # Detect a broken symlink in the spaces registry loader
 
@@ -47,3 +49,19 @@ write a fresh registry over the dangling link.
 
 - Epic [29-multi-space-planning-a-home-registry-and-the-atlas](../epics/29-multi-space-planning-a-home-registry-and-the-atlas.md)
 - Audit finding H3: [2026-08-22-multi-workspace-atlas](../audits/6g2k3qye4qma-2026-08-22-multi-workspace-atlas.md)
+
+## Implementation notes (2026-08-22)
+
+The `os.Lstat` probe is now `userconfig.brokenSymlinkError`, extracted from `Load` rather
+than copied into `spaces.go`, so both files in the package share one implementation and
+one explanation of why ENOENT is ambiguous here. `readRegistry` calls it on the ENOENT
+path only, so the common case still costs no extra syscall.
+
+The protection that matters most turned out to be on the write path: `space add` now
+refuses on a dangling link instead of writing a fresh registry over it, which was the step
+that turned a temporarily-unmounted dotfiles repo into permanent loss.
+
+Validation: `space list`, `status --all`, and `doctor` all report
+`broken symlink -> <target>` and exit 1 against a real dangling link; an absent registry
+is still silently empty and a healthy symlink still reads through. `go test -race ./...`,
+`golangci-lint run ./...`, planning lint, generated docs, and `git diff --check` are clean.

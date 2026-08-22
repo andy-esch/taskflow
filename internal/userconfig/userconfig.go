@@ -141,6 +141,23 @@ func guardTestIsolation() error {
 		DirEnv)
 }
 
+// brokenSymlinkError disambiguates ENOENT. Missing means one of two very different
+// things: no file at all (the normal case, silent), or a SYMLINK whose target is gone —
+// a real, actionable problem for exactly this audience, since people who commit their
+// dotfiles typically symlink both of this package's files out of a repo that may not be
+// mounted. Lstat sees the link itself rather than following it, so it separates the two.
+// Callers invoke this only on the error path, so the common case costs no extra syscall.
+//
+// nil means "genuinely absent" — the caller's own silent default applies.
+func brokenSymlinkError(path string) error {
+	fi, err := os.Lstat(path)
+	if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		return nil
+	}
+	target, _ := os.Readlink(path)
+	return fmt.Errorf("read %s: broken symlink -> %s (target does not exist)", path, target)
+}
+
 // Load reads the user config. It ALWAYS returns a usable *Config — never nil — so
 // callers can use the result unconditionally.
 //
@@ -164,15 +181,8 @@ func Load() (*Config, error) {
 	var cf configFileTOML
 	if _, err := toml.DecodeFile(path, &cf); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			// ENOENT is ambiguous: no file at all (the normal case, silent), or a
-			// SYMLINK whose target is gone — which is a real, actionable problem for
-			// exactly this audience, since people who commit their config typically
-			// symlink it out of a dotfiles repo that may not be mounted. Lstat sees the
-			// link itself, so it separates the two. Done only on the error path, so the
-			// common case still costs no extra syscall.
-			if fi, lerr := os.Lstat(path); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {
-				target, _ := os.Readlink(path)
-				return &Config{}, fmt.Errorf("read %s: broken symlink -> %s (target does not exist)", path, target)
+			if err := brokenSymlinkError(path); err != nil {
+				return &Config{}, err
 			}
 			return &Config{}, nil // no user config is the normal case
 		}
