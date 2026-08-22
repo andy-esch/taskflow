@@ -296,7 +296,16 @@ func (m Model) tabStrip() string {
 	return truncate(strings.Join(parts, m.st.dim("  ·  ")), m.width)
 }
 
+// spaceName labels the chip that says WHICH space the browser is showing. Launched
+// outside any planning repo it seeds a registered space so the tabs, dashboard, and
+// `:config` have something real to work against — but the user has not picked it, and
+// naming it here would claim a context they never entered. `atlas` is this project's
+// word for the whole set rather than one of it, which is the honest answer until they
+// choose one; the moment they do, the chip names it.
 func (m Model) spaceName() string {
+	if m.onAtlas && !m.spaceChosen {
+		return atlasName
+	}
 	if m.workspace.SpaceID != "" {
 		return m.workspace.SpaceID
 	}

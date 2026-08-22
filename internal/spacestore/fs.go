@@ -85,12 +85,27 @@ func (f *FS) OpenPlanningStore(root string) (core.SummaryStore, error) {
 func toCoreEntry(diagnosis spacehealth.SpaceProblem) core.SpaceEntryPoint {
 	s := diagnosis.Space
 	return core.SpaceEntryPoint{
-		ID: s.ID, Path: s.Path, Checkout: userconfig.ExpandTilde(s.Path),
+		ID: s.ID, Path: s.Path, Checkout: entryCheckout(diagnosis),
 		VerifyID: s.VerifyID, PlanningID: diagnosis.PlanningID,
 		Role: core.SpaceRole(diagnosis.Role), Label: s.Label, Accent: s.Accent,
 		Added: s.Added, State: core.SpaceState(diagnosis.Kind), Root: diagnosis.Root,
 		Detail: diagnosis.Message, Remedy: diagnosis.Remedy,
 	}
+}
+
+// entryCheckout is the path a consumer opens (or compares) this entry by. Discovery's
+// resolved directory wins because it is symlink-evaluated exactly like the checkout on an
+// opened core.Workspace, so the two compare equal; the mirrored Dir/Root fallback matches
+// what workspacestore and the CLI already do. An entry too broken to discover keeps its
+// tilde-expanded registry spelling, which is all that is known about it.
+func entryCheckout(diagnosis spacehealth.SpaceProblem) string {
+	if diagnosis.Dir != "" {
+		return diagnosis.Dir
+	}
+	if diagnosis.Root != "" {
+		return diagnosis.Root
+	}
+	return userconfig.ExpandTilde(diagnosis.Space.Path)
 }
 
 func classifyRegistryError(err error) error {

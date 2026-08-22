@@ -186,3 +186,41 @@ func TestSpaceRegistryOperations_PreserveAdapterErrorsAndForgetContract(t *testi
 func coreRegistration(path string) SpaceRegistration {
 	return SpaceRegistration{Checkout: path, VerifyID: "plan-id"}
 }
+
+// PreferredEntry is the "no local start at all" default the TUI needs when it was
+// launched outside any planning repo. It must apply the same direct-over-pointer routing
+// the cross-space overview does, and skip a logical space with nothing healthy in it
+// rather than reporting the whole registry unusable.
+func TestSpaceRegistryService_PreferredEntry(t *testing.T) {
+	svc := NewSpaceRegistryService(&fakeSpaceRegistryStore{entries: []SpaceEntryPoint{
+		{ID: "broken", PlanningID: "plan-a", Checkout: "/a", Role: SpaceRoleDirect, State: SpaceStateMissing},
+		{ID: "impl", PlanningID: "plan-b", Checkout: "/b-impl", Role: SpaceRolePointer, State: SpaceStateOK},
+		{ID: "plan", PlanningID: "plan-b", Checkout: "/b", Role: SpaceRoleDirect, State: SpaceStateOK},
+	}})
+	entry, ok, err := svc.PreferredEntry()
+	if err != nil || !ok {
+		t.Fatalf("PreferredEntry() = %v, ok=%v, err=%v", entry, ok, err)
+	}
+	if entry.ID != "plan" {
+		t.Fatalf("preferred entry = %q, want the direct checkout of the first healthy space", entry.ID)
+	}
+}
+
+// An empty or wholly unhealthy registry is not an error this service can phrase well —
+// there may be nothing wrong with it — so it reports "nothing to prefer" and lets the
+// caller say what that means where it stands.
+func TestSpaceRegistryService_PreferredEntryReportsNothingHealthy(t *testing.T) {
+	for name, entries := range map[string][]SpaceEntryPoint{
+		"empty": {},
+		"all broken": {
+			{ID: "gone", PlanningID: "plan-a", Checkout: "/a", State: SpaceStateMissing},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, ok, err := NewSpaceRegistryService(&fakeSpaceRegistryStore{entries: entries}).PreferredEntry()
+			if ok || err != nil {
+				t.Fatalf("PreferredEntry() ok=%v err=%v, want a clean miss", ok, err)
+			}
+		})
+	}
+}

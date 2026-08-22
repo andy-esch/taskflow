@@ -89,3 +89,13 @@ Validation: a real terminal smoke navigated from this repo's four-card atlas int
 registered `desirelines` pointer checkout without restarting. `go test -race ./...`,
 `golangci-lint run ./...`, planning lint, generated CLI docs, and `git diff --check` are
 clean.
+
+## Amendment (2026-08-22, post-audit)
+
+Audit [2026-08-22-multi-workspace-atlas](../audits/6g2k3qye4qma-2026-08-22-multi-workspace-atlas.md)
+reviewed this slice; its findings H1, H2, M1, M5, L1, L2, and L3 were fixed on the same
+branch. The behavioral change worth recording here is the landing rule: `ui` no longer
+decides by counting registered spaces but by context — inside a planning repo it opens
+that repo, and only outside one does it land on the atlas, seeding a registered space
+behind it. That supersedes the sketch bullet this task was built against; the epic
+records the reasoning.

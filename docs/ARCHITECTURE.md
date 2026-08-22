@@ -87,7 +87,7 @@ ones as follows:
 | --- | --- | --- |
 | `cli -> configstore`, `cli -> spacestore`, `cli -> workspacestore`, `cli -> store` construction | Composition root | Intentional; secondary adapters are injected into consumer-owned core ports. |
 | `cli -> store` through `Fixer`, `Linter`, `Layout`, and completion | Narrow fs/text adapter capability | Intentional today; these are not planning use cases. The broader reusable workspace decision is tracked separately. |
-| `cli -> config` for discovery/init/maintenance | Adapter orchestration | Atlas workspace opening now uses `core.WorkspaceService`; the deferred [`reusable-workspace-discovery-seam`](../planning/tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md) retains only init/doctor/fix work that still lacks another consumer. |
+| `cli -> config` for discovery/init/maintenance | Adapter orchestration | Atlas workspace opening now uses `core.WorkspaceService`; `ui` additionally reads `config.ErrNoConfig` to tell an ordinary discovery miss from a broken config. The deferred [`reusable-workspace-discovery-seam`](../planning/tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md) retains only init/doctor/fix work that still lacks another consumer. |
 | `cli -> userconfig` for initial presentation-preference loading | Adapter orchestration | Intentional today; registry catalog, selection, mutations, completion, and diagnosis all use `core.SpaceRegistryService`. |
 | `tui -> configui` | Focused primary-adapter composition | Intentional: the full TUI embeds the same configuration editor launched by `config edit`. |
 | `tui -> editor` / `os/exec` | Narrow process/terminal capability | Intentional; planning data still flows only through `core.Service`. |
@@ -324,7 +324,13 @@ Files split by concern:
 - **`atlas.go` / `session.go`** — the cross-space atlas and workspace-session boundary.
   The atlas renders one card per durable planning identity from
   `core.SpaceOverviewService`, exposes every diagnosed entry point, and opens a healthy
-  selection through `core.WorkspaceService`. A successful open atomically swaps the
+  selection through `core.WorkspaceService`. Which screen `ui` lands on is decided by the
+  CLI, not by how many spaces are registered: standing in a repo names the space you
+  meant, so that repo opens and the atlas stays one keystroke away; launched outside one
+  there is no such statement, so `ui` forgives `config.ErrNoConfig`, seeds a registered
+  space as the runtime workspace, and passes `WithAtlasLanding`. The seeded space keeps
+  every surface live but was not chosen, so the top-rail chip reads `[atlas]` until the
+  user leaves the atlas by any route. A successful open atomically swaps the
   entity service, config start, and watcher layout; a failed or stale open leaves the
   current workspace intact. `spaceSession` caches tabs/cursors/filters/dashboard/nav per
   checkout, while an outer workspace-generation stamp drops every asynchronous result
@@ -338,8 +344,8 @@ Files split by concern:
   here per entity (tasks by status via `Move`, audits by bucket via `MoveAudit`,
   epics and research none), so adding Projects/ADRs later is a new registry entry — including
   any `a`-menu / `:`-verb actions — not a reducer edit.
-- **`dashboard.go`** — the per-space **dashboard** (`tskflwctl ui` opens here when
-  the atlas has zero/one logical space): a
+- **`dashboard.go`** — the per-space **dashboard** (`tskflwctl ui` opens here whenever
+  it was launched inside a planning repo): a
   read-only composite of widgets over a single `core.Summary`, the in-app
   counterpart of `status`. Deliberately **not** an `entityTab` — it has no list,
   filter, sort, or lifecycle, so it carries its own small `dashboard` model plus a

@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -76,5 +77,26 @@ func TestWorkspaceService_OpenRejectsPlanningIdentityDrift(t *testing.T) {
 	})
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("identity drift error = %v", err)
+	}
+}
+
+// A primary adapter uses Checkout as its config start and as the identity of the tree it
+// has open; an empty one would silently make `:config` edit the launching directory.
+func TestWorkspaceService_OpenRejectsAnEmptyCheckout(t *testing.T) {
+	capabilities := workspaceCapabilitiesFake{}
+	_, err := NewWorkspaceService(&workspaceStoreFake{source: WorkspaceSource{
+		PlanningRoot: "/plan", Store: capabilities, Layout: capabilities,
+	}}).Open(WorkspaceRequest{Start: "/checkout"})
+	if domain.Classify(err) != domain.ClassValidation {
+		t.Fatalf("empty checkout error = %v", err)
+	}
+}
+
+// A service that cannot open anything is a different problem from a bad path, and the
+// caller has to be told which — so the capability check runs first.
+func TestWorkspaceService_OpenReportsAnUnavailableOpenerBeforeTheRequest(t *testing.T) {
+	_, err := (*WorkspaceService)(nil).Open(WorkspaceRequest{})
+	if err == nil || !strings.Contains(err.Error(), "opener is unavailable") {
+		t.Fatalf("nil opener error = %v, want the unavailable-opener cause", err)
 	}
 }

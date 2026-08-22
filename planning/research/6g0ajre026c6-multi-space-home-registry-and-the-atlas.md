@@ -252,8 +252,12 @@ Ideas worth keeping:
   color before you read its name.
 - **The cross-space in-progress rail may be the actual payload.** Cards orient; the
   rail answers the question that genuinely can't be asked today.
-- **Land only when >1 space is registered** — with zero or one, `ui` opens today's
-  Overview, so single-repo use is untouched.
+- ~~**Land only when >1 space is registered**~~ — **superseded 2026-08-22 by a context
+  rule.** Implementation landed on: in a planning repo, `ui` opens that repo; anywhere
+  else it opens the atlas. The count was a proxy for "has the user already said where
+  they are", and it answered that question wrong in both directions — it interposed the
+  atlas on someone standing in the repo they meant, and it could not help at all from a
+  directory with no repo, which is where the atlas is most needed.
 - **Per-card async loading**: each logical space's `core.Summary` once as its own `tea.Cmd`,
   skeletons that fill in. Keeps the no-I/O-in-`Update`/`View` non-negotiable, keeps
   the screen fast with many spaces, and makes one slow or broken repo a slow or broken
@@ -425,7 +429,8 @@ local paths into the durable definition of a space.
 > **Progress note, 2026-08-22.** The local atlas slice is implemented. It groups cards by
 > planning identity, exposes direct/pointer entry points and their paths, navigates into a
 > checkout through the reusable workspace boundary, restores checkout-specific TUI state,
-> and watches only the active tree. Atlas chrome follows home/global theme precedence;
+> and watches only the active tree. Landing follows the context rule above, not a space
+> count. Atlas chrome follows home/global theme precedence;
 > name/activity/registration ordering is a reversible in-session choice. Remote spaces,
 > scan/discovery, and persisted ordering remain deliberately uncommitted.
 

@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -93,9 +94,12 @@ func atlasTestModel(t *testing.T) (Model, *atlasTestAdapter, string, string) {
 	// selected checkout address.
 	adapter.trees[alpha+"-impl"] = store.NewFS(alpha)
 	registry := core.NewSpaceRegistryService(adapter)
+	// The atlas-landing shape: `ui` outside any planning repo, with alpha seeded behind
+	// the atlas as the space `esc` falls back into.
 	m := New(core.NewService(adapter.trees[alpha]),
 		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
-		WithAtlas(core.NewSpaceOverviewService(registry, adapter)))
+		WithAtlas(core.NewSpaceOverviewService(registry, adapter)),
+		WithAtlasLanding())
 	m.workspace = core.Workspace{
 		Checkout: alpha, PlanningRoot: alpha, PlanningID: "planning-alpha",
 		Planning: m.svc, Layout: noWatchLayout{},
@@ -195,6 +199,11 @@ func TestAtlasUsesItsOwnHomeScopedStyles(t *testing.T) {
 		t.Fatal("catppuccin test theme is not registered")
 	}
 	m := New(nil, WithAtlasTheme(atlasTheme))
+	if m.atlasTheme.Name != atlasTheme.Name {
+		t.Fatalf("atlas theme = %q, want %q", m.atlasTheme.Name, atlasTheme.Name)
+	}
+	// Run owns the light/dark choice for both palettes; the option must not pre-bake one.
+	*m.atlasSt = newStyles(m.atlasTheme.For(true))
 	if m.atlasSt.pal.Accent.Hex != atlasTheme.Dark.Accent.Hex {
 		t.Fatalf("atlas accent = %q, want global %q", m.atlasSt.pal.Accent.Hex, atlasTheme.Dark.Accent.Hex)
 	}
@@ -332,24 +341,50 @@ func TestAtlasDropsStaleWorkspaceResultsAndOldSessionMessages(t *testing.T) {
 	}
 }
 
-func TestAtlasSingleSpaceStartupFallsBackButRemainsExplicitlyReachable(t *testing.T) {
+// In-repo startup opens THAT repo however many spaces are registered: standing in a
+// planning repo says which space you meant, so the atlas must not interpose itself.
+func TestAtlasInRepoStartupOpensTheRepoAndKeepsTheAtlasOneKeyAway(t *testing.T) {
 	_, adapter, alpha, _ := atlasTestModel(t)
-	adapter.entries = adapter.entries[:1]
 	registry := core.NewSpaceRegistryService(adapter)
 	m := New(core.NewService(adapter.trees[alpha]),
 		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
-		WithAtlas(core.NewSpaceOverviewService(registry, adapter)))
+		WithAtlas(core.NewSpaceOverviewService(registry, adapter))) // no WithAtlasLanding
 	m.workspace = core.Workspace{Checkout: alpha, PlanningRoot: alpha, Planning: m.svc, Layout: noWatchLayout{}}
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = tm.(Model)
 	m = drainBatch(t, m, m.Init())
 	if m.onAtlas || !m.dash.loaded {
-		t.Fatalf("one-space startup should land on overview: atlas=%v dash=%v", m.onAtlas, m.dash.loaded)
+		t.Fatalf("in-repo startup should land on overview: atlas=%v dash=%v", m.onAtlas, m.dash.loaded)
+	}
+	if len(m.atlas.spaces) != 2 {
+		t.Fatalf("the atlas projection should still load in the background: spaces=%d", len(m.atlas.spaces))
 	}
 	tm, _ = m.Update(press("a"))
+	if m = tm.(Model); !m.onAtlas {
+		t.Fatal("explicit atlas should remain one keystroke away")
+	}
+}
+
+// Outside a repo the atlas IS the landing screen, single registered space or not — it is
+// the only surface that can say which space the seeded workspace even is.
+func TestAtlasLandingHoldsEvenWithOneRegisteredSpace(t *testing.T) {
+	_, adapter, alpha, _ := atlasTestModel(t)
+	adapter.entries = adapter.entries[:1]
+	registry := core.NewSpaceRegistryService(adapter)
+	m := New(core.NewService(adapter.trees[alpha]),
+		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
+		WithAtlas(core.NewSpaceOverviewService(registry, adapter)),
+		WithAtlasLanding())
+	m.workspace = core.Workspace{Checkout: alpha, PlanningRoot: alpha, Planning: m.svc, Layout: noWatchLayout{}}
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = tm.(Model)
+	m = drainBatch(t, m, m.Init())
 	if !m.onAtlas || len(m.atlas.spaces) != 1 {
-		t.Fatalf("explicit atlas should remain available: atlas=%v spaces=%d", m.onAtlas, len(m.atlas.spaces))
+		t.Fatalf("no-repo startup should land on the atlas: atlas=%v spaces=%d", m.onAtlas, len(m.atlas.spaces))
+	}
+	tm, _ = m.Update(press("esc"))
+	if m = tm.(Model); m.onAtlas {
+		t.Fatal("esc should fall back into the seeded workspace")
 	}
 }
 
@@ -375,7 +410,8 @@ func TestAtlasRegistryFailurePreservesOrdinaryTUIAndExplicitDiagnosis(t *testing
 	registry := core.NewSpaceRegistryService(adapter)
 	m := New(core.NewService(adapter.trees[alpha]),
 		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
-		WithAtlas(core.NewSpaceOverviewService(registry, adapter)))
+		WithAtlas(core.NewSpaceOverviewService(registry, adapter)),
+		WithAtlasLanding())
 	m.workspace = core.Workspace{Checkout: alpha, PlanningRoot: alpha, Planning: m.svc, Layout: noWatchLayout{}}
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = tm.(Model)
@@ -441,5 +477,144 @@ func TestAtlasEnabledModelDoesNotHideEditorControlCommand(t *testing.T) {
 	clipboard := scopeSession(m.sessionGen, tea.SetClipboard("value"))()
 	if _, hidden := clipboard.(sessionMsg); hidden {
 		t.Fatalf("OSC52 control message was hidden by session scoping: %T", clipboard)
+	}
+}
+
+// The header names the sort order and the status row explains why ⏎ did nothing; both
+// have to survive a registry too tall for the terminal, whichever card is focused.
+func TestAtlasPinsHeaderAndStatusAroundTheScrollingCards(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	spaces := make([]atlasSpace, 6)
+	for i := range spaces {
+		id := fmt.Sprintf("space-%d", i)
+		spaces[i] = atlasSpace{summary: core.SpaceSummary{
+			ID: id, PlanningID: id, Summary: &core.Summary{},
+			Entries: []core.SpaceEntryPoint{{ID: id, Checkout: "/" + id, State: core.SpaceStateOK}},
+		}}
+	}
+	m.atlas.spaces = spaces
+	m.atlas.openErr = "beta is unreachable"
+	for _, cursor := range []int{0, 3, 5} {
+		m.atlas.cursor = cursor
+		view := m.atlas.view(m.st, m.workspace, 100, 12)
+		if rows := strings.Split(view, "\n"); len(rows) > 12 {
+			t.Fatalf("cursor %d: atlas overran its %d-row budget with %d rows", cursor, 12, len(rows))
+		}
+		if !strings.Contains(view, "atlas · 6 space(s)") {
+			t.Errorf("cursor %d: header scrolled off:\n%s", cursor, view)
+		}
+		if !strings.Contains(view, "beta is unreachable") {
+			t.Errorf("cursor %d: open error scrolled off:\n%s", cursor, view)
+		}
+		if !strings.Contains(view, fmt.Sprintf("space-%d", cursor)) {
+			t.Errorf("cursor %d: focused card scrolled off:\n%s", cursor, view)
+		}
+	}
+}
+
+// Durable identity, not path spelling: the registry keeps a symlinked/relatively-spelled
+// path while an opened workspace carries the resolved one, so a string compare of the two
+// would drop the badge from the space the user is standing in.
+func TestAtlasCurrentBadgeFollowsIdentityNotPathSpelling(t *testing.T) {
+	entry := core.SpaceEntryPoint{
+		ID: "alpha", Checkout: "/logical/alpha", PlanningID: "planning-alpha", State: core.SpaceStateOK,
+	}
+	summary := core.SpaceSummary{ID: "alpha", PlanningID: "planning-alpha", Entries: []core.SpaceEntryPoint{entry}}
+	current := core.Workspace{
+		SpaceID: "alpha", Checkout: "/physical/alpha", PlanningRoot: "/physical/alpha",
+		PlanningID: "planning-alpha",
+	}
+	if !isCurrentEntry(current, entry) || !isCurrentSpace(current, summary) {
+		t.Fatal("an entry opened by the atlas must stay marked current under a different path spelling")
+	}
+	// The launch workspace carries no SpaceID; identity still resolves it by planning id.
+	launch := core.Workspace{Checkout: "/physical/alpha", PlanningID: "planning-alpha"}
+	if !isCurrentSpace(launch, summary) {
+		t.Fatal("the launch workspace should still mark its own logical space")
+	}
+	other := core.Workspace{SpaceID: "beta", Checkout: "/logical/alpha", PlanningID: "planning-beta"}
+	if isCurrentEntry(other, entry) || isCurrentSpace(other, summary) {
+		t.Fatal("a different space must not be marked current merely by sharing a path string")
+	}
+}
+
+// Entering the atlas is not navigation away: the space stays open, so the detail focus
+// and zoom the atlas had to clobber come back with it.
+func TestAtlasRoundTripRestoresDetailFocusAndZoom(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("a")) // atlas → the seeded space
+	m = tm.(Model)
+	m.onDash = false
+	m.focus = focusDetail
+	m.zoom = true
+	tm, _ = m.Update(press("a"))
+	if m = tm.(Model); !m.onAtlas || m.focus != focusList || m.zoom {
+		t.Fatalf("the atlas needs list focus and no zoom: atlas=%v focus=%v zoom=%v", m.onAtlas, m.focus, m.zoom)
+	}
+	tm, _ = m.Update(press("a"))
+	if m = tm.(Model); m.onAtlas || m.focus != focusDetail || !m.zoom {
+		t.Fatalf("round trip lost browsing state: atlas=%v focus=%v zoom=%v", m.onAtlas, m.focus, m.zoom)
+	}
+}
+
+// Switching spaces is navigation away, so the incoming space's own cached state wins over
+// the snapshot taken from the space that was left.
+func TestAtlasSwitchDiscardsTheResumeSnapshotOfTheSpaceLeft(t *testing.T) {
+	m, _, _, beta := atlasTestModel(t)
+	tm, _ := m.Update(press("a"))
+	m = tm.(Model)
+	m.onDash = false
+	m.focus = focusDetail
+	m.zoom = true
+	tm, _ = m.Update(press("a")) // into the atlas, snapshot taken
+	m = tm.(Model)
+	tm, _ = m.Update(press("j")) // select beta
+	m = tm.(Model)
+	tm, cmd := m.Update(press("enter"))
+	m = applyAtlasOpen(t, tm.(Model), cmd)
+	if m.workspace.Checkout != beta {
+		t.Fatalf("expected to enter beta, got %q", m.workspace.Checkout)
+	}
+	if m.focus != focusList || m.zoom {
+		t.Fatalf("a first visit must start clean, not on the previous space's state: focus=%v zoom=%v", m.focus, m.zoom)
+	}
+}
+
+// Launched outside a repo the browser seeds a space to keep its surfaces live; the chip
+// must not claim the user is IN it until they say so. Any route off the atlas is that
+// choice, after which the chip names the space for the rest of the session.
+func TestAtlasChipNamesTheAtlasUntilASpaceIsChosen(t *testing.T) {
+	m, _, alpha, _ := atlasTestModel(t) // the atlas-landing shape
+	if got := m.spaceName(); got != atlasName {
+		t.Fatalf("chip = %q on the landing atlas, want %q", got, atlasName)
+	}
+	if strip := m.tabStrip(); !strings.Contains(strip, "["+atlasName+"]") {
+		t.Fatalf("tab strip = %q, want the atlas chip", strip)
+	}
+	tm, _ := m.Update(press("esc")) // fall back into the seeded space
+	m = tm.(Model)
+	if got := m.spaceName(); got != filepath.Base(alpha) {
+		t.Fatalf("chip = %q after choosing, want the seeded space %q", got, filepath.Base(alpha))
+	}
+	tm, _ = m.Update(press("a")) // back to the atlas: the space is chosen now, so it stays named
+	if m = tm.(Model); m.spaceName() != filepath.Base(alpha) {
+		t.Fatalf("chip = %q on a later atlas visit, want the chosen space", m.spaceName())
+	}
+}
+
+// In-repo startup means the space was chosen by standing in it, so visiting the atlas
+// never blanks the chip.
+func TestAtlasChipKeepsTheRepoNameWhenLaunchedInsideOne(t *testing.T) {
+	_, adapter, alpha, _ := atlasTestModel(t)
+	registry := core.NewSpaceRegistryService(adapter)
+	m := New(core.NewService(adapter.trees[alpha]),
+		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
+		WithAtlas(core.NewSpaceOverviewService(registry, adapter))) // no WithAtlasLanding
+	m.workspace = core.Workspace{Checkout: alpha, PlanningRoot: alpha, Planning: m.svc, Layout: noWatchLayout{}}
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = drainBatch(t, tm.(Model), m.Init())
+	tm, _ = m.Update(press("a"))
+	if m = tm.(Model); !m.onAtlas || m.spaceName() != filepath.Base(alpha) {
+		t.Fatalf("chip = %q while visiting the atlas from a repo, want %q", m.spaceName(), filepath.Base(alpha))
 	}
 }

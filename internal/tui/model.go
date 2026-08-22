@@ -53,9 +53,15 @@ type Model struct {
 	sessionGen       uint64
 	sessionScope     bool
 	onAtlas          bool
-	atlas            atlas
-	atlasTheme       design.Theme
-	atlasSt          *styles
+	atlasLanding     bool
+	// spaceChosen records that the user has actually entered a space, as opposed to one
+	// having been opened FOR them to keep the browser's surfaces live. It only ever
+	// matters on the atlas-landing path; see spaceName.
+	spaceChosen bool
+	atlasResume atlasResume
+	atlas       atlas
+	atlasTheme  design.Theme
+	atlasSt     *styles
 
 	// st is the per-Model theming bundle (palette + chrome styles + color
 	// helpers). A POINTER, shared with the list delegates (item.go) so Run can
@@ -121,13 +127,23 @@ func WithWorkspaceOpening(svc *core.WorkspaceService) Option {
 
 // WithAtlas mounts the cross-space overview. The workspace opener remains a separate
 // option because tests and future consumers may supply one capability without the other.
+// Mounting it does NOT choose the landing screen — see WithAtlasLanding.
 func WithAtlas(svc *core.SpaceOverviewService) Option {
 	return func(m *Model) {
 		m.spaceOverviewSvc = svc
-		m.onAtlas = svc != nil
-		m.atlas.startup = svc != nil
 		m.atlas.loadGen = 1
 		m.sessionScope = svc != nil
+	}
+}
+
+// WithAtlasLanding starts on the atlas instead of the workspace overview. `ui` passes it
+// only when it was launched outside any planning repo: standing in a repo is an
+// unambiguous statement of which space you meant, so the atlas must not interpose itself
+// there — it stays one keystroke away. With no repo there is no such statement, and the
+// registry is the only sensible first screen.
+func WithAtlasLanding() Option {
+	return func(m *Model) {
+		m.atlasLanding = true
 	}
 }
 
@@ -137,9 +153,6 @@ func WithAtlas(svc *core.SpaceOverviewService) Option {
 func WithAtlasTheme(theme design.Theme) Option {
 	return func(m *Model) {
 		m.atlasTheme = theme
-		if theme.Name != "" {
-			*m.atlasSt = newStyles(theme.Dark)
-		}
 	}
 }
 
@@ -164,6 +177,12 @@ func New(svc *core.Service, opts ...Option) Model {
 	}
 	for _, opt := range opts {
 		opt(&m)
+	}
+	// Resolved after every option so the two are order-independent: landing on the atlas
+	// requires the capability, whichever order they were passed in.
+	if m.atlasLanding && m.spaceOverviewSvc != nil {
+		m.onAtlas = true
+		m.atlas.startup = true
 	}
 	return m
 }
@@ -237,6 +256,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	next, cmd := m.update(msg)
 	mm := next.(Model)
+	// Leaving the atlas by ANY route is the choice: entering a card, esc back into the
+	// seeded space, jumping straight to a tab, or the registry failing and dropping us
+	// there. Recorded in one place so a new exit route cannot forget it.
+	if !mm.onAtlas {
+		mm.spaceChosen = true
+	}
 	t := mm.cur()
 	t.list.Title = t.chip()
 	if mm.sessionScope {

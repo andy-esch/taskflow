@@ -9,6 +9,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/spacehealth"
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
@@ -120,4 +121,48 @@ func initializedRegistryRepo(t *testing.T) string {
 		t.Fatalf("init repo: %v", err)
 	}
 	return dir
+}
+
+// A registry row records how a person spelled the path; a runtime workspace records what
+// config.Discover resolved. Checkout is the value consumers OPEN and COMPARE by, so it has
+// to be the resolved one — otherwise a symlinked registry entry never matches the tree the
+// user is standing in, and the atlas drops its "current" badge.
+func TestFSRegistryAdapter_CheckoutIsTheResolvedPathNotTheRegistrySpelling(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(userconfig.DirEnv, home)
+	repo := initializedRegistryRepo(t)
+	link := filepath.Join(t.TempDir(), "linked-repo")
+	if err := os.Symlink(repo, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	// `space add` normalizes through PrepareSpace, so the case that matters is a row whose
+	// stored path is NOT the resolved one: a hand-edited spaces.toml, or a path that became
+	// a symlink after it was registered.
+	entry := toCoreEntry(spacehealth.DiagnoseSpace(userconfig.Space{ID: "linked", Path: link}))
+	cfg, err := config.Discover(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Checkout != cfg.Dir {
+		t.Fatalf("entry checkout = %q, want the resolved %q", entry.Checkout, cfg.Dir)
+	}
+	if entry.Path != link {
+		t.Fatalf("Path = %q, want the registered spelling %q retained for output", entry.Path, link)
+	}
+	if entry.Checkout == entry.Path {
+		t.Fatal("this case is only meaningful when the two spellings differ")
+	}
+}
+
+// An entry too broken to discover has nothing resolved to fall back on, so it keeps the
+// only thing known about it — the registry spelling, tilde-expanded.
+func TestFSRegistryAdapter_UndiscoverableEntryKeepsItsRegisteredPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(userconfig.DirEnv, home)
+	gone := filepath.Join(t.TempDir(), "vanished")
+	entry := toCoreEntry(spacehealth.DiagnoseSpace(userconfig.Space{ID: "gone", Path: gone}))
+	if entry.Checkout != gone || entry.Healthy() {
+		t.Fatalf("missing entry = %+v, want the registered path retained", entry)
+	}
 }

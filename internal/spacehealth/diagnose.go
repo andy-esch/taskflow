@@ -50,8 +50,15 @@ type SpaceProblem struct {
 	// a successfully discovered id supplies it for legacy registry entries.
 	PlanningID string
 	Root       string
-	Message    string
-	Remedy     string
+	// Dir is the directory discovery actually resolved this entry to — the same
+	// symlink-evaluated value a runtime workspace carries as its checkout. The registry
+	// spelling stays on Space.Path; consumers that COMPARE an entry against an open
+	// workspace must use this, or a symlinked (or differently-cased) registry row never
+	// matches the tree the user is standing in. Empty when discovery failed, or when it
+	// fell back to a bare tasks/ dir with no config anchoring it.
+	Dir     string
+	Message string
+	Remedy  string
 }
 
 // DiagnoseRegistry reads and diagnoses the home registry. Entry failures are returned as
@@ -117,6 +124,7 @@ func DiagnoseSpace(space userconfig.Space) SpaceProblem {
 		return p
 	}
 	p.Root = cfg.Root
+	p.Dir = cfg.Dir
 	if cfg.PlanningRepo == "" {
 		p.Role = RoleDirect
 	} else {

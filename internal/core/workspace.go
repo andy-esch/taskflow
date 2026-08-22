@@ -60,17 +60,22 @@ func NewWorkspaceService(store WorkspaceStore) *WorkspaceService {
 // non-empty start is required: silently treating an empty registry path as cwd would make
 // a failed atlas selection fall back to whichever tree launched the process.
 func (s *WorkspaceService) Open(request WorkspaceRequest) (Workspace, error) {
-	if strings.TrimSpace(request.Start) == "" {
-		return Workspace{}, fmt.Errorf("%w: workspace start path is required", domain.ErrValidation)
-	}
+	// Capability before request: a caller handed a service that cannot open anything has
+	// a different problem from one that passed a bad path, and must be told which.
 	if s == nil || s.store == nil {
 		return Workspace{}, fmt.Errorf("%w: workspace opener is unavailable", domain.ErrValidation)
+	}
+	if strings.TrimSpace(request.Start) == "" {
+		return Workspace{}, fmt.Errorf("%w: workspace start path is required", domain.ErrValidation)
 	}
 	source, err := s.store.OpenWorkspace(request.Start)
 	if err != nil {
 		return Workspace{}, err
 	}
-	if source.Store == nil || source.Layout == nil || source.PlanningRoot == "" {
+	// Checkout is load-bearing, not decoration: a primary adapter uses it as the config
+	// start and as the identity of the tree it has open. An empty one would silently make
+	// `:config` edit whatever directory launched the process.
+	if source.Store == nil || source.Layout == nil || source.PlanningRoot == "" || source.Checkout == "" {
 		return Workspace{}, fmt.Errorf("%w: workspace adapter returned incomplete capabilities", domain.ErrValidation)
 	}
 	// Registry diagnosis is necessarily a snapshot. Recheck its durable identity after

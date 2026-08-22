@@ -28,6 +28,11 @@ func scopeSession(gen uint64, cmd tea.Cmd) tea.Cmd {
 		case nil:
 			return nil
 		case tea.BatchMsg:
+			// Batch carries commands, not results: scope the children instead, or every
+			// command in the batch escapes the stamp. tea.Sequence has the same shape but
+			// an UNEXPORTED payload type, so it cannot be unwrapped here — this package
+			// must not use tea.Sequence while session scoping is in force (guarded by
+			// TestSessionScopingHasNoSequenceCommandsToLeak).
 			wrapped := make([]tea.Cmd, len(msg))
 			for i, child := range msg {
 				wrapped[i] = scopeSession(gen, child)
@@ -42,6 +47,11 @@ func scopeSession(gen uint64, cmd tea.Cmd) tea.Cmd {
 			// ExecProcess and OSC52 clipboard writes). They must remain
 			// visible to the runtime; only application/component results are scoped.
 			t := reflect.TypeOf(msg)
+			// A pointer type is unnamed, so its own PkgPath is "" — dereference first or a
+			// pointer-shaped runtime message would be hidden inside sessionMsg.
+			for t != nil && t.Kind() == reflect.Pointer {
+				t = t.Elem()
+			}
 			if t != nil && t.PkgPath() == "charm.land/bubbletea/v2" {
 				return msg
 			}
@@ -92,6 +102,9 @@ func (m *Model) saveSession() {
 // preserved cursors/filters do not imply preserved filesystem data.
 func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher, watchErr error) tea.Cmd {
 	m.saveSession()
+	// The resume snapshot belongs to the space being left; the incoming space's own
+	// focus/zoom come from its cached session (or the first-visit defaults) below.
+	m.atlasResume = atlasResume{}
 	oldWatcher := m.watch
 	m.workspace = workspace
 	m.svc = workspace.Planning

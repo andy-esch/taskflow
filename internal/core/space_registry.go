@@ -86,6 +86,28 @@ func (s *SpaceRegistryService) Resolve(id string) (SpaceEntryPoint, error) {
 	)
 }
 
+// PreferredEntry returns the entry point a consumer should open when it has been given
+// no local start at all — the TUI launched outside any planning repo. It is the first
+// logical space in registry order that has a healthy entry, routed through the same
+// direct-over-pointer preference the cross-space overview uses.
+//
+// This is a DEFAULT, never a selection: an explicit --space still goes through Resolve,
+// which fails loudly rather than substituting another tree. ok is false for an empty or
+// wholly unhealthy registry, which is a caller-specific situation (there may be nothing
+// wrong with the registry at all), not an error this service can phrase well.
+func (s *SpaceRegistryService) PreferredEntry() (SpaceEntryPoint, bool, error) {
+	catalog, err := s.Catalog()
+	if err != nil {
+		return SpaceEntryPoint{}, false, err
+	}
+	for _, group := range catalog.Groups {
+		if entry := preferredHealthyEntry(group.Entries); entry != nil {
+			return *entry, true, nil
+		}
+	}
+	return SpaceEntryPoint{}, false, nil
+}
+
 // Add validates a checkout before applying label policy or attempting a write. This
 // preserves the public contract that a bad path leaves no registry behind.
 func (s *SpaceRegistryService) Add(path, id string, dryRun bool) (SpaceMutation, error) {

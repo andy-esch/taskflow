@@ -39,10 +39,15 @@ func Run(workspace core.Workspace, th design.Theme, opts ...Option) error {
 		atlasTheme = th
 	}
 	*m.atlasSt = newStyles(atlasTheme.For(dark))
-	if w, err := newWatcher(workspace.Layout.WatchPaths()); err == nil {
-		m.watch = w
-	} else {
-		m.watchOff = true
+	// Layout is the only capability the browser can run without: no watcher means no live
+	// reload, which the footer already reports honestly. Treat a missing one as exactly
+	// that rather than panicking on a workspace some future adapter built incompletely.
+	m.watchOff = true
+	if workspace.Layout != nil {
+		if w, err := newWatcher(workspace.Layout.WatchPaths()); err == nil {
+			m.watch = w
+			m.watchOff = false
+		}
 	}
 	// Alt-screen is declarative in v2 (a View field, set in Model.View), not a
 	// program option — so there's no tea.WithAltScreen here anymore.

@@ -19,7 +19,10 @@ type atlas struct {
 	loadErr error
 	spaces  []atlasSpace
 	cursor  int
-	startup bool // first load decides whether the atlas replaces the one-space landing
+	// startup marks the load that ran because the atlas IS the landing screen. Its only
+	// job now is degradation: if the registry cannot be read at all, fall back to the
+	// seeded workspace rather than opening onto an empty screen.
+	startup bool
 	loadGen int
 	opening bool
 	openGen int
@@ -102,9 +105,6 @@ func (m Model) handleAtlasLoaded(msg atlasLoadedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.atlas.setOverview(msg.overview)
-	if startup && len(m.atlas.spaces) <= 1 {
-		m.onAtlas = false
-	}
 	return m, nil
 }
 
@@ -138,7 +138,7 @@ func (m Model) handleAtlasKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case msg.String() == "enter":
 		return m, m.openAtlasSelection()
 	case key.Matches(msg, keys.Atlas), key.Matches(msg, keys.Back):
-		m.onAtlas = false
+		m.exitAtlas()
 	case key.Matches(msg, keys.Command):
 		return m, m.cmd.focus()
 	case key.Matches(msg, keys.Palette):
@@ -153,10 +153,23 @@ func (m Model) handleAtlasKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// atlasResume is the browsing state entering the atlas has to clobber: it is a
+// full-width registry, so it needs list focus and an un-zoomed body. Returning from it is
+// not navigation to a new surface — the space is still open, right where it was — so the
+// snapshot is put back. A switch discards it; the incoming space restores its own.
+type atlasResume struct {
+	focus focus
+	zoom  bool
+	set   bool
+}
+
 func (m *Model) enterAtlas(refresh bool) tea.Cmd {
 	if m.spaceOverviewSvc == nil {
 		m.flash, m.flashErr = "atlas is unavailable in this session", true
 		return nil
+	}
+	if !m.onAtlas {
+		m.atlasResume = atlasResume{focus: m.focus, zoom: m.zoom, set: true}
 	}
 	m.onAtlas = true
 	m.focus = focusList
@@ -166,6 +179,20 @@ func (m *Model) enterAtlas(refresh bool) tea.Cmd {
 		return loadAtlas(m.spaceOverviewSvc, m.atlas.loadGen)
 	}
 	return nil
+}
+
+// exitAtlas returns to the space that was already open, restoring what enterAtlas took.
+func (m *Model) exitAtlas() {
+	m.onAtlas = false
+	if !m.atlasResume.set {
+		return
+	}
+	m.focus = m.atlasResume.focus
+	if m.atlasResume.zoom != m.zoom {
+		m.zoom = m.atlasResume.zoom
+		m.recomputeLayout()
+	}
+	m.atlasResume = atlasResume{}
 }
 
 func (m *Model) openAtlasSelection() tea.Cmd {
@@ -361,32 +388,47 @@ func (a atlas) view(st *styles, current core.Workspace, maxW, maxH int) string {
 	if a.reverse {
 		direction = "↓"
 	}
-	lines := []string{st.dashHeading.Render(fmt.Sprintf(
+	// Header and status are PINNED: only the cards scroll. They were both inside the
+	// scrolled slice once, which meant a registry big enough to need scrolling was also
+	// big enough to hide the sort order you just changed and the ✘ explaining why ⏎ did
+	// nothing. Everything the screen says about itself has to stay on screen.
+	header := []string{st.dashHeading.Render(fmt.Sprintf(
 		"atlas · %d space(s) · order %s %s", len(a.spaces), a.order.label(), direction,
 	)), ""}
+	var status []string
+	switch {
+	case a.opening:
+		status = []string{"", st.dim("opening selected space…")}
+	case a.openErr != "":
+		status = []string{"", st.fg(theme.ColorRed, "✘ "+a.openErr)}
+	case a.loadErr != nil:
+		status = []string{"", st.fg(theme.ColorYellow, "⚠ refresh failed: "+a.loadErr.Error())}
+	}
+
+	var body []string
 	focusRow := 0
 	for i, space := range a.spaces {
 		card, cardFocus := renderAtlasCard(st, space, i == a.cursor, current)
 		if i == a.cursor {
-			focusRow = len(lines) + cardFocus
+			focusRow = len(body) + cardFocus
 		}
-		lines = append(lines, card...)
+		body = append(body, card...)
 		if i < len(a.spaces)-1 {
-			lines = append(lines, "")
+			body = append(body, "")
 		}
 	}
-	if a.opening {
-		lines = append(lines, "", st.dim("opening selected space…"))
-	} else if a.openErr != "" {
-		lines = append(lines, "", st.fg(theme.ColorRed, "✘ "+a.openErr))
-	} else if a.loaded && a.loadErr != nil {
-		lines = append(lines, "", st.fg(theme.ColorYellow, "⚠ refresh failed: "+a.loadErr.Error()))
+	if maxH > 0 {
+		// One card row is the floor: a terminal too short for even that is already being
+		// hard-clamped by View, and scrollTo cannot take a non-positive window.
+		budget := max1(maxH - len(header) - len(status))
+		if len(body) > budget {
+			body = scrollTo(body, focusRow, budget)
+		}
 	}
+
+	lines := append(append(header, body...), status...)
 	for i := range lines {
 		lines[i] = truncate(lines[i], max1(maxW))
-	}
-	if maxH > 0 && len(lines) > maxH {
-		lines = scrollTo(lines, focusRow, maxH)
 	}
 	return strings.Join(lines, "\n")
 }
@@ -402,7 +444,7 @@ func renderAtlasCard(st *styles, space atlasSpace, selected bool, current core.W
 	if hasEntry && entry.Label != "" && entry.Label != title {
 		title += "  " + st.dim(entry.Label)
 	}
-	if hasEntry && workspaceKey(current) == filepathKey(entry.Checkout) {
+	if isCurrentSpace(current, summary) {
 		title += "  " + st.fg(theme.ColorGreen, "current")
 	}
 	lines := []string{marker + st.dashHeading.Render(title)}
@@ -438,7 +480,7 @@ func renderAtlasCard(st *styles, space atlasSpace, selected bool, current core.W
 			}
 			line := fmt.Sprintf("  %s%s %s  %s  %s", cursor, glyph, candidate.ID,
 				st.dim(string(candidate.Role)), st.dim(directory))
-			if filepathKey(candidate.Checkout) == workspaceKey(current) {
+			if isCurrentEntry(current, candidate) {
 				line += "  " + st.fg(theme.ColorGreen, "current")
 			}
 			lines = append(lines, line)
@@ -465,6 +507,34 @@ func atlasSummaryLine(st *styles, summary core.Summary) string {
 		parts = append(parts, fmt.Sprintf("%d finding(s)", n))
 	}
 	return strings.Join(parts, st.dim(" · "))
+}
+
+// isCurrentEntry reports whether one registered entry point IS the open workspace.
+// Durable identity is preferred over path spelling: SpaceID is set whenever the atlas
+// opened this workspace, and it survives symlinks, ~-expansion, and case-insensitive
+// volumes that a string compare of two paths does not. The path compare remains the
+// answer for the launch workspace, which carries no SpaceID unless --space named one;
+// both sides of it now come from config.Discover, so both are symlink-evaluated.
+func isCurrentEntry(current core.Workspace, entry core.SpaceEntryPoint) bool {
+	if current.SpaceID != "" && entry.ID != "" {
+		return current.SpaceID == entry.ID
+	}
+	return filepathKey(entry.Checkout) == workspaceKey(current)
+}
+
+// isCurrentSpace reports whether the open workspace belongs to this logical space — a
+// weaker question than isCurrentEntry, and the right one for the card title: you are "in"
+// desirelines whichever of its three registered checkouts you entered through.
+func isCurrentSpace(current core.Workspace, summary core.SpaceSummary) bool {
+	if current.PlanningID != "" && summary.PlanningID != "" {
+		return current.PlanningID == summary.PlanningID
+	}
+	for _, entry := range summary.Entries {
+		if isCurrentEntry(current, entry) {
+			return true
+		}
+	}
+	return false
 }
 
 // filepathKey mirrors workspaceKey for a raw checkout without manufacturing a partial
