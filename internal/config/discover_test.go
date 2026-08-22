@@ -454,3 +454,25 @@ func TestDiscover_ResolvesSymlinkedWorktree(t *testing.T) {
 		t.Errorf("Root = %q, want resolved %q", cfg.Root, eval(t, real))
 	}
 }
+
+// The ordinary discovery miss has to be distinguishable from a config that EXISTS but is
+// broken: `ui` forgives the first (the atlas is a home surface) and must stay fatal on the
+// second. The user-facing message is the actionable part, so wrapping must not prefix it.
+func TestDiscover_NoPlanningRepoIsIdentifiableAndKeepsItsMessage(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Discover(dir)
+	if !errors.Is(err, ErrNoConfig) {
+		t.Fatalf("discovery miss = %v, want errors.Is(err, ErrNoConfig)", err)
+	}
+	if !strings.HasPrefix(err.Error(), "not a taskflow planning repo") {
+		t.Fatalf("discovery miss message = %q, want the actionable text unprefixed", err.Error())
+	}
+	// A malformed config is a different, still-fatal failure.
+	broken := t.TempDir()
+	if err := os.WriteFile(filepath.Join(broken, ConfigFile), []byte("taskflow_root = [\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Discover(broken); err == nil || errors.Is(err, ErrNoConfig) {
+		t.Fatalf("malformed config = %v, want a fatal non-ErrNoConfig failure", err)
+	}
+}

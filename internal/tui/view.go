@@ -3,6 +3,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -57,6 +58,12 @@ func (m *Model) recomputeLayout() {
 }
 
 func (m Model) View() tea.View {
+	// View works on a copy, so swapping this pointer recolors the complete atlas shell
+	// (body, rail, footer, and overlays) without mutating the active space's styles or
+	// the entity-list delegates that share them.
+	if m.onAtlas && m.atlasSt != nil {
+		m.st = m.atlasSt
+	}
 	// Alt-screen is declarative in v2 (a View field, not a program option) — set it
 	// on every view so the browser owns the full screen and restores cleanly on exit.
 	if m.width == 0 || m.height == 0 {
@@ -83,6 +90,9 @@ func (m Model) View() tea.View {
 // name plus the current selection (or the active tab when nothing's selected), so
 // the entity you're on shows up in the terminal's tab bar.
 func (m Model) windowTitle() string {
+	if m.onAtlas {
+		return "tskflwctl · " + atlasName
+	}
 	if m.onDash {
 		return "tskflwctl · " + overviewName
 	}
@@ -126,6 +136,9 @@ func (m Model) helpMaxScroll() int {
 // helpEntityKind is the kind whose context notes the `?` panel shows — the active
 // tab's, or the dashboard sentinel when on the landing screen.
 func (m Model) helpEntityKind() entityKind {
+	if m.onAtlas {
+		return entityAtlas
+	}
 	if m.onDash {
 		return entityDashboard
 	}
@@ -138,6 +151,10 @@ func (m Model) helpEntityKind() entityKind {
 // tab that HAS loaded keeps its (stale) rows on a failed reload, with the
 // failure flagged in the footer instead.
 func (m Model) renderBody() string {
+	if m.onAtlas {
+		return m.pane(focusList, m.atlas.view(m.st, m.workspace,
+			m.width-m.st.paneHFrame, m.paneOuterH-m.st.paneVFrame), m.width)
+	}
 	if m.onDash {
 		// Mirror the tab pattern: a failed first load shows the error pane; once it
 		// has loaded, a failed refresh keeps the stale rows (flagged in the footer).
@@ -250,25 +267,52 @@ func max1(n int) int {
 func (m Model) tabStrip() string {
 	if m.width < 60 {
 		name := overviewName
-		if !m.onDash {
+		if m.onAtlas {
+			name = atlasName
+		} else if !m.onDash {
 			name = m.cur().name
 		}
-		return truncate(m.st.activeTab.Render("["+name+" ▾]"), m.width)
+		return truncate(m.st.dim("["+m.spaceName()+"] ")+m.st.activeTab.Render("["+name+" ▾]"), m.width)
 	}
-	parts := make([]string, 0, len(m.tabs)+1)
-	if m.onDash {
+	parts := make([]string, 0, len(m.tabs)+3)
+	parts = append(parts, m.st.dim("["+m.spaceName()+"]"))
+	if m.onAtlas {
+		parts = append(parts, m.st.activeTab.Render(atlasName))
+	} else {
+		parts = append(parts, m.st.dim(atlasName))
+	}
+	if m.onDash && !m.onAtlas {
 		parts = append(parts, m.st.activeTab.Render(overviewName))
 	} else {
 		parts = append(parts, m.st.dim(overviewName))
 	}
 	for i, t := range m.tabs {
-		if !m.onDash && i == m.active {
+		if !m.onAtlas && !m.onDash && i == m.active {
 			parts = append(parts, m.st.activeTab.Render(t.name))
 		} else {
 			parts = append(parts, m.st.dim(t.name))
 		}
 	}
 	return truncate(strings.Join(parts, m.st.dim("  ·  ")), m.width)
+}
+
+// spaceName labels the chip that says WHICH space the browser is showing. Launched
+// outside any planning repo it seeds a registered space so the tabs, dashboard, and
+// `:config` have something real to work against — but the user has not picked it, and
+// naming it here would claim a context they never entered. `atlas` is this project's
+// word for the whole set rather than one of it, which is the honest answer until they
+// choose one; the moment they do, the chip names it.
+func (m Model) spaceName() string {
+	if m.onAtlas && !m.spaceChosen {
+		return atlasName
+	}
+	if m.workspace.SpaceID != "" {
+		return m.workspace.SpaceID
+	}
+	if base := filepath.Base(m.workspace.Checkout); base != "." && base != string(filepath.Separator) {
+		return base
+	}
+	return "local"
 }
 
 // keyHint renders a footer token "<key> <label>", the key sourced from its binding so
@@ -312,12 +356,22 @@ func (m Model) footer() string {
 	if m.focus == focusDetail && (m.detail.finding() || m.detail.findActive()) {
 		return truncate(m.detail.findStatus(), m.width)
 	}
+	if m.onAtlas {
+		line := strings.Join([]string{
+			"↑↓ spaces", "h/l entry", "⏎ enter", keyHint(keys.Atlas, "back"),
+			keyHint(keys.Sort, "order"), keyHint(keys.SortRev, "reverse"),
+			keyHint(keys.Command, "cmd"), keyHint(keys.Refresh, "refresh"),
+			keyHint(keys.Help, "help"), keyHint(keys.Quit, "quit"),
+		}, " · ")
+		return m.st.dim(truncate(line, m.width))
+	}
 	// The dashboard isn't a list, so it gets its own hint line (no m/e/s/…), dimmed
 	// to match the tab footers below. A failed refresh is flagged here (the rows
 	// shown are the last good load), mirroring the tab "reload failed" note.
 	if m.onDash {
 		line := strings.Join([]string{
 			"↑↓ move", "⏎ open",
+			keyHint(keys.Atlas, "atlas"),
 			keyCombo(keys.PrevTab, keys.NextTab, " ", "tabs"),
 			keyHint(keys.Command, "cmd"),
 			keyHint(keys.Refresh, "refresh"),
@@ -331,6 +385,7 @@ func (m Model) footer() string {
 	}
 	hints := strings.Join([]string{
 		keyHint(keys.Command, "cmd"),
+		keyHint(keys.Atlas, "atlas"),
 		"/ filter", // the list's own filter (no keyMap binding)
 		keyHint(keys.Action, "move"),
 		keyHint(keys.Edit, "edit"),
@@ -344,7 +399,8 @@ func (m Model) footer() string {
 	}, " · ")
 	if m.focus == focusDetail {
 		hints = strings.Join([]string{
-			keyHint(keys.Command, "cmd"), detailFooterBody(), keyHint(keys.Zoom, "full"),
+			keyHint(keys.Command, "cmd"), keyHint(keys.Atlas, "atlas"),
+			detailFooterBody(), keyHint(keys.Zoom, "full"),
 			keyCombo(keys.Left, keys.Back, "/", "back"),
 		}, " · ")
 		switch {
@@ -352,13 +408,14 @@ func (m Model) footer() string {
 			// Full-screen: the list is hidden, so name the way out and drop the keys
 			// (m/e/s/tabs) that only make sense beside the list.
 			hints = strings.Join([]string{
-				"full-screen", detailFooterBody(), keys.Zoom.Help().Key + "/esc exit",
+				"full-screen", keyHint(keys.Atlas, "atlas"), detailFooterBody(),
+				keys.Zoom.Help().Key + "/esc exit",
 			}, " · ")
 		case !m.twoPane:
 			// Single-pane drill: q pops back to the list (context quit), so the
 			// hint must not promise it exits the app.
 			hints = strings.Join([]string{
-				keyHint(keys.Command, "cmd"), detailFooterBody(),
+				keyHint(keys.Command, "cmd"), keyHint(keys.Atlas, "atlas"), detailFooterBody(),
 				keys.Left.Help().Key + "/" + keys.Back.Help().Key + "/" + keys.Quit.Help().Key + " back",
 			}, " · ")
 		}

@@ -23,6 +23,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/spacestore"
 	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/userconfig"
+	"github.com/andy-esch/taskflow/internal/workspacestore"
 )
 
 // App is the dependency container. It is created empty by NewRootCmd and
@@ -69,6 +70,10 @@ type App struct {
 	// `status --all`. It reads through a consumer-owned port so another primary adapter
 	// can reuse the same grouping, selection, and failure-isolation rules.
 	SpaceOverviewSvc *core.SpaceOverviewService
+	// WorkspaceSvc opens arbitrary local planning entry points behind a neutral core
+	// boundary. The atlas injects it into the TUI rather than teaching Bubble Tea about
+	// config discovery or concrete Markdown storage.
+	WorkspaceSvc *core.WorkspaceService
 	// ConfigSvc is the framework-free configuration application core shared by
 	// Cobra, both TUI contexts, and future adapters.
 	ConfigSvc *core.ConfigurationService
@@ -192,6 +197,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 			core.WithConfigurationThemes(design.Names()), core.WithSpaceRegistry(spaceSvc)),
 		SpaceSvc:         spaceSvc,
 		SpaceOverviewSvc: core.NewSpaceOverviewService(spaceSvc, spaceAdapter),
+		WorkspaceSvc:     core.NewWorkspaceService(workspacestore.New()),
 	}
 
 	root := &cobra.Command{

@@ -76,7 +76,7 @@ composition, not runtime dependency direction.
 
 `internal/cli/*.go` is deliberately not constrained like its `render` and `prompt`
 subpackages. It is today's composition root: `NewRootCmd` constructs
-`configstore.FS`/`spacestore.FS`, repo resolution constructs `store.FS`, and the `ui`
+`configstore.FS`/`spacestore.FS`/`workspacestore.FS`, repo resolution constructs `store.FS`, and the `ui`
 commands launch `tui`/`configui`. Forbidding those imports would move wiring without
 improving the boundary.
 
@@ -85,9 +85,9 @@ ones as follows:
 
 | Edge | Classification | Disposition |
 | --- | --- | --- |
-| `cli -> configstore`, `cli -> spacestore`, `cli -> store` construction | Composition root | Intentional; secondary adapters are injected into consumer-owned core ports. |
+| `cli -> configstore`, `cli -> spacestore`, `cli -> workspacestore`, `cli -> store` construction | Composition root | Intentional; secondary adapters are injected into consumer-owned core ports. |
 | `cli -> store` through `Fixer`, `Linter`, `Layout`, and completion | Narrow fs/text adapter capability | Intentional today; these are not planning use cases. The broader reusable workspace decision is tracked separately. |
-| `cli -> config` for discovery/init/maintenance | Adapter orchestration | Existing deferred [`reusable-workspace-discovery-seam`](../planning/tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md); activate when atlas or web needs the same workspace opening path. |
+| `cli -> config` for discovery/init/maintenance | Adapter orchestration | Atlas workspace opening now uses `core.WorkspaceService`; `ui` additionally reads `config.ErrNoConfig` to tell an ordinary discovery miss from a broken config. The deferred [`reusable-workspace-discovery-seam`](../planning/tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md) retains only init/doctor/fix work that still lacks another consumer. |
 | `cli -> userconfig` for initial presentation-preference loading | Adapter orchestration | Intentional today; registry catalog, selection, mutations, completion, and diagnosis all use `core.SpaceRegistryService`. |
 | `tui -> configui` | Focused primary-adapter composition | Intentional: the full TUI embeds the same configuration editor launched by `config edit`. |
 | `tui -> editor` / `os/exec` | Narrow process/terminal capability | Intentional; planning data still flows only through `core.Service`. |
@@ -139,6 +139,10 @@ adapter capabilities rather than leaked persistence.
   one healthy entry point per identity. Roles and states are typed core vocabulary and
   entry health is derived from state, so an adapter cannot claim that a missing checkout
   is healthy.
+  `WorkspaceService` is the separate local-tree opening boundary used when a primary
+  adapter needs a complete entity service and watcher layout for an explicit start path.
+  Its `WorkspaceStore` port returns neutral capabilities; registry labels are carried as
+  presentation context and never influence discovery.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
@@ -244,6 +248,11 @@ adapter capabilities rather than leaked persistence.
   grouping, explicit selection, label policy, ordinary mutation receipts, and the narrow
   already-initialized-checkout registration used by `init`; CLI, completion,
   doctor, `status --all`, and future primary adapters consume that same boundary.
+- **`internal/workspacestore`** — the filesystem secondary adapter for
+  `core.WorkspaceStore`. It translates one explicit local start directory through
+  repo-scoped `config.Discover`, constructs the concrete Markdown store once, and exposes
+  it as separate entity and watcher-layout capabilities. The TUI receives only the
+  resulting `core.WorkspaceService`; it does not import discovery or filesystem packages.
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
   `internal/cli` (`root.go`), which it calls.
 
@@ -310,8 +319,24 @@ A Bubble Tea (Elm-architecture) browser, launched by `tskflwctl ui`. It is the
 returning a custom `tea.Msg` — **never I/O in `Update`/`View`**, never the store.
 Files split by concern:
 
-- **`model.go`** — the root `Model` + the `Update` reducer and `View`. Owns the
-  tab set, focus (list ⇄ detail), window size, and key routing.
+- **`model.go` / `view.go`** — the root `Model`, `Update` reducer, rendering, layout,
+  focus (list ⇄ detail), window size, and shell-level key routing.
+- **`atlas.go` / `session.go`** — the cross-space atlas and workspace-session boundary.
+  The atlas renders one card per durable planning identity from
+  `core.SpaceOverviewService`, exposes every diagnosed entry point, and opens a healthy
+  selection through `core.WorkspaceService`. Which screen `ui` lands on is decided by the
+  CLI, not by how many spaces are registered: standing in a repo names the space you
+  meant, so that repo opens and the atlas stays one keystroke away; launched outside one
+  there is no such statement, so `ui` forgives `config.ErrNoConfig`, seeds a registered
+  space as the runtime workspace, and passes `WithAtlasLanding`. The seeded space keeps
+  every surface live but was not chosen, so the top-rail chip reads `[atlas]` until the
+  user leaves the atlas by any route. A successful open atomically swaps the
+  entity service, config start, and watcher layout; a failed or stale open leaves the
+  current workspace intact. `spaceSession` caches tabs/cursors/filters/dashboard/nav per
+  checkout, while an outer workspace-generation stamp drops every asynchronous result
+  launched by an older session. Atlas chrome has its own home-scoped theme (global
+  flag/environment/home precedence, never the launch repo's override), shows each
+  entry-point path, and keeps name/activity/registration ordering as explicit TUI state.
 - **`entity.go`** — the **entity registry**: tasks/epics/audits/research as `*entityTab`s,
   each owning its own `list.Model`, cursor, loaders, list-scoped state (status
   view, sort, filter restore), and its **lifecycle table** (the transitions it
@@ -319,7 +344,8 @@ Files split by concern:
   here per entity (tasks by status via `Move`, audits by bucket via `MoveAudit`,
   epics and research none), so adding Projects/ADRs later is a new registry entry — including
   any `a`-menu / `:`-verb actions — not a reducer edit.
-- **`dashboard.go`** — the landing **dashboard** (`tskflwctl ui` opens here): a
+- **`dashboard.go`** — the per-space **dashboard** (`tskflwctl ui` opens here whenever
+  it was launched inside a planning repo): a
   read-only composite of widgets over a single `core.Summary`, the in-app
   counterpart of `status`. Deliberately **not** an `entityTab` — it has no list,
   filter, sort, or lifecycle, so it carries its own small `dashboard` model plus a
@@ -338,7 +364,7 @@ Files split by concern:
   `sortFields`/`FilterValue` each row exposes.
 - **`sort.go` / `statusview.go` / `command.go` / `action.go` / `overlay.go`** —
   interactive sort (per-entity columns), the unified status-view table (`:` words +
-  `s`/`S` cycle), the `:` command bar, the `a` lifecycle action menu, and the modal
+  `s`/`S` cycle), the `:` command bar, the `m` lifecycle action menu, and the modal
   registry. The action menu and `:` verbs are **registry-driven**: both read the
   active tab's transition table + `applyMove`, so tasks move by status and audits by
   bucket (close/reopen/defer, in-TUI now) through one entity-agnostic path —
@@ -357,12 +383,13 @@ Files split by concern:
 - **`nav.go`** — S6 cross-link navigation: `f` follows structured references
   (a task's epic; an epic's tasks via a picker modal), `ctrl+o` pops the
   back-stack; hidden targets escalate the tasks view to `:all` rather than fail.
-- **`watch.go`** — `fsnotify` live reload: a self-perpetuating listener `Cmd`
+- **`watch.go`** — active-space-only `fsnotify` live reload: a self-perpetuating listener `Cmd`
   feeds `fsEventMsg`; a generation-guarded `tea.Tick` debounce (200ms) coalesces
   save-storms into one reload of every loaded tab, cursor preserved by id. The
-  watched dir set comes from the `core.Layout` port (`WatchPaths()`, the FS
-  injected by the CLI), not from a root the TUI reconstructs — layout knowledge
-  stays in the store.
+  watched dir set comes from the active `core.Workspace`'s `Layout` port
+  (`WatchPaths()`), not from a root the TUI reconstructs — layout knowledge stays in
+  the store. A successful atlas switch closes the old watcher and starts only the new
+  session's watcher; cached sessions do not retain file descriptors.
 - **`help.go`** — the `?` keybinding overlay (`helpSections` is the runtime
   source of truth for keys) composited over the body with `ansi.Cut`.
 - **`style.go` / `keys.go`** — the per-Model `styles` bundle (the active palette
@@ -393,7 +420,7 @@ The CLI also has **golden snapshots** of the byte-stable machine contract (the
 `./...`). The single subprocess smoke layer (real binary, exit codes, lifecycle)
 lives in `cmd/tskflwctl/main_test.go`. `just test` + `just lint`.
 
-## Status (2026-08-21)
+## Status (2026-08-22)
 
 The layered shape now has two substantial primary consumers and several reusable
 application seams; it is no longer architecture held in reserve for a hypothetical UI:
@@ -402,10 +429,11 @@ application seams; it is no longer architecture held in reserve for a hypothetic
   schema and wire discovery, configuration lifecycle, planning-space registry verbs,
   global `--space` selection, and the cross-space `status --all` overview.
 - The Bubble Tea app provides its dashboard plus task/epic/audit/research tabs,
-  filtering/sorting/find, structured navigation, task and audit lifecycle actions,
-  task field editing, filesystem reloads, and the embedded configuration editor. Reads
-  and writes remain asynchronous commands over core services; production TUI code does
-  not open planning/config stores.
+  a cross-space atlas with reversible entry-point navigation, filtering/sorting/find,
+  structured navigation, task and audit lifecycle actions, task field editing,
+  active-space filesystem reloads, and the embedded configuration editor. Reads and
+  writes remain asynchronous commands over core services; production TUI code does not
+  open planning/config stores.
 - The configuration and cross-space features have dedicated core services and composite
   filesystem adapters. `SpaceRegistryService` owns catalog/selection/mutation policy and
   `SpaceOverviewService` owns cross-space summaries; Cobra is one primary adapter over
@@ -414,8 +442,10 @@ application seams; it is no longer architecture held in reserve for a hypothetic
   bounded retry for agent mutations, and parse-before-accept editor loops. Machine output
   is a versioned `internal/wire` contract with generated JSON Schema and golden coverage.
 
-The next architecture work is intentionally trigger-based. Activate reusable workspace
-discovery only when an atlas or served adapter needs to open arbitrary trees; thread
-`context.Context` when an HTTP request path exists; reshape findings pagination when a web
-findings view is scoped. Until those triggers occur, package movement or speculative
-interfaces are out of scope.
+The atlas decision has now activated the narrow reusable workspace-opening boundary:
+`core.WorkspaceService` and `internal/workspacestore` can open an explicit local entry
+point for a primary adapter without exposing discovery or concrete persistence. The
+broader `doctor`/fix promotion remains deferred because the atlas does not consume it.
+Thread `context.Context` when an HTTP request path exists; reshape findings pagination
+when a web findings view is scoped. Until those triggers occur, package movement or
+speculative interfaces are out of scope.

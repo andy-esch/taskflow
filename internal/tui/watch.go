@@ -13,10 +13,10 @@ import (
 // single refresh, short enough to feel live.
 const fsDebounce = 200 * time.Millisecond
 
-// watcher wraps an fsnotify watcher over the planning tree. It's created once
-// (outside the event loop) and lives for the program's duration; the model holds
-// a pointer and drives it via Cmds. nil = live reload unavailable (the browser
-// still works; `r` refreshes manually).
+// watcher wraps an fsnotify watcher over the active planning tree. It is created
+// outside the reducer, replaced after a successful atlas navigation, and closed as
+// that workspace becomes inactive. The model holds a pointer and drives it via Cmds.
+// nil = live reload unavailable (the browser still works; `r` refreshes manually).
 type watcher struct {
 	fsw *fsnotify.Watcher
 }

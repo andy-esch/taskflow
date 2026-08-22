@@ -39,7 +39,7 @@ func TestModal_ForceQuitFromEachOverlay(t *testing.T) {
 	tm, _ = m.Update(press("m"))
 	m = tm.(Model)
 	if !m.action.active {
-		t.Fatal("setup: a should open the action menu")
+		t.Fatal("setup: m should open the action menu")
 	}
 	if _, cmd := m.Update(ctrlC()); !quitsApp(cmd) {
 		t.Error("ctrl+c must quit from the action menu")
@@ -88,7 +88,7 @@ func TestModal_CapturesKeysWhileActive(t *testing.T) {
 	tm, _ := m.Update(press("m"))
 	m = tm.(Model)
 	if !m.action.active {
-		t.Fatal("setup: a should open the action menu")
+		t.Fatal("setup: m should open the action menu")
 	}
 	before := m.cur().name
 	tm, _ = m.Update(press("]")) // next-tab — must be swallowed by the open menu

@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -14,6 +15,21 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/id"
 )
+
+// ErrNoConfig marks the ORDINARY discovery miss — no planning repo anywhere above the
+// start directory — so a consumer that can legitimately run without one (the TUI atlas,
+// which is a home-registry surface) can tell it apart from a config that EXISTS but is
+// broken. Everything else Discover returns stays fatal. It is not a domain sentinel, so
+// domain.Classify and the CLI's exit-code mapping are unchanged.
+var ErrNoConfig = errors.New("no planning repo found")
+
+// noConfigError carries ErrNoConfig without prefixing the message: the "run
+// `tskflwctl init`" text is the actionable part a user reads, and wrapping with
+// fmt.Errorf("%w: …") would bury it behind a redundant summary.
+type noConfigError struct{ msg string }
+
+func (e noConfigError) Error() string { return e.msg }
+func (e noConfigError) Unwrap() error { return ErrNoConfig }
 
 // Config records where the planning data lives (the "taskflow root": the dir
 // holding tasks/, epics/, ...). One planning repo per product; no cross-product
@@ -133,9 +149,9 @@ func Discover(start string) (*Config, error) {
 		// git worktree/submodule it's a file pointing elsewhere, and missing it
 		// would over-climb into a parent's planning tree.
 		if parent == dir || exists(filepath.Join(dir, ".git")) {
-			return nil, fmt.Errorf(
+			return nil, noConfigError{fmt.Sprintf(
 				"not a taskflow planning repo (no %s or tasks/ found from %s up) — run `tskflwctl init`",
-				ConfigFile, start)
+				ConfigFile, start)}
 		}
 		dir = parent
 	}

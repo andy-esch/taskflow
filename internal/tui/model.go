@@ -44,6 +44,24 @@ type Model struct {
 	configDark      bool
 	configOpen      bool
 	configEditor    configui.Editor
+	// Atlas/session capabilities stay in the primary-adapter shell. They open and swap
+	// neutral core workspaces without importing repo discovery or filesystem adapters.
+	workspaceSvc     *core.WorkspaceService
+	spaceOverviewSvc *core.SpaceOverviewService
+	workspace        core.Workspace
+	sessions         map[string]spaceSession
+	sessionGen       uint64
+	sessionScope     bool
+	onAtlas          bool
+	atlasLanding     bool
+	// spaceChosen records that the user has actually entered a space, as opposed to one
+	// having been opened FOR them to keep the browser's surfaces live. It only ever
+	// matters on the atlas-landing path; see spaceName.
+	spaceChosen bool
+	atlasResume atlasResume
+	atlas       atlas
+	atlasTheme  design.Theme
+	atlasSt     *styles
 
 	// st is the per-Model theming bundle (palette + chrome styles + color
 	// helpers). A POINTER, shared with the list delegates (item.go) so Run can
@@ -99,6 +117,45 @@ func WithConfiguration(svc *core.ConfigurationService, start string, overrides c
 	}
 }
 
+// WithWorkspaceOpening supplies the reusable local workspace capability needed by atlas
+// navigation. New(svc) remains valid for embedded and focused single-space consumers.
+func WithWorkspaceOpening(svc *core.WorkspaceService) Option {
+	return func(m *Model) {
+		m.workspaceSvc = svc
+	}
+}
+
+// WithAtlas mounts the cross-space overview. The workspace opener remains a separate
+// option because tests and future consumers may supply one capability without the other.
+// Mounting it does NOT choose the landing screen — see WithAtlasLanding.
+func WithAtlas(svc *core.SpaceOverviewService) Option {
+	return func(m *Model) {
+		m.spaceOverviewSvc = svc
+		m.atlas.loadGen = 1
+		m.sessionScope = svc != nil
+	}
+}
+
+// WithAtlasLanding starts on the atlas instead of the workspace overview. `ui` passes it
+// only when it was launched outside any planning repo: standing in a repo is an
+// unambiguous statement of which space you meant, so the atlas must not interpose itself
+// there — it stays one keystroke away. With no repo there is no such statement, and the
+// registry is the only sensible first screen.
+func WithAtlasLanding() Option {
+	return func(m *Model) {
+		m.atlasLanding = true
+	}
+}
+
+// WithAtlasTheme supplies the home-scoped visual identity for the cross-space shell.
+// A repository theme still styles that repository's own screens; it must not leak into
+// the atlas merely because that checkout happened to launch the process.
+func WithAtlasTheme(theme design.Theme) Option {
+	return func(m *Model) {
+		m.atlasTheme = theme
+	}
+}
+
 // New constructs the root model over the same *core.Service the CLI uses.
 func New(svc *core.Service, opts ...Option) Model {
 	// One shared *styles, seeded with the default dark palette. The entity tabs'
@@ -106,16 +163,26 @@ func New(svc *core.Service, opts ...Option) Model {
 	// after background detection reaches every list delegate without a rebuild.
 	st := &styles{}
 	*st = newStyles(design.Default().Dark)
+	atlasSt := &styles{}
+	*atlasSt = newStyles(design.Default().Dark)
 	m := Model{
 		svc: svc, focus: focusList, st: st,
 		tabs: newEntityTabs(st), active: 0,
 		onDash: true, // the dashboard is the landing view; `]`/:tasks drops into work
 		detail: newDetailPane(st), cmd: newCommandBar(),
-		palette: newPalette(),
-		modals:  defaultModals(),
+		palette:  newPalette(),
+		modals:   defaultModals(),
+		sessions: make(map[string]spaceSession),
+		atlasSt:  atlasSt,
 	}
 	for _, opt := range opts {
 		opt(&m)
+	}
+	// Resolved after every option so the two are order-independent: landing on the atlas
+	// requires the capability, whichever order they were passed in.
+	if m.atlasLanding && m.spaceOverviewSvc != nil {
+		m.onAtlas = true
+		m.atlas.startup = true
 	}
 	return m
 }
@@ -128,10 +195,19 @@ func (m Model) Init() tea.Cmd {
 	if !m.onDash {
 		load = m.cur().reload(m.svc, "")
 	}
-	if m.watch != nil {
-		return tea.Batch(load, waitForFS(m.watch))
+	var cmds []tea.Cmd
+	cmds = append(cmds, load)
+	if m.spaceOverviewSvc != nil {
+		cmds = append(cmds, loadAtlas(m.spaceOverviewSvc, m.atlas.loadGen))
 	}
-	return load
+	if m.watch != nil {
+		cmds = append(cmds, waitForFS(m.watch))
+	}
+	cmd := tea.Batch(cmds...)
+	if m.sessionScope {
+		return scopeSession(m.sessionGen, cmd)
+	}
+	return cmd
 }
 
 // reloadAll re-fires the loader for every loaded tab, each preserving its own
@@ -169,10 +245,28 @@ func (m Model) cur() *entityTab { return m.tabs[m.active] }
 // is also where bubbles draws the `/` filter prompt, so the chip can't be a
 // separate line without losing it).
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if scoped, ok := msg.(sessionMsg); ok && m.sessionScope {
+		if scoped.gen != m.sessionGen {
+			if opened, ok := scoped.msg.(workspaceOpenedMsg); ok {
+				return m, closeWatcher(opened.watcher)
+			}
+			return m, nil
+		}
+		msg = scoped.msg
+	}
 	next, cmd := m.update(msg)
 	mm := next.(Model)
+	// Leaving the atlas by ANY route is the choice: entering a card, esc back into the
+	// seeded space, jumping straight to a tab, or the registry failing and dropping us
+	// there. Recorded in one place so a new exit route cannot forget it.
+	if !mm.onAtlas {
+		mm.spaceChosen = true
+	}
 	t := mm.cur()
 	t.list.Title = t.chip()
+	if mm.sessionScope {
+		cmd = scopeSession(mm.sessionGen, cmd)
+	}
 	return mm, cmd
 }
 
@@ -197,6 +291,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, routeToConfig(cmd)
+
+	case atlasLoadedMsg:
+		return m.handleAtlasLoaded(msg)
+
+	case workspaceOpenedMsg:
+		return m.handleWorkspaceOpened(msg)
 
 	case listLoadedMsg:
 		return m.handleListLoaded(msg)
@@ -489,19 +589,25 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.cmd.update(msg)
 	}
 
-	// 2. The list's filter input owns every key while capturing a query. It runs
+	// 2. The atlas is a shell-level navigator rather than a hidden entity list. It
+	// owns its keys before any active space's list/filter can see them.
+	if m.onAtlas {
+		return m.handleAtlasKey(msg)
+	}
+
+	// 3. The list's filter input owns every key while capturing a query. It runs
 	// through updateList (not a bare forward) so the live-filter cursor moves
 	// keep the detail pane in sync while typing.
 	if m.cur().list.SettingFilter() {
 		return m.updateList(msg)
 	}
 
-	// 2b. The detail pane's find input owns keys while a query is being typed.
+	// 3b. The detail pane's find input owns keys while a query is being typed.
 	if m.focus == focusDetail && m.detail.finding() {
 		return m, m.detail.updateFind(msg)
 	}
 
-	// 2c. The dashboard (landing screen) owns its own keys — cursor + jump-to-entity
+	// 3c. The dashboard (landing screen) owns its own keys — cursor + jump-to-entity
 	// plus a handful of globals. It's not a list, so the list-scoped hotkeys below
 	// (m/e/s/o/F/f/…) don't apply; routing here keeps them from acting on the hidden
 	// active tab's selection.
@@ -509,7 +615,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleDashKey(msg)
 	}
 
-	// 3. Global hotkeys.
+	// 4. Global hotkeys.
 	switch {
 	case key.Matches(msg, keys.Quit):
 		// q is a *context* quit: full-screen detail and the single-pane drill are
@@ -527,6 +633,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Help):
 		m.showHelp = true
 		return m, nil
+	case key.Matches(msg, keys.Atlas):
+		return m, m.enterAtlas(false)
 	case key.Matches(msg, keys.Action):
 		// Lifecycle actions are registry-driven: open the menu for any entity that
 		// declares transitions (tasks: statuses; audits: buckets; epics: statuses —
@@ -609,7 +717,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// 4. Focus-routed keys (list vs detail).
+	// 5. Focus-routed keys (list vs detail).
 	if m.focus == focusList {
 		switch {
 		case key.Matches(msg, keys.Right):
@@ -820,6 +928,7 @@ func (m *Model) switchTab(i int) tea.Cmd {
 // applyView / jumpTo all need it). Callers still own how tab i (re)loads: a
 // first-visit load, a view filter, or a cursor restore.
 func (m *Model) exitDashboard(i int) {
+	m.onAtlas = false
 	m.onDash = false
 	m.active = i
 	m.focus = focusList
@@ -844,6 +953,8 @@ func (m *Model) unzoom() {
 // list-scoped hotkeys (m/e/s/o/F/f/…) don't apply — the dashboard isn't a list.
 func (m Model) handleDashKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
+	case key.Matches(msg, keys.Atlas):
+		return m, m.enterAtlas(false)
 	case msg.String() == "j" || msg.String() == "down":
 		m.dash.move(1)
 	case msg.String() == "k" || msg.String() == "up":
@@ -872,6 +983,7 @@ func (m Model) handleDashKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // enterDash switches to the landing dashboard and refreshes its summary.
 func (m *Model) enterDash() tea.Cmd {
+	m.onAtlas = false
 	m.onDash = true
 	m.focus = focusList
 	m.detail.clear()
@@ -1026,8 +1138,16 @@ func (m Model) openInEditor() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	cmd := editor.Command(editor.Resolve(), path)
+	gen, scoped := m.sessionGen, m.sessionScope
+	// ExecProcess itself remains a Bubble Tea runtime-control message; only its eventual
+	// callback is session-scoped, preventing an editor opened in space A from reloading
+	// space B.
 	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
-		return editorClosedMsg{err: err}
+		msg := editorClosedMsg{err: err}
+		if scoped {
+			return sessionMsg{gen: gen, msg: msg}
+		}
+		return msg
 	})
 }
 

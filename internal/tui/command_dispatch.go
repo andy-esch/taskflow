@@ -16,6 +16,7 @@ import (
 // isOverviewWord reports whether a `:`-command word selects the landing
 // overview (`:overview`, or the `:o` shorthand).
 func isOverviewWord(word string) bool { return word == overviewName || word == "o" }
+func isAtlasWord(word string) bool    { return word == atlasName }
 
 // commandHint lists the `:` commands matching what's typed so far (all of them on
 // an empty prompt) — inline discovery of the command vocabulary, narrowing as you
@@ -41,6 +42,9 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 	if isOverviewWord(word) {
 		return m, m.enterDash()
 	}
+	if isAtlasWord(word) {
+		return m, m.enterAtlas(false)
+	}
 	if word == "config" {
 		return m, m.openConfig()
 	}
@@ -52,7 +56,7 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 	if view, i, ok := m.resolveView(word); ok {
 		return m, m.applyView(i, view)
 	}
-	if tr, ok := transitionFor(m.cur().transitions, word); ok {
+	if tr, ok := transitionFor(m.cur().transitions, word); ok && !m.onAtlas {
 		id, _, ok := m.selectedLifecycle()
 		if !ok {
 			cmd := m.cmd.focus()
@@ -98,12 +102,15 @@ func (m Model) commandOptions() []string {
 			add(w)
 		}
 	}
-	for _, tr := range m.cur().transitions {
-		add(tr.verb)
+	if !m.onAtlas {
+		for _, tr := range m.cur().transitions {
+			add(tr.verb)
+		}
 	}
 	add(overviewName)
 	add("o") // the :o shorthand (matches isOverviewWord); completion offers it, palette omits it
 	add("config")
+	add(atlasName)
 	return opts
 }
 
@@ -161,6 +168,7 @@ func (m Model) paletteCommands() []string {
 		}
 	}
 	add(overviewName) // the landing screen (omit the :o shorthand — palette avoids near-dupes)
+	add(atlasName)
 	add("config")
 	for _, t := range m.tabs {
 		add(t.name)
@@ -168,8 +176,10 @@ func (m Model) paletteCommands() []string {
 			add(w)
 		}
 	}
-	for _, tr := range m.cur().transitions {
-		add(tr.verb)
+	if !m.onAtlas {
+		for _, tr := range m.cur().transitions {
+			add(tr.verb)
+		}
 	}
 	return out
 }
@@ -222,6 +232,9 @@ func (m *Model) runPaletteCommand(word string) tea.Cmd {
 	if isOverviewWord(word) {
 		return m.enterDash()
 	}
+	if isAtlasWord(word) {
+		return m.enterAtlas(false)
+	}
 	if word == "config" {
 		return m.openConfig()
 	}
@@ -233,7 +246,7 @@ func (m *Model) runPaletteCommand(word string) tea.Cmd {
 	if view, i, ok := m.resolveView(word); ok {
 		return m.applyView(i, view)
 	}
-	if tr, ok := transitionFor(m.cur().transitions, word); ok {
+	if tr, ok := transitionFor(m.cur().transitions, word); ok && !m.onAtlas {
 		id, _, ok := m.selectedLifecycle()
 		if !ok {
 			m.flash, m.flashErr = "select a row first to :"+word, true

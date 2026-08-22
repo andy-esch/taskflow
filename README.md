@@ -6,9 +6,9 @@ task/epic/audit/research files. It dogfoods on its own planning under
 
 ## Demos
 
-The interactive TUI (`tskflwctl ui`) — tab across tasks, epics, and audits;
-status glyphs, epic rollup bars, and an audit's **segmented finding bar** over its
-status-grouped **finding tree**:
+The interactive TUI (`tskflwctl ui`) — navigate registered planning spaces from the
+atlas, then tab across tasks, epics, audits, and research; status glyphs, epic rollup
+bars, and an audit's **segmented finding bar** over its status-grouped **finding tree**:
 
 ![the tskflwctl TUI](./assets/tui.gif)
 
@@ -113,7 +113,7 @@ tskflwctl schema                       # the tool's contract for agents (statuse
 tskflwctl schema task --json           # how to author a task: sections, fields, conventions
 tskflwctl template list                # body scaffolds `new --template` can use (--kind to filter)
 tskflwctl template show audit security # inspect a template's rendered body (--json for the envelope)
-tskflwctl ui                           # Bubble Tea browser; :config opens Config/About
+tskflwctl ui                           # Bubble Tea browser; a / :atlas navigates spaces
 
 # update + lifecycle
 tskflwctl task set <slug> --priority high --tags a,b
@@ -178,6 +178,18 @@ spaces. Registry health remains informational, but unreadable planning files or 
 tree that cannot be loaded produce a non-zero partial-failure exit after every available
 summary has rendered. With no registered spaces it emits the ordinary single-repo `status`
 output.
+The same grouped projection now powers the TUI atlas. Standing in a planning repo,
+`tskflwctl ui` opens that repo; run it anywhere else and it lands on the atlas instead,
+opening a registered space behind it so every surface stays live — the top rail reads
+`[atlas]` rather than naming a space you have not chosen. `j`/`k` select a space,
+`h`/`l` choose among its direct and pointer entry points, and Enter opens it without
+restarting the TUI. Entry paths stay
+visible in dim text. Cards default to name order; `o` cycles name/activity/registration
+order and `O` reverses it. Press `a`, run `:atlas`, or use the command palette to return.
+The atlas uses the home/global theme rather than whichever repo launched it. Each entry point keeps its own tab,
+cursor, filter, dashboard, and navigation state across round trips; only the active
+space is watched for filesystem changes. Broken entries remain visible but cannot be
+entered, and a failed open leaves the current session untouched.
 `TSKFLW_CONFIG_HOME` overrides the home-config directory, which is useful for an isolated
 trial before populating the real registry.
 
@@ -337,10 +349,14 @@ Design rationale lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 ### Interactive TUI (`tskflwctl ui`)
 
 A Bubble Tea browser over the **same `core`** the CLI uses (a second primary
-adapter — never the filesystem directly). Two panes: an entity list (tasks /
-epics / audits) and a detail preview rendered as **glamour markdown** (`R`
-toggles raw). Vim-first keys: `ctrl+p` command palette (fuzzy-jump to any
-task/epic/audit or run a command), `:` command-jump, `/` filter (slug/desc/tags),
+adapter — never the filesystem directly). Launched outside any planning repo, the atlas
+is the landing screen: `j`/`k` select a space, `h`/`l` select a registered entry point,
+`o`/`O` change card ordering, Enter navigates into it, and `a` / `:atlas` returns.
+Launched inside one, it opens that repo and the atlas stays one keystroke away. Inside a
+space, two
+panes show an entity list (tasks / epics / audits / research) and a detail preview
+rendered as **glamour markdown** (`R` toggles raw). Vim-first keys: `ctrl+p` command
+palette (fuzzy-jump to any entity or run a command), `:` command-jump, `/` filter (slug/desc/tags),
 `F` toggles the filter between fuzzy and substring,
 `o`/`O` sort, `s`/`S` status views, `[`/`]` tabs, `m` move (lifecycle:
 start/complete/defer/…), `e` to edit a task's fields inline, `E` to open the

@@ -97,6 +97,8 @@ linters:
               desc: primary adapters must not edit configuration storage directly
             - pkg: github.com/andy-esch/taskflow/internal/userconfig
               desc: primary adapters must use a core seam instead of home-scoped storage
+            - pkg: github.com/andy-esch/taskflow/internal/workspacestore
+              desc: primary adapters must use the core workspace service, not its filesystem adapter
 
         # The repo-scoped config must never consult the home-scoped one: planning-root
         # discovery has to stay a pure function of the cwd, or `--space`-style handles

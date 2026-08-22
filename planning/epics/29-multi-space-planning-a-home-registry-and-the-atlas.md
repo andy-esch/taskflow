@@ -1,7 +1,7 @@
 ---
 schema: 1
 status: active
-description: 'Multi-space planning: a home registry of planning repos, a --space handle for any command, and a cross-space TUI board (the atlas). Vocabulary locked; whether the board ships is decided at step 3.'
+description: 'Multi-space planning: a home registry, a --space handle for any command, and a navigable cross-space TUI atlas. Registry, CLI, and the first atlas slice shipped; the atlas surface is not finished.'
 priority: low
 tags: [config, cli, tui, multi-repo]
 created: "2026-08-15"
@@ -18,8 +18,12 @@ handle for any command, and a cross-space TUI board (the atlas).
 > [decide-the-multi-space-vocabulary-blocks-slice-2](../tasks/6g1erb0p5893-decide-the-multi-space-vocabulary-blocks-slice-2.md)
 > for the rejected alternatives, so it is not relitigated.
 >
-> **Still open:** the registration policy details, and — deliberately — **whether
-> the TUI board is built at all** (step 3 below). The sketch is
+> **Direction settled 2026-08-22:** registration, the CLI slice, and the first atlas
+> slice are implemented. `status --all` is useful, but it cannot provide the
+> desired in-process navigation from the cross-space overview into a space. The epic
+> stays **active**: navigation works, but the atlas surface itself is unfinished (see
+> Out of scope for what is deliberately excluded, and the open tasks for what is not).
+> The sketch is
 > [multi-space-home-registry-and-the-atlas](../research/6g0ajre026c6-multi-space-home-registry-and-the-atlas.md);
 > its remaining forks are enumerated at the end. An ADR gets written if and when
 > the whole shape settles, not before.
@@ -85,17 +89,39 @@ The cheap independently-useful parts first, the expensive commitment last:
    already-initialized registration use case share `core.SpaceRegistryService`;
    planning-tree opening remains separate. `status --all` is the first live test of
    whether the atlas adds enough value.
-4. **Re-decide.** Having lived on the CLI half, is the board still wanted? It is
-   plausible that `--space` + `status --all` is most of the value.
-5. Only if yes: the `Resolve() → Workspace` seam
-   ([6fgcr2403sjn](../tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md),
-   currently deferred), the `spaceSession` refactor, the atlas, the switcher.
+4. **Re-decide — settled yes on 2026-08-22.** `--space` and `status --all` answer
+   cross-space CLI questions, but they do not provide the atlas's defining interaction:
+   navigate from the whole collection into one space without leaving the TUI.
+5. **Atlas foundation and navigation — shipped 2026-08-22.** The narrow reusable
+   workspace-opening boundary in
+   [establish-reusable-workspace-opening-for-atlas-navigation](../tasks/6g2jhr31f14p-establish-reusable-workspace-opening-for-atlas-navigation.md)
+   is followed by the `spaceSession` refactor, cards, explicit ordering and entry paths,
+   entry-point selection, and reversible navigation in
+   [build-the-tui-atlas-and-navigate-into-spaces](../tasks/6g2jhr3g20ss-build-the-tui-atlas-and-navigate-into-spaces.md).
+6. **Finish the atlas surface.** Navigation shipped; the screen did not. The cross-space
+   in-progress rail the sketch calls the atlas's actual payload, live filtering, and
+   branch/worktree badges are open tasks under this epic. Retire the epic when the atlas
+   answers "what am I working on, anywhere?" rather than only "where can I go?".
+
+## Landing rule (revised 2026-08-22)
+
+The sketch said "land on the atlas only when >1 space is registered". Implementation
+replaced that with a rule about *context* rather than *count*: standing in a planning
+repo is an unambiguous statement of which space you meant, so `tskflwctl ui` opens that
+repo and the atlas stays one keystroke away. Launched anywhere else there is no such
+statement, so the atlas is the landing screen and a registered space is opened behind it
+to keep every surface live. Counting registered spaces was a proxy for "did the user
+already tell us where they are"; asking that question directly is both simpler and the
+only version that works outside a repo at all.
 
 ## Out of scope
 
-- **Any ADR** until step 4 — the vocabulary is settled, the overall model is not.
-- The atlas's visual design — card layout, accent derivation, the cross-space
-  rail. Sketched, not specified.
+- An ADR merely to restate the feature choice. Write one only if implementation settles
+  a durable architectural rule that the existing architecture guide cannot carry.
+- **Per-space accent derivation.** `core.SpaceEntryPoint.Accent` exists and the atlas
+  deliberately does not use it. A card is identified by its name and its paths; color as
+  a second identity channel is a design commitment this epic has not made.
+- Remote/served spaces and persisted per-space ordering.
 - `space scan` (walking the filesystem for planning repos).
 - Persisted per-space stats. Skeleton cards that fill in are honest; cached
   numbers lie.
