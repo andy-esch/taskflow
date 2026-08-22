@@ -1,5 +1,7 @@
 taskflow_root = "."
-tracked_repos = []
+tracked_repos = ["../demo-bike-shop"]
+
+id = "6g2phe0tjcqz"
 
 [pager]
 enabled = false

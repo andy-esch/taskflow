@@ -1,0 +1,8 @@
+# tskflwctl planning config — this repo's planning lives in another repo.
+# planning_repo: the external planning repo, relative to this file (or absolute).
+# In a git worktree a RELATIVE value resolves against the canonical checkout, not the
+# worktree, so it means the same thing from every checkout of this repo.
+planning_repo = "../demo-planning"
+# planning_repo_id: the target's durable id, verified after resolving. Remove it to
+# opt out of the check; a mismatch fails rather than writing to the wrong tree.
+planning_repo_id = "6g2phe0tjcqz"

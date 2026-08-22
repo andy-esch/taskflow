@@ -140,7 +140,10 @@ func TestAtlasLoadsGroupedCardsAndNavigatesThroughSelectedEntry(t *testing.T) {
 		t.Fatalf("atlas landing = on:%v spaces:%d", m.onAtlas, len(m.atlas.spaces))
 	}
 	view := m.View().Content
-	for _, want := range []string{"atlas", "alpha", "alpha-impl", "beta", "~/git/alpha", "current", "order name"} {
+	// No "current" here on purpose: nothing is chosen yet on the landing atlas — see
+	// TestAtlasMarksNoCardCurrentUntilASpaceIsChosen. It is asserted below, once a space
+	// has actually been entered.
+	for _, want := range []string{"atlas", "alpha", "alpha-impl", "beta", "~/git/alpha", "order name"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("atlas view missing %q:\n%s", want, view)
 		}
@@ -164,6 +167,13 @@ func TestAtlasLoadsGroupedCardsAndNavigatesThroughSelectedEntry(t *testing.T) {
 	}
 	if m.workspace.PlanningID != "planning-alpha" || m.workspace.PlanningRoot != alpha {
 		t.Fatalf("pointer lost logical planning identity: %+v", m.workspace)
+	}
+
+	// Back on the atlas, the entry point just entered is the one marked current.
+	tm, _ = m.Update(press("a"))
+	m = tm.(Model)
+	if !strings.Contains(m.View().Content, "current") {
+		t.Fatalf("atlas did not mark the entered entry point current:\n%s", m.View().Content)
 	}
 }
 
@@ -616,5 +626,32 @@ func TestAtlasChipKeepsTheRepoNameWhenLaunchedInsideOne(t *testing.T) {
 	tm, _ = m.Update(press("a"))
 	if m = tm.(Model); !m.onAtlas || m.spaceName() != filepath.Base(alpha) {
 		t.Fatalf("chip = %q while visiting the atlas from a repo, want %q", m.spaceName(), filepath.Base(alpha))
+	}
+}
+
+// The chip reading `atlas` and a card reading `current` are contradictory claims about
+// the same moment. Until a space is chosen the seeded workspace is scaffolding, so no
+// card is marked; once chosen, the badge tracks it normally.
+func TestAtlasMarksNoCardCurrentUntilASpaceIsChosen(t *testing.T) {
+	m, _, alpha, _ := atlasTestModel(t) // the atlas-landing shape, alpha seeded behind it
+	if m.spaceName() != atlasName {
+		t.Fatalf("setup: expected the unchosen landing atlas, chip = %q", m.spaceName())
+	}
+	if got := m.currentForAtlas(); got.Checkout != "" || got.PlanningID != "" {
+		t.Fatalf("unchosen atlas marked %+v as current; want the zero workspace", got)
+	}
+	if strings.Contains(m.renderBody(), "current") {
+		t.Errorf("landing atlas rendered a `current` badge while the chip reads %q:\n%s",
+			atlasName, m.renderBody())
+	}
+	tm, _ := m.Update(press("esc")) // fall into the seeded space — now it IS chosen
+	m = tm.(Model)
+	tm, _ = m.Update(press("a"))
+	m = tm.(Model)
+	if m.currentForAtlas().Checkout != alpha {
+		t.Fatalf("after choosing, current = %+v, want %q", m.currentForAtlas(), alpha)
+	}
+	if !strings.Contains(m.renderBody(), "current") {
+		t.Errorf("atlas dropped the `current` badge for a chosen space:\n%s", m.renderBody())
 	}
 }
