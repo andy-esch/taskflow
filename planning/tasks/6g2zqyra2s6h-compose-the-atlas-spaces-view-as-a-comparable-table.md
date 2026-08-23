@@ -58,7 +58,7 @@ Target shape:
   about itself stays on screen, and the focused row is never scrolled off.
 - [x] A space with no healthy entry point stays visible, keeps its error, and still cannot
   be entered.
-- [ ] Degrades on narrow terminals by dropping the least load-bearing columns rather than
+- [x] Degrades on narrow terminals by dropping the least load-bearing columns rather than
   overflowing or wrapping.
 - [x] Existing atlas tests are reworked rather than deleted where they assert the old flat
   layout.

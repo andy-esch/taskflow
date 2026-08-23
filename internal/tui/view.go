@@ -376,6 +376,7 @@ func (m Model) footer() string {
 		if m.atlas.screen == atlasScreenWork {
 			line = strings.Join([]string{
 				"↑↓ tasks", "⏎ open task", keyHint(keys.View, "spaces"),
+				keyHint(keys.Sort, "order"), keyHint(keys.SortRev, "reverse"),
 				keyCombo(keys.PrevTab, keys.NextTab, " ", "tabs"),
 				keyHint(keys.Atlas, "back"), keyHint(keys.Command, "cmd"),
 				keyHint(keys.Refresh, "refresh"), keyHint(keys.Help, "help"),

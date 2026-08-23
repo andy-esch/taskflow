@@ -10,6 +10,18 @@ import (
 // TaskDate is the date to display for a task: its last-updated date, falling
 // back to created when never updated. Shared so the CLI render layer and the TUI
 // pick the same one (pair it with RelativeDate for the compact form).
+// StartedDate is how long a task has been UNDERWAY, as opposed to when it was last
+// touched. For in-progress work that is the question worth asking — a task started five
+// weeks ago and edited yesterday is a different situation from one started yesterday, and
+// TaskDate cannot tell them apart. Falls back to the ordinary date for rows that carry no
+// started_at (tasks that predate the stamp, or that never entered in-progress).
+func StartedDate(t domain.Task) string {
+	if t.StartedAt != "" {
+		return t.StartedAt
+	}
+	return TaskDate(t)
+}
+
 func TaskDate(t domain.Task) string {
 	if t.Updated != "" {
 		return t.Updated

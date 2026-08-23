@@ -10,6 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [validation, schema, adr]
 created: "2026-07-07"
+updated_at: "2026-08-23"
+started_at: "2026-08-23"
 ---
 # ADR — declared frontmatter-schema contract: close the policy questions
 

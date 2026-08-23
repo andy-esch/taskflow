@@ -7,6 +7,7 @@ package theme
 
 import (
 	"strings"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -149,6 +150,42 @@ func Priority(p string) Color {
 
 // Percent maps a completion percentage to its color: gray <34, yellow <100,
 // green at 100.
+// Staleness colours an elapsed duration by how much it should worry you. Built in the same
+// shape as Percent so the palette owns the thresholds rather than each view inventing its
+// own: a caller passes days and renders the result, and the boundaries move in one place.
+//
+// The thresholds are deliberately generous. Planning is not a ticketing system with an SLA,
+// and a fortnight on a hard task is ordinary — so nothing is flagged until a month, which
+// is roughly when "in progress" stops describing reality. A negative or unknown age is
+// neutral, never alarming.
+func Staleness(days int) Color {
+	switch {
+	case days < 0:
+		return ColorGray
+	case days >= 90:
+		return ColorRed
+	case days >= 30:
+		return ColorYellow
+	default:
+		return ColorGray
+	}
+}
+
+// DaysSince is the whole days between a YYYY-MM-DD date and now, or -1 when the date is
+// missing or unparseable — the same "unknown is not alarming" convention Staleness expects.
+func DaysSince(date string) int { return daysSinceFrom(date, time.Now()) }
+
+func daysSinceFrom(date string, now time.Time) int {
+	t, err := time.Parse(time.DateOnly, date)
+	if err != nil {
+		return -1
+	}
+	if d := int(now.Sub(t).Hours() / 24); d >= 0 {
+		return d
+	}
+	return -1
+}
+
 func Percent(pct int) Color {
 	switch {
 	case pct >= 100:
