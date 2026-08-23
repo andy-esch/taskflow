@@ -43,15 +43,19 @@ type atlas struct {
 	// screen is which view is showing; it survives an atlas round trip inside a session
 	// but not a fresh launch, so `ui` always opens on spaces.
 	screen atlasScreen
-	// work is the cross-space in-progress set, most recently touched first. It is the
-	// projection SpaceOverviewService already builds for `status --all`; the atlas kept
-	// only its length until now.
+	// work is the cross-space in-progress set. It is the projection SpaceOverviewService
+	// already builds for `status --all`; the atlas kept only its length until now.
 	work       []core.SpaceInProgress
 	workCursor int
+	workOrder  atlasWorkOrder
 	loaded     bool
-	loadErr    error
-	spaces     []atlasSpace
-	cursor     int
+	// stale marks the projection as out of date because planning data changed underneath
+	// it. Kept separate from loaded: the atlas keeps rendering its last good snapshot,
+	// it just knows to re-read before showing it again.
+	stale   bool
+	loadErr error
+	spaces  []atlasSpace
+	cursor  int
 	// startup marks the load that ran because the atlas IS the landing screen. Its only
 	// job now is degradation: if the registry cannot be read at all, fall back to the
 	// seeded workspace rather than opening onto an empty screen.
@@ -63,6 +67,34 @@ type atlas struct {
 	order   atlasOrder
 	reverse bool
 }
+
+// atlasWorkOrder is the work view's own ordering axis. The spaces view sorts by identity
+// (name, activity, registration); the work list sorts by the shape of the work itself, so
+// it needs a separate vocabulary rather than borrowing atlasOrder.
+type atlasWorkOrder uint8
+
+const (
+	// Started first: "what have I been in the middle of longest" is the question the view
+	// exists to answer, and it is the one a flat list answers best.
+	atlasWorkByStarted atlasWorkOrder = iota
+	atlasWorkBySpace
+	atlasWorkByPriority
+)
+
+func (o atlasWorkOrder) label() string {
+	switch o {
+	case atlasWorkBySpace:
+		return "space"
+	case atlasWorkByPriority:
+		return "priority"
+	default:
+		return "started"
+	}
+}
+
+// grouped reports whether this order draws per-space headings. Only the space order does:
+// grouping by anything else would repeat the heading for one row at a time.
+func (o atlasWorkOrder) grouped() bool { return o == atlasWorkBySpace }
 
 type atlasSpace struct {
 	summary core.SpaceSummary
@@ -184,11 +216,19 @@ func (m Model) handleAtlasKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.atlas.moveEntry(-1)
 	case !work && (msg.String() == "l" || msg.String() == "right"):
 		m.atlas.moveEntry(1)
-	case !work && key.Matches(msg, keys.Sort):
-		m.atlas.cycleOrder()
-	case !work && key.Matches(msg, keys.SortRev):
+	case key.Matches(msg, keys.Sort):
+		if work {
+			m.atlas.cycleWorkOrder(1)
+		} else {
+			m.atlas.cycleOrder()
+		}
+	case key.Matches(msg, keys.SortRev):
 		m.atlas.reverse = !m.atlas.reverse
-		m.atlas.applyOrder()
+		if work {
+			m.atlas.applyWorkOrder()
+		} else {
+			m.atlas.applyOrder()
+		}
 	case msg.String() == "enter":
 		if work {
 			return m, m.openAtlasWork()
@@ -231,11 +271,32 @@ func (m *Model) enterAtlas(refresh bool) tea.Cmd {
 	m.onAtlas = true
 	m.focus = focusList
 	m.unzoom()
-	if refresh || !m.atlas.loaded {
+	if refresh || !m.atlas.loaded || m.atlas.stale {
 		m.atlas.loadGen++
 		return loadAtlas(m.spaceOverviewSvc, m.atlas.loadGen)
 	}
 	return nil
+}
+
+// markAtlasStale records that planning data changed under the active space, so the
+// cross-space projection no longer reflects the tree. It is deliberately NOT refreshed
+// eagerly: Overview() re-reads EVERY registered planning tree, which is far too heavy to
+// run on each fsnotify debounce. The next entry re-reads instead — unless the atlas is
+// already on screen, where a visibly wrong list is worse than one extra read.
+//
+// This covers changes made inside the TUI as well as outside it: the watcher sees the
+// tool's own writes, so a `task start` here reaches the same path an edit in another
+// terminal does.
+func (m *Model) markAtlasStale() tea.Cmd {
+	if m.spaceOverviewSvc == nil || !m.atlas.loaded {
+		return nil
+	}
+	m.atlas.stale = true
+	if !m.onAtlas {
+		return nil // the next enterAtlas will re-read
+	}
+	m.atlas.loadGen++
+	return loadAtlas(m.spaceOverviewSvc, m.atlas.loadGen)
 }
 
 // exitAtlas returns to the space that was already open, restoring what enterAtlas took.
@@ -356,6 +417,7 @@ func (a *atlas) setOverview(overview core.SpaceOverview) {
 	a.sortSpaces()
 	a.restoreCursor(selectedSpace)
 	a.loaded = true
+	a.stale = false
 	a.loadErr = nil
 	a.openErr = ""
 }
@@ -370,16 +432,7 @@ func (a *atlas) setWork(rows []core.SpaceInProgress) {
 		selected = workKey(row)
 	}
 	a.work = append([]core.SpaceInProgress(nil), rows...)
-	sort.SliceStable(a.work, func(i, j int) bool {
-		x, y := a.work[i], a.work[j]
-		if dx, dy := theme.TaskDate(x.Task), theme.TaskDate(y.Task); dx != dy {
-			return dx > dy // most recent first
-		}
-		if x.SpaceID != y.SpaceID {
-			return x.SpaceID < y.SpaceID
-		}
-		return x.Task.Slug < y.Task.Slug
-	})
+	a.sortWork()
 	a.workCursor = 0
 	for i, row := range a.work {
 		if workKey(row) == selected {
@@ -387,6 +440,60 @@ func (a *atlas) setWork(rows []core.SpaceInProgress) {
 			break
 		}
 	}
+}
+
+// sortWork applies the active order. Every comparison falls through to space then slug, so
+// the result is byte-stable between runs whatever the axis.
+func (a *atlas) sortWork() {
+	sort.SliceStable(a.work, func(i, j int) bool {
+		x, y := a.work[i], a.work[j]
+		cmp := 0
+		switch a.workOrder {
+		case atlasWorkBySpace:
+			cmp = strings.Compare(strings.ToLower(x.SpaceID), strings.ToLower(y.SpaceID))
+		case atlasWorkByPriority:
+			cmp = priorityRank(x.Task.Priority) - priorityRank(y.Task.Priority)
+		default:
+			// Longest-underway first: the oldest start date sorts to the top, which is
+			// where a stuck task should be.
+			if dx, dy := theme.StartedDate(x.Task), theme.StartedDate(y.Task); dx != dy {
+				cmp = strings.Compare(dx, dy)
+			}
+		}
+		if cmp == 0 {
+			if cmp = strings.Compare(x.SpaceID, y.SpaceID); cmp == 0 {
+				cmp = strings.Compare(x.Task.Slug, y.Task.Slug)
+			}
+		}
+		if a.reverse {
+			return cmp > 0
+		}
+		return cmp < 0
+	})
+}
+
+// cycleWorkOrder advances the work axis, keeping the cursor on the same task.
+func (a *atlas) cycleWorkOrder(delta int) {
+	if delta >= 0 {
+		a.workOrder = atlasWorkOrder((int(a.workOrder) + 1) % 3)
+	}
+	a.applyWorkOrder()
+}
+
+func (a *atlas) applyWorkOrder() {
+	selected := ""
+	if row, ok := a.selectedWork(); ok {
+		selected = workKey(row)
+	}
+	a.sortWork()
+	a.workCursor = 0
+	for i, row := range a.work {
+		if workKey(row) == selected {
+			a.workCursor = i
+			break
+		}
+	}
+	a.openErr = ""
 }
 
 func workKey(row core.SpaceInProgress) string {
@@ -556,7 +663,7 @@ func (a atlas) view(st *styles, current core.Workspace, maxW, maxH int) string {
 		status = []string{"", st.fg(theme.ColorYellow, "⚠ refresh failed: "+a.loadErr.Error())}
 	}
 	band := a.entryBand(st, current, maxW)
-	body := a.spaceRows(st, current)
+	body := a.spaceRows(st, current, maxW)
 	if maxH > 0 {
 		if budget := max1(maxH - len(header) - len(band) - len(status)); len(body) > budget {
 			body = scrollTo(body, a.cursor, budget)
@@ -569,7 +676,7 @@ func (a atlas) view(st *styles, current core.Workspace, maxW, maxH int) string {
 // spaceRows renders one aligned row per space. Columns are measured across the whole set —
 // through the same relDateCells/countsWidth helpers the dashboard's epic widget uses — so
 // the bar column is scannable and two spaces can be compared without reading either.
-func (a atlas) spaceRows(st *styles, current core.Workspace) []string {
+func (a atlas) spaceRows(st *styles, current core.Workspace, maxW int) []string {
 	stats := make([]atlasStats, len(a.spaces))
 	nameW, activeW := 0, 0
 	for i, space := range a.spaces {
@@ -588,6 +695,39 @@ func (a atlas) spaceRows(st *styles, current core.Workspace) []string {
 		if s.attention > 0 {
 			attentionW = maxInt(attentionW, ansi.StringWidth(fmt.Sprintf("⚠%d", s.attention)))
 		}
+	}
+
+	// Same fitting rule as the work view: drop columns whole rather than shearing every row
+	// at the right edge. With real space names this table lands at 92 columns, so an 80-wide
+	// terminal has to give something up — the breakdown first, then recency, both of which
+	// are context beside the bar and the counts.
+	showCounts, showDate := countsW2 > 0, false
+	for _, d := range dates {
+		showDate = showDate || d != ""
+	}
+	fixed := func() int {
+		w := 2 + 2 + nameW + 2 + 10 + 1 + 4 + 2 + countsW + 2 + 1 + activeW
+		if showCounts {
+			w += 2 + countsW2
+		}
+		if attentionW > 0 {
+			w += 2 + attentionW
+		}
+		if showDate {
+			w += 2 + ansi.StringWidth(ansi.Strip(dates[0]))
+		}
+		return w
+	}
+	for avail := max1(maxW); fixed() > avail; {
+		if showCounts {
+			showCounts = false
+			continue
+		}
+		if showDate {
+			showDate = false
+			continue
+		}
+		break
 	}
 
 	rows := make([]string, 0, len(a.spaces))
@@ -616,7 +756,7 @@ func (a atlas) spaceRows(st *styles, current core.Workspace) []string {
 			st.fg(theme.Percent(pct), theme.PercentLabelPadded(pct)),
 			rollupCounts(stats[i].done, stats[i].total, countsW))
 		row += "  " + st.fg(theme.ColorCyan, fmt.Sprintf("▸%*d", activeW, stats[i].inProgress))
-		if countsW2 > 0 {
+		if showCounts {
 			row += "  " + padRight(counts[i], countsW2)
 		}
 		if attentionW > 0 {
@@ -626,7 +766,7 @@ func (a atlas) spaceRows(st *styles, current core.Workspace) []string {
 			}
 			row += "  " + cell
 		}
-		if dates[i] != "" {
+		if showDate && dates[i] != "" {
 			row += "  " + dates[i]
 		}
 		rows = append(rows, row)
@@ -774,9 +914,14 @@ func atlasCountsLine(st *styles, stats atlasStats) string {
 // sketch calls the atlas's actual payload, and the one `status --all` can answer on the
 // CLI but the TUI could not. One row per in-progress task across every healthy space.
 func (a atlas) workView(st *styles, maxW, maxH int) string {
+	direction := "↑"
+	if a.reverse {
+		direction = "↓"
+	}
 	header := []string{st.dashHeading.Render(fmt.Sprintf(
-		"atlas · work · %d in progress across %s",
+		"atlas · work · %d in progress across %s · order %s %s",
 		len(a.work), countLabel{a.workSpaceCount(), "space", "spaces"},
+		a.workOrder.label(), direction,
 	)), ""}
 	var status []string
 	switch {
@@ -794,38 +939,149 @@ func (a atlas) workView(st *styles, maxW, maxH int) string {
 		return strings.Join(truncateAll(append(append(header, body...), status...), maxW), "\n")
 	}
 
-	// Column widths come from the data, capped, so a long slug in one space cannot push
-	// every other row's description off the screen.
-	spaceW, slugW, ageW := 0, 0, 0
-	ages := make([]string, len(a.work))
-	for i, row := range a.work {
-		ages[i] = theme.RelativeDate(theme.TaskDate(row.Task))
-		spaceW = maxInt(spaceW, ansi.StringWidth(row.SpaceID))
-		slugW = maxInt(slugW, ansi.StringWidth(row.Task.Slug))
-		ageW = maxInt(ageW, ansi.StringWidth(ages[i]))
-	}
-	spaceW, slugW = minInt(spaceW, 22), minInt(slugW, 46)
-
-	body := make([]string, 0, len(a.work))
-	for i, row := range a.work {
-		cursor := "  "
-		if i == a.workCursor {
-			cursor = st.selected.Render("› ")
-		}
-		body = append(body, fmt.Sprintf("%s%s %s  %s  %s",
-			cursor,
-			st.dim(padRight(truncate("["+row.SpaceID+"]", spaceW+2), spaceW+2)),
-			padRight(truncate(row.Task.Slug, slugW), slugW),
-			st.dim(padRight(ages[i], ageW)),
-			st.dim(row.Task.Description),
-		))
-	}
+	body, focus := a.workRows(st, maxW)
 	if maxH > 0 {
 		if budget := max1(maxH - len(header) - len(status)); len(body) > budget {
-			body = scrollTo(body, a.workCursor, budget)
+			body = scrollTo(body, focus, budget)
 		}
 	}
 	return strings.Join(truncateAll(append(append(header, body...), status...), maxW), "\n")
+}
+
+// workRows renders the working set and reports which line the cursor is on. Grouping is a
+// property of the ORDER: only the space order draws headings, because grouping by started
+// date or priority would emit a heading per row.
+//
+// Columns are FITTED to the terminal, not truncated at its right edge. Right-edge
+// truncation looks fine on short space names and then quietly amputates the useful half of
+// every row on real ones: a 92-column terminal showing `[desirelines-planning]` plus a
+// 76-character slug has already spent 69 columns before the first data column, so age —
+// the whole point of this view — never renders at all. Columns are therefore dropped
+// WHOLE, least load-bearing first, so what survives is readable rather than sheared.
+func (a atlas) workRows(st *styles, maxW int) ([]string, int) {
+	grouped := a.workOrder.grouped()
+	spaceW, slugW, epicW, prioW, ageW := 0, 0, 0, 0, 0
+	ages := make([]string, len(a.work))
+	for i, row := range a.work {
+		ages[i] = theme.RelativeDate(theme.StartedDate(row.Task))
+		spaceW = maxInt(spaceW, ansi.StringWidth(row.SpaceID)+2) // the [brackets]
+		slugW = maxInt(slugW, ansi.StringWidth(row.Task.Slug))
+		epicW = maxInt(epicW, ansi.StringWidth(row.Task.Epic))
+		prioW = maxInt(prioW, ansi.StringWidth(row.Task.Priority))
+		ageW = maxInt(ageW, ansi.StringWidth(ages[i]))
+	}
+
+	// Sacrifice order, least load-bearing first. Slug and age always survive: without the
+	// slug there is no row, and without the age this view is just a list.
+	const (
+		gap       = 2
+		cursorW   = 2
+		slugFloor = 18
+		descFloor = 16
+	)
+	// A very long slug is identity, not information: letting it take the whole row buys one
+	// unabbreviated name at the cost of the epic and priority columns. Cap it at a share of
+	// the terminal first, fit the rest, then give any leftover back to it.
+	naturalSlugW := slugW
+	slugW = minInt(slugW, maxInt(slugFloor, maxW*2/5))
+	showSpace, showEpic, showPrio := !grouped, epicW > 0, prioW > 0
+	fixed := func() int {
+		w := cursorW + slugW + gap + ageW
+		if showSpace {
+			w += spaceW + 1
+		}
+		if showEpic {
+			w += gap + epicW
+		}
+		if showPrio {
+			w += gap + prioW
+		}
+		return w
+	}
+	avail := max1(maxW)
+	for fixed() > avail {
+		switch {
+		case showEpic:
+			showEpic = false
+		case showPrio:
+			showPrio = false
+		case slugW > slugFloor:
+			slugW = maxInt(slugFloor, slugW-(fixed()-avail))
+		case showSpace:
+			showSpace = false // last resort: grouping or the space column, but not neither
+		default:
+			slugW = max1(slugW - (fixed() - avail))
+		}
+		if !showEpic && !showPrio && !showSpace && slugW <= slugFloor {
+			break // nothing left to give; truncate handles the remainder
+		}
+	}
+	// Description is the flex column: it takes whatever is left, and is dropped rather than
+	// rendered as a two-character stub. Anything still spare after that goes back to the
+	// slug, up to its natural width, so a wide terminal shows the whole name.
+	descW := avail - fixed() - gap
+	showDesc := descW >= descFloor
+	if !showDesc {
+		descW = 0
+		if spare := avail - fixed(); spare > 0 {
+			slugW = minInt(naturalSlugW, slugW+spare)
+		}
+	} else if spare := descW - descFloor; spare > 0 && naturalSlugW > slugW {
+		grow := minInt(spare, naturalSlugW-slugW)
+		slugW += grow
+		descW -= grow
+	}
+
+	body := make([]string, 0, len(a.work)+2*a.workSpaceCount())
+	focus, lastSpace := 0, ""
+	for i, row := range a.work {
+		if grouped && row.SpaceID != lastSpace {
+			lastSpace = row.SpaceID
+			if len(body) > 0 {
+				body = append(body, "")
+			}
+			body = append(body, st.dashHeading.Render(row.SpaceID)+"  "+
+				st.dim(countLabel{a.countIn(row.SpaceID), "task", "tasks"}.String()))
+		}
+		cursor := "  "
+		if i == a.workCursor {
+			cursor = st.selected.Render("› ")
+			focus = len(body)
+		}
+		line := cursor
+		if showSpace {
+			// The heading carries the space when grouped; repeating it per row would be
+			// noise rather than structure.
+			line += st.dim(padRight(truncate("["+row.SpaceID+"]", spaceW), spaceW)) + " "
+		}
+		line += padRight(truncate(row.Task.Slug, slugW), slugW)
+		if showEpic {
+			line += "  " + st.dim(padRight(truncate(row.Task.Epic, epicW), epicW))
+		}
+		if showPrio {
+			line += "  " + padRight(st.priorityText(row.Task.Priority), prioW)
+		}
+		// Age is the point of this view: how long has this been underway, coloured by how
+		// much that should worry you.
+		line += "  " + st.fg(theme.Staleness(theme.DaysSince(theme.StartedDate(row.Task))),
+			padRight(ages[i], ageW))
+		if showDesc {
+			line += "  " + st.dim(truncate(row.Task.Description, descW))
+		}
+		body = append(body, line)
+	}
+	return body, focus
+}
+
+// countIn is how many rows of the working set belong to one space, for the group heading.
+func (a atlas) countIn(spaceID string) int {
+	n := 0
+	for _, row := range a.work {
+		if row.SpaceID == spaceID {
+			n++
+		}
+	}
+	return n
 }
 
 // workSpaceCount is how many distinct spaces the working set spans — "5 in progress" reads

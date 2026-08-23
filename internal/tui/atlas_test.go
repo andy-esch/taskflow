@@ -1043,7 +1043,7 @@ func TestAtlasSpaceRowsKeepColumnsAlignedAcrossUnequalBreakdowns(t *testing.T) {
 		mk("wide-one", 12, 7, 1), // "12 epics · 7 findings"
 		mk("narrow", 1, 0, 2),    // "1 epic"
 	}}
-	rows := a.spaceRows(st, core.Workspace{})
+	rows := a.spaceRows(st, core.Workspace{}, 200)
 	// Display columns, not byte offsets: the rows carry different numbers of multi-byte
 	// runes (the `·` separators), so a byte index would report shear that is not there.
 	columnOf := func(row, col string) int {
@@ -1076,5 +1076,215 @@ func TestAtlasEmptyWorkViewNamesTheRealViewKey(t *testing.T) {
 	if !strings.Contains(view, "press "+keys.View.Help().Key+" for spaces") {
 		t.Errorf("empty work view does not name %q as the way to the spaces view:\n%s",
 			keys.View.Help().Key, view)
+	}
+}
+
+// The work view's axis is its own: the spaces view sorts by identity, this sorts by the
+// shape of the work. Only the space order groups, and the cursor must survive a change.
+func TestAtlasWorkOrderCyclesAndOnlySpaceOrderGroups(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	if m.atlas.workOrder != atlasWorkByStarted {
+		t.Fatalf("work view opens on %q, want started", m.atlas.workOrder.label())
+	}
+	before, _ := m.atlas.selectedWork()
+
+	tm, _ = m.Update(press("o"))
+	m = tm.(Model)
+	if m.atlas.workOrder != atlasWorkBySpace {
+		t.Fatalf("o reached %q, want space", m.atlas.workOrder.label())
+	}
+	if after, _ := m.atlas.selectedWork(); after.Task.Slug != before.Task.Slug ||
+		after.PlanningID != before.PlanningID {
+		t.Errorf("reordering moved the cursor off %q onto %q", before.Task.Slug, after.Task.Slug)
+	}
+	grouped := ansi.Strip(m.atlas.view(m.st, m.workspace, 120, 24))
+	if !strings.Contains(grouped, "order space") {
+		t.Errorf("header does not name the active order:\n%s", grouped)
+	}
+	// Grouped rows drop the bracketed per-row space label in favour of a heading.
+	if strings.Contains(grouped, "[alpha]") {
+		t.Errorf("grouped work view still repeats the per-row space label:\n%s", grouped)
+	}
+
+	tm, _ = m.Update(press("o"))
+	m = tm.(Model)
+	if m.atlas.workOrder != atlasWorkByPriority {
+		t.Fatalf("second o reached %q, want priority", m.atlas.workOrder.label())
+	}
+	flat := ansi.Strip(m.atlas.view(m.st, m.workspace, 120, 24))
+	if !strings.Contains(flat, "[") {
+		t.Errorf("ungrouped orders must keep the per-row space label:\n%s", flat)
+	}
+	tm, _ = m.Update(press("o"))
+	if m = tm.(Model); m.atlas.workOrder != atlasWorkByStarted {
+		t.Fatalf("o did not cycle back to started, got %q", m.atlas.workOrder.label())
+	}
+}
+
+// Longest-underway first: a task stuck for months belongs at the top, which is the whole
+// reason this view prefers started_at over last-touched.
+func TestAtlasWorkStartedOrderPutsTheStalestFirst(t *testing.T) {
+	a := atlas{loaded: true}
+	a.setWork([]core.SpaceInProgress{
+		{SpaceID: "s", PlanningID: "p", Task: domain.Task{Slug: "fresh", StartedAt: "2026-08-20"}},
+		{SpaceID: "s", PlanningID: "p", Task: domain.Task{Slug: "ancient", StartedAt: "2026-02-01"}},
+		{SpaceID: "s", PlanningID: "p", Task: domain.Task{Slug: "middling", StartedAt: "2026-07-01"}},
+	})
+	got := []string{a.work[0].Task.Slug, a.work[1].Task.Slug, a.work[2].Task.Slug}
+	want := []string{"ancient", "middling", "fresh"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("started order = %v, want stalest first %v", got, want)
+		}
+	}
+}
+
+// A task edited yesterday but started months ago is the case the old view could not show:
+// it reported "yesterday" where the useful answer is how long it has been underway.
+func TestAtlasWorkAgeReportsTimeUnderwayNotLastEdit(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	m.atlas.work = []core.SpaceInProgress{{SpaceID: "s", PlanningID: "p", Task: domain.Task{
+		Slug: "long-hauler", StartedAt: "2026-02-01", Updated: "2026-08-22",
+		Description: "began in winter, edited very recently",
+	}}}
+	view := ansi.Strip(m.atlas.view(m.st, m.workspace, 120, 24))
+	if strings.Contains(view, "yesterday") {
+		t.Errorf("work view showed the last edit instead of time underway:\n%s", view)
+	}
+	if !strings.Contains(view, "mo ago") {
+		t.Errorf("work view did not report how long the task has been underway:\n%s", view)
+	}
+}
+
+// The atlas projection used to load exactly twice — at startup and on `r` — so starting a
+// task while the TUI was open left the work view showing the working set as it was at
+// program start, with nothing on screen admitting it. Reported 2026-08-23.
+func TestAtlasWorkViewSeesWorkStartedWhileTheTUIWasOpen(t *testing.T) {
+	m, _, alpha, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	before := len(m.atlas.work)
+
+	// A task is started in the active space while the browser is running — the same path
+	// whether that happens in this TUI or another terminal, since the watcher sees both.
+	body := "---\nstatus: in-progress\nepic: 01-test\ndescription: started while the ui was open\n---\n# Started\n"
+	if err := os.WriteFile(filepath.Join(alpha, "tasks", "6yyyyyyyyyyy-started-while-open.md"), []byte(body), 0o644); err != nil {
+		t.Skipf("fixture not writable: %v", err)
+	}
+	tm, cmd := m.Update(reloadMsg{}) // what the fsnotify debounce delivers
+	m = settleAtlasCmd(t, tm.(Model), cmd)
+
+	if len(m.atlas.work) != before+1 {
+		t.Fatalf("work view holds %d rows after a reload, want %d — the projection did not re-read",
+			len(m.atlas.work), before+1)
+	}
+	if !strings.Contains(ansi.Strip(m.atlas.view(m.st, m.workspace, 120, 24)), "started-while-open") {
+		t.Error("the newly started task is absent from the rendered work view")
+	}
+}
+
+// Re-reading every registered planning tree is expensive, so a change marks the projection
+// stale and the NEXT entry pays for it — unless the atlas is already on screen, where a
+// visibly wrong list is worse than one extra read.
+func TestAtlasStaleProjectionRefreshesLazilyOffScreenAndEagerlyOnIt(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("a")) // leave the atlas for the seeded space
+	m = tm.(Model)
+	if m.onAtlas {
+		t.Fatal("setup: expected to be off the atlas")
+	}
+	cmd := m.markAtlasStale()
+	if !m.atlas.stale {
+		t.Fatal("a reload did not mark the projection stale")
+	}
+	if cmd != nil {
+		t.Error("off-screen staleness should defer the re-read, not pay for it immediately")
+	}
+	// Entering now re-reads even though `refresh` is false.
+	if got := m.enterAtlas(false); got == nil {
+		t.Error("entering a stale atlas did not re-read the projection")
+	}
+
+	m.atlas.stale = false
+	m.onAtlas = true
+	if cmd := m.markAtlasStale(); cmd == nil {
+		t.Error("staleness while the atlas is on screen should re-read immediately")
+	}
+}
+
+// Audit L1, reported against the real registry: right-edge truncation amputated everything
+// after the epic column on a 92-column terminal, so the staleness age — the reason this
+// view exists — never rendered. Columns must be dropped whole, least load-bearing first,
+// with slug and age always surviving.
+func TestAtlasWorkRowsFitColumnsRatherThanShearingThem(t *testing.T) {
+	a := atlas{loaded: true, screen: atlasScreenWork}
+	a.setWork([]core.SpaceInProgress{{
+		SpaceID: "desirelines-planning", PlanningID: "p",
+		Task: domain.Task{
+			Slug:     "retain-and-re-audit-api-gateway-penetration-findings-before-multi-user-launch",
+			Epic:     "15-activity-data-processing-and-retention",
+			Priority: "medium", StartedAt: "2026-02-01",
+			Description: "Preserve the authorized assessment evidence and residual risks.",
+		},
+	}})
+	st := &styles{}
+	*st = testStyles
+
+	for _, width := range []int{92, 70, 50} {
+		rows, _ := a.workRows(st, width)
+		plain := ansi.Strip(rows[0])
+		if w := ansi.StringWidth(plain); w > width {
+			t.Errorf("width %d: row overflows at %d columns:\n%s", width, w, plain)
+		}
+		// The two load-bearing columns survive at every width.
+		t.Logf("width %d → %q", width, plain)
+		if !strings.Contains(plain, "retain-and-re-a") {
+			t.Errorf("width %d: the slug was lost:\n%s", width, plain)
+		}
+		if !strings.Contains(plain, "mo ago") {
+			t.Errorf("width %d: the staleness age was lost — the point of the view:\n%s", width, plain)
+		}
+	}
+
+	// Given room, the optional columns come back.
+	wide, _ := a.workRows(st, 200)
+	plainWide := ansi.Strip(wide[0])
+	for _, want := range []string{"15-activity-data", "medium", "Preserve the authorized"} {
+		if !strings.Contains(plainWide, want) {
+			t.Errorf("a wide terminal should show %q:\n%s", want, plainWide)
+		}
+	}
+}
+
+// Audit L1, the half filed against the spaces table: with real space names the row lands at
+// 92 columns, so a narrower terminal must shed the breakdown and recency rather than shear
+// the bar and counts that carry the comparison.
+func TestAtlasSpaceRowsShedContextColumnsBeforeShearing(t *testing.T) {
+	mk := func(id string, epics int) atlasSpace {
+		s := &core.Summary{Findings: core.FindingsRollup{Open: 85}}
+		for i := 0; i < epics; i++ {
+			s.Epics = append(s.Epics, core.EpicSummary{Done: 100, Total: 208, LastUpdated: "2026-08-01"})
+		}
+		return atlasSpace{summary: core.SpaceSummary{ID: id, PlanningID: id, Summary: s,
+			Entries: []core.SpaceEntryPoint{{ID: id, State: core.SpaceStateOK}}}}
+	}
+	a := atlas{loaded: true, spaces: []atlasSpace{mk("desirelines-planning", 18), mk("taskflow", 12)}}
+	st := &styles{}
+	*st = testStyles
+	for _, width := range []int{100, 80, 64} {
+		for _, row := range a.spaceRows(st, core.Workspace{}, width) {
+			plain := ansi.Strip(row)
+			if w := ansi.StringWidth(plain); w > width {
+				t.Errorf("width %d: row overflows at %d columns:\n%s", width, w, plain)
+			}
+			// The comparison itself must survive every width: the bar and the rollup.
+			if !strings.Contains(plain, "%") || !strings.Contains(plain, "/") {
+				t.Errorf("width %d: lost the progress comparison:\n%s", width, plain)
+			}
+		}
 	}
 }

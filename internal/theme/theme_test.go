@@ -2,6 +2,7 @@ package theme
 
 import (
 	"testing"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -152,5 +153,59 @@ func TestMarkers(t *testing.T) {
 	}
 	if MarkerWarn.Glyph != "⚠" || MarkerRevisit.Glyph != "↻" || MarkerUnreadable.Glyph != "!" {
 		t.Errorf("marker glyphs drifted: warn=%q revisit=%q unreadable=%q", MarkerWarn.Glyph, MarkerRevisit.Glyph, MarkerUnreadable.Glyph)
+	}
+}
+
+// Staleness thresholds are deliberately generous: planning is not a ticketing system, a
+// fortnight on a hard task is ordinary, and an unknown age must never read as alarming.
+func TestStaleness(t *testing.T) {
+	for _, tc := range []struct {
+		days int
+		want Color
+		why  string
+	}{
+		{-1, ColorGray, "unknown age is neutral, not alarming"},
+		{0, ColorGray, "started today"},
+		{13, ColorGray, "a fortnight in is ordinary"},
+		{29, ColorGray, "just under a month is still ordinary"},
+		{30, ColorYellow, "a month is where in-progress stops describing reality"},
+		{89, ColorYellow, ""},
+		{90, ColorRed, "a quarter underway is a problem"},
+		{900, ColorRed, ""},
+	} {
+		if got := Staleness(tc.days); got != tc.want {
+			t.Errorf("Staleness(%d) = %v, want %v — %s", tc.days, got, tc.want, tc.why)
+		}
+	}
+}
+
+func TestDaysSince(t *testing.T) {
+	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		date string
+		want int
+	}{
+		{"2026-08-23", 0},
+		{"2026-07-24", 30},
+		{"", -1},
+		{"not-a-date", -1},
+		{"2027-01-01", -1}, // a future start is unknown, not negative-alarming
+	} {
+		if got := daysSinceFrom(tc.date, now); got != tc.want {
+			t.Errorf("daysSinceFrom(%q) = %d, want %d", tc.date, got, tc.want)
+		}
+	}
+}
+
+// StartedDate answers "how long underway", which is a different question from "last
+// touched" — and the fallback matters for rows predating the started_at stamp.
+func TestStartedDatePrefersStartedAtOverLastTouched(t *testing.T) {
+	underway := domain.Task{StartedAt: "2026-07-01", Updated: "2026-08-22"}
+	if got := StartedDate(underway); got != "2026-07-01" {
+		t.Errorf("StartedDate = %q, want the start date, not the last edit", got)
+	}
+	legacy := domain.Task{Updated: "2026-08-22"}
+	if got := StartedDate(legacy); got != "2026-08-22" {
+		t.Errorf("StartedDate fallback = %q, want the ordinary date", got)
 	}
 }

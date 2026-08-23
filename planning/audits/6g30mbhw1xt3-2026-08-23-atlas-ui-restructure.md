@@ -95,7 +95,7 @@ carries it.
 
 ---
 
-#### L1. Narrow terminal degradation relies on line-level string truncation instead of structural column dropping  · **Status:** open
+#### L1. Narrow terminal degradation relies on line-level string truncation instead of structural column dropping  · **Status:** fixed
 
 **File:** `internal/tui/atlas.go:561,840-845`, `planning/tasks/6g2zqyra2s6h-compose-the-atlas-spaces-view-as-a-comparable-table.md:61-62` | **Component:** tui/atlas
 **Effort:** S · **Urgency:** eventually
@@ -104,7 +104,21 @@ Task `6g2zqyra2s6h` acceptance criterion 8 requires: "Degrades on narrow termina
 
 **Recommendation:** Implement progressive column inclusion in `spaceRows()` based on `maxW`, or explicitly record in `6g2zqyra2s6h` implementation notes that column pruning was deferred in favor of hard truncation.
 
-**Open, deliberately, 2026-08-23.** Confirmed: rows are truncated at the right edge rather
+**Reopened and fixed the same day — the deferral was wrong.** What follows was the original
+reasoning; it was judged against the demo fixture, whose spaces are called `kitchen` and
+`bike-workshop`. Against the real registry (`desirelines-planning`, 76-character slugs) the
+work view needed **138 columns** on a 92-column terminal, so everything after the epic
+column — priority, the staleness age that is the entire point of the view, and the
+description — never rendered at all. The spaces table lands at exactly 92 and shears at 80.
+
+Both now FIT rather than truncate: columns are dropped whole in a declared sacrifice order,
+with slug and age always surviving in the work view and the bar and rollup always surviving
+in the spaces table. The slug is capped at a share of the terminal first so one long name
+cannot starve the columns beside it, then grows back into whatever is spare. Pinned by
+`TestAtlasWorkRowsFitColumnsRatherThanShearingThem` and
+`TestAtlasSpaceRowsShedContextColumnsBeforeShearing`, both asserting at several widths.
+
+*Original note:* Confirmed: rows are truncated at the right edge rather
 than shedding whole columns, so a narrow terminal can cut mid-cell (`1mo a…`). Two things
 make this a real but low finding. Truncation from the right does drop the rightmost —
 least load-bearing — columns first, so the *ordering* is already correct; what is missing
@@ -166,4 +180,4 @@ something worth keeping: criterion 8 of `6g2zqyra2s6h` ("degrades by dropping th
 load-bearing columns") is **left unchecked**, because L1 is right that it is unmet. The
 planning data now shows that honestly instead of a completed task claiming a criterion it
 did not meet.
-- ⏳ `tskflwctl task new "Drop atlas table columns structurally on narrow terminals" --epic 29-multi-space-planning-a-home-registry-and-the-atlas --tags tui,atlas,ux` — L1: replace right-edge line truncation with whole-column dropping in priority order.
+- ✅ ~~`tskflwctl task new "Drop atlas table columns structurally on narrow terminals"`~~ — L1 fixed directly once real-registry widths showed it was acute, not eventual.

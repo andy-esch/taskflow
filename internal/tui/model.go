@@ -240,6 +240,9 @@ func (m *Model) reloadAll() tea.Cmd {
 	// The dashboard reads the same files, so keep the landing screen live too —
 	// otherwise an fsnotify/`r` reload refreshes the (hidden) tabs while the summary
 	// you're actually looking at silently goes stale. Loaded eagerly in Init.
+	// The cross-space projection reads the same files, so a reload here invalidates it too
+	// — otherwise the atlas keeps showing the working set as it was at program start.
+	cmds = append(cmds, m.markAtlasStale())
 	if m.dash.loaded {
 		cmds = append(cmds, loadDashboard(m.svc))
 	}
