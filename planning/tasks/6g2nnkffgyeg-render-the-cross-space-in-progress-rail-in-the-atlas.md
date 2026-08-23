@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g2nnkffgyeg
-status: in-progress
+status: completed
 epic: 29-multi-space-planning-a-home-registry-and-the-atlas
 description: Cycle the atlas between a spaces view and a full-viewport cross-space work view, so the rail is a screen rather than a band competing with the cards.
 effort: M
@@ -12,6 +12,7 @@ tags: [tui, atlas, ux]
 created: "2026-08-22"
 updated_at: "2026-08-23"
 started_at: "2026-08-23"
+completed_at: "2026-08-23"
 ---
 # Add a cross-space work view to the atlas
 
@@ -66,3 +67,67 @@ See [The atlas as a dashboard of dashboards](../research/6g2qtp0022t7-the-atlas-
 - Epic [29-multi-space-planning-a-home-registry-and-the-atlas](../epics/29-multi-space-planning-a-home-registry-and-the-atlas.md)
 - Design: [The atlas as a dashboard of dashboards](../research/6g2qtp0022t7-the-atlas-as-a-dashboard-of-dashboards.md)
 - Audit finding M3: [2026-08-22-multi-workspace-atlas](../audits/6g2k3qye4qma-2026-08-22-multi-workspace-atlas.md)
+
+## Implementation notes (2026-08-23)
+
+The atlas now cycles between a **spaces** view (the existing cards) and a **work** view:
+one row per in-progress task across every healthy space, most-recently-touched first, with
+space, slug, age, and description in data-derived columns capped so one long slug cannot
+push every description off screen.
+
+**The key is `[` / `]`, not a new binding.** Those already mean "move between sibling
+screens" everywhere else in this TUI and were dead keys on the atlas. Atlas views are
+siblings, so they keep that meaning — which also closes a gap noted during the v0.17.0
+audit. `h`/`l` and `o`/`O` stay spaces-only and are no longer promised by the footer while
+the work list shows, since they would do nothing there.
+
+**Landing on the task, not the space, needed an intent that outlives the switch.** The
+tabs to land on do not exist until the open succeeds, so `Model.pendingJump` carries the
+target across and `activateWorkspace` consumes it *instead of* the ordinary dashboard load
+— `jumpTo` threads the id through the tab's own loader, so it stays one load rather than a
+jump stacked on a dashboard fetch. A failed open drops the intent so it cannot fire against
+whatever workspace is opened next.
+
+The space owning a row is resolved by durable planning identity, falling back to the
+registry label only for id-less legacy trees, so a relabelled entry still matches.
+
+Verified by recording the real thing, not just tests: `]` reaches the work view showing
+5 tasks across 2 spaces, `j`+`⏎` enters `kitchen` and lands on the tasks tab with the
+cursor already on the chosen task and its detail open.
+
+Two pre-existing assertions were updated rather than deleted: the spaces header gained its
+view name, and a help assertion was matching a phrase that now word-wraps — it was
+narrowed to wrap-safe fragments and extended to cover the work view.
+
+**No banner**, per the design: living with a full-viewport work view is what should answer
+whether an aggregate band earns its rows.
+
+Validation: `go test -race ./...`, `golangci-lint run ./...`, planning lint, generated
+docs, and `git diff --check` all clean.
+
+## Amendment (2026-08-23) — the view-cycle key
+
+The first cut used `[`/`]` to cycle the atlas's two views, on the reasoning that those keys
+already mean "move between sibling screens". Review rejected it, correctly: the page strip
+is visibly `atlas · overview · tasks · epics · audits · research`, so keys that appear to
+walk that strip must actually walk it. Scoping them to atlas sub-views made the atlas a
+dead end you could only leave with `a`.
+
+Two changes:
+
+- **`v` cycles the current screen's views.** It is a different axis from `s` (which *rows*)
+  and `[`/`]` (which *screen*), so it gets its own key. Deliberately general rather than
+  atlas-specific, since other pages may grow alternate views. It is advertised only in the
+  atlas help, not the global section — promising it on screens where it is inert would be
+  a lie.
+- **The atlas joined the `[`/`]` page ring, in strip order.** `]` from the atlas reaches the
+  overview; `[` wraps back to the last tab; `[` from the overview reaches the atlas; `]`
+  from the last tab wraps forward to it. The ring skips the atlas entirely for consumers
+  that mount no overview service, so an embedded single-space TUI is unchanged.
+
+The atlas is now a first-class page rather than a modal side-trip.
+
+Tests: `TestPageRingIncludesTheAtlasInStripOrder` walks every hop, and
+`TestPageRingSkipsTheAtlasWhenItIsNotMounted` pins the unchanged fallback. Verified by
+recording: `v` → work, `]` → overview, `]` → tasks, `[` `[` → back to the atlas with the
+work view still active.

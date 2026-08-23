@@ -20,6 +20,7 @@ type keyMap struct {
 	Command     key.Binding // : → entity command-jump
 	Palette     key.Binding // ctrl+p → fuzzy command palette (jump to anything / run a command)
 	Atlas       key.Binding // a → cross-space atlas / return to current space
+	View        key.Binding // v → cycle the current screen's alternate views
 	PrevTab     key.Binding // [ → previous entity tab
 	NextTab     key.Binding // ] → next entity tab
 	Sort        key.Binding // o → cycle sort column
@@ -60,23 +61,27 @@ var keys = keyMap{
 	Command:     key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "command / jump (entity, status, or verb)")),
 	Palette:     key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "command palette — fuzzy jump to anything / run a command")),
 	Atlas:       key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "open atlas / return to current space")),
-	PrevTab:     key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous tab")),
-	NextTab:     key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next tab")),
-	Sort:        key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "cycle sort column")),
-	SortRev:     key.NewBinding(key.WithKeys("O"), key.WithHelp("O", "reverse sort direction")),
-	StatusView:  key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "cycle view (task status / audit bucket)")),
-	StatusRev:   key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "cycle view backward")),
-	FilterMode:  key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "filter mode: fuzzy ⇄ substring (default fuzzy)")),
-	Action:      key.NewBinding(key.WithKeys("m"), key.WithHelp("m", "move — lifecycle (start/complete/defer/…); audits: close/reopen/defer; epics: activate/retire/deprecate")),
-	Edit:        key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit fields in place — tasks: desc/priority/tags/effort/tier (+revisit when deferred) · epics: desc/priority/tags")),
-	OpenEditor:  key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "open the whole file in $EDITOR (any entity; re-read on save)")),
-	RawToggle:   key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "raw ⇄ pretty markdown")),
-	Follow:      key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "follow reference (task ⇄ epic)")),
-	JumpBack:    key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "jump back (follow history)")),
-	Yank:        key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy slug to clipboard")),
-	YankPath:    key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "copy file path to clipboard")),
-	Help:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle this help (esc to close)")),
-	Refresh:     key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh from disk")),
-	Quit:        key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
-	ForceQuit:   key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "force-quit")),
+	// v is the screen-level view cycle, distinct from `s` (which rows) and `[`/`]` (which
+	// screen). Only the atlas has alternate views today; the key is deliberately general
+	// so a second screen that grows one does not have to invent another binding.
+	View:       key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "cycle this screen's views (atlas: spaces ⇄ work)")),
+	PrevTab:    key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous tab")),
+	NextTab:    key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next tab")),
+	Sort:       key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "cycle sort column")),
+	SortRev:    key.NewBinding(key.WithKeys("O"), key.WithHelp("O", "reverse sort direction")),
+	StatusView: key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "cycle view (task status / audit bucket)")),
+	StatusRev:  key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "cycle view backward")),
+	FilterMode: key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "filter mode: fuzzy ⇄ substring (default fuzzy)")),
+	Action:     key.NewBinding(key.WithKeys("m"), key.WithHelp("m", "move — lifecycle (start/complete/defer/…); audits: close/reopen/defer; epics: activate/retire/deprecate")),
+	Edit:       key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit fields in place — tasks: desc/priority/tags/effort/tier (+revisit when deferred) · epics: desc/priority/tags")),
+	OpenEditor: key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "open the whole file in $EDITOR (any entity; re-read on save)")),
+	RawToggle:  key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "raw ⇄ pretty markdown")),
+	Follow:     key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "follow reference (task ⇄ epic)")),
+	JumpBack:   key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "jump back (follow history)")),
+	Yank:       key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy slug to clipboard")),
+	YankPath:   key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "copy file path to clipboard")),
+	Help:       key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle this help (esc to close)")),
+	Refresh:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh from disk")),
+	Quit:       key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	ForceQuit:  key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "force-quit")),
 }

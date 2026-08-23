@@ -227,7 +227,7 @@ registered on this machine.
 
 ---
 
-#### M3. The cross-space in-progress rail — the sketch's stated payload — is discarded  · **Status:** open
+#### M3. The cross-space in-progress rail — the sketch's stated payload — is discarded  · **Status:** fixed
 
 **File:** `internal/tui/atlas.go:344-392`, `internal/core/space_overview.go:36-40` | **Component:** tui
 **Effort:** M · **Urgency:** soon
@@ -244,6 +244,16 @@ cards.~~ **Superseded 2026-08-23** — a band beneath the cards competes with th
 20-row budget and would have to be built after the layout it sits under. It becomes a
 cycled **view** instead, which also lets it ship first. See
 [The atlas as a dashboard of dashboards](../research/6g2qtp0022t7-the-atlas-as-a-dashboard-of-dashboards.md).
+
+**Fixed 2026-08-23** as a view, cycled with `[`/`]`. Entering a row lands on the task
+itself rather than its space's dashboard, via a landing intent carried across the workspace
+switch. Spaces whose summary failed contribute no rows and keep their card-local error.
+Tests: `TestAtlasCyclesBetweenSpacesAndWorkViews`,
+`TestAtlasWorkRowEntersItsSpaceAndLandsOnTheTask`,
+`TestAtlasFailedWorkOpenDropsTheLandingIntent`,
+`TestAtlasWorkViewOmitsSpacesWhoseSummaryFailed`,
+`TestAtlasViewPersistsAcrossRoundTripButNotFreshLaunch`,
+`TestAtlasWorkViewEmptyStateIsActionable`.
 
 **Verified (2nd pass): confirmed, and it is the highest-value gap here.** See also L4:
 commit `6f3f0cc` deleted the epic's out-of-scope line that had explicitly excluded the

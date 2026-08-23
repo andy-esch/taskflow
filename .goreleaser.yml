@@ -1,4 +1,4 @@
-# goreleaser config for tskflwctl — see planning/tasks/in-progress/binary-releases-via-goreleaser.md
+# goreleaser config for tskflwctl — see planning/tasks/6fbj87000zs7-binary-releases-via-goreleaser.md
 # Pure-Go static binaries (CGO_ENABLED=0), darwin+linux × amd64+arm64, checksums
 # only (no signing/attestation yet). Distribution is GitHub Releases only — no
 # Homebrew tap, no external channels (decided 2026-06-12).

@@ -4,6 +4,7 @@ id: 6g2qtp0022t7
 created: "2026-08-23"
 description: Why the atlas shipped list-shaped, why it should become two views, and the sequencing that keeps the useful half ahead of the delightful half.
 tags: [tui, atlas, design, multi-repo]
+updated_at: "2026-08-23"
 ---
 # The atlas as a dashboard of dashboards
 
@@ -196,3 +197,87 @@ the useful part exists.
 3. **Per-space accent derivation.** `core.SpaceEntryPoint.Accent` exists and is unused;
    epic 29 currently lists it as out of scope. Tiles are what make an accent pay off, so
    this reopens on purpose or not at all.
+
+## Addendum, 2026-08-23 — the atlas is under-composed, not under-designed
+
+Both views shipped flat, and reviewing them against the rest of the TUI shows why. This
+codebase already has a widget vocabulary, and the dashboard — two keystrokes away — uses
+all of it. The atlas uses almost none.
+
+| Available | Dashboard | Atlas |
+| --- | --- | --- |
+| `s.miniBar(pct, w)` gradient bar | yes | no |
+| `s.segBar(done, active, dropped, total, w)` | yes | no |
+| `s.priorityText` / `s.statusText` | yes | no |
+| `theme.Breakdown` (`N key · N key · +N more`) | yes | no |
+| `relDateCells` (aligned, dimmed date column) | yes | hand-rolled |
+| `countsWidth` + `rollupCounts` (aligned `6/14`) | yes | no |
+
+The data gap is worse. Per space the atlas ignores aggregate `Done`/`Total`,
+`Findings.Acute`, `ReadyToClose`, `RevisitDue`, `Problems`, and `Epics[].LastUpdated`. Per
+task the work view ignores `Epic`, `Priority`, `Effort`, and `StartedAt`.
+
+So "more delight" and "more pragmatism" are not in tension here. The flatness comes from
+hand-rolling a text run instead of composing widgets that already exist and are already
+theme-aware and already tested. Several of these changes make the code *smaller*.
+
+### Spaces: a comparable table, and the entry-point problem solved properly
+
+The dashboard's epic row is `{glyph} {bar} {%} {done/total} {date} {id}`, with columns
+measured across the visible set. The same idiom applied to spaces:
+
+```
+  ● bike-workshop   ████░░░░░░  43%   6/14   ▸2   4 epics · 1 audit   ⚠3   1mo ago
+› ● kitchen         ████░░░░░░  41%   9/22   ▸3   3 epics · 1 audit   ⚠2   yesterday
+```
+
+Two wins beyond appearance: spaces become **directly comparable** — the bar column is
+scannable — and attention gets a home.
+
+**`⚠` is a deliberate fold** of acute findings, audits ready to close, snoozed tasks now
+due, and unreadable files. Confirmed 2026-08-23 as the right call: the atlas is an
+aggregate surface, and digging in is what the overview is for. It is one number because
+four columns of mostly-zeroes would be worse than one number that is usually absent.
+
+**Entry points move to a pinned detail band** below the table, showing the focused space's
+entries with `h`/`l` cycling there. This is a better answer than anything in the tile
+analysis above: the table scrolls, the band does not move, and it reuses the pinned
+header/status split already built for finding H2 rather than adding machinery. It also
+retires the awkward choice between hiding entry points and letting them blow up a row's
+height — a table row can be as wide as the terminal, and the band as tall as it needs.
+
+### Work: structure, and the signal nothing surfaces
+
+```
+› ● bake-the-crackly-rice-flour-baguette   kitchen   02-banh-mi  high   started yesterday
+  ● overhaul-bottom-bracket        bike-workshop     01-touring  medium started 1mo ago
+```
+
+**The largest single win is `started`, not `updated`.** The view currently shows
+last-touched. For in-progress work the useful question is how long it has been in
+progress — "started 5 weeks ago" is what says a thing is stuck — and `StartedAt` is
+already stamped on every task that entered in-progress. Nothing in the tool surfaces it.
+Colouring it by staleness (a small `theme.Staleness`, exactly analogous to the existing
+`theme.Percent`) turns an inventory into a health signal.
+
+`o`/`O` should also work here, cycling `started` (default) / `space` (grouped) /
+`priority`. Grouping by space removes the repeated space label — noise becomes structure —
+and earns its keep once several spaces are active.
+
+### What this does to the tile decision
+
+Most of what the tile task was carrying — bars, richer cards, visual weight — lands in the
+**table** for a fraction of the cost, with no grid reflow math and no 48-column squeeze.
+The 81-column entry-point arithmetic that ruled tiles out does not apply to a table: a row
+can be as wide as the terminal.
+
+So the tile question is **deliberately reopened rather than settled**: after the table
+exists, either tiles shrink to a pure layout change over already-rich rows, or they stop
+being necessary. Finding that out is cheaper than committing to the grid now.
+
+### Revised sequence
+
+1. Spaces table + attention fold + pinned entry band — the biggest visible win, almost
+   entirely composition of existing widgets.
+2. Work view structure — `started`/staleness, epic, priority, orders, grouping.
+3. Re-decide tiles with the table in front of you.

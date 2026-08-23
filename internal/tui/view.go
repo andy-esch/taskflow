@@ -92,7 +92,7 @@ func (m Model) View() tea.View {
 // the entity you're on shows up in the terminal's tab bar.
 func (m Model) windowTitle() string {
 	if m.onAtlas {
-		return "tskflwctl · " + atlasName
+		return "tskflwctl · " + atlasName + " · " + m.atlas.screen.label()
 	}
 	if m.onDash {
 		return "tskflwctl · " + overviewName
@@ -278,7 +278,7 @@ func (m Model) tabStrip() string {
 	parts := make([]string, 0, len(m.tabs)+3)
 	parts = append(parts, m.st.dim("["+m.spaceName()+"]"))
 	if m.onAtlas {
-		parts = append(parts, m.st.activeTab.Render(atlasName))
+		parts = append(parts, m.st.activeTab.Render(atlasName+" "+m.atlas.screen.label()))
 	} else {
 		parts = append(parts, m.st.dim(atlasName))
 	}
@@ -370,12 +370,27 @@ func (m Model) footer() string {
 		return truncate(m.detail.findStatus(), m.width)
 	}
 	if m.onAtlas {
-		line := strings.Join([]string{
-			"↑↓ spaces", "h/l entry", "⏎ enter", keyHint(keys.Atlas, "back"),
-			keyHint(keys.Sort, "order"), keyHint(keys.SortRev, "reverse"),
-			keyHint(keys.Command, "cmd"), keyHint(keys.Refresh, "refresh"),
-			keyHint(keys.Help, "help"), keyHint(keys.Quit, "quit"),
-		}, " · ")
+		// The two views share chrome but not keys: h/l and the ordering pair belong to the
+		// cards, so the footer must not promise them while the work list is showing.
+		var line string
+		if m.atlas.screen == atlasScreenWork {
+			line = strings.Join([]string{
+				"↑↓ tasks", "⏎ open task", keyHint(keys.View, "spaces"),
+				keyCombo(keys.PrevTab, keys.NextTab, " ", "tabs"),
+				keyHint(keys.Atlas, "back"), keyHint(keys.Command, "cmd"),
+				keyHint(keys.Refresh, "refresh"), keyHint(keys.Help, "help"),
+				keyHint(keys.Quit, "quit"),
+			}, " · ")
+		} else {
+			line = strings.Join([]string{
+				"↑↓ spaces", "h/l entry", "⏎ enter", keyHint(keys.View, "work"),
+				keyCombo(keys.PrevTab, keys.NextTab, " ", "tabs"),
+				keyHint(keys.Atlas, "back"), keyHint(keys.Sort, "order"),
+				keyHint(keys.SortRev, "reverse"), keyHint(keys.Command, "cmd"),
+				keyHint(keys.Refresh, "refresh"), keyHint(keys.Help, "help"),
+				keyHint(keys.Quit, "quit"),
+			}, " · ")
+		}
 		return m.st.dim(truncate(line, m.width))
 	}
 	// The dashboard isn't a list, so it gets its own hint line (no m/e/s/…), dimmed

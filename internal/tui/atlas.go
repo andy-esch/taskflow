@@ -7,18 +7,51 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
+// atlasScreen is which question the atlas is answering. The two want opposite layouts —
+// "where can I go" is spatial and comparative, "what am I working on" is temporal and
+// sorted — so they are separate views rather than two bands fighting over one viewport.
+// Keeping them separate is also what lets the work view exist before the spaces view is
+// re-laid out as tiles.
+type atlasScreen uint8
+
+const (
+	atlasScreenSpaces atlasScreen = iota
+	atlasScreenWork
+)
+
+func (v atlasScreen) label() string {
+	if v == atlasScreenWork {
+		return "work"
+	}
+	return "spaces"
+}
+
+func (v atlasScreen) next(delta int) atlasScreen {
+	const n = 2
+	return atlasScreen((int(v) + delta%n + n) % n)
+}
+
 // atlas is the cross-space navigation screen. It owns only the registry projection and
 // cursor state; opened planning data lives in the active/cached spaceSession.
 type atlas struct {
-	loaded  bool
-	loadErr error
-	spaces  []atlasSpace
-	cursor  int
+	// screen is which view is showing; it survives an atlas round trip inside a session
+	// but not a fresh launch, so `ui` always opens on spaces.
+	screen atlasScreen
+	// work is the cross-space in-progress set, most recently touched first. It is the
+	// projection SpaceOverviewService already builds for `status --all`; the atlas kept
+	// only its length until now.
+	work       []core.SpaceInProgress
+	workCursor int
+	loaded     bool
+	loadErr    error
+	spaces     []atlasSpace
+	cursor     int
 	// startup marks the load that ran because the atlas IS the landing screen. Its only
 	// job now is degradation: if the registry cannot be read at all, fall back to the
 	// seeded workspace rather than opening onto an empty screen.
@@ -115,27 +148,51 @@ func (m Model) handleWorkspaceOpened(msg workspaceOpenedMsg) (tea.Model, tea.Cmd
 	m.atlas.opening = false
 	if msg.err != nil {
 		m.atlas.openErr = msg.err.Error()
+		m.pendingJump = pendingJump{} // the tree it was meant for never opened
 		return m, nil
 	}
 	return m, m.activateWorkspace(msg.workspace, msg.watcher, msg.watchErr)
 }
 
 func (m Model) handleAtlasKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	work := m.atlas.screen == atlasScreenWork
 	switch {
+	// `[`/`]` walk the whole page strip, so the atlas is a member of that ring rather than
+	// a modal side-trip: `]` continues to the overview, `[` wraps back to the last tab.
+	// Cycling the atlas's OWN views is `v`, a different axis and so a different key.
+	case key.Matches(msg, keys.NextTab):
+		return m, m.enterDash()
+	case key.Matches(msg, keys.PrevTab):
+		return m, m.switchTab(len(m.tabs) - 1)
+	case key.Matches(msg, keys.View):
+		m.atlas.screen = m.atlas.screen.next(1)
+		m.atlas.openErr = ""
 	case msg.String() == "j" || msg.String() == "down":
-		m.atlas.move(1)
+		if work {
+			m.atlas.moveWork(1)
+		} else {
+			m.atlas.move(1)
+		}
 	case msg.String() == "k" || msg.String() == "up":
-		m.atlas.move(-1)
-	case msg.String() == "h" || msg.String() == "left":
+		if work {
+			m.atlas.moveWork(-1)
+		} else {
+			m.atlas.move(-1)
+		}
+	// h/l choose among a space's entry points, which only the spaces view has.
+	case !work && (msg.String() == "h" || msg.String() == "left"):
 		m.atlas.moveEntry(-1)
-	case msg.String() == "l" || msg.String() == "right":
+	case !work && (msg.String() == "l" || msg.String() == "right"):
 		m.atlas.moveEntry(1)
-	case key.Matches(msg, keys.Sort):
+	case !work && key.Matches(msg, keys.Sort):
 		m.atlas.cycleOrder()
-	case key.Matches(msg, keys.SortRev):
+	case !work && key.Matches(msg, keys.SortRev):
 		m.atlas.reverse = !m.atlas.reverse
 		m.atlas.applyOrder()
 	case msg.String() == "enter":
+		if work {
+			return m, m.openAtlasWork()
+		}
 		return m, m.openAtlasSelection()
 	case key.Matches(msg, keys.Atlas), key.Matches(msg, keys.Back):
 		m.exitAtlas()
@@ -220,7 +277,46 @@ func (m *Model) openAtlasSelection() tea.Cmd {
 	}, m.atlas.openGen)
 }
 
+// openAtlasWork enters the space owning the selected task, and lands ON that task rather
+// than on the space's dashboard — the row was chosen because of the work it names, so
+// arriving at a dashboard would make the user re-find it. The space is resolved by durable
+// planning identity, never by the registry label, so a relabelled entry still matches.
+func (m *Model) openAtlasWork() tea.Cmd {
+	row, ok := m.atlas.selectedWork()
+	if !ok {
+		m.atlas.openErr = "nothing in progress to open"
+		return nil
+	}
+	space, ok := m.atlas.spaceFor(row)
+	if !ok {
+		m.atlas.openErr = "the space for " + row.Task.Slug + " is no longer registered"
+		return nil
+	}
+	m.atlas.cursor = space
+	cmd := m.openAtlasSelection()
+	if cmd == nil {
+		return nil // openAtlasSelection already explained why (unhealthy, or unavailable)
+	}
+	m.pendingJump = pendingJump{kind: entityTasks, id: row.Task.Slug, set: true}
+	return cmd
+}
+
+// spaceFor locates the card owning a work row by planning identity, falling back to the
+// registry label for id-less legacy trees.
+func (a atlas) spaceFor(row core.SpaceInProgress) (int, bool) {
+	for i, space := range a.spaces {
+		if row.PlanningID != "" && space.summary.PlanningID == row.PlanningID {
+			return i, true
+		}
+		if row.PlanningID == "" && space.summary.ID == row.SpaceID {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
 func (a *atlas) setOverview(overview core.SpaceOverview) {
+	a.setWork(overview.InProgress)
 	selectedSpace, selectedEntry := "", ""
 	if len(a.spaces) > 0 && a.cursor >= 0 && a.cursor < len(a.spaces) {
 		selected := a.spaces[a.cursor]
@@ -257,6 +353,53 @@ func (a *atlas) setOverview(overview core.SpaceOverview) {
 	a.loaded = true
 	a.loadErr = nil
 	a.openErr = ""
+}
+
+// setWork refreshes the working set, keeping the cursor on the same task across reloads
+// where it survived. Rows are ordered most-recently-touched first: the question this view
+// answers is "what am I in the middle of", and recency is the closest proxy the planning
+// data has. Space and slug break ties so the order is byte-stable between runs.
+func (a *atlas) setWork(rows []core.SpaceInProgress) {
+	selected := ""
+	if row, ok := a.selectedWork(); ok {
+		selected = workKey(row)
+	}
+	a.work = append([]core.SpaceInProgress(nil), rows...)
+	sort.SliceStable(a.work, func(i, j int) bool {
+		x, y := a.work[i], a.work[j]
+		if dx, dy := theme.TaskDate(x.Task), theme.TaskDate(y.Task); dx != dy {
+			return dx > dy // most recent first
+		}
+		if x.SpaceID != y.SpaceID {
+			return x.SpaceID < y.SpaceID
+		}
+		return x.Task.Slug < y.Task.Slug
+	})
+	a.workCursor = 0
+	for i, row := range a.work {
+		if workKey(row) == selected {
+			a.workCursor = i
+			break
+		}
+	}
+}
+
+func workKey(row core.SpaceInProgress) string {
+	return row.PlanningID + "\x00" + row.Task.Slug
+}
+
+func (a atlas) selectedWork() (core.SpaceInProgress, bool) {
+	if a.workCursor < 0 || a.workCursor >= len(a.work) {
+		return core.SpaceInProgress{}, false
+	}
+	return a.work[a.workCursor], true
+}
+
+func (a *atlas) moveWork(delta int) {
+	if n := len(a.work); n > 0 {
+		a.workCursor = ((a.workCursor+delta)%n + n) % n
+		a.openErr = ""
+	}
 }
 
 func (a *atlas) cycleOrder() {
@@ -384,16 +527,19 @@ func (a atlas) view(st *styles, current core.Workspace, maxW, maxH int) string {
 		}, "\n")
 	}
 
+	if a.screen == atlasScreenWork {
+		return a.workView(st, maxW, maxH)
+	}
 	direction := "↑"
 	if a.reverse {
 		direction = "↓"
 	}
-	// Header and status are PINNED: only the cards scroll. They were both inside the
-	// scrolled slice once, which meant a registry big enough to need scrolling was also
-	// big enough to hide the sort order you just changed and the ✘ explaining why ⏎ did
-	// nothing. Everything the screen says about itself has to stay on screen.
+	// Four bands: a pinned header, a scrolling table, the focused space's entry points, and
+	// a pinned status row. Only the table scrolls — everything the screen says about itself,
+	// and everything about where ⏎ would take you, stays on screen.
 	header := []string{st.dashHeading.Render(fmt.Sprintf(
-		"atlas · %d space(s) · order %s %s", len(a.spaces), a.order.label(), direction,
+		"atlas · spaces · %s · order %s %s",
+		countLabel{len(a.spaces), "space", "spaces"}, a.order.label(), direction,
 	)), ""}
 	var status []string
 	switch {
@@ -404,109 +550,312 @@ func (a atlas) view(st *styles, current core.Workspace, maxW, maxH int) string {
 	case a.loadErr != nil:
 		status = []string{"", st.fg(theme.ColorYellow, "⚠ refresh failed: "+a.loadErr.Error())}
 	}
+	band := a.entryBand(st, current, maxW)
+	body := a.spaceRows(st, current)
+	if maxH > 0 {
+		if budget := max1(maxH - len(header) - len(band) - len(status)); len(body) > budget {
+			body = scrollTo(body, a.cursor, budget)
+		}
+	}
+	lines := append(append(append(header, body...), band...), status...)
+	return strings.Join(truncateAll(lines, maxW), "\n")
+}
 
-	var body []string
-	focusRow := 0
+// spaceRows renders one aligned row per space. Columns are measured across the whole set —
+// through the same relDateCells/countsWidth helpers the dashboard's epic widget uses — so
+// the bar column is scannable and two spaces can be compared without reading either.
+func (a atlas) spaceRows(st *styles, current core.Workspace) []string {
+	stats := make([]atlasStats, len(a.spaces))
+	nameW, activeW := 0, 0
 	for i, space := range a.spaces {
-		card, cardFocus := renderAtlasCard(st, space, i == a.cursor, current)
+		stats[i] = statsFor(space.summary)
+		nameW = maxInt(nameW, ansi.StringWidth(atlasSpaceName(space.summary)))
+		activeW = maxInt(activeW, ansi.StringWidth(fmt.Sprintf("%d", stats[i].inProgress)))
+	}
+	nameW = minInt(nameW, 28)
+	countsW := countsWidth(stats, func(s atlasStats) (int, int) { return s.done, s.total })
+	dates := relDateCells(stats, func(s atlasStats) string { return s.lastTouched }, st)
+	attentionW := 0
+	for _, s := range stats {
+		if s.attention > 0 {
+			attentionW = maxInt(attentionW, ansi.StringWidth(fmt.Sprintf("⚠%d", s.attention)))
+		}
+	}
+
+	rows := make([]string, 0, len(a.spaces))
+	for i, space := range a.spaces {
+		marker := "  "
 		if i == a.cursor {
-			focusRow = len(body) + cardFocus
+			marker = st.selected.Render("› ")
 		}
-		body = append(body, card...)
-		if i < len(a.spaces)-1 {
-			body = append(body, "")
+		name := padRight(truncate(atlasSpaceName(space.summary), nameW), nameW)
+		if isCurrentSpace(current, space.summary) {
+			name = st.fg(theme.ColorGreen, name)
 		}
+		row := marker + a.spaceGlyph(st, space) + " " + name
+		if !stats[i].loaded {
+			// A space whose summary could not be read keeps its row and says why, rather
+			// than showing a misleading empty bar.
+			detail := space.summary.LoadError
+			if detail == "" {
+				detail = "summary unavailable"
+			}
+			rows = append(rows, row+"  "+st.fg(theme.ColorRed, detail))
+			continue
+		}
+		pct := stats[i].percent()
+		row += fmt.Sprintf("  %s %s  %s", st.miniBar(pct, 10),
+			st.fg(theme.Percent(pct), theme.PercentLabelPadded(pct)),
+			rollupCounts(stats[i].done, stats[i].total, countsW))
+		row += "  " + st.fg(theme.ColorCyan, fmt.Sprintf("▸%*d", activeW, stats[i].inProgress))
+		if counts := atlasCountsLine(st, stats[i]); counts != "" {
+			row += "  " + counts
+		}
+		if attentionW > 0 {
+			cell := strings.Repeat(" ", attentionW)
+			if stats[i].attention > 0 {
+				cell = st.fg(theme.ColorYellow, padRight(fmt.Sprintf("⚠%d", stats[i].attention), attentionW))
+			}
+			row += "  " + cell
+		}
+		if dates[i] != "" {
+			row += "  " + dates[i]
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+// spaceGlyph reports at a glance whether a space can be entered at all.
+func (a atlas) spaceGlyph(st *styles, space atlasSpace) string {
+	if entry, ok := space.selectedEntry(); ok && entry.Healthy() {
+		return st.fg(theme.ColorGreen, "●")
+	}
+	return st.fg(theme.ColorRed, "!")
+}
+
+// entryBand is the pinned detail strip under the table: the focused space's registered
+// entry points, with the one ⏎ would open marked. It lives outside the scrolled body on
+// purpose — this is the answer to "where would Enter take me", and a table tall enough to
+// scroll is exactly when that answer must not scroll away.
+func (a atlas) entryBand(st *styles, current core.Workspace, maxW int) []string {
+	if a.cursor < 0 || a.cursor >= len(a.spaces) {
+		return nil
+	}
+	space := a.spaces[a.cursor]
+	entries := space.summary.Entries
+	if len(entries) == 0 {
+		return []string{"", st.dim("no registered entry point for this space")}
+	}
+	title := fmt.Sprintf(" %s · %d entry point", atlasSpaceName(space.summary), len(entries))
+	if len(entries) != 1 {
+		title += "s"
+	}
+	if len(entries) > 1 {
+		title += st.dim("  h/l choose")
+	}
+	rule := st.dim("─" + title + " " + strings.Repeat("─", max1(maxW-ansi.StringWidth(title)-3)))
+	band := []string{"", rule}
+	for i, candidate := range entries {
+		cursor := "  "
+		if i == space.entry {
+			cursor = st.selected.Render("› ")
+		}
+		glyph := st.fg(theme.ColorGreen, "●")
+		if !candidate.Healthy() {
+			glyph = st.fg(theme.ColorRed, "!")
+		}
+		directory := candidate.Path
+		if directory == "" {
+			directory = candidate.Checkout
+		}
+		line := fmt.Sprintf("%s%s %s  %s  %s", cursor, glyph, candidate.ID,
+			st.dim(string(candidate.Role)), st.dim(directory))
+		if isCurrentEntry(current, candidate) {
+			line += "  " + st.fg(theme.ColorGreen, "current")
+		}
+		band = append(band, line)
+		if !candidate.Healthy() && candidate.Detail != "" {
+			band = append(band, "    "+st.fg(theme.ColorRed, candidate.Detail))
+		}
+		if !candidate.Healthy() && candidate.Remedy != "" {
+			band = append(band, "    "+st.dim("remedy: "+candidate.Remedy))
+		}
+	}
+	return band
+}
+
+// atlasStats is the per-space aggregate a table row renders. Every number here is already
+// computed inside core.Summary for the dashboard; the atlas kept only a few of them, as
+// prose. Deriving them once per row keeps the render loop free of arithmetic.
+type atlasStats struct {
+	loaded      bool
+	done, total int
+	inProgress  int
+	epics       int
+	openAudits  int
+	findings    int
+	// attention folds the things that want a PERSON — acute findings, audits whose findings
+	// are all resolved, snoozed tasks come due, files that cannot be read — as opposed to
+	// the ordinary open counts beside it. One number because four columns of mostly-zeroes
+	// would be worse than one that is usually absent; the space's own overview is where you
+	// dig in.
+	attention   int
+	lastTouched string
+}
+
+func statsFor(summary core.SpaceSummary) atlasStats {
+	s := summary.Summary
+	if s == nil {
+		return atlasStats{}
+	}
+	stats := atlasStats{
+		loaded: true, inProgress: len(s.InProgress),
+		epics: len(s.Epics), openAudits: len(s.OpenAudits),
+		findings:  s.Findings.Open + s.Findings.InProgress,
+		attention: len(s.Findings.Acute) + s.ReadyToClose + s.RevisitDue + len(s.Problems),
+	}
+	for _, e := range s.Epics {
+		stats.done += e.Done
+		stats.total += e.Total
+		if e.LastUpdated > stats.lastTouched {
+			stats.lastTouched = e.LastUpdated
+		}
+	}
+	return stats
+}
+
+func (a atlasStats) percent() int {
+	if a.total <= 0 {
+		return 0
+	}
+	return a.done * 100 / a.total
+}
+
+// countLabel is one segment of the "4 epics · 1 audit" breakdown. Zero-count segments are
+// dropped rather than rendered, so a quiet space reads quietly.
+type countLabel struct {
+	n         int
+	one, many string
+}
+
+func (c countLabel) String() string {
+	unit := c.many
+	if c.n == 1 {
+		unit = c.one
+	}
+	return fmt.Sprintf("%d %s", c.n, unit)
+}
+
+func atlasCountsLine(st *styles, stats atlasStats) string {
+	var kept []countLabel
+	for _, c := range []countLabel{
+		{stats.epics, "epic", "epics"},
+		{stats.openAudits, "audit", "audits"},
+		{stats.findings, "finding", "findings"},
+	} {
+		if c.n > 0 {
+			kept = append(kept, c)
+		}
+	}
+	return theme.Breakdown(kept, st.dim(" · "), 0,
+		func(c countLabel) string { return st.dim(c.String()) }, nil)
+}
+
+// workView answers "what am I in the middle of, anywhere?" — the question the design
+// sketch calls the atlas's actual payload, and the one `status --all` can answer on the
+// CLI but the TUI could not. One row per in-progress task across every healthy space.
+func (a atlas) workView(st *styles, maxW, maxH int) string {
+	header := []string{st.dashHeading.Render(fmt.Sprintf(
+		"atlas · work · %d in progress across %s",
+		len(a.work), countLabel{a.workSpaceCount(), "space", "spaces"},
+	)), ""}
+	var status []string
+	switch {
+	case a.opening:
+		status = []string{"", st.dim("opening selected space…")}
+	case a.openErr != "":
+		status = []string{"", st.fg(theme.ColorRed, "✘ "+a.openErr)}
+	case a.loadErr != nil:
+		status = []string{"", st.fg(theme.ColorYellow, "⚠ refresh failed: "+a.loadErr.Error())}
+	}
+	if len(a.work) == 0 {
+		body := []string{st.dim("Nothing in progress across registered spaces."), "",
+			"Start something with `tskflwctl task start <slug>`, or press " +
+				keys.PrevTab.Help().Key + "/" + keys.NextTab.Help().Key + " for spaces."}
+		return strings.Join(truncateAll(append(append(header, body...), status...), maxW), "\n")
+	}
+
+	// Column widths come from the data, capped, so a long slug in one space cannot push
+	// every other row's description off the screen.
+	spaceW, slugW, ageW := 0, 0, 0
+	ages := make([]string, len(a.work))
+	for i, row := range a.work {
+		ages[i] = theme.RelativeDate(theme.TaskDate(row.Task))
+		spaceW = maxInt(spaceW, ansi.StringWidth(row.SpaceID))
+		slugW = maxInt(slugW, ansi.StringWidth(row.Task.Slug))
+		ageW = maxInt(ageW, ansi.StringWidth(ages[i]))
+	}
+	spaceW, slugW = minInt(spaceW, 22), minInt(slugW, 46)
+
+	body := make([]string, 0, len(a.work))
+	for i, row := range a.work {
+		cursor := "  "
+		if i == a.workCursor {
+			cursor = st.selected.Render("› ")
+		}
+		body = append(body, fmt.Sprintf("%s%s %s  %s  %s",
+			cursor,
+			st.dim(padRight(truncate("["+row.SpaceID+"]", spaceW+2), spaceW+2)),
+			padRight(truncate(row.Task.Slug, slugW), slugW),
+			st.dim(padRight(ages[i], ageW)),
+			st.dim(row.Task.Description),
+		))
 	}
 	if maxH > 0 {
-		// One card row is the floor: a terminal too short for even that is already being
-		// hard-clamped by View, and scrollTo cannot take a non-positive window.
-		budget := max1(maxH - len(header) - len(status))
-		if len(body) > budget {
-			body = scrollTo(body, focusRow, budget)
+		if budget := max1(maxH - len(header) - len(status)); len(body) > budget {
+			body = scrollTo(body, a.workCursor, budget)
 		}
 	}
+	return strings.Join(truncateAll(append(append(header, body...), status...), maxW), "\n")
+}
 
-	lines := append(append(header, body...), status...)
+// workSpaceCount is how many distinct spaces the working set spans — "5 in progress" reads
+// very differently depending on whether that is one repo or five.
+func (a atlas) workSpaceCount() int {
+	seen := make(map[string]struct{}, len(a.work))
+	for _, row := range a.work {
+		seen[workSpaceKey(row)] = struct{}{}
+	}
+	return len(seen)
+}
+
+func workSpaceKey(row core.SpaceInProgress) string {
+	if row.PlanningID != "" {
+		return row.PlanningID
+	}
+	return row.SpaceID
+}
+
+func truncateAll(lines []string, maxW int) []string {
 	for i := range lines {
 		lines[i] = truncate(lines[i], max1(maxW))
 	}
-	return strings.Join(lines, "\n")
+	return lines
 }
 
-func renderAtlasCard(st *styles, space atlasSpace, selected bool, current core.Workspace) ([]string, int) {
-	summary := space.summary
-	entry, hasEntry := space.selectedEntry()
-	marker := "  "
-	if selected {
-		marker = st.selected.Render("› ")
+func maxInt(a, b int) int {
+	if a > b {
+		return a
 	}
-	title := atlasSpaceName(summary)
-	if hasEntry && entry.Label != "" && entry.Label != title {
-		title += "  " + st.dim(entry.Label)
-	}
-	if isCurrentSpace(current, summary) {
-		title += "  " + st.fg(theme.ColorGreen, "current")
-	}
-	lines := []string{marker + st.dashHeading.Render(title)}
-	focusRow := 0
-
-	switch {
-	case summary.Summary != nil:
-		lines = append(lines, "  "+atlasSummaryLine(st, *summary.Summary))
-	case summary.LoadError != "":
-		lines = append(lines, "  "+st.fg(theme.ColorRed, "! "+summary.LoadError))
-	default:
-		lines = append(lines, "  "+st.dim("summary unavailable"))
-	}
-	if hasEntry {
-		entryLine := fmt.Sprintf("  entry points · %d/%d selected", space.entry+1, len(summary.Entries))
-		if len(summary.Entries) > 1 {
-			entryLine += st.dim("  h/l choose")
-		}
-		lines = append(lines, entryLine)
-		for i, candidate := range summary.Entries {
-			glyph := st.fg(theme.ColorGreen, "●")
-			if !candidate.Healthy() {
-				glyph = st.fg(theme.ColorRed, "!")
-			}
-			cursor := "  "
-			if selected && i == space.entry {
-				cursor = st.selected.Render("› ")
-				focusRow = len(lines)
-			}
-			directory := candidate.Path
-			if directory == "" {
-				directory = candidate.Checkout
-			}
-			line := fmt.Sprintf("  %s%s %s  %s  %s", cursor, glyph, candidate.ID,
-				st.dim(string(candidate.Role)), st.dim(directory))
-			if isCurrentEntry(current, candidate) {
-				line += "  " + st.fg(theme.ColorGreen, "current")
-			}
-			lines = append(lines, line)
-			if !candidate.Healthy() && candidate.Detail != "" {
-				lines = append(lines, "      "+st.fg(theme.ColorRed, candidate.Detail))
-			}
-			if !candidate.Healthy() && candidate.Remedy != "" {
-				lines = append(lines, "      "+st.dim("remedy: "+candidate.Remedy))
-			}
-		}
-	}
-	return lines, focusRow
+	return b
 }
 
-func atlasSummaryLine(st *styles, summary core.Summary) string {
-	parts := []string{fmt.Sprintf("%d in progress", len(summary.InProgress))}
-	if len(summary.Epics) > 0 {
-		parts = append(parts, fmt.Sprintf("%d epic(s)", len(summary.Epics)))
+func minInt(a, b int) int {
+	if a < b {
+		return a
 	}
-	if len(summary.OpenAudits) > 0 {
-		parts = append(parts, fmt.Sprintf("%d open audit(s)", len(summary.OpenAudits)))
-	}
-	if n := summary.Findings.Open + summary.Findings.InProgress; n > 0 {
-		parts = append(parts, fmt.Sprintf("%d finding(s)", n))
-	}
-	return strings.Join(parts, st.dim(" · "))
+	return b
 }
 
 // isCurrentEntry reports whether one registered entry point IS the open workspace.
