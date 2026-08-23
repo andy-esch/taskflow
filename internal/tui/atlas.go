@@ -253,6 +253,11 @@ func (m *Model) exitAtlas() {
 }
 
 func (m *Model) openAtlasSelection() tea.Cmd {
+	// Any new open supersedes a landing intent armed by a previous one. Without this, an
+	// abandoned work-view selection would fire against whichever space is opened next —
+	// and because slugs are only unique within a tree, it can silently select a DIFFERENT
+	// task that happens to share the slug rather than failing visibly.
+	m.pendingJump = pendingJump{}
 	if m.workspaceSvc == nil {
 		m.atlas.openErr = "workspace opening is unavailable"
 		return nil
@@ -575,8 +580,11 @@ func (a atlas) spaceRows(st *styles, current core.Workspace) []string {
 	nameW = minInt(nameW, 28)
 	countsW := countsWidth(stats, func(s atlasStats) (int, int) { return s.done, s.total })
 	dates := relDateCells(stats, func(s atlasStats) string { return s.lastTouched }, st)
-	attentionW := 0
-	for _, s := range stats {
+	attentionW, countsW2 := 0, 0
+	counts := make([]string, len(stats))
+	for i, s := range stats {
+		counts[i] = atlasCountsLine(st, s)
+		countsW2 = maxInt(countsW2, ansi.StringWidth(counts[i]))
 		if s.attention > 0 {
 			attentionW = maxInt(attentionW, ansi.StringWidth(fmt.Sprintf("⚠%d", s.attention)))
 		}
@@ -608,8 +616,8 @@ func (a atlas) spaceRows(st *styles, current core.Workspace) []string {
 			st.fg(theme.Percent(pct), theme.PercentLabelPadded(pct)),
 			rollupCounts(stats[i].done, stats[i].total, countsW))
 		row += "  " + st.fg(theme.ColorCyan, fmt.Sprintf("▸%*d", activeW, stats[i].inProgress))
-		if counts := atlasCountsLine(st, stats[i]); counts != "" {
-			row += "  " + counts
+		if countsW2 > 0 {
+			row += "  " + padRight(counts[i], countsW2)
 		}
 		if attentionW > 0 {
 			cell := strings.Repeat(" ", attentionW)
@@ -782,7 +790,7 @@ func (a atlas) workView(st *styles, maxW, maxH int) string {
 	if len(a.work) == 0 {
 		body := []string{st.dim("Nothing in progress across registered spaces."), "",
 			"Start something with `tskflwctl task start <slug>`, or press " +
-				keys.PrevTab.Help().Key + "/" + keys.NextTab.Help().Key + " for spaces."}
+				keys.View.Help().Key + " for spaces."}
 		return strings.Join(truncateAll(append(append(header, body...), status...), maxW), "\n")
 	}
 

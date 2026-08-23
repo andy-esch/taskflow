@@ -40,27 +40,27 @@ Target shape:
 
 ## Acceptance criteria
 
-- [ ] One aligned row per space, columns measured across the visible set so the bar,
+- [x] One aligned row per space, columns measured across the visible set so the bar,
   percentage, counts, and date columns line up — reusing `relDateCells`, `countsWidth`,
   `rollupCounts`, and `s.miniBar` rather than new measuring code.
-- [ ] Aggregate progress per space is member-task completion summed across its epics,
+- [x] Aggregate progress per space is member-task completion summed across its epics,
   rendered as a bar plus a `theme.Percent`-coloured percentage and a `done/total` rollup.
-- [ ] A single folded **attention** marker per space combines acute findings, audits ready
+- [x] A single folded **attention** marker per space combines acute findings, audits ready
   to close, snoozed tasks now due, and unreadable files. It is absent, not zero, when there
   is nothing to attend to. Folding is deliberate — the atlas is an aggregate surface and
   the space's own overview is where you dig in.
-- [ ] A recency column shows the space's most recent task activity, derived from its epics'
+- [x] A recency column shows the space's most recent task activity, derived from its epics'
   last-updated values.
-- [ ] **Entry points move to a pinned band below the table**, showing the focused space's
+- [x] **Entry points move to a pinned band below the table**, showing the focused space's
   entries with the selected one marked; `h`/`l` cycles within the band exactly as it does
   today. The band does not scroll with the table.
-- [ ] The pinned header and status row from finding H2 survive: everything the screen says
+- [x] The pinned header and status row from finding H2 survive: everything the screen says
   about itself stays on screen, and the focused row is never scrolled off.
-- [ ] A space with no healthy entry point stays visible, keeps its error, and still cannot
+- [x] A space with no healthy entry point stays visible, keeps its error, and still cannot
   be entered.
 - [ ] Degrades on narrow terminals by dropping the least load-bearing columns rather than
   overflowing or wrapping.
-- [ ] Existing atlas tests are reworked rather than deleted where they assert the old flat
+- [x] Existing atlas tests are reworked rather than deleted where they assert the old flat
   layout.
 
 ## Out of scope

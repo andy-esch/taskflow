@@ -3,10 +3,13 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -951,5 +954,127 @@ func TestAtlasEntryBandStaysPinnedBelowAScrollingTable(t *testing.T) {
 		if !strings.Contains(view, "atlas · spaces") {
 			t.Errorf("cursor %d: header scrolled off:\n%s", cursor, view)
 		}
+	}
+}
+
+// Audit 2026-08-23-atlas-ui-restructure H1. A landing intent belongs to the open that
+// armed it. Abandoning a work-view selection and opening a different space must not carry
+// it over — slugs are unique only within a tree, so a stale intent can silently select a
+// DIFFERENT task that happens to share the slug rather than failing visibly.
+func TestAtlasStaleLandingIntentCannotFollowIntoAnotherSpace(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	row, ok := m.atlas.selectedWork()
+	if !ok {
+		t.Fatal("setup: no work row")
+	}
+	tm, _ = m.Update(press("enter")) // arms the intent; open in flight
+	m = tm.(Model)
+	if !m.pendingJump.set {
+		t.Fatal("setup: expected an armed landing intent")
+	}
+	tm, _ = m.Update(press("v")) // abandon it for the spaces view
+	m = tm.(Model)
+	for i, sp := range m.atlas.spaces {
+		if sp.summary.PlanningID != row.PlanningID {
+			m.atlas.cursor = i // a different logical space
+		}
+	}
+	tm, cmd := m.Update(press("enter"))
+	m = tm.(Model)
+	if m.pendingJump.set {
+		t.Fatalf("a landing intent for %q survived into another space's open", m.pendingJump.id)
+	}
+	m = settleAtlasCmd(t, m, cmd)
+	if !m.onDash {
+		t.Errorf("opening a space from the spaces view should land on its dashboard, got tab %q", m.cur().name)
+	}
+}
+
+// Audit H2. Re-entering an already-visited space from the work view must re-read the tree.
+// A restored session's tabs are already loaded, and selecting against those rows would hide
+// work started elsewhere since the last visit.
+func TestAtlasWorkReEntryRefreshesARestoredSession(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	tm, cmd := m.Update(press("enter"))
+	m = applyAtlasOpen(t, tm.(Model), cmd)
+	root := m.workspace.PlanningRoot
+	tm, _ = m.Update(press("a")) // back to the atlas; this space's session is now cached
+	m = tm.(Model)
+
+	// Something starts elsewhere — another terminal, another machine — while we are away.
+	body := "---\nstatus: in-progress\nepic: 01-test\ndescription: appeared while away\n---\n# Appeared\n"
+	path := filepath.Join(root, "tasks", "6zzzzzzzzzzz-appeared-while-away.md")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Skipf("fixture not writable: %v", err)
+	}
+	tm, cmd = m.Update(press("enter"))
+	m = applyAtlasOpen(t, tm.(Model), cmd)
+	for _, it := range m.cur().list.Items() {
+		if ei, ok := it.(entityItem); ok && strings.Contains(ei.id(), "appeared-while-away") {
+			return
+		}
+	}
+	t.Errorf("re-entry rendered %d cached rows; work added on disk since the last visit is absent",
+		len(m.cur().list.Items()))
+}
+
+// Audit M1. The counts breakdown is variable-width, so everything after it — the attention
+// marker and the date — sheared out of column. This is the alignment coverage audit L2
+// noted was missing, and it is what let M1 through.
+func TestAtlasSpaceRowsKeepColumnsAlignedAcrossUnequalBreakdowns(t *testing.T) {
+	mk := func(id string, epics, findings, acute int) atlasSpace {
+		s := &core.Summary{Findings: core.FindingsRollup{Open: findings}}
+		for i := 0; i < epics; i++ {
+			s.Epics = append(s.Epics, core.EpicSummary{Done: 1, Total: 2, LastUpdated: "2026-08-01"})
+		}
+		for i := 0; i < acute; i++ {
+			s.Findings.Acute = append(s.Findings.Acute, core.AuditFinding{})
+		}
+		return atlasSpace{summary: core.SpaceSummary{ID: id, PlanningID: id, Summary: s,
+			Entries: []core.SpaceEntryPoint{{ID: id, State: core.SpaceStateOK}}}}
+	}
+	st := &styles{}
+	*st = testStyles
+	a := atlas{loaded: true, spaces: []atlasSpace{
+		mk("wide-one", 12, 7, 1), // "12 epics · 7 findings"
+		mk("narrow", 1, 0, 2),    // "1 epic"
+	}}
+	rows := a.spaceRows(st, core.Workspace{})
+	// Display columns, not byte offsets: the rows carry different numbers of multi-byte
+	// runes (the `·` separators), so a byte index would report shear that is not there.
+	columnOf := func(row, col string) int {
+		plain := ansi.Strip(row)
+		i := strings.Index(plain, col)
+		if i < 0 {
+			return -1
+		}
+		return ansi.StringWidth(plain[:i])
+	}
+	for _, col := range []string{"⚠", "3w ago"} {
+		first, second := columnOf(rows[0], col), columnOf(rows[1], col)
+		if first < 0 || second < 0 {
+			t.Fatalf("column %q missing from a row:\n%s\n%s", col, ansi.Strip(rows[0]), ansi.Strip(rows[1]))
+		}
+		if first != second {
+			t.Errorf("column %q starts at display column %d on one row and %d on the other:\n%s\n%s",
+				col, first, second, ansi.Strip(rows[0]), ansi.Strip(rows[1]))
+		}
+	}
+}
+
+// Audit M2. The empty work view must name the key that actually reaches the spaces view.
+func TestAtlasEmptyWorkViewNamesTheRealViewKey(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	m.atlas.work = nil
+	view := ansi.Strip(m.atlas.view(m.st, m.workspace, 100, 20))
+	if !strings.Contains(view, "press "+keys.View.Help().Key+" for spaces") {
+		t.Errorf("empty work view does not name %q as the way to the spaces view:\n%s",
+			keys.View.Help().Key, view)
 	}
 }

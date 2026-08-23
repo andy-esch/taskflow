@@ -35,24 +35,24 @@ See [The atlas as a dashboard of dashboards](../research/6g2qtp0022t7-the-atlas-
 
 ## Acceptance criteria
 
-- [ ] A key cycles the atlas between a **spaces** view (today's cards) and a **work** view,
+- [x] A key cycles the atlas between a **spaces** view (today's cards) and a **work** view,
   fitting the existing `o`/`O` and `s`/`S` cycling idiom rather than inventing a concept.
   The active view is named in the header, the footer, and `?` help.
-- [ ] The work view renders `overview.InProgress` full-viewport: one row per in-progress
+- [x] The work view renders `overview.InProgress` full-viewport: one row per in-progress
   task across every healthy space, each naming its space, slug, and age, in one
   byte-stable order.
-- [ ] Rows are navigable, and entering one opens that task's space through the same
+- [x] Rows are navigable, and entering one opens that task's space through the same
   `core.WorkspaceService` path `⏎` on a card already uses — landing on the task where
   possible rather than only on the space.
-- [ ] Spaces whose summary failed to load contribute no rows; their card-local error stays
+- [x] Spaces whose summary failed to load contribute no rows; their card-local error stays
   visible in the spaces view rather than being silently dropped from both.
-- [ ] The view survives the atlas lifecycle already established: refresh (`r`), ordering,
+- [x] The view survives the atlas lifecycle already established: refresh (`r`), ordering,
   registry-load failure, and the workspace-generation stamp that drops stale async results.
-- [ ] Which view is active persists across an atlas round trip within a session, and resets
+- [x] Which view is active persists across an atlas round trip within a session, and resets
   to spaces on a fresh launch.
-- [ ] **No banner.** Aggregate summary lines are deliberately excluded so that living with
+- [x] **No banner.** Aggregate summary lines are deliberately excluded so that living with
   the work view answers whether one earns its rows — see the research doc's open forks.
-- [ ] Tests cover the view cycle, the row → space navigation, an empty working set, and a
+- [x] Tests cover the view cycle, the row → space navigation, an empty working set, and a
   partial-failure overview.
 
 ## Out of scope

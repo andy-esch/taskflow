@@ -148,12 +148,20 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 	var loads tea.Cmd
 	switch {
 	case m.pendingJump.set:
-		// Entered from the work view to reach one task: land on it. jumpTo carries the id
-		// through the tab's own loader, so this is the single load, not one on top of a
-		// dashboard load. It runs after the swap, so it sees the incoming space's tabs.
+		// Entered from the work view to reach one task: land on it. jumpTo is deliberately
+		// NOT used here. A restored session's tabs are already `loaded`, holding rows read
+		// on the last visit, and jumpTo selects against those without re-reading the tree —
+		// so a task started elsewhere since would be invisible, and one completed elsewhere
+		// would still be listed. Stamping the target as the tab's restore id and going
+		// through the ordinary refresh gets the landing AND fresh data in one pass.
 		jump := m.pendingJump
 		m.pendingJump = pendingJump{}
-		loads = m.jumpTo(jump.kind, jump.id)
+		if i := indexOfKind(m.tabs, jump.kind); i >= 0 {
+			m.exitDashboard(i)
+			m.tabs[i].list.ResetFilter()
+			m.tabs[i].restore = jump.id
+		}
+		loads = m.reloadAll()
 	case restored && (!m.onDash || m.dash.loaded):
 		loads = m.reloadAll()
 	default:
