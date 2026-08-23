@@ -76,7 +76,9 @@ var atlasHelpSection = helpSection{"Global", []helpEntry{
 	he(keys.Command),
 	{":config", "open Configuration / About for the current space"},
 	he(keys.Atlas),
-	{keys.Sort.Help().Key, "cycle order: name → activity → registered"},
+	he(keys.View),
+	{keys.PrevTab.Help().Key + " / " + keys.NextTab.Help().Key, "move across the page strip (atlas · overview · tabs)"},
+	{keys.Sort.Help().Key, "cycle order: name → activity → registered (spaces view)"},
 	{keys.SortRev.Help().Key, "reverse the current atlas order"},
 	he(keys.Refresh),
 	he(keys.Help),
@@ -154,7 +156,11 @@ func notesFor(kind entityKind) helpSection {
 	var entries []helpEntry
 	switch kind {
 	case entityAtlas:
-		return helpSection{"Notes", []helpEntry{{atlasName, "j/k choose a space · h/l choose an entry point · ⏎ enter · o order · O reverse · a/esc return"}}}
+		return helpSection{"Notes", []helpEntry{
+			{atlasName + " · spaces", "j/k choose a space · h/l choose an entry point · ⏎ enter · o order · O reverse"},
+			{atlasName + " · work", "j/k choose a task · ⏎ open it in its own space"},
+			{"both", "v switch view · [ / ] move to the other pages · a/esc return to the current space"},
+		}}
 	case entityDashboard:
 		entries = append(entries, helpEntry{overviewName, "⏎ open the selected item · ] / [ to the tabs · r refresh"})
 	case entityTasks:

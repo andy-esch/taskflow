@@ -60,6 +60,13 @@ func scopeSession(gen uint64, cmd tea.Cmd) tea.Cmd {
 	}
 }
 
+// pendingJump is a "land here" intent that outlives the workspace it targets being opened.
+type pendingJump struct {
+	kind entityKind
+	id   string
+	set  bool
+}
+
 // spaceSession is the browsing state that should survive atlas round trips. Process-wide
 // chrome, modal state, and the watcher are deliberately excluded; only the active space
 // owns a watcher, and transient overlays should never reopen after a switch.
@@ -139,9 +146,25 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 	m.recomputeLayout()
 
 	var loads tea.Cmd
-	if restored && (!m.onDash || m.dash.loaded) {
+	switch {
+	case m.pendingJump.set:
+		// Entered from the work view to reach one task: land on it. jumpTo is deliberately
+		// NOT used here. A restored session's tabs are already `loaded`, holding rows read
+		// on the last visit, and jumpTo selects against those without re-reading the tree —
+		// so a task started elsewhere since would be invisible, and one completed elsewhere
+		// would still be listed. Stamping the target as the tab's restore id and going
+		// through the ordinary refresh gets the landing AND fresh data in one pass.
+		jump := m.pendingJump
+		m.pendingJump = pendingJump{}
+		if i := indexOfKind(m.tabs, jump.kind); i >= 0 {
+			m.exitDashboard(i)
+			m.tabs[i].list.ResetFilter()
+			m.tabs[i].restore = jump.id
+		}
 		loads = m.reloadAll()
-	} else {
+	case restored && (!m.onDash || m.dash.loaded):
+		loads = m.reloadAll()
+	default:
 		loads = loadDashboard(m.svc)
 	}
 	return tea.Batch(closeWatcher(oldWatcher), loads, waitForFS(m.watch))

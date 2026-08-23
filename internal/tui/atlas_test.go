@@ -3,10 +3,13 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -446,7 +449,10 @@ func TestAtlasHelpAndPaletteExposeNavigationWithoutHiddenLifecycleActions(t *tes
 	tm, _ := m.Update(press("?"))
 	m = tm.(Model)
 	help := m.View().Content
-	for _, want := range []string{"choose a space", "choose an entry", "enter", "return"} {
+	// Fragments are kept short deliberately: the help pane word-wraps, so asserting on a
+	// long phrase tests the wrap point rather than the content.
+	for _, want := range []string{"choose a space", "entry point", "enter", "return",
+		"choose a task", "switch view"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("atlas help missing %q:\n%s", want, help)
 		}
@@ -510,7 +516,7 @@ func TestAtlasPinsHeaderAndStatusAroundTheScrollingCards(t *testing.T) {
 		if rows := strings.Split(view, "\n"); len(rows) > 12 {
 			t.Fatalf("cursor %d: atlas overran its %d-row budget with %d rows", cursor, 12, len(rows))
 		}
-		if !strings.Contains(view, "atlas · 6 space(s)") {
+		if !strings.Contains(view, "atlas · spaces · 6 spaces") {
 			t.Errorf("cursor %d: header scrolled off:\n%s", cursor, view)
 		}
 		if !strings.Contains(view, "beta is unreachable") {
@@ -653,5 +659,422 @@ func TestAtlasMarksNoCardCurrentUntilASpaceIsChosen(t *testing.T) {
 	}
 	if !strings.Contains(m.renderBody(), "current") {
 		t.Errorf("atlas dropped the `current` badge for a chosen space:\n%s", m.renderBody())
+	}
+}
+
+// `v` cycles the atlas's own views. Keys that belong to the cards must not act on the work
+// list, and vice versa.
+func TestAtlasCyclesBetweenSpacesAndWorkViews(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	if m.atlas.screen != atlasScreenSpaces {
+		t.Fatal("the atlas must open on the spaces view")
+	}
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	if m.atlas.screen != atlasScreenWork {
+		t.Fatalf("v should reach the work view, got %q", m.atlas.screen.label())
+	}
+	view := m.View().Content
+	for _, want := range []string{"atlas · work", "in progress across", "⏎ open task", "v spaces"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("work view missing %q:\n%s", want, view)
+		}
+	}
+	// The cards' own keys must not reorder anything while the work list is showing.
+	before := m.atlas.order
+	tm, _ = m.Update(press("o"))
+	if m = tm.(Model); m.atlas.order != before {
+		t.Error("o reordered the cards from the work view")
+	}
+	tm, _ = m.Update(press("v"))
+	if m = tm.(Model); m.atlas.screen != atlasScreenSpaces {
+		t.Fatalf("v should cycle back to spaces, got %q", m.atlas.screen.label())
+	}
+	if !m.onAtlas {
+		t.Fatal("cycling views must not leave the atlas")
+	}
+	// …and now it should.
+	tm, _ = m.Update(press("o"))
+	if m = tm.(Model); m.atlas.order == before {
+		t.Error("o did not reorder the cards from the spaces view")
+	}
+}
+
+// A work row is chosen because of the task it names, so entering it must land ON that task
+// rather than on the space's dashboard — otherwise the user has to re-find it.
+func TestAtlasWorkRowEntersItsSpaceAndLandsOnTheTask(t *testing.T) {
+	m, _, alpha, beta := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	// Both fixture trees seed an in-progress task, so the working set spans two spaces.
+	if len(m.atlas.work) != 2 || m.atlas.workSpaceCount() != 2 {
+		t.Fatalf("working set = %d row(s) across %d space(s), want 2 across 2",
+			len(m.atlas.work), m.atlas.workSpaceCount())
+	}
+	row, ok := m.atlas.selectedWork()
+	if !ok {
+		t.Fatal("no work row selected")
+	}
+	want := alpha
+	if row.PlanningID == "planning-beta" {
+		want = beta
+	}
+	tm, cmd := m.Update(press("enter"))
+	m = applyAtlasOpen(t, tm.(Model), cmd)
+	if m.onAtlas || m.workspace.PlanningRoot != want {
+		t.Fatalf("work row did not enter its space: onAtlas=%v workspace=%+v", m.onAtlas, m.workspace)
+	}
+	if m.onDash {
+		t.Error("entering from the work view should land on the task's tab, not the dashboard")
+	}
+	if m.cur().kind != entityTasks {
+		t.Errorf("landed on the %v tab, want tasks", m.cur().kind)
+	}
+	if m.pendingJump.set {
+		t.Error("the landing intent should be consumed by the switch, not left set")
+	}
+}
+
+// A failed open must not leave a landing intent behind to fire against whatever workspace
+// is opened next.
+func TestAtlasFailedWorkOpenDropsTheLandingIntent(t *testing.T) {
+	m, adapter, alpha, beta := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	for _, root := range []string{alpha, alpha + "-impl", beta} {
+		adapter.openErrs[root] = errors.New("checkout vanished")
+	}
+	tm, cmd := m.Update(press("enter"))
+	m = settleAtlasCmd(t, tm.(Model), cmd)
+	if m.pendingJump.set {
+		t.Error("a failed open left its landing intent armed")
+	}
+	if !m.onAtlas || !strings.Contains(m.atlas.openErr, "vanished") {
+		t.Fatalf("failed work open = onAtlas:%v err:%q", m.onAtlas, m.atlas.openErr)
+	}
+}
+
+// The empty state has to say what to do, not just that there is nothing.
+func TestAtlasWorkViewEmptyStateIsActionable(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	m.atlas.work = nil
+	view := m.atlas.view(m.st, m.workspace, 100, 20)
+	for _, want := range []string{"Nothing in progress", "task start"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("empty work view missing %q:\n%s", want, view)
+		}
+	}
+}
+
+// The active view is browsing state, so it survives leaving and re-entering the atlas
+// within a session — but a fresh launch always opens on spaces.
+func TestAtlasViewPersistsAcrossRoundTripButNotFreshLaunch(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	tm, _ = m.Update(press("a")) // out to the current space
+	m = tm.(Model)
+	tm, _ = m.Update(press("a")) // and back
+	if m = tm.(Model); !m.onAtlas || m.atlas.screen != atlasScreenWork {
+		t.Fatalf("round trip lost the active view: atlas=%v view=%q", m.onAtlas, m.atlas.screen.label())
+	}
+	if fresh := New(nil); fresh.atlas.screen != atlasScreenSpaces {
+		t.Fatalf("a fresh model opens on %q, want spaces", fresh.atlas.screen.label())
+	}
+}
+
+// A space whose summary could not be read contributes no work rows — its failure belongs
+// on its own card, not as a silent gap or a phantom entry in the working set.
+func TestAtlasWorkViewOmitsSpacesWhoseSummaryFailed(t *testing.T) {
+	m, adapter, _, beta := atlasTestModel(t)
+	delete(adapter.trees, beta) // beta's planning store can no longer be opened
+	tm, cmd := m.Update(press("r"))
+	m = settleAtlasCmd(t, tm.(Model), cmd)
+	for _, row := range m.atlas.work {
+		if row.PlanningID == "planning-beta" {
+			t.Fatalf("a space that failed to summarize still contributed %q", row.Task.Slug)
+		}
+	}
+	if m.atlas.workSpaceCount() != 1 {
+		t.Fatalf("working set spans %d space(s), want only the healthy one", m.atlas.workSpaceCount())
+	}
+	// …and the failure is still visible where it belongs: on that space's own row, as the
+	// reason rather than a bar that would imply the tree was read.
+	if !strings.Contains(m.View().Content, "missing summary tree") {
+		t.Errorf("the failed space lost its row-local error:\n%s", m.View().Content)
+	}
+}
+
+// `[`/`]` walk the whole page strip — atlas · overview · tasks … research — so the atlas is
+// a member of that ring rather than a modal side-trip reachable only by `a`. Cycling the
+// atlas's own views is a different axis and belongs to `v`.
+func TestPageRingIncludesTheAtlasInStripOrder(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	last := len(m.tabs) - 1
+
+	// atlas → overview → first tab
+	tm, cmd := m.Update(press("]"))
+	m = settleAtlasCmd(t, tm.(Model), cmd)
+	if m.onAtlas || !m.onDash {
+		t.Fatalf("] from the atlas should reach the overview: atlas=%v dash=%v", m.onAtlas, m.onDash)
+	}
+	// overview → back to the atlas
+	tm, cmd = m.Update(press("["))
+	m = settleAtlasCmd(t, tm.(Model), cmd)
+	if !m.onAtlas {
+		t.Fatal("[ from the overview should reach the atlas")
+	}
+	// atlas → wraps back to the last tab
+	tm, cmd = m.Update(press("["))
+	m = settleAtlasCmd(t, tm.(Model), cmd)
+	if m.onAtlas || m.onDash || m.active != last {
+		t.Fatalf("[ from the atlas should wrap to the last tab, got active=%d dash=%v atlas=%v",
+			m.active, m.onDash, m.onAtlas)
+	}
+	// last tab → wraps forward to the atlas
+	tm, cmd = m.Update(press("]"))
+	m = settleAtlasCmd(t, tm.(Model), cmd)
+	if !m.onAtlas {
+		t.Fatal("] from the last tab should wrap to the atlas")
+	}
+}
+
+// Without an atlas mounted the ring must keep its old shape rather than routing to a
+// screen that does not exist for that consumer.
+func TestPageRingSkipsTheAtlasWhenItIsNotMounted(t *testing.T) {
+	m := newModel(t) // no WithAtlas
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = settleAtlasCmd(t, tm.(Model), m.Init())
+	if m.atlasInRing() {
+		t.Fatal("setup: this model should have no atlas")
+	}
+	tm, cmd := m.Update(press("["))
+	m = settleAtlasCmd(t, tm.(Model), cmd)
+	if m.onAtlas || m.onDash || m.active != len(m.tabs)-1 {
+		t.Fatalf("[ from the overview should still reach the last tab: active=%d dash=%v",
+			m.active, m.onDash)
+	}
+	tm, cmd = m.Update(press("]"))
+	m = settleAtlasCmd(t, tm.(Model), cmd)
+	if m.onAtlas || !m.onDash {
+		t.Fatalf("] from the last tab should still wrap to the overview: dash=%v atlas=%v",
+			m.onDash, m.onAtlas)
+	}
+}
+
+// The table exists so spaces can be COMPARED, which means the numbers have to be there and
+// aligned — the flat prose card it replaced had neither a bar nor a column.
+func TestAtlasSpacesTableRendersComparableColumns(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	view := m.atlas.view(m.st, m.workspace, 120, 24)
+	for _, want := range []string{"atlas · spaces", "%", "▸"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("spaces table missing %q:\n%s", want, view)
+		}
+	}
+	// One row per space, not a multi-line card each.
+	rows := 0
+	for _, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, "▸") {
+			rows++
+		}
+	}
+	if rows != len(m.atlas.spaces) {
+		t.Errorf("got %d summary rows for %d spaces", rows, len(m.atlas.spaces))
+	}
+}
+
+// `⚠` means "wants a person", not "has findings" — ordinary open findings are counted in
+// the breakdown, while only acute ones (plus closable audits, due revisits, and unreadable
+// files) raise the marker. A space with findings but nothing urgent must stay unmarked.
+func TestAtlasAttentionFoldsOnlyWhatWantsAPerson(t *testing.T) {
+	quiet := statsFor(core.SpaceSummary{Summary: &core.Summary{
+		Findings: core.FindingsRollup{Open: 3, InProgress: 1},
+	}})
+	if quiet.attention != 0 {
+		t.Errorf("ordinary findings raised the attention marker: %d", quiet.attention)
+	}
+	if quiet.findings != 4 {
+		t.Errorf("findings count = %d, want 4", quiet.findings)
+	}
+	loud := statsFor(core.SpaceSummary{Summary: &core.Summary{
+		Findings:     core.FindingsRollup{Open: 3, Acute: []core.AuditFinding{{}, {}}},
+		ReadyToClose: 1,
+		RevisitDue:   1,
+		Problems:     []domain.FileProblem{{}},
+	}})
+	if loud.attention != 5 {
+		t.Errorf("attention = %d, want 2 acute + 1 closable + 1 revisit + 1 unreadable", loud.attention)
+	}
+}
+
+// Aggregate progress is summed across a space's epics — the measure the flat card never
+// showed at all — and a space with no epics must not divide by zero.
+func TestAtlasSpaceProgressAggregatesAcrossEpics(t *testing.T) {
+	stats := statsFor(core.SpaceSummary{Summary: &core.Summary{Epics: []core.EpicSummary{
+		{Done: 3, Total: 4, LastUpdated: "2026-07-18"},
+		{Done: 3, Total: 10, LastUpdated: "2026-08-01"},
+	}}})
+	if stats.done != 6 || stats.total != 14 || stats.percent() != 42 {
+		t.Errorf("aggregate = %d/%d (%d%%), want 6/14 (42%%)", stats.done, stats.total, stats.percent())
+	}
+	if stats.lastTouched != "2026-08-01" {
+		t.Errorf("lastTouched = %q, want the most recent epic activity", stats.lastTouched)
+	}
+	if empty := statsFor(core.SpaceSummary{Summary: &core.Summary{}}); empty.percent() != 0 {
+		t.Errorf("a space with no epics reported %d%%", empty.percent())
+	}
+}
+
+// The band answers "where would Enter take me", so a table tall enough to scroll is exactly
+// when it must not scroll away with the rows.
+func TestAtlasEntryBandStaysPinnedBelowAScrollingTable(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	spaces := make([]atlasSpace, 12)
+	for i := range spaces {
+		id := fmt.Sprintf("space-%02d", i)
+		spaces[i] = atlasSpace{summary: core.SpaceSummary{
+			ID: id, PlanningID: id, Summary: &core.Summary{},
+			Entries: []core.SpaceEntryPoint{{ID: id, Path: "~/git/" + id, State: core.SpaceStateOK}},
+		}}
+	}
+	m.atlas.spaces = spaces
+	for _, cursor := range []int{0, 6, 11} {
+		m.atlas.cursor = cursor
+		view := m.atlas.view(m.st, core.Workspace{}, 100, 12)
+		if rows := strings.Split(view, "\n"); len(rows) > 12 {
+			t.Fatalf("cursor %d: overran the %d-row budget with %d rows", cursor, 12, len(rows))
+		}
+		focused := fmt.Sprintf("space-%02d", cursor)
+		if !strings.Contains(view, "~/git/"+focused) {
+			t.Errorf("cursor %d: the focused space's entry band scrolled away:\n%s", cursor, view)
+		}
+		if !strings.Contains(view, "atlas · spaces") {
+			t.Errorf("cursor %d: header scrolled off:\n%s", cursor, view)
+		}
+	}
+}
+
+// Audit 2026-08-23-atlas-ui-restructure H1. A landing intent belongs to the open that
+// armed it. Abandoning a work-view selection and opening a different space must not carry
+// it over — slugs are unique only within a tree, so a stale intent can silently select a
+// DIFFERENT task that happens to share the slug rather than failing visibly.
+func TestAtlasStaleLandingIntentCannotFollowIntoAnotherSpace(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	row, ok := m.atlas.selectedWork()
+	if !ok {
+		t.Fatal("setup: no work row")
+	}
+	tm, _ = m.Update(press("enter")) // arms the intent; open in flight
+	m = tm.(Model)
+	if !m.pendingJump.set {
+		t.Fatal("setup: expected an armed landing intent")
+	}
+	tm, _ = m.Update(press("v")) // abandon it for the spaces view
+	m = tm.(Model)
+	for i, sp := range m.atlas.spaces {
+		if sp.summary.PlanningID != row.PlanningID {
+			m.atlas.cursor = i // a different logical space
+		}
+	}
+	tm, cmd := m.Update(press("enter"))
+	m = tm.(Model)
+	if m.pendingJump.set {
+		t.Fatalf("a landing intent for %q survived into another space's open", m.pendingJump.id)
+	}
+	m = settleAtlasCmd(t, m, cmd)
+	if !m.onDash {
+		t.Errorf("opening a space from the spaces view should land on its dashboard, got tab %q", m.cur().name)
+	}
+}
+
+// Audit H2. Re-entering an already-visited space from the work view must re-read the tree.
+// A restored session's tabs are already loaded, and selecting against those rows would hide
+// work started elsewhere since the last visit.
+func TestAtlasWorkReEntryRefreshesARestoredSession(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	tm, cmd := m.Update(press("enter"))
+	m = applyAtlasOpen(t, tm.(Model), cmd)
+	root := m.workspace.PlanningRoot
+	tm, _ = m.Update(press("a")) // back to the atlas; this space's session is now cached
+	m = tm.(Model)
+
+	// Something starts elsewhere — another terminal, another machine — while we are away.
+	body := "---\nstatus: in-progress\nepic: 01-test\ndescription: appeared while away\n---\n# Appeared\n"
+	path := filepath.Join(root, "tasks", "6zzzzzzzzzzz-appeared-while-away.md")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Skipf("fixture not writable: %v", err)
+	}
+	tm, cmd = m.Update(press("enter"))
+	m = applyAtlasOpen(t, tm.(Model), cmd)
+	for _, it := range m.cur().list.Items() {
+		if ei, ok := it.(entityItem); ok && strings.Contains(ei.id(), "appeared-while-away") {
+			return
+		}
+	}
+	t.Errorf("re-entry rendered %d cached rows; work added on disk since the last visit is absent",
+		len(m.cur().list.Items()))
+}
+
+// Audit M1. The counts breakdown is variable-width, so everything after it — the attention
+// marker and the date — sheared out of column. This is the alignment coverage audit L2
+// noted was missing, and it is what let M1 through.
+func TestAtlasSpaceRowsKeepColumnsAlignedAcrossUnequalBreakdowns(t *testing.T) {
+	mk := func(id string, epics, findings, acute int) atlasSpace {
+		s := &core.Summary{Findings: core.FindingsRollup{Open: findings}}
+		for i := 0; i < epics; i++ {
+			s.Epics = append(s.Epics, core.EpicSummary{Done: 1, Total: 2, LastUpdated: "2026-08-01"})
+		}
+		for i := 0; i < acute; i++ {
+			s.Findings.Acute = append(s.Findings.Acute, core.AuditFinding{})
+		}
+		return atlasSpace{summary: core.SpaceSummary{ID: id, PlanningID: id, Summary: s,
+			Entries: []core.SpaceEntryPoint{{ID: id, State: core.SpaceStateOK}}}}
+	}
+	st := &styles{}
+	*st = testStyles
+	a := atlas{loaded: true, spaces: []atlasSpace{
+		mk("wide-one", 12, 7, 1), // "12 epics · 7 findings"
+		mk("narrow", 1, 0, 2),    // "1 epic"
+	}}
+	rows := a.spaceRows(st, core.Workspace{})
+	// Display columns, not byte offsets: the rows carry different numbers of multi-byte
+	// runes (the `·` separators), so a byte index would report shear that is not there.
+	columnOf := func(row, col string) int {
+		plain := ansi.Strip(row)
+		i := strings.Index(plain, col)
+		if i < 0 {
+			return -1
+		}
+		return ansi.StringWidth(plain[:i])
+	}
+	for _, col := range []string{"⚠", "3w ago"} {
+		first, second := columnOf(rows[0], col), columnOf(rows[1], col)
+		if first < 0 || second < 0 {
+			t.Fatalf("column %q missing from a row:\n%s\n%s", col, ansi.Strip(rows[0]), ansi.Strip(rows[1]))
+		}
+		if first != second {
+			t.Errorf("column %q starts at display column %d on one row and %d on the other:\n%s\n%s",
+				col, first, second, ansi.Strip(rows[0]), ansi.Strip(rows[1]))
+		}
+	}
+}
+
+// Audit M2. The empty work view must name the key that actually reaches the spaces view.
+func TestAtlasEmptyWorkViewNamesTheRealViewKey(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	m.atlas.work = nil
+	view := ansi.Strip(m.atlas.view(m.st, m.workspace, 100, 20))
+	if !strings.Contains(view, "press "+keys.View.Help().Key+" for spaces") {
+		t.Errorf("empty work view does not name %q as the way to the spaces view:\n%s",
+			keys.View.Help().Key, view)
 	}
 }

@@ -243,6 +243,15 @@ repo.
   ● desirelines 3d   segment-matcher-tolerance
 ```
 
+> **The tile grid above was not what shipped — and the sketch is why.** It was drawn
+> 2026-08-15, five days before the "one planning identity, several entry points"
+> refinement below. A full entry-point row measures 81 columns against the real registry;
+> a two-across tile leaves about 48 inside its borders. Entry points do not fit in a tile,
+> so v0.17.0 shipped a full-width list instead. The grid is still the goal, with entry
+> points reduced to the selected one — see
+> [The atlas as a dashboard of dashboards](6g2qtp0022t7-the-atlas-as-a-dashboard-of-dashboards.md),
+> which supersedes this section's layout, and the rail bullet below.
+
 Ideas worth keeping:
 
 - **Cards, not a list** — the k9s differentiator. Mostly composition of existing
@@ -251,7 +260,9 @@ Ideas worth keeping:
   subset of `design.Palette`), overridable in config, so a space is recognizable by
   color before you read its name.
 - **The cross-space in-progress rail may be the actual payload.** Cards orient; the
-  rail answers the question that genuinely can't be asked today.
+  rail answers the question that genuinely can't be asked today. **Refined 2026-08-23:**
+  still true, but it is a *view*, not a band beneath the cards — the two questions want
+  opposite layouts, and separating them lets the rail ship without waiting on the grid.
 - ~~**Land only when >1 space is registered**~~ — **superseded 2026-08-22 by a context
   rule.** Implementation landed on: in a planning repo, `ui` opens that repo; anywhere
   else it opens the atlas. The count was a proxy for "has the user already said where

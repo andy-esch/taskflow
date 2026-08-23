@@ -58,6 +58,11 @@ type Model struct {
 	// having been opened FOR them to keep the browser's surfaces live. It only ever
 	// matters on the atlas-landing path; see spaceName.
 	spaceChosen bool
+	// pendingJump is a landing intent carried ACROSS a workspace switch. The work view
+	// enters a space in order to reach one specific task, and the tabs it must land on do
+	// not exist until the open succeeds — so the intent waits here and activateWorkspace
+	// consumes it instead of the ordinary dashboard load. A failed open drops it.
+	pendingJump pendingJump
 	atlasResume atlasResume
 	atlas       atlas
 	atlasTheme  design.Theme
@@ -209,6 +214,11 @@ func (m Model) Init() tea.Cmd {
 	}
 	return cmd
 }
+
+// atlasInRing reports whether the atlas is a member of the `[`/`]` page ring. Embedded and
+// focused single-space consumers mount no overview service, and the ring must never send
+// them to a screen that does not exist for them.
+func (m Model) atlasInRing() bool { return m.spaceOverviewSvc != nil }
 
 // reloadAll re-fires the loader for every loaded tab, each preserving its own
 // cursor by id. Unvisited tabs are left alone (they reload fresh on first visit)
@@ -681,7 +691,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openPalette()
 	case key.Matches(msg, keys.NextTab):
 		if m.active == len(m.tabs)-1 {
-			return m, m.enterDash() // past the last tab wraps to the dashboard
+			if m.atlasInRing() {
+				return m, m.enterAtlas(false) // past the last tab wraps to the atlas
+			}
+			return m, m.enterDash() // …or to the dashboard when there is no atlas
 		}
 		return m, m.switchTab(m.active + 1)
 	case key.Matches(msg, keys.PrevTab):
@@ -966,6 +979,9 @@ func (m Model) handleDashKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.NextTab):
 		return m, m.leaveDashTo(0) // ] → first tab
 	case key.Matches(msg, keys.PrevTab):
+		if m.atlasInRing() {
+			return m, m.enterAtlas(false) // [ → the atlas sits before the overview in the strip
+		}
 		return m, m.leaveDashTo(len(m.tabs) - 1) // [ → last tab
 	case key.Matches(msg, keys.Command):
 		return m, m.cmd.focus()

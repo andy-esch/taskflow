@@ -59,7 +59,7 @@ the Open-audits dashboard section all visible.
 Decision: feature **TUI hero + status + audit show** (not the old four).
 
 Done in-repo:
-- Curated [`assets/demo-planning/`](../../../assets/demo-planning/) fixture — 3 epics
+- Curated [`assets/demo-planning/`](../../assets/demo-planning/) fixture — 3 epics
   mid-progress (50/33/100%), 8 tasks across every status, one open audit whose
   findings span fixed/landed/in-progress/open/deferred/wontfix (so the segmented
   bar shows all bands) + one closed audit. Generated with the tool; lint-clean.
@@ -75,8 +75,8 @@ Remaining (needs `vhs`, not in the dev container — host/CI):
 ## Recorded + documented 2026-06-25
 
 - GIFs recorded (`tui.gif`, `status.gif`, `audit-show.gif`) against the demo fixture.
-- Added [`assets/README.md`](../../../assets/README.md) — a demos hub embedding the
-  three GIFs and pulling together the sub-READMEs ([`vhs/`](../../../assets/vhs/README.md)
-  recording + [`demo-planning/`](../../../assets/demo-planning/README.md) data); added
-  [`assets/demo-planning/README.md`](../../../assets/demo-planning/README.md); linked
+- Added [`assets/README.md`](../../assets/README.md) — a demos hub embedding the
+  three GIFs and pulling together the sub-READMEs ([`vhs/`](../../assets/vhs/README.md)
+  recording + [`demo-planning/`](../../assets/demo-planning/README.md) data); added
+  [`assets/demo-planning/README.md`](../../assets/demo-planning/README.md); linked
   the hub from the root README's Demos section.

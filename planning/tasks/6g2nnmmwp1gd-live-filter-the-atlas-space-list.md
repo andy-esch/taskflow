@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [tui, atlas, ux]
 created: "2026-08-22"
-updated_at: "2026-08-22"
+updated_at: "2026-08-23"
 ---
 # Live-filter the atlas space list
 
@@ -40,3 +40,17 @@ machine rather than with one repo.
 
 - Epic [29-multi-space-planning-a-home-registry-and-the-atlas](../epics/29-multi-space-planning-a-home-registry-and-the-atlas.md)
 - Audit finding M4: [2026-08-22-multi-workspace-atlas](../audits/6g2k3qye4qma-2026-08-22-multi-workspace-atlas.md)
+
+## Scope note (2026-08-23)
+
+The atlas is becoming two cycled views. This task is the **spaces** view's filter — match
+against space id, entry-point label, and registry path, as written above.
+
+Whether the work view needs its own filter is a separate question and deliberately not
+answered here: its rows are tasks, so a filter there would match task slugs and
+descriptions and is closer to the entity tabs' existing `/` than to this one. Decide it
+after living with the work view.
+
+Order of work: this can land before or after the tile grid — it is cursor and matching
+logic, not layout — but if it lands after, the filter's chrome has to fit whatever the
+tile header becomes.
