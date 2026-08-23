@@ -163,7 +163,7 @@ audits):**
 
 - **Pulse** (recently completed/updated) and the **goals/Projects** widget are in
   the original dashboard plan (deferred) — see
-  `planning/tasks/completed/add-a-tui-landing-dashboard-the-default-view.md`.
+  `planning/tasks/6fg2ef802k6s-add-a-tui-landing-dashboard-the-default-view.md`.
 - `onDash` bool → screen-enum refactor was **decided against**; widget-registry
   refactor deferred until 5–6 widgets — see
   [dashboard-review-follow-ups-tier-3-polish-and-deferred-decisions](../tasks/6fgcr2403km8-dashboard-review-follow-ups-tier-3-polish-and-deferred-decisions.md).

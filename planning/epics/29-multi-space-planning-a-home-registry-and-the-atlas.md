@@ -103,6 +103,24 @@ The cheap independently-useful parts first, the expensive commitment last:
    branch/worktree badges are open tasks under this epic. Retire the epic when the atlas
    answers "what am I working on, anywhere?" rather than only "where can I go?".
 
+7. **The atlas surface, designed 2026-08-23.** Rather than patching the shipped list with
+   the three open findings, the surface was re-thought: the atlas asks two questions that
+   want opposite layouts, so it becomes two cycled views. Sequenced deliberately so the
+   useful half lands before the expensive one —
+   [work view](../tasks/6g2nnkffgyeg-render-the-cross-space-in-progress-rail-in-the-atlas.md)
+   → live with it → [tile grid + accents](../tasks/6g2xnn4yes8a-re-lay-the-atlas-spaces-view-as-a-tile-grid.md)
+   → [worktree-aware selection](../tasks/6g2nnkfk1em1-show-branch-and-worktree-badges-on-atlas-entry-points.md).
+   Reasoning in [The atlas as a dashboard of dashboards](../research/6g2qtp0022t7-the-atlas-as-a-dashboard-of-dashboards.md).
+   Two out-of-scope entries below are reopened **on purpose** by that design: per-space
+   accents (tiles are what make them pay off) and one shipped acceptance criterion about
+   showing every entry-point directory.
+
+> **Released in v0.17.0 (2026-08-22)** — the whole registry/CLI/atlas arc, 21 PRs since
+> v0.16.1, cut at the point where the atlas had been audited, its findings fixed or
+> tracked, and the README demo re-recorded against current code
+> ([`assets/atlas.gif`](../../assets/atlas.gif)). The release deliberately did NOT wait for
+> step 6: navigation is the part that had to be right, and the rail is additive.
+
 ## Landing rule (revised 2026-08-22)
 
 The sketch said "land on the atlas only when >1 space is registered". Implementation
@@ -118,9 +136,9 @@ only version that works outside a repo at all.
 
 - An ADR merely to restate the feature choice. Write one only if implementation settles
   a durable architectural rule that the existing architecture guide cannot carry.
-- **Per-space accent derivation.** `core.SpaceEntryPoint.Accent` exists and the atlas
-  deliberately does not use it. A card is identified by its name and its paths; color as
-  a second identity channel is a design commitment this epic has not made.
+- ~~**Per-space accent derivation.**~~ **Reopened 2026-08-23** by the tile-grid design:
+  a flat list gives colour nothing to attach to, a bordered tile does. Now an acceptance
+  criterion of the tile task rather than an exclusion.
 - Remote/served spaces and persisted per-space ordering.
 - `space scan` (walking the filesystem for planning repos).
 - Persisted per-space stats. Skeleton cards that fill in are honest; cached

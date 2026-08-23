@@ -382,7 +382,7 @@ the `createdItem` struct.
 All quick/correctness findings are fixed inline (see the progress log). The remaining
 open findings — **M3**, **L2**, **L4**, **L6**, **L8**, and optional **M6** — are
 larger refactors or design calls, tracked together in
-`planning/tasks/ready-to-start/address-deferred-code-audit-findings-numbering-dedup-cas-json-layout.md`
+`planning/tasks/6fbwhsw024nr-address-deferred-code-audit-findings-numbering-dedup-cas-json-layout.md`
 (epic 17). Close this audit once that task lands; nothing here is urgent.
 
 ## Related
