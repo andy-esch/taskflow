@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g3ahpetw89g
-bucket: open
+bucket: closed
 area: finding-note-and-vocabulary-selfreview
 date: "2026-08-24"
 updated_at: "2026-08-24"
@@ -102,7 +102,7 @@ transcribing them, matching what the `schema audit` conventions line now does.
 already publishes finding_statuses, and the two wire descriptions point at it
 instead of transcribing a list that had already fallen a word behind.
 
-#### M3. A `tracked` criterion needs no destination, while a `tracked` finding does  · **Status:** open
+#### M3. A `tracked` criterion needs no destination, while a `tracked` finding does  · **Status:** tracked by 6g31g9f8x4cv
 
 **File:** `internal/domain/resolution.go` · `internal/cli/task.go` | **Component:** domain / vocabulary
 **Effort:** S · **Urgency:** soon
@@ -124,6 +124,12 @@ drift.
 a `tracked` criterion's reason, or document why a criterion's destination is softer than a
 finding's. The asymmetry is defensible — an audit concludes its interest on handoff while a
 task's work merely moves — but it is currently accidental, not stated.
+
+**Resolution:** Folded in as criterion 10 of the acceptance-criterion vocabulary
+task, where the shared-word decision belongs. It is a decision about the
+vocabulary rather than a defect in this branch's code, and deciding it in
+isolation from the rest of that task's open questions would be deciding it
+twice.
 
 #### M4. A note containing the literal label can wrap into a false duplicate  · **Status:** fixed 2026-08-24
 

@@ -1,9 +1,10 @@
 ---
 schema: 1
 id: 6g2k3qye4qma
-bucket: open
+bucket: closed
 area: multi-workspace-atlas
 date: "2026-08-22"
+updated_at: "2026-08-24"
 ---
 
 # Audit: multi-workspace-atlas — 2026-08-22
@@ -202,7 +203,7 @@ filesystem access was added to the render path. Tests:
 
 ---
 
-#### M2. Atlas cards omit branch and worktree badges that `DescribeCheckout` already supplies  · **Status:** open
+#### M2. Atlas cards omit branch and worktree badges that `DescribeCheckout` already supplies  · **Status:** tracked by 6g2nnkfk1em1
 
 **File:** `internal/spacehealth/diagnose.go:119-127`, `internal/tui/atlas.go:439-444` | **Component:** spacehealth/tui
 **Effort:** S · **Urgency:** soon
@@ -226,6 +227,10 @@ are `base` checkouts, so it cannot fire yet — hence deferred rather than urgen
 registered on this machine.
 
 ---
+
+**Resolution:** Spun into a task on epic 29 rather than fixed in the atlas
+restructure branch: the badges need DescribeCheckout wired through the atlas
+projection, which is a wider change than the layout work this audit reviewed.
 
 #### M3. The cross-space in-progress rail — the sketch's stated payload — is discarded  · **Status:** fixed
 
@@ -261,7 +266,7 @@ rail, so it was left neither built nor excluded.
 
 ---
 
-#### M4. No live filter (`/`) on the atlas  · **Status:** open
+#### M4. No live filter (`/`) on the atlas  · **Status:** tracked by 6g2nnmmwp1gd
 
 **File:** `internal/tui/atlas.go:123-154` | **Component:** tui
 **Effort:** S · **Urgency:** soon
@@ -277,6 +282,10 @@ and registry path, composing with `o`/`O` ordering.
 the dashboard and tabs elsewhere) and `g`/`G`. Worth folding into the same pass.
 
 ---
+
+**Resolution:** Spun into a task on epic 29. A live filter is a feature the
+atlas did not yet have rather than a defect in what shipped, so it is queued
+rather than carried by this audit.
 
 #### M5. Visiting the atlas and returning resets focus and zoom for the space you never left  · **Status:** fixed
 

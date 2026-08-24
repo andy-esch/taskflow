@@ -119,6 +119,15 @@ the surface that shows unmet criteria is the surface that would explain a refusa
 - [ ] Criterion states reuse the finding glyph/colour vocabulary rather than introducing a · **deferred:** no glyph vocabulary rendered yet; falls out of the TUI roll-up in criterion 9
   parallel one.
 - [ ] A task's acceptance-criteria roll-up is visible near the top of its TUI detail view, · **deferred:** TUI detail-header roll-up not built yet; the CLI tally landed first
+- [ ] A decision is recorded on whether a `tracked` CRITERION must name its destination the
+      way a `tracked` FINDING does. `SetFindingStatus` refuses a bare `tracked` and lint
+      flags one, but `task ac --tracked <n> --reason "just because"` is accepted — the same
+      word carrying a weaker guarantee on one of the two entities that share it. The
+      asymmetry is defensible (an audit concludes its interest on handoff; a task's work
+      merely moves) but it is currently accidental rather than stated, and a shared
+      vocabulary whose guarantees differ per entity has already begun to drift. Either
+      require an id-shaped token in the reason, or write down why a criterion's destination
+      is softer. Raised as M3 of `2026-08-24-finding-note-and-vocabulary-selfreview`.
   not only by scrolling into the body.
 
 ## Decisions, 2026-08-24 — settled before implementation

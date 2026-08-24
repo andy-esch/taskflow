@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: 'audit finding --status write + audit sync + candidate drift lint — items 3+5 carved from the finding-level read task (grammar transcribed in-repo)'
 effort: Unknown
@@ -12,6 +12,7 @@ created: "2026-06-21"
 updated_at: "2026-08-24"
 id: 6feeygw00jmx
 started_at: "2026-08-24"
+completed_at: "2026-08-24"
 ---
 
 # Audit finding write surface — status write + candidate-list sync

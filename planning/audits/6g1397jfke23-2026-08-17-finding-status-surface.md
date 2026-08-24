@@ -64,7 +64,7 @@ atomic single write, `--json`. Agent-facing, like `audit append`.
 "on `fixed`, add a resolution block" convention that currently lives only in
 consumer docs.
 
-#### H2. `lint --fix` advertises repairing audits but never looks at finding status  · **Status:** open
+#### H2. `lint --fix` advertises repairing audits but never looks at finding status  · **Status:** tracked by 6fq9zy13wkdc
 
 **File:** `internal/cli/lint.go:16,28` | **Component:** cli / lint
 **Effort:** S · **Urgency:** soon
@@ -92,6 +92,12 @@ one command instead of a scripted hand-repair.
 **Recommendation:** add `--fix` to `audit lint`, over a static alias table, honoring
 the existing global `--dry-run`. Separately, narrow the `lint` help text so
 "repairs tasks/audits" cannot be read as covering finding status.
+
+**Resolution:** Carried by the audit-lint-fix task on epic 20, which is where
+the legacy-debt repair belongs. Its scope needs revising first: the
+emoji-stripping half is largely obsolete now that M2 made the parser
+decoration-tolerant, and its declined/tracked→superseded mapping predates
+tracked becoming a legal status.
 
 #### M1. The status error names the offending value but not the legal set  · **Status:** fixed
 
