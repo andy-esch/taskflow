@@ -81,7 +81,7 @@ func Bucket(b domain.AuditBucket) Token {
 // FindingStatus maps an audit finding's status to its glyph + color — the audit
 // analog of Status, drawing from the same vocabulary so a finding reads like a
 // task: ● active, ✔ done, ◌ parked, ✘ killed. The status set is finding.go's
-// (open · in-progress · fixed · landed · deferred · superseded · wontfix);
+// (open · in-progress · fixed · tracked · deferred · superseded · wontfix);
 // matching is case-insensitive. An empty/unknown status falls to the neutral dot
 // (audit lint flags those separately).
 func FindingStatus(s string) Token {
@@ -90,8 +90,12 @@ func FindingStatus(s string) Token {
 		return Token{"○", ColorYellow}
 	case "in-progress":
 		return Token{"●", ColorYellow}
-	case "fixed", "landed":
+	case "fixed":
 		return Token{"✔", ColorGreen}
+	case "tracked":
+		// Resolved for this audit but not BY it: an arrow says the work moved on, where a
+		// tick would claim it was done here.
+		return Token{"→", ColorGreen}
 	case "deferred", "superseded":
 		return Token{"◌", ColorGray}
 	case "wontfix":

@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"io"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -34,6 +36,7 @@ func newAuditCmd(app *App) *cobra.Command {
 		newAuditEditCmd(app),
 		newAuditAppendCmd(app),
 		newAuditFindingsCmd(app),
+		newAuditFindingCmd(app),
 		newAuditLintCmd(app),
 	)
 	// Bucket-move verbs from the shared lifecycle registry so the verb→destination
@@ -99,8 +102,18 @@ func newAuditListCmd(app *App) *cobra.Command {
 		lm                    listMode
 	)
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List audits (open by default)",
+		Use:   "list",
+		Short: "List audits (open by default)",
+		Long: "List audits with a segmented progress bar per row.\n\n" +
+			"The headline number is the SETTLED share — findings that have reached a terminal\n" +
+			"disposition, however they got there — so 100% is exactly the point an open audit\n" +
+			"becomes `✔ ready to close`. The bar says how it settled, grouping the seven statuses\n" +
+			"into four bands so the shape reads at a glance:\n\n" +
+			"  █ green   settled here         fixed · tracked\n" +
+			"  ▓ yellow  still being worked   in-progress\n" +
+			"  ▒ gray    settled by dropping  deferred · superseded · wontfix\n" +
+			"  ░ dim     still open           open\n\n" +
+			"The glyphs differ as well as the colors, so the bands survive --color=never.",
 		Example:     "  tskflwctl audit list\n  tskflwctl audit list --all -o table -c slug,open\n  tskflwctl audit list --closed -o json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
@@ -181,6 +194,131 @@ func newAuditFindingsCmd(app *App) *cobra.Command {
 	cmd.Flags().StringSliceVar(&urgency, "urgency", nil, "filter by urgency acute,soon,eventually (any-of)")
 	cmd.Flags().StringVar(&component, "component", "", "filter by component (case-insensitive substring)")
 	return cmd
+}
+
+// newAuditFindingCmd is the validated write path for a finding's resolution — singular
+// `finding` beside the plural `findings` query, the same read/write pairing `task set` has
+// beside `task list`.
+//
+// Until this existed the only way to resolve a finding was to hand-edit the markdown or run
+// a search-and-replace over it, which is how the vocabulary drifted from its own
+// documentation (finding H1 of 2026-08-17-finding-status-surface). A status a tool cannot
+// write is a status nobody can be held to — and the same is true of the paragraph that says
+// how it was resolved, which is why --note is here rather than left to the editor.
+func newAuditFindingCmd(app *App) *cobra.Command {
+	var status, note string
+	var pr int
+	cmd := &cobra.Command{
+		Use:   "finding <audit> <code>",
+		Short: "Set one finding's status and resolution note in place (validated, atomic)",
+		Long: "Stamp a finding's **Status:** and **Resolution:** without touching the rest of the audit.\n\n" +
+			"The status is validated against the finding vocabulary, and only the leading token\n" +
+			"is normalised — decoration the line formats carry (`fixed 2026-08-24 (PR #12)`,\n" +
+			"`deferred (see ADR-0003)`, `superseded by <link>`) is written verbatim, because it\n" +
+			"holds dates, links, and document names whose spelling is not the tool's to flatten.\n" +
+			"`tracked` additionally REQUIRES a destination (`tracked by <task-id>`), so a finding\n" +
+			"handed to a task always says where it went.\n\n" +
+			"--note writes the `**Resolution:**` paragraph as the finding's last block: one\n" +
+			"paragraph, no newlines, placed inside the right finding by construction rather than\n" +
+			"by careful typing. Passing an empty --note removes it. Both flags REPLACE what was\n" +
+			"there, and given together they land in a single atomic write.\n\n" +
+			"--pr N is sugar for the canonical `(PR #N)` decoration, so the reference is spelled\n" +
+			"one way across the corpus and stays greppable.",
+		Example: "  tskflwctl audit finding 2026-06-14-gateway H1 --status fixed\n" +
+			"  tskflwctl audit finding 2026-06-14-gateway M2 --status \"deferred (see ADR-0003)\"\n" +
+			"  tskflwctl audit finding 2026-06-14-gateway H1 --status \"tracked by 6g392b0rps7w\"\n" +
+			"  tskflwctl audit finding 2026-06-14-gateway H1 --status fixed --note \"Widened the regex; regression test added.\"",
+		Args:              cobra.ExactArgs(2),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeAuditSlugs,
+		RunE: func(c *cobra.Command, args []string) error {
+			if !c.Flags().Changed("status") && !c.Flags().Changed("note") && !c.Flags().Changed("pr") {
+				return fmt.Errorf("%w: pass --status (one of: %s) and/or --note",
+					domain.ErrValidation, strings.Join(domain.FindingStatuses(), ", "))
+			}
+			if c.Flags().Changed("status") && strings.TrimSpace(status) == "" {
+				return fmt.Errorf("%w: --status was given an empty value — pass one of: %s",
+					domain.ErrValidation, strings.Join(domain.FindingStatuses(), ", "))
+			}
+			if c.Flags().Changed("pr") {
+				var err error
+				if status, err = decorateWithPR(status, pr, c.Flags().Changed("status")); err != nil {
+					return err
+				}
+			}
+			edit := core.FindingEdit{Status: status}
+			if c.Flags().Changed("note") {
+				edit.Note = &note
+			}
+			a, changed, err := app.Svc.EditFinding(args[0], args[1], edit, app.DryRun)
+			if err != nil {
+				return err
+			}
+			what := describeFindingEdit(args[1], status, c.Flags().Changed("note"), note)
+			if !changed && !app.JSON { // already exactly these values — say so, no write
+				// Naming the value is the useful half of this message, so the status-only
+				// case (the overwhelmingly common one) keeps saying it.
+				if !c.Flags().Changed("note") {
+					fmt.Fprintf(app.Out, "%s %s in %s is already %s\n", app.Style.Dim("•"),
+						app.Style.Bold(args[1]), app.Style.Bold(a.Slug), app.Style.Bold(status))
+					return nil
+				}
+				fmt.Fprintf(app.Out, "%s %s in %s already reads that way\n",
+					app.Style.Dim("•"), app.Style.Bold(args[1]), app.Style.Bold(a.Slug))
+				return nil
+			}
+			_, body, err := app.Svc.ShowAudit(a.Slug)
+			if err != nil {
+				return err
+			}
+			return reportAuditMutation(app, a, body,
+				"set "+what+" in", "would set "+what+" in")
+		},
+	}
+	cmd.Flags().StringVar(&status, "status", "", "the finding's new status — one of: "+strings.Join(domain.FindingStatuses(), " | ")+" (decoration after the token is kept verbatim)")
+	cmd.Flags().IntVar(&pr, "pr", 0, "append `(PR #N)` to the status — the one canonical spelling, so the reference stays greppable")
+	cmd.Flags().StringVar(&note, "note", "", "the finding's `**Resolution:**` paragraph — how it was resolved; empty removes it")
+	return cmd
+}
+
+// existingPRRe matches the PR references a status might already carry — `(PR #9)`, `PR#9`,
+// `pr 9`. It is deliberately looser than what --pr writes: the point is to catch the
+// hand-spelled forms this flag exists to displace, not only the one it produces.
+var existingPRRe = regexp.MustCompile(`(?i)\bPR\s*#?\s*\d`)
+
+// decorateWithPR appends the canonical PR reference to a status. It is sugar over free-text
+// decoration for a reason: `(PR #12)`, `PR 12`, and `pull/12` all read the same to a human
+// and differently to grep, and the corpus already spells its dates two ways. One flag, one
+// spelling.
+func decorateWithPR(status string, pr int, hasStatus bool) (string, error) {
+	if !hasStatus {
+		return "", fmt.Errorf("%w: --pr decorates a status — pass --status too", domain.ErrValidation)
+	}
+	if pr <= 0 {
+		return "", fmt.Errorf("%w: --pr takes a positive pull-request number, got %d", domain.ErrValidation, pr)
+	}
+	if existingPRRe.MatchString(status) {
+		return "", fmt.Errorf("%w: --status already carries a PR reference — pass one or the other", domain.ErrValidation)
+	}
+	return strings.TrimSpace(status) + " (PR #" + strconv.Itoa(pr) + ")", nil
+}
+
+// describeFindingEdit names what the receipt should say happened. Either flag is optional
+// and either may be a removal, so the object of "set …" is built rather than interpolated.
+// The status-only case is spelled exactly as it was before --note existed, because that is
+// the overwhelmingly common receipt and there is no reason to churn it.
+func describeFindingEdit(code, status string, noteSet bool, note string) string {
+	switch {
+	case status == "" && note == "":
+		return code + "'s resolution note removed"
+	case status == "":
+		return code + "'s resolution note"
+	case noteSet && note == "":
+		return code + " " + status + " and removed its resolution note"
+	case noteSet:
+		return code + " " + status + " and its resolution note"
+	}
+	return code + " " + status
 }
 
 func newAuditLintCmd(app *App) *cobra.Command {
