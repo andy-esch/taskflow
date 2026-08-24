@@ -190,7 +190,8 @@ func parseAuditWithFindings(content []byte, path string) (domain.Audit, []domain
 	base := filepath.Base(path)
 	fnID, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
 	if !ok {
-		return domain.Audit{}, nil, fmt.Errorf("%w: %q has no leading id — move it to meta/ or delete it", errNotEntity, base)
+		reason, kind := entityNameProblem(base)
+		return domain.Audit{}, nil, fmt.Errorf("%w: %q %s", kind, base, reason)
 	}
 	fm, body, err := splitFrontmatterStrict(content)
 	if err != nil {

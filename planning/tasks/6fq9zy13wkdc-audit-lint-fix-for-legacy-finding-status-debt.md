@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fq9zy13wkdc
-status: ready-to-start
+status: next-up
 epic: 20-cli-ux-and-ergonomics
 description: No audit lint --fix to normalize legacy finding statuses (emoji/legacy words); schema audit omits the status vocabulary.
 effort: Unknown
@@ -10,6 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [audit, lint]
 created: "2026-07-18"
+updated_at: "2026-08-23"
 ---
 # audit lint --fix for legacy finding-status debt + document the vocabulary
 

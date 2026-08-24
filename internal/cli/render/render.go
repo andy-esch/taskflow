@@ -748,16 +748,27 @@ func FixHuman(w io.Writer, st Style, results []domain.FixResult, remaining []cor
 	if dryRun {
 		verb = "would fix"
 	}
+	fixedCount, skipped := 0, 0
 	for _, r := range results {
-		fmt.Fprintf(w, "%s %s\n", st.Green(verb), st.Bold(r.Path))
+		if r.Skipped {
+			skipped++
+			fmt.Fprintf(w, "%s %s\n", st.Warn("skipped"), st.Bold(r.Path))
+		} else {
+			fixedCount++
+			fmt.Fprintf(w, "%s %s\n", st.Green(verb), st.Bold(r.Path))
+		}
 		for _, c := range r.Changes {
 			fmt.Fprintf(w, "  %s %s\n", st.Dim("-"), c)
 		}
 	}
-	if len(results) == 0 {
+	switch {
+	case len(results) == 0:
 		fmt.Fprintln(w, st.Dim("nothing to fix"))
-	} else {
-		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d file(s) %s", len(results), verb)))
+	case skipped == 0:
+		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d file(s) %s", fixedCount, verb)))
+	default:
+		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d file(s) %s · %d skipped (see reasons above)",
+			fixedCount, verb, skipped)))
 	}
 	// What's still wrong after the pass — same per-entity rendering plain `lint`
 	// uses (epics are report-only; some task issues aren't auto-fixable).

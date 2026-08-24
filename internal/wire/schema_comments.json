@@ -36,6 +36,7 @@
   "github.com/andy-esch/taskflow/internal/domain.FindingTally.Dropped": "deferred, superseded, wontfix",
   "github.com/andy-esch/taskflow/internal/domain.FindingTally.Open": "open",
   "github.com/andy-esch/taskflow/internal/domain.FixResult": "FixResult records the auto-repairs applied (or proposed) for one file.",
+  "github.com/andy-esch/taskflow/internal/domain.FixResult.Skipped": "Skipped marks a file the pass deliberately did NOT repair, with Changes carrying the\nreason. Reported alongside repairs because the reason is the useful part — \"this id\nis still referenced by three files\" is what the operator has to act on — but counted\nseparately, since calling a refusal a fix is how a tool loses trust.",
   "github.com/andy-esch/taskflow/internal/domain.Issue": "Issue is a single frontmatter lint finding.",
   "github.com/andy-esch/taskflow/internal/domain.NamedTemplate": "NamedTemplate is one body scaffold a kind offers under a name.",
   "github.com/andy-esch/taskflow/internal/domain.Placeholder": "Placeholder is a {{Key}} token a kind's templates may fill: the real value at create time, or Label in a placeholder preview (`template show` / `schema`).",

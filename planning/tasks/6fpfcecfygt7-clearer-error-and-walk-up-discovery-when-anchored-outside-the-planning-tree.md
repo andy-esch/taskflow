@@ -1,15 +1,16 @@
 ---
 schema: 1
 id: 6fpfcecfygt7
-status: ready-to-start
+status: next-up
 epic: 23-point-an-impl-repo-at-an-external-planning-repo
-description: ""
+description: Make the 'no tasks/' failure name the path checked, the expected layout, and the -C / taskflow_root fixes, and decide walk-up discovery either way.
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
 tags: [cli, config, discovery, agents]
 created: "2026-07-15"
+updated_at: "2026-08-23"
 ---
 > ⚠️ **Externally proposed — filed 2026-07-15** from an agent dogfooding
 > session. The config side of decoupled planning is done (this epic shipped

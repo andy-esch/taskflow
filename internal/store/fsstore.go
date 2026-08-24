@@ -26,6 +26,12 @@ var errBadFrontmatter = fmt.Errorf("%w: malformed frontmatter", domain.ErrValida
 // entity (a real, id-led file whose frontmatter is malformed).
 var errNotEntity = fmt.Errorf("%w: not an entity file", domain.ErrValidation)
 
+// errBadEntityID marks a file that IS an entity — a 12-character id leads its name — whose
+// id is misspelled. Kept distinct from errNotEntity because the two want opposite advice:
+// a stray belongs in meta/, while this one belongs exactly where it is and needs one
+// character corrected. Both wrap ErrValidation, so exit-code classification is unchanged.
+var errBadEntityID = fmt.Errorf("%w: invalid entity id", domain.ErrValidation)
+
 // FS reads/writes a planning tree: tasks at <root>/tasks/<status>/<slug>.md
 // and epics at <root>/epics/<id>.md.
 type FS struct {
@@ -360,7 +366,8 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 	base := filepath.Base(path)
 	fnID, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
 	if !ok {
-		return domain.Task{}, fmt.Errorf("%w: %q has no leading id — move it to meta/ or delete it", errNotEntity, base)
+		reason, kind := entityNameProblem(base)
+		return domain.Task{}, fmt.Errorf("%w: %q %s", kind, base, reason)
 	}
 	fm, _, err := splitFrontmatterStrict(content)
 	if err != nil {

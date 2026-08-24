@@ -11,4 +11,9 @@ type FileProblem struct {
 type FixResult struct {
 	Path    string   `json:"path"`
 	Changes []string `json:"changes"`
+	// Skipped marks a file the pass deliberately did NOT repair, with Changes carrying the
+	// reason. Reported alongside repairs because the reason is the useful part — "this id
+	// is still referenced by three files" is what the operator has to act on — but counted
+	// separately, since calling a refusal a fix is how a tool loses trust.
+	Skipped bool `json:"skipped,omitempty"`
 }

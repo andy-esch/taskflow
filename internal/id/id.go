@@ -177,3 +177,62 @@ func Time(s string) time.Time {
 	}
 	return time.UnixMilli(int64(decode(s) >> randBits))
 }
+
+// InvalidChar reports the first character of s outside the Crockford alphabet, with its
+// 0-based position. ok is false when every character is legal — s may still be unusable for
+// another reason (wrong length), which Valid covers.
+//
+// This exists so a caller can say WHICH character is wrong. Reporting only "invalid" led to
+// a 12-character id being described as "no leading id", which sent people looking for a
+// missing id rather than at the one character in front of them.
+func InvalidChar(s string) (c byte, pos int, ok bool) {
+	for i := 0; i < len(s); i++ {
+		if strings.IndexByte(alphabet, s[i]) < 0 {
+			return s[i], i, true
+		}
+	}
+	return 0, 0, false
+}
+
+// Alias is Crockford's canonical decode for the characters excluded from the alphabet
+// because they are misread as digits: i and l decode as 1, o decodes as 0. Applying it
+// preserves the id's decoded value and therefore its sort position.
+//
+// u has NO alias. Crockford excludes it deliberately (to keep accidental obscenities out of
+// generated ids) and defines no digit it stands for, so an id containing u cannot be
+// repaired without inventing a different value — which would be a new identity, not a fix.
+func Alias(c byte) (byte, bool) {
+	switch c {
+	case 'i', 'l', 'I', 'L':
+		return '1', true
+	case 'o', 'O':
+		return '0', true
+	default:
+		return 0, false
+	}
+}
+
+// Canonicalize rewrites every aliasable character of s and reports whether the result is a
+// valid id. It never invents a value: an id containing u (or anything else with no canonical
+// decode) is returned unchanged with ok=false, because repairing it would mean choosing a
+// different identity rather than spelling the same one correctly.
+func Canonicalize(s string) (string, bool) {
+	if Valid(s) {
+		return s, true
+	}
+	if len(s) != Length {
+		return s, false
+	}
+	out := []byte(s)
+	for i := range out {
+		if strings.IndexByte(alphabet, out[i]) >= 0 {
+			continue
+		}
+		alias, ok := Alias(out[i])
+		if !ok {
+			return s, false
+		}
+		out[i] = alias
+	}
+	return string(out), Valid(string(out))
+}

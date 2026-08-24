@@ -1,6 +1,12 @@
 package store
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/andy-esch/taskflow/internal/domain"
+)
 
 // goodID is a real, valid 12-char id (the carveout task's own id) — Crockford
 // base32, lowercase, no i/l/o/u.
@@ -39,5 +45,43 @@ func TestSplitFlatName(t *testing.T) {
 					tc.stem, gotID, gotSlug, gotOK, tc.wantID, tc.wantSlug, tc.wantOK)
 			}
 		})
+	}
+}
+
+// The three cases must be told apart: a stray belongs in meta/, a mistyped id belongs
+// exactly where it is with one character corrected, and a u cannot be corrected at all.
+// Collapsing them into "has no leading id" was the reported defect.
+func TestEntityNameProblemDistinguishesStrayFromMistypedID(t *testing.T) {
+	reason, stray := entityNameProblem("notes.md")
+	if !errors.Is(stray, errNotEntity) || !strings.Contains(reason, "meta/") {
+		t.Errorf("stray = %v / %q; want the not-an-entity advice", stray, reason)
+	}
+
+	reason, bad := entityNameProblem("6fbj87000lt6-bad-id.md")
+	if !errors.Is(bad, errBadEntityID) {
+		t.Errorf("a mistyped id was classified as %v, not a bad id", bad)
+	}
+	for _, want := range []string{`"l"`, "position 9", "6fbj870001t6-bad-id.md"} {
+		if !strings.Contains(reason, want) {
+			t.Errorf("reason %q does not mention %q", reason, want)
+		}
+	}
+	if strings.Contains(reason, "meta/") {
+		t.Error("a real entity with a mistyped id must not be told to move to meta/")
+	}
+
+	reason, _ = entityNameProblem("6fbj87000ut6-u-id.md")
+	if strings.Contains(reason, "rename to") {
+		t.Errorf("u has no canonical decode, so no rename should be suggested: %q", reason)
+	}
+	if !strings.Contains(reason, "replaced deliberately") {
+		t.Errorf("the u case should say it needs a deliberate replacement: %q", reason)
+	}
+
+	// Both classifications stay ErrValidation so exit-code mapping is unchanged.
+	for _, err := range []error{stray, bad} {
+		if !errors.Is(err, domain.ErrValidation) {
+			t.Errorf("%v no longer classifies as a validation failure", err)
+		}
 	}
 }

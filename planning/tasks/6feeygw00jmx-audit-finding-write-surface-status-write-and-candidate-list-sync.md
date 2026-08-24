@@ -1,6 +1,6 @@
 ---
 schema: 1
-status: ready-to-start
+status: next-up
 epic: 20-cli-ux-and-ergonomics
 description: 'audit finding --status write + audit sync + candidate drift lint — items 3+5 carved from the finding-level read task (grammar transcribed in-repo)'
 effort: Unknown
@@ -9,7 +9,7 @@ priority: medium
 autonomy_level: 3
 tags: [cli, audit, core]
 created: "2026-06-21"
-updated_at: "2026-06-22"
+updated_at: "2026-08-23"
 id: 6feeygw00jmx
 ---
 

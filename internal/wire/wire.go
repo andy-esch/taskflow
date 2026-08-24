@@ -170,10 +170,15 @@ import (
 // point selected for reading, and a combined space-badged in-progress working set. The
 // envelope owns one top-level schema_version; nested summaries reuse the versionless
 // SummaryJSON payload rather than pretending to be independent envelopes.
+// 1.44: `lint --fix` results may carry `skipped`, marking a file the pass deliberately did
+// NOT repair with the reason in `changes` — an invalid id that is still referenced
+// elsewhere, or one containing `u`, which Crockford gives no canonical decode. Additive:
+// absent on every repaired file, so a consumer that ignores it sees the previous shape.
+//
 // 1.43: fresh `init --json` receipts may include `registration`, describing the
 // best-effort machine-local space registration (including preview vs applied and whether
 // the physical checkout was already registered).
-const SchemaVersion = "1.43"
+const SchemaVersion = "1.44"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

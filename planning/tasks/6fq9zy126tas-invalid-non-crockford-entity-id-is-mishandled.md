@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fq9zy126tas
-status: ready-to-start
+status: next-up
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: A non-Crockford id is misreported as 'no leading id', aborts the whole command (exit 11), and lint --fix can't repair it.
 effort: Unknown
@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [id, store]
 created: "2026-07-18"
-updated_at: "2026-08-19"
+updated_at: "2026-08-23"
 ---
 # Invalid (non-Crockford) entity id is mishandled
 
@@ -24,9 +24,17 @@ current code with an `l` in the id.
 
 ## Acceptance criteria
 
-- [ ] Error names the offending char / rule (e.g. `id "…" contains non-Crockford char 'l'`) instead of "has no leading id"
-- [ ] One bad file no longer forces exit 11 for the whole command — skip-with-warning (or gate the abort behind `--strict`) so unrelated queries succeed with a trustworthy exit code
-- [ ] `lint --fix` repairs/re-mints an invalid id, not only a missing one
+- [x] Error names the offending char / rule (e.g. `id "…" contains non-Crockford char 'l'`) instead of "has no leading id"
+- [x] One bad file no longer *hides the rest*: the listing completes best-effort, and the
+      trailing error NAMES the offending files rather than only counting them.
+      **Amended 2026-08-23:** the exit code deliberately stays 11. The original wording
+      ("no longer forces exit 11") was written before the partial-failure convention
+      settled; `status --all` already renders everything and then exits non-zero, and a
+      caller that received an incomplete result has to be able to tell. Exit codes are a
+      documented contract (10/11/13/14) that agents branch on, so the fix is a better
+      message, not a quieter exit. `--strict` was considered and rejected: it would add a
+      global flag and still change the default for existing callers.
+- [x] `lint --fix` repairs/re-mints an invalid id, not only a missing one
 - [ ] Ids are validated at write time so a bad id can't persist
 
 ## Notes

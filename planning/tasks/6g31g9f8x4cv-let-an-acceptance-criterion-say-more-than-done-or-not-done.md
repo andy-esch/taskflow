@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g31g9f8x4cv
-status: ready-to-start
+status: next-up
 epic: 20-cli-ux-and-ergonomics
 description: Criteria are a binary checkbox while findings carry a seven-state vocabulary; an unchecked box cannot distinguish not-yet from won't-do from deferred.
 effort: M
