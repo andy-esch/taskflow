@@ -59,7 +59,7 @@ func TestSchemaVersion_ParsesAndSurvivesEdits(t *testing.T) {
 	if got := readFile(t, path); !strings.Contains(got, "schema: 1") {
 		t.Errorf("SetFields dropped the reserved schema key:\n%s", got)
 	}
-	if _, err := fs.Move("keep", domain.StatusInProgress, bodyNow, false); err != nil {
+	if _, err := fs.Move("keep", domain.StatusInProgress, bodyNow, false, false); err != nil {
 		t.Fatal(err)
 	}
 	got := readFile(t, path)

@@ -234,7 +234,9 @@ func (t *entityTab) matches(word string) bool {
 // (movedMsg → flash + reload) or failure (actionErrMsg → flash, no reload).
 func moveTask(svc *core.Service, id string, tr transition) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.Move(id, domain.Status(tr.to), false); err != nil {
+		// force=false: a TUI completion is held to the same acceptance-criteria gate as
+		// the CLI's, and the refusal surfaces as the action's error flash.
+		if _, err := svc.Move(id, domain.Status(tr.to), false, false); err != nil {
 			return actionErrMsg{slug: id, err: err}
 		}
 		return movedMsg{slug: id, to: tr.to}

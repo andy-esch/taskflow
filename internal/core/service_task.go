@@ -169,12 +169,13 @@ func (s *Service) AppendBody(slug, text string, dryRun bool) (domain.Task, strin
 }
 
 // Move transitions a task to the given status (lifecycle engine behind the
-// explicit verbs). Moving to the current status is an idempotent no-op.
+// explicit verbs). Moving to the current status is an idempotent no-op. force bypasses
+// the acceptance-criteria gate on a completion — see Store.Move.
 // dryRun validates everything and returns the would-be task without writing.
-func (s *Service) Move(slug string, to domain.Status, dryRun bool) (domain.Task, error) {
+func (s *Service) Move(slug string, to domain.Status, dryRun, force bool) (domain.Task, error) {
 	now := s.now()
 	return retryOnConflict(s, dryRun, func() (domain.Task, error) {
-		return s.store.Move(slug, to, now, dryRun)
+		return s.store.Move(slug, to, now, dryRun, force)
 	})
 }
 

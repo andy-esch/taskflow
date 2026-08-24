@@ -231,6 +231,21 @@ func CountAcceptanceCriteria(body string) ACCount {
 	return c
 }
 
+// UnexplainedCriteria returns the criteria that are unmet AND say nothing about why —
+// a bare unticked box. They are the ones that block `task complete`, and the distinction
+// is the whole point of the state vocabulary: a criterion marked `wontfix` or `deferred`
+// has been DECIDED, and a decision should not stand in the way of finishing a task. Only
+// silence should.
+func UnexplainedCriteria(body string) []Criterion {
+	var out []Criterion
+	for _, c := range ListAcceptanceCriteria(body) {
+		if c.State == CriterionUnmet {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // CriterionCount is one state's share of a task's acceptance criteria.
 type CriterionCount struct {
 	State CriterionState

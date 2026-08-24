@@ -25,7 +25,7 @@ func TestFS_Move_RejectsUnreloadableWithoutMoving(t *testing.T) {
 	path, out := testutil.TaskFixture(root, "ready-to-start", "alpha.md", original)
 	testutil.Write(t, path, out)
 
-	_, err := NewFS(root).Move("alpha", domain.StatusInProgress, time.Now(), false)
+	_, err := NewFS(root).Move("alpha", domain.StatusInProgress, time.Now(), false, false)
 	if err == nil {
 		t.Fatal("want an error for a move that wouldn't reload")
 	}
@@ -108,7 +108,7 @@ func TestFS_Move_ConflictsWhenEditedConcurrently(t *testing.T) {
 	}
 	defer func() { testHookBeforeMoveWrite = nil }()
 
-	_, err := fs.Move("alpha", domain.StatusInProgress, time.Now(), false)
+	_, err := fs.Move("alpha", domain.StatusInProgress, time.Now(), false, false)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("want ErrConflict for a concurrently-edited task, got %v", err)
 	}

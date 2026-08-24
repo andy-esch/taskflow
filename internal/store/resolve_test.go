@@ -83,7 +83,7 @@ func TestResolve_FuzzyTiers(t *testing.T) {
 // id-led path and only its frontmatter status changes in place.
 func TestMove_FuzzyKeepsCanonicalSlug(t *testing.T) {
 	fs := fuzzyRepo(t)
-	task, err := fs.Move("backoff", domain.StatusInProgress, time.Now(), false)
+	task, err := fs.Move("backoff", domain.StatusInProgress, time.Now(), false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

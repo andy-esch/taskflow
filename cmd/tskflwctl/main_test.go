@@ -90,6 +90,15 @@ func TestSmoke_LifecycleAndExitCodes(t *testing.T) {
 	if out, code := run(t, root, "task", "start", slug); code != 0 {
 		t.Fatalf("task start: exit %d\n%s", code, out)
 	}
+	// The scaffold's acceptance criterion is unticked and unexplained, so completing is
+	// refused (exit 11) — the task counterpart of `audit close` refusing while findings
+	// are open. Through a real process, so the gate is proven at the exit-code boundary.
+	if out, code := run(t, root, "task", "complete", slug); code != 11 {
+		t.Fatalf("complete with an unexplained criterion should exit 11, got %d\n%s", code, out)
+	}
+	if out, code := run(t, root, "task", "ac", slug, "--check", "1"); code != 0 {
+		t.Fatalf("task ac --check: exit %d\n%s", code, out)
+	}
 	if out, code := run(t, root, "task", "complete", slug); code != 0 {
 		t.Fatalf("task complete: exit %d\n%s", code, out)
 	}

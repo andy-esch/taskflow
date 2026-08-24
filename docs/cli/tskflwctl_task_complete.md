@@ -2,6 +2,15 @@
 
 Move task(s) to completed
 
+### Synopsis
+
+Move task(s) to completed.
+
+Refuses a task whose acceptance criteria are still unmet with no reason given —
+the task counterpart of `audit close` refusing while findings are open. A criterion
+carrying a state (`task ac --defer|--wontfix|--tracked|--na`) has been DECIDED and
+does not block; only a silently unticked box does. --force completes anyway.
+
 ```
 tskflwctl task complete <task>... [flags]
 ```
@@ -16,7 +25,8 @@ tskflwctl task complete <task>... [flags]
 ### Options
 
 ```
-  -h, --help   help for complete
+      --force   complete even with unmet, unexplained acceptance criteria
+  -h, --help    help for complete
 ```
 
 ### Options inherited from parent commands

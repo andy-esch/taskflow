@@ -4,6 +4,7 @@ id: 6fsa47r4f7es
 bucket: open
 area: ai-agent-cli-ergonomics
 date: "2026-07-24"
+updated_at: "2026-08-24"
 ---
 # Audit: AI-agent CLI ergonomics — 2026-07-24
 
@@ -248,7 +249,7 @@ equivalent write surface.
 parser. Do not build a general Markdown editor. The useful abstraction is a small set
 of domain operations over the conventions the tool already owns.
 
-#### M5. `task complete` does not reconcile unfinished acceptance criteria  · **Status:** open
+#### M5. `task complete` does not reconcile unfinished acceptance criteria  · **Status:** fixed 2026-08-24
 
 **File:** internal/cli/moves.go; internal/core/service_task.go | **Component:** workflow integrity
 **Effort:** S · **Urgency:** soon
@@ -265,6 +266,12 @@ emit a distinct validation result; allow an explicit
 Alternatively make this policy configurable per planning repo, but always surface the
 unchecked count in the transition receipt and in lint. Never auto-check criteria merely
 because the status changed.
+
+**Resolution:** task complete now refuses when a criterion is unmet with no
+reason, mirroring MoveAudit's refusal to close an audit with open findings, with
+--force to override. The gate only became tolerable once a criterion could carry
+a state: it blocks silence, not disagreement — a task with three explicitly
+abandoned criteria completes, one with three never looked at does not.
 
 #### M6. Multi-document agent workflows have no preflighted, restartable change set  · **Status:** open
 

@@ -675,13 +675,14 @@ func newTaskMoveCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err // already wraps ErrValidation and lists valid statuses
 			}
-			return runTransition(app, to, args[:len(args)-1])
+			return runTransition(app, to, args[:len(args)-1], false)
 		},
 	}
 }
 
 func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:               use + " <task>...",
 		Short:             short,
 		Example:           "  tskflwctl task " + use + " my-task\n  tskflwctl task " + use + " task-a task-b",
@@ -698,9 +699,20 @@ func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Comm
 				}
 				args = []string{slug}
 			}
-			return runTransition(app, to, args)
+			return runTransition(app, to, args, force)
 		},
 	}
+	// Only `complete` has a gate to override — offering --force on `start` or `ready`
+	// would advertise a check that does not exist there.
+	if to == domain.StatusCompleted {
+		cmd.Long = short + ".\n\n" +
+			"Refuses a task whose acceptance criteria are still unmet with no reason given —\n" +
+			"the task counterpart of `audit close` refusing while findings are open. A criterion\n" +
+			"carrying a state (`task ac --defer|--wontfix|--tracked|--na`) has been DECIDED and\n" +
+			"does not block; only a silently unticked box does. --force completes anyway."
+		cmd.Flags().BoolVar(&force, "force", false, "complete even with unmet, unexplained acceptance criteria")
+	}
+	return cmd
 }
 
 // deprecatedTransitionCmd builds a hidden back-compat alias for a renamed verb:
@@ -715,9 +727,9 @@ func deprecatedTransitionCmd(app *App, oldVerb, newVerb string, to domain.Status
 }
 
 // runTransition moves each task to status `to`, via the shared runMoves report.
-func runTransition(app *App, to domain.Status, slugs []string) error {
+func runTransition(app *App, to domain.Status, slugs []string, force bool) error {
 	return runMoves(app, slugs, string(to),
-		func(slug string) (domain.Task, error) { return app.Svc.Move(slug, to, app.DryRun) },
+		func(slug string) (domain.Task, error) { return app.Svc.Move(slug, to, app.DryRun, force) },
 		func(t domain.Task) string { return t.Slug })
 }
 

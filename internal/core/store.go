@@ -27,7 +27,9 @@ type TaskStore interface {
 	// Mutators take dryRun: true runs EVERY validation (resolve, parse-before-
 	// commit, collision/CAS checks) and returns the would-be result, but stops
 	// short of touching disk — so a dry-run that would fail fails identically.
-	Move(slug string, to domain.Status, now time.Time, dryRun bool) (domain.Task, error)
+	// force skips the acceptance-criteria gate on a move to completed (the task
+	// counterpart of MoveAudit's bucket↔state refusal).
+	Move(slug string, to domain.Status, now time.Time, dryRun, force bool) (domain.Task, error)
 	// Defer moves a task to deferred and, when until is non-empty, records it as
 	// revisit_at ("snooze until") in the SAME atomic write — so a deferred task can
 	// never be left without the snooze date it was deferred with (the lost-second-
