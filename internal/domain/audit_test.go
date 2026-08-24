@@ -28,7 +28,7 @@ func TestParseAuditBucket_InvalidWrapsValidation(t *testing.T) {
 }
 
 // TestAudit_ResolvedAndPercent pins the bar's headline rollup — Resolved is the
-// done (fixed/landed) count, NOT everything-but-open — including the zero-findings
+// done (fixed/tracked) count, NOT everything-but-open — including the zero-findings
 // guard (no divide-by-zero → 0%) and integer truncation.
 func TestAudit_ResolvedAndPercent(t *testing.T) {
 	cases := []struct {
@@ -36,7 +36,7 @@ func TestAudit_ResolvedAndPercent(t *testing.T) {
 		wantResolved, wantPercent int
 	}{
 		{0, 0, 0, 0},   // no findings → 0%, not a panic
-		{4, 3, 3, 75},  // 3 of 4 fixed/landed
+		{4, 3, 3, 75},  // 3 of 4 fixed/tracked
 		{4, 4, 4, 100}, // all done
 		{4, 0, 0, 0},   // none done (open/in-progress/dropped don't count)
 		{3, 2, 2, 66},  // integer truncation (66.6 → 66)

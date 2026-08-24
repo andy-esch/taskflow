@@ -43,7 +43,7 @@ func gradient(pal design.Palette) []color.Color {
 }
 
 // Segments is an audit's finding breakdown for a stacked bar: counts of done
-// (fixed/landed), active (in-progress), and dropped (deferred/superseded/wontfix)
+// (fixed/tracked), active (in-progress), and dropped (deferred/superseded/wontfix)
 // findings out of Total. The remainder (Total − Done − Active − Dropped) — open
 // plus any unrecognized status — is the empty track.
 type Segments struct {
@@ -65,11 +65,15 @@ type band struct {
 // palette's semantic slots + its empty track. The headline % and done/total are
 // rendered separately by callers (the green band's reach == %done).
 func segBands(pal design.Palette) []band {
+	glyph := func(t theme.Token) rune { return []rune(t.Glyph)[0] }
+	tk := func(t theme.Token) band { return band{glyph(t), pal.Of(t.Color).Color()} }
 	return []band{
-		{'█', pal.Of(theme.ColorGreen).Color()},  // done — green
-		{'▓', pal.Of(theme.ColorYellow).Color()}, // active — yellow
-		{'▒', pal.Of(theme.ColorGray).Color()},   // dropped — gray
-		{'░', pal.Track.Color()},                 // open / empty track (glyph distinguishes it from dropped)
+		tk(theme.BandDone()),    // fixed · tracked — green
+		tk(theme.BandActive()),  // in-progress — yellow
+		tk(theme.BandDropped()), // deferred · superseded · wontfix — gray
+		// The open remainder is a track, not a disposition, so it takes the palette's
+		// dimmer empty tone rather than the band's colour; the glyph distinguishes it.
+		{glyph(theme.BandOpen()), pal.Track.Color()},
 	}
 }
 

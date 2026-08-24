@@ -120,9 +120,15 @@ func symbolsFor(kind entityKind, s *styles) (helpSection, bool) {
 		e = append(e,
 			tok(theme.FindingStatus("open"), "finding: open"),
 			tok(theme.FindingStatus("in-progress"), "finding: in-progress"),
-			tok(theme.FindingStatus("fixed"), "finding: fixed / landed"),
+			tok(theme.FindingStatus("fixed"), "finding: fixed"),
+			tok(theme.FindingStatus("tracked"), "finding: tracked (handed to a task)"),
 			tok(theme.FindingStatus("deferred"), "finding: deferred / superseded"),
 			tok(theme.FindingStatus("wontfix"), "finding: wontfix"),
+			// The bar's bands, which nothing else on screen explains.
+			tok(theme.BandDone(), "bar: settled here — fixed · tracked"),
+			tok(theme.BandActive(), "bar: in-progress"),
+			tok(theme.BandDropped(), "bar: settled by dropping — deferred · superseded · wontfix"),
+			tok(theme.BandOpen(), "bar: still open"),
 		)
 	default: // dashboard — a cross-entity screen, so the essentials of each widget
 		e = append(e,
