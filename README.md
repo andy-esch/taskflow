@@ -127,8 +127,10 @@ tskflwctl task edit <slug>                          # open the whole file in $ED
 echo "## Findings" | tskflwctl task append <slug> --body-file -  # add a section (agent; atomic)
 tskflwctl task set <slug> --body-file notes.md      # replace the body (agent; its own call)
 tskflwctl task ac <slug>                            # numbered acceptance criteria; --check/--uncheck <n> to flip one
+tskflwctl task ac <slug> --tracked 3 --reason "carried by <id>"  # …or --defer/--wontfix/--na: why it is unmet, not just that it is
 tskflwctl task start|next|ready|complete|defer|deprecate <slug>...   # defer takes --until <date>
 tskflwctl task defer <slug> --until 2026-09-01      # snooze (revisit_at); on a TTY, prompts for the date
+tskflwctl audit finding <slug> <code> --status "tracked by <id>" --note "how"  # status + resolution, one atomic write
 tskflwctl audit close|reopen|defer <slug>...
 tskflwctl research set <slug> --description "…" --tags a,b   # settable fields only; `schema research` lists them
 tskflwctl research edit|append <slug>                        # same human/agent pair as task edit|append

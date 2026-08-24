@@ -16,15 +16,21 @@ tskflwctl task ac <task> [flags]
   tskflwctl task ac add-retry-backoff             # numbered list
   tskflwctl task ac add-retry-backoff --check 3   # tick criterion 3
   tskflwctl task ac add-retry-backoff --uncheck 3
+  tskflwctl task ac add-retry-backoff --defer 2 --reason "waiting on the schema ADR"
 ```
 
 ### Options
 
 ```
-      --check int     check the criterion at this 1-based index
-  -h, --help          help for ac
-      --list          list the acceptance criteria (the default)
-      --uncheck int   uncheck the criterion at this 1-based index
+      --check int       check the criterion at this 1-based index
+      --defer int       mark the criterion at this 1-based index deferred (needs --reason)
+  -h, --help            help for ac
+      --list            list the acceptance criteria (the default)
+      --na int          mark the criterion at this 1-based index n/a — no longer applies (needs --reason)
+      --reason string   why the criterion is deferred/wontfix/tracked/n-a — required for those, rejected otherwise
+      --tracked int     mark the criterion at this 1-based index tracked — handed to another task (needs --reason naming it)
+      --uncheck int     uncheck the criterion at this 1-based index
+      --wontfix int     mark the criterion at this 1-based index wontfix (needs --reason)
 ```
 
 ### Options inherited from parent commands
