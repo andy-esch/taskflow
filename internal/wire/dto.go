@@ -54,6 +54,10 @@ func ToTaskJSON(t domain.Task) TaskJSON {
 type ACJSON struct {
 	Checked int `json:"checked" jsonschema:"description=acceptance criteria currently checked (- [x])"`
 	Total   int `json:"total" jsonschema:"description=total acceptance criteria in the task's acceptance-criteria section"`
+	// Explained is how many UNMET criteria state why — any of the non-binary criterion
+	// states (see domain.CriterionSuffixStates). Zero for
+	// every task written before the criterion vocabulary existed. Schema 1.45.
+	Explained int `json:"explained,omitempty"`
 }
 
 // TaskInfoJSON is the token-cheap metadata read for a task (`task info`): where
@@ -73,7 +77,7 @@ type TaskInfoJSON struct {
 func ToTaskInfoJSON(t domain.Task, ac domain.ACCount, path string) TaskInfoJSON {
 	return TaskInfoJSON{
 		ID: t.ID, Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
-		Path: path, AC: ACJSON{Checked: ac.Checked, Total: ac.Total},
+		Path: path, AC: ACJSON{Checked: ac.Checked, Total: ac.Total, Explained: ac.Explained},
 	}
 }
 
@@ -83,6 +87,14 @@ type CriterionJSON struct {
 	Index   int    `json:"index" jsonschema:"description=1-based position of the criterion in the acceptance section"`
 	Checked bool   `json:"checked" jsonschema:"description=whether the checkbox is checked (- [x])"`
 	Text    string `json:"text" jsonschema:"description=the criterion text — the first line after the checkbox"`
+	// State and Reason carry the disposition beyond the checkbox. Omitted when the
+	// criterion is a plain met/not-met, so a body written before the vocabulary existed
+	// serialises exactly as it did. Without these an agent reading `task ac --list --json`
+	// could see an unchecked box but not whether it was still to do, deferred, abandoned,
+	// or no longer applicable — the ambiguity the vocabulary exists to remove, reintroduced
+	// at the machine boundary. Schema 1.46.
+	State  string `json:"state,omitempty" jsonschema:"description=disposition beyond the checkbox — one of criterion_states in the schema contract; absent for a plain met/not-met criterion"`
+	Reason string `json:"reason,omitempty" jsonschema:"description=why the criterion is deferred/wontfix/n-a — required for those states"`
 }
 
 // ToCriteriaJSON maps the domain criteria to their wire DTOs (never nil — an empty
@@ -90,7 +102,11 @@ type CriterionJSON struct {
 func ToCriteriaJSON(cs []domain.Criterion) []CriterionJSON {
 	out := make([]CriterionJSON, len(cs))
 	for i, c := range cs {
-		out[i] = CriterionJSON{Index: c.Index, Checked: c.Checked, Text: c.Text}
+		j := CriterionJSON{Index: c.Index, Checked: c.Checked, Text: c.Text}
+		if c.State.NeedsReason() {
+			j.State, j.Reason = string(c.State), c.Reason
+		}
+		out[i] = j
 	}
 	return out
 }
@@ -101,7 +117,7 @@ type FindingsTallyJSON struct {
 	Total      int `json:"total" jsonschema:"description=total findings parsed from the audit body"`
 	Open       int `json:"open" jsonschema:"description=findings whose status is open"`
 	InProgress int `json:"in_progress" jsonschema:"description=findings whose status is in-progress"`
-	Done       int `json:"done" jsonschema:"description=findings whose status is fixed or landed"`
+	Done       int `json:"done" jsonschema:"description=findings whose status is fixed or tracked"`
 	Dropped    int `json:"dropped" jsonschema:"description=findings whose status is deferred, superseded, or wontfix"`
 }
 
@@ -170,7 +186,7 @@ type AuditJSON struct {
 	// The progress bar's disposition bands. open + in_progress + done + dropped ≤
 	// findings (an unrecognized/missing status counts toward none).
 	InProgressFindings int `json:"in_progress_findings" jsonschema:"description=findings whose status is in-progress"`
-	DoneFindings       int `json:"done_findings" jsonschema:"description=findings whose status is fixed or landed (the bar's done band)"`
+	DoneFindings       int `json:"done_findings" jsonschema:"description=findings whose status is fixed or tracked (the bar's done band)"`
 	DroppedFindings    int `json:"dropped_findings" jsonschema:"description=findings whose status is deferred, superseded, or wontfix"`
 	// ReadyToClose is true for an OPEN audit whose findings are all resolved/dropped
 	// (none open or in-progress) — a "ready to close" call-to-action.
@@ -211,15 +227,17 @@ func ToAuditJSON(a domain.Audit) AuditJSON {
 
 // FindingJSON is the wire shape of one audit finding.
 type FindingJSON struct {
-	Audit     string `json:"audit" jsonschema:"description=slug of the audit this finding belongs to"`
-	Bucket    string `json:"bucket" jsonschema:"description=the audit's bucket — open | closed | deferred"`
-	Code      string `json:"code" jsonschema:"description=finding code within the audit (H1/M2/S3…)"`
-	Title     string `json:"title" jsonschema:"description=finding title"`
-	Status    string `json:"status" jsonschema:"description=open | in-progress | fixed | landed | deferred | superseded | wontfix"`
-	File      string `json:"file,omitempty" jsonschema:"description=file:line the finding refers to"`
-	Component string `json:"component,omitempty" jsonschema:"description=component/subsystem"`
-	Effort    string `json:"effort,omitempty" jsonschema:"description=XS | S | M | L"`
-	Urgency   string `json:"urgency,omitempty" jsonschema:"description=acute | soon | eventually"`
+	Audit            string `json:"audit" jsonschema:"description=slug of the audit this finding belongs to"`
+	Bucket           string `json:"bucket" jsonschema:"description=the audit's bucket — open | closed | deferred"`
+	Code             string `json:"code" jsonschema:"description=finding code within the audit (H1/M2/S3…)"`
+	Title            string `json:"title" jsonschema:"description=finding title"`
+	Status           string `json:"status" jsonschema:"description=open | in-progress | fixed | tracked | deferred | superseded | wontfix"`
+	File             string `json:"file,omitempty" jsonschema:"description=file:line the finding refers to"`
+	Component        string `json:"component,omitempty" jsonschema:"description=component/subsystem"`
+	Effort           string `json:"effort,omitempty" jsonschema:"description=XS | S | M | L"`
+	Urgency          string `json:"urgency,omitempty" jsonschema:"description=acute | soon | eventually"`
+	StatusDecoration string `json:"status_decoration,omitempty" jsonschema:"description=everything after the status word — the date, PR link, by <task-id> destination, or reason"`
+	Note             string `json:"note,omitempty" jsonschema:"description=the finding's resolution paragraph — how it was resolved; absent when it carries none"`
 }
 
 // ToFindingJSON maps a core audit finding to its wire DTO.
@@ -227,6 +245,7 @@ func ToFindingJSON(f core.AuditFinding) FindingJSON {
 	return FindingJSON{
 		Audit: f.Audit, Bucket: f.Bucket, Code: f.Code, Title: f.Title, Status: f.Status,
 		File: f.File, Component: f.Component, Effort: f.Effort, Urgency: f.Urgency,
+		Note: f.Note, StatusDecoration: f.StatusDecoration,
 	}
 }
 

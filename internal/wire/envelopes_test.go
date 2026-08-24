@@ -168,6 +168,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				EpicStatuses:    []string{"active"},
 				AuditBuckets:    []string{"open"},
 				FindingStatuses: []string{"open", "fixed"},
+				CriterionStates: []string{"deferred", "wontfix"},
 				TaskFields:      []SchemaField{{Name: "tier", Type: "int"}},
 				EpicFields:      []string{"status", "description"},
 				ResearchFields:  []SchemaField{{Name: "created", Type: "date"}},

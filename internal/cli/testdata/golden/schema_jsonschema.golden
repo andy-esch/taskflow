@@ -12,6 +12,10 @@
         "total": {
           "type": "integer",
           "description": "total acceptance criteria in the task's acceptance-criteria section"
+        },
+        "explained": {
+          "type": "integer",
+          "description": "Explained is how many UNMET criteria state why — any of the non-binary criterion\nstates (see domain.CriterionSuffixStates). Zero for\nevery task written before the criterion vocabulary existed. Schema 1.45."
         }
       },
       "additionalProperties": false,
@@ -136,7 +140,7 @@
         },
         "done_findings": {
           "type": "integer",
-          "description": "findings whose status is fixed or landed (the bar's done band)"
+          "description": "findings whose status is fixed or tracked (the bar's done band)"
         },
         "dropped_findings": {
           "type": "integer",
@@ -622,6 +626,14 @@
         "text": {
           "type": "string",
           "description": "the criterion text — the first line after the checkbox"
+        },
+        "state": {
+          "type": "string",
+          "description": "disposition beyond the checkbox — one of criterion_states in the schema contract; absent for a plain met/not-met criterion"
+        },
+        "reason": {
+          "type": "string",
+          "description": "why the criterion is deferred/wontfix/n-a — required for those states"
         }
       },
       "additionalProperties": false,
@@ -1016,7 +1028,7 @@
         },
         "status": {
           "type": "string",
-          "description": "open | in-progress | fixed | landed | deferred | superseded | wontfix"
+          "description": "open | in-progress | fixed | tracked | deferred | superseded | wontfix"
         },
         "file": {
           "type": "string",
@@ -1033,6 +1045,14 @@
         "urgency": {
           "type": "string",
           "description": "acute | soon | eventually"
+        },
+        "status_decoration": {
+          "type": "string",
+          "description": "everything after the status word — the date"
+        },
+        "note": {
+          "type": "string",
+          "description": "the finding's resolution paragraph — how it was resolved; absent when it carries none"
         }
       },
       "additionalProperties": false,
@@ -1128,7 +1148,7 @@
         },
         "done": {
           "type": "integer",
-          "description": "findings whose status is fixed or landed"
+          "description": "findings whose status is fixed or tracked"
         },
         "dropped": {
           "type": "integer",
@@ -1574,6 +1594,13 @@
           },
           "type": "array"
         },
+        "criterion_states": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "CriterionStates are the non-binary acceptance-criterion states — the words legal as a\n`· **\u003cstate\u003e:** \u003creason\u003e` suffix beside a checkbox. Published for the same reason\nfinding_statuses is: `CriterionJSON.state` has carried one of these since 1.46, and\nwithout the set an agent had to trigger an error and parse prose to learn it."
+        },
         "task_fields": {
           "items": {
             "$ref": "#/$defs/SchemaField"
@@ -1614,6 +1641,7 @@
         "epic_statuses",
         "audit_buckets",
         "finding_statuses",
+        "criterion_states",
         "task_fields",
         "epic_fields",
         "research_fields",
@@ -2615,6 +2643,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.44)",
+  "title": "tskflwctl --json output (schema_version 1.48)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }
