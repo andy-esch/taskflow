@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g31g9f8x4cv
-status: next-up
+status: in-progress
 epic: 20-cli-ux-and-ergonomics
 description: Criteria are a binary checkbox while findings carry a seven-state vocabulary; an unchecked box cannot distinguish not-yet from won't-do from deferred.
 effort: M
@@ -11,6 +11,7 @@ autonomy_level: 3
 tags: [cli, domain, planning-model]
 created: "2026-08-23"
 updated_at: "2026-08-24"
+started_at: "2026-08-24"
 ---
 # Let an acceptance criterion say more than done or not-done
 
@@ -116,9 +117,10 @@ the surface that shows unmet criteria is the surface that would explain a refusa
 
 - [x] The state vocabulary is defined once in `domain` and shared with finding status —
   either the same set or a declared subset — with a test that fails if the two drift apart.
-- [ ] Criterion states reuse the finding glyph/colour vocabulary rather than introducing a · **deferred:** no glyph vocabulary rendered yet; falls out of the TUI roll-up in criterion 9
-  parallel one.
-- [ ] A task's acceptance-criteria roll-up is visible near the top of its TUI detail view, · **deferred:** TUI detail-header roll-up not built yet; the CLI tally landed first
+- [ ] Criterion states reuse the finding glyph/colour vocabulary rather than introducing a
+  parallel one. · **deferred:** no glyph vocabulary rendered yet; falls out of the TUI roll-up in criterion 9
+- [ ] A task's acceptance-criteria roll-up is visible near the top of its TUI detail view,
+  not only by scrolling into the body. · **deferred:** TUI detail-header roll-up not built yet; the CLI tally landed first
 - [ ] A decision is recorded on whether a `tracked` CRITERION must name its destination the
       way a `tracked` FINDING does. `SetFindingStatus` refuses a bare `tracked` and lint
       flags one, but `task ac --tracked <n> --reason "just because"` is accepted — the same
@@ -128,7 +130,6 @@ the surface that shows unmet criteria is the surface that would explain a refusa
       vocabulary whose guarantees differ per entity has already begun to drift. Either
       require an id-shaped token in the reason, or write down why a criterion's destination
       is softer. Raised as M3 of `2026-08-24-finding-note-and-vocabulary-selfreview`.
-  not only by scrolling into the body.
 
 ## Decisions, 2026-08-24 — settled before implementation
 

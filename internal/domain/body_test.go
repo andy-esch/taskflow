@@ -201,11 +201,15 @@ func TestSetAcceptanceCriterion_NoSection(t *testing.T) {
 // A multi-line criterion (a checkbox with an indented continuation line — the shape
 // real tasks use) is ONE criterion: the continuation isn't a separate checkbox, and a
 // flip touches only the checkbox line, leaving the continuation intact.
+//
+// Its Text is the WHOLE criterion. This previously asserted the truncated first line,
+// which is how `task ac --list`, `task show`, and the JSON all came to show
+// "…rather than introducing a" and silently drop the rest of the sentence.
 func TestSetAcceptanceCriterion_MultiLine(t *testing.T) {
 	body := "## Acceptance criteria\n\n- [ ] first criterion spans\n      a continuation line\n- [x] second is done\n"
 	cs := ListAcceptanceCriteria(body)
-	if len(cs) != 2 || cs[0].Text != "first criterion spans" {
-		t.Fatalf("multi-line criterion should count once: %+v", cs)
+	if len(cs) != 2 || cs[0].Text != "first criterion spans a continuation line" {
+		t.Fatalf("multi-line criterion should count once and read whole: %+v", cs)
 	}
 	out, err := SetAcceptanceCriterion(body, 1, true)
 	if err != nil {
@@ -432,5 +436,85 @@ func TestCriterionSuffixIsTrailingAndSingleLine(t *testing.T) {
 	// A multi-line reason would break out of the list item.
 	if _, err := SetCriterionState(body, 1, CriterionDeferred, "why\n- [ ] injected"); err == nil {
 		t.Error("a newline in a reason was accepted")
+	}
+}
+
+// A wrapped criterion's state suffix belongs at the END of the criterion, not the end of
+// its marker line. Appending it to the first line splits the sentence and leaves its tail
+// dangling beneath the reason:
+//
+//   - [ ] Criterion states reuse the finding glyph vocabulary rather than introducing a · **deferred:** not yet
+//     parallel one.
+//
+// which is what this repo's own planning file looked like until the scanner learned that
+// criteria wrap.
+func TestSetCriterionState_WrappedCriterion(t *testing.T) {
+	const body = "## Acceptance criteria\n\n" +
+		"- [ ] Criterion states reuse the finding glyph vocabulary rather than introducing a\n" +
+		"  parallel one.\n" +
+		"- [ ] A short one.\n"
+	const whole = "Criterion states reuse the finding glyph vocabulary rather than introducing a parallel one."
+
+	deferred, err := SetCriterionState(body, 1, CriterionDeferred, "not yet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(deferred, "  parallel one. · **deferred:** not yet\n") {
+		t.Errorf("suffix must land at the end of the criterion, indentation intact:\n%s", deferred)
+	}
+	c := ListAcceptanceCriteria(deferred)[0]
+	if c.Text != whole || c.State != CriterionDeferred || c.Reason != "not yet" {
+		t.Errorf("round-trip: text=%q state=%q reason=%q", c.Text, c.State, c.Reason)
+	}
+
+	// Re-setting REPLACES the suffix wherever it sits, and must not strip the
+	// continuation's indent — losing it would make the line stop being a continuation, so
+	// the next write would leave its suffix stranded and `met` would not clear it.
+	wont, err := SetCriterionState(deferred, 1, CriterionWontFix, "changed my mind")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(wont, "· **"); n != 1 {
+		t.Errorf("want exactly one suffix after re-setting, got %d:\n%s", n, wont)
+	}
+	if !strings.Contains(wont, "  parallel one. · **wontfix:** changed my mind\n") {
+		t.Errorf("re-set lost the continuation's indentation:\n%s", wont)
+	}
+
+	// met clears the suffix from wherever it is and ticks the box — the whole criterion
+	// returns to its original text.
+	met, err := SetCriterionState(wont, 1, CriterionMet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(met, "· **") {
+		t.Errorf("met must drop the suffix:\n%s", met)
+	}
+	if met != strings.Replace(body, "- [ ] Criterion", "- [x] Criterion", 1) {
+		t.Errorf("met should restore the criterion's text exactly:\n%s", met)
+	}
+}
+
+// The continuation rule stops where a markdown reader stops: a blank line, a new list
+// item, a heading, or a fence. Without those bounds one criterion would swallow the rest
+// of the section.
+func TestListAcceptanceCriteria_ContinuationBounds(t *testing.T) {
+	body := "## Acceptance criteria\n\n" +
+		"- [ ] wraps\n  onto here\n\n" + // blank line ends it
+		"  orphaned prose that is not part of it\n" +
+		"- [ ] next one\n" +
+		"  - a nested bullet is a sub-list, not more sentence\n" +
+		"- [ ] third\n" +
+		"## Next section\n" +
+		"  not a criterion either\n"
+	cs := ListAcceptanceCriteria(body)
+	want := []string{"wraps onto here", "next one", "third"}
+	if len(cs) != len(want) {
+		t.Fatalf("got %d criteria, want %d: %+v", len(cs), len(want), cs)
+	}
+	for i, w := range want {
+		if cs[i].Text != w {
+			t.Errorf("criterion %d = %q, want %q", i+1, cs[i].Text, w)
+		}
 	}
 }
