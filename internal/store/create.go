@@ -10,6 +10,7 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/id"
 )
 
 // fmField is one frontmatter key/value, written in declared order for new files.
@@ -87,12 +88,30 @@ func taskFields(t domain.Task) []fmField {
 // CreateTask writes a new task file at tasks/<id>-<slug>.md (flat, id-led per
 // ADR-0003 §4). It refuses to clobber an existing file; the slug, id, and status
 // are taken from t.
+// validEntityID rejects an id that cannot legally appear in a flat filename. The creates
+// build `<id>-<slug>.md` directly from it, so an illegal id would produce a file the
+// scanner refuses to parse — caught here rather than discovered by the next `lint`.
+func validEntityID(entityID string) error {
+	if id.Valid(entityID) {
+		return nil
+	}
+	if c, pos, bad := id.InvalidChar(entityID); bad {
+		return fmt.Errorf("%w: id %q contains %q at position %d, which Crockford base32 excludes (no i, l, o, u)",
+			domain.ErrValidation, entityID, string(c), pos)
+	}
+	return fmt.Errorf("%w: id %q is not a valid id (%d lowercase Crockford base32 characters)",
+		domain.ErrValidation, entityID, id.Length)
+}
+
 func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error) {
 	if t.Slug == "" {
 		return domain.Task{}, fmt.Errorf("%w: empty task slug", domain.ErrValidation)
 	}
 	if t.ID == "" {
 		return domain.Task{}, fmt.Errorf("%w: task has no id", domain.ErrValidation)
+	}
+	if err := validEntityID(t.ID); err != nil {
+		return domain.Task{}, err
 	}
 	// The id makes the flat filename unique, so writeNewFile's O_EXCL is the whole
 	// collision guard — no cross-dir slug scan. A duplicate slug (distinct id) is
@@ -129,6 +148,9 @@ func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit
 	}
 	if a.ID == "" {
 		return domain.Audit{}, fmt.Errorf("%w: audit has no id", domain.ErrValidation)
+	}
+	if err := validEntityID(a.ID); err != nil {
+		return domain.Audit{}, err
 	}
 	// The id makes the flat filename unique, so writeNewFile's O_EXCL is the whole
 	// collision guard — a duplicate slug (distinct id) is allowed, resolved by id.
@@ -168,6 +190,9 @@ func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (domain
 	}
 	if r.ID == "" {
 		return domain.Research{}, fmt.Errorf("%w: research doc has no id", domain.ErrValidation)
+	}
+	if err := validEntityID(r.ID); err != nil {
+		return domain.Research{}, err
 	}
 	// O_EXCL alone is NOT the whole collision guard here, contrary to what the task and
 	// audit create paths can assume. Research ids are minted from a DAY (ADR-0003 §3), so

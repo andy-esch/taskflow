@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/andy-esch/taskflow/internal/id"
+
 	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -83,11 +85,42 @@ func detectLineEnding(content []byte) string {
 	return "\n"
 }
 
+// validateIDUpdate rejects an `id` write whose value is not a legal Crockford id. It
+// deliberately checks the FORMAT only: writing a valid id that disagrees with the filename
+// is a different problem, already reported by lint as drift with a rename remedy, and
+// forbidding it here would break the fix pass that repairs exactly that.
+func validateIDUpdate(updates map[string]any) error {
+	v, ok := updates["id"]
+	if !ok {
+		return nil
+	}
+	s, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("%w: id must be a string, got %T", domain.ErrValidation, v)
+	}
+	if id.Valid(s) {
+		return nil
+	}
+	if c, pos, bad := id.InvalidChar(s); bad {
+		return fmt.Errorf("%w: id %q contains %q at position %d, which Crockford base32 excludes (no i, l, o, u)",
+			domain.ErrValidation, s, string(c), pos)
+	}
+	return fmt.Errorf("%w: id %q is not a valid id (%d lowercase Crockford base32 characters)",
+		domain.ErrValidation, s, id.Length)
+}
+
 // updateFrontmatter applies key=value updates to a file's frontmatter, then
 // reassembles the file. It edits a yaml.Node surgically, so unknown/custom
 // fields, comments, and key order survive; the body is preserved verbatim.
 // Values may be string, int, or []string.
 func updateFrontmatter(content []byte, updates map[string]any) ([]byte, error) {
+	// The id is the canonical key the filename encodes and resolveID/CAS match on, so an
+	// illegal one must never reach disk through ANY writer — this is the single choke point
+	// every field write passes through, including `task set --force`, which otherwise
+	// bypasses the known-field registry entirely and was observed persisting one.
+	if err := validateIDUpdate(updates); err != nil {
+		return nil, err
+	}
 	fm, body, err := splitFrontmatterStrict(content)
 	if err != nil {
 		return nil, err
