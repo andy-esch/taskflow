@@ -397,11 +397,11 @@ type taskDetail struct {
 func (d taskDetail) Title() string                { return d.t.Slug }
 func (d taskDetail) Path() string                 { return d.t.Path }
 func (d taskDetail) rawBody() string              { return d.body }
-func (d taskDetail) meta(w int, s *styles) string { return renderTaskMeta(d.t, w, s) }
+func (d taskDetail) meta(w int, s *styles) string { return renderTaskMeta(d.t, d.body, w, s) }
 
 // renderTaskMeta formats a task's frontmatter field block (no body), wrapped to
 // width. The body is rendered separately by the pane (raw or glamour).
-func renderTaskMeta(t domain.Task, width int, s *styles) string {
+func renderTaskMeta(t domain.Task, body string, width int, s *styles) string {
 	var b strings.Builder
 	detailField(&b, "status", s.statusText(t.Status), s)
 	detailField(&b, "epic", t.Epic, s)
@@ -415,7 +415,45 @@ func renderTaskMeta(t domain.Task, width int, s *styles) string {
 	if t.Updated != "" {
 		detailField(&b, "updated", fmt.Sprintf("%s (%s)", t.Updated, theme.RelativeDate(t.Updated)), s)
 	}
+	if roll := criterionRollup(body, s); roll != "" {
+		detailField(&b, "acceptance", roll, s)
+	}
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
+}
+
+// criterionRollup is the acceptance-criteria summary in the detail HEADER, so a criterion
+// that says `deferred` is visible without scrolling into the body. Once a criterion can
+// carry a decision, that decision belongs where decisions are read.
+//
+// Shaped after the audit finding bar deliberately — same renderer, same bands: met is the
+// done band, everything settled-but-not-met is the dropped band, and still-unmet criteria
+// are the empty track. Criteria have no in-progress state, so the active band is always
+// zero. The glyph tally beside it uses theme.CriterionState, which delegates the shared
+// words to the finding glyphs, so `◌ deferred` is the same mark in both places.
+//
+// Empty when the task has no acceptance criteria, which is most tasks.
+func criterionRollup(body string, s *styles) string {
+	counts := domain.TallyCriteria(body)
+	if len(counts) == 0 {
+		return ""
+	}
+	met, settled, total := 0, 0, 0
+	var marks []string
+	for _, c := range counts {
+		total += c.N
+		switch {
+		case c.State.Met():
+			met += c.N
+		case c.State != domain.CriterionUnmet:
+			settled += c.N
+		}
+		tok := theme.CriterionState(string(c.State))
+		marks = append(marks, fmt.Sprintf("%s %d", s.fg(tok.Color, tok.Glyph), c.N))
+	}
+	return fmt.Sprintf("%s  %s  %s",
+		s.segBar(met, 0, settled, total, 12),
+		theme.Counts(met, total),
+		strings.Join(marks, s.dim(" · ")))
 }
 
 // --- epic detail ---

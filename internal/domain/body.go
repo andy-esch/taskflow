@@ -231,6 +231,30 @@ func CountAcceptanceCriteria(body string) ACCount {
 	return c
 }
 
+// CriterionCount is one state's share of a task's acceptance criteria.
+type CriterionCount struct {
+	State CriterionState
+	N     int
+}
+
+// TallyCriteria counts a body's acceptance criteria by state, in the vocabulary's own
+// order, omitting states with no members. It is the roll-up's source: a task with a
+// criterion that is deferred rather than merely unticked has made a DECISION, and a bare
+// "3/8" cannot say so — it reads as five things still to do.
+func TallyCriteria(body string) []CriterionCount {
+	byState := map[CriterionState]int{}
+	for _, c := range ListAcceptanceCriteria(body) {
+		byState[c.State]++
+	}
+	out := make([]CriterionCount, 0, len(byState))
+	for _, st := range CriterionStates() {
+		if n := byState[st]; n > 0 {
+			out = append(out, CriterionCount{State: st, N: n})
+		}
+	}
+	return out
+}
+
 // ListAcceptanceCriteria returns the acceptance criteria in body order, 1-based —
 // the `task ac --list` view an agent then flips by index.
 func ListAcceptanceCriteria(body string) []Criterion {

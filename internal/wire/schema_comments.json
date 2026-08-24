@@ -17,6 +17,7 @@
   "github.com/andy-esch/taskflow/internal/domain.Criterion.Reason": "Reason is the explanation carried by a non-binary state, required for those and\nempty otherwise.",
   "github.com/andy-esch/taskflow/internal/domain.Criterion.State": "State is the criterion's disposition. The bracket supplies met/not-met; a\n`· **deferred:** why` suffix refines the not-met case. Every criterion written before\nthis vocabulary existed parses exactly as it always did, which is why there is\nnothing to migrate.",
   "github.com/andy-esch/taskflow/internal/domain.Criterion.Suffix": "Suffix is the state as the author WROTE it, empty when none was written. State is the\nresolved disposition; keeping both lets lint quote what was typed when the two\ndisagree — a checked criterion that also claims to be deferred resolves to met, and a\nmessage naming \"met\" would tell the author nothing about their own edit.",
+  "github.com/andy-esch/taskflow/internal/domain.CriterionCount": "CriterionCount is one state's share of a task's acceptance criteria.",
   "github.com/andy-esch/taskflow/internal/domain.CriterionState": "CriterionState is an acceptance criterion's disposition.",
   "github.com/andy-esch/taskflow/internal/domain.Descriptor": "Descriptor is the per-entity metadata the tool would otherwise hand-enumerate in a `switch kind` at every layer.",
   "github.com/andy-esch/taskflow/internal/domain.Descriptor.AuthoringFields": "frontmatter a drafter fills in (not tool-managed stamps)",

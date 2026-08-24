@@ -117,10 +117,10 @@ the surface that shows unmet criteria is the surface that would explain a refusa
 
 - [x] The state vocabulary is defined once in `domain` and shared with finding status —
   either the same set or a declared subset — with a test that fails if the two drift apart.
-- [ ] Criterion states reuse the finding glyph/colour vocabulary rather than introducing a
-  parallel one. · **deferred:** no glyph vocabulary rendered yet; falls out of the TUI roll-up in criterion 9
-- [ ] A task's acceptance-criteria roll-up is visible near the top of its TUI detail view,
-  not only by scrolling into the body. · **deferred:** TUI detail-header roll-up not built yet; the CLI tally landed first
+- [x] Criterion states reuse the finding glyph/colour vocabulary rather than introducing a
+  parallel one.
+- [x] A task's acceptance-criteria roll-up is visible near the top of its TUI detail view,
+  not only by scrolling into the body.
 - [ ] A decision is recorded on whether a `tracked` CRITERION must name its destination the
       way a `tracked` FINDING does. `SetFindingStatus` refuses a bare `tracked` and lint
       flags one, but `task ac --tracked <n> --reason "just because"` is accepted — the same

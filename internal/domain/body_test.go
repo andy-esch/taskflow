@@ -518,3 +518,37 @@ func TestListAcceptanceCriteria_ContinuationBounds(t *testing.T) {
 		}
 	}
 }
+
+// The roll-up's source. A bare "3/8" reads as five things still to do; the tally is what
+// lets a surface say that three of those five were DECIDED rather than forgotten.
+func TestTallyCriteria(t *testing.T) {
+	body := "## Acceptance criteria\n\n" +
+		"- [x] done one\n" +
+		"- [x] done two\n" +
+		"- [ ] still open\n" +
+		"- [ ] parked · **deferred:** waiting on the ADR\n" +
+		"- [ ] abandoned · **wontfix:** superseded\n" +
+		"- [ ] moved · **tracked:** carried by 6g3ag8py12y9\n" +
+		"- [ ] moot · **n/a:** the tile grid was dropped\n"
+	got := TallyCriteria(body)
+	want := []CriterionCount{
+		{CriterionMet, 2}, {CriterionUnmet, 1}, {CriterionDeferred, 1},
+		{CriterionWontFix, 1}, {CriterionTracked, 1}, {CriterionNA, 1},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("position %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+	// States with no members are omitted rather than rendered as zeroes.
+	if n := len(TallyCriteria("## Acceptance criteria\n\n- [x] only one\n")); n != 1 {
+		t.Errorf("a single-state body should tally one entry, got %d", n)
+	}
+	// No section, no tally — which is most tasks.
+	if n := len(TallyCriteria("# Title\n\nprose\n")); n != 0 {
+		t.Errorf("a body with no criteria should tally nothing, got %d", n)
+	}
+}
