@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [cli, domain, planning-model]
 created: "2026-08-23"
-updated_at: "2026-08-23"
+updated_at: "2026-08-24"
 ---
 # Let an acceptance criterion say more than done or not-done
 
@@ -64,17 +64,17 @@ Design-first; do not start implementing until these are answered.
 
 ## Acceptance criteria
 
-- [ ] The vocabulary and its markdown representation are decided and written down before
+- [x] The vocabulary and its markdown representation are decided and written down before
   any code, with the rejected alternatives recorded so they are not relitigated.
-- [ ] `domain` models a criterion's state as that vocabulary rather than a bool, and plain
+- [x] `domain` models a criterion's state as that vocabulary rather than a bool, and plain
   `- [ ]` / `- [x]` continue to parse to the obvious members.
-- [ ] `task ac` can set any state, and requires whatever justification the design decides
+- [x] `task ac` can set any state, and requires whatever justification the design decides
   is mandatory.
-- [ ] `lint` validates the vocabulary the way it validates finding status, including inside
+- [x] `lint` validates the vocabulary the way it validates finding status, including inside
   fenced blocks being ignored exactly as today.
-- [ ] `ACCount` and every surface that renders a tally (`task show`, `status`, the TUI) keep
+- [x] `ACCount` and every surface that renders a tally (`task show`, `status`, the TUI) keep
   reporting something honest when criteria are no longer two-valued.
-- [ ] A decision is recorded on whether `task complete` gates on unmet criteria, either way.
+- [ ] A decision is recorded on whether `task complete` gates on unmet criteria, either way. · **deferred:** workflow change; decide once the vocabulary has been lived with — no rework either way
 
 ## Out of scope
 
@@ -114,9 +114,77 @@ the surface that shows unmet criteria is the surface that would explain a refusa
 
 ### Added acceptance criteria
 
-- [ ] The state vocabulary is defined once in `domain` and shared with finding status —
+- [x] The state vocabulary is defined once in `domain` and shared with finding status —
   either the same set or a declared subset — with a test that fails if the two drift apart.
-- [ ] Criterion states reuse the finding glyph/colour vocabulary rather than introducing a
+- [ ] Criterion states reuse the finding glyph/colour vocabulary rather than introducing a · **deferred:** no glyph vocabulary rendered yet; falls out of the TUI roll-up in criterion 9
   parallel one.
-- [ ] A task's acceptance-criteria roll-up is visible near the top of its TUI detail view,
+- [ ] A task's acceptance-criteria roll-up is visible near the top of its TUI detail view, · **deferred:** TUI detail-header roll-up not built yet; the CLI tally landed first
   not only by scrolling into the body.
+
+## Decisions, 2026-08-24 — settled before implementation
+
+### Vocabulary: `met · not met · deferred · wontfix · n/a`
+
+`deferred` and `wontfix` are taken VERBATIM from the finding vocabulary — same word, same
+meaning, so a reader learns them once. `fixed`, `landed`, and `superseded` are audit-shaped
+and excluded. `n/a` is new: "turned out not to apply" is a thing criteria need and findings
+have no word for.
+
+This is an overlap, not a subset, so it is modelled honestly as one: a shared pool holds
+the words both entities use, each declares its own full set from that pool plus its own
+additions, and a test asserts the shared words are spelled identically in both. Calling it
+a subset would be a lie — `met` is not a finding status — and the lie is what lets the two
+drift, which is exactly finding M3 of
+[2026-08-17-finding-status-surface](../audits/6g1397jfke23-2026-08-17-finding-status-surface.md)
+(`landed` legal in code, absent from docs, code asserting otherwise).
+
+### Representation: checkbox plus suffix
+
+```
+- [x] Criterion that is done
+- [ ] Criterion still to do
+- [ ] Criterion parked · **deferred:** waiting on the schema ADR
+- [ ] Criterion abandoned · **wontfix:** superseded by the table layout
+- [ ] Criterion that stopped applying · **n/a:** the tile grid was dropped
+```
+
+The bracket keeps its existing binary meaning — `[x]` met, `[ ]` not met — and the suffix
+refines the NOT-MET case. Three consequences, all deliberate:
+
+- **No migration.** Every existing `- [ ]` / `- [x]` in the corpus stays valid and keeps
+  parsing with the same meaning. Nothing to back-fill, nothing for `lint --fix` to rewrite,
+  no legacy mode. The states are additive, so the burden the alternative designs carried
+  simply does not arise.
+- **It reuses a grammar that already exists.** `**Label:** value` is how findings carry
+  `**Status:**` / `**Effort:**` / `**Urgency:**`, and `·` is already the separator in
+  finding headers. Nothing new to learn or to parse differently.
+- **The reason has a natural home**, which is what makes Q3 answerable at all.
+
+A marker char in the bracket (`- [~]`) was rejected: the existing lint deliberately REJECTS
+non-canonical brackets ("malformed acceptance checkbox … use `- [ ]` or `- [x]`"), so it
+would fight a rule already in place, and it is cryptic. A frontmatter side-table was
+rejected for breaking hand-editability, which is a stated virtue of the format.
+
+### A reason is mandatory for `deferred`, `wontfix`, and `n/a`
+
+A deferral with no why is the thing this task exists to prevent — it is indistinguishable
+from an oversight, which is the original defect. `met` and `not met` take no reason.
+
+### Contradictions are lint errors
+
+`- [x] … · **deferred:** …` is rejected: met is met. So is an unknown state word, and a
+non-binary state with no reason. Each names the legal set in its message — finding M1's
+complaint, not repeated here.
+
+### Lessons applied from the finding vocabulary
+
+- **The write path ships WITH the vocabulary.** Findings shipped seven states and no verb,
+  so every change since has been a hand edit. `task ac` gains the state verbs in this task,
+  not a follow-up.
+- **One definition, generated outward** — `schema task`, the `task new` scaffold, the
+  generated CLI docs, and `--json-schema` all derive from the Go definition, with a drift
+  test.
+- **Decoration policy decided up front**, not discovered in an audit later: a leading emoji
+  is stripped before matching, because this repo's own candidate lists use ✅ ⏳ ⛔ and
+  finding M2 shows what happens when that is left to chance.
+- **Trailing prose tolerated** the way `**Status:** fixed 2026-01-01 (PR #9)` already is.

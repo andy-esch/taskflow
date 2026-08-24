@@ -132,7 +132,12 @@ func TaskInfoHuman(w io.Writer, st Style, t domain.Task, ac domain.ACCount, path
 	if t.Epic != "" {
 		field("epic", t.Epic)
 	}
-	field("ac", fmt.Sprintf("%d/%d", ac.Checked, ac.Total))
+	acText := fmt.Sprintf("%d/%d", ac.Checked, ac.Total)
+	if ac.Explained > 0 {
+		// Naming the explained ones keeps "1/4" from reading as four things still to do.
+		acText += st.Dim(fmt.Sprintf(" · %d explained", ac.Explained))
+	}
+	field("ac", acText)
 	field("path", path)
 }
 
@@ -160,19 +165,26 @@ func AcceptanceJSON(w io.Writer, slug string, cs []domain.Criterion) error {
 
 // AcceptanceHuman prints the numbered acceptance checklist ("[x]  1. text"), the
 // list an agent then flips by index. Empty prints a dim note.
+//
+// A criterion that is not met for a REASON shows that reason inline. Without it the state
+// vocabulary would be invisible on the surface where criteria are actually read, and an
+// unchecked box would go on meaning "not yet", "won't do", and "no longer applies" all at
+// once — the ambiguity the vocabulary exists to remove.
 func AcceptanceHuman(w io.Writer, st Style, cs []domain.Criterion) {
 	if len(cs) == 0 {
 		fmt.Fprintln(w, st.Dim("no acceptance criteria"))
 		return
 	}
 	for _, c := range cs {
-		box := "[ ]"
-		mark := st.Dim(box)
+		mark := st.Dim("[ ]")
 		if c.Checked {
-			box = "[x]"
-			mark = st.Green(box)
+			mark = st.Green("[x]")
 		}
-		fmt.Fprintf(w, "%s %s %s\n", mark, st.Dim(fmt.Sprintf("%2d.", c.Index)), c.Text)
+		line := fmt.Sprintf("%s %s %s", mark, st.Dim(fmt.Sprintf("%2d.", c.Index)), c.Text)
+		if c.State.NeedsReason() {
+			line += "  " + st.Warn(string(c.State)+":") + " " + st.Dim(c.Reason)
+		}
+		fmt.Fprintln(w, line)
 	}
 }
 
@@ -514,9 +526,9 @@ func EpicShowHuman(w io.Writer, st Style, es core.EpicSummary, tasks []domain.Ta
 
 // auditStateNote is the trailing call-to-action on an audit's progress line, kept
 // in one place so the list / show / dashboard surfaces can't drift. An open,
-// fully-triaged audit is flagged "✔ ready to close" (green) on every surface — the
-// distinguisher that keeps a settled audit (full bar, 0% fixed) from reading like an
-// untouched one. detail=true (single-audit views) additionally shows the routine
+// fully-triaged audit is flagged "✔ ready to close" (green) on every surface. It now
+// restates what the number already says (100% settled) rather than compensating for it,
+// which is the point: the marker and the percent agree. detail=true (single-audit views) additionally shows the routine
 // "(N open)" while findings remain; list rows omit that to stay scannable. Returns
 // "" (no leading space) when there is nothing to note.
 func auditStateNote(st Style, a domain.Audit, detail bool) string {
@@ -618,7 +630,7 @@ func ResearchShowJSON(w io.Writer, r domain.Research, body string) error {
 // order (active work first, terminal states last). A status outside the
 // vocabulary or missing entirely (audit lint flags those) sorts after these so
 // the tree never drops a finding.
-var findingStatusOrder = []string{"open", "in-progress", "fixed", "landed", "deferred", "superseded", "wontfix"}
+var findingStatusOrder = []string{"open", "in-progress", "fixed", "tracked", "deferred", "superseded", "wontfix"}
 
 // AuditShowHuman prints an audit's metadata, a status-grouped finding tree, and
 // its body. findings is parsed from the raw body by the caller; body is the

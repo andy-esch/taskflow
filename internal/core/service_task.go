@@ -114,6 +114,27 @@ func (s *Service) SetAcceptanceCriterion(slug string, n int, checked, dryRun boo
 	return rt, rb, true, err
 }
 
+// SetCriterionState sets a task's nth (1-based) criterion to an explicit state, through the
+// same atomic, frontmatter-preserving body-replace path the checkbox flip uses. It is the
+// write path the criterion vocabulary shipped WITH, rather than after: a state reachable
+// only by hand-editing is one nobody can be held to, which is how the finding vocabulary
+// drifted from its own documentation.
+func (s *Service) SetCriterionState(slug string, n int, state domain.CriterionState, reason string, dryRun bool) (domain.Task, string, bool, error) {
+	t, body, err := s.store.GetTask(slug)
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	newBody, err := domain.SetCriterionState(body, n, state, reason)
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	if newBody == body {
+		return t, body, false, nil // already in the target state — no write, no updated_at bump
+	}
+	rt, rb, err := s.store.EditBody(slug, newBody, false, s.now(), dryRun)
+	return rt, rb, true, err
+}
+
 // EditTask opens a task for whole-file editing — the human face of mutation,
 // complementing the field-level `task set`. edit (run by the cli's $EDITOR layer)
 // receives the current file content and returns the new content; the store

@@ -12,6 +12,11 @@ import (
 type ACCount struct {
 	Checked int
 	Total   int
+	// Explained is how many of the UNMET criteria say why they are unmet — deferred,
+	// wontfix, or n/a. Without it a tally of "1/4" cannot distinguish three criteria still
+	// to do from one to do and two deliberately not happening, which is the difference
+	// between a task that is stalled and one that is finished with scope removed.
+	Explained int
 }
 
 // Criterion is one acceptance-criteria checkbox for `task ac --list`: its 1-based
@@ -20,6 +25,19 @@ type Criterion struct {
 	Index   int
 	Checked bool
 	Text    string
+	// State is the criterion's disposition. The bracket supplies met/not-met; a
+	// `· **deferred:** why` suffix refines the not-met case. Every criterion written before
+	// this vocabulary existed parses exactly as it always did, which is why there is
+	// nothing to migrate.
+	State CriterionState
+	// Reason is the explanation carried by a non-binary state, required for those and
+	// empty otherwise.
+	Reason string
+	// Suffix is the state as the author WROTE it, empty when none was written. State is the
+	// resolved disposition; keeping both lets lint quote what was typed when the two
+	// disagree — a checked criterion that also claims to be deferred resolves to met, and a
+	// message naming "met" would tell the author nothing about their own edit.
+	Suffix CriterionState
 }
 
 // acCheckbox is an acceptance-criteria checkbox located in a body: its 0-based line
@@ -174,6 +192,10 @@ func CountAcceptanceCriteria(body string) ACCount {
 		c.Total++
 		if b.checked {
 			c.Checked++
+			continue
+		}
+		if _, state, _, _ := splitCriterion(b.text, false); state.NeedsReason() {
+			c.Explained++
 		}
 	}
 	return c
@@ -185,7 +207,8 @@ func ListAcceptanceCriteria(body string) []Criterion {
 	_, boxes := scanAcceptanceCheckboxes(body)
 	out := make([]Criterion, len(boxes))
 	for i, b := range boxes {
-		out[i] = Criterion{Index: i + 1, Checked: b.checked, Text: b.text}
+		text, state, reason, suffix := splitCriterion(b.text, b.checked)
+		out[i] = Criterion{Index: i + 1, Checked: b.checked, Text: text, State: state, Reason: reason, Suffix: suffix}
 	}
 	return out
 }
@@ -196,6 +219,72 @@ func ListAcceptanceCriteria(body string) []Criterion {
 // It is idempotent: flipping to the current state returns the body unchanged (the
 // caller can skip the write). ErrValidation when there's no acceptance section or n
 // is out of range.
+// SetCriterionState sets the 1-based nth criterion to an explicit state, rewriting only
+// that line. This is the write path the vocabulary needed to ship WITH: findings gained
+// seven statuses and no verb, so every change since has been a hand edit — the habit that
+// let the vocabulary drift from its own documentation. A state that is only reachable by
+// hand-editing is a state nobody can be held to.
+//
+// The bracket and the suffix are kept consistent by construction: met checks the box and
+// drops any suffix, and every other state unchecks it, so the two halves can never
+// disagree the way lint would otherwise have to report.
+func SetCriterionState(body string, n int, state CriterionState, reason string) (string, error) {
+	if strings.ContainsAny(reason, "\r\n") {
+		return "", fmt.Errorf("%w: a reason must be a single line — a newline here would break out of the criterion and can manufacture phantom checkboxes", ErrValidation)
+	}
+	if state.NeedsReason() && strings.TrimSpace(reason) == "" {
+		return "", fmt.Errorf("%w: %s needs a reason — say why, so it cannot be mistaken for an oversight",
+			ErrValidation, state)
+	}
+	if !state.NeedsReason() && strings.TrimSpace(reason) != "" {
+		return "", fmt.Errorf("%w: %s takes no reason (only %s do)",
+			ErrValidation, state, strings.Join(CriterionSuffixStates(), ", "))
+	}
+	lines, boxes := scanAcceptanceCheckboxes(body)
+	if len(boxes) == 0 {
+		return "", fmt.Errorf("%w: task has no acceptance criteria to set", ErrValidation)
+	}
+	if n < 1 || n > len(boxes) {
+		return "", fmt.Errorf("%w: criterion %d out of range (have %d)", ErrValidation, n, len(boxes))
+	}
+	box := boxes[n-1]
+	line := lines[box.line]
+	// Strip whatever suffix is there before writing the new one, so repeated calls are
+	// idempotent rather than stacking markers.
+	text := checkboxText(line)
+	if stripped, _, _, ok := criterionSuffix(text); ok {
+		text = stripped // replace the existing disposition rather than stacking another
+	}
+	if state.NeedsReason() {
+		text = strings.TrimSpace(text) + fmt.Sprintf(" · **%s:** %s", state, strings.TrimSpace(reason))
+	}
+	lines[box.line] = replaceCheckboxLine(line, state.Met(), strings.TrimSpace(text))
+	return strings.Join(lines, "\n"), nil
+}
+
+// replaceCheckboxLine rebuilds one checkbox line, preserving its original indentation and
+// bullet so a nested or differently-bulleted list survives a state change untouched.
+func replaceCheckboxLine(line string, checked bool, text string) string {
+	loc := bodyCheckboxRe.FindStringIndex(line)
+	if loc == nil {
+		return line
+	}
+	box := "[ ]"
+	if checked {
+		box = "[x]"
+	}
+	prefix := line[:loc[0]]
+	marker := line[loc[0]:loc[1]]
+	// Rewrite only the bracket inside the matched marker, so the bullet character and any
+	// spacing the author used are preserved verbatim.
+	marker = strings.Replace(marker, "[ ]", box, 1)
+	marker = strings.Replace(marker, "[x]", box, 1)
+	marker = strings.Replace(marker, "[X]", box, 1)
+	// bodyCheckboxRe stops at the closing bracket, so the single separating space that the
+	// canonical form uses is re-added here rather than inherited.
+	return prefix + marker + " " + text
+}
+
 func SetAcceptanceCriterion(body string, n int, checked bool) (string, error) {
 	lines, boxes := scanAcceptanceCheckboxes(body)
 	if len(boxes) == 0 {
@@ -266,6 +355,30 @@ func LintAcceptanceCriteria(body string) []Issue {
 	if acSections > 1 {
 		issues = append(issues, Issue{Field: "acceptance", Message: fmt.Sprintf("%d acceptance-criteria sections — the tally and `task ac` use the first and ignore the rest; merge them", acSections)})
 	}
+	return append(issues, lintCriterionStates(body)...)
+}
+
+// lintCriterionStates validates the state suffix on each criterion. Every message names the
+// legal set, because an error that only says a value is wrong leaves the reader — human or
+// agent — to go and find what right looks like (finding M1 of the finding-status audit).
+func lintCriterionStates(body string) []Issue {
+	var issues []Issue
+	for _, c := range ListAcceptanceCriteria(body) {
+		switch {
+		case c.Checked && c.Suffix != "":
+			// The bracket and the suffix disagree. Met is met; a met criterion that also
+			// claims to be deferred is a half-finished edit, not a state.
+			issues = append(issues, Issue{Field: "acceptance", Message: fmt.Sprintf(
+				"criterion %d is checked but carries a **%s:** suffix — a met criterion has no state suffix; uncheck it or drop the suffix",
+				c.Index, c.Suffix)})
+		case c.State.NeedsReason() && c.Reason == "":
+			// A deferral with no why is indistinguishable from an oversight, which is the
+			// defect this vocabulary exists to remove.
+			issues = append(issues, Issue{Field: "acceptance", Message: fmt.Sprintf(
+				"criterion %d is **%s:** with no reason — say why, e.g. `· **%s:** waiting on the schema ADR`",
+				c.Index, c.State, c.State)})
+		}
+	}
 	return issues
 }
 
@@ -303,6 +416,57 @@ func checkWord(checked bool) string {
 
 // checkboxText is the criterion text: everything after the `- [x]` marker on the
 // checkbox line, trimmed (continuation lines aren't separate criteria).
+// criterionMarkerRe matches ONE `· **label:**` marker on a criterion line. It is
+// deliberately un-anchored: the disposition suffix is the LAST such marker, and RE2 matches
+// leftmost, so a single anchored pattern silently picked the first one. A criterion reading
+// `Tests · **Coverage:** 100% · **deferred:** waiting on harness` matched `**Coverage:**`,
+// failed to parse it as a state, and dropped the deferral entirely — the tally lost it and
+// the criterion read as a plain oversight.
+//
+// Between the separator and the bold marker it tolerates a decoration run — anything that
+// is not a letter, digit, or `*` — so `· ⏳ **deferred:**` matches. This repo's own
+// candidate lists use ✅ ⏳ ⛔, and finding M2 of the finding-status audit records what
+// happens when an emoji is left to chance: it gets captured AS the value.
+var criterionMarkerRe = regexp.MustCompile(`(?i)[ \t]*·[^*\p{L}\p{N}]*\*\*([^:*]+):\*\*[ \t]*`)
+
+// criterionSuffix finds the trailing disposition suffix: the LAST `· **label:**` on the line
+// whose label is a state word. Everything before it is the criterion's own text — which may
+// legitimately contain other bold labels — and everything after it is the reason.
+//
+// ok is false when no marker names a state, in which case the line is ordinary text and is
+// left whole rather than guessed at.
+func criterionSuffix(text string) (body string, state CriterionState, reason string, ok bool) {
+	ms := criterionMarkerRe.FindAllStringSubmatchIndex(text, -1)
+	for i := len(ms) - 1; i >= 0; i-- {
+		m := ms[i]
+		st, valid := ParseCriterionState(text[m[2]:m[3]])
+		if !valid {
+			continue
+		}
+		return strings.TrimSpace(text[:m[0]]), st, strings.TrimSpace(text[m[1]:]), true
+	}
+	return text, "", "", false
+}
+
+// splitCriterion separates a criterion's text from its state suffix. An unrecognised
+// `· **label:**` is left as ordinary text rather than guessed at: lint reports it, and
+// silently swallowing it would hide a typo the author needs to see.
+func splitCriterion(text string, checked bool) (body string, state CriterionState, reason string, suffix CriterionState) {
+	stripped, written, why, ok := criterionSuffix(text)
+	if !ok {
+		if checked {
+			return text, CriterionMet, "", ""
+		}
+		return text, CriterionUnmet, "", ""
+	}
+	if checked {
+		// The bracket wins for the resolved state — met is met — while Suffix preserves the
+		// contradiction for lint to report against what the author actually typed.
+		return stripped, CriterionMet, why, written
+	}
+	return stripped, written, why, written
+}
+
 func checkboxText(line string) string {
 	if loc := bodyCheckboxRe.FindStringIndex(line); loc != nil {
 		return strings.TrimSpace(line[loc[1]:])

@@ -123,9 +123,9 @@ func TestFenceScanner_NestedFencesDoNotLeak(t *testing.T) {
 func TestListAcceptanceCriteria(t *testing.T) {
 	got := ListAcceptanceCriteria(acBody)
 	want := []Criterion{
-		{Index: 1, Checked: true, Text: "first is done"},
-		{Index: 2, Checked: false, Text: "second is not"},
-		{Index: 3, Checked: true, Text: "third is done (capital X)"},
+		{Index: 1, Checked: true, Text: "first is done", State: CriterionMet},
+		{Index: 2, Checked: false, Text: "second is not", State: CriterionUnmet},
+		{Index: 3, Checked: true, Text: "third is done (capital X)", State: CriterionMet},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("ListAcceptanceCriteria len = %d, want %d: %+v", len(got), len(want), got)
@@ -324,5 +324,113 @@ func TestSection_IgnoresFencedHeadings(t *testing.T) {
 	want := "## Real\n\ntext.\n\n```\n## Fake heading in a fence\n```\n\nmore text under Real."
 	if sec != want {
 		t.Fatalf("Section(real) =\n%q\nwant\n%q", sec, want)
+	}
+}
+
+// A tally of "1/4" cannot distinguish three criteria still to do from one to do and two
+// deliberately not happening. Explained is what makes the difference legible — and it is
+// what a future `task complete` reconciliation would have to reason about.
+func TestCountAcceptanceCriteriaSeparatesExplainedFromOutstanding(t *testing.T) {
+	body := "# T\n\n## Acceptance criteria\n\n" +
+		"- [x] done\n" +
+		"- [ ] still to do\n" +
+		"- [ ] parked · **deferred:** waiting on the ADR\n" +
+		"- [ ] dropped · **n/a:** scope removed\n"
+	got := CountAcceptanceCriteria(body)
+	if got.Total != 4 || got.Checked != 1 || got.Explained != 2 {
+		t.Errorf("tally = %+v; want 4 total, 1 checked, 2 explained", got)
+	}
+	// A body written before the vocabulary existed tallies exactly as it always did.
+	legacy := CountAcceptanceCriteria("# T\n\n## Acceptance criteria\n\n- [x] a\n- [ ] b\n")
+	if legacy.Total != 2 || legacy.Checked != 1 || legacy.Explained != 0 {
+		t.Errorf("legacy tally = %+v; want 2 total, 1 checked, 0 explained", legacy)
+	}
+}
+
+// The write path is what the vocabulary needed to ship WITH. A state reachable only by
+// hand-editing is one nobody can be held to — the habit that let the finding vocabulary
+// drift from its own documentation.
+func TestSetCriterionState(t *testing.T) {
+	body := "# T\n\n## Acceptance criteria\n\n- [ ] alpha\n- [x] beta\n  - [ ] nested\n"
+
+	out, err := SetCriterionState(body, 1, CriterionDeferred, "waiting on the ADR")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "- [ ] alpha · **deferred:** waiting on the ADR") {
+		t.Errorf("deferred not written as expected:\n%s", out)
+	}
+
+	// Re-setting must REPLACE the suffix, not stack another one.
+	out, err = SetCriterionState(out, 1, CriterionWontFix, "changed approach")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(out, "**deferred:**") != 0 || strings.Count(out, "**wontfix:**") != 1 {
+		t.Errorf("suffixes stacked instead of replacing:\n%s", out)
+	}
+
+	// Met clears the suffix and checks the box: the two halves cannot disagree.
+	out, err = SetCriterionState(out, 1, CriterionMet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "- [x] alpha\n") || strings.Contains(out, "**wontfix:**") {
+		t.Errorf("met did not clear the suffix:\n%s", out)
+	}
+
+	// A nested criterion keeps its indentation and bullet.
+	out, err = SetCriterionState(body, 3, CriterionNA, "scope removed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "  - [ ] nested · **n/a:** scope removed") {
+		t.Errorf("nested indentation was not preserved:\n%s", out)
+	}
+
+	// A reason is required for the non-binary states and rejected for the binary ones.
+	if _, err := SetCriterionState(body, 1, CriterionDeferred, ""); err == nil {
+		t.Error("deferred without a reason was accepted")
+	}
+	if _, err := SetCriterionState(body, 1, CriterionMet, "why"); err == nil {
+		t.Error("met with a reason was accepted")
+	}
+	if _, err := SetCriterionState(body, 9, CriterionMet, ""); err == nil {
+		t.Error("an out-of-range index was accepted")
+	}
+}
+
+// Audit 2026-08-24-planning-state-vocabulary M3 and L1. The disposition suffix is the LAST
+// state marker on the line, not the first: a criterion may legitimately carry its own bold
+// labels, and matching leftmost silently dropped the trailing deferral. And a reason must be
+// one line — a newline inside a checkbox list manufactures phantom criteria.
+func TestCriterionSuffixIsTrailingAndSingleLine(t *testing.T) {
+	body := "# T\n\n## Acceptance criteria\n\n" +
+		"- [ ] Tests · **Coverage:** 100% · **deferred:** waiting on harness\n" +
+		"- [ ] No state · **Note:** just prose\n"
+	cs := ListAcceptanceCriteria(body)
+	if cs[0].State != CriterionDeferred || cs[0].Reason != "waiting on harness" {
+		t.Errorf("trailing suffix missed: state=%q reason=%q", cs[0].State, cs[0].Reason)
+	}
+	if cs[0].Text != "Tests · **Coverage:** 100%" {
+		t.Errorf("the criterion's own bold label was eaten: %q", cs[0].Text)
+	}
+	if cs[1].State != CriterionUnmet || cs[1].Text != "No state · **Note:** just prose" {
+		t.Errorf("a non-state label was treated as a disposition: %+v", cs[1])
+	}
+	if got := CountAcceptanceCriteria(body); got.Explained != 1 {
+		t.Errorf("tally lost the explained criterion: %+v", got)
+	}
+	// Re-setting replaces only the trailing disposition, leaving the earlier label alone.
+	out, err := SetCriterionState(body, 1, CriterionWontFix, "changed approach")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "- [ ] Tests · **Coverage:** 100% · **wontfix:** changed approach") {
+		t.Errorf("re-set mangled the line:\n%s", out)
+	}
+	// A multi-line reason would break out of the list item.
+	if _, err := SetCriterionState(body, 1, CriterionDeferred, "why\n- [ ] injected"); err == nil {
+		t.Error("a newline in a reason was accepted")
 	}
 }

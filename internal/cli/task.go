@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -357,6 +358,11 @@ func emitPath(app *App, path string) error {
 // frontmatter-preserving body-replace path and returns the task_mutation envelope.
 func newTaskAcCmd(app *App) *cobra.Command {
 	var check, uncheck int
+	// One flag per state rather than a --state <word> pair, matching --check/--uncheck: the
+	// index is the argument, the flag names the destination. Same shape as the lifecycle
+	// verbs, where the verb names where the task is going.
+	var defer_, wontfix, tracked, na int
+	var reason string
 	var list bool
 	cmd := &cobra.Command{
 		Use:   "ac <task>",
@@ -369,7 +375,7 @@ func newTaskAcCmd(app *App) *cobra.Command {
 			"and is idempotent — flipping to the current state writes nothing. Checkboxes in " +
 			"fenced code blocks are ignored, and a missing section or out-of-range index is a " +
 			"validation error (exit 11).",
-		Example:           "  tskflwctl task ac add-retry-backoff             # numbered list\n  tskflwctl task ac add-retry-backoff --check 3   # tick criterion 3\n  tskflwctl task ac add-retry-backoff --uncheck 3",
+		Example:           "  tskflwctl task ac add-retry-backoff             # numbered list\n  tskflwctl task ac add-retry-backoff --check 3   # tick criterion 3\n  tskflwctl task ac add-retry-backoff --uncheck 3\n  tskflwctl task ac add-retry-backoff --defer 2 --reason \"waiting on the schema ADR\"",
 		Args:              cobra.MaximumNArgs(1),
 		Annotations:       map[string]string{"safety": "mutating"}, // --check/--uncheck write; --list reads
 		ValidArgsFunction: app.completeTaskSlugs,
@@ -378,8 +384,19 @@ func newTaskAcCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// No --check/--uncheck → the list view (the default; --list is explicit).
-			if !c.Flags().Changed("check") && !c.Flags().Changed("uncheck") {
+			// Exactly one destination flag may be given: they are alternatives, and silently
+			// honouring the first would make a two-flag typo write something unasked-for.
+			var chosen []string
+			for _, f := range []string{"check", "uncheck", "defer", "wontfix", "tracked", "na"} {
+				if c.Flags().Changed(f) {
+					chosen = append(chosen, "--"+f)
+				}
+			}
+			if len(chosen) > 1 {
+				return fmt.Errorf("%w: %s name different states; pass one", domain.ErrValidation, strings.Join(chosen, " and "))
+			}
+			// No destination flag → the list view (the default; --list is explicit).
+			if len(chosen) == 0 {
 				canon, cs, err := app.Svc.AcceptanceCriteria(slug)
 				if err != nil {
 					return err
@@ -390,33 +407,40 @@ func newTaskAcCmd(app *App) *cobra.Command {
 				render.AcceptanceHuman(app.Out, app.Style, cs)
 				return nil
 			}
-			checked := c.Flags().Changed("check")
-			idx := check
-			if !checked {
-				idx = uncheck
+			idx, state := check, domain.CriterionMet
+			switch chosen[0] {
+			case "--uncheck":
+				idx, state = uncheck, domain.CriterionUnmet
+			case "--defer":
+				idx, state = defer_, domain.CriterionDeferred
+			case "--wontfix":
+				idx, state = wontfix, domain.CriterionWontFix
+			case "--tracked":
+				idx, state = tracked, domain.CriterionTracked
+			case "--na":
+				idx, state = na, domain.CriterionNA
 			}
-			task, body, changed, err := app.Svc.SetAcceptanceCriterion(slug, idx, checked, app.DryRun)
+			task, body, changed, err := app.Svc.SetCriterionState(slug, idx, state, reason, app.DryRun)
 			if err != nil {
 				return err
 			}
 			if !changed && !app.JSON { // already in the target state — say so, no write
-				state := "checked"
-				if !checked {
-					state = "unchecked"
-				}
 				fmt.Fprintf(app.Out, "%s criterion %d is already %s\n", app.Style.Dim("•"), idx, state)
 				return nil
 			}
-			verb, dryVerb := "checked", "would check"
-			if !checked {
-				verb, dryVerb = "unchecked", "would uncheck"
-			}
-			return reportTaskMutation(app, task, body, verb, dryVerb)
+			return reportTaskMutation(app, task, body,
+				"set criterion "+strconv.Itoa(idx)+" "+string(state),
+				"would set criterion "+strconv.Itoa(idx)+" "+string(state))
 		},
 	}
 	cmd.Flags().BoolVar(&list, "list", false, "list the acceptance criteria (the default)")
 	cmd.Flags().IntVar(&check, "check", 0, "check the criterion at this 1-based index")
 	cmd.Flags().IntVar(&uncheck, "uncheck", 0, "uncheck the criterion at this 1-based index")
+	cmd.Flags().IntVar(&defer_, "defer", 0, "mark the criterion at this 1-based index deferred (needs --reason)")
+	cmd.Flags().IntVar(&wontfix, "wontfix", 0, "mark the criterion at this 1-based index wontfix (needs --reason)")
+	cmd.Flags().IntVar(&tracked, "tracked", 0, "mark the criterion at this 1-based index tracked — handed to another task (needs --reason naming it)")
+	cmd.Flags().IntVar(&na, "na", 0, "mark the criterion at this 1-based index n/a — no longer applies (needs --reason)")
+	cmd.Flags().StringVar(&reason, "reason", "", "why the criterion is deferred/wontfix/tracked/n-a — required for those, rejected otherwise")
 	cmd.MarkFlagsMutuallyExclusive("check", "uncheck")
 	cmd.MarkFlagsMutuallyExclusive("list", "check")
 	cmd.MarkFlagsMutuallyExclusive("list", "uncheck")
