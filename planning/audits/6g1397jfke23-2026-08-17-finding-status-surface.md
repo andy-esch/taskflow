@@ -4,6 +4,7 @@ id: 6g1397jfke23
 bucket: open
 area: finding-status-surface
 date: "2026-08-17"
+updated_at: "2026-08-24"
 ---
 
 # Audit: finding-status-surface — 2026-08-17
@@ -38,7 +39,7 @@ repo owns.
 
 ## Findings
 
-#### H1. There is no validated write path for a finding's status  · **Status:** open
+#### H1. There is no validated write path for a finding's status  · **Status:** fixed 2026-08-24
 
 **File:** `internal/cli/audit.go:28-37` | **Component:** cli / audit
 **Effort:** M · **Urgency:** soon
@@ -92,7 +93,7 @@ one command instead of a scripted hand-repair.
 the existing global `--dry-run`. Separately, narrow the `lint` help text so
 "repairs tasks/audits" cannot be read as covering finding status.
 
-#### M1. The status error names the offending value but not the legal set  · **Status:** open
+#### M1. The status error names the offending value but not the legal set  · **Status:** fixed
 
 **File:** `internal/domain/finding.go:114,116` | **Component:** domain / lint
 **Effort:** XS · **Urgency:** soon
@@ -132,7 +133,11 @@ catch none of them. A static alias table is the right shape, and doubles as the
 superseded, wontfix)`. Optionally add `did you mean superseded?` from the alias
 table.
 
-#### M2. A leading emoji is captured *as* the status  · **Status:** open
+**Resolution:** Named the legal set in the error message, derived from
+FindingStatuses() so the diagnostic cannot fall behind the vocabulary it is
+checking against.
+
+#### M2. A leading emoji is captured *as* the status  · **Status:** fixed 2026-08-24
 
 **File:** `internal/domain/finding.go:43` | **Component:** domain / parsing
 **Effort:** S · **Urgency:** eventually
@@ -167,7 +172,13 @@ candidate-list symbol and say so: *"that's a candidate-list symbol; a finding
 tolerance lets the two namespaces keep merging, and the scaffold at
 `audit new` is what puts them adjacent in the first place.
 
-#### M3. `landed` is legal in code, absent from the docs, and the code asserts otherwise  · **Status:** open
+**Resolution:** The glyph is decoration, not the status: `statusRe` now swallows
+a leading run of non-alphanumerics and the token is read through
+`stripLeadingDecoration`, the same helper criterion suffixes use. The span
+deliberately still covers the glyph, so re-stamping replaces it — leaving `✅
+deferred` would restate the same two-lists-disagree bug inside the file.
+
+#### M3. `landed` is legal in code, absent from the docs, and the code asserts otherwise  · **Status:** fixed 2026-08-24
 
 **File:** `internal/domain/finding.go:80-86` | **Component:** domain / vocabulary
 **Effort:** XS · **Urgency:** soon
@@ -199,6 +210,15 @@ the status table from `FindingStatuses()` (it is already sorted for `schema`)
 would make the comment's claim structurally true. Worth folding in rather than
 tracking separately.
 
+**Resolution:** Dropped. `landed` had zero uses in the corpus, so nothing was
+lost — but removing it exposed a word that WAS missing: 7 of 13 `deferred`
+findings were handoffs, improvised in prose as `deferred → tracked in task X` by
+two authors months apart. Those seven now read `tracked by <id>`, a status that
+counts toward the audit's done band and refuses to be written without a
+destination. The follow-up was taken too: the `schema audit` conventions line is
+built from FindingStatuses(), so the guidance cannot fall behind the vocabulary
+the way this finding's table did.
+
 #### L1. `audit edit`'s lint-on-save cannot reach the writers that matter  · **Status:** open
 
 **File:** `internal/cli/audit.go:33` (`newAuditEditCmd`) | **Component:** cli / audit
@@ -214,6 +234,12 @@ revisiting once H1 provides one.
 **Recommendation:** low priority standalone; mostly an argument for H1. If
 `audit append` grows a `--strict`, the agent-facing half closes.
 
+
+**Fixed 2026-08-24** while building the criterion vocabulary, which is the same lesson in a
+new place. `LintFindings` now names the legal set on BOTH the unknown-status and
+missing-status paths, and the new `SetFindingStatus` write path rejects with the same list.
+The criterion vocabulary was built with this rule from the start: every rejection there
+names its legal set too.
 ## What audited clean
 
 - **The vocabulary itself.** Six of the seven statuses are well-chosen, and every

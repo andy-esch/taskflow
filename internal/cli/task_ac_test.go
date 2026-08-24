@@ -112,8 +112,8 @@ func TestTaskAc_Check_Idempotent_NoWrite(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Error("checking an already-checked criterion must not write")
 	}
-	if !strings.Contains(out, "already checked") {
-		t.Errorf("expected an 'already checked' note:\n%s", out)
+	if !strings.Contains(out, "already met") {
+		t.Errorf("expected an 'already met' note:\n%s", out)
 	}
 }
 

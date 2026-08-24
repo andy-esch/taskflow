@@ -105,6 +105,7 @@ func runSchemaContract(app *App) error {
 		EpicStatuses:    domain.AllEpicStatuses(),
 		AuditBuckets:    buckets,
 		FindingStatuses: domain.FindingStatuses(),
+		CriterionStates: domain.CriterionSuffixStates(),
 		TaskFields:      fields,
 		EpicFields:      domain.KnownEpicFieldNames(),
 		ResearchFields:  researchFields,

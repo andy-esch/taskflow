@@ -104,6 +104,11 @@ type themeFileTOML struct {
 // set, else taskflow_root), then falls back to a tasks/ directory or a
 // planning/tasks/ subdir. It terminates at a .git boundary or the filesystem
 // root — never an infinite climb.
+// defaultSubdirRoot is the conventional in-repo planning subdirectory. Discover falls back
+// to it when a repo has no config and no top-level tasks/, and the pointer resolver climbs
+// the SAME ladder — named once so the two cannot disagree about what a planning repo is.
+const defaultSubdirRoot = "planning"
+
 func Discover(start string) (*Config, error) {
 	dir, err := filepath.Abs(start)
 	if err != nil {
@@ -141,8 +146,8 @@ func Discover(start string) (*Config, error) {
 		if isDir(filepath.Join(dir, domain.TasksDir)) {
 			return &Config{Root: dir}, nil
 		}
-		if isDir(filepath.Join(dir, "planning", domain.TasksDir)) {
-			return &Config{Root: filepath.Join(dir, "planning")}, nil
+		if isDir(filepath.Join(dir, defaultSubdirRoot, domain.TasksDir)) {
+			return &Config{Root: filepath.Join(dir, defaultSubdirRoot)}, nil
 		}
 		parent := filepath.Dir(dir)
 		// .git is the climb boundary whether it's a directory OR a file — in a
@@ -150,8 +155,8 @@ func Discover(start string) (*Config, error) {
 		// would over-climb into a parent's planning tree.
 		if parent == dir || exists(filepath.Join(dir, ".git")) {
 			return nil, noConfigError{fmt.Sprintf(
-				"not a taskflow planning repo (no %s or tasks/ found from %s up) — run `tskflwctl init`",
-				ConfigFile, start)}
+				"not a taskflow planning repo: searched from %s up to the repository boundary for %s, %s/, or %s/%s/ — run `tskflwctl init` here, or point at an existing one with `-C <planning repo>` or `--space <label>`",
+				start, ConfigFile, domain.TasksDir, defaultSubdirRoot, domain.TasksDir)}
 		}
 		dir = parent
 	}
@@ -177,8 +182,8 @@ func configuredRoot(dir, rel string) (string, error) {
 	}
 	if !isDir(filepath.Join(root, domain.TasksDir)) {
 		return "", fmt.Errorf(
-			"%w: taskflow_root %q points at %s, which has no tasks/ — fix %s or run `tskflwctl init`",
-			domain.ErrValidation, rel, root, ConfigFile)
+			"%w: taskflow_root %q points at %s, which has no %s/ — fix taskflow_root in %s, run `tskflwctl init`, or use `-C <planning repo>` to work elsewhere",
+			domain.ErrValidation, rel, root, domain.TasksDir, ConfigFile)
 	}
 	return root, nil
 }
@@ -249,10 +254,19 @@ func resolvePlanningRepo(dir, planningRepo, wantID string) (string, error) {
 		}
 		return evalOr(target), nil
 	}
-	if !isDir(filepath.Join(root, domain.TasksDir)) {
+	// Same ladder Discover climbs, in the same order: a config-less repo is a planning repo
+	// if it has tasks/ OR planning/tasks/. Checking only tasks/ broke the invariant stated
+	// above — a directory with planning/tasks/ resolved fine with `-C <target>` but was
+	// rejected when a pointer named it, so the two spellings disagreed about the same tree.
+	target := root
+	switch {
+	case isDir(filepath.Join(root, domain.TasksDir)):
+	case isDir(filepath.Join(root, defaultSubdirRoot, domain.TasksDir)):
+		target = filepath.Join(root, defaultSubdirRoot)
+	default:
 		return "", fmt.Errorf(
-			"%w: planning_repo %q points at %s, which is not a planning repo (no tasks/ there, and no %s naming one via taskflow_root) — run `tskflwctl init` there first",
-			domain.ErrValidation, planningRepo, root, ConfigFile)
+			"%w: planning_repo %q points at %s, which is not a planning repo — expected %s/ or %s/%s/ there, or a %s naming the root via taskflow_root. Fix the pointer, run `tskflwctl init` there, or use `-C <planning repo>` to work in it directly",
+			domain.ErrValidation, planningRepo, root, domain.TasksDir, defaultSubdirRoot, domain.TasksDir, ConfigFile)
 	}
 	// A config-less planning repo (bare tasks/ dir) carries no id, so an opted-in pointer
 	// must fail here for the same reason it fails on a mismatch — see verifyPlanningRepoID.
@@ -263,7 +277,7 @@ func resolvePlanningRepo(dir, planningRepo, wantID string) (string, error) {
 	// evalOr's dir, which configuredRoot inherits). The linkback work compares
 	// physical paths, so a symlinked external planning repo must not leave Root
 	// logical here. evalOr falls back to the lexical path if it can't resolve.
-	return evalOr(root), nil
+	return evalOr(target), nil
 }
 
 // verifyPlanningRepoID enforces the opt-in identity check. wantID empty means the pointer

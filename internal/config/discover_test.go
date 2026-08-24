@@ -476,3 +476,66 @@ func TestDiscover_NoPlanningRepoIsIdentifiableAndKeepsItsMessage(t *testing.T) {
 		t.Fatalf("malformed config = %v, want a fatal non-ErrNoConfig failure", err)
 	}
 }
+
+// A pointer at a repo root must resolve the same tree `-C <target>` would — the invariant
+// resolvePlanningRepo's own doc comment states. It was broken for a config-less repo whose
+// entities live under planning/: Discover's ladder tries tasks/ THEN planning/tasks/, but
+// the pointer tried only tasks/, so the two spellings disagreed about the same directory.
+func TestPointerResolvesTheSameTreeAsAnchoringAtTheTarget(t *testing.T) {
+	base := t.TempDir()
+	target := filepath.Join(base, "plan")
+	if err := os.MkdirAll(filepath.Join(target, "planning", "tasks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	impl := filepath.Join(base, "impl")
+	if err := os.MkdirAll(impl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(impl, ConfigFile), []byte("planning_repo = \"../plan\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	anchored, err := Discover(target)
+	if err != nil {
+		t.Fatalf("anchoring at the target failed: %v", err)
+	}
+	pointed, err := Discover(impl)
+	if err != nil {
+		t.Fatalf("the pointer failed where -C at the same directory succeeds: %v", err)
+	}
+	if pointed.Root != anchored.Root {
+		t.Errorf("pointer resolved %q but -C resolves %q — the two spellings must name one tree",
+			pointed.Root, anchored.Root)
+	}
+}
+
+// Discovery failures have to be actionable without reading the source: the path searched,
+// what was looked for, and every way out.
+func TestDiscoveryFailuresNameThePathTheLayoutAndTheRemedies(t *testing.T) {
+	_, err := Discover(t.TempDir())
+	if err == nil {
+		t.Fatal("expected a discovery failure")
+	}
+	for _, want := range []string{"searched from", ConfigFile, "tasks/", "planning/tasks/", "-C ", "--space"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("no-repo error omits %q: %s", want, err)
+		}
+	}
+
+	bad := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(bad, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bad, ConfigFile), []byte("taskflow_root = \"docs\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = Discover(bad)
+	if err == nil {
+		t.Fatal("expected a taskflow_root failure")
+	}
+	for _, want := range []string{"taskflow_root", "docs", "-C "} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("taskflow_root error omits %q: %s", want, err)
+		}
+	}
+}

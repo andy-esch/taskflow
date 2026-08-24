@@ -33,8 +33,13 @@ type SchemaContract struct {
 	EpicStatuses    []string       `json:"epic_statuses"`
 	AuditBuckets    []string       `json:"audit_buckets"`
 	FindingStatuses []string       `json:"finding_statuses"`
-	TaskFields      []SchemaField  `json:"task_fields"`
-	EpicFields      []string       `json:"epic_fields"`
+	// CriterionStates are the non-binary acceptance-criterion states — the words legal as a
+	// `· **<state>:** <reason>` suffix beside a checkbox. Published for the same reason
+	// finding_statuses is: `CriterionJSON.state` has carried one of these since 1.46, and
+	// without the set an agent had to trigger an error and parse prose to learn it.
+	CriterionStates []string      `json:"criterion_states"`
+	TaskFields      []SchemaField `json:"task_fields"`
+	EpicFields      []string      `json:"epic_fields"`
 	// ResearchFields mirrors TaskFields for research docs. Added because `research set`
 	// gates unknown keys on a field registry, and without this an agent had to trigger an
 	// error and parse prose to learn the set — the same reason epic_fields was added when

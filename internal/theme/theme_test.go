@@ -81,7 +81,7 @@ func TestFindingStatus(t *testing.T) {
 		{"open", "○", ColorYellow},
 		{"in-progress", "●", ColorYellow},
 		{"fixed", "✔", ColorGreen},
-		{"landed", "✔", ColorGreen},
+		{"tracked", "→", ColorGreen},
 		{"deferred", "◌", ColorGray},
 		{"superseded", "◌", ColorGray},
 		{"wontfix", "✘", ColorRed},

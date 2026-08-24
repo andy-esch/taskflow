@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -28,6 +29,40 @@ import (
 //
 // The fs and the editor stay decoupled: the store orchestrates resolve/parse/write;
 // the caller's edit callback owns the editor (a cli human-face concern).
+// acceptEdited wraps a parse function for the EDITOR path so an edit that introduces an
+// illegal entity id is rejected the way a frontmatter break is — the editor reopens with
+// the reason instead of the id reaching disk.
+//
+// Deliberately NOT folded into parseTask/parseAudit/parseResearch, which the reviewer
+// suggested: reads must stay tolerant so `lint` can REPORT a bad id already on disk, while
+// writes refuse to create one. Tightening the parser would turn every such file from
+// "flagged and fixable" into "unreadable". Same asymmetry the filename-id guard already
+// has.
+func acceptEdited[T any](parse func([]byte) (T, error), entityID func(T) string) func([]byte) (T, error) {
+	return func(content []byte) (T, error) {
+		v, err := parse(content)
+		if err != nil {
+			return v, err
+		}
+		if got := entityID(v); got != "" {
+			if err := validEntityID(got); err != nil {
+				return v, err
+			}
+		}
+		return v, nil
+	}
+}
+
+// asValidation wraps a rejected edit as a validation failure without stuttering: the id
+// guard already classifies its own error, and wrapping unconditionally produced
+// "validation failed: validation failed: …".
+func asValidation(err error) error {
+	if errors.Is(err, domain.ErrValidation) {
+		return err
+	}
+	return fmt.Errorf("%w: %v", domain.ErrValidation, err)
+}
+
 func editFile[T any](
 	noun, path string,
 	orig []byte,
@@ -51,7 +86,7 @@ func editFile[T any](
 			// success with an empty entity.
 			v, perr := parse(orig)
 			if perr != nil {
-				return zero, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
+				return zero, false, asValidation(perr)
 			}
 			return v, false, nil
 		}
@@ -60,7 +95,7 @@ func editFile[T any](
 		if _, perr := parse([]byte(edited)); perr != nil {
 			if edited == current {
 				// re-saved the same broken content → the user gave up
-				return zero, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
+				return zero, false, asValidation(perr)
 			}
 			current, prevErr = edited, perr // reopen on the broken content
 			continue
@@ -74,7 +109,7 @@ func editFile[T any](
 		}
 		v, perr := parse(stamped)
 		if perr != nil {
-			return zero, false, fmt.Errorf("%w: %v", domain.ErrValidation, perr)
+			return zero, false, asValidation(perr)
 		}
 		// Take the write lock only NOW — after the (long, interactive) editor returned and
 		// the edit parsed — so the flock covers just the brief verify→write, never the whole
@@ -117,7 +152,9 @@ func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prev
 	}
 	ifVersion := hashContent(orig)
 	return editFile("task", path, orig, now,
-		func(content []byte) (domain.Task, error) { return parseTask(content, path) },
+		acceptEdited(
+			func(content []byte) (domain.Task, error) { return parseTask(content, path) },
+			func(t domain.Task) string { return t.ID }),
 		s.writeLock,
 		// Version-CAS across the (long) editor window: conflict if the file relocated (a
 		// concurrent `task move` → resurrect hazard) OR its content changed under us.
@@ -141,7 +178,9 @@ func (s *FS) EditAudit(slug string, now time.Time, edit func(current string, pre
 	}
 	ifVersion := hashContent(orig)
 	return editFile("audit", path, orig, now,
-		func(content []byte) (domain.Audit, error) { return parseAudit(content, path) },
+		acceptEdited(
+			func(content []byte) (domain.Audit, error) { return parseAudit(content, path) },
+			func(a domain.Audit) string { return a.ID }),
 		s.writeLock,
 		func() error { return verifyUnchanged(s.resolveAuditPath, slug, path, ifVersion, "audit", "edit") },
 		edit)

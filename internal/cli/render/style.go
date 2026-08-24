@@ -171,8 +171,9 @@ func (s Style) Percent(pct int) string {
 }
 
 // AuditPercent colors an audit's fixed-share percent on the same gray/yellow/green
-// tiers as Percent, but labels it "N% fixed" (theme.AuditPercentLabel) so the
-// number reads as the fixed share, not overall triage.
+// tiers as Percent, but labels it "N% settled" (theme.AuditPercentLabel) so the number
+// reads as the share with a terminal disposition — fixed, tracked, or deliberately
+// dropped — rather than as the fixed share alone.
 func (s Style) AuditPercent(pct int) string {
 	return s.wrap(s.colorSeq(theme.Percent(pct)), theme.AuditPercentLabel(pct))
 }

@@ -11,6 +11,7 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/id"
 )
 
 // FixFrontmatter walks every task, epic, audit, and research file and applies safe repairs:
@@ -51,6 +52,41 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 				return fmt.Errorf("read %s: %w", path, err)
 			}
 			fixed, changes := fixFrontmatterText(content)
+			// An id-led name whose id is misspelled is repairable in place: i/l/o have a
+			// canonical Crockford decode, so the same identity can be spelled legally
+			// without becoming a different entity. Done before the content fixers because
+			// it may rewrite the `id:` field they would otherwise leave inconsistent.
+			if backfill {
+				repaired, renamed, note, err := s.repairInvalidID(dir, e.Name(), fixed)
+				if err != nil {
+					return err
+				}
+				fixed = repaired
+				if note != "" && renamed == "" {
+					// A refusal: report the reason, but do not let it count as a repair.
+					results = append(results, domain.FixResult{
+						Path: path, Changes: []string{note}, Skipped: true,
+					})
+					continue
+				}
+				if note != "" {
+					changes = append(changes, note)
+				}
+				if renamed != "" {
+					// The file moved; write the repaired content at its new name and skip
+					// the shared write below, which still points at the old path.
+					if !dryRun {
+						if err := writeFileAtomic(renamed, fixed, 0o644); err != nil {
+							return err
+						}
+						if err := os.Remove(path); err != nil {
+							return fmt.Errorf("remove %s after rename: %w", path, err)
+						}
+					}
+					results = append(results, domain.FixResult{Path: path, Changes: changes})
+					continue
+				}
+			}
 			if backfill {
 				withID, ok, err := backfillMissingID(fixed, e.Name())
 				if err != nil {
@@ -110,6 +146,89 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 		}
 	}
 	return results, nil
+}
+
+// repairInvalidID canonicalises a misspelled entity id in BOTH the filename and the `id:`
+// field, returning the new path when it renamed. i/l/o have a canonical Crockford decode
+// (1, 1, 0), so the repaired id keeps the same decoded value, the same sort position, and
+// therefore the same identity — it is a spelling fix, not a new entity.
+//
+// It REFUSES in two cases, reporting rather than repairing:
+//
+//   - u, which Crockford excludes with no digit it stands for. "Repairing" it would mean
+//     choosing a different value, i.e. a different identity.
+//   - an id referenced ANYWHERE else in the planning tree. Renaming the file would leave
+//     those references dangling, and this repo has no rename cascade yet — so a silent fix
+//     would trade one broken file for several broken links. The operator is told where.
+func (s *FS) repairInvalidID(dir, filename string, content []byte) (out []byte, renamed, note string, err error) {
+	stem := strings.TrimSuffix(filename, ".md")
+	if _, _, ok := splitFlatName(stem); ok {
+		return content, "", "", nil // already valid
+	}
+	if len(stem) < id.Length+2 || stem[id.Length] != '-' {
+		return content, "", "", nil // a stray, not a misspelled entity
+	}
+	bad := stem[:id.Length]
+	good, ok := id.Canonicalize(bad)
+	if !ok {
+		if _, _, isBad := id.InvalidChar(bad); isBad {
+			return content, "", fmt.Sprintf("id %q not repaired: no canonical decode (Crockford drops u deliberately)", bad), nil
+		}
+		return content, "", "", nil
+	}
+	refs, err := s.referencesTo(bad, filepath.Join(dir, filename))
+	if err != nil {
+		return content, "", "", err
+	}
+	if len(refs) > 0 {
+		return content, "", fmt.Sprintf("id %q not repaired: still referenced by %s — renaming would dangle those links",
+			bad, strings.Join(refs, ", ")), nil
+	}
+	target := filepath.Join(dir, good+stem[id.Length:]+".md")
+	if _, err := os.Stat(target); err == nil {
+		return content, "", fmt.Sprintf("id %q not repaired: %s already exists", bad, filepath.Base(target)), nil
+	}
+	// The frontmatter `id:` is the co-located copy of the filename id; both move together
+	// or lint immediately reports drift.
+	updated, err := updateFrontmatter(content, map[string]any{"id": good})
+	if err != nil {
+		return content, "", "", fmt.Errorf("rewrite id in %s: %w", filename, err)
+	}
+	return updated, target, fmt.Sprintf("id: %s → %s (canonical Crockford spelling), renamed to %s",
+		bad, good, filepath.Base(target)), nil
+}
+
+// referencesTo reports the planning files (other than self) whose text contains an id.
+// Cheap because it only runs when a misspelled id was actually found, which is normally
+// never; it reads the entity dirs rather than the whole repo.
+func (s *FS) referencesTo(entityID, self string) ([]string, error) {
+	var hits []string
+	for _, dir := range []string{s.tasksDir, s.epicsDir, s.auditsDir, s.researchDir} {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("read dir %s: %w", dir, err)
+		}
+		for _, e := range entries {
+			if !markdownDoc(e) {
+				continue
+			}
+			path := filepath.Join(dir, e.Name())
+			if path == self {
+				continue
+			}
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return nil, fmt.Errorf("read %s: %w", path, err)
+			}
+			if strings.Contains(string(b), entityID) {
+				hits = append(hits, e.Name())
+			}
+		}
+	}
+	return hits, nil
 }
 
 // backfillMissingID fills a task/audit's frontmatter `id:` from the id that already

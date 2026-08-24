@@ -2,8 +2,11 @@ package store
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/domain"
 
 	"github.com/andy-esch/taskflow/internal/testutil"
 	yaml "go.yaml.in/yaml/v3"
@@ -109,5 +112,83 @@ func TestFS_FixFrontmatter_DryRunThenWrite(t *testing.T) {
 	}
 	if len(tasks) != 1 || len(tasks[0].Tags) != 2 {
 		t.Errorf("tags not fixed: %+v", tasks)
+	}
+}
+
+// A misspelled id is repairable in place because i/l/o have a canonical Crockford decode:
+// the repaired id keeps the same decoded value, so it is the same identity spelled legally.
+// Both the filename and the co-located `id:` field must move together, or lint immediately
+// reports drift between them.
+func TestFixRepairsMisspelledIDInFilenameAndFrontmatter(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Epic("01-e.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
+	testutil.Write(t, filepath.Join(r.Root, "tasks", "6fbj87000lt6-bad-id.md"), "---\nschema: 1\nid: 6fbj87000lt6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# Bad\n")
+
+	results, err := NewFS(r.Root).FixFrontmatter(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].Skipped {
+		t.Fatalf("expected one repair, got %+v", results)
+	}
+	fixed := filepath.Join(r.Root, "tasks", "6fbj870001t6-bad-id.md")
+	body, err := os.ReadFile(fixed)
+	if err != nil {
+		t.Fatalf("repaired file not at its canonical name: %v", err)
+	}
+	if !strings.Contains(string(body), "id: 6fbj870001t6") {
+		t.Errorf("frontmatter id was not moved with the filename:\n%s", body)
+	}
+	if _, err := os.Stat(filepath.Join(r.Root, "tasks", "6fbj87000lt6-bad-id.md")); !os.IsNotExist(err) {
+		t.Error("the misspelled filename survived the repair")
+	}
+}
+
+// The guard that matters: renaming a referenced id would leave those links dangling, and
+// this repo has no rename cascade. Refusing loudly beats trading one broken file for
+// several broken references.
+func TestFixRefusesToRepairAnIDThatIsReferencedElsewhere(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Epic("01-e.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
+	testutil.Write(t, filepath.Join(r.Root, "tasks", "6fbj87000lt6-bad-id.md"), "---\nschema: 1\nid: 6fbj87000lt6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# Bad\n")
+	testutil.Write(t, filepath.Join(r.Root, "tasks", "6fbj870009t6-refers.md"), "---\nschema: 1\nid: 6fbj870009t6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# Ref\n\nSee [bad](6fbj87000lt6-bad-id.md).\n")
+
+	results, err := NewFS(r.Root).FixFrontmatter(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var refusal *domain.FixResult
+	for i := range results {
+		if strings.Contains(results[i].Path, "6fbj87000lt6") {
+			refusal = &results[i]
+		}
+	}
+	if refusal == nil || !refusal.Skipped {
+		t.Fatalf("a referenced id must be skipped, not repaired: %+v", results)
+	}
+	if !strings.Contains(refusal.Changes[0], "6fbj870009t6-refers.md") {
+		t.Errorf("the refusal must name the referring file: %q", refusal.Changes[0])
+	}
+	if _, err := os.Stat(filepath.Join(r.Root, "tasks", "6fbj87000lt6-bad-id.md")); err != nil {
+		t.Error("the file was renamed despite being referenced")
+	}
+}
+
+// u is excluded from Crockford with no digit it stands for, so there is nothing to repair
+// it TO — "fixing" it would mean choosing a different identity.
+func TestFixRefusesAnIDContainingU(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Epic("01-e.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
+	testutil.Write(t, filepath.Join(r.Root, "tasks", "6fbj87000ut6-u-id.md"), "---\nschema: 1\nid: 6fbj87000ut6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# U\n")
+
+	results, err := NewFS(r.Root).FixFrontmatter(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || !results[0].Skipped {
+		t.Fatalf("a u id must be skipped: %+v", results)
+	}
+	if !strings.Contains(results[0].Changes[0], "canonical decode") {
+		t.Errorf("the refusal should explain why u cannot be repaired: %q", results[0].Changes[0])
 	}
 }

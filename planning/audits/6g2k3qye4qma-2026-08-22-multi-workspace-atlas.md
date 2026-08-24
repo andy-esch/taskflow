@@ -422,6 +422,7 @@ regression test; see the finding for what changed and why. **H3 followed on main
 unfinished):
 
 - ⏳ `6g2nnkffgyeg` [Render the cross-space in-progress rail in the atlas](../tasks/6g2nnkffgyeg-render-the-cross-space-in-progress-rail-in-the-atlas.md) — M3, the highest-value gap.
+- ⛔ `6g2xnn4yes8a` [Re-lay the atlas spaces view as a tile grid](../tasks/6g2xnn4yes8a-re-lay-the-atlas-spaces-view-as-a-tile-grid.md) — deprecated 2026-08-23: the table delivered it, and real-terminal width now argues against a grid.
 - ⏳ `6g2nnkfk1em1` [Show branch and worktree badges on atlas entry points](../tasks/6g2nnkfk1em1-show-branch-and-worktree-badges-on-atlas-entry-points.md) — M2.
 - ⏳ `6g2nnmmwp1gd` [Live-filter the atlas space list](../tasks/6g2nnmmwp1gd-live-filter-the-atlas-space-list.md) — M4.
 - ✅ `6g2nnp5tkaaj` [Detect a broken symlink in the spaces registry loader](../tasks/6g2nnp5tkaaj-detect-a-broken-symlink-in-the-spaces-registry-loader.md) — H3, completed 2026-08-22.

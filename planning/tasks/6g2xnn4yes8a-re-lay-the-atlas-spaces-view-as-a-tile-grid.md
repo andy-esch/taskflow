@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g2xnn4yes8a
-status: ready-to-start
+status: deprecated
 epic: 29-multi-space-planning-a-home-registry-and-the-atlas
 description: Replace the full-width card list with a responsive grid of mini-dashboard tiles, with per-space accents and a reserved slot for the deferred worktree marker.
 effort: L
@@ -11,6 +11,7 @@ autonomy_level: 3
 tags: [tui, atlas, design, ux]
 created: "2026-08-23"
 updated_at: "2026-08-23"
+deprecated_at: "2026-08-23"
 ---
 # Re-lay the atlas spaces view as a tile grid
 
@@ -96,3 +97,29 @@ The entry-point criterion above is also superseded: the table puts entry points 
 band rather than choosing between hiding them and letting them blow up a row's height.
 Note also that `v` now cycles a screen's views, so tile work must not reinvent view
 switching.
+
+## Decision, 2026-08-23 — deprecated, not abandoned
+
+The re-decision this task was parked for has been taken: **do not build the tile grid.**
+The table shipped, was reviewed adversarially, survived two rounds of fixes, and delivers
+what tiles promised.
+
+**The width evidence now argues actively against the grid.** The original analysis assumed
+the binding constraint was vertical — cards too tall, tiles more compact. Live use showed
+the opposite. On a ~92-column terminal with real space names (`desirelines-planning`) and
+76-character slugs, the work view wanted **138 columns** and the spaces table lands at
+exactly 92. A two-across grid *halves* the available width to roughly 46 per tile, where a
+space name alone is 20 characters — reintroducing precisely the squeeze that already forced
+the list, and that cost the staleness signal until columns were fitted structurally.
+
+A table row can be as wide as the terminal. A tile cannot. That is the whole argument.
+
+**Resurrect this if the table stops being enough** — most likely with many more spaces
+registered, where side-by-side comparison beats a scroll. If so, re-read the width
+arithmetic above first: it is the thing that has to change for tiles to work, and a wider
+terminal or shorter space labels is what would change it.
+
+What this task raised that did NOT die with it, and is already elsewhere:
+- Per-space accents remain unbuilt and are again out of scope on epic 29.
+- The bar-language question is live as
+  [give-atlas-bars-their-own-visual-language](6g2zs0jq7b7b-give-atlas-bars-their-own-visual-language.md).

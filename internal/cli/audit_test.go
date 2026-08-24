@@ -211,3 +211,93 @@ func TestAuditLint_FlagsMissingBucket(t *testing.T) {
 		t.Errorf("expected the missing-bucket flag:\n%s", out)
 	}
 }
+
+// `audit finding --note` writes the `**Resolution:**` paragraph, so the block lands inside
+// the right finding by construction rather than by careful typing — the reason the status
+// write exists, applied to the sentence beside it. Status and note given together must be
+// ONE write: two would leave a window where the finding claims `fixed` with last round's
+// explanation.
+func TestAuditFinding_StatusAndNoteInOneWrite(t *testing.T) {
+	root := setupAuditRepo(t)
+	p := filepath.Join(root, "audits", testutil.TaskID("o")+"-o.md")
+
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1",
+		"--status", "fixed 2026-08-24", "--note", "Widened the regex; regression test added."); err != nil {
+		t.Fatalf("audit finding: %v", err)
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	if !strings.Contains(got, "**Status:** fixed 2026-08-24") {
+		t.Errorf("status not stamped:\n%s", got)
+	}
+	if !strings.Contains(got, "**Resolution:** Widened the regex; regression test added.") {
+		t.Errorf("note not written:\n%s", got)
+	}
+
+	// Re-noting replaces; it must not stack a second label under the first.
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1", "--note", "Superseded explanation."); err != nil {
+		t.Fatalf("re-note: %v", err)
+	}
+	b, _ = os.ReadFile(p)
+	if n := strings.Count(string(b), "**Resolution:**"); n != 1 {
+		t.Errorf("want exactly one resolution block after re-noting, got %d:\n%s", n, b)
+	}
+
+	// An empty --note removes it, leaving the status alone.
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1", "--note", ""); err != nil {
+		t.Fatalf("clear note: %v", err)
+	}
+	b, _ = os.ReadFile(p)
+	if strings.Contains(string(b), "**Resolution:**") {
+		t.Errorf("note should have been removed:\n%s", b)
+	}
+	if !strings.Contains(string(b), "**Status:** fixed 2026-08-24") {
+		t.Errorf("clearing the note must not disturb the status:\n%s", b)
+	}
+}
+
+// Neither flag is a usage error, not a silent no-op: a call that changes nothing is almost
+// certainly a mistyped flag name.
+func TestAuditFinding_RequiresAFlag(t *testing.T) {
+	root := setupAuditRepo(t)
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1"); err == nil {
+		t.Error("audit finding with neither --status nor --note must be rejected")
+	}
+}
+
+// A note carrying a newline could open a heading or a fence mid-finding, restructuring the
+// document — the same corruption class as a desynchronised offset, arriving via content.
+func TestAuditFinding_RejectsNewlineInNote(t *testing.T) {
+	root := setupAuditRepo(t)
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1",
+		"--note", "bad\n#### H9. injected"); err == nil {
+		t.Error("a newline in --note must be rejected")
+	}
+}
+
+// --pr is sugar for one canonical decoration. `(PR #12)`, `PR 12`, and `pull/12` read the
+// same to a human and differently to grep; the corpus already spells its dates two ways.
+func TestAuditFinding_PRSugar(t *testing.T) {
+	root := setupAuditRepo(t)
+	p := filepath.Join(root, "audits", testutil.TaskID("o")+"-o.md")
+
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1", "--status", "fixed 2026-08-24", "--pr", "12"); err != nil {
+		t.Fatalf("audit finding --pr: %v", err)
+	}
+	b, _ := os.ReadFile(p)
+	if !strings.Contains(string(b), "**Status:** fixed 2026-08-24 (PR #12)") {
+		t.Errorf("PR decoration not appended:\n%s", b)
+	}
+	for _, args := range [][]string{
+		{"audit", "finding", "o", "H1", "--pr", "12"},                              // nothing to decorate
+		{"audit", "finding", "o", "H1", "--status", "fixed", "--pr", "0"},          // not a PR number
+		{"audit", "finding", "o", "H1", "--status", "fixed (PR #9)", "--pr", "12"}, // two references
+	} {
+		if _, err := runRootRC(t, append([]string{"-C", root}, args...)...); err == nil {
+			t.Errorf("%v should be rejected", args)
+		}
+	}
+}

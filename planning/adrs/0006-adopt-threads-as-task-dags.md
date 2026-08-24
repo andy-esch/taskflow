@@ -8,18 +8,27 @@ supersedes:
 superseded_by: null
 ---
 
-# ADR-0006: Adopt Threads as DAG-Structured Task Workflows
+# ADR-0006: Adopt Threads as Initiative Views over a Global Task DAG
 
 > Follows the ADR format established in [0001-adopt-adrs](0001-adopt-adrs.md). Formally
 > **supersedes [0002-adopt-projects](0002-adopt-projects.md)** ("Adopt Projects"), replacing
-> flat task buckets with directed acyclic graph (DAG) workflows. Leverages
-> `github.com/dominikbraun/graph` for battle-tested graph algorithms and builds upon the
-> flat, ID-addressed storage foundation of
+> flat task buckets with named views over a planning-repository task DAG. Builds upon the flat,
+> ID-addressed storage foundation of
 > [0003-stable-key-id-addressed-storage](0003-stable-key-id-addressed-storage.md).
+>
+> **Grounding note — revised 2026-08-24:** This proposal was rewritten after stress-testing it
+> against the current domain, store, CLI, wire, initialization, and TUI seams. Obsolete
+> library-first, scheduler, stored-diagram, and project-bucket claims were removed. Remaining
+> uncertainties are called out as deferred decisions rather than implied implementation.
+>
+> **Acceptance gate:** This ADR remains proposed until the bounded
+> [vertical MVP spike](../tasks/6g3a1wtx4zrr-spike-a-vertical-threads-and-global-task-dag-mvp.md)
+> reports whether its core contracts should be accepted, revised and re-tested, or abandoned.
 
 ## Context and Problem Statement
 
 `tskflwctl` currently structures work across two primary abstractions:
+
 1. **Epics ([`planning/epics/`](../epics)):** Long-lived thematic domains (e.g. `cli-ux`,
    `storage-engine`). Tasks belong to **exactly one** epic, representing their permanent
    taxonomic home. Epics never truly "complete."
@@ -27,6 +36,7 @@ superseded_by: null
    statuses (`ready-to-start`, `in-progress`, `completed`, etc.) and acceptance criteria.
 
 ### The Limitation of Flat "Projects" (ADR-0002)
+
 [ADR-0002](0002-adopt-projects.md) proposed **Projects** as cross-cutting groupings of tasks
 targeting a shared milestone. However, ADR-0002 was never implemented (0 project files exist
 beyond scaffolding placeholders). More fundamentally, **a flat project bucket lacks causal
@@ -34,15 +44,17 @@ structure, dependencies, and execution sequencing**.
 
 In real-world software engineering and autonomous AI agent workflows, non-trivial initiatives
 are not unordered bags of tasks:
+
 - Core schemas must be designed before storage adapters can be written.
 - Storage adapters must land before CLI commands or TUI screens can consume them.
 - Backend APIs and frontend components must merge before end-to-end integration tests run.
 
 A flat project cannot answer critical operational questions:
+
 - *Which tasks are unblocked and ready for immediate parallel execution?*
-- *What is the critical path to shipment?*
-- *Which task is the primary bottleneck blocking the rest of the initiative?*
+- *What prerequisite chain explains why a task is blocked?*
 - *If a task is delayed, what downstream work is impacted?*
+- *How is one cross-epic initiative progressing toward its finish line?*
 
 We need a planning primitive that captures both the **cohesive container** of an initiative
 and the **causal dependency graph (DAG)** connecting its tasks.
@@ -56,35 +68,55 @@ and the **causal dependency graph (DAG)** connecting its tasks.
 - **Option B — Decentralized task-level dependencies only (`depends_on: []` on tasks, no workflow entity).**
   Tasks declare prerequisites directly in their frontmatter.
   *Rejected as the complete model:* Lacks a cohesive initiative-level container (goal, target
-  date, lifecycle, dedicated rollup, critical-path analysis). Global ad-hoc dependencies across
-  unrelated epics create unmaintainable spaghetti graphs without a clear finish line.
-- **Option C — Implement a custom in-house DAG engine in `internal/domain/dag`.**
-  Hand-roll topological sorting, cycle detection, and frontier calculation.
-  *Rejected:* Reinventing graph theory from scratch is error-prone and misses out on rich,
-  battle-tested algorithms (transitive reduction, elementary cycle extraction, Graphviz DOT
-  generation, shortest/longest path calculations).
-- **Option D — Adopt "Threads" as DAG-structured workflows backed by `dominikbraun/graph` (Chosen).**
-  A **Thread** is a first-class planning document defining a goal-oriented DAG of tasks.
-  Offloads core graph theory to `github.com/dominikbraun/graph` (a generic, zero-dependency Go
-  library) to unlock advanced workflow orchestration, active frontier derivation, and
-  critical-path analysis out of the box.
+  date, lifecycle, and dedicated rollup). The dependency graph has no named finish line.
+- **Option C — Store dependencies inside each Thread.**
+  Each Thread document owns both its members and edges.
+  *Rejected:* A task may belong to multiple Threads, while a prerequisite is a global constraint
+  within the planning repository. Two individually acyclic Threads could declare contradictory
+  edges whose global union is cyclic, and `task blockers` would have no single answer.
+- **Option D — Threads own membership; tasks own global dependencies (Chosen).**
+  The planning repository has one task DAG. A Thread is a first-class, many-valued initiative
+  view over a subset of that graph, with its own goal, lifecycle, and rollup. An edge is stored
+  once, on the dependent task.
+
+The implementation choice between an off-the-shelf Go graph library and a small taskflow-owned
+algorithm package is deliberately **not decided here**. It follows from the required operations
+and a focused package evaluation; no third-party graph type may leak into the domain, persistence,
+or wire contracts.
 
 ## Decision
 
-Adopt **Threads** as the primary cross-cutting workflow and dependency abstraction in
-`taskflow`, formally superseding ADR-0002.
+Adopt **Threads** as the primary cross-cutting initiative abstraction in `taskflow`, together
+with one canonical, global task-dependency relation inside each planning repository. This
+formally supersedes ADR-0002.
 
-### 1. Conceptual Model: A Thread is a Named Task DAG
+### 1. Conceptual Model: One Repository DAG, Many Thread Views
 
-A **Thread** is a Directed Acyclic Graph $G = (V, E)$ paired with an initiative definition:
-- **Vertices ($V$):** The set of task IDs ($\{T_1, T_2, \dots, T_n\}$) included in the workflow.
-- **Edges ($E \subseteq V \times V$):** Directed dependency arcs $(u, v)$ indicating that task
-  $u$ must reach status `completed` before task $v$ is unblocked ($u \prec v$).
-- **Generality:** A flat project is simply the special case of an edge-less Thread ($E = \emptyset$).
-  Threads support linear chains ($T_1 \to T_2 \to T_3$), fan-outs ($T_1 \to [T_2, T_3]$),
-  fan-ins ($[T_2, T_3] \to T_4$), and arbitrary non-cyclic network topologies.
+For one planning repository, let $G = (V, E)$ be the global Directed Acyclic Graph:
 
-```
+- **Vertices ($V$):** every task in that planning repository, addressed by stable task ID.
+- **Edges ($E$):** $(u, v)$ exists when task $v$ declares `depends_on: [u]`. The edge is a hard,
+  AND-style prerequisite: every declared predecessor must be satisfied before ordinary work on
+  $v$ may start.
+- **Scope:** the graph belongs to the planning repository, not to an implementation repository.
+  One planning space may coordinate multiple implementation repos (as in desirelines); that is
+  still one planning graph. A Thread never spans planning spaces.
+
+A **Thread** pairs an initiative definition with a member set $M \subseteq V$:
+
+- A task may belong to zero, one, or many Threads.
+- The Thread's internal graph is the projection of $G$ over $M$.
+- A direct prerequisite outside $M$ remains an **external gate**. It affects member readiness and
+  appears in graph/query output with properties such as task ID, slug, status, epic, and
+  `external: true`, but it does not enter the Thread's progress denominator.
+- Full blocker queries may traverse beyond those immediate boundary vertices through the global
+  graph; Thread graph views may keep the default display to members plus immediate external gates.
+- A flat project is the special case of a Thread whose members have no internal dependency edges.
+
+Membership does not own dependency truth. Removing a task from a Thread, completing or abandoning
+a Thread, or deleting a Thread must not remove task dependencies that may constrain other Threads.
+
+```text
                     ┌───────► Task 2 (UI Model) ───────┐
                     │                                   ▼
 Task 1 (Core Schema)┤                        Task 5 (E2E Integration)
@@ -93,61 +125,134 @@ Task 1 (Core Schema)┤                        Task 5 (E2E Integration)
                              (Store)   (CLI Client)
 ```
 
-### 2. Third-Party Library: `github.com/dominikbraun/graph`
+### 2. Dependency Ownership and Integrity
 
-We adopt `github.com/dominikbraun/graph` as the foundational graph engine for `taskflow`:
-- **Go 1.18+ Generics:** Operates directly over `graph.Graph[string, domain.Task]`, using
-  stable 12-character task IDs as keys.
-- **Zero External Dependencies:** Built purely on the Go standard library, preserving
-  `taskflow`'s lightweight dependency tree.
-- **Built-in Capabilities ("Freebies"):**
-  - Cycle detection & pre-insertion guards (`graph.Acyclic()`, `graph.PreventCycles()`, `graph.CreatesCycle()`).
-  - Native Transitive Reduction (`graph.TransitiveReduction()`).
-  - Topological Sorting (`graph.TopologicalSort()`).
-  - Graphviz DOT generation (`draw.DOT()`).
-  - Shortest / Longest path traversals over weighted edges.
+The dependent task is the single source of truth:
 
-### 3. Dynamic Execution States & The "Active Frontier"
+```yaml
+depends_on: [6fjangd7kvh0, 6fjangd7kvh2]
+```
 
-In a Thread DAG, a task's readiness is dynamically derived from graph state rather than relying
-solely on static frontmatter assertions:
+- `depends_on` is a duplicate-free semantic set of stable task IDs, never slugs. It is serialized
+  in stable ID order for reviewable diffs. There is no stored inverse `blocks` field; downstream
+  relations are computed.
+- `task depend add <task> --on <prerequisite>...` and `task depend remove ...` are the direct
+  mutation surface. A Thread-oriented edge command, if retained as convenience syntax, must say
+  that it changes a repository-global task dependency and must require both tasks to be Thread
+  members; it does not create a Thread-owned edge.
+- Every dependency mutation validates exact task resolution, duplicate/self edges, and acyclicity
+  against the repository graph before writing. `--dry-run` performs the same validation.
+- The final repository scan, graph validation, and write must occur inside one planning-repository
+  mutation guard. Per-file optimistic concurrency alone is insufficient: two individually valid
+  concurrent edge additions can form a cycle when combined. The existing Unix repository lock is
+  a starting point, but the implementation must define equivalent correctness on platforms where
+  that lock is currently a no-op.
+- Graph mutation fails closed when the repository dependency graph cannot be read soundly. `lint`
+  remains the fail-open, full-sweep diagnostic surface for hand-edited missing IDs, unreadable
+  tasks, legacy fields, and cycles.
+- The existing unmodelled `dependencies`, `blocked_by`, and `blocks` fields are legacy vocabulary.
+  Implementation must migrate the six current `blocked_by` users or report them with actionable
+  lint, then converge on `depends_on` alone. The unused task-level `projects` field is deprecated
+  separately: Thread membership belongs only in Thread documents, so it must not be renamed to
+  `threads` on tasks.
 
-$$\text{Active Frontier} = \big\{ v \in V \;\big|\; \text{status}(v) \neq \text{completed} \;\land\; \forall u \in \text{predecessors}(v),\; \text{status}(u) == \text{completed} \big\}$$
+### 3. Persisted Lifecycle and Derived Graph State
 
-$$\text{Blocked} = \big\{ v \in V \;\big|\; \exists u \in \text{predecessors}(v) \text{ s.t. } \text{status}(u) \neq \text{completed} \big\}$$
+Dependencies do not add a persisted `blocked` status. Task `status` remains the author-declared
+lifecycle; graph state is a derived projection that cannot drift from the edges and current task
+statuses.
 
-- **Ready (Frontier):** Tasks whose prerequisites are 100% completed. Instantly actionable for
-  autonomous agent swarms or human developers.
-- **In-Flight:** Tasks currently marked `in-progress` whose prerequisites were met.
-- **Blocked:** Tasks waiting on at least one incomplete upstream dependency.
-- **Drained:** Tasks marked `completed`.
-- **Broken / Orphaned:** Tasks whose upstream prerequisites were `deprecated` or `abandoned`
-  without reaching completion.
+`ready-to-start` means the task itself is adequately scoped and ready to undertake if its external
+constraints permit. It does **not** promise that those constraints are currently satisfied.
+`eligible` is the derived word for that stronger claim. This avoids adding another persisted status
+while preserving room for the separate draft/finalized readiness work already contemplated by the
+project.
 
-### 4. Advanced Graph Features
+A task is **soundly completed** when its own status is `completed` and every direct prerequisite is
+also soundly completed. Because the graph is acyclic, that recursive definition terminates. It makes
+reopen behavior explicit: reopening an upstream task invalidates completed descendants as dependency
+satisfiers until the chain is repaired, even though their persisted status remains `completed`.
 
-Adopting `dominikbraun/graph` provides several immediate capabilities:
+V1 exposes lifecycle role and dependency health as separate derived fields rather than collapsing
+them into a shadow status vocabulary:
 
-1. **Transitive Reduction (`thread simplify`):**
-   Automatically cleans up redundant edge declarations (e.g. if $A \to B \to C$ exists, prune
-   $A \to C$). Keeps markdown frontmatter and Mermaid diagrams minimal.
-2. **Cycle Diagnostics with Exact Path Attribution:**
-   When an invalid edge is proposed, the CLI provides the exact cycle sequence:
-   `error: cannot link T3 -> T1: introduces cycle [T1 -> T2 -> T3 -> T1]`.
-3. **Parallel Execution Waves (`thread plan`):**
-   Groups tasks into topological generations/ranks ($W_1, W_2, \dots, W_k$). An orchestrator
-   agent can dispatch all tasks in Wave $W_i$ concurrently and await completion before
-   triggering Wave $W_{i+1}$.
-4. **Critical Path Analysis & Bottlenecks:**
-   Weights tasks by effort estimates ($XS=1, S=2, M=4, L=8, XL=16$) to compute the longest path
-   and calculate slack (float) per task, highlighting delivery bottlenecks in CLI and TUI.
-5. **Transitive Blocker & Blast-Radius Queries:**
-   - `task blockers <task>`: Computes full upstream prerequisite tree.
-   - `task unblocks <task>`: Computes full downstream blast radius of unblocked work.
-6. **Multi-Format Visual Exporters:**
-   Native rendering to Mermaid (`mermaid graph TD`), Graphviz DOT, and Unicode box-drawing ASCII.
+- **Lifecycle role** follows the persisted status: queued (`next-up`), candidate
+  (`ready-to-start`), in-flight (`in-progress`), parked (`deferred`), nominally complete
+  (`completed`), or withdrawn (`deprecated`).
+- **Gate state** is `clear` when every prerequisite is soundly completed; `blocked` when the graph
+  is readable but at least one prerequisite is not soundly completed; or `broken` when an upstream
+  path contains a missing, unreadable, or withdrawn prerequisite.
 
-### 5. Document Layout & Frontmatter Specification
+Named views are compositions of those fields:
+
+- **Eligible / Frontier:** candidate plus a clear gate. Only eligible Thread members appear in the
+  dispatchable frontier.
+- **Drained:** nominally complete plus a clear gate; equivalently, soundly completed.
+- **Inconsistent:** in-flight or nominally complete with a blocked/broken gate—for example a forced
+  start, a completed task whose prerequisites never caught up, or completed downstream work whose
+  prerequisite was reopened.
+
+A queued task can therefore be queued-and-blocked without contradiction, while a ready task can be
+candidate-and-clear (eligible) or candidate-and-blocked. Parked and withdrawn tasks are never
+eligible and never satisfy downstream dependencies.
+
+Every product path that enters `in-progress`—the `task start` verb, generic `task move`,
+`task new --start`, and future TUI actions—must call the same core eligibility guard. The transition
+refuses an ineligible task by default. `--force` is an explicit escape hatch: it bypasses only the
+dependency gate, does not remove dependencies, and returns a receipt that says the transition was
+forced and names the outstanding blockers. The task remains derived as inconsistent until its
+prerequisites become soundly completed or the graph is corrected.
+
+Hand edits, or completing a force-started task before its prerequisites catch up, can still produce
+a nominally completed-but-unsound task. Such a task does not unblock descendants; `lint`, Thread
+views, and blocker queries surface the inconsistency. V1 does not invent a separate dependency-waiver
+entity: correct the edge when the constraint is no longer real.
+
+### 4. Thread Lifecycle
+
+Thread lifecycle remains explicit: `unstarted -> in-progress -> completed | abandoned`.
+
+- `thread start` requires at least one non-withdrawn member, stamps `started_at`, and changes only
+  the Thread.
+- Thread progress reuses the existing `TaskRollup` rule: deprecated members are reported but
+  excluded from `done / total`, deferred members remain in the denominator, and external gates do
+  not count. Graph health is reported beside that nominal rollup rather than folded into it.
+- `thread complete` succeeds only when every non-withdrawn member is soundly completed and no
+  member path is broken or inconsistent. Deferred members prevent completion. A deprecated member
+  cannot remain as an unsatisfied prerequisite of live member work.
+- `thread abandon` is terminal and membership-immutable for the initiative and never mutates member
+  tasks; they may belong to other Threads or remain useful off-Thread. V1 does not reopen an
+  abandoned Thread.
+- A completed Thread is not membership-mutable until an explicit `thread reopen`, which returns it
+  to `in-progress` and clears its terminal stamp. Task status and task-owned dependencies can still
+  change through their global commands; those changes can make a completed Thread inconsistent and
+  must report the affected Threads. The exact reopen diagnosis/repair UX deserves focused
+  follow-up but is not a blocker to adopting the model.
+
+### 5. Required Graph Projections and Package Boundary
+
+The first implementation needs a small, deterministic graph-analysis contract:
+
+1. Global cycle validation with an attributable cycle/path error.
+2. Status-aware Thread frontier, failing closed for defects in the relevant graph.
+3. Full upstream blocker and downstream impact queries over global dependencies.
+4. A deterministic topological plan. Its waves/generations are **explanatory**, not an execution
+   scheduler or barrier protocol.
+5. Runtime graph export. Mermaid and DOT are straightforward textual projections; ASCII/Unicode is
+   included only if the selected renderer makes it maintainable. Generated output is never stored
+   in the Thread document.
+
+All otherwise-equal ordering uses stable task ID as the tie-breaker. Thread plans rank member tasks
+only; they list outside prerequisites as marked gates rather than silently treating external work as
+Thread-owned execution. Section 11 bounds the deliberately deferred graph features, while the
+implementation slices preserve the planned TUI follow-up.
+
+Graph implementation/package selection is a pre-implementation spike, not an ADR commitment.
+Evaluate off-the-shelf packages against the operations above, determinism, API stability,
+dependency weight, cycle diagnostics, and render support. Keep the selected package behind a
+taskflow-owned analysis interface and use plain task IDs/domain values at every boundary.
+
+### 6. Document Layout & Frontmatter Specification
 
 Threads are stored in `planning/threads/<id>-<slug>.md` using flat, ID-addressed storage
 ([ADR-0003](0003-stable-key-id-addressed-storage.md)).
@@ -170,77 +275,230 @@ tasks:
   - 6fjangd7kvh2
   - 6fjangd7kvh3
   - 6fjangd7kvh4
-edges:
-  - from: 6fjangd7kvh0
-    to: [6fjangd7kvh1, 6fjangd7kvh2]
-  - from: 6fjangd7kvh2
-    to: 6fjangd7kvh3
-  - from: [6fjangd7kvh1, 6fjangd7kvh3]
-    to: 6fjangd7kvh4
 ---
 
 # Thread: Unified Navigation Hub
 
-## Objective
-Weave the independent config, TUI navigation, and doctor diagnostics into a staged delivery pipeline.
-
-## Topological Execution Plan
-```mermaid
-graph TD
-  6fjangd7kvh0["T1: Core Service"] --> 6fjangd7kvh1["T2: CLI Adapter"]
-  6fjangd7kvh0 --> 6fjangd7kvh2["T3: Store Engine"]
-  6fjangd7kvh2 --> 6fjangd7kvh3["T4: Migration Logic"]
-  6fjangd7kvh1 --> 6fjangd7kvh4["T5: E2E Integration"]
-  6fjangd7kvh3 --> 6fjangd7kvh4
+## Context
+Why this initiative exists, important constraints, and decisions that do not belong on one task.
 ```
 
-## Progress Log
-- 2026-08-21: Thread initiated; T1 core service started.
+The Thread file owns initiative metadata and membership only. `description`, `goal`, `status`,
+`created`, and `tasks` are required; `target_date`, lifecycle timestamps, and tags are optional.
+`target_date` is a human planning constraint, not a calculated forecast. An empty member set is
+valid while an unstarted Thread is being scoped, but it cannot start or complete.
+
+`tasks` is a duplicate-free semantic set serialized in stable ID order; list position carries no
+execution meaning. Task files own `depends_on`, and graph commands join the two at runtime.
+Thread IDs reuse ADR-0003's task/research conventions: 12-character stable ID in both filename
+and frontmatter, exact-ID resolution, drift lint, and rename-safe identity. The body is free-form
+narrative, not a generated graph or shared execution log.
+
+### 7. Bulk Composition is a First-Class Use Case
+
+Scoping often discovers a complete predicted task graph at once. Bulk composition is therefore
+part of the first useful Thread release, not an afterthought. An authoring manifest may mix existing
+tasks with complete specifications for new tasks:
+
+```yaml
+thread:
+  title: Unified navigation hub
+  description: Consolidate configuration lifecycle into one hub
+  goal: Ship unified config CLI and TUI routes
+nodes:
+  - key: config-model
+    new_task:
+      title: Define the unified configuration model
+      epic: 17-pm-go-cli
+      tags: [config, domain]
+  - key: existing-cli
+    task_id: 6fjangd7kvh2
+  - key: legacy-gate
+    task_id: 6fjangd7kvh0
+    member: false
+dependencies:
+  - {from: legacy-gate, to: config-model}
+  - {from: config-model, to: existing-cli}
 ```
 
-### 6. CLI Surface
+- Every node has a manifest-local, unique `key`. Exactly one of `task_id` or `new_task` is
+  required. A new-task specification uses the same validation and defaults as `task new`; V1 may
+  create it in `ready-to-start` or `next-up`, but not directly in an already-executing or terminal
+  state.
+- A V1 manifest creates exactly one new Thread. Extending an existing Thread remains available
+  through the ordinary membership/dependency commands until real use justifies update manifests.
+- `member` defaults to true. `member: false` permits an explicitly declared existing external gate;
+  output still discovers undeclared external gates from the global graph.
+- Dependency arcs point from prerequisite to dependent. They add repository-global `depends_on`
+  relations; the manifest does not own those edges and omission never removes an existing edge.
+- Local keys are authoring conveniences only. Persisted Thread membership and task dependencies use
+  stable IDs.
+
+#### Compile, Then Apply
+
+A one-shot command that generates fresh IDs during each retry is not safe enough for a multi-file
+operation. Bulk composition uses two phases:
 
 ```bash
-# Creation & Graph Editing
-tskflwctl thread new "Title" --goal "..." [--target-date YYYY-MM-DD]
+tskflwctl thread compose --from thread-plan.yaml --out thread-apply.yaml
+tskflwctl thread apply thread-apply.yaml
+tskflwctl thread apply thread-apply.yaml --dry-run --json
+```
+
+1. **Compose** reads the repository, validates the entire authoring manifest, mints all new Thread
+   and task IDs, resolves every local key, validates exact task/epic references and normal
+   task-creation invariants, and checks the proposed edge union for cycles. It writes a
+   materialized apply plan before any planning entity is mutated. The plan is bound to the
+   planning-space identity and records stable IDs, intended creations, additive membership/edge
+   changes, and the preconditions used to calculate them.
+2. **Apply** revalidates the complete materialized plan, then converges the repository toward it.
+   A missing planned entity is created with its preallocated ID; an identical creation or already
+   present set addition is skipped; a same-ID/different-identity collision or stale conflicting
+   edit stops with `ErrConflict`. Reapplying the same plan cannot mint duplicate tasks.
+
+Compose supports stdin for the authoring manifest, but a materialized plan must have a durable
+path before apply begins. A later convenience command may compose and apply in one invocation only
+if it first saves and reports that recovery plan.
+
+The store provides content-version checks and atomic per-file replacement; it does not provide an
+all-files transaction. Real apply holds the planning-repository mutation guard across its final
+read, graph validation, and write sequence so cooperating taskflow writers cannot interleave a
+globally invalid edge. It validates everything it can before the first write, reports a
+per-entity/edge receipt, stops on the first conflict, and is safe to resume with the same plan.
+It does not claim rollback or isolation from raw hand edits. `lint` must diagnose any remainder
+after interruption.
+
+### 8. CLI Surface
+
+```bash
+# Thread authoring and membership
+tskflwctl thread new "Title" --description "..." --goal "..." [--target-date YYYY-MM-DD]
 tskflwctl thread add <thread> <task-id>...
-tskflwctl thread edge <thread> <from-task> <to-task>
-tskflwctl thread simplify <thread>           # Apply transitive reduction
+tskflwctl thread remove <thread> <task-id>...
+tskflwctl thread set|edit|rename <thread> ...
+tskflwctl thread info|path <thread>
 
-# Lifecycle & Progress
-tskflwctl thread start|complete|abandon <thread>
-tskflwctl thread list [--status <status>]
-tskflwctl thread show <thread>               # Progress, critical path, active frontier
-tskflwctl thread frontier <thread>           # Machine list of currently actionable tasks
-tskflwctl thread plan <thread>               # Partition into parallel execution waves
-tskflwctl thread graph <thread> [--format mermaid|ascii|dot]
+# Bulk graph composition
+tskflwctl thread compose --from <yaml-or-json-file|-> --out <apply-plan>
+tskflwctl thread apply <apply-plan> [--dry-run]
 
-# Task Query Integration
-tskflwctl task list --thread <thread> [--unblocked]
+# Repository-global task dependencies
+tskflwctl task depend add <task> --on <prerequisite>...
+tskflwctl task depend remove <task> --on <prerequisite>...
 tskflwctl task blockers <task-id>
 tskflwctl task unblocks <task-id>
+
+# Lifecycle and progress
+tskflwctl task start <task-id> [--force]
+tskflwctl thread start|complete|abandon|reopen <thread>
+tskflwctl thread list [--status <status>]
+tskflwctl thread show <thread>               # Rollup, blockers, external gates, frontier
+tskflwctl thread frontier <thread>           # Machine list of currently eligible members
+tskflwctl thread plan <thread>               # Explanatory topology/waves
+tskflwctl thread graph <thread> [--format mermaid|dot|ascii]
+
+# Existing task queries gain Thread filters
+tskflwctl task list --thread <thread> [--unblocked]
 ```
+
+Mutations participate in the existing global `--dry-run` and output-mode contracts. Machine output
+must expose stable IDs, membership versus external-gate roles, derived graph state, blockers, and
+forced-transition metadata without requiring callers to parse human rendering.
+
+### 9. Planning Layout and Implementation Boundary
+
+`planning/threads/` replaces the unimplemented `planning/projects/` scaffold:
+
+- Add `ThreadsDir = "threads"`; `init` creates it and stops creating `ProjectsDir`.
+- A repository migration may remove an empty `projects/` placeholder. It must not delete a non-empty
+  legacy directory automatically; report it as deprecated content requiring an explicit migration.
+- Update space-health/layout discovery so a planning repository remains one coherent planning space.
+  The implementation repositories it coordinates do not gain their own copies of Thread state.
+
+Threads are first-class documents, so the implementation must deliberately cover the same seams as
+other entities: domain and validation, parser/store and optimistic concurrency, core use cases, CLI
+and completion, schema/templates, wire envelopes and JSON schema, initialization/layout, lint, and
+space health. The current entity descriptor reduces some enumeration, but store, core, render, and
+TUI paths are still partly per-entity; that fan-out is implementation cost, not evidence that Thread
+should be encoded as a task field.
+
+Dependency analysis belongs in pure core/domain-facing code over task IDs and statuses. Filesystem
+code parses and atomically mutates documents but does not decide frontier, sound completion, or
+topological semantics. Introduce narrow consumer-owned dependency and Thread persistence ports;
+keep the selected graph package, if any, behind the taskflow-owned analysis contract.
+
+### 10. Implementation Slices
+
+If the validation spike recommends acceptance and the decider accepts this ADR, production work can
+be scoped into the following delivery slices without requiring the deferred features:
+
+1. **Dependency foundation:** add modeled `Task.DependsOn`, replace the legacy dependency field
+   registry, migrate the six current `blocked_by` files to stable IDs, add graph loading and
+   fail-closed global integrity/lint, and complete the graph-package spike.
+2. **Dependency operations and eligibility:** add dependency mutation/query commands, deterministic
+   analysis projections, the shared transition guard across CLI/core call paths, and `--force`
+   receipts.
+3. **Thread entity:** add document/store/core/wire/CLI support, many-valued membership, lifecycle,
+   rollup, external gates, frontier, and initialization migration from the unused Projects scaffold.
+4. **Bulk composition and generated views:** ship compose/apply manifests with resumable receipts,
+   explanatory plans, and Mermaid/DOT rendering. This is part of V1 because known-ahead scoping is a
+   primary use case.
+5. **Planned TUI follow-up:** after CLI and wire behavior have usage feedback, add a Thread list/tab
+   and detail view showing lifecycle, rollup, frontier, member/external distinction, and a readable
+   graph. The first TUI slice should consume the same projections and should not introduce direct
+   graph editing or a separate readiness calculation.
+
+### 11. Explicitly Out of Scope for This Decision
+
+- critical path, slack, effort weighting, target-date forecasting, and bottleneck scoring;
+- autonomous dispatch, multi-agent/worktree orchestration, merge ordering, retries, or barriers;
+- transitive reduction or graph simplification commands;
+- soft, OR, conditional, time-based, or cross-planning-space dependency edges;
+- stored diagrams, stored rollups, or a shared execution log inside the Thread file;
+- all-files rollback or claims of transactionality across Markdown documents; and
+- choosing a graph package before the required-operation spike.
 
 ## Consequences
 
 ### Positive
-- **Generalizes & Replaces Projects:** Seamlessly provides high-level initiative grouping while
-  adding causal graph structure.
-- **Unlocks Multi-Agent Parallelism:** Agents can query the active frontier or topological waves
-  to dispatch parallel workers without stepping on unfinished prerequisites.
-- **Automated Hygiene:** Transitive reduction keeps graph definitions clean and prevents edge rot.
-- **Zero-Dependency Integration:** `dominikbraun/graph` provides industrial-grade graph theory
-  without bloating the application binary or supply chain.
-- **Durable Identity:** Tasks are referenced in edges by their stable 12-char ID (`6fjangd7kvh0`),
-  making graph edges impervious to task renames and status moves.
+
+- The planning repository has one dependency answer for every task, even when tasks are reused
+  across Threads or executed off-Thread.
+- Threads add an initiative goal, lifecycle, and rollup without changing the one-epic taxonomic
+  ownership rule.
+- Frontier, blockers, downstream impact, and explanatory sequencing become deterministic machine
+  projections instead of prose conventions.
+- External gates stay visible without inflating Thread progress, and one planning space can
+  coordinate tasks implemented across multiple repositories.
+- Bulk compose/apply supports known-ahead project scoping without sacrificing stable IDs or safe
+  retries.
+- Generated views avoid merge-prone cached diagrams and progress logs.
 
 ### Negative / Cost
-- **New Planning Entity:** Requires introducing `Thread` models, store routines, CLI verbs,
-  wire JSON envelopes, and TUI representations.
-- **Graph Validation Overhead:** Mutating graph edges requires cycle validation ($O(V + E)$),
-  though this cost is negligible (<1 ms) for human- and team-scale workflows.
-- **Deprecation of `planning/projects/`:** Scaffolding and documentation referencing the
-  unimplemented ADR-0002 project concept must be updated to reference threads.
+
+- `Task`, its field registry, persistence, mutation ports, transition paths, lint, and wire contracts
+  all change. This is not merely a new `Thread` model.
+- A first-class Thread still fans out across domain, store, core, CLI, completion, schema/template,
+  wire, init/layout, health, and eventually TUI code.
+- Graph-sensitive mutations require a sound repository scan and cycle analysis. The expected
+  complexity is linear in tasks plus edges, but performance should be measured rather than assigned
+  a speculative sub-millisecond promise.
+- Bulk apply is resumable but not transactionally atomic across files. Users and automation must keep
+  the materialized plan until its receipt is complete.
+- The canonical Thread document centralizes membership edits and can conflict under concurrent
+  scoping. Ordinary task execution does not rewrite it, which limits but does not remove that risk.
+
+### Semantic Risks
+
+- A dependency edit is global even when initiated while looking at one Thread. Human and machine
+  output must make that blast radius explicit.
+- Reopening an upstream task can make completed descendants and completed Threads inconsistent.
+  Recursive sound completion is conservative by design; the follow-up repair UX must make removal,
+  replacement, or re-completion understandable.
+- Hard AND-only prerequisites will not model every real workflow. They are intentionally the smallest
+  enforceable contract; pressure for soft or alternative gates should be evaluated from actual use.
+- The best graph package may provide useful later algorithms, but package capability must not expand
+  V1 scope or leak library types into persisted/public contracts.
 
 ## Amendments
 
@@ -251,5 +509,8 @@ _None yet (proposed)._
 - Supersedes: [0002-adopt-projects](0002-adopt-projects.md).
 - ADR format standard: [0001-adopt-adrs](0001-adopt-adrs.md).
 - Stable-key ID storage foundation: [0003-stable-key-id-addressed-storage](0003-stable-key-id-addressed-storage.md).
+- Validation home: epic [30-threads-and-task-dependency-graphs](../epics/30-threads-and-task-dependency-graphs.md).
+- Acceptance-gate spike: [spike-a-vertical-threads-and-global-task-dag-mvp](../tasks/6g3a1wtx4zrr-spike-a-vertical-threads-and-global-task-dag-mvp.md).
 - First-class entity roadmap: epic [28-first-class-entities-new-planning-nouns](../epics/28-first-class-entities-new-planning-nouns.md).
-- Graph engine: `github.com/dominikbraun/graph`.
+- Adjacent readiness work: [task-readiness-state-draft-vs-finalized-in-frontmatter](../tasks/6fbj87001m03-task-readiness-state-draft-vs-finalized-in-frontmatter.md).
+- Graph package selection: deferred to the required-operation spike in this ADR.

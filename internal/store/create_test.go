@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/testutil"
+
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -160,5 +162,32 @@ func TestCreateEpic_AutoNumber(t *testing.T) {
 	}
 	if next.ID != "05-gamma" {
 		t.Errorf("next epic id = %q, want 05-gamma", next.ID)
+	}
+}
+
+// The creates build `<id>-<slug>.md` straight from the id, so an illegal one would write a
+// file the scanner then refuses to parse. Catch it at the write, not at the next lint.
+func TestCreateRejectsAnInvalidEntityID(t *testing.T) {
+	r := testutil.NewRepo(t)
+	fs := NewFS(r.Root)
+	if _, err := fs.CreateTask(domain.Task{ID: "6fbj87000lt6", Slug: "s"}, "# T\n", false); err == nil {
+		t.Error("CreateTask accepted an invalid id")
+	} else if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("CreateTask error = %v; want a validation failure", err)
+	}
+	if _, err := fs.CreateAudit(domain.Audit{ID: "6fbj87000ut6", Slug: "s", Area: "a", Date: "2026-01-01"}, "# A\n", false); err == nil {
+		t.Error("CreateAudit accepted an invalid id")
+	}
+	if _, err := fs.CreateResearch(domain.Research{ID: "nope", Slug: "s"}, "# R\n", false); err == nil {
+		t.Error("CreateResearch accepted an invalid id")
+	}
+	// Nothing was written.
+	for _, dir := range []string{"tasks", "audits", "research"} {
+		entries, _ := os.ReadDir(filepath.Join(r.Root, dir))
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".md") {
+				t.Errorf("%s/%s was created despite an invalid id", dir, e.Name())
+			}
+		}
 	}
 }

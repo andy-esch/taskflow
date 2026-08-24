@@ -179,3 +179,46 @@ func TestNew_ConcurrentUnique(t *testing.T) {
 		t.Fatalf("got %d unique ids, want %d", len(seen), g*per)
 	}
 }
+
+// A 12-character id with one illegal letter used to be indistinguishable from a file with
+// no id at all, which sent readers looking for a missing id instead of at one wrong letter.
+func TestInvalidChar(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		char byte
+		pos  int
+		bad  bool
+	}{
+		{"6fbj870001t6", 0, 0, false},
+		{"6fbj87000lt6", 'l', 9, true},
+		{"6fbj87000ut6", 'u', 9, true},
+		{"i6bj870001t6", 'i', 0, true},
+	} {
+		c, pos, bad := InvalidChar(tc.in)
+		if bad != tc.bad || (bad && (c != tc.char || pos != tc.pos)) {
+			t.Errorf("InvalidChar(%q) = %q@%d,%v; want %q@%d,%v", tc.in, string(c), pos, bad, string(tc.char), tc.pos, tc.bad)
+		}
+	}
+}
+
+// Aliasing preserves the DECODED value, so a repaired id keeps its identity and its sort
+// position. u is the deliberate exception: Crockford defines no digit it stands for, so
+// "repairing" it would mean choosing a different id.
+func TestCanonicalizePreservesValueAndRefusesU(t *testing.T) {
+	fixed, ok := Canonicalize("6fbj87000lt6")
+	if !ok || fixed != "6fbj870001t6" {
+		t.Fatalf("Canonicalize(l) = %q,%v; want 6fbj870001t6,true", fixed, ok)
+	}
+	if decode(fixed) != decode("6fbj870001t6") {
+		t.Error("canonicalising changed the decoded value")
+	}
+	if got, ok := Canonicalize("6fbj87000ut6"); ok || got != "6fbj87000ut6" {
+		t.Errorf("Canonicalize(u) = %q,%v; want the input unchanged and false", got, ok)
+	}
+	if got, ok := Canonicalize("short"); ok || got != "short" {
+		t.Errorf("Canonicalize(short) = %q,%v; want unchanged and false", got, ok)
+	}
+	if got, ok := Canonicalize("6fbj870001t6"); !ok || got != "6fbj870001t6" {
+		t.Errorf("Canonicalize of an already-valid id must be identity, got %q,%v", got, ok)
+	}
+}

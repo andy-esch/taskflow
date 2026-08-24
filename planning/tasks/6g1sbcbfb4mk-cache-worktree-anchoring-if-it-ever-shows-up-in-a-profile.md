@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1sbcbfb4mk
-status: next-up
+status: ready-to-start
 epic: 21-code-quality-architecture-hardening
 description: anchorDir stats per resolution and CheckLinks iterates. Measured at well below noise (doctor 8.1ms/run); file the observation, act only on a profile.
 effort: Unknown
@@ -10,6 +10,7 @@ priority: low
 autonomy_level: 3
 tags: [perf, config]
 created: "2026-08-19"
+updated_at: "2026-08-23"
 ---
 # Cache worktree anchoring if it ever shows up in a profile
 

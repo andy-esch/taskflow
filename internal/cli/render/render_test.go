@@ -292,30 +292,51 @@ func TestResearchShowHuman_FieldsRelativeDateAndFitWidth(t *testing.T) {
 	}
 }
 
-// TestAuditProgressDistinguishesTriaged: the headline number must tell one story
-// with the bar. A fully-triaged open audit (all superseded, 0 fixed) reads
-// "0% fixed" like an untouched one, so the "ready to close" marker is what sets
-// them apart; an untouched audit shows neither the marker nor a fixed share.
+// TestAuditProgressDistinguishesTriaged: the headline number must tell one story with
+// the bar. A fully-triaged open audit (all superseded) is SETTLED — deciding not to fix
+// a finding resolves it — so it reads 100%, agrees with its own "ready to close" marker,
+// and is told apart from a fixed audit by the bar's bands (all ▒ dropped vs all █ done)
+// rather than by a number that called both of them unfinished. An untouched audit reads
+// 0% and carries no marker.
+//
+// This previously asserted "0% fixed" on the triaged row, which is how a closed,
+// fully-resolved audit came to display 77% on the same line as ready-to-close.
 func TestAuditProgressDistinguishesTriaged(t *testing.T) {
 	triaged := domain.Audit{Slug: "2026-06-01-triaged", Bucket: domain.AuditOpen, Area: "store", Findings: 2, DroppedFindings: 2}
 	untouched := domain.Audit{Slug: "2026-06-01-untouched", Bucket: domain.AuditOpen, Area: "store", Findings: 2, OpenFindings: 2}
+	allFixed := domain.Audit{Slug: "2026-06-01-allfixed", Bucket: domain.AuditOpen, Area: "store", Findings: 2, DoneFindings: 2}
 
 	var out bytes.Buffer
-	if err := AuditsHuman(&out, NewStyle(false), []domain.Audit{triaged, untouched}); err != nil {
+	if err := AuditsHuman(&out, NewStyle(false), []domain.Audit{triaged, untouched, allFixed}); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
-	var triagedLine, untouchedLine string
+	var triagedLine, untouchedLine, fixedLine string
 	for _, ln := range lines {
 		switch {
 		case strings.Contains(ln, "triaged"):
 			triagedLine = ln
 		case strings.Contains(ln, "untouched"):
 			untouchedLine = ln
+		case strings.Contains(ln, "allfixed"):
+			fixedLine = ln
 		}
 	}
-	if !strings.Contains(triagedLine, "0% fixed") {
-		t.Errorf("triaged audit should label its share %q:\n%s", "0% fixed", triagedLine)
+	// Both terminal audits are fully settled…
+	for _, tc := range []struct{ name, line string }{{"triaged", triagedLine}, {"allfixed", fixedLine}} {
+		if !strings.Contains(tc.line, "100% settled") {
+			t.Errorf("%s audit should read 100%% settled:\n%s", tc.name, tc.line)
+		}
+	}
+	// …and the BAR is what says how they got there: dropped is ▒, done is █.
+	if !strings.Contains(triagedLine, "▒") || strings.Contains(triagedLine, "█") {
+		t.Errorf("a triaged audit's bar should be all dropped-band:\n%s", triagedLine)
+	}
+	if !strings.Contains(fixedLine, "█") || strings.Contains(fixedLine, "▒") {
+		t.Errorf("an all-fixed audit's bar should be all done-band:\n%s", fixedLine)
+	}
+	if !strings.Contains(untouchedLine, "0% settled") {
+		t.Errorf("untouched audit should read 0%% settled:\n%s", untouchedLine)
 	}
 	if !strings.Contains(triagedLine, "ready to close") {
 		t.Errorf("fully-triaged open audit should be flagged ready to close:\n%s", triagedLine)

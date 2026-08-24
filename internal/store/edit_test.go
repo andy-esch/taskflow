@@ -3,8 +3,10 @@ package store
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
@@ -230,5 +232,44 @@ func TestEditTask_UnknownSlug_NotFound(t *testing.T) {
 	}
 	if ran {
 		t.Error("editor must not run for an unresolvable slug")
+	}
+}
+
+// Audit 2026-08-24-planning-state-vocabulary H2. An $EDITOR session rewrites the whole
+// frontmatter, and the stamping call only passes updated_at — so the id guard in
+// updateFrontmatter never saw it, and an illegal Crockford id reached disk. The claim that
+// updateFrontmatter was "the single choke point every write passes through" held for FIELD
+// writes only.
+func TestEditRejectsAnInvalidIDWithoutStutteringOrWriting(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Epic("01-e.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
+	path := filepath.Join(r.Root, "tasks", "6fbj870001t6-probe.md")
+	testutil.Write(t, path, "---\nschema: 1\nid: 6fbj870001t6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# Probe\n")
+
+	attempts := 0
+	_, changed, err := NewFS(r.Root).EditTask("probe", time.Now(), func(current string, prevErr error) (string, error) {
+		attempts++
+		if attempts == 1 {
+			return strings.Replace(current, "id: 6fbj870001t6", "id: 6fbj87000lt6", 1), nil
+		}
+		// The editor must have been reopened with the reason, exactly as a frontmatter
+		// break does — that is the whole point of routing this through the accept step.
+		if prevErr == nil || !strings.Contains(prevErr.Error(), "Crockford") {
+			t.Errorf("editor reopened without naming the problem: %v", prevErr)
+		}
+		return current, nil // give up
+	})
+	if changed {
+		t.Error("an edit introducing an invalid id was accepted")
+	}
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("error = %v; want a validation failure", err)
+	}
+	if n := strings.Count(err.Error(), "validation failed"); n != 1 {
+		t.Errorf("error stutters (%d× 'validation failed'): %v", n, err)
+	}
+	b, readErr := os.ReadFile(path)
+	if readErr != nil || strings.Contains(string(b), "6fbj87000lt6") {
+		t.Errorf("the invalid id reached disk: %v\n%s", readErr, b)
 	}
 }

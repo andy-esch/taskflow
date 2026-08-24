@@ -74,6 +74,12 @@ var entities = []Descriptor{
 			fmt.Sprintf("description is a single line, ≤%d characters.", MaxDescriptionLen),
 			"at least one tag is required at creation.",
 			"the filename slug is derived from the title; any title is accepted (colons, dashes, arrows, …) and the full title is kept as the body H1.",
+			// Derived from the vocabulary itself, never retyped beside it: a documented list
+			// that drifts from the code is the failure recorded as finding M3 of the
+			// 2026-08-17 finding-status-surface audit, where a reader of a stale table
+			// believed the vocabulary was closed at six values.
+			fmt.Sprintf("an acceptance criterion is `- [x]` (met) or `- [ ]` (not met). A not-met criterion may say WHY with a trailing `· **%s:** reason` — one of: %s. A reason is required for those, and a checked criterion takes no suffix.",
+				CriterionDeferred, strings.Join(CriterionSuffixStates(), " | ")),
 		},
 		Templates: []NamedTemplate{
 			{DefaultTemplate, "Standard task scaffold: objective, acceptance criteria, out-of-scope, related epic.", taskBodyTemplate},
@@ -110,6 +116,14 @@ var entities = []Descriptor{
 		Conventions: []string{
 			"audits are created in the open bucket; move them with audit close/reopen/defer.",
 			"the slug is <date>-<area>; findings live in the body as `#### H1. … **Status:** open`.",
+			// DERIVED, not transcribed. Finding M3 of 2026-08-17-finding-status-surface was
+			// a hand-kept status table that had silently fallen a word behind the code, and
+			// readers reasoned from the table. Building the sentence from FindingStatuses()
+			// makes it impossible for this guidance to lag the vocabulary again.
+			"finding statuses: " + strings.Join(FindingStatuses(), " | ") +
+				" — `tracked` means handed to a task and needs the destination (`tracked by <id>`).",
+			"never hand-edit a finding's **Status:** or **Resolution:** — `audit finding <audit> " +
+				"<code> --status <v> [--pr N] [--note <text>]` writes both in one validated, atomic edit.",
 		},
 		Templates: []NamedTemplate{
 			{DefaultTemplate, "Standard audit scaffold: findings + candidate tasks.", auditBodyTemplate},
@@ -301,7 +315,8 @@ const auditBodyTemplate = "\n# Audit: {{area}} — {{date}}\n\n" +
 	"**File:** <path:line> | **Component:** <component>\n" +
 	"**Effort:** <XS|S|M|L> · **Urgency:** <acute|soon|eventually>\n\n" +
 	"<what's wrong, why it matters, evidence>\n\n" +
-	"**Recommendation:** <minimum fix>\n" +
+	"**Recommendation:** <minimum fix>\n\n" +
+	"**Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>\n" +
 	"```\n\n" +
 	"## Candidate tasks\n\n" +
 	"<!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do -->\n\n" +

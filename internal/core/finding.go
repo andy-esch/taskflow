@@ -193,6 +193,84 @@ func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []domain.FileP
 // LintAudits validates audit findings — status vocabulary, missing status, and the
 // bucket↔state invariant — returning one LintResult per audit with issues (reusing
 // the task-lint result + render shape). slug, if set, restricts to one audit.
+// SetFindingStatus stamps one finding's status in place, through the audit body-replace
+// path so the rest of the file is byte-identical. Returns the audit and whether anything
+// changed — false means it already carried that exact value, so no write happened.
+//
+// This is the validated write path finding H1 of the 2026-08-17 audit asked for. Until now
+// the only way to resolve a finding was a hand edit or a scripted search-and-replace, which
+// is how a vocabulary drifts from its own documentation — and, in practice, how this repo's
+// own audits were maintained.
+func (s *Service) SetFindingStatus(slug, code, status string, dryRun bool) (domain.Audit, bool, error) {
+	return s.EditFinding(slug, code, FindingEdit{Status: status}, dryRun)
+}
+
+// FindingEdit is what one `audit finding` call may change. A zero field is left alone; the
+// two travel together so status and note land in ONE atomic write rather than two, which
+// would leave a window where the finding claims `fixed` with last round's explanation.
+type FindingEdit struct {
+	Status string  // "" leaves the status alone
+	Note   *string // nil leaves the note alone; a pointer to "" REMOVES it
+}
+
+// apply runs the edit against a body, re-parsing between steps so the second edit sees the
+// first one's offsets. Chaining rather than computing both spans up front is deliberate:
+// stale offsets are exactly how finding H1 of the 2026-08-24 audit corrupted files.
+func (e FindingEdit) apply(body, code string) (string, error) {
+	out := body
+	var err error
+	if e.Status != "" {
+		if out, err = domain.SetFindingStatus(out, code, e.Status); err != nil {
+			return "", err
+		}
+	}
+	if e.Note != nil {
+		if out, err = domain.SetFindingNote(out, code, *e.Note); err != nil {
+			return "", err
+		}
+	}
+	return out, nil
+}
+
+// EditFinding stamps a finding's status and/or resolution note in place, through the audit
+// body-replace path so the rest of the file is byte-identical. Returns the audit and
+// whether anything changed — false means it already carried those exact values, so no
+// write happened.
+//
+// This is the validated write path finding H1 of the 2026-08-17 audit asked for. Until now
+// the only way to resolve a finding was a hand edit or a scripted search-and-replace, which
+// is how a vocabulary drifts from its own documentation — and, in practice, how this repo's
+// own audits were maintained.
+func (s *Service) EditFinding(slug, code string, edit FindingEdit, dryRun bool) (domain.Audit, bool, error) {
+	a, body, err := s.store.GetAudit(slug)
+	if err != nil {
+		return domain.Audit{}, false, err
+	}
+	// Validate and compute against the parsed body first, so a bad code, status, or note
+	// fails before any write is attempted and --dry-run costs nothing.
+	want, err := edit.apply(body, code)
+	if err != nil {
+		return domain.Audit{}, false, err
+	}
+	if dryRun {
+		return a, want != body, nil
+	}
+	// EditAudit is the parse-before-accept write path, and it retries its callback on a
+	// rejected edit. This rewrite is DETERMINISTIC — a second identical attempt would be
+	// rejected identically — so the retry is refused rather than spun on.
+	attempted := false
+	ra, changed, err := s.store.EditAudit(slug, s.now(), func(current string, prevErr error) (string, error) {
+		if attempted {
+			return "", prevErr
+		}
+		attempted = true
+		// Applied to the whole file: frontmatter is YAML and carries no `#### CODE.`
+		// finding headers, so the grammar can only match inside the body.
+		return edit.apply(current, code)
+	})
+	return ra, changed, err
+}
+
 func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, error) {
 	var (
 		results  []LintResult

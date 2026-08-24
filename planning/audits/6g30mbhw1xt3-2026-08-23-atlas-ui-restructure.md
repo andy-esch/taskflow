@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g30mbhw1xt3
-bucket: open
+bucket: closed
 area: atlas-ui-restructure
 date: "2026-08-23"
 ---
@@ -153,10 +153,19 @@ Both task `6g2nnkffgyeg` (work view) and task `6g2zqyra2s6h` (spaces table) have
 
 **Recommendation:** Update the completed acceptance criteria in `6g2nnkffgyeg` and `6g2zqyra2s6h` to `- [x]` and note any deferred criteria in the implementation notes.
 
+**Fixed 2026-08-23** using `tskflwctl task ac --check`, which exists precisely for this and
+had not been used. Ticking per-criterion rather than wholesale is what surfaced L1:
+criterion 8 of `6g2zqyra2s6h` ("degrades by dropping the least load-bearing columns") would
+not tick honestly, because it was genuinely unmet. It was left unchecked until the column
+fitting landed, then checked — so the planning data never claimed a criterion the code did
+not meet.
+
 > **Resolution, 2026-08-23.** Every finding was independently reproduced before being acted
-> on; none was taken on the reviewer's word. H1, H2, M1, M2, L2, and L3 are fixed with
-> regression tests. **L1 stays open** — see its note. Two of the three proposed candidate
-> tasks were small enough to fix directly rather than track.
+> on; none was taken on the reviewer's word. **All seven are fixed**, each with a
+> regression test. L1 was initially deferred as "eventually" and that call was wrong: it had
+> been judged against the demo fixture's short space names, and real-registry widths showed
+> it was acute. It was reopened and fixed the same day. Every proposed candidate task was
+> small enough to fix directly rather than track.
 >
 > Also surfaced while running the gate, unrelated to this branch: `FORCE_COLOR=3` in the
 > developer's environment makes `TestColor_DefaultIsPlainForNonTTY` and
@@ -173,11 +182,4 @@ Both task `6g2nnkffgyeg` (work view) and task `6g2zqyra2s6h` (spaces table) have
 - ✅ ~~`tskflwctl task new "Pad atlas counts breakdown column to align attention and date cells" --epic 29-multi-space-planning-a-home-registry-and-the-atlas --tags tui,atlas,ux` — Compute maximum width for atlasCountsLine across spaces so ⚠ attention and date columns align across rows.~~ — fixed directly (M1).
 - ✅ ~~`tskflwctl task new "Fix empty work view keybinding prompt and verify column alignment in tests" --epic 29-multi-space-planning-a-home-registry-and-the-atlas --tags tui,atlas,ux,test` — Fix empty state prompt from [/] to v and add column alignment assertions in atlas_test.go.~~ — fixed directly (M2, L2).
 
-
-**Fixed 2026-08-23** using `tskflwctl task ac --check`, which exists precisely for this and
-was not used. Ticking was done per-criterion rather than wholesale, which surfaced
-something worth keeping: criterion 8 of `6g2zqyra2s6h` ("degrades by dropping the least
-load-bearing columns") is **left unchecked**, because L1 is right that it is unmet. The
-planning data now shows that honestly instead of a completed task claiming a criterion it
-did not meet.
 - ✅ ~~`tskflwctl task new "Drop atlas table columns structurally on narrow terminals"`~~ — L1 fixed directly once real-registry widths showed it was acute, not eventual.

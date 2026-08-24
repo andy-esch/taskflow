@@ -2,6 +2,22 @@
 
 List audits (open by default)
 
+### Synopsis
+
+List audits with a segmented progress bar per row.
+
+The headline number is the SETTLED share — findings that have reached a terminal
+disposition, however they got there — so 100% is exactly the point an open audit
+becomes `✔ ready to close`. The bar says how it settled, grouping the seven statuses
+into four bands so the shape reads at a glance:
+
+  █ green   settled here         fixed · tracked
+  ▓ yellow  still being worked   in-progress
+  ▒ gray    settled by dropping  deferred · superseded · wontfix
+  ░ dim     still open           open
+
+The glyphs differ as well as the colors, so the bands survive --color=never.
+
 ```
 tskflwctl audit list [flags]
 ```

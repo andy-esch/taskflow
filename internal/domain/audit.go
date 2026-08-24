@@ -73,27 +73,34 @@ type Audit struct {
 	// `-c open` projection, and the "(N open)" detail suffix.
 	OpenFindings    int `yaml:"-"` // status: open
 	ActiveFindings  int `yaml:"-"` // status: in-progress
-	DoneFindings    int `yaml:"-"` // status: fixed, landed
+	DoneFindings    int `yaml:"-"` // status: fixed, tracked
 	DroppedFindings int `yaml:"-"` // status: deferred, superseded, wontfix
 }
 
-// Resolved is the bar's "done" count — findings fixed or landed (DoneFindings),
-// the audit analog of an epic's Done. Findings that are merely parked/dropped
-// (deferred, superseded, wontfix) or in-progress are NOT counted here; the
-// segmented bar shows those as their own bands.
-func (a Audit) Resolved() int { return a.DoneFindings }
+// Resolved is the audit's SETTLED count — every finding that has reached a terminal
+// disposition, whether it was done here (fixed/tracked) or dropped (deferred,
+// superseded, wontfix). It is the numerator beside Percent, and the continuous form
+// of Settled: Resolved == Findings exactly when Settled reports true.
+//
+// It used to count only DoneFindings, which made a fully-triaged audit read as
+// unfinished — `2026-06-27-consumer-data-flow-architecture` closed with 17 done and 5
+// dropped and displayed "77% fixed", contradicting its own "ready to close" state on
+// the same line. Deciding not to fix a finding IS resolving it; the segmented bar still
+// separates the bands, so nothing about HOW it was settled is lost.
+func (a Audit) Resolved() int { return a.DoneFindings + a.DroppedFindings }
 
-// Percent is the share of findings done (fixed/landed), 0–100 (0 when there are
-// none) — the segmented bar's headline number and its green band's reach.
+// Percent is the share of findings settled, 0–100 (0 when there are none) — the
+// segmented bar's headline number. 100 means every finding has a terminal disposition,
+// which for an open audit is exactly ReadyToClose.
 func (a Audit) Percent() int {
 	if a.Findings == 0 {
 		return 0
 	}
-	return a.DoneFindings * 100 / a.Findings
+	return a.Resolved() * 100 / a.Findings
 }
 
 // Settled reports whether every finding has reached a terminal disposition — done
-// (fixed/landed) or dropped (deferred/superseded/wontfix) — so an open audit has
+// (fixed/tracked) or dropped (deferred/superseded/wontfix) — so an open audit has
 // nothing left to work and is a "ready to close" call-to-action. False when any
 // finding is still open/in-progress OR carries an unrecognized status (Done +
 // Dropped < Findings), and for an audit with no findings at all.

@@ -17,16 +17,33 @@ func PercentLabel(pct int) string { return fmt.Sprintf("%d%%", pct) }
 // "100%") so it aligns in hand-laid-out columns / rows.
 func PercentLabelPadded(pct int) string { return fmt.Sprintf("%3d%%", pct) }
 
-// AuditPercentLabel qualifies an audit's percent as the FIXED share — "0% fixed"
+// AuditPercentLabel qualifies an audit's percent as the SETTLED share — "80% settled"
 // — so a bare number can't be misread as overall progress. An epic's percent is
-// unambiguous (done/total), but an audit bands four dispositions: a fully-triaged
-// audit is legitimately 0% fixed yet ready to close, so its number names its unit.
-func AuditPercentLabel(pct int) string { return fmt.Sprintf("%d%% fixed", pct) }
+// unambiguous (done/total), but an audit bands four dispositions, and "settled" is the
+// one word that covers all the terminal ones: a finding ruled `wontfix` is as resolved
+// as one `fixed`. The word is the domain's own (Audit.Settled), so 100% settled and
+// "ready to close" are the same fact stated twice rather than two numbers to reconcile.
+func AuditPercentLabel(pct int) string { return fmt.Sprintf("%d%% settled", pct) }
 
 // AuditPercentLabelPadded is AuditPercentLabel right-justified to 3 percent digits
-// ("  0% fixed", "100% fixed") so audit list rows align.
-func AuditPercentLabelPadded(pct int) string { return fmt.Sprintf("%3d%% fixed", pct) }
+// ("  0% settled", "100% settled") so audit list rows align.
+func AuditPercentLabelPadded(pct int) string { return fmt.Sprintf("%3d%% settled", pct) }
 
 // Counts renders a done/total rollup ("7/12"). Width-justification for aligned
 // columns is the caller's concern (CLI tables pad cells; the TUI measures + pads).
 func Counts(done, total int) string { return fmt.Sprintf("%d/%d", done, total) }
+
+// The segmented audit bar's bands, in render order. Each groups SEVERAL finding statuses
+// under one colour deliberately: a reader takes in the shape at a glance, and seven hues
+// would be a decode task rather than a glance. The glyphs are distinct as well as the
+// colours, so the stacking survives `--color=never` and a mono terminal — which is also
+// what lets a legend name them.
+//
+// Defined here rather than inside the bar so the legend that NAMES a band and the bar that
+// DRAWS it read from one place.
+func BandDone() Token    { return Token{"█", ColorGreen} }  // fixed · tracked
+func BandActive() Token  { return Token{"▓", ColorYellow} } // in-progress
+func BandDropped() Token { return Token{"▒", ColorGray} }   // deferred · superseded · wontfix
+// BandOpen is the unfilled remainder rather than a disposition, so the bar paints it in the
+// palette's dimmer empty-track tone; the glyph is what tells it from BandDropped.
+func BandOpen() Token { return Token{"░", ColorGray} }

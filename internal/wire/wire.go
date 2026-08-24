@@ -46,7 +46,7 @@ import (
 // (the actionable subset) with the same finding rollup `audit list` reports;
 // omitted when there are none.
 // 1.13: every audit payload carries the finding-disposition tally the segmented
-// progress bar bands by — `in_progress_findings`, `done_findings` (fixed/landed),
+// progress bar bands by — `in_progress_findings`, `done_findings` (fixed/tracked),
 // `dropped_findings` (deferred/superseded/wontfix) — alongside `open_findings`.
 // 1.14: the `epic_mutation` envelope (`epic set`) added — the epic counterpart to
 // `task_mutation`; it carries dry_run + the reloaded epic (field-only, no body).
@@ -75,7 +75,7 @@ import (
 // 1.20: the `audit_mutation` envelope (`audit append`) added — the audit counterpart
 // to `task_mutation`; it carries dry_run + the reloaded audit + the resulting body.
 // 1.21: the schema contract carries `finding_statuses` — the legal audit
-// finding-status vocabulary (open · in-progress · fixed · landed · deferred ·
+// finding-status vocabulary (open · in-progress · fixed · tracked · deferred ·
 // superseded · wontfix), so an agent writing a finding discovers the status set
 // without parsing prose, the audit counterpart to `statuses`/`audit_buckets`.
 // 1.22: epic and audit payloads carry `updated_at` — the entity's own last-edited
@@ -170,10 +170,38 @@ import (
 // point selected for reading, and a combined space-badged in-progress working set. The
 // envelope owns one top-level schema_version; nested summaries reuse the versionless
 // SummaryJSON payload rather than pretending to be independent envelopes.
+// 1.48: the `schema` contract carries `criterion_states` — the non-binary acceptance
+// criterion states, published for the same reason `finding_statuses` is: `state` has been a
+// criterion wire field since 1.46, and without the set an agent had to trigger an error and
+// parse prose to learn it. A finding may carry `note` — the `**Resolution:**` paragraph saying HOW it was
+// resolved, written by `audit finding --note` — and `status_decoration`, everything after
+// the status word (the date on `fixed 2026-08-24`, the destination on `tracked by <id>`),
+// which the wire previously dropped because `status` carries only the vocabulary token.
+// Both additive and omitted when absent, so a finding recorded before they existed
+// serialises exactly as before.
+//
+// 1.47: the finding-status vocabulary drops `landed` and gains `tracked` — a finding
+// handed to a task, which counts toward `done_findings` because the AUDIT's interest in it
+// has concluded. NOT additive: `landed` is no longer accepted, though no audit in the
+// corpus ever used it, and a consumer switching on the status set must learn the new word.
+//
+// 1.46: `task ac --list --json` criteria may carry `state` and `reason` — the disposition
+// beyond the checkbox (deferred / wontfix / tracked / n/a) and why. Absent for a plain met/not-met
+// criterion, so a body written before the vocabulary existed serialises unchanged.
+//
+// 1.45: a task's acceptance tally carries `explained` — how many UNMET criteria state why
+// (deferred / wontfix / tracked / n/a). Additive and zero for every task written before the criterion
+// vocabulary existed, so a consumer that ignores it sees the previous shape.
+//
+// 1.44: `lint --fix` results may carry `skipped`, marking a file the pass deliberately did
+// NOT repair with the reason in `changes` — an invalid id that is still referenced
+// elsewhere, or one containing `u`, which Crockford gives no canonical decode. Additive:
+// absent on every repaired file, so a consumer that ignores it sees the previous shape.
+//
 // 1.43: fresh `init --json` receipts may include `registration`, describing the
 // best-effort machine-local space registration (including preview vs applied and whether
 // the physical checkout was already registered).
-const SchemaVersion = "1.43"
+const SchemaVersion = "1.48"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a
