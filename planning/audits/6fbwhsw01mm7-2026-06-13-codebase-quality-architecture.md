@@ -3,6 +3,7 @@ area: codebase (cli, core, store, domain, tui, theme, render)
 date: "2026-06-13"
 id: 6fbwhsw01mm7
 bucket: closed
+updated_at: "2026-08-24"
 ---
 
 # Audit: code quality & architecture — tskflwctl
@@ -146,7 +147,7 @@ work — fold into it.)*
 *Fix:* delete the local var + `BoolVar`; use `app.DryRun` throughout `lint.go`.
 
 #### M3. Auto epic-numbering can produce duplicates; `%02d` mis-sorts past 99
-**Status:** deferred → tracked in task `address-deferred-code-audit-findings-numbering-dedup-cas-json-layout`
+**Status:** tracked by 6fbwhsw024nr
 **Severity:** Medium · **File:** `internal/store/create.go:89-108,123-153`
 
 `nextEpicNumber` computes `max(prefix)+1` via `ReadDir`, then `CreateEpic` relies on
@@ -199,7 +200,7 @@ blast radius (help modal only), but a real UX bug.
 clamped value to store.
 
 #### M6. Mutators thread `force`/`dryRun` as trailing positional booleans
-**Status:** deferred → tracked in task `address-deferred-code-audit-findings-numbering-dedup-cas-json-layout`
+**Status:** tracked by 6fbwhsw024nr
 **Severity:** Medium · **File:** `internal/core/store.go:21-48`, `service.go:100`
 
 Every mutator on the `Store` port and `Service` ends in bare `bool`(s); `SetFields`
@@ -234,7 +235,7 @@ allowlist; verified it no longer reproduces.)*
 long-single-word case to `slug_test.go` (that path is currently untested).
 
 #### L2. Triple-duplicated list/resolve/scan scaffolding across the three stores
-**Status:** deferred → tracked in task `address-deferred-code-audit-findings-numbering-dedup-cas-json-layout`
+**Status:** tracked by 6fbwhsw024nr
 **Severity:** Low · **File:** `fsstore.go:44-74`, `epicstore.go:16-43`, `auditstore.go:29-59` (+ candidate gatherers)
 
 Each `List*` repeats the same `ReadDir → IsNotExist continue → skip dir/non-.md →
@@ -264,7 +265,7 @@ side. Low (requires existing write access to a status dir).
 *Fix:* `if !e.Type().IsRegular() { continue }` (also subsumes the `IsDir` check).
 
 #### L4. `Move` has no compare-and-swap guard, unlike `SetFields`
-**Status:** deferred → tracked in task `address-deferred-code-audit-findings-numbering-dedup-cas-json-layout`
+**Status:** tracked by 6fbwhsw024nr
 **Severity:** Low · **File:** `internal/store/fsstore.go:97-162`
 
 `Move` does resolve → read → `writeFileAtomic(newPath)` → `os.Remove(path)` with no
@@ -291,7 +292,7 @@ over the same sentinels. Adding a sentinel requires editing both in sync or
 *Fix:* one `[]struct{err error; code int; name string}` table both functions consult.
 
 #### L6. `epic` JSON shape differs between `epic list` and `epic show`
-**Status:** deferred → tracked in task `address-deferred-code-audit-findings-numbering-dedup-cas-json-layout`
+**Status:** tracked by 6fbwhsw024nr
 **Severity:** Low · **File:** `render/render.go:348-358` (`epicJSON`) vs `:534-541` (`epicMetaJSON`)
 
 `epic list` emits `total/done/percent`; `epic show` (`epicMetaJSON`) omits the
@@ -318,7 +319,7 @@ command. *(Touches in-flight dryRun work.)*
 results.
 
 #### L8. TUI watcher and shell-completion duplicate the store's directory layout
-**Status:** deferred → tracked in task `address-deferred-code-audit-findings-numbering-dedup-cas-json-layout`
+**Status:** tracked by 6fbwhsw024nr
 **Severity:** Low · **File:** `internal/tui/watch.go:44-55`, `internal/cli/completion.go:56-118`
 
 Both reconstruct `tasks/<status>` / `audits/<bucket>` / `epics/` directly via
