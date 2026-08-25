@@ -135,6 +135,26 @@ func (s *Service) SetCriterionState(slug string, n int, state domain.CriterionSt
 	return rt, rb, true, err
 }
 
+// EditCriteria adds, removes, or rewords one acceptance criterion through the same atomic,
+// frontmatter-preserving body-replace path SetCriterionState uses. edit is the domain
+// operation; naming it here rather than adding three near-identical methods keeps the write
+// path (read → transform → atomic replace, no write when nothing changed) in one place.
+func (s *Service) EditCriteria(slug string, dryRun bool, edit func(body string) (string, error)) (domain.Task, string, bool, error) {
+	t, body, err := s.store.GetTask(slug)
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	newBody, err := edit(body)
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	if newBody == body {
+		return t, body, false, nil
+	}
+	rt, rb, err := s.store.EditBody(slug, newBody, false, s.now(), dryRun)
+	return rt, rb, true, err
+}
+
 // EditTask opens a task for whole-file editing — the human face of mutation,
 // complementing the field-level `task set`. edit (run by the cli's $EDITOR layer)
 // receives the current file content and returns the new content; the store

@@ -171,3 +171,55 @@ func readFile(t *testing.T, path string) string {
 	}
 	return string(b)
 }
+
+// The CLI half of the criterion write surface. Exercised end-to-end because the point of
+// these flags is that a criterion can be evolved WITHOUT hand-editing the markdown, so what
+// lands on disk is the assertion.
+func TestTaskAC_AddRemoveReplace(t *testing.T) {
+	root := setupRepoWithAC(t)
+	read := func() string {
+		b, err := os.ReadFile(taskPath(t, root, "alpha"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+
+	// The seed body carries three criteria, so the added one is #4.
+	if _, err := runRootRC(t, "-C", root, "task", "ac", "alpha", "--add", "a fourth criterion"); err != nil {
+		t.Fatalf("--add: %v", err)
+	}
+	if !strings.Contains(read(), "- [ ] third\n- [ ] a fourth criterion") {
+		t.Errorf("--add must append after the last criterion:\n%s", read())
+	}
+
+	if _, err := runRootRC(t, "-C", root, "task", "ac", "alpha", "--replace", "4", "--text", "reworded fourth"); err != nil {
+		t.Fatalf("--replace: %v", err)
+	}
+	got := read()
+	if !strings.Contains(got, "- [ ] reworded fourth") || strings.Contains(got, "a fourth criterion") {
+		t.Errorf("--replace must reword in place, leaving nothing of the old text:\n%s", got)
+	}
+
+	if _, err := runRootRC(t, "-C", root, "task", "ac", "alpha", "--remove", "4"); err != nil {
+		t.Fatalf("--remove: %v", err)
+	}
+	if strings.Contains(read(), "reworded fourth") {
+		t.Errorf("--remove left the criterion behind:\n%s", read())
+	}
+	// …and the three it did not touch are byte-identical to the seed.
+	if !strings.Contains(read(), acTestBody) {
+		t.Errorf("add→replace→remove must round-trip the untouched criteria:\n%s", read())
+	}
+
+	for _, args := range [][]string{
+		{"task", "ac", "alpha", "--replace", "1"},              // no --text
+		{"task", "ac", "alpha", "--add", "x", "--remove", "1"}, // two operations
+		{"task", "ac", "alpha", "--remove", "99"},              // out of range
+		{"task", "ac", "alpha", "--add", ""},                   // empty text
+	} {
+		if _, err := runRootRC(t, append([]string{"-C", root}, args...)...); err == nil {
+			t.Errorf("%v should be rejected", args)
+		}
+	}
+}
