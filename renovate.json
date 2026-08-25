@@ -1,0 +1,49 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    "group:monorepos"
+  ],
+  "timezone": "America/New_York",
+  "schedule": ["before 6am on monday"],
+  "updateNotScheduled": false,
+  "rebaseWhen": "conflicted",
+  "minimumReleaseAge": "3 days",
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "description": "Group all non-major updates by manager to keep PR volume low while isolating majors for individual review",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "all non-major ({{manager}})"
+    },
+    {
+      "description": "Gate major version bumps behind the Dependency Dashboard for human review",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "labels": ["requires-review"]
+    },
+    {
+      "description": "Group the Charmbracelet ecosystem so interrelated Bubble Tea / Lip Gloss / Bubbles v2 packages bump together",
+      "matchPackageNames": [
+        "/^charm\\.land\\//",
+        "/^github\\.com\\/charmbracelet\\//",
+        "/^github\\.com\\/muesli\\//"
+      ],
+      "groupName": "charm"
+    },
+    {
+      "description": "Group Go toolchain and runtime version updates across go.mod and GitHub Actions workflows",
+      "matchDepNames": ["go", "golang"],
+      "groupName": "go version"
+    },
+    {
+      "description": "Group GitHub Actions workflow updates into one PR",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    }
+  ]
+}

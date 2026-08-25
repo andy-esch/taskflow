@@ -6,7 +6,10 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // cursorTo drives the action menu's cursor onto the given verb via j-presses (so
@@ -414,5 +417,45 @@ func TestModel_ActionMenuFitsTerminal(t *testing.T) {
 				t.Errorf("%dx%d with action menu: line %d is %d wide > %d", d.w, d.h, i, w, d.w)
 			}
 		}
+	}
+}
+
+// The completion gate reaches the TUI too. moveTask passes force=false, so a task whose
+// acceptance criteria are unticked and unexplained is refused here exactly as it is on the
+// CLI, and the refusal has to be VISIBLE — an error flash, not a silent no-move.
+//
+// This was asserted in a commit message before it was asserted in a test: the shared seed
+// repo's tasks carry no acceptance criteria, so nothing exercised the path.
+func TestModel_CompleteRefusedOnUnexplainedCriteria(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Task("in-progress", "gated.md", "---\nstatus: in-progress\nepic: 01-test\ndescription: d\n---\n"+
+		"# Gated\n\n## Acceptance criteria\n\n- [x] done\n- [ ] silently unticked\n")
+	r.Epic("01-test.md", "---\nstatus: active\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
+	svc := core.NewService(store.NewFS(r.Root))
+
+	msg := moveTask(svc, "gated", transition{to: string(domain.StatusCompleted)})()
+	errMsg, ok := msg.(actionErrMsg)
+	if !ok {
+		t.Fatalf("want the gate to refuse with actionErrMsg, got %T (%v)", msg, msg)
+	}
+	if !strings.Contains(errMsg.err.Error(), "no reason") {
+		t.Errorf("the refusal should say what is wrong: %v", errMsg.err)
+	}
+
+	// …and it must surface as a RED flash the reader can see, not a quiet failure.
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(errMsg)
+	m = tm.(Model)
+	if m.flash == "" || !m.flashErr {
+		t.Errorf("a refused completion must set an error flash, got %q (err=%v)", m.flash, m.flashErr)
+	}
+
+	// The task is still in-progress on disk — a refusal writes nothing.
+	tk, _, err := svc.ShowTask("gated")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tk.Status != domain.StatusInProgress {
+		t.Errorf("a refused completion must not move the task, got %q", tk.Status)
 	}
 }
