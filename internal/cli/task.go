@@ -404,6 +404,12 @@ func newTaskAcCmd(app *App) *cobra.Command {
 			if len(chosen) > 1 {
 				return fmt.Errorf("%w: %s ask for different things; pass one", domain.ErrValidation, strings.Join(chosen, " and "))
 			}
+			// --text carries --replace's payload and means nothing alone. Falling through to
+			// the list view would print criteria and report success while writing nothing —
+			// the silent-no-op shape a mistyped flag name produces.
+			if c.Flags().Changed("text") && !c.Flags().Changed("replace") {
+				return fmt.Errorf("%w: --text is the new wording for --replace <n>; pass --replace too", domain.ErrValidation)
+			}
 			// The three that change WHICH criteria exist, rather than what one of them says.
 			// They share the body-edit path; the list is reprinted afterwards because add
 			// and remove renumber everything below them.
@@ -473,6 +479,11 @@ func newTaskAcCmd(app *App) *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("check", "uncheck")
 	cmd.MarkFlagsMutuallyExclusive("list", "check")
 	cmd.MarkFlagsMutuallyExclusive("list", "uncheck")
+	// --list is the read view; every writing flag contradicts it. Registered here as well
+	// as caught by the `chosen` check so cobra reports the conflict before RunE.
+	for _, f := range []string{"defer", "wontfix", "tracked", "na", "add", "remove", "replace"} {
+		cmd.MarkFlagsMutuallyExclusive("list", f)
+	}
 	return cmd
 }
 

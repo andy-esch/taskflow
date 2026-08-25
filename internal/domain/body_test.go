@@ -579,7 +579,7 @@ func TestCriterionEvolution(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, ln := range strings.Split(got, "\n") {
-			if n := utf8.RuneCountInString(ln); n > criterionWrapWidth {
+			if n := utf8.RuneCountInString(ln); n > proseWrapWidth {
 				t.Errorf("line is %d runes, over the margin: %q", n, ln)
 			}
 		}
@@ -649,6 +649,30 @@ func TestCriterionEvolution(t *testing.T) {
 		}
 		if _, err := ReplaceCriterionText(body, 0, "x"); !errors.Is(err, ErrValidation) {
 			t.Errorf("want ErrValidation, got %v", err)
+		}
+	})
+}
+
+// Layout the tool writes must look like layout a careful author writes — every other block
+// here is separated from its heading and from its neighbours by exactly one blank line.
+func TestCriterionEvolution_Layout(t *testing.T) {
+	t.Run("the first criterion does not butt against the heading", func(t *testing.T) {
+		got, err := AddCriterion("# T\n\n## Acceptance criteria\n\n## Notes\n\nprose\n", "first ever")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(got, "## Acceptance criteria\n\n- [ ] first ever\n") {
+			t.Errorf("want a blank line between the heading and the first criterion:\n%q", got)
+		}
+	})
+
+	t.Run("removing the last criterion does not leave a double gap", func(t *testing.T) {
+		got, err := RemoveCriterion("# T\n\n## Acceptance criteria\n\n- [ ] only\n\n## Notes\n", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(got, "\n\n\n") {
+			t.Errorf("the gap left behind should collapse to one blank line:\n%q", got)
 		}
 	})
 }

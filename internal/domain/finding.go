@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"unicode/utf8"
 )
 
 // Finding is one parsed audit finding. The grammar is fixed by the `audit new`
@@ -324,36 +323,11 @@ func findingNote(section string, offset int) (string, Span, int) {
 		Span{Start: offset + m[0], End: offset + m[1] + len(text)}, len(all)
 }
 
-// noteWrapWidth is where a resolution note is hard-wrapped. The audit corpus is written at
-// this width by hand, and a tool that owns the formatting should produce what a careful
-// author would rather than one very long line with an ugly diff.
-const noteWrapWidth = 80
-
-// wrapNote renders the label and paragraph as hard-wrapped markdown. Wrapping is safe to do
-// here because findingNote reads the paragraph back through strings.Fields, so the wrapped
-// form and the logical string round-trip to each other.
+// wrapNote renders the label and paragraph as hard-wrapped markdown, sharing the wrapper
+// criteria use. Wrapping is safe here because findingNote reads the paragraph back through
+// strings.Fields, so the wrapped form and the logical string round-trip to each other.
 func wrapNote(text string) string {
-	line := FindingNoteLabel
-	width := utf8.RuneCountInString(line)
-	var b strings.Builder
-	for _, w := range strings.Fields(text) {
-		// Runes, not bytes: an audit's prose is full of `—`, `→`, and `✅`, and measuring
-		// their UTF-8 length would pull those lines visibly short.
-		wl := utf8.RuneCountInString(w)
-		// +1 for the space that would join them; an over-long word gets its own line
-		// rather than being broken, since it is likely a path, id, or URL.
-		// …and never BREAK before a `**` token: a continuation line starting with one reads
-		// as a second label, and lint would count it as a duplicate of this very note.
-		if width+1+wl > noteWrapWidth && line != FindingNoteLabel && !strings.HasPrefix(w, "**") {
-			b.WriteString(line + "\n")
-			line, width = w, wl
-			continue
-		}
-		line += " " + w
-		width += 1 + wl
-	}
-	b.WriteString(line)
-	return b.String()
+	return strings.Join(wrapProse(text, FindingNoteLabel+" ", "", proseWrapWidth), "\n")
 }
 
 // statusDecoration splits the trailing decoration off a raw status value: everything after

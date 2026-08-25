@@ -223,3 +223,17 @@ func TestTaskAC_AddRemoveReplace(t *testing.T) {
 		}
 	}
 }
+
+// --text is --replace's payload and means nothing alone. It used to fall through to the
+// list view: criteria printed, exit 0, nothing written — the silent-no-op shape a mistyped
+// flag name produces.
+func TestTaskAC_TextWithoutReplace(t *testing.T) {
+	root := setupRepoWithAC(t)
+	if _, err := runRootRC(t, "-C", root, "task", "ac", "alpha", "--text", "orphaned"); err == nil {
+		t.Error("--text without --replace must be rejected, not silently ignored")
+	}
+	// …and --list cannot be combined with a write.
+	if _, err := runRootRC(t, "-C", root, "task", "ac", "alpha", "--list", "--add", "x"); err == nil {
+		t.Error("--list with --add must be rejected")
+	}
+}

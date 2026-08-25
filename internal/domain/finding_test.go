@@ -344,8 +344,8 @@ func TestSetFindingNote(t *testing.T) {
 				!strings.Contains(line, "UTF-8") {
 				continue
 			}
-			if n := utf8.RuneCountInString(line); n > noteWrapWidth {
-				t.Errorf("line is %d runes, over the %d margin: %q", n, noteWrapWidth, line)
+			if n := utf8.RuneCountInString(line); n > proseWrapWidth {
+				t.Errorf("line is %d runes, over the %d margin: %q", n, proseWrapWidth, line)
 			}
 		}
 		if back := ParseFindings(got)[0].Note; back != long {

@@ -238,29 +238,39 @@ func CountAcceptanceCriteria(body string) ACCount {
 	return c
 }
 
-// criterionWrapWidth is where an added or replaced criterion is hard-wrapped, matching the
-// corpus. Continuations are indented two spaces, which is what scanAcceptanceCheckboxes
-// reads back as one criterion.
-const criterionWrapWidth = 88
+// proseWrapWidth is where markdown prose this tool WRITES is hard-wrapped: criteria, and a
+// finding's resolution note. One number, because the corpus is written at one width by hand
+// and two arbitrary margins would show up as ragged diffs between adjacent lines.
+const proseWrapWidth = 80
 
-// wrapCriterion renders a criterion as `- [ ] text`, hard-wrapped, with continuation lines
-// indented to line up under the text. Runes, not bytes: planning prose is full of `—` and
-// `·`, and measuring their UTF-8 length would pull lines visibly short.
-func wrapCriterion(text string) []string {
-	const marker, indent = "- [ ] ", "  "
-	line := marker
+// wrapProse renders text as hard-wrapped markdown lines: the first begins with lead, the
+// rest with indent, and no line exceeds proseWrapWidth RUNES.
+//
+// Runes, not bytes: planning prose is full of `—`, `·`, and `→`, and measuring their UTF-8
+// length pulls those lines visibly short of the margin. A word longer than the margin gets
+// its own line rather than being broken, since it is likely a path, id, or URL. A word
+// starting `**` never begins a continuation line — it would read as a markdown label
+// starting a new block, which for a resolution note means lint counting it as a second one.
+func wrapProse(text, lead, indent string, width int) []string {
+	line := lead
 	var out []string
 	for _, w := range strings.Fields(text) {
 		// Measure the line as it stands, trailing space included, so the test is exactly
 		// "would appending this word overflow" rather than a running total to keep in step.
-		if utf8.RuneCountInString(line)+utf8.RuneCountInString(w) > criterionWrapWidth &&
-			line != marker && line != indent { // never emit an empty line for one long word
+		if utf8.RuneCountInString(line)+utf8.RuneCountInString(w) > width &&
+			line != lead && line != indent && !strings.HasPrefix(w, "**") {
 			out = append(out, strings.TrimRight(line, " "))
 			line = indent
 		}
 		line += w + " "
 	}
 	return append(out, strings.TrimRight(line, " "))
+}
+
+// wrapCriterion renders a criterion as `- [ ] text`, wrapped, with continuations indented
+// two spaces — which is what scanAcceptanceCheckboxes reads back as one criterion.
+func wrapCriterion(text string) []string {
+	return wrapProse(text, "- [ ] ", "  ", proseWrapWidth)
 }
 
 // validCriterionText is the shared guard for text a criterion is given. A newline would
@@ -295,11 +305,17 @@ func AddCriterion(body, text string) (string, error) {
 		return "", fmt.Errorf("%w: task has no `## Acceptance criteria` section to add to — add one with `task append`", ErrValidation)
 	}
 	at := end
+	item := wrapCriterion(t)
 	if len(boxes) > 0 {
 		at = boxes[len(boxes)-1].end + 1 // straight after the last criterion, not the section
+	} else if at > 0 && strings.TrimSpace(lines[at-1]) != "" {
+		// The section has a heading and no criteria yet, and no blank line to sit under.
+		// Every other block this tool writes is separated from its heading; butting the
+		// first criterion against it would make the tool's output the odd one out.
+		item = append([]string{""}, item...)
 	}
 	out := append([]string{}, lines[:at]...)
-	out = append(out, wrapCriterion(t)...)
+	out = append(out, item...)
 	return strings.Join(append(out, lines[at:]...), "\n"), nil
 }
 
@@ -311,14 +327,25 @@ func RemoveCriterion(body string, n int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	out := append([]string{}, lines[:box.line]...)
-	return strings.Join(append(out, lines[box.end+1:]...), "\n"), nil
+	from, to := box.line, box.end+1
+	// Collapse the gap the criterion leaves behind: with a blank line on each side, removing
+	// what was between them would leave two, which no other write here produces.
+	if from > 0 && strings.TrimSpace(lines[from-1]) == "" &&
+		to < len(lines) && strings.TrimSpace(lines[to]) == "" {
+		to++
+	}
+	out := append([]string{}, lines[:from]...)
+	return strings.Join(append(out, lines[to:]...), "\n"), nil
 }
 
 // ReplaceCriterionText rewrites the 1-based nth criterion's text, KEEPING its checkbox and
 // any state suffix. Rewording a criterion is not the same as changing its disposition, and
 // silently dropping a `wontfix` and its reason because the wording changed would lose a
 // decision — use `task ac --check`/`--defer`/… to change that deliberately.
+//
+// A suffix the vocabulary does NOT recognise is part of the criterion's text (splitCriterion
+// leaves it there rather than guessing, and lint reports it), so it is replaced along with
+// the rest — rewording a criterion whose state was typo'd drops the typo.
 func ReplaceCriterionText(body string, n int, text string) (string, error) {
 	t, err := validCriterionText(text)
 	if err != nil {
