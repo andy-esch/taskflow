@@ -6,6 +6,8 @@ List a task's acceptance criteria, or check/uncheck one by index
 
 List a task's acceptance criteria — the checkboxes under its `## Acceptance criteria` section — or flip one by 1-based index. Run with no flags (or --list) to number them, then --check <n> / --uncheck <n> to tick or clear one. Matching is index-based, not substring, for robustness. A flip rewrites only that one checkbox (the rest of the file is preserved), is atomic, and is idempotent — flipping to the current state writes nothing. Checkboxes in fenced code blocks are ignored, and a missing section or out-of-range index is a validation error (exit 11).
 
+The criteria themselves can be edited too: --add <text> appends one, --remove <n> deletes one, and --replace <n> --text <new> rewords one. A reworded criterion KEEPS its checkbox and any state suffix — rewording is not a change of mind, and silently dropping a `wontfix` and its reason would lose a decision. Added and reworded text is wrapped to match the corpus. --add needs an existing `## Acceptance criteria` section: creating one would mean guessing where it belongs in a body the tool did not write.
+
 ```
 tskflwctl task ac <task> [flags]
 ```
@@ -17,17 +19,24 @@ tskflwctl task ac <task> [flags]
   tskflwctl task ac add-retry-backoff --check 3   # tick criterion 3
   tskflwctl task ac add-retry-backoff --uncheck 3
   tskflwctl task ac add-retry-backoff --defer 2 --reason "waiting on the schema ADR"
+  tskflwctl task ac add-retry-backoff --add "Retries stop at the configured ceiling"
+  tskflwctl task ac add-retry-backoff --replace 3 --text "Backoff is jittered"
+  tskflwctl task ac add-retry-backoff --remove 4
 ```
 
 ### Options
 
 ```
+      --add text        append a new unchecked criterion with this text
       --check int       check the criterion at this 1-based index
       --defer int       mark the criterion at this 1-based index deferred (needs --reason)
   -h, --help            help for ac
       --list            list the acceptance criteria (the default)
       --na int          mark the criterion at this 1-based index n/a — no longer applies (needs --reason)
       --reason string   why the criterion is deferred/wontfix/tracked/n-a — required for those, rejected otherwise
+      --remove int      delete the criterion at this 1-based index
+      --replace int     reword the criterion at this 1-based index (needs --text)
+      --text string     the new wording for --replace
       --tracked int     mark the criterion at this 1-based index tracked — handed to another task (needs --reason naming it)
       --uncheck int     uncheck the criterion at this 1-based index
       --wontfix int     mark the criterion at this 1-based index wontfix (needs --reason)

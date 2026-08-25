@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 const acBody = `# Title
@@ -551,4 +552,127 @@ func TestTallyCriteria(t *testing.T) {
 	if n := len(TallyCriteria("# Title\n\nprose\n")); n != 0 {
 		t.Errorf("a body with no criteria should tally nothing, got %d", n)
 	}
+}
+
+// M4 of 2026-07-24-ai-agent-cli-ergonomics: evolving a task's criteria was the one
+// structure-aware write with no surface at all, so it meant dumping the body, patching the
+// markdown by hand, and writing it back. These are the narrow operations that finding asked
+// for — not a general markdown editor.
+func TestCriterionEvolution(t *testing.T) {
+	const body = "# T\n\n## Acceptance criteria\n\n- [x] first\n- [ ] second\n\n## Notes\n\nprose\n"
+
+	t.Run("add appends after the last criterion, not the section", func(t *testing.T) {
+		got, err := AddCriterion(body, "third")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(got, "- [ ] second\n- [ ] third\n\n## Notes") {
+			t.Errorf("new criterion must land inside the section, before the next heading:\n%s", got)
+		}
+	})
+
+	t.Run("add wraps long text the way the corpus does", func(t *testing.T) {
+		long := "a newly added criterion that runs well past the margin and therefore has to be " +
+			"folded somewhere sensible rather than left as one very long line"
+		got, err := AddCriterion(body, long)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, ln := range strings.Split(got, "\n") {
+			if n := utf8.RuneCountInString(ln); n > proseWrapWidth {
+				t.Errorf("line is %d runes, over the margin: %q", n, ln)
+			}
+		}
+		// Wrapped or not, it reads back as ONE criterion with its text intact.
+		cs := ListAcceptanceCriteria(got)
+		if len(cs) != 3 || cs[2].Text != long {
+			t.Errorf("wrapped criterion did not round-trip: %+v", cs)
+		}
+	})
+
+	t.Run("add needs a section rather than guessing where one goes", func(t *testing.T) {
+		if _, err := AddCriterion("# T\n\nprose\n", "x"); !errors.Is(err, ErrValidation) {
+			t.Errorf("want ErrValidation for a body with no section, got %v", err)
+		}
+	})
+
+	t.Run("remove takes all of a wrapped criterion's lines", func(t *testing.T) {
+		wrapped := "## Acceptance criteria\n\n- [ ] one\n  wraps here\n- [ ] two\n"
+		got, err := RemoveCriterion(wrapped, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(got, "wraps here") {
+			t.Errorf("the continuation must go with its criterion:\n%s", got)
+		}
+		if cs := ListAcceptanceCriteria(got); len(cs) != 1 || cs[0].Text != "two" {
+			t.Errorf("after removing #1, #2 becomes #1: %+v", cs)
+		}
+	})
+
+	// Rewording is not a change of mind. Dropping a `wontfix` and its reason because the
+	// wording changed would lose a decision the vocabulary exists to record.
+	t.Run("replace keeps the checkbox and the state", func(t *testing.T) {
+		deferred, err := SetCriterionState(body, 2, CriterionDeferred, "waiting on the ADR")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := ReplaceCriterionText(deferred, 2, "reworded")
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := ListAcceptanceCriteria(got)[1]
+		if c.Text != "reworded" || c.State != CriterionDeferred || c.Reason != "waiting on the ADR" {
+			t.Errorf("state must survive a reword: text=%q state=%q reason=%q", c.Text, c.State, c.Reason)
+		}
+		// A checked criterion stays checked.
+		checked, err := ReplaceCriterionText(body, 1, "reworded too")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c := ListAcceptanceCriteria(checked)[0]; !c.Checked {
+			t.Errorf("rewording must not untick a met criterion: %+v", c)
+		}
+	})
+
+	t.Run("empty and multi-line text are refused", func(t *testing.T) {
+		for _, bad := range []string{"", "   ", "one\n- [ ] phantom"} {
+			if _, err := AddCriterion(body, bad); !errors.Is(err, ErrValidation) {
+				t.Errorf("AddCriterion(%q) should be ErrValidation, got %v", bad, err)
+			}
+		}
+	})
+
+	t.Run("an out-of-range index names the verb", func(t *testing.T) {
+		if _, err := RemoveCriterion(body, 9); !errors.Is(err, ErrValidation) {
+			t.Errorf("want ErrValidation, got %v", err)
+		}
+		if _, err := ReplaceCriterionText(body, 0, "x"); !errors.Is(err, ErrValidation) {
+			t.Errorf("want ErrValidation, got %v", err)
+		}
+	})
+}
+
+// Layout the tool writes must look like layout a careful author writes — every other block
+// here is separated from its heading and from its neighbours by exactly one blank line.
+func TestCriterionEvolution_Layout(t *testing.T) {
+	t.Run("the first criterion does not butt against the heading", func(t *testing.T) {
+		got, err := AddCriterion("# T\n\n## Acceptance criteria\n\n## Notes\n\nprose\n", "first ever")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(got, "## Acceptance criteria\n\n- [ ] first ever\n") {
+			t.Errorf("want a blank line between the heading and the first criterion:\n%q", got)
+		}
+	})
+
+	t.Run("removing the last criterion does not leave a double gap", func(t *testing.T) {
+		got, err := RemoveCriterion("# T\n\n## Acceptance criteria\n\n- [ ] only\n\n## Notes\n", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(got, "\n\n\n") {
+			t.Errorf("the gap left behind should collapse to one blank line:\n%q", got)
+		}
+	})
 }

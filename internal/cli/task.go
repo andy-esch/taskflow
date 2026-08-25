@@ -362,6 +362,8 @@ func newTaskAcCmd(app *App) *cobra.Command {
 	// index is the argument, the flag names the destination. Same shape as the lifecycle
 	// verbs, where the verb names where the task is going.
 	var defer_, wontfix, tracked, na int
+	var add, replaceText string
+	var remove, replace int
 	var reason string
 	var list bool
 	cmd := &cobra.Command{
@@ -374,8 +376,15 @@ func newTaskAcCmd(app *App) *cobra.Command {
 			"rewrites only that one checkbox (the rest of the file is preserved), is atomic, " +
 			"and is idempotent — flipping to the current state writes nothing. Checkboxes in " +
 			"fenced code blocks are ignored, and a missing section or out-of-range index is a " +
-			"validation error (exit 11).",
-		Example:           "  tskflwctl task ac add-retry-backoff             # numbered list\n  tskflwctl task ac add-retry-backoff --check 3   # tick criterion 3\n  tskflwctl task ac add-retry-backoff --uncheck 3\n  tskflwctl task ac add-retry-backoff --defer 2 --reason \"waiting on the schema ADR\"",
+			"validation error (exit 11).\n\n" +
+			"The criteria themselves can be edited too: --add <text> appends one, --remove <n> " +
+			"deletes one, and --replace <n> --text <new> rewords one. A reworded criterion KEEPS " +
+			"its checkbox and any state suffix — rewording is not a change of mind, and silently " +
+			"dropping a `wontfix` and its reason would lose a decision. Added and reworded text " +
+			"is wrapped to match the corpus. --add needs an existing `## Acceptance criteria` " +
+			"section: creating one would mean guessing where it belongs in a body the tool did " +
+			"not write.",
+		Example:           "  tskflwctl task ac add-retry-backoff             # numbered list\n  tskflwctl task ac add-retry-backoff --check 3   # tick criterion 3\n  tskflwctl task ac add-retry-backoff --uncheck 3\n  tskflwctl task ac add-retry-backoff --defer 2 --reason \"waiting on the schema ADR\"\n  tskflwctl task ac add-retry-backoff --add \"Retries stop at the configured ceiling\"\n  tskflwctl task ac add-retry-backoff --replace 3 --text \"Backoff is jittered\"\n  tskflwctl task ac add-retry-backoff --remove 4",
 		Args:              cobra.MaximumNArgs(1),
 		Annotations:       map[string]string{"safety": "mutating"}, // --check/--uncheck write; --list reads
 		ValidArgsFunction: app.completeTaskSlugs,
@@ -387,13 +396,35 @@ func newTaskAcCmd(app *App) *cobra.Command {
 			// Exactly one destination flag may be given: they are alternatives, and silently
 			// honouring the first would make a two-flag typo write something unasked-for.
 			var chosen []string
-			for _, f := range []string{"check", "uncheck", "defer", "wontfix", "tracked", "na"} {
+			for _, f := range []string{"check", "uncheck", "defer", "wontfix", "tracked", "na", "add", "remove", "replace"} {
 				if c.Flags().Changed(f) {
 					chosen = append(chosen, "--"+f)
 				}
 			}
 			if len(chosen) > 1 {
-				return fmt.Errorf("%w: %s name different states; pass one", domain.ErrValidation, strings.Join(chosen, " and "))
+				return fmt.Errorf("%w: %s ask for different things; pass one", domain.ErrValidation, strings.Join(chosen, " and "))
+			}
+			// --text carries --replace's payload and means nothing alone. Falling through to
+			// the list view would print criteria and report success while writing nothing —
+			// the silent-no-op shape a mistyped flag name produces.
+			if c.Flags().Changed("text") && !c.Flags().Changed("replace") {
+				return fmt.Errorf("%w: --text is the new wording for --replace <n>; pass --replace too", domain.ErrValidation)
+			}
+			// The three that change WHICH criteria exist, rather than what one of them says.
+			// They share the body-edit path; the list is reprinted afterwards because add
+			// and remove renumber everything below them.
+			if edit := criteriaEdit(chosen, add, remove, replace, replaceText); edit != nil {
+				task, body, changed, err := app.Svc.EditCriteria(slug, app.DryRun, edit)
+				if err != nil {
+					return err
+				}
+				if !changed && !app.JSON {
+					fmt.Fprintf(app.Out, "%s no change\n", app.Style.Dim("•"))
+					return nil
+				}
+				return reportTaskMutation(app, task, body,
+					strings.TrimPrefix(chosen[0], "--")+" acceptance criterion in",
+					"would "+strings.TrimPrefix(chosen[0], "--")+" acceptance criterion in")
 			}
 			// No destination flag → the list view (the default; --list is explicit).
 			if len(chosen) == 0 {
@@ -440,10 +471,19 @@ func newTaskAcCmd(app *App) *cobra.Command {
 	cmd.Flags().IntVar(&wontfix, "wontfix", 0, "mark the criterion at this 1-based index wontfix (needs --reason)")
 	cmd.Flags().IntVar(&tracked, "tracked", 0, "mark the criterion at this 1-based index tracked — handed to another task (needs --reason naming it)")
 	cmd.Flags().IntVar(&na, "na", 0, "mark the criterion at this 1-based index n/a — no longer applies (needs --reason)")
+	cmd.Flags().StringVar(&add, "add", "", "append a new unchecked criterion with this `text`")
+	cmd.Flags().IntVar(&remove, "remove", 0, "delete the criterion at this 1-based index")
+	cmd.Flags().IntVar(&replace, "replace", 0, "reword the criterion at this 1-based index (needs --text)")
+	cmd.Flags().StringVar(&replaceText, "text", "", "the new wording for --replace")
 	cmd.Flags().StringVar(&reason, "reason", "", "why the criterion is deferred/wontfix/tracked/n-a — required for those, rejected otherwise")
 	cmd.MarkFlagsMutuallyExclusive("check", "uncheck")
 	cmd.MarkFlagsMutuallyExclusive("list", "check")
 	cmd.MarkFlagsMutuallyExclusive("list", "uncheck")
+	// --list is the read view; every writing flag contradicts it. Registered here as well
+	// as caught by the `chosen` check so cobra reports the conflict before RunE.
+	for _, f := range []string{"defer", "wontfix", "tracked", "na", "add", "remove", "replace"} {
+		cmd.MarkFlagsMutuallyExclusive("list", f)
+	}
 	return cmd
 }
 
@@ -678,6 +718,29 @@ func newTaskMoveCmd(app *App) *cobra.Command {
 			return runTransition(app, to, args[:len(args)-1], false)
 		},
 	}
+}
+
+// criteriaEdit maps the structural flags to their domain operation, or nil when the call is
+// a state change or a plain list. Kept beside the command rather than inside it so the
+// mutual-exclusion check above stays the single place that decides WHICH flag won.
+func criteriaEdit(chosen []string, add string, remove, replace int, text string) func(string) (string, error) {
+	if len(chosen) != 1 {
+		return nil
+	}
+	switch chosen[0] {
+	case "--add":
+		return func(b string) (string, error) { return domain.AddCriterion(b, add) }
+	case "--remove":
+		return func(b string) (string, error) { return domain.RemoveCriterion(b, remove) }
+	case "--replace":
+		return func(b string) (string, error) {
+			if strings.TrimSpace(text) == "" {
+				return "", fmt.Errorf("%w: --replace needs the new wording — pass --text", domain.ErrValidation)
+			}
+			return domain.ReplaceCriterionText(b, replace, text)
+		}
+	}
+	return nil
 }
 
 func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Command {

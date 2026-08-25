@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // ACCount is the acceptance-criteria checkbox tally of a task body: how many of
@@ -158,7 +159,7 @@ func Section(body, name string) (text string, ok bool) {
 // whose title contains "acceptance", up to the next heading of the same or higher
 // level. Fence-aware in a single pass (a `##`/`- [ ]` inside a code fence is example
 // prose, not structure). One scanner backs the tally, the list, and the flip.
-func scanAcceptanceCheckboxes(body string) (lines []string, boxes []acCheckbox) {
+func scanAcceptanceCheckboxes(body string) (lines []string, boxes []acCheckbox, sectionEnd int) {
 	lines = strings.Split(normalizeNewlines(body), "\n")
 	var (
 		fence      fenceScanner
@@ -166,6 +167,9 @@ func scanAcceptanceCheckboxes(body string) (lines []string, boxes []acCheckbox) 
 		sectionLvl int
 		open       = -1 // index of the criterion still accepting continuation lines
 	)
+	// One past the last non-blank line of the section: where a new criterion is appended.
+	// -1 until the section is found, so "no section" is distinguishable from "an empty one".
+	sectionEnd = -1
 	for i, ln := range lines {
 		if fence.inCode(ln) {
 			open = -1
@@ -177,10 +181,10 @@ func scanAcceptanceCheckboxes(body string) (lines []string, boxes []acCheckbox) 
 			switch {
 			case !inSection:
 				if strings.Contains(strings.ToLower(m[2]), "acceptance") {
-					inSection, sectionLvl = true, lvl
+					inSection, sectionLvl, sectionEnd = true, lvl, i+1
 				}
 			case lvl <= sectionLvl: // a same-or-higher heading ends the section
-				return lines, boxes
+				return lines, boxes, sectionEnd
 			}
 			continue
 		}
@@ -200,8 +204,11 @@ func scanAcceptanceCheckboxes(body string) (lines []string, boxes []acCheckbox) 
 			}
 			open = -1
 		}
+		if inSection && strings.TrimSpace(ln) != "" {
+			sectionEnd = i + 1
+		}
 	}
-	return lines, boxes
+	return lines, boxes, sectionEnd
 }
 
 // isCriterionContinuation reports whether ln continues the criterion above it: indented,
@@ -216,7 +223,7 @@ func isCriterionContinuation(ln string) bool {
 // CountAcceptanceCriteria tallies the acceptance-criteria checkboxes. No such
 // section — or none with checkboxes — yields a zero tally.
 func CountAcceptanceCriteria(body string) ACCount {
-	_, boxes := scanAcceptanceCheckboxes(body)
+	_, boxes, _ := scanAcceptanceCheckboxes(body)
 	var c ACCount
 	for _, b := range boxes {
 		c.Total++
@@ -229,6 +236,149 @@ func CountAcceptanceCriteria(body string) ACCount {
 		}
 	}
 	return c
+}
+
+// proseWrapWidth is where markdown prose this tool WRITES is hard-wrapped: criteria, and a
+// finding's resolution note. One number, because the corpus is written at one width by hand
+// and two arbitrary margins would show up as ragged diffs between adjacent lines.
+const proseWrapWidth = 80
+
+// wrapProse renders text as hard-wrapped markdown lines: the first begins with lead, the
+// rest with indent, and no line exceeds proseWrapWidth RUNES.
+//
+// Runes, not bytes: planning prose is full of `—`, `·`, and `→`, and measuring their UTF-8
+// length pulls those lines visibly short of the margin. A word longer than the margin gets
+// its own line rather than being broken, since it is likely a path, id, or URL. A word
+// starting `**` never begins a continuation line — it would read as a markdown label
+// starting a new block, which for a resolution note means lint counting it as a second one.
+func wrapProse(text, lead, indent string, width int) []string {
+	line := lead
+	var out []string
+	for _, w := range strings.Fields(text) {
+		// Measure the line as it stands, trailing space included, so the test is exactly
+		// "would appending this word overflow" rather than a running total to keep in step.
+		if utf8.RuneCountInString(line)+utf8.RuneCountInString(w) > width &&
+			line != lead && line != indent && !strings.HasPrefix(w, "**") {
+			out = append(out, strings.TrimRight(line, " "))
+			line = indent
+		}
+		line += w + " "
+	}
+	return append(out, strings.TrimRight(line, " "))
+}
+
+// wrapCriterion renders a criterion as `- [ ] text`, wrapped, with continuations indented
+// two spaces — which is what scanAcceptanceCheckboxes reads back as one criterion.
+func wrapCriterion(text string) []string {
+	return wrapProse(text, "- [ ] ", "  ", proseWrapWidth)
+}
+
+// validCriterionText is the shared guard for text a criterion is given. A newline would
+// break out of the list item and can manufacture phantom checkboxes — the same hazard a
+// reason carries, for the same reason.
+func validCriterionText(text string) (string, error) {
+	if strings.ContainsAny(text, "\r\n") {
+		return "", fmt.Errorf("%w: a criterion is a single item — a newline here would break out of the list and can manufacture phantom checkboxes", ErrValidation)
+	}
+	t := strings.Join(strings.Fields(text), " ")
+	if t == "" {
+		return "", fmt.Errorf("%w: a criterion needs text", ErrValidation)
+	}
+	return t, nil
+}
+
+// AddCriterion appends an unchecked criterion to the acceptance-criteria section. It is the
+// write half the vocabulary shipped without: evolving a task's criteria meant dumping the
+// body, patching the markdown by hand, and writing it back — the raw-surgery gap M4 of
+// 2026-07-24-ai-agent-cli-ergonomics names.
+//
+// The section must already exist. Creating one would mean guessing where it belongs in a
+// body the tool did not write, and a heading in the wrong place is harder to notice than a
+// refusal.
+func AddCriterion(body, text string) (string, error) {
+	t, err := validCriterionText(text)
+	if err != nil {
+		return "", err
+	}
+	lines, boxes, end := scanAcceptanceCheckboxes(body)
+	if end < 0 {
+		return "", fmt.Errorf("%w: task has no `## Acceptance criteria` section to add to — add one with `task append`", ErrValidation)
+	}
+	at := end
+	item := wrapCriterion(t)
+	if len(boxes) > 0 {
+		at = boxes[len(boxes)-1].end + 1 // straight after the last criterion, not the section
+	} else if at > 0 && strings.TrimSpace(lines[at-1]) != "" {
+		// The section has a heading and no criteria yet, and no blank line to sit under.
+		// Every other block this tool writes is separated from its heading; butting the
+		// first criterion against it would make the tool's output the odd one out.
+		item = append([]string{""}, item...)
+	}
+	out := append([]string{}, lines[:at]...)
+	out = append(out, item...)
+	return strings.Join(append(out, lines[at:]...), "\n"), nil
+}
+
+// RemoveCriterion deletes the 1-based nth criterion, all of its lines. Indexes after it
+// shift down, which is why the CLI prints the renumbered list afterwards.
+func RemoveCriterion(body string, n int) (string, error) {
+	lines, boxes, _ := scanAcceptanceCheckboxes(body)
+	box, err := nthCriterion(boxes, n, "remove")
+	if err != nil {
+		return "", err
+	}
+	from, to := box.line, box.end+1
+	// Collapse the gap the criterion leaves behind: with a blank line on each side, removing
+	// what was between them would leave two, which no other write here produces.
+	if from > 0 && strings.TrimSpace(lines[from-1]) == "" &&
+		to < len(lines) && strings.TrimSpace(lines[to]) == "" {
+		to++
+	}
+	out := append([]string{}, lines[:from]...)
+	return strings.Join(append(out, lines[to:]...), "\n"), nil
+}
+
+// ReplaceCriterionText rewrites the 1-based nth criterion's text, KEEPING its checkbox and
+// any state suffix. Rewording a criterion is not the same as changing its disposition, and
+// silently dropping a `wontfix` and its reason because the wording changed would lose a
+// decision — use `task ac --check`/`--defer`/… to change that deliberately.
+//
+// A suffix the vocabulary does NOT recognise is part of the criterion's text (splitCriterion
+// leaves it there rather than guessing, and lint reports it), so it is replaced along with
+// the rest — rewording a criterion whose state was typo'd drops the typo.
+func ReplaceCriterionText(body string, n int, text string) (string, error) {
+	t, err := validCriterionText(text)
+	if err != nil {
+		return "", err
+	}
+	lines, boxes, _ := scanAcceptanceCheckboxes(body)
+	box, err := nthCriterion(boxes, n, "replace")
+	if err != nil {
+		return "", err
+	}
+	_, state, reason, ok := criterionSuffix(box.text)
+	if ok && state.NeedsReason() {
+		t += fmt.Sprintf(" · **%s:** %s", state, reason)
+	}
+	rewritten := wrapCriterion(t)
+	if box.checked {
+		rewritten[0] = strings.Replace(rewritten[0], "- [ ]", "- [x]", 1)
+	}
+	out := append([]string{}, lines[:box.line]...)
+	out = append(out, rewritten...)
+	return strings.Join(append(out, lines[box.end+1:]...), "\n"), nil
+}
+
+// nthCriterion resolves a 1-based index against the parsed boxes, naming the verb in the
+// error so a bad index reads as what the caller was trying to do.
+func nthCriterion(boxes []acCheckbox, n int, verb string) (acCheckbox, error) {
+	if len(boxes) == 0 {
+		return acCheckbox{}, fmt.Errorf("%w: task has no acceptance criteria to %s", ErrValidation, verb)
+	}
+	if n < 1 || n > len(boxes) {
+		return acCheckbox{}, fmt.Errorf("%w: criterion %d out of range (have %d)", ErrValidation, n, len(boxes))
+	}
+	return boxes[n-1], nil
 }
 
 // UnexplainedCriteria returns the criteria that are unmet AND say nothing about why —
@@ -273,7 +423,7 @@ func TallyCriteria(body string) []CriterionCount {
 // ListAcceptanceCriteria returns the acceptance criteria in body order, 1-based —
 // the `task ac --list` view an agent then flips by index.
 func ListAcceptanceCriteria(body string) []Criterion {
-	_, boxes := scanAcceptanceCheckboxes(body)
+	_, boxes, _ := scanAcceptanceCheckboxes(body)
 	out := make([]Criterion, len(boxes))
 	for i, b := range boxes {
 		text, state, reason, suffix := splitCriterion(b.text, b.checked)
@@ -309,7 +459,7 @@ func SetCriterionState(body string, n int, state CriterionState, reason string) 
 		return "", fmt.Errorf("%w: %s takes no reason (only %s do)",
 			ErrValidation, state, strings.Join(CriterionSuffixStates(), ", "))
 	}
-	lines, boxes := scanAcceptanceCheckboxes(body)
+	lines, boxes, _ := scanAcceptanceCheckboxes(body)
 	if len(boxes) == 0 {
 		return "", fmt.Errorf("%w: task has no acceptance criteria to set", ErrValidation)
 	}
@@ -374,7 +524,7 @@ func replaceCheckboxLine(line string, checked bool, text string) string {
 }
 
 func SetAcceptanceCriterion(body string, n int, checked bool) (string, error) {
-	lines, boxes := scanAcceptanceCheckboxes(body)
+	lines, boxes, _ := scanAcceptanceCheckboxes(body)
 	if len(boxes) == 0 {
 		return "", fmt.Errorf("%w: task has no acceptance criteria to %s", ErrValidation, checkWord(checked))
 	}

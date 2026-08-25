@@ -225,7 +225,7 @@ required/variadic args, flags and types, conflicts, whether it mutates, whether 
 be destructive, dry-run support, input body modes, and the JSON envelope name. This is
 a CLI manifest, not an MCP server and not a second execution path.
 
-#### M4. Structure-aware body writes stop short of the edits agents make most  · **Status:** open
+#### M4. Structure-aware body writes stop short of the edits agents make most  · **Status:** tracked by 6fpnn6zk157b
 
 **File:** internal/domain/body.go; internal/cli/task.go:588; internal/cli/audit.go:421 | **Component:** structured authoring
 **Effort:** M · **Urgency:** soon
@@ -248,6 +248,13 @@ equivalent write surface.
 `task ac --add/--replace/--remove` operations using the existing fence-aware body
 parser. Do not build a general Markdown editor. The useful abstraction is a small set
 of domain operations over the conventions the tool already owns.
+
+**Resolution:** Two of its three pieces are done: the audit-finding write
+surface completed as 6feeygw00jmx, and `task ac --add/--remove/--replace` landed
+here — the AC-evolution gap this finding said had no equivalent surface at all.
+The third, a dated progress-log entry, is carried by 6fpnn6zk157b. Built as the
+finding asked: narrow operations over the conventions the tool already owns, not
+a general markdown editor.
 
 #### M5. `task complete` does not reconcile unfinished acceptance criteria  · **Status:** fixed 2026-08-24
 

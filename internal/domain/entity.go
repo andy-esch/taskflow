@@ -80,6 +80,12 @@ var entities = []Descriptor{
 			// believed the vocabulary was closed at six values.
 			fmt.Sprintf("an acceptance criterion is `- [x]` (met) or `- [ ]` (not met). A not-met criterion may say WHY with a trailing `· **%s:** reason` — one of: %s. A reason is required for those, and a checked criterion takes no suffix.",
 				CriterionDeferred, strings.Join(CriterionSuffixStates(), " | ")),
+			// Named here for the same reason the audit conventions name `audit finding`:
+			// a criterion reachable only by hand-editing markdown is one the tool cannot
+			// keep well-formed, and this is the guidance an agent reads before writing one.
+			"never hand-edit the acceptance criteria — `task ac` owns them: --check/--uncheck " +
+				"<n>, --defer/--wontfix/--tracked/--na <n> --reason <why> for a state, and " +
+				"--add/--remove/--replace <n> to change which criteria exist.",
 		},
 		Templates: []NamedTemplate{
 			{DefaultTemplate, "Standard task scaffold: objective, acceptance criteria, out-of-scope, related epic.", taskBodyTemplate},
