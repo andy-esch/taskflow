@@ -270,6 +270,22 @@ adapter capabilities rather than leaked persistence.
   configuration entities and is implemented by `configstore.FS`; CLI, focused TUI,
   full TUI, and a future served adapter all call `ConfigurationService` rather than
   importing filesystem configuration packages.
+- **A word that means the same thing in two places is spelled once.**
+  `domain/resolution.go` holds the vocabulary an audit finding and an acceptance
+  criterion share — `deferred`, `wontfix`, `tracked` — and each entity declares its own
+  full set from that pool plus its own additions. Modelled as an OVERLAP, not a subset:
+  `met` is not a finding status and `superseded` is not a criterion state, and claiming
+  otherwise is exactly what lets the two drift. `theme.CriterionState` delegates the
+  shared words to `theme.FindingStatus` for the same reason, so one word renders as one
+  mark. Drift tests fail if either side diverges. This exists because it already went
+  wrong: `landed` was legal in code, absent from the docs, and contradicted by an
+  assertion (finding M3 of `2026-08-17-finding-status-surface`).
+- **A state the tool cannot write is a state nobody can be held to.** Every
+  closed-vocabulary field has a validated, atomic write verb — `task ac` for criterion
+  state, `audit finding` for finding status and its resolution note — because the
+  alternative is hand-edited markdown, which is how a vocabulary drifts from its own
+  documentation. Reads stay tolerant so `lint` can REPORT malformed data already on
+  disk; writes refuse to create it.
 
 ## Why these boundaries (and why not collapse them)
 Reviews periodically suggest folding the packages together ("Go favors fewer
@@ -420,7 +436,7 @@ The CLI also has **golden snapshots** of the byte-stable machine contract (the
 `./...`). The single subprocess smoke layer (real binary, exit codes, lifecycle)
 lives in `cmd/tskflwctl/main_test.go`. `just test` + `just lint`.
 
-## Status (2026-08-22)
+## Status (2026-08-25)
 
 The layered shape now has two substantial primary consumers and several reusable
 application seams; it is no longer architecture held in reserve for a hypothetical UI:
@@ -441,6 +457,12 @@ application seams; it is no longer architecture held in reserve for a hypothetic
 - Writes use atomic replacement/exclusive create, a repo-wide lock, content-version CAS,
   bounded retry for agent mutations, and parse-before-accept editor loops. Machine output
   is a versioned `internal/wire` contract with generated JSON Schema and golden coverage.
+- The planning model's closed vocabularies now have write verbs rather than only linters.
+  An acceptance criterion carries a state and a reason (`task ac`), an audit finding
+  carries a status and a resolution paragraph (`audit finding`), and the words the two
+  share are declared once in `domain/resolution.go`. Two invariants are enforced at write
+  time rather than reported after: `task complete` refuses a task with an unexplained
+  unmet criterion, mirroring `audit close` refusing while findings are open.
 
 The atlas decision has now activated the narrow reusable workspace-opening boundary:
 `core.WorkspaceService` and `internal/workspacestore` can open an explicit local entry

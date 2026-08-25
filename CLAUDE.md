@@ -35,13 +35,34 @@ We dogfood: drive this repo's planning with the tool itself.
 - **Lifecycle:** `task start|next|ready|complete|defer|deprecate <slug>...` (verbs
   name the destination status; `next`/`ready` replace the old promote/demote, which
   still work as hidden aliases). `defer` takes `--until <YYYY-MM-DD>` (snooze).
-- **Read/edit:** `task list|show|set|edit|append`, `epic list|show`,
-  `audit new|list|show|findings|lint|close|reopen|defer`,
+  **`complete` REFUSES** a task with an acceptance criterion that is unmet and gives no
+  reason — tick it, give it a state (below), or pass `--force`. Same rule as `audit
+  close` refusing while findings are open.
+- **Read/edit:** `task list|show|set|edit|append|ac`, `epic list|show`,
+  `audit new|list|show|findings|finding|lint|close|reopen|defer`,
   `research new|list|show|path|set|edit|append` (no lifecycle verbs — research has no
   status). Two faces of mutation: **agent**
   (field-level `task set`; body via `task append` / `task set --body|--body-file`,
   all scriptable + atomic) vs **human** (`task edit` — $EDITOR on the whole file,
   re-validated on save).
+- **Acceptance criteria — never hand-edit them; `task ac` owns them.** A criterion is
+  `- [x]` (met) or `- [ ]` (not met), and a not-met one may say WHY with a trailing
+  suffix: `- [ ] Ship the migration · **deferred:** waiting on the schema ADR`. States
+  are `deferred | wontfix | tracked | n/a`, each REQUIRING a reason.
+  `task ac <slug>` lists them numbered; `--check/--uncheck <n>` flips one;
+  `--defer|--wontfix|--tracked|--na <n> --reason <why>` sets a state; and
+  `--add <text>` / `--remove <n>` / `--replace <n> --text <new>` change which criteria
+  exist. A criterion carrying a state has been DECIDED and does not block `complete`;
+  only a silently unticked box does.
+- **Finding status — never hand-edit it; `audit finding` owns it.**
+  `audit finding <audit> <code> --status <v> [--pr N] [--note <text>]` writes the
+  `**Status:**` and the `**Resolution:**` paragraph in one validated, atomic edit.
+  Statuses: `open | in-progress | fixed | tracked | deferred | superseded | wontfix`.
+  **`tracked` means handed to a task and REQUIRES the destination** (`tracked by
+  <task-id>`) — it counts toward the audit's done band, because the audit's interest
+  concludes when a finding is transferred. An audit's headline percent is the **settled**
+  share (everything with a terminal disposition), so 100% is exactly when it is ready to
+  close.
 - **Triage (agents, cheapest first):** lead with the terse path — `epic show
   <id>` for an epic's task roster, and `task list -o table -c
   slug,status,description` for a compact, byte-stable table. `--json` is compact
