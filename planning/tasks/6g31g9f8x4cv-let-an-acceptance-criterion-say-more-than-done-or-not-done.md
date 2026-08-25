@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g31g9f8x4cv
-status: next-up
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Criteria are a binary checkbox while findings carry a seven-state vocabulary; an unchecked box cannot distinguish not-yet from won't-do from deferred.
 effort: M
@@ -11,6 +11,8 @@ autonomy_level: 3
 tags: [cli, domain, planning-model]
 created: "2026-08-23"
 updated_at: "2026-08-24"
+started_at: "2026-08-24"
+completed_at: "2026-08-24"
 ---
 # Let an acceptance criterion say more than done or not-done
 
@@ -74,7 +76,7 @@ Design-first; do not start implementing until these are answered.
   fenced blocks being ignored exactly as today.
 - [x] `ACCount` and every surface that renders a tally (`task show`, `status`, the TUI) keep
   reporting something honest when criteria are no longer two-valued.
-- [ ] A decision is recorded on whether `task complete` gates on unmet criteria, either way. · **deferred:** workflow change; decide once the vocabulary has been lived with — no rework either way
+- [x] A decision is recorded on whether `task complete` gates on unmet criteria, either way.
 
 ## Out of scope
 
@@ -116,10 +118,19 @@ the surface that shows unmet criteria is the surface that would explain a refusa
 
 - [x] The state vocabulary is defined once in `domain` and shared with finding status —
   either the same set or a declared subset — with a test that fails if the two drift apart.
-- [ ] Criterion states reuse the finding glyph/colour vocabulary rather than introducing a · **deferred:** no glyph vocabulary rendered yet; falls out of the TUI roll-up in criterion 9
+- [x] Criterion states reuse the finding glyph/colour vocabulary rather than introducing a
   parallel one.
-- [ ] A task's acceptance-criteria roll-up is visible near the top of its TUI detail view, · **deferred:** TUI detail-header roll-up not built yet; the CLI tally landed first
+- [x] A task's acceptance-criteria roll-up is visible near the top of its TUI detail view,
   not only by scrolling into the body.
+- [x] A decision is recorded on whether a `tracked` CRITERION must name its destination the
+      way a `tracked` FINDING does. `SetFindingStatus` refuses a bare `tracked` and lint
+      flags one, but `task ac --tracked <n> --reason "just because"` is accepted — the same
+      word carrying a weaker guarantee on one of the two entities that share it. The
+      asymmetry is defensible (an audit concludes its interest on handoff; a task's work
+      merely moves) but it is currently accidental rather than stated, and a shared
+      vocabulary whose guarantees differ per entity has already begun to drift. Either
+      require an id-shaped token in the reason, or write down why a criterion's destination
+      is softer. Raised as M3 of `2026-08-24-finding-note-and-vocabulary-selfreview`.
 
 ## Decisions, 2026-08-24 — settled before implementation
 
@@ -188,3 +199,44 @@ complaint, not repeated here.
   is stripped before matching, because this repo's own candidate lists use ✅ ⏳ ⛔ and
   finding M2 shows what happens when that is left to chance.
 - **Trailing prose tolerated** the way `**Status:** fixed 2026-01-01 (PR #9)` already is.
+
+### `task complete` gates on unexplained criteria — decided 2026-08-24
+
+`task complete` refuses when a criterion is unmet AND carries no state, and completes
+when every criterion is either met or explained. `--force` overrides.
+
+This is the task counterpart of a rule the tool already had: `MoveAudit` refuses to close
+an audit with open findings. Same situation, same answer — and putting the guard in the
+same place (the store, before the dry-run return) means a `--dry-run` preview fails
+identically to the real write rather than passing and then failing.
+
+What makes the gate tolerable is the vocabulary itself. Before it, "refuse on unmet
+criteria" would have meant "tick every box or never finish", because an unticked box was
+the only way to say anything. Now a criterion can say `wontfix`, `deferred`, `tracked`, or
+`n/a`, and each of those is a DECISION — so the gate blocks silence, not disagreement. You
+can complete a task with three criteria you have explicitly abandoned; you cannot complete
+one with three you never looked at.
+
+The refusal names the criteria by the same 1-based index `task ac` prints, and the detail
+header roll-up (criterion 9) is where a reader sees the same thing before trying.
+
+Closes M5 of [2026-07-24-ai-agent-cli-ergonomics](../audits/6fsa47r4f7es-2026-07-24-ai-agent-cli-ergonomics.md).
+
+### A `tracked` destination is checked for PRESENCE, not shape — decided 2026-08-24
+
+Both entities require a non-empty explanation of where the work went, and neither validates
+its form. `tracked by 6g3ag8py12y9` and `tracked by the config epic` are both accepted.
+
+The finding that raised this (M3 of 2026-08-24-finding-note-and-vocabulary-selfreview)
+overstated the asymmetry it found. It said findings *enforce* a destination while criteria
+do not; in fact `SetFindingStatus` only requires the decoration to be non-empty — `tracked
+hmm` passes. The two were already symmetric in strictness. What differed was the wording of
+the error, not the rule.
+
+Shape validation was considered and rejected: a destination is legitimately an epic id, an
+ADR, or an external issue, and a Crockford-id regex would reject `tracked by ADR-0003`,
+which is a perfectly good handoff. The check that WOULD be worth having is resolution — lint
+flagging a `tracked` that names an id which does not exist in the workspace — because that
+catches a typo or a deleted destination, which a shape regex never would. It is not built
+here; it is a better idea than the one this criterion asked about, and belongs with the
+other lint work rather than bolted on.

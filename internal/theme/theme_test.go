@@ -209,3 +209,33 @@ func TestStartedDatePrefersStartedAtOverLastTouched(t *testing.T) {
 		t.Errorf("StartedDate fallback = %q, want the ordinary date", got)
 	}
 }
+
+// Criterion 8 of let-an-acceptance-criterion-say-more-than-done-or-not-done: criterion
+// states must REUSE the finding glyph vocabulary, not run a parallel one beside it. This
+// is the test that makes that structural rather than aspirational — every word the two
+// vocabularies share must render identically, so a reader learns one mark per word.
+//
+// A second table here would be free to drift exactly the way the finding-status docs did.
+func TestCriterionStateReusesFindingGlyphs(t *testing.T) {
+	for _, w := range domain.SharedResolutionWords() {
+		if got, want := CriterionState(w), FindingStatus(w); got != want {
+			t.Errorf("shared word %q renders %v as a criterion and %v as a finding", w, got, want)
+		}
+	}
+	// The two that are not shared words but are deliberately borrowed anyway: a met
+	// criterion is resolved here like a fixed finding, an unmet one is outstanding like an
+	// open one.
+	for _, tc := range []struct{ criterion, finding string }{{"met", "fixed"}, {"not met", "open"}} {
+		if got, want := CriterionState(tc.criterion), FindingStatus(tc.finding); got != want {
+			t.Errorf("criterion %q renders %v; want the %q finding's %v", tc.criterion, got, tc.finding, want)
+		}
+	}
+	// `n/a` is the one criterion state findings have no word for, so it must NOT collide
+	// with a borrowed mark — a reader seeing ◌ must not have to ask which it means.
+	na := CriterionState("n/a")
+	for _, s := range domain.FindingStatuses() {
+		if na == FindingStatus(s) {
+			t.Errorf("n/a reuses the %q finding's mark %v, which overstates it", s, na)
+		}
+	}
+}

@@ -370,7 +370,7 @@ func TestModel_DashboardRefreshesOnMutation(t *testing.T) {
 	}
 	// Move alpha out of the working set behind the dashboard's back (as the CLI or
 	// another process would), then reload.
-	if _, err := m.svc.Move("alpha", domain.StatusCompleted, false); err != nil {
+	if _, err := m.svc.Move("alpha", domain.StatusCompleted, false, false); err != nil {
 		t.Fatal(err)
 	}
 	m = drainBatch(t, m, m.reloadAll())

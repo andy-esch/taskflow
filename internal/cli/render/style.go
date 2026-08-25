@@ -160,6 +160,22 @@ func (s Style) FindingStatus(status string) string {
 	return s.colorSeq(tok.Color) + tok.Glyph + " " + status + ansiReset
 }
 
+// CriterionState renders an acceptance criterion's state the way FindingStatus renders a
+// finding's — glyph then word, in the state's own colour. The tokens come from
+// theme.CriterionState, which delegates the shared words to the finding glyphs, so
+// `◌ deferred` is the same mark on a criterion as on a finding.
+//
+// It replaced a single warn-coloured label used for every state: identical yellow for
+// deferred, wontfix, and n/a, which is the second visual language criterion 8 of
+// let-an-acceptance-criterion-say-more-than-done-or-not-done rules out.
+func (s Style) CriterionState(state string) string {
+	if !s.on || state == "" {
+		return state
+	}
+	tok := theme.CriterionState(state)
+	return s.colorSeq(tok.Color) + tok.Glyph + " " + state + ansiReset
+}
+
 // Priority colors a priority label.
 func (s Style) Priority(p string) string {
 	return s.wrap(s.colorSeq(theme.Priority(p)), p)

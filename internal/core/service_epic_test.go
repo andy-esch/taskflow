@@ -26,7 +26,7 @@ func (nopStore) ListTasksWithBodies() ([]TaskWithBody, []domain.FileProblem, err
 func (nopStore) ResolveTaskPath(string) (string, error)  { return "", domain.ErrNotFound }
 func (nopStore) ResolveEpicPath(string) (string, error)  { return "", domain.ErrNotFound }
 func (nopStore) ResolveAuditPath(string) (string, error) { return "", domain.ErrNotFound }
-func (nopStore) Move(string, domain.Status, time.Time, bool) (domain.Task, error) {
+func (nopStore) Move(string, domain.Status, time.Time, bool, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
 func (nopStore) Defer(string, string, time.Time, bool) (domain.Task, error) {

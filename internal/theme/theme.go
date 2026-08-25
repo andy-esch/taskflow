@@ -105,6 +105,31 @@ func FindingStatus(s string) Token {
 	}
 }
 
+// CriterionState maps an acceptance criterion's state to its glyph + colour.
+//
+// The words the two vocabularies SHARE delegate to FindingStatus rather than restating its
+// glyphs. That is the point of sharing a word: a reader learns one mark for `deferred` and
+// it means the same thing wherever it appears, and a parallel table here would be free to
+// drift the way the finding-status docs did (M3 of 2026-08-17-finding-status-surface).
+// TestCriterionStateReusesFindingGlyphs holds the delegation.
+func CriterionState(s string) Token {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "met":
+		return FindingStatus("fixed") // resolved, here — the same tick a fixed finding gets
+	case "not met":
+		return FindingStatus("open") // still outstanding
+	case "n/a":
+		// The one state findings have no word for. A criterion that stopped applying is
+		// neither done nor dropped, so it gets its own mark rather than borrowing one that
+		// would overstate it.
+		return Token{"–", ColorGray}
+	default:
+		// deferred · wontfix · tracked are the SAME words as finding statuses and take the
+		// same marks by construction, not by coincidence.
+		return FindingStatus(s)
+	}
+}
+
 // Liveness maps an epic's derived activity band (core.EpicSummary.Liveness, passed
 // as its string value so theme stays domain-only) to a glyph + color. The shape
 // carries the state through a mono terminal: ● working (live work, like an active

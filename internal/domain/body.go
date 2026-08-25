@@ -40,10 +40,17 @@ type Criterion struct {
 	Suffix CriterionState
 }
 
-// acCheckbox is an acceptance-criteria checkbox located in a body: its 0-based line
-// index (so a flip can rewrite exactly that line) and current state/text.
+// acCheckbox is an acceptance-criteria checkbox located in a body: the 0-based line
+// index of its marker, the index of its LAST line, and current state/text.
+//
+// A criterion is not necessarily one line. The corpus wraps them, and treating only the
+// marker line as the criterion truncated every wrapped one — `task ac --list`, `task show`
+// and the JSON all showed "…rather than introducing a" and silently dropped the rest —
+// while the state writer appended its suffix mid-sentence, leaving the remainder stranded
+// on the line below. text is the criterion's full logical text with the wrapping collapsed.
 type acCheckbox struct {
-	line    int
+	line    int // the marker line
+	end     int // the criterion's last line (== line when it does not wrap)
 	checked bool
 	text    string
 }
@@ -157,12 +164,15 @@ func scanAcceptanceCheckboxes(body string) (lines []string, boxes []acCheckbox) 
 		fence      fenceScanner
 		inSection  bool
 		sectionLvl int
+		open       = -1 // index of the criterion still accepting continuation lines
 	)
 	for i, ln := range lines {
 		if fence.inCode(ln) {
+			open = -1
 			continue
 		}
 		if m := bodyHeadingRe.FindStringSubmatch(ln); m != nil {
+			open = -1
 			lvl := len(m[1])
 			switch {
 			case !inSection:
@@ -176,11 +186,31 @@ func scanAcceptanceCheckboxes(body string) (lines []string, boxes []acCheckbox) 
 		}
 		if inSection {
 			if m := bodyCheckboxRe.FindStringSubmatch(ln); m != nil {
-				boxes = append(boxes, acCheckbox{line: i, checked: m[1] == "x" || m[1] == "X", text: checkboxText(ln)})
+				boxes = append(boxes, acCheckbox{line: i, end: i, checked: m[1] == "x" || m[1] == "X", text: checkboxText(ln)})
+				open = len(boxes) - 1
+				continue
 			}
+			// A wrapped criterion continues on the following indented, non-list lines. A
+			// blank line, a new list item, or a heading ends it — the same rule a markdown
+			// reader applies, kept in this one pass so the fence tracker stays in step.
+			if open >= 0 && isCriterionContinuation(ln) {
+				boxes[open].end = i
+				boxes[open].text += " " + strings.TrimSpace(ln)
+				continue
+			}
+			open = -1
 		}
 	}
 	return lines, boxes
+}
+
+// isCriterionContinuation reports whether ln continues the criterion above it: indented,
+// non-blank, and not itself a list item (a nested bullet is a sub-list, not more sentence).
+func isCriterionContinuation(ln string) bool {
+	if strings.TrimSpace(ln) == "" || !strings.HasPrefix(ln, " ") && !strings.HasPrefix(ln, "\t") {
+		return false
+	}
+	return !acListItemRe.MatchString(ln)
 }
 
 // CountAcceptanceCriteria tallies the acceptance-criteria checkboxes. No such
@@ -199,6 +229,45 @@ func CountAcceptanceCriteria(body string) ACCount {
 		}
 	}
 	return c
+}
+
+// UnexplainedCriteria returns the criteria that are unmet AND say nothing about why —
+// a bare unticked box. They are the ones that block `task complete`, and the distinction
+// is the whole point of the state vocabulary: a criterion marked `wontfix` or `deferred`
+// has been DECIDED, and a decision should not stand in the way of finishing a task. Only
+// silence should.
+func UnexplainedCriteria(body string) []Criterion {
+	var out []Criterion
+	for _, c := range ListAcceptanceCriteria(body) {
+		if c.State == CriterionUnmet {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// CriterionCount is one state's share of a task's acceptance criteria.
+type CriterionCount struct {
+	State CriterionState
+	N     int
+}
+
+// TallyCriteria counts a body's acceptance criteria by state, in the vocabulary's own
+// order, omitting states with no members. It is the roll-up's source: a task with a
+// criterion that is deferred rather than merely unticked has made a DECISION, and a bare
+// "3/8" cannot say so — it reads as five things still to do.
+func TallyCriteria(body string) []CriterionCount {
+	byState := map[CriterionState]int{}
+	for _, c := range ListAcceptanceCriteria(body) {
+		byState[c.State]++
+	}
+	out := make([]CriterionCount, 0, len(byState))
+	for _, st := range CriterionStates() {
+		if n := byState[st]; n > 0 {
+			out = append(out, CriterionCount{State: st, N: n})
+		}
+	}
+	return out
 }
 
 // ListAcceptanceCriteria returns the acceptance criteria in body order, 1-based —
@@ -248,18 +317,37 @@ func SetCriterionState(body string, n int, state CriterionState, reason string) 
 		return "", fmt.Errorf("%w: criterion %d out of range (have %d)", ErrValidation, n, len(boxes))
 	}
 	box := boxes[n-1]
-	line := lines[box.line]
-	// Strip whatever suffix is there before writing the new one, so repeated calls are
-	// idempotent rather than stacking markers.
-	text := checkboxText(line)
-	if stripped, _, _, ok := criterionSuffix(text); ok {
-		text = stripped // replace the existing disposition rather than stacking another
+	// Strip whatever suffix is there before writing the new one, so repeated calls replace
+	// rather than stack. It can sit on any line of a wrapped criterion — including the
+	// wrong one, if it was written before the writer knew criteria wrap.
+	for j := box.line; j <= box.end; j++ {
+		lines[j] = stripCriterionSuffixLine(lines[j])
 	}
+	lines[box.line] = replaceCheckboxLine(lines[box.line], state.Met(), strings.TrimSpace(checkboxText(lines[box.line])))
+	// The suffix belongs at the END of the criterion, which on a wrapped one is not the
+	// marker line: appending it there splits the sentence and leaves its tail dangling
+	// under the reason.
 	if state.NeedsReason() {
-		text = strings.TrimSpace(text) + fmt.Sprintf(" · **%s:** %s", state, strings.TrimSpace(reason))
+		lines[box.end] = strings.TrimRight(lines[box.end], " \t") +
+			fmt.Sprintf(" · **%s:** %s", state, strings.TrimSpace(reason))
 	}
-	lines[box.line] = replaceCheckboxLine(line, state.Met(), strings.TrimSpace(text))
 	return strings.Join(lines, "\n"), nil
+}
+
+// stripCriterionSuffixLine removes a trailing disposition suffix from one line, leaving a
+// line that carries none untouched. Line-level rather than text-level because a wrapped
+// criterion's suffix may be on a continuation line, which has no checkbox marker to parse.
+func stripCriterionSuffixLine(line string) string {
+	stripped, _, _, ok := criterionSuffix(line)
+	if !ok {
+		return line
+	}
+	// criterionSuffix trims the whole text, indentation included. Re-attaching the line's
+	// own indent is what keeps a continuation line a continuation: strip it and the next
+	// scan no longer sees the line as part of the criterion, so the following write leaves
+	// its suffix behind and `met` stops clearing it.
+	indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+	return indent + strings.TrimRight(stripped, " \t")
 }
 
 // replaceCheckboxLine rebuilds one checkbox line, preserving its original indentation and

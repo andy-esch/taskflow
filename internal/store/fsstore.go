@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -117,8 +118,8 @@ func (s *FS) GetTask(slug string) (domain.Task, string, error) {
 // Move transitions a task to status `to`: it updates frontmatter (status +
 // dates) and relocates the file to the target status directory. Moving to the
 // current status is an idempotent no-op.
-func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun bool) (domain.Task, error) {
-	return s.moveTask(slug, to, now, dryRun, nil)
+func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun, force bool) (domain.Task, error) {
+	return s.moveTask(slug, to, now, dryRun, force, nil)
 }
 
 // Defer moves a task to deferred and records `until` as revisit_at in the SAME
@@ -131,7 +132,7 @@ func (s *FS) Defer(slug, until string, now time.Time, dryRun bool) (domain.Task,
 	if until != "" {
 		extra = map[string]any{"revisit_at": until}
 	}
-	return s.moveTask(slug, domain.StatusDeferred, now, dryRun, extra)
+	return s.moveTask(slug, domain.StatusDeferred, now, dryRun, false, extra)
 }
 
 // moveTask is the shared engine behind Move and Defer: it ensures the task ends up
@@ -139,7 +140,7 @@ func (s *FS) Defer(slug, until string, now time.Time, dryRun bool) (domain.Task,
 // in ONE atomic write. A real transition (from != to) relocates the file; an
 // in-place rewrite (from == to, used by a re-defer that carries a new revisit_at)
 // overwrites the existing file. When nothing would change it's an idempotent no-op.
-func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool, extra map[string]any) (domain.Task, error) {
+func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun, force bool, extra map[string]any) (domain.Task, error) {
 	if !to.Valid() {
 		return domain.Task{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
 	}
@@ -156,6 +157,19 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun bool,
 	cur, err := parseTask(content, path)
 	if err != nil {
 		return domain.Task{}, err
+	}
+	// Acceptance-criteria invariant, the task counterpart of the bucket↔state rule
+	// MoveAudit enforces: completing a task whose criteria are silently unticked writes a
+	// state the reader cannot trust. A criterion carrying deferred/wontfix/tracked/n/a has
+	// been DECIDED and does not block — only silence does. Runs before the dry-run return
+	// so a preview fails identically.
+	if to == domain.StatusCompleted && !force {
+		_, body := splitFrontmatter(content)
+		if unmet := domain.UnexplainedCriteria(string(body)); len(unmet) > 0 {
+			return domain.Task{}, fmt.Errorf(
+				"%w: task %q has %d acceptance criterion/criteria still unmet with no reason (%s); tick them, give each a state (`task ac --defer|--wontfix|--tracked|--na`), or pass --force",
+				domain.ErrValidation, slug, len(unmet), criterionIndexes(unmet))
+		}
 	}
 	from := cur.Status
 
@@ -395,4 +409,14 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 	t.FilenameID = fnID
 	t.Path = path
 	return t, nil
+}
+
+// criterionIndexes lists criteria by their 1-based index, so the refusal names exactly
+// which ones to act on — the numbers `task ac` already shows.
+func criterionIndexes(cs []domain.Criterion) string {
+	out := make([]string, len(cs))
+	for i, c := range cs {
+		out[i] = "#" + strconv.Itoa(c.Index)
+	}
+	return strings.Join(out, ", ")
 }

@@ -182,7 +182,7 @@ func AcceptanceHuman(w io.Writer, st Style, cs []domain.Criterion) {
 		}
 		line := fmt.Sprintf("%s %s %s", mark, st.Dim(fmt.Sprintf("%2d.", c.Index)), c.Text)
 		if c.State.NeedsReason() {
-			line += "  " + st.Warn(string(c.State)+":") + " " + st.Dim(c.Reason)
+			line += "  " + st.CriterionState(string(c.State)) + st.Dim(": "+c.Reason)
 		}
 		fmt.Fprintln(w, line)
 	}

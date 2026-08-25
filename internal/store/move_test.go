@@ -27,7 +27,7 @@ func TestFS_Move(t *testing.T) {
 	path := writeTaskAt(t, root, "ready-to-start", "alpha.md", "---\nstatus: ready-to-start\nepic: 01-x\n---\n# Alpha\n")
 
 	now := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
-	task, err := NewFS(root).Move("alpha", domain.StatusInProgress, now, false)
+	task, err := NewFS(root).Move("alpha", domain.StatusInProgress, now, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestFS_Move(t *testing.T) {
 func TestFS_Move_Idempotent(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "in-progress", "beta.md", "---\nstatus: in-progress\n---\n# B\n")
-	task, err := NewFS(root).Move("beta", domain.StatusInProgress, time.Now(), false)
+	task, err := NewFS(root).Move("beta", domain.StatusInProgress, time.Now(), false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestFS_Move_RevisitAt(t *testing.T) {
 
 	// Re-defer (deferred -> deferred): idempotent no-op, snooze date untouched.
 	redeferPath := deferred("redefer.md")
-	task, err := fs.Move("redefer", domain.StatusDeferred, now, false)
+	task, err := fs.Move("redefer", domain.StatusDeferred, now, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestFS_Move_RevisitAt(t *testing.T) {
 	} {
 		name := "leave-" + tc.dir + ".md"
 		path := deferred(name)
-		if _, err := fs.Move(strings.TrimSuffix(name, ".md"), tc.to, now, false); err != nil {
+		if _, err := fs.Move(strings.TrimSuffix(name, ".md"), tc.to, now, false, false); err != nil {
 			t.Fatalf("move to %s: %v", tc.to, err)
 		}
 		got := read(path)
@@ -191,7 +191,7 @@ func TestFS_Defer_BareNoDate(t *testing.T) {
 }
 
 func TestFS_Move_NotFound(t *testing.T) {
-	_, err := NewFS(t.TempDir()).Move("nope", domain.StatusCompleted, time.Now(), false)
+	_, err := NewFS(t.TempDir()).Move("nope", domain.StatusCompleted, time.Now(), false, false)
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
@@ -205,7 +205,7 @@ func TestFS_Resolve_Ambiguous(t *testing.T) {
 	idB := testutil.TaskID("dup-b")
 	testutil.Write(t, filepath.Join(root, "tasks", idA+"-dup.md"), "---\nstatus: ready-to-start\n---\n")
 	testutil.Write(t, filepath.Join(root, "tasks", idB+"-dup.md"), "---\nstatus: in-progress\n---\n")
-	_, err := NewFS(root).Move("dup", domain.StatusCompleted, time.Now(), false)
+	_, err := NewFS(root).Move("dup", domain.StatusCompleted, time.Now(), false, false)
 	if !errors.Is(err, domain.ErrAmbiguous) {
 		t.Errorf("want ErrAmbiguous, got %v", err)
 	}
@@ -216,4 +216,58 @@ func TestFS_Resolve_Ambiguous(t *testing.T) {
 			t.Errorf("ambiguous error should name %q: %v", want, err)
 		}
 	}
+}
+
+// Criterion 6 of let-an-acceptance-criterion-say-more-than-done-or-not-done, decided
+// 2026-08-24: completing a task whose criteria are silently unticked writes a state the
+// reader cannot trust, so it is refused — the task counterpart of MoveAudit refusing to
+// close an audit with open findings. A criterion carrying a STATE has been decided and
+// does not block; only silence does.
+func TestMove_CompleteGatesOnUnexplainedCriteria(t *testing.T) {
+	body := func(criteria string) string {
+		return "---\nid: 6fjangd7kvh3\nstatus: in-progress\ndescription: d\ntags: [a]\n---\n\n## Acceptance criteria\n\n" + criteria
+	}
+	now := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
+
+	t.Run("a bare unticked box refuses", func(t *testing.T) {
+		root := t.TempDir()
+		writeTask(t, root, "in-progress", "6fjangd7kvh3-gated.md", body("- [x] done\n- [ ] silently unticked\n"))
+		_, err := NewFS(root).Move("gated", domain.StatusCompleted, now, false, false)
+		if !errors.Is(err, domain.ErrValidation) {
+			t.Fatalf("want ErrValidation, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "#2") {
+			t.Errorf("the refusal should name which criterion to act on: %v", err)
+		}
+		// …and the refusal must be identical under --dry-run, so a preview cannot pass
+		// where the real write would fail.
+		if _, err := NewFS(root).Move("gated", domain.StatusCompleted, now, true, false); !errors.Is(err, domain.ErrValidation) {
+			t.Errorf("dry-run must fail identically, got %v", err)
+		}
+	})
+
+	t.Run("an explained criterion does not block", func(t *testing.T) {
+		root := t.TempDir()
+		writeTask(t, root, "in-progress", "6fjangd7kvh3-decided.md",
+			body("- [x] done\n- [ ] parked · **deferred:** waiting on the ADR\n- [ ] moot · **n/a:** dropped\n"))
+		if _, err := NewFS(root).Move("decided", domain.StatusCompleted, now, false, false); err != nil {
+			t.Fatalf("decided criteria must not block completion: %v", err)
+		}
+	})
+
+	t.Run("force completes anyway", func(t *testing.T) {
+		root := t.TempDir()
+		writeTask(t, root, "in-progress", "6fjangd7kvh3-forced.md", body("- [ ] silently unticked\n"))
+		if _, err := NewFS(root).Move("forced", domain.StatusCompleted, now, false, true); err != nil {
+			t.Fatalf("--force must bypass the gate: %v", err)
+		}
+	})
+
+	t.Run("only completion is gated", func(t *testing.T) {
+		root := t.TempDir()
+		writeTask(t, root, "in-progress", "6fjangd7kvh3-parked.md", body("- [ ] silently unticked\n"))
+		if _, err := NewFS(root).Move("parked", domain.StatusDeferred, now, false, false); err != nil {
+			t.Fatalf("deferring is not completing and must not be gated: %v", err)
+		}
+	})
 }

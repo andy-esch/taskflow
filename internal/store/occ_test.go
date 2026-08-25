@@ -89,7 +89,7 @@ func TestMove_ConflictsOnConcurrentContentEdit(t *testing.T) {
 		testHookBeforeMoveWrite = orig
 	}
 
-	_, err := fs.Move("m", domain.StatusInProgress, time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false)
+	_, err := fs.Move("m", domain.StatusInProgress, time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false, false)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place edit during a move must conflict, got %v", err)
 	}
