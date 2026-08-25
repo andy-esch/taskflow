@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1397jfke23
-bucket: open
+bucket: closed
 area: finding-status-surface
 date: "2026-08-17"
 updated_at: "2026-08-24"
@@ -64,7 +64,7 @@ atomic single write, `--json`. Agent-facing, like `audit append`.
 "on `fixed`, add a resolution block" convention that currently lives only in
 consumer docs.
 
-#### H2. `lint --fix` advertises repairing audits but never looks at finding status  · **Status:** tracked by 6fq9zy13wkdc
+#### H2. `lint --fix` advertises repairing audits but never looks at finding status  · **Status:** superseded 2026-08-24
 
 **File:** `internal/cli/lint.go:16,28` | **Component:** cli / lint
 **Effort:** S · **Urgency:** soon
@@ -93,11 +93,11 @@ one command instead of a scripted hand-repair.
 the existing global `--dry-run`. Separately, narrow the `lint` help text so
 "repairs tasks/audits" cannot be read as covering finding status.
 
-**Resolution:** Carried by the audit-lint-fix task on epic 20, which is where
-the legacy-debt repair belongs. Its scope needs revising first: the
-emoji-stripping half is largely obsolete now that M2 made the parser
-decoration-tolerant, and its declined/tracked→superseded mapping predates
-tracked becoming a legal status.
+**Resolution:** The task carrying this was deprecated: audit lint now passes on
+the whole corpus, so there is no legacy debt for a --fix to repair. The emoji
+half went obsolete when M2 made the parser decoration-tolerant, and the legacy
+words it wanted to normalise are gone (landed) or promoted (tracked). See
+6fq9zy13wkdc for the measurement.
 
 #### M1. The status error names the offending value but not the legal set  · **Status:** fixed
 
@@ -225,7 +225,7 @@ destination. The follow-up was taken too: the `schema audit` conventions line is
 built from FindingStatuses(), so the guidance cannot fall behind the vocabulary
 the way this finding's table did.
 
-#### L1. `audit edit`'s lint-on-save cannot reach the writers that matter  · **Status:** open
+#### L1. `audit edit`'s lint-on-save cannot reach the writers that matter  · **Status:** superseded 2026-08-24
 
 **File:** `internal/cli/audit.go:33` (`newAuditEditCmd`) | **Component:** cli / audit
 **Effort:** XS · **Urgency:** eventually
@@ -246,6 +246,14 @@ new place. `LintFindings` now names the legal set on BOTH the unknown-status and
 missing-status paths, and the new `SetFindingStatus` write path rejects with the same list.
 The criterion vocabulary was built with this rule from the start: every rejection there
 names its legal set too.
+
+**Resolution:** This finding's own recommendation called it mostly an argument
+for H1, and H1 shipped: agents resolve findings through audit finding
+--status/--note, which validates, so the net it said had never caught anything
+is no longer the only one. What remains — lint-on-save warning rather than
+refusing in $EDITOR — is now a deliberate choice for the human whole-file path
+rather than a fallback while no strict path existed. A parse break still reopens
+the editor; a vocabulary typo warns and audit lint catches it.
 ## What audited clean
 
 - **The vocabulary itself.** Six of the seven statuses are well-chosen, and every
