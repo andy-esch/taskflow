@@ -1,26 +1,55 @@
 ---
 schema: 1
 status: active
-description: Validate and, if accepted, implement Threads as initiative views over a planning-space task DAG, with global dependencies, lifecycle gating, bulk composition, and generated projections.
+description: Implement accepted Threads as initiative views over a planning-space task DAG, with global dependencies, lifecycle gating, bulk linking, and generated projections.
 priority: medium
 tags: [planning-model, threads, graph, workflow]
 created: "2026-08-24"
 ---
 # Threads and task dependency graphs
 
-**Goal.** Validate and, if ADR-0006 is accepted, implement Threads as initiative views over a planning-space task DAG without overcommitting to speculative graph features.
+**Goal.** Implement accepted Threads as initiative views over a planning-space task DAG without overcommitting to speculative graph features.
 
 ## Why this is its own epic
 
 Threads are not only a new first-class document. They change task dependency ownership, lifecycle eligibility, repository-wide graph integrity, multi-file composition, CLI and wire projections, and eventually the TUI. That cross-cutting domain deserves a coherent home rather than being split between the generic entity, storage, and CLI epics.
 
-The first work in this epic was deliberately a decision spike. It recommends accepting ADR-0006 and scoping the production implementation; no named risk requires another spike. ADR acceptance and production task creation remain explicit follow-up decisions rather than implied consequences of the prototype.
+The first work in this epic was deliberately a decision spike. It recommended accepting ADR-0006 and scoping the production implementation; no named risk required another spike. ADR-0006 was accepted on 2026-08-25, and the production tasks below now own delivery.
 
 ## Decision gate
 
-The spike left the explicit recommendation to **accept ADR-0006 and scope implementation slices**.
-The ADR remains proposed until decider sign-off. After acceptance, the work follows the delivery
-sequence below; this epic does not treat all Thread work as one implementation task.
+ADR-0006 is **accepted**. Work follows the delivery sequence below; this epic does not treat all
+Thread work as one implementation task.
+
+## Production task graph
+
+These bootstrap edges are prose until task `6g3q4rt7mgjn` lands the guarded dependency-write
+surface. That task must persist them through the production commands, making this epic the first
+real dependency dogfood. Prefer task IDs over slice numbers because ADR slice 2 is split across the
+guard and dependency-operation tasks:
+
+```text
+6g3q4rst78qy strict reads -----> 6g3q4rt7mgjn dependency operations <----- 6g3q4rt0wzkq portable guard
+       |                                  |                                      |
+       |                                  v                                      |
+       |                         6g3q4rte8kc1 eligibility                         |
+       |                                                                         |
+       +--------------------> 6g3q4rtmv4ak Thread entity <------------------------+
+                                      |             |
+dependency operations ----------------+             +----> 6g3q4rv1w9e2 generated views
+                                      v                           |
+                            6g3q4rtv8d0a bulk link                v
+                                                       6g3q4rv89vzw TUI
+```
+
+- [6g3q4rst78qy — strict dependency reads](../tasks/6g3q4rst78qy-establish-canonical-task-dependencies-and-strict-graph-reads.md)
+- [6g3q4rt0wzkq — portable mutation guard](../tasks/6g3q4rt0wzkq-make-repository-graph-mutations-portable-and-serializable.md)
+- [6g3q4rt7mgjn — dependency operations and queries](../tasks/6g3q4rt7mgjn-ship-guarded-dependency-mutations-and-graph-queries.md)
+- [6g3q4rte8kc1 — eligibility enforcement](../tasks/6g3q4rte8kc1-enforce-dependency-eligibility-across-every-task-start-path.md)
+- [6g3q4rtmv4ak — Thread entity and projections](../tasks/6g3q4rtmv4ak-add-the-thread-entity-lifecycle-and-graph-projections.md)
+- [6g3q4rtv8d0a — resumable bulk linking](../tasks/6g3q4rtv8d0a-bulk-link-existing-tasks-into-threads-with-resumable-apply.md)
+- [6g3q4rv1w9e2 — generated graph views](../tasks/6g3q4rv1w9e2-generate-deterministic-thread-graph-views.md)
+- [6g3q4rv89vzw — usage-informed TUI](../tasks/6g3q4rv89vzw-add-usage-informed-thread-views-to-the-tui.md)
 
 ## Delivery sequence and gates
 
@@ -35,8 +64,8 @@ Thread persistence.
 
 | Order | Slice | Exit gate | Highest-value stress tests |
 |---|---|---|---|
-| 1 | Strict dependency read foundation and legacy migration | One deterministic, fail-closed graph snapshot and lint contract; no public graph write yet | malformed/unreadable tasks, ID drift, unknown status, duplicate/self/missing edges, cycles, migration preserving body/frontmatter |
-| 2 | Portable guarded edge writes and read queries | Final scan, validation, and write share one store-owned critical section on every supported platform | concurrent opposite edges, direct write versus bulk apply, stale CAS, same edge twice, removal during concurrent reads |
+| 1 | `6g3q4rst78qy`: strict dependency reads, derived state, and legacy diagnosis | One deterministic strict snapshot/analysis contract with problems available to diagnostic readers; no graph write yet | malformed/unreadable tasks, ID drift, unknown status, duplicate/self/missing edges, cycles, legacy slug resolution, reconvergent diamonds |
+| 2 | `6g3q4rt0wzkq` + `6g3q4rt7mgjn`: portable guard, dependency writes/queries, and guarded legacy migration | Final scan, pure planning/validation, and write share one store-owned critical section on every supported platform | nested acquisition, concurrent opposite edges, direct write versus bulk apply, stale CAS, idempotent repeats, guarded slug-to-ID migration |
 | 3 | Eligibility enforcement | Every route into `in-progress` uses one policy and produces the same blocker/force result | all task statuses, direct/transitive blockers, withdrawn/missing prerequisites, reopen after downstream completion, forced inconsistent work |
 | 4 | Thread entity and projections | Membership and lifecycle persist independently from global edges; CLI and wire consume one projection | shared tasks, external gates and rollup denominators, empty/start/complete rules, abandoned/completed drift, membership conflicts |
 | 5 | Existing-task bulk linking | One literal-YAML manifest can create a Thread, add memberships and global edges, and converge after interruption | failure after every write prefix, retry/idempotency, wrong planning-space identity, edited/stale plan, concurrent edge mutation |
@@ -60,8 +89,11 @@ or other deferred graph analysis into V1.
 
 This epic is the first production consumer of its own capabilities:
 
-1. Slice 1 runs strict read-only analysis against this planning repository.
-2. Slice 2 uses production dependency commands to sequence all remaining epic tasks.
+1. Task `6g3q4rst78qy` proves a clean strict snapshot over the real repository, records scan timing,
+   and reports the six legacy-field resolutions without pretending an edge-free graph exercises
+   blocker or topology queries.
+2. Task `6g3q4rt7mgjn` uses production dependency commands to persist the bootstrap edges and then
+   exercises explanatory queries against those real relationships.
 3. Slice 4 creates a real Thread for the remaining initiative and observes its frontier and external
    gates during normal implementation work.
 4. Slice 5 uses bulk linking on the next naturally suitable initiative rather than a synthetic demo.
