@@ -22,20 +22,22 @@ Let users describe membership and dependency relationships among existing tasks 
 - Support one new Thread per manifest using local node keys and literal stable `task_id` references; `member: false` represents explicit external gates.
 - Materialize a planning-space-bound stable-ID apply plan before mutation.
 - Apply membership and repository-global dependency additions with dry-run, per-operation receipts, conflict detection, interruption recovery, and idempotent retry.
-- Keep inline task creation outside the required production path until usage justifies it.
+- Exclude inline task creation from V1; a future amendment must define creation provenance and already-applied identity before adding it.
 
 ## Acceptance criteria
 
 - [ ] Compose validates every task reference, member role, local key, and proposed global edge union without mutation.
 - [ ] Apply revalidates current repository health and planning-space identity inside the mutation guard.
+- [ ] Compose refuses an ID-less planning space with an actionable identity-migration message; path identity is never substituted silently.
 - [ ] Every interrupted write prefix remains graph-valid and retrying the same plan converges without duplicates.
 - [ ] Omitted membership or dependencies never imply destructive removal.
 - [ ] Human and machine receipts distinguish creates, updates, skips, conflicts, and completion.
+- [ ] Existing task edits between retries do not conflict merely because the plan links those tasks; V1 owns only additive membership and dependency intent.
 
 ## Stress tests
 
 - Inject failure after every operation; retry each prefix to completion.
-- Wrong planning space, edited/stale plans, already-present memberships/edges, concurrent direct dependency mutation, same-ID conflict, and raw hand edits.
+- Wrong or absent planning-space identity, edited/stale plans, already-present memberships/edges, concurrent direct dependency mutation, cross-kind ID conflict, and raw hand edits.
 
 ## Sequencing
 

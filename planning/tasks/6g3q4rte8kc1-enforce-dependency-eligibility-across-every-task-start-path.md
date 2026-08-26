@@ -19,23 +19,26 @@ Make dependency eligibility one authoritative core policy for all transitions in
 
 ## Scope
 
-- Derive lifecycle role, clear/blocked/broken gate state, sound completion, eligibility, and inconsistency from persisted tasks.
-- Route `task start`, generic move, create-and-start, and reusable adapter/TUI entry points through the same guard.
-- Return forced-transition metadata without removing or waiving dependencies.
+- Consume the shared lifecycle-role, gate-state, sound-completion, eligibility, and inconsistency derivation from the strict graph foundation.
+- Route `task start`, generic move, create-and-start, accepted `task edit` status deltas, and reusable adapter/TUI entry points through the same guard.
+- Replace the ambiguous internal force boolean with typed gate overrides while retaining contextual CLI `--force` spelling.
+- Report descendant tasks whose derived gate state changes after a lifecycle transition; add affected Thread IDs when Thread persistence exists.
 
 ## Acceptance criteria
 
-- [ ] Every current path into `in-progress` calls one policy and cannot bypass dependency checks accidentally.
+- [ ] Every first-party path into `in-progress`, including `task edit`, calls one policy and cannot bypass dependency checks accidentally.
 - [ ] Ineligible starts fail by default with deterministic outstanding blockers.
-- [ ] `--force` changes only lifecycle state and reports why the resulting task is inconsistent.
+- [ ] `task start --force` and `task move ... in-progress --force` bypass only the dependency gate; completion force remains scoped to unexplained acceptance criteria.
 - [ ] Reopening an upstream task makes completed descendants unsound without rewriting their persisted statuses.
 - [ ] Deferred and deprecated prerequisites follow ADR-0006 semantics consistently.
+- [ ] Lifecycle receipts report descendant task IDs/counts whose gate state changed and, after Thread support lands, affected Thread IDs with an explanatory remedy.
 
 ## Stress tests
 
 - Table-drive every task status against clear, blocked, and broken gates across every entry path.
 - Cover direct/transitive blockers, forced completion, upstream reopen, missing/withdrawn prerequisites, and parity between human and machine receipts.
+- Exercise batch transitions and measure repeated repository scans before introducing any invocation-local snapshot cache.
 
 ## Sequencing
 
-Requires guarded dependency operations. The Thread projection must consume this policy rather than recalculate readiness.
+Requires guarded dependency operations. Thread projections consume the derivation from the strict-read task; enforcement and Thread persistence may proceed independently once their own prerequisites land.

@@ -20,13 +20,15 @@ Provide one store-owned repository mutation boundary that makes final graph read
 ## Scope
 
 - Replace or explicitly close the non-Unix no-op locking gap.
-- Expose a narrow critical-section API suitable for dependency and later bulk Thread mutations without leaking filesystem locking into core services.
+- Expose a narrow control-inverted mutation port: the store locks, loads the strict snapshot, invokes a core-supplied pure planner, applies returned writes through package-internal lock-free helpers, and unlocks.
+- Forbid Store calls from inside the planner callback and make invalid nested mutation fail explicitly rather than self-deadlock.
 - Preserve atomic replacement and content-version conflict behavior for ordinary entity writes.
 
 ## Acceptance criteria
 
 - [ ] Every supported platform has an explicit, tested cooperating-writer serialization contract; unsupported guarantees are rejected or documented rather than silently no-op.
-- [ ] A graph mutation can perform its authoritative scan, validation, and writes within one repository guard.
+- [ ] A graph mutation performs its authoritative scan, pure planning/validation, and writes within one repository guard without exposing filesystem locking or teaching the store graph semantics.
+- [ ] The callback contract accepts and returns taskflow-owned snapshot/planned-write values, permits no nested Store calls, and detects invalid nesting without hanging.
 - [ ] Lock acquisition/release errors are attributable and process termination does not leave unrecoverable stale state.
 - [ ] Existing optimistic concurrency and ordinary write behavior remain compatible.
 
@@ -35,7 +37,8 @@ Provide one store-owned repository mutation boundary that makes final graph read
 - Concurrent opposite edge intents cannot both commit a cycle.
 - Concurrent same-file and different-file writers cannot lose updates silently.
 - Error, panic-equivalent, and process-exit paths release or recover the guard as designed.
+- A faithful nested-acquisition regression test cannot reproduce the current self-deadlock.
 
 ## Sequencing
 
-Can be designed alongside the strict read foundation, but guarded dependency writes require both tasks to land.
+The control-inversion contract is fixed by ADR-0006's 2026-08-26 amendment, so implementation can proceed alongside the strict read foundation. Guarded dependency writes require both tasks to land.

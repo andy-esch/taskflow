@@ -21,21 +21,26 @@ Expose safe repository-global dependency operations and deterministic read queri
 
 - Add `task depend add/remove`, blocker, downstream-impact, and explanatory plan use cases and CLI surfaces.
 - Perform exact-ID resolution, duplicate/self/missing checks, cycle validation, dry-run, and write inside the repository mutation guard.
+- Migrate diagnosed legacy dependency fields by resolving slugs to stable IDs and applying the validated union inside the same guard.
+- Treat `task edit` as a guarded product path for dependency deltas, or reject the delta with direction to the specialized commands.
 - Return stable human and machine receipts that make the global blast radius explicit.
 
 ## Acceptance criteria
 
-- [ ] Add/remove are additive/removal-aware, idempotency behavior is explicit, and invalid unions never write.
+- [ ] Add/remove are additive/removal-aware; an already-present add is an idempotent skip with a receipt entry, and invalid unions never write.
 - [ ] `--dry-run` performs the same authoritative validation without mutation.
-- [ ] Blocker, unblocks, and topology results are deterministic and distinguish direct from transitive information where exposed.
+- [ ] Blocker, unblocks, and topology results are deterministic; blocker entries distinguish direct/transitive work and carry a reason plus one deterministic shortest path.
 - [ ] Machine output contains stable task IDs and attributable validation/conflict errors without graph-library types.
-- [ ] Lint and queries remain useful for hand-edited broken repositories while mutation fails closed.
+- [ ] Diagnostic queries degrade with explicit problems and graph health; frontier/unblocked selectors return no eligible work on an unsound relevant graph; mutation fails closed.
+- [ ] The six live legacy `blocked_by` values migrate from resolvable slugs to stable `depends_on` IDs with atomic-frontmatter/body preservation; missing or ambiguous values write nothing.
+- [ ] `task set` cannot mutate `depends_on` even with `--force`, and `task edit` cannot bypass guarded graph validation.
 
 ## Stress tests
 
 - Concurrent opposite edges, duplicate adds, absent removals, stale content, malformed repositories, and deep/wide/disconnected graphs.
 - Direct dependency commands racing another direct command and a future bulk-apply-shaped writer.
+- Concurrent-cycle errors retain validation semantics while explaining that repository state changed after the command began when attributable.
 
 ## Sequencing
 
-Requires the strict read foundation and portable mutation guard. Its production commands become the first dependency dogfood surface for the remaining epic tasks.
+Requires the strict read foundation and portable mutation guard. Its production commands persist the epic's bootstrap edges and become the first dependency dogfood surface for the remaining tasks.

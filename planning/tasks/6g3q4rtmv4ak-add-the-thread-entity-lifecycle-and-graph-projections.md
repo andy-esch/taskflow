@@ -21,15 +21,19 @@ Introduce Threads as first-class initiative documents whose membership and lifec
 
 - Add Thread domain validation, flat ID-addressed Markdown storage, narrow core ports/use cases, CLI, completion, wire/schema, init/layout, health, and watch coverage.
 - Implement many-valued membership, lifecycle, rollup, frontier, external gates, and completed-Thread inconsistency.
+- Report nominal completion separately from soundly drained members, and augment lifecycle-impact receipts with affected Thread IDs.
 - Retire the unused Projects scaffold without deleting non-empty legacy content.
 
 ## Acceptance criteria
 
 - [ ] Thread files own metadata and a sorted task-ID membership set only; task files remain the dependency source of truth.
-- [ ] A task can belong to multiple Threads and an outside prerequisite appears as an external gate without entering progress totals.
-- [ ] Start, complete, abandon, reopen, and membership mutation rules match ADR-0006.
+- [ ] A task can belong to multiple Threads and an outside prerequisite appears as an external gate without entering progress totals while still preventing Thread completion until satisfied.
+- [ ] Views expose nominal `done / total`, sound `drained / total`, graph health, and exact outstanding external gates without contradictory completion UX.
+- [ ] Start and complete require at least one non-withdrawn member; complete, abandon, reopen, and membership mutation rules otherwise match ADR-0006.
 - [ ] CLI and wire projections use the shared graph/eligibility analysis and expose stable member/external roles.
 - [ ] Initialization creates `threads/`, stops creating `projects/`, and handles non-empty legacy Projects safely.
+- [ ] Task/Thread IDs are checked for cross-kind collisions, and an empty Projects scaffold is defined narrowly enough to permit only `.gitkeep` removal.
+- [ ] Task lifecycle receipts name affected Thread IDs once Thread documents can exist.
 
 ## Stress tests
 
@@ -38,4 +42,4 @@ Introduce Threads as first-class initiative documents whose membership and lifec
 
 ## Sequencing
 
-Requires the strict graph foundation, guarded writes, and shared eligibility semantics. Bulk linking waits for this persistence contract.
+Requires the strict graph derivation and portable guarded writes, but not lifecycle enforcement. Bulk linking waits for this persistence contract and dependency operations.

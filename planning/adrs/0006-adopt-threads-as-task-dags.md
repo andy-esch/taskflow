@@ -605,7 +605,58 @@ production domain and consumer-owned persistence ports as the implementation sli
 
 ## Amendments
 
-_None yet (proposed)._
+### 2026-08-26: Implementation-readiness hardening
+
+The adversarial [implementation-readiness audit](../audits/6g3qxqav7yed-2026-08-25-threads-dag-implementation-readiness.md)
+confirmed the central model but found contracts that the validation spike had simplified or left
+implicit. The following amendments supersede conflicting wording above:
+
+1. **The store controls the graph-mutation critical section.** A graph mutation port takes the
+   repository guard, loads the authoritative strict snapshot, invokes a core-supplied pure planner,
+   applies the returned planned writes through internal lock-free primitives, and releases the
+   guard. The planner cannot call another Store method. Nested graph/store mutation must fail
+   explicitly rather than self-deadlock. Filesystem locking and graph semantics remain on their
+   respective sides of this callback boundary.
+2. **Snapshot analysis is memoized and linear.** Sound completion, gate state, blockers, downstream
+   impact, and Thread projections cache one result per task per immutable snapshot. Reconvergent
+   graphs must remain O(V+E), demonstrated by visit-count assertions rather than timing guesses.
+3. **First-party generic editing cannot bypass graph or lifecycle policy.** `task set` and
+   `--force` always reject `depends_on` and direct users to `task depend add/remove`. `task edit` is
+   a product path, not a raw-hand-edit equivalent: a dependency delta must use the same guarded
+   graph validation or be rejected, and a status delta must use the same lifecycle/eligibility
+   policy. Direct filesystem edits remain possible but are diagnosed by lint and derived views.
+4. **Gate derivation has explicit precedence and explanations.** `broken` outranks `blocked`; a
+   deferred prerequisite is blocked, while a missing, unreadable, withdrawn, or recursively broken
+   prerequisite is broken. Each blocker projection carries a stable reason token and one
+   deterministic shortest explanatory path, so an unsound completed prerequisite is distinguishable
+   from ordinary unfinished work.
+5. **Diagnostic reads and actionable selectors have different failure behavior.** Mutations always
+   fail closed. Diagnostic reads such as `thread show`, blockers, and lint degrade with an explicit
+   problem list and graph-health marker. Dispatch-oriented selectors such as `thread frontier` and
+   `task list --unblocked` return no eligible work when their relevant graph is unsound and report
+   why; they never silently dispatch from a partial graph.
+6. **Legacy migration follows the mutation boundary.** The strict-read task diagnoses legacy
+   `blocked_by`, `dependencies`, and `blocks`, including exact slug-to-ID resolution, ambiguity, and
+   missing-target errors, but does not rewrite them. The guarded dependency-operations task performs
+   the additive, cycle-validated migration with body/frontmatter preservation.
+7. **Lifecycle receipts disclose graph impact.** Internal overrides are typed by gate even when the
+   CLI presents the contextual `--force` spelling. `start` and a move to `in-progress` may force only
+   the dependency gate; completion force continues to address unexplained acceptance criteria.
+   Transitions report descendants whose gate state changed. Once Threads exist, the same receipt also
+   reports affected Thread IDs rather than requiring a second discovery command.
+8. **Thread rollup and closure expose nominal versus sound completion.** External gates stay outside
+   the progress denominator but do block Thread completion. Views report nominal `done / total` and
+   sound `drained / total`, plus exact outstanding external gates. Both `thread start` and
+   `thread complete` require at least one non-withdrawn member.
+9. **Bulk-linking V1 operates on existing tasks only.** Inline task creation is deferred, so apply
+   convergence does not own or compare mutable task content. Compose refuses an ID-less planning
+   space with an actionable identity-migration error; path identity is not a substitute for the
+   durable planning-space ID. Additive membership and dependency operations treat an already-present
+   value as an idempotent skip with a receipt entry.
+10. **Identity and output remain deterministic.** Task and Thread IDs share a planning-space
+    namespace and are checked for cross-kind collision. Public blocker/impact DTOs use stable task
+    IDs, reason/path data, and taskflow-owned error vocabulary; concurrency attribution may enrich an
+    error but does not change a cycle from validation into a retryable conflict.
 
 ## Related
 
