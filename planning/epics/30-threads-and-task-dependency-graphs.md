@@ -1,26 +1,56 @@
 ---
 schema: 1
 status: active
-description: Validate and, if accepted, implement Threads as initiative views over a planning-space task DAG, with global dependencies, lifecycle gating, bulk composition, and generated projections.
+description: Implement accepted Threads as initiative views over a planning-space task DAG, with global dependencies, lifecycle gating, bulk linking, and generated projections.
 priority: medium
 tags: [planning-model, threads, graph, workflow]
 created: "2026-08-24"
 ---
 # Threads and task dependency graphs
 
-**Goal.** Validate and, if ADR-0006 is accepted, implement Threads as initiative views over a planning-space task DAG without overcommitting to speculative graph features.
+**Goal.** Implement accepted Threads as initiative views over a planning-space task DAG without overcommitting to speculative graph features.
 
 ## Why this is its own epic
 
 Threads are not only a new first-class document. They change task dependency ownership, lifecycle eligibility, repository-wide graph integrity, multi-file composition, CLI and wire projections, and eventually the TUI. That cross-cutting domain deserves a coherent home rather than being split between the generic entity, storage, and CLI epics.
 
-The first work in this epic was deliberately a decision spike. It recommends accepting ADR-0006 and scoping the production implementation; no named risk requires another spike. ADR acceptance and production task creation remain explicit follow-up decisions rather than implied consequences of the prototype.
+The first work in this epic was deliberately a decision spike. It recommended accepting ADR-0006 and scoping the production implementation; no named risk required another spike. ADR-0006 was accepted on 2026-08-25, and the production tasks below now own delivery.
 
 ## Decision gate
 
-The spike left the explicit recommendation to **accept ADR-0006 and scope implementation slices**.
-The ADR remains proposed until decider sign-off. After acceptance, the work follows the delivery
-sequence below; this epic does not treat all Thread work as one implementation task.
+ADR-0006 is **accepted**. Work follows the delivery sequence below; this epic does not treat all
+Thread work as one implementation task.
+
+## Production task graph
+
+These bootstrap edges are prose until the guarded dependency-write surface lands. Slice 3 must
+persist them through the production commands, making this epic the first real dependency dogfood:
+
+```text
+6g3q4rst78qy strict reads ---------\
+                                      -> 6g3q4rt7mgjn dependency operations
+6g3q4rt0wzkq portable mutation guard /                 |
+                                                         v
+                                      6g3q4rte8kc1 eligibility
+                                                         |
+                                                         v
+                                      6g3q4rtmv4ak Thread entity
+                                         |               |
+                                         v               v
+                              6g3q4rtv8d0a bulk link   6g3q4rv1w9e2 generated views
+                                                             |
+                                                             v
+                                                   6g3q4rv89vzw TUI
+```
+
+- [6g3q4rst78qy — strict dependency reads](../tasks/6g3q4rst78qy-establish-canonical-task-dependencies-and-strict-graph-reads.md)
+- [6g3q4rt0wzkq — portable mutation guard](../tasks/6g3q4rt0wzkq-make-repository-graph-mutations-portable-and-serializable.md)
+- [6g3q4rt7mgjn — dependency operations and queries](../tasks/6g3q4rt7mgjn-ship-guarded-dependency-mutations-and-graph-queries.md)
+- [6g3q4rte8kc1 — eligibility enforcement](../tasks/6g3q4rte8kc1-enforce-dependency-eligibility-across-every-task-start-path.md)
+- [6g3q4rtmv4ak — Thread entity and projections](../tasks/6g3q4rtmv4ak-add-the-thread-entity-lifecycle-and-graph-projections.md)
+- [6g3q4rtv8d0a — resumable bulk linking](../tasks/6g3q4rtv8d0a-bulk-link-existing-tasks-into-threads-with-resumable-apply.md)
+- [6g3q4rv1w9e2 — generated graph views](../tasks/6g3q4rv1w9e2-generate-deterministic-thread-graph-views.md)
+- [6g3q4rv89vzw — usage-informed TUI](../tasks/6g3q4rv89vzw-add-usage-informed-thread-views-to-the-tui.md)
 
 ## Delivery sequence and gates
 

@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: "2026-08-21"
 deciders: [andy-esch]
 tags: [adr, planning-model, graph, workflow, threads]
@@ -9,6 +9,10 @@ superseded_by: null
 ---
 
 # ADR-0006: Adopt Threads as Initiative Views over a Global Task DAG
+
+> ✔ **Accepted 2026-08-25 — finalized.** The vertical MVP spike validated the central model and
+> identified the production safety gates captured below. Decision sections are now frozen; record
+> later clarifications under `## Amendments` and reverse the decision through a superseding ADR.
 
 > Follows the ADR format established in [0001-adopt-adrs](0001-adopt-adrs.md). Formally
 > **supersedes [0002-adopt-projects](0002-adopt-projects.md)** ("Adopt Projects"), replacing
@@ -21,9 +25,10 @@ superseded_by: null
 > library-first, scheduler, stored-diagram, and project-bucket claims were removed. Remaining
 > uncertainties are called out as deferred decisions rather than implied implementation.
 >
-> **Acceptance gate:** This ADR remains proposed until the bounded
+> **Acceptance evidence:** The bounded
 > [vertical MVP spike](../tasks/6g3a1wtx4zrr-spike-a-vertical-threads-and-global-task-dag-mvp.md)
-> reports whether its core contracts should be accepted, revised and re-tested, or abandoned.
+> recommended acceptance after executable filesystem, concurrency, interruption, and manual-use
+> validation. Production rollout remains governed by the dependency-ordered slices in Section 10.
 
 ## Context and Problem Statement
 
