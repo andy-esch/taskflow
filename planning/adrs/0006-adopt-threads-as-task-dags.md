@@ -247,10 +247,15 @@ only; they list outside prerequisites as marked gates rather than silently treat
 Thread-owned execution. Section 11 bounds the deliberately deferred graph features, while the
 implementation slices preserve the planned TUI follow-up.
 
-Graph implementation/package selection is a pre-implementation spike, not an ADR commitment.
-Evaluate off-the-shelf packages against the operations above, determinism, API stability,
-dependency weight, cycle diagnostics, and render support. Keep the selected package behind a
-taskflow-owned analysis interface and use plain task IDs/domain values at every boundary.
+The validation spike completed enough package research to avoid a second open-ended research task.
+V1 defaults to the small owned algorithms proven by the spike. During the dependency-foundation
+slice, run one bounded implementation-time bake-off: execute the same taskflow-owned contract tests
+against the owned implementation and a thin [`dominikbraun/graph`](https://github.com/dominikbraun/graph)
+adapter. Adopt the dependency only if it materially removes maintained code while preserving stable
+task-ID ordering, attributable cycle diagnostics, and taskflow's error contracts; its explicitly
+unstable v0 API counts against marginal savings. Gonum is not a second mandatory candidate unless
+the required analysis surface grows beyond V1. No graph-library type may cross the taskflow-owned
+analysis interface into domain, persistence, or wire contracts.
 
 ### 6. Document Layout & Frontmatter Specification
 
@@ -294,11 +299,12 @@ Thread IDs reuse ADR-0003's task/research conventions: 12-character stable ID in
 and frontmatter, exact-ID resolution, drift lint, and rename-safe identity. The body is free-form
 narrative, not a generated graph or shared execution log.
 
-### 7. Bulk Composition is a First-Class Use Case
+### 7. Bulk Linking and Composition are First-Class Use Cases
 
-Scoping often discovers a complete predicted task graph at once. Bulk composition is therefore
-part of the first useful Thread release, not an afterthought. An authoring manifest may mix existing
-tasks with complete specifications for new tasks:
+Scoping often discovers the relationships among a set of already-created tasks at once. A manifest
+can bulk-link those tasks into one new Thread and add their repository-global dependency edges in one
+operation; it does not recreate or move the tasks. This is the primary V1 authoring path. The format
+may also mix in complete specifications for new tasks as an optional composition convenience:
 
 ```yaml
 thread:
@@ -307,10 +313,7 @@ thread:
   goal: Ship unified config CLI and TUI routes
 nodes:
   - key: config-model
-    new_task:
-      title: Define the unified configuration model
-      epic: 17-pm-go-cli
-      tags: [config, domain]
+    task_id: 6fjangd7kvh1
   - key: existing-cli
     task_id: 6fjangd7kvh2
   - key: legacy-gate
@@ -334,6 +337,12 @@ dependencies:
 - Local keys are authoring conveniences only. Persisted Thread membership and task dependencies use
   stable IDs.
 
+An authoring manifest is literal YAML; taskflow does not interpolate shell variables in it. In the
+primary existing-task workflow, `task_id` contains the copied stable task ID—not a slug, title, or
+`$VARIABLE`—and CLI/docs must make those IDs easy to discover. Compose resolves local keys and emits
+only stable IDs into the materialized apply plan. `new_task` does not need to complicate the normal
+bulk-linking workflow.
+
 #### Compile, Then Apply
 
 A one-shot command that generates fresh IDs during each retry is not safe enough for a multi-file
@@ -349,12 +358,14 @@ tskflwctl thread apply thread-apply.yaml --dry-run --json
    and task IDs, resolves every local key, validates exact task/epic references and normal
    task-creation invariants, and checks the proposed edge union for cycles. It writes a
    materialized apply plan before any planning entity is mutated. The plan is bound to the
-   planning-space identity and records stable IDs, intended creations, additive membership/edge
-   changes, and the preconditions used to calculate them.
+   planning-space identity and records stable IDs, exact intended creations, and additive
+   membership/edge changes. It is an intent log, not a frozen repository snapshot: unrelated
+   repository changes between compose and apply remain legal when current-state revalidation passes.
 2. **Apply** revalidates the complete materialized plan, then converges the repository toward it.
    A missing planned entity is created with its preallocated ID; an identical creation or already
    present set addition is skipped; a same-ID/different-identity collision or stale conflicting
-   edit stops with `ErrConflict`. Reapplying the same plan cannot mint duplicate tasks.
+   edit stops with `ErrConflict`. Apply rechecks task-creation invariants and referenced epics rather
+   than trusting compose-time validation. Reapplying the same plan cannot mint duplicate tasks.
 
 Compose supports stdin for the authoring manifest, but a materialized plan must have a durable
 path before apply begins. A later convenience command may compose and apply in one invocation only
@@ -367,6 +378,13 @@ globally invalid edge. It validates everything it can before the first write, re
 per-entity/edge receipt, stops on the first conflict, and is safe to resume with the same plan.
 It does not claim rollback or isolation from raw hand edits. `lint` must diagnose any remainder
 after interruption.
+
+Every persisted prefix must itself remain a sound repository graph. In particular, apply cannot
+create new tasks in stable-ID order when a new task may depend on another new task: an interruption
+could leave a dangling reference that then makes fail-closed retry impossible. Apply writes new
+tasks in deterministic topological waves (or uses an equivalent vertices-before-edges strategy),
+adds dependencies to existing tasks only after all referenced new tasks exist, and creates the
+Thread document last.
 
 ### 8. CLI Surface
 
@@ -430,23 +448,55 @@ keep the selected graph package, if any, behind the taskflow-owned analysis cont
 ### 10. Implementation Slices
 
 If the validation spike recommends acceptance and the decider accepts this ADR, production work can
-be scoped into the following delivery slices without requiring the deferred features:
+be scoped into the following dependency-ordered slices without requiring the deferred features:
 
-1. **Dependency foundation:** add modeled `Task.DependsOn`, replace the legacy dependency field
-   registry, migrate the six current `blocked_by` files to stable IDs, add graph loading and
-   fail-closed global integrity/lint, and complete the graph-package spike.
-2. **Dependency operations and eligibility:** add dependency mutation/query commands, deterministic
-   analysis projections, the shared transition guard across CLI/core call paths, and `--force`
-   receipts.
-3. **Thread entity:** add document/store/core/wire/CLI support, many-valued membership, lifecycle,
-   rollup, external gates, frontier, and initialization migration from the unused Projects scaffold.
-4. **Bulk composition and generated views:** ship compose/apply manifests with resumable receipts,
-   explanatory plans, and Mermaid/DOT rendering. This is part of V1 because known-ahead scoping is a
-   primary use case.
-5. **Planned TUI follow-up:** after CLI and wire behavior have usage feedback, add a Thread list/tab
+1. **Strict dependency read foundation:** add modeled `Task.DependsOn`, replace and migrate the
+   legacy dependency vocabulary, define the taskflow-owned graph-analysis contract, and add strict
+   graph snapshot/lint behavior. Run the bounded library bake-off here. Do not expose graph writes
+   while repository health and deterministic diagnostics are still unsettled.
+2. **Portable guarded dependency writes:** establish the cross-platform repository mutation guard,
+   then add dependency add/remove, dry-run, blocker/downstream, and explanatory-plan operations. The
+   final read, cycle validation, and write remain one store-owned critical section.
+3. **Eligibility enforcement:** centralize the transition policy and route every path into
+   `in-progress` through it, including generic move, start, create-and-start, and later TUI actions.
+   Ship `--force` only with an explanatory receipt. Do not release partial enforcement that callers
+   can bypass through another verb.
+4. **Thread entity and projections:** add document/store/core/wire/CLI support, many-valued
+   membership, lifecycle, rollup, external gates, frontier, and initialization migration from the
+   unused Projects scaffold. This consumes the shared analysis contract rather than reimplementing
+   graph state.
+5. **Bulk linking of existing tasks:** ship YAML compose/apply for existing stable task IDs, with a
+   durable materialized plan, planning-space binding, dry-run, resumable receipts, and safe retry.
+   The prototype's inline `new_task` path is an optional follow-up and is not required to prove the
+   primary bulk-linking workflow.
+6. **Generated views:** add deterministic Mermaid/DOT and polish explanatory plans after the shared
+   projection has CLI usage. Generated output is never persisted as Thread state.
+7. **Planned TUI follow-up:** after CLI and wire behavior have usage feedback, add a Thread list/tab
    and detail view showing lifecycle, rollup, frontier, member/external distinction, and a readable
    graph. The first TUI slice should consume the same projections and should not introduce direct
    graph editing or a separate readiness calculation.
+
+### 10.1. Dogfooding and Rollout Policy
+
+Threads and task dependencies must manage their own remaining implementation work as soon as each
+production safety boundary permits it. This is a product-validation policy, not an invitation to use
+the spike adapter on canonical planning data:
+
+- After the strict read foundation lands, run its graph health and explanatory queries against this
+  planning repository before enabling writes.
+- After guarded dependency writes land, sequence the remaining tasks in this epic with real
+  dependencies using the public commands. Do not invent dependencies merely to exercise a feature.
+- After the Thread entity lands, make this initiative one of the first real Threads. Exercise shared
+  membership and external gates when actual work naturally has those relationships.
+- After bulk linking lands, use a literal-YAML manifest to establish or extend the next real
+  initiative and retain its materialized plan until apply reports completion.
+- Record confusing output, forced transitions, reopen behavior, merge conflicts, and recovery work
+  in the owning implementation task. Contract-level findings amend this ADR before TUI behavior is
+  treated as settled.
+
+Dogfooding never bypasses the slice exit gates. In particular, canonical planning data must not be
+written by the experimental `threadspike` adapter; production migration, lint, locking, and wire
+contracts must land first.
 
 ### 11. Explicitly Out of Scope for This Decision
 
@@ -456,7 +506,7 @@ be scoped into the following delivery slices without requiring the deferred feat
 - soft, OR, conditional, time-based, or cross-planning-space dependency edges;
 - stored diagrams, stored rollups, or a shared execution log inside the Thread file;
 - all-files rollback or claims of transactionality across Markdown documents; and
-- choosing a graph package before the required-operation spike.
+- adopting a graph package for speculative algorithms outside the V1 contract.
 
 ## Consequences
 
@@ -499,6 +549,54 @@ be scoped into the following delivery slices without requiring the deferred feat
   enforceable contract; pressure for soft or alternative gates should be evaluated from actual use.
 - The best graph package may provide useful later algorithms, but package capability must not expand
   V1 scope or leak library types into persisted/public contracts.
+
+## Validation Spike Commentary (2026-08-24)
+
+The bounded vertical prototype under `internal/threadspike` plus its experimental filesystem adapter
+under `internal/store/threadspike.go` exercised the required scenarios against temporary Markdown
+planning repositories. It is intentionally not wired into `core.Service`, production wire contracts,
+ordinary CLI builds, or live planning data. A `-tags threadspike` build exposes a disposable manual
+compose/apply/show/plan surface solely to exercise the prototype in throwaway spaces.
+
+**Recommendation: accept and scope implementation**, retaining this ADR's proposed status until the
+decider signs off. The central model survived: one task-owned global DAG supports shared Thread
+membership, external gates, deterministic frontier/topology, and separate lifecycle/gate state.
+Recursive sound completion also behaves mechanically as specified when an upstream task is reopened,
+although the human repair UX remains a follow-up to validate through use.
+
+The spike found five contracts that must be explicit in production:
+
+1. **Every interrupted apply prefix must be graph-valid.** Stable-ID write order is unsafe; new tasks
+   need topological creation order (or deferred edge attachment), and the Thread lands last.
+2. **Apply-time validation is authoritative.** Compose-time success cannot justify creating a task
+   after its epic disappeared or accepting a hand-edited apply plan with invalid creation fields.
+3. **Graph snapshots are stricter than ordinary resilient lists.** ID drift, unknown task status,
+   malformed files, missing dependencies, and missing Thread members must make graph mutation fail
+   closed even when ordinary listing can still return partial data for repair.
+4. **The current lock proves the concurrent-cycle contract only on Unix.** Two opposite edge adds
+   were serialized correctly in the test harness, with exactly one accepted, but `writeLock` is a
+   documented no-op on non-Unix builds. Portable equivalent correctness is prerequisite work, not a
+   post-launch polish item.
+5. **The authoring manifest and apply plan are different artifacts.** The manifest is user-authored,
+   literal YAML whose primary workflow bulk-links existing task IDs with local graph keys. Optional
+   inline `new_task` definitions do not change that contract. The apply plan is generated,
+   stable-ID-only recovery state. Shell interpolation may be useful in a test fixture, but it is not
+   part of either file format and should not obscure the primary YAML-first workflow in product
+   documentation.
+
+The package comparison does not justify a V1 dependency. [`dominikbraun/graph`](https://github.com/dominikbraun/graph)
+is the closest fit—generic IDs, acyclic traits, stable topological ordering, cycle prevention, DOT,
+and no transitive dependencies—but its own documentation says the v0 API is unstable, and taskflow
+would still own its required diagnostics and all status/Thread semantics. [Gonum's graph/topo
+packages](https://pkg.go.dev/gonum.org/v1/gonum/graph/topo) are mature and actively maintained, but
+their generalized node API and broader module add adaptation cost without replacing taskflow's hard
+contracts. Keep a small owned adjacency/analysis implementation for V1, subject only to the bounded
+contract-test bake-off in Section 5; reconsider a broader package search if real usage asks for
+materially richer rendering or algorithms.
+
+The spike's pure graph and compose/apply tests are promotable as contract tests. The experimental
+mirror types, private store adapter, and failure-injection hook should be removed or rewritten behind
+production domain and consumer-owned persistence ports as the implementation slices land.
 
 ## Amendments
 
