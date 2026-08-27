@@ -224,6 +224,25 @@ type LintResult struct {
 	Issues []domain.Issue
 }
 
+func (r LintResult) Blocking() bool {
+	for _, issue := range r.Issues {
+		if issue.Blocking() {
+			return true
+		}
+	}
+	return false
+}
+
+func BlockingLintResultCount(results []LintResult) int {
+	count := 0
+	for _, result := range results {
+		if result.Blocking() {
+			count++
+		}
+	}
+	return count
+}
+
 // Lint validates active tasks' frontmatter (joining against known epics for the
 // epic-existence check) AND the epics themselves. Returns one LintResult per
 // task or epic with issues.
@@ -232,6 +251,7 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	taskProblems := append([]domain.FileProblem(nil), problems...)
 	epics, ep2, err := s.store.ListEpics()
 	if err != nil {
 		return nil, nil, err
@@ -242,6 +262,12 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		valid[domain.EpicRefKey(e.ID)] = true
 	}
 	validEpic := func(id string) bool { return valid[domain.EpicRefKey(id)] }
+	taskRecords := make([]domain.Task, len(tasks))
+	for i := range tasks {
+		taskRecords[i] = tasks[i].Task
+	}
+	graph := NewTaskGraph(taskRecords, taskProblems)
+	graphIssues := dependencyLintIssues(graph)
 
 	var results []LintResult
 	for _, tb := range tasks {
@@ -262,6 +288,7 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 			issues = append(domain.FrontmatterStatusIssues(t), domain.MissingIDIssue(t.ID)...)
 			issues = append(issues, domain.IDDriftIssue(t.ID, t.FilenameID)...)
 		}
+		issues = append(issues, graphIssues[t.Path]...)
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})
 		}
@@ -314,6 +341,72 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		}
 	}
 	return results, problems, nil
+}
+
+func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
+	out := make(map[string][]domain.Issue)
+	for _, problem := range graph.Problems() {
+		// These already have established ordinary-lint/FileProblem renderings. Keep
+		// strict snapshot attribution without printing the same defect twice.
+		switch problem.Code {
+		case ProblemUnreadable, ProblemMissingTaskID, ProblemTaskIDDrift, ProblemInvalidStatus,
+			ProblemLegacyMissing, ProblemLegacyAmbiguous:
+			continue
+		}
+		if problem.Path == "" {
+			continue
+		}
+		field := problem.Field
+		if field == "" {
+			field = "depends_on"
+		}
+		out[problem.Path] = append(out[problem.Path], domain.Issue{Field: field, Message: problem.Message})
+	}
+	for _, diagnostic := range graph.LegacyDiagnostics() {
+		parts := make([]string, 0, len(diagnostic.References))
+		severity := domain.IssueAdvisory
+		for _, ref := range diagnostic.References {
+			switch ref.Resolution {
+			case LegacyResolved:
+				parts = append(parts, fmt.Sprintf("%q resolves to %s (edge %s -> %s)", ref.Value, ref.CandidateIDs[0], ref.Edge.From, ref.Edge.To))
+			case LegacyUnsafe:
+				severity = ""
+				parts = append(parts, fmt.Sprintf("%q resolves to %s but its projected edge %s -> %s is structurally unsafe", ref.Value, ref.CandidateIDs[0], ref.Edge.From, ref.Edge.To))
+			case LegacyMissing:
+				severity = ""
+				parts = append(parts, fmt.Sprintf("%q has no exact task ID or slug match", ref.Value))
+			case LegacyAmbiguous:
+				severity = ""
+				parts = append(parts, fmt.Sprintf("%q is ambiguous across %s", ref.Value, strings.Join(ref.CandidateIDs, ", ")))
+			}
+		}
+		out[diagnostic.TaskPath] = append(out[diagnostic.TaskPath], domain.Issue{
+			Field: diagnostic.Field, Severity: severity,
+			Message: fmt.Sprintf("legacy dependency field: %s; canonical migration is intentionally deferred to guarded dependency operations",
+				strings.Join(parts, "; ")),
+		})
+	}
+	for _, taskID := range graph.TaskIDs() {
+		state := graph.State(taskID)
+		if !state.Inconsistent {
+			continue
+		}
+		blockers := graph.BlockingFrontier(taskID)
+		explanations := make([]string, 0, len(blockers))
+		for _, blocker := range blockers {
+			explanations = append(explanations, fmt.Sprintf("%s (%s via %s)",
+				blocker.TaskID, blocker.Reason, strings.Join(blocker.Path, " -> ")))
+		}
+		message := fmt.Sprintf("persisted %s task has a %s dependency gate", state.Role, state.Gate)
+		if len(explanations) > 0 {
+			message += ": " + strings.Join(explanations, "; ")
+		}
+		task, ok := graph.Task(taskID)
+		if ok && task.Path != "" {
+			out[task.Path] = append(out[task.Path], domain.Issue{Field: "status", Message: message})
+		}
+	}
+	return out
 }
 
 func hasTag(tags []string, want string) bool {

@@ -8,6 +8,7 @@ tier: 2
 priority: high
 autonomy_level: 3
 tags: [cli, testing]
+depends_on: [6fjangd7kvh2]
 created: "2026-01-02"
 updated_at: "2026-01-03"
 ---

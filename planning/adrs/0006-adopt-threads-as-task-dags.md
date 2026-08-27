@@ -155,6 +155,17 @@ depends_on: [6fjangd7kvh0, 6fjangd7kvh2]
 - Graph mutation fails closed when the repository dependency graph cannot be read soundly. `lint`
   remains the fail-open, full-sweep diagnostic surface for hand-edited missing IDs, unreadable
   tasks, legacy fields, and cycles.
+- Every immutable snapshot reports one repository-level health marker. `healthy` means the
+  canonical graph is valid and no legacy dependency vocabulary remains. `degraded` means every
+  legacy reference resolves exactly but has not yet been migrated; diagnostic reads may explain
+  it, while mutation and dispatch still fail closed. `broken` means any task is unreadable, an ID
+  or status is invalid, an edge is duplicate/self/invalid/missing, a legacy reference is missing or
+  ambiguous, or the graph is cyclic. `broken` takes precedence over `degraded`.
+- Supported commands prevent graph-invalid states rather than relying on lint after the fact.
+  Generic set/edit paths treat both `depends_on` and the legacy dependency fields as graph-owned,
+  including under `--force`; guarded dependency commands are the only product write path. Direct
+  filesystem edits and older binaries remain possible, so every structural defect and legacy
+  occurrence must also appear during an ordinary `lint` call with deterministic attribution.
 - The existing unmodelled `dependencies`, `blocked_by`, and `blocks` fields are legacy vocabulary.
   Implementation must migrate the six current `blocked_by` users or report them with actionable
   lint, then converge on `depends_on` alone. The unused task-level `projects` field is deprecated
@@ -186,7 +197,15 @@ them into a shadow status vocabulary:
   (`completed`), or withdrawn (`deprecated`).
 - **Gate state** is `clear` when every prerequisite is soundly completed; `blocked` when the graph
   is readable but at least one prerequisite is not soundly completed; or `broken` when an upstream
-  path contains a missing, unreadable, or withdrawn prerequisite.
+  path contains a missing, unreadable, withdrawn, invalid-status, cyclic, or otherwise recursively
+  broken prerequisite.
+
+Blocker projections use stable reason tokens: `not-started`, `in-flight`, `parked`, `withdrawn`,
+`missing`, `unsound-completed`, `invalid-status`, and `cycle`. The last two are forensic vocabulary,
+not states that supported commands may create: they let lint and diagnostic reads explain damage
+from direct filesystem edits, old binaries, or an interrupted external writer without collapsing it
+into a vague missing/blocked result. Every blocker also carries one deterministic shortest path from
+the queried task to that blocker.
 
 Named views are compositions of those fields:
 
@@ -657,6 +676,51 @@ implicit. The following amendments supersede conflicting wording above:
     namespace and are checked for cross-kind collision. Public blocker/impact DTOs use stable task
     IDs, reason/path data, and taskflow-owned error vocabulary; concurrency attribution may enrich an
     error but does not change a cycle from validation into a retryable conflict.
+
+### 2026-08-26: Dependency-foundation adversarial hardening
+
+Two independent implementation audits—[Gemini](../audits/6g417v97bx8s-2026-08-26-canonical-task-dependency-read-foundation.md)
+and [Claude](../audits/6g41amrnje2j-2026-08-26-canonical-task-dependency-read-foundation-claude.md)—found
+places where the first read foundation was safe in aggregate but its individual APIs and repair paths
+were too easy to misread or bypass. The following clarifications supersede conflicting wording above:
+
+1. **Cycle identity is an SCC property.** Validation identifies every member of each non-trivial
+   strongly connected component, plus a one-task component with a self-edge. Diagnostics emit one
+   deterministic representative edge-following cycle per component and attribute cyclic membership
+   to every affected task; they do not promise to enumerate every simple cycle. A self-edge is not
+   also reported as an indistinguishable generic cycle on the same task.
+2. **Graph health qualifies every projection.** Canonical edges and exactly resolved legacy edges
+   are validated as one projected union before a snapshot may be called degraded. A resolvable
+   legacy self-edge or cycle is broken, not merely unmigrated. A topological plan may return useful
+   partial waves for diagnosis, but its completeness flag is true only for a healthy snapshot.
+3. **Every first-party write honors graph ownership.** Generic set, edit, creation, and lint-repair
+   paths may neither add, delete, nor normalize canonical or legacy dependency fields. Until guarded
+   dependency creation exists, ordinary task creation rejects non-empty graph-owned fields. Malformed
+   graph frontmatter fails closed and must be repaired through an explicitly guarded migration or
+   deliberate filesystem edit; parser failure is never interpreted as an empty dependency set.
+4. **Safe legacy debt is visible without poisoning routine lint.** An exactly resolved legacy
+   reference whose projected edge is structurally legal is an advisory in normal human and JSON lint
+   output and does not make lint exit non-zero. Missing, ambiguous, self-referential, or cyclic legacy
+   projections remain errors. Snapshot health remains degraded and mutation/dispatch remains closed
+   until the advisory debt is migrated.
+5. **Authorization and explanation are separate contracts.** Lifecycle authorization uses the
+   typed derived state (`Eligible` and its gate), never the length of a blocker list. A gate
+   explanation includes that state, task-local structural problems, and an action-oriented blocking
+   frontier. The API also exposes a separately named full causal prerequisite projection for
+   forensic queries; neither projection's empty result is itself permission to start work.
+6. **Blocking projections declare their traversal semantics.** The causal projection may traverse
+   through all reachable unsound prerequisites. The action frontier stops at terminal constraints
+   such as missing, unreadable, withdrawn, invalid, or cyclic records and otherwise returns the
+   deepest current constraints a user can act on. Both use stable reason tokens and deterministic
+   shortest paths.
+7. **Complexity claims include output cost.** Snapshot state derivation remains O(V+E). A path
+   projection is O(V+E plus the size of the paths it returns); implementations keep predecessor
+   links during traversal and materialize paths only for emitted results. Lint uses the bounded
+   action frontier instead of expanding the full causal closure for every inconsistent task.
+8. **Diagnostics preserve source identity.** Unreadable task filenames retain recoverable stable-ID
+   identity, invalid dependency tokens remain distinguishable from missing valid IDs, and duplicate
+   IDs are attributed to every source path without silently assigning one record's graph defects to
+   another. Strict mutation still fails closed when no unique authoritative record exists.
 
 ## Related
 

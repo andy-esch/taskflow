@@ -75,6 +75,69 @@ func TestLint_Clean(t *testing.T) {
 	}
 }
 
+func TestLintReportsLegacyAndCanonicalDependencyDefects(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Epic("01-e.md", "---\nstatus: active\npriority: high\ndescription: e\n---\n# E\n")
+	targetID := testutil.TaskID("target")
+	dependentID := testutil.TaskID("dependent")
+	selfID := testutil.TaskID("self")
+	r.Task("completed", "target.md", "---\nid: "+targetID+"\nstatus: completed\nepic: 01-e\n---\n# target\n")
+	r.Task("completed", "dependent.md", "---\nid: "+dependentID+"\nstatus: completed\nepic: 01-e\nblocked_by: [target]\n---\n# dependent\n")
+	r.Task("completed", "self.md", "---\nid: "+selfID+"\nstatus: completed\nepic: 01-e\ndepends_on: ["+selfID+"]\n---\n# self\n")
+
+	out, err := runRootRC(t, "-C", r.Root, "lint")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("dependency defects must fail ordinary lint with exit 11, got %v", err)
+	}
+	for _, want := range []string{
+		"legacy dependency field", targetID, "guarded dependency operations",
+		"cannot depend on itself", "advisory finding",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("lint output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestLintResolvedLegacyDependencyIsAdvisoryWithExitZero(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Epic("01-e.md", "---\nstatus: active\npriority: high\ndescription: e\n---\n# E\n")
+	targetID := testutil.TaskID("target")
+	dependentID := testutil.TaskID("dependent")
+	r.Task("completed", "target.md", "---\nid: "+targetID+"\nstatus: completed\nepic: 01-e\n---\n# target\n")
+	r.Task("completed", "dependent.md", "---\nid: "+dependentID+"\nstatus: completed\nepic: 01-e\nblocked_by: [target]\n---\n# dependent\n")
+
+	human, err := runRootRC(t, "-C", r.Root, "lint")
+	if err != nil {
+		t.Fatalf("safe legacy advisory must exit zero: %v\n%s", err, human)
+	}
+	if !strings.Contains(human, "legacy dependency field") || !strings.Contains(human, "1 advisory finding") {
+		t.Fatalf("human advisory output =\n%s", human)
+	}
+	jsonOut, err := runRootRC(t, "-C", r.Root, "lint", "--json")
+	if err != nil {
+		t.Fatalf("JSON advisory must exit zero: %v\n%s", err, jsonOut)
+	}
+	if !strings.Contains(jsonOut, `"severity":"advisory"`) {
+		t.Fatalf("JSON advisory severity missing:\n%s", jsonOut)
+	}
+}
+
+func TestLintUnsafeLegacyDependencyRemainsValidationError(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Epic("01-e.md", "---\nstatus: active\npriority: high\ndescription: e\n---\n# E\n")
+	selfID := testutil.TaskID("self")
+	r.Task("completed", "self.md", "---\nid: "+selfID+"\nstatus: completed\nepic: 01-e\nblocked_by: [self]\n---\n# self\n")
+
+	out, err := runRootRC(t, "-C", r.Root, "lint", "--json")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("unsafe legacy projection must exit 11: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "structurally unsafe") || strings.Contains(out, `"severity":"advisory"`) {
+		t.Fatalf("unsafe legacy output =\n%s", out)
+	}
+}
+
 // TestLint_FlagsNonNNEpicFailOpen pins the epic NN- gate end-to-end: a non-NN-<slug>
 // epic is lint-flagged (exit 11, naming the convention) yet STILL lists/resolves — the
 // fail-open contract, not a dropped FileProblem.

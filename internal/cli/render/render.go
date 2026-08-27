@@ -9,6 +9,7 @@ package render
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -92,6 +93,11 @@ func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 	}
 	if len(t.Tags) > 0 {
 		field("tags", strings.Join(t.Tags, ", "))
+	}
+	if len(t.DependsOn) > 0 {
+		deps := append([]string(nil), t.DependsOn...)
+		sort.Strings(deps)
+		field("depends on", strings.Join(deps, ", "))
 	}
 	if t.Description != "" {
 		field("description", t.Description)
@@ -810,14 +816,28 @@ func ProblemsHuman(w io.Writer, st Style, problems []domain.FileProblem) {
 // entity for the footer ("task", "audit") since the same result/render shape backs
 // both `lint` and `audit lint`.
 func LintHuman(w io.Writer, st Style, results []core.LintResult, noun string) {
+	blockingItems, advisories := 0, 0
 	for _, r := range results {
 		fmt.Fprintf(w, "%s\n", st.Bold(r.Slug))
 		for _, iss := range r.Issues {
-			fmt.Fprintf(w, "  %s %s\n", st.Red(iss.Field+":"), iss.Message)
+			field := st.Red(iss.Field + ":")
+			if !iss.Blocking() {
+				field = st.Warn(iss.Field + ":")
+				advisories++
+			}
+			fmt.Fprintf(w, "  %s %s\n", field, iss.Message)
+		}
+		if r.Blocking() {
+			blockingItems++
 		}
 	}
-	if len(results) > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d %s(s) with issues", len(results), noun)))
+	switch {
+	case blockingItems > 0 && advisories > 0:
+		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d %s(s) with issues · %d advisory finding(s)", blockingItems, noun, advisories)))
+	case blockingItems > 0:
+		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d %s(s) with issues", blockingItems, noun)))
+	case advisories > 0:
+		fmt.Fprintf(w, "\n%s\n", st.Dim(fmt.Sprintf("%d advisory finding(s)", advisories)))
 	}
 }
 

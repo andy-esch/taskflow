@@ -10,6 +10,7 @@ priority: high
 autonomy_level: 2
 tags: [threads, graph, storage, concurrency]
 created: "2026-08-25"
+updated_at: "2026-08-26"
 ---
 # Make repository graph mutations portable and serializable
 
@@ -31,6 +32,9 @@ Provide one store-owned repository mutation boundary that makes final graph read
 - [ ] The callback contract accepts and returns taskflow-owned snapshot/planned-write values, permits no nested Store calls, and detects invalid nesting without hanging.
 - [ ] Lock acquisition/release errors are attributable and process termination does not leave unrecoverable stale state.
 - [ ] Existing optimistic concurrency and ordinary write behavior remain compatible.
+- [ ] The store boundary consumes one canonical strict-snapshot loader; remove
+  or fold any duplicate or otherwise unused ReadTaskGraph scan seam so lint and
+  mutation cannot drift.
 
 ## Stress tests
 

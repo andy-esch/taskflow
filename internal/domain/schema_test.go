@@ -98,7 +98,7 @@ func TestTaskFieldsMatchStruct(t *testing.T) {
 func TestFieldType(t *testing.T) {
 	for name, want := range map[string]string{
 		"tier": "int", "autonomy_level": "int",
-		"tags": "list", "dependencies": "list",
+		"tags": "list", "dependencies": "list", "depends_on": "list",
 		"created": "date", "audited": "date",
 		"description": "string", "epic": "string", "nonexistent": "string",
 	} {

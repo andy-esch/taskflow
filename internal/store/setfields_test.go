@@ -1,11 +1,13 @@
 package store
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -46,6 +48,17 @@ func TestFS_SetFields(t *testing.T) {
 	}
 	if tags, ok := m["tags"].([]any); !ok || len(tags) != 2 {
 		t.Errorf("tags not a 2-element list: %#v", m["tags"])
+	}
+}
+
+func TestFS_SetFieldsRejectsEveryGraphOwnedField(t *testing.T) {
+	for _, field := range []string{"depends_on", "blocked_by", "dependencies", "blocks"} {
+		root := t.TempDir()
+		writeTask(t, root, "ready-to-start", "alpha.md", editSeed)
+		_, err := NewFS(root).SetFields("alpha", map[string]any{field: []string{testutil.TaskID("beta")}}, false)
+		if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "graph-owned") {
+			t.Fatalf("SetFields %s error = %v", field, err)
+		}
 	}
 }
 

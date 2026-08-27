@@ -4,7 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
+	"sort"
 	"time"
+
+	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -151,15 +155,87 @@ func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prev
 		return domain.Task{}, false, fmt.Errorf("read task %s: %w", path, err)
 	}
 	ifVersion := hashContent(orig)
-	return editFile("task", path, orig, now,
-		acceptEdited(
+	originalDependencies, dependenciesReadable := dependencyValues(orig)
+	parseAcceptedTask := func(content []byte) (domain.Task, error) {
+		t, err := acceptEdited(
 			func(content []byte) (domain.Task, error) { return parseTask(content, path) },
-			func(t domain.Task) string { return t.ID }),
+			func(t domain.Task) string { return t.ID })(content)
+		if err != nil {
+			return t, err
+		}
+		candidate := dependencyFieldsFromTask(t)
+		if !dependenciesReadable {
+			// Parser failure is not an empty dependency set. Reject every candidate so
+			// deleting the malformed field cannot sneak through as a "repair".
+			return t, fmt.Errorf("%w: cannot verify the original graph-owned fields while repairing malformed frontmatter; repair them directly, run lint, then use guarded dependency operations", domain.ErrValidation)
+		} else if !candidate.equal(originalDependencies) {
+			return t, fmt.Errorf("%w: task edit cannot change depends_on or legacy dependency fields; use guarded dependency operations", domain.ErrValidation)
+		}
+		return t, nil
+	}
+	return editFile("task", path, orig, now,
+		parseAcceptedTask,
 		s.writeLock,
 		// Version-CAS across the (long) editor window: conflict if the file relocated (a
 		// concurrent `task move` → resurrect hazard) OR its content changed under us.
 		func() error { return verifyUnchanged(s.resolvePath, slug, path, ifVersion, "task", "edit") },
 		edit)
+}
+
+type taskDependencyFields struct {
+	dependsOn    []string
+	blockedBy    []string
+	dependencies []string
+	blocks       []string
+}
+
+func sortedCopy(values []string) []string {
+	out := append([]string(nil), values...)
+	sort.Strings(out)
+	return out
+}
+
+func dependencyFieldsFromTask(task domain.Task) taskDependencyFields {
+	return taskDependencyFields{
+		dependsOn:    sortedCopy(task.DependsOn),
+		blockedBy:    sortedCopy(task.LegacyBlockedBy),
+		dependencies: sortedCopy(task.LegacyDependencies),
+		blocks:       sortedCopy(task.LegacyBlocks),
+	}
+}
+
+func (fields taskDependencyFields) equal(other taskDependencyFields) bool {
+	return slices.Equal(fields.dependsOn, other.dependsOn) &&
+		slices.Equal(fields.blockedBy, other.blockedBy) &&
+		slices.Equal(fields.dependencies, other.dependencies) &&
+		slices.Equal(fields.blocks, other.blocks)
+}
+
+// dependencyValues extracts every dependency-affecting field from an original
+// task. A narrow decode can recover the graph baseline even when an unrelated
+// typed field (for example tier) is malformed, preserving task edit's existing
+// ability to repair such files without opening a dependency bypass. False means
+// the YAML itself is not trustworthy.
+func dependencyValues(content []byte) (taskDependencyFields, bool) {
+	fm, _, err := splitFrontmatterStrict(content)
+	if err != nil || fm == nil {
+		return taskDependencyFields{}, false
+	}
+	var fields struct {
+		DependsOn    []string `yaml:"depends_on"`
+		BlockedBy    []string `yaml:"blocked_by"`
+		Dependencies []string `yaml:"dependencies"`
+		Blocks       []string `yaml:"blocks"`
+	}
+	if err := yaml.Unmarshal(fm, &fields); err != nil {
+		return taskDependencyFields{}, false
+	}
+	return taskDependencyFields{
+		dependsOn:    sortedCopy(fields.DependsOn),
+		blockedBy:    sortedCopy(fields.BlockedBy),
+		dependencies: sortedCopy(fields.Dependencies),
+		blocks:       sortedCopy(fields.Blocks),
+	}, true
 }
 
 // EditAudit is the audit twin of EditTask: same parse-before-accept editor-loop,

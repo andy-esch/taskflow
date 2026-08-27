@@ -10,6 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [threads, graph, cli, storage]
 created: "2026-08-25"
+updated_at: "2026-08-26"
 ---
 # Ship guarded dependency mutations and graph queries
 
@@ -34,6 +35,14 @@ Expose safe repository-global dependency operations and deterministic read queri
 - [ ] Diagnostic queries degrade with explicit problems and graph health; frontier/unblocked selectors return no eligible work on an unsound relevant graph; mutation fails closed.
 - [ ] The six live legacy `blocked_by` values migrate from resolvable slugs to stable `depends_on` IDs with atomic-frontmatter/body preservation; missing or ambiguous values write nothing.
 - [ ] `task set` cannot mutate `depends_on` even with `--force`, and `task edit` cannot bypass guarded graph validation.
+- [ ] Public blocker commands expose separately named causal-closure and
+  action-frontier projections, while every authorization path uses derived
+  eligibility rather than blocker-list emptiness.
+- [ ] Machine-readable schema marks graph-owned dependency fields as unavailable
+  to generic set/unset and directs callers to guarded dependency operations.
+- [ ] Deep-chain stress establishes a supported graph-depth envelope; replace
+  recursive sound derivation if measured repository shapes approach unsafe stack
+  or latency bounds.
 
 ## Stress tests
 

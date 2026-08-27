@@ -30,6 +30,7 @@ var taskFields = []taskField{
 	{"tier", "int"},
 	{"autonomy_level", "int"},
 	{"tags", "list"},
+	{"depends_on", "list"},
 	{"related_tasks", "list"},
 	{"dependencies", "list"},
 	{"blocks", "list"},
@@ -80,6 +81,19 @@ func IsListField(f string) bool { return listFields[f] }
 // `task set --set` rejects unknown keys unless forced — a typo'd field name
 // must not silently persist (decided 2026-06-12).
 func KnownTaskField(f string) bool { return knownTaskFields[f] }
+
+// IsGraphOwnedTaskField reports whether changing a field changes the repository-
+// global dependency graph. The canonical field and all supported legacy aliases
+// are read-only through generic set/edit paths: canonical writes need guarded
+// validation, while legacy values may only be removed by the guarded migration.
+func IsGraphOwnedTaskField(f string) bool {
+	switch f {
+	case "depends_on", "blocked_by", "dependencies", "blocks":
+		return true
+	default:
+		return false
+	}
+}
 
 // UnsetField is a sentinel value in a SetFields update map: the key is
 // removed from the frontmatter instead of being assigned. It exists so field

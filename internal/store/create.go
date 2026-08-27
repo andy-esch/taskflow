@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 
 	yaml "go.yaml.in/yaml/v3"
@@ -79,6 +80,11 @@ func taskFields(t domain.Task) []fmField {
 		{"tags", t.Tags},
 		{"created", t.Created},
 	}
+	if len(t.DependsOn) > 0 {
+		dependencies := append([]string(nil), t.DependsOn...)
+		sort.Strings(dependencies)
+		fields = append(fields, fmField{"depends_on", dependencies})
+	}
 	if t.StartedAt != "" {
 		fields = append(fields, fmField{"started_at", t.StartedAt})
 	}
@@ -112,6 +118,9 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 	}
 	if err := validEntityID(t.ID); err != nil {
 		return domain.Task{}, err
+	}
+	if len(t.DependsOn) > 0 || len(t.LegacyBlockedBy) > 0 || len(t.LegacyDependencies) > 0 || len(t.LegacyBlocks) > 0 {
+		return domain.Task{}, fmt.Errorf("%w: task creation cannot set graph-owned dependency fields until guarded dependency creation is available", domain.ErrValidation)
 	}
 	// The id makes the flat filename unique, so writeNewFile's O_EXCL is the whole
 	// collision guard — no cross-dir slug scan. A duplicate slug (distinct id) is

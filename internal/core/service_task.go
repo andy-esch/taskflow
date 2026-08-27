@@ -77,6 +77,18 @@ func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
 	return s.store.GetTask(slug)
 }
 
+// ReadTaskGraph performs one resilient repository scan and projects it into the
+// strict, immutable dependency snapshot. Files remain repair-listable through the
+// ordinary store API; graph consumers instead inspect Health/Problems and fail
+// closed when the snapshot is degraded or broken.
+func (s *Service) ReadTaskGraph() (*TaskGraph, error) {
+	tasks, problems, err := s.store.ListTasks()
+	if err != nil {
+		return nil, err
+	}
+	return NewTaskGraph(tasks, problems), nil
+}
+
 // TaskPath resolves a task's file path without reading or parsing it — the seam
 // for `task path`, which must work even on a file with broken frontmatter.
 func (s *Service) TaskPath(slug string) (string, error) {
@@ -238,6 +250,15 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 	}
 	withMeta := make(map[string]any, len(updates)+1)
 	for field, val := range updates {
+		// A dependency change is a repository-global graph mutation, not ordinary
+		// frontmatter surgery. Reject it before the known/custom-field and --force
+		// branches so neither spelling can bypass cycle/referential validation. The
+		// guarded commands land in the next production slice.
+		if domain.IsGraphOwnedTaskField(field) {
+			return domain.Task{}, fmt.Errorf(
+				"%w: %s is graph-owned and cannot be changed with `task set` (including --force); use guarded dependency operations%s",
+				domain.ErrValidation, field, graphFieldDirection(field))
+		}
 		// status isn't a settable field: a status change relocates the file (frontmatter
 		// is authoritative — ADR-0003 Phase A — but the mirror dir must move with it, and
 		// SetFields writes in place). Route it through the lifecycle verbs, or the dir and
@@ -290,6 +311,13 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 	return retryOnConflict(s, dryRun, func() (domain.Task, error) {
 		return s.store.SetFields(slug, withMeta, dryRun)
 	})
+}
+
+func graphFieldDirection(field string) string {
+	if field == "depends_on" {
+		return " (`task depend add/remove` once available)"
+	}
+	return "; legacy dependency fields are removed only by the guarded migration"
 }
 
 // unknownFieldErr is the shared rejection for a field outside the registry, used

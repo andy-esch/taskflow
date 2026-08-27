@@ -170,6 +170,13 @@ import (
 // point selected for reading, and a combined space-badged in-progress working set. The
 // envelope owns one top-level schema_version; nested summaries reuse the versionless
 // SummaryJSON payload rather than pretending to be independent envelopes.
+// 1.49: task payloads carry `depends_on`, the sorted stable IDs of repository-global
+// prerequisites declared by that task. Additive and omitted for tasks without edges.
+// The task field/schema contract also recognizes the persisted list while generic
+// mutation remains forbidden until the guarded dependency commands land. Lint issues
+// may carry `severity: "advisory"`; omitted severity retains the established blocking
+// error behavior.
+//
 // 1.48: the `schema` contract carries `criterion_states` — the non-binary acceptance
 // criterion states, published for the same reason `finding_statuses` is: `state` has been a
 // criterion wire field since 1.46, and without the set an agent had to trigger an error and
@@ -201,7 +208,7 @@ import (
 // 1.43: fresh `init --json` receipts may include `registration`, describing the
 // best-effort machine-local space registration (including preview vs applied and whether
 // the physical checkout was already registered).
-const SchemaVersion = "1.48"
+const SchemaVersion = "1.49"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

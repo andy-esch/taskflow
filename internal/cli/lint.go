@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -59,9 +60,10 @@ func runLint(app *App, links bool) error {
 			fmt.Fprintf(app.Out, "%s all active tasks and epics pass lint\n", app.Style.Green("✔"))
 		}
 	}
-	if len(results)+len(problems) > 0 {
+	blocking := core.BlockingLintResultCount(results)
+	if blocking+len(problems) > 0 {
 		return fmt.Errorf("%w: %d item(s) with issues, %d unreadable file(s)",
-			domain.ErrValidation, len(results), len(problems))
+			domain.ErrValidation, blocking, len(problems))
 	}
 	return nil
 }
@@ -108,9 +110,10 @@ func runLintFix(app *App, dryRun bool) error {
 		render.FixHuman(app.Out, app.Style, results, results2, dryRun)
 		render.ProblemsHuman(app.ErrOut, app.Style, problems)
 	}
-	if len(results2)+len(problems) > 0 {
+	blocking := core.BlockingLintResultCount(results2)
+	if blocking+len(problems) > 0 {
 		return fmt.Errorf("%w: %d item(s) still with issues, %d unreadable file(s)",
-			domain.ErrValidation, len(results2), len(problems))
+			domain.ErrValidation, blocking, len(problems))
 	}
 	return nil
 }

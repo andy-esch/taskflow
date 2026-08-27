@@ -259,6 +259,11 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 	if _, ok := updates["status"]; ok {
 		return domain.Task{}, fmt.Errorf("%w: status is not a settable field — use Move", domain.ErrValidation)
 	}
+	for field := range updates {
+		if domain.IsGraphOwnedTaskField(field) {
+			return domain.Task{}, fmt.Errorf("%w: %s is graph-owned — use guarded dependency operations", domain.ErrValidation, field)
+		}
+	}
 	path, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, err

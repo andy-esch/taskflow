@@ -1324,6 +1324,10 @@
         },
         "message": {
           "type": "string"
+        },
+        "severity": {
+          "type": "string",
+          "description": "Severity is \"advisory\" for visible non-blocking debt and is omitted for\nordinary validation errors, preserving the existing wire shape."
         }
       },
       "additionalProperties": false,
@@ -2163,6 +2167,13 @@
           },
           "type": "array",
           "description": "topical tags"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "sorted stable task IDs that must be soundly completed before this task is ordinarily eligible to start"
         }
       },
       "additionalProperties": false,
@@ -2643,6 +2654,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.48)",
+  "title": "tskflwctl --json output (schema_version 1.49)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }
