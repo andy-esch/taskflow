@@ -113,6 +113,23 @@ func TestSetFields_RejectsNonNumericTypedField(t *testing.T) {
 	}
 }
 
+func TestSetFields_RejectsEveryGraphOwnedFieldEvenWithForce(t *testing.T) {
+	for _, field := range []string{"depends_on", "blocked_by", "dependencies", "blocks"} {
+		for _, force := range []bool{false, true} {
+			svc := setFieldsRepo(t)
+			_, err := svc.SetFields("t", map[string]any{field: testutil.TaskID("other")}, force, false)
+			if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "guarded dependency") {
+				t.Fatalf("field=%s force=%v error=%v; want guarded-operation direction", field, force, err)
+			}
+			task, _, showErr := svc.ShowTask("t")
+			if showErr != nil || len(task.DependsOn) != 0 || len(task.LegacyBlockedBy) != 0 ||
+				len(task.LegacyDependencies) != 0 || len(task.LegacyBlocks) != 0 {
+				t.Fatalf("field=%s force=%v changed task after rejection: task=%+v err=%v", field, force, task, showErr)
+			}
+		}
+	}
+}
+
 // TestSetFields_RejectsUnknownEpic mirrors NewTask: set can't orphan a task onto
 // a non-existent epic.
 func TestSetFields_RejectsUnknownEpic(t *testing.T) {

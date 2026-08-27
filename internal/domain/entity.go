@@ -71,6 +71,7 @@ var entities = []Descriptor{
 		},
 		Conventions: []string{
 			"status lives in frontmatter (authoritative) and is changed only via the lifecycle verbs (start/next/complete/…), which edit it in place — don't edit it directly.",
+			"depends_on is a sorted set of stable task IDs owned by the repository-global DAG. It is preservation-only until guarded `task depend add/remove` commands land: generic task creation, `task set`, `task edit`, and `lint --fix` cannot add, remove, or reinterpret it.",
 			fmt.Sprintf("description is a single line, ≤%d characters.", MaxDescriptionLen),
 			"at least one tag is required at creation.",
 			"the filename slug is derived from the title; any title is accepted (colons, dashes, arrows, …) and the full title is kept as the body H1.",

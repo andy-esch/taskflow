@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -50,6 +51,15 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 			content, err := os.ReadFile(path)
 			if err != nil {
 				return fmt.Errorf("read %s: %w", path, err)
+			}
+			if dir == s.tasksDir {
+				if guarded := graphOwnedFixChanges(content); len(guarded) > 0 {
+					results = append(results, domain.FixResult{
+						Path: path, Skipped: true,
+						Changes: []string{fmt.Sprintf("graph-owned repair refused (%s); repair deliberately, run lint, then use guarded dependency operations", strings.Join(guarded, ", "))},
+					})
+					continue
+				}
 			}
 			fixed, changes := fixFrontmatterText(content)
 			// An id-led name whose id is misspelled is repairable in place: i/l/o have a
@@ -333,6 +343,13 @@ func isIdentifier(s string) bool {
 }
 
 func fixValue(key, value string) (fixed, change string) {
+	if domain.IsGraphOwnedTaskField(key) {
+		return value, ""
+	}
+	return fixValueAllowed(key, value)
+}
+
+func fixValueAllowed(key, value string) (fixed, change string) {
 	if value == "" {
 		return value, "" // empty (e.g. a block list/map follows)
 	}
@@ -357,6 +374,28 @@ func fixValue(key, value string) (fixed, change string) {
 		return quoteYAML(val) + suffix, fmt.Sprintf("%s: quoted value containing ':'", key)
 	}
 	return value, ""
+}
+
+func graphOwnedFixChanges(content []byte) []string {
+	fm, _ := splitFrontmatter(content)
+	if fm == nil {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var changes []string
+	for _, rawLine := range strings.Split(string(fm), "\n") {
+		line := strings.TrimSuffix(rawLine, "\r")
+		key, value, ok := splitKeyValue(line)
+		if !ok || !domain.IsGraphOwnedTaskField(key) || seen[key] {
+			continue
+		}
+		if _, change := fixValueAllowed(key, value); change != "" {
+			seen[key] = true
+			changes = append(changes, key)
+		}
+	}
+	sort.Strings(changes)
+	return changes
 }
 
 // splitInlineComment separates an unquoted YAML scalar from a trailing

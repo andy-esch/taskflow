@@ -6,14 +6,21 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 func newLintCmd(app *App) *cobra.Command {
 	var fix, links bool
 	cmd := &cobra.Command{
-		Use:     "lint",
-		Short:   "Validate active task, epic, and research frontmatter (--fix repairs tasks/audits/research and assigns missing ids)",
+		Use:   "lint",
+		Short: "Validate entity frontmatter and task-dependency graph integrity",
+		Long: "Validate task, epic, and research frontmatter, then validate the repository-global\n" +
+			"task-dependency graph. Exactly resolved legacy dependency fields are visible\n" +
+			"advisories; missing, ambiguous, or structurally unsafe references are errors.\n\n" +
+			"--fix repairs ordinary frontmatter and missing ids. It never normalizes or changes\n" +
+			"graph-owned task fields (depends_on, blocked_by, dependencies, or blocks); a\n" +
+			"would-be graph repair is skipped and reported for deliberate remediation.",
 		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --links\n  tskflwctl lint --json",
 		Args:    cobra.NoArgs,
 		// Read-only by default; --fix opts into mutation explicitly.
@@ -25,7 +32,7 @@ func newLintCmd(app *App) *cobra.Command {
 			return runLint(app, links)
 		},
 	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter: quote ':' values, normalize lists, backfill missing task/audit/research ids; epics are text-only")
+	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair ordinary frontmatter and missing ids; graph-owned task fields are skipped")
 	cmd.Flags().BoolVar(&links, "links", false, "also check body cross-links: flag any [..](path.md) whose target file is missing (opt-in — a tree can carry pre-existing danglers)")
 	return cmd
 }
@@ -59,9 +66,10 @@ func runLint(app *App, links bool) error {
 			fmt.Fprintf(app.Out, "%s all active tasks and epics pass lint\n", app.Style.Green("✔"))
 		}
 	}
-	if len(results)+len(problems) > 0 {
+	blocking := core.BlockingLintResultCount(results)
+	if blocking+len(problems) > 0 {
 		return fmt.Errorf("%w: %d item(s) with issues, %d unreadable file(s)",
-			domain.ErrValidation, len(results), len(problems))
+			domain.ErrValidation, blocking, len(problems))
 	}
 	return nil
 }
@@ -108,9 +116,10 @@ func runLintFix(app *App, dryRun bool) error {
 		render.FixHuman(app.Out, app.Style, results, results2, dryRun)
 		render.ProblemsHuman(app.ErrOut, app.Style, problems)
 	}
-	if len(results2)+len(problems) > 0 {
+	blocking := core.BlockingLintResultCount(results2)
+	if blocking+len(problems) > 0 {
 		return fmt.Errorf("%w: %d item(s) still with issues, %d unreadable file(s)",
-			domain.ErrValidation, len(results2), len(problems))
+			domain.ErrValidation, blocking, len(problems))
 	}
 	return nil
 }

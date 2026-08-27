@@ -25,11 +25,24 @@ func EpicNameIssue(id string) []Issue {
 	return []Issue{{Field: "filename", Message: fmt.Sprintf("epic filename %q should be NN-<slug> (a zero-padded number) — rename it so epics order consistently", id)}}
 }
 
-// Issue is a single frontmatter lint finding.
+// IssueSeverity distinguishes non-blocking migration guidance from the
+// established default validation-error behavior.
+type IssueSeverity string
+
+const IssueAdvisory IssueSeverity = "advisory"
+
+// Issue is a single frontmatter lint finding. Empty Severity is the established
+// blocking error behavior; advisory findings remain visible but do not make the
+// ordinary lint command fail.
 type Issue struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
+	// Severity is "advisory" for visible non-blocking debt and is omitted for
+	// ordinary validation errors, preserving the existing wire shape.
+	Severity IssueSeverity `json:"severity,omitempty"`
 }
+
+func (i Issue) Blocking() bool { return i.Severity != IssueAdvisory }
 
 // DuplicateEpicNNIssues flags epics that share a leading NN key. Two epics on the same key
 // (e.g. `01-a`, `01-b`) co-mingle their tasks in the rollup and canonicalEpic silently

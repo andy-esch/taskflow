@@ -27,6 +27,19 @@ func TestToTaskJSON_CarriesID(t *testing.T) {
 	}
 }
 
+func TestToTaskJSON_CarriesStableDependencyOrderWithoutMutatingDomain(t *testing.T) {
+	original := []string{"600000000003", "600000000001", "600000000002"}
+	task := domain.Task{ID: "600000000004", DependsOn: append([]string(nil), original...)}
+	got := ToTaskJSON(task)
+	want := []string{"600000000001", "600000000002", "600000000003"}
+	if !reflect.DeepEqual(got.DependsOn, want) {
+		t.Fatalf("depends_on = %v, want %v", got.DependsOn, want)
+	}
+	if !reflect.DeepEqual(task.DependsOn, original) {
+		t.Fatalf("wire mapper mutated domain dependencies: %v", task.DependsOn)
+	}
+}
+
 // TestToAuditJSON_CarriesID mirrors the task check for audits.
 func TestToAuditJSON_CarriesID(t *testing.T) {
 	got := ToAuditJSON(domain.Audit{Slug: "2026-01-02-x", Bucket: domain.AuditOpen, ID: "6fjangd7kvh3"})

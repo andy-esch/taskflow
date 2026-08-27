@@ -23,7 +23,10 @@ func newTaskEditCmd(app *App) *cobra.Command {
 		Long: "Open the task's markdown file in $VISUAL/$EDITOR (falling back to vi). On\n" +
 			"save the file is re-parsed: a frontmatter break (or a value the loader can't\n" +
 			"read) reopens the editor with the error rather than landing on disk — deeper\n" +
-			"field checks remain `lint`'s job. The human counterpart to `task set`; agents\n" +
+			"field checks remain `lint`'s job. Graph-owned dependency fields are preservation-\n" +
+			"only here: a semantic change is rejected, and a malformed dependency baseline\n" +
+			"must be repaired deliberately before any edited candidate can land.\n\n" +
+			"The human counterpart to `task set`; agents\n" +
 			"and scripts should drive `set` (deterministic) instead.",
 		Example:           "  tskflwctl task edit add-retry-backoff\n  tskflwctl task edit   # pick from a list",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug

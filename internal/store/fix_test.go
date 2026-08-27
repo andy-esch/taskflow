@@ -84,6 +84,26 @@ func TestFixFrontmatterText_Idempotent(t *testing.T) {
 	}
 }
 
+func TestFixFrontmatterRefusesGraphOwnedNormalization(t *testing.T) {
+	root := t.TempDir()
+	taskID := testutil.TaskID("graph-fix")
+	path := filepath.Join(root, "tasks", taskID+"-graph-fix.md")
+	original := "---\nid: " + taskID + "\nstatus: ready-to-start\ndepends_on: " + testutil.TaskID("first") + ", " + testutil.TaskID("second") + "\ntags: one,two\n---\n# task\n"
+	testutil.Write(t, path, original)
+
+	results, err := NewFS(root).FixFrontmatter(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || !results[0].Skipped || !strings.Contains(results[0].Changes[0], "graph-owned") {
+		t.Fatalf("graph repair result = %+v", results)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil || string(raw) != original {
+		t.Fatalf("guarded file changed: err=%v\n%s", err, raw)
+	}
+}
+
 func TestFS_FixFrontmatter_DryRunThenWrite(t *testing.T) {
 	root := t.TempDir()
 	path, out := testutil.TaskFixture(root, "ready-to-start", "bad.md", "---\nstatus: ready-to-start\ntags: a,b\n---\n# B\n")

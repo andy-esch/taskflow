@@ -507,8 +507,12 @@ func newTaskSetCmd(app *App) *cobra.Command {
 		force                               bool
 	)
 	cmd := &cobra.Command{
-		Use:               "set <task>",
-		Short:             "Set one or more frontmatter fields (validated, single atomic write)",
+		Use:   "set <task>",
+		Short: "Set one or more frontmatter fields (validated, single atomic write)",
+		Long: "Set one or more task frontmatter fields in a single validated atomic write.\n" +
+			"Graph-owned dependency fields (depends_on and the legacy blocked_by, dependencies,\n" +
+			"and blocks fields) cannot be changed or removed here, including with --force.\n" +
+			"They require the guarded dependency operations introduced by the dependency roadmap.",
 		Example:           "  tskflwctl task set add-retry-backoff --priority high\n  tskflwctl task set --priority high   # pick the task from a list",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "mutating"},

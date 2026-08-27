@@ -1,6 +1,8 @@
 package wire
 
 import (
+	"sort"
+
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -36,6 +38,7 @@ type TaskJSON struct {
 	Updated     string   `json:"updated_at,omitempty" jsonschema:"description=last-modified date YYYY-MM-DD"`
 	RevisitAt   string   `json:"revisit_at,omitempty" jsonschema:"description=snooze-until date YYYY-MM-DD for a deferred task (set by task defer)"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"description=topical tags"`
+	DependsOn   []string `json:"depends_on,omitempty" jsonschema:"description=sorted stable task IDs that must be soundly completed before this task is ordinarily eligible to start"`
 }
 
 // ToTaskJSON maps a domain task to its wire DTO.
@@ -45,8 +48,15 @@ func ToTaskJSON(t domain.Task) TaskJSON {
 		Description: t.Description, Effort: t.Effort, Tier: t.Tier,
 		Priority: t.Priority, Autonomy: t.Autonomy,
 		Created: t.Created, Updated: t.Updated, RevisitAt: t.RevisitAt, Tags: t.Tags,
+		DependsOn: sortedStrings(t.DependsOn),
 	}
 	return j
+}
+
+func sortedStrings(values []string) []string {
+	out := append([]string(nil), values...)
+	sort.Strings(out)
+	return out
 }
 
 // ACJSON is a task's acceptance-criteria checkbox tally (the `ac` field of

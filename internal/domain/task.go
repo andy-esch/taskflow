@@ -33,4 +33,18 @@ type Task struct {
 	StartedAt   string   `yaml:"started_at"`           // stamped when a task enters in-progress (incl. `new --start`)
 	RevisitAt   string   `yaml:"revisit_at,omitempty"` // optional "snooze until" date for a deferred task (set by `task defer`)
 	Tags        []string `yaml:"tags"`
+
+	// DependsOn is the canonical repository-global dependency set from ADR-0006.
+	// Values are stable task IDs, never slugs. Valid writers serialize the semantic
+	// set in sorted order; readers deliberately retain malformed duplicate values so
+	// the strict graph snapshot and lint can diagnose hand-edited files precisely.
+	DependsOn []string `yaml:"depends_on,omitempty"`
+
+	// These fields are read-only legacy vocabulary. Keeping them on the typed record
+	// lets the strict snapshot resolve and diagnose the live slug references without
+	// treating them as canonical edges or silently dropping them during analysis. The
+	// guarded dependency-migration slice removes them later.
+	LegacyBlockedBy    []string `yaml:"blocked_by,omitempty"`
+	LegacyDependencies []string `yaml:"dependencies,omitempty"`
+	LegacyBlocks       []string `yaml:"blocks,omitempty"`
 }
