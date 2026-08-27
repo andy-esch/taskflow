@@ -240,6 +240,17 @@ field in place and stamp the dates atomically — no file moves (`lint --fix`
 re-normalizes a hand-edited drift). Errors carry semantic exit codes — `10`
 not-found, `11` validation, `13` ambiguous, `14` conflict (e.g. a name already taken).
 
+**Task-dependency read foundation.** Task frontmatter and JSON may carry `depends_on`,
+a sorted set of stable task IDs representing repository-global prerequisites. This
+release reads, validates, and explains that graph but intentionally exposes no public
+dependency mutation command yet. Generic task creation, `task set` (even `--force`),
+`task edit`, and `lint --fix` cannot add, remove, or reinterpret dependency fields;
+guarded `task depend add/remove` operations are the next slice. Ordinary `lint` reports
+all graph defects. Exactly resolved legacy `blocked_by`/`dependencies`/`blocks` values
+are visible JSON/human advisories with exit zero, while missing, ambiguous, cyclic, or
+self-referential legacy projections remain validation errors. See
+[`ADR-0006`](./planning/adrs/0006-adopt-threads-as-task-dags.md) for the model and rollout.
+
 **Research** is the thinnest kind, and the omissions are the point: no status and
 no lifecycle verbs (a later doc supersedes an earlier one — a decision that needs a
 lifecycle is an [ADR](./planning/adrs/)), and no `epic:` field, so provenance is

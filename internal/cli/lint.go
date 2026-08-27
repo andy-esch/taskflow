@@ -13,8 +13,14 @@ import (
 func newLintCmd(app *App) *cobra.Command {
 	var fix, links bool
 	cmd := &cobra.Command{
-		Use:     "lint",
-		Short:   "Validate active task, epic, and research frontmatter (--fix repairs tasks/audits/research and assigns missing ids)",
+		Use:   "lint",
+		Short: "Validate entity frontmatter and task-dependency graph integrity",
+		Long: "Validate task, epic, and research frontmatter, then validate the repository-global\n" +
+			"task-dependency graph. Exactly resolved legacy dependency fields are visible\n" +
+			"advisories; missing, ambiguous, or structurally unsafe references are errors.\n\n" +
+			"--fix repairs ordinary frontmatter and missing ids. It never normalizes or changes\n" +
+			"graph-owned task fields (depends_on, blocked_by, dependencies, or blocks); a\n" +
+			"would-be graph repair is skipped and reported for deliberate remediation.",
 		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --links\n  tskflwctl lint --json",
 		Args:    cobra.NoArgs,
 		// Read-only by default; --fix opts into mutation explicitly.
@@ -26,7 +32,7 @@ func newLintCmd(app *App) *cobra.Command {
 			return runLint(app, links)
 		},
 	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair frontmatter: quote ':' values, normalize lists, backfill missing task/audit/research ids; epics are text-only")
+	cmd.Flags().BoolVar(&fix, "fix", false, "auto-repair ordinary frontmatter and missing ids; graph-owned task fields are skipped")
 	cmd.Flags().BoolVar(&links, "links", false, "also check body cross-links: flag any [..](path.md) whose target file is missing (opt-in — a tree can carry pre-existing danglers)")
 	return cmd
 }

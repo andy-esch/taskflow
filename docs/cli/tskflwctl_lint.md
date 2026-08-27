@@ -1,6 +1,16 @@
 ## tskflwctl lint
 
-Validate active task, epic, and research frontmatter (--fix repairs tasks/audits/research and assigns missing ids)
+Validate entity frontmatter and task-dependency graph integrity
+
+### Synopsis
+
+Validate task, epic, and research frontmatter, then validate the repository-global
+task-dependency graph. Exactly resolved legacy dependency fields are visible
+advisories; missing, ambiguous, or structurally unsafe references are errors.
+
+--fix repairs ordinary frontmatter and missing ids. It never normalizes or changes
+graph-owned task fields (depends_on, blocked_by, dependencies, or blocks); a
+would-be graph repair is skipped and reported for deliberate remediation.
 
 ```
 tskflwctl lint [flags]
@@ -18,7 +28,7 @@ tskflwctl lint [flags]
 ### Options
 
 ```
-      --fix     auto-repair frontmatter: quote ':' values, normalize lists, backfill missing task/audit/research ids; epics are text-only
+      --fix     auto-repair ordinary frontmatter and missing ids; graph-owned task fields are skipped
   -h, --help    help for lint
       --links   also check body cross-links: flag any [..](path.md) whose target file is missing (opt-in — a tree can carry pre-existing danglers)
 ```

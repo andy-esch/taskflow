@@ -2,6 +2,13 @@
 
 Set one or more frontmatter fields (validated, single atomic write)
 
+### Synopsis
+
+Set one or more task frontmatter fields in a single validated atomic write.
+Graph-owned dependency fields (depends_on and the legacy blocked_by, dependencies,
+and blocks fields) cannot be changed or removed here, including with --force.
+They require the guarded dependency operations introduced by the dependency roadmap.
+
 ```
 tskflwctl task set <task> [flags]
 ```

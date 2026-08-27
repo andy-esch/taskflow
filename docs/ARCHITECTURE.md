@@ -143,6 +143,13 @@ adapter capabilities rather than leaked persistence.
   adapter needs a complete entity service and watcher layout for an explicit start path.
   Its `WorkspaceStore` port returns neutral capabilities; registry labels are carried as
   presentation context and never influence discovery.
+  `TaskGraph` is an immutable read projection over one repository scan. It owns graph
+  health (`healthy`/`degraded`/`broken`), SCC-based cycle attribution, derived lifecycle
+  role and gate state, sound completion, topology, downstream impact, and separately
+  named causal-blocker and action-frontier projections. The analyzer uses only taskflow
+  types and owned deterministic algorithms; a graph package cannot leak into domain,
+  persistence, or wire contracts. Eligibility is read from derived state, never inferred
+  from an empty blocker list.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
@@ -152,7 +159,11 @@ adapter capabilities rather than leaked persistence.
   the use-case `Store`; CLI lint and the TUI watcher get the narrow
   `Fixer`/`Linter`/`Layout` wired directly. It owns the *layout* knowledge — `WatchPaths()`
   hands the TUI watcher its dir set so the path convention isn't reconstructed
-  outside the store. Concurrency is **version-CAS** (epic 24): every write, just
+  outside the store. Task dependency fields are graph-owned: generic create/set/edit
+  paths cannot introduce a semantic delta, and text-level lint repair skips a would-be
+  dependency normalization instead of manufacturing unchecked edges. The future guarded
+  dependency port will own the repository-wide read/validate/write critical section.
+  Concurrency is **version-CAS** (epic 24): every write, just
   before committing, re-resolves the file by its **id** and re-hashes it
   against the content read at the start of the op (`verifyUnchanged` in `cas.go` — a
   strong whole-file SHA-256 computed on read, **never stored**), so a concurrent
