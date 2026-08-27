@@ -50,6 +50,23 @@ func TestCreateTask_OrderQuotingClobber(t *testing.T) {
 	}
 }
 
+func TestCreateTaskCreatesMissingPlanningRootBeforeLocking(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "new-planning-root")
+	fs := NewFS(root)
+	task := domain.Task{
+		Slug: "first", ID: "0abcdef12345", Status: domain.StatusReadyToStart, Epic: "e1",
+		Description: "first task", Effort: "Unknown", Tier: 3,
+		Priority: "medium", Autonomy: 3, Tags: []string{"a"}, Created: "2026-08-27",
+	}
+	got, err := fs.CreateTask(task, "# First\n", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(got.Path); err != nil {
+		t.Fatalf("created task path: %v", err)
+	}
+}
+
 func TestCreateTask_IDRoundTrips(t *testing.T) {
 	fs := NewFS(t.TempDir())
 	// Alphanumeric and all-digit ids: the latter must survive YAML as a string, not

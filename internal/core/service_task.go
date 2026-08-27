@@ -77,12 +77,16 @@ func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
 	return s.store.GetTask(slug)
 }
 
-// ReadTaskGraph performs one resilient repository scan and projects it into the
-// strict, immutable dependency snapshot. Files remain repair-listable through the
-// ordinary store API; graph consumers instead inspect Health/Problems and fail
-// closed when the snapshot is degraded or broken.
-func (s *Service) ReadTaskGraph() (*TaskGraph, error) {
-	tasks, problems, err := s.store.ListTasks()
+// LoadTaskGraph is the one canonical filesystem-agnostic snapshot loader used by
+// the guarded mutation boundary. Diagnostic consumers that already own task bodies
+// (notably lint) construct the same strict projection with NewTaskGraph rather than
+// performing a second repository scan.
+type TaskGraphSource interface {
+	ListTasks() ([]domain.Task, []domain.FileProblem, error)
+}
+
+func LoadTaskGraph(source TaskGraphSource) (*TaskGraph, error) {
+	tasks, problems, err := source.ListTasks()
 	if err != nil {
 		return nil, err
 	}

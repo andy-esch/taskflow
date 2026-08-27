@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [threads, graph, cli, storage]
 created: "2026-08-25"
-updated_at: "2026-08-26"
+updated_at: "2026-08-27"
 ---
 # Ship guarded dependency mutations and graph queries
 
@@ -43,6 +43,15 @@ Expose safe repository-global dependency operations and deterministic read queri
 - [ ] Deep-chain stress establishes a supported graph-depth envelope; replace
   recursive sound derivation if measured repository shapes approach unsafe stack
   or latency bounds.
+- [ ] Planner callbacks resolve task IDs and legacy references only from
+  supplied immutable graph values, emit deterministic prefix-safe write order,
+  and never call a Store method.
+- [ ] Every semantic dependency change receives the Service clock through the
+  mutation port, stamps updated_at exactly once, and an idempotent skip does not
+  advance it.
+- [ ] task edit keeps the human editor session outside the repository guard and
+  either rejects a dependency delta with direction or reapplies it through the
+  guarded dependency use case after fresh validation.
 
 ## Stress tests
 
@@ -53,3 +62,5 @@ Expose safe repository-global dependency operations and deterministic read queri
 ## Sequencing
 
 Requires the strict read foundation and portable mutation guard. Its production commands persist the epic's bootstrap edges and become the first dependency dogfood surface for the remaining tasks.
+
+## Mutation-guard integration amendment (2026-08-27)\n\nThe production mutation callback is snapshot-only. Exact-ID lookup, duplicate/self/missing checks, legacy resolution, and write ordering must be derived from the supplied immutable TaskGraph and pure core validators; callback code cannot reach back into Store or Service. Use the named LoadTaskGraph source for query loading and do not restore the unused ReadTaskGraph service seam.\n\nThe Service passes its clock into MutateTaskGraph. A real semantic change is stamped by store materialization, while an already-satisfied add or remove stays byte-identical. The six-task legacy migration must emit one deterministic prefix-safe sequence even though stable-ID order happens to be safe for its projected-edge replacement shape.\n\nHuman editing remains outside the repository guard. After the editor returns, task edit compares the proposed dependency set and either rejects it with exact task depend guidance or invokes the same guarded dependency use case against a fresh snapshot; the editor process is never held inside callback exclusion.

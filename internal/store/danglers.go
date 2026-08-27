@@ -16,6 +16,9 @@ import (
 // #fragment or ?query is stripped before the existence check. It is the Scheme-2 dangler
 // check `lint --links` surfaces.
 func (s *FS) DanglingLinks() ([]domain.FileProblem, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return nil, err
+	}
 	var out []domain.FileProblem
 	err := filepath.WalkDir(s.root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {

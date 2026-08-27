@@ -161,16 +161,36 @@ adapter capabilities rather than leaked persistence.
   hands the TUI watcher its dir set so the path convention isn't reconstructed
   outside the store. Task dependency fields are graph-owned: generic create/set/edit
   paths cannot introduce a semantic delta, and text-level lint repair skips a would-be
-  dependency normalization instead of manufacturing unchecked edges. The future guarded
-  dependency port will own the repository-wide read/validate/write critical section.
+  dependency normalization instead of manufacturing unchecked edges.
+  `TaskGraphMutationStore` is the control-inverted write capability: `FS` takes the
+  repository guard, loads the canonical strict snapshot, invokes a pure core planner over
+  taskflow-owned values, asks core to validate the complete plan and every recovery prefix,
+  applies surgical task dependency writes through lock-free internal helpers, and releases
+  the guard. The planner callback is exclusive at canonical-planning-root scope: any Store
+  call through the same or another `FS` during that brief phase fails with `ErrConflict`
+  instead of escaping the snapshot or self-deadlocking. This intentionally includes an
+  unrelated concurrent caller; a future long-lived adapter may retry after the mutation.
+  Multi-file plans are deterministic and resumable. Planner-provided write order is
+  semantic recovery data (stable-ID sorting is not generally prefix-safe); each replacement
+  is atomic, every supplied prefix is validated as non-broken before the first write, and an
+  error result identifies the durable applied prefix. A private byte-version on each scanned
+  task supports a whole-snapshot CAS before application plus a per-target CAS immediately
+  before each replacement; planner-facing task projections never expose those tokens.
+  Dependency writes stamp `updated_at` from the caller-injected clock only when graph-owned
+  fields actually change. A dry run holds the same exclusive guard for an authoritative
+  preview but, because it writes nothing, makes no CAS durability claim about later apply.
   Concurrency is **version-CAS** (epic 24): every write, just
   before committing, re-resolves the file by its **id** and re-hashes it
   against the content read at the start of the op (`verifyUnchanged` in `cas.go` — a
   strong whole-file SHA-256 computed on read, **never stored**), so a concurrent
-  in-place edit is `ErrConflict` (exit 14). A repo-wide advisory `flock`
-  (`writeLock`, unix; a no-op stub elsewhere) serializes the verify→write so that CAS is
+  in-place edit is `ErrConflict` (exit 14). The repository guard combines a
+  canonical-root in-process mutex with root-directory `flock` on Unix. The supported
+  release matrix is macOS and Linux; Windows and other non-Unix source builds reject
+  repository mutation explicitly until they have a runtime-tested, shared-repository lock
+  identity. This serializes verify→write for cooperating writers so that CAS is
   *atomic* — without it two writers both pass their verify before either renames and the
-  later silently clobbers the earlier (the verify→rename window, widened by the temp fsync).
+  later silently clobbers the earlier. Raw editors do not honor the advisory lock; the
+  immediate content check narrows but cannot eliminate their verify→rename race.
   The token is **internal**: scriptable mutations auto-retry it in `core.Service` (bounded +
   jittered, so agents don't reimplement the loop), the human `edit` surfaces the conflict
   (no retry, and the lock is held only for the write, never the editor session), and creates map

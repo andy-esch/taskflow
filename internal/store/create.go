@@ -51,6 +51,26 @@ func (s *FS) writeNewFile(dir, path string, content []byte, kind, id string, dry
 		}
 		return nil
 	}
+	// Preserve the store's historical ability to create the first entity in a
+	// not-yet-existing root; the directory-backed Unix lock needs the root first.
+	if err := os.MkdirAll(s.root, 0o755); err != nil {
+		return fmt.Errorf("mkdir planning root %s: %w", s.root, err)
+	}
+	unlock, err := s.writeLock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return s.writeNewFileUnlocked(dir, path, content, kind, id)
+}
+
+// writeNewFileUnlocked is the graph-guard-compatible create primitive. Public
+// entity creation enters through writeNewFile and takes the repository lock;
+// future compound graph operations may call this helper only while already guarded.
+func (s *FS) writeNewFileUnlocked(dir, path string, content []byte, kind, id string) error {
+	conflict := func() error {
+		return fmt.Errorf("%s %q already exists: %w", kind, id, domain.ErrConflict)
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", dir, err)
 	}
@@ -110,6 +130,9 @@ func validEntityID(entityID string) error {
 }
 
 func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Task{}, err
+	}
 	if t.Slug == "" {
 		return domain.Task{}, fmt.Errorf("%w: empty task slug", domain.ErrValidation)
 	}
@@ -152,6 +175,9 @@ func auditFields(a domain.Audit) []fmField {
 // CreateAudit writes a new audit at audits/<id>-<slug>.md (flat, id-led per
 // ADR-0003 §4). New audits always start in the open bucket; it refuses to clobber.
 func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Audit{}, err
+	}
 	if a.Slug == "" {
 		return domain.Audit{}, fmt.Errorf("%w: empty audit slug", domain.ErrValidation)
 	}
@@ -194,6 +220,9 @@ func researchFields(r domain.Research) []fmField {
 // per ADR-0003 §4). It refuses to clobber; the slug and id are taken from r. The id is
 // minted from r.Created by the caller (core), so ids stay chronological.
 func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (domain.Research, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Research{}, err
+	}
 	if r.Slug == "" {
 		return domain.Research{}, fmt.Errorf("%w: empty research slug", domain.ErrValidation)
 	}
@@ -295,6 +324,9 @@ func epicFields(e domain.Epic) []fmField {
 // deliberately allowed — they stay distinct ids; only `epic show billing` goes
 // fuzzy-ambiguous, recoverable by using the full NN-slug.
 func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (domain.Epic, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Epic{}, err
+	}
 	if slug == "" {
 		return domain.Epic{}, fmt.Errorf("%w: empty epic slug", domain.ErrValidation)
 	}

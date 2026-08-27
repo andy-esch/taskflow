@@ -78,6 +78,9 @@ func (s *FS) WatchPaths() []string {
 // A file with unreadable frontmatter is skipped and reported as a FileProblem
 // (so one bad file doesn't blind the whole listing); err is only for fatal I/O.
 func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return nil, nil, err
+	}
 	return scanDir(s.tasksDir, func(path string, content []byte) (domain.Task, error) {
 		return parseTask(content, path)
 	})
@@ -87,6 +90,9 @@ func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 // pass), so lint's acceptance-criteria checks read every file once — the task twin of
 // ListAuditsWithFindings.
 func (s *FS) ListTasksWithBodies() ([]core.TaskWithBody, []domain.FileProblem, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return nil, nil, err
+	}
 	return scanDir(s.tasksDir, func(path string, content []byte) (core.TaskWithBody, error) {
 		t, err := parseTask(content, path)
 		if err != nil {
@@ -99,6 +105,9 @@ func (s *FS) ListTasksWithBodies() ([]core.TaskWithBody, []domain.FileProblem, e
 
 // GetTask returns a single task plus its markdown body.
 func (s *FS) GetTask(slug string) (domain.Task, string, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Task{}, "", err
+	}
 	path, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, "", err
@@ -119,6 +128,9 @@ func (s *FS) GetTask(slug string) (domain.Task, string, error) {
 // dates) and relocates the file to the target status directory. Moving to the
 // current status is an idempotent no-op.
 func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun, force bool) (domain.Task, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Task{}, err
+	}
 	return s.moveTask(slug, to, now, dryRun, force, nil)
 }
 
@@ -128,6 +140,9 @@ func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun, force bo
 // date if the second write failed. An empty until is a plain move to deferred;
 // re-deferring an already-deferred task rewrites revisit_at in place.
 func (s *FS) Defer(slug, until string, now time.Time, dryRun bool) (domain.Task, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Task{}, err
+	}
 	var extra map[string]any
 	if until != "" {
 		extra = map[string]any{"revisit_at": until}
@@ -253,6 +268,9 @@ func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun, forc
 // SetFields surgically updates frontmatter fields on a task (no status/dir
 // change) and writes the file atomically in place.
 func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Task{}, err
+	}
 	// Defense-in-depth: a status change relocates the file, so it must go through Move,
 	// never an in-place field write (the core SetFields already rejects it). A direct
 	// store caller writing status here would desync the mirror dir from the frontmatter.
@@ -413,6 +431,7 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 	t.Slug = slug
 	t.FilenameID = fnID
 	t.Path = path
+	t.SourceVersion = hashContent(content)
 	return t, nil
 }
 

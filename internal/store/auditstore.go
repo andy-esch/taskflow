@@ -15,6 +15,9 @@ import (
 // ListAudits scans every audit bucket. Unreadable audits are skipped and
 // reported as FileProblems.
 func (s *FS) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return nil, nil, err
+	}
 	return scanDir(s.auditsDir, func(path string, content []byte) (domain.Audit, error) {
 		return parseAudit(content, path)
 	})
@@ -25,6 +28,9 @@ func (s *FS) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 // so Summary reads each audit once for both the tally and the findings rollup
 // instead of re-reading every body through GetAuditByPath.
 func (s *FS) ListAuditsWithFindings() ([]core.AuditWithFindings, []domain.FileProblem, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return nil, nil, err
+	}
 	return scanDir(s.auditsDir, func(path string, content []byte) (core.AuditWithFindings, error) {
 		a, findings, err := parseAuditWithFindings(content, path)
 		return core.AuditWithFindings{Audit: a, Findings: findings}, err
@@ -33,6 +39,9 @@ func (s *FS) ListAuditsWithFindings() ([]core.AuditWithFindings, []domain.FilePr
 
 // GetAudit returns one audit plus its markdown body.
 func (s *FS) GetAudit(slug string) (domain.Audit, string, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Audit{}, "", err
+	}
 	path, err := s.resolveAudit(slug)
 	if err != nil {
 		return domain.Audit{}, "", err
@@ -54,6 +63,9 @@ func (s *FS) GetAudit(slug string) (domain.Audit, string, error) {
 // slug. The finding/lint sweeps use this to read each audit ListAudits already
 // found exactly once, which also closes the concurrent-edit window a re-resolve opens.
 func (s *FS) GetAuditByPath(path string) (domain.Audit, string, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Audit{}, "", err
+	}
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return domain.Audit{}, "", fmt.Errorf("read audit %s: %w", path, err)
@@ -70,6 +82,9 @@ func (s *FS) GetAuditByPath(path string) (domain.Audit, string, error) {
 // `bucket:` frontmatter in place — under the flat layout (ADR-0003 §4) there is no bucket
 // directory to move between. Moving to the bucket it already declares is an idempotent no-op.
 func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Audit{}, err
+	}
 	if !to.Valid() {
 		return domain.Audit{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
 	}

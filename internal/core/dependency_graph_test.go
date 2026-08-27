@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -474,6 +475,39 @@ func TestTaskGraphReopenInvalidatesCompletedDescendantsWithoutRewriting(t *testi
 	state := reopened.State(downstream.ID)
 	if state.Drained || !state.Inconsistent || state.Gate != GateBlocked || downstream.Status != domain.StatusCompleted {
 		t.Fatalf("reopened downstream = %+v persisted=%s", state, downstream.Status)
+	}
+}
+
+func TestTaskGraphSameSourceSnapshotComparesUnreadableIdentity(t *testing.T) {
+	left := NewTaskGraph(nil, []domain.FileProblem{{Path: "/planning/tasks/aaaaaaaaaaaa-left.md", Message: "bad yaml"}})
+	right := NewTaskGraph(nil, []domain.FileProblem{{Path: "/planning/tasks/bbbbbbbbbbbb-right.md", Message: "bad yaml"}})
+	if left.SameSourceSnapshot(right) {
+		t.Fatal("different unreadable task sets compared as the same source snapshot")
+	}
+}
+
+func TestValidateTaskGraphMutationPlanPreservesSemanticWriteOrder(t *testing.T) {
+	alpha := graphRecord("alpha", domain.StatusReadyToStart)
+	beta := graphRecord("beta", domain.StatusReadyToStart, alpha.ID)
+	graph := NewTaskGraph([]domain.Task{alpha, beta}, nil)
+	plan := TaskGraphMutationPlan{TaskWrites: []TaskDependencyWrite{
+		{TaskID: beta.ID},
+		{TaskID: alpha.ID, DependsOn: []string{beta.ID}},
+	}}
+	validated, err := ValidateTaskGraphMutationPlan(graph, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if validated.TaskWrites[0].TaskID != beta.ID || validated.TaskWrites[1].TaskID != alpha.ID {
+		t.Fatalf("validator reordered semantic durable prefixes: %+v", validated.TaskWrites)
+	}
+
+	unsafe := TaskGraphMutationPlan{TaskWrites: []TaskDependencyWrite{
+		{TaskID: alpha.ID, DependsOn: []string{beta.ID}},
+		{TaskID: beta.ID},
+	}}
+	if _, err := ValidateTaskGraphMutationPlan(graph, unsafe); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("unsafe planner order error = %v", err)
 	}
 }
 

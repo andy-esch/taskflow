@@ -146,6 +146,9 @@ func editFile[T any](
 // old status directory — a permanent ErrAmbiguous). Returns the reloaded task and
 // whether it changed.
 func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Task, bool, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Task{}, false, err
+	}
 	path, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, false, err
@@ -244,6 +247,9 @@ func dependencyValues(content []byte) (taskDependencyFields, bool) {
 // lint (status vocab, bucket↔state) is left to the caller, mirroring how task edit
 // leaves field lint to `lint` — the store only guarantees the file still parses.
 func (s *FS) EditAudit(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Audit{}, false, err
+	}
 	path, err := s.resolveAudit(slug)
 	if err != nil {
 		return domain.Audit{}, false, err

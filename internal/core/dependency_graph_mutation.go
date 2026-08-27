@@ -1,0 +1,119 @@
+package core
+
+import (
+	"fmt"
+	"sort"
+
+	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/id"
+)
+
+// ValidateTaskGraphMutationSource rejects an authoritative snapshot that cannot
+// support a sound write. Degraded legacy snapshots remain eligible for the one
+// guarded migration that converges them to the canonical field.
+func ValidateTaskGraphMutationSource(graph *TaskGraph) error {
+	if graph == nil {
+		return fmt.Errorf("%w: authoritative task graph is required", domain.ErrValidation)
+	}
+	if graph.Health() == GraphBroken {
+		return fmt.Errorf("%w: repository task graph is broken; repair it before mutation: %s",
+			domain.ErrValidation, graphMutationHealthDetail(graph))
+	}
+	return nil
+}
+
+// ValidateTaskGraphMutationPlan normalizes task-owned sets and proves that every
+// planner-ordered durable prefix, plus the final state, remains a sound graph. It
+// is pure so command planners can validate and preview without a filesystem; the
+// store owns only locking, materialization, CAS, and atomic replacement.
+func ValidateTaskGraphMutationPlan(graph *TaskGraph, plan TaskGraphMutationPlan) (TaskGraphMutationPlan, error) {
+	if graph == nil {
+		return TaskGraphMutationPlan{}, fmt.Errorf("%w: authoritative task graph is required", domain.ErrValidation)
+	}
+	normalized := TaskGraphMutationPlan{TaskWrites: make([]TaskDependencyWrite, len(plan.TaskWrites))}
+	copy(normalized.TaskWrites, plan.TaskWrites)
+	for i := range normalized.TaskWrites {
+		normalized.TaskWrites[i].DependsOn = append([]string(nil), normalized.TaskWrites[i].DependsOn...)
+	}
+
+	seenTasks := make(map[string]bool, len(normalized.TaskWrites))
+	taskIDs := graph.TaskIDs()
+	prospective := make(map[string]domain.Task, len(taskIDs))
+	for _, taskID := range taskIDs {
+		task, _ := graph.Task(taskID)
+		prospective[taskID] = task
+	}
+	for i := range normalized.TaskWrites {
+		write := &normalized.TaskWrites[i]
+		if !id.Valid(write.TaskID) {
+			return TaskGraphMutationPlan{}, fmt.Errorf("%w: planned task id %q is not a stable task id", domain.ErrValidation, write.TaskID)
+		}
+		if seenTasks[write.TaskID] {
+			return TaskGraphMutationPlan{}, fmt.Errorf("%w: graph mutation plans task %s more than once", domain.ErrValidation, write.TaskID)
+		}
+		seenTasks[write.TaskID] = true
+		task, exists := prospective[write.TaskID]
+		if !exists {
+			return TaskGraphMutationPlan{}, fmt.Errorf("%w: planned task %s does not exist in the authoritative snapshot", domain.ErrValidation, write.TaskID)
+		}
+
+		seenDependencies := make(map[string]bool, len(write.DependsOn))
+		for _, prerequisite := range write.DependsOn {
+			switch {
+			case !id.Valid(prerequisite):
+				return TaskGraphMutationPlan{}, fmt.Errorf("%w: planned dependency %q for task %s is not a stable task id", domain.ErrValidation, prerequisite, write.TaskID)
+			case prerequisite == write.TaskID:
+				return TaskGraphMutationPlan{}, fmt.Errorf("%w: task %s cannot depend on itself", domain.ErrValidation, write.TaskID)
+			case seenDependencies[prerequisite]:
+				return TaskGraphMutationPlan{}, fmt.Errorf("%w: task %s repeats planned dependency %s", domain.ErrValidation, write.TaskID, prerequisite)
+			}
+			if _, exists := prospective[prerequisite]; !exists {
+				return TaskGraphMutationPlan{}, fmt.Errorf("%w: planned dependency %s for task %s does not exist", domain.ErrValidation, prerequisite, write.TaskID)
+			}
+			seenDependencies[prerequisite] = true
+		}
+		sort.Strings(write.DependsOn)
+		task.DependsOn = append([]string(nil), write.DependsOn...)
+		if write.ClearLegacy {
+			task.LegacyBlockedBy = nil
+			task.LegacyDependencies = nil
+			task.LegacyBlocks = nil
+		}
+		prospective[write.TaskID] = task
+
+		prefixGraph := taskGraphFromMap(taskIDs, prospective)
+		if prefixGraph.Health() == GraphBroken {
+			return TaskGraphMutationPlan{}, fmt.Errorf("%w: planned write prefix ending at task %s would leave a broken graph: %s",
+				domain.ErrValidation, write.TaskID, graphMutationHealthDetail(prefixGraph))
+		}
+	}
+
+	finalGraph := taskGraphFromMap(taskIDs, prospective)
+	if !finalGraph.MutationReady() {
+		return TaskGraphMutationPlan{}, fmt.Errorf("%w: planned dependency state is %s; mutation requires a healthy final graph: %s",
+			domain.ErrValidation, finalGraph.Health(), graphMutationHealthDetail(finalGraph))
+	}
+	return normalized, nil
+}
+
+func taskGraphFromMap(taskIDs []string, tasksByID map[string]domain.Task) *TaskGraph {
+	tasks := make([]domain.Task, 0, len(taskIDs))
+	for _, taskID := range taskIDs {
+		tasks = append(tasks, tasksByID[taskID])
+	}
+	return NewTaskGraph(tasks, nil)
+}
+
+func graphMutationHealthDetail(graph *TaskGraph) string {
+	if problems := graph.Problems(); len(problems) > 0 {
+		detail := problems[0].Message
+		if len(problems) > 1 {
+			detail += fmt.Sprintf(" (%d additional problem(s); run lint for the full sweep)", len(problems)-1)
+		}
+		return detail
+	}
+	if legacy := graph.LegacyDiagnostics(); len(legacy) > 0 {
+		return fmt.Sprintf("%d legacy dependency field occurrence(s) remain; run the guarded migration", len(legacy))
+	}
+	return "graph health is not mutation-ready"
+}

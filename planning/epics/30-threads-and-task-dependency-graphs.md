@@ -30,16 +30,21 @@ guard and dependency-operation tasks:
 
 ```text
 6g3q4rst78qy strict reads -----> 6g3q4rt7mgjn dependency operations <----- 6g3q4rt0wzkq portable guard
-       |                                  |                                      |
-       |                                  v                                      |
-       |                         6g3q4rte8kc1 eligibility                         |
-       |                                                                         |
-       +--------------------> 6g3q4rtmv4ak Thread entity <------------------------+
-                                      |             |
-dependency operations ----------------+             +----> 6g3q4rv1w9e2 generated views
-                                      v                           |
-                            6g3q4rtv8d0a bulk link                v
-                                                       6g3q4rv89vzw TUI
+                                           |
+                                           v
+                                  6g3q4rte8kc1 eligibility
+                                           |
+                                           v
+                                  6g3q4rtmv4ak Thread entity
+                                           |
+                                           v
+                                  6g3q4rtv8d0a bulk link
+                                           |
+                                           v
+                                  6g3q4rv1w9e2 generated views
+                                           |
+                                           v
+                                  6g3q4rv89vzw TUI
 ```
 
 - [6g3q4rst78qy — strict dependency reads](../tasks/6g3q4rst78qy-establish-canonical-task-dependencies-and-strict-graph-reads.md)
@@ -54,13 +59,14 @@ dependency operations ----------------+             +----> 6g3q4rv1w9e2 generate
 ## Delivery sequence and gates
 
 ```text
-strict read model -> guarded edge writes -> eligibility enforcement
-                                      \-> Thread entity -> bulk linking -> generated views -> TUI
+strict read model -> guarded edge writes -> eligibility enforcement -> Thread entity
+                                                             -> bulk linking -> generated views -> TUI
 ```
 
-Eligibility enforcement and the Thread entity share the same graph foundation. They can be scoped
-separately after guarded writes stabilize, but bulk linking waits for both dependency mutation and
-Thread persistence.
+Eligibility enforcement and the Thread entity share the same graph foundation, but implementation
+is deliberately serialized after guarded writes stabilize. Eligibility establishes the first
+non-dependency guarded mutation seam; Thread persistence reuses it for another entity kind; bulk
+linking then composes both materializers under one outer guard.
 
 | Order | Slice | Exit gate | Highest-value stress tests |
 |---|---|---|---|
@@ -108,6 +114,44 @@ checkpoints. Dogfooding begins when the corresponding production slice passes it
 - Critical-path, slack, forecasting, transitive reduction, or scheduler features.
 - Autonomous multi-agent or worktree orchestration.
 - TUI implementation before the domain, CLI, and wire projections are proven.
+
+## Sequencing amendment — guarded multi-kind writes (2026-08-27)
+
+The portable-guard audits proved the dependency boundary but also made the next extension point
+explicit: `TaskGraphMutationStore` deliberately materializes dependency writes only, while lifecycle,
+Thread, and bulk operations each need an authoritative read/validate/write decision under the same
+canonical-root exclusion contract. This amendment supersedes the earlier suggestion that eligibility
+and Thread persistence may be implemented independently after dependency operations.
+
+```text
+dependency operations
+        |
+        v
+eligibility lifecycle boundary    (first non-dependency guarded write)
+        |
+        v
+Thread mutation boundary          (first additional entity kind)
+        |
+        v
+compound bulk apply -> generated views -> TUI
+```
+
+This is implementation coordination, not a new domain dependency: the pure eligibility and Thread
+projections remain independently testable. Implementation is serialized so each slice reuses one
+reviewed guard-extension pattern rather than inventing incompatible callbacks or nesting guarded
+operations, which root-wide callback exclusion correctly rejects.
+
+Keep the public capabilities use-case-specific and share private store mechanics:
+
+- dependency commands use the existing guarded task-dependency capability;
+- lifecycle enforcement adds a narrow guarded status-transition capability;
+- Thread lifecycle/membership adds a narrow guarded Thread capability plus lock-free internal
+  materialization;
+- bulk apply owns one deliberate compound capability that takes the guard once and composes the
+  internal task and Thread materializers. It never orchestrates by nesting the narrower ports.
+
+Generated views remain unchanged and read-only. The TUI remains last and must retry/debounce the
+documented transient `ErrConflict` when a watcher refresh overlaps the planner-exclusive phase.
 
 ## Related
 
