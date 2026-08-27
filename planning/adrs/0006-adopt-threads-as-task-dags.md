@@ -722,6 +722,50 @@ were too easy to misread or bypass. The following clarifications supersede confl
    IDs are attributed to every source path without silently assigning one record's graph defects to
    another. Strict mutation still fails closed when no unique authoritative record exists.
 
+### 2026-08-27: Portable mutation-guard adversarial hardening
+
+Two independent implementation audits—[Gemini](../audits/6g45qfv27vrm-2026-08-27-portable-repository-graph-mutation-guard.md)
+and [Claude](../audits/6g45s2rm09pr-2026-08-27-portable-repository-graph-mutation-guard-claude.md)—validated the
+control-inverted boundary and cross-process cycle protection but exposed underspecified recovery,
+contention, and platform contracts. The following clarifications supersede conflicting wording above:
+
+1. **Planner write order is recovery data.** Stable-ID ordering is deterministic but not generally
+   prefix-safe: an edge reversal must durably remove the old edge before adding its reverse. A pure
+   core validator preserves the planner-provided order, canonicalizes only semantic sets such as
+   `depends_on`, and rejects the complete plan before writing unless every supplied prefix and the
+   final state are sound. Planners must therefore emit a deterministic, convergent sequence.
+2. **Planner exclusion is scoped to the canonical planning root.** During the callback, every Store
+   entry point for that root—including through a second `FS`—fails fast with `ErrConflict`. This
+   converts invalid re-entry into an attributable error and prevents a callback from escaping its
+   immutable snapshot. Go cannot reliably distinguish the callback goroutine from an unrelated
+   caller without threading an explicit execution capability through every port, so an unrelated
+   concurrent read or write may receive the same brief conflict. CLI use is unaffected; a future
+   TUI/server adapter should treat it as retryable contention or deliberately revise the port.
+3. **Only runtime-tested release platforms claim mutation support.** macOS and Linux use the
+   canonical-root process mutex plus root-directory `flock`, with real same-process and child-process
+   tests over the production path. Windows and other non-Unix source builds fail closed until a
+   shared-repository lock identity is selected and exercised in native CI; a per-user cache lock is
+   insufficient for cross-user repositories.
+4. **Raw-editor detection is best effort, not transactional isolation.** Real apply performs one
+   whole-snapshot content check before the first replacement and another content check immediately
+   before each target replacement. This preserves an attributable durable prefix when a later raw
+   edit is detected and substantially narrows the clobber window. A raw writer can still race the
+   final verify-to-rename interval because it does not honor the advisory guard; the operation never
+   claims an all-files transaction or isolation from direct filesystem edits.
+5. **Core owns plan semantics; store owns persistence mechanics.** Source-health, dependency-set,
+   prefix, and final-graph validation are pure core operations usable by command preview code. The
+   store owns canonical loading, repository exclusion, frontmatter materialization, exact source
+   comparison, immediate per-file CAS, and atomic replacement. Dependency writes stamp
+   `updated_at` from the caller-provided clock only when graph-owned fields change.
+6. **Graph dry-run is authoritative but not durable.** It takes the same exclusive repository guard
+   through snapshot, planning, validation, and materialization so its preview is internally
+   consistent. Because it performs no replacement, it does not run the pre-apply CAS and cannot
+   promise that a later real invocation sees the same repository.
+7. **Prefix validation cost is a bulk-apply gate, not premature V1 machinery.** Rebuilding the full
+   graph per changed task is acceptable for direct dependency commands and remains intentionally
+   simple. Before the bulk-linking slice is released, benchmark realistic repository/manifest sizes
+   and replace it with incremental validation if lock-held latency is operationally significant.
+
 ## Related
 
 - Supersedes: [0002-adopt-projects](0002-adopt-projects.md).

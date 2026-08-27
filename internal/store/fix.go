@@ -23,6 +23,9 @@ import (
 // text-normalized only. Under the flat layout there is no relocation: a bad
 // status/bucket is lint-flagged, not moved. When dryRun is true nothing is written.
 func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return nil, err
+	}
 	// `lint --fix` is a batch SECOND writer; take the repo write-lock (like every other
 	// write path) so a concurrent agent write — the cron writers, notably — can't be
 	// silently clobbered. Reads happen inside the lock too, so each file's read→fix→write is

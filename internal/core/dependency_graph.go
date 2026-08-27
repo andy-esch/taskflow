@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -727,7 +728,44 @@ func (g *TaskGraph) LegacyDiagnostics() []LegacyDependencyDiagnostic {
 
 func (g *TaskGraph) Task(taskID string) (domain.Task, bool) {
 	task, ok := g.tasks[taskID]
-	return cloneTask(task), ok
+	task = cloneTask(task)
+	task.SourceVersion = "" // persistence token is not planner/query data
+	return task, ok
+}
+
+// SameSourceSnapshot reports whether two graphs came from the same exact task
+// files. It exposes no version token: the store can use it as a whole-repository
+// CAS after planning, while callbacks receive only Task() projections with the
+// tokens cleared. Health and paths catch new unreadable/renamed entities; byte
+// hashes catch every in-place edit, including non-graph fields.
+func (g *TaskGraph) SameSourceSnapshot(other *TaskGraph) bool {
+	if other == nil || g.health != other.health || !slices.Equal(g.ids, other.ids) {
+		return false
+	}
+	for _, taskID := range g.ids {
+		left, right := g.tasks[taskID], other.tasks[taskID]
+		if left.Path != right.Path || left.SourceVersion == "" || left.SourceVersion != right.SourceVersion {
+			return false
+		}
+	}
+	return slices.EqualFunc(g.problems, other.problems, sameGraphProblem) &&
+		slices.EqualFunc(g.legacy, other.legacy, sameLegacyDiagnostic)
+}
+
+func sameGraphProblem(left, right GraphProblem) bool {
+	return left.Code == right.Code && left.TaskID == right.TaskID &&
+		left.RelatedTaskID == right.RelatedTaskID && left.Field == right.Field &&
+		left.Path == right.Path && left.Message == right.Message &&
+		slices.Equal(left.Cycle, right.Cycle)
+}
+
+func sameLegacyDiagnostic(left, right LegacyDependencyDiagnostic) bool {
+	return left.TaskID == right.TaskID && left.TaskSlug == right.TaskSlug &&
+		left.TaskPath == right.TaskPath && left.Field == right.Field &&
+		slices.EqualFunc(left.References, right.References, func(a, b LegacyReference) bool {
+			return a.Value == b.Value && a.Resolution == b.Resolution &&
+				a.Edge == b.Edge && slices.Equal(a.CandidateIDs, b.CandidateIDs)
+		})
 }
 
 func (g *TaskGraph) TaskIDs() []string { return append([]string(nil), g.ids...) }

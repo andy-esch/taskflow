@@ -78,6 +78,9 @@ func writeBody[T any](
 // (parse-before-accept, compare-and-swap, dry-run, body echo) lives in writeBody.
 // Returns the reloaded audit and the resulting (LF) body.
 func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Audit{}, "", err
+	}
 	path, err := s.resolveAudit(slug)
 	if err != nil {
 		return domain.Audit{}, "", err
@@ -110,6 +113,9 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 // comments, and key order survive) and updated_at is stamped. The shared write tail
 // lives in writeBody. Returns the reloaded task and the resulting (LF) body.
 func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Task{}, "", err
+	}
 	path, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, "", err

@@ -16,6 +16,9 @@ import (
 // ListEpics parses every epics/*.md file. Unreadable epics are skipped and
 // reported as FileProblems (resilient, like ListTasks).
 func (s *FS) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return nil, nil, err
+	}
 	epics, problems, err := scanDir(s.epicsDir, func(path string, content []byte) (domain.Epic, error) {
 		return parseEpic(content, path)
 	})
@@ -35,6 +38,9 @@ func (s *FS) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 // GetEpic returns one epic plus its markdown body. The id resolves exact
 // first, then fuzzy (unique prefix/substring), like task and audit slugs.
 func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Epic{}, "", err
+	}
 	cands, err := epicCandidates(s.epicsDir) // epics have no status/bucket dir
 	if err != nil {
 		return domain.Epic{}, "", err
@@ -63,6 +69,9 @@ func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
 // parse-before-commit guard: a status that wouldn't reload is rejected with the
 // file untouched.
 func (s *FS) MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epic, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Epic{}, err
+	}
 	if err := domain.ValidateEpicStatus(status); err != nil {
 		return domain.Epic{}, err
 	}
@@ -127,6 +136,9 @@ func (s *FS) MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epi
 // untouched (ErrValidation, not a FileProblem — the user's update is bad, the file
 // on disk was never the cause).
 func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (domain.Epic, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Epic{}, err
+	}
 	cands, err := epicCandidates(s.epicsDir) // epics have no status/bucket dir
 	if err != nil {
 		return domain.Epic{}, err
@@ -182,6 +194,9 @@ func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (doma
 // but the version-CAS recheck still catches a concurrent edit during the editor window.
 // Returns the reloaded epic and whether it changed.
 func (s *FS) EditEpic(id string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Epic{}, false, err
+	}
 	cands, err := epicCandidates(s.epicsDir) // epics have no status/bucket dir
 	if err != nil {
 		return domain.Epic{}, false, err

@@ -56,6 +56,47 @@ type TaskStore interface {
 	RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, error)
 }
 
+// TaskDependencyWrite is one semantic task-file change returned by a pure graph
+// mutation planner. The store owns YAML surgery and atomic replacement; planners
+// name only the task and its complete canonical dependency set. ClearLegacy is
+// reserved for the guarded migration from blocked_by/dependencies/blocks.
+type TaskDependencyWrite struct {
+	TaskID      string
+	DependsOn   []string
+	ClearLegacy bool
+}
+
+// TaskGraphMutationPlan is the complete deterministic write set produced from one
+// immutable repository snapshot. Writes are applied in the planner-provided order:
+// ordering is semantic recovery data because every durable prefix must remain sound.
+// Each file is replaced atomically; AppliedTaskIDs in the result is the durable prefix
+// when a later write fails, which makes a multi-file operation diagnosable and resumable.
+type TaskGraphMutationPlan struct {
+	TaskWrites []TaskDependencyWrite
+}
+
+// TaskGraphMutationResult reports what the store planned and which task-file
+// replacements actually landed. Dry runs return the normalized plan with no applied
+// IDs. A non-nil error may accompany a non-empty AppliedTaskIDs prefix.
+type TaskGraphMutationResult struct {
+	Plan           TaskGraphMutationPlan
+	AppliedTaskIDs []string
+	DryRun         bool
+}
+
+// TaskGraphPlanner is deliberately control-inverted: the store calls a pure core
+// planner while it owns the repository guard. The callback receives only the
+// immutable taskflow graph and returns taskflow-owned semantic values; it must not
+// call a Store method or begin another mutation.
+type TaskGraphPlanner func(*TaskGraph) (TaskGraphMutationPlan, error)
+
+// TaskGraphMutationStore owns the repository-wide graph read/validate/write
+// critical section. It is a sibling capability rather than part of Store so read-
+// only/test adapters do not acquire a mutation method they cannot implement.
+type TaskGraphMutationStore interface {
+	MutateTaskGraph(now time.Time, dryRun bool, planner TaskGraphPlanner) (TaskGraphMutationResult, error)
+}
+
 // EpicStore is the epic-persistence port.
 type EpicStore interface {
 	ListEpics() ([]domain.Epic, []domain.FileProblem, error)

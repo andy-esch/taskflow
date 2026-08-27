@@ -25,6 +25,9 @@ var firstH1Re = regexp.MustCompile(`(?m)^# .*$`)
 // rename is a rare, deliberate, single-user operation (git is the undo). A dry run runs
 // every check and returns the would-be result without touching disk.
 func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return domain.Task{}, 0, err
+	}
 	oldPath, err := s.resolve(slug)
 	if err != nil {
 		return domain.Task{}, 0, err

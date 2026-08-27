@@ -6,13 +6,33 @@ package store
 // repair it). GetTask/GetEpic/GetAudit would fail at the parse step first.
 
 // ResolveTaskPath returns a task's file path from its slug/id, parse-free.
-func (s *FS) ResolveTaskPath(slug string) (string, error) { return s.resolve(slug) }
+func (s *FS) ResolveTaskPath(slug string) (string, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return "", err
+	}
+	return s.resolve(slug)
+}
 
 // ResolveEpicPath returns an epic's file path from its id, parse-free.
-func (s *FS) ResolveEpicPath(id string) (string, error) { return s.resolveEpicPath(id) }
+func (s *FS) ResolveEpicPath(id string) (string, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return "", err
+	}
+	return s.resolveEpicPath(id)
+}
 
 // ResolveAuditPath returns an audit's file path from its slug/id, parse-free.
-func (s *FS) ResolveAuditPath(slug string) (string, error) { return s.resolveAudit(slug) }
+func (s *FS) ResolveAuditPath(slug string) (string, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return "", err
+	}
+	return s.resolveAudit(slug)
+}
 
 // ResolveResearchPath returns a research doc's file path from its slug/id, parse-free.
-func (s *FS) ResolveResearchPath(slug string) (string, error) { return s.resolveResearch(slug) }
+func (s *FS) ResolveResearchPath(slug string) (string, error) {
+	if err := s.rejectGraphPlannerCall(); err != nil {
+		return "", err
+	}
+	return s.resolveResearch(slug)
+}

@@ -8,7 +8,7 @@ import (
 	"syscall"
 )
 
-// writeLock takes the process-wide advisory write lock — flock(LOCK_EX) on the repo root
+// platformWriteLock takes the process-wide advisory write lock — flock(LOCK_EX) on the repo root
 // directory — so the version-CAS's verify→write becomes an ATOMIC compare-and-swap: no
 // other cooperating writer can land a rename between a verify and its own rename (the
 // lost-update window that the check-then-write, non-atomic on a filesystem, otherwise
@@ -18,7 +18,7 @@ import (
 // brief and infrequent, so serializing them is imperceptible; per-file locking is a future
 // refinement. flock auto-releases if the process dies (no stale lock files). Returns an
 // unlock func the caller defers after the write.
-func (s *FS) writeLock() (func(), error) {
+func (s *FS) platformWriteLockChecked() (func() error, error) {
 	f, err := os.Open(s.root)
 	if err != nil {
 		return nil, fmt.Errorf("open repo root for write lock: %w", err)
@@ -27,8 +27,14 @@ func (s *FS) writeLock() (func(), error) {
 		_ = f.Close()
 		return nil, fmt.Errorf("acquire write lock: %w", err)
 	}
-	return func() {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		_ = f.Close()
+	return func() error {
+		var releaseErr error
+		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_UN); err != nil {
+			releaseErr = fmt.Errorf("release repository lock: %w", err)
+		}
+		if err := f.Close(); err != nil && releaseErr == nil {
+			releaseErr = fmt.Errorf("close repository lock handle: %w", err)
+		}
+		return releaseErr
 	}, nil
 }

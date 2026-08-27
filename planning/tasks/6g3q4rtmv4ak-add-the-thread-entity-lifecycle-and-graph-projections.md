@@ -4,12 +4,13 @@ id: 6g3q4rtmv4ak
 status: next-up
 epic: 30-threads-and-task-dependency-graphs
 description: Introduce first-class Thread persistence, membership, lifecycle, rollup, frontier, external gates, CLI, and wire projections.
-effort: 4-7 days
+effort: 5-8 days
 tier: 1
 priority: high
 autonomy_level: 3
 tags: [threads, domain, storage, cli]
 created: "2026-08-25"
+updated_at: "2026-08-27"
 ---
 # Add the Thread entity, lifecycle, and graph projections
 
@@ -34,6 +35,13 @@ Introduce Threads as first-class initiative documents whose membership and lifec
 - [ ] Initialization creates `threads/`, stops creating `projects/`, and handles non-empty legacy Projects safely.
 - [ ] Task/Thread IDs are checked for cross-kind collisions, and an empty Projects scaffold is defined narrowly enough to permit only `.gitkeep` removal.
 - [ ] Task lifecycle receipts name affected Thread IDs once Thread documents can exist.
+- [ ] Thread create, membership, start, complete, abandon, reopen, and
+  cross-kind ID collision checks perform authoritative read, validation, and
+  write under one repository guard.
+- [ ] The store provides lock-free internal Thread materialization reusable by a
+  later compound bulk capability without nesting guarded mutations.
+- [ ] Concurrent Thread membership or lifecycle operations and task-graph
+  changes either serialize to a valid state or return an attributable conflict.
 
 ## Stress tests
 
@@ -43,3 +51,5 @@ Introduce Threads as first-class initiative documents whose membership and lifec
 ## Sequencing
 
 Requires the strict graph derivation and portable guarded writes, but not lifecycle enforcement. Bulk linking waits for this persistence contract and dependency operations.
+
+## Guarded Thread mutation amendment (2026-08-27)\n\nDiagnostic Thread projections may degrade explicitly, but every authoritative Thread mutation loads the required task graph and current Thread state inside one canonical-root repository guard. Creation and membership validate task existence and cross-kind identity there; start and complete validate membership, external gates, and sound completion there; the matching Thread write lands before release.\n\nExpose use-case-specific Thread mutation ports backed by private store guard/materialization helpers. Keep a lock-free internal Thread document materializer so bulk apply can compose task dependency writes and the final Thread write under one outer guard. Calling MutateTaskGraph from a Thread planner, or calling a guarded Thread method from a graph planner, is forbidden and will correctly fail callback exclusion.\n\nImplement after the eligibility task establishes the first non-dependency guarded-write pattern. Bulk linking waits for this Thread persistence/materialization contract as well as dependency operations.

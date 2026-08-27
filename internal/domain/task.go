@@ -5,6 +5,10 @@ package domain
 type Task struct {
 	Slug string `yaml:"-"`
 	Path string `yaml:"-"`
+	// SourceVersion is the store-internal hash of the exact bytes that produced this
+	// record. TaskGraph retains it for whole-snapshot CAS but clears it from Task()
+	// projections, so planners never receive persistence tokens.
+	SourceVersion string `yaml:"-"`
 	// StatusFellBack is set by the store when the frontmatter status is missing or
 	// unrecognized — under the flat layout (ADR-0003 §4) there is no directory to fall
 	// back to, so Status keeps its raw value; the task still lists and lint flags it
