@@ -31,6 +31,9 @@ func TestTaskDependencyFieldsRoundTrip(t *testing.T) {
 		!reflect.DeepEqual(task.LegacyBlocks, []string{"legacy-c"}) {
 		t.Fatalf("legacy fields did not round-trip: %+v", task)
 	}
+	if !reflect.DeepEqual(task.LegacyDependencyFields, []string{"blocked_by", "dependencies", "blocks"}) {
+		t.Fatalf("legacy field presence did not round-trip: %v", task.LegacyDependencyFields)
+	}
 }
 
 func TestCreateTaskRejectsDependenciesUntilGuardedCreationExists(t *testing.T) {

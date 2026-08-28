@@ -16,6 +16,7 @@ type TaskFilter struct {
 	Tag        string
 	All        bool
 	RevisitDue bool // only deferred tasks whose revisit_at (snooze-until) date has arrived
+	Unblocked  bool // only tasks whose strict graph state is derived Eligible
 }
 
 // ListTasks returns tasks matching the filter, plus any per-file load problems.
@@ -42,6 +43,14 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 	if err != nil {
 		return nil, nil, err
 	}
+	var graph *TaskGraph
+	if f.Unblocked {
+		graph = NewTaskGraph(all, problems)
+		if graph.Health() != GraphHealthy {
+			return nil, problems, fmt.Errorf("%w: task list --unblocked requires a healthy repository task graph; health=%s: %s",
+				domain.ErrValidation, graph.Health(), taskGraphHealthDetail(graph))
+		}
+	}
 	// --revisit-due narrows to deferred tasks, so it opts out of the active-only
 	// default (deferred is inactive) just like an explicit --status does.
 	activeOnly := f.Status == "" && !f.All && !f.RevisitDue
@@ -65,6 +74,9 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 			continue
 		}
 		if f.Tag != "" && !hasTag(t.Tags, f.Tag) {
+			continue
+		}
+		if f.Unblocked && !graph.State(t.ID).Eligible {
 			continue
 		}
 		out = append(out, t)
@@ -319,9 +331,9 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 
 func graphFieldDirection(field string) string {
 	if field == "depends_on" {
-		return " (`task depend add/remove` once available)"
+		return "; use `tskflwctl task depend add` or `tskflwctl task depend remove`"
 	}
-	return "; legacy dependency fields are removed only by the guarded migration"
+	return "; remove legacy dependency fields with `tskflwctl task depend migrate`"
 }
 
 // unknownFieldErr is the shared rejection for a field outside the registry, used

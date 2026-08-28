@@ -16,8 +16,8 @@ func ValidateTaskGraphMutationSource(graph *TaskGraph) error {
 		return fmt.Errorf("%w: authoritative task graph is required", domain.ErrValidation)
 	}
 	if graph.Health() == GraphBroken {
-		return fmt.Errorf("%w: repository task graph is broken; repair it before mutation: %s",
-			domain.ErrValidation, graphMutationHealthDetail(graph))
+		return fmt.Errorf("%w: repository task graph is broken: %s",
+			domain.ErrValidation, taskGraphHealthDetail(graph))
 	}
 	return nil
 }
@@ -78,20 +78,21 @@ func ValidateTaskGraphMutationPlan(graph *TaskGraph, plan TaskGraphMutationPlan)
 			task.LegacyBlockedBy = nil
 			task.LegacyDependencies = nil
 			task.LegacyBlocks = nil
+			task.LegacyDependencyFields = nil
 		}
 		prospective[write.TaskID] = task
 
 		prefixGraph := taskGraphFromMap(taskIDs, prospective)
 		if prefixGraph.Health() == GraphBroken {
 			return TaskGraphMutationPlan{}, fmt.Errorf("%w: planned write prefix ending at task %s would leave a broken graph: %s",
-				domain.ErrValidation, write.TaskID, graphMutationHealthDetail(prefixGraph))
+				domain.ErrValidation, write.TaskID, taskGraphHealthDetail(prefixGraph))
 		}
 	}
 
 	finalGraph := taskGraphFromMap(taskIDs, prospective)
 	if !finalGraph.MutationReady() {
 		return TaskGraphMutationPlan{}, fmt.Errorf("%w: planned dependency state is %s; mutation requires a healthy final graph: %s",
-			domain.ErrValidation, finalGraph.Health(), graphMutationHealthDetail(finalGraph))
+			domain.ErrValidation, finalGraph.Health(), taskGraphHealthDetail(finalGraph))
 	}
 	return normalized, nil
 }
@@ -104,16 +105,24 @@ func taskGraphFromMap(taskIDs []string, tasksByID map[string]domain.Task) *TaskG
 	return NewTaskGraph(tasks, nil)
 }
 
-func graphMutationHealthDetail(graph *TaskGraph) string {
+func taskGraphHealthDetail(graph *TaskGraph) string {
 	if problems := graph.Problems(); len(problems) > 0 {
-		detail := problems[0].Message
-		if len(problems) > 1 {
-			detail += fmt.Sprintf(" (%d additional problem(s); run lint for the full sweep)", len(problems)-1)
+		first := problems[0]
+		location := ""
+		if first.Path != "" {
+			location = fmt.Sprintf(" in %s", first.Path)
+			if first.Field != "" {
+				location += fmt.Sprintf(" (field %s)", first.Field)
+			}
 		}
-		return detail
+		detail := first.Message + location
+		if len(problems) > 1 {
+			detail += fmt.Sprintf(" (%d additional problem(s))", len(problems)-1)
+		}
+		return detail + "; repair the graph-owned frontmatter directly, then run `tskflwctl lint`"
 	}
 	if legacy := graph.LegacyDiagnostics(); len(legacy) > 0 {
-		return fmt.Sprintf("%d legacy dependency field occurrence(s) remain; run the guarded migration", len(legacy))
+		return fmt.Sprintf("%d legacy dependency field occurrence(s) remain; run `tskflwctl task depend migrate`", len(legacy))
 	}
 	return "graph health is not mutation-ready"
 }

@@ -51,4 +51,8 @@ type Task struct {
 	LegacyBlockedBy    []string `yaml:"blocked_by,omitempty"`
 	LegacyDependencies []string `yaml:"dependencies,omitempty"`
 	LegacyBlocks       []string `yaml:"blocks,omitempty"`
+	// LegacyDependencyFields preserves field presence separately from values so an
+	// explicitly empty legacy key remains diagnosable and migratable. Values are
+	// the canonical field names and are populated by the store parser.
+	LegacyDependencyFields []string `yaml:"-"`
 }

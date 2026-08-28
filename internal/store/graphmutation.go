@@ -171,7 +171,7 @@ func (s *FS) materializeTaskGraphPlan(graph *core.TaskGraph, plan core.TaskGraph
 		if !slices.Equal(parsed.DependsOn, planned.DependsOn) {
 			return nil, fmt.Errorf("%w: dependency update for task %s did not materialize the planned canonical set", domain.ErrValidation, planned.TaskID)
 		}
-		if planned.ClearLegacy && (len(parsed.LegacyBlockedBy) > 0 || len(parsed.LegacyDependencies) > 0 || len(parsed.LegacyBlocks) > 0) {
+		if planned.ClearLegacy && (len(parsed.LegacyBlockedBy) > 0 || len(parsed.LegacyDependencies) > 0 || len(parsed.LegacyBlocks) > 0 || len(parsed.LegacyDependencyFields) > 0) {
 			return nil, fmt.Errorf("%w: dependency update for task %s did not clear legacy fields", domain.ErrValidation, planned.TaskID)
 		}
 		writes = append(writes, materializedTaskGraphWrite{

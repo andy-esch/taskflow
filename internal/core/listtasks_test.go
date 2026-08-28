@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -68,5 +69,30 @@ func TestService_ListTasks_EmptyEpicFilterSkipsEpicScan(t *testing.T) {
 	}})
 	if _, _, err := svc.ListTasks(TaskFilter{}); err != nil {
 		t.Errorf("no epic filter must not consult ListEpics: %v", err)
+	}
+}
+
+func TestService_ListTasks_UnblockedUsesStrictGraphAndFailsClosed(t *testing.T) {
+	completed := graphRecord("completed-prerequisite", domain.StatusCompleted)
+	blocked := graphRecord("blocked-candidate", domain.StatusReadyToStart)
+	eligible := graphRecord("eligible-candidate", domain.StatusReadyToStart, completed.ID)
+	store := &fakeStore{tasks: []domain.Task{blocked, eligible, completed}}
+	got, problems, err := NewService(store).ListTasks(TaskFilter{Unblocked: true})
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("healthy --unblocked = %v, problems=%v", err, problems)
+	}
+	want := []string{blocked.ID, eligible.ID}
+	gotIDs := make([]string, len(got))
+	for i := range got {
+		gotIDs[i] = got[i].ID
+	}
+	if !slices.Equal(gotIDs, want) {
+		t.Fatalf("eligible IDs = %v, want %v", gotIDs, want)
+	}
+
+	broken := graphRecord("broken-candidate", domain.StatusReadyToStart, "not-a-stable-id")
+	store.tasks = append(store.tasks, broken)
+	if _, _, err := NewService(store).ListTasks(TaskFilter{Unblocked: true}); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("broken --unblocked = %v, want ErrValidation", err)
 	}
 }

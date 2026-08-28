@@ -186,10 +186,13 @@ func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prev
 }
 
 type taskDependencyFields struct {
-	dependsOn    []string
-	blockedBy    []string
-	dependencies []string
-	blocks       []string
+	dependsOn           []string
+	blockedBy           []string
+	dependencies        []string
+	blocks              []string
+	blockedByPresent    bool
+	dependenciesPresent bool
+	blocksPresent       bool
 }
 
 func sortedCopy(values []string) []string {
@@ -200,10 +203,13 @@ func sortedCopy(values []string) []string {
 
 func dependencyFieldsFromTask(task domain.Task) taskDependencyFields {
 	return taskDependencyFields{
-		dependsOn:    sortedCopy(task.DependsOn),
-		blockedBy:    sortedCopy(task.LegacyBlockedBy),
-		dependencies: sortedCopy(task.LegacyDependencies),
-		blocks:       sortedCopy(task.LegacyBlocks),
+		dependsOn:           sortedCopy(task.DependsOn),
+		blockedBy:           sortedCopy(task.LegacyBlockedBy),
+		dependencies:        sortedCopy(task.LegacyDependencies),
+		blocks:              sortedCopy(task.LegacyBlocks),
+		blockedByPresent:    slices.Contains(task.LegacyDependencyFields, "blocked_by") || len(task.LegacyBlockedBy) > 0,
+		dependenciesPresent: slices.Contains(task.LegacyDependencyFields, "dependencies") || len(task.LegacyDependencies) > 0,
+		blocksPresent:       slices.Contains(task.LegacyDependencyFields, "blocks") || len(task.LegacyBlocks) > 0,
 	}
 }
 
@@ -211,7 +217,10 @@ func (fields taskDependencyFields) equal(other taskDependencyFields) bool {
 	return slices.Equal(fields.dependsOn, other.dependsOn) &&
 		slices.Equal(fields.blockedBy, other.blockedBy) &&
 		slices.Equal(fields.dependencies, other.dependencies) &&
-		slices.Equal(fields.blocks, other.blocks)
+		slices.Equal(fields.blocks, other.blocks) &&
+		fields.blockedByPresent == other.blockedByPresent &&
+		fields.dependenciesPresent == other.dependenciesPresent &&
+		fields.blocksPresent == other.blocksPresent
 }
 
 // dependencyValues extracts every dependency-affecting field from an original
@@ -233,11 +242,18 @@ func dependencyValues(content []byte) (taskDependencyFields, bool) {
 	if err := yaml.Unmarshal(fm, &fields); err != nil {
 		return taskDependencyFields{}, false
 	}
+	var present map[string]yaml.Node
+	if err := yaml.Unmarshal(fm, &present); err != nil {
+		return taskDependencyFields{}, false
+	}
 	return taskDependencyFields{
-		dependsOn:    sortedCopy(fields.DependsOn),
-		blockedBy:    sortedCopy(fields.BlockedBy),
-		dependencies: sortedCopy(fields.Dependencies),
-		blocks:       sortedCopy(fields.Blocks),
+		dependsOn:           sortedCopy(fields.DependsOn),
+		blockedBy:           sortedCopy(fields.BlockedBy),
+		dependencies:        sortedCopy(fields.Dependencies),
+		blocks:              sortedCopy(fields.Blocks),
+		blockedByPresent:    present["blocked_by"].Kind != 0,
+		dependenciesPresent: present["dependencies"].Kind != 0,
+		blocksPresent:       present["blocks"].Kind != 0,
 	}, true
 }
 
