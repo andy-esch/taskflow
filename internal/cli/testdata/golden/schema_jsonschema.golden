@@ -645,6 +645,155 @@
       ],
       "description": "CriterionJSON is one acceptance-criteria checkbox for `task ac --list --json` — the list an agent then flips by index with `task ac --check/--uncheck`."
     },
+    "DependencyEdgeOutcomeJSON": {
+      "properties": {
+        "dependent_id": {
+          "type": "string"
+        },
+        "prerequisite_id": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "dependent_id",
+        "prerequisite_id",
+        "action",
+        "outcome"
+      ],
+      "description": "DependencyEdgeOutcomeJSON is one canonical edge result in a mutation receipt."
+    },
+    "DependencyMutationEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/DependencyEdgeOutcomeJSON"
+          },
+          "type": "array"
+        },
+        "cleared_legacy_fields": {
+          "items": {
+            "$ref": "#/$defs/LegacyFieldClearJSON"
+          },
+          "type": "array"
+        },
+        "planned_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "applied_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "remaining_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "operation",
+        "changed",
+        "dry_run",
+        "edges",
+        "cleared_legacy_fields",
+        "planned_task_ids",
+        "applied_task_ids",
+        "remaining_task_ids",
+        "workspace"
+      ],
+      "description": "DependencyMutationEnvelope is the successful `task depend` machine receipt."
+    },
+    "DependencyMutationJSON": {
+      "properties": {
+        "operation": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/DependencyEdgeOutcomeJSON"
+          },
+          "type": "array"
+        },
+        "cleared_legacy_fields": {
+          "items": {
+            "$ref": "#/$defs/LegacyFieldClearJSON"
+          },
+          "type": "array"
+        },
+        "planned_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "applied_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "remaining_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "operation",
+        "changed",
+        "dry_run",
+        "edges",
+        "cleared_legacy_fields",
+        "planned_task_ids",
+        "applied_task_ids",
+        "remaining_task_ids",
+        "workspace"
+      ],
+      "description": "DependencyMutationJSON is the reusable dependency-mutation receipt payload."
+    },
     "DoctorEnvelope": {
       "properties": {
         "schema_version": {
@@ -952,6 +1101,9 @@
         },
         "message": {
           "type": "string"
+        },
+        "dependency_mutation": {
+          "$ref": "#/$defs/DependencyMutationJSON"
         }
       },
       "additionalProperties": false,
@@ -1233,6 +1385,67 @@
       ],
       "description": "FixResult records the auto-repairs applied (or proposed) for one file."
     },
+    "GraphProblemJSON": {
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "related_task_id": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "cycle": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "description": "GraphProblemJSON is taskflow-owned repository-graph diagnostic data."
+    },
+    "GraphTaskJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "canonical stable task identifier"
+        },
+        "slug": {
+          "type": "string",
+          "description": "human task slug when the task is readable"
+        },
+        "status": {
+          "type": "string",
+          "description": "persisted lifecycle status when readable"
+        },
+        "epic": {
+          "type": "string",
+          "description": "epic identifier when readable"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id"
+      ],
+      "description": "GraphTaskJSON is the compact task identity used by graph-query envelopes."
+    },
     "InitEnvelope": {
       "properties": {
         "schema_version": {
@@ -1337,6 +1550,83 @@
         "message"
       ],
       "description": "Issue is a single frontmatter lint finding."
+    },
+    "LegacyDependencyJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "task_slug": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        },
+        "references": {
+          "items": {
+            "$ref": "#/$defs/LegacyReferenceJSON"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "field",
+        "references"
+      ],
+      "description": "LegacyDependencyJSON is one legacy field occurrence reported by a graph query."
+    },
+    "LegacyFieldClearJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "field"
+      ],
+      "description": "LegacyFieldClearJSON identifies one legacy field occurrence cleared by migration."
+    },
+    "LegacyReferenceJSON": {
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "prerequisite_id": {
+          "type": "string"
+        },
+        "dependent_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "value",
+        "resolution",
+        "candidate_ids"
+      ],
+      "description": "LegacyReferenceJSON records one legacy dependency resolution."
     },
     "LintEnvelope": {
       "properties": {
@@ -2057,6 +2347,121 @@
       ],
       "description": "SummaryJSON is the reusable, versionless dashboard payload."
     },
+    "TaskBlockerJSON": {
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/GraphTaskJSON"
+        },
+        "state": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "direct": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task",
+        "state",
+        "reason",
+        "path",
+        "direct"
+      ],
+      "description": "TaskBlockerJSON is one direct/transitive blocker with explanatory path."
+    },
+    "TaskBlockersEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "task": {
+          "$ref": "#/$defs/GraphTaskJSON"
+        },
+        "state": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        },
+        "projection": {
+          "type": "string"
+        },
+        "health": {
+          "type": "string"
+        },
+        "blockers": {
+          "items": {
+            "$ref": "#/$defs/TaskBlockerJSON"
+          },
+          "type": "array"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/GraphProblemJSON"
+          },
+          "type": "array"
+        },
+        "legacy_dependencies": {
+          "items": {
+            "$ref": "#/$defs/LegacyDependencyJSON"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "task",
+        "state",
+        "projection",
+        "health",
+        "blockers",
+        "problems",
+        "legacy_dependencies"
+      ],
+      "description": "TaskBlockersEnvelope is `task blockers --json`."
+    },
+    "TaskGraphStateJSON": {
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "gate": {
+          "type": "string"
+        },
+        "soundly_completed": {
+          "type": "boolean"
+        },
+        "eligible": {
+          "type": "boolean"
+        },
+        "drained": {
+          "type": "boolean"
+        },
+        "inconsistent": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "role",
+        "gate",
+        "soundly_completed",
+        "eligible",
+        "drained",
+        "inconsistent"
+      ],
+      "description": "TaskGraphStateJSON is the derived lifecycle/gate projection for one task."
+    },
     "TaskInfoEnvelope": {
       "properties": {
         "schema_version": {
@@ -2233,6 +2638,80 @@
         "body"
       ],
       "description": "TaskShowEnvelope is `task show --json`."
+    },
+    "TaskUnblockJSON": {
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/GraphTaskJSON"
+        },
+        "state": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        },
+        "path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "direct": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task",
+        "state",
+        "path",
+        "direct"
+      ],
+      "description": "TaskUnblockJSON is one transitive downstream dependent and its current state."
+    },
+    "TaskUnblocksEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "task": {
+          "$ref": "#/$defs/GraphTaskJSON"
+        },
+        "state": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        },
+        "health": {
+          "type": "string"
+        },
+        "unblocks": {
+          "items": {
+            "$ref": "#/$defs/TaskUnblockJSON"
+          },
+          "type": "array"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/GraphProblemJSON"
+          },
+          "type": "array"
+        },
+        "legacy_dependencies": {
+          "items": {
+            "$ref": "#/$defs/LegacyDependencyJSON"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "task",
+        "state",
+        "health",
+        "unblocks",
+        "problems",
+        "legacy_dependencies"
+      ],
+      "description": "TaskUnblocksEnvelope is `task unblocks --json`."
     },
     "TasksEnvelope": {
       "properties": {
@@ -2512,6 +2991,15 @@
         "task_mutation": {
           "$ref": "#/$defs/TaskMutationEnvelope"
         },
+        "dependency_mutation": {
+          "$ref": "#/$defs/DependencyMutationEnvelope"
+        },
+        "task_blockers": {
+          "$ref": "#/$defs/TaskBlockersEnvelope"
+        },
+        "task_unblocks": {
+          "$ref": "#/$defs/TaskUnblocksEnvelope"
+        },
         "epic_mutation": {
           "$ref": "#/$defs/EpicMutationEnvelope"
         },
@@ -2619,6 +3107,9 @@
         "acceptance",
         "path",
         "task_mutation",
+        "dependency_mutation",
+        "task_blockers",
+        "task_unblocks",
         "epic_mutation",
         "moves",
         "summary",
@@ -2654,6 +3145,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.49)",
+  "title": "tskflwctl --json output (schema_version 1.51)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

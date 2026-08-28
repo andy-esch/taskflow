@@ -146,10 +146,18 @@ adapter capabilities rather than leaked persistence.
   `TaskGraph` is an immutable read projection over one repository scan. It owns graph
   health (`healthy`/`degraded`/`broken`), SCC-based cycle attribution, derived lifecycle
   role and gate state, sound completion, topology, downstream impact, and separately
-  named causal-blocker and action-frontier projections. The analyzer uses only taskflow
-  types and owned deterministic algorithms; a graph package cannot leak into domain,
-  persistence, or wire contracts. Eligibility is read from derived state, never inferred
-  from an empty blocker list.
+  named causal-blocker and action-frontier projections. It also resolves ordinary task
+  references inside that immutable snapshot, so dependency planners never pre-resolve a
+  slug through persistence and carry a stale choice into the guarded callback. Service
+  dependency use cases emit taskflow-owned, adapter-neutral receipts for edge set
+  operations and the repository-wide legacy migration; typed failures retain any sound
+  durable prefix for explicit recovery. The analyzer uses only taskflow types and owned
+  deterministic algorithms; a graph package cannot leak into domain, persistence, or
+  wire contracts. Exactly resolved legacy edges participate in diagnostic traversal and
+  derived gates before migration, so a degraded snapshot cannot issue a false all-clear;
+  present-but-empty legacy keys still keep health degraded until migration removes them.
+  Eligibility is read from the queried task's explicit derived state, never inferred from
+  an empty blocker list, and `task list --unblocked` fails closed unless the snapshot is healthy.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as

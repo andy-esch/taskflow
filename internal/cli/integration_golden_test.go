@@ -70,6 +70,9 @@ func TestGolden_MachineContract(t *testing.T) {
 		{"task_list_name", []string{"-C", fixtureRepo, "task", "list", "--all", "-o", "name"}, nil},
 		{"task_show_json", []string{"-C", fixtureRepo, "task", "show", "alpha-task", "--json"}, nil},
 		{"task_acceptance_json", []string{"-C", fixtureRepo, "task", "ac", "alpha-task", "--json"}, nil},
+		{"task_blockers_json", []string{"-C", fixtureRepo, "task", "blockers", "alpha-task", "--json"}, nil},
+		{"task_unblocks_json", []string{"-C", fixtureRepo, "task", "unblocks", "gamma-task", "--json"}, nil},
+		{"task_list_unblocked_json", []string{"-C", fixtureRepo, "task", "list", "--unblocked", "--json"}, nil},
 		// task info / task path emit an absolute file path → redact the fixture root
 		// so the committed golden is portable (pins schema_version + shape + tally).
 		{"task_info_json", []string{"-C", fixtureRepo, "task", "info", "alpha-task", "--json"}, redact},

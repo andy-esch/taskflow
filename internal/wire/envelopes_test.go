@@ -67,6 +67,43 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"TaskMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToTaskMutationEnvelope(task, "# new body", true, WorkspaceJSON{}))
 		}},
+		{"DependencyMutationEnvelope", func(w io.Writer) error {
+			return emit(w, ToDependencyMutationEnvelope(core.DependencyMutationReceipt{
+				Operation: core.DependencyAdd, Changed: true, DryRun: true,
+				Edges: []core.DependencyEdgeOutcome{{
+					DependentID: "6g0000000002", PrerequisiteID: "6g0000000001",
+					Action: core.DependencyAdd, Outcome: "added",
+				}},
+				PlannedTaskIDs: []string{"6g0000000002"},
+			}, WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig}))
+		}},
+		{"TaskBlockersEnvelope", func(w io.Writer) error {
+			return emit(w, ToTaskBlockersEnvelope(core.TaskBlockersResult{
+				TaskID: "6g0000000002", Task: task,
+				State:      core.TaskGraphState{TaskID: "6g0000000002", Role: core.RoleInFlight, Gate: core.GateBroken, Inconsistent: true},
+				Projection: "frontier", Health: core.GraphBroken,
+				Problems: []core.GraphProblem{{Code: core.ProblemLegacyMissing, TaskID: "6g0000000002", Field: "blocked_by", Message: "missing legacy reference"}},
+				Legacy: []core.LegacyDependencyDiagnostic{{
+					TaskID: "6g0000000002", TaskSlug: "alpha", Field: "blocked_by",
+					References: []core.LegacyReference{{Value: "gone", Resolution: core.LegacyMissing}},
+				}},
+				Blockers: []core.TaskBlockerDetail{{
+					Blocker: core.Blocker{TaskID: "6g0000000001", Reason: core.BlockerNotStarted, Path: []string{"6g0000000002", "6g0000000001"}, Direct: true},
+					Task:    beta, State: core.TaskGraphState{TaskID: "6g0000000001", Role: core.RoleCandidate, Gate: core.GateClear, Eligible: true},
+				}},
+			}))
+		}},
+		{"TaskUnblocksEnvelope", func(w io.Writer) error {
+			return emit(w, ToTaskUnblocksEnvelope(core.TaskUnblocksResult{
+				TaskID: "6g0000000001", Task: beta,
+				State:  core.TaskGraphState{TaskID: "6g0000000001", Role: core.RoleCandidate, Gate: core.GateClear, Eligible: true},
+				Health: core.GraphHealthy,
+				Unblocks: []core.TaskDependentDetail{{
+					Impact: core.DependentImpact{TaskID: "6g0000000002", Path: []string{"6g0000000001", "6g0000000002"}, Direct: true},
+					Task:   task, State: core.TaskGraphState{TaskID: "6g0000000002", Role: core.RoleInFlight, Gate: core.GateClear},
+				}},
+			}))
+		}},
 		{"EpicMutationEnvelope", func(w io.Writer) error { return emit(w, ToEpicMutationEnvelope(epic, true, WorkspaceJSON{})) }},
 		{"CreatedEnvelope", func(w io.Writer) error {
 			return emit(w, ToCreatedEnvelope("task", "6fsa428vc2mm", "alpha", "ready-to-start", "tasks/6fsa428vc2mm-alpha.md", false, WorkspaceJSON{}))
