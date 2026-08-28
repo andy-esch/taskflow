@@ -9,11 +9,11 @@ priority: medium
 autonomy_level: 3
 tags: [cli, design]
 created: "2026-06-28"
-blocked_by: [design-package-foundation-palette-theme-registry-and-the-neon-default]
-updated_at: "2026-06-29"
+updated_at: "2026-08-27"
 started_at: "2026-06-28"
 completed_at: "2026-06-29"
 id: 6fgq1n000pca
+depends_on: [6fgq1n002skz]
 ---
 ## Objective
 Replace the picker's hardcoded `#b026ff` stopgap with the palette.

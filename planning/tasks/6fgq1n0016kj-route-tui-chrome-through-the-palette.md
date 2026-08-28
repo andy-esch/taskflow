@@ -9,11 +9,11 @@ priority: medium
 autonomy_level: 3
 tags: [tui, design]
 created: "2026-06-28"
-blocked_by: [design-package-foundation-palette-theme-registry-and-the-neon-default]
-updated_at: "2026-06-28"
+updated_at: "2026-08-27"
 started_at: "2026-06-28"
 completed_at: "2026-06-28"
 id: 6fgq1n0016kj
+depends_on: [6fgq1n002skz]
 ---
 ## Objective
 Make the TUI's structural chrome derive from the palette instead of scattered lipgloss literals.

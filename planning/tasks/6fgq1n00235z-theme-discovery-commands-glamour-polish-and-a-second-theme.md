@@ -9,11 +9,11 @@ priority: medium
 autonomy_level: 3
 tags: [cli, tui, design]
 created: "2026-06-28"
-updated_at: "2026-06-29"
-blocked_by: [theme-config-table-and-selection-plumbing]
+updated_at: "2026-08-27"
 started_at: "2026-06-29"
 completed_at: "2026-06-29"
 id: 6fgq1n00235z
+depends_on: [6fgq1n0006y3]
 ---
 ## Objective
 Make themes discoverable and prove the registry with a second theme + the deferred polish.
