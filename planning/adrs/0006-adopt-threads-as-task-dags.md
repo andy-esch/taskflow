@@ -815,9 +815,10 @@ but also made the next lifecycle slice's persistence obligations concrete:
 2. **Every creation and editing path has an explicit lifecycle contract.** `task new --start`
    authorizes and creates the in-progress record in one guarded operation rather than composing
    create and move. The interactive portion of `task edit` stays outside the repository guard, but
-   its ordinary writer may not persist a status delta. Before implementation, the product must
-   choose either to reject edited status changes in favor of lifecycle verbs or to delegate the
-   accepted candidate to the complete guarded lifecycle policy with exact-source CAS.
+   its ordinary writer may not persist a status delta. `task edit` rejects every status change and
+   directs the user to an explicit lifecycle verb. Separating content editing from lifecycle may
+   require one additional CLI call, but it keeps dates, gates, overrides, and impact receipts on the
+   single guarded lifecycle path. `task new --start` remains the intentional combined operation.
 3. **Lifecycle impact lands before Thread impact.** The eligibility slice owns deterministic
    before/after task gate state and descendant task receipts. The later Thread slice augments those
    receipts with affected Thread IDs after Thread documents exist; future data is not an eligibility

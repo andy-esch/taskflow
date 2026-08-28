@@ -24,16 +24,16 @@ Make dependency eligibility one authoritative core policy for all transitions in
 - Consume the shared lifecycle-role, gate-state, sound-completion, eligibility, and inconsistency derivation from the strict graph foundation.
 - Introduce a narrow guarded lifecycle-mutation capability: the store takes the canonical-root guard, loads one authoritative graph snapshot, invokes a pure core authorization/impact planner, and persists the transition before releasing the guard.
 - Route `task start`, generic move, create-and-start, and reusable adapter/TUI entry points through that capability. `task new --start` must authorize and create the in-progress task as one guarded operation rather than create first and move afterward.
-- Detect accepted `task edit` status deltas before the generic editor writer can persist them. The product decision below determines whether edit rejects those deltas or delegates them to the guarded lifecycle capability; the editor itself always remains outside the repository guard.
+- Detect and reject accepted `task edit` status deltas before the generic editor writer can persist them, with an actionable pointer to the explicit lifecycle verbs. The editor itself always remains outside the repository guard.
 - Replace the ambiguous internal force boolean with typed gate overrides while retaining contextual CLI `--force` spelling.
 - Report descendant tasks whose derived gate state changes after a lifecycle transition. Design the receipt for later augmentation, but leave affected Thread discovery and Thread IDs to the Thread-entity task.
 - Define one reusable before/after graph-state impact shape and add post-plan state for directly affected dependents to guarded dependency mutation receipts, so a legal edge to a withdrawn or unfinished prerequisite cannot look consequence-free.
 
 ## Acceptance criteria
 
-- [ ] Every first-party path that remains capable of entering `in-progress` calls one policy and cannot bypass dependency checks accidentally; rejecting edited status deltas removes `task edit` from that set rather than creating a second policy.
+- [ ] Every first-party path capable of entering `in-progress` calls one policy and cannot bypass dependency checks accidentally; `task edit` is not such a path because it rejects every status delta.
 - [ ] `task new --start` performs graph authorization and creation under one repository guard; it cannot commit from a preflight snapshot or as a create-then-move sequence.
-- [ ] `task edit` cannot persist a status delta through its ordinary editor write. It either rejects the delta before writing, or keeps the interactive editor outside the guard and detects concurrent source or graph changes before a delegated lifecycle commit.
+- [ ] `task edit` rejects every status delta before writing and directs the user to the appropriate lifecycle verb; editing task content and transitioning lifecycle remain separate operations.
 - [ ] Ineligible starts fail by default with deterministic outstanding blockers.
 - [ ] `task start --force` and `task move ... in-progress --force` bypass only the dependency gate; completion force remains scoped to unexplained acceptance criteria.
 - [ ] Reopening an upstream task makes completed descendants unsound without rewriting their persisted statuses.
@@ -52,22 +52,17 @@ Make dependency eligibility one authoritative core policy for all transitions in
 ## Stress tests
 
 - Table-drive every task status against clear, blocked, and broken gates across every entry path.
-- Cover direct/transitive blockers, forced completion, upstream reopen, missing/withdrawn prerequisites, create-and-start, rejected or delegated editor candidates, and parity between human and machine receipts.
-- Race a start against prerequisite lifecycle changes and dependency mutations. Race an accepted editor candidate against both task-source and graph changes without holding the repository guard while the editor is open.
+- Cover direct/transitive blockers, forced completion, upstream reopen, missing/withdrawn prerequisites, create-and-start, rejected editor status deltas, and parity between human and machine receipts.
+- Race a start against prerequisite lifecycle changes and dependency mutations. Verify that editor rejection remains deterministic across concurrent task-source changes without holding the repository guard while the editor is open.
 - Exercise batch transitions and measure repeated repository scans before introducing any invocation-local snapshot cache.
 
 ## Sequencing
 
 Requires guarded dependency operations. This task settles the first non-dependency extension of the guarded-write pattern; Thread persistence follows it so the two slices do not invent incompatible guard and materialization seams.
 
-## Product decision required before implementation
+## Task-edit lifecycle decision (2026-08-28)
 
-Decide whether `task edit` remains a lifecycle surface:
-
-- **Reject status deltas (recommended):** preserve editing for task content and ordinary metadata, and direct every status change to explicit lifecycle verbs. This matches `task set`, keeps dates, gates, force semantics, and receipts on one obvious path, and substantially narrows the guarded editor contract.
-- **Delegate status deltas:** accept a candidate edited outside the lock, then authorize the status transition and commit the complete candidate under the guarded lifecycle capability with exact-source CAS. This must enforce every applicable lifecycle rule—not only dependency eligibility—including completion criteria, lifecycle timestamps, reopen impact, typed overrides, and receipts.
-
-Either choice satisfies the ADR rule that a first-party editor cannot bypass lifecycle policy. Directly saving an edited status through the generic editor writer is not an option.
+`task edit` does not own lifecycle transitions. It rejects every status delta and directs the user to explicit lifecycle verbs such as `task start`, `task complete`, `task defer`, or generic `task move`. This may require a second CLI call when a user edits task content and transitions it in the same workflow, but it keeps dates, eligibility, completion gates, typed overrides, and impact receipts on one explicit guarded path. `task new --start` remains the intentional one-command create-and-start operation.
 
 ## Atomic lifecycle boundary amendment (2026-08-27)
 
