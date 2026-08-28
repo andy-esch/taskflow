@@ -44,6 +44,10 @@ Provide an explicit recovery capability for graph-owned frontmatter that is alre
 - A generic `--force` escape hatch for arbitrary graph writes.
 - Rewriting lifecycle status or Thread membership as part of dependency repair.
 
+## Sequencing
+
+This is a parallel recovery-hardening task, not a prerequisite for dependency eligibility or the first Thread entity slice. Promote it immediately if dogfooding encounters broken graph-owned state that the normal guarded operations cannot repair. Otherwise reassess it before bulk linking, when wider graph use and longer apply plans make an explicit recovery path more valuable.
+
 ## Related
 
 - Epic [30-threads-and-task-dependency-graphs](../epics/30-threads-and-task-dependency-graphs.md)
