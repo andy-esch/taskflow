@@ -803,6 +803,33 @@ following clarifications govern the first production dependency commands:
    details, subject to the reflected schema and human/JSON parity gates, rather than being frozen in
    this ADR.
 
+### 2026-08-28: Guarded dependency-operation implementation consequences
+
+Shipping the first production dependency commands validated the graph model and planner boundary,
+but also made the next lifecycle slice's persistence obligations concrete:
+
+1. **Eligibility is a guarded lifecycle write, not a preflight query.** The store holds the
+   canonical-root guard across authoritative graph loading, pure core authorization/impact planning,
+   and persistence. Ordinary `Move` after a separate eligibility read is invalid because a
+   prerequisite lifecycle or dependency mutation could commit between authorization and write.
+2. **Every creation and editing path has an explicit lifecycle contract.** `task new --start`
+   authorizes and creates the in-progress record in one guarded operation rather than composing
+   create and move. The interactive portion of `task edit` stays outside the repository guard, but
+   its ordinary writer may not persist a status delta. Before implementation, the product must
+   choose either to reject edited status changes in favor of lifecycle verbs or to delegate the
+   accepted candidate to the complete guarded lifecycle policy with exact-source CAS.
+3. **Lifecycle impact lands before Thread impact.** The eligibility slice owns deterministic
+   before/after task gate state and descendant task receipts. The later Thread slice augments those
+   receipts with affected Thread IDs after Thread documents exist; future data is not an eligibility
+   completion dependency.
+4. **Thread persistence follows the lifecycle seam.** Although pure graph derivations remain
+   independently testable, Thread mutations implement after eligibility settles the first
+   non-dependency reuse of the guard and lock-free materialization primitives. A readiness checkpoint
+   then decides whether the broad Thread slice remains coherent or should split.
+5. **Broken-graph repair remains parallel recovery hardening.** It does not block eligibility or the
+   first Thread entity. Dogfooding may promote it when an actual broken repository prevents guarded
+   work; otherwise reconsider it before bulk linking expands graph use.
+
 ## Related
 
 - Supersedes: [0002-adopt-projects](0002-adopt-projects.md).

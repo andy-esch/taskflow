@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [threads, graph, cli, workflow]
 created: "2026-08-25"
-updated_at: "2026-08-27"
+updated_at: "2026-08-28"
 depends_on: [6g3q4rtmv4ak]
 ---
 # Bulk-link existing tasks into Threads with resumable apply
@@ -55,4 +55,10 @@ Requires production dependency mutations and Thread persistence. Use the first r
 
 Before releasing bulk apply, benchmark the real guarded path at representative planning-space and manifest sizes. The current pure prefix validator rebuilds the full graph for every task-file write (O(W × (V+E))) while holding the exclusive repository guard; the adversarial audit measured roughly 442 ms for 1,000 tasks × 300 writes. Keep the simple validator for direct dependency operations, but require an explicit latency budget and move to incremental prefix validation if bulk-scale lock time is material. Include contention and raw-editor-CAS-window observations in the benchmark.
 
-## Compound mutation amendment (2026-08-27)\n\nApply is one dedicated compound capability, not orchestration across task depend and Thread commands. It takes the canonical-root guard once, reloads planning-space identity, the strict task graph, and relevant Thread state, validates the materialized intent, then invokes lock-free internal materializers. Nesting narrower guarded ports would fail callback exclusion and would not provide one authoritative plan.\n\nFor existing-task V1, dependency additions land in the plan's deterministic prefix-safe order and the Thread document lands last. A failure or raw-edit conflict returns the exact durable operation prefix; retry rebuilds current intent and converges without treating unrelated edits between invocations as stale frozen-plan versions. All real semantic writes use the caller clock and idempotent skips remain byte-identical.\n\nThe existing performance gate remains an exit criterion for this compound path, including lock-held validation time, callback-contention behavior, and the immediate per-target CAS window.
+## Compound mutation amendment (2026-08-27)
+
+Apply is one dedicated compound capability, not orchestration across task depend and Thread commands. It takes the canonical-root guard once, reloads planning-space identity, the strict task graph, and relevant Thread state, validates the materialized intent, then invokes lock-free internal materializers. Nesting narrower guarded ports would fail callback exclusion and would not provide one authoritative plan.
+
+For existing-task V1, dependency additions land in the plan's deterministic prefix-safe order and the Thread document lands last. A failure or raw-edit conflict returns the exact durable operation prefix; retry rebuilds current intent and converges without treating unrelated edits between invocations as stale frozen-plan versions. All real semantic writes use the caller clock and idempotent skips remain byte-identical.
+
+The existing performance gate remains an exit criterion for this compound path, including lock-held validation time, callback-contention behavior, and the immediate per-target CAS window.

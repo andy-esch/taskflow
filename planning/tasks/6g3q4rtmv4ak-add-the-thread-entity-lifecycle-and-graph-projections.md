@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [threads, domain, storage, cli]
 created: "2026-08-25"
-updated_at: "2026-08-27"
+updated_at: "2026-08-28"
 depends_on: [6g3q4rte8kc1]
 ---
 # Add the Thread entity, lifecycle, and graph projections
@@ -51,6 +51,16 @@ Introduce Threads as first-class initiative documents whose membership and lifec
 
 ## Sequencing
 
-Requires the strict graph derivation and portable guarded writes, but not lifecycle enforcement. Bulk linking waits for this persistence contract and dependency operations.
+Requires completed dependency eligibility enforcement so this task can extend the settled guarded lifecycle-write and materialization seam to a second entity kind. Bulk linking waits for this persistence contract and dependency operations.
 
-## Guarded Thread mutation amendment (2026-08-27)\n\nDiagnostic Thread projections may degrade explicitly, but every authoritative Thread mutation loads the required task graph and current Thread state inside one canonical-root repository guard. Creation and membership validate task existence and cross-kind identity there; start and complete validate membership, external gates, and sound completion there; the matching Thread write lands before release.\n\nExpose use-case-specific Thread mutation ports backed by private store guard/materialization helpers. Keep a lock-free internal Thread document materializer so bulk apply can compose task dependency writes and the final Thread write under one outer guard. Calling MutateTaskGraph from a Thread planner, or calling a guarded Thread method from a graph planner, is forbidden and will correctly fail callback exclusion.\n\nImplement after the eligibility task establishes the first non-dependency guarded-write pattern. Bulk linking waits for this Thread persistence/materialization contract as well as dependency operations.
+## Readiness checkpoint
+
+Review and re-estimate this task after eligibility ships against the actual reusable guard, planner, materialization, and receipt seams. Keep it as one vertical slice if Thread persistence, membership, lifecycle, and projections can land coherently within the estimate. Otherwise split persistence/read projections from guarded membership/lifecycle mutations before implementation; do not invent that split before the lifecycle seam exists.
+
+## Guarded Thread mutation amendment (2026-08-27)
+
+Diagnostic Thread projections may degrade explicitly, but every authoritative Thread mutation loads the required task graph and current Thread state inside one canonical-root repository guard. Creation and membership validate task existence and cross-kind identity there; start and complete validate membership, external gates, and sound completion there; the matching Thread write lands before release.
+
+Expose use-case-specific Thread mutation ports backed by private store guard/materialization helpers. Keep a lock-free internal Thread document materializer so bulk apply can compose task dependency writes and the final Thread write under one outer guard. Calling MutateTaskGraph from a Thread planner, or calling a guarded Thread method from a graph planner, is forbidden and will correctly fail callback exclusion.
+
+Implement after the eligibility task establishes the first non-dependency guarded-write pattern. Bulk linking waits for this Thread persistence/materialization contract as well as dependency operations.
