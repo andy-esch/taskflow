@@ -14,10 +14,11 @@ import (
 // It has no fs and no cobra, so it is testable in isolation and reused by both
 // primary adapters (the cli and the tui).
 type Service struct {
-	store     Store
-	templates TemplateSource
-	now       func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
-	newID     func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
+	store          Store
+	graphMutations TaskGraphMutationStore
+	templates      TemplateSource
+	now            func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
+	newID          func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
 	// newIDAt mints an id stamped with a GIVEN time (default id.NewAt) — for an entity
 	// whose id must encode its own declared date rather than "now", so lexical id order
 	// stays authorship order. Research uses it (its id is minted from `created`, which
@@ -72,10 +73,25 @@ func WithIDGen(gen func() string) Option {
 	}
 }
 
+// WithTaskGraphMutationStore supplies the use-case-specific guarded dependency
+// mutation capability. NewService discovers it automatically when the ordinary
+// Store also implements the capability (the production FS does); the option is
+// primarily for adapters/tests that keep read and mutation ports separate.
+func WithTaskGraphMutationStore(store TaskGraphMutationStore) Option {
+	return func(s *Service) {
+		if store != nil {
+			s.graphMutations = store
+		}
+	}
+}
+
 // NewService wires the core to its store; templates default to the built-in
 // source unless WithTemplateSource overrides it.
 func NewService(store Store, opts ...Option) *Service {
 	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New, newIDAt: id.NewAt, maxRetries: defaultMaxRetries, retrySleep: defaultRetrySleep}
+	if mutations, ok := store.(TaskGraphMutationStore); ok {
+		s.graphMutations = mutations
+	}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -380,10 +396,13 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 				parts = append(parts, fmt.Sprintf("%q is ambiguous across %s", ref.Value, strings.Join(ref.CandidateIDs, ", ")))
 			}
 		}
+		message := strings.Join(parts, "; ")
+		if message == "" {
+			message = "field is present but empty"
+		}
 		out[diagnostic.TaskPath] = append(out[diagnostic.TaskPath], domain.Issue{
 			Field: diagnostic.Field, Severity: severity,
-			Message: fmt.Sprintf("legacy dependency field: %s; canonical migration is intentionally deferred to guarded dependency operations",
-				strings.Join(parts, "; ")),
+			Message: fmt.Sprintf("legacy dependency field: %s; run `tskflwctl task depend migrate`", message),
 		})
 	}
 	for _, taskID := range graph.TaskIDs() {

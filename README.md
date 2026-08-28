@@ -102,9 +102,12 @@ tskflwctl research new "Storage options" --created 2026-06-24  # backdate: the i
 # read
 tskflwctl task list                    # active tasks (--all / --status / --epic / --tag)
 tskflwctl task list --revisit-due      # deferred tasks whose snooze date has arrived
+tskflwctl task list --unblocked        # active tasks whose derived dependency gate is clear
 tskflwctl task show <slug>             # metadata + body (--section <name> / --frontmatter-only to narrow)
 tskflwctl task info <slug> --json      # token-cheap metadata: path, status, epic, ac:{checked,total} (no body)
 tskflwctl task path <slug>             # just the absolute file path — $EDITOR "$(tskflwctl task path <slug>)"
+tskflwctl task blockers <slug>         # actionable blocker frontier (--causal for the full closure)
+tskflwctl task unblocks <slug>         # all transitive downstream tasks and their current graph state
 tskflwctl epic list                    # rollup: done/total per epic
 tskflwctl epic show <id> --section goal # epic body section (or --frontmatter-only); epic path <id> for the file
 tskflwctl audit list                   # open audits (--all / --closed / --deferred)
@@ -130,6 +133,9 @@ tskflwctl task ac <slug>                            # numbered acceptance criter
 tskflwctl task ac <slug> --tracked 3 --reason "carried by <id>"  # …or --defer/--wontfix/--na: why it is unmet, not just that it is
 tskflwctl task start|next|ready|complete|defer|deprecate <slug>...   # defer takes --until <date>
 tskflwctl task defer <slug> --until 2026-09-01      # snooze (revisit_at); on a TTY, prompts for the date
+tskflwctl task depend add <slug> --on <prerequisite>...     # guarded repository-global edge add
+tskflwctl task depend remove <slug> --on <prerequisite>...  # idempotent guarded edge removal
+tskflwctl task depend migrate                            # convert safe legacy dependency fields repo-wide
 tskflwctl audit finding <slug> <code> --status "tracked by <id>" --note "how"  # status + resolution, one atomic write
 tskflwctl audit close|reopen|defer <slug>...
 tskflwctl research set <slug> --description "…" --tags a,b   # settable fields only; `schema research` lists them
@@ -240,15 +246,21 @@ field in place and stamp the dates atomically — no file moves (`lint --fix`
 re-normalizes a hand-edited drift). Errors carry semantic exit codes — `10`
 not-found, `11` validation, `13` ambiguous, `14` conflict (e.g. a name already taken).
 
-**Task-dependency read foundation.** Task frontmatter and JSON may carry `depends_on`,
-a sorted set of stable task IDs representing repository-global prerequisites. This
-release reads, validates, and explains that graph but intentionally exposes no public
-dependency mutation command yet. Generic task creation, `task set` (even `--force`),
-`task edit`, and `lint --fix` cannot add, remove, or reinterpret dependency fields;
-guarded `task depend add/remove` operations are the next slice. Ordinary `lint` reports
-all graph defects. Exactly resolved legacy `blocked_by`/`dependencies`/`blocks` values
-are visible JSON/human advisories with exit zero, while missing, ambiguous, cyclic, or
-self-referential legacy projections remain validation errors. See
+**Task-dependency graph.** Task frontmatter and JSON may carry `depends_on`, a sorted
+set of stable task IDs representing repository-global prerequisites. Guarded
+`task depend add/remove` operations resolve references inside one authoritative
+repository snapshot, reject broken or cyclic results, support authoritative dry runs,
+and emit structured receipts. `task depend migrate` converts safe legacy
+`blocked_by`/`dependencies`/`blocks` fields repository-wide and can resume after a
+reported sound durable prefix; it also removes explicitly empty legacy keys. Resolved
+legacy edges already participate in blocker/downstream reads and derived gates, while
+health remains degraded until migration makes them canonical. Generic task creation, `task set` (even `--force`),
+`task edit`, and `lint --fix` cannot add, remove, or reinterpret graph-owned fields.
+Use `task blockers`, `task unblocks`, and `task list --unblocked` for explanatory and
+dispatch-oriented reads; mutations and the eligibility selector fail closed on an
+unsound graph, while diagnostic queries report the queried task's derived state, health,
+and attributable problems.
+Ordinary `lint` reports every graph defect. See
 [`ADR-0006`](./planning/adrs/0006-adopt-threads-as-task-dags.md) for the model and rollout.
 
 **Research** is the thinnest kind, and the omissions are the point: no status and

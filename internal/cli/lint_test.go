@@ -90,7 +90,7 @@ func TestLintReportsLegacyAndCanonicalDependencyDefects(t *testing.T) {
 		t.Fatalf("dependency defects must fail ordinary lint with exit 11, got %v", err)
 	}
 	for _, want := range []string{
-		"legacy dependency field", targetID, "guarded dependency operations",
+		"legacy dependency field", targetID, "tskflwctl task depend migrate",
 		"cannot depend on itself", "advisory finding",
 	} {
 		if !strings.Contains(out, want) {

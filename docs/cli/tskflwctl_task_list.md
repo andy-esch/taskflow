@@ -12,6 +12,7 @@ tskflwctl task list [flags]
   tskflwctl task list
   tskflwctl task list -q --tag tui | xargs tskflwctl task start
   tskflwctl task list -o table -c slug,status,epic
+  tskflwctl task list --unblocked --json
   tskflwctl task list --revisit-due -q | xargs tskflwctl task next   # resume snoozed tasks now due
 ```
 
@@ -27,6 +28,7 @@ tskflwctl task list [flags]
       --revisit-due       only deferred tasks whose revisit date has arrived (composes with --epic/--tag/-c)
       --status string     filter by status
       --tag string        filter by tag
+      --unblocked         only tasks whose derived dependency state is eligible
 ```
 
 ### Options inherited from parent commands

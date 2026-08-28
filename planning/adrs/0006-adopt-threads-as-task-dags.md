@@ -766,6 +766,43 @@ contention, and platform contracts. The following clarifications supersede confl
    simple. Before the bulk-linking slice is released, benchmark realistic repository/manifest sizes
    and replace it with incremental validation if lock-held latency is operationally significant.
 
+### 2026-08-27: Dependency-operation command and recovery contracts
+
+The focused [dependency-operations readiness audit](../audits/6g4aj7v60syg-2026-08-27-ship-guarded-dependency-mutations-and-graph-queries.md)
+found that the guarded substrate was ready but several product contracts remained implicit. The
+following clarifications govern the first production dependency commands:
+
+1. **User references resolve inside the authoritative snapshot.** Dependency planners translate
+   each task operand to a stable ID from the immutable `TaskGraph`; they never pre-resolve through
+   the Store and carry a potentially stale choice into the guard. Resolution preserves Taskflow's
+   ordinary task-reference tiers—exact ID or slug, then unique case-insensitive prefix, then unique
+   case-insensitive substring—and returns typed missing or ambiguous errors. The matching policy is
+   shared or parity-tested so guarded and ordinary commands cannot drift.
+2. **Legacy migration is an explicit, repository-wide convergence command.** `task depend migrate`
+   resolves every safe legacy occurrence and inherits the global `--dry-run` and `--json` modes. V1
+   has no per-task selector. It rejects an unsafe source before writing and emits a deterministic,
+   prefix-safe plan. The repository guard serializes the operation, but multiple file replacements
+   are not one rollback transaction: an attributable sound prefix may remain after failure, and the
+   same command must resume idempotently from that state.
+3. **Public query meanings are narrow and named.** `task blockers` defaults to the actionable
+   frontier and `--causal` requests the full forensic closure. `task unblocks` reports all transitive
+   downstream dependents plus their current derived state; it does not claim that satisfying the
+   source alone makes every result eligible. `task list --unblocked` is the first dispatch-oriented
+   selector and returns no work with an explicit diagnosis on an unsound relevant graph. There is no
+   repository-global `task plan` command in this slice; topological waves become public through the
+   later Thread plan projection.
+4. **Receipts distinguish convergence from success.** Edge receipts identify canonical endpoint
+   IDs and applied versus idempotently skipped operations. Migration receipts expose planned,
+   applied, skipped, and remaining work. A failure after a durable prefix carries that prefix in
+   typed human and JSON diagnostics rather than collapsing it into a prose-only error. Diagnostic
+   query envelopes include graph health and taskflow-owned problems, and all machine results carry
+   planning-workspace identity where mutation receipts already require it.
+5. **Generic editing remains intentionally narrow.** `task edit` continues to reject canonical or
+   legacy dependency deltas and directs the user to `task depend add/remove`; V1 does not reinterpret
+   an arbitrary editor-produced graph delta. Query and receipt DTO names remain implementation
+   details, subject to the reflected schema and human/JSON parity gates, rather than being frozen in
+   this ADR.
+
 ## Related
 
 - Supersedes: [0002-adopt-projects](0002-adopt-projects.md).

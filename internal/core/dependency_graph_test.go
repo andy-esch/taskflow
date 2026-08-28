@@ -164,10 +164,36 @@ func TestTaskGraphLegacyResolutionHealthAndDirection(t *testing.T) {
 			}
 		}
 	}
-	// Degraded means canonical queries remain explanatory, but dispatch does not
-	// claim eligible work while the legacy constraint is still hidden from the DAG.
+	// Resolved legacy constraints are projected into explanatory reads and derived
+	// gates even though dispatch still fails closed until migration makes them
+	// canonical.
 	if state := graph.State(dependent.ID); state.Gate != GateClear || state.Eligible {
 		t.Fatalf("degraded candidate state = %+v", state)
+	}
+	prerequisite.Status = domain.StatusReadyToStart
+	blocked := NewTaskGraph([]domain.Task{dependent, prerequisite}, nil)
+	if state := blocked.State(dependent.ID); state.Gate != GateBlocked || state.Eligible {
+		t.Fatalf("degraded blocked state = %+v", state)
+	}
+	if blockers := blocked.CausalBlockers(dependent.ID); len(blockers) != 1 || blockers[0].TaskID != prerequisite.ID {
+		t.Fatalf("legacy blocker projection = %+v", blockers)
+	}
+	if impacts := blocked.DownstreamImpact(prerequisite.ID); len(impacts) != 1 || impacts[0].TaskID != dependent.ID {
+		t.Fatalf("legacy downstream projection = %+v", impacts)
+	}
+}
+
+func TestTaskGraphDiagnosesPresentEmptyLegacyFields(t *testing.T) {
+	task := graphRecord("empty-legacy", domain.StatusReadyToStart)
+	task.LegacyDependencyFields = []string{"blocked_by", "dependencies", "blocks"}
+	graph := NewTaskGraph([]domain.Task{task}, nil)
+	if graph.Health() != GraphDegraded || len(graph.LegacyDiagnostics()) != 3 {
+		t.Fatalf("empty legacy health=%s diagnostics=%+v", graph.Health(), graph.LegacyDiagnostics())
+	}
+	for _, diagnostic := range graph.LegacyDiagnostics() {
+		if len(diagnostic.References) != 0 {
+			t.Fatalf("empty %s references = %+v", diagnostic.Field, diagnostic.References)
+		}
 	}
 }
 
@@ -222,6 +248,91 @@ func TestTaskGraphTopologicalWavesAndDownstream(t *testing.T) {
 	}
 }
 
+func TestTaskGraphResolveTaskIDMatchesRepositoryReferenceTiers(t *testing.T) {
+	polish := graphRecord("polish", domain.StatusReadyToStart)
+	batch := graphRecord("polish-batch", domain.StatusReadyToStart)
+	backoff := graphRecord("add-retry-backoff", domain.StatusReadyToStart)
+	jitter := graphRecord("add-retry-jitter", domain.StatusReadyToStart)
+	unreadableID := testutil.TaskID("unreadable")
+	graph := NewTaskGraph(
+		[]domain.Task{jitter, batch, backoff, polish},
+		[]domain.FileProblem{{Path: "tasks/" + unreadableID + "-unreadable.md", Message: "bad YAML"}},
+	)
+
+	tests := []struct {
+		query string
+		want  string
+	}{
+		{query: "polish", want: polish.ID},        // exact beats a longer prefix
+		{query: "POLISH-B", want: batch.ID},       // unique prefix, case-insensitive
+		{query: "JITTER", want: jitter.ID},        // unique substring, case-insensitive
+		{query: backoff.ID[:7], want: backoff.ID}, // stable-ID prefix
+		{query: unreadableID, want: unreadableID}, // exact diagnostic addressability
+		{query: "UNREAD", want: unreadableID},     // filename slug parity despite unreadable YAML
+	}
+	for _, tc := range tests {
+		got, err := graph.ResolveTaskID(tc.query)
+		if err != nil || got != tc.want {
+			t.Errorf("ResolveTaskID(%q) = %q, %v; want %q", tc.query, got, err, tc.want)
+		}
+	}
+
+	if _, err := graph.ResolveTaskID("add-retry"); !errors.Is(err, domain.ErrAmbiguous) ||
+		!strings.Contains(err.Error(), backoff.ID) || !strings.Contains(err.Error(), jitter.ID) {
+		t.Fatalf("ambiguous resolution should be classified and list canonical IDs: %v", err)
+	}
+	if _, err := graph.ResolveTaskID("does-not-exist"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("missing resolution = %v, want ErrNotFound", err)
+	}
+	for _, query := range []string{"", "../escape", `a\b`, "a/b", ".."} {
+		if _, err := graph.ResolveTaskID(query); !errors.Is(err, domain.ErrValidation) {
+			t.Errorf("unsafe query %q = %v, want ErrValidation", query, err)
+		}
+	}
+
+	duplicateA := graphRecord("duplicate-one", domain.StatusReadyToStart)
+	duplicateB := graphRecord("duplicate-two", domain.StatusReadyToStart)
+	duplicateB.ID, duplicateB.FilenameID = duplicateA.ID, duplicateA.ID
+	duplicateGraph := NewTaskGraph([]domain.Task{duplicateA, duplicateB}, nil)
+	if _, err := duplicateGraph.ResolveTaskID(duplicateA.ID); !errors.Is(err, domain.ErrAmbiguous) ||
+		!strings.Contains(err.Error(), duplicateA.Slug) || !strings.Contains(err.Error(), duplicateB.Slug) {
+		t.Fatalf("duplicate-id resolution = %v, want both source candidates and ErrAmbiguous", err)
+	}
+}
+
+func TestTaskGraphDownstreamImpactUsesDeterministicShortestPaths(t *testing.T) {
+	root := graphRecord("impact-root", domain.StatusCompleted)
+	left := graphRecord("impact-left", domain.StatusCompleted, root.ID)
+	right := graphRecord("impact-right", domain.StatusCompleted, root.ID)
+	join := graphRecord("impact-join", domain.StatusReadyToStart, right.ID, left.ID)
+	graph := NewTaskGraph([]domain.Task{join, right, left, root}, nil)
+
+	got := graph.DownstreamImpact(root.ID)
+	byID := make(map[string]DependentImpact, len(got))
+	for _, impact := range got {
+		byID[impact.TaskID] = impact
+	}
+	if !byID[left.ID].Direct || !byID[right.ID].Direct {
+		t.Fatalf("immediate downstream tasks were not marked direct: %+v", got)
+	}
+	first := left.ID
+	if right.ID < left.ID {
+		first = right.ID
+	}
+	wantPath := []string{root.ID, first, join.ID}
+	if impact := byID[join.ID]; impact.Direct || !reflect.DeepEqual(impact.Path, wantPath) {
+		t.Fatalf("join impact = %+v, want shortest path %v", impact, wantPath)
+	}
+
+	// Cached paths remain immutable to callers.
+	byID[join.ID].Path[0] = "corrupt"
+	for _, impact := range graph.DownstreamImpact(root.ID) {
+		if impact.TaskID == join.ID && impact.Path[0] != root.ID {
+			t.Fatalf("downstream impact cache leaked mutable path: %+v", impact)
+		}
+	}
+}
+
 func TestAnalyzeDAGDeepWideAndDisconnected(t *testing.T) {
 	const depth = 2048
 	nodes := make([]string, 0, depth+129)
@@ -248,6 +359,88 @@ func TestAnalyzeDAGDeepWideAndDisconnected(t *testing.T) {
 	}
 }
 
+func TestTaskGraphSupportedDeepChainEnvelope(t *testing.T) {
+	// 4,096 edges is deliberately far beyond a plausible markdown planning repo
+	// while still cheap enough for every CI run. Unlike TestAnalyzeDAGDeep..., this
+	// exercises the complete snapshot, recursive sound derivation, and explanatory
+	// path materialization rather than only the structural analyzer.
+	const edges = 4096
+	tasks := make([]domain.Task, 0, edges+1)
+	for i := 0; i <= edges; i++ {
+		taskID := fmt.Sprintf("%012d", i)
+		status := domain.StatusCompleted
+		if i == 0 || i == edges {
+			status = domain.StatusReadyToStart
+		}
+		task := domain.Task{
+			ID: taskID, FilenameID: taskID, Slug: fmt.Sprintf("deep-%04d", i),
+			Path: "tasks/" + taskID + "-deep.md", Status: status,
+		}
+		if i < edges {
+			task.DependsOn = []string{fmt.Sprintf("%012d", i+1)}
+		}
+		tasks = append(tasks, task)
+	}
+	graph := NewTaskGraph(tasks, nil)
+	if graph.Health() != GraphHealthy {
+		t.Fatalf("deep graph health = %s", graph.Health())
+	}
+	state := graph.State("000000000000")
+	if state.Gate != GateBlocked || state.Eligible {
+		t.Fatalf("deep root state = %+v", state)
+	}
+	frontier := graph.BlockingFrontier("000000000000")
+	if len(frontier) != 1 || frontier[0].TaskID != fmt.Sprintf("%012d", edges) || len(frontier[0].Path) != edges+1 {
+		t.Fatalf("deep frontier count=%d blocker=%+v", len(frontier), frontier)
+	}
+}
+
+func TestTaskGraphPathProjectionOutputEnvelope(t *testing.T) {
+	// Full explanatory paths amplify a linear chain quadratically. Keep that cost
+	// explicit at a large-but-CI-safe depth; the supported 4,096-edge structural and
+	// frontier envelope remains covered separately above.
+	const edges = 512
+	tasks := make([]domain.Task, 0, edges+1)
+	for i := 0; i <= edges; i++ {
+		taskID := fmt.Sprintf("%012d", i)
+		status := domain.StatusCompleted
+		if i == edges {
+			status = domain.StatusReadyToStart
+		}
+		task := domain.Task{ID: taskID, FilenameID: taskID, Slug: fmt.Sprintf("path-%04d", i), Status: status}
+		if i < edges {
+			task.DependsOn = []string{fmt.Sprintf("%012d", i+1)}
+		}
+		tasks = append(tasks, task)
+	}
+	graph := NewTaskGraph(tasks, nil)
+	wantPathElements := edges * (edges + 3) / 2 // lengths 2..edges+1
+	causal := graph.CausalBlockers("000000000000")
+	if len(causal) != edges || totalBlockerPathElements(causal) != wantPathElements {
+		t.Fatalf("causal count=%d path-elements=%d, want %d/%d", len(causal), totalBlockerPathElements(causal), edges, wantPathElements)
+	}
+	impacts := graph.DownstreamImpact(fmt.Sprintf("%012d", edges))
+	if len(impacts) != edges || totalImpactPathElements(impacts) != wantPathElements {
+		t.Fatalf("impact count=%d path-elements=%d, want %d/%d", len(impacts), totalImpactPathElements(impacts), edges, wantPathElements)
+	}
+}
+
+func totalBlockerPathElements(blockers []Blocker) int {
+	total := 0
+	for _, blocker := range blockers {
+		total += len(blocker.Path)
+	}
+	return total
+}
+
+func totalImpactPathElements(impacts []DependentImpact) int {
+	total := 0
+	for _, impact := range impacts {
+		total += len(impact.Path)
+	}
+	return total
+}
+
 func TestTaskGraphCycleBlockerReason(t *testing.T) {
 	a := graphRecord("cycle-a", domain.StatusCompleted)
 	b := graphRecord("cycle-b", domain.StatusCompleted, a.ID)
@@ -265,6 +458,11 @@ func TestTaskGraphCycleBlockerReason(t *testing.T) {
 	for _, blocker := range blockers {
 		if blocker.Reason != BlockerCycle {
 			t.Fatalf("cycle blocker = %+v", blocker)
+		}
+	}
+	for _, impact := range graph.DownstreamImpact(a.ID) {
+		if impact.TaskID == a.ID {
+			t.Fatalf("cyclic downstream query reported its source as its own impact: %+v", impact)
 		}
 	}
 }
@@ -508,6 +706,17 @@ func TestValidateTaskGraphMutationPlanPreservesSemanticWriteOrder(t *testing.T) 
 	}}
 	if _, err := ValidateTaskGraphMutationPlan(graph, unsafe); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("unsafe planner order error = %v", err)
+	}
+}
+
+func TestValidateTaskGraphMutationSourceNamesManualRepairPath(t *testing.T) {
+	task := graphRecord("manual-repair", domain.StatusReadyToStart, "not-a-stable-id")
+	err := ValidateTaskGraphMutationSource(NewTaskGraph([]domain.Task{task}, nil))
+	if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), task.Path) ||
+		!strings.Contains(err.Error(), "field depends_on") ||
+		!strings.Contains(err.Error(), "repair the graph-owned frontmatter directly") ||
+		!strings.Contains(err.Error(), "tskflwctl lint") {
+		t.Fatalf("broken graph recovery guidance = %v", err)
 	}
 }
 

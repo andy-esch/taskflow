@@ -11,6 +11,7 @@ autonomy_level: 2
 tags: [threads, graph, lifecycle, cli]
 created: "2026-08-25"
 updated_at: "2026-08-27"
+depends_on: [6g3q4rt7mgjn]
 ---
 # Enforce dependency eligibility across every task start path
 
@@ -24,6 +25,7 @@ Make dependency eligibility one authoritative core policy for all transitions in
 - Route `task start`, generic move, create-and-start, accepted `task edit` status deltas, and reusable adapter/TUI entry points through the same guard.
 - Replace the ambiguous internal force boolean with typed gate overrides while retaining contextual CLI `--force` spelling.
 - Report descendant tasks whose derived gate state changes after a lifecycle transition; add affected Thread IDs when Thread persistence exists.
+- Define one reusable before/after graph-state impact shape and add post-plan state for directly affected dependents to guarded dependency mutation receipts, so a legal edge to a withdrawn or unfinished prerequisite cannot look consequence-free.
 
 ## Acceptance criteria
 
@@ -33,6 +35,7 @@ Make dependency eligibility one authoritative core policy for all transitions in
 - [ ] Reopening an upstream task makes completed descendants unsound without rewriting their persisted statuses.
 - [ ] Deferred and deprecated prerequisites follow ADR-0006 semantics consistently.
 - [ ] Lifecycle receipts report descendant task IDs/counts whose gate state changed and, after Thread support lands, affected Thread IDs with an explanatory remedy.
+- [ ] Dependency add/remove receipts report the resulting derived state of each directly affected dependent and human output calls out a newly blocked, broken, or inconsistent task.
 - [ ] Eligibility authorization and the persisted lifecycle transition occur
   under one repository guard over the same authoritative graph snapshot.
 - [ ] Lifecycle writes use a dedicated use-case-specific guarded capability

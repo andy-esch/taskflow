@@ -14,9 +14,9 @@ import (
 
 // GraphHealth describes whether one immutable repository task snapshot is safe
 // for graph-sensitive decisions. Degraded is intentionally distinct from broken:
-// every legacy reference resolves, but those constraints are not canonical edges
-// yet. Both degraded and broken snapshots fail closed for ordinary mutations and
-// dispatch-oriented selectors.
+// every legacy reference resolves and can be projected for diagnostic reads, but
+// those constraints are not canonical edges yet. Both degraded and broken
+// snapshots fail closed for ordinary mutations and dispatch-oriented selectors.
 type GraphHealth string
 
 const (
@@ -140,6 +140,14 @@ type Blocker struct {
 	Direct bool
 }
 
+// DependentImpact is one task reachable downstream from a queried task. Path
+// starts at the queried task and ends at TaskID; Direct is true for one edge.
+type DependentImpact struct {
+	TaskID string
+	Path   []string
+	Direct bool
+}
+
 type TaskGraphState struct {
 	TaskID           string
 	Role             LifecycleRole
@@ -236,29 +244,35 @@ type soundResult struct {
 	broken bool
 }
 
+type taskReferenceCandidate struct {
+	id   string
+	slug string
+}
+
 // TaskGraph is an immutable projection over one repository scan. Its internal
 // query caches are synchronized; callers always receive copies of slices/maps.
 type TaskGraph struct {
-	tasks         map[string]domain.Task
-	ids           []string
-	dependencies  map[string][]string
-	outgoing      map[string][]string
-	problems      []GraphProblem
-	legacy        []LegacyDependencyDiagnostic
-	health        GraphHealth
-	hardBroken    map[string]bool
-	unreadableIDs map[string]bool
-	cycleMembers  map[string]bool
-	sound         map[string]soundResult
-	states        map[string]TaskGraphState
-	waves         [][]string
-	wavesComplete bool
+	tasks               map[string]domain.Task
+	ids                 []string
+	dependencies        map[string][]string
+	outgoing            map[string][]string
+	problems            []GraphProblem
+	legacy              []LegacyDependencyDiagnostic
+	health              GraphHealth
+	hardBroken          map[string]bool
+	unreadableIDs       map[string]bool
+	referenceCandidates []taskReferenceCandidate
+	cycleMembers        map[string]bool
+	sound               map[string]soundResult
+	states              map[string]TaskGraphState
+	waves               [][]string
+	wavesComplete       bool
 
-	mu              sync.Mutex
-	causalCache     map[string][]Blocker
-	frontierCache   map[string][]Blocker
-	downstreamCache map[string][]string
-	soundVisits     map[string]int
+	mu            sync.Mutex
+	causalCache   map[string][]Blocker
+	frontierCache map[string][]Blocker
+	impactCache   map[string][]DependentImpact
+	soundVisits   map[string]int
 }
 
 // NewTaskGraph builds the production strict snapshot with the owned analyzer.
@@ -268,23 +282,24 @@ func NewTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGra
 
 func newTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGraph {
 	g := &TaskGraph{
-		tasks:           make(map[string]domain.Task, len(tasks)),
-		dependencies:    make(map[string][]string, len(tasks)),
-		outgoing:        make(map[string][]string, len(tasks)),
-		hardBroken:      make(map[string]bool),
-		unreadableIDs:   make(map[string]bool),
-		cycleMembers:    make(map[string]bool),
-		sound:           make(map[string]soundResult, len(tasks)),
-		states:          make(map[string]TaskGraphState, len(tasks)),
-		causalCache:     make(map[string][]Blocker),
-		frontierCache:   make(map[string][]Blocker),
-		downstreamCache: make(map[string][]string),
-		soundVisits:     make(map[string]int, len(tasks)),
+		tasks:         make(map[string]domain.Task, len(tasks)),
+		dependencies:  make(map[string][]string, len(tasks)),
+		outgoing:      make(map[string][]string, len(tasks)),
+		hardBroken:    make(map[string]bool),
+		unreadableIDs: make(map[string]bool),
+		cycleMembers:  make(map[string]bool),
+		sound:         make(map[string]soundResult, len(tasks)),
+		states:        make(map[string]TaskGraphState, len(tasks)),
+		causalCache:   make(map[string][]Blocker),
+		frontierCache: make(map[string][]Blocker),
+		impactCache:   make(map[string][]DependentImpact),
+		soundVisits:   make(map[string]int, len(tasks)),
 	}
 	for _, problem := range unreadable {
-		taskID := taskIDFromPath(problem.Path)
+		taskID, taskSlug := taskIdentityFromPath(problem.Path)
 		if taskID != "" {
 			g.unreadableIDs[taskID] = true
+			g.referenceCandidates = append(g.referenceCandidates, taskReferenceCandidate{id: taskID, slug: taskSlug})
 			g.hardBroken[taskID] = true
 		}
 		g.problems = append(g.problems, GraphProblem{
@@ -314,6 +329,9 @@ func newTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGra
 	}
 	for _, task := range ordered {
 		taskID := canonicalTaskID(task)
+		if taskID != "" {
+			g.referenceCandidates = append(g.referenceCandidates, taskReferenceCandidate{id: taskID, slug: task.Slug})
+		}
 		if strings.TrimSpace(task.ID) == "" {
 			g.addProblem(GraphProblem{Code: ProblemMissingTaskID, TaskID: taskID, Field: "id", Path: task.Path,
 				Message: "missing stable task id in frontmatter"})
@@ -396,12 +414,24 @@ func newTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGra
 			}
 		}
 	}
+	legacyDiagnostics, legacyEdges := g.resolveLegacyDiagnostics(ordered)
+	g.legacy = legacyDiagnostics
+	// Resolved legacy edges are semantically real constraints. Project them into
+	// explanatory reads and derived state as well as structural analysis so a
+	// degraded snapshot never reports a false all-clear before migration. The
+	// persisted/canonical source remains Task.DependsOn; unioning here is read-only.
+	for _, edge := range legacyEdges {
+		if taskExists(g.tasks, edge.From) && taskExists(g.tasks, edge.To) {
+			g.dependencies[edge.To] = append(g.dependencies[edge.To], edge.From)
+			g.outgoing[edge.From] = append(g.outgoing[edge.From], edge.To)
+		}
+	}
+	for taskID := range g.dependencies {
+		g.dependencies[taskID] = sortedUnique(g.dependencies[taskID])
+	}
 	for taskID := range g.outgoing {
 		g.outgoing[taskID] = sortedUnique(g.outgoing[taskID])
 	}
-
-	legacyDiagnostics, legacyEdges := g.resolveLegacyDiagnostics(ordered)
-	g.legacy = legacyDiagnostics
 	projectedEdges := append(append([]DependencyEdge(nil), canonicalEdges...), legacyEdges...)
 	structure := analyzeDAG(dagInput{Nodes: append([]string(nil), g.ids...), Edges: projectedEdges})
 	g.waves = cloneWaves(structure.TopologicalWaves)
@@ -466,16 +496,17 @@ func canonicalTaskID(task domain.Task) string {
 	return task.ID
 }
 
-func taskIDFromPath(path string) string {
+func taskIdentityFromPath(path string) (string, string) {
 	base := filepath.Base(path)
-	if len(base) <= id.Length || base[id.Length] != '-' {
-		return ""
+	stem := strings.TrimSuffix(base, ".md")
+	if len(stem) < id.Length+2 || stem[id.Length] != '-' {
+		return "", ""
 	}
-	candidate := base[:id.Length]
+	candidate := stem[:id.Length]
 	if !id.Valid(candidate) {
-		return ""
+		return "", ""
 	}
-	return candidate
+	return candidate, stem[id.Length+1:]
 }
 
 func cloneTask(task domain.Task) domain.Task {
@@ -484,6 +515,7 @@ func cloneTask(task domain.Task) domain.Task {
 	task.LegacyBlockedBy = append([]string(nil), task.LegacyBlockedBy...)
 	task.LegacyDependencies = append([]string(nil), task.LegacyDependencies...)
 	task.LegacyBlocks = append([]string(nil), task.LegacyBlocks...)
+	task.LegacyDependencyFields = append([]string(nil), task.LegacyDependencyFields...)
 	return task
 }
 
@@ -537,7 +569,7 @@ func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task) ([]LegacyDep
 		}
 		for _, field := range fields {
 			values := sortedUnique(field.values(task))
-			if len(values) == 0 {
+			if len(values) == 0 && !slices.Contains(task.LegacyDependencyFields, field.name) {
 				continue
 			}
 			diagnostic := LegacyDependencyDiagnostic{
@@ -731,6 +763,55 @@ func (g *TaskGraph) Task(taskID string) (domain.Task, bool) {
 	task = cloneTask(task)
 	task.SourceVersion = "" // persistence token is not planner/query data
 	return task, ok
+}
+
+// ResolveTaskID applies the ordinary task-reference tiers to this immutable
+// snapshot and returns the canonical stable ID. Keeping resolution on TaskGraph
+// lets guarded planners resolve user input without Store re-entry or a pre-lock
+// TOCTOU choice. Exact unreadable IDs remain addressable for diagnostic queries.
+func (g *TaskGraph) ResolveTaskID(ref string) (string, error) {
+	if ref == "" || strings.ContainsAny(ref, `/\`) || strings.Contains(ref, "..") {
+		return "", fmt.Errorf("%w: task name %q must be a plain name (no path separators)", domain.ErrValidation, ref)
+	}
+	candidates := append([]taskReferenceCandidate(nil), g.referenceCandidates...)
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].id != candidates[j].id {
+			return candidates[i].id < candidates[j].id
+		}
+		return candidates[i].slug < candidates[j].slug
+	})
+
+	query := strings.ToLower(ref)
+	tiers := []func(string) bool{
+		func(key string) bool { return key == ref || strings.ToLower(key) == query },
+		func(key string) bool { return strings.HasPrefix(strings.ToLower(key), query) },
+		func(key string) bool { return strings.Contains(strings.ToLower(key), query) },
+	}
+	for _, matches := range tiers {
+		hits := make([]taskReferenceCandidate, 0)
+		for _, item := range candidates {
+			if matches(item.id) || (item.slug != "" && matches(item.slug)) {
+				hits = append(hits, item)
+			}
+		}
+		switch len(hits) {
+		case 0:
+			continue
+		case 1:
+			return hits[0].id, nil
+		default:
+			details := make([]string, len(hits))
+			for i, hit := range hits {
+				if hit.slug == "" {
+					details[i] = hit.id
+				} else {
+					details[i] = fmt.Sprintf("%s (%s)", hit.slug, hit.id)
+				}
+			}
+			return "", fmt.Errorf("%q matches %d tasks: %s: %w", ref, len(hits), strings.Join(details, ", "), domain.ErrAmbiguous)
+		}
+	}
+	return "", fmt.Errorf("task %q: %w", ref, domain.ErrNotFound)
 }
 
 // SameSourceSnapshot reports whether two graphs came from the same exact task
@@ -950,12 +1031,25 @@ func (g *TaskGraph) ExplainGate(taskID string) GateExplanation {
 
 // Downstream returns all transitive dependents in stable ID order, memoized per task.
 func (g *TaskGraph) Downstream(taskID string) []string {
+	impacts := g.DownstreamImpact(taskID)
+	result := make([]string, len(impacts))
+	for i, impact := range impacts {
+		result[i] = impact.TaskID
+	}
+	return result
+}
+
+// DownstreamImpact returns every transitive dependent with one deterministic
+// shortest path. Stable outgoing adjacency plus BFS fixes tie-breaking; results
+// are emitted in stable task-ID order.
+func (g *TaskGraph) DownstreamImpact(taskID string) []DependentImpact {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if cached, ok := g.downstreamCache[taskID]; ok {
-		return append([]string(nil), cached...)
+	if cached, ok := g.impactCache[taskID]; ok {
+		return cloneDependentImpacts(cached)
 	}
-	seen := make(map[string]bool)
+	seen := map[string]bool{taskID: true}
+	parent := make(map[string]string)
 	queue := []string{taskID}
 	for len(queue) > 0 {
 		current := queue[0]
@@ -965,17 +1059,25 @@ func (g *TaskGraph) Downstream(taskID string) []string {
 				continue
 			}
 			seen[dependent] = true
+			parent[dependent] = current
 			queue = append(queue, dependent)
 		}
 	}
-	delete(seen, taskID)
-	result := make([]string, 0, len(seen))
+	ids := make([]string, 0, len(seen))
 	for dependent := range seen {
-		result = append(result, dependent)
+		if dependent == taskID {
+			continue
+		}
+		ids = append(ids, dependent)
 	}
-	sort.Strings(result)
-	g.downstreamCache[taskID] = result
-	return append([]string(nil), result...)
+	sort.Strings(ids)
+	result := make([]DependentImpact, 0, len(ids))
+	for _, dependent := range ids {
+		path := blockerPath(taskID, dependent, parent)
+		result = append(result, DependentImpact{TaskID: dependent, Path: path, Direct: len(path) == 2})
+	}
+	g.impactCache[taskID] = result
+	return cloneDependentImpacts(result)
 }
 
 func (g *TaskGraph) TopologicalWaves() ([][]string, bool) {
@@ -984,6 +1086,15 @@ func (g *TaskGraph) TopologicalWaves() ([][]string, bool) {
 
 func cloneBlockers(values []Blocker) []Blocker {
 	out := make([]Blocker, len(values))
+	copy(out, values)
+	for i := range out {
+		out[i].Path = append([]string(nil), out[i].Path...)
+	}
+	return out
+}
+
+func cloneDependentImpacts(values []DependentImpact) []DependentImpact {
+	out := make([]DependentImpact, len(values))
 	copy(out, values)
 	for i := range out {
 		out[i].Path = append([]string(nil), out[i].Path...)

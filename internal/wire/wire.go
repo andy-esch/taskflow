@@ -170,6 +170,13 @@ import (
 // point selected for reading, and a combined space-badged in-progress working set. The
 // envelope owns one top-level schema_version; nested summaries reuse the versionless
 // SummaryJSON payload rather than pretending to be independent envelopes.
+// 1.51: dependency blocker/downstream query envelopes carry the queried task's
+// derived state, so eligibility is explicit and never inferred from an empty list.
+// 1.50: guarded dependency operations add `dependency_mutation` receipts, structured
+// partial-failure details on the error envelope, and the `task_blockers` /
+// `task_unblocks` diagnostic envelopes. Graph queries carry health, taskflow-owned
+// problems, legacy diagnostics, stable reason/path data, and derived task state.
+//
 // 1.49: task payloads carry `depends_on`, the sorted stable IDs of repository-global
 // prerequisites declared by that task. Additive and omitted for tasks without edges.
 // The task field/schema contract also recognizes the persisted list while generic
@@ -208,7 +215,7 @@ import (
 // 1.43: fresh `init --json` receipts may include `registration`, describing the
 // best-effort machine-local space registration (including preview vs applied and whether
 // the physical checkout was already registered).
-const SchemaVersion = "1.49"
+const SchemaVersion = "1.51"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

@@ -418,6 +418,15 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 		if err := yaml.Unmarshal(fm, &t); err != nil {
 			return domain.Task{}, fmt.Errorf("%w: %s", errBadFrontmatter, frontmatterError(fm, err))
 		}
+		var fields map[string]yaml.Node
+		if err := yaml.Unmarshal(fm, &fields); err != nil {
+			return domain.Task{}, fmt.Errorf("%w: %s", errBadFrontmatter, frontmatterError(fm, err))
+		}
+		for _, field := range []string{"blocked_by", "dependencies", "blocks"} {
+			if _, present := fields[field]; present {
+				t.LegacyDependencyFields = append(t.LegacyDependencyFields, field)
+			}
+		}
 	}
 	// Status is authoritative in frontmatter (ADR-0003 §4). There is no directory to
 	// fall back to under the flat layout, but an id-led file with a missing/unrecognized

@@ -69,6 +69,9 @@ func newTaskCmd(app *App) *cobra.Command {
 		newTaskAppendCmd(app),
 		newTaskRenameCmd(app),
 		newTaskMoveCmd(app),
+		newTaskDependCmd(app),
+		newTaskBlockersCmd(app),
+		newTaskUnblocksCmd(app),
 	)
 	// Explicit transition verbs over the internal move engine (no enum to
 	// hallucinate; per-verb intent), built from the shared lifecycle registry so
@@ -196,7 +199,7 @@ func newTaskListCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List tasks (active by default)",
-		Example:     "  tskflwctl task list\n  tskflwctl task list -q --tag tui | xargs tskflwctl task start\n  tskflwctl task list -o table -c slug,status,epic\n  tskflwctl task list --revisit-due -q | xargs tskflwctl task next   # resume snoozed tasks now due",
+		Example:     "  tskflwctl task list\n  tskflwctl task list -q --tag tui | xargs tskflwctl task start\n  tskflwctl task list -o table -c slug,status,epic\n  tskflwctl task list --unblocked --json\n  tskflwctl task list --revisit-due -q | xargs tskflwctl task next   # resume snoozed tasks now due",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -221,6 +224,7 @@ func newTaskListCmd(app *App) *cobra.Command {
 	cmd.Flags().StringVar(&filter.Tag, "tag", "", "filter by tag")
 	cmd.Flags().BoolVar(&filter.All, "all", false, "include completed/deprecated/deferred")
 	cmd.Flags().BoolVar(&filter.RevisitDue, "revisit-due", false, "only deferred tasks whose revisit date has arrived (composes with --epic/--tag/-c)")
+	cmd.Flags().BoolVar(&filter.Unblocked, "unblocked", false, "only tasks whose derived dependency state is eligible")
 	_ = cmd.RegisterFlagCompletionFunc("status", completeStatusValues)
 	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
 	return cmd

@@ -9,10 +9,10 @@ priority: medium
 autonomy_level: 3
 tags: [cli, tui]
 created: "2026-06-25"
-updated_at: "2026-06-29"
-blocked_by: [theme-discovery-commands-glamour-polish-and-a-second-theme]
+updated_at: "2026-08-27"
 completed_at: "2026-06-29"
 id: 6ffr4wc01gtv
+depends_on: [6fgq1n00235z]
 ---
 # Color/design overhaul: one coherent palette across every surface
 

@@ -9,11 +9,11 @@ priority: medium
 autonomy_level: 3
 tags: [cli, tui, design]
 created: "2026-06-28"
-blocked_by: [route-tui-chrome-through-the-palette, route-progress-bars-and-the-cli-ansi-map-through-the-palette, route-the-interactive-picker-theme-through-the-palette]
-updated_at: "2026-06-29"
+updated_at: "2026-08-27"
 started_at: "2026-06-29"
 completed_at: "2026-06-29"
 id: 6fgq1n0006y3
+depends_on: [6fgq1n000pca, 6fgq1n0016kj, 6fgq1n003wty]
 ---
 ## Objective
 Let users select a theme via config/env/flag, and feed it to every routed surface.

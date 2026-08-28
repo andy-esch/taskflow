@@ -11,6 +11,7 @@ autonomy_level: 3
 tags: [threads, domain, storage, cli]
 created: "2026-08-25"
 updated_at: "2026-08-27"
+depends_on: [6g3q4rte8kc1]
 ---
 # Add the Thread entity, lifecycle, and graph projections
 
