@@ -9,7 +9,8 @@ tskflwctl task move <task>... <status> [flags]
 ### Options
 
 ```
-  -h, --help   help for move
+      --force   override the destination's contextual gate (dependencies for in-progress; acceptance criteria for completed)
+  -h, --help    help for move
 ```
 
 ### Options inherited from parent commands

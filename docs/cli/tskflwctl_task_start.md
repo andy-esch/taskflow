@@ -2,6 +2,14 @@
 
 Move task(s) to in-progress
 
+### Synopsis
+
+Move task(s) to in-progress.
+
+Refuses a task unless it is ready-to-start with a clear dependency gate. --force
+bypasses only that dependency gate; it does not bypass lifecycle role or repair
+the dependencies, and the receipt names every outstanding blocker.
+
 ```
 tskflwctl task start <task>... [flags]
 ```
@@ -16,7 +24,8 @@ tskflwctl task start <task>... [flags]
 ### Options
 
 ```
-  -h, --help   help for start
+      --force   start despite outstanding dependency blockers
+  -h, --help    help for start
 ```
 
 ### Options inherited from parent commands

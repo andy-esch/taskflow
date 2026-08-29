@@ -162,10 +162,11 @@ adapter capabilities rather than leaked persistence.
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
   `<root>/tasks/<id>-<slug>.md` (flat, id-led). Splits frontmatter with a zero-dep byte
-  scanner; parses YAML with `go.yaml.in/yaml/v3`. One `*FS` satisfies all four
-  interfaces (`var _ core.Store/Fixer/Linter/Layout = (*FS)(nil)`): the Service gets
-  the use-case `Store`; CLI lint and the TUI watcher get the narrow
-  `Fixer`/`Linter`/`Layout` wired directly. It owns the *layout* knowledge — `WatchPaths()`
+  scanner; parses YAML with `go.yaml.in/yaml/v3`. One `*FS` satisfies the entity
+  `Store`, the narrow `Fixer`/`Linter`/`Layout` ports, and the guarded graph and
+  lifecycle mutation capabilities. The Service gets the use-case ports; CLI lint and
+  the TUI watcher get their narrower capabilities wired directly. It owns the *layout*
+  knowledge — `WatchPaths()`
   hands the TUI watcher its dir set so the path convention isn't reconstructed
   outside the store. Task dependency fields are graph-owned: generic create/set/edit
   paths cannot introduce a semantic delta, and text-level lint repair skips a would-be
@@ -187,6 +188,18 @@ adapter capabilities rather than leaked persistence.
   Dependency writes stamp `updated_at` from the caller-injected clock only when graph-owned
   fields actually change. A dry run holds the same exclusive guard for an authoritative
   preview but, because it writes nothing, makes no CAS durability claim about later apply.
+  `TaskLifecycleMutationStore` is the lifecycle sibling over that same canonical-root
+  guard. It authorizes a typed transition against one strict graph snapshot, materializes
+  status and timestamps, verifies the whole snapshot plus the target version, and writes
+  before releasing the guard. `task start`, generic move, defer, the TUI, and guarded
+  create-and-start all enter through this capability. Dependency-gate and
+  acceptance-criteria overrides are distinct core values even though the CLI spells both
+  contextually as `--force`; generic set/edit paths cannot change status, and ordinary
+  creation accepts only non-start states. Lifecycle results distinguish a durable commit
+  from pre-commit failure. If repository-guard cleanup fails after the atomic replacement,
+  the Service returns a typed failure carrying the committed receipt, never auto-retries it
+  (including when cleanup wraps `ErrConflict`), and adapters tell the caller to inspect the
+  current task state. The TUI reloads on that outcome instead of leaving a stale view.
   Concurrency is **version-CAS** (epic 24): every write, just
   before committing, re-resolves the file by its **id** and re-hashes it
   against the content read at the start of the op (`verifyUnchanged` in `cas.go` — a
@@ -199,8 +212,8 @@ adapter capabilities rather than leaked persistence.
   *atomic* — without it two writers both pass their verify before either renames and the
   later silently clobbers the earlier. Raw editors do not honor the advisory lock; the
   immediate content check narrows but cannot eliminate their verify→rename race.
-  The token is **internal**: scriptable mutations auto-retry it in `core.Service` (bounded +
-  jittered, so agents don't reimplement the loop), the human `edit` surfaces the conflict
+  The token is **internal**: scriptable mutations auto-retry pre-commit conflicts in
+  `core.Service` (bounded + jittered, so agents don't reimplement the loop), the human `edit` surfaces the conflict
   (no retry, and the lock is held only for the write, never the editor session), and creates map
   the empty precondition onto `createFileAtomic`'s `O_EXCL`. Exposing it over HTTP
   (`If-Match`) is the web adapter's job (epic 19), not the FS store's.

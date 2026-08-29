@@ -126,12 +126,13 @@ tskflwctl ui                           # Bubble Tea browser; a / :atlas navigate
 
 # update + lifecycle
 tskflwctl task set <slug> --priority high --tags a,b
-tskflwctl task edit <slug>                          # open the whole file in $EDITOR (human; re-validated on save)
+tskflwctl task edit <slug>                          # content/frontmatter edit; status is preservation-only
 echo "## Findings" | tskflwctl task append <slug> --body-file -  # add a section (agent; atomic)
 tskflwctl task set <slug> --body-file notes.md      # replace the body (agent; its own call)
 tskflwctl task ac <slug>                            # numbered acceptance criteria; --check/--uncheck <n> to flip one
 tskflwctl task ac <slug> --tracked 3 --reason "carried by <id>"  # …or --defer/--wontfix/--na: why it is unmet, not just that it is
 tskflwctl task start|next|ready|complete|defer|deprecate <slug>...   # defer takes --until <date>
+tskflwctl task start <slug> --force                 # bypass dependency gate only; receipt retains blockers
 tskflwctl task defer <slug> --until 2026-09-01      # snooze (revisit_at); on a TTY, prompts for the date
 tskflwctl task depend add <slug> --on <prerequisite>...     # guarded repository-global edge add
 tskflwctl task depend remove <slug> --on <prerequisite>...  # idempotent guarded edge removal
@@ -145,6 +146,13 @@ tskflwctl research edit|append <slug>                        # same human/agent 
 tskflwctl lint                         # validate active task, epic, and research frontmatter
 tskflwctl lint --fix                   # auto-repair frontmatter (quote ':' values, normalize lists, backfill ids)
 ```
+
+Task lifecycle writes and dependency writes share the repository guard and fail
+closed unless the canonical task graph is healthy. Repair invalid graph-owned
+frontmatter through the file reported by `tskflwctl task path`, confirm it with
+`tskflwctl lint`, then return to the guarded verbs. A rare cleanup error after a
+lifecycle write is reported explicitly as committed with a task/workspace receipt;
+inspect the current task state instead of blindly retrying it.
 
 ### Multiple planning repos
 
@@ -257,9 +265,12 @@ legacy edges already participate in blocker/downstream reads and derived gates, 
 health remains degraded until migration makes them canonical. Generic task creation, `task set` (even `--force`),
 `task edit`, and `lint --fix` cannot add, remove, or reinterpret graph-owned fields.
 Use `task blockers`, `task unblocks`, and `task list --unblocked` for explanatory and
-dispatch-oriented reads; mutations and the eligibility selector fail closed on an
-unsound graph, while diagnostic queries report the queried task's derived state, health,
-and attributable problems.
+dispatch-oriented reads. Ordinary dependency and lifecycle writes share the repository
+guard and fail closed unless the canonical graph is healthy; the explicit legacy
+migration is the repair exception. Every first-party transition into `in-progress`
+enforces the same eligibility policy, while `task start --force` bypasses only the
+dependency gate and returns the outstanding blockers. Diagnostic queries report the
+queried task's derived state, health, and attributable problems.
 Ordinary `lint` reports every graph defect. See
 [`ADR-0006`](./planning/adrs/0006-adopt-threads-as-task-dags.md) for the model and rollout.
 
