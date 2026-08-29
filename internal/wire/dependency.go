@@ -181,12 +181,108 @@ type LegacyFieldClearJSON struct {
 	Field  string `json:"field"`
 }
 
+// TaskGraphStateImpactJSON is one before/after derived-state consequence of a
+// graph or lifecycle mutation.
+type TaskGraphStateImpactJSON struct {
+	TaskID string             `json:"task_id"`
+	Before TaskGraphStateJSON `json:"before"`
+	After  TaskGraphStateJSON `json:"after"`
+	Path   []string           `json:"path,omitempty"`
+	Direct bool               `json:"direct"`
+}
+
+func toTaskGraphStateImpactsJSON(impacts []core.TaskGraphStateImpact) []TaskGraphStateImpactJSON {
+	out := make([]TaskGraphStateImpactJSON, 0, len(impacts))
+	for _, impact := range impacts {
+		out = append(out, TaskGraphStateImpactJSON{
+			TaskID: impact.TaskID, Before: toTaskGraphStateJSON(impact.Before), After: toTaskGraphStateJSON(impact.After),
+			Path: append([]string(nil), impact.Path...), Direct: impact.Direct,
+		})
+	}
+	return out
+}
+
+// TaskLifecycleBlockerJSON is one blocker deliberately retained by a forced
+// transition receipt.
+type TaskLifecycleBlockerJSON struct {
+	TaskID string   `json:"task_id"`
+	Reason string   `json:"reason"`
+	Path   []string `json:"path"`
+	Direct bool     `json:"direct"`
+}
+
+// TaskLifecycleJSON is the task-specific detail nested into the shared move
+// envelope. Audit and epic transitions omit it.
+type TaskLifecycleJSON struct {
+	TaskID              string                     `json:"task_id"`
+	From                string                     `json:"from"`
+	Changed             bool                       `json:"changed"`
+	Committed           bool                       `json:"committed" jsonschema:"description=true only after the lifecycle write became durable"`
+	Forced              bool                       `json:"forced"`
+	Override            string                     `json:"override,omitempty"`
+	Before              TaskGraphStateJSON         `json:"before"`
+	After               TaskGraphStateJSON         `json:"after"`
+	OutstandingBlockers []TaskLifecycleBlockerJSON `json:"outstanding_blockers"`
+	ImpactCount         int                        `json:"impact_count"`
+	Impacts             []TaskGraphStateImpactJSON `json:"impacts"`
+	Remedy              string                     `json:"remedy,omitempty"`
+}
+
+func ToTaskLifecycleJSON(receipt core.TaskLifecycleReceipt) TaskLifecycleJSON {
+	payload := TaskLifecycleJSON{
+		TaskID: receipt.Task.ID, From: string(receipt.From), Changed: receipt.Changed,
+		Committed: receipt.Committed,
+		Forced:    receipt.Forced, Override: string(receipt.Override),
+		Before: toTaskGraphStateJSON(receipt.Before), After: toTaskGraphStateJSON(receipt.After),
+		OutstandingBlockers: make([]TaskLifecycleBlockerJSON, 0, len(receipt.OutstandingBlockers)),
+		ImpactCount:         len(receipt.Impacts),
+		Impacts:             toTaskGraphStateImpactsJSON(receipt.Impacts),
+		Remedy:              receipt.Remedy,
+	}
+	for _, blocker := range receipt.OutstandingBlockers {
+		payload.OutstandingBlockers = append(payload.OutstandingBlockers, TaskLifecycleBlockerJSON{
+			TaskID: blocker.TaskID, Reason: string(blocker.Reason),
+			Path: append([]string(nil), blocker.Path...), Direct: blocker.Direct,
+		})
+	}
+	return payload
+}
+
+// TaskEligibilityFailureJSON preserves the typed default-start refusal in each
+// failed batch row. Error text remains alongside it for human compatibility.
+type TaskEligibilityFailureJSON struct {
+	TaskID            string                     `json:"task_id"`
+	State             TaskGraphStateJSON         `json:"state"`
+	Blockers          []TaskLifecycleBlockerJSON `json:"blockers"`
+	RequestedOverride string                     `json:"requested_override,omitempty"`
+	OverrideAllowed   bool                       `json:"override_allowed"`
+	Remedy            string                     `json:"remedy"`
+}
+
+func ToTaskEligibilityFailureJSON(failure *core.TaskEligibilityError) TaskEligibilityFailureJSON {
+	payload := TaskEligibilityFailureJSON{
+		TaskID: failure.TaskID, State: toTaskGraphStateJSON(failure.State),
+		Blockers:          make([]TaskLifecycleBlockerJSON, 0, len(failure.Blockers)),
+		RequestedOverride: string(failure.RequestedOverride),
+		OverrideAllowed:   failure.State.Role == core.RoleCandidate && failure.State.Gate != core.GateClear,
+		Remedy:            failure.Remedy(),
+	}
+	for _, blocker := range failure.Blockers {
+		payload.Blockers = append(payload.Blockers, TaskLifecycleBlockerJSON{
+			TaskID: blocker.TaskID, Reason: string(blocker.Reason),
+			Path: append([]string(nil), blocker.Path...), Direct: blocker.Direct,
+		})
+	}
+	return payload
+}
+
 // DependencyMutationJSON is the reusable dependency-mutation receipt payload.
 type DependencyMutationJSON struct {
 	Operation           string                      `json:"operation"`
 	Changed             bool                        `json:"changed"`
 	DryRun              bool                        `json:"dry_run"`
 	Edges               []DependencyEdgeOutcomeJSON `json:"edges"`
+	Impacts             []TaskGraphStateImpactJSON  `json:"impacts"`
 	ClearedLegacyFields []LegacyFieldClearJSON      `json:"cleared_legacy_fields"`
 	PlannedTaskIDs      []string                    `json:"planned_task_ids"`
 	AppliedTaskIDs      []string                    `json:"applied_task_ids"`
@@ -199,6 +295,7 @@ func ToDependencyMutationJSON(receipt core.DependencyMutationReceipt, workspace 
 	payload := DependencyMutationJSON{
 		Operation: string(receipt.Operation), Changed: receipt.Changed, DryRun: receipt.DryRun,
 		Edges:               make([]DependencyEdgeOutcomeJSON, 0, len(receipt.Edges)),
+		Impacts:             toTaskGraphStateImpactsJSON(receipt.Impacts),
 		ClearedLegacyFields: make([]LegacyFieldClearJSON, 0, len(receipt.ClearedLegacyFields)),
 		PlannedTaskIDs:      append([]string{}, receipt.PlannedTaskIDs...),
 		AppliedTaskIDs:      append([]string{}, receipt.AppliedTaskIDs...),

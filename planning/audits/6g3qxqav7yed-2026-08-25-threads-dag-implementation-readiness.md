@@ -4,6 +4,7 @@ id: 6g3qxqav7yed
 bucket: closed
 area: threads-dag-implementation-readiness
 date: "2026-08-25"
+updated_at: "2026-08-29"
 ---
 # Audit: Threads / task-DAG implementation readiness — 2026-08-25
 
@@ -519,7 +520,7 @@ scans of 279 files, and N chances for the answer to change mid-batch.
 dogfooding. If it bites, the fix is a per-invocation snapshot cache passed through the batch,
 not a different policy.
 
-#### L6. `thread complete` on a Thread with no live members is vacuously true  · **Status:** tracked by 6g3q4rtmv4ak
+#### L6. `thread complete` on a Thread with no live members is vacuously true  · **Status:** tracked by 6g4wm2yf6tyj
 
 **File:** planning/adrs/0006-adopt-threads-as-task-dags.md:225 | **Component:** thread lifecycle
 **Effort:** XS · **Urgency:** eventually
@@ -534,6 +535,9 @@ the same state.
 
 **Recommendation:** State the `≥ 1 non-withdrawn member` precondition on `complete` as well
 as `start`, in `6g3q4rtmv4ak`'s acceptance criteria.
+
+**Resolution:** The 2026-08-29 Thread readiness split moved start/complete
+lifecycle enforcement into the dedicated guarded Thread mutation task.
 
 #### L7. Thread ids and task ids share a mint but not a namespace check  · **Status:** tracked by 6g3q4rtmv4ak
 

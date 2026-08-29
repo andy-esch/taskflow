@@ -9,7 +9,8 @@ save the file is re-parsed: a frontmatter break (or a value the loader can't
 read) reopens the editor with the error rather than landing on disk — deeper
 field checks remain `lint`'s job. Graph-owned dependency fields are preservation-
 only here: a semantic change is rejected, and a malformed dependency baseline
-must be repaired deliberately before any edited candidate can land.
+must be repaired deliberately before any edited candidate can land. Status is also
+preservation-only: save content changes first, then use a task lifecycle verb.
 
 The human counterpart to `task set`; agents
 and scripts should drive `set` (deterministic) instead.

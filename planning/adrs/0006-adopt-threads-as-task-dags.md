@@ -485,17 +485,21 @@ be scoped into the following dependency-ordered slices without requiring the def
    `in-progress` through it, including generic move, start, create-and-start, and later TUI actions.
    Ship `--force` only with an explanatory receipt. Do not release partial enforcement that callers
    can bypass through another verb.
-4. **Thread entity and projections:** add document/store/core/wire/CLI support, many-valued
-   membership, lifecycle, rollup, external gates, frontier, and initialization migration from the
-   unused Projects scaffold. This consumes the shared analysis contract rather than reimplementing
-   graph state.
-5. **Bulk linking of existing tasks:** ship YAML compose/apply for existing stable task IDs, with a
+4. **Thread documents, guarded creation, and read projections:** add domain/store/core/wire/CLI
+   support, guarded creation in the explicit `unstarted` state, a reusable lock-free materializer,
+   nominal/sound rollups, external gates, frontier, and initialization migration from the unused
+   Projects scaffold. This consumes the shared analysis contract rather than reimplementing graph
+   state.
+5. **Guarded Thread membership and lifecycle:** add member add/remove and start, complete, abandon,
+   and reopen over one authoritative task/Thread snapshot; retain committed outcomes and augment
+   task-lifecycle receipts with affected Thread IDs.
+6. **Bulk linking of existing tasks:** ship YAML compose/apply for existing stable task IDs, with a
    durable materialized plan, planning-space binding, dry-run, resumable receipts, and safe retry.
    The prototype's inline `new_task` path is an optional follow-up and is not required to prove the
    primary bulk-linking workflow.
-6. **Generated views:** add deterministic Mermaid/DOT and polish explanatory plans after the shared
+7. **Generated views:** add deterministic Mermaid/DOT and polish explanatory plans after the shared
    projection has CLI usage. Generated output is never persisted as Thread state.
-7. **Planned TUI follow-up:** after CLI and wire behavior have usage feedback, add a Thread list/tab
+8. **Planned TUI follow-up:** after CLI and wire behavior have usage feedback, add a Thread list/tab
    and detail view showing lifecycle, rollup, frontier, member/external distinction, and a readable
    graph. The first TUI slice should consume the same projections and should not introduce direct
    graph editing or a separate readiness calculation.
@@ -510,8 +514,10 @@ the spike adapter on canonical planning data:
   planning repository before enabling writes.
 - After guarded dependency writes land, sequence the remaining tasks in this epic with real
   dependencies using the public commands. Do not invent dependencies merely to exercise a feature.
-- After the Thread entity lands, make this initiative one of the first real Threads. Exercise shared
-  membership and external gates when actual work naturally has those relationships.
+- After Thread documents and guarded creation land, make this initiative one of the first real
+  Threads and inspect its read projections. After guarded membership/lifecycle lands, manage that
+  Thread through the production mutation verbs. Exercise shared membership and external gates when
+  actual work naturally has those relationships.
 - After bulk linking lands, use a literal-YAML manifest to establish or extend the next real
   initiative and retain its materialized plan until apply reports completion.
 - Record confusing output, forced transitions, reopen behavior, merge conflicts, and recovery work
@@ -815,9 +821,10 @@ but also made the next lifecycle slice's persistence obligations concrete:
 2. **Every creation and editing path has an explicit lifecycle contract.** `task new --start`
    authorizes and creates the in-progress record in one guarded operation rather than composing
    create and move. The interactive portion of `task edit` stays outside the repository guard, but
-   its ordinary writer may not persist a status delta. Before implementation, the product must
-   choose either to reject edited status changes in favor of lifecycle verbs or to delegate the
-   accepted candidate to the complete guarded lifecycle policy with exact-source CAS.
+   its ordinary writer may not persist a status delta. `task edit` rejects every status change and
+   directs the user to an explicit lifecycle verb. Separating content editing from lifecycle may
+   require one additional CLI call, but it keeps dates, gates, overrides, and impact receipts on the
+   single guarded lifecycle path. `task new --start` remains the intentional combined operation.
 3. **Lifecycle impact lands before Thread impact.** The eligibility slice owns deterministic
    before/after task gate state and descendant task receipts. The later Thread slice augments those
    receipts with affected Thread IDs after Thread documents exist; future data is not an eligibility
@@ -829,6 +836,37 @@ but also made the next lifecycle slice's persistence obligations concrete:
 5. **Broken-graph repair remains parallel recovery hardening.** It does not block eligibility or the
    first Thread entity. Dogfooding may promote it when an actual broken repository prevents guarded
    work; otherwise reconsider it before bulk linking expands graph use.
+
+### 2026-08-29: Dependency-eligibility implementation consequences
+
+Two independent implementation audits—[Antigravity](../audits/6g4ta2mabq1y-2026-08-29-dependency-eligibility-enforcement-antigravity.md)
+and [Codex](../audits/6g4tf2yr4nb0-2026-08-29-dependency-eligibility-enforcement-codex.md)—closed the lifecycle slice with these reusable constraints:
+
+1. **Lifecycle durability is an explicit outcome.** A store result records whether its atomic write
+   committed. A guard-release or cleanup failure after that point returns a typed failure carrying
+   the committed receipt and must never enter a generic conflict retry loop. Human, machine, and TUI
+   adapters preserve the receipt; the TUI reloads. Thread lifecycle mutations must adopt the same
+   outcome distinction rather than treating every returned error as pre-commit failure.
+2. **Ordinary creation cannot manufacture lifecycle-owned state.** Generic task creation accepts only
+   the product's non-start creation states. Guarded create-and-start is the sole creation path into
+   `in-progress`. Thread creation should likewise begin from one explicit initial state; combined
+   create-and-start, if ever added, requires a semantic guarded operation rather than an arbitrary
+   status on a generic create port.
+3. **Cooperating-writer claims require cooperating-writer tests.** Raw-file CAS tests remain valuable,
+   but each new guarded Thread capability must also race two real services over distinct store
+   instances, prove the second operation waits on the canonical-root guard, and prove it authorizes
+   from fresh task/Thread state after release.
+4. **Failure receipts remain structured at the batch row.** Typed eligibility failures retain derived
+   state, blockers, override eligibility, and remedy per item. Thread member/frontier failures must
+   not be flattened into prose where a mixed batch cannot reconstruct attribution.
+5. **Per-item batch commits and repeated graph scans remain deliberate V1 tradeoffs.** Batch lifecycle
+   commands do not promise rollback. Repository scans stay correctness-first until dogfooding or a
+   benchmark demonstrates operational cost; no invocation-local cache is justified yet.
+6. **The first Thread slice is split at the materializer boundary.** The readiness checkpoint found
+   that first-class document/schema/init fan-out plus guarded creation/read projections is one
+   reviewable slice, while mutable membership/lifecycle, committed recovery, cooperating-writer
+   races, and affected-Thread task receipts form a second guarded mutation slice. Bulk apply depends
+   on both and composes the settled lock-free Thread materializer rather than inventing a third path.
 
 ## Related
 

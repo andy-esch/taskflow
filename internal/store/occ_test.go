@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -78,18 +79,18 @@ func TestVerifyUnchanged_SlugEqualsAnotherID(t *testing.T) {
 func TestMove_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "m.md",
-		"---\nid: 6fjangd7kvm1\nstatus: ready-to-start\nepic: e1\n---\n# m\n")
+		"---\nid: "+testutil.TaskID("m")+"\nstatus: ready-to-start\nepic: e1\ndescription: m\ntags: [test]\n---\n# m\n")
 	fs := NewFS(root)
 	p := filepath.Join(root, "tasks", testutil.TaskID("m")+"-m.md")
 
-	orig := testHookBeforeMoveWrite
-	defer func() { testHookBeforeMoveWrite = orig }()
-	testHookBeforeMoveWrite = func() {
-		_ = os.WriteFile(p, []byte("---\nid: 6fjangd7kvm1\nstatus: ready-to-start\nepic: e1\npriority: high\n---\n# m EDITED\n"), 0o644)
-		testHookBeforeMoveWrite = orig
+	orig := testHookBeforeLifecycleVerify
+	defer func() { testHookBeforeLifecycleVerify = orig }()
+	testHookBeforeLifecycleVerify = func() {
+		_ = os.WriteFile(p, []byte("---\nid: "+testutil.TaskID("m")+"\nstatus: ready-to-start\nepic: e1\npriority: high\n---\n# m EDITED\n"), 0o644)
+		testHookBeforeLifecycleVerify = orig
 	}
 
-	_, err := fs.Move("m", domain.StatusInProgress, time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false, false)
+	_, err := moveTaskForTest(fs, "m", domain.StatusInProgress, time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false, core.TaskLifecycleOverrideNone)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place edit during a move must conflict, got %v", err)
 	}

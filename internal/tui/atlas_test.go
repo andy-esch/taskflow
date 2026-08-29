@@ -17,6 +17,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 type atlasTestAdapter struct {
@@ -1054,7 +1055,7 @@ func TestAtlasSpaceRowsKeepColumnsAlignedAcrossUnequalBreakdowns(t *testing.T) {
 		}
 		return ansi.StringWidth(plain[:i])
 	}
-	for _, col := range []string{"⚠", "3w ago"} {
+	for _, col := range []string{"⚠", theme.RelativeDate("2026-08-01")} {
 		first, second := columnOf(rows[0], col), columnOf(rows[1], col)
 		if first < 0 || second < 0 {
 			t.Fatalf("column %q missing from a row:\n%s\n%s", col, ansi.Strip(rows[0]), ansi.Strip(rows[1]))

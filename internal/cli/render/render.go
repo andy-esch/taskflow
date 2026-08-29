@@ -212,6 +212,16 @@ func TaskMutationJSON(w io.Writer, t domain.Task, body string, dryRun bool, ws w
 // so the CLI's move loop (moves.go) keeps building it through the render package.
 type MoveResult = wire.MoveResult
 
+// TaskEligibilityFailure preserves the typed start refusal in JSON move rows.
+func TaskEligibilityFailure(failure *core.TaskEligibilityError) wire.TaskEligibilityFailureJSON {
+	return wire.ToTaskEligibilityFailureJSON(failure)
+}
+
+// TaskMoveResult maps a guarded lifecycle receipt into the shared move row.
+func TaskMoveResult(receipt core.TaskLifecycleReceipt) MoveResult {
+	return wire.ToTaskMoveResult(receipt)
+}
+
 // MovesHuman prints one line per transition outcome ("would move" on a
 // --dry-run preview).
 func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool) {
@@ -223,7 +233,17 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 		if r.Error != "" {
 			// Failures are diagnostics → stderr, so a partial `… | xargs move`
 			// doesn't interleave errors into the data stream.
-			fmt.Fprintf(errw, "%s %s: %s\n", st.Red("✘"), st.Bold(r.Slug), r.Error)
+			if r.Lifecycle != nil && r.Lifecycle.Committed {
+				fmt.Fprintf(errw, "%s %s: %s\n", st.Warn("⚠"), st.Bold(r.Slug), r.Error)
+				if r.Lifecycle.ImpactCount > 0 {
+					fmt.Fprintf(errw, "  %s %d downstream task(s) changed derived state\n", st.Warn("⚠"), r.Lifecycle.ImpactCount)
+				}
+				if r.Lifecycle.Remedy != "" {
+					fmt.Fprintf(errw, "  %s %s\n", st.Dim("remedy:"), r.Lifecycle.Remedy)
+				}
+			} else {
+				fmt.Fprintf(errw, "%s %s: %s\n", st.Red("✘"), st.Bold(r.Slug), r.Error)
+			}
 		} else {
 			// A recorded/would-be revisit date (defer --until) is shown inline so the
 			// preview and the real run both confirm the snooze, not just the move.
@@ -232,6 +252,29 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 				revisit = st.Dim(fmt.Sprintf(" (revisit %s)", r.RevisitAt))
 			}
 			fmt.Fprintf(out, "%s %s %s -> %s%s\n", st.Green("✔"), verb, st.Bold(r.Slug), r.To, revisit)
+			if r.Lifecycle != nil && r.Lifecycle.Forced {
+				fmt.Fprintf(out, "  %s forced %s override; %d blocker(s) remain\n", st.Warn("⚠"), r.Lifecycle.Override, len(r.Lifecycle.OutstandingBlockers))
+				for _, blocker := range r.Lifecycle.OutstandingBlockers {
+					fmt.Fprintf(out, "    %s %s (%s via %s)\n", st.Dim("•"), blocker.TaskID, blocker.Reason, strings.Join(blocker.Path, " -> "))
+				}
+			}
+			if r.Lifecycle != nil {
+				if len(r.Lifecycle.Impacts) > 0 {
+					fmt.Fprintf(out, "  %s %d downstream task(s) changed derived state\n", st.Warn("⚠"), len(r.Lifecycle.Impacts))
+				}
+				for _, impact := range r.Lifecycle.Impacts {
+					prefix := st.Dim("•")
+					if (impact.Before.Gate != impact.After.Gate && impact.After.Gate != string(core.GateClear)) ||
+						(!impact.Before.Inconsistent && impact.After.Inconsistent) {
+						prefix = st.Warn("⚠")
+					}
+					fmt.Fprintf(out, "  %s %s state %s/%s -> %s/%s\n", prefix, impact.TaskID,
+						impact.Before.Role, impact.Before.Gate, impact.After.Role, impact.After.Gate)
+				}
+				if r.Lifecycle.Remedy != "" {
+					fmt.Fprintf(out, "  %s %s\n", st.Dim("remedy:"), r.Lifecycle.Remedy)
+				}
+			}
 		}
 	}
 }

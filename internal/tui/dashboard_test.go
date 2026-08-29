@@ -144,9 +144,9 @@ func dashEpicsRepo(t *testing.T) string {
 	r.Epic("01-stale.md", "---\nstatus: active\ndescription: old epic\n---\n# Stale\n")
 	r.Epic("02-fresh.md", "---\nstatus: active\ndescription: new epic\n---\n# Fresh\n")
 	r.Task("completed", "old.md",
-		"---\nstatus: completed\nepic: 01-stale\ndescription: x\nupdated_at: 2025-02-01\n---\n# old\n")
+		"---\nid: "+testutil.TaskID("old")+"\nstatus: completed\nepic: 01-stale\ndescription: x\nupdated_at: 2025-02-01\n---\n# old\n")
 	r.Task("in-progress", "fresh-wip.md",
-		"---\nstatus: in-progress\nepic: 02-fresh\ndescription: y\nupdated_at: 2026-06-25\n---\n# fresh-wip\n")
+		"---\nid: "+testutil.TaskID("fresh-wip")+"\nstatus: in-progress\nepic: 02-fresh\ndescription: y\nupdated_at: 2026-06-25\n---\n# fresh-wip\n")
 	return r.Root
 }
 
@@ -370,7 +370,7 @@ func TestModel_DashboardRefreshesOnMutation(t *testing.T) {
 	}
 	// Move alpha out of the working set behind the dashboard's back (as the CLI or
 	// another process would), then reload.
-	if _, err := m.svc.Move("alpha", domain.StatusCompleted, false, false); err != nil {
+	if _, err := m.svc.Move("alpha", domain.StatusCompleted, false, core.TaskLifecycleOverrideNone); err != nil {
 		t.Fatal(err)
 	}
 	m = drainBatch(t, m, m.reloadAll())

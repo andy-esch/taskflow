@@ -25,7 +25,8 @@ func newTaskEditCmd(app *App) *cobra.Command {
 			"read) reopens the editor with the error rather than landing on disk — deeper\n" +
 			"field checks remain `lint`'s job. Graph-owned dependency fields are preservation-\n" +
 			"only here: a semantic change is rejected, and a malformed dependency baseline\n" +
-			"must be repaired deliberately before any edited candidate can land.\n\n" +
+			"must be repaired deliberately before any edited candidate can land. Status is also\n" +
+			"preservation-only: save content changes first, then use a task lifecycle verb.\n\n" +
 			"The human counterpart to `task set`; agents\n" +
 			"and scripts should drive `set` (deterministic) instead.",
 		Example:           "  tskflwctl task edit add-retry-backoff\n  tskflwctl task edit   # pick from a list",

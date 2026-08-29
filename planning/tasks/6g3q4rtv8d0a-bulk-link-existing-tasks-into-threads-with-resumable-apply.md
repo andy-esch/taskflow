@@ -10,8 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [threads, graph, cli, workflow]
 created: "2026-08-25"
-updated_at: "2026-08-28"
-depends_on: [6g3q4rtmv4ak]
+updated_at: "2026-08-29"
+depends_on: [6g4wm2yf6tyj]
 ---
 # Bulk-link existing tasks into Threads with resumable apply
 

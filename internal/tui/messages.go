@@ -16,13 +16,15 @@ type dashLoadedMsg struct {
 }
 
 // movedMsg reports a successful lifecycle transition (S4). The model flashes a
-// confirmation and fires a reload so the relocated entity shows in its new state.
+// confirmation and reloads the affected view so it reflects the new state.
 // to is the destination as a string (a task status or an audit bucket), so one
 // message serves every entity's lifecycle.
 type movedMsg struct {
-	slug    string
-	to      string
-	revisit string // a defer's recorded revisit date, surfaced in the flash (empty otherwise)
+	slug      string
+	to        string
+	revisit   string // a defer's recorded revisit date, surfaced in the flash (empty otherwise)
+	lifecycle *core.TaskLifecycleReceipt
+	warning   error // non-nil only when the move committed but cleanup failed
 }
 
 // actionErrMsg reports a failed mutation; the model flashes it (red) without

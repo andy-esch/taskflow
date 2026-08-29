@@ -177,10 +177,22 @@ func ToEpicMutationEnvelope(epic domain.Epic, dryRun bool, ws WorkspaceJSON) Epi
 // state — a task status or an audit bucket — so the JSON key is the neutral
 // "to" rather than "status".
 type MoveResult struct {
-	Slug      string `json:"slug"`
-	To        string `json:"to"`
-	RevisitAt string `json:"revisit_at,omitempty" jsonschema:"description=revisit (snooze-until) date recorded by task defer"`
-	Error     string `json:"error,omitempty"`
+	Slug             string                      `json:"slug"`
+	To               string                      `json:"to"`
+	RevisitAt        string                      `json:"revisit_at,omitempty" jsonschema:"description=revisit (snooze-until) date recorded by task defer"`
+	Lifecycle        *TaskLifecycleJSON          `json:"lifecycle,omitempty"`
+	LifecycleFailure *TaskEligibilityFailureJSON `json:"lifecycle_failure,omitempty"`
+	Error            string                      `json:"error,omitempty"`
+}
+
+// ToTaskMoveResult maps one guarded task lifecycle receipt into the shared
+// transition row used by human and machine batch reporting.
+func ToTaskMoveResult(receipt core.TaskLifecycleReceipt) MoveResult {
+	detail := ToTaskLifecycleJSON(receipt)
+	return MoveResult{
+		Slug: receipt.Task.Slug, To: string(receipt.To), RevisitAt: receipt.Task.RevisitAt,
+		Lifecycle: &detail,
+	}
 }
 
 // MovesEnvelope is the transition report (`task start --json`, etc.).
@@ -987,9 +999,28 @@ func ToTemplateShowEnvelope(info TemplateInfo, body string) TemplateShowEnvelope
 
 // ErrorItem is the error body inside ErrorEnvelope.
 type ErrorItem struct {
-	Code               string                  `json:"code"`
-	Message            string                  `json:"message"`
-	DependencyMutation *DependencyMutationJSON `json:"dependency_mutation,omitempty"`
+	Code               string                     `json:"code"`
+	Message            string                     `json:"message"`
+	DependencyMutation *DependencyMutationJSON    `json:"dependency_mutation,omitempty"`
+	TaskLifecycle      *TaskLifecycleRecoveryJSON `json:"task_lifecycle,omitempty"`
+}
+
+// TaskLifecycleRecoveryJSON is emitted on stderr when a lifecycle write
+// committed but repository cleanup failed. It gives agents enough identity and
+// workspace context to inspect durable state instead of blindly retrying.
+type TaskLifecycleRecoveryJSON struct {
+	Slug      string            `json:"slug"`
+	To        string            `json:"to"`
+	DryRun    bool              `json:"dry_run"`
+	Lifecycle TaskLifecycleJSON `json:"lifecycle"`
+	Workspace WorkspaceJSON     `json:"workspace"`
+}
+
+func ToTaskLifecycleRecoveryJSON(receipt core.TaskLifecycleReceipt, workspace WorkspaceJSON) TaskLifecycleRecoveryJSON {
+	return TaskLifecycleRecoveryJSON{
+		Slug: receipt.Task.Slug, To: string(receipt.To), DryRun: receipt.DryRun,
+		Lifecycle: ToTaskLifecycleJSON(receipt), Workspace: workspace,
+	}
 }
 
 // ErrorEnvelope is the failure payload emitted under --json (see cli.WriteError).

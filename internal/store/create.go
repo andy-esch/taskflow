@@ -64,9 +64,9 @@ func (s *FS) writeNewFile(dir, path string, content []byte, kind, id string, dry
 	return s.writeNewFileUnlocked(dir, path, content, kind, id)
 }
 
-// writeNewFileUnlocked is the graph-guard-compatible create primitive. Public
-// entity creation enters through writeNewFile and takes the repository lock;
-// future compound graph operations may call this helper only while already guarded.
+// writeNewFileUnlocked is the repository-guard-compatible create primitive.
+// Public entity creation enters through writeNewFile and takes the lock; guarded
+// compound operations may call this helper only while already holding it.
 func (s *FS) writeNewFileUnlocked(dir, path string, content []byte, kind, id string) error {
 	conflict := func() error {
 		return fmt.Errorf("%s %q already exists: %w", kind, id, domain.ErrConflict)
@@ -85,7 +85,7 @@ func (s *FS) writeNewFileUnlocked(dir, path string, content []byte, kind, id str
 
 // taskFields is the canonical frontmatter order for a new task. started_at is
 // appended only when set (a `new --start` task) — the one lifecycle stamp a
-// create can carry; the others are written only by Move.
+// create can carry; guarded lifecycle mutations write the others.
 func taskFields(t domain.Task) []fmField {
 	fields := []fmField{
 		{"schema", domain.FileSchemaVersion},
@@ -130,7 +130,7 @@ func validEntityID(entityID string) error {
 }
 
 func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Task{}, err
 	}
 	if t.Slug == "" {
@@ -141,6 +141,13 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 	}
 	if err := validEntityID(t.ID); err != nil {
 		return domain.Task{}, err
+	}
+	switch t.Status {
+	case domain.StatusReadyToStart, domain.StatusNextUp:
+		// Ordinary creation may place a task only in a non-start lifecycle state.
+		// In-progress creation belongs exclusively to guarded create-and-start.
+	default:
+		return domain.Task{}, fmt.Errorf("%w: ordinary task creation supports only ready-to-start or next-up status, got %q", domain.ErrValidation, t.Status)
 	}
 	if len(t.DependsOn) > 0 || len(t.LegacyBlockedBy) > 0 || len(t.LegacyDependencies) > 0 || len(t.LegacyBlocks) > 0 {
 		return domain.Task{}, fmt.Errorf("%w: task creation cannot set graph-owned dependency fields until guarded dependency creation is available", domain.ErrValidation)
@@ -175,7 +182,7 @@ func auditFields(a domain.Audit) []fmField {
 // CreateAudit writes a new audit at audits/<id>-<slug>.md (flat, id-led per
 // ADR-0003 §4). New audits always start in the open bucket; it refuses to clobber.
 func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, err
 	}
 	if a.Slug == "" {
@@ -220,7 +227,7 @@ func researchFields(r domain.Research) []fmField {
 // per ADR-0003 §4). It refuses to clobber; the slug and id are taken from r. The id is
 // minted from r.Created by the caller (core), so ids stay chronological.
 func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (domain.Research, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Research{}, err
 	}
 	if r.Slug == "" {
@@ -324,7 +331,7 @@ func epicFields(e domain.Epic) []fmField {
 // deliberately allowed — they stay distinct ids; only `epic show billing` goes
 // fuzzy-ambiguous, recoverable by using the full NN-slug.
 func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (domain.Epic, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Epic{}, err
 	}
 	if slug == "" {

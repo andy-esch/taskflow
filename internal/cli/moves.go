@@ -1,10 +1,22 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
+	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
+
+type taskLifecycleCommandFailure struct {
+	cause     error
+	receipt   core.TaskLifecycleReceipt
+	workspace wire.WorkspaceJSON
+}
+
+func (e *taskLifecycleCommandFailure) Error() string { return e.cause.Error() }
+func (e *taskLifecycleCommandFailure) Unwrap() error { return e.cause }
 
 // runMoves applies a per-slug transition to a target status/bucket, prints a
 // per-item report (JSON or human), and returns a summary error wrapping the
@@ -25,13 +37,32 @@ func runMoves[T any](app *App, slugs []string, status string, move func(slug str
 		res := render.MoveResult{Slug: slug, To: status}
 		if got, err := move(slug); err != nil {
 			res.Error = err.Error()
+			reportedErr := err
+			var eligibility *core.TaskEligibilityError
+			if errors.As(err, &eligibility) {
+				detail := render.TaskEligibilityFailure(eligibility)
+				res.LifecycleFailure = &detail
+			}
+			var committed *core.TaskLifecycleMutationFailure
+			if errors.As(err, &committed) {
+				committedResult := render.TaskMoveResult(committed.Receipt)
+				committedResult.Error = err.Error()
+				if committedResult.Slug == "" {
+					committedResult.Slug = slug
+				}
+				if committedResult.To == "" {
+					committedResult.To = status
+				}
+				res = committedResult
+				reportedErr = &taskLifecycleCommandFailure{cause: err, receipt: committed.Receipt, workspace: app.workspace()}
+			}
 			failed++
 			// Prefer a sentinel-bearing error (a meaningful exit code: 10/11/13/14)
 			// over a generic exit-1 one, so the batch's summary code reports the most
 			// actionable cause rather than whichever failure happened to be first in
 			// argv. (The first sentinel wins; per-item ✘ lines carry the full detail.)
-			if chosenErr == nil || (ExitCode(chosenErr) == 1 && ExitCode(err) != 1) {
-				chosenErr = err
+			if chosenErr == nil || (ExitCode(chosenErr) == 1 && ExitCode(reportedErr) != 1) {
+				chosenErr = reportedErr
 			}
 		} else {
 			res.Slug = slugOf(got)

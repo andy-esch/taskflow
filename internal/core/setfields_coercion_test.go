@@ -201,9 +201,9 @@ func TestSetFields_RejectsUpdatedAt(t *testing.T) {
 	}
 }
 
-// status is not a settable field — a change relocates the file, so it must route
-// through the lifecycle verbs, not an in-place `set` (which would desync the mirror
-// dir from the authoritative frontmatter). Rejected on both the set and unset paths.
+// Status is not a settable field. It must route through the guarded lifecycle
+// capability, which applies policy, timestamps, and impact reporting. Rejected on
+// both the set and unset paths.
 func TestSetFields_RejectsStatus(t *testing.T) {
 	svc := setFieldsRepo(t)
 	if _, err := svc.SetFields("t", map[string]any{"status": "completed"}, false, false); !errors.Is(err, domain.ErrValidation) {

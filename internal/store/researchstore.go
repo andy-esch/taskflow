@@ -19,7 +19,7 @@ import (
 // ListResearch scans the research dir. An unreadable doc is skipped and reported as
 // a FileProblem (one bad file doesn't blind the listing); err is only for fatal I/O.
 func (s *FS) ListResearch() ([]domain.Research, []domain.FileProblem, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
 	return scanDir(s.researchDir, func(path string, content []byte) (domain.Research, error) {
@@ -29,7 +29,7 @@ func (s *FS) ListResearch() ([]domain.Research, []domain.FileProblem, error) {
 
 // GetResearch returns one research doc plus its markdown body.
 func (s *FS) GetResearch(slug string) (domain.Research, string, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Research{}, "", err
 	}
 	path, err := s.resolveResearch(slug)
@@ -118,7 +118,7 @@ func (s *FS) resolveResearchPathExact(entityID string) (string, error) {
 // `status: reference` on the legacy corpus rides along untouched). The service injects
 // updated_at; protected fields are rejected before we get here.
 func (s *FS) SetResearchFields(slug string, updates map[string]any, dryRun bool) (domain.Research, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Research{}, err
 	}
 	path, err := s.resolveResearch(slug)
@@ -180,7 +180,7 @@ func (s *FS) SetResearchFields(slug string, updates map[string]any, dryRun bool)
 // guard, but the version-CAS recheck still catches a concurrent edit during the editor
 // window. Returns the reloaded doc and whether it changed.
 func (s *FS) EditResearch(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Research, bool, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Research{}, false, err
 	}
 	path, err := s.resolveResearch(slug)
@@ -208,7 +208,7 @@ func (s *FS) EditResearch(slug string, now time.Time, edit func(current string, 
 // write, stamping updated_at. `created` stays immutable — the id is minted from it. The
 // agent face of body editing, beside EditResearch's editor.
 func (s *FS) AppendResearchBody(slug, text string, now time.Time, dryRun bool) (domain.Research, string, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Research{}, "", err
 	}
 	path, err := s.resolveResearch(slug)

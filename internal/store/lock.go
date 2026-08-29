@@ -12,11 +12,11 @@ import (
 )
 
 // repositoryGuard supplies the same-process half of the repository guard and
-// records the callback-exclusive phase at the same canonical-root scope.
+// records the guarded-planner callback phase at the same canonical-root scope.
 type repositoryGuard struct {
-	write         sync.Mutex
-	plannerMu     sync.RWMutex
-	plannerActive bool
+	write          sync.Mutex
+	callbackMu     sync.RWMutex
+	callbackActive bool
 }
 
 // repositoryGuards supplies the same-process half of the repository guard.
@@ -66,33 +66,33 @@ func processRepositoryLock(root string) func() {
 	return guard.write.Unlock
 }
 
-func (s *FS) enterGraphPlanner() (func(), error) {
+func (s *FS) enterRepositoryPlanner() (func(), error) {
 	guard := repositoryGuardFor(s.root)
-	guard.plannerMu.Lock()
-	if guard.plannerActive {
-		guard.plannerMu.Unlock()
-		return nil, graphPlannerReentryError()
+	guard.callbackMu.Lock()
+	if guard.callbackActive {
+		guard.callbackMu.Unlock()
+		return nil, repositoryPlannerReentryError()
 	}
-	guard.plannerActive = true
-	guard.plannerMu.Unlock()
+	guard.callbackActive = true
+	guard.callbackMu.Unlock()
 	return func() {
-		guard.plannerMu.Lock()
-		guard.plannerActive = false
-		guard.plannerMu.Unlock()
+		guard.callbackMu.Lock()
+		guard.callbackActive = false
+		guard.callbackMu.Unlock()
 	}, nil
 }
 
-func graphPlannerReentryError() error {
-	return fmt.Errorf("repository graph planner is active; Store access from its callback or a concurrent caller is unavailable: %w", domain.ErrConflict)
+func repositoryPlannerReentryError() error {
+	return fmt.Errorf("repository mutation planner is active; Store access from its callback or a concurrent caller is unavailable: %w", domain.ErrConflict)
 }
 
-func (s *FS) rejectGraphPlannerCall() error {
+func (s *FS) rejectRepositoryPlannerCall() error {
 	guard := repositoryGuardFor(s.root)
-	guard.plannerMu.RLock()
-	active := guard.plannerActive
-	guard.plannerMu.RUnlock()
+	guard.callbackMu.RLock()
+	active := guard.callbackActive
+	guard.callbackMu.RUnlock()
 	if active {
-		return graphPlannerReentryError()
+		return repositoryPlannerReentryError()
 	}
 	return nil
 }
@@ -108,12 +108,12 @@ func (s *FS) writeLock() (func(), error) {
 	return func() { _ = release() }, nil
 }
 
-// checkedWriteLock is the graph-mutation form of writeLock: release failures are
-// returned so the control-inverted boundary can attribute them to the operation.
+// checkedWriteLock is the guarded-mutation form of writeLock: release failures
+// are returned so a control-inverted boundary can attribute them to the operation.
 // Ordinary legacy call sites retain their no-error unlock function until they are
 // migrated; both paths use the same process + platform serialization.
 func (s *FS) checkedWriteLock() (func() error, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, err
 	}
 	unlockProcess := processRepositoryLock(s.root)

@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,29 +11,82 @@ import (
 	"github.com/andy-esch/taskflow/internal/id"
 )
 
-// deferStore drives DeferTask's single atomic store.Defer call in isolation: it
-// records the call args (so a test can assert the contract) and can be made to
-// fail (deferErr) to prove the error propagates with its sentinel intact.
+// deferStore drives DeferTask's single guarded lifecycle call in isolation. It
+// records the plan and clock handed to the capability and can fail to prove the
+// error propagates with its sentinel intact.
 type deferStore struct {
 	nopStore
-	deferCalls int
-	lastSlug   string
-	lastUntil  string
-	dryRun     bool
-	deferNow   time.Time // the clock value Defer was handed (to prove WithClock governs stamps)
-	deferErr   error
+	lifecycleCalls int
+	lastPlan       TaskLifecyclePlan
+	dryRun         bool
+	lifecycleNow   time.Time
+	lifecycleErr   error
 }
 
-func (s *deferStore) Defer(slug, until string, now time.Time, dryRun bool) (domain.Task, error) {
-	s.deferCalls++
-	s.lastSlug = slug
-	s.lastUntil = until
-	s.dryRun = dryRun
-	s.deferNow = now
-	if s.deferErr != nil {
-		return domain.Task{}, s.deferErr
+type committedFailureStore struct {
+	nopStore
+	calls int
+	cause error
+}
+
+func (s *committedFailureStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
+	return []domain.Epic{{ID: "01-test", Status: "active"}}, nil, nil
+}
+
+func (s *committedFailureStore) MutateTaskLifecycle(_ time.Time, dryRun bool, planner TaskLifecyclePlanner) (TaskLifecycleMutationResult, error) {
+	s.calls++
+	existing := domain.Task{
+		ID: "6g0000000001", Slug: "existing", Status: domain.StatusReadyToStart,
+		Description: "existing", Tags: []string{"test"},
 	}
-	return domain.Task{Slug: slug, Status: domain.StatusDeferred, RevisitAt: until}, nil
+	graph := NewTaskGraph([]domain.Task{existing}, nil)
+	plan, err := planner(graph)
+	if err != nil {
+		return TaskLifecycleMutationResult{}, err
+	}
+	task := existing
+	from := existing.Status
+	before := graph.State(existing.ID)
+	if plan.Create != nil {
+		task = plan.Create.Task
+		from = task.Status
+		prospective := taskGraphWithTask(graph, task)
+		before = prospective.State(task.ID)
+	}
+	task.Status = plan.To
+	after := taskGraphWithTask(graph, task).State(task.ID)
+	return TaskLifecycleMutationResult{
+		Plan: plan, Task: task, From: from, Before: before, After: after,
+		Changed: true, DryRun: dryRun, Committed: true,
+	}, s.cause
+}
+
+func (s *deferStore) MutateTaskLifecycle(now time.Time, dryRun bool, planner TaskLifecyclePlanner) (TaskLifecycleMutationResult, error) {
+	s.lifecycleCalls++
+	s.dryRun = dryRun
+	s.lifecycleNow = now
+	if s.lifecycleErr != nil {
+		return TaskLifecycleMutationResult{}, s.lifecycleErr
+	}
+	const taskID = "6g0000000001"
+	graph := NewTaskGraph([]domain.Task{
+		{ID: taskID, Slug: "alpha", Status: domain.StatusInProgress},
+		{ID: "6g0000000002", Slug: "x", Status: domain.StatusInProgress},
+	}, nil)
+	plan, err := planner(graph)
+	if err != nil {
+		return TaskLifecycleMutationResult{}, err
+	}
+	s.lastPlan = plan
+	task, _ := graph.Task(plan.TaskID)
+	from := task.Status
+	task.Status = plan.To
+	task.RevisitAt = plan.RevisitAt
+	return TaskLifecycleMutationResult{
+		Plan: plan, Task: task, From: from, Before: graph.State(plan.TaskID),
+		After:   taskGraphWithStatus(graph, plan.TaskID, plan.To).State(plan.TaskID),
+		Changed: true, DryRun: dryRun,
+	}, nil
 }
 
 // TestDeferTask_AtomicSingleWrite pins the audit-M4 fix: a `defer --until` is ONE
@@ -46,14 +100,56 @@ func TestDeferTask_AtomicSingleWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeferTask: %v", err)
 	}
-	if st.deferCalls != 1 {
-		t.Errorf("want exactly one atomic Defer call, got %d", st.deferCalls)
+	if st.lifecycleCalls != 1 {
+		t.Errorf("want exactly one guarded lifecycle call, got %d", st.lifecycleCalls)
 	}
-	if st.lastSlug != "alpha" || st.lastUntil != "2026-09-01" || st.dryRun {
-		t.Errorf("Defer args = (%q, %q, dryRun=%v), want (alpha, 2026-09-01, false)", st.lastSlug, st.lastUntil, st.dryRun)
+	if st.lastPlan.TaskID != "6g0000000001" || st.lastPlan.RevisitAt != "2026-09-01" || st.dryRun {
+		t.Errorf("Defer plan = (%q, %q, dryRun=%v), want (6g0000000001, 2026-09-01, false)", st.lastPlan.TaskID, st.lastPlan.RevisitAt, st.dryRun)
 	}
-	if got.RevisitAt != "2026-09-01" || got.Status != domain.StatusDeferred {
-		t.Errorf("result = (status %q, revisit %q), want (deferred, 2026-09-01)", got.Status, got.RevisitAt)
+	if got.Task.RevisitAt != "2026-09-01" || got.Task.Status != domain.StatusDeferred {
+		t.Errorf("result = (status %q, revisit %q), want (deferred, 2026-09-01)", got.Task.Status, got.Task.RevisitAt)
+	}
+}
+
+func TestLifecycleCommittedFailureIsNeverRetriedAndRetainsReceipt(t *testing.T) {
+	for _, cause := range []error{
+		errors.New("unlock failed"),
+		fmt.Errorf("unlock failed: %w", domain.ErrConflict),
+	} {
+		for _, create := range []bool{false, true} {
+			name := "move"
+			if create {
+				name = "new-start"
+			}
+			t.Run(fmt.Sprintf("%s/%v", name, domain.Classify(cause)), func(t *testing.T) {
+				st := &committedFailureStore{cause: cause}
+				svc := NewService(st, WithRetry(4, func(int) {}), WithIDGen(func() string { return "6g0000000002" }))
+
+				var receipt TaskLifecycleReceipt
+				var err error
+				if create {
+					var task domain.Task
+					task, err = svc.NewTask(NewTaskParams{
+						Title: "Created", Epic: "01-test", Description: "created",
+						Tags: []string{"test"}, Start: true, Body: "# Created\n",
+					})
+					receipt.Task = task
+				} else {
+					receipt, err = svc.Move("existing", domain.StatusInProgress, false, TaskLifecycleOverrideNone)
+				}
+				var committed *TaskLifecycleMutationFailure
+				if !errors.As(err, &committed) || !committed.Receipt.Committed ||
+					committed.Receipt.Task.Status != domain.StatusInProgress {
+					t.Fatalf("result receipt=%+v err=%v", receipt, err)
+				}
+				if st.calls != 1 {
+					t.Fatalf("committed failure retried %d times", st.calls)
+				}
+				if !strings.Contains(err.Error(), "committed") || !strings.Contains(err.Error(), "inspect current task state") {
+					t.Fatalf("committed failure is not actionable: %v", err)
+				}
+			})
+		}
 	}
 }
 
@@ -62,15 +158,15 @@ func TestDeferTask_AtomicSingleWrite(t *testing.T) {
 // nothing changed, and the CLI still maps the sentinel to its exit code. (ErrConflict is the
 // one error that IS retried; that path is covered by TestRetry_ExhaustionSurfacesConflict.)
 func TestDeferTask_PropagatesStoreError(t *testing.T) {
-	st := &deferStore{deferErr: fmt.Errorf("%w: bad frontmatter", domain.ErrValidation)}
+	st := &deferStore{lifecycleErr: fmt.Errorf("%w: bad frontmatter", domain.ErrValidation)}
 	svc := NewService(st)
 
 	_, err := svc.DeferTask("alpha", "2026-09-01", false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("error should keep its sentinel, got %v", err)
 	}
-	if st.deferCalls != 1 {
-		t.Errorf("a non-conflict error must not be retried; want exactly one Defer call, got %d", st.deferCalls)
+	if st.lifecycleCalls != 1 {
+		t.Errorf("a non-conflict error must not be retried; want exactly one lifecycle call, got %d", st.lifecycleCalls)
 	}
 }
 
@@ -85,8 +181,8 @@ func TestDeferTask_ValidatesDate(t *testing.T) {
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("a bad --until should be ErrValidation, got %v", err)
 	}
-	if st.deferCalls != 0 {
-		t.Errorf("a bad date must not reach the store, got %d Defer calls", st.deferCalls)
+	if st.lifecycleCalls != 0 {
+		t.Errorf("a bad date must not reach the store, got %d lifecycle calls", st.lifecycleCalls)
 	}
 }
 
@@ -100,11 +196,11 @@ func TestDeferTask_DryRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dry-run DeferTask: %v", err)
 	}
-	if st.deferCalls != 1 || !st.dryRun {
-		t.Errorf("dry-run should reach Defer with dryRun=true, got calls=%d dryRun=%v", st.deferCalls, st.dryRun)
+	if st.lifecycleCalls != 1 || !st.dryRun {
+		t.Errorf("dry-run should reach lifecycle mutation with dryRun=true, got calls=%d dryRun=%v", st.lifecycleCalls, st.dryRun)
 	}
-	if got.RevisitAt != "2026-09-01" {
-		t.Errorf("dry-run preview should carry the would-be revisit_at, got %q", got.RevisitAt)
+	if got.Task.RevisitAt != "2026-09-01" {
+		t.Errorf("dry-run preview should carry the would-be revisit_at, got %q", got.Task.RevisitAt)
 	}
 }
 
@@ -117,8 +213,8 @@ func TestDeferTask_BareDefer(t *testing.T) {
 	if _, err := svc.DeferTask("alpha", "", false); err != nil {
 		t.Fatalf("bare DeferTask: %v", err)
 	}
-	if st.deferCalls != 1 || st.lastUntil != "" {
-		t.Errorf("bare defer should call Defer once with empty until, got calls=%d until=%q", st.deferCalls, st.lastUntil)
+	if st.lifecycleCalls != 1 || st.lastPlan.RevisitAt != "" {
+		t.Errorf("bare defer should use one lifecycle plan with empty revisit_at, got calls=%d until=%q", st.lifecycleCalls, st.lastPlan.RevisitAt)
 	}
 }
 
@@ -220,8 +316,8 @@ func TestWithClock_GovernsWriteStamps(t *testing.T) {
 	if _, err := svc.DeferTask("x", "2031-09-01", false); err != nil {
 		t.Fatalf("DeferTask: %v", err)
 	}
-	if !st.deferNow.Equal(fixed) {
-		t.Errorf("Defer should stamp via the injected clock; got %v, want %v", st.deferNow, fixed)
+	if !st.lifecycleNow.Equal(fixed) {
+		t.Errorf("lifecycle mutation should stamp via the injected clock; got %v, want %v", st.lifecycleNow, fixed)
 	}
 	if !svc.Now().Equal(fixed) {
 		t.Errorf("Service.Now() should expose the injected clock; got %v", svc.Now())

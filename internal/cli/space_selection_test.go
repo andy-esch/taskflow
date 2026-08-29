@@ -30,7 +30,7 @@ func selectedPlanningFixture(t *testing.T) (planning, pointer string, cfg *confi
 	t.Helper()
 	planning = initializedSpaceRepo(t)
 	path, content := testutil.TaskFixture(planning, "ready-to-start", "alpha.md",
-		"---\nstatus: ready-to-start\ndescription: selected alpha\ntags: [space]\n---\n# Alpha\n")
+		"---\nid: "+testutil.TaskID("alpha")+"\nstatus: ready-to-start\ndescription: selected alpha\ntags: [space]\n---\n# Alpha\n")
 	testutil.Write(t, path, content)
 	pointer = t.TempDir()
 	if _, err := config.InitPointer(pointer, planning, false); err != nil {

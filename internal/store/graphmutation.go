@@ -31,7 +31,7 @@ func (s *FS) MutateTaskGraph(now time.Time, dryRun bool, planner core.TaskGraphP
 	if now.IsZero() {
 		return result, fmt.Errorf("%w: graph mutation time is required", domain.ErrValidation)
 	}
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return result, err
 	}
 
@@ -111,7 +111,7 @@ func (s *FS) MutateTaskGraph(now time.Time, dryRun bool, planner core.TaskGraphP
 }
 
 func callTaskGraphPlanner(store *FS, planner core.TaskGraphPlanner, graph *core.TaskGraph) (core.TaskGraphMutationPlan, error) {
-	leave, err := store.enterGraphPlanner()
+	leave, err := store.enterRepositoryPlanner()
 	if err != nil {
 		return core.TaskGraphMutationPlan{}, err
 	}

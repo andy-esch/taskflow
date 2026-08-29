@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -428,7 +429,7 @@ func TestModel_ActionMenuFitsTerminal(t *testing.T) {
 // repo's tasks carry no acceptance criteria, so nothing exercised the path.
 func TestModel_CompleteRefusedOnUnexplainedCriteria(t *testing.T) {
 	r := testutil.NewRepo(t)
-	r.Task("in-progress", "gated.md", "---\nstatus: in-progress\nepic: 01-test\ndescription: d\n---\n"+
+	r.Task("in-progress", "gated.md", "---\nid: "+testutil.TaskID("gated")+"\nstatus: in-progress\nepic: 01-test\ndescription: d\n---\n"+
 		"# Gated\n\n## Acceptance criteria\n\n- [x] done\n- [ ] silently unticked\n")
 	r.Epic("01-test.md", "---\nstatus: active\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
 	svc := core.NewService(store.NewFS(r.Root))
@@ -457,5 +458,62 @@ func TestModel_CompleteRefusedOnUnexplainedCriteria(t *testing.T) {
 	}
 	if tk.Status != domain.StatusInProgress {
 		t.Errorf("a refused completion must not move the task, got %q", tk.Status)
+	}
+}
+
+func TestTUITaskStartUsesDependencyEligibilityPolicy(t *testing.T) {
+	r := testutil.NewRepo(t)
+	prerequisiteID := testutil.TaskID("prerequisite")
+	r.Task("next-up", "prerequisite.md", "---\nid: "+prerequisiteID+"\nstatus: next-up\ndescription: prerequisite\ntags: [test]\n---\n# Prerequisite\n")
+	r.Task("ready-to-start", "target.md", "---\nid: "+testutil.TaskID("target")+"\nstatus: ready-to-start\ndescription: target\ntags: [test]\ndepends_on: ["+prerequisiteID+"]\n---\n# Target\n")
+
+	msg := moveTask(core.NewService(store.NewFS(r.Root)), "target", transition{to: string(domain.StatusInProgress)})()
+	errMsg, ok := msg.(actionErrMsg)
+	if !ok || !strings.Contains(errMsg.err.Error(), "outstanding blockers") {
+		t.Fatalf("TUI start should expose the shared eligibility refusal, got %T (%v)", msg, msg)
+	}
+	task, _, err := store.NewFS(r.Root).GetTask("target")
+	if err != nil || task.Status != domain.StatusReadyToStart {
+		t.Fatalf("TUI refusal changed target: task=%+v err=%v", task, err)
+	}
+}
+
+func TestTUITaskReopenSurfacesDescendantImpactsAndRemedy(t *testing.T) {
+	r := testutil.NewRepo(t)
+	upstreamID := testutil.TaskID("upstream")
+	r.Task("completed", "upstream.md", "---\nid: "+upstreamID+"\nstatus: completed\nepic: 01-test\ndescription: upstream\ntags: [test]\n---\n# Upstream\n")
+	r.Task("completed", "dependent.md", "---\nid: "+testutil.TaskID("dependent")+"\nstatus: completed\nepic: 01-test\ndescription: dependent\ntags: [test]\ndepends_on: ["+upstreamID+"]\n---\n# Dependent\n")
+	r.Epic("01-test.md", "---\nstatus: active\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
+
+	msg := moveTask(core.NewService(store.NewFS(r.Root)), "upstream", transition{to: string(domain.StatusReadyToStart)})()
+	moved, ok := msg.(movedMsg)
+	if !ok || moved.lifecycle == nil || len(moved.lifecycle.Impacts) != 1 || moved.lifecycle.Remedy == "" {
+		if failed, failedOK := msg.(actionErrMsg); failedOK {
+			t.Fatalf("reopen failed: %v", failed.err)
+		}
+		t.Fatalf("reopen receipt was discarded: %T %+v", msg, msg)
+	}
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(moved)
+	m = tm.(Model)
+	if m.flashErr || !strings.Contains(m.flash, "1 downstream task(s) changed derived state") ||
+		!strings.Contains(m.flash, "inspect each affected task") {
+		t.Fatalf("impact flash = %q (err=%v)", m.flash, m.flashErr)
+	}
+}
+
+func TestTUICommittedCleanupFailureWarnsAndReloads(t *testing.T) {
+	receipt := core.TaskLifecycleReceipt{
+		Task: domain.Task{ID: testutil.TaskID("tui-committed"), Slug: "committed", Status: domain.StatusInProgress},
+		From: domain.StatusReadyToStart, To: domain.StatusInProgress, Changed: true, Committed: true,
+	}
+	m := loaded(t, 120, 40)
+	tm, cmd := m.Update(movedMsg{
+		slug: "committed", to: string(domain.StatusInProgress), lifecycle: &receipt,
+		warning: errors.New("task lifecycle transition committed, but repository cleanup failed"),
+	})
+	m = tm.(Model)
+	if !m.flashErr || !strings.Contains(m.flash, "WARNING: committed") || cmd == nil {
+		t.Fatalf("committed warning flash=%q err=%v reload=%v", m.flash, m.flashErr, cmd != nil)
 	}
 }

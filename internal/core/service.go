@@ -14,11 +14,12 @@ import (
 // It has no fs and no cobra, so it is testable in isolation and reused by both
 // primary adapters (the cli and the tui).
 type Service struct {
-	store          Store
-	graphMutations TaskGraphMutationStore
-	templates      TemplateSource
-	now            func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
-	newID          func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
+	store              Store
+	graphMutations     TaskGraphMutationStore
+	lifecycleMutations TaskLifecycleMutationStore
+	templates          TemplateSource
+	now                func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
+	newID              func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
 	// newIDAt mints an id stamped with a GIVEN time (default id.NewAt) — for an entity
 	// whose id must encode its own declared date rather than "now", so lexical id order
 	// stays authorship order. Research uses it (its id is minted from `created`, which
@@ -85,12 +86,26 @@ func WithTaskGraphMutationStore(store TaskGraphMutationStore) Option {
 	}
 }
 
+// WithTaskLifecycleMutationStore supplies the use-case-specific guarded task
+// lifecycle capability. Production discovers it from FS automatically; focused
+// tests may inject it independently from the ordinary Store.
+func WithTaskLifecycleMutationStore(store TaskLifecycleMutationStore) Option {
+	return func(s *Service) {
+		if store != nil {
+			s.lifecycleMutations = store
+		}
+	}
+}
+
 // NewService wires the core to its store; templates default to the built-in
 // source unless WithTemplateSource overrides it.
 func NewService(store Store, opts ...Option) *Service {
 	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New, newIDAt: id.NewAt, maxRetries: defaultMaxRetries, retrySleep: defaultRetrySleep}
 	if mutations, ok := store.(TaskGraphMutationStore); ok {
 		s.graphMutations = mutations
+	}
+	if mutations, ok := store.(TaskLifecycleMutationStore); ok {
+		s.lifecycleMutations = mutations
 	}
 	for _, opt := range opts {
 		opt(s)

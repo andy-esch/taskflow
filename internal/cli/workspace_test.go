@@ -84,7 +84,7 @@ func TestWorkspace_PointerIsCalledOut(t *testing.T) {
 // TestMutationReceipt_CarriesWorkspace: a successful mutation must prove which
 // planning tree it changed, without a separate pre-read.
 func TestMutationReceipt_CarriesWorkspace(t *testing.T) {
-	root := testutil.NewRepo(t).Task("ready-to-start", "a.md", "---\nstatus: ready-to-start\ndescription: a\ntags: [x]\n---\n").Root
+	root := testutil.NewRepo(t).Task("ready-to-start", "a.md", "---\nid: "+testutil.TaskID("a")+"\nstatus: ready-to-start\ndescription: a\ntags: [x]\n---\n").Root
 
 	out, errOut, err := runIn(t, root, "--json", "task", "start", "a")
 	if err != nil {

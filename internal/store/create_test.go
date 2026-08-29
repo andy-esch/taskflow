@@ -208,3 +208,21 @@ func TestCreateRejectsAnInvalidEntityID(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateTaskRejectsLifecycleOwnedAndInvalidStatuses(t *testing.T) {
+	for _, status := range []domain.Status{
+		domain.StatusInProgress, domain.StatusCompleted, domain.StatusDeferred,
+		domain.StatusDeprecated, domain.Status("invented"), "",
+	} {
+		t.Run(string(status), func(t *testing.T) {
+			fs := NewFS(t.TempDir())
+			_, err := fs.CreateTask(domain.Task{
+				ID: testutil.TaskID("ordinary-create-" + string(status)), Slug: "task",
+				Status: status, Tags: []string{"test"}, Created: "2026-08-29",
+			}, "# Task\n", false)
+			if !errors.Is(err, domain.ErrValidation) {
+				t.Fatalf("CreateTask status %q error = %v, want validation", status, err)
+			}
+		})
+	}
+}

@@ -24,19 +24,9 @@ type TaskStore interface {
 	// so `task path` works even on a file whose frontmatter won't parse (the case
 	// where you most need the path, to open and repair it).
 	ResolveTaskPath(slug string) (string, error)
-	// Mutators take dryRun: true runs EVERY validation (resolve, parse-before-
-	// commit, collision/CAS checks) and returns the would-be result, but stops
-	// short of touching disk — so a dry-run that would fail fails identically.
-	// force skips the acceptance-criteria gate on a move to completed (the task
-	// counterpart of MoveAudit's bucket↔state refusal).
-	Move(slug string, to domain.Status, now time.Time, dryRun, force bool) (domain.Task, error)
-	// Defer moves a task to deferred and, when until is non-empty, records it as
-	// revisit_at ("snooze until") in the SAME atomic write — so a deferred task can
-	// never be left without the snooze date it was deferred with (the lost-second-
-	// write hazard a Move-then-SetFields had). An empty until is exactly
-	// Move(StatusDeferred). The caller validates the date; the store writes it
-	// verbatim. Re-deferring an already-deferred task rewrites revisit_at in place.
-	Defer(slug, until string, now time.Time, dryRun bool) (domain.Task, error)
+	// Ordinary task mutations take dryRun: true runs every validation and returns
+	// the would-be result but stops short of disk. Lifecycle changes are deliberately
+	// absent: TaskLifecycleMutationStore is the only status-write capability.
 	SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error)
 	CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error)
 	// EditTask hands the current file content to edit (which runs the caller's
@@ -95,6 +85,18 @@ type TaskGraphPlanner func(*TaskGraph) (TaskGraphMutationPlan, error)
 // only/test adapters do not acquire a mutation method they cannot implement.
 type TaskGraphMutationStore interface {
 	MutateTaskGraph(now time.Time, dryRun bool, planner TaskGraphPlanner) (TaskGraphMutationResult, error)
+}
+
+// TaskLifecyclePlanner resolves user intent and returns one semantic lifecycle
+// plan from the immutable authoritative graph. It must not call a Store method or
+// begin another guarded mutation.
+type TaskLifecyclePlanner func(*TaskGraph) (TaskLifecyclePlan, error)
+
+// TaskLifecycleMutationStore owns the guarded lifecycle read/authorize/write
+// boundary. It is separate from TaskStore so read-only and lightweight test
+// adapters do not claim atomic repository semantics they cannot provide.
+type TaskLifecycleMutationStore interface {
+	MutateTaskLifecycle(now time.Time, dryRun bool, planner TaskLifecyclePlanner) (TaskLifecycleMutationResult, error)
 }
 
 // EpicStore is the epic-persistence port.
@@ -239,7 +241,7 @@ type Linter interface {
 
 // Layout is the on-disk-layout port: the directory set a filesystem watcher must
 // observe. The store owns the layout convention, so the TUI watcher consumes this
-// instead of rebuilding the tasks/<status> + audits/<bucket> shape itself.
+// instead of rebuilding the flat entity-directory shape itself.
 type Layout interface {
 	WatchPaths() []string
 }

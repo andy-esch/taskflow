@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -25,7 +26,7 @@ func TestFS_Move_RejectsUnreloadableWithoutMoving(t *testing.T) {
 	path, out := testutil.TaskFixture(root, "ready-to-start", "alpha.md", original)
 	testutil.Write(t, path, out)
 
-	_, err := NewFS(root).Move("alpha", domain.StatusInProgress, time.Now(), false, false)
+	_, err := moveTaskForTest(NewFS(root), "alpha", domain.StatusInProgress, time.Now(), false, core.TaskLifecycleOverrideNone)
 	if err == nil {
 		t.Fatal("want an error for a move that wouldn't reload")
 	}
@@ -95,20 +96,20 @@ func TestFS_SetFields_ConflictsWhenEditedConcurrently(t *testing.T) {
 func TestFS_Move_ConflictsWhenEditedConcurrently(t *testing.T) {
 	root := t.TempDir()
 	path, out := testutil.TaskFixture(root, "ready-to-start", "alpha.md",
-		"---\nstatus: ready-to-start\n---\n# Alpha\n")
+		"---\nid: "+testutil.TaskID("alpha")+"\nstatus: ready-to-start\ndescription: alpha\ntags: [test]\n---\n# Alpha\n")
 	testutil.Write(t, path, out)
 	fs := NewFS(root)
 
 	const concurrent = "---\nstatus: ready-to-start\ndescription: raced\n---\n# Alpha\n"
-	testHookBeforeMoveWrite = func() {
+	testHookBeforeLifecycleVerify = func() {
 		// A concurrent in-place edit lands between this Move's resolve and write.
 		if err := os.WriteFile(path, []byte(concurrent), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	defer func() { testHookBeforeMoveWrite = nil }()
+	defer func() { testHookBeforeLifecycleVerify = nil }()
 
-	_, err := fs.Move("alpha", domain.StatusInProgress, time.Now(), false, false)
+	_, err := moveTaskForTest(fs, "alpha", domain.StatusInProgress, time.Now(), false, core.TaskLifecycleOverrideNone)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("want ErrConflict for a concurrently-edited task, got %v", err)
 	}
