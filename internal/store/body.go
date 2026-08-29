@@ -15,8 +15,8 @@ import (
 // EOL — and, for tasks, stamps updated_at), echoes the body exactly as it lands on
 // disk (so a --json caller's echo matches a later `show --json`), parses before
 // committing so a broken result never lands, compare-and-swaps against a concurrent
-// relocation (recheck), then writes atomically. dryRun runs every check but skips
-// the write. Returns the reloaded entity and the resulting (LF) body.
+// source change (recheck), then writes atomically. dryRun runs every semantic check
+// but skips write-time locking/CAS. Returns the reloaded entity and resulting body.
 //
 // The frontmatter-parse guard + body computation stay in each caller (they need the
 // current body to append, and the per-entity stamp/parse/resolve differ); this folds
@@ -44,8 +44,8 @@ func writeBody[T any](
 	if err != nil {
 		return zero, "", fmt.Errorf("%w: %v", domain.ErrValidation, err)
 	}
-	// A dry-run previews without writing, so it takes neither the lock nor the version-CAS
-	// (write-time concerns) — consistent with the movers.
+	// A dry-run previews without writing, so it takes neither the lock nor the
+	// version-CAS; this ordinary body mutation has no repository-wide authorization.
 	if dryRun {
 		return v, string(storedBody), nil
 	}
@@ -59,9 +59,8 @@ func writeBody[T any](
 		return zero, "", lockErr
 	}
 	defer unlock()
-	// Compare-and-swap before the write (mirrors SetFields/Move): a concurrent move
-	// may have relocated the file during the read→write gap; writing the original
-	// path would resurrect the slug in its old directory.
+	// Compare-and-swap before the write: a concurrent lifecycle, rename, or content
+	// change during the read→write gap must defeat this stale body replacement.
 	if err := recheck(); err != nil {
 		return zero, "", err
 	}
@@ -78,7 +77,7 @@ func writeBody[T any](
 // (parse-before-accept, compare-and-swap, dry-run, body echo) lives in writeBody.
 // Returns the reloaded audit and the resulting (LF) body.
 func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, "", err
 	}
 	path, err := s.resolveAudit(slug)
@@ -99,7 +98,7 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
 		func(c []byte) (domain.Audit, error) { return parseAudit(c, path) },
 		s.writeLock,
-		// A concurrent bucket move (relocate) OR in-place edit during the read→write gap.
+		// A concurrent audit lifecycle or content edit during the read→write gap.
 		func() error {
 			return verifyUnchanged(s.resolveAuditPath, slug, path, hashContent(content), "audit", "edit")
 		},
@@ -113,7 +112,7 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 // comments, and key order survive) and updated_at is stamped. The shared write tail
 // lives in writeBody. Returns the reloaded task and the resulting (LF) body.
 func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Task{}, "", err
 	}
 	path, err := s.resolve(slug)
@@ -177,6 +176,6 @@ func toLF(s string) string {
 }
 
 // testHookBeforeBodyWrite runs between EditBody's validation and its compare-and-
-// swap, so a test can simulate a concurrent relocation in that window (mirrors
+// swap, so a test can simulate a concurrent source change in that window (mirrors
 // testHookBeforeSetFieldsWrite). nil in production.
 var testHookBeforeBodyWrite func()

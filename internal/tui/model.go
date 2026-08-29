@@ -100,8 +100,8 @@ type Model struct {
 	navStack   []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
 	flash      string     // transient post-action feedback line (cleared on the next key)
 	flashErr   bool       // the flash is an error (rendered red)
-	movedAway  string     // slug just relocated by a lifecycle action: its absence from the
-	// active tab after the post-move reload is the success, not a dangling reference
+	movedAway  string     // slug just moved out of the active lifecycle view: its absence after
+	// the post-move reload is the success, not a dangling reference
 
 	watch     *watcher // fsnotify source (nil when unavailable / in tests); see watch.go
 	watchOff  bool     // the watcher failed to start: live reload is off (footer note)
@@ -354,7 +354,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.revisit != "" {
 			m.flash += fmt.Sprintf(" (revisit %s)", msg.revisit)
 		}
-		m.flashErr = false
+		if msg.lifecycle != nil && len(msg.lifecycle.Impacts) > 0 {
+			m.flash += fmt.Sprintf("; %d downstream task(s) changed derived state", len(msg.lifecycle.Impacts))
+			if msg.lifecycle.Remedy != "" {
+				m.flash += "; " + msg.lifecycle.Remedy
+			}
+		}
+		if msg.warning != nil {
+			m.flash += "; WARNING: committed, but cleanup failed: " + msg.warning.Error()
+		}
+		m.flashErr = msg.warning != nil
 		// The moved task leaves the active list (its frontmatter status changed); its
 		// disappearance on the reload below is expected, so don't let the post-reload
 		// restore mistake it for a dangling reference and overwrite this success.
@@ -543,8 +552,8 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 		case tab.list.FilterState() == list.Unfiltered:
 			// The id is genuinely absent from a fully-visible list — a dangling
 			// reference jump (`f` to an epic that doesn't exist) or a selection
-			// deleted externally. Say so once. EXCEPT the task we just relocated: its
-			// absence here is the success (flashed green already), not a not-found.
+			// deleted externally. Say so once. EXCEPT the task whose lifecycle move took
+			// it out of this view: its absence is success, not a not-found.
 			if msg.kind == m.cur().kind && msg.restore != m.movedAway {
 				m.flash, m.flashErr = msg.restore+" not found", true
 			}

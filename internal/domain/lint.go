@@ -149,7 +149,7 @@ func FrontmatterStatusIssues(t Task) []Issue {
 	if !t.StatusFellBack {
 		return nil
 	}
-	return []Issue{{Field: "status", Message: "frontmatter status missing or unrecognized — set it with the lifecycle verb for its state (`task start`/`next`/`ready`/`complete`/`deprecate`)"}}
+	return []Issue{{Field: "status", Message: "frontmatter status missing or unrecognized — repair the file directly via `tskflwctl task path <task>`, run `tskflwctl lint`, then use lifecycle verbs for future transitions"}}
 }
 
 // MissingIDIssue flags an entity (task or audit) that has no stable id yet — the

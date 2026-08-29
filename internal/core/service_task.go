@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -216,14 +217,16 @@ func (s *Service) AppendBody(slug, text string, dryRun bool) (domain.Task, strin
 	return r.task, r.body, err
 }
 
-// Move transitions a task to the given status (lifecycle engine behind the
-// explicit verbs). Moving to the current status is an idempotent no-op. force bypasses
-// the acceptance-criteria gate on a completion — see Store.Move.
-// dryRun validates everything and returns the would-be task without writing.
-func (s *Service) Move(slug string, to domain.Status, dryRun, force bool) (domain.Task, error) {
-	now := s.now()
-	return retryOnConflict(s, dryRun, func() (domain.Task, error) {
-		return s.store.Move(slug, to, now, dryRun, force)
+// Move transitions a task through the guarded lifecycle capability. Override is
+// typed so dependency eligibility and completion criteria can never be confused
+// behind one internal force boolean.
+func (s *Service) Move(ref string, to domain.Status, dryRun bool, override TaskLifecycleOverride) (TaskLifecycleReceipt, error) {
+	return s.runTaskLifecycleMutation(dryRun, func(graph *TaskGraph) (TaskLifecyclePlan, error) {
+		taskID, err := graph.ResolveTaskID(ref)
+		if err != nil {
+			return TaskLifecyclePlan{}, err
+		}
+		return TaskLifecyclePlan{TaskID: taskID, To: to, Override: override}, nil
 	})
 }
 
@@ -235,16 +238,60 @@ func (s *Service) Move(slug string, to domain.Status, dryRun, force bool) (domai
 //
 // The date is validated here so the contract holds for every adapter — the same
 // guard the old SetFields path applied, kept now that the write bypasses SetFields.
-func (s *Service) DeferTask(slug, until string, dryRun bool) (domain.Task, error) {
+func (s *Service) DeferTask(ref, until string, dryRun bool) (TaskLifecycleReceipt, error) {
 	if until != "" {
 		if err := domain.ValidateDate(until); err != nil {
-			return domain.Task{}, err
+			return TaskLifecycleReceipt{}, err
 		}
 	}
-	now := s.now()
-	return retryOnConflict(s, dryRun, func() (domain.Task, error) {
-		return s.store.Defer(slug, until, now, dryRun)
+	return s.runTaskLifecycleMutation(dryRun, func(graph *TaskGraph) (TaskLifecyclePlan, error) {
+		taskID, err := graph.ResolveTaskID(ref)
+		if err != nil {
+			return TaskLifecyclePlan{}, err
+		}
+		return TaskLifecyclePlan{TaskID: taskID, To: domain.StatusDeferred, RevisitAt: until}, nil
 	})
+}
+
+func (s *Service) runTaskLifecycleMutation(dryRun bool, planner TaskLifecyclePlanner) (TaskLifecycleReceipt, error) {
+	if s.lifecycleMutations == nil {
+		return TaskLifecycleReceipt{}, fmt.Errorf("task lifecycle mutations are unavailable from this store")
+	}
+	now := s.now()
+	result, err := s.lifecycleMutations.MutateTaskLifecycle(now, dryRun, planner)
+	if !dryRun {
+		for attempt := 1; attempt <= s.maxRetries && errors.Is(err, domain.ErrConflict) && !result.Committed; attempt++ {
+			s.retrySleep(attempt)
+			result, err = s.lifecycleMutations.MutateTaskLifecycle(now, dryRun, planner)
+		}
+	}
+	receipt := taskLifecycleReceipt(result)
+	if err != nil && result.Committed {
+		return receipt, &TaskLifecycleMutationFailure{Cause: err, Receipt: receipt}
+	}
+	return receipt, err
+}
+
+func taskLifecycleReceipt(result TaskLifecycleMutationResult) TaskLifecycleReceipt {
+	return TaskLifecycleReceipt{
+		Task: result.Task, From: result.From, To: result.Plan.To,
+		Changed: result.Changed, DryRun: result.DryRun, Committed: result.Committed, Override: result.Plan.Override,
+		Forced: result.OverrideApplied, Before: result.Before, After: result.After,
+		OutstandingBlockers: cloneLifecycleBlockers(result.OutstandingBlockers),
+		Impacts:             cloneTaskGraphStateImpacts(result.Impacts),
+		Remedy:              taskLifecycleRemedy(result),
+	}
+}
+
+func taskLifecycleRemedy(result TaskLifecycleMutationResult) string {
+	parts := make([]string, 0, 2)
+	if result.OverrideApplied && result.Plan.Override == TaskLifecycleOverrideDependencyGate {
+		parts = append(parts, "resolve the outstanding blockers; the override did not alter dependency edges")
+	}
+	if len(result.Impacts) > 0 {
+		parts = append(parts, "inspect each affected task with `tskflwctl task blockers <task>` and restore sound prerequisites or update its dependencies")
+	}
+	return strings.Join(parts, "; ")
 }
 
 // SetFields validates and applies frontmatter updates to a task (stamping
@@ -275,12 +322,11 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 				"%w: %s is graph-owned and cannot be changed with `task set` (including --force); use guarded dependency operations%s",
 				domain.ErrValidation, field, graphFieldDirection(field))
 		}
-		// status isn't a settable field: a status change relocates the file (frontmatter
-		// is authoritative — ADR-0003 Phase A — but the mirror dir must move with it, and
-		// SetFields writes in place). Route it through the lifecycle verbs, or the dir and
-		// frontmatter silently desync. Rejected on both the set and unset paths.
+		// Status is lifecycle-owned. Route it through the guarded lifecycle capability
+		// so eligibility, timestamps, completion checks, and impact receipts cannot be
+		// bypassed. Rejected on both the set and unset paths.
 		if field == "status" {
-			return domain.Task{}, fmt.Errorf("%w: status changes relocate the file — use `task <verb>`/`task move`, not `set`", domain.ErrValidation)
+			return domain.Task{}, fmt.Errorf("%w: status is lifecycle-owned — use `task <verb>`/`task move`, not `set`", domain.ErrValidation)
 		}
 		if _, unset := val.(domain.UnsetField); unset {
 			switch field {
@@ -448,10 +494,7 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 		return domain.Task{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
 	}
 	status := domain.StatusReadyToStart
-	switch {
-	case p.Start:
-		status = domain.StatusInProgress
-	case p.Next:
+	if p.Next {
 		status = domain.StatusNextUp
 	}
 	t := domain.Task{
@@ -473,11 +516,6 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	if err := domain.ActiveTaskFieldErr(t); err != nil {
 		return domain.Task{}, err
 	}
-	// A task born in-progress (`new --start`) gets the same started_at stamp Move
-	// writes, so "every in-progress task has a started_at" holds however it got there.
-	if status == domain.StatusInProgress {
-		t.StartedAt = t.Created
-	}
 	body := p.Body
 	if body == "" {
 		tmpl, err := s.templateBody("task", p.Template)
@@ -485,6 +523,15 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 			return domain.Task{}, err
 		}
 		body = renderTemplate(tmpl, map[string]string{"title": p.Title, "epic": p.Epic})
+	}
+	if p.Start {
+		receipt, err := s.runTaskLifecycleMutation(p.DryRun, func(*TaskGraph) (TaskLifecyclePlan, error) {
+			return TaskLifecyclePlan{
+				To:     domain.StatusInProgress,
+				Create: &TaskLifecycleCreation{Task: t, Body: body},
+			}, nil
+		})
+		return receipt.Task, err
 	}
 	return s.store.CreateTask(t, body, p.DryRun)
 }

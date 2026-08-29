@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -17,6 +18,9 @@ import (
 // frontmatter changes (no relocation under the flat layout).
 func writeTaskAt(t *testing.T, root, status, name, content string) string {
 	t.Helper()
+	if strings.HasPrefix(content, "---\n") && !strings.Contains(strings.SplitN(content, "---\n", 3)[1], "id:") {
+		content = "---\nid: " + testutil.TaskID(strings.TrimSuffix(name, ".md")) + "\n" + content[len("---\n"):]
+	}
 	path, out := testutil.TaskFixture(root, status, name, content)
 	testutil.Write(t, path, out)
 	return path
@@ -24,10 +28,10 @@ func writeTaskAt(t *testing.T, root, status, name, content string) string {
 
 func TestFS_Move(t *testing.T) {
 	root := t.TempDir()
-	path := writeTaskAt(t, root, "ready-to-start", "alpha.md", "---\nstatus: ready-to-start\nepic: 01-x\n---\n# Alpha\n")
+	path := writeTaskAt(t, root, "ready-to-start", "alpha.md", "---\nstatus: ready-to-start\nepic: 01-x\ndescription: alpha\ntags: [test]\n---\n# Alpha\n")
 
 	now := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
-	task, err := NewFS(root).Move("alpha", domain.StatusInProgress, now, false, false)
+	task, err := moveTaskForTest(NewFS(root), "alpha", domain.StatusInProgress, now, false, core.TaskLifecycleOverrideNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,8 +53,8 @@ func TestFS_Move(t *testing.T) {
 
 func TestFS_Move_Idempotent(t *testing.T) {
 	root := t.TempDir()
-	writeTask(t, root, "in-progress", "beta.md", "---\nstatus: in-progress\n---\n# B\n")
-	task, err := NewFS(root).Move("beta", domain.StatusInProgress, time.Now(), false, false)
+	writeTaskAt(t, root, "in-progress", "beta.md", "---\nstatus: in-progress\n---\n# B\n")
+	task, err := moveTaskForTest(NewFS(root), "beta", domain.StatusInProgress, time.Now(), false, core.TaskLifecycleOverrideNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +75,7 @@ func TestFS_Move_RevisitAt(t *testing.T) {
 	fs := NewFS(root)
 	deferred := func(name string) string {
 		return writeTaskAt(t, root, "deferred", name,
-			"---\nstatus: deferred\nrevisit_at: \"2026-09-01\"\ndeferred_at: \"2026-06-01\"\n---\n# X\n")
+			"---\nstatus: deferred\nrevisit_at: \"2026-09-01\"\ndeferred_at: \"2026-06-01\"\ntags: [test]\n---\n# X\n")
 	}
 	read := func(path string) string {
 		b, err := os.ReadFile(path)
@@ -83,7 +87,7 @@ func TestFS_Move_RevisitAt(t *testing.T) {
 
 	// Re-defer (deferred -> deferred): idempotent no-op, snooze date untouched.
 	redeferPath := deferred("redefer.md")
-	task, err := fs.Move("redefer", domain.StatusDeferred, now, false, false)
+	task, err := moveTaskForTest(fs, "redefer", domain.StatusDeferred, now, false, core.TaskLifecycleOverrideNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +110,7 @@ func TestFS_Move_RevisitAt(t *testing.T) {
 	} {
 		name := "leave-" + tc.dir + ".md"
 		path := deferred(name)
-		if _, err := fs.Move(strings.TrimSuffix(name, ".md"), tc.to, now, false, false); err != nil {
+		if _, err := moveTaskForTest(fs, strings.TrimSuffix(name, ".md"), tc.to, now, false, core.TaskLifecycleOverrideNone); err != nil {
 			t.Fatalf("move to %s: %v", tc.to, err)
 		}
 		got := read(path)
@@ -135,7 +139,7 @@ func TestFS_Defer(t *testing.T) {
 		return string(b)
 	}
 
-	task, err := fs.Defer("alpha", "2026-09-01", now, false)
+	task, err := deferTaskForTest(fs, "alpha", "2026-09-01", now, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +155,7 @@ func TestFS_Defer(t *testing.T) {
 
 	// Re-defer with a NEW date: in-place rewrite, revisit_at updated.
 	later := time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)
-	redeferred, err := fs.Defer("alpha", "2026-12-25", later, false)
+	redeferred, err := deferTaskForTest(fs, "alpha", "2026-12-25", later, false)
 	if err != nil {
 		t.Fatalf("re-defer: %v", err)
 	}
@@ -170,7 +174,7 @@ func TestFS_Defer_BareNoDate(t *testing.T) {
 	path := writeTaskAt(t, root, "ready-to-start", "beta.md", "---\nstatus: ready-to-start\n---\n# Beta\n")
 	now := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
 
-	task, err := NewFS(root).Defer("beta", "", now, false)
+	task, err := deferTaskForTest(NewFS(root), "beta", "", now, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +195,7 @@ func TestFS_Defer_BareNoDate(t *testing.T) {
 }
 
 func TestFS_Move_NotFound(t *testing.T) {
-	_, err := NewFS(t.TempDir()).Move("nope", domain.StatusCompleted, time.Now(), false, false)
+	_, err := moveTaskForTest(NewFS(t.TempDir()), "nope", domain.StatusCompleted, time.Now(), false, core.TaskLifecycleOverrideNone)
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
@@ -203,9 +207,9 @@ func TestFS_Resolve_Ambiguous(t *testing.T) {
 	// layout — files are unique by id). Resolving by the shared slug is ambiguous.
 	idA := testutil.TaskID("dup-a")
 	idB := testutil.TaskID("dup-b")
-	testutil.Write(t, filepath.Join(root, "tasks", idA+"-dup.md"), "---\nstatus: ready-to-start\n---\n")
-	testutil.Write(t, filepath.Join(root, "tasks", idB+"-dup.md"), "---\nstatus: in-progress\n---\n")
-	_, err := NewFS(root).Move("dup", domain.StatusCompleted, time.Now(), false, false)
+	testutil.Write(t, filepath.Join(root, "tasks", idA+"-dup.md"), "---\nid: "+idA+"\nstatus: ready-to-start\n---\n")
+	testutil.Write(t, filepath.Join(root, "tasks", idB+"-dup.md"), "---\nid: "+idB+"\nstatus: in-progress\n---\n")
+	_, err := moveTaskForTest(NewFS(root), "dup", domain.StatusCompleted, time.Now(), false, core.TaskLifecycleOverrideNone)
 	if !errors.Is(err, domain.ErrAmbiguous) {
 		t.Errorf("want ErrAmbiguous, got %v", err)
 	}
@@ -224,15 +228,15 @@ func TestFS_Resolve_Ambiguous(t *testing.T) {
 // close an audit with open findings. A criterion carrying a STATE has been decided and
 // does not block; only silence does.
 func TestMove_CompleteGatesOnUnexplainedCriteria(t *testing.T) {
-	body := func(criteria string) string {
-		return "---\nid: 6fjangd7kvh3\nstatus: in-progress\ndescription: d\ntags: [a]\n---\n\n## Acceptance criteria\n\n" + criteria
+	body := func(seed, criteria string) string {
+		return "---\nid: " + testutil.TaskID(seed) + "\nstatus: in-progress\ndescription: d\ntags: [a]\n---\n\n## Acceptance criteria\n\n" + criteria
 	}
 	now := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
 
 	t.Run("a bare unticked box refuses", func(t *testing.T) {
 		root := t.TempDir()
-		writeTask(t, root, "in-progress", "6fjangd7kvh3-gated.md", body("- [x] done\n- [ ] silently unticked\n"))
-		_, err := NewFS(root).Move("gated", domain.StatusCompleted, now, false, false)
+		writeTask(t, root, "in-progress", "6fjangd7kvh3-gated.md", body("6fjangd7kvh3-gated", "- [x] done\n- [ ] silently unticked\n"))
+		_, err := moveTaskForTest(NewFS(root), "gated", domain.StatusCompleted, now, false, core.TaskLifecycleOverrideNone)
 		if !errors.Is(err, domain.ErrValidation) {
 			t.Fatalf("want ErrValidation, got %v", err)
 		}
@@ -241,7 +245,7 @@ func TestMove_CompleteGatesOnUnexplainedCriteria(t *testing.T) {
 		}
 		// …and the refusal must be identical under --dry-run, so a preview cannot pass
 		// where the real write would fail.
-		if _, err := NewFS(root).Move("gated", domain.StatusCompleted, now, true, false); !errors.Is(err, domain.ErrValidation) {
+		if _, err := moveTaskForTest(NewFS(root), "gated", domain.StatusCompleted, now, true, core.TaskLifecycleOverrideNone); !errors.Is(err, domain.ErrValidation) {
 			t.Errorf("dry-run must fail identically, got %v", err)
 		}
 	})
@@ -249,24 +253,24 @@ func TestMove_CompleteGatesOnUnexplainedCriteria(t *testing.T) {
 	t.Run("an explained criterion does not block", func(t *testing.T) {
 		root := t.TempDir()
 		writeTask(t, root, "in-progress", "6fjangd7kvh3-decided.md",
-			body("- [x] done\n- [ ] parked · **deferred:** waiting on the ADR\n- [ ] moot · **n/a:** dropped\n"))
-		if _, err := NewFS(root).Move("decided", domain.StatusCompleted, now, false, false); err != nil {
+			body("6fjangd7kvh3-decided", "- [x] done\n- [ ] parked · **deferred:** waiting on the ADR\n- [ ] moot · **n/a:** dropped\n"))
+		if _, err := moveTaskForTest(NewFS(root), "decided", domain.StatusCompleted, now, false, core.TaskLifecycleOverrideNone); err != nil {
 			t.Fatalf("decided criteria must not block completion: %v", err)
 		}
 	})
 
 	t.Run("force completes anyway", func(t *testing.T) {
 		root := t.TempDir()
-		writeTask(t, root, "in-progress", "6fjangd7kvh3-forced.md", body("- [ ] silently unticked\n"))
-		if _, err := NewFS(root).Move("forced", domain.StatusCompleted, now, false, true); err != nil {
+		writeTask(t, root, "in-progress", "6fjangd7kvh3-forced.md", body("6fjangd7kvh3-forced", "- [ ] silently unticked\n"))
+		if _, err := moveTaskForTest(NewFS(root), "forced", domain.StatusCompleted, now, false, core.TaskLifecycleOverrideAcceptanceCriteria); err != nil {
 			t.Fatalf("--force must bypass the gate: %v", err)
 		}
 	})
 
 	t.Run("only completion is gated", func(t *testing.T) {
 		root := t.TempDir()
-		writeTask(t, root, "in-progress", "6fjangd7kvh3-parked.md", body("- [ ] silently unticked\n"))
-		if _, err := NewFS(root).Move("parked", domain.StatusDeferred, now, false, false); err != nil {
+		writeTask(t, root, "in-progress", "6fjangd7kvh3-parked.md", body("6fjangd7kvh3-parked", "- [ ] silently unticked\n"))
+		if _, err := moveTaskForTest(NewFS(root), "parked", domain.StatusDeferred, now, false, core.TaskLifecycleOverrideNone); err != nil {
 			t.Fatalf("deferring is not completing and must not be gated: %v", err)
 		}
 	})

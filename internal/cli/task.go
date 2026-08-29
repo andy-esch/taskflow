@@ -699,7 +699,8 @@ func newTaskAppendCmd(app *App) *cobra.Command {
 }
 
 func newTaskMoveCmd(app *App) *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:         "move <task>... <status>",
 		Short:       "Transition task(s) to <status> (generic escape hatch)",
 		Args:        cobra.MinimumNArgs(2),
@@ -723,9 +724,11 @@ func newTaskMoveCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err // already wraps ErrValidation and lists valid statuses
 			}
-			return runTransition(app, to, args[:len(args)-1], false)
+			return runTransition(app, to, args[:len(args)-1], force)
 		},
 	}
+	cmd.Flags().BoolVar(&force, "force", false, "override the destination's contextual gate (dependencies for in-progress; acceptance criteria for completed)")
+	return cmd
 }
 
 // criteriaEdit maps the structural flags to their domain operation, or nil when the call is
@@ -773,9 +776,14 @@ func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Comm
 			return runTransition(app, to, args, force)
 		},
 	}
-	// Only `complete` has a gate to override — offering --force on `start` or `ready`
-	// would advertise a check that does not exist there.
-	if to == domain.StatusCompleted {
+	switch to {
+	case domain.StatusInProgress:
+		cmd.Long = short + ".\n\n" +
+			"Refuses a task unless it is ready-to-start with a clear dependency gate. --force\n" +
+			"bypasses only that dependency gate; it does not bypass lifecycle role or repair\n" +
+			"the dependencies, and the receipt names every outstanding blocker."
+		cmd.Flags().BoolVar(&force, "force", false, "start despite outstanding dependency blockers")
+	case domain.StatusCompleted:
 		cmd.Long = short + ".\n\n" +
 			"Refuses a task whose acceptance criteria are still unmet with no reason given —\n" +
 			"the task counterpart of `audit close` refusing while findings are open. A criterion\n" +
@@ -800,8 +808,23 @@ func deprecatedTransitionCmd(app *App, oldVerb, newVerb string, to domain.Status
 // runTransition moves each task to status `to`, via the shared runMoves report.
 func runTransition(app *App, to domain.Status, slugs []string, force bool) error {
 	return runMoves(app, slugs, string(to),
-		func(slug string) (domain.Task, error) { return app.Svc.Move(slug, to, app.DryRun, force) },
-		func(t domain.Task) string { return t.Slug })
+		func(slug string) (core.TaskLifecycleReceipt, error) {
+			return app.Svc.Move(slug, to, app.DryRun, lifecycleOverride(to, force))
+		},
+		func(receipt core.TaskLifecycleReceipt) string { return receipt.Task.Slug },
+		func(receipt core.TaskLifecycleReceipt, result *render.MoveResult) {
+			*result = render.TaskMoveResult(receipt)
+		})
+}
+
+func lifecycleOverride(to domain.Status, force bool) core.TaskLifecycleOverride {
+	if !force {
+		return core.TaskLifecycleOverrideNone
+	}
+	if to == domain.StatusCompleted {
+		return core.TaskLifecycleOverrideAcceptanceCriteria
+	}
+	return core.TaskLifecycleOverrideDependencyGate
 }
 
 // newDeferCmd mirrors newTransitionCmd (bare verb → picker, ArbitraryArgs, the
@@ -849,9 +872,13 @@ func newDeferCmd(app *App) *cobra.Command {
 				return err
 			}
 			return runMoves(app, args, string(to),
-				func(slug string) (domain.Task, error) { return app.Svc.DeferTask(slug, revisit, app.DryRun) },
-				func(t domain.Task) string { return t.Slug },
-				func(t domain.Task, r *render.MoveResult) { r.RevisitAt = t.RevisitAt })
+				func(slug string) (core.TaskLifecycleReceipt, error) {
+					return app.Svc.DeferTask(slug, revisit, app.DryRun)
+				},
+				func(receipt core.TaskLifecycleReceipt) string { return receipt.Task.Slug },
+				func(receipt core.TaskLifecycleReceipt, result *render.MoveResult) {
+					*result = render.TaskMoveResult(receipt)
+				})
 		},
 	}
 	cmd.Flags().StringVar(&until, "until", "", "revisit date YYYY-MM-DD (snooze until); records revisit_at on each task")

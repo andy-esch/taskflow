@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -45,7 +46,7 @@ func TestCreate_StampsSchemaVersion(t *testing.T) {
 // rewrites the status in frontmatter.
 func TestSchemaVersion_ParsesAndSurvivesEdits(t *testing.T) {
 	root := t.TempDir()
-	seed := "---\nschema: 1\nstatus: ready-to-start\ndescription: d\ntier: 2\ntags: [seed]\n---\n# T\n\nbody\n"
+	seed := "---\nschema: 1\nid: " + testutil.TaskID("keep") + "\nstatus: ready-to-start\ndescription: d\ntier: 2\ntags: [seed]\n---\n# T\n\nbody\n"
 	writeTask(t, root, "ready-to-start", "keep.md", seed)
 	path := filepath.Join(root, domain.TasksDir, testutil.TaskID("keep")+"-keep.md")
 	fs := NewFS(root)
@@ -59,7 +60,7 @@ func TestSchemaVersion_ParsesAndSurvivesEdits(t *testing.T) {
 	if got := readFile(t, path); !strings.Contains(got, "schema: 1") {
 		t.Errorf("SetFields dropped the reserved schema key:\n%s", got)
 	}
-	if _, err := fs.Move("keep", domain.StatusInProgress, bodyNow, false, false); err != nil {
+	if _, err := moveTaskForTest(fs, "keep", domain.StatusInProgress, bodyNow, false, core.TaskLifecycleOverrideNone); err != nil {
 		t.Fatal(err)
 	}
 	got := readFile(t, path)

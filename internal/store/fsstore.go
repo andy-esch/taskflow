@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 
@@ -17,7 +15,7 @@ import (
 // errBadFrontmatter marks a malformed-frontmatter parse failure (vs an I/O
 // error), so listing can decide whether to skip or fail. It wraps
 // domain.ErrValidation so a malformed file surfaces with the same exit code (11)
-// on the single-item read/move paths (GetTask/GetEpic/GetAudit/Move) that the
+// on the single-item read paths (GetTask/GetEpic/GetAudit) that the
 // write paths (SetFields/EditBody) already produce — agents route on the code.
 var errBadFrontmatter = fmt.Errorf("%w: malformed frontmatter", domain.ErrValidation)
 
@@ -33,8 +31,8 @@ var errNotEntity = fmt.Errorf("%w: not an entity file", domain.ErrValidation)
 // character corrected. Both wrap ErrValidation, so exit-code classification is unchanged.
 var errBadEntityID = fmt.Errorf("%w: invalid entity id", domain.ErrValidation)
 
-// FS reads/writes a planning tree: tasks at <root>/tasks/<status>/<slug>.md
-// and epics at <root>/epics/<id>.md.
+// FS reads and writes the flat, id-led entity directories under one planning
+// root: tasks/, epics/, audits/, and research/.
 type FS struct {
 	root        string // the planning root; the write-lock (flock) is taken on this dir
 	tasksDir    string
@@ -74,11 +72,11 @@ func (s *FS) WatchPaths() []string {
 	return []string{s.epicsDir, s.tasksDir, s.auditsDir, s.researchDir}
 }
 
-// ListTasks scans every status directory and parses each task's frontmatter.
+// ListTasks scans the flat task directory and parses each task's frontmatter.
 // A file with unreadable frontmatter is skipped and reported as a FileProblem
 // (so one bad file doesn't blind the whole listing); err is only for fatal I/O.
 func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
 	return scanDir(s.tasksDir, func(path string, content []byte) (domain.Task, error) {
@@ -90,7 +88,7 @@ func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 // pass), so lint's acceptance-criteria checks read every file once — the task twin of
 // ListAuditsWithFindings.
 func (s *FS) ListTasksWithBodies() ([]core.TaskWithBody, []domain.FileProblem, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
 	return scanDir(s.tasksDir, func(path string, content []byte) (core.TaskWithBody, error) {
@@ -105,7 +103,7 @@ func (s *FS) ListTasksWithBodies() ([]core.TaskWithBody, []domain.FileProblem, e
 
 // GetTask returns a single task plus its markdown body.
 func (s *FS) GetTask(slug string) (domain.Task, string, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Task{}, "", err
 	}
 	path, err := s.resolve(slug)
@@ -124,158 +122,16 @@ func (s *FS) GetTask(slug string) (domain.Task, string, error) {
 	return t, string(body), nil
 }
 
-// Move transitions a task to status `to`: it updates frontmatter (status +
-// dates) and relocates the file to the target status directory. Moving to the
-// current status is an idempotent no-op.
-func (s *FS) Move(slug string, to domain.Status, now time.Time, dryRun, force bool) (domain.Task, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
-		return domain.Task{}, err
-	}
-	return s.moveTask(slug, to, now, dryRun, force, nil)
-}
-
-// Defer moves a task to deferred and records `until` as revisit_at in the SAME
-// atomic write (the audit-M4 fix), so the relocation and the snooze date can't
-// land separately — a Move-then-SetFields could leave a task deferred without its
-// date if the second write failed. An empty until is a plain move to deferred;
-// re-deferring an already-deferred task rewrites revisit_at in place.
-func (s *FS) Defer(slug, until string, now time.Time, dryRun bool) (domain.Task, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
-		return domain.Task{}, err
-	}
-	var extra map[string]any
-	if until != "" {
-		extra = map[string]any{"revisit_at": until}
-	}
-	return s.moveTask(slug, domain.StatusDeferred, now, dryRun, false, extra)
-}
-
-// moveTask is the shared engine behind Move and Defer: it ensures the task ends up
-// in the `to` status dir with the status/date stamps plus any `extra` frontmatter,
-// in ONE atomic write. A real transition (from != to) relocates the file; an
-// in-place rewrite (from == to, used by a re-defer that carries a new revisit_at)
-// overwrites the existing file. When nothing would change it's an idempotent no-op.
-func (s *FS) moveTask(slug string, to domain.Status, now time.Time, dryRun, force bool, extra map[string]any) (domain.Task, error) {
-	if !to.Valid() {
-		return domain.Task{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
-	}
-	path, err := s.resolve(slug)
-	if err != nil {
-		return domain.Task{}, err
-	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return domain.Task{}, fmt.Errorf("read task %s: %w", path, err)
-	}
-	// Under the flat layout status lives only in frontmatter (ADR-0003 §4) — there is
-	// no directory to disagree with it, so a move is a pure in-place frontmatter edit.
-	cur, err := parseTask(content, path)
-	if err != nil {
-		return domain.Task{}, err
-	}
-	// Acceptance-criteria invariant, the task counterpart of the bucket↔state rule
-	// MoveAudit enforces: completing a task whose criteria are silently unticked writes a
-	// state the reader cannot trust. A criterion carrying deferred/wontfix/tracked/n/a has
-	// been DECIDED and does not block — only silence does. Runs before the dry-run return
-	// so a preview fails identically.
-	if to == domain.StatusCompleted && !force {
-		_, body := splitFrontmatter(content)
-		if unmet := domain.UnexplainedCriteria(string(body)); len(unmet) > 0 {
-			return domain.Task{}, fmt.Errorf(
-				"%w: task %q has %d acceptance criterion/criteria still unmet with no reason (%s); tick them, give each a state (`task ac --defer|--wontfix|--tracked|--na`), or pass --force",
-				domain.ErrValidation, slug, len(unmet), criterionIndexes(unmet))
-		}
-	}
-	from := cur.Status
-
-	date := now.Format("2006-01-02")
-	updates := map[string]any{}
-	if from != to {
-		// A real transition: stamp status, the activity date, and the destination's
-		// entry date.
-		updates["status"] = string(to)
-		updates["updated_at"] = date
-		switch to {
-		case domain.StatusInProgress:
-			updates["started_at"] = date
-		case domain.StatusCompleted:
-			updates["completed_at"] = date
-		case domain.StatusDeprecated:
-			updates["deprecated_at"] = date
-		case domain.StatusDeferred:
-			updates["deferred_at"] = date
-		}
-		// revisit_at is a live "snooze until" intent that only makes sense while a
-		// task is parked in deferred. Leaving deferred (resume via next/ready, or
-		// any other move) ends the snooze, so clear it — mirroring how entering a
-		// state stamps its date. (deleteMapNode is a no-op when none is set.) A
-		// re-defer (from==to==deferred) skips this branch, so an existing date is
-		// kept unless `extra` overwrites it below.
-		if from == domain.StatusDeferred {
-			updates["revisit_at"] = domain.UnsetField{}
-		}
-	}
-	// extra (Defer's revisit_at) rides the same write. When the status isn't
-	// changing — a re-defer in place — it's the only field change, and we still
-	// stamp updated_at so the activity date advances like the field-set path does.
-	if len(extra) > 0 {
-		if from == to {
-			updates["updated_at"] = date
-		}
-		for k, v := range extra {
-			updates[k] = v
-		}
-	}
-	// No-op: a move to the current status with no extra field changes.
-	if len(updates) == 0 {
-		return cur, nil
-	}
-	newContent, err := updateFrontmatter(content, updates)
-	if err != nil {
-		return domain.Task{}, err
-	}
-	// Parse before committing: if the updated content wouldn't read back, fail with
-	// nothing on disk changed. The file path never changes — a move is an in-place
-	// frontmatter edit under the flat layout (no relocation, no dual-file window).
-	t, err := parseTask(newContent, path)
-	if err != nil {
-		return domain.Task{}, err
-	}
-	if dryRun {
-		return t, nil // every check above ran; only the disk mutation is skipped
-	}
-	if testHookBeforeMoveWrite != nil {
-		testHookBeforeMoveWrite()
-	}
-	// Serialize the verify→write critical section (flock) so the version-CAS is atomic.
-	unlock, err := s.writeLock()
-	if err != nil {
-		return domain.Task{}, err
-	}
-	defer unlock()
-	// Version-CAS immediately before the write: re-hash the source so a concurrent
-	// in-place edit is caught. The flat layout has no relocation, so content drift is
-	// the only hazard; fail cleanly with nothing written.
-	if err := verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "move"); err != nil {
-		return domain.Task{}, err
-	}
-	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
-		return domain.Task{}, err
-	}
-	return t, nil
-}
-
 // SetFields surgically updates frontmatter fields on a task (no status/dir
 // change) and writes the file atomically in place.
 func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Task{}, err
 	}
-	// Defense-in-depth: a status change relocates the file, so it must go through Move,
-	// never an in-place field write (the core SetFields already rejects it). A direct
-	// store caller writing status here would desync the mirror dir from the frontmatter.
+	// Defense-in-depth: status is lifecycle-owned and must go through the guarded
+	// TaskLifecycleMutationStore capability, never generic frontmatter surgery.
 	if _, ok := updates["status"]; ok {
-		return domain.Task{}, fmt.Errorf("%w: status is not a settable field — use Move", domain.ErrValidation)
+		return domain.Task{}, fmt.Errorf("%w: status is lifecycle-owned — use a task lifecycle verb", domain.ErrValidation)
 	}
 	for field := range updates {
 		if domain.IsGraphOwnedTaskField(field) {
@@ -334,10 +190,9 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 	}
 	defer unlock()
 	// Version-CAS immediately before the write: verifyUnchanged re-resolves (a concurrent
-	// Move relocated the file → renaming onto the original path would resurrect the slug
-	// in its old status dir, a permanent ErrAmbiguous) AND re-hashes the source (a
-	// concurrent in-place edit the path-CAS alone missed). Atomicity guards only torn
-	// writes, not lost updates. ifVersion is the hash of the bytes read above.
+	// Re-resolve and re-hash the source immediately before replacement so a rename or
+	// concurrent in-place edit cannot be overwritten. Atomicity guards torn writes,
+	// not lost updates. ifVersion is the hash of the bytes read above.
 	if err := verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "update"); err != nil {
 		return domain.Task{}, err
 	}
@@ -351,11 +206,6 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 // compare-and-swap re-resolve — the seam tests use to interleave a concurrent
 // Move. Nil outside tests.
 var testHookBeforeSetFieldsWrite func()
-
-// testHookBeforeMoveWrite is Move's equivalent seam: it runs just before Move's
-// compare-and-swap re-resolve, so a test can interleave a concurrent relocation.
-// Nil outside tests.
-var testHookBeforeMoveWrite func()
 
 // resolve finds a task file by slug — exact first, then fuzzy (unique
 // case-insensitive prefix, then substring) via resolveID, matching on the stable
@@ -431,8 +281,9 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 	// Status is authoritative in frontmatter (ADR-0003 §4). There is no directory to
 	// fall back to under the flat layout, but an id-led file with a missing/unrecognized
 	// status is still a real task: it LISTS with its raw status and is FLAGGED by lint
-	// (StatusFellBack), rather than dropped as a hard read problem — and a lifecycle verb
-	// heals it (moveTask writes a valid status). A non-id-led stray is already rejected
+	// (StatusFellBack), rather than dropped as a hard read problem. Guarded lifecycle
+	// writes fail closed on this state, so repair the raw field and verify with lint. A
+	// non-id-led stray is already rejected
 	// above; a file with no frontmatter block at all remains a loud FileProblem.
 	if !t.Status.Valid() {
 		t.StatusFellBack = true
@@ -442,14 +293,4 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 	t.Path = path
 	t.SourceVersion = hashContent(content)
 	return t, nil
-}
-
-// criterionIndexes lists criteria by their 1-based index, so the refusal names exactly
-// which ones to act on — the numbers `task ac` already shows.
-func criterionIndexes(cs []domain.Criterion) string {
-	out := make([]string, len(cs))
-	for i, c := range cs {
-		out[i] = "#" + strconv.Itoa(c.Index)
-	}
-	return strings.Join(out, ", ")
 }

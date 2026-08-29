@@ -690,6 +690,12 @@
           },
           "type": "array"
         },
+        "impacts": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphStateImpactJSON"
+          },
+          "type": "array"
+        },
         "cleared_legacy_fields": {
           "items": {
             "$ref": "#/$defs/LegacyFieldClearJSON"
@@ -726,6 +732,7 @@
         "changed",
         "dry_run",
         "edges",
+        "impacts",
         "cleared_legacy_fields",
         "planned_task_ids",
         "applied_task_ids",
@@ -748,6 +755,12 @@
         "edges": {
           "items": {
             "$ref": "#/$defs/DependencyEdgeOutcomeJSON"
+          },
+          "type": "array"
+        },
+        "impacts": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphStateImpactJSON"
           },
           "type": "array"
         },
@@ -786,6 +799,7 @@
         "changed",
         "dry_run",
         "edges",
+        "impacts",
         "cleared_legacy_fields",
         "planned_task_ids",
         "applied_task_ids",
@@ -1104,6 +1118,9 @@
         },
         "dependency_mutation": {
           "$ref": "#/$defs/DependencyMutationJSON"
+        },
+        "task_lifecycle": {
+          "$ref": "#/$defs/TaskLifecycleRecoveryJSON"
         }
       },
       "additionalProperties": false,
@@ -1686,6 +1703,12 @@
         "revisit_at": {
           "type": "string",
           "description": "revisit (snooze-until) date recorded by task defer"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/TaskLifecycleJSON"
+        },
+        "lifecycle_failure": {
+          "$ref": "#/$defs/TaskEligibilityFailureJSON"
         },
         "error": {
           "type": "string"
@@ -2429,6 +2452,72 @@
       ],
       "description": "TaskBlockersEnvelope is `task blockers --json`."
     },
+    "TaskEligibilityFailureJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        },
+        "blockers": {
+          "items": {
+            "$ref": "#/$defs/TaskLifecycleBlockerJSON"
+          },
+          "type": "array"
+        },
+        "requested_override": {
+          "type": "string"
+        },
+        "override_allowed": {
+          "type": "boolean"
+        },
+        "remedy": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "state",
+        "blockers",
+        "override_allowed",
+        "remedy"
+      ],
+      "description": "TaskEligibilityFailureJSON preserves the typed default-start refusal in each failed batch row."
+    },
+    "TaskGraphStateImpactJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "before": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        },
+        "after": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        },
+        "path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "direct": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "before",
+        "after",
+        "direct"
+      ],
+      "description": "TaskGraphStateImpactJSON is one before/after derived-state consequence of a graph or lifecycle mutation."
+    },
     "TaskGraphStateJSON": {
       "properties": {
         "role": {
@@ -2588,6 +2677,125 @@
         "status"
       ],
       "description": "TaskJSON is the wire shape of a task inside the --json envelopes."
+    },
+    "TaskLifecycleBlockerJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "direct": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "reason",
+        "path",
+        "direct"
+      ],
+      "description": "TaskLifecycleBlockerJSON is one blocker deliberately retained by a forced transition receipt."
+    },
+    "TaskLifecycleJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "committed": {
+          "type": "boolean",
+          "description": "true only after the lifecycle write became durable"
+        },
+        "forced": {
+          "type": "boolean"
+        },
+        "override": {
+          "type": "string"
+        },
+        "before": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        },
+        "after": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        },
+        "outstanding_blockers": {
+          "items": {
+            "$ref": "#/$defs/TaskLifecycleBlockerJSON"
+          },
+          "type": "array"
+        },
+        "impact_count": {
+          "type": "integer"
+        },
+        "impacts": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphStateImpactJSON"
+          },
+          "type": "array"
+        },
+        "remedy": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "from",
+        "changed",
+        "committed",
+        "forced",
+        "before",
+        "after",
+        "outstanding_blockers",
+        "impact_count",
+        "impacts"
+      ],
+      "description": "TaskLifecycleJSON is the task-specific detail nested into the shared move envelope."
+    },
+    "TaskLifecycleRecoveryJSON": {
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/TaskLifecycleJSON"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "to",
+        "dry_run",
+        "lifecycle",
+        "workspace"
+      ],
+      "description": "TaskLifecycleRecoveryJSON is emitted on stderr when a lifecycle write committed but repository cleanup failed."
     },
     "TaskMutationEnvelope": {
       "properties": {
@@ -3145,6 +3353,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.51)",
+  "title": "tskflwctl --json output (schema_version 1.53)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

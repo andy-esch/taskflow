@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // freshRepo inits an empty planning tree and returns its root.
@@ -122,6 +125,22 @@ func TestTaskNew_Start(t *testing.T) {
 	// A task born in-progress carries started_at, like one moved there.
 	if !strings.Contains(string(b), "started_at:") {
 		t.Errorf("--start task should stamp started_at:\n%s", b)
+	}
+}
+
+func TestTaskNewStartFailsClosedWithoutCreatingOnBrokenGraph(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "01-e1.md"), "---\nstatus: active\n---\n")
+	path, content := testutil.TaskFixture(root, "ready-to-start", "broken.md",
+		"---\nid: "+testutil.TaskID("broken")+"\nstatus: ready-to-start\ndescription: broken\ntags: [x]\ndepends_on: ["+testutil.TaskID("missing")+"]\n---\n# Broken\n")
+	testutil.Write(t, path, content)
+
+	_, _, err := runIn(t, root, "task", "new", "Must Not Exist", "--epic", "01-e1", "--tags", "x", "--description", "atomic create and start", "--start")
+	if err == nil || ExitCode(err) != 11 || !strings.Contains(err.Error(), "repository task graph is broken") {
+		t.Fatalf("create-and-start on broken graph = %v", err)
+	}
+	if matches, globErr := filepath.Glob(filepath.Join(root, domain.TasksDir, "*-must-not-exist.md")); globErr != nil || len(matches) != 0 {
+		t.Fatalf("failed create-and-start left a task file: matches=%v err=%v", matches, globErr)
 	}
 }
 

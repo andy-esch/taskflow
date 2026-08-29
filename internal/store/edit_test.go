@@ -199,23 +199,23 @@ func TestEditTask_BrokenFileUnchanged_ErrValidation(t *testing.T) {
 	}
 }
 
-// Editing the frontmatter status away from the seeded status is an ordinary,
-// authoritative in-place edit under the flat layout: the write lands, and Status
-// reflects the edit (there is no folder to drift from, so no misfile).
-func TestEditTask_StatusEdit_Writes(t *testing.T) {
+// Lifecycle state is not generic document content. The editor may change other
+// fields, but a status delta must be rejected before it can bypass lifecycle
+// authorization, timestamps, and impact receipts.
+func TestEditTask_StatusEdit_Rejects(t *testing.T) {
 	fs, path := editRepo(t)
 	edited := strings.Replace(editSeed, "status: ready-to-start", "status: completed", 1)
-	task, changed, err := fs.EditTask("edit-me", bodyNow, func(string, error) (string, error) {
+	_, changed, err := fs.EditTask("edit-me", bodyNow, func(string, error) (string, error) {
 		return edited, nil
 	})
-	if err != nil || !changed {
-		t.Fatalf("a status edit is an ordinary write: changed=%v err=%v", changed, err)
+	if !errors.Is(err, domain.ErrValidation) || changed {
+		t.Fatalf("status edit should be rejected without a write: changed=%v err=%v", changed, err)
 	}
-	if string(task.Status) != "completed" {
-		t.Errorf("frontmatter is authoritative, want status completed, got %q", task.Status)
+	if !strings.Contains(err.Error(), "task complete") || !strings.Contains(err.Error(), "task move") {
+		t.Errorf("status rejection should point to lifecycle verbs, got %v", err)
 	}
-	if got := readFile(t, path); !strings.Contains(got, "status: completed") {
-		t.Errorf("the status edit should land in the file at its flat path, got %q", got)
+	if got := readFile(t, path); got != editSeed {
+		t.Errorf("status edit must leave the source untouched, got %q", got)
 	}
 }
 

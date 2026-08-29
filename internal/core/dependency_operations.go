@@ -44,6 +44,7 @@ type DependencyMutationReceipt struct {
 	Changed             bool
 	DryRun              bool
 	Edges               []DependencyEdgeOutcome
+	Impacts             []TaskGraphStateImpact
 	ClearedLegacyFields []LegacyFieldClear
 	PlannedTaskIDs      []string
 	AppliedTaskIDs      []string
@@ -129,12 +130,18 @@ func (s *Service) runDependencyMutation(operation DependencyOperation, dryRun bo
 	var receipt DependencyMutationReceipt
 	for attempt := 0; ; attempt++ {
 		details := dependencyPlanDetails{}
+		var sourceGraph *TaskGraph
 		result, err := s.graphMutations.MutateTaskGraph(now, dryRun, func(graph *TaskGraph) (TaskGraphMutationPlan, error) {
+			sourceGraph = graph
 			plan, plannedDetails, planErr := planner(graph)
 			details = plannedDetails
 			return plan, planErr
 		})
-		receipt = dependencyReceipt(operation, result, details, err)
+		impacts := []TaskGraphStateImpact(nil)
+		if operation == DependencyAdd || operation == DependencyRemove {
+			impacts = directDependencyImpacts(sourceGraph, result.Plan)
+		}
+		receipt = dependencyReceipt(operation, result, details, impacts, err)
 		// A graph conflict is safe to retry only before any replacement landed.
 		// Once a durable prefix exists, surface it; silently replaying would erase
 		// the recovery event the caller needs to understand.
@@ -148,7 +155,7 @@ func (s *Service) runDependencyMutation(operation DependencyOperation, dryRun bo
 	}
 }
 
-func dependencyReceipt(operation DependencyOperation, result TaskGraphMutationResult, details dependencyPlanDetails, mutationErr error) DependencyMutationReceipt {
+func dependencyReceipt(operation DependencyOperation, result TaskGraphMutationResult, details dependencyPlanDetails, impacts []TaskGraphStateImpact, mutationErr error) DependencyMutationReceipt {
 	planned := make([]string, len(result.Plan.TaskWrites))
 	for i, write := range result.Plan.TaskWrites {
 		planned[i] = write.TaskID
@@ -156,6 +163,7 @@ func dependencyReceipt(operation DependencyOperation, result TaskGraphMutationRe
 	receipt := DependencyMutationReceipt{
 		Operation: operation, Changed: len(planned) > 0, DryRun: result.DryRun,
 		Edges:               append([]DependencyEdgeOutcome(nil), details.edges...),
+		Impacts:             cloneTaskGraphStateImpacts(impacts),
 		ClearedLegacyFields: append([]LegacyFieldClear(nil), details.clears...),
 		PlannedTaskIDs:      planned, AppliedTaskIDs: append([]string(nil), result.AppliedTaskIDs...),
 	}

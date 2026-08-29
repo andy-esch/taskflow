@@ -26,7 +26,7 @@ func seedRepo(t *testing.T) string {
 	t.Helper()
 	r := testutil.NewRepo(t)
 	task := func(status, slug, desc string) {
-		body := fmt.Sprintf("---\nstatus: %s\nepic: 01-test\ndescription: %s\n---\n# %s\n", status, desc, slug)
+		body := fmt.Sprintf("---\nid: %s\nstatus: %s\nepic: 01-test\ndescription: %s\n---\n# %s\n", testutil.TaskID(slug), status, desc, slug)
 		r.Task(status, slug+".md", body)
 	}
 	task("in-progress", "alpha", "the alpha task")

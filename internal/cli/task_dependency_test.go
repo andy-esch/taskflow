@@ -128,6 +128,38 @@ func TestTaskDependAddRemoveJSONDryRunAndNoop(t *testing.T) {
 	}
 }
 
+func TestTaskDependAddCallsOutNewlyBlockedDependent(t *testing.T) {
+	prerequisiteID := testutil.TaskID("unfinished-prerequisite")
+	dependentID := testutil.TaskID("newly-blocked")
+	root := dependencyCLIRepo(t,
+		dependencyCLITask{slug: "unfinished-prerequisite", status: domain.StatusNextUp},
+		dependencyCLITask{slug: "newly-blocked", status: domain.StatusReadyToStart},
+	)
+	out, errOut, err := runIn(t, root, "task", "depend", "add", "newly-blocked", "--on", "unfinished-prerequisite")
+	if err != nil || errOut != "" {
+		t.Fatalf("dependency add: %v\nstdout=%s\nstderr=%s", err, out, errOut)
+	}
+	for _, want := range []string{dependentID, "candidate/clear -> candidate/blocked", "task blockers " + dependentID} {
+		if !strings.Contains(out, want) {
+			t.Errorf("human consequence missing %q:\n%s", want, out)
+		}
+	}
+
+	root = dependencyCLIRepo(t,
+		dependencyCLITask{slug: "unfinished-prerequisite", status: domain.StatusNextUp},
+		dependencyCLITask{slug: "newly-blocked", status: domain.StatusReadyToStart},
+	)
+	out, _, err = runIn(t, root, "task", "depend", "add", "newly-blocked", "--on", prerequisiteID, "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt wire.DependencyMutationEnvelope
+	if err := json.Unmarshal([]byte(out), &receipt); err != nil || len(receipt.Impacts) != 1 ||
+		receipt.Impacts[0].TaskID != dependentID || receipt.Impacts[0].After.Gate != "blocked" {
+		t.Fatalf("machine consequence=%+v decode=%v", receipt, err)
+	}
+}
+
 func TestTaskDependAddRejectsCycleWithValidationExit(t *testing.T) {
 	alphaID := testutil.TaskID("cycle-alpha")
 	betaID := testutil.TaskID("cycle-beta")

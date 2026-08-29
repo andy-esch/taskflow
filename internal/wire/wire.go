@@ -170,6 +170,13 @@ import (
 // point selected for reading, and a combined space-badged in-progress working set. The
 // envelope owns one top-level schema_version; nested summaries reuse the versionless
 // SummaryJSON payload rather than pretending to be independent envelopes.
+// 1.53: task lifecycle receipts expose committed durability, failed start rows
+// retain typed eligibility state/blockers/remedy, and post-commit cleanup errors
+// carry a structured task/workspace recovery receipt.
+// 1.52: task transition rows carry guarded lifecycle detail: exact prior status,
+// before/after derived state, typed override, retained blockers, downstream impact
+// count/details, and an explanatory remedy. Dependency mutation receipts add the
+// same before/after impact shape for directly affected dependents.
 // 1.51: dependency blocker/downstream query envelopes carry the queried task's
 // derived state, so eligibility is explicit and never inferred from an empty list.
 // 1.50: guarded dependency operations add `dependency_mutation` receipts, structured
@@ -215,7 +222,7 @@ import (
 // 1.43: fresh `init --json` receipts may include `registration`, describing the
 // best-effort machine-local space registration (including preview vs applied and whether
 // the physical checkout was already registered).
-const SchemaVersion = "1.51"
+const SchemaVersion = "1.53"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

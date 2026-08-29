@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -17,14 +18,14 @@ func fuzzyRepo(t *testing.T) *FS {
 	t.Helper()
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "add-retry-backoff.md",
-		"---\nstatus: ready-to-start\ndescription: x\n---\n# t\n")
+		"---\nid: "+testutil.TaskID("add-retry-backoff")+"\nstatus: ready-to-start\ndescription: x\ntags: [test]\n---\n# t\n")
 	writeTask(t, root, "in-progress", "add-retry-jitter.md",
-		"---\nstatus: in-progress\ndescription: x\n---\n# t\n")
+		"---\nid: "+testutil.TaskID("add-retry-jitter")+"\nstatus: in-progress\ndescription: x\n---\n# t\n")
 	writeTask(t, root, "in-progress", "polish.md",
-		"---\nstatus: in-progress\ndescription: x\n---\n# t\n")
+		"---\nid: "+testutil.TaskID("polish")+"\nstatus: in-progress\ndescription: x\n---\n# t\n")
 	// "polish" is also a strict prefix of this one — exact must still win.
 	writeTask(t, root, "completed", "polish-batch.md",
-		"---\nstatus: completed\ndescription: x\n---\n# t\n")
+		"---\nid: "+testutil.TaskID("polish-batch")+"\nstatus: completed\ndescription: x\n---\n# t\n")
 	return NewFS(root)
 }
 
@@ -83,7 +84,7 @@ func TestResolve_FuzzyTiers(t *testing.T) {
 // id-led path and only its frontmatter status changes in place.
 func TestMove_FuzzyKeepsCanonicalSlug(t *testing.T) {
 	fs := fuzzyRepo(t)
-	task, err := fs.Move("backoff", domain.StatusInProgress, time.Now(), false, false)
+	task, err := moveTaskForTest(fs, "backoff", domain.StatusInProgress, time.Now(), false, core.TaskLifecycleOverrideNone)
 	if err != nil {
 		t.Fatal(err)
 	}

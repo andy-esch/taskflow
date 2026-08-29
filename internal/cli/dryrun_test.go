@@ -103,7 +103,7 @@ func TestDryRun_TaskNew(t *testing.T) {
 func TestDryRun_TaskMoveAndSet(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "e1.md"), "---\nstatus: active\n---\n# E1\n")
-	runRoot(t, "-C", root, "task", "new", "Mover", "--epic", "e1", "--tags", "a")
+	runRoot(t, "-C", root, "task", "new", "Mover", "--epic", "e1", "--tags", "a", "--description", "move this task")
 	orig := taskPath(t, root, "mover")
 
 	// Move (in-place under the flat layout): previews, the file stays put and its

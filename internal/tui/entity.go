@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
@@ -236,10 +237,15 @@ func moveTask(svc *core.Service, id string, tr transition) tea.Cmd {
 	return func() tea.Msg {
 		// force=false: a TUI completion is held to the same acceptance-criteria gate as
 		// the CLI's, and the refusal surfaces as the action's error flash.
-		if _, err := svc.Move(id, domain.Status(tr.to), false, false); err != nil {
+		receipt, err := svc.Move(id, domain.Status(tr.to), false, core.TaskLifecycleOverrideNone)
+		if err != nil {
+			var committed *core.TaskLifecycleMutationFailure
+			if errors.As(err, &committed) {
+				return movedMsg{slug: id, to: tr.to, lifecycle: &committed.Receipt, warning: err}
+			}
 			return actionErrMsg{slug: id, err: err}
 		}
-		return movedMsg{slug: id, to: tr.to}
+		return movedMsg{slug: id, to: tr.to, lifecycle: &receipt}
 	}
 }
 
@@ -249,10 +255,15 @@ func moveTask(svc *core.Service, id string, tr transition) tea.Cmd {
 // success/failure reporting (movedMsg → flash + reload, actionErrMsg → flash).
 func deferTaskCmd(svc *core.Service, id, revisit string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.DeferTask(id, revisit, false); err != nil {
+		receipt, err := svc.DeferTask(id, revisit, false)
+		if err != nil {
+			var committed *core.TaskLifecycleMutationFailure
+			if errors.As(err, &committed) {
+				return movedMsg{slug: id, to: string(domain.StatusDeferred), revisit: revisit, lifecycle: &committed.Receipt, warning: err}
+			}
 			return actionErrMsg{slug: id, err: err}
 		}
-		return movedMsg{slug: id, to: string(domain.StatusDeferred), revisit: revisit}
+		return movedMsg{slug: id, to: string(domain.StatusDeferred), revisit: revisit, lifecycle: &receipt}
 	}
 }
 

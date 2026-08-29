@@ -22,9 +22,8 @@ import (
 // content unchanged (gives up → ErrValidation), or the content matches the original
 // (no write — but a pre-existing on-disk break is still surfaced, never a phantom
 // success). Just before the write it calls recheck, the caller's compare-and-swap
-// against a concurrent relocation during the (long) editor window; a nil recheck
-// skips that guard (epics never move directories). Returns the reloaded entity and
-// whether it changed.
+// against a concurrent source change during the (long) editor window; a nil
+// recheck skips that guard. Returns the reloaded entity and whether it changed.
 //
 // An accepted change has its updated_at stamped to `now` (surgically, preserving the
 // rest of the user's edit), so any editor edit advances the activity date the way the
@@ -123,10 +122,9 @@ func editFile[T any](
 			return zero, false, lockErr
 		}
 		defer unlock()
-		// Compare-and-swap before the write (mirrors SetFields/Move): the editor
-		// window is long, so a concurrent move may have relocated the file — writing
-		// to the original path would resurrect the slug in its old directory.
-		// Atomicity guards torn writes, not lost updates.
+		// Compare-and-swap before the write: the editor window is long, so any
+		// concurrent lifecycle, rename, or content write must defeat this stale save.
+		// Atomic replacement guards torn writes; this recheck guards lost updates.
 		if recheck != nil {
 			if err := recheck(); err != nil {
 				return zero, false, err
@@ -141,12 +139,11 @@ func editFile[T any](
 
 // EditTask resolves slug, reads the file, and runs the shared editor-loop
 // (parse-before-accept), accepting a save only if it still parses as a task. The
-// recheck is a compare-and-swap against a concurrent `task move` relocating the
-// file during the editor window (which would otherwise resurrect the slug in its
-// old status directory — a permanent ErrAmbiguous). Returns the reloaded task and
+// recheck is a compare-and-swap across the editor window, rejecting a concurrent
+// lifecycle transition, rename, or content edit. Returns the reloaded task and
 // whether it changed.
 func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Task, bool, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Task{}, false, err
 	}
 	path, err := s.resolve(slug)
@@ -159,6 +156,7 @@ func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prev
 	}
 	ifVersion := hashContent(orig)
 	originalDependencies, dependenciesReadable := dependencyValues(orig)
+	originalStatus, statusReadable := taskStatusValue(orig)
 	parseAcceptedTask := func(content []byte) (domain.Task, error) {
 		t, err := acceptEdited(
 			func(content []byte) (domain.Task, error) { return parseTask(content, path) },
@@ -174,15 +172,35 @@ func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prev
 		} else if !candidate.equal(originalDependencies) {
 			return t, fmt.Errorf("%w: task edit cannot change depends_on or legacy dependency fields; use guarded dependency operations", domain.ErrValidation)
 		}
+		if !statusReadable {
+			return t, fmt.Errorf("%w: cannot verify the original lifecycle status while repairing malformed frontmatter; repair it directly, run lint, then use a lifecycle verb", domain.ErrValidation)
+		}
+		if string(t.Status) != originalStatus {
+			return t, fmt.Errorf("%w: task edit cannot change status from %s to %s; save the content edit without that change, then use `task start`, `task complete`, `task defer`, or `task move`", domain.ErrValidation, originalStatus, t.Status)
+		}
 		return t, nil
 	}
 	return editFile("task", path, orig, now,
 		parseAcceptedTask,
 		s.writeLock,
-		// Version-CAS across the (long) editor window: conflict if the file relocated (a
-		// concurrent `task move` → resurrect hazard) OR its content changed under us.
+		// Version-CAS across the long editor window: conflict if the path or content
+		// changed under us.
 		func() error { return verifyUnchanged(s.resolvePath, slug, path, ifVersion, "task", "edit") },
 		edit)
+}
+
+func taskStatusValue(content []byte) (string, bool) {
+	fm, _, err := splitFrontmatterStrict(content)
+	if err != nil || fm == nil {
+		return "", false
+	}
+	var fields struct {
+		Status string `yaml:"status"`
+	}
+	if err := yaml.Unmarshal(fm, &fields); err != nil || fields.Status == "" {
+		return "", false
+	}
+	return fields.Status, true
 }
 
 type taskDependencyFields struct {
@@ -258,12 +276,12 @@ func dependencyValues(content []byte) (taskDependencyFields, bool) {
 }
 
 // EditAudit is the audit twin of EditTask: same parse-before-accept editor-loop,
-// with the compare-and-swap guarding against a concurrent `audit close`/`reopen`/
-// `defer` relocating the file across buckets during the editor window. Finding-level
-// lint (status vocab, bucket↔state) is left to the caller, mirroring how task edit
-// leaves field lint to `lint` — the store only guarantees the file still parses.
+// with the compare-and-swap guarding against a concurrent audit lifecycle or
+// content change during the editor window. Finding-level lint (status vocab,
+// bucket↔state) is left to the caller, mirroring how task edit leaves field lint
+// to `lint` — the store only guarantees the file still parses.
 func (s *FS) EditAudit(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, false, err
 	}
 	path, err := s.resolveAudit(slug)

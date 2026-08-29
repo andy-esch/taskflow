@@ -82,6 +82,11 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 		details := wire.ToDependencyMutationJSON(dependencyErr.receipt, dependencyErr.workspace)
 		payload.Error.DependencyMutation = &details
 	}
+	var lifecycleErr *taskLifecycleCommandFailure
+	if errors.As(err, &lifecycleErr) {
+		details := wire.ToTaskLifecycleRecoveryJSON(lifecycleErr.receipt, lifecycleErr.workspace)
+		payload.Error.TaskLifecycle = &details
+	}
 	// Compact, like every other --json envelope (see wire.EncodeJSON): an agent
 	// parsing the failure shouldn't pay for indentation either.
 	_ = wire.EncodeJSON(w, payload)

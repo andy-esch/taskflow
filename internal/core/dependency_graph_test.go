@@ -17,7 +17,8 @@ func graphRecord(seed string, status domain.Status, dependencies ...string) doma
 	taskID := testutil.TaskID(seed)
 	return domain.Task{
 		ID: taskID, FilenameID: taskID, Slug: seed, Path: "tasks/" + taskID + "-" + seed + ".md",
-		Status: status, DependsOn: append([]string(nil), dependencies...),
+		Status: status, Description: seed, Tags: []string{"graph"},
+		DependsOn: append([]string(nil), dependencies...),
 	}
 }
 

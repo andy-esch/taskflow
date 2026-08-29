@@ -7,7 +7,7 @@ package store
 
 // ResolveTaskPath returns a task's file path from its slug/id, parse-free.
 func (s *FS) ResolveTaskPath(slug string) (string, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return "", err
 	}
 	return s.resolve(slug)
@@ -15,7 +15,7 @@ func (s *FS) ResolveTaskPath(slug string) (string, error) {
 
 // ResolveEpicPath returns an epic's file path from its id, parse-free.
 func (s *FS) ResolveEpicPath(id string) (string, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return "", err
 	}
 	return s.resolveEpicPath(id)
@@ -23,7 +23,7 @@ func (s *FS) ResolveEpicPath(id string) (string, error) {
 
 // ResolveAuditPath returns an audit's file path from its slug/id, parse-free.
 func (s *FS) ResolveAuditPath(slug string) (string, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return "", err
 	}
 	return s.resolveAudit(slug)
@@ -31,7 +31,7 @@ func (s *FS) ResolveAuditPath(slug string) (string, error) {
 
 // ResolveResearchPath returns a research doc's file path from its slug/id, parse-free.
 func (s *FS) ResolveResearchPath(slug string) (string, error) {
-	if err := s.rejectGraphPlannerCall(); err != nil {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return "", err
 	}
 	return s.resolveResearch(slug)
