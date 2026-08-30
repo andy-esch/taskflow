@@ -7,6 +7,9 @@ Scaffold a planning tree here, or point at an external planning repo
 Bootstrap a new planning topology: either scaffold a local planning tree or
 point this repository at an existing external planning repo. A fresh config is
 registered as a machine-local space best-effort; use --no-register to opt out.
+Repeat init with the configured --taskflow-root to repair the scaffold, create
+threads/, and remove only an unused legacy projects/ placeholder; user-owned
+legacy content is preserved and reported.
 Bare init against an existing configuration reports its topology without
 changing it; use
 `tskflwctl config migrate` for safe configuration upgrades.
@@ -53,5 +56,5 @@ tskflwctl init [flags]
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 

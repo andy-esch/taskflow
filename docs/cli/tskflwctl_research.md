@@ -25,7 +25,7 @@ Work with research docs
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 * [tskflwctl research append](tskflwctl_research_append.md)	 - Append a section to a research doc's body (atomic; agent-facing)
 * [tskflwctl research edit](tskflwctl_research_edit.md)	 - Open a research doc in your editor (whole file; re-validated on save)
 * [tskflwctl research list](tskflwctl_research_list.md)	 - List research docs (newest first)

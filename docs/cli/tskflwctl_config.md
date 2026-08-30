@@ -35,7 +35,7 @@ tskflwctl config [flags]
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 * [tskflwctl config doctor](tskflwctl_config_doctor.md)	 - Audit linkback integrity and the home space registry
 * [tskflwctl config edit](tskflwctl_config_edit.md)	 - Edit safe user or repository preferences interactively
 * [tskflwctl config migrate](tskflwctl_config_migrate.md)	 - Apply safe, idempotent configuration upgrades

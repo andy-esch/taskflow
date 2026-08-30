@@ -53,6 +53,9 @@ func TestEntityRegistry_CoversEverySchemaKind(t *testing.T) {
 	if d, _ := descriptorFor("audit"); d.Dir != AuditsDir {
 		t.Errorf("audit dir = %q, want %q", d.Dir, AuditsDir)
 	}
+	if d, _ := descriptorFor("thread"); d.Dir != ThreadsDir {
+		t.Errorf("thread dir = %q, want %q", d.Dir, ThreadsDir)
+	}
 	// Descriptors() exposes the same kinds, in the same order, as a read-only copy.
 	ds := Descriptors()
 	if len(ds) != len(SchemaKinds()) {

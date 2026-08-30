@@ -161,11 +161,44 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 	if err != nil {
 		return domain.Task{}, err
 	}
-	if err := s.writeNewFile(s.tasksDir, path, content, "task", stem, dryRun); err != nil {
-		return domain.Task{}, err
+	if dryRun {
+		if err := s.ensureTaskIDNotThread(t.ID); err != nil {
+			return domain.Task{}, err
+		}
+		if err := s.writeNewFile(s.tasksDir, path, content, "task", stem, true); err != nil {
+			return domain.Task{}, err
+		}
+	} else {
+		if err := os.MkdirAll(s.root, 0o755); err != nil {
+			return domain.Task{}, fmt.Errorf("mkdir planning root %s: %w", s.root, err)
+		}
+		unlock, err := s.writeLock()
+		if err != nil {
+			return domain.Task{}, err
+		}
+		defer unlock()
+		if err := s.ensureTaskIDNotThread(t.ID); err != nil {
+			return domain.Task{}, err
+		}
+		if err := s.writeNewFileUnlocked(s.tasksDir, path, content, "task", stem); err != nil {
+			return domain.Task{}, err
+		}
 	}
 	t.Path = path
 	return t, nil
+}
+
+func (s *FS) ensureTaskIDNotThread(taskID string) error {
+	candidates, err := s.threadCandidates()
+	if err != nil {
+		return err
+	}
+	for _, candidate := range candidates {
+		if candidate.id == taskID {
+			return fmt.Errorf("stable id %s is already used by Thread %s: %w", taskID, filepath.Base(candidate.path), domain.ErrConflict)
+		}
+	}
+	return nil
 }
 
 // auditFields is the canonical frontmatter order for a new audit.

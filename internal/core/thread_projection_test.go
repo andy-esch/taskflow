@@ -1,0 +1,131 @@
+package core
+
+import (
+	"sort"
+	"testing"
+
+	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
+)
+
+func threadRecord(status domain.ThreadStatus, taskIDs ...string) domain.Thread {
+	sort.Strings(taskIDs)
+	return domain.Thread{
+		ID: testutil.TaskID("thread"), FilenameID: testutil.TaskID("thread"), Slug: "thread",
+		Path: "threads/" + testutil.TaskID("thread") + "-thread.md", Status: status,
+		Description: "Thread projection", Goal: "Prove projection semantics", Created: "2026-08-29",
+		Tasks: append([]string(nil), taskIDs...),
+	}
+}
+
+func TestProjectThreadRollupExternalGatesAndFrontier(t *testing.T) {
+	internalDone := graphRecord("internal-done", domain.StatusCompleted)
+	external := graphRecord("external", domain.StatusNextUp)
+	candidate := graphRecord("candidate", domain.StatusReadyToStart, internalDone.ID, external.ID)
+	parked := graphRecord("parked-member", domain.StatusDeferred)
+	withdrawn := graphRecord("withdrawn-member", domain.StatusDeprecated)
+	thread := threadRecord(domain.ThreadStatusInProgress, internalDone.ID, candidate.ID, parked.ID, withdrawn.ID)
+
+	view := ProjectThread(thread, NewTaskGraph([]domain.Task{candidate, withdrawn, external, internalDone, parked}, nil))
+	if view.GraphHealth != GraphHealthy || view.ProjectionHealth != GraphHealthy {
+		t.Fatalf("graph=%s projection=%s problems=%+v", view.GraphHealth, view.ProjectionHealth, view.Problems)
+	}
+	if view.Rollup != (ThreadRollup{Done: 1, Total: 3, Drained: 1, Deprecated: 1}) {
+		t.Fatalf("rollup = %+v", view.Rollup)
+	}
+	if len(view.ExternalGates) != 1 || view.ExternalGates[0].Task.ID != external.ID || !view.ExternalGates[0].Outstanding {
+		t.Fatalf("external gates = %+v", view.ExternalGates)
+	}
+	if len(view.Frontier) != 0 {
+		t.Fatalf("frontier = %+v; externally blocked candidate must not dispatch", view.Frontier)
+	}
+}
+
+func TestProjectThreadFrontierUsesSharedEligibility(t *testing.T) {
+	done := graphRecord("done", domain.StatusCompleted)
+	ready := graphRecord("ready", domain.StatusReadyToStart, done.ID)
+	queued := graphRecord("queued", domain.StatusNextUp)
+	thread := threadRecord(domain.ThreadStatusUnstarted, done.ID, ready.ID, queued.ID)
+	view := ProjectThread(thread, NewTaskGraph([]domain.Task{queued, ready, done}, nil))
+	if len(view.Frontier) != 1 || view.Frontier[0].Task.ID != ready.ID || !view.Frontier[0].State.Eligible {
+		t.Fatalf("frontier = %+v", view.Frontier)
+	}
+}
+
+func TestProjectThreadCompletedInconsistencyAndMissingMember(t *testing.T) {
+	done := graphRecord("done-member", domain.StatusCompleted)
+	missing := testutil.TaskID("missing-member")
+	thread := threadRecord(domain.ThreadStatusCompleted, done.ID, missing)
+	view := ProjectThread(thread, NewTaskGraph([]domain.Task{done}, nil))
+	if view.GraphHealth != GraphHealthy || view.ProjectionHealth != GraphBroken || !view.Inconsistent {
+		t.Fatalf("view = graph %s projection %s inconsistent=%v", view.GraphHealth, view.ProjectionHealth, view.Inconsistent)
+	}
+	if view.Rollup.Total != 2 || view.Rollup.Done != 1 || view.Rollup.Drained != 1 {
+		t.Fatalf("missing member must remain in denominator: %+v", view.Rollup)
+	}
+	if len(view.Problems) != 3 || view.Problems[0].Code != ThreadProblemMissingMember ||
+		view.Problems[1].Code != ThreadProblemCompletedUnhealthyEvidence ||
+		view.Problems[2].Code != ThreadProblemCompletedUndrained {
+		t.Fatalf("problems = %+v", view.Problems)
+	}
+	if len(view.Frontier) != 0 {
+		t.Fatal("broken Thread projection exposed dispatchable work")
+	}
+}
+
+func TestProjectThreadCompletedRequiresSoundExternalGate(t *testing.T) {
+	upstream := graphRecord("upstream-open", domain.StatusNextUp)
+	externalDone := graphRecord("external-done", domain.StatusCompleted, upstream.ID)
+	memberDone := graphRecord("member-done", domain.StatusCompleted, externalDone.ID)
+	thread := threadRecord(domain.ThreadStatusCompleted, memberDone.ID)
+	view := ProjectThread(thread, NewTaskGraph([]domain.Task{memberDone, externalDone, upstream}, nil))
+	if view.Rollup.Done != 1 || view.Rollup.Drained != 0 || !view.Inconsistent {
+		t.Fatalf("view = rollup %+v inconsistent=%v", view.Rollup, view.Inconsistent)
+	}
+	if len(view.ExternalGates) != 1 || !view.ExternalGates[0].Outstanding {
+		t.Fatalf("external gates = %+v", view.ExternalGates)
+	}
+}
+
+func TestProjectThreadEmptyCompletedIsInconsistent(t *testing.T) {
+	view := ProjectThread(threadRecord(domain.ThreadStatusCompleted), NewTaskGraph(nil, nil))
+	if !view.Inconsistent || view.Rollup.Total != 0 || len(view.Problems) != 1 || view.Problems[0].Code != ThreadProblemCompletedEmpty {
+		t.Fatalf("empty completed view = %+v", view)
+	}
+}
+
+func TestProjectThreadDeprecatedMemberDoesNotContributeExternalGate(t *testing.T) {
+	external := graphRecord("withdrawn-external", domain.StatusReadyToStart)
+	withdrawn := graphRecord("withdrawn", domain.StatusDeprecated, external.ID)
+	done := graphRecord("live-done", domain.StatusCompleted)
+	thread := threadRecord(domain.ThreadStatusCompleted, withdrawn.ID, done.ID)
+
+	view := ProjectThread(thread, NewTaskGraph([]domain.Task{withdrawn, external, done}, nil))
+	if view.Inconsistent || len(view.ExternalGates) != 0 {
+		t.Fatalf("withdrawn member gated closure: %+v", view)
+	}
+	if view.Rollup != (ThreadRollup{Done: 1, Total: 1, Drained: 1, Deprecated: 1}) {
+		t.Fatalf("rollup = %+v", view.Rollup)
+	}
+}
+
+func TestProjectThreadCompletedInconsistencyNamesOutstandingGate(t *testing.T) {
+	external := graphRecord("external-open", domain.StatusReadyToStart)
+	member := graphRecord("member-complete", domain.StatusCompleted, external.ID)
+	view := ProjectThread(threadRecord(domain.ThreadStatusCompleted, member.ID), NewTaskGraph([]domain.Task{member, external}, nil))
+
+	want := map[ThreadProblemCode]bool{
+		ThreadProblemCompletedUndrained:    false,
+		ThreadProblemCompletedExternalGate: false,
+	}
+	for _, problem := range view.Problems {
+		if _, exists := want[problem.Code]; exists {
+			want[problem.Code] = true
+		}
+	}
+	for code, found := range want {
+		if !found {
+			t.Errorf("missing %s in %+v", code, view.Problems)
+		}
+	}
+}

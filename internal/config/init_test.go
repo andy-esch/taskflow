@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -370,7 +371,7 @@ func TestInit(t *testing.T) {
 		t.Fatal("expected dirs/config to be created")
 	}
 
-	for _, d := range []string{"tasks", "epics", "projects", "audits"} {
+	for _, d := range []string{"tasks", "epics", "threads", "audits", "research"} {
 		if !isDir(filepath.Join(root, filepath.FromSlash(d))) {
 			t.Errorf("missing dir %s", d)
 		}
@@ -396,14 +397,14 @@ func TestInit(t *testing.T) {
 }
 
 // TestInitScaffoldsEntityDirs pins the flat layout (ADR-0003 §4): `init` creates the
-// entity parents (tasks/epics/audits/projects) and NO per-status or per-bucket subdirs
+// entity parents (tasks/epics/audits/research/threads) and NO per-status or per-bucket subdirs
 // (the flat store never reads them; a file dropped in one would be invisible).
 func TestInitScaffoldsEntityDirs(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
-	for _, d := range []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ProjectsDir} {
+	for _, d := range []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ResearchDir, domain.ThreadsDir} {
 		if !isDir(filepath.Join(root, d)) {
 			t.Errorf("init did not scaffold %s/", d)
 		}
@@ -427,11 +428,101 @@ func TestInitGitkeepsEveryDir(t *testing.T) {
 	if _, err := Init(root, "", false); err != nil {
 		t.Fatal(err)
 	}
-	for _, d := range []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ProjectsDir} {
+	for _, d := range []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ResearchDir, domain.ThreadsDir} {
 		keep := filepath.Join(root, filepath.FromSlash(d), ".gitkeep")
 		if !fileExists(keep) {
 			t.Errorf("init did not write %s/.gitkeep", d)
 		}
+	}
+}
+
+func TestInitRetiresOnlyEmptyProjectsScaffold(t *testing.T) {
+	root := t.TempDir()
+	projects := filepath.Join(root, domain.ProjectsDir)
+	if err := os.MkdirAll(projects, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projects, ".gitkeep"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Init(root, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isDir(projects) {
+		t.Fatal("empty legacy projects scaffold was preserved")
+	}
+	want := []string{"projects/.gitkeep", "projects"}
+	if !slices.Equal(result.Removed, want) {
+		t.Fatalf("removed = %v, want %v", result.Removed, want)
+	}
+}
+
+func TestInitPreservesAndReportsNonEmptyProjects(t *testing.T) {
+	root := t.TempDir()
+	projects := filepath.Join(root, domain.ProjectsDir)
+	if err := os.MkdirAll(projects, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(projects, "initiative.md")
+	if err := os.WriteFile(legacy, []byte("keep me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Init(root, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.LegacyProjects != projects {
+		t.Fatalf("legacy projects = %q, want %q", result.LegacyProjects, projects)
+	}
+	if !fileExists(legacy) {
+		t.Fatal("init removed user-owned legacy Projects content")
+	}
+	if len(result.Removed) != 0 {
+		t.Fatalf("removed = %v", result.Removed)
+	}
+}
+
+func TestInitProjectsRetirementDryRunDoesNotMutate(t *testing.T) {
+	root := t.TempDir()
+	projects := filepath.Join(root, domain.ProjectsDir)
+	if err := os.MkdirAll(projects, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projects, ".gitkeep"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Init(root, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isDir(projects) || !fileExists(filepath.Join(projects, ".gitkeep")) {
+		t.Fatal("dry-run mutated legacy projects scaffold")
+	}
+	if !slices.Equal(result.Removed, []string{"projects/.gitkeep", "projects"}) {
+		t.Fatalf("removed preview = %v", result.Removed)
+	}
+}
+
+func TestInitPreservesProjectsSymlinkEvenWhenTargetIsEmpty(t *testing.T) {
+	root := t.TempDir()
+	target := t.TempDir()
+	projects := filepath.Join(root, domain.ProjectsDir)
+	if err := os.Symlink(target, projects); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Init(root, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.LegacyProjects != projects || result.LegacyProjectsRemedy == "" {
+		t.Fatalf("legacy symlink report = %+v", result)
+	}
+	if info, err := os.Lstat(projects); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("projects symlink was changed: info=%v err=%v", info, err)
 	}
 }
 

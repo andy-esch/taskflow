@@ -1,6 +1,6 @@
 ## tskflwctl
 
-Local-first planning CLI (tasks, epics, audits, research) over markdown
+Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 
 ### Options
 
@@ -33,6 +33,7 @@ Local-first planning CLI (tasks, epics, audits, research) over markdown
 * [tskflwctl task](tskflwctl_task.md)	 - Work with tasks
 * [tskflwctl template](tskflwctl_template.md)	 - List and inspect the body scaffolds `new --template` can use
 * [tskflwctl theme](tskflwctl_theme.md)	 - Inspect color themes
+* [tskflwctl thread](tskflwctl_thread.md)	 - Work with initiative Threads over the task DAG
 * [tskflwctl ui](tskflwctl_ui.md)	 - Launch the interactive TUI (Bubble Tea)
 * [tskflwctl version](tskflwctl_version.md)	 - Print the tskflwctl version
 * [tskflwctl workspace](tskflwctl_workspace.md)	 - Print the planning tree this directory resolves to

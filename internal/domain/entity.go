@@ -159,6 +159,27 @@ var entities = []Descriptor{
 		},
 		Placeholders: []Placeholder{{"title", "<title>"}, {"date", "<date>"}},
 	},
+	{
+		Kind:   "thread",
+		Plural: "threads",
+		Dir:    ThreadsDir,
+		AuthoringFields: []FieldDoc{
+			{"description", "string", true, fmt.Sprintf("One line summarizing the initiative (≤%d chars).", MaxDescriptionLen), "Consolidate configuration lifecycle into one hub"},
+			{"goal", "string", true, "One-line observable finish line for the initiative.", "Ship unified config CLI and TUI routes"},
+			{"target_date", "date", false, "Optional human planning target, not a calculated forecast.", "2026-09-01"},
+			{"tags", "list", false, "Topical tags.", "[cli, tui, config]"},
+			{"tasks", "list", false, "Sorted stable task-ID membership set; list order has no execution meaning.", "[6fjangd7kvh0, 6fjangd7kvh1]"},
+		},
+		Conventions: []string{
+			"creation always persists unstarted; use thread lifecycle verbs for later status changes.",
+			"tasks contains stable task IDs only, is stored sorted without duplicates, and owns membership rather than dependency edges.",
+			"task files own the repository-global depends_on relation; Thread frontier, gates, and progress are runtime projections.",
+		},
+		Templates: []NamedTemplate{
+			{DefaultTemplate, "Standard Thread scaffold: context and constraints for the initiative.", threadBodyTemplate},
+		},
+		Placeholders: []Placeholder{{"title", "<title>"}, {"goal", "<goal>"}},
+	},
 }
 
 // Descriptors returns the entity registry (read-only copy) in schema/display
@@ -352,6 +373,16 @@ const researchBodyTemplate = `
 ## Related
 
 - <links to the tasks/epics this informs, or to earlier research it builds on>
+`
+
+const threadBodyTemplate = `
+# Thread: {{title}}
+
+**Goal.** {{goal}}
+
+## Context
+
+<why this initiative exists, important constraints, and decisions that do not belong on one task>
 `
 
 // auditSecurityBodyTemplate is the `security` audit scaffold: the same finding

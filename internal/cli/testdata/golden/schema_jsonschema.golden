@@ -1121,6 +1121,9 @@
         },
         "task_lifecycle": {
           "$ref": "#/$defs/TaskLifecycleRecoveryJSON"
+        },
+        "thread_mutation": {
+          "$ref": "#/$defs/ThreadMutationJSON"
         }
       },
       "additionalProperties": false,
@@ -1495,6 +1498,24 @@
           },
           "type": "array"
         },
+        "removed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "legacy_projects": {
+          "type": "string"
+        },
+        "legacy_projects_remedy": {
+          "type": "string"
+        },
+        "scaffold_repair_available": {
+          "type": "boolean"
+        },
+        "scaffold_repair_command": {
+          "type": "string"
+        },
         "already_initialized": {
           "type": "boolean"
         },
@@ -1515,7 +1536,8 @@
         "dry_run",
         "mode",
         "root",
-        "created"
+        "created",
+        "removed"
       ],
       "description": "InitEnvelope is `init --json`."
     },
@@ -1899,6 +1921,12 @@
           },
           "type": "array"
         },
+        "thread_statuses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "audit_buckets": {
           "items": {
             "type": "string"
@@ -1956,6 +1984,7 @@
         "schema_version",
         "statuses",
         "epic_statuses",
+        "thread_statuses",
         "audit_buckets",
         "finding_statuses",
         "criterion_states",
@@ -3105,6 +3134,381 @@
       ],
       "description": "ThemesEnvelope is `theme list --json`."
     },
+    "ThreadExternalGateJSON": {
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "member|external-gate"
+        },
+        "task": {
+          "$ref": "#/$defs/GraphTaskJSON"
+        },
+        "state": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        },
+        "outstanding": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "role",
+        "task",
+        "state",
+        "outstanding"
+      ],
+      "description": "ThreadExternalGateJSON marks whether a direct outside prerequisite is still preventing sound closure."
+    },
+    "ThreadFrontierEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "view": {
+          "$ref": "#/$defs/ThreadViewJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "view"
+      ],
+      "description": "ThreadFrontierEnvelope is `thread frontier --json`."
+    },
+    "ThreadJSON": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "unstarted|in-progress|completed|abandoned"
+        },
+        "description": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "target_date": {
+          "type": "string"
+        },
+        "created": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string"
+        },
+        "ended_at": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tasks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "slug",
+        "status",
+        "description",
+        "goal",
+        "created",
+        "tags",
+        "tasks"
+      ],
+      "description": "ThreadJSON is the persisted metadata and membership of one Thread."
+    },
+    "ThreadMutationEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "thread": {
+          "$ref": "#/$defs/ThreadJSON"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "committed": {
+          "type": "boolean",
+          "description": "true only after the Thread file became durable"
+        },
+        "path": {
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "thread",
+        "changed",
+        "dry_run",
+        "committed",
+        "path",
+        "workspace"
+      ],
+      "description": "ThreadMutationEnvelope is the successful `thread new --json` receipt."
+    },
+    "ThreadMutationJSON": {
+      "properties": {
+        "thread": {
+          "$ref": "#/$defs/ThreadJSON"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "committed": {
+          "type": "boolean",
+          "description": "true only after the Thread file became durable"
+        },
+        "path": {
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "thread",
+        "changed",
+        "dry_run",
+        "committed",
+        "path",
+        "workspace"
+      ],
+      "description": "ThreadMutationJSON is the reusable committed-outcome receipt payload."
+    },
+    "ThreadProblemJSON": {
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "invalid-thread-document|missing-thread-member|completed-thread-empty|completed-thread-undrained|completed-thread-external-gate|completed-thread-unhealthy-evidence"
+        },
+        "thread_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "code",
+        "thread_id",
+        "message"
+      ]
+    },
+    "ThreadRollupJSON": {
+      "properties": {
+        "done": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "drained": {
+          "type": "integer"
+        },
+        "deprecated": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "done",
+        "total",
+        "drained",
+        "deprecated"
+      ]
+    },
+    "ThreadShowEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "view": {
+          "$ref": "#/$defs/ThreadViewJSON"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "view",
+        "body"
+      ],
+      "description": "ThreadShowEnvelope is `thread show --json`."
+    },
+    "ThreadTaskJSON": {
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "member|external-gate"
+        },
+        "task": {
+          "$ref": "#/$defs/GraphTaskJSON"
+        },
+        "state": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "role",
+        "task",
+        "state"
+      ],
+      "description": "ThreadTaskJSON is one task in a Thread projection, with an explicit member or external-gate role and the shared repository graph state."
+    },
+    "ThreadViewJSON": {
+      "properties": {
+        "thread": {
+          "$ref": "#/$defs/ThreadJSON"
+        },
+        "rollup": {
+          "$ref": "#/$defs/ThreadRollupJSON"
+        },
+        "graph_health": {
+          "type": "string",
+          "description": "repository task-DAG verdict: healthy|degraded|broken"
+        },
+        "projection_health": {
+          "type": "string",
+          "description": "Thread-local evidence verdict after combining graph and document integrity: healthy|degraded|broken"
+        },
+        "inconsistent": {
+          "type": "boolean",
+          "description": "true when a completed Thread is not soundly closed"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/ThreadTaskJSON"
+          },
+          "type": "array"
+        },
+        "external_gates": {
+          "items": {
+            "$ref": "#/$defs/ThreadExternalGateJSON"
+          },
+          "type": "array"
+        },
+        "frontier": {
+          "items": {
+            "$ref": "#/$defs/ThreadTaskJSON"
+          },
+          "type": "array"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/ThreadProblemJSON"
+          },
+          "type": "array"
+        },
+        "graph_problems": {
+          "items": {
+            "$ref": "#/$defs/GraphProblemJSON"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "thread",
+        "rollup",
+        "graph_health",
+        "projection_health",
+        "inconsistent",
+        "members",
+        "external_gates",
+        "frontier",
+        "problems",
+        "graph_problems"
+      ],
+      "description": "ThreadViewJSON is the shared runtime projection consumed by list, show, and frontier adapters."
+    },
+    "ThreadsEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "graph_health": {
+          "type": "string",
+          "description": "repository task-DAG verdict: healthy|degraded|broken"
+        },
+        "graph_problems": {
+          "items": {
+            "$ref": "#/$defs/GraphProblemJSON"
+          },
+          "type": "array"
+        },
+        "threads": {
+          "items": {
+            "$ref": "#/$defs/ThreadViewJSON"
+          },
+          "type": "array"
+        },
+        "unreadable": {
+          "items": {
+            "$ref": "#/$defs/FileProblem"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "graph_health",
+        "graph_problems",
+        "threads",
+        "unreadable"
+      ],
+      "description": "ThreadsEnvelope is `thread list --json`."
+    },
     "VersionEnvelope": {
       "properties": {
         "schema_version": {
@@ -3207,6 +3611,18 @@
         },
         "task_unblocks": {
           "$ref": "#/$defs/TaskUnblocksEnvelope"
+        },
+        "threads": {
+          "$ref": "#/$defs/ThreadsEnvelope"
+        },
+        "thread_show": {
+          "$ref": "#/$defs/ThreadShowEnvelope"
+        },
+        "thread_frontier": {
+          "$ref": "#/$defs/ThreadFrontierEnvelope"
+        },
+        "thread_mutation": {
+          "$ref": "#/$defs/ThreadMutationEnvelope"
         },
         "epic_mutation": {
           "$ref": "#/$defs/EpicMutationEnvelope"
@@ -3318,6 +3734,10 @@
         "dependency_mutation",
         "task_blockers",
         "task_unblocks",
+        "threads",
+        "thread_show",
+        "thread_frontier",
+        "thread_mutation",
         "epic_mutation",
         "moves",
         "summary",
@@ -3353,6 +3773,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.53)",
+  "title": "tskflwctl --json output (schema_version 1.54)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

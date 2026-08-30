@@ -15,7 +15,7 @@ func newLintCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lint",
 		Short: "Validate entity frontmatter and task-dependency graph integrity",
-		Long: "Validate task, epic, and research frontmatter, then validate the repository-global\n" +
+		Long: "Validate task, epic, research, and Thread frontmatter, then validate the repository-global\n" +
 			"task-dependency graph. Exactly resolved legacy dependency fields are visible\n" +
 			"advisories; missing, ambiguous, or structurally unsafe references are errors.\n\n" +
 			"--fix repairs ordinary frontmatter and missing ids. It never normalizes or changes\n" +
@@ -63,7 +63,7 @@ func runLint(app *App, links bool) error {
 		// Results mix tasks and epics now, so the footer noun is the neutral "item".
 		render.LintHuman(app.Out, app.Style, results, "item")
 		if len(results) == 0 && len(problems) == 0 {
-			fmt.Fprintf(app.Out, "%s all active tasks and epics pass lint\n", app.Style.Green("✔"))
+			fmt.Fprintf(app.Out, "%s all planning entities and dependency links pass lint\n", app.Style.Green("✔"))
 		}
 	}
 	blocking := core.BlockingLintResultCount(results)

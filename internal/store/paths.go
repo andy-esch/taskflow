@@ -36,3 +36,11 @@ func (s *FS) ResolveResearchPath(slug string) (string, error) {
 	}
 	return s.resolveResearch(slug)
 }
+
+// ResolveThreadPath returns a Thread's path without parsing its frontmatter.
+func (s *FS) ResolveThreadPath(ref string) (string, error) {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return "", err
+	}
+	return s.resolveThread(ref)
+}

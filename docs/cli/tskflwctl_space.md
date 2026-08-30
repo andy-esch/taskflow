@@ -35,7 +35,7 @@ registry behaves exactly as before. Deleting it costs convenience — never data
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 * [tskflwctl space add](tskflwctl_space_add.md)	 - Register a planning entry point (defaults to the current directory)
 * [tskflwctl space forget](tskflwctl_space_forget.md)	 - Drop an entry point from the registry (the repo itself is untouched)
 * [tskflwctl space list](tskflwctl_space_list.md)	 - List planning spaces, entry points, and current health

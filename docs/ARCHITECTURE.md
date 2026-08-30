@@ -97,11 +97,11 @@ have explicit trigger-scoped work, and the remaining edges are composition or na
 adapter capabilities rather than leaked persistence.
 
 - **`internal/domain`** — entities + invariants (`Task`, `Status`). No fs, no
-  cobra logic (the one pragmatic concession: `Task`/`Epic`/`Audit`/`Research` carry a
+  cobra logic (the one pragmatic concession: `Task`/`Thread`/`Epic`/`Audit`/`Research` carry a
   `Path` the store stamps, so callers can locate the source file). Frontmatter **is** the
   authoritative status/bucket (ADR-0003 §4): tasks, audits, and research are stored
   **flat and id-led** — `tasks/<id>-<slug>.md`, `audits/<id>-<slug>.md`,
-  `research/<id>-<slug>.md` — with no status/bucket directory to mirror or drift against
+  `research/<id>-<slug>.md`, `threads/<id>-<slug>.md` — with no status/bucket directory to mirror or drift against
   (epics keep `NN-<slug>`; research has no status at all, so nothing to mirror). A file whose
   frontmatter status is missing or unrecognized is **listed but flagged** by `lint`
   (`StatusFellBack`; shown with a `⚠` in `task list`/`show`), never moved or dropped;
@@ -109,23 +109,26 @@ adapter capabilities rather than leaked persistence.
   — except `README.md`, silently carved. `meta/` is the sanctioned home for
   non-entity files.
   Per-entity metadata — the top-level dir, authoring fields, conventions, and
-  body scaffold for `task`/`epic`/`audit`/`research` — lives in **one registry** (`entity.go`'s
+  body scaffold for `task`/`thread`/`epic`/`audit`/`research` — lives in **one registry** (`entity.go`'s
   `Descriptor`); `SchemaKinds`/`AuthoringFields`/`Conventions`/`BodyTemplate` read
   that table instead of parallel `switch kind` blocks, so a kind's schema/scaffold
   surface is a registry entry, not a per-layer edit. Honest remaining fan-out for a
-  new entity (e.g. the scaffolded `projects/`), after the descriptor + the generic
+  new entity, after the descriptor + the generic
   seams: a typed `domain` struct + a `parse*`, thin `*Store` port methods (the scan
   is generic `scanDir[T]`, resolution generic `resolveID`), its `core.Service` use
   cases, a cli command, and render + TUI *display* delegates (a Human/JSON formatter
   — column layout is the generic `Column[T]`/`WriteTablePlain` — plus an `entityTab`
-  entry + row delegate). That residual is the cost of a **typed** domain whose four
+  entry + row delegate). That residual is the cost of a **typed** domain whose five
   entities have genuinely different shapes (tasks: status/tier/priority; epics:
-  rollups; audits: findings/buckets; research: dated, taggable, no lifecycle); the generics remove the *mechanics*, not the
-  per-entity shape. What IS collapsed: the metadata fan-out into the descriptor
+  rollups; audits: findings/buckets; research: dated, taggable, no lifecycle; Threads:
+  membership plus a derived DAG view); the generics remove the *mechanics*, not the
+  per-entity shape. Threads are intentionally different: persisted
+  initiative metadata plus a sorted task-ID membership set, with all DAG state derived
+  at read time. What IS collapsed: the metadata fan-out into the descriptor
   (M1), and TUI *lifecycle* (the `a` menu + `:` verbs) into each entity's transition
   table (M10), so an entity opts into close/move actions by declaring transitions,
   not by editing the reducer. A further data-driven persistence/render collapse
-  isn't pursued — for four heterogeneous entities it trades clarity for machinery.
+  isn't pursued — for five heterogeneous entities it trades clarity for machinery.
 - **`internal/core`** — use cases (`Service`) + the ports it needs, defined here
   at the consumer. `Store` (composed of
   `TaskStore`/`EpicStore`/`AuditStore`/`ResearchStore`) is the *use-case* port the
@@ -158,6 +161,14 @@ adapter capabilities rather than leaked persistence.
   present-but-empty legacy keys still keep health degraded until migration removes them.
   Eligibility is read from the queried task's explicit derived state, never inferred from
   an empty blocker list, and `task list --unblocked` fails closed unless the snapshot is healthy.
+  `ThreadView` is a pure projection over that same immutable graph: it distinguishes
+  members from direct external gates, reports nominal `done/total` and sound
+  `drained/total`, separates repository graph health from Thread-local projection
+  health, and emits a frontier only when the combined evidence is healthy. Completed
+  inconsistency carries stable reason codes; list projections hoist global graph
+  problems rather than repeating them per Thread. Guarded
+  Thread creation resolves initial members and validates the global task/Thread identity
+  namespace inside the repository critical section; it can create only `unstarted`.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
@@ -171,6 +182,12 @@ adapter capabilities rather than leaked persistence.
   outside the store. Task dependency fields are graph-owned: generic create/set/edit
   paths cannot introduce a semantic delta, and text-level lint repair skips a would-be
   dependency normalization instead of manufacturing unchecked edges.
+  `ThreadStore` is a separate narrow read port, and `ThreadCreationMutationStore` is the
+  first guarded Thread write capability. Thread files own metadata and membership only;
+  task files remain the sole source of dependency edges. Task creation and Thread creation
+  check one cross-kind stable-ID namespace under the same canonical-root guard. The legacy
+  `projects/` scaffold is no longer created; only an empty directory or a lone regular
+  `.gitkeep` is eligible for automatic retirement, and other content is preserved.
   `TaskGraphMutationStore` is the control-inverted write capability: `FS` takes the
   repository guard, loads the canonical strict snapshot, invokes a pure core planner over
   taskflow-owned values, asks core to validate the complete plan and every recovery prefix,

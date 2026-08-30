@@ -99,6 +99,21 @@ type TaskLifecycleMutationStore interface {
 	MutateTaskLifecycle(now time.Time, dryRun bool, planner TaskLifecyclePlanner) (TaskLifecycleMutationResult, error)
 }
 
+// ThreadStore is the narrow read capability for first-class Thread documents.
+// It remains separate from Store so existing secondary adapters and focused test
+// fakes do not claim Thread support accidentally.
+type ThreadStore interface {
+	ListThreads() ([]domain.Thread, []domain.FileProblem, error)
+	GetThread(ref string) (thread domain.Thread, body string, err error)
+	ResolveThreadPath(ref string) (string, error)
+}
+
+// ThreadCreationMutationStore owns guarded, unstarted Thread creation. The
+// control-inverted planner receives only immutable semantic snapshot values.
+type ThreadCreationMutationStore interface {
+	MutateThreadCreation(now time.Time, dryRun bool, planner ThreadCreationPlanner) (ThreadCreationMutationResult, error)
+}
+
 // EpicStore is the epic-persistence port.
 type EpicStore interface {
 	ListEpics() ([]domain.Epic, []domain.FileProblem, error)

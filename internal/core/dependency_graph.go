@@ -851,6 +851,14 @@ func sameLegacyDiagnostic(left, right LegacyDependencyDiagnostic) bool {
 
 func (g *TaskGraph) TaskIDs() []string { return append([]string(nil), g.ids...) }
 
+// Prerequisites returns the task's direct prerequisite IDs from this immutable
+// projection. The result includes safely resolved legacy constraints on a
+// degraded snapshot, matching State and blocker queries rather than exposing
+// only the canonical field bytes from Task().
+func (g *TaskGraph) Prerequisites(taskID string) []string {
+	return append([]string(nil), g.dependencies[taskID]...)
+}
+
 func (g *TaskGraph) State(taskID string) TaskGraphState {
 	if state, ok := g.states[taskID]; ok {
 		return state

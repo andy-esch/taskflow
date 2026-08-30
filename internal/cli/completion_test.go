@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
@@ -172,6 +173,17 @@ func TestComplete_Templates(t *testing.T) {
 	}
 	if got := complete(t, "template", "list", "--kind", ""); !has(got, "audit") {
 		t.Errorf("template list --kind completion: %v", got)
+	}
+}
+
+func TestComplete_Threads(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, domain.ThreadsDir, "6g3q4rtmv4ak-delivery.md"), "---\nid: 6g3q4rtmv4ak\nstatus: unstarted\ndescription: delivery\ngoal: ship\ncreated: \"2026-08-29\"\ntasks: []\n---\n# Delivery\n")
+	if got := complete(t, "-C", root, "thread", "show", "del"); !has(got, "delivery") {
+		t.Errorf("thread ref completion: %v", got)
+	}
+	if got := complete(t, "-C", root, "thread", "list", "--status", "in"); !has(got, "in-progress") {
+		t.Errorf("Thread status completion: %v", got)
 	}
 }
 

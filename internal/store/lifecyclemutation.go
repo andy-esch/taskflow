@@ -67,6 +67,11 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 		return result, err
 	}
 	result.Plan = validated
+	if validated.Create != nil {
+		if err := s.ensureTaskIDNotThread(validated.Create.Task.ID); err != nil {
+			return result, err
+		}
+	}
 	materialized, _, err := s.prepareTaskLifecycleMaterialization(graph, validated, now)
 	if err != nil {
 		return result, err
@@ -95,6 +100,9 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	}
 
 	if materialized.create {
+		if err := s.ensureTaskIDNotThread(materialized.task.ID); err != nil {
+			return result, err
+		}
 		if err := s.writeNewFileUnlocked(s.tasksDir, materialized.path, materialized.content, "task", materialized.task.ID+"-"+materialized.task.Slug); err != nil {
 			return result, err
 		}

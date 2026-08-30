@@ -73,6 +73,10 @@ func TestGolden_MachineContract(t *testing.T) {
 		{"task_blockers_json", []string{"-C", fixtureRepo, "task", "blockers", "alpha-task", "--json"}, nil},
 		{"task_unblocks_json", []string{"-C", fixtureRepo, "task", "unblocks", "gamma-task", "--json"}, nil},
 		{"task_list_unblocked_json", []string{"-C", fixtureRepo, "task", "list", "--unblocked", "--json"}, nil},
+		{"thread_list_json", []string{"-C", fixtureRepo, "thread", "list", "--json"}, nil},
+		{"thread_show_json", []string{"-C", fixtureRepo, "thread", "show", "fixture-thread", "--json"}, nil},
+		{"thread_frontier_json", []string{"-C", fixtureRepo, "thread", "frontier", "fixture-thread", "--json"}, nil},
+		{"thread_path_json", []string{"-C", fixtureRepo, "thread", "path", "fixture-thread", "--json"}, redact},
 		// task info / task path emit an absolute file path → redact the fixture root
 		// so the committed golden is portable (pins schema_version + shape + tally).
 		{"task_info_json", []string{"-C", fixtureRepo, "task", "info", "alpha-task", "--json"}, redact},
@@ -94,6 +98,7 @@ func TestGolden_MachineContract(t *testing.T) {
 		// date-free — ideal to pin byte-for-byte, especially the JSON Schema.
 		{"schema_json", []string{"schema", "--json"}, nil},
 		{"schema_task_json", []string{"schema", "task", "--json"}, nil},
+		{"schema_thread_json", []string{"schema", "thread", "--json"}, nil},
 		{"schema_jsonschema", []string{"schema", "--json-schema"}, nil},
 		// Templates are built-in + date-free, so their --json is byte-pinnable too.
 		{"template_list_json", []string{"template", "list", "--json"}, nil},
