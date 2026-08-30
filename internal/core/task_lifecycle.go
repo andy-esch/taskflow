@@ -31,9 +31,10 @@ type TaskGraphStateImpact struct {
 	Direct bool
 }
 
-// TaskLifecycleCreation is the semantic document carried by the one guarded
-// create-and-start operation. Task must be a ready-to-start candidate; the
-// lifecycle plan authorizes it and materializes the persisted in-progress state.
+// TaskLifecycleCreation is the semantic seed document carried by the one guarded
+// create-and-start operation. The seed uses ready-to-start as a canonical internal
+// shape; it is never persisted in that state, and readiness is not an authorization
+// prerequisite for starting an existing task.
 type TaskLifecycleCreation struct {
 	Task domain.Task
 	Body string
@@ -113,8 +114,8 @@ func (e *TaskEligibilityError) Error() string {
 		return "task is not eligible to start"
 	}
 	base := fmt.Sprintf("task %s is not eligible to start: role=%s gate=%s", e.TaskID, e.State.Role, e.State.Gate)
-	if e.State.Role != RoleCandidate {
-		return base + "; move it to ready-to-start before starting"
+	if !isPendingWorkRole(e.State.Role) {
+		return base + "; move it to next-up or ready-to-start before starting"
 	}
 	if len(e.Blockers) == 0 {
 		return base
@@ -123,7 +124,11 @@ func (e *TaskEligibilityError) Error() string {
 	for _, blocker := range e.Blockers {
 		parts = append(parts, fmt.Sprintf("%s (%s via %s)", blocker.TaskID, blocker.Reason, strings.Join(blocker.Path, " -> ")))
 	}
-	return base + "; outstanding blockers: " + strings.Join(parts, ", ") + "; pass --force to bypass only the dependency gate"
+	base += "; outstanding blockers: " + strings.Join(parts, ", ")
+	if e.DependencyGateOverrideAllowed() {
+		return base + "; pass --force to bypass only the blocked dependency gate"
+	}
+	return base + "; repair the broken dependency evidence before starting"
 }
 
 func (e *TaskEligibilityError) Unwrap() error { return domain.ErrValidation }
@@ -134,13 +139,24 @@ func (e *TaskEligibilityError) Remedy() string {
 	if e == nil {
 		return "inspect the task's lifecycle and dependency state before retrying"
 	}
-	if e.State.Role != RoleCandidate {
-		return "move the task to ready-to-start before starting"
+	if !isPendingWorkRole(e.State.Role) {
+		return "move the task to next-up or ready-to-start before starting"
 	}
-	if len(e.Blockers) > 0 {
+	if e.DependencyGateOverrideAllowed() {
 		return "resolve the outstanding blockers, or pass --force to bypass only the dependency gate"
 	}
+	if e.State.Gate == GateBroken {
+		return "repair the broken dependency evidence, then inspect the task before retrying"
+	}
 	return "inspect the task with `tskflwctl task blockers <task>` before retrying"
+}
+
+// DependencyGateOverrideAllowed reports whether the refusal is solely a blocked
+// dependency gate that --force may bypass. A broken gate can still occur in a
+// healthy repository when a prerequisite is withdrawn; force cannot make that
+// dependency evidence sound.
+func (e *TaskEligibilityError) DependencyGateOverrideAllowed() bool {
+	return e != nil && isPendingWorkRole(e.State.Role) && e.State.Gate == GateBlocked
 }
 
 // TaskLifecycleMutationFailure reports a post-commit failure without erasing
@@ -242,7 +258,7 @@ func validateCreateAndStartPlan(graph *TaskGraph, plan TaskLifecyclePlan) (TaskL
 		return TaskLifecyclePlan{}, TaskLifecycleAnalysis{}, fmt.Errorf("%w: create-and-start requires a task slug", domain.ErrValidation)
 	}
 	if task.Status != domain.StatusReadyToStart {
-		return TaskLifecyclePlan{}, TaskLifecycleAnalysis{}, fmt.Errorf("%w: create-and-start candidate must begin as ready-to-start, got %s", domain.ErrValidation, task.Status)
+		return TaskLifecyclePlan{}, TaskLifecycleAnalysis{}, fmt.Errorf("%w: create-and-start seed document must use ready-to-start, got %s", domain.ErrValidation, task.Status)
 	}
 	if len(task.DependsOn) > 0 || len(task.LegacyBlockedBy) > 0 || len(task.LegacyDependencies) > 0 || len(task.LegacyBlocks) > 0 {
 		return TaskLifecyclePlan{}, TaskLifecycleAnalysis{}, fmt.Errorf("%w: create-and-start cannot set graph-owned dependency fields", domain.ErrValidation)
@@ -294,12 +310,12 @@ func validateExistingLifecyclePlan(graph *TaskGraph, plan TaskLifecyclePlan, bod
 	analysis := TaskLifecycleAnalysis{From: task.Status, Before: before}
 
 	if task.Status != plan.To && plan.To == domain.StatusInProgress {
-		if before.Role != RoleCandidate {
+		if !isPendingWorkRole(before.Role) {
 			return TaskLifecyclePlan{}, TaskLifecycleAnalysis{}, eligibilityError(graph, plan.TaskID, plan.Override)
 		}
 		if before.Gate != GateClear {
 			analysis.OutstandingBlockers = graph.BlockingFrontier(plan.TaskID)
-			if plan.Override != TaskLifecycleOverrideDependencyGate {
+			if before.Gate != GateBlocked || plan.Override != TaskLifecycleOverrideDependencyGate {
 				return TaskLifecyclePlan{}, TaskLifecycleAnalysis{}, eligibilityError(graph, plan.TaskID, plan.Override)
 			}
 			analysis.OverrideApplied = true

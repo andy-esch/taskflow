@@ -82,6 +82,40 @@ func TestTaskStartEligibilityForceAndMachineReceipt(t *testing.T) {
 	}
 }
 
+func TestTaskStartAcceptsQueuedWorkWithClearOrForcedBlockedGate(t *testing.T) {
+	root := dependencyCLIRepo(t, dependencyCLITask{slug: "queued-clear", status: domain.StatusNextUp})
+	out, errOut, err := runIn(t, root, "task", "start", "queued-clear", "--json")
+	if err != nil || errOut != "" {
+		t.Fatalf("clear queued start: %v\nstdout=%s\nstderr=%s", err, out, errOut)
+	}
+	var started wire.MovesEnvelope
+	if err := json.Unmarshal([]byte(out), &started); err != nil || len(started.Moves) != 1 ||
+		started.Moves[0].Lifecycle == nil || started.Moves[0].Lifecycle.From != "next-up" ||
+		started.Moves[0].Lifecycle.Forced {
+		t.Fatalf("clear queued receipt=%+v decode=%v", started, err)
+	}
+
+	prerequisiteID := testutil.TaskID("queued-blocker")
+	root = dependencyCLIRepo(t,
+		dependencyCLITask{slug: "queued-blocker", status: domain.StatusNextUp},
+		dependencyCLITask{slug: "queued-blocked", status: domain.StatusNextUp, dependsOn: []string{prerequisiteID}},
+	)
+	out, _, err = runIn(t, root, "task", "start", "queued-blocked", "--json")
+	var refused wire.MovesEnvelope
+	if err == nil || json.Unmarshal([]byte(out), &refused) != nil || len(refused.Moves) != 1 ||
+		refused.Moves[0].LifecycleFailure == nil || !refused.Moves[0].LifecycleFailure.OverrideAllowed {
+		t.Fatalf("blocked queued refusal=%+v err=%v", refused, err)
+	}
+
+	out, errOut, err = runIn(t, root, "task", "start", "queued-blocked", "--force", "--json")
+	var forced wire.MovesEnvelope
+	if err != nil || errOut != "" || json.Unmarshal([]byte(out), &forced) != nil || len(forced.Moves) != 1 ||
+		forced.Moves[0].Lifecycle == nil || forced.Moves[0].Lifecycle.From != "next-up" ||
+		!forced.Moves[0].Lifecycle.Forced {
+		t.Fatalf("forced queued receipt=%+v err=%v stderr=%s", forced, err, errOut)
+	}
+}
+
 func TestTaskStartMixedBatchRetainsSuccessAndTypedFailure(t *testing.T) {
 	prerequisiteID := testutil.TaskID("mixed-prerequisite")
 	root := dependencyCLIRepo(t,
@@ -156,9 +190,9 @@ func TestTaskMoveForceUsesDestinationSpecificGate(t *testing.T) {
 		t.Fatalf("generic move should apply dependency override: %v", err)
 	}
 
-	root = dependencyCLIRepo(t, dependencyCLITask{slug: "queued", status: domain.StatusNextUp})
-	_, _, err = runIn(t, root, "task", "move", "queued", "in-progress", "--force")
-	if err == nil || ExitCode(err) != 11 || !strings.Contains(err.Error(), "move it to ready-to-start") {
+	root = dependencyCLIRepo(t, dependencyCLITask{slug: "parked", status: domain.StatusDeferred})
+	_, _, err = runIn(t, root, "task", "move", "parked", "in-progress", "--force")
+	if err == nil || ExitCode(err) != 11 || !strings.Contains(err.Error(), "move it to next-up or ready-to-start") {
 		t.Fatalf("force bypassed lifecycle role: %v", err)
 	}
 }

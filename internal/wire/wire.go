@@ -179,6 +179,10 @@ import (
 // completed inconsistencies with stable codes, and hoist list-level graph
 // diagnostics. Post-commit Thread creation failures carry the same mutation
 // receipt in the error envelope.
+// 1.55: eligibility now admits both queued (`next-up`) and candidate
+// (`ready-to-start`) work when the authoritative graph is healthy and the gate
+// is clear. Thread frontier and task list --unblocked share that derivation;
+// lifecycle refusal payloads allow dependency override only for blocked gates.
 // 1.53: task lifecycle receipts expose committed durability, failed start rows
 // retain typed eligibility state/blockers/remedy, and post-commit cleanup errors
 // carry a structured task/workspace recovery receipt.
@@ -231,7 +235,7 @@ import (
 // 1.43: fresh `init --json` receipts may include `registration`, describing the
 // best-effort machine-local space registration (including preview vs applied and whether
 // the physical checkout was already registered).
-const SchemaVersion = "1.54"
+const SchemaVersion = "1.55"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

@@ -38,7 +38,7 @@ func ThreadsHuman(w io.Writer, st Style, list core.ThreadListView) error {
 			st.Bold(view.Thread.Slug),
 			fmt.Sprintf("%d/%d done", view.Rollup.Done, view.Rollup.Total),
 			fmt.Sprintf("%d/%d drained", view.Rollup.Drained, view.Rollup.Total),
-			fmt.Sprintf("%d ready", len(view.Frontier)),
+			fmt.Sprintf("%d eligible", len(view.Frontier)),
 			string(view.GraphHealth) + "/" + string(view.ProjectionHealth),
 			view.Thread.Description,
 		})

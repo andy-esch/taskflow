@@ -104,6 +104,14 @@ const (
 	RoleUnknown           LifecycleRole = "unknown"
 )
 
+// isPendingWorkRole reports whether a task is waiting to enter in-progress.
+// Queued and candidate retain distinct planning meaning, but neither is an
+// authorization gate: the repository graph decides whether pending work can
+// start.
+func isPendingWorkRole(role LifecycleRole) bool {
+	return role == RoleQueued || role == RoleCandidate
+}
+
 type GateState string
 
 const (
@@ -724,7 +732,7 @@ func (g *TaskGraph) deriveState(taskID string) TaskGraphState {
 	sound := g.computeSound(taskID, make(map[string]bool)).sound
 	return TaskGraphState{
 		TaskID: taskID, Role: role, Gate: gate, SoundlyCompleted: sound,
-		Eligible:     g.health == GraphHealthy && role == RoleCandidate && gate == GateClear,
+		Eligible:     g.health == GraphHealthy && isPendingWorkRole(role) && gate == GateClear,
 		Drained:      role == RoleNominallyComplete && sound,
 		Inconsistent: (role == RoleInFlight || role == RoleNominallyComplete) && gate != GateClear,
 	}
@@ -1003,9 +1011,10 @@ func (g *TaskGraph) blockerReason(taskID string) BlockerReason {
 	if g.hardBroken[taskID] {
 		return BlockerInvalidTask
 	}
-	switch task.Status {
-	case domain.StatusNextUp, domain.StatusReadyToStart:
+	if isPendingWorkRole(roleForStatus(task.Status)) {
 		return BlockerNotStarted
+	}
+	switch task.Status {
 	case domain.StatusInProgress:
 		return BlockerInFlight
 	case domain.StatusCompleted:

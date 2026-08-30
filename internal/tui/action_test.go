@@ -476,6 +476,16 @@ func TestTUITaskStartUsesDependencyEligibilityPolicy(t *testing.T) {
 	if err != nil || task.Status != domain.StatusReadyToStart {
 		t.Fatalf("TUI refusal changed target: task=%+v err=%v", task, err)
 	}
+
+	r.Task("next-up", "queued-target.md", "---\nid: "+testutil.TaskID("queued-target")+"\nstatus: next-up\ndescription: queued target\ntags: [test]\n---\n# Queued target\n")
+	msg = moveTask(core.NewService(store.NewFS(r.Root)), "queued-target", transition{to: string(domain.StatusInProgress)})()
+	if _, ok := msg.(movedMsg); !ok {
+		t.Fatalf("TUI should start a clear-gated next-up task, got %T (%v)", msg, msg)
+	}
+	task, _, err = store.NewFS(r.Root).GetTask("queued-target")
+	if err != nil || task.Status != domain.StatusInProgress {
+		t.Fatalf("TUI queued start: task=%+v err=%v", task, err)
+	}
 }
 
 func TestTUITaskReopenSurfacesDescendantImpactsAndRemedy(t *testing.T) {

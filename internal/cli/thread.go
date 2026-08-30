@@ -186,8 +186,8 @@ func newThreadPathCmd(app *App) *cobra.Command {
 func newThreadFrontierCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:               "frontier <thread>",
-		Short:             "Show currently eligible member tasks",
-		Long:              "Show dispatchable members from the shared task-graph projection. An unhealthy projection returns no tasks and retains its diagnosis.",
+		Short:             "Show graph-clear pending member tasks",
+		Long:              "Show next-up and ready-to-start members whose dependency gates are clear in the shared task-graph projection. An unhealthy projection returns no tasks and retains its diagnosis.",
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: app.completeThreadSlugs,

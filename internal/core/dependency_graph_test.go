@@ -144,6 +144,46 @@ func TestTaskGraphGatePrecedenceReasonsAndShortestPaths(t *testing.T) {
 	}
 }
 
+func TestTaskGraphPendingRolesShareGraphDrivenEligibility(t *testing.T) {
+	completed := graphRecord("eligibility-completed", domain.StatusCompleted)
+	unfinished := graphRecord("eligibility-unfinished", domain.StatusNextUp)
+	for _, tc := range []struct {
+		status domain.Status
+		role   LifecycleRole
+	}{
+		{status: domain.StatusNextUp, role: RoleQueued},
+		{status: domain.StatusReadyToStart, role: RoleCandidate},
+	} {
+		t.Run(string(tc.status), func(t *testing.T) {
+			clear := graphRecord("clear-"+string(tc.status), tc.status, completed.ID)
+			blocked := graphRecord("blocked-"+string(tc.status), tc.status, unfinished.ID)
+			graph := NewTaskGraph([]domain.Task{clear, blocked, completed, unfinished}, nil)
+			if state := graph.State(clear.ID); state.Role != tc.role || state.Gate != GateClear || !state.Eligible {
+				t.Fatalf("clear state = %+v", state)
+			}
+			if state := graph.State(blocked.ID); state.Role != tc.role || state.Gate != GateBlocked || state.Eligible {
+				t.Fatalf("blocked state = %+v", state)
+			}
+		})
+	}
+	for _, status := range []domain.Status{
+		domain.StatusInProgress, domain.StatusDeferred, domain.StatusCompleted, domain.StatusDeprecated,
+	} {
+		task := graphRecord("not-pending-"+string(status), status)
+		if state := NewTaskGraph([]domain.Task{task}, nil).State(task.ID); state.Eligible {
+			t.Errorf("status %s unexpectedly eligible: %+v", status, state)
+		}
+	}
+}
+
+func TestTaskGraphLifecycleRoleCoversEveryPersistedStatus(t *testing.T) {
+	for _, status := range domain.AllStatuses() {
+		if role := roleForStatus(status); role == RoleUnknown {
+			t.Errorf("persisted status %q maps to unknown lifecycle role", status)
+		}
+	}
+}
+
 func TestTaskGraphLegacyResolutionHealthAndDirection(t *testing.T) {
 	prerequisite := graphRecord("prerequisite", domain.StatusCompleted)
 	dependent := graphRecord("dependent", domain.StatusReadyToStart)

@@ -265,10 +265,12 @@ func TestTaskGraphQueryCommandsAndUnblockedSelector(t *testing.T) {
 	rootID := testutil.TaskID("query-root")
 	middleID := testutil.TaskID("query-middle")
 	targetID := testutil.TaskID("query-target")
+	queuedID := testutil.TaskID("query-queued")
 	root := dependencyCLIRepo(t,
 		dependencyCLITask{slug: "query-root", status: domain.StatusReadyToStart},
 		dependencyCLITask{slug: "query-middle", status: domain.StatusCompleted, dependsOn: []string{rootID}},
 		dependencyCLITask{slug: "query-target", status: domain.StatusReadyToStart, dependsOn: []string{middleID}},
+		dependencyCLITask{slug: "query-queued", status: domain.StatusNextUp},
 	)
 
 	out, _, err := runIn(t, root, "task", "blockers", "query-target", "--json")
@@ -308,7 +310,9 @@ func TestTaskGraphQueryCommandsAndUnblockedSelector(t *testing.T) {
 		t.Fatal(err)
 	}
 	var tasks wire.TasksEnvelope
-	if err := json.Unmarshal([]byte(out), &tasks); err != nil || len(tasks.Tasks) != 1 || tasks.Tasks[0].ID != rootID {
+	if err := json.Unmarshal([]byte(out), &tasks); err != nil || len(tasks.Tasks) != 2 ||
+		!slices.ContainsFunc(tasks.Tasks, func(task wire.TaskJSON) bool { return task.ID == queuedID }) ||
+		!slices.ContainsFunc(tasks.Tasks, func(task wire.TaskJSON) bool { return task.ID == rootID }) {
 		t.Fatalf("unblocked list=%+v decode=%v", tasks, err)
 	}
 
