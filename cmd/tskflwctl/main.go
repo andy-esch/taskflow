@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
+	"charm.land/fang/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/fang"
 	"golang.org/x/term"
 
 	"github.com/andy-esch/taskflow/internal/cli"
@@ -30,7 +30,9 @@ func main() {
 			root,
 			fang.WithoutVersion(), // keep our own version string + `version` subcommand
 			fang.WithoutManpage(), // manpages come from ./internal/tools/mangen, not the runtime
-			fang.WithColorSchemeFunc(repoColorScheme),
+			fang.WithColorSchemeFunc(func(ld lipgloss.LightDarkFunc) fang.ColorScheme {
+				return repoColorScheme(cli.ChromeTheme(os.Args[1:]), ld)
+			}),
 			fang.WithErrorHandler(fangErrorHandler),
 		)
 		if err != nil {
@@ -77,19 +79,19 @@ func useFang(args []string, stderrIsTTY bool) bool {
 	return stderrIsTTY
 }
 
-// repoColorScheme maps fang's help/error palette onto the project's DEFAULT theme,
-// so styled help/errors carry the app's identity from the one palette — not hardcoded
-// literals or fang's truecolor charmtone default. fang's LightDarkFunc picks each
-// token's background-appropriate variant (so help/errors get light vs dark right —
-// more than the CLI body, which renders the dark palette); on a non-truecolor
-// terminal lipgloss downsamples to the nearest 16-color.
+// repoColorScheme maps fang's help/error palette onto the SELECTED theme, so styled
+// help/errors carry the app's identity from the one palette — not hardcoded literals
+// or fang's truecolor charmtone default. fang's LightDarkFunc picks each token's
+// background-appropriate variant (so help/errors get light vs dark right — more than
+// the CLI body, which renders the dark palette); on a non-truecolor terminal lipgloss
+// downsamples to the nearest 16-color.
 //
-// fang renders chrome OUTSIDE the per-command theme resolution, so it always uses
-// Default(), never the --theme / [theme] selection. Help/errors are brand chrome,
-// not data, so that's an accepted limitation (threading the selected theme into fang
-// would be a follow-up).
-func repoColorScheme(ld lipgloss.LightDarkFunc) fang.ColorScheme {
-	d := design.Default()
+// fang renders chrome OUTSIDE the per-command theme resolution (cobra's help path
+// returns before PersistentPreRunE), so the caller resolves the theme with
+// cli.ChromeTheme rather than reading a populated App. Taking it as a parameter keeps
+// this function pure and directly testable.
+func repoColorScheme(t design.Theme, ld lipgloss.LightDarkFunc) fang.ColorScheme {
+	d := t
 	// pick resolves token h to the detected terminal background via fang's func.
 	pick := func(h func(design.Palette) design.Hue) color.Color {
 		return ld(h(d.Light).Color(), h(d.Dark).Color())
@@ -105,7 +107,12 @@ func repoColorScheme(ld lipgloss.LightDarkFunc) fang.ColorScheme {
 		blue   = pick(sem(theme.ColorBlue))
 		cyan   = pick(sem(theme.ColorCyan))
 		gray   = pick(sem(theme.ColorGray))
-		danger = pick(func(p design.Palette) design.Hue { return p.Danger })
+		// Codeblock is fang's only BACKGROUND role: it fills the USAGE/Examples box
+		// and every token in there is drawn Foreground(role) over it. It previously
+		// took `gray`, a foreground hue, which painted the box light grey and
+		// collapsed DimmedArgument to 1.00:1 against its own background.
+		surface = pick(func(p design.Palette) design.Hue { return p.Surface })
+		danger  = pick(func(p design.Palette) design.Hue { return p.Danger })
 		// The error badge's foreground is a fixed high-contrast white — a universal
 		// "error" affordance, not a themeable color (the palette has no badge-fg token).
 		badgeFg = lipgloss.Color("15")
@@ -124,7 +131,7 @@ func repoColorScheme(ld lipgloss.LightDarkFunc) fang.ColorScheme {
 		FlagDefault:    gray,
 		Dash:           gray,
 		Help:           gray,
-		Codeblock:      gray,
+		Codeblock:      surface,
 		ErrorHeader:    [2]color.Color{badgeFg, danger}, // bright-white on a danger-red badge
 		ErrorDetails:   def,
 	}

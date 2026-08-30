@@ -182,6 +182,54 @@ func themeName(flag, env, cfgName, userName string) string {
 	return strings.TrimSpace(userName)
 }
 
+// ChromeTheme resolves the active theme for OUT-OF-BAND chrome — fang's styled
+// help and error boxes. Those render from cobra's help/error path, which returns
+// before PersistentPreRunE ever runs, so App.Th is still the zero default when
+// they draw. Without this, chrome silently ignored --theme and every [theme]
+// table and always painted the built-in default.
+//
+// It reuses themeName, so chrome and body share ONE precedence contract and
+// cannot drift. Every lookup is best-effort by design: `--help` must keep working
+// outside a planning repo, with no home config, and with an unreadable one.
+//
+// Discovery starts at the process cwd. A run that retargets with -C/--space picks
+// up that repo's theme for its BODY but not for chrome; chrome is brand framing,
+// not data, and scanning those flags here would duplicate cobra's parser for a
+// case that cannot change what any command does.
+func ChromeTheme(args []string) design.Theme {
+	cfgName := ""
+	if start, err := os.Getwd(); err == nil {
+		if cfg, cfgErr := config.Discover(start); cfgErr == nil && cfg != nil {
+			cfgName = cfg.Theme.Name
+		}
+	}
+	userName := ""
+	if uc, ucErr := userconfig.Load(); ucErr == nil && uc != nil {
+		userName = uc.Theme.Name
+	}
+	th, _ := design.Lookup(themeName(themeFlagFrom(args), os.Getenv("TSKFLW_THEME"), cfgName, userName))
+	return th
+}
+
+// themeFlagFrom scans raw args for --theme, the one flag chrome must honor before
+// cobra parses anything. Pure (args in, name out) so the scan is unit-tested
+// directly, mirroring useFang's --json scan. `--` ends flag scanning, so a literal
+// "--theme" argument after it is not read as the flag.
+func themeFlagFrom(args []string) string {
+	for i, a := range args {
+		if a == "--" {
+			return ""
+		}
+		if name, ok := strings.CutPrefix(a, "--theme="); ok {
+			return name
+		}
+		if a == "--theme" && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
 // NewRootCmd builds the command tree with explicit DI — no package globals.
 // All I/O flows through the injected streams, which makes commands testable.
 // in is the single stdin owner: it feeds App.In (the prompt gate, prompter, and

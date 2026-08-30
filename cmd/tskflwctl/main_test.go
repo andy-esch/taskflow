@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
@@ -195,7 +197,7 @@ func TestUseFang(t *testing.T) {
 func TestRepoColorScheme(t *testing.T) {
 	// Simulate a dark terminal: the LightDarkFunc returns the dark variant.
 	dark := func(_, dark color.Color) color.Color { return dark }
-	cs := repoColorScheme(dark)
+	cs := repoColorScheme(design.Default(), dark)
 	d := design.Default().Dark
 	if cs.Title != d.Accent.Color() {
 		t.Errorf("Title should be the theme accent (%v), got %v", d.Accent.Color(), cs.Title)
@@ -208,5 +210,68 @@ func TestRepoColorScheme(t *testing.T) {
 	}
 	if cs.ErrorHeader[0] == nil || cs.Base == nil {
 		t.Fatal("badge fg / base left unset")
+	}
+	// Codeblock is fang's only BACKGROUND role. Assigning it a foreground hue is
+	// the defect that made the USAGE box unreadable (DimmedArgument landed on an
+	// identically-colored background), so pin it to the surface token.
+	if cs.Codeblock != d.Surface.Color() {
+		t.Errorf("Codeblock must be the surface token (%v), got %v", d.Surface.Color(), cs.Codeblock)
+	}
+	if cs.Codeblock == cs.DimmedArgument {
+		t.Error("Codeblock (background) equals DimmedArgument (foreground): text is invisible")
+	}
+	// Base stays the terminal default: fang shares one Base between the help body
+	// text and the codeblock text, so pinning it would recolor all help prose.
+	if cs.Base != (lipgloss.NoColor{}) {
+		t.Errorf("Base should stay the terminal default, got %v", cs.Base)
+	}
+}
+
+// TestRepoColorSchemeFollowsSelectedTheme is the regression guard for the second
+// defect: chrome used design.Default() unconditionally, so a catppuccin user got
+// neon help. Every themed slot must move with the passed theme.
+func TestRepoColorSchemeFollowsSelectedTheme(t *testing.T) {
+	dark := func(_, dark color.Color) color.Color { return dark }
+	other, ok := design.Lookup("catppuccin")
+	if !ok {
+		t.Fatal("catppuccin should be registered")
+	}
+	def := repoColorScheme(design.Default(), dark)
+	alt := repoColorScheme(other, dark)
+	for _, c := range []struct {
+		name     string
+		def, alt color.Color
+	}{
+		{"Title", def.Title, alt.Title},
+		{"Command", def.Command, alt.Command},
+		{"Flag", def.Flag, alt.Flag},
+		{"Program", def.Program, alt.Program},
+		{"Codeblock", def.Codeblock, alt.Codeblock},
+	} {
+		if c.def == c.alt {
+			t.Errorf("%s did not follow the selected theme: both %v", c.name, c.def)
+		}
+	}
+	if alt.Codeblock != other.Dark.Surface.Color() {
+		t.Errorf("Codeblock should be catppuccin's surface (%v), got %v", other.Dark.Surface.Color(), alt.Codeblock)
+	}
+}
+
+// TestRepoColorSchemeFollowsBackground pins the OTHER axis: fang's LightDarkFunc
+// picks the background-appropriate variant, so a light terminal must get the light
+// surface. The two palettes layer in opposite directions (neon lifts to base01,
+// Latte rises to white), so a mapping that ignored the func would be invisible on
+// one of them.
+func TestRepoColorSchemeFollowsBackground(t *testing.T) {
+	onDark := repoColorScheme(design.Default(), func(_, dark color.Color) color.Color { return dark })
+	onLight := repoColorScheme(design.Default(), func(light, _ color.Color) color.Color { return light })
+	if onDark.Codeblock != design.Default().Dark.Surface.Color() {
+		t.Errorf("dark Codeblock = %v, want %v", onDark.Codeblock, design.Default().Dark.Surface.Color())
+	}
+	if onLight.Codeblock != design.Default().Light.Surface.Color() {
+		t.Errorf("light Codeblock = %v, want %v", onLight.Codeblock, design.Default().Light.Surface.Color())
+	}
+	if onDark.Codeblock == onLight.Codeblock {
+		t.Error("Codeblock ignored the background: same surface on light and dark")
 	}
 }

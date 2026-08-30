@@ -38,7 +38,11 @@ var neonDark = Palette{
 	MatchCurrent: Hue{"#ea5ce2", 13}, // accent bg for the current hit
 	MatchFg:      Hue{"#050608", 0},  // near-black text over a highlight
 	Track:        Hue{"#474849", 8},  // base03 empty track
-	Base:         Hue{"#050608", 0},  // Synth Midnight near-black bg
+	Base:         Hue{"#050608", 0},  // Synth Midnight near-black bg (base00)
+	// base01, the scheme's own "lighter background" slot (status bars, line
+	// highlight) — exactly the codeblock role. base00 is near-black, so lifting
+	// to base01 costs almost no foreground contrast (worst role 5.02:1).
+	Surface: Hue{"#1a1b1c", 0},
 	Gradient: []Hue{
 		{"#b026ff", 5},  // neon purple
 		{"#00e5ff", 14}, // neon cyan
@@ -78,6 +82,12 @@ var latteAA = Palette{
 	MatchFg:      Hue{"#1e1e2e", 0},  // near-black text over a (light) highlight
 	Track:        Hue{"#bcc0cc", 7},  // surface1
 	Base:         Hue{"#eff1f5", 15}, // Latte base (light bg)
+	// Pure white. Latte layers DOWNWARD (mantle/crust are darker than base), and
+	// these accents were darkened to clear AA against base at 4.5-5.6:1 — any of
+	// those darker layers pushes them under it (surface0 bottoms out at 3.20:1).
+	// A raised white card is the standard light-theme code surface and gains
+	// contrast instead (worst role 4.94:1).
+	Surface: Hue{"#ffffff", 15},
 	Gradient: []Hue{
 		{"#8839ef", 5},  // mauve
 		{"#209fb5", 6},  // sapphire-ish
@@ -109,6 +119,11 @@ var mochaDark = Palette{
 	MatchFg:      Hue{"#1e1e2e", 0},  // base — dark text over a highlight
 	Track:        Hue{"#313244", 8},  // surface0 empty track
 	Base:         Hue{"#1e1e2e", 0},  // Mocha base bg
+	// crust, NOT surface0. Mocha's accents are pastels with little contrast
+	// headroom, so lifting to surface0 (#313244) drops overlay2 to 4.45:1 —
+	// below AA. Catppuccin layers crust/mantle BEHIND base, and recessing to
+	// crust widens every pair instead (worst role 6.64:1).
+	Surface: Hue{"#11111b", 0},
 	Gradient: []Hue{
 		{"#cba6f7", 13}, // mauve
 		{"#89b4fa", 4},  // blue
