@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -52,5 +53,12 @@ func TestThreadStatusesAreClosedAndCopied(t *testing.T) {
 		if err := ValidateThreadStatus(status); err != nil {
 			t.Errorf("status %q: %v", status, err)
 		}
+	}
+}
+
+func TestThreadStatusDiagnosesProvisionalAbandonedValue(t *testing.T) {
+	err := ValidateThreadStatus(ThreadStatus("abandoned"))
+	if err == nil || !strings.Contains(err.Error(), `replaced by "cancelled"`) {
+		t.Fatalf("legacy status error = %v", err)
 	}
 }

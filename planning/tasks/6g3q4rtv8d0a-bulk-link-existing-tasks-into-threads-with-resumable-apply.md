@@ -41,6 +41,9 @@ Let users describe membership and dependency relationships among existing tasks 
   prefix remains sound, and receipts report the exact durable operation prefix.
 - [ ] Compound semantic writes use the caller-provided clock, while idempotent
   skips neither rewrite files nor advance timestamps.
+- [ ] Existing-task V1 does not manufacture task-creation projection impacts. If inline
+  `new_task` is later promoted, its compound planner must derive one receipt across task creation,
+  dependency, and membership changes rather than reuse the single-task lifecycle impact shortcut.
 
 ## Stress tests
 
@@ -60,5 +63,11 @@ Before releasing bulk apply, benchmark the real guarded path at representative p
 Apply is one dedicated compound capability, not orchestration across task depend and Thread commands. It takes the canonical-root guard once, reloads planning-space identity, the strict task graph, and relevant Thread state, validates the materialized intent, then invokes lock-free internal materializers. Nesting narrower guarded ports would fail callback exclusion and would not provide one authoritative plan.
 
 For existing-task V1, dependency additions land in the plan's deterministic prefix-safe order and the Thread document lands last. A failure or raw-edit conflict returns the exact durable operation prefix; retry rebuilds current intent and converges without treating unrelated edits between invocations as stale frozen-plan versions. All real semantic writes use the caller clock and idempotent skips remain byte-identical.
+
+The current task-lifecycle impact helper intentionally returns no Thread impacts for an isolated
+task creation: a freshly minted task cannot already participate in a persisted Thread or dependency
+edge. That shortcut is not valid for a future compound `new_task` apply which creates membership and
+edges in the same plan; such an extension must compare the compound before/after repository
+projection instead.
 
 The existing performance gate remains an exit criterion for this compound path, including lock-held validation time, callback-contention behavior, and the immediate per-target CAS window.

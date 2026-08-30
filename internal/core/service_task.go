@@ -279,6 +279,7 @@ func taskLifecycleReceipt(result TaskLifecycleMutationResult) TaskLifecycleRecei
 		Forced: result.OverrideApplied, Before: result.Before, After: result.After,
 		OutstandingBlockers: cloneLifecycleBlockers(result.OutstandingBlockers),
 		Impacts:             cloneTaskGraphStateImpacts(result.Impacts),
+		ThreadImpacts:       cloneThreadProjectionImpacts(result.ThreadImpacts),
 		Remedy:              taskLifecycleRemedy(result),
 	}
 }
@@ -288,10 +289,32 @@ func taskLifecycleRemedy(result TaskLifecycleMutationResult) string {
 	if result.OverrideApplied && result.Plan.Override == TaskLifecycleOverrideDependencyGate {
 		parts = append(parts, "resolve the outstanding blockers; the override did not alter dependency edges")
 	}
-	if len(result.Impacts) > 0 {
+	if taskImpactsNeedRepair(result.Impacts) {
 		parts = append(parts, "inspect each affected task with `tskflwctl task blockers <task>` and restore sound prerequisites or update its dependencies")
 	}
+	if threadImpactsNeedRepair(result.ThreadImpacts) {
+		parts = append(parts, "inspect each newly inconsistent Thread and restore sound member or external-gate evidence")
+	}
 	return strings.Join(parts, "; ")
+}
+
+func taskImpactsNeedRepair(impacts []TaskGraphStateImpact) bool {
+	for _, impact := range impacts {
+		if (!impact.Before.Inconsistent && impact.After.Inconsistent) ||
+			(impact.Before.Gate != impact.After.Gate && impact.After.Gate != GateClear) {
+			return true
+		}
+	}
+	return false
+}
+
+func threadImpactsNeedRepair(impacts []ThreadProjectionImpact) bool {
+	for _, impact := range impacts {
+		if !impact.Before.Inconsistent && impact.After.Inconsistent {
+			return true
+		}
+	}
+	return false
 }
 
 // SetFields validates and applies frontmatter updates to a task (stamping

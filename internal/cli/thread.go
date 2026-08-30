@@ -26,13 +26,115 @@ type threadCreationCommandFailure struct {
 func (e *threadCreationCommandFailure) Error() string { return e.cause.Error() }
 func (e *threadCreationCommandFailure) Unwrap() error { return e.cause }
 
+type threadMutationCommandFailure struct {
+	cause     error
+	receipt   core.ThreadMutationReceipt
+	path      string
+	workspace wire.WorkspaceJSON
+}
+
+func (e *threadMutationCommandFailure) Error() string { return e.cause.Error() }
+func (e *threadMutationCommandFailure) Unwrap() error { return e.cause }
+
 func newThreadCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "thread", Short: "Work with initiative Threads over the task DAG"}
 	cmd.AddCommand(
 		newThreadNewCmd(app), newThreadListCmd(app), newThreadShowCmd(app),
 		newThreadPathCmd(app), newThreadFrontierCmd(app),
+		newThreadMembershipCmd(app, "add", core.ThreadMutationAddMembers),
+		newThreadMembershipCmd(app, "remove", core.ThreadMutationRemoveMembers),
+		newThreadLifecycleCmd(app, "start", core.ThreadMutationStart),
+		newThreadLifecycleCmd(app, "complete", core.ThreadMutationComplete),
+		newThreadLifecycleCmd(app, "cancel", core.ThreadMutationCancel),
+		newThreadLifecycleCmd(app, "reopen", core.ThreadMutationReopen),
 	)
 	return cmd
+}
+
+func newThreadMembershipCmd(app *App, verb string, operation core.ThreadMutationOperation) *cobra.Command {
+	cmd := &cobra.Command{
+		Use: verb + " <thread> <task>...",
+		Short: map[core.ThreadMutationOperation]string{
+			core.ThreadMutationAddMembers:    "Atomically add task members to a Thread",
+			core.ThreadMutationRemoveMembers: "Atomically remove task members from a Thread",
+		}[operation],
+		Long:        "Resolve every task and validate Thread mutability under one repository guard. The complete request commits once or not at all; already-satisfied member intents are reported as idempotent skips.",
+		Args:        cobra.MinimumNArgs(2),
+		Annotations: map[string]string{"safety": "mutating"},
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) == 0 {
+				return app.completeThreadSlugs(cmd, args, toComplete)
+			}
+			return app.completeTaskSlugs(cmd, args[1:], toComplete)
+		},
+		RunE: func(_ *cobra.Command, args []string) error {
+			var (
+				receipt core.ThreadMutationReceipt
+				err     error
+			)
+			if operation == core.ThreadMutationAddMembers {
+				receipt, err = app.Svc.AddThreadMembers(args[0], args[1:], app.DryRun)
+			} else {
+				receipt, err = app.Svc.RemoveThreadMembers(args[0], args[1:], app.DryRun)
+			}
+			return emitThreadMutation(app, receipt, err)
+		},
+	}
+	return cmd
+}
+
+func newThreadLifecycleCmd(app *App, verb string, operation core.ThreadMutationOperation) *cobra.Command {
+	short := map[core.ThreadMutationOperation]string{
+		core.ThreadMutationStart:    "Start a Thread with at least one live member",
+		core.ThreadMutationComplete: "Complete a soundly drained Thread",
+		core.ThreadMutationCancel:   "Cancel a Thread without changing member tasks",
+		core.ThreadMutationReopen:   "Reopen a completed Thread",
+	}[operation]
+	return &cobra.Command{
+		Use:               verb + " <thread>",
+		Short:             short,
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeThreadSlugs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			var (
+				receipt core.ThreadMutationReceipt
+				err     error
+			)
+			switch operation {
+			case core.ThreadMutationStart:
+				receipt, err = app.Svc.StartThread(args[0], app.DryRun)
+			case core.ThreadMutationComplete:
+				receipt, err = app.Svc.CompleteThread(args[0], app.DryRun)
+			case core.ThreadMutationCancel:
+				receipt, err = app.Svc.CancelThread(args[0], app.DryRun)
+			case core.ThreadMutationReopen:
+				receipt, err = app.Svc.ReopenThread(args[0], app.DryRun)
+			}
+			return emitThreadMutation(app, receipt, err)
+		},
+	}
+}
+
+func emitThreadMutation(app *App, receipt core.ThreadMutationReceipt, err error) error {
+	path := ""
+	if receipt.Thread.Path != "" {
+		path = app.rel(receipt.Thread.Path)
+	}
+	if err != nil {
+		var committed *core.ThreadMutationFailure
+		if errors.As(err, &committed) {
+			return &threadMutationCommandFailure{
+				cause: err, receipt: committed.Receipt, path: path, workspace: app.workspace(),
+			}
+		}
+		return err
+	}
+	if app.JSON {
+		return render.ThreadUpdateJSON(app.Out, receipt, path, app.workspace())
+	}
+	render.ThreadMutationHuman(app.Out, app.Style, receipt, app.linkPath(receipt.Thread.Path))
+	return nil
 }
 
 func newThreadNewCmd(app *App) *cobra.Command {

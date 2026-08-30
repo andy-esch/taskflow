@@ -12,7 +12,7 @@ import (
 type ThreadJSON struct {
 	ID          string   `json:"id"`
 	Slug        string   `json:"slug"`
-	Status      string   `json:"status" jsonschema:"description=unstarted|in-progress|completed|abandoned"`
+	Status      string   `json:"status" jsonschema:"description=unstarted|in-progress|completed|cancelled"`
 	Description string   `json:"description"`
 	Goal        string   `json:"goal"`
 	TargetDate  string   `json:"target_date,omitempty"`
@@ -195,5 +195,72 @@ type ThreadMutationEnvelope struct {
 func ToThreadMutationEnvelope(receipt core.ThreadCreationReceipt, path string, workspace WorkspaceJSON) ThreadMutationEnvelope {
 	return ThreadMutationEnvelope{
 		SchemaVersion: SchemaVersion, ThreadMutationJSON: ToThreadMutationJSON(receipt, path, workspace),
+	}
+}
+
+// ThreadMemberOutcomeJSON records one resolved member intent, including an
+// idempotent skip that deliberately caused no set change.
+type ThreadMemberOutcomeJSON struct {
+	TaskID  string `json:"task_id"`
+	Action  string `json:"action" jsonschema:"description=add|remove"`
+	Outcome string `json:"outcome" jsonschema:"description=added|removed|skipped"`
+}
+
+// ThreadUpdateJSON is the existing-Thread membership/lifecycle mutation receipt.
+// Before and after retain the complete projection so graph consequences remain
+// inspectable without a follow-up read.
+type ThreadUpdateJSON struct {
+	Operation      string                    `json:"operation" jsonschema:"description=add-members|remove-members|start|complete|cancel|reopen"`
+	ThreadID       string                    `json:"thread_id"`
+	Changed        bool                      `json:"changed"`
+	DryRun         bool                      `json:"dry_run"`
+	Committed      bool                      `json:"committed" jsonschema:"description=true only after the Thread file became durable"`
+	MemberOutcomes []ThreadMemberOutcomeJSON `json:"member_outcomes"`
+	Before         ThreadViewJSON            `json:"before"`
+	After          ThreadViewJSON            `json:"after"`
+	Remedy         string                    `json:"remedy,omitempty"`
+	Path           string                    `json:"path"`
+	Workspace      WorkspaceJSON             `json:"workspace"`
+}
+
+func ToThreadUpdateJSON(receipt core.ThreadMutationReceipt, path string, workspace WorkspaceJSON) ThreadUpdateJSON {
+	payload := ThreadUpdateJSON{
+		Operation: string(receipt.Operation), ThreadID: receipt.Thread.ID,
+		Changed: receipt.Changed, DryRun: receipt.DryRun, Committed: receipt.Committed,
+		MemberOutcomes: make([]ThreadMemberOutcomeJSON, 0, len(receipt.MemberOutcomes)),
+		Before:         ToThreadViewJSON(receipt.Before), After: ToThreadViewJSON(receipt.After),
+		Remedy: receipt.Remedy, Path: path, Workspace: workspace,
+	}
+	for _, outcome := range receipt.MemberOutcomes {
+		payload.MemberOutcomes = append(payload.MemberOutcomes, ThreadMemberOutcomeJSON{
+			TaskID: outcome.TaskID, Action: outcome.Action, Outcome: outcome.Outcome,
+		})
+	}
+	return payload
+}
+
+// ThreadUpdateEnvelope is a successful existing-Thread mutation receipt.
+type ThreadUpdateEnvelope struct {
+	SchemaVersion string `json:"schema_version"`
+	ThreadUpdateJSON
+}
+
+func ToThreadUpdateEnvelope(receipt core.ThreadMutationReceipt, path string, workspace WorkspaceJSON) ThreadUpdateEnvelope {
+	return ThreadUpdateEnvelope{SchemaVersion: SchemaVersion, ThreadUpdateJSON: ToThreadUpdateJSON(receipt, path, workspace)}
+}
+
+// ThreadMutationFailureJSON is a pre-commit membership/lifecycle policy refusal.
+type ThreadMutationFailureJSON struct {
+	ThreadID  string `json:"thread_id"`
+	Operation string `json:"operation"`
+	Status    string `json:"status"`
+	Reason    string `json:"reason"`
+	Remedy    string `json:"remedy"`
+}
+
+func ToThreadMutationFailureJSON(failure *core.ThreadMutationPolicyError) ThreadMutationFailureJSON {
+	return ThreadMutationFailureJSON{
+		ThreadID: failure.ThreadID, Operation: string(failure.Operation), Status: string(failure.Status),
+		Reason: failure.Reason, Remedy: failure.Remedy,
 	}
 }

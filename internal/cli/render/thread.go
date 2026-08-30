@@ -26,6 +26,10 @@ func ThreadMutationJSON(w io.Writer, receipt core.ThreadCreationReceipt, path st
 	return wire.EncodeJSON(w, wire.ToThreadMutationEnvelope(receipt, path, workspace))
 }
 
+func ThreadUpdateJSON(w io.Writer, receipt core.ThreadMutationReceipt, path string, workspace wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToThreadUpdateEnvelope(receipt, path, workspace))
+}
+
 func ThreadsHuman(w io.Writer, st Style, list core.ThreadListView) error {
 	rows := make([][]string, 0, len(list.Threads))
 	for _, view := range list.Threads {
@@ -129,6 +133,41 @@ func ThreadCreatedHuman(w io.Writer, st Style, receipt core.ThreadCreationReceip
 		verb, marker = "would create", "◇"
 	}
 	fmt.Fprintf(w, "%s %s Thread %s at %s\n", st.Green(marker), verb, st.Bold(receipt.Thread.ID), path)
+}
+
+func ThreadMutationHuman(w io.Writer, st Style, receipt core.ThreadMutationReceipt, path string) {
+	marker, verb := "✔", "updated"
+	if receipt.DryRun {
+		marker, verb = "◇", "would update"
+	} else if !receipt.Changed {
+		marker, verb = "•", "already satisfied"
+	}
+	fmt.Fprintf(w, "%s %s Thread %s (%s)\n", st.Green(marker), verb, st.Bold(receipt.Thread.Slug), receipt.Operation)
+	for _, outcome := range receipt.MemberOutcomes {
+		prefix := st.Green("✔")
+		if receipt.DryRun {
+			prefix = st.Dim("◇")
+		} else if outcome.Outcome == "skipped" {
+			prefix = st.Dim("•")
+		}
+		fmt.Fprintf(w, "  %s %s %s (%s)\n", prefix, outcome.Action, outcome.TaskID, outcome.Outcome)
+	}
+	if receipt.Before.Thread.Status != receipt.After.Thread.Status {
+		fmt.Fprintf(w, "  %s status %s -> %s\n", st.Dim("•"), receipt.Before.Thread.Status, receipt.After.Thread.Status)
+	}
+	if receipt.Changed {
+		fmt.Fprintf(w, "  %s members %d -> %d · frontier %d -> %d · drained %d/%d -> %d/%d\n",
+			st.Dim("projection:"), len(receipt.Before.Members), len(receipt.After.Members),
+			len(receipt.Before.Frontier), len(receipt.After.Frontier),
+			receipt.Before.Rollup.Drained, receipt.Before.Rollup.Total,
+			receipt.After.Rollup.Drained, receipt.After.Rollup.Total)
+	}
+	if receipt.Remedy != "" {
+		fmt.Fprintf(w, "  %s %s\n", st.Dim("remedy:"), receipt.Remedy)
+	}
+	if path != "" {
+		fmt.Fprintf(w, "  %s %s\n", st.Dim("path:"), path)
+	}
 }
 
 func threadDiagnosticsHuman(w io.Writer, st Style, view core.ThreadView) {

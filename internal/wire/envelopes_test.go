@@ -126,6 +126,14 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				Thread: thread, Changed: true, DryRun: true,
 			}, "threads/6g0000000003-initiative.md", WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig}))
 		}},
+		{"ThreadUpdateEnvelope", func(w io.Writer) error {
+			return emit(w, ToThreadUpdateEnvelope(core.ThreadMutationReceipt{
+				Operation: core.ThreadMutationAddMembers, Thread: thread,
+				Before: threadView, After: threadView,
+				MemberOutcomes: []core.ThreadMemberOutcome{{TaskID: task.ID, Action: "add", Outcome: "skipped"}},
+				DryRun:         true,
+			}, "threads/6g0000000003-initiative.md", WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig}))
+		}},
 		{"EpicMutationEnvelope", func(w io.Writer) error { return emit(w, ToEpicMutationEnvelope(epic, true, WorkspaceJSON{})) }},
 		{"CreatedEnvelope", func(w io.Writer) error {
 			return emit(w, ToCreatedEnvelope("task", "6fsa428vc2mm", "alpha", "ready-to-start", "tasks/6fsa428vc2mm-alpha.md", false, WorkspaceJSON{}))

@@ -1124,6 +1124,12 @@
         },
         "thread_mutation": {
           "$ref": "#/$defs/ThreadMutationJSON"
+        },
+        "thread_update": {
+          "$ref": "#/$defs/ThreadUpdateJSON"
+        },
+        "thread_failure": {
+          "$ref": "#/$defs/ThreadMutationFailureJSON"
         }
       },
       "additionalProperties": false,
@@ -2779,6 +2785,15 @@
           },
           "type": "array"
         },
+        "thread_impact_count": {
+          "type": "integer"
+        },
+        "thread_impacts": {
+          "items": {
+            "$ref": "#/$defs/ThreadProjectionImpactJSON"
+          },
+          "type": "array"
+        },
         "remedy": {
           "type": "string"
         }
@@ -2795,7 +2810,9 @@
         "after",
         "outstanding_blockers",
         "impact_count",
-        "impacts"
+        "impacts",
+        "thread_impact_count",
+        "thread_impacts"
       ],
       "description": "TaskLifecycleJSON is the task-specific detail nested into the shared move envelope."
     },
@@ -3189,7 +3206,7 @@
         },
         "status": {
           "type": "string",
-          "description": "unstarted|in-progress|completed|abandoned"
+          "description": "unstarted|in-progress|completed|cancelled"
         },
         "description": {
           "type": "string"
@@ -3239,6 +3256,29 @@
       ],
       "description": "ThreadJSON is the persisted metadata and membership of one Thread."
     },
+    "ThreadMemberOutcomeJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string",
+          "description": "add|remove"
+        },
+        "outcome": {
+          "type": "string",
+          "description": "added|removed|skipped"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "action",
+        "outcome"
+      ],
+      "description": "ThreadMemberOutcomeJSON records one resolved member intent, including an idempotent skip that deliberately caused no set change."
+    },
     "ThreadMutationEnvelope": {
       "properties": {
         "schema_version": {
@@ -3276,6 +3316,35 @@
         "workspace"
       ],
       "description": "ThreadMutationEnvelope is the successful `thread new --json` receipt."
+    },
+    "ThreadMutationFailureJSON": {
+      "properties": {
+        "thread_id": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "remedy": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "thread_id",
+        "operation",
+        "status",
+        "reason",
+        "remedy"
+      ],
+      "description": "ThreadMutationFailureJSON is a pre-commit membership/lifecycle policy refusal."
     },
     "ThreadMutationJSON": {
       "properties": {
@@ -3337,6 +3406,42 @@
         "thread_id",
         "message"
       ]
+    },
+    "ThreadProjectionImpactJSON": {
+      "properties": {
+        "thread_id": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "direct": {
+          "type": "boolean"
+        },
+        "changed_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "before": {
+          "$ref": "#/$defs/ThreadViewJSON"
+        },
+        "after": {
+          "$ref": "#/$defs/ThreadViewJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "thread_id",
+        "slug",
+        "direct",
+        "changed_task_ids",
+        "before",
+        "after"
+      ],
+      "description": "ThreadProjectionImpactJSON is one Thread view changed by a task lifecycle transition; direct distinguishes membership from downstream/boundary effects."
     },
     "ThreadRollupJSON": {
       "properties": {
@@ -3404,6 +3509,124 @@
         "state"
       ],
       "description": "ThreadTaskJSON is one task in a Thread projection, with an explicit member or external-gate role and the shared repository graph state."
+    },
+    "ThreadUpdateEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string",
+          "description": "add-members|remove-members|start|complete|cancel|reopen"
+        },
+        "thread_id": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "committed": {
+          "type": "boolean",
+          "description": "true only after the Thread file became durable"
+        },
+        "member_outcomes": {
+          "items": {
+            "$ref": "#/$defs/ThreadMemberOutcomeJSON"
+          },
+          "type": "array"
+        },
+        "before": {
+          "$ref": "#/$defs/ThreadViewJSON"
+        },
+        "after": {
+          "$ref": "#/$defs/ThreadViewJSON"
+        },
+        "remedy": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "operation",
+        "thread_id",
+        "changed",
+        "dry_run",
+        "committed",
+        "member_outcomes",
+        "before",
+        "after",
+        "path",
+        "workspace"
+      ],
+      "description": "ThreadUpdateEnvelope is a successful existing-Thread mutation receipt."
+    },
+    "ThreadUpdateJSON": {
+      "properties": {
+        "operation": {
+          "type": "string",
+          "description": "add-members|remove-members|start|complete|cancel|reopen"
+        },
+        "thread_id": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "committed": {
+          "type": "boolean",
+          "description": "true only after the Thread file became durable"
+        },
+        "member_outcomes": {
+          "items": {
+            "$ref": "#/$defs/ThreadMemberOutcomeJSON"
+          },
+          "type": "array"
+        },
+        "before": {
+          "$ref": "#/$defs/ThreadViewJSON"
+        },
+        "after": {
+          "$ref": "#/$defs/ThreadViewJSON"
+        },
+        "remedy": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "operation",
+        "thread_id",
+        "changed",
+        "dry_run",
+        "committed",
+        "member_outcomes",
+        "before",
+        "after",
+        "path",
+        "workspace"
+      ],
+      "description": "ThreadUpdateJSON is the existing-Thread membership/lifecycle mutation receipt."
     },
     "ThreadViewJSON": {
       "properties": {
@@ -3627,6 +3850,9 @@
         "thread_mutation": {
           "$ref": "#/$defs/ThreadMutationEnvelope"
         },
+        "thread_update": {
+          "$ref": "#/$defs/ThreadUpdateEnvelope"
+        },
         "epic_mutation": {
           "$ref": "#/$defs/EpicMutationEnvelope"
         },
@@ -3741,6 +3967,7 @@
         "thread_show",
         "thread_frontier",
         "thread_mutation",
+        "thread_update",
         "epic_mutation",
         "moves",
         "summary",
@@ -3776,6 +4003,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.55)",
+  "title": "tskflwctl --json output (schema_version 1.56)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

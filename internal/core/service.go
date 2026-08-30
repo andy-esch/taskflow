@@ -19,6 +19,7 @@ type Service struct {
 	lifecycleMutations TaskLifecycleMutationStore
 	threads            ThreadStore
 	threadCreations    ThreadCreationMutationStore
+	threadMutations    ThreadMutationStore
 	templates          TemplateSource
 	now                func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
 	newID              func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
@@ -118,6 +119,15 @@ func WithThreadCreationMutationStore(store ThreadCreationMutationStore) Option {
 	}
 }
 
+// WithThreadMutationStore supplies guarded existing-Thread updates.
+func WithThreadMutationStore(store ThreadMutationStore) Option {
+	return func(s *Service) {
+		if store != nil {
+			s.threadMutations = store
+		}
+	}
+}
+
 // NewService wires the core to its store; templates default to the built-in
 // source unless WithTemplateSource overrides it.
 func NewService(store Store, opts ...Option) *Service {
@@ -133,6 +143,9 @@ func NewService(store Store, opts ...Option) *Service {
 	}
 	if mutations, ok := store.(ThreadCreationMutationStore); ok {
 		s.threadCreations = mutations
+	}
+	if mutations, ok := store.(ThreadMutationStore); ok {
+		s.threadMutations = mutations
 	}
 	for _, opt := range opts {
 		opt(s)

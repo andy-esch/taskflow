@@ -171,7 +171,11 @@ adapter capabilities rather than leaked persistence.
   when the combined evidence is healthy. Completed inconsistency carries stable reason codes;
   list projections hoist global graph problems rather than repeating them per Thread. Guarded
   Thread creation resolves initial members and validates the global task/Thread identity
-  namespace inside the repository critical section; it can create only `unstarted`.
+  namespace inside the repository critical section; it can create only `unstarted`. Existing
+  Thread membership and lifecycle plans are likewise pure validations over one immutable
+  task/Thread snapshot. Task lifecycle impact compares every Thread projection before and after
+  the task transition, including indirect member and external-gate effects, without making
+  Thread documents own task state.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
@@ -185,10 +189,14 @@ adapter capabilities rather than leaked persistence.
   outside the store. Task dependency fields are graph-owned: generic create/set/edit
   paths cannot introduce a semantic delta, and text-level lint repair skips a would-be
   dependency normalization instead of manufacturing unchecked edges.
-  `ThreadStore` is a separate narrow read port, and `ThreadCreationMutationStore` is the
-  first guarded Thread write capability. Thread files own metadata and membership only;
-  task files remain the sole source of dependency edges. Task creation and Thread creation
-  check one cross-kind stable-ID namespace under the same canonical-root guard. The legacy
+  `ThreadStore` is a separate narrow read port. `ThreadCreationMutationStore` owns guarded
+  unstarted creation, while `ThreadMutationStore` owns atomic existing-document membership
+  and lifecycle changes. Its lock-free update materializer is surgical: it changes only
+  membership/status/timestamps and preserves unknown fields, key order, body, and comment content;
+  the shared YAML editor may normalize inline-comment spacing.
+  Thread files own metadata and membership only; task files remain the sole source of dependency
+  edges. Task creation and Thread creation check one cross-kind stable-ID namespace under the
+  same canonical-root guard. The legacy
   `projects/` scaffold is no longer created; only an empty directory or a lone regular
   `.gitkeep` is eligible for automatic retirement, and other content is preserved.
   `TaskGraphMutationStore` is the control-inverted write capability: `FS` takes the
@@ -220,6 +228,15 @@ adapter capabilities rather than leaked persistence.
   the Service returns a typed failure carrying the committed receipt, never auto-retries it
   (including when cleanup wraps `ErrConflict`), and adapters tell the caller to inspect the
   current task state. The TUI reloads on that outcome instead of leaving a stale view.
+  Task lifecycle authorization also scans and validates every Thread under the guard. Its
+  receipt compares all before/after Thread projections, and its whole-snapshot CAS covers the
+  Thread set so a concurrent membership edit cannot make the attribution stale.
+  `ThreadMutationStore` follows the same transaction shape for membership and lifecycle:
+  strict graph/Thread snapshot, pure plan, surgical materialization, whole task+Thread CAS,
+  immediate target CAS, and one atomic Thread replacement. Cooperating dependency, task
+  lifecycle, and Thread writers therefore serialize and re-authorize from fresh state. Raw
+  editors do not join the advisory lock; the two CAS checks detect their changes where possible
+  but cannot make a cross-process guarantee across the final verify-to-rename window.
   Concurrency is **version-CAS** (epic 24): every write, just
   before committing, re-resolves the file by its **id** and re-hashes it
   against the content read at the start of the op (`verifyUnchanged` in `cas.go` — a

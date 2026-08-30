@@ -118,7 +118,7 @@ A **Thread** pairs an initiative definition with a member set $M \subseteq V$:
   graph; Thread graph views may keep the default display to members plus immediate external gates.
 - A flat project is the special case of a Thread whose members have no internal dependency edges.
 
-Membership does not own dependency truth. Removing a task from a Thread, completing or abandoning
+Membership does not own dependency truth. Removing a task from a Thread, completing or cancelling
 a Thread, or deleting a Thread must not remove task dependencies that may constrain other Threads.
 
 ```text
@@ -239,7 +239,16 @@ entity: correct the edge when the constraint is no longer real.
 
 ### 4. Thread Lifecycle
 
-Thread lifecycle remains explicit: `unstarted -> in-progress -> completed | abandoned`.
+Thread lifecycle remains explicit, with successful completion distinct from intentionally stopping
+the initiative:
+
+```text
+unstarted ──> in-progress ──> completed
+    │              │
+    └──────────────┴────────> cancelled
+
+completed ──thread reopen──> in-progress
+```
 
 - `thread start` requires at least one non-withdrawn member, stamps `started_at`, and changes only
   the Thread.
@@ -249,9 +258,10 @@ Thread lifecycle remains explicit: `unstarted -> in-progress -> completed | aban
 - `thread complete` succeeds only when every non-withdrawn member is soundly completed and no
   member path is broken or inconsistent. Deferred members prevent completion. A deprecated member
   cannot remain as an unsatisfied prerequisite of live member work.
-- `thread abandon` is terminal and membership-immutable for the initiative and never mutates member
-  tasks; they may belong to other Threads or remain useful off-Thread. V1 does not reopen an
-  abandoned Thread.
+- `thread cancel` may stop an unstarted or in-progress initiative without claiming successful
+  completion. Cancellation is terminal and membership-immutable and never mutates member tasks;
+  they may belong to other Threads or remain useful off-Thread. V1 does not reopen a cancelled
+  Thread.
 - A completed Thread is not membership-mutable until an explicit `thread reopen`, which returns it
   to `in-progress` and clears its terminal stamp. Task status and task-owned dependencies can still
   change through their global commands; those changes can make a completed Thread inconsistent and
@@ -296,7 +306,7 @@ Threads are stored in `planning/threads/<id>-<slug>.md` using flat, ID-addressed
 ---
 schema: 1
 id: 6g2b01v9ck2w
-status: in-progress      # unstarted | in-progress | completed | abandoned
+status: in-progress      # unstarted | in-progress | completed | cancelled
 description: Consolidate configuration lifecycle into unified hub
 goal: Ship unified config CLI and interactive TUI routes
 target_date: "2026-09-01"
@@ -438,7 +448,7 @@ tskflwctl task unblocks <task-id>
 
 # Lifecycle and progress
 tskflwctl task start <task-id> [--force]
-tskflwctl thread start|complete|abandon|reopen <thread>
+tskflwctl thread start|complete|cancel|reopen <thread>
 tskflwctl thread list [--status <status>]
 tskflwctl thread show <thread>               # Rollup, blockers, external gates, frontier
 tskflwctl thread frontier <thread>           # Machine list of graph-clear pending members
@@ -496,7 +506,7 @@ be scoped into the following dependency-ordered slices without requiring the def
    nominal/sound rollups, external gates, frontier, and initialization migration from the unused
    Projects scaffold. This consumes the shared analysis contract rather than reimplementing graph
    state.
-5. **Guarded Thread membership and lifecycle:** add member add/remove and start, complete, abandon,
+5. **Guarded Thread membership and lifecycle:** add member add/remove and start, complete, cancel,
    and reopen over one authoritative task/Thread snapshot; retain committed outcomes and augment
    task-lifecycle receipts with affected Thread IDs.
 6. **Bulk linking of existing tasks:** ship YAML compose/apply for existing stable task IDs, with a
@@ -905,6 +915,57 @@ signal, but the CLI does not require the intermediate transition before guarded 
 must update the shared graph derivation, every guarded start path, Thread projections,
 `task list --unblocked`, wire/schema output, documentation, and parity tests before later Thread UX
 builds on the narrower behavior.
+
+### 2026-08-30: Guarded Thread mutation semantics
+
+The implementation-readiness checkpoint for the first existing-Thread writer fixes three mutation
+contracts before code makes them expensive to change:
+
+1. **Multi-member add/remove is one atomic Thread mutation.** `thread add <thread> <task-id>...`
+   and `thread remove <thread> <task-id>...` validate the complete request and Thread mutability
+   inside one canonical-root guard. Any invalid member or forbidden lifecycle state rejects the
+   whole command without a write. Add-existing and remove-absent intents are successful idempotent
+   receipt entries, and one surviving change writes the sorted membership set once.
+2. **Task lifecycle receipts report projection impact, not only direct membership.** The guarded
+   task transition compares Thread projections before and after the task-graph change and reports
+   every Thread whose derived view changes, including shared membership, downstream-member, and
+   external-gate effects. Thread documents remain read-only during a task transition.
+3. **Cancellation is the unsuccessful terminal outcome.** The earlier provisional
+   `abandon`/`abandoned` vocabulary is replaced by `thread cancel` and persisted status
+   `cancelled`. `thread complete` remains the successful project outcome and deliberately shares
+   the familiar verb with tasks; the entity-qualified CLI keeps the operations unambiguous.
+   Deferred member work is parked rather than terminal and therefore blocks Thread completion.
+   Cancellation may enter from `unstarted` or `in-progress`, never mutates member tasks, and is not
+   reopenable in V1. Because no production lifecycle writer has emitted `abandoned`, the guarded
+   mutation slice replaces that provisional domain/wire/schema token directly rather than carrying
+   two permanent synonyms; lint must diagnose any hand-authored legacy value with an actionable
+   repair.
+
+### 2026-08-30: Guarded Thread mutation implementation consequences
+
+The first production existing-Thread writer validates the design with four concrete constraints:
+
+1. **Thread writes use the repository transaction shape, not entity-local read/modify/write.**
+   Membership and lifecycle acquire the canonical-root guard, load the complete strict task graph
+   and Thread set, resolve references inside that snapshot, run the pure policy, verify whole-source
+   versions, verify the target Thread immediately before replacement, and then perform one atomic
+   surgical write. The update materializer changes only `tasks`, `status`, and lifecycle/update
+   timestamps; comments, body, unknown fields, and key order remain owned by the author.
+2. **Task lifecycle now treats the Thread set as authorization evidence.** It loads and validates
+   every Thread under the same guard, compares all Thread projections before and after the task
+   transition, and includes the Thread snapshot in its pre-write CAS. A malformed or concurrently
+   edited Thread therefore blocks a task lifecycle write rather than allowing a receipt to claim
+   incomplete impact attribution. This is an intentional correctness-first global constraint.
+3. **Cooperating operations serialize; raw editors remain advisory outsiders.** Independent stores
+   prove that dependency mutation, task lifecycle, and Thread mutation wait on the same guard and
+   re-authorize from fresh state. Whole-snapshot and immediate-target hashes reject observed raw
+   task/Thread changes, but cannot eliminate the final verify-to-rename window for an editor that
+   ignores the advisory lock. The product must describe this as detection, not transactional
+   exclusion of arbitrary filesystem writers.
+4. **No new graph dependency was needed.** Membership/lifecycle implementation reused the existing
+   immutable `TaskGraph` projections and deterministic comparisons. This reinforces the earlier
+   decision to research a graph package only when a named operation exceeds the owned algorithms,
+   not merely because another graph-backed command has shipped.
 
 ## Related
 

@@ -238,6 +238,13 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 				if r.Lifecycle.ImpactCount > 0 {
 					fmt.Fprintf(errw, "  %s %d downstream task(s) changed derived state\n", st.Warn("⚠"), r.Lifecycle.ImpactCount)
 				}
+				if r.Lifecycle.ThreadImpactCount > 0 {
+					fmt.Fprintf(errw, "  %s %d Thread projection(s) changed\n", st.Warn("⚠"), r.Lifecycle.ThreadImpactCount)
+					for _, impact := range r.Lifecycle.ThreadImpacts {
+						fmt.Fprintf(errw, "    %s %s (%s) inconsistent %t -> %t\n", st.Dim("•"), impact.Slug, impact.ThreadID,
+							impact.Before.Inconsistent, impact.After.Inconsistent)
+					}
+				}
 				if r.Lifecycle.Remedy != "" {
 					fmt.Fprintf(errw, "  %s %s\n", st.Dim("remedy:"), r.Lifecycle.Remedy)
 				}
@@ -270,6 +277,17 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 					}
 					fmt.Fprintf(out, "  %s %s state %s/%s -> %s/%s\n", prefix, impact.TaskID,
 						impact.Before.Role, impact.Before.Gate, impact.After.Role, impact.After.Gate)
+				}
+				if len(r.Lifecycle.ThreadImpacts) > 0 {
+					fmt.Fprintf(out, "  %s %d Thread projection(s) changed\n", st.Dim("•"), len(r.Lifecycle.ThreadImpacts))
+				}
+				for _, impact := range r.Lifecycle.ThreadImpacts {
+					prefix := st.Dim("•")
+					if !impact.Before.Inconsistent && impact.After.Inconsistent {
+						prefix = st.Warn("⚠")
+					}
+					fmt.Fprintf(out, "  %s %s (%s) inconsistent %t -> %t\n", prefix, impact.Slug, impact.ThreadID,
+						impact.Before.Inconsistent, impact.After.Inconsistent)
 				}
 				if r.Lifecycle.Remedy != "" {
 					fmt.Fprintf(out, "  %s %s\n", st.Dim("remedy:"), r.Lifecycle.Remedy)

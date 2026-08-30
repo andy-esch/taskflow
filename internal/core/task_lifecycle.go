@@ -73,6 +73,7 @@ type TaskLifecycleMutationResult struct {
 	Before              TaskGraphState
 	After               TaskGraphState
 	Impacts             []TaskGraphStateImpact
+	ThreadImpacts       []ThreadProjectionImpact
 	OutstandingBlockers []Blocker
 	OverrideApplied     bool
 	Changed             bool
@@ -97,6 +98,7 @@ type TaskLifecycleReceipt struct {
 	After               TaskGraphState
 	OutstandingBlockers []Blocker
 	Impacts             []TaskGraphStateImpact
+	ThreadImpacts       []ThreadProjectionImpact
 	Remedy              string
 }
 

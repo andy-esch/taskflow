@@ -142,6 +142,9 @@ tskflwctl task defer <slug> --until 2026-09-01      # snooze (revisit_at); on a 
 tskflwctl task depend add <slug> --on <prerequisite>...     # guarded repository-global edge add
 tskflwctl task depend remove <slug> --on <prerequisite>...  # idempotent guarded edge removal
 tskflwctl task depend migrate                            # convert safe legacy dependency fields repo-wide
+tskflwctl thread add <thread> <task>...                  # atomic guarded membership add
+tskflwctl thread remove <thread> <task>...               # atomic guarded membership removal
+tskflwctl thread start|complete|cancel|reopen <thread>    # explicit Thread lifecycle
 tskflwctl audit finding <slug> <code> --status "tracked by <id>" --note "how"  # status + resolution, one atomic write
 tskflwctl audit close|reopen|defer <slug>...
 tskflwctl research set <slug> --description "…" --tags a,b   # settable fields only; `schema research` lists them
@@ -152,14 +155,15 @@ tskflwctl lint                         # validate entities, Thread membership, c
 tskflwctl lint --fix                   # auto-repair frontmatter (quote ':' values, normalize lists, backfill ids)
 ```
 
-Task lifecycle writes, dependency writes, and Thread creation share the repository
-guard and fail closed unless the canonical task graph is healthy. Thread creation
-always persists `unstarted`; membership and Thread lifecycle mutation verbs are a
-following implementation slice. Repair invalid graph-owned
-frontmatter through the file reported by `tskflwctl task path`, confirm it with
-`tskflwctl lint`, then return to the guarded verbs. A rare cleanup error after a
-lifecycle or Thread-creation write is reported explicitly as committed with an
-inspection receipt; inspect current state instead of blindly retrying it.
+Task lifecycle writes, dependency writes, and Thread creation/mutation share the repository
+guard and fail closed unless the canonical task graph and Thread set are healthy. Thread
+creation always persists `unstarted`; bulk membership edits are atomic per command, and
+`complete` requires every live member to be soundly drained. Task lifecycle receipts name
+every Thread projection they change without rewriting Thread documents. Repair invalid
+graph-owned frontmatter through the file reported by `tskflwctl task path`, confirm it with
+`tskflwctl lint`, then return to the guarded verbs. A rare cleanup error after a durable
+lifecycle or Thread write is reported explicitly as committed with an inspection receipt;
+inspect current state instead of blindly retrying it.
 
 Completed Thread drift is explanatory: machine and human views name empty,
 undrained, outstanding-gate, and unhealthy-evidence reasons. `lint --fix` may
