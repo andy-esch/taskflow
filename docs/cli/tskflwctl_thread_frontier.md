@@ -1,10 +1,10 @@
 ## tskflwctl thread frontier
 
-Show currently eligible member tasks
+Show graph-clear pending member tasks
 
 ### Synopsis
 
-Show dispatchable members from the shared task-graph projection. An unhealthy projection returns no tasks and retains its diagnosis.
+Show next-up and ready-to-start members whose dependency gates are clear in the shared task-graph projection. An unhealthy projection returns no tasks and retains its diagnosis.
 
 ```
 tskflwctl thread frontier <thread> [flags]

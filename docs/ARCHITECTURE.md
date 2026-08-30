@@ -160,13 +160,16 @@ adapter capabilities rather than leaked persistence.
   derived gates before migration, so a degraded snapshot cannot issue a false all-clear;
   present-but-empty legacy keys still keep health degraded until migration removes them.
   Eligibility is read from the queried task's explicit derived state, never inferred from
-  an empty blocker list, and `task list --unblocked` fails closed unless the snapshot is healthy.
+  an empty blocker list. Both queued (`next-up`) and candidate (`ready-to-start`) work are
+  eligible when their gate is clear in a healthy snapshot; readiness remains a handoff signal,
+  not a second authorization gate. `task list --unblocked` fails closed unless the snapshot is
+  healthy.
   `ThreadView` is a pure projection over that same immutable graph: it distinguishes
   members from direct external gates, reports nominal `done/total` and sound
   `drained/total`, separates repository graph health from Thread-local projection
-  health, and emits a frontier only when the combined evidence is healthy. Completed
-  inconsistency carries stable reason codes; list projections hoist global graph
-  problems rather than repeating them per Thread. Guarded
+  health, and emits a frontier of clear-gated `next-up` and `ready-to-start` members only
+  when the combined evidence is healthy. Completed inconsistency carries stable reason codes;
+  list projections hoist global graph problems rather than repeating them per Thread. Guarded
   Thread creation resolves initial members and validates the global task/Thread identity
   namespace inside the repository critical section; it can create only `unstarted`.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
