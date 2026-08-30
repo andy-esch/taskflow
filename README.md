@@ -111,7 +111,7 @@ tskflwctl task blockers <slug>         # actionable blocker frontier (--causal f
 tskflwctl task unblocks <slug>         # all transitive downstream tasks and their current graph state
 tskflwctl thread list                  # nominal/sound rollups + graph/projection health
 tskflwctl thread show <thread>         # members, direct external gates, frontier, and body
-tskflwctl thread frontier <thread>     # eligible members; fails closed to an empty result on unhealthy graph evidence
+tskflwctl thread frontier <thread>     # clear-gated next-up/ready members; fails closed on unhealthy graph evidence
 tskflwctl thread path <thread>         # parse-free path for direct repair
 tskflwctl epic list                    # rollup: done/total per epic
 tskflwctl epic show <id> --section goal # epic body section (or --frontmatter-only); epic path <id> for the file
@@ -331,8 +331,8 @@ emits the header row — even with zero results — so a consumer gets a stable
 schema and detects "no rows" by line count. Recipes:
 
 ```bash
-# start every ready-to-start task tagged `tui`
-tskflwctl task list -q --tag tui | xargs tskflwctl task start
+# start every next-up or ready-to-start task tagged `tui`
+tskflwctl task list --unblocked -q --tag tui | xargs tskflwctl task start
 
 # audits with open findings, projected to slug + open count
 tskflwctl audit list --all -o table -c slug,open | awk -F'\t' 'NR>1 && $2>0 {print $1}'
@@ -351,8 +351,10 @@ When a required input is missing, `tskflwctl` picks the *face* based on the
 terminal, never the capability ([clig.dev](https://clig.dev/#interactivity)):
 
 - **On a TTY** (a human): it prompts — `task new` without `--epic` opens an epic
-  picker; a bare `task start` opens a picker over ready-to-start tasks. Prompts
-  render to **stderr**, so stdout stays byte-identical to the flag-driven run.
+  picker; a bare `task start` opens a picker over pending active tasks. Guarded
+  authorization accepts `next-up` and `ready-to-start` only when their dependency
+  gate is clear. Prompts render to **stderr**, so stdout stays byte-identical to
+  the flag-driven run.
 - **Off a TTY** (a pipe, an agent, `--json`, or `--no-input` / `TSKFLW_NO_INPUT=1`):
   it never prompts — it fails with today's exit code (11) naming the flag to pass.
 

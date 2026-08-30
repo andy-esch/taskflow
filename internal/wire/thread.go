@@ -79,7 +79,7 @@ type ThreadViewJSON struct {
 	Inconsistent     bool                     `json:"inconsistent" jsonschema:"description=true when a completed Thread is not soundly closed"`
 	Members          []ThreadTaskJSON         `json:"members"`
 	ExternalGates    []ThreadExternalGateJSON `json:"external_gates"`
-	Frontier         []ThreadTaskJSON         `json:"frontier"`
+	Frontier         []ThreadTaskJSON         `json:"frontier" jsonschema:"description=next-up and ready-to-start Thread members with clear dependency gates; empty unless both graph_health and projection_health are healthy"`
 	Problems         []ThreadProblemJSON      `json:"problems"`
 	GraphProblems    []GraphProblemJSON       `json:"graph_problems"`
 }

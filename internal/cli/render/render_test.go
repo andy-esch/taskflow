@@ -663,6 +663,7 @@ func TestThreadHumanViewsExplainInconsistencyAndDeduplicateGraphProblems(t *test
 		Thread:      domain.Thread{ID: "6g0000000001", Slug: "initiative", Status: domain.ThreadStatusCompleted, Goal: "Explain drift"},
 		GraphHealth: core.GraphBroken, ProjectionHealth: core.GraphBroken,
 		Inconsistent: true, Problems: []core.ThreadProblem{problem},
+		Frontier: []core.ThreadTaskView{{Task: domain.Task{ID: "6g0000000002", Slug: "queued"}}},
 	}
 	var show bytes.Buffer
 	if err := ThreadShowHuman(&show, NewStyle(false), view, ""); err != nil {
@@ -682,5 +683,8 @@ func TestThreadHumanViewsExplainInconsistencyAndDeduplicateGraphProblems(t *test
 	}
 	if strings.Count(listed.String(), "missing dependency") != 1 {
 		t.Fatalf("list repeated repository diagnostics:\n%s", listed.String())
+	}
+	if !strings.Contains(listed.String(), "1 eligible") || strings.Contains(listed.String(), "1 ready") {
+		t.Fatalf("list must describe the frontier as eligible rather than readiness status:\n%s", listed.String())
 	}
 }

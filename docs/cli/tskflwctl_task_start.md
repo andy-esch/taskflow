@@ -6,9 +6,9 @@ Move task(s) to in-progress
 
 Move task(s) to in-progress.
 
-Refuses a task unless it is ready-to-start with a clear dependency gate. --force
-bypasses only that dependency gate; it does not bypass lifecycle role or repair
-the dependencies, and the receipt names every outstanding blocker.
+Refuses a task unless it is next-up or ready-to-start with a clear dependency gate.
+--force bypasses only a blocked dependency gate; it does not bypass another
+lifecycle role or broken evidence, and the receipt names every outstanding blocker.
 
 ```
 tskflwctl task start <task>... [flags]

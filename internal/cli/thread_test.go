@@ -26,7 +26,7 @@ func threadCLIRepo(t *testing.T) string {
 		dependsOn string
 	}{
 		{"external", domain.StatusCompleted, ""},
-		{"alpha", domain.StatusReadyToStart, externalID},
+		{"alpha", domain.StatusNextUp, externalID},
 		{"beta", domain.StatusReadyToStart, testutil.TaskID("alpha")},
 	} {
 		dependsOn := ""

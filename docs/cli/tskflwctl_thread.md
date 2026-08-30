@@ -26,7 +26,7 @@ Work with initiative Threads over the task DAG
 ### SEE ALSO
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
-* [tskflwctl thread frontier](tskflwctl_thread_frontier.md)	 - Show currently eligible member tasks
+* [tskflwctl thread frontier](tskflwctl_thread_frontier.md)	 - Show graph-clear pending member tasks
 * [tskflwctl thread list](tskflwctl_thread_list.md)	 - List Threads with nominal and sound progress
 * [tskflwctl thread new](tskflwctl_thread_new.md)	 - Create an unstarted Thread with optional initial task members
 * [tskflwctl thread path](tskflwctl_thread_path.md)	 - Print the absolute path to a Thread file

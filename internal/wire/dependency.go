@@ -19,11 +19,13 @@ func toGraphTaskJSON(taskID string, task domain.Task) GraphTaskJSON {
 }
 
 // TaskGraphStateJSON is the derived lifecycle/gate projection for one task.
+// Eligible is true for queued (next-up) or candidate (ready-to-start) work only
+// when the authoritative repository graph is healthy and the gate is clear.
 type TaskGraphStateJSON struct {
 	Role             string `json:"role"`
 	Gate             string `json:"gate"`
 	SoundlyCompleted bool   `json:"soundly_completed"`
-	Eligible         bool   `json:"eligible"`
+	Eligible         bool   `json:"eligible" jsonschema:"description=true only for next-up or ready-to-start work with a clear gate in a healthy graph"`
 	Drained          bool   `json:"drained"`
 	Inconsistent     bool   `json:"inconsistent"`
 }
@@ -255,7 +257,7 @@ type TaskEligibilityFailureJSON struct {
 	State             TaskGraphStateJSON         `json:"state"`
 	Blockers          []TaskLifecycleBlockerJSON `json:"blockers"`
 	RequestedOverride string                     `json:"requested_override,omitempty"`
-	OverrideAllowed   bool                       `json:"override_allowed"`
+	OverrideAllowed   bool                       `json:"override_allowed" jsonschema:"description=true only when the refusal is a blocked dependency gate on next-up or ready-to-start work; force never bypasses a broken gate or another lifecycle role"`
 	Remedy            string                     `json:"remedy"`
 }
 
@@ -264,7 +266,7 @@ func ToTaskEligibilityFailureJSON(failure *core.TaskEligibilityError) TaskEligib
 		TaskID: failure.TaskID, State: toTaskGraphStateJSON(failure.State),
 		Blockers:          make([]TaskLifecycleBlockerJSON, 0, len(failure.Blockers)),
 		RequestedOverride: string(failure.RequestedOverride),
-		OverrideAllowed:   failure.State.Role == core.RoleCandidate && failure.State.Gate != core.GateClear,
+		OverrideAllowed:   failure.DependencyGateOverrideAllowed(),
 		Remedy:            failure.Remedy(),
 	}
 	for _, blocker := range failure.Blockers {

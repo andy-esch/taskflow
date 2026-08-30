@@ -2499,7 +2499,8 @@
           "type": "string"
         },
         "override_allowed": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "true only when the refusal is a blocked dependency gate on next-up or ready-to-start work; force never bypasses a broken gate or another lifecycle role"
         },
         "remedy": {
           "type": "string"
@@ -2559,7 +2560,8 @@
           "type": "boolean"
         },
         "eligible": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "true only for next-up or ready-to-start work with a clear gate in a healthy graph"
         },
         "drained": {
           "type": "boolean"
@@ -3439,7 +3441,8 @@
           "items": {
             "$ref": "#/$defs/ThreadTaskJSON"
           },
-          "type": "array"
+          "type": "array",
+          "description": "next-up and ready-to-start Thread members with clear dependency gates; empty unless both graph_health and projection_health are healthy"
         },
         "problems": {
           "items": {
@@ -3773,6 +3776,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.54)",
+  "title": "tskflwctl --json output (schema_version 1.55)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

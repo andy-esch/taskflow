@@ -224,7 +224,7 @@ func newTaskListCmd(app *App) *cobra.Command {
 	cmd.Flags().StringVar(&filter.Tag, "tag", "", "filter by tag")
 	cmd.Flags().BoolVar(&filter.All, "all", false, "include completed/deprecated/deferred")
 	cmd.Flags().BoolVar(&filter.RevisitDue, "revisit-due", false, "only deferred tasks whose revisit date has arrived (composes with --epic/--tag/-c)")
-	cmd.Flags().BoolVar(&filter.Unblocked, "unblocked", false, "only tasks whose derived dependency state is eligible")
+	cmd.Flags().BoolVar(&filter.Unblocked, "unblocked", false, "only next-up or ready-to-start tasks with a clear dependency gate")
 	_ = cmd.RegisterFlagCompletionFunc("status", completeStatusValues)
 	_ = cmd.RegisterFlagCompletionFunc("epic", app.completeEpicIDs)
 	return cmd
@@ -779,9 +779,9 @@ func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Comm
 	switch to {
 	case domain.StatusInProgress:
 		cmd.Long = short + ".\n\n" +
-			"Refuses a task unless it is ready-to-start with a clear dependency gate. --force\n" +
-			"bypasses only that dependency gate; it does not bypass lifecycle role or repair\n" +
-			"the dependencies, and the receipt names every outstanding blocker."
+			"Refuses a task unless it is next-up or ready-to-start with a clear dependency gate.\n" +
+			"--force bypasses only a blocked dependency gate; it does not bypass another\n" +
+			"lifecycle role or broken evidence, and the receipt names every outstanding blocker."
 		cmd.Flags().BoolVar(&force, "force", false, "start despite outstanding dependency blockers")
 	case domain.StatusCompleted:
 		cmd.Long = short + ".\n\n" +

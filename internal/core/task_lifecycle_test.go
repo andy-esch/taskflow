@@ -23,52 +23,63 @@ func TestValidateTaskLifecycleStartEligibilityAndTypedOverride(t *testing.T) {
 		{name: "withdrawn", prereq: domain.StatusDeprecated, gate: GateBroken, wantReason: BlockerWithdrawn},
 	}
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			prerequisite := graphRecord("prerequisite-"+tc.name, tc.prereq)
-			target := graphRecord("target-"+tc.name, domain.StatusReadyToStart, prerequisite.ID)
-			graph := NewTaskGraph([]domain.Task{target, prerequisite}, nil)
-			plan := TaskLifecyclePlan{TaskID: target.ID, To: domain.StatusInProgress}
+		for _, source := range []domain.Status{domain.StatusNextUp, domain.StatusReadyToStart} {
+			t.Run(string(source)+"/"+tc.name, func(t *testing.T) {
+				prerequisite := graphRecord("prerequisite-"+string(source)+"-"+tc.name, tc.prereq)
+				target := graphRecord("target-"+string(source)+"-"+tc.name, source, prerequisite.ID)
+				graph := NewTaskGraph([]domain.Task{target, prerequisite}, nil)
+				plan := TaskLifecyclePlan{TaskID: target.ID, To: domain.StatusInProgress}
 
-			validated, analysis, err := ValidateTaskLifecyclePlan(graph, plan, "")
-			if tc.gate == GateClear {
-				if err != nil || validated != plan || analysis.OverrideApplied {
-					t.Fatalf("clear start = plan %+v analysis %+v err %v", validated, analysis, err)
+				validated, analysis, err := ValidateTaskLifecyclePlan(graph, plan, "")
+				if tc.gate == GateClear {
+					if err != nil || validated != plan || analysis.OverrideApplied {
+						t.Fatalf("clear start = plan %+v analysis %+v err %v", validated, analysis, err)
+					}
+					if analysis.From != source || analysis.After.Role != RoleInFlight {
+						t.Fatalf("clear start analysis = %+v", analysis)
+					}
+					return
 				}
-				if analysis.From != domain.StatusReadyToStart || analysis.After.Role != RoleInFlight {
-					t.Fatalf("clear start analysis = %+v", analysis)
+
+				var eligibility *TaskEligibilityError
+				if !errors.As(err, &eligibility) || eligibility.State.Gate != tc.gate {
+					t.Fatalf("default refusal = %#v, want eligibility gate %s", err, tc.gate)
 				}
-				return
-			}
+				if len(eligibility.Blockers) != 1 || eligibility.Blockers[0].Reason != tc.wantReason {
+					t.Fatalf("blockers = %+v, want reason %s", eligibility.Blockers, tc.wantReason)
+				}
+				if tc.gate == GateBlocked && !eligibility.DependencyGateOverrideAllowed() {
+					t.Fatal("blocked pending work should allow the dependency-gate override")
+				}
 
-			var eligibility *TaskEligibilityError
-			if !errors.As(err, &eligibility) || eligibility.State.Gate != tc.gate {
-				t.Fatalf("default refusal = %#v, want eligibility gate %s", err, tc.gate)
-			}
-			if len(eligibility.Blockers) != 1 || eligibility.Blockers[0].Reason != tc.wantReason {
-				t.Fatalf("blockers = %+v, want reason %s", eligibility.Blockers, tc.wantReason)
-			}
-
-			plan.Override = TaskLifecycleOverrideDependencyGate
-			_, forced, err := ValidateTaskLifecyclePlan(graph, plan, "")
-			if err != nil || !forced.OverrideApplied || forced.After.Role != RoleInFlight {
-				t.Fatalf("forced start analysis=%+v err=%v", forced, err)
-			}
-			if !reflect.DeepEqual(forced.OutstandingBlockers, eligibility.Blockers) {
-				t.Fatalf("forced blockers = %+v, want refusal blockers %+v", forced.OutstandingBlockers, eligibility.Blockers)
-			}
-		})
+				plan.Override = TaskLifecycleOverrideDependencyGate
+				_, forced, err := ValidateTaskLifecyclePlan(graph, plan, "")
+				if tc.gate == GateBroken {
+					if !errors.Is(err, domain.ErrValidation) {
+						t.Fatalf("broken graph force = %v, want validation", err)
+					}
+					return
+				}
+				if err != nil || !forced.OverrideApplied || forced.After.Role != RoleInFlight {
+					t.Fatalf("forced start analysis=%+v err=%v", forced, err)
+				}
+				if !reflect.DeepEqual(forced.OutstandingBlockers, eligibility.Blockers) {
+					t.Fatalf("forced blockers = %+v, want refusal blockers %+v", forced.OutstandingBlockers, eligibility.Blockers)
+				}
+			})
+		}
 	}
 }
 
 func TestValidateTaskLifecycleForceCannotBypassRoleOrBrokenRepository(t *testing.T) {
-	queued := graphRecord("queued", domain.StatusNextUp)
-	graph := NewTaskGraph([]domain.Task{queued}, nil)
+	parked := graphRecord("parked", domain.StatusDeferred)
+	graph := NewTaskGraph([]domain.Task{parked}, nil)
 	_, _, err := ValidateTaskLifecyclePlan(graph, TaskLifecyclePlan{
-		TaskID: queued.ID, To: domain.StatusInProgress, Override: TaskLifecycleOverrideDependencyGate,
+		TaskID: parked.ID, To: domain.StatusInProgress, Override: TaskLifecycleOverrideDependencyGate,
 	}, "")
 	var eligibility *TaskEligibilityError
-	if !errors.As(err, &eligibility) || eligibility.State.Role != RoleQueued {
-		t.Fatalf("force should not bypass queued role: %v", err)
+	if !errors.As(err, &eligibility) || eligibility.State.Role != RoleParked || eligibility.DependencyGateOverrideAllowed() {
+		t.Fatalf("force should not bypass parked role: %v", err)
 	}
 
 	missing := testutil.TaskID("missing")
@@ -89,9 +100,9 @@ func TestValidateTaskLifecycleEveryPersistedStatusEnteringInProgress(t *testing.
 			plan := TaskLifecyclePlan{TaskID: task.ID, To: domain.StatusInProgress}
 			_, analysis, err := ValidateTaskLifecyclePlan(NewTaskGraph([]domain.Task{task}, nil), plan, "")
 			switch status {
-			case domain.StatusReadyToStart:
+			case domain.StatusNextUp, domain.StatusReadyToStart:
 				if err != nil || analysis.After.Role != RoleInFlight {
-					t.Fatalf("candidate start analysis=%+v err=%v", analysis, err)
+					t.Fatalf("pending start analysis=%+v err=%v", analysis, err)
 				}
 			case domain.StatusInProgress:
 				if err != nil || analysis.From != domain.StatusInProgress || analysis.Before != analysis.After {
@@ -100,7 +111,7 @@ func TestValidateTaskLifecycleEveryPersistedStatusEnteringInProgress(t *testing.
 			default:
 				var eligibility *TaskEligibilityError
 				if !errors.As(err, &eligibility) {
-					t.Fatalf("status %s should require an explicit move to ready-to-start first: %v", status, err)
+					t.Fatalf("status %s should require an explicit move to pending work first: %v", status, err)
 				}
 			}
 		})

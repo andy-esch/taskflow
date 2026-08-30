@@ -28,7 +28,7 @@ tskflwctl task list [flags]
       --revisit-due       only deferred tasks whose revisit date has arrived (composes with --epic/--tag/-c)
       --status string     filter by status
       --tag string        filter by tag
-      --unblocked         only tasks whose derived dependency state is eligible
+      --unblocked         only next-up or ready-to-start tasks with a clear dependency gate
 ```
 
 ### Options inherited from parent commands

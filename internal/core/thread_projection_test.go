@@ -1,6 +1,7 @@
 package core
 
 import (
+	"slices"
 	"sort"
 	"testing"
 
@@ -47,8 +48,34 @@ func TestProjectThreadFrontierUsesSharedEligibility(t *testing.T) {
 	queued := graphRecord("queued", domain.StatusNextUp)
 	thread := threadRecord(domain.ThreadStatusUnstarted, done.ID, ready.ID, queued.ID)
 	view := ProjectThread(thread, NewTaskGraph([]domain.Task{queued, ready, done}, nil))
-	if len(view.Frontier) != 1 || view.Frontier[0].Task.ID != ready.ID || !view.Frontier[0].State.Eligible {
+	if len(view.Frontier) != 2 || !view.Frontier[0].State.Eligible || !view.Frontier[1].State.Eligible {
 		t.Fatalf("frontier = %+v", view.Frontier)
+	}
+	got := []string{view.Frontier[0].Task.ID, view.Frontier[1].Task.ID}
+	sort.Strings(got)
+	want := []string{queued.ID, ready.ID}
+	sort.Strings(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("frontier IDs = %v, want %v", got, want)
+	}
+}
+
+func TestProjectThreadBrokenProjectionSuppressesOtherwiseEligibleFrontier(t *testing.T) {
+	queued := graphRecord("queued-with-missing-thread-member", domain.StatusNextUp)
+	missing := testutil.TaskID("missing-thread-member")
+	view := ProjectThread(
+		threadRecord(domain.ThreadStatusUnstarted, queued.ID, missing),
+		NewTaskGraph([]domain.Task{queued}, nil),
+	)
+
+	if view.GraphHealth != GraphHealthy || view.ProjectionHealth != GraphBroken {
+		t.Fatalf("graph=%s projection=%s problems=%+v", view.GraphHealth, view.ProjectionHealth, view.Problems)
+	}
+	if len(view.Members) != 2 || !view.Members[0].State.Eligible && !view.Members[1].State.Eligible {
+		t.Fatalf("members = %+v; expected the present queued member to remain graph-eligible", view.Members)
+	}
+	if len(view.Frontier) != 0 {
+		t.Fatalf("frontier = %+v; broken Thread-local evidence must fail closed", view.Frontier)
 	}
 }
 

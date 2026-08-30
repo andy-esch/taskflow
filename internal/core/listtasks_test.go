@@ -76,12 +76,13 @@ func TestService_ListTasks_UnblockedUsesStrictGraphAndFailsClosed(t *testing.T) 
 	completed := graphRecord("completed-prerequisite", domain.StatusCompleted)
 	blocked := graphRecord("blocked-candidate", domain.StatusReadyToStart)
 	eligible := graphRecord("eligible-candidate", domain.StatusReadyToStart, completed.ID)
-	store := &fakeStore{tasks: []domain.Task{blocked, eligible, completed}}
+	queued := graphRecord("eligible-queued", domain.StatusNextUp)
+	store := &fakeStore{tasks: []domain.Task{blocked, eligible, queued, completed}}
 	got, problems, err := NewService(store).ListTasks(TaskFilter{Unblocked: true})
 	if err != nil || len(problems) != 0 {
 		t.Fatalf("healthy --unblocked = %v, problems=%v", err, problems)
 	}
-	want := []string{blocked.ID, eligible.ID}
+	want := []string{blocked.ID, eligible.ID, queued.ID}
 	gotIDs := make([]string, len(got))
 	for i := range got {
 		gotIDs[i] = got[i].ID
