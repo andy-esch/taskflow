@@ -192,10 +192,11 @@ func themeName(flag, env, cfgName, userName string) string {
 // cannot drift. Every lookup is best-effort by design: `--help` must keep working
 // outside a planning repo, with no home config, and with an unreadable one.
 //
-// Discovery starts at the process cwd. A run that retargets with -C/--space picks
-// up that repo's theme for its BODY but not for chrome; chrome is brand framing,
-// not data, and scanning those flags here would duplicate cobra's parser for a
-// case that cannot change what any command does.
+// Discovery starts at the process cwd, so a run that retargets with -C/--space
+// gets that repo's theme for its BODY but cwd's for chrome. That is inherent on
+// the HELP path (nothing has resolved a workspace yet) but not on the ERROR path,
+// where PersistentPreRunE has already populated App.Th with the -C-aware answer
+// and chrome could simply use it. Reconciling the two is tracked separately.
 func ChromeTheme(args []string) design.Theme {
 	cfgName := ""
 	if start, err := os.Getwd(); err == nil {
@@ -223,7 +224,10 @@ func themeFlagFrom(args []string) string {
 		if name, ok := strings.CutPrefix(a, "--theme="); ok {
 			return name
 		}
-		if a == "--theme" && i+1 < len(args) {
+		// A following flag is not a value: `--theme --json` means the flag was left
+		// bare, and treating "--json" as a theme name would resolve to the default
+		// while looking like a deliberate selection.
+		if a == "--theme" && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
 			return args[i+1]
 		}
 	}
