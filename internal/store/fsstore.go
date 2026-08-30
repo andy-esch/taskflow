@@ -32,13 +32,14 @@ var errNotEntity = fmt.Errorf("%w: not an entity file", domain.ErrValidation)
 var errBadEntityID = fmt.Errorf("%w: invalid entity id", domain.ErrValidation)
 
 // FS reads and writes the flat, id-led entity directories under one planning
-// root: tasks/, epics/, audits/, and research/.
+// root: tasks/, epics/, audits/, research/, and threads/.
 type FS struct {
 	root        string // the planning root; the write-lock (flock) is taken on this dir
 	tasksDir    string
 	epicsDir    string
 	auditsDir   string
 	researchDir string
+	threadsDir  string
 }
 
 // Compile-time assertions that FS satisfies the core ports. The use-case Store is
@@ -59,6 +60,7 @@ func NewFS(root string) *FS {
 		epicsDir:    filepath.Join(root, domain.EpicsDir),
 		auditsDir:   filepath.Join(root, domain.AuditsDir),
 		researchDir: filepath.Join(root, domain.ResearchDir),
+		threadsDir:  filepath.Join(root, domain.ThreadsDir),
 	}
 }
 
@@ -69,7 +71,7 @@ func (s *FS) WatchPaths() []string {
 	// Every entity dir is flat (ADR-0003 §4): each is the only watch path for its kind —
 	// a status/bucket change is an in-place frontmatter write that fires on the parent
 	// dir. Epics were always flat; research has no lifecycle to change at all.
-	return []string{s.epicsDir, s.tasksDir, s.auditsDir, s.researchDir}
+	return []string{s.epicsDir, s.tasksDir, s.auditsDir, s.researchDir, s.threadsDir}
 }
 
 // ListTasks scans the flat task directory and parses each task's frontmatter.

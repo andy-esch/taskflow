@@ -95,6 +95,18 @@ func TestDiagnoseRegistry_MissingFileIsHealthyEmptyRegistry(t *testing.T) {
 	}
 }
 
+func TestPlanningRootEmptyCountsThreadDocuments(t *testing.T) {
+	root := initializedRepo(t)
+	path := filepath.Join(root, domain.ThreadsDir, "6g3q4rtmv4ak-thread.md")
+	if err := os.WriteFile(path, []byte("# Thread\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	empty, err := planningRootEmpty(root)
+	if err != nil || empty {
+		t.Fatalf("Thread-only planning root: empty=%v err=%v", empty, err)
+	}
+}
+
 func initializedRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

@@ -17,6 +17,8 @@ type Service struct {
 	store              Store
 	graphMutations     TaskGraphMutationStore
 	lifecycleMutations TaskLifecycleMutationStore
+	threads            ThreadStore
+	threadCreations    ThreadCreationMutationStore
 	templates          TemplateSource
 	now                func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
 	newID              func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
@@ -97,6 +99,25 @@ func WithTaskLifecycleMutationStore(store TaskLifecycleMutationStore) Option {
 	}
 }
 
+// WithThreadStore supplies the Thread read capability independently from the
+// legacy aggregate Store. Production FS is discovered automatically.
+func WithThreadStore(store ThreadStore) Option {
+	return func(s *Service) {
+		if store != nil {
+			s.threads = store
+		}
+	}
+}
+
+// WithThreadCreationMutationStore supplies guarded Thread creation.
+func WithThreadCreationMutationStore(store ThreadCreationMutationStore) Option {
+	return func(s *Service) {
+		if store != nil {
+			s.threadCreations = store
+		}
+	}
+}
+
 // NewService wires the core to its store; templates default to the built-in
 // source unless WithTemplateSource overrides it.
 func NewService(store Store, opts ...Option) *Service {
@@ -106,6 +127,12 @@ func NewService(store Store, opts ...Option) *Service {
 	}
 	if mutations, ok := store.(TaskLifecycleMutationStore); ok {
 		s.lifecycleMutations = mutations
+	}
+	if threads, ok := store.(ThreadStore); ok {
+		s.threads = threads
+	}
+	if mutations, ok := store.(ThreadCreationMutationStore); ok {
+		s.threadCreations = mutations
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -274,9 +301,9 @@ func BlockingLintResultCount(results []LintResult) int {
 	return count
 }
 
-// Lint validates active tasks' frontmatter (joining against known epics for the
-// epic-existence check) AND the epics themselves. Returns one LintResult per
-// task or epic with issues.
+// Lint validates task, epic, research, and Thread documents plus repository-global
+// task-graph and cross-kind identity integrity. Returns one LintResult per entity
+// with issues while unreadable files remain separately attributable.
 func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	tasks, problems, err := s.store.ListTasksWithBodies()
 	if err != nil {
@@ -299,6 +326,39 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	}
 	graph := NewTaskGraph(taskRecords, taskProblems)
 	graphIssues := dependencyLintIssues(graph)
+	validTaskIDs := make(map[string]bool, len(tasks))
+	taskIdentity := make(map[string]bool, len(tasks)*2)
+	for _, task := range tasks {
+		if task.Task.ID != "" {
+			validTaskIDs[task.Task.ID] = true
+			taskIdentity[task.Task.ID] = true
+		}
+		if task.Task.FilenameID != "" {
+			taskIdentity[task.Task.FilenameID] = true
+		}
+	}
+
+	var threads []domain.Thread
+	threadIDs := make([]string, 0)
+	threadIdentity := make(map[string]bool)
+	if s.threads != nil {
+		var threadProblems []domain.FileProblem
+		threads, threadProblems, err = s.threads.ListThreads()
+		if err != nil {
+			return nil, nil, err
+		}
+		problems = append(problems, threadProblems...)
+		threadIDs = make([]string, 0, len(threads))
+		for _, thread := range threads {
+			threadIDs = append(threadIDs, thread.ID)
+			if thread.ID != "" {
+				threadIdentity[thread.ID] = true
+			}
+			if thread.FilenameID != "" {
+				threadIdentity[thread.FilenameID] = true
+			}
+		}
+	}
 
 	var results []LintResult
 	for _, tb := range tasks {
@@ -320,6 +380,14 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 			issues = append(issues, domain.IDDriftIssue(t.ID, t.FilenameID)...)
 		}
 		issues = append(issues, graphIssues[t.Path]...)
+		collisionID := t.ID
+		if !threadIdentity[collisionID] {
+			collisionID = t.FilenameID
+		}
+		if collisionID != "" && threadIdentity[collisionID] {
+			issues = append(issues, domain.Issue{Field: "id", Message: fmt.Sprintf(
+				"stable id %s is also used by a Thread — task and Thread identities must be globally unique", collisionID)})
+		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: t.Slug, Issues: issues})
 		}
@@ -369,6 +437,24 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: r.Slug, Issues: issues})
+		}
+	}
+	dupThreadIDs := domain.DuplicateIDIssues(threadIDs)
+	for _, thread := range threads {
+		issues := domain.LintThread(thread, func(taskID string) bool { return validTaskIDs[taskID] })
+		if issue, ok := dupThreadIDs[thread.ID]; ok {
+			issues = append(issues, issue)
+		}
+		collisionID := thread.ID
+		if !taskIdentity[collisionID] {
+			collisionID = thread.FilenameID
+		}
+		if collisionID != "" && taskIdentity[collisionID] {
+			issues = append(issues, domain.Issue{Field: "id", Message: fmt.Sprintf(
+				"stable id %s is also used by a task — task and Thread identities must be globally unique", collisionID)})
+		}
+		if len(issues) > 0 {
+			results = append(results, LintResult{Slug: thread.Slug, Issues: issues})
 		}
 	}
 	return results, problems, nil

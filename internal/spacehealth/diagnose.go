@@ -173,6 +173,9 @@ func planningRootEmpty(root string) (bool, error) {
 		domain.EpicsDir,
 		domain.AuditsDir,
 		domain.ResearchDir,
+		domain.ThreadsDir,
+		// Legacy Projects content remains part of the planning space until the
+		// operator explicitly migrates it; never diagnose that repository empty.
 		domain.ProjectsDir,
 	} {
 		path := filepath.Join(root, dir)

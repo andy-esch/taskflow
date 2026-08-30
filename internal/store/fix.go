@@ -15,9 +15,9 @@ import (
 	"github.com/andy-esch/taskflow/internal/id"
 )
 
-// FixFrontmatter walks every task, epic, audit, and research file and applies safe repairs:
+// FixFrontmatter walks every task, Thread, epic, audit, and research file and applies safe repairs:
 // text-level frontmatter normalization (quote unquoted-colon values, normalize
-// list fields) and — for tasks and audits — backfilling a missing stable id from
+// known list fields) and — for flat id-led entities — backfilling a missing stable id from
 // the id that already leads the flat filename (ADR-0003 §4), so the frontmatter
 // copy can never drift from the name. Epics keep their NN-slug identity and are
 // text-normalized only. Under the flat layout there is no relocation: a bad
@@ -137,10 +137,14 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	if err := fixDir(s.auditsDir, true); err != nil {
 		return results, err
 	}
-	// Research is id-led like tasks/audits, so the same id-backfill applies — and lint's
-	// MissingIDMessage tells the user "`lint --fix` assigns one", which was a dead end
-	// for research until this dir was included.
+	// Research and Threads are id-led like tasks/audits, so the same filename-sourced
+	// id backfill applies. The generic text fixer does not know `tasks` as a list field,
+	// so Thread membership remains a deliberate guarded repair rather than being
+	// normalized here.
 	if err := fixDir(s.researchDir, true); err != nil {
+		return results, err
+	}
+	if err := fixDir(s.threadsDir, true); err != nil {
 		return results, err
 	}
 	// Sweep the tool's own crash-orphaned temp files (housekeeping). Only on a real
@@ -149,10 +153,10 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	// file; the .md scan filter already hides these, so this just keeps the tree tidy.
 	if !dryRun {
 		now := time.Now()
-		// Flat entity dirs (ADR-0003 §4): temps land directly in tasks/, epics/, audits/, research/,
+		// Flat entity dirs (ADR-0003 §4): temps land directly in tasks/, epics/, audits/, research/, threads/,
 		// where writeFileAtomic/createFileAtomic stage them (os.CreateTemp uses the target
 		// file's dir) — there are no per-status/bucket subdirs to sweep anymore.
-		for _, dir := range []string{s.tasksDir, s.epicsDir, s.auditsDir, s.researchDir} {
+		for _, dir := range []string{s.tasksDir, s.epicsDir, s.auditsDir, s.researchDir, s.threadsDir} {
 			for _, p := range sweepStaleTemps(dir, now) {
 				results = append(results, domain.FixResult{Path: p, Changes: []string{"removed stale temp orphan"}})
 			}
@@ -201,6 +205,13 @@ func (s *FS) repairInvalidID(dir, filename string, content []byte) (out []byte, 
 	if _, err := os.Stat(target); err == nil {
 		return content, "", fmt.Sprintf("id %q not repaired: %s already exists", bad, filepath.Base(target)), nil
 	}
+	owner, err := s.crossKindIdentityOwner(dir, good)
+	if err != nil {
+		return content, "", "", err
+	}
+	if owner != "" {
+		return content, "", fmt.Sprintf("id %q not repaired: canonical spelling %s is already used by %s", bad, good, owner), nil
+	}
 	// The frontmatter `id:` is the co-located copy of the filename id; both move together
 	// or lint immediately reports drift.
 	updated, err := updateFrontmatter(content, map[string]any{"id": good})
@@ -211,12 +222,34 @@ func (s *FS) repairInvalidID(dir, filename string, content []byte) (out []byte, 
 		bad, good, filepath.Base(target)), nil
 }
 
+func (s *FS) crossKindIdentityOwner(dir, entityID string) (string, error) {
+	otherDir, kind := "", ""
+	switch dir {
+	case s.tasksDir:
+		otherDir, kind = s.threadsDir, "Thread"
+	case s.threadsDir:
+		otherDir, kind = s.tasksDir, "task"
+	default:
+		return "", nil
+	}
+	candidates, err := flatCandidates(otherDir)
+	if err != nil {
+		return "", err
+	}
+	for _, candidate := range candidates {
+		if candidate.id == entityID {
+			return kind + " " + filepath.Base(candidate.path), nil
+		}
+	}
+	return "", nil
+}
+
 // referencesTo reports the planning files (other than self) whose text contains an id.
 // Cheap because it only runs when a misspelled id was actually found, which is normally
 // never; it reads the entity dirs rather than the whole repo.
 func (s *FS) referencesTo(entityID, self string) ([]string, error) {
 	var hits []string
-	for _, dir := range []string{s.tasksDir, s.epicsDir, s.auditsDir, s.researchDir} {
+	for _, dir := range []string{s.tasksDir, s.epicsDir, s.auditsDir, s.researchDir, s.threadsDir} {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -244,7 +277,7 @@ func (s *FS) referencesTo(entityID, self string) ([]string, error) {
 	return hits, nil
 }
 
-// backfillMissingID fills a task/audit's frontmatter `id:` from the id that already
+// backfillMissingID fills an id-led entity's frontmatter `id:` from the id that already
 // leads its flat filename (<id>-<slug>.md) when the frontmatter carries none — the
 // canonical key resolveID/CAS match on, so the two can never drift (IDDriftIssue).
 // It's a no-op (ok=false) when the file already has an id, is unparseable, or has a

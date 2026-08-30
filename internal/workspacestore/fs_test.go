@@ -47,7 +47,7 @@ func TestFS_OpenWorkspaceResolvesDirectAndPointerEntries(t *testing.T) {
 		fromPointer.Checkout != pointerConfig.Dir || fromPointer.SpaceID != "implementation" {
 		t.Fatalf("pointer workspace = %+v, direct = %+v", fromPointer, direct)
 	}
-	if len(fromPointer.Layout.WatchPaths()) != 4 {
+	if len(fromPointer.Layout.WatchPaths()) != 5 {
 		t.Fatalf("watch paths = %v", fromPointer.Layout.WatchPaths())
 	}
 }

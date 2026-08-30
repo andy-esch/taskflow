@@ -66,7 +66,7 @@ func TestFS_WatchPaths(t *testing.T) {
 	for _, d := range NewFS(root).WatchPaths() {
 		got[d] = true
 	}
-	for _, parent := range []string{"epics", "tasks", "audits"} {
+	for _, parent := range []string{"epics", "tasks", "audits", "research", "threads"} {
 		if !got[filepath.Join(root, parent)] {
 			t.Errorf("WatchPaths missing entity parent %q", parent)
 		}

@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/andy-esch/taskflow/internal/id"
 )
 
 // standardEpicNameRe matches the epic filename convention NN-<slug> (a zero-padded
@@ -213,6 +215,72 @@ func LintResearch(r Research) []Issue {
 	}
 	if err := ValidateDescription(r.Description); err != nil {
 		issues = append(issues, Issue{Field: "description", Message: err.Error()})
+	}
+	return issues
+}
+
+// LintThread reports persisted Thread-document defects without making diagnostic
+// reads fail closed. Guarded Thread mutations use ValidateThreadDocument; ordinary
+// lint gives the author field-attributed repair guidance for the same invariants.
+func LintThread(thread Thread, validTask func(string) bool) []Issue {
+	var issues []Issue
+	add := func(field, message string) {
+		issues = append(issues, Issue{Field: field, Message: message})
+	}
+	if !id.Valid(thread.ID) {
+		add("id", "missing or invalid stable Thread id")
+	}
+	issues = append(issues, IDDriftIssue(thread.ID, thread.FilenameID)...)
+	if err := ValidateThreadStatus(thread.Status); err != nil {
+		add("status", err.Error())
+	}
+	switch {
+	case strings.TrimSpace(thread.Description) == "":
+		add("description", "missing")
+	case ValidateDescription(thread.Description) != nil:
+		add("description", "must be a single line within the documented length limit")
+	}
+	switch {
+	case strings.TrimSpace(thread.Goal) == "":
+		add("goal", "missing")
+	case strings.ContainsAny(thread.Goal, "\r\n"):
+		add("goal", "must be a single line")
+	}
+	for _, date := range []struct {
+		field    string
+		value    string
+		required bool
+	}{
+		{"created", thread.Created, true},
+		{"target_date", thread.TargetDate, false},
+		{"updated_at", thread.Updated, false},
+		{"started_at", thread.StartedAt, false},
+		{"ended_at", thread.EndedAt, false},
+	} {
+		if date.value == "" {
+			if date.required {
+				add(date.field, "missing")
+			}
+			continue
+		}
+		if ValidateDate(date.value) != nil {
+			add(date.field, "must be YYYY-MM-DD")
+		}
+	}
+	seen := make(map[string]bool, len(thread.Tasks))
+	for _, taskID := range thread.Tasks {
+		switch {
+		case !id.Valid(taskID):
+			add("tasks", fmt.Sprintf("%q is not a stable task id", taskID))
+		case seen[taskID]:
+			add("tasks", fmt.Sprintf("duplicate member %s", taskID))
+		case validTask != nil && !validTask(taskID):
+			add("tasks", fmt.Sprintf("unknown member task %s", taskID))
+		}
+		seen[taskID] = true
+	}
+	if !sort.StringsAreSorted(thread.Tasks) {
+		add("tasks", "member task ids must be sorted")
 	}
 	return issues
 }

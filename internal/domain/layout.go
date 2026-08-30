@@ -9,6 +9,7 @@ const (
 	EpicsDir    = "epics"
 	AuditsDir   = "audits"
 	ResearchDir = "research"
+	ThreadsDir  = "threads"
 	ProjectsDir = "projects"
 )
 

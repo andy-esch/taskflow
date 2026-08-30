@@ -477,9 +477,15 @@ tracked_repos = []
 // scaffold.
 type InitResult struct {
 	Created       []string
+	Removed       []string
 	ConfigDir     string
 	PlanningID    string
 	ConfigCreated bool
+	// LegacyProjects is the preserved projects/ path when it contains anything
+	// other than a lone regular .gitkeep. The caller can report the explicit
+	// manual migration without treating user-owned content as an init failure.
+	LegacyProjects       string
+	LegacyProjectsRemedy string
 }
 
 // Init scaffolds the planning directory tree and writes the config file under
@@ -528,7 +534,7 @@ func Init(dir, taskflowRoot string, dryRun bool) (InitResult, error) {
 	// Flat layout (ADR-0003 §4): scaffold only the entity parents — no per-status or
 	// per-bucket subdirs. The flat store never reads them, and a `.md` dropped into one
 	// would be invisible to the scan (a silent data-loss trap).
-	dirs := []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ResearchDir, domain.ProjectsDir}
+	dirs := []string{domain.TasksDir, domain.EpicsDir, domain.AuditsDir, domain.ResearchDir, domain.ThreadsDir}
 	for _, d := range dirs {
 		p := filepath.Join(root, filepath.FromSlash(d))
 		if !isDir(p) {
@@ -552,6 +558,15 @@ func Init(dir, taskflowRoot string, dryRun bool) (InitResult, error) {
 			}
 			result.Created = append(result.Created, d+"/"+gitKeep)
 		}
+	}
+	removed, legacyProjects, err := retireProjectsScaffold(root, dryRun)
+	if err != nil {
+		return result, err
+	}
+	result.Removed = append(result.Removed, removed...)
+	result.LegacyProjects = legacyProjects
+	if legacyProjects != "" {
+		result.LegacyProjectsRemedy = "review and recreate wanted initiatives with `tskflwctl thread new`, then remove projects/ manually"
 	}
 	cfg := filepath.Join(dir, ConfigFile)
 	// An existing configuration is maintenance, not bootstrap. Init may still repair the
@@ -594,6 +609,57 @@ func Init(dir, taskflowRoot string, dryRun bool) (InitResult, error) {
 		result.PlanningID = cf.ID
 	}
 	return result, nil
+}
+
+// retireProjectsScaffold removes only the unused scaffold introduced before
+// Threads superseded Projects. No recursive delete is used: an empty directory,
+// or one containing exactly a regular .gitkeep, is the entire automatic policy.
+// Anything else is user-owned legacy content and is reported for manual review.
+func retireProjectsScaffold(root string, dryRun bool) ([]string, string, error) {
+	projects := filepath.Join(root, domain.ProjectsDir)
+	info, err := os.Lstat(projects)
+	if os.IsNotExist(err) {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("inspect legacy projects scaffold %s: %w", projects, err)
+	}
+	if !info.IsDir() {
+		return nil, projects, nil
+	}
+	entries, err := os.ReadDir(projects)
+	if err != nil {
+		return nil, "", fmt.Errorf("read legacy projects scaffold %s: %w", projects, err)
+	}
+	removable := len(entries) == 0
+	if len(entries) == 1 {
+		info, infoErr := entries[0].Info()
+		if infoErr != nil {
+			return nil, "", fmt.Errorf("inspect legacy projects scaffold %s: %w", projects, infoErr)
+		}
+		removable = entries[0].Name() == gitKeep && info.Mode().IsRegular()
+	}
+	if !removable {
+		return nil, projects, nil
+	}
+	removed := make([]string, 0, 2)
+	if len(entries) == 1 {
+		removed = append(removed, domain.ProjectsDir+"/"+gitKeep)
+	}
+	removed = append(removed, domain.ProjectsDir)
+	if dryRun {
+		return removed, "", nil
+	}
+	if len(entries) == 1 {
+		keep := filepath.Join(projects, gitKeep)
+		if err := os.Remove(keep); err != nil {
+			return nil, "", fmt.Errorf("remove legacy projects placeholder %s: %w", keep, err)
+		}
+	}
+	if err := os.Remove(projects); err != nil {
+		return nil, "", fmt.Errorf("remove empty legacy projects scaffold %s: %w", projects, err)
+	}
+	return removed, "", nil
 }
 
 // Description is what an already-initialized directory declares, for surfaces that want to
