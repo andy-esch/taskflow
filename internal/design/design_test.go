@@ -282,11 +282,45 @@ func TestChromeSurfaceContrastAA(t *testing.T) {
 				t.Errorf("%s/%s: surface %s is indistinguishable from base %s (%.2f:1)",
 					name, bg, p.Surface.Hex, p.Base.Hex, lift)
 			}
-			if lift > 1.6 {
-				t.Errorf("%s/%s: surface %s is %.2f:1 from base %s — too far; the box's prose is the "+
-					"terminal default foreground, tuned for the base, and loses contrast as the surface departs",
-					name, bg, p.Surface.Hex, lift, p.Base.Hex)
+			// The box's prose is the TERMINAL's default foreground, which is tuned for
+			// the base and which no token here can change, so the surface has to stay on
+			// the base's side of the light/dark divide. This is the structural form of
+			// the original defect — a light-grey box on a dark palette — and it catches
+			// it independently of the AA loop above, which only sees the colored roles.
+			if darkSurface(t, p.Surface.Hex) != darkSurface(t, p.Base.Hex) {
+				t.Errorf("%s/%s: surface %s sits on the opposite side of the light/dark divide from base %s; "+
+					"the terminal's default foreground is tuned for the base and would be unreadable on it",
+					name, bg, p.Surface.Hex, p.Base.Hex)
 			}
+		}
+	}
+}
+
+// darkSurface reports whether light text reads better than dark text on hex — the
+// operational form of "this is a dark background". Used to keep a palette's surface
+// on the same side of the divide as its base.
+func darkSurface(t *testing.T, hex string) bool {
+	l := relLuminance(t, hex)
+	return contrastRatio(l, relLuminance(t, "#ffffff")) > contrastRatio(l, relLuminance(t, "#000000"))
+}
+
+// TestChromeSurfaceSlots pins the surface hexes the way TestNeonAccent pins the
+// accent: the contrast properties above accept any value that happens to pass, but
+// these three were each CHOSEN from their scheme, and two of them are deliberately
+// counter-intuitive. Pinning them makes a palette edit a reviewed decision rather
+// than a silent drift away from that provenance.
+func TestChromeSurfaceSlots(t *testing.T) {
+	for _, tc := range []struct {
+		name, hex, why string
+		ansi           int
+		pal            Palette
+	}{
+		{"neon dark", "#1a1b1c", "base16 Synth Midnight base01 — the scheme's own lighter-background slot", 0, neonDark},
+		{"catppuccin dark", "#11111b", "Mocha crust — RECESSED, because lifting to surface0 drops overlay2 to 4.45:1", 0, mochaDark},
+		{"shared light", "#ffffff", "raised white — Latte layers downward, and its AA-darkened accents lose contrast on every darker layer", 15, latteAA},
+	} {
+		if got := tc.pal.Surface; got.Hex != tc.hex || got.ANSI != tc.ansi {
+			t.Errorf("%s surface = {%q, %d}, want {%q, %d} (%s)", tc.name, got.Hex, got.ANSI, tc.hex, tc.ansi, tc.why)
 		}
 	}
 }

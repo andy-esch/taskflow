@@ -123,6 +123,8 @@ func TestThemeFlagFrom(t *testing.T) {
 		{"equals form", []string{"--theme=catppuccin", "task"}, "catppuccin"},
 		{"after a subcommand", []string{"task", "list", "--theme", "neon"}, "neon"},
 		{"trailing --theme with no value", []string{"task", "--theme"}, ""},
+		{"bare --theme followed by another flag", []string{"--theme", "--json"}, ""},
+		{"bare --theme followed by a short flag", []string{"--theme", "-C", "/tmp"}, ""},
 		{"literal --theme after -- is not the flag", []string{"--", "--theme", "neon"}, ""},
 		{"empty args", nil, ""},
 	} {
