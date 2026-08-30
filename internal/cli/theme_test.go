@@ -107,3 +107,58 @@ func TestThemeEntries(t *testing.T) {
 		t.Errorf("default flags wrong: neon is the default, catppuccin is not: %+v", got)
 	}
 }
+
+// TestThemeFlagFrom covers the raw-arg scan chrome uses before cobra parses
+// anything. fang's help renders from cobra's help path, which returns before
+// PersistentPreRunE, so --theme has to be read straight off os.Args or styled
+// help silently ignores it.
+func TestThemeFlagFrom(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"absent", []string{"task", "--help"}, ""},
+		{"space form", []string{"--theme", "catppuccin", "task"}, "catppuccin"},
+		{"equals form", []string{"--theme=catppuccin", "task"}, "catppuccin"},
+		{"after a subcommand", []string{"task", "list", "--theme", "neon"}, "neon"},
+		{"trailing --theme with no value", []string{"task", "--theme"}, ""},
+		{"literal --theme after -- is not the flag", []string{"--", "--theme", "neon"}, ""},
+		{"empty args", nil, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := themeFlagFrom(tc.args); got != tc.want {
+				t.Errorf("themeFlagFrom(%q) = %q, want %q", tc.args, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestChromeThemeHonorsFlagAndEnv pins the two precedence tiers chrome can
+// resolve without discovering a planning repo, and that it degrades to the
+// default rather than failing when nothing selects a theme.
+func TestChromeThemeHonorsFlagAndEnv(t *testing.T) {
+	t.Setenv("TSKFLW_THEME", "")
+	// A directory with no config and no parent config, so repo discovery is a
+	// miss and only the flag/env tiers are in play.
+	t.Chdir(t.TempDir())
+
+	if got := ChromeTheme([]string{"--theme", "catppuccin"}).Name; got != "catppuccin" {
+		t.Errorf("flag tier: got %q, want catppuccin", got)
+	}
+	t.Setenv("TSKFLW_THEME", "catppuccin")
+	if got := ChromeTheme(nil).Name; got != "catppuccin" {
+		t.Errorf("env tier: got %q, want catppuccin", got)
+	}
+	if got := ChromeTheme([]string{"--theme", "neon"}).Name; got != "neon" {
+		t.Errorf("flag must beat env: got %q, want neon", got)
+	}
+	t.Setenv("TSKFLW_THEME", "")
+	if got := ChromeTheme(nil).Name; got != design.Default().Name {
+		t.Errorf("no selection should fall back to the default, got %q", got)
+	}
+	// An unregistered name must not leave chrome unpainted.
+	if got := ChromeTheme([]string{"--theme", "no-such-theme"}).Name; got != design.Default().Name {
+		t.Errorf("unknown theme should degrade to the default, got %q", got)
+	}
+}

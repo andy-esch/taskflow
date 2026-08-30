@@ -238,3 +238,55 @@ func TestCatppuccinDarkSemanticSlots(t *testing.T) {
 		t.Errorf("catppuccin dark Markdown = %q, want tokyo-night", p.Markdown)
 	}
 }
+
+// TestChromeSurfaceContrastAA is the generalization of TestFindHighlightContrastAA
+// to the OTHER foreground-over-colored-background pairing in the project: fang's
+// help codeblock, whose Codeblock role is a background and whose every token is
+// drawn over it. It exists because the original mapping handed that background
+// role a foreground hue (theme.ColorGray), which painted the USAGE box light grey
+// and rendered DimmedArgument at 1.00:1 against its own background.
+//
+// It runs over EVERY registered theme and BOTH backgrounds, and asserts the two
+// properties a surface must hold:
+//
+//	a) every colored role fang draws inside the box clears WCAG AA (4.5:1);
+//	b) the surface stays close to the palette Base, because the box's prose is
+//	   drawn in the TERMINAL's default foreground (fang shares one Base between
+//	   the help body and the codeblock, so no token here can compensate for it) —
+//	   while staying far enough to read as a distinct block.
+func TestChromeSurfaceContrastAA(t *testing.T) {
+	for _, name := range Names() {
+		th, ok := Lookup(name)
+		if !ok {
+			t.Fatalf("%s should be registered", name)
+		}
+		for _, bg := range []string{"dark", "light"} {
+			p := th.For(bg == "dark")
+			surface := relLuminance(t, p.Surface.Hex)
+			// The roles fang paints over the codeblock background. Title and the
+			// error badge are deliberately absent: they render outside the box.
+			for role, hue := range map[string]Hue{
+				"Program(blue)":      p.Of(theme.ColorBlue),
+				"Command(yellow)":    p.Of(theme.ColorYellow),
+				"Flag(green)":        p.Of(theme.ColorGreen),
+				"QuotedString(cyan)": p.Of(theme.ColorCyan),
+				"Dimmed/Comment":     p.Of(theme.ColorGray),
+			} {
+				if r := contrastRatio(surface, relLuminance(t, hue.Hex)); r < 4.5 {
+					t.Errorf("%s/%s: %s over surface %s is %.2f:1 < 4.5:1 AA",
+						name, bg, role, p.Surface.Hex, r)
+				}
+			}
+			lift := contrastRatio(surface, relLuminance(t, p.Base.Hex))
+			if lift < 1.03 {
+				t.Errorf("%s/%s: surface %s is indistinguishable from base %s (%.2f:1)",
+					name, bg, p.Surface.Hex, p.Base.Hex, lift)
+			}
+			if lift > 1.6 {
+				t.Errorf("%s/%s: surface %s is %.2f:1 from base %s — too far; the box's prose is the "+
+					"terminal default foreground, tuned for the base, and loses contrast as the surface departs",
+					name, bg, p.Surface.Hex, lift, p.Base.Hex)
+			}
+		}
+	}
+}

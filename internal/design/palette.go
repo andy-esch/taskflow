@@ -60,6 +60,15 @@ type Palette struct {
 	MatchFg      Hue // text drawn over a match highlight
 	Track        Hue // progress empty-track tone
 	Base         Hue // the terminal background this palette is tuned for (e.g. the theme-preview canvas)
+	// Surface is the only BACKGROUND token in this struct: the raised/recessed
+	// layer a block of text is painted ON (fang's help codeblock today). Every
+	// other Hue here is a foreground. It is deliberately the palette's own
+	// adjacent layer rather than a free choice, and it moves in whichever
+	// direction PRESERVES contrast for that palette's foregrounds — up on the
+	// near-black neon base, down on Mocha, up to white on Latte — because the
+	// text drawn over it is the terminal's default foreground, which no token
+	// here can compensate for. TestChromeSurfaceContrastAA pins both properties.
+	Surface Hue
 
 	// Gradient — the rollup bar fill stops (the deliberate truecolor exception;
 	// purple -> cyan -> pink). Degrades per-cell on low-color terminals.
