@@ -114,6 +114,13 @@ type ThreadCreationMutationStore interface {
 	MutateThreadCreation(now time.Time, dryRun bool, planner ThreadCreationPlanner) (ThreadCreationMutationResult, error)
 }
 
+// ThreadMutationStore owns guarded updates to an existing Thread document.
+// Membership and lifecycle intents share the capability so neither can validate
+// against a stale task/Thread snapshot or nest another repository guard.
+type ThreadMutationStore interface {
+	MutateThread(now time.Time, dryRun bool, planner ThreadMutationPlanner) (ThreadMutationResult, error)
+}
+
 // EpicStore is the epic-persistence port.
 type EpicStore interface {
 	ListEpics() ([]domain.Epic, []domain.FileProblem, error)

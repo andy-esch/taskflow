@@ -51,6 +51,13 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	if err := core.ValidateTaskLifecycleSource(graph); err != nil {
 		return result, err
 	}
+	threads, threadProblems, err := s.ListThreads()
+	if err != nil {
+		return result, fmt.Errorf("load authoritative Threads for task lifecycle impact: %w", err)
+	}
+	if err := core.ValidateThreadMutationSource(graph, threads, threadProblems); err != nil {
+		return result, err
+	}
 
 	plan, err := callTaskLifecyclePlanner(s, planner, graph)
 	if err != nil {
@@ -81,6 +88,7 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	result.Before = analysis.Before
 	result.After = analysis.After
 	result.Impacts = cloneStoreTaskImpacts(analysis.Impacts)
+	result.ThreadImpacts = core.TaskLifecycleThreadImpacts(clonePlannerThreads(threads), graph, validated)
 	result.OutstandingBlockers = cloneStoreBlockers(analysis.OutstandingBlockers)
 	result.OverrideApplied = analysis.OverrideApplied
 	result.Changed = materialized.changed
@@ -95,8 +103,12 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative task graph before lifecycle write: %w", err)
 	}
-	if !graph.SameSourceSnapshot(currentGraph) {
-		return result, fmt.Errorf("repository task graph changed while authorizing lifecycle transition; retry: %w", domain.ErrConflict)
+	currentThreads, currentThreadProblems, err := s.ListThreads()
+	if err != nil {
+		return result, fmt.Errorf("re-read authoritative Threads before lifecycle write: %w", err)
+	}
+	if !graph.SameSourceSnapshot(currentGraph) || !sameThreadSourceSnapshot(threads, threadProblems, currentThreads, currentThreadProblems) {
+		return result, fmt.Errorf("repository task graph changed or Threads changed while authorizing lifecycle transition; retry: %w", domain.ErrConflict)
 	}
 
 	if materialized.create {

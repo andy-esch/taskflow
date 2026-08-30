@@ -17,14 +17,14 @@ const (
 	ThreadStatusUnstarted  ThreadStatus = "unstarted"
 	ThreadStatusInProgress ThreadStatus = "in-progress"
 	ThreadStatusCompleted  ThreadStatus = "completed"
-	ThreadStatusAbandoned  ThreadStatus = "abandoned"
+	ThreadStatusCancelled  ThreadStatus = "cancelled"
 )
 
 var threadStatuses = []ThreadStatus{
 	ThreadStatusUnstarted,
 	ThreadStatusInProgress,
 	ThreadStatusCompleted,
-	ThreadStatusAbandoned,
+	ThreadStatusCancelled,
 }
 
 // AllThreadStatuses returns the closed lifecycle vocabulary in display order.
@@ -34,6 +34,9 @@ func AllThreadStatuses() []ThreadStatus { return append([]ThreadStatus(nil), thr
 func ValidateThreadStatus(status ThreadStatus) error {
 	if slices.Contains(threadStatuses, status) {
 		return nil
+	}
+	if status == "abandoned" {
+		return fmt.Errorf("%w: legacy thread status %q was replaced by %q; update the Thread frontmatter", ErrValidation, status, ThreadStatusCancelled)
 	}
 	values := make([]string, len(threadStatuses))
 	for i, value := range threadStatuses {
