@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
+	"charm.land/fang/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/fang"
 	"golang.org/x/term"
 
 	"github.com/andy-esch/taskflow/internal/cli"
