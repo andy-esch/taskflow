@@ -178,11 +178,12 @@ Dependencies do not add a persisted `blocked` status. Task `status` remains the 
 lifecycle; graph state is a derived projection that cannot drift from the edges and current task
 statuses.
 
-`ready-to-start` means the task itself is adequately scoped and ready to undertake if its external
-constraints permit. It does **not** promise that those constraints are currently satisfied.
-`eligible` is the derived word for that stronger claim. This avoids adding another persisted status
-while preserving room for the separate draft/finalized readiness work already contemplated by the
-project.
+`next-up` and `ready-to-start` are both pending-work states. `next-up` says the task is selected into
+the working queue; `ready-to-start` additionally says its scope is suitable for handoff. Neither
+status promises that external constraints are currently satisfied, and `ready-to-start` is not a
+mandatory authorization hop before execution. `eligible` is the derived word for pending work whose
+repository graph is healthy and whose dependency gate is clear. This preserves the useful
+author-declared readiness distinction without letting it override or duplicate graph truth.
 
 A task is **soundly completed** when its own status is `completed` and every direct prerequisite is
 also soundly completed. Because the graph is acyclic, that recursive definition terminates. It makes
@@ -209,22 +210,26 @@ the queried task to that blocker.
 
 Named views are compositions of those fields:
 
-- **Eligible / Frontier:** candidate plus a clear gate. Only eligible Thread members appear in the
-  dispatchable frontier.
+- **Eligible / Frontier:** queued or candidate plus a clear gate in a healthy graph. The Thread
+  frontier is the eligible subset of its members; upstream sound completion, not a mandatory
+  `ready-to-start` hop, determines which pending tasks reach it.
 - **Drained:** nominally complete plus a clear gate; equivalently, soundly completed.
 - **Inconsistent:** in-flight or nominally complete with a blocked/broken gate—for example a forced
   start, a completed task whose prerequisites never caught up, or completed downstream work whose
   prerequisite was reopened.
 
-A queued task can therefore be queued-and-blocked without contradiction, while a ready task can be
-candidate-and-clear (eligible) or candidate-and-blocked. Parked and withdrawn tasks are never
-eligible and never satisfy downstream dependencies.
+A queued or candidate task may independently have a clear, blocked, or broken gate. Either role is
+eligible when the graph is healthy and its gate is clear. In-flight, parked, nominally complete,
+and withdrawn tasks are not work waiting to start, so they stay outside the frontier; parked and
+withdrawn tasks also never satisfy downstream dependencies.
 
 Every product path that enters `in-progress`—the `task start` verb, generic `task move`,
-`task new --start`, and future TUI actions—must call the same core eligibility guard. The transition
-refuses an ineligible task by default. `--force` is an explicit escape hatch: it bypasses only the
-dependency gate, does not remove dependencies, and returns a receipt that says the transition was
-forced and names the outstanding blockers. The task remains derived as inconsistent until its
+`task new --start`, and future TUI actions—must call the same core eligibility guard. An existing
+task may enter from either `next-up` or `ready-to-start` when its gate is clear. The transition
+refuses an ineligible task by default. `--force` is an explicit escape hatch available from either
+pending-work state: it bypasses only the dependency gate, does not bypass broken graph evidence or
+other lifecycle roles, does not remove dependencies, and returns a receipt that says the transition
+was forced and names the outstanding blockers. The task remains derived as inconsistent until its
 prerequisites become soundly completed or the graph is corrected.
 
 Hand edits, or completing a force-started task before its prerequisites catch up, can still produce
@@ -258,7 +263,8 @@ Thread lifecycle remains explicit: `unstarted -> in-progress -> completed | aban
 The first implementation needs a small, deterministic graph-analysis contract:
 
 1. Global cycle validation with an attributable cycle/path error.
-2. Status-aware Thread frontier, failing closed for defects in the relevant graph.
+2. Lifecycle-filtered, graph-derived Thread frontier, failing closed for defects in the relevant
+   graph.
 3. Full upstream blocker and downstream impact queries over global dependencies.
 4. A deterministic topological plan. Its waves/generations are **explanatory**, not an execution
    scheduler or barrier protocol.
@@ -435,7 +441,7 @@ tskflwctl task start <task-id> [--force]
 tskflwctl thread start|complete|abandon|reopen <thread>
 tskflwctl thread list [--status <status>]
 tskflwctl thread show <thread>               # Rollup, blockers, external gates, frontier
-tskflwctl thread frontier <thread>           # Machine list of currently eligible members
+tskflwctl thread frontier <thread>           # Machine list of graph-clear pending members
 tskflwctl thread plan <thread>               # Explanatory topology/waves
 tskflwctl thread graph <thread> [--format mermaid|dot|ascii]
 
@@ -658,8 +664,9 @@ implicit. The following amendments supersede conflicting wording above:
 5. **Diagnostic reads and actionable selectors have different failure behavior.** Mutations always
    fail closed. Diagnostic reads such as `thread show`, blockers, and lint degrade with an explicit
    problem list and graph-health marker. Dispatch-oriented selectors such as `thread frontier` and
-   `task list --unblocked` return no eligible work when their relevant graph is unsound and report
-   why; they never silently dispatch from a partial graph.
+   `task list --unblocked` include clear-gated `next-up` and `ready-to-start` work, return no eligible
+   work when their relevant graph is unsound, and report why; they never silently dispatch from a
+   partial graph.
 6. **Legacy migration follows the mutation boundary.** The strict-read task diagnoses legacy
    `blocked_by`, `dependencies`, and `blocks`, including exact slug-to-ID resolution, ambiguity, and
    missing-target errors, but does not rewrite them. The guarded dependency-operations task performs
@@ -710,10 +717,13 @@ were too easy to misread or bypass. The following clarifications supersede confl
    projections remain errors. Snapshot health remains degraded and mutation/dispatch remains closed
    until the advisory debt is migrated.
 5. **Authorization and explanation are separate contracts.** Lifecycle authorization uses the
-   typed derived state (`Eligible` and its gate), never the length of a blocker list. A gate
-   explanation includes that state, task-local structural problems, and an action-oriented blocking
-   frontier. The API also exposes a separately named full causal prerequisite projection for
-   forensic queries; neither projection's empty result is itself permission to start work.
+   typed derived state (`Eligible` and its gate), never the length of a blocker list. `Eligible`
+   admits both queued (`next-up`) and candidate (`ready-to-start`) work when the authoritative graph
+   is healthy and the gate is clear; readiness remains metadata rather than an extra authorization
+   gate. A gate explanation includes that state, task-local structural problems, and an
+   action-oriented blocking frontier. The API also exposes a separately named full causal
+   prerequisite projection for forensic queries; neither projection's empty result is itself
+   permission to start work.
 6. **Blocking projections declare their traversal semantics.** The causal projection may traverse
    through all reachable unsound prerequisites. The action frontier stops at terminal constraints
    such as missing, unreadable, withdrawn, invalid, or cyclic records and otherwise returns the
@@ -794,9 +804,9 @@ following clarifications govern the first production dependency commands:
    frontier and `--causal` requests the full forensic closure. `task unblocks` reports all transitive
    downstream dependents plus their current derived state; it does not claim that satisfying the
    source alone makes every result eligible. `task list --unblocked` is the first dispatch-oriented
-   selector and returns no work with an explicit diagnosis on an unsound relevant graph. There is no
-   repository-global `task plan` command in this slice; topological waves become public through the
-   later Thread plan projection.
+   selector, includes clear-gated queued and candidate tasks, and returns no work with an explicit
+   diagnosis on an unsound relevant graph. There is no repository-global `task plan` command in this
+   slice; topological waves become public through the later Thread plan projection.
 4. **Receipts distinguish convergence from success.** Edge receipts identify canonical endpoint
    IDs and applied versus idempotently skipped operations. Migration receipts expose planned,
    applied, skipped, and remaining work. A failure after a durable prefix carries that prefix in
@@ -873,6 +883,28 @@ and [Codex](../audits/6g4tf2yr4nb0-2026-08-29-dependency-eligibility-enforcement
    in the Thread rollup but are excluded from its progress denominator. Their own prerequisites are
    likewise excluded from the external-gate set and cannot make an otherwise drained completed Thread
    inconsistent. External gates are the direct outside prerequisites of non-withdrawn members.
+
+### 2026-08-29: Dogfood correction — readiness is not graph authorization
+
+The first production Thread exposed a semantic error in the accepted design: its next task was
+`next-up` with a clear gate, but `thread frontier` returned no work until the task was manually moved
+to `ready-to-start`. That made an author-declared handoff signal, rather than upstream graph truth,
+control the DAG frontier.
+
+The corrected contract treats `next-up` and `ready-to-start` as equally start-capable pending-work
+roles. `Eligible` is true for either role only when the authoritative repository graph is healthy
+and the task's gate is clear. `thread frontier` and `task list --unblocked` use that same derived
+state. `task start`, generic moves to `in-progress`, and TUI lifecycle actions accept either source
+role; `--force` may bypass a blocked gate from either role but still cannot bypass broken graph
+evidence or start from in-flight, parked, completed, or withdrawn roles.
+
+This does not delete `ready-to-start`. It remains useful metadata saying a task is sufficiently
+scoped for handoff, while `next-up` says it has entered the working queue. Teams may use that extra
+signal, but the CLI does not require the intermediate transition before guarded execution. A focused
+[corrective task](../tasks/6g5075cga2nt-make-dependency-eligibility-graph-driven-for-queued-and-ready-tasks.md)
+must update the shared graph derivation, every guarded start path, Thread projections,
+`task list --unblocked`, wire/schema output, documentation, and parity tests before later Thread UX
+builds on the narrower behavior.
 
 ## Related
 

@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g4wm2yf6tyj
-status: next-up
+status: ready-to-start
 epic: 30-threads-and-task-dependency-graphs
 description: Add authoritative Thread membership and lifecycle writes with committed receipts and concurrency guarantees.
 effort: 4-7 days
@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [threads, graph, lifecycle, cli]
 created: "2026-08-29"
-depends_on: [6g3q4rtmv4ak]
+depends_on: [6g3q4rtmv4ak, 6g5075cga2nt]
 updated_at: "2026-08-29"
 ---
 # Ship guarded Thread membership and lifecycle mutations
@@ -46,4 +46,7 @@ Make Thread membership and lifecycle authoritative guarded operations over the p
 
 ## Sequencing
 
-Requires Thread documents, guarded unstarted creation, read projections, and the lock-free creation materializer. Existing-task bulk linking depends on this task so compound apply composes the new surgical membership/lifecycle materializer rather than rebuilding existing Thread files.
+Requires Thread documents, guarded unstarted creation, read projections, the lock-free creation
+materializer, and task `6g5075cga2nt`'s graph-driven eligibility correction. Existing-task bulk
+linking depends on this task so compound apply composes the new surgical membership/lifecycle
+materializer rather than rebuilding existing Thread files.
