@@ -25,8 +25,9 @@ Thread work as one implementation task.
 
 These bootstrap edges were prose until task `6g3q4rt7mgjn` landed the guarded dependency-write
 surface. They are now persisted through the production commands, including the 2026-08-29 readiness
-split between Thread documents and guarded Thread mutations. Prefer task IDs over slice numbers
-because the ADR slices may be divided at reviewed implementation boundaries:
+split between Thread documents and guarded Thread mutations and the first-Thread dogfood correction.
+Prefer task IDs over slice numbers because the ADR slices may be divided at reviewed implementation
+boundaries:
 
 ```text
 6g3q4rst78qy strict reads -----> 6g3q4rt7mgjn dependency operations <----- 6g3q4rt0wzkq portable guard
@@ -36,6 +37,9 @@ because the ADR slices may be divided at reviewed implementation boundaries:
                                            |
                                            v
                                   6g3q4rtmv4ak Thread documents
+                                           |
+                                           v
+                                  6g5075cga2nt graph-driven eligibility correction
                                            |
                                            v
                                   6g4wm2yf6tyj Thread mutations
@@ -55,6 +59,7 @@ because the ADR slices may be divided at reviewed implementation boundaries:
 - [6g3q4rt7mgjn — dependency operations and queries](../tasks/6g3q4rt7mgjn-ship-guarded-dependency-mutations-and-graph-queries.md)
 - [6g3q4rte8kc1 — eligibility enforcement](../tasks/6g3q4rte8kc1-enforce-dependency-eligibility-across-every-task-start-path.md)
 - [6g3q4rtmv4ak — Thread documents, creation, and read projections](../tasks/6g3q4rtmv4ak-add-thread-documents-guarded-creation-and-read-projections.md)
+- [6g5075cga2nt — graph-driven eligibility for queued and ready tasks](../tasks/6g5075cga2nt-make-dependency-eligibility-graph-driven-for-queued-and-ready-tasks.md)
 - [6g4wm2yf6tyj — guarded Thread membership and lifecycle](../tasks/6g4wm2yf6tyj-ship-guarded-thread-membership-and-lifecycle-mutations.md)
 - [6g3q4rtv8d0a — resumable bulk linking](../tasks/6g3q4rtv8d0a-bulk-link-existing-tasks-into-threads-with-resumable-apply.md)
 - [6g3q4rv1w9e2 — generated graph views](../tasks/6g3q4rv1w9e2-generate-deterministic-thread-graph-views.md)
@@ -64,14 +69,16 @@ because the ADR slices may be divided at reviewed implementation boundaries:
 
 ```text
 strict reads -> guarded edge writes -> eligibility -> Thread documents/read projections
-                                                   -> Thread mutations -> bulk linking -> generated views -> TUI
+              -> graph-driven eligibility correction -> Thread mutations -> bulk linking
+              -> generated views -> TUI
 ```
 
 Eligibility enforcement and Threads share the same graph foundation, but implementation is
 deliberately serialized after guarded writes stabilize. Eligibility establishes the first
 non-dependency guarded mutation seam; Thread creation establishes the document and materializer;
-Thread membership/lifecycle then settles the second mutation family; bulk linking composes the
-task and Thread materializers under one outer guard.
+the first real Thread corrects the queued-versus-ready eligibility contract before Thread
+membership/lifecycle settles the second mutation family; bulk linking composes the task and Thread
+materializers under one outer guard.
 
 | Order | Slice | Exit gate | Highest-value stress tests |
 |---|---|---|---|
@@ -79,10 +86,11 @@ task and Thread materializers under one outer guard.
 | 2 | `6g3q4rt0wzkq` + `6g3q4rt7mgjn`: portable guard, dependency writes/queries, and guarded legacy migration | Final scan, pure planning/validation, and write share one store-owned critical section on every supported platform | nested acquisition, concurrent opposite edges, direct write versus bulk apply, stale CAS, idempotent repeats, guarded slug-to-ID migration |
 | 3 | Eligibility enforcement | Every route into `in-progress` uses one policy and produces the same blocker/force result | all task statuses, direct/transitive blockers, withdrawn/missing prerequisites, reopen after downstream completion, forced inconsistent work |
 | 4 | `6g3q4rtmv4ak`: Thread documents, guarded creation, and read projections | One first-class Thread document/materializer and one shared projection; creation is unstarted and authoritative | shared tasks, external gates and rollup denominators, empty Threads, cross-kind IDs, creation versus task mutation |
-| 5 | `6g4wm2yf6tyj`: guarded Thread membership and lifecycle | Membership/lifecycle use one guarded snapshot, retain committed outcomes, and augment task receipts with affected Threads | empty/all-withdrawn start/complete, abandoned/completed immutability, post-commit cleanup, real cooperating-writer races |
-| 6 | Existing-task bulk linking | One literal-YAML manifest can create a Thread, add memberships and global edges, and converge after interruption | failure after every write prefix, retry/idempotency, wrong planning-space identity, edited/stale plan, concurrent edge mutation |
-| 7 | Generated Mermaid/DOT and explanatory UX | Stable ordering and explicit member/external roles; nothing generated is persisted | snapshot/golden output, escaping hostile titles, large/deep/wide readable graphs |
-| 8 | Usage-informed TUI | TUI is a consumer of core/wire behavior, not a second graph engine | watcher reload during mutation, parity with CLI state, narrow/small-terminal degradation |
+| 5 | `6g5075cga2nt`: graph-driven pending-work eligibility correction | Clear-gated `next-up` and `ready-to-start` tasks share frontier/start eligibility while their lifecycle roles remain distinct | both pending roles across clear/blocked/broken gates, forced starts, Thread/task selector parity |
+| 6 | `6g4wm2yf6tyj`: guarded Thread membership and lifecycle | Membership/lifecycle use one guarded snapshot, retain committed outcomes, and augment task receipts with affected Threads | empty/all-withdrawn start/complete, abandoned/completed immutability, post-commit cleanup, real cooperating-writer races |
+| 7 | Existing-task bulk linking | One literal-YAML manifest can create a Thread, add memberships and global edges, and converge after interruption | failure after every write prefix, retry/idempotency, wrong planning-space identity, edited/stale plan, concurrent edge mutation |
+| 8 | Generated Mermaid/DOT and explanatory UX | Stable ordering and explicit member/external roles; nothing generated is persisted | snapshot/golden output, escaping hostile titles, large/deep/wide readable graphs |
+| 9 | Usage-informed TUI | TUI is a consumer of core/wire behavior, not a second graph engine | watcher reload during mutation, parity with CLI state, narrow/small-terminal degradation |
 
 ### Design attention
 
@@ -108,9 +116,12 @@ This epic is the first production consumer of its own capabilities:
    exercises explanatory queries against those real relationships.
 3. Slice 4 creates a real Thread for the remaining initiative and observes its frontier and external
    gates during normal implementation work.
-4. Slice 5 manages that Thread through production membership and lifecycle verbs.
-5. Slice 6 uses bulk linking on the next naturally suitable initiative rather than a synthetic demo.
-6. Every dogfood finding is recorded in the active task; contract changes also amend ADR-0006.
+4. Task `6g5075cga2nt` records and corrects the first semantic dogfood finding before later Thread
+   behavior builds on it.
+5. The guarded mutation slice manages that Thread through production membership and lifecycle verbs.
+6. The bulk-linking slice uses the feature on the next naturally suitable initiative rather than a
+   synthetic demo.
+7. Every dogfood finding is recorded in the active task; contract changes also amend ADR-0006.
 
 The experimental spike binary is limited to disposable planning spaces and does not satisfy these
 checkpoints. Dogfooding begins when the corresponding production slice passes its exit gate.
@@ -138,6 +149,9 @@ eligibility lifecycle boundary    (first non-dependency guarded write)
         |
         v
 Thread documents + creation       (first additional entity kind/materializer)
+        |
+        v
+graph-driven eligibility correction (first production Thread dogfood finding)
         |
         v
 Thread membership/lifecycle       (second guarded mutation family)

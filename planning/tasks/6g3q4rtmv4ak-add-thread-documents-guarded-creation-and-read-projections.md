@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g3q4rtmv4ak
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Introduce Thread documents, guarded unstarted creation, reusable materialization, and deterministic read projections.
 effort: 5-8 days
@@ -13,6 +13,7 @@ created: "2026-08-25"
 updated_at: "2026-08-29"
 depends_on: [6g3q4rte8kc1]
 started_at: "2026-08-29"
+completed_at: "2026-08-29"
 ---
 # Add Thread documents, guarded creation, and read projections
 
