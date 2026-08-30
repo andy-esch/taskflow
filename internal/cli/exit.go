@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
@@ -91,6 +92,16 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 	if errors.As(err, &threadErr) {
 		details := wire.ToThreadMutationJSON(threadErr.receipt, threadErr.path, threadErr.workspace)
 		payload.Error.ThreadMutation = &details
+	}
+	var threadUpdateErr *threadMutationCommandFailure
+	if errors.As(err, &threadUpdateErr) {
+		details := wire.ToThreadUpdateJSON(threadUpdateErr.receipt, threadUpdateErr.path, threadUpdateErr.workspace)
+		payload.Error.ThreadUpdate = &details
+	}
+	var threadPolicy *core.ThreadMutationPolicyError
+	if errors.As(err, &threadPolicy) {
+		details := wire.ToThreadMutationFailureJSON(threadPolicy)
+		payload.Error.ThreadFailure = &details
 	}
 	// Compact, like every other --json envelope (see wire.EncodeJSON): an agent
 	// parsing the failure shouldn't pay for indentation either.

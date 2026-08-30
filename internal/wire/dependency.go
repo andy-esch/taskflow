@@ -216,18 +216,43 @@ type TaskLifecycleBlockerJSON struct {
 // TaskLifecycleJSON is the task-specific detail nested into the shared move
 // envelope. Audit and epic transitions omit it.
 type TaskLifecycleJSON struct {
-	TaskID              string                     `json:"task_id"`
-	From                string                     `json:"from"`
-	Changed             bool                       `json:"changed"`
-	Committed           bool                       `json:"committed" jsonschema:"description=true only after the lifecycle write became durable"`
-	Forced              bool                       `json:"forced"`
-	Override            string                     `json:"override,omitempty"`
-	Before              TaskGraphStateJSON         `json:"before"`
-	After               TaskGraphStateJSON         `json:"after"`
-	OutstandingBlockers []TaskLifecycleBlockerJSON `json:"outstanding_blockers"`
-	ImpactCount         int                        `json:"impact_count"`
-	Impacts             []TaskGraphStateImpactJSON `json:"impacts"`
-	Remedy              string                     `json:"remedy,omitempty"`
+	TaskID              string                       `json:"task_id"`
+	From                string                       `json:"from"`
+	Changed             bool                         `json:"changed"`
+	Committed           bool                         `json:"committed" jsonschema:"description=true only after the lifecycle write became durable"`
+	Forced              bool                         `json:"forced"`
+	Override            string                       `json:"override,omitempty"`
+	Before              TaskGraphStateJSON           `json:"before"`
+	After               TaskGraphStateJSON           `json:"after"`
+	OutstandingBlockers []TaskLifecycleBlockerJSON   `json:"outstanding_blockers"`
+	ImpactCount         int                          `json:"impact_count"`
+	Impacts             []TaskGraphStateImpactJSON   `json:"impacts"`
+	ThreadImpactCount   int                          `json:"thread_impact_count"`
+	ThreadImpacts       []ThreadProjectionImpactJSON `json:"thread_impacts"`
+	Remedy              string                       `json:"remedy,omitempty"`
+}
+
+// ThreadProjectionImpactJSON is one Thread view changed by a task lifecycle
+// transition; direct distinguishes membership from downstream/boundary effects.
+type ThreadProjectionImpactJSON struct {
+	ThreadID       string         `json:"thread_id"`
+	Slug           string         `json:"slug"`
+	Direct         bool           `json:"direct"`
+	ChangedTaskIDs []string       `json:"changed_task_ids"`
+	Before         ThreadViewJSON `json:"before"`
+	After          ThreadViewJSON `json:"after"`
+}
+
+func toThreadProjectionImpactsJSON(impacts []core.ThreadProjectionImpact) []ThreadProjectionImpactJSON {
+	out := make([]ThreadProjectionImpactJSON, 0, len(impacts))
+	for _, impact := range impacts {
+		out = append(out, ThreadProjectionImpactJSON{
+			ThreadID: impact.ThreadID, Slug: impact.Slug, Direct: impact.Direct,
+			ChangedTaskIDs: append([]string{}, impact.ChangedTaskIDs...),
+			Before:         ToThreadViewJSON(impact.Before), After: ToThreadViewJSON(impact.After),
+		})
+	}
+	return out
 }
 
 func ToTaskLifecycleJSON(receipt core.TaskLifecycleReceipt) TaskLifecycleJSON {
@@ -239,6 +264,8 @@ func ToTaskLifecycleJSON(receipt core.TaskLifecycleReceipt) TaskLifecycleJSON {
 		OutstandingBlockers: make([]TaskLifecycleBlockerJSON, 0, len(receipt.OutstandingBlockers)),
 		ImpactCount:         len(receipt.Impacts),
 		Impacts:             toTaskGraphStateImpactsJSON(receipt.Impacts),
+		ThreadImpactCount:   len(receipt.ThreadImpacts),
+		ThreadImpacts:       toThreadProjectionImpactsJSON(receipt.ThreadImpacts),
 		Remedy:              receipt.Remedy,
 	}
 	for _, blocker := range receipt.OutstandingBlockers {

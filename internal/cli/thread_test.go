@@ -12,6 +12,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/testutil"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
@@ -132,6 +133,155 @@ func TestThreadNewDryRunAndInvalidMember(t *testing.T) {
 	}
 }
 
+func TestThreadMembershipAndLifecycleCommands(t *testing.T) {
+	root := threadCLIRepo(t)
+	if _, _, err := runIn(t, root, "thread", "new", "Membership", "--description", "Mutate members", "--goal", "Exercise membership"); err != nil {
+		t.Fatal(err)
+	}
+
+	out, errOut, err := runIn(t, root, "thread", "add", "membership", "beta", "alpha", "--json")
+	if err != nil || errOut != "" {
+		t.Fatalf("thread add: %v\nstdout=%s\nstderr=%s", err, out, errOut)
+	}
+	var added wire.ThreadUpdateEnvelope
+	if err := json.Unmarshal([]byte(out), &added); err != nil {
+		t.Fatalf("decode add: %v\n%s", err, out)
+	}
+	if added.Operation != string(core.ThreadMutationAddMembers) || !added.Changed || !added.Committed ||
+		len(added.MemberOutcomes) != 2 || len(added.Before.Members) != 0 || len(added.After.Members) != 2 ||
+		added.Workspace.PlanningRoot == "" || !strings.HasPrefix(added.Path, "threads/") {
+		t.Fatalf("add receipt = %+v", added)
+	}
+
+	path := threadPath(t, root, "membership")
+	beforeNoop, _ := os.ReadFile(path)
+	out, _, err = runIn(t, root, "thread", "add", "membership", "alpha", "--dry-run", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var noop wire.ThreadUpdateEnvelope
+	if err := json.Unmarshal([]byte(out), &noop); err != nil {
+		t.Fatal(err)
+	}
+	afterNoop, _ := os.ReadFile(path)
+	if !noop.DryRun || noop.Changed || noop.Committed || noop.MemberOutcomes[0].Outcome != "skipped" || !slices.Equal(beforeNoop, afterNoop) {
+		t.Fatalf("no-op receipt=%+v bytesChanged=%t", noop, !slices.Equal(beforeNoop, afterNoop))
+	}
+
+	beforeFailure := append([]byte(nil), afterNoop...)
+	if _, _, err := runIn(t, root, "thread", "remove", "membership", "alpha", "missing-task"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("atomic remove failure = %v", err)
+	}
+	afterFailure, _ := os.ReadFile(path)
+	if !slices.Equal(beforeFailure, afterFailure) {
+		t.Fatal("failed membership batch partially changed the Thread")
+	}
+
+	if _, _, err := runIn(t, root, "thread", "new", "Lifecycle", "--description", "Mutate lifecycle", "--goal", "Exercise lifecycle", "--task", "external"); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"thread", "start", "lifecycle"},
+		{"thread", "complete", "lifecycle"},
+		{"thread", "reopen", "lifecycle"},
+		{"thread", "cancel", "lifecycle"},
+	} {
+		if _, _, err := runIn(t, root, args...); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+	}
+	view, _, err := core.NewService(store.NewFS(root)).ShowThread("lifecycle")
+	if err != nil || view.Thread.Status != domain.ThreadStatusCancelled || view.Thread.EndedAt == "" {
+		t.Fatalf("lifecycle Thread = %+v err=%v", view.Thread, err)
+	}
+	if _, _, err := runIn(t, root, "thread", "add", "lifecycle", "alpha"); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("cancelled membership = %v", err)
+	}
+}
+
+func TestThreadCompletionFailureIsStructuredAndExplanatory(t *testing.T) {
+	root := threadCLIRepo(t)
+	if _, _, err := runIn(t, root, "thread", "new", "Blocked completion", "--description", "Cannot complete yet", "--goal", "Require sound closure", "--task", "alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runIn(t, root, "thread", "start", "blocked-completion"); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := runIn(t, root, "thread", "complete", "blocked-completion", "--json")
+	var policy *core.ThreadMutationPolicyError
+	if !errors.As(err, &policy) || policy.Remedy == "" {
+		t.Fatalf("completion policy = %v", err)
+	}
+	var encoded bytes.Buffer
+	WriteError(&encoded, err, true)
+	var envelope wire.ErrorEnvelope
+	if decodeErr := json.Unmarshal(encoded.Bytes(), &envelope); decodeErr != nil {
+		t.Fatalf("decode policy failure: %v\n%s", decodeErr, encoded.String())
+	}
+	if envelope.Error.Code != "validation" || envelope.Error.ThreadFailure == nil ||
+		envelope.Error.ThreadFailure.Operation != string(core.ThreadMutationComplete) ||
+		envelope.Error.ThreadFailure.Status != string(domain.ThreadStatusInProgress) || envelope.Error.ThreadFailure.Remedy == "" {
+		t.Fatalf("policy failure = %+v", envelope)
+	}
+}
+
+func TestTaskLifecycleJSONNamesChangedThreadProjectionWithoutWritingThread(t *testing.T) {
+	root := threadCLIRepo(t)
+	if _, _, err := runIn(t, root, "thread", "new", "Impact receipt", "--description", "Report Thread impact", "--goal", "Keep attribution complete", "--task", "external"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runIn(t, root, "thread", "start", "impact-receipt"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runIn(t, root, "thread", "complete", "impact-receipt"); err != nil {
+		t.Fatal(err)
+	}
+	path := threadPath(t, root, "impact-receipt")
+	before, _ := os.ReadFile(path)
+
+	out, errOut, err := runIn(t, root, "task", "next", "external", "--json")
+	if err != nil || errOut != "" {
+		t.Fatalf("task next: %v\nstdout=%s\nstderr=%s", err, out, errOut)
+	}
+	var moves wire.MovesEnvelope
+	if err := json.Unmarshal([]byte(out), &moves); err != nil {
+		t.Fatalf("decode moves: %v\n%s", err, out)
+	}
+	if len(moves.Moves) != 1 || moves.Moves[0].Lifecycle == nil ||
+		moves.Moves[0].Lifecycle.ThreadImpactCount != 1 || len(moves.Moves[0].Lifecycle.ThreadImpacts) != 1 ||
+		!moves.Moves[0].Lifecycle.ThreadImpacts[0].Direct || !moves.Moves[0].Lifecycle.ThreadImpacts[0].After.Inconsistent {
+		t.Fatalf("task lifecycle Thread impact = %+v", moves)
+	}
+	after, _ := os.ReadFile(path)
+	if !slices.Equal(before, after) {
+		t.Fatal("task lifecycle impact attribution rewrote the Thread document")
+	}
+}
+
+func TestLintExplainsLegacyAbandonedThreadStatus(t *testing.T) {
+	root := threadCLIRepo(t)
+	threadID := testutil.TaskID("legacy-abandoned-thread")
+	mustWrite(t, filepath.Join(root, domain.ThreadsDir, threadID+"-legacy.md"), "---\n"+
+		"id: "+threadID+"\nstatus: abandoned\ndescription: legacy\ngoal: migrate it\ncreated: \"2026-08-29\"\ntasks: []\n---\n# Legacy\n")
+	out, err := runRootRC(t, "-C", root, "lint", "--json")
+	if err == nil {
+		t.Fatal("legacy abandoned status must fail lint")
+	}
+	var lint wire.LintEnvelope
+	if decodeErr := json.Unmarshal([]byte(out), &lint); decodeErr != nil {
+		t.Fatalf("decode lint: %v\n%s", decodeErr, out)
+	}
+	found := false
+	for _, item := range lint.Issues {
+		for _, issue := range item.Issues {
+			found = found || item.Slug == "legacy" && issue.Field == "status" && strings.Contains(issue.Message, "cancelled")
+		}
+	}
+	if !found {
+		t.Fatalf("actionable legacy status issue missing: %+v", lint)
+	}
+}
+
 func TestLintReportsMalformedThreadMembership(t *testing.T) {
 	root := threadCLIRepo(t)
 	threadID := testutil.TaskID("thread")
@@ -244,6 +394,35 @@ func TestThreadCreationCommittedFailureHasStructuredRecovery(t *testing.T) {
 	if envelope.Error.Code != "conflict" || envelope.Error.ThreadMutation == nil ||
 		!envelope.Error.ThreadMutation.Committed || envelope.Error.ThreadMutation.Thread.ID != receipt.Thread.ID ||
 		envelope.Error.ThreadMutation.Path != "threads/6g3q4rtmv4ak-delivery.md" {
+		t.Fatalf("recovery = %+v", envelope)
+	}
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatal("command recovery wrapper lost error classification")
+	}
+}
+
+func TestThreadMutationCommittedFailureHasStructuredRecovery(t *testing.T) {
+	thread := domain.Thread{ID: "6g3q4rtmv4ak", Slug: "delivery", Status: domain.ThreadStatusInProgress,
+		Description: "delivery", Goal: "ship", Created: "2026-08-29"}
+	view := core.ProjectThread(thread, core.NewTaskGraph(nil, nil))
+	receipt := core.ThreadMutationReceipt{
+		Operation: core.ThreadMutationStart, Thread: thread, Before: view, After: view,
+		Changed: true, Committed: true,
+	}
+	cause := &core.ThreadMutationFailure{Cause: domain.ErrConflict, Receipt: receipt}
+	err := &threadMutationCommandFailure{
+		cause: cause, receipt: receipt, path: "threads/6g3q4rtmv4ak-delivery.md",
+		workspace: wire.WorkspaceJSON{PlanningRoot: "/repo/planning", Source: wire.WorkspaceSourceConfig},
+	}
+	var out bytes.Buffer
+	WriteError(&out, err, true)
+	var envelope wire.ErrorEnvelope
+	if decodeErr := json.Unmarshal(out.Bytes(), &envelope); decodeErr != nil {
+		t.Fatalf("decode recovery: %v\n%s", decodeErr, out.String())
+	}
+	if envelope.Error.Code != "conflict" || envelope.Error.ThreadUpdate == nil ||
+		!envelope.Error.ThreadUpdate.Committed || envelope.Error.ThreadUpdate.ThreadID != thread.ID ||
+		envelope.Error.ThreadUpdate.Path != "threads/6g3q4rtmv4ak-delivery.md" {
 		t.Fatalf("recovery = %+v", envelope)
 	}
 	if !errors.Is(err, domain.ErrConflict) {
