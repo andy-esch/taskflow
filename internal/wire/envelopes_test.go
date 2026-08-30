@@ -40,6 +40,11 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 	beta := domain.Task{Slug: "beta", Status: domain.StatusReadyToStart, Tier: 3, Tags: []string{"y"}}
 	epic := domain.Epic{ID: "e1", Status: "active", Description: "d"}
 	epicSum := core.EpicSummary{Epic: epic, Total: 2, Done: 1}
+	thread := domain.Thread{
+		ID: "6g0000000003", Slug: "initiative", Status: domain.ThreadStatusUnstarted,
+		Description: "Initiative", Goal: "Ship it", Created: "2026-08-29", Tasks: []string{},
+	}
+	threadView := core.ProjectThread(thread, core.NewTaskGraph(nil, nil))
 
 	// Every envelope, validated against its own $defs entry — the whole --json
 	// contract, not a sample. The embedded-struct envelopes (schema/schema_kind,
@@ -103,6 +108,23 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 					Task:   task, State: core.TaskGraphState{TaskID: "6g0000000002", Role: core.RoleInFlight, Gate: core.GateClear},
 				}},
 			}))
+		}},
+		{"ThreadsEnvelope", func(w io.Writer) error {
+			return emit(w, ToThreadsEnvelope(core.ThreadListView{
+				Threads: []core.ThreadView{threadView}, GraphHealth: threadView.GraphHealth,
+				GraphProblems: threadView.GraphProblems,
+			}, nil))
+		}},
+		{"ThreadShowEnvelope", func(w io.Writer) error {
+			return emit(w, ToThreadShowEnvelope(threadView, "# Initiative\n"))
+		}},
+		{"ThreadFrontierEnvelope", func(w io.Writer) error {
+			return emit(w, ToThreadFrontierEnvelope(threadView))
+		}},
+		{"ThreadMutationEnvelope", func(w io.Writer) error {
+			return emit(w, ToThreadMutationEnvelope(core.ThreadCreationReceipt{
+				Thread: thread, Changed: true, DryRun: true,
+			}, "threads/6g0000000003-initiative.md", WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig}))
 		}},
 		{"EpicMutationEnvelope", func(w io.Writer) error { return emit(w, ToEpicMutationEnvelope(epic, true, WorkspaceJSON{})) }},
 		{"CreatedEnvelope", func(w io.Writer) error {
@@ -203,6 +225,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToSchemaEnvelope(SchemaContract{
 				Statuses:        []SchemaStatus{{Value: "in-progress", Active: true}},
 				EpicStatuses:    []string{"active"},
+				ThreadStatuses:  []string{"unstarted"},
 				AuditBuckets:    []string{"open"},
 				FindingStatuses: []string{"open", "fixed"},
 				CriterionStates: []string{"deferred", "wontfix"},
@@ -267,8 +290,16 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"ErrorEnvelope", func(w io.Writer) error {
 			// Built by cli.WriteError (not a constructor here) — marshal the named type
-			// directly to prove its schema matches.
-			return emit(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{Code: "not-found", Message: "task not found"}})
+			// directly to prove its schema matches. Include the Thread post-commit
+			// recovery payload so its nested, schema-version-free shape is covered too.
+			return emit(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{
+				Code: "conflict", Message: "Thread creation committed before cleanup failed",
+				ThreadMutation: &ThreadMutationJSON{
+					Thread: ToThreadJSON(thread), Changed: true, Committed: true,
+					Path:      "threads/6g0000000003-initiative.md",
+					Workspace: WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig},
+				},
+			}})
 		}},
 	}
 	// Registry-derived coverage guard (replaces a brittle literal count): every

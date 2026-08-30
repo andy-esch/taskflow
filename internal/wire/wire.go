@@ -170,6 +170,15 @@ import (
 // point selected for reading, and a combined space-badged in-progress working set. The
 // envelope owns one top-level schema_version; nested summaries reuse the versionless
 // SummaryJSON payload rather than pretending to be independent envelopes.
+// 1.54: Thread documents add list/show/frontier and committed creation envelopes,
+// with persisted membership, nominal/sound rollups, external gates, graph health,
+// and stable member/external role vocabulary. The schema contract publishes the
+// Thread lifecycle vocabulary. Init receipts expose safe Projects-scaffold
+// removals, preserved legacy content, or an available scaffold-repair command.
+// Thread views separate repository graph health from projection health, explain
+// completed inconsistencies with stable codes, and hoist list-level graph
+// diagnostics. Post-commit Thread creation failures carry the same mutation
+// receipt in the error envelope.
 // 1.53: task lifecycle receipts expose committed durability, failed start rows
 // retain typed eligibility state/blockers/remedy, and post-commit cleanup errors
 // carry a structured task/workspace recovery receipt.
@@ -222,7 +231,7 @@ import (
 // 1.43: fresh `init --json` receipts may include `registration`, describing the
 // best-effort machine-local space registration (including preview vs applied and whether
 // the physical checkout was already registered).
-const SchemaVersion = "1.53"
+const SchemaVersion = "1.54"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

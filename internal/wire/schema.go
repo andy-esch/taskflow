@@ -31,6 +31,7 @@ type SchemaExitCode struct {
 type SchemaContract struct {
 	Statuses        []SchemaStatus `json:"statuses"`
 	EpicStatuses    []string       `json:"epic_statuses"`
+	ThreadStatuses  []string       `json:"thread_statuses"`
 	AuditBuckets    []string       `json:"audit_buckets"`
 	FindingStatuses []string       `json:"finding_statuses"`
 	// CriterionStates are the non-binary acceptance-criterion states — the words legal as a

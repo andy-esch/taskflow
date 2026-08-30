@@ -29,6 +29,9 @@ func newInitCmd(app *App) *cobra.Command {
 		Long: "Bootstrap a new planning topology: either scaffold a local planning tree or\n" +
 			"point this repository at an existing external planning repo. A fresh config is\n" +
 			"registered as a machine-local space best-effort; use --no-register to opt out.\n" +
+			"Repeat init with the configured --taskflow-root to repair the scaffold, create\n" +
+			"threads/, and remove only an unused legacy projects/ placeholder; user-owned\n" +
+			"legacy content is preserved and reported.\n" +
 			"Bare init against an existing configuration reports its topology without\n" +
 			"changing it; use\n" +
 			"`tskflwctl config migrate` for safe configuration upgrades.",
@@ -112,11 +115,24 @@ func runInitExisting(app *App, abs string, description config.Description) error
 	for i, migration := range pending {
 		pendingNames[i] = string(migration)
 	}
+	var repair config.InitResult
+	repairCommand := ""
+	if mode == "scaffold" {
+		repair, err = config.Init(abs, description.TaskflowRoot, true)
+		if err != nil {
+			return err
+		}
+		if len(repair.Created) > 0 || len(repair.Removed) > 0 {
+			repairCommand = fmt.Sprintf("tskflwctl init --taskflow-root %q", description.TaskflowRoot)
+		}
+	}
 	if app.JSON {
 		return render.InitJSON(app.Out, render.InitEnvelope{
 			DryRun: app.DryRun, Mode: mode, Root: abs,
 			PlanningRepo: description.PlanningRepo, AlreadyInitialized: true,
-			PendingMigrations: pendingNames,
+			PendingMigrations: pendingNames, LegacyProjects: repair.LegacyProjects,
+			LegacyProjectsRemedy:    repair.LegacyProjectsRemedy,
+			ScaffoldRepairAvailable: repairCommand != "", ScaffoldRepairCommand: repairCommand,
 		})
 	}
 	fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)
@@ -124,6 +140,14 @@ func runInitExisting(app *App, abs string, description config.Description) error
 	if len(pendingNames) > 0 {
 		fmt.Fprintf(app.Out, "\n%s configuration update available: %s\n", app.Style.Warn("⚠"), strings.Join(pendingNames, ", "))
 		fmt.Fprintln(app.Out, app.Style.Dim("→ tskflwctl config migrate"))
+	}
+	if repair.LegacyProjects != "" {
+		fmt.Fprintf(app.Out, "\n%s preserved legacy Projects content at %s — %s\n",
+			app.Style.Warn("⚠"), app.Style.Bold(repair.LegacyProjects), repair.LegacyProjectsRemedy)
+	}
+	if repairCommand != "" {
+		fmt.Fprintln(app.Out, "\n"+app.Style.Warn("⚠")+" scaffold repair available")
+		fmt.Fprintln(app.Out, app.Style.Dim("→ "+repairCommand))
 	}
 	return nil
 }
@@ -201,6 +225,7 @@ func runInitScaffold(app *App, abs, taskflowRoot string, tracks []string, regist
 		return err
 	}
 	created := result.Created
+	removed := result.Removed
 	var tracked []string
 	for _, tr := range tracks {
 		added, err := config.AddTrackedRepo(abs, tr, app.DryRun)
@@ -215,16 +240,24 @@ func runInitScaffold(app *App, abs, taskflowRoot string, tracks []string, regist
 	if app.JSON {
 		warnInitRegistration(app, abs, registrationErr)
 		envelope := render.InitEnvelope{
-			DryRun: app.DryRun, Mode: "scaffold", Root: abs, Tracked: tracked, Created: created,
+			DryRun: app.DryRun, Mode: "scaffold", Root: abs, Tracked: tracked,
+			Created: created, Removed: removed, LegacyProjects: result.LegacyProjects,
+			LegacyProjectsRemedy: result.LegacyProjectsRemedy,
 		}
 		if registration != nil {
 			envelope.Registration = render.InitRegistration(*registration)
 		}
 		return render.InitJSON(app.Out, envelope)
 	}
-	if len(created) == 0 && len(tracked) == 0 {
+	changed := len(created) > 0 || len(removed) > 0 || len(tracked) > 0
+	if !changed {
 		fmt.Fprintf(app.Out, "%s already initialized: %s\n", app.Style.Dim("·"), abs)
 		printLayout(app, abs)
+		if result.LegacyProjects != "" {
+			fmt.Fprintf(app.Out, "  %s preserved legacy Projects content at %s — %s\n",
+				app.Style.Warn("⚠"), app.Style.Bold(result.LegacyProjects), result.LegacyProjectsRemedy)
+		}
+		warnInitRegistration(app, abs, registrationErr)
 		return nil
 	}
 	verb := "initialized"
@@ -240,11 +273,18 @@ func runInitScaffold(app *App, abs, taskflowRoot string, tracks []string, regist
 	for _, c := range created {
 		fmt.Fprintf(app.Out, "  %s %s\n", app.Style.Dim("+"), c)
 	}
+	for _, removedPath := range removed {
+		fmt.Fprintf(app.Out, "  %s %s\n", app.Style.Dim("-"), removedPath)
+	}
 	for _, tr := range tracked {
 		fmt.Fprintf(app.Out, "  %s tracks %s\n", app.Style.Dim("+"), app.Style.Bold(tr))
 	}
 	if registration != nil {
 		render.InitRegistrationHuman(app.Out, app.Style, *registration)
+	}
+	if result.LegacyProjects != "" {
+		fmt.Fprintf(app.Out, "  %s preserved legacy Projects content at %s — %s\n",
+			app.Style.Warn("⚠"), app.Style.Bold(result.LegacyProjects), result.LegacyProjectsRemedy)
 	}
 	printLayout(app, abs)
 	warnInitRegistration(app, abs, registrationErr)

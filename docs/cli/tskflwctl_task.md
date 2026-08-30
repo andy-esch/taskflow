@@ -25,7 +25,7 @@ Work with tasks
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 * [tskflwctl task ac](tskflwctl_task_ac.md)	 - List a task's acceptance criteria, or check/uncheck one by index
 * [tskflwctl task append](tskflwctl_task_append.md)	 - Append a section to a task's body (atomic; agent-facing)
 * [tskflwctl task blockers](tskflwctl_task_blockers.md)	 - Explain the actionable blockers for a task

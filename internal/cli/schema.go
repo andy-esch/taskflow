@@ -101,8 +101,16 @@ func runSchemaContract(app *App) error {
 		codes = append(codes, render.SchemaExitCode{Code: e.code, Name: e.name})
 	}
 	c := render.SchemaContract{
-		Statuses:        statuses,
-		EpicStatuses:    domain.AllEpicStatuses(),
+		Statuses:     statuses,
+		EpicStatuses: domain.AllEpicStatuses(),
+		ThreadStatuses: func() []string {
+			values := domain.AllThreadStatuses()
+			out := make([]string, len(values))
+			for i, value := range values {
+				out[i] = string(value)
+			}
+			return out
+		}(),
 		AuditBuckets:    buckets,
 		FindingStatuses: domain.FindingStatuses(),
 		CriterionStates: domain.CriterionSuffixStates(),

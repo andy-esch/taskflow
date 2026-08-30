@@ -1,7 +1,7 @@
 # taskflow
 
 Home of **`tskflwctl`** — a local-first planning CLI over markdown+frontmatter
-task/epic/audit/research files. It dogfoods on its own planning under
+task/Thread/epic/audit/research files. It dogfoods on its own planning under
 [`planning/`](./planning/).
 
 ## Demos
@@ -37,7 +37,7 @@ regenerate with `just gifs`.
 | :--- | :--- |
 | **[`cmd/tskflwctl/`](./cmd/tskflwctl/)** | The CLI entrypoint (thin composition root). |
 | **[`internal/`](./internal/)** | `domain` (pure) · `core` (use cases) · `store` (markdown adapter) · `cli` (cobra) · `tui` (Bubble Tea) · `config`/`userconfig` · `spacehealth` · `spacestore`/`workspacestore`. |
-| **[`planning/`](./planning/)** | This repo's own epics, tasks, and research (self-hosted). |
+| **[`planning/`](./planning/)** | This repo's own epics, tasks, Threads, and research (self-hosted). |
 | **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** | One-screen orientation: the primary/secondary-adapter design. |
 
 ## Install
@@ -93,6 +93,7 @@ tskflwctl status --all                 # compact summaries + one in-progress rai
 tskflwctl task new "Add retry backoff" --epic <epic-id> --tags net
 tskflwctl task new "Triage flake" --epic <epic-id> --tags ci --description "is CI red?" --start  # straight to in-progress (--next/--start need --description)
 echo "$BODY" | tskflwctl task new "Long writeup" --epic <epic-id> --tags x --body-file -  # body from stdin/file
+tskflwctl thread new "Release path" --description "Coordinate the release" --goal "Ship it" --task <task>  # repeat --task; empty Threads are valid
 tskflwctl epic new "Billing overhaul" --description "Replace legacy pipeline"
 tskflwctl audit new dispatcher          # → audits/<id>-YYYY-MM-DD-dispatcher.md (--date to override)
 tskflwctl audit new auth --template security  # pick a body scaffold (default|security); --template is shell-completable
@@ -108,6 +109,10 @@ tskflwctl task info <slug> --json      # token-cheap metadata: path, status, epi
 tskflwctl task path <slug>             # just the absolute file path — $EDITOR "$(tskflwctl task path <slug>)"
 tskflwctl task blockers <slug>         # actionable blocker frontier (--causal for the full closure)
 tskflwctl task unblocks <slug>         # all transitive downstream tasks and their current graph state
+tskflwctl thread list                  # nominal/sound rollups + graph/projection health
+tskflwctl thread show <thread>         # members, direct external gates, frontier, and body
+tskflwctl thread frontier <thread>     # eligible members; fails closed to an empty result on unhealthy graph evidence
+tskflwctl thread path <thread>         # parse-free path for direct repair
 tskflwctl epic list                    # rollup: done/total per epic
 tskflwctl epic show <id> --section goal # epic body section (or --frontmatter-only); epic path <id> for the file
 tskflwctl audit list                   # open audits (--all / --closed / --deferred)
@@ -143,16 +148,23 @@ tskflwctl research set <slug> --description "…" --tags a,b   # settable fields
 tskflwctl research edit|append <slug>                        # same human/agent pair as task edit|append
 
 # hygiene
-tskflwctl lint                         # validate active task, epic, and research frontmatter
+tskflwctl lint                         # validate entities, Thread membership, cross-kind IDs, and the task DAG
 tskflwctl lint --fix                   # auto-repair frontmatter (quote ':' values, normalize lists, backfill ids)
 ```
 
-Task lifecycle writes and dependency writes share the repository guard and fail
-closed unless the canonical task graph is healthy. Repair invalid graph-owned
+Task lifecycle writes, dependency writes, and Thread creation share the repository
+guard and fail closed unless the canonical task graph is healthy. Thread creation
+always persists `unstarted`; membership and Thread lifecycle mutation verbs are a
+following implementation slice. Repair invalid graph-owned
 frontmatter through the file reported by `tskflwctl task path`, confirm it with
 `tskflwctl lint`, then return to the guarded verbs. A rare cleanup error after a
-lifecycle write is reported explicitly as committed with a task/workspace receipt;
-inspect the current task state instead of blindly retrying it.
+lifecycle or Thread-creation write is reported explicitly as committed with an
+inspection receipt; inspect current state instead of blindly retrying it.
+
+Completed Thread drift is explanatory: machine and human views name empty,
+undrained, outstanding-gate, and unhealthy-evidence reasons. `lint --fix` may
+repair ordinary Thread scalar syntax and a missing filename-owned ID, but Thread
+membership remains a deliberate guarded repair.
 
 ### Multiple planning repos
 

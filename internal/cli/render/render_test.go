@@ -608,7 +608,7 @@ func TestInitRegistrationReceipt_HumanAndJSONGolden(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	wantJSON := `{"schema_version":"` + SchemaVersion + `","dry_run":true,"mode":"scaffold","root":"/repo","created":[".tskflwctl.toml"],"registration":{"id":"planning","path":"~/git/planning","verify_id":"6gplan","changed":true,"dry_run":true}}` + "\n"
+	wantJSON := `{"schema_version":"` + SchemaVersion + `","dry_run":true,"mode":"scaffold","root":"/repo","created":[".tskflwctl.toml"],"removed":[],"registration":{"id":"planning","path":"~/git/planning","verify_id":"6gplan","changed":true,"dry_run":true}}` + "\n"
 	if got := out.String(); got != wantJSON {
 		t.Fatalf("init JSON receipt drifted:\ngot  %s\nwant %s", got, wantJSON)
 	}
@@ -650,5 +650,37 @@ func TestCreatedSlugNote(t *testing.T) {
 	CreatedSlugNote(&out, NewStyle(false), "Refactor: split the dispatcher", domain.Slugify("Refactor: split the dispatcher"))
 	if out.Len() == 0 {
 		t.Error("a title with a dropped colon should surface the slug")
+	}
+}
+
+func TestThreadHumanViewsExplainInconsistencyAndDeduplicateGraphProblems(t *testing.T) {
+	problem := core.ThreadProblem{
+		Code: core.ThreadProblemCompletedEmpty, ThreadID: "6g0000000001",
+		Message: "completed Thread has no non-deprecated members",
+	}
+	graphProblem := core.GraphProblem{Code: core.ProblemMissingDependency, Message: "missing dependency"}
+	view := core.ThreadView{
+		Thread:      domain.Thread{ID: "6g0000000001", Slug: "initiative", Status: domain.ThreadStatusCompleted, Goal: "Explain drift"},
+		GraphHealth: core.GraphBroken, ProjectionHealth: core.GraphBroken,
+		Inconsistent: true, Problems: []core.ThreadProblem{problem},
+	}
+	var show bytes.Buffer
+	if err := ThreadShowHuman(&show, NewStyle(false), view, ""); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(show.String(), string(core.ThreadProblemCompletedEmpty)) {
+		t.Fatalf("show omitted inconsistency reason:\n%s", show.String())
+	}
+
+	list := core.ThreadListView{
+		Threads: []core.ThreadView{view, view}, GraphHealth: core.GraphBroken,
+		GraphProblems: []core.GraphProblem{graphProblem},
+	}
+	var listed bytes.Buffer
+	if err := ThreadsHuman(&listed, NewStyle(false), list); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(listed.String(), "missing dependency") != 1 {
+		t.Fatalf("list repeated repository diagnostics:\n%s", listed.String())
 	}
 }

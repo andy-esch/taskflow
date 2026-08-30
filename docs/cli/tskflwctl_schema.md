@@ -20,7 +20,7 @@ envelopes so an agent can validate the tool's output. Everything is derived
 from the tool's own types and data.
 
 ```
-tskflwctl schema [task|epic|audit|research] [flags]
+tskflwctl schema [task|epic|audit|research|thread] [flags]
 ```
 
 ### Examples
@@ -59,5 +59,5 @@ tskflwctl schema [task|epic|audit|research] [flags]
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 

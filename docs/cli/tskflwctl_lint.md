@@ -4,7 +4,7 @@ Validate entity frontmatter and task-dependency graph integrity
 
 ### Synopsis
 
-Validate task, epic, and research frontmatter, then validate the repository-global
+Validate task, epic, research, and Thread frontmatter, then validate the repository-global
 task-dependency graph. Exactly resolved legacy dependency fields are visible
 advisories; missing, ambiguous, or structurally unsafe references are errors.
 
@@ -50,5 +50,5 @@ tskflwctl lint [flags]
 
 ### SEE ALSO
 
-* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, epics, audits, research) over markdown
+* [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 

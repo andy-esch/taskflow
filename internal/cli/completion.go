@@ -231,6 +231,17 @@ func (a *App) taskCompleter(exclude domain.Status) completeFunc {
 	}
 }
 
+// completeThreadSlugs offers the human slug when unique and the id-led stem
+// when disambiguation is required, matching task completion and resolution.
+func (a *App) completeThreadSlugs(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	root, ok := a.planningRoot()
+	if !ok {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	matches, _ := filepath.Glob(filepath.Join(root, domain.ThreadsDir, "*.md"))
+	return flatCompletions(matches, toComplete, map[string]bool{}, args), cobra.ShellCompDirectiveNoFileComp
+}
+
 // auditCompleter completes audit slugs whose bucket (== their directory) is not
 // `exclude`, so `audit reopen` won't offer already-open audits. An empty
 // exclude offers every audit.
