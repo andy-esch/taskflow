@@ -22,7 +22,7 @@ Make Thread membership and lifecycle authoritative guarded operations over the p
 ## Scope
 
 - Add a narrow guarded Thread-mutation capability for member add/remove and start, complete, abandon, and reopen.
-- Reuse the lock-free Thread materializer and canonical-root guard established by the Thread document slice; never nest task-graph, task-lifecycle, or Thread guarded capabilities.
+- Reuse the canonical-root guard pattern established by the Thread document slice and add a lock-free surgical Thread-update materializer that preserves existing timestamps, unknown fields, comments, and key order; the creation-only builder is not an existing-document serializer. Never nest task-graph, task-lifecycle, or Thread guarded capabilities.
 - Enforce ADR-0006 membership/lifecycle rules from one authoritative task/Thread snapshot and return typed committed-outcome receipts.
 - Augment task lifecycle receipts with affected Thread IDs now that Thread documents can be loaded inside the same guarded task transition.
 - Ship human/JSON CLI mutation surfaces and explanatory failures; the usage-informed TUI remains in its later dedicated task.
@@ -46,4 +46,4 @@ Make Thread membership and lifecycle authoritative guarded operations over the p
 
 ## Sequencing
 
-Requires Thread documents, guarded unstarted creation, read projections, and the lock-free Thread materializer. Existing-task bulk linking depends on this task so compound apply composes settled membership/lifecycle semantics rather than inventing them.
+Requires Thread documents, guarded unstarted creation, read projections, and the lock-free creation materializer. Existing-task bulk linking depends on this task so compound apply composes the new surgical membership/lifecycle materializer rather than rebuilding existing Thread files.

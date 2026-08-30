@@ -866,7 +866,13 @@ and [Codex](../audits/6g4tf2yr4nb0-2026-08-29-dependency-eligibility-enforcement
    that first-class document/schema/init fan-out plus guarded creation/read projections is one
    reviewable slice, while mutable membership/lifecycle, committed recovery, cooperating-writer
    races, and affected-Thread task receipts form a second guarded mutation slice. Bulk apply depends
-   on both and composes the settled lock-free Thread materializer rather than inventing a third path.
+   on both and composes the settled lock-free, creation-only Thread materializer for its final new
+   document rather than inventing a third creation path. Existing-Thread mutations use surgical
+   frontmatter updates so lifecycle timestamps and unowned text survive.
+7. **Withdrawn members do not retain actionable boundary gates.** Deprecated members remain visible
+   in the Thread rollup but are excluded from its progress denominator. Their own prerequisites are
+   likewise excluded from the external-gate set and cannot make an otherwise drained completed Thread
+   inconsistent. External gates are the direct outside prerequisites of non-withdrawn members.
 
 ## Related
 
