@@ -3927,7 +3927,8 @@
           "items": {
             "$ref": "#/$defs/ThreadExternalGateJSON"
           },
-          "type": "array"
+          "type": "array",
+          "description": "direct prerequisites outside the Thread membership boundary; deeper upstream context is available through causal blocker queries"
         },
         "frontier": {
           "items": {

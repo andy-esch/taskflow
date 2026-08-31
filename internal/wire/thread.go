@@ -78,7 +78,7 @@ type ThreadViewJSON struct {
 	ProjectionHealth string                   `json:"projection_health" jsonschema:"description=Thread-local evidence verdict after combining graph and document integrity: healthy|degraded|broken"`
 	Inconsistent     bool                     `json:"inconsistent" jsonschema:"description=true when a completed Thread is not soundly closed"`
 	Members          []ThreadTaskJSON         `json:"members"`
-	ExternalGates    []ThreadExternalGateJSON `json:"external_gates"`
+	ExternalGates    []ThreadExternalGateJSON `json:"external_gates" jsonschema:"description=direct prerequisites outside the Thread membership boundary; deeper upstream context is available through causal blocker queries"`
 	Frontier         []ThreadTaskJSON         `json:"frontier" jsonschema:"description=next-up and ready-to-start Thread members with clear dependency gates; empty unless both graph_health and projection_health are healthy"`
 	Problems         []ThreadProblemJSON      `json:"problems"`
 	GraphProblems    []GraphProblemJSON       `json:"graph_problems"`
