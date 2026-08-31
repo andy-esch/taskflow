@@ -1012,6 +1012,7 @@ type ErrorItem struct {
 	ThreadMutation     *ThreadMutationJSON        `json:"thread_mutation,omitempty"`
 	ThreadUpdate       *ThreadUpdateJSON          `json:"thread_update,omitempty"`
 	ThreadFailure      *ThreadMutationFailureJSON `json:"thread_failure,omitempty"`
+	ThreadApply        *ThreadApplyJSON           `json:"thread_apply,omitempty"`
 }
 
 // TaskLifecycleRecoveryJSON is emitted on stderr when a lifecycle write
@@ -1099,6 +1100,8 @@ type jsonEnvelopes struct {
 	ThreadFrontier ThreadFrontierEnvelope     `json:"thread_frontier"`
 	ThreadMutation ThreadMutationEnvelope     `json:"thread_mutation"`
 	ThreadUpdate   ThreadUpdateEnvelope       `json:"thread_update"`
+	ThreadCompose  ThreadApplyComposeEnvelope `json:"thread_compose"`
+	ThreadApply    ThreadApplyEnvelope        `json:"thread_apply"`
 	EpicMutation   EpicMutationEnvelope       `json:"epic_mutation"`
 	Moves          MovesEnvelope              `json:"moves"`
 	Summary        SummaryEnvelope            `json:"summary"`

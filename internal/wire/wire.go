@@ -239,7 +239,10 @@ import (
 // 1.43: fresh `init --json` receipts may include `registration`, describing the
 // best-effort machine-local space registration (including preview vs applied and whether
 // the physical checkout was already registered).
-const SchemaVersion = "1.56"
+// 1.57: `thread compose` and `thread apply` add materialized-plan and resumable
+// operation-receipt envelopes; apply failures may carry `thread_apply` recovery
+// detail in the standard error envelope.
+const SchemaVersion = "1.57"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

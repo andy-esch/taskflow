@@ -405,7 +405,17 @@ func (a *App) resolveFrom(start string) error {
 	a.Prompt = prompt.NewTTY(a.In, a.ErrOut, a.Th)
 	// One *FS satisfies all the core ports; the Service gets the use-case Store,
 	// the adapters get the narrow Fixer/Layout/Linter (see the App field comment).
-	fs := store.NewFS(cfg.Root)
+	discoveryStart := cfg.Dir
+	if discoveryStart == "" {
+		discoveryStart = cfg.Root
+	}
+	fs := store.NewFS(cfg.Root, store.WithPlanningIdentityReader(func() (string, string, error) {
+		fresh, err := config.Discover(discoveryStart)
+		if err != nil {
+			return "", "", err
+		}
+		return fresh.Root, fresh.ID, nil
+	}))
 	a.Svc = core.NewService(fs)
 	a.Fixer = fs
 	a.Layout = fs

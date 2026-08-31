@@ -39,7 +39,7 @@ func (e *threadMutationCommandFailure) Unwrap() error { return e.cause }
 func newThreadCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "thread", Short: "Work with initiative Threads over the task DAG"}
 	cmd.AddCommand(
-		newThreadNewCmd(app), newThreadListCmd(app), newThreadShowCmd(app),
+		newThreadNewCmd(app), newThreadComposeCmd(app), newThreadApplyCmd(app), newThreadListCmd(app), newThreadShowCmd(app),
 		newThreadPathCmd(app), newThreadFrontierCmd(app),
 		newThreadMembershipCmd(app, "add", core.ThreadMutationAddMembers),
 		newThreadMembershipCmd(app, "remove", core.ThreadMutationRemoveMembers),

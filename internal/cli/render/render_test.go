@@ -688,3 +688,67 @@ func TestThreadHumanViewsExplainInconsistencyAndDeduplicateGraphProblems(t *test
 		t.Fatalf("list must describe the frontier as eligible rather than readiness status:\n%s", listed.String())
 	}
 }
+
+func TestThreadApplyHumanDistinguishesAppliedSkippedAndDryRunOperations(t *testing.T) {
+	dependency := core.ThreadApplyOperation{
+		Kind: "dependency", Action: "add", DependentID: "6g0000000002", PrerequisiteID: "6g0000000001",
+	}
+	thread := core.ThreadApplyOperation{Kind: "thread", Action: "create", ThreadID: "6g0000000003"}
+	receipt := func(state core.ThreadApplyOperationState, dryRun, complete bool) core.ThreadApplyReceipt {
+		dependency.State = state
+		thread.State = state
+		return core.ThreadApplyReceipt{
+			DryRun: dryRun, Complete: complete,
+			Operations: []core.ThreadApplyOperation{dependency, thread},
+		}
+	}
+	tests := []struct {
+		name       string
+		receipt    core.ThreadApplyReceipt
+		wantLines  []string
+		rejectText string
+	}{
+		{
+			name:    "applied",
+			receipt: receipt(core.ThreadApplyApplied, false, true),
+			wantLines: []string{
+				"added dependency 6g0000000001 -> 6g0000000002",
+				"created Thread 6g0000000003",
+				"Thread apply complete",
+			},
+			rejectText: "already present",
+		},
+		{
+			name:    "converged skip",
+			receipt: receipt(core.ThreadApplySkipped, false, true),
+			wantLines: []string{
+				"skipped dependency 6g0000000001 -> 6g0000000002 (already present)",
+				"skipped Thread 6g0000000003 (already exists identically)",
+				"Thread apply complete",
+			},
+		},
+		{
+			name:    "dry run",
+			receipt: receipt(core.ThreadApplyPending, true, false),
+			wantLines: []string{
+				"would add dependency 6g0000000001 -> 6g0000000002",
+				"would create Thread 6g0000000003",
+			},
+			rejectText: "Thread apply complete",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			ThreadApplyHuman(&out, NewStyle(false), tt.receipt)
+			for _, want := range tt.wantLines {
+				if !strings.Contains(out.String(), want) {
+					t.Fatalf("receipt omitted %q:\n%s", want, out.String())
+				}
+			}
+			if tt.rejectText != "" && strings.Contains(out.String(), tt.rejectText) {
+				t.Fatalf("receipt unexpectedly contains %q:\n%s", tt.rejectText, out.String())
+			}
+		})
+	}
+}

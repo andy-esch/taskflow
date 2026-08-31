@@ -134,6 +134,26 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				DryRun:         true,
 			}, "threads/6g0000000003-initiative.md", WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig}))
 		}},
+		{"ThreadApplyComposeEnvelope", func(w io.Writer) error {
+			plan := core.ThreadApplyPlan{
+				Schema: core.ThreadApplyPlanSchema, PlanningRepoID: "6gplan", ComposedAt: "2026-08-30",
+				Thread: core.ThreadApplyThread{
+					ID: "6g0000000004", Slug: "bulk", Status: domain.ThreadStatusUnstarted,
+					Description: "Bulk Thread", Goal: "Ship it", Created: "2026-08-30",
+					Tasks: []string{"6g0000000002"}, Body: "# Bulk\n",
+				},
+			}
+			return emit(w, ToThreadApplyComposeEnvelope(plan, "/tmp/plan.yml", true, WorkspaceJSON{}))
+		}},
+		{"ThreadApplyEnvelope", func(w io.Writer) error {
+			return emit(w, ToThreadApplyEnvelope(core.ThreadApplyReceipt{
+				Plan:    core.ThreadApplyPlan{Thread: core.ThreadApplyThread{ID: "6g0000000004", Slug: "bulk"}},
+				Changed: true, DryRun: true,
+				Operations: []core.ThreadApplyOperation{{
+					Kind: "thread", Action: "create", State: core.ThreadApplyPending, ThreadID: "6g0000000004",
+				}},
+			}, "/tmp/plan.yml", WorkspaceJSON{}))
+		}},
 		{"EpicMutationEnvelope", func(w io.Writer) error { return emit(w, ToEpicMutationEnvelope(epic, true, WorkspaceJSON{})) }},
 		{"CreatedEnvelope", func(w io.Writer) error {
 			return emit(w, ToCreatedEnvelope("task", "6fsa428vc2mm", "alpha", "ready-to-start", "tasks/6fsa428vc2mm-alpha.md", false, WorkspaceJSON{}))
