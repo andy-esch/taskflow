@@ -725,6 +725,76 @@ func TestTaskGraphSameSourceSnapshotComparesUnreadableIdentity(t *testing.T) {
 	}
 }
 
+func TestTaskGraphReadAttributesUnreadableRecordWithoutFilesystemPath(t *testing.T) {
+	unreadableID := testutil.TaskID("remote-unreadable")
+	dependent := graphRecord("remote-dependent", domain.StatusReadyToStart, unreadableID)
+	graph := NewTaskGraphRead(TaskGraphRead{
+		Tasks: []domain.Task{dependent},
+		Problems: []TaskGraphLoadProblem{{
+			TaskID: unreadableID, TaskSlug: "remote-unreadable", Message: "remote row could not be decoded",
+		}},
+	})
+
+	if graph.Health() != GraphBroken {
+		t.Fatalf("health = %s, want broken", graph.Health())
+	}
+	problems := graph.Problems()
+	if len(problems) != 1 || problems[0].TaskID != unreadableID || problems[0].Path != "" ||
+		problems[0].Message != "unreadable task record: remote row could not be decoded" {
+		t.Fatalf("problems = %+v", problems)
+	}
+	for _, ref := range []string{unreadableID, "REMOTE-UNREAD"} {
+		if got, err := graph.ResolveTaskID(ref); err != nil || got != unreadableID {
+			t.Fatalf("ResolveTaskID(%q) = %q, %v", ref, got, err)
+		}
+	}
+	blockers := graph.CausalBlockers(dependent.ID)
+	if len(blockers) != 1 || blockers[0].TaskID != unreadableID || blockers[0].Reason != BlockerUnreadable {
+		t.Fatalf("blockers = %+v", blockers)
+	}
+}
+
+func TestTaskGraphReadUsesExplicitIdentityRatherThanParsingLocation(t *testing.T) {
+	wantID := testutil.TaskID("explicit-unreadable")
+	otherID := testutil.TaskID("location-unreadable")
+	graph := NewTaskGraphRead(TaskGraphRead{Problems: []TaskGraphLoadProblem{{
+		TaskID: wantID, TaskSlug: "explicit-unreadable",
+		Path: "opaque/tasks/" + otherID + "-wrong.md", Message: "bad record",
+	}}})
+
+	problems := graph.Problems()
+	if len(problems) != 1 || problems[0].TaskID != wantID {
+		t.Fatalf("problems = %+v", problems)
+	}
+	if _, err := graph.ResolveTaskID(otherID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("location-derived identity resolved unexpectedly: %v", err)
+	}
+}
+
+func TestTaskGraphReadDoesNotAddressInvalidUnreadableIdentity(t *testing.T) {
+	graph := NewTaskGraphRead(TaskGraphRead{Problems: []TaskGraphLoadProblem{{
+		TaskID: "not-a-stable-id", TaskSlug: "invalid-record", Message: "bad record",
+	}}})
+	if graph.Health() != GraphBroken || len(graph.Problems()) != 1 {
+		t.Fatalf("graph health/problems = %s %+v", graph.Health(), graph.Problems())
+	}
+	if _, err := graph.ResolveTaskID("invalid-record"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("invalid unreadable identity resolved unexpectedly: %v", err)
+	}
+}
+
+func TestTaskGraphReadFromFilesPreservesListDiagnosticsAndAdaptsGraphMessage(t *testing.T) {
+	problem := domain.FileProblem{Path: "tasks/" + testutil.TaskID("file-problem") + "-broken.md", Message: "bad YAML"}
+	read := TaskGraphReadFromFiles(nil, []domain.FileProblem{problem})
+	if got := taskGraphFileProblems(read.Problems); !reflect.DeepEqual(got, []domain.FileProblem{problem}) {
+		t.Fatalf("list problems = %+v, want %+v", got, []domain.FileProblem{problem})
+	}
+	graphProblems := NewTaskGraphRead(read).Problems()
+	if len(graphProblems) != 1 || graphProblems[0].Message != "unreadable task file: bad YAML" {
+		t.Fatalf("graph problems = %+v", graphProblems)
+	}
+}
+
 func TestValidateTaskGraphMutationPlanPreservesSemanticWriteOrder(t *testing.T) {
 	alpha := graphRecord("alpha", domain.StatusReadyToStart)
 	beta := graphRecord("beta", domain.StatusReadyToStart, alpha.ID)

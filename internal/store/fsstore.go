@@ -62,10 +62,11 @@ func WithPlanningIdentityReader(reader PlanningIdentityReader) FSOption {
 // the one the Service depends on; Fixer/Layout are the narrow fs/text ports the
 // primary adapters (lint --fix, the TUI watcher) wire to the FS directly.
 var (
-	_ core.Store  = (*FS)(nil)
-	_ core.Fixer  = (*FS)(nil)
-	_ core.Linter = (*FS)(nil)
-	_ core.Layout = (*FS)(nil)
+	_ core.Store           = (*FS)(nil)
+	_ core.TaskGraphSource = (*FS)(nil)
+	_ core.Fixer           = (*FS)(nil)
+	_ core.Linter          = (*FS)(nil)
+	_ core.Layout          = (*FS)(nil)
 )
 
 // NewFS returns a store rooted at a planning directory (the dir holding tasks/).
@@ -104,6 +105,16 @@ func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 	return scanDir(s.tasksDir, func(path string, content []byte) (domain.Task, error) {
 		return parseTask(content, path)
 	})
+}
+
+// ReadTaskGraph translates local resilient file diagnostics into the neutral
+// task-graph read contract in the same scan used by ListTasks.
+func (s *FS) ReadTaskGraph() (core.TaskGraphRead, error) {
+	tasks, problems, err := s.ListTasks()
+	if err != nil {
+		return core.TaskGraphRead{}, err
+	}
+	return core.TaskGraphReadFromFiles(tasks, problems), nil
 }
 
 // ListTasksWithBodies is ListTasks' scan with each task's body kept alongside (one

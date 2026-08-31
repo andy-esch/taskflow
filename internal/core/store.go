@@ -101,7 +101,11 @@ type TaskLifecycleMutationStore interface {
 
 // ThreadStore is the narrow read capability for first-class Thread documents.
 // It remains separate from Store so existing secondary adapters and focused test
-// fakes do not claim Thread support accidentally.
+// fakes do not claim Thread support accidentally. A Service joined projection
+// reads the Thread record(s) first and TaskGraphSource second. Paired adapters must
+// ensure that later task read is no older than the Thread read; a lagging or split
+// backend must coordinate a compatible snapshot instead of presenting skew as a
+// canonical repository view.
 type ThreadStore interface {
 	ListThreads() ([]domain.Thread, []domain.FileProblem, error)
 	GetThread(ref string) (thread domain.Thread, body string, err error)

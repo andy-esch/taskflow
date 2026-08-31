@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 // primary adapters (the cli and the tui).
 type Service struct {
 	store              Store
+	taskGraphs         TaskGraphSource
 	graphMutations     TaskGraphMutationStore
 	lifecycleMutations TaskLifecycleMutationStore
 	threads            ThreadStore
@@ -38,12 +40,24 @@ type Service struct {
 // template source today; repo-local sources in epic 22).
 type Option func(*Service)
 
+// WithTaskGraphSource supplies the read-only task snapshot capability used by
+// graph queries and Thread projections. Production defaults it from the
+// aggregate Store; split/read-only adapters can inject it independently without
+// implementing unrelated epic, audit, or research persistence.
+func WithTaskGraphSource(source TaskGraphSource) Option {
+	return func(s *Service) {
+		if !isNilCapability(source) {
+			s.taskGraphs = source
+		}
+	}
+}
+
 // WithTemplateSource overrides the built-in template source — epic 22 wires a
 // repo-local source layered over the built-ins, and tests inject a fake to prove
 // the list/show/create paths read through the port, not domain.Template* directly.
 func WithTemplateSource(src TemplateSource) Option {
 	return func(s *Service) {
-		if src != nil {
+		if !isNilCapability(src) {
 			s.templates = src
 		}
 	}
@@ -84,7 +98,7 @@ func WithIDGen(gen func() string) Option {
 // primarily for adapters/tests that keep read and mutation ports separate.
 func WithTaskGraphMutationStore(store TaskGraphMutationStore) Option {
 	return func(s *Service) {
-		if store != nil {
+		if !isNilCapability(store) {
 			s.graphMutations = store
 		}
 	}
@@ -95,7 +109,7 @@ func WithTaskGraphMutationStore(store TaskGraphMutationStore) Option {
 // tests may inject it independently from the ordinary Store.
 func WithTaskLifecycleMutationStore(store TaskLifecycleMutationStore) Option {
 	return func(s *Service) {
-		if store != nil {
+		if !isNilCapability(store) {
 			s.lifecycleMutations = store
 		}
 	}
@@ -105,7 +119,7 @@ func WithTaskLifecycleMutationStore(store TaskLifecycleMutationStore) Option {
 // legacy aggregate Store. Production FS is discovered automatically.
 func WithThreadStore(store ThreadStore) Option {
 	return func(s *Service) {
-		if store != nil {
+		if !isNilCapability(store) {
 			s.threads = store
 		}
 	}
@@ -114,7 +128,7 @@ func WithThreadStore(store ThreadStore) Option {
 // WithThreadCreationMutationStore supplies guarded Thread creation.
 func WithThreadCreationMutationStore(store ThreadCreationMutationStore) Option {
 	return func(s *Service) {
-		if store != nil {
+		if !isNilCapability(store) {
 			s.threadCreations = store
 		}
 	}
@@ -123,7 +137,7 @@ func WithThreadCreationMutationStore(store ThreadCreationMutationStore) Option {
 // WithThreadMutationStore supplies guarded existing-Thread updates.
 func WithThreadMutationStore(store ThreadMutationStore) Option {
 	return func(s *Service) {
-		if store != nil {
+		if !isNilCapability(store) {
 			s.threadMutations = store
 		}
 	}
@@ -133,7 +147,7 @@ func WithThreadMutationStore(store ThreadMutationStore) Option {
 // capability. Production discovers it from FS automatically.
 func WithThreadApplyMutationStore(store ThreadApplyMutationStore) Option {
 	return func(s *Service) {
-		if store != nil {
+		if !isNilCapability(store) {
 			s.threadApplies = store
 		}
 	}
@@ -142,29 +156,56 @@ func WithThreadApplyMutationStore(store ThreadApplyMutationStore) Option {
 // NewService wires the core to its store; templates default to the built-in
 // source unless WithTemplateSource overrides it.
 func NewService(store Store, opts ...Option) *Service {
+	if isNilCapability(store) {
+		store = nil
+	}
 	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New, newIDAt: id.NewAt, maxRetries: defaultMaxRetries, retrySleep: defaultRetrySleep}
-	if mutations, ok := store.(TaskGraphMutationStore); ok {
-		s.graphMutations = mutations
-	}
-	if mutations, ok := store.(TaskLifecycleMutationStore); ok {
-		s.lifecycleMutations = mutations
-	}
-	if threads, ok := store.(ThreadStore); ok {
-		s.threads = threads
-	}
-	if mutations, ok := store.(ThreadCreationMutationStore); ok {
-		s.threadCreations = mutations
-	}
-	if mutations, ok := store.(ThreadMutationStore); ok {
-		s.threadMutations = mutations
-	}
-	if mutations, ok := store.(ThreadApplyMutationStore); ok {
-		s.threadApplies = mutations
+	if store != nil {
+		if source, ok := store.(TaskGraphSource); ok && !isNilCapability(source) {
+			s.taskGraphs = source
+		} else {
+			s.taskGraphs = taskStoreGraphSource{store: store}
+		}
+		if mutations, ok := store.(TaskGraphMutationStore); ok && !isNilCapability(mutations) {
+			s.graphMutations = mutations
+		}
+		if mutations, ok := store.(TaskLifecycleMutationStore); ok && !isNilCapability(mutations) {
+			s.lifecycleMutations = mutations
+		}
+		if threads, ok := store.(ThreadStore); ok && !isNilCapability(threads) {
+			s.threads = threads
+		}
+		if mutations, ok := store.(ThreadCreationMutationStore); ok && !isNilCapability(mutations) {
+			s.threadCreations = mutations
+		}
+		if mutations, ok := store.(ThreadMutationStore); ok && !isNilCapability(mutations) {
+			s.threadMutations = mutations
+		}
+		if mutations, ok := store.(ThreadApplyMutationStore); ok && !isNilCapability(mutations) {
+			s.threadApplies = mutations
+		}
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
 	return s
+}
+
+// isNilCapability handles Go interfaces containing nil pointers (or another
+// nil-able concrete value). A non-nil adapter whose methods delegate through an
+// internally nil field remains the adapter's contract violation; core cannot
+// introspect arbitrary implementations without invoking them.
+func isNilCapability(value any) bool {
+	if value == nil {
+		return true
+	}
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // Now is the Service's wall clock (the injected one, default time.Now). Exposed so

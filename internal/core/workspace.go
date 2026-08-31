@@ -14,14 +14,19 @@ type WorkspaceStore interface {
 	OpenWorkspace(start string) (WorkspaceSource, error)
 }
 
-// WorkspaceSource is the adapter-neutral result of local discovery. Store and Layout
-// are intentionally separate capabilities even when one concrete filesystem value
-// implements both: entity use cases must not grow knowledge of watcher paths.
+// WorkspaceSource is the adapter-neutral result of local discovery. Its capabilities
+// stay separate even when one concrete filesystem value implements all of them: entity
+// use cases must not grow knowledge of watcher paths, and graph/Thread reads must remain
+// independently replaceable by split adapters. Nil TaskGraphs or Threads retain the
+// complete Store's backward-compatible defaults. Every non-nil interface must wrap an
+// operational implementation rather than delegating through an internally nil value.
 type WorkspaceSource struct {
 	Checkout     string
 	PlanningRoot string
 	PlanningID   string
 	Store        Store
+	TaskGraphs   TaskGraphSource
+	Threads      ThreadStore
 	Layout       Layout
 }
 
@@ -75,7 +80,7 @@ func (s *WorkspaceService) Open(request WorkspaceRequest) (Workspace, error) {
 	// Checkout is load-bearing, not decoration: a primary adapter uses it as the config
 	// start and as the identity of the tree it has open. An empty one would silently make
 	// `:config` edit whatever directory launched the process.
-	if source.Store == nil || source.Layout == nil || source.PlanningRoot == "" || source.Checkout == "" {
+	if isNilCapability(source.Store) || isNilCapability(source.Layout) || source.PlanningRoot == "" || source.Checkout == "" {
 		return Workspace{}, fmt.Errorf("%w: workspace adapter returned incomplete capabilities", domain.ErrValidation)
 	}
 	// Registry diagnosis is necessarily a snapshot. Recheck its durable identity after
@@ -93,7 +98,10 @@ func (s *WorkspaceService) Open(request WorkspaceRequest) (Workspace, error) {
 		Checkout:     source.Checkout,
 		PlanningRoot: source.PlanningRoot,
 		PlanningID:   source.PlanningID,
-		Planning:     NewService(source.Store),
-		Layout:       source.Layout,
+		Planning: NewService(source.Store,
+			WithTaskGraphSource(source.TaskGraphs),
+			WithThreadStore(source.Threads),
+		),
+		Layout: source.Layout,
 	}, nil
 }

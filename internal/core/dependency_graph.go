@@ -285,10 +285,16 @@ type TaskGraph struct {
 
 // NewTaskGraph builds the production strict snapshot with the owned analyzer.
 func NewTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGraph {
-	return newTaskGraph(tasks, unreadable)
+	return NewTaskGraphRead(TaskGraphReadFromFiles(tasks, unreadable))
 }
 
-func newTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGraph {
+// NewTaskGraphRead builds the strict snapshot from the neutral adapter read
+// contract used by Service graph consumers.
+func NewTaskGraphRead(read TaskGraphRead) *TaskGraph {
+	return newTaskGraph(read.Tasks, read.Problems)
+}
+
+func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem) *TaskGraph {
 	g := &TaskGraph{
 		tasks:         make(map[string]domain.Task, len(tasks)),
 		dependencies:  make(map[string][]string, len(tasks)),
@@ -304,15 +310,19 @@ func newTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGra
 		soundVisits:   make(map[string]int, len(tasks)),
 	}
 	for _, problem := range unreadable {
-		taskID, taskSlug := taskIdentityFromPath(problem.Path)
-		if taskID != "" {
+		taskID, taskSlug := problem.TaskID, problem.TaskSlug
+		if id.Valid(taskID) {
 			g.unreadableIDs[taskID] = true
 			g.referenceCandidates = append(g.referenceCandidates, taskReferenceCandidate{id: taskID, slug: taskSlug})
 			g.hardBroken[taskID] = true
 		}
+		message := "unreadable task record: " + problem.Message
+		if problem.Path != "" {
+			message = "unreadable task file: " + problem.Message
+		}
 		g.problems = append(g.problems, GraphProblem{
 			Code: ProblemUnreadable, TaskID: taskID, Path: problem.Path,
-			Message: "unreadable task file: " + problem.Message,
+			Message: message,
 		})
 	}
 
