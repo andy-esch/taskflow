@@ -32,9 +32,11 @@ Work with initiative Threads over the task DAG
 * [tskflwctl thread complete](tskflwctl_thread_complete.md)	 - Complete a soundly drained Thread
 * [tskflwctl thread compose](tskflwctl_thread_compose.md)	 - Compile existing tasks and dependency edges into a durable Thread apply plan
 * [tskflwctl thread frontier](tskflwctl_thread_frontier.md)	 - Show graph-clear pending member tasks
+* [tskflwctl thread graph](tskflwctl_thread_graph.md)	 - Export a deterministic Mermaid or DOT Thread graph
 * [tskflwctl thread list](tskflwctl_thread_list.md)	 - List Threads with nominal and sound progress
 * [tskflwctl thread new](tskflwctl_thread_new.md)	 - Create an unstarted Thread with optional initial task members
 * [tskflwctl thread path](tskflwctl_thread_path.md)	 - Print the absolute path to a Thread file
+* [tskflwctl thread plan](tskflwctl_thread_plan.md)	 - Show explanatory member dependency waves and external gates
 * [tskflwctl thread remove](tskflwctl_thread_remove.md)	 - Atomically remove task members from a Thread
 * [tskflwctl thread reopen](tskflwctl_thread_reopen.md)	 - Reopen a completed Thread
 * [tskflwctl thread show](tskflwctl_thread_show.md)	 - Show Thread progress, members, gates, frontier, and body

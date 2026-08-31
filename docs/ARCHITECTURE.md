@@ -187,8 +187,13 @@ adapter capabilities rather than leaked persistence.
   rather than relying on a concrete aggregate adapter. Joined reads fetch Thread data first and
   tasks second; paired adapters must ensure the later task snapshot is no older than the Thread
   snapshot, or coordinate a compatible snapshot themselves. These point-in-time diagnostics never
-  authorize mutation. Forthcoming graph views must extend this boundary with a taskflow-owned,
-  adapter-neutral projection. CLI, TUI, and future web adapters consume that projection;
+  authorize mutation. `ThreadGraphProjection` extends this boundary with stable-ID-ordered raw
+  member and immediate-external-gate nodes, every prerequisite-to-dependent edge induced by that
+  bounded node set, member-only explanatory waves, the complete `ThreadView`, and an explicit
+  topology-completeness verdict. Waves contract ordering paths through included gates without
+  treating those gates as Thread-owned work. CLI, TUI, and future web adapters consume that
+  projection; `thread plan` presents its waves and marked gates, while `thread graph` exports it as
+  Mermaid or DOT. Both commands return the same renderer-neutral projection under `--json`.
   `internal/graphfmt` owns pure Mermaid/DOT escaping and formatting without UI dependencies, and no
   Cobra, Bubble Tea, HTTP, filesystem, or graph-library type enters core or wire contracts. The
   source returns a neutral `TaskGraphRead`: unreadable records carry optional stable identity

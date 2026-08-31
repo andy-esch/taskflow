@@ -10,6 +10,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/graphfmt"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
@@ -40,7 +41,7 @@ func newThreadCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{Use: "thread", Short: "Work with initiative Threads over the task DAG"}
 	cmd.AddCommand(
 		newThreadNewCmd(app), newThreadComposeCmd(app), newThreadApplyCmd(app), newThreadListCmd(app), newThreadShowCmd(app),
-		newThreadPathCmd(app), newThreadFrontierCmd(app),
+		newThreadPathCmd(app), newThreadFrontierCmd(app), newThreadPlanCmd(app), newThreadGraphCmd(app),
 		newThreadMembershipCmd(app, "add", core.ThreadMutationAddMembers),
 		newThreadMembershipCmd(app, "remove", core.ThreadMutationRemoveMembers),
 		newThreadLifecycleCmd(app, "start", core.ThreadMutationStart),
@@ -304,4 +305,70 @@ func newThreadFrontierCmd(app *App) *cobra.Command {
 			return render.ThreadFrontierHuman(app.Out, app.Style, view)
 		},
 	}
+}
+
+func newThreadPlanCmd(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:               "plan <thread>",
+		Short:             "Show explanatory member dependency waves and external gates",
+		Long:              "Rank Thread members into deterministic topological waves and list immediate external gates separately. Member waves preserve ordering paths through included gates without treating those gates as Thread-owned work. Waves explain dependency order; they do not authorize dispatch or impose execution barriers. Under --json, emit the same neutral projection used by graph export.",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeThreadSlugs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			projection, err := app.Svc.ShowThreadGraph(args[0])
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return render.ThreadPlanJSON(app.Out, projection)
+			}
+			return app.paged(func(w io.Writer) error {
+				return render.ThreadPlanHuman(w, app.Style, projection)
+			})
+		},
+	}
+}
+
+func newThreadGraphCmd(app *App) *cobra.Command {
+	var format string
+	cmd := &cobra.Command{
+		Use:               "graph <thread>",
+		Short:             "Export a deterministic Mermaid or DOT Thread graph",
+		Long:              "Render Thread members, immediate external gates, and every dependency edge between those bounded nodes from the shared runtime projection. Mermaid is the default. Generated output is never persisted; --json emits the neutral projection instead of renderer text and cannot be combined with an explicit --format.",
+		Args:              cobra.ExactArgs(1),
+		Annotations:       map[string]string{"safety": "read-only"},
+		ValidArgsFunction: app.completeThreadSlugs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if app.JSON && cmd.Flags().Changed("format") {
+				return fmt.Errorf("%w: --format cannot be combined with --json; JSON emits the neutral graph projection", domain.ErrValidation)
+			}
+			projection, err := app.Svc.ShowThreadGraph(args[0])
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return render.ThreadGraphJSON(app.Out, projection)
+			}
+			var output string
+			switch format {
+			case "mermaid":
+				output, err = graphfmt.Mermaid(projection)
+			case "dot":
+				output, err = graphfmt.DOT(projection)
+			default:
+				return fmt.Errorf("%w: unsupported Thread graph format %q (want mermaid or dot)", domain.ErrValidation, format)
+			}
+			if err != nil {
+				return err
+			}
+			_, err = io.WriteString(app.Out, output)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&format, "format", "mermaid", "graph output format: mermaid|dot")
+	_ = cmd.RegisterFlagCompletionFunc("format", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return []string{"mermaid", "dot"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	return cmd
 }

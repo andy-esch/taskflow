@@ -45,6 +45,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		Description: "Initiative", Goal: "Ship it", Created: "2026-08-29", Tasks: []string{},
 	}
 	threadView := core.ProjectThread(thread, core.NewTaskGraph(nil, nil))
+	threadGraph := core.ProjectThreadGraph(thread, core.NewTaskGraph(nil, nil))
 
 	// Every envelope, validated against its own $defs entry — the whole --json
 	// contract, not a sample. The embedded-struct envelopes (schema/schema_kind,
@@ -120,6 +121,12 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"ThreadFrontierEnvelope", func(w io.Writer) error {
 			return emit(w, ToThreadFrontierEnvelope(threadView))
+		}},
+		{"ThreadGraphEnvelope", func(w io.Writer) error {
+			return emit(w, ToThreadGraphEnvelope(threadGraph))
+		}},
+		{"ThreadPlanEnvelope", func(w io.Writer) error {
+			return emit(w, ToThreadPlanEnvelope(threadGraph))
 		}},
 		{"ThreadMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToThreadMutationEnvelope(core.ThreadCreationReceipt{
