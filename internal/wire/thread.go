@@ -168,6 +168,84 @@ func ToThreadFrontierEnvelope(view core.ThreadView) ThreadFrontierEnvelope {
 	return ThreadFrontierEnvelope{SchemaVersion: SchemaVersion, View: ToThreadViewJSON(view)}
 }
 
+// ThreadGraphNodeJSON is one renderer-neutral vertex. Labels and descriptions
+// remain raw transport data; Mermaid and DOT escaping belongs to graphfmt.
+type ThreadGraphNodeJSON struct {
+	TaskID      string             `json:"task_id"`
+	Label       string             `json:"label"`
+	Description string             `json:"description"`
+	Status      string             `json:"status"`
+	Role        string             `json:"role" jsonschema:"description=member|external-gate"`
+	State       TaskGraphStateJSON `json:"state"`
+}
+
+// ThreadGraphEdgeJSON follows prerequisite-to-dependent direction.
+type ThreadGraphEdgeJSON struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// ThreadGraphWaveJSON is a one-based explanatory generation of member task IDs.
+type ThreadGraphWaveJSON struct {
+	Index   int      `json:"index"`
+	TaskIDs []string `json:"task_ids"`
+}
+
+// ThreadGraphProjectionJSON is the shared machine graph/plan projection. It is
+// intentionally renderer- and framework-neutral.
+type ThreadGraphProjectionJSON struct {
+	View             ThreadViewJSON        `json:"view"`
+	Nodes            []ThreadGraphNodeJSON `json:"nodes"`
+	Edges            []ThreadGraphEdgeJSON `json:"edges"`
+	Waves            []ThreadGraphWaveJSON `json:"waves"`
+	TopologyComplete bool                  `json:"topology_complete" jsonschema:"description=true only when the member topology and qualifying Thread projection are healthy and complete"`
+}
+
+func ToThreadGraphProjectionJSON(projection core.ThreadGraphProjection) ThreadGraphProjectionJSON {
+	payload := ThreadGraphProjectionJSON{
+		View:             ToThreadViewJSON(projection.View),
+		Nodes:            make([]ThreadGraphNodeJSON, 0, len(projection.Nodes)),
+		Edges:            make([]ThreadGraphEdgeJSON, 0, len(projection.Edges)),
+		Waves:            make([]ThreadGraphWaveJSON, 0, len(projection.Waves)),
+		TopologyComplete: projection.TopologyComplete,
+	}
+	for _, node := range projection.Nodes {
+		payload.Nodes = append(payload.Nodes, ThreadGraphNodeJSON{
+			TaskID: node.TaskID, Label: node.Label, Description: node.Description,
+			Status: string(node.Status), Role: string(node.Role), State: toTaskGraphStateJSON(node.State),
+		})
+	}
+	for _, edge := range projection.Edges {
+		payload.Edges = append(payload.Edges, ThreadGraphEdgeJSON{From: edge.From, To: edge.To})
+	}
+	for _, wave := range projection.Waves {
+		payload.Waves = append(payload.Waves, ThreadGraphWaveJSON{Index: wave.Index, TaskIDs: append([]string{}, wave.TaskIDs...)})
+	}
+	return payload
+}
+
+// ThreadGraphEnvelope is `thread graph --json`. Renderer choice is deliberately
+// absent: machine callers receive the reusable semantic projection.
+type ThreadGraphEnvelope struct {
+	SchemaVersion string                    `json:"schema_version"`
+	Projection    ThreadGraphProjectionJSON `json:"projection"`
+}
+
+func ToThreadGraphEnvelope(projection core.ThreadGraphProjection) ThreadGraphEnvelope {
+	return ThreadGraphEnvelope{SchemaVersion: SchemaVersion, Projection: ToThreadGraphProjectionJSON(projection)}
+}
+
+// ThreadPlanEnvelope is `thread plan --json`. It shares the exact neutral
+// projection with graph export while retaining a named schema entry per command.
+type ThreadPlanEnvelope struct {
+	SchemaVersion string                    `json:"schema_version"`
+	Projection    ThreadGraphProjectionJSON `json:"projection"`
+}
+
+func ToThreadPlanEnvelope(projection core.ThreadGraphProjection) ThreadPlanEnvelope {
+	return ThreadPlanEnvelope{SchemaVersion: SchemaVersion, Projection: ToThreadGraphProjectionJSON(projection)}
+}
+
 // ThreadMutationJSON is the reusable committed-outcome receipt payload. It is
 // standalone inside the success envelope and nested in a post-commit error.
 type ThreadMutationJSON struct {

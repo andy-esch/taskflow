@@ -3465,6 +3465,133 @@
       ],
       "description": "ThreadFrontierEnvelope is `thread frontier --json`."
     },
+    "ThreadGraphEdgeJSON": {
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "from",
+        "to"
+      ],
+      "description": "ThreadGraphEdgeJSON follows prerequisite-to-dependent direction."
+    },
+    "ThreadGraphEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "projection": {
+          "$ref": "#/$defs/ThreadGraphProjectionJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "projection"
+      ],
+      "description": "ThreadGraphEnvelope is `thread graph --json`."
+    },
+    "ThreadGraphNodeJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "description": "member|external-gate"
+        },
+        "state": {
+          "$ref": "#/$defs/TaskGraphStateJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "label",
+        "description",
+        "status",
+        "role",
+        "state"
+      ],
+      "description": "ThreadGraphNodeJSON is one renderer-neutral vertex."
+    },
+    "ThreadGraphProjectionJSON": {
+      "properties": {
+        "view": {
+          "$ref": "#/$defs/ThreadViewJSON"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/ThreadGraphNodeJSON"
+          },
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/ThreadGraphEdgeJSON"
+          },
+          "type": "array"
+        },
+        "waves": {
+          "items": {
+            "$ref": "#/$defs/ThreadGraphWaveJSON"
+          },
+          "type": "array"
+        },
+        "topology_complete": {
+          "type": "boolean",
+          "description": "true only when the member topology and qualifying Thread projection are healthy and complete"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "view",
+        "nodes",
+        "edges",
+        "waves",
+        "topology_complete"
+      ],
+      "description": "ThreadGraphProjectionJSON is the shared machine graph/plan projection."
+    },
+    "ThreadGraphWaveJSON": {
+      "properties": {
+        "index": {
+          "type": "integer"
+        },
+        "task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "index",
+        "task_ids"
+      ],
+      "description": "ThreadGraphWaveJSON is a one-based explanatory generation of member task IDs."
+    },
     "ThreadJSON": {
       "properties": {
         "id": {
@@ -3648,6 +3775,23 @@
         "workspace"
       ],
       "description": "ThreadMutationJSON is the reusable committed-outcome receipt payload."
+    },
+    "ThreadPlanEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "projection": {
+          "$ref": "#/$defs/ThreadGraphProjectionJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "projection"
+      ],
+      "description": "ThreadPlanEnvelope is `thread plan --json`."
     },
     "ThreadProblemJSON": {
       "properties": {
@@ -4117,6 +4261,12 @@
         "thread_frontier": {
           "$ref": "#/$defs/ThreadFrontierEnvelope"
         },
+        "thread_graph": {
+          "$ref": "#/$defs/ThreadGraphEnvelope"
+        },
+        "thread_plan": {
+          "$ref": "#/$defs/ThreadPlanEnvelope"
+        },
         "thread_mutation": {
           "$ref": "#/$defs/ThreadMutationEnvelope"
         },
@@ -4242,6 +4392,8 @@
         "threads",
         "thread_show",
         "thread_frontier",
+        "thread_graph",
+        "thread_plan",
         "thread_mutation",
         "thread_update",
         "thread_compose",
@@ -4281,6 +4433,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.57)",
+  "title": "tskflwctl --json output (schema_version 1.58)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

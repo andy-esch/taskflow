@@ -22,6 +22,14 @@ func ThreadFrontierJSON(w io.Writer, view core.ThreadView) error {
 	return wire.EncodeJSON(w, wire.ToThreadFrontierEnvelope(view))
 }
 
+func ThreadGraphJSON(w io.Writer, projection core.ThreadGraphProjection) error {
+	return wire.EncodeJSON(w, wire.ToThreadGraphEnvelope(projection))
+}
+
+func ThreadPlanJSON(w io.Writer, projection core.ThreadGraphProjection) error {
+	return wire.EncodeJSON(w, wire.ToThreadPlanEnvelope(projection))
+}
+
 func ThreadMutationJSON(w io.Writer, receipt core.ThreadCreationReceipt, path string, workspace wire.WorkspaceJSON) error {
 	return wire.EncodeJSON(w, wire.ToThreadMutationEnvelope(receipt, path, workspace))
 }
@@ -166,6 +174,60 @@ func ThreadFrontierHuman(w io.Writer, st Style, view core.ThreadView) error {
 	}
 	if len(view.Frontier) == 0 {
 		fmt.Fprintf(w, "%s no dispatchable member tasks\n", st.Dim("•"))
+	}
+	threadDiagnosticsHuman(w, st, view)
+	return nil
+}
+
+func ThreadPlanHuman(w io.Writer, st Style, projection core.ThreadGraphProjection) error {
+	view := projection.View
+	fmt.Fprintf(w, "%s  %s\n", st.Bold(view.Thread.Slug), st.Dim("("+view.Thread.ID+")"))
+	topology := "partial"
+	if projection.TopologyComplete {
+		topology = "complete"
+	}
+	fmt.Fprintf(w, "%s  %s · projection %s · topology %s\n",
+		st.Dim("graph:"), view.GraphHealth, view.ProjectionHealth, topology)
+
+	byID := make(map[string]core.ThreadGraphNode, len(projection.Nodes))
+	for _, node := range projection.Nodes {
+		byID[node.TaskID] = node
+	}
+	if len(view.ExternalGates) > 0 {
+		fmt.Fprintln(w, "\n"+st.Bold("External gates"))
+		for _, gate := range view.ExternalGates {
+			node := byID[gate.State.TaskID]
+			state := "satisfied"
+			if gate.Outstanding {
+				state = "outstanding"
+			}
+			fmt.Fprintf(w, "%s %s  %s  %s\n", st.Dim("•"), node.Label, node.TaskID, state)
+		}
+	}
+
+	ranked := make(map[string]bool, len(view.Members))
+	for _, wave := range projection.Waves {
+		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("Wave %d", wave.Index)))
+		for _, taskID := range wave.TaskIDs {
+			node := byID[taskID]
+			ranked[taskID] = true
+			fmt.Fprintf(w, "%s %s  %s  %s/%s\n", st.Dim("•"), node.Label, taskID, node.State.Role, node.State.Gate)
+		}
+	}
+	unranked := make([]core.ThreadGraphNode, 0)
+	for _, node := range projection.Nodes {
+		if node.Role == core.ThreadTaskMember && !ranked[node.TaskID] {
+			unranked = append(unranked, node)
+		}
+	}
+	if len(unranked) > 0 {
+		fmt.Fprintln(w, "\n"+st.Bold("Unranked members"))
+		for _, node := range unranked {
+			fmt.Fprintf(w, "%s %s  %s  %s/%s\n", st.Warn("⚠"), node.Label, node.TaskID, node.State.Role, node.State.Gate)
+		}
+	}
+	if len(projection.Waves) == 0 && len(unranked) == 0 {
+		fmt.Fprintf(w, "\n%s no member tasks to rank\n", st.Dim("•"))
 	}
 	threadDiagnosticsHuman(w, st, view)
 	return nil

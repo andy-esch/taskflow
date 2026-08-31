@@ -1098,6 +1098,8 @@ type jsonEnvelopes struct {
 	Threads        ThreadsEnvelope            `json:"threads"`
 	ThreadShow     ThreadShowEnvelope         `json:"thread_show"`
 	ThreadFrontier ThreadFrontierEnvelope     `json:"thread_frontier"`
+	ThreadGraph    ThreadGraphEnvelope        `json:"thread_graph"`
+	ThreadPlan     ThreadPlanEnvelope         `json:"thread_plan"`
 	ThreadMutation ThreadMutationEnvelope     `json:"thread_mutation"`
 	ThreadUpdate   ThreadUpdateEnvelope       `json:"thread_update"`
 	ThreadCompose  ThreadApplyComposeEnvelope `json:"thread_compose"`

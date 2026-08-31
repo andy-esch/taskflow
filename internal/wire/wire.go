@@ -242,7 +242,11 @@ import (
 // 1.57: `thread compose` and `thread apply` add materialized-plan and resumable
 // operation-receipt envelopes; apply failures may carry `thread_apply` recovery
 // detail in the standard error envelope.
-const SchemaVersion = "1.57"
+//
+// 1.58: `thread graph` and `thread plan` add one renderer-neutral node, edge,
+// wave, role, health, and topology-completeness projection for CLI and future
+// primary adapters.
+const SchemaVersion = "1.58"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a
