@@ -35,6 +35,12 @@ func ValidateTaskGraphMutationPlan(graph *TaskGraph, plan TaskGraphMutationPlan)
 	for i := range normalized.TaskWrites {
 		normalized.TaskWrites[i].DependsOn = append([]string(nil), normalized.TaskWrites[i].DependsOn...)
 	}
+	// A plan that only adds canonical edges has a monotone safety property: every
+	// physical prefix is an edge-subset of the final graph. If the final graph is
+	// healthy, no prefix can introduce a missing reference or cycle that the final
+	// graph does not also contain. Keep per-prefix graph reconstruction for removals
+	// and legacy-field clearing, where that argument does not hold.
+	additiveOnly := taskGraphMutationOnlyAddsEdges(graph, normalized)
 
 	seenTasks := make(map[string]bool, len(normalized.TaskWrites))
 	taskIDs := graph.TaskIDs()
@@ -82,10 +88,12 @@ func ValidateTaskGraphMutationPlan(graph *TaskGraph, plan TaskGraphMutationPlan)
 		}
 		prospective[write.TaskID] = task
 
-		prefixGraph := taskGraphFromMap(taskIDs, prospective)
-		if prefixGraph.Health() == GraphBroken {
-			return TaskGraphMutationPlan{}, fmt.Errorf("%w: planned write prefix ending at task %s would leave a broken graph: %s",
-				domain.ErrValidation, write.TaskID, taskGraphHealthDetail(prefixGraph))
+		if !additiveOnly {
+			prefixGraph := taskGraphFromMap(taskIDs, prospective)
+			if prefixGraph.Health() == GraphBroken {
+				return TaskGraphMutationPlan{}, fmt.Errorf("%w: planned write prefix ending at task %s would leave a broken graph: %s",
+					domain.ErrValidation, write.TaskID, taskGraphHealthDetail(prefixGraph))
+			}
 		}
 	}
 
@@ -95,6 +103,24 @@ func ValidateTaskGraphMutationPlan(graph *TaskGraph, plan TaskGraphMutationPlan)
 			domain.ErrValidation, finalGraph.Health(), taskGraphHealthDetail(finalGraph))
 	}
 	return normalized, nil
+}
+
+func taskGraphMutationOnlyAddsEdges(graph *TaskGraph, plan TaskGraphMutationPlan) bool {
+	for _, write := range plan.TaskWrites {
+		if write.ClearLegacy {
+			return false
+		}
+		task, exists := graph.Task(write.TaskID)
+		if !exists {
+			return false
+		}
+		for _, existing := range task.DependsOn {
+			if !sliceContainsExact(write.DependsOn, existing) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func taskGraphFromMap(taskIDs []string, tasksByID map[string]domain.Task) *TaskGraph {

@@ -34,12 +34,28 @@ var errBadEntityID = fmt.Errorf("%w: invalid entity id", domain.ErrValidation)
 // FS reads and writes the flat, id-led entity directories under one planning
 // root: tasks/, epics/, audits/, research/, and threads/.
 type FS struct {
-	root        string // the planning root; the write-lock (flock) is taken on this dir
-	tasksDir    string
-	epicsDir    string
-	auditsDir   string
-	researchDir string
-	threadsDir  string
+	root                   string // the planning root; the write-lock (flock) is taken on this dir
+	tasksDir               string
+	epicsDir               string
+	auditsDir              string
+	researchDir            string
+	threadsDir             string
+	planningIdentityReader PlanningIdentityReader
+}
+
+// PlanningIdentityReader re-runs configuration discovery at apply time. Root
+// and ID are both returned so the store can reject a pointer/config change that
+// resolves to another physical planning tree while it owns this tree's guard.
+type PlanningIdentityReader func() (root, id string, err error)
+
+type FSOption func(*FS)
+
+func WithPlanningIdentityReader(reader PlanningIdentityReader) FSOption {
+	return func(store *FS) {
+		if reader != nil {
+			store.planningIdentityReader = reader
+		}
+	}
 }
 
 // Compile-time assertions that FS satisfies the core ports. The use-case Store is
@@ -53,8 +69,8 @@ var (
 )
 
 // NewFS returns a store rooted at a planning directory (the dir holding tasks/).
-func NewFS(root string) *FS {
-	return &FS{
+func NewFS(root string, opts ...FSOption) *FS {
+	store := &FS{
 		root:        root,
 		tasksDir:    filepath.Join(root, domain.TasksDir),
 		epicsDir:    filepath.Join(root, domain.EpicsDir),
@@ -62,6 +78,10 @@ func NewFS(root string) *FS {
 		researchDir: filepath.Join(root, domain.ResearchDir),
 		threadsDir:  filepath.Join(root, domain.ThreadsDir),
 	}
+	for _, opt := range opts {
+		opt(store)
+	}
+	return store
 }
 
 // WatchPaths is the set of leaf directories a filesystem watcher must observe to

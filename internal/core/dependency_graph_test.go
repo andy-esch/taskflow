@@ -728,7 +728,8 @@ func TestTaskGraphSameSourceSnapshotComparesUnreadableIdentity(t *testing.T) {
 func TestValidateTaskGraphMutationPlanPreservesSemanticWriteOrder(t *testing.T) {
 	alpha := graphRecord("alpha", domain.StatusReadyToStart)
 	beta := graphRecord("beta", domain.StatusReadyToStart, alpha.ID)
-	graph := NewTaskGraph([]domain.Task{alpha, beta}, nil)
+	gamma := graphRecord("gamma", domain.StatusCompleted)
+	graph := NewTaskGraph([]domain.Task{alpha, beta, gamma}, nil)
 	plan := TaskGraphMutationPlan{TaskWrites: []TaskDependencyWrite{
 		{TaskID: beta.ID},
 		{TaskID: alpha.ID, DependsOn: []string{beta.ID}},
@@ -747,6 +748,22 @@ func TestValidateTaskGraphMutationPlanPreservesSemanticWriteOrder(t *testing.T) 
 	}}
 	if _, err := ValidateTaskGraphMutationPlan(graph, unsafe); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("unsafe planner order error = %v", err)
+	}
+
+	additive := TaskGraphMutationPlan{TaskWrites: []TaskDependencyWrite{{
+		TaskID: beta.ID, DependsOn: []string{alpha.ID, gamma.ID},
+	}}}
+	if !taskGraphMutationOnlyAddsEdges(graph, additive) {
+		t.Fatal("canonical edge superset was not recognized as additive")
+	}
+	if taskGraphMutationOnlyAddsEdges(graph, plan) {
+		t.Fatal("dependency-removal plan was incorrectly recognized as additive")
+	}
+	legacyClear := TaskGraphMutationPlan{TaskWrites: []TaskDependencyWrite{{
+		TaskID: beta.ID, DependsOn: []string{alpha.ID}, ClearLegacy: true,
+	}}}
+	if taskGraphMutationOnlyAddsEdges(graph, legacyClear) {
+		t.Fatal("legacy-clearing plan was incorrectly recognized as additive")
 	}
 }
 
