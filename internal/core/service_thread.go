@@ -215,7 +215,7 @@ func (s *Service) ListThreadViews() (ThreadListView, []domain.FileProblem, error
 	if err != nil {
 		return ThreadListView{}, nil, err
 	}
-	graph, err := LoadTaskGraph(s.store)
+	graph, err := LoadTaskGraph(s.taskGraphs)
 	if err != nil {
 		return ThreadListView{}, nil, err
 	}
@@ -243,7 +243,7 @@ func (s *Service) ShowThread(ref string) (ThreadView, string, error) {
 	if err != nil {
 		return ThreadView{}, "", err
 	}
-	graph, err := LoadTaskGraph(s.store)
+	graph, err := LoadTaskGraph(s.taskGraphs)
 	if err != nil {
 		return ThreadView{}, "", err
 	}

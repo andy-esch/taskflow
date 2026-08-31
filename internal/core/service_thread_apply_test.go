@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,8 @@ func (f *threadApplyFake) MutateThreadApply(_ time.Time, dryRun bool, planner Th
 func TestServiceComposeThreadApplyRendersDefaultTemplate(t *testing.T) {
 	task := graphRecord("compose-member", domain.StatusNextUp)
 	threadID := testutil.TaskID("composed-thread")
-	svc := NewService(&fakeStore{tasks: []domain.Task{task}},
+	svc := NewService(nil,
+		WithTaskGraphSource(&taskGraphReadFake{tasks: []domain.Task{task}}),
 		WithThreadStore(&threadReadFake{}),
 		WithIDGen(func() string { return threadID }),
 		WithClock(func() time.Time { return threadApplyNow }),
@@ -56,6 +58,36 @@ func TestServiceComposeThreadApplyRendersDefaultTemplate(t *testing.T) {
 	}
 	if plan.Thread.ID != threadID || !strings.Contains(plan.Thread.Body, "# Thread: Composed delivery") || !strings.Contains(plan.Thread.Body, "Exercise the production template") {
 		t.Fatalf("plan = %+v", plan)
+	}
+}
+
+func TestServiceComposeThreadApplyReportsEachMissingReadCapability(t *testing.T) {
+	tests := []struct {
+		name string
+		svc  *Service
+		want string
+	}{
+		{name: "task graph", svc: NewService(nil, WithThreadStore(&threadReadFake{})), want: "task graph reads are unavailable"},
+		{name: "Threads", svc: NewService(nil, WithTaskGraphSource(&taskGraphReadFake{})), want: "thread reads are unavailable"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := tt.svc.ComposeThreadApply("planning", ThreadComposeManifest{}); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("compose error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceComposeThreadApplyReadsThreadsBeforeTasks(t *testing.T) {
+	calls := make([]string, 0, 2)
+	svc := NewService(nil,
+		WithTaskGraphSource(&taskGraphReadFake{onList: func() { calls = append(calls, "tasks") }}),
+		WithThreadStore(&threadReadFake{onList: func() { calls = append(calls, "threads") }}),
+	)
+	_, _ = svc.ComposeThreadApply("planning", ThreadComposeManifest{})
+	if !slices.Equal(calls, []string{"threads", "tasks"}) {
+		t.Fatalf("calls = %v", calls)
 	}
 }
 

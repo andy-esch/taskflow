@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,18 +14,45 @@ import (
 type threadReadFake struct {
 	threads  []domain.Thread
 	problems []domain.FileProblem
+	thread   domain.Thread
+	body     string
+	getErr   error
+	onList   func()
+	onGet    func()
 }
 
 func (f *threadReadFake) ListThreads() ([]domain.Thread, []domain.FileProblem, error) {
+	if f.onList != nil {
+		f.onList()
+	}
 	return f.threads, f.problems, nil
 }
 
 func (f *threadReadFake) GetThread(string) (domain.Thread, string, error) {
-	return domain.Thread{}, "", fmt.Errorf("unused")
+	if f.onGet != nil {
+		f.onGet()
+	}
+	return f.thread, f.body, f.getErr
 }
 
 func (f *threadReadFake) ResolveThreadPath(string) (string, error) {
 	return "", fmt.Errorf("unused")
+}
+
+type taskGraphReadFake struct {
+	tasks    []domain.Task
+	problems []domain.FileProblem
+	err      error
+	onList   func()
+	calls    int
+}
+
+func (f *taskGraphReadFake) ReadTaskGraph() (TaskGraphRead, error) {
+	f.calls++
+	if f.onList != nil {
+		f.onList()
+	}
+	return TaskGraphReadFromFiles(f.tasks, f.problems), f.err
 }
 
 type threadCreationFake struct {
@@ -147,5 +175,136 @@ func TestServiceThreadListHoistsRepositoryGraphDiagnostics(t *testing.T) {
 	}
 	if len(list.Threads[0].GraphProblems) != 0 || list.Threads[0].GraphHealth != GraphBroken {
 		t.Fatalf("row repeated repository diagnostics: %+v", list.Threads[0])
+	}
+}
+
+func TestServiceThreadReadsComposeIndependentGraphAndThreadPorts(t *testing.T) {
+	gate := graphRecord("split-gate", domain.StatusCompleted)
+	member := graphRecord("split-member", domain.StatusReadyToStart, gate.ID)
+	thread := domain.Thread{
+		ID: "6g3q4rtmv4ak", FilenameID: "6g3q4rtmv4ak", Slug: "split-thread",
+		Status: domain.ThreadStatusUnstarted, Description: "Split read ports", Goal: "Keep core reusable",
+		Created: "2026-08-31", Tasks: []string{member.ID},
+	}
+	graphs := &taskGraphReadFake{tasks: []domain.Task{member, gate}}
+	threads := &threadReadFake{threads: []domain.Thread{thread}, thread: thread, body: "# Split Thread\n"}
+	svc := NewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads))
+
+	view, body, err := svc.ShowThread(thread.ID)
+	if err != nil || body != "# Split Thread\n" || len(view.Members) != 1 || len(view.ExternalGates) != 1 {
+		t.Fatalf("show view=%+v body=%q err=%v", view, body, err)
+	}
+	list, problems, err := svc.ListThreadViews()
+	if err != nil || len(problems) != 0 || len(list.Threads) != 1 || list.Threads[0].Thread.ID != thread.ID {
+		t.Fatalf("list=%+v problems=%+v err=%v", list, problems, err)
+	}
+
+	blockers, err := svc.TaskBlockers(member.ID, false)
+	if err != nil || len(blockers.Blockers) != 0 || blockers.State.Gate != GateClear {
+		t.Fatalf("blockers=%+v err=%v", blockers, err)
+	}
+	unblocks, err := svc.TaskUnblocks(gate.ID)
+	if err != nil || len(unblocks.Unblocks) != 1 || unblocks.Unblocks[0].Task.ID != member.ID {
+		t.Fatalf("unblocks=%+v err=%v", unblocks, err)
+	}
+}
+
+func TestServiceThreadReadsFailExplicitlyWithoutTaskGraphSource(t *testing.T) {
+	thread := domain.Thread{
+		ID: "6g3q4rtmv4ak", Slug: "missing-graph", Status: domain.ThreadStatusUnstarted,
+		Description: "Missing graph source", Goal: "Fail explicitly", Created: "2026-08-31",
+	}
+	svc := NewService(nil, WithThreadStore(&threadReadFake{thread: thread}))
+
+	if _, _, err := svc.ShowThread(thread.ID); err == nil || !strings.Contains(err.Error(), "task graph reads are unavailable") {
+		t.Fatalf("show error = %v", err)
+	}
+	if _, _, err := svc.ListThreadViews(); err == nil || !strings.Contains(err.Error(), "task graph reads are unavailable") {
+		t.Fatalf("list error = %v", err)
+	}
+	if _, err := svc.TaskBlockers(thread.ID, false); err == nil || !strings.Contains(err.Error(), "task graph reads are unavailable") {
+		t.Fatalf("blockers error = %v", err)
+	}
+}
+
+func TestServiceGraphQueriesDoNotRequireThreadSupport(t *testing.T) {
+	task := graphRecord("graph-only", domain.StatusReadyToStart)
+	graphs := &taskGraphReadFake{tasks: []domain.Task{task}}
+	svc := NewService(nil, WithTaskGraphSource(graphs))
+
+	result, err := svc.TaskBlockers(task.ID, false)
+	if err != nil || result.Task.ID != task.ID || result.State.Gate != GateClear {
+		t.Fatalf("blockers = %+v, err = %v", result, err)
+	}
+	if _, _, err := svc.ShowThread("any-thread"); err == nil || !strings.Contains(err.Error(), "thread reads are unavailable") {
+		t.Fatalf("show error = %v", err)
+	}
+	tasks, problems, err := svc.ListTasks(TaskFilter{Unblocked: true})
+	if err != nil || len(problems) != 0 || len(tasks) != 1 || tasks[0].ID != task.ID {
+		t.Fatalf("task list = %+v, problems = %+v, err = %v", tasks, problems, err)
+	}
+	board, err := svc.Board()
+	if err != nil || len(board.Columns) != len(domain.ActiveStatuses()) {
+		t.Fatalf("board = %+v, err = %v", board, err)
+	}
+	if _, _, err := svc.ListTasks(TaskFilter{Epic: "30"}); err == nil || !strings.Contains(err.Error(), "epic reads are unavailable") {
+		t.Fatalf("epic-filtered list error = %v", err)
+	}
+	if graphs.calls != 3 {
+		t.Fatalf("graph source calls = %d, want one per blockers/list/board operation", graphs.calls)
+	}
+}
+
+func TestServiceGraphReadsRejectTypedNilCapabilities(t *testing.T) {
+	var store *fakeStore
+	svc := NewService(store)
+	if _, err := svc.TaskBlockers("any-task", false); err == nil || !strings.Contains(err.Error(), "task graph reads are unavailable") {
+		t.Fatalf("typed-nil aggregate error = %v", err)
+	}
+
+	var graphs *taskGraphReadFake
+	svc = NewService(nil, WithTaskGraphSource(graphs))
+	if _, err := svc.Board(); err == nil || !strings.Contains(err.Error(), "task graph reads are unavailable") {
+		t.Fatalf("typed-nil graph option error = %v", err)
+	}
+
+	var threads *threadReadFake
+	svc = NewService(nil,
+		WithTaskGraphSource(&taskGraphReadFake{}),
+		WithThreadStore(threads),
+	)
+	if _, _, err := svc.ShowThread("any-thread"); err == nil || !strings.Contains(err.Error(), "thread reads are unavailable") {
+		t.Fatalf("typed-nil Thread option error = %v", err)
+	}
+}
+
+func TestServiceThreadViewsReadThreadsBeforeTasks(t *testing.T) {
+	task := graphRecord("ordered-member", domain.StatusReadyToStart)
+	thread := domain.Thread{
+		ID: "6g3q4rtmv4ak", Slug: "ordered-thread", Status: domain.ThreadStatusUnstarted,
+		Description: "Ordered reads", Goal: "Pin the compatibility contract", Created: "2026-08-31",
+		Tasks: []string{task.ID},
+	}
+
+	for _, operation := range []string{"show", "list"} {
+		t.Run(operation, func(t *testing.T) {
+			calls := make([]string, 0, 2)
+			graphs := &taskGraphReadFake{tasks: []domain.Task{task}, onList: func() { calls = append(calls, "tasks") }}
+			threads := &threadReadFake{
+				threads: []domain.Thread{thread}, thread: thread,
+				onList: func() { calls = append(calls, "threads") },
+				onGet:  func() { calls = append(calls, "threads") },
+			}
+			svc := NewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads))
+			var err error
+			if operation == "show" {
+				_, _, err = svc.ShowThread(thread.ID)
+			} else {
+				_, _, err = svc.ListThreadViews()
+			}
+			if err != nil || !slices.Equal(calls, []string{"threads", "tasks"}) {
+				t.Fatalf("calls = %v, err = %v", calls, err)
+			}
+		})
 	}
 }

@@ -432,7 +432,7 @@ func (s *Service) TaskUnblocks(ref string) (TaskUnblocksResult, error) {
 }
 
 func (s *Service) resolveTaskGraphQuery(ref string) (*TaskGraph, string, domain.Task, error) {
-	graph, err := LoadTaskGraph(s.store)
+	graph, err := LoadTaskGraph(s.taskGraphs)
 	if err != nil {
 		return nil, "", domain.Task{}, err
 	}

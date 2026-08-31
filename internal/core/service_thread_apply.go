@@ -10,14 +10,17 @@ import (
 // ComposeThreadApply compiles a strict authoring manifest into a durable,
 // planning-repository-bound plan without mutating repository state.
 func (s *Service) ComposeThreadApply(planningRepoID string, manifest ThreadComposeManifest) (ThreadApplyPlan, error) {
-	if s.store == nil || s.threads == nil {
-		return ThreadApplyPlan{}, fmt.Errorf("thread apply composition is unavailable from this store")
+	if s.taskGraphs == nil {
+		return ThreadApplyPlan{}, fmt.Errorf("task graph reads are unavailable from this store")
 	}
-	graph, err := LoadTaskGraph(s.store)
+	if s.threads == nil {
+		return ThreadApplyPlan{}, fmt.Errorf("thread reads are unavailable from this store")
+	}
+	threads, problems, err := s.threads.ListThreads()
 	if err != nil {
 		return ThreadApplyPlan{}, err
 	}
-	threads, problems, err := s.threads.ListThreads()
+	graph, err := LoadTaskGraph(s.taskGraphs)
 	if err != nil {
 		return ThreadApplyPlan{}, err
 	}

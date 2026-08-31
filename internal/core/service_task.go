@@ -32,6 +32,9 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 		}
 	}
 	if f.Epic != "" {
+		if s.store == nil {
+			return nil, nil, fmt.Errorf("epic reads are unavailable from this store")
+		}
 		epics, _, err := s.store.ListEpics()
 		if err != nil {
 			return nil, nil, err
@@ -40,13 +43,15 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 			return nil, nil, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, f.Epic)
 		}
 	}
-	all, problems, err := s.store.ListTasks()
+	read, err := loadTaskGraphRecords(s.taskGraphs)
 	if err != nil {
 		return nil, nil, err
 	}
+	all := read.Tasks
+	problems := taskGraphFileProblems(read.Problems)
 	var graph *TaskGraph
 	if f.Unblocked {
-		graph = NewTaskGraph(all, problems)
+		graph = NewTaskGraphRead(read)
 		if graph.Health() != GraphHealthy {
 			return nil, problems, fmt.Errorf("%w: task list --unblocked requires a healthy repository task graph; health=%s: %s",
 				domain.ErrValidation, graph.Health(), taskGraphHealthDetail(graph))
@@ -90,20 +95,89 @@ func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
 	return s.store.GetTask(slug)
 }
 
-// LoadTaskGraph is the one canonical filesystem-agnostic snapshot loader used by
-// the guarded mutation boundary. Diagnostic consumers that already own task bodies
-// (notably lint) construct the same strict projection with NewTaskGraph rather than
-// performing a second repository scan.
-type TaskGraphSource interface {
-	ListTasks() ([]domain.Task, []domain.FileProblem, error)
+// TaskGraphLoadProblem is an unreadable task record supplied to the strict graph.
+// TaskID/TaskSlug carry neutral record identity; Path is optional repair-location
+// context for filesystem adapters and is never parsed by the graph analyzer.
+type TaskGraphLoadProblem struct {
+	TaskID   string
+	TaskSlug string
+	Path     string
+	Message  string
 }
 
+// TaskGraphRead is one adapter-owned task-record snapshot. Keeping records and
+// load problems together leaves room for a future source revision token without
+// making the analyzer or primary adapters storage-aware.
+type TaskGraphRead struct {
+	Tasks    []domain.Task
+	Problems []TaskGraphLoadProblem
+}
+
+// TaskGraphSource is the narrow task-record read capability used by task listings,
+// boards, graph queries, and Thread projections. Service read use cases must use
+// the injected capability rather than reaching back through s.store. When paired
+// with a ThreadStore, the later task read must observe at least the repository state
+// visible to the earlier Thread read; adapters that cannot provide that ordering
+// must coordinate the pair themselves.
+type TaskGraphSource interface {
+	ReadTaskGraph() (TaskGraphRead, error)
+}
+
+type taskStoreGraphSource struct {
+	store interface {
+		ListTasks() ([]domain.Task, []domain.FileProblem, error)
+	}
+}
+
+func (s taskStoreGraphSource) ReadTaskGraph() (TaskGraphRead, error) {
+	tasks, problems, err := s.store.ListTasks()
+	if err != nil {
+		return TaskGraphRead{}, err
+	}
+	return TaskGraphReadFromFiles(tasks, problems), nil
+}
+
+// TaskGraphReadFromFiles adapts the legacy/local resilient task-list contract at
+// the storage boundary. Filename parsing for unreadable identity is deliberately
+// confined here; non-filesystem TaskGraphSource implementations provide identity
+// directly and need not synthesize a Markdown path.
+func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) TaskGraphRead {
+	read := TaskGraphRead{Tasks: tasks, Problems: make([]TaskGraphLoadProblem, 0, len(problems))}
+	for _, problem := range problems {
+		taskID, taskSlug := taskIdentityFromPath(problem.Path)
+		read.Problems = append(read.Problems, TaskGraphLoadProblem{
+			TaskID: taskID, TaskSlug: taskSlug, Path: problem.Path,
+			Message: problem.Message,
+		})
+	}
+	return read
+}
+
+func taskGraphFileProblems(problems []TaskGraphLoadProblem) []domain.FileProblem {
+	out := make([]domain.FileProblem, len(problems))
+	for i, problem := range problems {
+		out[i] = domain.FileProblem{Path: problem.Path, Message: problem.Message}
+	}
+	return out
+}
+
+func loadTaskGraphRecords(source TaskGraphSource) (TaskGraphRead, error) {
+	if isNilCapability(source) {
+		return TaskGraphRead{}, fmt.Errorf("task graph reads are unavailable from this store")
+	}
+	return source.ReadTaskGraph()
+}
+
+// LoadTaskGraph is the one canonical filesystem-agnostic snapshot loader used by
+// graph read use cases and guarded mutation adapters. Diagnostic consumers that
+// already own task bodies (notably lint) construct the same strict projection with
+// NewTaskGraph rather than performing a second repository scan.
 func LoadTaskGraph(source TaskGraphSource) (*TaskGraph, error) {
-	tasks, problems, err := source.ListTasks()
+	read, err := loadTaskGraphRecords(source)
 	if err != nil {
 		return nil, err
 	}
-	return NewTaskGraph(tasks, problems), nil
+	return NewTaskGraphRead(read), nil
 }
 
 // TaskPath resolves a task's file path without reading or parsing it — the seam

@@ -1043,6 +1043,52 @@ The corrected contract uses two distinct concepts:
 This is a vocabulary and contract correction, not a schema or projection expansion. It resolves the
 bulk-apply audit contradiction before deterministic graph views consume the shared projection.
 
+### 2026-08-31: Thread graph reads are independently portable capabilities
+
+The first production Thread reads exposed a composition constraint before generated views made it
+load-bearing: `ThreadStore` was independently injectable, but graph-backed Thread reads still loaded
+tasks through the aggregate task/epic/audit/research `Store`. That made a read-only service, split
+persistence adapter, or future served interface implement unrelated entity methods merely to project
+a Thread. The corrected adapter boundary is:
+
+1. **Task DAG reads use a consumer-owned `TaskGraphSource`.** `core.Service` accepts the narrow task
+   snapshot source independently from `ThreadStore`. Complete adapters default both capabilities
+   from their aggregate store, preserving ordinary CLI construction, while workspace and future
+   composition roots may provide distinct implementations. Task list, board, blockers, downstream
+   queries, Thread projections, and compose use this capability; an epic-filtered task list still
+   requires the separate epic read capability.
+2. **Authoritative mutation remains under the guarded write ports.** The read split does not pass a
+   precomputed graph into dependency, lifecycle, membership, or apply mutations. Those secondary
+   adapter capabilities still acquire the repository guard, load a fresh canonical snapshot, invoke
+   core validation, and materialize only the authorized plan.
+3. **Graph views originate as taskflow-owned core projections.** CLI, TUI, and future web adapters
+   consume the same neutral node, edge, role, ordering, health, and explanatory values. Transport
+   DTOs may map those values, but Cobra, Bubble Tea, HTTP, filesystem, and third-party graph-library
+   types do not cross the core or wire contracts.
+4. **Joined diagnostic reads require causally compatible sources.** Thread list/show and compose read
+   Thread records first and tasks second. Paired adapters must guarantee that the later task snapshot
+   is at least as new as the Thread snapshot; a lagging replica or split backend that cannot provide
+   that order must coordinate a compatible snapshot behind the two ports. Otherwise ordinary skew
+   is indistinguishable from a genuinely missing member. This consistency contract is for
+   explanatory reads only and does not replace guarded mutation revalidation.
+5. **Text graph formats are reusable output adapters.** `internal/graphfmt` owns pure deterministic
+   Mermaid and DOT formatting and format-specific escaping. It consumes raw labels from the neutral
+   core projection and imports no CLI/TUI/HTTP framework. A TUI, served adapter, or library caller
+   can reuse a formatter or consume the projection directly without shelling out to the CLI or
+   parsing presentation text.
+6. **Load diagnostics cross the adapter boundary before graph-view contracts ship.** The initial
+   narrow source returned filesystem-shaped `FileProblem` values, and core recovered unreadable task
+   identity from `<id>-<slug>.md`. Task
+   [`6g5gbk5a5bt0`](../tasks/6g5gbk5a5bt0-make-task-graph-load-diagnostics-adapter-neutral.md)
+   replaces that identity channel with `TaskGraphRead` and `TaskGraphLoadProblem`. An unreadable
+   record carries optional stable ID/slug plus message; a path is optional repair context, never the
+   analyzer's identity source. The filesystem performs the one filename conversion at its adapter
+   boundary, while legacy/body-aware `NewTaskGraph` callers retain an explicit file conversion.
+
+This split is deliberately smaller than a repository abstraction redesign. It establishes the port
+and projection seams needed by additional interfaces while leaving concrete storage, HTTP transport,
+and graph rendering implementations to their own adapters.
+
 ## Related
 
 - Supersedes: [0002-adopt-projects](0002-adopt-projects.md).

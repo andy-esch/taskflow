@@ -6,6 +6,16 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
+type countingTaskStore struct {
+	fakeStore
+	listCalls int
+}
+
+func (s *countingTaskStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
+	s.listCalls++
+	return s.fakeStore.ListTasks()
+}
+
 func TestBoard_ActivePipelineOnlyInOrder(t *testing.T) {
 	svc := NewService(&fakeStore{tasks: []domain.Task{
 		{Slug: "a", Status: domain.StatusInProgress},
@@ -57,5 +67,18 @@ func TestBoard_EmptyColumnsStillPresent(t *testing.T) {
 		if c.Status != domain.StatusInProgress && len(c.Tasks) != 0 {
 			t.Errorf("column %q should be empty, has %d", c.Status, len(c.Tasks))
 		}
+	}
+}
+
+func TestBoard_CompleteStoreFallbackScansTasksOnce(t *testing.T) {
+	store := &countingTaskStore{fakeStore: fakeStore{tasks: []domain.Task{{
+		ID: "6g3q4rtmv4ak", Slug: "single-scan", Status: domain.StatusNextUp,
+	}}}}
+	board, err := NewService(store).Board()
+	if err != nil || len(board.Columns) != len(domain.ActiveStatuses()) {
+		t.Fatalf("board = %+v, err = %v", board, err)
+	}
+	if store.listCalls != 1 {
+		t.Fatalf("ListTasks calls = %d, want 1", store.listCalls)
 	}
 }

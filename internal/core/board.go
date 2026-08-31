@@ -23,10 +23,12 @@ type Board struct {
 // is a column (an empty status shows an empty column, not a gap), and each column
 // keeps the store's task order.
 func (s *Service) Board() (Board, error) {
-	tasks, problems, err := s.store.ListTasks()
+	read, err := loadTaskGraphRecords(s.taskGraphs)
 	if err != nil {
 		return Board{}, err
 	}
+	tasks := read.Tasks
+	problems := taskGraphFileProblems(read.Problems)
 	byStatus := map[domain.Status][]domain.Task{}
 	for _, t := range tasks {
 		if t.Status.IsActive() {
