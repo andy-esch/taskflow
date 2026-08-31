@@ -250,6 +250,24 @@ func (s *Service) ShowThread(ref string) (ThreadView, string, error) {
 	return ProjectThread(thread, graph), body, nil
 }
 
+// ShowThreadGraph reads the Thread first and the task graph second, preserving
+// the same paired-source ordering contract as ShowThread while returning the
+// adapter-neutral graph projection used by every presentation surface.
+func (s *Service) ShowThreadGraph(ref string) (ThreadGraphProjection, error) {
+	if s.threads == nil {
+		return ThreadGraphProjection{}, fmt.Errorf("thread reads are unavailable from this store")
+	}
+	thread, _, err := s.threads.GetThread(ref)
+	if err != nil {
+		return ThreadGraphProjection{}, err
+	}
+	graph, err := LoadTaskGraph(s.taskGraphs)
+	if err != nil {
+		return ThreadGraphProjection{}, err
+	}
+	return ProjectThreadGraph(thread, graph), nil
+}
+
 func (s *Service) ThreadPath(ref string) (string, error) {
 	if s.threads == nil {
 		return "", fmt.Errorf("thread reads are unavailable from this store")
