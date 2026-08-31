@@ -94,6 +94,9 @@ tskflwctl task new "Add retry backoff" --epic <epic-id> --tags net
 tskflwctl task new "Triage flake" --epic <epic-id> --tags ci --description "is CI red?" --start  # straight to in-progress (--next/--start need --description)
 echo "$BODY" | tskflwctl task new "Long writeup" --epic <epic-id> --tags x --body-file -  # body from stdin/file
 tskflwctl thread new "Release path" --description "Coordinate the release" --goal "Ship it" --task <task>  # repeat --task; empty Threads are valid
+tskflwctl thread compose --from thread.yml --out thread.apply.yml  # strict existing-task graph → durable recovery plan
+tskflwctl thread apply thread.apply.yml --dry-run                  # preview pending edge/Thread operations
+tskflwctl thread apply thread.apply.yml                            # dependency files first, Thread last; safe to retry
 tskflwctl epic new "Billing overhaul" --description "Replace legacy pipeline"
 tskflwctl audit new dispatcher          # → audits/<id>-YYYY-MM-DD-dispatcher.md (--date to override)
 tskflwctl audit new auth --template security  # pick a body scaffold (default|security); --template is shell-completable

@@ -1130,6 +1130,9 @@
         },
         "thread_failure": {
           "$ref": "#/$defs/ThreadMutationFailureJSON"
+        },
+        "thread_apply": {
+          "$ref": "#/$defs/ThreadApplyJSON"
         }
       },
       "additionalProperties": false,
@@ -3153,6 +3156,272 @@
       ],
       "description": "ThemesEnvelope is `theme list --json`."
     },
+    "ThreadApplyComposeEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "written": {
+          "type": "boolean"
+        },
+        "plan_path": {
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/ThreadApplyPlanJSON"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "dry_run",
+        "written",
+        "plan_path",
+        "plan",
+        "workspace"
+      ],
+      "description": "ThreadApplyComposeEnvelope is `thread compose --json`."
+    },
+    "ThreadApplyDependencyJSON": {
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "from",
+        "to"
+      ],
+      "description": "ThreadApplyDependencyJSON is one stable-ID prerequisite-to-dependent edge in a generated apply plan."
+    },
+    "ThreadApplyEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "thread_id": {
+          "type": "string"
+        },
+        "thread_slug": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "committed": {
+          "type": "boolean"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/ThreadApplyOperationJSON"
+          },
+          "type": "array"
+        },
+        "plan_path": {
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "thread_id",
+        "thread_slug",
+        "changed",
+        "dry_run",
+        "complete",
+        "committed",
+        "operations",
+        "plan_path",
+        "workspace"
+      ]
+    },
+    "ThreadApplyJSON": {
+      "properties": {
+        "thread_id": {
+          "type": "string"
+        },
+        "thread_slug": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "committed": {
+          "type": "boolean"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/ThreadApplyOperationJSON"
+          },
+          "type": "array"
+        },
+        "plan_path": {
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "thread_id",
+        "thread_slug",
+        "changed",
+        "dry_run",
+        "complete",
+        "committed",
+        "operations",
+        "plan_path",
+        "workspace"
+      ],
+      "description": "ThreadApplyJSON is both the successful apply payload and the recovery detail nested in an error envelope after a durable prefix."
+    },
+    "ThreadApplyOperationJSON": {
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "dependency|thread"
+        },
+        "action": {
+          "type": "string",
+          "description": "add|create"
+        },
+        "state": {
+          "type": "string",
+          "description": "pending|applied|skipped"
+        },
+        "thread_id": {
+          "type": "string"
+        },
+        "dependent_id": {
+          "type": "string"
+        },
+        "prerequisite_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind",
+        "action",
+        "state"
+      ]
+    },
+    "ThreadApplyPlanJSON": {
+      "properties": {
+        "schema": {
+          "type": "integer"
+        },
+        "planning_repo_id": {
+          "type": "string"
+        },
+        "composed_at": {
+          "type": "string"
+        },
+        "thread": {
+          "$ref": "#/$defs/ThreadApplyThreadJSON"
+        },
+        "dependencies": {
+          "items": {
+            "$ref": "#/$defs/ThreadApplyDependencyJSON"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema",
+        "planning_repo_id",
+        "composed_at",
+        "thread"
+      ],
+      "description": "ThreadApplyPlanJSON is the machine projection of the durable schema-1 retry token."
+    },
+    "ThreadApplyThreadJSON": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "unstarted for V1 generated plans"
+        },
+        "description": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "target_date": {
+          "type": "string"
+        },
+        "created": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tasks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "slug",
+        "status",
+        "description",
+        "goal",
+        "created",
+        "tasks",
+        "body"
+      ],
+      "description": "ThreadApplyThreadJSON is the exact new-Thread intent embedded in a generated apply plan."
+    },
     "ThreadExternalGateJSON": {
       "properties": {
         "role": {
@@ -3853,6 +4122,12 @@
         "thread_update": {
           "$ref": "#/$defs/ThreadUpdateEnvelope"
         },
+        "thread_compose": {
+          "$ref": "#/$defs/ThreadApplyComposeEnvelope"
+        },
+        "thread_apply": {
+          "$ref": "#/$defs/ThreadApplyEnvelope"
+        },
         "epic_mutation": {
           "$ref": "#/$defs/EpicMutationEnvelope"
         },
@@ -3968,6 +4243,8 @@
         "thread_frontier",
         "thread_mutation",
         "thread_update",
+        "thread_compose",
+        "thread_apply",
         "epic_mutation",
         "moves",
         "summary",
@@ -4003,6 +4280,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.56)",
+  "title": "tskflwctl --json output (schema_version 1.57)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

@@ -103,6 +103,11 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 		details := wire.ToThreadMutationFailureJSON(threadPolicy)
 		payload.Error.ThreadFailure = &details
 	}
+	var threadApplyErr *threadApplyCommandFailure
+	if errors.As(err, &threadApplyErr) {
+		details := wire.ToThreadApplyJSON(threadApplyErr.receipt, threadApplyErr.planPath, threadApplyErr.workspace)
+		payload.Error.ThreadApply = &details
+	}
 	// Compact, like every other --json envelope (see wire.EncodeJSON): an agent
 	// parsing the failure shouldn't pay for indentation either.
 	_ = wire.EncodeJSON(w, payload)

@@ -20,6 +20,7 @@ type Service struct {
 	threads            ThreadStore
 	threadCreations    ThreadCreationMutationStore
 	threadMutations    ThreadMutationStore
+	threadApplies      ThreadApplyMutationStore
 	templates          TemplateSource
 	now                func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
 	newID              func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
@@ -128,6 +129,16 @@ func WithThreadMutationStore(store ThreadMutationStore) Option {
 	}
 }
 
+// WithThreadApplyMutationStore supplies the guarded compound bulk-link
+// capability. Production discovers it from FS automatically.
+func WithThreadApplyMutationStore(store ThreadApplyMutationStore) Option {
+	return func(s *Service) {
+		if store != nil {
+			s.threadApplies = store
+		}
+	}
+}
+
 // NewService wires the core to its store; templates default to the built-in
 // source unless WithTemplateSource overrides it.
 func NewService(store Store, opts ...Option) *Service {
@@ -146,6 +157,9 @@ func NewService(store Store, opts ...Option) *Service {
 	}
 	if mutations, ok := store.(ThreadMutationStore); ok {
 		s.threadMutations = mutations
+	}
+	if mutations, ok := store.(ThreadApplyMutationStore); ok {
+		s.threadApplies = mutations
 	}
 	for _, opt := range opts {
 		opt(s)

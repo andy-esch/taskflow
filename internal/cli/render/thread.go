@@ -30,6 +30,50 @@ func ThreadUpdateJSON(w io.Writer, receipt core.ThreadMutationReceipt, path stri
 	return wire.EncodeJSON(w, wire.ToThreadUpdateEnvelope(receipt, path, workspace))
 }
 
+func ThreadApplyComposeJSON(w io.Writer, plan core.ThreadApplyPlan, planPath string, dryRun bool, workspace wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToThreadApplyComposeEnvelope(plan, planPath, dryRun, workspace))
+}
+
+func ThreadApplyJSON(w io.Writer, receipt core.ThreadApplyReceipt, planPath string, workspace wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToThreadApplyEnvelope(receipt, planPath, workspace))
+}
+
+func ThreadApplyHuman(w io.Writer, st Style, receipt core.ThreadApplyReceipt) {
+	for _, operation := range receipt.Operations {
+		marker := st.Dim("•")
+		if operation.Kind == "dependency" {
+			verb := "skipped"
+			suffix := " (already present)"
+			switch operation.State {
+			case core.ThreadApplyApplied:
+				marker, verb, suffix = st.Green("✔"), "added", ""
+			case core.ThreadApplyPending:
+				verb, suffix = "pending", ""
+				if receipt.DryRun {
+					marker, verb = st.Dim("◇"), "would add"
+				}
+			}
+			fmt.Fprintf(w, "%s %s dependency %s -> %s%s\n", marker, verb, operation.PrerequisiteID, operation.DependentID, suffix)
+			continue
+		}
+		verb := "skipped"
+		suffix := " (already exists identically)"
+		switch operation.State {
+		case core.ThreadApplyApplied:
+			marker, verb, suffix = st.Green("✔"), "created", ""
+		case core.ThreadApplyPending:
+			verb, suffix = "pending", ""
+			if receipt.DryRun {
+				marker, verb = st.Dim("◇"), "would create"
+			}
+		}
+		fmt.Fprintf(w, "%s %s Thread %s%s\n", marker, verb, operation.ThreadID, suffix)
+	}
+	if receipt.Complete {
+		fmt.Fprintf(w, "%s Thread apply complete\n", st.Green("✔"))
+	}
+}
+
 func ThreadsHuman(w io.Writer, st Style, list core.ThreadListView) error {
 	rows := make([][]string, 0, len(list.Threads))
 	for _, view := range list.Threads {

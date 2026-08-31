@@ -121,6 +121,14 @@ type ThreadMutationStore interface {
 	MutateThread(now time.Time, dryRun bool, planner ThreadMutationPlanner) (ThreadMutationResult, error)
 }
 
+// ThreadApplyMutationStore owns the one guarded compound operation used by a
+// materialized bulk-link plan. Implementations must re-read planning identity,
+// tasks, and Threads under one guard; apply dependency writes before the new
+// Thread; and preserve the exact durable operation prefix on failure.
+type ThreadApplyMutationStore interface {
+	MutateThreadApply(now time.Time, dryRun bool, planner ThreadApplyPlanner) (ThreadApplyMutationResult, error)
+}
+
 // EpicStore is the epic-persistence port.
 type EpicStore interface {
 	ListEpics() ([]domain.Epic, []domain.FileProblem, error)

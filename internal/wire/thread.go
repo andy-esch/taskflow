@@ -249,6 +249,134 @@ func ToThreadUpdateEnvelope(receipt core.ThreadMutationReceipt, path string, wor
 	return ThreadUpdateEnvelope{SchemaVersion: SchemaVersion, ThreadUpdateJSON: ToThreadUpdateJSON(receipt, path, workspace)}
 }
 
+type ThreadApplyOperationJSON struct {
+	Kind           string `json:"kind" jsonschema:"description=dependency|thread"`
+	Action         string `json:"action" jsonschema:"description=add|create"`
+	State          string `json:"state" jsonschema:"description=pending|applied|skipped"`
+	ThreadID       string `json:"thread_id,omitempty"`
+	DependentID    string `json:"dependent_id,omitempty"`
+	PrerequisiteID string `json:"prerequisite_id,omitempty"`
+}
+
+func toThreadApplyOperations(operations []core.ThreadApplyOperation) []ThreadApplyOperationJSON {
+	out := make([]ThreadApplyOperationJSON, 0, len(operations))
+	for _, operation := range operations {
+		out = append(out, ThreadApplyOperationJSON{
+			Kind: operation.Kind, Action: operation.Action, State: string(operation.State),
+			ThreadID: operation.ThreadID, DependentID: operation.DependentID,
+			PrerequisiteID: operation.PrerequisiteID,
+		})
+	}
+	return out
+}
+
+// ThreadApplyDependencyJSON is one stable-ID prerequisite-to-dependent edge in
+// a generated apply plan.
+type ThreadApplyDependencyJSON struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// ThreadApplyThreadJSON is the exact new-Thread intent embedded in a generated
+// apply plan. Body is retained so an identical retry can be distinguished from
+// a same-ID document collision.
+type ThreadApplyThreadJSON struct {
+	ID          string   `json:"id"`
+	Slug        string   `json:"slug"`
+	Status      string   `json:"status" jsonschema:"description=unstarted for V1 generated plans"`
+	Description string   `json:"description"`
+	Goal        string   `json:"goal"`
+	TargetDate  string   `json:"target_date,omitempty"`
+	Created     string   `json:"created"`
+	Tags        []string `json:"tags,omitempty"`
+	Tasks       []string `json:"tasks"`
+	Body        string   `json:"body"`
+}
+
+// ThreadApplyPlanJSON is the machine projection of the durable schema-1 retry
+// token. Its repository ID authorizes apply against one planning space; all
+// dependency and membership references are exact stable IDs.
+type ThreadApplyPlanJSON struct {
+	Schema         int                         `json:"schema"`
+	PlanningRepoID string                      `json:"planning_repo_id"`
+	ComposedAt     string                      `json:"composed_at"`
+	Thread         ThreadApplyThreadJSON       `json:"thread"`
+	Dependencies   []ThreadApplyDependencyJSON `json:"dependencies,omitempty"`
+}
+
+func ToThreadApplyPlanJSON(plan core.ThreadApplyPlan) ThreadApplyPlanJSON {
+	payload := ThreadApplyPlanJSON{
+		Schema: plan.Schema, PlanningRepoID: plan.PlanningRepoID, ComposedAt: plan.ComposedAt,
+		Thread: ThreadApplyThreadJSON{
+			ID: plan.Thread.ID, Slug: plan.Thread.Slug, Status: string(plan.Thread.Status),
+			Description: plan.Thread.Description, Goal: plan.Thread.Goal,
+			TargetDate: plan.Thread.TargetDate, Created: plan.Thread.Created,
+			Tags:  append([]string(nil), plan.Thread.Tags...),
+			Tasks: append([]string{}, plan.Thread.Tasks...), Body: plan.Thread.Body,
+		},
+		Dependencies: make([]ThreadApplyDependencyJSON, 0, len(plan.Dependencies)),
+	}
+	for _, dependency := range plan.Dependencies {
+		payload.Dependencies = append(payload.Dependencies, ThreadApplyDependencyJSON{
+			From: dependency.From, To: dependency.To,
+		})
+	}
+	return payload
+}
+
+// ThreadApplyComposeEnvelope is `thread compose --json`. Plan is the exact
+// durable document written to PlanPath (or previewed when DryRun is true).
+type ThreadApplyComposeEnvelope struct {
+	SchemaVersion string              `json:"schema_version"`
+	DryRun        bool                `json:"dry_run"`
+	Written       bool                `json:"written"`
+	PlanPath      string              `json:"plan_path"`
+	Plan          ThreadApplyPlanJSON `json:"plan"`
+	Workspace     WorkspaceJSON       `json:"workspace"`
+}
+
+func ToThreadApplyComposeEnvelope(plan core.ThreadApplyPlan, planPath string, dryRun bool, workspace WorkspaceJSON) ThreadApplyComposeEnvelope {
+	return ThreadApplyComposeEnvelope{
+		SchemaVersion: SchemaVersion, DryRun: dryRun, Written: !dryRun,
+		PlanPath: planPath, Plan: ToThreadApplyPlanJSON(plan), Workspace: workspace,
+	}
+}
+
+// ThreadApplyJSON is both the successful apply payload and the recovery detail
+// nested in an error envelope after a durable prefix.
+type ThreadApplyJSON struct {
+	ThreadID   string                     `json:"thread_id"`
+	ThreadSlug string                     `json:"thread_slug"`
+	Changed    bool                       `json:"changed"`
+	DryRun     bool                       `json:"dry_run"`
+	Complete   bool                       `json:"complete"`
+	Committed  bool                       `json:"committed"`
+	Operations []ThreadApplyOperationJSON `json:"operations"`
+	PlanPath   string                     `json:"plan_path"`
+	Workspace  WorkspaceJSON              `json:"workspace"`
+}
+
+func ToThreadApplyJSON(receipt core.ThreadApplyReceipt, planPath string, workspace WorkspaceJSON) ThreadApplyJSON {
+	return ThreadApplyJSON{
+		ThreadID: receipt.Plan.Thread.ID, ThreadSlug: receipt.Plan.Thread.Slug,
+		Changed: receipt.Changed, DryRun: receipt.DryRun, Complete: receipt.Complete,
+		Committed: receipt.Committed, Operations: toThreadApplyOperations(receipt.Operations),
+		PlanPath: planPath, Workspace: workspace,
+	}
+}
+
+type ThreadApplyEnvelope struct {
+	SchemaVersion string `json:"schema_version"`
+	ThreadApplyJSON
+}
+
+func ToThreadApplyEnvelope(receipt core.ThreadApplyReceipt, planPath string, workspace WorkspaceJSON) ThreadApplyEnvelope {
+	return ThreadApplyEnvelope{
+		SchemaVersion:   SchemaVersion,
+		ThreadApplyJSON: ToThreadApplyJSON(receipt, planPath, workspace),
+	}
+}
+
 // ThreadMutationFailureJSON is a pre-commit membership/lifecycle policy refusal.
 type ThreadMutationFailureJSON struct {
 	ThreadID  string `json:"thread_id"`
