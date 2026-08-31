@@ -343,8 +343,9 @@ narrative, not a generated graph or shared execution log.
 
 Scoping often discovers the relationships among a set of already-created tasks at once. A manifest
 can bulk-link those tasks into one new Thread and add their repository-global dependency edges in one
-operation; it does not recreate or move the tasks. This is the primary V1 authoring path. The format
-may also mix in complete specifications for new tasks as an optional composition convenience:
+operation; it does not recreate or move the tasks. This is the V1 authoring path. Inline task
+creation is explicitly outside V1: it would add creation provenance, epic revalidation, and a
+different prefix-order problem before existing-task bulk linking has earned that complexity.
 
 ```yaml
 thread:
@@ -364,10 +365,8 @@ dependencies:
   - {from: config-model, to: existing-cli}
 ```
 
-- Every node has a manifest-local, unique `key`. Exactly one of `task_id` or `new_task` is
-  required. A new-task specification uses the same validation and defaults as `task new`; V1 may
-  create it in `ready-to-start` or `next-up`, but not directly in an already-executing or terminal
-  state.
+- Every node has a manifest-local, unique `key` and one exact stable `task_id`. The task must already
+  exist. Slugs, partial references, and inline `new_task` specifications are rejected.
 - A V1 manifest creates exactly one new Thread. Extending an existing Thread remains available
   through the ordinary membership/dependency commands until real use justifies update manifests.
 - `member` defaults to true. `member: false` permits an explicitly declared existing external gate;
@@ -380,8 +379,8 @@ dependencies:
 An authoring manifest is literal YAML; taskflow does not interpolate shell variables in it. In the
 primary existing-task workflow, `task_id` contains the copied stable task ID—not a slug, title, or
 `$VARIABLE`—and CLI/docs must make those IDs easy to discover. Compose resolves local keys and emits
-only stable IDs into the materialized apply plan. `new_task` does not need to complicate the normal
-bulk-linking workflow.
+only stable IDs into the materialized apply plan. A later ADR amendment may introduce `new_task`
+only after it defines creation provenance, already-applied identity, and recovery ordering.
 
 #### Compile, Then Apply
 
@@ -394,18 +393,18 @@ tskflwctl thread apply thread-apply.yaml
 tskflwctl thread apply thread-apply.yaml --dry-run --json
 ```
 
-1. **Compose** reads the repository, validates the entire authoring manifest, mints all new Thread
-   and task IDs, resolves every local key, validates exact task/epic references and normal
-   task-creation invariants, and checks the proposed edge union for cycles. It writes a
+1. **Compose** reads the repository, validates the entire authoring manifest, mints the new Thread
+   ID, resolves every local key, validates exact existing-task references, and checks the proposed
+   edge union for cycles. It writes a
    materialized apply plan before any planning entity is mutated. The plan is bound to the
-   planning-space identity and records stable IDs, exact intended creations, and additive
+   planning-space identity and records stable IDs, the exact intended Thread creation, and additive
    membership/edge changes. It is an intent log, not a frozen repository snapshot: unrelated
    repository changes between compose and apply remain legal when current-state revalidation passes.
 2. **Apply** revalidates the complete materialized plan, then converges the repository toward it.
-   A missing planned entity is created with its preallocated ID; an identical creation or already
-   present set addition is skipped; a same-ID/different-identity collision or stale conflicting
-   edit stops with `ErrConflict`. Apply rechecks task-creation invariants and referenced epics rather
-   than trusting compose-time validation. Reapplying the same plan cannot mint duplicate tasks.
+   The missing planned Thread is created with its preallocated ID; an identical Thread or already
+   present edge addition is skipped; a same-ID/different-identity collision or invalid current graph
+   stops with `ErrConflict` or validation. Apply rechecks every referenced task and Thread invariant
+   rather than trusting compose-time validation. Reapplying the same plan cannot mint another ID.
 
 Compose supports stdin for the authoring manifest, but a materialized plan must have a durable
 path before apply begins. A later convenience command may compose and apply in one invocation only
@@ -419,12 +418,11 @@ per-entity/edge receipt, stops on the first conflict, and is safe to resume with
 It does not claim rollback or isolation from raw hand edits. `lint` must diagnose any remainder
 after interruption.
 
-Every persisted prefix must itself remain a sound repository graph. In particular, apply cannot
-create new tasks in stable-ID order when a new task may depend on another new task: an interruption
-could leave a dangling reference that then makes fail-closed retry impossible. Apply writes new
-tasks in deterministic topological waves (or uses an equivalent vertices-before-edges strategy),
-adds dependencies to existing tasks only after all referenced new tasks exist, and creates the
-Thread document last.
+Every persisted prefix must itself remain a sound repository graph. Existing-task V1 writes
+dependency-owner task files in deterministic, prefix-validated order and creates the Thread last.
+The Thread therefore never advertises sequencing that has not already become durable. A future
+inline-task extension must solve vertices-before-edges ordering separately; it cannot inherit the
+existing-task write order by assumption.
 
 ### 8. CLI Surface
 
@@ -612,8 +610,9 @@ although the human repair UX remains a follow-up to validate through use.
 
 The spike found five contracts that must be explicit in production:
 
-1. **Every interrupted apply prefix must be graph-valid.** Stable-ID write order is unsafe; new tasks
-   need topological creation order (or deferred edge attachment), and the Thread lands last.
+1. **Every interrupted apply prefix must be graph-valid.** Existing-task dependency writes require
+   deterministic prefix validation and the Thread lands last. Any future inline tasks need
+   topological creation order (or deferred edge attachment) before joining this contract.
 2. **Apply-time validation is authoritative.** Compose-time success cannot justify creating a task
    after its epic disappeared or accepting a hand-edited apply plan with invalid creation fields.
 3. **Graph snapshots are stricter than ordinary resilient lists.** ID drift, unknown task status,
@@ -624,8 +623,8 @@ The spike found five contracts that must be explicit in production:
    documented no-op on non-Unix builds. Portable equivalent correctness is prerequisite work, not a
    post-launch polish item.
 5. **The authoring manifest and apply plan are different artifacts.** The manifest is user-authored,
-   literal YAML whose primary workflow bulk-links existing task IDs with local graph keys. Optional
-   inline `new_task` definitions do not change that contract. The apply plan is generated,
+   literal YAML which bulk-links existing task IDs with local graph keys. Inline `new_task`
+   definitions are not accepted in V1. The apply plan is generated,
    stable-ID-only recovery state. Shell interpolation may be useful in a test fixture, but it is not
    part of either file format and should not obscure the primary YAML-first workflow in product
    documentation.
@@ -966,6 +965,58 @@ The first production existing-Thread writer validates the design with four concr
    immutable `TaskGraph` projections and deterministic comparisons. This reinforces the earlier
    decision to research a graph package only when a named operation exceeds the owned algorithms,
    not merely because another graph-backed command has shipped.
+
+### 2026-08-30: Existing-task bulk apply V1 contract
+
+The production bulk-link slice narrows the spike into a generated-intent workflow with explicit
+recovery semantics:
+
+1. **Both inputs are strict but serve different authors.** The authoring manifest accepts schema 1
+   (or omitted schema), rejects unknown fields, uses unique local keys plus exact existing stable
+   task IDs, and treats `member: false` as a claim that the node is a real transitive upstream gate
+   of a member. Compose rejects a misleading non-gate. The generated schema-1 plan contains only
+   the durable planning-repository ID, compose date, one fully rendered/preallocated unstarted
+   Thread, sorted member IDs, and sorted stable-ID edge additions. Its output is mode `0600` and
+   no-clobber. Apply accepts a durable path, never stdin.
+2. **Identity is live authorization evidence.** Compose refuses an ID-less repository. Production
+   `FS` receives a configuration-rediscovery function from the CLI; apply invokes it while holding
+   the canonical planning-root guard and verifies that both the physical root and durable ID still
+   match the plan. A moved checkout remains valid, while a changed pointer, wrong repository, or
+   removed identity fails closed.
+3. **The plan is additive intent, not snapshot ownership.** Apply reloads the strict graph and every
+   Thread under the guard, unions each intended edge into the dependent task's current canonical
+   set, preserves unrelated edits and additional dependencies, and validates every task-file
+   prefix. A hand-edited plan with no member tasks is rejected even though ordinary `thread new`
+   permits an empty Thread; bulk apply retains compose's narrower at-least-one-member contract.
+   Existing edges and an exactly matching planned Thread are skips. A same-ID Thread with different
+   metadata, lifecycle state, membership, or body is a conflict, with an explicit diagnosis when
+   the original Thread has simply advanced after a successful apply. Canonical slug checks prevent
+   a hand-edited plan from turning the generated filename into a path escape.
+4. **Receipts describe physical durability without pretending at rollback.** Edge entries are
+   ordered by dependency-owner write and followed by the Thread create. A task-file replacement may
+   make several edge entries durable together; each is marked `applied` at that shared commit
+   boundary. Interruption leaves later entries `pending`; retrying the same plan recomputes current
+   additive intent and converges. After every changed dependency prefix, apply re-reads identity,
+   the graph, and Threads before declaring completion—even if the planned Thread was already an
+   idempotent skip—so a raw edit that undoes a repaired edge remains pending rather than becoming a
+   false success. A final-create or guard-cleanup error after all semantic writes reports
+   `complete: true` and is never retried automatically. On a real successful apply, `changed`
+   reports whether this invocation actually applied an operation; a dry-run uses it to report
+   whether work would be required.
+5. **The simple validator remains within the V1 budget, while atomic I/O dominates large applies.**
+   An adversarial review showed that rebuilding the entire graph for every additive prefix consumed
+   roughly 59% of the planning phase even though edge-addition safety is monotone: each prefix is an
+   edge-subset of the validated final graph. The shared validator now skips those redundant rebuilds
+   only for canonical edge supersets; removals and legacy-field clearing retain full prefix checks.
+   On an Apple M5, the complete guarded dry-run at 1,000 tasks and 300 dependency-owner writes now
+   takes approximately 0.22 seconds; the real 300-task-file apply plus final Thread create takes
+   approximately 3.24 seconds. V1 sets a reference budget of one second for guarded
+   read/validate/materialize and five seconds total at that scale. Crossing either budget on a
+   supported development-class machine, or dogfooding ordinary manifests that approach the
+   300-write case, triggers another profiling pass. The current real-apply time is mostly per-file
+   atomic durability, while the independently budgeted planning phase now has substantial headroom;
+   replacing the graph algorithm would not remove the dominant total lock hold. Contending taskflow
+   writers wait on the same guard and re-authorize from a fresh snapshot after release.
 
 ## Related
 

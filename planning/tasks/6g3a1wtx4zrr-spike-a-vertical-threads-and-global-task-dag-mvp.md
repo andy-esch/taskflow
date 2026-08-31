@@ -249,8 +249,9 @@ GUIDE=$("$TSK" -C "$PLAY" task new "Write guide" --epic "$DOCS" --tags threads -
 
 The variables above belong to this shell walkthrough, not to the Thread manifest format. The
 unquoted heredocs below substitute them while writing literal task IDs into each YAML file. A saved
-manifest used directly with `thread compose` must contain its actual existing-task IDs, or declare
-the tasks inline with `new_task`.
+manifest used directly with production `thread compose` must contain its actual existing-task IDs.
+The spike explored inline `new_task`; production V1 deliberately rejects it until creation
+provenance and recovery ordering receive a separate amendment.
 
 Compose and apply a linear Thread with an external gate:
 

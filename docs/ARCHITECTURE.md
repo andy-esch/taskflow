@@ -237,6 +237,20 @@ adapter capabilities rather than leaked persistence.
   lifecycle, and Thread writers therefore serialize and re-authorize from fresh state. Raw
   editors do not join the advisory lock; the two CAS checks detect their changes where possible
   but cannot make a cross-process guarantee across the final verify-to-rename window.
+  `ThreadApplyMutationStore` is the compound sibling for a generated bulk-link plan. The CLI
+  injects configuration rediscovery into `FS`, allowing apply to verify both the physical planning
+  root and durable repository ID while the canonical-root guard is held. One strict snapshot feeds
+  the pure additive planner; lock-free dependency materialization runs first, the no-clobber Thread
+  create runs last, and each atomic task replacement advances a structured operation receipt. An
+  interrupted prefix is therefore graph-valid and resumable from the same durable plan without
+  nesting `TaskGraphMutationStore` or `ThreadCreationMutationStore`. A raw edit before the first
+  write fails the whole-source CAS; a target edit after a durable prefix fails the immediate CAS and
+  leaves that prefix visible in the receipt. Apply re-reads identity, the graph, and Threads after
+  every changed dependency prefix—even when the planned Thread already exists—so an out-of-band
+  edit that undoes a repaired edge cannot produce a false complete receipt.
+  The shared graph-plan validator recognizes canonical edge-only supersets: every physical prefix
+  is then an edge-subset of the validated final graph, so it skips redundant per-prefix graph
+  rebuilds. Removal and legacy-migration plans retain full prefix validation.
   Concurrency is **version-CAS** (epic 24): every write, just
   before committing, re-resolves the file by its **id** and re-hashes it
   against the content read at the start of the op (`verifyUnchanged` in `cas.go` — a
