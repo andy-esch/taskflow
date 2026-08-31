@@ -453,7 +453,7 @@ tskflwctl thread list [--status <status>]
 tskflwctl thread show <thread>               # Rollup, blockers, external gates, frontier
 tskflwctl thread frontier <thread>           # Machine list of graph-clear pending members
 tskflwctl thread plan <thread>               # Explanatory topology/waves
-tskflwctl thread graph <thread> [--format mermaid|dot|ascii]
+tskflwctl thread graph <thread> [--format mermaid|dot]
 
 # Existing task queries gain Thread filters
 tskflwctl task list --thread <thread> [--unblocked]
@@ -515,7 +515,11 @@ be scoped into the following dependency-ordered slices without requiring the def
    primary bulk-linking workflow.
 7. **Generated views:** add deterministic Mermaid/DOT and polish explanatory plans after the shared
    projection has CLI usage. Generated output is never persisted as Thread state.
-8. **Planned TUI follow-up:** after CLI and wire behavior have usage feedback, add a Thread list/tab
+8. **CLI preview release checkpoint:** after generated views and the in-flight frontier presentation
+   follow-up are reviewed and merged, dogfood the complete CLI Thread workflow from a clean `main`
+   build and cut v0.18.0. Release notes must label Threads as a preview whose interface may still
+   evolve. TUI support and advanced graph calculations are not release prerequisites.
+9. **Planned TUI follow-up:** after CLI and wire behavior have usage feedback, add a Thread list/tab
    and detail view showing lifecycle, rollup, frontier, member/external distinction, and a readable
    graph. The first TUI slice should consume the same projections and should not introduce direct
    graph editing or a separate readiness calculation.
@@ -536,6 +540,10 @@ the spike adapter on canonical planning data:
   actual work naturally has those relationships.
 - After bulk linking lands, use a literal-YAML manifest to establish or extend the next real
   initiative and retain its materialized plan until apply reports completion.
+- After generated views and the frontier presentation follow-up land, exercise create, dependency,
+  membership, lifecycle, apply, plan, graph, show, and frontier commands from a clean `main` build.
+  That dogfood pass is the v0.18.0 CLI-preview release gate; it is not a claim that the Thread
+  interface is stable or that TUI support is complete.
 - Record confusing output, forced transitions, reopen behavior, merge conflicts, and recovery work
   in the owning implementation task. Contract-level findings amend this ADR before TUI behavior is
   treated as settled.
@@ -1088,6 +1096,35 @@ a Thread. The corrected adapter boundary is:
 This split is deliberately smaller than a repository abstraction redesign. It establishes the port
 and projection seams needed by additional interfaces while leaving concrete storage, HTTP transport,
 and graph rendering implementations to their own adapters.
+
+### 2026-08-31: Generated-view V1 is one semantic projection with two output families
+
+Implementation scoping resolved the remaining ambiguity between explanatory planning and text graph
+export:
+
+1. **One core projection feeds every interface.** A Thread graph projection contains the complete
+   Thread view, stable-ID-ordered member and immediate-external-gate nodes,
+   every prerequisite-to-dependent edge whose endpoints are both in that bounded node set,
+   member-only waves, and an explicit topology-completeness verdict. Member waves preserve ordering
+   paths that pass through included external gates by contracting those gate vertices; gates remain
+   outside the waves and never become Thread-owned work. The projection carries raw labels and
+   taskflow-owned semantic types only. CLI, TUI, future web, and library callers may consume it
+   directly.
+2. **Plans and diagrams are different presentations of the same evidence.** `thread plan` presents
+   member waves and lists external gates separately. `thread graph` emits Mermaid by default or DOT
+   when requested. ASCII/Unicode is deferred in V1 rather than advertised as an unavailable format.
+   Neither surface is a scheduler, dispatch authorization, duration estimate, or barrier protocol.
+3. **Machine output remains semantic.** `--json` on either command returns the versioned neutral
+   projection, never renderer text embedded in JSON. Explicit `--format` and `--json` are mutually
+   exclusive so renderer selection cannot leak into the machine contract.
+4. **Health qualifies topology.** Broken or degraded evidence may retain useful partial waves and
+   renderable nodes/edges for diagnosis, but `topology_complete` is true only when the Thread
+   projection and member topology are healthy and complete. Broken or unknown members stay visible
+   as nodes without being presented as ranked work.
+5. **The default graph boundary stays bounded.** Nodes include members plus their immediate external
+   gates; deeper upstream context remains the responsibility of causal blocker queries. Edges are
+   the induced repository subgraph over those nodes, including edges whose dependent is an external
+   gate. Every formatter consumes that boundary as-is and owns its own deterministic escaping.
 
 ## Related
 

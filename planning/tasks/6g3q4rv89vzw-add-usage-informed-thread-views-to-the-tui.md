@@ -10,8 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [threads, tui, graph, ux]
 created: "2026-08-25"
-updated_at: "2026-08-27"
-depends_on: [6g3q4rv1w9e2]
+updated_at: "2026-08-31"
+depends_on: [6g3q4rv1w9e2, 6g5m69wpydzw]
 ---
 # Add usage-informed Thread views to the TUI
 
