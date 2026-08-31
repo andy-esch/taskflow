@@ -145,7 +145,13 @@ adapter capabilities rather than leaked persistence.
   `WorkspaceService` is the separate local-tree opening boundary used when a primary
   adapter needs a complete entity service and watcher layout for an explicit start path.
   Its `WorkspaceStore` port returns neutral capabilities; registry labels are carried as
-  presentation context and never influence discovery.
+  presentation context and never influence discovery. `WorkspaceSource` carries
+  `TaskGraphSource` and `ThreadStore` independently from the complete entity `Store`, so a
+  split adapter can supply Thread projections without making both reads methods on one concrete
+  value. `WorkspaceService` intentionally still requires the complete `Store` and `Layout` needed
+  by the local TUI; a read-only primary adapter composes `Service` directly from the narrow ports.
+  Complete adapters remain source-compatible because `Service` defaults both read capabilities
+  from their aggregate store.
   `TaskGraph` is an immutable read projection over one repository scan. It owns graph
   health (`healthy`/`degraded`/`broken`), SCC-based cycle attribution, derived lifecycle
   role and gate state, sound completion, topology, downstream impact, and separately
@@ -162,8 +168,9 @@ adapter capabilities rather than leaked persistence.
   Eligibility is read from the queried task's explicit derived state, never inferred from
   an empty blocker list. Both queued (`next-up`) and candidate (`ready-to-start`) work are
   eligible when their gate is clear in a healthy snapshot; readiness remains a handoff signal,
-  not a second authorization gate. `task list --unblocked` fails closed unless the snapshot is
-  healthy.
+  not a second authorization gate. Task listings, board, blockers, downstream queries, and Thread
+  projections all consume the narrow `TaskGraphSource`; `task list --unblocked` fails closed unless
+  its snapshot is healthy.
   `ThreadView` is a pure projection over that same immutable graph: it distinguishes
   members from direct external gates, reports nominal `done/total` and sound
   `drained/total`, separates repository graph health from Thread-local projection
@@ -175,14 +182,26 @@ adapter capabilities rather than leaked persistence.
   Thread membership and lifecycle plans are likewise pure validations over one immutable
   task/Thread snapshot. Task lifecycle impact compares every Thread projection before and after
   the task transition, including indirect member and external-gate effects, without making
-  Thread documents own task state.
+  Thread documents own task state. Thread and dependency read use cases consume the narrow,
+  independently injectable `TaskGraphSource`; Thread reads combine it with `ThreadStore`
+  rather than relying on a concrete aggregate adapter. Joined reads fetch Thread data first and
+  tasks second; paired adapters must ensure the later task snapshot is no older than the Thread
+  snapshot, or coordinate a compatible snapshot themselves. These point-in-time diagnostics never
+  authorize mutation. Forthcoming graph views must extend this boundary with a taskflow-owned,
+  adapter-neutral projection. CLI, TUI, and future web adapters consume that projection;
+  `internal/graphfmt` owns pure Mermaid/DOT escaping and formatting without UI dependencies, and no
+  Cobra, Bubble Tea, HTTP, filesystem, or graph-library type enters core or wire contracts. The
+  source returns a neutral `TaskGraphRead`: unreadable records carry optional stable identity
+  directly, while filesystem adapters translate `FileProblem` paths once at their boundary. The
+  analyzer never parses an opaque source location for identity.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
   `<root>/tasks/<id>-<slug>.md` (flat, id-led). Splits frontmatter with a zero-dep byte
   scanner; parses YAML with `go.yaml.in/yaml/v3`. One `*FS` satisfies the entity
   `Store`, the narrow `Fixer`/`Linter`/`Layout` ports, and the guarded graph and
-  lifecycle mutation capabilities. The Service gets the use-case ports; CLI lint and
+  lifecycle mutation capabilities. Its `ReadTaskGraph` adapter translates file diagnostics into
+  neutral record identity in the same task scan. The Service gets the use-case ports; CLI lint and
   the TUI watcher get their narrower capabilities wired directly. It owns the *layout*
   knowledge — `WatchPaths()`
   hands the TUI watcher its dir set so the path convention isn't reconstructed
