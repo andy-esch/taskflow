@@ -10,8 +10,8 @@ priority: medium
 autonomy_level: 4
 tags: [threads, graph, cli, rendering]
 created: "2026-08-25"
-depends_on: [6g3q4rtv8d0a]
-updated_at: "2026-08-27"
+depends_on: [6g3q4rtv8d0a, 6g5f1d23jy1b]
+updated_at: "2026-08-31"
 ---
 # Generate deterministic Thread graph views
 
