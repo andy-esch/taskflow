@@ -18,8 +18,9 @@ func applySnapshot(repoID string, tasks ...domain.Task) ThreadApplySnapshot {
 	return ThreadApplySnapshot{PlanningRepoID: repoID, Graph: NewTaskGraph(tasks, nil)}
 }
 
-func TestComposeThreadApplyPlanResolvesExistingTasksAndExternalGate(t *testing.T) {
-	gate := graphRecord("bulk-gate", domain.StatusCompleted)
+func TestComposeThreadApplyPlanResolvesExistingTasksAndNonmemberGraphContext(t *testing.T) {
+	context := graphRecord("bulk-context", domain.StatusNextUp)
+	gate := graphRecord("bulk-boundary-gate", domain.StatusNextUp)
 	first := graphRecord("bulk-first", domain.StatusNextUp)
 	second := graphRecord("bulk-second", domain.StatusReadyToStart)
 	threadID := testutil.TaskID("bulk-thread")
@@ -30,14 +31,18 @@ func TestComposeThreadApplyPlanResolvesExistingTasksAndExternalGate(t *testing.T
 			Goal: "Create one resumable Thread plan", Tags: []string{"threads", "bulk", "threads"},
 		},
 		Nodes: []ThreadComposeNode{
+			{Key: "context", TaskID: context.ID, Member: &external},
 			{Key: "gate", TaskID: gate.ID, Member: &external},
 			{Key: "first", TaskID: first.ID},
 			{Key: "second", TaskID: second.ID},
 		},
-		Dependencies: []ThreadComposeDependency{{From: "first", To: "second"}, {From: "gate", To: "first"}},
+		Dependencies: []ThreadComposeDependency{
+			{From: "first", To: "second"}, {From: "gate", To: "first"}, {From: "context", To: "gate"},
+		},
 	}
+	snapshot := applySnapshot("planning-id", context, gate, first, second)
 	plan, err := ComposeThreadApplyPlan(
-		applySnapshot("planning-id", gate, first, second), manifest, "# Thread: Bulk delivery\n",
+		snapshot, manifest, "# Thread: Bulk delivery\n",
 		func() string { return threadID }, threadApplyNow,
 	)
 	if err != nil {
@@ -51,24 +56,66 @@ func TestComposeThreadApplyPlanResolvesExistingTasksAndExternalGate(t *testing.T
 	if !reflect.DeepEqual(plan.Thread.Tasks, wantMembers) || !reflect.DeepEqual(plan.Thread.Tags, []string{"bulk", "threads"}) {
 		t.Fatalf("planned Thread = %+v", plan.Thread)
 	}
-	wantEdges := []ThreadApplyDependency{{From: gate.ID, To: first.ID}, {From: first.ID, To: second.ID}}
+	wantEdges := []ThreadApplyDependency{
+		{From: context.ID, To: gate.ID}, {From: gate.ID, To: first.ID}, {From: first.ID, To: second.ID},
+	}
 	sortThreadApplyDependencies(wantEdges)
 	if !reflect.DeepEqual(plan.Dependencies, wantEdges) {
 		t.Fatalf("dependencies = %+v, want %+v", plan.Dependencies, wantEdges)
 	}
-	decision, err := PrepareThreadApply(applySnapshot("planning-id", gate, first, second), plan)
+	decision, err := PrepareThreadApply(snapshot, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(decision.GraphPlan.TaskWrites) != 2 || decision.ThreadPlan == nil || len(decision.Operations) != 3 {
+	if len(decision.GraphPlan.TaskWrites) != 3 || decision.ThreadPlan == nil || len(decision.Operations) != 4 {
 		t.Fatalf("decision = %+v", decision)
+	}
+
+	finalGraph := graphAfterTaskWrites(snapshot.Graph, decision.GraphPlan)
+	view := ProjectThread(plan.Thread.domainThread(), finalGraph)
+	if len(view.ExternalGates) != 1 || view.ExternalGates[0].Task.ID != gate.ID {
+		t.Fatalf("external gates = %+v; only the direct membership boundary belongs in the projection", view.ExternalGates)
+	}
+	causal := finalGraph.CausalBlockers(first.ID)
+	causalIDs := make(map[string]bool, len(causal))
+	for _, blocker := range causal {
+		causalIDs[blocker.TaskID] = true
+	}
+	if len(causal) != 2 || !causalIDs[context.ID] || !causalIDs[gate.ID] {
+		t.Fatalf("causal blockers = %+v; transitive nonmember context must remain queryable", causal)
+	}
+}
+
+func TestComposeThreadApplyPlanAcceptsExistingTransitiveNonmemberContext(t *testing.T) {
+	context := graphRecord("existing-context", domain.StatusNextUp)
+	gate := graphRecord("existing-boundary", domain.StatusNextUp, context.ID)
+	member := graphRecord("existing-member", domain.StatusNextUp, gate.ID)
+	nonmember := false
+	manifest := ThreadComposeManifest{
+		Thread: ThreadComposeInput{Title: "Existing context", Description: "Reuse the graph", Goal: "Keep roles precise"},
+		Nodes: []ThreadComposeNode{
+			{Key: "context", TaskID: context.ID, Member: &nonmember},
+			{Key: "gate", TaskID: gate.ID, Member: &nonmember},
+			{Key: "member", TaskID: member.ID},
+		},
+	}
+
+	plan, err := ComposeThreadApplyPlan(
+		applySnapshot("planning", context, gate, member), manifest, "body",
+		func() string { return testutil.TaskID("existing-context-thread") }, threadApplyNow,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Dependencies) != 0 || !reflect.DeepEqual(plan.Thread.Tasks, []string{member.ID}) {
+		t.Fatalf("plan = %+v", plan)
 	}
 }
 
 func TestComposeThreadApplyPlanRejectsMisleadingOrInvalidManifest(t *testing.T) {
 	member := graphRecord("bulk-member", domain.StatusNextUp)
-	externalTask := graphRecord("bulk-unused-external", domain.StatusCompleted)
-	external := false
+	nonmemberTask := graphRecord("bulk-unused-nonmember", domain.StatusCompleted)
+	nonmember := false
 	base := ThreadComposeManifest{
 		Thread: ThreadComposeInput{Title: "Bulk", Description: "Bulk Thread", Goal: "Exercise validation"},
 		Nodes:  []ThreadComposeNode{{Key: "member", TaskID: member.ID}},
@@ -90,16 +137,22 @@ func TestComposeThreadApplyPlanRejectsMisleadingOrInvalidManifest(t *testing.T) 
 			value.Nodes = append(value.Nodes, ThreadComposeNode{Key: "again", TaskID: member.ID})
 			return value
 		}(), want: "both declare"},
-		{name: "external is not a gate", repoID: "planning", manifest: func() ThreadComposeManifest {
+		{name: "nonmember is disconnected", repoID: "planning", manifest: func() ThreadComposeManifest {
 			value := base
-			value.Nodes = append(value.Nodes, ThreadComposeNode{Key: "external", TaskID: externalTask.ID, Member: &external})
+			value.Nodes = append(value.Nodes, ThreadComposeNode{Key: "context", TaskID: nonmemberTask.ID, Member: &nonmember})
 			return value
-		}(), want: "not an upstream gate"},
+		}(), want: "not upstream graph context"},
+		{name: "nonmember is downstream", repoID: "planning", manifest: func() ThreadComposeManifest {
+			value := base
+			value.Nodes = append(value.Nodes, ThreadComposeNode{Key: "context", TaskID: nonmemberTask.ID, Member: &nonmember})
+			value.Dependencies = []ThreadComposeDependency{{From: "member", To: "context"}}
+			return value
+		}(), want: "not upstream graph context"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ComposeThreadApplyPlan(
-				applySnapshot(tc.repoID, member, externalTask), tc.manifest, "body",
+				applySnapshot(tc.repoID, member, nonmemberTask), tc.manifest, "body",
 				func() string { return testutil.TaskID(tc.name) }, threadApplyNow,
 			)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {

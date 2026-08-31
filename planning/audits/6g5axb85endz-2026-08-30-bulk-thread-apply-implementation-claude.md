@@ -208,7 +208,7 @@ Mutation probes (each applied, measured, then reverted and checksum-verified):
 
 ### Medium
 
-#### M1. `member: false` is validated transitively, but a Thread can only ever display a *direct* external gate  · **Status:** open
+#### M1. `member: false` is validated transitively, but a Thread can only ever display a *direct* external gate  · **Status:** fixed
 
 **File:** `internal/core/thread_apply.go:310` (and `:489-497`) vs `internal/core/thread_projection.go:157-160` | **Component:** core/thread-apply · core/thread-projection
 **Effort:** S · **Urgency:** soon
@@ -241,6 +241,12 @@ word. Tightening compose to require a *direct* prerequisite of a member in the p
 is the smaller change and matches ADR §114 plus today's projection; widening `ProjectThread` to
 transitive gates is defensible but changes the meaning of every existing Thread view. Either way,
 retire the contradictory sentence in the 2026-08-30 amendment.
+
+**Resolution:** Bulk manifests now name member: false tasks as transitive
+nonmember graph context, while runtime and wire contracts reserve external gates
+for direct membership-boundary prerequisites. Core and CLI regressions cover
+proposed and existing multi-hop chains, direct projection, causal discovery, and
+invalid disconnected/downstream context.
 
 #### M2. The all-or-nothing whole-source CAS is untested — the full suite passes with it deleted  · **Status:** fixed
 

@@ -24,7 +24,10 @@ type ThreadComposeInput struct {
 type ThreadComposeNode struct {
 	Key    string `json:"key" yaml:"key"`
 	TaskID string `json:"task_id" yaml:"task_id"`
-	Member *bool  `json:"member,omitempty" yaml:"member,omitempty"`
+	// Member defaults to true. False keeps the task out of persisted Thread
+	// membership while allowing it to supply transitive upstream graph context
+	// for dependency edges declared by the manifest.
+	Member *bool `json:"member,omitempty" yaml:"member,omitempty"`
 }
 
 type ThreadComposeDependency struct {
@@ -237,7 +240,7 @@ func ComposeThreadApplyPlan(snapshot ThreadApplySnapshot, manifest ThreadCompose
 	keys := make(map[string]string, len(manifest.Nodes))
 	declaredTasks := make(map[string]string, len(manifest.Nodes))
 	members := make([]string, 0, len(manifest.Nodes))
-	external := make([]string, 0)
+	nonmembers := make([]string, 0)
 	for _, node := range manifest.Nodes {
 		key := strings.TrimSpace(node.Key)
 		switch {
@@ -260,7 +263,7 @@ func ComposeThreadApplyPlan(snapshot ThreadApplySnapshot, manifest ThreadCompose
 		if member {
 			members = append(members, node.TaskID)
 		} else {
-			external = append(external, node.TaskID)
+			nonmembers = append(nonmembers, node.TaskID)
 		}
 	}
 	if len(members) == 0 {
@@ -306,9 +309,9 @@ func ComposeThreadApplyPlan(snapshot ThreadApplySnapshot, manifest ThreadCompose
 		return ThreadApplyPlan{}, err
 	}
 	finalGraph := graphAfterTaskWrites(snapshot.Graph, decision.GraphPlan)
-	for _, taskID := range external {
+	for _, taskID := range nonmembers {
 		if !taskReachesAny(finalGraph, taskID, members) {
-			return ThreadApplyPlan{}, fmt.Errorf("%w: non-member node %q (%s) is not an upstream gate of any Thread member", domain.ErrValidation, declaredTasks[taskID], taskID)
+			return ThreadApplyPlan{}, fmt.Errorf("%w: non-member node %q (%s) is not upstream graph context for any Thread member", domain.ErrValidation, declaredTasks[taskID], taskID)
 		}
 	}
 	return decision.Plan, nil

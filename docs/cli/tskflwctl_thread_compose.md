@@ -4,7 +4,7 @@ Compile existing tasks and dependency edges into a durable Thread apply plan
 
 ### Synopsis
 
-Read one strict literal YAML/JSON manifest, resolve its exact stable task IDs, and validate the proposed global DAG without mutation. A real run creates a no-clobber materialized plan; --dry-run prints the same plan without creating the output file.
+Read one strict literal YAML/JSON manifest, resolve its exact stable task IDs, and validate the proposed global DAG without mutation. Nodes marked member: false may supply transitive upstream graph context without entering Thread membership; ordinary Thread views expose only direct membership-boundary prerequisites as external gates. A real run creates a no-clobber materialized plan; --dry-run prints the same plan without creating the output file.
 
 ```
 tskflwctl thread compose [flags]

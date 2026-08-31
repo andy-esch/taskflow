@@ -369,8 +369,10 @@ dependencies:
   exist. Slugs, partial references, and inline `new_task` specifications are rejected.
 - A V1 manifest creates exactly one new Thread. Extending an existing Thread remains available
   through the ordinary membership/dependency commands until real use justifies update manifests.
-- `member` defaults to true. `member: false` permits an explicitly declared existing external gate;
-  output still discovers undeclared external gates from the global graph.
+- `member` defaults to true. `member: false` declares existing nonmember graph context that must be
+  transitively upstream of at least one member. It is an authoring role, not persisted Thread
+  metadata. Runtime output derives direct external gates from the global graph regardless of which
+  nonmembers were declared in the manifest.
 - Dependency arcs point from prerequisite to dependent. They add repository-global `depends_on`
   relations; the manifest does not own those edges and omission never removes an existing edge.
 - Local keys are authoring conveniences only. Persisted Thread membership and task dependencies use
@@ -973,9 +975,10 @@ recovery semantics:
 
 1. **Both inputs are strict but serve different authors.** The authoring manifest accepts schema 1
    (or omitted schema), rejects unknown fields, uses unique local keys plus exact existing stable
-   task IDs, and treats `member: false` as a claim that the node is a real transitive upstream gate
-   of a member. Compose rejects a misleading non-gate. The generated schema-1 plan contains only
-   the durable planning-repository ID, compose date, one fully rendered/preallocated unstarted
+   task IDs, and treats `member: false` as a claim that the node is real transitive upstream graph
+   context for a member. Compose rejects disconnected or downstream nonmember context. The
+   generated schema-1 plan contains only the durable planning-repository ID, compose date, one
+   fully rendered/preallocated unstarted
    Thread, sorted member IDs, and sorted stable-ID edge additions. Its output is mode `0600` and
    no-clobber. Apply accepts a durable path, never stdin.
 2. **Identity is live authorization evidence.** Compose refuses an ID-less repository. Production
@@ -1017,6 +1020,28 @@ recovery semantics:
    atomic durability, while the independently budgeted planning phase now has substantial headroom;
    replacing the graph algorithm would not remove the dominant total lock hold. Contending taskflow
    writers wait on the same guard and re-authorize from a fresh snapshot after release.
+
+### 2026-08-31: Nonmember graph context is not an external-gate role
+
+Bulk-apply dogfooding and its implementation audit exposed an overloaded term. The manifest needs
+to name every endpoint of a proposed dependency edge, including deeper prerequisites outside the
+Thread, while the runtime projection deliberately names only the immediate membership boundary.
+The corrected contract uses two distinct concepts:
+
+1. **`member: false` declares compose-time nonmember graph context.** It is valid when the task is
+   transitively upstream of a declared member in the proposed final repository graph. This retains
+   multi-hop manifests such as `context -> boundary -> member`. The role is not written into the
+   materialized plan or Thread document; only the dependency edges persist.
+2. **An external gate is a direct boundary prerequisite.** Runtime Thread projections derive it
+   from the global DAG when a nonmember directly gates a non-withdrawn member. Default `thread
+   show`, rollup, completion, and graph views remain bounded to members plus those immediate gates.
+3. **Deeper context remains queryable, not silently promoted.** Full causal blocker queries traverse
+   beyond the direct gate and can explain the entire prerequisite chain. Deeper context does not
+   enter Thread membership, progress denominators, or persisted metadata merely because compose
+   referenced it.
+
+This is a vocabulary and contract correction, not a schema or projection expansion. It resolves the
+bulk-apply audit contradiction before deterministic graph views consume the shared projection.
 
 ## Related
 

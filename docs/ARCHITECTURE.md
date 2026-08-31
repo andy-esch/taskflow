@@ -248,6 +248,11 @@ adapter capabilities rather than leaked persistence.
   leaves that prefix visible in the receipt. Apply re-reads identity, the graph, and Threads after
   every changed dependency prefix—even when the planned Thread already exists—so an out-of-band
   edit that undoes a repaired edge cannot produce a false complete receipt.
+  The authoring manifest's `member: false` is a compose-time graph-context declaration, not a
+  persisted Thread role. Such a task must be transitively upstream of a member and may be needed to
+  express a multi-hop dependency chain. Runtime Thread projections reserve **external gate** for a
+  direct prerequisite outside the membership set; deeper context remains discoverable through
+  causal blocker queries without entering Thread rollups or the default boundary projection.
   The shared graph-plan validator recognizes canonical edge-only supersets: every physical prefix
   is then an edge-subset of the validated final graph, so it skips redundant per-prefix graph
   rebuilds. Removal and legacy-migration plans retain full prefix validation.

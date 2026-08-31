@@ -31,16 +31,18 @@ func writeThreadApplyCLITask(t *testing.T, root, seed string, status domain.Stat
 
 func TestThreadComposeAndApplyCLIConvergesExistingTasks(t *testing.T) {
 	root := freshRepo(t)
-	gateID := writeThreadApplyCLITask(t, root, "bulk-gate", domain.StatusCompleted)
+	contextID := writeThreadApplyCLITask(t, root, "bulk-context", domain.StatusNextUp)
+	gateID := writeThreadApplyCLITask(t, root, "bulk-boundary-gate", domain.StatusNextUp)
 	firstID := writeThreadApplyCLITask(t, root, "bulk-first", domain.StatusNextUp)
 	secondID := writeThreadApplyCLITask(t, root, "bulk-second", domain.StatusReadyToStart)
 	manifestPath := filepath.Join(root, "thread-manifest.yml")
 	planPath := filepath.Join(root, "thread-plan.yml")
 	mustWrite(t, manifestPath, "schema: 1\nthread:\n  title: Bulk delivery\n  description: Link existing work safely\n  goal: Create a resumable Thread\n  tags: [threads, bulk]\nnodes:\n"+
+		"  - key: context\n    task_id: "+contextID+"\n    member: false\n"+
 		"  - key: gate\n    task_id: "+gateID+"\n    member: false\n"+
 		"  - key: first\n    task_id: "+firstID+"\n"+
 		"  - key: second\n    task_id: "+secondID+"\n"+
-		"dependencies:\n  - from: gate\n    to: first\n  - from: first\n    to: second\n")
+		"dependencies:\n  - from: context\n    to: gate\n  - from: gate\n    to: first\n  - from: first\n    to: second\n")
 
 	composed := runRoot(t, "-C", root, "thread", "compose", "--from", manifestPath, "--out", planPath, "--json")
 	var compose wire.ThreadApplyComposeEnvelope
@@ -67,7 +69,7 @@ func TestThreadComposeAndApplyCLIConvergesExistingTasks(t *testing.T) {
 	if err := json.Unmarshal([]byte(previewText), &preview); err != nil {
 		t.Fatalf("preview JSON: %v\n%s", err, previewText)
 	}
-	if !preview.DryRun || !preview.Changed || preview.Complete || preview.Committed || len(preview.Operations) != 3 {
+	if !preview.DryRun || !preview.Changed || preview.Complete || preview.Committed || len(preview.Operations) != 4 {
 		t.Fatalf("preview = %+v", preview)
 	}
 
@@ -88,14 +90,35 @@ func TestThreadComposeAndApplyCLIConvergesExistingTasks(t *testing.T) {
 	if err != nil || graph.Health() != core.GraphHealthy {
 		t.Fatalf("graph health=%s err=%v", graph.Health(), err)
 	}
+	gate, _ := graph.Task(gateID)
 	first, _ := graph.Task(firstID)
 	second, _ := graph.Task(secondID)
-	if !slices.Contains(first.DependsOn, gateID) || !slices.Contains(second.DependsOn, firstID) {
-		t.Fatalf("first=%v second=%v", first.DependsOn, second.DependsOn)
+	if !slices.Contains(gate.DependsOn, contextID) || !slices.Contains(first.DependsOn, gateID) || !slices.Contains(second.DependsOn, firstID) {
+		t.Fatalf("gate=%v first=%v second=%v", gate.DependsOn, first.DependsOn, second.DependsOn)
 	}
 	thread, body, err := store.NewFS(root).GetThread(plan.Thread.ID)
 	if err != nil || !slices.Equal(thread.Tasks, plan.Thread.Tasks) || body != plan.Thread.Body {
 		t.Fatalf("thread=%+v body=%q err=%v", thread, body, err)
+	}
+	shownText := runRoot(t, "-C", root, "thread", "show", plan.Thread.ID, "--json")
+	var shown wire.ThreadShowEnvelope
+	if err := json.Unmarshal([]byte(shownText), &shown); err != nil {
+		t.Fatalf("thread show JSON: %v\n%s", err, shownText)
+	}
+	if len(shown.View.ExternalGates) != 1 || shown.View.ExternalGates[0].Task.TaskID != gateID {
+		t.Fatalf("external gates = %+v; transitive context must stay outside the direct boundary projection", shown.View.ExternalGates)
+	}
+	causalText := runRoot(t, "-C", root, "task", "blockers", firstID, "--causal", "--json")
+	var causal wire.TaskBlockersEnvelope
+	if err := json.Unmarshal([]byte(causalText), &causal); err != nil {
+		t.Fatalf("causal blockers JSON: %v\n%s", err, causalText)
+	}
+	causalIDs := make([]string, 0, len(causal.Blockers))
+	for _, blocker := range causal.Blockers {
+		causalIDs = append(causalIDs, blocker.Task.TaskID)
+	}
+	if !slices.Contains(causalIDs, gateID) || !slices.Contains(causalIDs, contextID) {
+		t.Fatalf("causal blockers = %+v; expected direct gate and transitive graph context", causal.Blockers)
 	}
 
 	convergedText := runRoot(t, "-C", root, "thread", "apply", planPath, "--json")

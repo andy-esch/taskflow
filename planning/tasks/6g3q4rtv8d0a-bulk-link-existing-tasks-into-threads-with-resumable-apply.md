@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g3q4rtv8d0a
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Compose literal-YAML membership and dependency graphs for existing tasks into planning-space-bound resumable apply plans.
 effort: 4-7 days
@@ -10,9 +10,10 @@ priority: high
 autonomy_level: 3
 tags: [threads, graph, cli, workflow]
 created: "2026-08-25"
-updated_at: "2026-08-30"
+updated_at: "2026-08-31"
 depends_on: [6g4wm2yf6tyj]
 started_at: "2026-08-30"
+completed_at: "2026-08-31"
 ---
 # Bulk-link existing tasks into Threads with resumable apply
 
@@ -22,7 +23,8 @@ Let users describe membership and dependency relationships among existing tasks 
 
 ## Scope
 
-- Support one new Thread per manifest using local node keys and literal stable `task_id` references; `member: false` represents explicit external gates.
+- Support one new Thread per manifest using local node keys and literal stable `task_id` references;
+  `member: false` supplies nonmember graph context without entering persisted membership.
 - Materialize a planning-space-bound stable-ID apply plan before mutation.
 - Apply membership and repository-global dependency additions with dry-run, per-operation receipts, conflict detection, interruption recovery, and idempotent retry.
 - Exclude inline task creation from V1; a future amendment must define creation provenance and already-applied identity before adding it.
@@ -80,8 +82,10 @@ authoring shape or set to `1`; unknown fields are rejected. Every node has one u
 one exact stable `task_id`, and optional `member` (default true). Inline `new_task`, partial task
 references, duplicate task declarations, duplicate edges, and shell interpolation are not accepted.
 At least one member is required. A `member: false` node must be an actual transitive prerequisite of
-a declared member in the proposed repository graph; otherwise it is not an external gate and compose
-rejects the misleading role.
+a declared member in the proposed repository graph; otherwise compose rejects it as invalid
+nonmember graph context. Only direct prerequisites outside the final membership set are external
+gates in ordinary Thread projections. Deeper nonmembers remain visible through causal graph queries
+but are not persisted as a Thread role.
 
 Compose emits a strict schema-1 materialized plan containing the durable planning-repository ID,
 compose date, one preallocated unstarted Thread (including its fully rendered body and sorted stable
@@ -109,9 +113,10 @@ Cleanup failure after the final durable write is classified as committed and is 
 
 Production now exposes `thread compose --from <manifest> --out <plan>` and
 `thread apply <durable-plan>`. Compose uses strict single-document YAML/JSON decoding with unknown
-field rejection, resolves only exact existing task IDs, validates `member: false` as a real upstream
-gate, renders the ordinary Thread template, and writes a schema-1 mode-`0600` no-clobber recovery
-plan. Dry-run performs the same semantic validation and prints the plan without creating it.
+field rejection, resolves only exact existing task IDs, validates `member: false` as real transitive
+upstream graph context, renders the ordinary Thread template, and writes a schema-1 mode-`0600`
+no-clobber recovery plan. Dry-run performs the same semantic validation and prints the plan without
+creating it.
 
 Apply is one `ThreadApplyMutationStore` operation. The CLI injects live config rediscovery into the
 filesystem adapter; while holding the canonical-root guard, the adapter verifies physical root and
@@ -125,8 +130,9 @@ committed, and survive both an interrupted durable prefix and post-final cleanup
 retry is limited to a pre-commit conflict with work still pending.
 
 Focused coverage includes strict/unknown/multi-document input, no-clobber plans, missing/wrong/moved
-identity evidence, unsafe hand-edited slugs, cross-kind ID collision, cycles, misleading external
-roles, additive unrelated task state, already-present edges and Thread, byte-identical no-op retry,
+identity evidence, unsafe hand-edited slugs, cross-kind ID collision, cycles, disconnected or
+downstream nonmember context, additive unrelated task state, already-present edges and Thread,
+byte-identical no-op retry,
 injected failure and successful retry after every durable operation prefix, raw edits before and after
 a durable prefix, a raw edit undoing a repair when the Thread already exists,
 whole-source task and Thread races before the first write, an exact concurrent Thread create,
