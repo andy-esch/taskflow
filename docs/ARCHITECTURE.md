@@ -146,12 +146,19 @@ adapter capabilities rather than leaked persistence.
   adapter needs a complete entity service and watcher layout for an explicit start path.
   Its `WorkspaceStore` port returns neutral capabilities; registry labels are carried as
   presentation context and never influence discovery. `WorkspaceSource` carries
-  `TaskGraphSource` and `ThreadStore` independently from the complete entity `Store`, so a
-  split adapter can supply Thread projections without making both reads methods on one concrete
-  value. `WorkspaceService` intentionally still requires the complete `Store` and `Layout` needed
+  `TaskGraphSource`, semantic `ThreadStore` reads, and optional local `ThreadPathSource`
+  independently from the complete entity `Store`, so a split adapter can supply Thread
+  projections without implementing filesystem navigation. Explicitly replacing Thread reads
+  detaches any path source discovered from the aggregate store unless the composition root also
+  supplies one; remote records therefore cannot be paired accidentally with unrelated local
+  paths through a hidden fallback. An explicitly supplied path source is instead an affirmative
+  override and may accompany aggregate-discovered reads; the composition root must ensure explicit
+  read/path sources describe the same corpus because these narrow ports deliberately expose no
+  shared backend identity. A value implementing both ports must be supplied through both options.
+  `WorkspaceService` intentionally still requires the complete `Store` and `Layout` needed
   by the local TUI; a read-only primary adapter composes `Service` directly from the narrow ports.
-  Complete adapters remain source-compatible because `Service` defaults both read capabilities
-  from their aggregate store.
+  Complete adapters remain ergonomic because `Service` discovers all supported capabilities from
+  their aggregate store.
   `TaskGraph` is an immutable read projection over one repository scan. It owns graph
   health (`healthy`/`degraded`/`broken`), SCC-based cycle attribution, derived lifecycle
   role and gate state, sound completion, topology, downstream impact, and separately
@@ -183,8 +190,10 @@ adapter capabilities rather than leaked persistence.
   task/Thread snapshot. Task lifecycle impact compares every Thread projection before and after
   the task transition, including indirect member and external-gate effects, without making
   Thread documents own task state. Thread and dependency read use cases consume the narrow,
-  independently injectable `TaskGraphSource`; Thread reads combine it with `ThreadStore`
-  rather than relying on a concrete aggregate adapter. Joined reads fetch Thread data first and
+  independently injectable `TaskGraphSource`; Thread reads combine it with the semantic
+  `ThreadStore` rather than relying on a concrete aggregate adapter. Explicit `thread path`
+  navigation alone consumes the optional `ThreadPathSource`; it does not participate in list,
+  show, compose, plan, projection, or graph reads. Joined reads fetch Thread data first and
   tasks second; paired adapters must ensure the later task snapshot is no older than the Thread
   snapshot, or coordinate a compatible snapshot themselves. These point-in-time diagnostics never
   authorize mutation. `ThreadGraphProjection` extends this boundary with stable-ID-ordered raw
@@ -213,9 +222,15 @@ adapter capabilities rather than leaked persistence.
   outside the store. Task dependency fields are graph-owned: generic create/set/edit
   paths cannot introduce a semantic delta, and text-level lint repair skips a would-be
   dependency normalization instead of manufacturing unchecked edges.
-  `ThreadStore` is a separate narrow read port. `ThreadCreationMutationStore` owns guarded
-  unstarted creation, while `ThreadMutationStore` owns atomic existing-document membership
-  and lifecycle changes. Its lock-free update materializer is surgical: it changes only
+  `ThreadStore` is a separate semantic read port. Its list diagnostic channel remains
+  filesystem-shaped until the tracked
+  [adapter-neutral Thread diagnostics](../planning/tasks/6g5rxq1ravd3-make-thread-read-diagnostics-adapter-neutral.md)
+  work lands. The same filesystem adapter also implements the narrower `ThreadPathSource`, whose
+  filename-only resolver deliberately does not parse frontmatter so malformed local documents
+  remain findable for repair. `Layout` remains separately responsible for watcher directories.
+  `ThreadCreationMutationStore` owns guarded
+  unstarted creation, while `ThreadMutationStore` owns atomic existing-document membership and
+  lifecycle changes. Its lock-free update materializer is surgical: it changes only
   membership/status/timestamps and preserves unknown fields, key order, body, and comment content;
   the shared YAML editor may normalize inline-comment spacing.
   Thread files own metadata and membership only; task files remain the sole source of dependency
