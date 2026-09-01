@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g3q4rv1w9e2
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Render explanatory Mermaid and DOT Thread graphs from shared runtime projections without persisting derived output.
 effort: 2-3 days
@@ -13,6 +13,7 @@ created: "2026-08-25"
 depends_on: [6g3q4rtv8d0a, 6g5f1d23jy1b, 6g5fy1m967ka, 6g5gbk5a5bt0]
 updated_at: "2026-08-31"
 started_at: "2026-08-31"
+completed_at: "2026-08-31"
 ---
 # Generate deterministic Thread graph views
 

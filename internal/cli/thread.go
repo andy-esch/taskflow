@@ -289,8 +289,8 @@ func newThreadPathCmd(app *App) *cobra.Command {
 func newThreadFrontierCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:               "frontier <thread>",
-		Short:             "Show graph-clear pending member tasks",
-		Long:              "Show next-up and ready-to-start members whose dependency gates are clear in the shared task-graph projection. An unhealthy projection returns no tasks and retains its diagnosis.",
+		Short:             "Show active work and graph-clear pending members",
+		Long:              "Show in-flight members for context, followed by next-up and ready-to-start members whose dependency gates are clear in the shared task-graph projection. In-flight work is not part of the frontier. An unhealthy projection returns no dispatchable tasks and retains its diagnosis.",
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: app.completeThreadSlugs,

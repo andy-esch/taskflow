@@ -112,6 +112,65 @@ func TestThreadNewListShowPathAndFrontier(t *testing.T) {
 	}
 }
 
+func TestThreadFrontierHumanShowsActiveWorkWithoutChangingMachineFrontier(t *testing.T) {
+	root := threadCLIRepo(t)
+	if _, _, err := runIn(t, root, "thread", "new", "Delivery", "--description", "Ship Threads", "--goal", "Dogfood Threads", "--task", "beta", "--task", "alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runIn(t, root, "task", "start", "alpha"); err != nil {
+		t.Fatal(err)
+	}
+
+	out, errOut, err := runIn(t, root, "thread", "frontier", "delivery")
+	if err != nil || errOut != "" {
+		t.Fatalf("human frontier: %v\nstdout=%s\nstderr=%s", err, out, errOut)
+	}
+	for _, want := range []string{
+		"1 in flight · 0 eligible member(s)",
+		"▶ alpha  " + testutil.TaskID("alpha") + "  in-flight/clear",
+		"no additional dispatchable member tasks",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("frontier omitted %q:\n%s", want, out)
+		}
+	}
+
+	out, errOut, err = runIn(t, root, "thread", "frontier", "delivery", "--json")
+	if err != nil || errOut != "" {
+		t.Fatalf("machine frontier: %v\nstdout=%s\nstderr=%s", err, out, errOut)
+	}
+	var envelope wire.ThreadFrontierEnvelope
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.View.Frontier) != 0 {
+		t.Fatalf("in-flight work entered the semantic frontier: %+v", envelope.View.Frontier)
+	}
+	if len(envelope.View.Members) != 2 || envelope.View.Members[0].State.Role != string(core.RoleInFlight) {
+		t.Fatalf("machine view lost ordinary member state: %+v", envelope.View.Members)
+	}
+}
+
+func TestThreadFrontierHumanShowsBlockedActiveBeforeEligibleWork(t *testing.T) {
+	root := threadCLIRepo(t)
+	if _, _, err := runIn(t, root, "thread", "new", "Delivery", "--description", "Ship Threads", "--goal", "Dogfood Threads", "--task", "beta", "--task", "alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runIn(t, root, "task", "start", "beta", "--force"); err != nil {
+		t.Fatal(err)
+	}
+
+	out, errOut, err := runIn(t, root, "thread", "frontier", "delivery")
+	if err != nil || errOut != "" {
+		t.Fatalf("frontier: %v\nstdout=%s\nstderr=%s", err, out, errOut)
+	}
+	active := strings.Index(out, "▶ beta  "+testutil.TaskID("beta")+"  in-flight/blocked")
+	eligible := strings.Index(out, "✔ alpha  "+testutil.TaskID("alpha"))
+	if active < 0 || eligible <= active {
+		t.Fatalf("blocked active work was not shown before eligible work:\n%s", out)
+	}
+}
+
 func TestThreadNewDryRunAndInvalidMember(t *testing.T) {
 	root := threadCLIRepo(t)
 	out, _, err := runIn(t, root, "thread", "new", "Preview", "--description", "Preview Thread", "--goal", "Prove preview", "--task", "alpha", "--dry-run", "--json")

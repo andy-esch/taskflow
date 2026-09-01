@@ -31,7 +31,7 @@ Work with initiative Threads over the task DAG
 * [tskflwctl thread cancel](tskflwctl_thread_cancel.md)	 - Cancel a Thread without changing member tasks
 * [tskflwctl thread complete](tskflwctl_thread_complete.md)	 - Complete a soundly drained Thread
 * [tskflwctl thread compose](tskflwctl_thread_compose.md)	 - Compile existing tasks and dependency edges into a durable Thread apply plan
-* [tskflwctl thread frontier](tskflwctl_thread_frontier.md)	 - Show graph-clear pending member tasks
+* [tskflwctl thread frontier](tskflwctl_thread_frontier.md)	 - Show active work and graph-clear pending members
 * [tskflwctl thread graph](tskflwctl_thread_graph.md)	 - Export a deterministic Mermaid or DOT Thread graph
 * [tskflwctl thread list](tskflwctl_thread_list.md)	 - List Threads with nominal and sound progress
 * [tskflwctl thread new](tskflwctl_thread_new.md)	 - Create an unstarted Thread with optional initial task members

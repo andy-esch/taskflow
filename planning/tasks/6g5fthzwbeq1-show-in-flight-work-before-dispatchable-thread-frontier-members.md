@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5fthzwbeq1
-status: ready-to-start
+status: in-progress
 epic: 30-threads-and-task-dependency-graphs
 description: Make human Thread frontier output show active members first and distinguish no additional dispatchable work without changing frontier semantics.
 effort: 1-2 hours
@@ -10,6 +10,8 @@ priority: low
 autonomy_level: 3
 tags: [threads, cli, ux]
 created: "2026-08-31"
+updated_at: "2026-08-31"
+started_at: "2026-08-31"
 ---
 
 # Show in-flight work before dispatchable Thread frontier members
@@ -33,15 +35,15 @@ dispatchable set so an empty frontier does not read like an idle or completed in
 
 ## Acceptance criteria
 
-- [ ] Human output lists in-flight members before eligible frontier members without inserting them
+- [x] Human output lists in-flight members before eligible frontier members without inserting them
   into the frontier or changing `eligible`.
-- [ ] An active-only Thread reports its active work followed by `no additional dispatchable member
+- [x] An active-only Thread reports its active work followed by `no additional dispatchable member
   tasks`.
-- [ ] A Thread with neither active nor eligible members retains the existing `no dispatchable member
+- [x] A Thread with neither active nor eligible members retains the existing `no dispatchable member
   tasks` diagnosis.
-- [ ] Blocked or broken in-flight members expose their gate state, and existing graph/Thread problem
+- [x] Blocked or broken in-flight members expose their gate state, and existing graph/Thread problem
   diagnostics still render.
-- [ ] `thread frontier --json`, `ThreadView.Frontier`, lifecycle authorization, and wire schema remain
+- [x] `thread frontier --json`, `ThreadView.Frontier`, lifecycle authorization, and wire schema remain
   unchanged.
 
 ## Stress tests
@@ -64,3 +66,18 @@ production Thread because it was found by using that Thread as the work-discover
 - Epic [30-threads-and-task-dependency-graphs](../epics/30-threads-and-task-dependency-graphs.md)
 - ADR [0006 — Adopt Threads as task DAGs](../adrs/0006-adopt-threads-as-task-dags.md)
 - Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+
+## Implementation progress (2026-08-31)
+
+The human frontier renderer now derives in-flight context only from the existing member lifecycle
+role, sorts active and semantic-frontier copies by stable task ID, and prints active rows before
+eligible pending work. Active rows include role and gate state; active-only Threads say no
+additional dispatchable member tasks, while an idle Thread retains the original diagnosis. No core
+projection, eligibility rule, wire type, JSON envelope, schema version, or machine golden changed.
+
+Focused renderer and CLI integration coverage exercises active-only, active plus eligible, multiple
+active members, forced blocked and broken active work, idle output, stable ordering, retained
+diagnostics, and an unchanged empty machine frontier. Live source dogfooding against
+complete-production-threads now reports this task as in-flight/clear above the no-additional-work
+message. The full race suite, golangci-lint, module tidy diff, generated CLI docs, planning lint, and
+diff hygiene are clean.
