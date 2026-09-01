@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5m69wpydzw
-status: next-up
+status: in-progress
 epic: 30-threads-and-task-dependency-graphs
 description: Dogfood the complete CLI Thread workflow from clean main and release it as an explicitly evolving preview.
 effort: S
@@ -12,6 +12,7 @@ tags: [threads, release, dogfood]
 created: "2026-08-31"
 depends_on: [6g3q4rv1w9e2, 6g5fthzwbeq1]
 updated_at: "2026-08-31"
+started_at: "2026-08-31"
 ---
 
 # Cut v0.18.0 as a CLI Threads preview
@@ -34,11 +35,11 @@ interface, TUI, or advanced graph features are frozen.
 
 ## Acceptance criteria
 
-- [ ] The graph-view slice and in-flight frontier presentation follow-up are merged to `main`, and
+- [x] The graph-view slice and in-flight frontier presentation follow-up are merged to `main`, and
   the release is built from a clean checkout of that commit.
-- [ ] A throwaway planning space passes the end-to-end CLI Thread workflow, including guarded
+- [x] A throwaway planning space passes the end-to-end CLI Thread workflow, including guarded
   failures and at least one external gate.
-- [ ] `just release-snapshot` and the repository's full release validation complete successfully;
+- [x] `just release-snapshot` and the repository's full release validation complete successfully;
   generated CLI docs and machine schema match the binary.
 - [ ] Release notes identify Threads as a CLI preview, enumerate the available commands, and state
   that interface details may still evolve from dogfooding.
@@ -65,3 +66,25 @@ during the release dogfood pass.
 - Epic [30-threads-and-task-dependency-graphs](../epics/30-threads-and-task-dependency-graphs.md)
 - ADR [0006 — Adopt Threads as task DAGs](../adrs/0006-adopt-threads-as-task-dags.md)
 - Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+
+## Clean-main dogfood (2026-08-31)
+
+Built tskflwctl v0.17.1-95-gf33dc00b from a clean detached worktree at merged main commit
+f33dc00b6b22422928547890a2a3290e161353f6. The retained lab is
+`/tmp/taskflow-v018-dogfood.xq7mv2`: `source` contains the clean build, `space` contains the
+throwaway planning repository, and `core.apply.yaml` plus `docs.apply.yaml` are the mode-0600
+materialized plans.
+
+The run initialized without registry writes; created two epics and six tasks; composed and applied
+a linear three-member Thread behind an external gate; created a second fan-in Thread sharing two
+tasks; and proved dry-run, first apply, idempotent retry, and no-clobber behavior. It exercised list,
+show, frontier, plan, renderer-neutral JSON, Mermaid, DOT, guarded blocked task start, guarded
+premature Thread completion, external-gate release, active-only frontier output, explicit member
+add/remove, Thread start/complete/cancel/reopen, and affected-Thread task lifecycle receipts.
+Reopening a cancelled Thread was correctly rejected because cancelled is terminal in V1; reopening
+a completed Thread succeeded.
+
+Final state: repository graph healthy, all three Thread projections healthy, core-delivery and
+cross-cutting-guide completed, lifecycle-probe intentionally cancelled, machine schema 1.58, and
+planning lint clean. The README now labels Threads as a v0.18.0 CLI preview. Release snapshot,
+release-note publication wiring, and tag/artifact verification remain open.

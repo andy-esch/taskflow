@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5fthzwbeq1
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Make human Thread frontier output show active members first and distinguish no additional dispatchable work without changing frontier semantics.
 effort: 1-2 hours
@@ -12,6 +12,7 @@ tags: [threads, cli, ux]
 created: "2026-08-31"
 updated_at: "2026-08-31"
 started_at: "2026-08-31"
+completed_at: "2026-08-31"
 ---
 
 # Show in-flight work before dispatchable Thread frontier members
