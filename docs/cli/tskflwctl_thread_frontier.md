@@ -1,10 +1,10 @@
 ## tskflwctl thread frontier
 
-Show graph-clear pending member tasks
+Show active work and graph-clear pending members
 
 ### Synopsis
 
-Show next-up and ready-to-start members whose dependency gates are clear in the shared task-graph projection. An unhealthy projection returns no tasks and retains its diagnosis.
+Show in-flight members for context, followed by next-up and ready-to-start members whose dependency gates are clear in the shared task-graph projection. In-flight work is not part of the frontier. An unhealthy projection returns no dispatchable tasks and retains its diagnosis.
 
 ```
 tskflwctl thread frontier <thread> [flags]

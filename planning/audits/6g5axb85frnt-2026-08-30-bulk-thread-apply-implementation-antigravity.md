@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5axb85frnt
-bucket: open
+bucket: closed
 area: bulk-thread-apply-implementation-antigravity
 date: "2026-08-30"
 updated_at: "2026-08-31"

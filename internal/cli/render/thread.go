@@ -3,6 +3,7 @@ package render
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/andy-esch/taskflow/internal/core"
@@ -166,17 +167,57 @@ func ThreadShowHuman(w io.Writer, st Style, view core.ThreadView, body string) e
 }
 
 func ThreadFrontierHuman(w io.Writer, st Style, view core.ThreadView) error {
-	fmt.Fprintf(w, "%s  %s\n", st.Bold(view.Thread.Slug), st.Dim("("+view.Thread.ID+")"))
-	fmt.Fprintf(w, "%s  %s · projection %s · %d eligible member(s)\n",
-		st.Dim("graph:"), view.GraphHealth, view.ProjectionHealth, len(view.Frontier))
-	for _, member := range view.Frontier {
-		fmt.Fprintf(w, "%s %s  %s\n", st.Green("✔"), st.Bold(member.Task.Slug), member.Task.ID)
+	inFlight := make([]core.ThreadTaskView, 0)
+	for _, member := range view.Members {
+		if member.State.Role == core.RoleInFlight {
+			inFlight = append(inFlight, member)
+		}
 	}
-	if len(view.Frontier) == 0 {
-		fmt.Fprintf(w, "%s no dispatchable member tasks\n", st.Dim("•"))
+	sortThreadTaskViews(inFlight)
+	frontier := append([]core.ThreadTaskView(nil), view.Frontier...)
+	sortThreadTaskViews(frontier)
+
+	fmt.Fprintf(w, "%s  %s\n", st.Bold(view.Thread.Slug), st.Dim("("+view.Thread.ID+")"))
+	fmt.Fprintf(w, "%s  %s · projection %s · %d in flight · %d eligible member(s)\n",
+		st.Dim("graph:"), view.GraphHealth, view.ProjectionHealth, len(inFlight), len(frontier))
+	for _, member := range inFlight {
+		name, taskID := threadTaskIdentity(member)
+		fmt.Fprintf(w, "%s %s  %s  %s/%s\n",
+			st.Warn("▶"), st.Bold(name), taskID, member.State.Role, member.State.Gate)
+	}
+	for _, member := range frontier {
+		name, taskID := threadTaskIdentity(member)
+		fmt.Fprintf(w, "%s %s  %s\n", st.Green("✔"), st.Bold(name), taskID)
+	}
+	if len(frontier) == 0 {
+		message := "no dispatchable member tasks"
+		if len(inFlight) > 0 {
+			message = "no additional dispatchable member tasks"
+		}
+		fmt.Fprintf(w, "%s %s\n", st.Dim("•"), message)
 	}
 	threadDiagnosticsHuman(w, st, view)
 	return nil
+}
+
+func sortThreadTaskViews(tasks []core.ThreadTaskView) {
+	sort.Slice(tasks, func(i, j int) bool {
+		_, left := threadTaskIdentity(tasks[i])
+		_, right := threadTaskIdentity(tasks[j])
+		return left < right
+	})
+}
+
+func threadTaskIdentity(task core.ThreadTaskView) (string, string) {
+	taskID := task.State.TaskID
+	if taskID == "" {
+		taskID = task.Task.ID
+	}
+	name := task.Task.Slug
+	if name == "" {
+		name = taskID
+	}
+	return name, taskID
 }
 
 func ThreadPlanHuman(w io.Writer, st Style, projection core.ThreadGraphProjection) error {

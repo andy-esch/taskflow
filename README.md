@@ -114,7 +114,9 @@ tskflwctl task blockers <slug>         # actionable blocker frontier (--causal f
 tskflwctl task unblocks <slug>         # all transitive downstream tasks and their current graph state
 tskflwctl thread list                  # nominal/sound rollups + graph/projection health
 tskflwctl thread show <thread>         # members, direct external gates, frontier, and body
-tskflwctl thread frontier <thread>     # clear-gated next-up/ready members; fails closed on unhealthy graph evidence
+tskflwctl thread frontier <thread>     # in-flight context, then clear-gated next-up/ready members
+tskflwctl thread plan <thread>         # explanatory member waves and external gates; not dispatch authorization
+tskflwctl thread graph <thread>        # deterministic Mermaid (default) or --format dot export
 tskflwctl thread path <thread>         # parse-free path for direct repair
 tskflwctl epic list                    # rollup: done/total per epic
 tskflwctl epic show <id> --section goal # epic body section (or --frontmatter-only); epic path <id> for the file

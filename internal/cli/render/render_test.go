@@ -689,6 +689,83 @@ func TestThreadHumanViewsExplainInconsistencyAndDeduplicateGraphProblems(t *test
 	}
 }
 
+func TestThreadFrontierHumanShowsInFlightBeforeEligibleMembers(t *testing.T) {
+	view := core.ThreadView{
+		Thread:           domain.Thread{ID: "6g0000000000", Slug: "initiative"},
+		GraphHealth:      core.GraphHealthy,
+		ProjectionHealth: core.GraphHealthy,
+		Members: []core.ThreadTaskView{
+			{Task: domain.Task{ID: "6g0000000003", Slug: "active-blocked"}, State: core.TaskGraphState{TaskID: "6g0000000003", Role: core.RoleInFlight, Gate: core.GateBlocked}},
+			{Task: domain.Task{ID: "6g0000000002", Slug: "parked"}, State: core.TaskGraphState{TaskID: "6g0000000002", Role: core.RoleParked, Gate: core.GateClear}},
+			{Task: domain.Task{ID: "6g0000000001", Slug: "active-clear"}, State: core.TaskGraphState{TaskID: "6g0000000001", Role: core.RoleInFlight, Gate: core.GateClear}},
+		},
+		Frontier: []core.ThreadTaskView{
+			{Task: domain.Task{ID: "6g0000000005", Slug: "eligible-later"}, State: core.TaskGraphState{TaskID: "6g0000000005", Role: core.RoleCandidate, Gate: core.GateClear}},
+			{Task: domain.Task{ID: "6g0000000004", Slug: "eligible-first"}, State: core.TaskGraphState{TaskID: "6g0000000004", Role: core.RoleQueued, Gate: core.GateClear}},
+		},
+	}
+	var out bytes.Buffer
+	if err := ThreadFrontierHuman(&out, NewStyle(false), view); err != nil {
+		t.Fatal(err)
+	}
+	want := "initiative  (6g0000000000)\n" +
+		"graph:  healthy · projection healthy · 2 in flight · 2 eligible member(s)\n" +
+		"▶ active-clear  6g0000000001  in-flight/clear\n" +
+		"▶ active-blocked  6g0000000003  in-flight/blocked\n" +
+		"✔ eligible-first  6g0000000004\n" +
+		"✔ eligible-later  6g0000000005\n"
+	if got := out.String(); got != want {
+		t.Fatalf("frontier output:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestThreadFrontierHumanExplainsActiveOnlyAndIdleStates(t *testing.T) {
+	tests := []struct {
+		name       string
+		members    []core.ThreadTaskView
+		wantLine   string
+		rejectLine string
+	}{
+		{
+			name: "active only",
+			members: []core.ThreadTaskView{{
+				Task:  domain.Task{ID: "6g0000000001", Slug: "active"},
+				State: core.TaskGraphState{TaskID: "6g0000000001", Role: core.RoleInFlight, Gate: core.GateBroken},
+			}},
+			wantLine:   "▶ active  6g0000000001  in-flight/broken\n• no additional dispatchable member tasks\n",
+			rejectLine: "\n• no dispatchable member tasks\n",
+		},
+		{
+			name:       "idle",
+			wantLine:   "• no dispatchable member tasks\n",
+			rejectLine: "no additional dispatchable member tasks",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			view := core.ThreadView{
+				Thread: domain.Thread{ID: "6g0000000000", Slug: "initiative"}, Members: tt.members,
+				GraphHealth: core.GraphHealthy, ProjectionHealth: core.GraphHealthy,
+			}
+			if tt.name == "active only" {
+				view.Problems = []core.ThreadProblem{{
+					Code: core.ThreadProblemInvalidDocument, Message: "broken active evidence",
+				}}
+			}
+			var out bytes.Buffer
+			if err := ThreadFrontierHuman(&out, NewStyle(false), view); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out.String(), tt.wantLine) || strings.Contains(out.String(), tt.rejectLine) {
+				t.Fatalf("frontier output:\n%s", out.String())
+			}
+			if tt.name == "active only" && !strings.Contains(out.String(), "broken active evidence") {
+				t.Fatalf("frontier dropped diagnostics:\n%s", out.String())
+			}
+		})
+	}
+}
+
 func TestThreadApplyHumanDistinguishesAppliedSkippedAndDryRunOperations(t *testing.T) {
 	dependency := core.ThreadApplyOperation{
 		Kind: "dependency", Action: "add", DependentID: "6g0000000002", PrerequisiteID: "6g0000000001",
