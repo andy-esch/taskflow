@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5rxq1ravd3
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Replace filesystem-shaped ThreadStore list diagnostics with an identity-aware neutral contract before TUI and future served adapters cement it.
 effort: 1-2 days
@@ -13,6 +13,7 @@ created: "2026-09-01"
 depends_on: [6g5gbk5a5bt0, 6g5ryqqx5ab7]
 updated_at: "2026-09-01"
 started_at: "2026-09-01"
+completed_at: "2026-09-01"
 ---
 
 # Make Thread read diagnostics adapter-neutral
