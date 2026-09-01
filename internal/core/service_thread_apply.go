@@ -16,7 +16,7 @@ func (s *Service) ComposeThreadApply(planningRepoID string, manifest ThreadCompo
 	if s.threads == nil {
 		return ThreadApplyPlan{}, fmt.Errorf("thread reads are unavailable from this store")
 	}
-	threads, problems, err := s.threads.ListThreads()
+	read, err := s.threads.ReadThreads()
 	if err != nil {
 		return ThreadApplyPlan{}, err
 	}
@@ -24,7 +24,7 @@ func (s *Service) ComposeThreadApply(planningRepoID string, manifest ThreadCompo
 	if err != nil {
 		return ThreadApplyPlan{}, err
 	}
-	if err := ValidateThreadCreationSource(graph, threads, problems); err != nil {
+	if err := ValidateThreadCreationSource(graph, read.Threads, read.Problems); err != nil {
 		return ThreadApplyPlan{}, err
 	}
 	template, err := s.templateBody("thread", "")
@@ -38,7 +38,7 @@ func (s *Service) ComposeThreadApply(planningRepoID string, manifest ThreadCompo
 	return ComposeThreadApplyPlan(ThreadApplySnapshot{
 		PlanningRepoID: planningRepoID,
 		Graph:          graph,
-		Threads:        threads,
+		Threads:        read.Threads,
 	}, manifest, body, s.newID, s.now())
 }
 

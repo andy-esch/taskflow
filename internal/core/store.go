@@ -99,6 +99,25 @@ type TaskLifecycleMutationStore interface {
 	MutateTaskLifecycle(now time.Time, dryRun bool, planner TaskLifecyclePlanner) (TaskLifecycleMutationResult, error)
 }
 
+// ThreadReadProblem describes one Thread record that could not be decoded. Stable
+// identity is carried explicitly when the adapter can recover it; Location is
+// optional repair context such as a local path or remote URI and is never parsed
+// by core for identity.
+type ThreadReadProblem struct {
+	ThreadID   string
+	ThreadSlug string
+	Location   string
+	Message    string
+}
+
+// ThreadRead is one adapter-owned Thread document snapshot. Records and problems
+// travel together so a future source revision token can qualify the complete read
+// without exposing persistence-specific types.
+type ThreadRead struct {
+	Threads  []domain.Thread
+	Problems []ThreadReadProblem
+}
+
 // ThreadStore is the narrow read capability for first-class Thread documents.
 // It remains separate from Store so existing secondary adapters and focused test
 // fakes do not claim Thread support accidentally. A Service joined projection
@@ -107,7 +126,7 @@ type TaskLifecycleMutationStore interface {
 // backend must coordinate a compatible snapshot instead of presenting skew as a
 // canonical repository view.
 type ThreadStore interface {
-	ListThreads() ([]domain.Thread, []domain.FileProblem, error)
+	ReadThreads() (ThreadRead, error)
 	GetThread(ref string) (thread domain.Thread, body string, err error)
 }
 

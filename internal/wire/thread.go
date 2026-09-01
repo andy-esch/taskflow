@@ -62,7 +62,7 @@ type ThreadRollupJSON struct {
 }
 
 type ThreadProblemJSON struct {
-	Code     string `json:"code" jsonschema:"description=invalid-thread-document|missing-thread-member|completed-thread-empty|completed-thread-undrained|completed-thread-external-gate|completed-thread-unhealthy-evidence"`
+	Code     string `json:"code" jsonschema:"description=invalid-thread-document|thread-id-drift|duplicate-thread-id|thread-task-id-collision|missing-thread-member|completed-thread-empty|completed-thread-undrained|completed-thread-external-gate|completed-thread-unhealthy-evidence"`
 	ThreadID string `json:"thread_id"`
 	TaskID   string `json:"task_id,omitempty"`
 	Path     string `json:"path,omitempty"`
@@ -125,20 +125,33 @@ func toThreadTaskJSON(item core.ThreadTaskView) ThreadTaskJSON {
 
 // ThreadsEnvelope is `thread list --json`.
 type ThreadsEnvelope struct {
-	SchemaVersion string               `json:"schema_version"`
-	GraphHealth   string               `json:"graph_health" jsonschema:"description=repository task-DAG verdict: healthy|degraded|broken"`
-	GraphProblems []GraphProblemJSON   `json:"graph_problems"`
-	Threads       []ThreadViewJSON     `json:"threads"`
-	Unreadable    []domain.FileProblem `json:"unreadable"`
+	SchemaVersion string                  `json:"schema_version"`
+	GraphHealth   string                  `json:"graph_health" jsonschema:"description=repository task-DAG verdict: healthy|degraded|broken"`
+	GraphProblems []GraphProblemJSON      `json:"graph_problems"`
+	Threads       []ThreadViewJSON        `json:"threads"`
+	Unreadable    []ThreadReadProblemJSON `json:"unreadable"`
 }
 
-func ToThreadsEnvelope(list core.ThreadListView, problems []domain.FileProblem) ThreadsEnvelope {
+// ThreadReadProblemJSON is an adapter-neutral failed-record diagnostic. Identity
+// is explicit when recoverable; location is optional repair context and must not
+// be parsed by consumers to reconstruct identity.
+type ThreadReadProblemJSON struct {
+	ThreadID   string `json:"thread_id,omitempty"`
+	ThreadSlug string `json:"thread_slug,omitempty"`
+	Location   string `json:"location,omitempty"`
+	Message    string `json:"message"`
+}
+
+func ToThreadsEnvelope(list core.ThreadListView, problems []core.ThreadReadProblem) ThreadsEnvelope {
 	payload := ThreadsEnvelope{
 		SchemaVersion: SchemaVersion, GraphHealth: string(list.GraphHealth), GraphProblems: toGraphProblemsJSON(list.GraphProblems),
-		Threads: make([]ThreadViewJSON, 0, len(list.Threads)), Unreadable: problems,
+		Threads: make([]ThreadViewJSON, 0, len(list.Threads)), Unreadable: make([]ThreadReadProblemJSON, 0, len(problems)),
 	}
-	if payload.Unreadable == nil {
-		payload.Unreadable = []domain.FileProblem{}
+	for _, problem := range problems {
+		payload.Unreadable = append(payload.Unreadable, ThreadReadProblemJSON{
+			ThreadID: problem.ThreadID, ThreadSlug: problem.ThreadSlug,
+			Location: problem.Location, Message: problem.Message,
+		})
 	}
 	for _, view := range list.Threads {
 		payload.Threads = append(payload.Threads, ToThreadViewJSON(view))

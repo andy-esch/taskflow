@@ -7,12 +7,33 @@ import (
 	"strings"
 
 	"github.com/andy-esch/taskflow/internal/core"
-	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
-func ThreadsJSON(w io.Writer, list core.ThreadListView, problems []domain.FileProblem) error {
+func ThreadsJSON(w io.Writer, list core.ThreadListView, problems []core.ThreadReadProblem) error {
 	return wire.EncodeJSON(w, wire.ToThreadsEnvelope(list, problems))
+}
+
+// ThreadProblemsHuman renders failed portable Thread records without assuming
+// repair context is a filesystem path. Stable identity takes precedence when an
+// adapter supplies both identity and a potentially opaque location.
+func ThreadProblemsHuman(w io.Writer, st Style, problems []core.ThreadReadProblem) {
+	for _, problem := range problems {
+		identity := problem.ThreadSlug
+		if identity != "" && problem.ThreadID != "" {
+			identity += " (" + problem.ThreadID + ")"
+		} else if identity == "" {
+			identity = problem.ThreadID
+		}
+		if identity == "" {
+			identity = "unidentified Thread record"
+		}
+		fmt.Fprintf(w, "%s %s\n", st.Red("!"), st.Bold(identity))
+		if problem.Location != "" {
+			fmt.Fprintf(w, "    %s %s\n", st.Dim("location:"), problem.Location)
+		}
+		fmt.Fprintf(w, "    %s\n", problem.Message)
+	}
 }
 
 func ThreadShowJSON(w io.Writer, view core.ThreadView, body string) error {

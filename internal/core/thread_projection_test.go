@@ -79,6 +79,40 @@ func TestProjectThreadBrokenProjectionSuppressesOtherwiseEligibleFrontier(t *tes
 	}
 }
 
+func TestProjectThreadIdentityDriftAndTaskCollisionFailClosed(t *testing.T) {
+	task := graphRecord("colliding-identity", domain.StatusNextUp)
+	thread := threadRecord(domain.ThreadStatusUnstarted, task.ID)
+	thread.ID = task.ID
+	thread.FilenameID = testutil.TaskID("different-thread-filename")
+
+	view := ProjectThread(thread, NewTaskGraph([]domain.Task{task}, nil))
+	if view.ProjectionHealth != GraphBroken || len(view.Frontier) != 0 {
+		t.Fatalf("identity-defective projection = %+v", view)
+	}
+	codes := make(map[ThreadProblemCode]bool)
+	for _, problem := range view.Problems {
+		codes[problem.Code] = true
+	}
+	if !codes[ThreadProblemIDDrift] || !codes[ThreadProblemTaskIDCollision] {
+		t.Fatalf("identity problems = %+v", view.Problems)
+	}
+}
+
+func TestProjectThreadMissingAndInvalidIDsDoNotBecomeTaskCollisions(t *testing.T) {
+	task := graphRecord("unrelated-task", domain.StatusNextUp)
+	for _, threadID := range []string{"", "not-a-stable-id"} {
+		thread := threadRecord(domain.ThreadStatusUnstarted, task.ID)
+		thread.ID, thread.FilenameID = threadID, ""
+		view := ProjectThread(thread, NewTaskGraph([]domain.Task{task}, nil))
+		if view.ProjectionHealth != GraphBroken || len(view.Frontier) != 0 {
+			t.Fatalf("invalid identity projection = %+v", view)
+		}
+		if len(view.Problems) != 1 || view.Problems[0].Code != ThreadProblemInvalidDocument {
+			t.Fatalf("invalid identity problems = %+v", view.Problems)
+		}
+	}
+}
+
 func TestProjectThreadCompletedInconsistencyAndMissingMember(t *testing.T) {
 	done := graphRecord("done-member", domain.StatusCompleted)
 	missing := testutil.TaskID("missing-member")

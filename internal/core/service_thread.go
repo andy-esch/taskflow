@@ -207,11 +207,11 @@ func threadMutationReceipt(result ThreadMutationResult) ThreadMutationReceipt {
 // ListThreadViews reads every Thread and the task graph once, then applies the
 // same projection used by show/frontier. Repository-global graph diagnostics are
 // hoisted to the list level rather than repeated on every Thread row.
-func (s *Service) ListThreadViews() (ThreadListView, []domain.FileProblem, error) {
+func (s *Service) ListThreadViews() (ThreadListView, []ThreadReadProblem, error) {
 	if s.threads == nil {
 		return ThreadListView{}, nil, fmt.Errorf("thread reads are unavailable from this store")
 	}
-	threads, problems, err := s.threads.ListThreads()
+	read, err := s.threads.ReadThreads()
 	if err != nil {
 		return ThreadListView{}, nil, err
 	}
@@ -219,12 +219,10 @@ func (s *Service) ListThreadViews() (ThreadListView, []domain.FileProblem, error
 	if err != nil {
 		return ThreadListView{}, nil, err
 	}
-	sort.Slice(threads, func(i, j int) bool {
-		if threads[i].ID != threads[j].ID {
-			return threads[i].ID < threads[j].ID
-		}
-		return threads[i].Path < threads[j].Path
-	})
+	threads := cloneThreads(read.Threads)
+	problems := append([]ThreadReadProblem(nil), read.Problems...)
+	sort.Slice(threads, func(i, j int) bool { return threadLess(threads[i], threads[j]) })
+	sort.Slice(problems, func(i, j int) bool { return threadReadProblemLess(problems[i], problems[j]) })
 	list := ThreadListView{
 		Threads: make([]ThreadView, len(threads)), GraphHealth: graph.Health(), GraphProblems: graph.Problems(),
 	}
@@ -232,7 +230,110 @@ func (s *Service) ListThreadViews() (ThreadListView, []domain.FileProblem, error
 		list.Threads[i] = ProjectThread(thread, graph)
 		list.Threads[i].GraphProblems = nil
 	}
+	markDuplicateThreadIDs(list.Threads)
 	return list, problems, nil
+}
+
+func threadLess(left, right domain.Thread) bool {
+	leftKey := []string{
+		left.ID, left.FilenameID, left.Slug, left.Path, string(left.Status), left.Description,
+		left.Goal, left.TargetDate, left.Created, left.Updated, left.StartedAt, left.EndedAt,
+		strings.Join(left.Tags, "\x00"), strings.Join(left.Tasks, "\x00"),
+	}
+	rightKey := []string{
+		right.ID, right.FilenameID, right.Slug, right.Path, string(right.Status), right.Description,
+		right.Goal, right.TargetDate, right.Created, right.Updated, right.StartedAt, right.EndedAt,
+		strings.Join(right.Tags, "\x00"), strings.Join(right.Tasks, "\x00"),
+	}
+	for i := range leftKey {
+		if leftKey[i] != rightKey[i] {
+			return leftKey[i] < rightKey[i]
+		}
+	}
+	return false
+}
+
+func threadReadProblemLess(left, right ThreadReadProblem) bool {
+	leftKey := [...]string{left.ThreadID, left.ThreadSlug, left.Location, left.Message}
+	rightKey := [...]string{right.ThreadID, right.ThreadSlug, right.Location, right.Message}
+	for i := range leftKey {
+		if leftKey[i] != rightKey[i] {
+			return leftKey[i] < rightKey[i]
+		}
+	}
+	return false
+}
+
+func markDuplicateThreadIDs(views []ThreadView) {
+	indices := make(map[string][]int, len(views))
+	for i := range views {
+		if views[i].Thread.ID != "" {
+			indices[views[i].Thread.ID] = append(indices[views[i].Thread.ID], i)
+		}
+	}
+	for threadID, matches := range indices {
+		if len(matches) < 2 {
+			continue
+		}
+		for _, i := range matches {
+			views[i].ProjectionHealth = GraphBroken
+			views[i].Frontier = nil
+			views[i].Problems = append(views[i].Problems, ThreadProblem{
+				Code: ThreadProblemDuplicateID, ThreadID: threadID, Path: views[i].Thread.Path,
+				Message: fmt.Sprintf("Thread id %s is used by %d readable Thread documents", threadID, len(matches)),
+			})
+			if views[i].Thread.Status == domain.ThreadStatusCompleted {
+				views[i].Inconsistent = true
+				if !hasThreadProblem(views[i].Problems, ThreadProblemCompletedUnhealthyEvidence) {
+					views[i].Problems = append(views[i].Problems, ThreadProblem{
+						Code: ThreadProblemCompletedUnhealthyEvidence, ThreadID: threadID, Path: views[i].Thread.Path,
+						Message: "completed Thread has broken projection evidence",
+					})
+				}
+			}
+		}
+	}
+}
+
+func hasThreadProblem(problems []ThreadProblem, code ThreadProblemCode) bool {
+	for _, problem := range problems {
+		if problem.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func threadDiagnosticName(thread domain.Thread) string {
+	if thread.Path != "" {
+		return thread.Path
+	}
+	if thread.Slug != "" && thread.ID != "" {
+		return thread.Slug + " (" + thread.ID + ")"
+	}
+	if thread.Slug != "" {
+		return thread.Slug
+	}
+	if thread.ID != "" {
+		return thread.ID
+	}
+	return "unidentified Thread"
+}
+
+func threadReadProblemName(problem ThreadReadProblem) string {
+	if problem.ThreadSlug != "" && problem.ThreadID != "" {
+		return problem.ThreadSlug + " (" + problem.ThreadID + ")"
+	}
+	if problem.ThreadSlug != "" {
+		return problem.ThreadSlug
+	}
+	if problem.ThreadID != "" {
+		return problem.ThreadID
+	}
+	if problem.Location != "" {
+		return problem.Location
+	}
+	return "unidentified Thread record"
 }
 
 func (s *Service) ShowThread(ref string) (ThreadView, string, error) {

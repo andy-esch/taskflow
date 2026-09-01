@@ -225,9 +225,9 @@ func newThreadListCmd(app *App) *cobra.Command {
 				if err := render.ThreadsHuman(app.Out, app.Style, list); err != nil {
 					return err
 				}
-				render.ProblemsHuman(app.ErrOut, app.Style, problems)
+				render.ThreadProblemsHuman(app.ErrOut, app.Style, problems)
 			}
-			return problemsError(problems)
+			return threadProblemsError(problems)
 		},
 	}
 	cmd.Flags().StringVar(&status, "status", "", "filter by Thread status")

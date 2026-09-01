@@ -55,7 +55,7 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads for task lifecycle impact: %w", err)
 	}
-	if err := core.ValidateThreadMutationSource(graph, threads, threadProblems); err != nil {
+	if err := core.ValidateThreadMutationSource(graph, threads, threadReadProblemsFromFiles(threadProblems)); err != nil {
 		return result, err
 	}
 

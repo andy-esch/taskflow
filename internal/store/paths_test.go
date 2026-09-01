@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -66,5 +67,47 @@ func TestResolveThreadPathPreservesSymlinkedPlanningRoot(t *testing.T) {
 	want := filepath.Join(linkedRoot, domain.ThreadsDir, threadID+"-symlink-thread.md")
 	if err != nil || got != want {
 		t.Fatalf("symlink path = %q, %v; want %q", got, err, want)
+	}
+}
+
+func TestReadThreadsRecoversFilesystemProblemIdentityAtAdapterBoundary(t *testing.T) {
+	root := t.TempDir()
+	threadID := testutil.TaskID("unreadable-thread")
+	identifiedPath := filepath.Join(root, domain.ThreadsDir, threadID+"-unreadable-thread.md")
+	unidentifiedPath := filepath.Join(root, domain.ThreadsDir, "invalid-name.md")
+	testutil.Write(t, identifiedPath, "---\nid: [unterminated\n---\n")
+	testutil.Write(t, unidentifiedPath, "---\nid: [unterminated\n---\n")
+
+	read, err := NewFS(root).ReadThreads()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(read.Threads) != 0 || len(read.Problems) != 2 {
+		t.Fatalf("read = %+v", read)
+	}
+	byLocation := make(map[string]core.ThreadReadProblem, len(read.Problems))
+	for _, problem := range read.Problems {
+		byLocation[problem.Location] = problem
+	}
+	if got := byLocation[identifiedPath]; got.ThreadID != threadID || got.ThreadSlug != "unreadable-thread" || got.Message == "" {
+		t.Fatalf("identified problem = %+v", got)
+	}
+	if got := byLocation[unidentifiedPath]; got.ThreadID != "" || got.ThreadSlug != "" || got.Message == "" {
+		t.Fatalf("invalid filename problem = %+v", got)
+	}
+}
+
+func TestFSReadThreadsPerformsExactlyOneNativeThreadScan(t *testing.T) {
+	calls := 0
+	fs := NewFS(t.TempDir())
+	fs.threadListOverride = func() ([]domain.Thread, []domain.FileProblem, error) {
+		calls++
+		return []domain.Thread{{ID: testutil.TaskID("single-scan")}}, []domain.FileProblem{{
+			Path: filepath.Join("threads", testutil.TaskID("single-problem")+"-single-problem.md"), Message: "broken",
+		}}, nil
+	}
+	read, err := fs.ReadThreads()
+	if err != nil || calls != 1 || len(read.Threads) != 1 || len(read.Problems) != 1 {
+		t.Fatalf("read=%+v calls=%d err=%v", read, calls, err)
 	}
 }

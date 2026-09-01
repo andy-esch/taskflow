@@ -15,13 +15,57 @@ import (
 var _ core.ThreadStore = (*FS)(nil)
 var _ core.ThreadPathSource = (*FS)(nil)
 
+// ReadThreads adapts the filesystem's resilient entity scan to the portable
+// Thread read contract in one pass. Filename identity recovery belongs here at
+// the concrete adapter boundary; core never parses Location for meaning.
+func (s *FS) ReadThreads() (core.ThreadRead, error) {
+	return readThreads(s.ListThreads)
+}
+
+func readThreads(scan func() ([]domain.Thread, []domain.FileProblem, error)) (core.ThreadRead, error) {
+	threads, problems, err := scan()
+	if err != nil {
+		return core.ThreadRead{}, err
+	}
+	return threadReadFromFiles(threads, problems), nil
+}
+
+// ListThreads is the filesystem-native scan retained for guarded mutations and
+// local maintenance flows that compare exact file problems under the repository
+// lock. Portable readers use ReadThreads instead.
 func (s *FS) ListThreads() ([]domain.Thread, []domain.FileProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
+	if s.threadListOverride != nil {
+		return s.threadListOverride()
+	}
 	return scanDir(s.threadsDir, func(path string, content []byte) (domain.Thread, error) {
 		return parseThread(content, path)
 	})
+}
+
+func threadReadFromFiles(threads []domain.Thread, problems []domain.FileProblem) core.ThreadRead {
+	read := core.ThreadRead{
+		Threads:  append([]domain.Thread(nil), threads...),
+		Problems: threadReadProblemsFromFiles(problems),
+	}
+	return read
+}
+
+func threadReadProblemsFromFiles(problems []domain.FileProblem) []core.ThreadReadProblem {
+	out := make([]core.ThreadReadProblem, 0, len(problems))
+	for _, problem := range problems {
+		threadID, threadSlug := "", ""
+		base := filepath.Base(problem.Path)
+		if id, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md")); ok {
+			threadID, threadSlug = id, slug
+		}
+		out = append(out, core.ThreadReadProblem{
+			ThreadID: threadID, ThreadSlug: threadSlug, Location: problem.Path, Message: problem.Message,
+		})
+	}
+	return out
 }
 
 func (s *FS) GetThread(ref string) (domain.Thread, string, error) {

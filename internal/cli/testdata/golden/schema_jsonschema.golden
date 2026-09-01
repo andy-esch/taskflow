@@ -3797,7 +3797,7 @@
       "properties": {
         "code": {
           "type": "string",
-          "description": "invalid-thread-document|missing-thread-member|completed-thread-empty|completed-thread-undrained|completed-thread-external-gate|completed-thread-unhealthy-evidence"
+          "description": "invalid-thread-document|thread-id-drift|duplicate-thread-id|thread-task-id-collision|missing-thread-member|completed-thread-empty|completed-thread-undrained|completed-thread-external-gate|completed-thread-unhealthy-evidence"
         },
         "thread_id": {
           "type": "string"
@@ -3855,6 +3855,28 @@
         "after"
       ],
       "description": "ThreadProjectionImpactJSON is one Thread view changed by a task lifecycle transition; direct distinguishes membership from downstream/boundary effects."
+    },
+    "ThreadReadProblemJSON": {
+      "properties": {
+        "thread_id": {
+          "type": "string"
+        },
+        "thread_slug": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "message"
+      ],
+      "description": "ThreadReadProblemJSON is an adapter-neutral failed-record diagnostic."
     },
     "ThreadRollupJSON": {
       "properties": {
@@ -4133,7 +4155,7 @@
         },
         "unreadable": {
           "items": {
-            "$ref": "#/$defs/FileProblem"
+            "$ref": "#/$defs/ThreadReadProblemJSON"
           },
           "type": "array"
         }
@@ -4433,6 +4455,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.58)",
+  "title": "tskflwctl --json output (schema_version 1.59)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

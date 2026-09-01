@@ -171,7 +171,7 @@ func threadPolicyError(thread domain.Thread, operation ThreadMutationOperation, 
 // ValidateThreadMutationSource applies the same strict repository-wide evidence
 // gate as Thread creation. A mutation cannot silently ignore an unreadable Thread
 // or an invalid/missing member while claiming an authoritative receipt.
-func ValidateThreadMutationSource(graph *TaskGraph, threads []domain.Thread, unreadable []domain.FileProblem) error {
+func ValidateThreadMutationSource(graph *TaskGraph, threads []domain.Thread, unreadable []ThreadReadProblem) error {
 	return ValidateThreadCreationSource(graph, threads, unreadable)
 }
 
