@@ -15,17 +15,19 @@ import (
 // It has no fs and no cobra, so it is testable in isolation and reused by both
 // primary adapters (the cli and the tui).
 type Service struct {
-	store              Store
-	taskGraphs         TaskGraphSource
-	graphMutations     TaskGraphMutationStore
-	lifecycleMutations TaskLifecycleMutationStore
-	threads            ThreadStore
-	threadCreations    ThreadCreationMutationStore
-	threadMutations    ThreadMutationStore
-	threadApplies      ThreadApplyMutationStore
-	templates          TemplateSource
-	now                func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
-	newID              func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
+	store               Store
+	taskGraphs          TaskGraphSource
+	graphMutations      TaskGraphMutationStore
+	lifecycleMutations  TaskLifecycleMutationStore
+	threads             ThreadStore
+	threadPaths         ThreadPathSource
+	threadPathsExplicit bool
+	threadCreations     ThreadCreationMutationStore
+	threadMutations     ThreadMutationStore
+	threadApplies       ThreadApplyMutationStore
+	templates           TemplateSource
+	now                 func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
+	newID               func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
 	// newIDAt mints an id stamped with a GIVEN time (default id.NewAt) — for an entity
 	// whose id must encode its own declared date rather than "now", so lexical id order
 	// stays authorship order. Research uses it (its id is minted from `created`, which
@@ -116,11 +118,34 @@ func WithTaskLifecycleMutationStore(store TaskLifecycleMutationStore) Option {
 }
 
 // WithThreadStore supplies the Thread read capability independently from the
-// legacy aggregate Store. Production FS is discovered automatically.
+// legacy aggregate Store. Production FS is discovered automatically. This
+// option never infers ThreadPathSource from its argument, even when one value
+// implements both ports: pass that value to WithThreadPathSource too when both
+// capabilities are intended. Replacing reads detaches only an implicit
+// aggregate-store path default; an explicitly supplied path remains selected.
 func WithThreadStore(store ThreadStore) Option {
 	return func(s *Service) {
 		if !isNilCapability(store) {
 			s.threads = store
+			// An explicitly replaced semantic source must not inherit path
+			// resolution discovered from an unrelated aggregate Store. Keep an
+			// independently supplied path source regardless of option order.
+			if !s.threadPathsExplicit {
+				s.threadPaths = nil
+			}
+		}
+	}
+}
+
+// WithThreadPathSource supplies optional local Thread path resolution. It is
+// independent from WithThreadStore so portable adapters never need to
+// counterfeit filesystem semantics and split sources cannot be cross-wired by
+// construction order.
+func WithThreadPathSource(source ThreadPathSource) Option {
+	return func(s *Service) {
+		if !isNilCapability(source) {
+			s.threadPaths = source
+			s.threadPathsExplicit = true
 		}
 	}
 }
@@ -174,6 +199,9 @@ func NewService(store Store, opts ...Option) *Service {
 		}
 		if threads, ok := store.(ThreadStore); ok && !isNilCapability(threads) {
 			s.threads = threads
+		}
+		if paths, ok := store.(ThreadPathSource); ok && !isNilCapability(paths) {
+			s.threadPaths = paths
 		}
 		if mutations, ok := store.(ThreadCreationMutationStore); ok && !isNilCapability(mutations) {
 			s.threadCreations = mutations

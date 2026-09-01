@@ -269,8 +269,8 @@ func (s *Service) ShowThreadGraph(ref string) (ThreadGraphProjection, error) {
 }
 
 func (s *Service) ThreadPath(ref string) (string, error) {
-	if s.threads == nil {
-		return "", fmt.Errorf("thread reads are unavailable from this store")
+	if s.threadPaths == nil {
+		return "", fmt.Errorf("%w: thread path resolution is unavailable from this service", domain.ErrValidation)
 	}
-	return s.threads.ResolveThreadPath(ref)
+	return s.threadPaths.ResolveThreadPath(ref)
 }

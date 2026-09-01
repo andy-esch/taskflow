@@ -51,8 +51,27 @@ boundaries:
                                   6g3q4rv1w9e2 generated views
                                            |
                                            v
-                                  6g3q4rv89vzw TUI
+                                  6g5m69wpydzw v0.18 preview
+
+6g5gbk5a5bt0 neutral task diagnostics ---------------+
+                                                     v
+6g5fy1m967ka portable reads -> 6g5ryqqx5ab7 path -> 6g5rxq1ravd3 Thread diagnostics
+                                                             |
+6g5rxq1g5mp1 watcher recovery -------------------------------+
+                                                             v
+                                                    6g5rwjqeh6a6 projection reload
+                                                             |
+6g5rxq17px59 stable TUI identity ----------------------------+
+                                                             v
+                                                    6g5rwjqr7rt8 list/detail
+                                                             |
+                                                             v
+                                                    6g5rwjr0dz4p topology UX
 ```
+
+The projection loader also depends on the generated views and v0.18 preview above. The stable-ID
+and watcher fixes are independent general TUI roots; their placement here is a delivery grouping,
+not an invented dependency on the release.
 
 - [6g3q4rst78qy — strict dependency reads](../tasks/6g3q4rst78qy-establish-canonical-task-dependencies-and-strict-graph-reads.md)
 - [6g3q4rt0wzkq — portable mutation guard](../tasks/6g3q4rt0wzkq-make-repository-graph-mutations-portable-and-serializable.md)
@@ -63,14 +82,24 @@ boundaries:
 - [6g4wm2yf6tyj — guarded Thread membership and lifecycle](../tasks/6g4wm2yf6tyj-ship-guarded-thread-membership-and-lifecycle-mutations.md)
 - [6g3q4rtv8d0a — resumable bulk linking](../tasks/6g3q4rtv8d0a-bulk-link-existing-tasks-into-threads-with-resumable-apply.md)
 - [6g3q4rv1w9e2 — generated graph views](../tasks/6g3q4rv1w9e2-generate-deterministic-thread-graph-views.md)
-- [6g3q4rv89vzw — usage-informed TUI](../tasks/6g3q4rv89vzw-add-usage-informed-thread-views-to-the-tui.md)
+- [6g5m69wpydzw — v0.18.0 CLI preview](../tasks/6g5m69wpydzw-cut-v0.18.0-as-a-cli-threads-preview.md)
+- [6g5rxq17px59 — stable TUI entity identity](../tasks/6g5rxq17px59-make-tui-entity-navigation-use-stable-identities.md)
+- [6g5rxq1g5mp1 — watcher directory recovery](../tasks/6g5rxq1g5mp1-keep-tui-live-reload-healthy-when-entity-directories-appear.md)
+- [6g5ryqqx5ab7 — split local Thread paths from portable reads](../tasks/6g5ryqqx5ab7-split-local-thread-path-resolution-from-portable-thread-reads.md)
+- [6g5rxq1ravd3 — neutral Thread read diagnostics](../tasks/6g5rxq1ravd3-make-thread-read-diagnostics-adapter-neutral.md)
+- [6g5rwjqeh6a6 — contention-safe TUI projection loading](../tasks/6g5rwjqeh6a6-wire-thread-projections-into-the-tui-with-contention-safe-reloads.md)
+- [6g5rwjqr7rt8 — Thread list/detail TUI](../tasks/6g5rwjqr7rt8-add-thread-list-and-detail-views-to-the-tui.md)
+- [6g5rwjr0dz4p — dogfooded topology presentation](../tasks/6g5rwjr0dz4p-add-dogfooded-thread-graph-presentation-to-the-tui.md)
+- Deprecated combined scope: [6g3q4rv89vzw](../tasks/6g3q4rv89vzw-add-usage-informed-thread-views-to-the-tui.md)
 
 ## Delivery sequence and gates
 
 ```text
 strict reads -> guarded edge writes -> eligibility -> Thread documents/read projections
               -> graph-driven eligibility correction -> Thread mutations -> bulk linking
-              -> generated views -> TUI
+              -> generated views -> CLI preview
+              -> TUI identity/watcher/path/diagnostic foundations -> projection reload
+              -> list/detail dogfood -> smallest useful topology view
 ```
 
 Eligibility enforcement and Threads share the same graph foundation, but implementation is
@@ -90,7 +119,9 @@ materializers under one outer guard.
 | 6 | `6g4wm2yf6tyj`: guarded Thread membership and lifecycle | Membership/lifecycle use one guarded snapshot, retain committed outcomes, and augment task receipts with affected Threads | empty/all-withdrawn start/complete, cancelled/completed immutability, post-commit cleanup, real cooperating-writer races |
 | 7 | Existing-task bulk linking | One literal-YAML manifest can create a Thread, add memberships and global edges, and converge after interruption | failure after every write prefix, retry/idempotency, wrong planning-space identity, edited/stale plan, concurrent edge mutation |
 | 8 | Generated Mermaid/DOT and explanatory UX | Stable ordering and explicit member/external roles; nothing generated is persisted | snapshot/golden output, escaping hostile titles, large/deep/wide readable graphs |
-| 9 | Usage-informed TUI | TUI is a consumer of core/wire behavior, not a second graph engine | watcher reload during mutation, parity with CLI state, narrow/small-terminal degradation |
+| 9a | TUI foundations | Stable-ID UI state, recoverable directory watches, optional local paths, neutral Thread diagnostics, and bounded conflict reloads are independently proven | duplicate slugs, missing/replaced directories, pathless adapters, mutation-event bursts, stale async results |
+| 9b | Thread list/detail | A read-only first-class Thread destination consumes core projections and remains useful on narrow terminals | CLI/core parity, completed drift, missing members, shared membership, filters and reloads |
+| 9c | Dogfooded topology UX | Recorded list/detail usage justifies the smallest extra graph presentation; no second traversal engine appears | deep/wide/fan-in graphs, external gates, incomplete topology, resize and reload |
 
 ### Design attention
 
@@ -122,6 +153,9 @@ This epic is the first production consumer of its own capabilities:
 6. The bulk-linking slice uses the feature on the next naturally suitable initiative rather than a
    synthetic demo.
 7. Every dogfood finding is recorded in the active task; contract changes also amend ADR-0006.
+8. The first TUI stage fixes general identity and watcher seams plus Thread path/diagnostic
+   portability and contention handling before adding visuals. Dogfood list/detail on a real active
+   Thread before selecting a topology layout; a terminal diagram is not presumed necessary.
 
 The experimental spike binary is limited to disposable planning spaces and does not satisfy these
 checkpoints. Dogfooding begins when the corresponding production slice passes its exit gate.
@@ -157,7 +191,8 @@ graph-driven eligibility correction (first production Thread dogfood finding)
 Thread membership/lifecycle       (second guarded mutation family)
         |
         v
-compound bulk apply -> generated views -> TUI
+compound bulk apply -> generated views -> CLI preview
+                    -> TUI foundations -> list/detail -> dogfooded topology UX
 ```
 
 This is implementation coordination, not a new domain dependency: the pure eligibility and Thread
@@ -175,8 +210,11 @@ Keep the public capabilities use-case-specific and share private store mechanics
 - bulk apply owns one deliberate compound capability that takes the guard once and composes the
   internal task and Thread materializers. It never orchestrates by nesting the narrower ports.
 
-Generated views remain unchanged and read-only. The TUI remains last and must retry/debounce the
-documented transient `ErrConflict` when a watcher refresh overlaps the planner-exclusive phase.
+Generated views remain unchanged and read-only. The TUI remains last, but its implementation is now
+split: general stable identity and recoverable watches plus optional local Thread paths and neutral
+Thread diagnostics precede one contention-safe projection loader; list/detail ships before topology
+presentation. The loader must retry/debounce the documented transient `ErrConflict` when a watcher
+refresh overlaps the planner-exclusive phase without hiding durable errors.
 
 ## Related
 

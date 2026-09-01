@@ -109,6 +109,14 @@ type TaskLifecycleMutationStore interface {
 type ThreadStore interface {
 	ListThreads() ([]domain.Thread, []domain.FileProblem, error)
 	GetThread(ref string) (thread domain.Thread, body string, err error)
+}
+
+// ThreadPathSource is the optional local-navigation capability behind `thread
+// path`. It is deliberately separate from semantic Thread reads: a database,
+// API, or cache adapter can provide portable Thread records without inventing a
+// filesystem path, while the local filesystem adapter can retain parse-free
+// path recovery for malformed documents.
+type ThreadPathSource interface {
 	ResolveThreadPath(ref string) (string, error)
 }
 

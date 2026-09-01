@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5m69wpydzw
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Dogfood the complete CLI Thread workflow from clean main and release it as an explicitly evolving preview.
 effort: S
@@ -11,8 +11,9 @@ autonomy_level: 4
 tags: [threads, release, dogfood]
 created: "2026-08-31"
 depends_on: [6g3q4rv1w9e2, 6g5fthzwbeq1]
-updated_at: "2026-08-31"
+updated_at: "2026-09-01"
 started_at: "2026-08-31"
+completed_at: "2026-09-01"
 ---
 
 # Cut v0.18.0 as a CLI Threads preview
@@ -41,9 +42,9 @@ interface, TUI, or advanced graph features are frozen.
   failures and at least one external gate.
 - [x] `just release-snapshot` and the repository's full release validation complete successfully;
   generated CLI docs and machine schema match the binary.
-- [ ] Release notes identify Threads as a CLI preview, enumerate the available commands, and state
+- [x] Release notes identify Threads as a CLI preview, enumerate the available commands, and state
   that interface details may still evolve from dogfooding.
-- [ ] The v0.18.0 tag and published artifacts identify the same commit and expected checksums.
+- [x] The v0.18.0 tag and published artifacts identify the same commit and expected checksums.
 
 ## Stress tests
 

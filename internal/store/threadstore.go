@@ -13,6 +13,7 @@ import (
 )
 
 var _ core.ThreadStore = (*FS)(nil)
+var _ core.ThreadPathSource = (*FS)(nil)
 
 func (s *FS) ListThreads() ([]domain.Thread, []domain.FileProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {

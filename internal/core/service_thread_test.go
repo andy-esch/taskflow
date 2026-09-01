@@ -2,7 +2,6 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -35,8 +34,45 @@ func (f *threadReadFake) GetThread(string) (domain.Thread, string, error) {
 	return f.thread, f.body, f.getErr
 }
 
-func (f *threadReadFake) ResolveThreadPath(string) (string, error) {
-	return "", fmt.Errorf("unused")
+var _ ThreadStore = (*threadReadFake)(nil)
+
+type threadPathFake struct {
+	path string
+	err  error
+	refs []string
+}
+
+func (f *threadPathFake) ResolveThreadPath(ref string) (string, error) {
+	f.refs = append(f.refs, ref)
+	return f.path, f.err
+}
+
+var _ ThreadPathSource = (*threadPathFake)(nil)
+
+type aggregateThreadPathFake struct {
+	*fakeStore
+	path  string
+	calls int
+	reads *threadReadFake
+}
+
+func (f *aggregateThreadPathFake) ResolveThreadPath(string) (string, error) {
+	f.calls++
+	return f.path, nil
+}
+
+func (f *aggregateThreadPathFake) ListThreads() ([]domain.Thread, []domain.FileProblem, error) {
+	if f.reads == nil {
+		return nil, nil, nil
+	}
+	return f.reads.ListThreads()
+}
+
+func (f *aggregateThreadPathFake) GetThread(ref string) (domain.Thread, string, error) {
+	if f.reads == nil {
+		return domain.Thread{}, "", domain.ErrNotFound
+	}
+	return f.reads.GetThread(ref)
 }
 
 type taskGraphReadFake struct {
@@ -206,6 +242,99 @@ func TestServiceThreadReadsComposeIndependentGraphAndThreadPorts(t *testing.T) {
 	unblocks, err := svc.TaskUnblocks(gate.ID)
 	if err != nil || len(unblocks.Unblocks) != 1 || unblocks.Unblocks[0].Task.ID != member.ID {
 		t.Fatalf("unblocks=%+v err=%v", unblocks, err)
+	}
+}
+
+func TestServiceThreadPathIsIndependentFromPortableThreadReads(t *testing.T) {
+	paths := &threadPathFake{path: "/planning/threads/6g3q4rtmv4ak-split-thread.md"}
+	svc := NewService(nil, WithThreadPathSource(paths))
+
+	got, err := svc.ThreadPath("split-thread")
+	if err != nil || got != paths.path || !slices.Equal(paths.refs, []string{"split-thread"}) {
+		t.Fatalf("path = %q, refs = %v, err = %v", got, paths.refs, err)
+	}
+	if _, _, err := svc.ShowThread("split-thread"); err == nil || !strings.Contains(err.Error(), "thread reads are unavailable") {
+		t.Fatalf("show error = %v", err)
+	}
+}
+
+func TestServiceThreadPathDefaultsAndExplicitSourcesDoNotCrossWire(t *testing.T) {
+	const aggregatePath = "/aggregate/threads/local.md"
+	const explicitPath = "/explicit/threads/remote.md"
+
+	t.Run("complete aggregate defaults path source", func(t *testing.T) {
+		aggregate := &aggregateThreadPathFake{fakeStore: &fakeStore{}, path: aggregatePath}
+		got, err := NewService(aggregate).ThreadPath("local")
+		if err != nil || got != aggregatePath || aggregate.calls != 1 {
+			t.Fatalf("path = %q, calls = %d, err = %v", got, aggregate.calls, err)
+		}
+	})
+
+	t.Run("explicit Thread reads detach aggregate path", func(t *testing.T) {
+		aggregate := &aggregateThreadPathFake{fakeStore: &fakeStore{}, path: aggregatePath}
+		svc := NewService(aggregate, WithThreadStore(&threadReadFake{}))
+		_, err := svc.ThreadPath("remote")
+		if domain.Classify(err) != domain.ClassValidation || aggregate.calls != 0 {
+			t.Fatalf("error = %v, aggregate calls = %d", err, aggregate.calls)
+		}
+	})
+
+	t.Run("explicit path override retains aggregate Thread reads", func(t *testing.T) {
+		thread := domain.Thread{ID: "6g3q4rtmv4ak", Slug: "local-thread"}
+		aggregate := &aggregateThreadPathFake{
+			fakeStore: &fakeStore{}, path: aggregatePath,
+			reads: &threadReadFake{threads: []domain.Thread{thread}, thread: thread},
+		}
+		paths := &threadPathFake{path: explicitPath}
+		svc := NewService(aggregate, WithThreadPathSource(paths))
+		view, _, err := svc.ShowThread(thread.ID)
+		if err != nil || view.Thread.ID != thread.ID {
+			t.Fatalf("aggregate Thread view = %+v, err = %v", view, err)
+		}
+		got, err := svc.ThreadPath(thread.ID)
+		if err != nil || got != explicitPath || aggregate.calls != 0 {
+			t.Fatalf("path = %q, aggregate calls = %d, err = %v", got, aggregate.calls, err)
+		}
+	})
+
+	for _, tc := range []struct {
+		name string
+		opts func(*threadPathFake) []Option
+	}{
+		{
+			name: "path then reads",
+			opts: func(paths *threadPathFake) []Option {
+				return []Option{WithThreadPathSource(paths), WithThreadStore(&threadReadFake{})}
+			},
+		},
+		{
+			name: "reads then path",
+			opts: func(paths *threadPathFake) []Option {
+				return []Option{WithThreadStore(&threadReadFake{}), WithThreadPathSource(paths)}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			aggregate := &aggregateThreadPathFake{fakeStore: &fakeStore{}, path: aggregatePath}
+			paths := &threadPathFake{path: explicitPath}
+			got, err := NewService(aggregate, tc.opts(paths)...).ThreadPath("remote")
+			if err != nil || got != explicitPath || aggregate.calls != 0 || !slices.Equal(paths.refs, []string{"remote"}) {
+				t.Fatalf("path = %q, explicit refs = %v, aggregate calls = %d, err = %v", got, paths.refs, aggregate.calls, err)
+			}
+		})
+	}
+}
+
+func TestServiceThreadPathRejectsMissingAndTypedNilCapabilities(t *testing.T) {
+	var paths *threadPathFake
+	for _, svc := range []*Service{
+		NewService(nil),
+		NewService(nil, WithThreadPathSource(paths)),
+		NewService(nil, WithThreadStore(&threadReadFake{}), WithThreadPathSource(paths)),
+	} {
+		if _, err := svc.ThreadPath("any-thread"); domain.Classify(err) != domain.ClassValidation {
+			t.Fatalf("path error = %v, class = %q", err, domain.Classify(err))
+		}
 	}
 }
 
