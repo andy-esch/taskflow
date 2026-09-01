@@ -205,9 +205,11 @@ adapter capabilities rather than leaked persistence.
   Mermaid or DOT. Both commands return the same renderer-neutral projection under `--json`.
   `internal/graphfmt` owns pure Mermaid/DOT escaping and formatting without UI dependencies, and no
   Cobra, Bubble Tea, HTTP, filesystem, or graph-library type enters core or wire contracts. The
-  source returns a neutral `TaskGraphRead`: unreadable records carry optional stable identity
-  directly, while filesystem adapters translate `FileProblem` paths once at their boundary. The
-  analyzer never parses an opaque source location for identity.
+  sources return neutral `TaskGraphRead` and `ThreadRead` snapshots: unreadable records carry
+  optional stable identity directly, while filesystem adapters translate `FileProblem` paths once
+  at their boundary. Core never parses an opaque source location for identity. `ThreadReadProblem`
+  keeps location optional so a remote adapter does not invent a Markdown path; Thread list wire
+  output maps that contract explicitly rather than serializing persistence types.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
@@ -222,10 +224,11 @@ adapter capabilities rather than leaked persistence.
   outside the store. Task dependency fields are graph-owned: generic create/set/edit
   paths cannot introduce a semantic delta, and text-level lint repair skips a would-be
   dependency normalization instead of manufacturing unchecked edges.
-  `ThreadStore` is a separate semantic read port. Its list diagnostic channel remains
-  filesystem-shaped until the tracked
-  [adapter-neutral Thread diagnostics](../planning/tasks/6g5rxq1ravd3-make-thread-read-diagnostics-adapter-neutral.md)
-  work lands. The same filesystem adapter also implements the narrower `ThreadPathSource`, whose
+  `ThreadStore` is a separate semantic read port. Its `ReadThreads` snapshot carries readable
+  records and adapter-neutral `ThreadReadProblem` values together. The filesystem implementation
+  performs one native `ListThreads` scan and recovers safe filename identity at that boundary;
+  guarded mutations retain the native file-problem snapshot for exact under-lock comparison. The
+  same filesystem adapter also implements the narrower `ThreadPathSource`, whose
   filename-only resolver deliberately does not parse frontmatter so malformed local documents
   remain findable for repair. `Layout` remains separately responsible for watcher directories.
   `ThreadCreationMutationStore` owns guarded
