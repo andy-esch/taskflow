@@ -519,10 +519,12 @@ be scoped into the following dependency-ordered slices without requiring the def
    follow-up are reviewed and merged, dogfood the complete CLI Thread workflow from a clean `main`
    build and cut v0.18.0. Release notes must label Threads as a preview whose interface may still
    evolve. TUI support and advanced graph calculations are not release prerequisites.
-9. **Planned TUI follow-up:** after CLI and wire behavior have usage feedback, add a Thread list/tab
-   and detail view showing lifecycle, rollup, frontier, member/external distinction, and a readable
-   graph. The first TUI slice should consume the same projections and should not introduce direct
-   graph editing or a separate readiness calculation.
+9. **Usage-informed TUI follow-up:** after CLI and wire behavior have usage feedback, harden stable
+   entity identity, watcher recovery, optional local path separation, neutral Thread diagnostics,
+   and contention-safe projection reloads before adding a Thread list/tab and detail view. Dogfood
+   that read-only surface before choosing the smallest useful topology presentation. Every stage
+   consumes the same core projections and introduces neither graph editing nor a separate readiness
+   calculation.
 
 ### 10.1. Dogfooding and Rollout Policy
 
@@ -547,6 +549,9 @@ the spike adapter on canonical planning data:
 - Record confusing output, forced transitions, reopen behavior, merge conflicts, and recovery work
   in the owning implementation task. Contract-level findings amend this ADR before TUI behavior is
   treated as settled.
+- Carry the same policy into the TUI: repair general adapter foundations before Thread-specific
+  presentation, dogfood list/detail before topology UX, and file independent correctness gaps rather
+  than hiding them inside a broad screen-building task.
 
 Dogfooding never bypasses the slice exit gates. In particular, canonical planning data must not be
 written by the experimental `threadspike` adapter; production migration, lint, locking, and wire
@@ -1125,6 +1130,47 @@ export:
    gates; deeper upstream context remains the responsibility of causal blocker queries. Edges are
    the induced repository subgraph over those nodes, including edges whose dependent is an external
    gate. Every formatter consumes that boundary as-is and owns its own deterministic escaping.
+
+### 2026-09-01: TUI delivery starts with adapter hardening, not a graph screen
+
+The v0.18.0 CLI-preview dogfood proved the semantic projections but made the original combined TUI
+task too coarse. The second primary adapter crosses several independent correctness boundaries, so
+the accepted rollout now uses this sequence:
+
+1. **Canonical UI identity precedes the new entity.** Existing task, audit, and research rows use
+   display slugs as cursor, detail, history, and session keys even though stable IDs are authoritative
+   and duplicate slugs are allowed. Repair that general contract before a Thread row can copy it.
+2. **Watch desired layout, not only directories present at startup.** `core.Layout` already supplies
+   `threads/`, but the watcher skips a missing leaf permanently and can remain attached to a replaced
+   inode. Recover desired watches as configured directories appear or are replaced, and surface
+   partial degradation instead of reporting live reload as simply healthy.
+3. **Separate local paths from portable Thread reads.** `ThreadStore` carries only semantic list and
+   show reads. Explicit `thread path` lookup uses the independently injectable optional
+   `ThreadPathSource`; local FS construction discovers both capabilities, while pathless readers
+   retain list/show/compose/plan/projection/graph behavior. Replacing Thread reads explicitly
+   detaches an aggregate-store path default unless the composition root also supplies a path source,
+   preventing remote Thread contents from inheriting unrelated local files through a hidden
+   fallback. An explicitly supplied path source is an affirmative override and may accompany
+   aggregate-discovered reads; composition roots must keep explicit read/path sources on the same
+   corpus because the narrow ports do not expose backend identity. A value implementing both must be
+   passed through both options. Missing path capability is a typed validation failure, and the FS
+   resolver remains parse-free so it can locate malformed documents for repair.
+4. **Finish the Thread read port's diagnostic neutrality.** `TaskGraphSource` no longer requires
+   filesystem-shaped problems; `ThreadStore.ListThreads` still does. Introduce an identity-aware,
+   optionally located Thread read problem before TUI and future served adapters depend on the port.
+5. **Centralize contention-safe asynchronous reads.** A planner-active `ErrConflict` is transient for
+   list/detail/dashboard readers. Preserve the last coherent model and perform a bounded, coalesced
+   retry in shared TUI machinery; do not create a Thread-only error policy or hide durable failures.
+6. **Ship list/detail before topology.** The first visible slice shows lifecycle, sound progress,
+   in-flight and dispatchable work, members, external gates, health, and inconsistency from the shared
+   projection. It remains read-only.
+7. **Make topology presentation earn its complexity.** Dogfood list/detail on a real multi-wave,
+   externally gated Thread, record what remains unclear, then add the smallest deterministic
+   terminal-native explanation. A compact wave view is preferred unless evidence justifies a richer
+   layout; Mermaid/DOT text is never parsed back into the TUI.
+
+These are implementation boundaries, not new Thread semantics. Repository-global dependencies and
+core projections remain authoritative, and advanced analysis stays out of scope.
 
 ## Related
 

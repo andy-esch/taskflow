@@ -93,6 +93,23 @@ render concepts). Epic 17 is the CLI port; this is the interactive front-end.
 - **Polish** [tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort](../tasks/6fb7ym4023q0-tui-s2b-polish-find-occurrences-highlight-fidelity-per-entity-sort.md):
   S2b fresh-eyes follow-ups (occurrence-level find, highlight fidelity, per-entity sort).
 
+## Threads-era foundation follow-ups
+
+Scoping the first Thread screens after the v0.18.0 CLI preview exposed two general TUI correctness
+gaps that must land before the new entity copies them:
+
+- [Stable entity identity](../tasks/6g5rxq17px59-make-tui-entity-navigation-use-stable-identities.md)
+  separates canonical row/navigation keys from display slugs so duplicate-slug records cannot
+  collide during selection, reload, detail reads, or workspace restoration.
+- [Recoverable entity-directory watches](../tasks/6g5rxq1g5mp1-keep-tui-live-reload-healthy-when-entity-directories-appear.md)
+  observes configured leaf directories that appear or are replaced after launch, and reports partial
+  watcher degradation honestly.
+
+Both are ordinary TUI hardening rather than Thread-specific semantics. They are members of the
+production Threads dogfood Thread because the second primary adapter made the gaps load-bearing;
+the Thread list/detail task depends on stable identity, while contention-safe projection loading
+depends on watcher recovery.
+
 ## References
 
 - `research/6fakbec02jvw-tui-ux-design-and-navigation-spec.md` — the input UX spec
