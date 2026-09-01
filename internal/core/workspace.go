@@ -17,8 +17,14 @@ type WorkspaceStore interface {
 // WorkspaceSource is the adapter-neutral result of local discovery. Its capabilities
 // stay separate even when one concrete filesystem value implements all of them: entity
 // use cases must not grow knowledge of watcher paths, and graph/Thread reads must remain
-// independently replaceable by split adapters. Nil TaskGraphs or Threads retain the
-// complete Store's backward-compatible defaults. Every non-nil interface must wrap an
+// independently replaceable by split adapters. ThreadPaths is an optional, explicitly
+// local navigation capability rather than part of portable Thread reads. Nil TaskGraphs
+// or Threads retain the complete Store's backward-compatible defaults; explicitly
+// replacing Threads detaches any aggregate-store path default unless ThreadPaths is also
+// supplied. A value implementing both ports must be placed in both fields. Supplying only
+// ThreadPaths intentionally overrides paths for aggregate-discovered reads; the composition
+// root must ensure every explicit read/path pair describes the same Thread corpus because
+// these narrow ports carry no shared backend identity. Every non-nil interface must wrap an
 // operational implementation rather than delegating through an internally nil value.
 type WorkspaceSource struct {
 	Checkout     string
@@ -27,6 +33,7 @@ type WorkspaceSource struct {
 	Store        Store
 	TaskGraphs   TaskGraphSource
 	Threads      ThreadStore
+	ThreadPaths  ThreadPathSource
 	Layout       Layout
 }
 
@@ -101,6 +108,7 @@ func (s *WorkspaceService) Open(request WorkspaceRequest) (Workspace, error) {
 		Planning: NewService(source.Store,
 			WithTaskGraphSource(source.TaskGraphs),
 			WithThreadStore(source.Threads),
+			WithThreadPathSource(source.ThreadPaths),
 		),
 		Layout: source.Layout,
 	}, nil

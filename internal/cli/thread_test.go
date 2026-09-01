@@ -112,6 +112,15 @@ func TestThreadNewListShowPathAndFrontier(t *testing.T) {
 	}
 }
 
+func TestThreadPathReturnsTypedErrorWithoutLocalPathCapability(t *testing.T) {
+	app := &App{Svc: core.NewService(nil), Out: &bytes.Buffer{}}
+	cmd := newThreadPathCmd(app)
+	cmd.SetArgs([]string{"remote-thread"})
+	if err := cmd.Execute(); domain.Classify(err) != domain.ClassValidation {
+		t.Fatalf("thread path error = %v, class = %q", err, domain.Classify(err))
+	}
+}
+
 func TestThreadFrontierHumanShowsActiveWorkWithoutChangingMachineFrontier(t *testing.T) {
 	root := threadCLIRepo(t)
 	if _, _, err := runIn(t, root, "thread", "new", "Delivery", "--description", "Ship Threads", "--goal", "Dogfood Threads", "--task", "beta", "--task", "alpha"); err != nil {

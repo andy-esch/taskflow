@@ -27,6 +27,6 @@ func (f *FS) OpenWorkspace(start string) (core.WorkspaceSource, error) {
 	}
 	return core.WorkspaceSource{
 		Checkout: checkout, PlanningRoot: cfg.Root, PlanningID: cfg.ID,
-		Store: fs, TaskGraphs: fs, Threads: fs, Layout: fs,
+		Store: fs, TaskGraphs: fs, Threads: fs, ThreadPaths: fs, Layout: fs,
 	}, nil
 }

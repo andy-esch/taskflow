@@ -10,6 +10,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func TestFS_OpenWorkspaceResolvesDirectAndPointerEntries(t *testing.T) {
@@ -22,6 +23,9 @@ func TestFS_OpenWorkspaceResolvesDirectAndPointerEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	threadID := testutil.TaskID("workspace-thread")
+	threadPath := filepath.Join(planningConfig.Root, domain.ThreadsDir, threadID+"-workspace-thread.md")
+	testutil.Write(t, threadPath, "malformed but path-resolvable\n")
 	pointer := t.TempDir()
 	if _, err := config.InitPointer(pointer, planning, false); err != nil {
 		t.Fatal(err)
@@ -49,6 +53,12 @@ func TestFS_OpenWorkspaceResolvesDirectAndPointerEntries(t *testing.T) {
 	}
 	if len(fromPointer.Layout.WatchPaths()) != 5 {
 		t.Fatalf("watch paths = %v", fromPointer.Layout.WatchPaths())
+	}
+	for name, workspace := range map[string]core.Workspace{"direct": direct, "pointer": fromPointer} {
+		got, err := workspace.Planning.ThreadPath("workspace-thread")
+		if err != nil || got != threadPath {
+			t.Fatalf("%s workspace Thread path = %q, %v; want %q", name, got, err, threadPath)
+		}
 	}
 }
 

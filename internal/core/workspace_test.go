@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -32,10 +33,11 @@ func TestWorkspaceService_OpenAssemblesRuntimeAndPreservesSelection(t *testing.T
 		Description: "Workspace split ports", Goal: "Preserve adapter neutrality", Created: "2026-08-31",
 		Tasks: []string{member.ID},
 	}
+	paths := &threadPathFake{path: "/plan/threads/6g3q4rtmv4ak-workspace-thread.md"}
 	adapter := &workspaceStoreFake{source: WorkspaceSource{
 		Checkout: "/checkout", PlanningRoot: "/plan", PlanningID: "planning-id",
 		Store: store, TaskGraphs: &taskGraphReadFake{tasks: []domain.Task{member}},
-		Threads: &threadReadFake{threads: []domain.Thread{thread}, thread: thread}, Layout: layout,
+		Threads: &threadReadFake{threads: []domain.Thread{thread}, thread: thread}, ThreadPaths: paths, Layout: layout,
 	}}
 	workspace, err := NewWorkspaceService(adapter).Open(WorkspaceRequest{
 		Start: "/checkout/nested", SpaceID: "implementation", ExpectedPlanningID: "planning-id",
@@ -52,6 +54,39 @@ func TestWorkspaceService_OpenAssemblesRuntimeAndPreservesSelection(t *testing.T
 	if err != nil || view.ProjectionHealth != GraphHealthy || len(view.Members) != 1 ||
 		view.Members[0].Task.ID != member.ID || view.Members[0].Task.Slug != member.Slug {
 		t.Fatalf("workspace Thread view = %+v, err = %v", view, err)
+	}
+	path, err := workspace.Planning.ThreadPath(thread.ID)
+	if err != nil || path != paths.path || !slices.Equal(paths.refs, []string{thread.ID}) {
+		t.Fatalf("workspace Thread path = %q, refs = %v, err = %v", path, paths.refs, err)
+	}
+}
+
+func TestWorkspaceService_ExplicitThreadReadsDoNotBorrowAggregatePaths(t *testing.T) {
+	aggregate := &aggregateThreadPathFake{fakeStore: &fakeStore{}, path: "/plan/threads/local.md"}
+	thread := domain.Thread{ID: "6g3q4rtmv4ak", Slug: "remote-thread"}
+	workspace, err := NewWorkspaceService(&workspaceStoreFake{source: WorkspaceSource{
+		Checkout: "/checkout", PlanningRoot: "/plan", Store: aggregate,
+		Threads: &threadReadFake{thread: thread}, Layout: workspaceLayoutFake{},
+	}}).Open(WorkspaceRequest{Start: "/checkout"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.Planning.ThreadPath(thread.ID); domain.Classify(err) != domain.ClassValidation || aggregate.calls != 0 {
+		t.Fatalf("path error = %v, aggregate calls = %d", err, aggregate.calls)
+	}
+}
+
+func TestWorkspaceService_TypedNilThreadPathSourceIsUnavailable(t *testing.T) {
+	var paths *threadPathFake
+	workspace, err := NewWorkspaceService(&workspaceStoreFake{source: WorkspaceSource{
+		Checkout: "/checkout", PlanningRoot: "/plan", Store: &fakeStore{},
+		Threads: &threadReadFake{}, ThreadPaths: paths, Layout: workspaceLayoutFake{},
+	}}).Open(WorkspaceRequest{Start: "/checkout"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.Planning.ThreadPath("remote"); domain.Classify(err) != domain.ClassValidation {
+		t.Fatalf("path error = %v", err)
 	}
 }
 
