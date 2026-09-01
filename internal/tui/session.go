@@ -117,7 +117,9 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 	m.svc = workspace.Planning
 	m.configStart = workspace.Checkout
 	m.watch = nextWatcher
-	m.watchOff = watchErr != nil
+	health := nextWatcher.watchHealth()
+	m.watchOff = watchErr != nil || health == watchUnavailable
+	m.watchDegraded = !m.watchOff && health == watchDegraded
 	m.sessionGen++
 	m.onAtlas = false
 	m.atlas.opening = false
@@ -167,7 +169,11 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 	default:
 		loads = loadDashboard(m.svc)
 	}
-	return tea.Batch(closeWatcher(oldWatcher), loads, waitForFS(m.watch))
+	var listen tea.Cmd
+	if !m.watchOff {
+		listen = waitForFS(m.watch)
+	}
+	return tea.Batch(closeWatcher(oldWatcher), loads, listen)
 }
 
 func (m *Model) closeTransientUI() {

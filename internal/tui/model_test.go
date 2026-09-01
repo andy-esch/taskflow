@@ -2,7 +2,10 @@ package tui
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1573,6 +1576,103 @@ func TestModel_FsEventDebounces(t *testing.T) {
 	}
 	if _, ok := cmd().(reloadMsg); !ok {
 		t.Fatalf("debounce should fire reloadMsg, got %T", cmd())
+	}
+}
+
+func TestModel_FsEventSurfacesAndRecoversWatcherHealth(t *testing.T) {
+	m := loaded(t, 120, 40)
+	tm, _ := m.Update(fsEventMsg{health: watchDegraded})
+	m = tm.(Model)
+	if m.watchOff || !m.watchDegraded || !strings.Contains(ansi.Strip(m.footer()), "live-reload degraded") {
+		t.Fatalf("degraded watcher state = off:%v degraded:%v footer:%q", m.watchOff, m.watchDegraded, ansi.Strip(m.footer()))
+	}
+
+	// The dashboard uses different footer hints but must report the same active
+	// workspace degradation rather than looking healthy.
+	m.onDash = true
+	if footer := ansi.Strip(m.footer()); !strings.Contains(footer, "live-reload degraded") {
+		t.Fatalf("dashboard footer = %q", footer)
+	}
+	m.onDash = false
+	m.onAtlas = true
+	if footer := ansi.Strip(m.footer()); !strings.Contains(footer, "live-reload degraded") {
+		t.Fatalf("atlas footer = %q", footer)
+	}
+	m.onAtlas = false
+
+	tm, _ = m.Update(debounceMsg{gen: m.dirtyGen, health: watchHealthy})
+	m = tm.(Model)
+	if m.watchOff || m.watchDegraded || strings.Contains(ansi.Strip(m.footer()), "live-reload") {
+		t.Fatalf("recovered watcher state = off:%v degraded:%v footer:%q", m.watchOff, m.watchDegraded, ansi.Strip(m.footer()))
+	}
+
+	tm, _ = m.Update(fsEventMsg{health: watchUnavailable})
+	m = tm.(Model)
+	if !m.watchOff || m.watchDegraded || !strings.Contains(ansi.Strip(m.footer()), "live-reload off") {
+		t.Fatalf("unavailable watcher state = off:%v degraded:%v footer:%q", m.watchOff, m.watchDegraded, ansi.Strip(m.footer()))
+	}
+}
+
+func TestModel_WatcherRecoveryStartsListenerOnlyOnOffToActiveEdge(t *testing.T) {
+	tasks := filepath.Join(t.TempDir(), "tasks")
+	if err := os.Mkdir(tasks, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	w, err := newWatcher([]string{tasks})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.close() })
+	m := loaded(t, 120, 40)
+	m.watch = w
+	m.watchOff = false
+
+	if _, cmd := m.Update(watcherReconciledMsg{health: watchHealthy}); cmd != nil {
+		t.Fatal("already-active explicit reconciliation started a second listener")
+	}
+	_, cmd := m.Update(debounceMsg{gen: m.dirtyGen, health: watchHealthy})
+	if cmd == nil {
+		t.Fatal("healthy debounce did not request its reload")
+	}
+	if msg := cmd(); msg != (reloadMsg{}) {
+		t.Fatalf("healthy debounce command = %T, want only reloadMsg", msg)
+	}
+
+	m.watchOff = true
+	if _, cmd := m.Update(watcherReconciledMsg{health: watchHealthy}); cmd == nil {
+		t.Fatal("off-to-healthy recovery did not restart the listener")
+	}
+}
+
+func TestActivateWorkspaceDerivesAndRetainsRecoverableWatcherHealth(t *testing.T) {
+	root := t.TempDir()
+	tasks := filepath.Join(root, "tasks")
+	threads := filepath.Join(root, "threads")
+	if err := os.Mkdir(tasks, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	w, err := newWatcher([]string{tasks, threads})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.close() })
+	m := loaded(t, 120, 40)
+	workspace := core.Workspace{Checkout: root, PlanningRoot: root, Planning: m.svc}
+	_ = m.activateWorkspace(workspace, w, nil)
+	if m.watch != w || m.watchOff || !m.watchDegraded {
+		t.Fatalf("activated watcher = same:%v off:%v degraded:%v", m.watch == w, m.watchOff, m.watchDegraded)
+	}
+
+	unavailable, err := newWatcherWithPathAdder([]string{tasks}, func(string) error {
+		return errors.New("temporary watch exhaustion")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = unavailable.close() })
+	_ = m.activateWorkspace(workspace, unavailable, nil)
+	if m.watch != unavailable || !m.watchOff || m.watchDegraded {
+		t.Fatalf("unavailable watcher = same:%v off:%v degraded:%v", m.watch == unavailable, m.watchOff, m.watchDegraded)
 	}
 }
 

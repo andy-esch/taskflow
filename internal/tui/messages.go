@@ -100,13 +100,22 @@ type tabMsg struct {
 // fsnotify debounce) — each tab's cursor is preserved by id across the reload.
 type reloadMsg struct{}
 
-// fsEventMsg is a raw filesystem change from the watcher. It (re)arms the debounce
-// rather than reloading directly, so an editor's save-storm coalesces.
-type fsEventMsg struct{}
+// fsEventMsg is a raw filesystem change plus the watcher's reconciled health. It
+// (re)arms the debounce rather than reloading directly, so an editor's save-storm
+// coalesces while directory creation/replacement can update the footer honestly.
+type fsEventMsg struct{ health watchHealth }
 
-// debounceMsg fires fsDebounce after an fs event; the model reloads only if gen
-// still matches m.dirtyGen (i.e. no newer event re-armed the window).
-type debounceMsg struct{ gen int }
+// watcherReconciledMsg reports an explicit reconciliation requested alongside a
+// manual reload. It lets a transient Add failure recover even when no new event
+// arrives solely to trigger another attachment attempt.
+type watcherReconciledMsg struct{ health watchHealth }
+
+// debounceMsg fires fsDebounce after an fs event with a final quiet-period
+// reconciliation. The model reloads only if gen still matches m.dirtyGen.
+type debounceMsg struct {
+	gen    int
+	health watchHealth
+}
 
 // errMsg carries a tab's list-load failure. It's stored per tab (not globally):
 // one failing loader must not blank tabs that loaded fine, and concurrent

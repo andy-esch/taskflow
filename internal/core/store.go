@@ -300,9 +300,10 @@ type Linter interface {
 	DanglingLinks() ([]domain.FileProblem, error)
 }
 
-// Layout is the on-disk-layout port: the directory set a filesystem watcher must
-// observe. The store owns the layout convention, so the TUI watcher consumes this
-// instead of rebuilding the flat entity-directory shape itself.
+// Layout is the on-disk-layout port: the desired directory set a filesystem
+// watcher must observe, including configured entity directories that do not exist
+// yet. The store owns the layout convention, so consumers recover desired paths
+// instead of rebuilding the flat entity-directory shape themselves.
 type Layout interface {
 	WatchPaths() []string
 }

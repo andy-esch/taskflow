@@ -44,9 +44,11 @@ func Run(workspace core.Workspace, th design.Theme, opts ...Option) error {
 	// that rather than panicking on a workspace some future adapter built incompletely.
 	m.watchOff = true
 	if workspace.Layout != nil {
-		if w, err := newWatcher(workspace.Layout.WatchPaths()); err == nil {
+		if w, _ := newWatcher(workspace.Layout.WatchPaths()); w != nil {
 			m.watch = w
-			m.watchOff = false
+			health := w.watchHealth()
+			m.watchOff = health == watchUnavailable
+			m.watchDegraded = health == watchDegraded
 		}
 	}
 	// Alt-screen is declarative in v2 (a View field, set in Model.View), not a
