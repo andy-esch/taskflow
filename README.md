@@ -4,6 +4,11 @@ Home of **`tskflwctl`** — a local-first planning CLI over markdown+frontmatter
 task/Thread/epic/audit/research files. It dogfoods on its own planning under
 [`planning/`](./planning/).
 
+> **Threads preview (v0.18.0).** The production Thread commands are ready for CLI use and
+> dogfooding, but their interface and workflows may still evolve from real-world feedback. This
+> preview does not include TUI Thread views or advanced graph analysis such as critical path,
+> forecasting, or slack.
+
 ## Demos
 
 The interactive TUI (`tskflwctl ui`) — navigate registered planning spaces from the
