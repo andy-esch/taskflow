@@ -1150,7 +1150,14 @@ the accepted rollout now uses this sequence:
 2. **Watch desired layout, not only directories present at startup.** `core.Layout` already supplies
    `threads/`, but the watcher skips a missing leaf permanently and can remain attached to a replaced
    inode. Recover desired watches as configured directories appear or are replaced, and surface
-   partial degradation instead of reporting live reload as simply healthy.
+   partial degradation instead of reporting live reload as simply healthy. The implementation keeps
+   normalized desired leaves plus de-duplicated nearest-existing-parent sentinels, reconciles inode
+   identity on events and after the debounce quiet period, and retries on manual refresh. This stays
+   event-driven: it neither polls nor teaches the TUI entity-directory names, and it refuses an
+   unbounded filesystem-root sentinel. Canonicalization de-duplicates symlink aliases, but a
+   layout-controlled symlink remains explicitly degraded because same-name retarget notifications
+   are not portable across filesystem backends; manual refresh re-resolves the raw Layout paths and
+   moves attachments to the current target.
 3. **Separate local paths from portable Thread reads.** `ThreadStore` carries only semantic list and
    show reads. Explicit `thread path` lookup uses the independently injectable optional
    `ThreadPathSource`; local FS construction discovers both capabilities, while pathless readers

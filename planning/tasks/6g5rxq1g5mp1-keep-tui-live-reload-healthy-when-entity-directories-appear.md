@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5rxq1g5mp1
-status: next-up
+status: in-progress
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Discover and watch configured entity directories created or replaced after TUI launch, including a previously absent threads directory.
 effort: 1-2 days
@@ -10,6 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [tui, watcher, threads, correctness]
 created: "2026-09-01"
+updated_at: "2026-09-01"
+started_at: "2026-09-01"
 ---
 
 # Keep TUI live reload healthy when entity directories appear
@@ -43,15 +45,15 @@ attach a watch, and replacing a watched directory can leave the watcher bound to
 
 ## Acceptance criteria
 
-- [ ] Starting with no `threads/` directory and then creating a Thread causes the active workspace
+- [x] Starting with no `threads/` directory and then creating a Thread causes the active workspace
   to reload without restarting the TUI; a second change inside that directory is also observed.
-- [ ] Removing and recreating or atomically replacing a configured entity directory reattaches the
+- [x] Removing and recreating or atomically replacing a configured entity directory reattaches the
   desired watch and yields current data rather than remaining bound to the old inode.
-- [ ] Partial attachment failure is represented as degraded live reload, not an unqualified healthy
+- [x] Partial attachment failure is represented as degraded live reload, not an unqualified healthy
   watcher, and recovery clears that degradation.
-- [ ] Path normalization prevents duplicate watches for symlink/alias spellings while workspace
+- [x] Path normalization prevents duplicate watches for symlink/alias spellings while workspace
   switching closes every watch owned by the previous session.
-- [ ] Event coalescing remains bounded: directory reconciliation and the ensuing file events do not
+- [x] Event coalescing remains bounded: directory reconciliation and the ensuing file events do not
   cause reload storms or busy retry loops.
 
 ## Stress tests
@@ -76,3 +78,21 @@ including planning spaces that predate `threads/`.
 - Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
 - Downstream [contention-safe Thread projection loading](6g5rwjqeh6a6-wire-thread-projections-into-the-tui-with-contention-safe-reloads.md)
 - Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+
+## Implementation progress (2026-09-01)
+
+The active-space watcher now treats Layout.WatchPaths as normalized desired leaves instead of a startup-only attachment list. Direct leaf watches are paired with de-duplicated nearest-existing-parent sentinels, attachment identity is rechecked with os.SameFile, and filesystem roots are refused as unbounded fallback sentinels. Missing, nested, removed, and atomically replaced entity directories therefore converge without polling or TUI knowledge of entity directory names.
+
+Watcher health is explicit: complete direct and sentinel coverage is healthy, recoverable partial coverage is degraded, and zero useful coverage is unavailable. Events propagate reconciled health into every persistent footer surface (list, detail, dashboard, and atlas), while transient command, flash, and find overrides retain precedence. The debounce quiet-period performs a final reconciliation to close rapid nested-creation races, and manual reload retries transient Add failures. Workspace activation derives and retains the new watcher's health, and existing close/session scoping shuts down every leaf and sentinel owned by the prior space.
+
+Symlink aliases are de-duplicated, but a layout-controlled symlink remains deliberately degraded because filesystem backends cannot portably report same-name retargets. Events may trigger opportunistic recovery; manual reload is the guaranteed path that re-resolves the raw Layout paths and moves watches to the current target without polling or false-healthy reporting.
+
+Focused tests exercise missing leaves followed by a second file write, rapid nested creation through the real debounce callback, remove/recreate, deterministic atomic inode replacement, replacement during Add, transient total and partial Add failure with recovery, symlink-alias de-duplication and retarget reconciliation, root refusal, health/footer transitions, listener cardinality, event coalescing, active-watcher health derivation, and watcher cleanup. Final validation is recorded after adversarial review closeout.
+
+## Adversarial review closeout (2026-09-01)
+
+Claude found one false-healthy portability defect and five coverage or documentation gaps; Antigravity independently found the two most important surviving test mutations. All eight findings are fixed. Reconciliation now re-resolves raw Layout paths, symlink-backed layouts remain honestly degraded where same-name retarget notification is not portable, and manual refresh moves attachments to the current target. A valid watcher with zero successful initial attachments is retained as unavailable so manual recovery remains possible.
+
+New regression coverage pins the production quiet-period reconciliation, listener cardinality, post-Add identity verification, event-carried atomic-replacement health and inode replacement, incoming workspace health, unavailable watcher retention and recovery, symlink retarget reconciliation, and complete watch cleanup. Documentation now distinguishes persistent footer health from transient footer overrides and records the symlink support boundary.
+
+Validation is green: focused TUI/core tests; the watcher and reducer race set repeated 20 times; full go test -race ./...; golangci-lint with zero issues; go vet on affected packages; docs drift; module tidiness; planning lint; audit lint; and git diff checks.

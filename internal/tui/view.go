@@ -349,6 +349,17 @@ func detailFooterBody() string {
 	}, " · ")
 }
 
+func (m Model) withWatchHealth(hints string) string {
+	switch {
+	case m.watchOff:
+		return "live-reload off · " + hints
+	case m.watchDegraded:
+		return "live-reload degraded · " + hints
+	default:
+		return hints
+	}
+}
+
 func (m Model) footer() string {
 	if m.cmd.active {
 		// Surface the matching commands inline so `:` is self-documenting: the full
@@ -392,7 +403,7 @@ func (m Model) footer() string {
 				keyHint(keys.Quit, "quit"),
 			}, " · ")
 		}
-		return m.st.dim(truncate(line, m.width))
+		return m.st.dim(truncate(m.withWatchHealth(line), m.width))
 	}
 	// The dashboard isn't a list, so it gets its own hint line (no m/e/s/…), dimmed
 	// to match the tab footers below. A failed refresh is flagged here (the rows
@@ -410,7 +421,7 @@ func (m Model) footer() string {
 		if m.dash.loaded && m.dash.loadErr != nil {
 			line = "⚠ refresh failed · " + line
 		}
-		return m.st.dim(truncate(line, m.width))
+		return m.st.dim(truncate(m.withWatchHealth(line), m.width))
 	}
 	hints := strings.Join([]string{
 		keyHint(keys.Command, "cmd"),
@@ -459,8 +470,5 @@ func (m Model) footer() string {
 	if m.cur().loaded && m.cur().loadErr != nil {
 		hints = "⚠ reload failed · " + hints // the rows shown are the last good load
 	}
-	if m.watchOff {
-		hints = "live-reload off · " + hints
-	}
-	return m.st.dim(truncate(hints, m.width))
+	return m.st.dim(truncate(m.withWatchHealth(hints), m.width))
 }

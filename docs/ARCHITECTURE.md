@@ -552,10 +552,20 @@ Files split by concern:
 - **`watch.go`** — active-space-only `fsnotify` live reload: a self-perpetuating listener `Cmd`
   feeds `fsEventMsg`; a generation-guarded `tea.Tick` debounce (200ms) coalesces
   save-storms into one reload of every loaded tab, cursor preserved by id. The
-  watched dir set comes from the active `core.Workspace`'s `Layout` port
+  desired dir set comes from the active `core.Workspace`'s `Layout` port
   (`WatchPaths()`), not from a root the TUI reconstructs — layout knowledge stays in
-  the store. A successful atlas switch closes the old watcher and starts only the new
-  session's watcher; cached sessions do not retain file descriptors.
+  the store. Paths are canonicalized through their deepest existing prefix; direct
+  leaf watches observe entity writes while de-duplicated nearest-parent sentinels
+  discover missing leaves and inode replacement. Every event and the final quiet-period
+  tick reconcile the attachment set, so rapid nested creation converges without polling.
+  Partial coverage is `degraded`, zero useful coverage is `off`, and a manual refresh
+  retries reconciliation. Symlink spellings still de-duplicate, but a layout-controlled
+  symlink keeps health degraded: same-name retarget events are not portable across
+  `fsnotify` backends, so manual refresh re-resolves the raw Layout paths and reattaches
+  their current targets rather than claiming complete automatic coverage. A successful
+  atlas switch closes every leaf and sentinel
+  owned by the old watcher and starts only the new session's watcher; cached sessions
+  do not retain file descriptors.
 - **`help.go`** — the `?` keybinding overlay (`helpSections` is the runtime
   source of truth for keys) composited over the body with `ansi.Cut`.
 - **`style.go` / `keys.go`** — the per-Model `styles` bundle (the active palette

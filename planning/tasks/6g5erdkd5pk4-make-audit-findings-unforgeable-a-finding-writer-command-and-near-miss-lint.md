@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [cli, agents, robustness, dx]
 created: "2026-08-31"
-updated_at: "2026-08-31"
+updated_at: "2026-09-01"
 ---
 # Make audit findings unforgeable: a finding writer command and near-miss lint
 
@@ -96,3 +96,15 @@ can re-stamp a finding it can already see, but nothing can bring one into existe
   finding-level operations (query/write/lint/sync)
 - Encountered in: audit `6g5axb85endz`
   ([2026-08-30-bulk-thread-apply-implementation-claude](../audits/6g5axb85endz-2026-08-30-bulk-thread-apply-implementation-claude.md))
+
+## Recurrence (2026-09-01 watcher implementation audit)
+
+The Claude watcher audit reproduced this failure exactly: six evidence-backed findings used headings
+such as `#### WR-01 — ...` with a free-standing `**Status:** open`. Both audit lint and the top-level
+planning lint reported green while `audit show` reported zero findings, so lifecycle updates could
+not address `WR-01`. The implementation owner had to rewrite the headings as
+`#### WR1. ... · **Status:** open` before using `audit finding`.
+
+The interim adversarial-review preparation script now injects the canonical grammar into every
+external-agent brief, but prompt wording is only mitigation. This recurrence strengthens the case
+for the writer command and near-miss diagnostics in this task.

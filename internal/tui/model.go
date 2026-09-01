@@ -103,10 +103,11 @@ type Model struct {
 	movedAway  string     // slug just moved out of the active lifecycle view: its absence after
 	// the post-move reload is the success, not a dangling reference
 
-	watch     *watcher // fsnotify source (nil when unavailable / in tests); see watch.go
-	watchOff  bool     // the watcher failed to start: live reload is off (footer note)
-	dirtyGen  int      // bumped per fs event; the debounce tick fires a reload only when it matches
-	detailGen int      // bumped per detail request; orders concurrent loads for the same id
+	watch         *watcher // fsnotify source (nil when unavailable / in tests); see watch.go
+	watchOff      bool     // no useful attachment remains; manual reload is the fallback
+	watchDegraded bool     // parent sentinels remain, but not every desired leaf is attached
+	dirtyGen      int      // bumped per fs event; the debounce tick fires a reload only when it matches
+	detailGen     int      // bumped per detail request; orders concurrent loads for the same id
 }
 
 // Option adds an optional application capability to the main TUI.
@@ -205,7 +206,7 @@ func (m Model) Init() tea.Cmd {
 	if m.spaceOverviewSvc != nil {
 		cmds = append(cmds, loadAtlas(m.spaceOverviewSvc, m.atlas.loadGen))
 	}
-	if m.watch != nil {
+	if m.watch != nil && !m.watchOff {
 		cmds = append(cmds, waitForFS(m.watch))
 	}
 	cmd := tea.Batch(cmds...)
@@ -425,20 +426,43 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case reloadMsg:
-		return m, m.reloadAll()
+		return m, tea.Batch(m.reloadAll(), reconcileWatcher(m.watch))
+
+	case watcherReconciledMsg:
+		wasOff := m.watchOff
+		m.watchOff = msg.health == watchUnavailable
+		m.watchDegraded = msg.health == watchDegraded
+		if wasOff && !m.watchOff {
+			return m, waitForFS(m.watch)
+		}
+		return m, nil
 
 	case fsEventMsg:
 		// A filesystem change: keep listening, and (re)arm the debounce. The reload
 		// only fires from a debounce tick whose generation is still current, so an
-		// editor's save-storm of events coalesces into one reload.
+		// editor's save-storm of events coalesces into one reload. Reconciliation
+		// may also move live reload between healthy, degraded, and unavailable.
+		m.watchOff = msg.health == watchUnavailable
+		m.watchDegraded = msg.health == watchDegraded
 		m.dirtyGen++
-		return m, tea.Batch(waitForFS(m.watch), debounceTick(m.dirtyGen))
+		var listen tea.Cmd
+		if !m.watchOff {
+			listen = waitForFS(m.watch)
+		}
+		return m, tea.Batch(listen, debounceTick(m.watch, m.dirtyGen))
 
 	case debounceMsg:
 		if msg.gen != m.dirtyGen {
 			return m, nil // a newer event re-armed the debounce; this tick is stale
 		}
-		return m, func() tea.Msg { return reloadMsg{} }
+		wasOff := m.watchOff
+		m.watchOff = msg.health == watchUnavailable
+		m.watchDegraded = msg.health == watchDegraded
+		reload := func() tea.Msg { return reloadMsg{} }
+		if wasOff && !m.watchOff {
+			return m, tea.Batch(waitForFS(m.watch), reload)
+		}
+		return m, reload
 
 	case errMsg:
 		if i := indexOfKind(m.tabs, msg.kind); i >= 0 && msg.gen == m.tabs[i].loadGen {

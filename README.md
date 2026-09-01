@@ -442,7 +442,13 @@ full keymap, `r` to refresh. The detail pane's title is a **click-to-open link**
 (OSC 8) to the entity's file, and the terminal window/tab title tracks the current
 selection. It **live-reloads** via `fsnotify` — edits from
 your editor or a CLI `task move` in another terminal show up within ~200ms,
-cursor preserved. See
+cursor preserved. Configured entity directories remain desired even when absent
+at launch: parent watches discover them when they appear and recover directory
+replacement, while the footer reports degraded or unavailable coverage honestly.
+Symlink-backed planning layouts remain deliberately degraded because filesystem
+backends cannot portably report same-name symlink retargets; manual refresh (`r`)
+re-resolves the layout and moves the watches to the current target.
+See
 [`planning/epics/18-tui-bubble-tea-interactive-planning-browser.md`](./planning/epics/18-tui-bubble-tea-interactive-planning-browser.md).
 
 > **Clickable titles under tmux + Ghostty.** The detail-title link is correct OSC 8
