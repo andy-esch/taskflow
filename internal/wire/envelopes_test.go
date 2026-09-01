@@ -114,7 +114,9 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToThreadsEnvelope(core.ThreadListView{
 				Threads: []core.ThreadView{threadView}, GraphHealth: threadView.GraphHealth,
 				GraphProblems: threadView.GraphProblems,
-			}, nil))
+			}, []core.ThreadReadProblem{{
+				ThreadID: "6g0000000004", ThreadSlug: "pathless-record", Message: "remote decode failed",
+			}}))
 		}},
 		{"ThreadShowEnvelope", func(w io.Writer) error {
 			return emit(w, ToThreadShowEnvelope(threadView, "# Initiative\n"))

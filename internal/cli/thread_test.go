@@ -112,6 +112,37 @@ func TestThreadNewListShowPathAndFrontier(t *testing.T) {
 	}
 }
 
+func TestThreadListReportsIdentityAwareUnreadableRecords(t *testing.T) {
+	root := threadCLIRepo(t)
+	threadID := testutil.TaskID("unreadable-cli-thread")
+	path := filepath.Join(root, domain.ThreadsDir, threadID+"-unreadable-cli-thread.md")
+	testutil.Write(t, path, "---\nid: [unterminated\n---\n")
+
+	out, errOut, err := runIn(t, root, "thread", "list", "--json")
+	if err == nil || ExitCode(err) != 11 || errOut != "" {
+		t.Fatalf("JSON list error=%v exit=%d stderr=%q stdout=%s", err, ExitCode(err), errOut, out)
+	}
+	var envelope wire.ThreadsEnvelope
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("decode Thread list: %v\n%s", err, out)
+	}
+	if len(envelope.Unreadable) != 1 || envelope.Unreadable[0].ThreadID != threadID ||
+		envelope.Unreadable[0].ThreadSlug != "unreadable-cli-thread" ||
+		filepath.Base(envelope.Unreadable[0].Location) != filepath.Base(path) {
+		t.Fatalf("unreadable = %+v", envelope.Unreadable)
+	}
+
+	_, errOut, err = runIn(t, root, "thread", "list")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("human list error=%v exit=%d", err, ExitCode(err))
+	}
+	for _, want := range []string{"unreadable-cli-thread", threadID, filepath.Base(path), "location:"} {
+		if !strings.Contains(errOut, want) {
+			t.Fatalf("human diagnostics missing %q:\n%s", want, errOut)
+		}
+	}
+}
+
 func TestThreadPathReturnsTypedErrorWithoutLocalPathCapability(t *testing.T) {
 	app := &App{Svc: core.NewService(nil), Out: &bytes.Buffer{}}
 	cmd := newThreadPathCmd(app)

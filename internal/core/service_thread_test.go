@@ -12,7 +12,7 @@ import (
 
 type threadReadFake struct {
 	threads  []domain.Thread
-	problems []domain.FileProblem
+	problems []ThreadReadProblem
 	thread   domain.Thread
 	body     string
 	getErr   error
@@ -20,11 +20,11 @@ type threadReadFake struct {
 	onGet    func()
 }
 
-func (f *threadReadFake) ListThreads() ([]domain.Thread, []domain.FileProblem, error) {
+func (f *threadReadFake) ReadThreads() (ThreadRead, error) {
 	if f.onList != nil {
 		f.onList()
 	}
-	return f.threads, f.problems, nil
+	return ThreadRead{Threads: f.threads, Problems: f.problems}, nil
 }
 
 func (f *threadReadFake) GetThread(string) (domain.Thread, string, error) {
@@ -61,11 +61,11 @@ func (f *aggregateThreadPathFake) ResolveThreadPath(string) (string, error) {
 	return f.path, nil
 }
 
-func (f *aggregateThreadPathFake) ListThreads() ([]domain.Thread, []domain.FileProblem, error) {
+func (f *aggregateThreadPathFake) ReadThreads() (ThreadRead, error) {
 	if f.reads == nil {
-		return nil, nil, nil
+		return ThreadRead{}, nil
 	}
-	return f.reads.ListThreads()
+	return f.reads.ReadThreads()
 }
 
 func (f *aggregateThreadPathFake) GetThread(ref string) (domain.Thread, string, error) {
@@ -167,7 +167,7 @@ func TestServiceLintIncludesThreadIntegrityAndCrossKindIdentity(t *testing.T) {
 			Status: domain.ThreadStatusUnstarted, Description: "Valid description", Goal: "Ship it",
 			Created: "2026-08-29", Tasks: []string{"6g3q4rtmv4az"},
 		}},
-		problems: []domain.FileProblem{{Path: "threads/bad.md", Message: "bad frontmatter"}},
+		problems: []ThreadReadProblem{{Location: "threads/bad.md", Message: "bad frontmatter"}},
 	}
 	svc := NewService(&fakeStore{tasks: []domain.Task{task}}, WithThreadStore(threadStore))
 	results, problems, err := svc.Lint()
@@ -211,6 +211,71 @@ func TestServiceThreadListHoistsRepositoryGraphDiagnostics(t *testing.T) {
 	}
 	if len(list.Threads[0].GraphProblems) != 0 || list.Threads[0].GraphHealth != GraphBroken {
 		t.Fatalf("row repeated repository diagnostics: %+v", list.Threads[0])
+	}
+}
+
+func TestServiceThreadListPreservesAndOrdersAdapterNeutralProblems(t *testing.T) {
+	threadID := "6g3q4rtmv4ak"
+	threadStore := &threadReadFake{
+		threads: []domain.Thread{{
+			ID: threadID, Slug: "readable-thread", Status: domain.ThreadStatusUnstarted,
+			Description: "Readable remote Thread", Goal: "Keep diagnostics separate", Created: "2026-09-01",
+		}},
+		problems: []ThreadReadProblem{
+			{ThreadID: threadID, ThreadSlug: "unreadable-copy", Location: "misleading/other.md", Message: "bad remote record"},
+			{ThreadID: "6g3q4rtmv4aa", ThreadSlug: "pathless", Message: "remote decode failed"},
+		},
+	}
+	svc := NewService(&fakeStore{}, WithThreadStore(threadStore))
+
+	list, problems, err := svc.ListThreadViews()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Threads) != 1 || list.Threads[0].Thread.ID != threadID || list.Threads[0].ProjectionHealth != GraphHealthy {
+		t.Fatalf("readable list = %+v", list)
+	}
+	if len(problems) != 2 || problems[0].ThreadSlug != "pathless" || problems[0].Location != "" ||
+		problems[1].ThreadSlug != "unreadable-copy" || problems[1].Location != "misleading/other.md" {
+		t.Fatalf("neutral problems = %+v", problems)
+	}
+}
+
+func TestServiceThreadListFailsDuplicateIDsButAllowsDuplicateSlugs(t *testing.T) {
+	duplicateID := "6g3q4rtmv4ak"
+	missingID := "6g3q4rtmv4az"
+	threads := []domain.Thread{
+		{ID: duplicateID, Slug: "first", Status: domain.ThreadStatusCompleted, Description: "First duplicate", Goal: "Fail closed", Created: "2026-09-01", Tasks: []string{missingID}},
+		{ID: duplicateID, Slug: "second", Status: domain.ThreadStatusUnstarted, Description: "Second duplicate", Goal: "Fail closed", Created: "2026-09-01"},
+		{ID: "6g3q4rtmv4aa", Slug: "shared-slug", Status: domain.ThreadStatusUnstarted, Description: "First shared slug", Goal: "Remain legal", Created: "2026-09-01"},
+		{ID: "6g3q4rtmv4ab", Slug: "shared-slug", Status: domain.ThreadStatusUnstarted, Description: "Second shared slug", Goal: "Remain legal", Created: "2026-09-01"},
+	}
+	list, _, err := NewService(&fakeStore{}, WithThreadStore(&threadReadFake{threads: threads})).ListThreadViews()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, view := range list.Threads {
+		if view.Thread.ID == duplicateID {
+			codes := make(map[ThreadProblemCode]bool)
+			completedEvidence := 0
+			for _, problem := range view.Problems {
+				codes[problem.Code] = true
+				if problem.Code == ThreadProblemCompletedUnhealthyEvidence {
+					completedEvidence++
+				}
+			}
+			if view.ProjectionHealth != GraphBroken || len(view.Frontier) != 0 || !codes[ThreadProblemDuplicateID] {
+				t.Fatalf("duplicate view = %+v", view)
+			}
+			if view.Thread.Status == domain.ThreadStatusCompleted &&
+				(!view.Inconsistent || !codes[ThreadProblemCompletedUnhealthyEvidence] || completedEvidence != 1) {
+				t.Fatalf("completed duplicate view = %+v", view)
+			}
+			continue
+		}
+		if view.ProjectionHealth != GraphHealthy || len(view.Problems) != 0 {
+			t.Fatalf("duplicate slug was treated as an identity defect: %+v", view)
+		}
 	}
 }
 

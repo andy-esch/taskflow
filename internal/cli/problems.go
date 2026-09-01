@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -38,5 +39,34 @@ func problemsError(problems []domain.FileProblem) error {
 		listed += fmt.Sprintf(", +%d more", extra)
 	}
 	return fmt.Errorf("%w: %d file(s) with unreadable frontmatter: %s",
+		domain.ErrValidation, len(problems), listed)
+}
+
+func threadProblemsError(problems []core.ThreadReadProblem) error {
+	if len(problems) == 0 {
+		return nil
+	}
+	names := make([]string, 0, problemNamesInError)
+	for _, problem := range problems {
+		if len(names) == problemNamesInError {
+			break
+		}
+		name := problem.ThreadSlug
+		if name == "" {
+			name = problem.ThreadID
+		}
+		if name == "" && problem.Location != "" {
+			name = filepath.Base(problem.Location)
+		}
+		if name == "" {
+			name = "unidentified Thread record"
+		}
+		names = append(names, name)
+	}
+	listed := strings.Join(names, ", ")
+	if extra := len(problems) - len(names); extra > 0 {
+		listed += fmt.Sprintf(", +%d more", extra)
+	}
+	return fmt.Errorf("%w: %d unreadable Thread record(s): %s",
 		domain.ErrValidation, len(problems), listed)
 }

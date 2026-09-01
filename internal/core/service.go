@@ -438,12 +438,15 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	threadIDs := make([]string, 0)
 	threadIdentity := make(map[string]bool)
 	if s.threads != nil {
-		var threadProblems []domain.FileProblem
-		threads, threadProblems, err = s.threads.ListThreads()
+		var threadRead ThreadRead
+		threadRead, err = s.threads.ReadThreads()
 		if err != nil {
 			return nil, nil, err
 		}
-		problems = append(problems, threadProblems...)
+		threads = threadRead.Threads
+		for _, problem := range threadRead.Problems {
+			problems = append(problems, domain.FileProblem{Path: problem.Location, Message: problem.Message})
+		}
 		threadIDs = make([]string, 0, len(threads))
 		for _, thread := range threads {
 			threadIDs = append(threadIDs, thread.ID)

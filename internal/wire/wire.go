@@ -246,7 +246,11 @@ import (
 // 1.58: `thread graph` and `thread plan` add one renderer-neutral node, edge,
 // wave, role, health, and topology-completeness projection for CLI and future
 // primary adapters.
-const SchemaVersion = "1.58"
+//
+// 1.59: `thread list` unreadable diagnostics replace the filesystem-specific
+// `{path,message}` shape with optional `thread_id`, `thread_slug`, optional
+// `location`, and `message`. Remote adapters need not fabricate local paths.
+const SchemaVersion = "1.59"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

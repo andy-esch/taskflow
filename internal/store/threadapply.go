@@ -54,7 +54,7 @@ func (s *FS) MutateThreadApply(now time.Time, dryRun bool, planner core.ThreadAp
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads: %w", err)
 	}
-	if err := core.ValidateThreadCreationSource(graph, threads, problems); err != nil {
+	if err := core.ValidateThreadCreationSource(graph, threads, threadReadProblemsFromFiles(problems)); err != nil {
 		return result, err
 	}
 	snapshot := core.ThreadApplySnapshot{
@@ -263,7 +263,7 @@ func (s *FS) reprepareThreadApply(plan core.ThreadApplyPlan, expectedRepoID stri
 	if err != nil {
 		return core.ThreadApplyDecision{}, fmt.Errorf("re-read Threads before final Thread convergence: %w", err)
 	}
-	if err := core.ValidateThreadCreationSource(graph, threads, problems); err != nil {
+	if err := core.ValidateThreadCreationSource(graph, threads, threadReadProblemsFromFiles(problems)); err != nil {
 		return core.ThreadApplyDecision{}, err
 	}
 	return core.PrepareThreadApply(core.ThreadApplySnapshot{

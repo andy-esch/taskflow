@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5ryqqx5ab7
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Move ResolveThreadPath behind an optional local-path capability so portable Thread list/show adapters need not counterfeit filesystem behavior.
 effort: 1 day
@@ -13,6 +13,7 @@ created: "2026-09-01"
 depends_on: [6g5fy1m967ka]
 updated_at: "2026-09-01"
 started_at: "2026-09-01"
+completed_at: "2026-09-01"
 ---
 
 # Split local Thread path resolution from portable Thread reads

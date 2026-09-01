@@ -7,7 +7,9 @@ task/Thread/epic/audit/research files. It dogfoods on its own planning under
 > **Threads preview (v0.18.0).** The production Thread commands are ready for CLI use and
 > dogfooding, but their interface and workflows may still evolve from real-world feedback. This
 > preview does not include TUI Thread views or advanced graph analysis such as critical path,
-> forecasting, or slack.
+> forecasting, or slack. Preview machine contracts may change with an explicit schema-version bump;
+> schema 1.59 makes `thread list --json` unreadable-record diagnostics path-optional and
+> identity-aware for non-filesystem adapters.
 
 ## Demos
 

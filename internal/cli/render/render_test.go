@@ -597,6 +597,20 @@ func TestProblemsHuman(t *testing.T) {
 	}
 }
 
+func TestThreadProblemsHumanPrefersIdentityAndKeepsOptionalLocation(t *testing.T) {
+	var out bytes.Buffer
+	ThreadProblemsHuman(&out, NewStyle(false), []core.ThreadReadProblem{
+		{ThreadID: "6g0000000004", ThreadSlug: "remote-thread", Location: "opaque://misleading", Message: "decode failed"},
+		{Message: "identity unavailable"},
+	})
+	got := out.String()
+	for _, want := range []string{"remote-thread", "6g0000000004", "opaque://misleading", "decode failed", "unidentified Thread record"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Thread problems output missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestInitRegistrationReceipt_HumanAndJSONGolden(t *testing.T) {
 	receipt := core.SpaceRegistrationReceipt{
 		ID: "planning", Path: "~/git/planning", VerifyID: "6gplan", Changed: true, DryRun: true,

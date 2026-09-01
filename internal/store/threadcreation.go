@@ -52,7 +52,7 @@ func (s *FS) MutateThreadCreation(now time.Time, dryRun bool, planner core.Threa
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads: %w", err)
 	}
-	if err := core.ValidateThreadCreationSource(graph, threads, problems); err != nil {
+	if err := core.ValidateThreadCreationSource(graph, threads, threadReadProblemsFromFiles(problems)); err != nil {
 		return result, err
 	}
 	snapshot := core.ThreadCreationSnapshot{Graph: graph, Threads: clonePlannerThreads(threads)}

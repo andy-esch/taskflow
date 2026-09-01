@@ -59,32 +59,32 @@ func (e *ThreadCreationMutationFailure) Unwrap() error {
 
 // ValidateThreadCreationSource proves the guarded snapshot is authoritative
 // enough to introduce a new cross-linked document.
-func ValidateThreadCreationSource(graph *TaskGraph, threads []domain.Thread, unreadable []domain.FileProblem) error {
+func ValidateThreadCreationSource(graph *TaskGraph, threads []domain.Thread, unreadable []ThreadReadProblem) error {
 	if err := ValidateTaskLifecycleSource(graph); err != nil {
 		return err
 	}
 	if len(unreadable) > 0 {
-		return fmt.Errorf("%w: current Thread documents are unreadable: %s", domain.ErrValidation, unreadable[0].Message)
+		orderedProblems := append([]ThreadReadProblem(nil), unreadable...)
+		sort.Slice(orderedProblems, func(i, j int) bool { return threadReadProblemLess(orderedProblems[i], orderedProblems[j]) })
+		problem := orderedProblems[0]
+		return fmt.Errorf("%w: current Thread record %s is unreadable: %s",
+			domain.ErrValidation, threadReadProblemName(problem), problem.Message)
 	}
 	seen := make(map[string]string, len(threads))
 	ordered := cloneThreads(threads)
-	sort.Slice(ordered, func(i, j int) bool {
-		if ordered[i].ID != ordered[j].ID {
-			return ordered[i].ID < ordered[j].ID
-		}
-		return ordered[i].Path < ordered[j].Path
-	})
+	sort.Slice(ordered, func(i, j int) bool { return threadLess(ordered[i], ordered[j]) })
 	for _, thread := range ordered {
+		name := threadDiagnosticName(thread)
 		if err := domain.ValidateThreadDocument(thread); err != nil {
-			return fmt.Errorf("%w: existing Thread %s is invalid: %v", domain.ErrValidation, thread.Path, err)
+			return fmt.Errorf("%w: existing Thread %s is invalid: %v", domain.ErrValidation, name, err)
 		}
-		if thread.FilenameID == "" || thread.FilenameID != thread.ID {
-			return fmt.Errorf("%w: existing Thread %s has id drift: frontmatter=%q filename=%q", domain.ErrValidation, thread.Path, thread.ID, thread.FilenameID)
+		if thread.FilenameID != "" && thread.FilenameID != thread.ID {
+			return fmt.Errorf("%w: existing Thread %s has id drift: frontmatter=%q filename=%q", domain.ErrValidation, name, thread.ID, thread.FilenameID)
 		}
 		if prior, exists := seen[thread.ID]; exists {
-			return fmt.Errorf("%w: duplicate Thread id %s across %s and %s", domain.ErrValidation, thread.ID, prior, thread.Path)
+			return fmt.Errorf("%w: duplicate Thread id %s across %s and %s", domain.ErrValidation, thread.ID, prior, name)
 		}
-		seen[thread.ID] = thread.Path
+		seen[thread.ID] = name
 		if _, collision := graph.Task(thread.ID); collision {
 			return fmt.Errorf("%w: stable id %s is used by both a task and a Thread", domain.ErrValidation, thread.ID)
 		}

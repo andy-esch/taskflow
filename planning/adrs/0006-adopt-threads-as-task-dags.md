@@ -1089,14 +1089,21 @@ a Thread. The corrected adapter boundary is:
    core projection and imports no CLI/TUI/HTTP framework. A TUI, served adapter, or library caller
    can reuse a formatter or consume the projection directly without shelling out to the CLI or
    parsing presentation text.
-6. **Load diagnostics cross the adapter boundary before graph-view contracts ship.** The initial
-   narrow source returned filesystem-shaped `FileProblem` values, and core recovered unreadable task
-   identity from `<id>-<slug>.md`. Task
+6. **Load diagnostics cross the adapter boundary before additional primary adapters consume them.**
+   The initial narrow sources returned filesystem-shaped `FileProblem` values, and core recovered
+   unreadable identity from `<id>-<slug>.md`. Task
    [`6g5gbk5a5bt0`](../tasks/6g5gbk5a5bt0-make-task-graph-load-diagnostics-adapter-neutral.md)
    replaces that identity channel with `TaskGraphRead` and `TaskGraphLoadProblem`. An unreadable
    record carries optional stable ID/slug plus message; a path is optional repair context, never the
    analyzer's identity source. The filesystem performs the one filename conversion at its adapter
    boundary, while legacy/body-aware `NewTaskGraph` callers retain an explicit file conversion.
+   Task [`6g5rxq1ravd3`](../tasks/6g5rxq1ravd3-make-thread-read-diagnostics-adapter-neutral.md)
+   applies the same rule to `ThreadStore`: one `ThreadRead` carries readable records plus
+   `ThreadReadProblem` values with optional Thread ID, slug, location, and message. Portable core
+   readers never parse location, while guarded filesystem mutations retain native file problems for
+   exact source-snapshot comparison. `thread list --json` maps the neutral diagnostic explicitly;
+   schema 1.59 replaces its preview-only `{path,message}` unreadable shape with optional identity and
+   location fields.
 
 This split is deliberately smaller than a repository abstraction redesign. It establishes the port
 and projection seams needed by additional interfaces while leaving concrete storage, HTTP transport,
@@ -1155,9 +1162,10 @@ the accepted rollout now uses this sequence:
    corpus because the narrow ports do not expose backend identity. A value implementing both must be
    passed through both options. Missing path capability is a typed validation failure, and the FS
    resolver remains parse-free so it can locate malformed documents for repair.
-4. **Finish the Thread read port's diagnostic neutrality.** `TaskGraphSource` no longer requires
-   filesystem-shaped problems; `ThreadStore.ListThreads` still does. Introduce an identity-aware,
-   optionally located Thread read problem before TUI and future served adapters depend on the port.
+4. **Keep Thread read diagnostics neutral.** `ThreadStore.ReadThreads` returns one semantic snapshot
+   whose problems carry optional stable ID/slug and optional repair location. The filesystem adapts
+   its native scan once; core and machine consumers do not infer identity from that location. This
+   boundary is complete before TUI and future served adapters consume Thread lists.
 5. **Centralize contention-safe asynchronous reads.** A planner-active `ErrConflict` is transient for
    list/detail/dashboard readers. Preserve the last coherent model and perform a bounded, coalesced
    retry in shared TUI machinery; do not create a Thread-only error policy or hide durable failures.

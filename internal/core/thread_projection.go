@@ -22,6 +22,9 @@ type ThreadProblemCode string
 
 const (
 	ThreadProblemInvalidDocument            ThreadProblemCode = "invalid-thread-document"
+	ThreadProblemIDDrift                    ThreadProblemCode = "thread-id-drift"
+	ThreadProblemDuplicateID                ThreadProblemCode = "duplicate-thread-id"
+	ThreadProblemTaskIDCollision            ThreadProblemCode = "thread-task-id-collision"
 	ThreadProblemMissingMember              ThreadProblemCode = "missing-thread-member"
 	ThreadProblemCompletedEmpty             ThreadProblemCode = "completed-thread-empty"
 	ThreadProblemCompletedUndrained         ThreadProblemCode = "completed-thread-undrained"
@@ -106,6 +109,26 @@ func ProjectThread(thread domain.Thread, graph *TaskGraph) ThreadView {
 			Code: ThreadProblemInvalidDocument, ThreadID: thread.ID, Path: thread.Path,
 			Message: err.Error(),
 		})
+	}
+	if thread.FilenameID != "" && thread.FilenameID != thread.ID {
+		view.ProjectionHealth = GraphBroken
+		view.Problems = append(view.Problems, ThreadProblem{
+			Code: ThreadProblemIDDrift, ThreadID: thread.ID, Path: thread.Path,
+			Message: fmt.Sprintf("Thread id drift: frontmatter=%q filename=%q", thread.ID, thread.FilenameID),
+		})
+	}
+	collisionID := thread.ID
+	if _, collision := graph.Task(collisionID); !collision {
+		collisionID = thread.FilenameID
+	}
+	if collisionID != "" {
+		if _, collision := graph.Task(collisionID); collision {
+			view.ProjectionHealth = GraphBroken
+			view.Problems = append(view.Problems, ThreadProblem{
+				Code: ThreadProblemTaskIDCollision, ThreadID: thread.ID, TaskID: collisionID, Path: thread.Path,
+				Message: fmt.Sprintf("stable id %s is used by both a task and a Thread", collisionID),
+			})
+		}
 	}
 
 	memberIDs := append([]string(nil), thread.Tasks...)
