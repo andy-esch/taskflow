@@ -391,6 +391,9 @@ func newTaskAcCmd(app *App) *cobra.Command {
 	var add, replaceText string
 	var remove, replace int
 	var reason string
+	// --to is --tracked's destination, resolved to a stable id at write time so the
+	// handoff survives a rename of the task it points at.
+	var trackedTo string
 	var list bool
 	cmd := &cobra.Command{
 		Use:   "ac <task>",
@@ -407,6 +410,11 @@ func newTaskAcCmd(app *App) *cobra.Command {
 			"Checkboxes in fenced code blocks are ignored, and a missing section or an " +
 			"out-of-range index is a validation error (exit 11) that rejects the whole " +
 			"request before writing, so a bad index never leaves a half-applied body.\n\n" +
+			"A `tracked` criterion additionally REQUIRES --to <task>, the destination it was " +
+			"handed to. The reference is resolved to that task's stable id at write time and " +
+			"the id is what gets recorded, so a later rename of the destination cannot break " +
+			"the pointer — the same reason a finding's `tracked` status names `tracked by " +
+			"<task-id>`. --reason keeps the prose.\n\n" +
 			"The criteria themselves can be edited too: --add <text> appends one, --remove <n> " +
 			"deletes one, and --replace <n> --text <new> rewords one. A reworded criterion KEEPS " +
 			"its checkbox and any state suffix — rewording is not a change of mind, and silently " +
@@ -414,7 +422,7 @@ func newTaskAcCmd(app *App) *cobra.Command {
 			"is wrapped to match the corpus. --add needs an existing `## Acceptance criteria` " +
 			"section: creating one would mean guessing where it belongs in a body the tool did " +
 			"not write.",
-		Example:           "  tskflwctl task ac add-retry-backoff               # numbered list\n  tskflwctl task ac add-retry-backoff --check 3     # tick criterion 3\n  tskflwctl task ac add-retry-backoff --check 1,2,4 # tick three, one atomic write\n  tskflwctl task ac add-retry-backoff --uncheck 1,3\n  tskflwctl task ac add-retry-backoff --defer 2 --reason \"waiting on the schema ADR\"\n  tskflwctl task ac add-retry-backoff --add \"Retries stop at the configured ceiling\"\n  tskflwctl task ac add-retry-backoff --replace 3 --text \"Backoff is jittered\"\n  tskflwctl task ac add-retry-backoff --remove 4",
+		Example:           "  tskflwctl task ac add-retry-backoff               # numbered list\n  tskflwctl task ac add-retry-backoff --check 3     # tick criterion 3\n  tskflwctl task ac add-retry-backoff --check 1,2,4 # tick three, one atomic write\n  tskflwctl task ac add-retry-backoff --uncheck 1,3\n  tskflwctl task ac add-retry-backoff --tracked 2 --to split-the-corpus --reason \"that task owns the artifact\"\n  tskflwctl task ac add-retry-backoff --defer 2 --reason \"waiting on the schema ADR\"\n  tskflwctl task ac add-retry-backoff --add \"Retries stop at the configured ceiling\"\n  tskflwctl task ac add-retry-backoff --replace 3 --text \"Backoff is jittered\"\n  tskflwctl task ac add-retry-backoff --remove 4",
 		Args:              cobra.MaximumNArgs(1),
 		Annotations:       map[string]string{"safety": "mutating"}, // --check/--uncheck write; --list reads
 		ValidArgsFunction: app.completeTaskSlugs,
@@ -481,7 +489,22 @@ func newTaskAcCmd(app *App) *cobra.Command {
 			case "--na":
 				idxs, state = []int{na}, domain.CriterionNA
 			}
-			task, body, changed, err := app.Svc.SetCriteriaState(slug, idxs, state, reason, app.DryRun)
+			// --to belongs to --tracked alone: it names where the work went, which is
+			// meaningless for a deferral or a wontfix. Falling through silently would
+			// accept a destination and drop it.
+			if c.Flags().Changed("to") && state != domain.CriterionTracked {
+				return fmt.Errorf("%w: --to names a `tracked` criterion's destination; pass --tracked <n>", domain.ErrValidation)
+			}
+			var (
+				task    domain.Task
+				body    string
+				changed bool
+			)
+			if state == domain.CriterionTracked {
+				task, body, changed, err = app.Svc.SetCriteriaTracked(slug, idxs, trackedTo, reason, app.DryRun)
+			} else {
+				task, body, changed, err = app.Svc.SetCriteriaState(slug, idxs, state, reason, app.DryRun)
+			}
 			if err != nil {
 				return err
 			}
@@ -514,6 +537,8 @@ func newTaskAcCmd(app *App) *cobra.Command {
 	cmd.Flags().IntVar(&replace, "replace", 0, "reword the criterion at this 1-based index (needs --text)")
 	cmd.Flags().StringVar(&replaceText, "text", "", "the new wording for --replace")
 	cmd.Flags().StringVar(&reason, "reason", "", "why the criterion is deferred/wontfix/tracked/n-a — required for those, rejected otherwise")
+	cmd.Flags().StringVar(&trackedTo, "to", "", "the destination `task` a --tracked criterion was handed to (resolved to its stable id)")
+	_ = cmd.RegisterFlagCompletionFunc("to", app.completeTaskSlugs)
 	cmd.MarkFlagsMutuallyExclusive("check", "uncheck")
 	cmd.MarkFlagsMutuallyExclusive("list", "check")
 	cmd.MarkFlagsMutuallyExclusive("list", "uncheck")

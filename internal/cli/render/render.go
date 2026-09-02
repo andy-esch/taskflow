@@ -188,7 +188,17 @@ func AcceptanceHuman(w io.Writer, st Style, cs []domain.Criterion) {
 		}
 		line := fmt.Sprintf("%s %s %s", mark, st.Dim(fmt.Sprintf("%2d.", c.Index)), c.Text)
 		if c.State.NeedsReason() {
-			line += "  " + st.CriterionState(string(c.State)) + st.Dim(": "+c.Reason)
+			// A tracked criterion's destination is now its own field, so it has to be
+			// re-joined here: it is the single most useful thing about the state, and
+			// dropping it would make the human list say work moved without saying where.
+			why := c.Reason
+			if c.TrackedBy != "" {
+				why = "by " + c.TrackedBy
+				if c.Reason != "" {
+					why += " — " + c.Reason
+				}
+			}
+			line += "  " + st.CriterionState(string(c.State)) + st.Dim(": "+why)
 		}
 		fmt.Fprintln(w, line)
 	}

@@ -39,6 +39,47 @@ type Criterion struct {
 	// disagree — a checked criterion that also claims to be deferred resolves to met, and a
 	// message naming "met" would tell the author nothing about their own edit.
 	Suffix CriterionState
+	// TrackedBy is the destination task id a `tracked` criterion was handed to, parsed
+	// out of the reason's `by <id> —` head. Empty for every other state, and for a
+	// `tracked` criterion written before the destination was required.
+	//
+	// It is a separate field rather than prose because the whole point of `tracked` is
+	// that the work went somewhere: held only as a sentence, nothing resolves it, nothing
+	// links it, and nothing notices when the destination is renamed or completed without
+	// absorbing the criterion.
+	TrackedBy string
+}
+
+// TrackedDestination splits a tracked criterion's reason into the destination task id
+// and the prose after it. The written shape is `by <id> — <prose>`, matching the
+// `tracked by <task-id>` a finding's status already uses, so one convention covers both.
+// ok is false when the reason carries no destination.
+func TrackedDestination(reason string) (id, prose string, ok bool) {
+	rest, found := strings.CutPrefix(strings.TrimSpace(reason), trackedByPrefix)
+	if !found {
+		return "", reason, false
+	}
+	rest = strings.TrimSpace(rest)
+	id, prose, _ = strings.Cut(rest, trackedProseSeparator)
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", reason, false
+	}
+	return id, strings.TrimSpace(prose), true
+}
+
+const (
+	trackedByPrefix       = "by "
+	trackedProseSeparator = " — "
+)
+
+// FormatTrackedReason composes the reason a tracked criterion carries from a resolved
+// destination id and the author's prose.
+func FormatTrackedReason(id, prose string) string {
+	if strings.TrimSpace(prose) == "" {
+		return trackedByPrefix + id
+	}
+	return trackedByPrefix + id + trackedProseSeparator + strings.TrimSpace(prose)
 }
 
 // acCheckbox is an acceptance-criteria checkbox located in a body: the 0-based line
@@ -453,7 +494,16 @@ func ListAcceptanceCriteria(body string) []Criterion {
 	out := make([]Criterion, len(boxes))
 	for i, b := range boxes {
 		text, state, reason, suffix := splitCriterion(b.text, b.checked)
-		out[i] = Criterion{Index: i + 1, Checked: b.checked, Text: text, State: state, Reason: reason, Suffix: suffix}
+		c := Criterion{Index: i + 1, Checked: b.checked, Text: text, State: state, Reason: reason, Suffix: suffix}
+		// The destination is surfaced as its own field only where it means something.
+		// Parsing it for every state would report a criterion whose prose merely starts
+		// with "by " as having been handed somewhere.
+		if state == CriterionTracked {
+			if id, prose, ok := TrackedDestination(reason); ok {
+				c.TrackedBy, c.Reason = id, prose
+			}
+		}
+		out[i] = c
 	}
 	return out
 }
