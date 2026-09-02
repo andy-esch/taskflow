@@ -30,7 +30,7 @@ nobody will run it.
 
 ## Findings
 
-#### H1. `board` and `task list` do not surface blocked/eligibility state · **Status:** open
+#### H1. `board` and `task list` do not surface blocked/eligibility state · **Status:** fixed
 
 **File:** board and task list output paths | **Component:** cli-read-surfaces
 **Effort:** S · **Urgency:** soon
@@ -58,7 +58,11 @@ work that cannot be started.
 them last within their status. Ideally `board` gains the frontier view for free: eligible work first,
 blocked work visibly parked.
 
-**Resolution:**
+**Resolution:** board now marks ineligible tasks with a dimmed entry and sorts
+them last within their status, so the top of each column is startable work;
+board --json carries a per-row blocked flag. Eligibility is computed once per
+board from the repository graph and is omitted entirely when the graph is not
+healthy, since it is only meaningful over a graph the tool trusts.
 
 #### H2. `--tracked` takes an unvalidated free-text reason, so the pointer rots · **Status:** open
 
@@ -107,7 +111,15 @@ presumably been there for weeks.
 `lint` currently reports "all planning entities and dependency links pass lint" on a repo the graph
 guard considers degraded, which reads as a contradiction.
 
-**Resolution:**
+**Resolution:** Partially addressed: board now prints a graph-health warning
+line naming the degradation and its remedy, and board --json carries a graph
+object, so the latch is visible on the surface an agent reads first. status and
+lint are NOT done. lint deliberately treats a resolvable legacy dependency field
+as advisory with exit zero
+(TestLintResolvedLegacyDependencyIsAdvisoryWithExitZero), and a repository-level
+verdict added naively breaks that contract; the real gap is narrower —
+dependencyLintIssues skips ProblemLegacyMissing and ProblemLegacyAmbiguous as
+already-rendered elsewhere, and that is where the silence comes from.
 
 #### H4. A nested code fence silently drops every finding after it · **Status:** fixed
 
