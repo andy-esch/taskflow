@@ -2,11 +2,13 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
@@ -49,6 +51,26 @@ func newTaskDependCmd(app *App) *cobra.Command {
 	return cmd
 }
 
+// dependencyEdgeArgs takes the one positional task and, when handed more, names the
+// flag form instead of cobra's bare "accepts 1 arg(s), received 2". `depend add A B`
+// is the shape the verb itself suggests, so two task-shaped arguments is a strong
+// signal of exactly that mistake — and an arity count teaches nothing about where the
+// second one was supposed to go.
+func dependencyEdgeArgs(verb string) cobra.PositionalArgs {
+	return func(_ *cobra.Command, args []string) error {
+		switch {
+		case len(args) == 1:
+			return nil
+		case len(args) == 0:
+			return fmt.Errorf("%w: name the task whose prerequisites change — tskflwctl task depend %s <task> --on <prereq>",
+				domain.ErrValidation, verb)
+		default:
+			return fmt.Errorf("%w: prerequisites go in --on, not positionally; did you mean: tskflwctl task depend %s %s --on %s?",
+				domain.ErrValidation, verb, args[0], strings.Join(args[1:], " --on "))
+		}
+	}
+}
+
 func newTaskDependencyEdgeCmd(app *App, operation core.DependencyOperation) *cobra.Command {
 	var prerequisites []string
 	verb := string(operation)
@@ -56,7 +78,7 @@ func newTaskDependencyEdgeCmd(app *App, operation core.DependencyOperation) *cob
 		Use:               verb + " <task>",
 		Short:             fmt.Sprintf("%s one or more hard prerequisites", map[core.DependencyOperation]string{core.DependencyAdd: "Add", core.DependencyRemove: "Remove"}[operation]),
 		Example:           fmt.Sprintf("  tskflwctl task depend %s deploy --on build --on verify", verb),
-		Args:              cobra.ExactArgs(1),
+		Args:              dependencyEdgeArgs(verb),
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.completeTaskSlugs,
 		RunE: func(_ *cobra.Command, args []string) error {
