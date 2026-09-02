@@ -432,12 +432,6 @@ func ListAcceptanceCriteria(body string) []Criterion {
 	return out
 }
 
-// SetAcceptanceCriterion flips the 1-based nth acceptance-criteria checkbox to
-// checked/unchecked, returning the new body. Only that one checkbox's `[ ]`/`[x]`
-// is rewritten — every other byte (frontmatter is handled upstream) is preserved.
-// It is idempotent: flipping to the current state returns the body unchanged (the
-// caller can skip the write). ErrValidation when there's no acceptance section or n
-// is out of range.
 // SetCriterionState sets the 1-based nth criterion to an explicit state, rewriting only
 // that line. This is the write path the vocabulary needed to ship WITH: findings gained
 // seven statuses and no verb, so every change since has been a hand edit — the habit that
@@ -448,6 +442,23 @@ func ListAcceptanceCriteria(body string) []Criterion {
 // drops any suffix, and every other state unchecks it, so the two halves can never
 // disagree the way lint would otherwise have to report.
 func SetCriterionState(body string, n int, state CriterionState, reason string) (string, error) {
+	return SetCriteriaState(body, []int{n}, state, reason)
+}
+
+// SetCriteriaState sets every 1-based index in ns to one state in a SINGLE pass over the
+// body. It exists because setting k criteria one call at a time is k file rewrites, k
+// updated_at bumps, and k filesystem events for what is semantically one edit — the shell
+// loop callers were writing to work around a single-index API.
+//
+// Every index is validated BEFORE any line is touched, so a bad index anywhere in the
+// list rejects the whole request rather than leaving the body half-applied. Indices are
+// deduplicated and order does not matter: each criterion is written at most once, and
+// 3,1 means the same as 1,3. Returning the input body unchanged means every requested
+// criterion was already in the target state, so the caller can skip the write.
+//
+// One pass is safe because every edit here replaces a line in place — nothing is
+// inserted or removed — so the scanned box positions stay valid throughout.
+func SetCriteriaState(body string, ns []int, state CriterionState, reason string) (string, error) {
 	if strings.ContainsAny(reason, "\r\n") {
 		return "", fmt.Errorf("%w: a reason must be a single line — a newline here would break out of the criterion and can manufacture phantom checkboxes", ErrValidation)
 	}
@@ -463,23 +474,39 @@ func SetCriterionState(body string, n int, state CriterionState, reason string) 
 	if len(boxes) == 0 {
 		return "", fmt.Errorf("%w: task has no acceptance criteria to set", ErrValidation)
 	}
-	if n < 1 || n > len(boxes) {
-		return "", fmt.Errorf("%w: criterion %d out of range (have %d)", ErrValidation, n, len(boxes))
+	if len(ns) == 0 {
+		return "", fmt.Errorf("%w: no criterion index given to set %s", ErrValidation, state)
 	}
-	box := boxes[n-1]
-	// Strip whatever suffix is there before writing the new one, so repeated calls replace
-	// rather than stack. It can sit on any line of a wrapped criterion — including the
-	// wrong one, if it was written before the writer knew criteria wrap.
-	for j := box.line; j <= box.end; j++ {
-		lines[j] = stripCriterionSuffixLine(lines[j])
+	// Validate every index first: a partially-applied write would leave the file in a
+	// state the caller never asked for and cannot distinguish from success.
+	seen := make(map[int]bool, len(ns))
+	targets := make([]int, 0, len(ns))
+	for _, n := range ns {
+		if n < 1 || n > len(boxes) {
+			return "", fmt.Errorf("%w: criterion %d out of range (have %d)", ErrValidation, n, len(boxes))
+		}
+		if seen[n] {
+			continue // a repeated index writes one criterion once, not twice
+		}
+		seen[n] = true
+		targets = append(targets, n)
 	}
-	lines[box.line] = replaceCheckboxLine(lines[box.line], state.Met(), strings.TrimSpace(checkboxText(lines[box.line])))
-	// The suffix belongs at the END of the criterion, which on a wrapped one is not the
-	// marker line: appending it there splits the sentence and leaves its tail dangling
-	// under the reason.
-	if state.NeedsReason() {
-		lines[box.end] = strings.TrimRight(lines[box.end], " \t") +
-			fmt.Sprintf(" · **%s:** %s", state, strings.TrimSpace(reason))
+	for _, n := range targets {
+		box := boxes[n-1]
+		// Strip whatever suffix is there before writing the new one, so repeated calls
+		// replace rather than stack. It can sit on any line of a wrapped criterion —
+		// including the wrong one, if it was written before the writer knew criteria wrap.
+		for j := box.line; j <= box.end; j++ {
+			lines[j] = stripCriterionSuffixLine(lines[j])
+		}
+		lines[box.line] = replaceCheckboxLine(lines[box.line], state.Met(), strings.TrimSpace(checkboxText(lines[box.line])))
+		// The suffix belongs at the END of the criterion, which on a wrapped one is not
+		// the marker line: appending it there splits the sentence and leaves its tail
+		// dangling under the reason.
+		if state.NeedsReason() {
+			lines[box.end] = strings.TrimRight(lines[box.end], " \t") +
+				fmt.Sprintf(" · **%s:** %s", state, strings.TrimSpace(reason))
+		}
 	}
 	return strings.Join(lines, "\n"), nil
 }
@@ -523,6 +550,12 @@ func replaceCheckboxLine(line string, checked bool, text string) string {
 	return prefix + marker + " " + text
 }
 
+// SetAcceptanceCriterion flips the 1-based nth acceptance-criteria checkbox to
+// checked/unchecked, returning the new body. Only that one checkbox's `[ ]`/`[x]`
+// is rewritten — every other byte (frontmatter is handled upstream) is preserved.
+// It is idempotent: flipping to the current state returns the body unchanged (the
+// caller can skip the write). ErrValidation when there's no acceptance section or n
+// is out of range.
 func SetAcceptanceCriterion(body string, n int, checked bool) (string, error) {
 	lines, boxes, _ := scanAcceptanceCheckboxes(body)
 	if len(boxes) == 0 {

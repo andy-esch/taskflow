@@ -355,13 +355,35 @@ func emitPath(app *App, path string) error {
 	return nil
 }
 
+// joinIndices renders an index list for a status line: "3" for one, "1, 2 and 4" for
+// several, so the message reads as a sentence rather than a slice literal.
+func joinIndices(ns []int) string {
+	parts := make([]string, len(ns))
+	for i, n := range ns {
+		parts[i] = strconv.Itoa(n)
+	}
+	switch len(parts) {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	default:
+		return strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
+	}
+}
+
 // newTaskAcCmd lists a task's acceptance criteria, or flips one by index — the CLI
 // for close-out edits that otherwise force a hand-edit of `- [ ]` → `- [x]`.
 // Index-based (`--list` to number them, then `--check 3`) is the robust form;
 // substring matching is deliberately not offered. A flip goes through the atomic,
 // frontmatter-preserving body-replace path and returns the task_mutation envelope.
 func newTaskAcCmd(app *App) *cobra.Command {
-	var check, uncheck int
+	// --check/--uncheck take a LIST of indices: closing out several criteria at once is
+	// the common shape at the end of a piece of work, and one flag call is one atomic
+	// write instead of one per criterion. The four state flags below stay single-index —
+	// each needs its own --reason, and one reason spread across several criteria would be
+	// a different (and less honest) feature.
+	var check, uncheck []int
 	// One flag per state rather than a --state <word> pair, matching --check/--uncheck: the
 	// index is the argument, the flag names the destination. Same shape as the lifecycle
 	// verbs, where the verb names where the task is going.
@@ -374,13 +396,17 @@ func newTaskAcCmd(app *App) *cobra.Command {
 		Use:   "ac <task>",
 		Short: "List a task's acceptance criteria, or check/uncheck one by index",
 		Long: "List a task's acceptance criteria — the checkboxes under its " +
-			"`## Acceptance criteria` section — or flip one by 1-based index. Run with no " +
+			"`## Acceptance criteria` section — or flip them by 1-based index. Run with no " +
 			"flags (or --list) to number them, then --check <n> / --uncheck <n> to tick or " +
-			"clear one. Matching is index-based, not substring, for robustness. A flip " +
-			"rewrites only that one checkbox (the rest of the file is preserved), is atomic, " +
-			"and is idempotent — flipping to the current state writes nothing. Checkboxes in " +
-			"fenced code blocks are ignored, and a missing section or out-of-range index is a " +
-			"validation error (exit 11).\n\n" +
+			"clear them. Both take a LIST: --check 1,2,4 (or --check 1 --check 2) flips all " +
+			"of them in ONE atomic write, so closing out several criteria costs one file " +
+			"rewrite and one updated_at bump rather than one per criterion. Indices are " +
+			"deduplicated and order-independent. Matching is index-based, not substring, for " +
+			"robustness. A flip rewrites only those checkboxes (the rest of the file is " +
+			"preserved) and is idempotent — flipping to the current state writes nothing. " +
+			"Checkboxes in fenced code blocks are ignored, and a missing section or an " +
+			"out-of-range index is a validation error (exit 11) that rejects the whole " +
+			"request before writing, so a bad index never leaves a half-applied body.\n\n" +
 			"The criteria themselves can be edited too: --add <text> appends one, --remove <n> " +
 			"deletes one, and --replace <n> --text <new> rewords one. A reworded criterion KEEPS " +
 			"its checkbox and any state suffix — rewording is not a change of mind, and silently " +
@@ -388,7 +414,7 @@ func newTaskAcCmd(app *App) *cobra.Command {
 			"is wrapped to match the corpus. --add needs an existing `## Acceptance criteria` " +
 			"section: creating one would mean guessing where it belongs in a body the tool did " +
 			"not write.",
-		Example:           "  tskflwctl task ac add-retry-backoff             # numbered list\n  tskflwctl task ac add-retry-backoff --check 3   # tick criterion 3\n  tskflwctl task ac add-retry-backoff --uncheck 3\n  tskflwctl task ac add-retry-backoff --defer 2 --reason \"waiting on the schema ADR\"\n  tskflwctl task ac add-retry-backoff --add \"Retries stop at the configured ceiling\"\n  tskflwctl task ac add-retry-backoff --replace 3 --text \"Backoff is jittered\"\n  tskflwctl task ac add-retry-backoff --remove 4",
+		Example:           "  tskflwctl task ac add-retry-backoff               # numbered list\n  tskflwctl task ac add-retry-backoff --check 3     # tick criterion 3\n  tskflwctl task ac add-retry-backoff --check 1,2,4 # tick three, one atomic write\n  tskflwctl task ac add-retry-backoff --uncheck 1,3\n  tskflwctl task ac add-retry-backoff --defer 2 --reason \"waiting on the schema ADR\"\n  tskflwctl task ac add-retry-backoff --add \"Retries stop at the configured ceiling\"\n  tskflwctl task ac add-retry-backoff --replace 3 --text \"Backoff is jittered\"\n  tskflwctl task ac add-retry-backoff --remove 4",
 		Args:              cobra.MaximumNArgs(1),
 		Annotations:       map[string]string{"safety": "mutating"}, // --check/--uncheck write; --list reads
 		ValidArgsFunction: app.completeTaskSlugs,
@@ -442,35 +468,43 @@ func newTaskAcCmd(app *App) *cobra.Command {
 				render.AcceptanceHuman(app.Out, app.Style, cs)
 				return nil
 			}
-			idx, state := check, domain.CriterionMet
+			idxs, state := check, domain.CriterionMet
 			switch chosen[0] {
 			case "--uncheck":
-				idx, state = uncheck, domain.CriterionUnmet
+				idxs, state = uncheck, domain.CriterionUnmet
 			case "--defer":
-				idx, state = defer_, domain.CriterionDeferred
+				idxs, state = []int{defer_}, domain.CriterionDeferred
 			case "--wontfix":
-				idx, state = wontfix, domain.CriterionWontFix
+				idxs, state = []int{wontfix}, domain.CriterionWontFix
 			case "--tracked":
-				idx, state = tracked, domain.CriterionTracked
+				idxs, state = []int{tracked}, domain.CriterionTracked
 			case "--na":
-				idx, state = na, domain.CriterionNA
+				idxs, state = []int{na}, domain.CriterionNA
 			}
-			task, body, changed, err := app.Svc.SetCriterionState(slug, idx, state, reason, app.DryRun)
+			task, body, changed, err := app.Svc.SetCriteriaState(slug, idxs, state, reason, app.DryRun)
 			if err != nil {
 				return err
 			}
+			what := "criterion " + joinIndices(idxs)
+			if len(idxs) > 1 {
+				what = "criteria " + joinIndices(idxs)
+			}
 			if !changed && !app.JSON { // already in the target state — say so, no write
-				fmt.Fprintf(app.Out, "%s criterion %d is already %s\n", app.Style.Dim("•"), idx, state)
+				verb := "is"
+				if len(idxs) > 1 {
+					verb = "are"
+				}
+				fmt.Fprintf(app.Out, "%s %s %s already %s\n", app.Style.Dim("•"), what, verb, state)
 				return nil
 			}
 			return reportTaskMutation(app, task, body,
-				"set criterion "+strconv.Itoa(idx)+" "+string(state),
-				"would set criterion "+strconv.Itoa(idx)+" "+string(state))
+				"set "+what+" "+string(state),
+				"would set "+what+" "+string(state))
 		},
 	}
 	cmd.Flags().BoolVar(&list, "list", false, "list the acceptance criteria (the default)")
-	cmd.Flags().IntVar(&check, "check", 0, "check the criterion at this 1-based index")
-	cmd.Flags().IntVar(&uncheck, "uncheck", 0, "uncheck the criterion at this 1-based index")
+	cmd.Flags().IntSliceVar(&check, "check", nil, "check the criteria at these 1-based `indices` (comma-separated or repeatable)")
+	cmd.Flags().IntSliceVar(&uncheck, "uncheck", nil, "uncheck the criteria at these 1-based `indices` (comma-separated or repeatable)")
 	cmd.Flags().IntVar(&defer_, "defer", 0, "mark the criterion at this 1-based index deferred (needs --reason)")
 	cmd.Flags().IntVar(&wontfix, "wontfix", 0, "mark the criterion at this 1-based index wontfix (needs --reason)")
 	cmd.Flags().IntVar(&tracked, "tracked", 0, "mark the criterion at this 1-based index tracked — handed to another task (needs --reason naming it)")
