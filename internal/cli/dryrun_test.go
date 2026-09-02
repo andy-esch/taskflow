@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -23,21 +22,6 @@ func noTaskFile(t *testing.T, root, slug string) {
 	if len(m) != 0 {
 		t.Errorf("--dry-run wrote to disk: task file(s) for %q exist: %v", slug, m)
 	}
-}
-
-// runRootRC runs the root command and returns output + error (for exit-code
-// assertions a would-fail dry run needs).
-func runRootRC(t *testing.T, args ...string) (string, error) {
-	t.Helper()
-	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
-	cmd.SetArgs(args)
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	// Execute() BEFORE reading out: `return out.String(), cmd.Execute()` evaluates
-	// out.String() first (left-to-right), capturing the buffer pre-Execute (empty).
-	err := cmd.Execute()
-	return out.String(), err
 }
 
 // H4 (2026-06-22 audit): `task edit` is interactive and has no preview, so it

@@ -198,23 +198,29 @@ func resolveID(kind, query string, cands []candidate) (candidate, error) {
 // the version-CAS re-resolve (verifyUnchanged) needs. Unlike resolveID it never matches
 // on the human slug, so a same-named sibling — a task whose SLUG happens to equal this
 // file's id — can't turn the guard into a spurious ErrAmbiguous that would lock the file
-// out of every future write. A genuine duplicate id on disk stays an ambiguity (a real
-// problem the guard should surface as a conflict); no match is ErrNotFound (it vanished).
+// out of every future write. No match is ErrNotFound (it vanished).
+//
+// A genuine duplicate id on disk is a REAL ambiguity and is returned as one, naming the
+// files that collide. It is deliberately not folded into the guard's conflict: retrying
+// cannot resolve two files claiming one id, so presenting it as "changed on disk; retry"
+// spends the OCC budget to deliver advice that can never work, and hides the only fact
+// that would let someone fix it — which files.
 func resolveExactID(cands []candidate, id string) (candidate, error) {
-	var hit candidate
-	found := false
+	var hits []candidate
 	for _, c := range cands {
 		if c.id == id {
-			if found {
-				return candidate{}, domain.ErrAmbiguous
-			}
-			hit, found = c, true
+			hits = append(hits, c)
 		}
 	}
-	if !found {
+	switch len(hits) {
+	case 0:
 		return candidate{}, domain.ErrNotFound
+	case 1:
+		return hits[0], nil
+	default:
+		return candidate{}, fmt.Errorf("id %q is claimed by %d files: %s: %w",
+			id, len(hits), describeCandidates(hits), domain.ErrAmbiguous)
 	}
-	return hit, nil
 }
 
 // describeCandidates renders an ambiguity list — "add-retry (6f…a3b), add-retry (6f…c1d)" —

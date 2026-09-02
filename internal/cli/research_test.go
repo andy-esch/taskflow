@@ -142,13 +142,18 @@ func TestResearchList_NonIDLedFileIsReported(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "research", "2026-06-28-legacy.md"), "---\ncreated: 2026-06-28\n---\n# Legacy\n")
 
-	out, err := runRootRC(t, "-C", root, "research", "list")
+	res, err := runRootStreams(t, "-C", root, "research", "list")
 	if err == nil {
 		t.Fatal("a non-id-led research file must make `research list` exit non-zero")
 	}
-	// The aggregate error carries the count; the per-file line names the fix.
-	if !strings.Contains(out, "no leading id") || !strings.Contains(out, "meta/") {
-		t.Errorf("output should name the carveout gate and the fix, got:\n%s", out)
+	// The aggregate error carries the count; the per-file line names the fix. It is
+	// a diagnostic, so stderr is where it belongs — asserting the stream is what
+	// makes this test able to notice it moving onto the payload stream.
+	if !strings.Contains(res.Err, "no leading id") || !strings.Contains(res.Err, "meta/") {
+		t.Errorf("stderr should name the carveout gate and the fix, got:\n%s", res.Err)
+	}
+	if strings.Contains(res.Out, "no leading id") {
+		t.Errorf("the diagnostic must not reach the payload stream:\n%s", res.Out)
 	}
 }
 
@@ -169,18 +174,22 @@ func TestResearchShow_AmbiguousWordingIsNotResearchs(t *testing.T) {
 	runRoot(t, "-C", root, "research", "new", "Dup doc", "--created", "2026-02-02")
 	runRoot(t, "-C", root, "research", "new", "Dup doc", "--created", "2026-02-02")
 
-	out, err := runRootRC(t, "-C", root, "research", "show", "dup-doc")
+	res, err := runRootStreams(t, "-C", root, "research", "show", "dup-doc")
 	if err == nil {
 		t.Fatal("a duplicate slug must be ambiguous")
 	}
-	// The ambiguity surfaces as the returned error (the exit-code path), not on the
-	// output stream, so assert against both to stay honest about where it lands.
-	msg := err.Error() + out
-	if strings.Contains(msg, "researchs") {
-		t.Errorf("mass-noun plural is wrong:\n%s", msg)
+	// The ambiguity surfaces as the RETURNED error (the exit-code path) rather than
+	// on either stream. The harness can now say so instead of merging both and
+	// hoping: assert the wording where it actually lives, and that the payload
+	// stream stays empty of it.
+	if strings.Contains(err.Error(), "researchs") {
+		t.Errorf("mass-noun plural is wrong:\n%s", err.Error())
 	}
-	if !strings.Contains(msg, "matches 2 research docs") {
-		t.Errorf("want 'matches 2 research docs', got:\n%s", msg)
+	if !strings.Contains(err.Error(), "matches 2 research docs") {
+		t.Errorf("want 'matches 2 research docs', got:\n%s", err.Error())
+	}
+	if strings.Contains(res.Out, "researchs") {
+		t.Errorf("mass-noun plural leaked onto stdout:\n%s", res.Out)
 	}
 }
 

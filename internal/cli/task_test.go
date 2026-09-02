@@ -24,20 +24,6 @@ func setupRepo(t *testing.T) string {
 	return root
 }
 
-// runRoot executes the root command in-process against args, capturing output.
-func runRoot(t *testing.T, args ...string) string {
-	t.Helper()
-	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
-	cmd.SetArgs(args)
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("execute %v: %v\noutput:\n%s", args, err, out.String())
-	}
-	return out.String()
-}
-
 func TestTaskList_JSON(t *testing.T) {
 	root := setupRepo(t)
 	out := runRoot(t, "-C", root, "task", "list", "--json")

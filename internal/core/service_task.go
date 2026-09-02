@@ -223,11 +223,21 @@ func (s *Service) SetAcceptanceCriterion(slug string, n int, checked, dryRun boo
 // only by hand-editing is one nobody can be held to, which is how the finding vocabulary
 // drifted from its own documentation.
 func (s *Service) SetCriterionState(slug string, n int, state domain.CriterionState, reason string, dryRun bool) (domain.Task, string, bool, error) {
+	return s.SetCriteriaState(slug, []int{n}, state, reason, dryRun)
+}
+
+// SetCriteriaState sets several of a task's (1-based) criteria to one state in a SINGLE
+// atomic write, so closing out k criteria costs one file rewrite, one updated_at bump,
+// and one filesystem event instead of k of each. changed is false when every requested
+// criterion was already in the target state — the same idempotence the single-index path
+// has always had, extended to a set, and the whole set is validated in the domain before
+// anything is written.
+func (s *Service) SetCriteriaState(slug string, ns []int, state domain.CriterionState, reason string, dryRun bool) (domain.Task, string, bool, error) {
 	t, body, err := s.store.GetTask(slug)
 	if err != nil {
 		return domain.Task{}, "", false, err
 	}
-	newBody, err := domain.SetCriterionState(body, n, state, reason)
+	newBody, err := domain.SetCriteriaState(body, ns, state, reason)
 	if err != nil {
 		return domain.Task{}, "", false, err
 	}
