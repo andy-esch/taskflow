@@ -61,9 +61,6 @@ var (
 	// capturing the code and the rest of the line (the title, possibly with an
 	// inline "· **Status:** …").
 	findingHeaderRe = regexp.MustCompile(`(?m)^#{2,6}\s+([A-Z]+\d+)\.[ \t]*(.*)$`)
-	// fenceRe spans a ```-fenced code block, stripped first so example finding
-	// syntax in docs or the scaffold isn't parsed as a real finding.
-	fenceRe = regexp.MustCompile("(?s)```.*?```")
 	// statusRe captures the status VALUE's leading run after `**Status:**`, but ONLY
 	// where the marker is authoritative — at line start (a status line) or right after
 	// the header's `· ` separator — so a literal `**Status:**` mentioned in a title or
@@ -115,14 +112,28 @@ func fieldValueRe(label string) *regexp.Regexp {
 // offset by its length, so a status write landed somewhere else entirely: on the scaffold
 // `audit new` emits, `## Candidate tasks` became `## Candidafixedasks` while the finding's
 // own status went unchanged, and the command still reported success.
+//
+// The scan is line-based over the shared fenceScanner rather than a ```…``` regex. A regex
+// pairs fence RUNS off against each other, so an odd number of them — which a four-backtick
+// block wrapping a lone ```example produces — pairs a real closer with the NEXT finding's
+// fence and masks every heading in between. Those findings then parse away entirely: they
+// cannot be stamped, and the progress bar reports the survivors as the whole audit. Honoring
+// the opening run's character and length (CommonMark §4.5) is what makes a nested fence, a
+// ~~~ fence, and an unterminated one all behave.
 func blankFences(body string) string {
 	out := []byte(body)
-	for _, m := range fenceRe.FindAllStringIndex(body, -1) {
-		for i := m[0]; i < m[1]; i++ {
-			if out[i] != '\n' {
+	var fence fenceScanner
+	for pos := 0; pos < len(out); {
+		end := pos
+		for end < len(out) && out[end] != '\n' {
+			end++
+		}
+		if fence.inCode(string(out[pos:end])) {
+			for i := pos; i < end; i++ {
 				out[i] = ' '
 			}
 		}
+		pos = end + 1 // step over the newline, which is never blanked
 	}
 	return string(out)
 }

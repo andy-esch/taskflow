@@ -703,7 +703,10 @@ func newTaskAppendCmd(app *App) *cobra.Command {
 			"or stdin (--body-file -); a blank line separates it from the existing body.",
 		// --body is one line as typed; multi-line content comes from a file or stdin
 		// (a shell passes "\n" inside --body literally, it is not a newline).
-		Example:           "  tskflwctl task append my-task --body 'a one-line note'\n  printf '## Review\\n- looks good\\n' | tskflwctl task append my-task --body-file -",
+		// A heredoc leads, deliberately: planning bodies are full of percent signs
+		// (coverage, gates, metrics) and printf reads them as format verbs, so the
+		// obvious multi-line spelling silently truncates the write.
+		Example:           "  tskflwctl task append my-task --body 'a one-line note'\n  tskflwctl task append my-task --body-file - <<'EOF'\n## Review\n- coverage held at 82% after the change\nEOF\n  cat notes.md | tskflwctl task append my-task --body-file -",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.completeTaskSlugs,

@@ -17,7 +17,10 @@ tskflwctl audit append <audit> [flags]
 
 ```
   tskflwctl audit append my-audit --body '#### H1. Title  · **Status:** open'
-  printf '#### M3. ...\n' | tskflwctl audit append my-audit --body-file -
+  tskflwctl audit append my-audit --body-file - <<'EOF'
+#### M3. Cache hit rate fell to 40% · **Status:** open
+EOF
+  cat findings.md | tskflwctl audit append my-audit --body-file -
 ```
 
 ### Options
