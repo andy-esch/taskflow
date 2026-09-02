@@ -28,6 +28,14 @@ behind one optimistic progress number.
 - Add a Threads tab/list and detail route through the existing entity registry, command palette,
   tab navigation, selection restore, filtering, and sorting conventions. File opening/path copy is
   capability-aware: provide it for local workspaces and do not imply a path for portable readers.
+- Make that registry route the single owner of Thread list/detail generations, loaded/error state,
+  selection identity, and reloads. Delete or collapse the temporary parallel fields in
+  `threadProjectionState`; retain only repository-level Thread diagnostics that genuinely do not
+  belong to one row. Fold the temporary `readSurface` distinction into the registry's entity/screen
+  identity where that removes duplicate discriminators.
+- Entering the Threads route must issue its first lazy list request, after which task and Thread
+  watcher events reload that same state owner. A background or restored route must not need a
+  second cache to remain live.
 - Render persisted lifecycle separately from derived health: status, nominal and drained progress,
   inconsistency, in-flight members, dispatchable frontier members, missing/broken members, and
   immediate external gates must keep their core meanings.
@@ -46,6 +54,9 @@ behind one optimistic progress number.
 - [ ] Threads are reachable as a first-class TUI tab and through command-palette navigation, with
   stable filtering, sorting, selection restoration, and help text consistent with the other
   read-only entities; path copy/open works when locally available and degrades explicitly when not.
+- [ ] One production integration test enters the registry route and proves one list request, one
+  generation/error owner, one canonical detail selection, and one reload path; no parallel Thread
+  list/detail state machine remains.
 - [ ] List rows distinguish lifecycle, sound progress, graph/projection health, and active/eligible
   work without recomputing any of those values in the TUI.
 - [ ] Detail output faithfully presents members, immediate external gates, in-flight work,

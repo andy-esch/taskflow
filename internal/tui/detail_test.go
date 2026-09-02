@@ -33,3 +33,31 @@ func TestRenderTaskMeta_CriterionRollup(t *testing.T) {
 		t.Errorf("a task with no criteria should have no acceptance row:\n%s", bare)
 	}
 }
+
+func TestDetailPaneUsesLoadedIdentityInsteadOfDisplayTitle(t *testing.T) {
+	d := newDetailPane(&testStyles)
+	d.SetSize(40, 5)
+	content := taskDetail{
+		t:    domain.Task{Slug: "duplicate-display-slug"},
+		body: strings.Repeat("line\n", 40),
+	}
+	d.SetContent("stable-a", content)
+	d.vp.GotoBottom()
+	offset := d.vp.YOffset()
+	if offset == 0 {
+		t.Fatal("setup: detail content should scroll")
+	}
+
+	d.SetContent("stable-a", content)
+	if d.vp.YOffset() != offset {
+		t.Errorf("same canonical record lost its scroll offset: %d -> %d", offset, d.vp.YOffset())
+	}
+	if !d.showing("stable-a") || d.showing("duplicate-display-slug") {
+		t.Error("loaded identity was conflated with the display title")
+	}
+
+	d.SetContent("stable-b", content)
+	if d.vp.YOffset() != 0 {
+		t.Errorf("a different canonical record with the same title kept scroll offset %d", d.vp.YOffset())
+	}
+}

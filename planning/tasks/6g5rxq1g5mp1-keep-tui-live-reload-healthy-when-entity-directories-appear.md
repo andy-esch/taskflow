@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5rxq1g5mp1
-status: in-progress
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Discover and watch configured entity directories created or replaced after TUI launch, including a previously absent threads directory.
 effort: 1-2 days
@@ -12,6 +12,7 @@ tags: [tui, watcher, threads, correctness]
 created: "2026-09-01"
 updated_at: "2026-09-01"
 started_at: "2026-09-01"
+completed_at: "2026-09-01"
 ---
 
 # Keep TUI live reload healthy when entity directories appear

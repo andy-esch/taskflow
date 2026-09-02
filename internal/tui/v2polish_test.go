@@ -40,7 +40,7 @@ func TestView_WindowTitleFallsBackToTab(t *testing.T) {
 // loaded entity's file path (click-to-open).
 func TestDetailTitle_ClickableLink(t *testing.T) {
 	m := loaded(t, 120, 40) // two-pane, so the detail pane renders
-	m.detail.SetContent(taskDetail{t: domain.Task{Slug: "x", Path: "/abs/x.md"}, body: "hi"})
+	m.detail.SetContent("x", taskDetail{t: domain.Task{Slug: "x", Path: "/abs/x.md"}, body: "hi"})
 	out := m.View().Content
 	if !strings.Contains(out, "\x1b]8;;file:///abs/x.md") {
 		t.Errorf("detail title should be an OSC 8 link to the file path; got:\n%q", out)

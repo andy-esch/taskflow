@@ -127,7 +127,7 @@ func (t *entityTab) reload(svc *core.Service, restoreID string) tea.Cmd {
 	t.loadGen++
 	t.restore, t.restoreGen = restoreID, t.loadGen
 	load := t.loadList(t, svc)
-	return func() tea.Msg {
+	stamped := func() tea.Msg {
 		msg := load()
 		if lm, ok := msg.(listLoadedMsg); ok {
 			lm.restore = restoreID
@@ -135,6 +135,8 @@ func (t *entityTab) reload(svc *core.Service, restoreID string) tea.Cmd {
 		}
 		return msg // errMsg passes through unchanged
 	}
+	request := readRequest{surface: readEntityList, kind: t.kind, gen: t.loadGen}
+	return withReadConflictRetry(request, stamped)
 }
 
 // selectByID moves the cursor to the row with the given id, reporting whether it
