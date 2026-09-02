@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,10 +23,7 @@ func TestTaskList_ReportsBadFileButShowsGood(t *testing.T) {
 	write("tasks/"+testutil.TaskID("good")+"-good.md", "---\nstatus: ready-to-start\ndescription: ok\n---\n# Good\n")
 	write("tasks/"+testutil.TaskID("bad")+"-bad.md", "---\nstatus: ready-to-start\ntags: a,b,c\n---\n# Bad\n")
 
-	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
-	cmd.SetArgs([]string{"-C", root, "task", "list"})
-	err := cmd.Execute()
+	res, err := runRootStreams(t, "-C", root, "task", "list")
 
 	if err == nil {
 		t.Fatal("expected a non-zero result for the unreadable file")
@@ -35,11 +31,12 @@ func TestTaskList_ReportsBadFileButShowsGood(t *testing.T) {
 	if ExitCode(err) != 11 {
 		t.Errorf("want exit 11, got %d", ExitCode(err))
 	}
-	s := out.String()
-	if !bytes.Contains([]byte(s), []byte("good")) {
-		t.Errorf("the good task should still be listed:\n%s", s)
+	// Best-effort listing on stdout, per-file guidance on stderr: the point of the
+	// command is that one bad file neither hides the good rows nor pollutes them.
+	if !strings.Contains(res.Out, "good") {
+		t.Errorf("the good task should still be listed:\n%s", res.Out)
 	}
-	if !bytes.Contains([]byte(s), []byte("tags")) || !bytes.Contains([]byte(s), []byte("bad.md")) {
-		t.Errorf("the bad file should be reported with guidance:\n%s", s)
+	if !strings.Contains(res.Err, "tags") || !strings.Contains(res.Err, "bad.md") {
+		t.Errorf("the bad file should be reported with guidance:\n%s", res.Err)
 	}
 }
