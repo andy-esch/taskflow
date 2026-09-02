@@ -63,7 +63,7 @@ func scopeSession(gen uint64, cmd tea.Cmd) tea.Cmd {
 // pendingJump is a "land here" intent that outlives the workspace it targets being opened.
 type pendingJump struct {
 	kind entityKind
-	id   string
+	ref  entityRef
 	set  bool
 }
 
@@ -71,17 +71,17 @@ type pendingJump struct {
 // chrome, modal state, and the watcher are deliberately excluded; only the active space
 // owns a watcher, and transient overlays should never reopen after a switch.
 type spaceSession struct {
-	tabs      []*entityTab
-	active    int
-	onDash    bool
-	dash      dashboard
-	threads   threadProjectionState
-	detail    detailPane
-	focus     focus
-	zoom      bool
-	navStack  []navLoc
-	detailGen int
-	movedAway string
+	tabs         []*entityTab
+	active       int
+	onDash       bool
+	dash         dashboard
+	threads      threadProjectionState
+	detail       detailPane
+	focus        focus
+	zoom         bool
+	navStack     []navLoc
+	detailGen    int
+	movedAwayKey string
 }
 
 func workspaceKey(workspace core.Workspace) string {
@@ -100,7 +100,7 @@ func (m *Model) saveSession() {
 		tabs: m.tabs, active: m.active, onDash: m.onDash, dash: m.dash, threads: m.threads,
 		detail: m.detail, focus: m.focus, zoom: m.zoom,
 		navStack: append([]navLoc(nil), m.navStack...), detailGen: m.detailGen,
-		movedAway: m.movedAway,
+		movedAwayKey: m.movedAwayKey,
 	}
 }
 
@@ -133,7 +133,7 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 		m.tabs, m.active, m.onDash, m.dash = saved.tabs, saved.active, saved.onDash, saved.dash
 		m.threads = saved.threads
 		m.detail, m.focus, m.zoom = saved.detail, saved.focus, saved.zoom
-		m.navStack, m.detailGen, m.movedAway = saved.navStack, saved.detailGen, saved.movedAway
+		m.navStack, m.detailGen, m.movedAwayKey = saved.navStack, saved.detailGen, saved.movedAwayKey
 	} else {
 		m.tabs = newEntityTabs(m.st)
 		m.active = 0
@@ -145,7 +145,7 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 		m.zoom = false
 		m.navStack = nil
 		m.detailGen = 0
-		m.movedAway = ""
+		m.movedAwayKey = ""
 	}
 	m.dirtyGen = 0
 	m.recomputeLayout()
@@ -157,14 +157,15 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 		// NOT used here. A restored session's tabs are already `loaded`, holding rows read
 		// on the last visit, and jumpTo selects against those without re-reading the tree —
 		// so a task started elsewhere since would be invisible, and one completed elsewhere
-		// would still be listed. Stamping the target as the tab's restore id and going
+		// would still be listed. Stamping the target as the tab's restore key and going
 		// through the ordinary refresh gets the landing AND fresh data in one pass.
 		jump := m.pendingJump
 		m.pendingJump = pendingJump{}
 		if i := indexOfKind(m.tabs, jump.kind); i >= 0 {
 			m.exitDashboard(i)
 			m.tabs[i].list.ResetFilter()
-			m.tabs[i].restore = jump.id
+			m.tabs[i].restore = jump.ref
+			m.tabs[i].restoreWiden = true
 		}
 		loads = m.reloadAll()
 	case restored && (!m.onDash || m.dash.loaded):

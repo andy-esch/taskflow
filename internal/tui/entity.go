@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
@@ -41,14 +42,104 @@ const overviewName = "overview"
 // atlasName is the canonical screen/command label for the cross-space navigator.
 const atlasName = "atlas"
 
-// entityItem is a list row that knows its own stable id (slug / epic id) and the
-// fields it can be sorted by, so the model can preserve the cursor, stale-guard
-// detail loads, and reorder lists generically across entities.
+// entityRef keeps durable identity separate from human-facing text. key is the
+// canonical reference accepted by the entity's store; label is the slug/id users
+// see and copy. Keeping both in the registry contract prevents a future entity
+// (notably Threads) from accidentally using a mutable or ambiguous label for
+// selection, detail reads, navigation, or saved workspace state.
+type entityRef struct {
+	key   string
+	label string
+}
+
+func (r entityRef) empty() bool { return r.key == "" }
+
+// entityItem is a list row that knows its canonical reference, visible label,
+// and sortable fields, so the model can preserve the cursor, stale-guard detail
+// loads, and reorder lists generically across entities. displayLabel prefixes a
+// short identity hint when duplicate labels coexist in the loaded result. Prefixing
+// keeps the only distinguishing text visible when a long shared label is truncated.
 type entityItem interface {
 	list.Item
-	id() string
+	ref() entityRef
+	displayLabel() string
+	hasIdentityHint() bool
 	path() string // the entity's on-disk file path (for the clipboard yank)
 	sortFields() sortFields
+}
+
+// validateEntityItems is the registry's last line of defence against an invalid
+// portable adapter. A canonical key must be non-empty and unique within a loaded
+// result; otherwise selection would mean "nothing" or silently choose the first
+// matching row. Local stores enforce this more deeply, but future adapters must
+// fail just as loudly instead of relying on filesystem invariants they do not have.
+func validateEntityItems(items []list.Item) error {
+	seen := make(map[string]string, len(items))
+	for _, raw := range items {
+		item, ok := raw.(entityItem)
+		if !ok {
+			return fmt.Errorf("entity registry received unsupported row %T", raw)
+		}
+		ref := item.ref()
+		if ref.key == "" {
+			return fmt.Errorf("entity %q has no canonical identity", ref.label)
+		}
+		if prior, ok := seen[ref.key]; ok {
+			return fmt.Errorf("canonical identity %q is shared by %q and %q", ref.key, prior, ref.label)
+		}
+		seen[ref.key] = ref.label
+	}
+	return nil
+}
+
+// duplicateIdentityHints returns the shortest deterministic stable-ID prefix
+// (six characters minimum) needed to distinguish rows that share a visible
+// label. Unique labels stay unannotated; a full key is used only in the unlikely
+// case that shorter prefixes still collide.
+func duplicateIdentityHints(refs []entityRef) map[string]string {
+	byLabel := make(map[string][]string)
+	for _, ref := range refs {
+		byLabel[ref.label] = append(byLabel[ref.label], ref.key)
+	}
+	hints := make(map[string]string)
+	for _, keys := range byLabel {
+		if len(keys) < 2 {
+			continue
+		}
+		for keyIndex, key := range keys {
+			found := false
+			for n := min(6, len(key)); n <= len(key); n++ {
+				prefix := key[:n]
+				unique := true
+				for otherIndex, other := range keys {
+					if otherIndex != keyIndex && strings.HasPrefix(other, prefix) {
+						unique = false
+						break
+					}
+				}
+				if unique {
+					hints[key] = prefix
+					found = true
+					break
+				}
+			}
+			// A non-filesystem adapter may supply unequal key lengths where one key is
+			// a strict prefix of another. The shorter key has no unique prefix, but its
+			// full value is still the most useful explicit discriminator. Equal or empty
+			// keys remain an adapter-contract violation and are handled separately.
+			if !found {
+				hints[key] = key
+			}
+		}
+	}
+	return hints
+}
+
+func labelWithIdentityHint(label, hint string) string {
+	if hint == "" {
+		return label
+	}
+	return "[" + hint + "] " + label
 }
 
 // lifecycleItem is an entityItem with a mutable lifecycle state (a task's status,
@@ -98,7 +189,7 @@ type entityTab struct {
 	// The `m` menu and `:` verbs read these off the active tab, so lifecycle is no
 	// longer task-only plumbing in the reducer. nil transitions ⇒ no `m`/`:`-verb actions.
 	transitions []transition
-	applyMove   func(svc *core.Service, id string, tr transition) tea.Cmd
+	applyMove   func(svc *core.Service, ref entityRef, tr transition) tea.Cmd
 
 	// S2b list-scoped state (persists per tab across switches/reloads).
 	statusView  string    // view axis: "" = default, "all", a task status, or an audit bucket
@@ -107,30 +198,39 @@ type entityTab struct {
 	sortRev     bool      // sort direction toggle ("O")
 	filterExact bool      // false = fuzzy (default), true = substring; toggled session-wide by "F"
 
-	// restore is the cursor id the next landing load (or its async refilter) should
+	// restore is the canonical cursor key the next landing load (or its async refilter) should
 	// select — a jumpTo target or a reload's cursor-preservation. restoreGen stamps
 	// the loadGen it belongs to, so a newer reload supersedes a stale target and an
 	// old filter-match callback (handleTabMsg) can't apply it. The id also rides on
 	// each load's listLoadedMsg (gen-safe), so a dropped stale load never applies a
-	// restore meant for another — the single-slot race M6 flagged.
-	restore    string
-	restoreGen int
+	// restore meant for another — the single-slot race M6 flagged. restoreWiden is
+	// reserved for cross-space Atlas landings: if the task left the default working
+	// view after the Atlas snapshot, a genuine miss retries once in :all.
+	restore      entityRef
+	restoreGen   int
+	restoreWiden bool
 }
 
-// reload re-fires the tab's list loader with the cursor id to restore afterward,
+// reload re-fires the tab's list loader with the canonical cursor key to restore afterward,
 // passing the tab so the loader can read its current statusView (a value-typed
 // Model still mutates via the pointer). Each reload bumps the load generation so an
-// older in-flight load can't land over this one's result, records restoreID as the
+// older in-flight load can't land over this one's result, records restoreKey as the
 // tab's pending intent (so a concurrent markReload carries it forward, not the
 // stale cursor), and stamps it onto the load's message for the gen-safe consumer.
-func (t *entityTab) reload(svc *core.Service, restoreID string) tea.Cmd {
+func (t *entityTab) reload(svc *core.Service, restore entityRef) tea.Cmd {
+	// Keep the Atlas fallback only while reloads carry the same pending target.
+	// A watcher firing during the landing must not discard it, while an unrelated
+	// navigation must not inherit it.
+	widenOnMissing := t.restoreWiden && !restore.empty() && t.restore.key == restore.key
 	t.loadGen++
-	t.restore, t.restoreGen = restoreID, t.loadGen
+	t.restore, t.restoreGen = restore, t.loadGen
+	t.restoreWiden = widenOnMissing
 	load := t.loadList(t, svc)
 	stamped := func() tea.Msg {
 		msg := load()
 		if lm, ok := msg.(listLoadedMsg); ok {
-			lm.restore = restoreID
+			lm.restore = restore
+			lm.widenOnMissing = widenOnMissing
 			return lm
 		}
 		return msg // errMsg passes through unchanged
@@ -139,14 +239,14 @@ func (t *entityTab) reload(svc *core.Service, restoreID string) tea.Cmd {
 	return withReadConflictRetry(request, stamped)
 }
 
-// selectByID moves the cursor to the row with the given id, reporting whether it
+// selectByKey moves the cursor to the row with the given canonical key, reporting whether it
 // was found. It ranges the *visible* items, since list.Select indexes the
 // filtered/paginated view — immediately after SetItems on a filtered list the
 // refilter is still in flight (VisibleItems is empty), so callers must keep the
 // restore pending until this succeeds.
-func (t *entityTab) selectByID(id string) bool {
+func (t *entityTab) selectByKey(key string) bool {
 	for i, it := range t.list.VisibleItems() {
-		if ei, ok := it.(entityItem); ok && ei.id() == id {
+		if ei, ok := it.(entityItem); ok && ei.ref().key == key {
 			t.list.Select(i)
 			return true
 		}
@@ -159,14 +259,14 @@ func (t *entityTab) selectByID(id string) bool {
 // reload firing mid-jump carries the jump target forward instead of yanking the
 // cursor back to where it was — the M6 fix for the reload/jump race. With nothing
 // pending it captures the current cursor (the ordinary reload-preserves-cursor case).
-func (t *entityTab) markReload() string {
-	if t.restore != "" {
+func (t *entityTab) markReload() entityRef {
+	if !t.restore.empty() {
 		return t.restore
 	}
 	if it, ok := t.list.SelectedItem().(entityItem); ok {
-		return it.id()
+		return it.ref()
 	}
-	return ""
+	return entityRef{}
 }
 
 // viewFor maps a `:` word to a view value on this tab's axis.
@@ -235,19 +335,19 @@ func (t *entityTab) matches(word string) bool {
 
 // moveTask applies a task status transition off the event loop, reporting success
 // (movedMsg → flash + reload) or failure (actionErrMsg → flash, no reload).
-func moveTask(svc *core.Service, id string, tr transition) tea.Cmd {
+func moveTask(svc *core.Service, ref entityRef, tr transition) tea.Cmd {
 	return func() tea.Msg {
 		// force=false: a TUI completion is held to the same acceptance-criteria gate as
 		// the CLI's, and the refusal surfaces as the action's error flash.
-		receipt, err := svc.Move(id, domain.Status(tr.to), false, core.TaskLifecycleOverrideNone)
+		receipt, err := svc.Move(ref.key, domain.Status(tr.to), false, core.TaskLifecycleOverrideNone)
 		if err != nil {
 			var committed *core.TaskLifecycleMutationFailure
 			if errors.As(err, &committed) {
-				return movedMsg{slug: id, to: tr.to, lifecycle: &committed.Receipt, warning: err}
+				return movedMsg{ref: ref, to: tr.to, lifecycle: &committed.Receipt, warning: err}
 			}
-			return actionErrMsg{slug: id, err: err}
+			return actionErrMsg{ref: ref, err: err}
 		}
-		return movedMsg{slug: id, to: tr.to, lifecycle: &receipt}
+		return movedMsg{ref: ref, to: tr.to, lifecycle: &receipt}
 	}
 }
 
@@ -255,29 +355,29 @@ func moveTask(svc *core.Service, id string, tr transition) tea.Cmd {
 // TUI face of `task defer [--until]`. An empty date parks the task indefinitely
 // (a plain Move); a non-empty one also records revisit_at. Mirrors moveTask's
 // success/failure reporting (movedMsg → flash + reload, actionErrMsg → flash).
-func deferTaskCmd(svc *core.Service, id, revisit string) tea.Cmd {
+func deferTaskCmd(svc *core.Service, ref entityRef, revisit string) tea.Cmd {
 	return func() tea.Msg {
-		receipt, err := svc.DeferTask(id, revisit, false)
+		receipt, err := svc.DeferTask(ref.key, revisit, false)
 		if err != nil {
 			var committed *core.TaskLifecycleMutationFailure
 			if errors.As(err, &committed) {
-				return movedMsg{slug: id, to: string(domain.StatusDeferred), revisit: revisit, lifecycle: &committed.Receipt, warning: err}
+				return movedMsg{ref: ref, to: string(domain.StatusDeferred), revisit: revisit, lifecycle: &committed.Receipt, warning: err}
 			}
-			return actionErrMsg{slug: id, err: err}
+			return actionErrMsg{ref: ref, err: err}
 		}
-		return movedMsg{slug: id, to: string(domain.StatusDeferred), revisit: revisit, lifecycle: &receipt}
+		return movedMsg{ref: ref, to: string(domain.StatusDeferred), revisit: revisit, lifecycle: &receipt}
 	}
 }
 
 // moveAudit applies an audit bucket transition (close/reopen/defer). The store
 // refuses closing/deferring an audit with still-open findings (M4); that surfaces
 // as an actionErrMsg (red flash, no move), matching the CLI.
-func moveAudit(svc *core.Service, id string, tr transition) tea.Cmd {
+func moveAudit(svc *core.Service, ref entityRef, tr transition) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.MoveAudit(id, domain.AuditBucket(tr.to), false); err != nil {
-			return actionErrMsg{slug: id, err: err}
+		if _, err := svc.MoveAudit(ref.key, domain.AuditBucket(tr.to), false); err != nil {
+			return actionErrMsg{ref: ref, err: err}
 		}
-		return movedMsg{slug: id, to: tr.to}
+		return movedMsg{ref: ref, to: tr.to}
 	}
 }
 
@@ -285,12 +385,12 @@ func moveAudit(svc *core.Service, id string, tr transition) tea.Cmd {
 // status is a frontmatter field, not a directory, so MoveEpic rewrites it in place
 // — the file never moves. Success → movedMsg (flash + reload); failure →
 // actionErrMsg (red flash, no reload), matching the CLI.
-func moveEpic(svc *core.Service, id string, tr transition) tea.Cmd {
+func moveEpic(svc *core.Service, ref entityRef, tr transition) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.MoveEpic(id, tr.to, false); err != nil {
-			return actionErrMsg{slug: id, err: err}
+		if _, err := svc.MoveEpic(ref.key, tr.to, false); err != nil {
+			return actionErrMsg{ref: ref, err: err}
 		}
-		return movedMsg{slug: id, to: tr.to}
+		return movedMsg{ref: ref, to: tr.to}
 	}
 }
 

@@ -22,13 +22,13 @@ import (
 // the overflow collapses into a "+N more →" row that jumps to the full tab.
 const dashListCap = 6
 
-// dashTarget is what selecting a row opens: normally a specific item (id set) via
+// dashTarget is what selecting a row opens: normally a specific item (ref set) via
 // jumpTo or a whole view (view set) via applyView on the named entity's tab. The
 // configuration target opens the separately injected Config/About capability.
 type dashTarget struct {
 	action dashTargetAction
 	kind   entityKind
-	id     string
+	ref    entityRef
 	view   string
 }
 
@@ -80,6 +80,11 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 	} else {
 		shown, more := capList(len(s.InProgress))
 		vis := s.InProgress[:shown]
+		refs := make([]entityRef, 0, len(vis))
+		for _, task := range vis {
+			refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
+		}
+		hints := duplicateIdentityHints(refs)
 		dateCells := relDateCells(vis, theme.TaskDate, st)
 		for i, t := range vis {
 			tok := theme.Status(t.Status)
@@ -87,8 +92,8 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 			if dateCells[i] != "" { // a blank (undated) cell still pads, so the slug column holds
 				cell += dateCells[i] + "  "
 			}
-			cell += t.Slug
-			nav(cell, dashTarget{kind: entityTasks, id: t.Slug})
+			cell += labelWithIdentityHint(t.Slug, hints[t.CanonicalID()])
+			nav(cell, dashTarget{kind: entityTasks, ref: entityRef{key: t.CanonicalID(), label: t.Slug}})
 		}
 		if more > 0 {
 			nav(st.dim(fmt.Sprintf("+%d more →", more)), dashTarget{kind: entityTasks, view: "in-progress"})
@@ -132,7 +137,7 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 				id = st.dim(id)
 			}
 			row += "  " + id + epicStatusNote(es, st)
-			nav(row, dashTarget{kind: entityEpics, id: es.Epic.ID})
+			nav(row, dashTarget{kind: entityEpics, ref: entityRef{key: es.Epic.ID, label: es.Epic.ID}})
 		}
 		if more > 0 {
 			nav(st.dim(fmt.Sprintf("+%d more →", more)), dashTarget{kind: entityEpics})
@@ -153,7 +158,7 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 		}
 		for _, f := range fr.Acute {
 			label := strings.TrimSpace(f.Code + " " + f.Title)
-			nav(st.fg(theme.ColorRed, "⚠")+" "+label, dashTarget{kind: entityAudits, id: f.Audit})
+			nav(st.fg(theme.ColorRed, "⚠")+" "+label, dashTarget{kind: entityAudits, ref: entityRef{key: f.AuditID, label: f.Audit}})
 		}
 	}
 

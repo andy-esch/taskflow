@@ -22,8 +22,8 @@ func epicsTab(t *testing.T, m Model) Model {
 func TestModel_ActionMenuMovesEpic(t *testing.T) {
 	m := loaded(t, 120, 40)
 	m = epicsTab(t, m)
-	if m.selectedID() != "01-test" {
-		t.Fatalf("setup: want the seeded epic selected, got %q", m.selectedID())
+	if m.selectedLabel() != "01-test" {
+		t.Fatalf("setup: want the seeded epic selected, got %q", m.selectedLabel())
 	}
 	tm, _ := m.Update(press("m"))
 	m = tm.(Model)

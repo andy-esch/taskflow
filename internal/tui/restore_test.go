@@ -20,13 +20,13 @@ import (
 func TestEntityTab_MarkReloadCarriesPendingTarget(t *testing.T) {
 	m := loaded(t, 120, 40) // cursor on alpha
 	tab := m.cur()
-	if got := tab.markReload(); got != m.selectedID() {
-		t.Errorf("with nothing pending, markReload should capture the cursor, got %q want %q", got, m.selectedID())
+	if got := tab.markReload(); got != m.selectedRef() {
+		t.Errorf("with nothing pending, markReload should capture the cursor, got %+v want %+v", got, m.selectedRef())
 	}
 	// Simulate a jump in flight: reload() records the target as the pending restore.
-	tab.restore = "jump-target"
-	if got := tab.markReload(); got != "jump-target" {
-		t.Errorf("markReload must carry the pending jump target forward, got %q", got)
+	tab.restore = testEntityRef("jump-target")
+	if got := tab.markReload(); got != testEntityRef("jump-target") {
+		t.Errorf("markReload must carry the pending jump target forward, got %+v", got)
 	}
 }
 
@@ -37,21 +37,21 @@ func TestModel_StaleReloadDoesNotStealRestore(t *testing.T) {
 	m := loaded(t, 120, 40) // cursor on alpha
 	gen := m.cur().loadGen
 	items := []list.Item{
-		taskItem{t: domain.Task{Slug: "alpha", Status: domain.StatusInProgress}},
-		taskItem{t: domain.Task{Slug: "beta", Status: domain.StatusReadyToStart}},
+		taskItem{t: domain.Task{FilenameID: testutil.TaskID("alpha"), Slug: "alpha", Status: domain.StatusInProgress}},
+		taskItem{t: domain.Task{FilenameID: testutil.TaskID("beta"), Slug: "beta", Status: domain.StatusReadyToStart}},
 	}
 	// A current-gen load carrying restore=beta selects beta.
-	tm, _ := m.Update(listLoadedMsg{kind: entityTasks, gen: gen, items: items, restore: "beta"})
+	tm, _ := m.Update(listLoadedMsg{kind: entityTasks, gen: gen, items: items, restore: entityRef{key: testutil.TaskID("beta"), label: "beta"}})
 	m = tm.(Model)
-	if m.selectedID() != "beta" {
-		t.Fatalf("a current load's per-message restore should select beta, got %q", m.selectedID())
+	if m.selectedLabel() != "beta" {
+		t.Fatalf("a current load's per-message restore should select beta, got %q", m.selectedLabel())
 	}
 	// A STALE load (older gen) carrying restore=alpha is dropped wholesale — its
 	// restore must not steal the cursor back, nor fire a spurious not-found flash.
-	tm, _ = m.Update(listLoadedMsg{kind: entityTasks, gen: gen - 1, items: items, restore: "alpha"})
+	tm, _ = m.Update(listLoadedMsg{kind: entityTasks, gen: gen - 1, items: items, restore: entityRef{key: testutil.TaskID("alpha"), label: "alpha"}})
 	m = tm.(Model)
-	if m.selectedID() != "beta" {
-		t.Errorf("a stale-gen load must not apply its restore; cursor moved to %q", m.selectedID())
+	if m.selectedLabel() != "beta" {
+		t.Errorf("a stale-gen load must not apply its restore; cursor moved to %q", m.selectedLabel())
 	}
 	if m.flashErr {
 		t.Errorf("a stale load must not flash, got %q", m.flash)
@@ -97,10 +97,11 @@ func TestModel_ReloadDuringJumpKeepsTarget(t *testing.T) {
 
 	// Jump to the hidden completed task: escalates to :all and fires the reload (its
 	// load is left in flight — we deliberately don't drain the returned cmd).
-	_ = m.jumpTo(entityTasks, "done-one")
-	if m.cur().restore != "done-one" || m.cur().statusView != "all" {
+	doneRef := entityRef{key: testutil.TaskID("done-one"), label: "done-one"}
+	_ = m.jumpTo(entityTasks, doneRef)
+	if m.cur().restore != doneRef || m.cur().statusView != "all" {
 		t.Fatalf("jump should escalate to :all and pend restore=done-one, got view=%q restore=%q",
-			m.cur().statusView, m.cur().restore)
+			m.cur().statusView, m.cur().restore.key)
 	}
 	g1 := m.cur().loadGen
 
@@ -108,8 +109,8 @@ func TestModel_ReloadDuringJumpKeepsTarget(t *testing.T) {
 	// the jump target forward, so the new (higher-gen) load also aims at done-one.
 	tm, reloadCmd := m.Update(reloadMsg{})
 	m = tm.(Model)
-	if m.cur().restore != "done-one" {
-		t.Fatalf("a reload mid-jump must carry the jump target forward, got %q", m.cur().restore)
+	if m.cur().restore != doneRef {
+		t.Fatalf("a reload mid-jump must carry the jump target forward, got %+v", m.cur().restore)
 	}
 	if m.cur().loadGen == g1 {
 		t.Fatal("the background reload should have bumped the load generation")
@@ -117,8 +118,8 @@ func TestModel_ReloadDuringJumpKeepsTarget(t *testing.T) {
 
 	// Land the reload; the jump target must win, with no false not-found flash.
 	m = pump(t, m, reloadCmd, 8)
-	if m.selectedID() != "done-one" {
-		t.Errorf("the jump target should survive the concurrent reload, got %q", m.selectedID())
+	if m.selectedLabel() != "done-one" {
+		t.Errorf("the jump target should survive the concurrent reload, got %q", m.selectedLabel())
 	}
 	if m.flashErr {
 		t.Errorf("no spurious not-found flash expected, got %q", m.flash)

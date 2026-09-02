@@ -18,7 +18,7 @@ import (
 type paletteKind int
 
 const (
-	palJump    paletteKind = iota // jump to an entity (ek, id)
+	palJump    paletteKind = iota // jump to an entity (ek, ref)
 	palCommand                    // run a `:` command word (word)
 )
 
@@ -27,7 +27,8 @@ const (
 type paletteItem struct {
 	kind   paletteKind
 	ek     entityKind // palJump: which tab to land on
-	id     string     // palJump: the entity id/slug
+	ref    entityRef  // palJump: canonical key plus visible label
+	entity string     // palJump: human entity kind; shown only to disambiguate cross-kind labels
 	word   string     // palCommand: the `:` word to dispatch
 	title  string
 	filter string

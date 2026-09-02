@@ -12,7 +12,7 @@ import (
 // TestView_WindowTitle: the terminal window title reflects the current selection.
 func TestView_WindowTitle(t *testing.T) {
 	m := loaded(t, 80, 24)
-	id := m.selectedID()
+	id := m.selectedLabel()
 	if id == "" {
 		t.Fatal("setup: expected a selected task")
 	}

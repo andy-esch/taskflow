@@ -41,7 +41,7 @@ type detailPane struct {
 
 	vp           viewport.Model
 	title        string
-	loadedID     string // canonical request identity owning content; never a display title
+	loadedKey    string // canonical request identity owning content; never a display title
 	width        int
 	content      detailContent // current payload (re-rendered on resize); nil for errors
 	pretty       bool          // glamour body (true) vs raw markdown (false)
@@ -151,12 +151,12 @@ func (d *detailPane) SetContent(id string, c detailContent) {
 	// position (the viewport clamps it to the new content); only a *different*
 	// item snaps back to the top. Otherwise every external write under the
 	// watched tree would yank the body you're reading back to line one.
-	sameItem := d.hasContent && d.content != nil && d.loadedID == id
+	sameItem := d.hasContent && d.content != nil && d.loadedKey == id
 	offset := d.vp.YOffset()
 	d.content = c
 	d.errMsg = ""
 	d.title = c.Title()
-	d.loadedID = id
+	d.loadedKey = id
 	d.render()
 	d.refreshFind() // recompute matches for the new content (find persists across items)
 	if sameItem {
@@ -180,7 +180,7 @@ func (d detailPane) path() string {
 // SetError shows a per-item load error in the pane (keeps the browser alive).
 func (d *detailPane) SetError(title, msg string) {
 	d.content = nil
-	d.loadedID = ""
+	d.loadedKey = ""
 	d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 	d.resetFind()
 	d.errMsg = msg
@@ -200,10 +200,10 @@ func (d *detailPane) SetRefreshError(msg string) {
 	d.loading = false
 }
 
-// showing reports whether the pane currently holds loaded content for id — the
+// showing reports whether the pane currently holds loaded content for key — the
 // precondition for retaining it across a failed refresh.
-func (d detailPane) showing(id string) bool {
-	return d.content != nil && d.loadedID == id
+func (d detailPane) showing(key string) bool {
+	return d.content != nil && d.loadedKey == key
 }
 
 // refreshFailed reports the retained-but-stale state: a body is on screen and
@@ -221,7 +221,7 @@ func (d *detailPane) clear() {
 	d.resetFind()
 	d.errMsg = ""
 	d.title = ""
-	d.loadedID = ""
+	d.loadedKey = ""
 	d.hasContent = false
 	d.loading = true
 }
@@ -235,7 +235,7 @@ func (d *detailPane) showEmpty() {
 	d.resetFind()
 	d.errMsg = ""
 	d.title = ""
-	d.loadedID = ""
+	d.loadedKey = ""
 	d.hasContent = false
 	d.loading = false
 }
@@ -516,9 +516,15 @@ func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int, s *styl
 	detailField(&b, "progress", progress, s)
 	if len(tasks) > 0 {
 		b.WriteString("\n")
+		refs := make([]entityRef, 0, len(tasks))
+		for _, task := range tasks {
+			refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
+		}
+		hints := duplicateIdentityHints(refs)
 		for _, t := range tasks {
 			tok := theme.Status(t.Status)
-			fmt.Fprintf(&b, "  %s %s\n", s.fg(tok.Color, tok.Glyph), t.Slug)
+			fmt.Fprintf(&b, "  %s %s\n", s.fg(tok.Color, tok.Glyph),
+				labelWithIdentityHint(t.Slug, hints[t.CanonicalID()]))
 		}
 	}
 	return wrap(strings.TrimRight(b.String(), "\n"), width)

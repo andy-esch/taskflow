@@ -14,7 +14,7 @@ import (
 // native clipboard tool, a side effect we keep out of the test run.
 func TestModel_YankSlug(t *testing.T) {
 	m := loaded(t, 80, 24)
-	want := m.selectedID()
+	want := m.selectedLabel()
 	if want == "" {
 		t.Fatal("setup: expected a selected task")
 	}
@@ -143,13 +143,13 @@ func loadTab(t *testing.T, m Model, key string) Model {
 }
 
 // TestModel_YankAcrossEntities: yank works on epics and audits, not only tasks —
-// the wiring is generic via entityItem.id()/path().
+// the wiring is generic via entityItem.ref()/path().
 func TestModel_YankAcrossEntities(t *testing.T) {
 	m := loadTab(t, loaded(t, 80, 24), "]") // tasks → epics
 	if m.cur().kind != entityEpics {
 		t.Fatalf("expected the epics tab, got %v", m.cur().kind)
 	}
-	wantID := m.selectedID()
+	wantID := m.selectedLabel()
 	if wantID == "" {
 		t.Fatal("no epic selected")
 	}

@@ -48,7 +48,7 @@ func order(m Model) []string {
 	out := make([]string, 0, len(items))
 	for _, it := range items {
 		if ei, ok := it.(entityItem); ok {
-			out = append(out, ei.id())
+			out = append(out, ei.ref().label)
 		}
 	}
 	return out

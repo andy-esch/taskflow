@@ -93,15 +93,15 @@ type Model struct {
 	palette palette // the ctrl+p command palette (fuzzy launcher); see palette.go
 	modals  []modal // the ordered overlay registry (see overlay.go / defaultModals)
 
-	showHelp   bool       // the `?` keybinding overlay is open
-	helpScroll int        // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
-	action     actionMenu // the `m` lifecycle action menu (S4)
-	follow     followMenu // the `f` reference picker (S6, epics → their tasks)
-	edit       editMenu   // the `e` inline field editor (task set with a GUI)
-	navStack   []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
-	flash      string     // transient post-action feedback line (cleared on the next key)
-	flashErr   bool       // the flash is an error (rendered red)
-	movedAway  string     // slug just moved out of the active lifecycle view: its absence after
+	showHelp     bool       // the `?` keybinding overlay is open
+	helpScroll   int        // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
+	action       actionMenu // the `m` lifecycle action menu (S4)
+	follow       followMenu // the `f` reference picker (S6, epics → their tasks)
+	edit         editMenu   // the `e` inline field editor (task set with a GUI)
+	navStack     []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
+	flash        string     // transient post-action feedback line (cleared on the next key)
+	flashErr     bool       // the flash is an error (rendered red)
+	movedAwayKey string     // canonical key just moved out of the active lifecycle view: its absence after
 	// the post-move reload is the success, not a dangling reference
 
 	watch         *watcher // fsnotify source (nil when unavailable / in tests); see watch.go
@@ -201,7 +201,7 @@ func (m Model) Init() tea.Cmd {
 	// discarded but the call still churns the tab's load generation / restore state.
 	load := m.dashboardLoad()
 	if !m.onDash {
-		load = m.cur().reload(m.svc, "")
+		load = m.cur().reload(m.svc, entityRef{})
 	}
 	var cmds []tea.Cmd
 	cmds = append(cmds, load)
@@ -224,7 +224,7 @@ func (m Model) Init() tea.Cmd {
 func (m Model) atlasInRing() bool { return m.spaceOverviewSvc != nil }
 
 // reloadAll re-fires the loader for every loaded tab, each preserving its own
-// cursor by id. Unvisited tabs are left alone (they reload fresh on first visit)
+// cursor by canonical key. Unvisited tabs are left alone (they reload fresh on first visit)
 // — except the active tab, which always reloads: after a failed *initial* load
 // nothing is `loaded`, and `r` must still be able to recover the session.
 // This is the `r` / fsnotify path: a change from another process is reflected on
@@ -236,7 +236,7 @@ func (m *Model) reloadAll() tea.Cmd {
 		if !t.loaded && i != m.active {
 			continue
 		}
-		// markReload picks the restore id (a pending jump target, else the cursor);
+		// markReload picks the restore key (a pending jump target, else the cursor);
 		// reload stamps it onto the load it fires.
 		cmds = append(cmds, t.reload(m.svc, t.markReload()))
 	}
@@ -358,7 +358,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if domain.Classify(msg.err) == domain.ClassConflict && m.detail.showing(msg.id) {
 			m.detail.SetRefreshError(msg.err.Error())
 		} else {
-			m.detail.SetError(msg.id, msg.err.Error())
+			title := msg.label
+			if title == "" {
+				title = msg.id
+			}
+			m.detail.SetError(title, msg.err.Error())
 		}
 		return m, nil
 
@@ -431,8 +435,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case movedMsg:
 		// A transition succeeded: flash it and reload so the moved task shows in its
-		// new status (frontmatter-authoritative), each tab's cursor preserved by id.
-		m.flash = fmt.Sprintf("moved %s → %s", msg.slug, msg.to)
+		// new status (frontmatter-authoritative), each tab's cursor preserved by key.
+		m.flash = fmt.Sprintf("moved %s → %s", msg.ref.label, msg.to)
 		if msg.revisit != "" {
 			m.flash += fmt.Sprintf(" (revisit %s)", msg.revisit)
 		}
@@ -449,16 +453,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The moved task leaves the active list (its frontmatter status changed); its
 		// disappearance on the reload below is expected, so don't let the post-reload
 		// restore mistake it for a dangling reference and overwrite this success.
-		m.movedAway = msg.slug
+		m.movedAwayKey = msg.ref.key
 		return m, m.reloadAll()
 
 	case editedMsg:
 		// A field edit succeeded: flash it and reload so the new value shows. The
 		// task keeps its dir (SetFields isn't a move), so this is a plain refresh —
-		// each tab's cursor preserved by id, no movedAway dance. If the editor is
+		// each tab's cursor preserved by key, no movedAway dance. If the editor is
 		// still open (the user can keep editing), refresh the field it just set so
 		// it isn't stale.
-		m.flash = fmt.Sprintf("set %s on %s", msg.field, msg.slug)
+		m.flash = fmt.Sprintf("set %s on %s", msg.field, msg.ref.label)
 		m.flashErr = false
 		if m.edit.active {
 			m.edit.applied(msg.field, msg.value) // back to the picker, value refreshed
@@ -600,15 +604,15 @@ func (m Model) handleTabMsg(msg tabMsg) (tea.Model, tea.Cmd) {
 	tab := m.tabs[i]
 	prev := ""
 	if i == m.active {
-		prev = m.selectedID()
+		prev = m.selectedKey()
 	}
 	var cmd tea.Cmd
 	tab.list, cmd = tab.list.Update(msg.msg)
 	// Retry a pending restore now its async refilter may have populated VisibleItems
 	// — but only for the gen that set it, so a newer reload's target isn't applied
 	// against this (now-superseded) filter pass.
-	if tab.restore != "" && tab.restoreGen == tab.loadGen && tab.selectByID(tab.restore) {
-		tab.restore, tab.restoreGen = "", 0
+	if !tab.restore.empty() && tab.restoreGen == tab.loadGen && tab.selectByKey(tab.restore.key) {
+		tab.restore, tab.restoreGen, tab.restoreWiden = entityRef{}, 0, false
 	}
 	cmd = routeToTab(msg.kind, cmd)
 	if i != m.active {
@@ -619,7 +623,7 @@ func (m Model) handleTabMsg(msg tabMsg) (tea.Model, tea.Cmd) {
 
 // handleListLoaded applies an entity-list load to its tab (by kind, so a load
 // that finishes after a tab switch still lands correctly). Every tab restores its
-// own cursor by id (so an all-tabs reload preserves each); only the active tab
+// own cursor by canonical key (so an all-tabs reload preserves each); only the active tab
 // also kicks off the selected item's detail load.
 func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	i := indexOfKind(m.tabs, msg.kind)
@@ -629,6 +633,13 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	tab := m.tabs[i]
 	if msg.gen != tab.loadGen {
 		return m, nil // an older load finishing late must not clobber the newer one
+	}
+	if err := validateEntityItems(msg.items); err != nil {
+		// Treat an adapter identity violation exactly like a durable read failure:
+		// retain the last coherent rows on refresh, or show the error pane on an
+		// initial load. Never install a list whose selection key is ambiguous.
+		tab.loadErr = err
+		return m, nil
 	}
 	// A successful load clears the tab's error so a transient failure (e.g. the
 	// planning dir briefly unreadable) recovers on the next `r`/reload.
@@ -647,32 +658,50 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 		m.palette.reindex(m.paletteIndex()) // a tab finished loading while the palette is open
 	}
 	// Resolve the cursor restore carried by THIS load (gen-matched above). Reading
-	// the per-message id — not a mutable tab slot two triggers share — means a
+	// the per-message key — not a mutable tab slot two triggers share — means a
 	// dropped stale load can't apply a restore meant for another (M6). This load
 	// supersedes any pending restore; clear it, then re-pend only if still unfound
 	// under an async filter.
-	tab.restore, tab.restoreGen = "", 0
-	if msg.restore != "" && !tab.selectByID(msg.restore) {
+	tab.restore, tab.restoreGen, tab.restoreWiden = entityRef{}, 0, false
+	if !msg.restore.empty() && !tab.selectByKey(msg.restore.key) {
 		switch {
 		case tab.list.FilterState() == list.Unfiltered:
-			// The id is genuinely absent from a fully-visible list — a dangling
+			// Atlas work is a snapshot. The selected task can leave the default working
+			// view between that read and this fresh workspace load. Widen only this
+			// explicit landing to :all, then retry once; ordinary cursor preservation
+			// still reports a genuine deletion instead of changing views behind the user.
+			if msg.widenOnMissing && tab.statusView != "all" {
+				tab.statusView = "all"
+				tab.restore, tab.restoreWiden = msg.restore, true
+				label := msg.restore.label
+				if label == "" {
+					label = msg.restore.key
+				}
+				m.flash, m.flashErr = "showing :all to reach "+label, false
+				return m, tea.Batch(cmd, tab.reload(m.svc, msg.restore))
+			}
+			// The canonical key is genuinely absent from a fully-visible list — a dangling
 			// reference jump (`f` to an epic that doesn't exist) or a selection
 			// deleted externally. Say so once. EXCEPT the task whose lifecycle move took
 			// it out of this view: its absence is success, not a not-found.
-			if msg.kind == m.cur().kind && msg.restore != m.movedAway {
-				m.flash, m.flashErr = msg.restore+" not found", true
+			if msg.kind == m.cur().kind && msg.restore.key != m.movedAwayKey {
+				label := msg.restore.label
+				if label == "" {
+					label = msg.restore.key
+				}
+				m.flash, m.flashErr = label+" not found", true
 			}
 		default:
 			// Filtered: SetItems' refilter is async (VisibleItems is empty now), so
 			// keep the target pending — keyed to this gen — for handleTabMsg to retry
 			// when the FilterMatchesMsg lands.
-			tab.restore, tab.restoreGen = msg.restore, msg.gen
+			tab.restore, tab.restoreGen, tab.restoreWiden = msg.restore, msg.gen, msg.widenOnMissing
 		}
 	}
 	if msg.kind != m.cur().kind {
 		return m, cmd // a background tab loaded; leave the active view alone
 	}
-	m.movedAway = "" // consumed: the active tab's post-move reload has landed
+	m.movedAwayKey = "" // consumed: the active tab's post-move reload has landed
 	return m, tea.Batch(cmd, m.refreshDetail())
 }
 
@@ -767,8 +796,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// declares transitions (tasks: statuses; audits: buckets; epics: statuses —
 		// epicTransitions/moveEpic, which rewrite the status: field in place).
 		if cur := m.cur(); len(cur.transitions) > 0 {
-			if id, state, ok := m.selectedLifecycle(); ok {
-				m.action.open(id, cur.transitions, state)
+			if ref, state, ok := m.selectedLifecycle(); ok {
+				m.action.open(ref, cur.transitions, state)
 			}
 		}
 		return m, nil
@@ -799,7 +828,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.JumpBack):
 		return m.navBack()
 	case key.Matches(msg, keys.Yank):
-		return m.yank(m.selectedID(), "slug")
+		text, label := m.selectedYankRef()
+		return m.yank(text, label)
 	case key.Matches(msg, keys.YankPath):
 		return m.yank(m.selectedPath(), "path")
 	case key.Matches(msg, keys.Command):
@@ -896,7 +926,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // when the selection changes.
 func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	t := m.cur()
-	prev := m.selectedID()
+	prev := m.selectedKey()
 	var cmd tea.Cmd
 	t.list, cmd = t.list.Update(msg)
 	return m.afterSelectionChange(prev, routeToTab(t.kind, cmd))
@@ -906,7 +936,7 @@ func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 // list's cursor (keys, filter keystrokes, async filter matches, reloads): if the
 // selection changed, the detail pane follows it.
 func (m Model) afterSelectionChange(prev string, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	switch id := m.selectedID(); id {
+	switch key := m.selectedKey(); key {
 	case prev:
 		return m, cmd
 	case "":
@@ -916,7 +946,7 @@ func (m Model) afterSelectionChange(prev string, cmd tea.Cmd) (tea.Model, tea.Cm
 		return m, cmd
 	default:
 		m.detail.loading = true
-		return m, tea.Batch(cmd, m.loadDetail(id))
+		return m, tea.Batch(cmd, m.loadDetail(key))
 	}
 }
 
@@ -933,9 +963,9 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 				m.action.dateErr = err.Error() // keep what was typed, show the error
 				return nil
 			}
-			slug := m.action.slug
+			ref := m.action.ref
 			m.action.close()
-			return deferTaskCmd(m.svc, slug, date)
+			return deferTaskCmd(m.svc, ref, date)
 		case "esc":
 			if len(m.action.options) > 0 {
 				m.action.revisit = false // came from the menu → return to it
@@ -953,9 +983,9 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.action.confirm {
 		switch msg.String() {
 		case "y", "Y":
-			tr, slug := m.action.selected(), m.action.slug
+			tr, ref := m.action.selected(), m.action.ref
 			m.action.close()
-			return m.cur().applyMove(m.svc, slug, tr)
+			return m.cur().applyMove(m.svc, ref, tr)
 		case "n", "N", "esc":
 			if m.action.confirmOnly() {
 				m.action.close() // a bare `:deprecate` confirm has no menu to return to
@@ -980,11 +1010,11 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 		// prompt instead of applying at once; the registry's optionalDate flag — not a
 		// hardcoded destination — is what routes us here (the audit "defer" has no date).
 		if tr.optionalDate {
-			return m.action.beginRevisit(m.action.slug)
+			return m.action.beginRevisit(m.action.ref)
 		}
-		slug := m.action.slug
+		ref := m.action.ref
 		m.action.close()
-		return m.cur().applyMove(m.svc, slug, tr)
+		return m.cur().applyMove(m.svc, ref, tr)
 	case "esc", "h", "a", "q":
 		m.action.close()
 	}
@@ -996,15 +1026,15 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 // the revisit-date prompt (mirroring the CLI snooze); everything else applies
 // immediately. Shared by the `:`-command and palette entry points so all three
 // paths agree.
-func (m *Model) beginTransition(id string, tr transition) tea.Cmd {
+func (m *Model) beginTransition(ref entityRef, tr transition) tea.Cmd {
 	if tr.destructive {
-		m.action.openConfirm(id, tr)
+		m.action.openConfirm(ref, tr)
 		return nil
 	}
 	if tr.optionalDate {
-		return m.action.beginRevisit(id)
+		return m.action.beginRevisit(ref)
 	}
-	return m.cur().applyMove(m.svc, id, tr)
+	return m.cur().applyMove(m.svc, ref, tr)
 }
 
 // selectedTask returns the selected row as a task — ok only on the tasks tab. Used
@@ -1026,17 +1056,17 @@ func (m Model) selectedEpic() (domain.Epic, bool) {
 	return domain.Epic{}, false
 }
 
-// selectedLifecycle returns the selected row's id and current lifecycle state (a
+// selectedLifecycle returns the selected row's reference and current lifecycle state (a
 // task's status, an audit's bucket, or an epic's status) for the action menu, or
 // ok=false on an empty list. Every entity now implements lifecycleState() (epics
 // via moveEpic, which rewrites the status: field in place rather than moving the
 // file), so it asks the row via the lifecycleItem interface, never switching on
 // concrete item types.
-func (m Model) selectedLifecycle() (id, state string, ok bool) {
+func (m Model) selectedLifecycle() (ref entityRef, state string, ok bool) {
 	if li, ok := m.cur().list.SelectedItem().(lifecycleItem); ok {
-		return li.id(), li.lifecycleState(), true
+		return li.ref(), li.lifecycleState(), true
 	}
-	return "", "", false
+	return entityRef{}, "", false
 }
 
 // switchTab makes tab i active: it resets focus + the detail pane, loads the tab
@@ -1048,7 +1078,7 @@ func (m *Model) switchTab(i int) tea.Cmd {
 	}
 	m.exitDashboard(i)
 	if !m.cur().loaded {
-		return m.cur().reload(m.svc, "")
+		return m.cur().reload(m.svc, entityRef{})
 	}
 	return m.refreshDetail()
 }
@@ -1130,7 +1160,7 @@ func (m *Model) enterDash() tea.Cmd {
 func (m *Model) leaveDashTo(i int) tea.Cmd {
 	m.exitDashboard(i)
 	if !m.cur().loaded {
-		return m.cur().reload(m.svc, "")
+		return m.cur().reload(m.svc, entityRef{})
 	}
 	return m.refreshDetail()
 }
@@ -1148,8 +1178,8 @@ func (m *Model) dashJump(tgt dashTarget) tea.Cmd {
 	default:
 		return nil // fail closed if a future target is rendered without a route
 	}
-	if tgt.id != "" {
-		return m.jumpTo(tgt.kind, tgt.id)
+	if !tgt.ref.empty() {
+		return m.jumpTo(tgt.kind, tgt.ref)
 	}
 	i := indexOfKind(m.tabs, tgt.kind)
 	if i < 0 {
@@ -1162,22 +1192,23 @@ func (m *Model) dashJump(tgt dashTarget) tea.Cmd {
 // pane into its empty state when the active tab has no items — so an empty tab
 // (e.g. a repo with no audits) never sits on a perpetual "loading…".
 func (m *Model) refreshDetail() tea.Cmd {
-	id := m.selectedID()
-	if id == "" {
+	key := m.selectedKey()
+	if key == "" {
 		m.detail.loading = false
 		return nil
 	}
 	m.detail.loading = true
-	return m.loadDetail(id)
+	return m.loadDetail(key)
 }
 
 // loadDetail fires the active tab's item loader, stamping the response with a
-// fresh request generation. (kind, id) alone can't order two loads for the SAME
-// id — e.g. `r` plus an fs-debounce reload — and Cmds run concurrently, so the
+// fresh request generation. (kind, canonical key) alone can't order two loads for
+// the SAME record — e.g. `r` plus an fs-debounce reload — and Cmds run concurrently, so the
 // older read could land last and win without the stamp.
 func (m *Model) loadDetail(id string) tea.Cmd {
 	m.detailGen++
 	gen := m.detailGen
+	label := m.selectedLabel()
 	load := m.cur().loadItem(m.svc, id)
 	stamped := func() tea.Msg {
 		switch msg := load().(type) {
@@ -1186,6 +1217,7 @@ func (m *Model) loadDetail(id string) tea.Cmd {
 			return msg
 		case detailErrMsg:
 			msg.gen = gen
+			msg.label = label
 			return msg
 		default:
 			return msg
@@ -1217,10 +1249,10 @@ func (m Model) readRequestCurrent(request readRequest) bool {
 	}
 }
 
-// isCurrentSelection reports whether (kind, id) still matches the active tab's
+// isCurrentSelection reports whether (kind, canonical key) still matches the active tab's
 // selection — the stale guard for async detail loads.
 func (m Model) isCurrentSelection(kind entityKind, id string) bool {
-	return kind == m.cur().kind && id == m.selectedID()
+	return kind == m.cur().kind && id == m.selectedKey()
 }
 
 func (m *Model) setFocus(f focus) { m.focus = f }
@@ -1252,11 +1284,29 @@ func (m *Model) toggleZoom() {
 	m.recomputeLayout()
 }
 
-func (m Model) selectedID() string {
+func (m Model) selectedRef() entityRef {
 	if it, ok := m.cur().list.SelectedItem().(entityItem); ok {
-		return it.id()
+		return it.ref()
 	}
-	return ""
+	return entityRef{}
+}
+
+func (m Model) selectedKey() string   { return m.selectedRef().key }
+func (m Model) selectedLabel() string { return m.selectedRef().label }
+
+// selectedYankRef returns a CLI-usable reference. An ordinary unique row keeps
+// the friendly slug; a row whose display needed a stable-ID hint copies that
+// canonical key because its slug is known to be ambiguous.
+func (m Model) selectedYankRef() (string, string) {
+	it, ok := m.cur().list.SelectedItem().(entityItem)
+	if !ok {
+		return "", "slug"
+	}
+	ref := it.ref()
+	if it.hasIdentityHint() {
+		return ref.key, "id"
+	}
+	return ref.label, "slug"
 }
 
 // selectedPath is the file path of the active tab's selection (empty if none) —
@@ -1311,10 +1361,10 @@ func (m Model) openInEditor() (tea.Model, tea.Cmd) {
 // --- interactive sort ---
 
 // applySortToCurrent reorders the active list under its current sort state,
-// preserving the cursor by id (SetItems re-applies any active `/` filter).
+// preserving the cursor by canonical key (SetItems re-applies any active `/` filter).
 func (m *Model) applySortToCurrent() tea.Cmd {
 	t := m.cur()
-	id := m.selectedID()
+	selectedKey := m.selectedKey()
 	// Sort a COPY of the loader's order, never the list's current slice: sortItems
 	// reorders in place, so re-sorting the already-sorted slice compounds (and left
 	// sortDefault unable to undo anything).
@@ -1324,7 +1374,7 @@ func (m *Model) applySortToCurrent() tea.Cmd {
 	}
 	sortItems(items, t.sortKey, t.sortRev)
 	cmd := routeToTab(t.kind, t.list.SetItems(items))
-	t.selectByID(id)
+	t.selectByKey(selectedKey)
 	return cmd
 }
 
@@ -1367,7 +1417,7 @@ func (m Model) toggleFilterMode() (tea.Model, tea.Cmd) {
 	if exact {
 		f = listfilter.Substring
 	}
-	prev := m.selectedID()
+	prev := m.selectedKey()
 	for _, t := range m.tabs {
 		t.filterExact = exact
 		t.list.Filter = f
@@ -1400,15 +1450,15 @@ func (m Model) resolveView(word string) (view string, tab int, ok bool) {
 }
 
 // applyView switches to tab i, sets its view filter, and reloads — preserving the
-// cursor by id when the item survives into the new view.
+// cursor by canonical key when the item survives into the new view.
 func (m *Model) applyView(i int, view string) tea.Cmd {
 	m.exitDashboard(i)
 	tab := m.tabs[i]
-	restoreID := tab.markReload() // preserve the cursor across the view change
+	restore := tab.markReload() // preserve the cursor across the view change
 	// Reset the active filter when switching views, matching jumpTo: otherwise a
 	// stale `/foo` silently carries into the new status view (the chip still reads
 	// filter:foo and the view can look unexpectedly empty).
 	tab.list.ResetFilter()
 	tab.statusView = view
-	return tab.reload(m.svc, restoreID)
+	return tab.reload(m.svc, restore)
 }

@@ -51,8 +51,13 @@ func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 			sortRevisitDueFirst(tasks, now) // browsing all deferred: the due ones lead
 		}
 		items := make([]list.Item, 0, len(tasks))
+		refs := make([]entityRef, 0, len(tasks))
+		for _, task := range tasks {
+			refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
+		}
+		hints := duplicateIdentityHints(refs)
 		for _, t := range tasks {
-			items = append(items, taskItem{t: t, due: domain.IsTaskRevisitDue(t, now)})
+			items = append(items, taskItem{t: t, due: domain.IsTaskRevisitDue(t, now), identityHint: hints[t.CanonicalID()]})
 		}
 		return listLoadedMsg{kind: entityTasks, gen: gen, items: items, problems: problems}
 	}
@@ -171,8 +176,13 @@ func loadAuditList(t *entityTab, svc *core.Service) tea.Cmd {
 		}
 		countsW := countsWidth(audits, func(a domain.Audit) (int, int) { return a.Resolved(), a.Findings })
 		items := make([]list.Item, 0, len(audits))
+		refs := make([]entityRef, 0, len(audits))
+		for _, audit := range audits {
+			refs = append(refs, entityRef{key: audit.CanonicalID(), label: audit.Slug})
+		}
+		hints := duplicateIdentityHints(refs)
 		for _, a := range audits {
-			items = append(items, auditItem{a: a, countsW: countsW})
+			items = append(items, auditItem{a: a, countsW: countsW, identityHint: hints[a.CanonicalID()]})
 		}
 		return listLoadedMsg{kind: entityAudits, gen: gen, items: items, problems: problems}
 	}
@@ -264,8 +274,13 @@ func loadResearchList(t *entityTab, svc *core.Service) tea.Cmd {
 			return errMsg{kind: entityResearch, gen: gen, err: err}
 		}
 		items := make([]list.Item, 0, len(docs))
+		refs := make([]entityRef, 0, len(docs))
+		for _, doc := range docs {
+			refs = append(refs, entityRef{key: doc.CanonicalID(), label: doc.Slug})
+		}
+		hints := duplicateIdentityHints(refs)
 		for _, r := range docs {
-			items = append(items, researchItem{r: r})
+			items = append(items, researchItem{r: r, identityHint: hints[r.CanonicalID()]})
 		}
 		return listLoadedMsg{kind: entityResearch, gen: gen, items: items, problems: problems}
 	}

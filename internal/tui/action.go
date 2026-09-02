@@ -96,7 +96,7 @@ func validTransitions(transitions []transition, cur string) []transition {
 // model routes every key to it while active and floats it over the body.
 type actionMenu struct {
 	active  bool
-	slug    string       // the task being acted on
+	ref     entityRef    // canonical mutation key plus the visible label
 	options []transition // the rows (a single entry when a `:`-verb opened the confirm directly)
 	cursor  int
 	confirm bool // a destructive choice is awaiting y/n
@@ -111,27 +111,27 @@ type actionMenu struct {
 
 // open shows the transition menu for slug from state cur (its current status or
 // bucket), offering the given entity's transition table minus the no-op row.
-func (a *actionMenu) open(slug string, transitions []transition, cur string) {
+func (a *actionMenu) open(ref entityRef, transitions []transition, cur string) {
 	opts := validTransitions(transitions, cur)
 	if len(opts) == 0 {
 		return // nothing to offer — don't open an empty menu, so selected() never indexes nil
 	}
-	*a = actionMenu{active: true, slug: slug, options: opts}
+	*a = actionMenu{active: true, ref: ref, options: opts}
 }
 
 // openConfirm jumps straight to the y/n gate for one verb — used when a `:`
 // command names a destructive verb explicitly (no menu to pick from).
-func (a *actionMenu) openConfirm(slug string, tr transition) {
-	*a = actionMenu{active: true, slug: slug, options: []transition{tr}, confirm: true}
+func (a *actionMenu) openConfirm(ref entityRef, tr transition) {
+	*a = actionMenu{active: true, ref: ref, options: []transition{tr}, confirm: true}
 }
 
 // beginRevisit switches the menu into the revisit-date sub-state for slug (also
 // usable cold, from a `:defer`/palette verb with no menu open) and focuses the
 // date input. Esc from here returns to the menu when one is open (options set),
 // else closes — see handleActionKey.
-func (a *actionMenu) beginRevisit(slug string) tea.Cmd {
+func (a *actionMenu) beginRevisit(ref entityRef) tea.Cmd {
 	a.active = true
-	a.slug = slug
+	a.ref = ref
 	a.confirm = false
 	a.revisit = true
 	a.dateErr = ""
@@ -169,7 +169,7 @@ func (a actionMenu) confirmOnly() bool { return len(a.options) == 1 }
 // view renders the menu (or confirm prompt) as a centered box + hint line, ready
 // to composite over the body with overlay(). Clamped to (maxW, maxH).
 func (a actionMenu) view(s *styles, maxW, maxH int) string {
-	slug := truncate(a.slug, max(maxW-8, 12))
+	slug := truncate(a.ref.label, max(maxW-8, 12))
 	if a.revisit {
 		var b strings.Builder
 		b.WriteString(s.actionHeading.Render("defer " + slug))

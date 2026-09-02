@@ -31,8 +31,8 @@ func auditsTab(t *testing.T, m Model) Model {
 func TestModel_ActionMenuMovesAudit(t *testing.T) {
 	m := loaded(t, 120, 40)
 	m = auditsTab(t, m)
-	if m.selectedID() != "2026-06-01-thing" {
-		t.Fatalf("setup: want the seeded audit selected, got %q", m.selectedID())
+	if m.selectedLabel() != "2026-06-01-thing" {
+		t.Fatalf("setup: want the seeded audit selected, got %q", m.selectedLabel())
 	}
 	tm, _ := m.Update(press("m"))
 	m = tm.(Model)
@@ -103,8 +103,8 @@ func TestModel_AuditCloseBlockedByOpenFindings(t *testing.T) {
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
 	m = auditsTab(t, tm.(Model))
-	if m.selectedID() != "2026-06-02-open" {
-		t.Fatalf("setup: want the open-findings audit selected, got %q", m.selectedID())
+	if m.selectedLabel() != "2026-06-02-open" {
+		t.Fatalf("setup: want the open-findings audit selected, got %q", m.selectedLabel())
 	}
 
 	tm, _ = m.Update(press("m"))

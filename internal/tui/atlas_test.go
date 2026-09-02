@@ -263,7 +263,7 @@ func TestAtlasRoundTripRestoresPerSpaceBrowsingState(t *testing.T) {
 	tm, cmd := m.Update(press("]"))
 	m = drain(t, tm.(Model), cmd)
 	m.cur().list.Select(1)
-	wantID := m.selectedID()
+	wantID := m.selectedLabel()
 
 	// Enter beta through the atlas.
 	tm, _ = m.Update(press("a"))
@@ -285,9 +285,9 @@ func TestAtlasRoundTripRestoresPerSpaceBrowsingState(t *testing.T) {
 	tm, cmd = m.Update(press("enter"))
 	m = applyAtlasOpen(t, tm.(Model), cmd)
 	if workspaceKey(m.workspace) != workspaceKey(core.Workspace{Checkout: alpha}) || m.onDash ||
-		m.cur().kind != entityTasks || m.selectedID() != wantID {
+		m.cur().kind != entityTasks || m.selectedLabel() != wantID {
 		t.Fatalf("restored session = checkout:%q dash:%v tab:%s selected:%q want:%q",
-			m.workspace.Checkout, m.onDash, m.cur().name, m.selectedID(), wantID)
+			m.workspace.Checkout, m.onDash, m.cur().name, m.selectedLabel(), wantID)
 	}
 }
 
@@ -348,7 +348,7 @@ func TestAtlasDropsStaleWorkspaceResultsAndOldSessionMessages(t *testing.T) {
 	}
 
 	oldGen := m.sessionGen - 1
-	tm, _ = m.Update(sessionMsg{gen: oldGen, msg: movedMsg{slug: "foreign", to: "completed"}})
+	tm, _ = m.Update(sessionMsg{gen: oldGen, msg: movedMsg{ref: testEntityRef("foreign"), to: "completed"}})
 	m = tm.(Model)
 	if m.flash != "" {
 		t.Fatalf("old session mutation landed in current workspace: %q", m.flash)
@@ -736,6 +736,46 @@ func TestAtlasWorkRowEntersItsSpaceAndLandsOnTheTask(t *testing.T) {
 	}
 }
 
+// The work projection and destination list are separate reads. If a task completes
+// between them, it is no longer in the default working view, but the stable landing
+// identity is still valid: retry in :all rather than claiming the task disappeared.
+func TestAtlasWorkLandingWidensWhenTaskLeavesWorkingViewBeforeOpen(t *testing.T) {
+	m, adapter, alpha, beta := atlasTestModel(t)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	row, ok := m.atlas.selectedWork()
+	if !ok {
+		t.Fatal("setup: no Atlas work row selected")
+	}
+	root := alpha
+	if row.PlanningID == "planning-beta" {
+		root = beta
+	}
+
+	// Capture the Atlas landing intent first, then race its workspace-open command
+	// with a lifecycle change made through the same portable core service.
+	tm, cmd := m.Update(press("enter"))
+	m = tm.(Model)
+	if _, err := core.NewService(adapter.trees[root]).Move(
+		row.Task.CanonicalID(), domain.StatusCompleted, false,
+		core.TaskLifecycleOverrideAcceptanceCriteria,
+	); err != nil {
+		t.Fatalf("complete selected Atlas task: %v", err)
+	}
+	m = applyAtlasOpen(t, m, cmd)
+
+	if m.onAtlas || m.cur().kind != entityTasks {
+		t.Fatalf("landing did not enter the task tab: atlas=%v tab=%v", m.onAtlas, m.cur().kind)
+	}
+	if m.cur().statusView != "all" || m.selectedKey() != row.Task.CanonicalID() {
+		t.Fatalf("landing = view:%q key:%q, want :all key:%q",
+			m.cur().statusView, m.selectedKey(), row.Task.CanonicalID())
+	}
+	if m.flashErr || !strings.Contains(m.flash, "showing :all") {
+		t.Fatalf("fallback explanation = err:%v flash:%q", m.flashErr, m.flash)
+	}
+}
+
 // A failed open must not leave a landing intent behind to fire against whatever workspace
 // is opened next.
 func TestAtlasFailedWorkOpenDropsTheLandingIntent(t *testing.T) {
@@ -985,7 +1025,7 @@ func TestAtlasStaleLandingIntentCannotFollowIntoAnotherSpace(t *testing.T) {
 	tm, cmd := m.Update(press("enter"))
 	m = tm.(Model)
 	if m.pendingJump.set {
-		t.Fatalf("a landing intent for %q survived into another space's open", m.pendingJump.id)
+		t.Fatalf("a landing intent for %q survived into another space's open", m.pendingJump.ref.label)
 	}
 	m = settleAtlasCmd(t, m, cmd)
 	if !m.onDash {
@@ -1015,7 +1055,7 @@ func TestAtlasWorkReEntryRefreshesARestoredSession(t *testing.T) {
 	tm, cmd = m.Update(press("enter"))
 	m = applyAtlasOpen(t, tm.(Model), cmd)
 	for _, it := range m.cur().list.Items() {
-		if ei, ok := it.(entityItem); ok && strings.Contains(ei.id(), "appeared-while-away") {
+		if ei, ok := it.(entityItem); ok && strings.Contains(ei.ref().label, "appeared-while-away") {
 			return
 		}
 	}
@@ -1139,6 +1179,45 @@ func TestAtlasWorkStartedOrderPutsTheStalestFirst(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("started order = %v, want stalest first %v", got, want)
 		}
+	}
+}
+
+func TestAtlasWorkOrderAndRowsDistinguishDuplicateSlugsByCanonicalID(t *testing.T) {
+	first := core.SpaceInProgress{SpaceID: "same-space", PlanningID: "planning-same", Task: domain.Task{
+		ID: "aaaaaa111111", Slug: "same-task", Priority: "low", StartedAt: "2026-08-01",
+	}}
+	second := core.SpaceInProgress{SpaceID: "same-space", PlanningID: "planning-same", Task: domain.Task{
+		ID: "bbbbbb222222", Slug: "same-task", Priority: "high", StartedAt: "2026-08-02",
+	}}
+	a := atlas{loaded: true, work: []core.SpaceInProgress{first, second}, workCursor: 1, workOrder: atlasWorkByPriority}
+	a.applyWorkOrder()
+	selected, ok := a.selectedWork()
+	if !ok || selected.Task.CanonicalID() != second.Task.CanonicalID() {
+		t.Fatalf("re-sort restored %+v, want second duplicate %q", selected.Task, second.Task.CanonicalID())
+	}
+
+	rows, _ := a.workRows(&testStyles, 80)
+	joined := ansi.Strip(strings.Join(rows, "\n"))
+	if !strings.Contains(joined, "[aaaaaa]") || !strings.Contains(joined, "[bbbbbb]") {
+		t.Fatalf("atlas work rows did not distinguish duplicate slugs:\n%s", joined)
+	}
+}
+
+func TestAtlasWorkLandingCarriesTheSelectedCanonicalKey(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	first := core.SpaceInProgress{SpaceID: "alpha", PlanningID: "planning-alpha", Task: domain.Task{
+		ID: "aaaaaa111111", Slug: "same-task", Status: domain.StatusInProgress,
+	}}
+	second := core.SpaceInProgress{SpaceID: "alpha", PlanningID: "planning-alpha", Task: domain.Task{
+		ID: "bbbbbb222222", Slug: "same-task", Status: domain.StatusInProgress,
+	}}
+	m.atlas.work = []core.SpaceInProgress{first, second}
+	m.atlas.workCursor = 1
+	if cmd := m.openAtlasWork(); cmd == nil {
+		t.Fatal("selected work row did not issue a workspace open")
+	}
+	if !m.pendingJump.set || m.pendingJump.ref.key != second.Task.CanonicalID() {
+		t.Fatalf("pending landing = %+v, want second duplicate %q", m.pendingJump, second.Task.CanonicalID())
 	}
 }
 

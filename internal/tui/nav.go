@@ -21,7 +21,7 @@ import (
 // followed a reference.
 type navLoc struct {
 	kind entityKind
-	id   string
+	ref  entityRef
 }
 
 // followMenu is the reference picker for an entity with several outgoing links
@@ -53,9 +53,14 @@ func (f followMenu) view(s *styles, maxW, maxH int) string {
 	var b strings.Builder
 	b.WriteString(s.actionHeading.Render("follow " + truncate(f.epicID, max(maxW-8, 12))))
 	b.WriteString("\n\n")
+	refs := make([]entityRef, 0, len(f.tasks))
+	for _, task := range f.tasks {
+		refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
+	}
+	hints := duplicateIdentityHints(refs)
 	for i, t := range f.tasks {
 		tok := theme.Status(t.Status)
-		label := s.fg(tok.Color, tok.Glyph) + " " + truncate(t.Slug, max(maxW-10, 12))
+		label := s.fg(tok.Color, tok.Glyph) + " " + truncate(labelWithIdentityHint(t.Slug, hints[t.CanonicalID()]), max(maxW-10, 12))
 		if i == f.cursor {
 			b.WriteString(s.selected.Render("› ") + label + "\n")
 		} else {
@@ -80,7 +85,7 @@ func (m *Model) handleFollowKey(msg tea.KeyPressMsg) tea.Cmd {
 		target := m.follow.selected()
 		m.follow.close()
 		m.pushLoc()
-		return m.jumpTo(entityTasks, target.Slug)
+		return m.jumpTo(entityTasks, entityRef{key: target.CanonicalID(), label: target.Slug})
 	case key.Matches(msg, keys.Back), key.Matches(msg, keys.Quit):
 		m.follow.close()
 	}
@@ -102,24 +107,24 @@ func (m Model) followSelected() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.pushLoc()
-		return m, m.jumpTo(entityEpics, task.Epic)
+		return m, m.jumpTo(entityEpics, entityRef{key: task.Epic, label: task.Epic})
 	case entityEpics:
-		id := m.selectedID()
-		if id == "" {
+		ref := m.selectedRef()
+		if ref.empty() {
 			return m, nil
 		}
 		// The epic's task list rides in the already-loaded detail content (the
 		// pane is stale-guarded, so a matching ID means current data).
 		ed, ok := m.detail.content.(epicDetail)
-		if !ok || ed.es.Epic.ID != id {
+		if !ok || ed.es.Epic.ID != ref.key {
 			m.flash, m.flashErr = "references still loading…", true
 			return m, nil
 		}
 		if len(ed.tasks) == 0 {
-			m.flash, m.flashErr = fmt.Sprintf("%s has no tasks", id), true
+			m.flash, m.flashErr = fmt.Sprintf("%s has no tasks", ref.label), true
 			return m, nil
 		}
-		m.follow.open(id, ed.tasks)
+		m.follow.open(ref.label, ed.tasks)
 		return m, nil
 	default:
 		m.flash, m.flashErr = "no linked entities here", true
@@ -136,11 +141,11 @@ const navStackMax = 50
 // current top (re-following the same place adds no useful history) and caps the
 // stack at navStackMax, dropping the oldest entries.
 func (m *Model) pushLoc() {
-	id := m.selectedID()
-	if id == "" {
+	ref := m.selectedRef()
+	if ref.empty() {
 		return
 	}
-	loc := navLoc{kind: m.cur().kind, id: id}
+	loc := navLoc{kind: m.cur().kind, ref: ref}
 	if n := len(m.navStack); n > 0 && m.navStack[n-1] == loc {
 		return
 	}
@@ -159,15 +164,15 @@ func (m Model) navBack() (tea.Model, tea.Cmd) {
 	}
 	loc := m.navStack[n-1]
 	m.navStack = m.navStack[:n-1]
-	return m, m.jumpTo(loc.kind, loc.id)
+	return m, m.jumpTo(loc.kind, loc.ref)
 }
 
-// jumpTo makes (kind, id) the active selection: switches the tab, clears any
+// jumpTo makes (kind, canonical ref) the active selection: switches the tab, clears any
 // applied filter (a jump is explicit navigation — a filter must not hide the
 // target), and selects the row. A task hidden by the current status view
 // escalates the view to :all and reloads with the cursor restore pending; a
 // genuinely missing target flashes instead of crashing.
-func (m *Model) jumpTo(kind entityKind, id string) tea.Cmd {
+func (m *Model) jumpTo(kind entityKind, ref entityRef) tea.Cmd {
 	i := indexOfKind(m.tabs, kind)
 	if i < 0 {
 		return nil
@@ -178,9 +183,9 @@ func (m *Model) jumpTo(kind entityKind, id string) tea.Cmd {
 	tab := m.tabs[i]
 	tab.list.ResetFilter()
 	if !tab.loaded {
-		return tab.reload(m.svc, id)
+		return tab.reload(m.svc, ref)
 	}
-	if tab.selectByID(id) {
+	if tab.selectByKey(ref.key) {
 		return m.refreshDetail()
 	}
 	if tab.viewAxis != nil && tab.statusView != "all" {
@@ -188,9 +193,9 @@ func (m *Model) jumpTo(kind entityKind, id string) tea.Cmd {
 		// hides archived tasks; the epics default hides retired/deprecated buckets —
 		// so widen to :all rather than fail (the chip shows view:all afterwards).
 		tab.statusView = "all"
-		m.flash, m.flashErr = fmt.Sprintf("showing :all to reach %s", id), false
-		return tab.reload(m.svc, id)
+		m.flash, m.flashErr = fmt.Sprintf("showing :all to reach %s", ref.label), false
+		return tab.reload(m.svc, ref)
 	}
-	m.flash, m.flashErr = fmt.Sprintf("%s not found", id), true
+	m.flash, m.flashErr = fmt.Sprintf("%s not found", ref.label), true
 	return m.refreshDetail()
 }

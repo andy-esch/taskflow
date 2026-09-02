@@ -131,7 +131,7 @@ func TestRepeatedConflictBecomesVisibleWithoutSpinning(t *testing.T) {
 
 func TestRepeatedEntityDetailConflictRetainsOnlyTheSameLoadedRecord(t *testing.T) {
 	m := loaded(t, 120, 40)
-	id := m.selectedID()
+	id := m.selectedKey()
 	wantBody := "last coherent detail"
 	m.detail.SetContent(id, taskDetail{t: domain.Task{Slug: "display-slug"}, body: wantBody})
 	m.detailGen++
@@ -173,7 +173,7 @@ func TestRepeatedEntityDetailConflictRetainsOnlyTheSameLoadedRecord(t *testing.T
 		err:  errPlannerWindow,
 	})
 	m = tm.(Model)
-	if m.detail.content != nil || m.detail.loadedID != "" {
+	if m.detail.content != nil || m.detail.loadedKey != "" {
 		t.Error("a conflict for a different canonical record retained unrelated detail")
 	}
 }
@@ -224,7 +224,7 @@ func TestReadRequestCurrentEnumeratesEverySurface(t *testing.T) {
 	m := loaded(t, 120, 40)
 	m.threads.listGen = 7
 	m.threads.detailGen, m.threads.detailRef = 9, "delivery"
-	id := m.selectedID()
+	id := m.selectedKey()
 
 	tests := []struct {
 		name    string
@@ -434,7 +434,7 @@ func TestPlannerWindowRetainsEveryLoadedSurface(t *testing.T) {
 	// The entity detail is the one surface a list reload does not re-read on its
 	// own, so drive it directly: a selection re-read inside the window must keep
 	// the body it is showing rather than replacing it with an error pane.
-	m, detailRetries := drainConflicts(t, m, m.loadDetail(m.selectedID()))
+	m, detailRetries := drainConflicts(t, m, m.loadDetail(m.selectedKey()))
 	if len(detailRetries) != 1 {
 		t.Fatalf("a contended detail read should hold one conflict, got %d", len(detailRetries))
 	}
