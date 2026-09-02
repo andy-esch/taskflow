@@ -29,10 +29,10 @@ func followToEpic(t *testing.T, m Model) Model {
 func TestModel_FollowTaskToEpicAndBack(t *testing.T) {
 	m := loaded(t, 120, 40) // alpha selected; seed tasks carry epic: 01-test
 	m = followToEpic(t, m)
-	if m.selectedID() != "01-test" {
-		t.Fatalf("should land on the task's epic, got %q", m.selectedID())
+	if m.selectedLabel() != "01-test" {
+		t.Fatalf("should land on the task's epic, got %q", m.selectedLabel())
 	}
-	if len(m.navStack) != 1 || m.navStack[0] != (navLoc{entityTasks, "alpha"}) {
+	if len(m.navStack) != 1 || m.navStack[0] != (navLoc{kind: entityTasks, ref: entityRef{key: testutil.TaskID("alpha"), label: "alpha"}}) {
 		t.Fatalf("the origin should be on the back-stack, got %v", m.navStack)
 	}
 	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "ctrl+o alpha") {
@@ -41,8 +41,8 @@ func TestModel_FollowTaskToEpicAndBack(t *testing.T) {
 	// ctrl+o returns to the task with the cursor restored, stack emptied.
 	tm, cmd := m.Update(press("ctrl+o"))
 	m = pump(t, tm.(Model), cmd, 8)
-	if m.cur().name != "tasks" || m.selectedID() != "alpha" {
-		t.Errorf("back should restore tasks/alpha, got %s/%s", m.cur().name, m.selectedID())
+	if m.cur().name != "tasks" || m.selectedLabel() != "alpha" {
+		t.Errorf("back should restore tasks/alpha, got %s/%s", m.cur().name, m.selectedLabel())
 	}
 	if len(m.navStack) != 0 {
 		t.Errorf("the stack should be empty after back, got %v", m.navStack)
@@ -79,8 +79,8 @@ func TestModel_FollowEpicToTaskViaMenuMultiHop(t *testing.T) {
 	want := m.follow.selected().Slug
 	tm, cmd = m.Update(press("enter")) // hop 2: epics/01-test → tasks/<want>
 	m = pump(t, tm.(Model), cmd, 8)
-	if m.cur().name != "tasks" || m.selectedID() != want {
-		t.Fatalf("enter should jump to tasks/%s, got %s/%s", want, m.cur().name, m.selectedID())
+	if m.cur().name != "tasks" || m.selectedLabel() != want {
+		t.Fatalf("enter should jump to tasks/%s, got %s/%s", want, m.cur().name, m.selectedLabel())
 	}
 	if len(m.navStack) != 2 {
 		t.Fatalf("two hops should stack two origins, got %v", m.navStack)
@@ -88,13 +88,13 @@ func TestModel_FollowEpicToTaskViaMenuMultiHop(t *testing.T) {
 	// Unwind both hops.
 	tm, cmd = m.Update(press("ctrl+o"))
 	m = pump(t, tm.(Model), cmd, 8)
-	if m.cur().name != "epics" || m.selectedID() != "01-test" {
-		t.Errorf("first back should restore epics/01-test, got %s/%s", m.cur().name, m.selectedID())
+	if m.cur().name != "epics" || m.selectedLabel() != "01-test" {
+		t.Errorf("first back should restore epics/01-test, got %s/%s", m.cur().name, m.selectedLabel())
 	}
 	tm, cmd = m.Update(press("ctrl+o"))
 	m = pump(t, tm.(Model), cmd, 8)
-	if m.cur().name != "tasks" || m.selectedID() != "alpha" {
-		t.Errorf("second back should restore tasks/alpha, got %s/%s", m.cur().name, m.selectedID())
+	if m.cur().name != "tasks" || m.selectedLabel() != "alpha" {
+		t.Errorf("second back should restore tasks/alpha, got %s/%s", m.cur().name, m.selectedLabel())
 	}
 	// Esc closes the picker without following.
 	m = followToEpic(t, m) // back on epics with detail loaded
@@ -191,8 +191,8 @@ func TestModel_FollowEscalatesToAllView(t *testing.T) {
 	if m.cur().statusView != "all" {
 		t.Errorf("a hidden target should escalate the view to :all, got %q", m.cur().statusView)
 	}
-	if m.selectedID() != "done-one" {
-		t.Errorf("the completed task should be selected, got %q", m.selectedID())
+	if m.selectedLabel() != "done-one" {
+		t.Errorf("the completed task should be selected, got %q", m.selectedLabel())
 	}
 }
 
@@ -205,14 +205,14 @@ func TestModel_JumpClearsAppliedFilter(t *testing.T) {
 	// filter moves the selection; follow from the filtered selection (beta),
 	// then come BACK into the filtered tab: the filter must be gone.
 	m.cur().list.SetFilterText("beta")
-	if m.selectedID() != "beta" {
-		t.Fatalf("setup: filter should select beta, got %q", m.selectedID())
+	if m.selectedLabel() != "beta" {
+		t.Fatalf("setup: filter should select beta, got %q", m.selectedLabel())
 	}
 	m = followToEpic(t, m)
 	tm, cmd := m.Update(press("ctrl+o"))
 	m = pump(t, tm.(Model), cmd, 8)
-	if m.cur().name != "tasks" || m.selectedID() != "beta" {
-		t.Fatalf("back should restore tasks/beta, got %s/%s", m.cur().name, m.selectedID())
+	if m.cur().name != "tasks" || m.selectedLabel() != "beta" {
+		t.Fatalf("back should restore tasks/beta, got %s/%s", m.cur().name, m.selectedLabel())
 	}
 	if m.cur().list.FilterState() != list.Unfiltered {
 		t.Errorf("a jump must clear the target tab's filter, state=%v", m.cur().list.FilterState())
@@ -245,8 +245,8 @@ func TestModel_FollowDanglingEpicRef(t *testing.T) {
 	}
 	tm, cmd = m.Update(press("ctrl+o"))
 	m = pump(t, tm.(Model), cmd, 8)
-	if m.cur().name != "tasks" || m.selectedID() != "orphan" {
-		t.Errorf("ctrl+o should still return home, got %s/%s", m.cur().name, m.selectedID())
+	if m.cur().name != "tasks" || m.selectedLabel() != "orphan" {
+		t.Errorf("ctrl+o should still return home, got %s/%s", m.cur().name, m.selectedLabel())
 	}
 }
 
@@ -281,7 +281,7 @@ func TestModel_FollowPickerFitsTerminal(t *testing.T) {
 // of the same place.
 func TestPushLoc_SkipsConsecutiveDuplicate(t *testing.T) {
 	m := loaded(t, 120, 40)
-	if m.selectedID() == "" {
+	if m.selectedLabel() == "" {
 		t.Fatal("setup: expected a selection to push")
 	}
 	m.pushLoc()

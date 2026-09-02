@@ -51,8 +51,8 @@ func TestModel_DashboardEnterJumpsToItem(t *testing.T) {
 	if m.onDash {
 		t.Fatal("enter should leave the dashboard")
 	}
-	if m.cur().kind != entityTasks || m.selectedID() != "alpha" {
-		t.Errorf("enter on the in-progress row should select alpha on tasks, got tab=%q id=%q", m.cur().name, m.selectedID())
+	if m.cur().kind != entityTasks || m.selectedLabel() != "alpha" {
+		t.Errorf("enter on the in-progress row should select alpha on tasks, got tab=%q id=%q", m.cur().name, m.selectedLabel())
 	}
 }
 
@@ -344,8 +344,12 @@ func TestModel_DashboardAuditFindingsWidget(t *testing.T) {
 func TestModel_DashboardAcuteFindingJumpsToAudit(t *testing.T) {
 	m := loadedDashAt(t, auditFindingsRepo(t), 120, 40)
 	pos := -1
+	wantKey := testutil.TaskID("2026-06-27-arch")
 	for i, idx := range m.dash.nav {
-		if tgt := m.dash.rows[idx].target; tgt != nil && tgt.kind == entityAudits && tgt.id == "2026-06-27-arch" {
+		if tgt := m.dash.rows[idx].target; tgt != nil && tgt.kind == entityAudits && tgt.ref.label == "2026-06-27-arch" {
+			if tgt.ref.key != wantKey {
+				t.Fatalf("acute finding target uses %q, want canonical audit key %q", tgt.ref.key, wantKey)
+			}
 			pos = i
 		}
 	}
@@ -355,9 +359,9 @@ func TestModel_DashboardAcuteFindingJumpsToAudit(t *testing.T) {
 	m.dash.cursor = pos
 	tm, cmd := m.Update(press("enter"))
 	m = drain(t, tm.(Model), cmd)
-	if m.onDash || m.cur().kind != entityAudits || m.selectedID() != "2026-06-27-arch" {
+	if m.onDash || m.cur().kind != entityAudits || m.selectedLabel() != "2026-06-27-arch" || m.selectedKey() != wantKey {
 		t.Errorf("enter on the acute finding should jump to its audit, got onDash=%v tab=%q id=%q",
-			m.onDash, m.cur().name, m.selectedID())
+			m.onDash, m.cur().name, m.selectedLabel())
 	}
 }
 

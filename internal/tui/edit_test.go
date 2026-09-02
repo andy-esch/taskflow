@@ -77,8 +77,8 @@ func enumCursorTo(t *testing.T, m Model, opt string) Model {
 // high → apply persists via SetFields, flashes success, and reloads.
 func TestModel_EditPriorityViaMenu(t *testing.T) {
 	m := loadedAt(t, cleanTaskRepo(t), 120, 40)
-	if m.selectedID() != "clean" {
-		t.Fatalf("setup: want clean selected, got %q", m.selectedID())
+	if m.selectedLabel() != "clean" {
+		t.Fatalf("setup: want clean selected, got %q", m.selectedLabel())
 	}
 	tm, _ := m.Update(press("e"))
 	m = tm.(Model)
@@ -287,8 +287,8 @@ func TestModel_EditEpicPriorityViaMenu(t *testing.T) {
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
 	m = cmdJump(t, tm.(Model), "epics")
-	if m.cur().kind != entityEpics || m.selectedID() != "01-e" {
-		t.Fatalf("setup: want the epic selected on the epics tab, got tab=%q id=%q", m.cur().name, m.selectedID())
+	if m.cur().kind != entityEpics || m.selectedLabel() != "01-e" {
+		t.Fatalf("setup: want the epic selected on the epics tab, got tab=%q id=%q", m.cur().name, m.selectedLabel())
 	}
 
 	tm, _ = m.Update(press("e"))
@@ -401,8 +401,8 @@ func selectOverdue(t *testing.T, m Model) Model {
 	t.Helper()
 	tm, _ := m.Update(press("j"))
 	m = tm.(Model)
-	if m.selectedID() != "overdue" {
-		t.Fatalf("setup: want overdue selected, got %q", m.selectedID())
+	if m.selectedLabel() != "overdue" {
+		t.Fatalf("setup: want overdue selected, got %q", m.selectedLabel())
 	}
 	return m
 }

@@ -56,13 +56,13 @@ func TestPalette_JumpSelectsEntity(t *testing.T) {
 	if len(items) < 2 {
 		t.Skip("need ≥2 seeded tasks to prove the jump moves the selection")
 	}
-	target := items[len(items)-1].(entityItem).id() // not the default-selected first row
-	if m.selectedID() == target {
-		t.Fatalf("setup: target %q is already selected", target)
+	target := items[len(items)-1].(entityItem).ref() // not the default-selected first row
+	if m.selectedKey() == target.key {
+		t.Fatalf("setup: target %q is already selected", target.label)
 	}
-	m.runPaletteItem(paletteItem{kind: palJump, ek: entityTasks, id: target})
-	if got := m.selectedID(); got != target {
-		t.Errorf("jump should select %q, selected %q", target, got)
+	m.runPaletteItem(paletteItem{kind: palJump, ek: entityTasks, ref: target})
+	if got := m.selectedKey(); got != target.key {
+		t.Errorf("jump should select %q, selected key %q", target.label, got)
 	}
 }
 
@@ -87,23 +87,23 @@ func TestPalette_FilterNarrows(t *testing.T) {
 	m = tm.(Model)
 	total := len(m.palette.list.Items())
 
-	target := m.tabs[0].list.Items()[0].(entityItem).id()
-	for _, r := range target {
+	target := m.tabs[0].list.Items()[0].(entityItem).ref()
+	for _, r := range target.label {
 		tm, _ = m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		m = tm.(Model)
 	}
 	got := m.palette.list.Items()
 	if len(got) == 0 || len(got) >= total {
-		t.Fatalf("typing %q should narrow the list (was %d, now %d)", target, total, len(got))
+		t.Fatalf("typing %q should narrow the list (was %d, now %d)", target.label, total, len(got))
 	}
 	found := false
 	for _, it := range got {
-		if pi, ok := it.(paletteItem); ok && pi.id == target {
+		if pi, ok := it.(paletteItem); ok && pi.ref.key == target.key {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("the typed target %q should remain in the filtered candidates", target)
+		t.Errorf("the typed target %q should remain in the filtered candidates", target.label)
 	}
 }
 

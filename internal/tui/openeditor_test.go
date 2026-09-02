@@ -42,8 +42,8 @@ func TestOpenInEditor_Key(t *testing.T) {
 // task-only; this is the whole-file $EDITOR path). Pins epic parity for `E`.
 func TestOpenInEditor_Epic(t *testing.T) {
 	m := epicsTab(t, loaded(t, 120, 40))
-	if m.selectedID() != "01-test" {
-		t.Fatalf("setup: want the seeded epic selected, got %q", m.selectedID())
+	if m.selectedLabel() != "01-test" {
+		t.Fatalf("setup: want the seeded epic selected, got %q", m.selectedLabel())
 	}
 	if m.selectedPath() == "" {
 		t.Fatal("an epic selection should have a file path for E to open")

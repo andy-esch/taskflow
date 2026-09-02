@@ -23,6 +23,8 @@ import (
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
+func testEntityRef(label string) entityRef { return entityRef{key: label, label: label} }
+
 // seedRepo writes a tiny planning tree: alpha (in-progress), beta (ready-to-start),
 // one epic, and one open audit so every tab has content.
 func seedRepo(t *testing.T) string {
@@ -173,8 +175,8 @@ func TestModel_LoadsWorkingSetOrder(t *testing.T) {
 		t.Fatal("tasks tab should be loaded")
 	}
 	// Working-set order: in-progress (alpha) before ready-to-start (beta).
-	if m.selectedID() != "alpha" {
-		t.Errorf("expected in-progress task first, got %q", m.selectedID())
+	if m.selectedLabel() != "alpha" {
+		t.Errorf("expected in-progress task first, got %q", m.selectedLabel())
 	}
 	if !strings.Contains(m.View().Content, "alpha") || !strings.Contains(m.View().Content, "beta") {
 		t.Errorf("view should list both tasks:\n%s", m.View().Content)
@@ -186,27 +188,27 @@ func TestModel_SelectionLoadsBodyWithStaleGuard(t *testing.T) {
 	// Move down → select beta, which triggers a body load.
 	tm, _ := m.Update(press("j"))
 	m = tm.(Model)
-	if m.selectedID() != "beta" {
-		t.Fatalf("expected beta after j, got %q", m.selectedID())
+	if m.selectedLabel() != "beta" {
+		t.Fatalf("expected beta after j, got %q", m.selectedLabel())
 	}
 	if !m.detail.loading {
 		t.Error("selection change should start a body load")
 	}
 	// A stale body (for alpha) must be dropped while beta is selected.
-	tm, _ = m.Update(detailMsg{kind: entityTasks, id: "alpha", gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: "alpha"}, body: "x"}})
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: testutil.TaskID("alpha"), gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: "alpha"}, body: "x"}})
 	m = tm.(Model)
 	if m.detail.hasContent {
 		t.Error("stale body for a different selection must be ignored")
 	}
 	// An outdated request generation for the RIGHT id must be dropped too (two
 	// loads for the same id aren't ordered by (kind, id) alone).
-	tm, _ = m.Update(detailMsg{kind: entityTasks, id: "beta", gen: m.detailGen - 1, content: taskDetail{t: domain.Task{Slug: "beta"}, body: "old"}})
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: testutil.TaskID("beta"), gen: m.detailGen - 1, content: taskDetail{t: domain.Task{Slug: "beta"}, body: "old"}})
 	m = tm.(Model)
 	if m.detail.hasContent {
 		t.Error("an older detail load for the same id must be ignored")
 	}
 	// The matching body sets the detail.
-	tm, _ = m.Update(detailMsg{kind: entityTasks, id: "beta", gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: "beta"}, body: "beta body"}})
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: testutil.TaskID("beta"), gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: "beta"}, body: "beta body"}})
 	m = tm.(Model)
 	if !m.detail.hasContent || m.detail.title != "beta" {
 		t.Errorf("detail should show beta, got title %q hasContent=%v", m.detail.title, m.detail.hasContent)
@@ -253,9 +255,9 @@ func TestModel_Responsive(t *testing.T) {
 
 func TestModel_BodyErrorDoesNotBrick(t *testing.T) {
 	m := loaded(t, 120, 40)
-	slug := m.selectedID()
+	key := m.selectedKey()
 	// An ambiguous-id (a prefix matching multiple files) body error must not blank the UI.
-	tm, _ := m.Update(detailErrMsg{kind: entityTasks, id: slug, gen: m.detailGen, err: domain.ErrAmbiguous})
+	tm, _ := m.Update(detailErrMsg{kind: entityTasks, id: key, gen: m.detailGen, err: domain.ErrAmbiguous})
 	m = tm.(Model)
 	if m.cur().loadErr != nil {
 		t.Error("a per-task body error must not set the tab's list-load error")
@@ -270,9 +272,9 @@ func TestModel_BodyErrorDoesNotBrick(t *testing.T) {
 
 func TestModel_DetailScrollKeys(t *testing.T) {
 	m := loaded(t, 120, 12) // short, so the body overflows
-	slug := m.selectedID()
+	key, label := m.selectedKey(), m.selectedLabel()
 	long := strings.Repeat("a line of text\n", 60)
-	tm, _ := m.Update(detailMsg{kind: entityTasks, id: slug, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: slug}, body: long}})
+	tm, _ := m.Update(detailMsg{kind: entityTasks, id: key, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: label}, body: long}})
 	m = tm.(Model)
 	tm, _ = m.Update(press("l")) // focus detail
 	m = tm.(Model)
@@ -347,7 +349,7 @@ func TestModel_ViewFitsTerminal(t *testing.T) {
 		{120, 40}, {100, 24}, {90, 30}, {80, 24}, {70, 20}, {40, 12}, {24, 8},
 	} {
 		m := loaded(t, d.w, d.h)
-		tm, _ := m.Update(detailMsg{kind: entityTasks, id: m.selectedID(), gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: m.selectedID()}, body: "# body\n\nsome text here\n"}})
+		tm, _ := m.Update(detailMsg{kind: entityTasks, id: m.selectedKey(), gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: m.selectedLabel()}, body: "# body\n\nsome text here\n"}})
 		m = tm.(Model)
 		lines := strings.Split(m.View().Content, "\n")
 		if len(lines) != d.h {
@@ -399,8 +401,8 @@ func TestModel_CycleTabsLoadsEntity(t *testing.T) {
 	if _, ok := m.cur().list.SelectedItem().(epicItem); !ok {
 		t.Errorf("epics tab should hold epicItems, got %T", m.cur().list.SelectedItem())
 	}
-	if m.selectedID() != "01-test" {
-		t.Errorf("expected epic 01-test selected, got %q", m.selectedID())
+	if m.selectedLabel() != "01-test" {
+		t.Errorf("expected epic 01-test selected, got %q", m.selectedLabel())
 	}
 	// [ wraps back to tasks (cursor preserved — see the dedicated test).
 	tm, _ = m.Update(press("["))
@@ -436,8 +438,8 @@ func TestModel_CommandJumpSwitchesEntity(t *testing.T) {
 	if !m.cur().loaded {
 		t.Error("audits tab should load after the jump")
 	}
-	if m.selectedID() != "2026-06-01-thing" {
-		t.Errorf("expected the seeded audit selected, got %q", m.selectedID())
+	if m.selectedLabel() != "2026-06-01-thing" {
+		t.Errorf("expected the seeded audit selected, got %q", m.selectedLabel())
 	}
 }
 
@@ -486,8 +488,8 @@ func TestModel_PerTabCursorPreserved(t *testing.T) {
 	// Move the tasks cursor to beta.
 	tm, _ := m.Update(press("j"))
 	m = tm.(Model)
-	if m.selectedID() != "beta" {
-		t.Fatalf("expected beta selected on tasks, got %q", m.selectedID())
+	if m.selectedLabel() != "beta" {
+		t.Fatalf("expected beta selected on tasks, got %q", m.selectedLabel())
 	}
 	// Cycle all the way round — every tab plus the dashboard — and back to tasks,
 	// draining each load. Derived from the tab count, not hardcoded, so adding an entity
@@ -499,8 +501,8 @@ func TestModel_PerTabCursorPreserved(t *testing.T) {
 	if m.cur().name != "tasks" {
 		t.Fatalf("expected to land back on tasks, got %q", m.cur().name)
 	}
-	if m.selectedID() != "beta" {
-		t.Errorf("tasks cursor should be preserved at beta, got %q", m.selectedID())
+	if m.selectedLabel() != "beta" {
+		t.Errorf("tasks cursor should be preserved at beta, got %q", m.selectedLabel())
 	}
 }
 
@@ -731,7 +733,7 @@ func TestModel_ConflictErrorTriggersReload(t *testing.T) {
 	}
 	gen := m.cur().loadGen
 	conflict := fmt.Errorf("%q: %w", "in-progress", domain.ErrConflict)
-	tm, cmd := m.Update(actionErrMsg{slug: m.selectedID(), err: conflict})
+	tm, cmd := m.Update(actionErrMsg{ref: m.selectedRef(), err: conflict})
 	m = tm.(Model)
 	if cmd == nil {
 		t.Fatal("a conflict error must produce a reload command, not just a flash")
@@ -763,7 +765,7 @@ func TestModel_ValidationErrorShowsBareReasonInline(t *testing.T) {
 		t.Fatal("setup: the inline editor should be open")
 	}
 	vErr := fmt.Errorf("%w: at least one tag is required", domain.ErrValidation)
-	tm, cmd := m.Update(actionErrMsg{slug: m.selectedID(), err: vErr})
+	tm, cmd := m.Update(actionErrMsg{ref: m.selectedRef(), err: vErr})
 	m = tm.(Model)
 	if cmd != nil {
 		t.Error("a validation error while editing must not reload — the fix is in place")
@@ -834,13 +836,13 @@ func TestModel_StaleListLoadDropped(t *testing.T) {
 // item still snaps to the top.
 func TestModel_DetailScrollSurvivesReload(t *testing.T) {
 	m := loaded(t, 120, 12)
-	slug := m.selectedID()
+	key, label := m.selectedKey(), m.selectedLabel()
 	long := strings.Repeat("a line of text\n", 60)
-	feed := func(id, body string) {
-		tm, _ := m.Update(detailMsg{kind: entityTasks, id: id, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: id}, body: body}})
+	feed := func(key, label, body string) {
+		tm, _ := m.Update(detailMsg{kind: entityTasks, id: key, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: label}, body: body}})
 		m = tm.(Model)
 	}
-	feed(slug, long)
+	feed(key, label, long)
 	tm, _ := m.Update(press("l"))
 	m = tm.(Model)
 	tm, _ = m.Update(press("G")) // scroll to bottom
@@ -849,7 +851,7 @@ func TestModel_DetailScrollSurvivesReload(t *testing.T) {
 	if off == 0 {
 		t.Fatal("setup: the body should have scrolled")
 	}
-	feed(slug, long) // same item reloaded (e.g. an external write)
+	feed(key, label, long) // same item reloaded (e.g. an external write)
 	if m.detail.vp.YOffset() != off {
 		t.Errorf("a same-item refresh must keep the scroll: %d → %d", off, m.detail.vp.YOffset())
 	}
@@ -858,7 +860,7 @@ func TestModel_DetailScrollSurvivesReload(t *testing.T) {
 	m = tm.(Model)
 	tm, _ = m.Update(press("j"))
 	m = tm.(Model)
-	feed(m.selectedID(), long)
+	feed(m.selectedKey(), m.selectedLabel(), long)
 	if m.detail.vp.YOffset() != 0 {
 		t.Errorf("a different item should start at the top, got offset %d", m.detail.vp.YOffset())
 	}
@@ -940,8 +942,8 @@ func TestModel_RefreshFiresReloadMsg(t *testing.T) {
 	}
 	tm, _ := m.Update(reloadMsg{})
 	m = tm.(Model)
-	if m.cur().restore != "alpha" {
-		t.Errorf("reloadMsg should capture the active tab's cursor id, got %q", m.cur().restore)
+	if m.cur().restore != (entityRef{key: testutil.TaskID("alpha"), label: "alpha"}) {
+		t.Errorf("reloadMsg should capture the active tab's cursor ref, got %+v", m.cur().restore)
 	}
 }
 
@@ -1078,7 +1080,7 @@ func auditSlugs(m Model) []string {
 	items := m.cur().list.Items()
 	out := make([]string, 0, len(items))
 	for _, it := range items {
-		out = append(out, it.(auditItem).id())
+		out = append(out, it.(auditItem).ref().label)
 	}
 	return out
 }
@@ -1232,12 +1234,12 @@ func TestModel_ZoomFullScreensDetail(t *testing.T) {
 	// Load the current selection's detail with a unique marker, so we can prove the
 	// zoomed pane renders the DETAIL body (not an empty pane) — not just that the list
 	// vanished. `other` is the non-selected task, which must disappear when zoomed.
-	id := m.selectedID()
+	id, label := m.selectedKey(), m.selectedLabel()
 	other := "beta"
-	if id == "beta" {
+	if label == "beta" {
 		other = "alpha"
 	}
-	tm0, _ := m.Update(detailMsg{kind: entityTasks, id: id, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: id}, body: "ZOOMDETAILMARKER"}})
+	tm0, _ := m.Update(detailMsg{kind: entityTasks, id: id, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: label}, body: "ZOOMDETAILMARKER"}})
 	m = tm0.(Model)
 
 	// z → full-screen detail: zoomed, single-pane, detail focused; the list is hidden
@@ -1381,8 +1383,8 @@ func TestModel_DetailFindHighlightsAndNavigates(t *testing.T) {
 	// Give the detail a body with two "find" matches on separate lines, plus
 	// filler so the viewport must scroll.
 	body := "alpha line\nbeta\nfind me here\nbeta again\nfind once more\n" + strings.Repeat("filler\n", 30)
-	id := m.selectedID()
-	tm, _ := m.Update(detailMsg{kind: entityTasks, id: id, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: id}, body: body}})
+	id, label := m.selectedKey(), m.selectedLabel()
+	tm, _ := m.Update(detailMsg{kind: entityTasks, id: id, gen: m.detailGen, content: taskDetail{t: domain.Task{Slug: label}, body: body}})
 	m = tm.(Model)
 	tm, _ = m.Update(press("l")) // focus detail
 	m = tm.(Model)
@@ -1528,8 +1530,8 @@ func TestModel_ReloadAllTabsPreservesCursors(t *testing.T) {
 	// tasks: move the cursor to beta.
 	tm, _ := m.Update(press("j"))
 	m = tm.(Model)
-	if m.selectedID() != "beta" {
-		t.Fatalf("setup: want beta on tasks, got %q", m.selectedID())
+	if m.selectedLabel() != "beta" {
+		t.Fatalf("setup: want beta on tasks, got %q", m.selectedLabel())
 	}
 	// Visit epics so that tab is loaded too, and note its selection.
 	tm, cmd := m.Update(press("]"))
@@ -1537,20 +1539,20 @@ func TestModel_ReloadAllTabsPreservesCursors(t *testing.T) {
 	if m.cur().name != "epics" {
 		t.Fatalf("setup: expected epics, got %q", m.cur().name)
 	}
-	epicID := m.selectedID()
+	epicID := m.selectedLabel()
 	// Back to tasks, then reload everything.
 	tm, _ = m.Update(press("["))
 	m = tm.(Model)
 	tm, cmd = m.Update(reloadMsg{})
 	m = drainBatch(t, tm.(Model), cmd)
 
-	if m.selectedID() != "beta" {
-		t.Errorf("tasks cursor should survive reload at beta, got %q", m.selectedID())
+	if m.selectedLabel() != "beta" {
+		t.Errorf("tasks cursor should survive reload at beta, got %q", m.selectedLabel())
 	}
 	tm, _ = m.Update(press("]")) // epics is already loaded; no reload needed
 	m = tm.(Model)
-	if m.selectedID() != epicID {
-		t.Errorf("epics cursor should survive reload at %q, got %q", epicID, m.selectedID())
+	if m.selectedLabel() != epicID {
+		t.Errorf("epics cursor should survive reload at %q, got %q", epicID, m.selectedLabel())
 	}
 }
 
@@ -1734,7 +1736,7 @@ func TestModel_ReloadWithBackgroundFilterApplied(t *testing.T) {
 		t.Errorf("expected beta visible after reload, got %q", it.t.Slug)
 	}
 	// The cursor restore (pending until the refilter landed) points at beta.
-	if id := tasks.list.SelectedItem().(entityItem).id(); id != "beta" {
+	if id := tasks.list.SelectedItem().(entityItem).ref().label; id != "beta" {
 		t.Errorf("cursor should be restored to beta after the refilter, got %q", id)
 	}
 	// The active epics tab was not polluted by the tasks tab's matches.

@@ -339,6 +339,16 @@ func TestTaskGraphResolveTaskIDMatchesRepositoryReferenceTiers(t *testing.T) {
 		!strings.Contains(err.Error(), duplicateA.Slug) || !strings.Contains(err.Error(), duplicateB.Slug) {
 		t.Fatalf("duplicate-id resolution = %v, want both source candidates and ErrAmbiguous", err)
 	}
+
+	// A canonical ID is authoritative even when another task uses that exact text
+	// as its human slug. Otherwise ID-addressed TUI lifecycle mutations become
+	// ambiguous despite carrying the correct stable key end to end.
+	idTarget := graphRecord("friendly-target", domain.StatusReadyToStart)
+	idSlugSibling := graphRecord(idTarget.ID, domain.StatusReadyToStart)
+	idPrecedenceGraph := NewTaskGraph([]domain.Task{idSlugSibling, idTarget}, nil)
+	if got, err := idPrecedenceGraph.ResolveTaskID(idTarget.ID); err != nil || got != idTarget.ID {
+		t.Fatalf("stable id did not precede a sibling slug: got %q, %v", got, err)
+	}
 }
 
 func TestTaskGraphDownstreamImpactUsesDeterministicShortestPaths(t *testing.T) {

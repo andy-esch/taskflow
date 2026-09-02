@@ -166,18 +166,42 @@ func resolveID(kind, query string, cands []candidate) (candidate, error) {
 		return cands[i].slug < cands[j].slug
 	})
 	q := strings.ToLower(query)
+	exact := func(key string) bool { return key == query || strings.ToLower(key) == q }
+
+	// Canonical IDs are authoritative. Keep this as a separate tier from exact
+	// slugs so a sibling whose human slug happens to equal this record's stable ID
+	// cannot make the canonical record ambiguous or unreachable.
+	var exactIDHits []candidate
+	for _, c := range cands {
+		if exact(c.id) {
+			exactIDHits = append(exactIDHits, c)
+		}
+	}
+	switch len(exactIDHits) {
+	case 1:
+		return exactIDHits[0], nil
+	case 0:
+		// Continue through the human-friendly slug/prefix/substring tiers.
+	default:
+		return candidate{}, fmt.Errorf("%q matches %d %s by id: %s: %w",
+			query, len(exactIDHits), domain.PluralKind(kind), describeCandidates(exactIDHits), domain.ErrAmbiguous)
+	}
+
 	tiers := []func(key string) bool{
-		func(key string) bool { return key == query || strings.ToLower(key) == q },
+		exact,
 		func(key string) bool { return strings.HasPrefix(strings.ToLower(key), q) },
 		func(key string) bool { return strings.Contains(strings.ToLower(key), q) },
 	}
-	for _, match := range tiers {
+	for tier, match := range tiers {
 		var hits []candidate
 		for _, c := range cands {
-			// Under the flat layout a task/audit resolves on either its stable id
-			// (a prefix) or its human slug; epic/legacy candidates carry only id
-			// (slug ""), so this stays their single-key match unchanged.
-			if match(c.id) || (c.slug != "" && match(c.slug)) {
+			// The exact-ID tier already returned above. Exact human slugs therefore
+			// get their own tier; looser tiers continue matching either key.
+			matched := c.slug != "" && match(c.slug)
+			if tier > 0 {
+				matched = match(c.id) || matched
+			}
+			if matched {
 				hits = append(hits, c)
 			}
 		}

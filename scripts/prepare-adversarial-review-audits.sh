@@ -138,6 +138,7 @@ for reviewer in "${reviewers[@]}"; do
 		# The regex and Markdown code span are intentional literals.
 		# shellcheck disable=SC2016
 		printf '> Finding grammar is exact: use `#### M1. <title> · **Status:** open` (or H1/L1). Codes must match `[A-Z]+[0-9]+`; no hyphens, no em dash in place of the period, and no free-standing status line.\n\n'
+		printf '> Required second pass: after completing the brief checklist, review the change again for systemic failure modes. Take an explicitly adversarial stance toward shared abstractions, test helpers that can mask broad defect classes, state changing between projection and action, and boundaries that only appear to fail closed. Prefer one demonstrated systemic issue over several speculative findings, and settle each challenged pattern with hostile evidence.\n\n'
 		cat "$brief_file"
 	} >"$body_file"
 	body_files+=("$body_file")
@@ -163,6 +164,6 @@ for i in "${!reviewers[@]}"; do
 		--date "$audit_date" --body-file "${body_files[$i]}" --no-input >/dev/null
 	"${cli[@]}" -C "$planning_root" audit lint "${audit_slugs[$i]}" >/dev/null
 	audit_path="$("${cli[@]}" -C "$planning_root" audit path "${audit_slugs[$i]}")"
-	printf '\n[%s]\nReview the audit assigned to you at %s. Perform the requested adversarial review, replace only its Reviewer report placeholder, preserve the brief, and leave every finding open for implementation-owner triage.\n' \
+	printf '\n[%s]\nReview the audit assigned to you at %s. Complete both the contract/checklist pass and the required systemic second pass, including code that may still be in flux. Replace only its Reviewer report placeholder, preserve the brief, and leave every finding open for implementation-owner triage.\n' \
 		"${reviewers[$i]}" "$audit_path"
 done

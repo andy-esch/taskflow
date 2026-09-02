@@ -97,8 +97,8 @@ func (m Model) windowTitle() string {
 	if m.onDash {
 		return "tskflwctl · " + overviewName
 	}
-	if id := m.selectedID(); id != "" {
-		return "tskflwctl · " + id
+	if label := m.selectedLabel(); label != "" {
+		return "tskflwctl · " + label
 	}
 	return "tskflwctl · " + m.cur().name
 }
@@ -462,7 +462,7 @@ func (m Model) footer() string {
 	}
 	if n := len(m.navStack); n > 0 {
 		// Breadcrumb for the follow stack: where ctrl+o leads, and how deep.
-		hints = fmt.Sprintf("↩ ctrl+o %s (%d) · ", m.navStack[n-1].id, n) + hints
+		hints = fmt.Sprintf("↩ ctrl+o %s (%d) · ", m.navStack[n-1].ref.label, n) + hints
 	}
 	if p := m.cur().problems; len(p) > 0 {
 		hints = fmt.Sprintf("! %d unreadable · ", len(p)) + hints

@@ -77,6 +77,16 @@ type Audit struct {
 	DroppedFindings int `yaml:"-"` // status: deferred, superseded, wontfix
 }
 
+// CanonicalID is the stable store-resolution identity. Filename identity wins
+// for filesystem records so frontmatter drift cannot redirect a read; adapters
+// without filename semantics use ID.
+func (a Audit) CanonicalID() string {
+	if a.FilenameID != "" {
+		return a.FilenameID
+	}
+	return a.ID
+}
+
 // Resolved is the audit's SETTLED count — every finding that has reached a terminal
 // disposition, whether it was done here (fixed/tracked) or dropped (deferred,
 // superseded, wontfix). It is the numerator beside Percent, and the continuous form

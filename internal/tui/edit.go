@@ -116,7 +116,7 @@ func tierStr(n int) string {
 // body (see overlay.go's editModal marker).
 type editMenu struct {
 	active  bool
-	slug    string
+	ref     entityRef
 	fields  []editField
 	apply   fieldSetter     // routes submit to the entity's write (SetFields / SetEpicFields)
 	cursor  int             // selected field
@@ -132,22 +132,22 @@ type editMenu struct {
 // actionErrMsg (a core validation error → shown on the field). Storing it on the
 // menu is what makes the form entity-agnostic — task and epic differ only here and
 // in their field set (see setFieldCmd / setEpicFieldCmd).
-type fieldSetter func(svc *core.Service, slug, key, value string) tea.Cmd
+type fieldSetter func(svc *core.Service, ref entityRef, key, value string) tea.Cmd
 
 // open shows the form for a task.
 func (e *editMenu) open(t domain.Task) {
-	*e = newEditMenu(t.Slug, editableFields(t), setFieldCmd)
+	*e = newEditMenu(entityRef{key: t.CanonicalID(), label: t.Slug}, editableFields(t), setFieldCmd)
 }
 
 // openEpic shows the form for an epic. Same form + widgets as a task; only the
 // field set (no effort/tier) and the submit target (SetEpicFields) differ.
 func (e *editMenu) openEpic(ep domain.Epic) {
-	*e = newEditMenu(ep.ID, editableEpicFields(ep), setEpicFieldCmd)
+	*e = newEditMenu(entityRef{key: ep.ID, label: ep.ID}, editableEpicFields(ep), setEpicFieldCmd)
 }
 
 // newEditMenu builds the form shell (the shared text widgets) for an entity's
 // slug + field set + submit route.
-func newEditMenu(slug string, fields []editField, apply fieldSetter) editMenu {
+func newEditMenu(ref entityRef, fields []editField, apply fieldSetter) editMenu {
 	if len(fields) == 0 {
 		return editMenu{} // an empty field set must not open a form, so cur() never indexes nil
 	}
@@ -163,7 +163,7 @@ func newEditMenu(slug string, fields []editField, apply fieldSetter) editMenu {
 	ta.SetHeight(4)
 	ta.KeyMap.InsertNewline.SetEnabled(false) // Enter submits; description stays one line
 
-	return editMenu{active: true, slug: slug, fields: fields, apply: apply, input: ti, area: ta}
+	return editMenu{active: true, ref: ref, fields: fields, apply: apply, input: ti, area: ta}
 }
 
 func (e *editMenu) close() {
@@ -323,11 +323,11 @@ func (m *Model) submitEdit() tea.Cmd {
 			return nil
 		}
 		if parsed == "" {
-			return unsetFieldCmd(m.svc, m.edit.slug, key) // blank → clear the snooze
+			return unsetFieldCmd(m.svc, m.edit.ref, key) // blank → clear the snooze
 		}
 		val = parsed
 	}
-	return m.edit.apply(m.svc, m.edit.slug, key, val)
+	return m.edit.apply(m.svc, m.edit.ref, key, val)
 }
 
 // setCurrent updates the form's displayed value for a field after a confirmed
@@ -343,36 +343,36 @@ func (e *editMenu) setCurrent(key, val string) {
 // setFieldCmd runs a task field write off the event loop, reporting success
 // (editedMsg → flash + reload) or the core validation error (actionErrMsg → flash,
 // no reload). force=false, dryRun=false: a real, fully-validated set.
-func setFieldCmd(svc *core.Service, slug, key, value string) tea.Cmd {
+func setFieldCmd(svc *core.Service, ref entityRef, key, value string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.SetFields(slug, map[string]any{key: value}, false, false); err != nil {
-			return actionErrMsg{slug: slug, err: err}
+		if _, err := svc.SetFields(ref.key, map[string]any{key: value}, false, false); err != nil {
+			return actionErrMsg{ref: ref, err: err}
 		}
-		return editedMsg{slug: slug, field: key, value: value}
+		return editedMsg{ref: ref, field: key, value: value}
 	}
 }
 
 // unsetFieldCmd removes a frontmatter field (the inline-edit twin of `task set
 // --unset`), reporting the same editedMsg/actionErrMsg. Used when a revisit date is
 // blanked in the editor — clearing the snooze rather than writing an empty date.
-func unsetFieldCmd(svc *core.Service, slug, key string) tea.Cmd {
+func unsetFieldCmd(svc *core.Service, ref entityRef, key string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.SetFields(slug, map[string]any{key: domain.UnsetField{}}, false, false); err != nil {
-			return actionErrMsg{slug: slug, err: err}
+		if _, err := svc.SetFields(ref.key, map[string]any{key: domain.UnsetField{}}, false, false); err != nil {
+			return actionErrMsg{ref: ref, err: err}
 		}
-		return editedMsg{slug: slug, field: key, value: ""}
+		return editedMsg{ref: ref, field: key, value: ""}
 	}
 }
 
 // setEpicFieldCmd is setFieldCmd's epic twin: it routes through SetEpicFields (the
 // `epic set` write), reporting the same editedMsg/actionErrMsg so the form's flash,
 // reload, and on-field error handling are reused unchanged.
-func setEpicFieldCmd(svc *core.Service, id, key, value string) tea.Cmd {
+func setEpicFieldCmd(svc *core.Service, ref entityRef, key, value string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.SetEpicFields(id, map[string]any{key: value}, false, false); err != nil {
-			return actionErrMsg{slug: id, err: err}
+		if _, err := svc.SetEpicFields(ref.key, map[string]any{key: value}, false, false); err != nil {
+			return actionErrMsg{ref: ref, err: err}
 		}
-		return editedMsg{slug: id, field: key, value: value}
+		return editedMsg{ref: ref, field: key, value: value}
 	}
 }
 
@@ -392,7 +392,7 @@ func (e editMenu) view(s *styles, maxW, maxH int) string {
 		}
 		rows = append(rows, marker+padField(f.label, editLabelW)+"  "+e.cell(s, i, f, innerW))
 	}
-	body := s.actionHeading.Render("edit "+truncate(e.slug, max(innerW-6, 8))) + "\n\n" + strings.Join(rows, "\n")
+	body := s.actionHeading.Render("edit "+truncate(e.ref.label, max(innerW-6, 8))) + "\n\n" + strings.Join(rows, "\n")
 	// The long-text field gets a roomy word-wrapped box below the list.
 	if e.editing && e.cur().kind == fieldLongText {
 		body += "\n\n" + s.editAreaBox.Render(e.area.View())

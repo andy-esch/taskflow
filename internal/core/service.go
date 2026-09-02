@@ -319,7 +319,7 @@ func summarize(store SummaryStore, now time.Time) (Summary, error) {
 		// that). Same filter + (audit, document) order as QueryFindings would produce.
 		for _, fd := range a.Findings {
 			if isActionableFinding(fd) {
-				actionable = append(actionable, AuditFinding{Finding: fd, Audit: a.Audit.Slug, Bucket: string(a.Audit.Bucket)})
+				actionable = append(actionable, AuditFinding{Finding: fd, Audit: a.Audit.Slug, AuditID: a.Audit.CanonicalID(), Bucket: string(a.Audit.Bucket)})
 			}
 		}
 	}

@@ -72,7 +72,7 @@ func taskSlugs(m Model) []string {
 	out := make([]string, 0, len(items))
 	for _, it := range items {
 		if ti, ok := it.(taskItem); ok {
-			out = append(out, ti.id())
+			out = append(out, ti.ref().label)
 		}
 	}
 	return out

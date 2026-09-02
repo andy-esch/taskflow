@@ -59,7 +59,7 @@ func TestResearchTab_ListsNewestFirst(t *testing.T) {
 	// ListResearch order is newest-first, so zeta (2026-06-10) precedes alpha (2026-06-02)
 	// even though that's the reverse of slug order — proving the row order is the
 	// service's, not incidental alphabetical.
-	if got := m.selectedID(); got != "zeta-doc" {
+	if got := m.selectedLabel(); got != "zeta-doc" {
 		t.Errorf("expected zeta-doc selected (newest), got %q", got)
 	}
 }
@@ -121,7 +121,7 @@ func TestResearchTab_ActionMenuDoesNotOpen(t *testing.T) {
 // the fixtures disagree on all three axes.
 func TestResearchTab_SortCycleReorders(t *testing.T) {
 	m := toResearch(t, loaded(t, 120, 40))
-	if got := m.selectedID(); got != "zeta-doc" {
+	if got := m.selectedLabel(); got != "zeta-doc" {
 		t.Fatalf("default sort should be created-desc (zeta first), got %q", got)
 	}
 	// → updated. alpha carries updated_at 2026-07-01; zeta has none so it falls back to
@@ -129,14 +129,14 @@ func TestResearchTab_SortCycleReorders(t *testing.T) {
 	tm, cmd := m.Update(press("o"))
 	m = settle(t, tm.(Model), cmd)
 	m.cur().list.Select(0)
-	if got := m.selectedID(); got != "alpha-doc" {
+	if got := m.selectedLabel(); got != "alpha-doc" {
 		t.Errorf("updated sort should lead with alpha-doc, got %q", got)
 	}
 	// → slug, ascending.
 	tm, cmd = m.Update(press("o"))
 	m = settle(t, tm.(Model), cmd)
 	m.cur().list.Select(0)
-	if got := m.selectedID(); got != "alpha-doc" {
+	if got := m.selectedLabel(); got != "alpha-doc" {
 		t.Errorf("slug sort should lead with alpha-doc, got %q", got)
 	}
 }

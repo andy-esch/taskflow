@@ -1147,6 +1147,17 @@ the accepted rollout now uses this sequence:
 1. **Canonical UI identity precedes the new entity.** Existing task, audit, and research rows use
    display slugs as cursor, detail, history, and session keys even though stable IDs are authoritative
    and duplicate slugs are allowed. Repair that general contract before a Thread row can copy it.
+   The implemented registry contract carries a canonical store key separately from the visible
+   label. Task/audit/research and future Thread rows use the domain record's canonical identity:
+   filename-derived stable ID when an adapter has one, otherwise its semantic ID; epics use their
+   existing canonical ID. That key is load-bearing for reads, stale guards,
+   cursor restoration, palette/dashboard/follow navigation, mutations, atlas landings, and cached
+   workspace sessions. Slugs remain display and filter vocabulary; duplicate labels in a loaded
+   result receive a leading, collision-expanded ID prefix that survives row truncation and remains
+   stable while that result is filtered or paginated. Adapter-provided canonical keys must be
+   non-empty and unique; the entity registry rejects a violating result rather than selecting an
+   arbitrary row. Frontmatter-ID drift stays a lint concern and never causes navigation to fall
+   back to an ambiguous slug.
 2. **Watch desired layout, not only directories present at startup.** `core.Layout` already supplies
    `threads/`, but the watcher skips a missing leaf permanently and can remain attached to a replaced
    inode. Recover desired watches as configured directories appear or are replaced, and surface

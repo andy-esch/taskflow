@@ -65,9 +65,9 @@ func TestDetailPane_GlamourRendererRebuildsOnStyle(t *testing.T) {
 // seedDetail puts a markdown body on the detail pane of a loaded model.
 func seedDetail(t *testing.T, m Model, body string) Model {
 	t.Helper()
-	id := m.selectedID()
-	tm, _ := m.Update(detailMsg{kind: entityTasks, id: id, gen: m.detailGen,
-		content: taskDetail{t: domain.Task{Slug: id}, body: body}})
+	key, label := m.selectedKey(), m.selectedLabel()
+	tm, _ := m.Update(detailMsg{kind: entityTasks, id: key, gen: m.detailGen,
+		content: taskDetail{t: domain.Task{Slug: label}, body: body}})
 	return tm.(Model)
 }
 

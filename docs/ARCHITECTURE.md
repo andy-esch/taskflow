@@ -506,10 +506,23 @@ Files split by concern:
 - **`entity.go`** — the **entity registry**: tasks/epics/audits/research as `*entityTab`s,
   each owning its own `list.Model`, cursor, loaders, list-scoped state (status
   view, sort, filter restore), and its **lifecycle table** (the transitions it
-  offers + an `applyMove`). Read/browse is keybinding-free; lifecycle is declared
-  here per entity (tasks by status via `Move`, audits by bucket via `MoveAudit`,
-  epics and research none), so adding Projects/ADRs later is a new registry entry — including
-  any `a`-menu / `:`-verb actions — not a reducer edit.
+  offers + an `applyMove`). Every row exposes an `entityRef` with a canonical store
+  key separate from its human label. Task, audit, research, and future Thread rows use
+  the domain record's `CanonicalID`: filename-derived identity wins for local records
+  (the same identity the filesystem store resolves/CAS), while adapters without filename
+  semantics supply the semantic `ID`; epics use their already-canonical ID. Selection restore,
+  detail stale guards, palette/dashboard targets, follow history, lifecycle/edit writes, atlas
+  landings, and cached workspace sessions carry that key. Rows, window titles, filters,
+  breadcrumbs, and mutation messages keep the label; duplicate labels in one loaded result gain a
+  leading shortest-unique stable-ID prefix, which stays present as long labels are truncated and
+  remains stable while filtering or paginating that result. A missing or drifting frontmatter
+  `id:` therefore remains lintable without making the TUI fall back to an ambiguous slug. Adapter
+  rows must provide non-empty, unique canonical keys; the registry rejects a loaded result that
+  violates that contract rather than selecting an arbitrary row. This is the contract a Thread row
+  must implement when it joins the registry. Read/browse is keybinding-free; lifecycle is
+  declared here per entity (tasks by status via `Move`, audits by bucket via `MoveAudit`, epics by
+  status via `MoveEpic`; research has none), so adding Projects/ADRs later is a new registry entry
+  — including any `a`-menu / `:`-verb actions — not a reducer edit.
 - **`dashboard.go`** — the per-space **dashboard** (`tskflwctl ui` opens here whenever
   it was launched inside a planning repo): a
   read-only composite of widgets over a single `core.Summary`, the in-app

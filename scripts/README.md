@@ -5,7 +5,11 @@
 `prepare-adversarial-review-audits.sh` turns one tailored review brief into independent audit
 entities for Claude and Antigravity (or an explicit reviewer list). It uses `tskflwctl audit new`,
 preflights the full pair before writing, injects the exact finding grammar, lints each audit, and
-prints the short handoff prompt for each external agent.
+prints the short handoff prompt for each external agent. It also requires a distinct second pass
+for systemic failure modes: shared abstractions or test helpers that can mask a class of defects,
+state changing between projection and action, and boundaries that only appear to fail closed. This
+is deliberately evidence-gated so “play devil's advocate” does not become permission to manufacture
+speculative architecture findings.
 
 The script deliberately does not generate the substantive brief. Review quality has come from
 deriving the implementation contract and hostile cases for the change at hand, not from a generic

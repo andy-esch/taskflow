@@ -363,7 +363,7 @@ func (m *Model) openAtlasWork() tea.Cmd {
 	if cmd == nil {
 		return nil // openAtlasSelection already explained why (unhealthy, or unavailable)
 	}
-	m.pendingJump = pendingJump{kind: entityTasks, id: row.Task.Slug, set: true}
+	m.pendingJump = pendingJump{kind: entityTasks, ref: entityRef{key: row.Task.CanonicalID(), label: row.Task.Slug}, set: true}
 	return cmd
 }
 
@@ -497,7 +497,7 @@ func (a *atlas) applyWorkOrder() {
 }
 
 func workKey(row core.SpaceInProgress) string {
-	return row.PlanningID + "\x00" + row.Task.Slug
+	return row.PlanningID + "\x00" + row.Task.CanonicalID()
 }
 
 func (a atlas) selectedWork() (core.SpaceInProgress, bool) {
@@ -962,10 +962,20 @@ func (a atlas) workRows(st *styles, maxW int) ([]string, int) {
 	grouped := a.workOrder.grouped()
 	spaceW, slugW, epicW, prioW, ageW := 0, 0, 0, 0, 0
 	ages := make([]string, len(a.work))
+	refs := make([]entityRef, 0, len(a.work))
+	for _, row := range a.work {
+		// Planning identity scopes duplicate labels: equal slugs in different
+		// planning spaces already have an explicit space discriminator.
+		refs = append(refs, entityRef{
+			key: row.Task.CanonicalID(), label: row.PlanningID + "\x00" + row.Task.Slug,
+		})
+	}
+	hints := duplicateIdentityHints(refs)
 	for i, row := range a.work {
 		ages[i] = theme.RelativeDate(theme.StartedDate(row.Task))
 		spaceW = maxInt(spaceW, ansi.StringWidth(row.SpaceID)+2) // the [brackets]
-		slugW = maxInt(slugW, ansi.StringWidth(row.Task.Slug))
+		displayLabel := labelWithIdentityHint(row.Task.Slug, hints[row.Task.CanonicalID()])
+		slugW = maxInt(slugW, ansi.StringWidth(displayLabel))
 		epicW = maxInt(epicW, ansi.StringWidth(row.Task.Epic))
 		prioW = maxInt(prioW, ansi.StringWidth(row.Task.Priority))
 		ageW = maxInt(ageW, ansi.StringWidth(ages[i]))
@@ -1054,7 +1064,8 @@ func (a atlas) workRows(st *styles, maxW int) ([]string, int) {
 			// noise rather than structure.
 			line += st.dim(padRight(truncate("["+row.SpaceID+"]", spaceW), spaceW)) + " "
 		}
-		line += padRight(truncate(row.Task.Slug, slugW), slugW)
+		displayLabel := labelWithIdentityHint(row.Task.Slug, hints[row.Task.CanonicalID()])
+		line += padRight(truncate(displayLabel, slugW), slugW)
 		if showEpic {
 			line += "  " + st.dim(padRight(truncate(row.Task.Epic, epicW), epicW))
 		}

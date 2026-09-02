@@ -41,17 +41,22 @@ func rollupCounts(done, total, width int) string {
 // loadTaskList), so the render path stays clock-free and a WithClock injection
 // reaches the marker too.
 type taskItem struct {
-	t   domain.Task
-	due bool
+	t            domain.Task
+	due          bool
+	identityHint string
 }
 
 // FilterValue feeds the `/` fuzzy filter: slug, description, and tags so a tag
 // query (e.g. "/go") narrows the list (S2b broadened this from slug+desc).
 func (i taskItem) FilterValue() string {
-	return i.t.Slug + " " + i.t.Description + " " + strings.Join(i.t.Tags, " ")
+	return i.t.Slug + " " + i.t.CanonicalID() + " " + i.t.Description + " " + strings.Join(i.t.Tags, " ")
 }
-func (i taskItem) id() string   { return i.t.Slug }
-func (i taskItem) path() string { return i.t.Path }
+func (i taskItem) ref() entityRef { return entityRef{key: i.t.CanonicalID(), label: i.t.Slug} }
+func (i taskItem) displayLabel() string {
+	return labelWithIdentityHint(i.t.Slug, i.identityHint)
+}
+func (i taskItem) hasIdentityHint() bool { return i.identityHint != "" }
+func (i taskItem) path() string          { return i.t.Path }
 
 // lifecycleState is the task's current status — the action menu drops the no-op
 // transition that lands on it (M10).
@@ -91,7 +96,7 @@ func (d taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	}
 	// Pad by display cells, not bytes (%-*s) — a non-ASCII slug would otherwise
 	// shove the date column out of alignment.
-	slug := padRight(truncate(it.t.Slug, slugW), slugW)
+	slug := padRight(truncate(it.displayLabel(), slugW), slugW)
 	row(w, m, index, fmt.Sprintf("%s %s %s  %s", st.fg(tok.Color, tok.Glyph), marker, slug, st.dim(date)), st)
 }
 
@@ -108,8 +113,12 @@ type epicItem struct {
 func (i epicItem) FilterValue() string {
 	return i.es.Epic.ID + " " + i.es.Epic.Description + " " + strings.Join(i.es.Epic.Tags, " ")
 }
-func (i epicItem) id() string   { return i.es.Epic.ID }
-func (i epicItem) path() string { return i.es.Epic.Path }
+func (i epicItem) ref() entityRef {
+	return entityRef{key: i.es.Epic.ID, label: i.es.Epic.ID}
+}
+func (i epicItem) displayLabel() string  { return i.es.Epic.ID }
+func (i epicItem) hasIdentityHint() bool { return false }
+func (i epicItem) path() string          { return i.es.Epic.Path }
 
 // lifecycleState is the epic's current status (active/retired/deprecated) — the
 // action menu drops the no-op transition that lands on it.
@@ -180,13 +189,18 @@ func (d epicDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 // auditItem adapts a domain.Audit to a list item. countsW is the resolved/total
 // column width measured across the list at load (see loadAuditList).
 type auditItem struct {
-	a       domain.Audit
-	countsW int
+	a            domain.Audit
+	countsW      int
+	identityHint string
 }
 
-func (i auditItem) FilterValue() string { return i.a.Slug + " " + i.a.Area }
-func (i auditItem) id() string          { return i.a.Slug }
-func (i auditItem) path() string        { return i.a.Path }
+func (i auditItem) FilterValue() string { return i.a.Slug + " " + i.a.CanonicalID() + " " + i.a.Area }
+func (i auditItem) ref() entityRef      { return entityRef{key: i.a.CanonicalID(), label: i.a.Slug} }
+func (i auditItem) displayLabel() string {
+	return labelWithIdentityHint(i.a.Slug, i.identityHint)
+}
+func (i auditItem) hasIdentityHint() bool { return i.identityHint != "" }
+func (i auditItem) path() string          { return i.a.Path }
 
 // lifecycleState is the audit's current bucket — the action menu drops the no-op
 // transition that lands on it (e.g. reopen on an already-open audit).
@@ -217,7 +231,7 @@ func (d auditDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	pctStr := st.fg(theme.Percent(pct), theme.AuditPercentLabelPadded(pct))
 	counts := rollupCounts(it.a.Resolved(), it.a.Findings, it.countsW)
 	line := fmt.Sprintf("%s %s %s %s  %s  %s",
-		st.fg(tok.Color, tok.Glyph), bar, pctStr, counts, it.a.Slug, st.dim(it.a.Area))
+		st.fg(tok.Color, tok.Glyph), bar, pctStr, counts, it.displayLabel(), st.dim(it.a.Area))
 	if it.a.ReadyToClose() {
 		line += "  " + st.fg(theme.ColorGreen, "✔ ready to close")
 	}
@@ -228,16 +242,21 @@ func (d auditDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 // task/audit items it exposes no lifecycleState — the `m` action menu is inert here,
 // which the model already handles by checking len(transitions) before opening it.
 type researchItem struct {
-	r domain.Research
+	r            domain.Research
+	identityHint string
 }
 
 // FilterValue spans slug, description, and tags: the corpus is browsed by topic, so `/`
 // has to reach a doc by what it's ABOUT, not just what the file is called.
 func (i researchItem) FilterValue() string {
-	return i.r.Slug + " " + i.r.Description + " " + strings.Join(i.r.Tags, " ")
+	return i.r.Slug + " " + i.r.CanonicalID() + " " + i.r.Description + " " + strings.Join(i.r.Tags, " ")
 }
-func (i researchItem) id() string   { return i.r.Slug }
-func (i researchItem) path() string { return i.r.Path }
+func (i researchItem) ref() entityRef { return entityRef{key: i.r.CanonicalID(), label: i.r.Slug} }
+func (i researchItem) displayLabel() string {
+	return labelWithIdentityHint(i.r.Slug, i.identityHint)
+}
+func (i researchItem) hasIdentityHint() bool { return i.identityHint != "" }
+func (i researchItem) path() string          { return i.r.Path }
 
 func (i researchItem) sortFields() sortFields {
 	// Research sorts by created (the loader's default order), updated, and slug — no
@@ -271,6 +290,6 @@ func (d researchDelegate) Render(w io.Writer, m list.Model, index int, item list
 	if desc == "" {
 		desc = "—" // a doc with no summary: show the gap rather than a ragged blank
 	}
-	line := fmt.Sprintf("%s  %s  %s", st.dim(it.r.Created), it.r.Slug, st.dim(desc))
+	line := fmt.Sprintf("%s  %s  %s", st.dim(it.r.Created), it.displayLabel(), st.dim(desc))
 	row(w, m, index, line, st)
 }

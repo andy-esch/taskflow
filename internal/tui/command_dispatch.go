@@ -57,13 +57,13 @@ func (m Model) dispatchCommand() (tea.Model, tea.Cmd) {
 		return m, m.applyView(i, view)
 	}
 	if tr, ok := transitionFor(m.cur().transitions, word); ok && !m.onAtlas {
-		id, _, ok := m.selectedLifecycle()
+		ref, _, ok := m.selectedLifecycle()
 		if !ok {
 			cmd := m.cmd.focus()
 			m.cmd.err = "select a row first"
 			return m, cmd
 		}
-		return m, m.beginTransition(id, tr) // confirm/revisit/apply per the verb
+		return m, m.beginTransition(ref, tr) // confirm/revisit/apply per the verb
 	}
 	cmd := m.cmd.focus()
 	m.cmd.err = "unknown: " + word
@@ -122,7 +122,7 @@ func (m *Model) openPalette() tea.Cmd {
 	var loads []tea.Cmd
 	for _, t := range m.tabs {
 		if !t.loaded {
-			loads = append(loads, t.reload(m.svc, ""))
+			loads = append(loads, t.reload(m.svc, entityRef{}))
 		}
 	}
 	w := min(max(m.width-8, 28), 64)
@@ -141,10 +141,24 @@ func (m Model) paletteIndex() []paletteItem {
 			if !ok {
 				continue
 			}
+			ref := ei.ref()
 			items = append(items, paletteItem{
-				kind: palJump, ek: t.kind, id: ei.id(),
-				title: ei.id(), filter: ei.id() + " " + t.name,
+				kind: palJump, ek: t.kind, ref: ref, entity: t.name,
+				title: ei.displayLabel(), filter: ei.FilterValue() + " " + t.name,
 			})
+		}
+	}
+	// Keep ordinary titles unchanged, but name the entity when two different
+	// registries produce the same visible title. Duplicate labels within one registry
+	// are already stable-ID-disambiguated by the loader. FilterValue deliberately
+	// gives the palette the same slug/key/description/tag vocabulary as its source tab.
+	titleCounts := make(map[string]int)
+	for _, item := range items {
+		titleCounts[item.title]++
+	}
+	for i := range items {
+		if titleCounts[items[i].title] > 1 {
+			items[i].title += " · " + items[i].entity
 		}
 	}
 	for _, w := range m.paletteCommands() {
@@ -217,7 +231,7 @@ func (m *Model) runPaletteItem(it paletteItem) tea.Cmd {
 	switch it.kind {
 	case palJump:
 		m.pushLoc()
-		return m.jumpTo(it.ek, it.id)
+		return m.jumpTo(it.ek, it.ref)
 	case palCommand:
 		return m.runPaletteCommand(it.word)
 	}
@@ -247,12 +261,12 @@ func (m *Model) runPaletteCommand(word string) tea.Cmd {
 		return m.applyView(i, view)
 	}
 	if tr, ok := transitionFor(m.cur().transitions, word); ok && !m.onAtlas {
-		id, _, ok := m.selectedLifecycle()
+		ref, _, ok := m.selectedLifecycle()
 		if !ok {
 			m.flash, m.flashErr = "select a row first to :"+word, true
 			return nil
 		}
-		return m.beginTransition(id, tr) // confirm/revisit/apply per the verb
+		return m.beginTransition(ref, tr) // confirm/revisit/apply per the verb
 	}
 	return nil
 }

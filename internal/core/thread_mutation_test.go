@@ -32,6 +32,13 @@ func TestThreadMutationSnapshotResolvesThreadInsideGuardedSnapshot(t *testing.T)
 	if _, err := snapshot.ResolveThreadID("delivery"); !errors.Is(err, domain.ErrAmbiguous) {
 		t.Fatalf("ambiguous resolution error = %v", err)
 	}
+
+	idSlugSibling := threadRecord(domain.ThreadStatusUnstarted)
+	idSlugSibling.ID, idSlugSibling.Slug = testutil.TaskID("thread-id-slug-sibling"), alpha.ID
+	withCollision := ThreadMutationSnapshot{Threads: []domain.Thread{idSlugSibling, alpha}}
+	if got, err := withCollision.ResolveThreadID(alpha.ID); err != nil || got != alpha.ID {
+		t.Fatalf("stable Thread id did not precede a sibling slug: got %q, %v", got, err)
+	}
 }
 
 func TestValidateThreadMembershipMutationIsAtomicSortedAndIdempotent(t *testing.T) {

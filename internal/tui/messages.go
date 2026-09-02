@@ -36,7 +36,7 @@ type readRetryMsg readConflictMsg
 // to is the destination as a string (a task status or an audit bucket), so one
 // message serves every entity's lifecycle.
 type movedMsg struct {
-	slug      string
+	ref       entityRef
 	to        string
 	revisit   string // a defer's recorded revisit date, surfaced in the flash (empty otherwise)
 	lifecycle *core.TaskLifecycleReceipt
@@ -46,16 +46,16 @@ type movedMsg struct {
 // actionErrMsg reports a failed mutation; the model flashes it (red) without
 // reloading or corrupting state.
 type actionErrMsg struct {
-	slug string
-	err  error
+	ref entityRef
+	err error
 }
 
 // editedMsg reports a successful inline field edit (SetFields). The model flashes
 // it and reloads so the new value shows; unlike movedMsg the task doesn't change
-// dirs, so it's just a refresh, cursor preserved by id. value is the written value,
+// dirs, so it's just a refresh, cursor preserved by canonical key. value is the written value,
 // so the still-open editor can refresh the field it just set.
 type editedMsg struct {
-	slug  string
+	ref   entityRef
 	field string
 	value string
 }
@@ -76,15 +76,19 @@ type listLoadedMsg struct {
 	gen      int
 	items    []list.Item
 	problems []domain.FileProblem
-	// restore is the cursor id this specific load should re-select (a jump target
+	// restore is the canonical cursor key this specific load should re-select (a jump target
 	// or a reload's cursor-preservation). Carrying it on the message — stamped with
 	// the same gen — means a dropped stale load can't apply a restore meant for a
 	// newer one, closing the M6 race where a reload and a jump shared one tab slot.
-	restore string
+	restore entityRef
+	// widenOnMissing belongs only to an Atlas work landing. The Atlas is a snapshot:
+	// a task may complete, defer, or otherwise leave the default working view before
+	// its workspace opens. In that case the consumer retries once in :all.
+	widenOnMissing bool
 }
 
 // detailMsg carries a lazily-loaded item detail for the right pane. It's applied
-// only when (kind, id) still match the active tab's selection — the stale guard —
+// only when (kind, id) still match the active tab's canonical selection key — the stale guard —
 // and when gen is the latest detail request (two loads for the *same* id aren't
 // ordered otherwise).
 type detailMsg struct {
@@ -97,10 +101,11 @@ type detailMsg struct {
 // detailErrMsg carries a per-item detail-load failure (e.g. an ambiguous
 // duplicate slug). It's shown in the detail pane — it must not blank the browser.
 type detailErrMsg struct {
-	kind entityKind
-	id   string
-	gen  int
-	err  error
+	kind  entityKind
+	id    string
+	label string
+	gen   int
+	err   error
 }
 
 func (msg detailErrMsg) readError() error { return msg.err }
@@ -115,7 +120,7 @@ type tabMsg struct {
 }
 
 // reloadMsg requests a refresh of every loaded tab (fired by `r` and by the
-// fsnotify debounce) — each tab's cursor is preserved by id across the reload.
+// fsnotify debounce) — each tab's cursor is preserved by canonical key across the reload.
 type reloadMsg struct{}
 
 // fsEventMsg is a raw filesystem change plus the watcher's reconciled health. It

@@ -129,8 +129,9 @@ func sortCountsDesc(cs []CountBy) {
 // came from).
 type AuditFinding struct {
 	domain.Finding
-	Audit  string // the audit's slug
-	Bucket string // the audit's bucket (open|closed|deferred)
+	Audit   string // the audit's slug
+	AuditID string // canonical store identity; internal navigation must not resolve Audit
+	Bucket  string // the audit's bucket (open|closed|deferred)
 }
 
 // FindingFilter narrows a finding query. Empty fields match everything. Audit, if
@@ -154,10 +155,10 @@ func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []domain.FileP
 		out      []AuditFinding
 		problems []domain.FileProblem
 	)
-	collect := func(slug, bucket, body string) {
+	collect := func(id, slug, bucket, body string) {
 		for _, fd := range domain.ParseFindings(body) {
 			if findingMatches(fd, f) {
-				out = append(out, AuditFinding{Finding: fd, Audit: slug, Bucket: bucket})
+				out = append(out, AuditFinding{Finding: fd, Audit: slug, AuditID: id, Bucket: bucket})
 			}
 		}
 	}
@@ -167,7 +168,7 @@ func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []domain.FileP
 		if err != nil {
 			return nil, nil, err
 		}
-		collect(a.Slug, string(a.Bucket), body)
+		collect(a.CanonicalID(), a.Slug, string(a.Bucket), body)
 		return out, nil, nil
 	}
 
@@ -185,7 +186,7 @@ func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []domain.FileP
 			problems = append(problems, domain.FileProblem{Path: a.Path, Message: err.Error()})
 			continue
 		}
-		collect(a.Slug, string(a.Bucket), body)
+		collect(a.CanonicalID(), a.Slug, string(a.Bucket), body)
 	}
 	return out, problems, nil
 }
