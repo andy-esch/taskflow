@@ -4,6 +4,7 @@ id: 6g5xyxhhc8p5
 bucket: open
 area: cli-ergonomics-from-an-agent-session
 date: "2026-09-01"
+updated_at: "2026-09-02"
 ---
 # Audit: cli-ergonomics-from-an-agent-session — 2026-09-01
 
@@ -149,7 +150,7 @@ format-string surface.
 
 **Resolution:**
 
-#### H5. `task depend add A B` fails with a bare arity error · **Status:** open
+#### H5. `task depend add A B` fails with a bare arity error · **Status:** fixed
 
 **File:** task depend add | **Component:** cli-arg-parsing
 **Effort:** XS · **Urgency:** eventually
@@ -166,9 +167,12 @@ default and teaches nothing; two task-shaped arguments is a strong signal of exa
 **Recommendation:** when `depend add` receives extra positional args, suggest the flag form —
 `did you mean: task depend add A --on B?`. Same for `depend remove`.
 
-**Resolution:**
+**Resolution:** task depend add/remove now reject extra positional args with the
+flag form spelled out — 'did you mean: tskflwctl task depend add alpha --on
+beta?' — instead of cobra's bare arity count. Several trailing prerequisites
+each get their own --on in the suggestion.
 
-#### H6. Bare-verb suggestion points at `lint` for `list` · **Status:** open
+#### H6. Bare-verb suggestion points at `lint` for `list` · **Status:** fixed
 
 **File:** root command suggestions | **Component:** cli-arg-parsing
 **Effort:** XS · **Urgency:** eventually
@@ -187,7 +191,11 @@ a repo it does not own, with a very different effect from listing tasks. `board`
 **Recommendation:** hand-map the common bare verbs (`list`, `show`, `new`, `start`, `complete`) to
 their noun-qualified forms, or append "run `tskflwctl board` for active work" to the root error.
 
-**Resolution:**
+**Resolution:** Hidden redirect commands intercept the bare verbs (list, show,
+new, start, complete, edit) and name their noun-qualified forms, so 'list' no
+longer answers with 'lint'. They use the styleOnlyPreRun opt-out so a usage
+error does not depend on repo discovery; genuine typos still reach cobra's
+distance matching.
 
 ## Relationship to `2026-07-24-ai-agent-cli-ergonomics`
 
