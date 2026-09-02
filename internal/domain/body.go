@@ -118,6 +118,32 @@ func (f *fenceScanner) inCode(line string) bool {
 	return true
 }
 
+// UnterminatedFence reports a code fence left open at the end of body: the 1-based
+// line it was opened on and the delimiter that opened it. Everything after such a
+// fence is invisible to every structure scanner here — headings, sections,
+// acceptance criteria, audit findings — so a body that ends inside one silently
+// under-reports its own contents.
+//
+// It is checked on WRITE (store.writeBody) rather than only on read, because the
+// write is the last moment the author still has the text and can fix it cheaply.
+// By the time a reader notices, the evidence is a finding that cannot be stamped or
+// a criterion that never appears in the tally.
+func UnterminatedFence(body string) (line int, marker string, ok bool) {
+	var fence fenceScanner
+	openedAt, openedWith := 0, ""
+	for i, ln := range strings.Split(normalizeNewlines(body), "\n") {
+		wasOpen := fence.open
+		fence.inCode(ln)
+		if !wasOpen && fence.open {
+			openedAt, openedWith = i+1, strings.Repeat(string(fence.marker), fence.length)
+		}
+	}
+	if fence.open {
+		return openedAt, openedWith, true
+	}
+	return 0, "", false
+}
+
 // Section returns the markdown block for the FIRST heading whose title contains
 // name (case-insensitive), from that heading through the line before the next
 // heading of the same or higher level — nested deeper headings stay inside.

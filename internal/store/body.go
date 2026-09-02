@@ -44,6 +44,17 @@ func writeBody[T any](
 	if err != nil {
 		return zero, "", fmt.Errorf("%w: %v", domain.ErrValidation, err)
 	}
+	// Same contract one level up in the body's own structure: a fence left open
+	// hides every heading, criterion and finding after it from the scanners, while
+	// the file still parses and still renders correctly. Refusing here is the last
+	// point where the author still has the text in hand — a truncated `append` that
+	// ends mid-fence is caught at the write instead of surfacing later as findings
+	// that cannot be stamped.
+	if line, marker, bad := domain.UnterminatedFence(string(storedBody)); bad {
+		return zero, "", fmt.Errorf(
+			"%w: %s body ends inside an unterminated %s fence opened at line %d; everything after it is invisible to the structure scanners",
+			domain.ErrValidation, noun, marker, line)
+	}
 	// A dry-run previews without writing, so it takes neither the lock nor the
 	// version-CAS; this ordinary body mutation has no repository-wide authorization.
 	if dryRun {
