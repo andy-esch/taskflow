@@ -48,12 +48,31 @@ type BoardEnvelope struct {
 	SchemaVersion string               `json:"schema_version"`
 	Columns       []BoardColumnJSON    `json:"columns"`
 	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+	// Graph is the repository-wide dependency-graph verdict, present only when it is
+	// not healthy. Degradation is latched at mutation time, so without it here an agent
+	// reads a clean board and meets the refusal later, mid-operation.
+	Graph *GraphHealthJSON `json:"graph,omitempty"`
+}
+
+// GraphHealthJSON reports a non-healthy repository task graph and what to do about it.
+type GraphHealthJSON struct {
+	Health string `json:"health" jsonschema:"description=repository task graph health — degraded or broken"`
+	Detail string `json:"detail,omitempty" jsonschema:"description=what is wrong and the remedy"`
 }
 
 // BoardColumnJSON is one status column of the board.
 type BoardColumnJSON struct {
-	Status string     `json:"status"`
-	Tasks  []TaskJSON `json:"tasks"`
+	Status string          `json:"status"`
+	Tasks  []BoardTaskJSON `json:"tasks"`
+}
+
+// BoardTaskJSON is a board row: the same TaskJSON `task list` emits, plus whether the
+// repository graph says this task can be started. The flag lives here rather than on
+// TaskJSON because it is only computed where eligibility was asked for — carrying it
+// everywhere would make its absence ambiguous between "not blocked" and "not checked".
+type BoardTaskJSON struct {
+	TaskJSON
+	Blocked bool `json:"blocked,omitempty" jsonschema:"description=a hard prerequisite is unmet, so task start will refuse; run task blockers <slug>"`
 }
 
 // ToBoardEnvelope builds the `board --json` envelope value: each active status a
@@ -61,11 +80,14 @@ type BoardColumnJSON struct {
 func ToBoardEnvelope(b core.Board) BoardEnvelope {
 	e := BoardEnvelope{SchemaVersion: SchemaVersion, Columns: make([]BoardColumnJSON, 0, len(b.Columns)), Unreadable: b.Problems}
 	for _, c := range b.Columns {
-		col := BoardColumnJSON{Status: string(c.Status), Tasks: make([]TaskJSON, 0, len(c.Tasks))}
+		col := BoardColumnJSON{Status: string(c.Status), Tasks: make([]BoardTaskJSON, 0, len(c.Tasks))}
 		for _, t := range c.Tasks {
-			col.Tasks = append(col.Tasks, ToTaskJSON(t))
+			col.Tasks = append(col.Tasks, BoardTaskJSON{TaskJSON: ToTaskJSON(t), Blocked: b.Blocked[t.ID]})
 		}
 		e.Columns = append(e.Columns, col)
+	}
+	if b.GraphHealth != "" && b.GraphHealth != core.GraphHealthy {
+		e.Graph = &GraphHealthJSON{Health: string(b.GraphHealth), Detail: b.GraphDetail}
 	}
 	return e
 }

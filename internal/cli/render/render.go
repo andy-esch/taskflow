@@ -362,9 +362,21 @@ func BoardHuman(w io.Writer, st Style, b core.Board) error {
 		}
 		rows := make([][]string, 0, len(c.Tasks))
 		for _, t := range c.Tasks {
-			rows = append(rows, []string{"  " + st.Bold(t.Slug), st.Priority(t.Priority), t.Description})
+			// A blocked row is dimmed and marked: the board's whole job is to answer
+			// "what next", and an unmarked blocked task is an answer that `task start`
+			// will refuse. `task blockers <slug>` names the offending edge.
+			slug, marker := st.Bold(t.Slug), "  "
+			if b.Blocked[t.ID] {
+				slug, marker = st.Dim(t.Slug), st.Dim("⛔")
+			}
+			rows = append(rows, []string{marker + slug, st.Priority(t.Priority), t.Description})
 		}
 		writeTable(w, st.width, nil, rows)
+	}
+	if b.GraphHealth != "" && b.GraphHealth != core.GraphHealthy {
+		// Latched at mutation time, so without this it stays invisible until an
+		// unrelated `task complete` refuses mid-operation in an unfamiliar repo.
+		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ task graph %s: %s", b.GraphHealth, b.GraphDetail)))
 	}
 	if len(b.Problems) > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable file(s) (run `lint`)", len(b.Problems))))
