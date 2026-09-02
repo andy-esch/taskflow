@@ -75,6 +75,7 @@ type spaceSession struct {
 	active    int
 	onDash    bool
 	dash      dashboard
+	threads   threadProjectionState
 	detail    detailPane
 	focus     focus
 	zoom      bool
@@ -96,7 +97,7 @@ func (m *Model) saveSession() {
 		return
 	}
 	m.sessions[key] = spaceSession{
-		tabs: m.tabs, active: m.active, onDash: m.onDash, dash: m.dash,
+		tabs: m.tabs, active: m.active, onDash: m.onDash, dash: m.dash, threads: m.threads,
 		detail: m.detail, focus: m.focus, zoom: m.zoom,
 		navStack: append([]navLoc(nil), m.navStack...), detailGen: m.detailGen,
 		movedAway: m.movedAway,
@@ -130,6 +131,7 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 	saved, restored := m.sessions[key]
 	if restored {
 		m.tabs, m.active, m.onDash, m.dash = saved.tabs, saved.active, saved.onDash, saved.dash
+		m.threads = saved.threads
 		m.detail, m.focus, m.zoom = saved.detail, saved.focus, saved.zoom
 		m.navStack, m.detailGen, m.movedAway = saved.navStack, saved.detailGen, saved.movedAway
 	} else {
@@ -137,6 +139,7 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 		m.active = 0
 		m.onDash = true
 		m.dash = dashboard{}
+		m.threads = threadProjectionState{}
 		m.detail = newDetailPane(m.st)
 		m.focus = focusList
 		m.zoom = false
@@ -167,7 +170,7 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 	case restored && (!m.onDash || m.dash.loaded):
 		loads = m.reloadAll()
 	default:
-		loads = loadDashboard(m.svc)
+		loads = tea.Batch(m.reloadDashboard(), m.reloadThreadProjections())
 	}
 	var listen tea.Cmd
 	if !m.watchOff {

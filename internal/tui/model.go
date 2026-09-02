@@ -85,8 +85,9 @@ type Model struct {
 	focus   focus
 	tabs    []*entityTab
 	active  int
-	onDash  bool      // showing the landing dashboard (a non-list screen left of the tabs)
-	dash    dashboard // the landing screen's widgets (see dashboard.go)
+	onDash  bool                  // showing the landing dashboard (a non-list screen left of the tabs)
+	dash    dashboard             // the landing screen's widgets (see dashboard.go)
+	threads threadProjectionState // typed core projections; rendered by the next Thread UI slice
 	detail  detailPane
 	cmd     commandBar
 	palette palette // the ctrl+p command palette (fuzzy launcher); see palette.go
@@ -128,6 +129,7 @@ func WithConfiguration(svc *core.ConfigurationService, start string, overrides c
 func WithWorkspaceOpening(svc *core.WorkspaceService) Option {
 	return func(m *Model) {
 		m.workspaceSvc = svc
+		m.sessionScope = m.sessionScope || svc != nil
 	}
 }
 
@@ -138,7 +140,7 @@ func WithAtlas(svc *core.SpaceOverviewService) Option {
 	return func(m *Model) {
 		m.spaceOverviewSvc = svc
 		m.atlas.loadGen = 1
-		m.sessionScope = svc != nil
+		m.sessionScope = m.sessionScope || svc != nil
 	}
 }
 
@@ -197,7 +199,7 @@ func (m Model) Init() tea.Cmd {
 	// Load only the landing surface — the dashboard's summary or the active tab.
 	// Don't fire the tab loader when the dashboard is the landing: its result is
 	// discarded but the call still churns the tab's load generation / restore state.
-	load := loadDashboard(m.svc)
+	load := m.dashboardLoad()
 	if !m.onDash {
 		load = m.cur().reload(m.svc, "")
 	}
@@ -244,10 +246,31 @@ func (m *Model) reloadAll() tea.Cmd {
 	// The cross-space projection reads the same files, so a reload here invalidates it too
 	// — otherwise the atlas keeps showing the working set as it was at program start.
 	cmds = append(cmds, m.markAtlasStale())
-	if m.dash.loaded {
-		cmds = append(cmds, loadDashboard(m.svc))
+	// `|| m.onDash` mirrors the active-tab carve-out above: after a failed or
+	// contended FIRST load nothing is `loaded`, and the screen you are actually
+	// looking at must still be recoverable by a watcher event or `r`.
+	if m.dash.loaded || m.onDash {
+		cmds = append(cmds, m.reloadDashboard())
 	}
+	// Thread projections follow the same rule: a surface nobody has asked for yet
+	// stays unread, and one already requested is invalidated by the same event.
+	cmds = append(cmds, m.reloadThreadProjections())
 	return tea.Batch(cmds...)
+}
+
+// dashboardLoad reads the summary at the CURRENT generation. Init has a value
+// receiver, so the landing load cannot bump a counter; it rides the zero
+// generation the model starts (and every fresh session restarts) on.
+func (m Model) dashboardLoad() tea.Cmd {
+	request := readRequest{surface: readDashboard, gen: m.dash.loadGen}
+	return withReadConflictRetry(request, loadDashboard(m.svc, request.gen))
+}
+
+// reloadDashboard invalidates any summary read still in flight, so a slow one
+// cannot land after it — or after its retry — and overwrite a newer load.
+func (m *Model) reloadDashboard() tea.Cmd {
+	m.dash.loadGen++
+	return m.dashboardLoad()
 }
 
 // cur returns the active entity tab. The tab is a pointer, so reads use a value
@@ -319,7 +342,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.isCurrentSelection(msg.kind, msg.id) || msg.gen != m.detailGen {
 			return m, nil // stale: tab/selection changed, or a newer load is in flight
 		}
-		m.detail.SetContent(msg.content)
+		m.detail.SetContent(msg.id, msg.content)
 		return m, nil
 
 	case detailErrMsg:
@@ -328,7 +351,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.isCurrentSelection(msg.kind, msg.id) || msg.gen != m.detailGen {
 			return m, nil
 		}
-		m.detail.SetError(msg.id, msg.err.Error())
+		// A conflict that survived its retry is durable enough to show, but not a
+		// reason to throw away a body that is still the last coherent read of this
+		// item: keep it and flag the failed refresh in the footer. Every other
+		// class — and a first load with nothing to retain — takes the error pane.
+		if domain.Classify(msg.err) == domain.ClassConflict && m.detail.showing(msg.id) {
+			m.detail.SetRefreshError(msg.err.Error())
+		} else {
+			m.detail.SetError(msg.id, msg.err.Error())
+		}
 		return m, nil
 
 	case tabMsg:
@@ -340,6 +371,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// stuck on "loading…" with no clue why. renderBody/footer surface it instead —
 		// a failed *refresh* keeps the last good rows, a failed first load shows the
 		// error pane.
+		if msg.gen != m.dash.loadGen {
+			return m, nil // stale: a newer summary load (or its retry) superseded this one
+		}
 		if msg.err != nil {
 			m.dash.loadErr = msg.err
 			return m, nil
@@ -347,6 +381,53 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dash.loadErr = nil
 		m.dash.setSummary(msg.summary, m.st, m.configSvc != nil)
 		return m, nil
+
+	case threadListLoadedMsg:
+		// The Thread cache follows the dashboard's rules: generation-stamped, with
+		// a failure stored durably beside the last coherent projection rather than
+		// replacing it. The values themselves stay exactly as core produced them.
+		if msg.gen != m.threads.listGen {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.threads.loadErr = msg.err
+			return m, nil
+		}
+		m.threads.list, m.threads.problems = msg.list, msg.problems
+		m.threads.loaded, m.threads.loadErr = true, nil
+		return m, nil
+
+	case threadDetailLoadedMsg:
+		// A result for a Thread the selection has moved off is stale even at the
+		// current generation, so the ref is part of the identity check.
+		if msg.gen != m.threads.detailGen || msg.ref != m.threads.detailRef {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.threads.detailErr = msg.err
+			return m, nil
+		}
+		m.threads.detail, m.threads.detailBody = msg.view, msg.body
+		m.threads.detailLoadedRef = msg.ref
+		m.threads.detailOK, m.threads.detailErr = true, nil
+		return m, nil
+
+	case readConflictMsg:
+		// Transient contention (read_retry.go): the surface keeps whatever it last
+		// read and waits out one quiet period. Nothing is stored, so a first load
+		// stays visibly loading instead of resolving into a false empty state.
+		if !m.readRequestCurrent(msg.request) {
+			return m, nil
+		}
+		return m, deferReadRetry(msg.request, msg.retry)
+
+	case readRetryMsg:
+		// The quiet period elapsed. Anything newer has already superseded this
+		// request, in which case the retry is dropped rather than re-read.
+		if !m.readRequestCurrent(msg.request) {
+			return m, nil
+		}
+		return m, msg.retry
 
 	case movedMsg:
 		// A transition succeeded: flash it and reload so the moved task shows in its
@@ -1026,7 +1107,7 @@ func (m Model) handleDashKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Help):
 		m.showHelp = true
 	case key.Matches(msg, keys.Refresh):
-		return m, loadDashboard(m.svc)
+		return m, m.reloadDashboard()
 	case key.Matches(msg, keys.Quit):
 		return m, tea.Quit
 	}
@@ -1040,7 +1121,7 @@ func (m *Model) enterDash() tea.Cmd {
 	m.focus = focusList
 	m.detail.clear()
 	m.unzoom() // the dashboard has no detail pane to full-screen
-	return loadDashboard(m.svc)
+	return m.reloadDashboard()
 }
 
 // leaveDashTo drops from the dashboard onto tab i (loading it if needed). Unlike
@@ -1098,7 +1179,7 @@ func (m *Model) loadDetail(id string) tea.Cmd {
 	m.detailGen++
 	gen := m.detailGen
 	load := m.cur().loadItem(m.svc, id)
-	return func() tea.Msg {
+	stamped := func() tea.Msg {
 		switch msg := load().(type) {
 		case detailMsg:
 			msg.gen = gen
@@ -1109,6 +1190,30 @@ func (m *Model) loadDetail(id string) tea.Cmd {
 		default:
 			return msg
 		}
+	}
+	request := readRequest{surface: readEntityDetail, kind: m.cur().kind, id: id, gen: gen}
+	return withReadConflictRetry(request, stamped)
+}
+
+// readRequestCurrent reports whether a held conflict's request is still the one
+// its surface is waiting on. It is the single place the retry policy asks each
+// surface "is this still yours?", so a retry can never resurrect a load the
+// model has already moved past.
+func (m Model) readRequestCurrent(request readRequest) bool {
+	switch request.surface {
+	case readEntityList:
+		i := indexOfKind(m.tabs, request.kind)
+		return i >= 0 && m.tabs[i].loadGen == request.gen
+	case readEntityDetail:
+		return request.gen == m.detailGen && m.isCurrentSelection(request.kind, request.id)
+	case readDashboard:
+		return request.gen == m.dash.loadGen
+	case readThreadList:
+		return request.gen == m.threads.listGen
+	case readThreadDetail:
+		return request.gen == m.threads.detailGen && request.id == m.threads.detailRef
+	default:
+		return false
 	}
 }
 

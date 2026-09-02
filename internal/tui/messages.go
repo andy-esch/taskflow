@@ -11,9 +11,25 @@ import (
 // dashLoadedMsg carries the dashboard's core.Summary load (the landing screen's
 // data). A non-nil err flashes instead of populating the widgets.
 type dashLoadedMsg struct {
+	gen     int
 	summary core.Summary
 	err     error
 }
+
+func (msg dashLoadedMsg) readError() error { return msg.err }
+
+// readConflictMsg is emitted instead of exposing the first planner-window
+// conflict. Update retains the current projection and schedules retry exactly
+// once after the filesystem quiet period.
+type readConflictMsg struct {
+	request readRequest
+	retry   tea.Cmd
+}
+
+// readRetryMsg is the delayed half of readConflictMsg. It carries the original,
+// unwrapped command: a second conflict is consequently delivered as the ordinary
+// durable error message rather than scheduling an unbounded retry loop.
+type readRetryMsg readConflictMsg
 
 // movedMsg reports a successful lifecycle transition (S4). The model flashes a
 // confirmation and reloads the affected view so it reflects the new state.
@@ -87,6 +103,8 @@ type detailErrMsg struct {
 	err  error
 }
 
+func (msg detailErrMsg) readError() error { return msg.err }
+
 // tabMsg wraps a list-internal message (notably the async FilterMatchesMsg) with
 // the tab it belongs to. Without the tag, a background tab's refilter after a
 // reload would be applied to whichever tab happens to be active — blanking the
@@ -126,3 +144,5 @@ type errMsg struct {
 	gen  int
 	err  error
 }
+
+func (msg errMsg) readError() error { return msg.err }

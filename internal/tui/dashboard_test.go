@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -412,7 +413,7 @@ func TestModel_DashboardLoadErrorIsDurable(t *testing.T) {
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	// The initial dashboard load fails before any summary is shown.
-	tm, _ = m.Update(dashLoadedMsg{err: domain.ErrNotFound})
+	tm, _ = m.Update(dashLoadedMsg{gen: m.dash.loadGen, err: domain.ErrNotFound})
 	m = tm.(Model)
 	if m.dash.loadErr == nil {
 		t.Fatal("a failed dashboard load should be stored, not just flashed")
@@ -435,7 +436,7 @@ func TestModel_DashboardLoadErrorIsDurable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tm, _ = m.Update(dashLoadedMsg{summary: s})
+	tm, _ = m.Update(dashLoadedMsg{gen: m.dash.loadGen, summary: s})
 	m = tm.(Model)
 	if m.dash.loadErr != nil || !m.dash.loaded {
 		t.Errorf("a successful load should clear the error and load: err=%v loaded=%v", m.dash.loadErr, m.dash.loaded)
@@ -453,7 +454,7 @@ func TestModel_DashboardRefreshFailureKeepsRows(t *testing.T) {
 	if !m.dash.loaded {
 		t.Fatal("setup: dashboard should be loaded")
 	}
-	tm, _ := m.Update(dashLoadedMsg{err: domain.ErrNotFound})
+	tm, _ := m.Update(dashLoadedMsg{gen: m.dash.loadGen, err: domain.ErrNotFound})
 	m = tm.(Model)
 	if !m.dash.loaded {
 		t.Error("a failed refresh must keep the last good load (loaded stays true)")
@@ -464,6 +465,24 @@ func TestModel_DashboardRefreshFailureKeepsRows(t *testing.T) {
 	}
 	if !strings.Contains(v, "refresh failed") {
 		t.Errorf("the footer should flag the failed dashboard refresh:\n%s", v)
+	}
+}
+
+func TestModel_DashboardDropsStaleSuccessAndError(t *testing.T) {
+	m := loadedDash(t, 120, 40)
+	wantRows := append([]dashRow(nil), m.dash.rows...)
+	staleGen := m.dash.loadGen
+	m.dash.loadGen++
+
+	tm, _ := m.Update(dashLoadedMsg{gen: staleGen, err: domain.ErrNotFound})
+	m = tm.(Model)
+	if m.dash.loadErr != nil {
+		t.Errorf("a stale dashboard error landed: %v", m.dash.loadErr)
+	}
+	tm, _ = m.Update(dashLoadedMsg{gen: staleGen, summary: core.Summary{}})
+	m = tm.(Model)
+	if !m.dash.loaded || !reflect.DeepEqual(m.dash.rows, wantRows) {
+		t.Error("a stale dashboard success overwrote the latest coherent rows")
 	}
 }
 

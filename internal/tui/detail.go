@@ -41,6 +41,7 @@ type detailPane struct {
 
 	vp           viewport.Model
 	title        string
+	loadedID     string // canonical request identity owning content; never a display title
 	width        int
 	content      detailContent // current payload (re-rendered on resize); nil for errors
 	pretty       bool          // glamour body (true) vs raw markdown (false)
@@ -145,16 +146,17 @@ func (d *detailPane) SetSize(w, h int) {
 	}
 }
 
-func (d *detailPane) SetContent(c detailContent) {
+func (d *detailPane) SetContent(id string, c detailContent) {
 	// A live-reload refresh of the item already on screen keeps the scroll
 	// position (the viewport clamps it to the new content); only a *different*
 	// item snaps back to the top. Otherwise every external write under the
 	// watched tree would yank the body you're reading back to line one.
-	sameItem := d.hasContent && d.content != nil && d.title == c.Title()
+	sameItem := d.hasContent && d.content != nil && d.loadedID == id
 	offset := d.vp.YOffset()
 	d.content = c
 	d.errMsg = ""
 	d.title = c.Title()
+	d.loadedID = id
 	d.render()
 	d.refreshFind() // recompute matches for the new content (find persists across items)
 	if sameItem {
@@ -178,6 +180,7 @@ func (d detailPane) path() string {
 // SetError shows a per-item load error in the pane (keeps the browser alive).
 func (d *detailPane) SetError(title, msg string) {
 	d.content = nil
+	d.loadedID = ""
 	d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 	d.resetFind()
 	d.errMsg = msg
@@ -188,6 +191,28 @@ func (d *detailPane) SetError(title, msg string) {
 	d.loading = false
 }
 
+// SetRefreshError keeps the last coherent body on screen and records why the
+// refresh behind it failed — the footer flags it, mirroring the
+// list's "reload failed" note. Only a *re*-read of the item already shown takes
+// this path; a first load with nothing to retain continues through SetError.
+func (d *detailPane) SetRefreshError(msg string) {
+	d.errMsg = msg
+	d.loading = false
+}
+
+// showing reports whether the pane currently holds loaded content for id — the
+// precondition for retaining it across a failed refresh.
+func (d detailPane) showing(id string) bool {
+	return d.content != nil && d.loadedID == id
+}
+
+// refreshFailed reports the retained-but-stale state: a body is on screen and
+// the read that should have replaced it failed. SetContent and SetError both
+// clear one half of it, so it lasts exactly until the next resolved load.
+func (d detailPane) refreshFailed() bool {
+	return d.content != nil && d.errMsg != ""
+}
+
 // clear resets the pane to its loading state — used when switching tabs so the
 // previous entity's detail doesn't linger while the new selection loads.
 func (d *detailPane) clear() {
@@ -196,6 +221,7 @@ func (d *detailPane) clear() {
 	d.resetFind()
 	d.errMsg = ""
 	d.title = ""
+	d.loadedID = ""
 	d.hasContent = false
 	d.loading = true
 }
@@ -209,6 +235,7 @@ func (d *detailPane) showEmpty() {
 	d.resetFind()
 	d.errMsg = ""
 	d.title = ""
+	d.loadedID = ""
 	d.hasContent = false
 	d.loading = false
 }

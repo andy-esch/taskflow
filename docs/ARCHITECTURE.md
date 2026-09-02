@@ -498,10 +498,10 @@ Files split by concern:
   every surface live but was not chosen, so the top-rail chip reads `[atlas]` until the
   user leaves the atlas by any route. A successful open atomically swaps the
   entity service, config start, and watcher layout; a failed or stale open leaves the
-  current workspace intact. `spaceSession` caches tabs/cursors/filters/dashboard/nav per
-  checkout, while an outer workspace-generation stamp drops every asynchronous result
-  launched by an older session. Atlas chrome has its own home-scoped theme (global
-  flag/environment/home precedence, never the launch repo's override), shows each
+  current workspace intact. `spaceSession` caches tabs/cursors/filters/dashboard/Thread
+  projections/nav per checkout, while an outer workspace-generation stamp drops every
+  asynchronous result launched by an older session. Atlas chrome has its own home-scoped
+  theme (global flag/environment/home precedence, never the launch repo's override), shows each
   entry-point path, and keeps name/activity/registration ordering as explicit TUI state.
 - **`entity.go`** — the **entity registry**: tasks/epics/audits/research as `*entityTab`s,
   each owning its own `list.Model`, cursor, loaders, list-scoped state (status
@@ -522,6 +522,21 @@ Files split by concern:
   `entityTab`; a read-only orientation screen ⇒ the dashboard pattern.
 - **`commands.go` / `messages.go`** — the async load `tea.Cmd`s and the `tea.Msg`
   types they return (list loads, lazy detail loads, reload, errors).
+- **`thread_projection.go` / `read_retry.go`** — the Thread read path and the shared
+  transient-contention policy. Threads are cached as the `core` projections themselves
+  (`ThreadListView` / `ThreadView`), never re-derived into a second TUI semantic model,
+  and are read lazily: a Thread surface nobody has opened is no more loaded at startup
+  than an unvisited tab, while a requested one is invalidated by the same debounced
+  reload — including by task-only edits, since membership readiness is graph-derived.
+  A read that lands inside a guarded repository mutation's planner window fails with
+  `domain.ErrConflict`, which is contention, not corruption: every asynchronous surface
+  (entity list, entity detail, dashboard, Threads) routes that first conflict through
+  one policy — keep the last coherent model, retry the same request once after a quiet
+  period, drop the retry if a newer generation superseded it, and let a repeated
+  conflict surface as an ordinary durable error. A first load has nothing to retain, so
+  it stays visibly loading rather than resolving into a false empty state. A conflict
+  from a *mutation* is the opposite case (the file changed under a compare-and-swap)
+  and still flashes and reloads.
 - **`detail.go` / `find.go` / `glamour.go`** — the right pane (a `viewport`): the
   field block + a markdown body rendered two ways (raw / `glamour`, both cached so
   `R` toggles for free) + vim-like `/` `n` `N` find-in-body over *occurrences*

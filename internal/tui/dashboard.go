@@ -50,6 +50,7 @@ type dashRow struct {
 type dashboard struct {
 	loaded  bool
 	loadErr error // last Summary load failure; the rows below are the last good load (or none)
+	loadGen int   // bumped per refresh; stale summaries and errors are dropped
 	rows    []dashRow
 	nav     []int // indices into rows that carry a target (selectable), in order
 	cursor  int   // index into nav
