@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1dpb5gwtt9
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: An ambiguous id or an I/O error becomes 'changed on disk; retry', burning four backoffs on advice that cannot work.
 effort: Unknown
@@ -10,7 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [store, robustness]
 created: "2026-08-18"
-updated_at: "2026-08-19"
+updated_at: "2026-09-02"
+started_at: "2026-09-02"
+completed_at: "2026-09-02"
 ---
 
 # verifyUnchanged collapses every resolve error into a futile "retry" conflict
@@ -46,11 +48,11 @@ task's criteria to avoid two epics fixing one thing.
 
 ## Acceptance criteria
 
-- [ ] `verifyUnchanged` distinguishes a real conflict (path moved / content changed) from a
+- [x] `verifyUnchanged` distinguishes a real conflict (path moved / content changed) from a
       resolve FAILURE, and propagates the underlying error — an ambiguous id must surface as
       `ErrAmbiguous` (exit 13) naming the duplicate, not as a retryable conflict.
-- [ ] `retryOnConflict` does not retry a non-conflict.
-- [ ] Tests: an ambiguous id gives a useful error and does not sleep through four retries.
+- [x] `retryOnConflict` does not retry a non-conflict.
+- [x] Tests: an ambiguous id gives a useful error and does not sleep through four retries.
 
 ## Related
 

@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1dpb5ksa66
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: runRoot/runRootRC use one buffer for both streams, so moving diagnostics from stderr to stdout leaves the whole internal/cli suite green despite breaking -o name and --json consumers.
 effort: Unknown
@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [testing, cli]
 created: "2026-08-18"
+updated_at: "2026-09-02"
+started_at: "2026-09-02"
+completed_at: "2026-09-02"
 ---
 
 # The CLI test harness merges stdout and stderr, so no test can catch a wrong-channel regression
@@ -39,11 +42,11 @@ is explicitly honest about checking both — but honesty about a blind spot does
 
 ## Acceptance criteria
 
-- [ ] The harness exposes stdout and stderr separately, with the merged view still available
+- [x] The harness exposes stdout and stderr separately, with the merged view still available
       for tests that legitimately don't care.
-- [ ] At least one test pins the contract directly: diagnostics on stderr, payload on
+- [x] At least one test pins the contract directly: diagnostics on stderr, payload on
       stdout, verified by the mutation above FAILING.
-- [ ] Existing assertions migrated to the right stream where the distinction matters —
+- [x] Existing assertions migrated to the right stream where the distinction matters —
       notably anything checking a `FileProblem` or an error message.
 
 ## Out of scope

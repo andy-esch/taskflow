@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g294kc8zjre
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Accept comma-separated and repeatable criteria indices in task ac --check/--uncheck (e.g. --check 1,2,4) to eliminate agent loops
 effort: Unknown
@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, task, ac, ergonomics, agents]
 created: "2026-08-21"
+updated_at: "2026-09-02"
+started_at: "2026-09-02"
+completed_at: "2026-09-02"
 ---
 # Support multi-index lists in task ac --check and --uncheck
 
@@ -98,19 +101,19 @@ Supporting list inputs directly on `--check` and `--uncheck` solves this cleanly
 
 ## Acceptance criteria
 
-- [ ] `tskflwctl task ac <slug> --check 1,2,4` ticks criteria 1, 2, and 4 in a single atomic file write.
-- [ ] `tskflwctl task ac <slug> --check 1 --check 2` works identically to comma-separated lists.
-- [ ] `tskflwctl task ac <slug> --uncheck 1,3` clears criteria 1 and 3 in a single atomic file write.
-- [ ] Single-index invocations like `task ac <slug> --check 3` continue to work without breaking changes.
-- [ ] Passing duplicate indices (e.g. `--check 1,1,2`) deduplicates cleanly and flips each checkbox once.
-- [ ] Out-of-bounds indices (e.g. `--check 0` or `--check 99` on a 3-item task) fail validation with exit code 11 before writing.
-- [ ] Mutually exclusive combinations (`--check` + `--uncheck`, `--list` + `--check`, `--list` + `--uncheck`) fail fast with validation errors.
-- [ ] Partial flips (some criteria already checked, some unchecked) flip only the unchecked criteria and report count accurately.
-- [ ] Full no-op flips (all requested criteria already in target state) perform no disk writes and do not bump `updated_at`.
-- [ ] `--dry-run` validates inputs and previews the mutation without writing.
-- [ ] `--json` returns the standard `task_mutation` envelope matching schema version 1.40.
-- [ ] Comprehensive unit, integration, and golden tests pass with race detector enabled (`go test -race ./...`).
-- [ ] Generated CLI documentation (`docs/cli/tskflwctl_task_ac.md`) is updated with zero docgen drift.
+- [x] `tskflwctl task ac <slug> --check 1,2,4` ticks criteria 1, 2, and 4 in a single atomic file write.
+- [x] `tskflwctl task ac <slug> --check 1 --check 2` works identically to comma-separated lists.
+- [x] `tskflwctl task ac <slug> --uncheck 1,3` clears criteria 1 and 3 in a single atomic file write.
+- [x] Single-index invocations like `task ac <slug> --check 3` continue to work without breaking changes.
+- [x] Passing duplicate indices (e.g. `--check 1,1,2`) deduplicates cleanly and flips each checkbox once.
+- [x] Out-of-bounds indices (e.g. `--check 0` or `--check 99` on a 3-item task) fail validation with exit code 11 before writing.
+- [x] Mutually exclusive combinations (`--check` + `--uncheck`, `--list` + `--check`, `--list` + `--uncheck`) fail fast with validation errors.
+- [x] Partial flips (some criteria already checked, some unchecked) flip only the unchecked criteria and report count accurately.
+- [x] Full no-op flips (all requested criteria already in target state) perform no disk writes and do not bump `updated_at`.
+- [x] `--dry-run` validates inputs and previews the mutation without writing.
+- [x] `--json` returns the standard `task_mutation` envelope matching schema version 1.40.
+- [x] Comprehensive unit, integration, and golden tests pass with race detector enabled (`go test -race ./...`).
+- [x] Generated CLI documentation (`docs/cli/tskflwctl_task_ac.md`) is updated with zero docgen drift.
 
 ## Test Strategy & Edge Cases
 
@@ -134,3 +137,49 @@ Supporting list inputs directly on `--check` and `--uncheck` solves this cleanly
 - String / regex pattern matching against criterion text (index-based matching remains the only supported approach).
 - Re-ordering or deleting acceptance criteria via CLI.
 - Adding new acceptance criteria checkboxes (handled via `task append` or body editing).
+
+## Implementation deviations
+
+Two places where the delivered work differs from this task's written plan. Recorded
+here rather than by editing the plan, so the difference stays visible to a later
+reader.
+
+**1. Multi-index landed on `SetCriteriaState`, not `SetAcceptanceCriteria`.**
+
+The Architecture section specifies `domain.SetAcceptanceCriteria` /
+`core.SetAcceptanceCriteria` as the write path for `--check`/`--uncheck`. That was
+true when this task was written; it no longer is. `--check`/`--uncheck` now route
+through `SetCriterionState` (`internal/cli/task.go`), which the criterion-state
+vocabulary introduced, and `SetAcceptanceCriterion` has **no production caller left
+at either layer** — only tests reach it.
+
+Building the multi-index API on `SetAcceptanceCriteria` would therefore have
+extended a dead path, left the live one single-index, and — because
+`SetCriterionState` also strips disposition suffixes when a criterion becomes met —
+silently regressed `--check` on a criterion carrying a `deferred:`/`wontfix:`
+suffix, leaving a checked box with a stale reason attached.
+
+Delivered instead: `domain.SetCriteriaState(body, ns, state, reason)` and
+`core.SetCriteriaState(slug, ns, state, reason, dryRun)`, with the single-index
+`SetCriterionState` kept as a thin wrapper over each. Same user-facing behaviour the
+criteria describe, on the path that is actually live. `SetAcceptanceCriterion` was
+left untouched rather than extended or deleted — removing it is a separate call.
+
+**2. The `--json` envelope assertion pins the schema constant, not `1.40`.**
+
+Criterion 11 names schema version 1.40. `wire.SchemaVersion` is now `1.59`, so
+asserting the literal would pin a regression. The test compares against
+`wire.SchemaVersion` — the invariant the criterion meant ("the standard
+task_mutation envelope at the current schema version"), which cannot go stale the
+same way.
+
+**Scope held as written:** only `--check`/`--uncheck` take lists. The four state
+flags (`--defer`/`--wontfix`/`--tracked`/`--na`) stay single-index because each
+requires its own `--reason`, and spreading one reason across several criteria would
+be a different feature. The underlying `SetCriteriaState` accepts a list for any
+state, so that remains a CLI-surface decision rather than a layering constraint.
+
+Mutual exclusion (`--check`+`--uncheck`, `--list`+either) is pre-existing cobra flag
+grouping and still exits 1 with cobra's usage error rather than 11; criterion 7 asks
+for a fail-fast validation error, which that is, and changing the exit code of
+pre-existing behaviour was out of scope.
