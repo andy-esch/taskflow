@@ -3,6 +3,7 @@ package store
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -64,7 +65,22 @@ func verifyUnchanged(resolve func(string) (string, error), slug, path, ifVersion
 		canonical = entityID
 	}
 	curPath, err := resolve(canonical)
-	if err != nil || curPath != path {
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		// The file we read is no longer resolvable under its own id: moved, renamed,
+		// or deleted under us. That IS the conflict this guard exists for, and a
+		// retry re-reads from scratch and can legitimately succeed.
+		return conflict()
+	case err != nil:
+		// Everything else — a genuine duplicate id (ErrAmbiguous), or a real ReadDir
+		// I/O failure — is NOT a conflict, and no number of retries can fix it.
+		// Collapsing it into one would burn the whole OCC budget and then hand back
+		// "changed on disk; retry": advice that cannot work, for a condition it
+		// misnames. Propagating keeps the sentinel the CLI maps to its own exit code
+		// (13 for the ambiguity, which names the colliding files). This mirrors the
+		// os.IsNotExist split in the re-read below.
+		return fmt.Errorf("re-resolve %s %q before writing: %w", noun, slug, err)
+	case curPath != path:
 		return conflict()
 	}
 	if ifVersion == "" {
