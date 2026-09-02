@@ -55,6 +55,16 @@ type Research struct {
 	Updated string `yaml:"updated_at"`
 }
 
+// CanonicalID is the stable store-resolution identity. Filename identity wins
+// for filesystem records so frontmatter drift cannot redirect a read; adapters
+// without filename semantics use ID.
+func (r Research) CanonicalID() string {
+	if r.FilenameID != "" {
+		return r.FilenameID
+	}
+	return r.ID
+}
+
 // knownResearchFields is the frontmatter keys the tool recognizes for a research doc,
 // DERIVED from the registry's AuthoringFields plus the tool-managed stamps — so a field
 // added to the research Descriptor becomes settable without a second list to keep in

@@ -800,15 +800,41 @@ func (g *TaskGraph) ResolveTaskID(ref string) (string, error) {
 	})
 
 	query := strings.ToLower(ref)
+	exact := func(key string) bool { return key == ref || strings.ToLower(key) == query }
+	exactIDHits := make([]taskReferenceCandidate, 0)
+	for _, item := range candidates {
+		if exact(item.id) {
+			exactIDHits = append(exactIDHits, item)
+		}
+	}
+	if len(exactIDHits) == 1 {
+		return exactIDHits[0].id, nil
+	}
+	if len(exactIDHits) > 1 {
+		details := make([]string, len(exactIDHits))
+		for i, hit := range exactIDHits {
+			if hit.slug == "" {
+				details[i] = hit.id
+			} else {
+				details[i] = fmt.Sprintf("%s (%s)", hit.slug, hit.id)
+			}
+		}
+		return "", fmt.Errorf("%q matches %d tasks by id: %s: %w",
+			ref, len(exactIDHits), strings.Join(details, ", "), domain.ErrAmbiguous)
+	}
 	tiers := []func(string) bool{
-		func(key string) bool { return key == ref || strings.ToLower(key) == query },
+		exact,
 		func(key string) bool { return strings.HasPrefix(strings.ToLower(key), query) },
 		func(key string) bool { return strings.Contains(strings.ToLower(key), query) },
 	}
-	for _, matches := range tiers {
+	for tier, matches := range tiers {
 		hits := make([]taskReferenceCandidate, 0)
 		for _, item := range candidates {
-			if matches(item.id) || (item.slug != "" && matches(item.slug)) {
+			matched := item.slug != "" && matches(item.slug)
+			if tier > 0 {
+				matched = matches(item.id) || matched
+			}
+			if matched {
 				hits = append(hits, item)
 			}
 		}

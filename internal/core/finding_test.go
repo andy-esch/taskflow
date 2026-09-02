@@ -27,8 +27,8 @@ func findingsRepo() *fakeStore {
 		// Keying Path to the slug lets the slug-keyed auditBodies map serve both
 		// GetAudit (single-audit) and GetAuditByPath (the cross-audit sweep).
 		audits: []domain.Audit{
-			{ID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Path: "2026-06-14-gateway", Bucket: domain.AuditOpen},
-			{ID: "6fjangd7kvh6", Slug: "2026-06-10-ingest", Path: "2026-06-10-ingest", Bucket: domain.AuditClosed},
+			{ID: "6fjangd7kvh5", FilenameID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Path: "2026-06-14-gateway", Bucket: domain.AuditOpen},
+			{ID: "6fjangd7kvh6", FilenameID: "6fjangd7kvh6", Slug: "2026-06-10-ingest", Path: "2026-06-10-ingest", Bucket: domain.AuditClosed},
 		},
 		auditBodies: map[string]string{
 			"2026-06-14-gateway": gatewayBody,
@@ -54,7 +54,7 @@ func TestQueryFindings_CrossAudit_NoFilter(t *testing.T) {
 		t.Fatalf("expected all 3 findings across both audits, got %v", codes(got))
 	}
 	// Each hit carries its audit + bucket.
-	if got[0].Audit != "2026-06-14-gateway" || got[0].Bucket != "open" {
+	if got[0].Audit != "2026-06-14-gateway" || got[0].AuditID != "6fjangd7kvh5" || got[0].Bucket != "open" {
 		t.Errorf("finding should be tagged with its audit/bucket, got %+v", got[0])
 	}
 }

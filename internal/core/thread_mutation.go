@@ -46,15 +46,37 @@ func (s ThreadMutationSnapshot) ResolveThreadID(ref string) (string, error) {
 		return threads[i].Slug < threads[j].Slug
 	})
 	query := strings.ToLower(ref)
+	exact := func(key string) bool { return key == ref || strings.ToLower(key) == query }
+	exactIDHits := make([]domain.Thread, 0)
+	for _, thread := range threads {
+		if exact(thread.ID) {
+			exactIDHits = append(exactIDHits, thread)
+		}
+	}
+	if len(exactIDHits) == 1 {
+		return exactIDHits[0].ID, nil
+	}
+	if len(exactIDHits) > 1 {
+		details := make([]string, len(exactIDHits))
+		for i, hit := range exactIDHits {
+			details[i] = fmt.Sprintf("%s (%s)", hit.Slug, hit.ID)
+		}
+		return "", fmt.Errorf("%q matches %d Threads by id: %s: %w",
+			ref, len(exactIDHits), strings.Join(details, ", "), domain.ErrAmbiguous)
+	}
 	tiers := []func(string) bool{
-		func(key string) bool { return key == ref || strings.ToLower(key) == query },
+		exact,
 		func(key string) bool { return strings.HasPrefix(strings.ToLower(key), query) },
 		func(key string) bool { return strings.Contains(strings.ToLower(key), query) },
 	}
-	for _, matches := range tiers {
+	for tier, matches := range tiers {
 		hits := make([]domain.Thread, 0)
 		for _, thread := range threads {
-			if matches(thread.ID) || (thread.Slug != "" && matches(thread.Slug)) {
+			matched := thread.Slug != "" && matches(thread.Slug)
+			if tier > 0 {
+				matched = matches(thread.ID) || matched
+			}
+			if matched {
 				hits = append(hits, thread)
 			}
 		}

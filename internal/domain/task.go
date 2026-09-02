@@ -56,3 +56,14 @@ type Task struct {
 	// the canonical field names and are populated by the store parser.
 	LegacyDependencyFields []string `yaml:"-"`
 }
+
+// CanonicalID returns the store-resolution identity for this record. Filesystem
+// reads prefer the ID derived from the filename so a missing/drifting frontmatter
+// copy remains repairable; portable adapters that have no filename identity use
+// the semantic ID they supplied.
+func (t Task) CanonicalID() string {
+	if t.FilenameID != "" {
+		return t.FilenameID
+	}
+	return t.ID
+}

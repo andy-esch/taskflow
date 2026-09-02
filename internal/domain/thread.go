@@ -68,6 +68,16 @@ type Thread struct {
 	Tasks       []string     `yaml:"tasks"`
 }
 
+// CanonicalID is the stable store-resolution identity a primary adapter should
+// retain. It gives the future TUI Thread row the same drift-safe, portable contract
+// as task, audit, and research rows.
+func (t Thread) CanonicalID() string {
+	if t.FilenameID != "" {
+		return t.FilenameID
+	}
+	return t.ID
+}
+
 // ValidateThreadDocument enforces invariants shared by guarded creation and
 // future guarded Thread mutations. Readers may still retain malformed documents
 // as FileProblems so diagnostic commands can explain direct hand edits.

@@ -78,6 +78,21 @@ func TestResolve_FuzzyTiers(t *testing.T) {
 	}
 }
 
+func TestResolveID_ExactStableIDPrecedesSiblingSlug(t *testing.T) {
+	want := candidate{id: testutil.TaskID("canonical-target"), slug: "friendly-target", path: "target.md"}
+	sibling := candidate{id: testutil.TaskID("sibling"), slug: want.id, path: "sibling.md"}
+
+	got, err := resolveID("task", want.id, []candidate{sibling, want})
+	if err != nil || got.path != want.path {
+		t.Fatalf("canonical id resolved to %+v, %v; want %+v", got, err, want)
+	}
+
+	duplicate := candidate{id: want.id, slug: "duplicate-id", path: "duplicate.md"}
+	if _, err := resolveID("task", want.id, []candidate{sibling, want, duplicate}); !errors.Is(err, domain.ErrAmbiguous) {
+		t.Fatalf("a genuinely duplicated stable id must remain ambiguous: %v", err)
+	}
+}
+
 // TestMove_FuzzyKeepsCanonicalSlug pins the rename trap: moving by an
 // abbreviation must keep the file's full slug, not rename it to the query.
 // Under the flat layout the file never relocates — it stays at its original
