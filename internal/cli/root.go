@@ -291,6 +291,9 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(newLintCmd(app))
 	root.AddCommand(newConfigCmd(app))
 	root.AddCommand(newDoctorCmd(app)) // hidden compatibility forwarding command
+	for _, c := range newBareVerbCmds(app) {
+		root.AddCommand(c) // hidden: answer a bare verb with its noun-qualified forms
+	}
 	root.AddCommand(newWorkspaceCmd(app))
 	root.AddCommand(newSpaceCmd(app))
 	root.AddCommand(newSchemaCmd(app))
