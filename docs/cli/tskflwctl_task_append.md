@@ -16,7 +16,11 @@ tskflwctl task append <task> [flags]
 
 ```
   tskflwctl task append my-task --body 'a one-line note'
-  printf '## Review\n- looks good\n' | tskflwctl task append my-task --body-file -
+  tskflwctl task append my-task --body-file - <<'EOF'
+## Review
+- coverage held at 82% after the change
+EOF
+  cat notes.md | tskflwctl task append my-task --body-file -
 ```
 
 ### Options

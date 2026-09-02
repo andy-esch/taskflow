@@ -562,7 +562,9 @@ func newAuditAppendCmd(app *App) *cobra.Command {
 			"the scriptable counterpart to `audit edit`, e.g. to add a finding section. Content\n" +
 			"comes from --body, --body-file, or stdin (--body-file -); a blank line separates it\n" +
 			"from the existing body. Finding grammar is left to `audit lint`.",
-		Example:           "  tskflwctl audit append my-audit --body '#### H1. Title  · **Status:** open'\n  printf '#### M3. ...\\n' | tskflwctl audit append my-audit --body-file -",
+		// A heredoc leads: findings quote percentages and code, and printf reads a
+		// bare % as a format verb, truncating the write at the first one.
+		Example:           "  tskflwctl audit append my-audit --body '#### H1. Title  · **Status:** open'\n  tskflwctl audit append my-audit --body-file - <<'EOF'\n#### M3. Cache hit rate fell to 40% · **Status:** open\nEOF\n  cat findings.md | tskflwctl audit append my-audit --body-file -",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.completeAuditSlugs,
