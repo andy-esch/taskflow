@@ -4,6 +4,7 @@ id: 6g5xyxhhc8p5
 bucket: open
 area: cli-ergonomics-from-an-agent-session
 date: "2026-09-01"
+updated_at: "2026-09-02"
 ---
 # Audit: cli-ergonomics-from-an-agent-session — 2026-09-01
 
@@ -108,7 +109,7 @@ guard considers degraded, which reads as a contradiction.
 
 **Resolution:**
 
-#### H4. A nested code fence silently drops every finding after it · **Status:** open
+#### H4. A nested code fence silently drops every finding after it · **Status:** fixed
 
 **File:** audit body parser; `task append` / `audit new --body-file` | **Component:** body-mutation
 **Effort:** S · **Urgency:** acute
@@ -147,7 +148,12 @@ are ubiquitous in planning bodies — metrics, coverage, gate thresholds; mine h
 unescaped `%` truncated one of my writes. Lead with a heredoc into `--body-file -`, which has no
 format-string surface.
 
-**Resolution:**
+**Resolution:** blankFences now scans lines through the shared fenceScanner
+(CommonMark run-length) instead of pairing ``` runs with a regex, so nested,
+tilde and unterminated fences all mask correctly. store.writeBody refuses a body
+ending inside an open fence, beside its existing parse-before-commit guard. The
+task/audit append examples lead with a heredoc into --body-file - rather than
+printf, which truncated a real write at an unescaped percent sign.
 
 #### H5. `task depend add A B` fails with a bare arity error · **Status:** open
 
@@ -222,3 +228,33 @@ nothing about surfaces I did not touch (`ui`, `thread`, `routine`, `epic`, `rese
 - ⏳ `tskflwctl task new "Report graph degradation in status, board and lint" --epic 30-threads-and-task-dependency-graphs --tags cli,graph,lint` — H3; and reconcile lint passing on a graph the guard rejects
 - ⏳ `tskflwctl task new "Fix nested-fence parsing in audit bodies and validate fences on write" --epic 21-code-quality-architecture-hardening --tags audit,parser,body-mutation` — H4, **acute**: a nested fence silently drops findings from the index and they can never be stamped; check 6fpnn6zk157b first for overlap
 - ⏳ `tskflwctl task new "Improve arg-shape and bare-verb error suggestions" --epic 20-cli-ux-and-ergonomics --tags cli,errors` — H5 and H6 together; both are one-line suggestion improvements
+
+#### H7. `audit finding --note` duplicates the Resolution block instead of filling an empty one · **Status:** open
+
+**File:** audit finding --note; internal/domain/finding.go note writer | **Component:** body-mutation
+**Effort:** XS · **Urgency:** soon
+
+Found while stamping H4 of this audit. Five of the six findings here carry a bare
+`**Resolution:**` placeholder with no paragraph — a shape `audit lint` already flags
+("empty `**Resolution:**` label"). Stamping one of them appended a SECOND block rather
+than filling the empty one:
+
+    **Resolution:**
+
+    **Resolution:** blankFences now scans lines through …
+
+The command reported success. `audit lint` then swapped one complaint for a worse one —
+"more than one `**Resolution:**` block — only the first is read" — which means the note
+just written is the one being ignored, while the empty placeholder above it wins. A
+resolution that is silently unread is the same class of defect as H4: the write succeeds,
+the file renders fine, and the tool's own index disagrees with what the author sees.
+
+`NoteSpan` is documented as covering "the note including its label, so re-noting replaces
+the block rather than nesting a second label inside the first". That holds when a note
+already has a paragraph; an empty label leaves the span empty, so the writer falls through
+to the append path.
+
+**Recommendation:** treat an empty `**Resolution:**` label as the target span so the note
+fills it, or refuse the write naming the malformed label. Either is better than producing
+a state whose own lint rule says the new content is unread. The repository is not clean of
+these today, so the fill path is worth preferring over the refusal.
