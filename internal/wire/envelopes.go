@@ -1035,6 +1035,25 @@ type ErrorItem struct {
 	ThreadUpdate       *ThreadUpdateJSON          `json:"thread_update,omitempty"`
 	ThreadFailure      *ThreadMutationFailureJSON `json:"thread_failure,omitempty"`
 	ThreadApply        *ThreadApplyJSON           `json:"thread_apply,omitempty"`
+	Filesystem         *FilesystemErrorJSON       `json:"filesystem,omitempty"`
+}
+
+// FilesystemErrorJSON carries the recovery-relevant shape of an OS-level failure.
+// Domain failures already classify into stable codes; a filesystem failure fell through
+// to `{"code":"error","message":"..."}`, leaving an agent to parse prose to tell
+// permission-denied from missing-directory from disk-full — which are four different
+// next actions. Present only for errors that actually came from the filesystem.
+//
+// Exit codes are deliberately unchanged (these stay exit 1): this adds detail to the
+// envelope rather than a new code policy.
+type FilesystemErrorJSON struct {
+	Class     string `json:"class" jsonschema:"description=permission|not-found|read-only|no-space|io"`
+	Operation string `json:"operation,omitempty" jsonschema:"description=the syscall that failed — open, mkdir, rename"`
+	Path      string `json:"path,omitempty" jsonschema:"description=the path it failed on"`
+	// Retryable is true only when repeating the same call could plausibly succeed with
+	// no operator action. Permission, not-found, read-only, and no-space all need
+	// something changed first, so a retry loop on them is a spin, not recovery.
+	Retryable bool `json:"retryable" jsonschema:"description=whether repeating the call unchanged could succeed"`
 }
 
 // TaskLifecycleRecoveryJSON is emitted on stderr when a lifecycle write

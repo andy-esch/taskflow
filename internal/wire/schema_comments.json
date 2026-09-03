@@ -132,6 +132,8 @@
   "github.com/andy-esch/taskflow/internal/wire.EpicsEnvelope": "EpicsEnvelope is `epic list --json`.",
   "github.com/andy-esch/taskflow/internal/wire.ErrorEnvelope": "ErrorEnvelope is the failure payload emitted under --json (see cli.WriteError).",
   "github.com/andy-esch/taskflow/internal/wire.ErrorItem": "ErrorItem is the error body inside ErrorEnvelope.",
+  "github.com/andy-esch/taskflow/internal/wire.FilesystemErrorJSON": "FilesystemErrorJSON carries the recovery-relevant shape of an OS-level failure.",
+  "github.com/andy-esch/taskflow/internal/wire.FilesystemErrorJSON.Retryable": "Retryable is true only when repeating the same call could plausibly succeed with\nno operator action. Permission, not-found, read-only, and no-space all need\nsomething changed first, so a retry loop on them is a spin, not recovery.",
   "github.com/andy-esch/taskflow/internal/wire.FindingJSON": "FindingJSON is the wire shape of one audit finding.",
   "github.com/andy-esch/taskflow/internal/wire.FindingsEnvelope": "FindingsEnvelope is `audit findings --json` (the finding-level query).",
   "github.com/andy-esch/taskflow/internal/wire.FindingsRollupJSON": "FindingsRollupJSON aggregates the actionable audit findings (status open or in-progress) across all audits — the `status` summary's \"audit findings\" view.",
