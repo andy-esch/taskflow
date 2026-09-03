@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5rwjqr7rt8
-status: next-up
+status: in-progress
 epic: 30-threads-and-task-dependency-graphs
 description: Expose Thread navigation, lifecycle, progress, frontier, gates, and inconsistency in responsive read-only TUI list and detail views.
 effort: 2-3 days
@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [threads, tui, ux, graph]
 created: "2026-09-01"
 depends_on: [6g5rwjqeh6a6, 6g5rxq17px59]
-updated_at: "2026-09-01"
+updated_at: "2026-09-03"
+started_at: "2026-09-02"
 ---
 
 # Add Thread list and detail views to the TUI
@@ -45,28 +46,28 @@ behind one optimistic progress number.
   demonstrates a coherent mutation workflow worth designing.
 - Define deliberate normal, narrow, and very small terminal layouts. Degradation may collapse
   secondary columns, but must retain identity, lifecycle, graph health, and the distinction between
-  in-flight, clear pending, and blocked work.
+  in-flight, dispatchable pending, and pending work that current graph evidence cannot dispatch.
 - Build parity fixtures from the same repository snapshots used by core/CLI projection tests rather
   than recreating graph cases in UI-only form.
 
 ## Acceptance criteria
 
-- [ ] Threads are reachable as a first-class TUI tab and through command-palette navigation, with
+- [x] Threads are reachable as a first-class TUI tab and through command-palette navigation, with
   stable filtering, sorting, selection restoration, and help text consistent with the other
   read-only entities; path copy/open works when locally available and degrades explicitly when not.
-- [ ] One production integration test enters the registry route and proves one list request, one
+- [x] One production integration test enters the registry route and proves one list request, one
   generation/error owner, one canonical detail selection, and one reload path; no parallel Thread
   list/detail state machine remains.
-- [ ] List rows distinguish lifecycle, sound progress, graph/projection health, and active/eligible
+- [x] List rows distinguish lifecycle, sound progress, graph/projection health, and active/eligible
   work without recomputing any of those values in the TUI.
-- [ ] Detail output faithfully presents members, immediate external gates, in-flight work,
+- [x] Detail output faithfully presents members, immediate external gates, in-flight work,
   dispatchable frontier, missing/broken evidence, inconsistency, and the Thread body from the shared
   core projection.
-- [ ] Completed-but-unsound, cancelled, empty, shared-member, externally gated, and healthy active
+- [x] Completed-but-unsound, cancelled, empty, shared-member, externally gated, and healthy active
   Threads remain visually distinguishable in parity fixtures.
-- [ ] Normal, narrow, and minimum supported terminal tests prove that essential state remains
+- [x] Normal, narrow, and minimum supported terminal tests prove that essential state remains
   readable and navigation/help do not overflow or become unreachable.
-- [ ] No TUI-local graph traversal, eligibility rule, direct filesystem read/write, membership
+- [x] No TUI-local graph traversal, eligibility rule, direct filesystem read/write, membership
   mutation, or lifecycle mutation is introduced.
 
 ## Stress tests
@@ -93,3 +94,46 @@ best terminal interface.
 - Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
 - Foundation [contention-safe Thread projection loading](6g5rwjqeh6a6-wire-thread-projections-into-the-tui-with-contention-safe-reloads.md)
 - Supersedes part of [the original combined TUI slice](6g3q4rv89vzw-add-usage-informed-thread-views-to-the-tui.md)
+
+## Implementation progress (2026-09-02)
+
+Threads now participate as a read-only registry entity with lazy list/detail loading, canonical
+selection identity, filtering, sort/restore behavior, palette and command navigation, per-space
+session state, and the ordinary contention-safe reload path. The temporary `threadProjectionState`
+and its dedicated list/detail messages and read surfaces are gone. Rows retain each shared
+`core.ThreadView`; only repository-wide graph and unreadable-record diagnostics remain as typed
+metadata on the registry tab.
+
+Responsive rows keep lifecycle, graph/projection health, nominal and sound rollups, and compact
+in-flight/frontier/not-dispatchable counts. Detail renders the core projection's members, active work,
+dispatchable frontier, immediate external gates, inconsistency evidence, diagnostics, and persisted
+body. Thread mutation affordances remain absent. Optional `ThreadPathSource` is resolved beside the
+detail read: local workspaces retain path copy, clickable titles, and `$EDITOR`, while portable
+readers keep semantic browsing and explicitly report that a local path is unavailable.
+
+Coverage includes the registry ownership path, task-only and Thread-document reloads, split/pathless
+adapters, canonical state preservation across filter/sort/reload, normal/narrow/minimum rows, help
+layout, and completed-unsound, cancelled, empty, shared-member, externally gated, and healthy active
+projections produced by the core projector. The full race-enabled suite and golangci-lint pass;
+generated CLI docs and `git diff --check` are clean. Repository planning and audit-finding lint pass.
+
+## Adversarial review closeout (2026-09-03)
+
+Two independent implementation audits—[Claude](../audits/6g6db7yt62r4-2026-09-03-tui-thread-list-detail-implementation-claude.md)
+and [Antigravity](../audits/6g6db7z2qfze-2026-09-03-tui-thread-list-detail-implementation-antigravity.md)—confirmed
+the single-registry-owner and portable/local capability boundaries, then exposed responsive and
+coverage gaps. All findings were fixed in this task and both audits are closed.
+
+Rows now reserve lifecycle, health, progress where space permits, and graph-derived work before an
+explicitly budgeted identity tail. Grapheme-aware middle elision keeps long distinct slugs and
+duplicate canonical hints distinguishable; tiny layouts compact only counts over 99. Pending work
+is partitioned against the authoritative core frontier, so clear-gated members suppressed by
+unhealthy repository evidence are reported as pending but not dispatchable rather than disappearing.
+
+Regression coverage directly injects stale list/detail messages, pins the read-only registry/action
+contract, distinguishes nominal from sound progress, exercises degraded-graph frontier semantics,
+and checks path-loading/pathless inline-edit feedback plus Unicode terminal-cell budgets. No finding
+required an out-of-scope follow-up.
+
+Final validation: uncached `go test -count=1 -race ./...`, golangci-lint, generated-doc drift,
+module tidiness, planning lint, audit-finding lint, and `git diff --check main` all pass.
