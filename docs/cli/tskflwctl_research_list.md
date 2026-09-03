@@ -24,7 +24,7 @@ tskflwctl research list [flags]
 ### Options
 
 ```
-  -c, --columns strings   select columns for -o table/csv/json, comma-separated (implies -o table); available: slug,created,description,tags,updated,id
+  -c, --columns strings   select columns for -o table/csv/json, comma-separated (-o table when no format is pinned); available: slug,created,description,tags,updated,id
   -h, --help              help for list
   -o, --output string     output format: human|json|name|table|csv
   -q, --quiet             ids only, one per line (alias for -o name)

@@ -27,8 +27,8 @@ Work with code audits
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 * [tskflwctl audit append](tskflwctl_audit_append.md)	 - Append a section to an audit's body (atomic; agent-facing)
-* [tskflwctl audit close](tskflwctl_audit_close.md)	 - Move audit(s) to closed/
-* [tskflwctl audit defer](tskflwctl_audit_defer.md)	 - Move audit(s) to deferred/
+* [tskflwctl audit close](tskflwctl_audit_close.md)	 - Move audit(s) to the closed bucket
+* [tskflwctl audit defer](tskflwctl_audit_defer.md)	 - Move audit(s) to the deferred bucket
 * [tskflwctl audit edit](tskflwctl_audit_edit.md)	 - Open an audit in your editor (whole file; re-validated on save)
 * [tskflwctl audit finding](tskflwctl_audit_finding.md)	 - Set one finding's status and resolution note in place (validated, atomic)
 * [tskflwctl audit findings](tskflwctl_audit_findings.md)	 - Query findings across audits (or one) by status/effort/urgency/component
@@ -37,6 +37,6 @@ Work with code audits
 * [tskflwctl audit list](tskflwctl_audit_list.md)	 - List audits (open by default)
 * [tskflwctl audit new](tskflwctl_audit_new.md)	 - Create a new audit (open bucket, scaffolded findings)
 * [tskflwctl audit path](tskflwctl_audit_path.md)	 - Print the absolute path to an audit's file
-* [tskflwctl audit reopen](tskflwctl_audit_reopen.md)	 - Move audit(s) back to open/
+* [tskflwctl audit reopen](tskflwctl_audit_reopen.md)	 - Move audit(s) to the open bucket
 * [tskflwctl audit show](tskflwctl_audit_show.md)	 - Show an audit's metadata and body
 

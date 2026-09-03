@@ -35,7 +35,7 @@ tskflwctl audit list [flags]
 ```
       --all               all buckets
       --closed            closed audits only
-  -c, --columns strings   select columns for -o table/csv/json, comma-separated (implies -o table); available: slug,bucket,area,date,findings,open
+  -c, --columns strings   select columns for -o table/csv/json, comma-separated (-o table when no format is pinned); available: slug,bucket,area,date,findings,open
       --deferred          deferred audits only
   -h, --help              help for list
   -o, --output string     output format: human|json|name|table|csv

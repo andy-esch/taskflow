@@ -50,7 +50,10 @@ type listMode struct {
 func (m *listMode) bind(cmd *cobra.Command, columnSpecs []render.ColumnSpec) {
 	cmd.Flags().StringVarP(&m.output, "output", "o", "", "output format: human|json|name|table|csv")
 	cmd.Flags().StringSliceVarP(&m.columns, "columns", "c", nil,
-		"select columns for -o table/csv/json, comma-separated (implies -o table); available: "+specNames(columnSpecs))
+		// "implies -o table" alone read as "-c means table", steering agents away from
+		// `--json -c`, which is the documented token-cheap machine path. The implication
+		// only fires when no format is pinned; say so.
+		"select columns for -o table/csv/json, comma-separated (-o table when no format is pinned); available: "+specNames(columnSpecs))
 	cmd.Flags().BoolVarP(&m.quiet, "quiet", "q", false, "ids only, one per line (alias for -o name)")
 	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats)
 	_ = cmd.RegisterFlagCompletionFunc("columns", columnCompleter(columnSpecs))
