@@ -247,7 +247,7 @@
         },
         "tasks": {
           "items": {
-            "$ref": "#/$defs/TaskJSON"
+            "$ref": "#/$defs/BoardTaskJSON"
           },
           "type": "array"
         }
@@ -276,6 +276,10 @@
             "$ref": "#/$defs/FileProblem"
           },
           "type": "array"
+        },
+        "graph": {
+          "$ref": "#/$defs/GraphHealthJSON",
+          "description": "Graph is the repository-wide dependency-graph verdict, present only when it is\nnot healthy. Degradation is latched at mutation time, so without it here an agent\nreads a clean board and meets the refusal later, mid-operation."
         }
       },
       "additionalProperties": false,
@@ -285,6 +289,83 @@
         "columns"
       ],
       "description": "BoardEnvelope is `board --json`: the active-work pipeline, tasks grouped by status."
+    },
+    "BoardTaskJSON": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "stable identifier — the immutable key that survives slug and status changes; absent on tasks created before id assignment"
+        },
+        "slug": {
+          "type": "string",
+          "description": "task slug (filename without .md) — the human handle"
+        },
+        "status": {
+          "type": "string",
+          "description": "lifecycle status — authoritative"
+        },
+        "epic": {
+          "type": "string",
+          "description": "id of the epic this task belongs to"
+        },
+        "description": {
+          "type": "string",
+          "description": "one-line summary (\u003c=200 chars)"
+        },
+        "effort": {
+          "type": "string",
+          "description": "free-form effort estimate"
+        },
+        "tier": {
+          "type": "integer",
+          "description": "importance 1 (highest) to 5 (lowest)"
+        },
+        "priority": {
+          "type": "string",
+          "description": "high | medium | low"
+        },
+        "autonomy_level": {
+          "type": "integer",
+          "description": "how autonomously this can be done 1-5"
+        },
+        "created": {
+          "type": "string",
+          "description": "creation date YYYY-MM-DD"
+        },
+        "updated_at": {
+          "type": "string",
+          "description": "last-modified date YYYY-MM-DD"
+        },
+        "revisit_at": {
+          "type": "string",
+          "description": "snooze-until date YYYY-MM-DD for a deferred task (set by task defer)"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "topical tags"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "sorted stable task IDs that must be soundly completed before this task is ordinarily eligible to start"
+        },
+        "blocked": {
+          "type": "boolean",
+          "description": "a hard prerequisite is unmet"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "slug",
+        "status"
+      ],
+      "description": "BoardTaskJSON is a board row: the same TaskJSON `task list` emits, plus whether the repository graph says this task can be started."
     },
     "ConfigBoolValueJSON": {
       "properties": {
@@ -1413,6 +1494,24 @@
         "changes"
       ],
       "description": "FixResult records the auto-repairs applied (or proposed) for one file."
+    },
+    "GraphHealthJSON": {
+      "properties": {
+        "health": {
+          "type": "string",
+          "description": "repository task graph health — degraded or broken"
+        },
+        "detail": {
+          "type": "string",
+          "description": "what is wrong and the remedy"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "health"
+      ],
+      "description": "GraphHealthJSON reports a non-healthy repository task graph and what to do about it."
     },
     "GraphProblemJSON": {
       "properties": {
