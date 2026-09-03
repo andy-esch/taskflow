@@ -236,7 +236,7 @@ nothing about surfaces I did not touch (`ui`, `thread`, `routine`, `epic`, `rese
 - ⏳ `tskflwctl task new "Fix nested-fence parsing in audit bodies and validate fences on write" --epic 21-code-quality-architecture-hardening --tags audit,parser,body-mutation` — H4, **acute**: a nested fence silently drops findings from the index and they can never be stamped; check 6fpnn6zk157b first for overlap
 - ⏳ `tskflwctl task new "Improve arg-shape and bare-verb error suggestions" --epic 20-cli-ux-and-ergonomics --tags cli,errors` — H5 and H6 together; both are one-line suggestion improvements
 
-#### H7. `audit finding --note` duplicates the Resolution block instead of filling an empty one · **Status:** open
+#### H7. `audit finding --note` duplicates the Resolution block instead of filling an empty one · **Status:** fixed
 
 **File:** audit finding --note; internal/domain/finding.go note writer | **Component:** body-mutation
 **Effort:** XS · **Urgency:** soon
@@ -265,3 +265,8 @@ to the append path.
 fills it, or refuse the write naming the malformed label. Either is better than producing
 a state whose own lint rule says the new content is unread. The repository is not clean of
 these today, so the fill path is worth preferring over the refusal.
+
+**Resolution:** findingNote now returns a span for a STRAY Resolution label —
+one with nothing after it in the section — so a later note replaces it instead
+of appending a second block. A label with prose below it still returns no span,
+since replacing it would strand that prose; lint continues to name it.

@@ -323,11 +323,20 @@ func findingNote(section string, offset int) (string, Span, int) {
 		stop = i
 	}
 	text := strings.TrimRight(rest[:stop], " \t\n")
-	// A label with a BLANK LINE after it terminates at offset 0, so there is no text to
-	// read — and reporting a span anyway is how the paragraph below it gets orphaned: the
-	// write path would replace the label alone and strand the prose it was introducing.
-	// No text, no note, no span; `LintFindings` names the stray label instead.
 	if strings.TrimSpace(text) == "" {
+		// A STRAY label — nothing but whitespace after it in the section — is the
+		// scaffold's placeholder, or one an author left. It still gets a span, covering
+		// the label itself, so a later note REPLACES it. Without that the write path
+		// appended a second label beside it, and `LintFindings` then reported "only the
+		// first is read": the note just written is the ignored one, while the empty
+		// placeholder wins. The command reported success either way.
+		if strings.TrimSpace(rest) == "" {
+			return "", Span{Start: offset + m[0], End: offset + m[1]}, len(all)
+		}
+		// A label with PROSE below it is a different mistake — the paragraph belongs on
+		// the label's own line. Reporting a span here is how that prose gets orphaned:
+		// the write would replace the label alone and strand the text it introduced. No
+		// span; `LintFindings` names the stray label and the author moves the text up.
 		return "", Span{}, len(all)
 	}
 	return strings.Join(strings.Fields(text), " "),
