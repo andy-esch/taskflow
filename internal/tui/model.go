@@ -95,7 +95,7 @@ type Model struct {
 	showHelp     bool       // the `?` keybinding overlay is open
 	helpScroll   int        // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
 	action       actionMenu // the `m` lifecycle action menu (S4)
-	follow       followMenu // the `f` reference picker (S6, epics → their tasks)
+	follow       followMenu // the `f` reference picker (S6, epics/Threads → their tasks)
 	edit         editMenu   // the `e` inline field editor (task set with a GUI)
 	navStack     []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
 	flash        string     // transient post-action feedback line (cleared on the next key)
@@ -633,10 +633,10 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	if !msg.restore.empty() && !tab.selectByKey(msg.restore.key) {
 		switch {
 		case tab.list.FilterState() == list.Unfiltered:
-			// Atlas work is a snapshot. The selected task can leave the default working
-			// view between that read and this fresh workspace load. Widen only this
-			// explicit landing to :all, then retry once; ordinary cursor preservation
-			// still reports a genuine deletion instead of changing views behind the user.
+			// An explicit navigation target can be hidden by the destination tab's
+			// default view (or leave it while an Atlas workspace opens). Widen only
+			// this explicit landing to :all, then retry once; ordinary cursor
+			// preservation still reports deletion without changing views behind the user.
 			if msg.widenOnMissing && tab.statusView != "all" {
 				tab.statusView = "all"
 				tab.restore, tab.restoreWiden = msg.restore, true
@@ -758,6 +758,16 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, keys.Atlas):
 		return m, m.enterAtlas(false)
+	case key.Matches(msg, keys.View):
+		// Alternate entity presentations belong to the detail payload and pane,
+		// not the root model. Today Threads provide summary ⇄ topology; the seam
+		// remains reusable by another entity without another root-level state path.
+		if m.focus == focusDetail {
+			m.detail.cycleView()
+		}
+		return m, nil
+	case m.focus == focusDetail && msg.String() == "enter" && m.detail.selectionAvailable():
+		return m.openDetailSelection()
 	case key.Matches(msg, keys.Action):
 		// Lifecycle actions are registry-driven: open the menu for any entity that
 		// declares transitions (tasks: statuses; audits: buckets; epics: statuses —
@@ -865,6 +875,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateList(msg)
 	}
 	switch {
+	case msg.String() == "j" || msg.String() == "down":
+		if m.detail.moveSelection(1) {
+			return m, nil
+		}
+	case msg.String() == "k" || msg.String() == "up":
+		if m.detail.moveSelection(-1) {
+			return m, nil
+		}
 	case key.Matches(msg, keys.Find):
 		return m, m.detail.startFind()
 	case key.Matches(msg, keys.FindNext):

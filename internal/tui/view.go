@@ -348,17 +348,30 @@ func keyCombo(a, b key.Binding, sep, label string) string {
 	return a.Help().Key + sep + b.Help().Key + " " + label
 }
 
-// detailFooterBody is the footer fragment shared by every detail-pane footer (focused,
-// full-screen, single-pane drill), so the three variants compose it rather than each
-// repeating it.
-func detailFooterBody() string {
-	return strings.Join([]string{
+// detailFooterBody is the footer fragment shared by every detail-pane footer
+// (focused, full-screen, single-pane drill). Optional presentation and markdown
+// controls are advertised only when the loaded detail can actually use them.
+func (m Model) detailFooterBody() string {
+	hints := []string{
 		keyHint(keys.Find, "find"),
 		keyCombo(keys.FindNext, keys.FindPrev, "/", "match"),
-		keyHint(keys.RawToggle, "raw/pretty"),
-		"j/k scroll", // viewport keys — no keyMap binding
-		keyCombo(keys.Top, keys.Bottom, "/", "top/bottom"),
-	}, " · ")
+	}
+	if next := m.detail.nextViewName(); next != "" {
+		hints = append(hints, keyHint(keys.View, next))
+	}
+	if m.cur().kind == entityThreads {
+		hints = append(hints, keyHint(keys.Follow, "tasks"))
+	}
+	if m.detail.bodyModeAvailable() {
+		hints = append(hints, keyHint(keys.RawToggle, "raw/pretty"))
+	}
+	if m.detail.selectionAvailable() {
+		hints = append(hints, "j/k task", "⏎ open")
+	} else {
+		hints = append(hints, "j/k scroll") // viewport keys — no keyMap binding
+	}
+	hints = append(hints, keyCombo(keys.Top, keys.Bottom, "/", "top/bottom"))
+	return strings.Join(hints, " · ")
 }
 
 func (m Model) withWatchHealth(hints string) string {
@@ -458,7 +471,7 @@ func (m Model) footer() string {
 	if m.focus == focusDetail {
 		hints = strings.Join([]string{
 			keyHint(keys.Command, "cmd"), keyHint(keys.Atlas, "atlas"),
-			detailFooterBody(), keyHint(keys.Zoom, "full"),
+			m.detailFooterBody(), keyHint(keys.Zoom, "full"),
 			keyCombo(keys.Left, keys.Back, "/", "back"),
 		}, " · ")
 		switch {
@@ -466,14 +479,14 @@ func (m Model) footer() string {
 			// Full-screen: the list is hidden, so name the way out and drop the keys
 			// (m/e/s/tabs) that only make sense beside the list.
 			hints = strings.Join([]string{
-				"full-screen", keyHint(keys.Atlas, "atlas"), detailFooterBody(),
+				"full-screen", keyHint(keys.Atlas, "atlas"), m.detailFooterBody(),
 				keys.Zoom.Help().Key + "/esc exit",
 			}, " · ")
 		case !m.twoPane:
 			// Single-pane drill: q pops back to the list (context quit), so the
 			// hint must not promise it exits the app.
 			hints = strings.Join([]string{
-				keyHint(keys.Command, "cmd"), keyHint(keys.Atlas, "atlas"), detailFooterBody(),
+				keyHint(keys.Command, "cmd"), keyHint(keys.Atlas, "atlas"), m.detailFooterBody(),
 				keys.Left.Help().Key + "/" + keys.Back.Help().Key + "/" + keys.Quit.Help().Key + " back",
 			}, " · ")
 		}

@@ -12,8 +12,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	clirender "github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/graphfmt"
 	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -127,12 +129,12 @@ func TestThreadsUseOneRegistryListAndDetailOwner(t *testing.T) {
 		t.Fatalf("repository diagnostics were not retained on the registry tab: %+v", tab.threadDiagnostics)
 	}
 
-	wantView, wantBody, err := m.svc.ShowThread("delivery")
+	wantProjection, wantBody, err := m.svc.ShowThreadGraphDetail("delivery")
 	if err != nil {
 		t.Fatal(err)
 	}
 	detail := selectedThreadDetail(t, m)
-	if !reflect.DeepEqual(detail.view, wantView) || detail.body != wantBody || m.detail.loadedKey != wantView.Thread.CanonicalID() {
+	if !reflect.DeepEqual(detail.projection, wantProjection) || detail.body != wantBody || m.detail.loadedKey != wantProjection.View.Thread.CanonicalID() {
 		t.Fatalf("registry detail changed core projection/body: key=%q detail=%+v", m.detail.loadedKey, detail)
 	}
 	if detail.path == "" || m.selectedPath() != detail.path {
@@ -142,7 +144,7 @@ func TestThreadsUseOneRegistryListAndDetailOwner(t *testing.T) {
 	var route, jump bool
 	for _, item := range m.paletteIndex() {
 		route = route || item.kind == palCommand && item.word == "threads"
-		jump = jump || item.kind == palJump && item.ek == entityThreads && item.ref.key == wantView.Thread.CanonicalID()
+		jump = jump || item.kind == palJump && item.ek == entityThreads && item.ref.key == wantProjection.View.Thread.CanonicalID()
 	}
 	if !route || !jump {
 		t.Fatalf("Thread route/item missing from palette: route=%v jump=%v", route, jump)
@@ -302,7 +304,7 @@ func TestThreadRegistryReloadsOnTaskAndThreadChanges(t *testing.T) {
 	if got := frontierIDs(selectedThreadView(t, m)); len(got) == 1 && got[0] == second {
 		t.Error("task-only edit did not refresh the Thread list projection")
 	}
-	if got := frontierIDs(selectedThreadDetail(t, m).view); len(got) == 1 && got[0] == second {
+	if got := frontierIDs(selectedThreadDetail(t, m).projection.View); len(got) == 1 && got[0] == second {
 		t.Error("task-only edit did not refresh the selected Thread detail")
 	}
 
@@ -313,7 +315,7 @@ func TestThreadRegistryReloadsOnTaskAndThreadChanges(t *testing.T) {
 	if got := len(selectedThreadView(t, m).Members); got != 1 {
 		t.Fatalf("Thread-document edit left %d list members", got)
 	}
-	if got := len(selectedThreadDetail(t, m).view.Members); got != 1 {
+	if got := len(selectedThreadDetail(t, m).projection.View.Members); got != 1 {
 		t.Fatalf("Thread-document edit left %d detail members", got)
 	}
 }
@@ -463,7 +465,7 @@ func TestThreadActivityUsesAuthoritativeFrontierOnUnhealthyGraph(t *testing.T) {
 	if activity.inFlight != 1 || activity.dispatchable != len(view.Frontier) || activity.notDispatchable != 2 {
 		t.Fatalf("activity did not account for authoritative frontier: %+v", activity)
 	}
-	meta := ansi.Strip(renderThreadMeta(threadDetail{view: view}, 100, &testStyles))
+	meta := ansi.Strip(renderThreadMeta(threadDetail{projection: core.ThreadGraphProjection{View: view}}, 100, &testStyles))
 	if !strings.Contains(meta, "0 dispatchable · 2 pending not dispatchable") {
 		t.Fatalf("detail hid globally unsafe pending work:\n%s", meta)
 	}
@@ -481,7 +483,7 @@ func TestThreadDetailKeepsNominalAndSoundProgressDistinct(t *testing.T) {
 		Created: "2026-09-03", Tasks: []string{done.ID},
 	}
 	view := core.ProjectThread(thread, core.NewTaskGraph([]domain.Task{done}, nil))
-	meta := ansi.Strip(renderThreadMeta(threadDetail{view: view}, 100, &testStyles))
+	meta := ansi.Strip(renderThreadMeta(threadDetail{projection: core.ThreadGraphProjection{View: view}}, 100, &testStyles))
 	if !strings.Contains(meta, "1/1 nominally done · 0/1 soundly drained") {
 		t.Fatalf("detail collapsed nominal and sound progress:\n%s", meta)
 	}
@@ -582,6 +584,293 @@ func TestThreadDetailPresentsCoreProjectionAndBody(t *testing.T) {
 	}
 }
 
+func TestThreadDetailCyclesToTopologyAndPreservesItAcrossReload(t *testing.T) {
+	m, _ := threadModel(t)
+	m = openThreads(t, m)
+	m.setFocus(focusDetail)
+	if selectedThreadDetail(t, m).detailViewName() != string(threadDetailSummary) {
+		t.Fatal("Thread detail did not start in the summary view")
+	}
+
+	tm, cmd := m.Update(press("v"))
+	m = tm.(Model)
+	if cmd != nil || selectedThreadDetail(t, m).detailViewName() != string(threadDetailTopology) {
+		t.Fatalf("v did not switch to topology: cmd=%v view=%q", cmd != nil, selectedThreadDetail(t, m).detailViewName())
+	}
+	if got, want := selectedThreadDetail(t, m).detailSelectionKey(), testutil.TaskID("first"); got != want {
+		t.Fatalf("topology cursor=%q want first visual task %q", got, want)
+	}
+	plain := ansi.Strip(m.detail.styled)
+	for _, want := range []string{
+		"view:     topology", "Wave 1", "Wave 2", "[prerequisite] ─▶ [dependent]", "needs [", "› ",
+		testutil.TaskID("first"), testutil.TaskID("second"),
+	} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("topology view omitted %q:\n%s", want, plain)
+		}
+	}
+	footer := ansi.Strip(m.detailFooterBody())
+	if !strings.Contains(footer, "v summary") || !strings.Contains(footer, "f tasks") ||
+		!strings.Contains(footer, "j/k task") || !strings.Contains(footer, "⏎ open") ||
+		strings.Contains(footer, "raw/pretty") || strings.Contains(footer, "j/k scroll") {
+		t.Fatalf("topology footer did not describe the active controls: %q", footer)
+	}
+
+	tm, cmd = m.Update(press("j"))
+	m = tm.(Model)
+	if cmd != nil {
+		t.Fatal("topology cursor movement unexpectedly returned a command")
+	}
+	if got, want := selectedThreadDetail(t, m).detailSelectionKey(), testutil.TaskID("second"); got != want {
+		t.Fatalf("j selected %q want %q", got, want)
+	}
+	if line, ok := selectedThreadDetail(t, m).detailSelectionLine(ansi.Strip(m.detail.styled)); !ok ||
+		!strings.Contains(strings.Split(ansi.Strip(m.detail.styled), "\n")[line], testutil.TaskID("second")) {
+		t.Fatalf("visible cursor did not move to the second task:\n%s", ansi.Strip(m.detail.styled))
+	}
+
+	// A watcher refresh may change graph evidence without changing the selected
+	// Thread. The pane retains the reader's chosen representation and stable task
+	// selection rather than snapping back to summary/the first row.
+	m = drainNested(t, m, m.reloadAll())
+	if selectedThreadDetail(t, m).detailViewName() != string(threadDetailTopology) {
+		t.Fatal("same-Thread reload discarded the topology view")
+	}
+	if got, want := selectedThreadDetail(t, m).detailSelectionKey(), testutil.TaskID("second"); got != want {
+		t.Fatalf("same-Thread reload changed topology cursor from %q to %q", want, got)
+	}
+
+	// Resize while focused exercises the same content through the minimum-width
+	// single-pane path; cycling back still restores the persisted markdown body.
+	tm, _ = m.Update(tea.WindowSizeMsg{Width: 20, Height: 8})
+	m = tm.(Model)
+	_ = m.View()
+	tm, _ = m.Update(press("v"))
+	m = tm.(Model)
+	detail := selectedThreadDetail(t, m)
+	if detail.detailViewName() != string(threadDetailSummary) || detail.rawBody() != "# Thread: Delivery\n\nbody\n" {
+		t.Fatalf("summary was not restored after resize: view=%q body=%q", detail.detailViewName(), detail.rawBody())
+	}
+}
+
+func TestThreadTopologyCursorOpensSelectedTaskByStableIdentity(t *testing.T) {
+	m, _ := threadModel(t)
+	m = openThreads(t, m)
+	m.setFocus(focusDetail)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	target := selectedThreadDetail(t, m).detailSelectionKey()
+
+	tm, cmd := m.Update(press("enter"))
+	m = drainNested(t, tm.(Model), cmd)
+	if m.cur().kind != entityTasks || m.selectedKey() != target {
+		t.Fatalf("topology enter did not land on task %s: kind=%v selected=%q", target, m.cur().kind, m.selectedKey())
+	}
+	if m.cur().statusView != "all" {
+		t.Fatalf("completed topology target did not widen unloaded Tasks view: %q", m.cur().statusView)
+	}
+	if len(m.navStack) != 1 || m.navStack[0].kind != entityThreads || m.navStack[0].ref.key != "6g503c6pfqeb" {
+		t.Fatalf("topology origin was not retained on the back stack: %+v", m.navStack)
+	}
+
+	tm, cmd = m.Update(press("ctrl+o"))
+	m = drainNested(t, tm.(Model), cmd)
+	if m.cur().kind != entityThreads || m.selectedKey() != "6g503c6pfqeb" {
+		t.Fatalf("back did not restore the Thread: kind=%v selected=%q", m.cur().kind, m.selectedKey())
+	}
+}
+
+func TestThreadTopologyRendersHostileDeepWideDisconnectedAndPartialEvidence(t *testing.T) {
+	projection := hostileThreadGraphProjection()
+	if projection.TopologyComplete {
+		t.Fatal("fixture should be partial because it includes a missing member")
+	}
+
+	for _, width := range []int{120, 54, 24, 12} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			first := renderThreadTopology(projection, "remote\npath\x1b", "", width, &testStyles)
+			second := renderThreadTopology(projection, "remote\npath\x1b", "", width, &testStyles)
+			if first != second {
+				t.Fatal("same projection rendered nondeterministically")
+			}
+			plain := ansi.Strip(first)
+			for _, line := range strings.Split(plain, "\n") {
+				if got := ansi.StringWidth(line); got > width {
+					t.Errorf("line width %d exceeds %d: %q", got, width, line)
+				}
+			}
+			for _, want := range []string{"partial", "External", "Wave", "Unranked"} {
+				if !strings.Contains(plain, want) {
+					t.Errorf("width %d omitted %q:\n%s", width, want, plain)
+				}
+			}
+			if width >= 24 && !strings.Contains(plain, "external-gate") {
+				t.Errorf("width %d obscured the external role:\n%s", width, plain)
+			}
+			if width >= 54 && !strings.Contains(plain, "needs [") {
+				t.Errorf("width %d obscured the compact prerequisite relation:\n%s", width, plain)
+			}
+		})
+	}
+
+	if got := terminalText("hostile\nlabel\t\x1b[31m"); got != "hostile↵label⇥�[31m" {
+		t.Fatalf("terminal text was not neutralized: %q", got)
+	}
+}
+
+func TestThreadTopologyKeepsCLIAndGraphExportProjectionEvidenceAligned(t *testing.T) {
+	projection := hostileThreadGraphProjection()
+	plainTUI := ansi.Strip(renderThreadTopology(projection, "", "", 160, &testStyles))
+	var cli strings.Builder
+	if err := clirender.ThreadPlanHuman(&cli, clirender.NewStyle(false), projection); err != nil {
+		t.Fatal(err)
+	}
+	dot, err := graphfmt.DOT(projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, wave := range projection.Waves {
+		heading := fmt.Sprintf("Wave %d", wave.Index)
+		if !strings.Contains(cli.String(), heading) || !strings.Contains(plainTUI, heading) {
+			t.Errorf("projection wave %d diverged across CLI/TUI", wave.Index)
+		}
+	}
+	for _, node := range projection.Nodes {
+		if !strings.Contains(cli.String(), node.TaskID) || !strings.Contains(plainTUI, node.TaskID) || !strings.Contains(dot, node.TaskID) {
+			t.Errorf("projection node %s diverged across plan/TUI/DOT", node.TaskID)
+		}
+	}
+	if got := strings.Count(dot, " -> "); got != len(projection.Edges) {
+		t.Fatalf("DOT edge count=%d want %d", got, len(projection.Edges))
+	}
+	aliases := threadGraphAliases(projection)
+	incoming := threadGraphIncoming(projection.Edges, aliases)
+	references := 0
+	for _, prerequisites := range incoming {
+		references += len(prerequisites)
+		if relation := "needs [" + strings.Join(prerequisites, "], [") + "]"; !strings.Contains(plainTUI, relation) {
+			t.Errorf("TUI omitted compact relation %q", relation)
+		}
+	}
+	if references != len(projection.Edges) {
+		t.Fatalf("TUI prerequisite reference count=%d want %d", references, len(projection.Edges))
+	}
+}
+
+func TestThreadFollowPickerNavigatesByStableTaskIdentityAndBack(t *testing.T) {
+	m, _ := threadModel(t)
+	m = openThreads(t, m)
+	m.setFocus(focusDetail)
+	tm, _ := m.Update(press("v"))
+	m = tm.(Model)
+	tm, _ = m.Update(press("j"))
+	m = tm.(Model)
+	wantTarget := selectedThreadDetail(t, m).detailSelectionKey()
+
+	tm, cmd := m.Update(press("f"))
+	m = tm.(Model)
+	if cmd != nil || !m.follow.active || len(m.follow.tasks) != 2 {
+		t.Fatalf("Thread follow picker did not open over both tasks: active=%v tasks=%d cmd=%v flash=%q",
+			m.follow.active, len(m.follow.tasks), cmd != nil, m.flash)
+	}
+	target := m.follow.selected()
+	if target.CanonicalID() != wantTarget {
+		t.Fatalf("Thread follow picker selected %q want topology cursor %q", target.CanonicalID(), wantTarget)
+	}
+	tm, cmd = m.Update(press("enter"))
+	m = drainNested(t, tm.(Model), cmd)
+	if m.cur().kind != entityTasks || m.selectedKey() != target.CanonicalID() {
+		t.Fatalf("Thread follow did not land on task %s: kind=%v selected=%q", target.CanonicalID(), m.cur().kind, m.selectedKey())
+	}
+	if len(m.navStack) != 1 || m.navStack[0].kind != entityThreads || m.navStack[0].ref.key != "6g503c6pfqeb" {
+		t.Fatalf("Thread origin was not retained on the back stack: %+v", m.navStack)
+	}
+
+	tm, cmd = m.Update(press("ctrl+o"))
+	m = drainNested(t, tm.(Model), cmd)
+	if m.cur().kind != entityThreads || m.selectedKey() != "6g503c6pfqeb" {
+		t.Fatalf("back did not restore the Thread: kind=%v selected=%q", m.cur().kind, m.selectedKey())
+	}
+}
+
+func TestThreadFollowTargetsIncludeExternalGatesAndSkipMissingMembers(t *testing.T) {
+	projection := hostileThreadGraphProjection()
+	tasks := threadFollowTasks(projection)
+	if len(tasks) != len(projection.Nodes)-1 {
+		t.Fatalf("follow targets=%d want every readable node (%d)", len(tasks), len(projection.Nodes)-1)
+	}
+	wantIDs := make([]string, 0, len(tasks))
+	for _, node := range projection.Nodes {
+		if node.Label != node.TaskID { // the missing member falls back to its id label
+			wantIDs = append(wantIDs, node.TaskID)
+		}
+	}
+	gotIDs := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		gotIDs = append(gotIDs, task.CanonicalID())
+	}
+	if !reflect.DeepEqual(gotIDs, wantIDs) {
+		t.Fatalf("follow targets lost projection node order:\n got %v\nwant %v", gotIDs, wantIDs)
+	}
+
+	picker := followMenu{}
+	picker.open("large-thread", tasks)
+	picker.move(-1) // wrap to the final task, well below a short terminal's first window
+	view := ansi.Strip(picker.view(&testStyles, 60, 10))
+	if !strings.Contains(view, tasks[len(tasks)-1].Slug) || !strings.Contains(view, fmt.Sprintf("%d/%d", len(tasks), len(tasks))) {
+		t.Fatalf("short picker clipped its selected final task:\n%s", view)
+	}
+	if lines := strings.Count(view, "\n") + 1; lines > 10 {
+		t.Fatalf("short picker rendered %d lines into height 10:\n%s", lines, view)
+	}
+}
+
+func hostileThreadGraphProjection() core.ThreadGraphProjection {
+	gate := domain.Task{ID: testutil.TaskID("external-gate"), Slug: "external-gate", Status: domain.StatusCompleted}
+	root := domain.Task{
+		ID: testutil.TaskID("root"), Slug: "hostile\n\x1b[31m-根", Status: domain.StatusCompleted,
+		DependsOn: []string{gate.ID},
+	}
+	tasks := []domain.Task{gate, root}
+	members := []string{root.ID}
+	previous := root.ID
+	for i := 0; i < 8; i++ {
+		task := domain.Task{
+			ID: testutil.TaskID(fmt.Sprintf("deep-%d", i)), Slug: fmt.Sprintf("deep-%d", i),
+			Status: domain.StatusNextUp, DependsOn: []string{previous},
+		}
+		tasks = append(tasks, task)
+		members = append(members, task.ID)
+		previous = task.ID
+	}
+	wides := make([]string, 0, 8)
+	for i := 0; i < 8; i++ {
+		task := domain.Task{
+			ID: testutil.TaskID(fmt.Sprintf("wide-%d", i)), Slug: fmt.Sprintf("wide-%d-移行", i),
+			Status: domain.StatusReadyToStart, DependsOn: []string{root.ID},
+		}
+		tasks = append(tasks, task)
+		members = append(members, task.ID)
+		wides = append(wides, task.ID)
+	}
+	join := domain.Task{
+		ID: testutil.TaskID("join"), Slug: "fan-in", Status: domain.StatusNextUp,
+		DependsOn: wides,
+	}
+	disconnected := domain.Task{ID: testutil.TaskID("disconnected"), Slug: "disconnected", Status: domain.StatusReadyToStart}
+	tasks = append(tasks, join, disconnected)
+	members = append(members, join.ID, disconnected.ID, testutil.TaskID("missing-member"))
+	sort.Strings(members)
+	thread := domain.Thread{
+		ID: testutil.TaskID("topology-thread"), FilenameID: testutil.TaskID("topology-thread"),
+		Slug: "topology-stress", Status: domain.ThreadStatusInProgress,
+		Description: "stress terminal topology", Goal: "render supplied graph evidence",
+		Created: "2026-09-03", Tasks: members,
+	}
+	return core.ProjectThreadGraph(thread, core.NewTaskGraph(tasks, nil))
+}
+
 func TestThreadProjectionStatesRemainVisuallyDistinct(t *testing.T) {
 	task := func(name string, status domain.Status, dependsOn ...string) domain.Task {
 		sort.Strings(dependsOn)
@@ -625,7 +914,7 @@ func TestThreadProjectionStatesRemainVisuallyDistinct(t *testing.T) {
 		l := list.New([]list.Item{it}, threadDelegate{st: &testStyles}, 96, 5)
 		var out strings.Builder
 		threadDelegate{st: &testStyles}.Render(&out, l, 0, it)
-		rendered[name] = ansi.Strip(out.String()) + "\n" + ansi.Strip(renderThreadMeta(threadDetail{view: view}, 120, &testStyles))
+		rendered[name] = ansi.Strip(out.String()) + "\n" + ansi.Strip(renderThreadMeta(threadDetail{projection: core.ThreadGraphProjection{View: view}}, 120, &testStyles))
 	}
 	for name, want := range map[string][]string{
 		"completed-unsound": {"completed", "inconsistent", "Diagnostics", "missing-thread-member"},
