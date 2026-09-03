@@ -39,16 +39,14 @@ func (r *countingRead) cmd() tea.Cmd {
 // re-run one filesystem quiet period later, and its result lands normally.
 func TestConflictRetriesTheSameRequestAfterOneQuietPeriod(t *testing.T) {
 	m, _ := threadModel(t)
-	list, _, err := m.svc.ListThreadViews()
-	if err != nil {
-		t.Fatal(err)
-	}
+	tab := threadTab(m)
+	tab.loadGen = 1
+	success := loadThreadList(tab, m.svc)()
 	read := &countingRead{msgs: []tea.Msg{
-		threadListLoadedMsg{gen: 1, err: errPlannerWindow},
-		threadListLoadedMsg{gen: 1, list: list},
+		errMsg{kind: entityThreads, gen: 1, err: errPlannerWindow},
+		success,
 	}}
-	request := readRequest{surface: readThreadList, gen: 1}
-	m.threads.listGen = 1
+	request := readRequest{surface: readEntityList, kind: entityThreads, gen: 1}
 
 	msg := withReadConflictRetry(request, read.cmd())()
 	conflict, ok := msg.(readConflictMsg)
@@ -61,9 +59,9 @@ func TestConflictRetriesTheSameRequestAfterOneQuietPeriod(t *testing.T) {
 	start := time.Now()
 	tm, cmd := m.Update(conflict)
 	m = tm.(Model)
-	if m.threads.loadErr != nil || m.threads.loaded {
+	if tab.loadErr != nil || tab.loaded {
 		t.Fatalf("a first conflict must not become a visible error or a false load: err=%v loaded=%v",
-			m.threads.loadErr, m.threads.loaded)
+			tab.loadErr, tab.loaded)
 	}
 	if cmd == nil {
 		t.Fatal("a current request's conflict should schedule a retry")
@@ -86,8 +84,8 @@ func TestConflictRetriesTheSameRequestAfterOneQuietPeriod(t *testing.T) {
 	tm, cmd = m.Update(retry)
 	m = tm.(Model)
 	m = drain(t, m, cmd)
-	if !m.threads.loaded || m.threads.loadErr != nil {
-		t.Fatalf("the retry's success should land: loaded=%v err=%v", m.threads.loaded, m.threads.loadErr)
+	if !tab.loaded || tab.loadErr != nil {
+		t.Fatalf("the retry's success should land: loaded=%v err=%v", tab.loaded, tab.loadErr)
 	}
 	if read.calls != 2 {
 		t.Errorf("the read ran %d times, want exactly one retry", read.calls)
@@ -99,9 +97,10 @@ func TestConflictRetriesTheSameRequestAfterOneQuietPeriod(t *testing.T) {
 // schedules nothing further.
 func TestRepeatedConflictBecomesVisibleWithoutSpinning(t *testing.T) {
 	m, _ := threadModel(t)
-	read := &countingRead{msgs: []tea.Msg{threadListLoadedMsg{gen: 1, err: errPlannerWindow}}}
-	request := readRequest{surface: readThreadList, gen: 1}
-	m.threads.listGen = 1
+	tab := threadTab(m)
+	tab.loadGen = 1
+	read := &countingRead{msgs: []tea.Msg{errMsg{kind: entityThreads, gen: 1, err: errPlannerWindow}}}
+	request := readRequest{surface: readEntityList, kind: entityThreads, gen: 1}
 
 	conflict := withReadConflictRetry(request, read.cmd())().(readConflictMsg)
 	tm, _ := m.Update(conflict)
@@ -116,10 +115,9 @@ func TestRepeatedConflictBecomesVisibleWithoutSpinning(t *testing.T) {
 	if _, held := again.(readConflictMsg); held {
 		t.Fatal("a retry's own conflict must not be held for another retry")
 	}
-	tm, cmd = m.Update(again)
-	m = tm.(Model)
-	if !errors.Is(m.threads.loadErr, domain.ErrConflict) {
-		t.Errorf("a repeated conflict should be visible, got err=%v", m.threads.loadErr)
+	_, cmd = m.Update(again)
+	if !errors.Is(tab.loadErr, domain.ErrConflict) {
+		t.Errorf("a repeated conflict should be visible, got err=%v", tab.loadErr)
 	}
 	if cmd != nil {
 		t.Error("a repeated conflict must not schedule more work")
@@ -173,7 +171,7 @@ func TestRepeatedEntityDetailConflictRetainsOnlyTheSameLoadedRecord(t *testing.T
 		err:  errPlannerWindow,
 	})
 	m = tm.(Model)
-	if m.detail.content != nil || m.detail.loadedKey != "" {
+	if m.detail.content != nil || m.detail.loadedKey != id {
 		t.Error("a conflict for a different canonical record retained unrelated detail")
 	}
 }
@@ -183,14 +181,15 @@ func TestRepeatedEntityDetailConflictRetainsOnlyTheSameLoadedRecord(t *testing.T
 // before it can touch the model.
 func TestNewerGenerationSupersedesAScheduledRetry(t *testing.T) {
 	m, _ := threadModel(t)
-	read := &countingRead{msgs: []tea.Msg{threadListLoadedMsg{gen: 1, err: errPlannerWindow}}}
-	request := readRequest{surface: readThreadList, gen: 1}
-	m.threads.listGen = 1
+	tab := threadTab(m)
+	tab.loadGen = 1
+	read := &countingRead{msgs: []tea.Msg{errMsg{kind: entityThreads, gen: 1, err: errPlannerWindow}}}
+	request := readRequest{surface: readEntityList, kind: entityThreads, gen: 1}
 	conflict := withReadConflictRetry(request, read.cmd())().(readConflictMsg)
 
 	// A newer request (a watcher reload, say) starts while the conflict is in the
 	// queue behind it.
-	m.threads.listGen++
+	tab.loadGen++
 
 	tm, cmd := m.Update(conflict)
 	m = tm.(Model)
@@ -206,13 +205,14 @@ func TestNewerGenerationSupersedesAScheduledRetry(t *testing.T) {
 		t.Errorf("the superseded read ran %d times, want 1 (the original attempt)", read.calls)
 	}
 
-	// The same rule holds for a detail whose selection moved on.
-	m.threads.detailGen, m.threads.detailRef = 3, "delivery"
-	moved := readRequest{surface: readThreadDetail, id: "other", gen: 3}
+	// The same generic rule holds for a Thread detail whose selection moved on.
+	m = openThreads(t, m)
+	m.detailGen = 3
+	moved := readRequest{surface: readEntityDetail, kind: entityThreads, id: "other", gen: 3}
 	if m.readRequestCurrent(moved) {
 		t.Error("a retry for a Thread that is no longer selected must be dropped")
 	}
-	if !m.readRequestCurrent(readRequest{surface: readThreadDetail, id: "delivery", gen: 3}) {
+	if !m.readRequestCurrent(readRequest{surface: readEntityDetail, kind: entityThreads, id: m.selectedKey(), gen: 3}) {
 		t.Error("the selected Thread's own retry should still be current")
 	}
 }
@@ -222,8 +222,6 @@ func TestNewerGenerationSupersedesAScheduledRetry(t *testing.T) {
 // its current and superseded identities are both defined.
 func TestReadRequestCurrentEnumeratesEverySurface(t *testing.T) {
 	m := loaded(t, 120, 40)
-	m.threads.listGen = 7
-	m.threads.detailGen, m.threads.detailRef = 9, "delivery"
 	id := m.selectedKey()
 
 	tests := []struct {
@@ -240,12 +238,6 @@ func TestReadRequestCurrentEnumeratesEverySurface(t *testing.T) {
 		{"dashboard",
 			readRequest{surface: readDashboard, gen: m.dash.loadGen},
 			readRequest{surface: readDashboard, gen: m.dash.loadGen + 1}},
-		{"Thread list",
-			readRequest{surface: readThreadList, gen: m.threads.listGen},
-			readRequest{surface: readThreadList, gen: m.threads.listGen + 1}},
-		{"Thread detail",
-			readRequest{surface: readThreadDetail, id: m.threads.detailRef, gen: m.threads.detailGen},
-			readRequest{surface: readThreadDetail, id: "another-thread", gen: m.threads.detailGen}},
 	}
 	if len(tests) != int(readSurfaceCount) {
 		t.Fatalf("tested %d read surfaces, want %d", len(tests), readSurfaceCount)
@@ -270,8 +262,6 @@ func TestReadPolicyResultTypesOptInBesideTheirDeclarations(t *testing.T) {
 		"entity list":   errMsg{err: errPlannerWindow},
 		"entity detail": detailErrMsg{err: errPlannerWindow},
 		"dashboard":     dashLoadedMsg{err: errPlannerWindow},
-		"Thread list":   threadListLoadedMsg{err: errPlannerWindow},
-		"Thread detail": threadDetailLoadedMsg{err: errPlannerWindow},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if !errors.Is(readMessageError(msg), domain.ErrConflict) {
@@ -289,17 +279,18 @@ func TestReadPolicyResultTypesOptInBesideTheirDeclarations(t *testing.T) {
 // on its first appearance, and nothing re-runs behind the user's back.
 func TestNonConflictFailuresSkipTheRetryPolicy(t *testing.T) {
 	m, _ := threadModel(t)
-	m.threads.listGen = 1
+	tab := threadTab(m)
+	tab.loadGen = 1
 	for _, err := range []error{domain.ErrNotFound, domain.ErrValidation, errors.New("disk fell over")} {
-		read := &countingRead{msgs: []tea.Msg{threadListLoadedMsg{gen: 1, err: err}}}
-		msg := withReadConflictRetry(readRequest{surface: readThreadList, gen: 1}, read.cmd())()
+		read := &countingRead{msgs: []tea.Msg{errMsg{kind: entityThreads, gen: 1, err: err}}}
+		msg := withReadConflictRetry(readRequest{surface: readEntityList, kind: entityThreads, gen: 1}, read.cmd())()
 		if _, held := msg.(readConflictMsg); held {
 			t.Fatalf("%v was treated as transient contention", err)
 		}
 		tm, cmd := m.Update(msg)
 		m = tm.(Model)
-		if !errors.Is(m.threads.loadErr, err) {
-			t.Errorf("durable error %v was not stored, got %v", err, m.threads.loadErr)
+		if !errors.Is(tab.loadErr, err) {
+			t.Errorf("durable error %v was not stored, got %v", err, tab.loadErr)
 		}
 		if cmd != nil {
 			t.Errorf("durable error %v scheduled follow-up work", err)
@@ -309,9 +300,9 @@ func TestNonConflictFailuresSkipTheRetryPolicy(t *testing.T) {
 		}
 	}
 	// Recovery is the ordinary path: the next successful read clears it.
-	m = drain(t, m, m.requestThreadList())
-	if m.threads.loadErr != nil || !m.threads.loaded {
-		t.Errorf("a later successful reload should clear the error: err=%v loaded=%v", m.threads.loadErr, m.threads.loaded)
+	m = drain(t, m, tab.reload(m.svc, entityRef{}))
+	if tab.loadErr != nil || !tab.loaded {
+		t.Errorf("a later successful reload should clear the error: err=%v loaded=%v", tab.loadErr, tab.loaded)
 	}
 }
 
@@ -388,11 +379,12 @@ func TestPlannerWindowRetainsEveryLoadedSurface(t *testing.T) {
 	m = drainNested(t, m, m.Init()) // dashboard
 	tm, cmd := m.Update(press("]")) // tasks tab + its detail
 	m = drainNested(t, tm.(Model), cmd)
-	m = drainNested(t, m, m.requestThreadList())
-	m = drainNested(t, m, m.requestThreadDetail("delivery"))
-	if !m.dash.loaded || !m.cur().loaded || !m.threads.loaded || !m.threads.detailOK || !m.detail.hasContent {
-		t.Fatalf("setup: every surface should be loaded: dash=%v tab=%v threads=%v detail=%v pane=%v",
-			m.dash.loaded, m.cur().loaded, m.threads.loaded, m.threads.detailOK, m.detail.hasContent)
+	m = openThreads(t, m)
+	if !m.dash.loaded || !m.tabs[indexOfKind(m.tabs, entityTasks)].loaded ||
+		!threadTab(m).loaded || !m.detail.hasContent {
+		t.Fatalf("setup: every surface should be loaded: dash=%v tasks=%v threads=%v detail=%v",
+			m.dash.loaded, m.tabs[indexOfKind(m.tabs, entityTasks)].loaded,
+			threadTab(m).loaded, m.detail.hasContent)
 	}
 	rows := len(m.cur().list.Items())
 	body := m.detail.content.rawBody()
@@ -403,7 +395,7 @@ func TestPlannerWindowRetainsEveryLoadedSurface(t *testing.T) {
 	// One watcher reload while the planner holds the tree.
 	var retries []readRetryMsg
 	m, retries = drainConflicts(t, m, m.reloadAll())
-	if len(retries) != 4 {
+	if len(retries) != 3 {
 		t.Fatalf("expected every loaded surface to hold its conflict, got %d retries", len(retries))
 	}
 	if !m.dash.loaded || m.dash.loadErr != nil {
@@ -415,11 +407,8 @@ func TestPlannerWindowRetainsEveryLoadedSurface(t *testing.T) {
 	if m.detail.content == nil || m.detail.content.rawBody() != body {
 		t.Error("the detail pane lost the body it was showing")
 	}
-	if !m.threads.loaded || m.threads.loadErr != nil || len(m.threads.list.Threads) != 1 {
-		t.Errorf("the Thread list blanked: loaded=%v err=%v", m.threads.loaded, m.threads.loadErr)
-	}
-	if !m.threads.detailOK || m.threads.detailErr != nil {
-		t.Errorf("the Thread detail blanked: ok=%v err=%v", m.threads.detailOK, m.threads.detailErr)
+	if !threadTab(m).loaded || threadTab(m).loadErr != nil || len(threadTab(m).list.Items()) != 1 {
+		t.Errorf("the Thread list blanked: loaded=%v err=%v", threadTab(m).loaded, threadTab(m).loadErr)
 	}
 
 	// Each surface reloaded once for the one event, and no surface's failure
@@ -453,9 +442,9 @@ func TestPlannerWindowRetainsEveryLoadedSurface(t *testing.T) {
 	if after := readGenerations(m); after != during {
 		t.Errorf("retries opened new reads on other surfaces: %v, want %v", after, during)
 	}
-	if m.cur().loadErr != nil || m.dash.loadErr != nil || m.threads.loadErr != nil || m.threads.detailErr != nil {
-		t.Errorf("retries after the window closed should all succeed: tab=%v dash=%v threads=%v/%v",
-			m.cur().loadErr, m.dash.loadErr, m.threads.loadErr, m.threads.detailErr)
+	if m.cur().loadErr != nil || m.dash.loadErr != nil || m.detail.errMsg != "" {
+		t.Errorf("retries after the window closed should all succeed: tab=%v dash=%v detail=%q",
+			m.cur().loadErr, m.dash.loadErr, m.detail.errMsg)
 	}
 	if len(m.cur().list.Items()) != rows || m.detail.errMsg != "" {
 		t.Errorf("the converged model = %d rows, detail err %q", len(m.cur().list.Items()), m.detail.errMsg)
@@ -502,11 +491,14 @@ func TestFirstLoadContentionIsNotAFalseEmptyState(t *testing.T) {
 }
 
 // readGenerations snapshots every INDEPENDENTLY reloadable surface's request
-// counter: the tasks tab, the dashboard, and both Thread caches. The entity
-// detail is deliberately absent — it is a derived read, chained off its list's
-// result, and is exercised on its own below.
-func readGenerations(m Model) [4]int {
-	return [4]int{m.cur().loadGen, m.dash.loadGen, m.threads.listGen, m.threads.detailGen}
+// counter: the loaded tasks/Threads registry entries and the dashboard. Entity
+// detail is deliberately absent — it is derived from the active list result.
+func readGenerations(m Model) [3]int {
+	return [3]int{
+		m.tabs[indexOfKind(m.tabs, entityTasks)].loadGen,
+		threadTab(m).loadGen,
+		m.dash.loadGen,
+	}
 }
 
 // drainConflicts resolves a reload's command tree, collecting the retry each

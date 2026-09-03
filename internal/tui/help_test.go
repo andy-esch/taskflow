@@ -73,7 +73,7 @@ func TestHelpAndFooterDeriveFromKeymap(t *testing.T) {
 // fit and the truncate backstop must keep rows from widening the box. Checked both at
 // the helpLines level (the real invariant) and the rendered-box level (uniform border).
 func TestHelpBoxFixedWidthAcrossScroll(t *testing.T) {
-	for _, kind := range []entityKind{entityTasks, entityEpics, entityAudits, entityDashboard} {
+	for _, kind := range []entityKind{entityTasks, entityEpics, entityThreads, entityAudits, entityDashboard} {
 		for _, maxW := range []int{20, 30, 47, 62, 120} { // 20/30 = narrow (backstop regime)
 			contentW := helpWidth(maxW) - testStyles.helpHFrame
 			// Invariant 1 (the one the resize/clip bug violated): no composed line may
@@ -120,12 +120,15 @@ func TestSymbolsLegendIsPageSpecific(t *testing.T) {
 		}
 		return b.String()
 	}
-	tasks, epics, audits := text(entityTasks), text(entityEpics), text(entityAudits)
+	tasks, epics, threads, audits := text(entityTasks), text(entityEpics), text(entityThreads), text(entityAudits)
 	if !strings.Contains(tasks, "revisit") || strings.Contains(tasks, "liveness") {
 		t.Error("tasks legend should describe task markers, not epic liveness")
 	}
 	if !strings.Contains(epics, "dormant") || strings.Contains(epics, "finding:") {
 		t.Error("epics legend should describe liveness, not audit findings")
+	}
+	if !strings.Contains(threads, "Thread projection healthy") || !strings.Contains(threads, "dispatchable frontier") {
+		t.Error("Threads legend should explain projection health and graph-derived work")
 	}
 	if !strings.Contains(audits, "finding:") || !strings.Contains(audits, "bucket") {
 		t.Error("audits legend should describe buckets + finding statuses")

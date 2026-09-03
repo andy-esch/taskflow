@@ -27,6 +27,9 @@ var (
 	taskSortCols  = []sortKey{sortDefault, sortPriority, sortUpdated, sortTier, sortSlug}
 	epicSortCols  = []sortKey{sortDefault, sortPriority, sortSlug}
 	auditSortCols = []sortKey{sortDefault, sortUpdated, sortSlug}
+	// Threads are service-ordered by stable identity by default; their only
+	// additional persisted ordering dimensions are updated date and slug.
+	threadSortCols = []sortKey{sortDefault, sortUpdated, sortSlug}
 	// Research: created (the loader default) → updated → slug. No priority/tier, and
 	// deliberately no separate "created" key — sortDefault already IS created-descending,
 	// so one would reorder nothing while showing a sort chip.
