@@ -201,8 +201,12 @@ adapter capabilities rather than leaked persistence.
   bounded node set, member-only explanatory waves, the complete `ThreadView`, and an explicit
   topology-completeness verdict. Waves contract ordering paths through included gates without
   treating those gates as Thread-owned work. CLI, TUI, and future web adapters consume that
-  projection; `thread plan` presents its waves and marked gates, while `thread graph` exports it as
-  Mermaid or DOT. Both commands return the same renderer-neutral projection under `--json`.
+  projection; `thread plan` presents its waves and marked gates, `thread graph` exports it as
+  Mermaid or DOT, and Thread detail in the TUI groups each bounded incoming edge beneath its
+  dependent wave node using compact presentation aliases without reparsing either text format. A
+  stable-ID cursor walks those supplied gate/wave/unranked rows and delegates Enter-to-open back to
+  the shell's ordinary entity navigator. Both CLI commands return the same renderer-neutral
+  projection under `--json`.
   `internal/graphfmt` owns pure Mermaid/DOT escaping and formatting without UI dependencies, and no
   Cobra, Bubble Tea, HTTP, filesystem, or graph-library type enters core or wire contracts. The
   sources return neutral `TaskGraphRead` and `ThreadRead` snapshots: unreadable records carry
@@ -540,9 +544,15 @@ Files split by concern:
   graph/read diagnostics live on that registry tab, and no parallel Thread list/detail cache
   exists. The tab is read lazily and then invalidated by the same debounced reload as every other
   loaded entity — including by task-only edits, since membership readiness is graph-derived.
-  Detail loading joins `ShowThread` with the separately optional `ThreadPathSource`; pathless
-  adapters retain semantic browsing while path copy, clickable titles, and `$EDITOR` degrade
-  explicitly rather than borrowing `domain.Thread.Path` from a portable record.
+  Detail loading uses one `ShowThreadGraphDetail` read for the graph projection and persisted body,
+  then joins the separately optional `ThreadPathSource`; pathless adapters retain summary and
+  topology browsing while path copy, clickable titles, and `$EDITOR` degrade explicitly rather
+  than borrowing `domain.Thread.Path` from a portable record. The generic detail pane owns an
+  optional alternate-view seam and preserves the selected representation across same-entity
+  reloads; Thread content supplies summary/topology renderers without adding Thread state to the
+  root model. A sibling optional navigation seam lets structured detail presentations own their
+  row order and selected identity while the shell continues to own keys, history, and canonical
+  cross-entity navigation.
   A read that lands inside a guarded repository mutation's planner window fails with
   `domain.ErrConflict`, which is contention, not corruption: every asynchronous surface
   (entity list, entity detail, dashboard) routes that first conflict through
@@ -576,9 +586,10 @@ Files split by concern:
   error stays on the field (shown inline) for an in-place fix, success returns to the
   picker. Task-only; status stays in the action menu. No new validation path —
   core re-validates, the same as `task set`.
-- **`nav.go`** — S6 cross-link navigation: `f` follows structured references
-  (a task's epic; an epic's tasks via a picker modal), `ctrl+o` pops the
-  back-stack; hidden targets escalate the tasks view to `:all` rather than fail.
+- **`nav.go`** — S6 cross-link navigation: `f` follows structured references from a task to its
+  epic directly, or from an epic/Thread to its task references through the same picker modal;
+  Thread targets include members and immediate external gates. `ctrl+o` pops the back-stack;
+  hidden targets escalate the destination view to `:all` rather than fail.
 - **`watch.go`** — active-space-only `fsnotify` live reload: a self-perpetuating listener `Cmd`
   feeds `fsEventMsg`; a generation-guarded `tea.Tick` debounce (200ms) coalesces
   save-storms into one reload of every loaded tab, cursor preserved by id. The

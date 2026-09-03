@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5rwjqr7rt8
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Expose Thread navigation, lifecycle, progress, frontier, gates, and inconsistency in responsive read-only TUI list and detail views.
 effort: 2-3 days
@@ -13,6 +13,7 @@ created: "2026-09-01"
 depends_on: [6g5rwjqeh6a6, 6g5rxq17px59]
 updated_at: "2026-09-03"
 started_at: "2026-09-02"
+completed_at: "2026-09-03"
 ---
 
 # Add Thread list and detail views to the TUI

@@ -1205,6 +1205,26 @@ dispatchable frontier, and pending work not dispatchable under current graph evi
 retains members, immediate external gates, diagnostics, and the persisted body without treating
 document order as dispatch authority.
 
+Dogfooding that detail against `complete-production-threads` exposed the remaining topology gap:
+the active Thread had nineteen bounded nodes, one immediate external gate, eight member waves, and
+fan-out/fan-in edges. Summary answered state and health, and `thread plan` answered broad execution
+order, but neither showed why a member occupied its wave without mentally joining a separate
+Mermaid/DOT export. A wave-only TUI would therefore still look like a sequence of task bags. The
+smallest sufficient follow-up is a read-only `v` alternate view in Thread detail: external gates,
+the core-supplied member waves, unranked members when topology is partial, and compact stable
+aliases that list each node's bounded incoming prerequisites. The direction remains explicit as
+`[prerequisite] ─▶ [dependent]`, without repeating two long labels for every edge. The wave page
+also carries a stable-ID selector: `j`/`k` moves in displayed gate/wave/unranked order and `Enter`
+opens the selected task through the ordinary canonical navigator. `f` remains the direct picker for
+any readable member or immediate external-gate task, and `ctrl+o` returns to the Thread. The TUI
+receives the body and `ThreadGraphProjection` from one paired read, presents projection fields
+without local traversal,
+and preserves the chosen view and selected task across a same-Thread reload. A free-form node
+canvas, Mermaid/DOT parsing, advanced analysis, and graph mutation remain deferred; they are not
+needed to answer the observed causal question. A genuinely two-dimensional, full-screen graph with
+spatial `hjkl` node navigation is a separate prototype task; it requires layout and interaction
+decisions that do not belong in the linear detail reader.
+
 These are implementation boundaries, not new Thread semantics. Repository-global dependencies and
 core projections remain authoritative, and advanced analysis stays out of scope.
 
