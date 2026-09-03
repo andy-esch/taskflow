@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5xyxhhc8p5
-bucket: open
+bucket: closed
 area: cli-ergonomics-from-an-agent-session
 date: "2026-09-01"
 updated_at: "2026-09-02"
@@ -94,7 +94,7 @@ pointer, and it surfaces as its own tracked_by field in --json rather than as
 prose. Unresolvable and self-referential destinations are refused before any
 write.
 
-#### H3. Repo-global graph degradation surfaces at an unrelated mutation · **Status:** open
+#### H3. Repo-global graph degradation surfaces at an unrelated mutation · **Status:** tracked by 6g697mp8s4tx
 
 **File:** graph guard on task transitions | **Component:** dependency-graph
 **Effort:** S · **Urgency:** eventually
@@ -116,15 +116,9 @@ presumably been there for weeks.
 `lint` currently reports "all planning entities and dependency links pass lint" on a repo the graph
 guard considers degraded, which reads as a contradiction.
 
-**Resolution:** Partially addressed: board now prints a graph-health warning
-line naming the degradation and its remedy, and board --json carries a graph
-object, so the latch is visible on the surface an agent reads first. status and
-lint are NOT done. lint deliberately treats a resolvable legacy dependency field
-as advisory with exit zero
-(TestLintResolvedLegacyDependencyIsAdvisoryWithExitZero), and a repository-level
-verdict added naively breaks that contract; the real gap is narrower —
-dependencyLintIssues skips ProblemLegacyMissing and ProblemLegacyAmbiguous as
-already-rendered elsewhere, and that is where the silence comes from.
+**Resolution:** Board half landed in the same pass; the remainder — status, and
+reconciling lint's advisory/exit-zero contract with the graph guard's latch — is
+task 6g697mp8s4tx, which carries the constraint analysis.
 
 #### H4. A nested code fence silently drops every finding after it · **Status:** fixed
 
