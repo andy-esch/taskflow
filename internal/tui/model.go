@@ -1,7 +1,7 @@
 // Package tui is the second primary adapter: an interactive Bubble Tea front-end
 // over the same core.Service the CLI uses. It never touches the store/fs — every
 // read runs as a tea.Cmd against the service (commands.go), so Update and View
-// stay I/O-free. Entities (tasks/epics/audits/research) are declared in a registry
+// stay I/O-free. Entities (tasks/epics/Threads/audits/research) are declared in a registry
 // (entity.go); the lists live-reload via fsnotify (watch.go). See
 // docs/ARCHITECTURE.md for the subsystem map.
 package tui
@@ -28,7 +28,7 @@ const (
 	focusDetail
 )
 
-// Model is the root TUI model: a multi-entity browser (tasks/epics/audits/research) over
+// Model is the root TUI model: a multi-entity browser (tasks/epics/Threads/audits/research) over
 // the core service. A tab strip + `:` command-jump switch the active entity; each
 // entity keeps its own list (and cursor). The right pane shows the selection's
 // detail.
@@ -85,9 +85,8 @@ type Model struct {
 	focus   focus
 	tabs    []*entityTab
 	active  int
-	onDash  bool                  // showing the landing dashboard (a non-list screen left of the tabs)
-	dash    dashboard             // the landing screen's widgets (see dashboard.go)
-	threads threadProjectionState // typed core projections; rendered by the next Thread UI slice
+	onDash  bool      // showing the landing dashboard (a non-list screen left of the tabs)
+	dash    dashboard // the landing screen's widgets (see dashboard.go)
 	detail  detailPane
 	cmd     commandBar
 	palette palette // the ctrl+p command palette (fuzzy launcher); see palette.go
@@ -252,9 +251,6 @@ func (m *Model) reloadAll() tea.Cmd {
 	if m.dash.loaded || m.onDash {
 		cmds = append(cmds, m.reloadDashboard())
 	}
-	// Thread projections follow the same rule: a surface nobody has asked for yet
-	// stays unread, and one already requested is invalidated by the same event.
-	cmds = append(cmds, m.reloadThreadProjections())
 	return tea.Batch(cmds...)
 }
 
@@ -362,7 +358,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if title == "" {
 				title = msg.id
 			}
-			m.detail.SetError(title, msg.err.Error())
+			m.detail.SetError(msg.id, title, msg.err.Error(), msg.localPath)
 		}
 		return m, nil
 
@@ -384,36 +380,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.dash.loadErr = nil
 		m.dash.setSummary(msg.summary, m.st, m.configSvc != nil)
-		return m, nil
-
-	case threadListLoadedMsg:
-		// The Thread cache follows the dashboard's rules: generation-stamped, with
-		// a failure stored durably beside the last coherent projection rather than
-		// replacing it. The values themselves stay exactly as core produced them.
-		if msg.gen != m.threads.listGen {
-			return m, nil
-		}
-		if msg.err != nil {
-			m.threads.loadErr = msg.err
-			return m, nil
-		}
-		m.threads.list, m.threads.problems = msg.list, msg.problems
-		m.threads.loaded, m.threads.loadErr = true, nil
-		return m, nil
-
-	case threadDetailLoadedMsg:
-		// A result for a Thread the selection has moved off is stale even at the
-		// current generation, so the ref is part of the identity check.
-		if msg.gen != m.threads.detailGen || msg.ref != m.threads.detailRef {
-			return m, nil
-		}
-		if msg.err != nil {
-			m.threads.detailErr = msg.err
-			return m, nil
-		}
-		m.threads.detail, m.threads.detailBody = msg.view, msg.body
-		m.threads.detailLoadedRef = msg.ref
-		m.threads.detailOK, m.threads.detailErr = true, nil
 		return m, nil
 
 	case readConflictMsg:
@@ -654,6 +620,7 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	cmd := routeToTab(msg.kind, tab.list.SetItems(msg.items))
 	tab.loaded = true
 	tab.problems = msg.problems
+	tab.threadDiagnostics = msg.threadDiagnostics
 	if m.palette.active {
 		m.palette.reindex(m.paletteIndex()) // a tab finished loading while the palette is open
 	}
@@ -812,6 +779,15 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.edit.open(t)
 		} else if ep, ok := m.selectedEpic(); ok {
 			m.edit.openEpic(ep)
+		} else if m.cur().kind == entityThreads && !m.selectedRef().empty() {
+			switch {
+			case m.selectedPath() != "":
+				m.flash, m.flashErr = "no inline edit here — press E to edit in $EDITOR", true
+			case m.detail.loading && !m.detail.showing(m.selectedKey()):
+				m.flash, m.flashErr = "Thread path is still loading", true
+			default:
+				m.flash, m.flashErr = "Thread editing is unavailable without a local path", true
+			}
 		} else if m.selectedPath() != "" {
 			m.flash, m.flashErr = "no inline edit here — press E to edit in $EDITOR", true
 		}
@@ -831,7 +807,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		text, label := m.selectedYankRef()
 		return m.yank(text, label)
 	case key.Matches(msg, keys.YankPath):
-		return m.yank(m.selectedPath(), "path")
+		return m.yankSelectedPath()
 	case key.Matches(msg, keys.Command):
 		return m, m.cmd.focus()
 	case key.Matches(msg, keys.Palette):
@@ -1240,10 +1216,6 @@ func (m Model) readRequestCurrent(request readRequest) bool {
 		return request.gen == m.detailGen && m.isCurrentSelection(request.kind, request.id)
 	case readDashboard:
 		return request.gen == m.dash.loadGen
-	case readThreadList:
-		return request.gen == m.threads.listGen
-	case readThreadDetail:
-		return request.gen == m.threads.detailGen && request.id == m.threads.detailRef
 	default:
 		return false
 	}
@@ -1312,6 +1284,14 @@ func (m Model) selectedYankRef() (string, string) {
 // selectedPath is the file path of the active tab's selection (empty if none) —
 // the clipboard yank target for Y.
 func (m Model) selectedPath() string {
+	// Thread paths are an optional local-navigation capability, not part of the
+	// portable list projection. They arrive with the selected detail read.
+	if m.cur().kind == entityThreads {
+		if m.detail.loadedKey == m.selectedKey() {
+			return m.detail.path()
+		}
+		return ""
+	}
 	if it, ok := m.cur().list.SelectedItem().(entityItem); ok {
 		return it.path()
 	}
@@ -1330,18 +1310,38 @@ func (m Model) yank(text, label string) (tea.Model, tea.Cmd) {
 	return m, copyToClipboard(text)
 }
 
+func (m Model) yankSelectedPath() (tea.Model, tea.Cmd) {
+	if m.cur().kind == entityThreads && !m.selectedRef().empty() && m.selectedPath() == "" {
+		if m.detail.loading && !m.detail.showing(m.selectedKey()) {
+			m.flash, m.flashErr = "Thread path is still loading", true
+		} else {
+			m.flash, m.flashErr = "local path unavailable for this Thread", true
+		}
+		return m, nil
+	}
+	return m.yank(m.selectedPath(), "path")
+}
+
 // openInEditor suspends the TUI and opens the current selection's file in the
 // user's $EDITOR: tea.ExecProcess releases the terminal for the editor, then
 // restores it. It edits the file directly rather than through core — the same
 // path as editing it in another terminal, which the fsnotify watcher already
 // handles — and reloads on return (via editorClosedMsg) so the change shows at
 // once, instant even when the watcher is off (the debounce coalesces the
-// duplicate fs event). It works on any entity (tasks/epics/audits/research) and from
+// duplicate fs event). It works on any entity with a local path capability and from
 // either pane, since it acts on the selected row's path.
 func (m Model) openInEditor() (tea.Model, tea.Cmd) {
 	path := m.selectedPath()
 	if path == "" {
-		m.flash, m.flashErr = "nothing to edit", true
+		if m.cur().kind == entityThreads && !m.selectedRef().empty() {
+			if m.detail.loading && !m.detail.showing(m.selectedKey()) {
+				m.flash, m.flashErr = "Thread path is still loading", true
+			} else {
+				m.flash, m.flashErr = "local path unavailable for this Thread", true
+			}
+		} else {
+			m.flash, m.flashErr = "nothing to edit", true
+		}
 		return m, nil
 	}
 	cmd := editor.Command(editor.Resolve(), path)

@@ -23,6 +23,7 @@ type entityKind int
 const (
 	entityTasks entityKind = iota
 	entityEpics
+	entityThreads
 	entityAudits
 	entityResearch
 )
@@ -181,6 +182,10 @@ type entityTab struct {
 	loadGen   int   // bumped per reload; stale list results/errors are dropped by gen
 	loadErr   error // this tab's last list-load failure (nil after a successful load)
 	problems  []domain.FileProblem
+	// Thread list reads carry repository-wide graph/read diagnostics that do not
+	// belong to any one row. They live on the registry tab — not in a parallel
+	// Thread state machine — and are nil for every other entity.
+	threadDiagnostics *threadListDiagnostics
 
 	// Lifecycle (registry-driven, S4/M10): the transitions this entity offers and
 	// the move that applies one. Tasks declare status transitions (svc.Move); audits
@@ -433,6 +438,14 @@ func newEntityTabs(st *styles) []*entityTab {
 			// Epic status is a frontmatter field, not a directory: the `m` menu / `:`
 			// verbs flip it via svc.MoveEpic (the file stays put), mirroring task/audit.
 			sortCols: epicSortCols, transitions: epicTransitions, applyMove: moveEpic,
+		},
+		{
+			// Threads are deliberately read-only in this first visible slice. Lifecycle,
+			// membership, and graph semantics all come from core projections; the registry
+			// owns only list/detail loading, selection, sorting, and presentation.
+			kind: entityThreads, name: "threads", aliases: []string{"th", "thread"},
+			list: mk(threadDelegate{st: st}), loadList: loadThreadList, loadItem: loadThreadDetail,
+			sortCols: threadSortCols,
 		},
 		{
 			kind: entityAudits, name: "audits", aliases: []string{"a", "audit"},

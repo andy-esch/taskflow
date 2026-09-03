@@ -49,6 +49,7 @@ type detailPane struct {
 	prettyStyled string        // meta + glamour body (cached)
 	styled       string        // the active composition, kept so find can re-highlight
 	errMsg       string
+	errorPath    string // optional local repair path retained for an error pane
 	loading      bool
 	hasContent   bool
 	find         finder
@@ -155,6 +156,7 @@ func (d *detailPane) SetContent(id string, c detailContent) {
 	offset := d.vp.YOffset()
 	d.content = c
 	d.errMsg = ""
+	d.errorPath = ""
 	d.title = c.Title()
 	d.loadedKey = id
 	d.render()
@@ -168,22 +170,23 @@ func (d *detailPane) SetContent(id string, c detailContent) {
 	d.loading = false
 }
 
-// path returns the loaded entity's file path, or "" when there's no content (error
-// or empty pane) — so the title is linkified only when it points somewhere real.
+// path returns the loaded entity's local path. An error pane may retain a
+// separately resolved repair path; empty/pathless panes return "".
 func (d detailPane) path() string {
 	if d.content == nil {
-		return ""
+		return d.errorPath
 	}
 	return d.content.Path()
 }
 
 // SetError shows a per-item load error in the pane (keeps the browser alive).
-func (d *detailPane) SetError(title, msg string) {
+func (d *detailPane) SetError(id, title, msg, localPath string) {
 	d.content = nil
-	d.loadedKey = ""
+	d.loadedKey = id
 	d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 	d.resetFind()
 	d.errMsg = msg
+	d.errorPath = localPath
 	d.title = title
 	d.vp.SetContent(d.st.fg(theme.ColorRed, "⚠ "+msg))
 	d.vp.GotoTop()
@@ -220,6 +223,7 @@ func (d *detailPane) clear() {
 	d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 	d.resetFind()
 	d.errMsg = ""
+	d.errorPath = ""
 	d.title = ""
 	d.loadedKey = ""
 	d.hasContent = false
@@ -234,6 +238,7 @@ func (d *detailPane) showEmpty() {
 	d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 	d.resetFind()
 	d.errMsg = ""
+	d.errorPath = ""
 	d.title = ""
 	d.loadedKey = ""
 	d.hasContent = false
@@ -527,6 +532,130 @@ func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int, s *styl
 				labelWithIdentityHint(t.Slug, hints[t.CanonicalID()]))
 		}
 	}
+	return wrap(strings.TrimRight(b.String(), "\n"), width)
+}
+
+// --- thread detail ---
+
+type threadDetail struct {
+	view      core.ThreadView
+	body      string
+	path      string
+	pathIssue string
+}
+
+func (d threadDetail) Title() string                { return d.view.Thread.Slug }
+func (d threadDetail) Path() string                 { return d.path }
+func (d threadDetail) rawBody() string              { return d.body }
+func (d threadDetail) meta(w int, s *styles) string { return renderThreadMeta(d, w, s) }
+
+func threadTaskIdentity(task core.ThreadTaskView) (string, string) {
+	id := task.State.TaskID
+	if id == "" {
+		id = task.Task.CanonicalID()
+	}
+	name := task.Task.Slug
+	if name == "" {
+		name = id
+	}
+	return name, id
+}
+
+func threadTaskLine(task core.ThreadTaskView, marker string, s *styles) string {
+	name, id := threadTaskIdentity(task)
+	state := string(task.State.Role) + "/" + string(task.State.Gate)
+	if task.State.Role == "" && task.State.Gate == "" {
+		state = "missing/broken"
+	}
+	return fmt.Sprintf("  %s %s  %s  %s", marker, name, s.dim(id), state)
+}
+
+func threadSection(b *strings.Builder, title string, lines []string, s *styles) {
+	if len(lines) == 0 {
+		return
+	}
+	b.WriteString("\n" + s.dashHeading.Render(title) + "\n")
+	for _, line := range lines {
+		b.WriteString(line + "\n")
+	}
+}
+
+func renderThreadMeta(d threadDetail, width int, s *styles) string {
+	view, thread := d.view, d.view.Thread
+	var b strings.Builder
+	status := theme.ThreadStatus(thread.Status)
+	detailField(&b, "thread", thread.Slug+"  "+s.dim("("+thread.CanonicalID()+")"), s)
+	detailField(&b, "lifecycle", s.fg(status.Color, status.Glyph+" "+string(thread.Status)), s)
+	health := string(view.GraphHealth) + " · projection " + string(view.ProjectionHealth)
+	if view.Inconsistent {
+		health += "  " + s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph+" inconsistent")
+	}
+	detailField(&b, "health", health, s)
+	detailField(&b, "progress", fmt.Sprintf("%d/%d nominally done · %d/%d soundly drained · %d deprecated",
+		view.Rollup.Done, view.Rollup.Total, view.Rollup.Drained, view.Rollup.Total, view.Rollup.Deprecated), s)
+	activity := activityForThread(view)
+	detailField(&b, "work", fmt.Sprintf("%d in flight · %d dispatchable · %d pending not dispatchable",
+		activity.inFlight, activity.dispatchable, activity.notDispatchable), s)
+	detailField(&b, "goal", thread.Goal, s)
+	detailField(&b, "target", thread.TargetDate, s)
+	if len(thread.Tags) > 0 {
+		detailField(&b, "tags", strings.Join(thread.Tags, ", "), s)
+	}
+	if d.pathIssue != "" {
+		detailField(&b, "local path", "unavailable · "+d.pathIssue, s)
+	}
+
+	var inFlight []string
+	for _, member := range view.Members {
+		if member.State.Role == core.RoleInFlight {
+			inFlight = append(inFlight, threadTaskLine(member, s.fg(theme.ColorYellow, "▶"), s))
+		}
+	}
+	threadSection(&b, "In flight", inFlight, s)
+
+	frontier := make([]string, 0, len(view.Frontier))
+	for _, member := range view.Frontier {
+		frontier = append(frontier, threadTaskLine(member, s.fg(theme.ColorGreen, "✓"), s))
+	}
+	threadSection(&b, "Dispatchable frontier", frontier, s)
+
+	members := make([]string, 0, len(view.Members))
+	for _, member := range view.Members {
+		var marker string
+		if member.Task.Slug == "" || member.State.Role == core.RoleUnknown || member.State.Gate == core.GateBroken {
+			marker = s.fg(theme.ColorRed, theme.MarkerUnreadable.Glyph)
+		} else {
+			tok := theme.Status(member.Task.Status)
+			marker = s.fg(tok.Color, tok.Glyph)
+		}
+		members = append(members, threadTaskLine(member, marker, s))
+	}
+	threadSection(&b, "Members (persisted order)", members, s)
+
+	gates := make([]string, 0, len(view.ExternalGates))
+	for _, gate := range view.ExternalGates {
+		state := "satisfied"
+		marker := s.fg(theme.ColorGreen, "✓")
+		if gate.Outstanding {
+			state = "outstanding"
+			marker = s.fg(theme.ColorYellow, "!")
+		}
+		line := threadTaskLine(gate.ThreadTaskView, marker, s) + "  " + state
+		gates = append(gates, line)
+	}
+	threadSection(&b, "Immediate external gates (not members)", gates, s)
+
+	diagnostics := make([]string, 0, len(view.Problems)+len(view.GraphProblems))
+	for _, problem := range view.Problems {
+		diagnostics = append(diagnostics, fmt.Sprintf("  %s %s  %s",
+			s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph), problem.Code, problem.Message))
+	}
+	for _, problem := range view.GraphProblems {
+		diagnostics = append(diagnostics, fmt.Sprintf("  %s %s  %s",
+			s.fg(theme.ColorRed, theme.MarkerUnreadable.Glyph), problem.Code, problem.Message))
+	}
+	threadSection(&b, "Diagnostics", diagnostics, s)
+
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
 }
 

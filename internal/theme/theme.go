@@ -60,6 +60,24 @@ func Status(s domain.Status) Token {
 	}
 }
 
+// ThreadStatus maps the initiative lifecycle independently from task status.
+// Shared shapes keep familiar concepts legible while unstarted and cancelled
+// retain their own persisted meanings.
+func ThreadStatus(s domain.ThreadStatus) Token {
+	switch s {
+	case domain.ThreadStatusUnstarted:
+		return Token{"○", ColorBlue}
+	case domain.ThreadStatusInProgress:
+		return Token{"●", ColorYellow}
+	case domain.ThreadStatusCompleted:
+		return Token{"✔", ColorGreen}
+	case domain.ThreadStatusCancelled:
+		return Token{"✘", ColorGray}
+	default:
+		return Token{"•", ColorRed}
+	}
+}
+
 // Bucket maps an audit bucket to its glyph + color. Like Status (and unlike the
 // old color-only mapping), the bucket carries a distinct *shape* so its state
 // survives a mono terminal / --color=never / colorblindness — and the glyphs are

@@ -159,7 +159,8 @@ func TestModel_YankAcrossEntities(t *testing.T) {
 		t.Errorf("epic yank flash = %q, want %q", m.flash, "copied slug: "+wantID)
 	}
 
-	m = loadTab(t, m, "]") // epics → audits
+	m = loadTab(t, m, "]") // epics → Threads
+	m = loadTab(t, m, "]") // Threads → audits
 	if m.cur().kind != entityAudits {
 		t.Fatalf("expected the audits tab, got %v", m.cur().kind)
 	}

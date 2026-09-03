@@ -547,8 +547,8 @@ func TestModel_ChromeVisibleWhenListPaginates(t *testing.T) {
 
 func TestModel_CommandAliases(t *testing.T) {
 	for _, tc := range []struct{ word, want string }{
-		{"t", "tasks"}, {"e", "epics"}, {"a", "audits"},
-		{"task", "tasks"}, {"epic", "epics"}, {"audits", "audits"},
+		{"t", "tasks"}, {"e", "epics"}, {"th", "threads"}, {"a", "audits"},
+		{"task", "tasks"}, {"epic", "epics"}, {"thread", "threads"}, {"threads", "threads"}, {"audits", "audits"},
 	} {
 		m := loaded(t, 120, 40)
 		tm, _ := m.Update(press(":"))
@@ -574,10 +574,12 @@ func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
 	m = toTasks(t, tm.(Model)) // dashboard → tasks
-	// → audits (empty), via epics.
+	// → audits (empty), via epics and Threads.
 	tm, cmd := m.Update(press("]")) // tasks → epics (also empty)
 	m = drain(t, tm.(Model), cmd)
-	tm, cmd = m.Update(press("]")) // epics → audits (empty)
+	tm, cmd = m.Update(press("]")) // epics → Threads (also empty)
+	m = drain(t, tm.(Model), cmd)
+	tm, cmd = m.Update(press("]")) // Threads → audits (empty)
 	m = drain(t, tm.(Model), cmd)
 	if m.cur().name != "audits" || len(m.cur().list.Items()) != 0 {
 		t.Fatalf("expected an empty audits tab, got %q with %d items", m.cur().name, len(m.cur().list.Items()))

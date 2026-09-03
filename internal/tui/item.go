@@ -7,6 +7,7 @@ import (
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -182,6 +183,202 @@ func (d epicDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	idAndDesc := id + epicStatusNote(it.es, st) + "  " + st.dim(it.es.Epic.Description)
 	row(w, m, index, fmt.Sprintf("%s %s %s %s  %s",
 		epicGlyph(it.es, st), bar, pctStr, counts, idAndDesc), st)
+}
+
+// --- threads ---
+
+// threadItem retains the complete shared core projection. Rendering may count
+// supplied role/gate values for compact presentation, but it never traverses
+// dependencies or recreates health, eligibility, or frontier rules.
+type threadItem struct {
+	view         core.ThreadView
+	countsW      int
+	identityHint string
+}
+
+func (i threadItem) FilterValue() string {
+	t := i.view.Thread
+	return strings.Join([]string{
+		t.Slug, t.CanonicalID(), string(t.Status), t.Description, t.Goal,
+		strings.Join(t.Tags, " "), string(i.view.GraphHealth), string(i.view.ProjectionHealth),
+	}, " ")
+}
+func (i threadItem) ref() entityRef {
+	return entityRef{key: i.view.Thread.CanonicalID(), label: i.view.Thread.Slug}
+}
+func (i threadItem) displayLabel() string {
+	return labelWithIdentityHint(i.view.Thread.Slug, i.identityHint)
+}
+func (i threadItem) hasIdentityHint() bool { return i.identityHint != "" }
+
+// Thread paths are resolved only through the optional ThreadPathSource during
+// detail loading. The portable semantic record is never treated as that port.
+func (i threadItem) path() string { return "" }
+func (i threadItem) sortFields() sortFields {
+	updated := i.view.Thread.Updated
+	if updated == "" {
+		updated = i.view.Thread.Created
+	}
+	return sortFields{updated: updated, slug: i.view.Thread.Slug}
+}
+
+// threadActivity partitions work using the core projection's authoritative
+// frontier. A clear local gate does not imply dispatchability when repository
+// graph evidence is unhealthy, so pending work outside view.Frontier belongs in
+// notDispatchable instead of disappearing from the row.
+type threadActivity struct {
+	inFlight        int
+	dispatchable    int
+	notDispatchable int
+}
+
+func activityForThread(view core.ThreadView) threadActivity {
+	a := threadActivity{dispatchable: len(view.Frontier)}
+	pending := 0
+	for _, member := range view.Members {
+		switch member.State.Role {
+		case core.RoleInFlight:
+			a.inFlight++
+		case core.RoleQueued, core.RoleCandidate:
+			pending++
+		}
+	}
+	a.notDispatchable = max(0, pending-a.dispatchable)
+	return a
+}
+
+func threadWorkText(activity threadActivity, compact bool) string {
+	if compact {
+		compactCount := func(value int) string {
+			if value > 99 {
+				return "99+"
+			}
+			return fmt.Sprint(value)
+		}
+		return "▶" + compactCount(activity.inFlight) +
+			"✓" + compactCount(activity.dispatchable) +
+			"×" + compactCount(activity.notDispatchable)
+	}
+	return fmt.Sprintf("▶%d ✓%d ×%d", activity.inFlight, activity.dispatchable, activity.notDispatchable)
+}
+
+// truncateMiddle retains both ends of a long plain-text identity. Thread slugs
+// commonly share an initiative prefix and differ at the tail, so ordinary
+// right-truncation can make distinct rows identical. ANSI's grapheme-aware
+// helpers keep this safe for wide and combining Unicode too.
+func truncateMiddle(value string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if ansi.StringWidth(value) <= width {
+		return value
+	}
+	if width == 1 {
+		return "…"
+	}
+	leftWidth := width / 2
+	rightWidth := width - leftWidth - 1
+	left := ansi.Truncate(value, leftWidth, "")
+	right := ansi.TruncateLeft(value, ansi.StringWidth(value)-rightWidth, "")
+	return left + "…" + right
+}
+
+// threadIdentityLabel gives a duplicate's canonical hint first claim on the
+// remaining row budget. If even the hint is unusually long, middle elision keeps
+// its distinguishing tail instead of clipping it away.
+func threadIdentityLabel(item threadItem, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if item.identityHint == "" {
+		return truncateMiddle(item.view.Thread.Slug, width)
+	}
+	hint := "[" + item.identityHint + "]"
+	if ansi.StringWidth(hint) >= width {
+		return truncateMiddle(hint, width)
+	}
+	remaining := width - ansi.StringWidth(hint) - 1
+	if remaining <= 0 {
+		return hint
+	}
+	return hint + " " + truncateMiddle(item.view.Thread.Slug, remaining)
+}
+
+func threadRowTail(item threadItem, width int, st *styles) string {
+	if width <= 0 {
+		return ""
+	}
+	label := threadIdentityLabel(item, width)
+	remaining := width - ansi.StringWidth(label) - 2
+	if remaining <= 0 || item.view.Thread.Description == "" {
+		return label
+	}
+	return label + "  " + st.dim(truncate(item.view.Thread.Description, remaining))
+}
+
+func threadHealthText(view core.ThreadView, s *styles, compact bool) string {
+	mark := func(health core.GraphHealth) string {
+		switch health {
+		case core.GraphHealthy:
+			return s.fg(theme.ColorGreen, "✓")
+		case core.GraphDegraded:
+			return s.fg(theme.ColorYellow, "~")
+		default:
+			return s.fg(theme.ColorRed, "!")
+		}
+	}
+	if compact {
+		if view.GraphHealth == view.ProjectionHealth {
+			return mark(view.ProjectionHealth)
+		}
+		// At the smallest widths, retain the graph/projection ordering while
+		// dropping only the redundant letters and separator.
+		return mark(view.GraphHealth) + mark(view.ProjectionHealth)
+	}
+	return "g" + mark(view.GraphHealth) + "/v" + mark(view.ProjectionHealth)
+}
+
+type threadDelegate struct{ st *styles }
+
+func (threadDelegate) Height() int                         { return 1 }
+func (threadDelegate) Spacing() int                        { return 0 }
+func (threadDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
+
+func (d threadDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	it, ok := item.(threadItem)
+	if !ok {
+		return
+	}
+	st, view := d.st, it.view
+	status := theme.ThreadStatus(view.Thread.Status)
+	activity := activityForThread(view)
+	health := threadHealthText(view, st, m.Width() < 34)
+	if view.Inconsistent {
+		health += " " + st.fg(theme.ColorYellow, theme.MarkerWarn.Glyph)
+	}
+
+	contentWidth := max1(m.Width() - 2) // row reserves the two-cell cursor prefix
+	var prefix string
+	switch {
+	case m.Width() >= 64:
+		progress := fmt.Sprintf("d:%s s:%s",
+			rollupCounts(view.Rollup.Done, view.Rollup.Total, it.countsW),
+			rollupCounts(view.Rollup.Drained, view.Rollup.Total, it.countsW))
+		prefix = fmt.Sprintf("%s %-11s %s %s  %s",
+			st.fg(status.Color, status.Glyph), view.Thread.Status,
+			padRight(health, 7), progress, threadWorkText(activity, false))
+	case m.Width() >= 42:
+		prefix = fmt.Sprintf("%s %s %s",
+			st.fg(status.Color, status.Glyph), padRight(health, 7), threadWorkText(activity, false))
+	default:
+		prefix = fmt.Sprintf("%s %s %s",
+			st.fg(status.Color, status.Glyph), health, threadWorkText(activity, true))
+	}
+	line := truncate(prefix, contentWidth)
+	if remaining := contentWidth - ansi.StringWidth(prefix) - 2; remaining > 0 {
+		line = prefix + "  " + threadRowTail(it, remaining, st)
+	}
+	row(w, m, index, line, st)
 }
 
 // --- audits ---

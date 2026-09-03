@@ -498,16 +498,16 @@ Files split by concern:
   every surface live but was not chosen, so the top-rail chip reads `[atlas]` until the
   user leaves the atlas by any route. A successful open atomically swaps the
   entity service, config start, and watcher layout; a failed or stale open leaves the
-  current workspace intact. `spaceSession` caches tabs/cursors/filters/dashboard/Thread
-  projections/nav per checkout, while an outer workspace-generation stamp drops every
+  current workspace intact. `spaceSession` caches tabs/cursors/filters/dashboard/detail/nav
+  per checkout, while an outer workspace-generation stamp drops every
   asynchronous result launched by an older session. Atlas chrome has its own home-scoped
   theme (global flag/environment/home precedence, never the launch repo's override), shows each
   entry-point path, and keeps name/activity/registration ordering as explicit TUI state.
-- **`entity.go`** — the **entity registry**: tasks/epics/audits/research as `*entityTab`s,
+- **`entity.go`** — the **entity registry**: tasks/epics/Threads/audits/research as `*entityTab`s,
   each owning its own `list.Model`, cursor, loaders, list-scoped state (status
   view, sort, filter restore), and its **lifecycle table** (the transitions it
   offers + an `applyMove`). Every row exposes an `entityRef` with a canonical store
-  key separate from its human label. Task, audit, research, and future Thread rows use
+  key separate from its human label. Task, audit, research, and Thread rows use
   the domain record's `CanonicalID`: filename-derived identity wins for local records
   (the same identity the filesystem store resolves/CAS), while adapters without filename
   semantics supply the semantic `ID`; epics use their already-canonical ID. Selection restore,
@@ -518,10 +518,10 @@ Files split by concern:
   remains stable while filtering or paginating that result. A missing or drifting frontmatter
   `id:` therefore remains lintable without making the TUI fall back to an ambiguous slug. Adapter
   rows must provide non-empty, unique canonical keys; the registry rejects a loaded result that
-  violates that contract rather than selecting an arbitrary row. This is the contract a Thread row
-  must implement when it joins the registry. Read/browse is keybinding-free; lifecycle is
+  violates that contract rather than selecting an arbitrary row. Read/browse is keybinding-free;
+  lifecycle is
   declared here per entity (tasks by status via `Move`, audits by bucket via `MoveAudit`, epics by
-  status via `MoveEpic`; research has none), so adding Projects/ADRs later is a new registry entry
+  status via `MoveEpic`; Threads and research have none), so adding Projects/ADRs later is a new registry entry
   — including any `a`-menu / `:`-verb actions — not a reducer edit.
 - **`dashboard.go`** — the per-space **dashboard** (`tskflwctl ui` opens here whenever
   it was launched inside a planning repo): a
@@ -535,15 +535,17 @@ Files split by concern:
   `entityTab`; a read-only orientation screen ⇒ the dashboard pattern.
 - **`commands.go` / `messages.go`** — the async load `tea.Cmd`s and the `tea.Msg`
   types they return (list loads, lazy detail loads, reload, errors).
-- **`thread_projection.go` / `read_retry.go`** — the Thread read path and the shared
-  transient-contention policy. Threads are cached as the `core` projections themselves
-  (`ThreadListView` / `ThreadView`), never re-derived into a second TUI semantic model,
-  and are read lazily: a Thread surface nobody has opened is no more loaded at startup
-  than an unvisited tab, while a requested one is invalidated by the same debounced
-  reload — including by task-only edits, since membership readiness is graph-derived.
+- **`thread_projection.go` / `read_retry.go`** — the Thread registry loaders and the shared
+  transient-contention policy. A Thread row retains its `core.ThreadView`; repository-wide
+  graph/read diagnostics live on that registry tab, and no parallel Thread list/detail cache
+  exists. The tab is read lazily and then invalidated by the same debounced reload as every other
+  loaded entity — including by task-only edits, since membership readiness is graph-derived.
+  Detail loading joins `ShowThread` with the separately optional `ThreadPathSource`; pathless
+  adapters retain semantic browsing while path copy, clickable titles, and `$EDITOR` degrade
+  explicitly rather than borrowing `domain.Thread.Path` from a portable record.
   A read that lands inside a guarded repository mutation's planner window fails with
   `domain.ErrConflict`, which is contention, not corruption: every asynchronous surface
-  (entity list, entity detail, dashboard, Threads) routes that first conflict through
+  (entity list, entity detail, dashboard) routes that first conflict through
   one policy — keep the last coherent model, retry the same request once after a quiet
   period, drop the retry if a newer generation superseded it, and let a repeated
   conflict surface as an ordinary durable error. A first load has nothing to retain, so

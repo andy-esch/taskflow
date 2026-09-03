@@ -18,8 +18,6 @@ const (
 	readEntityList readSurface = iota
 	readEntityDetail
 	readDashboard
-	readThreadList
-	readThreadDetail
 	readSurfaceCount
 )
 

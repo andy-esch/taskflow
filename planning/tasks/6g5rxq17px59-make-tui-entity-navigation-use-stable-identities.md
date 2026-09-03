@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5rxq17px59
-status: in-progress
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Separate durable row/navigation identity from display slugs so duplicate-slug tasks, audits, research, and Threads cannot collide across reloads or workspace sessions.
 effort: 1-2 days
@@ -12,6 +12,7 @@ tags: [tui, architecture, identity, correctness]
 created: "2026-09-01"
 updated_at: "2026-09-02"
 started_at: "2026-09-02"
+completed_at: "2026-09-02"
 ---
 
 # Make TUI entity navigation use stable identities

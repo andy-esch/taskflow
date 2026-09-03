@@ -76,6 +76,9 @@ type listLoadedMsg struct {
 	gen      int
 	items    []list.Item
 	problems []domain.FileProblem
+	// Only the Threads registry entry populates this. It retains repository-level
+	// diagnostics that cannot be attributed to a single Thread row.
+	threadDiagnostics *threadListDiagnostics
 	// restore is the canonical cursor key this specific load should re-select (a jump target
 	// or a reload's cursor-preservation). Carrying it on the message — stamped with
 	// the same gen — means a dropped stale load can't apply a restore meant for a
@@ -101,11 +104,12 @@ type detailMsg struct {
 // detailErrMsg carries a per-item detail-load failure (e.g. an ambiguous
 // duplicate slug). It's shown in the detail pane — it must not blank the browser.
 type detailErrMsg struct {
-	kind  entityKind
-	id    string
-	label string
-	gen   int
-	err   error
+	kind      entityKind
+	id        string
+	label     string
+	gen       int
+	err       error
+	localPath string // optional navigation capability retained on a semantic read failure
 }
 
 func (msg detailErrMsg) readError() error { return msg.err }

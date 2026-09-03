@@ -36,7 +36,7 @@ var helpSections = []helpSection{
 		he(keys.Command),
 		{":config", "open Configuration / About for this space"},
 		he(keys.Atlas),
-		{"/", "filter the list (slug, desc, tags)"}, // the list's own filter (no keyMap binding)
+		{"/", "filter the list (label, id, metadata)"}, // the list's own filter (no keyMap binding)
 		he(keys.FilterMode),
 		he(keys.Sort), he(keys.SortRev),
 		he(keys.StatusView), he(keys.StatusRev),
@@ -113,6 +113,20 @@ func symbolsFor(kind entityKind, s *styles) (helpSection, bool) {
 			tok(theme.Liveness("dormant"), "dormant — drained / quiet (id dimmed)"),
 			tok(theme.MarkerWarn, "non-conforming status (→ active/retired/deprecated)"),
 		)
+	case entityThreads:
+		for _, status := range domain.AllThreadStatuses() {
+			e = append(e, tok(theme.ThreadStatus(status), string(status)))
+		}
+		e = append(e,
+			mark(theme.ColorGreen, "g✓/v✓", "repository graph / Thread projection healthy"),
+			mark(theme.ColorYellow, "g~/v~", "degraded graph / projection evidence"),
+			mark(theme.ColorRed, "g!/v!", "broken graph / projection evidence"),
+			mark(theme.ColorYellow, "⚠", "persisted lifecycle disagrees with projection"),
+			mark(theme.ColorYellow, "▶n", "member tasks in flight"),
+			mark(theme.ColorGreen, "✓n", "dispatchable frontier members"),
+			mark(theme.ColorRed, "×n", "pending members not dispatchable under current graph evidence"),
+		)
+		return helpSection{"Symbols", e}, true
 	case entityAudits:
 		for _, b := range domain.AllAuditBuckets() {
 			e = append(e, tok(theme.Bucket(b), string(b)+" bucket"))
@@ -173,6 +187,12 @@ func notesFor(kind entityKind) helpSection {
 		entries = append(entries, helpEntry{"views", "s/S or :working / :deferred / :revisit / :all"})
 	case entityAudits:
 		entries = append(entries, helpEntry{"views", "s/S or :open / :closed / :deferred / :all to switch bucket"})
+	case entityThreads:
+		entries = append(entries,
+			helpEntry{"read-only", "use Thread lifecycle and membership CLI verbs for mutations"},
+			helpEntry{"progress", "d = nominally done · s = soundly drained · list order does not authorize dispatch"},
+			helpEntry{"tiny health", "paired marks retain graph then projection order when g/v labels collapse"},
+		)
 	}
 	entries = append(entries, helpEntry{"find", "matches the rendered text on screen — R for the raw source"})
 	return helpSection{"Notes", entries}
@@ -204,8 +224,19 @@ func helpSectionsFor(f focus, kind entityKind, s *styles) []helpSection {
 		return []helpSection{notesFor(kind), atlasHelpSection}
 	}
 	byTitle := make(map[string]helpSection, len(helpSections))
-	for _, s := range helpSections {
-		byTitle[s.title] = s
+	for _, section := range helpSections {
+		if section.title == "Global" && kind == entityThreads {
+			filtered := section.entries[:0:0]
+			for _, entry := range section.entries {
+				if entry.keys == keys.Action.Help().Key || entry.keys == keys.Edit.Help().Key ||
+					entry.keys == keys.StatusView.Help().Key || entry.keys == keys.StatusRev.Help().Key {
+					continue
+				}
+				filtered = append(filtered, entry)
+			}
+			section.entries = filtered
+		}
+		byTitle[section.title] = section
 	}
 	out := make([]helpSection, 0, 4) // active-pane keys + Symbols + Notes + Global
 	add := func(title string) {

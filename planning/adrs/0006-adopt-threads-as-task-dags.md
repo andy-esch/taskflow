@@ -1195,6 +1195,16 @@ the accepted rollout now uses this sequence:
    terminal-native explanation. A compact wave view is preferred unless evidence justifies a richer
    layout; Mermaid/DOT text is never parsed back into the TUI.
 
+The delivered list/detail slice follows those boundaries: Threads are an ordinary registry entity,
+not a parallel cache. Each row retains the shared `ThreadView`, repository-wide diagnostics live on
+the tab, and the ordinary entity generation/stale-selection/reload machinery owns both list and
+detail reads. Local path lookup is joined through optional `ThreadPathSource`; pathless adapters keep
+the semantic view and explicitly disable path copy/editor affordances. The list uses responsive
+representations of lifecycle, graph/projection health, nominal/sound progress, in-flight members,
+dispatchable frontier, and pending work not dispatchable under current graph evidence. The detail
+retains members, immediate external gates, diagnostics, and the persisted body without treating
+document order as dispatch authority.
+
 These are implementation boundaries, not new Thread semantics. Repository-global dependencies and
 core projections remain authoritative, and advanced analysis stays out of scope.
 

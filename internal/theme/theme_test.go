@@ -33,6 +33,26 @@ func TestStatus(t *testing.T) {
 	}
 }
 
+func TestThreadStatus(t *testing.T) {
+	cases := []struct {
+		status domain.ThreadStatus
+		glyph  string
+		color  Color
+	}{
+		{domain.ThreadStatusUnstarted, "○", ColorBlue},
+		{domain.ThreadStatusInProgress, "●", ColorYellow},
+		{domain.ThreadStatusCompleted, "✔", ColorGreen},
+		{domain.ThreadStatusCancelled, "✘", ColorGray},
+		{domain.ThreadStatus("foreign"), "•", ColorRed},
+	}
+	for _, c := range cases {
+		got := ThreadStatus(c.status)
+		if got.Glyph != c.glyph || got.Color != c.color {
+			t.Errorf("ThreadStatus(%q) = {%q,%d}, want {%q,%d}", c.status, got.Glyph, got.Color, c.glyph, c.color)
+		}
+	}
+}
+
 func TestBucket(t *testing.T) {
 	cases := []struct {
 		bucket domain.AuditBucket

@@ -207,6 +207,18 @@ func (m Model) listPaneContent() string {
 			return fmt.Sprintf("No %s audits.\n\nOther buckets: s/S or :open / :closed / :deferred / :all", t.statusView)
 		}
 	}
+	if t.kind == entityThreads && len(t.list.Items()) == 0 {
+		message := "No Threads.\n\nCreate one:\n  tskflwctl thread new \"Title\" --goal \"Outcome\""
+		if d := t.threadDiagnostics; d != nil {
+			if d.graphHealth != core.GraphHealthy {
+				message += fmt.Sprintf("\n\nRepository graph: %s (%d diagnostic(s))", d.graphHealth, len(d.graphProblems))
+			}
+			if len(d.readProblems) > 0 {
+				message += fmt.Sprintf("\nUnreadable Thread records: %d", len(d.readProblems))
+			}
+		}
+		return message
+	}
 	return t.list.View()
 }
 
@@ -423,20 +435,26 @@ func (m Model) footer() string {
 		}
 		return m.st.dim(truncate(m.withWatchHealth(line), m.width))
 	}
-	hints := strings.Join([]string{
+	listHints := []string{
 		keyHint(keys.Command, "cmd"),
 		keyHint(keys.Atlas, "atlas"),
 		"/ filter", // the list's own filter (no keyMap binding)
-		keyHint(keys.Action, "move"),
-		keyHint(keys.Edit, "edit"),
-		keyHint(keys.OpenEditor, "editor"),
-		keyHint(keys.StatusView, "view"),
+	}
+	if len(m.cur().transitions) > 0 {
+		listHints = append(listHints, keyHint(keys.Action, "move"))
+	}
+	if m.cur().kind == entityTasks || m.cur().kind == entityEpics {
+		listHints = append(listHints, keyHint(keys.Edit, "edit"))
+	}
+	listHints = append(listHints, keyHint(keys.OpenEditor, "editor"))
+	if len(m.cur().viewAxis) > 0 {
+		listHints = append(listHints, keyHint(keys.StatusView, "view"))
+	}
+	listHints = append(listHints,
 		keyCombo(keys.PrevTab, keys.NextTab, " ", "tabs"),
-		keyHint(keys.Right, "detail"),
-		keyHint(keys.Zoom, "full"),
-		keyHint(keys.Help, "help"),
-		keyHint(keys.Quit, "quit"),
-	}, " · ")
+		keyHint(keys.Right, "detail"), keyHint(keys.Zoom, "full"),
+		keyHint(keys.Help, "help"), keyHint(keys.Quit, "quit"))
+	hints := strings.Join(listHints, " · ")
 	if m.focus == focusDetail {
 		hints = strings.Join([]string{
 			keyHint(keys.Command, "cmd"), keyHint(keys.Atlas, "atlas"),
@@ -466,6 +484,14 @@ func (m Model) footer() string {
 	}
 	if p := m.cur().problems; len(p) > 0 {
 		hints = fmt.Sprintf("! %d unreadable · ", len(p)) + hints
+	}
+	if d := m.cur().threadDiagnostics; d != nil {
+		if len(d.readProblems) > 0 {
+			hints = fmt.Sprintf("! %d unreadable Thread record(s) · ", len(d.readProblems)) + hints
+		}
+		if d.graphHealth != core.GraphHealthy {
+			hints = fmt.Sprintf("⚠ repository graph %s · ", d.graphHealth) + hints
+		}
 	}
 	switch {
 	case m.cur().loaded && m.cur().loadErr != nil:
