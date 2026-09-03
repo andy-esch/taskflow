@@ -715,6 +715,10 @@
         "reason": {
           "type": "string",
           "description": "why the criterion is deferred/wontfix/n-a — required for those states"
+        },
+        "tracked_by": {
+          "type": "string",
+          "description": "stable id of the task a tracked criterion was handed to"
         }
       },
       "additionalProperties": false,

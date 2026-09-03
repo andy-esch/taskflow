@@ -64,7 +64,7 @@ board --json carries a per-row blocked flag. Eligibility is computed once per
 board from the repository graph and is omitted entirely when the graph is not
 healthy, since it is only meaningful over a graph the tool trusts.
 
-#### H2. `--tracked` takes an unvalidated free-text reason, so the pointer rots · **Status:** open
+#### H2. `--tracked` takes an unvalidated free-text reason, so the pointer rots · **Status:** fixed
 
 **File:** task ac --tracked | **Component:** acceptance-criteria
 **Effort:** S · **Urgency:** soon
@@ -87,7 +87,12 @@ records the id, keeping `--reason` for the prose. Then `task unblocks`/`blockers
 can flag a criterion tracked to a task that is completed or deprecated. Same treatment the finding
 statuses already get.
 
-**Resolution:**
+**Resolution:** task ac --tracked now requires --to <task>, resolved to the
+destination's stable id at write time and recorded as 'by <id>'. The id rather
+than the typed reference is stored, so renaming the destination cannot break the
+pointer, and it surfaces as its own tracked_by field in --json rather than as
+prose. Unresolvable and self-referential destinations are refused before any
+write.
 
 #### H3. Repo-global graph degradation surfaces at an unrelated mutation · **Status:** open
 

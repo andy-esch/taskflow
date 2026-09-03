@@ -233,6 +233,38 @@ func (s *Service) SetCriterionState(slug string, n int, state domain.CriterionSt
 // has always had, extended to a set, and the whole set is validated in the domain before
 // anything is written.
 func (s *Service) SetCriteriaState(slug string, ns []int, state domain.CriterionState, reason string, dryRun bool) (domain.Task, string, bool, error) {
+	return s.setCriteriaState(slug, ns, state, reason, dryRun)
+}
+
+// SetCriteriaTracked hands criteria to another task, resolving trackedTo to that task's
+// stable id BEFORE writing. Resolution at write time is the whole point: a destination
+// held only as prose is a string nothing can follow, so a renamed or completed
+// destination silently strands the criterion — and a tracked criterion is, by
+// definition, the residue that must not be lost.
+//
+// The id is recorded rather than the reference the caller typed, so a later `task rename`
+// (which cascades body links, not criterion reasons) cannot break the pointer.
+func (s *Service) SetCriteriaTracked(slug string, ns []int, trackedTo, reason string, dryRun bool) (domain.Task, string, bool, error) {
+	if strings.TrimSpace(trackedTo) == "" {
+		return domain.Task{}, "", false, fmt.Errorf(
+			"%w: `tracked` needs a destination — pass --to <task> so the handoff can be followed", domain.ErrValidation)
+	}
+	destination, _, err := s.store.GetTask(trackedTo)
+	if err != nil {
+		return domain.Task{}, "", false, fmt.Errorf("resolve --to %q: %w", trackedTo, err)
+	}
+	if destination.ID == "" {
+		return domain.Task{}, "", false, fmt.Errorf(
+			"%w: destination task %q has no stable id to track by", domain.ErrValidation, trackedTo)
+	}
+	if destination.Slug == slug {
+		return domain.Task{}, "", false, fmt.Errorf(
+			"%w: a criterion cannot be tracked to its own task", domain.ErrValidation)
+	}
+	return s.setCriteriaState(slug, ns, domain.CriterionTracked, domain.FormatTrackedReason(destination.ID, reason), dryRun)
+}
+
+func (s *Service) setCriteriaState(slug string, ns []int, state domain.CriterionState, reason string, dryRun bool) (domain.Task, string, bool, error) {
 	t, body, err := s.store.GetTask(slug)
 	if err != nil {
 		return domain.Task{}, "", false, err

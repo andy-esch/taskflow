@@ -105,6 +105,13 @@ type CriterionJSON struct {
 	// at the machine boundary. Schema 1.46.
 	State  string `json:"state,omitempty" jsonschema:"description=disposition beyond the checkbox — one of criterion_states in the schema contract; absent for a plain met/not-met criterion"`
 	Reason string `json:"reason,omitempty" jsonschema:"description=why the criterion is deferred/wontfix/n-a — required for those states"`
+	// TrackedBy is the destination task id of a `tracked` criterion. It is a field
+	// rather than part of Reason because the point of `tracked` is that the work went
+	// somewhere followable: held as prose, nothing resolves it and nothing notices when
+	// the destination is renamed or completed without absorbing the criterion. Absent
+	// for every other state, and for a tracked criterion written before the destination
+	// was recorded.
+	TrackedBy string `json:"tracked_by,omitempty" jsonschema:"description=stable id of the task a tracked criterion was handed to"`
 }
 
 // ToCriteriaJSON maps the domain criteria to their wire DTOs (never nil — an empty
@@ -114,7 +121,7 @@ func ToCriteriaJSON(cs []domain.Criterion) []CriterionJSON {
 	for i, c := range cs {
 		j := CriterionJSON{Index: c.Index, Checked: c.Checked, Text: c.Text}
 		if c.State.NeedsReason() {
-			j.State, j.Reason = string(c.State), c.Reason
+			j.State, j.Reason, j.TrackedBy = string(c.State), c.Reason, c.TrackedBy
 		}
 		out[i] = j
 	}
