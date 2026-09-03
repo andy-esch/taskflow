@@ -32,7 +32,7 @@ type keyMap struct {
 	Edit        key.Binding // e → inline field editor (tasks)
 	OpenEditor  key.Binding // E → open the selection's whole file in $EDITOR (any entity)
 	RawToggle   key.Binding // R → raw ⇄ pretty markdown in the detail body
-	Follow      key.Binding // f → follow the selection's reference (task ⇄ epic)
+	Follow      key.Binding // f → follow the selection's structured entity reference
 	JumpBack    key.Binding // ctrl+o → pop the follow back-stack (vim jumplist)
 	Yank        key.Binding // y → copy the selection's slug/id to the clipboard
 	YankPath    key.Binding // Y → copy the selection's file path to the clipboard
@@ -61,10 +61,10 @@ var keys = keyMap{
 	Command:     key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "command / jump (entity, status, or verb)")),
 	Palette:     key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "command palette — fuzzy jump to anything / run a command")),
 	Atlas:       key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "open atlas / return to current space")),
-	// v is the screen-level view cycle, distinct from `s` (which rows) and `[`/`]` (which
-	// screen). Only the atlas has alternate views today; the key is deliberately general
-	// so a second screen that grows one does not have to invent another binding.
-	View:       key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "cycle this screen's views (atlas: spaces ⇄ work)")),
+	// v is the screen/detail-level presentation cycle, distinct from `s` (which rows)
+	// and `[`/`]` (which screen). Atlas and Thread detail both use the same general
+	// binding without coupling their view state.
+	View:       key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "cycle this screen's alternate views")),
 	PrevTab:    key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous tab")),
 	NextTab:    key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next tab")),
 	Sort:       key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "cycle sort column")),
@@ -76,7 +76,7 @@ var keys = keyMap{
 	Edit:       key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit fields in place — tasks: desc/priority/tags/effort/tier (+revisit when deferred) · epics: desc/priority/tags")),
 	OpenEditor: key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "open the whole file in $EDITOR (any entity; re-read on save)")),
 	RawToggle:  key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "raw ⇄ pretty markdown")),
-	Follow:     key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "follow reference (task ⇄ epic)")),
+	Follow:     key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "follow reference (task → epic · epic/Thread → task)")),
 	JumpBack:   key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "jump back (follow history)")),
 	Yank:       key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy slug to clipboard")),
 	YankPath:   key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "copy file path to clipboard")),

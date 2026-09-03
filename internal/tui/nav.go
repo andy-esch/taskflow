@@ -7,15 +7,17 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // Cross-link navigation (S6): follow structured references — a task's `epic:`
-// field, an epic's task list — with `f`, and walk back with ctrl+o (vim
-// jumplist style). Only *structured* references for now; body [[wikilinks]]
-// and the peek-overlay are deferred (see the task file).
+// field, an epic's task list, or a Thread's bounded task nodes — with `f`, and
+// walk back with ctrl+o (vim jumplist style). Only *structured* references for
+// now; body [[wikilinks]] and the peek-overlay are deferred (see the task file).
 
 // navLoc is one entry in the follow back-stack: where the user was when they
 // followed a reference.
@@ -24,18 +26,27 @@ type navLoc struct {
 	ref  entityRef
 }
 
-// followMenu is the reference picker for an entity with several outgoing links
-// (an epic's tasks). Modal like the action menu: the model routes every key to
-// it while active and floats it over the body.
+// followMenu is the reference picker for an entity with several outgoing task
+// links (an epic or Thread). Modal like the action menu: the model routes every
+// key to it while active and floats it over the body.
 type followMenu struct {
-	active bool
-	epicID string        // the epic whose references are listed
-	tasks  []domain.Task // the rows
-	cursor int
+	active      bool
+	sourceLabel string        // the entity whose references are listed
+	tasks       []domain.Task // the rows
+	cursor      int
 }
 
-func (f *followMenu) open(epicID string, tasks []domain.Task) {
-	*f = followMenu{active: true, epicID: epicID, tasks: tasks}
+func (f *followMenu) open(sourceLabel string, tasks []domain.Task) {
+	*f = followMenu{active: true, sourceLabel: sourceLabel, tasks: tasks}
+}
+
+func (f *followMenu) selectTask(taskID string) {
+	for index, task := range f.tasks {
+		if task.CanonicalID() == taskID {
+			f.cursor = index
+			return
+		}
+	}
 }
 
 func (f *followMenu) close() { f.active = false }
@@ -51,14 +62,20 @@ func (f followMenu) selected() domain.Task { return f.tasks[f.cursor] }
 // view renders the picker as a centered box + hint line for overlay().
 func (f followMenu) view(s *styles, maxW, maxH int) string {
 	var b strings.Builder
-	b.WriteString(s.actionHeading.Render("follow " + truncate(f.epicID, max(maxW-8, 12))))
+	position := ""
+	if len(f.tasks) > 0 {
+		position = fmt.Sprintf(" · %d/%d", f.cursor+1, len(f.tasks))
+	}
+	b.WriteString(s.actionHeading.Render("follow " + truncate(f.sourceLabel, max(maxW-8-ansi.StringWidth(position), 12)) + position))
 	b.WriteString("\n\n")
 	refs := make([]entityRef, 0, len(f.tasks))
 	for _, task := range f.tasks {
 		refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
 	}
 	hints := duplicateIdentityHints(refs)
-	for i, t := range f.tasks {
+	start, end := f.visibleRange(maxH)
+	for i := start; i < end; i++ {
+		t := f.tasks[i]
 		tok := theme.Status(t.Status)
 		label := s.fg(tok.Color, tok.Glyph) + " " + truncate(labelWithIdentityHint(t.Slug, hints[t.CanonicalID()]), max(maxW-10, 12))
 		if i == f.cursor {
@@ -70,6 +87,29 @@ func (f followMenu) view(s *styles, maxW, maxH int) string {
 	box := s.actionBorder.Render(strings.TrimRight(b.String(), "\n"))
 	hint := s.dim("↑↓/jk select · ⏎ follow · esc cancel")
 	return clampBox(lipgloss.JoinVertical(lipgloss.Center, box, hint), maxW, maxH)
+}
+
+// visibleRange keeps the selected reference on screen in a short terminal. The
+// box consumes two border rows, a heading plus spacer, and one hint row; every
+// remaining row can hold exactly one task. Clamping is presentation-only and
+// never changes the underlying task order or cursor.
+func (f followMenu) visibleRange(maxH int) (int, int) {
+	count := len(f.tasks)
+	if count == 0 || maxH <= 0 {
+		return 0, count
+	}
+	visible := max(1, maxH-5)
+	if visible >= count {
+		return 0, count
+	}
+	start := f.cursor - visible/2
+	if start < 0 {
+		start = 0
+	}
+	if end := start + visible; end > count {
+		start = count - visible
+	}
+	return start, start + visible
 }
 
 // handleFollowKey drives the picker while it's open. It mutates the model copy
@@ -93,8 +133,9 @@ func (m *Model) handleFollowKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // followSelected follows the selected item's outgoing reference: a task jumps
-// to its epic; an epic opens the picker over its tasks. Audits have no
-// structured references (yet).
+// to its epic; an epic opens the picker over its tasks; a Thread opens the same
+// picker over member and immediate-external-gate tasks from its loaded graph
+// projection. Audits have no structured references (yet).
 func (m Model) followSelected() (tea.Model, tea.Cmd) {
 	switch t := m.cur(); t.kind {
 	case entityTasks:
@@ -126,10 +167,66 @@ func (m Model) followSelected() (tea.Model, tea.Cmd) {
 		}
 		m.follow.open(ref.label, ed.tasks)
 		return m, nil
+	case entityThreads:
+		ref := m.selectedRef()
+		if ref.empty() {
+			return m, nil
+		}
+		detail, ok := m.detail.content.(threadDetail)
+		if !ok || detail.projection.View.Thread.CanonicalID() != ref.key {
+			m.flash, m.flashErr = "references still loading…", true
+			return m, nil
+		}
+		tasks := threadFollowTasks(detail.projection)
+		if len(tasks) == 0 {
+			m.flash, m.flashErr = fmt.Sprintf("%s has no readable task references", ref.label), true
+			return m, nil
+		}
+		m.follow.open(ref.label, tasks)
+		m.follow.selectTask(detail.detailSelectionKey())
+		return m, nil
 	default:
 		m.flash, m.flashErr = "no linked entities here", true
 		return m, nil
 	}
+}
+
+// openDetailSelection follows a structured row selected inside a detail
+// presentation. The presentation supplies only a canonical target; the shell
+// retains ownership of history, tab switching, lifecycle-view widening, and
+// asynchronous loading exactly as it does for the `f` picker.
+func (m Model) openDetailSelection() (tea.Model, tea.Cmd) {
+	kind, ref, ok := m.detail.selectionTarget()
+	if !ok {
+		return m, nil
+	}
+	m.pushLoc()
+	return m, m.jumpTo(kind, ref)
+}
+
+// threadFollowTasks retains the stable node order supplied by the projection
+// while recovering the semantic task values carried by its Thread view. Missing
+// or unreadable nodes remain visible in topology diagnostics but are not offered
+// as navigation targets that cannot resolve on the task tab.
+func threadFollowTasks(projection core.ThreadGraphProjection) []domain.Task {
+	byID := make(map[string]domain.Task, len(projection.View.Members)+len(projection.View.ExternalGates))
+	for _, member := range projection.View.Members {
+		if member.Task.Slug != "" {
+			byID[member.State.TaskID] = member.Task
+		}
+	}
+	for _, gate := range projection.View.ExternalGates {
+		if gate.Task.Slug != "" {
+			byID[gate.State.TaskID] = gate.Task
+		}
+	}
+	tasks := make([]domain.Task, 0, len(byID))
+	for _, node := range projection.Nodes {
+		if task, ok := byID[node.TaskID]; ok {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks
 }
 
 // navStackMax bounds the back-stack so a long bounce between an epic and its
@@ -183,6 +280,15 @@ func (m *Model) jumpTo(kind entityKind, ref entityRef) tea.Cmd {
 	tab := m.tabs[i]
 	tab.list.ResetFilter()
 	if !tab.loaded {
+		// An explicit navigation target may be outside an axis-bearing tab's
+		// default view (for example, a completed Thread member while Tasks shows
+		// only working states). Nothing has been browsed on an unloaded tab yet, so
+		// load :all immediately rather than landing on an arbitrary visible row and
+		// requiring a second read. Loaded tabs retain their view unless the target
+		// is actually absent below.
+		if len(tab.viewAxis) > 0 {
+			tab.statusView = "all"
+		}
 		return tab.reload(m.svc, ref)
 	}
 	if tab.selectByKey(ref.key) {

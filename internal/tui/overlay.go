@@ -101,7 +101,7 @@ func (actionModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 
 func (actionModal) view(m *Model, w, h int) string { return m.action.view(m.st, w, h) }
 
-// followModal is the `f` reference picker (an epic → its tasks).
+// followModal is the `f` reference picker (an epic or Thread → its tasks).
 type followModal struct{}
 
 func (followModal) active(m *Model) bool { return m.follow.active }

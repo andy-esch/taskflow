@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
@@ -27,6 +28,32 @@ type detailContent interface {
 	Path() string // the entity's on-disk file path (for the clickable detail title)
 	meta(width int, s *styles) string
 	rawBody() string
+}
+
+// alternateDetailContent is the optional extension point for an entity detail
+// that has more than one presentation of the same loaded evidence. The pane owns
+// cycling and reload preservation; individual entities own only their view names
+// and rendering. This keeps the root model free of Thread-specific view state and
+// leaves the same seam available to future entity detail views.
+type alternateDetailContent interface {
+	detailContent
+	detailViewName() string
+	nextDetailViewName() string
+	withDetailView(string) detailContent
+}
+
+// navigableDetailContent is the optional detail-page selection seam. It lets a
+// structured detail presentation behave like the rest of the TUI—move a visible
+// cursor and open the selected entity—without teaching the root model about a
+// particular renderer's rows. Keys and canonical navigation stay in the shell;
+// row order and selection rendering stay with the content.
+type navigableDetailContent interface {
+	detailContent
+	detailSelectionKey() string
+	withDetailSelection(string) detailContent
+	moveDetailSelection(int) (detailContent, bool)
+	detailSelectionTarget() (entityKind, entityRef, bool)
+	detailSelectionLine(string) (int, bool)
 }
 
 // detailPane is the right pane: a scrollable view of the selected item's detail.
@@ -118,6 +145,91 @@ func (d *detailPane) toggleMode() {
 	d.refreshFind()
 }
 
+// cycleView switches an alternate detail presentation without re-reading the
+// repository. It returns false for ordinary one-view entities. A find query stays
+// active and is recomputed against the newly visible representation.
+func (d *detailPane) cycleView() bool {
+	content, ok := d.content.(alternateDetailContent)
+	if !ok {
+		return false
+	}
+	d.content = content.withDetailView(content.nextDetailViewName())
+	d.render()
+	d.refreshFind()
+	d.vp.GotoTop()
+	if !d.scrollToDetailSelection() {
+		d.scrollToCurrent()
+	}
+	return true
+}
+
+func (d detailPane) nextViewName() string {
+	if content, ok := d.content.(alternateDetailContent); ok {
+		return content.nextDetailViewName()
+	}
+	return ""
+}
+
+func (d detailPane) bodyModeAvailable() bool {
+	return d.content != nil && strings.TrimSpace(d.content.rawBody()) != ""
+}
+
+func (d detailPane) selectionAvailable() bool {
+	if content, ok := d.content.(navigableDetailContent); ok {
+		_, _, available := content.detailSelectionTarget()
+		return available
+	}
+	return false
+}
+
+// moveSelection gives a structured detail view first refusal over vertical
+// navigation. The bool means the view owns a cursor (and therefore consumes the
+// key), even when movement is clamped at the first or last row.
+func (d *detailPane) moveSelection(delta int) bool {
+	content, ok := d.content.(navigableDetailContent)
+	if !ok {
+		return false
+	}
+	next, active := content.moveDetailSelection(delta)
+	if !active {
+		return false
+	}
+	d.content = next
+	d.render()
+	d.refreshFind()
+	d.scrollToDetailSelection()
+	return true
+}
+
+func (d detailPane) selectionTarget() (entityKind, entityRef, bool) {
+	if content, ok := d.content.(navigableDetailContent); ok {
+		return content.detailSelectionTarget()
+	}
+	return entityTasks, entityRef{}, false
+}
+
+// scrollToDetailSelection keeps the rendered cursor visible with a small lead.
+// The content finds its own row in the final wrapped representation, avoiding a
+// second layout calculation in the pane.
+func (d *detailPane) scrollToDetailSelection() bool {
+	content, ok := d.content.(navigableDetailContent)
+	if !ok {
+		return false
+	}
+	line, ok := content.detailSelectionLine(ansi.Strip(d.styled))
+	if !ok {
+		return false
+	}
+	top, height := d.vp.YOffset(), d.vp.Height()
+	switch {
+	case line < top:
+		d.vp.SetYOffset(max(0, line-2))
+	case height > 0 && line >= top+height:
+		d.vp.SetYOffset(max(0, line-height+3))
+	}
+	return true
+}
+
 func joinDetail(meta, body string) string {
 	switch {
 	case meta == "":
@@ -154,6 +266,18 @@ func (d *detailPane) SetContent(id string, c detailContent) {
 	// watched tree would yank the body you're reading back to line one.
 	sameItem := d.hasContent && d.content != nil && d.loadedKey == id
 	offset := d.vp.YOffset()
+	if sameItem {
+		current, currentOK := d.content.(alternateDetailContent)
+		fresh, freshOK := c.(alternateDetailContent)
+		if currentOK && freshOK {
+			c = fresh.withDetailView(current.detailViewName())
+		}
+		currentNav, currentOK := d.content.(navigableDetailContent)
+		freshNav, freshOK := c.(navigableDetailContent)
+		if currentOK && freshOK {
+			c = freshNav.withDetailSelection(currentNav.detailSelectionKey())
+		}
+	}
 	d.content = c
 	d.errMsg = ""
 	d.errorPath = ""
@@ -163,8 +287,10 @@ func (d *detailPane) SetContent(id string, c detailContent) {
 	d.refreshFind() // recompute matches for the new content (find persists across items)
 	if sameItem {
 		d.vp.SetYOffset(offset)
+		d.scrollToDetailSelection()
 	} else {
 		d.vp.GotoTop()
+		d.scrollToDetailSelection()
 	}
 	d.hasContent = true
 	d.loading = false
@@ -538,16 +664,109 @@ func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int, s *styl
 // --- thread detail ---
 
 type threadDetail struct {
-	view      core.ThreadView
-	body      string
-	path      string
-	pathIssue string
+	projection core.ThreadGraphProjection
+	body       string
+	path       string
+	pathIssue  string
+	view       threadDetailView
+	selection  string // stable task ID selected in topology view
 }
 
-func (d threadDetail) Title() string                { return d.view.Thread.Slug }
-func (d threadDetail) Path() string                 { return d.path }
-func (d threadDetail) rawBody() string              { return d.body }
-func (d threadDetail) meta(w int, s *styles) string { return renderThreadMeta(d, w, s) }
+type threadDetailView string
+
+const (
+	threadDetailSummary  threadDetailView = "summary"
+	threadDetailTopology threadDetailView = "topology"
+)
+
+func (d threadDetail) Title() string { return d.projection.View.Thread.Slug }
+func (d threadDetail) Path() string  { return d.path }
+func (d threadDetail) rawBody() string {
+	if d.detailViewName() == string(threadDetailTopology) {
+		return ""
+	}
+	return d.body
+}
+func (d threadDetail) meta(w int, s *styles) string {
+	if d.detailViewName() == string(threadDetailTopology) {
+		return renderThreadTopology(d.projection, d.pathIssue, d.detailSelectionKey(), w, s)
+	}
+	return renderThreadMeta(d, w, s)
+}
+func (d threadDetail) detailViewName() string {
+	if d.view == threadDetailTopology {
+		return string(threadDetailTopology)
+	}
+	return string(threadDetailSummary)
+}
+func (d threadDetail) nextDetailViewName() string {
+	if d.detailViewName() == string(threadDetailTopology) {
+		return string(threadDetailSummary)
+	}
+	return string(threadDetailTopology)
+}
+func (d threadDetail) withDetailView(name string) detailContent {
+	if name == string(threadDetailTopology) {
+		d.view = threadDetailTopology
+		d.selection = threadGraphSelectedTaskID(d.projection, d.selection)
+	} else {
+		d.view = threadDetailSummary
+	}
+	return d
+}
+
+func (d threadDetail) detailSelectionKey() string {
+	return threadGraphSelectedTaskID(d.projection, d.selection)
+}
+
+func (d threadDetail) withDetailSelection(taskID string) detailContent {
+	d.selection = threadGraphSelectedTaskID(d.projection, taskID)
+	return d
+}
+
+func (d threadDetail) moveDetailSelection(delta int) (detailContent, bool) {
+	if d.detailViewName() != string(threadDetailTopology) {
+		return d, false
+	}
+	ids := threadGraphNavigationIDs(d.projection)
+	if len(ids) == 0 {
+		return d, false
+	}
+	current := d.detailSelectionKey()
+	index := 0
+	for i, taskID := range ids {
+		if taskID == current {
+			index = i
+			break
+		}
+	}
+	index = min(max(index+delta, 0), len(ids)-1)
+	d.selection = ids[index]
+	return d, true
+}
+
+func (d threadDetail) detailSelectionTarget() (entityKind, entityRef, bool) {
+	if d.detailViewName() != string(threadDetailTopology) {
+		return entityTasks, entityRef{}, false
+	}
+	task, ok := threadGraphTask(d.projection, d.detailSelectionKey())
+	if !ok {
+		return entityTasks, entityRef{}, false
+	}
+	return entityTasks, entityRef{key: task.CanonicalID(), label: task.Slug}, true
+}
+
+func (d threadDetail) detailSelectionLine(rendered string) (int, bool) {
+	if d.detailViewName() != string(threadDetailTopology) {
+		return 0, false
+	}
+	for line, text := range strings.Split(rendered, "\n") {
+		if strings.HasPrefix(text, "› ") {
+			return line, true
+		}
+	}
+	return 0, false
+}
 
 func threadTaskIdentity(task core.ThreadTaskView) (string, string) {
 	id := task.State.TaskID
@@ -581,7 +800,7 @@ func threadSection(b *strings.Builder, title string, lines []string, s *styles) 
 }
 
 func renderThreadMeta(d threadDetail, width int, s *styles) string {
-	view, thread := d.view, d.view.Thread
+	view, thread := d.projection.View, d.projection.View.Thread
 	var b strings.Builder
 	status := theme.ThreadStatus(thread.Status)
 	detailField(&b, "thread", thread.Slug+"  "+s.dim("("+thread.CanonicalID()+")"), s)
@@ -645,18 +864,303 @@ func renderThreadMeta(d threadDetail, width int, s *styles) string {
 	}
 	threadSection(&b, "Immediate external gates (not members)", gates, s)
 
+	threadSection(&b, "Diagnostics", threadDiagnosticLines(view, s), s)
+
+	return wrap(strings.TrimRight(b.String(), "\n"), width)
+}
+
+func threadDiagnosticLines(view core.ThreadView, s *styles) []string {
 	diagnostics := make([]string, 0, len(view.Problems)+len(view.GraphProblems))
 	for _, problem := range view.Problems {
 		diagnostics = append(diagnostics, fmt.Sprintf("  %s %s  %s",
-			s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph), problem.Code, problem.Message))
+			s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph), problem.Code, terminalText(problem.Message)))
 	}
 	for _, problem := range view.GraphProblems {
 		diagnostics = append(diagnostics, fmt.Sprintf("  %s %s  %s",
-			s.fg(theme.ColorRed, theme.MarkerUnreadable.Glyph), problem.Code, problem.Message))
+			s.fg(theme.ColorRed, theme.MarkerUnreadable.Glyph), problem.Code, terminalText(problem.Message)))
 	}
-	threadSection(&b, "Diagnostics", diagnostics, s)
+	return diagnostics
+}
+
+// renderThreadTopology is intentionally a wave map with compact incoming-edge
+// aliases, not a terminal graph-layout engine. Waves and edges are rendered
+// exactly as the core projection supplies them: the TUI groups evidence for
+// reading, but never traverses dependencies or derives scheduling, eligibility,
+// or ownership.
+func renderThreadTopology(projection core.ThreadGraphProjection, pathIssue, selectedTaskID string, width int, s *styles) string {
+	view, thread := projection.View, projection.View.Thread
+	selectedTaskID = threadGraphSelectedTaskID(projection, selectedTaskID)
+	layoutWidth := width
+	if layoutWidth <= 0 {
+		// Detail can arrive before the first WindowSizeMsg. Match the pane's
+		// unbounded rendering convention without collapsing every identity to one
+		// cell while its real width is not known yet.
+		layoutWidth = 120
+	}
+	var b strings.Builder
+	detailField(&b, "thread", terminalText(thread.Slug)+"  "+s.dim("("+terminalText(thread.CanonicalID())+")"), s)
+	detailField(&b, "view", "topology · member waves plus bounded dependencies", s)
+	health := string(view.GraphHealth) + " · projection " + string(view.ProjectionHealth)
+	if view.Inconsistent {
+		health += "  " + s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph+" inconsistent")
+	}
+	detailField(&b, "health", health, s)
+	topology := "partial"
+	if projection.TopologyComplete {
+		topology = "complete"
+	}
+	detailField(&b, "topology", fmt.Sprintf("%s · %d member(s) · %d external gate(s) · %d wave(s) · %d edge(s)",
+		topology, len(view.Members), len(view.ExternalGates), len(projection.Waves), len(projection.Edges)), s)
+	detailField(&b, "direction", "[prerequisite] ─▶ [dependent] · each node lists what it needs", s)
+	if !projection.TopologyComplete {
+		detailField(&b, "warning", s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph+" waves are partial; unranked work and diagnostics remain visible"), s)
+	}
+	if pathIssue != "" {
+		detailField(&b, "local path", "unavailable · "+terminalText(pathIssue), s)
+	}
+
+	byID := make(map[string]core.ThreadGraphNode, len(projection.Nodes))
+	for _, node := range projection.Nodes {
+		byID[node.TaskID] = node
+	}
+	aliases := threadGraphAliases(projection)
+	incoming := threadGraphIncoming(projection.Edges, aliases)
+	outstanding := make(map[string]bool, len(view.ExternalGates))
+	for _, gate := range view.ExternalGates {
+		outstanding[gate.State.TaskID] = gate.Outstanding
+	}
+
+	external := make([]string, 0, len(view.ExternalGates)*2)
+	for _, node := range projection.Nodes {
+		if node.Role != core.ThreadTaskExternalGate {
+			continue
+		}
+		isOutstanding, known := outstanding[node.TaskID]
+		state, marker := "gate state unavailable", s.fg(theme.ColorRed, theme.MarkerUnreadable.Glyph)
+		if known && !isOutstanding {
+			state, marker = "satisfied", s.fg(theme.ColorGreen, "✓")
+		} else if known {
+			state, marker = "outstanding", s.fg(theme.ColorYellow, "!")
+		}
+		external = append(external, threadGraphNodeLines(node, aliases[node.TaskID], marker, state,
+			incoming[node.TaskID], node.TaskID == selectedTaskID, layoutWidth, s)...)
+	}
+	threadSection(&b, "External gates (not members)", external, s)
+
+	ranked := make(map[string]bool, len(view.Members))
+	for _, wave := range projection.Waves {
+		lines := make([]string, 0, len(wave.TaskIDs)*2)
+		for _, taskID := range wave.TaskIDs {
+			ranked[taskID] = true
+			node, ok := byID[taskID]
+			if !ok {
+				node = core.ThreadGraphNode{TaskID: taskID, Label: taskID}
+				lines = append(lines, threadGraphNodeLines(node, aliases[taskID], s.fg(theme.ColorRed, theme.MarkerUnreadable.Glyph),
+					"projection node missing", incoming[taskID], false, layoutWidth, s)...)
+				continue
+			}
+			lines = append(lines, threadGraphNodeLines(node, aliases[node.TaskID], threadGraphNodeMarker(node, s), "",
+				incoming[node.TaskID], node.TaskID == selectedTaskID, layoutWidth, s)...)
+		}
+		threadSection(&b, fmt.Sprintf("Wave %d · explanatory order, not a barrier", wave.Index), lines, s)
+	}
+
+	unranked := make([]string, 0)
+	for _, node := range projection.Nodes {
+		if node.Role != core.ThreadTaskMember || ranked[node.TaskID] {
+			continue
+		}
+		unranked = append(unranked, threadGraphNodeLines(node, aliases[node.TaskID], s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph),
+			"unranked", incoming[node.TaskID], node.TaskID == selectedTaskID, layoutWidth, s)...)
+	}
+	threadSection(&b, "Unranked members (partial topology)", unranked, s)
+	if len(projection.Waves) == 0 && len(unranked) == 0 {
+		threadSection(&b, "Member waves", []string{"  " + s.dim("• no member tasks to rank")}, s)
+	}
+
+	threadSection(&b, "Diagnostics", threadDiagnosticLines(view, s), s)
 
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
+}
+
+func threadGraphNodeMarker(node core.ThreadGraphNode, s *styles) string {
+	if node.State.Role == core.RoleUnknown || node.State.Gate == core.GateBroken {
+		return s.fg(theme.ColorRed, theme.MarkerUnreadable.Glyph)
+	}
+	tok := theme.Status(node.Status)
+	return s.fg(tok.Color, tok.Glyph)
+}
+
+func threadGraphNodeLines(node core.ThreadGraphNode, alias, marker, suffix string, prerequisites []string, selected bool, width int, s *styles) []string {
+	aliasLabel := "[" + alias + "]"
+	cursor := "  "
+	if selected {
+		cursor = s.selected.Render("› ")
+	}
+	prefix := cursor + marker + " " + s.dim(aliasLabel) + " "
+	ref := threadGraphNodeRef(node, max1(width-ansi.StringWidth(prefix)), s)
+	state := string(node.Role) + " · " + string(node.State.Role) + "/" + string(node.State.Gate)
+	if node.Role == "" {
+		state = "unknown role · " + string(node.State.Role) + "/" + string(node.State.Gate)
+	}
+	if suffix != "" {
+		state += " · " + suffix
+	}
+	if len(prerequisites) > 0 {
+		refs := make([]string, len(prerequisites))
+		for index, prerequisite := range prerequisites {
+			refs[index] = "[" + prerequisite + "]"
+		}
+		state += " · needs " + strings.Join(refs, ", ")
+	}
+	return []string{prefix + ref, "    " + s.dim(state)}
+}
+
+// threadGraphNavigationIDs returns readable bounded tasks in their visual order:
+// external gates, ranked wave members, then any unranked members. The projection
+// remains the source of both layout and identity; this only indexes supplied
+// records for the linear cursor.
+func threadGraphNavigationIDs(projection core.ThreadGraphProjection) []string {
+	readable := make(map[string]bool, len(projection.View.Members)+len(projection.View.ExternalGates))
+	for _, member := range projection.View.Members {
+		readable[member.State.TaskID] = member.Task.Slug != ""
+	}
+	for _, gate := range projection.View.ExternalGates {
+		readable[gate.State.TaskID] = gate.Task.Slug != ""
+	}
+	ids := make([]string, 0, len(readable))
+	seen := make(map[string]bool, len(readable))
+	appendID := func(taskID string) {
+		if readable[taskID] && !seen[taskID] {
+			ids = append(ids, taskID)
+			seen[taskID] = true
+		}
+	}
+	for _, node := range projection.Nodes {
+		if node.Role == core.ThreadTaskExternalGate {
+			appendID(node.TaskID)
+		}
+	}
+	for _, wave := range projection.Waves {
+		for _, taskID := range wave.TaskIDs {
+			appendID(taskID)
+		}
+	}
+	for _, node := range projection.Nodes {
+		appendID(node.TaskID)
+	}
+	return ids
+}
+
+func threadGraphSelectedTaskID(projection core.ThreadGraphProjection, selected string) string {
+	ids := threadGraphNavigationIDs(projection)
+	for _, taskID := range ids {
+		if taskID == selected {
+			return selected
+		}
+	}
+	if len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
+}
+
+func threadGraphTask(projection core.ThreadGraphProjection, taskID string) (domain.Task, bool) {
+	for _, member := range projection.View.Members {
+		if member.State.TaskID == taskID && member.Task.Slug != "" {
+			return member.Task, true
+		}
+	}
+	for _, gate := range projection.View.ExternalGates {
+		if gate.State.TaskID == taskID && gate.Task.Slug != "" {
+			return gate.Task, true
+		}
+	}
+	return domain.Task{}, false
+}
+
+func threadGraphAliases(projection core.ThreadGraphProjection) map[string]string {
+	aliases := make(map[string]string, len(projection.Nodes))
+	gates := 0
+	for _, node := range projection.Nodes {
+		if node.Role == core.ThreadTaskExternalGate {
+			gates++
+			aliases[node.TaskID] = fmt.Sprintf("G%d", gates)
+		}
+	}
+	members := 0
+	for _, wave := range projection.Waves {
+		for _, taskID := range wave.TaskIDs {
+			if aliases[taskID] == "" {
+				members++
+				aliases[taskID] = fmt.Sprintf("M%d", members)
+			}
+		}
+	}
+	unknown := 0
+	for _, node := range projection.Nodes {
+		if aliases[node.TaskID] != "" {
+			continue
+		}
+		switch node.Role {
+		case core.ThreadTaskMember:
+			members++
+			aliases[node.TaskID] = fmt.Sprintf("M%d", members)
+		default:
+			unknown++
+			aliases[node.TaskID] = fmt.Sprintf("?%d", unknown)
+		}
+	}
+	return aliases
+}
+
+// threadGraphIncoming groups the supplied edge records by dependent for compact
+// presentation. It does not walk the graph or manufacture transitive relations.
+func threadGraphIncoming(edges []core.ThreadGraphEdge, aliases map[string]string) map[string][]string {
+	incoming := make(map[string][]string)
+	for _, edge := range edges {
+		alias := aliases[edge.From]
+		if alias == "" {
+			alias = "?"
+		}
+		incoming[edge.To] = append(incoming[edge.To], alias)
+	}
+	return incoming
+}
+
+func threadGraphNodeRef(node core.ThreadGraphNode, width int, s *styles) string {
+	id := terminalText(node.TaskID)
+	label := terminalText(node.Label)
+	if label == "" {
+		label = id
+	}
+	suffix := "(" + id + ")"
+	if label == id {
+		return s.dim(truncateMiddle(id, width))
+	}
+	if width <= ansi.StringWidth(suffix)+1 {
+		return s.dim(truncateMiddle(id, width))
+	}
+	labelWidth := width - ansi.StringWidth(suffix) - 1
+	return truncateMiddle(label, labelWidth) + " " + s.dim(suffix)
+}
+
+// terminalText prevents repository-authored labels and diagnostics from
+// injecting terminal control sequences or manufacturing extra topology rows.
+func terminalText(value string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '\n', '\r':
+			return '↵'
+		case '\t':
+			return '⇥'
+		default:
+			if unicode.IsControl(r) {
+				return '�'
+			}
+			return r
+		}
+	}, value)
 }
 
 // --- audit detail ---

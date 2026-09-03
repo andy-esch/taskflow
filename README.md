@@ -6,8 +6,10 @@ task/Thread/epic/audit/research files. It dogfoods on its own planning under
 
 > **Threads preview (v0.18.0).** The production Thread commands are ready for CLI use and
 > dogfooding, but their interface and workflows may still evolve from real-world feedback. This
-> preview now includes read-only TUI Thread list/detail views, but not TUI mutation or advanced graph
-> analysis such as critical path, forecasting, or slack. Preview machine contracts may change with an explicit schema-version bump;
+> preview now includes read-only TUI Thread list/detail views and a `v` topology view of member
+> waves plus compact prerequisite relationships, but not TUI mutation or advanced graph analysis
+> such as critical path, forecasting, or slack. Preview machine contracts may change with an
+> explicit schema-version bump;
 > schema 1.59 makes `thread list --json` unreadable-record diagnostics path-optional and
 > identity-aware for non-filesystem adapters.
 
@@ -443,7 +445,11 @@ full keymap, `r` to refresh. The detail pane's title is a **click-to-open link**
 (OSC 8) to the entity's file, and the terminal window/tab title tracks the current
 selection. The read-only Threads tab keeps persisted lifecycle separate from graph/projection
 health, nominal versus sound progress, in-flight work, dispatchable frontier, external gates, and
-diagnostics; membership order is not presented as dependency or dispatch order. It **live-reloads**
+diagnostics; with its detail focused, `v` switches to a terminal-native topology view that combines
+the core projection's member waves with compact per-node prerequisite aliases. `j`/`k` selects a
+visible task and `Enter` opens it; `f` remains the fast stable-identity picker for members and
+immediate external gates.
+Membership order is not presented as dependency or dispatch order. It **live-reloads**
 via `fsnotify` — edits from
 your editor or a CLI `task move` in another terminal show up within ~200ms,
 cursor preserved. Configured entity directories remain desired even when absent

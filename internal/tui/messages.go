@@ -84,9 +84,9 @@ type listLoadedMsg struct {
 	// the same gen — means a dropped stale load can't apply a restore meant for a
 	// newer one, closing the M6 race where a reload and a jump shared one tab slot.
 	restore entityRef
-	// widenOnMissing belongs only to an Atlas work landing. The Atlas is a snapshot:
-	// a task may complete, defer, or otherwise leave the default working view before
-	// its workspace opens. In that case the consumer retries once in :all.
+	// widenOnMissing belongs only to explicit navigation, never ordinary cursor
+	// restoration. A target may be hidden by the destination tab's default view; in
+	// that case the consumer retries once in :all.
 	widenOnMissing bool
 }
 

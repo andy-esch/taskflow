@@ -208,9 +208,9 @@ type entityTab struct {
 	// the loadGen it belongs to, so a newer reload supersedes a stale target and an
 	// old filter-match callback (handleTabMsg) can't apply it. The id also rides on
 	// each load's listLoadedMsg (gen-safe), so a dropped stale load never applies a
-	// restore meant for another — the single-slot race M6 flagged. restoreWiden is
-	// reserved for cross-space Atlas landings: if the task left the default working
-	// view after the Atlas snapshot, a genuine miss retries once in :all.
+	// restore meant for another — the single-slot race M6 flagged. restoreWiden lets
+	// an explicit navigation target retry once in :all when a tab's default view
+	// hides it; ordinary cursor preservation never widens behind the user.
 	restore      entityRef
 	restoreGen   int
 	restoreWiden bool
@@ -223,7 +223,7 @@ type entityTab struct {
 // tab's pending intent (so a concurrent markReload carries it forward, not the
 // stale cursor), and stamps it onto the load's message for the gen-safe consumer.
 func (t *entityTab) reload(svc *core.Service, restore entityRef) tea.Cmd {
-	// Keep the Atlas fallback only while reloads carry the same pending target.
+	// Keep the explicit-navigation fallback only while reloads carry the same pending target.
 	// A watcher firing during the landing must not discard it, while an unrelated
 	// navigation must not inherit it.
 	widenOnMissing := t.restoreWiden && !restore.empty() && t.restore.key == restore.key

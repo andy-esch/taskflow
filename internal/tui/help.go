@@ -192,6 +192,7 @@ func notesFor(kind entityKind) helpSection {
 			helpEntry{"read-only", "use Thread lifecycle and membership CLI verbs for mutations"},
 			helpEntry{"progress", "d = nominally done · s = soundly drained · list order does not authorize dispatch"},
 			helpEntry{"tiny health", "paired marks retain graph then projection order when g/v labels collapse"},
+			helpEntry{"topology", "in detail, v switches summary ⇄ waves; j/k selects and enter opens a task; f picks directly"},
 		)
 	}
 	entries = append(entries, helpEntry{"find", "matches the rendered text on screen — R for the raw source"})
@@ -225,6 +226,16 @@ func helpSectionsFor(f focus, kind entityKind, s *styles) []helpSection {
 	}
 	byTitle := make(map[string]helpSection, len(helpSections))
 	for _, section := range helpSections {
+		if section.title == "Detail" && kind == entityThreads {
+			entries := make([]helpEntry, 0, len(section.entries)+1)
+			for _, entry := range section.entries {
+				if entry.keys == keys.RawToggle.Help().Key {
+					entries = append(entries, he(keys.View))
+				}
+				entries = append(entries, entry)
+			}
+			section.entries = entries
+		}
 		if section.title == "Global" && kind == entityThreads {
 			filtered := section.entries[:0:0]
 			for _, entry := range section.entries {

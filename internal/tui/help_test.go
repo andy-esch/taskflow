@@ -61,7 +61,9 @@ func TestHelpAndFooterDeriveFromKeymap(t *testing.T) {
 		}
 	}
 	// The detail-footer fragment derives its keys from the bindings.
-	body := detailFooterBody()
+	m := Model{detail: newDetailPane(&testStyles), tabs: []*entityTab{{kind: entityTasks}}}
+	m.detail.content = taskDetail{body: "body"}
+	body := m.detailFooterBody()
 	if !strings.Contains(body, keys.RawToggle.Help().Key) || !strings.Contains(body, keys.Find.Help().Key) {
 		t.Errorf("detail footer should derive keys from the bindings: %q", body)
 	}

@@ -52,17 +52,18 @@ func loadThreadList(t *entityTab, svc *core.Service) tea.Cmd {
 	}
 }
 
-// loadThreadDetail joins the semantic projection/body with the independently
-// optional local-path capability. A pathless adapter still gets a complete detail
-// view. Only the semantic read participates in contention retry; optional path
-// failure is explanatory and cannot blank otherwise coherent content.
+// loadThreadDetail joins one coherent graph-projection/body read with the
+// independently optional local-path capability. A pathless adapter still gets
+// both summary and topology views. Only the semantic read participates in
+// contention retry; optional path failure is explanatory and cannot blank
+// otherwise coherent content.
 func loadThreadDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
 		// Path lookup is optional and non-authoritative. Resolve it independently so
 		// a local repair path survives a semantic projection failure, but never let a
 		// missing/path-only failure blank otherwise coherent Thread content.
 		path, pathErr := svc.ThreadPath(id)
-		view, body, err := svc.ShowThread(id)
+		projection, body, err := svc.ShowThreadGraphDetail(id)
 		if err != nil {
 			return detailErrMsg{kind: entityThreads, id: id, err: err, localPath: path}
 		}
@@ -71,7 +72,7 @@ func loadThreadDetail(svc *core.Service, id string) tea.Cmd {
 			issue = pathErr.Error()
 		}
 		return detailMsg{kind: entityThreads, id: id, content: threadDetail{
-			view: view, body: body, path: path, pathIssue: issue,
+			projection: projection, body: body, path: path, pathIssue: issue,
 		}}
 	}
 }
