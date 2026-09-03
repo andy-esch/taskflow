@@ -237,7 +237,7 @@ func fixedGraphRecord(id, slug string, status domain.Status, dependencies ...str
 	}
 }
 
-func TestServiceShowThreadGraphUsesIndependentPortsInOrder(t *testing.T) {
+func TestServiceShowThreadGraphDetailUsesOnePairedReadInOrder(t *testing.T) {
 	task := graphRecord("member", domain.StatusReadyToStart)
 	thread := domain.Thread{
 		ID: "6g3q4rtmv4ak", Slug: "ordered", Status: domain.ThreadStatusUnstarted,
@@ -246,9 +246,9 @@ func TestServiceShowThreadGraphUsesIndependentPortsInOrder(t *testing.T) {
 	}
 	calls := make([]string, 0, 2)
 	graphs := &taskGraphReadFake{tasks: []domain.Task{task}, onList: func() { calls = append(calls, "tasks") }}
-	threads := &threadReadFake{thread: thread, onGet: func() { calls = append(calls, "threads") }}
-	projection, err := NewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads)).ShowThreadGraph(thread.ID)
-	if err != nil || !slices.Equal(calls, []string{"threads", "tasks"}) || len(projection.Nodes) != 1 {
-		t.Fatalf("calls=%v projection=%+v err=%v", calls, projection, err)
+	threads := &threadReadFake{thread: thread, body: "# Ordered\n", onGet: func() { calls = append(calls, "threads") }}
+	projection, body, err := NewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads)).ShowThreadGraphDetail(thread.ID)
+	if err != nil || !slices.Equal(calls, []string{"threads", "tasks"}) || len(projection.Nodes) != 1 || body != "# Ordered\n" {
+		t.Fatalf("calls=%v projection=%+v body=%q err=%v", calls, projection, body, err)
 	}
 }

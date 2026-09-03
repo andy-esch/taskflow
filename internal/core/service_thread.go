@@ -337,36 +337,47 @@ func threadReadProblemName(problem ThreadReadProblem) string {
 }
 
 func (s *Service) ShowThread(ref string) (ThreadView, string, error) {
-	if s.threads == nil {
-		return ThreadView{}, "", fmt.Errorf("thread reads are unavailable from this store")
-	}
-	thread, body, err := s.threads.GetThread(ref)
-	if err != nil {
-		return ThreadView{}, "", err
-	}
-	graph, err := LoadTaskGraph(s.taskGraphs)
+	thread, body, graph, err := s.readThreadGraph(ref)
 	if err != nil {
 		return ThreadView{}, "", err
 	}
 	return ProjectThread(thread, graph), body, nil
 }
 
+// ShowThreadGraphDetail returns the persisted Thread body and the complete
+// adapter-neutral graph projection from one paired read. Presentation adapters
+// that offer summary and topology views use this instead of independently
+// calling ShowThread and ShowThreadGraph, which could otherwise combine two
+// different repository snapshots during an external edit.
+func (s *Service) ShowThreadGraphDetail(ref string) (ThreadGraphProjection, string, error) {
+	thread, body, graph, err := s.readThreadGraph(ref)
+	if err != nil {
+		return ThreadGraphProjection{}, "", err
+	}
+	return ProjectThreadGraph(thread, graph), body, nil
+}
+
+func (s *Service) readThreadGraph(ref string) (domain.Thread, string, *TaskGraph, error) {
+	if s.threads == nil {
+		return domain.Thread{}, "", nil, fmt.Errorf("thread reads are unavailable from this store")
+	}
+	thread, body, err := s.threads.GetThread(ref)
+	if err != nil {
+		return domain.Thread{}, "", nil, err
+	}
+	graph, err := LoadTaskGraph(s.taskGraphs)
+	if err != nil {
+		return domain.Thread{}, "", nil, err
+	}
+	return thread, body, graph, nil
+}
+
 // ShowThreadGraph reads the Thread first and the task graph second, preserving
 // the same paired-source ordering contract as ShowThread while returning the
 // adapter-neutral graph projection used by every presentation surface.
 func (s *Service) ShowThreadGraph(ref string) (ThreadGraphProjection, error) {
-	if s.threads == nil {
-		return ThreadGraphProjection{}, fmt.Errorf("thread reads are unavailable from this store")
-	}
-	thread, _, err := s.threads.GetThread(ref)
-	if err != nil {
-		return ThreadGraphProjection{}, err
-	}
-	graph, err := LoadTaskGraph(s.taskGraphs)
-	if err != nil {
-		return ThreadGraphProjection{}, err
-	}
-	return ProjectThreadGraph(thread, graph), nil
+	projection, _, err := s.ShowThreadGraphDetail(ref)
+	return projection, err
 }
 
 func (s *Service) ThreadPath(ref string) (string, error) {
