@@ -4,7 +4,7 @@ id: 6fsa47r4f7es
 bucket: open
 area: ai-agent-cli-ergonomics
 date: "2026-07-24"
-updated_at: "2026-08-24"
+updated_at: "2026-09-02"
 ---
 # Audit: AI-agent CLI ergonomics — 2026-07-24
 
@@ -164,6 +164,15 @@ to return the prior result on replay, with bounded retention and a documented sc
 per workspace. If persistent receipts are judged too heavy for a local-first CLI,
 provide a narrower `--append-if-absent-hash` contract and document its limitations.
 
+**Resolution:** Re-verified still open on 2026-09-02 against v0.18.0: task
+append exposes no operation key, if-absent hash, or any replay identity, so a
+lost acknowledgement after a committed append still duplicates durable content.
+The finding's reasoning holds unchanged — OCC covers the process boundary, not
+an agent transport whose ack can be lost after success. Design-heavy (M): needs
+a decision on whether a local-first CLI should persist dedupe records at all,
+versus the narrower --append-if-absent-hash the finding offers as an
+alternative.
+
 ### Medium
 
 #### M1. List and finding queries are projectable but still unbounded  · **Status:** open
@@ -187,6 +196,15 @@ to task/audit/epic lists and `audit findings`; return `total` and `next_after` i
 Add `--query` over slug/title/description/tags and `--updated-since` for cross-session
 resumption. Preserve the current unbounded behavior when no bound is requested.
 
+**Resolution:** Re-verified still open on 2026-09-02: task list exposes none of
+--limit, --after, --sort, --updated-since, or --query, so an unbounded corpus is
+still the only read. Column projection landed
+(honor-c-columns-and-compact-output-for-json, completed) and reduces per-row
+cost, but not row COUNT, which is what truncated the caller. Note
+recast-findingsrollup-as-a-composed-service-view-model-for-web-pagination-sort
+is deferred and covers FindingsRollup for the web read model, not these CLI list
+queries.
+
 #### M2. Body mutation JSON echoes the entire resulting document by default  · **Status:** open
 
 **File:** internal/wire/envelopes.go:137-153,382-395 | **Component:** wire / token economy
@@ -207,6 +225,14 @@ post-write `version`. Add `--include-body` for the current echo behavior. A dry-
 optionally expose a short change summary or unified diff without serializing unrelated
 body content.
 
+**Resolution:** Re-verified still open on 2026-09-02 and measured: a --dry-run
+append of the 10-character body 'probe-only' returned 4271 bytes, 3276 of them
+the echoed body. Deliberately NOT fixed alongside M7, though both are S: making
+receipts compact by default changes the shape of an established --json contract,
+so it needs a schema version decision and an --include-body escape hatch agreed
+first. Additive enrichment (M7) was safe to land unilaterally; a breaking
+default is not.
+
 #### M3. `schema` describes entities but not the executable command surface  · **Status:** open
 
 **File:** internal/cli/schema.go; internal/cli/root.go | **Component:** command discovery
@@ -224,6 +250,15 @@ Cobra tree rather than hand-maintained. For every leaf command expose path, purp
 required/variadic args, flags and types, conflicts, whether it mutates, whether it can
 be destructive, dry-run support, input body modes, and the JSON envelope name. This is
 a CLI manifest, not an MCP server and not a second execution path.
+
+**Resolution:** Re-verified still open on 2026-09-02: schema exposes entity
+kinds, statuses, the field registry and exit codes, but nothing inventories the
+command surface — no schema cli, no capabilities. An agent still traverses
+root/noun/verb help prose to learn paths, arg shapes, flag conflicts and
+mutation classification. Note the safety annotations the manifest would expose
+are themselves already tracked as unread metadata by
+make-the-command-safety-annotations-load-bearing, so the two overlap and should
+be sequenced together.
 
 #### M4. Structure-aware body writes stop short of the edits agents make most  · **Status:** tracked by 6fpnn6zk157b
 
@@ -302,7 +337,16 @@ Prefer resume-safe execution over pretending multiple renames are one transactio
 This also gives sandboxed agent environments one stable, least-privilege mutation
 entry point instead of a growing set of approval prefixes.
 
-#### M7. JSON errors classify domain failures but flatten OS recovery information  · **Status:** open
+**Resolution:** Re-verified still open on 2026-09-02: there is no apply command
+and no change-set format, so a multi-command closeout interrupted halfway still
+leaves state valid file-by-file but semantically incomplete. Largest item in
+this audit (L) and the only one whose own recommendation hedges on fit — it
+explicitly says cross-file atomicity may be wrong for a git-agnostic local-files
+tool and proposes restartability instead. Worth an explicit keep-or-drop
+decision before any implementation, rather than carrying indefinitely as an open
+finding.
+
+#### M7. JSON errors classify domain failures but flatten OS recovery information  · **Status:** fixed
 
 **File:** internal/cli/exit.go:61-87 | **Component:** errors / recovery
 **Effort:** S · **Urgency:** eventually
@@ -320,9 +364,19 @@ structured details for OS failures: `class` (`permission`, `not-found`,
 if no new exit-code policy is desired. Add `doctor --write-access` only if real use
 shows preflighting is valuable; structured errors are the minimum useful fix.
 
+**Resolution:** Reproduced on v0.18.0 — a write into a read-only tasks dir
+returned {code: error, message: open ...: permission denied} and nothing else —
+then fixed. The JSON error envelope now carries an optional filesystem block
+with class (permission|not-found|read-only|no-space|io), operation, path, and
+retryable, read from the *fs.PathError and *os.LinkError Go already carries
+rather than by matching message text. retryable is true only for genuinely
+transient errno values, so an agent cannot spin on a condition needing operator
+action. Exit codes and human output are deliberately unchanged, and a domain
+failure carries no filesystem block.
+
 ### Low
 
-#### L1. Generated help is source-synchronized but contains stale semantic copy  · **Status:** open
+#### L1. Generated help is source-synchronized but contains stale semantic copy  · **Status:** fixed
 
 **File:** internal/cli/audit.go:20-24; internal/cli/listmode.go:49-55 | **Component:** help / docs
 **Effort:** XS · **Urgency:** eventually
@@ -338,6 +392,16 @@ an agent away from the real contract.
 the frontmatter-state transition registry and test the `-c` wording against the
 format-resolution matrix. Add a small stale-vocabulary test for retired layout terms;
 doc generation alone cannot catch semantically obsolete prose.
+
+**Resolution:** Both copy defects confirmed live on v0.18.0 and fixed. The audit
+lifecycle text is now DERIVED from domain.AuditTransitions (auditVerbShort)
+instead of hand-keyed beside it, so it cannot drift from the transition it
+describes; it names the bucket rather than a directory the flat layout deleted.
+The -c help no longer reads as an unconditional 'implies -o table', which had
+steered agents off the --json -c path. TestHelp_CarriesNoRetiredLayoutVocabulary
+walks the whole command tree for retired directory vocabulary — the stale-prose
+class docgen cannot catch — and distinguishes a path claim from a
+slash-separated enumeration so it stays high-confidence.
 
 #### L2. Cross-session resumption still requires several reads and body interpretation  · **Status:** open
 
@@ -355,6 +419,13 @@ sections still grow without a tail option.
 from the existing section/AC parser, include only the latest dated progress item, and
 keep the underlying commands. This should be a compact read model, not a new stored
 summary that can drift.
+
+**Resolution:** Re-verified still open on 2026-09-02: no task brief and no task
+info --include, so resuming work is still task info plus task ac plus one or
+more task show --section calls, followed by prose interpretation. Its dependency
+has since strengthened rather than shifted: task ac now reports a criterion's
+state and tracked destination as structured fields, so an unchecked-AC section
+of a brief would be a projection rather than prose parsing.
 
 ## Candidate tasks
 
