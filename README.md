@@ -6,15 +6,15 @@ task/Thread/epic/audit/research files. It dogfoods on its own planning under
 
 > **Threads preview (v0.18.0).** The production Thread commands are ready for CLI use and
 > dogfooding, but their interface and workflows may still evolve from real-world feedback. This
-> preview does not include TUI Thread views or advanced graph analysis such as critical path,
-> forecasting, or slack. Preview machine contracts may change with an explicit schema-version bump;
+> preview now includes read-only TUI Thread list/detail views, but not TUI mutation or advanced graph
+> analysis such as critical path, forecasting, or slack. Preview machine contracts may change with an explicit schema-version bump;
 > schema 1.59 makes `thread list --json` unreadable-record diagnostics path-optional and
 > identity-aware for non-filesystem adapters.
 
 ## Demos
 
 The interactive TUI (`tskflwctl ui`) — navigate registered planning spaces from the
-atlas, then tab across tasks, epics, audits, and research; status glyphs, epic rollup
+atlas, then tab across tasks, epics, Threads, audits, and research; status glyphs, epic rollup
 bars, and an audit's **segmented finding bar** over its status-grouped **finding tree**:
 
 ![the tskflwctl TUI](./assets/tui.gif)
@@ -426,13 +426,14 @@ is the landing screen: `j`/`k` select a space, `h`/`l` select a registered entry
 `o`/`O` change card ordering, Enter navigates into it, and `a` / `:atlas` returns.
 Launched inside one, it opens that repo and the atlas stays one keystroke away. Inside a
 space, two
-panes show an entity list (tasks / epics / audits / research) and a detail preview
+panes show an entity list (tasks / epics / Threads / audits / research) and a detail preview
 rendered as **glamour markdown** (`R` toggles raw). Vim-first keys: `ctrl+p` command
-palette (fuzzy-jump to any entity or run a command), `:` command-jump, `/` filter (slug/desc/tags),
+palette (fuzzy-jump to any entity or run a command), `:` command-jump, `/` filter (label/id/metadata),
 `F` toggles the filter between fuzzy and substring,
-`o`/`O` sort, `s`/`S` status views, `[`/`]` tabs, `m` move (lifecycle:
+`o`/`O` sort, `s`/`S` status views where available, `[`/`]` tabs, `m` move (lifecycle:
 start/complete/defer/…), `e` to edit a task's fields inline, `E` to open the
-whole file in `$EDITOR` (any entity; re-read on save via live-reload), `f` to
+whole local file in `$EDITOR` (when that entity exposes a local-path capability;
+re-read on save via live-reload), `f` to
 follow a reference (task ⇄ epic) with `ctrl+o` to
 jump back, `y`/`Y` to copy the selection's slug / file path to the system
 clipboard (a native tool — pbcopy/wl-copy/xclip — when available, else OSC 52 so
@@ -440,7 +441,10 @@ it still works over SSH), `/`+`n`/`N` find-in-body when the
 detail is focused, `?` for the
 full keymap, `r` to refresh. The detail pane's title is a **click-to-open link**
 (OSC 8) to the entity's file, and the terminal window/tab title tracks the current
-selection. It **live-reloads** via `fsnotify` — edits from
+selection. The read-only Threads tab keeps persisted lifecycle separate from graph/projection
+health, nominal versus sound progress, in-flight work, dispatchable frontier, external gates, and
+diagnostics; membership order is not presented as dependency or dispatch order. It **live-reloads**
+via `fsnotify` — edits from
 your editor or a CLI `task move` in another terminal show up within ~200ms,
 cursor preserved. Configured entity directories remain desired even when absent
 at launch: parent watches discover them when they appear and recover directory
