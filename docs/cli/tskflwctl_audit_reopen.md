@@ -1,6 +1,6 @@
 ## tskflwctl audit reopen
 
-Move audit(s) back to open/
+Move audit(s) to the open bucket
 
 ```
 tskflwctl audit reopen <audit>... [flags]

@@ -1,6 +1,6 @@
 ## tskflwctl audit defer
 
-Move audit(s) to deferred/
+Move audit(s) to the deferred bucket
 
 ```
 tskflwctl audit defer <audit>... [flags]

@@ -78,6 +78,9 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 	payload := wire.ErrorEnvelope{SchemaVersion: wire.SchemaVersion}
 	payload.Error.Code = errorCodeName(ExitCode(err))
 	payload.Error.Message = err.Error()
+	// An OS failure otherwise arrives as code "error" plus prose, leaving an agent to
+	// tell permission-denied from missing-directory from disk-full by reading English.
+	payload.Error.Filesystem = filesystemDetails(err)
 	var dependencyErr *dependencyCommandFailure
 	if errors.As(err, &dependencyErr) {
 		details := wire.ToDependencyMutationJSON(dependencyErr.receipt, dependencyErr.workspace)

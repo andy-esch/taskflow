@@ -1,6 +1,6 @@
 ## tskflwctl audit close
 
-Move audit(s) to closed/
+Move audit(s) to the closed bucket
 
 ```
 tskflwctl audit close <audit>... [flags]
