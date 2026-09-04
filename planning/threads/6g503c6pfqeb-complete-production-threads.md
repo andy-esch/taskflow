@@ -6,7 +6,7 @@ description: Deliver production Threads through the CLI preview and a usage-info
 goal: Preserve the production graph foundation while carrying Threads into a faithful TUI
 created: "2026-08-29"
 tags: [threads, dogfood]
-tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6jqqcdehne, 6g6scc9jgxae]
+tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6jqqcdehne, 6g6scc9jgxae, 6g6wdvfjdaaa, 6g6wdvfp2ksa]
 updated_at: "2026-09-04"
 started_at: "2026-08-30"
 ---
@@ -33,6 +33,11 @@ one shared diagnostic vocabulary precedes portable board/status projections; and
 spatial graph prototype tests whether two-dimensional navigation earns a production slice. Those
 are independent branches. Repository-global dependencies record the release boundary without
 pretending the branches technically depend on each other.
+
+Two additional post-release members close planning gaps exposed by that fan-out. One makes frontier
+output carry priority, tier, and effort without redefining eligibility; the other defines objective
+compatibility and graduation gates so this Thread has an evidence-based finish line rather than an
+indefinite preview label.
 
 The deprecated combined TUI member remains as planning history. Its replacement tasks and the
 foundation gaps found while scoping them are members of this Thread, while repository-global

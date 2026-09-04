@@ -77,6 +77,8 @@ boundaries:
                                                       |          v
                                                       |   6g6jqqcdehne portable summaries
                                                       +-> 6g6dw5js81f3 spatial prototype
+                                                      +-> 6g6wdvfp2ksa frontier decision context
+                                                      +-> 6g6wdvfjdaaa preview graduation contract
 ```
 
 The projection loader also depends on the generated views and v0.18 preview above. The stable-ID
@@ -107,6 +109,8 @@ not an invented dependency on the release.
 - [6g5vm4efjcdv — neutral repository-lint diagnostics](../tasks/6g5vm4efjcdv-make-repository-lint-load-diagnostics-adapter-neutral.md)
 - [6g6jqqcdehne — portable board/status diagnostics](../tasks/6g6jqqcdehne-preserve-portable-load-diagnostics-in-board-and-status.md)
 - [6g6dw5js81f3 — spatial Thread graph prototype](../tasks/6g6dw5js81f3-prototype-a-two-dimensional-navigable-thread-graph-view.md)
+- [6g6wdvfp2ksa — frontier decision context](../tasks/6g6wdvfp2ksa-make-thread-frontier-help-choose-among-independent-candidates.md)
+- [6g6wdvfjdaaa — preview graduation contract](../tasks/6g6wdvfjdaaa-define-the-thread-preview-graduation-and-compatibility-contract.md)
 - Deprecated combined scope: [6g3q4rv89vzw](../tasks/6g3q4rv89vzw-add-usage-informed-thread-views-to-the-tui.md)
 
 ## Delivery sequence and gates
@@ -146,6 +150,8 @@ materializers under one outer guard.
 | 11a | Guarded graph repair | Every accepted durable prefix monotonically reduces deterministic graph damage without creating an escape hatch | cycles, dangling/self/duplicate edges, concurrent edits, interruption after every prefix |
 | 11b | Portable multi-entity diagnostics | One adapter-neutral vocabulary survives lint, board, status, Atlas, CLI, TUI, and wire projections | pathless and misleading locations, mixed entity kinds, deterministic ordering, scan counts |
 | 11c | Spatial graph experiment | A bounded prototype answers whether deterministic two-dimensional navigation merits production work | fan-in/out, crossings, skipped waves, narrow terminals, large graphs, reload stability |
+| 11d | Frontier decision context | Independent eligible candidates expose shared planning metadata without changing graph truth or inventing a scheduler | mixed priorities/tiers, unknown effort, active work, external gates, unhealthy graphs |
+| 11e | Preview graduation contract | Public and persisted surfaces have explicit compatibility classifications and observable graduation gates | old preview data, CLI/JSON consumers, pathless adapters, TUI/web evolution, unmet gates |
 
 ### Design attention
 
@@ -192,6 +198,8 @@ This epic is the first production consumer of its own capabilities:
 10. The post-release frontier fans out instead of manufacturing dependencies: graph repair is the
     highest-priority foundation, portable diagnostics are one serialized contract migration, and
     the spatial view remains a low-priority prototype justified by recorded dogfood feedback.
+    Frontier metadata makes those choices visible, while the graduation contract defines which
+    outcomes actually gate the end of preview.
 
 The experimental spike binary is limited to disposable planning spaces and does not satisfy these
 checkpoints. Dogfooding begins when the corresponding production slice passes its exit gate.
