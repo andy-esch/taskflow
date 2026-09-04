@@ -140,6 +140,10 @@ func graphDiagnosticsHuman(w io.Writer, st Style, problems []core.GraphProblem, 
 		fmt.Fprintf(w, "%s %s: %s\n", st.Warn("⚠"), problem.Code, problem.Message)
 	}
 	for _, diagnostic := range legacy {
-		fmt.Fprintf(w, "%s legacy %s on %s; run task depend migrate\n", st.Warn("⚠"), diagnostic.Field, diagnostic.TaskID)
+		remedy := "run task depend migrate"
+		if !diagnostic.MigrationReady() {
+			remedy = "repair graph-owned frontmatter directly, then run lint"
+		}
+		fmt.Fprintf(w, "%s legacy %s on %s; %s\n", st.Warn("⚠"), diagnostic.Field, diagnostic.TaskID, remedy)
 	}
 }

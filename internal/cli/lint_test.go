@@ -159,6 +159,9 @@ func TestLintReportsMissingAndAmbiguousLegacyReferencesExactlyOnce(t *testing.T)
 	if strings.Count(out, "legacy dependency field") != 1 || strings.Contains(out, "pass lint") {
 		t.Fatalf("legacy field should be one blocking grouped issue, never clean:\n%s", out)
 	}
+	if !strings.Contains(out, "repair the graph-owned frontmatter directly") || strings.Contains(out, "task depend migrate") {
+		t.Fatalf("unresolvable legacy references must prescribe direct repair, not migration:\n%s", out)
+	}
 }
 
 func TestLintUnsafeLegacyDependencyRemainsValidationError(t *testing.T) {
@@ -173,6 +176,9 @@ func TestLintUnsafeLegacyDependencyRemainsValidationError(t *testing.T) {
 	}
 	if !strings.Contains(out, "structurally unsafe") || strings.Contains(out, `"severity":"advisory"`) {
 		t.Fatalf("unsafe legacy output =\n%s", out)
+	}
+	if !strings.Contains(out, "repair the graph-owned frontmatter directly") || strings.Contains(out, "task depend migrate") {
+		t.Fatalf("unsafe legacy projection must prescribe direct repair, not migration:\n%s", out)
 	}
 }
 

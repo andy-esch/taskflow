@@ -92,6 +92,18 @@ type LegacyDependencyDiagnostic struct {
 	References []LegacyReference
 }
 
+// MigrationReady reports whether the guarded legacy migration can rewrite this
+// field occurrence. Present-but-empty fields are safe to remove; every populated
+// reference must resolve to a structurally safe canonical edge.
+func (d LegacyDependencyDiagnostic) MigrationReady() bool {
+	for _, ref := range d.References {
+		if ref.Resolution != LegacyResolved {
+			return false
+		}
+	}
+	return true
+}
+
 type LifecycleRole string
 
 const (

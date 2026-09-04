@@ -598,13 +598,10 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 			case LegacyResolved:
 				parts = append(parts, fmt.Sprintf("%q resolves to %s (edge %s -> %s)", ref.Value, ref.CandidateIDs[0], ref.Edge.From, ref.Edge.To))
 			case LegacyUnsafe:
-				severity = ""
 				parts = append(parts, fmt.Sprintf("%q resolves to %s but its projected edge %s -> %s is structurally unsafe", ref.Value, ref.CandidateIDs[0], ref.Edge.From, ref.Edge.To))
 			case LegacyMissing:
-				severity = ""
 				parts = append(parts, fmt.Sprintf("%q has no exact task ID or slug match", ref.Value))
 			case LegacyAmbiguous:
-				severity = ""
 				parts = append(parts, fmt.Sprintf("%q is ambiguous across %s", ref.Value, strings.Join(ref.CandidateIDs, ", ")))
 			}
 		}
@@ -612,9 +609,14 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 		if message == "" {
 			message = "field is present but empty"
 		}
+		remedy := "run `tskflwctl task depend migrate`"
+		if !diagnostic.MigrationReady() {
+			severity = ""
+			remedy = "repair the graph-owned frontmatter directly, then run `tskflwctl lint`"
+		}
 		out[diagnostic.TaskPath] = append(out[diagnostic.TaskPath], domain.Issue{
 			Field: diagnostic.Field, Severity: severity,
-			Message: fmt.Sprintf("legacy dependency field: %s; run `tskflwctl task depend migrate`", message),
+			Message: fmt.Sprintf("legacy dependency field: %s; %s", message, remedy),
 		})
 	}
 	for _, taskID := range graph.TaskIDs() {
