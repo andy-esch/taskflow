@@ -146,6 +146,24 @@ func TestLintReportsMissingAndAmbiguousLegacyReferencesExactlyOnce(t *testing.T)
 	}
 	dependentID := testutil.TaskID("legacy-dependent")
 	r.Task("completed", "legacy-dependent.md", "---\nid: "+dependentID+"\nstatus: completed\nblocked_by: [same, gone]\n---\n# dependent\n")
+	results, problems, err := core.NewService(store.NewFS(r.Root)).Lint()
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("Lint() error=%v problems=%+v", err, problems)
+	}
+	legacyFieldIssues := 0
+	for _, result := range results {
+		if result.Slug != "legacy-dependent" {
+			continue
+		}
+		for _, issue := range result.Issues {
+			if issue.Field == "blocked_by" {
+				legacyFieldIssues++
+			}
+		}
+	}
+	if legacyFieldIssues != 1 {
+		t.Fatalf("blocked_by lint issues = %d, want one grouped owner: %+v", legacyFieldIssues, results)
+	}
 
 	out, err := runRootRC(t, "-C", r.Root, "lint", "--color=never")
 	if err == nil || ExitCode(err) != 11 {

@@ -16,6 +16,14 @@ type PlanningSummarySource interface {
 	TaskGraphSource
 }
 
+// Pin both halves of the composite capability independently. This keeps a future
+// refactor from replacing either compile-time requirement with optional runtime
+// discovery while leaving the immediate summarize call buildable.
+var (
+	_ SummaryStore    = (PlanningSummarySource)(nil)
+	_ TaskGraphSource = (PlanningSummarySource)(nil)
+)
+
 // SpaceOverviewStore is the narrow secondary-adapter port for opening one planning tree.
 // Registry cataloging is deliberately supplied by SpaceRegistryService instead of being
 // folded into this filesystem capability.
