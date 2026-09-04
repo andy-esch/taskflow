@@ -93,4 +93,19 @@ neutral graph load problems into filesystem-shaped `FileProblem` results, losing
 pathless adapter. [Preserve portable load diagnostics in board and status](6g6jqqcdehne-preserve-portable-load-diagnostics-in-board-and-status.md)
 tracks that work after the shared repository-lint diagnostic vocabulary lands.
 
-## Adversarial review closeout (2026-09-04)\n\nTwo independent reviews converged on a real weakness in the legacy-diagnostic de-duplication test. The test now asserts the core Lint result contains exactly one blocked_by issue for the dependent task; a restored competing raw-problem owner produces three issues and fails the targeted test. All additional Claude findings were accepted: lint and graph-query diagnostics recommend migration only for resolved or present-empty legacy fields, while missing, ambiguous, and unsafe fields prescribe direct repair plus lint; non-healthy summary graph objects now exercise the real JSON Schema validator; and compile-time assertions independently pin both PlanningSummarySource capabilities.\n\nThe review loop also improved. Generated briefs now require a frozen handoff, an isolation attestation, the exact mutation each regression claims to kill, non-default optional wire values in semantic validation, execution of advertised repair commands, and coordinated mutations that challenge architectural invariants rather than only their nearest call site. Full go test -race, repeated focused race tests, golangci-lint, tidy/doc checks, planning/audit lint, and diff checks pass.
+## Adversarial review closeout (2026-09-04)
+
+Two independent reviews converged on a real weakness in the legacy-diagnostic de-duplication test.
+The test now asserts the core Lint result contains exactly one blocked_by issue for the dependent
+task; a restored competing raw-problem owner produces three issues and fails the targeted test. All
+additional Claude findings were accepted: lint and graph-query diagnostics recommend migration only
+for resolved or present-empty legacy fields, while missing, ambiguous, and unsafe fields prescribe
+direct repair plus lint; non-healthy summary graph objects now exercise the real JSON Schema
+validator; and compile-time assertions independently pin both `PlanningSummarySource` capabilities.
+
+The review loop also improved. Generated briefs now require a frozen handoff, an isolation
+attestation, the exact mutation each regression claims to kill, non-default optional wire values in
+semantic validation, execution of advertised repair commands, and coordinated mutations that
+challenge architectural invariants rather than only their nearest call site. Full `go test -race`,
+repeated focused race tests, golangci-lint, tidy/doc checks, planning/audit lint, and diff checks
+pass.
