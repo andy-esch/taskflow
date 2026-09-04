@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [store, core, occ, concurrency]
 created: "2026-08-24"
-updated_at: "2026-08-24"
+updated_at: "2026-09-04"
+audit_sources: [planning/audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md]
 ---
 # Give finding-status writes a non-interactive CAS path
 
@@ -59,3 +60,9 @@ Two consequences, from audit finding M1 of
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Audit finding M1: [2026-08-24-planning-state-vocabulary](../audits/6g38xqpa1ef6-2026-08-24-planning-state-vocabulary.md)
 - Introduced by [audit-finding-write-surface-status-write-and-candidate-list-sync](6feeygw00jmx-audit-finding-write-surface-status-write-and-candidate-list-sync.md)
+
+Cross-referenced by audit 2026-09-04-concurrency-and-atomicity: M1 (partial overlap). Two corrections that audit surfaced, for the human triaging this task — no status/scope change made here.
+
+1. The 'No OCC' premise above is no longer accurate. `store.EditAudit` computes `ifVersion := hashContent(orig)` (internal/store/edit.go:295) and passes `verifyUnchanged` (:301) under `s.writeLock`. A probe racing `audit append` against `audit finding --status` twelve times lost zero writes and produced six correct exit-14s, so the third acceptance criterion already holds. What remains live is the `retryOnConflict` wrapper and the `attempted` closure flag at internal/core/finding.go:262.
+
+2. The objective lists `SetCriterionState` among the mutations that already 'perform a content-hash compare-and-swap wrapped in retryOnConflict'. It does neither. Finding H1 of that audit shows the `task ac` writers compute the new body from a `GetTask` read that no CAS covers, then hand finished bytes to `EditBody`, which CASes only its own later read — measured at 3 lost appends in 12 races. Please do not read this task's comparison as evidence that the task ac path is safe.

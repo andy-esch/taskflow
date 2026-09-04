@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [store, config, architecture, robustness]
 created: "2026-09-02"
-updated_at: "2026-09-02"
+updated_at: "2026-09-04"
+audit_sources: [planning/audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md]
 ---
 # Unify the three divergent writeFileAtomic implementations
 
@@ -96,3 +97,5 @@ options on one helper, and stop the three copies from drifting further.
 - renameio scoping itself to atomicity, not durability: <https://pkg.go.dev/github.com/google/renameio/v2>
 - Go's darwin `File.Sync` using `F_FULLFSYNC` with an `ENOTSUP` fallback: <https://github.com/golang/go/issues/26650>, <https://github.com/golang/go/blob/master/src/internal/poll/fd_fsync_darwin.go>
 - `F_FULLFSYNC` cost on macOS: <https://mjtsai.com/blog/2022/02/17/apple-ssd-benchmarks-and-f_fullsync/>, <https://bonsaidb.io/blog/acid-on-apple/>
+
+Reinforced by audit 2026-09-04-concurrency-and-atomicity: L1. That audit confirms the store/config divergence is currently latent rather than live — `markdownDoc` (internal/store/resolve.go:23) gates every entity scan on `e.Type().IsRegular()`, so a symlinked task/audit/epic/research/thread file is never listed or resolved and `store.writeFileAtomic` is never handed one. The unification is still worth doing: the safety depends entirely on that gate, which atomic.go never mentions, and config.go:1146 currently claims the store 'has the same idea' when it does not.
