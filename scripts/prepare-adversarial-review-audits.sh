@@ -141,6 +141,7 @@ for reviewer in "${reviewers[@]}"; do
 		# shellcheck disable=SC2016
 		printf '> Finding grammar is exact: use `#### M1. <title> · **Status:** open` (or H1/L1). Codes must match `[A-Z]+[0-9]+`; no hyphens, no em dash in place of the period, and no free-standing status line.\n\n'
 		printf '> Required second pass: after completing the brief checklist, review the change again for systemic failure modes. Take an explicitly adversarial stance toward shared abstractions, test helpers that can mask broad defect classes, state changing between projection and action, and boundaries that only appear to fail closed. Prefer one demonstrated systemic issue over several speculative findings, and settle each challenged pattern with hostile evidence.\n\n'
+		printf '> Review-effectiveness floor: execute the exact mutation each new regression test claims to kill and require that test to fail; exercise newly added optional wire branches with non-default values in semantic validators; actually run every emitted repair command against the state that recommends it; and use coordinated mutations when a nearby call site would otherwise preserve an architectural invariant accidentally.\n\n'
 		cat <<'EOF'
 > Shared-worktree isolation is mandatory. Treat the checkout named in the handoff as a read-only
 > source. Before inspecting implementation, running tests or generators, or making mutation probes,
@@ -206,6 +207,11 @@ back. Leave the sandbox in place and report its path until the implementation ow
 audit transfer; if the hash guard fails, report the conflict and sandbox path instead of resolving
 it in the shared checkout.
 
+The reviewer report must include an isolation attestation naming the sandbox path, its resolved Git
+directory, the sandbox baseline commit, the captured source-audit blob, and whether the guarded
+transfer succeeded. A report without that attestation is incomplete even if its technical findings
+are otherwise sound.
+
 EOF
 		cat "$brief_file"
 	} >"$body_file"
@@ -232,6 +238,8 @@ for i in "${!reviewers[@]}"; do
 		--date "$audit_date" --body-file "${body_files[$i]}" --no-input >/dev/null
 	"${cli[@]}" -C "$planning_root" audit lint "${audit_slugs[$i]}" >/dev/null
 	audit_path="$("${cli[@]}" -C "$planning_root" audit path "${audit_slugs[$i]}")"
-	printf '\n[%s]\nReview the audit assigned to you at %s. The current checkout is a shared, read-only handoff: before inspecting or testing, follow the audit\047s Mandatory reviewer sandbox protocol and do all work in that independent clone. Complete both review passes, then copy back only the assigned audit after its origin-hash guard passes. Preserve the brief and leave every finding open for implementation-owner triage.\n' \
+	printf '\n[%s]\nReview the audit assigned to you at %s. The current checkout is a shared, read-only handoff: before inspecting or testing, follow the audit\047s Mandatory reviewer sandbox protocol and do all work in that independent clone. Complete both review passes, then copy back only the assigned audit after its origin-hash guard passes. Preserve the brief and leave every finding open for implementation-owner triage. Include the required isolation attestation in your report.\n' \
 		"${reviewers[$i]}" "$audit_path"
 done
+
+printf '\n[handoff freeze]\nDo not launch either reviewer until the implementation snapshot and both audit briefs are final for this review round. Once a reviewer starts, do not edit its audit or silently advance the review target. If either must change, cancel and relaunch that review or accept a report explicitly scoped to the captured sandbox baseline.\n'

@@ -27,6 +27,16 @@ rules must not forbid that local checkpoint, though they should continue to forb
 the source checkout and any push. If the reviewer cannot create or verify the independent sandbox,
 the correct outcome is a reported blocker—never a fallback to the shared checkout.
 
+Freeze the handoff before launching reviewers. Both audit briefs and the implementation snapshot
+must be final for that review round, and the implementation owner must not edit an assigned audit
+while its reviewer is active. If either target changes, cancel and relaunch or explicitly accept a
+report scoped to the already captured baseline. This avoids forcing the final source-hash guard into
+a conflict and makes each verdict's reviewed state unambiguous.
+
+The report must attest to isolation with the sandbox path, resolved Git directory, sandbox baseline
+commit, captured source-audit blob, and transfer result. This is a deliverable rather than an
+honor-system preamble: a technically useful report that omits it is still protocol-incomplete.
+
 The script deliberately does not generate the substantive brief. Review quality has come from
 deriving the implementation contract and hostile cases for the change at hand, not from a generic
 checklist. Start from a previous strong brief and preserve these required sections:
@@ -38,6 +48,19 @@ checklist. Start from a previous strong brief and preserve these required sectio
 - change-specific hostile angles and platform/support-boundary discipline;
 - sandbox-local contamination/restoration rules and a precise deliverable; and
 - a `## Reviewer report` placeholder for the assigned agent to replace.
+
+The most productive repeatable probes should also be tailored into the brief:
+
+- mutate the exact invariant each newly added regression test claims to protect and require that
+  test—not merely some unrelated test—to fail;
+- populate new optional wire/schema branches with non-default values in semantic validators;
+- execute every suggested repair command against each diagnostic class that recommends it; and
+- use coordinated mutations across an interface and its immediate caller so compilation by accident
+  is not mistaken for a pinned architectural contract.
+
+These checks came from review-loop evidence: two independent reviewers converged on a surviving
+diagnostic de-duplication mutation, while running the advertised remedy and exercising non-default
+schema paths exposed separate gaps that ordinary green tests did not.
 
 Example:
 
