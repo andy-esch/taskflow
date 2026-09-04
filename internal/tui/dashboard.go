@@ -163,7 +163,7 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 	}
 
 	// Needs attention — the open/ready-to-close audit queue, epics with a non-conforming
-	// status, and unreadable files.
+	// status, a non-healthy task graph, and unreadable files.
 	// Under a non-specific heading a bare count says nothing, so every row names its
 	// own category and wears its entity's glyph (the audit ◆ matches the audits tab);
 	// "all clear" when there's nothing.
@@ -182,6 +182,10 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 	if s.BadEpicStatus > 0 {
 		nav(st.glyph(theme.MarkerWarn)+fmt.Sprintf(" %d epic(s) with unrecognized status (set active/retired/deprecated)", s.BadEpicStatus),
 			dashTarget{kind: entityEpics})
+		allClear = false
+	}
+	if s.GraphHealth != "" && s.GraphHealth != core.GraphHealthy {
+		info(st.glyph(theme.MarkerWarn) + fmt.Sprintf(" task graph %s: %s", s.GraphHealth, s.GraphDetail))
 		allClear = false
 	}
 	if len(s.Problems) > 0 {

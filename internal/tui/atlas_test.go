@@ -945,9 +945,10 @@ func TestAtlasAttentionFoldsOnlyWhatWantsAPerson(t *testing.T) {
 		ReadyToClose: 1,
 		RevisitDue:   1,
 		Problems:     []domain.FileProblem{{}},
+		GraphHealth:  core.GraphBroken,
 	}})
-	if loud.attention != 5 {
-		t.Errorf("attention = %d, want 2 acute + 1 closable + 1 revisit + 1 unreadable", loud.attention)
+	if loud.attention != 6 {
+		t.Errorf("attention = %d, want 2 acute + 1 closable + 1 revisit + 1 unreadable + 1 graph verdict", loud.attention)
 	}
 }
 

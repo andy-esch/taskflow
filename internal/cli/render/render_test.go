@@ -476,6 +476,50 @@ func TestSummaryHuman_NoAudits(t *testing.T) {
 	}
 }
 
+func TestSummaryReportsNonHealthyGraphInHumanAndJSON(t *testing.T) {
+	s := core.Summary{
+		GraphHealth: core.GraphDegraded,
+		GraphDetail: "2 legacy dependency field occurrence(s) remain; run `tskflwctl task depend migrate`",
+	}
+	var out bytes.Buffer
+	if err := SummaryHuman(&out, NewStyle(false), s); err != nil {
+		t.Fatal(err)
+	}
+	if want := "⚠ task graph degraded: " + s.GraphDetail; !strings.Contains(out.String(), want) {
+		t.Fatalf("summary graph warning missing %q:\n%s", want, out.String())
+	}
+
+	out.Reset()
+	if err := SummaryJSON(&out, s); err != nil {
+		t.Fatal(err)
+	}
+	var envelope wire.SummaryEnvelope
+	decodeStrict(t, out.Bytes(), &envelope)
+	if envelope.Graph == nil || envelope.Graph.Health != "degraded" || envelope.Graph.Detail != s.GraphDetail {
+		t.Fatalf("summary graph JSON = %+v", envelope.Graph)
+	}
+
+	out.Reset()
+	if err := SummaryJSON(&out, core.Summary{GraphHealth: core.GraphHealthy}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), `"graph"`) {
+		t.Fatalf("healthy summary must omit graph verdict:\n%s", out.String())
+	}
+}
+
+func TestStatusAllHumanReportsSpaceGraphHealth(t *testing.T) {
+	summary := core.Summary{GraphHealth: core.GraphBroken, GraphDetail: "dependency is missing; run `tskflwctl lint`"}
+	overview := core.SpaceOverview{Spaces: []core.SpaceSummary{{ID: "planning", Summary: &summary}}}
+	var out bytes.Buffer
+	if err := StatusAllHuman(&out, NewStyle(false), overview); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "task graph broken: "+summary.GraphDetail) {
+		t.Fatalf("compact space summary hid graph verdict:\n%s", out.String())
+	}
+}
+
 // TestSummary_RevisitDueNudge pins the snooze surface: a non-zero RevisitDue
 // renders the ↻ nudge (no emoji) in the human dashboard and carries revisit_due in
 // the JSON envelope; zero renders no nudge.

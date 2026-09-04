@@ -2474,6 +2474,10 @@
             "$ref": "#/$defs/FileProblem"
           },
           "type": "array"
+        },
+        "graph": {
+          "$ref": "#/$defs/GraphHealthJSON",
+          "description": "Graph is omitted for a healthy repository and reports the same strict task-DAG\nverdict used by board, guarded mutations, and dispatch-oriented reads."
         }
       },
       "additionalProperties": false,
@@ -2528,6 +2532,10 @@
             "$ref": "#/$defs/FileProblem"
           },
           "type": "array"
+        },
+        "graph": {
+          "$ref": "#/$defs/GraphHealthJSON",
+          "description": "Graph is omitted for a healthy repository and reports the same strict task-DAG\nverdict used by board, guarded mutations, and dispatch-oriented reads."
         }
       },
       "additionalProperties": false,
@@ -4588,6 +4596,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.59)",
+  "title": "tskflwctl --json output (schema_version 1.60)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

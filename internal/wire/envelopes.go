@@ -86,10 +86,15 @@ func ToBoardEnvelope(b core.Board) BoardEnvelope {
 		}
 		e.Columns = append(e.Columns, col)
 	}
-	if b.GraphHealth != "" && b.GraphHealth != core.GraphHealthy {
-		e.Graph = &GraphHealthJSON{Health: string(b.GraphHealth), Detail: b.GraphDetail}
-	}
+	e.Graph = toGraphHealthJSON(b.GraphHealth, b.GraphDetail)
 	return e
+}
+
+func toGraphHealthJSON(health core.GraphHealth, detail string) *GraphHealthJSON {
+	if health == "" || health == core.GraphHealthy {
+		return nil
+	}
+	return &GraphHealthJSON{Health: string(health), Detail: detail}
 }
 
 // TaskShowEnvelope is `task show --json`.
@@ -254,6 +259,9 @@ type SummaryJSON struct {
 	RevisitDue    int                  `json:"revisit_due"`
 	BadEpicStatus int                  `json:"bad_epic_status"`
 	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+	// Graph is omitted for a healthy repository and reports the same strict task-DAG
+	// verdict used by board, guarded mutations, and dispatch-oriented reads.
+	Graph *GraphHealthJSON `json:"graph,omitempty"`
 }
 
 // ToSummaryJSON builds the reusable dashboard payload.
@@ -287,7 +295,7 @@ func ToSummaryJSON(s core.Summary) SummaryJSON {
 		Counts: counts, InProgress: inprog,
 		Epics: epics, OpenAudits: audits, Findings: findings,
 		RevisitDue: s.RevisitDue, BadEpicStatus: s.BadEpicStatus,
-		Unreadable: s.Problems,
+		Unreadable: s.Problems, Graph: toGraphHealthJSON(s.GraphHealth, s.GraphDetail),
 	}
 }
 

@@ -179,6 +179,12 @@ graph-owned frontmatter through the file reported by `tskflwctl task path`, conf
 lifecycle or Thread write is reported explicitly as committed with an inspection receipt;
 inspect current state instead of blindly retrying it.
 
+`board`, `status`, and their JSON envelopes report a non-healthy task graph before a write
+encounters that guard; the TUI overview and cross-space atlas carry the same summary signal.
+These read dashboards remain informational. `lint` is the validation gate: safe resolvable legacy
+fields are visible advisories with exit zero, while missing, ambiguous, or structurally unsafe
+dependencies fail lint. Run `task depend migrate` for the advisory legacy case.
+
 Completed Thread drift is explanatory: machine and human views name empty,
 undrained, outstanding-gate, and unhealthy-evidence reasons. `lint --fix` may
 repair ordinary Thread scalar syntax and a missing filename-owned ID, but Thread

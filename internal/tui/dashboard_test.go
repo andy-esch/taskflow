@@ -183,6 +183,23 @@ func TestModel_DashboardNeedsAttentionLabelsAudits(t *testing.T) {
 	}
 }
 
+func TestDashboardNeedsAttentionReportsGraphDegradation(t *testing.T) {
+	var d dashboard
+	d.setSummary(core.Summary{
+		GraphHealth: core.GraphDegraded,
+		GraphDetail: "legacy dependency field remains; run task depend migrate",
+	}, &testStyles, false)
+	view := ansi.Strip(d.view(&testStyles, 120, 40))
+	for _, want := range []string{"needs attention", "task graph degraded", "task depend migrate"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("dashboard graph warning missing %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "all clear") {
+		t.Errorf("degraded graph cannot be all clear:\n%s", view)
+	}
+}
+
 // dashAlignRepo writes two epics whose rollup counts differ in width ("0/1" vs
 // "0/12"), both dated, so the column-alignment of the epic ids is observable.
 func dashAlignRepo(t *testing.T) string {

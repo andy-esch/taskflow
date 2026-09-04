@@ -20,7 +20,11 @@ func newStatusCmd(app *App) *cobra.Command {
 		Long: "Show the current planning repo's dashboard. With --all, summarize every\n" +
 			"logical planning space in the home registry and combine their in-progress work.\n" +
 			"Multiple registered entry points sharing one planning id are read only once. The\n" +
-			"command works from any directory; -C is used only when the registry is empty.\n\n" +
+			"command works from any directory; -C is used only when the registry is empty.\n" +
+			"A non-healthy task graph is reported with its first cause and repair command; in\n" +
+			"JSON it appears as graph, or spaces[].summary.graph with --all. Graph health is\n" +
+			"informational on this read-only dashboard; use lint when validation exit status\n" +
+			"is required.\n\n" +
 			"Broken registry entries remain inline and informational. Unreadable planning files\n" +
 			"or a selected tree that fails to load still render every available result, then make\n" +
 			"the command exit non-zero so automation can detect the partial result.",

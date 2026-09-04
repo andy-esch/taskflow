@@ -8,6 +8,10 @@ Show the current planning repo's dashboard. With --all, summarize every
 logical planning space in the home registry and combine their in-progress work.
 Multiple registered entry points sharing one planning id are read only once. The
 command works from any directory; -C is used only when the registry is empty.
+A non-healthy task graph is reported with its first cause and repair command; in
+JSON it appears as graph, or spaces[].summary.graph with --all. Graph health is
+informational on this read-only dashboard; use lint when validation exit status
+is required.
 
 Broken registry entries remain inline and informational. Unreadable planning files
 or a selected tree that fails to load still render every available result, then make

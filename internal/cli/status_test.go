@@ -62,6 +62,43 @@ func TestStatus_JSON(t *testing.T) {
 	}
 }
 
+func TestStatusReportsGraphDegradationWithoutTurningReadIntoFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		dependency string
+		health     string
+		remedy     string
+	}{
+		{name: "resolved legacy", dependency: "blocked_by: [gate]\n", health: "degraded", remedy: "task depend migrate"},
+		{name: "missing canonical", dependency: "depends_on: [6g0000000000]\n", health: "broken", remedy: "run `tskflwctl lint`"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := testutil.NewRepo(t)
+			r.Task("completed", "gate.md", "---\nid: "+testutil.TaskID("gate")+"\nstatus: completed\n---\n# gate\n")
+			r.Task("ready-to-start", "member.md", "---\nid: "+testutil.TaskID("member")+"\nstatus: ready-to-start\n"+tc.dependency+"---\n# member\n")
+
+			human, err := runRootRC(t, "-C", r.Root, "status", "--color=never")
+			if err != nil {
+				t.Fatalf("graph health is an informational status read: %v\n%s", err, human)
+			}
+			for _, want := range []string{"task graph " + tc.health, tc.remedy} {
+				if !strings.Contains(human, want) {
+					t.Errorf("status missing %q:\n%s", want, human)
+				}
+			}
+
+			jsonOut := runRoot(t, "-C", r.Root, "status", "--json")
+			var envelope wire.SummaryEnvelope
+			if err := json.Unmarshal([]byte(jsonOut), &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if envelope.Graph == nil || envelope.Graph.Health != tc.health || !strings.Contains(envelope.Graph.Detail, tc.remedy) {
+				t.Fatalf("status graph JSON = %+v\n%s", envelope.Graph, jsonOut)
+			}
+		})
+	}
+}
+
 func TestStatusAll_GroupsEntryPointsAndIsolatesBrokenOnes(t *testing.T) {
 	spaceConfigHome(t)
 	planningA := setupRepo(t)
@@ -78,8 +115,10 @@ func TestStatusAll_GroupsEntryPointsAndIsolatesBrokenOnes(t *testing.T) {
 	}
 	missingA := filepath.Join(t.TempDir(), "gone")
 
-	planningB := testutil.NewRepo(t).Task("in-progress", "gamma.md",
-		"---\nstatus: in-progress\ndescription: gamma\ntags: [seed]\n---\n# Gamma\n").Root
+	planningB := testutil.NewRepo(t).
+		Task("completed", "gate.md", "---\nid: "+testutil.TaskID("gate")+"\nstatus: completed\n---\n# Gate\n").
+		Task("in-progress", "gamma.md",
+			"---\nid: "+testutil.TaskID("gamma")+"\nstatus: in-progress\ndescription: gamma\ntags: [seed]\nblocked_by: [gate]\n---\n# Gamma\n").Root
 	if _, err := config.Init(planningB, "", false); err != nil {
 		t.Fatal(err)
 	}
@@ -126,12 +165,15 @@ func TestStatusAll_GroupsEntryPointsAndIsolatesBrokenOnes(t *testing.T) {
 	if envelope.InProgress[0].Space != "planning-a" || envelope.InProgress[1].Space != "planning-b" {
 		t.Errorf("combined tasks lost their space badges: %+v", envelope.InProgress)
 	}
+	if envelope.Spaces[1].Summary.Graph == nil || envelope.Spaces[1].Summary.Graph.Health != "degraded" {
+		t.Errorf("cross-space summary lost graph verdict: %+v", envelope.Spaces[1].Summary)
+	}
 
 	human, errOut, err := runIn(t, t.TempDir(), "status", "--all", "--color=never")
 	if err != nil {
 		t.Fatalf("human status --all: %v\n%s%s", err, human, errOut)
 	}
-	for _, want := range []string{"planning-a", "planning-b", "missing-a", "not found", "[planning-a]", "[planning-b]", "beta", "gamma"} {
+	for _, want := range []string{"planning-a", "planning-b", "missing-a", "not found", "[planning-a]", "[planning-b]", "beta", "gamma", "task graph degraded", "task depend migrate"} {
 		if !strings.Contains(human, want) {
 			t.Errorf("status --all missing %q:\n%s", want, human)
 		}
