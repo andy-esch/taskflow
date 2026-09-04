@@ -10,8 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [threads, graph, storage, cli]
 created: "2026-08-28"
-depends_on: [6g3q4rt7mgjn]
-updated_at: "2026-08-28"
+depends_on: [6g3q4rt7mgjn, 6g697mp8s4tx]
+updated_at: "2026-09-03"
 ---
 
 # Add a guarded repair path for broken dependency graphs

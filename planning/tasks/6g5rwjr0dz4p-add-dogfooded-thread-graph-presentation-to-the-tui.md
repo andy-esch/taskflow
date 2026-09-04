@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5rwjr0dz4p
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: After list/detail dogfooding, present Thread topology in the TUI without duplicating traversal logic or making narrow terminals unusable.
 effort: 1-2 days
@@ -13,6 +13,7 @@ created: "2026-09-01"
 depends_on: [6g5rwjqr7rt8]
 updated_at: "2026-09-03"
 started_at: "2026-09-03"
+completed_at: "2026-09-03"
 ---
 
 # Add dogfooded Thread graph presentation to the TUI
