@@ -11,6 +11,22 @@ state changing between projection and action, and boundaries that only appear to
 is deliberately evidence-gated so “play devil's advocate” does not become permission to manufacture
 speculative architecture findings.
 
+Every generated review is also isolated from the handoff checkout. The injected protocol treats
+that checkout as read-only, creates an independent local clone with its own `.git`, overlays the
+current staged, unstaged, untracked, and deletion state, and records a sandbox-only baseline commit.
+All tests, generators, formatting, and mutation probes happen against that baseline. The reviewer
+may transfer only their assigned audit back, and only when its source hash still matches the value
+recorded before the copy. The sandbox is retained until the implementation owner confirms receipt.
+This is required even for nominally read-only reviews: two reviewers may run simultaneously, and
+review tooling or restoration commands must never share an index, branch, generated files, or
+working tree with each other or the implementation owner. A Git worktree is intentionally not used
+because it still shares repository administration and refs.
+
+The sandbox baseline is the only reviewer-created commit permitted. A tailored brief's validation
+rules must not forbid that local checkpoint, though they should continue to forbid every commit in
+the source checkout and any push. If the reviewer cannot create or verify the independent sandbox,
+the correct outcome is a reported blocker—never a fallback to the shared checkout.
+
 The script deliberately does not generate the substantive brief. Review quality has come from
 deriving the implementation contract and hostile cases for the change at hand, not from a generic
 checklist. Start from a previous strong brief and preserve these required sections:
@@ -20,7 +36,7 @@ checklist. Start from a previous strong brief and preserve these required sectio
 - a mandatory evidence floor with real reproductions, repeated race tests, mutation probes,
   resource evidence, and exact validation commands;
 - change-specific hostile angles and platform/support-boundary discipline;
-- contamination/restoration rules and a precise deliverable; and
+- sandbox-local contamination/restoration rules and a precise deliverable; and
 - a `## Reviewer report` placeholder for the assigned agent to replace.
 
 Example:
@@ -35,3 +51,8 @@ scripts/prepare-adversarial-review-audits.sh \
 Use `--dry-run` to validate the brief, names, and audit collisions without creating files. This is
 an interim standalone-audit workflow; it does not decide the task-attached review storage and
 verdict questions tracked by epic 27.
+
+The generated handoff prompt includes the absolute audit path. Each reviewer must translate that to
+the repository-relative `AUDIT_REL` used by the injected commands. If the source-audit hash changes
+while review is underway, the reviewer must leave the sandbox intact and report the conflict rather
+than overwrite or merge in the shared checkout.

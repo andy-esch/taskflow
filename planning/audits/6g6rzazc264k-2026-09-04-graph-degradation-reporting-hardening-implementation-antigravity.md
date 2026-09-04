@@ -13,6 +13,61 @@ date: "2026-09-04"
 > Finding grammar is exact: use `#### H1. <title> · **Status:** open` (or M1/L1). Codes must match `[A-Z]+[0-9]+`; do not put status on a separate line or pre-resolve a finding.
 >
 > Required second pass: after completing the checklist, review again as a devil's advocate for systemic failure modes. Challenge shared abstractions, adapters that only happen to be filesystem-backed, test helpers that conceal divergent snapshots, and error paths that appear noisy but still report a false clean state. Prefer one demonstrated systemic issue over several speculative findings, and settle every challenged pattern with hostile evidence.
+>
+> Shared-worktree isolation is mandatory. Treat the checkout named in the handoff as a read-only source. Before inspecting implementation, running tests or generators, or making mutation probes, create the independent sandbox below. Do not use `git worktree`, a symlink, or any arrangement whose `.git` metadata points back to the shared checkout. At completion, copy back only this assigned audit after the origin-hash guard passes.
+
+## Mandatory reviewer sandbox
+
+The implementation owner and another reviewer may be using the handoff checkout concurrently.
+Reading this brief and performing the initial copy are the only operations allowed there until the
+final guarded audit transfer. Create an isolated clone whose working tree includes the exact current
+source contents, including staged, unstaged, untracked, and deleted files:
+
+```sh
+SOURCE_ROOT="$(git rev-parse --show-toplevel)"
+AUDIT_REL="planning/audits/6g6rzazc264k-2026-09-04-graph-degradation-reporting-hardening-implementation-antigravity.md"
+SOURCE_AUDIT="$SOURCE_ROOT/$AUDIT_REL"
+SOURCE_AUDIT_BLOB="$(git hash-object "$SOURCE_AUDIT")"
+SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/taskflow-review-antigravity.XXXXXX")"
+
+git clone --no-hardlinks "$SOURCE_ROOT" "$SANDBOX"
+rsync -a --delete --exclude='.git' "$SOURCE_ROOT/" "$SANDBOX/"
+test -d "$SANDBOX/.git"
+cd "$SANDBOX"
+
+git add -A
+git -c user.name='Taskflow Review Sandbox' \
+  -c user.email='review-sandbox@invalid' \
+  -c commit.gpgsign=false \
+  -c core.hooksPath=/dev/null \
+  commit --allow-empty --no-verify -m 'chore: capture review sandbox baseline'
+```
+
+The checkpoint is the only commit you may create. Confirm `git rev-parse --git-dir` resolves inside
+`$SANDBOX`. Perform all inspection, builds, tests,
+formatting, generation, fixtures, mutations, and report editing there. Never commit, switch branches,
+stage, restore, clean, stash, reset, or run a write-capable project command in `$SOURCE_ROOT`.
+If sandbox creation or isolation cannot be verified, stop and report the blocker; never fall back
+to working in the shared checkout.
+
+Before transfer, restore every sandbox probe against the checkpoint and verify `git status --short`
+lists only `$AUDIT_REL`; inspect `git diff --check` and `git diff -- "$AUDIT_REL"`. Then transfer
+only the audit, guarded against concurrent source edits:
+
+```sh
+test "$(git -C "$SOURCE_ROOT" hash-object "$SOURCE_AUDIT")" = "$SOURCE_AUDIT_BLOB" || {
+  printf 'source audit changed; do not overwrite it; preserve sandbox at %s\n' "$SANDBOX" >&2
+  exit 1
+}
+TRANSFER="$(mktemp "${SOURCE_AUDIT}.review-transfer.XXXXXX")"
+cp -p "$SANDBOX/$AUDIT_REL" "$TRANSFER"
+mv "$TRANSFER" "$SOURCE_AUDIT"
+cmp -s "$SANDBOX/$AUDIT_REL" "$SOURCE_AUDIT"
+```
+
+Do not copy anything else back. Leave the sandbox in place and report its path until the
+implementation owner confirms receipt. If the hash guard fails, report the conflict and sandbox
+path instead of resolving it in the shared checkout.
 
 ## Review brief
 
@@ -142,11 +197,11 @@ A `ready` verdict is not credible unless the report contains all of the followin
 
 ## Validation and restoration
 
-Run proportionate validation and hostile scratch-space probes. You may make temporary mutation
-probes, but restore every probe and generated artifact. Do not install dependencies, commit, push,
+Run proportionate validation and hostile scratch-space probes inside the reviewer sandbox. Restore
+every probe and generated artifact to the sandbox checkpoint. Do not install dependencies, push,
 edit implementation permanently, create follow-up tasks, change finding statuses, close this audit,
-or edit the other reviewer's audit. At finish, `git status --short` must differ from its starting
-state only by your edits to this assigned audit. Verify that with `git diff`.
+or edit the other reviewer's audit. At finish, sandbox `git status --short` must show only this
+assigned audit before its guarded one-file transfer back to the source checkout.
 
 ## Deliverable
 
