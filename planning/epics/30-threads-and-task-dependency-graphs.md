@@ -67,6 +67,16 @@ boundaries:
                                                              |
                                                              v
                                                     6g5rwjr0dz4p topology UX
+
+6g697mp8s4tx graph-health reporting ----+
+                                        +-> 6g6scc9jgxae v0.19 preview
+6g63db3sdfrh Atlas recovery ------------+             |
+                                                      +-> 6g4g8gatbnrs repair
+                                                      +-> 6g5vm4efjcdv neutral lint
+                                                      |          |
+                                                      |          v
+                                                      |   6g6jqqcdehne portable summaries
+                                                      +-> 6g6dw5js81f3 spatial prototype
 ```
 
 The projection loader also depends on the generated views and v0.18 preview above. The stable-ID
@@ -90,6 +100,13 @@ not an invented dependency on the release.
 - [6g5rwjqeh6a6 — contention-safe TUI projection loading](../tasks/6g5rwjqeh6a6-wire-thread-projections-into-the-tui-with-contention-safe-reloads.md)
 - [6g5rwjqr7rt8 — Thread list/detail TUI](../tasks/6g5rwjqr7rt8-add-thread-list-and-detail-views-to-the-tui.md)
 - [6g5rwjr0dz4p — dogfooded topology presentation](../tasks/6g5rwjr0dz4p-add-dogfooded-thread-graph-presentation-to-the-tui.md)
+- [6g697mp8s4tx — graph degradation in status and lint](../tasks/6g697mp8s4tx-report-graph-degradation-in-status-and-lint.md)
+- [6g63db3sdfrh — coherent Atlas recovery](../tasks/6g63db3sdfrh-preserve-coherent-atlas-summaries-across-transient-per-space-refresh-failures.md)
+- [6g6scc9jgxae — v0.19.0 TUI preview](../tasks/6g6scc9jgxae-cut-v0.19.0-as-a-tui-threads-preview.md)
+- [6g4g8gatbnrs — guarded graph repair](../tasks/6g4g8gatbnrs-add-a-guarded-repair-path-for-broken-dependency-graphs.md)
+- [6g5vm4efjcdv — neutral repository-lint diagnostics](../tasks/6g5vm4efjcdv-make-repository-lint-load-diagnostics-adapter-neutral.md)
+- [6g6jqqcdehne — portable board/status diagnostics](../tasks/6g6jqqcdehne-preserve-portable-load-diagnostics-in-board-and-status.md)
+- [6g6dw5js81f3 — spatial Thread graph prototype](../tasks/6g6dw5js81f3-prototype-a-two-dimensional-navigable-thread-graph-view.md)
 - Deprecated combined scope: [6g3q4rv89vzw](../tasks/6g3q4rv89vzw-add-usage-informed-thread-views-to-the-tui.md)
 
 ## Delivery sequence and gates
@@ -100,6 +117,8 @@ strict reads -> guarded edge writes -> eligibility -> Thread documents/read proj
               -> generated views -> CLI preview
               -> TUI identity/watcher/path/diagnostic foundations -> projection reload
               -> list/detail dogfood -> smallest useful topology view
+              -> graph-health and Atlas hardening -> TUI preview
+              -> guarded repair / portable diagnostics / spatial-view experiment
 ```
 
 Eligibility enforcement and Threads share the same graph foundation, but implementation is
@@ -122,6 +141,11 @@ materializers under one outer guard.
 | 9a | TUI foundations | Stable-ID UI state, recoverable directory watches, optional local paths, neutral Thread diagnostics, and bounded conflict reloads are independently proven | duplicate slugs, missing/replaced directories, pathless adapters, mutation-event bursts, stale async results |
 | 9b | Thread list/detail | A read-only first-class Thread destination consumes core projections and remains useful on narrow terminals | CLI/core parity, completed drift, missing members, shared membership, filters and reloads |
 | 9c | Dogfooded topology UX | Recorded list/detail usage justifies the smallest extra graph presentation; no second traversal engine appears | deep/wide/fan-in graphs, external gates, incomplete topology, resize and reload |
+| 9d | Release hardening | Graph failures are visible outside mutations and transient Atlas contention preserves the last coherent per-space view | degraded/broken graphs, advisory legacy debt, mixed healthy/contended spaces, stale generations |
+| 10 | v0.19.0 TUI preview | Clean-main CLI/TUI dogfood and release validation pass with preview boundaries documented | shared members, external gates, fan-in/out waves, task navigation, watcher refresh, release artifacts |
+| 11a | Guarded graph repair | Every accepted durable prefix monotonically reduces deterministic graph damage without creating an escape hatch | cycles, dangling/self/duplicate edges, concurrent edits, interruption after every prefix |
+| 11b | Portable multi-entity diagnostics | One adapter-neutral vocabulary survives lint, board, status, Atlas, CLI, TUI, and wire projections | pathless and misleading locations, mixed entity kinds, deterministic ordering, scan counts |
+| 11c | Spatial graph experiment | A bounded prototype answers whether deterministic two-dimensional navigation merits production work | fan-in/out, crossings, skipped waves, narrow terminals, large graphs, reload stability |
 
 ### Design attention
 
@@ -135,6 +159,13 @@ The graph library is lower risk. Keep a taskflow-owned interface and run a bound
 bake-off between the spike's small implementation and `dominikbraun/graph` during slice 1. Do not
 create another open-ended research spike, and do not let library features pull critical path, slack,
 or other deferred graph analysis into V1.
+
+The next release intentionally precedes the guarded repair subsystem and the shared diagnostic
+migration. Repair has the highest post-release foundation priority, but its multi-file monotonicity
+proof deserves an adversarial design pass rather than becoming a rushed preview gate. The portable
+diagnostic tasks must remain serialized around one shared value and explicit wire-version boundary.
+The spatial view is an evidence-producing prototype, not a hidden commitment to a renderer or graph
+library.
 
 ## Dogfood checkpoints
 
@@ -156,6 +187,11 @@ This epic is the first production consumer of its own capabilities:
 8. The first TUI stage fixes general identity and watcher seams plus Thread path/diagnostic
    portability and contention handling before adding visuals. Dogfood list/detail on a real active
    Thread before selecting a topology layout; a terminal diagram is not presumed necessary.
+9. After the linear wave view lands, status/lint graph reporting and Atlas partial-refresh recovery
+   close the v0.19.0 release boundary. A clean-main dogfood pass must use both CLI and TUI surfaces.
+10. The post-release frontier fans out instead of manufacturing dependencies: graph repair is the
+    highest-priority foundation, portable diagnostics are one serialized contract migration, and
+    the spatial view remains a low-priority prototype justified by recorded dogfood feedback.
 
 The experimental spike binary is limited to disposable planning spaces and does not satisfy these
 checkpoints. Dogfooding begins when the corresponding production slice passes its exit gate.
@@ -165,7 +201,8 @@ checkpoints. Dogfooding begins when the corresponding production slice passes it
 - Treating the spike as production implementation.
 - Critical-path, slack, forecasting, transitive reduction, or scheduler features.
 - Autonomous multi-agent or worktree orchestration.
-- TUI implementation before the domain, CLI, and wire projections are proven.
+- Treating the spatial prototype as a production renderer before its layout and navigation evidence
+  is evaluated.
 
 ## Sequencing amendment — guarded multi-kind writes (2026-08-27)
 

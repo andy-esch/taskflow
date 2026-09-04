@@ -10,8 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [threads, graph, storage, cli]
 created: "2026-08-28"
-depends_on: [6g3q4rt7mgjn, 6g697mp8s4tx]
-updated_at: "2026-09-03"
+depends_on: [6g3q4rt7mgjn, 6g697mp8s4tx, 6g6scc9jgxae]
+updated_at: "2026-09-04"
 ---
 
 # Add a guarded repair path for broken dependency graphs
@@ -46,7 +46,10 @@ Provide an explicit recovery capability for graph-owned frontmatter that is alre
 
 ## Sequencing
 
-This is a parallel recovery-hardening task, not a prerequisite for dependency eligibility or the first Thread entity slice. Promote it immediately if dogfooding encounters broken graph-owned state that the normal guarded operations cannot repair. Otherwise reassess it before bulk linking, when wider graph use and longer apply plans make an explicit recovery path more valuable.
+Status and lint now expose degraded/broken graph evidence and executable interim guidance. Cut the
+bounded v0.19.0 TUI preview from that coherent diagnostic slice before beginning this larger recovery
+subsystem. Immediately after the release, this is the highest-priority Thread foundation task: it
+turns detection into safe recovery without reopening generic setters or `--force` graph writes.
 
 ## Related
 
