@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
@@ -106,6 +108,16 @@ func TestLintResolvedLegacyDependencyIsAdvisoryWithExitZero(t *testing.T) {
 	dependentID := testutil.TaskID("dependent")
 	r.Task("completed", "target.md", "---\nid: "+targetID+"\nstatus: completed\nepic: 01-e\n---\n# target\n")
 	r.Task("completed", "dependent.md", "---\nid: "+dependentID+"\nstatus: completed\nepic: 01-e\nblocked_by: [target]\n---\n# dependent\n")
+	graph, err := core.LoadTaskGraph(store.NewFS(r.Root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if graph.MutationReady() {
+		t.Fatal("resolved legacy graph must not be mutation-ready")
+	}
+	if _, err := core.ValidateTaskGraphMutationPlan(graph, core.TaskGraphMutationPlan{}); err == nil {
+		t.Fatal("ordinary graph mutation guard must refuse a degraded final graph")
+	}
 
 	human, err := runRootRC(t, "-C", r.Root, "lint")
 	if err != nil {
@@ -114,12 +126,38 @@ func TestLintResolvedLegacyDependencyIsAdvisoryWithExitZero(t *testing.T) {
 	if !strings.Contains(human, "legacy dependency field") || !strings.Contains(human, "1 advisory finding") {
 		t.Fatalf("human advisory output =\n%s", human)
 	}
+	if strings.Contains(human, "pass lint") {
+		t.Fatalf("mutation-blocking graph must not be reported as lint-clean:\n%s", human)
+	}
 	jsonOut, err := runRootRC(t, "-C", r.Root, "lint", "--json")
 	if err != nil {
 		t.Fatalf("JSON advisory must exit zero: %v\n%s", err, jsonOut)
 	}
 	if !strings.Contains(jsonOut, `"severity":"advisory"`) {
 		t.Fatalf("JSON advisory severity missing:\n%s", jsonOut)
+	}
+}
+
+func TestLintReportsMissingAndAmbiguousLegacyReferencesExactlyOnce(t *testing.T) {
+	r := testutil.NewRepo(t)
+	firstID, secondID := testutil.TaskID("same-one"), testutil.TaskID("same-two")
+	for _, taskID := range []string{firstID, secondID} {
+		r.File("tasks/"+taskID+"-same.md", "---\nid: "+taskID+"\nstatus: completed\n---\n# same\n")
+	}
+	dependentID := testutil.TaskID("legacy-dependent")
+	r.Task("completed", "legacy-dependent.md", "---\nid: "+dependentID+"\nstatus: completed\nblocked_by: [same, gone]\n---\n# dependent\n")
+
+	out, err := runRootRC(t, "-C", r.Root, "lint", "--color=never")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("unresolvable legacy references must fail lint with exit 11: %v\n%s", err, out)
+	}
+	for _, want := range []string{`"gone" has no exact task ID or slug match`, `"same" is ambiguous across`} {
+		if got := strings.Count(out, want); got != 1 {
+			t.Errorf("lint occurrence count for %q = %d, want 1:\n%s", want, got, out)
+		}
+	}
+	if strings.Count(out, "legacy dependency field") != 1 || strings.Contains(out, "pass lint") {
+		t.Fatalf("legacy field should be one blocking grouped issue, never clean:\n%s", out)
 	}
 }
 

@@ -572,8 +572,10 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 	out := make(map[string][]domain.Issue)
 	for _, problem := range graph.Problems() {
-		// These already have established ordinary-lint/FileProblem renderings. Keep
-		// strict snapshot attribution without printing the same defect twice.
+		// These are already owned by another ordinary-lint path. The legacy missing
+		// and ambiguous graph problems are rendered once through the grouped legacy
+		// diagnostic below; the remaining codes are domain lint or FileProblems.
+		// Keep strict snapshot attribution without printing the same defect twice.
 		switch problem.Code {
 		case ProblemUnreadable, ProblemMissingTaskID, ProblemTaskIDDrift, ProblemInvalidStatus,
 			ProblemLegacyMissing, ProblemLegacyAmbiguous:
