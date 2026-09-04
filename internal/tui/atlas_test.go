@@ -46,7 +46,7 @@ func (a *atlasTestAdapter) ForgetSpace(string, bool) (core.SpaceEntryPoint, bool
 	return core.SpaceEntryPoint{}, false, errors.New("not used")
 }
 
-func (a *atlasTestAdapter) OpenPlanningStore(root string) (core.SummaryStore, error) {
+func (a *atlasTestAdapter) OpenPlanningStore(root string) (core.PlanningSummarySource, error) {
 	fs, ok := a.trees[root]
 	if !ok {
 		return nil, errors.New("missing summary tree")
@@ -945,9 +945,10 @@ func TestAtlasAttentionFoldsOnlyWhatWantsAPerson(t *testing.T) {
 		ReadyToClose: 1,
 		RevisitDue:   1,
 		Problems:     []domain.FileProblem{{}},
+		GraphHealth:  core.GraphBroken,
 	}})
-	if loud.attention != 5 {
-		t.Errorf("attention = %d, want 2 acute + 1 closable + 1 revisit + 1 unreadable", loud.attention)
+	if loud.attention != 6 {
+		t.Errorf("attention = %d, want 2 acute + 1 closable + 1 revisit + 1 unreadable + 1 graph verdict", loud.attention)
 	}
 }
 

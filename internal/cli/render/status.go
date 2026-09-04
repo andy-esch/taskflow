@@ -78,6 +78,9 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 	if s.BadEpicStatus > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ %d epic(s) with unrecognized status (set active/retired/deprecated; run `lint`)", s.BadEpicStatus)))
 	}
+	if warning := taskGraphWarning(st, s.GraphHealth, s.GraphDetail); warning != "" {
+		fmt.Fprintf(w, "\n%s\n", warning)
+	}
 	if len(s.Problems) > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable file(s) (run `lint`)", len(s.Problems))))
 	}
@@ -203,6 +206,9 @@ func renderCompactSpaceSummary(w io.Writer, st Style, summary core.Summary) {
 	}
 	if summary.BadEpicStatus > 0 {
 		warnings = append(warnings, plural(summary.BadEpicStatus, "epic")+" with unrecognized status")
+	}
+	if summary.GraphHealth != "" && summary.GraphHealth != core.GraphHealthy {
+		warnings = append(warnings, fmt.Sprintf("task graph %s: %s", summary.GraphHealth, summary.GraphDetail))
 	}
 	if len(summary.Problems) > 0 {
 		warnings = append(warnings, plural(len(summary.Problems), "unreadable file"))

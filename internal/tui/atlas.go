@@ -844,7 +844,7 @@ type atlasStats struct {
 	openAudits  int
 	findings    int
 	// attention folds the things that want a PERSON — acute findings, audits whose findings
-	// are all resolved, snoozed tasks come due, files that cannot be read — as opposed to
+	// are all resolved, snoozed tasks come due, a non-healthy task graph, files that cannot be read — as opposed to
 	// the ordinary open counts beside it. One number because four columns of mostly-zeroes
 	// would be worse than one that is usually absent; the space's own overview is where you
 	// dig in.
@@ -861,7 +861,7 @@ func statsFor(summary core.SpaceSummary) atlasStats {
 		loaded: true, inProgress: len(s.InProgress),
 		epics: len(s.Epics), openAudits: len(s.OpenAudits),
 		findings:  s.Findings.Open + s.Findings.InProgress,
-		attention: len(s.Findings.Acute) + s.ReadyToClose + s.RevisitDue + len(s.Problems),
+		attention: len(s.Findings.Acute) + s.ReadyToClose + s.RevisitDue + len(s.Problems) + graphAttention(s.GraphHealth),
 	}
 	for _, e := range s.Epics {
 		stats.done += e.Done
@@ -871,6 +871,13 @@ func statsFor(summary core.SpaceSummary) atlasStats {
 		}
 	}
 	return stats
+}
+
+func graphAttention(health core.GraphHealth) int {
+	if health != "" && health != core.GraphHealthy {
+		return 1
+	}
+	return 0
 }
 
 func (a atlasStats) percent() int {

@@ -23,3 +23,20 @@ func TestGraphDiagnosticsHumanDeduplicatesRepeatedRepositoryProblems(t *testing.
 		t.Fatalf("distinct repository problem was lost:\n%s", out.String())
 	}
 }
+
+func TestGraphDiagnosticsHumanOnlyOffersMigrationForSafeLegacyFields(t *testing.T) {
+	legacy := []core.LegacyDependencyDiagnostic{
+		{TaskID: "safe", Field: "blocked_by", References: []core.LegacyReference{{Resolution: core.LegacyResolved}}},
+		{TaskID: "broken", Field: "dependencies", References: []core.LegacyReference{{Resolution: core.LegacyMissing}}},
+	}
+	var out bytes.Buffer
+	graphDiagnosticsHuman(&out, NewStyle(false), nil, legacy)
+	for _, want := range []string{
+		"legacy blocked_by on safe; run task depend migrate",
+		"legacy dependencies on broken; repair graph-owned frontmatter directly, then run lint",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("diagnostics missing %q:\n%s", want, out.String())
+		}
+	}
+}

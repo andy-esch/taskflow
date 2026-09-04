@@ -10,8 +10,8 @@ priority: low
 autonomy_level: 3
 tags: [threads, tui, graph, ux, dogfood]
 created: "2026-09-03"
-depends_on: [6g5rwjr0dz4p]
-updated_at: "2026-09-03"
+depends_on: [6g5rwjr0dz4p, 6g6scc9jgxae]
+updated_at: "2026-09-04"
 ---
 # Prototype a two-dimensional navigable Thread graph view
 
@@ -21,6 +21,14 @@ Explore and prototype a full-screen, genuinely spatial Thread graph in which nod
 dimensions and `h`/`j`/`k`/`l` navigate by graph/layout adjacency. This is deliberately separate
 from the compact linear wave reader: it should earn a richer interaction and layout model from
 dogfood evidence rather than stretching detail-pane text into a pseudo-graph.
+
+## Dogfood evidence
+
+The shipped wave reader makes execution order legible, and task selection plus `f`/`j`/`k`
+navigation make its linear rows usable. It still presents a complex Thread as a sequence of task
+bags: the earlier inline `<node> -> <node>` list was removed as verbose without conveying spatial
+structure, while fan-out and fan-in remain difficult to perceive. That is sufficient evidence to
+authorize a bounded spatial prototype, but not to make it a v0.19.0 release gate.
 
 ## Design questions
 
@@ -36,7 +44,7 @@ dogfood evidence rather than stretching detail-pane text into a pseudo-graph.
 
 ## Acceptance criteria
 
-- [ ] Dogfood evidence from the linear wave view identifies concrete questions that require spatial
+- [x] Dogfood evidence from the linear wave view identifies concrete questions that require spatial
   presentation.
 - [ ] A short design note defines spatial layout, deterministic ordering, hjkl neighbor selection,
   focus, panning, reload, and narrow-terminal behavior.
@@ -55,8 +63,10 @@ the linear wave view before the prototype is evaluated.
 
 ## Sequencing
 
-Follow the linear TUI topology task. Keep this task queued until dogfooding shows that compact waves
-plus inline prerequisites cannot answer an important planning question.
+Follow the linear TUI topology task and the v0.19.0 preview checkpoint. The dogfood threshold above
+has been met, but this remains a low-priority experiment beside post-release graph recovery and
+portable-diagnostic hardening. Its outcome is a decision and evidence, not an assumed production
+renderer.
 
 ## Related
 

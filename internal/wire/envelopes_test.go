@@ -172,15 +172,19 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"SummaryEnvelope", func(w io.Writer) error {
 			return emit(w, ToSummaryEnvelope(core.Summary{
-				Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
-				InProgress: []domain.Task{task},
-				Epics:      []core.EpicSummary{epicSum},
+				Counts:      []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
+				InProgress:  []domain.Task{task},
+				Epics:       []core.EpicSummary{epicSum},
+				GraphHealth: core.GraphDegraded,
+				GraphDetail: "one safe legacy dependency field remains",
 			}))
 		}},
 		{"StatusAllEnvelope", func(w io.Writer) error {
 			summary := core.Summary{
-				Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
-				InProgress: []domain.Task{task},
+				Counts:      []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
+				InProgress:  []domain.Task{task},
+				GraphHealth: core.GraphBroken,
+				GraphDetail: "canonical dependency target is missing",
 			}
 			return emit(w, ToStatusAllEnvelope(core.SpaceOverview{
 				Spaces: []core.SpaceSummary{{

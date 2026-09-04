@@ -199,6 +199,9 @@ func TestTaskGraphLegacyResolutionHealthAndDirection(t *testing.T) {
 		t.Fatalf("problems=%+v legacy=%+v", graph.Problems(), graph.LegacyDiagnostics())
 	}
 	for _, diagnostic := range graph.LegacyDiagnostics() {
+		if !diagnostic.MigrationReady() {
+			t.Errorf("resolved legacy %s must be migration-ready: %+v", diagnostic.Field, diagnostic)
+		}
 		for _, ref := range diagnostic.References {
 			if ref.Resolution != LegacyResolved || ref.Edge != (DependencyEdge{From: prerequisite.ID, To: dependent.ID}) {
 				t.Errorf("legacy %s resolution = %+v", diagnostic.Field, ref)
@@ -232,7 +235,7 @@ func TestTaskGraphDiagnosesPresentEmptyLegacyFields(t *testing.T) {
 		t.Fatalf("empty legacy health=%s diagnostics=%+v", graph.Health(), graph.LegacyDiagnostics())
 	}
 	for _, diagnostic := range graph.LegacyDiagnostics() {
-		if len(diagnostic.References) != 0 {
+		if len(diagnostic.References) != 0 || !diagnostic.MigrationReady() {
 			t.Fatalf("empty %s references = %+v", diagnostic.Field, diagnostic.References)
 		}
 	}
@@ -256,7 +259,7 @@ func TestTaskGraphLegacyMissingAndAmbiguousAreBroken(t *testing.T) {
 		t.Fatalf("legacy problem codes = %v", codes)
 	}
 	diagnostic := graph.LegacyDiagnostics()[0]
-	if len(diagnostic.References) != 2 || diagnostic.References[0].Value != "gone" || diagnostic.References[1].Value != "same" {
+	if len(diagnostic.References) != 2 || diagnostic.References[0].Value != "gone" || diagnostic.References[1].Value != "same" || diagnostic.MigrationReady() {
 		t.Fatalf("legacy references not stable: %+v", diagnostic.References)
 	}
 }
@@ -582,7 +585,7 @@ func TestTaskGraphLegacyProjectedCycleIsUnsafeAndBroken(t *testing.T) {
 		t.Fatalf("health=%s mutationReady=%v", graph.Health(), graph.MutationReady())
 	}
 	for _, diagnostic := range graph.LegacyDiagnostics() {
-		if len(diagnostic.References) != 1 || diagnostic.References[0].Resolution != LegacyUnsafe {
+		if len(diagnostic.References) != 1 || diagnostic.References[0].Resolution != LegacyUnsafe || diagnostic.MigrationReady() {
 			t.Fatalf("legacy diagnostic = %+v, want unsafe", diagnostic)
 		}
 	}

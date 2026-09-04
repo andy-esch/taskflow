@@ -17,6 +17,8 @@ The brief must begin with review sections rather than frontmatter or an H1. It m
   Validation and restoration, Deliverable, and Reviewer report.
 
 When no --reviewer is supplied, the default pair is claude and antigravity.
+Every generated audit requires the reviewer to clone + overlay the shared checkout
+into an independent temporary sandbox before inspecting or mutating the repository.
 Set TSKFLWCTL to an alternate binary path when needed.
 EOF
 }
@@ -139,6 +141,78 @@ for reviewer in "${reviewers[@]}"; do
 		# shellcheck disable=SC2016
 		printf '> Finding grammar is exact: use `#### M1. <title> · **Status:** open` (or H1/L1). Codes must match `[A-Z]+[0-9]+`; no hyphens, no em dash in place of the period, and no free-standing status line.\n\n'
 		printf '> Required second pass: after completing the brief checklist, review the change again for systemic failure modes. Take an explicitly adversarial stance toward shared abstractions, test helpers that can mask broad defect classes, state changing between projection and action, and boundaries that only appear to fail closed. Prefer one demonstrated systemic issue over several speculative findings, and settle each challenged pattern with hostile evidence.\n\n'
+		printf '> Review-effectiveness floor: execute the exact mutation each new regression test claims to kill and require that test to fail; exercise newly added optional wire branches with non-default values in semantic validators; actually run every emitted repair command against the state that recommends it; and use coordinated mutations when a nearby call site would otherwise preserve an architectural invariant accidentally.\n\n'
+		cat <<'EOF'
+> Shared-worktree isolation is mandatory. Treat the checkout named in the handoff as a read-only
+> source. Before inspecting implementation, running tests or generators, or making mutation probes,
+> create the independent sandbox below. Do not use `git worktree`, a symlink, or any arrangement
+> whose `.git` metadata points back to the shared checkout. At completion, copy back only the
+> assigned audit after the origin-hash guard passes.
+
+## Mandatory reviewer sandbox
+
+The implementation owner and another reviewer may be using the handoff checkout concurrently.
+Reading this brief and performing the initial copy are the only operations allowed there until the
+final guarded audit transfer. Substitute the repository-relative assigned audit path printed in the
+handoff prompt, then create an isolated clone whose working tree is overlaid with the exact current
+source contents (including staged, unstaged, untracked, and deleted files):
+
+```sh
+SOURCE_ROOT="$(git rev-parse --show-toplevel)"
+AUDIT_REL="planning/audits/<your-assigned-audit-file>.md"
+SOURCE_AUDIT="$SOURCE_ROOT/$AUDIT_REL"
+SOURCE_AUDIT_BLOB="$(git hash-object "$SOURCE_AUDIT")"
+SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/taskflow-review.XXXXXX")"
+
+git clone --no-hardlinks "$SOURCE_ROOT" "$SANDBOX"
+rsync -a --delete --exclude='.git' "$SOURCE_ROOT/" "$SANDBOX/"
+test -d "$SANDBOX/.git"
+cd "$SANDBOX"
+
+git add -A
+git -c user.name='Taskflow Review Sandbox' \
+  -c user.email='review-sandbox@invalid' \
+  -c commit.gpgsign=false \
+  -c core.hooksPath=/dev/null \
+  commit --allow-empty --no-verify -m 'chore: capture review sandbox baseline'
+```
+
+The sandbox-only checkpoint makes the copied handoff state—not the source branch's last commit—the
+restoration baseline for mutation probes and is the only commit the reviewer may create. Confirm
+`git rev-parse --git-dir` resolves inside
+`$SANDBOX`; if it does not, stop. Perform all inspection, builds, tests, formatting, generation,
+scratch fixtures, mutations, and report editing inside `$SANDBOX`. Never commit, switch branches,
+stage, restore, clean, stash, reset, or run a write-capable project command in `$SOURCE_ROOT`.
+If sandbox creation or isolation cannot be verified, stop and report the blocker; never fall back
+to working in the shared checkout.
+
+Before transfer, restore every sandbox probe against the checkpoint and verify `git status --short`
+lists only `$AUDIT_REL`. Inspect `git diff --check` and `git diff -- "$AUDIT_REL"`. Then verify the
+source audit has not changed since the copy and transfer that one file atomically:
+
+```sh
+test "$(git -C "$SOURCE_ROOT" hash-object "$SOURCE_AUDIT")" = "$SOURCE_AUDIT_BLOB" || {
+  printf 'source audit changed; do not overwrite it; preserve sandbox at %s\n' "$SANDBOX" >&2
+  exit 1
+}
+
+TRANSFER="$(mktemp "${SOURCE_AUDIT}.review-transfer.XXXXXX")"
+cp -p "$SANDBOX/$AUDIT_REL" "$TRANSFER"
+mv "$TRANSFER" "$SOURCE_AUDIT"
+cmp -s "$SANDBOX/$AUDIT_REL" "$SOURCE_AUDIT"
+```
+
+Do not copy source code, generated files, Git metadata, test artifacts, or any other planning file
+back. Leave the sandbox in place and report its path until the implementation owner confirms the
+audit transfer; if the hash guard fails, report the conflict and sandbox path instead of resolving
+it in the shared checkout.
+
+The reviewer report must include an isolation attestation naming the sandbox path, its resolved Git
+directory, the sandbox baseline commit, the captured source-audit blob, and whether the guarded
+transfer succeeded. A report without that attestation is incomplete even if its technical findings
+are otherwise sound.
+
+EOF
 		cat "$brief_file"
 	} >"$body_file"
 	body_files+=("$body_file")
@@ -164,6 +238,8 @@ for i in "${!reviewers[@]}"; do
 		--date "$audit_date" --body-file "${body_files[$i]}" --no-input >/dev/null
 	"${cli[@]}" -C "$planning_root" audit lint "${audit_slugs[$i]}" >/dev/null
 	audit_path="$("${cli[@]}" -C "$planning_root" audit path "${audit_slugs[$i]}")"
-	printf '\n[%s]\nReview the audit assigned to you at %s. Complete both the contract/checklist pass and the required systemic second pass, including code that may still be in flux. Replace only its Reviewer report placeholder, preserve the brief, and leave every finding open for implementation-owner triage.\n' \
+	printf '\n[%s]\nReview the audit assigned to you at %s. The current checkout is a shared, read-only handoff: before inspecting or testing, follow the audit\047s Mandatory reviewer sandbox protocol and do all work in that independent clone. Complete both review passes, then copy back only the assigned audit after its origin-hash guard passes. Preserve the brief and leave every finding open for implementation-owner triage. Include the required isolation attestation in your report.\n' \
 		"${reviewers[$i]}" "$audit_path"
 done
+
+printf '\n[handoff freeze]\nDo not launch either reviewer until the implementation snapshot and both audit briefs are final for this review round. Once a reviewer starts, do not edit its audit or silently advance the review target. If either must change, cancel and relaunch that review or accept a report explicitly scoped to the captured sandbox baseline.\n'

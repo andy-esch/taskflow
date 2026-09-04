@@ -10,8 +10,8 @@ priority: low
 autonomy_level: 3
 tags: [architecture, diagnostics, lint, ports]
 created: "2026-09-01"
-updated_at: "2026-09-01"
-depends_on: [6g5rxq1ravd3]
+updated_at: "2026-09-04"
+depends_on: [6g5rxq1ravd3, 6g6scc9jgxae]
 ---
 # Make repository lint load diagnostics adapter-neutral
 
@@ -41,6 +41,12 @@ Mixed readable and unreadable entity kinds, pathless problems, misleading locati
 ## Out of scope
 
 Changing lint rules, redesigning ordinary entity list envelopes, implementing a database or HTTP store, or changing guarded mutation policy.
+
+## Sequencing
+
+Begin after the v0.19.0 TUI preview so its shared diagnostic and wire-contract decisions form a
+deliberate post-release boundary. This task owns the multi-entity vocabulary first; only then does
+`preserve-portable-load-diagnostics-in-board-and-status` carry it through dashboard projections.
 
 ## Related
 

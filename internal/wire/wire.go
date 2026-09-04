@@ -250,7 +250,11 @@ import (
 // 1.59: `thread list` unreadable diagnostics replace the filesystem-specific
 // `{path,message}` shape with optional `thread_id`, `thread_slug`, optional
 // `location`, and `message`. Remote adapters need not fabricate local paths.
-const SchemaVersion = "1.59"
+//
+// 1.60: `status` and each loaded `status --all` summary may carry `graph`, the
+// same non-healthy repository task-DAG verdict and remedy already exposed by
+// `board`. Healthy summaries omit it.
+const SchemaVersion = "1.60"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

@@ -275,20 +275,25 @@ type Summary struct {
 	RevisitDue    int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
 	BadEpicStatus int                  // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
 	Problems      []domain.FileProblem // unreadable files
+	GraphHealth   GraphHealth          // repository-wide task-DAG verdict from the same snapshot as Counts/InProgress
+	GraphDetail   string               // first cause + remedy when GraphHealth is not healthy
 }
 
 // Summary composes a one-screen overview from a single scan of tasks + epics +
 // audits. Only OPEN audits are surfaced — the actionable subset, paralleling the
 // in-progress task working set (closed/deferred audits are done/parked).
 func (s *Service) Summary() (Summary, error) {
-	return summarize(s.store, s.now())
+	return summarize(s.store, s.taskGraphs, s.now())
 }
 
-func summarize(store SummaryStore, now time.Time) (Summary, error) {
-	tasks, p1, err := store.ListTasks()
+func summarize(store SummaryStore, taskGraphs TaskGraphSource, now time.Time) (Summary, error) {
+	read, err := loadTaskGraphRecords(taskGraphs)
 	if err != nil {
 		return Summary{}, err
 	}
+	tasks := read.Tasks
+	p1 := taskGraphFileProblems(read.Problems)
+	graph := NewTaskGraphRead(read)
 	epics, p2, err := store.ListEpics()
 	if err != nil {
 		return Summary{}, err
@@ -352,7 +357,7 @@ func summarize(store SummaryStore, now time.Time) (Summary, error) {
 			badEpicStatus++
 		}
 	}
-	return Summary{
+	summary := Summary{
 		Counts:     ordered,
 		InProgress: inProgress,
 		// Active-only + live-first HERE so the dashboard's "what's live right now"
@@ -368,7 +373,12 @@ func summarize(store SummaryStore, now time.Time) (Summary, error) {
 		RevisitDue:    revisitDue,
 		BadEpicStatus: badEpicStatus,
 		Problems:      append(append(p1, p2...), p3...),
-	}, nil
+		GraphHealth:   graph.Health(),
+	}
+	if summary.GraphHealth != GraphHealthy {
+		summary.GraphDetail = taskGraphHealthDetail(graph)
+	}
+	return summary, nil
 }
 
 // LintResult is the set of frontmatter issues for one entity (a task by slug, or
@@ -562,8 +572,10 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 	out := make(map[string][]domain.Issue)
 	for _, problem := range graph.Problems() {
-		// These already have established ordinary-lint/FileProblem renderings. Keep
-		// strict snapshot attribution without printing the same defect twice.
+		// These are already owned by another ordinary-lint path. The legacy missing
+		// and ambiguous graph problems are rendered once through the grouped legacy
+		// diagnostic below; the remaining codes are domain lint or FileProblems.
+		// Keep strict snapshot attribution without printing the same defect twice.
 		switch problem.Code {
 		case ProblemUnreadable, ProblemMissingTaskID, ProblemTaskIDDrift, ProblemInvalidStatus,
 			ProblemLegacyMissing, ProblemLegacyAmbiguous:
@@ -586,13 +598,10 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 			case LegacyResolved:
 				parts = append(parts, fmt.Sprintf("%q resolves to %s (edge %s -> %s)", ref.Value, ref.CandidateIDs[0], ref.Edge.From, ref.Edge.To))
 			case LegacyUnsafe:
-				severity = ""
 				parts = append(parts, fmt.Sprintf("%q resolves to %s but its projected edge %s -> %s is structurally unsafe", ref.Value, ref.CandidateIDs[0], ref.Edge.From, ref.Edge.To))
 			case LegacyMissing:
-				severity = ""
 				parts = append(parts, fmt.Sprintf("%q has no exact task ID or slug match", ref.Value))
 			case LegacyAmbiguous:
-				severity = ""
 				parts = append(parts, fmt.Sprintf("%q is ambiguous across %s", ref.Value, strings.Join(ref.CandidateIDs, ", ")))
 			}
 		}
@@ -600,9 +609,14 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 		if message == "" {
 			message = "field is present but empty"
 		}
+		remedy := "run `tskflwctl task depend migrate`"
+		if !diagnostic.MigrationReady() {
+			severity = ""
+			remedy = "repair the graph-owned frontmatter directly, then run `tskflwctl lint`"
+		}
 		out[diagnostic.TaskPath] = append(out[diagnostic.TaskPath], domain.Issue{
 			Field: diagnostic.Field, Severity: severity,
-			Message: fmt.Sprintf("legacy dependency field: %s; run `tskflwctl task depend migrate`", message),
+			Message: fmt.Sprintf("legacy dependency field: %s; %s", message, remedy),
 		})
 	}
 	for _, taskID := range graph.TaskIDs() {

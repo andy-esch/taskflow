@@ -161,6 +161,11 @@ depends_on: [6fjangd7kvh0, 6fjangd7kvh2]
   it, while mutation and dispatch still fail closed. `broken` means any task is unreadable, an ID
   or status is invalid, an edge is duplicate/self/invalid/missing, a legacy reference is missing or
   ambiguous, or the graph is cyclic. `broken` takes precedence over `degraded`.
+- Dashboard reads (`board`, `status`, cross-space status, and the TUI overview/atlas) surface any
+  non-healthy verdict from the same task snapshot used for their work projections, including the
+  first cause and an actionable remedy. Their machine envelopes carry the same optional `graph`
+  object. Graph health alone remains informational on these read surfaces; `lint` is the validation
+  gate, while unreadable files retain the existing partial-result/non-zero dashboard contract.
 - Supported commands prevent graph-invalid states rather than relying on lint after the fact.
   Generic set/edit paths treat both `depends_on` and the legacy dependency fields as graph-owned,
   including under `--force`; guarded dependency commands are the only product write path. Direct

@@ -67,8 +67,11 @@ would not solve the actual partial-failure case.
 
 ## Sequencing
 
-Follow-up to the shared TUI read-contention foundation. It can proceed in parallel with
-stable-identity and Thread list/detail work; it does not redefine Thread projection semantics.
+This is the next Thread frontier item and the final bounded hardening gate for the v0.19.0 TUI
+preview. It follows the now-completed contention, stable-identity, and Thread view foundations and
+does not redefine Thread projection semantics. Land it before the post-release portable-diagnostic
+migration so the two tasks do not evolve `SpaceSummary` failure evidence concurrently: this task
+owns transient whole-space refresh state; the later work owns record-level load diagnostics.
 
 ## Related
 

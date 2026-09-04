@@ -6,8 +6,8 @@ description: Deliver production Threads through the CLI preview and a usage-info
 goal: Preserve the production graph foundation while carrying Threads into a faithful TUI
 created: "2026-08-29"
 tags: [threads, dogfood]
-tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g6dw5js81f3]
-updated_at: "2026-09-03"
+tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6jqqcdehne, 6g6scc9jgxae, 6g6wdvfjdaaa, 6g6wdvfp2ksa]
+updated_at: "2026-09-04"
 started_at: "2026-08-30"
 ---
 
@@ -23,11 +23,21 @@ the same commands being built. Real sequencing belongs in repository-global task
 membership alone does not manufacture an ordering.
 
 The v0.18.0 CLI preview shipped after deterministic graph/plan views and the in-flight frontier
-presentation passed a clean-build dogfood run. The remaining work deliberately hardens general TUI
-identity and watcher recovery, then separates optional local Thread paths and portable diagnostics
-before loading Thread projections into the second primary adapter. Read-only list/detail UX then
-ships before any topology view, so real TUI usage—not the availability of a graph projection—decides
-the smallest useful terminal presentation.
+presentation passed a clean-build dogfood run. Stable identity, watcher recovery, portable Thread
+reads, contention-safe projection loading, list/detail navigation, and a compact wave view have now
+landed. Graph-health reporting and coherent Atlas refresh recovery form the bounded v0.19.0 TUI
+preview checkpoint.
+
+After that release, the graph deliberately fans out: guarded repair turns diagnosis into recovery;
+one shared diagnostic vocabulary precedes portable board/status projections; and a low-priority
+spatial graph prototype tests whether two-dimensional navigation earns a production slice. Those
+are independent branches. Repository-global dependencies record the release boundary without
+pretending the branches technically depend on each other.
+
+Two additional post-release members close planning gaps exposed by that fan-out. One makes frontier
+output carry priority, tier, and effort without redefining eligibility; the other defines objective
+compatibility and graduation gates so this Thread has an evidence-based finish line rather than an
+indefinite preview label.
 
 The deprecated combined TUI member remains as planning history. Its replacement tasks and the
 foundation gaps found while scoping them are members of this Thread, while repository-global

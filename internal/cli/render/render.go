@@ -383,15 +383,25 @@ func BoardHuman(w io.Writer, st Style, b core.Board) error {
 		}
 		writeTable(w, st.width, nil, rows)
 	}
-	if b.GraphHealth != "" && b.GraphHealth != core.GraphHealthy {
+	if warning := taskGraphWarning(st, b.GraphHealth, b.GraphDetail); warning != "" {
 		// Latched at mutation time, so without this it stays invisible until an
 		// unrelated `task complete` refuses mid-operation in an unfamiliar repo.
-		fmt.Fprintf(w, "\n%s\n", st.Warn(fmt.Sprintf("⚠ task graph %s: %s", b.GraphHealth, b.GraphDetail)))
+		fmt.Fprintf(w, "\n%s\n", warning)
 	}
 	if len(b.Problems) > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable file(s) (run `lint`)", len(b.Problems))))
 	}
 	return nil
+}
+
+// taskGraphWarning is the shared human graph verdict for every dashboard-like
+// surface. Keeping the sentence here prevents status and board from disagreeing
+// about the same core snapshot.
+func taskGraphWarning(st Style, health core.GraphHealth, detail string) string {
+	if health == "" || health == core.GraphHealthy {
+		return ""
+	}
+	return st.Warn(fmt.Sprintf("⚠ task graph %s: %s", health, detail))
 }
 
 // BoardJSON writes the active-work board as a versioned envelope.

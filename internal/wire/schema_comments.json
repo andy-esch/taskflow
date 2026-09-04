@@ -180,6 +180,7 @@
   "github.com/andy-esch/taskflow/internal/wire.StatusCountJSON": "StatusCountJSON is one status bucket and its task count.",
   "github.com/andy-esch/taskflow/internal/wire.SummaryEnvelope": "SummaryEnvelope is `status --json`: the shared dashboard payload with the one top-level schema version required of every machine envelope.",
   "github.com/andy-esch/taskflow/internal/wire.SummaryJSON": "SummaryJSON is the reusable, versionless dashboard payload.",
+  "github.com/andy-esch/taskflow/internal/wire.SummaryJSON.Graph": "Graph is omitted for a healthy repository and reports the same strict task-DAG\nverdict used by board, guarded mutations, and dispatch-oriented reads.",
   "github.com/andy-esch/taskflow/internal/wire.TaskBlockerJSON": "TaskBlockerJSON is one direct/transitive blocker with explanatory path.",
   "github.com/andy-esch/taskflow/internal/wire.TaskBlockersEnvelope": "TaskBlockersEnvelope is `task blockers --json`.",
   "github.com/andy-esch/taskflow/internal/wire.TaskEligibilityFailureJSON": "TaskEligibilityFailureJSON preserves the typed default-start refusal in each failed batch row.",

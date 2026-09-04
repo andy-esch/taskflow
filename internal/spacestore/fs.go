@@ -78,7 +78,7 @@ func (f *FS) ForgetSpace(id string, dryRun bool) (core.SpaceEntryPoint, bool, er
 	return toCoreEntry(spacehealth.DiagnoseSpace(existing)), true, nil
 }
 
-func (f *FS) OpenPlanningStore(root string) (core.SummaryStore, error) {
+func (f *FS) OpenPlanningStore(root string) (core.PlanningSummarySource, error) {
 	return store.NewFS(root), nil
 }
 
