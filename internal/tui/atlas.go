@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -49,10 +50,10 @@ type atlas struct {
 	workCursor int
 	workOrder  atlasWorkOrder
 	loaded     bool
-	// stale marks the projection as out of date because planning data changed underneath
-	// it. Kept separate from loaded: the atlas keeps rendering its last good snapshot,
-	// it just knows to re-read before showing it again.
-	stale   bool
+	// dirty marks the complete projection as out of date because planning data changed
+	// underneath it. It is deliberately separate from per-space contention: a partial
+	// retry cannot clear a watcher signal for healthy spaces it did not re-read.
+	dirty   bool
 	loadErr error
 	spaces  []atlasSpace
 	cursor  int
@@ -61,11 +62,18 @@ type atlas struct {
 	// seeded workspace rather than opening onto an empty screen.
 	startup bool
 	loadGen int
-	opening bool
-	openGen int
-	openErr string
-	order   atlasOrder
-	reverse bool
+	// overview is the registry-ordered core projection behind the sorted display rows.
+	// Keeping it intact lets one bounded retry replace only contended spaces without
+	// re-reading or dropping independently successful ones.
+	overview core.SpaceOverview
+	// retrying distinguishes an automatically scheduled quiet-period retry from a stale
+	// summary that already exhausted that one retry and now needs a later refresh.
+	retrying bool
+	opening  bool
+	openGen  int
+	openErr  string
+	order    atlasOrder
+	reverse  bool
 }
 
 // atlasWorkOrder is the work view's own ordering axis. The spaces view sorts by identity
@@ -129,10 +137,30 @@ type atlasLoadedMsg struct {
 	err      error
 }
 
+// atlasRetryMsg is the delayed request to retry only the contended groups retained in
+// the current Atlas generation. A newer loadGen or outer session generation drops it.
+type atlasRetryMsg struct{ gen int }
+
+// atlasRetriedMsg is the partial replacement set returned by the bounded retry.
+type atlasRetriedMsg struct {
+	gen     int
+	refresh core.SpaceOverviewRefresh
+}
+
 func loadAtlas(svc *core.SpaceOverviewService, gen int) tea.Cmd {
 	return func() tea.Msg {
 		overview, err := svc.Overview()
 		return atlasLoadedMsg{gen: gen, overview: overview, err: err}
+	}
+}
+
+func deferAtlasRetry(gen int) tea.Cmd {
+	return tea.Tick(fsDebounce, func(time.Time) tea.Msg { return atlasRetryMsg{gen: gen} })
+}
+
+func retryContendedAtlas(svc *core.SpaceOverviewService, gen int, current core.SpaceOverview) tea.Cmd {
+	return func() tea.Msg {
+		return atlasRetriedMsg{gen: gen, refresh: svc.RetryContended(current)}
 	}
 }
 
@@ -159,6 +187,7 @@ func (m Model) handleAtlasLoaded(msg atlasLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.gen != m.atlas.loadGen {
 		return m, nil
 	}
+	m.atlas.retrying = false
 	startup := m.atlas.startup
 	m.atlas.startup = false
 	if msg.err != nil {
@@ -169,7 +198,26 @@ func (m Model) handleAtlasLoaded(msg atlasLoadedMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	m.atlas.setOverview(msg.overview)
+	if m.atlas.setOverview(msg.overview) {
+		m.atlas.retrying = true
+		return m, deferAtlasRetry(msg.gen)
+	}
+	return m, nil
+}
+
+func (m Model) handleAtlasRetry(msg atlasRetryMsg) (tea.Model, tea.Cmd) {
+	if msg.gen != m.atlas.loadGen || !m.atlas.retrying || m.spaceOverviewSvc == nil {
+		return m, nil
+	}
+	return m, retryContendedAtlas(m.spaceOverviewSvc, msg.gen, m.atlas.overview)
+}
+
+func (m Model) handleAtlasRetried(msg atlasRetriedMsg) (tea.Model, tea.Cmd) {
+	if msg.gen != m.atlas.loadGen || !m.atlas.retrying {
+		return m, nil
+	}
+	m.atlas.retrying = false
+	m.atlas.applyOverview(core.ApplySpaceOverviewRefresh(m.atlas.overview, msg.refresh))
 	return m, nil
 }
 
@@ -271,7 +319,8 @@ func (m *Model) enterAtlas(refresh bool) tea.Cmd {
 	m.onAtlas = true
 	m.focus = focusList
 	m.unzoom()
-	if refresh || !m.atlas.loaded || m.atlas.stale {
+	if refresh || !m.atlas.loaded || m.atlas.dirty || overviewHasContention(m.atlas.overview) {
+		m.atlas.retrying = false
 		m.atlas.loadGen++
 		return loadAtlas(m.spaceOverviewSvc, m.atlas.loadGen)
 	}
@@ -291,10 +340,11 @@ func (m *Model) markAtlasStale() tea.Cmd {
 	if m.spaceOverviewSvc == nil || !m.atlas.loaded {
 		return nil
 	}
-	m.atlas.stale = true
+	m.atlas.dirty = true
 	if !m.onAtlas {
 		return nil // the next enterAtlas will re-read
 	}
+	m.atlas.retrying = false
 	m.atlas.loadGen++
 	return loadAtlas(m.spaceOverviewSvc, m.atlas.loadGen)
 }
@@ -381,12 +431,26 @@ func (a atlas) spaceFor(row core.SpaceInProgress) (int, bool) {
 	return 0, false
 }
 
-func (a *atlas) setOverview(overview core.SpaceOverview) {
-	a.setWork(overview.InProgress)
+func (a *atlas) setOverview(overview core.SpaceOverview) bool {
+	if a.loaded {
+		overview = core.RetainContendedSpaceSummaries(a.overview, overview)
+	}
+	a.applyOverview(overview)
+	// Only a complete Overview read can acknowledge a whole-projection watcher signal
+	// and clear errors from the preceding load/open attempt. A targeted retry must leave
+	// all three untouched because it did not inspect unrelated spaces.
+	a.loaded = true
+	a.dirty = false
+	a.loadErr = nil
+	a.openErr = ""
+	return overviewHasContention(overview)
+}
+
+func (a *atlas) applyOverview(overview core.SpaceOverview) {
 	selectedSpace, selectedEntry := "", ""
 	if len(a.spaces) > 0 && a.cursor >= 0 && a.cursor < len(a.spaces) {
 		selected := a.spaces[a.cursor]
-		selectedSpace = atlasSpaceKey(selected.summary)
+		selectedSpace = selected.summary.ReconciliationKey()
 		if entry, ok := selected.selectedEntry(); ok {
 			selectedEntry = entry.ID
 		}
@@ -404,7 +468,7 @@ func (a *atlas) setOverview(overview core.SpaceOverview) {
 				}
 			}
 		}
-		if atlasSpaceKey(summary) == selectedSpace {
+		if summary.ReconciliationKey() == selectedSpace {
 			for j, entry := range summary.Entries {
 				if entry.ID == selectedEntry {
 					space.entry = j
@@ -414,12 +478,19 @@ func (a *atlas) setOverview(overview core.SpaceOverview) {
 		}
 		a.spaces[i] = space
 	}
+	a.overview = overview
+	a.setWork(overview.InProgress)
 	a.sortSpaces()
 	a.restoreCursor(selectedSpace)
-	a.loaded = true
-	a.stale = false
-	a.loadErr = nil
-	a.openErr = ""
+}
+
+func overviewHasContention(overview core.SpaceOverview) bool {
+	for _, space := range overview.Spaces {
+		if space.Contended() {
+			return true
+		}
+	}
+	return false
 }
 
 // setWork refreshes the working set, keeping the cursor on the same task across reloads
@@ -522,7 +593,7 @@ func (a *atlas) cycleOrder() {
 func (a *atlas) applyOrder() {
 	selected := ""
 	if len(a.spaces) > 0 && a.cursor >= 0 && a.cursor < len(a.spaces) {
-		selected = atlasSpaceKey(a.spaces[a.cursor].summary)
+		selected = a.spaces[a.cursor].summary.ReconciliationKey()
 	}
 	a.sortSpaces()
 	a.restoreCursor(selected)
@@ -545,7 +616,7 @@ func (a *atlas) restoreCursor(key string) {
 		return
 	}
 	for i, space := range a.spaces {
-		if atlasSpaceKey(space.summary) == key {
+		if space.summary.ReconciliationKey() == key {
 			a.cursor = i
 			return
 		}
@@ -579,16 +650,6 @@ func atlasSpaceName(summary core.SpaceSummary) string {
 		return summary.ID
 	}
 	return summary.PlanningID
-}
-
-func atlasSpaceKey(summary core.SpaceSummary) string {
-	if summary.PlanningID != "" {
-		return "planning:" + summary.PlanningID
-	}
-	if len(summary.Entries) > 0 {
-		return "entry:" + summary.Entries[0].ID
-	}
-	return "summary:" + summary.ID
 }
 
 func (a *atlas) move(delta int) {
@@ -653,15 +714,7 @@ func (a atlas) view(st *styles, current core.Workspace, maxW, maxH int) string {
 		"atlas · spaces · %s · order %s %s",
 		countLabel{len(a.spaces), "space", "spaces"}, a.order.label(), direction,
 	)), ""}
-	var status []string
-	switch {
-	case a.opening:
-		status = []string{"", st.dim("opening selected space…")}
-	case a.openErr != "":
-		status = []string{"", st.fg(theme.ColorRed, "✘ "+a.openErr)}
-	case a.loadErr != nil:
-		status = []string{"", st.fg(theme.ColorYellow, "⚠ refresh failed: "+a.loadErr.Error())}
-	}
+	status := a.statusLines(st)
 	band := a.entryBand(st, current, maxW)
 	body := a.spaceRows(st, current, maxW)
 	if maxH > 0 {
@@ -671,6 +724,37 @@ func (a atlas) view(st *styles, current core.Workspace, maxW, maxH int) string {
 	}
 	lines := append(append(append(header, body...), band...), status...)
 	return strings.Join(truncateAll(lines, maxW), "\n")
+}
+
+func (a atlas) statusLines(st *styles) []string {
+	switch {
+	case a.opening:
+		return []string{"", st.dim("opening selected space…")}
+	case a.openErr != "":
+		return []string{"", st.fg(theme.ColorRed, "✘ "+a.openErr)}
+	case a.loadErr != nil:
+		return []string{"", st.fg(theme.ColorYellow, "⚠ refresh failed: "+a.loadErr.Error())}
+	}
+	if n := a.staleSpaceCount(); n > 0 {
+		detail := fmt.Sprintf("⚠ %s retained from the last coherent read", countLabel{n, "space summary", "space summaries"})
+		if a.retrying {
+			detail += "; retrying after the quiet period"
+		} else {
+			detail += "; press r to retry"
+		}
+		return []string{"", st.fg(theme.ColorYellow, detail)}
+	}
+	return nil
+}
+
+func (a atlas) staleSpaceCount() int {
+	n := 0
+	for _, space := range a.spaces {
+		if space.summary.Stale {
+			n++
+		}
+	}
+	return n
 }
 
 // spaceRows renders one aligned row per space. Columns are measured across the whole set —
@@ -687,13 +771,16 @@ func (a atlas) spaceRows(st *styles, current core.Workspace, maxW int) []string 
 	nameW = minInt(nameW, 28)
 	countsW := countsWidth(stats, func(s atlasStats) (int, int) { return s.done, s.total })
 	dates := relDateCells(stats, func(s atlasStats) string { return s.lastTouched }, st)
-	attentionW, countsW2 := 0, 0
+	attentionW, countsW2, staleW := 0, 0, 0
 	counts := make([]string, len(stats))
 	for i, s := range stats {
 		counts[i] = atlasCountsLine(st, s)
 		countsW2 = maxInt(countsW2, ansi.StringWidth(counts[i]))
 		if s.attention > 0 {
 			attentionW = maxInt(attentionW, ansi.StringWidth(fmt.Sprintf("⚠%d", s.attention)))
+		}
+		if a.spaces[i].summary.Stale {
+			staleW = len("stale")
 		}
 	}
 
@@ -712,6 +799,9 @@ func (a atlas) spaceRows(st *styles, current core.Workspace, maxW int) []string 
 		}
 		if attentionW > 0 {
 			w += 2 + attentionW
+		}
+		if staleW > 0 {
+			w += 2 + staleW
 		}
 		if showDate {
 			w += 2 + ansi.StringWidth(ansi.Strip(dates[0]))
@@ -744,11 +834,17 @@ func (a atlas) spaceRows(st *styles, current core.Workspace, maxW int) []string 
 		if !stats[i].loaded {
 			// A space whose summary could not be read keeps its row and says why, rather
 			// than showing a misleading empty bar.
-			detail := space.summary.LoadError
-			if detail == "" {
-				detail = "summary unavailable"
+			detail := "summary unavailable"
+			color := theme.ColorRed
+			if space.summary.Failure != nil {
+				if space.summary.Failure.Message != "" {
+					detail = space.summary.Failure.Message
+				}
+				if space.summary.Contended() {
+					color = theme.ColorYellow
+				}
 			}
-			rows = append(rows, row+"  "+st.fg(theme.ColorRed, detail))
+			rows = append(rows, row+"  "+st.fg(color, detail))
 			continue
 		}
 		pct := stats[i].percent()
@@ -766,6 +862,13 @@ func (a atlas) spaceRows(st *styles, current core.Workspace, maxW int) []string 
 			}
 			row += "  " + cell
 		}
+		if staleW > 0 {
+			cell := strings.Repeat(" ", staleW)
+			if space.summary.Stale {
+				cell = st.fg(theme.ColorYellow, "stale")
+			}
+			row += "  " + cell
+		}
 		if showDate && dates[i] != "" {
 			row += "  " + dates[i]
 		}
@@ -776,6 +879,9 @@ func (a atlas) spaceRows(st *styles, current core.Workspace, maxW int) []string 
 
 // spaceGlyph reports at a glance whether a space can be entered at all.
 func (a atlas) spaceGlyph(st *styles, space atlasSpace) string {
+	if space.summary.Stale || space.summary.Contended() {
+		return st.fg(theme.ColorYellow, "◐")
+	}
 	if entry, ok := space.selectedEntry(); ok && entry.Healthy() {
 		return st.fg(theme.ColorGreen, "●")
 	}
@@ -804,6 +910,10 @@ func (a atlas) entryBand(st *styles, current core.Workspace, maxW int) []string 
 	}
 	rule := st.dim("─" + title + " " + strings.Repeat("─", max1(maxW-ansi.StringWidth(title)-3)))
 	band := []string{"", rule}
+	if space.summary.Stale && space.summary.Failure != nil {
+		band = append(band, st.fg(theme.ColorYellow,
+			"  ⚠ summary stale: "+space.summary.Failure.Message))
+	}
 	for i, candidate := range entries {
 		cursor := "  "
 		if i == space.entry {
@@ -930,15 +1040,7 @@ func (a atlas) workView(st *styles, maxW, maxH int) string {
 		len(a.work), countLabel{a.workSpaceCount(), "space", "spaces"},
 		a.workOrder.label(), direction,
 	)), ""}
-	var status []string
-	switch {
-	case a.opening:
-		status = []string{"", st.dim("opening selected space…")}
-	case a.openErr != "":
-		status = []string{"", st.fg(theme.ColorRed, "✘ "+a.openErr)}
-	case a.loadErr != nil:
-		status = []string{"", st.fg(theme.ColorYellow, "⚠ refresh failed: "+a.loadErr.Error())}
-	}
+	status := a.statusLines(st)
 	if len(a.work) == 0 {
 		body := []string{st.dim("Nothing in progress across registered spaces."), "",
 			"Start something with `tskflwctl task start <slug>`, or press " +
@@ -982,6 +1084,9 @@ func (a atlas) workRows(st *styles, maxW int) ([]string, int) {
 		ages[i] = theme.RelativeDate(theme.StartedDate(row.Task))
 		spaceW = maxInt(spaceW, ansi.StringWidth(row.SpaceID)+2) // the [brackets]
 		displayLabel := labelWithIdentityHint(row.Task.Slug, hints[row.Task.CanonicalID()])
+		if row.Stale && !grouped {
+			displayLabel = "stale · " + displayLabel
+		}
 		slugW = maxInt(slugW, ansi.StringWidth(displayLabel))
 		epicW = maxInt(epicW, ansi.StringWidth(row.Task.Epic))
 		prioW = maxInt(prioW, ansi.StringWidth(row.Task.Priority))
@@ -1057,7 +1162,11 @@ func (a atlas) workRows(st *styles, maxW int) ([]string, int) {
 			if len(body) > 0 {
 				body = append(body, "")
 			}
-			body = append(body, st.dashHeading.Render(row.SpaceID)+"  "+
+			spaceLabel := row.SpaceID
+			if row.Stale {
+				spaceLabel = st.fg(theme.ColorYellow, spaceLabel+" · stale")
+			}
+			body = append(body, st.dashHeading.Render(spaceLabel)+"  "+
 				st.dim(countLabel{a.countIn(row.SpaceID), "task", "tasks"}.String()))
 		}
 		cursor := "  "
@@ -1069,9 +1178,18 @@ func (a atlas) workRows(st *styles, maxW int) ([]string, int) {
 		if showSpace {
 			// The heading carries the space when grouped; repeating it per row would be
 			// noise rather than structure.
-			line += st.dim(padRight(truncate("["+row.SpaceID+"]", spaceW), spaceW)) + " "
+			spaceLabel := padRight(truncate("["+row.SpaceID+"]", spaceW), spaceW)
+			if row.Stale {
+				spaceLabel = st.fg(theme.ColorYellow, spaceLabel)
+			} else {
+				spaceLabel = st.dim(spaceLabel)
+			}
+			line += spaceLabel + " "
 		}
 		displayLabel := labelWithIdentityHint(row.Task.Slug, hints[row.Task.CanonicalID()])
+		if row.Stale && !grouped {
+			displayLabel = "stale · " + displayLabel
+		}
 		line += padRight(truncate(displayLabel, slugW), slugW)
 		if showEpic {
 			line += "  " + st.dim(padRight(truncate(row.Task.Epic, epicW), epicW))

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -17,14 +18,17 @@ import (
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 type atlasTestAdapter struct {
-	entries  []core.SpaceEntryPoint
-	trees    map[string]*store.FS
-	openErrs map[string]error
-	listErr  error
+	entries      []core.SpaceEntryPoint
+	trees        map[string]*store.FS
+	openErrs     map[string]error
+	summaryErrs  map[string]error
+	summaryOpens []string
+	listErr      error
 }
 
 func (a *atlasTestAdapter) ListSpaceEntries() ([]core.SpaceEntryPoint, error) {
@@ -47,6 +51,10 @@ func (a *atlasTestAdapter) ForgetSpace(string, bool) (core.SpaceEntryPoint, bool
 }
 
 func (a *atlasTestAdapter) OpenPlanningStore(root string) (core.PlanningSummarySource, error) {
+	a.summaryOpens = append(a.summaryOpens, root)
+	if err := a.summaryErrs[root]; err != nil {
+		return nil, err
+	}
 	fs, ok := a.trees[root]
 	if !ok {
 		return nil, errors.New("missing summary tree")
@@ -92,7 +100,8 @@ func atlasTestModel(t *testing.T) (Model, *atlasTestAdapter, string, string) {
 		trees: map[string]*store.FS{
 			alpha: store.NewFS(alpha), beta: store.NewFS(beta),
 		},
-		openErrs: make(map[string]error),
+		openErrs:    make(map[string]error),
+		summaryErrs: make(map[string]error),
 	}
 	// The pointer entry resolves to alpha's planning store while retaining its own
 	// selected checkout address.
@@ -136,6 +145,230 @@ func settleAtlasCmd(t *testing.T, m Model, cmd tea.Cmd) Model {
 	}
 	tm, next := m.Update(msg)
 	return settleAtlasCmd(t, tm.(Model), next)
+}
+
+func atlasSummary(t *testing.T, m Model, planningID string) core.SpaceSummary {
+	t.Helper()
+	for _, space := range m.atlas.overview.Spaces {
+		if space.PlanningID == planningID {
+			return space
+		}
+	}
+	t.Fatalf("atlas has no summary for %q: %+v", planningID, m.atlas.overview.Spaces)
+	return core.SpaceSummary{}
+}
+
+func TestAtlasRetainsContendedSpaceAndRetriesOnlyThatSpaceAfterQuietPeriod(t *testing.T) {
+	m, adapter, alpha, beta := atlasTestModel(t)
+
+	// Give the healthy space a visible update so the contended refresh proves successful
+	// groups advance rather than the whole Atlas freezing at its prior generation.
+	id := testutil.TaskID("alpha-new")
+	body := fmt.Sprintf("---\nid: %s\nstatus: in-progress\nepic: 01-test\ndescription: new alpha work\n---\n# Alpha new\n", id)
+	if err := os.WriteFile(filepath.Join(alpha, "tasks", id+"-alpha-new.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	released := false
+	defer func() {
+		if !released {
+			close(release)
+		}
+	}()
+	go func() {
+		_, err := adapter.trees[beta].MutateTaskGraph(time.Now(), true,
+			func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
+				close(entered)
+				<-release
+				return core.TaskGraphMutationPlan{}, nil
+			})
+		done <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("guarded mutation never entered its planner window")
+	}
+
+	adapter.summaryOpens = nil
+	tm, refreshCmd := m.Update(press("r"))
+	m = tm.(Model)
+	tm, retryTick := m.Update(refreshCmd())
+	m = tm.(Model)
+	if retryTick == nil || !m.atlas.retrying {
+		t.Fatal("a current contended Atlas refresh should schedule one quiet-period retry")
+	}
+	alphaSummary := atlasSummary(t, m, "planning-alpha")
+	betaSummary := atlasSummary(t, m, "planning-beta")
+	if alphaSummary.Summary == nil || len(alphaSummary.Summary.InProgress) != 2 {
+		t.Fatalf("healthy space did not advance during partial failure: %+v", alphaSummary)
+	}
+	if !betaSummary.Stale || betaSummary.Summary == nil || len(betaSummary.Summary.InProgress) != 1 {
+		t.Fatalf("contended space did not retain its coherent summary: %+v", betaSummary)
+	}
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "stale") ||
+		!strings.Contains(view, "retrying after the quiet period") {
+		t.Fatalf("retained contention is not visible while retrying:\n%s", view)
+	}
+
+	close(release)
+	released = true
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("guarded mutation: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("guarded mutation did not leave its planner window")
+	}
+
+	tm, retryLoad := m.Update(retryTick())
+	m = tm.(Model)
+	if retryLoad == nil {
+		t.Fatal("current Atlas retry request did not run")
+	}
+	tm, next := m.Update(retryLoad())
+	m = tm.(Model)
+	if next != nil || m.atlas.retrying || atlasSummary(t, m, "planning-beta").Stale {
+		t.Fatalf("successful bounded retry did not settle: next=%v atlas=%+v", next != nil, m.atlas)
+	}
+	if want := []string{alpha, beta, beta}; !slices.Equal(adapter.summaryOpens, want) {
+		t.Fatalf("full refresh plus targeted retry opened %v, want %v", adapter.summaryOpens, want)
+	}
+}
+
+func TestAtlasRepeatedContentionStopsAfterOneRetryAndKeepsStaleEvidence(t *testing.T) {
+	m, adapter, alpha, beta := atlasTestModel(t)
+	adapter.summaryErrs[beta] = fmt.Errorf("planner remains active: %w", domain.ErrConflict)
+	adapter.summaryOpens = nil
+
+	tm, refreshCmd := m.Update(press("r"))
+	m = tm.(Model)
+	tm, retryTick := m.Update(refreshCmd())
+	m = tm.(Model)
+	tm, retryLoad := m.Update(retryTick())
+	m = tm.(Model)
+	tm, next := m.Update(retryLoad())
+	m = tm.(Model)
+	if next != nil || m.atlas.retrying {
+		t.Fatal("a retry's own contention must become visible instead of scheduling again")
+	}
+	space := atlasSummary(t, m, "planning-beta")
+	if !space.Stale || !space.Contended() || space.Summary == nil {
+		t.Fatalf("repeated contention lost the last coherent summary: %+v", space)
+	}
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "press r to retry") {
+		t.Fatalf("exhausted retry is not actionable:\n%s", view)
+	}
+	if want := []string{alpha, beta, beta}; !slices.Equal(adapter.summaryOpens, want) {
+		t.Fatalf("bounded retry opened %v, want %v", adapter.summaryOpens, want)
+	}
+}
+
+func TestAtlasFirstLoadAndDurableFailuresDoNotInventRetainedData(t *testing.T) {
+	_, adapter, alpha, beta := atlasTestModel(t)
+	adapter.summaryErrs[beta] = fmt.Errorf("planner active: %w", domain.ErrConflict)
+	registry := core.NewSpaceRegistryService(adapter)
+	m := New(core.NewService(adapter.trees[alpha]),
+		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
+		WithAtlas(core.NewSpaceOverviewService(registry, adapter)), WithAtlasLanding())
+	m.workspace = core.Workspace{Checkout: alpha, PlanningRoot: alpha, PlanningID: "planning-alpha",
+		Planning: m.svc, Layout: noWatchLayout{}}
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = tm.(Model)
+	m = drainBatch(t, m, m.Init())
+	first := atlasSummary(t, m, "planning-beta")
+	if first.Summary != nil || first.Stale || !first.Contended() || !m.atlas.retrying {
+		t.Fatalf("first-load contention invented retained data: %+v retrying=%v", first, m.atlas.retrying)
+	}
+
+	adapter.summaryErrs[beta] = errors.New("durable tree failure")
+	tm, refreshCmd := m.Update(press("r"))
+	m = tm.(Model)
+	tm, next := m.Update(refreshCmd())
+	m = tm.(Model)
+	durable := atlasSummary(t, m, "planning-beta")
+	if next != nil || durable.Summary != nil || durable.Stale || durable.Failure == nil || durable.Contended() {
+		t.Fatalf("durable failure retained or retried stale data: next=%v summary=%+v", next != nil, durable)
+	}
+}
+
+func TestAtlasDropsSupersededRetryRequestsAndResults(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	m.atlas.retrying = true
+	oldLoad := m.atlas.loadGen
+	m.atlas.loadGen++
+	tm, cmd := m.Update(atlasRetryMsg{gen: oldLoad})
+	m = tm.(Model)
+	if cmd != nil {
+		t.Fatal("a newer Atlas generation must drop the older retry")
+	}
+	obsolete := atlasSummary(t, m, "planning-beta")
+	obsolete.Summary = &core.Summary{InProgress: []domain.Task{{Slug: "obsolete-result"}}}
+	tm, cmd = m.Update(atlasRetriedMsg{
+		gen: oldLoad, refresh: core.SpaceOverviewRefresh{Spaces: []core.SpaceSummary{obsolete}},
+	})
+	m = tm.(Model)
+	if cmd != nil || !m.atlas.retrying ||
+		atlasSummary(t, m, "planning-beta").Summary.InProgress[0].Slug == "obsolete-result" {
+		t.Fatal("an older Atlas generation's retry result changed current state")
+	}
+
+	oldSession := m.sessionGen
+	m.sessionGen++
+	tm, cmd = m.Update(sessionMsg{gen: oldSession, msg: atlasRetryMsg{gen: m.atlas.loadGen}})
+	m = tm.(Model)
+	if cmd != nil || !m.atlas.retrying {
+		t.Fatal("an old workspace session retry must not touch the current Atlas")
+	}
+	foreign := obsolete
+	foreign.Summary = &core.Summary{InProgress: []domain.Task{{Slug: "foreign-session-result"}}}
+	tm, cmd = m.Update(sessionMsg{gen: oldSession, msg: atlasRetriedMsg{
+		gen: m.atlas.loadGen, refresh: core.SpaceOverviewRefresh{Spaces: []core.SpaceSummary{foreign}},
+	}})
+	m = tm.(Model)
+	if cmd != nil || !m.atlas.retrying ||
+		atlasSummary(t, m, "planning-beta").Summary.InProgress[0].Slug == "foreign-session-result" {
+		t.Fatal("an old workspace session retry result changed current state")
+	}
+}
+
+func TestAtlasPartialRetryPreservesWholeProjectionDirtySignalAndOpenError(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	previous := m.atlas.overview
+	originalBeta := atlasSummary(t, m, "planning-beta")
+	contended := core.SpaceOverview{Spaces: append([]core.SpaceSummary(nil), previous.Spaces...)}
+	for i := range contended.Spaces {
+		if contended.Spaces[i].PlanningID == "planning-beta" {
+			contended.Spaces[i].Summary = nil
+			contended.Spaces[i].Failure = &core.SpaceLoadFailure{
+				Class: domain.ClassConflict, Message: "planner active",
+			}
+		}
+	}
+	m.atlas.applyOverview(core.RetainContendedSpaceSummaries(previous, contended))
+	m.atlas.retrying = true
+	m.atlas.dirty = true // an off-screen watcher event the partial retry did not read
+	m.atlas.openErr = "selected entry could not be opened"
+	m.onAtlas = false
+
+	betaFresh := atlasSummary(t, m, "planning-beta")
+	betaFresh.Summary = originalBeta.Summary
+	betaFresh.Failure = nil
+	betaFresh.Stale = false
+	tm, cmd := m.Update(atlasRetriedMsg{
+		gen: m.atlas.loadGen, refresh: core.SpaceOverviewRefresh{Spaces: []core.SpaceSummary{betaFresh}},
+	})
+	m = tm.(Model)
+	if cmd != nil || !m.atlas.dirty || m.atlas.openErr != "selected entry could not be opened" {
+		t.Fatalf("partial retry reset whole-overview state: dirty=%v openErr=%q", m.atlas.dirty, m.atlas.openErr)
+	}
+	if cmd := m.enterAtlas(false); cmd == nil {
+		t.Fatal("a partial retry erased the deferred full refresh required by the watcher")
+	}
 }
 
 func TestAtlasLoadsGroupedCardsAndNavigatesThroughSelectedEntry(t *testing.T) {
@@ -1204,6 +1437,27 @@ func TestAtlasWorkOrderAndRowsDistinguishDuplicateSlugsByCanonicalID(t *testing.
 	}
 }
 
+func TestAtlasUngroupedWorkRowsNameStaleDataWithoutColor(t *testing.T) {
+	a := atlas{loaded: true, screen: atlasScreenWork, workOrder: atlasWorkByStarted}
+	a.setWork([]core.SpaceInProgress{
+		{SpaceID: "alpha", PlanningID: "planning-alpha", Task: domain.Task{Slug: "fresh-task"}},
+		{SpaceID: "beta", PlanningID: "planning-beta", Stale: true, Task: domain.Task{Slug: "retained-task"}},
+	})
+
+	for _, order := range []atlasWorkOrder{atlasWorkByStarted, atlasWorkByPriority} {
+		a.workOrder = order
+		a.applyWorkOrder()
+		rows, _ := a.workRows(&testStyles, 120)
+		plain := ansi.Strip(strings.Join(rows, "\n"))
+		if !strings.Contains(plain, "stale · retained-task") {
+			t.Fatalf("%s order does not identify the retained row without color:\n%s", order.label(), plain)
+		}
+		if strings.Contains(plain, "stale · fresh-task") {
+			t.Fatalf("%s order marked fresh work stale:\n%s", order.label(), plain)
+		}
+	}
+}
+
 func TestAtlasWorkLandingCarriesTheSelectedCanonicalKey(t *testing.T) {
 	m, _, _, _ := atlasTestModel(t)
 	first := core.SpaceInProgress{SpaceID: "alpha", PlanningID: "planning-alpha", Task: domain.Task{
@@ -1279,7 +1533,7 @@ func TestAtlasStaleProjectionRefreshesLazilyOffScreenAndEagerlyOnIt(t *testing.T
 		t.Fatal("setup: expected to be off the atlas")
 	}
 	cmd := m.markAtlasStale()
-	if !m.atlas.stale {
+	if !m.atlas.dirty {
 		t.Fatal("a reload did not mark the projection stale")
 	}
 	if cmd != nil {
@@ -1290,7 +1544,7 @@ func TestAtlasStaleProjectionRefreshesLazilyOffScreenAndEagerlyOnIt(t *testing.T
 		t.Error("entering a stale atlas did not re-read the projection")
 	}
 
-	m.atlas.stale = false
+	m.atlas.dirty = false
 	m.onAtlas = true
 	if cmd := m.markAtlasStale(); cmd == nil {
 		t.Error("staleness while the atlas is on screen should re-read immediately")
