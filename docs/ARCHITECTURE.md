@@ -142,6 +142,10 @@ adapter capabilities rather than leaked persistence.
   then selects one healthy entry point per identity. That composite requires the metadata
   `SummaryStore` and the canonical `TaskGraphSource` explicitly, so counts, in-progress
   work, and graph health derive from one task snapshot even for split/remote adapters.
+  Per-space read failures retain an adapter-neutral domain class plus human message rather
+  than collapsing immediately to filesystem prose. `RetryContended` returns a typed partial
+  replacement set and re-reads only groups that hit the guarded planner window; it cannot be
+  mistaken for a complete registry overview or silently drop independently healthy spaces.
   Roles and states are typed core vocabulary and entry health is derived from state, so
   an adapter cannot claim that a missing checkout is healthy.
   `WorkspaceService` is the separate local-tree opening boundary used when a primary
@@ -508,7 +512,16 @@ Files split by concern:
   per checkout, while an outer workspace-generation stamp drops every
   asynchronous result launched by an older session. Atlas chrome has its own home-scoped
   theme (global flag/environment/home precedence, never the launch repo's override), shows each
-  entry-point path, and keeps name/activity/registration ordering as explicit TUI state.
+  entry-point path, and keeps name/activity/registration ordering as explicit TUI state. A
+  partial refresh that hits planner-window contention advances successful spaces, retains the
+  affected space's last coherent summary and working rows as visibly stale, and retries only
+  those affected groups once after the filesystem quiet period. A repeated conflict remains
+  visible and waits for a later manual/watcher refresh; first-load and durable failures never
+  invent retained data. Atlas load generations and the outer session stamp both supersede a
+  delayed retry before it can land against newer state. Whole-overview watcher dirtiness is
+  separate from per-space contention: only a complete overview read clears that signal or an
+  outstanding open error, so a successful partial retry cannot make an unrelated changed space
+  appear fresh. Ungrouped work rows name retained data in text as well as color.
 - **`entity.go`** — the **entity registry**: tasks/epics/Threads/audits/research as `*entityTab`s,
   each owning its own `list.Model`, cursor, loaders, list-scoped state (status
   view, sort, filter restore), and its **lifecycle table** (the transitions it
@@ -563,7 +576,10 @@ Files split by concern:
   conflict surface as an ordinary durable error. A first load has nothing to retain, so
   it stays visibly loading rather than resolving into a false empty state. A conflict
   from a *mutation* is the opposite case (the file changed under a compare-and-swap)
-  and still flashes and reloads.
+  and still flashes and reloads. The cross-space Atlas follows the same bound at group
+  granularity through structured `SpaceLoadFailure` evidence: healthy groups are not rolled
+  back or re-read by the retry, stale provenance survives into the combined work view, and the
+  last coherent summary owns its mutable slice data rather than aliasing an older projection.
 - **`detail.go` / `find.go` / `glamour.go`** — the right pane (a `viewport`): the
   field block + a markdown body rendered two ways (raw / `glamour`, both cached so
   `R` toggles for free) + vim-like `/` `n` `N` find-in-body over *occurrences*
