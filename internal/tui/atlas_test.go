@@ -46,7 +46,7 @@ func (a *atlasTestAdapter) ForgetSpace(string, bool) (core.SpaceEntryPoint, bool
 	return core.SpaceEntryPoint{}, false, errors.New("not used")
 }
 
-func (a *atlasTestAdapter) OpenPlanningStore(root string) (core.SummaryStore, error) {
+func (a *atlasTestAdapter) OpenPlanningStore(root string) (core.PlanningSummarySource, error) {
 	fs, ok := a.trees[root]
 	if !ok {
 		return nil, errors.New("missing summary tree")

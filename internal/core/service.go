@@ -275,20 +275,25 @@ type Summary struct {
 	RevisitDue    int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
 	BadEpicStatus int                  // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
 	Problems      []domain.FileProblem // unreadable files
+	GraphHealth   GraphHealth          // repository-wide task-DAG verdict from the same snapshot as Counts/InProgress
+	GraphDetail   string               // first cause + remedy when GraphHealth is not healthy
 }
 
 // Summary composes a one-screen overview from a single scan of tasks + epics +
 // audits. Only OPEN audits are surfaced — the actionable subset, paralleling the
 // in-progress task working set (closed/deferred audits are done/parked).
 func (s *Service) Summary() (Summary, error) {
-	return summarize(s.store, s.now())
+	return summarize(s.store, s.taskGraphs, s.now())
 }
 
-func summarize(store SummaryStore, now time.Time) (Summary, error) {
-	tasks, p1, err := store.ListTasks()
+func summarize(store SummaryStore, taskGraphs TaskGraphSource, now time.Time) (Summary, error) {
+	read, err := loadTaskGraphRecords(taskGraphs)
 	if err != nil {
 		return Summary{}, err
 	}
+	tasks := read.Tasks
+	p1 := taskGraphFileProblems(read.Problems)
+	graph := NewTaskGraphRead(read)
 	epics, p2, err := store.ListEpics()
 	if err != nil {
 		return Summary{}, err
@@ -352,7 +357,7 @@ func summarize(store SummaryStore, now time.Time) (Summary, error) {
 			badEpicStatus++
 		}
 	}
-	return Summary{
+	summary := Summary{
 		Counts:     ordered,
 		InProgress: inProgress,
 		// Active-only + live-first HERE so the dashboard's "what's live right now"
@@ -368,7 +373,12 @@ func summarize(store SummaryStore, now time.Time) (Summary, error) {
 		RevisitDue:    revisitDue,
 		BadEpicStatus: badEpicStatus,
 		Problems:      append(append(p1, p2...), p3...),
-	}, nil
+		GraphHealth:   graph.Health(),
+	}
+	if summary.GraphHealth != GraphHealthy {
+		summary.GraphDetail = taskGraphHealthDetail(graph)
+	}
+	return summary, nil
 }
 
 // LintResult is the set of frontmatter issues for one entity (a task by slug, or

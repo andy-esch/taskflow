@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -434,6 +435,39 @@ func TestService_Summary(t *testing.T) {
 	}
 	if len(s.Epics) != 1 || s.Epics[0].Total != 3 || s.Epics[0].Done != 1 {
 		t.Errorf("epic rollup wrong: %+v", s.Epics)
+	}
+}
+
+// Summary consumes the explicit TaskGraphSource just like board and Thread reads.
+// A split adapter must not get counts from Store.ListTasks while graph health comes
+// from another snapshot; both projections are derived from the one graph read.
+func TestService_SummaryUsesInjectedTaskGraphSnapshot(t *testing.T) {
+	gate := graphRecord("summary-gate", domain.StatusCompleted)
+	member := graphRecord("summary-member", domain.StatusReadyToStart)
+	member.LegacyBlockedBy = []string{gate.Slug}
+	graphs := &taskGraphReadFake{tasks: []domain.Task{member, gate}}
+	svc := NewService(&fakeStore{
+		// Deliberately contradictory: this aggregate-store task must not leak into
+		// a Summary when a dedicated graph source was injected.
+		tasks: []domain.Task{{Slug: "wrong", Status: domain.StatusInProgress}},
+	}, WithTaskGraphSource(graphs))
+
+	summary, err := svc.Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if graphs.calls != 1 {
+		t.Fatalf("ReadTaskGraph calls = %d, want exactly 1", graphs.calls)
+	}
+	if summary.GraphHealth != GraphDegraded || !strings.Contains(summary.GraphDetail, "1 legacy dependency field occurrence") {
+		t.Fatalf("graph verdict = %s / %q", summary.GraphHealth, summary.GraphDetail)
+	}
+	counts := map[domain.Status]int{}
+	for _, count := range summary.Counts {
+		counts[count.Status] = count.Count
+	}
+	if counts[domain.StatusReadyToStart] != 1 || counts[domain.StatusCompleted] != 1 || counts[domain.StatusInProgress] != 0 {
+		t.Fatalf("summary counts did not use graph snapshot: %+v", counts)
 	}
 }
 

@@ -7,11 +7,20 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
+// PlanningSummarySource is the complete read capability for one planning-space
+// dashboard. TaskGraphSource is explicit rather than discovered with a type
+// assertion: every adapter must provide the same strict task snapshot contract,
+// including record identity for unreadable tasks.
+type PlanningSummarySource interface {
+	SummaryStore
+	TaskGraphSource
+}
+
 // SpaceOverviewStore is the narrow secondary-adapter port for opening one planning tree.
 // Registry cataloging is deliberately supplied by SpaceRegistryService instead of being
 // folded into this filesystem capability.
 type SpaceOverviewStore interface {
-	OpenPlanningStore(root string) (SummaryStore, error)
+	OpenPlanningStore(root string) (PlanningSummarySource, error)
 }
 
 // SpaceSummary is the result for one logical planning identity. Selected is the healthy
@@ -102,7 +111,7 @@ func summarizeSpaceGroup(group SpaceGroup, source SpaceOverviewStore, asOf time.
 		space.LoadError = fmt.Sprintf("open planning tree: %v", err)
 		return space
 	}
-	summary, err := summarize(planningStore, asOf)
+	summary, err := summarize(planningStore, planningStore, asOf)
 	if err != nil {
 		space.LoadError = err.Error()
 		return space

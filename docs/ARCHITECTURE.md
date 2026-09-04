@@ -138,10 +138,12 @@ adapter capabilities rather than leaked persistence.
   them. `SpaceRegistryService` owns the repo-independent catalog, grouping, explicit
   selection, label policy, and mutation receipts through `SpaceRegistryStore`.
   `SpaceOverviewService` composes that catalog with `SpaceOverviewStore`, whose only job
-  is opening the narrow read-only `SummaryStore` needed for a dashboard scan, then selects
-  one healthy entry point per identity. Roles and states are typed core vocabulary and
-  entry health is derived from state, so an adapter cannot claim that a missing checkout
-  is healthy.
+  is opening the narrow read-only `PlanningSummarySource` needed for a dashboard scan,
+  then selects one healthy entry point per identity. That composite requires the metadata
+  `SummaryStore` and the canonical `TaskGraphSource` explicitly, so counts, in-progress
+  work, and graph health derive from one task snapshot even for split/remote adapters.
+  Roles and states are typed core vocabulary and entry health is derived from state, so
+  an adapter cannot claim that a missing checkout is healthy.
   `WorkspaceService` is the separate local-tree opening boundary used when a primary
   adapter needs a complete entity service and watcher layout for an explicit start path.
   Its `WorkspaceStore` port returns neutral capabilities; registry labels are carried as
