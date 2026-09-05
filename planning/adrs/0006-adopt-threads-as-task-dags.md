@@ -1100,15 +1100,24 @@ a Thread. The corrected adapter boundary is:
    [`6g5gbk5a5bt0`](../tasks/6g5gbk5a5bt0-make-task-graph-load-diagnostics-adapter-neutral.md)
    replaces that identity channel with `TaskGraphRead` and `TaskGraphLoadProblem`. An unreadable
    record carries optional stable ID/slug plus message; a path is optional repair context, never the
-   analyzer's identity source. The filesystem performs the one filename conversion at its adapter
-   boundary, while legacy/body-aware `NewTaskGraph` callers retain an explicit file conversion.
+   analyzer's identity source. It also carries an opaque source revision used only by
+   whole-snapshot CAS. Filesystem reads hash the exact bytes before parsing, so a raw edit that
+   remains unreadable with the same diagnostic still invalidates a guarded plan. Missing revisions
+   fail closed for snapshot equality, and neither planner-facing task values nor wire diagnostics
+   expose them. The filesystem performs the filename conversion at its adapter boundary, while
+   legacy/body-aware `NewTaskGraph` callers retain an explicit file conversion without claiming
+   authoritative CAS evidence.
    Task [`6g5rxq1ravd3`](../tasks/6g5rxq1ravd3-make-thread-read-diagnostics-adapter-neutral.md)
    applies the same rule to `ThreadStore`: one `ThreadRead` carries readable records plus
    `ThreadReadProblem` values with optional Thread ID, slug, location, and message. Portable core
-   readers never parse location, while guarded filesystem mutations retain native file problems for
-   exact source-snapshot comparison. `thread list --json` maps the neutral diagnostic explicitly;
+   readers never parse location. Task
+   [`6g72ncs4xjdm`](../tasks/6g72ncs4xjdm-version-unreadable-thread-sources-for-repair-safe-cas.md)
+   completes the symmetry by carrying opaque revisions for unreadable Thread sources into guarded
+   filesystem snapshot comparison. Until then, ordinary Thread mutations remain safe because they
+   reject malformed Thread reads before planning; repair must not rely on the weaker
+   `{location,message}` equality. `thread list --json` maps the neutral diagnostic explicitly;
    schema 1.59 replaces its preview-only `{path,message}` unreadable shape with optional identity and
-   location fields.
+   location fields, and the opaque revision remains outside that wire contract.
 
 This split is deliberately smaller than a repository abstraction redesign. It establishes the port
 and projection seams needed by additional interfaces while leaving concrete storage, HTTP transport,
@@ -1267,7 +1276,9 @@ convergent intent documents rather than unsafe replacement-state snapshots. `lin
 force, heuristic cycle breaking, and slug-to-ID guessing never reach this capability.
 
 Repair computes task and Thread projection impacts from readable evidence, but malformed Thread
-documents do not block recovery of the underlying repository task graph. The receipt names any
+documents do not block recovery of the underlying repository task graph. Before repair ships,
+unreadable Thread reads gain opaque source revisions so concurrent byte changes cannot hide behind
+an unchanged diagnostic while those incomplete impacts are being authorized. The receipt names any
 incomplete Thread evidence so callers cannot mistake a partial impact calculation for completeness.
 The broader pressure that relational constraints place on authoritative Markdown remains a valid
 architecture question, tracked outside this delivery path; V1 keeps Markdown and Git authoritative

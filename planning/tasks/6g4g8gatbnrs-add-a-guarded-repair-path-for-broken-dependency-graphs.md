@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [threads, graph, storage, cli]
 created: "2026-08-28"
-depends_on: [6g3q4rt7mgjn, 6g697mp8s4tx, 6g6scc9jgxae, 6g721vewvvrz]
+depends_on: [6g3q4rt7mgjn, 6g697mp8s4tx, 6g6scc9jgxae, 6g721vewvvrz, 6g72ncs4xjdm]
 updated_at: "2026-09-05"
 started_at: "2026-09-05"
 audit_sources: [planning/audits/6g71vzq8wdnj-2026-09-05-add-a-guarded-repair-path-for-broken-dependency-graphs-antigravity.md, planning/audits/6g71yr50md16-2026-09-05-add-a-guarded-repair-path-for-broken-dependency-graphs-claude.md]
@@ -95,16 +95,18 @@ Provide an explicit recovery capability for graph-owned frontmatter that is alre
 
 ## Sequencing
 
-The v0.19.0 preview shipped the diagnostic baseline. Adversarial design review found two foundations
-that must land before the recovery subsystem: opaque revisions for unreadable task sources, followed
-by a lossless graph-declaration projection and simulator. This task resumes after those foundations
-and owns repair policy, guarded materialization, receipts, CLI/wire contracts, and guidance. The
-larger question of whether relational planning data should remain authoritative Markdown is tracked
+The v0.19.0 preview shipped the diagnostic baseline. Adversarial design and implementation review
+found three foundations that must land before the recovery subsystem: opaque revisions for
+unreadable task sources, the same protection for unreadable Thread evidence, and a lossless
+graph-declaration projection and simulator. This task resumes after those foundations and owns
+repair policy, guarded materialization, receipts, CLI/wire contracts, and guidance. The larger
+question of whether relational planning data should remain authoritative Markdown is tracked
 separately and does not weaken the current repair contract.
 
 ## Related
 
 - Epic [30-threads-and-task-dependency-graphs](../epics/30-threads-and-task-dependency-graphs.md)
 - Prerequisite [unreadable-source revision tokens](6g721tvf4crh-version-unreadable-task-graph-sources-for-repair-safe-cas.md)
+- Prerequisite [unreadable Thread-source revision tokens](6g72ncs4xjdm-version-unreadable-thread-sources-for-repair-safe-cas.md)
 - Prerequisite [source-level graph declarations](6g721vewvvrz-model-graph-owned-source-declarations-for-sound-repair.md)
 - Follow-up research [Markdown-first storage durability](6g721w07mv1d-reassess-markdown-first-storage-durability-for-relational-planning-data.md)
