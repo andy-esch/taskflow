@@ -272,6 +272,10 @@ type taskReferenceCandidate struct {
 // TaskGraph is an immutable projection over one repository scan. Its internal
 // query caches are synchronized; callers always receive copies of slices/maps.
 type TaskGraph struct {
+	sourceTasks         []domain.Task
+	sourceComplete      bool
+	representative      map[string]TaskGraphSourceRef
+	sourceRefCounts     map[TaskGraphSourceRef]int
 	tasks               map[string]domain.Task
 	ids                 []string
 	loadProblems        []TaskGraphLoadProblem
@@ -304,23 +308,30 @@ func NewTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGra
 // NewTaskGraphRead builds the strict snapshot from the neutral adapter read
 // contract used by Service graph consumers.
 func NewTaskGraphRead(read TaskGraphRead) *TaskGraph {
-	return newTaskGraph(read.Tasks, read.Problems)
+	return newTaskGraph(read.Tasks, read.Problems, true)
 }
 
-func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem) *TaskGraph {
+func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, sourceComplete bool) *TaskGraph {
 	g := &TaskGraph{
-		tasks:         make(map[string]domain.Task, len(tasks)),
-		dependencies:  make(map[string][]string, len(tasks)),
-		outgoing:      make(map[string][]string, len(tasks)),
-		hardBroken:    make(map[string]bool),
-		unreadableIDs: make(map[string]bool),
-		cycleMembers:  make(map[string]bool),
-		sound:         make(map[string]soundResult, len(tasks)),
-		states:        make(map[string]TaskGraphState, len(tasks)),
-		causalCache:   make(map[string][]Blocker),
-		frontierCache: make(map[string][]Blocker),
-		impactCache:   make(map[string][]DependentImpact),
-		soundVisits:   make(map[string]int, len(tasks)),
+		sourceTasks:     cloneTasks(tasks),
+		sourceComplete:  sourceComplete,
+		representative:  make(map[string]TaskGraphSourceRef, len(tasks)),
+		sourceRefCounts: make(map[TaskGraphSourceRef]int, len(tasks)),
+		tasks:           make(map[string]domain.Task, len(tasks)),
+		dependencies:    make(map[string][]string, len(tasks)),
+		outgoing:        make(map[string][]string, len(tasks)),
+		hardBroken:      make(map[string]bool),
+		unreadableIDs:   make(map[string]bool),
+		cycleMembers:    make(map[string]bool),
+		sound:           make(map[string]soundResult, len(tasks)),
+		states:          make(map[string]TaskGraphState, len(tasks)),
+		causalCache:     make(map[string][]Blocker),
+		frontierCache:   make(map[string][]Blocker),
+		impactCache:     make(map[string][]DependentImpact),
+		soundVisits:     make(map[string]int, len(tasks)),
+	}
+	for _, task := range tasks {
+		g.sourceRefCounts[sourceRefForTask(task)]++
 	}
 	g.loadProblems = cloneTaskGraphLoadProblems(unreadable)
 	sort.SliceStable(g.loadProblems, func(i, j int) bool {
@@ -359,13 +370,14 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem) *TaskG
 	})
 	idCounts := make(map[string]int, len(ordered))
 	idPaths := make(map[string][]string, len(ordered))
+	representativeIndexes := make(map[string]int, len(ordered))
 	for _, task := range ordered {
 		if taskID := canonicalTaskID(task); taskID != "" {
 			idCounts[taskID]++
 			idPaths[taskID] = append(idPaths[taskID], displayPath(task.Path))
 		}
 	}
-	for _, task := range ordered {
+	for recordIndex, task := range ordered {
 		taskID := canonicalTaskID(task)
 		if taskID != "" {
 			g.referenceCandidates = append(g.referenceCandidates, taskReferenceCandidate{id: taskID, slug: task.Slug})
@@ -390,6 +402,8 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem) *TaskG
 		}
 		if _, exists := g.tasks[taskID]; !exists {
 			g.tasks[taskID] = cloneTask(task)
+			g.representative[taskID] = sourceRefForTask(task)
+			representativeIndexes[taskID] = recordIndex
 			g.ids = append(g.ids, taskID)
 		}
 		if !task.Status.Valid() {
@@ -401,13 +415,13 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem) *TaskG
 	sort.Strings(g.ids)
 
 	canonicalEdges := make([]DependencyEdge, 0)
-	for _, task := range ordered {
+	for recordIndex, task := range ordered {
 		taskID := canonicalTaskID(task)
 		if taskID == "" {
 			continue
 		}
-		representative, isRepresentative := g.tasks[taskID]
-		isRepresentative = isRepresentative && representative.Path == task.Path && representative.Slug == task.Slug
+		representativeIndex, exists := representativeIndexes[taskID]
+		isRepresentative := exists && representativeIndex == recordIndex
 		dependencies := append([]string(nil), task.DependsOn...)
 		sort.Strings(dependencies)
 		if isRepresentative {
@@ -452,7 +466,7 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem) *TaskG
 			}
 		}
 	}
-	legacyDiagnostics, legacyEdges := g.resolveLegacyDiagnostics(ordered)
+	legacyDiagnostics, legacyEdges := g.resolveLegacyDiagnostics(ordered, representativeIndexes)
 	g.legacy = legacyDiagnostics
 	// Resolved legacy edges are semantically real constraints. Project them into
 	// explanatory reads and derived state as well as structural analysis so a
@@ -557,6 +571,14 @@ func cloneTask(task domain.Task) domain.Task {
 	return task
 }
 
+func cloneTasks(tasks []domain.Task) []domain.Task {
+	out := make([]domain.Task, len(tasks))
+	for i, task := range tasks {
+		out[i] = cloneTask(task)
+	}
+	return out
+}
+
 func cloneTaskGraphLoadProblems(problems []TaskGraphLoadProblem) []TaskGraphLoadProblem {
 	return append([]TaskGraphLoadProblem(nil), problems...)
 }
@@ -581,7 +603,7 @@ func (g *TaskGraph) hasProblem(code GraphProblemCode, taskID string) bool {
 	return false
 }
 
-func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task) ([]LegacyDependencyDiagnostic, []DependencyEdge) {
+func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task, representativeIndexes map[string]int) ([]LegacyDependencyDiagnostic, []DependencyEdge) {
 	bySlug := make(map[string][]string, len(g.tasks))
 	for _, taskID := range g.ids {
 		bySlug[g.tasks[taskID].Slug] = append(bySlug[g.tasks[taskID].Slug], taskID)
@@ -604,11 +626,13 @@ func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task) ([]LegacyDep
 	var diagnostics []LegacyDependencyDiagnostic
 	var edges []DependencyEdge
 	seenEdges := make(map[DependencyEdge]bool)
-	for _, task := range records {
+	for recordIndex, task := range records {
 		taskID := canonicalTaskID(task)
 		if taskID == "" {
 			continue
 		}
+		representativeIndex, exists := representativeIndexes[taskID]
+		isRepresentative := exists && representativeIndex == recordIndex
 		for _, field := range fields {
 			values := sortedUnique(field.values(task))
 			if len(values) == 0 && !slices.Contains(task.LegacyDependencyFields, field.name) {
@@ -646,7 +670,7 @@ func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task) ([]LegacyDep
 							Message: fmt.Sprintf("legacy %s reference %q makes task %s depend on itself", field.name, value, taskID)})
 						g.hardBroken[taskID] = true
 					}
-					if !seenEdges[ref.Edge] {
+					if isRepresentative && !seenEdges[ref.Edge] {
 						seenEdges[ref.Edge] = true
 						edges = append(edges, ref.Edge)
 					}
@@ -889,18 +913,30 @@ func (g *TaskGraph) ResolveTaskID(ref string) (string, error) {
 // hashes catch every in-place edit, including non-graph fields and sources that
 // remain unreadable with an otherwise identical diagnostic.
 func (g *TaskGraph) SameSourceSnapshot(other *TaskGraph) bool {
-	if other == nil || g.health != other.health || !slices.Equal(g.ids, other.ids) {
+	if other == nil || !g.sourceComplete || !other.sourceComplete ||
+		g.health != other.health || !slices.Equal(g.ids, other.ids) {
 		return false
 	}
-	for _, taskID := range g.ids {
-		left, right := g.tasks[taskID], other.tasks[taskID]
-		if left.Path != right.Path || left.SourceVersion == "" || left.SourceVersion != right.SourceVersion {
-			return false
-		}
+	if !sameReadableTaskSources(g.sourceTasks, other.sourceTasks) {
+		return false
 	}
 	return slices.EqualFunc(g.loadProblems, other.loadProblems, sameTaskGraphLoadProblem) &&
 		slices.EqualFunc(g.problems, other.problems, sameGraphProblem) &&
 		slices.EqualFunc(g.legacy, other.legacy, sameLegacyDiagnostic)
+}
+
+func sameReadableTaskSources(left, right []domain.Task) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	left = cloneTasks(left)
+	right = cloneTasks(right)
+	sort.SliceStable(left, func(i, j int) bool { return taskSourceSnapshotKey(left[i]) < taskSourceSnapshotKey(left[j]) })
+	sort.SliceStable(right, func(i, j int) bool { return taskSourceSnapshotKey(right[i]) < taskSourceSnapshotKey(right[j]) })
+	return slices.EqualFunc(left, right, func(a, b domain.Task) bool {
+		return sourceRefForTask(a) == sourceRefForTask(b) &&
+			a.SourceVersion != "" && a.SourceVersion == b.SourceVersion
+	})
 }
 
 func sameTaskGraphLoadProblem(left, right TaskGraphLoadProblem) bool {
@@ -927,10 +963,30 @@ func sameLegacyDiagnostic(left, right LegacyDependencyDiagnostic) bool {
 
 func (g *TaskGraph) TaskIDs() []string { return append([]string(nil), g.ids...) }
 
-// Prerequisites returns the task's direct prerequisite IDs from this immutable
-// projection. The result includes safely resolved legacy constraints on a
-// degraded snapshot, matching State and blocker queries rather than exposing
-// only the canonical field bytes from Task().
+// CanonicalDependencies returns the deduplicated stable-ID values declared in
+// the representative task's canonical depends_on field. It includes self,
+// dangling, and unreadable-target IDs but omits invalid literals and legacy
+// constraints. SourceDeclarations is the lossless raw view; Prerequisites is the
+// fail-closed behavior view.
+func (g *TaskGraph) CanonicalDependencies(taskID string) []string {
+	task, ok := g.tasks[taskID]
+	if !ok {
+		return nil
+	}
+	values := make([]string, 0, len(task.DependsOn))
+	for _, value := range task.DependsOn {
+		if id.Valid(value) {
+			values = append(values, value)
+		}
+	}
+	return sortedUnique(values)
+}
+
+// Prerequisites returns the task's direct prerequisite values from this
+// immutable projection. It deliberately retains every canonical literal,
+// including invalid, dangling, and unreadable-target values, so behavior queries
+// fail closed on broken evidence. Safely resolved legacy constraints are unioned
+// in on degraded snapshots. This is not an edge-only or stable-ID-only view.
 func (g *TaskGraph) Prerequisites(taskID string) []string {
 	return append([]string(nil), g.dependencies[taskID]...)
 }

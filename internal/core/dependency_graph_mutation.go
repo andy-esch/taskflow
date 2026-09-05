@@ -128,7 +128,11 @@ func taskGraphFromMap(taskIDs []string, tasksByID map[string]domain.Task) *TaskG
 	for _, taskID := range taskIDs {
 		tasks = append(tasks, tasksByID[taskID])
 	}
-	return NewTaskGraph(tasks, nil)
+	// Representative-map reconstructions are safe for ordinary prospective
+	// behavior queries only. Mark them source-incomplete so repair-oriented
+	// source queries and whole-snapshot CAS fail closed instead of treating one
+	// record per ID as a complete repository read.
+	return newTaskGraph(tasks, nil, false)
 }
 
 func taskGraphHealthDetail(graph *TaskGraph) string {
