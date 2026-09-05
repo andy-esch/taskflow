@@ -1112,12 +1112,14 @@ a Thread. The corrected adapter boundary is:
    `ThreadReadProblem` values with optional Thread ID, slug, location, and message. Portable core
    readers never parse location. Task
    [`6g72ncs4xjdm`](../tasks/6g72ncs4xjdm-version-unreadable-thread-sources-for-repair-safe-cas.md)
-   completes the symmetry by carrying opaque revisions for unreadable Thread sources into guarded
-   filesystem snapshot comparison. Until then, ordinary Thread mutations remain safe because they
-   reject malformed Thread reads before planning; repair must not rely on the weaker
-   `{location,message}` equality. `thread list --json` maps the neutral diagnostic explicitly;
+   completes the symmetry by carrying opaque revisions for unreadable Thread sources into one
+   deterministic `ThreadRead` snapshot comparison. The filesystem hashes the exact bytes during the
+   same resilient scan, all graph-aware write guards consume that revision-bearing read, and missing
+   revisions fail closed. Ordinary mutations still reject malformed Thread reads before planning;
+   the complete comparison exists for their pre-write transitions and for repair, which may proceed
+   with incomplete Thread evidence. `thread list --json` maps the neutral diagnostic explicitly;
    schema 1.59 replaces its preview-only `{path,message}` unreadable shape with optional identity and
-   location fields, and the opaque revision remains outside that wire contract.
+   location fields, and service, TUI, schema, and wire projections omit the opaque revision.
 
 This split is deliberately smaller than a repository abstraction redesign. It establishes the port
 and projection seams needed by additional interfaces while leaving concrete storage, HTTP transport,
@@ -1276,10 +1278,10 @@ convergent intent documents rather than unsafe replacement-state snapshots. `lin
 force, heuristic cycle breaking, and slug-to-ID guessing never reach this capability.
 
 Repair computes task and Thread projection impacts from readable evidence, but malformed Thread
-documents do not block recovery of the underlying repository task graph. Before repair ships,
-unreadable Thread reads gain opaque source revisions so concurrent byte changes cannot hide behind
-an unchanged diagnostic while those incomplete impacts are being authorized. The receipt names any
-incomplete Thread evidence so callers cannot mistake a partial impact calculation for completeness.
+documents do not block recovery of the underlying repository task graph. Unreadable Thread reads
+carry opaque source revisions, so concurrent byte changes cannot hide behind an unchanged diagnostic
+while those incomplete impacts are being authorized. The receipt names any incomplete Thread
+evidence so callers cannot mistake a partial impact calculation for completeness.
 The broader pressure that relational constraints place on authoritative Markdown remains a valid
 architecture question, tracked outside this delivery path; V1 keeps Markdown and Git authoritative
 while repair experience supplies evidence for that later decision.
