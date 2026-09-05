@@ -146,5 +146,5 @@ rule inside it is easy to miss. Land that first, or land it with this.
   0% settled 0/0; the broken-vs-empty distinction is carried by the near-miss
   lint rule rather than by a lint flag on empty open audits, which would fire on
   every queued brief and fresh scaffold.
-- [ ] Reviewer-brief boilerplate and schema audit no longer state that **Status:**
+- [x] Reviewer-brief boilerplate and schema audit no longer state that **Status:**
   on its own line breaks parsing, because it does not.

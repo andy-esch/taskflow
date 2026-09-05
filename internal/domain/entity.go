@@ -123,6 +123,7 @@ var entities = []Descriptor{
 		Conventions: []string{
 			"audits are created in the open bucket; move them with audit close/reopen/defer.",
 			"the slug is <date>-<area>; findings live in the body as `#### H1. … **Status:** open`.",
+			"the finding header is the exact part: the code must match `[A-Z]+[0-9]+` followed by `.` — `H-1.`, `H1:`, `h1.`, `**H1.**` and a bare `1.` all parse to NOTHING. `**Status:**` may sit on its own line, and a wrong separator or status word is caught loudly; only the code token fails silently. `lint --fix` canonicalizes a drifted header, and `audit append` refuses one outright.",
 			// DERIVED, not transcribed. Finding M3 of 2026-08-17-finding-status-surface was
 			// a hand-kept status table that had silently fallen a word behind the code, and
 			// readers reasoned from the table. Building the sentence from FindingStatuses()
