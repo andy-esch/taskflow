@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -261,15 +262,69 @@ func (s *Service) EditFinding(slug, code string, edit FindingEdit, dryRun bool) 
 }
 
 // AuditLintIssues is the single audit check-set, shared by `audit lint` and the
-// top-level `lint` roster so the two cannot drift. Findings arrive already parsed
-// because the repository sweep reads each audit once (ListAuditsWithFindings),
-// while the single-audit path parses the body it just fetched.
-func AuditLintIssues(a domain.Audit, findings []domain.Finding) []domain.Issue {
-	iss := domain.LintFindings(string(a.Bucket), findings)
+// top-level `lint` roster so the two cannot drift. Findings and near-misses arrive
+// already derived because the repository sweep reads each audit once
+// (ListAuditsWithFindings), while the single-audit path derives both from the body
+// it just fetched.
+//
+// nearMisses is a separate input rather than something recomputed from findings
+// because a dropped finding is by construction ABSENT from findings — the parsed
+// set can never reveal what failed to parse into it.
+func AuditLintIssues(a domain.Audit, findings []domain.Finding, nearMisses []domain.NearMissHeader) []domain.Issue {
+	iss := domain.NearMissFindingIssues(nearMisses)
+	iss = append(iss, domain.LintFindings(string(a.Bucket), findings)...)
 	iss = append(iss, domain.MissingIDIssue(a.ID)...)             // audits get a stable id too
 	iss = append(iss, domain.IDDriftIssue(a.ID, a.FilenameID)...) // …that must match the filename
 	iss = append(iss, domain.FrontmatterBucketIssues(a)...)       // and a missing/foreign bucket flag
 	return iss
+}
+
+// FixFindingHeaders canonicalizes every near-miss finding header in the repository,
+// one guarded body write per audit. This is the repair half of the near-miss
+// contract: detection alone still ends with a human or an agent re-editing the
+// document by hand, which is the loop the tool exists to remove.
+//
+// It writes through TransformAuditBody rather than the frontmatter fixer because
+// the change is a BODY edit and must carry the audit's content CAS — FixFrontmatter
+// deliberately rewrites frontmatter only and passes the body through untouched.
+// Audits with nothing to repair are not written at all, so a clean corpus is a no-op.
+func (s *Service) FixFindingHeaders(dryRun bool) ([]domain.FixResult, error) {
+	audits, _, err := s.store.ListAuditsWithFindings()
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	var out []domain.FixResult
+	for _, a := range audits {
+		if len(a.NearMisses) == 0 {
+			continue
+		}
+		slug := a.Audit.Slug
+		changes, err := retryOnConflict(s, dryRun, func() ([]string, error) {
+			var applied []string
+			_, _, changed, err := s.store.TransformAuditBody(slug, now, dryRun, func(current string) (string, error) {
+				fixed, hits := domain.CanonicalizeFindingHeaders(current)
+				applied = applied[:0]
+				for _, h := range hits {
+					applied = append(applied, fmt.Sprintf("line %d: %q → %q", h.Line, h.Text, h.Canonical))
+				}
+				return fixed, nil
+			})
+			if err != nil || !changed {
+				return nil, err
+			}
+			return applied, nil
+		})
+		if err != nil {
+			// Report the prefix that already landed, then surface the failure — the
+			// same partial-progress contract the frontmatter fixer keeps.
+			return out, fmt.Errorf("canonicalize finding headers in %s: %w", slug, err)
+		}
+		if len(changes) > 0 {
+			out = append(out, domain.FixResult{Path: a.Audit.Path, Changes: changes})
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, error) {
@@ -278,7 +333,8 @@ func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, e
 		problems []domain.FileProblem
 	)
 	check := func(a domain.Audit, body string) {
-		if iss := AuditLintIssues(a, domain.ParseFindings(body)); len(iss) > 0 {
+		iss := AuditLintIssues(a, domain.ParseFindings(body), domain.NearMissFindingHeaders(body))
+		if len(iss) > 0 {
 			results = append(results, LintResult{Slug: a.Slug, Issues: iss})
 		}
 	}

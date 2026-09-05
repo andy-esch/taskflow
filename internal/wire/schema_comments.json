@@ -53,6 +53,7 @@
   "github.com/andy-esch/taskflow/internal/domain.Issue.Severity": "Severity is \"advisory\" for visible non-blocking debt and is omitted for\nordinary validation errors, preserving the existing wire shape.",
   "github.com/andy-esch/taskflow/internal/domain.IssueSeverity": "IssueSeverity distinguishes non-blocking migration guidance from the established default validation-error behavior.",
   "github.com/andy-esch/taskflow/internal/domain.NamedTemplate": "NamedTemplate is one body scaffold a kind offers under a name.",
+  "github.com/andy-esch/taskflow/internal/domain.NearMissHeader": "LintFindings validates an audit's parsed findings plus the bucket↔state invariant, returning one Issue per problem (Field = the finding code, or \"bucket\" for the audit-level check).",
   "github.com/andy-esch/taskflow/internal/domain.Placeholder": "Placeholder is a {{Key}} token a kind's templates may fill: the real value at create time, or Label in a placeholder preview (`template show` / `schema`).",
   "github.com/andy-esch/taskflow/internal/domain.Placeholder.Key": "the {{Key}} token, e.g. \"title\"",
   "github.com/andy-esch/taskflow/internal/domain.Placeholder.Label": "the preview label, e.g. \"\u003ctitle\u003e\"",

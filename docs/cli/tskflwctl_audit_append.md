@@ -7,7 +7,9 @@ Append a section to an audit's body (atomic; agent-facing)
 Append markdown to the end of an audit's body in one atomic, validated write —
 the scriptable counterpart to `audit edit`, e.g. to add a finding section. Content
 comes from --body, --body-file, or stdin (--body-file -); a blank line separates it
-from the existing body. Finding grammar is left to `audit lint`.
+from the existing body. A heading that reads as a finding but would parse to nothing
+is refused here, with the canonical replacement — `audit lint` and `lint --fix` cover
+drift already in the file.
 
 ```
 tskflwctl audit append <audit> [flags]

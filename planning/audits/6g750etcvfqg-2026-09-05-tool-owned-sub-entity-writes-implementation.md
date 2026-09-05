@@ -106,6 +106,79 @@ top-level `lint` gate and extracted `core.AuditLintIssues` as the shared check-s
    referencing them at all — a third instance of this bug class. Judge whether Part B's design
    generalizes to them or quietly hard-codes findings.
 
+## Part B — decisions taken during implementation
+
+Recorded as they were made, so the reviewer inherits the reasoning rather than reverse-engineering
+it from the diff. Each is a deliberate choice with a plausible alternative; all are fair game.
+
+1. **A separator dash is discarded, not preserved.** `#### BTA-01 — title` canonicalizes to
+   `#### BTA1. title`, dropping the em-dash. The first implementation kept it and produced
+   `#### BTA1. — title` with a dangling dash. **This is the only place the repair discards author
+   bytes.** The judgement is that a dash between code and title is a separator standing in for the
+   period, not title text. Attack it: a title that legitimately opens with a dash, an en-dash used
+   as a bullet, `#### H1 - - double`. Mitigation in place: the lint message shows the exact
+   replacement before `--fix` is ever run, so nothing changes silently.
+2. **The recognizer captures the title rather than slicing the line.** The first version computed
+   the title by byte offset and split a multi-byte em-dash mid-rune (`#### M2. \x94 a title`),
+   caught by a test rather than review. Any future widening must keep the capture-group form —
+   verify no byte arithmetic returns.
+3. **`AuditWithFindings` gained a `NearMisses` field** rather than carrying the raw body. Near
+   misses are derived on the same scan that parses findings, because a dropped finding is by
+   construction absent from the parsed set and no later pass over parsed findings can see it. The
+   alternative — carrying every body — was rejected as wasteful for `summarize`, which shares this
+   type. Judge whether a derived diagnostic belongs on a read-model struct, and whether the
+   single-audit path (`LintAudits`) and the sweep path can drift now that they derive it separately.
+4. **`AuditLintIssues` takes near-misses as a third parameter.** It could have recomputed them from
+   a body, but the sweep does not carry one. Confirm both call sites pass equivalent input and that
+   nothing bypasses the shared check-set.
+5. **`FixFindingHeaders` returns the durable prefix on failure.** A mid-run write error surfaces
+   after the audits already repaired, matching the frontmatter fixer's partial-progress contract.
+   Verify the prefix is accurate and that a conflict mid-sweep is retried rather than lost.
+6. **Body repairs run after the frontmatter pass** in `runLintFix`, because the frontmatter pass can
+   rename a file to heal a broken id and the body pass resolves by slug. Check the ordering holds
+   when a single run both renames a file and repairs a header inside it.
+7. **Heading depth is preserved, not normalized.** A `##### h-3:` becomes `##### H3.`, not `####`.
+   The parser accepts depths 2–6, so normalizing would be a gratuitous rewrite — but it does mean a
+   canonicalized corpus can carry mixed finding depths.
+8. **A write is refused, not auto-repaired.** `audit append` and `audit edit` reject a heading that
+   would parse to nothing, naming the canonical replacement, rather than silently rewriting what
+   the author typed. This follows the unterminated-fence guard sitting beside it in `writeBody`;
+   `lint --fix` remains the explicit opt-in for rewriting text. Challenge whether refusing is right
+   for an agent workflow, where auto-repair would save a round trip.
+9. **Only INTRODUCED drift is refused.** `IntroducedNearMissHeaders(prev, next)` diffs by header
+   text, so pre-existing drift never blocks an unrelated append or a status stamp — otherwise one
+   bad header would freeze the document. Attack the diff: duplicate identical headers (the count is
+   decremented per occurrence), a header moved rather than added, and a rename that both removes
+   and adds. The repair path (`TransformAuditBody`) is deliberately NOT covered by this guard.
+10. **An acceptance criterion was narrowed rather than met.** AC 6 originally also required lint to
+    flag an open audit with no findings and no near-misses. Measured against the live corpus that
+    rule fires on exactly one audit — this brief, legitimately empty while it waits for a reviewer —
+    and would fire on every fresh `audit new` scaffold. It was dropped as a false-positive generator
+    of the same kind this work exists to remove; the broken-vs-empty distinction is carried by the
+    near-miss rule, which names the offending line. **Reviewer: this is a scope reduction I made
+    unilaterally — overturn it if you disagree.**
+
+## Part B — where the coverage is thin
+
+Stated plainly rather than left for the reviewer to discover, because the author knows best where
+he did not look.
+
+- **`audit edit`'s guard has no test.** The append path is covered in both directions; the editor
+  path (`internal/store/edit.go`, inside `acceptEdited`) is wired but only exercised indirectly. It
+  reads the pre-edit body via a second `splitFrontmatterStrict` on `orig` — confirm that matches
+  what the editor callback actually receives, and that a broken-frontmatter edit still surfaces the
+  parse error rather than the near-miss refusal.
+- **`FixFindingHeaders` partial-progress is unverified under failure.** The happy path, dry run, and
+  idempotence are tested; a mid-sweep write failure across several drifted audits is not. The
+  durable prefix it returns on error is asserted by construction only.
+- **Retry inside the fix sweep is untested.** `FixFindingHeaders` wraps each audit in
+  `retryOnConflict`, but no test races a concurrent writer against a `--fix` run.
+- **No fuzzing of the recognizer.** `internal/domain/body_fuzz_test.go` exists as a precedent for
+  the criterion scanner; the near-miss recognizer has none. A fuzz target over heading-shaped input
+  asserting "never claims a line `ParseFindings` would accept" would be cheap and valuable.
+- **Multi-byte coverage is one case.** The em-dash regression is pinned, but CJK titles, RTL text,
+  and combining marks in a heading are untested.
+
 ## Already settled — do not re-derive
 
 Recorded so review effort goes to open questions. Challenge these only with contrary evidence.
@@ -121,6 +194,27 @@ Recorded so review effort goes to open questions. Challenge these only with cont
   `0/0`) reproduces from the hyphenated code alone.
 - **Orphan-`**Status:**` detection was rejected with evidence.** 51 unclaimed markers across 37 of
   57 audits, all legitimate instructional prose in inline backticks — a 100% false-positive rate.
+- **The recognizer's corpus measurement is now a test, not a claim.**
+  `TestNearMissFindingHeaders_LiveCorpusIsClean` walks `planning/audits/` on every run and fails
+  with the exact heading it would have corrupted; `TestNearMissFindingHeaders_DoesNotShadowCanonicalFindings`
+  asserts `--fix` is a no-op over the same tree. Re-derive independently if you like, but a
+  regression here cannot land silently.
+
+## Autonomy disclosure
+
+This slice was implemented with unusually little supervision, so the things a reviewer would
+normally infer from a conversation are recorded instead:
+
+- Every acceptance criterion was ticked by the author. **AC 6 was narrowed before being ticked**
+  (decision 10 above) — that is the one place the delivered scope is smaller than the agreed scope.
+- Three shipped behaviours change existing output or refuse previously-accepted input, and each
+  deserves an explicit yes/no: the `no findings` progress cell (porcelain change), the
+  `audit append`/`audit edit` refusal (previously-accepted writes now fail), and the separator-dash
+  discard under `--fix` (the only place author bytes are dropped).
+- The corpus measurements quoted throughout (58 audits, 426 findings, 51 orphan markers, 116
+  false positives for the rejected pattern) were taken by the author against the live tree. The
+  first two are pinned as tests; the last two are not, and are the ones to re-derive if any of the
+  design rests on them for you.
 
 ## Evidence floor
 

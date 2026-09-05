@@ -203,6 +203,12 @@ type EpicStore interface {
 type AuditWithFindings struct {
 	Audit    domain.Audit
 	Findings []domain.Finding
+	// NearMisses are headings that read as findings but do not parse as one, so
+	// they contribute NOTHING to Findings above. Derived on the same scan for the
+	// same reason Findings is: a dropped finding is invisible to any later pass
+	// over the parsed set, and re-reading every audit to look for it would undo
+	// the one-read contract this type exists to keep.
+	NearMisses []domain.NearMissHeader
 }
 
 // TaskWithBody is a task plus its markdown body, kept together by

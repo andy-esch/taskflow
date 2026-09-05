@@ -630,6 +630,23 @@ func EpicShowHuman(w io.Writer, st Style, es core.EpicSummary, tasks []domain.Ta
 // which is the point: the marker and the percent agree. detail=true (single-audit views) additionally shows the routine
 // "(N open)" while findings remain; list rows omit that to stay scannable. Returns
 // "" (no leading space) when there is nothing to note.
+// auditProgressCell is the audit progress cell shared by `audit list` and
+// `audit show`, so the two surfaces cannot drift.
+//
+// An audit with no findings reads as an explicit "no findings" rather than
+// "░░░░░░░░ 0% settled 0/0", which invited the reader to see a real audit making no
+// progress. It is a percentage of nothing: an empty bar and a 0% that can never
+// move say strictly less than the words do. Whether the audit is empty on purpose
+// or because its headers failed to parse is not this cell's job to answer — the
+// near-miss lint rule reports that loudly, and by name.
+func auditProgressCell(st Style, a domain.Audit, width int, gap string) string {
+	if a.Findings == 0 {
+		return st.Dim("no findings")
+	}
+	bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, width)
+	return fmt.Sprintf("%s %s%s%s", bar, st.AuditPercent(a.Percent()), gap, theme.Counts(a.Resolved(), a.Findings))
+}
+
 func auditStateNote(st Style, a domain.Audit, detail bool) string {
 	switch {
 	case a.ReadyToClose():
@@ -648,8 +665,7 @@ func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
 	}
 	rows := make([][]string, 0, len(audits))
 	for _, a := range audits {
-		bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 8)
-		progress := fmt.Sprintf("%s %s %s", bar, st.AuditPercent(a.Percent()), theme.Counts(a.Resolved(), a.Findings))
+		progress := auditProgressCell(st, a, 8, " ")
 		if note := auditStateNote(st, a, false); note != "" {
 			progress += "  " + note
 		}
@@ -753,8 +769,7 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Fin
 	if a.Updated != "" {
 		field("updated", a.Updated)
 	}
-	bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10)
-	progress := fmt.Sprintf("%s %s  %s", bar, st.AuditPercent(a.Percent()), theme.Counts(a.Resolved(), a.Findings))
+	progress := auditProgressCell(st, a, 10, "  ")
 	if note := auditStateNote(st, a, true); note != "" {
 		progress += "  " + note
 	}

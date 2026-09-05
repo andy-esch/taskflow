@@ -555,7 +555,9 @@ func newAuditAppendCmd(app *App) *cobra.Command {
 		Long: "Append markdown to the end of an audit's body in one atomic, validated write —\n" +
 			"the scriptable counterpart to `audit edit`, e.g. to add a finding section. Content\n" +
 			"comes from --body, --body-file, or stdin (--body-file -); a blank line separates it\n" +
-			"from the existing body. Finding grammar is left to `audit lint`.",
+			"from the existing body. A heading that reads as a finding but would parse to nothing\n" +
+			"is refused here, with the canonical replacement — `audit lint` and `lint --fix` cover\n" +
+			"drift already in the file.",
 		// A heredoc leads: findings quote percentages and code, and printf reads a
 		// bare % as a format verb, truncating the write at the first one.
 		Example:           "  tskflwctl audit append my-audit --body '#### H1. Title  · **Status:** open'\n  tskflwctl audit append my-audit --body-file - <<'EOF'\n#### M3. Cache hit rate fell to 40% · **Status:** open\nEOF\n  cat findings.md | tskflwctl audit append my-audit --body-file -",

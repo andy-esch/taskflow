@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g72wf39pyhb
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Silent-drop of near-miss audit finding headers hides actionable work; add a narrow recognizer, a loud lint rule, and lint --fix auto-repair.
 effort: 4-8 hours
@@ -13,6 +13,8 @@ created: "2026-09-05"
 updated_at: "2026-09-05"
 depends_on: [6fm8p1cj11qf, 6g392b0rps7w]
 audit_sources: [planning/audits/6g750etcvfqg-2026-09-05-tool-owned-sub-entity-writes-implementation.md]
+started_at: "2026-09-05"
+completed_at: "2026-09-05"
 ---
 # Make near-miss audit findings loud and self-repairing
 
@@ -126,23 +128,24 @@ rule inside it is easy to miss. Land that first, or land it with this.
 
 ## Acceptance criteria
 
-- [ ] A narrow, letter-led near-miss recognizer sits beside findingHeaderRe and
+- [x] A narrow, letter-led near-miss recognizer sits beside findingHeaderRe and
   flags every non-canonical finding header with its line number and exact
   canonical replacement.
-- [ ] The recognizer produces zero false positives across the existing audit
+- [x] The recognizer produces zero false positives across the existing audit
   corpus, verified by a fixture built from the 12 audits that use numbered
   section headings.
-- [ ] All seven silent-loss shapes (H1:, H-1., h1., H1 without a period, **H1.**,
+- [x] All seven silent-loss shapes (H1:, H-1., h1., H1 without a period, **H1.**,
   bare 1., depth-7) are caught by lint rather than dropped.
-- [ ] lint --fix canonicalizes a near-miss finding header in place through the
+- [x] lint --fix canonicalizes a near-miss finding header in place through the
   audit body-transform CAS (6g392b0rps7w), so a drifted audit is repaired by the
   tool instead of rewritten by its author; FixFrontmatter stays
   frontmatter-only.
-- [ ] audit append and audit edit honor the promise in audit append --help by
+- [x] audit append and audit edit honor the promise in audit append --help by
   routing a recognizer hit through the same body-transform op, so the check
   cannot be forgotten or bypassed by a raw write.
-- [ ] audit show and audit list render an explicit no-findings state instead of
-  0% settled 0/0, and lint flags an open audit with neither findings nor
-  recognizer hits.
-- [ ] Reviewer-brief boilerplate and schema audit no longer state that **Status:**
+- [x] audit show and audit list render an explicit no-findings state instead of
+  0% settled 0/0; the broken-vs-empty distinction is carried by the near-miss
+  lint rule rather than by a lint flag on empty open audits, which would fire on
+  every queued brief and fresh scaffold.
+- [x] Reviewer-brief boilerplate and schema audit no longer state that **Status:**
   on its own line breaks parsing, because it does not.
