@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6fm8p1cj11qf
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Top-level `tskflwctl lint` checks tasks + epics but not audits (audit checks live only behind `audit lint`); fold audit lint into the lint roster so the hygiene gate covers all three entities.
 effort: Unknown
@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [lint, audit, core]
 created: "2026-07-09"
+updated_at: "2026-09-05"
+started_at: "2026-09-05"
+completed_at: "2026-09-05"
 ---
 # Fold audits into the top-level `lint` command
 
@@ -60,13 +63,13 @@ run reports tasks + epics + audits:
 
 ## Acceptance criteria
 
-- [ ] `tskflwctl lint` (no subcommand) reports audit issues — bad/missing bucket,
+- [x] `tskflwctl lint` (no subcommand) reports audit issues — bad/missing bucket,
       missing/drifted audit id, and finding-level (status vocab, bucket↔state) —
       in the same pass as tasks and epics.
-- [ ] `lint --json` includes audit results/problems in the envelope.
-- [ ] Success message no longer claims only "tasks and epics".
-- [ ] `audit lint` behavior is unchanged; no double-reporting when both are run.
-- [ ] A test covers an audit with a frontmatter defect being caught by top-level `lint`.
+- [x] `lint --json` includes audit results/problems in the envelope.
+- [x] Success message no longer claims only "tasks and epics".
+- [x] `audit lint` behavior is unchanged; no double-reporting when both are run.
+- [x] A test covers an audit with a frontmatter defect being caught by top-level `lint`.
 
 ## Out of scope / deferred
 
