@@ -1260,6 +1260,33 @@ unreadable-source revisions that a safe editor must preserve and target. Product
 requires an adapter-neutral, lossless source-declaration projection beneath `TaskGraph`; this is a
 repair foundation, not a reason to replace the owned DAG algorithms with a graph package.
 
+The implemented foundation retains every readable physical task record, including duplicate-ID
+shadows, beside the semantic representative map and preserves the complete unreadable-record set.
+Its public core vocabulary names a physical source by optional stable ID, slug, and opaque location;
+then names the graph-owned field, verbatim value, and zero-based occurrence among equal values.
+`SourceDeclarations` is the raw declaration multiset, `CanonicalDependencies` is the deduplicated
+stable-ID value set declared by canonical `depends_on`, and `Prerequisites` is the fail-closed
+behavior view: it retains every canonical literal, including invalid or unresolved evidence, and
+unions safely resolved legacy constraints. A declaration carries a projected edge only when its
+uniquely attributable representative record actually contributes that edge to the semantic graph;
+duplicate-ID shadows remain diagnosable source evidence without injecting canonical or legacy
+behavior. These views are deterministic, immutable, and adapter-neutral. Future repair code must
+choose the view explicitly rather than reconstructing source intent from semantic edges.
+
+The pure source simulator accepts only declaration drops, value deduplication, and present-but-empty
+legacy-key removal. A last-value drop preserves the now-empty legacy key unless that separate cleanup
+is selected, including when both operations share one batch. It clones the full readable source set,
+retains unreadable diagnostics and their private revisions, changes only selected graph-owned
+declarations, and clears revision authority on any prospectively changed record. `dedupe` means retain
+exactly one matching value, making retries independent of occurrence renumbering;
+occurrence-addressed `drop` remains an explicit operator choice. Whole-snapshot CAS now compares
+every readable physical record, not only one representative per stable ID. Existing
+representative-map graph reconstruction remains valid only behind ordinary mutation's healthy-source
+precondition; it is marked source-incomplete, rejects repair-oriented queries and simulation, and is
+forbidden for broken-graph repair. The simulator intentionally treats missing selections as
+convergent no-ops; the downstream repair planner and materializer own per-operation outcomes and
+receipts.
+
 `task depend repair` is a separate mutation capability and the only supported command family that
 may begin from `GraphBroken`. Repair is removal-only, source-declaration-addressed, guarded by the
 repository lock plus whole-snapshot/per-file CAS, and validated by separate progress and

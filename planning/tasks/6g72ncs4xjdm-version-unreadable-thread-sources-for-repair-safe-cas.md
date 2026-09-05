@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g72ncs4xjdm
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Make Thread snapshot comparison detect concurrent content changes in Thread files that remain unreadable.
 effort: 1 day
@@ -14,6 +14,7 @@ depends_on: [6g721tvf4crh]
 updated_at: "2026-09-05"
 started_at: "2026-09-05"
 audit_sources: [planning/audits/6g73ymfrj67y-2026-09-05-thread-source-revision-cas-implementation-claude.md, planning/audits/6g73ymg15x2e-2026-09-05-thread-source-revision-cas-implementation-antigravity.md]
+completed_at: "2026-09-05"
 ---
 
 # Version unreadable Thread sources for repair-safe CAS
