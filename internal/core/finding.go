@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -276,6 +277,54 @@ func AuditLintIssues(a domain.Audit, findings []domain.Finding, nearMisses []dom
 	iss = append(iss, domain.IDDriftIssue(a.ID, a.FilenameID)...) // …that must match the filename
 	iss = append(iss, domain.FrontmatterBucketIssues(a)...)       // and a missing/foreign bucket flag
 	return iss
+}
+
+// FixFindingHeaders canonicalizes every near-miss finding header in the repository,
+// one guarded body write per audit. This is the repair half of the near-miss
+// contract: detection alone still ends with a human or an agent re-editing the
+// document by hand, which is the loop the tool exists to remove.
+//
+// It writes through TransformAuditBody rather than the frontmatter fixer because
+// the change is a BODY edit and must carry the audit's content CAS — FixFrontmatter
+// deliberately rewrites frontmatter only and passes the body through untouched.
+// Audits with nothing to repair are not written at all, so a clean corpus is a no-op.
+func (s *Service) FixFindingHeaders(dryRun bool) ([]domain.FixResult, error) {
+	audits, _, err := s.store.ListAuditsWithFindings()
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	var out []domain.FixResult
+	for _, a := range audits {
+		if len(a.NearMisses) == 0 {
+			continue
+		}
+		slug := a.Audit.Slug
+		changes, err := retryOnConflict(s, dryRun, func() ([]string, error) {
+			var applied []string
+			_, _, changed, err := s.store.TransformAuditBody(slug, now, dryRun, func(current string) (string, error) {
+				fixed, hits := domain.CanonicalizeFindingHeaders(current)
+				applied = applied[:0]
+				for _, h := range hits {
+					applied = append(applied, fmt.Sprintf("line %d: %q → %q", h.Line, h.Text, h.Canonical))
+				}
+				return fixed, nil
+			})
+			if err != nil || !changed {
+				return nil, err
+			}
+			return applied, nil
+		})
+		if err != nil {
+			// Report the prefix that already landed, then surface the failure — the
+			// same partial-progress contract the frontmatter fixer keeps.
+			return out, fmt.Errorf("canonicalize finding headers in %s: %w", slug, err)
+		}
+		if len(changes) > 0 {
+			out = append(out, domain.FixResult{Path: a.Audit.Path, Changes: changes})
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, error) {

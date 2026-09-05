@@ -76,6 +76,13 @@ func runLint(app *App, links bool) error {
 
 func runLintFix(app *App, dryRun bool) error {
 	results, err := app.Fixer.FixFrontmatter(dryRun)
+	// Body repairs run after frontmatter: the frontmatter pass can rename a file to
+	// heal a broken id, and the body pass resolves audits by slug.
+	if err == nil {
+		var headerFixes []domain.FixResult
+		headerFixes, err = app.Svc.FixFindingHeaders(dryRun)
+		results = append(results, headerFixes...)
+	}
 	if err != nil {
 		// A mid-run write failure still repaired earlier files: report that partial
 		// progress before surfacing the error, so the user can reconcile what landed.
