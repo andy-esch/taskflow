@@ -121,6 +121,27 @@ func TestMutateTaskGraphDryRunValidatesWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestMaterializeTaskGraphPlanReportsTaskAbsentFromSnapshotAsNotFound(t *testing.T) {
+	root := t.TempDir()
+	writeGraphMutationTask(t, root, "alpha", domain.StatusReadyToStart, nil, "")
+	graph, err := core.LoadTaskGraph(NewFS(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make the planned task resolvable only after the snapshot. The materializer
+	// must attribute the stale plan to the absent snapshot entity, not misreport
+	// its empty snapshot path as a concurrent path change.
+	newcomerID := testutil.TaskID("newcomer")
+	writeGraphMutationTask(t, root, "newcomer", domain.StatusReadyToStart, nil, "")
+	_, err = NewFS(root).materializeTaskGraphPlan(graph, core.TaskGraphMutationPlan{
+		TaskWrites: []core.TaskDependencyWrite{{TaskID: newcomerID}},
+	}, graphMutationNow)
+	if !errors.Is(err, domain.ErrNotFound) || errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("absent snapshot task error = %v, want ErrNotFound only", err)
+	}
+}
+
 func TestMutateTaskGraphConcurrentOppositeEdgesCannotCommitCycle(t *testing.T) {
 	root := t.TempDir()
 	aID, bID := testutil.TaskID("alpha"), testutil.TaskID("beta")
