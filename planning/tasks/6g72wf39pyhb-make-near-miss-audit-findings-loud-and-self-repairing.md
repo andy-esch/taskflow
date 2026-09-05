@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g72wf39pyhb
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Silent-drop of near-miss audit finding headers hides actionable work; add a narrow recognizer, a loud lint rule, and lint --fix auto-repair.
 effort: 4-8 hours
@@ -14,6 +14,7 @@ updated_at: "2026-09-05"
 depends_on: [6fm8p1cj11qf, 6g392b0rps7w]
 audit_sources: [planning/audits/6g750etcvfqg-2026-09-05-tool-owned-sub-entity-writes-implementation.md]
 started_at: "2026-09-05"
+completed_at: "2026-09-05"
 ---
 # Make near-miss audit findings loud and self-repairing
 

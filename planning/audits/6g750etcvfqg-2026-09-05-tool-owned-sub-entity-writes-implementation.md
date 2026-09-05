@@ -158,6 +158,27 @@ it from the diff. Each is a deliberate choice with a plausible alternative; all 
     near-miss rule, which names the offending line. **Reviewer: this is a scope reduction I made
     unilaterally — overturn it if you disagree.**
 
+## Part B — where the coverage is thin
+
+Stated plainly rather than left for the reviewer to discover, because the author knows best where
+he did not look.
+
+- **`audit edit`'s guard has no test.** The append path is covered in both directions; the editor
+  path (`internal/store/edit.go`, inside `acceptEdited`) is wired but only exercised indirectly. It
+  reads the pre-edit body via a second `splitFrontmatterStrict` on `orig` — confirm that matches
+  what the editor callback actually receives, and that a broken-frontmatter edit still surfaces the
+  parse error rather than the near-miss refusal.
+- **`FixFindingHeaders` partial-progress is unverified under failure.** The happy path, dry run, and
+  idempotence are tested; a mid-sweep write failure across several drifted audits is not. The
+  durable prefix it returns on error is asserted by construction only.
+- **Retry inside the fix sweep is untested.** `FixFindingHeaders` wraps each audit in
+  `retryOnConflict`, but no test races a concurrent writer against a `--fix` run.
+- **No fuzzing of the recognizer.** `internal/domain/body_fuzz_test.go` exists as a precedent for
+  the criterion scanner; the near-miss recognizer has none. A fuzz target over heading-shaped input
+  asserting "never claims a line `ParseFindings` would accept" would be cheap and valuable.
+- **Multi-byte coverage is one case.** The em-dash regression is pinned, but CJK titles, RTL text,
+  and combining marks in a heading are untested.
+
 ## Already settled — do not re-derive
 
 Recorded so review effort goes to open questions. Challenge these only with contrary evidence.
@@ -173,6 +194,27 @@ Recorded so review effort goes to open questions. Challenge these only with cont
   `0/0`) reproduces from the hyphenated code alone.
 - **Orphan-`**Status:**` detection was rejected with evidence.** 51 unclaimed markers across 37 of
   57 audits, all legitimate instructional prose in inline backticks — a 100% false-positive rate.
+- **The recognizer's corpus measurement is now a test, not a claim.**
+  `TestNearMissFindingHeaders_LiveCorpusIsClean` walks `planning/audits/` on every run and fails
+  with the exact heading it would have corrupted; `TestNearMissFindingHeaders_DoesNotShadowCanonicalFindings`
+  asserts `--fix` is a no-op over the same tree. Re-derive independently if you like, but a
+  regression here cannot land silently.
+
+## Autonomy disclosure
+
+This slice was implemented with unusually little supervision, so the things a reviewer would
+normally infer from a conversation are recorded instead:
+
+- Every acceptance criterion was ticked by the author. **AC 6 was narrowed before being ticked**
+  (decision 10 above) — that is the one place the delivered scope is smaller than the agreed scope.
+- Three shipped behaviours change existing output or refuse previously-accepted input, and each
+  deserves an explicit yes/no: the `no findings` progress cell (porcelain change), the
+  `audit append`/`audit edit` refusal (previously-accepted writes now fail), and the separator-dash
+  discard under `--fix` (the only place author bytes are dropped).
+- The corpus measurements quoted throughout (58 audits, 426 findings, 51 orphan markers, 116
+  false positives for the rejected pattern) were taken by the author against the live tree. The
+  first two are pinned as tests; the last two are not, and are the ones to re-derive if any of the
+  design rests on them for you.
 
 ## Evidence floor
 
