@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g392b0rps7w
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Give audit finding edits a store-owned body-transform CAS and bounded retry path, replacing their remaining interactive-editor workaround without risking concurrent audit writes.
 effort: S
@@ -10,8 +10,10 @@ priority: medium
 autonomy_level: 3
 tags: [store, core, occ, concurrency]
 created: "2026-08-24"
-updated_at: "2026-09-04"
+updated_at: "2026-09-05"
 audit_sources: [planning/audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md]
+started_at: "2026-09-05"
+completed_at: "2026-09-05"
 ---
 # Give finding-status writes a non-interactive CAS path
 
@@ -25,11 +27,11 @@ The earlier premise that `EditAudit` lacked content OCC is obsolete. It hashes t
 
 ## Acceptance criteria
 
-- [ ] The audit-store port exposes a non-interactive body-transform operation whose input is derived from the exact audit snapshot protected by its content CAS.
-- [ ] `core.EditFinding` uses that operation inside `retryOnConflict`, and its interactive-loop `attempted` closure flag disappears.
-- [ ] A race between `audit append` and `audit finding` preserves both changes; transient conflicts are reapplied, while exhaustion still surfaces `domain.ErrConflict` (exit 14).
-- [ ] `--dry-run` validates and computes without locking or writing, and an already-applied finding edit remains a no-op.
-- [ ] Focused store/core tests pin callback errors, no-op behavior, CAS rejection, retry, and concurrent append preservation.
+- [x] The audit-store port exposes a non-interactive body-transform operation whose input is derived from the exact audit snapshot protected by its content CAS.
+- [x] `core.EditFinding` uses that operation inside `retryOnConflict`, and its interactive-loop `attempted` closure flag disappears.
+- [x] A race between `audit append` and `audit finding` preserves both changes; transient conflicts are reapplied, while exhaustion still surfaces `domain.ErrConflict` (exit 14).
+- [x] `--dry-run` validates and computes without locking or writing, and an already-applied finding edit remains a no-op.
+- [x] Focused store/core tests pin callback errors, no-op behavior, CAS rejection, retry, and concurrent append preservation.
 
 ## Out of scope
 
