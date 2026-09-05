@@ -39,6 +39,12 @@ type TaskStore interface {
 	// updated_at. The agent face of body editing, beside EditTask's editor. Returns
 	// the reloaded task and the resulting body (so a --json caller can echo it).
 	EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error)
+	// TransformTaskBody is the read-modify-write counterpart to EditBody. The store
+	// passes transform the body from the exact source snapshot its content CAS
+	// protects, so a semantic edit can be safely re-applied after contention rather
+	// than replacing a concurrent write with bytes derived from an earlier read.
+	// transform is pure application logic and must not call back into the Store.
+	TransformTaskBody(slug string, now time.Time, dryRun bool, transform func(current string) (string, error)) (domain.Task, string, bool, error)
 	// RenameTask re-titles a task: a new slug from newTitle, the file renamed (id kept),
 	// the body H1 rewritten, and every inbound relative-path markdown link across the tree
 	// repointed to the new filename. Returns the reloaded task and the count of links

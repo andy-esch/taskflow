@@ -1,10 +1,13 @@
 package store
 
 import (
+	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
@@ -155,5 +158,92 @@ func TestEditBody_EchoesOnDiskBody(t *testing.T) {
 	// returns), not the LF intermediate.
 	if lone := strings.Count(gotBody, "\n") - strings.Count(gotBody, "\r\n"); lone != 0 || !strings.Contains(gotBody, "\r\n") {
 		t.Errorf("echoed body should use the file's CRLF ending (no lone LF), got %q", gotBody)
+	}
+}
+
+func TestTransformTaskBodyNoOpDoesNotWrite(t *testing.T) {
+	fs, path := editRepo(t)
+	before := readFile(t, path)
+	task, body, changed, err := fs.TransformTaskBody("edit-me", bodyNow, false, func(current string) (string, error) {
+		return current, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed || task.Updated != "" || !strings.Contains(body, "body") {
+		t.Fatalf("no-op result = task %+v changed %v body %q", task, changed, body)
+	}
+	if got := readFile(t, path); got != before {
+		t.Fatalf("no-op transform rewrote the task:\n%s", got)
+	}
+}
+
+func TestTransformTaskBodyCallbackErrorDoesNotWrite(t *testing.T) {
+	fs, path := editRepo(t)
+	before := readFile(t, path)
+	want := errors.New("transform failed")
+	_, _, changed, err := fs.TransformTaskBody("edit-me", bodyNow, false, func(string) (string, error) {
+		return "", want
+	})
+	if !errors.Is(err, want) || changed {
+		t.Fatalf("callback error = %v changed %v", err, changed)
+	}
+	if got := readFile(t, path); got != before {
+		t.Fatalf("failed transform rewrote the task:\n%s", got)
+	}
+}
+
+func TestTransformTaskBodyDryRunComputesWithoutWriting(t *testing.T) {
+	fs, path := editRepo(t)
+	before := readFile(t, path)
+	task, body, changed, err := fs.TransformTaskBody("edit-me", bodyNow, true, func(current string) (string, error) {
+		return strings.Replace(current, "body", "previewed", 1), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed || task.Updated != "2026-06-20" || !strings.Contains(body, "previewed") {
+		t.Fatalf("dry-run result = task %+v changed %v body %q", task, changed, body)
+	}
+	if got := readFile(t, path); got != before {
+		t.Fatalf("dry-run transform rewrote the task:\n%s", got)
+	}
+}
+
+func TestAcceptanceCriterionTransformRetriesWithoutLosingConcurrentBodyWrite(t *testing.T) {
+	root := t.TempDir()
+	seed := "---\nstatus: ready-to-start\ndescription: original\ntier: 2\n---\n# Title\n\n## Acceptance criteria\n\n- [ ] preserve concurrent work\n"
+	writeTask(t, root, "ready-to-start", "criterion-race.md", seed)
+	path, _ := testutil.TaskFixture(root, "ready-to-start", "criterion-race.md", seed)
+
+	injected := false
+	testHookBeforeBodyWrite = func() {
+		if injected {
+			return
+		}
+		injected = true
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content = append(content, []byte("\n## Progress\n\nconcurrent note\n")...)
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { testHookBeforeBodyWrite = nil })
+
+	svc := core.NewService(NewFS(root), core.WithRetry(1, func(int) {}))
+	_, body, changed, err := svc.SetAcceptanceCriterion("criterion-race", 1, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed || !injected || !strings.Contains(body, "- [x] preserve concurrent work") ||
+		!strings.Contains(body, "concurrent note") {
+		t.Fatalf("criterion race result = changed %v injected %v body:\n%s", changed, injected, body)
+	}
+	got := readFile(t, path)
+	if !strings.Contains(got, "- [x] preserve concurrent work") || !strings.Contains(got, "concurrent note") {
+		t.Fatalf("criterion edit lost one writer:\n%s", got)
 	}
 }

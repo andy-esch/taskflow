@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ type conflictStore struct {
 	failErr           error // if non-nil, returned instead of ErrConflict (non-conflict passthrough)
 	setCalls          int
 	bodyCalls         int
+	transformCalls    int
 	auditMoveCalls    int
 	auditBodyCalls    int
 	researchSetCalls  int
@@ -40,6 +42,17 @@ func (c *conflictStore) SetFields(slug string, _ map[string]any, _ bool) (domain
 func (c *conflictStore) EditBody(slug, text string, _ bool, _ time.Time, _ bool) (domain.Task, string, error) {
 	c.bodyCalls++
 	return domain.Task{Slug: slug}, text, c.errFor(c.bodyCalls)
+}
+func (c *conflictStore) TransformTaskBody(slug string, _ time.Time, _ bool, transform func(string) (string, error)) (domain.Task, string, bool, error) {
+	c.transformCalls++
+	body, err := transform("# Task\n\n## Acceptance criteria\n\n- [ ] works\n")
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	if err := c.errFor(c.transformCalls); err != nil {
+		return domain.Task{}, "", false, err
+	}
+	return domain.Task{Slug: slug}, body, true, nil
 }
 func (c *conflictStore) MoveAudit(slug string, _ domain.AuditBucket, _ bool) (domain.Audit, error) {
 	c.auditMoveCalls++
@@ -119,6 +132,43 @@ func TestRetry_AppendBodyRetries(t *testing.T) {
 	}
 	if cs.bodyCalls != 2 {
 		t.Errorf("want 2 store calls (1 + 1 retry), got %d", cs.bodyCalls)
+	}
+}
+
+func TestRetry_SetAcceptanceCriterionReappliesAfterConflict(t *testing.T) {
+	cs := &conflictStore{conflicts: 2}
+	svc := NewService(cs, WithRetry(4, noopSleep))
+	if _, body, changed, err := svc.SetAcceptanceCriterion("t", 1, true, false); err != nil {
+		t.Fatalf("criterion edit should heal transient conflicts: %v", err)
+	} else if !changed || !strings.Contains(body, "- [x] works") {
+		t.Fatalf("criterion edit result = changed %v body %q", changed, body)
+	}
+	if cs.transformCalls != 3 {
+		t.Errorf("want 3 transformed snapshots (1 + 2 retries), got %d", cs.transformCalls)
+	}
+}
+
+func TestRetry_SetAcceptanceCriterionExhaustionSurfacesConflict(t *testing.T) {
+	cs := &conflictStore{conflicts: 100}
+	svc := NewService(cs, WithRetry(2, noopSleep))
+	_, _, _, err := svc.SetAcceptanceCriterion("t", 1, true, false)
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("persistent criterion contention must surface ErrConflict, got %v", err)
+	}
+	if cs.transformCalls != 3 {
+		t.Errorf("want 3 transformed snapshots (1 + 2 retries), got %d", cs.transformCalls)
+	}
+}
+
+func TestRetry_SetAcceptanceCriterionDryRunIsNotRetried(t *testing.T) {
+	cs := &conflictStore{conflicts: 100}
+	svc := NewService(cs, WithRetry(4, noopSleep))
+	_, _, _, err := svc.SetAcceptanceCriterion("t", 1, true, true)
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("a conflicting criterion dry-run should return the conflict, got %v", err)
+	}
+	if cs.transformCalls != 1 {
+		t.Errorf("a criterion dry-run must be attempted once, got %d calls", cs.transformCalls)
 	}
 }
 

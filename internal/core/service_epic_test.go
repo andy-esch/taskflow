@@ -37,6 +37,9 @@ func (nopStore) EditTask(string, time.Time, func(string, error) (string, error))
 func (nopStore) EditBody(string, string, bool, time.Time, bool) (domain.Task, string, error) {
 	return domain.Task{}, "", nil
 }
+func (nopStore) TransformTaskBody(string, time.Time, bool, func(string) (string, error)) (domain.Task, string, bool, error) {
+	return domain.Task{}, "", false, nil
+}
 func (nopStore) RenameTask(string, string, bool) (domain.Task, int, error) {
 	return domain.Task{}, 0, nil
 }
