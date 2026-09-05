@@ -107,7 +107,7 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative Threads before lifecycle write: %w", err)
 	}
-	if !graph.SameSourceSnapshot(currentGraph) || !sameThreadSourceSnapshot(threads, threadProblems, currentThreads, currentThreadProblems) {
+	if err := verifyTaskGraphSourceSnapshot(graph, currentGraph); err != nil || !sameThreadSourceSnapshot(threads, threadProblems, currentThreads, currentThreadProblems) {
 		return result, fmt.Errorf("repository task graph changed or Threads changed while authorizing lifecycle transition; retry: %w", domain.ErrConflict)
 	}
 

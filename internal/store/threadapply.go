@@ -120,7 +120,7 @@ func (s *FS) MutateThreadApply(now time.Time, dryRun bool, planner core.ThreadAp
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative Threads before Thread apply: %w", err)
 	}
-	if !graph.SameSourceSnapshot(currentGraph) || !sameThreadSourceSnapshot(threads, problems, currentThreads, currentProblems) {
+	if err := verifyTaskGraphSourceSnapshot(graph, currentGraph); err != nil || !sameThreadSourceSnapshot(threads, problems, currentThreads, currentProblems) {
 		return result, fmt.Errorf("repository tasks or Threads changed while preparing Thread apply; retry: %w", domain.ErrConflict)
 	}
 

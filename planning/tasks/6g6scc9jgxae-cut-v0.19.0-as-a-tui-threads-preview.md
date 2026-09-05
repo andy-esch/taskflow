@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g6scc9jgxae
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Release the first TUI Thread workflow after graph-health reporting and Atlas refresh hardening pass clean-main dogfood.
 effort: S
@@ -10,9 +10,10 @@ priority: medium
 autonomy_level: 4
 tags: [threads, release, tui, dogfood]
 created: "2026-09-04"
-updated_at: "2026-09-04"
+updated_at: "2026-09-05"
 depends_on: [6g63db3sdfrh, 6g697mp8s4tx]
 started_at: "2026-09-04"
+completed_at: "2026-09-05"
 ---
 
 # Cut v0.19.0 as a TUI Threads preview
@@ -49,7 +50,7 @@ stable Thread list/detail navigation and a compact wave view backed by the same 
 - [x] Release notes explain the CLI and TUI capabilities as one workflow and identify guarded graph
       repair, portable multi-entity diagnostics, and a spatial graph view as post-release work—not
       silently shipped or promised stable interfaces.
-- [ ] The v0.19.0 tag and published artifacts identify the same clean-main commit and expected
+- [x] The v0.19.0 tag and published artifacts identify the same clean-main commit and expected
       checksums.
 
 ## Stress tests

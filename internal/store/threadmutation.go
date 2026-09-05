@@ -89,7 +89,7 @@ func (s *FS) MutateThread(now time.Time, dryRun bool, planner core.ThreadMutatio
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative Threads before Thread write: %w", err)
 	}
-	if !graph.SameSourceSnapshot(currentGraph) || !sameThreadSourceSnapshot(threads, problems, currentThreads, currentProblems) {
+	if err := verifyTaskGraphSourceSnapshot(graph, currentGraph); err != nil || !sameThreadSourceSnapshot(threads, problems, currentThreads, currentProblems) {
 		return result, fmt.Errorf("repository tasks or Threads changed while authorizing Thread mutation; retry: %w", domain.ErrConflict)
 	}
 

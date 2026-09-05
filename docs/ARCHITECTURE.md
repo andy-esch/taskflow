@@ -217,7 +217,10 @@ adapter capabilities rather than leaked persistence.
   Cobra, Bubble Tea, HTTP, filesystem, or graph-library type enters core or wire contracts. The
   sources return neutral `TaskGraphRead` and `ThreadRead` snapshots: unreadable records carry
   optional stable identity directly, while filesystem adapters translate `FileProblem` paths once
-  at their boundary. Core never parses an opaque source location for identity. `ThreadReadProblem`
+  at their boundary. An unreadable task record also carries an opaque, non-wire source revision so
+  whole-snapshot CAS can detect changed bytes even when decoding fails with the same message; core
+  compares but never interprets that token. Core never parses an opaque source location for
+  identity. `ThreadReadProblem`
   keeps location optional so a remote adapter does not invent a Markdown path; Thread list wire
   output maps that contract explicitly rather than serializing persistence types.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
@@ -263,8 +266,9 @@ adapter capabilities rather than leaked persistence.
   semantic recovery data (stable-ID sorting is not generally prefix-safe); each replacement
   is atomic, every supplied prefix is validated as non-broken before the first write, and an
   error result identifies the durable applied prefix. A private byte-version on each scanned
-  task supports a whole-snapshot CAS before application plus a per-target CAS immediately
-  before each replacement; planner-facing task projections never expose those tokens.
+  readable task and unreadable task source supports a whole-snapshot CAS before application plus a
+  per-target CAS immediately before each replacement; planner-facing task projections, ordinary
+  file diagnostics, and wire contracts never expose those tokens.
   Dependency writes stamp `updated_at` from the caller-injected clock only when graph-owned
   fields actually change. A dry run holds the same exclusive guard for an authoritative
   preview but, because it writes nothing, makes no CAS durability claim about later apply.

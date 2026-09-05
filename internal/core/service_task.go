@@ -98,16 +98,21 @@ func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
 // TaskGraphLoadProblem is an unreadable task record supplied to the strict graph.
 // TaskID/TaskSlug carry neutral record identity; Path is optional repair-location
 // context for filesystem adapters and is never parsed by the graph analyzer.
+// SourceVersion is an opaque adapter-owned revision of the exact source that
+// produced the problem. Core only compares it during whole-snapshot CAS; it does
+// not parse or publish it.
 type TaskGraphLoadProblem struct {
-	TaskID   string
-	TaskSlug string
-	Path     string
-	Message  string
+	TaskID        string
+	TaskSlug      string
+	Path          string
+	Message       string
+	SourceVersion string `json:"-" yaml:"-"`
 }
 
-// TaskGraphRead is one adapter-owned task-record snapshot. Keeping records and
-// load problems together leaves room for a future source revision token without
-// making the analyzer or primary adapters storage-aware.
+// TaskGraphRead is one adapter-owned task-record snapshot. Readable records and
+// unreadable load problems both carry opaque source revisions, allowing guarded
+// stores to compare the complete source set without making the analyzer or
+// primary adapters storage-aware.
 type TaskGraphRead struct {
 	Tasks    []domain.Task
 	Problems []TaskGraphLoadProblem
@@ -138,19 +143,26 @@ func (s taskStoreGraphSource) ReadTaskGraph() (TaskGraphRead, error) {
 }
 
 // TaskGraphReadFromFiles adapts the legacy/local resilient task-list contract at
-// the storage boundary. Filename parsing for unreadable identity is deliberately
-// confined here; non-filesystem TaskGraphSource implementations provide identity
-// directly and need not synthesize a Markdown path.
+// the storage boundary. Non-filesystem TaskGraphSource implementations provide
+// identity directly and need not synthesize a Markdown path.
 func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) TaskGraphRead {
 	read := TaskGraphRead{Tasks: tasks, Problems: make([]TaskGraphLoadProblem, 0, len(problems))}
 	for _, problem := range problems {
-		taskID, taskSlug := taskIdentityFromPath(problem.Path)
-		read.Problems = append(read.Problems, TaskGraphLoadProblem{
-			TaskID: taskID, TaskSlug: taskSlug, Path: problem.Path,
-			Message: problem.Message,
-		})
+		read.Problems = append(read.Problems, TaskGraphLoadProblemFromFile(problem, ""))
 	}
 	return read
+}
+
+// TaskGraphLoadProblemFromFile is the one compatibility conversion for a local
+// file diagnostic. Filesystem adapters may attach an opaque source revision;
+// legacy list adapters deliberately leave it empty and therefore fail closed if
+// a guarded mutation ever tries to compare two unreadable snapshots from them.
+func TaskGraphLoadProblemFromFile(problem domain.FileProblem, sourceVersion string) TaskGraphLoadProblem {
+	taskID, taskSlug := taskIdentityFromPath(problem.Path)
+	return TaskGraphLoadProblem{
+		TaskID: taskID, TaskSlug: taskSlug, Path: problem.Path,
+		Message: problem.Message, SourceVersion: sourceVersion,
+	}
 }
 
 func taskGraphFileProblems(problems []TaskGraphLoadProblem) []domain.FileProblem {

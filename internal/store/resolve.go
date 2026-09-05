@@ -24,12 +24,12 @@ func markdownDoc(e os.DirEntry) bool {
 	return e.Type().IsRegular() && strings.HasSuffix(e.Name(), ".md")
 }
 
-// scanDir reads every regular .md file in dir and parses each through parse. A
-// parse failure becomes a FileProblem (the file is skipped, not fatal) so one
-// bad file doesn't blind the listing; a missing dir yields nothing; only a real
-// read error is fatal. It's the shared body of ListTasks/ListEpics/ListAudits —
-// each passes a parse closure binding the file's status/bucket.
-func scanDir[T any](dir string, parse func(path string, content []byte) (T, error)) ([]T, []domain.FileProblem, error) {
+type sourceFileProblem struct {
+	problem       domain.FileProblem
+	sourceVersion string
+}
+
+func scanDirSources[T any](dir string, parse func(path string, content []byte) (T, error), versionProblems bool) ([]T, []sourceFileProblem, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -38,7 +38,7 @@ func scanDir[T any](dir string, parse func(path string, content []byte) (T, erro
 		return nil, nil, fmt.Errorf("read dir %s: %w", dir, err)
 	}
 	var out []T
-	var problems []domain.FileProblem
+	var problems []sourceFileProblem
 	for _, e := range entries {
 		if !markdownDoc(e) {
 			continue
@@ -51,12 +51,47 @@ func scanDir[T any](dir string, parse func(path string, content []byte) (T, erro
 		if err != nil {
 			return nil, nil, fmt.Errorf("read %s: %w", path, err)
 		}
+		sourceVersion := ""
+		if versionProblems {
+			// Capture the exact bytes before handing the slice to a parser. Current
+			// parsers are read-only, but the scan contract need not rely on that for
+			// the token that later authorizes a repository write.
+			sourceVersion = hashContent(content)
+		}
 		v, err := parse(path, content)
 		if err != nil {
-			problems = append(problems, domain.FileProblem{Path: path, Message: err.Error()})
+			problems = append(problems, sourceFileProblem{
+				problem:       domain.FileProblem{Path: path, Message: err.Error()},
+				sourceVersion: sourceVersion,
+			})
 			continue
 		}
 		out = append(out, v)
+	}
+	return out, problems, nil
+}
+
+// scanDirWithSourceVersions is the resilient entity scan with store-private
+// source evidence retained for callers that authorize multi-record writes. The
+// ordinary list surface projects the same scan down to FileProblem so persistence
+// tokens do not leak into domain or wire contracts.
+func scanDirWithSourceVersions[T any](dir string, parse func(path string, content []byte) (T, error)) ([]T, []sourceFileProblem, error) {
+	return scanDirSources(dir, parse, true)
+}
+
+// scanDir reads every regular .md file in dir and parses each through parse. A
+// parse failure becomes a FileProblem (the file is skipped, not fatal) so one
+// bad file doesn't blind the listing; a missing dir yields nothing; only a real
+// read error is fatal. It's the shared body of ListTasks/ListEpics/ListAudits —
+// each passes a parse closure binding the file's status/bucket.
+func scanDir[T any](dir string, parse func(path string, content []byte) (T, error)) ([]T, []domain.FileProblem, error) {
+	out, sourceProblems, err := scanDirSources(dir, parse, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	problems := make([]domain.FileProblem, len(sourceProblems))
+	for i, problem := range sourceProblems {
+		problems[i] = problem.problem
 	}
 	return out, problems, nil
 }
