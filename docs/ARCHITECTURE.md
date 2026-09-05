@@ -184,6 +184,25 @@ adapter capabilities rather than leaked persistence.
   not a second authorization gate. Task listings, board, blockers, downstream queries, and Thread
   projections all consume the narrow `TaskGraphSource`; `task list --unblocked` fails closed unless
   its snapshot is healthy.
+  The immutable graph also retains a private clone of every readable source record rather than only
+  its per-ID semantic representative. Recovery-oriented core queries deliberately separate
+  `SourceDeclarations` (the raw multiset, including duplicates, invalid literals, legacy ownership,
+  and physical source attribution), `CanonicalDependencies` (deduplicated stable-ID values from
+  canonical `depends_on`), and `Prerequisites` (all canonical literals plus resolved legacy values,
+  deliberately retaining invalid or unresolved canonical evidence so behavior fails closed).
+  A source declaration names a projected edge only when its uniquely attributable representative
+  record actually contributes that edge to the semantic graph; duplicate-ID shadows remain source
+  evidence but cannot inject canonical or legacy behavior. Removal-only `SimulateSourceEdits`
+  rebuilds from that complete readable set and the original unreadable diagnostics, so duplicate-ID
+  shadows and opaque unreadable revisions survive prospective repair. Exact occurrence drops,
+  idempotent deduplication, and empty legacy-key cleanup are typed core intent. Removing a last
+  legacy value preserves the now-empty key unless cleanup is selected explicitly. Behavior-only
+  graphs reconstructed from representative maps are marked source-incomplete, and all
+  repair-oriented source queries reject them; materialization, per-operation outcomes, and repair
+  policy remain outside this projection.
+  Whole-snapshot equality compares the full readable-record multiset as well as unreadable sources,
+  closing the prior CAS blind spot where a changed duplicate-ID shadow could hide behind the same
+  representative task.
   `ThreadView` is a pure projection over that same immutable graph: it distinguishes
   members from direct external gates, reports nominal `done/total` and sound
   `drained/total`, separates repository graph health from Thread-local projection
