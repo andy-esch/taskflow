@@ -83,6 +83,9 @@ func (nopStore) EditAudit(string, time.Time, func(string, error) (string, error)
 func (nopStore) AppendAuditBody(string, string, time.Time, bool) (domain.Audit, string, error) {
 	return domain.Audit{}, "", nil
 }
+func (nopStore) TransformAuditBody(string, time.Time, bool, func(string) (string, error)) (domain.Audit, string, bool, error) {
+	return domain.Audit{}, "", false, nil
+}
 func (nopStore) ListResearch() ([]domain.Research, []domain.FileProblem, error) {
 	return nil, nil, nil
 }

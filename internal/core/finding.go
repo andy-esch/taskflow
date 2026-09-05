@@ -243,33 +243,21 @@ func (e FindingEdit) apply(body, code string) (string, error) {
 // is how a vocabulary drifts from its own documentation — and, in practice, how this repo's
 // own audits were maintained.
 func (s *Service) EditFinding(slug, code string, edit FindingEdit, dryRun bool) (domain.Audit, bool, error) {
-	a, body, err := s.store.GetAudit(slug)
-	if err != nil {
-		return domain.Audit{}, false, err
+	// The transform is recomputed from whatever body the store hands back, so a
+	// conflict is retried rather than refused: the previous editor-callback path had
+	// to escape its retry loop with an `attempted` flag because it replayed stale
+	// precomputed text. A concurrent `audit append` now costs a retry, not the edit.
+	now := s.now()
+	type result struct {
+		audit   domain.Audit
+		changed bool
 	}
-	// Validate and compute against the parsed body first, so a bad code, status, or note
-	// fails before any write is attempted and --dry-run costs nothing.
-	want, err := edit.apply(body, code)
-	if err != nil {
-		return domain.Audit{}, false, err
-	}
-	if dryRun {
-		return a, want != body, nil
-	}
-	// EditAudit is the parse-before-accept write path, and it retries its callback on a
-	// rejected edit. This rewrite is DETERMINISTIC — a second identical attempt would be
-	// rejected identically — so the retry is refused rather than spun on.
-	attempted := false
-	ra, changed, err := s.store.EditAudit(slug, s.now(), func(current string, prevErr error) (string, error) {
-		if attempted {
-			return "", prevErr
-		}
-		attempted = true
-		// Applied to the whole file: frontmatter is YAML and carries no `#### CODE.`
-		// finding headers, so the grammar can only match inside the body.
-		return edit.apply(current, code)
+	r, err := retryOnConflict(s, dryRun, func() (result, error) {
+		audit, _, changed, err := s.store.TransformAuditBody(slug, now, dryRun,
+			func(current string) (string, error) { return edit.apply(current, code) })
+		return result{audit: audit, changed: changed}, err
 	})
-	return ra, changed, err
+	return r.audit, r.changed, err
 }
 
 // AuditLintIssues is the single audit check-set, shared by `audit lint` and the

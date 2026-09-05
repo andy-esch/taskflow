@@ -153,6 +153,65 @@ func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun 
 	)
 }
 
+// TransformAuditBody is TransformTaskBody's audit twin: it applies transform to
+// the body read from the exact audit-file snapshot protected by the write's
+// content CAS. It is the non-interactive read-modify-write path for semantic
+// body edits such as finding status and resolution stamps. A rejected CAS lets
+// core invoke the operation again, at which point transform receives fresh body
+// text rather than stale precomputed bytes — which is what lets a finding stamp
+// retry around a concurrent `audit append` instead of refusing it. An unchanged
+// normalized body is a no-op and does not stamp updated_at.
+func (s *FS) TransformAuditBody(
+	slug string,
+	now time.Time,
+	dryRun bool,
+	transform func(current string) (string, error),
+) (domain.Audit, string, bool, error) {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return domain.Audit{}, "", false, err
+	}
+	path, err := s.resolveAudit(slug)
+	if err != nil {
+		return domain.Audit{}, "", false, err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Audit{}, "", false, fmt.Errorf("read audit %s: %w", path, err)
+	}
+	_, body, err := splitFrontmatterStrict(content)
+	if err != nil {
+		return domain.Audit{}, "", false, err // can't body-edit a file whose frontmatter won't parse
+	}
+	newBody, err := transform(string(body))
+	if err != nil {
+		return domain.Audit{}, "", false, err
+	}
+	newBody = normalizeBody(newBody)
+	if newBody == normalizeBody(string(body)) {
+		audit, err := parseAudit(content, path)
+		if err != nil {
+			return domain.Audit{}, "", false, fmt.Errorf("%s: %w", path, err)
+		}
+		return audit, string(body), false, nil
+	}
+
+	updatedAt := now.Format("2006-01-02")
+	audit, storedBody, err := writeBody(
+		"audit", path, content, newBody,
+		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
+		func(c []byte) (domain.Audit, error) { return parseAudit(c, path) },
+		s.writeLock,
+		func() error {
+			return verifyUnchanged(s.resolveAuditPath, slug, path, hashContent(content), "audit", "edit")
+		},
+		dryRun,
+	)
+	if err != nil {
+		return domain.Audit{}, "", false, err
+	}
+	return audit, storedBody, true, nil
+}
+
 // TransformTaskBody applies transform to the body read from the exact task-file
 // snapshot protected by the write's content CAS. It is the non-interactive
 // read-modify-write path for semantic body edits such as acceptance-criterion

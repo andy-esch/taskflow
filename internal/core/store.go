@@ -240,6 +240,13 @@ type AuditStore interface {
 	// The agent face of audit body editing, beside EditAudit's editor. Returns the
 	// reloaded audit and the resulting body.
 	AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error)
+	// TransformAuditBody is the read-modify-write counterpart to AppendAuditBody,
+	// and the audit twin of TransformTaskBody. transform receives the body from the
+	// exact snapshot the write's content CAS protects, so core can simply re-invoke
+	// the operation on ErrConflict and have the edit recomputed against fresh text.
+	// Reports whether the normalized body actually changed; an unchanged body is a
+	// no-op that stamps nothing.
+	TransformAuditBody(slug string, now time.Time, dryRun bool, transform func(current string) (string, error)) (domain.Audit, string, bool, error)
 }
 
 // ResearchStore is the research-persistence port. The narrowest entity port: research
