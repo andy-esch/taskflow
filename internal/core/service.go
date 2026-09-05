@@ -558,7 +558,7 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	}
 	problems = append(problems, ap...)
 	for _, a := range auditRecords {
-		if issues := AuditLintIssues(a.Audit, a.Findings); len(issues) > 0 {
+		if issues := AuditLintIssues(a.Audit, a.Findings, a.NearMisses); len(issues) > 0 {
 			results = append(results, LintResult{Slug: a.Audit.Slug, Issues: issues})
 		}
 	}
