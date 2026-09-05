@@ -108,17 +108,20 @@ type TaskLifecycleMutationStore interface {
 // ThreadReadProblem describes one Thread record that could not be decoded. Stable
 // identity is carried explicitly when the adapter can recover it; Location is
 // optional repair context such as a local path or remote URI and is never parsed
-// by core for identity.
+// by core for identity. SourceVersion is an opaque adapter-owned revision of the
+// exact source that produced the problem. Core and guarded stores may compare it,
+// but user-facing projections must not publish it.
 type ThreadReadProblem struct {
-	ThreadID   string
-	ThreadSlug string
-	Location   string
-	Message    string
+	ThreadID      string
+	ThreadSlug    string
+	Location      string
+	Message       string
+	SourceVersion string `json:"-" yaml:"-"`
 }
 
-// ThreadRead is one adapter-owned Thread document snapshot. Records and problems
-// travel together so a future source revision token can qualify the complete read
-// without exposing persistence-specific types.
+// ThreadRead is one adapter-owned Thread document snapshot. Readable records and
+// unreadable problems both carry opaque source revisions so guarded stores can
+// qualify the complete source set without exposing persistence-specific types.
 type ThreadRead struct {
 	Threads  []domain.Thread
 	Problems []ThreadReadProblem

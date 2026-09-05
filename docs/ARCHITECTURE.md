@@ -217,12 +217,13 @@ adapter capabilities rather than leaked persistence.
   Cobra, Bubble Tea, HTTP, filesystem, or graph-library type enters core or wire contracts. The
   sources return neutral `TaskGraphRead` and `ThreadRead` snapshots: unreadable records carry
   optional stable identity directly, while filesystem adapters translate `FileProblem` paths once
-  at their boundary. An unreadable task record also carries an opaque, non-wire source revision so
-  whole-snapshot CAS can detect changed bytes even when decoding fails with the same message; core
-  compares but never interprets that token. Core never parses an opaque source location for
-  identity. `ThreadReadProblem`
-  keeps location optional so a remote adapter does not invent a Markdown path; Thread list wire
-  output maps that contract explicitly rather than serializing persistence types.
+  at their boundary. Unreadable task and Thread records also carry opaque, non-wire source revisions
+  so whole-snapshot CAS can detect changed bytes even when decoding fails with the same message;
+  core and guarded stores compare but never interpret those tokens. Missing revision evidence fails
+  closed for guarded equality. Core never parses an opaque source location for identity.
+  `ThreadReadProblem` keeps location optional so a remote adapter does not invent a Markdown path;
+  Thread list/service projections strip its source revision and wire output maps the diagnostic
+  explicitly rather than serializing persistence evidence.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
@@ -239,9 +240,11 @@ adapter capabilities rather than leaked persistence.
   dependency normalization instead of manufacturing unchecked edges.
   `ThreadStore` is a separate semantic read port. Its `ReadThreads` snapshot carries readable
   records and adapter-neutral `ThreadReadProblem` values together. The filesystem implementation
-  performs one native `ListThreads` scan and recovers safe filename identity at that boundary;
-  guarded mutations retain the native file-problem snapshot for exact under-lock comparison. The
-  same filesystem adapter also implements the narrower `ThreadPathSource`, whose
+  performs one revision-bearing scan, recovers safe filename identity at that boundary, and hashes
+  the exact unreadable bytes before parsing. Guarded Thread creation/mutation/apply and task
+  lifecycle operations compare that complete `ThreadRead` snapshot before writing. There is no
+  parallel tokenless Thread-listing path that a guarded writer can select accidentally. The same
+  filesystem adapter also implements the narrower `ThreadPathSource`, whose
   filename-only resolver deliberately does not parse frontmatter so malformed local documents
   remain findable for repair. `Layout` remains separately responsible for watcher directories.
   `ThreadCreationMutationStore` owns guarded

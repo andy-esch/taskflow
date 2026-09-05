@@ -613,7 +613,7 @@ func TestThreadApplyPlannerCannotReenterStore(t *testing.T) {
 	repoID := "planning"
 	fs := threadApplyStore(root, &repoID)
 	_, err := fs.MutateThreadApply(threadApplyStoreNow, true, func(core.ThreadApplySnapshot) (core.ThreadApplyPlan, error) {
-		_, _, nestedErr := fs.ListThreads()
+		_, nestedErr := fs.ReadThreads()
 		return core.ThreadApplyPlan{}, nestedErr
 	})
 	if !errors.Is(err, domain.ErrConflict) {

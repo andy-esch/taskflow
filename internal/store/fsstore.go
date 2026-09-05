@@ -41,8 +41,6 @@ type FS struct {
 	researchDir            string
 	threadsDir             string
 	planningIdentityReader PlanningIdentityReader
-	// threadListOverride is a per-instance test seam for pinning adapter scan counts.
-	threadListOverride func() ([]domain.Thread, []domain.FileProblem, error)
 }
 
 // PlanningIdentityReader re-runs configuration discovery at apply time. Root

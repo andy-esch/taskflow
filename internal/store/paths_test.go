@@ -96,18 +96,3 @@ func TestReadThreadsRecoversFilesystemProblemIdentityAtAdapterBoundary(t *testin
 		t.Fatalf("invalid filename problem = %+v", got)
 	}
 }
-
-func TestFSReadThreadsPerformsExactlyOneNativeThreadScan(t *testing.T) {
-	calls := 0
-	fs := NewFS(t.TempDir())
-	fs.threadListOverride = func() ([]domain.Thread, []domain.FileProblem, error) {
-		calls++
-		return []domain.Thread{{ID: testutil.TaskID("single-scan")}}, []domain.FileProblem{{
-			Path: filepath.Join("threads", testutil.TaskID("single-problem")+"-single-problem.md"), Message: "broken",
-		}}, nil
-	}
-	read, err := fs.ReadThreads()
-	if err != nil || calls != 1 || len(read.Threads) != 1 || len(read.Problems) != 1 {
-		t.Fatalf("read=%+v calls=%d err=%v", read, calls, err)
-	}
-}

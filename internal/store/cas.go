@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/andy-esch/taskflow/internal/core"
@@ -36,6 +38,63 @@ func verifyTaskGraphSourceSnapshot(expected, current *core.TaskGraph) error {
 		return domain.ErrConflict
 	}
 	return nil
+}
+
+// verifyThreadSourceSnapshot is the unreadable-aware half of every graph-aware
+// repository write CAS. It compares opaque source evidence without exposing it
+// to planners or renderers and remains valid for a future repair path that may
+// deliberately continue past malformed Thread documents.
+func verifyThreadSourceSnapshot(expected, current core.ThreadRead) error {
+	if !sameThreadSourceSnapshot(expected, current) {
+		return domain.ErrConflict
+	}
+	return nil
+}
+
+func sameThreadSourceSnapshot(left, right core.ThreadRead) bool {
+	if len(left.Threads) != len(right.Threads) || len(left.Problems) != len(right.Problems) {
+		return false
+	}
+	leftThreads := append([]domain.Thread(nil), left.Threads...)
+	rightThreads := append([]domain.Thread(nil), right.Threads...)
+	sort.SliceStable(leftThreads, func(i, j int) bool { return threadSourceKey(leftThreads[i]) < threadSourceKey(leftThreads[j]) })
+	sort.SliceStable(rightThreads, func(i, j int) bool { return threadSourceKey(rightThreads[i]) < threadSourceKey(rightThreads[j]) })
+	if !slices.EqualFunc(leftThreads, rightThreads, sameThreadSource) {
+		return false
+	}
+	leftProblems := append([]core.ThreadReadProblem(nil), left.Problems...)
+	rightProblems := append([]core.ThreadReadProblem(nil), right.Problems...)
+	sort.SliceStable(leftProblems, func(i, j int) bool {
+		return threadProblemSourceKey(leftProblems[i]) < threadProblemSourceKey(leftProblems[j])
+	})
+	sort.SliceStable(rightProblems, func(i, j int) bool {
+		return threadProblemSourceKey(rightProblems[i]) < threadProblemSourceKey(rightProblems[j])
+	})
+	return slices.EqualFunc(leftProblems, rightProblems, sameThreadProblemSource)
+}
+
+func threadSourceKey(thread domain.Thread) string {
+	return strings.Join([]string{
+		thread.FilenameID, thread.ID, thread.Slug, thread.Path, thread.SourceVersion,
+	}, "\x00")
+}
+
+func sameThreadSource(left, right domain.Thread) bool {
+	return left.FilenameID == right.FilenameID && left.ID == right.ID &&
+		left.Slug == right.Slug && left.Path == right.Path &&
+		left.SourceVersion != "" && left.SourceVersion == right.SourceVersion
+}
+
+func threadProblemSourceKey(problem core.ThreadReadProblem) string {
+	return strings.Join([]string{
+		problem.ThreadID, problem.ThreadSlug, problem.Location, problem.Message, problem.SourceVersion,
+	}, "\x00")
+}
+
+func sameThreadProblemSource(left, right core.ThreadReadProblem) bool {
+	return left.ThreadID == right.ThreadID && left.ThreadSlug == right.ThreadSlug &&
+		left.Location == right.Location && left.Message == right.Message &&
+		left.SourceVersion != "" && left.SourceVersion == right.SourceVersion
 }
 
 // verifyUnchanged is the version-CAS precondition shared by every write: called

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -238,6 +239,29 @@ func TestServiceThreadListPreservesAndOrdersAdapterNeutralProblems(t *testing.T)
 	if len(problems) != 2 || problems[0].ThreadSlug != "pathless" || problems[0].Location != "" ||
 		problems[1].ThreadSlug != "unreadable-copy" || problems[1].Location != "misleading/other.md" {
 		t.Fatalf("neutral problems = %+v", problems)
+	}
+}
+
+func TestServiceThreadListStripsOpaqueProblemSourceRevisions(t *testing.T) {
+	const revision = "opaque-thread-source-revision"
+	threadStore := &threadReadFake{problems: []ThreadReadProblem{{
+		ThreadID: "6g3q4rtmv4aa", ThreadSlug: "broken", Message: "remote decode failed", SourceVersion: revision,
+	}}}
+	svc := NewService(&fakeStore{}, WithThreadStore(threadStore))
+
+	_, problems, err := svc.ListThreadViews()
+	if err != nil || len(problems) != 1 {
+		t.Fatalf("problems=%+v err=%v", problems, err)
+	}
+	if problems[0].SourceVersion != "" {
+		t.Fatalf("service exposed opaque source revision %q", problems[0].SourceVersion)
+	}
+	encoded, err := json.Marshal(ThreadReadProblem{ThreadID: "6g3q4rtmv4aa", SourceVersion: revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), revision) || strings.Contains(string(encoded), "SourceVersion") {
+		t.Fatalf("opaque Thread source revision leaked through JSON: %s", encoded)
 	}
 }
 

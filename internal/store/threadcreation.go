@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"time"
 
@@ -48,14 +47,14 @@ func (s *FS) MutateThreadCreation(now time.Time, dryRun bool, planner core.Threa
 	if err != nil {
 		return result, fmt.Errorf("load authoritative task graph: %w", err)
 	}
-	threads, problems, err := s.ListThreads()
+	threadRead, err := s.ReadThreads()
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads: %w", err)
 	}
-	if err := core.ValidateThreadCreationSource(graph, threads, threadReadProblemsFromFiles(problems)); err != nil {
+	if err := core.ValidateThreadCreationSource(graph, threadRead.Threads, threadRead.Problems); err != nil {
 		return result, err
 	}
-	snapshot := core.ThreadCreationSnapshot{Graph: graph, Threads: clonePlannerThreads(threads)}
+	snapshot := core.ThreadCreationSnapshot{Graph: graph, Threads: clonePlannerThreads(threadRead.Threads)}
 	plan, err := callThreadCreationPlanner(s, planner, snapshot)
 	if err != nil {
 		return result, err
@@ -81,11 +80,11 @@ func (s *FS) MutateThreadCreation(now time.Time, dryRun bool, planner core.Threa
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative task graph before Thread create: %w", err)
 	}
-	currentThreads, currentProblems, err := s.ListThreads()
+	currentThreadRead, err := s.ReadThreads()
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative Threads before create: %w", err)
 	}
-	if err := verifyTaskGraphSourceSnapshot(graph, currentGraph); err != nil || !sameThreadSourceSnapshot(threads, problems, currentThreads, currentProblems) {
+	if graphErr := verifyTaskGraphSourceSnapshot(graph, currentGraph); graphErr != nil || verifyThreadSourceSnapshot(threadRead, currentThreadRead) != nil {
 		return result, fmt.Errorf("repository tasks or Threads changed while planning; retry: %w", domain.ErrConflict)
 	}
 	if err := s.writeNewFileUnlocked(s.threadsDir, materialized.path, materialized.content, "Thread", materialized.thread.ID+"-"+materialized.thread.Slug); err != nil {
@@ -174,23 +173,6 @@ func clonePlannerThreads(threads []domain.Thread) []domain.Thread {
 		out[i].Tasks = append([]string(nil), thread.Tasks...)
 	}
 	return out
-}
-
-func sameThreadSourceSnapshot(left []domain.Thread, leftProblems []domain.FileProblem, right []domain.Thread, rightProblems []domain.FileProblem) bool {
-	if !slices.Equal(leftProblems, rightProblems) || len(left) != len(right) {
-		return false
-	}
-	key := func(thread domain.Thread) string { return thread.FilenameID + "\x00" + thread.Path }
-	left = append([]domain.Thread(nil), left...)
-	right = append([]domain.Thread(nil), right...)
-	sort.Slice(left, func(i, j int) bool { return key(left[i]) < key(left[j]) })
-	sort.Slice(right, func(i, j int) bool { return key(right[i]) < key(right[j]) })
-	for i := range left {
-		if key(left[i]) != key(right[i]) || left[i].SourceVersion == "" || left[i].SourceVersion != right[i].SourceVersion {
-			return false
-		}
-	}
-	return true
 }
 
 var testHookBeforeThreadCreationVerify func()

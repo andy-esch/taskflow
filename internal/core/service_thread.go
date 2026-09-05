@@ -221,6 +221,9 @@ func (s *Service) ListThreadViews() (ThreadListView, []ThreadReadProblem, error)
 	}
 	threads := cloneThreads(read.Threads)
 	problems := append([]ThreadReadProblem(nil), read.Problems...)
+	for i := range problems {
+		problems[i].SourceVersion = ""
+	}
 	sort.Slice(threads, func(i, j int) bool { return threadLess(threads[i], threads[j]) })
 	sort.Slice(problems, func(i, j int) bool { return threadReadProblemLess(problems[i], problems[j]) })
 	list := ThreadListView{

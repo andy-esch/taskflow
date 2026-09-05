@@ -168,7 +168,7 @@ func TestThreadMutationPlannerCannotReenterStore(t *testing.T) {
 	created, _ := createThreadForMutation(t, root, "thread-reentry")
 	fs := NewFS(root)
 	_, err := fs.MutateThread(threadMutationStoreNow, true, func(core.ThreadMutationSnapshot) (core.ThreadMutationPlan, error) {
-		_, _, nestedErr := fs.ListThreads()
+		_, nestedErr := fs.ReadThreads()
 		return core.ThreadMutationPlan{ThreadID: created.Thread.ID, Operation: core.ThreadMutationAddMembers, TaskIDs: []string{memberID}}, nestedErr
 	})
 	if !errors.Is(err, domain.ErrConflict) {
