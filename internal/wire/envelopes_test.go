@@ -382,6 +382,24 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 	}
 }
 
+func TestStatusAllEnvelope_PreservesRetainedSummaryAndFailure(t *testing.T) {
+	summary := core.Summary{InProgress: []domain.Task{{
+		Slug: "working", Status: domain.StatusInProgress,
+	}}}
+	envelope := ToStatusAllEnvelope(core.SpaceOverview{Spaces: []core.SpaceSummary{{
+		ID: "planning", PlanningID: "6gplan", Summary: &summary,
+		Failure: &core.SpaceLoadFailure{
+			Class: domain.ClassConflict, Message: "planner window is active",
+		},
+		Stale: true,
+	}}})
+
+	if len(envelope.Spaces) != 1 || envelope.Spaces[0].Summary == nil ||
+		envelope.Spaces[0].Error != "planner window is active" {
+		t.Fatalf("retained summary/failure mapping = %+v", envelope.Spaces)
+	}
+}
+
 // TestMutationEnvelopes_CarryWorkspace pins the 1.31 contract structurally: a receipt
 // for a WRITE must name the planning tree it wrote to, so a caller can prove which one
 // it changed without a second read (audit 2026-07-24-ai-agent-cli-ergonomics, H1).

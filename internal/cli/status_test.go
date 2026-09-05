@@ -232,11 +232,14 @@ func TestStatusAll_AllBrokenRegistryGroupRemainsInformational(t *testing.T) {
 
 func TestStatusAllProblemsError_SelectedTreeLoadFailure(t *testing.T) {
 	selected := core.SpaceEntryPoint{ID: "planning", State: core.SpaceStateOK}
-	err := statusAllProblemsError(core.SpaceOverview{Spaces: []core.SpaceSummary{{
-		ID: "planning", Selected: &selected, LoadError: "checkout disappeared",
-	}}})
-	if err == nil || !strings.Contains(err.Error(), "1 planning space(s) failed to load") || !errors.Is(err, domain.ErrValidation) {
-		t.Fatalf("selected tree load failure should be a partial validation failure, got %v", err)
+	for _, summary := range []*core.Summary{nil, {}} {
+		err := statusAllProblemsError(core.SpaceOverview{Spaces: []core.SpaceSummary{{
+			ID: "planning", Selected: &selected, Summary: summary,
+			Failure: &core.SpaceLoadFailure{Message: "checkout disappeared"},
+		}}})
+		if err == nil || !strings.Contains(err.Error(), "1 planning space(s) failed to load") || !errors.Is(err, domain.ErrValidation) {
+			t.Fatalf("selected tree load failure with summary=%v should be a partial validation failure, got %v", summary != nil, err)
+		}
 	}
 }
 

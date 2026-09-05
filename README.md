@@ -247,7 +247,9 @@ order and `O` reverses it. Press `a`, run `:atlas`, or use the command palette t
 The atlas uses the home/global theme rather than whichever repo launched it. Each entry point keeps its own tab,
 cursor, filter, dashboard, and navigation state across round trips; only the active
 space is watched for filesystem changes. Broken entries remain visible but cannot be
-entered, and a failed open leaves the current session untouched.
+entered, and a failed open leaves the current session untouched. If a refresh overlaps a
+guarded mutation, unaffected spaces update immediately while the busy space retains its last
+coherent summary as visibly stale and receives one bounded retry after the quiet period.
 `TSKFLW_CONFIG_HOME` overrides the home-config directory, which is useful for an isolated
 trial before populating the real registry.
 

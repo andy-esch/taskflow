@@ -328,6 +328,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case atlasLoadedMsg:
 		return m.handleAtlasLoaded(msg)
 
+	case atlasRetryMsg:
+		return m.handleAtlasRetry(msg)
+
+	case atlasRetriedMsg:
+		return m.handleAtlasRetried(msg)
+
 	case workspaceOpenedMsg:
 		return m.handleWorkspaceOpened(msg)
 

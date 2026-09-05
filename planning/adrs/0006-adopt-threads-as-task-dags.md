@@ -1192,6 +1192,12 @@ the accepted rollout now uses this sequence:
 5. **Centralize contention-safe asynchronous reads.** A planner-active `ErrConflict` is transient for
    list/detail/dashboard readers. Preserve the last coherent model and perform a bounded, coalesced
    retry in shared TUI machinery; do not create a Thread-only error policy or hide durable failures.
+   The cross-space Atlas applies the same rule per logical space: core retains a structured failure
+   class, successful groups advance, the last coherent contended summary is visibly marked stale,
+   and one quiet-period retry re-reads only affected groups. Repeated contention, first-load
+   failure, and durable failure remain explicit; newer Atlas or workspace generations discard the
+   retry. A complete-overview dirty signal remains independent of that partial state, so the retry
+   cannot acknowledge unrelated watcher changes or clear a user-facing open error.
 6. **Ship list/detail before topology.** The first visible slice shows lifecycle, sound progress,
    in-flight and dispatchable work, members, external gates, health, and inconsistency from the shared
    projection. It remains read-only.

@@ -139,8 +139,20 @@ func StatusAllHuman(w io.Writer, st Style, overview core.SpaceOverview) error {
 		fmt.Fprintln(w, st.Bold(heading))
 		if space.Summary != nil {
 			renderCompactSpaceSummary(w, st, *space.Summary)
-		} else {
-			fmt.Fprintf(w, "  %s %s\n", st.Red("!"), space.LoadError)
+		}
+		if space.Failure != nil {
+			detail := "summary unavailable"
+			glyph := st.Red("!")
+			if space.Failure.Message != "" {
+				detail = space.Failure.Message
+			}
+			if space.Summary != nil {
+				detail = "retained summary: " + detail
+				glyph = st.Warn("!")
+			}
+			fmt.Fprintf(w, "  %s %s\n", glyph, detail)
+		} else if space.Summary == nil {
+			fmt.Fprintf(w, "  %s %s\n", st.Red("!"), "summary unavailable")
 		}
 		for _, entry := range space.Entries {
 			if entry.Healthy() {

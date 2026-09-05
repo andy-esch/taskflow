@@ -313,8 +313,9 @@ type StatusAllEnvelope struct {
 }
 
 // SpaceSummaryJSON is one logical planning space in StatusAllEnvelope. EntryPoints
-// includes healthy and broken registered checkouts. Summary is absent only when the group
-// could not be loaded; Error then explains the group-local failure.
+// includes healthy and broken registered checkouts. A normal one-shot status read has either
+// Summary or Error. Long-lived adapters may deliberately retain a stale Summary beside Error;
+// the wire mapping preserves both rather than inventing its own refresh policy.
 type SpaceSummaryJSON struct {
 	ID                 string       `json:"id"`
 	PlanningID         string       `json:"planning_id,omitempty"`
@@ -342,7 +343,9 @@ func ToStatusAllEnvelope(overview core.SpaceOverview) StatusAllEnvelope {
 		}
 		item := SpaceSummaryJSON{
 			ID: space.ID, PlanningID: space.PlanningID, EntryPoints: entryPoints,
-			Error: space.LoadError,
+		}
+		if space.Failure != nil {
+			item.Error = space.Failure.Message
 		}
 		if space.Selected != nil {
 			item.SelectedEntryPoint = space.Selected.ID

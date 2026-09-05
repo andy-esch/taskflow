@@ -520,6 +520,26 @@ func TestStatusAllHumanReportsSpaceGraphHealth(t *testing.T) {
 	}
 }
 
+func TestStatusAllHumanReportsFailureBesideRetainedSummary(t *testing.T) {
+	summary := core.Summary{
+		Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
+		InProgress: []domain.Task{{Slug: "working"}},
+	}
+	overview := core.SpaceOverview{Spaces: []core.SpaceSummary{{
+		ID: "planning", Summary: &summary, Stale: true,
+		Failure: &core.SpaceLoadFailure{Class: domain.ClassConflict, Message: "planner window is active"},
+	}}}
+	var out bytes.Buffer
+	if err := StatusAllHuman(&out, NewStyle(false), overview); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"1 in-progress", "retained summary: planner window is active"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("compact retained summary missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
 // TestSummary_RevisitDueNudge pins the snooze surface: a non-zero RevisitDue
 // renders the ↻ nudge (no emoji) in the human dashboard and carries revisit_due in
 // the JSON envelope; zero renders no nudge.

@@ -94,9 +94,8 @@ func statusAllProblemsError(overview core.SpaceOverview) error {
 	for _, space := range overview.Spaces {
 		if space.Summary != nil {
 			unreadableFiles += len(space.Summary.Problems)
-			continue
 		}
-		if space.Selected != nil && space.LoadError != "" {
+		if space.Selected != nil && space.Failure != nil {
 			failedSpaces++
 		}
 	}
