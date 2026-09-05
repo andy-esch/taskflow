@@ -74,9 +74,11 @@ Provide an explicit recovery capability for graph-owned frontmatter that is alre
       repairs, show exact copyable selectors, and predict residual problems without writing.
 - [ ] `--auto` is limited to duplicate/self/empty-legacy cleanup. Invalid and dangling values remain
       verbatim until explicitly dropped; cycle and ambiguous-legacy choices are never guessed.
-- [ ] Concurrent task/dependency edits—including byte changes to still-unreadable files—produce a
-      typed conflict rather than a stale repair. Every injected durable prefix is diagnosable,
-      convergent on retry, and never repeats an already-satisfied `dedupe` or `drop` intent.
+- [ ] Concurrent task, dependency, and Thread-evidence edits—including byte
+  changes to still-unreadable task or Thread files—produce a typed conflict
+  rather than a stale repair. Every injected durable prefix is diagnosable,
+  convergent on retry, and never repeats an already-satisfied dedupe or drop
+  intent.
 - [ ] Human and JSON receipts derive `Changed` from actual materialized writes and report `Committed`,
       initial/final health, selected and removed declarations, addressed and residual defects, raw
       removed values, workspace, applied/remaining files, task-state impacts, readable Thread

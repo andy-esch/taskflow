@@ -139,7 +139,7 @@ func TestThreadCreationRejectsRawThreadRaceByWholeSnapshotCAS(t *testing.T) {
 func TestThreadCreationPlannerCannotReenterStore(t *testing.T) {
 	fs := NewFS(t.TempDir())
 	_, err := fs.MutateThreadCreation(threadCreationNow, true, func(core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
-		_, _, nestedErr := fs.ListThreads()
+		_, nestedErr := fs.ReadThreads()
 		return core.ThreadCreationPlan{}, nestedErr
 	})
 	if !errors.Is(err, domain.ErrConflict) {
@@ -204,9 +204,9 @@ func TestTaskAndThreadCreationSerializeCrossKindIdentity(t *testing.T) {
 		t.Fatalf("successes=%d conflicts=%d errors=(%v, %v)", successes, conflicts, errA, errB)
 	}
 	tasks, _, taskErr := NewFS(root).ListTasks()
-	threads, _, threadErr := NewFS(root).ListThreads()
-	if taskErr != nil || threadErr != nil || len(tasks)+len(threads) != 1 {
-		t.Fatalf("tasks=%d Threads=%d taskErr=%v threadErr=%v", len(tasks), len(threads), taskErr, threadErr)
+	threadRead, threadErr := NewFS(root).ReadThreads()
+	if taskErr != nil || threadErr != nil || len(tasks)+len(threadRead.Threads) != 1 {
+		t.Fatalf("tasks=%d Threads=%d taskErr=%v threadErr=%v", len(tasks), len(threadRead.Threads), taskErr, threadErr)
 	}
 }
 

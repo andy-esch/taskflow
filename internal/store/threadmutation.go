@@ -47,14 +47,14 @@ func (s *FS) MutateThread(now time.Time, dryRun bool, planner core.ThreadMutatio
 	if err != nil {
 		return result, fmt.Errorf("load authoritative task graph: %w", err)
 	}
-	threads, problems, err := s.ListThreads()
+	threadRead, err := s.ReadThreads()
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads: %w", err)
 	}
-	if err := core.ValidateThreadMutationSource(graph, threads, threadReadProblemsFromFiles(problems)); err != nil {
+	if err := core.ValidateThreadMutationSource(graph, threadRead.Threads, threadRead.Problems); err != nil {
 		return result, err
 	}
-	snapshot := core.ThreadMutationSnapshot{Graph: graph, Threads: clonePlannerThreads(threads)}
+	snapshot := core.ThreadMutationSnapshot{Graph: graph, Threads: clonePlannerThreads(threadRead.Threads)}
 	plan, err := callThreadMutationPlanner(s, planner, snapshot)
 	if err != nil {
 		return result, err
@@ -85,11 +85,11 @@ func (s *FS) MutateThread(now time.Time, dryRun bool, planner core.ThreadMutatio
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative task graph before Thread write: %w", err)
 	}
-	currentThreads, currentProblems, err := s.ListThreads()
+	currentThreadRead, err := s.ReadThreads()
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative Threads before Thread write: %w", err)
 	}
-	if err := verifyTaskGraphSourceSnapshot(graph, currentGraph); err != nil || !sameThreadSourceSnapshot(threads, problems, currentThreads, currentProblems) {
+	if graphErr := verifyTaskGraphSourceSnapshot(graph, currentGraph); graphErr != nil || verifyThreadSourceSnapshot(threadRead, currentThreadRead) != nil {
 		return result, fmt.Errorf("repository tasks or Threads changed while authorizing Thread mutation; retry: %w", domain.ErrConflict)
 	}
 

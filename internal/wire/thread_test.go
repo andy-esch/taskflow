@@ -1,7 +1,9 @@
 package wire
 
 import (
+	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/core"
@@ -21,8 +23,9 @@ func TestToThreadJSONPreservesTagOrderAndCanonicalizesMembership(t *testing.T) {
 }
 
 func TestToThreadsEnvelopeRetainsPathlessIdentityWithoutParsingLocation(t *testing.T) {
+	const sourceVersion = "opaque-thread-source-revision"
 	payload := ToThreadsEnvelope(core.ThreadListView{}, []core.ThreadReadProblem{
-		{ThreadID: "6g0000000002", ThreadSlug: "pathless", Message: "remote decode failed"},
+		{ThreadID: "6g0000000002", ThreadSlug: "pathless", Message: "remote decode failed", SourceVersion: sourceVersion},
 		{ThreadID: "6g0000000001", ThreadSlug: "explicit", Location: "opaque://6g9999999999-wrong", Message: "bad record"},
 	})
 	if payload.Unreadable == nil || len(payload.Unreadable) != 2 {
@@ -33,5 +36,12 @@ func TestToThreadsEnvelopeRetainsPathlessIdentityWithoutParsingLocation(t *testi
 	}
 	if payload.Unreadable[1].ThreadID != "6g0000000001" || payload.Unreadable[1].Location != "opaque://6g9999999999-wrong" {
 		t.Fatalf("located problem = %+v", payload.Unreadable[1])
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), sourceVersion) || strings.Contains(string(encoded), "source_version") {
+		t.Fatalf("opaque Thread source revision leaked through wire JSON: %s", encoded)
 	}
 }

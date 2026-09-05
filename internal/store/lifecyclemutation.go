@@ -51,11 +51,11 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	if err := core.ValidateTaskLifecycleSource(graph); err != nil {
 		return result, err
 	}
-	threads, threadProblems, err := s.ListThreads()
+	threadRead, err := s.ReadThreads()
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads for task lifecycle impact: %w", err)
 	}
-	if err := core.ValidateThreadMutationSource(graph, threads, threadReadProblemsFromFiles(threadProblems)); err != nil {
+	if err := core.ValidateThreadMutationSource(graph, threadRead.Threads, threadRead.Problems); err != nil {
 		return result, err
 	}
 
@@ -88,7 +88,7 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	result.Before = analysis.Before
 	result.After = analysis.After
 	result.Impacts = cloneStoreTaskImpacts(analysis.Impacts)
-	result.ThreadImpacts = core.TaskLifecycleThreadImpacts(clonePlannerThreads(threads), graph, validated)
+	result.ThreadImpacts = core.TaskLifecycleThreadImpacts(clonePlannerThreads(threadRead.Threads), graph, validated)
 	result.OutstandingBlockers = cloneStoreBlockers(analysis.OutstandingBlockers)
 	result.OverrideApplied = analysis.OverrideApplied
 	result.Changed = materialized.changed
@@ -103,11 +103,11 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative task graph before lifecycle write: %w", err)
 	}
-	currentThreads, currentThreadProblems, err := s.ListThreads()
+	currentThreadRead, err := s.ReadThreads()
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative Threads before lifecycle write: %w", err)
 	}
-	if err := verifyTaskGraphSourceSnapshot(graph, currentGraph); err != nil || !sameThreadSourceSnapshot(threads, threadProblems, currentThreads, currentThreadProblems) {
+	if graphErr := verifyTaskGraphSourceSnapshot(graph, currentGraph); graphErr != nil || verifyThreadSourceSnapshot(threadRead, currentThreadRead) != nil {
 		return result, fmt.Errorf("repository task graph changed or Threads changed while authorizing lifecycle transition; retry: %w", domain.ErrConflict)
 	}
 
