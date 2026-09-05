@@ -103,9 +103,18 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 	if err != nil {
 		return domain.Audit{}, "", err // can't body-edit a file whose frontmatter won't parse
 	}
+	// `audit append --help` promises the finding grammar is checked; until now it was
+	// deferred to `audit lint`, which only ever validated findings that ALREADY parsed
+	// — so a header appended in the drifted shape fell between the two and vanished.
+	// Only what this write introduces is refused: an audit that already carries drift
+	// must still accept unrelated appends.
+	appended := appendSection(string(body), text)
+	if err := domain.NearMissWriteError("audit", domain.IntroducedNearMissHeaders(string(body), appended)); err != nil {
+		return domain.Audit{}, "", err
+	}
 	updatedAt := now.Format("2006-01-02")
 	return writeBody(
-		"audit", path, content, appendSection(string(body), text),
+		"audit", path, content, appended,
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
 		func(c []byte) (domain.Audit, error) { return parseAudit(c, path) },
 		s.writeLock,

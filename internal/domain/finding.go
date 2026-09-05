@@ -320,6 +320,48 @@ func LintFindingHeaders(body string) []Issue {
 	return NearMissFindingIssues(NearMissFindingHeaders(body))
 }
 
+// IntroducedNearMissHeaders returns the near-miss headings present in next that
+// were not already in prev — what THIS write is adding, not what the file already
+// carried. A guarded write refuses only the former: refusing the latter would block
+// an ordinary status stamp or an unrelated append on any already-drifted audit,
+// turning one bad header into a frozen document.
+//
+// Compared by header text rather than line number, because inserting a section
+// renumbers every heading below it without changing any of them.
+func IntroducedNearMissHeaders(prev, next string) []NearMissHeader {
+	before := make(map[string]int)
+	for _, h := range NearMissFindingHeaders(prev) {
+		before[h.Text]++
+	}
+	var out []NearMissHeader
+	for _, h := range NearMissFindingHeaders(next) {
+		if before[h.Text] > 0 {
+			before[h.Text]-- // an existing occurrence accounts for this one
+			continue
+		}
+		out = append(out, h)
+	}
+	return out
+}
+
+// NearMissWriteError is the refusal a guarded write returns when it would introduce
+// a heading that parses to nothing. It names the exact canonical replacement so the
+// author — human or agent — can correct it without re-deriving the grammar, at the
+// last point where they still hold the text. Same contract as the unterminated-fence
+// refusal: catch it at the write, not later as findings that cannot be stamped.
+func NearMissWriteError(noun string, hits []NearMissHeader) error {
+	if len(hits) == 0 {
+		return nil
+	}
+	parts := make([]string, 0, len(hits))
+	for _, h := range hits {
+		parts = append(parts, fmt.Sprintf("%q → write %q", h.Text, h.Canonical))
+	}
+	return fmt.Errorf(
+		"%w: this %s write would add %d heading(s) that parse to nothing, so their findings would be invisible: %s",
+		ErrValidation, noun, len(hits), strings.Join(parts, "; "))
+}
+
 func LintFindings(bucket string, fs []Finding) []Issue {
 	var issues []Issue
 	for _, f := range fs {

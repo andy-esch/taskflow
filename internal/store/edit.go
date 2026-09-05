@@ -293,9 +293,25 @@ func (s *FS) EditAudit(slug string, now time.Time, edit func(current string, pre
 		return domain.Audit{}, false, fmt.Errorf("read audit %s: %w", path, err)
 	}
 	ifVersion := hashContent(orig)
+	_, origBody, _ := splitFrontmatterStrict(orig)
 	return editFile("audit", path, orig, now,
 		acceptEdited(
-			func(content []byte) (domain.Audit, error) { return parseAudit(content, path) },
+			func(content []byte) (domain.Audit, error) {
+				a, err := parseAudit(content, path)
+				if err != nil {
+					return a, err
+				}
+				// The editor reopens on a rejected edit, so refusing here puts the exact
+				// canonical replacement in front of the author while they still have the
+				// text open — the same reason the unterminated-fence guard lives at the
+				// write. Pre-existing drift elsewhere in the file is not this edit's fault.
+				_, newBody, splitErr := splitFrontmatterStrict(content)
+				if splitErr != nil {
+					return a, splitErr
+				}
+				return a, domain.NearMissWriteError("audit",
+					domain.IntroducedNearMissHeaders(string(origBody), string(newBody)))
+			},
 			func(a domain.Audit) string { return a.ID }),
 		s.writeLock,
 		func() error { return verifyUnchanged(s.resolveAuditPath, slug, path, ifVersion, "audit", "edit") },

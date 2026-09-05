@@ -127,19 +127,19 @@ rule inside it is easy to miss. Land that first, or land it with this.
 
 ## Acceptance criteria
 
-- [ ] A narrow, letter-led near-miss recognizer sits beside findingHeaderRe and
+- [x] A narrow, letter-led near-miss recognizer sits beside findingHeaderRe and
   flags every non-canonical finding header with its line number and exact
   canonical replacement.
-- [ ] The recognizer produces zero false positives across the existing audit
+- [x] The recognizer produces zero false positives across the existing audit
   corpus, verified by a fixture built from the 12 audits that use numbered
   section headings.
-- [ ] All seven silent-loss shapes (H1:, H-1., h1., H1 without a period, **H1.**,
+- [x] All seven silent-loss shapes (H1:, H-1., h1., H1 without a period, **H1.**,
   bare 1., depth-7) are caught by lint rather than dropped.
-- [ ] lint --fix canonicalizes a near-miss finding header in place through the
+- [x] lint --fix canonicalizes a near-miss finding header in place through the
   audit body-transform CAS (6g392b0rps7w), so a drifted audit is repaired by the
   tool instead of rewritten by its author; FixFrontmatter stays
   frontmatter-only.
-- [ ] audit append and audit edit honor the promise in audit append --help by
+- [x] audit append and audit edit honor the promise in audit append --help by
   routing a recognizer hit through the same body-transform op, so the check
   cannot be forgotten or bypassed by a raw write.
 - [ ] audit show and audit list render an explicit no-findings state instead of
