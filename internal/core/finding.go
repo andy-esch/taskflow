@@ -272,17 +272,25 @@ func (s *Service) EditFinding(slug, code string, edit FindingEdit, dryRun bool) 
 	return ra, changed, err
 }
 
+// AuditLintIssues is the single audit check-set, shared by `audit lint` and the
+// top-level `lint` roster so the two cannot drift. Findings arrive already parsed
+// because the repository sweep reads each audit once (ListAuditsWithFindings),
+// while the single-audit path parses the body it just fetched.
+func AuditLintIssues(a domain.Audit, findings []domain.Finding) []domain.Issue {
+	iss := domain.LintFindings(string(a.Bucket), findings)
+	iss = append(iss, domain.MissingIDIssue(a.ID)...)             // audits get a stable id too
+	iss = append(iss, domain.IDDriftIssue(a.ID, a.FilenameID)...) // …that must match the filename
+	iss = append(iss, domain.FrontmatterBucketIssues(a)...)       // and a missing/foreign bucket flag
+	return iss
+}
+
 func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, error) {
 	var (
 		results  []LintResult
 		problems []domain.FileProblem
 	)
 	check := func(a domain.Audit, body string) {
-		iss := domain.LintFindings(string(a.Bucket), domain.ParseFindings(body))
-		iss = append(iss, domain.MissingIDIssue(a.ID)...)             // audits get a stable id too
-		iss = append(iss, domain.IDDriftIssue(a.ID, a.FilenameID)...) // …that must match the filename
-		iss = append(iss, domain.FrontmatterBucketIssues(a)...)       // and a missing/foreign bucket flag
-		if len(iss) > 0 {
+		if iss := AuditLintIssues(a, domain.ParseFindings(body)); len(iss) > 0 {
 			results = append(results, LintResult{Slug: a.Slug, Issues: iss})
 		}
 	}

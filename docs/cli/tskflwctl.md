@@ -25,7 +25,7 @@ Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 * [tskflwctl config](tskflwctl_config.md)	 - Inspect, migrate, diagnose, and edit configuration
 * [tskflwctl epic](tskflwctl_epic.md)	 - Work with epics
 * [tskflwctl init](tskflwctl_init.md)	 - Scaffold a planning tree here, or point at an external planning repo
-* [tskflwctl lint](tskflwctl_lint.md)	 - Validate entity frontmatter and task-dependency graph integrity
+* [tskflwctl lint](tskflwctl_lint.md)	 - Validate entity frontmatter, audit findings, and task-dependency graph integrity
 * [tskflwctl research](tskflwctl_research.md)	 - Work with research docs
 * [tskflwctl schema](tskflwctl_schema.md)	 - Describe the tool's contract + per-kind authoring guidance (for agents)
 * [tskflwctl space](tskflwctl_space.md)	 - Manage planning spaces and their registered entry points

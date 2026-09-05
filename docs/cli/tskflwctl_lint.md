@@ -1,11 +1,11 @@
 ## tskflwctl lint
 
-Validate entity frontmatter and task-dependency graph integrity
+Validate entity frontmatter, audit findings, and task-dependency graph integrity
 
 ### Synopsis
 
-Validate task, epic, research, and Thread frontmatter, then validate the repository-global
-task-dependency graph. Exactly resolved legacy dependency fields are visible
+Validate task, epic, research, and Thread frontmatter plus audit findings, then validate the
+repository-global task-dependency graph. Exactly resolved legacy dependency fields are visible
 advisories; missing, ambiguous, or structurally unsafe references are errors.
 
 --fix repairs ordinary frontmatter and missing ids. It never normalizes or changes
