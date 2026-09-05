@@ -12,7 +12,7 @@ tags: [audit, findings, dx, robustness]
 created: "2026-09-05"
 updated_at: "2026-09-05"
 depends_on: [6fm8p1cj11qf, 6g392b0rps7w]
-audit_sources: [planning/audits/6g750etcvfqg-2026-09-05-tool-owned-sub-entity-writes-implementation.md]
+audit_sources: [planning/audits/6g7731f5kjkw-2026-09-05-tool-owned-sub-entity-writes-implementation-claude.md, planning/audits/6g7731f8zzjq-2026-09-05-tool-owned-sub-entity-writes-implementation-antigravity.md]
 started_at: "2026-09-05"
 completed_at: "2026-09-05"
 ---
