@@ -110,13 +110,24 @@ func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 }
 
 // ReadTaskGraph translates local resilient file diagnostics into the neutral
-// task-graph read contract in the same scan used by ListTasks.
+// task-graph read contract while retaining an opaque hash of every unreadable
+// source. It uses the same scanner and parser as ListTasks without exposing the
+// store-private token through that ordinary list surface.
 func (s *FS) ReadTaskGraph() (core.TaskGraphRead, error) {
-	tasks, problems, err := s.ListTasks()
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return core.TaskGraphRead{}, err
+	}
+	tasks, sourceProblems, err := scanDirWithSourceVersions(s.tasksDir, func(path string, content []byte) (domain.Task, error) {
+		return parseTask(content, path)
+	})
 	if err != nil {
 		return core.TaskGraphRead{}, err
 	}
-	return core.TaskGraphReadFromFiles(tasks, problems), nil
+	read := core.TaskGraphRead{Tasks: tasks, Problems: make([]core.TaskGraphLoadProblem, 0, len(sourceProblems))}
+	for _, problem := range sourceProblems {
+		read.Problems = append(read.Problems, core.TaskGraphLoadProblemFromFile(problem.problem, problem.sourceVersion))
+	}
+	return read, nil
 }
 
 // ListTasksWithBodies is ListTasks' scan with each task's body kept alongside (one

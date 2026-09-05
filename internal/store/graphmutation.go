@@ -84,8 +84,8 @@ func (s *FS) MutateTaskGraph(now time.Time, dryRun bool, planner core.TaskGraphP
 	if err != nil {
 		return result, fmt.Errorf("re-read authoritative task graph before write: %w", err)
 	}
-	if !graph.SameSourceSnapshot(currentGraph) {
-		return result, fmt.Errorf("repository task graph changed while planning; retry: %w", domain.ErrConflict)
+	if err := verifyTaskGraphSourceSnapshot(graph, currentGraph); err != nil {
+		return result, fmt.Errorf("repository task graph changed while planning; retry: %w", err)
 	}
 	for _, write := range writes {
 		// Keep the raw-editor CAS window bounded to one atomic replacement. The

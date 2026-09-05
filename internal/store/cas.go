@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -23,6 +24,18 @@ import (
 func hashContent(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
+}
+
+// verifyTaskGraphSourceSnapshot is the shared pre-write whole-repository CAS for
+// every graph-aware mutation, including the forthcoming broken-graph repair path.
+// It is deliberately valid for broken snapshots: unreadable source revisions are
+// part of SameSourceSnapshot, so a raw edit cannot hide behind an unchanged parse
+// error. Callers add operation-specific conflict context around the sentinel.
+func verifyTaskGraphSourceSnapshot(expected, current *core.TaskGraph) error {
+	if !expected.SameSourceSnapshot(current) {
+		return domain.ErrConflict
+	}
+	return nil
 }
 
 // verifyUnchanged is the version-CAS precondition shared by every write: called

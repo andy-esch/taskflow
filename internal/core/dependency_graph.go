@@ -274,6 +274,7 @@ type taskReferenceCandidate struct {
 type TaskGraph struct {
 	tasks               map[string]domain.Task
 	ids                 []string
+	loadProblems        []TaskGraphLoadProblem
 	dependencies        map[string][]string
 	outgoing            map[string][]string
 	problems            []GraphProblem
@@ -321,7 +322,14 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem) *TaskG
 		impactCache:   make(map[string][]DependentImpact),
 		soundVisits:   make(map[string]int, len(tasks)),
 	}
-	for _, problem := range unreadable {
+	g.loadProblems = cloneTaskGraphLoadProblems(unreadable)
+	sort.SliceStable(g.loadProblems, func(i, j int) bool {
+		left, right := g.loadProblems[i], g.loadProblems[j]
+		leftKey := strings.Join([]string{left.TaskID, left.TaskSlug, left.Path, left.Message, left.SourceVersion}, "\x00")
+		rightKey := strings.Join([]string{right.TaskID, right.TaskSlug, right.Path, right.Message, right.SourceVersion}, "\x00")
+		return leftKey < rightKey
+	})
+	for _, problem := range g.loadProblems {
 		taskID, taskSlug := problem.TaskID, problem.TaskSlug
 		if id.Valid(taskID) {
 			g.unreadableIDs[taskID] = true
@@ -547,6 +555,10 @@ func cloneTask(task domain.Task) domain.Task {
 	task.LegacyBlocks = append([]string(nil), task.LegacyBlocks...)
 	task.LegacyDependencyFields = append([]string(nil), task.LegacyDependencyFields...)
 	return task
+}
+
+func cloneTaskGraphLoadProblems(problems []TaskGraphLoadProblem) []TaskGraphLoadProblem {
+	return append([]TaskGraphLoadProblem(nil), problems...)
 }
 
 func displayPath(path string) string {
@@ -874,7 +886,8 @@ func (g *TaskGraph) ResolveTaskID(ref string) (string, error) {
 // files. It exposes no version token: the store can use it as a whole-repository
 // CAS after planning, while callbacks receive only Task() projections with the
 // tokens cleared. Health and paths catch new unreadable/renamed entities; byte
-// hashes catch every in-place edit, including non-graph fields.
+// hashes catch every in-place edit, including non-graph fields and sources that
+// remain unreadable with an otherwise identical diagnostic.
 func (g *TaskGraph) SameSourceSnapshot(other *TaskGraph) bool {
 	if other == nil || g.health != other.health || !slices.Equal(g.ids, other.ids) {
 		return false
@@ -885,8 +898,15 @@ func (g *TaskGraph) SameSourceSnapshot(other *TaskGraph) bool {
 			return false
 		}
 	}
-	return slices.EqualFunc(g.problems, other.problems, sameGraphProblem) &&
+	return slices.EqualFunc(g.loadProblems, other.loadProblems, sameTaskGraphLoadProblem) &&
+		slices.EqualFunc(g.problems, other.problems, sameGraphProblem) &&
 		slices.EqualFunc(g.legacy, other.legacy, sameLegacyDiagnostic)
+}
+
+func sameTaskGraphLoadProblem(left, right TaskGraphLoadProblem) bool {
+	return left.TaskID == right.TaskID && left.TaskSlug == right.TaskSlug &&
+		left.Path == right.Path && left.Message == right.Message &&
+		left.SourceVersion != "" && left.SourceVersion == right.SourceVersion
 }
 
 func sameGraphProblem(left, right GraphProblem) bool {

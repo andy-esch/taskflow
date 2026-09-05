@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -735,6 +736,58 @@ func TestTaskGraphSameSourceSnapshotComparesUnreadableIdentity(t *testing.T) {
 	right := NewTaskGraph(nil, []domain.FileProblem{{Path: "/planning/tasks/bbbbbbbbbbbb-right.md", Message: "bad yaml"}})
 	if left.SameSourceSnapshot(right) {
 		t.Fatal("different unreadable task sets compared as the same source snapshot")
+	}
+}
+
+func TestTaskGraphSameSourceSnapshotComparesOpaqueUnreadableRevisions(t *testing.T) {
+	firstID := testutil.TaskID("first-unreadable")
+	secondID := testutil.TaskID("second-unreadable")
+	problems := []TaskGraphLoadProblem{
+		{TaskID: firstID, TaskSlug: "first-unreadable", Message: "bad remote row", SourceVersion: "opaque-revision-a"},
+		{TaskID: secondID, TaskSlug: "second-unreadable", Message: "bad remote row", SourceVersion: "opaque-revision-b"},
+	}
+	left := NewTaskGraphRead(TaskGraphRead{Problems: problems})
+	encoded, err := json.Marshal(problems[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), problems[0].SourceVersion) || strings.Contains(string(encoded), "SourceVersion") {
+		t.Fatalf("opaque source revision leaked through JSON: %s", encoded)
+	}
+
+	// Adapter result ordering is not source identity. The analyzer normalizes the
+	// problems before comparing the complete snapshot.
+	reordered := NewTaskGraphRead(TaskGraphRead{Problems: []TaskGraphLoadProblem{problems[1], problems[0]}})
+	if !left.SameSourceSnapshot(reordered) {
+		t.Fatal("identical pathless unreadable sources compared as different snapshots")
+	}
+
+	changed := append([]TaskGraphLoadProblem(nil), problems...)
+	changed[0].SourceVersion = "opaque-revision-changed"
+	if left.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Problems: changed})) {
+		t.Fatal("changed unreadable source revision compared as the same snapshot")
+	}
+
+	missing := append([]TaskGraphLoadProblem(nil), problems...)
+	missing[0].SourceVersion = ""
+	if left.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Problems: missing})) {
+		t.Fatal("unversioned unreadable source was accepted as CAS-equivalent")
+	}
+	if NewTaskGraphRead(TaskGraphRead{Problems: missing}).SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Problems: missing})) {
+		t.Fatal("two unversioned unreadable snapshots were accepted as CAS-equivalent")
+	}
+}
+
+func TestTaskGraphSameSourceSnapshotRejectsReadableUnreadableTransition(t *testing.T) {
+	task := graphRecord("representation-transition", domain.StatusReadyToStart)
+	task.SourceVersion = "opaque-readable-revision"
+	readable := NewTaskGraphRead(TaskGraphRead{Tasks: []domain.Task{task}})
+	unreadable := NewTaskGraphRead(TaskGraphRead{Problems: []TaskGraphLoadProblem{{
+		TaskID: task.ID, TaskSlug: task.Slug, Path: task.Path,
+		Message: "row became unreadable", SourceVersion: "opaque-unreadable-revision",
+	}}})
+	if readable.SameSourceSnapshot(unreadable) || unreadable.SameSourceSnapshot(readable) {
+		t.Fatal("readable/unreadable source transition compared as the same snapshot")
 	}
 }
 

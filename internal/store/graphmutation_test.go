@@ -240,6 +240,59 @@ func TestMutateTaskGraphBrokenSnapshotFailsBeforePlanner(t *testing.T) {
 	}
 }
 
+func TestUnreadableTaskSourceRevisionDefeatsStaleGraphPrewriteCAS(t *testing.T) {
+	root := t.TempDir()
+	path, firstContent := testutil.TaskFixture(root, "next-up", "unreadable.md", "# no frontmatter\n")
+	testutil.Write(t, path, firstContent)
+	fs := NewFS(root)
+
+	firstRead, err := fs.ReadTaskGraph()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(firstRead.Tasks) != 0 || len(firstRead.Problems) != 1 {
+		t.Fatalf("first read = %+v", firstRead)
+	}
+	firstProblem := firstRead.Problems[0]
+	if firstProblem.SourceVersion == "" || firstProblem.SourceVersion != hashContent([]byte(firstContent)) {
+		t.Fatalf("unreadable source version = %q", firstProblem.SourceVersion)
+	}
+	before := core.NewTaskGraphRead(firstRead)
+
+	secondContent := "# still no frontmatter, but different bytes\n"
+	if err := os.WriteFile(path, []byte(secondContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	secondRead, err := fs.ReadTaskGraph()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(secondRead.Problems) != 1 || firstProblem.Message != secondRead.Problems[0].Message ||
+		firstProblem.Path != secondRead.Problems[0].Path || firstProblem.TaskID != secondRead.Problems[0].TaskID {
+		t.Fatalf("fixture did not preserve diagnostic identity: first=%+v second=%+v", firstProblem, secondRead.Problems)
+	}
+	if firstProblem.SourceVersion == secondRead.Problems[0].SourceVersion {
+		t.Fatal("different unreadable bytes produced the same source revision")
+	}
+	after := core.NewTaskGraphRead(secondRead)
+	if err := verifyTaskGraphSourceSnapshot(before, after); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("stale unreadable-source snapshot error = %v, want ErrConflict", err)
+	}
+
+	// Restoring the exact bytes restores the opaque revision and proves that the
+	// comparison is content-based rather than scan- or error-instance-based.
+	if err := os.WriteFile(path, []byte(firstContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := core.LoadTaskGraph(fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !before.SameSourceSnapshot(restored) {
+		t.Fatal("byte-identical unreadable source did not restore snapshot identity")
+	}
+}
+
 func TestMutateTaskGraphRejectsPlannerStoreCallsAndNestedMutationWithoutHanging(t *testing.T) {
 	root := t.TempDir()
 	aID := testutil.TaskID("alpha")
