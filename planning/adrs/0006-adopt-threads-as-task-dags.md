@@ -1239,6 +1239,40 @@ decisions that do not belong in the linear detail reader.
 These are implementation boundaries, not new Thread semantics. Repository-global dependencies and
 core projections remain authoritative, and advanced analysis stays out of scope.
 
+### 2026-09-05: Broken-graph recovery operates on source declarations
+
+Adversarial design review of guarded repair exposed a boundary below the semantic `TaskGraph`.
+Ordinary queries should continue to consume its canonical/projected edges, health, SCCs, waves, and
+derived state. Recovery cannot: representative task maps and deduplicated edge projections discard
+the duplicate values, invalid literals, legacy declaration ownership, duplicate-ID records, and
+unreadable-source revisions that a safe editor must preserve and target. Production repair therefore
+requires an adapter-neutral, lossless source-declaration projection beneath `TaskGraph`; this is a
+repair foundation, not a reason to replace the owned DAG algorithms with a graph package.
+
+`task depend repair` is a separate mutation capability and the only supported command family that
+may begin from `GraphBroken`. Repair is removal-only, source-declaration-addressed, guarded by the
+repository lock plus whole-snapshot/per-file CAS, and validated by separate progress and
+preservation proofs. A selected repair may succeed while residual defects leave the graph broken.
+Each durable prefix must remain syntactically valid, add no declaration or edge, remove only
+authorized declarations, and satisfy convergent intent; health and diagnostic row counts need not
+improve monotonically because SCC attribution can split and previously masked defects can surface.
+Receipts must make residual problems and partial durability explicit.
+
+The command is diagnostic when invoked without mutation selectors. It must expose exact source,
+field, raw value, projected edge, and copyable repair selectors in human output, with equivalent
+stable evidence in JSON. `--auto` is deliberately narrow: canonical deduplication, self-edge
+removal, and empty legacy-key cleanup. Invalid or dangling values require explicit `--drop`; cycle
+edges and ambiguous legacy references always require an operator choice. Manifests remain optional,
+convergent intent documents rather than unsafe replacement-state snapshots. `lint --fix`, generic
+force, heuristic cycle breaking, and slug-to-ID guessing never reach this capability.
+
+Repair computes task and Thread projection impacts from readable evidence, but malformed Thread
+documents do not block recovery of the underlying repository task graph. The receipt names any
+incomplete Thread evidence so callers cannot mistake a partial impact calculation for completeness.
+The broader pressure that relational constraints place on authoritative Markdown remains a valid
+architecture question, tracked outside this delivery path; V1 keeps Markdown and Git authoritative
+while repair experience supplies evidence for that later decision.
+
 ## Related
 
 - Supersedes: [0002-adopt-projects](0002-adopt-projects.md).
