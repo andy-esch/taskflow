@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g6scc9jgxae
-status: next-up
+status: in-progress
 epic: 30-threads-and-task-dependency-graphs
 description: Release the first TUI Thread workflow after graph-health reporting and Atlas refresh hardening pass clean-main dogfood.
 effort: S
@@ -12,6 +12,7 @@ tags: [threads, release, tui, dogfood]
 created: "2026-09-04"
 updated_at: "2026-09-04"
 depends_on: [6g63db3sdfrh, 6g697mp8s4tx]
+started_at: "2026-09-04"
 ---
 
 # Cut v0.19.0 as a TUI Threads preview
@@ -37,15 +38,15 @@ stable Thread list/detail navigation and a compact wave view backed by the same 
 
 ## Acceptance criteria
 
-- [ ] `report-graph-degradation-in-status-and-lint` and
+- [x] `report-graph-degradation-in-status-and-lint` and
       `preserve-coherent-atlas-summaries-across-transient-per-space-refresh-failures` are completed
       and merged to clean `main`.
-- [ ] A clean-build dogfood pass covers Thread list/detail, wave presentation, task navigation and
+- [x] A clean-build dogfood pass covers Thread list/detail, wave presentation, task navigation and
       return, external gates, shared membership, lifecycle updates, watcher reload, and a visible
       non-healthy graph diagnostic.
-- [ ] `just release-snapshot`, the full release validation, generated-doc/schema checks, and
+- [x] `just release-snapshot`, the full release validation, generated-doc/schema checks, and
       planning lint pass from the release commit.
-- [ ] Release notes explain the CLI and TUI capabilities as one workflow and identify guarded graph
+- [x] Release notes explain the CLI and TUI capabilities as one workflow and identify guarded graph
       repair, portable multi-entity diagnostics, and a spatial graph view as post-release work—not
       silently shipped or promised stable interfaces.
 - [ ] The v0.19.0 tag and published artifacts identify the same clean-main commit and expected
