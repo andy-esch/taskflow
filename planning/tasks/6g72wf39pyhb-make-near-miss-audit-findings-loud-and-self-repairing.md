@@ -12,6 +12,7 @@ tags: [audit, findings, dx, robustness]
 created: "2026-09-05"
 updated_at: "2026-09-05"
 depends_on: [6fm8p1cj11qf, 6g392b0rps7w]
+audit_sources: [planning/audits/6g750etcvfqg-2026-09-05-tool-owned-sub-entity-writes-implementation.md]
 ---
 # Make near-miss audit findings loud and self-repairing
 

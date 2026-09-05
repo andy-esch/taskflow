@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [store, core, occ, concurrency]
 created: "2026-08-24"
 updated_at: "2026-09-05"
-audit_sources: [planning/audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md]
+audit_sources: [planning/audits/6g750etcvfqg-2026-09-05-tool-owned-sub-entity-writes-implementation.md]
 started_at: "2026-09-05"
 completed_at: "2026-09-05"
 ---
