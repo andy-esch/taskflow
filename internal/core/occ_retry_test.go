@@ -23,6 +23,7 @@ type conflictStore struct {
 	auditBodyCalls    int
 	researchSetCalls  int
 	researchBodyCalls int
+	auditTransforms   int
 }
 
 func (c *conflictStore) errFor(n int) error {
@@ -61,6 +62,23 @@ func (c *conflictStore) MoveAudit(slug string, _ domain.AuditBucket, _ bool) (do
 func (c *conflictStore) AppendAuditBody(slug, text string, _ time.Time, _ bool) (domain.Audit, string, error) {
 	c.auditBodyCalls++
 	return domain.Audit{Slug: slug}, text, c.errFor(c.auditBodyCalls)
+}
+
+// auditFindingBody is the body each TransformAuditBody attempt hands the transform.
+// A losing attempt must be recomputed against this text, not against a snapshot the
+// caller precomputed before the conflict.
+const auditFindingBody = "# Audit: a\n\n## Findings\n\n#### H1. a finding · **Status:** open\n\nBody.\n"
+
+func (c *conflictStore) TransformAuditBody(slug string, _ time.Time, _ bool, transform func(string) (string, error)) (domain.Audit, string, bool, error) {
+	c.auditTransforms++
+	body, err := transform(auditFindingBody)
+	if err != nil {
+		return domain.Audit{}, "", false, err
+	}
+	if err := c.errFor(c.auditTransforms); err != nil {
+		return domain.Audit{}, "", false, err
+	}
+	return domain.Audit{Slug: slug}, body, body != auditFindingBody, nil
 }
 
 func (c *conflictStore) SetResearchFields(slug string, _ map[string]any, _ bool) (domain.Research, error) {
@@ -194,6 +212,46 @@ func TestRetry_AppendAuditBodyRetries(t *testing.T) {
 	}
 	if cs.auditBodyCalls != 2 {
 		t.Errorf("want 2 store calls (1 + 1 retry), got %d", cs.auditBodyCalls)
+	}
+}
+
+// A finding stamp now heals a transient conflict instead of refusing it. The old
+// editor-callback path could not: it escaped its retry loop with an `attempted`
+// flag because it replayed stale precomputed text.
+func TestRetry_EditFindingRetries(t *testing.T) {
+	cs := &conflictStore{conflicts: 1}
+	svc := NewService(cs, WithRetry(4, noopSleep))
+	_, changed, err := svc.EditFinding("a", "H1", FindingEdit{Status: "fixed"}, false)
+	if err != nil {
+		t.Fatalf("EditFinding should heal a transient conflict: %v", err)
+	}
+	if !changed {
+		t.Error("the retried stamp should still report a change")
+	}
+	if cs.auditTransforms != 2 {
+		t.Errorf("want 2 store calls (1 + 1 retry), got %d", cs.auditTransforms)
+	}
+}
+
+// Exhausting the retries still surfaces the typed conflict (exit 14), rather than
+// masking it as success or as a plain error.
+func TestRetry_EditFindingExhaustionSurfacesConflict(t *testing.T) {
+	cs := &conflictStore{conflicts: 99}
+	svc := NewService(cs, WithRetry(2, noopSleep))
+	if _, _, err := svc.EditFinding("a", "H1", FindingEdit{Status: "fixed"}, false); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("exhausted retries must surface ErrConflict, got %v", err)
+	}
+}
+
+// A dry run neither retries nor writes: retryOnConflict returns the first result.
+func TestRetry_EditFindingDryRunDoesNotRetry(t *testing.T) {
+	cs := &conflictStore{conflicts: 1}
+	svc := NewService(cs, WithRetry(4, noopSleep))
+	if _, _, err := svc.EditFinding("a", "H1", FindingEdit{Status: "fixed"}, true); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("a dry run should not retry, got %v", err)
+	}
+	if cs.auditTransforms != 1 {
+		t.Errorf("want exactly 1 store call for a dry run, got %d", cs.auditTransforms)
 	}
 }
 
