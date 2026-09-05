@@ -106,6 +106,41 @@ top-level `lint` gate and extracted `core.AuditLintIssues` as the shared check-s
    referencing them at all — a third instance of this bug class. Judge whether Part B's design
    generalizes to them or quietly hard-codes findings.
 
+## Part B — decisions taken during implementation
+
+Recorded as they were made, so the reviewer inherits the reasoning rather than reverse-engineering
+it from the diff. Each is a deliberate choice with a plausible alternative; all are fair game.
+
+1. **A separator dash is discarded, not preserved.** `#### BTA-01 — title` canonicalizes to
+   `#### BTA1. title`, dropping the em-dash. The first implementation kept it and produced
+   `#### BTA1. — title` with a dangling dash. **This is the only place the repair discards author
+   bytes.** The judgement is that a dash between code and title is a separator standing in for the
+   period, not title text. Attack it: a title that legitimately opens with a dash, an en-dash used
+   as a bullet, `#### H1 - - double`. Mitigation in place: the lint message shows the exact
+   replacement before `--fix` is ever run, so nothing changes silently.
+2. **The recognizer captures the title rather than slicing the line.** The first version computed
+   the title by byte offset and split a multi-byte em-dash mid-rune (`#### M2. \x94 a title`),
+   caught by a test rather than review. Any future widening must keep the capture-group form —
+   verify no byte arithmetic returns.
+3. **`AuditWithFindings` gained a `NearMisses` field** rather than carrying the raw body. Near
+   misses are derived on the same scan that parses findings, because a dropped finding is by
+   construction absent from the parsed set and no later pass over parsed findings can see it. The
+   alternative — carrying every body — was rejected as wasteful for `summarize`, which shares this
+   type. Judge whether a derived diagnostic belongs on a read-model struct, and whether the
+   single-audit path (`LintAudits`) and the sweep path can drift now that they derive it separately.
+4. **`AuditLintIssues` takes near-misses as a third parameter.** It could have recomputed them from
+   a body, but the sweep does not carry one. Confirm both call sites pass equivalent input and that
+   nothing bypasses the shared check-set.
+5. **`FixFindingHeaders` returns the durable prefix on failure.** A mid-run write error surfaces
+   after the audits already repaired, matching the frontmatter fixer's partial-progress contract.
+   Verify the prefix is accurate and that a conflict mid-sweep is retried rather than lost.
+6. **Body repairs run after the frontmatter pass** in `runLintFix`, because the frontmatter pass can
+   rename a file to heal a broken id and the body pass resolves by slug. Check the ordering holds
+   when a single run both renames a file and repairs a header inside it.
+7. **Heading depth is preserved, not normalized.** A `##### h-3:` becomes `##### H3.`, not `####`.
+   The parser accepts depths 2–6, so normalizing would be a gratuitous rewrite — but it does mean a
+   canonicalized corpus can carry mixed finding depths.
+
 ## Already settled — do not re-derive
 
 Recorded so review effort goes to open questions. Challenge these only with contrary evidence.
