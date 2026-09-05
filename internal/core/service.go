@@ -548,6 +548,20 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 			results = append(results, LintResult{Slug: r.Slug, Issues: issues})
 		}
 	}
+	// Audits are part of the same hygiene gate (they were reachable only behind
+	// `audit lint`, so a finding defect stayed invisible to the command the repo
+	// actually runs). The sweep reads each audit once, findings already parsed, and
+	// shares its check-set with `audit lint` via AuditLintIssues.
+	auditRecords, ap, err := s.store.ListAuditsWithFindings()
+	if err != nil {
+		return nil, nil, err
+	}
+	problems = append(problems, ap...)
+	for _, a := range auditRecords {
+		if issues := AuditLintIssues(a.Audit, a.Findings); len(issues) > 0 {
+			results = append(results, LintResult{Slug: a.Audit.Slug, Issues: issues})
+		}
+	}
 	dupThreadIDs := domain.DuplicateIDIssues(threadIDs)
 	for _, thread := range threads {
 		issues := domain.LintThread(thread, func(taskID string) bool { return validTaskIDs[taskID] })
