@@ -196,29 +196,19 @@ func (s *Service) AcceptanceCriteria(slug string) (string, []domain.Criterion, e
 	return t.Slug, domain.ListAcceptanceCriteria(body), nil
 }
 
-// SetAcceptanceCriterion flips a task's nth (1-based) acceptance-criteria checkbox and
-// writes the result through the atomic, frontmatter-preserving body-replace path
-// (EditBody). Returns the reloaded task, the resulting body, and whether anything
-// changed — false means the criterion was already in the target state, so no write was
-// performed (and updated_at is not bumped).
+// SetAcceptanceCriterion flips a task's nth (1-based) acceptance-criteria checkbox.
+// The transform runs against the exact store snapshot protected by content CAS and
+// is re-applied to fresh body text after a transient conflict. Returns the reloaded
+// task, the resulting body, and whether anything changed — false means the criterion
+// was already in the target state, so no write was performed and updated_at is not bumped.
 func (s *Service) SetAcceptanceCriterion(slug string, n int, checked, dryRun bool) (domain.Task, string, bool, error) {
-	t, body, err := s.store.GetTask(slug)
-	if err != nil {
-		return domain.Task{}, "", false, err
-	}
-	newBody, err := domain.SetAcceptanceCriterion(body, n, checked)
-	if err != nil {
-		return domain.Task{}, "", false, err
-	}
-	if newBody == body {
-		return t, body, false, nil // already in the target state — no write
-	}
-	rt, rb, err := s.store.EditBody(slug, newBody, false, s.now(), dryRun)
-	return rt, rb, true, err
+	return s.transformTaskBody(slug, dryRun, func(body string) (string, error) {
+		return domain.SetAcceptanceCriterion(body, n, checked)
+	})
 }
 
 // SetCriterionState sets a task's nth (1-based) criterion to an explicit state, through the
-// same atomic, frontmatter-preserving body-replace path the checkbox flip uses. It is the
+// same CAS-covered body-transform path the checkbox flip uses. It is the
 // write path the criterion vocabulary shipped WITH, rather than after: a state reachable
 // only by hand-editing is one nobody can be held to, which is how the finding vocabulary
 // drifted from its own documentation.
@@ -265,39 +255,31 @@ func (s *Service) SetCriteriaTracked(slug string, ns []int, trackedTo, reason st
 }
 
 func (s *Service) setCriteriaState(slug string, ns []int, state domain.CriterionState, reason string, dryRun bool) (domain.Task, string, bool, error) {
-	t, body, err := s.store.GetTask(slug)
-	if err != nil {
-		return domain.Task{}, "", false, err
-	}
-	newBody, err := domain.SetCriteriaState(body, ns, state, reason)
-	if err != nil {
-		return domain.Task{}, "", false, err
-	}
-	if newBody == body {
-		return t, body, false, nil // already in the target state — no write, no updated_at bump
-	}
-	rt, rb, err := s.store.EditBody(slug, newBody, false, s.now(), dryRun)
-	return rt, rb, true, err
+	return s.transformTaskBody(slug, dryRun, func(body string) (string, error) {
+		return domain.SetCriteriaState(body, ns, state, reason)
+	})
 }
 
-// EditCriteria adds, removes, or rewords one acceptance criterion through the same atomic,
-// frontmatter-preserving body-replace path SetCriterionState uses. edit is the domain
-// operation; naming it here rather than adding three near-identical methods keeps the write
-// path (read → transform → atomic replace, no write when nothing changed) in one place.
+// EditCriteria adds, removes, or rewords one acceptance criterion through the same
+// CAS-covered body-transform path SetCriterionState uses. edit is the domain operation;
+// naming it here rather than adding three near-identical methods keeps the write path
+// (read → transform → atomic replace, no write when nothing changed) in one place.
 func (s *Service) EditCriteria(slug string, dryRun bool, edit func(body string) (string, error)) (domain.Task, string, bool, error) {
-	t, body, err := s.store.GetTask(slug)
-	if err != nil {
-		return domain.Task{}, "", false, err
+	return s.transformTaskBody(slug, dryRun, edit)
+}
+
+func (s *Service) transformTaskBody(slug string, dryRun bool, transform func(body string) (string, error)) (domain.Task, string, bool, error) {
+	now := s.now()
+	type result struct {
+		task    domain.Task
+		body    string
+		changed bool
 	}
-	newBody, err := edit(body)
-	if err != nil {
-		return domain.Task{}, "", false, err
-	}
-	if newBody == body {
-		return t, body, false, nil
-	}
-	rt, rb, err := s.store.EditBody(slug, newBody, false, s.now(), dryRun)
-	return rt, rb, true, err
+	r, err := retryOnConflict(s, dryRun, func() (result, error) {
+		task, body, changed, err := s.store.TransformTaskBody(slug, now, dryRun, transform)
+		return result{task: task, body: body, changed: changed}, err
+	})
+	return r.task, r.body, r.changed, err
 }
 
 // EditTask opens a task for whole-file editing — the human face of mutation,

@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g6qvrj15x97
-bucket: open
+bucket: closed
 area: concurrency-and-atomicity
 date: "2026-09-04"
 updated_at: "2026-09-04"
@@ -83,7 +83,7 @@ lost **0 of 12** (6 of 12 correctly exited 14). That contrast is the finding and
 
 ### High
 
-#### H1. `task ac` silently discards a concurrent body write  · **Status:** open
+#### H1. `task ac` silently discards a concurrent body write  · **Status:** fixed
 
 **File:** `internal/core/service_task.go:205` (and `:268`, `:287`) | **Component:** core/store OCC
 **Effort:** S · **Urgency:** acute
@@ -135,9 +135,14 @@ and hands them to a store writer that re-reads. The task at
 `planning/tasks/6g392b0rps7w-…` explicitly deferred that survey ("Extending CAS to any other
 surface that currently lacks it … is its own task"); this finding is its first hit.
 
+**Resolution:** Added a store-owned task-body transform whose semantic edit is
+derived from the same snapshot protected by content CAS, then wrapped all task
+acceptance-criteria mutations in bounded conflict retry. A deterministic
+regression injects a concurrent body append and proves neither change is lost.
+
 ### Medium
 
-#### M1. `task ac` and `audit finding` are the only scriptable mutations without OCC auto-retry  · **Status:** open
+#### M1. `task ac` and `audit finding` are the only scriptable mutations without OCC auto-retry  · **Status:** tracked by 6g392b0rps7w
 
 **File:** `internal/core/finding.go:245` · `internal/core/service_task.go:267` | **Component:** core
 **Effort:** XS · **Urgency:** soon
@@ -175,7 +180,11 @@ later attempt.
 workaround that stands in for the mechanism; it should disappear with the retry, as that
 task already specifies.
 
-#### M2. Repository lock acquisition is unbounded and undiagnosed  · **Status:** open
+**Resolution:** The task acceptance-criteria half is fixed by 6g6yhyrhp643. The
+remaining audit-finding auto-retry and interactive-loop workaround are re-scoped
+in 6g392b0rps7w.
+
+#### M2. Repository lock acquisition is unbounded and undiagnosed  · **Status:** tracked by 6g6yjm16dkgt
 
 **File:** `internal/store/lock_unix.go:26` | **Component:** store guard
 **Effort:** S · **Urgency:** eventually
@@ -210,6 +219,10 @@ live hang.
 "waiting for the repository lock…" line to the injected `io.Writer` and fall back to the
 blocking acquire, optionally under a deadline that returns `ErrConflict`. Keep the blocking
 path as the default so cooperating serialization is unchanged.
+
+**Resolution:** Tracked as an adapter-neutral design task covering both
+process-local and platform locks, progress and cancellation; direct output from
+the store was rejected as an interface leak.
 
 ### Low
 
@@ -246,7 +259,7 @@ table already records store/atomic.go as non-symlink-preserving (os.Stat).
 Latent only: markdownDoc gates entity scans on IsRegular(), so a symlinked
 entity file is never resolved today.
 
-#### L2. `materializeTaskGraphPlan` misattributes an absent task as `ErrConflict`  · **Status:** open
+#### L2. `materializeTaskGraphPlan` misattributes an absent task as `ErrConflict`  · **Status:** fixed
 
 **File:** `internal/store/graphmutation.go:132` | **Component:** store graph mutation
 **Effort:** XS · **Urgency:** eventually
@@ -265,6 +278,10 @@ reported as a smell rather than a defect. Kept because it sits in a signal-picke
 adjacent to H1's theme: the exit code the CLI shows must name the real condition.
 
 **Recommendation:** check the `ok` and return `ErrNotFound`, mirroring the lifecycle sibling.
+
+**Resolution:** materializeTaskGraphPlan now checks graph.Task membership before
+path resolution and returns ErrNotFound for a task absent from its snapshot; a
+regression covers a task created on disk only after that snapshot.
 
 ## What audited clean
 
@@ -317,28 +334,15 @@ edges. Specifically:
 Not done — three Medium-or-higher findings were surfaced (H1, M1, M2), so step 11 does not
 apply.
 
-## Candidate tasks (human to triage)
+## Disposition
 
-- `tskflwctl task new "Close the lost-update window in the task ac write path" --epic 21-code-quality-architecture-hardening --tags store,core,occ,concurrency --tier 1 --priority high --description "task ac computes the new body from a GetTask read that no CAS covers, then hands finished bytes to EditBody, which CASes only its own later read; a concurrent body write is silently erased."`
-- `tskflwctl task new "Emit a waiting signal and a non-blocking first attempt for the repository lock" --epic 21-code-quality-architecture-hardening --tags store,concurrency,ux --tier 3 --priority medium --description "flock(LOCK_EX) has no LOCK_NB, timeout, or progress output, so a waiter appears hung; the bounded CAS retry beside it is loud and fast by design."`
-- `tskflwctl task new "Return ErrNotFound rather than ErrConflict for a task missing from the graph-mutation snapshot" --epic 21-code-quality-architecture-hardening --tags store,errors --tier 4 --priority low --description "materializeTaskGraphPlan discards graph.Task()'s ok, so an absent task is reported as a path change; the lifecycle sibling checks it."`
-- ⚠️ M1 partially tracked in `planning/tasks/6g392b0rps7w-give-finding-status-writes-a-non-interactive-cas-path.md` — that task owns the `audit finding` half (its `retryOnConflict` acceptance criterion is still open); the `task ac` half is new and depends on H1.
-- ⏳ L1 tracked in `planning/tasks/6g63jj1dh0sb-unify-the-three-divergent-writefileatomic-implementations.md`
-
-## Related-task observations (propose-only)
-
-- **Partly already-shipped, and one premise now false:**
-  `planning/tasks/6g392b0rps7w-give-finding-status-writes-a-non-interactive-cas-path.md`.
-  Its objective says `editFile` "does not verify the content hash. A concurrent automated
-  write between read and write is a lost update." That is no longer true: `store.EditAudit`
-  computes `ifVersion := hashContent(orig)` (`edit.go:295`) and passes `verifyUnchanged`
-  (`:301`) under `s.writeLock`. My probe raced `audit finding` against `audit append` twelve
-  times and lost **zero** writes, with six correct exit-14s — so its third acceptance
-  criterion ("a conflicting concurrent write surfaces `domain.ErrConflict` … rather than
-  silently winning or losing") already holds. What remains live is the `retryOnConflict`
-  wrapper and the `attempted` closure flag. Suggest re-scoping the description to the retry
-  gap; **not changing status/tier/priority here.**
-- **Scope conflict:** the same task lists `SetCriterionState` among the mutations that
-  "instead perform a content-hash compare-and-swap wrapped in `retryOnConflict`". Finding H1
-  shows `SetCriterionState` does neither, and is in fact the worse offender of the two. The
-  task's comparison should not be used as evidence that the `task ac` path is safe.
+- H1 and the task-criteria half of M1 were fixed through
+  [Close the lost-update window in task acceptance-criteria writes](../tasks/6g6yhyrhp643-close-the-lost-update-window-in-task-acceptance-criteria-writes.md).
+- The remaining audit-finding half of M1 was corrected and retained in
+  [Give finding-status writes a non-interactive CAS path](../tasks/6g392b0rps7w-give-finding-status-writes-a-non-interactive-cas-path.md).
+- M2 was reframed around an adapter-neutral contract and tracked in
+  [Design bounded and observable repository lock acquisition](../tasks/6g6yjm16dkgt-design-bounded-and-observable-repository-lock-acquisition.md).
+- L1 remains tracked in
+  [Unify the three divergent writeFileAtomic implementations](../tasks/6g63jj1dh0sb-unify-the-three-divergent-writefileatomic-implementations.md).
+- L2 was fixed directly with focused regression coverage because it was an isolated
+  defense-in-depth correction rather than a standalone delivery slice.

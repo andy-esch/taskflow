@@ -129,7 +129,10 @@ type materializedTaskGraphWrite struct {
 func (s *FS) materializeTaskGraphPlan(graph *core.TaskGraph, plan core.TaskGraphMutationPlan, now time.Time) ([]materializedTaskGraphWrite, error) {
 	writes := make([]materializedTaskGraphWrite, 0, len(plan.TaskWrites))
 	for _, planned := range plan.TaskWrites {
-		task, _ := graph.Task(planned.TaskID)
+		task, ok := graph.Task(planned.TaskID)
+		if !ok {
+			return nil, fmt.Errorf("task %s is absent from the graph snapshot: %w", planned.TaskID, domain.ErrNotFound)
+		}
 		path, err := s.resolvePath(planned.TaskID)
 		if err != nil {
 			return nil, err

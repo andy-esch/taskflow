@@ -153,6 +153,61 @@ func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun 
 	)
 }
 
+// TransformTaskBody applies transform to the body read from the exact task-file
+// snapshot protected by the write's content CAS. It is the non-interactive
+// read-modify-write path for semantic body edits such as acceptance-criterion
+// transitions: a rejected CAS lets core invoke the operation again, at which
+// point transform receives fresh body text instead of stale precomputed bytes.
+// An unchanged normalized body is a no-op and does not stamp updated_at.
+func (s *FS) TransformTaskBody(
+	slug string,
+	now time.Time,
+	dryRun bool,
+	transform func(current string) (string, error),
+) (domain.Task, string, bool, error) {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return domain.Task{}, "", false, err
+	}
+	path, err := s.resolve(slug)
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return domain.Task{}, "", false, fmt.Errorf("read task %s: %w", path, err)
+	}
+	_, body, err := splitFrontmatterStrict(content)
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	newBody, err := transform(string(body))
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	newBody = normalizeBody(newBody)
+	if newBody == normalizeBody(string(body)) {
+		task, err := parseTask(content, path)
+		if err != nil {
+			return domain.Task{}, "", false, fmt.Errorf("%s: %w", path, err)
+		}
+		return task, string(body), false, nil
+	}
+
+	updatedAt := now.Format("2006-01-02")
+	task, storedBody, err := writeBody(
+		"task", path, content, newBody,
+		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
+		func(c []byte) (domain.Task, error) { return parseTask(c, path) },
+		s.writeLock,
+		func() error { return verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "edit") },
+		dryRun,
+	)
+	if err != nil {
+		return domain.Task{}, "", false, err
+	}
+	return task, storedBody, true, nil
+}
+
 // normalizeBody works in LF internally (any CRLF/CR input is folded to LF), trims
 // trailing blank lines, and guarantees a single trailing newline (the markdown-file
 // convention), leaving an empty body empty. replaceBodyStamped re-emits the result
