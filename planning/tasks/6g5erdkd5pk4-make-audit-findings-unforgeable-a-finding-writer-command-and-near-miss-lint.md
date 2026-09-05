@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5erdkd5pk4
-status: ready-to-start
+status: deprecated
 epic: 20-cli-ux-and-ergonomics
 description: Findings must be hand-authored into exact syntax and a near-miss parses to zero findings while lint stays green; add a writer command and diagnostics.
 effort: Unknown
@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [cli, agents, robustness, dx]
 created: "2026-08-31"
-updated_at: "2026-09-01"
+updated_at: "2026-09-05"
+deprecated_at: "2026-09-05"
 ---
 # Make audit findings unforgeable: a finding writer command and near-miss lint
 

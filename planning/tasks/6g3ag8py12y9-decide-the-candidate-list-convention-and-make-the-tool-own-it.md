@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [cli, audit, core, design]
 created: "2026-08-24"
-updated_at: "2026-08-24"
+updated_at: "2026-09-05"
+depends_on: [6g72wf39pyhb]
 ---
 ## Context
 
