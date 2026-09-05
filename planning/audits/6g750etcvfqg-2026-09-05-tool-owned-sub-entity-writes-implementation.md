@@ -140,6 +140,23 @@ it from the diff. Each is a deliberate choice with a plausible alternative; all 
 7. **Heading depth is preserved, not normalized.** A `##### h-3:` becomes `##### H3.`, not `####`.
    The parser accepts depths 2–6, so normalizing would be a gratuitous rewrite — but it does mean a
    canonicalized corpus can carry mixed finding depths.
+8. **A write is refused, not auto-repaired.** `audit append` and `audit edit` reject a heading that
+   would parse to nothing, naming the canonical replacement, rather than silently rewriting what
+   the author typed. This follows the unterminated-fence guard sitting beside it in `writeBody`;
+   `lint --fix` remains the explicit opt-in for rewriting text. Challenge whether refusing is right
+   for an agent workflow, where auto-repair would save a round trip.
+9. **Only INTRODUCED drift is refused.** `IntroducedNearMissHeaders(prev, next)` diffs by header
+   text, so pre-existing drift never blocks an unrelated append or a status stamp — otherwise one
+   bad header would freeze the document. Attack the diff: duplicate identical headers (the count is
+   decremented per occurrence), a header moved rather than added, and a rename that both removes
+   and adds. The repair path (`TransformAuditBody`) is deliberately NOT covered by this guard.
+10. **An acceptance criterion was narrowed rather than met.** AC 6 originally also required lint to
+    flag an open audit with no findings and no near-misses. Measured against the live corpus that
+    rule fires on exactly one audit — this brief, legitimately empty while it waits for a reviewer —
+    and would fire on every fresh `audit new` scaffold. It was dropped as a false-positive generator
+    of the same kind this work exists to remove; the broken-vs-empty distinction is carried by the
+    near-miss rule, which names the offending line. **Reviewer: this is a scope reduction I made
+    unilaterally — overturn it if you disagree.**
 
 ## Already settled — do not re-derive
 

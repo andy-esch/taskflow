@@ -142,8 +142,9 @@ rule inside it is easy to miss. Land that first, or land it with this.
 - [x] audit append and audit edit honor the promise in audit append --help by
   routing a recognizer hit through the same body-transform op, so the check
   cannot be forgotten or bypassed by a raw write.
-- [ ] audit show and audit list render an explicit no-findings state instead of
-  0% settled 0/0, and lint flags an open audit with neither findings nor
-  recognizer hits.
+- [x] audit show and audit list render an explicit no-findings state instead of
+  0% settled 0/0; the broken-vs-empty distinction is carried by the near-miss
+  lint rule rather than by a lint flag on empty open audits, which would fire on
+  every queued brief and fresh scaffold.
 - [ ] Reviewer-brief boilerplate and schema audit no longer state that **Status:**
   on its own line breaks parsing, because it does not.
