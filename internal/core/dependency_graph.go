@@ -288,6 +288,7 @@ type TaskGraph struct {
 	unreadableIDs       map[string]bool
 	referenceCandidates []taskReferenceCandidate
 	cycleMembers        map[string]bool
+	cycleComponent      map[string]int
 	sound               map[string]soundResult
 	states              map[string]TaskGraphState
 	waves               [][]string
@@ -323,6 +324,7 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 		hardBroken:      make(map[string]bool),
 		unreadableIDs:   make(map[string]bool),
 		cycleMembers:    make(map[string]bool),
+		cycleComponent:  make(map[string]int),
 		sound:           make(map[string]soundResult, len(tasks)),
 		states:          make(map[string]TaskGraphState, len(tasks)),
 		causalCache:     make(map[string][]Blocker),
@@ -493,6 +495,7 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 		for _, taskID := range component {
 			g.cycleMembers[taskID] = true
 			componentByTask[taskID] = componentIndex
+			g.cycleComponent[taskID] = componentIndex
 		}
 		cycle := structure.RepresentativeCycles[componentIndex]
 		for _, taskID := range component {

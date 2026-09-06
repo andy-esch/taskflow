@@ -1204,6 +1204,9 @@
         "dependency_mutation": {
           "$ref": "#/$defs/DependencyMutationJSON"
         },
+        "graph_repair": {
+          "$ref": "#/$defs/TaskGraphRepairJSON"
+        },
         "task_lifecycle": {
           "$ref": "#/$defs/TaskLifecycleRecoveryJSON"
         },
@@ -2666,6 +2669,389 @@
         "remedy"
       ],
       "description": "TaskEligibilityFailureJSON preserves the typed default-start refusal in each failed batch row."
+    },
+    "TaskGraphRepairDeclarationJSON": {
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/TaskGraphRepairSourceJSON"
+        },
+        "field": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "occurrence": {
+          "type": "integer"
+        },
+        "has_projected_edge": {
+          "type": "boolean"
+        },
+        "prerequisite_id": {
+          "type": "string"
+        },
+        "dependent_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "source",
+        "field",
+        "value",
+        "occurrence",
+        "has_projected_edge"
+      ],
+      "description": "TaskGraphRepairDeclarationJSON records an exact raw declaration removed by the prospective plan or durable prefix."
+    },
+    "TaskGraphRepairDefectJSON": {
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "repairable": {
+          "type": "boolean"
+        },
+        "automatic": {
+          "type": "boolean"
+        },
+        "target": {
+          "$ref": "#/$defs/TaskGraphRepairEditJSON"
+        },
+        "has_projected_edge": {
+          "type": "boolean"
+        },
+        "prerequisite_id": {
+          "type": "string"
+        },
+        "dependent_id": {
+          "type": "string"
+        },
+        "candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "problem": {
+          "$ref": "#/$defs/GraphProblemJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "reason",
+        "repairable",
+        "automatic",
+        "has_projected_edge",
+        "candidate_ids"
+      ],
+      "description": "TaskGraphRepairDefectJSON is one repairable declaration defect or residual direct-edit problem."
+    },
+    "TaskGraphRepairEditJSON": {
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/TaskGraphRepairSourceJSON"
+        },
+        "field": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "occurrence": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "action",
+        "source",
+        "field",
+        "value",
+        "occurrence"
+      ],
+      "description": "TaskGraphRepairEditJSON is a stable, replayable source-declaration selector."
+    },
+    "TaskGraphRepairEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "committed": {
+          "type": "boolean"
+        },
+        "initial_health": {
+          "type": "string"
+        },
+        "final_health": {
+          "type": "string"
+        },
+        "selected": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphRepairEditJSON"
+          },
+          "type": "array"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphRepairOperationJSON"
+          },
+          "type": "array"
+        },
+        "removed": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphRepairDeclarationJSON"
+          },
+          "type": "array"
+        },
+        "addressed": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphRepairDefectJSON"
+          },
+          "type": "array"
+        },
+        "residual": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphRepairDefectJSON"
+          },
+          "type": "array"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/GraphProblemJSON"
+          },
+          "type": "array"
+        },
+        "planned_files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "applied_files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "remaining_files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "impacts": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphStateImpactJSON"
+          },
+          "type": "array"
+        },
+        "thread_impacts": {
+          "items": {
+            "$ref": "#/$defs/ThreadProjectionImpactJSON"
+          },
+          "type": "array"
+        },
+        "incomplete_thread_evidence": {
+          "items": {
+            "$ref": "#/$defs/ThreadReadProblemJSON"
+          },
+          "type": "array"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "changed",
+        "dry_run",
+        "committed",
+        "initial_health",
+        "final_health",
+        "selected",
+        "operations",
+        "removed",
+        "addressed",
+        "residual",
+        "problems",
+        "planned_files",
+        "applied_files",
+        "remaining_files",
+        "impacts",
+        "thread_impacts",
+        "incomplete_thread_evidence",
+        "workspace"
+      ],
+      "description": "TaskGraphRepairEnvelope is `task depend repair --json`."
+    },
+    "TaskGraphRepairJSON": {
+      "properties": {
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "committed": {
+          "type": "boolean"
+        },
+        "initial_health": {
+          "type": "string"
+        },
+        "final_health": {
+          "type": "string"
+        },
+        "selected": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphRepairEditJSON"
+          },
+          "type": "array"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphRepairOperationJSON"
+          },
+          "type": "array"
+        },
+        "removed": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphRepairDeclarationJSON"
+          },
+          "type": "array"
+        },
+        "addressed": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphRepairDefectJSON"
+          },
+          "type": "array"
+        },
+        "residual": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphRepairDefectJSON"
+          },
+          "type": "array"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/GraphProblemJSON"
+          },
+          "type": "array"
+        },
+        "planned_files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "applied_files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "remaining_files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "impacts": {
+          "items": {
+            "$ref": "#/$defs/TaskGraphStateImpactJSON"
+          },
+          "type": "array"
+        },
+        "thread_impacts": {
+          "items": {
+            "$ref": "#/$defs/ThreadProjectionImpactJSON"
+          },
+          "type": "array"
+        },
+        "incomplete_thread_evidence": {
+          "items": {
+            "$ref": "#/$defs/ThreadReadProblemJSON"
+          },
+          "type": "array"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "changed",
+        "dry_run",
+        "committed",
+        "initial_health",
+        "final_health",
+        "selected",
+        "operations",
+        "removed",
+        "addressed",
+        "residual",
+        "problems",
+        "planned_files",
+        "applied_files",
+        "remaining_files",
+        "impacts",
+        "thread_impacts",
+        "incomplete_thread_evidence",
+        "workspace"
+      ],
+      "description": "TaskGraphRepairJSON is the reusable guarded repair receipt payload."
+    },
+    "TaskGraphRepairOperationJSON": {
+      "properties": {
+        "edit": {
+          "$ref": "#/$defs/TaskGraphRepairEditJSON"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "automatic": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "edit",
+        "reason",
+        "automatic"
+      ],
+      "description": "TaskGraphRepairOperationJSON is one selected and reauthorized repair action."
+    },
+    "TaskGraphRepairSourceJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "task_slug": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "TaskGraphRepairSourceJSON is the exact owner of a graph declaration."
     },
     "TaskGraphStateImpactJSON": {
       "properties": {
@@ -4409,6 +4795,9 @@
         "dependency_mutation": {
           "$ref": "#/$defs/DependencyMutationEnvelope"
         },
+        "graph_repair": {
+          "$ref": "#/$defs/TaskGraphRepairEnvelope"
+        },
         "task_blockers": {
           "$ref": "#/$defs/TaskBlockersEnvelope"
         },
@@ -4550,6 +4939,7 @@
         "path",
         "task_mutation",
         "dependency_mutation",
+        "graph_repair",
         "task_blockers",
         "task_unblocks",
         "threads",
@@ -4596,6 +4986,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.60)",
+  "title": "tskflwctl --json output (schema_version 1.61)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

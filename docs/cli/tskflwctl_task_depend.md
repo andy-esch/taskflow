@@ -29,4 +29,5 @@ Change repository-global task dependencies through the graph guard
 * [tskflwctl task depend add](tskflwctl_task_depend_add.md)	 - Add one or more hard prerequisites
 * [tskflwctl task depend migrate](tskflwctl_task_depend_migrate.md)	 - Convert all safe legacy dependency fields to canonical depends_on IDs
 * [tskflwctl task depend remove](tskflwctl_task_depend_remove.md)	 - Remove one or more hard prerequisites
+* [tskflwctl task depend repair](tskflwctl_task_depend_repair.md)	 - Diagnose or repair broken graph-owned declarations
 

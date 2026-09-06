@@ -5,9 +5,11 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/id"
 
 	yaml "go.yaml.in/yaml/v3"
@@ -149,6 +151,119 @@ func updateFrontmatter(content []byte, updates map[string]any) ([]byte, error) {
 	}
 
 	return assembleFile(mapping, body, detectLineEnding(content))
+}
+
+// updateDependencySourceEdits removes exact graph-owned YAML occurrences while
+// retaining every unselected sequence node, key, comment, and body. It is the
+// repair counterpart to updateFrontmatter's replacement values: repair must not
+// manufacture a desired dependency set or clear an entire legacy field.
+func updateDependencySourceEdits(content []byte, edits []core.TaskGraphSourceEdit, updatedAt string) ([]byte, bool, error) {
+	fm, body, err := splitFrontmatterStrict(content)
+	if err != nil {
+		return nil, false, err
+	}
+	var doc yaml.Node
+	if len(bytes.TrimSpace(fm)) > 0 {
+		if err := yaml.Unmarshal(fm, &doc); err != nil {
+			return nil, false, fmt.Errorf("%w: parse frontmatter: %v", errBadFrontmatter, err)
+		}
+	}
+	mapping, err := documentMapping(&doc)
+	if err != nil {
+		return nil, false, err
+	}
+	type editGroup struct {
+		drops     map[string]map[int]bool
+		dedupe    map[string]bool
+		dropEmpty bool
+	}
+	groups := make(map[string]*editGroup)
+	for _, edit := range edits {
+		field := string(edit.Field)
+		group := groups[field]
+		if group == nil {
+			group = &editGroup{drops: make(map[string]map[int]bool), dedupe: make(map[string]bool)}
+			groups[field] = group
+		}
+		switch edit.Action {
+		case core.TaskGraphSourceDropDeclaration:
+			if group.drops[edit.Value] == nil {
+				group.drops[edit.Value] = make(map[int]bool)
+			}
+			group.drops[edit.Value][edit.Occurrence] = true
+		case core.TaskGraphSourceDedupe:
+			group.dedupe[edit.Value] = true
+		case core.TaskGraphSourceDropEmptyField:
+			group.dropEmpty = true
+		default:
+			return nil, false, fmt.Errorf("%w: unsupported dependency repair action %q", domain.ErrValidation, edit.Action)
+		}
+	}
+	fields := make([]string, 0, len(groups))
+	for field := range groups {
+		fields = append(fields, field)
+	}
+	sort.Strings(fields)
+	changed := false
+	for _, field := range fields {
+		keyIndex, value := mapValueNode(mapping, field)
+		if value == nil {
+			continue
+		}
+		if value.Kind != yaml.SequenceNode {
+			return nil, false, fmt.Errorf("%w: graph-owned field %s is not a YAML list", domain.ErrValidation, field)
+		}
+		group := groups[field]
+		occurrences := make(map[string]int)
+		seen := make(map[string]bool)
+		remaining := make([]*yaml.Node, 0, len(value.Content))
+		for _, item := range value.Content {
+			raw := item.Value
+			if item.Kind == yaml.AliasNode && item.Alias != nil {
+				raw = item.Alias.Value
+			}
+			occurrence := occurrences[raw]
+			occurrences[raw]++
+			if group.drops[raw][occurrence] {
+				changed = true
+				continue
+			}
+			if group.dedupe[raw] && seen[raw] {
+				changed = true
+				continue
+			}
+			seen[raw] = true
+			remaining = append(remaining, item)
+		}
+		value.Content = remaining
+		if group.dropEmpty {
+			if len(value.Content) != 0 {
+				return nil, false, fmt.Errorf("%w: graph-owned field %s is not empty after selected declaration removals", domain.ErrValidation, field)
+			}
+			mapping.Content = append(mapping.Content[:keyIndex], mapping.Content[keyIndex+2:]...)
+			changed = true
+			continue
+		}
+		if field == string(core.TaskDependencyDependsOn) && len(value.Content) == 0 {
+			mapping.Content = append(mapping.Content[:keyIndex], mapping.Content[keyIndex+2:]...)
+			changed = true
+		}
+	}
+	if !changed {
+		return append([]byte(nil), content...), false, nil
+	}
+	setMapNode(mapping, "updated_at", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: updatedAt})
+	out, err := assembleFile(mapping, body, detectLineEnding(content))
+	return out, true, err
+}
+
+func mapValueNode(mapping *yaml.Node, key string) (int, *yaml.Node) {
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			return i, mapping.Content[i+1]
+		}
+	}
+	return -1, nil
 }
 
 // assembleFile encodes a frontmatter mapping node and reattaches the `---`

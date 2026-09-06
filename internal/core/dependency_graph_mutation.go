@@ -149,10 +149,26 @@ func taskGraphHealthDetail(graph *TaskGraph) string {
 		if len(problems) > 1 {
 			detail += fmt.Sprintf(" (%d additional problem(s))", len(problems)-1)
 		}
-		return detail + "; repair the graph-owned frontmatter directly, then run `tskflwctl lint`"
+		if graphProblemRepairable(first.Code) {
+			if len(graph.LegacyDiagnostics()) > 0 {
+				return detail + "; run `tskflwctl task depend repair`, then `tskflwctl task depend migrate` when repair reports no blocking defects"
+			}
+			return detail + "; run `tskflwctl task depend repair` for exact source-level diagnosis"
+		}
+		return detail + "; repair the named non-dependency field directly, then run `tskflwctl lint`"
 	}
 	if legacy := graph.LegacyDiagnostics(); len(legacy) > 0 {
 		return fmt.Sprintf("%d legacy dependency field occurrence(s) remain; run `tskflwctl task depend migrate`", len(legacy))
 	}
 	return "graph health is not mutation-ready"
+}
+
+func graphProblemRepairable(code GraphProblemCode) bool {
+	switch code {
+	case ProblemDuplicateDependency, ProblemSelfDependency, ProblemInvalidDependencyID,
+		ProblemMissingDependency, ProblemCycle, ProblemLegacyMissing, ProblemLegacyAmbiguous:
+		return true
+	default:
+		return false
+	}
 }

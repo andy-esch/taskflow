@@ -72,6 +72,7 @@ func TestGolden_MachineContract(t *testing.T) {
 		{"task_acceptance_json", []string{"-C", fixtureRepo, "task", "ac", "alpha-task", "--json"}, nil},
 		{"task_blockers_json", []string{"-C", fixtureRepo, "task", "blockers", "alpha-task", "--json"}, nil},
 		{"task_unblocks_json", []string{"-C", fixtureRepo, "task", "unblocks", "gamma-task", "--json"}, nil},
+		{"task_depend_repair_json", []string{"-C", fixtureRepo, "task", "depend", "repair", "--json"}, redact},
 		{"task_list_unblocked_json", []string{"-C", fixtureRepo, "task", "list", "--unblocked", "--json"}, nil},
 		{"thread_list_json", []string{"-C", fixtureRepo, "thread", "list", "--json"}, nil},
 		{"thread_show_json", []string{"-C", fixtureRepo, "thread", "show", "fixture-thread", "--json"}, nil},

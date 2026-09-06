@@ -86,6 +86,11 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 		details := wire.ToDependencyMutationJSON(dependencyErr.receipt, dependencyErr.workspace)
 		payload.Error.DependencyMutation = &details
 	}
+	var repairErr *graphRepairCommandFailure
+	if errors.As(err, &repairErr) {
+		details := wire.ToTaskGraphRepairJSON(repairErr.receipt, repairErr.workspace)
+		payload.Error.GraphRepair = &details
+	}
 	var lifecycleErr *taskLifecycleCommandFailure
 	if errors.As(err, &lifecycleErr) {
 		details := wire.ToTaskLifecycleRecoveryJSON(lifecycleErr.receipt, lifecycleErr.workspace)

@@ -1296,6 +1296,15 @@ authorized declarations, and satisfy convergent intent; health and diagnostic ro
 improve monotonically because SCC attribution can split and previously masked defects can surface.
 Receipts must make residual problems and partial durability explicit.
 
+Progress counts source-level self declarations independently of projected edges, so a repairable
+self-edge on a duplicate-ID shadow can improve the graph even though the shadow contributes no
+semantic edge. Preservation is a separate comparison of complete before/after source records:
+unselected fields and records remain exact, authorized value counts decrease without survivor
+reordering, and unreadable evidence remains unchanged. During apply, each next source group is
+reauthorized against a freshly read durable snapshot and composed into the cumulative receipt. This
+retains protection from editors that do not participate in the repository lock without repeatedly
+validating the entire growing prefix.
+
 The command is diagnostic when invoked without mutation selectors. It must expose exact source,
 field, raw value, projected edge, and copyable repair selectors in human output, with equivalent
 stable evidence in JSON. `--auto` is deliberately narrow: canonical deduplication, self-edge
@@ -1312,6 +1321,14 @@ evidence so callers cannot mistake a partial impact calculation for completeness
 The broader pressure that relational constraints place on authoritative Markdown remains a valid
 architecture question, tracked outside this delivery path; V1 keeps Markdown and Git authoritative
 while repair experience supplies evidence for that later decision.
+
+The initial implementation follows this boundary directly: the core owns declaration diagnosis,
+request reauthorization, prefix simulation, progress/preservation validation, and adapter-neutral
+receipts; the filesystem repair port owns the task+Thread guarded snapshot, surgical YAML sequence
+edits, and whole/per-prefix/per-file CAS. The CLI is only a primary adapter over that use case. Its
+YAML plan schema is `schema: 1` with an `operations` list containing `action`, `task` and/or exact
+`location`, `field`, verbatim `value`, and zero-based `occurrence`; direct flags and manifest entries
+compile to the same typed repair request.
 
 ## Related
 

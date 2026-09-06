@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g4g8gatbnrs
-status: next-up
+status: in-progress
 epic: 30-threads-and-task-dependency-graphs
 description: Repair cycles, dangling edges, and other broken graph-owned state without requiring an unsafe generic mutation path.
 effort: 3-5 days
@@ -11,9 +11,9 @@ autonomy_level: 3
 tags: [threads, graph, storage, cli]
 created: "2026-08-28"
 depends_on: [6g3q4rt7mgjn, 6g697mp8s4tx, 6g6scc9jgxae, 6g721vewvvrz, 6g72ncs4xjdm]
-updated_at: "2026-09-05"
+updated_at: "2026-09-06"
 started_at: "2026-09-05"
-audit_sources: [planning/audits/6g71vzq8wdnj-2026-09-05-add-a-guarded-repair-path-for-broken-dependency-graphs-antigravity.md, planning/audits/6g71yr50md16-2026-09-05-add-a-guarded-repair-path-for-broken-dependency-graphs-claude.md]
+audit_sources: [planning/audits/6g71vzq8wdnj-2026-09-05-add-a-guarded-repair-path-for-broken-dependency-graphs-antigravity.md, planning/audits/6g71yr50md16-2026-09-05-add-a-guarded-repair-path-for-broken-dependency-graphs-claude.md, planning/audits/6g7cr4psd1nk-2026-09-06-guarded-broken-graph-repair-implementation-claude.md, planning/audits/6g7cr4q1vhms-2026-09-06-guarded-broken-graph-repair-implementation-antigravity.md]
 ---
 
 # Add a guarded repair path for broken dependency graphs
@@ -58,32 +58,32 @@ Provide an explicit recovery capability for graph-owned frontmatter that is alre
 
 ## Acceptance criteria
 
-- [ ] A broken source graph can enter only the dedicated repair planner; ordinary add/remove/migrate,
+- [x] A broken source graph can enter only the dedicated repair planner; ordinary add/remove/migrate,
       lifecycle, generic task mutation, and `lint --fix` continue to fail closed.
-- [ ] Validation runs over the full source-level projection and preserves duplicate-ID shadow
+- [x] Validation runs over the full source-level projection and preserves duplicate-ID shadow
       records, unreadable records/revisions, duplicate declarations, raw invalid values, and legacy
       declaration ownership. It does not reconstruct a prospective repository from representative
       `TaskGraph.Task()` values.
-- [ ] Progress and preservation are independent hard checks: the complete plan strictly improves
+- [x] Progress and preservation are independent hard checks: the complete plan strictly improves
       the structural defect measure, every prefix is structurally non-worsening and discharges
       selected intent, and no unrelated declaration or valid constraint disappears.
-- [ ] Cycle, self-edge, dangling-reference, invalid-ID, duplicate-edge, and each legacy-field fixture
+- [x] Cycle, self-edge, dangling-reference, invalid-ID, duplicate-edge, and each legacy-field fixture
       have an actionable preview and converge to the selected repaired state, whether or not
       unrelated residual problems leave the repository broken.
-- [ ] Bare diagnosis and `--dry-run` explain each defect, distinguish auto-safe from explicit
+- [x] Bare diagnosis and `--dry-run` explain each defect, distinguish auto-safe from explicit
       repairs, show exact copyable selectors, and predict residual problems without writing.
-- [ ] `--auto` is limited to duplicate/self/empty-legacy cleanup. Invalid and dangling values remain
+- [x] `--auto` is limited to duplicate/self/empty-legacy cleanup. Invalid and dangling values remain
       verbatim until explicitly dropped; cycle and ambiguous-legacy choices are never guessed.
-- [ ] Concurrent task, dependency, and Thread-evidence edits—including byte
+- [x] Concurrent task, dependency, and Thread-evidence edits—including byte
   changes to still-unreadable task or Thread files—produce a typed conflict
   rather than a stale repair. Every injected durable prefix is diagnosable,
   convergent on retry, and never repeats an already-satisfied dedupe or drop
   intent.
-- [ ] Human and JSON receipts derive `Changed` from actual materialized writes and report `Committed`,
+- [x] Human and JSON receipts derive `Changed` from actual materialized writes and report `Committed`,
       initial/final health, selected and removed declarations, addressed and residual defects, raw
       removed values, workspace, applied/remaining files, task-state impacts, readable Thread
       impacts, and incomplete Thread diagnostics.
-- [ ] Normal lint and other graph-health surfaces point to defect-specific repair diagnosis once it
+- [x] Normal lint and other graph-health surfaces point to defect-specific repair diagnosis once it
       exists, including “repair, then migrate” where legacy migration cannot yet run.
 
 ## Out of scope
@@ -104,6 +104,30 @@ graph-declaration projection and simulator. This task resumes after those founda
 repair policy, guarded materialization, receipts, CLI/wire contracts, and guidance. The larger
 question of whether relational planning data should remain authoritative Markdown is tracked
 separately and does not weaken the current repair contract.
+
+## Implementation progress (2026-09-06)
+
+The dedicated core/store port, source-level diagnosis and removal planner, independent progress and
+preservation proofs, surgical filesystem materializer, task-and-Thread evidence CAS, convergent
+partial receipts, CLI/manifest surface, human/JSON rendering, and lint/status guidance are now
+implemented. The validator also rejects mixed dedupe/exact-drop effects and reauthorizes selected
+receipt intent so metadata cannot outrun the guarded operations. Copyable selectors retain raw
+colon-bearing and terminal-`#<digits>` values.
+
+Focused fixtures cover every canonical and legacy defect class, residual-broken repairs,
+duplicate-ID shadows, YAML aliases, unreadable evidence, exact YAML-node preservation, readable
+Thread impacts, late readable/unreadable task and Thread edits, injected durable prefixes, and
+convergent retries. The Claude implementation audit found and drove fixes for shadow-owned
+self-declarations, the independent containment proof, alias materialization, mutation-killing guard
+coverage, truthful pre-write receipts, documentation, and growing-prefix validation cost. Per-write
+validation now proves and composes one source group while retaining fresh task and Thread evidence
+reads for out-of-band editor safety; the retained benchmark measured 100 repaired files at 1.76s
+and 200 at 5.46s, versus the audit baseline of 6.33s and 37.54s. All seven findings are fixed and
+both implementation audits are closed.
+
+Validation is clean under the full uncached `go test -count=1 -race ./...`, golangci-lint, module
+tidiness, planning and audit lint, repeat generation of CLI/schema artifacts, and
+`git diff --check`.
 
 ## Related
 

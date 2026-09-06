@@ -3,11 +3,190 @@ package render
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
+
+// TaskGraphRepairJSON writes the guarded source-declaration repair receipt.
+func TaskGraphRepairJSON(w io.Writer, receipt core.TaskGraphRepairReceipt, workspace wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToTaskGraphRepairEnvelope(receipt, workspace))
+}
+
+// TaskGraphRepairHuman keeps diagnosis terse while making every destructive
+// choice copyable. Exact source paths are preferred over potentially ambiguous
+// duplicate task IDs.
+func TaskGraphRepairHuman(w io.Writer, st Style, receipt core.TaskGraphRepairReceipt, workspace wire.WorkspaceJSON) error {
+	fmt.Fprintf(w, "%s %s -> %s · changed=%t · committed=%t\n", st.Dim("graph:"), receipt.InitialHealth, receipt.FinalHealth, receipt.Changed, receipt.Committed)
+	if workspace.PlanningRoot != "" {
+		fmt.Fprintf(w, "%s %s\n", st.Dim("workspace:"), workspace.PlanningRoot)
+	}
+	if len(receipt.Selected) == 0 {
+		auto, explicit, direct := 0, 0, 0
+		for _, defect := range receipt.Residual {
+			switch {
+			case !defect.Repairable:
+				direct++
+			case defect.Automatic:
+				auto++
+			default:
+				explicit++
+			}
+		}
+		if auto == 0 && explicit == 0 && direct == 0 {
+			fmt.Fprintf(w, "%s no broken graph-owned declarations found\n", st.Green("✔"))
+			return nil
+		}
+		if auto > 0 {
+			fmt.Fprintf(w, "%s %d inferable repair(s); apply with `tskflwctl task depend repair --auto`\n", st.Bold("inferable:"), auto)
+		}
+		for _, defect := range receipt.Residual {
+			if !defect.Repairable {
+				continue
+			}
+			detail := repairEditDisplay(defect.Target)
+			if defect.HasProjectedEdge {
+				detail += fmt.Sprintf("  edge %s -> %s", defect.ProjectedEdge.From, defect.ProjectedEdge.To)
+			}
+			if len(defect.CandidateIDs) > 0 {
+				detail += "  candidates " + strings.Join(defect.CandidateIDs, ", ")
+			}
+			fmt.Fprintf(w, "%s %s  %s\n", st.Dim("•"), defect.Reason, detail)
+			if !defect.Automatic {
+				flag := "--drop"
+				if defect.Target.Action == core.TaskGraphSourceDedupe {
+					flag = "--dedupe"
+				}
+				fmt.Fprintf(w, "  %s\n", st.Dim("tskflwctl task depend repair "+flag+" "+shellQuote(repairEditSelector(defect.Target))))
+			}
+		}
+		for _, defect := range receipt.Residual {
+			if defect.Repairable {
+				continue
+			}
+			fmt.Fprintf(w, "%s %s/%s: %s\n", st.Warn("⚠"), defect.Reason, defect.Problem.Code, defect.Problem.Message)
+		}
+		if len(receipt.IncompleteThreads) > 0 {
+			fmt.Fprintf(w, "%s %d unreadable Thread document(s); impact evidence is incomplete\n", st.Warn("⚠"), len(receipt.IncompleteThreads))
+			for _, problem := range receipt.IncompleteThreads {
+				location := problem.Location
+				if location == "" {
+					location = problem.ThreadID
+				}
+				fmt.Fprintf(w, "  %s %s: %s\n", st.Dim("•"), location, problem.Message)
+			}
+		}
+		fmt.Fprintln(w, st.Dim("nothing was written; select --auto, --drop, --dedupe, or --plan"))
+		return nil
+	}
+	operations := make(map[core.TaskGraphSourceEdit]core.TaskGraphRepairOperation, len(receipt.Operations))
+	for _, operation := range receipt.Operations {
+		operations[operation.Edit] = operation
+	}
+	fmt.Fprintf(w, "%s %d intent(s), %d active operation(s)\n", st.Dim("selected:"), len(receipt.Selected), len(receipt.Operations))
+	for _, selection := range receipt.Selected {
+		operation, active := operations[selection]
+		mode := "explicit"
+		reason := "already satisfied"
+		if active {
+			reason = string(operation.Reason)
+			if operation.Automatic {
+				mode = "auto"
+			}
+		} else {
+			mode = "satisfied"
+		}
+		fmt.Fprintf(w, "%s %s %s  %s\n", st.Dim("•"), mode, repairEditDisplay(selection), st.Dim(reason))
+	}
+	verb, prefix := "removed", st.Green("✔")
+	if receipt.DryRun {
+		verb, prefix = "would remove", st.Dim("◇")
+	}
+	for _, declaration := range receipt.Removed {
+		fmt.Fprintf(w, "%s %s %s:%s=%s#%d\n", prefix, verb, repairSourceDisplay(declaration.Source), declaration.Field, strconv.Quote(declaration.Value), declaration.Occurrence)
+	}
+	if !receipt.Changed {
+		fmt.Fprintf(w, "%s selected repair intent is already satisfied\n", st.Dim("•"))
+	}
+	for _, files := range []struct {
+		label  string
+		values []string
+	}{
+		{label: "planned files", values: receipt.PlannedFiles},
+		{label: "applied files", values: receipt.AppliedFiles},
+		{label: "remaining files", values: receipt.RemainingFiles},
+	} {
+		if len(files.values) > 0 {
+			fmt.Fprintf(w, "%s\n", st.Dim(files.label+": "+strings.Join(files.values, ", ")))
+		}
+	}
+	for _, impact := range receipt.Impacts {
+		fmt.Fprintf(w, "%s task %s state %s -> %s\n", st.Dim("•"), impact.TaskID,
+			taskGraphStateSummary(impact.Before), taskGraphStateSummary(impact.After))
+	}
+	for _, impact := range receipt.ThreadImpacts {
+		name := impact.Slug
+		if name == "" {
+			name = impact.ThreadID
+		}
+		fmt.Fprintf(w, "%s Thread %s (%s) projection %s -> %s; changed tasks: %s\n", st.Dim("•"), name,
+			impact.ThreadID, impact.Before.ProjectionHealth, impact.After.ProjectionHealth, strings.Join(impact.ChangedTaskIDs, ", "))
+	}
+	if len(receipt.Residual) > 0 {
+		fmt.Fprintf(w, "%s %d residual defect(s); run `tskflwctl task depend repair` to inspect\n", st.Warn("⚠"), len(receipt.Residual))
+		for _, defect := range receipt.Residual {
+			if defect.Repairable {
+				fmt.Fprintf(w, "  %s %s  %s\n", st.Dim("•"), defect.Reason, repairEditDisplay(defect.Target))
+			} else {
+				fmt.Fprintf(w, "  %s %s/%s: %s\n", st.Warn("⚠"), defect.Reason, defect.Problem.Code, defect.Problem.Message)
+			}
+		}
+	}
+	if len(receipt.IncompleteThreads) > 0 {
+		fmt.Fprintf(w, "%s %d unreadable Thread document(s); impact evidence is incomplete\n", st.Warn("⚠"), len(receipt.IncompleteThreads))
+		for _, problem := range receipt.IncompleteThreads {
+			location := problem.Location
+			if location == "" {
+				location = problem.ThreadID
+			}
+			fmt.Fprintf(w, "  %s %s: %s\n", st.Dim("•"), location, problem.Message)
+		}
+	}
+	return nil
+}
+
+func taskGraphStateSummary(state core.TaskGraphState) string {
+	return fmt.Sprintf("%s/%s sound=%t eligible=%t drained=%t inconsistent=%t",
+		state.Role, state.Gate, state.SoundlyCompleted, state.Eligible, state.Drained, state.Inconsistent)
+}
+
+func repairEditDisplay(edit core.TaskGraphSourceEdit) string {
+	return fmt.Sprintf("%s:%s=%s#%d", repairSourceDisplay(edit.Source), edit.Field, strconv.Quote(edit.Value), edit.Occurrence)
+}
+
+func repairEditSelector(edit core.TaskGraphSourceEdit) string {
+	selector := fmt.Sprintf("%s:%s=%s", repairSourceDisplay(edit.Source), edit.Field, edit.Value)
+	if edit.Action == core.TaskGraphSourceDropDeclaration {
+		selector += fmt.Sprintf("#%d", edit.Occurrence)
+	}
+	return selector
+}
+
+func repairSourceDisplay(source core.TaskGraphSourceRef) string {
+	if source.Location != "" {
+		return source.Location
+	}
+	if source.TaskID != "" {
+		return source.TaskID
+	}
+	return source.TaskSlug
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
 
 // DependencyMutationJSON writes the stable guarded dependency receipt.
 func DependencyMutationJSON(w io.Writer, receipt core.DependencyMutationReceipt, workspace wire.WorkspaceJSON) error {
@@ -142,7 +321,7 @@ func graphDiagnosticsHuman(w io.Writer, st Style, problems []core.GraphProblem, 
 	for _, diagnostic := range legacy {
 		remedy := "run task depend migrate"
 		if !diagnostic.MigrationReady() {
-			remedy = "repair graph-owned frontmatter directly, then run lint"
+			remedy = "run task depend repair, then task depend migrate"
 		}
 		fmt.Fprintf(w, "%s legacy %s on %s; %s\n", st.Warn("⚠"), diagnostic.Field, diagnostic.TaskID, remedy)
 	}

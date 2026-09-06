@@ -418,6 +418,41 @@ func TaskLifecycleThreadImpacts(threads []domain.Thread, graph *TaskGraph, plan 
 	return impacts
 }
 
+// TaskGraphThreadImpacts compares readable Thread projections across an
+// arbitrary graph-only change. directTaskIDs are declaration owners whose files
+// were part of the selected durable prefix; malformed Thread evidence is carried
+// separately by the enclosing repair receipt and never blocks this computation.
+func TaskGraphThreadImpacts(threads []domain.Thread, before, after *TaskGraph, directTaskIDs []string) []ThreadProjectionImpact {
+	if before == nil || after == nil {
+		return nil
+	}
+	direct := make(map[string]bool, len(directTaskIDs))
+	for _, taskID := range directTaskIDs {
+		direct[taskID] = true
+	}
+	ordered := cloneThreads(threads)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].ID < ordered[j].ID })
+	impacts := make([]ThreadProjectionImpact, 0)
+	for _, thread := range ordered {
+		left, right := ProjectThread(thread, before), ProjectThread(thread, after)
+		if reflect.DeepEqual(left, right) {
+			continue
+		}
+		isDirect := false
+		for _, taskID := range thread.Tasks {
+			if direct[taskID] {
+				isDirect = true
+				break
+			}
+		}
+		impacts = append(impacts, ThreadProjectionImpact{
+			ThreadID: thread.ID, Slug: thread.Slug, Direct: isDirect,
+			ChangedTaskIDs: changedThreadProjectionTaskIDs(left, right), Before: left, After: right,
+		})
+	}
+	return impacts
+}
+
 func changedThreadProjectionTaskIDs(before, after ThreadView) []string {
 	type projectionTask struct {
 		Role        ThreadTaskRole

@@ -83,6 +83,25 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				PlannedTaskIDs: []string{"6g0000000002"},
 			}, WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig}))
 		}},
+		{"TaskGraphRepairEnvelope", func(w io.Writer) error {
+			return emit(w, ToTaskGraphRepairEnvelope(core.TaskGraphRepairReceipt{
+				Changed: true, DryRun: true, InitialHealth: core.GraphBroken, FinalHealth: core.GraphBroken,
+				Selected: []core.TaskGraphSourceEdit{{
+					Action: core.TaskGraphSourceDropDeclaration,
+					Source: core.TaskGraphSourceRef{TaskID: "6g0000000002", TaskSlug: "alpha", Location: "/repo/planning/tasks/alpha.md"},
+					Field:  core.TaskDependencyDependsOn, Value: "invalid raw value",
+				}},
+				Operations: []core.TaskGraphRepairOperation{{
+					Edit:   core.TaskGraphSourceEdit{Action: core.TaskGraphSourceDropDeclaration, Source: core.TaskGraphSourceRef{TaskID: "6g0000000002"}, Field: core.TaskDependencyDependsOn, Value: "invalid raw value"},
+					Reason: core.RepairInvalidID,
+				}},
+				Residual: []core.TaskGraphRepairDefect{{
+					Reason: core.RepairDirectEdit, Problem: core.GraphProblem{Code: core.ProblemUnreadable, Path: "/repo/planning/tasks/bad.md", Message: "bad yaml"},
+				}},
+				PlannedFiles:      []string{"/repo/planning/tasks/alpha.md"},
+				IncompleteThreads: []core.ThreadReadProblem{{ThreadID: "6g0000000004", ThreadSlug: "bad-thread", Location: "/repo/planning/threads/bad.md", Message: "bad yaml"}},
+			}, WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig}))
+		}},
 		{"TaskBlockersEnvelope", func(w io.Writer) error {
 			return emit(w, ToTaskBlockersEnvelope(core.TaskBlockersResult{
 				TaskID: "6g0000000002", Task: task,
