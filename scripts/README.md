@@ -58,6 +58,11 @@ The most productive repeatable probes should also be tailored into the brief:
 - use coordinated mutations across an interface and its immediate caller so compilation by accident
   is not mistaken for a pinned architectural contract.
 
+Every named symbol, field, lock path, test, fixture, and shipped capability must also be verified in
+the sandbox with a path/line or command result. Keep implemented evidence separate from requirements
+found only in planning documents. A clean verdict built on invented names or future fixtures is not
+corroborating evidence and should be rejected during owner triage.
+
 These checks came from review-loop evidence: two independent reviewers converged on a surviving
 diagnostic de-duplication mutation, while running the advertised remedy and exercising non-default
 schema paths exposed separate gaps that ordinary green tests did not.
