@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [design, palette]
 created: "2026-08-29"
-updated_at: "2026-08-29"
+updated_at: "2026-09-06"
+audited: "2026-09-06"
 ---
 # Resolve the CLI body palette from the terminal background
 
@@ -72,3 +73,33 @@ Plausible shapes, in rough order of preference:
 
 - Epic [25-design-system-coherent-palette-and-selectable-themes](../epics/25-design-system-coherent-palette-and-selectable-themes.md)
 - Builds on the completed `validate-and-visually-tune-the-neon-day-light-palette`.
+
+## Sweep verification (2026-09-06)
+
+Automated weekly sweep. The task's premise is **fully intact** — the body palette
+is still hardcoded to `a.Th.Dark` and is still the only surface that ignores the
+terminal background. But `internal/cli/root.go` has moved since 2026-08-29 and
+three of the line references in the Objective / "The tradeoff to settle first"
+are now stale.
+
+### Line references — corrected against HEAD `84b3798`
+
+| Cited in body | Actual today | Note |
+| --- | --- | --- |
+| `root.go:101` | `root.go:101` | ✅ accurate — `setStyle`'s `WithPalette(a.Th.Dark)` |
+| `root.go:352` | **`root.go:407`** | ⚠️ moved; line 352 is now unrelated space-resolution code |
+| `root.go:409` (glamour markdown) | **`root.go:474`** | ⚠️ moved — `a.Th.For(lipgloss.HasDarkBackground(...)).Markdown` |
+| `root.go:405` (the LAZY comment) | **`root.go:470–471`** | ⚠️ moved; comment text unchanged |
+| `tui.go:36` | `internal/tui/tui.go:36` | ✅ accurate — `newStyles(th.For(dark))` |
+| `prompt/tty.go:142` | `internal/cli/prompt/tty.go:142` | ✅ accurate — `p.theme.For(isDark).Accent` |
+
+Both `a.Th.Dark` sites are unchanged in substance: `root.go:101` in `setStyle` and
+`root.go:407` in the post-`config.Discover` re-skin. The lazy-markdown precedent the
+task wants to imitate is intact at `root.go:470–474`, so the recommended shape
+(option 1) is still the right one.
+
+No acceptance criterion ticked — none is met.
+
+## Progress Log
+
+- 2026-09-06: automated weekly sweep — premise re-confirmed; corrected three stale `root.go` line refs (352→407, 409→474, 405→470) after the 2026-09-05 cli churn.

@@ -10,8 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [store, config, architecture, robustness]
 created: "2026-09-02"
-updated_at: "2026-09-04"
+updated_at: "2026-09-06"
 audit_sources: [planning/audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md]
+audited: "2026-09-06"
 ---
 # Unify the three divergent writeFileAtomic implementations
 
@@ -99,3 +100,42 @@ options on one helper, and stop the three copies from drifting further.
 - `F_FULLFSYNC` cost on macOS: <https://mjtsai.com/blog/2022/02/17/apple-ssd-benchmarks-and-f_fullsync/>, <https://bonsaidb.io/blog/acid-on-apple/>
 
 Reinforced by audit 2026-09-04-concurrency-and-atomicity: L1. That audit confirms the store/config divergence is currently latent rather than live — `markdownDoc` (internal/store/resolve.go:23) gates every entity scan on `e.Type().IsRegular()`, so a symlinked task/audit/epic/research/thread file is never listed or resolved and `store.writeFileAtomic` is never handed one. The unification is still worth doing: the safety depends entirely on that gate, which atomic.go never mentions, and config.go:1146 currently claims the store 'has the same idea' when it does not.
+
+## Sweep verification (2026-09-06)
+
+Automated weekly sweep. Every code reference in this task was re-checked against
+HEAD `84b3798` and **all of them still hold**:
+
+- Three divergent definitions: `internal/store/atomic.go:48`,
+  `internal/config/config.go:1148`, `internal/userconfig/paths.go:71` — verified
+  accurate (2026-09-06). The durability/symlink table in the Objective still
+  matches the code (`syncDir` at `atomic.go:68` is store-only; `config` and
+  `userconfig` both resolve via `Lstat` + `EvalSymlinks`).
+- The inaccurate comment at `userconfig/paths.go:70` ("Mirrors store/atomic.go's
+  contract for the planning tree") is still there, verbatim — AC 6 is unmet.
+- `config.go`'s "The store has the same idea; config can't import store" rationale
+  is at **1146–1147**, not 1145 as the Objective says (one-line drift only).
+- Bulk write paths cited under "On macOS the strict path is expensive":
+  `rename.go:119`, `graphmutation.go:100`, `fix.go:92`, `fix.go:117`,
+  `threadapply.go:134` — all five exact.
+- The audit's latency argument holds: `markdownDoc` at `internal/store/resolve.go:23`
+  still gates every scan on `e.Type().IsRegular()`.
+
+### One thing the task under-counts
+
+The Objective names five bulk call sites, but `writeFileAtomic`/`createFileAtomic`
+have **fourteen** production call sites inside `store` today — the five above plus
+`auditstore.go:148`, `body.go:78`, `create.go:77`, `edit.go:133`,
+`epicstore.go:124`, `epicstore.go:185`, `fsstore.go:243`,
+`lifecyclemutation.go:131`, `researchstore.go:171`, `threadmutation.go:102`.
+
+That matters for **AC 3** ("each call site's required guarantee is decided and
+recorded"), whose real surface is ~14 decisions rather than 5, and it is the main
+reason the `4-6 hours` estimate may be optimistic. Left unchanged pending human
+review — the code did not grow, the task simply enumerated a subset.
+
+No acceptance criterion was ticked: none is demonstrably met.
+
+## Progress Log
+
+- 2026-09-06: automated weekly sweep — all cited paths/lines re-verified against HEAD; flagged that AC 3 covers ~14 store call sites, not the 5 enumerated.

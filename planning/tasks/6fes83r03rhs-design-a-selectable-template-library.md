@@ -10,8 +10,9 @@ autonomy_level: 3
 tags: [feature, templates, dx]
 created: "2026-06-22"
 started_at: "2026-06-22"
-updated_at: "2026-06-23"
+updated_at: "2026-09-06"
 id: 6fes83r03rhs
+audited: "2026-09-06"
 ---
 # Design a selectable template library
 
@@ -158,3 +159,71 @@ mirroring task/audit authoring. (`schema <kind>` now already advertises template
 - Builds directly on epic 21's M1 entity descriptor (`internal/domain/entity.go`) —
   the single-default seed this generalizes. Shipped in increments; this task tracks
   the remaining steps (4–5).
+
+## Sweep verification (2026-09-06)
+
+Automated weekly sweep. Every "Done" claim in the 2026-06-22 handoff was
+re-verified against HEAD `84b3798` and **all of steps 1–3 still hold**:
+
+- Step 1 — `Descriptor.Templates []NamedTemplate` + `Placeholders`
+  (`internal/domain/entity.go:27–28`), `DefaultTemplate = "default"` (`:33`),
+  `LookupTemplate` (`:234`), `Template` (`:255`), `TemplatesFor` (`:272`),
+  `TemplateNames` (`:281`); the `security` audit template is live at `entity.go:138`
+  / `auditSecurityBodyTemplate` (`:389`).
+- Step 2 — `completeTemplateNames` (`internal/cli/completion.go:143`), wired on
+  `audit new` at `audit.go:89`.
+- Step 3 — `internal/cli/template.go` (with `--raw` at `:103`) and
+  `internal/cli/render/templates.go`; `core.TemplateBody` / `RenderLabels` /
+  `renderTemplate` all at `internal/core/scaffold.go:44/36/14`;
+  `TestTemplates_OnlyDeclaredPlaceholders` at `internal/domain/template_test.go:75`.
+
+### Step 4's stated prerequisite has since SHIPPED — read that block with this correction
+
+The `## Next — step 4` block says:
+
+> Resolution must route through a store-backed port — today the cli reads
+> `domain.Template*` directly (fine for built-in, but repo-local needs the fs).
+> Likely shape: a `TemplateSource` port + a `core.Service` method that merges
+> built-in + repo-local
+
+and the `➡️` note at the end of "Post-review hardening" lists
+`route-template-resolution-through-a-core-port` as a prerequisite to do
+"before/with step 4". **That sibling task is now `completed`** (epic 22 is at
+33%, 1/3). The port exists:
+
+- `core.TemplateSource` — `internal/core/template.go:11`, with `Templates(kind)` and
+  `Lookup(kind, name)`.
+- `builtinTemplates` as the default source (`template.go:23`), so `template
+  list/show` still run with no planning repo.
+- `WithTemplateSource(src)` on the service (`internal/core/service.go:57–60`),
+  whose own doc comment says *"epic 22 wires a repo-local source"* — the swap seam
+  step 4 asked for is already cut and named.
+
+So step 4 is **no longer a CLI refactor plus a source**; it is now a source
+implementation plus the wiring. The port's own comment states this intent
+verbatim: *"which makes step 4 (repo-local templates) a source swap here rather
+than a CLI refactor."*
+
+Two residual direct reads of `domain.Template*` remain in the CLI, both outside
+the create/list paths and both arguably fine:
+`internal/cli/completion.go:135,145` (`TemplateNames` for shell completion) and
+`internal/cli/schema.go:145` (`TemplatesFor`, for the repo-less `schema <kind>`
+surface). Whether repo-local names must appear in completion and in `schema` output
+is an unstated step-4 decision — flagged, not decided.
+
+### This task has no acceptance criteria
+
+`tskflwctl task ac design-a-selectable-template-library` reports **none** — the file
+has a "Suggested first increment" list and a progress narrative, but no
+`## Acceptance criteria` section, so `task complete` would not refuse it on any
+unmet criterion. Given steps 1–3 are done and 4–5 are not, this is worth giving
+real criteria before pickup. Not added by this sweep: writing acceptance criteria
+is scoping, and scoping is the human's call.
+
+The two "Still open" design decisions are genuinely still open and untouched:
+repo-local location (`templates/` vs `.tskflwctl/templates/`) and the template file
+format.
+
+## Progress Log
+
+- 2026-09-06: automated weekly sweep — steps 1–3 re-verified intact; recorded that step 4's prerequisite `TemplateSource` port has shipped (sibling task completed), leaving a source swap rather than a CLI refactor; flagged the missing acceptance-criteria section.

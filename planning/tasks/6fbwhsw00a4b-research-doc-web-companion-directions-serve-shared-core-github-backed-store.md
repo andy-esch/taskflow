@@ -9,6 +9,8 @@ autonomy_level: 3
 tags: [web, architecture, research]
 created: "2026-06-13"
 id: 6fbwhsw00a4b
+updated_at: "2026-09-06"
+audited: "2026-09-06"
 ---
 
 # Research doc: web companion directions (serve, shared core, GitHub-backed store)
@@ -76,3 +78,55 @@ different question than GitHub discoverability, but worth a line.
 - Epic [19-web-companion-apps-over-a-shared-core](../epics/19-web-companion-apps-over-a-shared-core.md)
 - `docs/ARCHITECTURE.md` — ports-and-adapters layout this builds on
 - `internal/core/store.go` — the `Store` port a GitHub adapter would implement
+
+## Sweep verification (2026-09-06)
+
+Automated weekly sweep. The deliverable is still outstanding — no web-companion
+research doc exists under `planning/research/` (nearest neighbours are
+`6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db.md`, which epic 19's
+body already names as the read-side seed, and
+`6g2qtp0022t7-the-atlas-as-a-dashboard-of-dashboards.md`). AC 1–3 all unmet;
+nothing ticked.
+
+Two seed facts have moved since this was filed on 2026-06-13. Both are recorded
+here rather than rewritten into the "Ideas to capture" section, because the doc is
+where the thinking happens and the seed material should stay as filed.
+
+### 1. Half the motivating concern has been retired by ADR-0003
+
+The Objective's motivating concern reads: *"directory buckets are a crude browsing
+UI and force file moves on status changes."*
+
+The second clause is **no longer true**. ADR-0003 §4 landed (epic
+`24-data-model-evolution-...`, 95%): tasks/audits/research/threads are stored
+**flat and id-led** (`tasks/<id>-<slug>.md`), `status` is authoritative in
+frontmatter, and a lifecycle verb edits frontmatter in place with **no file move**.
+There is no status directory left to browse or to churn.
+
+What survives is the first clause — GitHub's flat directory listing is still a poor
+browsing UI for 300+ id-led filenames, and arguably a *worse* one now that the slug
+is prefixed by an opaque id. The `BOARD.md` baseline the task already names is, if
+anything, a stronger comparator than when it was written. Worth the doc restating
+the problem in post-ADR-0003 terms before weighing options.
+
+### 2. The `core.Store` port is ~3× the surface this task assumes
+
+Tier 2 ("Hosted web UI over a GitHub-backed store") sizes the work as
+*"implement `core.Store` (`internal/core/store.go`, ~12 methods)"*. As of HEAD
+`84b3798`, `core.Store` composes four interfaces totalling **34 methods**:
+
+- `TaskStore` — 10 · `EpicStore` — 7 · `AuditStore` — 10 · `ResearchStore` — 7
+
+and threads live in a **separate `ThreadStore`** (`store.go:137`, 2 methods) that a
+complete adapter would also need, plus the narrow `Fixer` / `Linter` /
+`SummaryStore` ports beside it. A GitHub-API adapter is therefore a much larger
+commitment than the "~12 methods" figure implies — which strengthens the doc's
+existing bias toward `tskflwctl serve` (option 1) as the first slice, and makes the
+read-only framing of that slice more important, not less.
+
+The `1-2 days` effort is unchanged: the deliverable is still a research doc, and
+these corrections are inputs to it rather than extra scope.
+
+## Progress Log
+
+- 2026-09-06: automated weekly sweep — doc still unwritten; recorded that ADR-0003 retired the "file moves on status changes" premise and that `core.Store` is now 34 methods (+ThreadStore), not ~12.
