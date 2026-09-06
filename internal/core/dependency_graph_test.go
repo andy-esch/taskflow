@@ -903,13 +903,13 @@ func TestValidateTaskGraphMutationPlanPreservesSemanticWriteOrder(t *testing.T) 
 	}
 }
 
-func TestValidateTaskGraphMutationSourceNamesManualRepairPath(t *testing.T) {
+func TestValidateTaskGraphMutationSourceNamesGuardedRepairPath(t *testing.T) {
 	task := graphRecord("manual-repair", domain.StatusReadyToStart, "not-a-stable-id")
 	err := ValidateTaskGraphMutationSource(NewTaskGraph([]domain.Task{task}, nil))
 	if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), task.Path) ||
 		!strings.Contains(err.Error(), "field depends_on") ||
-		!strings.Contains(err.Error(), "repair the graph-owned frontmatter directly") ||
-		!strings.Contains(err.Error(), "tskflwctl lint") {
+		!strings.Contains(err.Error(), "tskflwctl task depend repair") ||
+		!strings.Contains(err.Error(), "source-level diagnosis") {
 		t.Fatalf("broken graph recovery guidance = %v", err)
 	}
 }

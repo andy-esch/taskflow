@@ -18,6 +18,7 @@ type Service struct {
 	store               Store
 	taskGraphs          TaskGraphSource
 	graphMutations      TaskGraphMutationStore
+	graphRepairs        TaskGraphRepairStore
 	lifecycleMutations  TaskLifecycleMutationStore
 	threads             ThreadStore
 	threadPaths         ThreadPathSource
@@ -102,6 +103,17 @@ func WithTaskGraphMutationStore(store TaskGraphMutationStore) Option {
 	return func(s *Service) {
 		if !isNilCapability(store) {
 			s.graphMutations = store
+		}
+	}
+}
+
+// WithTaskGraphRepairStore supplies the dedicated broken-graph recovery
+// capability. It is never inferred from TaskGraphMutationStore: adapters must
+// implement the narrower repair contract explicitly.
+func WithTaskGraphRepairStore(store TaskGraphRepairStore) Option {
+	return func(s *Service) {
+		if !isNilCapability(store) {
+			s.graphRepairs = store
 		}
 	}
 }
@@ -193,6 +205,9 @@ func NewService(store Store, opts ...Option) *Service {
 		}
 		if mutations, ok := store.(TaskGraphMutationStore); ok && !isNilCapability(mutations) {
 			s.graphMutations = mutations
+		}
+		if repairs, ok := store.(TaskGraphRepairStore); ok && !isNilCapability(repairs) {
+			s.graphRepairs = repairs
 		}
 		if mutations, ok := store.(TaskLifecycleMutationStore); ok && !isNilCapability(mutations) {
 			s.lifecycleMutations = mutations
@@ -602,7 +617,11 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 		if field == "" {
 			field = "depends_on"
 		}
-		out[problem.Path] = append(out[problem.Path], domain.Issue{Field: field, Message: problem.Message})
+		message := problem.Message
+		if graphProblemRepairable(problem.Code) {
+			message += "; run `tskflwctl task depend repair` for exact source-level diagnosis"
+		}
+		out[problem.Path] = append(out[problem.Path], domain.Issue{Field: field, Message: message})
 	}
 	for _, diagnostic := range graph.LegacyDiagnostics() {
 		parts := make([]string, 0, len(diagnostic.References))
@@ -626,7 +645,7 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 		remedy := "run `tskflwctl task depend migrate`"
 		if !diagnostic.MigrationReady() {
 			severity = ""
-			remedy = "repair the graph-owned frontmatter directly, then run `tskflwctl lint`"
+			remedy = "run `tskflwctl task depend repair`, then `tskflwctl task depend migrate` when the graph is structurally safe"
 		}
 		out[diagnostic.TaskPath] = append(out[diagnostic.TaskPath], domain.Issue{
 			Field: diagnostic.Field, Severity: severity,

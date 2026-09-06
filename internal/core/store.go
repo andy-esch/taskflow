@@ -93,6 +93,18 @@ type TaskGraphMutationStore interface {
 	MutateTaskGraph(now time.Time, dryRun bool, planner TaskGraphPlanner) (TaskGraphMutationResult, error)
 }
 
+// TaskGraphRepairPlanner is the sole planner admitted to an already-broken
+// graph. It returns source-declaration removals, never replacement dependency
+// sets, and must not call another store method while the repository guard is held.
+type TaskGraphRepairPlanner func(*TaskGraph) (TaskGraphRepairPlan, error)
+
+// TaskGraphRepairStore is deliberately separate from ordinary graph mutation.
+// Its implementation owns the guarded task+Thread evidence snapshot, repair-only
+// validation, surgical materialization, and durable-prefix receipt.
+type TaskGraphRepairStore interface {
+	MutateTaskGraphRepair(now time.Time, dryRun bool, planner TaskGraphRepairPlanner) (TaskGraphRepairMutationResult, error)
+}
+
 // TaskLifecyclePlanner resolves user intent and returns one semantic lifecycle
 // plan from the immutable authoritative graph. It must not call a Store method or
 // begin another guarded mutation.
