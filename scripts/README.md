@@ -1,5 +1,32 @@
 # Repository scripts
 
+## General isolated review workspaces
+
+`isolated-review-workspace.sh` is a standalone shell tool for any review that needs an independent
+copy of a live Git working tree and exactly one deliverable copied back. It has no dependency on
+taskflow's Go packages, CLI, planning schema, or audit layout:
+
+```sh
+SOURCE_ROOT="$(git rev-parse --show-toplevel)"
+DELIVERABLE="path/to/review-report.md"
+SANDBOX="$(scripts/isolated-review-workspace.sh create \
+  --source "$SOURCE_ROOT" --deliverable "$DELIVERABLE" --print-path)"
+
+"$SANDBOX/scripts/isolated-review-workspace.sh" verify --sandbox "$SANDBOX"
+"$SANDBOX/scripts/isolated-review-workspace.sh" transfer --sandbox "$SANDBOX"
+```
+
+`create` makes an independent `--no-hardlinks` clone, overlays the current staged, unstaged,
+untracked, and deleted state, rejects a source that changes during capture, and makes one local
+baseline commit. `verify` fails if the reviewer committed, staged anything, changed another file,
+or if the source deliverable changed. `transfer` repeats those checks, requires a real deliverable
+delta, and atomically replaces only that source file. State and attestation evidence live under the
+sandbox's private `.git`; the sandbox remains available until its owner confirms receipt.
+
+The source checkout still needs a handoff freeze. A filesystem copy cannot make an arbitrary live
+working tree transactionally atomic, and the source-hash guard cannot coordinate with an editor that
+ignores it. The helper detects ordinary drift and fails closed; it is not a repository lock.
+
 ## Adversarial implementation reviews
 
 `prepare-adversarial-review-audits.sh` turns one tailored review brief into independent audit
@@ -11,12 +38,10 @@ state changing between projection and action, and boundaries that only appear to
 is deliberately evidence-gated so “play devil's advocate” does not become permission to manufacture
 speculative architecture findings.
 
-Every generated review is also isolated from the handoff checkout. The injected protocol treats
-that checkout as read-only, creates an independent local clone with its own `.git`, overlays the
-current staged, unstaged, untracked, and deletion state, and records a sandbox-only baseline commit.
-All tests, generators, formatting, and mutation probes happen against that baseline. The reviewer
-may transfer only their assigned audit back, and only when its source hash still matches the value
-recorded before the copy. The sandbox is retained until the implementation owner confirms receipt.
+Every generated review uses the general isolated-workspace helper above. The injected protocol
+treats the handoff checkout as read-only, and the reviewer may transfer only their assigned audit
+back after the helper's verification passes. The sandbox is retained until the implementation
+owner confirms receipt.
 This is required even for nominally read-only reviews: two reviewers may run simultaneously, and
 review tooling or restoration commands must never share an index, branch, generated files, or
 working tree with each other or the implementation owner. A Git worktree is intentionally not used
@@ -80,7 +105,7 @@ Use `--dry-run` to validate the brief, names, and audit collisions without creat
 an interim standalone-audit workflow; it does not decide the task-attached review storage and
 verdict questions tracked by epic 27.
 
-The generated handoff prompt includes the absolute audit path. Each reviewer must translate that to
-the repository-relative `AUDIT_REL` used by the injected commands. If the source-audit hash changes
-while review is underway, the reviewer must leave the sandbox intact and report the conflict rather
-than overwrite or merge in the shared checkout.
+The generated handoff prompt includes the absolute audit path. Each reviewer translates that to the
+repository-relative deliverable used by the helper. If its source hash changes while review is
+underway, the reviewer must leave the sandbox intact and report the conflict rather than overwrite
+or merge in the shared checkout.
