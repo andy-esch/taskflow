@@ -20,7 +20,9 @@ updated_at: "2026-09-04"
 Explore and prototype a full-screen, genuinely spatial Thread graph in which nodes occupy two
 dimensions and `h`/`j`/`k`/`l` navigate by graph/layout adjacency. This is deliberately separate
 from the compact linear wave reader: it should earn a richer interaction and layout model from
-dogfood evidence rather than stretching detail-pane text into a pseudo-graph.
+dogfood evidence rather than stretching detail-pane text into a pseudo-graph. Treat it as a
+separately removable presentation extension over the stable projection, not as a new core graph
+model or an assumed default UI.
 
 ## Dogfood evidence
 
@@ -35,6 +37,8 @@ authorize a bounded spatial prototype, but not to make it a v0.19.0 release gate
 - Define what left/right/up/down mean when edges skip waves, fan out, fan in, or cross.
 - Decide whether layout is deterministic and taskflow-owned or delegated to a terminal graph-layout
   library.
+- Choose an experimental integration boundary—optional CLI renderer, gated TUI destination,
+  separate module/binary, or another narrow adapter—and state its discovery/distribution tradeoff.
 - Preserve stable task identity, member/external-gate roles, direction, health, and incomplete
   topology without recomputing core graph semantics.
 - Specify selection, Enter-to-open, back-stack behavior, scrolling/panning, zoom, narrow-terminal
@@ -50,6 +54,11 @@ authorize a bounded spatial prototype, but not to make it a v0.19.0 release gate
   focus, panning, reload, and narrow-terminal behavior.
 - [ ] A bounded prototype renders the existing `ThreadGraphProjection` without parsing Mermaid/DOT
   or deriving task readiness/scheduling semantics.
+- [ ] The dependency direction points from the extension toward the stable projection/wire
+      contract: core code does not import the experiment, default CLI/TUI paths do not require it,
+      and removing it requires no planning-data migration.
+- [ ] Experimental launch/discovery is explicit, and renderer/layout failure cannot corrupt or
+      authorize changes to the planning graph.
 - [ ] Direct task navigation and ctrl+o return use canonical task/Thread identities.
 - [ ] Fan-out, fan-in, edge crossing, skipped waves, disconnected members, external gates, hostile
   labels, incomplete topology, and large graphs are stress-tested.
@@ -58,15 +67,16 @@ authorize a bounded spatial prototype, but not to make it a v0.19.0 release gate
 
 ## Out of scope
 
-Production graph mutation, critical-path/slack/forecasting analysis, web rendering, or replacing
-the linear wave view before the prototype is evaluated.
+Production graph mutation, critical-path/slack/forecasting analysis, web rendering, replacing the
+linear wave view before the prototype is evaluated, or committing to a general plugin framework.
 
 ## Sequencing
 
 Follow the linear TUI topology task and the v0.19.0 preview checkpoint. The dogfood threshold above
 has been met, but this remains a low-priority experiment beside post-release graph recovery and
 portable-diagnostic hardening. Its outcome is a decision and evidence, not an assumed production
-renderer.
+renderer. It may be tested during later preview releases, but it does not gate those releases or
+Thread graduation unless a later planning decision explicitly promotes it.
 
 ## Related
 
