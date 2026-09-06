@@ -4,14 +4,13 @@ Home of **`tskflwctl`** — a local-first planning CLI over markdown+frontmatter
 task/Thread/epic/audit/research files. It dogfoods on its own planning under
 [`planning/`](./planning/).
 
-> **Threads preview (v0.18.0).** The production Thread commands are ready for CLI use and
-> dogfooding, but their interface and workflows may still evolve from real-world feedback. This
-> preview now includes read-only TUI Thread list/detail views and a `v` topology view of member
-> waves plus compact prerequisite relationships, but not TUI mutation or advanced graph analysis
-> such as critical path, forecasting, or slack. Preview machine contracts may change with an
-> explicit schema-version bump;
-> schema 1.59 makes `thread list --json` unreadable-record diagnostics path-optional and
-> identity-aware for non-filesystem adapters.
+> **Threads preview.** The workflow is ready for real CLI and read-only TUI dogfooding,
+> including guarded mutations and repair, bulk apply, shared projections, and a `v` wave/topology
+> view. Persisted and machine contracts are protected during preview, but command ergonomics and
+> presentation may still evolve. Preview graduation is evidence-gated—not date- or version-gated;
+> see the [compatibility matrix and graduation checklist](./docs/THREADS_COMPATIBILITY.md).
+> TUI mutation, a spatial graph, critical-path analysis, forecasting, and slack remain outside the
+> current feature.
 
 ## Demos
 
@@ -77,6 +76,10 @@ just release-snapshot   # dry-run a full release into ./dist (publishes nothing)
 Releases are cut by pushing a tag (`vX.Y.Z`), which runs `.github/workflows/release.yml`
 (goreleaser). A manual `workflow_dispatch` run builds a `--snapshot` and uploads
 the binaries as workflow artifacts without minting a Release.
+Thread contract changes and removal of the preview notice additionally follow the
+[Threads compatibility and graduation checklist](./docs/THREADS_COMPATIBILITY.md). Tag only the
+fully validated preview-removal candidate, then verify the published artifacts against that
+immutable tag.
 
 ## Daily workflow
 
