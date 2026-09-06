@@ -8,8 +8,9 @@ priority: medium
 autonomy_level: 3
 tags: [planning-model, frontmatter, domain, draft]
 created: "2026-06-12"
-updated_at: "2026-06-21"
+updated_at: "2026-09-06"
 id: 6fbj87001m03
+audited: "2026-09-06"
 ---
 # Task readiness state (draft vs finalized) in frontmatter
 
@@ -117,3 +118,76 @@ Moved out of epic 17 (the pm→tskflwctl port): this is a NEW planning-model ide
 pm parity, so it must not gate closing the port. Kept alive here as a draft. Like
 Projects/ADRs, it is really a planning-*model* change — a natural future candidate to
 be proposed as an ADR rather than slipped in as a task.
+
+## Sweep verification (2026-09-06)
+
+Automated weekly sweep. This task is still a DRAFT and still correctly blocked on
+its own Open questions — neither acceptance criterion is met, and nothing was
+ticked. The `⚠️ Conflicts` and `Design sketch` sections are left intact below;
+what follows records how the ground under two of their premises has shifted since
+2026-06-12, so whoever de-drafts this does not re-derive a retired invariant.
+
+### The `status == directory` premise has been retired
+
+Two places in this task rest on it, and both now need re-reading:
+
+- **`## ⚠️ Conflicts to resolve before starting`, bullet 3** — *"`status == directory`
+  is a CLAUDE.md non-negotiable: any option that adds a readiness *directory* needs
+  an architecture-level sign-off."* ADR-0003 §4 has since inverted this. Status is
+  authoritative **in frontmatter**; tasks/audits/research/threads are stored flat and
+  id-led (`tasks/<id>-<slug>.md`) with **no status directory at all**, and lifecycle
+  verbs edit frontmatter in place without moving files. The `tasks/draft/` option in
+  Open question 1 is therefore not merely "needs sign-off" — it now contradicts the
+  accepted storage model outright, which arguably *simplifies* the decision rather
+  than complicating it.
+- **`## Design sketch`, bullet 2** — the proposed "declared + lint-checked against
+  derived" shape is described as *"mirroring the existing status-vs-folder pattern
+  (declared value, authoritative source, drift surfaced as ⚠ misfiled)."* There is no
+  folder to mirror any more. The nearest surviving analogue is `lint`'s
+  `StatusFellBack` (a missing/unrecognized frontmatter status is **flagged**, shown
+  with `⚠` in `task list`/`show`, and never relocated). The hybrid shape may well
+  still be right — but its precedent is now "declared value, lint flags what it can't
+  recognise", not "declared vs directory".
+
+I am deliberately **not** rescoping either section: which option this changes the
+answer to is exactly the human decision the Open questions exist to hold.
+
+### The motivating cohort has shrunk from four tasks to one
+
+The DRAFT banner cites *"four real draft tasks [that] just had to improvise the
+mechanism (banner + `draft` tag + `DRAFT:` description prefix)"*, and Open question
+9 (Migration) plans to move them onto the new mechanism.
+
+Today exactly **two** tasks in `planning/tasks/` carry the `draft` tag, and one of
+them — `6fbj87003e4g-schema-command-for-agent-self-discovery` — was **completed
+2026-06-16**. So the live cohort is this task and nothing else. The improvised
+convention did not spread; it drained. That does not make the idea wrong, but it
+removes the "four files are improvising" pressure that motivated it, and it makes
+Open question 9 (does the `draft` tag stay?) nearly free to answer either way.
+
+### Two smaller reference corrections
+
+- **Open question 10 (Registry impact)** forward-references
+  `schema-command-for-agent-self-discovery` as *"the future `schema` command
+  output"*. That command **shipped** (task completed 2026-06-16). `tskflwctl schema`
+  now prints a live Task field registry, so this is a concrete surface to design
+  against rather than a hypothetical — and note the registry already lists fields
+  like `audited` and `revisit_at`, i.e. adding `readiness` is a known, exercised path.
+- **`## Design sketch`, bullet 1** cites *"`auditstore.go` counts `#### H1.` headers
+  and open `**Status:**` markers"* and *"the audit counter already solves this with
+  `fenceRe`"*. The precedent still exists but has moved: parsing now lives in
+  `parseAuditWithFindings` (`internal/store/auditstore.go:205`), and there is no
+  `fenceRe` in production source any more — unterminated-fence handling is enforced
+  at the write boundary in `internal/store/body.go:47–55`. Re-read the precedent
+  there before citing it.
+
+### Housekeeping
+
+`## Related` still points at *"Epic [17-pm-go-cli]"*, but frontmatter has said
+`epic: 20-cli-ux-and-ergonomics` since the 2026-06-21 reassignment recorded at the
+bottom of this file. Left as-is (the link is history, not a claim about the current
+epic), but flagged so it is not mistaken for the live assignment.
+
+## Progress Log
+
+- 2026-09-06: automated weekly sweep — still correctly a draft; recorded that ADR-0003 retired the `status == directory` premise two sections depend on, that the four-draft cohort is down to this task alone, and that the `schema` command it forward-references has shipped.
