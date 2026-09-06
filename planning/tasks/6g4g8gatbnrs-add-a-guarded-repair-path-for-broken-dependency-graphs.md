@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g4g8gatbnrs
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Repair cycles, dangling edges, and other broken graph-owned state without requiring an unsafe generic mutation path.
 effort: 3-5 days
@@ -14,6 +14,7 @@ depends_on: [6g3q4rt7mgjn, 6g697mp8s4tx, 6g6scc9jgxae, 6g721vewvvrz, 6g72ncs4xjd
 updated_at: "2026-09-06"
 started_at: "2026-09-05"
 audit_sources: [planning/audits/6g71vzq8wdnj-2026-09-05-add-a-guarded-repair-path-for-broken-dependency-graphs-antigravity.md, planning/audits/6g71yr50md16-2026-09-05-add-a-guarded-repair-path-for-broken-dependency-graphs-claude.md, planning/audits/6g7cr4psd1nk-2026-09-06-guarded-broken-graph-repair-implementation-claude.md, planning/audits/6g7cr4q1vhms-2026-09-06-guarded-broken-graph-repair-implementation-antigravity.md]
+completed_at: "2026-09-06"
 ---
 
 # Add a guarded repair path for broken dependency graphs

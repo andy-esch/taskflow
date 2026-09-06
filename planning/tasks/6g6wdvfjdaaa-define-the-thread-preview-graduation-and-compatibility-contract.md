@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g6wdvfjdaaa
-status: next-up
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Define the evidence, compatibility promises, and remaining gates required before Threads graduate from preview.
 effort: 1-2 days
@@ -11,7 +11,10 @@ autonomy_level: 3
 tags: [threads, release, compatibility, architecture]
 created: "2026-09-04"
 depends_on: [6g6scc9jgxae]
-updated_at: "2026-09-04"
+updated_at: "2026-09-06"
+started_at: "2026-09-06"
+audit_sources: [planning/audits/6g7f1jnn46x3-2026-09-06-thread-preview-graduation-contract-claude.md, planning/audits/6g7f1jnyeyhg-2026-09-06-thread-preview-graduation-contract-antigravity.md]
+completed_at: "2026-09-06"
 ---
 
 # Define the Thread preview graduation and compatibility contract
@@ -37,17 +40,17 @@ still evolve, and what observable gates must pass before the preview notice can 
 
 ## Acceptance criteria
 
-- [ ] A contract matrix names every public or persisted Thread surface, its stability classification,
+- [x] A contract matrix names every public or persisted Thread surface, its stability classification,
       and the compatibility or migration promise attached to it.
-- [ ] Graduation gates are observable and linked to owning task IDs or concrete verification; no
+- [x] Graduation gates are observable and linked to owning task IDs or concrete verification; no
       gate is merely “seems stable” or a version/date threshold.
-- [ ] Guarded repair, portable diagnostics, the spatial prototype, and known preview limitations are
+- [x] Guarded repair, portable diagnostics, the spatial prototype, and known preview limitations are
       each classified as required, explicitly non-blocking, or tracked by a named follow-up.
-- [ ] Persisted-document, CLI, and JSON/wire evolution have deliberate deprecation and migration
+- [x] Persisted-document, CLI, and JSON/wire evolution have deliberate deprecation and migration
       rules that work for local files and future service/database adapters.
-- [ ] ADR-0006, the README preview notice, architecture guidance, and release checklist agree on what
+- [x] ADR-0006, the README preview notice, architecture guidance, and release checklist agree on what
       graduation means and which interfaces remain experimental afterward.
-- [ ] The result provides an executable decision path for either removing the preview label or
+- [x] The result provides an executable decision path for either removing the preview label or
       retaining it with specific unmet gates and owners.
 
 ## Stress tests
@@ -66,6 +69,33 @@ still evolve, and what observable gates must pass before the preview notice can 
 Start after the v0.19.0 checkpoint so the contract is based on two shipped dogfood slices rather
 than aspiration. It may then refine the order and release significance of the post-v0.19 tasks, but
 must not retroactively describe an unimplemented capability as stable.
+
+## Contract outcome (2026-09-06)
+
+The canonical matrix and seven observable gate groups now live in
+[`docs/THREADS_COMPATIBILITY.md`](../../docs/THREADS_COMPATIBILITY.md). The preview remains in place:
+the implementation already satisfies the integrity/recovery, guarded-mutation, machine-contract,
+adapter-neutrality, and established dogfood foundations. The one remaining required implementation
+gap is executable backward-compatibility evidence for the concrete persisted shapes shipped in the
+two preview releases.
+
+That required gap is owned by
+[`6g7ddeyp773z`](6g7ddeyp773z-pin-thread-document-and-plan-backward-compatibility.md). The final clean
+decision/release run is owned by [`6g7ddfhh2jc2`](6g7ddfhh2jc2-graduate-threads-from-preview.md).
+Both are members of the production Thread and form a real dependency chain after this task.
+Guarded graph repair is required and already delivered. Portable diagnostics in board/status,
+frontier ranking metadata, and the spatial TUI experiment stay independently sequenced and
+explicitly non-blocking. The document `schema` marker remains advisory; making it a shared
+cross-entity read/write guard is deliberately deferred to
+[`6g7f0tqgftg3`](6g7f0tqgftg3-enforce-reserved-document-schema-versions-across-entity-writers.md)
+rather than being adopted asymmetrically for Threads.
+
+Adversarial review narrowed the persisted promise to the concrete historical shapes that tests can
+pin: the advisory marker is not described as protection, and incompatible Thread shapes may not
+ship until a guarding reader has already been deployed. It also split manifest shorthand from the
+strict apply-plan schema, added repository identity as required replay context, made mutation-side
+wire coverage explicit, and divided the final release check into pre-tag candidate validation and
+post-tag publication verification.
 
 ## Related
 

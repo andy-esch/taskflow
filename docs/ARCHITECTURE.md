@@ -233,6 +233,16 @@ adapter capabilities rather than leaked persistence.
   stable-ID cursor walks those supplied gate/wave/unranked rows and delegates Enter-to-open back to
   the shell's ordinary entity navigator. Both CLI commands return the same renderer-neutral
   projection under `--json`.
+  The public/persisted boundary and the preview exit criteria are recorded in
+  [`docs/THREADS_COMPATIBILITY.md`](THREADS_COMPATIBILITY.md). Persisted Thread/task graph semantics,
+  concrete historically shipped Thread shapes, versioned wire values, and adapter-neutral
+  projection meanings are compatibility contracts. The shared document `schema` marker remains
+  advisory, so fixtures—not that marker—enforce today's upgrade boundary. Concrete Go ports,
+  filesystem/CAS machinery, renderer text, and TUI layout remain replaceable implementation or
+  presentation details. A future database, service, or web adapter therefore
+  preserves stable identity, snapshot consistency, guarded mutation outcomes, and the shared
+  semantic/wire projections without pretending to have Markdown paths or inheriting Go source
+  compatibility.
   `internal/graphfmt` owns pure Mermaid/DOT escaping and formatting without UI dependencies, and no
   Cobra, Bubble Tea, HTTP, filesystem, or graph-library type enters core or wire contracts. The
   sources return neutral `TaskGraphRead` and `ThreadRead` snapshots: unreadable records carry

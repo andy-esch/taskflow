@@ -1330,6 +1330,41 @@ YAML plan schema is `schema: 1` with an `operations` list containing `action`, `
 `location`, `field`, verbatim `value`, and zero-based `occurrence`; direct flags and manifest entries
 compile to the same typed repair request.
 
+### 2026-09-06: Preview graduation is an evidence-backed compatibility decision
+
+The v0.18.0 CLI and v0.19.0 TUI checkpoints proved that Threads are useful, but neither defined what
+removing “preview” would promise. Graduation now follows the contract matrix and executable gates in
+[`docs/THREADS_COMPATIBILITY.md`](../../docs/THREADS_COMPATIBILITY.md), not a date, version number, or
+subjective stability assessment.
+
+After graduation, the persisted global-DAG/membership split, the concrete Thread document shapes
+shipped since v0.18.0, stable IDs, lifecycle semantics, versioned JSON meanings, error
+classifications, and adapter-neutral projection semantics are supported contracts. The advisory
+document `schema` marker does not enforce that boundary: historical fixtures do, and no
+incompatible shape may ship until a guarding reader has already been deployed. Existing command
+verbs and flags receive a deprecation path. Human text, Mermaid/DOT formatting, shell-completion
+order, exact TUI layout/key choices, concrete Go interfaces under `internal/`, filesystem
+locking/CAS mechanics, and graph algorithms may evolve without becoming public source contracts.
+Other adapters must preserve the semantic snapshot and mutation guarantees; they need not emulate
+Markdown paths or byte-level surgery.
+
+Graduation requires fresh evidence for graph diagnosis and guarded recovery, lifecycle and mutation
+safety, historical document/manifest/plan upgrades with their repository-identity context,
+machine/command compatibility, adapter-neutral reads, clean-build dogfood, and the release pipeline.
+The release gate separates pre-tag validation of the exact preview-removal candidate from post-tag
+artifact verification; a pushed tag is never rewritten. Guarded repair is required and has shipped.
+The remaining required implementation is historical persisted-shape compatibility coverage in
+[`6g7ddeyp773z`](../tasks/6g7ddeyp773z-pin-thread-document-and-plan-backward-compatibility.md), followed
+by the clean release checkpoint in
+[`6g7ddfhh2jc2`](../tasks/6g7ddfhh2jc2-graduate-threads-from-preview.md). Portable diagnostics in
+repository-wide convenience views, frontier ranking metadata, the spatial graph experiment, a
+production remote adapter, and advanced graph calculations remain named non-blocking work. A failed
+required gate keeps the preview label and must identify an owner; optional scope cannot substitute
+for the missing evidence. The existing document `schema` marker remains advisory. A future shared
+enforcement boundary is tracked across all entities by
+[`6g7f0tqgftg3`](../tasks/6g7f0tqgftg3-enforce-reserved-document-schema-versions-across-entity-writers.md)
+and is intentionally neither adopted for Threads alone nor made a graduation gate.
+
 ## Related
 
 - Supersedes: [0002-adopt-projects](0002-adopt-projects.md).
