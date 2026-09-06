@@ -64,7 +64,9 @@ func TestThreadNewListShowPathAndFrontier(t *testing.T) {
 		t.Fatalf("decode creation: %v\n%s", err, out)
 	}
 	wantMembers := []string{testutil.TaskID("alpha"), testutil.TaskID("beta")}
-	if created.Thread.Status != "unstarted" || !created.Changed || !created.Committed || !slices.Equal(created.Thread.Tasks, wantMembers) {
+	if created.SchemaVersion != wire.SchemaVersion || created.Thread.Status != "unstarted" || !created.Changed || !created.Committed ||
+		!slices.Equal(created.Thread.Tasks, wantMembers) || !strings.HasPrefix(created.Path, "threads/") ||
+		created.Workspace.PlanningRoot == "" {
 		t.Fatalf("creation = %+v", created)
 	}
 	content, err := os.ReadFile(threadPath(t, root, "delivery"))
@@ -490,9 +492,10 @@ func TestThreadCreationCommittedFailureHasStructuredRecovery(t *testing.T) {
 	if decodeErr := json.Unmarshal(out.Bytes(), &envelope); decodeErr != nil {
 		t.Fatalf("decode recovery: %v\n%s", decodeErr, out.String())
 	}
-	if envelope.Error.Code != "conflict" || envelope.Error.ThreadMutation == nil ||
+	if envelope.SchemaVersion != wire.SchemaVersion || envelope.Error.Code != "conflict" || envelope.Error.ThreadMutation == nil ||
 		!envelope.Error.ThreadMutation.Committed || envelope.Error.ThreadMutation.Thread.ID != receipt.Thread.ID ||
-		envelope.Error.ThreadMutation.Path != "threads/6g3q4rtmv4ak-delivery.md" {
+		envelope.Error.ThreadMutation.Path != "threads/6g3q4rtmv4ak-delivery.md" ||
+		envelope.Error.ThreadMutation.Workspace.PlanningRoot != "/repo/planning" {
 		t.Fatalf("recovery = %+v", envelope)
 	}
 	if !errors.Is(err, domain.ErrConflict) {
@@ -519,9 +522,10 @@ func TestThreadMutationCommittedFailureHasStructuredRecovery(t *testing.T) {
 	if decodeErr := json.Unmarshal(out.Bytes(), &envelope); decodeErr != nil {
 		t.Fatalf("decode recovery: %v\n%s", decodeErr, out.String())
 	}
-	if envelope.Error.Code != "conflict" || envelope.Error.ThreadUpdate == nil ||
+	if envelope.SchemaVersion != wire.SchemaVersion || envelope.Error.Code != "conflict" || envelope.Error.ThreadUpdate == nil ||
 		!envelope.Error.ThreadUpdate.Committed || envelope.Error.ThreadUpdate.ThreadID != thread.ID ||
-		envelope.Error.ThreadUpdate.Path != "threads/6g3q4rtmv4ak-delivery.md" {
+		envelope.Error.ThreadUpdate.Path != "threads/6g3q4rtmv4ak-delivery.md" ||
+		envelope.Error.ThreadUpdate.Workspace.PlanningRoot != "/repo/planning" {
 		t.Fatalf("recovery = %+v", envelope)
 	}
 	if !errors.Is(err, domain.ErrConflict) {

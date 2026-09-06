@@ -3,14 +3,14 @@ schema: 1
 id: 6g7ddfhh2jc2
 status: next-up
 epic: 30-threads-and-task-dependency-graphs
-description: Run the evidence-based graduation gates and either remove the preview label or record the exact blockers.
+description: After the v0.20 preview soak, explicitly decide whether evidence supports removing the preview label or requires more named work.
 effort: S
 tier: 2
 priority: medium
 autonomy_level: 4
 tags: [threads, release, compatibility, dogfood]
 created: "2026-09-06"
-depends_on: [6g7ddeyp773z]
+depends_on: [6g7fhfpmy032]
 updated_at: "2026-09-06"
 ---
 
@@ -18,14 +18,17 @@ updated_at: "2026-09-06"
 
 ## Objective
 
-Run the evidence-based graduation decision from a clean release candidate. Remove the preview label
-only when every required gate in the compatibility contract passes; otherwise retain it, record the
-failed evidence, and sequence a named owner rather than substituting confidence or elapsed time.
+After the compatibility-hardened v0.20 checkpoint has shipped and accumulated real use, explicitly
+open the evidence-based graduation decision from a clean release candidate. Remove the preview
+label only when every required gate passes and the preview owner judges the soak evidence sufficient;
+otherwise retain it, record the missing evidence, and sequence a named owner.
 
 ## Scope
 
 - Verify gates G1–G6 in `docs/THREADS_COMPATIBILITY.md` against one clean candidate, recording the
   exact commit, binary version, commands, fixture results, and any exceptions here.
+- Review findings from the v0.18.0, v0.19.0, and compatibility-hardened v0.20.0 previews. A clean
+  gate run is necessary but does not force graduation when real-use evidence remains too thin.
 - Repeat the throwaway-space workflow with shared membership, external gates, fan-out/fan-in,
   lifecycle changes, bulk-apply retry, deliberately broken and repaired dependency evidence, TUI
   stable-ID navigation, and watcher reload.
@@ -44,6 +47,8 @@ failed evidence, and sequence a named owner rather than substituting confidence 
 
 - [ ] `pin-thread-document-and-plan-backward-compatibility` is completed and its historical fixtures
       pass on the release candidate.
+- [ ] The compatibility-hardened v0.20.0 preview is published and its recorded soak findings have
+      either been resolved, explicitly accepted as non-blocking, or assigned to named follow-ups.
 - [ ] G1–G5 have fresh automated evidence from the candidate, including the named hostile tests in
       the contract, full race tests, lint, generated docs/schema checks, and guarded-repair/mutation
       compatibility coverage.
@@ -63,12 +68,14 @@ Do not check off or complete this task after a partial pass. Before tagging, rec
 gate, link its owner, add any real dependency edge, and retain or restore the preview notice until a
 later clean candidate is re-run. After tagging, never rewrite the tag: retry publication for the
 same candidate, or use a patch release to restore the preview notice if the candidate itself is
-invalid.
+invalid. Passing the automated gates does not override an explicit decision to gather more preview
+usage; in that case keep this task open and add another bounded preview checkpoint only when useful.
 
 ## Out of scope
 
 - Requiring the two-dimensional graph experiment, frontier ranking metadata, a remote/database
   adapter, or portable board/status diagnostics merely to remove the local Thread preview label.
+- Treating v0.20.0 as an automatic graduation deadline.
 - Declaring all of taskflow 1.0-stable.
 
 ## Related

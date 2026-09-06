@@ -1335,7 +1335,9 @@ compile to the same typed repair request.
 The v0.18.0 CLI and v0.19.0 TUI checkpoints proved that Threads are useful, but neither defined what
 removing “preview” would promise. Graduation now follows the contract matrix and executable gates in
 [`docs/THREADS_COMPATIBILITY.md`](../../docs/THREADS_COMPATIBILITY.md), not a date, version number, or
-subjective stability assessment.
+subjective stability assessment. Passing those gates permits a graduation decision; it does not
+force one. The compatibility-hardened v0.20.0 release will deliberately retain the preview label so
+the historical upgrade and guarded-recovery contracts receive another installed-release soak.
 
 After graduation, the persisted global-DAG/membership split, the concrete Thread document shapes
 shipped since v0.18.0, stable IDs, lifecycle semantics, versioned JSON meanings, error
@@ -1355,7 +1357,9 @@ The release gate separates pre-tag validation of the exact preview-removal candi
 artifact verification; a pushed tag is never rewritten. Guarded repair is required and has shipped.
 The remaining required implementation is historical persisted-shape compatibility coverage in
 [`6g7ddeyp773z`](../tasks/6g7ddeyp773z-pin-thread-document-and-plan-backward-compatibility.md), followed
-by the clean release checkpoint in
+by the preview-labelled v0.20.0 checkpoint in
+[`6g7fhfpmy032`](../tasks/6g7fhfpmy032-cut-v0.20.0-as-a-compatibility-hardened-threads-preview.md), and
+only then an explicitly opened clean graduation decision in
 [`6g7ddfhh2jc2`](../tasks/6g7ddfhh2jc2-graduate-threads-from-preview.md). Portable diagnostics in
 repository-wide convenience views, frontier ranking metadata, the spatial graph experiment, a
 production remote adapter, and advanced graph calculations remain named non-blocking work. A failed
@@ -1364,6 +1368,12 @@ for the missing evidence. The existing document `schema` marker remains advisory
 enforcement boundary is tracked across all entities by
 [`6g7f0tqgftg3`](../tasks/6g7f0tqgftg3-enforce-reserved-document-schema-versions-across-entity-writers.md)
 and is intentionally neither adopted for Threads alone nor made a graduation gate.
+
+The spatial graph remains architecturally downstream from the shared renderer-neutral
+`ThreadGraphProjection`. Its bounded prototype should enter through an optional CLI/TUI presentation
+adapter or similarly removable boundary: core must not import it, default interfaces must not depend
+on it, and abandoning it must require no planning-data migration. A later explicit decision may
+promote a proven slice; experimentation alone does not fold it into the base.
 
 ## Related
 

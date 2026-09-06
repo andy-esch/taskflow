@@ -1,0 +1,18 @@
+schema: 0
+thread:
+  title: Retained Preview Delivery
+  description: Reapply a preview-era Thread plan
+  goal: Preserve durable retry semantics
+  target_date: "2026-02-15"
+  tags: [compatibility, threads]
+nodes:
+  - key: gate
+    task_id: 6fjangd7kvh2
+    member: false
+  - key: alpha
+    task_id: 6fjangd7kvh0
+  - key: beta
+    task_id: 6fjangd7kvh1
+dependencies:
+  - from: gate
+    to: beta

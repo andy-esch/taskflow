@@ -6,7 +6,7 @@ description: Deliver production Threads through the CLI preview and a usage-info
 goal: Preserve the production graph foundation while carrying Threads into a faithful TUI
 created: "2026-08-29"
 tags: [threads, dogfood]
-tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6jqqcdehne, 6g6scc9jgxae, 6g6wdvfjdaaa, 6g6wdvfp2ksa, 6g721tvf4crh, 6g721vewvvrz, 6g72ncs4xjdm, 6g7ddeyp773z, 6g7ddfhh2jc2]
+tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6jqqcdehne, 6g6scc9jgxae, 6g6wdvfjdaaa, 6g6wdvfp2ksa, 6g721tvf4crh, 6g721vewvvrz, 6g72ncs4xjdm, 6g7ddeyp773z, 6g7ddfhh2jc2, 6g7fhfpmy032]
 updated_at: "2026-09-06"
 started_at: "2026-08-30"
 ---
@@ -40,10 +40,13 @@ compatibility and graduation gates so this Thread has an evidence-based finish l
 indefinite preview label.
 
 That graduation branch is now explicit: define the compatibility contract, pin v0.18.0/v0.19.0
-Thread-document and apply-plan behavior with executable historical fixtures, then run one clean
-graduate-or-remain-preview release checkpoint. Those are real sequential dependencies. The spatial
+Thread-document and apply-plan behavior with executable historical fixtures, ship that hardening as
+a preview-labelled v0.20.0 checkpoint, then explicitly decide whether the accumulated soak supports
+graduation or another named preview checkpoint. Those are real sequential dependencies. The spatial
 prototype, frontier ranking, and portable diagnostics in repository-wide convenience views remain
-independent improvements rather than accidental graduation gates.
+independent improvements rather than accidental graduation gates. The spatial prototype is also a
+removable presentation extension over `ThreadGraphProjection`, not a second graph model or a silent
+core commitment.
 
 The guarded-repair branch was split after adversarial review. Unreadable task sources first gain
 opaque revision evidence for whole-snapshot CAS; unreadable Thread evidence then gains the same

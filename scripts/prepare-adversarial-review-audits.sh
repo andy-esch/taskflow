@@ -17,8 +17,8 @@ The brief must begin with review sections rather than frontmatter or an H1. It m
   Validation and restoration, Deliverable, and Reviewer report.
 
 When no --reviewer is supplied, the default pair is claude and antigravity.
-Every generated audit requires the reviewer to clone + overlay the shared checkout
-into an independent temporary sandbox before inspecting or mutating the repository.
+Every generated audit requires the reviewer to use `isolated-review-workspace.sh`
+before inspecting or mutating the source checkout.
 Set TSKFLWCTL to an alternate binary path when needed.
 EOF
 }
@@ -146,72 +146,54 @@ for reviewer in "${reviewers[@]}"; do
 		cat <<'EOF'
 > Shared-worktree isolation is mandatory. Treat the checkout named in the handoff as a read-only
 > source. Before inspecting implementation, running tests or generators, or making mutation probes,
-> create the independent sandbox below. Do not use `git worktree`, a symlink, or any arrangement
-> whose `.git` metadata points back to the shared checkout. At completion, copy back only the
-> assigned audit after the origin-hash guard passes.
+> create the independent workspace below. Do not use `git worktree`, a symlink, or any arrangement
+> whose `.git` metadata points back to the shared checkout. The general shell helper owns isolation,
+> the baseline, verification, and the guarded one-file transfer.
 
 ## Mandatory reviewer sandbox
 
 The implementation owner and another reviewer may be using the handoff checkout concurrently.
 Reading this brief and performing the initial copy are the only operations allowed there until the
 final guarded audit transfer. Substitute the repository-relative assigned audit path printed in the
-handoff prompt, then create an isolated clone whose working tree is overlaid with the exact current
-source contents (including staged, unstaged, untracked, and deleted files):
+handoff prompt, then invoke the repository's general isolated-review tool:
 
 ```sh
 SOURCE_ROOT="$(git rev-parse --show-toplevel)"
 AUDIT_REL="planning/audits/<your-assigned-audit-file>.md"
-SOURCE_AUDIT="$SOURCE_ROOT/$AUDIT_REL"
-SOURCE_AUDIT_BLOB="$(git hash-object "$SOURCE_AUDIT")"
-SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/taskflow-review.XXXXXX")"
-
-git clone --no-hardlinks "$SOURCE_ROOT" "$SANDBOX"
-rsync -a --delete --exclude='.git' "$SOURCE_ROOT/" "$SANDBOX/"
-test -d "$SANDBOX/.git"
+SANDBOX="$("$SOURCE_ROOT/scripts/isolated-review-workspace.sh" create \
+  --source "$SOURCE_ROOT" \
+  --deliverable "$AUDIT_REL" \
+  --print-path)"
 cd "$SANDBOX"
-
-git add -A
-git -c user.name='Taskflow Review Sandbox' \
-  -c user.email='review-sandbox@invalid' \
-  -c commit.gpgsign=false \
-  -c core.hooksPath=/dev/null \
-  commit --allow-empty --no-verify -m 'chore: capture review sandbox baseline'
 ```
 
-The sandbox-only checkpoint makes the copied handoff state—not the source branch's last commit—the
-restoration baseline for mutation probes and is the only commit the reviewer may create. Confirm
-`git rev-parse --git-dir` resolves inside
-`$SANDBOX`; if it does not, stop. Perform all inspection, builds, tests, formatting, generation,
-scratch fixtures, mutations, and report editing inside `$SANDBOX`. Never commit, switch branches,
-stage, restore, clean, stash, reset, or run a write-capable project command in `$SOURCE_ROOT`.
-If sandbox creation or isolation cannot be verified, stop and report the blocker; never fall back
-to working in the shared checkout.
+The helper creates an independent `--no-hardlinks` clone, overlays the current staged, unstaged,
+untracked, and deleted source state, detects a changing handoff, and records the result in a
+sandbox-only baseline commit. That checkpoint—not the source branch's last commit—is the restoration
+baseline for probes and the only commit the reviewer may create. Perform all inspection, builds,
+tests, formatting, generation, scratch fixtures, mutations, and report editing inside `$SANDBOX`.
+Never commit again, switch branches, stage, restore, clean, stash, reset, or run a write-capable
+project command in `$SOURCE_ROOT`. If creation fails, report the blocker; never fall back to the
+shared checkout.
 
-Before transfer, restore every sandbox probe against the checkpoint and verify `git status --short`
-lists only `$AUDIT_REL`. Inspect `git diff --check` and `git diff -- "$AUDIT_REL"`. Then verify the
-source audit has not changed since the copy and transfer that one file atomically:
+Before transfer, restore every probe so only the assigned audit differs, inspect its diff, then use
+the helper for fail-closed verification and transfer:
 
 ```sh
-test "$(git -C "$SOURCE_ROOT" hash-object "$SOURCE_AUDIT")" = "$SOURCE_AUDIT_BLOB" || {
-  printf 'source audit changed; do not overwrite it; preserve sandbox at %s\n' "$SANDBOX" >&2
-  exit 1
-}
-
-TRANSFER="$(mktemp "${SOURCE_AUDIT}.review-transfer.XXXXXX")"
-cp -p "$SANDBOX/$AUDIT_REL" "$TRANSFER"
-mv "$TRANSFER" "$SOURCE_AUDIT"
-cmp -s "$SANDBOX/$AUDIT_REL" "$SOURCE_AUDIT"
+"$SANDBOX/scripts/isolated-review-workspace.sh" verify --sandbox "$SANDBOX"
+git diff -- "$AUDIT_REL"
+"$SANDBOX/scripts/isolated-review-workspace.sh" transfer --sandbox "$SANDBOX"
 ```
 
-Do not copy source code, generated files, Git metadata, test artifacts, or any other planning file
-back. Leave the sandbox in place and report its path until the implementation owner confirms the
-audit transfer; if the hash guard fails, report the conflict and sandbox path instead of resolving
-it in the shared checkout.
+The helper refuses commits, staging, unrelated changes, a non-independent `.git`, source-deliverable
+drift, and empty reports; it copies back only the assigned audit through a same-directory atomic
+rename. Do not copy anything else manually. Leave the workspace in place and report its path until
+the implementation owner confirms receipt. On refusal, preserve it and report the conflict rather
+than resolving it in the shared checkout.
 
-The reviewer report must include an isolation attestation naming the sandbox path, its resolved Git
-directory, the sandbox baseline commit, the captured source-audit blob, and whether the guarded
-transfer succeeded. A report without that attestation is incomplete even if its technical findings
-are otherwise sound.
+Include the helper's attestation—workspace path, resolved Git directory, baseline commit, captured
+source blob/fingerprint, deliverable, and transfer result—in the report. A report without it is
+incomplete even if its technical findings are otherwise sound.
 
 EOF
 		cat "$brief_file"

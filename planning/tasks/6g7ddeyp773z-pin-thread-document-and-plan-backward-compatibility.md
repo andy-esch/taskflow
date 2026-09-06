@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g7ddeyp773z
-status: next-up
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Make the persisted Thread and bulk-plan upgrade promise executable with historical compatibility fixtures.
 effort: 1-2 days
@@ -12,6 +12,9 @@ tags: [threads, compatibility, testing]
 created: "2026-09-06"
 depends_on: [6g6wdvfjdaaa]
 updated_at: "2026-09-06"
+started_at: "2026-09-06"
+audit_sources: [planning/audits/6g7fmrq9yk94-2026-09-06-thread-document-plan-backward-compatibility-implementation-claude.md, planning/audits/6g7fmrqj9hp9-2026-09-06-thread-document-plan-backward-compatibility-implementation-antigravity.md]
+completed_at: "2026-09-06"
 ---
 
 # Pin Thread document and plan backward compatibility
@@ -44,23 +47,43 @@ the repository's currently advisory document `schema` marker into a Thread-only 
 
 ## Acceptance criteria
 
-- [ ] Committed fixtures with release provenance cover the persisted Thread and bulk-link artifacts
+- [x] Committed fixtures with release provenance cover the persisted Thread and bulk-link artifacts
       users could retain from v0.18.0 and v0.19.0; the current binary reads and projects them.
-- [ ] A guarded membership or lifecycle update of an old schema-1 Thread preserves its stable ID,
+- [x] A guarded membership or lifecycle update of an old schema-1 Thread preserves its stable ID,
       body, comments, key order where already promised, and unknown additive frontmatter.
-- [ ] The compatibility fixture proves the fields and meanings actually emitted by the preview
+- [x] The compatibility fixture proves the fields and meanings actually emitted by the preview
       releases, while documenting that the shared document `schema` marker is advisory and not a
       Thread-only mutation gate.
-- [ ] Schema-zero (omitted and explicit) and explicit schema-1 authoring manifests, plus strict
+- [x] Schema-zero (omitted and explicit) and explicit schema-1 authoring manifests, plus strict
       schema-1 apply plans, retain their documented behavior; unsupported versions fail without
       writes and a schema-1 interrupted plan remains retryable.
-- [ ] A retained plan replays against migrated repository identity; the same plan against legacy
+- [x] A retained plan replays against migrated repository identity; the same plan against legacy
       configuration without a durable ID fails before mutation with the `config migrate` remedy.
-- [ ] Stable Thread JSON fields, meanings, roles, health values, edge direction, lifecycle
+- [x] Stable Thread JSON fields, meanings, roles, health values, edge direction, lifecycle
       operations, and error classifications have command-level compatibility coverage. The four
       mutation-side envelopes (`thread_mutation`, `thread_update`, `thread_compose`, and
       `thread_apply`) are exercised with non-default values and at least one structured failure.
-- [ ] Focused tests, full race tests, lint, generated schema/docs checks, and planning lint pass.
+- [x] Focused tests, full race tests, lint, generated schema/docs checks, and planning lint pass.
+
+## Implementation progress (2026-09-06)
+
+The compatibility corpus retains the exact v0.18.0 and v0.19.0 Thread documents and show/graph
+goldens, labelled with their source commits and wire versions. Shared task/config fixtures are also
+exact tagged bytes. Authoring manifests and the apply plan are explicitly documented as
+reconstructions from the public tagged structs because the original throwaway dogfood plans were
+not committed.
+
+`TestThreadPreviewReleaseWireSemanticsRemainCompatible` requires every historical JSON field and
+value while allowing later additive object fields. The remaining compatibility tests exercise
+current reads, unknown-frontmatter/comment/body-preserving membership and lifecycle updates, schema
+zero/one manifests, strict plan rejection before writes, the legacy `config migrate` refusal, and
+same-plan convergence after a dependency prefix has already landed. Existing command tests now pin
+non-default success and structured-failure receipt context for the four Thread mutation envelopes.
+
+Validation passed with `go test -race ./...`, `just lint`, `just docs-check`, `git diff --check`, and
+`tskflwctl lint`. Follow-on planning now sequences this work into the preview-labelled v0.20.0
+checkpoint before an explicit graduation decision; the independent spatial prototype is scoped as
+a removable presentation extension over `ThreadGraphProjection`.
 
 ## Stress tests
 
@@ -82,3 +105,11 @@ the repository's currently advisory document `schema` marker into a Thread-only 
 - ADR [0006 — Adopt Threads as task DAGs](../adrs/0006-adopt-threads-as-task-dags.md)
 - Preview checkpoints [v0.18.0](6g5m69wpydzw-cut-v0.18.0-as-a-cli-threads-preview.md) and
   [v0.19.0](6g6scc9jgxae-cut-v0.19.0-as-a-tui-threads-preview.md)
+
+## Adversarial review closeout
+
+The independent Claude and Antigravity reviews are closed with every finding fixed. The final suite
+retains all six tagged JSON surfaces for both preview releases, explicitly proves advisory document
+schema handling and comment preservation on a rewritten node, and reports indexed array assertion
+paths. Full race tests, lint, documentation checks, audit/planning lint, and fixture provenance
+checks pass.

@@ -3,7 +3,9 @@
 Threads remain a preview until the gates below pass. Preview means the feature is suitable for real
 planning data, but its command ergonomics and presentation may still change. It does not waive data
 integrity: guarded writes, stable IDs, explicit plan/wire schemas, and recovery receipts apply
-during preview.
+during preview. Passing the gates makes graduation supportable; it does not force it. The project
+will first ship the compatibility-hardened v0.20.0 checkpoint with the preview label intact and use
+that installed-release evidence before explicitly reconsidering graduation.
 
 ## Compatibility contract
 
@@ -41,7 +43,7 @@ is not evidence.
 | G3 — persisted upgrade compatibility | Fixtures from the v0.18.0 and v0.19.0 surfaces prove that the current binary can read, project, and safely mutate old Thread documents; replay retained plans against migrated configuration; and refuse a pre-migration repository before mutation with the documented `config migrate` remedy. The tests pin actual historical shapes rather than treating the advisory document `schema` key as an enforcement boundary. | Required follow-up: [`6g7ddeyp773z`](../planning/tasks/6g7ddeyp773z-pin-thread-document-and-plan-backward-compatibility.md). |
 | G4 — machine and command compatibility | Thread envelopes remain in the reflected JSON Schema; read-side CLI goldens stay stable; command docs are current; and command-level compatibility coverage checks mutation, update, compose, and apply envelopes—including failure receipts—without parsing human text. | Existing `internal/wire` registry/schema tests and `internal/cli/testdata/golden/thread_*` read fixtures, plus the mutation-side assertions required by the G3 follow-up. Release review also confirms that the wire-version bump class matches any changed fields, meanings, vocabularies, or errors. |
 | G5 — adapter-neutral semantics | Pathless fake adapters exercise Thread list/show/compose/plan/graph and stable navigation from the same core projections; no core or wire contract requires a local path, Cobra, Bubble Tea, or renderer type. | Candidate evidence must run `TestServiceThreadReadsComposeIndependentGraphAndThreadPorts`, `TestServiceComposeThreadApplyRendersDefaultTemplate`, `TestServiceShowThreadGraphDetailUsesOnePairedReadInOrder`, `TestTaskGraphReadAttributesUnreadableRecordWithoutFilesystemPath`, and `TestThreadTopologyCursorOpensSelectedTaskByStableIdentity`, backed by [`6g5fy1m967ka`](../planning/tasks/6g5fy1m967ka-decouple-thread-graph-reads-from-the-aggregate-planning-store.md), [`6g5ryqqx5ab7`](../planning/tasks/6g5ryqqx5ab7-split-local-thread-path-resolution-from-portable-thread-reads.md), and [`6g5rxq1ravd3`](../planning/tasks/6g5rxq1ravd3-make-thread-read-diagnostics-adapter-neutral.md). |
-| G6 — real dogfood | A clean binary manages a throwaway space containing shared membership, direct external gates, fan-out/fan-in, lifecycle changes, bulk apply retry, a deliberately broken-and-repaired graph, TUI navigation, and live reload. The production implementation Thread is healthy. | Repeat the [`v0.18.0`](../planning/tasks/6g5m69wpydzw-cut-v0.18.0-as-a-cli-threads-preview.md) and [`v0.19.0`](../planning/tasks/6g6scc9jgxae-cut-v0.19.0-as-a-tui-threads-preview.md) playbook at graduation and record the result. |
+| G6 — real dogfood and preview soak | A clean binary manages a throwaway space containing shared membership, direct external gates, fan-out/fan-in, lifecycle changes, bulk apply retry, a deliberately broken-and-repaired graph, TUI navigation, and live reload. The production implementation Thread is healthy, and findings from multiple installed preview releases have explicit dispositions. | Ship and record the compatibility-hardened [`v0.20.0`](../planning/tasks/6g7fhfpmy032-cut-v0.20.0-as-a-compatibility-hardened-threads-preview.md) checkpoint with the preview notice intact. At graduation, repeat the v0.18.0/v0.19.0 playbook on a clean candidate and review the accumulated preview findings. |
 | G7a — candidate documentation and release checks | Starting from the G1–G6 commit, make the preview-removal and release-note changes, then run generated docs/schema checks, `just release-snapshot`, full race tests, lint, and planning lint on that exact candidate. | Pre-tag half of [`6g7ddfhh2jc2`](../planning/tasks/6g7ddfhh2jc2-graduate-threads-from-preview.md). This candidate is the only commit eligible to tag. |
 | G7b — publication verification | The pushed tag identifies the G7a candidate; the release workflow succeeds; published binaries and checksums identify that same commit. A publication failure is retried for the same immutable tag. If the candidate itself is later proven invalid, ship a patch release that restores the preview notice and names the failed gate. | Post-tag half of [`6g7ddfhh2jc2`](../planning/tasks/6g7ddfhh2jc2-graduate-threads-from-preview.md). The task remains open until this evidence is recorded. |
 
@@ -54,8 +56,9 @@ is not evidence.
 - [`6g6wdvfp2ksa`](../planning/tasks/6g6wdvfp2ksa-make-thread-frontier-help-choose-among-independent-candidates.md)
   improves selection among equally eligible work without changing eligibility semantics.
 - [`6g6dw5js81f3`](../planning/tasks/6g6dw5js81f3-prototype-a-two-dimensional-navigable-thread-graph-view.md)
-  is an explicitly experimental presentation. Waves, nodes, and edges already expose the complete
-  semantic graph without making a spatial renderer a release requirement.
+  is an explicitly experimental, separately removable presentation extension over
+  `ThreadGraphProjection`. Waves, nodes, and edges already expose the complete semantic graph
+  without making a spatial renderer a release or graduation requirement.
 - [`6g7f0tqgftg3`](../planning/tasks/6g7f0tqgftg3-enforce-reserved-document-schema-versions-across-entity-writers.md)
   tracks a future shared read/write boundary for the reserved document `schema` marker. Adopting
   that policy for every entity is intentionally not a Thread-only graduation requirement.
@@ -65,15 +68,19 @@ is not evidence.
 
 ## Decision procedure
 
-1. Complete G3 and run G1–G6 against a clean commit built from `main`; record the commit, commands,
-   versions, fixture results, and any exceptions in the graduation task.
-2. If G1–G6 pass, create the G7a candidate from that commit by removing the README preview notice
-   and aligning the ADR, architecture, generated docs/schema, and release notes. Run the full G7a
-   validation again on this exact candidate. If it fails, do not tag it; retain or restore the
-   preview notice and name the failed evidence and owning task.
-3. Tag only the passing G7a candidate, then perform G7b publication verification. Retry a failed
+1. Complete G3, then cut the v0.20.0 checkpoint from clean `main` with the preview notice intact.
+   Record its candidate, compatibility and dogfood evidence, published artifacts, and follow-ups.
+2. After that installed release has supplied enough real-use evidence, explicitly open the
+   graduation task. Run G1–G6 against a clean commit built from `main` and record the commit,
+   commands, versions, fixture results, preview findings, and any exceptions. Passing gates is
+   necessary but does not prevent choosing another bounded preview checkpoint.
+3. If G1–G6 and the explicit soak review pass, create the G7a candidate from that commit by removing
+   the README preview notice and aligning the ADR, architecture, generated docs/schema, and release
+   notes. Run the full G7a validation again on this exact candidate. If it fails, do not tag it;
+   retain or restore the preview notice and name the failed evidence and owning task.
+4. Tag only the passing G7a candidate, then perform G7b publication verification. Retry a failed
    release workflow for the same tag. If post-publication evidence proves the candidate itself was
    invalid, issue a patch release that restores the preview notice and names the failed gate; do
    not rewrite the published tag.
-4. Complete the graduation task only after G7b is recorded. Never substitute a version/date
+5. Complete the graduation task only after G7b is recorded. Never substitute a version/date
    milestone or an unrelated optional feature for missing evidence.
