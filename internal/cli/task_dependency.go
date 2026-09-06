@@ -47,6 +47,7 @@ func newTaskDependCmd(app *App) *cobra.Command {
 		newTaskDependencyEdgeCmd(app, core.DependencyAdd),
 		newTaskDependencyEdgeCmd(app, core.DependencyRemove),
 		newTaskDependencyMigrateCmd(app),
+		newTaskDependencyRepairCmd(app),
 	)
 	return cmd
 }

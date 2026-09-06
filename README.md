@@ -156,6 +156,8 @@ tskflwctl task defer <slug> --until 2026-09-01      # snooze (revisit_at); on a 
 tskflwctl task depend add <slug> --on <prerequisite>...     # guarded repository-global edge add
 tskflwctl task depend remove <slug> --on <prerequisite>...  # idempotent guarded edge removal
 tskflwctl task depend migrate                            # convert safe legacy dependency fields repo-wide
+tskflwctl task depend repair                             # diagnose broken graph-owned source declarations
+tskflwctl task depend repair --auto --dry-run            # preview safe dedupe/self/empty-legacy cleanup
 tskflwctl thread add <thread> <task>...                  # atomic guarded membership add
 tskflwctl thread remove <thread> <task>...               # atomic guarded membership removal
 tskflwctl thread start|complete|cancel|reopen <thread>    # explicit Thread lifecycle
@@ -173,9 +175,9 @@ Task lifecycle writes, dependency writes, and Thread creation/mutation share the
 guard and fail closed unless the canonical task graph and Thread set are healthy. Thread
 creation always persists `unstarted`; bulk membership edits are atomic per command, and
 `complete` requires every live member to be soundly drained. Task lifecycle receipts name
-every Thread projection they change without rewriting Thread documents. Repair invalid
-graph-owned frontmatter through the file reported by `tskflwctl task path`, confirm it with
-`tskflwctl lint`, then return to the guarded verbs. A rare cleanup error after a durable
+every Thread projection they change without rewriting Thread documents. Diagnose invalid
+graph-owned frontmatter with `task depend repair`; its explicit source selectors and optional
+manifest feed the sole guarded removal-only recovery path. A rare cleanup error after a durable
 lifecycle or Thread write is reported explicitly as committed with an inspection receipt;
 inspect current state instead of blindly retrying it.
 
@@ -183,7 +185,8 @@ inspect current state instead of blindly retrying it.
 encounters that guard; the TUI overview and cross-space atlas carry the same summary signal.
 These read dashboards remain informational. `lint` is the validation gate: safe resolvable legacy
 fields are visible advisories with exit zero, while missing, ambiguous, or structurally unsafe
-dependencies fail lint. Run `task depend migrate` for the advisory legacy case.
+dependencies fail lint. Run `task depend repair` for broken declarations, then
+`task depend migrate` for any safely resolved legacy fields that remain.
 
 Completed Thread drift is explanatory: machine and human views name empty,
 undrained, outstanding-gate, and unhealthy-evidence reasons. `lint --fix` may
@@ -296,7 +299,14 @@ not-found, `11` validation, `13` ambiguous, `14` conflict (e.g. a name already t
 set of stable task IDs representing repository-global prerequisites. Guarded
 `task depend add/remove` operations resolve references inside one authoritative
 repository snapshot, reject broken or cyclic results, support authoritative dry runs,
-and emit structured receipts. `task depend migrate` converts safe legacy
+and emit structured receipts. `task depend repair` is a separate capability and the only
+guarded mutation admitted to an already-broken graph. Its bare form diagnoses exact source,
+field, raw value, occurrence, and projected edge; `--auto` is limited to canonical dedupe,
+self-edge removal, and empty legacy keys, while `--drop`, `--dedupe`, and `--plan` express
+explicit convergent intent. It removes source declarations surgically, proves structural
+progress and preservation independently, CAS-protects task and Thread evidence, and reports
+residual defects plus readable Thread impacts even when a repair legitimately leaves the graph
+broken. `task depend migrate` converts safe legacy
 `blocked_by`/`dependencies`/`blocks` fields repository-wide and can resume after a
 reported sound durable prefix; it also removes explicitly empty legacy keys. Resolved
 legacy edges already participate in blocker/downstream reads and derived gates, while
@@ -304,8 +314,8 @@ health remains degraded until migration makes them canonical. Generic task creat
 `task edit`, and `lint --fix` cannot add, remove, or reinterpret graph-owned fields.
 Use `task blockers`, `task unblocks`, and `task list --unblocked` for explanatory and
 dispatch-oriented reads. Ordinary dependency and lifecycle writes share the repository
-guard and fail closed unless the canonical graph is healthy; the explicit legacy
-migration is the repair exception. Every first-party transition into `in-progress`
+guard and fail closed unless the canonical graph is healthy; guarded repair and the explicit
+legacy migration are narrow recovery exceptions with different source preconditions. Every first-party transition into `in-progress`
 enforces the same eligibility policy, while `task start --force` bypasses only the
 dependency gate and returns the outstanding blockers. Diagnostic queries report the
 queried task's derived state, health, and attributable problems.

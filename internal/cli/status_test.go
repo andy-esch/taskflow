@@ -70,7 +70,7 @@ func TestStatusReportsGraphDegradationWithoutTurningReadIntoFailure(t *testing.T
 		remedy     string
 	}{
 		{name: "resolved legacy", dependency: "blocked_by: [gate]\n", health: "degraded", remedy: "task depend migrate"},
-		{name: "missing canonical", dependency: "depends_on: [6g0000000000]\n", health: "broken", remedy: "run `tskflwctl lint`"},
+		{name: "missing canonical", dependency: "depends_on: [6g0000000000]\n", health: "broken", remedy: "task depend repair"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := testutil.NewRepo(t)

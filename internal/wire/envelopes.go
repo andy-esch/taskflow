@@ -1041,6 +1041,7 @@ type ErrorItem struct {
 	Code               string                     `json:"code"`
 	Message            string                     `json:"message"`
 	DependencyMutation *DependencyMutationJSON    `json:"dependency_mutation,omitempty"`
+	GraphRepair        *TaskGraphRepairJSON       `json:"graph_repair,omitempty"`
 	TaskLifecycle      *TaskLifecycleRecoveryJSON `json:"task_lifecycle,omitempty"`
 	ThreadMutation     *ThreadMutationJSON        `json:"thread_mutation,omitempty"`
 	ThreadUpdate       *ThreadUpdateJSON          `json:"thread_update,omitempty"`
@@ -1145,6 +1146,7 @@ type jsonEnvelopes struct {
 	Path           PathEnvelope               `json:"path"`
 	TaskMutation   TaskMutationEnvelope       `json:"task_mutation"`
 	DependencyMut  DependencyMutationEnvelope `json:"dependency_mutation"`
+	GraphRepair    TaskGraphRepairEnvelope    `json:"graph_repair"`
 	TaskBlockers   TaskBlockersEnvelope       `json:"task_blockers"`
 	TaskUnblocks   TaskUnblocksEnvelope       `json:"task_unblocks"`
 	Threads        ThreadsEnvelope            `json:"threads"`

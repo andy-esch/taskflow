@@ -254,7 +254,9 @@ import (
 // 1.60: `status` and each loaded `status --all` summary may carry `graph`, the
 // same non-healthy repository task-DAG verdict and remedy already exposed by
 // `board`. Healthy summaries omit it.
-const SchemaVersion = "1.60"
+// 1.61: `task depend repair` adds source-declaration diagnosis, preview,
+// guarded mutation, impact, incomplete-Thread-evidence, and recovery receipts.
+const SchemaVersion = "1.61"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a
