@@ -18,7 +18,7 @@ import (
 
 var graphMutationNow = time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC)
 
-func writeGraphMutationTask(t *testing.T, root, seed string, status domain.Status, dependencies []string, extra string) string {
+func writeGraphMutationTask(t testing.TB, root, seed string, status domain.Status, dependencies []string, extra string) string {
 	t.Helper()
 	taskID := testutil.TaskID(seed)
 	dir := filepath.Join(root, domain.TasksDir)

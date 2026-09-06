@@ -198,8 +198,9 @@ adapter capabilities rather than leaked persistence.
   idempotent deduplication, and empty legacy-key cleanup are typed core intent. Removing a last
   legacy value preserves the now-empty key unless cleanup is selected explicitly. Behavior-only
   graphs reconstructed from representative maps are marked source-incomplete, and all
-  repair-oriented source queries reject them; materialization, per-operation outcomes, and repair
-  policy remain outside this projection.
+  repair-oriented source queries reject them. The sibling `TaskGraphRepairStore` consumes this
+  complete projection through exact declaration selectors; repair policy and validation remain in
+  core while the filesystem adapter owns YAML-node materialization.
   Whole-snapshot equality compares the full readable-record multiset as well as unreadable sources,
   closing the prior CAS blind spot where a changed duplicate-ID shadow could hide behind the same
   representative task.
@@ -294,6 +295,20 @@ adapter capabilities rather than leaked persistence.
   Dependency writes stamp `updated_at` from the caller-injected clock only when graph-owned
   fields actually change. A dry run holds the same exclusive guard for an authoritative
   preview but, because it writes nothing, makes no CAS durability claim about later apply.
+  `TaskGraphRepairStore` is deliberately not a mode flag on that ordinary mutation port. It alone
+  accepts a broken source graph, and only for reauthorized `drop`, `dedupe`, and empty-legacy-key
+  operations. Core diagnoses exact declarations, simulates every atomic source-file step, proves
+  componentwise structural non-regression separately from an independent before/after source-record
+  preservation comparison, and permits residual broken state when the selected repair strictly
+  improves it. The filesystem adapter reads Thread evidence before the task snapshot under the
+  repository guard, materializes exact YAML sequence-node removals (including alias-resolved
+  values), performs whole-snapshot plus fresh per-step/per-target CAS, and returns typed partial
+  durability. Each next source group is reauthorized against the current durable snapshot and its
+  proof is composed into the receipt; earlier groups are not quadratically revalidated. Readable
+  task/Thread projections and unreadable Thread diagnostics are receipt data; malformed Thread
+  documents make impact evidence incomplete but do not block task-graph recovery. `task depend
+  repair` is diagnostic without selectors; its optional manifest carries convergent intent rather
+  than a stale replacement snapshot.
   `TaskLifecycleMutationStore` is the lifecycle sibling over that same canonical-root
   guard. It authorizes a typed transition against one strict graph snapshot, materializes
   status and timestamps, verifies the whole snapshot plus the target version, and writes
