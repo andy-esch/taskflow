@@ -187,9 +187,12 @@ func TestThreadApplyFailureJSONRetainsDurablePrefix(t *testing.T) {
 	if decodeErr := json.Unmarshal(output.Bytes(), &envelope); decodeErr != nil {
 		t.Fatal(decodeErr)
 	}
-	if envelope.Error.Code != "conflict" || envelope.Error.ThreadApply == nil ||
+	if envelope.SchemaVersion != wire.SchemaVersion || envelope.Error.Code != "conflict" || envelope.Error.ThreadApply == nil ||
 		!envelope.Error.ThreadApply.Committed || envelope.Error.ThreadApply.Complete ||
-		envelope.Error.ThreadApply.Operations[0].State != "applied" || envelope.Error.ThreadApply.Operations[1].State != "pending" {
+		envelope.Error.ThreadApply.Operations[0].State != "applied" || envelope.Error.ThreadApply.Operations[1].State != "pending" ||
+		envelope.Error.ThreadApply.ThreadID != testutil.TaskID("error-thread") ||
+		envelope.Error.ThreadApply.PlanPath != "/tmp/thread.apply.yml" ||
+		envelope.Error.ThreadApply.Workspace.PlanningRoot != "/repo/planning" {
 		t.Fatalf("error envelope = %+v", envelope)
 	}
 }

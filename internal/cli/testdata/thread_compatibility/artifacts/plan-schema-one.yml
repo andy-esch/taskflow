@@ -1,0 +1,20 @@
+schema: 1
+planning_repo_id: 6fjangd7kvhz
+composed_at: "2026-01-04"
+thread:
+  id: 6fjangd7kvh5
+  slug: retained-preview-delivery
+  status: unstarted
+  description: Reapply a preview-era Thread plan
+  goal: Preserve durable retry semantics
+  target_date: "2026-02-15"
+  created: "2026-01-04"
+  tags: [compatibility, threads]
+  tasks: [6fjangd7kvh0, 6fjangd7kvh1]
+  body: |
+    # Thread: Retained Preview Delivery
+
+    Historical schema-1 apply plan.
+dependencies:
+  - from: 6fjangd7kvh2
+    to: 6fjangd7kvh1
