@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 4
 tags: [threads, release, compatibility, dogfood]
 created: "2026-09-06"
-depends_on: [6g7ddeyp773z]
+depends_on: [6g7ddeyp773z, 6g7j2ebatzyt]
 updated_at: "2026-09-06"
 ---
 
