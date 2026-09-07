@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g7q6p00hvyn
-status: next-up
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: A title containing '..' mints a task whose slug the resolver refuses, so the record is unreachable by name and the CLI's own next-step hint fails.
 effort: 1-2 hours
@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, store, robustness, storage]
 created: "2026-09-07"
+updated_at: "2026-09-07"
+started_at: "2026-09-07"
+completed_at: "2026-09-07"
 ---
 # Reconcile Slugify's output with the resolver's name validation
 
@@ -80,12 +83,12 @@ apart again.
 
 ## Acceptance criteria
 
-- [ ] A title containing `..` or `...` produces a slug that resolves by name.
-- [ ] Version-number slugs still round-trip (`"Upgrade to Go 1.24"` →
+- [x] A title containing `..` or `...` produces a slug that resolves by name.
+- [x] Version-number slugs still round-trip (`"Upgrade to Go 1.24"` →
   `upgrade-to-go-1.24`, resolvable).
-- [ ] A property/table test asserts every `Slugify` output is a valid resolver query,
+- [x] A property/table test asserts every `Slugify` output is a valid resolver query,
   covering ellipses, digit ranges (`1..2`), leading/trailing dots, and non-ASCII.
-- [ ] Existing slugs in `planning/` are unaffected, or the change is called out as a
+- [x] Existing slugs in `planning/` are unaffected, or the change is called out as a
   rename with the affected files listed.
 
 ## Out of scope
@@ -93,3 +96,9 @@ apart again.
 - Cosmetics of single dots in filenames (`agents.md-across-...`) — intentional per
   the Slugify policy, and it resolves correctly.
 - Any change to how ids are minted or to the flat id-led filename layout.
+
+## Implementation evidence (2026-09-07)
+
+`Slugify` now collapses adjacent periods while retaining single periods, so version-number slugs remain stable and every non-empty generated slug satisfies the resolver query guard. The resolver remains strict; no traversal rule was weakened. An end-to-end CLI regression creates the original ellipsis title, follows the printed `task start` hint, and reaches the new task by slug. Table coverage pins ellipses, `1..2`, version numbers, edge dots, and non-ASCII input, while a fuzz property exercised more than 250,000 arbitrary titles without producing an invalid non-empty query. No existing path under `planning/` contains adjacent periods, and the implementation performs no migration or rename.
+
+Validation passed: `go test -race ./...`, focused fuzzing, `just lint`, `just tidy-check`, `just docs-check`, `tskflwctl lint`, and `git diff --check`.
