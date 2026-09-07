@@ -27,7 +27,9 @@ gifs: build
 	set -euo pipefail
 	command -v vhs >/dev/null || { echo "vhs not installed — see https://github.com/charmbracelet/vhs"; exit 1; }
 	mkdir -p assets
-	for tape in assets/vhs/*.tape; do echo "→ $tape"; PATH="$PWD/bin:$PATH" vhs "$tape"; done
+	# Recording is a visual artifact build: do not let an invoking agent's or shell's
+	# NO_COLOR setting silently strip the palette from every captured TUI/CLI frame.
+	for tape in assets/vhs/*.tape; do echo "→ $tape"; env -u NO_COLOR PATH="$PWD/bin:$PATH" vhs "$tape"; done
 
 # Install onto $GOBIN / $GOPATH/bin (so `tskflwctl` is on PATH)
 install:

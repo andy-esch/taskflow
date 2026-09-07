@@ -26,6 +26,12 @@ and back without restarting:
 
 ![the tskflwctl atlas](./assets/atlas.gif)
 
+Threads turn repository-global task dependencies into a project-sized execution graph. The focused
+topology view groups work into explanatory waves, keeps external gates visible, and opens every
+node through its stable task identity:
+
+![a touring-bike release Thread in the tskflwctl TUI](./assets/threads.gif)
+
 …and the same vocabulary on the CLI:
 
 | | |

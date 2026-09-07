@@ -1,0 +1,6 @@
+taskflow_root = "."
+id = "6g7j3s6s0zcy"
+tracked_repos = []
+
+[pager]
+enabled = false

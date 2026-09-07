@@ -1,8 +1,9 @@
-# Demo pointer fixture
+# Demo implementation-repository pointer
 
-A config file and nothing else — deliberately.
+One hidden [`.tskflwctl.toml`](./.tskflwctl.toml) plus this explanation—deliberately no planning
+entities.
 
-This is an **impl repo** whose [`.tskflwctl.toml`](./.tskflwctl.toml) points at
+This is an **impl repo** whose config points at
 [`demo-planning/`](../demo-planning/) rather than holding a planning tree of its own.
 It exists so the atlas has a card reachable **two ways**: the planning checkout itself,
 and a repo that routes to it. That is the one atlas behavior nothing else can
