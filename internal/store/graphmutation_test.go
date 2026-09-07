@@ -171,6 +171,12 @@ func TestMutateTaskGraphConcurrentOppositeEdgesCannotCommitCycle(t *testing.T) {
 			succeeded++
 		} else if errors.Is(err, domain.ErrValidation) && strings.Contains(err.Error(), "dependency cycle:") {
 			rejected++
+		} else if errors.Is(err, domain.ErrConflict) && strings.Contains(err.Error(), "repository mutation planner is active") {
+			// Same-process contention has two valid schedules. A caller that
+			// reaches the repository mutex before the winning planner starts
+			// waits and then observes the cycle; one that arrives during the
+			// callback fails fast so planner re-entry cannot self-deadlock.
+			rejected++
 		} else {
 			t.Fatalf("unexpected concurrent mutation result: %v", err)
 		}
