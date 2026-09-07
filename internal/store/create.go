@@ -213,7 +213,8 @@ func auditFields(a domain.Audit) []fmField {
 }
 
 // CreateAudit writes a new audit at audits/<id>-<slug>.md (flat, id-led per
-// ADR-0003 §4). New audits always start in the open bucket; it refuses to clobber.
+// ADR-0003 §4). New audits always start in the open bucket; it refuses to clobber
+// either the exact path or a different audit already using the same stable id.
 func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, err
@@ -227,8 +228,9 @@ func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit
 	if err := validEntityID(a.ID); err != nil {
 		return domain.Audit{}, err
 	}
-	// The id makes the flat filename unique, so writeNewFile's O_EXCL is the whole
-	// collision guard — a duplicate slug (distinct id) is allowed, resolved by id.
+	// A duplicate slug with a distinct id is legal and remains resolvable by id. A
+	// duplicate ID with a different slug is a different path, however, so O_EXCL
+	// cannot see it and both records would become ambiguous and unwritable.
 	a.Bucket = domain.AuditOpen
 	stem := a.ID + "-" + a.Slug
 	path := filepath.Join(s.auditsDir, stem+".md")
@@ -236,11 +238,45 @@ func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit
 	if err != nil {
 		return domain.Audit{}, err
 	}
-	if err := s.writeNewFile(s.auditsDir, path, content, "audit", stem, dryRun); err != nil {
-		return domain.Audit{}, err
+	if dryRun {
+		if err := s.ensureAuditIDUnique(a.ID); err != nil {
+			return domain.Audit{}, err
+		}
+		if err := s.writeNewFile(s.auditsDir, path, content, "audit", stem, true); err != nil {
+			return domain.Audit{}, err
+		}
+	} else {
+		if err := os.MkdirAll(s.root, 0o755); err != nil {
+			return domain.Audit{}, fmt.Errorf("mkdir planning root %s: %w", s.root, err)
+		}
+		unlock, err := s.writeLock()
+		if err != nil {
+			return domain.Audit{}, err
+		}
+		defer unlock()
+		if err := s.ensureAuditIDUnique(a.ID); err != nil {
+			return domain.Audit{}, err
+		}
+		if err := s.writeNewFileUnlocked(s.auditsDir, path, content, "audit", stem); err != nil {
+			return domain.Audit{}, err
+		}
 	}
 	a.Path = path
 	return a, nil
+}
+
+func (s *FS) ensureAuditIDUnique(auditID string) error {
+	candidates, err := s.auditCandidates()
+	if err != nil {
+		return err
+	}
+	for _, candidate := range candidates {
+		if candidate.id == auditID {
+			return fmt.Errorf("audit id %q already used by %q: %w",
+				auditID, filepath.Base(candidate.path), domain.ErrConflict)
+		}
+	}
+	return nil
 }
 
 // researchFields is the canonical frontmatter order for a new research doc. Thin by
