@@ -76,7 +76,6 @@ boundaries:
                                                       |          |
                                                       |          v
                                                       |   6g6jqqcdehne portable summaries
-                                                      +-> 6g6dw5js81f3 spatial prototype
                                                       +-> 6g6wdvfp2ksa frontier decision context
                                                       +-> 6g6wdvfjdaaa graduation contract
                                                                   |
@@ -85,9 +84,8 @@ boundaries:
                                                                   |
                                                                   v
                                                          6g7fhfpmy032 v0.20 preview
-                                                                  |
-                                                                  v
-                                                         6g7ddfhh2jc2 graduation decision
+                                                                  +-> 6g6dw5js81f3 flagship spatial prototype
+                                                                  +-> 6g7ddfhh2jc2 graduation decision
 ```
 
 The projection loader also depends on the generated views and v0.18 preview above. The stable-ID
@@ -134,8 +132,9 @@ strict reads -> guarded edge writes -> eligibility -> Thread documents/read proj
               -> TUI identity/watcher/path/diagnostic foundations -> projection reload
               -> list/detail dogfood -> smallest useful topology view
               -> graph-health and Atlas hardening -> TUI preview
-              -> guarded repair / portable diagnostics / spatial-view extension experiment
-              -> compatibility fixtures -> v0.20 preview soak -> explicit graduation decision
+              -> guarded repair / portable diagnostics / frontier context
+              -> compatibility fixtures -> v0.20 preview soak
+              -> flagship spatial prototype / explicit graduation decision
 ```
 
 Eligibility enforcement and Threads share the same graph foundation, but implementation is
@@ -162,12 +161,12 @@ materializers under one outer guard.
 | 10 | v0.19.0 TUI preview | Clean-main CLI/TUI dogfood and release validation pass with preview boundaries documented | shared members, external gates, fan-in/out waves, task navigation, watcher refresh, release artifacts |
 | 11a | Guarded graph repair | Every accepted durable prefix monotonically reduces deterministic graph damage without creating an escape hatch | cycles, dangling/self/duplicate edges, concurrent edits, interruption after every prefix |
 | 11b | Portable multi-entity diagnostics | One adapter-neutral vocabulary survives lint, board, status, Atlas, CLI, TUI, and wire projections | pathless and misleading locations, mixed entity kinds, deterministic ordering, scan counts |
-| 11c | Spatial graph experiment | A bounded prototype answers whether deterministic two-dimensional navigation merits production work | fan-in/out, crossings, skipped waves, narrow terminals, large graphs, reload stability |
-| 11d | Frontier decision context | Independent eligible candidates expose shared planning metadata without changing graph truth or inventing a scheduler | mixed priorities/tiers, unknown effort, active work, external gates, unhealthy graphs |
-| 11e | Preview graduation contract | Public and persisted surfaces have explicit compatibility classifications and observable graduation gates | old preview data, CLI/JSON consumers, pathless adapters, TUI/web evolution, unmet gates |
-| 11f | Historical compatibility fixtures | Current readers, surgical writers, and resumable apply preserve the concrete v0.18.0/v0.19.0 artifacts and meanings | additive frontmatter, old wire fields, schema 0/1 manifests, strict plans, interrupted prefix, legacy repo identity |
+| 11c | Frontier decision context | Independent eligible candidates expose shared planning metadata without changing graph truth or inventing a scheduler | mixed priorities/tiers, unknown effort, active work, external gates, unhealthy graphs |
+| 11d | Preview graduation contract | Public and persisted surfaces have explicit compatibility classifications and observable graduation gates | old preview data, CLI/JSON consumers, pathless adapters, TUI/web evolution, unmet gates |
+| 11e | Historical compatibility fixtures | Current readers, surgical writers, and resumable apply preserve the concrete v0.18.0/v0.19.0 artifacts and meanings | additive frontmatter, old wire fields, schema 0/1 manifests, strict plans, interrupted prefix, legacy repo identity |
 | 12 | v0.20.0 hardened preview | Compatibility and recovery improvements ship through the release pipeline while the preview notice remains explicit | clean candidate, installed CLI/TUI use, retained plans, repair, archives/checksums |
-| 13 | Explicit graduation decision | Fresh gates plus accumulated preview evidence support either a preview-removal candidate or named further work | all G1–G7 evidence, unresolved preview findings, exact candidate/tag provenance |
+| 13a | Flagship spatial graph design/prototype | A bounded high-priority pass proves deterministic two-dimensional comprehension and navigation, then cuts production-grade slices for the next feature release | fan-in/out, crossings, skipped waves, narrow terminals, large graphs, reload stability |
+| 13b | Explicit graduation decision | Fresh gates plus accumulated preview evidence support either a preview-removal candidate or named further work | all G1–G7 evidence, unresolved preview findings, exact candidate/tag provenance |
 
 ### Design attention
 
@@ -187,8 +186,9 @@ foundations have now shipped. The next bounded checkpoint is v0.20.0: it carries
 and the historical compatibility suite while deliberately retaining the preview label. Graduation
 is a later explicit decision after installed-release evidence, not an automatic consequence of green
 tests. Portable diagnostic tasks remain serialized around one shared value and explicit wire-version
-boundary. The spatial view is an optional, removable presentation-extension prototype over the
-existing projection—not a hidden commitment to a renderer, graph library, or core dependency.
+boundary. After v0.20, the spatial view is the tier-1 flagship candidate for the next feature
+release. Its removable presentation-extension boundary over the existing projection prevents a
+prominent UX experiment from becoming a hidden renderer, graph-library, or core dependency.
 
 ## Dogfood checkpoints
 
@@ -212,15 +212,15 @@ This epic is the first production consumer of its own capabilities:
    Thread before selecting a topology layout; a terminal diagram is not presumed necessary.
 9. After the linear wave view lands, status/lint graph reporting and Atlas partial-refresh recovery
    close the v0.19.0 release boundary. A clean-main dogfood pass must use both CLI and TUI surfaces.
-10. The post-release frontier fans out instead of manufacturing dependencies: graph repair is the
-    highest-priority foundation, portable diagnostics are one serialized contract migration, and
-    the spatial view remains a low-priority prototype justified by recorded dogfood feedback.
-    Frontier metadata makes those choices visible, while the graduation contract defines which
-    outcomes actually gate the end of preview.
+10. The post-v0.19 frontier fans out instead of manufacturing dependencies: graph repair is the
+    highest-priority integrity foundation, portable diagnostics are one serialized contract
+    migration, and frontier metadata makes independent choices visible. The graduation contract
+    defines which outcomes actually gate the end of preview.
 11. After historical compatibility becomes executable, cut v0.20.0 with the preview notice intact.
-    Treat it as the third installed dogfood checkpoint, record findings, and only then explicitly
-    decide whether to open graduation or add another bounded preview checkpoint. The optional spatial
-    extension may ship for experimentation when ready, but neither gates nor silently joins core.
+    Treat it as the third installed dogfood checkpoint and record findings. Completion immediately
+    unlocks the tier-1 spatial design/prototype as the flagship candidate for the next feature
+    release, alongside the independent decision to graduate Threads or name another preview
+    checkpoint. The spatial work does not gate v0.20 or silently join core.
 
 The experimental spike binary is limited to disposable planning spaces and does not satisfy these
 checkpoints. Dogfooding begins when the corresponding production slice passes its exit gate.

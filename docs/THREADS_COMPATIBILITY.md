@@ -56,9 +56,9 @@ is not evidence.
 - [`6g6wdvfp2ksa`](../planning/tasks/6g6wdvfp2ksa-make-thread-frontier-help-choose-among-independent-candidates.md)
   improves selection among equally eligible work without changing eligibility semantics.
 - [`6g6dw5js81f3`](../planning/tasks/6g6dw5js81f3-prototype-a-two-dimensional-navigable-thread-graph-view.md)
-  is an explicitly experimental, separately removable presentation extension over
-  `ThreadGraphProjection`. Waves, nodes, and edges already expose the complete semantic graph
-  without making a spatial renderer a release or graduation requirement.
+  is the high-priority flagship presentation candidate immediately after v0.20. Its design/prototype
+  remains a separately removable extension over `ThreadGraphProjection`; this is non-blocking only
+  for v0.20 and the correctness-based graduation gates, not a statement of low product priority.
 - [`6g7f0tqgftg3`](../planning/tasks/6g7f0tqgftg3-enforce-reserved-document-schema-versions-across-entity-writers.md)
   tracks a future shared read/write boundary for the reserved document `schema` marker. Adopting
   that policy for every entity is intentionally not a Thread-only graduation requirement.

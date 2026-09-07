@@ -1,0 +1,23 @@
+schema: 1
+thread:
+  title: Departure Safety Review
+  description: Recheck the frame and wheels as one shared pre-departure safety slice.
+  goal: Prove that the loaded bike is structurally ready to leave the workshop
+  tags: [touring, safety, dogfood]
+nodes:
+  - key: frame
+    task_id: 6g7j3wdeyvgg
+  - key: hub
+    task_id: 6g7j3wdj57jz
+    member: false
+  - key: wheels
+    task_id: 6g7j3wdrana7
+  - key: shakedown
+    task_id: 6g7j3we1hzfz
+dependencies:
+  - from: frame
+    to: wheels
+  - from: hub
+    to: wheels
+  - from: wheels
+    to: shakedown

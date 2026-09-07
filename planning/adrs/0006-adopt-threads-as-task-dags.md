@@ -1361,7 +1361,7 @@ by the preview-labelled v0.20.0 checkpoint in
 [`6g7fhfpmy032`](../tasks/6g7fhfpmy032-cut-v0.20.0-as-a-compatibility-hardened-threads-preview.md), and
 only then an explicitly opened clean graduation decision in
 [`6g7ddfhh2jc2`](../tasks/6g7ddfhh2jc2-graduate-threads-from-preview.md). Portable diagnostics in
-repository-wide convenience views, frontier ranking metadata, the spatial graph experiment, a
+repository-wide convenience views, frontier ranking metadata, the flagship spatial graph prototype, a
 production remote adapter, and advanced graph calculations remain named non-blocking work. A failed
 required gate keeps the preview label and must identify an owner; optional scope cannot substitute
 for the missing evidence. The existing document `schema` marker remains advisory. A future shared
@@ -1370,10 +1370,13 @@ enforcement boundary is tracked across all entities by
 and is intentionally neither adopted for Threads alone nor made a graduation gate.
 
 The spatial graph remains architecturally downstream from the shared renderer-neutral
-`ThreadGraphProjection`. Its bounded prototype should enter through an optional CLI/TUI presentation
-adapter or similarly removable boundary: core must not import it, default interfaces must not depend
-on it, and abandoning it must require no planning-data migration. A later explicit decision may
-promote a proven slice; experimentation alone does not fold it into the base.
+`ThreadGraphProjection`. Immediately after the v0.20.x checkpoint it becomes the high-priority
+flagship presentation candidate. Its design/prototype should still enter through an optional
+CLI/TUI presentation adapter or similarly removable boundary: core must not import it, default
+interfaces must not require it until promotion, and abandoning or revising it must require no
+planning-data migration. That isolation is risk containment for a prominent feature, not a claim
+that the feature is low value; a successful prototype should produce explicit production and
+release slices rather than silently folding experimental code into the base.
 
 ## Related
 

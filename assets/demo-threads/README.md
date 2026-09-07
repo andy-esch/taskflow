@@ -16,3 +16,7 @@ semantics:
 
 `assets/vhs/threads.tape` records only against this fixture. Keep its dates and prose deterministic,
 its dependencies mechanically credible, and the space lint-clean.
+
+`shared-safety-review.compose.yml` is a release-dogfood input for a throwaway copy of this space. It
+creates a second Thread sharing three members, retains the rear hub as nonmember graph context, and
+adds one plausible frame-inspection → wheel-truing edge; never apply it to the committed fixture.
