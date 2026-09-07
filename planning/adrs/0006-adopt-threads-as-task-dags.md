@@ -1336,7 +1336,7 @@ The v0.18.0 CLI and v0.19.0 TUI checkpoints proved that Threads are useful, but 
 removing “preview” would promise. Graduation now follows the contract matrix and executable gates in
 [`docs/THREADS_COMPATIBILITY.md`](../../docs/THREADS_COMPATIBILITY.md), not a date, version number, or
 subjective stability assessment. Passing those gates permits a graduation decision; it does not
-force one. The compatibility-hardened v0.20.0 release will deliberately retain the preview label so
+force one. The compatibility-hardened v0.20.0 release deliberately retained the preview label so
 the historical upgrade and guarded-recovery contracts receive another installed-release soak.
 
 After graduation, the persisted global-DAG/membership split, the concrete Thread document shapes
@@ -1355,11 +1355,11 @@ safety, historical document/manifest/plan upgrades with their repository-identit
 machine/command compatibility, adapter-neutral reads, clean-build dogfood, and the release pipeline.
 The release gate separates pre-tag validation of the exact preview-removal candidate from post-tag
 artifact verification; a pushed tag is never rewritten. Guarded repair is required and has shipped.
-The remaining required implementation is historical persisted-shape compatibility coverage in
-[`6g7ddeyp773z`](../tasks/6g7ddeyp773z-pin-thread-document-and-plan-backward-compatibility.md), followed
-by the preview-labelled v0.20.0 checkpoint in
-[`6g7fhfpmy032`](../tasks/6g7fhfpmy032-cut-v0.20.0-as-a-compatibility-hardened-threads-preview.md), and
-only then an explicitly opened clean graduation decision in
+Historical persisted-shape compatibility coverage in
+[`6g7ddeyp773z`](../tasks/6g7ddeyp773z-pin-thread-document-and-plan-backward-compatibility.md) and the
+preview-labelled v0.20.0 checkpoint in
+[`6g7fhfpmy032`](../tasks/6g7fhfpmy032-cut-v0.20.0-as-a-compatibility-hardened-threads-preview.md) have
+now shipped. The remaining required step is an explicitly opened clean graduation decision in
 [`6g7ddfhh2jc2`](../tasks/6g7ddfhh2jc2-graduate-threads-from-preview.md). Portable diagnostics in
 repository-wide convenience views, frontier ranking metadata, the flagship spatial graph prototype, a
 production remote adapter, and advanced graph calculations remain named non-blocking work. A failed
@@ -1370,7 +1370,7 @@ enforcement boundary is tracked across all entities by
 and is intentionally neither adopted for Threads alone nor made a graduation gate.
 
 The spatial graph remains architecturally downstream from the shared renderer-neutral
-`ThreadGraphProjection`. Immediately after the v0.20.x checkpoint it becomes the high-priority
+`ThreadGraphProjection`. With the v0.20.0 checkpoint shipped, it becomes the high-priority
 flagship presentation candidate. Its design/prototype should still enter through an optional
 CLI/TUI presentation adapter or similarly removable boundary: core must not import it, default
 interfaces must not require it until promotion, and abandoning or revising it must require no

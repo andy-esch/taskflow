@@ -4,13 +4,13 @@ Home of **`tskflwctl`** — a local-first planning CLI over markdown+frontmatter
 task/Thread/epic/audit/research files. It dogfoods on its own planning under
 [`planning/`](./planning/).
 
-> **Threads preview.** The workflow is ready for real CLI and read-only TUI dogfooding,
-> including guarded mutations and repair, bulk apply, shared projections, and a `v` wave/topology
+> **Threads preview.** The workflow is ready for real CLI and TUI dogfooding. The CLI owns guarded
+> Thread mutations, repair, and bulk apply; the TUI provides shared read projections and a `v` wave/topology
 > view. Persisted and machine contracts are protected during preview, but command ergonomics and
 > presentation may still evolve. Preview graduation is evidence-gated—not date- or version-gated;
 > see the [compatibility matrix and graduation checklist](./docs/THREADS_COMPATIBILITY.md).
-> TUI mutation, a spatial graph, critical-path analysis, forecasting, and slack remain outside the
-> current feature.
+> Thread mutation from the TUI, a spatial graph, critical-path analysis, forecasting, and slack
+> remain outside the current feature.
 
 ## Demos
 

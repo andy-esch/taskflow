@@ -182,11 +182,11 @@ create another open-ended research spike, and do not let library features pull c
 or other deferred graph analysis into V1.
 
 The v0.19.0 release intentionally preceded guarded repair; repair and its CAS/source-declaration
-foundations have now shipped. The next bounded checkpoint is v0.20.0: it carries that recovery work
-and the historical compatibility suite while deliberately retaining the preview label. Graduation
-is a later explicit decision after installed-release evidence, not an automatic consequence of green
-tests. Portable diagnostic tasks remain serialized around one shared value and explicit wire-version
-boundary. After v0.20, the spatial view is the tier-1 flagship candidate for the next feature
+foundations have now shipped. v0.20.0 carried that recovery work and the historical compatibility
+suite while deliberately retaining the preview label. Graduation is a later explicit decision after
+installed-release evidence, not an automatic consequence of green tests. Portable diagnostic tasks
+remain serialized around one shared value and explicit wire-version boundary. With v0.20 shipped,
+the spatial view is the tier-1 flagship candidate for the next feature
 release. Its removable presentation-extension boundary over the existing projection prevents a
 prominent UX experiment from becoming a hidden renderer, graph-library, or core dependency.
 
@@ -216,9 +216,8 @@ This epic is the first production consumer of its own capabilities:
     highest-priority integrity foundation, portable diagnostics are one serialized contract
     migration, and frontier metadata makes independent choices visible. The graduation contract
     defines which outcomes actually gate the end of preview.
-11. After historical compatibility becomes executable, cut v0.20.0 with the preview notice intact.
-    Treat it as the third installed dogfood checkpoint and record findings. Completion immediately
-    unlocks the tier-1 spatial design/prototype as the flagship candidate for the next feature
+11. v0.20.0 shipped with the preview notice intact as the third installed dogfood checkpoint. Its
+    completed release evidence unlocks the tier-1 spatial design/prototype as the flagship candidate for the next feature
     release, alongside the independent decision to graduate Threads or name another preview
     checkpoint. The spatial work does not gate v0.20 or silently join core.
 
