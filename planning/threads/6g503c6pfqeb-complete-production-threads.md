@@ -29,10 +29,9 @@ landed. Graph-health reporting and coherent Atlas refresh recovery form the boun
 preview checkpoint.
 
 After that release, the graph deliberately fans out: guarded repair turns diagnosis into recovery;
-one shared diagnostic vocabulary precedes portable board/status projections; and a low-priority
-spatial graph prototype tests whether two-dimensional navigation earns a production slice. Those
-are independent branches. Repository-global dependencies record the release boundary without
-pretending the branches technically depend on each other.
+one shared diagnostic vocabulary precedes portable board/status projections; and frontier output
+gains planning context without inventing a scheduler. Repository-global dependencies record the
+release boundary without pretending those branches technically depend on each other.
 
 Two additional post-release members close planning gaps exposed by that fan-out. One makes frontier
 output carry priority, tier, and effort without redefining eligibility; the other defines objective
@@ -40,13 +39,12 @@ compatibility and graduation gates so this Thread has an evidence-based finish l
 indefinite preview label.
 
 That graduation branch is now explicit: define the compatibility contract, pin v0.18.0/v0.19.0
-Thread-document and apply-plan behavior with executable historical fixtures, ship that hardening as
-a preview-labelled v0.20.0 checkpoint, then explicitly decide whether the accumulated soak supports
-graduation or another named preview checkpoint. Those are real sequential dependencies. The spatial
-prototype, frontier ranking, and portable diagnostics in repository-wide convenience views remain
-independent improvements rather than accidental graduation gates. The spatial prototype is also a
-removable presentation extension over `ThreadGraphProjection`, not a second graph model or a silent
-core commitment.
+Thread-document and apply-plan behavior with executable historical fixtures, then ship that
+hardening as a preview-labelled v0.20.0 checkpoint. That release unlocks two distinct high-profile
+decisions: whether the accumulated soak supports graduation, and a tier-1 spatial graph
+design/prototype intended to seed the next feature release. The latter is a removable presentation
+extension over `ThreadGraphProjection`, not a second graph model or silent core commitment; that
+architectural isolation contains flagship risk without demoting its product importance.
 
 The guarded-repair branch was split after adversarial review. Unreadable task sources first gain
 opaque revision evidence for whole-snapshot CAS; unreadable Thread evidence then gains the same

@@ -3,26 +3,26 @@ schema: 1
 id: 6g6dw5js81f3
 status: next-up
 epic: 30-threads-and-task-dependency-graphs
-description: Explore a full-screen spatial Thread graph with direct hjkl node navigation after the linear wave view has accumulated enough dogfood evidence.
+description: Design and prove a flagship full-screen spatial Thread graph with deterministic layout and direct hjkl node navigation.
 effort: 3-5 days
-tier: 4
-priority: low
+tier: 1
+priority: high
 autonomy_level: 3
 tags: [threads, tui, graph, ux, dogfood]
 created: "2026-09-03"
-depends_on: [6g5rwjr0dz4p, 6g6scc9jgxae]
-updated_at: "2026-09-04"
+depends_on: [6g5rwjr0dz4p, 6g6scc9jgxae, 6g7fhfpmy032]
+updated_at: "2026-09-07"
 ---
 # Prototype a two-dimensional navigable Thread graph view
 
 ## Objective
 
-Explore and prototype a full-screen, genuinely spatial Thread graph in which nodes occupy two
-dimensions and `h`/`j`/`k`/`l` navigate by graph/layout adjacency. This is deliberately separate
-from the compact linear wave reader: it should earn a richer interaction and layout model from
-dogfood evidence rather than stretching detail-pane text into a pseudo-graph. Treat it as a
-separately removable presentation extension over the stable projection, not as a new core graph
-model or an assumed default UI.
+Design and prototype a full-screen, genuinely spatial Thread graph in which nodes occupy two
+dimensions and `h`/`j`/`k`/`l` navigate by graph/layout adjacency. This is the flagship feature
+candidate for the first feature release after v0.20.x, not low-priority polish. It remains separate
+from the compact linear wave reader so its richer interaction and layout model can be nailed without
+stretching detail-pane text into a pseudo-graph. The removable presentation boundary is risk
+containment, not a signal that the experience is disposable or unimportant.
 
 ## Dogfood evidence
 
@@ -30,7 +30,8 @@ The shipped wave reader makes execution order legible, and task selection plus `
 navigation make its linear rows usable. It still presents a complex Thread as a sequence of task
 bags: the earlier inline `<node> -> <node>` list was removed as verbose without conveying spatial
 structure, while fan-out and fan-in remain difficult to perceive. That is sufficient evidence to
-authorize a bounded spatial prototype, but not to make it a v0.19.0 release gate.
+authorize a high-priority spatial design/prototype immediately after the v0.20 checkpoint. The
+prototype is the gate to production-grade slices; it is deliberately not a reason to delay v0.20.
 
 ## Design questions
 
@@ -62,8 +63,10 @@ authorize a bounded spatial prototype, but not to make it a v0.19.0 release gate
 - [ ] Direct task navigation and ctrl+o return use canonical task/Thread identities.
 - [ ] Fan-out, fan-in, edge crossing, skipped waves, disconnected members, external gates, hostile
   labels, incomplete topology, and large graphs are stress-tested.
-- [ ] The prototype produces enough evidence to accept a production slice, revise the
-  projection/layout boundary, adopt a suitable library, or abandon the spatial view.
+- [ ] The prototype produces enough evidence to define and sequence a
+  production-grade spatial graph slice as the flagship candidate for the first
+  feature release after v0.20.x, or records a specific reason to revise or
+  abandon that direction.
 
 ## Out of scope
 
@@ -72,11 +75,12 @@ linear wave view before the prototype is evaluated, or committing to a general p
 
 ## Sequencing
 
-Follow the linear TUI topology task and the v0.19.0 preview checkpoint. The dogfood threshold above
-has been met, but this remains a low-priority experiment beside post-release graph recovery and
-portable-diagnostic hardening. Its outcome is a decision and evidence, not an assumed production
-renderer. It may be tested during later preview releases, but it does not gate those releases or
-Thread graduation unless a later planning decision explicitly promotes it.
+Begin after the compatibility-hardened v0.20 checkpoint is complete. At that boundary this becomes
+the highest-priority Thread presentation initiative: a deliberate design and prototype gate for a
+production-quality flagship, not an opportunistic experiment. If the evidence holds, split and
+sequence the production renderer, interaction hardening, accessibility, and release work rather
+than hiding them inside this prototype. It remains independent of the correctness-only Thread
+graduation decision; product importance does not make it a retroactive v0.20 or graduation gate.
 
 ## Related
 
