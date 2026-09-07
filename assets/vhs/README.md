@@ -12,18 +12,26 @@ just gifs
 Requires `vhs` (plus its `ttyd` + `ffmpeg` deps) on `PATH` — it isn't a build or
 runtime dependency, only needed to (re)record the demos. `just gifs` builds the
 binary first and runs each tape against `./bin/tskflwctl` (shown as `tskflwctl`
-via a `PATH` prepend), so the GIFs always reflect the current code.
+via a `PATH` prepend), so the GIFs always reflect the current code. It also clears
+an inherited `NO_COLOR` for the recorder so an agent or shell preference cannot
+silently turn the visual artifacts monochrome.
 
-The featured tapes — **`tui`** (hero), **`atlas`**, **`status`**, **`audit-show`**,
-and **`picker`** — are the ones shown in the READMEs. The first three each `cd`
-(hidden) into the curated [`assets/demo-planning/`](../demo-planning/) fixture, a
+The featured tapes — **`tui`** (hero), **`threads`**, **`atlas`**, **`status`**,
+**`audit-show`**, and **`picker`** — are the ones shown in the READMEs. `tui`, `status`,
+and `audit-show` each `cd` (hidden) into the curated
+[`assets/demo-planning/`](../demo-planning/) fixture, a
 bike-workshop planning tree authored to show the symbology off: epics
 mid-progress, tasks across every status, and an open audit whose findings span
-fixed / landed / in-progress / open / deferred / wontfix (so the segmented bar
+fixed / in-progress / open / deferred / wontfix (so the segmented bar
 shows all its bands). `picker` works on a **throwaway copy** of the fixture (in
 `/tmp`) because it actually creates a task through the interactive prompts, and
 mustn't dirty the committed tree. Regenerate the fixture itself by re-running the
 `tskflwctl epic/task/audit new` commands, or edit the markdown in place.
+
+**Threads gets a purpose-built graph.** `threads.tape` records the compact
+[`assets/demo-threads/`](../demo-threads/) fixture instead. Its touring-bike release has three
+waves, meaningful fan-out/fan-in, an in-flight member, an eligible member, and one immediate
+external parts gate, so every visible relationship exists for a domain reason rather than staging.
 
 **The atlas needs more than one tree.** `atlas.tape` is the exception to
 "one fixture, `cd` into it": a cross-space navigator has nothing to show with a single
@@ -32,13 +40,15 @@ space, so it stages a throwaway **registry** via
 only piece of this directory that could touch something outside the repo, so it is
 deliberate about two things: `TSKFLW_CONFIG_HOME` redirects the whole home config into
 the staging dir, so `space add` can never reach the recorder's real `spaces.toml`; and
-every tree is a copy, so the committed fixtures stay clean. It stages three:
+every tree is a copy, so the committed fixtures stay clean. It stages four entry points across
+three planning identities:
 
 | staged as | from | role |
 | --- | --- | --- |
 | `bike-workshop` | [`demo-planning/`](../demo-planning/) | the direct planning checkout |
 | `bike-shop` | [`demo-bike-shop/`](../demo-bike-shop/) | an impl repo *pointing at* that same tree |
 | `kitchen` | [`demo-kitchen/`](../demo-kitchen/) | a second, unrelated planning identity |
+| `touring-release` | [`demo-threads/`](../demo-threads/) | the focused Thread fixture as a third identity |
 
 `bike-workshop` and `bike-shop` share one durable planning id, so the atlas groups them
 into **one card with two entry points** — which is the only reason the `h`/`l` entry-point

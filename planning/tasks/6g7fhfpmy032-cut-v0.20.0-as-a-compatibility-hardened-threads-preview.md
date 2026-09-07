@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 4
 tags: [threads, release, compatibility, dogfood]
 created: "2026-09-06"
-depends_on: [6g7ddeyp773z]
+depends_on: [6g7ddeyp773z, 6g7j2ebatzyt]
 updated_at: "2026-09-06"
 ---
 
@@ -57,6 +57,13 @@ explicit graduation decision; passing the graduation gates makes graduation poss
 - Requiring the two-dimensional graph experiment, frontier ranking, or portable convenience-view
   diagnostics merely to cut this checkpoint.
 - Folding an experimental spatial renderer into core Thread semantics.
+
+## Preview visual evidence
+
+The approved [touring-bike Thread topology recording](../../assets/threads.gif) demonstrates the
+current terminal-native graph comprehension path: three explanatory waves, fan-out/fan-in,
+eligible and in-flight work, an immediate external gate, and stable task navigation. It remains a
+secondary preview demo; the optional two-dimensional spatial renderer is not a v0.20 release gate.
 
 ## Related
 

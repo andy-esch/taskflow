@@ -32,7 +32,7 @@ center in the frame.
 
 **Recommendation:** add drive-side tension to pull the rim to true center.
 
-#### H3. Nipples creak under first load  · **Status:** landed (2026-06-10)
+#### H3. Nipples creak under first load  · **Status:** fixed (2026-06-10)
 
 **Component:** wheels
 **Effort:** XS · **Urgency:** eventually

@@ -41,6 +41,9 @@ STAGE="${STAGE:-/private/tmp/tskflw-atlas}"
   cp -R assets/demo-bike-shop "$STAGE/bike-shop"
   # kitchen: a second, unrelated planning identity, so the atlas has more than one card.
   cp -R assets/demo-kitchen "$STAGE/kitchen"
+  # touring-release: the focused Thread fixture is a third planning identity. Keeping it
+  # in the atlas makes the demo gallery internally honest about every reusable workspace.
+  cp -R assets/demo-threads "$STAGE/touring-release"
 
   # Re-point the pointer at the renamed sibling. planning_repo is stored relative,
   # and `config migrate`/`init` deliberately preserve that spelling, so this is a
@@ -51,11 +54,13 @@ p = pathlib.Path(sys.argv[1])
 p.write_text(re.sub(r'(planning_repo\s*=\s*")\.\./demo-planning(")', r'\1../bike-workshop\2', p.read_text()))
 PY
 
-  # Register all three. The --id is the machine-local label the atlas card shows,
-  # so it is chosen for the demo rather than inherited from the directory name.
+  # Register all four entry points across three planning identities. The --id is the
+  # machine-local label the atlas card shows, so it is chosen for the demo rather than
+  # inherited from the directory name.
   tskflwctl space add "$STAGE/bike-workshop" --id bike-workshop >/dev/null
   tskflwctl space add "$STAGE/bike-shop" --id bike-shop >/dev/null
   tskflwctl space add "$STAGE/kitchen" --id kitchen >/dev/null
+  tskflwctl space add "$STAGE/touring-release" --id touring-release >/dev/null
 ) || return 1
 
 # The two things only a sourced script can hand back: the isolated registry, and

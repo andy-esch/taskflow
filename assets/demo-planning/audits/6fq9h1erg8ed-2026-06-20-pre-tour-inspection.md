@@ -33,7 +33,7 @@ cassette under climbing load and chew the chainrings.
 
 **Recommendation:** replace the chain; re-measure the cassette for hooking.
 
-#### H3. Headset has a notchy index at center  · **Status:** landed (2026-06-19)
+#### H3. Headset has a notchy index at center  · **Status:** fixed (2026-06-19)
 
 **Component:** headset
 **Effort:** M · **Urgency:** soon

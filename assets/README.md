@@ -12,6 +12,15 @@ audit's **segmented finding bar** over its status-grouped **finding tree**.
 
 ![the tskflwctl TUI](./tui.gif)
 
+## Thread topology (`tskflwctl ui` → Threads → `v`)
+
+A touring-bike release makes the graph concrete: completed foundations fan out into eligible,
+in-flight, and externally blocked workshop jobs, then converge on a loaded shakedown ride. The
+topology view exposes waves and immediate prerequisites without pretending persisted member order
+is execution order; `j`/`k`, Enter, and `ctrl+o` keep navigation tied to stable task identities.
+
+![a touring-bike release Thread in the tskflwctl TUI](./threads.gif)
+
 ## The atlas (`tskflwctl ui`, outside a planning repo)
 
 Standing in a planning repo, `ui` opens that repo. Run it anywhere else and there is no
@@ -60,9 +69,12 @@ stderr, so stdout stays a clean data stream.
 - **[`demo-planning/`](./demo-planning/)** — the curated planning tree the tapes
   record against, shaped to exercise the symbology. See
   [`demo-planning/README.md`](./demo-planning/README.md).
+- **[`demo-threads/`](./demo-threads/)** — the compact touring-bike release graph used by the
+  focused Thread topology recording and registered as its own identity in the staged Atlas. See
+  [`demo-threads/README.md`](./demo-threads/README.md).
 - **[`demo-kitchen/`](./demo-kitchen/)** and **[`demo-bike-shop/`](./demo-bike-shop/)** —
-  the second planning identity and the pointer repo that give the atlas more than one
-  card and more than one entry point. Only `atlas.tape` uses them, via
+  an unrelated planning identity and the pointer repo that give the Atlas multiple cards and a
+  shared-identity entry-point pair. Only `atlas.tape` uses them, via
   [`vhs/atlas-setup.sh`](./vhs/atlas-setup.sh), which stages copies into a throwaway
   registry rather than ever touching your real one.
 
