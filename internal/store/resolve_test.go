@@ -93,6 +93,58 @@ func TestResolveID_ExactStableIDPrecedesSiblingSlug(t *testing.T) {
 	}
 }
 
+func TestResolveID_SlugifyOutputsAreValidQueries(t *testing.T) {
+	cases := []struct {
+		title string
+		want  string
+	}{
+		{title: "Wait... what happens here", want: "wait.-what-happens-here"},
+		{title: "Upgrade to Go 1.24", want: "upgrade-to-go-1.24"},
+		{title: "Support versions 1..2", want: "support-versions-1.2"},
+		{title: "...leading and trailing...", want: "leading-and-trailing"},
+		{title: "日本語…の計画", want: "日本語-の計画"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.title, func(t *testing.T) {
+			slug := domain.Slugify(tc.title)
+			if slug != tc.want {
+				t.Fatalf("Slugify(%q) = %q, want %q", tc.title, slug, tc.want)
+			}
+			if err := validQueryName("task", slug); err != nil {
+				t.Fatalf("Slugify(%q) produced an invalid resolver query %q: %v", tc.title, slug, err)
+			}
+
+			want := candidate{id: testutil.TaskID(tc.title), slug: slug, path: slug + ".md"}
+			got, err := resolveID("task", slug, []candidate{want})
+			if err != nil || got.path != want.path {
+				t.Fatalf("generated slug %q resolved to %+v, %v; want %+v", slug, got, err, want)
+			}
+		})
+	}
+}
+
+func FuzzSlugifyOutputIsValidQueryName(f *testing.F) {
+	for _, seed := range []string{
+		"Wait... what happens here",
+		"Upgrade to Go 1.24",
+		"Support versions 1..2",
+		"...leading and trailing...",
+		"日本語…の計画",
+		"../../etc/passwd",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, title string) {
+		slug := domain.Slugify(title)
+		if slug == "" {
+			return // create paths reject titles with no usable slug
+		}
+		if err := validQueryName("task", slug); err != nil {
+			t.Fatalf("Slugify(%q) produced an invalid resolver query %q: %v", title, slug, err)
+		}
+	})
+}
+
 // TestMove_FuzzyKeepsCanonicalSlug pins the rename trap: moving by an
 // abbreviation must keep the file's full slug, not rename it to the query.
 // Under the flat layout the file never relocates — it stays at its original

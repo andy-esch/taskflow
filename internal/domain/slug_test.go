@@ -22,6 +22,8 @@ func TestSlugify(t *testing.T) {
 		"...dots...":                       "dots",
 		"don't shorten Tasks' apostrophes": "dont-shorten-tasks-apostrophes",
 		"v1.2 point release":               "v1.2-point-release",
+		"Wait... what happens here":        "wait.-what-happens-here",
+		"Support versions 1..2":            "support-versions-1.2",
 	}
 	for in, want := range cases {
 		if got := Slugify(in); got != want {

@@ -82,6 +82,26 @@ func TestTaskNew_HappyPath(t *testing.T) {
 	runRoot(t, "-C", root, "lint") // would Fatalf if exit != 0
 }
 
+func TestTaskNew_EllipsisSlugRoundTripsThroughPrintedNextStep(t *testing.T) {
+	root := freshRepo(t)
+	mustWrite(t, filepath.Join(root, "epics", "01-e1.md"), "---\nstatus: active\n---\n")
+
+	const slug = "wait.-what-happens-here"
+	out := runRoot(t, "-C", root, "task", "new", "Wait... what happens here", "--epic", "01-e1", "--tags", "x", "--description", "exercise generated slug resolution")
+	if !strings.Contains(out, "task start "+slug) {
+		t.Fatalf("create output did not print a usable next step for %q:\n%s", slug, out)
+	}
+
+	runRoot(t, "-C", root, "task", "start", slug)
+	b, err := os.ReadFile(taskPath(t, root, slug))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "status: in-progress") {
+		t.Fatalf("generated slug did not address the created task:\n%s", b)
+	}
+}
+
 func TestTaskNew_Next(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "01-e1.md"), "---\nstatus: active\n---\n")
