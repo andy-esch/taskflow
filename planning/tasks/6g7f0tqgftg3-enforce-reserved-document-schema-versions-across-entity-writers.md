@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [schema, frontmatter, validation, compatibility]
 created: "2026-09-06"
 depends_on: [6fkkz41cax80]
-updated_at: "2026-09-06"
+updated_at: "2026-09-07"
+audit_sources: [2026-09-07-arch-data-model-and-storage]
 ---
 
 # Enforce reserved document schema versions across entity writers
@@ -72,3 +73,5 @@ adding a Thread-only check that leaves every sibling entity with different upgra
 - Policy task [ADR — declared frontmatter-schema contract](6fkkz41cax80-adr-close-frontmatter-schema-policy-questions.md)
 - Thread graduation contract [task](6g6wdvfjdaaa-define-the-thread-preview-graduation-and-compatibility-contract.md)
 - Compatibility guide [Threads compatibility and preview graduation](../../docs/THREADS_COMPATIBILITY.md)
+
+Reinforced by audit 2026-09-07-arch-data-model-and-storage: M2. Corpus inventory as of 2026-09-07 — 93 documents carry no `schema:` key (86/334 tasks, 5/15 epics, 2/69 audits; research and Threads are complete). `lint --fix` does not backfill it, so absence must be decided (backfill now, or declare absence == 1 permanently) before the first real bump.
