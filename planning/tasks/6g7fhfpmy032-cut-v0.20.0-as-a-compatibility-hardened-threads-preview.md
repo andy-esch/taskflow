@@ -102,17 +102,17 @@ record the immutable tag/commit and links here before completing the publication
 
 ## Acceptance criteria
 
-- [ ] `pin-thread-document-and-plan-backward-compatibility` is complete and the v0.18.0/v0.19.0
+- [x] `pin-thread-document-and-plan-backward-compatibility` is complete and the v0.18.0/v0.19.0
       compatibility fixtures pass from the recorded clean candidate.
-- [ ] Focused hostile tests, full `go test -race ./...`, lint, generated docs/schema checks,
+- [x] Focused hostile tests, full `go test -race ./...`, lint, generated docs/schema checks,
       planning lint, and `just release-snapshot` pass on that candidate.
-- [ ] A fresh candidate binary completes the bounded CLI/TUI dogfood pass; commands and outcomes,
+- [x] A fresh candidate binary completes the bounded CLI/TUI dogfood pass; commands and outcomes,
       including any filed follow-ups, are recorded here.
-- [ ] README and release notes explicitly retain the Threads preview classification and explain
+- [x] README and release notes explicitly retain the Threads preview classification and explain
       the compatibility/recovery value of this release without implying graduation.
 - [ ] The published v0.20.0 tag, release workflow, archives, checksums, and installed binary all
       identify the recorded candidate.
-- [ ] The graduation task remains a separate explicit decision after this checkpoint; the spatial
+- [x] The graduation task remains a separate explicit decision after this checkpoint; the spatial
       graph experiment is neither silently promoted nor made a release gate.
 
 ## Out of scope
