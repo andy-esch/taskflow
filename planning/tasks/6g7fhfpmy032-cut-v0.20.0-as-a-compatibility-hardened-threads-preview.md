@@ -58,6 +58,13 @@ explicit graduation decision; passing the graduation gates makes graduation poss
   diagnostics merely to cut this checkpoint.
 - Folding an experimental spatial renderer into core Thread semantics.
 
+## Preview visual evidence
+
+The approved [touring-bike Thread topology recording](../../assets/threads.gif) demonstrates the
+current terminal-native graph comprehension path: three explanatory waves, fan-out/fan-in,
+eligible and in-flight work, an immediate external gate, and stable task navigation. It remains a
+secondary preview demo; the optional two-dimensional spatial renderer is not a v0.20 release gate.
+
 ## Related
 
 - Epic [30-threads-and-task-dependency-graphs](../epics/30-threads-and-task-dependency-graphs.md)
