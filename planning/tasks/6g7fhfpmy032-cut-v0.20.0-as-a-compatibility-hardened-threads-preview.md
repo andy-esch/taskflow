@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g7fhfpmy032
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Ship the compatibility and repair hardening as another explicit preview checkpoint before reconsidering graduation.
 effort: 1 day
@@ -13,6 +13,7 @@ created: "2026-09-06"
 depends_on: [6g7ddeyp773z, 6g7j2ebatzyt]
 updated_at: "2026-09-07"
 started_at: "2026-09-07"
+completed_at: "2026-09-07"
 ---
 
 # Cut v0.20.0 as a compatibility-hardened Threads preview
@@ -110,7 +111,7 @@ record the immutable tag/commit and links here before completing the publication
       including any filed follow-ups, are recorded here.
 - [x] README and release notes explicitly retain the Threads preview classification and explain
       the compatibility/recovery value of this release without implying graduation.
-- [ ] The published v0.20.0 tag, release workflow, archives, checksums, and installed binary all
+- [x] The published v0.20.0 tag, release workflow, archives, checksums, and installed binary all
       identify the recorded candidate.
 - [x] The graduation task remains a separate explicit decision after this checkpoint; the spatial
       graph experiment is neither silently promoted nor made a release gate.
@@ -137,3 +138,19 @@ secondary preview demo; the optional two-dimensional spatial renderer is not a v
   [`6g7ddeyp773z`](6g7ddeyp773z-pin-thread-document-and-plan-backward-compatibility.md)
 - Graduation decision [`6g7ddfhh2jc2`](6g7ddfhh2jc2-graduate-threads-from-preview.md)
 - Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+
+## Publication verification (2026-09-07)
+
+- Immutable tag `v0.20.0` and candidate commit:
+  `7ed39c86c6b597cbb3614cb1cf5f893c1d69cbec`.
+- [Release workflow](https://github.com/andy-esch/taskflow/actions/runs/34132565142) completed
+  successfully and [the GitHub Release](https://github.com/andy-esch/taskflow/releases/tag/v0.20.0)
+  publishes `checksums.txt` plus Darwin/Linux archives for amd64 and arm64.
+- A fresh download of all five assets passed every published SHA-256 check. The extracted
+  Darwin arm64 binary reports `tskflwctl 0.20.0`.
+- The checksum-verified Darwin arm64 release binary was installed at
+  `/Users/andyeschbacher/go/bin/tskflwctl`; its SHA-256 matches the extracted artifact and the
+  installed command reports `tskflwctl 0.20.0`.
+- The generated commit dump was replaced with concise
+  [planning-linked release notes](https://github.com/andy-esch/taskflow/releases/tag/v0.20.0)
+  that retain the Threads preview boundary.

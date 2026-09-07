@@ -108,3 +108,71 @@ func TestLintPassesWithCleanAudit(t *testing.T) {
 		t.Errorf("a clean audit must not fail the top-level lint, got: %q", out)
 	}
 }
+
+func TestLintReportsEveryAuditSharingAStableID(t *testing.T) {
+	root := t.TempDir()
+	audits := filepath.Join(root, domain.AuditsDir)
+	for _, dir := range []string{filepath.Join(root, domain.TasksDir), audits} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const shared = "6g7s4k845fsb"
+	for _, slug := range []string{"2026-09-07-alpha", "2026-09-07-beta"} {
+		content := "---\nid: " + shared + "\nbucket: open\narea: " + slug + "\ndate: 2026-09-07\n---\n# Audit\n"
+		if err := os.WriteFile(filepath.Join(audits, shared+"-"+slug+".md"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	out, err := runRootRC(t, "-C", root, "lint", "--color=never")
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("duplicate audit ids must fail ordinary lint, got %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "duplicate stable id") || !strings.Contains(out, shared) {
+		t.Fatalf("lint did not explain the duplicate audit id:\n%s", out)
+	}
+	for _, slug := range []string{"2026-09-07-alpha", "2026-09-07-beta"} {
+		if !strings.Contains(out, slug) {
+			t.Errorf("lint did not identify %s:\n%s", slug, out)
+		}
+	}
+}
+
+func TestLintReportsMalformedAuditInDuplicateIdentity(t *testing.T) {
+	root := t.TempDir()
+	audits := filepath.Join(root, domain.AuditsDir)
+	for _, dir := range []string{filepath.Join(root, domain.TasksDir), audits} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const shared = "6g7s4k845fsb"
+	for _, slug := range []string{"2026-09-07-alpha", "2026-09-07-beta"} {
+		content := "---\nid: " + shared + "\nbucket: open\narea: " + slug + "\ndate: 2026-09-07\n---\n# Audit\n"
+		if err := os.WriteFile(filepath.Join(audits, shared+"-"+slug+".md"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	malformedSlug := "2026-09-07-gamma"
+	malformedPath := filepath.Join(audits, shared+"-"+malformedSlug+".md")
+	if err := os.WriteFile(malformedPath, []byte("---\nid: [unterminated\n---\n# Audit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runRootRC(t, "-C", root, "lint", "--color=never")
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("mixed readable/unreadable duplicate ids must fail lint, got %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"shared by 3 docs", "all are unresolvable", malformedSlug,
+		shared + "-2026-09-07-alpha.md", shared + "-2026-09-07-beta.md", shared + "-" + malformedSlug + ".md",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("lint output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "both are unresolvable") {
+		t.Errorf("three-way collision used two-way wording:\n%s", out)
+	}
+}

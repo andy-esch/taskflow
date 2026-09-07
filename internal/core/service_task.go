@@ -158,7 +158,10 @@ func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) 
 // legacy list adapters deliberately leave it empty and therefore fail closed if
 // a guarded mutation ever tries to compare two unreadable snapshots from them.
 func TaskGraphLoadProblemFromFile(problem domain.FileProblem, sourceVersion string) TaskGraphLoadProblem {
-	taskID, taskSlug := taskIdentityFromPath(problem.Path)
+	taskID, taskSlug := problem.EntityID, problem.EntitySlug
+	if taskID == "" {
+		taskID, taskSlug = taskIdentityFromPath(problem.Path)
+	}
 	return TaskGraphLoadProblem{
 		TaskID: taskID, TaskSlug: taskSlug, Path: problem.Path,
 		Message: problem.Message, SourceVersion: sourceVersion,

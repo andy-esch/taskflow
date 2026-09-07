@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g7qc8qd00xe
-bucket: open
+bucket: closed
 area: arch-data-model-and-storage
 date: "2026-09-07"
 updated_at: "2026-09-07"
@@ -324,7 +324,7 @@ a duplicate id is a copied file or a merge, which no minting policy prevents.
 
 ## Findings
 
-#### H1. A duplicate stable id on an audit is invisible to `lint` and permanently bricks both documents  · **Status:** open
+#### H1. A duplicate stable id on an audit is invisible to `lint` and permanently bricks both documents  · **Status:** fixed
 
 **File:** `internal/store/create.go:230` · `internal/core/service.go:556-580` |
 **Component:** store/create, core/lint
@@ -386,7 +386,15 @@ trigger; detection is.
 uniformly over the union of all id-led kinds rather than kind-by-kind — is M1's,
 not this finding's. H1 is fixable without waiting for M1.
 
-#### M1. The cross-kind stable-id namespace is asserted in three places and enforced between two kinds  · **Status:** open
+**Resolution:** CreateAudit now serializes canonical ID collision detection with
+file creation under the repository write lock, and ordinary lint reports every
+duplicate audit ID with all conflicting sources. Store race coverage, core lint
+coverage, the original CLI reproduction, the full race-enabled suite, static
+analysis, docs/module checks, planning lint, and diff hygiene pass. Implemented
+by task 6g7s4k845fsb; the analogous research serialization gap is tracked by
+6g7s6hr3qnfq.
+
+#### M1. The cross-kind stable-id namespace is asserted in three places and enforced between two kinds  · **Status:** tracked by 6fkkz41cax80
 
 **File:** `internal/store/fix.go:225-245` · `internal/store/create.go:191-202` ·
 `internal/core/service.go:513,592` | **Component:** domain/identity
@@ -451,6 +459,10 @@ should say that and the messages should be corrected.
 
 **Follow-up:** Add identity uniqueness to Q7's candidate rule list in
 `6fkkz41cax80` so the ADR survey can decide it rather than inherit it.
+
+**Resolution:** The frontmatter-schema policy ADR task now makes stable-ID
+uniqueness scope an explicit Q7 decision and records both possible enforcement
+consequences.
 
 #### M2. `schema:` is stamped into every new document, read by nothing, and absent from 26% of the corpus  · **Status:** tracked by 6g7f0tqgftg3
 
@@ -556,7 +568,7 @@ form so there is one answer.
 **Resolution:** Q9 (entity coverage & sharing) is the deciding question; the
 three existing registry shapes are inventoried in the finding.
 
-#### L1. ADR-0003 §6's throwaway-migration posture is the project's only accepted migration policy, and open work now needs a different one  · **Status:** open
+#### L1. ADR-0003 §6's throwaway-migration posture is the project's only accepted migration policy, and open work now needs a different one  · **Status:** tracked by 6fkkz41cax80
 
 **File:** `internal/tools/{flatmigrate,researchmigrate,wikimigrate}` |
 **Component:** tools
@@ -594,6 +606,10 @@ bumps (dry-run, idempotency, partial-failure recovery, Git-native rollback) is
 epic 26's to decide; §6 does not preclude one."* The 2026-07 migration tools
 under `internal/tools/` may then be retired or kept deliberately, as a separate
 call.
+
+**Resolution:** The schema-evolution question now distinguishes ADR-0003's
+one-off flat-layout migration from the durable migration contract required
+before a real schema bump.
 
 ## What audited clean
 

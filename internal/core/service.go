@@ -460,7 +460,8 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	}
 
 	var threads []domain.Thread
-	threadIDs := make([]string, 0)
+	threadIDSources := make([]domain.StableIdentitySource, 0)
+	threadProblems := make([]domain.FileProblem, 0)
 	threadIdentity := make(map[string]bool)
 	if s.threads != nil {
 		var threadRead ThreadRead
@@ -470,11 +471,20 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		}
 		threads = threadRead.Threads
 		for _, problem := range threadRead.Problems {
-			problems = append(problems, domain.FileProblem{Path: problem.Location, Message: problem.Message})
+			fileProblem := domain.FileProblem{
+				Path: problem.Location, Message: problem.Message,
+				EntityID: problem.ThreadID, EntitySlug: problem.ThreadSlug,
+			}
+			threadProblems = append(threadProblems, fileProblem)
+			problems = append(problems, fileProblem)
+			threadIDSources = append(threadIDSources, domain.StableIdentitySource{
+				ID: problem.ThreadID, Location: problem.Location,
+			})
 		}
-		threadIDs = make([]string, 0, len(threads))
 		for _, thread := range threads {
-			threadIDs = append(threadIDs, thread.ID)
+			threadIDSources = append(threadIDSources, domain.StableIdentitySource{
+				ID: thread.CanonicalID(), Location: thread.Path,
+			})
 			if thread.ID != "" {
 				threadIdentity[thread.ID] = true
 			}
@@ -546,23 +556,27 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		return nil, nil, err
 	}
 	problems = append(problems, rp...)
-	// Cross-doc: a duplicate stable id makes BOTH docs unresolvable by id and unwritable,
+	// Cross-doc: a duplicate stable id makes every owning doc unresolvable by id and unwritable,
 	// and nothing else reports it (the create path now refuses one, but a hand-edit or an
 	// older tool version can still produce it). Keyed by id, so each colliding doc gets it.
-	researchIDs := make([]string, 0, len(docs))
+	researchIDs := make([]domain.StableIdentitySource, 0, len(docs)+len(rp))
 	for _, r := range docs {
-		researchIDs = append(researchIDs, r.FilenameID)
+		researchIDs = append(researchIDs, domain.StableIdentitySource{ID: r.CanonicalID(), Location: r.Path})
+	}
+	for _, problem := range rp {
+		researchIDs = append(researchIDs, domain.StableIdentitySource{ID: problem.EntityID, Location: problem.Path})
 	}
 	dupIDs := domain.DuplicateIDIssues(researchIDs)
 	for _, r := range docs {
 		issues := domain.LintResearch(r)
-		if iss, ok := dupIDs[r.FilenameID]; ok {
+		if iss, ok := dupIDs[r.CanonicalID()]; ok {
 			issues = append(issues, iss)
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: r.Slug, Issues: issues})
 		}
 	}
+	results = appendDuplicateProblemLintResults(results, rp, dupIDs)
 	// Audits are part of the same hygiene gate (they were reachable only behind
 	// `audit lint`, so a finding defect stayed invisible to the command the repo
 	// actually runs). The sweep reads each audit once, findings already parsed, and
@@ -572,15 +586,30 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		return nil, nil, err
 	}
 	problems = append(problems, ap...)
+	auditIDs := make([]domain.StableIdentitySource, 0, len(auditRecords)+len(ap))
+	for _, record := range auditRecords {
+		auditIDs = append(auditIDs, domain.StableIdentitySource{
+			ID: record.Audit.CanonicalID(), Location: record.Audit.Path,
+		})
+	}
+	for _, problem := range ap {
+		auditIDs = append(auditIDs, domain.StableIdentitySource{ID: problem.EntityID, Location: problem.Path})
+	}
+	dupAuditIDs := domain.DuplicateIDIssues(auditIDs)
 	for _, a := range auditRecords {
-		if issues := AuditLintIssues(a.Audit, a.Findings, a.NearMisses); len(issues) > 0 {
+		issues := AuditLintIssues(a.Audit, a.Findings, a.NearMisses)
+		if issue, ok := dupAuditIDs[a.Audit.CanonicalID()]; ok {
+			issues = append(issues, issue)
+		}
+		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: a.Audit.Slug, Issues: issues})
 		}
 	}
-	dupThreadIDs := domain.DuplicateIDIssues(threadIDs)
+	results = appendDuplicateProblemLintResults(results, ap, dupAuditIDs)
+	dupThreadIDs := domain.DuplicateIDIssues(threadIDSources)
 	for _, thread := range threads {
 		issues := domain.LintThread(thread, func(taskID string) bool { return validTaskIDs[taskID] })
-		if issue, ok := dupThreadIDs[thread.ID]; ok {
+		if issue, ok := dupThreadIDs[thread.CanonicalID()]; ok {
 			issues = append(issues, issue)
 		}
 		collisionID := thread.ID
@@ -595,7 +624,27 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 			results = append(results, LintResult{Slug: thread.Slug, Issues: issues})
 		}
 	}
+	results = appendDuplicateProblemLintResults(results, threadProblems, dupThreadIDs)
 	return results, problems, nil
+}
+
+// appendDuplicateProblemLintResults preserves the ordinary unreadable-file
+// diagnostic while also surfacing identity defects recovered by the adapter.
+// Identity belongs to the record even when its body does not decode; core must
+// never infer it by parsing an adapter's path or URI.
+func appendDuplicateProblemLintResults(results []LintResult, problems []domain.FileProblem, duplicates map[string]domain.Issue) []LintResult {
+	for _, problem := range problems {
+		issue, ok := duplicates[problem.EntityID]
+		if !ok {
+			continue
+		}
+		label := problem.EntitySlug
+		if label == "" {
+			label = problem.Path
+		}
+		results = append(results, LintResult{Slug: label, Issues: []domain.Issue{issue}})
+	}
+	return results
 }
 
 func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {

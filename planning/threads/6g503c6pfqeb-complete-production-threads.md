@@ -38,9 +38,8 @@ output carry priority, tier, and effort without redefining eligibility; the othe
 compatibility and graduation gates so this Thread has an evidence-based finish line rather than an
 indefinite preview label.
 
-That graduation branch is now explicit: define the compatibility contract, pin v0.18.0/v0.19.0
-Thread-document and apply-plan behavior with executable historical fixtures, then ship that
-hardening as a preview-labelled v0.20.0 checkpoint. That release unlocks two distinct high-profile
+That graduation branch is now explicit: the compatibility contract, v0.18.0/v0.19.0 historical
+fixtures, and preview-labelled v0.20.0 hardening checkpoint have shipped. That release unlocks two distinct high-profile
 decisions: whether the accumulated soak supports graduation, and a tier-1 spatial graph
 design/prototype intended to seed the next feature release. The latter is a removable presentation
 extension over `ThreadGraphProjection`, not a second graph model or silent core commitment; that

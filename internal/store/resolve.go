@@ -60,8 +60,13 @@ func scanDirSources[T any](dir string, parse func(path string, content []byte) (
 		}
 		v, err := parse(path, content)
 		if err != nil {
+			problem := domain.FileProblem{Path: path, Message: err.Error()}
+			if entityID, slug, ok := splitFlatName(strings.TrimSuffix(e.Name(), ".md")); ok {
+				problem.EntityID = entityID
+				problem.EntitySlug = slug
+			}
 			problems = append(problems, sourceFileProblem{
-				problem:       domain.FileProblem{Path: path, Message: err.Error()},
+				problem:       problem,
 				sourceVersion: sourceVersion,
 			})
 			continue

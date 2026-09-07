@@ -332,12 +332,21 @@ func FrontmatterBucketIssues(a Audit) []Issue {
 	return []Issue{{Field: "bucket", Message: "frontmatter bucket missing or unrecognized — set it with `audit close`/`reopen`/`defer`"}}
 }
 
-// DuplicateIDIssues flags entities that share a stable id. Two docs on one id are
-// unresolvable by id (ErrAmbiguous) and — worse — both become UNWRITABLE, because the
+// StableIdentitySource is one canonical identity plus optional adapter-owned
+// location evidence. Location may be a filesystem path, URI, or another opaque
+// source label; the domain never parses it.
+type StableIdentitySource struct {
+	ID       string
+	Location string
+}
+
+// DuplicateIDIssues flags entities that share a stable id. Multiple docs on one id are
+// unresolvable by id (ErrAmbiguous) and — worse — all become UNWRITABLE, because the
 // write paths' CAS re-resolve also goes ambiguous and surfaces as a retryable conflict
-// that can never clear. Returns one issue per colliding entity, keyed by id; nothing for
-// a unique set. Fail-open, like the other cross-entity checks: the docs still list, the
-// clash is called out.
+// that can never clear. Returns one reusable issue per colliding id; callers attach it
+// to every matching record. A unique set returns nothing. Each issue includes every
+// available source location, sorted for stable output. Fail-open, like the other
+// cross-entity checks: the docs still list, the clash is called out.
 //
 // The old duplicate lint was retired when the flat layout landed, on the reasoning that
 // "id-led filenames are unique by construction" — true of FILENAMES, not of ids: a
@@ -346,25 +355,37 @@ func FrontmatterBucketIssues(a Audit) []Issue {
 // tail (ADR-0003 §3).
 //
 // It is cross-entity (it needs the whole set), so it lives here rather than in a per-doc
-// lint. Keyed by id, and each issue names the peers, so the operator can rename one.
-func DuplicateIDIssues(ids []string) map[string]Issue {
-	byID := make(map[string][]string, len(ids))
-	for _, id := range ids {
-		if strings.TrimSpace(id) == "" {
+// lint. Keyed by id, and each issue names the peers, so the operator can assign distinct
+// identities deliberately.
+func DuplicateIDIssues(sources []StableIdentitySource) map[string]Issue {
+	byID := make(map[string][]StableIdentitySource, len(sources))
+	for _, source := range sources {
+		if strings.TrimSpace(source.ID) == "" {
 			continue // a missing id is MissingIDIssue's job, not a duplicate
 		}
-		byID[id] = append(byID[id], id)
+		byID[source.ID] = append(byID[source.ID], source)
 	}
 	out := make(map[string]Issue)
 	for id, group := range byID {
 		if len(group) < 2 {
 			continue
 		}
+		locations := make([]string, 0, len(group))
+		for _, source := range group {
+			if location := strings.TrimSpace(source.Location); location != "" {
+				locations = append(locations, fmt.Sprintf("%q", location))
+			}
+		}
+		sort.Strings(locations)
+		where := ""
+		if len(locations) > 0 {
+			where = " across " + strings.Join(locations, ", ")
+		}
 		out[id] = Issue{
 			Field: "id",
 			Message: fmt.Sprintf(
-				"duplicate stable id %q shared by %d docs — both are unresolvable by id and unwritable (the write CAS goes ambiguous); rename one file and its frontmatter id",
-				id, len(group)),
+				"duplicate stable id %q shared by %d docs%s — all are unresolvable by id and unwritable (the write CAS goes ambiguous); assign distinct filename and frontmatter ids to all but one",
+				id, len(group), where),
 		}
 	}
 	return out

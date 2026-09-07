@@ -160,6 +160,72 @@ func TestCreateAudit_IDRoundTrips(t *testing.T) {
 	}
 }
 
+func TestCreateAudit_RefusesDuplicateIDAcrossDifferentSlugs(t *testing.T) {
+	root := t.TempDir()
+	fs := NewFS(root)
+	const shared = "6g7s4k845fsb"
+	alpha := domain.Audit{ID: shared, Slug: "2026-09-07-alpha", Area: "alpha", Date: "2026-09-07"}
+	beta := domain.Audit{ID: shared, Slug: "2026-09-07-beta", Area: "beta", Date: "2026-09-07"}
+	if _, err := fs.CreateAudit(alpha, "# Alpha\n", false); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := fs.CreateAudit(beta, "# Beta\n", false)
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("duplicate audit id must be ErrConflict, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "2026-09-07-alpha") {
+		t.Errorf("error should name the existing owner: %v", err)
+	}
+	if matches, _ := filepath.Glob(filepath.Join(root, domain.AuditsDir, "*beta*")); len(matches) != 0 {
+		t.Errorf("refused create wrote %v", matches)
+	}
+
+	if _, err := fs.CreateAudit(beta, "# Beta\n", true); !errors.Is(err, domain.ErrConflict) {
+		t.Errorf("dry-run must refuse the same duplicate id, got %v", err)
+	}
+}
+
+func TestCreateAudit_SerializesDuplicateIDCheckWithCreate(t *testing.T) {
+	root := t.TempDir()
+	fs := NewFS(root)
+	const shared = "6g7s4k845fsc"
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, slug := range []string{"2026-09-07-alpha", "2026-09-07-beta"} {
+		audit := domain.Audit{ID: shared, Slug: slug, Area: slug, Date: "2026-09-07"}
+		go func() {
+			<-start
+			_, err := fs.CreateAudit(audit, "# Audit\n", false)
+			results <- err
+		}()
+	}
+	close(start)
+
+	var successes, conflicts int
+	for range 2 {
+		err := <-results
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, domain.ErrConflict):
+			conflicts++
+		default:
+			t.Fatalf("unexpected create result: %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("successes=%d conflicts=%d, want 1 each", successes, conflicts)
+	}
+	matches, err := filepath.Glob(filepath.Join(root, domain.AuditsDir, shared+"-*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("created %d audits for one stable id: %v", len(matches), matches)
+	}
+}
+
 func TestCreateEpic_AutoNumber(t *testing.T) {
 	fs := NewFS(t.TempDir())
 	// First epic → 01; with an existing 04-... the next is 05.
