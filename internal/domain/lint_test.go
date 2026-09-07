@@ -115,6 +115,32 @@ func TestIDDriftIssue(t *testing.T) {
 	}
 }
 
+func TestDuplicateIDIssuesNamesEverySourceDeterministically(t *testing.T) {
+	const shared = "6g7s4k845fsb"
+	issues := DuplicateIDIssues([]StableIdentitySource{
+		{ID: shared, Location: "audits/zeta.md"},
+		{ID: "6g7s4k845fsc", Location: "audits/unique.md"},
+		{ID: shared, Location: "audits/alpha.md"},
+		{ID: shared, Location: "audits/malformed.md"},
+	})
+	if len(issues) != 1 {
+		t.Fatalf("duplicate issues = %+v, want exactly one id", issues)
+	}
+	message := issues[shared].Message
+	for _, want := range []string{"shared by 3 docs", "all are unresolvable", "audits/alpha.md", "audits/malformed.md", "audits/zeta.md"} {
+		if !strings.Contains(message, want) {
+			t.Errorf("duplicate diagnostic missing %q: %s", want, message)
+		}
+	}
+	if strings.Contains(message, "both are") {
+		t.Errorf("three-way duplicate diagnostic must not say both: %s", message)
+	}
+	if strings.Index(message, "audits/alpha.md") > strings.Index(message, "audits/malformed.md") ||
+		strings.Index(message, "audits/malformed.md") > strings.Index(message, "audits/zeta.md") {
+		t.Errorf("source locations are not sorted: %s", message)
+	}
+}
+
 func cleanEpic() Epic {
 	return Epic{ID: "20-good", Status: "active", Priority: "high", Description: "a goal"}
 }

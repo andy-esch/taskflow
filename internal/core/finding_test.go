@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -137,6 +138,127 @@ func TestLintAudits_MultipleIssues(t *testing.T) {
 	results, _, _ := NewService(fs).LintAudits("")
 	if len(results) != 1 || len(results[0].Issues) != 2 {
 		t.Fatalf("expected 2 issues (bad status + open-in-closed), got %+v", results)
+	}
+}
+
+func TestServiceLintReportsDuplicateAuditIDs(t *testing.T) {
+	const shared = "6g7s4k845fsb"
+	fs := &fakeStore{audits: []domain.Audit{
+		{ID: shared, FilenameID: shared, Slug: "2026-09-07-alpha", Path: "audits/" + shared + "-2026-09-07-alpha.md", Bucket: domain.AuditOpen},
+		{ID: shared, FilenameID: shared, Slug: "2026-09-07-beta", Path: "audits/" + shared + "-2026-09-07-beta.md", Bucket: domain.AuditOpen},
+	}}
+	results, problems, err := NewService(fs).Lint()
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("Lint: err=%v problems=%v", err, problems)
+	}
+
+	got := make(map[string]string, len(results))
+	for _, result := range results {
+		for _, issue := range result.Issues {
+			got[result.Slug] += issue.Message
+		}
+	}
+	for _, slug := range []string{"2026-09-07-alpha", "2026-09-07-beta"} {
+		if !strings.Contains(got[slug], "duplicate stable id") || !strings.Contains(got[slug], shared) {
+			t.Errorf("%s lint = %q, want duplicate id %s", slug, got[slug], shared)
+		}
+	}
+}
+
+func TestServiceLintIncludesUnreadableAuditInDuplicateIdentity(t *testing.T) {
+	const shared = "6g7s4k845fsb"
+	alphaPath := "audits/" + shared + "-2026-09-07-alpha.md"
+	betaPath := "audits/" + shared + "-2026-09-07-beta.md"
+	fs := &fakeStore{
+		audits: []domain.Audit{{
+			ID: shared, FilenameID: shared, Slug: "2026-09-07-alpha",
+			Path: alphaPath, Bucket: domain.AuditOpen,
+		}},
+		auditProblems: []domain.FileProblem{{
+			Path: betaPath, Message: "malformed frontmatter",
+			EntityID: shared, EntitySlug: "2026-09-07-beta",
+		}},
+	}
+	results, problems, err := NewService(fs).Lint()
+	if err != nil || len(problems) != 1 {
+		t.Fatalf("Lint: err=%v problems=%+v", err, problems)
+	}
+
+	got := make(map[string]string, len(results))
+	for _, result := range results {
+		for _, issue := range result.Issues {
+			got[result.Slug] += issue.Message
+		}
+	}
+	for _, slug := range []string{"2026-09-07-alpha", "2026-09-07-beta"} {
+		message := got[slug]
+		if !strings.Contains(message, "shared by 2 docs") ||
+			!strings.Contains(message, alphaPath) || !strings.Contains(message, betaPath) {
+			t.Errorf("%s duplicate diagnostic = %q", slug, message)
+		}
+	}
+}
+
+func TestServiceLintIncludesUnreadableResearchInDuplicateIdentity(t *testing.T) {
+	const shared = "6g7s4k845fsb"
+	alphaPath := "research/" + shared + "-alpha.md"
+	betaPath := "research/" + shared + "-beta.md"
+	fs := &fakeStore{
+		research: []domain.Research{{
+			ID: shared, FilenameID: shared, Slug: "alpha", Path: alphaPath,
+			Created: "2026-09-07", Description: "readable research",
+		}},
+		researchProblems: []domain.FileProblem{{
+			Path: betaPath, Message: "malformed frontmatter",
+			EntityID: shared, EntitySlug: "beta",
+		}},
+	}
+	results, problems, err := NewService(fs).Lint()
+	if err != nil || len(problems) != 1 {
+		t.Fatalf("Lint: err=%v problems=%+v", err, problems)
+	}
+	assertDuplicateIdentityResults(t, results, []string{"alpha", "beta"}, alphaPath, betaPath)
+}
+
+func TestServiceLintIncludesUnreadableThreadInDuplicateIdentity(t *testing.T) {
+	const shared = "6g7s4k845fsb"
+	alphaPath := "threads/" + shared + "-alpha.md"
+	betaPath := "threads/" + shared + "-beta.md"
+	threadStore := &threadReadFake{
+		threads: []domain.Thread{{
+			ID: shared, FilenameID: shared, Slug: "alpha", Path: alphaPath,
+			Status: domain.ThreadStatusUnstarted, Description: "readable Thread",
+			Goal: "prove duplicate identity lint", Created: "2026-09-07",
+		}},
+		problems: []ThreadReadProblem{{
+			ThreadID: shared, ThreadSlug: "beta", Location: betaPath,
+			Message: "malformed frontmatter",
+		}},
+	}
+	results, problems, err := NewService(&fakeStore{}, WithThreadStore(threadStore)).Lint()
+	if err != nil || len(problems) != 1 {
+		t.Fatalf("Lint: err=%v problems=%+v", err, problems)
+	}
+	assertDuplicateIdentityResults(t, results, []string{"alpha", "beta"}, alphaPath, betaPath)
+}
+
+func assertDuplicateIdentityResults(t *testing.T, results []LintResult, slugs []string, paths ...string) {
+	t.Helper()
+	got := make(map[string]string, len(results))
+	for _, result := range results {
+		for _, issue := range result.Issues {
+			if issue.Field == "id" && strings.Contains(issue.Message, "duplicate stable id") {
+				got[result.Slug] += issue.Message
+			}
+		}
+	}
+	for _, slug := range slugs {
+		message := got[slug]
+		for _, path := range paths {
+			if !strings.Contains(message, path) {
+				t.Errorf("%s duplicate diagnostic %q does not name %s", slug, message, path)
+			}
+		}
 	}
 }
 

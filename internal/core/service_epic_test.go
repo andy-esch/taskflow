@@ -113,6 +113,9 @@ type fakeStore struct {
 	tasks             []domain.Task
 	epics             []domain.Epic
 	audits            []domain.Audit
+	auditProblems     []domain.FileProblem
+	research          []domain.Research
+	researchProblems  []domain.FileProblem
 	problems          []domain.FileProblem // returned by ListTasks
 	created           []domain.Task        // tasks passed to CreateTask
 	createdBodies     []string             // bodies passed to CreateTask (parallel to created)
@@ -155,7 +158,7 @@ func (f *fakeStore) ListTasksWithBodies() ([]TaskWithBody, []domain.FileProblem,
 	return out, f.problems, nil
 }
 func (f *fakeStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
-	return f.audits, nil, nil
+	return f.audits, f.auditProblems, nil
 }
 
 // ListAuditsWithFindings mirrors the real store: one scan returning each seeded
@@ -166,7 +169,10 @@ func (f *fakeStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.File
 	for _, a := range f.audits {
 		out = append(out, AuditWithFindings{Audit: a, Findings: domain.ParseFindings(f.auditBodies[a.Slug])})
 	}
-	return out, nil, nil
+	return out, f.auditProblems, nil
+}
+func (f *fakeStore) ListResearch() ([]domain.Research, []domain.FileProblem, error) {
+	return f.research, f.researchProblems, nil
 }
 func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 	for _, t := range f.tasks {

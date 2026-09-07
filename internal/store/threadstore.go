@@ -45,10 +45,12 @@ func threadReadFromSourceFiles(threads []domain.Thread, problems []sourceFilePro
 }
 
 func threadReadProblemFromFile(problem domain.FileProblem, sourceVersion string) core.ThreadReadProblem {
-	threadID, threadSlug := "", ""
-	base := filepath.Base(problem.Path)
-	if id, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md")); ok {
-		threadID, threadSlug = id, slug
+	threadID, threadSlug := problem.EntityID, problem.EntitySlug
+	if threadID == "" {
+		base := filepath.Base(problem.Path)
+		if id, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md")); ok {
+			threadID, threadSlug = id, slug
+		}
 	}
 	return core.ThreadReadProblem{
 		ThreadID: threadID, ThreadSlug: threadSlug, Location: problem.Path,

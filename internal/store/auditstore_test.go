@@ -34,6 +34,9 @@ func TestFS_ListAudits_MissingFrontmatterIsLoud(t *testing.T) {
 	if len(problems) != 1 || !strings.Contains(problems[0].Message, "missing frontmatter") || !strings.Contains(problems[0].Message, "schema audit") {
 		t.Errorf("want one loud, shape-naming problem, got %+v", problems)
 	}
+	if problems[0].EntityID != testutil.TaskID("notes") || problems[0].EntitySlug != "notes" {
+		t.Errorf("unreadable audit lost filename identity: %+v", problems[0])
+	}
 }
 
 func TestFS_ListAudits_FindingCounts(t *testing.T) {

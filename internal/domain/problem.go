@@ -5,6 +5,13 @@ package domain
 type FileProblem struct {
 	Path    string `json:"path"`
 	Message string `json:"message"`
+	// EntityID and EntitySlug are optional canonical identity recovered by a
+	// persistence adapter even when the document itself could not be decoded.
+	// They let application-level consistency checks include unreadable records
+	// without parsing Path for meaning. They are diagnostic plumbing, not part of
+	// the public unreadable-file wire contract.
+	EntityID   string `json:"-" yaml:"-"`
+	EntitySlug string `json:"-" yaml:"-"`
 }
 
 // FixResult records the auto-repairs applied (or proposed) for one file.
