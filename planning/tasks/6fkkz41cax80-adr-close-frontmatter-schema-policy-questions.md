@@ -159,9 +159,13 @@ Are these part of "the schema" or a separate pass?
 - [ ] Park (out of scope for this ADR)
 
 Which rules are in scope now? *(pick any)*
-- [ ] `epic` exists &nbsp; [ ] pointer validity (`superseded_by` / `parent_task`) &nbsp; [ ] `related_tasks` resolvable &nbsp; [ ] `blocks` symmetry &nbsp; [ ] date ordering (`created ≤ completed_at`)
+- [ ] `epic` exists &nbsp; [ ] pointer validity (`superseded_by` / `parent_task`) &nbsp; [ ] `related_tasks` resolvable &nbsp; [ ] `blocks` symmetry &nbsp; [ ] date ordering (`created ≤ completed_at`) &nbsp; [ ] stable-ID uniqueness scope
 
-**Notes:**
+**Notes:** The 2026-09-07 architecture audit found that user-facing diagnostics and
+`docs/ARCHITECTURE.md` claim stable IDs are globally unique while implementation only enforces the
+task↔Thread pair. This ADR must decide whether uniqueness is per kind or planning-space-wide before
+adding more first-class nouns. If global, declare one union-wide create/lint rule rather than more
+pairwise checks; if per-kind, remove the misleading global claims and the special cross-kind guard.
 
 ---
 
@@ -218,6 +222,12 @@ degrade + warn, never hard-fail).
 > are tombstoned and never reused — the enforced epic-NN duplicate guard already
 > *is* this rule, at the entity level. This change-discipline, not a "perfect"
 > schema, is the futureproofing.
+
+The park applies only while no real schema bump exists. ADR-0003 §6's throwaway-script decision was
+specific to the 2026-07 flat-layout cutover, not a general migration policy. When the first durable
+schema bump is proposed, this ADR must define dry-run, idempotency, partial-failure recovery, and
+Git-native rollback, and amend ADR-0003 so the old one-off wording cannot be mistaken for current
+policy.
 
 ---
 
