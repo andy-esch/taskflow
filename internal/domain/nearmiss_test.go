@@ -66,9 +66,70 @@ func TestNearMissFindingHeaders_IgnoresOrdinaryHeadings(t *testing.T) {
 		"#### H1. already canonical · **Status:** open",
 		"## 2026-09-05 review",
 		"### 4. Which repairs can be safely inferred?",
+		"### Top 3 Recommendations by Impact",
+		"### Top 5 Recommendations by Impact",
+		"### Edge 1 — the dead-letter queue terminus",
+		"### Edge 2 — the database timeout boundary",
+		"### Phase 2 rollout",
+		"### Step 4 verification",
+		"### Option 3 tradeoffs",
+		"### Wave 1 follow-up",
 	} {
 		if hits := NearMissFindingHeaders(line + "\n"); len(hits) != 0 {
 			t.Errorf("false positive on %q: %+v", line, hits)
+		}
+	}
+}
+
+// Audit closeouts commonly refer to a finding in a narrative heading. Once the
+// same canonical code exists as a real finding, that heading is a reference rather
+// than a dropped definition and must never be rewritten into a duplicate finding.
+func TestNearMissFindingHeaders_IgnoresReferencesToExistingFindings(t *testing.T) {
+	body := "" +
+		"## Findings\n\n" +
+		"#### L1. low finding · **Status:** fixed\n\n" +
+		"#### M1. first medium finding · **Status:** fixed\n\n" +
+		"#### M2. second medium finding · **Status:** fixed\n\n" +
+		"#### M3. third medium finding · **Status:** fixed\n\n" +
+		"#### H1. first high finding · **Status:** fixed\n\n" +
+		"#### H7. seventh high finding · **Status:** superseded\n\n" +
+		"#### H8. eighth high finding · **Status:** tracked by 6gexample\n\n" +
+		"## L1 fixed — 2026-07-20\n\n" +
+		"### M1 — was already fixed, still marked open\n" +
+		"### M2 — fixed\n" +
+		"### M3 — fixed\n" +
+		"## H8 tracked, H7 assessed — 2026-07-20\n\n" +
+		"### H8 → tracked\n" +
+		"### H7 → half fixed, half superseded\n" +
+		"## H1 fixed — 2026-07-20\n" +
+		"### M1 — dateless activities no longer anchor the slider domain\n" +
+		"### L1 — day-index helpers deduplicated\n" +
+		"## H2 needs a canonical header\n"
+
+	// H2 has no real definition and remains a genuine near miss; every code that is
+	// already defined is ignored even when referenced more than once.
+	hits := NearMissFindingHeaders(body)
+	if len(hits) != 1 || hits[0].Text != "## H2 needs a canonical header" {
+		t.Fatalf("want only the undefined H2 heading, got %+v", hits)
+	}
+	fixed, changed := CanonicalizeFindingHeaders(body)
+	if len(changed) != 1 || !strings.Contains(fixed, "## H2. needs a canonical header") {
+		t.Fatalf("repair should touch only undefined H2, got changes %+v\n%s", changed, fixed)
+	}
+	for _, preserved := range []string{
+		"## L1 fixed — 2026-07-20",
+		"### M1 — was already fixed, still marked open",
+		"### M2 — fixed",
+		"### M3 — fixed",
+		"## H8 tracked, H7 assessed — 2026-07-20",
+		"### H8 → tracked",
+		"### H7 → half fixed, half superseded",
+		"## H1 fixed — 2026-07-20",
+		"### M1 — dateless activities no longer anchor the slider domain",
+		"### L1 — day-index helpers deduplicated",
+	} {
+		if !strings.Contains(fixed, preserved) {
+			t.Errorf("existing-finding reference was rewritten: %q\n%s", preserved, fixed)
 		}
 	}
 }

@@ -68,19 +68,18 @@ var (
 	// `h1.`, `H1 ` with no period, `**H1.**`, `H_1.`, `M2 —`.
 	//
 	// The class is deliberately narrow, the same rule acCheckboxyRe follows: a warning
-	// here must be high-confidence, not noise. Requiring a LETTER-LED code is what does
-	// that — it is why ordinary numbered section headings (`### 1. Lifecycle`,
-	// `#### 3.1 Data Flow`) are not matched. A code-agnostic pattern that also accepted
-	// bare digits was measured at 116 false positives over the 57-audit corpus; this one
-	// at zero, while still catching all nine drift shapes. Widen it only against a
-	// re-run of that corpus measurement.
+	// here must be high-confidence, not noise. Requiring an uninterrupted LETTER+DIGIT
+	// code is what does that — it excludes both ordinary numbered section headings
+	// (`### 1. Lifecycle`) and word-number headings (`### Phase 2`). A code-agnostic
+	// pattern that also accepted bare digits was measured at 116 false positives over
+	// the 57-audit corpus. Widen this only against a re-run of that corpus measurement.
 	// The hashes, code letters, digits, and the whole remaining title are captured so
 	// the repair is a pure recomposition — no byte arithmetic over a line that may
 	// carry multi-byte runes (an em-dash title once got sliced mid-rune that way).
 	// A dash between the code and the title is a SEPARATOR standing in for the
 	// period (`#### BTA-01 — title`), not title text, so it is consumed rather than
 	// carried into the canonical title where it would dangle as `BTA1. — title`.
-	nearMissHeaderRe = regexp.MustCompile(`^(#{2,6})[ \t]+\*{0,2}([A-Za-z]{1,4})[-_ ]?(\d{1,3})[.:)—–-]?\*{0,2}[.:)—–-]?[ \t]+(?:[—–-][ \t]+)?(\S.*)$`)
+	nearMissHeaderRe = regexp.MustCompile(`^(#{2,6})[ \t]+\*{0,2}([A-Za-z]{1,4})[-_]?(\d{1,3})[.:)—–-]?\*{0,2}[.:)—–-]?[ \t]+(?:[—–-][ \t]+)?(\S.*)$`)
 	// statusRe captures the status VALUE's leading run after `**Status:**`, but ONLY
 	// where the marker is authoritative — at line start (a status line) or right after
 	// the header's `· ` separator — so a literal `**Status:**` mentioned in a title or
@@ -245,9 +244,17 @@ type NearMissHeader struct {
 // the same derivation as a repair.
 func NearMissFindingHeaders(body string) []NearMissHeader {
 	var (
-		out   []NearMissHeader
-		fence fenceScanner
+		out           []NearMissHeader
+		fence         fenceScanner
+		existingCodes = make(map[string]struct{})
 	)
+	for _, finding := range ParseFindings(body) {
+		i := len(finding.Code)
+		for i > 0 && finding.Code[i-1] >= '0' && finding.Code[i-1] <= '9' {
+			i--
+		}
+		existingCodes[canonicalFindingCode(finding.Code[:i], finding.Code[i:])] = struct{}{}
+	}
 	for i, line := range strings.Split(normalizeNewlines(body), "\n") {
 		if fence.inCode(line) {
 			continue
@@ -259,6 +266,9 @@ func NearMissFindingHeaders(body string) []NearMissHeader {
 		if m == nil {
 			continue
 		}
+		if _, exists := existingCodes[canonicalFindingCode(m[2], m[3])]; exists {
+			continue // a closeout/reference heading, not a dropped finding definition
+		}
 		out = append(out, NearMissHeader{Line: i + 1, Text: line, Canonical: canonicalFindingHeader(m[1], m[2], m[3], m[4])})
 	}
 	return out
@@ -269,11 +279,15 @@ func NearMissFindingHeaders(body string) []NearMissHeader {
 // are normalised — the title may carry an em-dash, a `·`, or an inline `**Status:**`,
 // none of which this touches.
 func canonicalFindingHeader(hashes, letters, digits, title string) string {
+	return hashes + " " + canonicalFindingCode(letters, digits) + ". " + title
+}
+
+func canonicalFindingCode(letters, digits string) string {
 	n := strings.TrimLeft(digits, "0")
 	if n == "" {
 		n = "0" // `H00.` is drift, not a reason to emit a code with no number
 	}
-	return hashes + " " + strings.ToUpper(letters) + n + ". " + title
+	return strings.ToUpper(letters) + n
 }
 
 // CanonicalizeFindingHeaders rewrites every near-miss heading in body to canonical
