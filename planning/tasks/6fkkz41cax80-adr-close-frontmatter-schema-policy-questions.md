@@ -10,8 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [validation, schema, adr]
 created: "2026-07-07"
-updated_at: "2026-08-23"
+updated_at: "2026-09-07"
 started_at: "2026-08-23"
+audit_sources: [2026-09-07-arch-data-model-and-storage]
 ---
 # ADR — declared frontmatter-schema contract: close the policy questions
 
@@ -295,3 +296,5 @@ Next number after 0003 / 0004 → **ADR-0005**. &nbsp; [ ] confirm &nbsp; [ ] ot
 - Epic [26-frontmatter-schema-declared-validation-contract](../epics/26-frontmatter-schema-declared-validation-contract.md) — the 12 open questions live in its body.
 - Prior art: `domain.LintTask`, `domain.MissingIDIssue`, `store.parseTask`'s loud
   missing-frontmatter failure, `schema --json-schema`.
+
+Reinforced by audit 2026-09-07-arch-data-model-and-storage: M3 (Q9 input) — three entity kinds declare known fields in three shapes: task a typed table (domain/fields.go:24), epic a hand-written map literal plus a hardcoded list predicate (domain/epic.go:106,130), research derived from the entity Descriptor (domain/research.go:81). Audit and Thread have none, correctly (no `set` verb). Also: the audit proposes adding stable-id uniqueness to Q7's candidate referential-rule list — see finding M1.
