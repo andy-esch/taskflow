@@ -11,7 +11,8 @@ import (
 // bug report at a time doesn't converge):
 //
 //   - letters, digits, and combining marks — any script — are kept (lowercased);
-//   - '.' is kept (version numbers), though trimmed at the ends;
+//   - '.' is kept (version numbers), though adjacent dots collapse and dots are
+//     trimmed at the ends;
 //   - apostrophes vanish silently ("don't" → dont, not don-t) — the one
 //     language-driven exception;
 //   - EVERY other rune is a word break: whitespace, '_', ASCII and unicode
@@ -22,6 +23,7 @@ import (
 func Slugify(text string) string {
 	var b strings.Builder
 	pendingBreak := false
+	lastWasDot := false
 	for _, r := range strings.ToLower(strings.TrimSpace(text)) {
 		switch {
 		case r == '\'' || r == '’' || r == '‘':
@@ -29,8 +31,17 @@ func Slugify(text string) string {
 		case unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) || r == '.':
 			if pendingBreak && b.Len() > 0 {
 				b.WriteByte('-')
+				lastWasDot = false
 			}
-			b.WriteRune(r)
+			if r == '.' {
+				if !lastWasDot {
+					b.WriteByte('.')
+				}
+				lastWasDot = true
+			} else {
+				b.WriteRune(r)
+				lastWasDot = false
+			}
 			pendingBreak = false
 		default:
 			pendingBreak = true
