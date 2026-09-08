@@ -197,6 +197,47 @@ func TestFS_CreateResearch_DuplicateIDRefusedOnDryRun(t *testing.T) {
 	}
 }
 
+func TestFS_CreateResearch_SerializesDuplicateIDCheckWithCreate(t *testing.T) {
+	root := t.TempDir()
+	const shared = "6g7s6hr3qnfq"
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, slug := range []string{"alpha", "beta"} {
+		slug := slug
+		go func() {
+			<-start
+			_, err := NewFS(root).CreateResearch(domain.Research{
+				Slug: slug, ID: shared, Created: "2026-09-07",
+			}, "# Research\n", false)
+			results <- err
+		}()
+	}
+	close(start)
+
+	var successes, conflicts int
+	for range 2 {
+		err := <-results
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, domain.ErrConflict):
+			conflicts++
+		default:
+			t.Fatalf("unexpected create result: %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("successes=%d conflicts=%d, want 1 each", successes, conflicts)
+	}
+	matches, err := filepath.Glob(filepath.Join(root, domain.ResearchDir, shared+"-*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("created %d research docs for one stable id: %v", len(matches), matches)
+	}
+}
+
 // A write must not be more permissive than a read. splitFrontmatterStrict returns a nil
 // block (not an error) for a fence-less file, and updateFrontmatter/documentMapping would
 // CREATE one — so without a guard these succeed and leave the doc with no id and no

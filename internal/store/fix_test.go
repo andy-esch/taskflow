@@ -164,6 +164,39 @@ func TestFixRepairsMisspelledIDInFilenameAndFrontmatter(t *testing.T) {
 	}
 }
 
+// Canonicalizing a misspelled id must not mint a second file for an identity
+// already owned under another slug. The exact target path differs, so only the
+// same-kind filename identity scan can keep lint --fix from breaking the graph.
+func TestFixRefusesCanonicalIDRepairOwnedBySameKind(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Epic("01-e.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
+	existing := filepath.Join(r.Root, "tasks", "6g7s6hr3qnf0-beta.md")
+	invalid := filepath.Join(r.Root, "tasks", "6g7s6hr3qnfo-alpha.md")
+	testutil.Write(t, existing, "---\nschema: 1\nid: 6g7s6hr3qnf0\nstatus: ready-to-start\nepic: 01-e\ndescription: existing\n---\n# Existing\n")
+	invalidBody := "---\nschema: 1\nid: 6g7s6hr3qnfo\nstatus: ready-to-start\nepic: 01-e\ndescription: invalid alias\n---\n# Invalid alias\n"
+	testutil.Write(t, invalid, invalidBody)
+
+	results, err := NewFS(r.Root).FixFrontmatter(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || !results[0].Skipped {
+		t.Fatalf("canonical identity collision must be skipped: %+v", results)
+	}
+	if got := results[0].Changes[0]; !strings.Contains(got, "6g7s6hr3qnf0-beta.md") {
+		t.Fatalf("refusal must name the existing identity owner: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(r.Root, "tasks", "6g7s6hr3qnf0-alpha.md")); !os.IsNotExist(err) {
+		t.Fatalf("canonical duplicate was created: %v", err)
+	}
+	if raw, err := os.ReadFile(invalid); err != nil || string(raw) != invalidBody {
+		t.Fatalf("refused repair changed its source: err=%v\n%s", err, raw)
+	}
+	if _, err := os.Stat(existing); err != nil {
+		t.Fatalf("existing identity owner changed: %v", err)
+	}
+}
+
 // The guard that matters: renaming a referenced id would leave those links dangling, and
 // this repo has no rename cascade. Refusing loudly beats trading one broken file for
 // several broken references.

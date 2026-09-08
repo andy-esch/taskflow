@@ -284,7 +284,13 @@ adapter capabilities rather than leaked persistence.
   the shared YAML editor may normalize inline-comment spacing.
   Thread files own metadata and membership only; task files remain the sole source of dependency
   edges. Task creation and Thread creation check one cross-kind stable-ID namespace under the
-  same canonical-root guard. The legacy
+  same canonical-root guard. Ordinary task, epic, audit, and research creation enter through one
+  filesystem-adapter transaction that acquires that guard before any identity scan or sequence
+  allocation and retains it through the atomic no-clobber write. Dry-run performs the same
+  preparation and collision checks without claiming a durable reservation. Graph-aware Thread and
+  create-and-start operations retain their stronger core-planned transactions and reuse only the
+  lock-compatible create primitive; this storage ordering is not imposed on future adapters that
+  can provide native uniqueness. The legacy
   `projects/` scaffold is no longer created; only an empty directory or a lone regular
   `.gitkeep` is eligible for automatic retirement, and other content is preserved.
   `TaskGraphMutationStore` is the control-inverted write capability: `FS` takes the
