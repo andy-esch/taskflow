@@ -73,6 +73,14 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"TaskMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToTaskMutationEnvelope(task, "# new body", true, WorkspaceJSON{}))
 		}},
+		{"TaskRenameEnvelope", func(w io.Writer) error {
+			return emit(w, ToTaskRenameEnvelope(core.TaskRenameReceipt{
+				Task:     domain.Task{ID: "6g0000000001", Slug: "renamed", Status: domain.StatusInProgress},
+				FromSlug: "alpha", PlannedDocuments: 3, AppliedDocuments: 3,
+				PlannedLinks: 2, AppliedLinks: 2, Changed: true,
+				Committed: true, Complete: true, DestinationWritten: true, SourceRemoved: true,
+			}, WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig}))
+		}},
 		{"DependencyMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToDependencyMutationEnvelope(core.DependencyMutationReceipt{
 				Operation: core.DependencyAdd, Changed: true, DryRun: true,
@@ -355,10 +363,13 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{
 				Code: "conflict", Message: "Thread creation committed before cleanup failed",
 				TaskRename: &TaskRenameRecoveryJSON{
-					TaskID: "6g0000000001", FromSlug: "old", ToSlug: "new",
-					PlannedDocuments: 3, AppliedDocuments: 1, PlannedLinks: 2, AppliedLinks: 1,
-					Changed: true, Committed: true, Remedy: "rerun by stable id",
-					Workspace: WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig},
+					TaskRenameJSON: TaskRenameJSON{
+						TaskID: "6g0000000001", FromSlug: "old", ToSlug: "new",
+						PlannedDocuments: 3, AppliedDocuments: 1, PlannedLinks: 2, AppliedLinks: 1,
+						Changed: true, Committed: true,
+						Workspace: WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig},
+					},
+					Remedy: "rerun by stable id",
 				},
 				ThreadMutation: &ThreadMutationJSON{
 					Thread: ToThreadJSON(thread), Changed: true, Committed: true,

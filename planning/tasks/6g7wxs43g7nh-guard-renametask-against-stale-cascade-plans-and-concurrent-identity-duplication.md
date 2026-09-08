@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g7wxs43g7nh
-status: in-progress
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: Guard RenameTask planning and cascade writes with repository snapshots/CAS so concurrent renames cannot duplicate IDs or discard cooperating writes.
 effort: 1-2 days
@@ -12,6 +12,7 @@ tags: [rename, concurrency, occ, store, hardening]
 created: "2026-09-07"
 updated_at: "2026-09-08"
 started_at: "2026-09-07"
+completed_at: "2026-09-08"
 ---
 # Guard RenameTask against stale cascade plans and concurrent identity duplication
 

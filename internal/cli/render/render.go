@@ -218,6 +218,13 @@ func TaskMutationJSON(w io.Writer, t domain.Task, body string, dryRun bool, ws w
 	return wire.EncodeJSON(w, wire.ToTaskMutationEnvelope(t, body, dryRun, ws))
 }
 
+// TaskRenameJSON writes the guarded rename receipt. Unlike the generic task
+// mutation envelope, it exposes the complete multi-document plan and durable
+// outcome while retaining the resulting task for compatibility.
+func TaskRenameJSON(w io.Writer, receipt core.TaskRenameReceipt, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToTaskRenameEnvelope(receipt, ws))
+}
+
 // MoveResult is the per-item outcome of a transition (the wire type), re-exported
 // so the CLI's move loop (moves.go) keeps building it through the render package.
 type MoveResult = wire.MoveResult

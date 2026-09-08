@@ -3407,52 +3407,155 @@
       ],
       "description": "TaskMutationEnvelope is `task set` / `task append` / `task set --body` under --json: the reloaded task, dry_run, and (for the body commands) the resulting body."
     },
+    "TaskRenameEnvelope": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "stable identity retained across the rename"
+        },
+        "from_slug": {
+          "type": "string",
+          "description": "source slug observed when the rename was planned"
+        },
+        "to_slug": {
+          "type": "string",
+          "description": "destination slug derived from the requested title"
+        },
+        "planned_documents": {
+          "type": "integer",
+          "description": "document writes in the guarded rename plan"
+        },
+        "applied_documents": {
+          "type": "integer",
+          "description": "planned document writes that became durable"
+        },
+        "planned_links": {
+          "type": "integer",
+          "description": "inbound Markdown links the guarded plan will repoint"
+        },
+        "applied_links": {
+          "type": "integer",
+          "description": "planned inbound link rewrites that became durable"
+        },
+        "changed": {
+          "type": "boolean",
+          "description": "true when the plan changes at least one document"
+        },
+        "dry_run": {
+          "type": "boolean",
+          "description": "true for a non-durable preview; applied counts and committed remain zero or false"
+        },
+        "committed": {
+          "type": "boolean",
+          "description": "true after at least one planned document write became durable"
+        },
+        "complete": {
+          "type": "boolean",
+          "description": "true when the entire plan is applied and the destination is the sole authoritative task path; an exact no-op is complete without a commit"
+        },
+        "destination_written": {
+          "type": "boolean",
+          "description": "true after the renamed task content became durable at its destination path"
+        },
+        "source_removed": {
+          "type": "boolean",
+          "description": "true when a distinct old source path was removed after destination creation"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON",
+          "description": "planning tree this receipt describes"
+        },
+        "task": {
+          "$ref": "#/$defs/TaskJSON",
+          "description": "resulting task on success or prospective task on dry-run"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "task_id",
+        "from_slug",
+        "to_slug",
+        "planned_documents",
+        "applied_documents",
+        "planned_links",
+        "applied_links",
+        "changed",
+        "dry_run",
+        "committed",
+        "complete",
+        "destination_written",
+        "source_removed",
+        "workspace",
+        "task"
+      ],
+      "description": "TaskRenameEnvelope is the non-error `task rename --json` receipt for committed outcomes and dry-run previews."
+    },
     "TaskRenameRecoveryJSON": {
       "properties": {
         "task_id": {
-          "type": "string"
+          "type": "string",
+          "description": "stable identity retained across the rename"
         },
         "from_slug": {
-          "type": "string"
+          "type": "string",
+          "description": "source slug observed when the rename was planned"
         },
         "to_slug": {
-          "type": "string"
+          "type": "string",
+          "description": "destination slug derived from the requested title"
         },
         "planned_documents": {
-          "type": "integer"
+          "type": "integer",
+          "description": "document writes in the guarded rename plan"
         },
         "applied_documents": {
-          "type": "integer"
+          "type": "integer",
+          "description": "planned document writes that became durable"
         },
         "planned_links": {
-          "type": "integer"
+          "type": "integer",
+          "description": "inbound Markdown links the guarded plan will repoint"
         },
         "applied_links": {
-          "type": "integer"
+          "type": "integer",
+          "description": "planned inbound link rewrites that became durable"
         },
         "changed": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "true when the plan changes at least one document"
         },
         "dry_run": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "true for a non-durable preview; applied counts and committed remain zero or false"
         },
         "committed": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "true after at least one planned document write became durable"
         },
         "complete": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "true when the entire plan is applied and the destination is the sole authoritative task path; an exact no-op is complete without a commit"
         },
         "destination_written": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "true after the renamed task content became durable at its destination path"
         },
         "source_removed": {
-          "type": "boolean"
-        },
-        "remedy": {
-          "type": "string"
+          "type": "boolean",
+          "description": "true when a distinct old source path was removed after destination creation"
         },
         "workspace": {
-          "$ref": "#/$defs/WorkspaceJSON"
+          "$ref": "#/$defs/WorkspaceJSON",
+          "description": "planning tree this receipt describes"
+        },
+        "remedy": {
+          "type": "string",
+          "description": "operator action appropriate to the durable prefix"
         }
       },
       "additionalProperties": false,
@@ -3471,8 +3574,8 @@
         "complete",
         "destination_written",
         "source_removed",
-        "remedy",
-        "workspace"
+        "workspace",
+        "remedy"
       ],
       "description": "TaskRenameRecoveryJSON is the structured durable-prefix diagnosis emitted when a task rename fails after one or more document writes committed."
     },
@@ -4864,6 +4967,9 @@
         "task_mutation": {
           "$ref": "#/$defs/TaskMutationEnvelope"
         },
+        "task_rename": {
+          "$ref": "#/$defs/TaskRenameEnvelope"
+        },
         "dependency_mutation": {
           "$ref": "#/$defs/DependencyMutationEnvelope"
         },
@@ -5010,6 +5116,7 @@
         "acceptance",
         "path",
         "task_mutation",
+        "task_rename",
         "dependency_mutation",
         "graph_repair",
         "task_blockers",
@@ -5058,6 +5165,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.62)",
+  "title": "tskflwctl --json output (schema_version 1.63)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }
