@@ -205,7 +205,16 @@ func (s *FS) repairInvalidID(dir, filename string, content []byte) (out []byte, 
 	if _, err := os.Stat(target); err == nil {
 		return content, "", fmt.Sprintf("id %q not repaired: %s already exists", bad, filepath.Base(target)), nil
 	}
-	owner, err := s.crossKindIdentityOwner(dir, good)
+	owner, err := candidateIDOwner(good, func() ([]candidate, error) {
+		return flatCandidates(dir)
+	})
+	if err != nil {
+		return content, "", "", err
+	}
+	if owner != "" {
+		return content, "", fmt.Sprintf("id %q not repaired: canonical spelling %s is already used by %s", bad, good, owner), nil
+	}
+	owner, err = s.crossKindIdentityOwner(dir, good)
 	if err != nil {
 		return content, "", "", err
 	}
