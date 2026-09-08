@@ -295,8 +295,9 @@ same logical operation. The implementation and recovery contract is now explicit
   the same rename by stable task id. Once the destination exists but the old source remains, do not
   retry blindly; inspect both files and restore one stable-id owner explicitly.
 - Store and core return typed planned/applied progress and recovery state. Primary adapters can render
-  their own presentation; `task rename --json` failure output carries the structured receipt. Dry-run
-  describes only a non-durable preview and never claims a reservation.
+  their own presentation; `task rename --json` returns the same structured receipt fields for success,
+  dry-run, and post-commit failure. Dry-run reports the prospective document/link plan but zero applied
+  work, and never claims a reservation, commit, or complete operation.
 
 ## Related
 

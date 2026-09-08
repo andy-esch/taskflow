@@ -14,4 +14,4 @@ started_at: "2026-01-03"
 ---
 # Beta Task
 
-Body for the beta fixture task.
+Body for the beta fixture task. See [alpha-task](6fjangd7kvh0-alpha-task.md).

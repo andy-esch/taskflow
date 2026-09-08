@@ -716,7 +716,7 @@ func newTaskRenameCmd(app *App) *cobra.Command {
 			}
 			task, cascade := receipt.Task, receipt.PlannedLinks
 			if app.JSON {
-				return render.TaskMutationJSON(app.Out, task, "", app.DryRun, app.workspace())
+				return render.TaskRenameJSON(app.Out, receipt, app.workspace())
 			}
 			verb := "renamed to"
 			if app.DryRun {

@@ -258,7 +258,10 @@ import (
 // guarded mutation, impact, incomplete-Thread-evidence, and recovery receipts.
 // 1.62: post-commit `task rename` failures carry a structured durable-prefix
 // receipt and recovery remedy in the standard error envelope.
-const SchemaVersion = "1.62"
+// 1.63: successful and dry-run `task rename` output adds the same planned/applied
+// document and link counts, identity, and durability state used by failure receipts.
+// The existing task, dry_run, and workspace fields remain available.
+const SchemaVersion = "1.63"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

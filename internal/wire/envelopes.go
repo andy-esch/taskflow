@@ -1146,6 +1146,7 @@ type jsonEnvelopes struct {
 	Acceptance     AcceptanceEnvelope         `json:"acceptance"`
 	Path           PathEnvelope               `json:"path"`
 	TaskMutation   TaskMutationEnvelope       `json:"task_mutation"`
+	TaskRename     TaskRenameEnvelope         `json:"task_rename"`
 	DependencyMut  DependencyMutationEnvelope `json:"dependency_mutation"`
 	GraphRepair    TaskGraphRepairEnvelope    `json:"graph_repair"`
 	TaskBlockers   TaskBlockersEnvelope       `json:"task_blockers"`
