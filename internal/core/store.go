@@ -47,9 +47,9 @@ type TaskStore interface {
 	TransformTaskBody(slug string, now time.Time, dryRun bool, transform func(current string) (string, error)) (domain.Task, string, bool, error)
 	// RenameTask re-titles a task: a new slug from newTitle, the file renamed (id kept),
 	// the body H1 rewritten, and every inbound relative-path markdown link across the tree
-	// repointed to the new filename. Returns the reloaded task and the count of links
-	// repointed. Multi-file + write-locked but not version-CAS'd (a rare deliberate op).
-	RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, error)
+	// repointed to the new filename. Its result records a durable multi-document prefix
+	// so post-commit failures are recoverable without guessing whether a retry is safe.
+	RenameTask(slug, newTitle string, dryRun bool) (TaskRenameMutationResult, error)
 }
 
 // TaskDependencyWrite is one semantic task-file change returned by a pure graph

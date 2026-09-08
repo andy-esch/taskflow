@@ -1043,6 +1043,7 @@ type ErrorItem struct {
 	DependencyMutation *DependencyMutationJSON    `json:"dependency_mutation,omitempty"`
 	GraphRepair        *TaskGraphRepairJSON       `json:"graph_repair,omitempty"`
 	TaskLifecycle      *TaskLifecycleRecoveryJSON `json:"task_lifecycle,omitempty"`
+	TaskRename         *TaskRenameRecoveryJSON    `json:"task_rename,omitempty"`
 	ThreadMutation     *ThreadMutationJSON        `json:"thread_mutation,omitempty"`
 	ThreadUpdate       *ThreadUpdateJSON          `json:"thread_update,omitempty"`
 	ThreadFailure      *ThreadMutationFailureJSON `json:"thread_failure,omitempty"`

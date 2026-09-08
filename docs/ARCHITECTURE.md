@@ -293,6 +293,18 @@ adapter capabilities rather than leaked persistence.
   can provide native uniqueness. The legacy
   `projects/` scaffold is no longer created; only an empty directory or a lone regular
   `.gitkeep` is eligible for automatic retirement, and other content is preserved.
+  `RenameTask` is the exceptional multi-document member of the ordinary task port. A real rename
+  captures the caller's source version before waiting, then takes the canonical repository guard
+  and recompiles the inbound-link cascade from the current tree. Every cascade replacement is
+  checked against the bytes that produced it; the destination uses an exclusive create that retains
+  the source file's effective permission bits; and the old source is checked again before deletion.
+  Link rewrites commit first, the destination second, and source deletion last. A failure before the
+  destination therefore leaves a convergent prefix
+  that can be resumed by repeating the rename by stable id. A failure after the destination exists
+  but before source removal deliberately retains both files for inspection rather than risking a
+  destructive retry. Core exposes that distinction as an adapter-neutral durable-prefix receipt;
+  the CLI includes it in structured error output. Dry-run plans without taking or claiming a
+  reservation. See ADR-0003's 2026-09-08 amendment.
   `TaskGraphMutationStore` is the control-inverted write capability: `FS` takes the
   repository guard, loads the canonical strict snapshot, invokes a pure core planner over
   taskflow-owned values, asks core to validate the complete plan and every recovery prefix,

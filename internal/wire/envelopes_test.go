@@ -350,10 +350,16 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"ErrorEnvelope", func(w io.Writer) error {
 			// Built by cli.WriteError (not a constructor here) — marshal the named type
-			// directly to prove its schema matches. Include the Thread post-commit
-			// recovery payload so its nested, schema-version-free shape is covered too.
+			// directly to prove its schema matches. Include post-commit recovery payloads
+			// so their nested, schema-version-free shapes are covered too.
 			return emit(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{
 				Code: "conflict", Message: "Thread creation committed before cleanup failed",
+				TaskRename: &TaskRenameRecoveryJSON{
+					TaskID: "6g0000000001", FromSlug: "old", ToSlug: "new",
+					PlannedDocuments: 3, AppliedDocuments: 1, PlannedLinks: 2, AppliedLinks: 1,
+					Changed: true, Committed: true, Remedy: "rerun by stable id",
+					Workspace: WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig},
+				},
 				ThreadMutation: &ThreadMutationJSON{
 					Thread: ToThreadJSON(thread), Changed: true, Committed: true,
 					Path:      "threads/6g0000000003-initiative.md",

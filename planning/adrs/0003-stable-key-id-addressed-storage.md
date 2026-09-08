@@ -276,6 +276,28 @@ The *full* "what is a valid entity / valid frontmatter" contract is
 [26-frontmatter-schema-declared-validation-contract](../epics/26-frontmatter-schema-declared-validation-contract.md)'s to formalize; this amendment fixes the
 narrow layout-hygiene rule the flatten needs now.
 
+### 2026-09-08 — task rename is a guarded, resumable multi-document mutation
+
+Scheme 2 makes a re-title more than a filename change: every inbound Markdown link is part of the
+same logical operation. The implementation and recovery contract is now explicit, as hardened by
+[guard-renametask-against-stale-cascade-plans-and-concurrent-identity-duplication](../tasks/6g7wxs43g7nh-guard-renametask-against-stale-cascade-plans-and-concurrent-identity-duplication.md):
+
+- A real rename captures the caller's source version before waiting, takes the canonical repository
+  guard, rejects a changed source, and plans against the fresh guarded tree. Concurrent cooperating
+  renames therefore cannot both commit, and cooperating edits to inbound-link documents are included.
+- Every planned document is content-CAS checked immediately before replacement. The destination is
+  created with a no-clobber precondition while retaining the source file's effective permission bits,
+  and the old source is checked again immediately before deletion. Raw editors remain outside the
+  advisory lock, but are rejected at those guarded mutation boundaries rather than silently
+  overwritten where the filesystem permits detection.
+- Same-path cascade rewrites commit first, destination creation second, and old-source deletion last.
+  A failure during the cascade leaves a convergent durable prefix: after resolving the error, rerun
+  the same rename by stable task id. Once the destination exists but the old source remains, do not
+  retry blindly; inspect both files and restore one stable-id owner explicitly.
+- Store and core return typed planned/applied progress and recovery state. Primary adapters can render
+  their own presentation; `task rename --json` failure output carries the structured receipt. Dry-run
+  describes only a non-durable preview and never claims a reservation.
+
 ## Related
 
 - Home epic & the open-questions index:

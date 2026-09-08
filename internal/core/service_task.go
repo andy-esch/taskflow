@@ -673,8 +673,14 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 }
 
 // RenameTask re-titles a task (new slug from newTitle, id kept) and cascades its inbound
-// body links across the planning tree — see store.RenameTask. Returns the reloaded task
-// and the count of inbound links repointed.
-func (s *Service) RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, error) {
-	return s.store.RenameTask(slug, newTitle, dryRun)
+// body links across the planning tree — see store.RenameTask. A committed failure keeps
+// the store's durable prefix and recovery guidance instead of collapsing to a bare error.
+func (s *Service) RenameTask(slug, newTitle string, dryRun bool) (TaskRenameReceipt, error) {
+	result, err := s.store.RenameTask(slug, newTitle, dryRun)
+	receipt := taskRenameReceipt(result)
+	if err != nil && result.Committed {
+		receipt.Remedy = taskRenameFailureRemedy(result)
+		return receipt, &TaskRenameFailure{Cause: err, Receipt: receipt}
+	}
+	return receipt, err
 }

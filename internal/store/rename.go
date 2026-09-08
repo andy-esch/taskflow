@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -19,51 +21,222 @@ var firstH1Re = regexp.MustCompile(`(?m)^# .*$`)
 // title, and CASCADES — every inbound relative-path markdown link across the planning
 // tree that points at the old filename is repointed to the new one (and a link whose
 // display text was the bare old slug is refreshed to the new slug). Returns the reloaded
-// task and the count of inbound links repointed.
+// task and a durable-prefix receipt.
 //
-// It is a multi-file write serialized by the repo write-lock but NOT version-CAS-guarded:
-// rename is a rare, deliberate, single-user operation (git is the undo). A dry run runs
-// every check and returns the would-be result without touching disk.
-func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, error) {
+// Real writes capture the caller's source version before waiting, then acquire the
+// canonical repository guard, reject a changed source, compile the cascade from the
+// guarded current tree, and CAS every document immediately before replacing it. This
+// prevents two concurrent renames from both committing and preserves cooperating writes
+// to inbound-link documents. A dry run performs the same planning without a reservation.
+func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (result core.TaskRenameMutationResult, err error) {
+	result.DryRun = dryRun
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
-		return domain.Task{}, 0, err
+		return result, err
 	}
-	oldPath, err := s.resolve(slug)
+	source, err := s.snapshotTaskRenameSource(slug)
 	if err != nil {
-		return domain.Task{}, 0, err
-	}
-	id, oldSlug, ok := splitFlatName(strings.TrimSuffix(filepath.Base(oldPath), ".md"))
-	if !ok {
-		return domain.Task{}, 0, fmt.Errorf("%w: %q is not an id-led task file", errNotEntity, filepath.Base(oldPath))
+		return result, err
 	}
 	newSlug := domain.Slugify(newTitle)
 	if newSlug == "" {
-		return domain.Task{}, 0, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, newTitle)
+		return result, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, newTitle)
 	}
-	oldName, newName := id+"-"+oldSlug+".md", id+"-"+newSlug+".md"
-	newPath := filepath.Join(filepath.Dir(oldPath), newName)
 
-	// Refuse to rename onto an existing file: the write loop below would silently
-	// clobber it. newPath shares the id, so a collision means a duplicate-id sibling
-	// already exists — fail loud on that corrupt state rather than destroy the file.
-	if newPath != oldPath {
-		if _, err := os.Stat(newPath); err == nil {
-			return domain.Task{}, 0, fmt.Errorf("%w: target filename already exists: %s", domain.ErrConflict, newName)
-		} else if !os.IsNotExist(err) {
-			return domain.Task{}, 0, fmt.Errorf("stat target %s: %w", newPath, err)
+	if dryRun {
+		plan, err := s.prepareTaskRename(source, newTitle, newSlug)
+		if err != nil {
+			return result, err
 		}
+		return taskRenameResult(plan, true), nil
+	}
+	if testHookBeforeTaskRenameLock != nil {
+		testHookBeforeTaskRenameLock()
+	}
+	unlock, err := s.checkedWriteLock()
+	if err != nil {
+		return result, err
+	}
+	defer func() {
+		if releaseErr := unlock(); releaseErr != nil {
+			err = errors.Join(err, fmt.Errorf("release repository task rename guard: %w", releaseErr))
+		}
+	}()
+
+	// Preserve the precise target-collision diagnosis even when the colliding file
+	// already makes stable-id resolution ambiguous. This check is authoritative
+	// because it now occurs after acquiring the repository guard.
+	if err := s.ensureTaskRenameTargetAvailable(source, newSlug); err != nil {
+		return result, err
+	}
+	// The pre-lock source version is the intent boundary: a competing rename or
+	// source edit that completed while this caller waited makes this operation stale,
+	// even if resolving by stable id could find the task at its new path.
+	if err := verifyUnchanged(s.resolvePath, source.id, source.path, source.version, "task", "rename"); err != nil {
+		return result, err
+	}
+	plan, err := s.prepareTaskRename(source, newTitle, newSlug)
+	if err != nil {
+		return result, err
+	}
+	result = taskRenameResult(plan, false)
+	if !result.Changed {
+		result.Complete = true
+		return result, nil
+	}
+
+	// Apply same-path inbound-link rewrites first. Any durable prefix is convergent:
+	// a retry scans the remaining old links and leaves already-repointed links alone.
+	for _, edit := range plan.cascadeEdits {
+		if testHookBeforeTaskRenameWrite != nil {
+			testHookBeforeTaskRenameWrite(edit.path)
+		}
+		if err := verifyTaskRenamePath(edit.path, edit.ifVersion); err != nil {
+			return result, err
+		}
+		if err := writeFileAtomic(edit.path, edit.content, 0o644); err != nil {
+			return result, fmt.Errorf("write task rename cascade document %s: %w", edit.path, err)
+		}
+		result.AppliedDocuments++
+		result.AppliedLinks += edit.links
+		result.Committed = true
+		if testHookAfterTaskRenameWrite != nil {
+			if err := testHookAfterTaskRenameWrite(edit.path); err != nil {
+				return result, fmt.Errorf("after task rename cascade document %s: %w", edit.path, err)
+			}
+		}
+	}
+
+	// Recheck the source immediately before materializing the destination. The
+	// repository guard excludes cooperating writers; this CAS bounds the remaining
+	// raw-editor window and prevents a stale H1/body from replacing newer bytes.
+	if testHookBeforeTaskRenameWrite != nil {
+		testHookBeforeTaskRenameWrite(source.path)
+	}
+	if err := verifyUnchanged(s.resolvePath, source.id, source.path, source.version, "task", "rename"); err != nil {
+		return result, err
+	}
+	sourceInfo, err := os.Stat(source.path)
+	if err != nil {
+		return result, fmt.Errorf("stat task %s before rename destination create: %w", source.id, err)
+	}
+	if plan.newPath != source.path && testHookBeforeTaskRenameDestinationCreate != nil {
+		testHookBeforeTaskRenameDestinationCreate(plan.newPath)
+	}
+	if plan.newPath == source.path {
+		if err := writeFileAtomic(source.path, plan.renamedContent, 0o644); err != nil {
+			return result, fmt.Errorf("write renamed task %s: %w", source.id, err)
+		}
+	} else if err := createFileAtomicExactMode(plan.newPath, plan.renamedContent, sourceInfo.Mode().Perm()); err != nil {
+		if os.IsExist(err) {
+			return result, fmt.Errorf("%w: target filename already exists: %s", domain.ErrConflict, filepath.Base(plan.newPath))
+		}
+		return result, fmt.Errorf("create renamed task %s: %w", source.id, err)
+	}
+	result.AppliedDocuments++
+	result.AppliedLinks += plan.targetLinks
+	result.Committed = true
+	result.DestinationWritten = true
+	if testHookAfterTaskRenameWrite != nil {
+		if err := testHookAfterTaskRenameWrite(plan.newPath); err != nil {
+			return result, fmt.Errorf("after writing renamed task %s: %w", source.id, err)
+		}
+	}
+
+	if plan.newPath != source.path {
+		if testHookBeforeTaskRenameSourceRemove != nil {
+			if err := testHookBeforeTaskRenameSourceRemove(source.path, plan.newPath); err != nil {
+				return result, fmt.Errorf("before removing old task %s: %w", source.id, err)
+			}
+		}
+		// A raw editor does not honor the repository guard. Recheck the old source
+		// bytes once more before deleting that path; after the destination exists,
+		// a conflict intentionally leaves both copies for explicit inspection.
+		if err := verifyTaskRenamePath(source.path, source.version); err != nil {
+			return result, err
+		}
+		if err := os.Remove(source.path); err != nil {
+			return result, fmt.Errorf("remove old %s: %w", source.path, err)
+		}
+		result.SourceRemoved = true
+	}
+	result.Complete = true
+	return result, nil
+}
+
+type taskRenameSource struct {
+	id      string
+	oldSlug string
+	path    string
+	version string
+}
+
+func (s *FS) snapshotTaskRenameSource(ref string) (taskRenameSource, error) {
+	path, err := s.resolve(ref)
+	if err != nil {
+		return taskRenameSource{}, err
+	}
+	id, oldSlug, ok := splitFlatName(strings.TrimSuffix(filepath.Base(path), ".md"))
+	if !ok {
+		return taskRenameSource{}, fmt.Errorf("%w: %q is not an id-led task file", errNotEntity, filepath.Base(path))
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return taskRenameSource{}, fmt.Errorf("task %q changed on disk during rename; retry: %w", ref, domain.ErrConflict)
+		}
+		return taskRenameSource{}, fmt.Errorf("read task %q for rename: %w", ref, err)
+	}
+	return taskRenameSource{id: id, oldSlug: oldSlug, path: path, version: hashContent(content)}, nil
+}
+
+type taskRenameEdit struct {
+	path      string
+	ifVersion string
+	content   []byte
+	links     int
+}
+
+type taskRenamePlan struct {
+	task           domain.Task
+	source         taskRenameSource
+	newPath        string
+	renamedContent []byte
+	targetChanged  bool
+	targetLinks    int
+	cascadeEdits   []taskRenameEdit
+	plannedLinks   int
+}
+
+func taskRenameResult(plan taskRenamePlan, dryRun bool) core.TaskRenameMutationResult {
+	plannedDocuments := len(plan.cascadeEdits)
+	if plan.targetChanged {
+		plannedDocuments++
+	}
+	return core.TaskRenameMutationResult{
+		Task: plan.task, FromSlug: plan.source.oldSlug,
+		PlannedDocuments: plannedDocuments,
+		PlannedLinks:     plan.plannedLinks,
+		Changed:          plannedDocuments > 0,
+		DryRun:           dryRun,
+	}
+}
+
+func (s *FS) prepareTaskRename(source taskRenameSource, newTitle, newSlug string) (taskRenamePlan, error) {
+	oldName := source.id + "-" + source.oldSlug + ".md"
+	newName := source.id + "-" + newSlug + ".md"
+	newPath := filepath.Join(filepath.Dir(source.path), newName)
+
+	// This check now runs inside the repository guard for real writes. The final
+	// create is also O_EXCL, preserving no-clobber protection from raw writers.
+	if err := s.ensureTaskRenameTargetAvailable(source, newSlug); err != nil {
+		return taskRenamePlan{}, err
 	}
 
 	// Build every edit in one tree walk: the renamed file gets its H1 rewritten (and any
 	// self-links repointed); every other file gets its inbound links repointed.
-	type fileEdit struct {
-		path    string
-		content []byte
-	}
-	var edits []fileEdit
+	plan := taskRenamePlan{source: source, newPath: newPath}
 	cascade := 0
-	var renamedContent []byte
-	err = filepath.WalkDir(s.root, func(p string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(s.root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -80,53 +253,74 @@ func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (domain.Task, int, e
 		if err != nil {
 			return err
 		}
-		isTarget := p == oldPath
+		isTarget := p == source.path
 		if isTarget {
 			content = replaceFirstH1(content, newTitle)
 		}
-		rewritten, n := repointLinks(content, filepath.Dir(p), oldPath, oldName, newName, oldSlug, newSlug)
+		rewritten, n := repointLinks(content, filepath.Dir(p), source.path, oldName, newName, source.oldSlug, newSlug)
 		switch {
 		case isTarget:
-			renamedContent = rewritten
-			edits = append(edits, fileEdit{newPath, rewritten}) // the renamed file writes to the NEW path
+			plan.renamedContent = rewritten
+			plan.targetChanged = newPath != source.path || hashContent(rewritten) != source.version
+			plan.targetLinks = n
 			cascade += n
 		case n > 0:
-			edits = append(edits, fileEdit{p, rewritten})
+			plan.cascadeEdits = append(plan.cascadeEdits, taskRenameEdit{
+				path: p, ifVersion: hashContent(content), content: rewritten, links: n,
+			})
 			cascade += n
 		}
 		return nil
 	})
 	if err != nil {
-		return domain.Task{}, 0, err
+		return taskRenamePlan{}, err
 	}
-	if renamedContent == nil {
-		return domain.Task{}, 0, fmt.Errorf("rename %s: source file vanished under the walk", slug)
+	if plan.renamedContent == nil {
+		return taskRenamePlan{}, fmt.Errorf("task %s changed on disk during rename planning; retry: %w", source.id, domain.ErrConflict)
 	}
 	// Parse-before-commit: the renamed file must still read back as a task, or nothing changes.
-	t, err := parseTask(renamedContent, newPath)
+	t, err := parseTask(plan.renamedContent, newPath)
 	if err != nil {
-		return domain.Task{}, 0, err
+		return taskRenamePlan{}, err
 	}
-	if dryRun {
-		return t, cascade, nil
-	}
-	unlock, err := s.writeLock()
-	if err != nil {
-		return domain.Task{}, 0, err
-	}
-	defer unlock()
-	for _, e := range edits {
-		if err := writeFileAtomic(e.path, e.content, 0o644); err != nil {
-			return domain.Task{}, 0, err
-		}
-	}
-	if newPath != oldPath {
-		if err := os.Remove(oldPath); err != nil {
-			return domain.Task{}, 0, fmt.Errorf("remove old %s: %w", oldPath, err)
-		}
-	}
-	return t, cascade, nil
+	plan.task = t
+	plan.plannedLinks = cascade
+	return plan, nil
 }
+
+func (s *FS) ensureTaskRenameTargetAvailable(source taskRenameSource, newSlug string) error {
+	newName := source.id + "-" + newSlug + ".md"
+	newPath := filepath.Join(filepath.Dir(source.path), newName)
+	if newPath == source.path {
+		return nil
+	}
+	if _, err := os.Stat(newPath); err == nil {
+		return fmt.Errorf("%w: target filename already exists: %s", domain.ErrConflict, newName)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat target %s: %w", newPath, err)
+	}
+	return nil
+}
+
+func verifyTaskRenamePath(path, ifVersion string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("task rename document %s changed on disk; retry: %w", path, domain.ErrConflict)
+		}
+		return fmt.Errorf("re-read task rename document %s: %w", path, err)
+	}
+	if hashContent(content) != ifVersion {
+		return fmt.Errorf("task rename document %s changed on disk; retry: %w", path, domain.ErrConflict)
+	}
+	return nil
+}
+
+var testHookBeforeTaskRenameLock func()
+var testHookBeforeTaskRenameWrite func(path string)
+var testHookAfterTaskRenameWrite func(path string) error
+var testHookBeforeTaskRenameDestinationCreate func(path string)
+var testHookBeforeTaskRenameSourceRemove func(oldPath, newPath string) error
 
 // repointLinks rewrites every markdown link — inline or reference-style — that RESOLVES to
 // oldPath (relative to sourceDir — the file the link lives in) so its filename becomes
