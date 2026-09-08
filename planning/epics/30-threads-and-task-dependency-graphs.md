@@ -85,7 +85,7 @@ boundaries:
                                                                   v
                                                          6g7fhfpmy032 v0.20 preview
                                                                   +-> 6g6dw5js81f3 flagship spatial prototype
-                                                                  +-> 6g7ddfhh2jc2 graduation decision
+                                                                  +-> 6g7ddfhh2jc2 graduation decision (deferred for multi-release soak)
 ```
 
 The projection loader also depends on the generated views and v0.18 preview above. The stable-ID
@@ -134,7 +134,7 @@ strict reads -> guarded edge writes -> eligibility -> Thread documents/read proj
               -> graph-health and Atlas hardening -> TUI preview
               -> guarded repair / portable diagnostics / frontier context
               -> compatibility fixtures -> v0.20 preview soak
-              -> flagship spatial prototype / explicit graduation decision
+              -> flagship spatial prototype; graduation remains deferred during multi-release soak
 ```
 
 Eligibility enforcement and Threads share the same graph foundation, but implementation is
@@ -166,7 +166,7 @@ materializers under one outer guard.
 | 11e | Historical compatibility fixtures | Current readers, surgical writers, and resumable apply preserve the concrete v0.18.0/v0.19.0 artifacts and meanings | additive frontmatter, old wire fields, schema 0/1 manifests, strict plans, interrupted prefix, legacy repo identity |
 | 12 | v0.20.0 hardened preview | Compatibility and recovery improvements ship through the release pipeline while the preview notice remains explicit | clean candidate, installed CLI/TUI use, retained plans, repair, archives/checksums |
 | 13a | Flagship spatial graph design/prototype | A bounded high-priority pass proves deterministic two-dimensional comprehension and navigation, then cuts production-grade slices for the next feature release | fan-in/out, crossings, skipped waves, narrow terminals, large graphs, reload stability |
-| 13b | Explicit graduation decision | Fresh gates plus accumulated preview evidence support either a preview-removal candidate or named further work | all G1–G7 evidence, unresolved preview findings, exact candidate/tag provenance |
+| 13b | Deferred graduation decision | After additional installed preview releases, fresh gates plus accumulated evidence support either a preview-removal candidate or named further work | all G1–G7 evidence, unresolved preview findings, exact candidate/tag provenance |
 
 ### Design attention
 
@@ -217,9 +217,10 @@ This epic is the first production consumer of its own capabilities:
     migration, and frontier metadata makes independent choices visible. The graduation contract
     defines which outcomes actually gate the end of preview.
 11. v0.20.0 shipped with the preview notice intact as the third installed dogfood checkpoint. Its
-    completed release evidence unlocks the tier-1 spatial design/prototype as the flagship candidate for the next feature
-    release, alongside the independent decision to graduate Threads or name another preview
-    checkpoint. The spatial work does not gate v0.20 or silently join core.
+    completed release evidence unlocks the tier-1 spatial design/prototype as the flagship candidate
+    for the next feature release. The independent graduation decision is explicitly deferred until
+    additional installed preview releases provide a multi-release soak; another release-checkpoint
+    task should be added only when it owns concrete work. The spatial work does not silently join core.
 
 The experimental spike binary is limited to disposable planning spaces and does not satisfy these
 checkpoints. Dogfooding begins when the corresponding production slice passes its exit gate.
