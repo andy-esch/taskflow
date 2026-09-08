@@ -85,6 +85,8 @@ boundaries:
                                                                   v
                                                          6g7fhfpmy032 v0.20 preview
                                                                   +-> 6g6dw5js81f3 flagship spatial prototype
+                                                                  |          +-> 6g86e10dztpf dense route hardening
+                                                                  |          +-> 6g86c7y6hn41 one-hop focus view
                                                                   +-> 6g7ddfhh2jc2 graduation decision (deferred for multi-release soak)
 ```
 
@@ -121,6 +123,8 @@ not an invented dependency on the release.
 - [6g7ddeyp773z — historical Thread compatibility fixtures](../tasks/6g7ddeyp773z-pin-thread-document-and-plan-backward-compatibility.md)
 - [6g7fhfpmy032 — v0.20.0 compatibility-hardened preview](../tasks/6g7fhfpmy032-cut-v0.20.0-as-a-compatibility-hardened-threads-preview.md)
 - [6g7ddfhh2jc2 — explicit preview graduation decision](../tasks/6g7ddfhh2jc2-graduate-threads-from-preview.md)
+- [6g86e10dztpf — trustworthy dense spatial routes](../tasks/6g86e10dztpf-make-dense-thread-graph-routes-visually-trustworthy.md)
+- [6g86c7y6hn41 — one-hop spatial focus view](../tasks/6g86c7y6hn41-add-a-one-hop-focus-subgraph-mode-to-the-tui-thread-graph.md)
 - Deprecated combined scope: [6g3q4rv89vzw](../tasks/6g3q4rv89vzw-add-usage-informed-thread-views-to-the-tui.md)
 
 ## Delivery sequence and gates
@@ -134,7 +138,8 @@ strict reads -> guarded edge writes -> eligibility -> Thread documents/read proj
               -> graph-health and Atlas hardening -> TUI preview
               -> guarded repair / portable diagnostics / frontier context
               -> compatibility fixtures -> v0.20 preview soak
-              -> flagship spatial prototype; graduation remains deferred during multi-release soak
+              -> flagship spatial prototype -> dense routing / one-hop focus
+              -> graduation remains deferred during multi-release soak
 ```
 
 Eligibility enforcement and Threads share the same graph foundation, but implementation is
@@ -166,7 +171,8 @@ materializers under one outer guard.
 | 11e | Historical compatibility fixtures | Current readers, surgical writers, and resumable apply preserve the concrete v0.18.0/v0.19.0 artifacts and meanings | additive frontmatter, old wire fields, schema 0/1 manifests, strict plans, interrupted prefix, legacy repo identity |
 | 12 | v0.20.0 hardened preview | Compatibility and recovery improvements ship through the release pipeline while the preview notice remains explicit | clean candidate, installed CLI/TUI use, retained plans, repair, archives/checksums |
 | 13a | Flagship spatial graph design/prototype | A bounded high-priority pass proves deterministic two-dimensional comprehension and navigation, then cuts production-grade slices for the next feature release | fan-in/out, crossings, skipped waves, narrow terminals, large graphs, reload stability |
-| 13b | Deferred graduation decision | After additional installed preview releases, fresh gates plus accumulated evidence support either a preview-removal candidate or named further work | all G1–G7 evidence, unresolved preview findings, exact candidate/tag provenance |
+| 13b | Spatial route hardening and focused comprehension | Dense whole-graph routes cannot invent connectivity, while a separate one-hop view makes immediate graph context legible without new core semantics | long/crossing/shared routes, clipping, fan-in/out, hidden-boundary cues, stable focus/reload |
+| 13c | Deferred graduation decision | After additional installed preview releases, fresh gates plus accumulated evidence support either a preview-removal candidate or named further work | all G1–G7 evidence, unresolved preview findings, exact candidate/tag provenance |
 
 ### Design attention
 
@@ -189,6 +195,9 @@ remain serialized around one shared value and explicit wire-version boundary. Wi
 the spatial view is the tier-1 flagship candidate for the next feature
 release. Its removable presentation-extension boundary over the existing projection prevents a
 prominent UX experiment from becoming a hidden renderer, graph-library, or core dependency.
+The usable prototype has now upheld that boundary and exposed two independent production slices:
+dense-route truthfulness and a bounded one-hop focus view. Neither changes Thread semantics, and
+neither should be smuggled into preview graduation.
 
 ## Dogfood checkpoints
 
@@ -221,6 +230,11 @@ This epic is the first production consumer of its own capabilities:
     for the next feature release. The independent graduation decision is explicitly deferred until
     additional installed preview releases provide a multi-release soak; another release-checkpoint
     task should be added only when it owns concrete work. The spatial work does not silently join core.
+12. The first spatial prototype was exercised against the production Thread while tasks were added
+    and renamed. Graph-first navigation exposed a visually false long-route junction even though it
+    followed the correct canonical edge. The prototype now fails over explicitly at bounded capacity;
+    dense routing and one-hop focus remain separate tier-1 follow-ups, while general Back and
+    structured-detail action targeting remain owned by the TUI epic.
 
 The experimental spike binary is limited to disposable planning spaces and does not satisfy these
 checkpoints. Dogfooding begins when the corresponding production slice passes its exit gate.
@@ -230,8 +244,8 @@ checkpoints. Dogfooding begins when the corresponding production slice passes it
 - Treating the spike as production implementation.
 - Critical-path, slack, forecasting, transitive reduction, or scheduler features.
 - Autonomous multi-agent or worktree orchestration.
-- Treating the spatial prototype as a production renderer before its layout and navigation evidence
-  is evaluated.
+- Promoting the spatial prototype as a production renderer before dense-route truthfulness and its
+  bounded fallback behavior are evaluated.
 
 ## Sequencing amendment — guarded multi-kind writes (2026-08-27)
 

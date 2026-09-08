@@ -1378,6 +1378,35 @@ planning-data migration. That isolation is risk containment for a prominent feat
 that the feature is low value; a successful prototype should produce explicit production and
 release slices rather than silently folding experimental code into the base.
 
+### 2026-09-08: Spatial presentation consumes graph truth; it does not redefine it
+
+The first full-screen TUI prototype validates the renderer-neutral boundary above. It consumes the
+existing `ThreadGraphProjection` directly, derives only bounded presentation layers and terminal
+routes, and stores selection by canonical task ID. Core remains unaware of coordinates, viewport
+state, color, key bindings, and renderer failure. The TUI may therefore replace or promote the
+layout without a planning-data migration or a competing graph model.
+
+Dogfooding also fixes the interaction contract. Dependencies flow left to right, and `h`/`l`
+prefer actual incoming/outgoing edges even when an edge skips visual columns; geometry is only a
+fallback when no edge exists in that direction. `j`/`k` move within a presentation column. Opening
+a node and returning preserve the Thread presentation and selected canonical identity, while `y`
+copies the selected task rather than the parent Thread. Shared Back and structured-detail action
+targeting remain shell concerns, not renderer-local behavior.
+
+The prototype is intentionally bounded rather than silently approximate. Oversized or narrow
+layouts fall back explicitly to the complete wave reader and task picker. Live add/rename reloads
+preserve selection, and incomplete topology remains qualified by the supplied projection health.
+No graph-layout library was adopted: core already supplies the semantic graph and waves, while the
+remaining problem is terminal route placement. That choice is revisitable behind the TUI adapter.
+
+The dogfood graph exposed the principal promotion risk: a long edge can cross another node's
+incoming route and visually invent a dependency even when graph-first navigation remains correct.
+The immediate correction uses late-but-valid external-gate placement and node-free inter-row
+tracks, but production promotion requires dedicated dense-route hardening rather than treating the
+prototype router as proven. One-hop focus, reusable Back navigation, and consistent child-action
+targets are separately tracked extensions; their value does not expand the canonical Thread graph
+boundary or move presentation semantics into core.
+
 ## Related
 
 - Supersedes: [0002-adopt-projects](0002-adopt-projects.md).

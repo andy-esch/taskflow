@@ -95,8 +95,8 @@ render concepts). Epic 17 is the CLI port; this is the interactive front-end.
 
 ## Threads-era foundation follow-ups
 
-Scoping the first Thread screens after the v0.18.0 CLI preview exposed two general TUI correctness
-gaps that must land before the new entity copies them:
+Scoping and dogfooding the Thread screens exposed reusable TUI correctness boundaries that should
+not be solved inside one entity renderer:
 
 - [Stable entity identity](../tasks/6g5rxq17px59-make-tui-entity-navigation-use-stable-identities.md)
   separates canonical row/navigation keys from display slugs so duplicate-slug records cannot
@@ -104,11 +104,18 @@ gaps that must land before the new entity copies them:
 - [Recoverable entity-directory watches](../tasks/6g5rxq1g5mp1-keep-tui-live-reload-healthy-when-entity-directories-appear.md)
   observes configured leaf directories that appear or are replaced after launch, and reports partial
   watcher degradation honestly.
+- [Reusable Back navigation](../tasks/6g86016qvk5d-add-a-reusable-back-action-for-tui-entity-navigation.md)
+  makes cross-entity jumps reversibly discoverable through shell-owned history rather than
+  renderer-local key behavior.
+- [Structured-detail action targets](../tasks/6g86g03zfj2f-define-consistent-action-targets-for-structured-tui-detail-selections.md)
+  defines whether open, copy, edit, path, follow, and lifecycle actions address the parent record or
+  a selected child by canonical identity.
 
-Both are ordinary TUI hardening rather than Thread-specific semantics. They are members of the
+These are ordinary TUI hardening rather than Thread-specific semantics. They are members of the
 production Threads dogfood Thread because the second primary adapter made the gaps load-bearing;
-the Thread list/detail task depends on stable identity, while contention-safe projection loading
-depends on watcher recovery.
+the Thread list/detail task depends on stable identity, contention-safe projection loading depends
+on watcher recovery, and the spatial prototype supplies concrete child-navigation cases for the two
+remaining contracts.
 
 ## References
 
