@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -18,6 +19,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/graphfmt"
 	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/testutil"
+	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 // threadRepo is the same semantic projection shape exercised by core and CLI:
@@ -320,6 +322,54 @@ func TestThreadRegistryReloadsOnTaskAndThreadChanges(t *testing.T) {
 	}
 }
 
+func TestThreadSpatialReloadAddsAndRenamesNodesWithoutLosingSelection(t *testing.T) {
+	m, root := threadModel(t)
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = openThreads(t, tm.(Model))
+	m.setFocus(focusDetail)
+	for range 2 {
+		tm, _ = m.Update(press("v"))
+		m = tm.(Model)
+	}
+	tm, _ = m.Update(press("l"))
+	m = tm.(Model)
+	selected := testutil.TaskID("second")
+	if got := selectedThreadDetail(t, m).detailSelectionKey(); got != selected {
+		t.Fatalf("setup spatial selection=%q want %q", got, selected)
+	}
+
+	third := testutil.TaskID("watch-added-third")
+	testutil.Write(t, filepath.Join(root, domain.TasksDir, third+"-watch-added-third.md"), fmt.Sprintf(
+		"---\nid: %s\nstatus: next-up\ndescription: added while the graph is open\ndepends_on: [%s]\n---\n# third\n", third, selected))
+	testutil.Write(t, filepath.Join(root, "threads", "6g503c6pfqeb-delivery.md"), fmt.Sprintf(
+		"---\nschema: 1\nid: 6g503c6pfqeb\nstatus: in-progress\ndescription: the delivery thread\n"+
+			"goal: ship it\ncreated: \"2026-08-29\"\ntasks: [%s, %s, %s]\n---\n# Thread: Delivery\n\nbody\n",
+		testutil.TaskID("first"), selected, third))
+	m = drainNested(t, m, m.reloadAll())
+	detail := selectedThreadDetail(t, m)
+	if detail.detailViewName() != string(threadDetailSpatial) || detail.detailSelectionKey() != selected || !m.zoom {
+		t.Fatalf("added node disturbed spatial context: view=%q selected=%q zoom=%v", detail.detailViewName(), detail.detailSelectionKey(), m.zoom)
+	}
+	if _, ok := spatialPlacement(buildThreadSpatialLayout(detail.projection), third); !ok {
+		t.Fatal("reload did not add the new Thread member to the open spatial graph")
+	}
+
+	oldPath := filepath.Join(root, domain.TasksDir, selected+"-second.md")
+	newPath := filepath.Join(root, domain.TasksDir, selected+"-renamed-second.md")
+	if err := os.Rename(oldPath, newPath); err != nil {
+		t.Fatal(err)
+	}
+	m = drainNested(t, m, m.reloadAll())
+	detail = selectedThreadDetail(t, m)
+	if detail.detailSelectionKey() != selected {
+		t.Fatalf("rename changed stable spatial selection to %q", detail.detailSelectionKey())
+	}
+	placement, ok := spatialPlacement(buildThreadSpatialLayout(detail.projection), selected)
+	if !ok || placement.node.Label != "renamed-second" {
+		t.Fatalf("renamed node did not refresh in place: %+v present=%v", placement.node, ok)
+	}
+}
+
 func TestThreadRegistryPreservesSelectionFilterAndSortState(t *testing.T) {
 	m, root := threadModel(t)
 	testutil.Write(t, filepath.Join(root, "threads", "6g503c6pfqec-second-thread.md"),
@@ -610,8 +660,8 @@ func TestThreadDetailCyclesToTopologyAndPreservesItAcrossReload(t *testing.T) {
 		}
 	}
 	footer := ansi.Strip(m.detailFooterBody())
-	if !strings.Contains(footer, "v summary") || !strings.Contains(footer, "f tasks") ||
-		!strings.Contains(footer, "j/k task") || !strings.Contains(footer, "⏎ open") ||
+	if !strings.Contains(footer, "v spatial") || !strings.Contains(footer, "f tasks") ||
+		!strings.Contains(footer, "j/k task") || !strings.Contains(footer, "⏎ open") || !strings.Contains(footer, "y copy task") ||
 		strings.Contains(footer, "raw/pretty") || strings.Contains(footer, "j/k scroll") {
 		t.Fatalf("topology footer did not describe the active controls: %q", footer)
 	}
@@ -647,9 +697,392 @@ func TestThreadDetailCyclesToTopologyAndPreservesItAcrossReload(t *testing.T) {
 	_ = m.View()
 	tm, _ = m.Update(press("v"))
 	m = tm.(Model)
+	if selectedThreadDetail(t, m).detailViewName() != string(threadDetailSpatial) || !m.zoom {
+		t.Fatalf("topology did not cycle into the immersive spatial view: view=%q zoom=%v",
+			selectedThreadDetail(t, m).detailViewName(), m.zoom)
+	}
+	tm, _ = m.Update(press("v"))
+	m = tm.(Model)
 	detail := selectedThreadDetail(t, m)
 	if detail.detailViewName() != string(threadDetailSummary) || detail.rawBody() != "# Thread: Delivery\n\nbody\n" {
 		t.Fatalf("summary was not restored after resize: view=%q body=%q", detail.detailViewName(), detail.rawBody())
+	}
+}
+
+func TestThreadSpatialGraphUsesDirectionalStableIdentityNavigation(t *testing.T) {
+	m, _ := threadModel(t)
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = openThreads(t, tm.(Model))
+	m.setFocus(focusDetail)
+
+	// summary → topology → spatial. The presentation, rather than the root
+	// model knowing about Threads, requests the full content region.
+	tm, _ = m.Update(press("v"))
+	m = tm.(Model)
+	tm, _ = m.Update(press("v"))
+	m = tm.(Model)
+	if got := selectedThreadDetail(t, m).detailViewName(); got != string(threadDetailSpatial) || !m.zoom || m.focus != focusDetail {
+		t.Fatalf("spatial entry = view %q zoom=%v focus=%v", got, m.zoom, m.focus)
+	}
+	plain := ansi.Strip(m.detail.styled)
+	for _, want := range []string{
+		"spatial graph", "prerequisite ─▶ dependent", "status", "roles", "external gate",
+		"focus", "about", "the dependency", "┌", "▶", "┐",
+	} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("spatial graph omitted %q:\n%s", want, plain)
+		}
+	}
+	footer := ansi.Strip(m.footer())
+	if !strings.Contains(footer, "hjkl node") || !strings.Contains(footer, "⏎ open") ||
+		!strings.Contains(footer, "y copy task") || !strings.Contains(footer, "esc waves") || strings.Contains(footer, "j/k scroll") {
+		t.Fatalf("spatial footer did not describe its controls: %q", footer)
+	}
+
+	first, second := testutil.TaskID("first"), testutil.TaskID("second")
+	if got := selectedThreadDetail(t, m).detailSelectionKey(); got != first {
+		t.Fatalf("initial spatial selection=%q want %q", got, first)
+	}
+	tm, _ = m.Update(press("l"))
+	m = tm.(Model)
+	if got := selectedThreadDetail(t, m).detailSelectionKey(); got != second {
+		t.Fatalf("l selected %q want connected dependent %q", got, second)
+	}
+	m = drainNested(t, m, m.reloadAll())
+	if selectedThreadDetail(t, m).detailViewName() != string(threadDetailSpatial) ||
+		selectedThreadDetail(t, m).detailSelectionKey() != second || !m.zoom {
+		t.Fatalf("same-Thread reload discarded spatial context: view=%q selected=%q zoom=%v",
+			selectedThreadDetail(t, m).detailViewName(), selectedThreadDetail(t, m).detailSelectionKey(), m.zoom)
+	}
+	tm, _ = m.Update(press("h"))
+	m = tm.(Model)
+	if got := selectedThreadDetail(t, m).detailSelectionKey(); got != first {
+		t.Fatalf("h selected %q want connected prerequisite %q", got, first)
+	}
+	tm, _ = m.Update(press("l"))
+	m = tm.(Model)
+
+	// Enter and ctrl+o keep the canonical node identity plus the presentation
+	// context, rather than returning to an arbitrary Thread summary.
+	tm, cmd := m.Update(press("enter"))
+	m = drainNested(t, tm.(Model), cmd)
+	if m.cur().kind != entityTasks || m.selectedKey() != second {
+		t.Fatalf("spatial enter did not open task %q: kind=%v selected=%q", second, m.cur().kind, m.selectedKey())
+	}
+	tm, cmd = m.Update(press("ctrl+o"))
+	m = drainNested(t, tm.(Model), cmd)
+	if m.cur().kind != entityThreads || selectedThreadDetail(t, m).detailViewName() != string(threadDetailSpatial) ||
+		selectedThreadDetail(t, m).detailSelectionKey() != second || !m.zoom {
+		t.Fatalf("ctrl+o did not restore spatial context: kind=%v view=%q selected=%q zoom=%v",
+			m.cur().kind, selectedThreadDetail(t, m).detailViewName(), selectedThreadDetail(t, m).detailSelectionKey(), m.zoom)
+	}
+
+	// Esc is the explicit complexity step-down, not an application quit or a
+	// jump to the unrelated list pane.
+	tm, cmd = m.Update(press("esc"))
+	m = tm.(Model)
+	if cmd != nil || selectedThreadDetail(t, m).detailViewName() != string(threadDetailTopology) || m.zoom || m.focus != focusDetail {
+		t.Fatalf("Esc did not return to waves: cmd=%v view=%q zoom=%v focus=%v",
+			cmd != nil, selectedThreadDetail(t, m).detailViewName(), m.zoom, m.focus)
+	}
+}
+
+func TestThreadStructuredDetailYankCopiesHighlightedTask(t *testing.T) {
+	m, _ := threadModel(t)
+	m = openThreads(t, m)
+	threadSlug := m.selectedLabel()
+
+	// List focus still means the Thread row itself.
+	tm, cmd := m.Update(press("y"))
+	m = tm.(Model)
+	if cmd == nil || m.flash != "copied slug: "+threadSlug {
+		t.Fatalf("Thread-list yank = %q cmd=%v, want parent Thread", m.flash, cmd != nil)
+	}
+
+	m.setFocus(focusDetail)
+	tm, _ = m.Update(press("v")) // summary → topology
+	m = tm.(Model)
+	first := testutil.TaskID("first")
+	if got := selectedThreadDetail(t, m).detailSelectionKey(); got != first {
+		t.Fatalf("topology selection=%q want %q", got, first)
+	}
+	tm, cmd = m.Update(press("y"))
+	m = tm.(Model)
+	if cmd == nil || m.flash != "copied slug: first" {
+		t.Fatalf("topology yank = %q cmd=%v, want highlighted task", m.flash, cmd != nil)
+	}
+
+	tm, _ = m.Update(press("v")) // topology → spatial
+	m = tm.(Model)
+	tm, _ = m.Update(press("l"))
+	m = tm.(Model)
+	if got, want := selectedThreadDetail(t, m).detailSelectionKey(), testutil.TaskID("second"); got != want {
+		t.Fatalf("spatial selection=%q want %q", got, want)
+	}
+	tm, cmd = m.Update(press("y"))
+	m = tm.(Model)
+	if cmd == nil || m.flash != "copied slug: second" {
+		t.Fatalf("spatial yank = %q cmd=%v, want highlighted task", m.flash, cmd != nil)
+	}
+
+	// An unreadable supplied node cannot be opened as a task, but its stable ID
+	// remains more useful than silently copying the parent Thread.
+	projection := hostileThreadGraphProjection()
+	missing := ""
+	for _, node := range projection.Nodes {
+		if node.State.Role == core.RoleUnknown {
+			missing = node.TaskID
+			break
+		}
+	}
+	detail := threadDetail{projection: projection, view: threadDetailSpatial, selection: missing}
+	if text, label, ok := detail.detailSelectionYankRef(); !ok || text != missing || label != "id" {
+		t.Fatalf("unreadable-node yank = (%q, %q, %v), want stable id", text, label, ok)
+	}
+}
+
+func TestThreadSpatialLayoutPlacesExternalGateBetweenMemberWaves(t *testing.T) {
+	before := domain.Task{ID: testutil.TaskID("before-gate"), Slug: "before-gate", Status: domain.StatusCompleted}
+	gate := domain.Task{
+		ID: testutil.TaskID("middle-gate"), Slug: "middle-gate", Status: domain.StatusCompleted,
+		DependsOn: []string{before.ID},
+	}
+	after := domain.Task{
+		ID: testutil.TaskID("after-gate"), Slug: "after-gate", Status: domain.StatusNextUp,
+		DependsOn: []string{gate.ID},
+	}
+	thread := domain.Thread{
+		ID: testutil.TaskID("gate-layout-thread"), FilenameID: testutil.TaskID("gate-layout-thread"),
+		Slug: "gate-layout", Status: domain.ThreadStatusInProgress, Created: "2026-09-08",
+		Tasks: []string{before.ID, after.ID},
+	}
+	projection := core.ProjectThreadGraph(thread, core.NewTaskGraph([]domain.Task{after, gate, before}, nil))
+	layout := buildThreadSpatialLayout(projection)
+	beforeNode, beforeOK := spatialPlacement(layout, before.ID)
+	gateNode, gateOK := spatialPlacement(layout, gate.ID)
+	afterNode, afterOK := spatialPlacement(layout, after.ID)
+	if !beforeOK || !gateOK || !afterOK {
+		t.Fatalf("layout omitted supplied nodes: before=%v gate=%v after=%v", beforeOK, gateOK, afterOK)
+	}
+	if beforeNode.column >= gateNode.column || gateNode.column >= afterNode.column {
+		t.Fatalf("external gate did not preserve left-to-right dependency order: before=%d gate=%d after=%d",
+			beforeNode.column, gateNode.column, afterNode.column)
+	}
+	if gateNode.node.Role != core.ThreadTaskExternalGate || !strings.Contains(strings.Join(layout.columnLabels, " "), "external") {
+		t.Fatalf("interposed gate lost its bounded role/label: node=%+v labels=%v", gateNode, layout.columnLabels)
+	}
+}
+
+func TestThreadSpatialLayoutPullsSourceGateBesideItsFirstDependent(t *testing.T) {
+	a := testutil.TaskID("early-member")
+	b := testutil.TaskID("middle-member")
+	c := testutil.TaskID("late-member")
+	gate := testutil.TaskID("late-external-gate")
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: a, Role: core.ThreadTaskMember},
+			{TaskID: gate, Role: core.ThreadTaskExternalGate},
+			{TaskID: b, Role: core.ThreadTaskMember},
+			{TaskID: c, Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: a, To: b},
+			{From: b, To: c},
+			{From: gate, To: c},
+		},
+	}
+	layout := buildThreadSpatialLayout(projection)
+	if got, want := layout.byID[gate].column, layout.byID[c].column-1; got != want {
+		t.Fatalf("source gate column=%d want immediately before dependent column %d", got, want)
+	}
+	if layout.byID[gate].column <= layout.byID[a].column {
+		t.Fatalf("late gate remained beside unrelated graph roots: gate=%d early=%d", layout.byID[gate].column, layout.byID[a].column)
+	}
+}
+
+func TestThreadSpatialHorizontalNavigationPrefersGraphEdgesAcrossVisibleColumns(t *testing.T) {
+	a := testutil.TaskID("skip-source")
+	d := testutil.TaskID("layer-source")
+	b := testutil.TaskID("nearest-prerequisite")
+	c := testutil.TaskID("selected-dependent")
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: a, Label: "skip source", Role: core.ThreadTaskMember},
+			{TaskID: d, Label: "layer source", Role: core.ThreadTaskMember},
+			{TaskID: b, Label: "nearest prerequisite", Role: core.ThreadTaskMember},
+			{TaskID: c, Label: "selected dependent", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: a, To: c}, // direct, but skips the nearest visible column
+			{From: d, To: b},
+			{From: b, To: c}, // direct and in the nearest visible column
+		},
+	}
+	layout := buildThreadSpatialLayout(projection)
+	if layout.byID[a].column != 0 || layout.byID[b].column != 1 || layout.byID[c].column != 2 {
+		t.Fatalf("fixture did not produce three presentation columns: a=%d b=%d c=%d", layout.byID[a].column, layout.byID[b].column, layout.byID[c].column)
+	}
+	if got := threadSpatialMove(projection, c, -1, 0); got != b {
+		t.Fatalf("h did not choose the nearest directly connected column: got %q want %q", got, b)
+	}
+	if got := threadSpatialMove(projection, b, -1, 0); got != d {
+		t.Fatalf("second h did not follow the prerequisite edge: got %q want %q", got, d)
+	}
+	if got := threadSpatialMove(projection, a, 1, 0); got != c {
+		t.Fatalf("l stopped on unrelated task in the next visible column: got %q want directly connected %q", got, c)
+	}
+}
+
+func TestThreadSpatialConnectorGeometryUsesElbowsAndAccentFocus(t *testing.T) {
+	canvas := newThreadSpatialCanvas(50, 12)
+	from := threadSpatialNode{x: 2, y: 1}
+	to := threadSpatialNode{x: 32, y: 7}
+	drawThreadSpatialEdge(canvas, from, to, true)
+
+	fromY := from.y + threadSpatialNodeSlotHeight/2
+	toY := to.y + threadSpatialNodeSlotHeight/2
+	middle := from.x + threadSpatialNodeWidth + max(1, ((to.x-1)-(from.x+threadSpatialNodeWidth))/2)
+	if got := threadSpatialConnectorGlyph(canvas.cells[fromY][middle].connector); got != "┐" {
+		t.Fatalf("upper bend=%q want right-to-down elbow", got)
+	}
+	if got := threadSpatialConnectorGlyph(canvas.cells[toY][middle].connector); got != "└" {
+		t.Fatalf("lower bend=%q want up-to-right elbow", got)
+	}
+	if !canvas.cells[fromY][middle].accent || !canvas.cells[toY][middle].accent {
+		t.Fatal("selected-node connectors did not inherit palette accent focus")
+	}
+	if got := canvas.cells[toY][to.x-1].text; got != "▶" {
+		t.Fatalf("dependency endpoint=%q want arrowhead", got)
+	}
+	if got := canvas.cells[toY][to.x-1].color; got != theme.ColorYellow {
+		t.Fatalf("dependency arrow color=%v want frontier-pointer yellow", got)
+	}
+}
+
+func TestThreadSpatialLongEdgeUsesNodeFreeTrack(t *testing.T) {
+	a := testutil.TaskID("long-edge-source")
+	d := testutil.TaskID("other-source")
+	b := testutil.TaskID("intermediate-node")
+	c := testutil.TaskID("long-edge-target")
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: a, Label: "long source", Role: core.ThreadTaskMember},
+			{TaskID: d, Label: "other source", Role: core.ThreadTaskMember},
+			{TaskID: b, Label: "intermediate", Role: core.ThreadTaskMember},
+			{TaskID: c, Label: "long target", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: a, To: c},
+			{From: d, To: b},
+			{From: b, To: c},
+		},
+	}
+	layout := buildThreadSpatialLayout(projection)
+	canvas := renderThreadSpatialCanvas(projection, layout, a)
+	from, middle, to := layout.byID[a], layout.byID[b], layout.byID[c]
+	if to.column-from.column <= 1 || middle.column != from.column+1 {
+		t.Fatalf("fixture did not create a skipped visible column: from=%d middle=%d to=%d", from.column, middle.column, to.column)
+	}
+	trackY := threadSpatialNodeTop + min(from.row, to.row)*threadSpatialNodeStrideY + threadSpatialNodeSlotHeight
+	if !canvas.cells[trackY][middle.x-2].accent {
+		t.Fatal("selected long edge did not use the node-free inter-row track")
+	}
+	middleY := middle.y + threadSpatialNodeSlotHeight/2
+	if canvas.cells[middleY][middle.x-2].accent {
+		t.Fatal("selected long edge still borrowed the intermediate node's incoming route")
+	}
+}
+
+func TestThreadSpatialSelectedNodeExpandsInsideStableSlot(t *testing.T) {
+	projection := core.ThreadGraphProjection{Nodes: []core.ThreadGraphNode{{
+		TaskID: "task-id", Label: "selected task", Status: domain.StatusNextUp,
+		Role: core.ThreadTaskMember, State: core.TaskGraphState{Role: core.RoleQueued, Gate: core.GateClear},
+	}}}
+	layout := buildThreadSpatialLayout(projection)
+	placement := layout.byID["task-id"]
+	canvas := renderThreadSpatialCanvas(projection, layout, "task-id")
+	for row := placement.y; row < placement.y+threadSpatialNodeSlotHeight; row++ {
+		cell := canvas.cells[row][placement.x]
+		if cell.accent || cell.color != theme.Status(domain.StatusNextUp).Color {
+			t.Fatalf("expanded selected card row %d changed semantic box color: %+v", row-placement.y, cell)
+		}
+	}
+	if got := canvas.cells[placement.y+1][placement.x+2].color; got != theme.Status(domain.StatusNextUp).Color {
+		t.Fatalf("selected status glyph color=%v want semantic next-up color", got)
+	}
+	if got := canvas.cells[placement.y+2][placement.x-2].color; got != theme.ColorYellow {
+		t.Fatalf("focus pointer color=%v want frontier-pointer yellow", got)
+	}
+	if got := canvas.cells[placement.y+2][placement.x-2].text; got != "›" {
+		t.Fatalf("focus marker=%q want a marker distinct from dependency arrows", got)
+	}
+}
+
+func TestThreadSpatialGraphIsBoundedDeterministicAndExplicitWhenNarrow(t *testing.T) {
+	projection := hostileThreadGraphProjection()
+	selected := ""
+	for _, node := range projection.Nodes {
+		if node.State.Role == core.RoleUnknown {
+			selected = node.TaskID
+			break
+		}
+	}
+	if selected == "" {
+		t.Fatal("hostile projection has no unreadable node for the partial-topology viewport")
+	}
+	for _, size := range []struct{ width, height int }{{120, 28}, {72, 14}, {54, 10}} {
+		first := renderThreadSpatial(projection, "remote path unavailable", selected, size.width, size.height, &testStyles)
+		second := renderThreadSpatial(projection, "remote path unavailable", selected, size.width, size.height, &testStyles)
+		if first != second {
+			t.Fatalf("%dx%d spatial render was nondeterministic", size.width, size.height)
+		}
+		plain := ansi.Strip(first)
+		if lines := strings.Count(plain, "\n") + 1; lines > size.height {
+			t.Errorf("%dx%d rendered %d lines", size.width, size.height, lines)
+		}
+		for _, line := range strings.Split(plain, "\n") {
+			if got := ansi.StringWidth(line); got > size.width {
+				t.Errorf("%dx%d line width=%d: %q", size.width, size.height, got, line)
+			}
+		}
+		if size.width < threadSpatialMinWidth || size.height < threadSpatialMinHeight {
+			if !strings.Contains(plain, "needs at least") || !strings.Contains(plain, "Esc returns") {
+				t.Errorf("narrow fallback was not explanatory:\n%s", plain)
+			}
+		} else {
+			for _, want := range []string{"spatial graph", "partial", "unranked", "focus", "about"} {
+				if !strings.Contains(plain, want) {
+					t.Errorf("%dx%d graph omitted %q:\n%s", size.width, size.height, want, plain)
+				}
+			}
+		}
+	}
+}
+
+func TestThreadSpatialGraphFailsOpenToWavesBeyondPrototypeCapacity(t *testing.T) {
+	projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, threadSpatialMaxNodes+1)}
+	for index := range projection.Nodes {
+		projection.Nodes[index] = core.ThreadGraphNode{
+			TaskID: fmt.Sprintf("task-%04d", index), Label: fmt.Sprintf("task-%04d", index),
+			Status: domain.StatusNextUp, Role: core.ThreadTaskMember,
+			State: core.TaskGraphState{Role: core.RoleQueued, Gate: core.GateClear},
+		}
+	}
+	first := renderThreadSpatial(projection, "", projection.Nodes[0].TaskID, 100, 20, &testStyles)
+	second := renderThreadSpatial(projection, "", projection.Nodes[0].TaskID, 100, 20, &testStyles)
+	if first != second {
+		t.Fatal("capacity fallback was nondeterministic")
+	}
+	plain := ansi.Strip(first)
+	for _, want := range []string{"bounded prototype fallback", "513 nodes", "no partial graph", "complete wave reader", "focus [M1]"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("capacity fallback omitted %q:\n%s", want, plain)
+		}
+	}
+	for _, line := range strings.Split(plain, "\n") {
+		if got := ansi.StringWidth(line); got > 100 {
+			t.Fatalf("capacity fallback line width=%d: %q", got, line)
+		}
 	}
 }
 

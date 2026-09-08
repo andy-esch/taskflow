@@ -78,6 +78,7 @@ type Model struct {
 	width, height int
 	twoPane       bool
 	zoom          bool // full-screen the detail pane (z): hide the list, give detail the full width
+	immersiveZoom bool // full-screen was entered by an immersive detail view, so leaving it restores the prior split
 	listOuterW    int
 	detailOuterW  int
 	paneOuterH    int
@@ -92,15 +93,16 @@ type Model struct {
 	palette palette // the ctrl+p command palette (fuzzy launcher); see palette.go
 	modals  []modal // the ordered overlay registry (see overlay.go / defaultModals)
 
-	showHelp     bool       // the `?` keybinding overlay is open
-	helpScroll   int        // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
-	action       actionMenu // the `m` lifecycle action menu (S4)
-	follow       followMenu // the `f` reference picker (S6, epics/Threads → their tasks)
-	edit         editMenu   // the `e` inline field editor (task set with a GUI)
-	navStack     []navLoc   // where each `f` jump came from; ctrl+o pops (S6)
-	flash        string     // transient post-action feedback line (cleared on the next key)
-	flashErr     bool       // the flash is an error (rendered red)
-	movedAwayKey string     // canonical key just moved out of the active lifecycle view: its absence after
+	showHelp                bool                    // the `?` keybinding overlay is open
+	helpScroll              int                     // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
+	action                  actionMenu              // the `m` lifecycle action menu (S4)
+	follow                  followMenu              // the `f` reference picker (S6, epics/Threads → their tasks)
+	edit                    editMenu                // the `e` inline field editor (task set with a GUI)
+	navStack                []navLoc                // where each `f` jump came from; ctrl+o pops (S6)
+	pendingDetailNavigation detailNavigationRestore // presentation/selection to restore after an async ctrl+o return
+	flash                   string                  // transient post-action feedback line (cleared on the next key)
+	flashErr                bool                    // the flash is an error (rendered red)
+	movedAwayKey            string                  // canonical key just moved out of the active lifecycle view: its absence after
 	// the post-move reload is the success, not a dangling reference
 
 	watch         *watcher // fsnotify source (nil when unavailable / in tests); see watch.go
@@ -344,7 +346,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.isCurrentSelection(msg.kind, msg.id) || msg.gen != m.detailGen {
 			return m, nil // stale: tab/selection changed, or a newer load is in flight
 		}
+		msg.content = m.restoreDetailNavigation(msg.kind, msg.id, msg.content)
 		m.detail.SetContent(msg.id, msg.content)
+		m.syncDetailImmersion(false)
 		return m, nil
 
 	case detailErrMsg:
@@ -352,6 +356,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// detail pane — it must not blank the whole browser.
 		if !m.isCurrentSelection(msg.kind, msg.id) || msg.gen != m.detailGen {
 			return m, nil
+		}
+		if m.pendingDetailNavigation.kind == msg.kind && m.pendingDetailNavigation.key == msg.id {
+			m.pendingDetailNavigation = detailNavigationRestore{}
 		}
 		// A conflict that survived its retry is durable enough to show, but not a
 		// reason to throw away a body that is still the last coherent read of this
@@ -750,6 +757,12 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// q is a *context* quit: full-screen detail and the single-pane drill are
 		// both layers, so q pops back (to the split / the list) rather than exiting.
 		// In two-pane, detail focus isn't a layer — q quits from either pane.
+		if m.detail.immersive() {
+			wasImmersive := true
+			m.detail.retreatView()
+			m.syncDetailImmersion(wasImmersive)
+			return m, nil
+		}
 		if m.zoom {
 			m.toggleZoom()
 			return m, nil
@@ -766,10 +779,13 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.enterAtlas(false)
 	case key.Matches(msg, keys.View):
 		// Alternate entity presentations belong to the detail payload and pane,
-		// not the root model. Today Threads provide summary ⇄ topology; the seam
+		// not the root model. Threads provide summary → topology → spatial; the seam
 		// remains reusable by another entity without another root-level state path.
 		if m.focus == focusDetail {
-			m.detail.cycleView()
+			wasImmersive := m.detail.immersive()
+			if m.detail.cycleView() {
+				m.syncDetailImmersion(wasImmersive)
+			}
 		}
 		return m, nil
 	case m.focus == focusDetail && msg.String() == "enter" && m.detail.selectionAvailable():
@@ -865,7 +881,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Zoom):
 		// Full-screen the detail pane (toggle). Entity-tab only — the dashboard
 		// routes its keys in handleDashKey above and never reaches here.
-		m.toggleZoom()
+		if !m.detail.immersive() {
+			m.toggleZoom()
+		}
 		return m, nil
 	}
 
@@ -881,6 +899,18 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateList(msg)
 	}
 	switch {
+	case m.detail.directionalSelectionAvailable() && (msg.String() == "h" || msg.String() == "left"):
+		m.detail.moveSelectionDirection(-1, 0)
+		return m, nil
+	case m.detail.directionalSelectionAvailable() && (msg.String() == "l" || msg.String() == "right"):
+		m.detail.moveSelectionDirection(1, 0)
+		return m, nil
+	case m.detail.directionalSelectionAvailable() && (msg.String() == "j" || msg.String() == "down"):
+		m.detail.moveSelectionDirection(0, 1)
+		return m, nil
+	case m.detail.directionalSelectionAvailable() && (msg.String() == "k" || msg.String() == "up"):
+		m.detail.moveSelectionDirection(0, -1)
+		return m, nil
 	case msg.String() == "j" || msg.String() == "down":
 		if m.detail.moveSelection(1) {
 			return m, nil
@@ -897,15 +927,32 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.FindPrev):
 		m.detail.findNext(-1)
 		return m, nil
-	case key.Matches(msg, keys.Left), key.Matches(msg, keys.Back):
+	case key.Matches(msg, keys.Back):
 		// First Esc/h clears an active find; then it leaves full-screen (back to the
 		// split) or, in the split, returns focus to the list.
 		if m.detail.findActive() {
 			m.detail.clearFind()
 			return m, nil
 		}
+		if m.detail.immersive() {
+			wasImmersive := true
+			m.detail.retreatView()
+			m.syncDetailImmersion(wasImmersive)
+			return m, nil
+		}
 		if m.zoom {
 			m.toggleZoom() // exit full-screen back to the split (focus → list)
+			return m, nil
+		}
+		m.setFocus(focusList)
+		return m, nil
+	case key.Matches(msg, keys.Left):
+		if m.detail.findActive() {
+			m.detail.clearFind()
+			return m, nil
+		}
+		if m.zoom {
+			m.toggleZoom()
 			return m, nil
 		}
 		m.setFocus(focusList)
@@ -1101,6 +1148,7 @@ func (m *Model) exitDashboard(i int) {
 // (switching tabs, entering the dashboard) so it never strands a full-screen pane
 // over a just-cleared selection.
 func (m *Model) unzoom() {
+	m.immersiveZoom = false
 	if m.zoom {
 		m.zoom = false
 		m.recomputeLayout()
@@ -1272,12 +1320,34 @@ func (m *Model) toggleFocus() {
 // reaches here.
 func (m *Model) toggleZoom() {
 	m.zoom = !m.zoom
+	m.immersiveZoom = false
 	if m.zoom {
 		m.setFocus(focusDetail)
 	} else {
 		m.setFocus(focusList)
 	}
 	m.recomputeLayout()
+}
+
+// syncDetailImmersion translates a presentation's generic full-region request
+// into shell-owned zoom/focus state. If the graph entered full-screen itself,
+// leaving that view restores the split; a user-entered zoom remains theirs.
+func (m *Model) syncDetailImmersion(wasImmersive bool) {
+	nowImmersive := m.detail.immersive()
+	switch {
+	case nowImmersive && !m.zoom:
+		m.zoom = true
+		m.immersiveZoom = true
+		m.setFocus(focusDetail)
+		m.recomputeLayout()
+	case nowImmersive:
+		m.setFocus(focusDetail)
+	case wasImmersive && m.immersiveZoom:
+		m.zoom = false
+		m.immersiveZoom = false
+		m.setFocus(focusDetail)
+		m.recomputeLayout()
+	}
 }
 
 func (m Model) selectedRef() entityRef {
@@ -1292,8 +1362,17 @@ func (m Model) selectedLabel() string { return m.selectedRef().label }
 
 // selectedYankRef returns a CLI-usable reference. An ordinary unique row keeps
 // the friendly slug; a row whose display needed a stable-ID hint copies that
-// canonical key because its slug is known to be ambiguous.
+// canonical key because its slug is known to be ambiguous. When focus is inside
+// a structured detail presentation, its highlighted child is the operative
+// selection: yanking a Thread wave/spatial node must not silently copy the
+// parent Thread row behind it.
 func (m Model) selectedYankRef() (string, string) {
+	if m.focus == focusDetail {
+		text, label, ok := m.detail.selectionYankRef()
+		if ok {
+			return text, label
+		}
+	}
 	it, ok := m.cur().list.SelectedItem().(entityItem)
 	if !ok {
 		return "", "slug"

@@ -42,6 +42,34 @@ type alternateDetailContent interface {
 	withDetailView(string) detailContent
 }
 
+// retreatingDetailContent lets an immersive presentation name the adjacent
+// lower-complexity view that Esc should reveal. Most alternate presentations
+// only need the forward `v` cycle; spatial graphs use this without teaching the
+// root model what a Thread or a wave is.
+type retreatingDetailContent interface {
+	alternateDetailContent
+	previousDetailViewName() string
+}
+
+// sizedDetailContent owns a complete, height-aware detail surface. Ordinary
+// entity detail remains meta+markdown in the shared viewport; bounded visual
+// presentations can reserve a fixed inspector while keeping all repository
+// semantics outside the renderer.
+type sizedDetailContent interface {
+	detailContent
+	detailSized() bool
+	renderDetail(width, height int, s *styles) string
+}
+
+// immersiveDetailContent asks the shell for the full detail region while the
+// presentation is active. It is deliberately presentation-generic: the shell
+// manages chrome and focus, while the content chooses only whether it benefits
+// from the immersive canvas.
+type immersiveDetailContent interface {
+	detailContent
+	detailImmersive() bool
+}
+
 // navigableDetailContent is the optional detail-page selection seam. It lets a
 // structured detail presentation behave like the rest of the TUI—move a visible
 // cursor and open the selected entity—without teaching the root model about a
@@ -54,6 +82,24 @@ type navigableDetailContent interface {
 	moveDetailSelection(int) (detailContent, bool)
 	detailSelectionTarget() (entityKind, entityRef, bool)
 	detailSelectionLine(string) (int, bool)
+}
+
+// directionalDetailContent extends the stable-identity selection seam for a
+// genuinely spatial surface. dx/dy are layout directions, not graph mutations;
+// the content remains the authority on deterministic neighbor choice.
+type directionalDetailContent interface {
+	navigableDetailContent
+	detailDirectional() bool
+	moveDetailSelectionDirection(dx, dy int) (detailContent, bool)
+}
+
+// yankableDetailContent lets a structured detail presentation name the thing
+// its own cursor highlights. Opening and copying are deliberately separate: an
+// unreadable graph node may not be safe to open, but its stable ID is still a
+// useful clipboard target and must not fall through to the parent entity row.
+type yankableDetailContent interface {
+	detailContent
+	detailSelectionYankRef() (text, label string, ok bool)
 }
 
 // detailPane is the right pane: a scrollable view of the selected item's detail.
@@ -120,6 +166,11 @@ func (d *detailPane) render() {
 		d.rawStyled, d.prettyStyled, d.styled = "", "", ""
 		return
 	}
+	if content, ok := d.content.(sizedDetailContent); ok && content.detailSized() {
+		d.styled = content.renderDetail(d.width, d.vp.Height(), d.st)
+		d.rawStyled, d.prettyStyled = d.styled, d.styled
+		return
+	}
 	meta := d.content.meta(d.width, d.st)
 	body := d.content.rawBody()
 	d.rawStyled = joinDetail(meta, wrap(body, d.width))
@@ -163,6 +214,29 @@ func (d *detailPane) cycleView() bool {
 	return true
 }
 
+func (d *detailPane) retreatView() bool {
+	content, ok := d.content.(retreatingDetailContent)
+	if !ok {
+		return false
+	}
+	d.content = content.withDetailView(content.previousDetailViewName())
+	d.render()
+	d.refreshFind()
+	d.vp.GotoTop()
+	d.scrollToDetailSelection()
+	return true
+}
+
+func (d detailPane) immersive() bool {
+	content, ok := d.content.(immersiveDetailContent)
+	return ok && content.detailImmersive()
+}
+
+func (d detailPane) directionalSelectionAvailable() bool {
+	content, ok := d.content.(directionalDetailContent)
+	return ok && content.detailDirectional()
+}
+
 func (d detailPane) nextViewName() string {
 	if content, ok := d.content.(alternateDetailContent); ok {
 		return content.nextDetailViewName()
@@ -201,11 +275,34 @@ func (d *detailPane) moveSelection(delta int) bool {
 	return true
 }
 
+func (d *detailPane) moveSelectionDirection(dx, dy int) bool {
+	content, ok := d.content.(directionalDetailContent)
+	if !ok {
+		return false
+	}
+	next, active := content.moveDetailSelectionDirection(dx, dy)
+	if !active {
+		return false
+	}
+	d.content = next
+	d.render()
+	d.refreshFind()
+	d.vp.GotoTop()
+	return true
+}
+
 func (d detailPane) selectionTarget() (entityKind, entityRef, bool) {
 	if content, ok := d.content.(navigableDetailContent); ok {
 		return content.detailSelectionTarget()
 	}
 	return entityTasks, entityRef{}, false
+}
+
+func (d detailPane) selectionYankRef() (string, string, bool) {
+	if content, ok := d.content.(yankableDetailContent); ok {
+		return content.detailSelectionYankRef()
+	}
+	return "", "", false
 }
 
 // scrollToDetailSelection keeps the rendered cursor visible with a small lead.
@@ -243,14 +340,17 @@ func joinDetail(meta, body string) string {
 
 func (d *detailPane) SetSize(w, h int) {
 	widthChanged := w != d.width
+	heightChanged := h != d.vp.Height()
 	d.width = w
 	d.vp.SetWidth(w)
 	d.vp.SetHeight(h)
 	switch {
 	case d.content != nil:
 		// Body wrap (and glamour) depend on width — re-render only when it changed
-		// (a height-only resize must not re-run glamour).
-		if widthChanged || d.styled == "" {
+		// (a height-only resize must not re-run glamour). A sized presentation is
+		// the exception because it deliberately budgets fixed and canvas rows.
+		sized, sizedOK := d.content.(sizedDetailContent)
+		if widthChanged || (heightChanged && sizedOK && sized.detailSized()) || d.styled == "" {
 			d.render()
 		}
 		d.refreshFind()
@@ -669,7 +769,7 @@ type threadDetail struct {
 	path       string
 	pathIssue  string
 	view       threadDetailView
-	selection  string // stable task ID selected in topology view
+	selection  string // stable task ID selected in topology/spatial views
 }
 
 type threadDetailView string
@@ -677,12 +777,13 @@ type threadDetailView string
 const (
 	threadDetailSummary  threadDetailView = "summary"
 	threadDetailTopology threadDetailView = "topology"
+	threadDetailSpatial  threadDetailView = "spatial"
 )
 
 func (d threadDetail) Title() string { return d.projection.View.Thread.Slug }
 func (d threadDetail) Path() string  { return d.path }
 func (d threadDetail) rawBody() string {
-	if d.detailViewName() == string(threadDetailTopology) {
+	if d.detailViewName() != string(threadDetailSummary) {
 		return ""
 	}
 	return d.body
@@ -691,36 +792,83 @@ func (d threadDetail) meta(w int, s *styles) string {
 	if d.detailViewName() == string(threadDetailTopology) {
 		return renderThreadTopology(d.projection, d.pathIssue, d.detailSelectionKey(), w, s)
 	}
+	if d.detailViewName() == string(threadDetailSpatial) {
+		return ""
+	}
 	return renderThreadMeta(d, w, s)
 }
 func (d threadDetail) detailViewName() string {
-	if d.view == threadDetailTopology {
+	switch d.view {
+	case threadDetailTopology:
 		return string(threadDetailTopology)
-	}
-	return string(threadDetailSummary)
-}
-func (d threadDetail) nextDetailViewName() string {
-	if d.detailViewName() == string(threadDetailTopology) {
+	case threadDetailSpatial:
+		return string(threadDetailSpatial)
+	default:
 		return string(threadDetailSummary)
 	}
-	return string(threadDetailTopology)
+}
+func (d threadDetail) nextDetailViewName() string {
+	switch d.detailViewName() {
+	case string(threadDetailTopology):
+		return string(threadDetailSpatial)
+	case string(threadDetailSpatial):
+		return string(threadDetailSummary)
+	default:
+		return string(threadDetailTopology)
+	}
+}
+func (d threadDetail) previousDetailViewName() string {
+	switch d.detailViewName() {
+	case string(threadDetailSpatial):
+		return string(threadDetailTopology)
+	case string(threadDetailTopology):
+		return string(threadDetailSummary)
+	default:
+		return string(threadDetailSpatial)
+	}
 }
 func (d threadDetail) withDetailView(name string) detailContent {
-	if name == string(threadDetailTopology) {
+	switch name {
+	case string(threadDetailTopology):
 		d.view = threadDetailTopology
 		d.selection = threadGraphSelectedTaskID(d.projection, d.selection)
-	} else {
+	case string(threadDetailSpatial):
+		d.view = threadDetailSpatial
+		d.selection = threadGraphSelectedTaskID(d.projection, d.selection)
+	default:
 		d.view = threadDetailSummary
 	}
 	return d
 }
 
+func (d threadDetail) detailImmersive() bool {
+	return d.detailViewName() == string(threadDetailSpatial)
+}
+
+func (d threadDetail) detailSized() bool { return d.detailImmersive() }
+
+func (d threadDetail) detailDirectional() bool { return d.detailImmersive() }
+
+func (d threadDetail) renderDetail(width, height int, s *styles) string {
+	if d.detailViewName() != string(threadDetailSpatial) {
+		return ""
+	}
+	return renderThreadSpatial(d.projection, d.pathIssue, d.detailSelectionKey(), width, height, s)
+}
+
 func (d threadDetail) detailSelectionKey() string {
+	if d.detailViewName() == string(threadDetailSpatial) {
+		return threadSpatialSelectedTaskID(d.projection, d.selection)
+	}
 	return threadGraphSelectedTaskID(d.projection, d.selection)
 }
 
 func (d threadDetail) withDetailSelection(taskID string) detailContent {
-	d.selection = threadGraphSelectedTaskID(d.projection, taskID)
+	if d.detailViewName() == string(threadDetailSpatial) {
+		d.selection = threadSpatialSelectedTaskID(d.projection, taskID)
+	} else {
+		d.selection = threadGraphSelectedTaskID(d.projection, taskID)
+	}
 	return d
 }
 
@@ -745,8 +893,16 @@ func (d threadDetail) moveDetailSelection(delta int) (detailContent, bool) {
 	return d, true
 }
 
+func (d threadDetail) moveDetailSelectionDirection(dx, dy int) (detailContent, bool) {
+	if d.detailViewName() != string(threadDetailSpatial) {
+		return d, false
+	}
+	d.selection = threadSpatialMove(d.projection, d.detailSelectionKey(), dx, dy)
+	return d, true
+}
+
 func (d threadDetail) detailSelectionTarget() (entityKind, entityRef, bool) {
-	if d.detailViewName() != string(threadDetailTopology) {
+	if d.detailViewName() == string(threadDetailSummary) {
 		return entityTasks, entityRef{}, false
 	}
 	task, ok := threadGraphTask(d.projection, d.detailSelectionKey())
@@ -754,6 +910,22 @@ func (d threadDetail) detailSelectionTarget() (entityKind, entityRef, bool) {
 		return entityTasks, entityRef{}, false
 	}
 	return entityTasks, entityRef{key: task.CanonicalID(), label: task.Slug}, true
+}
+
+func (d threadDetail) detailSelectionYankRef() (string, string, bool) {
+	if d.detailViewName() == string(threadDetailSummary) {
+		return "", "", false
+	}
+	taskID := d.detailSelectionKey()
+	if task, ok := threadGraphTask(d.projection, taskID); ok && task.Slug != "" {
+		return task.Slug, "slug", true
+	}
+	for _, node := range d.projection.Nodes {
+		if node.TaskID == taskID && taskID != "" {
+			return taskID, "id", true
+		}
+	}
+	return "", "", false
 }
 
 func (d threadDetail) detailSelectionLine(rendered string) (int, bool) {
