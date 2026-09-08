@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,7 +14,17 @@ import (
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
+
+type taskRenameCommandFailure struct {
+	cause     error
+	receipt   core.TaskRenameReceipt
+	workspace wire.WorkspaceJSON
+}
+
+func (e *taskRenameCommandFailure) Error() string { return e.cause.Error() }
+func (e *taskRenameCommandFailure) Unwrap() error { return e.cause }
 
 // resolveBody returns the body to use when creating or editing a document: --body
 // verbatim, or the contents of --body-file (a path, or "-" for stdin). The two flags
@@ -695,10 +706,15 @@ func newTaskRenameCmd(app *App) *cobra.Command {
 			return nil, cobra.ShellCompDirectiveNoFileComp // the title is free text
 		},
 		RunE: func(_ *cobra.Command, args []string) error {
-			task, cascade, err := app.Svc.RenameTask(args[0], args[1], app.DryRun)
+			receipt, err := app.Svc.RenameTask(args[0], args[1], app.DryRun)
 			if err != nil {
+				var committed *core.TaskRenameFailure
+				if errors.As(err, &committed) {
+					return &taskRenameCommandFailure{cause: err, receipt: committed.Receipt, workspace: app.workspace()}
+				}
 				return err
 			}
+			task, cascade := receipt.Task, receipt.PlannedLinks
 			if app.JSON {
 				return render.TaskMutationJSON(app.Out, task, "", app.DryRun, app.workspace())
 			}

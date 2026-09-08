@@ -40,8 +40,8 @@ func (nopStore) EditBody(string, string, bool, time.Time, bool) (domain.Task, st
 func (nopStore) TransformTaskBody(string, time.Time, bool, func(string) (string, error)) (domain.Task, string, bool, error) {
 	return domain.Task{}, "", false, nil
 }
-func (nopStore) RenameTask(string, string, bool) (domain.Task, int, error) {
-	return domain.Task{}, 0, nil
+func (nopStore) RenameTask(string, string, bool) (TaskRenameMutationResult, error) {
+	return TaskRenameMutationResult{}, nil
 }
 func (nopStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return nil, nil, nil

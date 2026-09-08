@@ -256,7 +256,9 @@ import (
 // `board`. Healthy summaries omit it.
 // 1.61: `task depend repair` adds source-declaration diagnosis, preview,
 // guarded mutation, impact, incomplete-Thread-evidence, and recovery receipts.
-const SchemaVersion = "1.61"
+// 1.62: post-commit `task rename` failures carry a structured durable-prefix
+// receipt and recovery remedy in the standard error envelope.
+const SchemaVersion = "1.62"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

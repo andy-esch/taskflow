@@ -82,6 +82,18 @@ func syncDir(dir string) {
 // create-must-not-exist (HTTP `If-None-Match: *`): a losing create fails here rather
 // than clobbering the winner, so a create path needs no separate verifyUnchanged.
 func createFileAtomic(path string, data []byte, perm os.FileMode) error {
+	return createFileAtomicWithMode(path, data, perm, false)
+}
+
+// createFileAtomicExactMode is the no-clobber create used when an existing
+// source file is being relocated. Unlike an ordinary create, the destination
+// must retain the source's effective permission bits even under a different
+// process umask.
+func createFileAtomicExactMode(path string, data []byte, perm os.FileMode) error {
+	return createFileAtomicWithMode(path, data, perm, true)
+}
+
+func createFileAtomicWithMode(path string, data []byte, perm os.FileMode, exactMode bool) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
 	if err != nil {
 		return err // os.IsExist(err) on collision
@@ -90,6 +102,13 @@ func createFileAtomic(path string, data []byte, perm os.FileMode) error {
 		_ = f.Close()
 		_ = os.Remove(path)
 		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if exactMode {
+		if err = f.Chmod(perm); err != nil {
+			_ = f.Close()
+			_ = os.Remove(path)
+			return fmt.Errorf("chmod %s: %w", path, err)
+		}
 	}
 	if err = f.Sync(); err != nil {
 		_ = f.Close()

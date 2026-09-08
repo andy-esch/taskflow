@@ -1210,6 +1210,9 @@
         "task_lifecycle": {
           "$ref": "#/$defs/TaskLifecycleRecoveryJSON"
         },
+        "task_rename": {
+          "$ref": "#/$defs/TaskRenameRecoveryJSON"
+        },
         "thread_mutation": {
           "$ref": "#/$defs/ThreadMutationJSON"
         },
@@ -3404,6 +3407,75 @@
       ],
       "description": "TaskMutationEnvelope is `task set` / `task append` / `task set --body` under --json: the reloaded task, dry_run, and (for the body commands) the resulting body."
     },
+    "TaskRenameRecoveryJSON": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "from_slug": {
+          "type": "string"
+        },
+        "to_slug": {
+          "type": "string"
+        },
+        "planned_documents": {
+          "type": "integer"
+        },
+        "applied_documents": {
+          "type": "integer"
+        },
+        "planned_links": {
+          "type": "integer"
+        },
+        "applied_links": {
+          "type": "integer"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "committed": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "destination_written": {
+          "type": "boolean"
+        },
+        "source_removed": {
+          "type": "boolean"
+        },
+        "remedy": {
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceJSON"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "from_slug",
+        "to_slug",
+        "planned_documents",
+        "applied_documents",
+        "planned_links",
+        "applied_links",
+        "changed",
+        "dry_run",
+        "committed",
+        "complete",
+        "destination_written",
+        "source_removed",
+        "remedy",
+        "workspace"
+      ],
+      "description": "TaskRenameRecoveryJSON is the structured durable-prefix diagnosis emitted when a task rename fails after one or more document writes committed."
+    },
     "TaskShowEnvelope": {
       "properties": {
         "schema_version": {
@@ -4986,6 +5058,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.61)",
+  "title": "tskflwctl --json output (schema_version 1.62)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

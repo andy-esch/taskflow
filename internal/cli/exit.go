@@ -96,6 +96,11 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 		details := wire.ToTaskLifecycleRecoveryJSON(lifecycleErr.receipt, lifecycleErr.workspace)
 		payload.Error.TaskLifecycle = &details
 	}
+	var renameErr *taskRenameCommandFailure
+	if errors.As(err, &renameErr) {
+		details := wire.ToTaskRenameRecoveryJSON(renameErr.receipt, renameErr.workspace)
+		payload.Error.TaskRename = &details
+	}
 	var threadErr *threadCreationCommandFailure
 	if errors.As(err, &threadErr) {
 		details := wire.ToThreadMutationJSON(threadErr.receipt, threadErr.path, threadErr.workspace)

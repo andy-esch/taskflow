@@ -205,6 +205,7 @@
   "github.com/andy-esch/taskflow/internal/wire.TaskLifecycleRecoveryJSON": "TaskLifecycleRecoveryJSON is emitted on stderr when a lifecycle write committed but repository cleanup failed.",
   "github.com/andy-esch/taskflow/internal/wire.TaskMutationEnvelope": "TaskMutationEnvelope is `task set` / `task append` / `task set --body` under --json: the reloaded task, dry_run, and (for the body commands) the resulting body.",
   "github.com/andy-esch/taskflow/internal/wire.TaskMutationEnvelope.Workspace": "Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.",
+  "github.com/andy-esch/taskflow/internal/wire.TaskRenameRecoveryJSON": "TaskRenameRecoveryJSON is the structured durable-prefix diagnosis emitted when a task rename fails after one or more document writes committed.",
   "github.com/andy-esch/taskflow/internal/wire.TaskShowEnvelope": "TaskShowEnvelope is `task show --json`.",
   "github.com/andy-esch/taskflow/internal/wire.TaskUnblockJSON": "TaskUnblockJSON is one transitive downstream dependent and its current state.",
   "github.com/andy-esch/taskflow/internal/wire.TaskUnblocksEnvelope": "TaskUnblocksEnvelope is `task unblocks --json`.",
