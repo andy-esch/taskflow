@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/testutil"
 
@@ -64,6 +65,87 @@ func TestCreateTaskCreatesMissingPlanningRootBeforeLocking(t *testing.T) {
 	}
 	if _, err := os.Stat(got.Path); err != nil {
 		t.Fatalf("created task path: %v", err)
+	}
+}
+
+func TestCreateEntityFileSerializesPreparationWithWrite(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "entities")
+	firstPrepared := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	secondPrepared := make(chan struct{})
+	results := make(chan error, 2)
+
+	go func() {
+		_, err := NewFS(root).createEntityFile(false, func() (entityFileCreation, error) {
+			close(firstPrepared)
+			<-releaseFirst
+			return entityFileCreation{
+				dir: dir, path: filepath.Join(dir, "first.md"), content: []byte("first"), kind: "test entity", name: "first",
+			}, nil
+		})
+		results <- err
+	}()
+	<-firstPrepared
+
+	go func() {
+		_, err := NewFS(root).createEntityFile(false, func() (entityFileCreation, error) {
+			close(secondPrepared)
+			return entityFileCreation{
+				dir: dir, path: filepath.Join(dir, "second.md"), content: []byte("second"), kind: "test entity", name: "second",
+			}, nil
+		})
+		results <- err
+	}()
+
+	select {
+	case <-secondPrepared:
+		t.Fatal("a concurrent entity prepared while the first create still held the repository guard")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(releaseFirst)
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestCreateTaskRefusesDuplicateIDAcrossDifferentSlugs(t *testing.T) {
+	root := t.TempDir()
+	const shared = "6g7s6hr3qnfq"
+	newTask := func(slug string) domain.Task {
+		return domain.Task{ID: shared, Slug: slug, Status: domain.StatusReadyToStart, Created: "2026-09-07"}
+	}
+	if _, err := NewFS(root).CreateTask(newTask("alpha"), "# Alpha\n", false); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewFS(root).CreateTask(newTask("beta"), "# Beta\n", false)
+	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "alpha") {
+		t.Fatalf("duplicate task id error = %v, want conflict naming the existing owner", err)
+	}
+	if matches, _ := filepath.Glob(filepath.Join(root, domain.TasksDir, "*beta*")); len(matches) != 0 {
+		t.Fatalf("refused create wrote %v", matches)
+	}
+}
+
+func TestCreateTaskTreatsUnreadableFilenameIdentityAsOwned(t *testing.T) {
+	root := t.TempDir()
+	const shared = "6g7s6hr3qnfq"
+	dir := filepath.Join(root, domain.TasksDir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	owner := filepath.Join(dir, shared+"-broken-owner.md")
+	if err := os.WriteFile(owner, []byte("# missing frontmatter\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := NewFS(root).CreateTask(domain.Task{
+		ID: shared, Slug: "replacement", Status: domain.StatusReadyToStart, Created: "2026-09-07",
+	}, "# Replacement\n", false)
+	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "broken-owner") {
+		t.Fatalf("unreadable owner collision = %v, want conflict naming the filename owner", err)
 	}
 }
 
@@ -245,6 +327,35 @@ func TestCreateEpic_AutoNumber(t *testing.T) {
 	}
 	if next.ID != "05-gamma" {
 		t.Errorf("next epic id = %q, want 05-gamma", next.ID)
+	}
+}
+
+func TestCreateEpicSerializesNumberAllocation(t *testing.T) {
+	root := t.TempDir()
+	type result struct {
+		epic domain.Epic
+		err  error
+	}
+	start := make(chan struct{})
+	results := make(chan result, 2)
+	for _, slug := range []string{"alpha", "beta"} {
+		slug := slug
+		go func() {
+			<-start
+			epic, err := NewFS(root).CreateEpic(slug, domain.Epic{
+				Status: "active", Description: slug, Priority: "medium", Created: "2026-09-07",
+			}, "# "+slug+"\n", false)
+			results <- result{epic: epic, err: err}
+		}()
+	}
+	close(start)
+	first, second := <-results, <-results
+	if first.err != nil || second.err != nil {
+		t.Fatalf("concurrent epic creates failed: %v, %v", first.err, second.err)
+	}
+	firstNum, secondNum := epicNum(first.epic.ID), epicNum(second.epic.ID)
+	if firstNum == secondNum || firstNum+secondNum != 3 {
+		t.Fatalf("concurrent epic ids = %q, %q; want distinct allocations 1 and 2", first.epic.ID, second.epic.ID)
 	}
 }
 

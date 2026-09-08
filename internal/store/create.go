@@ -37,46 +37,82 @@ func buildFile(fields []fmField, body string) ([]byte, error) {
 	return assembleFile(mapping, []byte(body), "\n") // new files are always LF
 }
 
-// writeNewFile is the shared new-file contract for Create{Task,Epic,Audit}: it
-// atomically creates path (never clobbering), mapping an existing file to an
-// ErrConflict named by kind/id, and creating dir as needed. dryRun runs the same
-// collision check but skips the write — so a dry-run that would clash still fails.
-func (s *FS) writeNewFile(dir, path string, content []byte, kind, id string, dryRun bool) error {
-	conflict := func() error {
-		return fmt.Errorf("%s %q already exists: %w", kind, id, domain.ErrConflict)
+// entityFileCreation is one fully prepared ordinary entity file. Any repository
+// scan or identifier allocation needed to prepare it belongs in the callback
+// passed to createEntityFile, where the store can serialize that work with the
+// no-clobber write.
+type entityFileCreation struct {
+	dir     string
+	path    string
+	content []byte
+	kind    string
+	name    string
+}
+
+// createEntityFile owns the check-and-create transaction for ordinary single-file
+// entities. On a real write, prepare runs while the repository guard is held and
+// the file is then created without releasing that guard. This ordering prevents a
+// future entity from accidentally recreating the audit/research race by scanning
+// identity first and acquiring the write lock later.
+//
+// Dry-run invokes the same preparation and exact-path collision checks without
+// creating the planning root or taking a writer lock. Compound graph-aware creates
+// retain their richer guarded planners and finish through writeNewFileUnlocked.
+func (s *FS) createEntityFile(dryRun bool, prepare func() (entityFileCreation, error)) (entityFileCreation, error) {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return entityFileCreation{}, err
+	}
+	if prepare == nil {
+		return entityFileCreation{}, fmt.Errorf("%w: entity file preparation is required", domain.ErrValidation)
 	}
 	if dryRun {
-		if _, statErr := os.Stat(path); statErr == nil {
-			return conflict()
+		creation, err := prepare()
+		if err != nil {
+			return entityFileCreation{}, err
 		}
-		return nil
+		if _, err := os.Stat(creation.path); err == nil {
+			return entityFileCreation{}, entityAlreadyExistsError(creation.kind, creation.name)
+		} else if !os.IsNotExist(err) {
+			return entityFileCreation{}, fmt.Errorf("stat %s %s: %w", creation.kind, creation.path, err)
+		}
+		return creation, nil
 	}
+
 	// Preserve the store's historical ability to create the first entity in a
 	// not-yet-existing root; the directory-backed Unix lock needs the root first.
 	if err := os.MkdirAll(s.root, 0o755); err != nil {
-		return fmt.Errorf("mkdir planning root %s: %w", s.root, err)
+		return entityFileCreation{}, fmt.Errorf("mkdir planning root %s: %w", s.root, err)
 	}
 	unlock, err := s.writeLock()
 	if err != nil {
-		return err
+		return entityFileCreation{}, err
 	}
 	defer unlock()
-	return s.writeNewFileUnlocked(dir, path, content, kind, id)
+
+	creation, err := prepare()
+	if err != nil {
+		return entityFileCreation{}, err
+	}
+	if err := s.writeNewFileUnlocked(creation.dir, creation.path, creation.content, creation.kind, creation.name); err != nil {
+		return entityFileCreation{}, err
+	}
+	return creation, nil
+}
+
+func entityAlreadyExistsError(kind, name string) error {
+	return fmt.Errorf("%s %q already exists: %w", kind, name, domain.ErrConflict)
 }
 
 // writeNewFileUnlocked is the repository-guard-compatible create primitive.
-// Public entity creation enters through writeNewFile and takes the lock; guarded
-// compound operations may call this helper only while already holding it.
+// Ordinary entity creation enters through createEntityFile and takes the lock;
+// guarded compound operations may call this helper only while already holding it.
 func (s *FS) writeNewFileUnlocked(dir, path string, content []byte, kind, id string) error {
-	conflict := func() error {
-		return fmt.Errorf("%s %q already exists: %w", kind, id, domain.ErrConflict)
-	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	if err := createFileAtomic(path, content, 0o644); err != nil {
 		if os.IsExist(err) {
-			return conflict()
+			return entityAlreadyExistsError(kind, id)
 		}
 		return err
 	}
@@ -152,40 +188,61 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 	if len(t.DependsOn) > 0 || len(t.LegacyBlockedBy) > 0 || len(t.LegacyDependencies) > 0 || len(t.LegacyBlocks) > 0 {
 		return domain.Task{}, fmt.Errorf("%w: task creation cannot set graph-owned dependency fields until guarded dependency creation is available", domain.ErrValidation)
 	}
-	// The id makes the flat filename unique, so writeNewFile's O_EXCL is the whole
-	// collision guard — no cross-dir slug scan. A duplicate slug (distinct id) is
-	// allowed under the flat layout and stays resolvable by id.
+	// A duplicate slug with a distinct id is legal and remains resolvable by id.
+	// A duplicate stable id with a different slug has a different path, so its
+	// identity scan must be serialized with the O_EXCL write.
 	stem := t.ID + "-" + t.Slug
 	path := filepath.Join(s.tasksDir, stem+".md")
 	content, err := buildFile(taskFields(t), body)
 	if err != nil {
 		return domain.Task{}, err
 	}
-	if dryRun {
+	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
+		if err := ensureCandidateIDUnique("task", t.ID, s.taskCandidates); err != nil {
+			return entityFileCreation{}, err
+		}
 		if err := s.ensureTaskIDNotThread(t.ID); err != nil {
-			return domain.Task{}, err
+			return entityFileCreation{}, err
 		}
-		if err := s.writeNewFile(s.tasksDir, path, content, "task", stem, true); err != nil {
-			return domain.Task{}, err
-		}
-	} else {
-		if err := os.MkdirAll(s.root, 0o755); err != nil {
-			return domain.Task{}, fmt.Errorf("mkdir planning root %s: %w", s.root, err)
-		}
-		unlock, err := s.writeLock()
-		if err != nil {
-			return domain.Task{}, err
-		}
-		defer unlock()
-		if err := s.ensureTaskIDNotThread(t.ID); err != nil {
-			return domain.Task{}, err
-		}
-		if err := s.writeNewFileUnlocked(s.tasksDir, path, content, "task", stem); err != nil {
-			return domain.Task{}, err
+		return entityFileCreation{dir: s.tasksDir, path: path, content: content, kind: "task", name: stem}, nil
+	})
+	if err != nil {
+		return domain.Task{}, err
+	}
+	t.Path = creation.path
+	return t, nil
+}
+
+// ensureCandidateIDUnique applies the same same-kind stable-identity rule to
+// every flat entity directory. Filename candidates are deliberately used so an
+// unreadable record still retains ownership of its recoverable id.
+func ensureCandidateIDUnique(kind, entityID string, list func() ([]candidate, error)) error {
+	owner, err := candidateIDOwner(entityID, list)
+	if err != nil {
+		return err
+	}
+	if owner != "" {
+		return fmt.Errorf("%s id %q already used by %q: %w",
+			kind, entityID, owner, domain.ErrConflict)
+	}
+	return nil
+}
+
+// candidateIDOwner returns the basename of the first flat entity whose filename
+// owns entityID. Keeping this lower-level query separate lets repair paths report
+// a safe refusal through their own result channel instead of turning an expected
+// identity collision into a batch-level error.
+func candidateIDOwner(entityID string, list func() ([]candidate, error)) (string, error) {
+	candidates, err := list()
+	if err != nil {
+		return "", err
+	}
+	for _, candidate := range candidates {
+		if candidate.id == entityID {
+			return filepath.Base(candidate.path), nil
 		}
 	}
-	t.Path = path
-	return t, nil
+	return "", nil
 }
 
 func (s *FS) ensureTaskIDNotThread(taskID string) error {
@@ -238,45 +295,21 @@ func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit
 	if err != nil {
 		return domain.Audit{}, err
 	}
-	if dryRun {
+	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
 		if err := s.ensureAuditIDUnique(a.ID); err != nil {
-			return domain.Audit{}, err
+			return entityFileCreation{}, err
 		}
-		if err := s.writeNewFile(s.auditsDir, path, content, "audit", stem, true); err != nil {
-			return domain.Audit{}, err
-		}
-	} else {
-		if err := os.MkdirAll(s.root, 0o755); err != nil {
-			return domain.Audit{}, fmt.Errorf("mkdir planning root %s: %w", s.root, err)
-		}
-		unlock, err := s.writeLock()
-		if err != nil {
-			return domain.Audit{}, err
-		}
-		defer unlock()
-		if err := s.ensureAuditIDUnique(a.ID); err != nil {
-			return domain.Audit{}, err
-		}
-		if err := s.writeNewFileUnlocked(s.auditsDir, path, content, "audit", stem); err != nil {
-			return domain.Audit{}, err
-		}
+		return entityFileCreation{dir: s.auditsDir, path: path, content: content, kind: "audit", name: stem}, nil
+	})
+	if err != nil {
+		return domain.Audit{}, err
 	}
-	a.Path = path
+	a.Path = creation.path
 	return a, nil
 }
 
 func (s *FS) ensureAuditIDUnique(auditID string) error {
-	candidates, err := s.auditCandidates()
-	if err != nil {
-		return err
-	}
-	for _, candidate := range candidates {
-		if candidate.id == auditID {
-			return fmt.Errorf("audit id %q already used by %q: %w",
-				auditID, filepath.Base(candidate.path), domain.ErrConflict)
-		}
-	}
-	return nil
+	return ensureCandidateIDUnique("audit", auditID, s.auditCandidates)
 }
 
 // researchFields is the canonical frontmatter order for a new research doc. Thin by
@@ -308,34 +341,31 @@ func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (domain
 	if err := validEntityID(r.ID); err != nil {
 		return domain.Research{}, err
 	}
-	// O_EXCL alone is NOT the whole collision guard here, contrary to what the task and
-	// audit create paths can assume. Research ids are minted from a DAY (ADR-0003 §3), so
+	// O_EXCL alone is NOT the whole collision guard here. Research ids are minted from a
+	// DAY (ADR-0003 §3), so
 	// every doc sharing a `created` date draws from the same random tail — and a duplicate
 	// id on a DIFFERENT slug is a different path, which O_EXCL never sees. Two docs sharing
 	// an id are unresolvable by id and, worse, both become unwritable: the write paths'
 	// CAS re-resolve returns ErrAmbiguous, which surfaces as a retryable conflict forever.
 	// So check the id against what is already on disk. Cheap: researchCandidates is a
-	// ReadDir + filename split, no parsing.
-	cands, err := s.researchCandidates()
-	if err != nil {
-		return domain.Research{}, err
-	}
-	for _, c := range cands {
-		if c.id == r.ID {
-			return domain.Research{}, fmt.Errorf("research id %q already used by %q: %w",
-				r.ID, filepath.Base(c.path), domain.ErrConflict)
-		}
-	}
+	// ReadDir + filename split, no parsing. createEntityFile keeps that scan and the
+	// eventual write inside one repository critical section.
 	stem := r.ID + "-" + r.Slug
 	path := filepath.Join(s.researchDir, stem+".md")
 	content, err := buildFile(researchFields(r), body)
 	if err != nil {
 		return domain.Research{}, err
 	}
-	if err := s.writeNewFile(s.researchDir, path, content, "research doc", stem, dryRun); err != nil {
+	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
+		if err := ensureCandidateIDUnique("research", r.ID, s.researchCandidates); err != nil {
+			return entityFileCreation{}, err
+		}
+		return entityFileCreation{dir: s.researchDir, path: path, content: content, kind: "research doc", name: stem}, nil
+	})
+	if err != nil {
 		return domain.Research{}, err
 	}
-	r.Path = path
+	r.Path = creation.path
 	return r, nil
 }
 
@@ -352,14 +382,9 @@ func epicNum(id string) int {
 	return 0
 }
 
-// nextEpicNumber returns max(existing NN- prefix)+1, or 1 if none.
-//
-// Not serialized against a concurrent CreateEpic: two `epic new` processes
-// racing between this scan and their writes could mint the same number with
-// different slugs (O_EXCL only guards an identical path). That's accepted — this
-// is a single-user local CLI with no daemon, so concurrent creation doesn't
-// occur in practice, and the numeric ordering above keeps even a hand-created
-// duplicate deterministic rather than flipping on string compare.
+// nextEpicNumber returns max(existing NN- prefix)+1, or 1 if none. CreateEpic
+// invokes it from createEntityFile's preparation callback, so allocation and the
+// corresponding no-clobber write share one repository critical section.
 func (s *FS) nextEpicNumber() (int, error) {
 	entries, err := os.ReadDir(s.epicsDir)
 	if err != nil {
@@ -406,22 +431,23 @@ func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (d
 	if slug == "" {
 		return domain.Epic{}, fmt.Errorf("%w: empty epic slug", domain.ErrValidation)
 	}
-	num, err := s.nextEpicNumber()
+	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
+		num, err := s.nextEpicNumber()
+		if err != nil {
+			return entityFileCreation{}, err
+		}
+		id := fmt.Sprintf("%02d-%s", num, slug)
+		path := filepath.Join(s.epicsDir, id+".md")
+		content, err := buildFile(epicFields(e), body)
+		if err != nil {
+			return entityFileCreation{}, err
+		}
+		return entityFileCreation{dir: s.epicsDir, path: path, content: content, kind: "epic", name: id}, nil
+	})
 	if err != nil {
 		return domain.Epic{}, err
 	}
-	id := fmt.Sprintf("%02d-%s", num, slug)
-	path := filepath.Join(s.epicsDir, id+".md")
-	content, err := buildFile(epicFields(e), body)
-	if err != nil {
-		return domain.Epic{}, err
-	}
-	// The auto-numbered id is always fresh, so the collision check can't actually
-	// fire here — but routing through writeNewFile keeps one create contract.
-	if err := s.writeNewFile(s.epicsDir, path, content, "epic", id, dryRun); err != nil {
-		return domain.Epic{}, err
-	}
-	e.ID = id
-	e.Path = path
+	e.ID = creation.name
+	e.Path = creation.path
 	return e, nil
 }
