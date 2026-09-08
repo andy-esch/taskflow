@@ -39,11 +39,12 @@ compatibility and graduation gates so this Thread has an evidence-based finish l
 indefinite preview label.
 
 That graduation branch is now explicit: the compatibility contract, v0.18.0/v0.19.0 historical
-fixtures, and preview-labelled v0.20.0 hardening checkpoint have shipped. That release unlocks two distinct high-profile
-decisions: whether the accumulated soak supports graduation, and a tier-1 spatial graph
-design/prototype intended to seed the next feature release. The latter is a removable presentation
-extension over `ThreadGraphProjection`, not a second graph model or silent core commitment; that
-architectural isolation contains flagship risk without demoting its product importance.
+fixtures, and preview-labelled v0.20.0 hardening checkpoint have shipped. That release unlocks the
+tier-1 spatial graph design/prototype intended to seed the next feature release. Graduation is now
+deliberately deferred while additional installed preview releases accumulate multi-release soak
+evidence. The spatial work remains a removable presentation extension over
+`ThreadGraphProjection`, not a second graph model or silent core commitment; that architectural
+isolation contains flagship risk without demoting its product importance.
 
 The guarded-repair branch was split after adversarial review. Unreadable task sources first gain
 opaque revision evidence for whole-snapshot CAS; unreadable Thread evidence then gains the same

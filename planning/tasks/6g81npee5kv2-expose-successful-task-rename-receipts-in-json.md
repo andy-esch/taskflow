@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g81npee5kv2
-status: in-progress
+status: completed
 epic: 24-data-model-evolution-stable-key-storage-read-model-content-occ
 description: Give task rename JSON success and dry-run output the same structured planning and cascade receipt available on failures.
 effort: 0.5-1 day
@@ -13,6 +13,7 @@ created: "2026-09-08"
 depends_on: [6g7wxs43g7nh]
 updated_at: "2026-09-08"
 started_at: "2026-09-08"
+completed_at: "2026-09-08"
 ---
 # Expose successful task rename receipts in JSON
 
@@ -36,6 +37,7 @@ Emit a rename-specific success and dry-run envelope so agents can observe source
 ## Evidence
 
 - Tracked from finding L2 in the [Claude task rename implementation audit](../audits/6g81f73jh6d9-2026-09-08-task-rename-snapshot-and-recovery-implementation-claude.md).
+- Delivered by [PR #215](https://github.com/andy-esch/taskflow/pull/215).
 
 ## Implementation evidence (2026-09-08)
 

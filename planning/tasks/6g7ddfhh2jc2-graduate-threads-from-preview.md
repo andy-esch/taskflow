@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g7ddfhh2jc2
-status: next-up
+status: deferred
 epic: 30-threads-and-task-dependency-graphs
 description: After the v0.20 preview soak, explicitly decide whether evidence supports removing the preview label or requires more named work.
 effort: S
@@ -11,7 +11,8 @@ autonomy_level: 4
 tags: [threads, release, compatibility, dogfood]
 created: "2026-09-06"
 depends_on: [6g7fhfpmy032]
-updated_at: "2026-09-06"
+updated_at: "2026-09-08"
+deferred_at: "2026-09-08"
 ---
 
 # Graduate Threads from preview
@@ -84,3 +85,7 @@ usage; in that case keep this task open and add another bounded preview checkpoi
 - Contract [Threads compatibility and preview graduation](../../docs/THREADS_COMPATIBILITY.md)
 - ADR [0006 — Adopt Threads as task DAGs](../adrs/0006-adopt-threads-as-task-dags.md)
 - Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+
+## Deferral note (2026-09-08)
+
+Threads intentionally remain in preview beyond v0.20.0 while additional installed releases exercise the compatibility and dogfood contract. Reopen this decision after that multi-release soak produces enough evidence; do not manufacture a dated gate or another release-checkpoint task until one owns concrete work.
