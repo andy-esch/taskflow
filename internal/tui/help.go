@@ -125,6 +125,13 @@ func symbolsFor(kind entityKind, s *styles) (helpSection, bool) {
 			mark(theme.ColorYellow, "▶n", "member tasks in flight"),
 			mark(theme.ColorGreen, "✓n", "dispatchable frontier members"),
 			mark(theme.ColorRed, "×n", "pending members not dispatchable under current graph evidence"),
+			helpEntry{s.accent("━/┃"), "focused dependency route (heavy; color is redundant)"},
+			mark(theme.ColorYellow, "▶/◀", "dependency direction toward the dependent task"),
+			mark(theme.ColorYellow, "2+", "fan-in / fan-out route count"),
+			mark(theme.ColorGray, "═/║/╬", "shared endpoint route bundle"),
+			mark(theme.ColorGray, "╳", "unrelated routes cross without connecting"),
+			mark(theme.ColorGray, "≋", "unrelated routes overlap without connecting"),
+			mark(theme.ColorGray, "!", "renderer routing conflict (also reported in the spatial header)"),
 		)
 		return helpSection{"Symbols", e}, true
 	case entityAudits:

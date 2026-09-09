@@ -727,7 +727,7 @@ func TestThreadSpatialGraphUsesDirectionalStableIdentityNavigation(t *testing.T)
 	}
 	plain := ansi.Strip(m.detail.styled)
 	for _, want := range []string{
-		"spatial graph", "prerequisite ─▶ dependent", "status", "roles", "external gate",
+		"spatial graph", "prerequisite ─▶ dependent", "status", "roles", "╔ gate",
 		"focus", "about", "the dependency", "┌", "▶", "┐",
 	} {
 		if !strings.Contains(plain, want) {
@@ -1125,7 +1125,7 @@ func TestThreadSpatialCanvasDistinguishesCrossingsSharedStubsAndOverlaps(t *test
 	shared := newThreadSpatialCanvas(8, 3)
 	shared.routeHorizontal(1, 6, 1, threadSpatialRouteStyle{id: 1, from: "a", to: "c"})
 	shared.routeHorizontal(1, 5, 1, threadSpatialRouteStyle{id: 2, from: "a", to: "d"})
-	if cell := shared.cells[1][3]; !cell.shared || threadSpatialSharedConnectorGlyph(cell.connector) != "━" {
+	if cell := shared.cells[1][3]; !cell.shared || threadSpatialSharedConnectorGlyph(cell.connector) != "═" {
 		t.Fatalf("common-source stub lost the shared-route grammar: %+v", cell)
 	}
 	merged := newThreadSpatialCanvas(9, 8)
@@ -1146,11 +1146,118 @@ func TestThreadSpatialCanvasDistinguishesCrossingsSharedStubsAndOverlaps(t *test
 	}
 }
 
-func TestThreadSpatialLegendExplainsEveryRouteGlyph(t *testing.T) {
+func TestThreadSpatialRouteGrammarKeepsFocusSharedRoutesAndCollisionsDistinct(t *testing.T) {
+	ordinary := newThreadSpatialCanvas(8, 3)
+	ordinary.routeHorizontal(1, 6, 1, threadSpatialRouteStyle{id: 1, from: "a", to: "b"})
+	if got := threadSpatialConnectorGlyph(ordinary.cells[1][3].connector); got != "─" {
+		t.Fatalf("ordinary route glyph=%q want light stroke", got)
+	}
+
+	focused := newThreadSpatialCanvas(8, 3)
+	focused.routeHorizontal(1, 6, 1, threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true})
+	if cell := focused.cells[1][3]; !cell.accent || threadSpatialFocusConnectorGlyph(cell.connector) != "━" {
+		t.Fatalf("focused route lacks redundant accent and heavy-stroke grammar: %+v", cell)
+	}
+	if got := ansi.Strip(focused.renderLine(1, &testStyles)); !strings.Contains(got, "━") {
+		t.Fatalf("focused route did not retain its non-color channel after rendering: %q", got)
+	}
+	focused.routeVertical(6, 1, 2, threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true})
+	if got := threadSpatialFocusConnectorGlyph(focused.cells[1][6].connector); got != "┓" {
+		t.Fatalf("focused route corner=%q want one continuous heavy elbow", got)
+	}
+
+	shared := newThreadSpatialCanvas(8, 3)
+	shared.routeHorizontal(1, 6, 1, threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true})
+	shared.routeHorizontal(1, 5, 1, threadSpatialRouteStyle{id: 2, from: "a", to: "c"})
+	if cell := shared.cells[1][3]; !cell.shared || !cell.accent || threadSpatialSharedConnectorGlyph(cell.connector) != "═" {
+		t.Fatalf("focused shared bundle did not preserve both meanings: %+v", cell)
+	}
+
+	crossing := newThreadSpatialCanvas(8, 8)
+	crossing.routeHorizontal(1, 5, 3, threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true})
+	crossing.routeVertical(3, 1, 5, threadSpatialRouteStyle{id: 2, from: "c", to: "d"})
+	if cell := crossing.cells[3][3]; !cell.crossing || cell.accent || cell.color != theme.ColorGray {
+		t.Fatalf("unrelated crossing inherited focused-route treatment: %+v", cell)
+	}
+	if got := ansi.Strip(crossing.renderLine(3, &testStyles)); !strings.Contains(got, "╳") {
+		t.Fatalf("neutral crossing grammar missing from rendered row: %q", got)
+	}
+}
+
+func TestThreadSpatialFanCountRelocatesInsteadOfErasingCongestion(t *testing.T) {
+	canvas := newThreadSpatialCanvas(10, 6)
+	canvas.routeHorizontal(1, 8, 3, threadSpatialRouteStyle{id: 1, from: "a", to: "b"})
+	canvas.routeVertical(3, 1, 5, threadSpatialRouteStyle{id: 2, from: "c", to: "d"})
+	if !canvas.cells[3][3].crossing {
+		t.Fatal("fixture did not put a crossing on the preferred count cell")
+	}
+	point, ok := canvas.putRouteCountAlong(threadSpatialPoint{x: 3, y: 3}, 1, 3, 5, false)
+	if !ok || point != (threadSpatialPoint{x: 4, y: 3}) {
+		t.Fatalf("fan count placement=(%+v,%v) want first free approach cell", point, ok)
+	}
+	if !canvas.cells[3][3].crossing || canvas.cells[3][3].text != "" {
+		t.Fatalf("relocated count erased crossing grammar: %+v", canvas.cells[3][3])
+	}
+	if cell := canvas.cells[3][4]; !cell.routeCount || cell.text != "5" || cell.color != theme.ColorYellow {
+		t.Fatalf("relocated fan count lost multiplicity grammar: %+v", cell)
+	}
+}
+
+func TestThreadSpatialFanCountFallsBackToNodeBorderWhenStubIsFull(t *testing.T) {
+	placement := threadSpatialNode{
+		node: core.ThreadGraphNode{TaskID: "a", Label: "source", Role: core.ThreadTaskMember},
+		x:    3, y: 2,
+	}
+	layout := threadSpatialLayout{byID: map[string]threadSpatialNode{"a": placement}}
+	canvas := newThreadSpatialCanvas(50, 10)
+	drawThreadSpatialNode(canvas, placement, false)
+	canvas.cells[4][27] = threadSpatialCell{crossing: true, color: theme.ColorGray}
+	routes := []threadSpatialRoute{
+		{id: 1, edge: core.ThreadGraphEdge{From: "a", To: "b"}, segments: []threadSpatialRouteSegment{{
+			from: threadSpatialPoint{x: 25, y: 4}, to: threadSpatialPoint{x: 28, y: 4},
+		}}, arrow: threadSpatialPoint{x: 40, y: 4}, arrowRune: '▶'},
+		{id: 2, edge: core.ThreadGraphEdge{From: "a", To: "c"}, segments: []threadSpatialRouteSegment{{
+			from: threadSpatialPoint{x: 25, y: 4}, to: threadSpatialPoint{x: 28, y: 4},
+		}}, arrow: threadSpatialPoint{x: 44, y: 4}, arrowRune: '▶'},
+	}
+	drawThreadSpatialRouteCounts(canvas, layout, routes, "")
+	fallback := threadSpatialCountFallback(layout, "a", "", 's', '▶')
+	if cell := canvas.cells[fallback.y][fallback.x]; !cell.routeCount || cell.text != "2" || cell.color != theme.ColorYellow {
+		t.Fatalf("fully congested fan-out silently lost its node-border fallback: %+v", cell)
+	}
+	if !canvas.cells[4][27].crossing {
+		t.Fatalf("node-border fallback erased congested stub evidence: %+v", canvas.cells[4][27])
+	}
+}
+
+func TestThreadSpatialRoutingConflictIsNeutralAndReportedOutOfBand(t *testing.T) {
+	canvas := newThreadSpatialCanvas(9, 8)
+	turn := threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true}
+	canvas.routeVertical(3, 3, 6, turn)
+	canvas.routeHorizontal(3, 7, 3, turn)
+	canvas.routeHorizontal(1, 7, 3, threadSpatialRouteStyle{id: 2, from: "c", to: "d"})
+	cell := canvas.cells[3][3]
+	if !cell.conflict || cell.accent || cell.color != theme.ColorGray {
+		t.Fatalf("renderer conflict leaked into focus or task-health presentation: %+v", cell)
+	}
+	if got := threadSpatialRouteConflictSummary(canvas); got != "1 routing conflict" {
+		t.Fatalf("routing conflict summary=%q want explicit out-of-band diagnostic", got)
+	}
+}
+
+func TestThreadSpatialInlineLegendStaysCompactAndDefersRareGrammarToHelp(t *testing.T) {
 	legend := ansi.Strip(threadSpatialRoleLegend(&testStyles))
-	for _, grammar := range []string{"▶/◀ direction", "2 fan", "┄ track", "◇ turn", "╳ cross", "━/┃/◆ shared", "≋ overlap", "! conflict"} {
+	for _, grammar := range []string{"┌ member", "╔ gate", "━ focus route", "▶ direction", "2 fan"} {
 		if !strings.Contains(legend, grammar) {
 			t.Errorf("route legend omitted %q: %q", grammar, legend)
+		}
+	}
+	if width := ansi.StringWidth(legend); width > 72 {
+		t.Errorf("inline route legend width=%d want <=72: %q", width, legend)
+	}
+	for _, rare := range []string{"╳", "≋", "conflict"} {
+		if strings.Contains(legend, rare) {
+			t.Errorf("inline legend should leave uncommon %q grammar to contextual help: %q", rare, legend)
 		}
 	}
 }
@@ -1177,7 +1284,6 @@ func TestThreadSpatialRouteCountsPreserveSideAndEndpointSemantics(t *testing.T) 
 		text string
 		kind string
 	}{
-		{x: placement.x - 3, text: "›", kind: "focus pointer"},
 		{x: placement.x - 2, text: "2", kind: "left-entry fan-in count"},
 		{x: placement.x - 1, text: "▶", kind: "left-entry direction"},
 		{x: placement.x + threadSpatialNodeWidth, text: "◀", kind: "right-entry direction"},
@@ -1213,7 +1319,14 @@ func TestThreadSpatialDenseRoutesDistinguishCrossingsBundlesAndCounts(t *testing
 	}
 	layout := buildThreadSpatialLayout(projection)
 	canvas := renderThreadSpatialCanvas(projection, layout, "b")
-	crossings, selectedCrossings, shared, corridors, waypoints, routeCounts := 0, 0, 0, 0, 0, 0
+	crossings, shared, routeCounts, trackedRoutes := 0, 0, 0, 0
+	for _, route := range layout.routes {
+		for _, segment := range route.segments {
+			if segment.corridor {
+				trackedRoutes++
+			}
+		}
+	}
 	for row := range canvas.cells {
 		for column := range canvas.cells[row] {
 			cell := canvas.cells[row][column]
@@ -1222,8 +1335,8 @@ func TestThreadSpatialDenseRoutesDistinguishCrossingsBundlesAndCounts(t *testing
 				if cell.connector != 0 {
 					t.Errorf("crossing at (%d,%d) became a junction: %+v", column, row, cell)
 				}
-				if cell.accent {
-					selectedCrossings++
+				if cell.accent || cell.color != theme.ColorGray {
+					t.Errorf("crossing at (%d,%d) inherited focus or status color: %+v", column, row, cell)
 				}
 				if got := ansi.Strip(canvas.renderLine(row, &testStyles)); !strings.Contains(got, "╳") {
 					t.Errorf("crossing row omitted the non-junction glyph: %q", got)
@@ -1231,15 +1344,6 @@ func TestThreadSpatialDenseRoutesDistinguishCrossingsBundlesAndCounts(t *testing
 			}
 			if cell.shared {
 				shared++
-			}
-			if cell.corridor {
-				corridors++
-				if got := ansi.Strip(canvas.renderLine(row, &testStyles)); !strings.Contains(got, "┄") {
-					t.Errorf("long-route row omitted its corridor grammar: %q", got)
-				}
-			}
-			if cell.text == "◇" {
-				waypoints++
 			}
 			if cell.routeCount {
 				routeCounts++
@@ -1249,14 +1353,11 @@ func TestThreadSpatialDenseRoutesDistinguishCrossingsBundlesAndCounts(t *testing
 	if crossings == 0 {
 		t.Fatal("fixture did not expose an unrelated perpendicular route crossing")
 	}
-	if selectedCrossings == 0 {
-		t.Fatal("selected incident route did not retain emphasis through a crossing")
-	}
 	if shared == 0 {
 		t.Fatal("fan-in/fan-out did not expose explicit shared-route geometry")
 	}
-	if corridors == 0 || waypoints < 2 {
-		t.Fatalf("skipped-layer route omitted corridor attribution: corridors=%d waypoints=%d", corridors, waypoints)
+	if trackedRoutes == 0 {
+		t.Fatal("fixture did not exercise a skipped-layer route")
 	}
 	if routeCounts == 0 {
 		t.Fatalf("dense fan-in/fan-out omitted every endpoint multiplicity marker: count markers=%d", routeCounts)
@@ -1268,11 +1369,18 @@ func TestThreadSpatialDenseRoutesDistinguishCrossingsBundlesAndCounts(t *testing
 		for _, segment := range route.segments {
 			for _, point := range threadSpatialTestSegmentPoints(segment) {
 				cell := canvas.cells[point.y][point.x]
-				if !cell.accent && !strings.ContainsAny(cell.text, "▶◀2+") {
+				collision := cell.crossing || cell.overlap || cell.conflict
+				if !cell.accent && !collision && !strings.ContainsAny(cell.text, "▶◀2+") {
 					t.Errorf("selected incident route %s -> %s lost emphasis at %+v: %+v",
 						route.edge.From, route.edge.To, point, cell)
 				}
 			}
+		}
+	}
+	for row := range canvas.cells {
+		plain := ansi.Strip(canvas.renderLine(row, &testStyles))
+		if strings.ContainsAny(plain, "┄◇") {
+			t.Errorf("route row retained fragmented track/waypoint grammar: %q", plain)
 		}
 	}
 }
@@ -1456,6 +1564,11 @@ func TestThreadSpatialBoundaryLabelsBundleAliasesWithoutOverwritingNodes(t *test
 	if got := ansi.Strip(canvas.renderLine(4, &testStyles)); !strings.Contains(got, "…▶[M2,M3,M4]") {
 		t.Fatalf("clipped fan-out aliases were not bundled deterministically: %q", got)
 	}
+	for column := 25; column < 40; column++ {
+		if cell := canvas.cells[4][column]; cell.text != "" && !cell.accent {
+			t.Fatalf("selected-route boundary alias did not use the focus channel at column %d: %+v", column, cell)
+		}
+	}
 	if got := canvas.cells[4][3:25]; !reflect.DeepEqual(got, before) {
 		t.Fatalf("boundary annotation overwrote the selected node: got=%+v want=%+v", got, before)
 	}
@@ -1579,7 +1692,7 @@ func TestThreadSpatialReverseRouteUsesNodeFreeTrack(t *testing.T) {
 			}
 		}
 	}
-	if corridors != 1 || len(routes[0].waypoints) != 2 {
+	if corridors != 1 {
 		t.Fatalf("reverse route lost its attributed horizontal track: %+v", routes[0])
 	}
 }
@@ -1745,11 +1858,8 @@ func TestThreadSpatialSelectedNodeExpandsInsideStableSlot(t *testing.T) {
 	if got := canvas.cells[placement.y+1][placement.x+2].color; got != theme.Status(domain.StatusNextUp).Color {
 		t.Fatalf("selected status glyph color=%v want semantic next-up color", got)
 	}
-	if got := canvas.cells[placement.y+2][placement.x-3].color; got != theme.ColorYellow {
-		t.Fatalf("focus pointer color=%v want frontier-pointer yellow", got)
-	}
-	if got := canvas.cells[placement.y+2][placement.x-3].text; got != "›" {
-		t.Fatalf("focus marker=%q want a marker distinct from dependency arrows", got)
+	if got := canvas.cells[placement.y+2][placement.x-3].text; got != "" {
+		t.Fatalf("selected card retained a redundant connector-adjacent focus marker: %q", got)
 	}
 }
 

@@ -54,7 +54,6 @@ type threadSpatialRoute struct {
 	id        int32
 	edge      core.ThreadGraphEdge
 	segments  []threadSpatialRouteSegment
-	waypoints []threadSpatialPoint
 	arrow     threadSpatialPoint
 	arrowRune rune
 }
@@ -226,9 +225,9 @@ func threadSpatialColumnGeometry(
 	}
 	gaps := make([]int, columnCount)
 	for boundary := range gaps {
-		// Four reserved cells separate route lanes from node endpoint arrows,
-		// side-aware fan counts, and the focus pointer.
-		gaps[boundary] = max(threadSpatialNodeGapX, len(uses[boundary])+4)
+		// Five reserved cells separate route lanes from node endpoint arrows
+		// and side-aware fan counts on both sides of the next node.
+		gaps[boundary] = max(threadSpatialNodeGapX, len(uses[boundary])+5)
 	}
 	columnX := make([]int, columnCount)
 	columnX[0] = 3
@@ -340,13 +339,6 @@ func newThreadSpatialRoute(
 			from: points[index-1], to: points[index],
 			corridor: seed.needsTrack && points[index-1].y == trackY && points[index].y == trackY,
 		})
-	}
-	if seed.needsTrack {
-		for index := 1; index < len(points)-1; index++ {
-			if points[index].y == trackY {
-				route.waypoints = append(route.waypoints, points[index])
-			}
-		}
 	}
 	return route
 }
@@ -748,7 +740,6 @@ type threadSpatialCell struct {
 	accent       bool
 	connector    threadSpatialConnector
 	routeID      int32
-	corridor     bool
 	shared       bool
 	crossing     bool
 	overlap      bool
@@ -761,7 +752,6 @@ type threadSpatialRouteStyle struct {
 	from     string
 	to       string
 	selected bool
-	corridor bool
 }
 
 type threadSpatialConnector uint8
@@ -819,6 +809,15 @@ func (c *threadSpatialCanvas) putText(x, y int, value string, color theme.Color,
 	}
 }
 
+func (c *threadSpatialCanvas) putAccentText(x, y int, value string, bold bool) {
+	c.putText(x, y, value, theme.ColorNone, bold)
+	for column := x; column < x+ansi.StringWidth(value) && column < c.width; column++ {
+		if y >= 0 && y < len(c.cells) && column >= 0 && !c.cells[y][column].continuation {
+			c.cells[y][column].accent = true
+		}
+	}
+}
+
 func (c *threadSpatialCanvas) putRouteConnector(
 	x, y int,
 	directions threadSpatialConnector,
@@ -830,16 +829,15 @@ func (c *threadSpatialCanvas) putRouteConnector(
 	c.routeStyles[style.id] = style
 	cell := &c.cells[y][x]
 	switch {
-	case cell.crossing:
+	case cell.crossing || cell.overlap || cell.conflict:
 		// Dedicated lanes and tracks make each crossing a straight horizontal
 		// route over a straight vertical route. A further coincident stroke
-		// cannot turn the crossing into a junction.
+		// cannot turn the collision into a junction.
 	case cell.routeID == 0 || cell.routeID == style.id:
 		cell.connector |= directions
 		if cell.routeID == 0 {
 			cell.routeID = style.id
 		}
-		cell.corridor = cell.corridor || style.corridor
 	default:
 		resident := c.routeStyles[cell.routeID]
 		existingHorizontal, existingVertical := threadSpatialConnectorAxes(cell.connector)
@@ -855,31 +853,35 @@ func (c *threadSpatialCanvas) putRouteConnector(
 			// real fan-in/fan-out bundle. Preserve every arm; unlike a crossing,
 			// the routes intentionally share the remaining endpoint segment.
 			cell.connector |= directions
-			cell.corridor = cell.corridor || style.corridor
 			cell.shared = true
 		case perpendicular && (existingTurns || incomingTurns):
 			// This is a routing invariant failure, not a legitimate crossing:
 			// flattening it would sever the turning route and invent endpoints.
-			cell.connector, cell.corridor, cell.shared, cell.crossing = 0, false, false, false
+			cell.connector, cell.shared, cell.crossing = 0, false, false
 			cell.conflict = true
-			cell.color, cell.bold = theme.ColorRed, true
 		case perpendicular:
 			// Physical intersection does not imply connectivity, even when the
 			// two routes eventually share an endpoint elsewhere.
-			cell.connector, cell.corridor, cell.shared = 0, false, false
+			cell.connector, cell.shared = 0, false
 			cell.crossing = true
 		case sharesEndpoint:
 			cell.connector |= directions
-			cell.corridor = cell.corridor || style.corridor
 			cell.shared = true
 		default:
 			// Collinear overlap without a common endpoint is an independent
 			// bundle. Keep it visibly distinct from a true shared endpoint.
-			cell.connector, cell.corridor, cell.shared = 0, false, false
+			cell.connector, cell.shared = 0, false
 			cell.overlap = true
 		}
 	}
-	if style.selected {
+	if cell.crossing || cell.overlap || cell.conflict {
+		// Route collisions describe topology or renderer state, not focus. Keep
+		// them neutral so a selected edge cannot make an unrelated crossing look
+		// connected to the selected task.
+		cell.accent = false
+		cell.color = theme.ColorGray
+		cell.bold = cell.conflict
+	} else if style.selected || (cell.routeID != 0 && c.routeStyles[cell.routeID].selected) {
 		cell.accent, cell.bold = true, true
 	} else if cell.color == theme.ColorNone {
 		cell.color = theme.ColorGray
@@ -903,7 +905,7 @@ func (c *threadSpatialCanvas) putRouteArrow(x, y int, arrow rune, style threadSp
 	cell.text = string(arrow)
 	cell.connector = 0
 	cell.routeID = style.id
-	cell.crossing, cell.corridor, cell.overlap, cell.conflict = false, false, false, false
+	cell.crossing, cell.overlap, cell.conflict = false, false, false
 	// Direction markers use the same yellow active-work language as Thread
 	// frontier pointers. Selected connection strokes remain accent-colored, so
 	// the arrowhead is legible as direction rather than another focus segment.
@@ -911,42 +913,52 @@ func (c *threadSpatialCanvas) putRouteArrow(x, y int, arrow rune, style threadSp
 	cell.color, cell.bold = theme.ColorYellow, cell.bold || style.selected
 }
 
-func (c *threadSpatialCanvas) putRouteWaypoint(point threadSpatialPoint, style threadSpatialRouteStyle) {
-	if point.y < 0 || point.y >= len(c.cells) || point.x < 0 || point.x >= c.width {
-		return
-	}
-	cell := &c.cells[point.y][point.x]
-	if cell.crossing || cell.overlap || cell.conflict {
-		return
-	}
-	cell.text = "◇"
-	cell.connector = 0
-	cell.routeID = style.id
-	cell.corridor, cell.overlap, cell.conflict = false, false, false
-	if style.selected {
-		cell.accent, cell.bold = true, true
-	} else {
-		cell.color = theme.ColorGray
-	}
-}
-
-func (c *threadSpatialCanvas) putRouteCount(point threadSpatialPoint, count int, selected bool) {
+func (c *threadSpatialCanvas) putRouteCount(point threadSpatialPoint, count int, selected bool) bool {
 	if count < 2 || point.y < 0 || point.y >= len(c.cells) || point.x < 0 || point.x >= c.width {
-		return
+		return false
 	}
 	label := "+"
 	if count < 10 {
 		label = strconv.Itoa(count)
 	}
 	cells := &c.cells[point.y][point.x]
-	if cells.crossing || cells.overlap || cells.conflict || cells.text == "▶" ||
-		cells.text == "◀" || cells.text == "◇" {
-		return
+	if cells.crossing || cells.overlap || cells.conflict || cells.text != "" || cells.continuation {
+		return false
 	}
 	cells.text, cells.connector, cells.routeID = label, 0, 0
-	cells.corridor, cells.shared, cells.crossing = false, false, false
+	cells.shared, cells.crossing = false, false
 	cells.color, cells.bold, cells.accent = theme.ColorYellow, selected, false
 	cells.routeCount = true
+	return true
+}
+
+func (c *threadSpatialCanvas) putRouteCountAlong(
+	point threadSpatialPoint,
+	step, maxSteps, count int,
+	selected bool,
+) (threadSpatialPoint, bool) {
+	for attempt := 0; attempt <= maxSteps; attempt++ {
+		candidate := point
+		candidate.x += step * attempt
+		if c.putRouteCount(candidate, count, selected) {
+			return candidate, true
+		}
+	}
+	return threadSpatialPoint{}, false
+}
+
+func (c *threadSpatialCanvas) putRouteCountFallback(point threadSpatialPoint, count int, selected bool) bool {
+	if count < 2 || point.y < 0 || point.y >= len(c.cells) || point.x < 0 || point.x >= c.width {
+		return false
+	}
+	label := "+"
+	if count < 10 {
+		label = strconv.Itoa(count)
+	}
+	c.cells[point.y][point.x] = threadSpatialCell{
+		text: label, color: theme.ColorYellow, bold: selected, routeCount: true,
+	}
+	return true
 }
 
 func (c *threadSpatialCanvas) routeHorizontal(x0, x1, y int, style threadSpatialRouteStyle) {
@@ -1011,15 +1023,85 @@ func threadSpatialConnectorGlyph(directions threadSpatialConnector) string {
 }
 
 func threadSpatialSharedConnectorGlyph(directions threadSpatialConnector) string {
-	horizontal, vertical := threadSpatialConnectorAxes(directions)
-	switch {
-	case horizontal && !vertical:
-		return "━"
-	case vertical && !horizontal:
-		return "┃"
+	switch directions {
+	case threadSpatialLeft, threadSpatialRight, threadSpatialLeft | threadSpatialRight:
+		return "═"
+	case threadSpatialUp, threadSpatialDown, threadSpatialUp | threadSpatialDown:
+		return "║"
+	case threadSpatialRight | threadSpatialDown:
+		return "╔"
+	case threadSpatialLeft | threadSpatialDown:
+		return "╗"
+	case threadSpatialRight | threadSpatialUp:
+		return "╚"
+	case threadSpatialLeft | threadSpatialUp:
+		return "╝"
+	case threadSpatialLeft | threadSpatialRight | threadSpatialDown:
+		return "╦"
+	case threadSpatialLeft | threadSpatialRight | threadSpatialUp:
+		return "╩"
+	case threadSpatialUp | threadSpatialDown | threadSpatialRight:
+		return "╠"
+	case threadSpatialUp | threadSpatialDown | threadSpatialLeft:
+		return "╣"
+	case threadSpatialLeft | threadSpatialRight | threadSpatialUp | threadSpatialDown:
+		return "╬"
 	default:
-		return "◆"
+		return " "
 	}
+}
+
+func threadSpatialFocusConnectorGlyph(directions threadSpatialConnector) string {
+	switch directions {
+	case threadSpatialLeft, threadSpatialRight, threadSpatialLeft | threadSpatialRight:
+		return "━"
+	case threadSpatialUp, threadSpatialDown, threadSpatialUp | threadSpatialDown:
+		return "┃"
+	case threadSpatialRight | threadSpatialDown:
+		return "┏"
+	case threadSpatialLeft | threadSpatialDown:
+		return "┓"
+	case threadSpatialRight | threadSpatialUp:
+		return "┗"
+	case threadSpatialLeft | threadSpatialUp:
+		return "┛"
+	case threadSpatialLeft | threadSpatialRight | threadSpatialDown:
+		return "┳"
+	case threadSpatialLeft | threadSpatialRight | threadSpatialUp:
+		return "┻"
+	case threadSpatialUp | threadSpatialDown | threadSpatialRight:
+		return "┣"
+	case threadSpatialUp | threadSpatialDown | threadSpatialLeft:
+		return "┫"
+	case threadSpatialLeft | threadSpatialRight | threadSpatialUp | threadSpatialDown:
+		return "╋"
+	default:
+		return " "
+	}
+}
+
+func (c *threadSpatialCanvas) routeConflictCount() int {
+	count := 0
+	for row := range c.cells {
+		for column := range c.cells[row] {
+			if c.cells[row][column].conflict {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+func threadSpatialRouteConflictSummary(canvas *threadSpatialCanvas) string {
+	conflicts := canvas.routeConflictCount()
+	if conflicts == 0 {
+		return ""
+	}
+	label := fmt.Sprintf("%d routing conflict", conflicts)
+	if conflicts != 1 {
+		label += "s"
+	}
+	return label
 }
 
 func (c *threadSpatialCanvas) renderLine(row int, s *styles) string {
@@ -1062,9 +1144,8 @@ func (c *threadSpatialCanvas) renderLine(row int, s *styles) string {
 				text = "╳"
 			case cell.shared:
 				text = threadSpatialSharedConnectorGlyph(cell.connector)
-			case cell.corridor && cell.connector&(threadSpatialLeft|threadSpatialRight) != 0 &&
-				cell.connector&(threadSpatialUp|threadSpatialDown) == 0:
-				text = "┄"
+			case cell.accent && cell.connector != 0:
+				text = threadSpatialFocusConnectorGlyph(cell.connector)
 			case cell.connector != 0:
 				text = threadSpatialConnectorGlyph(cell.connector)
 			}
@@ -1128,6 +1209,9 @@ func renderThreadSpatial(projection core.ThreadGraphProjection, pathIssue, selec
 		focus = layout.columnLabels[selected.column]
 	}
 	header := fmt.Sprintf("spatial graph · %s · focus %s · prerequisite ─▶ dependent · %s", topology, focus, health)
+	if routeIssue := threadSpatialRouteConflictSummary(canvas); routeIssue != "" {
+		header += " · " + routeIssue
+	}
 	if pathIssue != "" {
 		header += " · local path unavailable"
 	}
@@ -1349,7 +1433,7 @@ func putThreadSpatialBoundaryLabel(
 	for distance := 0; distance <= width; distance++ {
 		for _, x := range []int{desired - distance, desired + distance} {
 			if available(x) {
-				canvas.putText(x, row, label, theme.ColorYellow, true)
+				canvas.putAccentText(x, row, label, true)
 				return
 			}
 		}
@@ -1416,10 +1500,13 @@ func renderThreadSpatialCanvasWindow(
 	for _, route := range routes {
 		drawThreadSpatialRouteAdornments(canvas, route, route.edge.From == selected || route.edge.To == selected)
 	}
-	drawThreadSpatialRouteCounts(canvas, routes, selected)
 	for _, node := range layout.nodes {
 		drawThreadSpatialNode(canvas, node, node.node.TaskID == selected)
 	}
+	// Counts normally replace one cell of a shared endpoint stub. Drawing them
+	// after nodes also permits the explicit node-border fallback used when every
+	// safe stub cell is congested; endpoint multiplicity is never silently lost.
+	drawThreadSpatialRouteCounts(canvas, layout, routes, selected)
 	return canvas
 }
 
@@ -1447,7 +1534,7 @@ func drawThreadSpatialRouteSegments(canvas *threadSpatialCanvas, route threadSpa
 	for _, segment := range route.segments {
 		style := threadSpatialRouteStyle{
 			id: route.id, from: route.edge.From, to: route.edge.To,
-			selected: selected, corridor: segment.corridor,
+			selected: selected,
 		}
 		switch {
 		case segment.from.y == segment.to.y:
@@ -1460,52 +1547,99 @@ func drawThreadSpatialRouteSegments(canvas *threadSpatialCanvas, route threadSpa
 
 func drawThreadSpatialRouteAdornments(canvas *threadSpatialCanvas, route threadSpatialRoute, selected bool) {
 	style := threadSpatialRouteStyle{id: route.id, from: route.edge.From, to: route.edge.To, selected: selected}
-	for _, waypoint := range route.waypoints {
-		canvas.putRouteWaypoint(waypoint, style)
-	}
 	canvas.putRouteArrow(route.arrow.x, route.arrow.y, route.arrowRune, style)
 }
 
-func drawThreadSpatialRouteCounts(canvas *threadSpatialCanvas, routes []threadSpatialRoute, selected string) {
+func drawThreadSpatialRouteCounts(
+	canvas *threadSpatialCanvas,
+	layout threadSpatialLayout,
+	routes []threadSpatialRoute,
+	selected string,
+) {
 	type routeEndKey struct {
 		taskID string
 		kind   byte
 		side   rune
 	}
 	type routeEnd struct {
-		point threadSpatialPoint
-		count int
+		point    threadSpatialPoint
+		fallback threadSpatialPoint
+		step     int
+		maxSteps int
+		count    int
 	}
 	ends := make(map[routeEndKey]routeEnd)
 	order := make([]routeEndKey, 0)
-	add := func(key routeEndKey, point threadSpatialPoint) {
+	add := func(key routeEndKey, point, fallback threadSpatialPoint, step, maxSteps int) {
 		end := ends[key]
 		if end.count == 0 {
 			order = append(order, key)
+			end.point, end.fallback, end.step, end.maxSteps = point, fallback, step, maxSteps
+		} else {
+			end.maxSteps = min(end.maxSteps, maxSteps)
 		}
-		end.point, end.count = point, end.count+1
+		end.count++
 		ends[key] = end
 	}
 	for _, route := range routes {
 		if len(route.segments) == 0 {
 			continue
 		}
-		sourcePoint := route.segments[0].from
+		first := route.segments[0]
+		sourcePoint := first.from
 		sourcePoint.x += 2
-		add(routeEndKey{taskID: route.edge.From, kind: 's', side: '▶'}, sourcePoint)
+		sourceFallback := threadSpatialCountFallback(layout, route.edge.From, selected, 's', '▶')
+		sourceStep := sign(first.to.x - first.from.x)
+		add(
+			routeEndKey{taskID: route.edge.From, kind: 's', side: '▶'},
+			sourcePoint, sourceFallback, sourceStep, max(0, abs(first.to.x-sourcePoint.x)-1),
+		)
 
+		last := route.segments[len(route.segments)-1]
 		targetPoint := route.arrow
 		if route.arrowRune == '▶' {
 			targetPoint.x--
 		} else {
 			targetPoint.x++
 		}
-		add(routeEndKey{taskID: route.edge.To, kind: 't', side: route.arrowRune}, targetPoint)
+		targetFallback := threadSpatialCountFallback(layout, route.edge.To, selected, 't', route.arrowRune)
+		targetStep := sign(last.from.x - route.arrow.x)
+		add(
+			routeEndKey{taskID: route.edge.To, kind: 't', side: route.arrowRune},
+			targetPoint, targetFallback, targetStep, max(0, abs(last.from.x-targetPoint.x)-1),
+		)
 	}
 	for _, key := range order {
 		end := ends[key]
-		canvas.putRouteCount(end.point, end.count, key.taskID == selected)
+		if _, ok := canvas.putRouteCountAlong(end.point, end.step, end.maxSteps, end.count, key.taskID == selected); !ok {
+			canvas.putRouteCountFallback(end.fallback, end.count, key.taskID == selected)
+		}
 	}
+}
+
+func threadSpatialCountFallback(
+	layout threadSpatialLayout,
+	taskID, selected string,
+	kind byte,
+	side rune,
+) threadSpatialPoint {
+	placement, ok := layout.byID[taskID]
+	if !ok {
+		return threadSpatialPoint{x: -1, y: -1}
+	}
+	topY := placement.y + 1
+	if taskID == selected {
+		topY = placement.y
+	}
+	x := placement.x + threadSpatialNodeWidth/2
+	if kind == 't' {
+		if side == '▶' {
+			x = placement.x + 2
+		} else {
+			x = placement.x + threadSpatialNodeWidth - 3
+		}
+	}
+	return threadSpatialPoint{x: x, y: topY}
 }
 
 func drawThreadSpatialNode(canvas *threadSpatialCanvas, placement threadSpatialNode, selected bool) {
@@ -1544,8 +1678,8 @@ func drawThreadSpatialNode(canvas *threadSpatialCanvas, placement threadSpatialN
 	}
 
 	// Selection expands inside its pre-reserved five-row slot without changing
-	// the box's semantic status color. Focus is conveyed by geometry, the yellow
-	// pointer, and accent-colored touching edges rather than repainting state.
+	// the box's semantic status color. Focus is conveyed by the expanded geometry
+	// and accent-colored touching edges rather than repainting task state.
 	line := func(value string) string {
 		return vertical + " " + padRight(truncate(value, insideWidth), insideWidth) + " " + vertical
 	}
@@ -1558,7 +1692,6 @@ func drawThreadSpatialNode(canvas *threadSpatialCanvas, placement threadSpatialN
 	canvas.putText(placement.x, placement.y+2, line("["+placement.alias+"] "+statusLabel), color, false)
 	canvas.putText(placement.x, placement.y+3, line(string(node.State.Role)+" / "+string(node.State.Gate)), color, false)
 	canvas.putText(placement.x, placement.y+4, bottom, color, true)
-	canvas.putText(placement.x-3, placement.y+2, "›", theme.ColorYellow, true)
 }
 
 func threadSpatialStatusLegend(s *styles) string {
@@ -1579,10 +1712,9 @@ func threadSpatialStatusLegend(s *styles) string {
 }
 
 func threadSpatialRoleLegend(s *styles) string {
-	return s.dim("roles") + "  ┌ member  ╔ external gate  " +
-		s.accent("magenta=focus") + "  " +
-		s.fg(theme.ColorYellow, "› focus  ▶/◀ direction") +
-		"  2 fan  ┄ track  ◇ turn  ╳ cross  ━/┃/◆ shared  ≋ overlap  ! conflict"
+	return s.dim("roles") + "  ┌ member  ╔ gate  " +
+		s.accent("━ focus route") + "  " +
+		s.fg(theme.ColorYellow, "▶ direction  2 fan")
 }
 
 func threadSpatialInspector(projection core.ThreadGraphProjection, layout threadSpatialLayout, selected string, width int, s *styles) []string {
