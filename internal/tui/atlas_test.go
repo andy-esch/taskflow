@@ -807,6 +807,70 @@ func TestAtlasRoundTripRestoresDetailFocusAndZoom(t *testing.T) {
 	}
 }
 
+func TestAtlasRoundTripPreservesAutomaticImmersiveZoomOwnership(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("a")) // atlas → the seeded space
+	m = tm.(Model)
+	m.onDash = false
+	m.focus = focusDetail
+	m.detail.SetContent("thread", threadDetail{view: threadDetailSpatial})
+	m.zoom = true
+	m.immersiveZoom = true
+
+	tm, _ = m.Update(press("a"))
+	m = tm.(Model)
+	if !m.onAtlas || m.zoom || m.immersiveZoom || !m.atlasResume.immersiveZoom {
+		t.Fatalf("atlas entry lost the immersive ownership snapshot: atlas=%v zoom=%v immersive=%v resume=%+v",
+			m.onAtlas, m.zoom, m.immersiveZoom, m.atlasResume)
+	}
+	tm, _ = m.Update(press("a"))
+	m = tm.(Model)
+	if m.onAtlas || !m.zoom || !m.immersiveZoom {
+		t.Fatalf("atlas return did not restore immersive zoom ownership: atlas=%v zoom=%v immersive=%v",
+			m.onAtlas, m.zoom, m.immersiveZoom)
+	}
+
+	// Retreating from the spatial presentation must now consume only the zoom
+	// that presentation originally requested.
+	tm, _ = m.Update(press("esc"))
+	m = tm.(Model)
+	if m.zoom || m.immersiveZoom || selectedThreadDetail(t, m).detailViewName() != string(threadDetailTopology) {
+		t.Fatalf("spatial retreat stranded full-screen after Atlas: zoom=%v immersive=%v view=%q",
+			m.zoom, m.immersiveZoom, selectedThreadDetail(t, m).detailViewName())
+	}
+}
+
+func TestAtlasSessionCachesPreAtlasImmersiveState(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	tm, _ := m.Update(press("a")) // atlas → alpha
+	m = tm.(Model)
+	m.onDash = false
+	m.focus = focusDetail
+	m.detail.SetContent("thread", threadDetail{view: threadDetailSpatial})
+	m.zoom = true
+	m.immersiveZoom = true
+
+	tm, _ = m.Update(press("a")) // alpha → atlas
+	m = tm.(Model)
+	m.saveSession()
+	saved := m.sessions[workspaceKey(m.workspace)]
+	if !saved.zoom || !saved.immersiveZoom || saved.focus != focusDetail {
+		t.Fatalf("session cached Atlas-clobbered state: focus=%v zoom=%v immersive=%v",
+			saved.focus, saved.zoom, saved.immersiveZoom)
+	}
+
+	// The normal workspace restoration path consumes the same fields. Exercise
+	// their interaction here without allowing an entity reload to replace this
+	// deliberately synthetic Thread detail in the generic Atlas fixture.
+	m.onAtlas = false
+	m.detail, m.focus, m.zoom, m.immersiveZoom = saved.detail, saved.focus, saved.zoom, saved.immersiveZoom
+	tm, _ = m.Update(press("esc"))
+	m = tm.(Model)
+	if m.zoom || m.immersiveZoom {
+		t.Fatalf("restored automatic immersion could not retreat: zoom=%v immersive=%v", m.zoom, m.immersiveZoom)
+	}
+}
+
 // Switching spaces is navigation away, so the incoming space's own cached state wins over
 // the snapshot taken from the space that was left.
 func TestAtlasSwitchDiscardsTheResumeSnapshotOfTheSpaceLeft(t *testing.T) {

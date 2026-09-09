@@ -787,6 +787,41 @@ func TestThreadSpatialGraphUsesDirectionalStableIdentityNavigation(t *testing.T)
 	}
 }
 
+func TestThreadSpatialGraphPreservesManualZoomAndOwnsNoZoomKey(t *testing.T) {
+	m, _ := threadModel(t)
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = openThreads(t, tm.(Model))
+	m.setFocus(focusDetail)
+
+	// A user-entered zoom predates the spatial presentation and remains theirs.
+	tm, _ = m.Update(press("z"))
+	m = tm.(Model)
+	if !m.zoom || m.immersiveZoom {
+		t.Fatalf("manual zoom ownership = zoom:%v immersive:%v", m.zoom, m.immersiveZoom)
+	}
+	for range 2 {
+		tm, _ = m.Update(press("v"))
+		m = tm.(Model)
+	}
+	if got := selectedThreadDetail(t, m).detailViewName(); got != string(threadDetailSpatial) ||
+		!m.zoom || m.immersiveZoom {
+		t.Fatalf("spatial entry consumed manual zoom: view=%q zoom=%v immersive=%v", got, m.zoom, m.immersiveZoom)
+	}
+
+	// Spatial navigation owns z, so it cannot accidentally rewrite shell zoom
+	// ownership while the presentation is immersive.
+	tm, _ = m.Update(press("z"))
+	m = tm.(Model)
+	if !m.zoom || m.immersiveZoom {
+		t.Fatalf("z changed spatial zoom ownership: zoom=%v immersive=%v", m.zoom, m.immersiveZoom)
+	}
+	tm, _ = m.Update(press("esc"))
+	m = tm.(Model)
+	if got := selectedThreadDetail(t, m).detailViewName(); got != string(threadDetailTopology) || !m.zoom || m.immersiveZoom {
+		t.Fatalf("spatial retreat consumed manual zoom: view=%q zoom=%v immersive=%v", got, m.zoom, m.immersiveZoom)
+	}
+}
+
 func TestThreadStructuredDetailYankCopiesHighlightedTask(t *testing.T) {
 	m, _ := threadModel(t)
 	m = openThreads(t, m)
@@ -993,6 +1028,81 @@ func TestThreadSpatialLongEdgeUsesNodeFreeTrack(t *testing.T) {
 	}
 }
 
+func TestThreadSpatialLongEdgeKeepsDeepestRowTrackInsideCanvas(t *testing.T) {
+	a, b, c, d := "a", "b", "c", "d"
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: a, Label: "upper source", Role: core.ThreadTaskMember},
+			{TaskID: b, Label: "deep source", Role: core.ThreadTaskMember},
+			{TaskID: c, Label: "middle", Role: core.ThreadTaskMember},
+			{TaskID: d, Label: "target", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: a, To: c},
+			{From: c, To: d},
+			{From: b, To: d},
+		},
+	}
+	layout := buildThreadSpatialLayout(projection)
+	from, middle, to := layout.byID[b], layout.byID[c], layout.byID[d]
+	if from.row == 0 || to.column-from.column <= 1 {
+		t.Fatalf("fixture did not put a skipped-layer endpoint on the deepest row: from=%+v to=%+v", from, to)
+	}
+	trackY := threadSpatialNodeTop + min(from.row, to.row)*threadSpatialNodeStrideY + threadSpatialNodeSlotHeight
+	if trackY >= layout.height {
+		t.Fatalf("long-edge track row %d falls outside layout height %d", trackY, layout.height)
+	}
+	canvas := renderThreadSpatialCanvas(projection, layout, b)
+	if got := threadSpatialConnectorGlyph(canvas.cells[trackY][middle.x-2].connector); got != "─" {
+		t.Fatalf("deepest-row long edge was clipped at its horizontal track: glyph=%q", got)
+	}
+	if !canvas.cells[trackY][middle.x-2].accent {
+		t.Fatal("deepest-row long edge lost selected-route emphasis")
+	}
+}
+
+func TestThreadSpatialPresentationIsInvariantUnderEquivalentProjectionPermutations(t *testing.T) {
+	base := core.ThreadGraphProjection{
+		View: core.ThreadView{GraphHealth: core.GraphHealthy, ProjectionHealth: core.GraphHealthy},
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Label: "alpha", Status: domain.StatusCompleted, Role: core.ThreadTaskMember},
+			{TaskID: "b", Label: "beta", Status: domain.StatusNextUp, Role: core.ThreadTaskMember},
+			{TaskID: "c", Label: "charlie", Status: domain.StatusReadyToStart, Role: core.ThreadTaskMember},
+			{TaskID: "gate", Label: "external", Status: domain.StatusCompleted, Role: core.ThreadTaskExternalGate},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: "a", To: "c"}, {From: "b", To: "c"}, {From: "gate", To: "b"},
+		},
+		Waves: []core.ThreadGraphWave{
+			{Index: 1, TaskIDs: []string{"a", "b"}}, {Index: 2, TaskIDs: []string{"c"}},
+		},
+	}
+	permuted := base
+	permuted.Nodes = []core.ThreadGraphNode{base.Nodes[3], base.Nodes[2], base.Nodes[1], base.Nodes[0]}
+	permuted.Edges = []core.ThreadGraphEdge{base.Edges[2], base.Edges[1], base.Edges[0]}
+	permuted.Waves = []core.ThreadGraphWave{
+		{Index: 2, TaskIDs: []string{"c"}}, {Index: 1, TaskIDs: []string{"b", "a"}},
+	}
+
+	if got, want := buildThreadSpatialLayout(permuted), buildThreadSpatialLayout(base); !reflect.DeepEqual(got, want) {
+		t.Fatalf("equivalent projection permutation changed spatial layout:\n got: %#v\nwant: %#v", got, want)
+	}
+	if got, want := threadGraphAliases(permuted), threadGraphAliases(base); !reflect.DeepEqual(got, want) {
+		t.Fatalf("equivalent projection permutation changed aliases: got %v want %v", got, want)
+	}
+	baseLayout := buildThreadSpatialLayout(base)
+	gotNeeds, gotUnlocks := threadSpatialConnections(permuted, baseLayout, "c")
+	wantNeeds, wantUnlocks := threadSpatialConnections(base, baseLayout, "c")
+	if gotNeeds != wantNeeds || gotUnlocks != wantUnlocks {
+		t.Fatalf("equivalent edge permutation changed inspector connections: got (%q, %q) want (%q, %q)",
+			gotNeeds, gotUnlocks, wantNeeds, wantUnlocks)
+	}
+	if got, want := renderThreadSpatial(permuted, "", "c", 120, 30, &testStyles),
+		renderThreadSpatial(base, "", "c", 120, 30, &testStyles); got != want {
+		t.Fatalf("equivalent projection permutation changed rendered output:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
 func TestThreadSpatialSelectedNodeExpandsInsideStableSlot(t *testing.T) {
 	projection := core.ThreadGraphProjection{Nodes: []core.ThreadGraphNode{{
 		TaskID: "task-id", Label: "selected task", Status: domain.StatusNextUp,
@@ -1083,6 +1193,60 @@ func TestThreadSpatialGraphFailsOpenToWavesBeyondPrototypeCapacity(t *testing.T)
 		if got := ansi.StringWidth(line); got > 100 {
 			t.Fatalf("capacity fallback line width=%d: %q", got, line)
 		}
+	}
+}
+
+func TestThreadSpatialCapacityGuardsEdgesAndCanvasIndependently(t *testing.T) {
+	t.Run("edges", func(t *testing.T) {
+		projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, 100)}
+		for index := range projection.Nodes {
+			projection.Nodes[index] = core.ThreadGraphNode{TaskID: fmt.Sprintf("task-%03d", index), Role: core.ThreadTaskMember}
+			for prerequisite := 0; prerequisite < index; prerequisite++ {
+				projection.Edges = append(projection.Edges, core.ThreadGraphEdge{
+					From: projection.Nodes[prerequisite].TaskID, To: projection.Nodes[index].TaskID,
+				})
+			}
+		}
+		layout := buildThreadSpatialLayout(projection)
+		if len(layout.nodes) > threadSpatialMaxNodes || layout.width*layout.height > threadSpatialMaxCanvasCells {
+			t.Fatalf("edge fixture tripped a different guard: nodes=%d canvas=%dx%d", len(layout.nodes), layout.width, layout.height)
+		}
+		if issue := threadSpatialCapacityIssue(layout, len(projection.Edges)); !strings.Contains(issue, "edges exceeds") {
+			t.Fatalf("edge guard issue=%q", issue)
+		}
+	})
+
+	t.Run("canvas cells", func(t *testing.T) {
+		projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, 505)}
+		for index := range projection.Nodes {
+			projection.Nodes[index] = core.ThreadGraphNode{TaskID: fmt.Sprintf("task-%03d", index), Role: core.ThreadTaskMember}
+		}
+		// A 255-node chain creates width while the other 250 sources create
+		// height, staying below both the node and edge guards.
+		for index := 1; index < 255; index++ {
+			projection.Edges = append(projection.Edges, core.ThreadGraphEdge{
+				From: projection.Nodes[index-1].TaskID, To: projection.Nodes[index].TaskID,
+			})
+		}
+		layout := buildThreadSpatialLayout(projection)
+		if len(layout.nodes) > threadSpatialMaxNodes || len(projection.Edges) > threadSpatialMaxEdges {
+			t.Fatalf("canvas fixture tripped a different guard: nodes=%d edges=%d", len(layout.nodes), len(projection.Edges))
+		}
+		if issue := threadSpatialCapacityIssue(layout, len(projection.Edges)); !strings.Contains(issue, "canvas limit") {
+			t.Fatalf("canvas guard issue=%q for %dx%d", issue, layout.width, layout.height)
+		}
+	})
+}
+
+func TestThreadSpatialNarrowFallbackAllocatesNoCanvasBeforeCapacityChecks(t *testing.T) {
+	projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, threadSpatialMaxNodes+1)}
+	for index := range projection.Nodes {
+		projection.Nodes[index] = core.ThreadGraphNode{TaskID: fmt.Sprintf("task-%04d", index), Role: core.ThreadTaskMember}
+	}
+	plain := ansi.Strip(renderThreadSpatial(projection, "", projection.Nodes[0].TaskID,
+		threadSpatialMinWidth-1, threadSpatialMinHeight, &testStyles))
+	if !strings.Contains(plain, "needs at least") || strings.Contains(plain, "capacity guard") {
+		t.Fatalf("narrow no-canvas path did not remain independent of capacity fallback:\n%s", plain)
 	}
 }
 

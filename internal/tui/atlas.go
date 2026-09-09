@@ -303,9 +303,10 @@ func (m Model) handleAtlasKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // not navigation to a new surface — the space is still open, right where it was — so the
 // snapshot is put back. A switch discards it; the incoming space restores its own.
 type atlasResume struct {
-	focus focus
-	zoom  bool
-	set   bool
+	focus         focus
+	zoom          bool
+	immersiveZoom bool
+	set           bool
 }
 
 func (m *Model) enterAtlas(refresh bool) tea.Cmd {
@@ -314,7 +315,9 @@ func (m *Model) enterAtlas(refresh bool) tea.Cmd {
 		return nil
 	}
 	if !m.onAtlas {
-		m.atlasResume = atlasResume{focus: m.focus, zoom: m.zoom, set: true}
+		m.atlasResume = atlasResume{
+			focus: m.focus, zoom: m.zoom, immersiveZoom: m.immersiveZoom, set: true,
+		}
 	}
 	m.onAtlas = true
 	m.focus = focusList
@@ -356,6 +359,7 @@ func (m *Model) exitAtlas() {
 		return
 	}
 	m.focus = m.atlasResume.focus
+	m.immersiveZoom = m.atlasResume.immersiveZoom
 	if m.atlasResume.zoom != m.zoom {
 		m.zoom = m.atlasResume.zoom
 		m.recomputeLayout()
