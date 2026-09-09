@@ -76,13 +76,13 @@ crossing gaps, waypoints, or outer-boundary skip routes.
 
 The spatial adapter now assigns deterministic per-edge boundary lanes and node-free inter-row
 tracks before it allocates the canvas. Long and reverse routes retain their endpoints through
-explicit waypoints and subdued corridors; unrelated perpendicular routes render as crossings rather
-than false junctions; shared endpoint geometry and compact fan-in/fan-out counts remain distinct.
-The selected task's incident routes stay magenta while semantic node colors and yellow direction
-markers remain independent. When a selected incident edge is clipped, its visible boundary names
-the offscreen endpoint alias instead of leaving an unattributed line. Panning also omits a route
-whose two endpoint nodes are both outside the viewport, preventing unrelated offscreen work from
-becoming a wall of unowned corridors while preserving every route incident to a visible node.
+continuous elbow strokes; unrelated perpendicular routes render as crossings rather than false
+junctions; shared endpoint geometry and compact fan-in/fan-out counts remain distinct. The selected
+task's incident routes stay magenta while semantic node colors and yellow direction markers remain
+independent. When a selected incident edge is clipped, its visible boundary names the offscreen
+endpoint alias instead of leaving an unattributed line. Panning also omits a route whose two endpoint
+nodes are both outside the viewport, preventing unrelated offscreen work from becoming a wall of
+unowned routes while preserving every route incident to a visible node.
 
 External-gate placement now settles a stable fixed point for cascaded gates, and column headings
 identify presentation layers separately from core member waves. Regression fixtures cover dense
@@ -117,3 +117,21 @@ MiB. The remaining pre-layout work and repeated layout construction are delibera
 [cache and preflight spatial Thread layout work](6g8ezj5e51hg-cache-and-preflight-spatial-thread-layout-work.md),
 sequenced immediately after this task in the production Thread. Both implementation audits are
 closed with every finding either fixed here or linked to that follow-up.
+
+## Design review closeout (2026-09-09)
+
+The independent
+[route trustworthiness design review](../audits/6g8g43px88xr-2026-09-09-dense-thread-route-trustworthiness-design-review.md)
+found the graph topologically honest but its visual hierarchy too dependent on color and a
+truncated legend. The presentation now gives ordinary, focused, and genuinely shared routes
+separate light, heavy, and double-line geometry. Crossings, unrelated overlaps, and renderer
+conflicts stay neutral even when a selected route passes through them; routing conflicts are also
+reported explicitly in the header instead of borrowing task-health red.
+
+Long paths use continuous elbows instead of dotted corridors and waypoint diamonds. Fan counts walk
+outward along congested endpoint stubs and fall back to the node border rather than disappearing.
+Selected boundary aliases use the focus accent, the redundant connector-adjacent caret is removed,
+and the inline legend fits within 72 cells while uncommon collision grammar remains available in
+contextual `?` help. Focused regressions cover these visual channels, congested and fully occupied
+count placement, neutral collisions, continuous turns, boundary attribution, and out-of-band
+renderer diagnostics without changing `ThreadGraphProjection` or graph semantics.
