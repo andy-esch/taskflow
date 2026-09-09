@@ -52,23 +52,32 @@ func buildThreadSpatialLayout(projection core.ThreadGraphProjection) threadSpati
 	byNode := make(map[string]core.ThreadGraphNode, len(projection.Nodes))
 	order := make(map[string]int, len(projection.Nodes))
 	allIDs := make([]string, 0, len(projection.Nodes))
-	for index, node := range projection.Nodes {
+	for _, node := range orderedThreadGraphNodes(projection.Nodes) {
 		if _, seen := byNode[node.TaskID]; seen {
 			continue
 		}
 		byNode[node.TaskID] = node
-		order[node.TaskID] = index
+		order[node.TaskID] = len(order)
 		allIDs = append(allIDs, node.TaskID)
 	}
+	missing := make(map[string]bool)
 	for _, wave := range projection.Waves {
 		for _, taskID := range wave.TaskIDs {
 			if _, exists := byNode[taskID]; exists || taskID == "" {
 				continue
 			}
-			byNode[taskID] = core.ThreadGraphNode{TaskID: taskID, Label: taskID, Role: core.ThreadTaskMember}
-			order[taskID] = len(order)
-			allIDs = append(allIDs, taskID)
+			missing[taskID] = true
 		}
+	}
+	missingIDs := make([]string, 0, len(missing))
+	for taskID := range missing {
+		missingIDs = append(missingIDs, taskID)
+	}
+	sort.Strings(missingIDs)
+	for _, taskID := range missingIDs {
+		byNode[taskID] = core.ThreadGraphNode{TaskID: taskID, Label: taskID, Role: core.ThreadTaskMember}
+		order[taskID] = len(order)
+		allIDs = append(allIDs, taskID)
 	}
 
 	columns := rankThreadSpatialColumns(allIDs, projection.Edges, order)
@@ -95,7 +104,9 @@ func buildThreadSpatialLayout(projection core.ThreadGraphProjection) threadSpati
 			layout.nodes = append(layout.nodes, placement)
 			layout.byID[taskID] = placement
 			layout.width = max(layout.width, placement.x+threadSpatialNodeWidth+4)
-			layout.height = max(layout.height, placement.y+threadSpatialNodeSlotHeight)
+			// Keep the inter-row track after the deepest occupied slot inside the
+			// canvas. Skipped-layer edges deliberately route through this blank row.
+			layout.height = max(layout.height, placement.y+threadSpatialNodeStrideY)
 		}
 	}
 	return layout
@@ -673,6 +684,9 @@ func renderThreadSpatial(projection core.ThreadGraphProjection, pathIssue, selec
 	}
 	layout := buildThreadSpatialLayout(projection)
 	selectedTaskID = threadSpatialSelectedTaskIDInLayout(layout, selectedTaskID)
+	// The narrow explanation allocates no graph canvas, so it intentionally
+	// precedes prototype capacity checks. Small terminals can always retreat to
+	// the wave reader even when the spatial projection itself is oversized.
 	if width < threadSpatialMinWidth || height < threadSpatialMinHeight {
 		return renderThreadSpatialNarrow(projection, layout, selectedTaskID, width, height, s)
 	}
@@ -762,7 +776,7 @@ func renderThreadSpatialCanvas(projection core.ThreadGraphProjection, layout thr
 		x := 3 + column*strideX
 		canvas.putText(x, 0, truncate(label, threadSpatialNodeWidth), theme.ColorGray, false)
 	}
-	for _, edge := range projection.Edges {
+	for _, edge := range orderedThreadGraphEdges(projection.Edges) {
 		from, fromOK := spatialPlacement(layout, edge.From)
 		to, toOK := spatialPlacement(layout, edge.To)
 		if !fromOK || !toOK {
@@ -968,7 +982,7 @@ func threadSpatialInspectorBox(title string, content []string, width int, s *sty
 func threadSpatialConnections(projection core.ThreadGraphProjection, layout threadSpatialLayout, selected string) (string, string) {
 	needs := make([]string, 0)
 	unlocks := make([]string, 0)
-	for _, edge := range projection.Edges {
+	for _, edge := range orderedThreadGraphEdges(projection.Edges) {
 		switch {
 		case edge.To == selected:
 			needs = append(needs, threadSpatialConnectionLabel(layout, edge.From))

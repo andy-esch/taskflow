@@ -71,16 +71,17 @@ type pendingJump struct {
 // chrome, modal state, and the watcher are deliberately excluded; only the active space
 // owns a watcher, and transient overlays should never reopen after a switch.
 type spaceSession struct {
-	tabs         []*entityTab
-	active       int
-	onDash       bool
-	dash         dashboard
-	detail       detailPane
-	focus        focus
-	zoom         bool
-	navStack     []navLoc
-	detailGen    int
-	movedAwayKey string
+	tabs          []*entityTab
+	active        int
+	onDash        bool
+	dash          dashboard
+	detail        detailPane
+	focus         focus
+	zoom          bool
+	immersiveZoom bool
+	navStack      []navLoc
+	detailGen     int
+	movedAwayKey  string
 }
 
 func workspaceKey(workspace core.Workspace) string {
@@ -95,9 +96,15 @@ func (m *Model) saveSession() {
 	if key == "." || m.svc == nil {
 		return
 	}
+	focus, zoom, immersiveZoom := m.focus, m.zoom, m.immersiveZoom
+	if m.onAtlas && m.atlasResume.set {
+		// Atlas temporarily clobbers the open space's pane state. A switch must
+		// cache the state from before Atlas entry, not the registry's list focus.
+		focus, zoom, immersiveZoom = m.atlasResume.focus, m.atlasResume.zoom, m.atlasResume.immersiveZoom
+	}
 	m.sessions[key] = spaceSession{
 		tabs: m.tabs, active: m.active, onDash: m.onDash, dash: m.dash,
-		detail: m.detail, focus: m.focus, zoom: m.zoom,
+		detail: m.detail, focus: focus, zoom: zoom, immersiveZoom: immersiveZoom,
 		navStack: append([]navLoc(nil), m.navStack...), detailGen: m.detailGen,
 		movedAwayKey: m.movedAwayKey,
 	}
@@ -130,7 +137,7 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 	saved, restored := m.sessions[key]
 	if restored {
 		m.tabs, m.active, m.onDash, m.dash = saved.tabs, saved.active, saved.onDash, saved.dash
-		m.detail, m.focus, m.zoom = saved.detail, saved.focus, saved.zoom
+		m.detail, m.focus, m.zoom, m.immersiveZoom = saved.detail, saved.focus, saved.zoom, saved.immersiveZoom
 		m.navStack, m.detailGen, m.movedAwayKey = saved.navStack, saved.detailGen, saved.movedAwayKey
 	} else {
 		m.tabs = newEntityTabs(m.st)
@@ -140,6 +147,7 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 		m.detail = newDetailPane(m.st)
 		m.focus = focusList
 		m.zoom = false
+		m.immersiveZoom = false
 		m.navStack = nil
 		m.detailGen = 0
 		m.movedAwayKey = ""

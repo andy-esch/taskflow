@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -1251,26 +1252,65 @@ func threadGraphTask(projection core.ThreadGraphProjection, taskID string) (doma
 	return domain.Task{}, false
 }
 
+// The core projection producer already emits canonical ordering. Keeping that
+// boundary explicit here makes alternate presentation adapters deterministic
+// even when tests or future portable producers supply equivalent slices in a
+// different order.
+func orderedThreadGraphNodes(nodes []core.ThreadGraphNode) []core.ThreadGraphNode {
+	ordered := append([]core.ThreadGraphNode(nil), nodes...)
+	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].TaskID < ordered[j].TaskID })
+	return ordered
+}
+
+func orderedThreadGraphEdges(edges []core.ThreadGraphEdge) []core.ThreadGraphEdge {
+	ordered := append([]core.ThreadGraphEdge(nil), edges...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].From != ordered[j].From {
+			return ordered[i].From < ordered[j].From
+		}
+		return ordered[i].To < ordered[j].To
+	})
+	return ordered
+}
+
 func threadGraphAliases(projection core.ThreadGraphProjection) map[string]string {
 	aliases := make(map[string]string, len(projection.Nodes))
 	gates := 0
-	for _, node := range projection.Nodes {
+	orderedNodes := orderedThreadGraphNodes(projection.Nodes)
+	for _, node := range orderedNodes {
 		if node.Role == core.ThreadTaskExternalGate {
 			gates++
 			aliases[node.TaskID] = fmt.Sprintf("G%d", gates)
 		}
 	}
-	members := 0
+	waveByTask := make(map[string]int)
 	for _, wave := range projection.Waves {
 		for _, taskID := range wave.TaskIDs {
-			if aliases[taskID] == "" {
-				members++
-				aliases[taskID] = fmt.Sprintf("M%d", members)
+			if taskID == "" || aliases[taskID] != "" {
+				continue
+			}
+			if current, exists := waveByTask[taskID]; !exists || wave.Index < current {
+				waveByTask[taskID] = wave.Index
 			}
 		}
 	}
+	waveIDs := make([]string, 0, len(waveByTask))
+	for taskID := range waveByTask {
+		waveIDs = append(waveIDs, taskID)
+	}
+	sort.SliceStable(waveIDs, func(i, j int) bool {
+		if waveByTask[waveIDs[i]] != waveByTask[waveIDs[j]] {
+			return waveByTask[waveIDs[i]] < waveByTask[waveIDs[j]]
+		}
+		return waveIDs[i] < waveIDs[j]
+	})
+	members := 0
+	for _, taskID := range waveIDs {
+		members++
+		aliases[taskID] = fmt.Sprintf("M%d", members)
+	}
 	unknown := 0
-	for _, node := range projection.Nodes {
+	for _, node := range orderedNodes {
 		if aliases[node.TaskID] != "" {
 			continue
 		}
@@ -1290,7 +1330,7 @@ func threadGraphAliases(projection core.ThreadGraphProjection) map[string]string
 // presentation. It does not walk the graph or manufacture transitive relations.
 func threadGraphIncoming(edges []core.ThreadGraphEdge, aliases map[string]string) map[string][]string {
 	incoming := make(map[string][]string)
-	for _, edge := range edges {
+	for _, edge := range orderedThreadGraphEdges(edges) {
 		alias := aliases[edge.From]
 		if alias == "" {
 			alias = "?"
