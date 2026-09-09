@@ -10,8 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [threads, tui, graph, ux, dogfood]
 created: "2026-09-08"
-depends_on: [6g6dw5js81f3]
-updated_at: "2026-09-08"
+depends_on: [6g6dw5js81f3, 6g8by30btznq]
+updated_at: "2026-09-09"
 ---
 
 # Add a one-hop focus subgraph mode to the TUI Thread graph
@@ -52,6 +52,8 @@ losing the user's stable selection and route back to the whole graph.
 - Complements the
   [reusable TUI Back action](6g86016qvk5d-add-a-reusable-back-action-for-tui-entity-navigation.md)
 - Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+- Tracked from the
+  [spatial Thread graph experience design review](../audits/6g8bbjgcx9tj-2026-09-09-spatial-thread-graph-tui-experience-design-review.md)
 
 ## Design attention
 
@@ -59,4 +61,7 @@ Evaluate using the otherwise redundant spatial-mode `z` binding as a local whole
 but do not lock that key without checking the shared shell contract. The focused layout should make
 incoming versus outgoing sides obvious and expose hidden-neighbor counts or boundary cues where
 one-hop context ends. A focus subgraph is a presentation projection over the already bounded Thread
-projection, not permission to walk deeper repository dependencies behind core's back.
+projection, not permission to walk deeper repository dependencies behind core's back. Preserve
+semantic `h`/`l` prerequisite/dependent walks and make branch choice and dead ends explicit. Treat
+focus as a complementary causal-inspection lens: neither node count alone nor the cited design
+research justifies replacing or automatically suppressing the full sparse-DAG view.

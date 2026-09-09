@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [tui, threads, ux, navigation, discoverability]
 created: "2026-09-08"
 depends_on: [6g6dw5js81f3]
-updated_at: "2026-09-08"
+updated_at: "2026-09-09"
 ---
 # Make alternate TUI views and Thread identity discoverable
 
@@ -58,7 +58,9 @@ Treat the focused-card idea as a responsive list interaction, not permission to 
 taller. Explore a compact view switcher such as labelled chips or a small tab strip that communicates
 both current and adjacent presentations while preserving `v` as the fast cycle binding. The visual
 affordance should work for Atlas modes and future multi-view entities without teaching the shell
-Thread-specific view names.
+Thread-specific view names. Atlas's existing dynamic tab label is only a current-location precedent:
+Atlas must also expose its available alternate views without requiring the user to press `v` or open
+global help.
 
 ## Sequencing
 

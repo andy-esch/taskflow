@@ -10,8 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [threads, tui, graph, ux, dogfood]
 created: "2026-09-08"
-depends_on: [6g6dw5js81f3]
-updated_at: "2026-09-08"
+depends_on: [6g6dw5js81f3, 6g8by30btznq]
+updated_at: "2026-09-09"
 ---
 
 # Make dense Thread graph routes visually trustworthy
@@ -33,8 +33,9 @@ supplied `ThreadGraphProjection`.
   panning, while node boxes retain their semantic status colors.
 - [ ] External gates are positioned inside a valid dependency interval near the work they gate,
   without reversing supplied edges or misrepresenting member waves.
-- [ ] Dense, deep, wide, skipped-layer, same-row, reverse/cyclic-residue, and narrow-terminal cases
-  have deterministic layout and rendering regressions with bounded dimensions and runtime.
+- [ ] Dense, deep, wide, skipped-layer, same-row, reverse/cyclic-residue, cascaded external-gate,
+  and narrow-terminal cases have deterministic layout and rendering regressions with bounded
+  dimensions and runtime.
 - [ ] The work remains a TUI presentation adapter over `ThreadGraphProjection`; graph semantics,
   readiness, and persisted planning data stay unchanged.
 
@@ -49,9 +50,19 @@ supplied `ThreadGraphProjection`.
 - Discovered by the false `G1 → M1` route during dogfooding of the
   [two-dimensional Thread graph prototype](6g6dw5js81f3-prototype-a-two-dimensional-navigable-thread-graph-view.md)
 - Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+- Coordinates viewport boundaries with
+  [responsive spatial layout](6g8btt5hcgs9-make-spatial-thread-layout-responsive-to-available-space.md)
+- Tracked from the
+  [spatial Thread graph experience design review](../audits/6g8bbjgcx9tj-2026-09-09-spatial-thread-graph-tui-experience-design-review.md)
+- Also owns the chained external-gate placement finding from the
+  [Antigravity implementation audit](../audits/6g8bb1mf9hw0-2026-09-09-spatial-thread-graph-prototype-implementation-antigravity.md)
 
 ## Sequencing
 
-Follow the prototype and use its node-free track plus late external-gate placement as the baseline,
-not as proof that dense routing is finished. It may proceed independently of the one-hop focus
-subgraph: one hardens whole-graph truthfulness, while the other adds a deliberately bounded view.
+Follow the bounded correctness-hardening task, which repairs the prototype's missing deepest-row
+track, and use that node-free route plus late external-gate placement as the baseline—not as proof
+that dense routing is finished. This work may then proceed independently of the one-hop focus
+subgraph and responsive layout: it owns whether edges remain identifiable and truthful at crossings
+and viewport boundaries; responsive layout owns which complete node/layer units are visible. Prefer
+testable routing invariants over committing in advance to any one researched technique such as
+crossing gaps, waypoints, or outer-boundary skip routes.
