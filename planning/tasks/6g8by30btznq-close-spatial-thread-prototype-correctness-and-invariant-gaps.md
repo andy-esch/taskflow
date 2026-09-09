@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g8by30btznq
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Fix the concrete route and Atlas immersion bugs from implementation review, then pin ordering, capacity, and manual-zoom invariants before spatial feature work continues.
 effort: 1-2 days
@@ -13,6 +13,7 @@ created: "2026-09-09"
 updated_at: "2026-09-09"
 depends_on: [6g6dw5js81f3]
 started_at: "2026-09-09"
+completed_at: "2026-09-09"
 ---
 
 # Close spatial Thread prototype correctness and invariant gaps
