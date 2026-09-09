@@ -110,12 +110,15 @@ not be solved inside one entity renderer:
 - [Structured-detail action targets](../tasks/6g86g03zfj2f-define-consistent-action-targets-for-structured-tui-detail-selections.md)
   defines whether open, copy, edit, path, follow, and lifecycle actions address the parent record or
   a selected child by canonical identity.
+- [Alternate-view and Thread identity discoverability](../tasks/6g87qn72901g-make-alternate-tui-views-and-thread-identity-discoverable.md)
+  leads Thread rows with recognizable content, explores a bounded focused card, and makes alternate
+  Thread and Atlas presentations visible without prior knowledge of `v`.
 
 These are ordinary TUI hardening rather than Thread-specific semantics. They are members of the
 production Threads dogfood Thread because the second primary adapter made the gaps load-bearing;
 the Thread list/detail task depends on stable identity, contention-safe projection loading depends
 on watcher recovery, and the spatial prototype supplies concrete child-navigation cases for the two
-remaining contracts.
+remaining navigation contracts plus a complete multi-view case for the shared discovery treatment.
 
 ## References
 

@@ -184,6 +184,13 @@ selected node and everything one edge away—which is tracked as the
 [one-hop focus subgraph task](6g86c7y6hn41-add-a-one-hop-focus-subgraph-mode-to-the-tui-thread-graph.md)
 rather than expanding this first renderer checkpoint without an interaction contract.
 
+The same walkthrough also showed that reaching the spatial view still depends on already knowing
+the unobtrusive `v` binding, while the Thread list leads with compact status/health syntax and can
+truncate the identifying slug. Atlas has the same hidden alternate-view problem. That shared
+discoverability and focused-row design work is tracked in
+[alternate TUI views and Thread identity](6g87qn72901g-make-alternate-tui-views-and-thread-identity-discoverable.md),
+including a bounded expanded card for the selected Thread rather than making every list row taller.
+
 The routing rule was prompted by a concrete dogfood failure: `G1` genuinely unlocks `M25`, while
 `M1` is unlocked by `G2`; the original long `G1 → M25` stroke crossed `G2 → M1` at M1's arrow and
 visually invented `G1 → M1`. Navigation correctly followed the supplied edge to `M25`, exposing
