@@ -6,8 +6,8 @@ description: Deliver production Threads through the CLI preview and a usage-info
 goal: Preserve the production graph foundation while carrying Threads into a faithful TUI
 created: "2026-08-29"
 tags: [threads, dogfood]
-tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6jqqcdehne, 6g6scc9jgxae, 6g6wdvfjdaaa, 6g6wdvfp2ksa, 6g721tvf4crh, 6g721vewvvrz, 6g72ncs4xjdm, 6g7ddeyp773z, 6g7ddfhh2jc2, 6g7fhfpmy032, 6g7j2ebatzyt]
-updated_at: "2026-09-06"
+tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6jqqcdehne, 6g6scc9jgxae, 6g6wdvfjdaaa, 6g6wdvfp2ksa, 6g721tvf4crh, 6g721vewvvrz, 6g72ncs4xjdm, 6g7ddeyp773z, 6g7ddfhh2jc2, 6g7fhfpmy032, 6g7j2ebatzyt, 6g86016qvk5d, 6g86c7y6hn41, 6g86e10dztpf, 6g86g03zfj2f, 6g87qn72901g]
+updated_at: "2026-09-08"
 started_at: "2026-08-30"
 ---
 
@@ -45,6 +45,15 @@ deliberately deferred while additional installed preview releases accumulate mul
 evidence. The spatial work remains a removable presentation extension over
 `ThreadGraphProjection`, not a second graph model or silent core commitment; that architectural
 isolation contains flagship risk without demoting its product importance.
+
+The first spatial prototype has now upheld that boundary in live dogfooding: it consumes the shared
+projection, preserves canonical selection through add/rename reloads, and navigates actual edges
+rather than assuming adjacent columns are connected. The same pass caught a visually false
+long-route junction and ambiguous shell actions. Those findings are explicit downstream members:
+dense-route truthfulness and one-hop focus stay in the Threads epic, while reusable Back navigation
+structured child-action targeting, and alternate-view/Thread identity discoverability stay in the
+general TUI epic. Their shared Thread membership keeps the feedback loop visible without inventing
+dependencies among parallel concerns.
 
 The guarded-repair branch was split after adversarial review. Unreadable task sources first gain
 opaque revision evidence for whole-snapshot CAS; unreadable Thread evidence then gains the same

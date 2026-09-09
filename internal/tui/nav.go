@@ -22,8 +22,17 @@ import (
 // navLoc is one entry in the follow back-stack: where the user was when they
 // followed a reference.
 type navLoc struct {
-	kind entityKind
-	ref  entityRef
+	kind            entityKind
+	ref             entityRef
+	detailView      string // optional alternate presentation active at this location
+	detailSelection string // optional canonical child identity selected inside it
+}
+
+type detailNavigationRestore struct {
+	kind      entityKind
+	key       string
+	view      string
+	selection string
 }
 
 // followMenu is the reference picker for an entity with several outgoing task
@@ -243,6 +252,14 @@ func (m *Model) pushLoc() {
 		return
 	}
 	loc := navLoc{kind: m.cur().kind, ref: ref}
+	if m.detail.loadedKey == ref.key {
+		if content, ok := m.detail.content.(alternateDetailContent); ok {
+			loc.detailView = content.detailViewName()
+		}
+		if content, ok := m.detail.content.(navigableDetailContent); ok {
+			loc.detailSelection = content.detailSelectionKey()
+		}
+	}
 	if n := len(m.navStack); n > 0 && m.navStack[n-1] == loc {
 		return
 	}
@@ -261,7 +278,38 @@ func (m Model) navBack() (tea.Model, tea.Cmd) {
 	}
 	loc := m.navStack[n-1]
 	m.navStack = m.navStack[:n-1]
+	if loc.detailView != "" || loc.detailSelection != "" {
+		m.pendingDetailNavigation = detailNavigationRestore{
+			kind: loc.kind, key: loc.ref.key, view: loc.detailView, selection: loc.detailSelection,
+		}
+	}
 	return m, m.jumpTo(loc.kind, loc.ref)
+}
+
+// restoreDetailNavigation applies the context captured by pushLoc only after the
+// asynchronous detail read for the exact canonical entity lands. A failed or
+// redirected jump consumes the pending request without leaking it to a later
+// selection.
+func (m *Model) restoreDetailNavigation(kind entityKind, key string, content detailContent) detailContent {
+	pending := m.pendingDetailNavigation
+	if pending == (detailNavigationRestore{}) {
+		return content
+	}
+	m.pendingDetailNavigation = detailNavigationRestore{}
+	if pending.kind != kind || pending.key != key {
+		return content
+	}
+	if pending.view != "" {
+		if alternate, ok := content.(alternateDetailContent); ok {
+			content = alternate.withDetailView(pending.view)
+		}
+	}
+	if pending.selection != "" {
+		if navigable, ok := content.(navigableDetailContent); ok {
+			content = navigable.withDetailSelection(pending.selection)
+		}
+	}
+	return content
 }
 
 // jumpTo makes (kind, canonical ref) the active selection: switches the tab, clears any

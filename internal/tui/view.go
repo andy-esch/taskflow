@@ -352,9 +352,11 @@ func keyCombo(a, b key.Binding, sep, label string) string {
 // (focused, full-screen, single-pane drill). Optional presentation and markdown
 // controls are advertised only when the loaded detail can actually use them.
 func (m Model) detailFooterBody() string {
-	hints := []string{
-		keyHint(keys.Find, "find"),
-		keyCombo(keys.FindNext, keys.FindPrev, "/", "match"),
+	hints := make([]string, 0, 8)
+	if !m.detail.directionalSelectionAvailable() {
+		hints = append(hints,
+			keyHint(keys.Find, "find"),
+			keyCombo(keys.FindNext, keys.FindPrev, "/", "match"))
 	}
 	if next := m.detail.nextViewName(); next != "" {
 		hints = append(hints, keyHint(keys.View, next))
@@ -365,10 +367,18 @@ func (m Model) detailFooterBody() string {
 	if m.detail.bodyModeAvailable() {
 		hints = append(hints, keyHint(keys.RawToggle, "raw/pretty"))
 	}
-	if m.detail.selectionAvailable() {
+	if m.detail.directionalSelectionAvailable() {
+		hints = append(hints, "hjkl node")
+		if m.detail.selectionAvailable() {
+			hints = append(hints, "⏎ open")
+		}
+	} else if m.detail.selectionAvailable() {
 		hints = append(hints, "j/k task", "⏎ open")
 	} else {
 		hints = append(hints, "j/k scroll") // viewport keys — no keyMap binding
+	}
+	if _, _, ok := m.detail.selectionYankRef(); ok {
+		hints = append(hints, keyHint(keys.Yank, "copy task"))
 	}
 	hints = append(hints, keyCombo(keys.Top, keys.Bottom, "/", "top/bottom"))
 	return strings.Join(hints, " · ")
@@ -475,6 +485,10 @@ func (m Model) footer() string {
 			keyCombo(keys.Left, keys.Back, "/", "back"),
 		}, " · ")
 		switch {
+		case m.detail.immersive():
+			hints = strings.Join([]string{
+				"spatial graph", keyHint(keys.Atlas, "atlas"), m.detailFooterBody(), "esc waves",
+			}, " · ")
 		case m.zoom:
 			// Full-screen: the list is hidden, so name the way out and drop the keys
 			// (m/e/s/tabs) that only make sense beside the list.

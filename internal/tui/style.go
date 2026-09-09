@@ -108,6 +108,13 @@ func (s *styles) fg(c theme.Color, str string) string {
 	return lipgloss.NewStyle().Foreground(s.lipColor(c)).Render(str)
 }
 
+// accent renders non-semantic focus/selection chrome through the active
+// palette. Domain status remains on fg; interactive focus should not borrow a
+// status color merely because the default theme's accent happens to be bright.
+func (s *styles) accent(str string) string {
+	return lipgloss.NewStyle().Foreground(s.pal.Accent.Color()).Render(str)
+}
+
 // glyph renders a theme Token (status / bucket / liveness / marker) as its colored
 // glyph — the shared shorthand for the fg(tok.Color, tok.Glyph) the rows + dashboard
 // repeat, so a marker is drawn from theme rather than a re-typed literal.
