@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g6dw5js81f3
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Design and prove a flagship full-screen spatial Thread graph with deterministic layout and direct hjkl node navigation.
 effort: 3-5 days
@@ -13,6 +13,7 @@ created: "2026-09-03"
 depends_on: [6g5rwjr0dz4p, 6g6scc9jgxae, 6g7fhfpmy032]
 updated_at: "2026-09-08"
 started_at: "2026-09-08"
+completed_at: "2026-09-08"
 ---
 # Prototype a two-dimensional navigable Thread graph view
 
