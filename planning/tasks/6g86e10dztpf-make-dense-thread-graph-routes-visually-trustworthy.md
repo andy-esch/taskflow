@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g86e10dztpf
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Make dense Thread graphs preserve edge identity across long routes, crossings, shared lanes, and viewport clipping without visually inventing dependencies.
 effort: 2-3 days
@@ -13,6 +13,7 @@ created: "2026-09-08"
 depends_on: [6g6dw5js81f3, 6g8by30btznq]
 updated_at: "2026-09-09"
 started_at: "2026-09-09"
+completed_at: "2026-09-09"
 ---
 
 # Make dense Thread graph routes visually trustworthy
