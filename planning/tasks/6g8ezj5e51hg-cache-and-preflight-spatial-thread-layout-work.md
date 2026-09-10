@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g8ezj5e51hg
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Bound oversized spatial-graph work before route layout and reuse one shared read-only layout per projection refresh across selection, navigation, and rendering.
 effort: 1-2 days
@@ -13,6 +13,7 @@ created: "2026-09-09"
 depends_on: [6g86e10dztpf]
 updated_at: "2026-09-10"
 started_at: "2026-09-09"
+completed_at: "2026-09-10"
 ---
 ## Objective
 
