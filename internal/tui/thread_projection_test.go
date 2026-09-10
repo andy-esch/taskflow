@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -726,7 +727,7 @@ func TestThreadSpatialGraphUsesDirectionalStableIdentityNavigation(t *testing.T)
 	}
 	plain := ansi.Strip(m.detail.styled)
 	for _, want := range []string{
-		"spatial graph", "prerequisite ─▶ dependent", "status", "roles", "external gate",
+		"spatial graph", "prerequisite ─▶ dependent", "status", "roles", "╔ gate",
 		"focus", "about", "the dependency", "┌", "▶", "┐",
 	} {
 		if !strings.Contains(plain, want) {
@@ -908,6 +909,109 @@ func TestThreadSpatialLayoutPlacesExternalGateBetweenMemberWaves(t *testing.T) {
 	}
 }
 
+func TestThreadSpatialLayoutPlacesCascadedExternalGatesAtOneStableFixedPoint(t *testing.T) {
+	memberA, memberB, memberC, memberD := "member-a", "member-b", "member-c", "member-d"
+	// Canonical presentation order visits the upstream gate first. Its
+	// downstream gate moves later in pass one, forcing the upstream placement
+	// to settle on a subsequent fixed-point pass.
+	upstreamGate, downstreamGate := "a-upstream-gate", "z-downstream-gate"
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: memberA, Role: core.ThreadTaskMember},
+			{TaskID: memberB, Role: core.ThreadTaskMember},
+			{TaskID: memberC, Role: core.ThreadTaskMember},
+			{TaskID: memberD, Role: core.ThreadTaskMember},
+			{TaskID: upstreamGate, Role: core.ThreadTaskExternalGate},
+			{TaskID: downstreamGate, Role: core.ThreadTaskExternalGate},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: memberA, To: memberB},
+			{From: memberB, To: memberC},
+			{From: memberC, To: memberD},
+			{From: upstreamGate, To: downstreamGate},
+			{From: downstreamGate, To: memberD},
+		},
+		Waves: []core.ThreadGraphWave{
+			{Index: 1, TaskIDs: []string{memberA}},
+			{Index: 2, TaskIDs: []string{memberB}},
+			{Index: 3, TaskIDs: []string{memberC}},
+			{Index: 4, TaskIDs: []string{memberD}},
+		},
+	}
+	layout := buildThreadSpatialLayout(projection)
+	upstream := layout.byID[upstreamGate]
+	downstream := layout.byID[downstreamGate]
+	member := layout.byID[memberD]
+	if upstream.column >= downstream.column || downstream.column >= member.column {
+		t.Fatalf("cascaded gates did not settle inside their dependency intervals: upstream=%d downstream=%d member=%d",
+			upstream.column, downstream.column, member.column)
+	}
+	if downstream.column != member.column-1 || upstream.column != downstream.column-1 {
+		t.Fatalf("cascaded gates did not settle beside their dependents: upstream=%d downstream=%d member=%d",
+			upstream.column, downstream.column, member.column)
+	}
+
+	permuted := projection
+	permuted.Nodes = []core.ThreadGraphNode{
+		projection.Nodes[5], projection.Nodes[4], projection.Nodes[3], projection.Nodes[2], projection.Nodes[1], projection.Nodes[0],
+	}
+	permuted.Edges = []core.ThreadGraphEdge{
+		projection.Edges[4], projection.Edges[3], projection.Edges[2], projection.Edges[1], projection.Edges[0],
+	}
+	if got := buildThreadSpatialLayout(permuted); !reflect.DeepEqual(got, layout) {
+		t.Fatalf("cascaded gate placement changed under equivalent evidence permutation:\n got: %#v\nwant: %#v", got, layout)
+	}
+}
+
+func TestThreadSpatialColumnLabelsDistinguishLayoutLayersFromMemberWaves(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Role: core.ThreadTaskMember},
+			{TaskID: "b", Role: core.ThreadTaskMember},
+			{TaskID: "gate", Role: core.ThreadTaskExternalGate},
+		},
+		Edges: []core.ThreadGraphEdge{{From: "a", To: "gate"}, {From: "gate", To: "b"}},
+		Waves: []core.ThreadGraphWave{
+			{Index: 1, TaskIDs: []string{"a"}}, {Index: 2, TaskIDs: []string{"b"}},
+		},
+	}
+	labels := buildThreadSpatialLayout(projection).columnLabels
+	if len(labels) != 3 {
+		t.Fatalf("column labels=%v want three layout layers", labels)
+	}
+	for index, label := range labels {
+		if !strings.HasPrefix(label, fmt.Sprintf("layer %d", index+1)) {
+			t.Errorf("column %d label %q misrepresents a layout layer as a wave", index+1, label)
+		}
+	}
+	if !strings.Contains(labels[0], "wave 1") || !strings.Contains(labels[1], "external") ||
+		!strings.Contains(labels[2], "wave 2") {
+		t.Fatalf("layer labels lost actual wave/role evidence: %v", labels)
+	}
+}
+
+func TestThreadSpatialColumnLabelsDoNotInventContiguousWaveRanges(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Role: core.ThreadTaskMember},
+			{TaskID: "b", Role: core.ThreadTaskMember},
+			{TaskID: "c", Role: core.ThreadTaskMember},
+		},
+		Waves: []core.ThreadGraphWave{
+			{Index: 1, TaskIDs: []string{"a"}},
+			{Index: 3, TaskIDs: []string{"b"}},
+			{Index: 5, TaskIDs: []string{"c"}},
+		},
+	}
+	byNode := map[string]core.ThreadGraphNode{
+		"a": projection.Nodes[0], "b": projection.Nodes[1], "c": projection.Nodes[2],
+	}
+	labels := labelThreadSpatialColumns([][]string{{"a", "b", "c"}}, projection, byNode)
+	if len(labels) != 1 || !strings.Contains(labels[0], "waves 1+3+5") || strings.Contains(labels[0], "1–5") {
+		t.Fatalf("non-contiguous wave label=%v want the exact supplied wave set", labels)
+	}
+}
+
 func TestThreadSpatialLayoutPullsSourceGateBesideItsFirstDependent(t *testing.T) {
 	a := testutil.TaskID("early-member")
 	b := testutil.TaskID("middle-member")
@@ -968,29 +1072,628 @@ func TestThreadSpatialHorizontalNavigationPrefersGraphEdgesAcrossVisibleColumns(
 	}
 }
 
-func TestThreadSpatialConnectorGeometryUsesElbowsAndAccentFocus(t *testing.T) {
-	canvas := newThreadSpatialCanvas(50, 12)
-	from := threadSpatialNode{x: 2, y: 1}
-	to := threadSpatialNode{x: 32, y: 7}
-	drawThreadSpatialEdge(canvas, from, to, true)
+func TestThreadSpatialCrossingPreservesProductionRoutesAndArrowheads(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Role: core.ThreadTaskMember}, {TaskID: "b", Role: core.ThreadTaskMember},
+			{TaskID: "c", Role: core.ThreadTaskMember}, {TaskID: "d", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{{From: "a", To: "d"}, {From: "b", To: "c"}},
+	}
+	layout := buildThreadSpatialLayout(projection)
+	canvas := renderThreadSpatialCanvasWindow(projection, layout, "a", 0, 0, layout.width, layout.height)
+	crossings := 0
+	for row := range canvas.cells {
+		for column := range canvas.cells[row] {
+			cell := canvas.cells[row][column]
+			if cell.conflict || cell.overlap {
+				t.Fatalf("production route collision at (%d,%d) was not a straight crossing: %+v", column, row, cell)
+			}
+			if cell.crossing {
+				crossings++
+			}
+		}
+	}
+	if crossings == 0 {
+		t.Fatal("crossed-edge fixture did not produce a pass-through crossing")
+	}
+	for _, route := range layout.routes {
+		cell := canvas.cells[route.arrow.y][route.arrow.x]
+		if cell.text != string(route.arrowRune) || cell.color != theme.ColorYellow {
+			t.Errorf("production route %s -> %s endpoint=%+v want yellow %q",
+				route.edge.From, route.edge.To, cell, route.arrowRune)
+		}
+		for index := 1; index < len(route.segments); index++ {
+			corner := route.segments[index].from
+			cell := canvas.cells[corner.y][corner.x]
+			if cell.crossing || cell.conflict || cell.overlap {
+				t.Errorf("route %s -> %s lost its corner at %+v: %+v",
+					route.edge.From, route.edge.To, corner, cell)
+			}
+		}
+	}
+}
 
-	fromY := from.y + threadSpatialNodeSlotHeight/2
-	toY := to.y + threadSpatialNodeSlotHeight/2
-	middle := from.x + threadSpatialNodeWidth + max(1, ((to.x-1)-(from.x+threadSpatialNodeWidth))/2)
-	if got := threadSpatialConnectorGlyph(canvas.cells[fromY][middle].connector); got != "┐" {
-		t.Fatalf("upper bend=%q want right-to-down elbow", got)
+func TestThreadSpatialCanvasDistinguishesCrossingsSharedStubsAndOverlaps(t *testing.T) {
+	crossing := newThreadSpatialCanvas(8, 8)
+	crossing.routeHorizontal(1, 5, 3, threadSpatialRouteStyle{id: 1, from: "a", to: "d"})
+	crossing.routeVertical(3, 1, 5, threadSpatialRouteStyle{id: 2, from: "b", to: "d"})
+	if cell := crossing.cells[3][3]; !cell.crossing || cell.shared || cell.connector != 0 {
+		t.Fatalf("perpendicular routes with a common endpoint became a junction: %+v", cell)
 	}
-	if got := threadSpatialConnectorGlyph(canvas.cells[toY][middle].connector); got != "└" {
-		t.Fatalf("lower bend=%q want up-to-right elbow", got)
+
+	shared := newThreadSpatialCanvas(8, 3)
+	shared.routeHorizontal(1, 6, 1, threadSpatialRouteStyle{id: 1, from: "a", to: "c"})
+	shared.routeHorizontal(1, 5, 1, threadSpatialRouteStyle{id: 2, from: "a", to: "d"})
+	if cell := shared.cells[1][3]; !cell.shared || threadSpatialSharedConnectorGlyph(cell.connector) != "═" {
+		t.Fatalf("common-source stub lost the shared-route grammar: %+v", cell)
 	}
-	if !canvas.cells[fromY][middle].accent || !canvas.cells[toY][middle].accent {
-		t.Fatal("selected-node connectors did not inherit palette accent focus")
+	merged := newThreadSpatialCanvas(9, 8)
+	turnStyle := threadSpatialRouteStyle{id: 1, from: "a", to: "d"}
+	merged.routeVertical(3, 3, 6, turnStyle)
+	merged.routeHorizontal(3, 7, 3, turnStyle)
+	merged.routeHorizontal(1, 7, 3, threadSpatialRouteStyle{id: 2, from: "b", to: "d"})
+	if cell := merged.cells[3][3]; !cell.shared || cell.crossing || cell.connector !=
+		(threadSpatialLeft|threadSpatialRight|threadSpatialDown) {
+		t.Fatalf("common-target turn did not preserve every real bundle arm: %+v", cell)
 	}
-	if got := canvas.cells[toY][to.x-1].text; got != "▶" {
-		t.Fatalf("dependency endpoint=%q want arrowhead", got)
+
+	overlap := newThreadSpatialCanvas(8, 3)
+	overlap.routeHorizontal(1, 6, 1, threadSpatialRouteStyle{id: 1, from: "a", to: "b"})
+	overlap.routeHorizontal(3, 7, 1, threadSpatialRouteStyle{id: 2, from: "c", to: "d"})
+	if cell := overlap.cells[1][4]; !cell.overlap || cell.shared || cell.connector != 0 {
+		t.Fatalf("unrelated collinear routes were presented as a shared bundle: %+v", cell)
 	}
-	if got := canvas.cells[toY][to.x-1].color; got != theme.ColorYellow {
-		t.Fatalf("dependency arrow color=%v want frontier-pointer yellow", got)
+}
+
+func TestThreadSpatialRouteGrammarKeepsFocusSharedRoutesAndCollisionsDistinct(t *testing.T) {
+	ordinary := newThreadSpatialCanvas(8, 3)
+	ordinary.routeHorizontal(1, 6, 1, threadSpatialRouteStyle{id: 1, from: "a", to: "b"})
+	if got := threadSpatialConnectorGlyph(ordinary.cells[1][3].connector); got != "─" {
+		t.Fatalf("ordinary route glyph=%q want light stroke", got)
+	}
+
+	focused := newThreadSpatialCanvas(8, 3)
+	focused.routeHorizontal(1, 6, 1, threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true})
+	if cell := focused.cells[1][3]; !cell.accent || threadSpatialFocusConnectorGlyph(cell.connector) != "━" {
+		t.Fatalf("focused route lacks redundant accent and heavy-stroke grammar: %+v", cell)
+	}
+	if got := ansi.Strip(focused.renderLine(1, &testStyles)); !strings.Contains(got, "━") {
+		t.Fatalf("focused route did not retain its non-color channel after rendering: %q", got)
+	}
+	focused.routeVertical(6, 1, 2, threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true})
+	if got := threadSpatialFocusConnectorGlyph(focused.cells[1][6].connector); got != "┓" {
+		t.Fatalf("focused route corner=%q want one continuous heavy elbow", got)
+	}
+
+	shared := newThreadSpatialCanvas(8, 3)
+	shared.routeHorizontal(1, 6, 1, threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true})
+	shared.routeHorizontal(1, 5, 1, threadSpatialRouteStyle{id: 2, from: "a", to: "c"})
+	if cell := shared.cells[1][3]; !cell.shared || !cell.accent || threadSpatialSharedConnectorGlyph(cell.connector) != "═" {
+		t.Fatalf("focused shared bundle did not preserve both meanings: %+v", cell)
+	}
+
+	crossing := newThreadSpatialCanvas(8, 8)
+	crossing.routeHorizontal(1, 5, 3, threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true})
+	crossing.routeVertical(3, 1, 5, threadSpatialRouteStyle{id: 2, from: "c", to: "d"})
+	if cell := crossing.cells[3][3]; !cell.crossing || cell.accent || cell.color != theme.ColorGray {
+		t.Fatalf("unrelated crossing inherited focused-route treatment: %+v", cell)
+	}
+	if got := ansi.Strip(crossing.renderLine(3, &testStyles)); !strings.Contains(got, "╳") {
+		t.Fatalf("neutral crossing grammar missing from rendered row: %q", got)
+	}
+}
+
+func TestThreadSpatialFanCountRelocatesInsteadOfErasingCongestion(t *testing.T) {
+	canvas := newThreadSpatialCanvas(10, 6)
+	canvas.routeHorizontal(1, 8, 3, threadSpatialRouteStyle{id: 1, from: "a", to: "b"})
+	canvas.routeVertical(3, 1, 5, threadSpatialRouteStyle{id: 2, from: "c", to: "d"})
+	if !canvas.cells[3][3].crossing {
+		t.Fatal("fixture did not put a crossing on the preferred count cell")
+	}
+	point, ok := canvas.putRouteCountAlong(threadSpatialPoint{x: 3, y: 3}, 1, 3, 5, false)
+	if !ok || point != (threadSpatialPoint{x: 4, y: 3}) {
+		t.Fatalf("fan count placement=(%+v,%v) want first free approach cell", point, ok)
+	}
+	if !canvas.cells[3][3].crossing || canvas.cells[3][3].text != "" {
+		t.Fatalf("relocated count erased crossing grammar: %+v", canvas.cells[3][3])
+	}
+	if cell := canvas.cells[3][4]; !cell.routeCount || cell.text != "5" || cell.color != theme.ColorYellow {
+		t.Fatalf("relocated fan count lost multiplicity grammar: %+v", cell)
+	}
+}
+
+func TestThreadSpatialFanCountFallsBackToNodeBorderWhenStubIsFull(t *testing.T) {
+	placement := threadSpatialNode{
+		node: core.ThreadGraphNode{TaskID: "a", Label: "source", Role: core.ThreadTaskMember},
+		x:    3, y: 2,
+	}
+	layout := threadSpatialLayout{byID: map[string]threadSpatialNode{"a": placement}}
+	canvas := newThreadSpatialCanvas(50, 10)
+	drawThreadSpatialNode(canvas, placement, false)
+	canvas.cells[4][27] = threadSpatialCell{crossing: true, color: theme.ColorGray}
+	routes := []threadSpatialRoute{
+		{id: 1, edge: core.ThreadGraphEdge{From: "a", To: "b"}, segments: []threadSpatialRouteSegment{{
+			from: threadSpatialPoint{x: 25, y: 4}, to: threadSpatialPoint{x: 28, y: 4},
+		}}, arrow: threadSpatialPoint{x: 40, y: 4}, arrowRune: '▶'},
+		{id: 2, edge: core.ThreadGraphEdge{From: "a", To: "c"}, segments: []threadSpatialRouteSegment{{
+			from: threadSpatialPoint{x: 25, y: 4}, to: threadSpatialPoint{x: 28, y: 4},
+		}}, arrow: threadSpatialPoint{x: 44, y: 4}, arrowRune: '▶'},
+	}
+	drawThreadSpatialRouteCounts(canvas, layout, routes, "")
+	fallback := threadSpatialCountFallback(layout, "a", "", 's', '▶')
+	if cell := canvas.cells[fallback.y][fallback.x]; !cell.routeCount || cell.text != "2" || cell.color != theme.ColorYellow {
+		t.Fatalf("fully congested fan-out silently lost its node-border fallback: %+v", cell)
+	}
+	if !canvas.cells[4][27].crossing {
+		t.Fatalf("node-border fallback erased congested stub evidence: %+v", canvas.cells[4][27])
+	}
+}
+
+func TestThreadSpatialRoutingConflictIsNeutralAndReportedOutOfBand(t *testing.T) {
+	canvas := newThreadSpatialCanvas(9, 8)
+	turn := threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true}
+	canvas.routeVertical(3, 3, 6, turn)
+	canvas.routeHorizontal(3, 7, 3, turn)
+	canvas.routeHorizontal(1, 7, 3, threadSpatialRouteStyle{id: 2, from: "c", to: "d"})
+	cell := canvas.cells[3][3]
+	if !cell.conflict || cell.accent || cell.color != theme.ColorGray {
+		t.Fatalf("renderer conflict leaked into focus or task-health presentation: %+v", cell)
+	}
+	if got := threadSpatialRouteConflictSummary(canvas); got != "1 routing conflict" {
+		t.Fatalf("routing conflict summary=%q want explicit out-of-band diagnostic", got)
+	}
+}
+
+func TestThreadSpatialInlineLegendStaysCompactAndDefersRareGrammarToHelp(t *testing.T) {
+	legend := ansi.Strip(threadSpatialRoleLegend(&testStyles))
+	for _, grammar := range []string{"┌ member", "╔ gate", "━ focus route", "▶ direction", "2 fan"} {
+		if !strings.Contains(legend, grammar) {
+			t.Errorf("route legend omitted %q: %q", grammar, legend)
+		}
+	}
+	if width := ansi.StringWidth(legend); width > 72 {
+		t.Errorf("inline route legend width=%d want <=72: %q", width, legend)
+	}
+	for _, rare := range []string{"╳", "≋", "conflict"} {
+		if strings.Contains(legend, rare) {
+			t.Errorf("inline legend should leave uncommon %q grammar to contextual help: %q", rare, legend)
+		}
+	}
+}
+
+func TestThreadSpatialRouteCountsPreserveSideAndEndpointSemantics(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Role: core.ThreadTaskMember},
+			{TaskID: "b", Role: core.ThreadTaskMember},
+			{TaskID: "c", Role: core.ThreadTaskMember},
+			{TaskID: "d", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: "a", To: "c"}, {From: "b", To: "c"},
+			{From: "c", To: "c"}, {From: "c", To: "d"}, {From: "d", To: "c"},
+		},
+	}
+	layout := buildThreadSpatialLayout(projection)
+	placement := layout.byID["c"]
+	row := placement.y + threadSpatialNodeSlotHeight/2
+	canvas := renderThreadSpatialCanvas(projection, layout, "c")
+	for _, check := range []struct {
+		x    int
+		text string
+		kind string
+	}{
+		{x: placement.x - 2, text: "2", kind: "left-entry fan-in count"},
+		{x: placement.x - 1, text: "▶", kind: "left-entry direction"},
+		{x: placement.x + threadSpatialNodeWidth, text: "◀", kind: "right-entry direction"},
+		{x: placement.x + threadSpatialNodeWidth + 1, text: "2", kind: "right-entry fan-in count"},
+		{x: placement.x + threadSpatialNodeWidth + 2, text: "2", kind: "source fan-out count"},
+	} {
+		if got := canvas.cells[row][check.x].text; got != check.text {
+			t.Errorf("%s at x=%d is %q want %q", check.kind, check.x, got, check.text)
+		}
+	}
+	for _, x := range []int{placement.x - 2, placement.x + threadSpatialNodeWidth + 1, placement.x + threadSpatialNodeWidth + 2} {
+		if !canvas.cells[row][x].routeCount {
+			t.Errorf("cell x=%d contains an incidental numeral rather than a route count: %+v", x, canvas.cells[row][x])
+		}
+	}
+}
+
+func TestThreadSpatialDenseRoutesDistinguishCrossingsBundlesAndCounts(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Role: core.ThreadTaskMember},
+			{TaskID: "b", Role: core.ThreadTaskMember},
+			{TaskID: "c", Role: core.ThreadTaskMember},
+			{TaskID: "d", Role: core.ThreadTaskMember},
+			{TaskID: "e", Role: core.ThreadTaskMember},
+			{TaskID: "f", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: "a", To: "c"}, {From: "b", To: "d"},
+			{From: "c", To: "f"}, {From: "d", To: "e"},
+			{From: "b", To: "e"},
+		},
+	}
+	layout := buildThreadSpatialLayout(projection)
+	canvas := renderThreadSpatialCanvas(projection, layout, "b")
+	crossings, shared, routeCounts, trackedRoutes := 0, 0, 0, 0
+	for _, route := range layout.routes {
+		for _, segment := range route.segments {
+			if segment.corridor {
+				trackedRoutes++
+			}
+		}
+	}
+	for row := range canvas.cells {
+		for column := range canvas.cells[row] {
+			cell := canvas.cells[row][column]
+			if cell.crossing {
+				crossings++
+				if cell.connector != 0 {
+					t.Errorf("crossing at (%d,%d) became a junction: %+v", column, row, cell)
+				}
+				if cell.accent || cell.color != theme.ColorGray {
+					t.Errorf("crossing at (%d,%d) inherited focus or status color: %+v", column, row, cell)
+				}
+				if got := ansi.Strip(canvas.renderLine(row, &testStyles)); !strings.Contains(got, "╳") {
+					t.Errorf("crossing row omitted the non-junction glyph: %q", got)
+				}
+			}
+			if cell.shared {
+				shared++
+			}
+			if cell.routeCount {
+				routeCounts++
+			}
+		}
+	}
+	if crossings == 0 {
+		t.Fatal("fixture did not expose an unrelated perpendicular route crossing")
+	}
+	if shared == 0 {
+		t.Fatal("fan-in/fan-out did not expose explicit shared-route geometry")
+	}
+	if trackedRoutes == 0 {
+		t.Fatal("fixture did not exercise a skipped-layer route")
+	}
+	if routeCounts == 0 {
+		t.Fatalf("dense fan-in/fan-out omitted every endpoint multiplicity marker: count markers=%d", routeCounts)
+	}
+	for _, route := range layout.routes {
+		if route.edge.From != "b" && route.edge.To != "b" {
+			continue
+		}
+		for _, segment := range route.segments {
+			for _, point := range threadSpatialTestSegmentPoints(segment) {
+				cell := canvas.cells[point.y][point.x]
+				collision := cell.crossing || cell.overlap || cell.conflict
+				if !cell.accent && !collision && !strings.ContainsAny(cell.text, "▶◀2+") {
+					t.Errorf("selected incident route %s -> %s lost emphasis at %+v: %+v",
+						route.edge.From, route.edge.To, point, cell)
+				}
+			}
+		}
+	}
+	for row := range canvas.cells {
+		plain := ansi.Strip(canvas.renderLine(row, &testStyles))
+		if strings.ContainsAny(plain, "┄◇") {
+			t.Errorf("route row retained fragmented track/waypoint grammar: %q", plain)
+		}
+	}
+}
+
+func TestThreadSpatialDenseLayeredFixtureIsBoundedAndDeterministic(t *testing.T) {
+	const layerCount, rowCount = 5, 4
+	projection := core.ThreadGraphProjection{
+		View:             core.ThreadView{GraphHealth: core.GraphHealthy, ProjectionHealth: core.GraphHealthy},
+		TopologyComplete: true,
+	}
+	ids := make([][]string, layerCount)
+	for layer := range layerCount {
+		wave := core.ThreadGraphWave{Index: layer + 1}
+		for row := range rowCount {
+			taskID := fmt.Sprintf("l%d-r%d", layer, row)
+			ids[layer] = append(ids[layer], taskID)
+			wave.TaskIDs = append(wave.TaskIDs, taskID)
+			projection.Nodes = append(projection.Nodes, core.ThreadGraphNode{
+				TaskID: taskID, Label: taskID, Status: domain.StatusNextUp, Role: core.ThreadTaskMember,
+				State: core.TaskGraphState{Role: core.RoleQueued, Gate: core.GateClear},
+			})
+		}
+		projection.Waves = append(projection.Waves, wave)
+	}
+	for layer := 0; layer < layerCount-1; layer++ {
+		for _, from := range ids[layer] {
+			for _, to := range ids[layer+1] {
+				projection.Edges = append(projection.Edges, core.ThreadGraphEdge{From: from, To: to})
+			}
+		}
+	}
+	for layer := 0; layer < layerCount-2; layer++ {
+		for row := range rowCount {
+			projection.Edges = append(projection.Edges, core.ThreadGraphEdge{
+				From: ids[layer][row], To: ids[layer+2][row],
+			})
+		}
+	}
+
+	layout := buildThreadSpatialLayout(projection)
+	if issue := threadSpatialCapacityIssue(layout, len(projection.Edges)); issue != "" {
+		t.Fatalf("representative dense fixture exceeded its bounded canvas: %s", issue)
+	}
+	if len(layout.routes) != len(projection.Edges) {
+		t.Fatalf("routed edges=%d want every supplied edge=%d", len(layout.routes), len(projection.Edges))
+	}
+	seenRoutes := make(map[int32]bool, len(layout.routes))
+	for _, route := range layout.routes {
+		if seenRoutes[route.id] {
+			t.Fatalf("route identity repeated: %d", route.id)
+		}
+		seenRoutes[route.id] = true
+		for _, segment := range route.segments {
+			for _, point := range threadSpatialTestSegmentPoints(segment) {
+				for _, node := range layout.nodes {
+					inside := point.x >= node.x && point.x < node.x+threadSpatialNodeWidth &&
+						point.y >= node.y && point.y < node.y+threadSpatialNodeSlotHeight
+					if inside {
+						t.Fatalf("dense route %s -> %s crossed node %s at %+v",
+							route.edge.From, route.edge.To, node.node.TaskID, point)
+					}
+				}
+			}
+		}
+	}
+	selected := ids[2][1]
+	canvas := renderThreadSpatialCanvas(projection, layout, selected)
+	for row := range canvas.cells {
+		for column := range canvas.cells[row] {
+			cell := canvas.cells[row][column]
+			if cell.conflict || cell.overlap {
+				point := threadSpatialPoint{x: column, y: row}
+				touches := make([]string, 0)
+				for _, route := range layout.routes {
+					for _, segment := range route.segments {
+						for _, candidate := range threadSpatialTestSegmentPoints(segment) {
+							if candidate == point {
+								touches = append(touches, fmt.Sprintf("%d:%s->%s:%+v", route.id, route.edge.From, route.edge.To, segment))
+								break
+							}
+						}
+					}
+				}
+				t.Fatalf("dense production route collision at (%d,%d) is ambiguous: %+v routes=%v", column, row, cell, touches)
+			}
+		}
+	}
+	first := renderThreadSpatial(projection, "", selected, 100, 28, &testStyles)
+	for iteration := 0; iteration < 10; iteration++ {
+		if got := renderThreadSpatial(projection, "", selected, 100, 28, &testStyles); got != first {
+			t.Fatalf("dense render changed on iteration %d", iteration)
+		}
+	}
+}
+
+func TestThreadSpatialRoutesStayOutsideNodeBoxes(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Role: core.ThreadTaskMember},
+			{TaskID: "b", Role: core.ThreadTaskMember},
+			{TaskID: "c", Role: core.ThreadTaskMember},
+			{TaskID: "d", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: "a", To: "c"}, {From: "b", To: "d"}, {From: "a", To: "d"},
+		},
+	}
+	layout := buildThreadSpatialLayout(projection)
+	for _, route := range layout.routes {
+		for _, segment := range route.segments {
+			for _, point := range threadSpatialTestSegmentPoints(segment) {
+				for _, node := range layout.nodes {
+					inside := point.x >= node.x && point.x < node.x+threadSpatialNodeWidth &&
+						point.y >= node.y && point.y < node.y+threadSpatialNodeSlotHeight
+					if inside {
+						t.Fatalf("route %s -> %s crossed node %s at %+v", route.edge.From, route.edge.To, node.node.TaskID, point)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestThreadSpatialClippedIncidentRoutesNameTheirOffscreenEndpoint(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Role: core.ThreadTaskMember},
+			{TaskID: "b", Role: core.ThreadTaskMember},
+			{TaskID: "c", Role: core.ThreadTaskMember},
+			{TaskID: "d", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: "a", To: "b"}, {From: "b", To: "c"}, {From: "c", To: "d"}, {From: "a", To: "d"},
+		},
+	}
+	for _, test := range []struct {
+		selected string
+		want     string
+	}{
+		{selected: "a", want: "…▶[M4]"},
+		{selected: "d", want: "[M1]…"},
+	} {
+		rendered := ansi.Strip(renderThreadSpatial(projection, "", test.selected, 60, 20, &testStyles))
+		graph := strings.Join(strings.Split(rendered, "\n")[:15], "\n")
+		if !strings.Contains(graph, test.want) {
+			t.Errorf("selected %s omitted clipped route endpoint %q:\n%s", test.selected, test.want, graph)
+		}
+	}
+}
+
+func TestThreadSpatialBoundaryLabelsBundleAliasesWithoutOverwritingNodes(t *testing.T) {
+	aliases := make([]string, 20)
+	for index := range aliases {
+		aliases[index] = fmt.Sprintf("M%d", index+1)
+	}
+	if got, want := threadSpatialBoundaryLabel('t', '▶', aliases), "…▶[M1,M2,M3,+17]"; got != want {
+		t.Fatalf("large clipped fan-in label=%q want compact diagnostic %q", got, want)
+	}
+
+	layout := threadSpatialLayout{
+		byID: map[string]threadSpatialNode{
+			"a": {node: core.ThreadGraphNode{TaskID: "a"}, alias: "M1", x: 3, y: 2},
+			"b": {node: core.ThreadGraphNode{TaskID: "b"}, alias: "M2", x: 100, y: 2},
+			"c": {node: core.ThreadGraphNode{TaskID: "c"}, alias: "M3", x: 100, y: 8},
+			"d": {node: core.ThreadGraphNode{TaskID: "d"}, alias: "M4", x: 100, y: 14},
+		},
+	}
+	for index, target := range []string{"b", "c", "d"} {
+		layout.routes = append(layout.routes, threadSpatialRoute{
+			id: int32(index + 1), edge: core.ThreadGraphEdge{From: "a", To: target},
+			segments: []threadSpatialRouteSegment{{
+				from: threadSpatialPoint{x: 25, y: 4}, to: threadSpatialPoint{x: 100, y: 4},
+			}},
+			arrow: threadSpatialPoint{x: 100, y: 4}, arrowRune: '▶',
+		})
+	}
+	canvas := newThreadSpatialCanvas(110, 20)
+	drawThreadSpatialNode(canvas, layout.byID["a"], true)
+	before := append([]threadSpatialCell(nil), canvas.cells[4][3:25]...)
+	annotateThreadSpatialRouteBoundaries(canvas, layout, "a", 0, 0, 40, 10)
+	if got := ansi.Strip(canvas.renderLine(4, &testStyles)); !strings.Contains(got, "…▶[M2,M3,M4]") {
+		t.Fatalf("clipped fan-out aliases were not bundled deterministically: %q", got)
+	}
+	for column := 25; column < 40; column++ {
+		if cell := canvas.cells[4][column]; cell.text != "" && !cell.accent {
+			t.Fatalf("selected-route boundary alias did not use the focus channel at column %d: %+v", column, cell)
+		}
+	}
+	if got := canvas.cells[4][3:25]; !reflect.DeepEqual(got, before) {
+		t.Fatalf("boundary annotation overwrote the selected node: got=%+v want=%+v", got, before)
+	}
+
+	// A centered top/bottom annotation beside a node must move into free space
+	// instead of replacing the node's border at column 24.
+	putThreadSpatialBoundaryLabel(canvas, 't', 26, 4, "[M9]…", 0, 40)
+	if got := canvas.cells[4][24]; !reflect.DeepEqual(got, before[21]) {
+		t.Fatalf("collision-aware boundary label replaced node border: got=%+v want=%+v", got, before[21])
+	}
+}
+
+func TestThreadSpatialViewportOmitsRoutesBetweenTwoOffscreenNodes(t *testing.T) {
+	layout := threadSpatialLayout{
+		byID: map[string]threadSpatialNode{
+			"left":  {node: core.ThreadGraphNode{TaskID: "left"}, x: 3, y: 2},
+			"focus": {node: core.ThreadGraphNode{TaskID: "focus"}, x: 63, y: 2},
+			"right": {node: core.ThreadGraphNode{TaskID: "right"}, x: 123, y: 2},
+		},
+		routes: []threadSpatialRoute{
+			{id: 1, edge: core.ThreadGraphEdge{From: "left", To: "right"}},
+			{id: 2, edge: core.ThreadGraphEdge{From: "focus", To: "right"}},
+		},
+	}
+	routes := threadSpatialRoutesForWindow(layout, "focus", 50, 0, 40, 12)
+	if len(routes) != 1 || routes[0].id != 2 {
+		t.Fatalf("viewport routes=%+v want only the selected incident route", routes)
+	}
+}
+
+func threadSpatialTestSegmentPoints(segment threadSpatialRouteSegment) []threadSpatialPoint {
+	points := make([]threadSpatialPoint, 0)
+	switch {
+	case segment.from.y == segment.to.y:
+		left, right := min(segment.from.x, segment.to.x), max(segment.from.x, segment.to.x)
+		for x := left; x <= right; x++ {
+			points = append(points, threadSpatialPoint{x: x, y: segment.from.y})
+		}
+	case segment.from.x == segment.to.x:
+		top, bottom := min(segment.from.y, segment.to.y), max(segment.from.y, segment.to.y)
+		for y := top; y <= bottom; y++ {
+			points = append(points, threadSpatialPoint{x: segment.from.x, y: y})
+		}
+	}
+	return points
+}
+
+func TestThreadSpatialCyclicResidueUsesDistinctDeterministicLoops(t *testing.T) {
+	base := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Role: core.ThreadTaskMember},
+			{TaskID: "b", Role: core.ThreadTaskMember},
+			{TaskID: "c", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: "a", To: "a"}, {From: "a", To: "b"}, {From: "b", To: "c"}, {From: "c", To: "a"},
+		},
+	}
+	permuted := base
+	permuted.Nodes = []core.ThreadGraphNode{base.Nodes[2], base.Nodes[1], base.Nodes[0]}
+	permuted.Edges = []core.ThreadGraphEdge{base.Edges[3], base.Edges[2], base.Edges[1], base.Edges[0]}
+
+	layout := buildThreadSpatialLayout(base)
+	if len(layout.columns) != 1 || !strings.Contains(layout.columnLabels[0], "unranked") {
+		t.Fatalf("cyclic residue was not kept in one explicit partial layer: columns=%v labels=%v", layout.columns, layout.columnLabels)
+	}
+	if len(layout.routes) != 4 {
+		t.Fatalf("cyclic residue routes=%d want 4 including the supplied self-edge", len(layout.routes))
+	}
+	lanes := make(map[int]bool)
+	for _, route := range layout.routes {
+		if route.arrowRune != '◀' {
+			t.Errorf("same-column cyclic edge %s -> %s arrow=%q want reverse-entry marker", route.edge.From, route.edge.To, route.arrowRune)
+		}
+		lane := 0
+		for _, segment := range route.segments {
+			if segment.from.x == segment.to.x {
+				lane = max(lane, segment.from.x)
+			}
+		}
+		lanes[lane] = true
+	}
+	if len(lanes) != len(layout.routes) {
+		t.Fatalf("cyclic edges shared indistinguishable loop lanes: lanes=%v routes=%d", lanes, len(layout.routes))
+	}
+	if got := buildThreadSpatialLayout(permuted); !reflect.DeepEqual(got, layout) {
+		t.Fatalf("equivalent cyclic evidence changed route layout:\n got: %#v\nwant: %#v", got, layout)
+	}
+}
+
+func TestThreadSpatialReverseRouteUsesNodeFreeTrack(t *testing.T) {
+	const routeID int32 = 1
+	placements := map[string]threadSpatialNode{
+		"target": {node: core.ThreadGraphNode{TaskID: "target"}, column: 0, row: 0, x: 3, y: 2},
+		"source": {node: core.ThreadGraphNode{TaskID: "source"}, column: 2, row: 0, x: 63, y: 2},
+	}
+	seed := threadSpatialRouteSeed{
+		id: routeID, edge: core.ThreadGraphEdge{From: "source", To: "target"},
+		fromColumn: 2, toColumn: 0, fromRow: 0, toRow: 0, needsTrack: true,
+	}
+	routes := materializeThreadSpatialRoutes(
+		[]threadSpatialRouteSeed{seed}, placements,
+		map[int32]threadSpatialRouteLanes{routeID: {source: 88, target: 27}},
+		map[int32]int{routeID: 7},
+	)
+	if len(routes) != 1 || routes[0].arrowRune != '◀' || routes[0].arrow != (threadSpatialPoint{x: 25, y: 4}) {
+		t.Fatalf("reverse route did not enter its actual target from the right: %+v", routes)
+	}
+	corridors := 0
+	for _, segment := range routes[0].segments {
+		if segment.corridor {
+			corridors++
+		}
+		for _, point := range threadSpatialTestSegmentPoints(segment) {
+			for taskID, node := range placements {
+				inside := point.x >= node.x && point.x < node.x+threadSpatialNodeWidth &&
+					point.y >= node.y && point.y < node.y+threadSpatialNodeSlotHeight
+				if inside {
+					t.Fatalf("reverse route crossed %s at %+v", taskID, point)
+				}
+			}
+		}
+	}
+	if corridors != 1 {
+		t.Fatalf("reverse route lost its attributed horizontal track: %+v", routes[0])
 	}
 }
 
@@ -1018,8 +1721,16 @@ func TestThreadSpatialLongEdgeUsesNodeFreeTrack(t *testing.T) {
 	if to.column-from.column <= 1 || middle.column != from.column+1 {
 		t.Fatalf("fixture did not create a skipped visible column: from=%d middle=%d to=%d", from.column, middle.column, to.column)
 	}
-	trackY := threadSpatialNodeTop + min(from.row, to.row)*threadSpatialNodeStrideY + threadSpatialNodeSlotHeight
-	if !canvas.cells[trackY][middle.x-2].accent {
+	route, ok := threadSpatialTestRoute(layout, a, c)
+	if !ok {
+		t.Fatalf("layout omitted route %s -> %s", a, c)
+	}
+	corridor, ok := threadSpatialTestCorridor(route)
+	if !ok {
+		t.Fatalf("skipped-layer route has no corridor: %+v", route)
+	}
+	probeX := (corridor.from.x + corridor.to.x) / 2
+	if !canvas.cells[corridor.from.y][probeX].accent {
 		t.Fatal("selected long edge did not use the node-free inter-row track")
 	}
 	middleY := middle.y + threadSpatialNodeSlotHeight/2
@@ -1044,21 +1755,48 @@ func TestThreadSpatialLongEdgeKeepsDeepestRowTrackInsideCanvas(t *testing.T) {
 		},
 	}
 	layout := buildThreadSpatialLayout(projection)
-	from, middle, to := layout.byID[b], layout.byID[c], layout.byID[d]
+	from, to := layout.byID[b], layout.byID[d]
 	if from.row == 0 || to.column-from.column <= 1 {
 		t.Fatalf("fixture did not put a skipped-layer endpoint on the deepest row: from=%+v to=%+v", from, to)
 	}
-	trackY := threadSpatialNodeTop + min(from.row, to.row)*threadSpatialNodeStrideY + threadSpatialNodeSlotHeight
+	route, ok := threadSpatialTestRoute(layout, b, d)
+	if !ok {
+		t.Fatalf("layout omitted route %s -> %s", b, d)
+	}
+	corridor, ok := threadSpatialTestCorridor(route)
+	if !ok {
+		t.Fatalf("deepest-row skipped-layer route has no corridor: %+v", route)
+	}
+	trackY := corridor.from.y
 	if trackY >= layout.height {
 		t.Fatalf("long-edge track row %d falls outside layout height %d", trackY, layout.height)
 	}
 	canvas := renderThreadSpatialCanvas(projection, layout, b)
-	if got := threadSpatialConnectorGlyph(canvas.cells[trackY][middle.x-2].connector); got != "─" {
+	probeX := (corridor.from.x + corridor.to.x) / 2
+	if got := threadSpatialConnectorGlyph(canvas.cells[trackY][probeX].connector); got != "─" {
 		t.Fatalf("deepest-row long edge was clipped at its horizontal track: glyph=%q", got)
 	}
-	if !canvas.cells[trackY][middle.x-2].accent {
+	if !canvas.cells[trackY][probeX].accent {
 		t.Fatal("deepest-row long edge lost selected-route emphasis")
 	}
+}
+
+func threadSpatialTestRoute(layout threadSpatialLayout, from, to string) (threadSpatialRoute, bool) {
+	for _, route := range layout.routes {
+		if route.edge.From == from && route.edge.To == to {
+			return route, true
+		}
+	}
+	return threadSpatialRoute{}, false
+}
+
+func threadSpatialTestCorridor(route threadSpatialRoute) (threadSpatialRouteSegment, bool) {
+	for _, segment := range route.segments {
+		if segment.corridor {
+			return segment, true
+		}
+	}
+	return threadSpatialRouteSegment{}, false
 }
 
 func TestThreadSpatialPresentationIsInvariantUnderEquivalentProjectionPermutations(t *testing.T) {
@@ -1120,11 +1858,8 @@ func TestThreadSpatialSelectedNodeExpandsInsideStableSlot(t *testing.T) {
 	if got := canvas.cells[placement.y+1][placement.x+2].color; got != theme.Status(domain.StatusNextUp).Color {
 		t.Fatalf("selected status glyph color=%v want semantic next-up color", got)
 	}
-	if got := canvas.cells[placement.y+2][placement.x-2].color; got != theme.ColorYellow {
-		t.Fatalf("focus pointer color=%v want frontier-pointer yellow", got)
-	}
-	if got := canvas.cells[placement.y+2][placement.x-2].text; got != "›" {
-		t.Fatalf("focus marker=%q want a marker distinct from dependency arrows", got)
+	if got := canvas.cells[placement.y+2][placement.x-3].text; got != "" {
+		t.Fatalf("selected card retained a redundant connector-adjacent focus marker: %q", got)
 	}
 }
 
@@ -1196,16 +1931,24 @@ func TestThreadSpatialGraphFailsOpenToWavesBeyondPrototypeCapacity(t *testing.T)
 	}
 }
 
+func TestThreadSpatialCanvasCapacityMatchesCellRepresentation(t *testing.T) {
+	const maxCellBytes = uintptr(48)
+	if got := unsafe.Sizeof(threadSpatialCell{}); got > maxCellBytes {
+		t.Fatalf("thread spatial cell grew to %d bytes; reconsider the %d-cell canvas limit", got, threadSpatialMaxCanvasCells)
+	}
+	if bytes := uintptr(threadSpatialMaxCanvasCells) * unsafe.Sizeof(threadSpatialCell{}); bytes > 24*1024*1024 {
+		t.Fatalf("canvas guard permits %d bytes of cell storage; want no more than 24 MiB", bytes)
+	}
+}
+
 func TestThreadSpatialCapacityGuardsEdgesAndCanvasIndependently(t *testing.T) {
 	t.Run("edges", func(t *testing.T) {
-		projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, 100)}
-		for index := range projection.Nodes {
-			projection.Nodes[index] = core.ThreadGraphNode{TaskID: fmt.Sprintf("task-%03d", index), Role: core.ThreadTaskMember}
-			for prerequisite := 0; prerequisite < index; prerequisite++ {
-				projection.Edges = append(projection.Edges, core.ThreadGraphEdge{
-					From: projection.Nodes[prerequisite].TaskID, To: projection.Nodes[index].TaskID,
-				})
-			}
+		projection := core.ThreadGraphProjection{Nodes: []core.ThreadGraphNode{
+			{TaskID: "source", Role: core.ThreadTaskMember},
+			{TaskID: "target", Role: core.ThreadTaskMember},
+		}}
+		for range threadSpatialMaxEdges + 1 {
+			projection.Edges = append(projection.Edges, core.ThreadGraphEdge{From: "source", To: "target"})
 		}
 		layout := buildThreadSpatialLayout(projection)
 		if len(layout.nodes) > threadSpatialMaxNodes || layout.width*layout.height > threadSpatialMaxCanvasCells {

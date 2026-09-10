@@ -129,7 +129,9 @@ func TestSymbolsLegendIsPageSpecific(t *testing.T) {
 	if !strings.Contains(epics, "dormant") || strings.Contains(epics, "finding:") {
 		t.Error("epics legend should describe liveness, not audit findings")
 	}
-	if !strings.Contains(threads, "Thread projection healthy") || !strings.Contains(threads, "dispatchable frontier") {
+	if !strings.Contains(threads, "Thread projection healthy") || !strings.Contains(threads, "dispatchable frontier") ||
+		!strings.Contains(threads, "focused dependency route") || !strings.Contains(threads, "shared endpoint route bundle") ||
+		!strings.Contains(threads, "unrelated routes cross") || !strings.Contains(threads, "renderer routing conflict") {
 		t.Error("Threads legend should explain projection health and graph-derived work")
 	}
 	if !strings.Contains(audits, "finding:") || !strings.Contains(audits, "bucket") {
