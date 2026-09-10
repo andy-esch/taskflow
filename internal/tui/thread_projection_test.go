@@ -617,6 +617,160 @@ func TestThreadRegistryDropsOutOfOrderListAndDetailMessages(t *testing.T) {
 	}
 }
 
+func TestThreadSpatialCacheFollowsCoherentProjectionReplacement(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		View: core.ThreadView{
+			Thread:           domain.Thread{ID: "thread-id", Slug: "thread"},
+			GraphHealth:      core.GraphHealthy,
+			ProjectionHealth: core.GraphHealthy,
+		},
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Label: "alpha", Role: core.ThreadTaskMember},
+			{TaskID: "b", Label: "beta", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{{From: "a", To: "b"}},
+		Waves: []core.ThreadGraphWave{{Index: 1, TaskIDs: []string{"a"}}, {Index: 2, TaskIDs: []string{"b"}}},
+	}
+	detail := newThreadDetail(projection, "body", "", "")
+	detail.view, detail.selection = threadDetailSpatial, "b"
+	pane := newDetailPane(&testStyles)
+	pane.SetSize(120, 30)
+	pane.SetContent("thread-id", detail)
+	loaded := pane.content.(threadDetail)
+	original := loaded.spatialPrepared()
+	if original.layout == nil || original.issue != "" {
+		t.Fatalf("initial coherent projection did not prepare: %+v", original)
+	}
+
+	movedContent, moved := loaded.moveDetailSelectionDirection(-1, 0)
+	if !moved {
+		t.Fatal("cached spatial detail refused directional selection")
+	}
+	movedDetail := movedContent.(threadDetail)
+	if movedDetail.spatialPrepared().layout != original.layout {
+		t.Fatal("selection copy rebuilt instead of sharing the coherent projection layout")
+	}
+	_ = movedDetail.renderDetail(100, 28, &testStyles)
+	if movedDetail.spatialPrepared().layout != original.layout {
+		t.Fatal("render rebuilt instead of sharing the coherent projection layout")
+	}
+	if want := buildThreadSpatialLayout(projection); !reflect.DeepEqual(*original.layout, want) {
+		t.Fatal("render/navigation mutated the shared read-only layout")
+	}
+
+	added := projection
+	added.Nodes = []core.ThreadGraphNode{
+		{TaskID: "a", Label: "alpha renamed", Role: core.ThreadTaskMember},
+		{TaskID: "b", Label: "beta", Role: core.ThreadTaskMember},
+		{TaskID: "c", Label: "charlie", Role: core.ThreadTaskMember},
+	}
+	added.Edges = []core.ThreadGraphEdge{{From: "a", To: "b"}, {From: "b", To: "c"}}
+	added.Waves = []core.ThreadGraphWave{
+		{Index: 1, TaskIDs: []string{"a"}}, {Index: 2, TaskIDs: []string{"b"}}, {Index: 3, TaskIDs: []string{"c"}},
+	}
+	pane.SetContent("thread-id", newThreadDetail(added, "body", "", ""))
+	loaded = pane.content.(threadDetail)
+	refreshed := loaded.spatialPrepared()
+	if refreshed.layout == nil || refreshed.layout == original.layout {
+		t.Fatal("add/rename refresh retained the previous projection layout")
+	}
+	if loaded.detailSelectionKey() != "b" {
+		t.Fatalf("add/rename refresh lost stable selection: %q", loaded.detailSelectionKey())
+	}
+	if node := refreshed.layout.byID["a"].node; node.Label != "alpha renamed" {
+		t.Fatalf("renamed task label remained stale in refreshed layout: %+v", node)
+	}
+	if _, ok := refreshed.layout.byID["c"]; !ok {
+		t.Fatal("added task was absent from refreshed layout")
+	}
+
+	deleted := projection
+	deleted.Nodes = []core.ThreadGraphNode{{TaskID: "a", Label: "alpha", Role: core.ThreadTaskMember}}
+	deleted.Edges, deleted.Waves = nil, []core.ThreadGraphWave{{Index: 1, TaskIDs: []string{"a"}}}
+	pane.SetContent("thread-id", newThreadDetail(deleted, "body", "", ""))
+	loaded = pane.content.(threadDetail)
+	deletedPrepared := loaded.spatialPrepared()
+	if deletedPrepared.layout == refreshed.layout || loaded.detailSelectionKey() != "a" {
+		t.Fatalf("deletion refresh retained stale cache/selection: selection=%q", loaded.detailSelectionKey())
+	}
+
+	degraded := deleted
+	degraded.View.GraphHealth = core.GraphDegraded
+	pane.SetContent("thread-id", newThreadDetail(degraded, "body", "", ""))
+	loaded = pane.content.(threadDetail)
+	degradedPrepared := loaded.spatialPrepared()
+	if degradedPrepared.layout == deletedPrepared.layout {
+		t.Fatal("coherent degraded refresh reused the prior healthy layout")
+	}
+	pane.SetRefreshError("repository mutation planner is active")
+	retained := pane.content.(threadDetail)
+	if retained.spatialPrepared().layout != degradedPrepared.layout {
+		t.Fatal("failed refresh discarded the last coherent degraded layout")
+	}
+
+	recovered := deleted
+	recovered.Nodes = []core.ThreadGraphNode{{TaskID: "a", Label: "alpha recovered", Role: core.ThreadTaskMember}}
+	pane.SetContent("thread-id", newThreadDetail(recovered, "body", "", ""))
+	loaded = pane.content.(threadDetail)
+	recoveredPrepared := loaded.spatialPrepared()
+	if recoveredPrepared.layout == nil || recoveredPrepared.layout == degradedPrepared.layout ||
+		recoveredPrepared.layout.byID["a"].node.Label != "alpha recovered" {
+		t.Fatal("recovery did not replace degraded spatial cache with fresh evidence")
+	}
+}
+
+func TestThreadSpatialCacheRemainsLazyUntilSpatialView(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{{TaskID: "a", Label: "alpha", Role: core.ThreadTaskMember}},
+	}
+	detail := newThreadDetail(projection, "body", "", "")
+	pane := newDetailPane(&testStyles)
+	pane.SetSize(120, 30)
+	pane.SetContent("thread-id", detail)
+	loaded := pane.content.(threadDetail)
+	if loaded.spatial.prepared.layout != nil {
+		t.Fatal("summary rendering eagerly prepared the spatial layout")
+	}
+
+	spatial := loaded.withDetailView(string(threadDetailSpatial)).(threadDetail)
+	if spatial.spatial != loaded.spatial || spatial.spatial.prepared.layout == nil {
+		t.Fatal("entering the spatial view did not prepare the detail's shared lazy layout")
+	}
+}
+
+func TestThreadSpatialRuntimeMethodsConsumeTheCachedPreparedResult(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Label: "alpha", Role: core.ThreadTaskMember},
+			{TaskID: "b", Label: "beta", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{{From: "a", To: "b"}},
+	}
+	detail := newThreadDetail(projection, "", "", "")
+	preparations := 0
+	detail.spatial.prepare = func(core.ThreadGraphProjection) threadSpatialPrepared {
+		preparations++
+		return threadSpatialPrepared{
+			issue: "cached sentinel", fallbackTaskID: "a", nodeCount: 2, edgeCount: 1,
+		}
+	}
+
+	spatial := detail.withDetailView(string(threadDetailSpatial)).(threadDetail)
+	if preparations != 1 || spatial.selection != "a" {
+		t.Fatalf("spatial entry preparations=%d selection=%q, want one cached preparation at a", preparations, spatial.selection)
+	}
+	if rendered := ansi.Strip(spatial.renderDetail(100, 20, &testStyles)); !strings.Contains(rendered, "cached sentinel") {
+		t.Fatalf("render bypassed the injected cached result:\n%s", rendered)
+	}
+	moved, ok := spatial.moveDetailSelectionDirection(1, 0)
+	if !ok || moved.(threadDetail).selection != "a" {
+		t.Fatalf("navigation bypassed rejected cached result: moved=%v selection=%q", ok, moved.(threadDetail).selection)
+	}
+	if preparations != 1 {
+		t.Fatalf("runtime methods prepared layout %d times, want exactly once", preparations)
+	}
+}
+
 func TestThreadDetailPresentsCoreProjectionAndBody(t *testing.T) {
 	m, _ := threadModel(t)
 	m = openThreads(t, m)
@@ -1420,10 +1574,11 @@ func TestThreadSpatialDenseLayeredFixtureIsBoundedAndDeterministic(t *testing.T)
 		}
 	}
 
-	layout := buildThreadSpatialLayout(projection)
-	if issue := threadSpatialCapacityIssue(layout, len(projection.Edges)); issue != "" {
-		t.Fatalf("representative dense fixture exceeded its bounded canvas: %s", issue)
+	prepared := prepareThreadSpatial(projection)
+	if prepared.issue != "" || prepared.layout == nil {
+		t.Fatalf("representative dense fixture exceeded its bounded canvas: %s", prepared.issue)
 	}
+	layout := *prepared.layout
 	if len(layout.routes) != len(projection.Edges) {
 		t.Fatalf("routed edges=%d want every supplied edge=%d", len(layout.routes), len(projection.Edges))
 	}
@@ -1919,7 +2074,7 @@ func TestThreadSpatialGraphFailsOpenToWavesBeyondPrototypeCapacity(t *testing.T)
 		t.Fatal("capacity fallback was nondeterministic")
 	}
 	plain := ansi.Strip(first)
-	for _, want := range []string{"bounded prototype fallback", "513 nodes", "no partial graph", "complete wave reader", "focus [M1]"} {
+	for _, want := range []string{"bounded prototype fallback", "513 nodes", "no partial graph", "complete wave reader", "focus", "task-0000"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("capacity fallback omitted %q:\n%s", want, plain)
 		}
@@ -1941,44 +2096,219 @@ func TestThreadSpatialCanvasCapacityMatchesCellRepresentation(t *testing.T) {
 	}
 }
 
-func TestThreadSpatialCapacityGuardsEdgesAndCanvasIndependently(t *testing.T) {
-	t.Run("edges", func(t *testing.T) {
+func TestThreadSpatialPreflightBoundsNodesEdgesRoutesAndCanvas(t *testing.T) {
+	t.Run("nodes at and beyond limit", func(t *testing.T) {
+		atLimit := threadSpatialNodeLimitProjection()
+		prepared := prepareThreadSpatial(atLimit)
+		if prepared.issue != "" || prepared.layout == nil || len(prepared.layout.nodes) != threadSpatialMaxNodes {
+			t.Fatalf("at-limit nodes were not prepared: issue=%q layout=%v", prepared.issue, prepared.layout != nil)
+		}
+
+		beyond := atLimit
+		beyond.Nodes = append(append([]core.ThreadGraphNode(nil), atLimit.Nodes...), core.ThreadGraphNode{
+			TaskID: "one-too-many", Role: core.ThreadTaskMember,
+		})
+		plannerCalls := 0
+		prepared = prepareThreadSpatialWithPlanner(beyond, func(core.ThreadGraphProjection) threadSpatialLayoutPlan {
+			plannerCalls++
+			return threadSpatialLayoutPlan{}
+		})
+		if prepared.layout != nil || !strings.Contains(prepared.issue, "node records exceeds") || plannerCalls != 0 {
+			t.Fatalf("node preflight did work after limit: issue=%q layout=%v", prepared.issue, prepared.layout != nil)
+		}
+	})
+
+	t.Run("wave-only nodes participate in preflight", func(t *testing.T) {
+		projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, threadSpatialMaxNodes)}
+		for index := range projection.Nodes {
+			projection.Nodes[index] = core.ThreadGraphNode{TaskID: fmt.Sprintf("task-%04d", index)}
+		}
+		projection.Waves = []core.ThreadGraphWave{{Index: 1, TaskIDs: []string{"missing-wave-node"}}}
+		prepared := prepareThreadSpatial(projection)
+		if prepared.nodeCount != threadSpatialMaxNodes+1 || prepared.layout != nil ||
+			!strings.Contains(prepared.issue, "nodes exceeds") {
+			t.Fatalf("wave-only node escaped bounded preflight: %+v", prepared)
+		}
+	})
+
+	t.Run("edges at and beyond limit", func(t *testing.T) {
 		projection := core.ThreadGraphProjection{Nodes: []core.ThreadGraphNode{
 			{TaskID: "source", Role: core.ThreadTaskMember},
 			{TaskID: "target", Role: core.ThreadTaskMember},
 		}}
-		for range threadSpatialMaxEdges + 1 {
+		for range threadSpatialMaxEdges {
 			projection.Edges = append(projection.Edges, core.ThreadGraphEdge{From: "source", To: "target"})
 		}
-		layout := buildThreadSpatialLayout(projection)
-		if len(layout.nodes) > threadSpatialMaxNodes || layout.width*layout.height > threadSpatialMaxCanvasCells {
-			t.Fatalf("edge fixture tripped a different guard: nodes=%d canvas=%dx%d", len(layout.nodes), layout.width, layout.height)
+		prepared := prepareThreadSpatial(projection)
+		routes := -1
+		if prepared.layout != nil {
+			routes = len(prepared.layout.routes)
 		}
-		if issue := threadSpatialCapacityIssue(layout, len(projection.Edges)); !strings.Contains(issue, "edges exceeds") {
-			t.Fatalf("edge guard issue=%q", issue)
+		if prepared.issue != "" || prepared.layout == nil || routes != threadSpatialMaxEdges {
+			t.Fatalf("at-limit edges were not prepared: issue=%q routes=%d", prepared.issue, routes)
+		}
+		projection.Edges = append(projection.Edges, core.ThreadGraphEdge{From: "source", To: "target"})
+		plannerCalls := 0
+		prepared = prepareThreadSpatialWithPlanner(projection, func(core.ThreadGraphProjection) threadSpatialLayoutPlan {
+			plannerCalls++
+			return threadSpatialLayoutPlan{}
+		})
+		if prepared.layout != nil || !strings.Contains(prepared.issue, "edges exceeds") || plannerCalls != 0 {
+			t.Fatalf("edge preflight did work after limit: issue=%q layout=%v", prepared.issue, prepared.layout != nil)
 		}
 	})
 
-	t.Run("canvas cells", func(t *testing.T) {
-		projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, 505)}
-		for index := range projection.Nodes {
-			projection.Nodes[index] = core.ThreadGraphNode{TaskID: fmt.Sprintf("task-%03d", index), Role: core.ThreadTaskMember}
+	t.Run("malformed wave records are bounded before identity scans", func(t *testing.T) {
+		projection := core.ThreadGraphProjection{
+			Nodes: []core.ThreadGraphNode{{TaskID: "a"}},
+			Waves: []core.ThreadGraphWave{{Index: 1, TaskIDs: make([]string, threadSpatialMaxNodes+1)}},
 		}
-		// A 255-node chain creates width while the other 250 sources create
-		// height, staying below both the node and edge guards.
-		for index := 1; index < 255; index++ {
-			projection.Edges = append(projection.Edges, core.ThreadGraphEdge{
-				From: projection.Nodes[index-1].TaskID, To: projection.Nodes[index].TaskID,
-			})
+		for index := range projection.Waves[0].TaskIDs {
+			projection.Waves[0].TaskIDs[index] = "a"
 		}
-		layout := buildThreadSpatialLayout(projection)
-		if len(layout.nodes) > threadSpatialMaxNodes || len(projection.Edges) > threadSpatialMaxEdges {
-			t.Fatalf("canvas fixture tripped a different guard: nodes=%d edges=%d", len(layout.nodes), len(projection.Edges))
-		}
-		if issue := threadSpatialCapacityIssue(layout, len(projection.Edges)); !strings.Contains(issue, "canvas limit") {
-			t.Fatalf("canvas guard issue=%q for %dx%d", issue, layout.width, layout.height)
+		prepared := prepareThreadSpatial(projection)
+		if prepared.layout != nil || !strings.Contains(prepared.issue, "wave task records exceeds") {
+			t.Fatalf("malformed wave record input escaped preflight: %+v", prepared)
 		}
 	})
+
+	t.Run("rejected input caches a bounded selection fallback", func(t *testing.T) {
+		projection := threadSpatialNodeLimitProjection()
+		projection.Nodes = append(projection.Nodes, core.ThreadGraphNode{TaskID: "zzzz-one-too-many"})
+		prepared := prepareThreadSpatial(projection)
+		if got := threadSpatialSelectedTaskIDPrepared(prepared, ""); got != "task-0000" {
+			t.Fatalf("cached fallback selection=%q want task-0000", got)
+		}
+		if got := threadSpatialSelectedTaskIDPrepared(prepared, "picker-selection"); got != "picker-selection" {
+			t.Fatalf("capacity fallback discarded stable picker selection: %q", got)
+		}
+	})
+
+	t.Run("canvas boundary precedes route materialization", func(t *testing.T) {
+		inside := threadSpatialNearCanvasProjection(91)
+		prepared := prepareThreadSpatial(inside)
+		if prepared.issue != "" || prepared.layout == nil {
+			t.Fatalf("near-limit canvas was rejected: issue=%q", prepared.issue)
+		}
+		if cells := prepared.layout.width * prepared.layout.height; cells > threadSpatialMaxCanvasCells || cells < 450_000 {
+			t.Fatalf("inside canvas=%d cells want near the %d-cell bound", cells, threadSpatialMaxCanvasCells)
+		}
+		if len(prepared.layout.routes) == 0 {
+			t.Fatal("inside canvas did not materialize its bounded routes")
+		}
+
+		outside := threadSpatialNearCanvasProjection(92)
+		prepared = prepareThreadSpatial(outside)
+		if prepared.layout == nil || !strings.Contains(prepared.issue, "canvas limit") {
+			t.Fatalf("over-limit canvas issue=%q layout=%v", prepared.issue, prepared.layout != nil)
+		}
+		if len(prepared.layout.routes) != 0 {
+			t.Fatalf("over-limit canvas materialized %d routes before fallback", len(prepared.layout.routes))
+		}
+	})
+
+	t.Run("long route remains bounded", func(t *testing.T) {
+		const nodes = 32
+		projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, nodes)}
+		for index := range projection.Nodes {
+			projection.Nodes[index] = core.ThreadGraphNode{TaskID: fmt.Sprintf("task-%02d", index), Role: core.ThreadTaskMember}
+			if index > 0 {
+				projection.Edges = append(projection.Edges, core.ThreadGraphEdge{
+					From: projection.Nodes[index-1].TaskID, To: projection.Nodes[index].TaskID,
+				})
+			}
+		}
+		projection.Edges = append(projection.Edges, core.ThreadGraphEdge{From: "task-00", To: "task-31"})
+		prepared := prepareThreadSpatial(projection)
+		if prepared.issue != "" || prepared.layout == nil {
+			t.Fatalf("bounded long-route fixture was rejected: %q", prepared.issue)
+		}
+		route, ok := threadSpatialTestRoute(*prepared.layout, "task-00", "task-31")
+		if !ok {
+			t.Fatal("bounded fixture omitted its skipped-layer route")
+		}
+		longest := 0
+		for _, segment := range route.segments {
+			longest = max(longest, abs(segment.to.x-segment.from.x)+abs(segment.to.y-segment.from.y))
+		}
+		if longest < 800 {
+			t.Fatalf("fixture route length=%d did not exercise long-path planning", longest)
+		}
+	})
+}
+
+func threadSpatialNodeLimitProjection() core.ThreadGraphProjection {
+	projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, threadSpatialMaxNodes)}
+	for index := range projection.Nodes {
+		projection.Nodes[index] = core.ThreadGraphNode{
+			TaskID: fmt.Sprintf("task-%04d", index), Role: core.ThreadTaskMember,
+		}
+	}
+	return projection
+}
+
+func threadSpatialNearCanvasProjection(rows int) core.ThreadGraphProjection {
+	const chainNodes = 30
+	projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, 0, chainNodes+rows-1)}
+	for index := range chainNodes {
+		taskID := fmt.Sprintf("chain-%02d", index)
+		projection.Nodes = append(projection.Nodes, core.ThreadGraphNode{TaskID: taskID, Role: core.ThreadTaskMember})
+		if index > 0 {
+			projection.Edges = append(projection.Edges, core.ThreadGraphEdge{
+				From: fmt.Sprintf("chain-%02d", index-1), To: taskID,
+			})
+		}
+	}
+	for index := 1; index < rows; index++ {
+		projection.Nodes = append(projection.Nodes, core.ThreadGraphNode{
+			TaskID: fmt.Sprintf("source-%03d", index), Role: core.ThreadTaskMember,
+		})
+	}
+	return projection
+}
+
+func BenchmarkThreadSpatialPrepareNearCanvasLimit(b *testing.B) {
+	projection := threadSpatialNearCanvasProjection(91)
+	b.ReportAllocs()
+	for b.Loop() {
+		prepared := prepareThreadSpatial(projection)
+		if prepared.issue != "" {
+			b.Fatalf("near-limit projection was rejected: %q", prepared.issue)
+		}
+	}
+}
+
+func BenchmarkThreadSpatialCachedRenderNearCanvasLimit(b *testing.B) {
+	projection := threadSpatialNearCanvasProjection(91)
+	detail := newThreadDetail(projection, "", "", "")
+	detail.view = threadDetailSpatial
+	detail.selection = "chain-00"
+	layout := detail.spatialPrepared().layout
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_ = detail.renderDetail(120, 30, &testStyles)
+		if detail.spatial.prepared.layout != layout {
+			b.Fatal("render replaced the cached layout")
+		}
+	}
+}
+
+func BenchmarkThreadSpatialCachedNavigationNearNodeLimit(b *testing.B) {
+	detail := newThreadDetail(threadSpatialNodeLimitProjection(), "", "", "")
+	detail.view, detail.selection = threadDetailSpatial, "task-0256"
+	prepared := detail.spatialPrepared()
+	direction := 1
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		moved, _ := detail.moveDetailSelectionDirection(0, direction)
+		detail = moved.(threadDetail)
+		direction = -direction
+		if detail.spatial.prepared.layout != prepared.layout {
+			b.Fatal("navigation replaced the cached layout")
+		}
+	}
 }
 
 func TestThreadSpatialNarrowFallbackAllocatesNoCanvasBeforeCapacityChecks(t *testing.T) {

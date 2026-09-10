@@ -766,11 +766,34 @@ func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int, s *styl
 
 type threadDetail struct {
 	projection core.ThreadGraphProjection
+	spatial    *threadSpatialCache // one lazy immutable layout per coherent projection read
 	body       string
 	path       string
 	pathIssue  string
 	view       threadDetailView
 	selection  string // stable task ID selected in topology/spatial views
+}
+
+func newThreadDetail(
+	projection core.ThreadGraphProjection,
+	body, path, pathIssue string,
+) threadDetail {
+	return threadDetail{
+		projection: projection,
+		spatial:    newThreadSpatialCache(projection),
+		body:       body,
+		path:       path,
+		pathIssue:  pathIssue,
+	}
+}
+
+func (d threadDetail) spatialPrepared() threadSpatialPrepared {
+	if d.spatial != nil {
+		return d.spatial.get()
+	}
+	// Direct literals remain convenient for small renderer unit tests. Runtime
+	// detail loads always use newThreadDetail and therefore share the lazy cache.
+	return prepareThreadSpatial(d.projection)
 }
 
 type threadDetailView string
@@ -835,7 +858,7 @@ func (d threadDetail) withDetailView(name string) detailContent {
 		d.selection = threadGraphSelectedTaskID(d.projection, d.selection)
 	case string(threadDetailSpatial):
 		d.view = threadDetailSpatial
-		d.selection = threadGraphSelectedTaskID(d.projection, d.selection)
+		d.selection = threadSpatialSelectedTaskIDPrepared(d.spatialPrepared(), d.selection)
 	default:
 		d.view = threadDetailSummary
 	}
@@ -854,19 +877,21 @@ func (d threadDetail) renderDetail(width, height int, s *styles) string {
 	if d.detailViewName() != string(threadDetailSpatial) {
 		return ""
 	}
-	return renderThreadSpatial(d.projection, d.pathIssue, d.detailSelectionKey(), width, height, s)
+	return renderThreadSpatialPrepared(
+		d.projection, d.spatialPrepared(), d.pathIssue, d.selection, width, height, s,
+	)
 }
 
 func (d threadDetail) detailSelectionKey() string {
 	if d.detailViewName() == string(threadDetailSpatial) {
-		return threadSpatialSelectedTaskID(d.projection, d.selection)
+		return threadSpatialSelectedTaskIDPrepared(d.spatialPrepared(), d.selection)
 	}
 	return threadGraphSelectedTaskID(d.projection, d.selection)
 }
 
 func (d threadDetail) withDetailSelection(taskID string) detailContent {
 	if d.detailViewName() == string(threadDetailSpatial) {
-		d.selection = threadSpatialSelectedTaskID(d.projection, taskID)
+		d.selection = threadSpatialSelectedTaskIDPrepared(d.spatialPrepared(), taskID)
 	} else {
 		d.selection = threadGraphSelectedTaskID(d.projection, taskID)
 	}
@@ -898,7 +923,8 @@ func (d threadDetail) moveDetailSelectionDirection(dx, dy int) (detailContent, b
 	if d.detailViewName() != string(threadDetailSpatial) {
 		return d, false
 	}
-	d.selection = threadSpatialMove(d.projection, d.detailSelectionKey(), dx, dy)
+	prepared := d.spatialPrepared()
+	d.selection = threadSpatialMovePrepared(d.projection, prepared, d.selection, dx, dy)
 	return d, true
 }
 

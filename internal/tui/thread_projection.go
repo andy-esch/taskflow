@@ -71,8 +71,8 @@ func loadThreadDetail(svc *core.Service, id string) tea.Cmd {
 		if pathErr != nil {
 			issue = pathErr.Error()
 		}
-		return detailMsg{kind: entityThreads, id: id, content: threadDetail{
-			projection: projection, body: body, path: path, pathIssue: issue,
-		}}
+		return detailMsg{kind: entityThreads, id: id, content: newThreadDetail(
+			projection, body, path, issue,
+		)}
 	}
 }

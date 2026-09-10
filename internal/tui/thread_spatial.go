@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -82,7 +83,192 @@ type threadSpatialLayout struct {
 	height       int
 }
 
+// threadSpatialPrepared is one shared, read-only presentation result for one
+// coherent Thread projection. Its layout owns maps and slices that callers must
+// never mutate. An input or canvas capacity issue deliberately carries no
+// materialized routes, so callers can fail open to the wave reader without
+// paying the work the guard exists to bound.
+type threadSpatialPrepared struct {
+	layout         *threadSpatialLayout
+	issue          string
+	fallbackTaskID string
+	nodeCount      int
+	edgeCount      int
+}
+
+// threadSpatialCache is owned by one loaded threadDetail. Value-copying the
+// detail while changing view or selection retains this pointer; replacing the
+// coherent projection installs a new cache. sync.Once keeps the seam safe if a
+// future shell renders and navigates from different goroutines.
+type threadSpatialCache struct {
+	once       sync.Once
+	projection core.ThreadGraphProjection
+	prepare    func(core.ThreadGraphProjection) threadSpatialPrepared
+	prepared   threadSpatialPrepared
+}
+
+func newThreadSpatialCache(projection core.ThreadGraphProjection) *threadSpatialCache {
+	return &threadSpatialCache{projection: projection, prepare: prepareThreadSpatial}
+}
+
+func (c *threadSpatialCache) get() threadSpatialPrepared {
+	if c == nil {
+		return threadSpatialPrepared{}
+	}
+	c.once.Do(func() {
+		prepare := c.prepare
+		if prepare == nil {
+			prepare = prepareThreadSpatial
+		}
+		c.prepared = prepare(c.projection)
+	})
+	return c.prepared
+}
+
+type threadSpatialLayoutPlan struct {
+	layout        threadSpatialLayout
+	seeds         []threadSpatialRouteSeed
+	boundaryLanes map[int32]threadSpatialRouteLanes
+	trackY        map[int32]int
+}
+
+func prepareThreadSpatial(projection core.ThreadGraphProjection) threadSpatialPrepared {
+	return prepareThreadSpatialWithPlanner(projection, planThreadSpatialLayout)
+}
+
+func prepareThreadSpatialWithPlanner(
+	projection core.ThreadGraphProjection,
+	planner func(core.ThreadGraphProjection) threadSpatialLayoutPlan,
+) threadSpatialPrepared {
+	prepared := preflightThreadSpatialInput(projection)
+	if prepared.issue != "" {
+		return prepared
+	}
+
+	// Ranking and lane geometry are bounded by the cheap input limits above.
+	// Canvas area is then known before route objects or terminal cells exist.
+	plan := planner(projection)
+	if issue := threadSpatialCanvasCapacityIssue(plan.layout); issue != "" {
+		prepared.issue = issue
+		// Point at a standalone layout copy. A pointer into plan would retain the
+		// rejected route seeds and lane/track maps for the detail's lifetime.
+		layout := plan.layout
+		prepared.layout = &layout
+		return prepared
+	}
+	layout := materializeThreadSpatialLayout(plan)
+	prepared.layout = &layout
+	return prepared
+}
+
+func preflightThreadSpatialInput(projection core.ThreadGraphProjection) threadSpatialPrepared {
+	prepared := threadSpatialPrepared{
+		edgeCount:      len(projection.Edges),
+		fallbackTaskID: boundedThreadSpatialFallbackTaskID(projection),
+	}
+	// Raw records also cost downstream sorting and ordering work, even when
+	// malformed evidence repeats an identity. Bound those shapes independently
+	// of the semantic unique-node count used by a healthy projection.
+	if len(projection.Nodes) > threadSpatialMaxNodes {
+		prepared.nodeCount = len(projection.Nodes)
+		prepared.issue = fmt.Sprintf(
+			"%d node records exceeds the %d-record spatial input limit",
+			len(projection.Nodes), threadSpatialMaxNodes,
+		)
+		return prepared
+	}
+	if len(projection.Waves) > threadSpatialMaxNodes {
+		prepared.nodeCount = len(projection.Nodes)
+		prepared.issue = fmt.Sprintf(
+			"%d wave records exceeds the %d-record spatial input limit",
+			len(projection.Waves), threadSpatialMaxNodes,
+		)
+		return prepared
+	}
+	seen := make(map[string]bool, threadSpatialMaxNodes+1)
+	for _, node := range projection.Nodes {
+		seen[node.TaskID] = true
+	}
+	count := len(seen)
+	waveTaskRecords := 0
+	for _, wave := range projection.Waves {
+		if len(wave.TaskIDs) > threadSpatialMaxNodes-waveTaskRecords {
+			prepared.nodeCount = count
+			prepared.issue = fmt.Sprintf(
+				"wave task records exceeds the %d-record spatial input limit",
+				threadSpatialMaxNodes,
+			)
+			return prepared
+		}
+		waveTaskRecords += len(wave.TaskIDs)
+		for _, taskID := range wave.TaskIDs {
+			if taskID == "" || seen[taskID] {
+				continue
+			}
+			seen[taskID] = true
+			count++
+			if count > threadSpatialMaxNodes {
+				prepared.nodeCount = count
+				prepared.issue = fmt.Sprintf(
+					"%d nodes exceeds the %d-node prototype limit",
+					count, threadSpatialMaxNodes,
+				)
+				return prepared
+			}
+		}
+	}
+	prepared.nodeCount = count
+	if prepared.edgeCount > threadSpatialMaxEdges {
+		prepared.issue = fmt.Sprintf(
+			"%d edges exceeds the %d-edge prototype limit",
+			prepared.edgeCount, threadSpatialMaxEdges,
+		)
+	}
+	return prepared
+}
+
+func boundedThreadSpatialFallbackTaskID(projection core.ThreadGraphProjection) string {
+	first := ""
+	consider := func(taskID string) {
+		if taskID != "" && (first == "" || taskID < first) {
+			first = taskID
+		}
+	}
+	for index, node := range projection.Nodes {
+		if index > threadSpatialMaxNodes {
+			break
+		}
+		consider(node.TaskID)
+	}
+	records := 0
+	for waveIndex, wave := range projection.Waves {
+		if waveIndex > threadSpatialMaxNodes {
+			return first
+		}
+		for _, taskID := range wave.TaskIDs {
+			if records > threadSpatialMaxNodes {
+				return first
+			}
+			consider(taskID)
+			records++
+		}
+	}
+	return first
+}
+
+func threadSpatialCanvasCapacityIssue(layout threadSpatialLayout) string {
+	if layout.width > 0 && layout.height > threadSpatialMaxCanvasCells/layout.width {
+		return fmt.Sprintf("%d×%d layout exceeds the %d-cell prototype canvas limit",
+			layout.width, layout.height, threadSpatialMaxCanvasCells)
+	}
+	return ""
+}
+
 func buildThreadSpatialLayout(projection core.ThreadGraphProjection) threadSpatialLayout {
+	return materializeThreadSpatialLayout(planThreadSpatialLayout(projection))
+}
+
+func planThreadSpatialLayout(projection core.ThreadGraphProjection) threadSpatialLayoutPlan {
 	byNode := make(map[string]core.ThreadGraphNode, len(projection.Nodes))
 	order := make(map[string]int, len(projection.Nodes))
 	allIDs := make([]string, 0, len(projection.Nodes))
@@ -146,7 +332,14 @@ func buildThreadSpatialLayout(projection core.ThreadGraphProjection) threadSpati
 			layout.byID[taskID] = placement
 		}
 	}
-	layout.routes = materializeThreadSpatialRoutes(seeds, layout.byID, boundaryLanes, trackY)
+	return threadSpatialLayoutPlan{
+		layout: layout, seeds: seeds, boundaryLanes: boundaryLanes, trackY: trackY,
+	}
+}
+
+func materializeThreadSpatialLayout(plan threadSpatialLayoutPlan) threadSpatialLayout {
+	layout := plan.layout
+	layout.routes = materializeThreadSpatialRoutes(plan.seeds, layout.byID, plan.boundaryLanes, plan.trackY)
 	return layout
 }
 
@@ -591,19 +784,31 @@ func labelThreadSpatialColumns(columns [][]string, projection core.ThreadGraphPr
 // that direction falls back to the nearest populated column. Vertical movement
 // stays within the current column.
 func threadSpatialMove(projection core.ThreadGraphProjection, selected string, dx, dy int) string {
-	layout := buildThreadSpatialLayout(projection)
+	return threadSpatialMovePrepared(projection, prepareThreadSpatial(projection), selected, dx, dy)
+}
+
+func threadSpatialMovePrepared(
+	projection core.ThreadGraphProjection,
+	prepared threadSpatialPrepared,
+	selected string,
+	dx, dy int,
+) string {
+	selected = threadSpatialSelectedTaskIDPrepared(prepared, selected)
+	if prepared.layout == nil || prepared.issue != "" {
+		return selected
+	}
+	layout := *prepared.layout
 	current, ok := spatialPlacement(layout, selected)
 	if !ok {
 		return firstSpatialSelectable(layout)
 	}
 	if dy != 0 {
-		column := spatialSelectableColumn(layout, current.column)
-		for index, candidate := range column {
-			if candidate.node.TaskID != current.node.TaskID {
-				continue
+		if current.column >= 0 && current.column < len(layout.columns) {
+			column := layout.columns[current.column]
+			if len(column) > 0 {
+				next := min(max(current.row+sign(dy), 0), len(column)-1)
+				return column[next]
 			}
-			next := min(max(index+sign(dy), 0), len(column)-1)
-			return column[next].node.TaskID
 		}
 		return current.node.TaskID
 	}
@@ -657,9 +862,20 @@ func threadSpatialDirectNeighbor(edges []core.ThreadGraphEdge, current, candidat
 	return false
 }
 
-func threadSpatialSelectedTaskID(projection core.ThreadGraphProjection, selected string) string {
-	layout := buildThreadSpatialLayout(projection)
-	return threadSpatialSelectedTaskIDInLayout(layout, selected)
+func threadSpatialSelectedTaskIDPrepared(
+	prepared threadSpatialPrepared,
+	selected string,
+) string {
+	if prepared.layout != nil {
+		return threadSpatialSelectedTaskIDInLayout(*prepared.layout, selected)
+	}
+	// Input rejection deliberately avoids building an unbounded identity index.
+	// A non-empty selection came from the coherent projection or task picker, so
+	// retain that stable ID; otherwise use the bounded preflight fallback.
+	if selected != "" {
+		return selected
+	}
+	return prepared.fallbackTaskID
 }
 
 func threadSpatialSelectedTaskIDInLayout(layout threadSpatialLayout, selected string) string {
@@ -1164,23 +1380,40 @@ func (c *threadSpatialCanvas) renderLine(row int, s *styles) string {
 }
 
 func renderThreadSpatial(projection core.ThreadGraphProjection, pathIssue, selectedTaskID string, width, height int, s *styles) string {
+	return renderThreadSpatialPrepared(
+		projection, prepareThreadSpatial(projection), pathIssue, selectedTaskID, width, height, s,
+	)
+}
+
+func renderThreadSpatialPrepared(
+	projection core.ThreadGraphProjection,
+	prepared threadSpatialPrepared,
+	pathIssue, selectedTaskID string,
+	width, height int,
+	s *styles,
+) string {
 	if width <= 0 {
 		width = 120
 	}
 	if height <= 0 {
 		height = 28
 	}
-	layout := buildThreadSpatialLayout(projection)
-	selectedTaskID = threadSpatialSelectedTaskIDInLayout(layout, selectedTaskID)
+	selectedTaskID = threadSpatialSelectedTaskIDPrepared(prepared, selectedTaskID)
 	// The narrow explanation allocates no graph canvas, so it intentionally
 	// precedes prototype capacity checks. Small terminals can always retreat to
 	// the wave reader even when the spatial projection itself is oversized.
 	if width < threadSpatialMinWidth || height < threadSpatialMinHeight {
-		return renderThreadSpatialNarrow(projection, layout, selectedTaskID, width, height, s)
+		return renderThreadSpatialNarrow(projection, prepared, selectedTaskID, width, height, s)
 	}
-	if issue := threadSpatialCapacityIssue(layout, len(projection.Edges)); issue != "" {
-		return renderThreadSpatialCapacityFallback(projection, layout, selectedTaskID, issue, width, height, s)
+	if prepared.issue != "" {
+		return renderThreadSpatialCapacityFallback(projection, prepared, selectedTaskID, width, height, s)
 	}
+	if prepared.layout == nil {
+		return renderThreadSpatialCapacityFallback(projection, threadSpatialPrepared{
+			issue: "spatial layout is unavailable", nodeCount: prepared.nodeCount, edgeCount: prepared.edgeCount,
+		}, selectedTaskID, width, height, s)
+	}
+	layout := *prepared.layout
 
 	fixedRows := 8 // header + two legend rows + five-row focus card
 	canvasHeight := max(1, height-fixedRows)
@@ -1440,24 +1673,10 @@ func putThreadSpatialBoundaryLabel(
 	}
 }
 
-func threadSpatialCapacityIssue(layout threadSpatialLayout, edgeCount int) string {
-	switch {
-	case len(layout.nodes) > threadSpatialMaxNodes:
-		return fmt.Sprintf("%d nodes exceeds the %d-node prototype limit", len(layout.nodes), threadSpatialMaxNodes)
-	case edgeCount > threadSpatialMaxEdges:
-		return fmt.Sprintf("%d edges exceeds the %d-edge prototype limit", edgeCount, threadSpatialMaxEdges)
-	case layout.width > 0 && layout.height > threadSpatialMaxCanvasCells/layout.width:
-		return fmt.Sprintf("%d×%d layout exceeds the %d-cell prototype canvas limit",
-			layout.width, layout.height, threadSpatialMaxCanvasCells)
-	default:
-		return ""
-	}
-}
-
 func renderThreadSpatialCapacityFallback(
 	projection core.ThreadGraphProjection,
-	layout threadSpatialLayout,
-	selectedTaskID, issue string,
+	prepared threadSpatialPrepared,
+	selectedTaskID string,
 	width, height int,
 	s *styles,
 ) string {
@@ -1467,11 +1686,11 @@ func renderThreadSpatialCapacityFallback(
 		truncate(threadSpatialStatusLegend(s), width),
 		truncate(threadSpatialRoleLegend(s), width),
 		"",
-		truncate(s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph+" capacity guard")+" · "+issue, width),
-		truncate(fmt.Sprintf("projection has %d nodes and %d edges; no partial graph was rendered", len(layout.nodes), len(projection.Edges)), width),
+		truncate(s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph+" capacity guard")+" · "+prepared.issue, width),
+		truncate(fmt.Sprintf("projection has %d nodes and %d edges; no partial graph was rendered", prepared.nodeCount, prepared.edgeCount), width),
 		truncate("Use v or Esc for the complete wave reader; f still opens the task picker.", width),
 	}
-	lines = append(lines, threadSpatialInspector(projection, layout, selectedTaskID, width, s)...)
+	lines = append(lines, threadSpatialInspectorPrepared(projection, prepared, selectedTaskID, width, s)...)
 	return strings.Join(lines[:min(len(lines), height)], "\n")
 }
 
@@ -1717,6 +1936,29 @@ func threadSpatialRoleLegend(s *styles) string {
 		s.fg(theme.ColorYellow, "▶ direction  2 fan")
 }
 
+func threadSpatialInspectorPrepared(
+	projection core.ThreadGraphProjection,
+	prepared threadSpatialPrepared,
+	selected string,
+	width int,
+	s *styles,
+) []string {
+	if prepared.layout != nil {
+		return threadSpatialInspector(projection, *prepared.layout, selected, width, s)
+	}
+	if selected == "" {
+		return threadSpatialInspectorBox("focus", []string{"no readable task", "", ""}, width, s)
+	}
+	// Input preflight may intentionally reject the projection before aliases,
+	// ranks, or adjacency indexes exist. Retain stable identity without doing
+	// unbounded fallback work that would defeat the guard.
+	return threadSpatialInspectorBox("focus", []string{
+		s.accent(terminalText(selected)),
+		s.dim("layout unavailable at current capacity limit"),
+		"Use f to choose a task or return to the complete wave reader.",
+	}, width, s)
+}
+
 func threadSpatialInspector(projection core.ThreadGraphProjection, layout threadSpatialLayout, selected string, width int, s *styles) []string {
 	placement, ok := spatialPlacement(layout, selected)
 	if !ok {
@@ -1811,7 +2053,13 @@ func threadSpatialConnectionLabel(layout threadSpatialLayout, taskID string) str
 	return "[" + placement.alias + "] " + label
 }
 
-func renderThreadSpatialNarrow(projection core.ThreadGraphProjection, layout threadSpatialLayout, selected string, width, height int, s *styles) string {
+func renderThreadSpatialNarrow(
+	projection core.ThreadGraphProjection,
+	prepared threadSpatialPrepared,
+	selected string,
+	width, height int,
+	s *styles,
+) string {
 	if width <= 0 {
 		width = 1
 	}
@@ -1826,6 +2074,6 @@ func renderThreadSpatialNarrow(projection core.ThreadGraphProjection, layout thr
 		truncate("Resize to reveal the graph; Esc returns to the wave reader.", width),
 		"",
 	}
-	lines = append(lines, threadSpatialInspector(projection, layout, selected, width, s)...)
+	lines = append(lines, threadSpatialInspectorPrepared(projection, prepared, selected, width, s)...)
 	return strings.Join(lines[:min(len(lines), height)], "\n")
 }
