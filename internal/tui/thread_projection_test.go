@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1345,9 +1346,9 @@ func TestThreadSpatialFanCountRelocatesInsteadOfErasingCongestion(t *testing.T) 
 	if !canvas.cells[3][3].crossing {
 		t.Fatal("fixture did not put a crossing on the preferred count cell")
 	}
-	point, ok := canvas.putRouteCountAlong(threadSpatialPoint{x: 3, y: 3}, 1, 3, 5, false)
-	if !ok || point != (threadSpatialPoint{x: 4, y: 3}) {
-		t.Fatalf("fan count placement=(%+v,%v) want first free approach cell", point, ok)
+	point, result := canvas.putRouteCountAlong(threadSpatialPoint{x: 3, y: 3}, 1, 3, 5, false)
+	if result != threadSpatialRouteCountPlaced || point != (threadSpatialPoint{x: 4, y: 3}) {
+		t.Fatalf("fan count placement=(%+v,%v) want first free approach cell", point, result)
 	}
 	if !canvas.cells[3][3].crossing || canvas.cells[3][3].text != "" {
 		t.Fatalf("relocated count erased crossing grammar: %+v", canvas.cells[3][3])
@@ -1384,6 +1385,30 @@ func TestThreadSpatialFanCountFallsBackToNodeBorderWhenStubIsFull(t *testing.T) 
 	}
 }
 
+func TestThreadSpatialClippedFanCountDoesNotMasqueradeAsCongestion(t *testing.T) {
+	placement := threadSpatialNode{
+		node: core.ThreadGraphNode{TaskID: "a", Label: "source", Role: core.ThreadTaskMember},
+		x:    0, y: 0,
+	}
+	layout := threadSpatialLayout{byID: map[string]threadSpatialNode{"a": placement}}
+	routes := []threadSpatialRoute{
+		{id: 1, edge: core.ThreadGraphEdge{From: "a", To: "b"}, segments: []threadSpatialRouteSegment{{
+			from: threadSpatialPoint{x: 22, y: 2}, to: threadSpatialPoint{x: 30, y: 2},
+		}}},
+		{id: 2, edge: core.ThreadGraphEdge{From: "a", To: "c"}, segments: []threadSpatialRouteSegment{{
+			from: threadSpatialPoint{x: 22, y: 2}, to: threadSpatialPoint{x: 30, y: 2},
+		}}},
+	}
+	canvas := newThreadSpatialViewportCanvas(0, 0, 24, 5)
+	drawThreadSpatialNode(canvas, placement, false)
+	drawThreadSpatialRouteCounts(canvas, layout, routes, "")
+	fallback := threadSpatialCountFallback(layout, "a", "", 's', '▶')
+	cell, ok := canvas.cellAt(fallback.x, fallback.y)
+	if !ok || cell.routeCount || cell.text != "─" {
+		t.Fatalf("clipped preferred count incorrectly used congestion fallback: exists=%v cell=%+v", ok, cell)
+	}
+}
+
 func TestThreadSpatialRoutingConflictIsNeutralAndReportedOutOfBand(t *testing.T) {
 	canvas := newThreadSpatialCanvas(9, 8)
 	turn := threadSpatialRouteStyle{id: 1, from: "a", to: "b", selected: true}
@@ -1396,6 +1421,104 @@ func TestThreadSpatialRoutingConflictIsNeutralAndReportedOutOfBand(t *testing.T)
 	}
 	if got := threadSpatialRouteConflictSummary(canvas); got != "1 routing conflict" {
 		t.Fatalf("routing conflict summary=%q want explicit out-of-band diagnostic", got)
+	}
+	routes := []threadSpatialRoute{
+		{id: 1, edge: core.ThreadGraphEdge{From: "a", To: "b"}, segments: []threadSpatialRouteSegment{
+			{from: threadSpatialPoint{x: 3, y: 3}, to: threadSpatialPoint{x: 3, y: 6}},
+			{from: threadSpatialPoint{x: 3, y: 3}, to: threadSpatialPoint{x: 7, y: 3}},
+		}},
+		{id: 2, edge: core.ThreadGraphEdge{From: "c", To: "d"}, segments: []threadSpatialRouteSegment{{
+			from: threadSpatialPoint{x: 1, y: 3}, to: threadSpatialPoint{x: 7, y: 3},
+		}}},
+	}
+	if got := threadSpatialLayoutRouteConflictCount(routes); got != 1 {
+		t.Fatalf("layout conflict count=%d want stable global diagnostic=1", got)
+	}
+	clipped := newThreadSpatialViewportCanvas(4, 4, 3, 3)
+	for _, route := range routes {
+		drawThreadSpatialRouteSegments(clipped, route, false)
+	}
+	if got := threadSpatialRouteConflictSummary(clipped); got != "" {
+		t.Fatalf("fixture should keep the conflict outside its viewport, got %q", got)
+	}
+	if got := threadSpatialRouteConflictCountSummary(threadSpatialLayoutRouteConflictCount(routes)); got != "1 routing conflict" {
+		t.Fatalf("panned layout conflict summary=%q want stable diagnostic", got)
+	}
+	for name, nonConflict := range map[string][]threadSpatialRoute{
+		"straight crossing": {
+			{id: 1, edge: core.ThreadGraphEdge{From: "a", To: "b"}, segments: []threadSpatialRouteSegment{{
+				from: threadSpatialPoint{x: 1, y: 3}, to: threadSpatialPoint{x: 7, y: 3},
+			}}},
+			{id: 2, edge: core.ThreadGraphEdge{From: "c", To: "d"}, segments: []threadSpatialRouteSegment{{
+				from: threadSpatialPoint{x: 3, y: 1}, to: threadSpatialPoint{x: 3, y: 6},
+			}}},
+		},
+		"shared endpoint bundle": {
+			{id: 1, edge: core.ThreadGraphEdge{From: "a", To: "b"}, segments: []threadSpatialRouteSegment{
+				{from: threadSpatialPoint{x: 3, y: 3}, to: threadSpatialPoint{x: 3, y: 6}},
+				{from: threadSpatialPoint{x: 3, y: 3}, to: threadSpatialPoint{x: 7, y: 3}},
+			}},
+			{id: 2, edge: core.ThreadGraphEdge{From: "a", To: "c"}, segments: []threadSpatialRouteSegment{{
+				from: threadSpatialPoint{x: 1, y: 3}, to: threadSpatialPoint{x: 7, y: 3},
+			}}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := threadSpatialLayoutRouteConflictCount(nonConflict); got != 0 {
+				t.Fatalf("layout conflict count=%d want 0", got)
+			}
+		})
+	}
+}
+
+func TestThreadSpatialHeaderReportsLayoutConflictOutsideTheViewport(t *testing.T) {
+	placement := threadSpatialNode{
+		node:  core.ThreadGraphNode{TaskID: "focus", Label: "focus", Role: core.ThreadTaskMember},
+		alias: "M1", x: 300, y: 2,
+	}
+	layout := threadSpatialLayout{
+		nodes: []threadSpatialNode{placement}, byID: map[string]threadSpatialNode{"focus": placement},
+		columns: [][]string{{"focus"}}, columnX: []int{300}, columnLabels: []string{"layer 1"},
+		width: 500, height: 12, routeConflicts: 1,
+	}
+	projection := core.ThreadGraphProjection{Nodes: []core.ThreadGraphNode{placement.node}}
+	rendered := ansi.Strip(renderThreadSpatialPrepared(
+		projection, threadSpatialPrepared{layout: &layout, fallbackTaskID: "focus"},
+		"", "focus", 160, 14, &testStyles,
+	))
+	header := strings.Split(rendered, "\n")[0]
+	if !strings.Contains(header, "1 routing conflict") {
+		t.Fatalf("panned spatial header omitted layout-wide routing conflict: %q", header)
+	}
+}
+
+func TestThreadSpatialLayoutConflictIndexMatchesFullRouteComposition(t *testing.T) {
+	random := rand.New(rand.NewSource(20260910)) //nolint:gosec // deterministic layout regression fixture
+	for trial := 0; trial < 300; trial++ {
+		nodeCount := 4 + random.Intn(9)
+		projection := core.ThreadGraphProjection{Nodes: make([]core.ThreadGraphNode, nodeCount)}
+		for index := range projection.Nodes {
+			projection.Nodes[index] = core.ThreadGraphNode{
+				TaskID: fmt.Sprintf("trial-%03d-node-%02d", trial, index), Role: core.ThreadTaskMember,
+			}
+		}
+		edgeCount := nodeCount + random.Intn(nodeCount*2)
+		for range edgeCount {
+			from, to := random.Intn(nodeCount), random.Intn(nodeCount)
+			projection.Edges = append(projection.Edges, core.ThreadGraphEdge{
+				From: projection.Nodes[from].TaskID, To: projection.Nodes[to].TaskID,
+			})
+		}
+
+		layout := buildThreadSpatialLayout(projection)
+		full := newThreadSpatialCanvas(layout.width, layout.height)
+		for _, route := range layout.routes {
+			drawThreadSpatialRouteSegments(full, route, false)
+		}
+		if want := full.routeConflictCount(); layout.routeConflicts != want {
+			t.Fatalf("trial %d indexed conflicts=%d want full route composition=%d; edges=%+v",
+				trial, layout.routeConflicts, want, projection.Edges)
+		}
 	}
 }
 
@@ -1751,6 +1874,302 @@ func TestThreadSpatialViewportOmitsRoutesBetweenTwoOffscreenNodes(t *testing.T) 
 	routes := threadSpatialRoutesForWindow(layout, "focus", 50, 0, 40, 12)
 	if len(routes) != 1 || routes[0].id != 2 {
 		t.Fatalf("viewport routes=%+v want only the selected incident route", routes)
+	}
+}
+
+func TestThreadSpatialCanvasWindowAllocatesOnlyTheViewportAndMatchesLegacyClipping(t *testing.T) {
+	projection := threadSpatialNearCanvasProjection(18)
+	projection.Nodes[15].Label = "touring 🚲 release"
+	layout := buildThreadSpatialLayout(projection)
+	selected := "chain-15"
+	selectedNode := layout.byID[selected]
+	const width, height = 37, 9
+	windows := []struct {
+		name       string
+		panX, panY int
+	}{
+		{name: "origin"},
+		{name: "selected-interior", panX: max(0, selectedNode.x-7), panY: selectedNode.y},
+		{name: "selected-clipped-left-and-top", panX: selectedNode.x + 5, panY: selectedNode.y + 1},
+		{name: "bottom-left", panY: max(0, layout.height-height)},
+		{name: "bottom-right", panX: max(0, layout.width-width), panY: max(0, layout.height-height)},
+	}
+	for _, test := range windows {
+		t.Run(test.name, func(t *testing.T) {
+			viewport := renderThreadSpatialCanvasWindow(
+				projection, layout, selected, test.panX, test.panY, width, height,
+			)
+			annotateThreadSpatialRouteBoundaries(
+				viewport, layout, selected, test.panX, test.panY, width, height,
+			)
+			if viewport.originX != test.panX || viewport.originY != test.panY ||
+				len(viewport.cells) != height || viewport.width != width {
+				t.Fatalf("viewport canvas origin=(%d,%d) size=%dx%d want origin=(%d,%d) size=%dx%d",
+					viewport.originX, viewport.originY, viewport.width, len(viewport.cells),
+					test.panX, test.panY, width, height)
+			}
+			for row := range viewport.cells {
+				if len(viewport.cells[row]) != width {
+					t.Fatalf("viewport row %d cells=%d want %d", row, len(viewport.cells[row]), width)
+				}
+			}
+
+			// Recreate the former implementation: compose the same requested
+			// window into a full-layout canvas, annotate it, and crop afterward.
+			legacy := newThreadSpatialCanvas(layout.width, layout.height)
+			drawThreadSpatialCanvasWindow(
+				legacy, layout, selected, test.panX, test.panY, width, height,
+			)
+			annotateThreadSpatialRouteBoundaries(
+				legacy, layout, selected, test.panX, test.panY, width, height,
+			)
+			for localY := 0; localY < height; localY++ {
+				for localX := 0; localX < width; localX++ {
+					globalX, globalY := test.panX+localX, test.panY+localY
+					want := legacy.cells[globalY][globalX]
+					if got := viewport.cells[localY][localX]; !reflect.DeepEqual(got, want) {
+						t.Fatalf("viewport cell local=(%d,%d) layout=(%d,%d)\n got: %+v\nwant: %+v",
+							localX, localY, globalX, globalY, got, want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestThreadSpatialCanvasWindowCapsSyntheticTerminalSizeToLayoutBounds(t *testing.T) {
+	layout := threadSpatialLayout{width: 12, height: 4}
+	canvas := renderThreadSpatialCanvasWindow(
+		core.ThreadGraphProjection{}, layout, "", 0, 0, 1_000_000, 1_000_000,
+	)
+	if canvas.width != layout.width || len(canvas.cells) != layout.height {
+		t.Fatalf("oversized terminal allocated canvas=%dx%d want bounded layout=%dx%d",
+			canvas.width, len(canvas.cells), layout.width, layout.height)
+	}
+}
+
+func TestThreadSpatialViewportPreservesPartiallyClippedEndpointCounts(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Role: core.ThreadTaskMember},
+			{TaskID: "b", Role: core.ThreadTaskMember},
+			{TaskID: "c", Role: core.ThreadTaskMember},
+			{TaskID: "d", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{
+			{From: "a", To: "c"}, {From: "b", To: "c"},
+			{From: "c", To: "c"}, {From: "c", To: "d"}, {From: "d", To: "c"},
+		},
+	}
+	layout := buildThreadSpatialLayout(projection)
+	placement := layout.byID["c"]
+	for _, test := range []struct {
+		name        string
+		panX, width int
+	}{
+		{name: "left-endpoint", panX: max(0, placement.x-3), width: 12},
+		{name: "right-endpoint", panX: placement.x + threadSpatialNodeWidth - 5, width: 12},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			const panY, height = 0, 10
+			viewport := renderThreadSpatialCanvasWindow(
+				projection, layout, "c", test.panX, panY, test.width, height,
+			)
+			legacy := newThreadSpatialCanvas(layout.width, layout.height)
+			drawThreadSpatialCanvasWindow(
+				legacy, layout, "c", test.panX, panY, test.width, height,
+			)
+			counts := 0
+			for localY := range viewport.cells {
+				for localX := range viewport.cells[localY] {
+					globalX, globalY := test.panX+localX, panY+localY
+					want := legacy.cells[globalY][globalX]
+					got := viewport.cells[localY][localX]
+					if !reflect.DeepEqual(got, want) {
+						t.Fatalf("endpoint cell local=(%d,%d) layout=(%d,%d)\n got: %+v\nwant: %+v",
+							localX, localY, globalX, globalY, got, want)
+					}
+					if got.routeCount {
+						counts++
+					}
+				}
+			}
+			if counts == 0 {
+				t.Fatal("fixture did not retain a visible endpoint count")
+			}
+		})
+	}
+}
+
+func TestThreadSpatialViewportClipsWideTextWithoutMovingFollowingCells(t *testing.T) {
+	canvas := newThreadSpatialViewportCanvas(2, 0, 3, 1)
+	canvas.putText(0, 0, "a界bc", theme.ColorGray, false)
+	if got := ansi.Strip(canvas.renderLine(0, &testStyles)); got != " bc" {
+		t.Fatalf("left-clipped wide text=%q want coordinate-preserving %q", got, " bc")
+	}
+	if got := ansi.StringWidth(canvas.renderLine(0, &testStyles)); got > canvas.width {
+		t.Fatalf("left-clipped wide text width=%d exceeds viewport=%d", got, canvas.width)
+	}
+
+	accent := newThreadSpatialViewportCanvas(1, 0, 3, 1)
+	accent.putAccentText(0, 0, "界a", true)
+	clipped, _ := accent.cellAt(1, 0)
+	visible, _ := accent.cellAt(2, 0)
+	if clipped.text != "" || clipped.accent {
+		t.Fatalf("clipped wide rune left an accented empty cell: %+v", clipped)
+	}
+	if visible.text != "a" || !visible.accent {
+		t.Fatalf("visible accent text lost its glyph or style: %+v", visible)
+	}
+}
+
+func TestThreadSpatialVisibleRouteExtentHandlesLeaveAndReentryWithoutPathScanning(t *testing.T) {
+	route := threadSpatialRoute{segments: []threadSpatialRouteSegment{
+		{from: threadSpatialPoint{x: 0, y: 2}, to: threadSpatialPoint{x: 20, y: 2}},
+		{from: threadSpatialPoint{x: 20, y: 2}, to: threadSpatialPoint{x: 20, y: 20}},
+		{from: threadSpatialPoint{x: 20, y: 20}, to: threadSpatialPoint{x: 5, y: 20}},
+		{from: threadSpatialPoint{x: 5, y: 20}, to: threadSpatialPoint{x: 5, y: 4}},
+		{from: threadSpatialPoint{x: 5, y: 4}, to: threadSpatialPoint{x: 15, y: 4}},
+	}}
+	first, last, ok := threadSpatialVisibleRouteExtent(route, 10, 0, 10, 10)
+	if !ok || first != (threadSpatialPoint{x: 10, y: 2}) || last != (threadSpatialPoint{x: 15, y: 4}) {
+		t.Fatalf("visible extent=(%+v,%+v,%v) want first entry (10,2) and final reentry (15,4)", first, last, ok)
+	}
+
+	canvas := newThreadSpatialViewportCanvas(10, 0, 10, 10)
+	drawThreadSpatialRouteSegments(canvas, route, true)
+	for _, point := range []threadSpatialPoint{{x: 10, y: 2}, {x: 19, y: 2}, {x: 10, y: 4}, {x: 15, y: 4}} {
+		cell, exists := canvas.cellAt(point.x, point.y)
+		if !exists || cell.connector == 0 || !cell.accent {
+			t.Errorf("visible route point %+v was not composed faithfully: exists=%v cell=%+v", point, exists, cell)
+		}
+	}
+}
+
+func TestThreadSpatialVisibleSegmentExtentPreservesTraversalDirection(t *testing.T) {
+	tests := []struct {
+		name        string
+		segment     threadSpatialRouteSegment
+		first, last threadSpatialPoint
+		visible     bool
+	}{
+		{
+			name: "horizontal-forward", segment: threadSpatialRouteSegment{
+				from: threadSpatialPoint{x: 0, y: 4}, to: threadSpatialPoint{x: 30, y: 4},
+			},
+			first: threadSpatialPoint{x: 10, y: 4}, last: threadSpatialPoint{x: 19, y: 4}, visible: true,
+		},
+		{
+			name: "horizontal-reverse", segment: threadSpatialRouteSegment{
+				from: threadSpatialPoint{x: 30, y: 4}, to: threadSpatialPoint{x: 0, y: 4},
+			},
+			first: threadSpatialPoint{x: 19, y: 4}, last: threadSpatialPoint{x: 10, y: 4}, visible: true,
+		},
+		{
+			name: "vertical-forward", segment: threadSpatialRouteSegment{
+				from: threadSpatialPoint{x: 12, y: 0}, to: threadSpatialPoint{x: 12, y: 30},
+			},
+			first: threadSpatialPoint{x: 12, y: 3}, last: threadSpatialPoint{x: 12, y: 8}, visible: true,
+		},
+		{
+			name: "vertical-reverse", segment: threadSpatialRouteSegment{
+				from: threadSpatialPoint{x: 12, y: 30}, to: threadSpatialPoint{x: 12, y: 0},
+			},
+			first: threadSpatialPoint{x: 12, y: 8}, last: threadSpatialPoint{x: 12, y: 3}, visible: true,
+		},
+		{
+			name: "outside", segment: threadSpatialRouteSegment{
+				from: threadSpatialPoint{x: 0, y: 20}, to: threadSpatialPoint{x: 30, y: 20},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			first, last, visible := threadSpatialVisibleSegmentExtent(test.segment, 10, 3, 10, 6)
+			if visible != test.visible || first != test.first || last != test.last {
+				t.Fatalf("extent=(%+v,%+v,%v) want (%+v,%+v,%v)",
+					first, last, visible, test.first, test.last, test.visible)
+			}
+		})
+	}
+}
+
+func TestThreadSpatialRouteDrawingBoundsWorkToTheViewport(t *testing.T) {
+	canvas := newThreadSpatialViewportCanvas(4_000, 4_000, 80, 18)
+	style := threadSpatialRouteStyle{id: 1, from: "a", to: "b"}
+	if writes := canvas.routeHorizontal(-100_000, 100_000, 4_005, style); writes != canvas.width {
+		t.Fatalf("horizontal route composed %d cells want viewport width %d", writes, canvas.width)
+	}
+	if writes := canvas.routeVertical(4_005, -100_000, 100_000, style); writes != len(canvas.cells) {
+		t.Fatalf("vertical route composed %d cells want viewport height %d", writes, len(canvas.cells))
+	}
+	if writes := canvas.routeHorizontal(-100_000, 100_000, 3_999, style); writes != 0 {
+		t.Fatalf("offscreen horizontal route composed %d cells", writes)
+	}
+	if writes := canvas.routeVertical(3_999, -100_000, 100_000, style); writes != 0 {
+		t.Fatalf("offscreen vertical route composed %d cells", writes)
+	}
+}
+
+func TestThreadSpatialViewportAnnotatesVerticalOffscreenEndpoints(t *testing.T) {
+	layout := threadSpatialLayout{
+		byID: map[string]threadSpatialNode{
+			"source": {node: core.ThreadGraphNode{TaskID: "source"}, alias: "M1", x: 12, y: 0},
+			"target": {node: core.ThreadGraphNode{TaskID: "target"}, alias: "M2", x: 17, y: 20},
+		},
+		routes: []threadSpatialRoute{{
+			id: 1, edge: core.ThreadGraphEdge{From: "source", To: "target"},
+			segments: []threadSpatialRouteSegment{
+				{from: threadSpatialPoint{x: 15, y: 2}, to: threadSpatialPoint{x: 15, y: 22}},
+				{from: threadSpatialPoint{x: 15, y: 22}, to: threadSpatialPoint{x: 17, y: 22}},
+			},
+			arrow: threadSpatialPoint{x: 17, y: 22}, arrowRune: '▶',
+		}},
+	}
+	const panX, panY, width, height = 10, 10, 20, 8
+	for _, selected := range []string{"source", "target"} {
+		canvas := newThreadSpatialViewportCanvas(panX, panY, width, height)
+		drawThreadSpatialRouteSegments(canvas, layout.routes[0], true)
+		for y := panY; y < panY+height; y++ {
+			cell, ok := canvas.cellAt(15, y)
+			if !ok || cell.connector == 0 || !cell.accent {
+				t.Fatalf("selected %s lost vertical route at y=%d: exists=%v cell=%+v", selected, y, ok, cell)
+			}
+		}
+		annotateThreadSpatialRouteBoundaries(canvas, layout, selected, panX, panY, width, height)
+		plain := ansi.Strip(canvas.renderLine(panY, &testStyles) + "\n" + canvas.renderLine(panY+height-1, &testStyles))
+		for _, want := range []string{"[M1]…", "…▶[M2]"} {
+			if !strings.Contains(plain, want) {
+				t.Errorf("selected %s omitted vertical boundary label %q:\n%s", selected, want, plain)
+			}
+		}
+	}
+}
+
+func TestThreadSpatialViewportIncludesSelectedRouteWithBothEndpointsOffscreen(t *testing.T) {
+	layout := threadSpatialLayout{
+		byID: map[string]threadSpatialNode{
+			"left":  {node: core.ThreadGraphNode{TaskID: "left"}, x: 3, y: 2},
+			"right": {node: core.ThreadGraphNode{TaskID: "right"}, x: 123, y: 2},
+		},
+		routes: []threadSpatialRoute{{
+			id: 1, edge: core.ThreadGraphEdge{From: "left", To: "right"},
+			segments: []threadSpatialRouteSegment{{
+				from: threadSpatialPoint{x: 25, y: 4}, to: threadSpatialPoint{x: 122, y: 4},
+			}},
+		}},
+	}
+	routes := threadSpatialRoutesForWindow(layout, "left", 50, 0, 40, 12)
+	if len(routes) != 1 || routes[0].id != 1 {
+		t.Fatalf("selected route with offscreen endpoints=%+v want incident route 1", routes)
+	}
+	canvas := newThreadSpatialViewportCanvas(50, 0, 40, 12)
+	drawThreadSpatialRouteSegments(canvas, routes[0], true)
+	for _, x := range []int{50, 70, 89} {
+		cell, ok := canvas.cellAt(x, 4)
+		if !ok || cell.connector == 0 || !cell.accent {
+			t.Errorf("selected offscreen route missing at x=%d: exists=%v cell=%+v", x, ok, cell)
+		}
 	}
 }
 
@@ -2291,6 +2710,37 @@ func BenchmarkThreadSpatialCachedRenderNearCanvasLimit(b *testing.B) {
 		if detail.spatial.prepared.layout != layout {
 			b.Fatal("render replaced the cached layout")
 		}
+	}
+}
+
+func BenchmarkThreadSpatialVisibleViewportRenderNearCanvasLimit(b *testing.B) {
+	projection := threadSpatialNearCanvasProjection(91)
+	prepared := prepareThreadSpatial(projection)
+	if prepared.issue != "" || prepared.layout == nil {
+		b.Fatalf("near-limit projection was rejected: %q", prepared.issue)
+	}
+	layout := *prepared.layout
+	selected := "chain-15"
+	placement := layout.byID[selected]
+	for _, size := range []struct {
+		width, height int
+	}{{width: 80, height: 18}, {width: 160, height: 36}} {
+		b.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(b *testing.B) {
+			panX := min(max(placement.x+threadSpatialNodeWidth/2-size.width/2, 0), max(layout.width-size.width, 0))
+			panY := min(max(placement.y+threadSpatialNodeSlotHeight/2-size.height/2, 0), max(layout.height-size.height, 0))
+			b.ReportAllocs()
+			for b.Loop() {
+				canvas := renderThreadSpatialCanvasWindow(
+					projection, layout, selected, panX, panY, size.width, size.height,
+				)
+				annotateThreadSpatialRouteBoundaries(
+					canvas, layout, selected, panX, panY, size.width, size.height,
+				)
+				if len(canvas.cells) != size.height || canvas.width != size.width {
+					b.Fatalf("canvas=%dx%d want viewport=%dx%d", canvas.width, len(canvas.cells), size.width, size.height)
+				}
+			}
+		})
 	}
 }
 
