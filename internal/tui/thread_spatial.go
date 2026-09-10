@@ -73,14 +73,15 @@ type threadSpatialRouteLanes struct {
 }
 
 type threadSpatialLayout struct {
-	nodes        []threadSpatialNode
-	byID         map[string]threadSpatialNode
-	columns      [][]string
-	columnX      []int
-	columnLabels []string
-	routes       []threadSpatialRoute
-	width        int
-	height       int
+	nodes          []threadSpatialNode
+	byID           map[string]threadSpatialNode
+	columns        [][]string
+	columnX        []int
+	columnLabels   []string
+	routes         []threadSpatialRoute
+	routeConflicts int
+	width          int
+	height         int
 }
 
 // threadSpatialPrepared is one shared, read-only presentation result for one
@@ -340,6 +341,7 @@ func planThreadSpatialLayout(projection core.ThreadGraphProjection) threadSpatia
 func materializeThreadSpatialLayout(plan threadSpatialLayoutPlan) threadSpatialLayout {
 	layout := plan.layout
 	layout.routes = materializeThreadSpatialRoutes(plan.seeds, layout.byID, plan.boundaryLanes, plan.trackY)
+	layout.routeConflicts = threadSpatialLayoutRouteConflictCount(layout.routes)
 	return layout
 }
 
@@ -534,6 +536,148 @@ func newThreadSpatialRoute(
 		})
 	}
 	return route
+}
+
+// threadSpatialLayoutRouteConflictCount keeps the routing-invariant diagnostic
+// stable across viewport pans without recreating the full terminal-cell canvas.
+// A conflict can only be introduced at a point where one route has both a
+// horizontal and a vertical arm. Candidate points are therefore route segment
+// endpoints plus the rare self-intersection; only segments covering those
+// points are replayed through the exact cell-merging grammar used by rendering.
+func threadSpatialLayoutRouteConflictCount(routes []threadSpatialRoute) int {
+	candidates := make(map[threadSpatialPoint]bool)
+	styles := make(map[int32]threadSpatialRouteStyle, len(routes))
+	for _, route := range routes {
+		styles[route.id] = threadSpatialRouteStyle{id: route.id, from: route.edge.From, to: route.edge.To}
+		for _, segment := range route.segments {
+			candidates[segment.from] = true
+			candidates[segment.to] = true
+		}
+		for left := 0; left < len(route.segments); left++ {
+			for right := left + 1; right < len(route.segments); right++ {
+				if point, ok := threadSpatialPerpendicularSegmentIntersection(
+					route.segments[left], route.segments[right],
+				); ok {
+					candidates[point] = true
+				}
+			}
+		}
+	}
+	if len(candidates) == 0 {
+		return 0
+	}
+
+	byRow := make(map[int][]int)
+	byColumn := make(map[int][]int)
+	for point := range candidates {
+		byRow[point.y] = append(byRow[point.y], point.x)
+		byColumn[point.x] = append(byColumn[point.x], point.y)
+	}
+	for row := range byRow {
+		sort.Ints(byRow[row])
+	}
+	for column := range byColumn {
+		sort.Ints(byColumn[column])
+	}
+
+	cells := make(map[threadSpatialPoint]threadSpatialCell, len(candidates))
+	for _, route := range routes {
+		style := styles[route.id]
+		for _, segment := range route.segments {
+			var coordinates []int
+			var low, high int
+			horizontal := segment.from.y == segment.to.y
+			switch {
+			case horizontal:
+				coordinates = byRow[segment.from.y]
+				low, high = min(segment.from.x, segment.to.x), max(segment.from.x, segment.to.x)
+			case segment.from.x == segment.to.x:
+				coordinates = byColumn[segment.from.x]
+				low, high = min(segment.from.y, segment.to.y), max(segment.from.y, segment.to.y)
+			default:
+				continue
+			}
+			start := sort.SearchInts(coordinates, low)
+			for index := start; index < len(coordinates) && coordinates[index] <= high; index++ {
+				point := threadSpatialPoint{x: segment.from.x, y: segment.from.y}
+				if horizontal {
+					point.x = coordinates[index]
+				} else {
+					point.y = coordinates[index]
+				}
+				cell := cells[point]
+				mergeThreadSpatialRouteConnector(
+					&cell, styles, threadSpatialSegmentDirectionsAt(segment, point), style,
+				)
+				cells[point] = cell
+			}
+		}
+	}
+
+	conflicts := 0
+	for _, cell := range cells {
+		if cell.conflict {
+			conflicts++
+		}
+	}
+	return conflicts
+}
+
+func threadSpatialPerpendicularSegmentIntersection(
+	left, right threadSpatialRouteSegment,
+) (threadSpatialPoint, bool) {
+	leftHorizontal := left.from.y == left.to.y
+	leftVertical := left.from.x == left.to.x
+	rightHorizontal := right.from.y == right.to.y
+	rightVertical := right.from.x == right.to.x
+	if leftHorizontal && rightVertical {
+		point := threadSpatialPoint{x: right.from.x, y: left.from.y}
+		return point, threadSpatialSegmentContains(left, point) && threadSpatialSegmentContains(right, point)
+	}
+	if leftVertical && rightHorizontal {
+		point := threadSpatialPoint{x: left.from.x, y: right.from.y}
+		return point, threadSpatialSegmentContains(left, point) && threadSpatialSegmentContains(right, point)
+	}
+	return threadSpatialPoint{}, false
+}
+
+func threadSpatialSegmentContains(segment threadSpatialRouteSegment, point threadSpatialPoint) bool {
+	switch {
+	case segment.from.y == segment.to.y:
+		return point.y == segment.from.y && point.x >= min(segment.from.x, segment.to.x) &&
+			point.x <= max(segment.from.x, segment.to.x)
+	case segment.from.x == segment.to.x:
+		return point.x == segment.from.x && point.y >= min(segment.from.y, segment.to.y) &&
+			point.y <= max(segment.from.y, segment.to.y)
+	default:
+		return false
+	}
+}
+
+func threadSpatialSegmentDirectionsAt(
+	segment threadSpatialRouteSegment,
+	point threadSpatialPoint,
+) threadSpatialConnector {
+	directions := threadSpatialConnector(0)
+	switch {
+	case segment.from.y == segment.to.y:
+		left, right := min(segment.from.x, segment.to.x), max(segment.from.x, segment.to.x)
+		if point.x > left {
+			directions |= threadSpatialLeft
+		}
+		if point.x < right {
+			directions |= threadSpatialRight
+		}
+	case segment.from.x == segment.to.x:
+		top, bottom := min(segment.from.y, segment.to.y), max(segment.from.y, segment.to.y)
+		if point.y > top {
+			directions |= threadSpatialUp
+		}
+		if point.y < bottom {
+			directions |= threadSpatialDown
+		}
+	}
+	return directions
 }
 
 // placeThreadSpatialExternalGates keeps a source-only boundary gate close to
@@ -982,54 +1126,98 @@ const (
 type threadSpatialCanvas struct {
 	cells       [][]threadSpatialCell
 	routeStyles map[int32]threadSpatialRouteStyle
+	originX     int
+	originY     int
 	width       int
 }
 
 func newThreadSpatialCanvas(width, height int) *threadSpatialCanvas {
+	return newThreadSpatialViewportCanvas(0, 0, width, height)
+}
+
+// newThreadSpatialViewportCanvas allocates only the visible terminal window.
+// Drawing methods continue to accept layout-space coordinates and translate
+// them through this origin, keeping clipping out of the semantic layout.
+func newThreadSpatialViewportCanvas(originX, originY, width, height int) *threadSpatialCanvas {
+	width, height = max(width, 1), max(height, 1)
 	cells := make([][]threadSpatialCell, max(height, 1))
 	for row := range cells {
-		cells[row] = make([]threadSpatialCell, max(width, 1))
+		cells[row] = make([]threadSpatialCell, width)
 	}
 	return &threadSpatialCanvas{
-		cells: cells, routeStyles: make(map[int32]threadSpatialRouteStyle), width: max(width, 1),
+		cells: cells, routeStyles: make(map[int32]threadSpatialRouteStyle),
+		originX: originX, originY: originY, width: width,
 	}
 }
 
+func (c *threadSpatialCanvas) localPoint(x, y int) (int, int, bool) {
+	localX, localY := x-c.originX, y-c.originY
+	return localX, localY,
+		localX >= 0 && localX < c.width && localY >= 0 && localY < len(c.cells)
+}
+
+func (c *threadSpatialCanvas) cellAt(x, y int) (*threadSpatialCell, bool) {
+	localX, localY, ok := c.localPoint(x, y)
+	if !ok {
+		return nil, false
+	}
+	return &c.cells[localY][localX], true
+}
+
+func (c *threadSpatialCanvas) containsY(y int) bool {
+	return y >= c.originY && y < c.originY+len(c.cells)
+}
+
 func (c *threadSpatialCanvas) putText(x, y int, value string, color theme.Color, bold bool) {
-	if y < 0 || y >= len(c.cells) {
+	localY := y - c.originY
+	if localY < 0 || localY >= len(c.cells) {
 		return
 	}
 	column := x
 	last := -1
+	right := c.originX + c.width
 	for _, r := range value {
 		cellWidth := ansi.StringWidth(string(r))
 		if cellWidth == 0 {
 			if last >= 0 {
-				c.cells[y][last].text += string(r)
+				c.cells[localY][last].text += string(r)
 			}
 			continue
 		}
-		if column < 0 {
-			column += cellWidth
+		next := column + cellWidth
+		if next <= c.originX {
+			column = next
+			last = -1
 			continue
 		}
-		if column+cellWidth > c.width {
+		// A wide rune straddling either viewport edge cannot be represented as a
+		// partial terminal cell. Clip the whole rune and preserve the coordinates
+		// of the cells that follow it.
+		if column < c.originX {
+			column = next
+			last = -1
+			continue
+		}
+		if column >= right || next > right {
 			return
 		}
-		c.cells[y][column] = threadSpatialCell{text: string(r), color: color, bold: bold}
-		last = column
+		localX := column - c.originX
+		c.cells[localY][localX] = threadSpatialCell{text: string(r), color: color, bold: bold}
+		last = localX
 		for offset := 1; offset < cellWidth; offset++ {
-			c.cells[y][column+offset] = threadSpatialCell{continuation: true, color: color, bold: bold}
+			c.cells[localY][localX+offset] = threadSpatialCell{continuation: true, color: color, bold: bold}
 		}
-		column += cellWidth
+		column = next
 	}
 }
 
 func (c *threadSpatialCanvas) putAccentText(x, y int, value string, bold bool) {
 	c.putText(x, y, value, theme.ColorNone, bold)
-	for column := x; column < x+ansi.StringWidth(value) && column < c.width; column++ {
-		if y >= 0 && y < len(c.cells) && column >= 0 && !c.cells[y][column].continuation {
-			c.cells[y][column].accent = true
+	left := max(x, c.originX)
+	right := min(x+ansi.StringWidth(value), c.originX+c.width)
+	for column := left; column < right; column++ {
+		if cell, ok := c.cellAt(column, y); ok && cell.text != "" && !cell.continuation {
+			cell.accent = true
 		}
 	}
 }
@@ -1039,11 +1227,20 @@ func (c *threadSpatialCanvas) putRouteConnector(
 	directions threadSpatialConnector,
 	style threadSpatialRouteStyle,
 ) {
-	if y < 0 || y >= len(c.cells) || x < 0 || x >= c.width {
+	cell, ok := c.cellAt(x, y)
+	if !ok {
 		return
 	}
 	c.routeStyles[style.id] = style
-	cell := &c.cells[y][x]
+	mergeThreadSpatialRouteConnector(cell, c.routeStyles, directions, style)
+}
+
+func mergeThreadSpatialRouteConnector(
+	cell *threadSpatialCell,
+	routeStyles map[int32]threadSpatialRouteStyle,
+	directions threadSpatialConnector,
+	style threadSpatialRouteStyle,
+) {
 	switch {
 	case cell.crossing || cell.overlap || cell.conflict:
 		// Dedicated lanes and tracks make each crossing a straight horizontal
@@ -1055,7 +1252,7 @@ func (c *threadSpatialCanvas) putRouteConnector(
 			cell.routeID = style.id
 		}
 	default:
-		resident := c.routeStyles[cell.routeID]
+		resident := routeStyles[cell.routeID]
 		existingHorizontal, existingVertical := threadSpatialConnectorAxes(cell.connector)
 		incomingHorizontal, incomingVertical := threadSpatialConnectorAxes(directions)
 		sharesEndpoint := resident.from == style.from || resident.from == style.to ||
@@ -1097,7 +1294,7 @@ func (c *threadSpatialCanvas) putRouteConnector(
 		cell.accent = false
 		cell.color = theme.ColorGray
 		cell.bold = cell.conflict
-	} else if style.selected || (cell.routeID != 0 && c.routeStyles[cell.routeID].selected) {
+	} else if style.selected || (cell.routeID != 0 && routeStyles[cell.routeID].selected) {
 		cell.accent, cell.bold = true, true
 	} else if cell.color == theme.ColorNone {
 		cell.color = theme.ColorGray
@@ -1111,10 +1308,10 @@ func threadSpatialConnectorAxes(connector threadSpatialConnector) (horizontal, v
 }
 
 func (c *threadSpatialCanvas) putRouteArrow(x, y int, arrow rune, style threadSpatialRouteStyle) {
-	if y < 0 || y >= len(c.cells) || x < 0 || x >= c.width {
+	cell, ok := c.cellAt(x, y)
+	if !ok {
 		return
 	}
-	cell := &c.cells[y][x]
 	if cell.text == string(arrow) && cell.routeID != 0 && cell.routeID != style.id {
 		cell.shared = true
 	}
@@ -1130,21 +1327,24 @@ func (c *threadSpatialCanvas) putRouteArrow(x, y int, arrow rune, style threadSp
 }
 
 func (c *threadSpatialCanvas) putRouteCount(point threadSpatialPoint, count int, selected bool) bool {
-	if count < 2 || point.y < 0 || point.y >= len(c.cells) || point.x < 0 || point.x >= c.width {
+	if count < 2 {
+		return false
+	}
+	cell, ok := c.cellAt(point.x, point.y)
+	if !ok {
 		return false
 	}
 	label := "+"
 	if count < 10 {
 		label = strconv.Itoa(count)
 	}
-	cells := &c.cells[point.y][point.x]
-	if cells.crossing || cells.overlap || cells.conflict || cells.text != "" || cells.continuation {
+	if cell.crossing || cell.overlap || cell.conflict || cell.text != "" || cell.continuation {
 		return false
 	}
-	cells.text, cells.connector, cells.routeID = label, 0, 0
-	cells.shared, cells.crossing = false, false
-	cells.color, cells.bold, cells.accent = theme.ColorYellow, selected, false
-	cells.routeCount = true
+	cell.text, cell.connector, cell.routeID = label, 0, 0
+	cell.shared, cell.crossing = false, false
+	cell.color, cell.bold, cell.accent = theme.ColorYellow, selected, false
+	cell.routeCount = true
 	return true
 }
 
@@ -1152,36 +1352,63 @@ func (c *threadSpatialCanvas) putRouteCountAlong(
 	point threadSpatialPoint,
 	step, maxSteps, count int,
 	selected bool,
-) (threadSpatialPoint, bool) {
+) (threadSpatialPoint, threadSpatialRouteCountResult) {
+	// Counts describe endpoint multiplicity. If their preferred endpoint cell is
+	// clipped, the boundary annotation owns that offscreen evidence; do not move
+	// a count from an offscreen endpoint into the middle of a visible route.
+	if _, _, ok := c.localPoint(point.x, point.y); !ok {
+		return threadSpatialPoint{}, threadSpatialRouteCountClipped
+	}
 	for attempt := 0; attempt <= maxSteps; attempt++ {
 		candidate := point
 		candidate.x += step * attempt
+		if _, _, ok := c.localPoint(candidate.x, candidate.y); !ok {
+			return threadSpatialPoint{}, threadSpatialRouteCountClipped
+		}
 		if c.putRouteCount(candidate, count, selected) {
-			return candidate, true
+			return candidate, threadSpatialRouteCountPlaced
 		}
 	}
-	return threadSpatialPoint{}, false
+	return threadSpatialPoint{}, threadSpatialRouteCountCongested
 }
 
+type threadSpatialRouteCountResult uint8
+
+const (
+	threadSpatialRouteCountPlaced threadSpatialRouteCountResult = iota
+	threadSpatialRouteCountClipped
+	threadSpatialRouteCountCongested
+)
+
 func (c *threadSpatialCanvas) putRouteCountFallback(point threadSpatialPoint, count int, selected bool) bool {
-	if count < 2 || point.y < 0 || point.y >= len(c.cells) || point.x < 0 || point.x >= c.width {
+	if count < 2 {
+		return false
+	}
+	cell, ok := c.cellAt(point.x, point.y)
+	if !ok {
 		return false
 	}
 	label := "+"
 	if count < 10 {
 		label = strconv.Itoa(count)
 	}
-	c.cells[point.y][point.x] = threadSpatialCell{
+	*cell = threadSpatialCell{
 		text: label, color: theme.ColorYellow, bold: selected, routeCount: true,
 	}
 	return true
 }
 
-func (c *threadSpatialCanvas) routeHorizontal(x0, x1, y int, style threadSpatialRouteStyle) {
+func (c *threadSpatialCanvas) routeHorizontal(x0, x1, y int, style threadSpatialRouteStyle) int {
 	if x1 < x0 {
 		x0, x1 = x1, x0
 	}
-	for x := x0; x <= x1; x++ {
+	if !c.containsY(y) {
+		return 0
+	}
+	visibleX0 := max(x0, c.originX)
+	visibleX1 := min(x1, c.originX+c.width-1)
+	writes := 0
+	for x := visibleX0; x <= visibleX1; x++ {
 		directions := threadSpatialConnector(0)
 		if x > x0 {
 			directions |= threadSpatialLeft
@@ -1190,14 +1417,22 @@ func (c *threadSpatialCanvas) routeHorizontal(x0, x1, y int, style threadSpatial
 			directions |= threadSpatialRight
 		}
 		c.putRouteConnector(x, y, directions, style)
+		writes++
 	}
+	return writes
 }
 
-func (c *threadSpatialCanvas) routeVertical(x, y0, y1 int, style threadSpatialRouteStyle) {
+func (c *threadSpatialCanvas) routeVertical(x, y0, y1 int, style threadSpatialRouteStyle) int {
 	if y1 < y0 {
 		y0, y1 = y1, y0
 	}
-	for y := y0; y <= y1; y++ {
+	if x < c.originX || x >= c.originX+c.width {
+		return 0
+	}
+	visibleY0 := max(y0, c.originY)
+	visibleY1 := min(y1, c.originY+len(c.cells)-1)
+	writes := 0
+	for y := visibleY0; y <= visibleY1; y++ {
 		directions := threadSpatialConnector(0)
 		if y > y0 {
 			directions |= threadSpatialUp
@@ -1206,7 +1441,9 @@ func (c *threadSpatialCanvas) routeVertical(x, y0, y1 int, style threadSpatialRo
 			directions |= threadSpatialDown
 		}
 		c.putRouteConnector(x, y, directions, style)
+		writes++
 	}
+	return writes
 }
 
 func threadSpatialConnectorGlyph(directions threadSpatialConnector) string {
@@ -1309,7 +1546,10 @@ func (c *threadSpatialCanvas) routeConflictCount() int {
 }
 
 func threadSpatialRouteConflictSummary(canvas *threadSpatialCanvas) string {
-	conflicts := canvas.routeConflictCount()
+	return threadSpatialRouteConflictCountSummary(canvas.routeConflictCount())
+}
+
+func threadSpatialRouteConflictCountSummary(conflicts int) string {
 	if conflicts == 0 {
 		return ""
 	}
@@ -1321,7 +1561,8 @@ func threadSpatialRouteConflictSummary(canvas *threadSpatialCanvas) string {
 }
 
 func (c *threadSpatialCanvas) renderLine(row int, s *styles) string {
-	if row < 0 || row >= len(c.cells) {
+	localY := row - c.originY
+	if localY < 0 || localY >= len(c.cells) {
 		return ""
 	}
 	var out strings.Builder
@@ -1345,7 +1586,7 @@ func (c *threadSpatialCanvas) renderLine(row int, s *styles) string {
 		out.WriteString(value)
 		segment.Reset()
 	}
-	for _, cell := range c.cells[row] {
+	for _, cell := range c.cells[localY] {
 		if cell.continuation {
 			continue
 		}
@@ -1442,7 +1683,7 @@ func renderThreadSpatialPrepared(
 		focus = layout.columnLabels[selected.column]
 	}
 	header := fmt.Sprintf("spatial graph · %s · focus %s · prerequisite ─▶ dependent · %s", topology, focus, health)
-	if routeIssue := threadSpatialRouteConflictSummary(canvas); routeIssue != "" {
+	if routeIssue := threadSpatialRouteConflictCountSummary(layout.routeConflicts); routeIssue != "" {
 		header += " · " + routeIssue
 	}
 	if pathIssue != "" {
@@ -1455,7 +1696,6 @@ func renderThreadSpatialPrepared(
 	}
 	for row := 0; row < canvasHeight; row++ {
 		line := canvas.renderLine(panY+row, s)
-		line = ansi.Cut(line, panX, panX+width)
 		lines = append(lines, truncate(line, width))
 	}
 	lines = append(lines, threadSpatialInspector(projection, layout, selectedTaskID, width, s)...)
@@ -1509,7 +1749,7 @@ func annotateThreadSpatialRouteBoundaries(
 		if (route.edge.From != selected && route.edge.To != selected) || len(route.segments) == 0 {
 			continue
 		}
-		first, last, found := threadSpatialVisibleRouteExtent(route, visible)
+		first, last, found := threadSpatialVisibleRouteExtent(route, panX, panY, width, height)
 		if !found {
 			continue
 		}
@@ -1596,29 +1836,69 @@ func threadSpatialBoundaryLabel(kind byte, arrow rune, aliases []string) string 
 
 func threadSpatialVisibleRouteExtent(
 	route threadSpatialRoute,
-	visible func(threadSpatialPoint) bool,
+	panX, panY, width, height int,
 ) (threadSpatialPoint, threadSpatialPoint, bool) {
 	var first, last threadSpatialPoint
 	found := false
 	for _, segment := range route.segments {
-		dx, dy := sign(segment.to.x-segment.from.x), sign(segment.to.y-segment.from.y)
-		point := segment.from
-		for {
-			if visible(point) {
-				if !found {
-					first = point
-					found = true
-				}
-				last = point
-			}
-			if point == segment.to {
-				break
-			}
-			point.x += dx
-			point.y += dy
+		segmentFirst, segmentLast, visible := threadSpatialVisibleSegmentExtent(
+			segment, panX, panY, width, height,
+		)
+		if !visible {
+			continue
 		}
+		if !found {
+			first = segmentFirst
+			found = true
+		}
+		last = segmentLast
 	}
 	return first, last, found
+}
+
+func threadSpatialVisibleSegmentExtent(
+	segment threadSpatialRouteSegment,
+	panX, panY, width, height int,
+) (threadSpatialPoint, threadSpatialPoint, bool) {
+	if width <= 0 || height <= 0 {
+		return threadSpatialPoint{}, threadSpatialPoint{}, false
+	}
+	left, right := panX, panX+width-1
+	top, bottom := panY, panY+height-1
+	switch {
+	case segment.from.y == segment.to.y:
+		if segment.from.y < top || segment.from.y > bottom {
+			return threadSpatialPoint{}, threadSpatialPoint{}, false
+		}
+		low := max(min(segment.from.x, segment.to.x), left)
+		high := min(max(segment.from.x, segment.to.x), right)
+		if low > high {
+			return threadSpatialPoint{}, threadSpatialPoint{}, false
+		}
+		if segment.from.x <= segment.to.x {
+			return threadSpatialPoint{x: low, y: segment.from.y},
+				threadSpatialPoint{x: high, y: segment.from.y}, true
+		}
+		return threadSpatialPoint{x: high, y: segment.from.y},
+			threadSpatialPoint{x: low, y: segment.from.y}, true
+	case segment.from.x == segment.to.x:
+		if segment.from.x < left || segment.from.x > right {
+			return threadSpatialPoint{}, threadSpatialPoint{}, false
+		}
+		low := max(min(segment.from.y, segment.to.y), top)
+		high := min(max(segment.from.y, segment.to.y), bottom)
+		if low > high {
+			return threadSpatialPoint{}, threadSpatialPoint{}, false
+		}
+		if segment.from.y <= segment.to.y {
+			return threadSpatialPoint{x: segment.from.x, y: low},
+				threadSpatialPoint{x: segment.from.x, y: high}, true
+		}
+		return threadSpatialPoint{x: segment.from.x, y: high},
+			threadSpatialPoint{x: segment.from.x, y: low}, true
+	default:
+		return threadSpatialPoint{}, threadSpatialPoint{}, false
+	}
 }
 
 func threadSpatialRouteAlias(layout threadSpatialLayout, taskID string) string {
@@ -1635,15 +1915,17 @@ func putThreadSpatialBoundaryLabel(
 	label string,
 	panX, width int,
 ) {
-	if row < 0 || row >= len(canvas.cells) || label == "" {
+	if !canvas.containsY(row) || label == "" {
 		return
 	}
 	labelWidth := ansi.StringWidth(label)
-	viewportWidth := min(width, canvas.width-panX)
+	left := max(panX, canvas.originX)
+	rightEdge := min(panX+width, canvas.originX+canvas.width)
+	viewportWidth := rightEdge - left
 	if viewportWidth <= 0 || labelWidth > viewportWidth {
 		return
 	}
-	left, right := panX, panX+viewportWidth-labelWidth
+	right := rightEdge - labelWidth
 	desired := min(max(anchorX-labelWidth/2, left), right)
 	switch side {
 	case 'l':
@@ -1656,8 +1938,8 @@ func putThreadSpatialBoundaryLabel(
 			return false
 		}
 		for column := x; column < x+labelWidth; column++ {
-			cell := canvas.cells[row][column]
-			if cell.text != "" || cell.continuation {
+			cell, ok := canvas.cellAt(column, row)
+			if !ok || cell.text != "" || cell.continuation {
 				return false
 			}
 		}
@@ -1707,7 +1989,22 @@ func renderThreadSpatialCanvasWindow(
 	selected string,
 	panX, panY, width, height int,
 ) *threadSpatialCanvas {
-	canvas := newThreadSpatialCanvas(layout.width, layout.height)
+	// The terminal can be larger than the graph. Intersecting the requested
+	// window with layout bounds keeps a synthetic or malformed terminal size
+	// from allocating more cells than the already-preflighted layout itself.
+	canvasWidth := min(max(width, 1), max(layout.width-panX, 1))
+	canvasHeight := min(max(height, 1), max(layout.height-panY, 1))
+	canvas := newThreadSpatialViewportCanvas(panX, panY, canvasWidth, canvasHeight)
+	drawThreadSpatialCanvasWindow(canvas, layout, selected, panX, panY, width, height)
+	return canvas
+}
+
+func drawThreadSpatialCanvasWindow(
+	canvas *threadSpatialCanvas,
+	layout threadSpatialLayout,
+	selected string,
+	panX, panY, width, height int,
+) {
 	for column, label := range layout.columnLabels {
 		x := layout.columnX[column]
 		canvas.putText(x, 0, truncate(label, threadSpatialNodeWidth), theme.ColorGray, false)
@@ -1726,7 +2023,6 @@ func renderThreadSpatialCanvasWindow(
 	// after nodes also permits the explicit node-border fallback used when every
 	// safe stub cell is congested; endpoint multiplicity is never silently lost.
 	drawThreadSpatialRouteCounts(canvas, layout, routes, selected)
-	return canvas
 }
 
 func threadSpatialRoutesForWindow(
@@ -1739,7 +2035,10 @@ func threadSpatialRoutesForWindow(
 		return ok && node.x < panX+width && node.x+threadSpatialNodeWidth > panX &&
 			node.y < panY+height && node.y+threadSpatialNodeSlotHeight > panY
 	}
-	routes := make([]threadSpatialRoute, 0, len(layout.routes))
+	// Grow with the evidence that actually reaches this viewport. Reserving the
+	// full layout edge count here would retain an O(E) per-frame allocation even
+	// when only a handful of incident or visible-node routes can be drawn.
+	var routes []threadSpatialRoute
 	for _, route := range layout.routes {
 		if route.edge.From == selected || route.edge.To == selected ||
 			visibleNode(route.edge.From) || visibleNode(route.edge.To) {
@@ -1830,7 +2129,13 @@ func drawThreadSpatialRouteCounts(
 	}
 	for _, key := range order {
 		end := ends[key]
-		if _, ok := canvas.putRouteCountAlong(end.point, end.step, end.maxSteps, end.count, key.taskID == selected); !ok {
+		if end.count < 2 {
+			continue
+		}
+		_, result := canvas.putRouteCountAlong(
+			end.point, end.step, end.maxSteps, end.count, key.taskID == selected,
+		)
+		if result == threadSpatialRouteCountCongested {
 			canvas.putRouteCountFallback(end.fallback, end.count, key.taskID == selected)
 		}
 	}
