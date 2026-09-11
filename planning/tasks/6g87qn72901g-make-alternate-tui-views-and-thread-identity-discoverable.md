@@ -10,8 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [tui, threads, ux, navigation, discoverability]
 created: "2026-09-08"
-depends_on: [6g6dw5js81f3]
-updated_at: "2026-09-09"
+depends_on: [6g6dw5js81f3, 6g8vxcnezktm]
+updated_at: "2026-09-10"
 ---
 # Make alternate TUI views and Thread identity discoverable
 

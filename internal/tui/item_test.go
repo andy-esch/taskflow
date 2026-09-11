@@ -50,6 +50,21 @@ func assertColumns(t *testing.T, row string, parts ...string) {
 	}
 }
 
+func TestTruncateMiddleHonorsExactTerminalCellBudget(t *testing.T) {
+	for _, value := range []string{
+		"移行移行移行移行移行移行",
+		"shared-prefix-移行-suffix",
+		"bike-🚲-delivery-🚴",
+		"combine-e\u0301-and-tail",
+	} {
+		for width := 1; width <= 24; width++ {
+			if got := ansi.StringWidth(truncateMiddle(value, width)); got > width {
+				t.Errorf("truncateMiddle(%q, %d) width=%d", value, width, got)
+			}
+		}
+	}
+}
+
 // A task row: status glyph, slug, relative date — in that order.
 func TestTaskDelegateRow(t *testing.T) {
 	task := domain.Task{Slug: "alpha", Status: domain.StatusInProgress, Updated: "2020-01-02"}

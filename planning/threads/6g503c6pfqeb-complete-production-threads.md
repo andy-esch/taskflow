@@ -6,7 +6,7 @@ description: Deliver production Threads through the CLI preview and a usage-info
 goal: Preserve the production graph foundation while carrying Threads into a faithful TUI
 created: "2026-08-29"
 tags: [threads, dogfood]
-tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6jqqcdehne, 6g6scc9jgxae, 6g6wdvfjdaaa, 6g6wdvfp2ksa, 6g721tvf4crh, 6g721vewvvrz, 6g72ncs4xjdm, 6g7ddeyp773z, 6g7ddfhh2jc2, 6g7fhfpmy032, 6g7j2ebatzyt, 6g86016qvk5d, 6g86c7y6hn41, 6g86e10dztpf, 6g86g03zfj2f, 6g87qn72901g, 6g8btt5hcgs9, 6g8by30btznq, 6g8ezj5e51hg, 6g8k47wg8xks]
+tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6jqqcdehne, 6g6scc9jgxae, 6g6wdvfjdaaa, 6g6wdvfp2ksa, 6g721tvf4crh, 6g721vewvvrz, 6g72ncs4xjdm, 6g7ddeyp773z, 6g7ddfhh2jc2, 6g7fhfpmy032, 6g7j2ebatzyt, 6g86016qvk5d, 6g86c7y6hn41, 6g86e10dztpf, 6g86g03zfj2f, 6g87qn72901g, 6g8btt5hcgs9, 6g8by30btznq, 6g8ezj5e51hg, 6g8k47wg8xks, 6g8vxbv3d4xn, 6g8vxcnezktm]
 updated_at: "2026-09-10"
 started_at: "2026-08-30"
 ---
@@ -61,6 +61,15 @@ budgeting; dense-route hardening owns edge truthfulness at the resulting boundar
 not establish a numeric size cutoff for node-link views: this dogfooded graph is a sparse 40-node,
 51-edge DAG, so the full graph remains a flagship surface to harden, waves remain the ordered scan,
 and one-hop focus remains a complementary local lens.
+
+Responsive-layout dogfooding then made the next uncertainty concrete: a healthy large graph can be
+fast yet still be difficult to comprehend when only a few complete nodes fit in the viewport.
+Prominent node/layer/row scope and a deliberate narrow-terminal card remain bounded corrections in
+the responsive task. A new design branch now precedes one-hop implementation to compare full-graph,
+overview/focus, progressive-disclosure, and web-extension strategies against real navigation jobs.
+In parallel, a whole-TUI information-architecture review is allowed to challenge the growing mix of
+entity tabs, alternate views, pane focus, zoom, and history before the narrower view-discoverability
+task implements more shell chrome.
 
 Two implementation reviews then found a missing deepest-row long-edge track and Atlas losing
 presentation-owned immersive-zoom state, plus unpinned ordering, capacity, and manual-zoom

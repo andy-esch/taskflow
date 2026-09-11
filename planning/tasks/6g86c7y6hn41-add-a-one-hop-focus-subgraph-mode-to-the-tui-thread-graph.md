@@ -10,8 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [threads, tui, graph, ux, dogfood]
 created: "2026-09-08"
-depends_on: [6g6dw5js81f3, 6g8by30btznq]
-updated_at: "2026-09-09"
+depends_on: [6g6dw5js81f3, 6g8by30btznq, 6g8vxbv3d4xn]
+updated_at: "2026-09-10"
 ---
 
 # Add a one-hop focus subgraph mode to the TUI Thread graph

@@ -279,7 +279,17 @@ func truncateMiddle(value string, width int) string {
 	leftWidth := width / 2
 	rightWidth := width - leftWidth - 1
 	left := ansi.Truncate(value, leftWidth, "")
-	right := ansi.TruncateLeft(value, ansi.StringWidth(value)-rightWidth, "")
+	valueWidth := ansi.StringWidth(value)
+	cut := valueWidth - rightWidth
+	right := ansi.TruncateLeft(value, cut, "")
+	// TruncateLeft preserves a grapheme that straddles its cell boundary. That
+	// is desirable in prose, but a wide rune can make an identity exceed the
+	// exact card budget. Advance the cut until the retained suffix fits while
+	// continuing to preserve the distinguishing tail.
+	for ansi.StringWidth(right) > rightWidth && cut < valueWidth {
+		cut++
+		right = ansi.TruncateLeft(value, cut, "")
+	}
 	return left + "…" + right
 }
 

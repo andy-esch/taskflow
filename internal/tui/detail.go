@@ -71,6 +71,15 @@ type immersiveDetailContent interface {
 	detailImmersive() bool
 }
 
+// widthPreferringDetailContent lets a loaded presentation ask the shell for a
+// bounded split that reflects its content. The shell retains ownership of pane
+// frames and minimums; the entity supplies only an identity-safe list floor and
+// the detail width at which its structured rows stop wrapping wastefully.
+type widthPreferringDetailContent interface {
+	detailContent
+	detailPaneWidthPreference(totalWidth int) (minListWidth, preferredDetailWidth int)
+}
+
 // navigableDetailContent is the optional detail-page selection seam. It lets a
 // structured detail presentation behave like the rest of the TUI—move a visible
 // cursor and open the selected entity—without teaching the root model about a
@@ -796,6 +805,13 @@ func (d threadDetail) spatialPrepared() threadSpatialPrepared {
 	return prepareThreadSpatial(d.projection)
 }
 
+func (d threadDetail) spatialPreparedForViewport(width int) threadSpatialPrepared {
+	if d.spatial != nil {
+		return d.spatial.getForViewport(width)
+	}
+	return prepareThreadSpatialForViewport(d.projection, width)
+}
+
 type threadDetailView string
 
 const (
@@ -858,7 +874,6 @@ func (d threadDetail) withDetailView(name string) detailContent {
 		d.selection = threadGraphSelectedTaskID(d.projection, d.selection)
 	case string(threadDetailSpatial):
 		d.view = threadDetailSpatial
-		d.selection = threadSpatialSelectedTaskIDPrepared(d.spatialPrepared(), d.selection)
 	default:
 		d.view = threadDetailSummary
 	}
@@ -867,6 +882,14 @@ func (d threadDetail) withDetailView(name string) detailContent {
 
 func (d threadDetail) detailImmersive() bool {
 	return d.detailViewName() == string(threadDetailSpatial)
+}
+
+func (d threadDetail) detailPaneWidthPreference(totalWidth int) (int, int) {
+	// Keep enough of the Thread list to recognize identity while giving structured
+	// summaries/topology up to a useful no-wrap width. Once detail has 144 cells,
+	// genuinely surplus space returns to the list instead of growing either pane
+	// without bound. Spatial mode independently asks for the full region.
+	return 38, min(max(totalWidth-42, 84), 144)
 }
 
 func (d threadDetail) detailSized() bool { return d.detailImmersive() }
@@ -878,7 +901,7 @@ func (d threadDetail) renderDetail(width, height int, s *styles) string {
 		return ""
 	}
 	return renderThreadSpatialPrepared(
-		d.projection, d.spatialPrepared(), d.pathIssue, d.selection, width, height, s,
+		d.projection, d.spatialPreparedForViewport(width), d.pathIssue, d.selection, width, height, s,
 	)
 }
 

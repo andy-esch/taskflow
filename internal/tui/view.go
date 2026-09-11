@@ -41,9 +41,15 @@ func (m *Model) recomputeLayout() {
 	var listInnerW int
 	if m.twoPane {
 		listOuterW := m.width * 2 / 5
-		if listOuterW < 28 {
-			listOuterW = 28
+		minListOuterW := 28
+		maxListOuterW := max(m.width-28, 1)
+		if preferred, ok := m.detail.content.(widthPreferringDetailContent); ok {
+			contentMinList, preferredDetail := preferred.detailPaneWidthPreference(m.width)
+			minListOuterW = min(max(minListOuterW, contentMinList), maxListOuterW)
+			preferredDetail = min(max(preferredDetail, 28), max(m.width-minListOuterW, 28))
+			listOuterW = m.width - preferredDetail
 		}
+		listOuterW = min(max(listOuterW, minListOuterW), maxListOuterW)
 		m.listOuterW = listOuterW
 		m.detailOuterW = m.width - listOuterW
 		listInnerW = max1(listOuterW - m.st.paneHFrame)
