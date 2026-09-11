@@ -50,7 +50,7 @@ views in both Thread detail and Atlas.
   [two-dimensional Thread graph prototype](6g6dw5js81f3-prototype-a-two-dimensional-navigable-thread-graph-view.md)
 - Coordinate with
   [structured-detail action targeting](6g86g03zfj2f-define-consistent-action-targets-for-structured-tui-detail-selections.md)
-- Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+- Thread [Refine Thread and TUI navigation](../threads/6g90h4pg0q7n-refine-thread-and-tui-navigation.md)
 
 ## Design attention
 

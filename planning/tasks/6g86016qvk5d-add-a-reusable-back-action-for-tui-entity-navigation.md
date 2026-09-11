@@ -47,7 +47,7 @@ instead of creating competing stacks.
 - Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
 - Discovered while dogfooding the
   [two-dimensional Thread graph prototype](6g6dw5js81f3-prototype-a-two-dimensional-navigable-thread-graph-view.md)
-- Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+- Thread [Refine Thread and TUI navigation](../threads/6g90h4pg0q7n-refine-thread-and-tui-navigation.md)
 
 ## Sequencing
 

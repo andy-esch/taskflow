@@ -66,4 +66,4 @@ that a browser automatically solves graph comprehension.
   [one-hop focus subgraph](6g86c7y6hn41-add-a-one-hop-focus-subgraph-mode-to-the-tui-thread-graph.md)
 - Coordinate with the
   [whole-TUI navigation and information-architecture review](6g8vxcnezktm-reassess-tui-navigation-and-information-architecture-at-current-scale.md).
-- Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+- Thread [Refine Thread and TUI navigation](../threads/6g90h4pg0q7n-refine-thread-and-tui-navigation.md)

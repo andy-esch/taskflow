@@ -51,7 +51,7 @@ losing the user's stable selection and route back to the whole graph.
   [two-dimensional Thread graph prototype](6g6dw5js81f3-prototype-a-two-dimensional-navigable-thread-graph-view.md)
 - Complements the
   [reusable TUI Back action](6g86016qvk5d-add-a-reusable-back-action-for-tui-entity-navigation.md)
-- Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+- Thread [Refine Thread and TUI navigation](../threads/6g90h4pg0q7n-refine-thread-and-tui-navigation.md)
 - Tracked from the
   [spatial Thread graph experience design review](../audits/6g8bbjgcx9tj-2026-09-09-spatial-thread-graph-tui-experience-design-review.md)
 

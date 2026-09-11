@@ -60,4 +60,4 @@ without making hidden bindings the only way to discover functionality.
 - Coordinate with the reusable Back and structured-detail action-target tasks.
 - Coordinate with the
   [large-Thread graph navigation investigation](6g8vxbv3d4xn-explore-progressive-disclosure-and-navigation-for-large-thread-graphs.md).
-- Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+- Thread [Refine Thread and TUI navigation](../threads/6g90h4pg0q7n-refine-thread-and-tui-navigation.md)

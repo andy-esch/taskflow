@@ -1,14 +1,15 @@
 ---
 schema: 1
 id: 6g503c6pfqeb
-status: in-progress
+status: completed
 description: Deliver production Threads through the CLI preview and a usage-informed TUI
 goal: Preserve the production graph foundation while carrying Threads into a faithful TUI
 created: "2026-08-29"
 tags: [threads, dogfood]
-tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6jqqcdehne, 6g6scc9jgxae, 6g6wdvfjdaaa, 6g6wdvfp2ksa, 6g721tvf4crh, 6g721vewvvrz, 6g72ncs4xjdm, 6g7ddeyp773z, 6g7ddfhh2jc2, 6g7fhfpmy032, 6g7j2ebatzyt, 6g86016qvk5d, 6g86c7y6hn41, 6g86e10dztpf, 6g86g03zfj2f, 6g87qn72901g, 6g8btt5hcgs9, 6g8by30btznq, 6g8ezj5e51hg, 6g8k47wg8xks, 6g8vxbv3d4xn, 6g8vxcnezktm]
-updated_at: "2026-09-10"
+tasks: [6g3q4rtv8d0a, 6g3q4rv1w9e2, 6g3q4rv89vzw, 6g4g8gatbnrs, 6g4wm2yf6tyj, 6g5075cga2nt, 6g5f1d23jy1b, 6g5fthzwbeq1, 6g5fy1m967ka, 6g5gbk5a5bt0, 6g5m69wpydzw, 6g5rwjqeh6a6, 6g5rwjqr7rt8, 6g5rwjr0dz4p, 6g5rxq17px59, 6g5rxq1g5mp1, 6g5rxq1ravd3, 6g5ryqqx5ab7, 6g63db3sdfrh, 6g697mp8s4tx, 6g6dw5js81f3, 6g6scc9jgxae, 6g6wdvfjdaaa, 6g721tvf4crh, 6g721vewvvrz, 6g72ncs4xjdm, 6g7ddeyp773z, 6g7fhfpmy032, 6g7j2ebatzyt, 6g86e10dztpf, 6g8btt5hcgs9, 6g8by30btznq, 6g8ezj5e51hg, 6g8k47wg8xks]
+updated_at: "2026-09-11"
 started_at: "2026-08-30"
+ended_at: "2026-09-11"
 ---
 
 # Thread: Complete production Threads
@@ -88,3 +89,16 @@ the other independent post-preview branches remain eligible.
 The deprecated combined TUI member remains as planning history. Its replacement tasks and the
 foundation gaps found while scoping them are members of this Thread, while repository-global
 dependencies remain the sole source of execution order.
+
+## Closeout (2026-09-11)
+
+This Thread delivered the production graph foundation, guarded mutation and repair paths, stable
+Thread projections, three preview releases, a dogfooded TUI, and the first usable spatial graph.
+Its remaining product uncertainty is no longer whether Threads can work: it is how large graphs and
+the wider TUI should become easier to comprehend and navigate. Seven live usability tasks therefore
+continue in [Refine Thread and TUI navigation](6g90h4pg0q7n-refine-thread-and-tui-navigation.md).
+
+Two other live tasks intentionally have no successor membership. Portable board/status diagnostics
+remains independent adapter-foundation work under its repository-global dependencies. Thread
+graduation remains deferred until multi-release preview evidence supports reopening that decision;
+making it a member would turn the new usability Thread into an artificial release gate.
