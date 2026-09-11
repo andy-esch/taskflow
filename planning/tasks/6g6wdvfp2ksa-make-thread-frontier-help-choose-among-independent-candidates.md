@@ -71,6 +71,6 @@ slice; it does not block guarded repair, diagnostic portability, or the spatial 
 ## Related
 
 - Epic [30-threads-and-task-dependency-graphs](../epics/30-threads-and-task-dependency-graphs.md)
-- Thread [Complete production Threads](../threads/6g503c6pfqeb-complete-production-threads.md)
+- Thread [Refine Thread and TUI navigation](../threads/6g90h4pg0q7n-refine-thread-and-tui-navigation.md)
 - Release checkpoint [v0.19.0 TUI preview](6g6scc9jgxae-cut-v0.19.0-as-a-tui-threads-preview.md)
 - Earlier presentation correction [Show in-flight work](6g5fthzwbeq1-show-in-flight-work-before-dispatchable-thread-frontier-members.md)
