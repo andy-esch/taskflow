@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g8k47wg8xks
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Allocate and compose spatial Thread canvas cells from the visible viewport rather than the full bounded graph on every frame.
 effort: 1-2 days
@@ -13,6 +13,7 @@ created: "2026-09-10"
 depends_on: [6g8ezj5e51hg]
 updated_at: "2026-09-10"
 started_at: "2026-09-10"
+completed_at: "2026-09-10"
 ---
 # Render only the visible spatial Thread viewport
 
