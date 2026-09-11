@@ -367,11 +367,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if domain.Classify(msg.err) == domain.ClassConflict && m.detail.showing(msg.id) {
 			m.detail.SetRefreshError(msg.err.Error())
 		} else {
+			wasImmersive := m.detail.immersive()
 			title := msg.label
 			if title == "" {
 				title = msg.id
 			}
 			m.detail.SetError(msg.id, title, msg.err.Error(), msg.localPath)
+			m.syncClearedDetailLayout(wasImmersive)
 		}
 		return m, nil
 
@@ -989,7 +991,9 @@ func (m Model) afterSelectionChange(prev string, cmd tea.Cmd) (tea.Model, tea.Cm
 	case "":
 		// A `/` filter narrowed the list to zero matches: drop the now-stale detail
 		// instead of leaving the last item showing.
+		wasImmersive := m.detail.immersive()
 		m.detail.showEmpty()
+		m.syncClearedDetailLayout(wasImmersive)
 		return m, cmd
 	default:
 		m.detail.loading = true
@@ -1143,14 +1147,15 @@ func (m *Model) exitDashboard(i int) {
 	m.unzoom() // a tab switch drops full-screen — the new tab opens on its list
 }
 
-// unzoom leaves full-screen detail and restores the layout, if zoomed. A no-op
-// otherwise. Used where the item/tab context changes out from under the zoom
-// (switching tabs, entering the dashboard) so it never strands a full-screen pane
-// over a just-cleared selection.
+// unzoom leaves full-screen detail and restores the layout. It also recomputes
+// an ordinary split after content was cleared, so a presentation-owned width
+// preference cannot leak into a new tab that has no detail response of its own.
 func (m *Model) unzoom() {
 	m.immersiveZoom = false
 	if m.zoom {
 		m.zoom = false
+	}
+	if m.width > 0 && m.height > 0 {
 		m.recomputeLayout()
 	}
 }
@@ -1242,7 +1247,9 @@ func (m *Model) dashJump(tgt dashTarget) tea.Cmd {
 func (m *Model) refreshDetail() tea.Cmd {
 	key := m.selectedKey()
 	if key == "" {
-		m.detail.loading = false
+		wasImmersive := m.detail.immersive()
+		m.detail.showEmpty()
+		m.syncClearedDetailLayout(wasImmersive)
 		return nil
 	}
 	m.detail.loading = true
@@ -1346,6 +1353,27 @@ func (m *Model) syncDetailImmersion(wasImmersive bool) {
 		m.zoom = false
 		m.immersiveZoom = false
 		m.setFocus(focusDetail)
+		m.recomputeLayout()
+	default:
+		// A newly loaded or newly selected structured detail may have a reusable
+		// split-width preference even when it is not immersive.
+		if m.width > 0 && m.height > 0 {
+			m.recomputeLayout()
+		}
+	}
+}
+
+// syncClearedDetailLayout removes only shell-owned immersive zoom, then sizes
+// the panes from the now-empty/error content. User-entered zoom remains theirs,
+// but it can no longer retain a vanished detail's split preference when they
+// return to the list.
+func (m *Model) syncClearedDetailLayout(wasImmersive bool) {
+	if wasImmersive && m.immersiveZoom {
+		m.zoom = false
+		m.immersiveZoom = false
+		m.setFocus(focusList)
+	}
+	if m.width > 0 && m.height > 0 {
 		m.recomputeLayout()
 	}
 }

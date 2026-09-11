@@ -651,12 +651,21 @@ func TestThreadSpatialCacheFollowsCoherentProjectionReplacement(t *testing.T) {
 	if movedDetail.spatialPrepared().layout != original.layout {
 		t.Fatal("selection copy rebuilt instead of sharing the coherent projection layout")
 	}
-	_ = movedDetail.renderDetail(100, 28, &testStyles)
-	if movedDetail.spatialPrepared().layout != original.layout {
-		t.Fatal("render rebuilt instead of sharing the coherent projection layout")
+	_ = movedDetail.renderDetail(64, 28, &testStyles)
+	resized := movedDetail.spatialPrepared()
+	if resized.layout == nil || resized.layout == original.layout {
+		t.Fatal("width change did not replace the responsive geometry variant")
 	}
-	if want := buildThreadSpatialLayout(projection); !reflect.DeepEqual(*original.layout, want) {
-		t.Fatal("render/navigation mutated the shared read-only layout")
+	wantWidth := threadSpatialResponsiveNodeWidth(64, len(original.layout.columns))
+	if resized.layout.effectiveNodeWidth() != wantWidth {
+		t.Fatalf("responsive node width=%d want %d", resized.layout.effectiveNodeWidth(), wantWidth)
+	}
+	_ = movedDetail.renderDetail(64, 28, &testStyles)
+	if movedDetail.spatialPrepared().layout != resized.layout {
+		t.Fatal("same-width render rebuilt instead of reusing responsive geometry")
+	}
+	if want := materializeThreadSpatialLayout(planThreadSpatialLayoutWithNodeWidth(projection, wantWidth)); !reflect.DeepEqual(*resized.layout, want) {
+		t.Fatal("render/navigation mutated the shared responsive layout")
 	}
 
 	added := projection
@@ -734,8 +743,467 @@ func TestThreadSpatialCacheRemainsLazyUntilSpatialView(t *testing.T) {
 	}
 
 	spatial := loaded.withDetailView(string(threadDetailSpatial)).(threadDetail)
-	if spatial.spatial != loaded.spatial || spatial.spatial.prepared.layout == nil {
-		t.Fatal("entering the spatial view did not prepare the detail's shared lazy layout")
+	if spatial.spatial != loaded.spatial || spatial.spatial.prepared.layout != nil {
+		t.Fatal("entering the spatial view eagerly prepared the detail's shared lazy layout")
+	}
+	_ = spatial.renderDetail(120, 30, &testStyles)
+	if spatial.spatial.prepared.layout == nil {
+		t.Fatal("first spatial render did not prepare the detail's shared lazy layout")
+	}
+}
+
+func TestThreadDetailUsesAResponsiveIdentitySafePaneBudget(t *testing.T) {
+	m, _ := threadModel(t)
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 36})
+	m = openThreads(t, tm.(Model))
+	if !m.twoPane || m.listOuterW != 42 || m.detailOuterW != 98 {
+		t.Fatalf("140-column Thread split = two:%v list:%d detail:%d, want 42/98",
+			m.twoPane, m.listOuterW, m.detailOuterW)
+	}
+
+	for _, size := range []struct {
+		width          int
+		listW, detailW int
+	}{{width: 100, listW: 38, detailW: 62}, {width: 200, listW: 56, detailW: 144}} {
+		tm, _ = m.Update(tea.WindowSizeMsg{Width: size.width, Height: 36})
+		m = tm.(Model)
+		if m.listOuterW != size.listW || m.detailOuterW != size.detailW {
+			t.Errorf("%d-column Thread split = %d/%d want %d/%d",
+				size.width, m.listOuterW, m.detailOuterW, size.listW, size.detailW)
+		}
+	}
+
+	m.setFocus(focusDetail)
+	for range 2 {
+		tm, _ = m.Update(press("v"))
+		m = tm.(Model)
+	}
+	if !m.zoom || m.detailOuterW != 200 || m.detail.width != 200-testStyles.paneHFrame {
+		t.Fatalf("immersive spatial width = zoom:%v outer:%d inner:%d", m.zoom, m.detailOuterW, m.detail.width)
+	}
+	tm, _ = m.Update(press("esc"))
+	m = tm.(Model)
+	if m.zoom || m.listOuterW != 56 || m.detailOuterW != 144 {
+		t.Fatalf("return from spatial lost responsive split: zoom:%v list:%d detail:%d",
+			m.zoom, m.listOuterW, m.detailOuterW)
+	}
+
+	cmd := m.switchTab(indexOfKind(m.tabs, entityAudits))
+	m = drainNested(t, m, cmd)
+	if m.listOuterW != 80 || m.detailOuterW != 120 {
+		t.Fatalf("empty non-Thread tab retained Thread split: %d/%d want 80/120", m.listOuterW, m.detailOuterW)
+	}
+	m = openThreads(t, m)
+	if m.listOuterW != 56 || m.detailOuterW != 144 {
+		t.Fatalf("Thread reload did not restore preferred split: %d/%d", m.listOuterW, m.detailOuterW)
+	}
+	tm, _ = m.Update(detailErrMsg{
+		kind: entityThreads, id: m.selectedKey(), gen: m.detailGen, err: domain.ErrAmbiguous,
+	})
+	m = tm.(Model)
+	if m.listOuterW != 80 || m.detailOuterW != 120 {
+		t.Fatalf("Thread detail error retained stale split: %d/%d want 80/120", m.listOuterW, m.detailOuterW)
+	}
+}
+
+func TestThreadSpatialResponsiveGeometryPreservesCompactIdentity(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Label: "shared-production-prefix-task-alpha", Role: core.ThreadTaskMember},
+			{TaskID: "b", Label: "shared-production-prefix-task-beta", Role: core.ThreadTaskMember},
+			{TaskID: "c", Label: "shared-production-prefix-task-charlie", Role: core.ThreadTaskMember},
+			{TaskID: "d", Label: "shared-production-prefix-task-delta", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{{From: "a", To: "b"}, {From: "b", To: "c"}, {From: "c", To: "d"}},
+	}
+	widths := []int{64, 120, 180}
+	wantNodeWidths := []int{18, 33, 42}
+	for index, viewportWidth := range widths {
+		prepared := prepareThreadSpatialForViewport(projection, viewportWidth)
+		if prepared.layout == nil || prepared.issue != "" {
+			t.Fatalf("%d-column preparation failed: %+v", viewportWidth, prepared)
+		}
+		layout := *prepared.layout
+		if got := layout.effectiveNodeWidth(); got != wantNodeWidths[index] {
+			t.Errorf("%d-column node width=%d want %d", viewportWidth, got, wantNodeWidths[index])
+		}
+		placement := layout.byID["a"]
+		canvas := newThreadSpatialCanvas(layout.width, layout.height)
+		drawThreadSpatialNode(canvas, placement, layout.effectiveNodeWidth(), false)
+		identity := ansi.Strip(canvas.renderLine(placement.y+2, &testStyles))
+		if !strings.Contains(identity, "[M1]") || !strings.Contains(identity, "pha") {
+			t.Errorf("%d-column compact node lost stable code or distinguishing suffix: %q", viewportWidth, identity)
+		}
+	}
+}
+
+func TestThreadSpatialResponsiveWidthPropagatesThroughFullGeometry(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Label: "shared-prefix-alpha", Status: domain.StatusInProgress, Role: core.ThreadTaskMember},
+			{TaskID: "b", Label: "移行移行移行移行移行移行", Status: domain.StatusNextUp, Role: core.ThreadTaskMember},
+			{TaskID: "c", Label: "shared-prefix-charlie", Status: domain.StatusCompleted, Role: core.ThreadTaskMember},
+			{TaskID: "d", Label: "shared-prefix-delta", Status: domain.StatusNextUp, Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{{From: "a", To: "b"}, {From: "b", To: "c"}, {From: "c", To: "d"}},
+	}
+	for _, tc := range []struct {
+		viewportWidth int
+		nodeWidth     int
+	}{{viewportWidth: 64, nodeWidth: 18}, {viewportWidth: 180, nodeWidth: 42}} {
+		detail := newThreadDetail(projection, "", "", "")
+		detail.view, detail.selection = threadDetailSpatial, "a"
+		rendered := detail.renderDetail(tc.viewportWidth, 30, &testStyles)
+		for _, line := range strings.Split(ansi.Strip(rendered), "\n") {
+			if got := ansi.StringWidth(line); got > tc.viewportWidth {
+				t.Fatalf("%d-column responsive render emitted width %d: %q", tc.viewportWidth, got, line)
+			}
+		}
+		prepared := detail.spatial.prepared
+		if prepared.layout == nil || prepared.issue != "" {
+			t.Fatalf("%d-column cache preparation failed: %+v", tc.viewportWidth, prepared)
+		}
+		layout := *prepared.layout
+		if got := layout.effectiveNodeWidth(); got != tc.nodeWidth {
+			t.Fatalf("%d-column cached node width=%d want %d", tc.viewportWidth, got, tc.nodeWidth)
+		}
+		canvas := renderThreadSpatialCanvasWindow(
+			projection, layout, "a", 0, 0, layout.width, layout.height,
+		)
+		for _, placement := range layout.nodes {
+			topY := placement.y + 1
+			left, right := "┌", "┐"
+			if placement.node.TaskID == "a" {
+				topY = placement.y
+			}
+			if placement.node.Role == core.ThreadTaskExternalGate {
+				left, right = "╔", "╗"
+			}
+			leftCell, leftOK := canvas.cellAt(placement.x, topY)
+			rightCell, rightOK := canvas.cellAt(placement.x+tc.nodeWidth-1, topY)
+			if !leftOK || !rightOK || leftCell.text != left || rightCell.text != right {
+				t.Fatalf("node %q width %d border drift: left=%+v right=%+v", placement.node.TaskID, tc.nodeWidth, leftCell, rightCell)
+			}
+			middleY := topY + 1
+			if cell, ok := canvas.cellAt(placement.x+tc.nodeWidth-1, middleY); !ok || cell.text != "│" {
+				t.Fatalf("node %q width %d compact identity overflowed its right border: %+v", placement.node.TaskID, tc.nodeWidth, cell)
+			}
+		}
+		for _, route := range layout.routes {
+			if len(route.segments) == 0 {
+				continue
+			}
+			from, to := layout.byID[route.edge.From], layout.byID[route.edge.To]
+			if got, want := route.segments[0].from.x, from.x+tc.nodeWidth; got != want {
+				t.Errorf("%d-wide route %s->%s source x=%d want %d", tc.nodeWidth, route.edge.From, route.edge.To, got, want)
+			}
+			wantArrowX := to.x - 1
+			if route.arrowRune == '◀' {
+				wantArrowX = to.x + tc.nodeWidth
+			}
+			if route.arrow.x != wantArrowX {
+				t.Errorf("%d-wide route %s->%s arrow x=%d want %d", tc.nodeWidth, route.edge.From, route.edge.To, route.arrow.x, wantArrowX)
+			}
+		}
+		last := layout.nodes[len(layout.nodes)-1]
+		window := threadSpatialWindowForSelection(
+			layout, last.node.TaskID, tc.nodeWidth, threadSpatialNodeSlotHeight,
+		)
+		if !threadSpatialNodeFullyVisible(
+			layout, last, window.panX, window.panY, window.width, window.height,
+		) {
+			t.Fatalf("%d-wide exact-card viewport clipped selection: node=%+v window=%+v", tc.nodeWidth, last, window)
+		}
+	}
+}
+
+func TestThreadSpatialWindowKeepsNodesWholeAndExposesHiddenExtent(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "a", Label: "alpha", Role: core.ThreadTaskMember},
+			{TaskID: "b", Label: "beta", Role: core.ThreadTaskMember},
+			{TaskID: "c", Label: "charlie", Role: core.ThreadTaskMember},
+			{TaskID: "d", Label: "delta", Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{{From: "a", To: "b"}, {From: "b", To: "c"}, {From: "c", To: "d"}},
+	}
+	prepared := prepareThreadSpatialForViewport(projection, 64)
+	layout := *prepared.layout
+	window := threadSpatialWindowForSelection(layout, "b", layout.effectiveNodeWidth(), 8)
+	selected := layout.byID["b"]
+	if !threadSpatialNodeFullyVisible(
+		layout, selected, window.panX, window.panY, window.width, window.height,
+	) {
+		t.Fatalf("selected node was not a complete viewport unit: node=%+v window=%+v", selected, window)
+	}
+	if summary := threadSpatialWindowSummary(
+		layout, window.panX, window.panY, window.width, window.height,
+	); !strings.Contains(summary, "viewport") || !strings.Contains(summary, "/4 nodes") ||
+		!strings.Contains(summary, "◂") || !strings.Contains(summary, "▸") ||
+		!strings.Contains(summary, "layers") || !strings.Contains(summary, "rows") {
+		t.Fatalf("interior viewport summary did not expose both hidden extents: %q", summary)
+	}
+	canvas := renderThreadSpatialCanvasWindow(
+		projection, layout, "b", window.panX, window.panY, window.width, window.height,
+	)
+	for _, placement := range layout.nodes {
+		intersects := placement.x < window.panX+window.width &&
+			placement.x+layout.effectiveNodeWidth() > window.panX &&
+			placement.y < window.panY+window.height &&
+			placement.y+threadSpatialNodeSlotHeight > window.panY
+		if !intersects || threadSpatialNodeFullyVisible(
+			layout, placement, window.panX, window.panY, window.width, window.height,
+		) {
+			continue
+		}
+		for row := placement.y; row < placement.y+threadSpatialNodeSlotHeight; row++ {
+			for column := placement.x; column < placement.x+layout.effectiveNodeWidth(); column++ {
+				cell, ok := canvas.cellAt(column, row)
+				if ok && cell.text != "" && strings.Contains("┌┐└┘╔╗╚╝", cell.text) {
+					t.Fatalf("partially visible node %q leaked border at (%d,%d)", placement.node.TaskID, column, row)
+				}
+			}
+		}
+	}
+	annotateThreadSpatialWindowGutters(canvas, layout, window.panX, window.panY, window.width, window.height)
+	leftFound, rightFound := false, false
+	for row := window.panY; row < window.panY+window.height; row++ {
+		if cell, ok := canvas.cellAt(window.panX, row); ok && cell.text == "◂" {
+			leftFound = true
+		}
+		if cell, ok := canvas.cellAt(window.panX+window.width-1, row); ok && cell.text == "▸" {
+			rightFound = true
+		}
+	}
+	if !leftFound || !rightFound {
+		t.Fatalf("horizontal hidden-extent gutters = left:%v right:%v", leftFound, rightFound)
+	}
+}
+
+func TestThreadSpatialVerticalWindowReservesOneCompleteSelectedSlot(t *testing.T) {
+	projection := core.ThreadGraphProjection{Nodes: []core.ThreadGraphNode{
+		{TaskID: "a", Label: "alpha", Role: core.ThreadTaskMember},
+		{TaskID: "b", Label: "beta", Role: core.ThreadTaskMember},
+		{TaskID: "c", Label: "charlie", Role: core.ThreadTaskMember},
+		{TaskID: "d", Label: "delta", Role: core.ThreadTaskMember},
+	}}
+	prepared := prepareThreadSpatialForViewport(projection, 64)
+	layout := *prepared.layout
+	window := threadSpatialWindowForSelection(layout, "c", 64, threadSpatialNodeSlotHeight)
+	if !threadSpatialNodeFullyVisible(layout, layout.byID["c"], window.panX, window.panY, window.width, window.height) {
+		t.Fatalf("five-row canvas clipped its selected slot: %+v", window)
+	}
+	canvas := renderThreadSpatialCanvasWindow(
+		projection, layout, "c", window.panX, window.panY, window.width, window.height,
+	)
+	annotateThreadSpatialWindowGutters(canvas, layout, window.panX, window.panY, window.width, window.height)
+	top, topOK := canvas.cellAt(window.panX, window.panY)
+	bottom, bottomOK := canvas.cellAt(window.panX, window.panY+window.height-1)
+	if !topOK || !bottomOK || top.text != "▲" || bottom.text != "▼" {
+		t.Fatalf("vertical hidden-extent gutters = top:%+v bottom:%+v", top, bottom)
+	}
+	if summary := threadSpatialWindowSummary(
+		layout, window.panX, window.panY, window.width, window.height,
+	); !strings.Contains(summary, "1/4 nodes") || !strings.Contains(summary, "▲") ||
+		!strings.Contains(summary, "▼") || !strings.Contains(summary, "rows 3/4") {
+		t.Fatalf("vertical viewport summary did not expose hidden nodes and rows: %q", summary)
+	}
+}
+
+func TestThreadSpatialWindowGutterNeverOverwritesGraphEvidence(t *testing.T) {
+	canvas := newThreadSpatialCanvas(5, 3)
+	canvas.putText(4, 0, "node", theme.ColorGreen, false)
+	canvas.putRouteConnector(4, 1, threadSpatialUp|threadSpatialDown, threadSpatialRouteStyle{id: 1})
+	putThreadSpatialWindowGutter(canvas, 4, 0, 0, 1, 3, "▸")
+	if cell := canvas.cells[0][4]; cell.text != "n" || cell.color != theme.ColorGreen {
+		t.Fatalf("gutter overwrote node text: %+v", cell)
+	}
+	if cell := canvas.cells[1][4]; cell.connector == 0 || cell.text != "" {
+		t.Fatalf("gutter overwrote route evidence: %+v", cell)
+	}
+	if cell := canvas.cells[2][4]; cell.text != "▸" {
+		t.Fatalf("gutter did not use the first empty boundary cell: %+v", cell)
+	}
+
+	guarded := newThreadSpatialCanvas(7, 1)
+	guarded.cells[0][0].continuation = true
+	guarded.cells[0][1].crossing = true
+	guarded.cells[0][2].overlap = true
+	guarded.cells[0][3].conflict = true
+	guarded.cells[0][4].routeCount = true
+	guarded.cells[0][5].connector = threadSpatialLeft
+	putThreadSpatialWindowGutter(guarded, 0, 0, 1, 0, 7, "▼")
+	for column := range 6 {
+		if guarded.cells[0][column].text != "" {
+			t.Errorf("gutter overwrote guarded evidence at column %d: %+v", column, guarded.cells[0][column])
+		}
+	}
+	if cell := guarded.cells[0][6]; cell.text != "▼" {
+		t.Fatalf("gutter did not skip every non-text evidence state: %+v", cell)
+	}
+}
+
+func TestThreadSpatialWindowKeepsEverySelectionCompleteAcrossViewportSizes(t *testing.T) {
+	projection := core.ThreadGraphProjection{}
+	for row := 0; row < 4; row++ {
+		for column := 0; column < 5; column++ {
+			taskID := fmt.Sprintf("task-%d-%d", column, row)
+			projection.Nodes = append(projection.Nodes, core.ThreadGraphNode{
+				TaskID: taskID, Label: "shared-long-identity-" + taskID, Role: core.ThreadTaskMember,
+			})
+			if column > 0 {
+				projection.Edges = append(projection.Edges, core.ThreadGraphEdge{
+					From: fmt.Sprintf("task-%d-%d", column-1, row), To: taskID,
+				})
+			}
+		}
+	}
+	for _, size := range []struct{ width, height int }{
+		{60, 5}, {80, 7}, {120, 11}, {180, 17},
+	} {
+		prepared := prepareThreadSpatialForViewport(projection, size.width)
+		if prepared.layout == nil || prepared.issue != "" {
+			t.Fatalf("%dx%d preparation failed: %+v", size.width, size.height, prepared)
+		}
+		layout := *prepared.layout
+		for _, placement := range layout.nodes {
+			window := threadSpatialWindowForSelection(
+				layout, placement.node.TaskID, size.width, size.height,
+			)
+			if !threadSpatialNodeFullyVisible(
+				layout, placement, window.panX, window.panY, window.width, window.height,
+			) {
+				t.Errorf("%dx%d selection %q was clipped: node=%+v window=%+v",
+					size.width, size.height, placement.node.TaskID, placement, window)
+			}
+		}
+	}
+}
+
+func TestThreadSpatialWindowMaximizesCompleteLayersAndRowsAroundSelection(t *testing.T) {
+	fan := core.ThreadGraphProjection{Nodes: []core.ThreadGraphNode{
+		{TaskID: "root", Label: "root", Role: core.ThreadTaskMember},
+		{TaskID: "sink", Label: "sink", Role: core.ThreadTaskMember},
+	}}
+	for index := range 10 {
+		taskID := fmt.Sprintf("mid-%02d", index)
+		fan.Nodes = append(fan.Nodes, core.ThreadGraphNode{TaskID: taskID, Label: taskID, Role: core.ThreadTaskMember})
+		fan.Edges = append(fan.Edges,
+			core.ThreadGraphEdge{From: "root", To: taskID},
+			core.ThreadGraphEdge{From: taskID, To: "sink"},
+		)
+	}
+	fanPrepared := prepareThreadSpatialForViewport(fan, 80)
+	if fanPrepared.layout == nil || fanPrepared.issue != "" {
+		t.Fatalf("fan preparation failed: %+v", fanPrepared)
+	}
+	assertThreadSpatialAxisPanIsOptimal(t, *fanPrepared.layout, "mid-04", 80, 11, true)
+
+	disconnected := core.ThreadGraphProjection{}
+	for index := range 12 {
+		taskID := fmt.Sprintf("node-%02d", index)
+		disconnected.Nodes = append(disconnected.Nodes, core.ThreadGraphNode{
+			TaskID: taskID, Label: taskID, Role: core.ThreadTaskMember,
+		})
+	}
+	disconnectedPrepared := prepareThreadSpatialForViewport(disconnected, 80)
+	if disconnectedPrepared.layout == nil || disconnectedPrepared.issue != "" {
+		t.Fatalf("disconnected preparation failed: %+v", disconnectedPrepared)
+	}
+	assertThreadSpatialAxisPanIsOptimal(t, *disconnectedPrepared.layout, "node-06", 80, 11, false)
+}
+
+func assertThreadSpatialAxisPanIsOptimal(
+	t *testing.T,
+	layout threadSpatialLayout,
+	selectedTaskID string,
+	width, height int,
+	horizontal bool,
+) {
+	t.Helper()
+	window := threadSpatialWindowForSelection(layout, selectedTaskID, width, height)
+	selected := layout.byID[selectedTaskID]
+	intervals := make([]threadSpatialAxisInterval, 0)
+	viewportSize, layoutSize, pan := height, layout.height, window.panY
+	selectedInterval := threadSpatialAxisInterval{
+		start: selected.y, end: selected.y + threadSpatialNodeSlotHeight,
+	}
+	seen := make(map[int]bool)
+	for _, placement := range layout.nodes {
+		if !seen[placement.y] {
+			seen[placement.y] = true
+			intervals = append(intervals, threadSpatialAxisInterval{
+				start: placement.y, end: placement.y + threadSpatialNodeSlotHeight,
+			})
+		}
+	}
+	if horizontal {
+		intervals = intervals[:0]
+		viewportSize, layoutSize, pan = width, layout.width, window.panX
+		selectedInterval = threadSpatialAxisInterval{
+			start: selected.x, end: selected.x + layout.effectiveNodeWidth(),
+		}
+		for _, x := range layout.columnX {
+			intervals = append(intervals, threadSpatialAxisInterval{
+				start: x, end: x + layout.effectiveNodeWidth(),
+			})
+		}
+	}
+
+	complete := func(candidate int) int {
+		count := 0
+		for _, interval := range intervals {
+			if interval.start >= candidate && interval.end <= candidate+viewportSize {
+				count++
+			}
+		}
+		return count
+	}
+	want := -1
+	for candidate := 0; candidate <= max(layoutSize-viewportSize, 0); candidate++ {
+		if selectedInterval.start < candidate || selectedInterval.end > candidate+viewportSize {
+			continue
+		}
+		want = max(want, complete(candidate))
+	}
+	if got := complete(pan); got != want {
+		t.Fatalf("optimized axis pan=%d shows %d complete units, want best=%d", pan, got, want)
+	}
+}
+
+func TestThreadSpatialResponsiveWidthKeepsAValidNearLimitLayoutAvailable(t *testing.T) {
+	projection := threadSpatialNearCanvasProjection(91)
+	base := prepareThreadSpatial(projection)
+	if base.layout == nil || base.issue != "" {
+		t.Fatalf("default near-limit layout was not available: %+v", base)
+	}
+	wide := prepareThreadSpatialForViewport(projection, 180)
+	if wide.layout == nil || wide.issue != "" {
+		t.Fatalf("responsive width rejected a graph accepted by the default layout: %+v", wide)
+	}
+	widestSafe := 0
+	for nodeWidth := 18; nodeWidth <= 42; nodeWidth++ {
+		candidate := prepareThreadSpatialWithNodeWidth(projection, nodeWidth)
+		if candidate.issue == "" {
+			widestSafe = nodeWidth
+		}
+	}
+	if widestSafe != 22 {
+		t.Fatalf("fixture widest safe width=%d want independently pinned 22", widestSafe)
+	}
+	if got := wide.layout.effectiveNodeWidth(); got != widestSafe {
+		t.Fatalf("near-limit layout width=%d want widest safe %d", got, widestSafe)
+	}
+	cache := newThreadSpatialCache(projection)
+	first := cache.getForViewport(180)
+	second := cache.getForViewport(180)
+	if first.layout == nil || second.layout != first.layout {
+		t.Fatal("capacity-constrained responsive geometry was rebuilt at the same viewport width")
+	}
+
+	recoverable := prepareThreadSpatialForViewport(threadSpatialNearCanvasProjection(100), 87)
+	if recoverable.layout == nil || recoverable.issue != "" || recoverable.layout.effectiveNodeWidth() != 19 {
+		t.Fatalf("non-cache responsive preparation did not recover at widest safe width 19: %+v", recoverable)
 	}
 }
 
@@ -749,7 +1217,7 @@ func TestThreadSpatialRuntimeMethodsConsumeTheCachedPreparedResult(t *testing.T)
 	}
 	detail := newThreadDetail(projection, "", "", "")
 	preparations := 0
-	detail.spatial.prepare = func(core.ThreadGraphProjection) threadSpatialPrepared {
+	detail.spatial.prepare = func(core.ThreadGraphProjection, int) threadSpatialPrepared {
 		preparations++
 		return threadSpatialPrepared{
 			issue: "cached sentinel", fallbackTaskID: "a", nodeCount: 2, edgeCount: 1,
@@ -757,11 +1225,14 @@ func TestThreadSpatialRuntimeMethodsConsumeTheCachedPreparedResult(t *testing.T)
 	}
 
 	spatial := detail.withDetailView(string(threadDetailSpatial)).(threadDetail)
-	if preparations != 1 || spatial.selection != "a" {
-		t.Fatalf("spatial entry preparations=%d selection=%q, want one cached preparation at a", preparations, spatial.selection)
+	if preparations != 0 || spatial.selection != "" {
+		t.Fatalf("spatial entry preparations=%d selection=%q, want a lazy unselected layout", preparations, spatial.selection)
 	}
 	if rendered := ansi.Strip(spatial.renderDetail(100, 20, &testStyles)); !strings.Contains(rendered, "cached sentinel") {
 		t.Fatalf("render bypassed the injected cached result:\n%s", rendered)
+	}
+	if spatial.detailSelectionKey() != "a" {
+		t.Fatalf("first prepared spatial selection=%q want a", spatial.detailSelectionKey())
 	}
 	moved, ok := spatial.moveDetailSelectionDirection(1, 0)
 	if !ok || moved.(threadDetail).selection != "a" {
@@ -1365,7 +1836,7 @@ func TestThreadSpatialFanCountFallsBackToNodeBorderWhenStubIsFull(t *testing.T) 
 	}
 	layout := threadSpatialLayout{byID: map[string]threadSpatialNode{"a": placement}}
 	canvas := newThreadSpatialCanvas(50, 10)
-	drawThreadSpatialNode(canvas, placement, false)
+	drawThreadSpatialNode(canvas, placement, threadSpatialNodeWidth, false)
 	canvas.cells[4][27] = threadSpatialCell{crossing: true, color: theme.ColorGray}
 	routes := []threadSpatialRoute{
 		{id: 1, edge: core.ThreadGraphEdge{From: "a", To: "b"}, segments: []threadSpatialRouteSegment{{
@@ -1400,7 +1871,7 @@ func TestThreadSpatialClippedFanCountDoesNotMasqueradeAsCongestion(t *testing.T)
 		}}},
 	}
 	canvas := newThreadSpatialViewportCanvas(0, 0, 24, 5)
-	drawThreadSpatialNode(canvas, placement, false)
+	drawThreadSpatialNode(canvas, placement, threadSpatialNodeWidth, false)
 	drawThreadSpatialRouteCounts(canvas, layout, routes, "")
 	fallback := threadSpatialCountFallback(layout, "a", "", 's', '▶')
 	cell, ok := canvas.cellAt(fallback.x, fallback.y)
@@ -1836,7 +2307,7 @@ func TestThreadSpatialBoundaryLabelsBundleAliasesWithoutOverwritingNodes(t *test
 		})
 	}
 	canvas := newThreadSpatialCanvas(110, 20)
-	drawThreadSpatialNode(canvas, layout.byID["a"], true)
+	drawThreadSpatialNode(canvas, layout.byID["a"], threadSpatialNodeWidth, true)
 	before := append([]threadSpatialCell(nil), canvas.cells[4][3:25]...)
 	annotateThreadSpatialRouteBoundaries(canvas, layout, "a", 0, 0, 40, 10)
 	if got := ansi.Strip(canvas.renderLine(4, &testStyles)); !strings.Contains(got, "…▶[M2,M3,M4]") {
@@ -2246,7 +2717,7 @@ func TestThreadSpatialReverseRouteUsesNodeFreeTrack(t *testing.T) {
 	routes := materializeThreadSpatialRoutes(
 		[]threadSpatialRouteSeed{seed}, placements,
 		map[int32]threadSpatialRouteLanes{routeID: {source: 88, target: 27}},
-		map[int32]int{routeID: 7},
+		map[int32]int{routeID: 7}, threadSpatialNodeWidth,
 	)
 	if len(routes) != 1 || routes[0].arrowRune != '◀' || routes[0].arrow != (threadSpatialPoint{x: 25, y: 4}) {
 		t.Fatalf("reverse route did not enter its actual target from the right: %+v", routes)
@@ -2465,14 +2936,42 @@ func TestThreadSpatialGraphIsBoundedDeterministicAndExplicitWhenNarrow(t *testin
 			}
 		}
 		if size.width < threadSpatialMinWidth || size.height < threadSpatialMinHeight {
-			if !strings.Contains(plain, "needs at least") || !strings.Contains(plain, "Esc returns") {
+			if !strings.Contains(plain, "need ≥60×14") || !strings.Contains(plain, "Esc waves") {
 				t.Errorf("narrow fallback was not explanatory:\n%s", plain)
 			}
+			if !strings.Contains(plain, "╭─ spatial graph · give it room") ||
+				!strings.Contains(plain, fmt.Sprintf("now %d×%d", size.width, size.height)) {
+				t.Errorf("narrow fallback was not an intentional, contextual card:\n%s", plain)
+			}
 		} else {
-			for _, want := range []string{"spatial graph", "partial", "unranked", "focus", "about"} {
+			for _, want := range []string{
+				"spatial graph", "partial", "unranked", "viewport", "nodes", "layers", "rows", "focus", "about",
+			} {
 				if !strings.Contains(plain, want) {
 					t.Errorf("%dx%d graph omitted %q:\n%s", size.width, size.height, want, plain)
 				}
+			}
+		}
+	}
+}
+
+func TestThreadSpatialMinimumDimensionsFollowPhysicalLayout(t *testing.T) {
+	projection := core.ThreadGraphProjection{Nodes: []core.ThreadGraphNode{{
+		TaskID: "task-id", Label: "touring-bike-release", Status: domain.StatusNextUp, Role: core.ThreadTaskMember,
+	}}}
+	atMinimum := ansi.Strip(renderThreadSpatial(projection, "", "task-id", 60, 14, &testStyles))
+	if strings.Contains(atMinimum, "give it room") || !strings.Contains(atMinimum, "viewport 1/1 nodes") {
+		t.Fatalf("60x14 did not render the spatial graph at its physical minimum:\n%s", atMinimum)
+	}
+	lines := strings.Split(atMinimum, "\n")
+	if len(lines) != 14 || !strings.HasPrefix(lines[len(lines)-1], "╰") {
+		t.Fatalf("60x14 omitted the complete five-line focus inspector: lines=%d last=%q\n%s", len(lines), lines[len(lines)-1], atMinimum)
+	}
+	for _, size := range []struct{ width, height int }{{59, 14}, {60, 13}, {40, 20}} {
+		plain := ansi.Strip(renderThreadSpatial(projection, "", "task-id", size.width, size.height, &testStyles))
+		for _, want := range []string{"give it room", "need ≥60×14", "Esc waves", "f pick"} {
+			if !strings.Contains(plain, want) {
+				t.Errorf("%dx%d narrow view omitted %q:\n%s", size.width, size.height, want, plain)
 			}
 		}
 	}
@@ -2702,7 +3201,8 @@ func BenchmarkThreadSpatialCachedRenderNearCanvasLimit(b *testing.B) {
 	detail := newThreadDetail(projection, "", "", "")
 	detail.view = threadDetailSpatial
 	detail.selection = "chain-00"
-	layout := detail.spatialPrepared().layout
+	_ = detail.renderDetail(120, 30, &testStyles)
+	layout := detail.spatial.prepared.layout
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
@@ -2768,7 +3268,7 @@ func TestThreadSpatialNarrowFallbackAllocatesNoCanvasBeforeCapacityChecks(t *tes
 	}
 	plain := ansi.Strip(renderThreadSpatial(projection, "", projection.Nodes[0].TaskID,
 		threadSpatialMinWidth-1, threadSpatialMinHeight, &testStyles))
-	if !strings.Contains(plain, "needs at least") || strings.Contains(plain, "capacity guard") {
+	if !strings.Contains(plain, "need ≥60×14") || strings.Contains(plain, "capacity guard") {
 		t.Fatalf("narrow no-canvas path did not remain independent of capacity fallback:\n%s", plain)
 	}
 }

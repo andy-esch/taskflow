@@ -18,13 +18,18 @@ import (
 // projection. These constants describe terminal cells, not repository graph
 // semantics, and can be replaced with another renderer without a data migration.
 const (
-	threadSpatialNodeWidth      = 22
+	threadSpatialNodeWidth      = 22 // stable default for layout-only callers and tests
+	threadSpatialNodeMinWidth   = 18
+	threadSpatialNodeMaxWidth   = 42
 	threadSpatialNodeSlotHeight = 5
 	threadSpatialNodeGapX       = 8
 	threadSpatialNodeGapY       = 1
 	threadSpatialNodeTop        = 2
+	threadSpatialHeaderRows     = 4
+	threadSpatialInspectorRows  = 5
+	threadSpatialFixedRows      = threadSpatialHeaderRows + threadSpatialInspectorRows
 	threadSpatialMinWidth       = 60
-	threadSpatialMinHeight      = 12
+	threadSpatialMinHeight      = threadSpatialFixedRows + threadSpatialNodeSlotHeight
 	threadSpatialMaxNodes       = 512
 	threadSpatialMaxEdges       = 2048
 	threadSpatialMaxCanvasCells = 500_000
@@ -43,6 +48,18 @@ type threadSpatialNode struct {
 type threadSpatialPoint struct {
 	x int
 	y int
+}
+
+type threadSpatialWindow struct {
+	panX   int
+	panY   int
+	width  int
+	height int
+}
+
+type threadSpatialAxisInterval struct {
+	start int
+	end   int
 }
 
 type threadSpatialRouteSegment struct {
@@ -80,8 +97,16 @@ type threadSpatialLayout struct {
 	columnLabels   []string
 	routes         []threadSpatialRoute
 	routeConflicts int
+	nodeWidth      int
 	width          int
 	height         int
+}
+
+func (l threadSpatialLayout) effectiveNodeWidth() int {
+	if l.nodeWidth > 0 {
+		return l.nodeWidth
+	}
+	return threadSpatialNodeWidth
 }
 
 // threadSpatialPrepared is one shared, read-only presentation result for one
@@ -99,31 +124,61 @@ type threadSpatialPrepared struct {
 
 // threadSpatialCache is owned by one loaded threadDetail. Value-copying the
 // detail while changing view or selection retains this pointer; replacing the
-// coherent projection installs a new cache. sync.Once keeps the seam safe if a
-// future shell renders and navigates from different goroutines.
+// coherent projection installs a new cache. The mutex protects both lazy first
+// preparation and replacement when a resize crosses a bounded node-width
+// bucket; each returned layout remains immutable.
 type threadSpatialCache struct {
-	once       sync.Once
-	projection core.ThreadGraphProjection
-	prepare    func(core.ThreadGraphProjection) threadSpatialPrepared
-	prepared   threadSpatialPrepared
+	mu          sync.Mutex
+	projection  core.ThreadGraphProjection
+	prepare     func(core.ThreadGraphProjection, int) threadSpatialPrepared
+	prepared    threadSpatialPrepared
+	nodeWidth   int
+	layerCount  int
+	layersReady bool
+	ready       bool
 }
 
 func newThreadSpatialCache(projection core.ThreadGraphProjection) *threadSpatialCache {
-	return &threadSpatialCache{projection: projection, prepare: prepareThreadSpatial}
+	return &threadSpatialCache{projection: projection, prepare: prepareThreadSpatialWithNodeWidth}
 }
 
 func (c *threadSpatialCache) get() threadSpatialPrepared {
 	if c == nil {
 		return threadSpatialPrepared{}
 	}
-	c.once.Do(func() {
-		prepare := c.prepare
-		if prepare == nil {
-			prepare = prepareThreadSpatial
-		}
-		c.prepared = prepare(c.projection)
-	})
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.ready {
+		c.prepareWidthLocked(threadSpatialNodeWidth)
+	}
 	return c.prepared
+}
+
+func (c *threadSpatialCache) getForViewport(width int) threadSpatialPrepared {
+	if c == nil {
+		return threadSpatialPrepared{}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.layersReady {
+		c.layerCount = threadSpatialLayerCount(c.projection)
+		c.layersReady = true
+	}
+	c.prepareWidthLocked(threadSpatialResponsiveNodeWidth(width, c.layerCount))
+	return c.prepared
+}
+
+func (c *threadSpatialCache) prepareWidthLocked(nodeWidth int) {
+	if c.ready && c.nodeWidth == nodeWidth {
+		return
+	}
+	prepare := c.prepare
+	if prepare == nil {
+		prepare = prepareThreadSpatialWithNodeWidth
+	}
+	c.prepared = prepareThreadSpatialAtResponsiveWidth(c.projection, nodeWidth, prepare)
+	c.nodeWidth = nodeWidth
+	c.ready = true
 }
 
 type threadSpatialLayoutPlan struct {
@@ -134,7 +189,80 @@ type threadSpatialLayoutPlan struct {
 }
 
 func prepareThreadSpatial(projection core.ThreadGraphProjection) threadSpatialPrepared {
-	return prepareThreadSpatialWithPlanner(projection, planThreadSpatialLayout)
+	return prepareThreadSpatialWithNodeWidth(projection, threadSpatialNodeWidth)
+}
+
+func prepareThreadSpatialForViewport(
+	projection core.ThreadGraphProjection,
+	width int,
+) threadSpatialPrepared {
+	nodeWidth := threadSpatialResponsiveNodeWidth(width, threadSpatialLayerCount(projection))
+	return prepareThreadSpatialAtResponsiveWidth(
+		projection, nodeWidth, prepareThreadSpatialWithNodeWidth,
+	)
+}
+
+func prepareThreadSpatialWithNodeWidth(
+	projection core.ThreadGraphProjection,
+	nodeWidth int,
+) threadSpatialPrepared {
+	return prepareThreadSpatialWithPlanner(projection, func(projection core.ThreadGraphProjection) threadSpatialLayoutPlan {
+		return planThreadSpatialLayoutWithNodeWidth(projection, nodeWidth)
+	})
+}
+
+func prepareThreadSpatialAtResponsiveWidth(
+	projection core.ThreadGraphProjection,
+	preferredWidth int,
+	prepare func(core.ThreadGraphProjection, int) threadSpatialPrepared,
+) threadSpatialPrepared {
+	preferredWidth = min(max(preferredWidth, threadSpatialNodeMinWidth), threadSpatialNodeMaxWidth)
+	preferred := prepare(projection, preferredWidth)
+	if !threadSpatialPreparedHasCanvasCapacityIssue(preferred) {
+		return preferred
+	}
+
+	// Width affects only presentation geometry, and layout area grows
+	// monotonically with it. Preserve the existing safety ceiling without
+	// rejecting a graph that fits at a narrower responsive width.
+	low, high := threadSpatialNodeMinWidth, preferredWidth-1
+	var best threadSpatialPrepared
+	found := false
+	for low <= high {
+		candidateWidth := low + (high-low)/2
+		candidate := prepare(projection, candidateWidth)
+		switch {
+		case candidate.issue == "":
+			best, found = candidate, true
+			low = candidateWidth + 1
+		case threadSpatialPreparedHasCanvasCapacityIssue(candidate):
+			high = candidateWidth - 1
+		default:
+			return candidate
+		}
+	}
+	if found {
+		return best
+	}
+	return preferred
+}
+
+func threadSpatialPreparedHasCanvasCapacityIssue(prepared threadSpatialPrepared) bool {
+	return prepared.issue != "" && prepared.layout != nil &&
+		prepared.issue == threadSpatialCanvasCapacityIssue(*prepared.layout)
+}
+
+// threadSpatialResponsiveNodeWidth aims to show up to three complete layout
+// layers while spending spare width on recognizable task identity. The bounded
+// width range also bounds the number of geometry variants a resize can request.
+func threadSpatialResponsiveNodeWidth(viewportWidth, layerCount int) int {
+	if viewportWidth <= 0 || layerCount <= 0 {
+		return threadSpatialNodeWidth
+	}
+	usable := max(viewportWidth-4, threadSpatialNodeMinWidth)
+	visibleLayers := min(layerCount, 3)
+	gapBudget := max(visibleLayers-1, 0) * threadSpatialNodeGapX
+	return min(max((usable-gapBudget)/visibleLayers, threadSpatialNodeMinWidth), threadSpatialNodeMaxWidth)
 }
 
 func prepareThreadSpatialWithPlanner(
@@ -270,6 +398,65 @@ func buildThreadSpatialLayout(projection core.ThreadGraphProjection) threadSpati
 }
 
 func planThreadSpatialLayout(projection core.ThreadGraphProjection) threadSpatialLayoutPlan {
+	return planThreadSpatialLayoutWithNodeWidth(projection, threadSpatialNodeWidth)
+}
+
+func planThreadSpatialLayoutWithNodeWidth(
+	projection core.ThreadGraphProjection,
+	nodeWidth int,
+) threadSpatialLayoutPlan {
+	nodeWidth = min(max(nodeWidth, threadSpatialNodeMinWidth), threadSpatialNodeMaxWidth)
+	byNode, order, allIDs, columns := rankThreadSpatialProjection(projection)
+	labels := labelThreadSpatialColumns(columns, projection, byNode)
+	aliases := threadGraphAliases(projection)
+	seeds := buildThreadSpatialRouteSeeds(columns, projection.Edges)
+	columnX, boundaryLanes, layoutWidth := threadSpatialColumnGeometry(len(columns), seeds, nodeWidth)
+	rowCount := 0
+	for _, ids := range columns {
+		rowCount = max(rowCount, len(ids))
+	}
+	rowY, trackY, layoutHeight := threadSpatialRowGeometry(rowCount, seeds)
+
+	layout := threadSpatialLayout{
+		byID: make(map[string]threadSpatialNode, len(allIDs)), columns: columns, columnX: columnX, columnLabels: labels,
+		nodeWidth: nodeWidth, width: max(layoutWidth, 1), height: max(layoutHeight, 1),
+	}
+	// Every row reserves the expanded focus-card height. Compact nodes occupy
+	// the middle three rows, so moving focus can reveal detail without shifting
+	// graph geometry or colliding with the node below it. Inter-row and
+	// inter-column gaps expand only when distinct edge lanes require the space.
+	for column, ids := range columns {
+		for row, taskID := range ids {
+			node := byNode[taskID]
+			placement := threadSpatialNode{
+				node: node, alias: aliases[taskID], column: column, row: row,
+				x: columnX[column], y: rowY[row],
+				order: order[taskID],
+			}
+			layout.nodes = append(layout.nodes, placement)
+			layout.byID[taskID] = placement
+		}
+	}
+	return threadSpatialLayoutPlan{
+		layout: layout, seeds: seeds, boundaryLanes: boundaryLanes, trackY: trackY,
+	}
+}
+
+// threadSpatialLayerCount performs only the bounded identity/ranking work needed
+// to choose a responsive width. It deliberately avoids lane geometry, route
+// materialization, and conflict analysis, so a cold viewport preparation does
+// not build and immediately discard a fixed-width layout.
+func threadSpatialLayerCount(projection core.ThreadGraphProjection) int {
+	if preflightThreadSpatialInput(projection).issue != "" {
+		return 0
+	}
+	_, _, _, columns := rankThreadSpatialProjection(projection)
+	return len(columns)
+}
+
+func rankThreadSpatialProjection(
+	projection core.ThreadGraphProjection,
+) (map[string]core.ThreadGraphNode, map[string]int, []string, [][]string) {
 	byNode := make(map[string]core.ThreadGraphNode, len(projection.Nodes))
 	order := make(map[string]int, len(projection.Nodes))
 	allIDs := make([]string, 0, len(projection.Nodes))
@@ -303,44 +490,14 @@ func planThreadSpatialLayout(projection core.ThreadGraphProjection) threadSpatia
 
 	columns := rankThreadSpatialColumns(allIDs, projection.Edges, order)
 	columns = placeThreadSpatialExternalGates(columns, projection.Edges, byNode, order)
-	labels := labelThreadSpatialColumns(columns, projection, byNode)
-	aliases := threadGraphAliases(projection)
-	seeds := buildThreadSpatialRouteSeeds(columns, projection.Edges)
-	columnX, boundaryLanes, layoutWidth := threadSpatialColumnGeometry(len(columns), seeds)
-	rowCount := 0
-	for _, ids := range columns {
-		rowCount = max(rowCount, len(ids))
-	}
-	rowY, trackY, layoutHeight := threadSpatialRowGeometry(rowCount, seeds)
-
-	layout := threadSpatialLayout{
-		byID: make(map[string]threadSpatialNode, len(allIDs)), columns: columns, columnX: columnX, columnLabels: labels,
-		width: max(layoutWidth, 1), height: max(layoutHeight, 1),
-	}
-	// Every row reserves the expanded focus-card height. Compact nodes occupy
-	// the middle three rows, so moving focus can reveal detail without shifting
-	// graph geometry or colliding with the node below it. Inter-row and
-	// inter-column gaps expand only when distinct edge lanes require the space.
-	for column, ids := range columns {
-		for row, taskID := range ids {
-			node := byNode[taskID]
-			placement := threadSpatialNode{
-				node: node, alias: aliases[taskID], column: column, row: row,
-				x: columnX[column], y: rowY[row],
-				order: order[taskID],
-			}
-			layout.nodes = append(layout.nodes, placement)
-			layout.byID[taskID] = placement
-		}
-	}
-	return threadSpatialLayoutPlan{
-		layout: layout, seeds: seeds, boundaryLanes: boundaryLanes, trackY: trackY,
-	}
+	return byNode, order, allIDs, columns
 }
 
 func materializeThreadSpatialLayout(plan threadSpatialLayoutPlan) threadSpatialLayout {
 	layout := plan.layout
-	layout.routes = materializeThreadSpatialRoutes(plan.seeds, layout.byID, plan.boundaryLanes, plan.trackY)
+	layout.routes = materializeThreadSpatialRoutes(
+		plan.seeds, layout.byID, plan.boundaryLanes, plan.trackY, layout.effectiveNodeWidth(),
+	)
 	layout.routeConflicts = threadSpatialLayoutRouteConflictCount(layout.routes)
 	return layout
 }
@@ -382,6 +539,7 @@ func (seed threadSpatialRouteSeed) targetBoundary() int {
 func threadSpatialColumnGeometry(
 	columnCount int,
 	seeds []threadSpatialRouteSeed,
+	nodeWidth int,
 ) ([]int, map[int32]threadSpatialRouteLanes, int) {
 	if columnCount == 0 {
 		return nil, nil, 1
@@ -427,12 +585,12 @@ func threadSpatialColumnGeometry(
 	columnX := make([]int, columnCount)
 	columnX[0] = 3
 	for column := 1; column < columnCount; column++ {
-		columnX[column] = columnX[column-1] + threadSpatialNodeWidth + gaps[column-1]
+		columnX[column] = columnX[column-1] + nodeWidth + gaps[column-1]
 	}
 	lanes := make(map[int32]threadSpatialRouteLanes, len(seeds))
 	for boundary, laneUses := range uses {
 		for index, use := range laneUses {
-			lane := columnX[boundary] + threadSpatialNodeWidth + 3 + index
+			lane := columnX[boundary] + nodeWidth + 3 + index
 			assigned := lanes[use.routeID]
 			if use.target {
 				assigned.target = lane
@@ -443,7 +601,7 @@ func threadSpatialColumnGeometry(
 		}
 	}
 	last := columnCount - 1
-	width := columnX[last] + threadSpatialNodeWidth + gaps[last] + 1
+	width := columnX[last] + nodeWidth + gaps[last] + 1
 	return columnX, lanes, width
 }
 
@@ -485,6 +643,7 @@ func materializeThreadSpatialRoutes(
 	placements map[string]threadSpatialNode,
 	lanes map[int32]threadSpatialRouteLanes,
 	trackYs map[int32]int,
+	nodeWidth int,
 ) []threadSpatialRoute {
 	routes := make([]threadSpatialRoute, 0, len(seeds))
 	for _, seed := range seeds {
@@ -493,9 +652,9 @@ func materializeThreadSpatialRoutes(
 		if !fromOK || !toOK {
 			continue
 		}
-		fromPoint := threadSpatialPoint{x: from.x + threadSpatialNodeWidth, y: from.y + threadSpatialNodeSlotHeight/2}
+		fromPoint := threadSpatialPoint{x: from.x + nodeWidth, y: from.y + threadSpatialNodeSlotHeight/2}
 		toLeft := threadSpatialPoint{x: to.x - 1, y: to.y + threadSpatialNodeSlotHeight/2}
-		toRight := threadSpatialPoint{x: to.x + threadSpatialNodeWidth, y: to.y + threadSpatialNodeSlotHeight/2}
+		toRight := threadSpatialPoint{x: to.x + nodeWidth, y: to.y + threadSpatialNodeSlotHeight/2}
 		var points []threadSpatialPoint
 		arrow, arrowRune := toLeft, '▶'
 		switch {
@@ -1622,8 +1781,214 @@ func (c *threadSpatialCanvas) renderLine(row int, s *styles) string {
 
 func renderThreadSpatial(projection core.ThreadGraphProjection, pathIssue, selectedTaskID string, width, height int, s *styles) string {
 	return renderThreadSpatialPrepared(
-		projection, prepareThreadSpatial(projection), pathIssue, selectedTaskID, width, height, s,
+		projection, prepareThreadSpatialForViewport(projection, width), pathIssue, selectedTaskID, width, height, s,
 	)
+}
+
+func threadSpatialWindowForSelection(
+	layout threadSpatialLayout,
+	selectedTaskID string,
+	width, height int,
+) threadSpatialWindow {
+	window := threadSpatialWindow{width: max(width, 1), height: max(height, 1)}
+	selected, ok := spatialPlacement(layout, selectedTaskID)
+	if !ok {
+		return window
+	}
+	nodeWidth := layout.effectiveNodeWidth()
+	xIntervals := make([]threadSpatialAxisInterval, 0, len(layout.columnX))
+	for _, x := range layout.columnX {
+		xIntervals = append(xIntervals, threadSpatialAxisInterval{start: x, end: x + nodeWidth})
+	}
+	window.panX = threadSpatialBestAxisPan(
+		xIntervals,
+		threadSpatialAxisInterval{start: selected.x, end: selected.x + nodeWidth},
+		window.width,
+		layout.width,
+	)
+
+	yByStart := make(map[int]bool)
+	for _, placement := range layout.nodes {
+		yByStart[placement.y] = true
+	}
+	yStarts := make([]int, 0, len(yByStart))
+	for y := range yByStart {
+		yStarts = append(yStarts, y)
+	}
+	sort.Ints(yStarts)
+	yIntervals := make([]threadSpatialAxisInterval, 0, len(yStarts))
+	for _, y := range yStarts {
+		yIntervals = append(yIntervals, threadSpatialAxisInterval{
+			start: y, end: y + threadSpatialNodeSlotHeight,
+		})
+	}
+	window.panY = threadSpatialBestAxisPan(
+		yIntervals,
+		threadSpatialAxisInterval{start: selected.y, end: selected.y + threadSpatialNodeSlotHeight},
+		window.height,
+		layout.height,
+	)
+	return window
+}
+
+// threadSpatialBestAxisPan chooses a unit-aligned window that keeps the
+// selection whole and maximizes the number of complete columns or rows. The
+// candidate set is bounded by unit edges; binary-search scoring keeps the work
+// O(n log n) rather than scanning every cell of a potentially large layout.
+func threadSpatialBestAxisPan(
+	intervals []threadSpatialAxisInterval,
+	selected threadSpatialAxisInterval,
+	viewportSize, layoutSize int,
+) int {
+	viewportSize = max(viewportSize, 1)
+	maxPan := max(layoutSize-viewportSize, 0)
+	centered := selected.start - max((viewportSize-(selected.end-selected.start))/2, 0)
+	centered = min(max(centered, 0), maxPan)
+	if len(intervals) == 0 || maxPan == 0 {
+		return centered
+	}
+
+	ordered := append([]threadSpatialAxisInterval(nil), intervals...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].start != ordered[j].start {
+			return ordered[i].start < ordered[j].start
+		}
+		return ordered[i].end < ordered[j].end
+	})
+	candidates := make([]int, 0, len(ordered)*2+3)
+	candidates = append(candidates, centered, 0, maxPan)
+	for _, interval := range ordered {
+		candidates = append(candidates,
+			min(max(interval.start, 0), maxPan),
+			min(max(interval.end-viewportSize, 0), maxPan),
+		)
+	}
+	sort.Ints(candidates)
+
+	bestPan, bestCount, bestDistance := centered, -1, -1
+	previous, havePrevious := 0, false
+	for _, pan := range candidates {
+		if havePrevious && pan == previous {
+			continue
+		}
+		previous, havePrevious = pan, true
+		if selected.start < pan || selected.end > pan+viewportSize {
+			continue
+		}
+		first := sort.Search(len(ordered), func(i int) bool { return ordered[i].start >= pan })
+		last := sort.Search(len(ordered), func(i int) bool { return ordered[i].end > pan+viewportSize })
+		count := max(last-first, 0)
+		distance := abs(pan - centered)
+		if count > bestCount || count == bestCount &&
+			(bestDistance < 0 || distance < bestDistance || distance == bestDistance && pan < bestPan) {
+			bestPan, bestCount, bestDistance = pan, count, distance
+		}
+	}
+	return bestPan
+}
+
+func threadSpatialNodeFullyVisible(
+	layout threadSpatialLayout,
+	placement threadSpatialNode,
+	panX, panY, width, height int,
+) bool {
+	nodeWidth := layout.effectiveNodeWidth()
+	return placement.x >= panX && placement.x+nodeWidth <= panX+width &&
+		placement.y >= panY && placement.y+threadSpatialNodeSlotHeight <= panY+height
+}
+
+func threadSpatialWindowSummary(
+	layout threadSpatialLayout,
+	panX, panY, width, height int,
+) string {
+	firstColumn, lastColumn := len(layout.columns), -1
+	firstRow, lastRow := len(layout.nodes), -1
+	visibleNodes, totalRows := 0, 0
+	for _, placement := range layout.nodes {
+		totalRows = max(totalRows, placement.row+1)
+		if !threadSpatialNodeFullyVisible(layout, placement, panX, panY, width, height) {
+			continue
+		}
+		visibleNodes++
+		firstColumn = min(firstColumn, placement.column)
+		lastColumn = max(lastColumn, placement.column)
+		firstRow = min(firstRow, placement.row)
+		lastRow = max(lastRow, placement.row)
+	}
+	if lastColumn < 0 {
+		return fmt.Sprintf("viewport 0/%d nodes · no complete layer visible", len(layout.nodes))
+	}
+	left, right, above, below := "", "", "", ""
+	if firstColumn > 0 {
+		left = "◂ "
+	}
+	if lastColumn+1 < len(layout.columns) {
+		right = " ▸"
+	}
+	if firstRow > 0 {
+		above = "▲ "
+	}
+	if lastRow+1 < totalRows {
+		below = " ▼"
+	}
+	visibleColumns := strconv.Itoa(firstColumn + 1)
+	if lastColumn != firstColumn {
+		visibleColumns += "–" + strconv.Itoa(lastColumn+1)
+	}
+	visibleRows := strconv.Itoa(firstRow + 1)
+	if lastRow != firstRow {
+		visibleRows += "–" + strconv.Itoa(lastRow+1)
+	}
+	return fmt.Sprintf("viewport %d/%d nodes · %slayers %s/%d%s · %srows %s/%d%s",
+		visibleNodes, len(layout.nodes), left, visibleColumns, len(layout.columns), right,
+		above, visibleRows, totalRows, below)
+}
+
+func annotateThreadSpatialWindowGutters(
+	canvas *threadSpatialCanvas,
+	layout threadSpatialLayout,
+	panX, panY, width, height int,
+) {
+	if width <= 0 || height <= 0 {
+		return
+	}
+	nodeWidth := layout.effectiveNodeWidth()
+	left, right, above, below := false, false, false, false
+	for _, placement := range layout.nodes {
+		left = left || placement.x < panX
+		right = right || placement.x+nodeWidth > panX+width
+		above = above || placement.y < panY
+		below = below || placement.y+threadSpatialNodeSlotHeight > panY+height
+	}
+	if left {
+		putThreadSpatialWindowGutter(canvas, panX, panY, 0, 1, height, "◂")
+	}
+	if right {
+		putThreadSpatialWindowGutter(canvas, panX+width-1, panY, 0, 1, height, "▸")
+	}
+	if above {
+		putThreadSpatialWindowGutter(canvas, panX, panY, 1, 0, width, "▲")
+	}
+	if below {
+		putThreadSpatialWindowGutter(canvas, panX, panY+height-1, 1, 0, width, "▼")
+	}
+}
+
+func putThreadSpatialWindowGutter(
+	canvas *threadSpatialCanvas,
+	x, y, dx, dy, attempts int,
+	marker string,
+) {
+	for attempt := 0; attempt < attempts; attempt++ {
+		candidateX, candidateY := x+dx*attempt, y+dy*attempt
+		cell, ok := canvas.cellAt(candidateX, candidateY)
+		if !ok || cell.text != "" || cell.connector != 0 || cell.continuation ||
+			cell.crossing || cell.overlap || cell.conflict || cell.routeCount {
+			continue
+		}
+		canvas.putText(candidateX, candidateY, marker, theme.ColorGray, true)
+		return
+	}
 }
 
 func renderThreadSpatialPrepared(
@@ -1656,19 +2021,17 @@ func renderThreadSpatialPrepared(
 	}
 	layout := *prepared.layout
 
-	fixedRows := 8 // header + two legend rows + five-row focus card
+	fixedRows := threadSpatialFixedRows
 	canvasHeight := max(1, height-fixedRows)
 	selected, selectedOK := spatialPlacement(layout, selectedTaskID)
-	panX, panY := 0, 0
-	if selectedOK {
-		panX = min(max(selected.x+threadSpatialNodeWidth/2-width/2, 0), max(layout.width-width, 0))
-		panY = min(max(selected.y+threadSpatialNodeSlotHeight/2-canvasHeight/2, 0), max(layout.height-canvasHeight, 0))
-	}
+	window := threadSpatialWindowForSelection(layout, selectedTaskID, width, canvasHeight)
+	panX, panY := window.panX, window.panY
 	canvas := renderThreadSpatialCanvasWindow(
 		projection, layout, selectedTaskID,
 		panX, panY, width, canvasHeight,
 	)
 	annotateThreadSpatialRouteBoundaries(canvas, layout, selectedTaskID, panX, panY, width, canvasHeight)
+	annotateThreadSpatialWindowGutters(canvas, layout, panX, panY, width, canvasHeight)
 
 	topology := "partial"
 	if projection.TopologyComplete {
@@ -1682,7 +2045,8 @@ func renderThreadSpatialPrepared(
 	if selectedOK && selected.column < len(layout.columnLabels) {
 		focus = layout.columnLabels[selected.column]
 	}
-	header := fmt.Sprintf("spatial graph · %s · focus %s · prerequisite ─▶ dependent · %s", topology, focus, health)
+	header := fmt.Sprintf("spatial graph · %s · focus %s · prerequisite ─▶ dependent · %s",
+		topology, focus, health)
 	if routeIssue := threadSpatialRouteConflictCountSummary(layout.routeConflicts); routeIssue != "" {
 		header += " · " + routeIssue
 	}
@@ -1691,6 +2055,7 @@ func renderThreadSpatialPrepared(
 	}
 	lines := []string{
 		truncate(header, width),
+		truncate(threadSpatialWindowSummary(layout, panX, panY, width, canvasHeight), width),
 		truncate(threadSpatialStatusLegend(s), width),
 		truncate(threadSpatialRoleLegend(s), width),
 	}
@@ -2005,9 +2370,13 @@ func drawThreadSpatialCanvasWindow(
 	selected string,
 	panX, panY, width, height int,
 ) {
+	nodeWidth := layout.effectiveNodeWidth()
 	for column, label := range layout.columnLabels {
 		x := layout.columnX[column]
-		canvas.putText(x, 0, truncate(label, threadSpatialNodeWidth), theme.ColorGray, false)
+		if x < panX || x+nodeWidth > panX+width {
+			continue
+		}
+		canvas.putText(x, 0, truncate(label, nodeWidth), theme.ColorGray, false)
 	}
 	routes := threadSpatialRoutesForWindow(layout, selected, panX, panY, width, height)
 	for _, route := range routes {
@@ -2017,7 +2386,10 @@ func drawThreadSpatialCanvasWindow(
 		drawThreadSpatialRouteAdornments(canvas, route, route.edge.From == selected || route.edge.To == selected)
 	}
 	for _, node := range layout.nodes {
-		drawThreadSpatialNode(canvas, node, node.node.TaskID == selected)
+		if !threadSpatialNodeFullyVisible(layout, node, panX, panY, width, height) {
+			continue
+		}
+		drawThreadSpatialNode(canvas, node, nodeWidth, node.node.TaskID == selected)
 	}
 	// Counts normally replace one cell of a shared endpoint stub. Drawing them
 	// after nodes also permits the explicit node-border fallback used when every
@@ -2030,10 +2402,11 @@ func threadSpatialRoutesForWindow(
 	selected string,
 	panX, panY, width, height int,
 ) []threadSpatialRoute {
+	nodeWidth := layout.effectiveNodeWidth()
 	visibleNode := func(taskID string) bool {
 		node, ok := layout.byID[taskID]
-		return ok && node.x < panX+width && node.x+threadSpatialNodeWidth > panX &&
-			node.y < panY+height && node.y+threadSpatialNodeSlotHeight > panY
+		return ok && node.x >= panX && node.x+nodeWidth <= panX+width &&
+			node.y >= panY && node.y+threadSpatialNodeSlotHeight <= panY+height
 	}
 	// Grow with the evidence that actually reaches this viewport. Reserving the
 	// full layout edge count here would retain an O(E) per-frame allocation even
@@ -2155,18 +2528,24 @@ func threadSpatialCountFallback(
 	if taskID == selected {
 		topY = placement.y
 	}
-	x := placement.x + threadSpatialNodeWidth/2
+	nodeWidth := layout.effectiveNodeWidth()
+	x := placement.x + nodeWidth/2
 	if kind == 't' {
 		if side == '▶' {
 			x = placement.x + 2
 		} else {
-			x = placement.x + threadSpatialNodeWidth - 3
+			x = placement.x + nodeWidth - 3
 		}
 	}
 	return threadSpatialPoint{x: x, y: topY}
 }
 
-func drawThreadSpatialNode(canvas *threadSpatialCanvas, placement threadSpatialNode, selected bool) {
+func drawThreadSpatialNode(
+	canvas *threadSpatialCanvas,
+	placement threadSpatialNode,
+	nodeWidth int,
+	selected bool,
+) {
 	node := placement.node
 	color := theme.Status(node.Status).Color
 	if node.State.Role == core.RoleUnknown || node.State.Gate == core.GateBroken {
@@ -2180,8 +2559,8 @@ func drawThreadSpatialNode(canvas *threadSpatialCanvas, placement threadSpatialN
 		bottomLeft, bottomHorizontal, bottomRight = "╚", "═", "╝"
 		vertical = "║"
 	}
-	top := left + strings.Repeat(horizontal, threadSpatialNodeWidth-2) + right
-	bottom := bottomLeft + strings.Repeat(bottomHorizontal, threadSpatialNodeWidth-2) + bottomRight
+	top := left + strings.Repeat(horizontal, nodeWidth-2) + right
+	bottom := bottomLeft + strings.Repeat(bottomHorizontal, nodeWidth-2) + bottomRight
 	label := terminalText(node.Label)
 	if label == "" {
 		label = terminalText(node.TaskID)
@@ -2190,10 +2569,18 @@ func drawThreadSpatialNode(canvas *threadSpatialCanvas, placement threadSpatialN
 	if node.State.Role == core.RoleUnknown || node.State.Gate == core.GateBroken {
 		marker = theme.MarkerUnreadable.Glyph
 	}
-	insideWidth := threadSpatialNodeWidth - 4
+	insideWidth := nodeWidth - 4
+	alias := ""
+	if placement.alias != "" {
+		alias = "[" + placement.alias + "] "
+	}
+	identityPrefix := alias + marker + " "
+	identity := truncate(identityPrefix, insideWidth)
+	if labelWidth := insideWidth - ansi.StringWidth(identityPrefix); labelWidth > 0 {
+		identity = identityPrefix + truncateMiddle(label, labelWidth)
+	}
 	if !selected {
-		inside := truncate(marker+" "+label, insideWidth)
-		middle := vertical + " " + padRight(inside, insideWidth) + " " + vertical
+		middle := vertical + " " + padRight(identity, insideWidth) + " " + vertical
 		compactY := placement.y + 1
 		canvas.putText(placement.x, compactY, top, color, false)
 		canvas.putText(placement.x, compactY+1, middle, color, false)
@@ -2212,7 +2599,7 @@ func drawThreadSpatialNode(canvas *threadSpatialCanvas, placement threadSpatialN
 		statusLabel = "unknown"
 	}
 	canvas.putText(placement.x, placement.y, top, color, true)
-	canvas.putText(placement.x, placement.y+1, line(marker+" "+label), color, true)
+	canvas.putText(placement.x, placement.y+1, line(identity), color, true)
 	canvas.putText(placement.x, placement.y+2, line("["+placement.alias+"] "+statusLabel), color, false)
 	canvas.putText(placement.x, placement.y+3, line(string(node.State.Role)+" / "+string(node.State.Gate)), color, false)
 	canvas.putText(placement.x, placement.y+4, bottom, color, true)
@@ -2236,7 +2623,7 @@ func threadSpatialStatusLegend(s *styles) string {
 }
 
 func threadSpatialRoleLegend(s *styles) string {
-	return s.dim("roles") + "  ┌ member  ╔ gate  " +
+	return s.dim("roles") + "  ┌ member [M#]  ╔ gate [G#]  " +
 		s.accent("━ focus route") + "  " +
 		s.fg(theme.ColorYellow, "▶ direction  2 fan")
 }
@@ -2371,14 +2758,11 @@ func renderThreadSpatialNarrow(
 	if height <= 0 {
 		height = 1
 	}
-	lines := []string{
-		truncate("spatial graph · prerequisite ─▶ dependent", width),
-		truncate(threadSpatialStatusLegend(s), width),
-		"",
-		truncate(fmt.Sprintf("This prototype needs at least %d×%d terminal cells.", threadSpatialMinWidth, threadSpatialMinHeight), width),
-		truncate("Resize to reveal the graph; Esc returns to the wave reader.", width),
-		"",
-	}
+	lines := threadSpatialInspectorBox("spatial graph · give it room", []string{
+		fmt.Sprintf("need ≥%d×%d · now %d×%d", threadSpatialMinWidth, threadSpatialMinHeight, width, height),
+		"Esc waves · f pick · resize",
+		"Give the map room to breathe; the routes will follow.",
+	}, width, s)
 	lines = append(lines, threadSpatialInspectorPrepared(projection, prepared, selected, width, s)...)
 	return strings.Join(lines[:min(len(lines), height)], "\n")
 }
