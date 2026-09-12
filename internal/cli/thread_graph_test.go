@@ -17,6 +17,9 @@ func TestThreadGraphFormatsAndPlanUseSharedProjection(t *testing.T) {
 		"6fjangd7kvh2",
 		"external-gate",
 		"--> ",
+		`subgraph legend["Legend"]`,
+		"Thread member<br/>blue &#183; solid border",
+		"External prerequisite<br/>not a Thread member &#183; amber &#183; dashed border",
 	} {
 		if !strings.Contains(mermaid, want) {
 			t.Errorf("Mermaid missing %q:\n%s", want, mermaid)
@@ -24,7 +27,11 @@ func TestThreadGraphFormatsAndPlanUseSharedProjection(t *testing.T) {
 	}
 
 	dot := runRoot(t, "-C", fixtureRepo, "thread", "graph", "fixture-thread", "--format", "dot")
-	for _, want := range []string{"digraph thread {", `role="member"`, `role="external-gate"`, " -> "} {
+	for _, want := range []string{
+		"digraph thread {", `role="member"`, `role="external-gate"`, " -> ",
+		"subgraph cluster_legend", `Thread member\nblue fill, solid border`,
+		`External prerequisite\nnot a Thread member\namber fill, dashed border`,
+	} {
 		if !strings.Contains(dot, want) {
 			t.Errorf("DOT missing %q:\n%s", want, dot)
 		}

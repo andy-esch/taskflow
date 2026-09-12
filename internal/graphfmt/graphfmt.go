@@ -40,6 +40,13 @@ func Mermaid(projection core.ThreadGraphProjection) (string, error) {
 		}
 		fmt.Fprintf(&out, "  class n%d %s\n", index, className)
 	}
+	out.WriteString("  subgraph legend[\"Legend\"]\n")
+	out.WriteString("    direction LR\n")
+	out.WriteString("    legendMember[\"Thread member<br/>blue &#183; solid border\"]\n")
+	out.WriteString("    legendExternalGate[\"External prerequisite<br/>not a Thread member &#183; amber &#183; dashed border\"]\n")
+	out.WriteString("  end\n")
+	out.WriteString("  class legendMember member\n")
+	out.WriteString("  class legendExternalGate externalGate\n")
 	out.WriteString("  classDef member fill:#e8f1ff,stroke:#3267a8,stroke-width:1px\n")
 	out.WriteString("  classDef externalGate fill:#fff4d6,stroke:#9a6700,stroke-width:1px,stroke-dasharray:5 3\n")
 	return out.String(), nil
@@ -60,16 +67,22 @@ func DOT(projection core.ThreadGraphProjection) (string, error) {
 	out.WriteString("  rankdir=TB;\n")
 	out.WriteString("  node [shape=box];\n")
 	for index, node := range projection.Nodes {
-		style := "rounded"
+		style, color, fillColor := "rounded,filled", "#3267a8", "#e8f1ff"
 		if node.Role == core.ThreadTaskExternalGate {
-			style = "rounded,dashed"
+			style, color, fillColor = "rounded,dashed,filled", "#9a6700", "#fff4d6"
 		}
-		fmt.Fprintf(&out, "  n%d [label=%s, task_id=%s, role=%s, style=%s];\n",
-			index, quoteDOT(prepared.labels[index]), quoteDOT(node.TaskID), quoteDOT(string(node.Role)), quoteDOT(style))
+		fmt.Fprintf(&out, "  n%d [label=%s, task_id=%s, role=%s, style=%s, color=%s, fillcolor=%s];\n",
+			index, quoteDOT(prepared.labels[index]), quoteDOT(node.TaskID), quoteDOT(string(node.Role)),
+			quoteDOT(style), quoteDOT(color), quoteDOT(fillColor))
 	}
 	for _, edge := range projection.Edges {
 		fmt.Fprintf(&out, "  %s -> %s;\n", prepared.nodeNames[edge.From], prepared.nodeNames[edge.To])
 	}
+	out.WriteString("  subgraph cluster_legend {\n")
+	out.WriteString("    label=\"Legend\";\n")
+	out.WriteString("    legend_member [label=\"Thread member\\nblue fill, solid border\", role=\"legend\", style=\"rounded,filled\", color=\"#3267a8\", fillcolor=\"#e8f1ff\"];\n")
+	out.WriteString("    legend_external_gate [label=\"External prerequisite\\nnot a Thread member\\namber fill, dashed border\", role=\"legend\", style=\"rounded,dashed,filled\", color=\"#9a6700\", fillcolor=\"#fff4d6\"];\n")
+	out.WriteString("  }\n")
 	out.WriteString("}\n")
 	return out.String(), nil
 }
