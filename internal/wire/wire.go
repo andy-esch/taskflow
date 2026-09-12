@@ -261,7 +261,10 @@ import (
 // 1.63: successful and dry-run `task rename` output adds the same planned/applied
 // document and link counts, identity, and durability state used by failure receipts.
 // The existing task, dry_run, and workspace fields remain available.
-const SchemaVersion = "1.63"
+// 1.64: Thread graph and plan nodes may carry `title`, the first non-fenced H1
+// derived from a Markdown task body. The existing stable `label` remains the
+// slug and portable adapters may omit title when body-derived data is unavailable.
+const SchemaVersion = "1.64"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

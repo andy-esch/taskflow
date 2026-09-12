@@ -45,3 +45,13 @@ func TestToThreadsEnvelopeRetainsPathlessIdentityWithoutParsingLocation(t *testi
 		t.Fatalf("opaque Thread source revision leaked through wire JSON: %s", encoded)
 	}
 }
+
+func TestToThreadGraphProjectionJSONAddsTitleWithoutReplacingLabel(t *testing.T) {
+	payload := ToThreadGraphProjectionJSON(core.ThreadGraphProjection{Nodes: []core.ThreadGraphNode{{
+		TaskID: "6g0000000001", Label: "canonical-slug", Title: "Canonical TUI Title",
+	}}})
+	if len(payload.Nodes) != 1 || payload.Nodes[0].Label != "canonical-slug" ||
+		payload.Nodes[0].Title != "Canonical TUI Title" {
+		t.Fatalf("node = %+v", payload.Nodes)
+	}
+}

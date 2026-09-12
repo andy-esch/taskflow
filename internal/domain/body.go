@@ -102,8 +102,9 @@ type acCheckbox struct {
 // the scanners skip fenced lines — the same "don't treat code as structure"
 // discipline scanLinks uses for links.
 var (
-	bodyHeadingRe  = regexp.MustCompile(`^(#{1,6})[ \t]+(.*\S)[ \t]*$`)
-	bodyCheckboxRe = regexp.MustCompile(`^[ \t]*[-*+][ \t]+\[([ xX])\]`)
+	bodyHeadingRe    = regexp.MustCompile(`^(#{1,6})[ \t]+(.*\S)[ \t]*$`)
+	bodyATXClosingRe = regexp.MustCompile(`(^|[ \t]+)#+[ \t]*$`)
+	bodyCheckboxRe   = regexp.MustCompile(`^[ \t]*[-*+][ \t]+\[([ xX])\]`)
 )
 
 // fenceAt reports whether line is a fenced-code delimiter: a run of >=3 backticks
@@ -183,6 +184,27 @@ func UnterminatedFence(body string) (line int, marker string, ok bool) {
 		return openedAt, openedWith, true
 	}
 	return 0, "", false
+}
+
+// FirstH1 returns the first non-fenced ATX level-one heading. Markdown-first
+// adapters use it as optional presentation data; a missing heading is not a
+// structural read failure because stable identity remains filename/frontmatter
+// owned.
+func FirstH1(body string) (title string, ok bool) {
+	var fence fenceScanner
+	for _, line := range strings.Split(normalizeNewlines(body), "\n") {
+		if fence.inCode(line) {
+			continue
+		}
+		match := bodyHeadingRe.FindStringSubmatch(line)
+		if match != nil && len(match[1]) == 1 {
+			title := strings.TrimSpace(bodyATXClosingRe.ReplaceAllString(match[2], ""))
+			if title != "" {
+				return title, true
+			}
+		}
+	}
+	return "", false
 }
 
 // Section returns the markdown block for the FIRST heading whose title contains

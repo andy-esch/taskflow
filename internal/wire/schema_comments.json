@@ -77,6 +77,7 @@
   "github.com/andy-esch/taskflow/internal/domain.Task.SourceVersion": "SourceVersion is the store-internal hash of the exact bytes that produced this\nrecord. TaskGraph retains it for whole-snapshot CAS but clears it from Task()\nprojections, so planners never receive persistence tokens.",
   "github.com/andy-esch/taskflow/internal/domain.Task.StartedAt": "stamped when a task enters in-progress (incl. `new --start`)",
   "github.com/andy-esch/taskflow/internal/domain.Task.StatusFellBack": "StatusFellBack is set by the store when the frontmatter status is missing or\nunrecognized — under the flat layout (ADR-0003 §4) there is no directory to fall\nback to, so Status keeps its raw value; the task still lists and lint flags it\n(FrontmatterStatusIssues).",
+  "github.com/andy-esch/taskflow/internal/domain.Task.Title": "Title is the first non-fenced H1 in the Markdown body. It is derived by\nadapters rather than duplicated in frontmatter; callers must fall back to\nSlug when an adapter cannot provide body-derived presentation data.",
   "github.com/andy-esch/taskflow/internal/domain.Thread": "Thread is a named initiative view over the repository-global task DAG.",
   "github.com/andy-esch/taskflow/internal/domain.ThreadStatus": "ThreadStatus is the persisted initiative lifecycle.",
   "github.com/andy-esch/taskflow/internal/domain.Transition": "Transition is one lifecycle action: the verb a user names (from the CLI or the TUI action menu) mapped to the destination state it moves a document to.",

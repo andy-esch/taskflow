@@ -7,11 +7,13 @@ import (
 )
 
 // ThreadGraphNode is one raw, adapter-neutral task vertex in a Thread graph.
-// Label and Description are deliberately unescaped; output adapters own the
-// syntax and safety rules of their target format.
+// Title, Label, and Description are deliberately unescaped; output adapters
+// own the syntax and safety rules of their target format. Title is optional
+// body-derived presentation data while Label retains the slug fallback.
 type ThreadGraphNode struct {
 	TaskID      string
 	Label       string
+	Title       string
 	Description string
 	Status      domain.Status
 	Role        ThreadTaskRole
@@ -164,7 +166,7 @@ func threadGraphNode(item ThreadTaskView) ThreadGraphNode {
 		label = item.State.TaskID
 	}
 	return ThreadGraphNode{
-		TaskID: item.State.TaskID, Label: label, Description: item.Task.Description,
+		TaskID: item.State.TaskID, Label: label, Title: item.Task.Title, Description: item.Task.Description,
 		Status: item.Task.Status, Role: item.Role, State: item.State,
 	}
 }

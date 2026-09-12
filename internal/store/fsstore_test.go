@@ -51,7 +51,8 @@ func TestFS_ListTasks(t *testing.T) {
 	for _, task := range tasks {
 		seen[string(task.Status)] = true
 		if task.Slug == "alpha" {
-			if task.Epic != "01-x" || task.Tier != 2 || task.Priority != "high" || task.Description != "do alpha" {
+			if task.Title != "Alpha" || task.Epic != "01-x" || task.Tier != 2 ||
+				task.Priority != "high" || task.Description != "do alpha" {
 				t.Errorf("alpha parsed wrong: %+v", task)
 			}
 			if len(task.Tags) != 2 {

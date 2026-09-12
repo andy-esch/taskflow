@@ -82,6 +82,22 @@ func TestSection_NotFound(t *testing.T) {
 	}
 }
 
+func TestFirstH1SkipsFencesAndNormalizesCRLF(t *testing.T) {
+	body := "```markdown\r\n# Example only\r\n```\r\n\r\n## Context\r\n\r\n# Real TUI Title\r\n"
+	if title, ok := FirstH1(body); !ok || title != "Real TUI Title" {
+		t.Fatalf("FirstH1 = %q, %v", title, ok)
+	}
+	if title, ok := FirstH1("## No level-one heading\n"); ok || title != "" {
+		t.Fatalf("FirstH1 unexpectedly found %q", title)
+	}
+	if title, ok := FirstH1("# ###\n# iOS client support ###\n"); !ok || title != "iOS client support" {
+		t.Fatalf("FirstH1 with an ATX closing sequence = %q, %v", title, ok)
+	}
+	if title, ok := FirstH1("# Keep-the-trailing-hash#\n"); !ok || title != "Keep-the-trailing-hash#" {
+		t.Fatalf("FirstH1 stripped a non-closing hash sequence: %q, %v", title, ok)
+	}
+}
+
 // CRLF line endings (Windows / core.autocrlf checkout / a CRLF --body-file) must
 // not blind the heading + checkbox scanners.
 func TestCountAcceptanceCriteria_CRLF(t *testing.T) {
