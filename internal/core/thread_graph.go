@@ -45,6 +45,7 @@ type ThreadGraphProjection struct {
 	Edges            []ThreadGraphEdge
 	Waves            []ThreadGraphWave
 	TopologyComplete bool
+	Scope            *ThreadGraphScope
 }
 
 // ProjectThreadGraph projects one Thread over one immutable repository task
@@ -92,12 +93,7 @@ func ProjectThreadGraph(thread domain.Thread, graph *TaskGraph) ThreadGraphProje
 			}
 		}
 	}
-	sort.Slice(projection.Edges, func(i, j int) bool {
-		if projection.Edges[i].From != projection.Edges[j].From {
-			return projection.Edges[i].From < projection.Edges[j].From
-		}
-		return projection.Edges[i].To < projection.Edges[j].To
-	})
+	sortThreadGraphEdges(projection.Edges)
 
 	memberEdges := contractThreadGraphMembers(projection.Nodes, projection.Edges, rankableMembers)
 	topology := analyzeDAG(dagInput{Nodes: rankableMemberIDs, Edges: memberEdges})
