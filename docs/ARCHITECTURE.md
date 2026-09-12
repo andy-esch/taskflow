@@ -223,12 +223,14 @@ adapter capabilities rather than leaked persistence.
   tasks second; paired adapters must ensure the later task snapshot is no older than the Thread
   snapshot, or coordinate a compatible snapshot themselves. These point-in-time diagnostics never
   authorize mutation. `ThreadGraphProjection` extends this boundary with stable-ID-ordered raw
-  member and immediate-external-gate nodes, every prerequisite-to-dependent edge induced by that
-  bounded node set, member-only explanatory waves, the complete `ThreadView`, and an explicit
-  topology-completeness verdict. Waves contract ordering paths through included gates without
-  treating those gates as Thread-owned work. CLI, TUI, and future web adapters consume that
-  projection; `thread plan` presents its waves and marked gates, `thread graph` exports it as
-  Mermaid or DOT, and Thread detail in the TUI groups each bounded incoming edge beneath its
+  member and immediate-external-gate nodes, stable slug labels, optional body-derived human titles,
+  every prerequisite-to-dependent edge induced by that bounded node set, member-only explanatory
+  waves, the complete `ThreadView`, and an explicit topology-completeness verdict. Waves contract
+  ordering paths through included gates without treating those gates as Thread-owned work. CLI,
+  TUI, and future web adapters consume that projection; `thread plan` presents its waves and marked
+  gates, `thread graph` exports compact title/state/role/ID nodes as Mermaid or DOT (with bounded
+  descriptions available through `--details`), and Thread detail in the TUI groups each bounded
+  incoming edge beneath its
   dependent wave node using compact presentation aliases without reparsing either text format. A
   stable-ID cursor walks those supplied gate/wave/unranked rows and delegates Enter-to-open back to
   the shell's ordinary entity navigator. Both CLI commands return the same renderer-neutral

@@ -14,16 +14,27 @@ func TestThreadGraphFormatsAndPlanUseSharedProjection(t *testing.T) {
 	for _, want := range []string{
 		"flowchart TD\n",
 		"graph_health=healthy projection_health=healthy topology_complete=true",
-		"6fjangd7kvh2",
-		"external-gate",
+		"Alpha Task<br/>ready-to-start &#183; Thread member<br/>ID 6fjangd7kvh0",
+		"Gamma Task<br/>completed &#183; external prerequisite<br/>ID 6fjangd7kvh2",
 		"--> ",
-		`subgraph legend["Legend"]`,
+		`subgraph legend["Legend &#183; compact labels &#183; add --details for descriptions"]`,
 		"Thread member<br/>blue &#183; solid border",
 		"External prerequisite<br/>not a Thread member &#183; amber &#183; dashed border",
 	} {
 		if !strings.Contains(mermaid, want) {
 			t.Errorf("Mermaid missing %q:\n%s", want, mermaid)
 		}
+	}
+	if strings.Contains(mermaid, "A fully specified ready-to-start task") {
+		t.Fatalf("compact Mermaid leaked a task description:\n%s", mermaid)
+	}
+	detailed := runRoot(t, "-C", fixtureRepo, "thread", "graph", "fixture-thread", "--details")
+	if !strings.Contains(detailed, "A fully specified ready-to-start task for golden snapshots") {
+		t.Fatalf("--details omitted the task description:\n%s", detailed)
+	}
+	if !strings.Contains(detailed, `Legend &#183; detailed labels &#183; descriptions included`) ||
+		strings.Contains(detailed, "add --details") {
+		t.Fatalf("--details retained compact-view guidance:\n%s", detailed)
 	}
 
 	dot := runRoot(t, "-C", fixtureRepo, "thread", "graph", "fixture-thread", "--format", "dot")
@@ -70,16 +81,22 @@ func TestThreadGraphAndPlanJSONExposeSameNeutralProjection(t *testing.T) {
 }
 
 func TestThreadGraphRejectsRendererSelectionInJSONAndUnknownFormats(t *testing.T) {
-	for _, args := range [][]string{
-		{"-C", fixtureRepo, "thread", "graph", "fixture-thread", "--format", "dot", "--json"},
-		{"-C", fixtureRepo, "thread", "graph", "fixture-thread", "--format", "ascii"},
-	} {
-		out, err := runRootRC(t, args...)
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{args: []string{"-C", fixtureRepo, "thread", "graph", "fixture-thread", "--format", "dot", "--json"}, want: "renderer flags"},
+		{args: []string{"-C", fixtureRepo, "thread", "graph", "fixture-thread", "--details", "--json"}, want: "renderer flags"},
+		{args: []string{"-C", fixtureRepo, "thread", "graph", "fixture-thread", "--format", "ascii"}, want: "format"},
+		{args: []string{"-C", fixtureRepo, "thread", "graph", "missing-thread", "--format", "ascii"}, want: "unsupported Thread graph format"},
+	}
+	for _, test := range tests {
+		out, err := runRootRC(t, test.args...)
 		if err == nil {
-			t.Fatalf("%v should fail, output=%s", args, out)
+			t.Fatalf("%v should fail, output=%s", test.args, out)
 		}
-		if !strings.Contains(err.Error(), "format") {
-			t.Fatalf("%v error=%v", args, err)
+		if !strings.Contains(err.Error(), test.want) {
+			t.Fatalf("%v error=%v", test.args, err)
 		}
 	}
 }

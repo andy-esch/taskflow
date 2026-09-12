@@ -16,10 +16,26 @@ type preparedProjection struct {
 	labels    []string
 }
 
+// RenderOptions controls presentation-only graph detail. It deliberately does
+// not alter the adapter-neutral projection or its JSON representation.
+type RenderOptions struct {
+	IncludeDescriptions bool
+}
+
+const (
+	maxNodeLabelRunes       = 64
+	maxNodeDescriptionRunes = 120
+)
+
 // Mermaid renders a deterministic top-to-bottom Mermaid flowchart. Synthetic
 // node names keep task IDs and labels out of Mermaid identifier syntax.
 func Mermaid(projection core.ThreadGraphProjection) (string, error) {
-	prepared, err := prepare(projection)
+	return MermaidWithOptions(projection, RenderOptions{})
+}
+
+// MermaidWithOptions renders Mermaid with explicit presentation detail.
+func MermaidWithOptions(projection core.ThreadGraphProjection, options RenderOptions) (string, error) {
+	prepared, err := prepare(projection, options)
 	if err != nil {
 		return "", err
 	}
@@ -40,7 +56,7 @@ func Mermaid(projection core.ThreadGraphProjection) (string, error) {
 		}
 		fmt.Fprintf(&out, "  class n%d %s\n", index, className)
 	}
-	out.WriteString("  subgraph legend[\"Legend\"]\n")
+	fmt.Fprintf(&out, "  subgraph legend[\"%s\"]\n", mermaidLegendTitle(options))
 	out.WriteString("    direction LR\n")
 	out.WriteString("    legendMember[\"Thread member<br/>blue &#183; solid border\"]\n")
 	out.WriteString("    legendExternalGate[\"External prerequisite<br/>not a Thread member &#183; amber &#183; dashed border\"]\n")
@@ -56,7 +72,12 @@ func Mermaid(projection core.ThreadGraphProjection) (string, error) {
 // attributes make the semantic distinction available to downstream DOT tooling
 // without asking it to parse the visible label.
 func DOT(projection core.ThreadGraphProjection) (string, error) {
-	prepared, err := prepare(projection)
+	return DOTWithOptions(projection, RenderOptions{})
+}
+
+// DOTWithOptions renders Graphviz DOT with explicit presentation detail.
+func DOTWithOptions(projection core.ThreadGraphProjection, options RenderOptions) (string, error) {
+	prepared, err := prepare(projection, options)
 	if err != nil {
 		return "", err
 	}
@@ -79,7 +100,7 @@ func DOT(projection core.ThreadGraphProjection) (string, error) {
 		fmt.Fprintf(&out, "  %s -> %s;\n", prepared.nodeNames[edge.From], prepared.nodeNames[edge.To])
 	}
 	out.WriteString("  subgraph cluster_legend {\n")
-	out.WriteString("    label=\"Legend\";\n")
+	fmt.Fprintf(&out, "    label=%s;\n", quoteDOT(dotLegendTitle(options)))
 	out.WriteString("    legend_member [label=\"Thread member\\nblue fill, solid border\", role=\"legend\", style=\"rounded,filled\", color=\"#3267a8\", fillcolor=\"#e8f1ff\"];\n")
 	out.WriteString("    legend_external_gate [label=\"External prerequisite\\nnot a Thread member\\namber fill, dashed border\", role=\"legend\", style=\"rounded,dashed,filled\", color=\"#9a6700\", fillcolor=\"#fff4d6\"];\n")
 	out.WriteString("  }\n")
@@ -96,7 +117,7 @@ func healthToken(health core.GraphHealth) string {
 	}
 }
 
-func prepare(projection core.ThreadGraphProjection) (preparedProjection, error) {
+func prepare(projection core.ThreadGraphProjection, options RenderOptions) (preparedProjection, error) {
 	prepared := preparedProjection{
 		nodeNames: make(map[string]string, len(projection.Nodes)),
 		labels:    make([]string, len(projection.Nodes)),
@@ -112,7 +133,7 @@ func prepare(projection core.ThreadGraphProjection) (preparedProjection, error) 
 			return preparedProjection{}, fmt.Errorf("thread graph task %s has unknown role %q", node.TaskID, node.Role)
 		}
 		prepared.nodeNames[node.TaskID] = fmt.Sprintf("n%d", index)
-		prepared.labels[index] = nodeLabel(node)
+		prepared.labels[index] = nodeLabel(node, options)
 	}
 	seenEdges := make(map[core.ThreadGraphEdge]bool, len(projection.Edges))
 	for _, edge := range projection.Edges {
@@ -127,23 +148,77 @@ func prepare(projection core.ThreadGraphProjection) (preparedProjection, error) 
 	return prepared, nil
 }
 
-func nodeLabel(node core.ThreadGraphNode) string {
-	label := node.Label
+func nodeLabel(node core.ThreadGraphNode, options RenderOptions) string {
+	label := compactText(node.Title, maxNodeLabelRunes)
 	if label == "" {
-		label = node.TaskID
+		label = compactText(strings.ReplaceAll(node.Label, "-", " "), maxNodeLabelRunes)
+		if label == "" {
+			label = "Task"
+		}
+		labelRunes := []rune(label)
+		labelRunes[0] = unicode.ToUpper(labelRunes[0])
+		label = string(labelRunes)
 	}
-	parts := []string{label, node.TaskID}
-	metadata := string(node.Role)
+	parts := []string{label}
+
+	metadata := roleLabel(node.Role)
 	if node.Status != "" {
 		metadata = string(node.Status) + " · " + metadata
 	}
 	if metadata != "" {
 		parts = append(parts, metadata)
 	}
-	if node.Description != "" {
-		parts = append(parts, node.Description)
+	if options.IncludeDescriptions {
+		if description := compactText(node.Description, maxNodeDescriptionRunes); description != "" {
+			parts = append(parts, description)
+		}
 	}
+	parts = append(parts, "ID "+node.TaskID)
 	return strings.Join(parts, "\n")
+}
+
+func roleLabel(role core.ThreadTaskRole) string {
+	if role == core.ThreadTaskExternalGate {
+		return "external prerequisite"
+	}
+	if role == core.ThreadTaskMember {
+		return "Thread member"
+	}
+	return string(role)
+}
+
+func compactText(value string, limit int) string {
+	value = strings.Join(strings.Fields(value), " ")
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	cutRunes := runes[:limit-1]
+	lastSpace := -1
+	for index := len(cutRunes) - 1; index >= 0; index-- {
+		if cutRunes[index] == ' ' {
+			lastSpace = index
+			break
+		}
+	}
+	if lastSpace >= (limit-1)*2/3 {
+		cutRunes = cutRunes[:lastSpace]
+	}
+	return strings.TrimSpace(string(cutRunes)) + "…"
+}
+
+func mermaidLegendTitle(options RenderOptions) string {
+	if options.IncludeDescriptions {
+		return "Legend &#183; detailed labels &#183; descriptions included"
+	}
+	return "Legend &#183; compact labels &#183; add --details for descriptions"
+}
+
+func dotLegendTitle(options RenderOptions) string {
+	if options.IncludeDescriptions {
+		return "Legend\nDetailed labels; descriptions included"
+	}
+	return "Legend\nCompact labels; add --details for descriptions"
 }
 
 // Mermaid quoted labels still interpret HTML and flowchart punctuation. Keep a
