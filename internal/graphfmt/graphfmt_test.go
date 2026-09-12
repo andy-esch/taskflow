@@ -62,6 +62,8 @@ func TestMermaidEscapesHostileLabelsAndPreservesProjectionOrder(t *testing.T) {
 		"legendExternalGate[\"External prerequisite<br/>not a Thread member &#183; amber &#183; dashed border\"]\n",
 		"class legendMember member\n",
 		"class legendExternalGate externalGate\n",
+		"classDef member fill:#e8f1ff,color:#172033,stroke:#3267a8",
+		"classDef externalGate fill:#fff4d6,color:#3d2c00,stroke:#9a6700",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Mermaid output missing %q:\n%s", want, got)
@@ -203,8 +205,8 @@ func TestFormattersAcceptEmptyAndRejectMalformedProjection(t *testing.T) {
 		"  end\n" +
 		"  class legendMember member\n" +
 		"  class legendExternalGate externalGate\n" +
-		"  classDef member fill:#e8f1ff,stroke:#3267a8,stroke-width:1px\n" +
-		"  classDef externalGate fill:#fff4d6,stroke:#9a6700,stroke-width:1px,stroke-dasharray:5 3\n"
+		"  classDef member fill:#e8f1ff,color:#172033,stroke:#3267a8,stroke-width:1px\n" +
+		"  classDef externalGate fill:#fff4d6,color:#3d2c00,stroke:#9a6700,stroke-width:1px,stroke-dasharray:5 3\n"
 	if got, err := Mermaid(core.ThreadGraphProjection{}); err != nil || got != wantMermaid {
 		t.Fatalf("empty Mermaid got=%q err=%v", got, err)
 	}

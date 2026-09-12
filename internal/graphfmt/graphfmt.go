@@ -63,8 +63,10 @@ func MermaidWithOptions(projection core.ThreadGraphProjection, options RenderOpt
 	out.WriteString("  end\n")
 	out.WriteString("  class legendMember member\n")
 	out.WriteString("  class legendExternalGate externalGate\n")
-	out.WriteString("  classDef member fill:#e8f1ff,stroke:#3267a8,stroke-width:1px\n")
-	out.WriteString("  classDef externalGate fill:#fff4d6,stroke:#9a6700,stroke-width:1px,stroke-dasharray:5 3\n")
+	// Explicit foregrounds keep pale semantic cards legible when a Mermaid
+	// host (notably GitHub dark mode) otherwise inherits its page text color.
+	out.WriteString("  classDef member fill:#e8f1ff,color:#172033,stroke:#3267a8,stroke-width:1px\n")
+	out.WriteString("  classDef externalGate fill:#fff4d6,color:#3d2c00,stroke:#9a6700,stroke-width:1px,stroke-dasharray:5 3\n")
 	return out.String(), nil
 }
 
