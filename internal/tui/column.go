@@ -17,18 +17,48 @@ import (
 // dated the column is width 0 and every cell is "", so the caller drops it (a blank
 // cell among dated ones still pads, holding the next column). The dashboard's
 // in-progress + epics widgets share this rather than each pre-measuring a dateW.
+//
+// This is the ROLLUP spelling: the date behind an epic or a space is the newest of
+// many member tasks, so a long gap means "nothing in this bucket moved lately", not
+// "this work is stalled" — colouring it would read as an accusation of neglect the
+// number can't support. Per-item ages use staleDateCells instead.
 func relDateCells[T any](items []T, raw func(T) string, st *styles) []string {
+	return dateCells(items, raw, st, false)
+}
+
+// staleDateCells is relDateCells for a column of PER-ITEM ages, colouring each cell by
+// theme.Staleness — the same treatment (and the same shared thresholds) the atlas work
+// list already gives its age column. A task that has been in progress for two months
+// is the one thing an "in progress" list should say out loud.
+func staleDateCells[T any](items []T, raw func(T) string, st *styles) []string {
+	return dateCells(items, raw, st, true)
+}
+
+// dateCells is the shared measure-then-pad body. Padding is applied to the PLAIN text
+// before any styling, so the ANSI escapes (which carry no display width) can't disturb
+// the column alignment either spelling depends on.
+func dateCells[T any](items []T, raw func(T) string, st *styles, stale bool) []string {
 	cells := make([]string, len(items))
+	days := make([]int, len(items))
 	w := 0
 	for i, it := range items {
-		cells[i] = theme.RelativeDate(raw(it))
+		d := raw(it)
+		cells[i] = theme.RelativeDate(d)
+		// -1 for a missing or unparseable date, which theme.Staleness maps to neutral:
+		// an unknown age is never alarming.
+		days[i] = theme.DaysSince(d)
 		w = max(w, len(cells[i])) // RelativeDate output is ASCII, so len == display width
 	}
 	if w == 0 {
 		return cells // all undated → empty cells; the caller omits the column
 	}
 	for i := range cells {
-		cells[i] = st.dim(fmt.Sprintf("%-*s", w, cells[i]))
+		padded := fmt.Sprintf("%-*s", w, cells[i])
+		if stale {
+			cells[i] = st.fg(theme.Staleness(days[i]), padded)
+			continue
+		}
+		cells[i] = st.dim(padded)
 	}
 	return cells
 }

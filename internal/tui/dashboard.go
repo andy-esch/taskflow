@@ -102,7 +102,7 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 			refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
 		}
 		hints := duplicateIdentityHints(refs)
-		dateCells := relDateCells(vis, theme.TaskDate, st)
+		dateCells := staleDateCells(vis, theme.TaskDate, st)
 		for i, t := range vis {
 			tok := theme.Status(t.Status)
 			cell := st.fg(tok.Color, tok.Glyph) + " "
