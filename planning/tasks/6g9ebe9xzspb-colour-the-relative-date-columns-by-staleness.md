@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g9ebe9xzspb
-status: ready-to-start
+status: completed
 epic: 25-design-system-coherent-palette-and-selectable-themes
 description: Wire the already-built theme.Staleness helper into relDateCells so dashboard dates carry the signal instead of a flat dim.
 effort: S
@@ -10,6 +10,8 @@ priority: medium
 autonomy_level: 4
 tags: [tui, design, ux]
 created: "2026-09-12"
+updated_at: "2026-09-12"
+completed_at: "2026-09-12"
 ---
 # Colour the relative-date columns by staleness
 
@@ -23,12 +25,12 @@ existing helper into those columns: an in-progress task untouched for two months
 
 ## Acceptance criteria
 
-- [ ] The dashboard's in-progress dates carry the staleness colour instead of a flat dim.
-- [ ] Column alignment is unchanged, with padding measured in display cells rather than bytes.
-- [ ] An undated or unparseable date stays neutral and never renders as alarming.
-- [ ] Whether the epics widget and the entity-list date columns also adopt it is decided rather than
+- [x] The dashboard's in-progress dates carry the staleness colour instead of a flat dim.
+- [x] Column alignment is unchanged, with padding measured in display cells rather than bytes.
+- [x] An undated or unparseable date stays neutral and never renders as alarming.
+- [x] Whether the epics widget and the entity-list date columns also adopt it is decided rather than
   left inconsistent.
-- [ ] No new threshold is introduced — `theme.Staleness` stays the single place the boundaries live.
+- [x] No new threshold is introduced — `theme.Staleness` stays the single place the boundaries live.
 
 ## Design notes
 
