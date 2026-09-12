@@ -94,17 +94,29 @@ func TestWarnUnknownTheme(t *testing.T) {
 }
 
 // TestThemeEntries: `theme list`'s rows — every registered theme, sorted, with the
-// default and the active one flagged.
+// default and the active one flagged. Derived from design.Names() rather than a
+// hardcoded pair, so registering a theme doesn't break a test that has no opinion
+// about which themes exist; exactly-one-flagged is the property that actually matters.
 func TestThemeEntries(t *testing.T) {
-	got := themeEntries("catppuccin")
-	if len(got) != 2 || got[0].Name != "catppuccin" || got[1].Name != "neon" {
-		t.Fatalf("themeEntries = %+v, want [catppuccin, neon] (sorted)", got)
+	const active = "catppuccin"
+	want := design.Names()
+	got := themeEntries(active)
+	if len(got) != len(want) {
+		t.Fatalf("themeEntries = %+v, want %d rows (one per registered theme: %v)", got, len(want), want)
 	}
-	if !got[0].Active || got[1].Active {
-		t.Errorf("active flags wrong: catppuccin should be active, neon not: %+v", got)
+	for i, name := range want {
+		if got[i].Name != name {
+			t.Errorf("themeEntries[%d].Name = %q, want %q (sorted like design.Names())", i, got[i].Name, name)
+		}
 	}
-	if got[0].Default || !got[1].Default {
-		t.Errorf("default flags wrong: neon is the default, catppuccin is not: %+v", got)
+	for _, row := range got {
+		if wantActive := row.Name == active; row.Active != wantActive {
+			t.Errorf("%s: Active = %v, want %v (only the resolved theme is active)", row.Name, row.Active, wantActive)
+		}
+		if wantDefault := row.Name == design.Default().Name; row.Default != wantDefault {
+			t.Errorf("%s: Default = %v, want %v (only %s is the default)",
+				row.Name, row.Default, wantDefault, design.Default().Name)
+		}
 	}
 }
 

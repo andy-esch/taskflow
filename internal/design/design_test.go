@@ -38,19 +38,31 @@ func contrastRatio(a, b float64) float64 {
 // regular-match and current-match backgrounds. The light palette shares one MatchFg
 // across two backgrounds, so this is where a white-on-amber regression (~2.3:1, the
 // bug this replaced) would be caught.
+// Every registered theme's find highlights, not just the default's: the Match /
+// MatchCurrent / MatchFg triple is one shared foreground over two backgrounds, so a
+// theme that picks a fg for its match color can silently fail on its current-hit (the
+// exact defect the light palette's comment records). Loops Names() like
+// TestChromeSurfaceContrastAA, so a newly-registered theme is covered on arrival
+// rather than shipping its highlights unverified.
 func TestFindHighlightContrastAA(t *testing.T) {
-	for _, bg := range []string{"dark", "light"} {
-		p := Default().For(bg == "dark")
-		for _, pr := range []struct {
-			name   string
-			bg, fg string
-		}{
-			{"match", p.Match.Hex, p.MatchFg.Hex},
-			{"current", p.MatchCurrent.Hex, p.MatchFg.Hex},
-		} {
-			if r := contrastRatio(relLuminance(t, pr.bg), relLuminance(t, pr.fg)); r < 4.5 {
-				t.Errorf("%s find-%s contrast %.2f:1 (bg %s / fg %s) < 4.5:1 AA",
-					bg, pr.name, r, pr.bg, pr.fg)
+	for _, name := range Names() {
+		th, ok := Lookup(name)
+		if !ok {
+			t.Fatalf("%s should be registered", name)
+		}
+		for _, bg := range []string{"dark", "light"} {
+			p := th.For(bg == "dark")
+			for _, pr := range []struct {
+				name   string
+				bg, fg string
+			}{
+				{"match", p.Match.Hex, p.MatchFg.Hex},
+				{"current", p.MatchCurrent.Hex, p.MatchFg.Hex},
+			} {
+				if r := contrastRatio(relLuminance(t, pr.bg), relLuminance(t, pr.fg)); r < 4.5 {
+					t.Errorf("%s/%s find-%s contrast %.2f:1 (bg %s / fg %s) < 4.5:1 AA",
+						name, bg, pr.name, r, pr.bg, pr.fg)
+				}
 			}
 		}
 	}
@@ -192,7 +204,7 @@ func TestLookupDegrades(t *testing.T) {
 // (so the listing + its --json are byte-stable).
 func TestNames(t *testing.T) {
 	got := Names()
-	want := []string{"catppuccin", "neon"}
+	want := []string{"catppuccin", "miami-vice", "neon"}
 	if len(got) != len(want) {
 		t.Fatalf("Names() = %v, want %v", got, want)
 	}
@@ -236,6 +248,53 @@ func TestCatppuccinDarkSemanticSlots(t *testing.T) {
 	// ships tokyo-night, distinct from neon's dracula.
 	if p.Markdown != "tokyo-night" {
 		t.Errorf("catppuccin dark Markdown = %q, want tokyo-night", p.Markdown)
+	}
+}
+
+// The miami-vice (dark) semantic slots — the curated third theme's contract — pinned
+// like the other two. Two of these carry a DECISION rather than a scheme lookup, so
+// the pin is what keeps them from drifting to the obvious-looking value: yellow is
+// deliberately unmoved (it carries ⚠/↻/◆/medium alongside in-progress), and cyan is
+// the mockup's lighter label purple, NOT the #b026ff dot that fails AA for small text.
+func TestMiamiViceDarkSemanticSlots(t *testing.T) {
+	tm, ok := Lookup("miami-vice")
+	if !ok {
+		t.Fatal("Lookup(miami-vice) not registered")
+	}
+	p := tm.Dark
+	cases := []struct {
+		name string
+		c    theme.Color
+		hex  string
+		ansi int
+	}{
+		{"none", theme.ColorNone, "", NoANSI},
+		{"red", theme.ColorRed, "#FF4242", 1},
+		{"green", theme.ColorGreen, "#06ea61", 2},
+		{"yellow", theme.ColorYellow, "#c9d364", 3},
+		{"blue", theme.ColorBlue, "#00e5ff", 4},
+		{"cyan", theme.ColorCyan, "#c88cff", 6},
+		{"gray", theme.ColorGray, "#8b7bb5", 8},
+	}
+	for _, tc := range cases {
+		if got := p.Of(tc.c); got.Hex != tc.hex || got.ANSI != tc.ansi {
+			t.Errorf("Of(%s) = {%q, %d}, want {%q, %d}", tc.name, got.Hex, got.ANSI, tc.hex, tc.ansi)
+		}
+	}
+	if a := p.Accent; a.Hex != "#ff2ec4" { // hot pink
+		t.Errorf("miami-vice accent = %q, want #ff2ec4 (hot pink)", a.Hex)
+	}
+	// #b026ff is the mockup's purple, but 4.07:1 on this base — it belongs in the
+	// gradient (decoration) and must never become the ready-to-start slot (text).
+	if p.Of(theme.ColorCyan).Hex == "#b026ff" {
+		t.Error("ready-to-start must not be #b026ff: 4.07:1 on this base, below AA for small text")
+	}
+	if g := p.Gradient; len(g) == 0 || g[0].Hex != "#b026ff" {
+		t.Errorf("miami-vice gradient should open on #b026ff, got %v", g)
+	}
+	// Shares neon's dracula (a dark synthwave body), unlike catppuccin's tokyo-night.
+	if p.Markdown != theme.MarkdownStyleDark {
+		t.Errorf("miami-vice dark Markdown = %q, want %q", p.Markdown, theme.MarkdownStyleDark)
 	}
 }
 
