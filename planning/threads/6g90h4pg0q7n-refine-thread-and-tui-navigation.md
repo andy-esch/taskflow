@@ -6,7 +6,7 @@ description: Make large Thread graphs comprehensible and shared TUI navigation p
 goal: Ship an evidence-backed large-graph experience and a coherent shared TUI navigation model.
 created: "2026-09-11"
 tags: [threads, tui, ux, dogfood]
-tasks: [6g6wdvfp2ksa, 6g86016qvk5d, 6g86c7y6hn41, 6g86g03zfj2f, 6g87qn72901g, 6g8vxbv3d4xn, 6g8vxcnezktm, 6g914ybs9t87, 6g9150nrt4p9]
+tasks: [6g6wdvfp2ksa, 6g86016qvk5d, 6g86c7y6hn41, 6g86g03zfj2f, 6g87qn72901g, 6g8vxbv3d4xn, 6g8vxcnezktm, 6g914ybs9t87, 6g9150nrt4p9, 6g95fc3aj4ye]
 updated_at: "2026-09-11"
 started_at: "2026-09-11"
 ---
