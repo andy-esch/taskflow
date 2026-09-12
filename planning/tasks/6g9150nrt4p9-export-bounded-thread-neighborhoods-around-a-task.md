@@ -30,23 +30,24 @@ dependencies outside the supplied projection.
   edges: include the focal node, every node within the requested hop distance, and every supplied
   edge whose endpoints are both included.
 - [ ] Mermaid, DOT, and JSON expose the same bounded node/edge set, stable identities,
-  member/external-gate roles, graph and projection health, focal identity, requested depth, and
-  shown-versus-hidden scope.
+  member/external-gate roles, graph and projection health, focal identity, requested depth,
+  shown-versus-hidden scope, and deterministic boundary-continuation evidence.
 - [ ] The output states that it is a bounded neighborhood and visibly discloses omitted graph scope
   or boundary continuations so it cannot be mistaken for the complete Thread.
 - [ ] Missing, ambiguous, unreadable, or out-of-Thread focus references fail explicitly; degraded
   and partial projections retain their supplied diagnostics rather than being relabeled healthy.
-- [ ] The implementation reuses the projection/presentation seam selected by the large-graph design
-  pass and remains usable by CLI, TUI, web, and PR tooling without importing terminal or GitHub
-  policy into core graph facts.
+- [ ] A pure adapter-neutral selector derives the bounded node/edge set and explicit scope metadata
+  from `ThreadGraphProjection`; CLI, TUI, web, and PR tooling can reuse it without importing
+  terminal geometry or GitHub policy into core graph facts.
 - [ ] Fan-in, fan-out, chain, isolated member, external gate, shared neighbor, depth-one/depth-two,
   hostile label, and deterministic ordering regressions are covered.
 
 ## Design attention
 
 Treat hop distance as undirected proximity over directed dependency evidence while preserving arrow
-direction in the rendered result. The large-graph navigation research owns the final shared seam and
-may refine how boundary evidence is disclosed before implementation begins.
+direction in the rendered result. The selector must distinguish a truthful bounded excerpt from a
+complete graph and identify supplied edges that cross its boundary. Keep responsive coordinates,
+aliases, keys, viewport history, and PR-description composition out of this shared seam.
 
 ## Out of scope
 
@@ -59,4 +60,5 @@ may refine how boundary evidence is disclosed before implementation begins.
 - Epic [30-threads-and-task-dependency-graphs](../epics/30-threads-and-task-dependency-graphs.md)
 - Thread [Refine Thread and TUI navigation](../threads/6g90h4pg0q7n-refine-thread-and-tui-navigation.md)
 - Follow [large-graph navigation research](6g8vxbv3d4xn-explore-progressive-disclosure-and-navigation-for-large-thread-graphs.md)
+- Implements the shared seam selected in [Large Thread graph progressive disclosure and navigation](../research/6g95tfg02hm3-large-thread-graph-progressive-disclosure-and-navigation.md).
 - Coordinate with the [one-hop TUI focus view](6g86c7y6hn41-add-a-one-hop-focus-subgraph-mode-to-the-tui-thread-graph.md).
