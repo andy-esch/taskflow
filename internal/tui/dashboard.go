@@ -72,6 +72,23 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 		return n, 0
 	}
 
+	// Tasks — the shape of the whole set before the working subset below it. Without
+	// this the Overview opened on "in progress", i.e. on work already started, and
+	// never showed a next-up or ready-to-start count anywhere; `status` has always led
+	// with it. Read-only: it orients, so no row here takes a target.
+	if active, archived := s.SplitCounts(); len(active) > 0 || len(archived) > 0 {
+		head("tasks")
+		// Labels padded to a shared width so the two count lines start in the same
+		// column, the way the CLI dashboard aligns them.
+		if len(active) > 0 {
+			line(st.dim("active  ") + "  " + countsLine(active, st))
+		}
+		if len(archived) > 0 {
+			line(st.dim("archived") + "  " + countsLine(archived, st))
+		}
+		blank()
+	}
+
 	// In progress — the active work, each with how long since it was last touched
 	// (a staleness cue) in an aligned column, the slug last so it absorbs truncation.
 	head(fmt.Sprintf("in progress (%d)", len(s.InProgress)))
@@ -216,6 +233,16 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 		d.cursor = 0
 	}
 	d.loaded = true
+}
+
+// countsLine renders one status-count breakdown ("4 ● next-up · 3 ● in-progress"),
+// each count wearing its own status glyph + color. Shares the iterate/join STRUCTURE
+// with the CLI's countLine via theme.Breakdown, and the active/archived partition via
+// core.Summary.SplitCounts; only this surface's coloring is its own (audit M10).
+func countsLine(cs []core.StatusCount, st *styles) string {
+	return theme.Breakdown(cs, st.dim(" · "), 0, func(c core.StatusCount) string {
+		return fmt.Sprintf("%d %s", c.Count, st.statusText(c.Status))
+	}, nil)
 }
 
 // urgencyLine renders a finding-urgency breakdown ("⚠ 1 acute · 12 soon · 23

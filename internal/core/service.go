@@ -279,6 +279,28 @@ type StatusCount struct {
 	Count  int
 }
 
+// SplitCounts partitions Counts into the active pipeline and the archived remainder,
+// dropping empty buckets and preserving Counts' display order within each.
+//
+// It lives here, not in a renderer, because "which statuses are active" and "don't
+// show a bucket nobody is in" are the same facts for every surface: the CLI dashboard
+// and the TUI Overview both present this line, and a split derived separately in each
+// is a drift waiting to happen (they already disagreed once — the TUI simply omitted
+// the line). Colour and layout stay with the adapters; the partition does not.
+func (s Summary) SplitCounts() (active, archived []StatusCount) {
+	for _, c := range s.Counts {
+		switch {
+		case c.Count == 0: // Counts carries every status, including the empty ones
+			continue
+		case c.Status.IsActive():
+			active = append(active, c)
+		default:
+			archived = append(archived, c)
+		}
+	}
+	return active, archived
+}
+
 // Summary is the at-a-glance project state for the dashboard.
 type Summary struct {
 	Counts        []StatusCount        // every status in display order (count may be 0)
