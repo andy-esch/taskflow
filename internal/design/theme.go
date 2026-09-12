@@ -132,18 +132,88 @@ var mochaDark = Palette{
 	Markdown: "tokyo-night", // a glamour standard style — pastel dark, a closer match to Catppuccin than dracula
 }
 
+// miamiViceDark — "miami-vice". Hot pink and neon cyan over indigo, drawn from the
+// 1b web mockup direction. Where neon-night is a base16 scheme, this one is a
+// curated palette: the hues come from the mockup and every slot was contrast-checked
+// against Base (#160b2e) before being written down.
+//
+// WHICH SLOTS MOVE, AND WHY THE OTHERS DON'T. The mockup's pipeline reads cyan ->
+// purple -> pink, but only two of those three slots are free. ColorCyan is used in
+// exactly ONE place (Status ready-to-start) and ColorBlue in three, so both retint
+// freely. ColorYellow carries in-progress AND the ⚠ warn marker AND ↻ revisit AND
+// the audit-open ◆ AND priority-medium AND the mid Percent band AND BandActive —
+// retinting it hot pink to match the mockup's third column would turn every warning
+// pink and weaken warn-against-error next to the red. So the pipeline here reads
+// cyan -> purple -> yellow: Miami at the front, the warning vocabulary untouched.
+//
+// That restraint is also what makes the theme work. Because yellow keeps the
+// warnings, #ff2ec4 stays scarce — Accent, borders, headings, the current find hit —
+// which is exactly where the mockup spends its pink and why it reads as an accent
+// rather than a wash.
+var miamiViceDark = Palette{
+	Semantic: map[theme.Color]Hue{
+		theme.ColorNone:   {Hex: "", ANSI: NoANSI},
+		theme.ColorRed:    {Hex: "#FF4242", ANSI: 1}, // Outrun base08, the same legible red neon swaps in
+		theme.ColorGreen:  {Hex: "#06ea61", ANSI: 2},
+		theme.ColorYellow: {Hex: "#c9d364", ANSI: 3}, // deliberately unmoved — see above
+		theme.ColorBlue:   {Hex: "#00e5ff", ANSI: 4}, // next-up: the mockup's neon cyan
+		// ready-to-start. The mockup's purple DOT is #b026ff, which is 4.07:1 on this
+		// background and fails AA for small text; this is the mockup's own lighter
+		// READY TO START *label* color (7.71:1). #b026ff survives as the first
+		// Gradient stop below, where it is decoration rather than text.
+		theme.ColorCyan: {Hex: "#c88cff", ANSI: 6},
+		theme.ColorGray: {Hex: "#8b7bb5", ANSI: 8},
+	},
+	// The ANSI slots above stay on the CONVENTIONAL mapping (blue 4, cyan 6) even
+	// though the hues here are cyan and purple: `theme --help` documents that on a
+	// 16-color terminal the semantic colors fall back to the terminal's own palette
+	// and "look the same across themes", and honoring the slot convention is what
+	// keeps that promise.
+	Accent:       Hue{"#ff2ec4", 13}, // hot pink -> bright magenta
+	BorderActive: Hue{"#ff2ec4", 13},
+	BorderIdle:   Hue{"#4a3a6b", 8}, // recessive indigo; a border, not text (cf. neon's own idle border)
+	Danger:       Hue{"#FF4242", 1},
+	Heading:      Hue{"#ff2ec4", 13},
+	Match:        Hue{"#ffd166", 3},  // warm amber bg; dark text over it (12.99:1)
+	MatchCurrent: Hue{"#ff2ec4", 13}, // accent bg for the current hit; same dark text (5.74:1)
+	MatchFg:      Hue{"#160b2e", 0},  // the base indigo, as text over both highlights
+	Track:        Hue{"#3a2b57", 8},
+	Base:         Hue{"#160b2e", 0}, // the mockup's body fill
+	// RECESSED, like Mocha's crust and unlike Latte's white card: this is the
+	// mockup's own sidebar fill, and layering AWAY from an already-dark base widens
+	// every foreground pair instead of narrowing it (worst role 5.36:1, lift 1.07).
+	Surface: Hue{"#0a041a", 0},
+	// DELIBERATELY the same triple neon uses, not a copy-paste left unfinished: the 1b
+	// mockup's own bar gradient is purple -> cyan -> pink, so this IS miami's gradient,
+	// and both themes being synthwave means they land on it honestly. The consequence
+	// is that rollup bars look alike under either theme and only the Track behind them
+	// differs — accepted, so don't "fix" it into a difference for its own sake.
+	Gradient: []Hue{
+		{"#b026ff", 5},  // neon purple — also the mockup's ready-to-start dot, too dark for text
+		{"#00e5ff", 14}, // neon cyan
+		{"#ff2ec4", 13}, // neon pink
+	},
+	Markdown: theme.MarkdownStyleDark,
+}
+
 var (
 	// neon is the default theme: neon-night (dark) + the AA Latte light.
 	neon = Theme{Name: "neon", Dark: neonDark, Light: latteAA}
 	// catppuccin is the established-library alternative: Mocha (dark) + the AA Latte
 	// light (Latte is Catppuccin's own light flavor).
 	catppuccin = Theme{Name: "catppuccin", Dark: mochaDark, Light: latteAA}
+	// miamiVice is the curated synthwave alternative. Its light variant is latteAA
+	// like the others — deliberately, not by omission: an 80s palette has no honest
+	// light form, and sharing the AA-tuned Latte beats inventing a pastel Miami that
+	// would be neither legible nor the thing anyone picked this theme for.
+	miamiVice = Theme{Name: "miami-vice", Dark: miamiViceDark, Light: latteAA}
 )
 
 // registry holds the built-in themes by name.
 var registry = map[string]Theme{
 	neon.Name:       neon,
 	catppuccin.Name: catppuccin,
+	miamiVice.Name:  miamiVice,
 }
 
 // Default is the project's default theme (neon / 80s).

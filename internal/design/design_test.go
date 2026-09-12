@@ -204,7 +204,7 @@ func TestLookupDegrades(t *testing.T) {
 // (so the listing + its --json are byte-stable).
 func TestNames(t *testing.T) {
 	got := Names()
-	want := []string{"catppuccin", "neon"}
+	want := []string{"catppuccin", "miami-vice", "neon"}
 	if len(got) != len(want) {
 		t.Fatalf("Names() = %v, want %v", got, want)
 	}
@@ -248,6 +248,53 @@ func TestCatppuccinDarkSemanticSlots(t *testing.T) {
 	// ships tokyo-night, distinct from neon's dracula.
 	if p.Markdown != "tokyo-night" {
 		t.Errorf("catppuccin dark Markdown = %q, want tokyo-night", p.Markdown)
+	}
+}
+
+// The miami-vice (dark) semantic slots — the curated third theme's contract — pinned
+// like the other two. Two of these carry a DECISION rather than a scheme lookup, so
+// the pin is what keeps them from drifting to the obvious-looking value: yellow is
+// deliberately unmoved (it carries ⚠/↻/◆/medium alongside in-progress), and cyan is
+// the mockup's lighter label purple, NOT the #b026ff dot that fails AA for small text.
+func TestMiamiViceDarkSemanticSlots(t *testing.T) {
+	tm, ok := Lookup("miami-vice")
+	if !ok {
+		t.Fatal("Lookup(miami-vice) not registered")
+	}
+	p := tm.Dark
+	cases := []struct {
+		name string
+		c    theme.Color
+		hex  string
+		ansi int
+	}{
+		{"none", theme.ColorNone, "", NoANSI},
+		{"red", theme.ColorRed, "#FF4242", 1},
+		{"green", theme.ColorGreen, "#06ea61", 2},
+		{"yellow", theme.ColorYellow, "#c9d364", 3},
+		{"blue", theme.ColorBlue, "#00e5ff", 4},
+		{"cyan", theme.ColorCyan, "#c88cff", 6},
+		{"gray", theme.ColorGray, "#8b7bb5", 8},
+	}
+	for _, tc := range cases {
+		if got := p.Of(tc.c); got.Hex != tc.hex || got.ANSI != tc.ansi {
+			t.Errorf("Of(%s) = {%q, %d}, want {%q, %d}", tc.name, got.Hex, got.ANSI, tc.hex, tc.ansi)
+		}
+	}
+	if a := p.Accent; a.Hex != "#ff2ec4" { // hot pink
+		t.Errorf("miami-vice accent = %q, want #ff2ec4 (hot pink)", a.Hex)
+	}
+	// #b026ff is the mockup's purple, but 4.07:1 on this base — it belongs in the
+	// gradient (decoration) and must never become the ready-to-start slot (text).
+	if p.Of(theme.ColorCyan).Hex == "#b026ff" {
+		t.Error("ready-to-start must not be #b026ff: 4.07:1 on this base, below AA for small text")
+	}
+	if g := p.Gradient; len(g) == 0 || g[0].Hex != "#b026ff" {
+		t.Errorf("miami-vice gradient should open on #b026ff, got %v", g)
+	}
+	// Shares neon's dracula (a dark synthwave body), unlike catppuccin's tokyo-night.
+	if p.Markdown != theme.MarkdownStyleDark {
+		t.Errorf("miami-vice dark Markdown = %q, want %q", p.Markdown, theme.MarkdownStyleDark)
 	}
 }
 
