@@ -277,6 +277,7 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.PersistentFlags().BoolVar(&app.NoPager, "no-pager", false, "do not pipe long human output through a pager")
 	root.PersistentFlags().BoolVar(&app.Paginate, "paginate", false, "page long human output through $PAGER (on a TTY), even if disabled in config")
 	root.PersistentFlags().StringVar(&app.Theme, "theme", "", "color theme name (overrides TSKFLW_THEME and [theme].name in config)")
+	_ = root.RegisterFlagCompletionFunc("theme", completeThemeNames)
 
 	root.AddCommand(newInitCmd(app))
 	root.AddCommand(newVersionCmd(app))

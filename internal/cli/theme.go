@@ -70,10 +70,11 @@ func newThemeListCmd(app *App) *cobra.Command {
 func newThemePreviewCmd(app *App) *cobra.Command {
 	var variantFlag string
 	cmd := &cobra.Command{
-		Use:         "preview [name]",
-		Short:       "Preview a theme's palette (color swatches + a sample bar)",
-		Args:        cobra.MaximumNArgs(1),
-		Annotations: map[string]string{"safety": "read-only"},
+		Use:               "preview [name]",
+		Short:             "Preview a theme's palette (color swatches + a sample bar)",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeThemeNames,
+		Annotations:       map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, args []string) error {
 			t := app.Th
 			if len(args) == 1 {
@@ -131,6 +132,15 @@ func resolveVariant(flag string, allowDetect bool, detectDark func() bool) (bool
 		return false, fmt.Errorf("%w: --variant must be auto, dark, or light (got %q)",
 			domain.ErrValidation, flag)
 	}
+}
+
+// completeThemeNames offers the registered theme names wherever one is typed — the
+// persistent --theme flag and `theme preview`'s optional argument. Sourced from the
+// registry (already sorted) rather than a literal list, so registering a theme is
+// still the only step: the completion, `theme list`, `config edit`'s cycler, and the
+// unknown-theme error all follow from the same enumeration.
+func completeThemeNames(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return design.Names(), cobra.ShellCompDirectiveNoFileComp
 }
 
 // themeEntries builds the rows for `theme list`: every registered theme, flagged
