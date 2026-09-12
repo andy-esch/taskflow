@@ -239,6 +239,7 @@
   "github.com/andy-esch/taskflow/internal/wire.ThreadGraphEnvelope": "ThreadGraphEnvelope is `thread graph --json`.",
   "github.com/andy-esch/taskflow/internal/wire.ThreadGraphNodeJSON": "ThreadGraphNodeJSON is one renderer-neutral vertex.",
   "github.com/andy-esch/taskflow/internal/wire.ThreadGraphProjectionJSON": "ThreadGraphProjectionJSON is the shared machine graph/plan projection.",
+  "github.com/andy-esch/taskflow/internal/wire.ThreadGraphScopeJSON": "ThreadGraphScopeJSON makes a bounded graph excerpt self-describing.",
   "github.com/andy-esch/taskflow/internal/wire.ThreadGraphWaveJSON": "ThreadGraphWaveJSON is a one-based explanatory generation of member task IDs.",
   "github.com/andy-esch/taskflow/internal/wire.ThreadJSON": "ThreadJSON is the persisted metadata and membership of one Thread.",
   "github.com/andy-esch/taskflow/internal/wire.ThreadMemberOutcomeJSON": "ThreadMemberOutcomeJSON records one resolved member intent, including an idempotent skip that deliberately caused no set change.",

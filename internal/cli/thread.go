@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -333,16 +334,28 @@ func newThreadPlanCmd(app *App) *cobra.Command {
 func newThreadGraphCmd(app *App) *cobra.Command {
 	var format string
 	var details bool
+	var around string
+	var depth int
 	cmd := &cobra.Command{
 		Use:               "graph <thread>",
 		Short:             "Export a deterministic Mermaid or DOT Thread graph",
-		Long:              "Render Thread members, immediate external gates, and every dependency edge between those bounded nodes from the shared runtime projection. Compact labels prioritize the human task title, lifecycle state and role, then stable ID; adapters without a body-derived title fall back to a humanized slug. --details adds a bounded description. Mermaid is the default. Generated output is never persisted; --json emits the neutral projection instead of renderer text and cannot be combined with renderer flags.",
+		Long:              "Render Thread members, immediate external gates, and every dependency edge between those bounded nodes from the shared runtime projection. Pass --around TASK to select the one-hop neighborhood around a member or external gate; --depth 2 widens it to two hops. The bounded output discloses omitted nodes and exact crossing edges. Compact labels prioritize the human task title, lifecycle state and role, then stable ID; adapters without a body-derived title fall back to a humanized slug. --details adds a bounded description. Mermaid is the default. Generated output is never persisted; --json emits the full or selected neutral projection instead of renderer text and cannot be combined with renderer flags.",
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: app.completeThreadSlugs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			aroundSet := cmd.Flags().Changed("around")
 			if app.JSON && (cmd.Flags().Changed("format") || details) {
 				return fmt.Errorf("%w: renderer flags --format and --details cannot be combined with --json; JSON emits the neutral graph projection", domain.ErrValidation)
+			}
+			if aroundSet && strings.TrimSpace(around) == "" {
+				return fmt.Errorf("%w: --around requires a non-empty task name or ID", domain.ErrValidation)
+			}
+			if !aroundSet && cmd.Flags().Changed("depth") {
+				return fmt.Errorf("%w: --depth requires --around TASK", domain.ErrValidation)
+			}
+			if aroundSet && depth != 1 && depth != 2 {
+				return fmt.Errorf("%w: Thread graph neighborhood depth must be 1 or 2, got %d", domain.ErrValidation, depth)
 			}
 			if format != "mermaid" && format != "dot" {
 				return fmt.Errorf("%w: unsupported Thread graph format %q (want mermaid or dot)", domain.ErrValidation, format)
@@ -350,6 +363,12 @@ func newThreadGraphCmd(app *App) *cobra.Command {
 			projection, err := app.Svc.ShowThreadGraph(args[0])
 			if err != nil {
 				return err
+			}
+			if aroundSet {
+				projection, err = core.SelectThreadGraphNeighborhood(projection, around, depth)
+				if err != nil {
+					return err
+				}
 			}
 			if app.JSON {
 				return render.ThreadGraphJSON(app.Out, projection)
@@ -371,8 +390,11 @@ func newThreadGraphCmd(app *App) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&details, "details", false, "include a bounded task description in each graph node")
 	cmd.Flags().StringVar(&format, "format", "mermaid", "graph output format: mermaid|dot")
+	cmd.Flags().StringVar(&around, "around", "", "show a bounded neighborhood around a member or external-gate task")
+	cmd.Flags().IntVar(&depth, "depth", 1, "neighborhood hop depth: 1|2 (requires --around)")
 	_ = cmd.RegisterFlagCompletionFunc("format", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return []string{"mermaid", "dot"}, cobra.ShellCompDirectiveNoFileComp
 	})
+	_ = cmd.RegisterFlagCompletionFunc("around", app.completeTaskSlugs)
 	return cmd
 }

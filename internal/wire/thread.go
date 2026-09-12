@@ -207,6 +207,22 @@ type ThreadGraphWaveJSON struct {
 	TaskIDs []string `json:"task_ids"`
 }
 
+// ThreadGraphScopeJSON makes a bounded graph excerpt self-describing. Boundary
+// edges retain exact directed continuation evidence while remaining outside the
+// induced edges rendered as visible task-to-task relationships.
+type ThreadGraphScopeJSON struct {
+	Kind          string                `json:"kind" jsonschema:"description=neighborhood"`
+	FocalTaskID   string                `json:"focal_task_id"`
+	Depth         int                   `json:"depth" jsonschema:"description=undirected hop distance over supplied directed edges; currently 1 or 2"`
+	TotalNodes    int                   `json:"total_nodes"`
+	ShownNodes    int                   `json:"shown_nodes"`
+	HiddenNodes   int                   `json:"hidden_nodes"`
+	TotalEdges    int                   `json:"total_edges"`
+	ShownEdges    int                   `json:"shown_edges"`
+	HiddenEdges   int                   `json:"hidden_edges"`
+	BoundaryEdges []ThreadGraphEdgeJSON `json:"boundary_edges" jsonschema:"description=exact supplied directed edges with one shown and one omitted endpoint; not part of projection.edges"`
+}
+
 // ThreadGraphProjectionJSON is the shared machine graph/plan projection. It is
 // intentionally renderer- and framework-neutral.
 type ThreadGraphProjectionJSON struct {
@@ -215,6 +231,7 @@ type ThreadGraphProjectionJSON struct {
 	Edges            []ThreadGraphEdgeJSON `json:"edges"`
 	Waves            []ThreadGraphWaveJSON `json:"waves"`
 	TopologyComplete bool                  `json:"topology_complete" jsonschema:"description=true only when the member topology and qualifying Thread projection are healthy and complete"`
+	Scope            *ThreadGraphScopeJSON `json:"scope,omitempty" jsonschema:"description=present only when nodes edges and waves are a bounded excerpt of the supplied Thread graph"`
 }
 
 func ToThreadGraphProjectionJSON(projection core.ThreadGraphProjection) ThreadGraphProjectionJSON {
@@ -236,6 +253,17 @@ func ToThreadGraphProjectionJSON(projection core.ThreadGraphProjection) ThreadGr
 	}
 	for _, wave := range projection.Waves {
 		payload.Waves = append(payload.Waves, ThreadGraphWaveJSON{Index: wave.Index, TaskIDs: append([]string{}, wave.TaskIDs...)})
+	}
+	if projection.Scope != nil {
+		payload.Scope = &ThreadGraphScopeJSON{
+			Kind: string(projection.Scope.Kind), FocalTaskID: projection.Scope.FocalTaskID, Depth: projection.Scope.Depth,
+			TotalNodes: projection.Scope.TotalNodes, ShownNodes: projection.Scope.ShownNodes, HiddenNodes: projection.Scope.HiddenNodes,
+			TotalEdges: projection.Scope.TotalEdges, ShownEdges: projection.Scope.ShownEdges, HiddenEdges: projection.Scope.HiddenEdges,
+			BoundaryEdges: make([]ThreadGraphEdgeJSON, 0, len(projection.Scope.BoundaryEdges)),
+		}
+		for _, edge := range projection.Scope.BoundaryEdges {
+			payload.Scope.BoundaryEdges = append(payload.Scope.BoundaryEdges, ThreadGraphEdgeJSON{From: edge.From, To: edge.To})
+		}
 	}
 	return payload
 }

@@ -264,7 +264,10 @@ import (
 // 1.64: Thread graph and plan nodes may carry `title`, the first non-fenced H1
 // derived from a Markdown task body. The existing stable `label` remains the
 // slug and portable adapters may omit title when body-derived data is unavailable.
-const SchemaVersion = "1.64"
+// 1.65: bounded `thread graph` projections may carry `scope`, identifying the
+// focal task, hop depth, shown/hidden counts, and exact directed boundary edges.
+// Full graph and `thread plan` projections omit it.
+const SchemaVersion = "1.65"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

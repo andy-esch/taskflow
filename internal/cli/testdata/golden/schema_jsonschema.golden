@@ -4264,6 +4264,10 @@
         "topology_complete": {
           "type": "boolean",
           "description": "true only when the member topology and qualifying Thread projection are healthy and complete"
+        },
+        "scope": {
+          "$ref": "#/$defs/ThreadGraphScopeJSON",
+          "description": "present only when nodes edges and waves are a bounded excerpt of the supplied Thread graph"
         }
       },
       "additionalProperties": false,
@@ -4276,6 +4280,61 @@
         "topology_complete"
       ],
       "description": "ThreadGraphProjectionJSON is the shared machine graph/plan projection."
+    },
+    "ThreadGraphScopeJSON": {
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "neighborhood"
+        },
+        "focal_task_id": {
+          "type": "string"
+        },
+        "depth": {
+          "type": "integer",
+          "description": "undirected hop distance over supplied directed edges; currently 1 or 2"
+        },
+        "total_nodes": {
+          "type": "integer"
+        },
+        "shown_nodes": {
+          "type": "integer"
+        },
+        "hidden_nodes": {
+          "type": "integer"
+        },
+        "total_edges": {
+          "type": "integer"
+        },
+        "shown_edges": {
+          "type": "integer"
+        },
+        "hidden_edges": {
+          "type": "integer"
+        },
+        "boundary_edges": {
+          "items": {
+            "$ref": "#/$defs/ThreadGraphEdgeJSON"
+          },
+          "type": "array",
+          "description": "exact supplied directed edges with one shown and one omitted endpoint; not part of projection.edges"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind",
+        "focal_task_id",
+        "depth",
+        "total_nodes",
+        "shown_nodes",
+        "hidden_nodes",
+        "total_edges",
+        "shown_edges",
+        "hidden_edges",
+        "boundary_edges"
+      ],
+      "description": "ThreadGraphScopeJSON makes a bounded graph excerpt self-describing."
     },
     "ThreadGraphWaveJSON": {
       "properties": {
@@ -5168,6 +5227,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.64)",
+  "title": "tskflwctl --json output (schema_version 1.65)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }
