@@ -38,19 +38,31 @@ func contrastRatio(a, b float64) float64 {
 // regular-match and current-match backgrounds. The light palette shares one MatchFg
 // across two backgrounds, so this is where a white-on-amber regression (~2.3:1, the
 // bug this replaced) would be caught.
+// Every registered theme's find highlights, not just the default's: the Match /
+// MatchCurrent / MatchFg triple is one shared foreground over two backgrounds, so a
+// theme that picks a fg for its match color can silently fail on its current-hit (the
+// exact defect the light palette's comment records). Loops Names() like
+// TestChromeSurfaceContrastAA, so a newly-registered theme is covered on arrival
+// rather than shipping its highlights unverified.
 func TestFindHighlightContrastAA(t *testing.T) {
-	for _, bg := range []string{"dark", "light"} {
-		p := Default().For(bg == "dark")
-		for _, pr := range []struct {
-			name   string
-			bg, fg string
-		}{
-			{"match", p.Match.Hex, p.MatchFg.Hex},
-			{"current", p.MatchCurrent.Hex, p.MatchFg.Hex},
-		} {
-			if r := contrastRatio(relLuminance(t, pr.bg), relLuminance(t, pr.fg)); r < 4.5 {
-				t.Errorf("%s find-%s contrast %.2f:1 (bg %s / fg %s) < 4.5:1 AA",
-					bg, pr.name, r, pr.bg, pr.fg)
+	for _, name := range Names() {
+		th, ok := Lookup(name)
+		if !ok {
+			t.Fatalf("%s should be registered", name)
+		}
+		for _, bg := range []string{"dark", "light"} {
+			p := th.For(bg == "dark")
+			for _, pr := range []struct {
+				name   string
+				bg, fg string
+			}{
+				{"match", p.Match.Hex, p.MatchFg.Hex},
+				{"current", p.MatchCurrent.Hex, p.MatchFg.Hex},
+			} {
+				if r := contrastRatio(relLuminance(t, pr.bg), relLuminance(t, pr.fg)); r < 4.5 {
+					t.Errorf("%s/%s find-%s contrast %.2f:1 (bg %s / fg %s) < 4.5:1 AA",
+						name, bg, pr.name, r, pr.bg, pr.fg)
+				}
 			}
 		}
 	}
