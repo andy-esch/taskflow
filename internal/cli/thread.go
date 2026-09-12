@@ -332,16 +332,20 @@ func newThreadPlanCmd(app *App) *cobra.Command {
 
 func newThreadGraphCmd(app *App) *cobra.Command {
 	var format string
+	var details bool
 	cmd := &cobra.Command{
 		Use:               "graph <thread>",
 		Short:             "Export a deterministic Mermaid or DOT Thread graph",
-		Long:              "Render Thread members, immediate external gates, and every dependency edge between those bounded nodes from the shared runtime projection. Mermaid is the default. Generated output is never persisted; --json emits the neutral projection instead of renderer text and cannot be combined with an explicit --format.",
+		Long:              "Render Thread members, immediate external gates, and every dependency edge between those bounded nodes from the shared runtime projection. Compact labels prioritize the human task title, lifecycle state and role, then stable ID; adapters without a body-derived title fall back to a humanized slug. --details adds a bounded description. Mermaid is the default. Generated output is never persisted; --json emits the neutral projection instead of renderer text and cannot be combined with renderer flags.",
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"safety": "read-only"},
 		ValidArgsFunction: app.completeThreadSlugs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if app.JSON && cmd.Flags().Changed("format") {
-				return fmt.Errorf("%w: --format cannot be combined with --json; JSON emits the neutral graph projection", domain.ErrValidation)
+			if app.JSON && (cmd.Flags().Changed("format") || details) {
+				return fmt.Errorf("%w: renderer flags --format and --details cannot be combined with --json; JSON emits the neutral graph projection", domain.ErrValidation)
+			}
+			if format != "mermaid" && format != "dot" {
+				return fmt.Errorf("%w: unsupported Thread graph format %q (want mermaid or dot)", domain.ErrValidation, format)
 			}
 			projection, err := app.Svc.ShowThreadGraph(args[0])
 			if err != nil {
@@ -351,13 +355,12 @@ func newThreadGraphCmd(app *App) *cobra.Command {
 				return render.ThreadGraphJSON(app.Out, projection)
 			}
 			var output string
+			options := graphfmt.RenderOptions{IncludeDescriptions: details}
 			switch format {
 			case "mermaid":
-				output, err = graphfmt.Mermaid(projection)
+				output, err = graphfmt.MermaidWithOptions(projection, options)
 			case "dot":
-				output, err = graphfmt.DOT(projection)
-			default:
-				return fmt.Errorf("%w: unsupported Thread graph format %q (want mermaid or dot)", domain.ErrValidation, format)
+				output, err = graphfmt.DOTWithOptions(projection, options)
 			}
 			if err != nil {
 				return err
@@ -366,6 +369,7 @@ func newThreadGraphCmd(app *App) *cobra.Command {
 			return err
 		},
 	}
+	cmd.Flags().BoolVar(&details, "details", false, "include a bounded task description in each graph node")
 	cmd.Flags().StringVar(&format, "format", "mermaid", "graph output format: mermaid|dot")
 	_ = cmd.RegisterFlagCompletionFunc("format", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return []string{"mermaid", "dot"}, cobra.ShellCompDirectiveNoFileComp

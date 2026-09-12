@@ -181,11 +181,14 @@ func ToThreadFrontierEnvelope(view core.ThreadView) ThreadFrontierEnvelope {
 	return ThreadFrontierEnvelope{SchemaVersion: SchemaVersion, View: ToThreadViewJSON(view)}
 }
 
-// ThreadGraphNodeJSON is one renderer-neutral vertex. Labels and descriptions
-// remain raw transport data; Mermaid and DOT escaping belongs to graphfmt.
+// ThreadGraphNodeJSON is one renderer-neutral vertex. Title is optional
+// body-derived presentation data; Label retains the stable slug-era contract.
+// All strings remain raw transport data; Mermaid and DOT escaping belongs to
+// graphfmt.
 type ThreadGraphNodeJSON struct {
 	TaskID      string             `json:"task_id"`
 	Label       string             `json:"label"`
+	Title       string             `json:"title,omitempty"`
 	Description string             `json:"description"`
 	Status      string             `json:"status"`
 	Role        string             `json:"role" jsonschema:"description=member|external-gate"`
@@ -224,7 +227,7 @@ func ToThreadGraphProjectionJSON(projection core.ThreadGraphProjection) ThreadGr
 	}
 	for _, node := range projection.Nodes {
 		payload.Nodes = append(payload.Nodes, ThreadGraphNodeJSON{
-			TaskID: node.TaskID, Label: node.Label, Description: node.Description,
+			TaskID: node.TaskID, Label: node.Label, Title: node.Title, Description: node.Description,
 			Status: string(node.Status), Role: string(node.Role), State: toTaskGraphStateJSON(node.State),
 		})
 	}

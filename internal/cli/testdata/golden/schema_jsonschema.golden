@@ -4209,6 +4209,9 @@
         "label": {
           "type": "string"
         },
+        "title": {
+          "type": "string"
+        },
         "description": {
           "type": "string"
         },
@@ -5165,6 +5168,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.63)",
+  "title": "tskflwctl --json output (schema_version 1.64)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

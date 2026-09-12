@@ -12,6 +12,7 @@ import (
 func TestProjectThreadGraphBoundsAndOrdersNeutralProjection(t *testing.T) {
 	external := graphRecord("external-gate", domain.StatusCompleted)
 	first := graphRecord("first-member", domain.StatusCompleted, external.ID)
+	first.Title = "First Member"
 	second := graphRecord("second-member", domain.StatusReadyToStart, first.ID)
 	disconnected := graphRecord("disconnected-member", domain.StatusNextUp)
 	thread := domain.Thread{
@@ -33,14 +34,19 @@ func TestProjectThreadGraphBoundsAndOrdersNeutralProjection(t *testing.T) {
 	slices.Sort(wantNodeIDs)
 	gotNodeIDs := make([]string, len(projection.Nodes))
 	roles := make(map[string]ThreadTaskRole)
+	titles := make(map[string]string)
 	for i, node := range projection.Nodes {
 		gotNodeIDs[i], roles[node.TaskID] = node.TaskID, node.Role
+		titles[node.TaskID] = node.Title
 	}
 	if !slices.Equal(gotNodeIDs, wantNodeIDs) {
 		t.Fatalf("nodes=%v want=%v", gotNodeIDs, wantNodeIDs)
 	}
 	if roles[external.ID] != ThreadTaskExternalGate || roles[first.ID] != ThreadTaskMember {
 		t.Fatalf("roles=%v", roles)
+	}
+	if titles[first.ID] != "First Member" || titles[external.ID] != "" {
+		t.Fatalf("titles=%v", titles)
 	}
 	wantEdges := []ThreadGraphEdge{{From: external.ID, To: first.ID}, {From: first.ID, To: second.ID}}
 	slices.SortFunc(wantEdges, func(a, b ThreadGraphEdge) int {

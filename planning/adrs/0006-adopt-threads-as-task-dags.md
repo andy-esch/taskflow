@@ -1090,10 +1090,12 @@ a Thread. The corrected adapter boundary is:
    is indistinguishable from a genuinely missing member. This consistency contract is for
    explanatory reads only and does not replace guarded mutation revalidation.
 5. **Text graph formats are reusable output adapters.** `internal/graphfmt` owns pure deterministic
-   Mermaid and DOT formatting and format-specific escaping. It consumes raw labels from the neutral
-   core projection and imports no CLI/TUI/HTTP framework. A TUI, served adapter, or library caller
-   can reuse a formatter or consume the projection directly without shelling out to the CLI or
-   parsing presentation text.
+   Mermaid and DOT formatting and format-specific escaping. It consumes raw titles, labels, and
+   descriptions from the neutral core projection and imports no CLI/TUI/HTTP framework. Local
+   Markdown reads derive an optional title from the first non-fenced H1; pathless adapters may omit
+   it and retain the stable slug label. A TUI, served adapter, or library caller can reuse a
+   formatter or consume the projection directly without shelling out to the CLI or parsing
+   presentation text.
 6. **Load diagnostics cross the adapter boundary before additional primary adapters consume them.**
    The initial narrow sources returned filesystem-shaped `FileProblem` values, and core recovered
    unreadable identity from `<id>-<slug>.md`. Task
@@ -1135,16 +1137,19 @@ export:
    every prerequisite-to-dependent edge whose endpoints are both in that bounded node set,
    member-only waves, and an explicit topology-completeness verdict. Member waves preserve ordering
    paths that pass through included external gates by contracting those gate vertices; gates remain
-   outside the waves and never become Thread-owned work. The projection carries raw labels and
-   taskflow-owned semantic types only. CLI, TUI, future web, and library callers may consume it
-   directly.
+   outside the waves and never become Thread-owned work. The projection carries the stable slug
+   label, an optional body-derived human title, raw description, and taskflow-owned semantic types.
+   CLI, TUI, future web, and library callers may consume it directly.
 2. **Plans and diagrams are different presentations of the same evidence.** `thread plan` presents
    member waves and lists external gates separately. `thread graph` emits Mermaid by default or DOT
-   when requested. ASCII/Unicode is deferred in V1 rather than advertised as an unavailable format.
-   Neither surface is a scheduler, dispatch authorization, duration estimate, or barrier protocol.
+   when requested. Graph nodes default to a bounded title/state/role/stable-ID hierarchy;
+   `--details` adds a bounded description without changing the projection. ASCII/Unicode is deferred
+   in V1 rather than advertised as an unavailable format. Neither surface is a scheduler, dispatch
+   authorization, duration estimate, or barrier protocol.
 3. **Machine output remains semantic.** `--json` on either command returns the versioned neutral
-   projection, never renderer text embedded in JSON. Explicit `--format` and `--json` are mutually
-   exclusive so renderer selection cannot leak into the machine contract.
+   projection, never renderer text embedded in JSON. Explicit renderer flags (`--format` and
+   `--details`) and `--json` are mutually exclusive so presentation choices cannot leak into the
+   machine contract.
 4. **Health qualifies topology.** Broken or degraded evidence may retain useful partial waves and
    renderable nodes/edges for diagnosis, but `topology_complete` is true only when the Thread
    projection and member topology are healthy and complete. Broken or unknown members stay visible

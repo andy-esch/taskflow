@@ -300,7 +300,7 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 		reason, kind := entityNameProblem(base)
 		return domain.Task{}, fmt.Errorf("%w: %q %s", kind, base, reason)
 	}
-	fm, _, err := splitFrontmatterStrict(content)
+	fm, body, err := splitFrontmatterStrict(content)
 	if err != nil {
 		return domain.Task{}, err
 	}
@@ -333,6 +333,9 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 		t.StatusFellBack = true
 	}
 	t.Slug = slug
+	if title, ok := domain.FirstH1(string(body)); ok {
+		t.Title = title
+	}
 	t.FilenameID = fnID
 	t.Path = path
 	t.SourceVersion = hashContent(content)

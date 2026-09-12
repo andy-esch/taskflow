@@ -5,6 +5,10 @@ package domain
 type Task struct {
 	Slug string `yaml:"-"`
 	Path string `yaml:"-"`
+	// Title is the first non-fenced H1 in the Markdown body. It is derived by
+	// adapters rather than duplicated in frontmatter; callers must fall back to
+	// Slug when an adapter cannot provide body-derived presentation data.
+	Title string `yaml:"-"`
 	// SourceVersion is the store-internal hash of the exact bytes that produced this
 	// record. TaskGraph retains it for whole-snapshot CAS but clears it from Task()
 	// projections, so planners never receive persistence tokens.
