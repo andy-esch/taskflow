@@ -134,7 +134,8 @@ tskflwctl thread list                  # nominal/sound rollups + graph/projectio
 tskflwctl thread show <thread>         # members, direct external gates, frontier, and body
 tskflwctl thread frontier <thread>     # in-flight context, then clear-gated next-up/ready members
 tskflwctl thread plan <thread>         # explanatory member waves and external gates; not dispatch authorization
-tskflwctl thread graph <thread>        # compact titled Mermaid; add --details or --format dot
+tskflwctl thread graph <thread>        # full compact Mermaid; add --format dot or --details
+tskflwctl thread graph <thread> --around <task> --depth 1  # truthful review-sized neighborhood
 tskflwctl thread path <thread>         # local parse-free path for direct repair
 tskflwctl epic list                    # rollup: done/total per epic
 tskflwctl epic show <id> --section goal # epic body section (or --frontmatter-only); epic path <id> for the file
