@@ -839,10 +839,18 @@ func (g *TaskGraph) Task(taskID string) (domain.Task, bool) {
 // lets guarded planners resolve user input without Store re-entry or a pre-lock
 // TOCTOU choice. Exact unreadable IDs remain addressable for diagnostic queries.
 func (g *TaskGraph) ResolveTaskID(ref string) (string, error) {
+	return resolveTaskReference(ref, g.referenceCandidates)
+}
+
+// resolveTaskReference is the shared, storage-free task-reference resolver.
+// Callers provide only the candidate namespace they are authorized to address;
+// this keeps exact-ID precedence and the ordinary slug tiers consistent without
+// letting a bounded projection accidentally resolve a task outside its scope.
+func resolveTaskReference(ref string, source []taskReferenceCandidate) (string, error) {
 	if ref == "" || strings.ContainsAny(ref, `/\`) || strings.Contains(ref, "..") {
 		return "", fmt.Errorf("%w: task name %q must be a plain name (no path separators)", domain.ErrValidation, ref)
 	}
-	candidates := append([]taskReferenceCandidate(nil), g.referenceCandidates...)
+	candidates := append([]taskReferenceCandidate(nil), source...)
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].id != candidates[j].id {
 			return candidates[i].id < candidates[j].id

@@ -458,7 +458,7 @@ tskflwctl thread list [--status <status>]
 tskflwctl thread show <thread>               # Rollup, blockers, external gates, frontier
 tskflwctl thread frontier <thread>           # Machine list of graph-clear pending members
 tskflwctl thread plan <thread>               # Explanatory topology/waves
-tskflwctl thread graph <thread> [--format mermaid|dot]
+tskflwctl thread graph <thread> [--format mermaid|dot] [--around <task> --depth 1|2]
 
 # Existing task queries gain Thread filters
 tskflwctl task list --thread <thread> [--unblocked]
@@ -1411,6 +1411,24 @@ tracks, but production promotion requires dedicated dense-route hardening rather
 prototype router as proven. One-hop focus, reusable Back navigation, and consistent child-action
 targets are separately tracked extensions; their value does not expand the canonical Thread graph
 boundary or move presentation semantics into core.
+
+### 2026-09-12: Bounded neighborhoods are semantic excerpts with explicit boundaries
+
+Large-graph dogfood needs a review-sized causal view without replacing the full spatial graph or
+quietly inventing a second graph model. A pure core selector now derives a one- or two-hop
+neighborhood from the already-supplied `ThreadGraphProjection`. Hop distance is undirected for
+proximity, while every retained dependency stays prerequisite-to-dependent. The result contains
+the focal node, the induced node/edge set, original wave indexes for shown members, full source
+health diagnostics, shown/hidden counts, and the exact directed edges crossing the excerpt.
+
+`thread graph --around <task> [--depth 1|2]` exposes that same result through Mermaid, DOT, and the
+versioned JSON projection; full export remains the default. Text renderers mark the focal task,
+state plainly that the view is bounded, and group crossing edges into deterministic continuation
+markers rather than drawing omitted tasks. JSON retains those exact crossing edges so TUI, web,
+and PR adapters can make their own faithful presentation choices. The selector does not rescan the
+repository, choose a focus automatically, encode viewport geometry, or import terminal/GitHub
+policy. The separately planned TUI focus mode can therefore reuse this seam while keeping its
+overlay and navigation behavior replaceable.
 
 ## Related
 

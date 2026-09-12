@@ -79,6 +79,7 @@ func TestGolden_MachineContract(t *testing.T) {
 		{"thread_show_json", []string{"-C", fixtureRepo, "thread", "show", "fixture-thread", "--json"}, nil},
 		{"thread_frontier_json", []string{"-C", fixtureRepo, "thread", "frontier", "fixture-thread", "--json"}, nil},
 		{"thread_graph_json", []string{"-C", fixtureRepo, "thread", "graph", "fixture-thread", "--json"}, nil},
+		{"thread_graph_neighborhood_json", []string{"-C", fixtureRepo, "thread", "graph", "fixture-thread", "--around", "alpha-task", "--depth", "1", "--json"}, nil},
 		{"thread_plan_json", []string{"-C", fixtureRepo, "thread", "plan", "fixture-thread", "--json"}, nil},
 		{"thread_path_json", []string{"-C", fixtureRepo, "thread", "path", "fixture-thread", "--json"}, redact},
 		// task info / task path emit an absolute file path → redact the fixture root

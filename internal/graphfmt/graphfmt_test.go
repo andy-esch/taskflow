@@ -290,3 +290,79 @@ func TestFormattersKeepLegendDeterministicForMemberOnlyDegradedProjection(t *tes
 		t.Fatalf("DOT legend is unbounded or introduced an edge:\n%s", firstDOT)
 	}
 }
+
+func TestBoundedFormattersDiscloseScopeFocusAndBoundaryContinuations(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		View: core.ThreadView{GraphHealth: core.GraphDegraded, ProjectionHealth: core.GraphBroken},
+		Nodes: []core.ThreadGraphNode{
+			{TaskID: "6g0000000002", Label: "focus <task>", Status: domain.StatusInProgress, Role: core.ThreadTaskMember},
+			{TaskID: "6g0000000003", Label: "shown-child", Status: domain.StatusNextUp, Role: core.ThreadTaskMember},
+		},
+		Edges: []core.ThreadGraphEdge{{From: "6g0000000002", To: "6g0000000003"}},
+		Scope: &core.ThreadGraphScope{
+			Kind: core.ThreadGraphScopeNeighborhood, FocalTaskID: "6g0000000002", Depth: 1,
+			TotalNodes: 4, ShownNodes: 2, HiddenNodes: 2, TotalEdges: 3, ShownEdges: 1, HiddenEdges: 2,
+			BoundaryEdges: []core.ThreadGraphEdge{
+				{From: "6g0000000001", To: "6g0000000002"},
+				{From: "6g0000000003", To: "6g0000000004"},
+			},
+		},
+	}
+
+	mermaid, err := Mermaid(projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"scope=bounded Thread neighborhood focus=6g0000000002 depth=1 shown_nodes=2 total_nodes=4 hidden_nodes=2",
+		"Bounded Thread neighborhood &#183; 1 hop &#183; 2/4 nodes shown &#183; 2 hidden",
+		`n0["Focus &#60;task&#62;`, "class n0 memberFocus", "stroke:#c026d3",
+		`boundary0["&#8230; 1 omitted prerequisite edge"]`, "boundary0 -.-> n0",
+		`boundary1["&#8230; 1 omitted dependent edge"]`, "n1 -.-> boundary1",
+		"Omitted continuation<br/>summary marker &#183; dotted edge",
+	} {
+		if !strings.Contains(mermaid, want) {
+			t.Errorf("bounded Mermaid missing %q:\n%s", want, mermaid)
+		}
+	}
+	for _, hiddenID := range []string{"6g0000000001", "6g0000000004"} {
+		if strings.Contains(mermaid, hiddenID) {
+			t.Errorf("bounded Mermaid leaked omitted task identity %s:\n%s", hiddenID, mermaid)
+		}
+	}
+
+	dot, err := DOT(projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"scope=bounded Thread neighborhood focus=6g0000000002 depth=1",
+		`label="Bounded Thread neighborhood · 1 hop · 2/4 nodes shown · 2 hidden"`,
+		`focal="true"`, `color="#c026d3"`, `penwidth=3`,
+		`label="… 1 omitted prerequisite edge"`, `boundary0 -> n0 [style="dotted"]`,
+		`label="… 1 omitted dependent edge"`, `n1 -> boundary1 [style="dotted"]`,
+	} {
+		if !strings.Contains(dot, want) {
+			t.Errorf("bounded DOT missing %q:\n%s", want, dot)
+		}
+	}
+}
+
+func TestBoundedFormattersRejectDishonestScopeMetadata(t *testing.T) {
+	projection := core.ThreadGraphProjection{
+		Nodes: []core.ThreadGraphNode{{TaskID: "6g0000000001", Role: core.ThreadTaskMember}},
+		Scope: &core.ThreadGraphScope{
+			Kind: core.ThreadGraphScopeNeighborhood, FocalTaskID: "6g0000000001", Depth: 1,
+			TotalNodes: 2, ShownNodes: 1, HiddenNodes: 1, TotalEdges: 1, HiddenEdges: 1,
+			BoundaryEdges: []core.ThreadGraphEdge{{From: "", To: "6g0000000001"}},
+		},
+	}
+	if _, err := Mermaid(projection); err == nil || !strings.Contains(err.Error(), "empty endpoint") {
+		t.Fatalf("invalid boundary error=%v", err)
+	}
+	projection.Scope.BoundaryEdges = nil
+	projection.Scope.ShownNodes = 2
+	if _, err := DOT(projection); err == nil || !strings.Contains(err.Error(), "scope counts") {
+		t.Fatalf("invalid count error=%v", err)
+	}
+}

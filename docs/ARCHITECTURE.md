@@ -225,11 +225,18 @@ adapter capabilities rather than leaked persistence.
   authorize mutation. `ThreadGraphProjection` extends this boundary with stable-ID-ordered raw
   member and immediate-external-gate nodes, stable slug labels, optional body-derived human titles,
   every prerequisite-to-dependent edge induced by that bounded node set, member-only explanatory
-  waves, the complete `ThreadView`, and an explicit topology-completeness verdict. Waves contract
-  ordering paths through included gates without treating those gates as Thread-owned work. CLI,
+  waves, the complete `ThreadView`, and an explicit topology-completeness verdict. A pure selector
+  can narrow that supplied projection to the one- or two-hop neighborhood around a member or
+  external gate. It treats hop proximity as undirected while retaining edge direction, filters
+  waves without renumbering them, and attaches focal identity, shown/hidden counts, and exact
+  crossing edges as scope evidence. It never rescans repository data or imports adapter policy.
+  The full projection's waves contract ordering paths through included gates without treating
+  those gates as Thread-owned work. CLI,
   TUI, and future web adapters consume that projection; `thread plan` presents its waves and marked
   gates, `thread graph` exports compact title/state/role/ID nodes as Mermaid or DOT (with bounded
-  descriptions available through `--details`), and Thread detail in the TUI groups each bounded
+  descriptions available through `--details`). Its optional `--around TASK --depth 1|2` view marks
+  the focal task and summarizes omitted boundary continuations without presenting the excerpt as
+  the complete Thread. Thread detail in the TUI groups each bounded
   incoming edge beneath its
   dependent wave node using compact presentation aliases without reparsing either text format. A
   stable-ID cursor walks those supplied gate/wave/unranked rows and delegates Enter-to-open back to

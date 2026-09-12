@@ -55,3 +55,29 @@ func TestToThreadGraphProjectionJSONAddsTitleWithoutReplacingLabel(t *testing.T)
 		t.Fatalf("node = %+v", payload.Nodes)
 	}
 }
+
+func TestToThreadGraphProjectionJSONKeepsOptionalNeighborhoodScopeExact(t *testing.T) {
+	full := ToThreadGraphProjectionJSON(core.ThreadGraphProjection{})
+	if full.Scope != nil {
+		t.Fatalf("full graph unexpectedly has scope: %+v", full.Scope)
+	}
+
+	bounded := ToThreadGraphProjectionJSON(core.ThreadGraphProjection{Scope: &core.ThreadGraphScope{
+		Kind: core.ThreadGraphScopeNeighborhood, FocalTaskID: "6g0000000001", Depth: 2,
+		TotalNodes: 8, ShownNodes: 4, HiddenNodes: 4, TotalEdges: 10, ShownEdges: 3, HiddenEdges: 7,
+		BoundaryEdges: []core.ThreadGraphEdge{{From: "6g0000000004", To: "6g0000000005"}},
+	}})
+	if bounded.Scope == nil || bounded.Scope.Kind != "neighborhood" || bounded.Scope.FocalTaskID != "6g0000000001" ||
+		bounded.Scope.Depth != 2 || bounded.Scope.TotalNodes != 8 || bounded.Scope.ShownNodes != 4 ||
+		bounded.Scope.HiddenNodes != 4 || bounded.Scope.TotalEdges != 10 || bounded.Scope.ShownEdges != 3 ||
+		bounded.Scope.HiddenEdges != 7 || !slices.Equal(bounded.Scope.BoundaryEdges, []ThreadGraphEdgeJSON{{From: "6g0000000004", To: "6g0000000005"}}) {
+		t.Fatalf("scope=%+v", bounded.Scope)
+	}
+	encoded, err := json.Marshal(full)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"scope"`) {
+		t.Fatalf("full graph encoded optional scope: %s", encoded)
+	}
+}

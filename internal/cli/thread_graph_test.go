@@ -89,6 +89,10 @@ func TestThreadGraphRejectsRendererSelectionInJSONAndUnknownFormats(t *testing.T
 		{args: []string{"-C", fixtureRepo, "thread", "graph", "fixture-thread", "--details", "--json"}, want: "renderer flags"},
 		{args: []string{"-C", fixtureRepo, "thread", "graph", "fixture-thread", "--format", "ascii"}, want: "format"},
 		{args: []string{"-C", fixtureRepo, "thread", "graph", "missing-thread", "--format", "ascii"}, want: "unsupported Thread graph format"},
+		{args: []string{"-C", fixtureRepo, "thread", "graph", "missing-thread", "--around", "alpha-task", "--depth", "3"}, want: "depth must be 1 or 2"},
+		{args: []string{"-C", fixtureRepo, "thread", "graph", "missing-thread", "--depth", "2"}, want: "--depth requires --around"},
+		{args: []string{"-C", fixtureRepo, "thread", "graph", "missing-thread", "--around", ""}, want: "--around requires a non-empty task"},
+		{args: []string{"-C", fixtureRepo, "thread", "graph", "missing-thread", "--around", " ", "--depth", "2"}, want: "--around requires a non-empty task"},
 	}
 	for _, test := range tests {
 		out, err := runRootRC(t, test.args...)
@@ -97,6 +101,53 @@ func TestThreadGraphRejectsRendererSelectionInJSONAndUnknownFormats(t *testing.T
 		}
 		if !strings.Contains(err.Error(), test.want) {
 			t.Fatalf("%v error=%v", test.args, err)
+		}
+	}
+}
+
+func TestThreadGraphSelectsSameBoundedNeighborhoodForTextAndJSON(t *testing.T) {
+	mermaid := runRoot(t, "-C", fixtureRepo, "thread", "graph", "fixture-thread", "--around", "alpha-task")
+	for _, want := range []string{
+		"bounded Thread neighborhood", "focus=6fjangd7kvh0", "depth=1", "shown_nodes=2", "hidden_nodes=1",
+		"Alpha Task", "Gamma Task",
+	} {
+		if !strings.Contains(mermaid, want) {
+			t.Errorf("bounded Mermaid missing %q:\n%s", want, mermaid)
+		}
+	}
+	if strings.Contains(mermaid, "Beta Task") {
+		t.Fatalf("bounded Mermaid included disconnected task:\n%s", mermaid)
+	}
+
+	out := runRoot(t, "-C", fixtureRepo, "thread", "graph", "fixture-thread", "--around", "6fjangd7kvh0", "--depth", "1", "--json")
+	var envelope wire.ThreadGraphEnvelope
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	projection := envelope.Projection
+	if projection.Scope == nil || projection.Scope.FocalTaskID != "6fjangd7kvh0" || projection.Scope.Depth != 1 ||
+		projection.Scope.TotalNodes != 3 || projection.Scope.ShownNodes != 2 || projection.Scope.HiddenNodes != 1 ||
+		len(projection.Nodes) != 2 || len(projection.Edges) != 1 {
+		t.Fatalf("projection=%+v", projection)
+	}
+
+	dot := runRoot(t, "-C", fixtureRepo, "thread", "graph", "fixture-thread", "--around", "gamma-task", "--depth", "2", "--format", "dot")
+	if !strings.Contains(dot, "bounded Thread neighborhood") || !strings.Contains(dot, `focal="true"`) {
+		t.Fatalf("bounded DOT omitted scope/focus evidence:\n%s", dot)
+	}
+}
+
+func TestThreadGraphRejectsUnknownAmbiguousAndUnreadableNeighborhoodFocus(t *testing.T) {
+	for _, test := range []struct {
+		ref  string
+		want string
+	}{
+		{ref: "missing-task", want: "not a node in the supplied Thread graph"},
+		{ref: "task", want: "matches 3 tasks"},
+	} {
+		_, err := runRootRC(t, "-C", fixtureRepo, "thread", "graph", "fixture-thread", "--around", test.ref)
+		if err == nil || !strings.Contains(err.Error(), test.want) {
+			t.Fatalf("focus %q error=%v want %q", test.ref, err, test.want)
 		}
 	}
 }
