@@ -5,7 +5,7 @@ description: 'Keep the multi-adapter core honest with enforceable dependency dir
 priority: medium
 tags: [architecture, quality]
 created: "2026-06-22"
-updated_at: "2026-08-22"
+updated_at: "2026-09-13"
 ---
 
 # Code quality & architecture hardening
@@ -43,9 +43,13 @@ whose remedy changes a boundary rather than one feature's behavior.
 
 ## Live work
 
-- The remaining ready tasks are bounded correctness or maintainability findings (BOM and
-  block-scalar handling, migration fidelity, error classification, test-stream fidelity,
-  and top-level audit lint), not a mandate for a package rewrite.
+- The reusable host/container release gate now turns the repository's automated qualification into
+  one executable contract while leaving publication and manual dogfood explicit.
+- [Make documentation layered, executable, and agent-navigable](../threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md)
+  sequences source ownership, the architecture split, selective package contracts, executable
+  examples and import graphs, and final drift enforcement without mandating a package rewrite.
+- Other ready tasks remain bounded correctness or maintainability findings such as BOM and
+  block-scalar handling, migration fidelity, and atomic-write consolidation.
 
 ## Trigger map for deferred seams
 

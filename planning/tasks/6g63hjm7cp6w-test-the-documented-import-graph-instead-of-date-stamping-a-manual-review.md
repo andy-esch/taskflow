@@ -10,15 +10,18 @@ priority: medium
 autonomy_level: 3
 tags: [architecture, docs, go, dx]
 created: "2026-09-02"
+depends_on: [6g6x7e2ef37r]
+updated_at: "2026-09-13"
 ---
 # Test the documented import graph instead of date-stamping a manual review
 
 ## Objective
 
-`docs/ARCHITECTURE.md` carries an explicit package dependency graph (the
+The current `docs/ARCHITECTURE.md` carries an explicit package dependency graph (the
 `domain -> id`, `core -> domain, id`, … block) under the note "Reviewed against
-the production import graph on 2026-08-22". That is a manual, date-stamped review
-of something `go list` can answer exactly, which means the doc is accurate only
+the production import graph on 2026-08-22". The architecture restructuring task will choose its
+durable home before this task implements a checker. Wherever it lands, it is a manual,
+date-stamped review of something `go list` can answer exactly, which means the doc is accurate only
 until the next import lands and nobody re-runs it by hand.
 
 `.golangci.yml` already makes the *stable* part of the direction executable, and
@@ -33,7 +36,9 @@ removes the review date as a thing a human has to refresh.
 
 ## Acceptance criteria
 
-- [ ] A test parses the dependency-graph block out of `docs/ARCHITECTURE.md` and compares it to the production import graph from `go list ./internal/...`
+- [ ] A test parses the dependency-graph block from the canonical focused architecture guide chosen
+      by the restructuring task and compares it to the production import graph from
+      `go list ./internal/...`.
 - [ ] Drift fails with a diff naming the added or removed edge, not just a boolean mismatch
 - [ ] Test-only imports are excluded, matching the existing golangci exemption for UI integration tests that construct `store.FS`
 - [ ] The "Reviewed against ... on <date>" line is replaced by a pointer to the test, so the doc no longer carries a staleness date
@@ -48,3 +53,5 @@ removes the review date as a thing a human has to refresh.
 ## Related
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
+- Thread [Make documentation layered, executable, and agent-navigable](../threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md)
+- Follows [Restructure the architecture documentation into focused guides](6g6x7e2ef37r-restructure-the-architecture-documentation-into-focused-guides.md)

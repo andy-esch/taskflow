@@ -10,6 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [docs, architecture, maintainability]
 created: "2026-09-04"
+depends_on: [6g9cz5saenme]
+updated_at: "2026-09-13"
 ---
 
 # Restructure the architecture documentation into focused guides
@@ -18,7 +20,9 @@ created: "2026-09-04"
 
 Make the architecture documentation easier to navigate and maintain by replacing the oversized
 single-file structure with a concise entry point and smaller, clearly owned guides organized around
-stable architectural concerns.
+stable architectural concerns. Use the source-of-truth matrix from the documentation-ownership task
+to decide what belongs in the index, a focused guide, generated output, package documentation, an
+ADR, or planning history.
 
 ## Acceptance criteria
 
@@ -40,3 +44,5 @@ stable architectural concerns.
 ## Related
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
+- Thread [Make documentation layered, executable, and agent-navigable](../threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md)
+- Follows [Establish documentation ownership and agent routing](6g9cz5saenme-establish-documentation-ownership-and-agent-routing.md)
