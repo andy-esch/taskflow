@@ -78,7 +78,7 @@ non-trivial finding before checking the dogfood criterion.
 
 ## Acceptance criteria
 
-- [ ] The one-hop TUI focus, graph input-limit regression, and reusable release-validation tasks
+- [x] The one-hop TUI focus, graph input-limit regression, and reusable release-validation tasks
   are completed and merged into the clean candidate.
 - [x] Host and pinned-container release validation pass against the same recorded commit with no
   tracked worktree changes.
@@ -113,3 +113,16 @@ Host and pinned-container validation both passed against clean commit
 format/tidy and generated-artifact checks, lint with zero issues, the package vulnerability scan,
 planning integrity, GoReleaser configuration, and an isolated four-platform snapshot. The final
 release candidate must repeat both commands after this planning evidence lands on `main`.
+
+## Merged prerequisite evidence (2026-09-13)
+
+[PR #236](https://github.com/andy-esch/taskflow/pull/236) merged the one-hop closeout, graph input-limit
+regressions, and reusable release gate to `main` at
+`a1789c64b952f92678d7dc9a319b92045074534a`. The release checkpoint remains in progress until that
+merged candidate passes the recorded automated and manual qualification steps and publication is
+verified.
+
+Both `just release-validate` and `just release-validate-container` subsequently passed against a
+clean detached clone of that exact merge commit. Each completed the full shared gate and four-target
+snapshot without changing the candidate. This satisfies the automated qualification criterion;
+manual TUI dogfood, release notes, and publication verification remain open.
