@@ -11,6 +11,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 
@@ -23,6 +24,9 @@ const (
 )
 
 func main() {
+	out := flag.String("out", outPath, "output path for the generated comment map")
+	flag.Parse()
+
 	r := new(jsonschema.Reflector)
 	// Only the packages the schema references — the envelope/DTO types (wire) and the
 	// domain types they embed (FileProblem, Issue, FieldDoc). Scoping it here means
@@ -39,9 +43,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "marshal:", err)
 		os.Exit(1)
 	}
-	if err := os.WriteFile(outPath, append(b, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(*out, append(b, '\n'), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, "write:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("wrote %d comments to %s\n", len(r.CommentMap), outPath)
+	fmt.Printf("wrote %d comments to %s\n", len(r.CommentMap), *out)
 }

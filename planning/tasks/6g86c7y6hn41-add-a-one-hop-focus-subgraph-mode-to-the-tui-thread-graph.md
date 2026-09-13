@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g86c7y6hn41
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Zoom the spatial Thread graph into a selected task and its immediate prerequisites and dependents without losing whole-graph context or stable navigation.
 effort: 3-5 days
@@ -11,10 +11,11 @@ autonomy_level: 3
 tags: [threads, tui, graph, ux, dogfood]
 created: "2026-09-08"
 depends_on: [6g6dw5js81f3, 6g8by30btznq, 6g8vxbv3d4xn, 6g9150nrt4p9]
-updated_at: "2026-09-12"
+updated_at: "2026-09-13"
 started_at: "2026-09-12"
 audited: "2026-09-12"
 audit_sources: [planning/audits/6g9fg4a8xvyc-2026-09-12-tui-one-hop-thread-focus-implementation-claude.md, planning/audits/6g9fg4awm2cg-2026-09-12-tui-one-hop-thread-focus-implementation-antigravity.md]
+completed_at: "2026-09-13"
 ---
 
 # Add a one-hop focus subgraph mode to the TUI Thread graph

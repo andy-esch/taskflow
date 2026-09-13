@@ -102,6 +102,17 @@ release-snapshot:
 release-check:
 	goreleaser check
 
+# Run the complete automated release-candidate gate from a clean checkout.
+# Generated checks and the snapshot build use disposable outputs so the source
+# tree stays unchanged. Manual CLI/TUI dogfood and publication remain separate.
+release-validate:
+	./scripts/release-validate.sh
+
+# Run the same gate in the pinned Linux tool image. The host only needs Git and
+# Docker (or set TASKFLOW_CONTAINER_ENGINE=podman).
+release-validate-container:
+	./scripts/release-validate-container.sh
+
 # Clean build artifacts
 clean:
 	rm -rf bin dist manpages

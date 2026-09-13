@@ -77,12 +77,14 @@ just install            # → go install onto $PATH (version-stamped)
 just build              # → bin/tskflwctl
 just run task list      # run without installing
 just install            # put tskflwctl on $PATH
-just release-snapshot   # dry-run a full release into ./dist (publishes nothing)
+just release-validate   # complete clean-candidate gate, including an isolated snapshot
 ```
 
 Releases are cut by pushing a tag (`vX.Y.Z`), which runs `.github/workflows/release.yml`
 (goreleaser). A manual `workflow_dispatch` run builds a `--snapshot` and uploads
 the binaries as workflow artifacts without minting a Release.
+The [release guide](./docs/RELEASING.md) also provides the same gate in a pinned, non-root Linux
+container and separates automated qualification from manual CLI/TUI dogfood and publication checks.
 Thread contract changes and removal of the preview notice additionally follow the
 [Threads compatibility and graduation checklist](./docs/THREADS_COMPATIBILITY.md). Tag only the
 fully validated preview-removal candidate, then verify the published artifacts against that
@@ -446,6 +448,7 @@ e.g. `task show <TAB>`, `audit close <TAB>`, `epic show <TAB>` offer the real sl
 - `just lint` — `golangci-lint run ./...`
 - `just fmt` — gofmt + lint formatting
 - `just tidy` — `go mod tidy`
+- `just release-validate` — validate a clean release candidate without changing tracked files
 
 Design rationale lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 

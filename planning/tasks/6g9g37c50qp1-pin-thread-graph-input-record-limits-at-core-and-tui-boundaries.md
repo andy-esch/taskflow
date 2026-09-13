@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g9g37c50qp1
-status: ready-to-start
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Add regression coverage for duplicate-node and malformed dependency-rank record limits already enforced by Thread focus and spatial preflight.
 effort: 2-4 hours
@@ -11,7 +11,9 @@ autonomy_level: 3
 tags: [threads, graph, hardening, tests]
 created: "2026-09-12"
 depends_on: [6g86c7y6hn41]
-updated_at: "2026-09-12"
+updated_at: "2026-09-13"
+started_at: "2026-09-13"
+completed_at: "2026-09-13"
 ---
 # Pin Thread graph input record limits at core and TUI boundaries
 
@@ -22,13 +24,13 @@ selection and spatial rendering into executable regression contracts.
 
 ## Acceptance criteria
 
-- [ ] Core neighborhood-selector tests reject duplicate node identities without relying on later
+- [x] Core neighborhood-selector tests reject duplicate node identities without relying on later
   map collapse or a neighboring validator.
-- [ ] TUI preflight tests cover too many raw dependency-rank records, too many task records across
+- [x] TUI preflight tests cover too many raw dependency-rank records, too many task records across
   ranks, and repeated rank identities where applicable.
-- [ ] Each assertion proves the guard fails before route layout or terminal-canvas materialization
+- [x] Each assertion proves the guard fails before route layout or terminal-canvas materialization
   and retains the existing bounded diagnostic.
-- [ ] Focused core/TUI suites, the race-enabled affected package suite, and planning lint pass.
+- [x] Focused core/TUI suites, the race-enabled affected package suite, and planning lint pass.
 
 ## Related
 

@@ -172,7 +172,8 @@ materializers under one outer guard.
 | 12 | v0.20.0 hardened preview | Compatibility and recovery improvements ship through the release pipeline while the preview notice remains explicit | clean candidate, installed CLI/TUI use, retained plans, repair, archives/checksums |
 | 13a | Flagship spatial graph design/prototype | A bounded high-priority pass proves deterministic two-dimensional comprehension and navigation, then cuts production-grade slices for the next feature release | fan-in/out, crossings, skipped waves, narrow terminals, large graphs, reload stability |
 | 13b | Spatial route hardening and focused comprehension | Dense whole-graph routes cannot invent connectivity, while a separate one-hop view makes immediate graph context legible without new core semantics | long/crossing/shared routes, clipping, fan-in/out, hidden-boundary cues, stable focus/reload |
-| 13c | Deferred graduation decision | After additional installed preview releases, fresh gates plus accumulated evidence support either a preview-removal candidate or named further work | all G1–G7 evidence, unresolved preview findings, exact candidate/tag provenance |
+| 13c | v0.21.0 spatial Threads preview | The flagship spatial graph, bounded CLI export, one-hop TUI focus, and their record-limit guards pass one reusable host/container release gate plus installed dogfood | clean candidate, full/focused navigation, bounded exports, live reload, four archives/checksums |
+| 13d | Deferred graduation decision | After additional installed preview releases, fresh gates plus accumulated evidence support either a preview-removal candidate or named further work | all G1–G7 evidence, unresolved preview findings, exact candidate/tag provenance |
 
 ### Design attention
 
@@ -197,7 +198,9 @@ release. Its removable presentation-extension boundary over the existing project
 prominent UX experiment from becoming a hidden renderer, graph-library, or core dependency.
 The usable prototype has now upheld that boundary and exposed two independent production slices:
 dense-route truthfulness and a bounded one-hop focus view. Neither changes Thread semantics, and
-neither should be smuggled into preview graduation.
+neither should be smuggled into preview graduation. Task `6g9mz2shwmb0` now owns a concrete v0.21.0
+checkpoint for those slices and the reusable release gate; it does not wait for or gate the broader
+navigation redesign.
 
 ## Dogfood checkpoints
 
@@ -235,6 +238,10 @@ This epic is the first production consumer of its own capabilities:
     followed the correct canonical edge. The prototype now fails over explicitly at bounded capacity;
     dense routing and one-hop focus remain separate tier-1 follow-ups, while general Back and
     structured-detail action targeting remain owned by the TUI epic.
+13. v0.21.0 is the next installed preview checkpoint now that the spatial graph, readable bounded
+    exports, one-hop focus, and input-limit contracts are concrete. Its release task uses the shared
+    host/container gate and remains independent of the subsequent TUI information-architecture
+    design and the deferred graduation decision.
 
 The experimental spike binary is limited to disposable planning spaces and does not satisfy these
 checkpoints. Dogfooding begins when the corresponding production slice passes its exit gate.

@@ -10,8 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [tui, navigation, ux, threads]
 created: "2026-09-08"
-depends_on: [6g6dw5js81f3]
-updated_at: "2026-09-08"
+depends_on: [6g6dw5js81f3, 6g8vxcnezktm]
+updated_at: "2026-09-13"
 ---
 
 # Add a reusable Back action for TUI entity navigation
