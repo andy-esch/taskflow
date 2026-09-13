@@ -10,6 +10,8 @@ autonomy_level: 3
 tags: [tui]
 created: "2026-06-24"
 id: 6ffdv9g01q40
+audited: "2026-09-13"
+updated_at: "2026-09-13"
 ---
 # Edit unreadable files from the TUI
 
@@ -71,3 +73,43 @@ fsnotify (+ the explicit reload), and a now-parsing file naturally moves from
 
 You can see the `! N unreadable` files, select one, press `E`, fix it, and watch it
 join the normal list on save — build/test/lint green and the docs updated.
+
+## Sweep audit 2026-09-13
+
+Automated weekly sweep. Citations re-checked against `main` (`1ca31b9`); the premise is
+intact and every referenced symbol still exists.
+
+**Verified accurate (2026-09-13):** `ListTasks`/`ListEpics`/`ListAudits` still return
+`(items, problems, err)` (`internal/tui/commands.go:39,98,173`); the model still keeps
+them apart at `model.go:642` (`tab.problems = msg.problems`) on the
+`[]domain.FileProblem` field declared at `entity.go:184`; the footer is still only a
+count — `! %d unreadable` at `view.go:526`; and `E` still routes through
+`selectedPath()` (`model.go:1449`) into `openInEditor()` (`model.go:1496`), which is
+exactly why it cannot reach a file that never became a row. `internal/editor` is
+unchanged.
+
+**Scope has GROWN since 2026-06-24 — two things a design should now account for.**
+
+1. **Two unreadable channels, not one.** Research joined the `problems` pattern
+   (`commands.go:272`), but Threads did **not**: `thread_projection.go:26,49` carries its
+   own `readProblems` field with a separate footer string at `view.go:530`
+   (`! %d unreadable Thread record(s)`). A "problems view" built only on `tab.problems`
+   would silently skip malformed Thread documents — and those are precisely the ones
+   `store`'s filename-only `ThreadPathSource` resolver was written to keep findable for
+   repair, so a path to open them does exist.
+2. **A third surface already shows the count.** The dashboard prints
+   `%d unreadable file(s) (run lint)` (`dashboard.go:209`). Whatever affordance this task
+   picks, the dashboard is a natural launch point for it — the dashboard is a *launch*
+   surface by design and `dashJump` already exists.
+
+Not a shipped criterion, but worth knowing: `thread_spatial.go:455` and `detail.go:141`
+already reason about unreadable *graph nodes* being inspectable and yankable-but-not-
+always-safe-to-open. That is a separate axis (graph records, not files that failed to
+parse), but the "copy the id even when you cannot open the thing" precedent is directly
+reusable for criterion 3.
+
+Acceptance criteria left untouched — none is demonstrably met.
+
+## Progress log
+
+- 2026-09-13: automated weekly sweep — every citation re-verified and still exact; scope grew, since Threads now carry a second, separate unreadable channel (`readProblems`) and the dashboard shows a third count.

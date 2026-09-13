@@ -10,6 +10,8 @@ priority: medium
 autonomy_level: 2
 tags: [tui, design, theme, ux, board]
 created: "2026-09-11"
+audited: "2026-09-13"
+updated_at: "2026-09-13"
 ---
 # Mine the web mockup directions for the TUI: data organization and a more 80s chrome
 
@@ -182,3 +184,55 @@ Deliberately undecided:
   [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md).
 - Source canvas: `~/Downloads/Taskflow Web Interface Mockup/Taskflow Web.dc.html` (turn 1: options
   1a/1b/1c/1d), synced 2026-09-03 per its `github.md`.
+
+## Sweep audit 2026-09-13
+
+Automated weekly sweep. This task's write-up is unusually citation-dense, so every
+reference was re-checked against `main` (`1ca31b9`).
+
+**A guardrail in "Guardrails measured, not assumed" has been ANSWERED by shipped code.**
+The last bullet reads: *"Every theme is a Dark/Light pair and both existing themes share
+`latteAA`. An 80s theme has no honest light variant; reusing `latteAA` is likely right but
+should be said out loud rather than a pastel Miami invented."* `miami-vice` landed
+2026-09-12 (`c037150`) as `Theme{Name: "miami-vice", Dark: miamiViceDark, Light: latteAA}`
+(`internal/design/theme.go:209`) — and the decision *is* said out loud, in the code, in
+almost the task's own words (`:205-208`: "deliberately, not by omission: an 80s palette has
+no honest light form, and sharing the AA-tuned Latte beats inventing a pastel Miami").
+So "both existing themes" is now three, and axis B's framing bullet — "the cleanest home
+for 1b and 1c is as THEMES, not redesigns" — has had its 1b half executed.
+
+**Two more axis-B items are now filed as their own tasks,** which is part of what
+acceptance criterion 5 asks for:
+- item 2 (border vocabulary) → `make-the-border-idiom-a-theme-owned-token-and-retire-rounded-corners`
+- item 3 (modal drop shadow) → `give-modal-overlays-a-dos-drop-shadow`
+
+**Drifted citations (code moved under them, claims still true):**
+- `styles.segBar` is cited at `item.go:437` and `detail.go:1444`. `item.go:437` is exact;
+  the `detail.go` call is now **two** sites, `detail.go:841` and `detail.go:1702`. The
+  argument is unaffected — if anything strengthened, since the dashboard now degrades to a
+  bare count against three sibling uses rather than two.
+- `twoPane` at `≥90` is now `view.go:39`, not `:38`.
+
+**Verified accurate (2026-09-13):** `core.Board` still has exactly one consumer, and it is
+still `internal/cli/board.go:20`. `Board.Blocked` is still `map[string]bool`
+(`core/board.go:29`), so naming the gating edge still means widening the projection.
+`sortEligibleFirst` still parks blocked work at the end of its column
+(`core/board.go:84-87`). `taskDelegate.Height()` is still `1` (`item.go:74`), so the
+two-line-card tradeoff stands as stated. `overlay()` is still at `help.go:349` and still
+composes via `lipgloss.NewCompositor`. `TestChromeSurfaceContrastAA` still loops `Names()`
+over every registered theme and both backgrounds (`design_test.go:316-317`) — which is why
+`miami-vice` was held to AA on arrival without anyone re-running the measurement by hand.
+`relDateCells` still exists as the shared aligned-date helper (`tui/column.go:14`).
+
+**Left for a human — this task may be closer to done than its status suggests.** Criteria
+1-4 all ask for something to be *written up*, and the body above contains those write-ups
+(axis A with its comparison table, axis B's seven-item inventory, the width budget against
+`view.go`'s real breakpoints, and the measured guardrails). What is genuinely missing is
+criterion 5's explicit take / defer / reject marking per idea — even though three ideas
+have de facto been taken. No box was ticked: whether the body *is* the deliverable or a
+precursor to it is the author's call, not a sweep's. Flagged in the PR as possibly
+completable.
+
+## Progress log
+
+- 2026-09-13: automated weekly sweep — the `latteAA` light-variant guardrail was answered by shipped code (`miami-vice`, 2026-09-12); two axis-B items are now filed as tasks; `segBar`/`twoPane` line citations refreshed. Flagged as possibly completable.
