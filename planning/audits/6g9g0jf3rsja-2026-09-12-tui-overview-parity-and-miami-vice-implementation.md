@@ -4,6 +4,7 @@ id: 6g9g0jf3rsja
 bucket: open
 area: tui-overview-parity-and-miami-vice-implementation
 date: "2026-09-12"
+updated_at: "2026-09-12"
 ---
 # Audit: TUI Overview parity + the miami-vice theme — 2026-09-12
 
@@ -136,8 +137,42 @@ itself parse as a live finding:
 
 Codes are conventionally H/M/L plus a number, by severity.
 
-_No findings recorded yet._
+#### M1. Cross-space status now prints every zero-valued bucket  · **Status:** open
+
+**File:** internal/cli/render/status.go:99 | **Component:** CLI status renderer
+**Effort:** XS · **Urgency:** soon
+
+The zero filter was removed from `countLine` on the premise that all callers receive `Summary.SplitCounts` output, but `renderCompactSpaceSummary` still calls it with raw `summary.Counts` at line 172. That slice explicitly contains every status and may contain zeroes (`internal/core/service.go:306`). On this branch, `go run ./cmd/tskflwctl --no-color status --all` renders `0 next-up · 1 ready-to-start · 0 in-progress · 14 completed · 0 deprecated · 1 deferred` for `andy-esch-infra`, and an empty `dotfiles` summary renders six zero buckets. Running the same command from the merged Miami Vice worktree renders only non-zero buckets and `tasks none`, respectively. This is a user-visible regression outside the two single-space dashboards and violates the new zero-omission contract.
+
+**Recommendation:** Restore the defensive zero check in `countLine`, or pass a zero-filtered projection at the compact caller; add a `StatusAllHuman` regression test built from a canonical Summary containing all status buckets.
+
+#### M2. Short Overviews can make the new task counts permanently unreachable  · **Status:** open
+
+**File:** internal/tui/dashboard.go:79 | **Component:** TUI dashboard viewport
+**Effort:** S · **Urgency:** soon
+
+The new task heading and count lines deliberately have no navigation target, while `dashboard.view` centers its window exclusively on the selected target row (`internal/tui/dashboard.go:299-315`). When there is no in-progress task, the first selectable row is normally an epic below the counts and the empty in-progress widget. In a real 60x12 Zsh PTY, this branch opened with `in progress (0)` as the first visible line; `tasks`, `active`, and `archived` were all clipped above the window. The dashboard key handler moves only through `d.nav`, so no key can focus or reveal those non-target rows: moving up from the first epic wraps to the last target. The feature is therefore absent, not merely initially scrolled, on a supported short terminal. Existing count tests all use height 40, while the short-screen test checks only that the selected last row remains visible.
+
+**Recommendation:** Give informational rows a reachable vertical viewport policy, or pin/reserve the count band while cursor-scrolling the remaining widgets; add a no-in-progress short-height test proving both the counts and current selection can be reached.
+
+#### L1. Theme preview completes an impossible second theme name  · **Status:** open
+
+**File:** internal/cli/theme.go:70 | **Component:** shell completion
+**Effort:** XS · **Urgency:** eventually
+
+`theme preview` accepts at most one positional name, but its new `ValidArgsFunction` reuses `completeThemeNames`, which ignores `args` and always returns the registry. This survives the Cobra driver and is visible in a real shell: after typing `tskflwctl theme preview neon ` in Zsh and pressing Tab, the generated completion offered `catppuccin`, `miami-vice`, and `neon`; selecting one produces a command rejected by `cobra.MaximumNArgs(1)`. The flag-value completion itself works, and prefix filtering works, so the defect is specifically the already-filled optional positional.
+
+**Recommendation:** Use a positional wrapper that returns no candidates once `len(args) >= 1`, while keeping the registry-driven function for `--theme`; cover both the first and second positional completion requests.
+
+#### L2. Staleness tests do not prove the Overview uses the colored helper  · **Status:** open
+
+**File:** internal/tui/column_staleness_test.go:11 | **Component:** TUI regression coverage
+**Effort:** XS · **Urgency:** soon
+
+The new tests call `staleDateCells` directly and prove that helper differs from `relDateCells`, but no test observes styling through `dashboard.setSummary`. The existing dashboard age test at `internal/tui/dashboard_test.go:286` strips ANSI before checking dates and alignment. Consequently, changing the production call at `internal/tui/dashboard.go:105` back to `relDateCells` would leave the helper tests and every rendered-dashboard assertion satisfied while removing the delivered feature. The current wiring is correct, but its load-bearing integration is unguarded.
+
+**Recommendation:** Render an Overview fixture with fresh and stale in-progress tasks and compare the two date cells styling before stripping ANSI, so the test fails if the dashboard call site returns to the neutral helper.
 
 ## Candidate tasks
 
-_Follow-up work you would file, if any. Reference task ids once created._
+_No separate tasks filed. M1, M2, and L2 are bounded corrections to the open Overview branch; L1 is small enough to fold into its review follow-up rather than creating planning overhead before maintainer triage._
