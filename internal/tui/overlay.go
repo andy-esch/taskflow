@@ -28,7 +28,7 @@ type modal interface {
 // action menu, follow picker, inline field editor, then the command palette. The first active
 // modal owns the key and the floated box. Adding one is a struct + an entry here (M14).
 func defaultModals() []modal {
-	return []modal{helpModal{}, configModal{}, actionModal{}, followModal{}, editModal{}, paletteModal{}}
+	return []modal{helpModal{}, configModal{}, actionModal{}, followModal{}, detailDirectionModal{}, editModal{}, paletteModal{}}
 }
 
 // configModal embeds the same typed editor used by `config edit`.
@@ -111,6 +111,20 @@ func (followModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 }
 
 func (followModal) view(m *Model, w, h int) string { return m.follow.view(m.st, w, h) }
+
+// detailDirectionModal chooses among multiple equally direct neighbors exposed
+// by a structured detail presentation.
+type detailDirectionModal struct{}
+
+func (detailDirectionModal) active(m *Model) bool { return m.direction.active }
+
+func (detailDirectionModal) handleKey(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
+	return true, m.handleDetailDirectionKey(msg)
+}
+
+func (detailDirectionModal) view(m *Model, w, h int) string {
+	return m.direction.view(m.st, w, h)
+}
 
 // editModal is the `e` inline field editor (the human face of `task set`).
 type editModal struct{}

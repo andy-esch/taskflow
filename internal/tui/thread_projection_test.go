@@ -1194,7 +1194,7 @@ func TestThreadSpatialResponsiveWidthKeepsAValidNearLimitLayoutAvailable(t *test
 	if got := wide.layout.effectiveNodeWidth(); got != widestSafe {
 		t.Fatalf("near-limit layout width=%d want widest safe %d", got, widestSafe)
 	}
-	cache := newThreadSpatialCache(projection)
+	cache := newThreadSpatialCache(projection, nil)
 	first := cache.getForViewport(180)
 	second := cache.getForViewport(180)
 	if first.layout == nil || second.layout != first.layout {
@@ -1225,8 +1225,8 @@ func TestThreadSpatialRuntimeMethodsConsumeTheCachedPreparedResult(t *testing.T)
 	}
 
 	spatial := detail.withDetailView(string(threadDetailSpatial)).(threadDetail)
-	if preparations != 0 || spatial.selection != "" {
-		t.Fatalf("spatial entry preparations=%d selection=%q, want a lazy unselected layout", preparations, spatial.selection)
+	if preparations != 0 || spatial.selection != "a" {
+		t.Fatalf("spatial entry preparations=%d selection=%q, want a lazy preferred selection", preparations, spatial.selection)
 	}
 	if rendered := ansi.Strip(spatial.renderDetail(100, 20, &testStyles)); !strings.Contains(rendered, "cached sentinel") {
 		t.Fatalf("render bypassed the injected cached result:\n%s", rendered)
@@ -1279,7 +1279,8 @@ func TestThreadDetailCyclesToTopologyAndPreservesItAcrossReload(t *testing.T) {
 	}
 	plain := ansi.Strip(m.detail.styled)
 	for _, want := range []string{
-		"view:     topology", "Wave 1", "Wave 2", "[prerequisite] ─▶ [dependent]", "needs [", "› ",
+		"view:     topology", "Dependency rank 1", "Dependency rank 2",
+		"ranks are not execution barriers", "[prerequisite] ─▶ [dependent]", "needs [", "› ",
 		testutil.TaskID("first"), testutil.TaskID("second"),
 	} {
 		if !strings.Contains(plain, want) {
@@ -1353,33 +1354,22 @@ func TestThreadSpatialGraphUsesDirectionalStableIdentityNavigation(t *testing.T)
 	}
 	plain := ansi.Strip(m.detail.styled)
 	for _, want := range []string{
-		"spatial graph", "prerequisite ─▶ dependent", "status", "roles", "╔ gate",
-		"focus", "about", "the dependency", "┌", "▶", "┐",
+		"spatial graph", "prerequisite ─▶ dependent", "status", "rank≠barrier", "╔ gate",
+		"focus", "about", "the dependent", "┌", "▶", "┐",
 	} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("spatial graph omitted %q:\n%s", want, plain)
 		}
 	}
 	footer := ansi.Strip(m.footer())
-	if !strings.Contains(footer, "hjkl node") || !strings.Contains(footer, "⏎ open") ||
-		!strings.Contains(footer, "y copy task") || !strings.Contains(footer, "esc waves") || strings.Contains(footer, "j/k scroll") {
+	if !strings.Contains(footer, "z focus") || !strings.Contains(footer, "hjkl node") || !strings.Contains(footer, "⏎ open") ||
+		!strings.Contains(footer, "y copy task") || !strings.Contains(footer, "esc ranks") || strings.Contains(footer, "j/k scroll") {
 		t.Fatalf("spatial footer did not describe its controls: %q", footer)
 	}
 
 	first, second := testutil.TaskID("first"), testutil.TaskID("second")
-	if got := selectedThreadDetail(t, m).detailSelectionKey(); got != first {
-		t.Fatalf("initial spatial selection=%q want %q", got, first)
-	}
-	tm, _ = m.Update(press("l"))
-	m = tm.(Model)
 	if got := selectedThreadDetail(t, m).detailSelectionKey(); got != second {
-		t.Fatalf("l selected %q want connected dependent %q", got, second)
-	}
-	m = drainNested(t, m, m.reloadAll())
-	if selectedThreadDetail(t, m).detailViewName() != string(threadDetailSpatial) ||
-		selectedThreadDetail(t, m).detailSelectionKey() != second || !m.zoom {
-		t.Fatalf("same-Thread reload discarded spatial context: view=%q selected=%q zoom=%v",
-			selectedThreadDetail(t, m).detailViewName(), selectedThreadDetail(t, m).detailSelectionKey(), m.zoom)
+		t.Fatalf("initial spatial selection=%q want eligible %q", got, second)
 	}
 	tm, _ = m.Update(press("h"))
 	m = tm.(Model)
@@ -1388,20 +1378,39 @@ func TestThreadSpatialGraphUsesDirectionalStableIdentityNavigation(t *testing.T)
 	}
 	tm, _ = m.Update(press("l"))
 	m = tm.(Model)
-
+	m = drainNested(t, m, m.reloadAll())
+	if selectedThreadDetail(t, m).detailViewName() != string(threadDetailSpatial) ||
+		selectedThreadDetail(t, m).detailSelectionKey() != second || !m.zoom {
+		t.Fatalf("same-Thread reload discarded spatial context: view=%q selected=%q zoom=%v",
+			selectedThreadDetail(t, m).detailViewName(), selectedThreadDetail(t, m).detailSelectionKey(), m.zoom)
+	}
+	tm, _ = m.Update(press("z"))
+	m = tm.(Model)
+	if !selectedThreadDetail(t, m).detailLocalFocusActive() {
+		t.Fatal("z did not enter one-hop focus before task navigation")
+	}
+	// Move away from both the focal and the preferred entry anchor so history
+	// restoration has to preserve its independent canonical selection field.
+	tm, _ = m.Update(press("h"))
+	m = tm.(Model)
+	if got := selectedThreadDetail(t, m).detailSelectionKey(); got != first {
+		t.Fatalf("focused prerequisite selection=%q want %q", got, first)
+	}
 	// Enter and ctrl+o keep the canonical node identity plus the presentation
-	// context, rather than returning to an arbitrary Thread summary.
+	// and local-focus context, rather than returning to an arbitrary Thread summary.
 	tm, cmd := m.Update(press("enter"))
 	m = drainNested(t, tm.(Model), cmd)
-	if m.cur().kind != entityTasks || m.selectedKey() != second {
-		t.Fatalf("spatial enter did not open task %q: kind=%v selected=%q", second, m.cur().kind, m.selectedKey())
+	if m.cur().kind != entityTasks || m.selectedKey() != first {
+		t.Fatalf("spatial enter did not open task %q: kind=%v selected=%q", first, m.cur().kind, m.selectedKey())
 	}
 	tm, cmd = m.Update(press("ctrl+o"))
 	m = drainNested(t, tm.(Model), cmd)
 	if m.cur().kind != entityThreads || selectedThreadDetail(t, m).detailViewName() != string(threadDetailSpatial) ||
-		selectedThreadDetail(t, m).detailSelectionKey() != second || !m.zoom {
-		t.Fatalf("ctrl+o did not restore spatial context: kind=%v view=%q selected=%q zoom=%v",
-			m.cur().kind, selectedThreadDetail(t, m).detailViewName(), selectedThreadDetail(t, m).detailSelectionKey(), m.zoom)
+		selectedThreadDetail(t, m).detailSelectionKey() != first || !m.zoom ||
+		!selectedThreadDetail(t, m).detailLocalFocusActive() {
+		t.Fatalf("ctrl+o did not restore spatial focus context: kind=%v view=%q selected=%q zoom=%v focus=%v",
+			m.cur().kind, selectedThreadDetail(t, m).detailViewName(), selectedThreadDetail(t, m).detailSelectionKey(),
+			m.zoom, selectedThreadDetail(t, m).detailLocalFocusActive())
 	}
 
 	// Esc is the explicit complexity step-down, not an application quit or a
@@ -1409,12 +1418,12 @@ func TestThreadSpatialGraphUsesDirectionalStableIdentityNavigation(t *testing.T)
 	tm, cmd = m.Update(press("esc"))
 	m = tm.(Model)
 	if cmd != nil || selectedThreadDetail(t, m).detailViewName() != string(threadDetailTopology) || m.zoom || m.focus != focusDetail {
-		t.Fatalf("Esc did not return to waves: cmd=%v view=%q zoom=%v focus=%v",
+		t.Fatalf("Esc did not return to dependency ranks: cmd=%v view=%q zoom=%v focus=%v",
 			cmd != nil, selectedThreadDetail(t, m).detailViewName(), m.zoom, m.focus)
 	}
 }
 
-func TestThreadSpatialGraphPreservesManualZoomAndOwnsNoZoomKey(t *testing.T) {
+func TestThreadSpatialGraphPreservesManualZoomWhileUsingZoomKeyForFocus(t *testing.T) {
 	m, _ := threadModel(t)
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = openThreads(t, tm.(Model))
@@ -1435,12 +1444,18 @@ func TestThreadSpatialGraphPreservesManualZoomAndOwnsNoZoomKey(t *testing.T) {
 		t.Fatalf("spatial entry consumed manual zoom: view=%q zoom=%v immersive=%v", got, m.zoom, m.immersiveZoom)
 	}
 
-	// Spatial navigation owns z, so it cannot accidentally rewrite shell zoom
-	// ownership while the presentation is immersive.
+	// Spatial navigation owns z as a local graph lens without rewriting shell
+	// zoom ownership while the presentation is immersive.
 	tm, _ = m.Update(press("z"))
 	m = tm.(Model)
-	if !m.zoom || m.immersiveZoom {
-		t.Fatalf("z changed spatial zoom ownership: zoom=%v immersive=%v", m.zoom, m.immersiveZoom)
+	if !m.zoom || m.immersiveZoom || !selectedThreadDetail(t, m).detailLocalFocusActive() {
+		t.Fatalf("z did not enter local focus without changing zoom ownership: zoom=%v immersive=%v focus=%v",
+			m.zoom, m.immersiveZoom, selectedThreadDetail(t, m).detailLocalFocusActive())
+	}
+	tm, _ = m.Update(press("z"))
+	m = tm.(Model)
+	if selectedThreadDetail(t, m).detailLocalFocusActive() {
+		t.Fatal("second z did not restore the full spatial graph")
 	}
 	tm, _ = m.Update(press("esc"))
 	m = tm.(Model)
@@ -1610,9 +1625,9 @@ func TestThreadSpatialColumnLabelsDistinguishLayoutLayersFromMemberWaves(t *test
 			t.Errorf("column %d label %q misrepresents a layout layer as a wave", index+1, label)
 		}
 	}
-	if !strings.Contains(labels[0], "wave 1") || !strings.Contains(labels[1], "external") ||
-		!strings.Contains(labels[2], "wave 2") {
-		t.Fatalf("layer labels lost actual wave/role evidence: %v", labels)
+	if !strings.Contains(labels[0], "rank 1") || !strings.Contains(labels[1], "external") ||
+		!strings.Contains(labels[2], "rank 2") {
+		t.Fatalf("layer labels lost actual dependency-rank/role evidence: %v", labels)
 	}
 }
 
@@ -1633,8 +1648,8 @@ func TestThreadSpatialColumnLabelsDoNotInventContiguousWaveRanges(t *testing.T) 
 		"a": projection.Nodes[0], "b": projection.Nodes[1], "c": projection.Nodes[2],
 	}
 	labels := labelThreadSpatialColumns([][]string{{"a", "b", "c"}}, projection, byNode)
-	if len(labels) != 1 || !strings.Contains(labels[0], "waves 1+3+5") || strings.Contains(labels[0], "1–5") {
-		t.Fatalf("non-contiguous wave label=%v want the exact supplied wave set", labels)
+	if len(labels) != 1 || !strings.Contains(labels[0], "ranks 1+3+5") || strings.Contains(labels[0], "1–5") {
+		t.Fatalf("non-contiguous rank label=%v want the exact supplied wave set", labels)
 	}
 }
 
@@ -1995,7 +2010,7 @@ func TestThreadSpatialLayoutConflictIndexMatchesFullRouteComposition(t *testing.
 
 func TestThreadSpatialInlineLegendStaysCompactAndDefersRareGrammarToHelp(t *testing.T) {
 	legend := ansi.Strip(threadSpatialRoleLegend(&testStyles))
-	for _, grammar := range []string{"┌ member", "╔ gate", "━ focus route", "▶ direction", "2 fan"} {
+	for _, grammar := range []string{"rank≠barrier", "┌ member", "╔ gate", "━ focus", "▶ edge", "2 fan"} {
 		if !strings.Contains(legend, grammar) {
 			t.Errorf("route legend omitted %q: %q", grammar, legend)
 		}
@@ -2936,7 +2951,7 @@ func TestThreadSpatialGraphIsBoundedDeterministicAndExplicitWhenNarrow(t *testin
 			}
 		}
 		if size.width < threadSpatialMinWidth || size.height < threadSpatialMinHeight {
-			if !strings.Contains(plain, "need ≥60×14") || !strings.Contains(plain, "Esc waves") {
+			if !strings.Contains(plain, "need ≥60×14") || !strings.Contains(plain, "Esc ranks") {
 				t.Errorf("narrow fallback was not explanatory:\n%s", plain)
 			}
 			if !strings.Contains(plain, "╭─ spatial graph · give it room") ||
@@ -2969,7 +2984,7 @@ func TestThreadSpatialMinimumDimensionsFollowPhysicalLayout(t *testing.T) {
 	}
 	for _, size := range []struct{ width, height int }{{59, 14}, {60, 13}, {40, 20}} {
 		plain := ansi.Strip(renderThreadSpatial(projection, "", "task-id", size.width, size.height, &testStyles))
-		for _, want := range []string{"give it room", "need ≥60×14", "Esc waves", "f pick"} {
+		for _, want := range []string{"give it room", "need ≥60×14", "Esc ranks", "f pick"} {
 			if !strings.Contains(plain, want) {
 				t.Errorf("%dx%d narrow view omitted %q:\n%s", size.width, size.height, want, plain)
 			}
@@ -2992,7 +3007,7 @@ func TestThreadSpatialGraphFailsOpenToWavesBeyondPrototypeCapacity(t *testing.T)
 		t.Fatal("capacity fallback was nondeterministic")
 	}
 	plain := ansi.Strip(first)
-	for _, want := range []string{"bounded prototype fallback", "513 nodes", "no partial graph", "complete wave reader", "focus", "task-0000"} {
+	for _, want := range []string{"bounded prototype fallback", "513 nodes", "no partial graph", "complete dependency-rank reader", "focus", "task-0000"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("capacity fallback omitted %q:\n%s", want, plain)
 		}
@@ -3085,7 +3100,7 @@ func TestThreadSpatialPreflightBoundsNodesEdgesRoutesAndCanvas(t *testing.T) {
 			projection.Waves[0].TaskIDs[index] = "a"
 		}
 		prepared := prepareThreadSpatial(projection)
-		if prepared.layout != nil || !strings.Contains(prepared.issue, "wave task records exceeds") {
+		if prepared.layout != nil || !strings.Contains(prepared.issue, "dependency-rank task records exceeds") {
 			t.Fatalf("malformed wave record input escaped preflight: %+v", prepared)
 		}
 	})
@@ -3319,7 +3334,7 @@ func TestThreadTopologyRendersHostileDeepWideDisconnectedAndPartialEvidence(t *t
 					t.Errorf("line width %d exceeds %d: %q", got, width, line)
 				}
 			}
-			for _, want := range []string{"partial", "External", "Wave", "Unranked"} {
+			for _, want := range []string{"partial", "External", "Dependency", "Unranked"} {
 				if !strings.Contains(plain, want) {
 					t.Errorf("width %d omitted %q:\n%s", width, want, plain)
 				}
@@ -3351,8 +3366,9 @@ func TestThreadTopologyKeepsCLIAndGraphExportProjectionEvidenceAligned(t *testin
 	}
 
 	for _, wave := range projection.Waves {
-		heading := fmt.Sprintf("Wave %d", wave.Index)
-		if !strings.Contains(cli.String(), heading) || !strings.Contains(plainTUI, heading) {
+		cliHeading := fmt.Sprintf("Wave %d", wave.Index)
+		tuiHeading := fmt.Sprintf("Dependency rank %d", wave.Index)
+		if !strings.Contains(cli.String(), cliHeading) || !strings.Contains(plainTUI, tuiHeading) {
 			t.Errorf("projection wave %d diverged across CLI/TUI", wave.Index)
 		}
 	}

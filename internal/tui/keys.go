@@ -57,7 +57,7 @@ var keys = keyMap{
 	FindNext:    key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next match")),
 	FindPrev:    key.NewBinding(key.WithKeys("N"), key.WithHelp("N", "previous match")),
 	ToggleFocus: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "switch focus (list ⇄ detail)")),
-	Zoom:        key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "full-screen the detail pane (z/esc to exit)")),
+	Zoom:        key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "full-screen detail / focus the spatial graph")),
 	Command:     key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "command / jump (entity, status, or verb)")),
 	Palette:     key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "command palette — fuzzy jump to anything / run a command")),
 	Atlas:       key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "open atlas / return to current space")),

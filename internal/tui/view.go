@@ -374,6 +374,13 @@ func (m Model) detailFooterBody() string {
 		hints = append(hints, keyHint(keys.RawToggle, "raw/pretty"))
 	}
 	if m.detail.directionalSelectionAvailable() {
+		if m.detail.localFocusAvailable() {
+			label := "focus"
+			if m.detail.localFocusActive() {
+				label = "full graph"
+			}
+			hints = append(hints, keyHint(keys.Zoom, label))
+		}
 		hints = append(hints, "hjkl node")
 		if m.detail.selectionAvailable() {
 			hints = append(hints, "⏎ open")
@@ -493,7 +500,7 @@ func (m Model) footer() string {
 		switch {
 		case m.detail.immersive():
 			hints = strings.Join([]string{
-				"spatial graph", keyHint(keys.Atlas, "atlas"), m.detailFooterBody(), "esc waves",
+				"spatial graph", keyHint(keys.Atlas, "atlas"), m.detailFooterBody(), "esc ranks",
 			}, " · ")
 		case m.zoom:
 			// Full-screen: the list is hidden, so name the way out and drop the keys

@@ -26,6 +26,7 @@ type navLoc struct {
 	ref             entityRef
 	detailView      string // optional alternate presentation active at this location
 	detailSelection string // optional canonical child identity selected inside it
+	detailContext   detailNavigationContext
 }
 
 type detailNavigationRestore struct {
@@ -33,6 +34,7 @@ type detailNavigationRestore struct {
 	key       string
 	view      string
 	selection string
+	context   detailNavigationContext
 }
 
 // followMenu is the reference picker for an entity with several outgoing task
@@ -103,7 +105,10 @@ func (f followMenu) view(s *styles, maxW, maxH int) string {
 // remaining row can hold exactly one task. Clamping is presentation-only and
 // never changes the underlying task order or cursor.
 func (f followMenu) visibleRange(maxH int) (int, int) {
-	count := len(f.tasks)
+	return visibleTaskPickerRange(len(f.tasks), f.cursor, maxH)
+}
+
+func visibleTaskPickerRange(count, cursor, maxH int) (int, int) {
 	if count == 0 || maxH <= 0 {
 		return 0, count
 	}
@@ -111,7 +116,7 @@ func (f followMenu) visibleRange(maxH int) (int, int) {
 	if visible >= count {
 		return 0, count
 	}
-	start := f.cursor - visible/2
+	start := cursor - visible/2
 	if start < 0 {
 		start = 0
 	}
@@ -256,6 +261,9 @@ func (m *Model) pushLoc() {
 		if content, ok := m.detail.content.(alternateDetailContent); ok {
 			loc.detailView = content.detailViewName()
 		}
+		if content, ok := m.detail.content.(contextualDetailContent); ok {
+			loc.detailContext = content.detailNavigationContext()
+		}
 		if content, ok := m.detail.content.(navigableDetailContent); ok {
 			loc.detailSelection = content.detailSelectionKey()
 		}
@@ -278,9 +286,10 @@ func (m Model) navBack() (tea.Model, tea.Cmd) {
 	}
 	loc := m.navStack[n-1]
 	m.navStack = m.navStack[:n-1]
-	if loc.detailView != "" || loc.detailSelection != "" {
+	if loc.detailView != "" || loc.detailSelection != "" || loc.detailContext != (detailNavigationContext{}) {
 		m.pendingDetailNavigation = detailNavigationRestore{
 			kind: loc.kind, key: loc.ref.key, view: loc.detailView, selection: loc.detailSelection,
+			context: loc.detailContext,
 		}
 	}
 	return m, m.jumpTo(loc.kind, loc.ref)
@@ -302,6 +311,11 @@ func (m *Model) restoreDetailNavigation(kind entityKind, key string, content det
 	if pending.view != "" {
 		if alternate, ok := content.(alternateDetailContent); ok {
 			content = alternate.withDetailView(pending.view)
+		}
+	}
+	if pending.context != (detailNavigationContext{}) {
+		if contextual, ok := content.(contextualDetailContent); ok {
+			content = contextual.withDetailNavigationContext(pending.context)
 		}
 	}
 	if pending.selection != "" {

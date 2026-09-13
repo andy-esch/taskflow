@@ -191,6 +191,7 @@ func (m *Model) closeTransientUI() {
 	m.configOpen = false
 	m.action.close()
 	m.follow.close()
+	m.direction.close()
 	m.edit.close()
 	m.palette.close()
 	m.cmd.blur()

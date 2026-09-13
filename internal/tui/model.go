@@ -97,6 +97,7 @@ type Model struct {
 	helpScroll              int                     // overlay scroll offset (j/k while open; clamped to helpMaxScroll)
 	action                  actionMenu              // the `m` lifecycle action menu (S4)
 	follow                  followMenu              // the `f` reference picker (S6, epics/Threads → their tasks)
+	direction               detailDirectionMenu     // an ambiguous semantic h/l move inside a structured detail
 	edit                    editMenu                // the `e` inline field editor (task set with a GUI)
 	navStack                []navLoc                // where each `f` jump came from; ctrl+o pops (S6)
 	pendingDetailNavigation detailNavigationRestore // presentation/selection to restore after an async ctrl+o return
@@ -345,6 +346,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case detailMsg:
 		if !m.isCurrentSelection(msg.kind, msg.id) || msg.gen != m.detailGen {
 			return m, nil // stale: tab/selection changed, or a newer load is in flight
+		}
+		if m.direction.active {
+			m.direction.close()
+			m.flash, m.flashErr = "graph refreshed; choose a direction again", false
 		}
 		msg.content = m.restoreDetailNavigation(msg.kind, msg.id, msg.content)
 		m.detail.SetContent(msg.id, msg.content)
@@ -881,11 +886,21 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.toggleFocus()
 		return m, nil
 	case key.Matches(msg, keys.Zoom):
+		// A spatial presentation may own z as a local focus lens. Everywhere else
+		// it retains the shell's ordinary full-screen-detail behavior.
+		localFocusPresentation := m.zoom && m.focus == focusDetail && m.detail.immersive()
+		if localFocusPresentation {
+			handled, err := m.detail.toggleLocalFocus()
+			if err != nil {
+				m.flash, m.flashErr = err.Error(), true
+			}
+			if handled {
+				return m, nil
+			}
+		}
 		// Full-screen the detail pane (toggle). Entity-tab only — the dashboard
 		// routes its keys in handleDashKey above and never reaches here.
-		if !m.detail.immersive() {
-			m.toggleZoom()
-		}
+		m.toggleZoom()
 		return m, nil
 	}
 
@@ -902,10 +917,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	switch {
 	case m.detail.directionalSelectionAvailable() && (msg.String() == "h" || msg.String() == "left"):
-		m.detail.moveSelectionDirection(-1, 0)
+		m.moveDetailDirection(-1, 0)
 		return m, nil
 	case m.detail.directionalSelectionAvailable() && (msg.String() == "l" || msg.String() == "right"):
-		m.detail.moveSelectionDirection(1, 0)
+		m.moveDetailDirection(1, 0)
 		return m, nil
 	case m.detail.directionalSelectionAvailable() && (msg.String() == "j" || msg.String() == "down"):
 		m.detail.moveSelectionDirection(0, 1)
@@ -969,6 +984,23 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.detail.vp, cmd = m.detail.vp.Update(msg)
 	return m, cmd
+}
+
+func (m *Model) moveDetailDirection(dx, dy int) {
+	label, tasks, owned := m.detail.directionChoices(dx, dy)
+	if !owned {
+		m.detail.moveSelectionDirection(dx, dy)
+		return
+	}
+	switch len(tasks) {
+	case 0:
+		m.flash = "no readable direct " + label + " in this one-hop focus"
+		m.flashErr = true
+	case 1:
+		m.detail.selectDetailTask(tasks[0].CanonicalID())
+	default:
+		m.direction.open(label, tasks, m.detail.loadedKey, m.detail.detailSelectionKey(), dx, dy)
+	}
 }
 
 // updateList forwards a key to the active list, lazily loading the detail body
