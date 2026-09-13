@@ -18,6 +18,7 @@ RUN groupadd --gid 10001 validator \
 
 ENV GOCACHE=/cache/go-build
 ENV GOMODCACHE=/cache/go-mod
+ENV GOLANGCI_LINT_CACHE=/cache/go-build/golangci-lint
 
 COPY scripts/release-validate-container-entrypoint.sh /usr/local/bin/taskflow-release-validate
 RUN chmod 0755 /usr/local/bin/taskflow-release-validate
