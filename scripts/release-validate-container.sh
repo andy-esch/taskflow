@@ -45,7 +45,7 @@ image=taskflow-release-validator:local
 "$engine" volume create taskflow-release-go-build >/dev/null
 "$engine" volume create taskflow-release-go-mod >/dev/null
 "$engine" run --rm --read-only \
-	--tmpfs /work:rw,uid=10001,gid=10001,mode=1777 \
+	--tmpfs /work:rw,exec,uid=10001,gid=10001,mode=1777 \
 	--mount "type=bind,source=$staging/repo,target=/src,readonly" \
 	--mount type=volume,source=taskflow-release-go-build,target=/cache/go-build \
 	--mount type=volume,source=taskflow-release-go-mod,target=/cache/go-mod \
