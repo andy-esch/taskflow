@@ -149,6 +149,8 @@ func (fixture releaseValidationFixture) run(extra ...string) (string, error) {
 		"PATH="+fixture.bin+":/usr/bin:/bin",
 		"FAKE_LOG="+fixture.log,
 		"FAKE_REPO="+fixture.repo,
+		"FAKE_RELEASE_TMP_ROOT="+filepath.Dir(fixture.repo),
+		"TASKFLOW_RELEASE_TMP_ROOT="+filepath.Dir(fixture.repo),
 	)
 	command.Env = append(command.Env, extra...)
 	output, err := command.CombinedOutput()
@@ -197,6 +199,10 @@ func fakeLoggedCommand(name string) string {
 const fakeGoCommand = `#!/usr/bin/env bash
 set -euo pipefail
 printf 'go %s\n' "$*" >>"$FAKE_LOG"
+case "${GOCACHE:-}" in
+  "$FAKE_RELEASE_TMP_ROOT"/taskflow-release-validate.*/go-build-cache) ;;
+  *) printf 'GOCACHE is not isolated: %s\n' "${GOCACHE:-<unset>}" >&2; exit 43 ;;
+esac
 if [[ "$*" == "env GOVERSION" ]]; then
 	printf 'go%s\n' "${FAKE_GO_VERSION:-1.25.12}"
 	exit 0
@@ -219,6 +225,10 @@ fi
 `
 
 const fakeLintCommand = `#!/usr/bin/env bash
+case "${GOLANGCI_LINT_CACHE:-}" in
+  "$FAKE_RELEASE_TMP_ROOT"/taskflow-release-validate.*/golangci-lint-cache) ;;
+  *) printf 'GOLANGCI_LINT_CACHE is not isolated: %s\n' "${GOLANGCI_LINT_CACHE:-<unset>}" >&2; exit 44 ;;
+esac
 if [[ "${1:-}" == version ]]; then
 	printf 'golangci-lint has version 2.12.2 built with go1.25.12\n'
 	exit 0

@@ -126,6 +126,9 @@ candidate_commit=$(git rev-parse HEAD)
 release_tmp_root=${TASKFLOW_RELEASE_TMP_ROOT:-${TMPDIR:-/tmp}}
 validation_tmp=$(mktemp -d "$release_tmp_root/taskflow-release-validate.XXXXXX")
 trap cleanup EXIT
+export GOCACHE="$validation_tmp/go-build-cache"
+export GOLANGCI_LINT_CACHE="$validation_tmp/golangci-lint-cache"
+mkdir -p "$GOCACHE" "$GOLANGCI_LINT_CACHE"
 
 run_phase "toolchain compatibility" check_tools
 run_phase "focused package tests" go test ./internal/core ./internal/store ./internal/cli ./internal/tui ./internal/wire
