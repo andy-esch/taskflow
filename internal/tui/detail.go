@@ -103,6 +103,39 @@ type directionalDetailContent interface {
 	moveDetailSelectionDirection(dx, dy int) (detailContent, bool)
 }
 
+// detailNavigationContext is opaque presentation state that must survive a
+// coherent reload or a shell-owned follow/back round trip. The shell only stores
+// and restores these comparable values; an entity detail owns their meaning.
+type detailNavigationContext struct {
+	Name      string
+	Primary   string
+	Secondary string
+}
+
+type contextualDetailContent interface {
+	detailContent
+	detailNavigationContext() detailNavigationContext
+	withDetailNavigationContext(detailNavigationContext) detailContent
+}
+
+// localFocusDetailContent lets an immersive detail presentation use the shell's
+// existing zoom key for a local focus lens. Outside that presentation the shell
+// retains its ordinary pane-full-screen meaning.
+type localFocusDetailContent interface {
+	detailContent
+	detailLocalFocusAvailable() bool
+	detailLocalFocusActive() bool
+	toggleDetailLocalFocus() (detailContent, error)
+}
+
+// branchingDirectionalDetailContent may replace an ambiguous directional move
+// with a compact chooser. The bool says the presentation owns that direction;
+// an owned empty result is an explicit dead end rather than geometric fallback.
+type branchingDirectionalDetailContent interface {
+	directionalDetailContent
+	detailDirectionChoices(dx, dy int) (label string, tasks []domain.Task, owned bool)
+}
+
 // yankableDetailContent lets a structured detail presentation name the thing
 // its own cursor highlights. Opening and copying are deliberately separate: an
 // unreadable graph node may not be safe to open, but its stable ID is still a
@@ -247,6 +280,87 @@ func (d detailPane) directionalSelectionAvailable() bool {
 	return ok && content.detailDirectional()
 }
 
+func (d detailPane) localFocusAvailable() bool {
+	content, ok := d.content.(localFocusDetailContent)
+	return ok && content.detailLocalFocusAvailable()
+}
+
+func (d detailPane) localFocusActive() bool {
+	content, ok := d.content.(localFocusDetailContent)
+	return ok && content.detailLocalFocusActive()
+}
+
+func (d *detailPane) toggleLocalFocus() (bool, error) {
+	content, ok := d.content.(localFocusDetailContent)
+	if !ok {
+		return false, nil
+	}
+	// Availability drives discoverability, but an immersive presentation still
+	// owns the attempted action so it can explain why the current selection is
+	// not a valid focus target instead of letting the shell reinterpret the key.
+	next, err := content.toggleDetailLocalFocus()
+	if err != nil {
+		return true, err
+	}
+	d.content = next
+	d.render()
+	d.refreshFind()
+	d.vp.GotoTop()
+	return true, nil
+}
+
+func (d detailPane) directionChoices(dx, dy int) (string, []domain.Task, bool) {
+	content, ok := d.content.(branchingDirectionalDetailContent)
+	if !ok {
+		return "", nil, false
+	}
+	return content.detailDirectionChoices(dx, dy)
+}
+
+func (d detailPane) detailSelectionKey() string {
+	content, ok := d.content.(navigableDetailContent)
+	if !ok {
+		return ""
+	}
+	return content.detailSelectionKey()
+}
+
+// directionTargetStillValid re-derives a chooser option at commit time. A
+// background refresh may replace the projection while the modal is open; the
+// task remaining readable is insufficient if the edge or its direction changed.
+func (d detailPane) directionTargetStillValid(menu detailDirectionMenu, taskID string) bool {
+	if d.loadedKey != menu.loadedKey || d.detailSelectionKey() != menu.originSelection {
+		return false
+	}
+	_, tasks, owned := d.directionChoices(menu.dx, menu.dy)
+	if !owned {
+		return false
+	}
+	for _, task := range tasks {
+		if task.CanonicalID() == taskID {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *detailPane) selectDetailTask(taskID string) bool {
+	content, ok := d.content.(navigableDetailContent)
+	if !ok {
+		return false
+	}
+	next := content.withDetailSelection(taskID)
+	selected, ok := next.(navigableDetailContent)
+	if !ok || selected.detailSelectionKey() != taskID {
+		return false
+	}
+	d.content = next
+	d.render()
+	d.refreshFind()
+	d.vp.GotoTop()
+	return true
+}
+
 func (d detailPane) nextViewName() string {
 	if content, ok := d.content.(alternateDetailContent); ok {
 		return content.nextDetailViewName()
@@ -381,6 +495,11 @@ func (d *detailPane) SetContent(id string, c detailContent) {
 		fresh, freshOK := c.(alternateDetailContent)
 		if currentOK && freshOK {
 			c = fresh.withDetailView(current.detailViewName())
+		}
+		currentContext, currentOK := d.content.(contextualDetailContent)
+		freshContext, freshOK := c.(contextualDetailContent)
+		if currentOK && freshOK {
+			c = freshContext.withDetailNavigationContext(currentContext.detailNavigationContext())
 		}
 		currentNav, currentOK := d.content.(navigableDetailContent)
 		freshNav, freshOK := c.(navigableDetailContent)
@@ -776,6 +895,7 @@ func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int, s *styl
 type threadDetail struct {
 	projection core.ThreadGraphProjection
 	spatial    *threadSpatialCache // one lazy immutable layout per coherent projection read
+	focus      *threadSpatialFocus
 	body       string
 	path       string
 	pathIssue  string
@@ -783,13 +903,22 @@ type threadDetail struct {
 	selection  string // stable task ID selected in topology/spatial views
 }
 
+type threadSpatialFocus struct {
+	projection    core.ThreadGraphProjection
+	spatial       *threadSpatialCache
+	focalTaskID   string
+	fullSelection string
+}
+
+const threadSpatialFocusContext = "thread-spatial-one-hop"
+
 func newThreadDetail(
 	projection core.ThreadGraphProjection,
 	body, path, pathIssue string,
 ) threadDetail {
 	return threadDetail{
 		projection: projection,
-		spatial:    newThreadSpatialCache(projection),
+		spatial:    newThreadSpatialCache(projection, nil),
 		body:       body,
 		path:       path,
 		pathIssue:  pathIssue,
@@ -797,19 +926,33 @@ func newThreadDetail(
 }
 
 func (d threadDetail) spatialPrepared() threadSpatialPrepared {
-	if d.spatial != nil {
-		return d.spatial.get()
+	_, spatial := d.activeSpatialProjection()
+	if spatial != nil {
+		return spatial.get()
 	}
 	// Direct literals remain convenient for small renderer unit tests. Runtime
 	// detail loads always use newThreadDetail and therefore share the lazy cache.
-	return prepareThreadSpatial(d.projection)
+	return prepareThreadSpatial(d.activeProjection())
 }
 
 func (d threadDetail) spatialPreparedForViewport(width int) threadSpatialPrepared {
-	if d.spatial != nil {
-		return d.spatial.getForViewport(width)
+	_, spatial := d.activeSpatialProjection()
+	if spatial != nil {
+		return spatial.getForViewport(width)
 	}
-	return prepareThreadSpatialForViewport(d.projection, width)
+	return prepareThreadSpatialForViewport(d.activeProjection(), width)
+}
+
+func (d threadDetail) activeSpatialProjection() (core.ThreadGraphProjection, *threadSpatialCache) {
+	if d.focus != nil {
+		return d.focus.projection, d.focus.spatial
+	}
+	return d.projection, d.spatial
+}
+
+func (d threadDetail) activeProjection() core.ThreadGraphProjection {
+	projection, _ := d.activeSpatialProjection()
+	return projection
 }
 
 type threadDetailView string
@@ -868,12 +1011,21 @@ func (d threadDetail) previousDetailViewName() string {
 	}
 }
 func (d threadDetail) withDetailView(name string) detailContent {
+	if name != string(threadDetailSpatial) && d.focus != nil {
+		d.selection = d.focus.fullSelection
+		d.focus = nil
+	}
 	switch name {
 	case string(threadDetailTopology):
 		d.view = threadDetailTopology
 		d.selection = threadGraphSelectedTaskID(d.projection, d.selection)
 	case string(threadDetailSpatial):
 		d.view = threadDetailSpatial
+		// Deliberately entering the map answers "where is work happening?" A
+		// coherent reload or follow/back restoration reapplies its explicit stable
+		// selection after this view switch, so those paths do not yank a reader who
+		// is already navigating the graph.
+		d.selection = threadSpatialPreferredTaskID(d.projection)
 	default:
 		d.view = threadDetailSummary
 	}
@@ -900,8 +1052,9 @@ func (d threadDetail) renderDetail(width, height int, s *styles) string {
 	if d.detailViewName() != string(threadDetailSpatial) {
 		return ""
 	}
+	projection := d.activeProjection()
 	return renderThreadSpatialPrepared(
-		d.projection, d.spatialPreparedForViewport(width), d.pathIssue, d.selection, width, height, s,
+		projection, d.spatialPreparedForViewport(width), d.pathIssue, d.selection, width, height, s,
 	)
 }
 
@@ -947,8 +1100,111 @@ func (d threadDetail) moveDetailSelectionDirection(dx, dy int) (detailContent, b
 		return d, false
 	}
 	prepared := d.spatialPrepared()
-	d.selection = threadSpatialMovePrepared(d.projection, prepared, d.selection, dx, dy)
+	d.selection = threadSpatialMovePrepared(d.activeProjection(), prepared, d.selection, dx, dy)
 	return d, true
+}
+
+func (d threadDetail) detailNavigationContext() detailNavigationContext {
+	if d.focus == nil {
+		return detailNavigationContext{}
+	}
+	return detailNavigationContext{
+		Name: threadSpatialFocusContext, Primary: d.focus.focalTaskID,
+		Secondary: d.focus.fullSelection,
+	}
+}
+
+func (d threadDetail) withDetailNavigationContext(context detailNavigationContext) detailContent {
+	if context.Name != threadSpatialFocusContext || d.detailViewName() != string(threadDetailSpatial) {
+		return d
+	}
+	// Navigation context carries a canonical identity, not a user-entered fuzzy
+	// reference. Require the exact readable task to survive before calling the
+	// core selector, whose public CLI-facing resolver intentionally also accepts
+	// slugs and prefixes.
+	if _, ok := threadGraphTask(d.projection, context.Primary); !ok {
+		return d
+	}
+	projection, err := core.SelectThreadGraphNeighborhood(d.projection, context.Primary, 1)
+	if err != nil {
+		return d
+	}
+	fullSelection := threadGraphSelectedTaskID(d.projection, context.Secondary)
+	if fullSelection == "" {
+		fullSelection = threadSpatialPreferredTaskID(d.projection)
+	}
+	d.focus = &threadSpatialFocus{
+		projection: projection, spatial: newThreadSpatialCache(projection, threadGraphAliases(d.projection)),
+		focalTaskID: projection.Scope.FocalTaskID, fullSelection: fullSelection,
+	}
+	d.selection = projection.Scope.FocalTaskID
+	return d
+}
+
+func (d threadDetail) detailLocalFocusAvailable() bool {
+	if d.detailViewName() != string(threadDetailSpatial) {
+		return false
+	}
+	if d.focus != nil {
+		return true
+	}
+	_, ok := threadGraphTask(d.projection, d.detailSelectionKey())
+	return ok
+}
+
+func (d threadDetail) detailLocalFocusActive() bool { return d.focus != nil }
+
+func (d threadDetail) toggleDetailLocalFocus() (detailContent, error) {
+	if d.detailViewName() != string(threadDetailSpatial) {
+		return d, fmt.Errorf("%w: local focus is available only in the spatial Thread graph", domain.ErrValidation)
+	}
+	if d.focus != nil {
+		d.selection = threadGraphSelectedTaskID(d.projection, d.focus.fullSelection)
+		d.focus = nil
+		return d, nil
+	}
+	focalTaskID := d.detailSelectionKey()
+	if _, ok := threadGraphTask(d.projection, focalTaskID); !ok {
+		return d, fmt.Errorf("%w: selected Thread graph node %s is not readable", domain.ErrValidation, focalTaskID)
+	}
+	projection, err := core.SelectThreadGraphNeighborhood(d.projection, focalTaskID, 1)
+	if err != nil {
+		return d, err
+	}
+	d.focus = &threadSpatialFocus{
+		projection: projection, spatial: newThreadSpatialCache(projection, threadGraphAliases(d.projection)),
+		focalTaskID: focalTaskID, fullSelection: focalTaskID,
+	}
+	d.selection = focalTaskID
+	return d, nil
+}
+
+func (d threadDetail) detailDirectionChoices(dx, dy int) (string, []domain.Task, bool) {
+	if d.focus == nil || d.detailViewName() != string(threadDetailSpatial) || dy != 0 || dx == 0 {
+		return "", nil, false
+	}
+	label := "dependent"
+	if dx < 0 {
+		label = "prerequisite"
+	}
+	selected := d.detailSelectionKey()
+	tasks := make([]domain.Task, 0)
+	for _, edge := range orderedThreadGraphEdges(d.focus.projection.Edges) {
+		candidate := ""
+		switch {
+		case dx < 0 && edge.To == selected:
+			candidate = edge.From
+		case dx > 0 && edge.From == selected:
+			candidate = edge.To
+		}
+		if candidate == "" {
+			continue
+		}
+		if task, ok := threadGraphTask(d.projection, candidate); ok {
+			tasks = append(tasks, task)
+		}
+	}
+	return label, tasks, true
 }
 
 func (d threadDetail) detailSelectionTarget() (entityKind, entityRef, bool) {
@@ -1104,8 +1360,9 @@ func threadDiagnosticLines(view core.ThreadView, s *styles) []string {
 	return diagnostics
 }
 
-// renderThreadTopology is intentionally a wave map with compact incoming-edge
-// aliases, not a terminal graph-layout engine. Waves and edges are rendered
+// renderThreadTopology is intentionally a dependency-rank map with compact
+// incoming-edge aliases, not a terminal graph-layout engine. The core's waves
+// and edges are rendered
 // exactly as the core projection supplies them: the TUI groups evidence for
 // reading, but never traverses dependencies or derives scheduling, eligibility,
 // or ownership.
@@ -1121,7 +1378,7 @@ func renderThreadTopology(projection core.ThreadGraphProjection, pathIssue, sele
 	}
 	var b strings.Builder
 	detailField(&b, "thread", terminalText(thread.Slug)+"  "+s.dim("("+terminalText(thread.CanonicalID())+")"), s)
-	detailField(&b, "view", "topology · member waves plus bounded dependencies", s)
+	detailField(&b, "view", "topology · member dependency ranks plus bounded dependencies", s)
 	health := string(view.GraphHealth) + " · projection " + string(view.ProjectionHealth)
 	if view.Inconsistent {
 		health += "  " + s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph+" inconsistent")
@@ -1131,11 +1388,12 @@ func renderThreadTopology(projection core.ThreadGraphProjection, pathIssue, sele
 	if projection.TopologyComplete {
 		topology = "complete"
 	}
-	detailField(&b, "topology", fmt.Sprintf("%s · %d member(s) · %d external gate(s) · %d wave(s) · %d edge(s)",
+	detailField(&b, "topology", fmt.Sprintf("%s · %d member(s) · %d external gate(s) · %d rank(s) · %d edge(s)",
 		topology, len(view.Members), len(view.ExternalGates), len(projection.Waves), len(projection.Edges)), s)
 	detailField(&b, "direction", "[prerequisite] ─▶ [dependent] · each node lists what it needs", s)
+	detailField(&b, "rank", "prerequisite depth · ranks are not execution barriers", s)
 	if !projection.TopologyComplete {
-		detailField(&b, "warning", s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph+" waves are partial; unranked work and diagnostics remain visible"), s)
+		detailField(&b, "warning", s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph+" dependency ranks are partial; unranked work and diagnostics remain visible"), s)
 	}
 	if pathIssue != "" {
 		detailField(&b, "local path", "unavailable · "+terminalText(pathIssue), s)
@@ -1184,7 +1442,7 @@ func renderThreadTopology(projection core.ThreadGraphProjection, pathIssue, sele
 			lines = append(lines, threadGraphNodeLines(node, aliases[node.TaskID], threadGraphNodeMarker(node, s), "",
 				incoming[node.TaskID], node.TaskID == selectedTaskID, layoutWidth, s)...)
 		}
-		threadSection(&b, fmt.Sprintf("Wave %d · explanatory order, not a barrier", wave.Index), lines, s)
+		threadSection(&b, fmt.Sprintf("Dependency rank %d", wave.Index), lines, s)
 	}
 
 	unranked := make([]string, 0)
@@ -1197,7 +1455,7 @@ func renderThreadTopology(projection core.ThreadGraphProjection, pathIssue, sele
 	}
 	threadSection(&b, "Unranked members (partial topology)", unranked, s)
 	if len(projection.Waves) == 0 && len(unranked) == 0 {
-		threadSection(&b, "Member waves", []string{"  " + s.dim("• no member tasks to rank")}, s)
+		threadSection(&b, "Member dependency ranks", []string{"  " + s.dim("• no member tasks to rank")}, s)
 	}
 
 	threadSection(&b, "Diagnostics", threadDiagnosticLines(view, s), s)

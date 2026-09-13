@@ -130,6 +130,7 @@ type threadSpatialPrepared struct {
 type threadSpatialCache struct {
 	mu          sync.Mutex
 	projection  core.ThreadGraphProjection
+	aliases     map[string]string
 	prepare     func(core.ThreadGraphProjection, int) threadSpatialPrepared
 	prepared    threadSpatialPrepared
 	nodeWidth   int
@@ -138,8 +139,14 @@ type threadSpatialCache struct {
 	ready       bool
 }
 
-func newThreadSpatialCache(projection core.ThreadGraphProjection) *threadSpatialCache {
-	return &threadSpatialCache{projection: projection, prepare: prepareThreadSpatialWithNodeWidth}
+func newThreadSpatialCache(
+	projection core.ThreadGraphProjection,
+	aliases map[string]string,
+) *threadSpatialCache {
+	return &threadSpatialCache{
+		projection: projection, aliases: cloneThreadGraphAliases(aliases),
+		prepare: prepareThreadSpatialWithNodeWidth,
+	}
 }
 
 func (c *threadSpatialCache) get() threadSpatialPrepared {
@@ -176,9 +183,46 @@ func (c *threadSpatialCache) prepareWidthLocked(nodeWidth int) {
 	if prepare == nil {
 		prepare = prepareThreadSpatialWithNodeWidth
 	}
-	c.prepared = prepareThreadSpatialAtResponsiveWidth(c.projection, nodeWidth, prepare)
+	c.prepared = applyThreadSpatialAliases(
+		prepareThreadSpatialAtResponsiveWidth(c.projection, nodeWidth, prepare),
+		c.aliases,
+	)
 	c.nodeWidth = nodeWidth
 	c.ready = true
+}
+
+func cloneThreadGraphAliases(aliases map[string]string) map[string]string {
+	if len(aliases) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(aliases))
+	for taskID, alias := range aliases {
+		cloned[taskID] = alias
+	}
+	return cloned
+}
+
+// applyThreadSpatialAliases keeps a focused excerpt's short labels stable with
+// its parent graph. Aliases are presentation identity, so they stay in the TUI
+// cache rather than contaminating the portable graph projection.
+func applyThreadSpatialAliases(
+	prepared threadSpatialPrepared,
+	aliases map[string]string,
+) threadSpatialPrepared {
+	if prepared.layout == nil || len(aliases) == 0 {
+		return prepared
+	}
+	layout := *prepared.layout
+	layout.nodes = append([]threadSpatialNode(nil), layout.nodes...)
+	layout.byID = make(map[string]threadSpatialNode, len(layout.nodes))
+	for index := range layout.nodes {
+		if alias := aliases[layout.nodes[index].node.TaskID]; alias != "" {
+			layout.nodes[index].alias = alias
+		}
+		layout.byID[layout.nodes[index].node.TaskID] = layout.nodes[index]
+	}
+	prepared.layout = &layout
+	return prepared
 }
 
 type threadSpatialLayoutPlan struct {
@@ -309,7 +353,7 @@ func preflightThreadSpatialInput(projection core.ThreadGraphProjection) threadSp
 	if len(projection.Waves) > threadSpatialMaxNodes {
 		prepared.nodeCount = len(projection.Nodes)
 		prepared.issue = fmt.Sprintf(
-			"%d wave records exceeds the %d-record spatial input limit",
+			"%d dependency-rank records exceeds the %d-record spatial input limit",
 			len(projection.Waves), threadSpatialMaxNodes,
 		)
 		return prepared
@@ -324,7 +368,7 @@ func preflightThreadSpatialInput(projection core.ThreadGraphProjection) threadSp
 		if len(wave.TaskIDs) > threadSpatialMaxNodes-waveTaskRecords {
 			prepared.nodeCount = count
 			prepared.issue = fmt.Sprintf(
-				"wave task records exceeds the %d-record spatial input limit",
+				"dependency-rank task records exceeds the %d-record spatial input limit",
 				threadSpatialMaxNodes,
 			)
 			return prepared
@@ -357,16 +401,76 @@ func preflightThreadSpatialInput(projection core.ThreadGraphProjection) threadSp
 }
 
 func boundedThreadSpatialFallbackTaskID(projection core.ThreadGraphProjection) string {
+	type candidate struct {
+		id       string
+		activity string
+	}
+	prefer := func(current candidate, taskID, activity string) candidate {
+		if taskID == "" {
+			return current
+		}
+		if current.id == "" || activity > current.activity ||
+			(activity == current.activity && taskID < current.id) {
+			return candidate{id: taskID, activity: activity}
+		}
+		return current
+	}
+	viewTaskID := func(member core.ThreadTaskView) string {
+		taskID := member.State.TaskID
+		if taskID == "" {
+			taskID = member.Task.CanonicalID()
+		}
+		return taskID
+	}
+	var inFlight, recentMember candidate
+	for _, member := range projection.View.Members {
+		taskID := viewTaskID(member)
+		if taskID == "" || member.Task.Slug == "" || member.State.Role == core.RoleUnknown {
+			continue
+		}
+		modified := threadSpatialPortableActivity(member.Task)
+		recentMember = prefer(recentMember, taskID, modified)
+		if member.State.Role == core.RoleInFlight {
+			inFlight = prefer(inFlight, taskID, modified)
+		}
+	}
+	if inFlight.id != "" {
+		return inFlight.id
+	}
+	var eligible candidate
+	for _, member := range projection.View.Frontier {
+		taskID := viewTaskID(member)
+		if taskID == "" || member.Task.Slug == "" || member.State.Role == core.RoleUnknown {
+			continue
+		}
+		eligible = prefer(eligible, taskID, threadSpatialPortableActivity(member.Task))
+	}
+	if eligible.id != "" {
+		return eligible.id
+	}
+	if recentMember.id != "" {
+		return recentMember.id
+	}
+	// A readable external prerequisite is a better last-resort anchor than an
+	// unreadable member record: it can be inspected, opened, and focused.
+	var external candidate
+	for _, gate := range projection.View.ExternalGates {
+		taskID := viewTaskID(gate.ThreadTaskView)
+		if taskID == "" || gate.Task.Slug == "" {
+			continue
+		}
+		external = prefer(external, taskID, threadSpatialPortableActivity(gate.Task))
+	}
+	if external.id != "" {
+		return external.id
+	}
 	first := ""
 	consider := func(taskID string) {
 		if taskID != "" && (first == "" || taskID < first) {
 			first = taskID
 		}
 	}
-	for index, node := range projection.Nodes {
-		if index > threadSpatialMaxNodes {
-			break
-		}
+	for _, node := range projection.Nodes {
 		consider(node.TaskID)
 	}
 	records := 0
@@ -383,6 +487,20 @@ func boundedThreadSpatialFallbackTaskID(projection core.ThreadGraphProjection) s
 		}
 	}
 	return first
+}
+
+func threadSpatialPortableActivity(task domain.Task) string {
+	if task.Updated != "" && domain.ValidateDate(task.Updated) == nil {
+		return task.Updated
+	}
+	if task.Created != "" && domain.ValidateDate(task.Created) == nil {
+		return task.Created
+	}
+	return ""
+}
+
+func threadSpatialPreferredTaskID(projection core.ThreadGraphProjection) string {
+	return boundedThreadSpatialFallbackTaskID(projection)
 }
 
 func threadSpatialCanvasCapacityIssue(layout threadSpatialLayout) string {
@@ -1054,16 +1172,16 @@ func labelThreadSpatialColumns(columns [][]string, projection core.ThreadGraphPr
 		sort.Ints(waveNumbers)
 		switch len(waveNumbers) {
 		case 1:
-			label += fmt.Sprintf(" · wave %d", waveNumbers[0])
+			label += fmt.Sprintf(" · rank %d", waveNumbers[0])
 		case 2:
-			label += fmt.Sprintf(" · waves %d+%d", waveNumbers[0], waveNumbers[1])
+			label += fmt.Sprintf(" · ranks %d+%d", waveNumbers[0], waveNumbers[1])
 		default:
 			if len(waveNumbers) > 2 {
 				parts := make([]string, 0, len(waveNumbers))
 				for _, wave := range waveNumbers {
 					parts = append(parts, strconv.Itoa(wave))
 				}
-				label += " · waves " + strings.Join(parts, "+")
+				label += " · ranks " + strings.Join(parts, "+")
 			}
 		}
 		switch {
@@ -1974,6 +2092,80 @@ func annotateThreadSpatialWindowGutters(
 	}
 }
 
+// annotateThreadSpatialScopeCard places bounded-scope guidance only in a blank
+// viewport corner. The graph remains the primary canvas: if no corner can hold
+// the card without covering a node, route, count, or continuation marker, the
+// always-visible header retains the scope summary instead.
+func annotateThreadSpatialScopeCard(
+	canvas *threadSpatialCanvas,
+	projection core.ThreadGraphProjection,
+	panX, panY, width, height int,
+) bool {
+	scope := projection.Scope
+	if scope == nil || scope.Kind != core.ThreadGraphScopeNeighborhood || width < 34 || height < 7 {
+		return false
+	}
+	focal := scope.FocalTaskID
+	for _, node := range projection.Nodes {
+		if node.TaskID == scope.FocalTaskID {
+			if label := terminalText(node.Label); label != "" {
+				focal = label
+			}
+			break
+		}
+	}
+	content := []string{
+		fmt.Sprintf("%d/%d shown · %d hidden", scope.ShownNodes, scope.TotalNodes, scope.HiddenNodes),
+		fmt.Sprintf("%d boundary edge(s)", len(scope.BoundaryEdges)),
+		"z full graph · esc ranks",
+	}
+	cardTitle := "ZOOMED · ONE-HOP · " + focal
+	cardWidth := 34
+	for _, value := range append([]string{cardTitle}, content...) {
+		cardWidth = max(cardWidth, ansi.StringWidth(value)+4)
+	}
+	cardWidth = min(cardWidth, min(width-2, 50))
+	const cardHeight = 5
+	positions := [][2]int{
+		{panX + width - cardWidth - 1, panY + 1},
+		{panX + 1, panY + 1},
+		{panX + width - cardWidth - 1, panY + height - cardHeight - 1},
+		{panX + 1, panY + height - cardHeight - 1},
+	}
+	for _, position := range positions {
+		x, y := position[0], position[1]
+		if !threadSpatialCanvasAreaEmpty(canvas, x, y, cardWidth, cardHeight) {
+			continue
+		}
+		inside := cardWidth - 2
+		title := truncate("─ "+cardTitle+" ", inside)
+		canvas.putAccentText(x, y, "╭"+title+strings.Repeat("─", max(inside-ansi.StringWidth(title), 0))+"╮", true)
+		colors := []theme.Color{theme.ColorCyan, theme.ColorGray, theme.ColorYellow}
+		for index, value := range content {
+			row := y + index + 1
+			canvas.putAccentText(x, row, "│", true)
+			canvas.putText(x+1, row, padRight(truncate(" "+value, inside), inside), colors[index], false)
+			canvas.putAccentText(x+cardWidth-1, row, "│", true)
+		}
+		canvas.putAccentText(x, y+cardHeight-1, "╰"+strings.Repeat("─", inside)+"╯", true)
+		return true
+	}
+	return false
+}
+
+func threadSpatialCanvasAreaEmpty(canvas *threadSpatialCanvas, x, y, width, height int) bool {
+	for row := y; row < y+height; row++ {
+		for column := x; column < x+width; column++ {
+			cell, ok := canvas.cellAt(column, row)
+			if !ok || cell.text != "" || cell.connector != 0 || cell.continuation || cell.routeID != 0 ||
+				cell.shared || cell.crossing || cell.overlap || cell.conflict || cell.routeCount {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func putThreadSpatialWindowGutter(
 	canvas *threadSpatialCanvas,
 	x, y, dx, dy, attempts int,
@@ -2032,6 +2224,7 @@ func renderThreadSpatialPrepared(
 	)
 	annotateThreadSpatialRouteBoundaries(canvas, layout, selectedTaskID, panX, panY, width, canvasHeight)
 	annotateThreadSpatialWindowGutters(canvas, layout, panX, panY, width, canvasHeight)
+	annotateThreadSpatialScopeCard(canvas, projection, panX, panY, width, canvasHeight)
 
 	topology := "partial"
 	if projection.TopologyComplete {
@@ -2045,17 +2238,32 @@ func renderThreadSpatialPrepared(
 	if selectedOK && selected.column < len(layout.columnLabels) {
 		focus = layout.columnLabels[selected.column]
 	}
-	header := fmt.Sprintf("spatial graph · %s · focus %s · prerequisite ─▶ dependent · %s",
-		topology, focus, health)
+	mode := "spatial graph"
+	scope := projection.Scope
+	header := fmt.Sprintf("%s · %s · focus %s · prerequisite ─▶ dependent · %s",
+		mode, topology, focus, health)
+	if scope != nil && scope.Kind == core.ThreadGraphScopeNeighborhood {
+		// Keep the bounded-state cue, topology qualification, and both health
+		// verdicts ahead of optional geometry. Even at the minimum graph width,
+		// the first two lines retain the facts that distinguish a trustworthy
+		// excerpt from an apparently complete healthy graph.
+		header = fmt.Sprintf("%s  %s · %s · %d/%d shown",
+			s.accentBadge("ZOOMED · ONE-HOP"), mode, topology, scope.ShownNodes, scope.TotalNodes)
+	}
 	if routeIssue := threadSpatialRouteConflictCountSummary(layout.routeConflicts); routeIssue != "" {
 		header += " · " + routeIssue
 	}
 	if pathIssue != "" {
 		header += " · local path unavailable"
 	}
+	windowSummary := threadSpatialWindowSummary(layout, panX, panY, width, canvasHeight)
+	if scope != nil && scope.Kind == core.ThreadGraphScopeNeighborhood {
+		windowSummary = fmt.Sprintf("%s · %d hidden · %d boundary edge(s) · z full graph · %s",
+			health, scope.HiddenNodes, len(scope.BoundaryEdges), windowSummary)
+	}
 	lines := []string{
 		truncate(header, width),
-		truncate(threadSpatialWindowSummary(layout, panX, panY, width, canvasHeight), width),
+		truncate(windowSummary, width),
 		truncate(threadSpatialStatusLegend(s), width),
 		truncate(threadSpatialRoleLegend(s), width),
 	}
@@ -2328,14 +2536,22 @@ func renderThreadSpatialCapacityFallback(
 	s *styles,
 ) string {
 	health := fmt.Sprintf("graph %s · projection %s", projection.View.GraphHealth, projection.View.ProjectionHealth)
+	heading := "spatial graph · bounded prototype fallback · " + health
+	if scope := projection.Scope; scope != nil && scope.Kind == core.ThreadGraphScopeNeighborhood {
+		heading = s.accentBadge("ZOOMED · ONE-HOP") + "  " + heading
+	}
+	returnHint := "Use v or Esc for the complete dependency-rank reader; f still opens the task picker."
+	if scope := projection.Scope; scope != nil && scope.Kind == core.ThreadGraphScopeNeighborhood {
+		returnHint = "Use z for the full graph, v or Esc for dependency ranks, or f for the task picker."
+	}
 	lines := []string{
-		truncate("spatial graph · bounded prototype fallback · "+health, width),
+		truncate(heading, width),
 		truncate(threadSpatialStatusLegend(s), width),
 		truncate(threadSpatialRoleLegend(s), width),
 		"",
 		truncate(s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph+" capacity guard")+" · "+prepared.issue, width),
 		truncate(fmt.Sprintf("projection has %d nodes and %d edges; no partial graph was rendered", prepared.nodeCount, prepared.edgeCount), width),
-		truncate("Use v or Esc for the complete wave reader; f still opens the task picker.", width),
+		truncate(returnHint, width),
 	}
 	lines = append(lines, threadSpatialInspectorPrepared(projection, prepared, selectedTaskID, width, s)...)
 	return strings.Join(lines[:min(len(lines), height)], "\n")
@@ -2349,7 +2565,7 @@ func renderThreadSpatialCanvas(_ core.ThreadGraphProjection, layout threadSpatia
 }
 
 func renderThreadSpatialCanvasWindow(
-	_ core.ThreadGraphProjection,
+	projection core.ThreadGraphProjection,
 	layout threadSpatialLayout,
 	selected string,
 	panX, panY, width, height int,
@@ -2359,6 +2575,13 @@ func renderThreadSpatialCanvasWindow(
 	// from allocating more cells than the already-preflighted layout itself.
 	canvasWidth := min(max(width, 1), max(layout.width-panX, 1))
 	canvasHeight := min(max(height, 1), max(layout.height-panY, 1))
+	// A bounded graph may leave most of a large terminal blank. Preserve that
+	// visible space so the scope card can truthfully occupy it, while retaining
+	// the existing allocation ceiling for synthetic or hostile dimensions.
+	if scope := projection.Scope; scope != nil && scope.Kind == core.ThreadGraphScopeNeighborhood &&
+		width > 0 && height > 0 && width <= threadSpatialMaxCanvasCells/height {
+		canvasWidth, canvasHeight = width, height
+	}
 	canvas := newThreadSpatialViewportCanvas(panX, panY, canvasWidth, canvasHeight)
 	drawThreadSpatialCanvasWindow(canvas, layout, selected, panX, panY, width, height)
 	return canvas
@@ -2623,9 +2846,9 @@ func threadSpatialStatusLegend(s *styles) string {
 }
 
 func threadSpatialRoleLegend(s *styles) string {
-	return s.dim("roles") + "  ┌ member [M#]  ╔ gate [G#]  " +
-		s.accent("━ focus route") + "  " +
-		s.fg(theme.ColorYellow, "▶ direction  2 fan")
+	return s.dim("rank≠barrier") + "  ┌ member [M#]  ╔ gate [G#]  " +
+		s.accent("━ focus") + "  " +
+		s.fg(theme.ColorYellow, "▶ edge  2 fan")
 }
 
 func threadSpatialInspectorPrepared(
@@ -2647,7 +2870,7 @@ func threadSpatialInspectorPrepared(
 	return threadSpatialInspectorBox("focus", []string{
 		s.accent(terminalText(selected)),
 		s.dim("layout unavailable at current capacity limit"),
-		"Use f to choose a task or return to the complete wave reader.",
+		"Use f to choose a task or return to the complete dependency-rank reader.",
 	}, width, s)
 }
 
@@ -2758,9 +2981,15 @@ func renderThreadSpatialNarrow(
 	if height <= 0 {
 		height = 1
 	}
-	lines := threadSpatialInspectorBox("spatial graph · give it room", []string{
+	title := "spatial graph · give it room"
+	returnHint := "Esc ranks · f pick · resize"
+	if scope := projection.Scope; scope != nil && scope.Kind == core.ThreadGraphScopeNeighborhood {
+		title = "ZOOMED · ONE-HOP · give it room"
+		returnHint = "z full · Esc ranks · f pick · resize"
+	}
+	lines := threadSpatialInspectorBox(title, []string{
 		fmt.Sprintf("need ≥%d×%d · now %d×%d", threadSpatialMinWidth, threadSpatialMinHeight, width, height),
-		"Esc waves · f pick · resize",
+		returnHint,
 		"Give the map room to breathe; the routes will follow.",
 	}, width, s)
 	lines = append(lines, threadSpatialInspectorPrepared(projection, prepared, selected, width, s)...)

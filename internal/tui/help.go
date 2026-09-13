@@ -199,7 +199,7 @@ func notesFor(kind entityKind) helpSection {
 			helpEntry{"read-only", "use Thread lifecycle and membership CLI verbs for mutations"},
 			helpEntry{"progress", "d = nominally done · s = soundly drained · list order does not authorize dispatch"},
 			helpEntry{"tiny health", "paired marks retain graph then projection order when g/v labels collapse"},
-			helpEntry{"topology", "in detail, v cycles summary → waves → spatial; waves use j/k, spatial uses hjkl, enter opens, and f picks directly"},
+			helpEntry{"topology", "in detail, v cycles summary → ranks → spatial; ranks show prerequisite depth, not execution barriers; ranks use j/k, spatial uses hjkl, z toggles one-hop focus, enter opens, and f picks directly"},
 		)
 	}
 	entries = append(entries, helpEntry{"find", "matches the rendered text on screen — R for the raw source"})

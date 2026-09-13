@@ -134,6 +134,15 @@ func TestSymbolsLegendIsPageSpecific(t *testing.T) {
 		!strings.Contains(threads, "unrelated routes cross") || !strings.Contains(threads, "renderer routing conflict") {
 		t.Error("Threads legend should explain projection health and graph-derived work")
 	}
+	threadNotes := notesFor(entityThreads)
+	var noteText strings.Builder
+	for _, entry := range threadNotes.entries {
+		noteText.WriteString(entry.desc + "\n")
+	}
+	if got := noteText.String(); !strings.Contains(got, "prerequisite depth, not execution barriers") ||
+		!strings.Contains(got, "z toggles one-hop focus") {
+		t.Errorf("Threads help should distinguish dependency ranks and local focus:\n%s", got)
+	}
 	if !strings.Contains(audits, "finding:") || !strings.Contains(audits, "bucket") {
 		t.Error("audits legend should describe buckets + finding statuses")
 	}

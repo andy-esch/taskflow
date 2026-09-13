@@ -5,11 +5,12 @@ task/Thread/epic/audit/research files. It dogfoods on its own planning under
 [`planning/`](./planning/).
 
 > **Threads preview.** The workflow is ready for real CLI and TUI dogfooding. The CLI owns guarded
-> Thread mutations, repair, and bulk apply; the TUI provides shared read projections and a `v` wave/topology
-> view. Persisted and machine contracts are protected during preview, but command ergonomics and
+> Thread mutations, repair, and bulk apply; the TUI provides shared read projections plus `v`
+> dependency-rank and spatial graph views, including a one-hop focus lens. Persisted and machine
+> contracts are protected during preview, but command ergonomics and
 > presentation may still evolve. Preview graduation is evidence-gated—not date- or version-gated;
 > see the [compatibility matrix and graduation checklist](./docs/THREADS_COMPATIBILITY.md).
-> Thread mutation from the TUI, a spatial graph, critical-path analysis, forecasting, and slack
+> Thread mutation from the TUI, critical-path analysis, forecasting, and slack
 > remain outside the current feature.
 
 ## Demos
@@ -27,8 +28,8 @@ and back without restarting:
 ![the tskflwctl atlas](./assets/atlas.gif)
 
 Threads turn repository-global task dependencies into a project-sized execution graph. The focused
-topology view groups work into explanatory waves, keeps external gates visible, and opens every
-node through its stable task identity:
+topology view groups work into explanatory dependency ranks—not execution barriers—keeps external
+gates visible, and opens every node through its stable task identity:
 
 ![a touring-bike release Thread in the tskflwctl TUI](./assets/threads.gif)
 
@@ -473,10 +474,12 @@ full keymap, `r` to refresh. The detail pane's title is a **click-to-open link**
 (OSC 8) to the entity's file, and the terminal window/tab title tracks the current
 selection. The read-only Threads tab keeps persisted lifecycle separate from graph/projection
 health, nominal versus sound progress, in-flight work, dispatchable frontier, external gates, and
-diagnostics; with its detail focused, `v` switches to a terminal-native topology view that combines
-the core projection's member waves with compact per-node prerequisite aliases. `j`/`k` selects a
-visible task and `Enter` opens it; `f` remains the fast stable-identity picker for members and
-immediate external gates.
+diagnostics; with its detail focused, `v` cycles through terminal-native dependency-rank and spatial
+graph views over the same core projection. A dependency rank expresses prerequisite depth, not a
+synchronized execution phase. The spatial view uses `hjkl` for stable-identity navigation,
+`z` to toggle a one-hop neighborhood around the selected task, and `Enter` to open it; ambiguous
+horizontal fan-in/fan-out opens a chooser instead of guessing. `f` remains the fast
+stable-identity picker for members and immediate external gates.
 Membership order is not presented as dependency or dispatch order. It **live-reloads**
 via `fsnotify` — edits from
 your editor or a CLI `task move` in another terminal show up within ~200ms,

@@ -10,6 +10,8 @@ priority: high
 autonomy_level: 2
 tags: [tui, ux, navigation, information-architecture, research, design]
 created: "2026-09-10"
+updated_at: "2026-09-12"
+depends_on: [6g86c7y6hn41]
 ---
 # Reassess TUI navigation and information architecture at current scale
 
@@ -51,6 +53,30 @@ without making hidden bindings the only way to discover functionality.
 
 - Implementing the redesign, changing planning-domain semantics, adding mouse support, or treating
   a web interface as a substitute for a coherent shared interaction model.
+
+## Dogfood evidence: the spatial graph is a graph engine without a reading hierarchy
+
+A 185-column capture of the 15-node navigation Thread makes the current scale problem concrete.
+Before the first node, six dense rows mix Thread identity, topology completeness, selection layer,
+dependency rank, boundary role, direction, health, viewport inventory, task status, node role, route
+focus, and fan counts. The bottom inspector is semantically useful but can sit dozens of rows from
+the selected node. Healthy evidence consumes the same prominence as a problem, while terms such as
+`gate` and `fan` require graph-domain knowledge that the screen does not teach.
+
+The `?` overlay already has section machinery and more than key bindings, but it is titled `Keys`,
+fixed to a narrow key-reference layout, and receives only the active entity kind. It cannot know
+whether Thread summary, dependency ranks, the full graph, or one-hop focus is active. Evaluate a
+spatial-specific graph guide that leads with how to read the current view, defines Thread task and
+external prerequisite concepts in plain language, explains multiple-route and crossing marks, then
+lists navigation controls. Use that guide to remove permanent legend density rather than adding a
+second wall of explanations.
+
+The redesign should compare at least these concrete moves: a small mode/title strip; healthy state
+collapsed while degraded evidence stays loud; selected-task context adjacent to the graph instead
+of a distant bottom chasm; overflow cues shown only when relevant; plain-language node and route
+vocabulary; and a shorter footer that makes `?` discoverable as the graph guide. Preserve exact
+projection evidence and keyboard speed, but do not require users to decode renderer implementation
+terms before they can answer what is active, what blocks it, and what it unlocks.
 
 ## Related
 

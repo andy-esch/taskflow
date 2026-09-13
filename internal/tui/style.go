@@ -115,6 +115,16 @@ func (s *styles) accent(str string) string {
 	return lipgloss.NewStyle().Foreground(s.pal.Accent.Color()).Render(str)
 }
 
+// accentBadge is redundant by design: uppercase text survives colorless output,
+// while the accent background makes a persistent mode change hard to overlook.
+func (s *styles) accentBadge(str string) string {
+	return lipgloss.NewStyle().
+		Background(s.pal.Accent.Color()).
+		Foreground(s.pal.Base.Color()).
+		Bold(true).
+		Render(" " + str + " ")
+}
+
 // glyph renders a theme Token (status / bucket / liveness / marker) as its colored
 // glyph — the shared shorthand for the fg(tok.Color, tok.Glyph) the rows + dashboard
 // repeat, so a marker is drawn from theme rather than a re-typed literal.
