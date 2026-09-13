@@ -221,3 +221,17 @@ func TestSelectThreadGraphNeighborhoodRejectsBadScopeAndFocus(t *testing.T) {
 		t.Fatalf("ambiguous error=%v", err)
 	}
 }
+
+func TestSelectThreadGraphNeighborhoodRejectsDuplicateNodeRecordsBeforeSemanticValidation(t *testing.T) {
+	projection := neighborhoodProjection()
+	duplicate := projection.Nodes[0]
+	duplicate.Role = ThreadTaskRole("invalid-role")
+	projection.Nodes = append(projection.Nodes, duplicate)
+
+	_, err := SelectThreadGraphNeighborhood(projection, "focus", 1)
+	if !errors.Is(err, domain.ErrValidation) ||
+		!strings.Contains(err.Error(), "repeats task ID "+duplicate.TaskID) ||
+		strings.Contains(err.Error(), "unknown role") {
+		t.Fatalf("duplicate node error=%v, want duplicate-record rejection before role validation", err)
+	}
+}

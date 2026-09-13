@@ -3099,9 +3099,57 @@ func TestThreadSpatialPreflightBoundsNodesEdgesRoutesAndCanvas(t *testing.T) {
 		for index := range projection.Waves[0].TaskIDs {
 			projection.Waves[0].TaskIDs[index] = "a"
 		}
-		prepared := prepareThreadSpatial(projection)
-		if prepared.layout != nil || !strings.Contains(prepared.issue, "dependency-rank task records exceeds") {
+		plannerCalls := 0
+		prepared := prepareThreadSpatialWithPlanner(projection, func(core.ThreadGraphProjection) threadSpatialLayoutPlan {
+			plannerCalls++
+			return threadSpatialLayoutPlan{}
+		})
+		if prepared.layout != nil ||
+			!strings.Contains(prepared.issue, "dependency-rank task records exceeds") || plannerCalls != 0 {
 			t.Fatalf("malformed wave record input escaped preflight: %+v", prepared)
+		}
+	})
+
+	t.Run("task records across dependency ranks are bounded before layout", func(t *testing.T) {
+		projection := core.ThreadGraphProjection{
+			Nodes: []core.ThreadGraphNode{{TaskID: "a"}},
+			Waves: []core.ThreadGraphWave{
+				{Index: 1, TaskIDs: make([]string, threadSpatialMaxNodes/2)},
+				{Index: 2, TaskIDs: make([]string, threadSpatialMaxNodes/2+1)},
+			},
+		}
+		for waveIndex := range projection.Waves {
+			for taskIndex := range projection.Waves[waveIndex].TaskIDs {
+				projection.Waves[waveIndex].TaskIDs[taskIndex] = "a"
+			}
+		}
+		plannerCalls := 0
+		prepared := prepareThreadSpatialWithPlanner(projection, func(core.ThreadGraphProjection) threadSpatialLayoutPlan {
+			plannerCalls++
+			return threadSpatialLayoutPlan{}
+		})
+		if prepared.layout != nil ||
+			!strings.Contains(prepared.issue, "dependency-rank task records exceeds") || plannerCalls != 0 {
+			t.Fatalf("cross-rank task records escaped preflight: issue=%q layout=%v plannerCalls=%d", prepared.issue, prepared.layout != nil, plannerCalls)
+		}
+	})
+
+	t.Run("repeated dependency-rank records cannot bypass the raw record limit", func(t *testing.T) {
+		projection := core.ThreadGraphProjection{
+			Nodes: []core.ThreadGraphNode{{TaskID: "a"}},
+			Waves: make([]core.ThreadGraphWave, threadSpatialMaxNodes+1),
+		}
+		for index := range projection.Waves {
+			projection.Waves[index] = core.ThreadGraphWave{Index: 1, TaskIDs: []string{"a"}}
+		}
+		plannerCalls := 0
+		prepared := prepareThreadSpatialWithPlanner(projection, func(core.ThreadGraphProjection) threadSpatialLayoutPlan {
+			plannerCalls++
+			return threadSpatialLayoutPlan{}
+		})
+		if prepared.layout != nil ||
+			!strings.Contains(prepared.issue, "dependency-rank records exceeds") || plannerCalls != 0 {
+			t.Fatalf("repeated rank records escaped preflight: issue=%q layout=%v plannerCalls=%d", prepared.issue, prepared.layout != nil, plannerCalls)
 		}
 	})
 
