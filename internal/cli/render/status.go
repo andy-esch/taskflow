@@ -13,7 +13,7 @@ import (
 // SummaryHuman renders the at-a-glance dashboard.
 func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 	// Status counts — active line, then archived line, only non-zero buckets.
-	active, archived := splitCounts(s.Counts)
+	active, archived := s.SplitCounts()
 	fmt.Fprintf(w, "%s\n", st.Bold("Tasks"))
 	if line := countLine(st, active); line != "" {
 		fmt.Fprintf(w, "  %s  %s\n", st.Dim("active  "), line)
@@ -87,17 +87,6 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 	return nil
 }
 
-func splitCounts(counts []core.StatusCount) (active, archived []core.StatusCount) {
-	for _, c := range counts {
-		if c.Status.IsActive() {
-			active = append(active, c)
-		} else {
-			archived = append(archived, c)
-		}
-	}
-	return active, archived
-}
-
 // countByLine renders a finding breakdown ("1 acute · 12 soon · 23 eventually"),
 // the dim-separated, uncolored counterpart of the dashboard's by-urgency / by-area
 // lines. Shares the iterate/format/join STRUCTURE with them via theme.Breakdown;
@@ -107,16 +96,12 @@ func countByLine(st Style, cs []core.CountBy) string {
 		func(c core.CountBy) string { return fmt.Sprintf("%d %s", c.Count, c.Key) }, nil)
 }
 
-// countLine renders "3 next-up · 1 in-progress", skipping zero buckets.
+// countLine renders "3 next-up · 1 in-progress". Empty buckets are already gone —
+// Summary.SplitCounts drops them, so both dashboards agree on what counts as worth
+// showing; this is pure formatting.
 func countLine(st Style, counts []core.StatusCount) string {
-	var parts []string
-	for _, c := range counts {
-		if c.Count == 0 {
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("%d %s", c.Count, st.Status(c.Status)))
-	}
-	return strings.Join(parts, st.Dim(" · "))
+	return theme.Breakdown(counts, st.Dim(" · "), 0,
+		func(c core.StatusCount) string { return fmt.Sprintf("%d %s", c.Count, st.Status(c.Status)) }, nil)
 }
 
 // SummaryJSON writes the dashboard as a versioned envelope.
