@@ -26,6 +26,9 @@ pins Go and the release tools in
 Linux execution plus the same Darwin/Linux snapshot matrix, but is not a bit-for-bit reproducible
 build claim. A devcontainer may wrap this image later; it must not become a second release gate.
 
+The image pins the release compiler independently of the minimum Go version in `go.mod`: release
+tools may require a newer toolchain, and GitHub Actions uses the same newer Go release line.
+
 Automated validation does not replace a release task's bounded CLI/TUI dogfood. After both are
 recorded on one immutable candidate, tag that exact commit. The tag-triggered
 [GitHub Actions workflow](../.github/workflows/release.yml) remains authoritative for publication;
