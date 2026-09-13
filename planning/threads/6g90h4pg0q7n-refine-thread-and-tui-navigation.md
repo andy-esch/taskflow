@@ -6,8 +6,8 @@ description: Make large Thread graphs comprehensible and shared TUI navigation p
 goal: Ship an evidence-backed large-graph experience and a coherent shared TUI navigation model.
 created: "2026-09-11"
 tags: [threads, tui, ux, dogfood]
-tasks: [6g6wdvfp2ksa, 6g86016qvk5d, 6g86c7y6hn41, 6g86g03zfj2f, 6g87qn72901g, 6g8vxbv3d4xn, 6g8vxcnezktm, 6g914ybs9t87, 6g9150nrt4p9, 6g95fc3aj4ye, 6g9g37bvetjy, 6g9g37c50qp1]
-updated_at: "2026-09-12"
+tasks: [6g6wdvfp2ksa, 6g86016qvk5d, 6g86c7y6hn41, 6g86g03zfj2f, 6g87qn72901g, 6g8vxbv3d4xn, 6g8vxcnezktm, 6g914ybs9t87, 6g9150nrt4p9, 6g95fc3aj4ye, 6g9g37bvetjy, 6g9g37c50qp1, 6g9mz2shwmb0]
+updated_at: "2026-09-13"
 started_at: "2026-09-11"
 ---
 # Thread: Refine Thread and TUI navigation
@@ -37,3 +37,7 @@ The one-hop implementation reviews added two deliberately trailing slices. Recor
 coverage follows the focus implementation directly. The Threads demo refresh waits for the
 information-architecture recommendation and alternate-view discoverability work, avoiding a
 recording that immediately becomes stale again.
+
+The v0.21.0 release task is an installed preview checkpoint after one-hop focus, its record-limit
+regressions, and the repository-global release validator. It does not block the information-
+architecture review or turn every remaining navigation refinement into release scope.

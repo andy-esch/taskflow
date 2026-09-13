@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g7r20ffjf2w
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Unify automated release checks behind one command and run the same contract in a pinned, headless Linux container.
 effort: 1-2 days
@@ -12,6 +12,7 @@ tags: [release, automation, containers, developer-experience]
 created: "2026-09-07"
 updated_at: "2026-09-13"
 started_at: "2026-09-13"
+completed_at: "2026-09-13"
 ---
 # Make release validation a reproducible one-command gate
 
@@ -30,13 +31,13 @@ Turn the automated portion of release qualification into one reusable command, t
 
 ## Acceptance criteria
 
-- [ ] One documented `just release-validate` command executes the repository's complete automated release gate and returns non-zero at the failing phase.
-- [ ] The gate checks its candidate and prerequisites explicitly, prints concise phase-oriented progress, and leaves tracked files unchanged on both success and failure.
-- [ ] One documented container command runs the same validation implementation in a pinned Linux environment without reading the developer's home-directory configuration or requiring host-installed Go, GoReleaser, or golangci-lint.
-- [ ] Container execution works from a clean clone, uses non-root ownership safely, and keeps module/build caches and generated release artifacts from polluting tracked source.
-- [ ] Host and container paths are covered by focused smoke tests or CI evidence, including at least a stale generated artifact, a failing test/check, a dirty candidate, and a missing prerequisite.
-- [ ] The repository documents which environment is authoritative for release parity, any cross-platform limitations, and whether a reusable devcontainer adds value without duplicating the runner.
-- [ ] The v0.20 release playbook remains historical evidence; future release tasks can link to the reusable gate instead of copying its automated command list.
+- [x] One documented `just release-validate` command executes the repository's complete automated release gate and returns non-zero at the failing phase.
+- [x] The gate checks its candidate and prerequisites explicitly, prints concise phase-oriented progress, and leaves tracked files unchanged on both success and failure.
+- [x] One documented container command runs the same validation implementation in a pinned Linux environment without reading the developer's home-directory configuration or requiring host-installed Go, GoReleaser, or golangci-lint.
+- [x] Container execution works from a clean clone, uses non-root ownership safely, and keeps module/build caches and generated release artifacts from polluting tracked source.
+- [x] Host and container paths are covered by focused smoke tests or CI evidence, including at least a stale generated artifact, a failing test/check, a dirty candidate, and a missing prerequisite.
+- [x] The repository documents which environment is authoritative for release parity, any cross-platform limitations, and whether a reusable devcontainer adds value without duplicating the runner.
+- [x] The v0.20 release playbook remains historical evidence; future release tasks can link to the reusable gate instead of copying its automated command list.
 
 ## Design guidance
 
@@ -62,5 +63,20 @@ Prefer a purpose-built Containerfile and headless command as the portable baseli
 ## Related
 
 - Release checkpoint [cut-v0.20.0-as-a-compatibility-hardened-threads-preview](6g7fhfpmy032-cut-v0.20.0-as-a-compatibility-hardened-threads-preview.md)
+- First consumer [cut-v0.21.0-as-a-spatial-threads-preview](6g9mz2shwmb0-cut-v0.21.0-as-a-spatial-threads-preview.md)
 - Distribution foundation [binary-releases-via-goreleaser](6fbj87000zs7-binary-releases-via-goreleaser.md)
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
+
+## Implementation evidence (2026-09-13)
+
+The host gate passed on f6170ae with focused and full race tests, formatting, module tidiness,
+generated CLI and schema checks, golangci-lint, package vulnerability scanning, planning lint,
+GoReleaser validation, and four isolated snapshot archives; the candidate remained clean. The
+pinned Linux container then passed the same contract on 4f98a00 as an unprivileged user with a
+read-only root, a disposable source clone, and reusable external Go and lint caches.
+
+Focused harness coverage proves dirty candidates, missing prerequisites, unsupported Go versions,
+race-suite failures, and stale generated documentation fail at the named phase without rewriting the
+source checkout. The first container runs also caught and corrected a release-tool compiler
+mismatch, noexec temporary storage, and a hidden lint-cache write, providing direct evidence for the
+hardened boundaries.
