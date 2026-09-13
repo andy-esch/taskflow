@@ -33,11 +33,54 @@ compatibility and usability evidence without implying that Threads have graduate
 - Tag the recorded candidate, verify the GitHub workflow, four archives, checksums, embedded
   version, and an installed binary, then record immutable evidence.
 
+## Release execution playbook
+
+After the release-planning PR lands, freeze one clean `main` commit and run both forms of the same
+automated gate. Record the commit printed by each command; they must match.
+
+```bash
+git status --short
+git rev-parse HEAD
+just release-validate
+just release-validate-container
+```
+
+Use a copy of the touring-bike fixture for the bounded manual pass:
+
+```bash
+V021_LAB=$(mktemp -d /tmp/taskflow-v021-dogfood.XXXXXX)
+V021_CLI="$PWD/bin/tskflwctl"
+cp -R assets/demo-threads "$V021_LAB/space"
+
+just build
+"$V021_CLI" -C "$V021_LAB/space" lint
+"$V021_CLI" -C "$V021_LAB/space" thread frontier touring-bike-departure
+"$V021_CLI" -C "$V021_LAB/space" thread graph touring-bike-departure
+"$V021_CLI" -C "$V021_LAB/space" thread graph touring-bike-departure \
+  --around service-bottom-bracket-and-crankset --depth 1 --format mermaid
+"$V021_CLI" -C "$V021_LAB/space" thread graph touring-bike-departure \
+  --around service-bottom-bracket-and-crankset --depth 2 --json
+"$V021_CLI" -C "$V021_LAB/space" ui
+```
+
+In the TUI, open Threads, cycle to the spatial graph, and confirm initial focus lands on the
+in-flight bottom-bracket task. Exercise `h/j/k/l`, ambiguous-neighbor selection, `z` focus and
+return, `Enter` task navigation, and `ctrl+o` return. With that view open, use another terminal to
+run:
+
+```bash
+"$V021_CLI" -C "$V021_LAB/space" task complete service-bottom-bracket-and-crankset
+"$V021_CLI" -C "$V021_LAB/space" task start true-and-tension-both-wheels
+```
+
+Confirm the graph refreshes without losing coherent selection. Record outcomes and file every
+non-trivial finding before checking the dogfood criterion.
+
 ## Acceptance criteria
 
 - [ ] The one-hop TUI focus, graph input-limit regression, and reusable release-validation tasks
   are completed and merged into the clean candidate.
-- [ ] Host and pinned-container release validation pass against the same recorded commit with no
+- [x] Host and pinned-container release validation pass against the same recorded commit with no
   tracked worktree changes.
 - [ ] A fresh candidate binary passes the bounded CLI/TUI dogfood covering full graph, one-hop
   focus and return, directional navigation, task jump/back, live refresh, frontier, and bounded
@@ -46,7 +89,7 @@ compatibility and usability evidence without implying that Threads have graduate
   reviews, and a bounded Thread graph as evidence without overstating compatibility.
 - [ ] The v0.21.0 tag, release workflow, four archives, checksums, extracted version, and installed
   binary all identify the recorded candidate.
-- [ ] Preview graduation remains a separate deferred decision, and unfinished navigation design or
+- [x] Preview graduation remains a separate deferred decision, and unfinished navigation design or
   polish work is not made an artificial release prerequisite.
 
 ## Out of scope
@@ -62,3 +105,11 @@ compatibility and usability evidence without implying that Threads have graduate
 - Contract [Threads compatibility and preview graduation](../../docs/THREADS_COMPATIBILITY.md)
 - Previous checkpoint [v0.20.0 compatibility-hardened preview](6g7fhfpmy032-cut-v0.20.0-as-a-compatibility-hardened-threads-preview.md)
 - Release gate [Make release validation reproducible](6g7r20ffjf2w-make-release-validation-a-reproducible-one-command-gate.md)
+
+## Pre-merge automated evidence (2026-09-13)
+
+Host and pinned-container validation both passed against clean commit
+`48844c634be7f8bc9020fd73fbed5be5f59b3556`. Each run completed the focused and full race suites,
+format/tidy and generated-artifact checks, lint with zero issues, the package vulnerability scan,
+planning integrity, GoReleaser configuration, and an isolated four-platform snapshot. The final
+release candidate must repeat both commands after this planning evidence lands on `main`.
