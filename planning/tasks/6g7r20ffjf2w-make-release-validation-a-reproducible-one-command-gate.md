@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g7r20ffjf2w
-status: ready-to-start
+status: in-progress
 epic: 21-code-quality-architecture-hardening
 description: Unify automated release checks behind one command and run the same contract in a pinned, headless Linux container.
 effort: 1-2 days
@@ -10,6 +10,8 @@ priority: medium
 autonomy_level: 4
 tags: [release, automation, containers, developer-experience]
 created: "2026-09-07"
+updated_at: "2026-09-13"
+started_at: "2026-09-13"
 ---
 # Make release validation a reproducible one-command gate
 
