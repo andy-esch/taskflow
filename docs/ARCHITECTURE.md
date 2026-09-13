@@ -236,12 +236,17 @@ adapter capabilities rather than leaked persistence.
   gates, `thread graph` exports compact title/state/role/ID nodes as Mermaid or DOT (with bounded
   descriptions available through `--details`). Its optional `--around TASK --depth 1|2` view marks
   the focal task and summarizes omitted boundary continuations without presenting the excerpt as
-  the complete Thread. Thread detail in the TUI groups each bounded
+  the complete Thread. The immersive TUI spatial view calls the same pure selector for its local
+  one-hop focus lens, keeps full and focused layout caches separate, and stores focal/full-selection
+  context through the generic detail reload and navigation seams. Terminal geometry, collision-aware
+  scope-card placement, key routing, and fan-out choice remain presentation concerns. Thread detail
+  in the TUI groups each bounded
   incoming edge beneath its
-  dependent wave node using compact presentation aliases without reparsing either text format. A
-  stable-ID cursor walks those supplied gate/wave/unranked rows and delegates Enter-to-open back to
-  the shell's ordinary entity navigator. Both CLI commands return the same renderer-neutral
-  projection under `--json`.
+  dependent node using compact presentation aliases without reparsing either text format. The TUI
+  labels the core's explanatory waves as dependency ranks so lifecycle state cannot be mistaken for
+  an execution barrier. A stable-ID cursor walks those supplied gate/rank/unranked rows and delegates
+  Enter-to-open back to the shell's ordinary entity navigator. Both CLI commands return the same
+  renderer-neutral projection under `--json`.
   The public/persisted boundary and the preview exit criteria are recorded in
   [`docs/THREADS_COMPATIBILITY.md`](THREADS_COMPATIBILITY.md). Persisted Thread/task graph semantics,
   concrete historically shipped Thread shapes, versioned wire values, and adapter-neutral

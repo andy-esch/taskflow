@@ -1399,7 +1399,7 @@ copies the selected task rather than the parent Thread. Shared Back and structur
 targeting remain shell concerns, not renderer-local behavior.
 
 The prototype is intentionally bounded rather than silently approximate. Oversized or narrow
-layouts fall back explicitly to the complete wave reader and task picker. Live add/rename reloads
+layouts fall back explicitly to the complete dependency-rank reader and task picker. Live add/rename reloads
 preserve selection, and incomplete topology remains qualified by the supplied projection health.
 No graph-layout library was adopted: core already supplies the semantic graph and waves, while the
 remaining problem is terminal route placement. That choice is revisitable behind the TUI adapter.
@@ -1427,8 +1427,20 @@ state plainly that the view is bounded, and group crossing edges into determinis
 markers rather than drawing omitted tasks. JSON retains those exact crossing edges so TUI, web,
 and PR adapters can make their own faithful presentation choices. The selector does not rescan the
 repository, choose a focus automatically, encode viewport geometry, or import terminal/GitHub
-policy. The separately planned TUI focus mode can therefore reuse this seam while keeping its
-overlay and navigation behavior replaceable.
+policy. The TUI focus mode now reuses this seam while keeping its overlay and navigation behavior
+replaceable: `z` narrows the immersive canvas to one hop, a collision-aware scope card yields to
+topology, and exact source health plus boundary counts remain visible. Full and focused layout
+caches stay separate, so returning restores the original canonical selection and viewport;
+reload and shell-owned follow/back retain the focal context through a generic detail-state seam.
+Within focus, `h`/`l` follows supplied incoming/outgoing edges, opens a chooser rather than guessing
+across a branch, and explains a dead end. None of those interaction policies enter core.
+
+Spatial dogfooding also exposed that the projection term "wave" can imply a synchronized lifecycle
+phase that the graph does not impose. The stable projection and CLI compatibility vocabulary remain
+waves: deterministic topological generations of Thread members, explanatory rather than dispatch
+authorization or barriers. Human-facing TUI topology and spatial labels call the same indexes
+**dependency ranks** and explain that they represent prerequisite depth. A later-rank task may be
+in flight while independent earlier-rank work remains next-up; status and rank are orthogonal.
 
 ## Related
 
