@@ -9,4 +9,5 @@ set -euo pipefail
 checkout=$(mktemp -d /work/taskflow-release.XXXXXX)
 cp -R /src/. "$checkout"
 cd "$checkout"
+export TASKFLOW_RELEASE_TMP_ROOT=/work
 exec ./scripts/release-validate.sh

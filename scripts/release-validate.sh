@@ -101,7 +101,7 @@ build_snapshot_in_clone() {
 
 cleanup() {
 	case "${validation_tmp:-}" in
-		"${TMPDIR:-/tmp}"/taskflow-release-validate.*) rm -rf -- "$validation_tmp" ;;
+		"$release_tmp_root"/taskflow-release-validate.*) rm -rf -- "$validation_tmp" ;;
 		"") ;;
 		*) printf 'release validation: refusing to remove unexpected temporary path %s\n' "$validation_tmp" >&2 ;;
 	esac
@@ -123,7 +123,8 @@ repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || fail "run from a Git c
 cd "$repo_root"
 check_clean
 candidate_commit=$(git rev-parse HEAD)
-validation_tmp=$(mktemp -d "${TMPDIR:-/tmp}/taskflow-release-validate.XXXXXX")
+release_tmp_root=${TASKFLOW_RELEASE_TMP_ROOT:-${TMPDIR:-/tmp}}
+validation_tmp=$(mktemp -d "$release_tmp_root/taskflow-release-validate.XXXXXX")
 trap cleanup EXIT
 
 run_phase "toolchain compatibility" check_tools
