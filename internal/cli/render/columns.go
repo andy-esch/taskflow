@@ -19,7 +19,8 @@ import (
 // selectors. selectedName records which spelling an explicit projection used so
 // legacy JSON callers keep their key while canonical callers get the wire key.
 // This keeps compatibility without letting a canonical header carry a display
-// fallback. The first column is the id (slug / epic id), which `-o name` projects.
+// fallback. The first column is the concise command handle (slug / epic id),
+// which `-o name` projects; a later column may carry a distinct durable id.
 type Column[T any] struct {
 	Name         string
 	Desc         string
@@ -361,11 +362,12 @@ func csvInjectionSafe(s string) string {
 	return s
 }
 
-// TaskColumns is the projectable column set for `task list` (slug first — the id
-// projected by `-o name`).
+// TaskColumns is the projectable column set for `task list`. Slug stays first as
+// the human-facing handle projected by `-o name`; the durable id is selectable
+// explicitly and appended last so established columns retain their positions.
 func TaskColumns() []Column[domain.Task] {
 	return columnRegistry(
-		column("slug", "task identifier", func(t domain.Task) string { return t.Slug }),
+		column("slug", "task slug", func(t domain.Task) string { return t.Slug }),
 		column("status", "lifecycle status", func(t domain.Task) string { return string(t.Status) }),
 		column("tier", "priority tier 1-5", func(t domain.Task) string { return fmt.Sprintf("%d", t.Tier) }),
 		column("priority", "high|medium|low", func(t domain.Task) string { return t.Priority }),
@@ -377,10 +379,11 @@ func TaskColumns() []Column[domain.Task] {
 			return t.Created
 		}, func(t domain.Task) string { return t.Updated }),
 		column("description", "one-line summary", func(t domain.Task) string { return t.Description }),
-		// revisit_at is appended LAST so adding it doesn't shift the pre-existing
-		// default `task list -o table`/`csv` columns (description stays column 7);
-		// it's still `-c`-selectable in any position the caller asks.
+		// revisit_at remains after the original columns so their positions stay
+		// stable (description is column 7); id is the new trailing addition. Both
+		// are `-c`-selectable in any order the caller asks.
 		column("revisit_at", "snooze-until date (deferred tasks)", func(t domain.Task) string { return t.RevisitAt }),
+		column("id", "stable task identifier", func(t domain.Task) string { return t.ID }),
 	)
 }
 
@@ -440,10 +443,12 @@ func ResearchColumns() []Column[domain.Research] {
 	)
 }
 
-// AuditColumns is the projectable column set for `audit list` (slug first).
+// AuditColumns is the projectable column set for `audit list`. Slug stays first
+// as the human-facing handle projected by `-o name`; the durable id is appended
+// last for explicit selection without shifting established columns.
 func AuditColumns() []Column[domain.Audit] {
 	return columnRegistry(
-		column("slug", "audit identifier", func(a domain.Audit) string { return a.Slug }),
+		column("slug", "audit slug", func(a domain.Audit) string { return a.Slug }),
 		column("bucket", "open|closed|deferred", func(a domain.Audit) string { return string(a.Bucket) }),
 		column("area", "area under audit", func(a domain.Audit) string { return a.Area }),
 		column("date", "audit date", func(a domain.Audit) string { return a.Date }),
@@ -451,5 +456,6 @@ func AuditColumns() []Column[domain.Audit] {
 		contractColumn("open", "open_findings", "open findings",
 			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) },
 			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) }),
+		column("id", "stable audit identifier", func(a domain.Audit) string { return a.ID }),
 	)
 }

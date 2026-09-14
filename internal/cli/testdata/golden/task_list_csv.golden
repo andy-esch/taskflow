@@ -1,4 +1,4 @@
-slug,status,tier,priority,epic,updated,description,revisit_at
-alpha-task,ready-to-start,2,high,01-fixture-epic,2026-01-03,A fully specified ready-to-start task for golden snapshots,
-beta-task,in-progress,3,medium,01-fixture-epic,2026-01-03,An in-progress fixture task,
-gamma-task,completed,1,low,01-fixture-epic,2026-01-02,A completed fixture task,
+slug,status,tier,priority,epic,updated,description,revisit_at,id
+alpha-task,ready-to-start,2,high,01-fixture-epic,2026-01-03,A fully specified ready-to-start task for golden snapshots,,6fjangd7kvh0
+beta-task,in-progress,3,medium,01-fixture-epic,2026-01-03,An in-progress fixture task,,6fjangd7kvh1
+gamma-task,completed,1,low,01-fixture-epic,2026-01-02,A completed fixture task,,6fjangd7kvh2

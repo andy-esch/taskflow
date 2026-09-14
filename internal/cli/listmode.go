@@ -148,11 +148,13 @@ func conflictList(want map[outputMode]string) string {
 }
 
 // renderList writes a list result in the resolved mode. The column registry is
-// the single source of truth: modeName projects the first (id) column, modeTable
-// projects the `-c` selection (or all columns), and the others defer to the
-// supplied JSON/human renderers. Problems go to stderr except in JSON mode,
-// where the envelope embeds them. The caller still owns problemsError() for the
-// exit code, since it knows whether a problem is fatal for that command.
+// the single source of truth: modeName projects the first concise command handle
+// (a slug for tasks/audits, an id for epics), modeTable projects the `-c`
+// selection (or all columns), and the others defer to the supplied JSON/human
+// renderers. A durable id may therefore be an explicit later column without
+// changing `-q`. Problems go to stderr except in JSON mode, where the envelope
+// embeds them. The caller still owns problemsError() for the exit code, since it
+// knows whether a problem is fatal for that command.
 func renderList[T any](
 	app *App, mode outputMode, columns []string, items []T, problems []domain.FileProblem,
 	listKey string, cols []render.Column[T],
@@ -177,7 +179,7 @@ func renderList[T any](
 	case modeName:
 		ids := make([]string, len(items))
 		for i, it := range items {
-			ids[i] = cols[0].Extract(it) // first column is the id (slug / epic id)
+			ids[i] = cols[0].Extract(it) // first column is the concise command handle
 		}
 		render.IDsQuiet(app.Out, ids)
 	case modeTable, modeCSV:

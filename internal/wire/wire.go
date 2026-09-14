@@ -273,7 +273,12 @@ import (
 // former `updated` / `open` selectors and their projected keys remain available
 // as compatibility aliases.
 // Schema descriptions reference the published finding/criterion vocabularies.
-const SchemaVersion = "1.66"
+// 1.67: task and audit list projection registries expose their stable `id` as an
+// explicitly selectable field. The new column is appended to the stable table
+// and CSV layouts; slug remains the first, human-facing `-q` / `-o name` handle.
+// Full typed entity envelopes retain their existing fields and advance only the
+// shared schema_version.
+const SchemaVersion = "1.67"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a
