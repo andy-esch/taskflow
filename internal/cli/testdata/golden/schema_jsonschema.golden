@@ -714,7 +714,7 @@
         },
         "reason": {
           "type": "string",
-          "description": "why the criterion is deferred/wontfix/n-a — required for those states"
+          "description": "why the criterion carries its state — required for every criterion_states value"
         },
         "tracked_by": {
           "type": "string",
@@ -1330,7 +1330,7 @@
         },
         "status": {
           "type": "string",
-          "description": "open | in-progress | fixed | tracked | deferred | superseded | wontfix"
+          "description": "one of finding_statuses in the schema contract"
         },
         "file": {
           "type": "string",
@@ -5227,6 +5227,6 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.65)",
+  "title": "tskflwctl --json output (schema_version 1.66)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
 }

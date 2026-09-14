@@ -8,8 +8,9 @@ For triage, lead with the terse path: `epic show <id>` for an epic's task
 roster, and `task list -o table -c slug,status,description` for a compact,
 byte-stable table. --json is compact and also takes -c to project just the
 fields you need; reach for full --json (no -c) when you need every frontmatter
-field. A --json -c projection is a string-valued column view — only full --json
-validates against --json-schema.
+field. A --json -c projection uses raw string values; canonical selectors use
+wire keys while explicit legacy aliases retain their requested compatibility key. Only
+full --json validates against --json-schema.
 
 With no argument, emit the machine contract — statuses, the epic/bucket
 enums, the task field registry with types, and the exit/error codes — so an

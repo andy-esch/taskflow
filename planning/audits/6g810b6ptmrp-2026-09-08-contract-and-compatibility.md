@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6g810b6ptmrp
-bucket: open
+bucket: closed
 area: contract-and-compatibility
 date: "2026-09-08"
-updated_at: "2026-09-08"
+updated_at: "2026-09-13"
 ---
 
 # Code Quality Audit: contract-and-compatibility — 2026-09-08
@@ -71,7 +71,7 @@ An AST sweep over `internal/wire/*.go` confirmed all 52 `*Envelope` structs decl
 
 ### High
 
-#### H1. `--json -c updated` invents a last-updated date the full envelope says is absent  · **Status:** open
+#### H1. `--json -c updated` invents a last-updated date the full envelope says is absent  · **Status:** fixed
 
 **File:** `internal/cli/render/columns.go:233` | **Component:** cli/render
 **Effort:** S · **Urgency:** soon
@@ -125,9 +125,14 @@ help strings — "last-updated date" is not what the closure returns.
 matches a full-`--json` key must produce the same value for the same record — would close
 this class rather than this instance. That is the shape of a task, not of this fix.
 
+**Resolution:** Split display and canonical extraction: projected JSON and an
+explicit updated_at table/CSV selection use the raw optional field, while default
+and legacy updated table/CSV views retain their created-date fallback. Render and
+CLI regression tests cover never-edited records.
+
 ### Medium
 
-#### M1. `--json -c` column keys diverge from the wire keys for the same datum  · **Status:** open
+#### M1. `--json -c` column keys diverge from the wire keys for the same datum  · **Status:** fixed
 
 **File:** `internal/cli/render/columns.go:233` | **Component:** cli/render, wire
 **Effort:** S · **Urgency:** soon
@@ -179,7 +184,12 @@ alias name or the canonical name — projecting under the canonical name is the 
 that makes the two paths agree, but it changes the key a `-c updated` caller sees today.
 That is a contract call, not a cleanup.
 
-#### M2. `CriterionJSON.reason`'s published description omits `tracked`, a state that requires it  · **Status:** open
+**Resolution:** Canonical selectors and their projected keys now match
+updated_at/open_findings. The former updated/open spellings remain accepted and
+retain their projected keys as compatibility aliases; raw JSON values no longer
+inherit display fallbacks, and default table/CSV output stays byte-compatible.
+
+#### M2. `CriterionJSON.reason`'s published description omits `tracked`, a state that requires it  · **Status:** fixed
 
 **File:** `internal/wire/dto.go:107` | **Component:** wire
 **Effort:** XS · **Urgency:** soon
@@ -223,7 +233,11 @@ every criterion_states value". One literal removed is one literal that cannot dr
 **Tightening (adjacent):** while in the file, `dto.go:251`'s `FindingJSON.Status` has the
 same re-typed-vocabulary shape (see L1).
 
-#### M3. The fang gate misses truthy `--json=<v>` spellings, dropping the JSON error envelope  · **Status:** open
+**Resolution:** CriterionJSON.reason now points to the published
+criterion_states registry instead of retyping an incomplete vocabulary; schema
+regression coverage pins that reference.
+
+#### M3. The fang gate misses truthy `--json=<v>` spellings, dropping the JSON error envelope  · **Status:** fixed
 
 **File:** `cmd/tskflwctl/main.go:70` | **Component:** cmd
 **Effort:** XS · **Urgency:** soon
@@ -266,9 +280,13 @@ anyway). Add the four missing spellings to `TestUseFang`.
 does not need to be, but the same argv scan would misread `--json` if a shorthand is ever
 added; a comment naming that assumption would age better than the current one.
 
+**Resolution:** The fang gate now parses every --json=<value> spelling with
+strconv.ParseBool; all truthy pflag spellings bypass fang and false/invalid
+cases retain the cobra path.
+
 ### Low
 
-#### L1. `FindingJSON.status`'s vocabulary literal has no drift pin, unlike its epic sibling  · **Status:** open
+#### L1. `FindingJSON.status`'s vocabulary literal has no drift pin, unlike its epic sibling  · **Status:** fixed
 
 **File:** `internal/wire/dto.go:251` | **Component:** wire
 **Effort:** XS · **Urgency:** eventually
@@ -286,7 +304,11 @@ would silently leave it stale". `render.findingStatusOrder` got its registry pin
 M2 recommends and point at `finding_statuses` in the schema contract instead of
 enumerating.
 
-#### L2. `AuditColumns` is undocumented — its godoc line was absorbed into `ResearchColumns`  · **Status:** open
+**Resolution:** FindingJSON.status now points to the published finding_statuses
+registry, with schema regression coverage preventing a second hand-maintained
+vocabulary.
+
+#### L2. `AuditColumns` is undocumented — its godoc line was absorbed into `ResearchColumns`  · **Status:** fixed
 
 **File:** `internal/cli/render/columns.go:282` | **Component:** cli/render
 **Effort:** XS · **Urgency:** eventually
@@ -300,7 +322,10 @@ land in this file.
 
 **Recommendation:** move the first line back above `func AuditColumns`.
 
-#### L3. The `SchemaVersion` changelog block is out of numeric order from 1.42 onward  · **Status:** open
+**Resolution:** Restored the ResearchColumns and AuditColumns godoc comments to
+their respective exported functions.
+
+#### L3. The `SchemaVersion` changelog block is out of numeric order from 1.42 onward  · **Status:** fixed
 
 **File:** `internal/wire/wire.go:172` | **Component:** wire
 **Effort:** XS · **Urgency:** eventually
@@ -314,6 +339,10 @@ after 1.50" currently has to read the whole block to be sure they found it all.
 
 **Recommendation:** re-sort ascending and add a one-line "append new entries at the
 bottom" note so the next insert has an obvious cursor.
+
+**Resolution:** Sorted the SchemaVersion changelog, documented the
+append-at-bottom rule, and added a test requiring strict numeric ordering and
+agreement with the current version.
 
 ## What audited clean
 
@@ -347,26 +376,24 @@ bottom" note so the next insert has an obvious cursor.
 
 Not done: four Medium-or-higher findings surfaced, above the step-11 threshold.
 
-## Candidate tasks (human to triage)
+## Candidate tasks
 
 No open task matched any finding's fingerprint. The nearest hits
 (`honor-c-columns-and-compact-output-for-json`,
 `populate-json-schema-field-descriptions-at-build-time`,
 `audit-agent-discoverability-of-the-schema-contract-for-sibling-gaps`) are all
 **completed** — they are the work that *built* these surfaces, not open owners of these
-defects. Overlap classified NONE for all seven findings; no task annotations were made.
+defects. Overlap classified NONE for all seven findings. The four originally proposed tasks were
+consolidated into one bounded sweep because they share the published machine-contract boundary and
+can retain separate render, wire, and entrypoint commits without fragmenting the planning trail.
 
-- `tskflwctl task new "Stop --json -c from inventing an updated date the envelope omits" --epic 20-cli-ux-and-ergonomics --tags cli,json,agent --tier 2 --priority high --description "The updated column falls back to created for display; that fallback leaks into --json -c, so the cheap machine path reports an edit the full envelope says never happened (H1)."`
-- `tskflwctl task new "Align -c column names with the wire keys they project" --epic 20-cli-ux-and-ergonomics --tags cli,json,agent --tier 3 --priority medium --description "task/research updated and audit open project under names the full --json does not use, and the wire spelling updated_at is rejected outright (M1)."`
-- `tskflwctl task new "Point published descriptions at the vocabulary instead of re-typing it" --epic 26-frontmatter-schema-declared-validation-contract --tags schema,agents --tier 3 --priority medium --description "CriterionJSON.reason omits tracked and misspells n/a; FindingJSON.status re-types seven statuses unpinned. Both should reference the schema contract's published sets (M2, L1)."`
-- `tskflwctl task new "Close the fang gate on every truthy --json spelling" --epic 21-code-quality-architecture-hardening --tags cli,json --tier 2 --priority medium --description "--json=1|t|T|TRUE|True takes fang's human path on a TTY, replacing the machine error envelope with styled prose; TestUseFang covers only two spellings (M3)."`
-- L2 and L3 are one-line repairs; fold them into whichever of the above touches the file
-  rather than minting tasks for them.
+- ✅ [`restore-projected-json-and-cli-contract-fidelity`](../tasks/6g9s401jtqb7-restore-projected-json-and-cli-contract-fidelity.md)
+  — fixed H1, M1, M2, M3, L1, L2, and L3 with schema 1.66 and focused contract guards.
 
-## Related-task observations (propose-only)
+## Related-task observations
 
-- **Possibly already-shipped:** `planning/tasks/6fq9zy15j5pz-task-new-json-expose-the-minted-id-as-its-own-field.md`
-  (status `ready-to-start`). It reports that `created.id` returns the slug and the minted
+- **Confirmed already shipped:** [`task-new-json-expose-the-minted-id-as-its-own-field`](../tasks/6fq9zy15j5pz-task-new-json-expose-the-minted-id-as-its-own-field.md)
+  reported that `created.id` returns the slug and the minted
   id is only inside `created.path`. Schema 1.32 changed exactly that, and both of its
   acceptance criteria look satisfied today. Verified with a dry run (wrote nothing):
 
@@ -377,4 +404,5 @@ defects. Overlap classified NONE for all seven findings; no task annotations wer
 
   `created.id` carries the stable id and `created.slug` is a distinct field, consistent
   across `task`/`epic`/`audit`/`research` (all four emit the one `CreatedEnvelope`). Worth
-  a human read before completing — status left untouched, per this routine's scope.
+  a human read before completing. Its two criteria are now checked and the stale task is completed;
+  no duplicate implementation was created.

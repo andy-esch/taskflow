@@ -6,6 +6,8 @@ import (
 	"image/color"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 
 	"charm.land/fang/v2"
 	"charm.land/lipgloss/v2"
@@ -44,8 +46,13 @@ func main() {
 	// Machine / pipe path — identical to the pre-fang main().
 	if err := root.Execute(); err != nil {
 		// Under --json, errors are a machine-readable envelope on stderr
-		// (stdout stays empty on failure); prose otherwise.
+		// (stdout stays empty on failure); prose otherwise. Prefer cobra's parsed
+		// value, then recover from argv when an earlier bad flag prevented cobra
+		// from reaching a later --json.
 		asJSON, _ := root.PersistentFlags().GetBool("json")
+		if !asJSON {
+			asJSON = jsonFlagActive(os.Args[1:])
+		}
 		cli.WriteError(os.Stderr, err, asJSON)
 		os.Exit(cli.ExitCode(err)) // semantic codes: 10 not-found … 14 conflict
 	}
@@ -68,15 +75,34 @@ func fangErrorHandler(w io.Writer, styles fang.Styles, err error) {
 // run. Pure (args + tty flag) so the contract gate is unit-testable; `--` ends
 // flag scanning so a literal "--json" argument doesn't trip it.
 func useFang(args []string, stderrIsTTY bool) bool {
+	return stderrIsTTY && !jsonFlagActive(args)
+}
+
+// jsonFlagActive reports the effective root --json value in argv. pflag bool
+// flags are last-value-wins; every strconv.ParseBool spelling is accepted, an
+// invalid value leaves the last valid value intact, and -- ends flag scanning.
+// Keeping this independent of terminal state lets the error path recover the
+// requested envelope even when cobra stops before parsing a later --json flag.
+func jsonFlagActive(args []string) bool {
+	active := false
 	for _, a := range args {
 		if a == "--" {
 			break
 		}
-		if a == "--json" || a == "--json=true" {
-			return false
+		if a == "--json" {
+			active = true
+			continue
+		}
+		value, ok := strings.CutPrefix(a, "--json=")
+		if !ok {
+			continue
+		}
+		enabled, err := strconv.ParseBool(value)
+		if err == nil {
+			active = enabled
 		}
 	}
-	return stderrIsTTY
+	return active
 }
 
 // repoColorScheme maps fang's help/error palette onto the SELECTED theme, so styled

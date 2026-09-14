@@ -38,6 +38,74 @@ func TestSelectColumns(t *testing.T) {
 	}
 }
 
+func TestSelectColumns_CanonicalNamesAndLegacyAliases(t *testing.T) {
+	cols := TaskColumns()
+	canonical, err := SelectColumns(cols, []string{"updated_at"})
+	if err != nil {
+		t.Fatalf("canonical updated_at selector: %v", err)
+	}
+	legacy, err := SelectColumns(cols, []string{"updated"})
+	if err != nil {
+		t.Fatalf("legacy updated selector: %v", err)
+	}
+	if canonical[0].selectorName() != "updated_at" || legacy[0].selectorName() != "updated_at" {
+		t.Fatalf("canonical/legacy selectors did not resolve to updated_at: canonical=%q legacy=%q",
+			canonical[0].selectorName(), legacy[0].selectorName())
+	}
+	if canonical[0].Name != "updated_at" || legacy[0].Name != "updated" {
+		t.Errorf("canonical selection should echo its header while legacy keeps compatibility: canonical=%q legacy=%q",
+			canonical[0].Name, legacy[0].Name)
+	}
+	neverEdited := domain.Task{Created: "2026-01-01"}
+	if got := canonical[0].Extract(neverEdited); got != "" {
+		t.Errorf("canonical table/CSV selector should expose raw updated_at, got %q", got)
+	}
+	if got := legacy[0].Extract(neverEdited); got != "2026-01-01" {
+		t.Errorf("legacy table/CSV selector should retain the created fallback, got %q", got)
+	}
+	var table bytes.Buffer
+	WriteTablePlain(&table, canonical, []domain.Task{neverEdited})
+	if got := table.String(); got != "updated_at\n\n" {
+		t.Errorf("canonical table should pair its header with the raw empty value, got %q", got)
+	}
+	table.Reset()
+	WriteTablePlain(&table, legacy, []domain.Task{neverEdited})
+	if got := table.String(); got != "updated\n2026-01-01\n" {
+		t.Errorf("legacy table should retain its header and fallback, got %q", got)
+	}
+	var csv bytes.Buffer
+	if err := WriteCSV(&csv, canonical, []domain.Task{neverEdited}); err != nil {
+		t.Fatal(err)
+	}
+	if got := csv.String(); got != "updated_at\n\n" {
+		t.Errorf("canonical CSV should pair its header with the raw empty value, got %q", got)
+	}
+	csv.Reset()
+	if err := WriteCSV(&csv, legacy, []domain.Task{neverEdited}); err != nil {
+		t.Fatal(err)
+	}
+	if got := csv.String(); got != "updated\n2026-01-01\n" {
+		t.Errorf("legacy CSV should retain its header and fallback, got %q", got)
+	}
+	if canonical[0].projectedName() != "updated_at" || legacy[0].projectedName() != "updated" {
+		t.Errorf("projected JSON should echo the selected spelling: canonical=%q legacy=%q",
+			canonical[0].projectedName(), legacy[0].projectedName())
+	}
+	spec := Specs(cols)[5]
+	if spec.Name != "updated_at" || len(spec.Aliases) != 1 || spec.Aliases[0] != "updated" {
+		t.Errorf("completion/help should advertise canonical updated_at and retain its alias metadata: %#v", spec)
+	}
+	if _, err := SelectColumns(cols, []string{"updated", "updated_at"}); !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("alias plus canonical name should be rejected as a duplicate, got %v", err)
+	}
+
+	audit, err := SelectColumns(AuditColumns(), []string{"open"})
+	if err != nil || audit[0].selectorName() != "open_findings" {
+		t.Fatalf("legacy audit selector should resolve to open_findings: column=%q err=%v",
+			audit[0].selectorName(), err)
+	}
+}
+
 // TestProjectedListJSON pins the `--json -c` contract: a schema_version-first
 // envelope under the entity key, rows narrowed to the selected columns in -c
 // order, values as the column extractors' strings, and `unreadable` omitted
@@ -98,6 +166,92 @@ func TestProjectedListJSON(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "unreadable") {
 		t.Errorf("projection with problems must include unreadable:\n%s", buf.String())
+	}
+}
+
+func TestProjectedListJSON_UsesCanonicalWireKeysAndRawValues(t *testing.T) {
+	tasks := []domain.Task{
+		{Slug: "never-edited", Created: "2026-01-01"},
+		{Slug: "edited", Created: "2026-01-01", Updated: "2026-02-03"},
+	}
+	// Select through the legacy presentation name to prove compatibility input
+	// retains its established key without leaking the created-date fallback into
+	// projected JSON.
+	selected, err := SelectColumns(TaskColumns(), []string{"slug", "updated"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var projected bytes.Buffer
+	if err := ProjectedListJSON(&projected, "tasks", selected, tasks, nil); err != nil {
+		t.Fatal(err)
+	}
+	var narrow struct {
+		Tasks []map[string]string `json:"tasks"`
+	}
+	if err := json.Unmarshal(projected.Bytes(), &narrow); err != nil {
+		t.Fatalf("projected task JSON: %v\n%s", err, projected.String())
+	}
+	if len(narrow.Tasks) != 2 || narrow.Tasks[0]["updated"] != "" || narrow.Tasks[1]["updated"] != "2026-02-03" {
+		t.Fatalf("legacy projection should preserve its key with raw values: %#v", narrow.Tasks)
+	}
+	if _, leaked := narrow.Tasks[0]["updated_at"]; leaked {
+		t.Fatalf("legacy selector unexpectedly changed its output key: %#v", narrow.Tasks[0])
+	}
+
+	var full bytes.Buffer
+	if err := TasksJSON(&full, tasks, nil); err != nil {
+		t.Fatal(err)
+	}
+	var authoritative struct {
+		Tasks []map[string]any `json:"tasks"`
+	}
+	if err := json.Unmarshal(full.Bytes(), &authoritative); err != nil {
+		t.Fatal(err)
+	}
+	if _, invented := authoritative.Tasks[0]["updated_at"]; invented {
+		t.Fatalf("full envelope should omit an absent updated_at: %#v", authoritative.Tasks[0])
+	}
+	if got := authoritative.Tasks[1]["updated_at"]; got != narrow.Tasks[1]["updated"] {
+		t.Fatalf("projected updated value %v disagrees with full envelope %v", narrow.Tasks[1]["updated"], got)
+	}
+
+	researchSelected, err := SelectColumns(ResearchColumns(), []string{"updated_at"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projected.Reset()
+	if err := ProjectedListJSON(&projected, "research", researchSelected,
+		[]domain.Research{{Created: "2026-01-01"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := projected.String(); !strings.Contains(got, `"updated_at":""`) || strings.Contains(got, `"updated":`) {
+		t.Fatalf("research projection should use raw canonical updated_at:\n%s", got)
+	}
+
+	auditSelected, err := SelectColumns(AuditColumns(), []string{"open_findings"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projected.Reset()
+	if err := ProjectedListJSON(&projected, "audits", auditSelected,
+		[]domain.Audit{{OpenFindings: 3}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := projected.String(); !strings.Contains(got, `"open_findings":"3"`) || strings.Contains(got, `"open":`) {
+		t.Fatalf("audit projection should use the canonical open_findings key:\n%s", got)
+	}
+
+	auditSelected, err = SelectColumns(AuditColumns(), []string{"open"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projected.Reset()
+	if err := ProjectedListJSON(&projected, "audits", auditSelected,
+		[]domain.Audit{{OpenFindings: 3}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := projected.String(); !strings.Contains(got, `"open":"3"`) || strings.Contains(got, `"open_findings":`) {
+		t.Fatalf("legacy audit projection should preserve its open key:\n%s", got)
 	}
 }
 
@@ -263,7 +417,7 @@ func names[T any](cols []Column[T]) []string {
 // first char a spreadsheet treats as a formula (= + - @) are prefixed with a quote
 // so a shared CSV can't execute a pasted formula; safe cells are untouched.
 func TestWriteCSV_NeutralizesFormulaInjection(t *testing.T) {
-	cols := []Column[string]{{"v", "value", func(s string) string { return s }}}
+	cols := []Column[string]{column("v", "value", func(s string) string { return s })}
 	var buf bytes.Buffer
 	if err := WriteCSV(&buf, cols, []string{"=SUM(A1)", "safe", "-1+2", "@cmd", "+x"}); err != nil {
 		t.Fatal(err)

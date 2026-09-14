@@ -160,8 +160,9 @@ func renderList[T any](
 	humanFn func(io.Writer, render.Style, []T) error,
 ) error {
 	if mode == modeJSON {
-		// `--json -c …` narrows each row to the selected columns (as column-named
-		// string fields) while keeping the schema_version + unreadable envelope;
+		// `--json -c …` narrows each row to raw string-valued fields while
+		// keeping the schema_version + unreadable envelope. Canonical selectors
+		// use wire keys; explicit compatibility aliases retain their requested key.
 		// bare `--json` emits the full typed envelope via jsonFn.
 		if len(columns) > 0 {
 			sel, err := render.SelectColumns(cols, columns)
@@ -217,13 +218,24 @@ var completeOutputFormats = cobra.FixedCompletions([]cobra.Completion{
 // Because the value is its own token with no internal `=`/parens, this works
 // where kubectl's `custom-columns=` and a `table(...)` DSL can't.
 func columnCompleter(specs []render.ColumnSpec) completeFunc {
+	canonical := make(map[string]string, len(specs)*2)
+	for _, s := range specs {
+		canonical[s.Name] = s.Name
+		for _, alias := range s.Aliases {
+			canonical[alias] = s.Name
+		}
+	}
 	return func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		parts := strings.Split(toComplete, ",")
 		prefix := strings.Join(parts[:len(parts)-1], ",") // columns chosen so far
 		last := parts[len(parts)-1]                       // the column being typed
 		used := make(map[string]bool, len(parts))
 		for _, p := range parts[:len(parts)-1] {
-			used[p] = true
+			if name, ok := canonical[p]; ok {
+				used[name] = true
+			} else {
+				used[p] = true
+			}
 		}
 		var out []cobra.Completion
 		for _, s := range specs {
