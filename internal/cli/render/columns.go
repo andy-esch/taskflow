@@ -13,8 +13,8 @@ import (
 )
 
 // Column is one projectable field shared by the list formats. Name and Extract
-// retain the stable table/CSV header and display value. jsonName and jsonExtract
-// are optional canonical wire-contract overrides for `--json -c`; when present,
+// retain the stable table/CSV header and display value. projection is an optional
+// canonical wire-contract override for `--json -c`; when present,
 // both the canonical JSON name and the legacy presentation name are accepted as
 // selectors. selectedName records which spelling an explicit projection used so
 // legacy JSON callers keep their key while canonical callers get the wire key.
@@ -24,9 +24,17 @@ type Column[T any] struct {
 	Name         string
 	Desc         string
 	Extract      func(T) string
-	jsonName     string
-	jsonExtract  func(T) string
+	projection   *columnProjection[T]
 	selectedName string
+}
+
+// columnProjection keeps a canonical selector inseparable from the raw value it
+// claims to expose. A nil projection means Name/Extract are already canonical.
+// The fields stay package-private so contractColumn is the production construction
+// path; validateColumnRegistry still fails closed against malformed declarations.
+type columnProjection[T any] struct {
+	name    string
+	extract func(T) string
 }
 
 func column[T any](name, desc string, extract func(T) string) Column[T] {
@@ -34,22 +42,25 @@ func column[T any](name, desc string, extract func(T) string) Column[T] {
 }
 
 func contractColumn[T any](name, jsonName, desc string, display, project func(T) string) Column[T] {
+	if jsonName == "" || project == nil {
+		panic("render: a contract column requires both a canonical selector and raw projector")
+	}
 	return Column[T]{
 		Name: name, Desc: desc, Extract: display,
-		jsonName: jsonName, jsonExtract: project,
+		projection: &columnProjection[T]{name: jsonName, extract: project},
 	}
 }
 
 func (c Column[T]) selectorName() string {
-	if c.jsonName != "" {
-		return c.jsonName
+	if c.projection != nil {
+		return c.projection.name
 	}
 	return c.Name
 }
 
 func (c Column[T]) projectedValue(item T) string {
-	if c.jsonExtract != nil {
-		return c.jsonExtract(item)
+	if c.projection != nil {
+		return c.projection.extract(item)
 	}
 	return c.Extract(item)
 }
@@ -70,8 +81,66 @@ type ColumnSpec struct {
 	Aliases []string
 }
 
+type columnSelectorOwner struct {
+	column string
+	index  int
+}
+
+// validateColumnRegistry rejects declaration bugs before a selector map can
+// silently let a later column shadow an earlier canonical name or alias.
+func validateColumnRegistry[T any](cols []Column[T]) error {
+	seen := make(map[string]columnSelectorOwner, len(cols)*2)
+	for i, c := range cols {
+		if c.Name == "" {
+			return fmt.Errorf("invalid column registry: column %d has an empty display name", i)
+		}
+		if c.Extract == nil {
+			return fmt.Errorf("invalid column registry: column %q has no display extractor", c.Name)
+		}
+		if c.projection != nil {
+			if c.projection.name == "" {
+				return fmt.Errorf("invalid column registry: column %q has an empty canonical selector", c.Name)
+			}
+			if c.projection.extract == nil {
+				return fmt.Errorf("invalid column registry: canonical selector %q has no raw projector", c.projection.name)
+			}
+		}
+
+		selectors := []string{c.selectorName()}
+		if c.Name != c.selectorName() {
+			selectors = append(selectors, c.Name)
+		}
+		for _, selector := range selectors {
+			if prior, ok := seen[selector]; ok {
+				return fmt.Errorf(
+					"invalid column registry: selector %q for column %q at index %d collides with column %q at index %d",
+					selector, c.Name, i, prior.column, prior.index,
+				)
+			}
+			seen[selector] = columnSelectorOwner{column: c.Name, index: i}
+		}
+	}
+	return nil
+}
+
+func mustValidateColumnRegistry[T any](cols []Column[T]) {
+	if err := validateColumnRegistry(cols); err != nil {
+		// Official registries are static program declarations, not user input. A
+		// malformed one is a programmer error that must fail during command setup;
+		// SelectColumns returns the same validation as an error for caller-supplied
+		// or test-constructed slices.
+		panic(err)
+	}
+}
+
+func columnRegistry[T any](cols ...Column[T]) []Column[T] {
+	mustValidateColumnRegistry(cols)
+	return cols
+}
+
 // Specs projects a typed column set to its name/description pairs.
 func Specs[T any](cols []Column[T]) []ColumnSpec {
+	mustValidateColumnRegistry(cols)
 	out := make([]ColumnSpec, len(cols))
 	for i, c := range cols {
 		out[i] = ColumnSpec{Name: c.selectorName(), Desc: c.Desc}
@@ -86,6 +155,9 @@ func Specs[T any](cols []Column[T]) []ColumnSpec {
 // `names` returns all (the default table). An unknown name is a validation error
 // listing the available columns.
 func SelectColumns[T any](all []Column[T], names []string) ([]Column[T], error) {
+	if err := validateColumnRegistry(all); err != nil {
+		return nil, err
+	}
 	if len(names) == 0 {
 		return all, nil
 	}
@@ -117,11 +189,9 @@ func SelectColumns[T any](all []Column[T], names []string) ([]Column[T], error) 
 		// fallback. An explicitly selected legacy alias retains its old header and
 		// display value, and projected JSON retains the requested key while using
 		// the raw projected value.
-		if n == canonical && c.Name != canonical {
+		if n == canonical && c.projection != nil {
 			c.Name = canonical
-			if c.jsonExtract != nil {
-				c.Extract = c.jsonExtract
-			}
+			c.Extract = c.projection.extract
 		}
 		out = append(out, c)
 	}
@@ -294,7 +364,7 @@ func csvInjectionSafe(s string) string {
 // TaskColumns is the projectable column set for `task list` (slug first — the id
 // projected by `-o name`).
 func TaskColumns() []Column[domain.Task] {
-	return []Column[domain.Task]{
+	return columnRegistry(
 		column("slug", "task identifier", func(t domain.Task) string { return t.Slug }),
 		column("status", "lifecycle status", func(t domain.Task) string { return string(t.Status) }),
 		column("tier", "priority tier 1-5", func(t domain.Task) string { return fmt.Sprintf("%d", t.Tier) }),
@@ -311,13 +381,13 @@ func TaskColumns() []Column[domain.Task] {
 		// default `task list -o table`/`csv` columns (description stays column 7);
 		// it's still `-c`-selectable in any position the caller asks.
 		column("revisit_at", "snooze-until date (deferred tasks)", func(t domain.Task) string { return t.RevisitAt }),
-	}
+	)
 }
 
 // EpicColumns is the projectable column set for `epic list` (id first; done/total
 // as plain numbers, not the human "2/3 (66%)" cell).
 func EpicColumns() []Column[core.EpicSummary] {
-	return []Column[core.EpicSummary]{
+	return columnRegistry(
 		column("id", "epic identifier", func(e core.EpicSummary) string { return e.Epic.ID }),
 		column("status", "epic status", func(e core.EpicSummary) string { return e.Epic.Status }),
 		column("priority", "high|medium|low", func(e core.EpicSummary) string { return e.Epic.Priority }),
@@ -329,14 +399,14 @@ func EpicColumns() []Column[core.EpicSummary] {
 		// column 6); both are still `-c`-selectable in any position the caller asks.
 		column("percent", "rollup % complete", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Percent()) }),
 		column("deprecated", "withdrawn (excluded) task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Deprecated) }),
-	}
+	)
 }
 
 // FindingColumns is the projectable column set for `audit findings`. The first
 // column is the addressable id `audit:code` (what `-o name` projects) — unique
 // across audits, unlike a bare finding code which repeats.
 func FindingColumns() []Column[core.AuditFinding] {
-	return []Column[core.AuditFinding]{
+	return columnRegistry(
 		column("ref", "addressable id: audit:code", func(f core.AuditFinding) string { return f.Audit + ":" + f.Code }),
 		column("code", "finding code (H1/M2/…)", func(f core.AuditFinding) string { return f.Code }),
 		column("audit", "audit slug", func(f core.AuditFinding) string { return f.Audit }),
@@ -346,13 +416,13 @@ func FindingColumns() []Column[core.AuditFinding] {
 		column("component", "component", func(f core.AuditFinding) string { return f.Component }),
 		column("file", "file:line", func(f core.AuditFinding) string { return f.File }),
 		column("title", "finding title", func(f core.AuditFinding) string { return f.Title }),
-	}
+	)
 }
 
 // ResearchColumns are the projectable columns for `research list -o table/csv` and
 // `--json -c`. No status/bucket column exists because research has no lifecycle.
 func ResearchColumns() []Column[domain.Research] {
-	return []Column[domain.Research]{
+	return columnRegistry(
 		column("slug", "research identifier", func(r domain.Research) string { return r.Slug }),
 		column("created", "date the research was done", func(r domain.Research) string { return r.Created }),
 		column("description", "one-line summary", func(r domain.Research) string { return r.Description }),
@@ -367,12 +437,12 @@ func ResearchColumns() []Column[domain.Research] {
 			return r.Created
 		}, func(r domain.Research) string { return r.Updated }),
 		column("id", "stable identifier", func(r domain.Research) string { return r.ID }),
-	}
+	)
 }
 
 // AuditColumns is the projectable column set for `audit list` (slug first).
 func AuditColumns() []Column[domain.Audit] {
-	return []Column[domain.Audit]{
+	return columnRegistry(
 		column("slug", "audit identifier", func(a domain.Audit) string { return a.Slug }),
 		column("bucket", "open|closed|deferred", func(a domain.Audit) string { return string(a.Bucket) }),
 		column("area", "area under audit", func(a domain.Audit) string { return a.Area }),
@@ -381,5 +451,5 @@ func AuditColumns() []Column[domain.Audit] {
 		contractColumn("open", "open_findings", "open findings",
 			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) },
 			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) }),
-	}
+	)
 }
