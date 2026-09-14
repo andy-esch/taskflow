@@ -3,13 +3,15 @@ schema: 1
 id: 6g63hhk3eddf
 status: ready-to-start
 epic: 21-code-quality-architecture-hardening
-description: '76 commands carry safety annotations that nothing reads: expose them in schema --json and make them verify something'
+description: '77 commands carry safety annotations that nothing reads: expose them in schema --json and make them verify something'
 effort: 3-5 hours
 tier: 2
 priority: medium
 autonomy_level: 3
 tags: [cli, agents, schema, architecture]
 created: "2026-09-02"
+audited: "2026-09-13"
+updated_at: "2026-09-13"
 ---
 # Make the command safety annotations load-bearing
 
@@ -48,3 +50,28 @@ mutating path should be a test failure, not a code-review catch.
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - `planning/research/6f9menr01t1n-tskflwctl-command-spec.md` — command safety tags, the original intent
+
+## Sweep audit 2026-09-13
+
+Automated weekly sweep. The premise re-verified against `main` (`1ca31b9`).
+
+**Still true, and the count has moved the way the task predicted.** There are now **77**
+annotated commands (41 `read-only`, **36** `mutating`), up from the 76 (41/35) recorded
+on 2026-09-02. A new mutating command arrived in the intervening eleven days and — as the
+Objective argues — nothing noticed, because there is still nothing to notice with.
+`grep -rn 'Annotations\[' internal/` returns **zero** hits: no consumer anywhere, no test
+asserting the values, and `schema` still does not emit them (`internal/cli/schema.go:46`
+is itself only another *definition* site). `description` updated 76 → 77.
+
+That drift is the cheapest available evidence for acceptance criterion 2 — a convention
+whose population changed silently in under two weeks is exactly the rot the task names.
+
+**Verified accurate (2026-09-13):** both citations into
+`planning/research/6f9menr01t1n-tskflwctl-command-spec.md` still land where the task says.
+Line 248 is the `schema --type cli --json` intent ("emit the command tree … safety tags
+… so an agent introspects syntax instead of scraping `--help`"); line 278 is the `✅
+Command safety tagged via cobra Annotations` completion marker.
+
+## Progress log
+
+- 2026-09-13: automated weekly sweep — annotation count drifted 76 → 77 (41 read-only, 36 mutating) with still zero consumers, which is the rot the task predicts; `description` updated.

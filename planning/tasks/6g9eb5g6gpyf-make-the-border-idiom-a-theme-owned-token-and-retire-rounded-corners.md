@@ -10,6 +10,8 @@ priority: high
 autonomy_level: 3
 tags: [tui, design, theme, chrome]
 created: "2026-09-12"
+audited: "2026-09-13"
+updated_at: "2026-09-13"
 ---
 # Make the border idiom a theme-owned token and retire rounded corners
 
@@ -66,3 +68,33 @@ follows the theme or stays fixed as a contrast device.
 - Epic [25-design-system-coherent-palette-and-selectable-themes](../epics/25-design-system-coherent-palette-and-selectable-themes.md)
 - Enabler for [the miami-vice theme](6g95m4eyvf4k-mine-the-web-mockup-directions-for-the-tui-data-organization-and-a-more-80s.md)'s chrome half.
 - Context: [mine the web mockup directions for the TUI](6g95m4eyvf4k-mine-the-web-mockup-directions-for-the-tui-data-organization-and-a-more-80s.md), axis B item 2.
+
+## Sweep audit 2026-09-13
+
+Automated weekly sweep. Every code citation re-checked against `main` (`1ca31b9`).
+
+**Verified accurate (2026-09-13):** `RoundedBorder()` at `internal/tui/style.go:69,70,78,86,87`
+and `NormalBorder()` at `:93` — all six still literal, still unthemeable. The
+"border STYLES are theme-independent" claim is still at `style.go:57`. `newStyles`
+call sites in `tui.go:36,41` are exact. `Theme.For()` still returns a `Palette` by
+value (`design/palette.go:100`), and `design/palette.go` still imports lipgloss (`:19`),
+so the design note's chosen approach still holds.
+
+**Drifted — `latteAA` is now shared by THREE themes, not two.** `miami-vice` landed
+2026-09-12 (`c037150`) and also pairs with `latteAA` (`design/theme.go:209`, alongside
+`neon` at `:201` and `catppuccin` at `:204`). This *strengthens* the design note's
+argument for putting the idiom on `design.Theme` rather than `design.Palette` — the
+shared-light-palette collision is now three-way — but the note's "BOTH `neon` and
+`catppuccin`" phrasing is now undercounting.
+
+**Drifted — minor.** The `newStyles` call sites cited as `model.go:174,176` are now at
+`model.go:175,177`.
+
+**Left for a human:** acceptance criterion 4 names only `catppuccin`'s idiom as a
+deliberate choice. `miami-vice` now needs the same decision, and it is the theme whose
+whole point is the 80s idiom this task introduces. Widening a criterion is a scope
+change, so this sweep flagged it rather than editing it.
+
+## Progress log
+
+- 2026-09-13: automated weekly sweep — all six `RoundedBorder`/`NormalBorder` sites and the `style.go:57` comment re-verified; `latteAA` is now shared by three themes (`miami-vice` landed 2026-09-12), so the "put it on `Theme`, not `Palette`" argument strengthens and AC 4 undercounts.
