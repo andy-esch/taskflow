@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g9mz2shwmb0
-status: in-progress
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Qualify and publish the spatial graph and bounded-focus work as another explicitly preview-labelled installed release.
 effort: 1 day
@@ -13,6 +13,7 @@ created: "2026-09-13"
 started_at: "2026-09-13"
 depends_on: [6g7r20ffjf2w, 6g9g37c50qp1]
 updated_at: "2026-09-13"
+completed_at: "2026-09-13"
 ---
 ## Objective
 
@@ -82,12 +83,12 @@ non-trivial finding before checking the dogfood criterion.
   are completed and merged into the clean candidate.
 - [x] Host and pinned-container release validation pass against the same recorded commit with no
   tracked worktree changes.
-- [ ] A fresh candidate binary passes the bounded CLI/TUI dogfood covering full graph, one-hop
+- [x] A fresh candidate binary passes the bounded CLI/TUI dogfood covering full graph, one-hop
   focus and return, directional navigation, task jump/back, live refresh, frontier, and bounded
   Mermaid/JSON exports; findings are fixed or tracked.
-- [ ] README and release notes retain the Threads preview classification and use planning tasks,
+- [x] README and release notes retain the Threads preview classification and use planning tasks,
   reviews, and a bounded Thread graph as evidence without overstating compatibility.
-- [ ] The v0.21.0 tag, release workflow, four archives, checksums, extracted version, and installed
+- [x] The v0.21.0 tag, release workflow, four archives, checksums, extracted version, and installed
   binary all identify the recorded candidate.
 - [x] Preview graduation remains a separate deferred decision, and unfinished navigation design or
   polish work is not made an artificial release prerequisite.
@@ -126,3 +127,41 @@ Both `just release-validate` and `just release-validate-container` subsequently 
 clean detached clone of that exact merge commit. Each completed the full shared gate and four-target
 snapshot without changing the candidate. This satisfies the automated qualification criterion;
 manual TUI dogfood, release notes, and publication verification remain open.
+
+## Final candidate qualification (2026-09-13)
+
+Candidate `e6a9c8078ada5798f3f618e64cacf614fbea38e2` passed both
+`just release-validate` and `just release-validate-container`. Each gate completed focused and full
+race tests, format/tidy and generated-artifact checks, lint, vulnerability scanning, planning
+integrity, GoReleaser validation, and four-target snapshot creation without changing the candidate.
+
+A fresh `tskflwctl v0.20.0-104-ge6a9c80` then exercised a copied touring-bike space. Full Mermaid,
+one-hop Mermaid, and two-hop JSON graphs rendered with healthy projections and truthful bounded
+scope. The lifecycle guard correctly refused premature completion; after satisfying the fixture's
+remaining criteria through `task ac`, completion and start receipts updated the Thread to the wheel
+task in flight with no additional frontier. The refreshed one-hop JSON carried that exact status and
+final planning lint passed. The maintainer separately ran the current Threads and spatial views in a
+real terminal and reported the smoke test looked great. No release-blocking finding was discovered.
+
+## Publication verification in progress (2026-09-13)
+
+Tag `v0.21.0` resolves to the qualified candidate
+`e6a9c8078ada5798f3f618e64cacf614fbea38e2`. The
+[tag-triggered workflow](https://github.com/andy-esch/taskflow/actions/runs/34779224449) completed
+successfully, and the [GitHub Release](https://github.com/andy-esch/taskflow/releases/tag/v0.21.0)
+publishes `checksums.txt` plus Darwin/Linux archives for amd64 and arm64. Fresh downloads of all four
+archives passed every published SHA-256 check, and the extracted Darwin arm64 binary reports
+`tskflwctl 0.21.0`.
+
+The generated release body is still an uncurated commit dump, so the preview/release-notes criterion
+remains open. The installed `/Users/andyeschbacher/go/bin/tskflwctl` also still reports the candidate
+development version rather than `0.21.0`; installation verification remains open with it.
+
+## Release closeout (2026-09-13)
+
+The published release body now replaces the generated commit dump with concise spatial-Threads
+highlights, tag-stable planning and design-review links, the exact bounded Thread neighborhood, and
+an explicit preview boundary. The checksum-verified Darwin arm64 artifact was installed at
+`/Users/andyeschbacher/go/bin/tskflwctl`; its SHA-256 is
+`354a7ae08e313cf13daac5ac819c16cea4e428e17104e599e8310484f766669a`, byte-compares equal to the
+downloaded artifact, and the installed command reports `tskflwctl 0.21.0`.
