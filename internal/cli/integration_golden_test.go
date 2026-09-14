@@ -67,6 +67,7 @@ func TestGolden_MachineContract(t *testing.T) {
 	}{
 		{"task_list_json", []string{"-C", fixtureRepo, "task", "list", "--all", "--json"}, nil},
 		{"task_list_csv", []string{"-C", fixtureRepo, "task", "list", "--all", "-o", "csv"}, nil},
+		{"task_list_ids_json", []string{"-C", fixtureRepo, "task", "list", "--all", "--json", "-c", "id,slug"}, nil},
 		{"task_list_name", []string{"-C", fixtureRepo, "task", "list", "--all", "-o", "name"}, nil},
 		{"task_show_json", []string{"-C", fixtureRepo, "task", "show", "alpha-task", "--json"}, nil},
 		{"task_rename_dry_run_json", []string{"-C", fixtureRepo, "--dry-run", "task", "rename", "alpha-task", "Renamed Alpha Task", "--json"}, redact},
@@ -96,6 +97,8 @@ func TestGolden_MachineContract(t *testing.T) {
 		// schema_version + bucket + finding tally shape).
 		{"audit_info_json", []string{"-C", fixtureRepo, "audit", "info", "2026-01-02-fixture-area", "--json"}, redact},
 		{"audit_path_json", []string{"-C", fixtureRepo, "audit", "path", "2026-01-02-fixture-area", "--json"}, redact},
+		{"audit_list_csv", []string{"-C", fixtureRepo, "audit", "list", "--all", "-o", "csv"}, nil},
+		{"audit_list_ids_json", []string{"-C", fixtureRepo, "audit", "list", "--all", "--json", "-c", "id,slug"}, nil},
 		{"audit_findings_json", []string{"-C", fixtureRepo, "audit", "findings", "--json"}, nil},
 		{"audit_findings_open_json", []string{"-C", fixtureRepo, "audit", "findings", "--status", "open", "--json"}, nil},
 		{"lint_json", []string{"-C", fixtureRepo, "lint", "--json"}, nil},

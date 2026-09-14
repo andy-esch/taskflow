@@ -6,8 +6,8 @@ description: Turn compatibility audits into durable projected-output and command
 goal: Machine-facing CLI views stay backward compatible and reject registry drift as they evolve.
 created: "2026-09-13"
 tags: [cli, json, contract, dogfood]
-tasks: [6g9s401jtqb7, 6g9txf8x9m70]
-updated_at: "2026-09-13"
+tasks: [6g9s401jtqb7, 6g9txf8x9m70, 6ga3z57hqa70]
+updated_at: "2026-09-14"
 started_at: "2026-09-13"
 ---
 

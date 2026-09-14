@@ -255,34 +255,35 @@ func TestProjectedListJSON_UsesCanonicalWireKeysAndRawValues(t *testing.T) {
 	}
 }
 
-// TestColumnRegistries_FirstColumnIsID pins the invariant renderList relies on
-// for `-o name`/`-q`: the first column of every registry is the id.
-func TestColumnRegistries_FirstColumnIsID(t *testing.T) {
+// TestColumnRegistries_FirstColumnIsQuietHandle pins the invariant renderList
+// relies on for `-o name`/`-q`: the first column is the concise human handle,
+// which is deliberately distinct from the durable task/audit id.
+func TestColumnRegistries_FirstColumnIsQuietHandle(t *testing.T) {
 	if got := TaskColumns()[0].Name; got != "slug" {
-		t.Errorf("TaskColumns first column must be the id (slug), got %q", got)
+		t.Errorf("TaskColumns first column must be the quiet slug handle, got %q", got)
 	}
 	if got := EpicColumns()[0].Name; got != "id" {
 		t.Errorf("EpicColumns first column must be the id, got %q", got)
 	}
 	if got := AuditColumns()[0].Name; got != "slug" {
-		t.Errorf("AuditColumns first column must be the id (slug), got %q", got)
+		t.Errorf("AuditColumns first column must be the quiet slug handle, got %q", got)
 	}
 }
 
 func TestWriteTablePlain_TaskExtractors(t *testing.T) {
 	var b bytes.Buffer
 	WriteTablePlain(&b, TaskColumns(), []domain.Task{{
-		Slug: "alpha", Status: domain.StatusInProgress, Tier: 2, Priority: "high",
+		ID: "6ga000000001", Slug: "alpha", Status: domain.StatusInProgress, Tier: 2, Priority: "high",
 		Epic: "20-cli", Updated: "2026-06-19", Description: "do the thing",
 		RevisitAt: "2026-09-01",
 	}})
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
-	// revisit_at is appended LAST (after description) so the pre-existing default
-	// columns kept their positions; a populated value lands in the trailing cell.
-	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at" {
+	// revisit_at remains after description so the pre-existing columns keep their
+	// positions; the stable id is the intentional new trailing column.
+	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at\tid" {
 		t.Errorf("task header: %q", lines[0])
 	}
-	if lines[1] != "alpha\tin-progress\t2\thigh\t20-cli\t2026-06-19\tdo the thing\t2026-09-01" {
+	if lines[1] != "alpha\tin-progress\t2\thigh\t20-cli\t2026-06-19\tdo the thing\t2026-09-01\t6ga000000001" {
 		t.Errorf("task row: %q", lines[1])
 	}
 }
@@ -298,8 +299,10 @@ func TestTaskRevisitAt_FlowsThroughCSVAndJSON(t *testing.T) {
 	if err := WriteCSV(&cb, TaskColumns(), []domain.Task{task}); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.TrimSpace(cb.String()); !strings.HasSuffix(got, ",2026-09-01") {
-		t.Errorf("csv row should end with the revisit_at cell:\n%s", got)
+	lines := strings.Split(strings.TrimSpace(cb.String()), "\n")
+	fields := strings.Split(lines[1], ",")
+	if got := fields[len(fields)-2]; got != "2026-09-01" {
+		t.Errorf("csv revisit_at cell = %q, want 2026-09-01:\n%s", got, cb.String())
 	}
 
 	var jb bytes.Buffer
@@ -342,14 +345,14 @@ func TestWriteTablePlain_EpicExtractors(t *testing.T) {
 func TestWriteTablePlain_AuditExtractors(t *testing.T) {
 	var b bytes.Buffer
 	WriteTablePlain(&b, AuditColumns(), []domain.Audit{{
-		Slug: "2026-06-19-x", Bucket: domain.AuditOpen, Area: "cli",
+		ID: "6ga000000002", Slug: "2026-06-19-x", Bucket: domain.AuditOpen, Area: "cli",
 		Date: "2026-06-19", Findings: 4, OpenFindings: 1,
 	}})
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
-	if lines[0] != "slug\tbucket\tarea\tdate\tfindings\topen" {
+	if lines[0] != "slug\tbucket\tarea\tdate\tfindings\topen\tid" {
 		t.Errorf("audit header: %q", lines[0])
 	}
-	if lines[1] != "2026-06-19-x\topen\tcli\t2026-06-19\t4\t1" {
+	if lines[1] != "2026-06-19-x\topen\tcli\t2026-06-19\t4\t1\t6ga000000002" {
 		t.Errorf("audit row: %q", lines[1])
 	}
 }
@@ -360,7 +363,7 @@ func TestWriteTablePlain_AuditExtractors(t *testing.T) {
 func TestWriteTablePlain_EmptyIsHeaderOnly(t *testing.T) {
 	var b bytes.Buffer
 	WriteTablePlain(&b, TaskColumns(), nil)
-	if got := strings.TrimSpace(b.String()); got != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at" {
+	if got := strings.TrimSpace(b.String()); got != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at\tid" {
 		t.Errorf("empty table should be header-only, got %q", got)
 	}
 }
@@ -385,7 +388,7 @@ func TestWriteCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
-	if lines[0] != "slug,status,tier,priority,epic,updated,description,revisit_at" {
+	if lines[0] != "slug,status,tier,priority,epic,updated,description,revisit_at,id" {
 		t.Errorf("csv header: %q", lines[0])
 	}
 	// A cell containing a comma must be RFC 4180 quoted (this is exactly what
@@ -400,7 +403,7 @@ func TestWriteCSV_EmptyIsHeaderOnly(t *testing.T) {
 	if err := WriteCSV(&b, AuditColumns(), nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.TrimSpace(b.String()); got != "slug,bucket,area,date,findings,open" {
+	if got := strings.TrimSpace(b.String()); got != "slug,bucket,area,date,findings,open,id" {
 		t.Errorf("empty csv should be header-only, got %q", got)
 	}
 }

@@ -41,11 +41,11 @@ func TestTaskList_Table(t *testing.T) {
 	if len(lines) < 2 {
 		t.Fatalf("-o table needs a header + ≥1 row:\n%q", out)
 	}
-	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at" {
+	if lines[0] != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at\tid" {
 		t.Errorf("-o table header wrong: %q", lines[0])
 	}
-	if cols := strings.Split(lines[1], "\t"); len(cols) != 8 {
-		t.Errorf("-o table row should have 8 tab-separated columns, got %d: %q", len(cols), lines[1])
+	if cols := strings.Split(lines[1], "\t"); len(cols) != 9 {
+		t.Errorf("-o table row should have 9 tab-separated columns, got %d: %q", len(cols), lines[1])
 	}
 }
 
@@ -120,6 +120,43 @@ func TestColumns_JSONProjection(t *testing.T) {
 	// Key order follows -c (slug before status), which a plain map would lose.
 	if i, j := strings.Index(out, "\"slug\""), strings.Index(out, "\"status\""); i < 0 || j < 0 || i > j {
 		t.Errorf("projected keys should appear in -c order (slug before status):\n%s", out)
+	}
+}
+
+func TestStableIDColumns_ProjectTaskAndAuditHandles(t *testing.T) {
+	for _, tc := range []struct {
+		name, noun, listKey string
+	}{
+		{name: "task", noun: "task", listKey: "tasks"},
+		{name: "audit", noun: "audit", listKey: "audits"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := runRoot(t, "-C", fixtureRepo, tc.noun, "list", "--all", "--json", "-c", "id,slug")
+			var envelope map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+				t.Fatalf("invalid projected JSON: %v\n%s", err, out)
+			}
+			var rows []map[string]string
+			if err := json.Unmarshal(envelope[tc.listKey], &rows); err != nil {
+				t.Fatalf("invalid %s rows: %v\n%s", tc.listKey, err, out)
+			}
+			if len(rows) == 0 {
+				t.Fatalf("expected at least one projected %s row", tc.name)
+			}
+			for _, row := range rows {
+				if len(row) != 2 || row["id"] == "" || row["slug"] == "" || row["id"] == row["slug"] {
+					t.Errorf("projected row must distinguish durable id from slug: %#v", row)
+				}
+			}
+			if id, slug := strings.Index(out, `"id"`), strings.Index(out, `"slug"`); id < 0 || slug < 0 || id > slug {
+				t.Errorf("projected keys should retain requested id,slug order:\n%s", out)
+			}
+
+			table := runRoot(t, "-C", fixtureRepo, tc.noun, "list", "--all", "-o", "table", "-c", "id,slug")
+			if header := strings.SplitN(table, "\n", 2)[0]; header != "id\tslug" {
+				t.Errorf("explicit table projection header = %q, want id\\tslug", header)
+			}
+		})
 	}
 }
 
@@ -246,7 +283,7 @@ func TestColumns_CanonicalUpdatedAtUsesRawValueEndToEnd(t *testing.T) {
 func TestTable_EmptyIsHeaderOnly(t *testing.T) {
 	root := setupRepo(t) // alpha/beta have no tags, so --tag filters to empty
 	out := strings.TrimSpace(runRoot(t, "-C", root, "task", "list", "--tag", "zzz-none", "-o", "table"))
-	if out != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at" {
+	if out != "slug\tstatus\ttier\tpriority\tepic\tupdated\tdescription\trevisit_at\tid" {
 		t.Errorf("empty -o table should be header-only, got %q", out)
 	}
 	if q := runRoot(t, "-C", root, "task", "list", "--tag", "zzz-none", "-q"); q != "" {
@@ -295,11 +332,11 @@ func TestTaskList_CSV(t *testing.T) {
 	root := setupRepo(t)
 	out := runRoot(t, "-C", root, "task", "list", "-o", "csv")
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if lines[0] != "slug,status,tier,priority,epic,updated,description,revisit_at" {
+	if lines[0] != "slug,status,tier,priority,epic,updated,description,revisit_at,id" {
 		t.Errorf("-o csv header wrong: %q", lines[0])
 	}
-	if cols := strings.Split(lines[1], ","); len(cols) != 8 {
-		t.Errorf("-o csv row should have 8 comma-separated columns, got %d: %q", len(cols), lines[1])
+	if cols := strings.Split(lines[1], ","); len(cols) != 9 {
+		t.Errorf("-o csv row should have 9 comma-separated columns, got %d: %q", len(cols), lines[1])
 	}
 	// -c projects csv too (csv is columnar, like table).
 	proj := runRoot(t, "-C", root, "task", "list", "-o", "csv", "-c", "slug,status")
@@ -311,7 +348,7 @@ func TestTaskList_CSV(t *testing.T) {
 func TestAuditList_Table(t *testing.T) {
 	root := setupAuditRepo(t)
 	out := runRoot(t, "-C", root, "audit", "list", "-o", "table")
-	if h := strings.SplitN(out, "\n", 2)[0]; h != "slug\tbucket\tarea\tdate\tfindings\topen" {
+	if h := strings.SplitN(out, "\n", 2)[0]; h != "slug\tbucket\tarea\tdate\tfindings\topen\tid" {
 		t.Errorf("audit -o table header wrong: %q", h)
 	}
 }
@@ -402,6 +439,11 @@ func TestComplete_Columns(t *testing.T) {
 	}
 	if has(got, "slug") || has(got, "slug,slug") {
 		t.Errorf("an already-chosen column must not be re-offered: %v", got)
+	}
+	for _, noun := range []string{"task", "audit"} {
+		if got := complete(t, "-C", root, noun, "list", "-c", "i"); !has(got, "id") {
+			t.Errorf("%s stable id column should be discoverable through completion: %v", noun, got)
+		}
 	}
 	for _, tc := range []struct {
 		args []string

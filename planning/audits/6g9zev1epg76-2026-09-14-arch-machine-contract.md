@@ -4,6 +4,7 @@ id: 6g9zev1epg76
 bucket: open
 area: arch-machine-contract
 date: "2026-09-14"
+updated_at: "2026-09-14"
 ---
 
 # Weekly Architecture Audit: machine-contract — 2026-09-14
@@ -444,7 +445,7 @@ a minor bump (additive field / additive rows). Consider also publishing `12` as
 and `domain/errors.go` both document as reserved and the contract does not
 mention at all.
 
-#### M2. `--json -c` cannot project `id` for tasks or audits, so the cheap machine path cannot return the durable handle  · **Status:** open
+#### M2. `--json -c` cannot project `id` for tasks or audits, so the cheap machine path cannot return the durable handle  · **Status:** fixed
 
 **File:** `internal/cli/render/columns.go:296-315` (tasks), `:374-385` (audits) | **Component:** cli/render — column registry
 **Effort:** XS · **Urgency:** soon
@@ -501,6 +502,11 @@ appended **last** in both — the file's existing convention for additive column
 pure minor bump. `EpicColumns()` already leads with `id` and needs nothing.
 Coordinate with `enforce-projected-column-registry-invariants`, which will want
 the new selectors covered by its collision/parity fixtures.
+
+**Resolution:** Task and audit list registries now expose stable IDs as
+trailing, explicitly selectable columns. Schema 1.67, command-level projections,
+completion, machine-text goldens, and the shared full-wire fidelity harness pin
+the behavior without changing slug-first quiet output.
 
 #### M3. `thread list` has neither `-o` nor `-c`, so the newest first-class entity is absent from the triage contract  · **Status:** open
 
