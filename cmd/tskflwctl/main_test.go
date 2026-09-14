@@ -151,6 +151,48 @@ func TestSmoke_LifecycleAndExitCodes(t *testing.T) {
 	if env.SchemaVersion == "" || env.Error.Code != "not-found" || env.Error.Message == "" {
 		t.Errorf("error envelope wrong: %+v", env)
 	}
+
+	// Raw argv still carries the output request when cobra stops at an earlier
+	// unknown flag. Error formatting must not depend on flag order.
+	cmd = exec.Command(binary(t), "-C", root, "--badflag", "--json")
+	jsonOut.Reset()
+	jsonErr.Reset()
+	cmd.Stdout = &jsonOut
+	cmd.Stderr = &jsonErr
+	_ = cmd.Run()
+	if jsonOut.Len() != 0 {
+		t.Errorf("stdout must stay empty on an early --json parse failure, got %q", jsonOut.String())
+	}
+	env = struct {
+		SchemaVersion string `json:"schema_version"`
+		Error         struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}{}
+	if err := json.Unmarshal([]byte(jsonErr.String()), &env); err != nil {
+		t.Fatalf("--json after an unknown flag should still select the JSON error envelope: %v\n%s", err, jsonErr.String())
+	}
+	if env.SchemaVersion == "" || env.Error.Message == "" {
+		t.Errorf("early parse error envelope wrong: %+v", env)
+	}
+
+	// If a preceding value-taking flag consumes the literal `--`, cobra can
+	// still parse a later --json even though the lightweight routing scanner
+	// correctly treats `--` as a terminator. The error writer prefers that parsed
+	// truth so the non-TTY machine path does not regress.
+	cmd = exec.Command(binary(t), "-C", root, "task", "list", "--epic", "--", "--json", "-c", "nope")
+	jsonOut.Reset()
+	jsonErr.Reset()
+	cmd.Stdout = &jsonOut
+	cmd.Stderr = &jsonErr
+	_ = cmd.Run()
+	if jsonOut.Len() != 0 {
+		t.Errorf("stdout must stay empty when cobra parsed a later --json, got %q", jsonOut.String())
+	}
+	if err := json.Unmarshal([]byte(jsonErr.String()), &env); err != nil {
+		t.Fatalf("cobra-parsed --json should select the JSON error envelope: %v\n%s", err, jsonErr.String())
+	}
 }
 
 func TestSmoke_VersionStamp(t *testing.T) {
@@ -179,6 +221,15 @@ func TestUseFang(t *testing.T) {
 		{"non-tty closes it (pipe/redirect/CI)", []string{"task", "list"}, false, false},
 		{"--json closes it even on a tty", []string{"task", "list", "--json"}, true, false},
 		{"--json=true closes it", []string{"--json=true"}, true, false},
+		{"--json=1 closes it", []string{"--json=1"}, true, false},
+		{"--json=t closes it", []string{"--json=t"}, true, false},
+		{"--json=T closes it", []string{"--json=T"}, true, false},
+		{"--json=TRUE closes it", []string{"--json=TRUE"}, true, false},
+		{"--json=True closes it", []string{"--json=True"}, true, false},
+		{"--json=false stays human", []string{"--json=false"}, true, true},
+		{"last false spelling restores human path", []string{"--json", "--json=false"}, true, true},
+		{"last true spelling closes human path", []string{"--json=false", "--json"}, true, false},
+		{"invalid json value stays on cobra validation path", []string{"--json=not-a-bool"}, true, true},
 		{"--json on a non-tty", []string{"--json"}, false, false},
 		{"literal --json after -- does not count", []string{"task", "new", "--", "--json"}, true, true},
 	}
@@ -186,6 +237,29 @@ func TestUseFang(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := useFang(tc.args, tc.tty); got != tc.want {
 				t.Errorf("useFang(%q, tty=%v) = %v, want %v", tc.args, tc.tty, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestJSONFlagActive(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"absent", []string{"task", "list"}, false},
+		{"bare", []string{"task", "list", "--json"}, true},
+		{"unknown before true", []string{"--badflag", "--json"}, true},
+		{"last valid false wins", []string{"--json", "--json=0"}, false},
+		{"last valid true wins", []string{"--json=false", "--json=True"}, true},
+		{"invalid preserves prior valid value", []string{"--json", "--json=nope"}, true},
+		{"invalid alone is not active", []string{"--json=nope"}, false},
+		{"terminator", []string{"task", "new", "--", "--json"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := jsonFlagActive(tc.args); got != tc.want {
+				t.Fatalf("jsonFlagActive(%q) = %v, want %v", tc.args, got, tc.want)
 			}
 		})
 	}
