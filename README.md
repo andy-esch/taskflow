@@ -372,9 +372,12 @@ The `list` commands (`task`/`epic`/`audit list`) share one output-format flag,
 | `json` | full records + `schema_version` | `jq` |
 
 `-q`/`--quiet` is shorthand for `-o name`; `--json` (on every command) equals
-`-o json`. `-c/--columns slug,status,…` projects the columnar formats (`table`,
-`csv`) to the columns you name, in the order you name them (and implies
-`-o table`) — both the formats and the column names are shell-completable. `-o table` is a documented contract under
+`-o json`. `-c/--columns slug,status,…` projects `table`, `csv`, or `--json` to
+the fields you name, in order (and implies `-o table` when no format is pinned).
+Projected JSON uses raw field values and avoids display-only fallbacks. Canonical
+selectors emit canonical field keys; the legacy `updated` and `open` selectors remain
+accepted and retain their legacy projected keys for compatibility. Formats
+and canonical column names are shell-completable. `-o table` is a documented contract under
 the one `schema_version` (a column add/reorder is a schema bump), and always
 emits the header row — even with zero results — so a consumer gets a stable
 schema and detects "no rows" by line count. Recipes:
@@ -384,7 +387,7 @@ schema and detects "no rows" by line count. Recipes:
 tskflwctl task list --unblocked -q --tag tui | xargs tskflwctl task start
 
 # audits with open findings, projected to slug + open count
-tskflwctl audit list --all -o table -c slug,open | awk -F'\t' 'NR>1 && $2>0 {print $1}'
+tskflwctl audit list --all -o table -c slug,open_findings | awk -F'\t' 'NR>1 && $2>0 {print $1}'
 
 # in-progress slugs via jq
 tskflwctl task list --status in-progress -o json | jq -r '.tasks[].slug'

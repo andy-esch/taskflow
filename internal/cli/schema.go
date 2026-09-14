@@ -26,8 +26,9 @@ func newSchemaCmd(app *App) *cobra.Command {
 			"roster, and `task list -o table -c slug,status,description` for a compact,\n" +
 			"byte-stable table. --json is compact and also takes -c to project just the\n" +
 			"fields you need; reach for full --json (no -c) when you need every frontmatter\n" +
-			"field. A --json -c projection is a string-valued column view — only full --json\n" +
-			"validates against --json-schema.\n\n" +
+			"field. A --json -c projection uses raw string values; canonical selectors use\n" +
+			"wire keys while explicit legacy aliases retain their requested compatibility key. Only\n" +
+			"full --json validates against --json-schema.\n\n" +
 			"With no argument, emit the machine contract — statuses, the epic/bucket\n" +
 			"enums, the task field registry with types, and the exit/error codes — so an\n" +
 			"agent can drive the tool without parsing --help prose. With a kind, emit how\n" +

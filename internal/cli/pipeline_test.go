@@ -123,6 +123,124 @@ func TestColumns_JSONProjection(t *testing.T) {
 	}
 }
 
+func TestColumns_JSONProjectionUsesCanonicalWireSelectorAndKey(t *testing.T) {
+	root := setupRepo(t) // neither fixture carries updated_at
+	canonical := runRoot(t, "-C", root, "task", "list", "--json", "-c", "slug,updated_at")
+	legacy := runRoot(t, "-C", root, "task", "list", "--json", "-c", "slug,updated")
+	var got struct {
+		Tasks []map[string]string `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(canonical), &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range got.Tasks {
+		if _, ok := row["updated_at"]; !ok {
+			t.Errorf("projected row missing canonical updated_at key: %#v", row)
+		}
+		if row["updated_at"] != "" {
+			t.Errorf("never-edited fixture invented updated_at: %#v", row)
+		}
+		if _, leaked := row["updated"]; leaked {
+			t.Errorf("projected row leaked legacy updated key: %#v", row)
+		}
+	}
+	got.Tasks = nil
+	if err := json.Unmarshal([]byte(legacy), &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range got.Tasks {
+		if _, ok := row["updated"]; !ok {
+			t.Errorf("legacy projection missing compatibility key: %#v", row)
+		}
+		if row["updated"] != "" {
+			t.Errorf("legacy projection should still use raw values: %#v", row)
+		}
+		if _, leaked := row["updated_at"]; leaked {
+			t.Errorf("legacy projection unexpectedly renamed its output key: %#v", row)
+		}
+	}
+
+	canonicalTable := runRoot(t, "-C", root, "task", "list", "-c", "updated_at")
+	legacyTable := runRoot(t, "-C", root, "task", "list", "-c", "updated")
+	canonicalLines := strings.Split(strings.TrimSuffix(canonicalTable, "\n"), "\n")
+	legacyLines := strings.Split(strings.TrimSuffix(legacyTable, "\n"), "\n")
+	if header := canonicalLines[0]; header != "updated_at" {
+		t.Errorf("explicit canonical table selection should echo its name, got %q", header)
+	}
+	if header := legacyLines[0]; header != "updated" {
+		t.Errorf("legacy table selection should preserve its header, got %q", header)
+	}
+	for _, line := range canonicalLines[1:] {
+		if line != "" {
+			t.Errorf("canonical updated_at table cells should be empty for never-edited fixtures, got %q", line)
+		}
+	}
+}
+
+// TestColumns_CanonicalUpdatedAtUsesRawValueEndToEnd gives the command layer a
+// real created-but-never-edited record. A fixture with neither date cannot tell
+// the raw extractor from the legacy created-date fallback and would let the
+// original projection defect survive outside render's unit tests.
+func TestColumns_CanonicalUpdatedAtUsesRawValueEndToEnd(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "epic", "new", "Projection fixture", "--description", "projection fixture")
+	runRoot(t, "-C", root, "task", "new", "Never edited task",
+		"--epic", "01-projection-fixture", "--tags", "contract", "--description", "never edited")
+
+	full := runRoot(t, "-C", root, "task", "list", "--json")
+	var fullTasks struct {
+		Tasks []struct {
+			Created string `json:"created"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(full), &fullTasks); err != nil || len(fullTasks.Tasks) != 1 {
+		t.Fatalf("full task list: err=%v output=%s", err, full)
+	}
+	created := fullTasks.Tasks[0].Created
+	if created == "" {
+		t.Fatal("task new should set created")
+	}
+
+	canonicalJSON := runRoot(t, "-C", root, "task", "list", "--json", "-c", "updated_at")
+	legacyJSON := runRoot(t, "-C", root, "task", "list", "--json", "-c", "updated")
+	for name, output := range map[string]string{"updated_at": canonicalJSON, "updated": legacyJSON} {
+		var projected struct {
+			Tasks []map[string]string `json:"tasks"`
+		}
+		if err := json.Unmarshal([]byte(output), &projected); err != nil || len(projected.Tasks) != 1 {
+			t.Fatalf("%s task projection: err=%v output=%s", name, err, output)
+		}
+		if got := projected.Tasks[0][name]; got != "" {
+			t.Fatalf("%s projection invented updated_at from created: %q", name, got)
+		}
+	}
+	if got := runRoot(t, "-C", root, "task", "list", "-o", "table", "-c", "updated_at"); got != "updated_at\n\n" {
+		t.Fatalf("canonical task table should carry the raw empty value, got %q", got)
+	}
+	if got := runRoot(t, "-C", root, "task", "list", "-o", "table", "-c", "updated"); got != "updated\n"+created+"\n" {
+		t.Fatalf("legacy task table should retain the created fallback, got %q", got)
+	}
+
+	runRoot(t, "-C", root, "research", "new", "Never edited research",
+		"--created", "2026-01-06", "--tags", "contract", "--description", "never edited")
+	researchJSON := runRoot(t, "-C", root, "research", "list", "--json", "-c", "updated_at")
+	var projectedResearch struct {
+		Research []map[string]string `json:"research"`
+	}
+	if err := json.Unmarshal([]byte(researchJSON), &projectedResearch); err != nil || len(projectedResearch.Research) != 1 {
+		t.Fatalf("research projection: err=%v output=%s", err, researchJSON)
+	}
+	if got := projectedResearch.Research[0]["updated_at"]; got != "" {
+		t.Fatalf("canonical research projection invented updated_at from created: %q", got)
+	}
+	if got := runRoot(t, "-C", root, "research", "list", "-o", "csv", "-c", "updated_at"); got != "updated_at\n\n" {
+		t.Fatalf("canonical research CSV should carry the raw empty value, got %q", got)
+	}
+	if got := runRoot(t, "-C", root, "research", "list", "-o", "table", "-c", "updated"); got != "updated\n2026-01-06\n" {
+		t.Fatalf("legacy research table should retain the created fallback, got %q", got)
+	}
+}
+
 // TestTable_EmptyIsHeaderOnly pins the porcelain contract end-to-end: an empty
 // result still emits the header row (stable schema), where -q/human emit nothing.
 func TestTable_EmptyIsHeaderOnly(t *testing.T) {
@@ -284,5 +402,17 @@ func TestComplete_Columns(t *testing.T) {
 	}
 	if has(got, "slug") || has(got, "slug,slug") {
 		t.Errorf("an already-chosen column must not be re-offered: %v", got)
+	}
+	for _, tc := range []struct {
+		args []string
+		bad  string
+	}{
+		{[]string{"task", "list", "-c", "updated,"}, "updated,updated_at"},
+		{[]string{"research", "list", "-c", "updated,"}, "updated,updated_at"},
+		{[]string{"audit", "list", "-c", "open,"}, "open,open_findings"},
+	} {
+		if got := complete(t, append([]string{"-C", root}, tc.args...)...); has(got, tc.bad) {
+			t.Errorf("legacy alias must suppress its canonical duplicate %q: %v", tc.bad, got)
+		}
 	}
 }

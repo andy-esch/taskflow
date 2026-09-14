@@ -73,3 +73,35 @@ func TestEpicStatusDescriptionMatchesVocab(t *testing.T) {
 		}
 	}
 }
+
+// TestDispositionDescriptionsReferencePublishedVocabularies keeps DTO guidance
+// attached to the schema contract's executable registries. Retyping either list
+// here would create a second vocabulary that can drift independently.
+func TestDispositionDescriptionsReferencePublishedVocabularies(t *testing.T) {
+	b, err := JSONSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Defs map[string]struct {
+			Properties map[string]struct {
+				Description string `json:"description"`
+			} `json:"properties"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		def, field, registry string
+	}{
+		{"CriterionJSON", "state", "criterion_states"},
+		{"CriterionJSON", "reason", "criterion_states"},
+		{"FindingJSON", "status", "finding_statuses"},
+	} {
+		desc := doc.Defs[tc.def].Properties[tc.field].Description
+		if !strings.Contains(desc, tc.registry) {
+			t.Errorf("%s.%s description %q should reference %s", tc.def, tc.field, desc, tc.registry)
+		}
+	}
+}

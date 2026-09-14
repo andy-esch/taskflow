@@ -12,28 +12,72 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// Column is one projectable column of a list table: a machine name (the header
-// in `-o table`, and what `-c/--columns` selects), a short description (for
-// completion), and an extractor. A per-entity []Column is the single source of
-// truth for the default table columns, `-c` validation, `-c` completion, and the
-// projection itself — so the four can't drift. The first column is the id (slug
-// / epic id), which `-o name` projects.
+// Column is one projectable field shared by the list formats. Name and Extract
+// retain the stable table/CSV header and display value. jsonName and jsonExtract
+// are optional canonical wire-contract overrides for `--json -c`; when present,
+// both the canonical JSON name and the legacy presentation name are accepted as
+// selectors. selectedName records which spelling an explicit projection used so
+// legacy JSON callers keep their key while canonical callers get the wire key.
+// This keeps compatibility without letting a canonical header carry a display
+// fallback. The first column is the id (slug / epic id), which `-o name` projects.
 type Column[T any] struct {
-	Name    string
-	Desc    string
-	Extract func(T) string
+	Name         string
+	Desc         string
+	Extract      func(T) string
+	jsonName     string
+	jsonExtract  func(T) string
+	selectedName string
+}
+
+func column[T any](name, desc string, extract func(T) string) Column[T] {
+	return Column[T]{Name: name, Desc: desc, Extract: extract}
+}
+
+func contractColumn[T any](name, jsonName, desc string, display, project func(T) string) Column[T] {
+	return Column[T]{
+		Name: name, Desc: desc, Extract: display,
+		jsonName: jsonName, jsonExtract: project,
+	}
+}
+
+func (c Column[T]) selectorName() string {
+	if c.jsonName != "" {
+		return c.jsonName
+	}
+	return c.Name
+}
+
+func (c Column[T]) projectedValue(item T) string {
+	if c.jsonExtract != nil {
+		return c.jsonExtract(item)
+	}
+	return c.Extract(item)
+}
+
+func (c Column[T]) projectedName() string {
+	if c.selectedName != "" {
+		return c.selectedName
+	}
+	return c.selectorName()
 }
 
 // ColumnSpec is the name+description of a column without the (typed) extractor,
 // so the cli completion/help layer can offer and describe columns without the
 // generic type parameter.
-type ColumnSpec struct{ Name, Desc string }
+type ColumnSpec struct {
+	Name    string
+	Desc    string
+	Aliases []string
+}
 
 // Specs projects a typed column set to its name/description pairs.
 func Specs[T any](cols []Column[T]) []ColumnSpec {
 	out := make([]ColumnSpec, len(cols))
 	for i, c := range cols {
-		out[i] = ColumnSpec{Name: c.Name, Desc: c.Desc}
+		out[i] = ColumnSpec{Name: c.selectorName(), Desc: c.Desc}
+		if c.Name != c.selectorName() {
+			out[i].Aliases = []string{c.Name}
+		}
 	}
 	return out
 }
@@ -45,16 +89,39 @@ func SelectColumns[T any](all []Column[T], names []string) ([]Column[T], error) 
 	if len(names) == 0 {
 		return all, nil
 	}
-	byName := make(map[string]Column[T], len(all))
+	byName := make(map[string]Column[T], len(all)*2)
 	for _, c := range all {
-		byName[c.Name] = c
+		byName[c.selectorName()] = c
+		if c.Name != c.selectorName() {
+			byName[c.Name] = c // compatibility alias for the old table/CSV name
+		}
 	}
 	out := make([]Column[T], 0, len(names))
+	selected := make(map[string]string, len(names))
 	for _, n := range names {
 		c, ok := byName[n]
 		if !ok {
 			return nil, fmt.Errorf("%w: unknown column %q (available: %s)",
 				domain.ErrValidation, n, columnNames(all))
+		}
+		canonical := c.selectorName()
+		if prior, exists := selected[canonical]; exists {
+			return nil, fmt.Errorf("%w: duplicate column %q (already selected as %q)",
+				domain.ErrValidation, n, prior)
+		}
+		selected[canonical] = n
+		c.selectedName = n
+		// Preserve legacy/default headers, but echo an explicitly requested
+		// canonical selector in table/CSV with the canonical value semantics.
+		// Otherwise an `updated_at` header could carry the display-only created
+		// fallback. An explicitly selected legacy alias retains its old header and
+		// display value, and projected JSON retains the requested key while using
+		// the raw projected value.
+		if n == canonical && c.Name != canonical {
+			c.Name = canonical
+			if c.jsonExtract != nil {
+				c.Extract = c.jsonExtract
+			}
 		}
 		out = append(out, c)
 	}
@@ -65,7 +132,7 @@ func SelectColumns[T any](all []Column[T], names []string) ([]Column[T], error) 
 func columnNames[T any](cols []Column[T]) string {
 	names := make([]string, len(cols))
 	for i, c := range cols {
-		names[i] = c.Name
+		names[i] = c.selectorName()
 	}
 	return strings.Join(names, ", ")
 }
@@ -116,10 +183,9 @@ func WriteCSV[T any](w io.Writer, cols []Column[T], items []T) error {
 	return cw.Error()
 }
 
-// projectedField is one key/value of a projected `--json -c` row. The value is
-// the column extractor's string — the projection is a column VIEW, so it mirrors
-// the table/csv cells (numbers and lists render as their string form), keeping
-// the column registry the single source of truth for table, csv, and json alike.
+// projectedField is one key/value of a projected `--json -c` row. Values remain
+// strings, but a column may supply a canonical wire key/value distinct from its
+// human table/CSV presentation.
 type projectedField struct{ key, value string }
 
 // projectedRow marshals as a JSON object whose keys stay in column (i.e. `-c`)
@@ -173,16 +239,20 @@ func marshalOrderedObject(fields []orderedField) ([]byte, error) {
 // entity's envelope key ("tasks", "epics", …), so a projected list lands under
 // the same key as its full envelope.
 //
-// This is a column VIEW (like -o table/csv), NOT the canonical typed envelope:
-// every value is a string and rows omit unselected fields, so projected output
-// does NOT validate against `schema --json-schema` (which describes the full
-// envelopes). Only bare `--json` is the schema-validated contract.
+// This is a string-valued VIEW, NOT the canonical typed envelope: rows omit
+// unselected fields, so projected output does NOT validate against
+// `schema --json-schema` (which describes the full envelopes). Columns that
+// represent wire fields use their canonical keys and source values when selected
+// canonically. Explicit compatibility aliases retain their requested output key
+// but still use the raw projected value. Presentation-only fallbacks are reserved
+// for default or explicitly legacy table/CSV selections. Only bare `--json` is
+// the schema-validated contract.
 func ProjectedListJSON[T any](w io.Writer, listKey string, cols []Column[T], items []T, problems []domain.FileProblem) error {
 	rows := make([]projectedRow, 0, len(items))
 	for _, it := range items {
 		row := make(projectedRow, len(cols))
 		for i, c := range cols {
-			row[i] = projectedField{key: c.Name, value: c.Extract(it)}
+			row[i] = projectedField{key: c.projectedName(), value: c.projectedValue(it)}
 		}
 		rows = append(rows, row)
 	}
@@ -225,22 +295,22 @@ func csvInjectionSafe(s string) string {
 // projected by `-o name`).
 func TaskColumns() []Column[domain.Task] {
 	return []Column[domain.Task]{
-		{"slug", "task identifier", func(t domain.Task) string { return t.Slug }},
-		{"status", "lifecycle status", func(t domain.Task) string { return string(t.Status) }},
-		{"tier", "priority tier 1-5", func(t domain.Task) string { return fmt.Sprintf("%d", t.Tier) }},
-		{"priority", "high|medium|low", func(t domain.Task) string { return t.Priority }},
-		{"epic", "parent epic id", func(t domain.Task) string { return t.Epic }},
-		{"updated", "last-updated date", func(t domain.Task) string {
+		column("slug", "task identifier", func(t domain.Task) string { return t.Slug }),
+		column("status", "lifecycle status", func(t domain.Task) string { return string(t.Status) }),
+		column("tier", "priority tier 1-5", func(t domain.Task) string { return fmt.Sprintf("%d", t.Tier) }),
+		column("priority", "high|medium|low", func(t domain.Task) string { return t.Priority }),
+		column("epic", "parent epic id", func(t domain.Task) string { return t.Epic }),
+		contractColumn("updated", "updated_at", "last-updated date", func(t domain.Task) string {
 			if t.Updated != "" {
 				return t.Updated
 			}
 			return t.Created
-		}},
-		{"description", "one-line summary", func(t domain.Task) string { return t.Description }},
+		}, func(t domain.Task) string { return t.Updated }),
+		column("description", "one-line summary", func(t domain.Task) string { return t.Description }),
 		// revisit_at is appended LAST so adding it doesn't shift the pre-existing
 		// default `task list -o table`/`csv` columns (description stays column 7);
 		// it's still `-c`-selectable in any position the caller asks.
-		{"revisit_at", "snooze-until date (deferred tasks)", func(t domain.Task) string { return t.RevisitAt }},
+		column("revisit_at", "snooze-until date (deferred tasks)", func(t domain.Task) string { return t.RevisitAt }),
 	}
 }
 
@@ -248,17 +318,17 @@ func TaskColumns() []Column[domain.Task] {
 // as plain numbers, not the human "2/3 (66%)" cell).
 func EpicColumns() []Column[core.EpicSummary] {
 	return []Column[core.EpicSummary]{
-		{"id", "epic identifier", func(e core.EpicSummary) string { return e.Epic.ID }},
-		{"status", "epic status", func(e core.EpicSummary) string { return e.Epic.Status }},
-		{"priority", "high|medium|low", func(e core.EpicSummary) string { return e.Epic.Priority }},
-		{"done", "completed task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Done) }},
-		{"total", "total task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Total) }},
-		{"description", "one-line summary", func(e core.EpicSummary) string { return e.Epic.Description }},
+		column("id", "epic identifier", func(e core.EpicSummary) string { return e.Epic.ID }),
+		column("status", "epic status", func(e core.EpicSummary) string { return e.Epic.Status }),
+		column("priority", "high|medium|low", func(e core.EpicSummary) string { return e.Epic.Priority }),
+		column("done", "completed task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Done) }),
+		column("total", "total task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Total) }),
+		column("description", "one-line summary", func(e core.EpicSummary) string { return e.Epic.Description }),
 		// percent/deprecated are appended LAST so adding them didn't shift the
 		// pre-existing default `epic list -o table`/`csv` columns (description stays
 		// column 6); both are still `-c`-selectable in any position the caller asks.
-		{"percent", "rollup % complete", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Percent()) }},
-		{"deprecated", "withdrawn (excluded) task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Deprecated) }},
+		column("percent", "rollup % complete", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Percent()) }),
+		column("deprecated", "withdrawn (excluded) task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Deprecated) }),
 	}
 }
 
@@ -267,47 +337,49 @@ func EpicColumns() []Column[core.EpicSummary] {
 // across audits, unlike a bare finding code which repeats.
 func FindingColumns() []Column[core.AuditFinding] {
 	return []Column[core.AuditFinding]{
-		{"ref", "addressable id: audit:code", func(f core.AuditFinding) string { return f.Audit + ":" + f.Code }},
-		{"code", "finding code (H1/M2/…)", func(f core.AuditFinding) string { return f.Code }},
-		{"audit", "audit slug", func(f core.AuditFinding) string { return f.Audit }},
-		{"status", "finding status", func(f core.AuditFinding) string { return f.Status }},
-		{"effort", "XS|S|M|L", func(f core.AuditFinding) string { return f.Effort }},
-		{"urgency", "acute|soon|eventually", func(f core.AuditFinding) string { return f.Urgency }},
-		{"component", "component", func(f core.AuditFinding) string { return f.Component }},
-		{"file", "file:line", func(f core.AuditFinding) string { return f.File }},
-		{"title", "finding title", func(f core.AuditFinding) string { return f.Title }},
+		column("ref", "addressable id: audit:code", func(f core.AuditFinding) string { return f.Audit + ":" + f.Code }),
+		column("code", "finding code (H1/M2/…)", func(f core.AuditFinding) string { return f.Code }),
+		column("audit", "audit slug", func(f core.AuditFinding) string { return f.Audit }),
+		column("status", "finding status", func(f core.AuditFinding) string { return f.Status }),
+		column("effort", "XS|S|M|L", func(f core.AuditFinding) string { return f.Effort }),
+		column("urgency", "acute|soon|eventually", func(f core.AuditFinding) string { return f.Urgency }),
+		column("component", "component", func(f core.AuditFinding) string { return f.Component }),
+		column("file", "file:line", func(f core.AuditFinding) string { return f.File }),
+		column("title", "finding title", func(f core.AuditFinding) string { return f.Title }),
 	}
 }
 
-// AuditColumns is the projectable column set for `audit list` (slug first).
 // ResearchColumns are the projectable columns for `research list -o table/csv` and
 // `--json -c`. No status/bucket column exists because research has no lifecycle.
 func ResearchColumns() []Column[domain.Research] {
 	return []Column[domain.Research]{
-		{"slug", "research identifier", func(r domain.Research) string { return r.Slug }},
-		{"created", "date the research was done", func(r domain.Research) string { return r.Created }},
-		{"description", "one-line summary", func(r domain.Research) string { return r.Description }},
-		{"tags", "topical tags", func(r domain.Research) string { return strings.Join(r.Tags, ",") }},
+		column("slug", "research identifier", func(r domain.Research) string { return r.Slug }),
+		column("created", "date the research was done", func(r domain.Research) string { return r.Created }),
+		column("description", "one-line summary", func(r domain.Research) string { return r.Description }),
+		column("tags", "topical tags", func(r domain.Research) string { return strings.Join(r.Tags, ",") }),
 		// Falls back to created when never edited, matching the task `updated` column: a doc
 		// written once has been "last touched" on its created date, and an empty cell here
 		// would sort last under an updated sort for no good reason.
-		{"updated", "last-updated date", func(r domain.Research) string {
+		contractColumn("updated", "updated_at", "last-updated date", func(r domain.Research) string {
 			if r.Updated != "" {
 				return r.Updated
 			}
 			return r.Created
-		}},
-		{"id", "stable identifier", func(r domain.Research) string { return r.ID }},
+		}, func(r domain.Research) string { return r.Updated }),
+		column("id", "stable identifier", func(r domain.Research) string { return r.ID }),
 	}
 }
 
+// AuditColumns is the projectable column set for `audit list` (slug first).
 func AuditColumns() []Column[domain.Audit] {
 	return []Column[domain.Audit]{
-		{"slug", "audit identifier", func(a domain.Audit) string { return a.Slug }},
-		{"bucket", "open|closed|deferred", func(a domain.Audit) string { return string(a.Bucket) }},
-		{"area", "area under audit", func(a domain.Audit) string { return a.Area }},
-		{"date", "audit date", func(a domain.Audit) string { return a.Date }},
-		{"findings", "total findings", func(a domain.Audit) string { return fmt.Sprintf("%d", a.Findings) }},
-		{"open", "open findings", func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) }},
+		column("slug", "audit identifier", func(a domain.Audit) string { return a.Slug }),
+		column("bucket", "open|closed|deferred", func(a domain.Audit) string { return string(a.Bucket) }),
+		column("area", "area under audit", func(a domain.Audit) string { return a.Area }),
+		column("date", "audit date", func(a domain.Audit) string { return a.Date }),
+		column("findings", "total findings", func(a domain.Audit) string { return fmt.Sprintf("%d", a.Findings) }),
+		contractColumn("open", "open_findings", "open findings",
+			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) },
+			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) }),
 	}
 }

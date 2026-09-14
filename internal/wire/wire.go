@@ -22,6 +22,7 @@ import (
 // whole CLI output schema, not per envelope (decided 2026-06-12). Adding a
 // field bumps the minor; renaming/removing bumps the major. Key naming rule:
 // JSON keys match the frontmatter keys exactly (`created`, `updated_at`).
+// Keep entries contiguous and ascending; append each new version at the bottom.
 // 1.1: every CLI-settable field round-trips (effort, autonomy_level), and the
 // misfiled signal (previously human-output-only ⚠) is machine-readable.
 // 1.2: mutation envelopes carry dry_run:true under --dry-run previews.
@@ -170,43 +171,27 @@ import (
 // point selected for reading, and a combined space-badged in-progress working set. The
 // envelope owns one top-level schema_version; nested summaries reuse the versionless
 // SummaryJSON payload rather than pretending to be independent envelopes.
-// 1.56: guarded existing-Thread membership and lifecycle mutations add atomic
-// member outcome receipts, before/after projections, cancel/complete/reopen
-// semantics, typed policy failures, and committed recovery. Task lifecycle
-// receipts now name every Thread projection changed by the transition.
-// 1.55: eligibility now admits both queued (`next-up`) and candidate
-// (`ready-to-start`) work when the authoritative graph is healthy and the gate
-// is clear. Thread frontier and task list --unblocked share that derivation;
-// lifecycle refusal payloads allow dependency override only for blocked gates.
-// 1.54: Thread documents add list/show/frontier and committed creation envelopes,
-// with persisted membership, nominal/sound rollups, external gates, graph health,
-// and stable member/external role vocabulary. The schema contract publishes the
-// Thread lifecycle vocabulary. Init receipts expose safe Projects-scaffold
-// removals, preserved legacy content, or an available scaffold-repair command.
-// Thread views separate repository graph health from projection health, explain
-// completed inconsistencies with stable codes, and hoist list-level graph
-// diagnostics. Post-commit Thread creation failures carry the same mutation
-// receipt in the error envelope.
-// 1.53: task lifecycle receipts expose committed durability, failed start rows
-// retain typed eligibility state/blockers/remedy, and post-commit cleanup errors
-// carry a structured task/workspace recovery receipt.
-// 1.52: task transition rows carry guarded lifecycle detail: exact prior status,
-// before/after derived state, typed override, retained blockers, downstream impact
-// count/details, and an explanatory remedy. Dependency mutation receipts add the
-// same before/after impact shape for directly affected dependents.
-// 1.51: dependency blocker/downstream query envelopes carry the queried task's
-// derived state, so eligibility is explicit and never inferred from an empty list.
-// 1.50: guarded dependency operations add `dependency_mutation` receipts, structured
-// partial-failure details on the error envelope, and the `task_blockers` /
-// `task_unblocks` diagnostic envelopes. Graph queries carry health, taskflow-owned
-// problems, legacy diagnostics, stable reason/path data, and derived task state.
+// 1.43: fresh `init --json` receipts may include `registration`, describing the
+// best-effort machine-local space registration (including preview vs applied and whether
+// the physical checkout was already registered).
 //
-// 1.49: task payloads carry `depends_on`, the sorted stable IDs of repository-global
-// prerequisites declared by that task. Additive and omitted for tasks without edges.
-// The task field/schema contract also recognizes the persisted list while generic
-// mutation remains forbidden until the guarded dependency commands land. Lint issues
-// may carry `severity: "advisory"`; omitted severity retains the established blocking
-// error behavior.
+// 1.44: `lint --fix` results may carry `skipped`, marking a file the pass deliberately did
+// NOT repair with the reason in `changes` — an invalid id that is still referenced
+// elsewhere, or one containing `u`, which Crockford gives no canonical decode. Additive:
+// absent on every repaired file, so a consumer that ignores it sees the previous shape.
+//
+// 1.45: a task's acceptance tally carries `explained` — how many UNMET criteria state why
+// (deferred / wontfix / tracked / n/a). Additive and zero for every task written before the criterion
+// vocabulary existed, so a consumer that ignores it sees the previous shape.
+//
+// 1.46: `task ac --list --json` criteria may carry `state` and `reason` — the disposition
+// beyond the checkbox (deferred / wontfix / tracked / n/a) and why. Absent for a plain met/not-met
+// criterion, so a body written before the vocabulary existed serialises unchanged.
+//
+// 1.47: the finding-status vocabulary drops `landed` and gains `tracked` — a finding
+// handed to a task, which counts toward `done_findings` because the AUDIT's interest in it
+// has concluded. NOT additive: `landed` is no longer accepted, though no audit in the
+// corpus ever used it, and a consumer switching on the status set must learn the new word.
 //
 // 1.48: the `schema` contract carries `criterion_states` — the non-binary acceptance
 // criterion states, published for the same reason `finding_statuses` is: `state` has been a
@@ -218,27 +203,43 @@ import (
 // Both additive and omitted when absent, so a finding recorded before they existed
 // serialises exactly as before.
 //
-// 1.47: the finding-status vocabulary drops `landed` and gains `tracked` — a finding
-// handed to a task, which counts toward `done_findings` because the AUDIT's interest in it
-// has concluded. NOT additive: `landed` is no longer accepted, though no audit in the
-// corpus ever used it, and a consumer switching on the status set must learn the new word.
+// 1.49: task payloads carry `depends_on`, the sorted stable IDs of repository-global
+// prerequisites declared by that task. Additive and omitted for tasks without edges.
+// The task field/schema contract also recognizes the persisted list while generic
+// mutation remains forbidden until the guarded dependency commands land. Lint issues
+// may carry `severity: "advisory"`; omitted severity retains the established blocking
+// error behavior.
 //
-// 1.46: `task ac --list --json` criteria may carry `state` and `reason` — the disposition
-// beyond the checkbox (deferred / wontfix / tracked / n/a) and why. Absent for a plain met/not-met
-// criterion, so a body written before the vocabulary existed serialises unchanged.
-//
-// 1.45: a task's acceptance tally carries `explained` — how many UNMET criteria state why
-// (deferred / wontfix / tracked / n/a). Additive and zero for every task written before the criterion
-// vocabulary existed, so a consumer that ignores it sees the previous shape.
-//
-// 1.44: `lint --fix` results may carry `skipped`, marking a file the pass deliberately did
-// NOT repair with the reason in `changes` — an invalid id that is still referenced
-// elsewhere, or one containing `u`, which Crockford gives no canonical decode. Additive:
-// absent on every repaired file, so a consumer that ignores it sees the previous shape.
-//
-// 1.43: fresh `init --json` receipts may include `registration`, describing the
-// best-effort machine-local space registration (including preview vs applied and whether
-// the physical checkout was already registered).
+// 1.50: guarded dependency operations add `dependency_mutation` receipts, structured
+// partial-failure details on the error envelope, and the `task_blockers` /
+// `task_unblocks` diagnostic envelopes. Graph queries carry health, taskflow-owned
+// problems, legacy diagnostics, stable reason/path data, and derived task state.
+// 1.51: dependency blocker/downstream query envelopes carry the queried task's
+// derived state, so eligibility is explicit and never inferred from an empty list.
+// 1.52: task transition rows carry guarded lifecycle detail: exact prior status,
+// before/after derived state, typed override, retained blockers, downstream impact
+// count/details, and an explanatory remedy. Dependency mutation receipts add the
+// same before/after impact shape for directly affected dependents.
+// 1.53: task lifecycle receipts expose committed durability, failed start rows
+// retain typed eligibility state/blockers/remedy, and post-commit cleanup errors
+// carry a structured task/workspace recovery receipt.
+// 1.54: Thread documents add list/show/frontier and committed creation envelopes,
+// with persisted membership, nominal/sound rollups, external gates, graph health,
+// and stable member/external role vocabulary. The schema contract publishes the
+// Thread lifecycle vocabulary. Init receipts expose safe Projects-scaffold
+// removals, preserved legacy content, or an available scaffold-repair command.
+// Thread views separate repository graph health from projection health, explain
+// completed inconsistencies with stable codes, and hoist list-level graph
+// diagnostics. Post-commit Thread creation failures carry the same mutation
+// receipt in the error envelope.
+// 1.55: eligibility now admits both queued (`next-up`) and candidate
+// (`ready-to-start`) work when the authoritative graph is healthy and the gate
+// is clear. Thread frontier and task list --unblocked share that derivation;
+// lifecycle refusal payloads allow dependency override only for blocked gates.
+// 1.56: guarded existing-Thread membership and lifecycle mutations add atomic
+// member outcome receipts, before/after projections, cancel/complete/reopen
+// semantics, typed policy failures, and committed recovery. Task lifecycle
+// receipts now name every Thread projection changed by the transition.
 // 1.57: `thread compose` and `thread apply` add materialized-plan and resumable
 // operation-receipt envelopes; apply failures may carry `thread_apply` recovery
 // detail in the standard error envelope.
@@ -267,7 +268,12 @@ import (
 // 1.65: bounded `thread graph` projections may carry `scope`, identifying the
 // focal task, hop depth, shown/hidden counts, and exact directed boundary edges.
 // Full graph and `thread plan` projections omit it.
-const SchemaVersion = "1.65"
+// 1.66: projected list JSON accepts canonical wire selectors (`updated_at`,
+// `open_findings`) and uses raw values rather than table display fallbacks. The
+// former `updated` / `open` selectors and their projected keys remain available
+// as compatibility aliases.
+// Schema descriptions reference the published finding/criterion vocabularies.
+const SchemaVersion = "1.66"
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

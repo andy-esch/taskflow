@@ -104,7 +104,7 @@ type CriterionJSON struct {
 	// or no longer applicable — the ambiguity the vocabulary exists to remove, reintroduced
 	// at the machine boundary. Schema 1.46.
 	State  string `json:"state,omitempty" jsonschema:"description=disposition beyond the checkbox — one of criterion_states in the schema contract; absent for a plain met/not-met criterion"`
-	Reason string `json:"reason,omitempty" jsonschema:"description=why the criterion is deferred/wontfix/n-a — required for those states"`
+	Reason string `json:"reason,omitempty" jsonschema:"description=why the criterion carries its state — required for every criterion_states value"`
 	// TrackedBy is the destination task id of a `tracked` criterion. It is a field
 	// rather than part of Reason because the point of `tracked` is that the work went
 	// somewhere followable: held as prose, nothing resolves it and nothing notices when
@@ -248,7 +248,7 @@ type FindingJSON struct {
 	Bucket           string `json:"bucket" jsonschema:"description=the audit's bucket — open | closed | deferred"`
 	Code             string `json:"code" jsonschema:"description=finding code within the audit (H1/M2/S3…)"`
 	Title            string `json:"title" jsonschema:"description=finding title"`
-	Status           string `json:"status" jsonschema:"description=open | in-progress | fixed | tracked | deferred | superseded | wontfix"`
+	Status           string `json:"status" jsonschema:"description=one of finding_statuses in the schema contract"`
 	File             string `json:"file,omitempty" jsonschema:"description=file:line the finding refers to"`
 	Component        string `json:"component,omitempty" jsonschema:"description=component/subsystem"`
 	Effort           string `json:"effort,omitempty" jsonschema:"description=XS | S | M | L"`
