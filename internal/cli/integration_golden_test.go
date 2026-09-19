@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/userconfig"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // fixtureRepo is the committed, date-stable planning tree the golden snapshots run
@@ -121,4 +124,44 @@ func TestGolden_MachineContract(t *testing.T) {
 			assertGolden(t, tc.name, out)
 		})
 	}
+}
+
+type projectionSelectorContract struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Aliases     []string `json:"aliases,omitempty"`
+}
+
+func projectionSelectorContracts(specs []render.ColumnSpec) []projectionSelectorContract {
+	out := make([]projectionSelectorContract, len(specs))
+	for i, spec := range specs {
+		out[i] = projectionSelectorContract{Name: spec.Name, Description: spec.Desc, Aliases: spec.Aliases}
+	}
+	return out
+}
+
+// TestGolden_ProjectionContract keeps caller-selected JSON behavior inside the
+// same revision gate as typed envelopes. The static JSON Schema cannot describe
+// dynamic row keys, so this snapshot records their ordered selectors and aliases.
+func TestGolden_ProjectionContract(t *testing.T) {
+	contract := struct {
+		SchemaVersion string                       `json:"schema_version"`
+		Task          []projectionSelectorContract `json:"task"`
+		Epic          []projectionSelectorContract `json:"epic"`
+		Finding       []projectionSelectorContract `json:"finding"`
+		Research      []projectionSelectorContract `json:"research"`
+		Audit         []projectionSelectorContract `json:"audit"`
+	}{
+		SchemaVersion: wire.SchemaVersion,
+		Task:          projectionSelectorContracts(render.Specs(render.TaskColumns())),
+		Epic:          projectionSelectorContracts(render.Specs(render.EpicColumns())),
+		Finding:       projectionSelectorContracts(render.Specs(render.FindingColumns())),
+		Research:      projectionSelectorContracts(render.Specs(render.ResearchColumns())),
+		Audit:         projectionSelectorContracts(render.Specs(render.AuditColumns())),
+	}
+	b, err := json.MarshalIndent(contract, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertGolden(t, "projection_contract_json", string(append(b, '\n')))
 }

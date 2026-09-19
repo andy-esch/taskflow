@@ -507,7 +507,10 @@ adapter capabilities rather than leaked persistence.
   are testable in-process (see `internal/cli/task_test.go`).
 - **Render is separate from logic**: commands call the service, then
   `render.TasksHuman`/`TasksJSON`. `--json` is a global flag; JSON carries a
-  semver `schema_version` and never emits ANSI.
+  monotonic `schema_version` and never emits ANSI. ADR-0008 governs that one
+  cross-envelope revision: it covers typed envelopes and dynamic projections,
+  is additive by default, and is explicitly **not** SemVer. The generated JSON
+  Schema describes only the typed envelopes and has a revision-qualified `$id`.
 - **The core never touches the fs or cobra.**
 - **Ports live with their consumer.** `core.ConfigurationStore` carries neutral
   configuration entities and is implemented by `configstore.FS`; CLI, focused TUI,
@@ -735,8 +738,21 @@ The CLI also has **golden snapshots** of the byte-stable machine contract (the
 `internal/cli/testdata/golden/`, run in-process against the committed
 `testdata/planning/` fixture; regenerate them with `go test ./internal/cli
 -update` (the `-update` flag is cli-package-scoped, so target that package, not
-`./...`). The single subprocess smoke layer (real binary, exit codes, lifecycle)
-lives in `cmd/tskflwctl/main_test.go`. `just test` + `just lint`.
+`./...`). That updater refuses to bless changed or new JSON snapshots at an
+unchanged machine-contract revision. Advance and classify `wire.SchemaVersion`
+first; the successful update then advances the committed revision marker. The
+projection-contract golden covers the dynamic selector/alias registries that the
+static JSON Schema cannot describe. The single subprocess smoke layer (real binary,
+exit codes, lifecycle) lives in `cmd/tskflwctl/main_test.go`. `just test` + `just
+lint`.
+
+Every machine-contract revision beginning with 1.68 is classified `ADDITIVE` or
+`NOT ADDITIVE` beside `wire.SchemaVersion`; a focused test requires the marker
+and agreement with the policy published by `schema --json`. The generated schema
+constrains every registered envelope's `schema_version` to its exact revision in
+addition to carrying that revision in `$id`. See
+[ADR-0008](../planning/adrs/0008-use-monotonic-revisions-for-the-json-machine-contract.md)
+for what those labels promise and what the revision excludes.
 
 ## Status (2026-08-25)
 

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -24,6 +25,12 @@ func TestMain(m *testing.M) {
 		panic("pin config home: " + err.Error())
 	}
 	code := m.Run()
+	if code == 0 && *updateGolden {
+		if err := finalizeGoldenRevision(); err != nil {
+			fmt.Fprintln(os.Stderr, "finalize machine-contract golden revision:", err)
+			code = 1
+		}
+	}
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
 }

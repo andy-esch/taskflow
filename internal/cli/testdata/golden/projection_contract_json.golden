@@ -1,0 +1,178 @@
+{
+  "schema_version": "1.68",
+  "task": [
+    {
+      "name": "slug",
+      "description": "task slug"
+    },
+    {
+      "name": "status",
+      "description": "lifecycle status"
+    },
+    {
+      "name": "tier",
+      "description": "priority tier 1-5"
+    },
+    {
+      "name": "priority",
+      "description": "high|medium|low"
+    },
+    {
+      "name": "epic",
+      "description": "parent epic id"
+    },
+    {
+      "name": "updated_at",
+      "description": "last-updated date",
+      "aliases": [
+        "updated"
+      ]
+    },
+    {
+      "name": "description",
+      "description": "one-line summary"
+    },
+    {
+      "name": "revisit_at",
+      "description": "snooze-until date (deferred tasks)"
+    },
+    {
+      "name": "id",
+      "description": "stable task identifier"
+    }
+  ],
+  "epic": [
+    {
+      "name": "id",
+      "description": "epic identifier"
+    },
+    {
+      "name": "status",
+      "description": "epic status"
+    },
+    {
+      "name": "priority",
+      "description": "high|medium|low"
+    },
+    {
+      "name": "done",
+      "description": "completed task count"
+    },
+    {
+      "name": "total",
+      "description": "total task count"
+    },
+    {
+      "name": "description",
+      "description": "one-line summary"
+    },
+    {
+      "name": "percent",
+      "description": "rollup % complete"
+    },
+    {
+      "name": "deprecated",
+      "description": "withdrawn (excluded) task count"
+    }
+  ],
+  "finding": [
+    {
+      "name": "ref",
+      "description": "addressable id: audit:code"
+    },
+    {
+      "name": "code",
+      "description": "finding code (H1/M2/…)"
+    },
+    {
+      "name": "audit",
+      "description": "audit slug"
+    },
+    {
+      "name": "status",
+      "description": "finding status"
+    },
+    {
+      "name": "effort",
+      "description": "XS|S|M|L"
+    },
+    {
+      "name": "urgency",
+      "description": "acute|soon|eventually"
+    },
+    {
+      "name": "component",
+      "description": "component"
+    },
+    {
+      "name": "file",
+      "description": "file:line"
+    },
+    {
+      "name": "title",
+      "description": "finding title"
+    }
+  ],
+  "research": [
+    {
+      "name": "slug",
+      "description": "research identifier"
+    },
+    {
+      "name": "created",
+      "description": "date the research was done"
+    },
+    {
+      "name": "description",
+      "description": "one-line summary"
+    },
+    {
+      "name": "tags",
+      "description": "topical tags"
+    },
+    {
+      "name": "updated_at",
+      "description": "last-updated date",
+      "aliases": [
+        "updated"
+      ]
+    },
+    {
+      "name": "id",
+      "description": "stable identifier"
+    }
+  ],
+  "audit": [
+    {
+      "name": "slug",
+      "description": "audit slug"
+    },
+    {
+      "name": "bucket",
+      "description": "open|closed|deferred"
+    },
+    {
+      "name": "area",
+      "description": "area under audit"
+    },
+    {
+      "name": "date",
+      "description": "audit date"
+    },
+    {
+      "name": "findings",
+      "description": "total findings"
+    },
+    {
+      "name": "open_findings",
+      "description": "open findings",
+      "aliases": [
+        "open"
+      ]
+    },
+    {
+      "name": "id",
+      "description": "stable audit identifier"
+    }
+  ]
+}
