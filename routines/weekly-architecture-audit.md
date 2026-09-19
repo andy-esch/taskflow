@@ -349,14 +349,15 @@ in the repo today.)
       idempotent repair tooling.
 
   machine-contract
-    Governing ADRs: any ADR on the JSON contract / agent ergonomics; plus the
-      `SchemaVersion` changelog in internal/wire/wire.go, which is the de-facto
-      compatibility record.
+    Governing ADRs: ADR-0008 (monotonic JSON contract revision and agent-facing
+      obligations), plus the classified `SchemaVersion` changelog in
+      internal/wire/wire.go as the executable compatibility record.
     Surface: internal/wire/ (all of it), internal/cli/render/,
       internal/cli/testdata/golden/, docs/cli/, the `schema` command
       (internal/cli/schema*.go), cmd/tskflwctl exit codes
-    Look for: whether schema_version bumps track *semantic* change or only shape
-      change; whether reflected `jsonschema:"description=…"` strings still
+    Look for: whether each schema_version bump's ADDITIVE / NOT ADDITIVE label
+      truthfully tracks semantic as well as shape change; whether reflected
+      `jsonschema:"description=…"` strings still
       describe the real predicate; envelope consistency across commands
       (does every one carry workspace, schema_version, the same error shape);
       whether `--json -c` projections and full `--json` can disagree; exit-code

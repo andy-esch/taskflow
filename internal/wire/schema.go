@@ -26,14 +26,51 @@ type SchemaExitCode struct {
 	Name string `json:"name"`
 }
 
+// SchemaRevisionPolicy makes ADR-0008's compatibility rules discoverable to a
+// machine consumer without requiring access to source comments or planning docs.
+type SchemaRevisionPolicy struct {
+	Scheme                 string `json:"scheme"`
+	Scope                  string `json:"scope"`
+	DefaultCompatibility   string `json:"default_compatibility"`
+	CurrentCompatibility   string `json:"current_compatibility"`
+	ClassifiedSince        string `json:"classified_since"`
+	ReaderExpectation      string `json:"reader_expectation"`
+	GeneratedJSONSchemaFor string `json:"generated_json_schema_for"`
+	JSONSchemaValidation   string `json:"json_schema_validation"`
+}
+
+// CurrentSchemaRevisionPolicy returns the policy for the running binary. Keep
+// its constants beside SchemaVersion so one changelog test can guard them.
+func CurrentSchemaRevisionPolicy() SchemaRevisionPolicy {
+	return SchemaRevisionPolicy{
+		Scheme:                 SchemaRevisionScheme,
+		Scope:                  SchemaRevisionScope,
+		DefaultCompatibility:   SchemaRevisionCompatibilityDefault,
+		CurrentCompatibility:   SchemaRevisionCompatibility,
+		ClassifiedSince:        SchemaRevisionClassificationSince,
+		ReaderExpectation:      SchemaRevisionReaderExpectation,
+		GeneratedJSONSchemaFor: JSONSchemaScope,
+		JSONSchemaValidation:   JSONSchemaValidationMode,
+	}
+}
+
+// NormalizeSchemaContract stamps wire-owned metadata onto an assembled schema
+// contract. Primary adapters supply the domain registries below, but they must
+// not be able to omit or contradict the revision policy of the running binary.
+func NormalizeSchemaContract(c SchemaContract) SchemaContract {
+	c.RevisionPolicy = CurrentSchemaRevisionPolicy()
+	return c
+}
+
 // SchemaContract is the global machine contract (`tskflwctl schema`): everything
 // an agent needs to drive the tool without parsing --help prose.
 type SchemaContract struct {
-	Statuses        []SchemaStatus `json:"statuses"`
-	EpicStatuses    []string       `json:"epic_statuses"`
-	ThreadStatuses  []string       `json:"thread_statuses"`
-	AuditBuckets    []string       `json:"audit_buckets"`
-	FindingStatuses []string       `json:"finding_statuses"`
+	RevisionPolicy  SchemaRevisionPolicy `json:"revision_policy"`
+	Statuses        []SchemaStatus       `json:"statuses"`
+	EpicStatuses    []string             `json:"epic_statuses"`
+	ThreadStatuses  []string             `json:"thread_statuses"`
+	AuditBuckets    []string             `json:"audit_buckets"`
+	FindingStatuses []string             `json:"finding_statuses"`
 	// CriterionStates are the non-binary acceptance-criterion states — the words legal as a
 	// `· **<state>:** <reason>` suffix beside a checkbox. Published for the same reason
 	// finding_statuses is: `CriterionJSON.state` has carried one of these since 1.46, and

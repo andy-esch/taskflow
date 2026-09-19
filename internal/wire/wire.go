@@ -18,10 +18,12 @@ import (
 	"io"
 )
 
-// SchemaVersion is the semver of the --json payloads — ONE version for the
-// whole CLI output schema, not per envelope (decided 2026-06-12). Adding a
-// field bumps the minor; renaming/removing bumps the major. Key naming rule:
-// JSON keys match the frontmatter keys exactly (`created`, `updated_at`).
+// SchemaVersion is the monotonic revision of ALL machine JSON behavior — typed
+// envelopes and caller-selected projections — with one revision for the whole
+// binary, not one per envelope. It is deliberately not SemVer; ADR-0008 defines
+// the compatibility policy and separates this revision from on-disk `schema:`.
+// Beginning at 1.68, every entry must declare ADDITIVE or NOT ADDITIVE. Key
+// naming rule: JSON keys match frontmatter keys exactly (`created`, `updated_at`).
 // Keep entries contiguous and ascending; append each new version at the bottom.
 // 1.1: every CLI-settable field round-trips (effort, autonomy_level), and the
 // misfiled signal (previously human-output-only ⚠) is machine-readable.
@@ -278,7 +280,35 @@ import (
 // and CSV layouts; slug remains the first, human-facing `-q` / `-o name` handle.
 // Full typed entity envelopes retain their existing fields and advance only the
 // shared schema_version.
-const SchemaVersion = "1.67"
+// 1.68: ADDITIVE — `schema --json` publishes the monotonic revision policy and
+// current compatibility classification. The generated Draft 2020-12 schema has
+// a revision-qualified `$id` plus root revision/classification annotations.
+const SchemaVersion = "1.68"
+
+const (
+	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.
+	SchemaRevisionScheme = "monotonic-revision"
+	// SchemaRevisionScope includes typed envelopes and dynamic projections.
+	SchemaRevisionScope = "all-json-output"
+	// JSONSchemaScope is narrower because caller-selected projection rows cannot
+	// have one static shape.
+	JSONSchemaScope = "typed-envelopes"
+	// SchemaRevisionClassificationSince is the first revision whose changelog
+	// classification is required and test-enforced.
+	SchemaRevisionClassificationSince = "1.68"
+	// SchemaRevisionCompatibility classifies the current revision. It must agree
+	// with the current changelog entry; wire_changelog_test.go enforces that.
+	SchemaRevisionCompatibility = "additive"
+	// SchemaRevisionCompatibilityDefault is policy, not a guarantee: every
+	// revision still declares its own classification.
+	SchemaRevisionCompatibilityDefault = "additive"
+	// SchemaRevisionReaderExpectation is what makes an additive object-field
+	// change compatible for a semantic JSON consumer.
+	SchemaRevisionReaderExpectation = "ignore-unknown-object-fields"
+	// JSONSchemaValidationMode distinguishes exact schema validation from the
+	// forward-compatible behavior expected of a tolerant decoder.
+	JSONSchemaValidationMode = "exact-revision"
+)
 
 // EncodeJSON writes the payload as compact (un-indented) JSON with a single
 // trailing newline. Machine output: pretty-printing is pure token cost for a

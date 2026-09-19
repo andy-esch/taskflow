@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/andy-esch/taskflow/internal/wire/json-envelopes",
+  "$id": "https://github.com/andy-esch/taskflow/internal/wire/json-envelopes/1.68",
   "$ref": "#/$defs/jsonEnvelopes",
   "$defs": {
     "ACJSON": {
@@ -29,7 +29,8 @@
     "AcceptanceEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "slug": {
           "type": "string"
@@ -53,7 +54,8 @@
     "AuditInfoEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "audit_info": {
           "$ref": "#/$defs/AuditInfoJSON"
@@ -167,7 +169,8 @@
     "AuditMutationEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -196,7 +199,8 @@
     "AuditShowEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "audit": {
           "$ref": "#/$defs/AuditJSON"
@@ -217,7 +221,8 @@
     "AuditsEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "audits": {
           "items": {
@@ -263,7 +268,8 @@
     "BoardEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "columns": {
           "items": {
@@ -407,7 +413,8 @@
     "ConfigEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "repository": {
           "$ref": "#/$defs/ConfigRepositoryJSON"
@@ -432,7 +439,8 @@
     "ConfigMigrationEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -640,7 +648,8 @@
     "CreatedEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -758,7 +767,8 @@
     "DependencyMutationEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "operation": {
           "type": "string"
@@ -896,7 +906,8 @@
     "DoctorEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "root": {
           "type": "string"
@@ -1099,7 +1110,8 @@
     "EpicMutationEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -1125,7 +1137,8 @@
     "EpicShowEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "epic": {
           "$ref": "#/$defs/EpicMetaJSON"
@@ -1153,7 +1166,8 @@
     "EpicsEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "epics": {
           "items": {
@@ -1179,7 +1193,8 @@
     "ErrorEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "error": {
           "$ref": "#/$defs/ErrorItem"
@@ -1371,7 +1386,8 @@
     "FindingsEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "findings": {
           "items": {
@@ -1471,7 +1487,8 @@
     "FixEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -1617,7 +1634,8 @@
     "InitEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -1818,7 +1836,8 @@
     "LintEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "unreadable": {
           "items": {
@@ -1895,7 +1914,8 @@
     "MovesEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -1924,7 +1944,8 @@
     "PathEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "path": {
           "type": "string",
@@ -1979,7 +2000,8 @@
     "ResearchListEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "research": {
           "items": {
@@ -2005,7 +2027,8 @@
     "ResearchMutationEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -2034,7 +2057,8 @@
     "ResearchShowEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "research": {
           "$ref": "#/$defs/ResearchJSON"
@@ -2055,7 +2079,11 @@
     "SchemaEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
+        },
+        "revision_policy": {
+          "$ref": "#/$defs/SchemaRevisionPolicy"
         },
         "statuses": {
           "items": {
@@ -2130,6 +2158,7 @@
       "type": "object",
       "required": [
         "schema_version",
+        "revision_policy",
         "statuses",
         "epic_statuses",
         "thread_statuses",
@@ -2181,7 +2210,8 @@
     "SchemaKindEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "kind": {
           "type": "string"
@@ -2226,6 +2256,47 @@
         "templates"
       ],
       "description": "SchemaKindEnvelope is `schema \u003ckind\u003e --json` (per-kind authoring guidance)."
+    },
+    "SchemaRevisionPolicy": {
+      "properties": {
+        "scheme": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "default_compatibility": {
+          "type": "string"
+        },
+        "current_compatibility": {
+          "type": "string"
+        },
+        "classified_since": {
+          "type": "string"
+        },
+        "reader_expectation": {
+          "type": "string"
+        },
+        "generated_json_schema_for": {
+          "type": "string"
+        },
+        "json_schema_validation": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "scheme",
+        "scope",
+        "default_compatibility",
+        "current_compatibility",
+        "classified_since",
+        "reader_expectation",
+        "generated_json_schema_for",
+        "json_schema_validation"
+      ],
+      "description": "SchemaRevisionPolicy makes ADR-0008's compatibility rules discoverable to a machine consumer without requiring access to source comments or planning docs."
     },
     "SchemaStatus": {
       "properties": {
@@ -2318,7 +2389,8 @@
     "SpaceMutationEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -2376,7 +2448,8 @@
     "SpacesEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "spaces": {
           "items": {
@@ -2396,7 +2469,8 @@
     "StatusAllEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "spaces": {
           "items": {
@@ -2440,7 +2514,8 @@
     "SummaryEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "counts": {
           "items": {
@@ -2590,7 +2665,8 @@
     "TaskBlockersEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "task": {
           "$ref": "#/$defs/GraphTaskJSON"
@@ -2784,7 +2860,8 @@
     "TaskGraphRepairEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "changed": {
           "type": "boolean"
@@ -3124,7 +3201,8 @@
     "TaskInfoEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "task_info": {
           "$ref": "#/$defs/TaskInfoJSON"
@@ -3381,7 +3459,8 @@
     "TaskMutationEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -3410,7 +3489,8 @@
     "TaskRenameEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "task_id": {
           "type": "string",
@@ -3582,7 +3662,8 @@
     "TaskShowEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "task": {
           "$ref": "#/$defs/TaskJSON"
@@ -3631,7 +3712,8 @@
     "TaskUnblocksEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "task": {
           "$ref": "#/$defs/GraphTaskJSON"
@@ -3677,7 +3759,8 @@
     "TasksEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "tasks": {
           "items": {
@@ -3724,7 +3807,8 @@
     "TemplateShowEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "template": {
           "$ref": "#/$defs/TemplateInfo"
@@ -3745,7 +3829,8 @@
     "TemplatesEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "templates": {
           "items": {
@@ -3788,7 +3873,8 @@
     "ThemePreviewEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "name": {
           "type": "string"
@@ -3841,7 +3927,8 @@
     "ThemesEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "themes": {
           "items": {
@@ -3861,7 +3948,8 @@
     "ThreadApplyComposeEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "dry_run": {
           "type": "boolean"
@@ -3911,7 +3999,8 @@
     "ThreadApplyEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "thread_id": {
           "type": "string"
@@ -4153,7 +4242,8 @@
     "ThreadFrontierEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "view": {
           "$ref": "#/$defs/ThreadViewJSON"
@@ -4187,7 +4277,8 @@
     "ThreadGraphEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "projection": {
           "$ref": "#/$defs/ThreadGraphProjectionJSON"
@@ -4442,7 +4533,8 @@
     "ThreadMutationEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "thread": {
           "$ref": "#/$defs/ThreadJSON"
@@ -4543,7 +4635,8 @@
     "ThreadPlanEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "projection": {
           "$ref": "#/$defs/ThreadGraphProjectionJSON"
@@ -4669,7 +4762,8 @@
     "ThreadShowEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "view": {
           "$ref": "#/$defs/ThreadViewJSON"
@@ -4712,7 +4806,8 @@
     "ThreadUpdateEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "operation": {
           "type": "string",
@@ -4899,7 +4994,8 @@
     "ThreadsEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "graph_health": {
           "type": "string",
@@ -4938,7 +5034,8 @@
     "VersionEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "version": {
           "type": "string"
@@ -4955,7 +5052,8 @@
     "WorkspaceEnvelope": {
       "properties": {
         "schema_version": {
-          "type": "string"
+          "type": "string",
+          "const": "1.68"
         },
         "workspace": {
           "$ref": "#/$defs/WorkspaceJSON"
@@ -5227,6 +5325,9 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.67)",
-  "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition."
+  "title": "tskflwctl --json output (schema_version 1.68)",
+  "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition.",
+  "x-taskflow-revision-compatibility": "additive",
+  "x-taskflow-revision-scheme": "monotonic-revision",
+  "x-taskflow-schema-version": "1.68"
 }

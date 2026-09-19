@@ -26,6 +26,9 @@ there is no status/bucket
 directory (`threads/<id>-<slug>.md` stores metadata and task-ID membership only), epics
 stay `NN-<slug>`, and research has no status at all). The TUI never touches the store —
 it reads through `core.Service` as `tea.Cmd`s (no I/O in `Update`/`View`).
+`schema_version` is [ADR-0008](planning/adrs/0008-use-monotonic-revisions-for-the-json-machine-contract.md)'s
+monotonic machine-contract revision, not SemVer;
+every revision from 1.68 declares `ADDITIVE` or `NOT ADDITIVE` beside the constant.
 
 ## Planning workflow — use `tskflwctl`, not `pm`
 

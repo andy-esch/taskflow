@@ -3,6 +3,8 @@ package wire
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
+	"reflect"
 
 	"github.com/invopop/jsonschema"
 
@@ -999,6 +1001,7 @@ type SchemaEnvelope struct {
 
 // ToSchemaEnvelope builds the `schema --json` global-contract envelope value.
 func ToSchemaEnvelope(c SchemaContract) SchemaEnvelope {
+	c = NormalizeSchemaContract(c)
 	return SchemaEnvelope{SchemaVersion: SchemaVersion, SchemaContract: c}
 }
 
@@ -1212,8 +1215,41 @@ func JSONSchema() ([]byte, error) {
 	}
 	r.CommentMap = comments
 	s := r.Reflect(&jsonEnvelopes{})
+	if err := constrainEnvelopeSchemaVersions(s); err != nil {
+		return nil, err
+	}
+	s.ID = jsonschema.ID("https://github.com/andy-esch/taskflow/internal/wire/json-envelopes/" + SchemaVersion)
 	s.Title = "tskflwctl --json output (schema_version " + SchemaVersion + ")"
 	s.Description = "Each property of the root names a --json envelope and references its definition in $defs; " +
 		"validate a command's --json output against the matching definition."
+	s.Extras = map[string]any{
+		"x-taskflow-schema-version":         SchemaVersion,
+		"x-taskflow-revision-scheme":        SchemaRevisionScheme,
+		"x-taskflow-revision-compatibility": SchemaRevisionCompatibility,
+	}
 	return json.MarshalIndent(s, "", "  ")
+}
+
+// constrainEnvelopeSchemaVersions makes "exact-revision" executable rather
+// than merely descriptive. The document's revision-qualified $id identifies
+// the schema resource; each envelope's const additionally rejects a payload
+// that was paired with the wrong cached revision of that resource.
+func constrainEnvelopeSchemaVersions(s *jsonschema.Schema) error {
+	registry := reflect.TypeOf(jsonEnvelopes{})
+	for i := range registry.NumField() {
+		name := registry.Field(i).Type.Name()
+		definition, ok := s.Definitions[name]
+		if !ok {
+			return fmt.Errorf("generated JSON schema has no definition for registered envelope %s", name)
+		}
+		if definition.Properties == nil {
+			return fmt.Errorf("generated JSON schema definition %s has no properties", name)
+		}
+		version, ok := definition.Properties.Get("schema_version")
+		if !ok {
+			return fmt.Errorf("generated JSON schema definition %s has no schema_version property", name)
+		}
+		version.Const = SchemaVersion
+	}
+	return nil
 }
