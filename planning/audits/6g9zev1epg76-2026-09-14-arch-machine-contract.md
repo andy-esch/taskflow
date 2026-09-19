@@ -4,7 +4,7 @@ id: 6g9zev1epg76
 bucket: open
 area: arch-machine-contract
 date: "2026-09-14"
-updated_at: "2026-09-14"
+updated_at: "2026-09-19"
 ---
 
 # Weekly Architecture Audit: machine-contract — 2026-09-14
@@ -303,7 +303,7 @@ issue one `task info` per row. See M2.
 
 ## Findings
 
-#### H1. The `--json` contract's stated versioning rule and its practiced rule have diverged, and neither is recorded as a decision  · **Status:** open
+#### H1. The `--json` contract's stated versioning rule and its practiced rule have diverged, and neither is recorded as a decision  · **Status:** fixed 2026-09-19
 
 **File:** `internal/wire/wire.go:23` (rule) · `internal/wire/wire.go:94-98, 124-128, 192-194, 251-253` (the exceptions) | **Component:** wire / machine contract
 **Effort:** S · **Urgency:** soon
@@ -382,6 +382,11 @@ version-range pinning. Human decision — nothing was edited.
 **Follow-up:** if the decision goes the other way (honour semver and ship a
 2.0), that is a much larger change with consumer-migration consequences and
 belongs in its own task, not in this ADR.
+
+**Resolution:** ADR-0008 now defines schema_version as one monotonic all-JSON
+revision rather than SemVer. Revision 1.68 publishes the policy, requires
+ADDITIVE or NOT ADDITIVE changelog classifications from that boundary, and tests
+the declaration against the executable constants.
 
 #### M1. The published `exit_codes` contract omits every code an agent is most likely to actually receive  · **Status:** open
 
@@ -559,7 +564,7 @@ starting set: `slug`, `status`, `done`, `total`, `drained`, `frontier`,
 `description`, `id`. Use `contractColumn` for any column whose canonical wire
 key differs from its display header, per the 1.66 convention.
 
-#### L1. The published JSON Schema's `$id` carries no version  · **Status:** open
+#### L1. The published JSON Schema's `$id` carries no version  · **Status:** fixed 2026-09-19
 
 **File:** `internal/wire/envelopes.go:1205-1219` | **Component:** wire — JSON Schema generation
 **Effort:** XS · **Urgency:** eventually
@@ -595,6 +600,10 @@ means served schemas cannot be cached or content-addressed correctly.
 `schema_version` annotation at the schema root. Both are additive to the schema
 document. Fold into whatever H1's ADR decides about how the version is
 published, rather than fixing separately.
+
+**Resolution:** The generated Draft 2020-12 schema now has a revision-qualified
+$id and root annotations for revision, scheme, and compatibility; focused tests
+and machine-contract goldens pin them.
 
 ## What audited clean
 
