@@ -39,7 +39,13 @@ func SchemaJSON(w io.Writer, c SchemaContract) error {
 
 // SchemaHuman renders the global contract as readable sections.
 func SchemaHuman(w io.Writer, st Style, c SchemaContract) error {
+	c = wire.NormalizeSchemaContract(c)
 	fmt.Fprintf(w, "%s %s\n\n", st.Bold("tskflwctl schema"), st.Dim("v"+SchemaVersion))
+	fmt.Fprintf(w, "%s: %s · %s · classified since %s\n",
+		st.Bold("JSON revision"), c.RevisionPolicy.Scheme,
+		c.RevisionPolicy.CurrentCompatibility, c.RevisionPolicy.ClassifiedSince)
+	fmt.Fprintf(w, "%s: %s · generated schema: %s\n\n",
+		st.Bold("Scope"), c.RevisionPolicy.Scope, c.RevisionPolicy.GeneratedJSONSchemaFor)
 	fmt.Fprintf(w, "%s:\n", st.Bold("Task statuses"))
 	for _, s := range c.Statuses {
 		active := ""

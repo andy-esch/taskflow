@@ -378,7 +378,9 @@ Projected JSON uses raw field values and avoids display-only fallbacks. Canonica
 selectors emit canonical field keys; the legacy `updated` and `open` selectors remain
 accepted and retain their legacy projected keys for compatibility. Formats
 and canonical column names are shell-completable. `-o table` is a documented contract under
-the one `schema_version` (a column add/reorder is a schema bump), and always
+the one monotonic `schema_version` ([ADR-0008](planning/adrs/0008-use-monotonic-revisions-for-the-json-machine-contract.md);
+it is not SemVer), so a column
+add/reorder advances and classifies the contract revision. It always
 emits the header row — even with zero results — so a consumer gets a stable
 schema and detects "no rows" by line count. Recipes:
 

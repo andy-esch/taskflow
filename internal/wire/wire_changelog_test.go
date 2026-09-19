@@ -12,9 +12,17 @@ import (
 	"testing"
 )
 
-var schemaChangelogEntry = regexp.MustCompile(`(?m)^// (\d+)\.(\d+):`)
+var (
+	schemaChangelogEntry                   = regexp.MustCompile(`(?m)^// (\d+)\.(\d+):`)
+	schemaChangelogClassification          = regexp.MustCompile(`(?m)^// (\d+)\.(\d+): ([A-Z][A-Z ]*) —`)
+	schemaChangelogClassificationCandidate = regexp.MustCompile(`(?m)^// (\d+)\.(\d+): ([A-Z][A-Z ]*)(?:\s+.*)?$`)
+)
 
 type schemaRelease struct{ major, minor int }
+
+func (r schemaRelease) atOrAfter(other schemaRelease) bool {
+	return r.major > other.major || (r.major == other.major && r.minor >= other.minor)
+}
 
 func parseSchemaRelease(s string) (schemaRelease, error) {
 	parts := strings.Split(s, ".")
@@ -57,9 +65,70 @@ func validateSchemaChangelog(releases []schemaRelease, current schemaRelease) er
 	return nil
 }
 
-// TestSchemaVersionChangelogIsAscending makes the compatibility record usable
-// as a changelog: concurrent feature branches must append rather than inserting
-// a newer version above older entries.
+func validateSchemaClassifications(
+	releases []schemaRelease,
+	classifications map[schemaRelease]string,
+	since schemaRelease,
+	current schemaRelease,
+	currentCompatibility string,
+) error {
+	valid := map[string]bool{"ADDITIVE": true, "NOT ADDITIVE": true}
+	for _, release := range releases {
+		if !release.atOrAfter(since) {
+			continue
+		}
+		classification, ok := classifications[release]
+		if !ok {
+			return fmt.Errorf("SchemaVersion changelog %d.%d has no compatibility classification", release.major, release.minor)
+		}
+		if !valid[classification] {
+			return fmt.Errorf("SchemaVersion changelog %d.%d has unknown compatibility classification %q", release.major, release.minor, classification)
+		}
+	}
+
+	wantCurrent := strings.ToUpper(strings.ReplaceAll(currentCompatibility, "-", " "))
+	if got := classifications[current]; got != wantCurrent {
+		return fmt.Errorf("SchemaRevisionCompatibility = %q, current changelog classification = %q", currentCompatibility, got)
+	}
+	return nil
+}
+
+func parseSchemaClassifications(changelog []byte) (map[schemaRelease]string, error) {
+	classifications := make(map[schemaRelease]string)
+	for _, match := range schemaChangelogClassification.FindAllSubmatch(changelog, -1) {
+		major, err := strconv.Atoi(string(match[1]))
+		if err != nil {
+			return nil, err
+		}
+		minor, err := strconv.Atoi(string(match[2]))
+		if err != nil {
+			return nil, err
+		}
+		classifications[schemaRelease{major, minor}] = strings.TrimSpace(string(match[3]))
+	}
+	for _, match := range schemaChangelogClassificationCandidate.FindAllSubmatch(changelog, -1) {
+		major, err := strconv.Atoi(string(match[1]))
+		if err != nil {
+			return nil, err
+		}
+		minor, err := strconv.Atoi(string(match[2]))
+		if err != nil {
+			return nil, err
+		}
+		release := schemaRelease{major, minor}
+		if _, ok := classifications[release]; !ok {
+			return nil, fmt.Errorf(
+				"SchemaVersion changelog %d.%d classification must use `ADDITIVE — description` or `NOT ADDITIVE — description` (with an em dash)",
+				major, minor,
+			)
+		}
+	}
+	return classifications, nil
+}
+
+// TestSchemaVersionChangelogIsAscending makes ADR-0008's compatibility record
+// executable: concurrent feature branches must append rather than insert, and
+// every revision from the policy boundary declares its compatibility.
 func TestSchemaVersionChangelogIsAscending(t *testing.T) {
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -77,7 +146,8 @@ func TestSchemaVersionChangelogIsAscending(t *testing.T) {
 	if end < 0 {
 		t.Fatal("find SchemaVersion declaration after changelog")
 	}
-	matches := schemaChangelogEntry.FindAllSubmatch(source[start:start+end], -1)
+	changelog := source[start : start+end]
+	matches := schemaChangelogEntry.FindAllSubmatch(changelog, -1)
 	releases := make([]schemaRelease, 0, len(matches))
 	for _, match := range matches {
 		major, err := strconv.Atoi(string(match[1]))
@@ -95,6 +165,18 @@ func TestSchemaVersionChangelogIsAscending(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := validateSchemaChangelog(releases, current); err != nil {
+		t.Fatal(err)
+	}
+
+	classifications, err := parseSchemaClassifications(changelog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	since, err := parseSchemaRelease(SchemaRevisionClassificationSince)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateSchemaClassifications(releases, classifications, since, current, SchemaRevisionCompatibility); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -121,5 +203,67 @@ func TestValidateSchemaChangelogRejectsMissingReleases(t *testing.T) {
 				t.Fatal("invalid changelog accepted")
 			}
 		})
+	}
+}
+
+func TestValidateSchemaClassifications(t *testing.T) {
+	r167 := schemaRelease{1, 67}
+	r168 := schemaRelease{1, 68}
+	r169 := schemaRelease{1, 69}
+	releases := []schemaRelease{r167, r168, r169}
+
+	if err := validateSchemaClassifications(releases, map[schemaRelease]string{
+		r168: "ADDITIVE",
+		r169: "NOT ADDITIVE",
+	}, r168, r169, "not-additive"); err != nil {
+		t.Fatalf("valid classifications: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name            string
+		classifications map[schemaRelease]string
+		current         string
+	}{
+		{"missing", map[schemaRelease]string{r168: "ADDITIVE"}, "not-additive"},
+		{"unknown", map[schemaRelease]string{r168: "ADDITIVE", r169: "BREAKING"}, "not-additive"},
+		{"current mismatch", map[schemaRelease]string{r168: "ADDITIVE", r169: "NOT ADDITIVE"}, "additive"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateSchemaClassifications(releases, tc.classifications, r168, r169, tc.current); err == nil {
+				t.Fatal("invalid classifications accepted")
+			}
+		})
+	}
+}
+
+func TestParseSchemaClassificationsExplainsDelimiter(t *testing.T) {
+	_, err := parseSchemaClassifications([]byte("// 1.68: ADDITIVE - adds policy metadata\n"))
+	if err == nil || !strings.Contains(err.Error(), "with an em dash") {
+		t.Fatalf("ASCII delimiter should get an actionable diagnostic, got %v", err)
+	}
+}
+
+func TestSchemaRevisionPolicyBoundary(t *testing.T) {
+	if SchemaRevisionScheme != "monotonic-revision" {
+		t.Fatalf("ADR-0008 revision scheme changed to %q", SchemaRevisionScheme)
+	}
+	if SchemaRevisionClassificationSince != "1.68" {
+		t.Fatalf("ADR-0008 classification boundary changed to %q", SchemaRevisionClassificationSince)
+	}
+	if SchemaRevisionScope != "all-json-output" || JSONSchemaScope != "typed-envelopes" {
+		t.Fatalf("ADR-0008 scopes changed: revision=%q generated-schema=%q", SchemaRevisionScope, JSONSchemaScope)
+	}
+	if SchemaRevisionCompatibilityDefault != "additive" ||
+		SchemaRevisionReaderExpectation != "ignore-unknown-object-fields" ||
+		JSONSchemaValidationMode != "exact-revision" {
+		t.Fatalf("ADR-0008 reader policy changed: default=%q reader=%q validation=%q",
+			SchemaRevisionCompatibilityDefault, SchemaRevisionReaderExpectation, JSONSchemaValidationMode)
+	}
+	current, err := parseSchemaRelease(SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.major != 1 {
+		t.Fatalf("ADR-0008 reserves major revision movement for a superseding ADR; got %s", SchemaVersion)
 	}
 }

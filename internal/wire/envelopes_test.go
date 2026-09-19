@@ -2,6 +2,7 @@ package wire
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"reflect"
 	"testing"
@@ -16,6 +17,54 @@ import (
 // constructor's output (the same value render's *JSON funcs encode, and the value a
 // web handler would wrap) validates against the schema.
 func emit(w io.Writer, v any) error { return EncodeJSON(w, v) }
+
+func TestToSchemaEnvelopeStampsRevisionPolicy(t *testing.T) {
+	for _, input := range []SchemaRevisionPolicy{
+		{},
+		{Scheme: "stale", Scope: "contradictory"},
+	} {
+		envelope := ToSchemaEnvelope(SchemaContract{RevisionPolicy: input})
+		if envelope.RevisionPolicy != CurrentSchemaRevisionPolicy() {
+			t.Fatalf("schema envelope policy = %+v, want current wire policy", envelope.RevisionPolicy)
+		}
+	}
+}
+
+func TestJSONSchemaRejectsEnvelopeFromAnotherRevision(t *testing.T) {
+	schemaBytes, err := JSONSchema()
+	if err != nil {
+		t.Fatalf("JSONSchema: %v", err)
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaBytes))
+	if err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	id := doc.(map[string]any)["$id"].(string)
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource(id, doc); err != nil {
+		t.Fatalf("add resource: %v", err)
+	}
+	sch, err := c.Compile(id + "#/$defs/TaskShowEnvelope")
+	if err != nil {
+		t.Fatalf("compile task-show definition: %v", err)
+	}
+
+	payload, err := json.Marshal(ToTaskShowEnvelope(domain.Task{ID: "6g0000000001", Slug: "alpha"}, "# Alpha\n"))
+	if err != nil {
+		t.Fatalf("marshal task-show envelope: %v", err)
+	}
+	var instance map[string]any
+	if err := json.Unmarshal(payload, &instance); err != nil {
+		t.Fatalf("decode task-show envelope: %v", err)
+	}
+	if err := sch.Validate(instance); err != nil {
+		t.Fatalf("current revision should validate: %v", err)
+	}
+	instance["schema_version"] = "0.0"
+	if err := sch.Validate(instance); err == nil {
+		t.Fatal("exact-revision schema accepted an envelope declaring schema_version 0.0")
+	}
+}
 
 // TestJSONSchema_ValidatesRealOutput is the round-trip proof: the emitted schema
 // actually validates real --json output across a representative spread of

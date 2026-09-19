@@ -171,6 +171,7 @@
   "github.com/andy-esch/taskflow/internal/wire.SchemaExitCode": "SchemaExitCode is one exit code and its stable machine name (also the `code` in the --json error envelope).",
   "github.com/andy-esch/taskflow/internal/wire.SchemaField": "SchemaField is one known frontmatter field and its YAML storage type.",
   "github.com/andy-esch/taskflow/internal/wire.SchemaKindEnvelope": "SchemaKindEnvelope is `schema \u003ckind\u003e --json` (per-kind authoring guidance).",
+  "github.com/andy-esch/taskflow/internal/wire.SchemaRevisionPolicy": "SchemaRevisionPolicy makes ADR-0008's compatibility rules discoverable to a machine consumer without requiring access to source comments or planning docs.",
   "github.com/andy-esch/taskflow/internal/wire.SchemaStatus": "SchemaStatus is one task status and whether it is part of the working set.",
   "github.com/andy-esch/taskflow/internal/wire.SpaceEntry": "SpaceEntry is one registered entry point in `space list --json`.",
   "github.com/andy-esch/taskflow/internal/wire.SpaceEntry.Detail": "Detail explains a non-ok State in one line, so a caller need not re-derive it.",

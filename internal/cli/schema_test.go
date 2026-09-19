@@ -8,6 +8,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // TestSchema_RunsWithoutPlanningRepo pins the feature's reason to exist: an agent
@@ -27,14 +28,24 @@ func TestSchema_JSONSchema(t *testing.T) {
 	bare := t.TempDir()
 	out := runRoot(t, "-C", bare, "schema", "--json-schema")
 	var doc struct {
-		Schema string                     `json:"$schema"`
-		Defs   map[string]json.RawMessage `json:"$defs"`
+		Schema        string                     `json:"$schema"`
+		ID            string                     `json:"$id"`
+		Revision      string                     `json:"x-taskflow-schema-version"`
+		Scheme        string                     `json:"x-taskflow-revision-scheme"`
+		Compatibility string                     `json:"x-taskflow-revision-compatibility"`
+		Defs          map[string]json.RawMessage `json:"$defs"`
 	}
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
 		t.Fatalf("--json-schema output is not valid JSON: %v\n%s", err, out)
 	}
 	if !strings.Contains(doc.Schema, "2020-12") {
 		t.Errorf("$schema should be Draft 2020-12, got %q", doc.Schema)
+	}
+	if !strings.HasSuffix(doc.ID, "/"+wire.SchemaVersion) || doc.Revision != wire.SchemaVersion {
+		t.Errorf("schema identity should carry revision %q: id=%q annotation=%q", wire.SchemaVersion, doc.ID, doc.Revision)
+	}
+	if doc.Scheme != wire.SchemaRevisionScheme || doc.Compatibility != wire.SchemaRevisionCompatibility {
+		t.Errorf("schema revision policy drifted: scheme=%q compatibility=%q", doc.Scheme, doc.Compatibility)
 	}
 	for _, def := range []string{"TasksEnvelope", "TaskShowEnvelope", "SchemaEnvelope", "ErrorEnvelope"} {
 		if _, ok := doc.Defs[def]; !ok {
@@ -47,8 +58,18 @@ func TestSchemaContract_JSON(t *testing.T) {
 	root := freshRepo(t)
 	js := runRoot(t, "-C", root, "schema", "--json")
 	var c struct {
-		SchemaVersion string `json:"schema_version"`
-		Statuses      []struct {
+		SchemaVersion  string `json:"schema_version"`
+		RevisionPolicy struct {
+			Scheme                 string `json:"scheme"`
+			Scope                  string `json:"scope"`
+			DefaultCompatibility   string `json:"default_compatibility"`
+			CurrentCompatibility   string `json:"current_compatibility"`
+			ClassifiedSince        string `json:"classified_since"`
+			ReaderExpectation      string `json:"reader_expectation"`
+			GeneratedJSONSchemaFor string `json:"generated_json_schema_for"`
+			JSONSchemaValidation   string `json:"json_schema_validation"`
+		} `json:"revision_policy"`
+		Statuses []struct {
 			Value  string `json:"value"`
 			Active bool   `json:"active"`
 		} `json:"statuses"`
@@ -61,6 +82,16 @@ func TestSchemaContract_JSON(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(js), &c); err != nil {
 		t.Fatalf("schema --json invalid: %v\n%s", err, js)
+	}
+	if c.RevisionPolicy.Scheme != wire.SchemaRevisionScheme ||
+		c.RevisionPolicy.Scope != wire.SchemaRevisionScope ||
+		c.RevisionPolicy.DefaultCompatibility != wire.SchemaRevisionCompatibilityDefault ||
+		c.RevisionPolicy.CurrentCompatibility != wire.SchemaRevisionCompatibility ||
+		c.RevisionPolicy.ClassifiedSince != wire.SchemaRevisionClassificationSince ||
+		c.RevisionPolicy.ReaderExpectation != wire.SchemaRevisionReaderExpectation ||
+		c.RevisionPolicy.GeneratedJSONSchemaFor != wire.JSONSchemaScope ||
+		c.RevisionPolicy.JSONSchemaValidation != wire.JSONSchemaValidationMode {
+		t.Errorf("revision policy not derived from wire constants: %+v", c.RevisionPolicy)
 	}
 	// Statuses are derived from the domain set, carrying the active flag.
 	if len(c.Statuses) != len(domain.AllStatuses()) {
