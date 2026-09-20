@@ -32,8 +32,9 @@ func (s *FS) ListAuditsWithFindings() ([]core.AuditWithFindings, []domain.FilePr
 		return nil, nil, err
 	}
 	return scanDir(s.auditsDir, func(path string, content []byte) (core.AuditWithFindings, error) {
-		a, findings, nearMisses, err := parseAuditWithFindings(content, path)
-		return core.AuditWithFindings{Audit: a, Findings: findings, NearMisses: nearMisses}, err
+		a, findings, nearMisses, candidateIssues, err := parseAuditWithFindings(content, path)
+		return core.AuditWithFindings{Audit: a, Findings: findings, NearMisses: nearMisses,
+			CandidateIssues: candidateIssues}, err
 	})
 }
 
@@ -193,7 +194,7 @@ func (s *FS) resolveAudit(slug string) (string, error) {
 }
 
 func parseAudit(content []byte, path string) (domain.Audit, error) {
-	a, _, _, err := parseAuditWithFindings(content, path)
+	a, _, _, _, err := parseAuditWithFindings(content, path)
 	return a, err
 }
 
@@ -202,24 +203,24 @@ func parseAudit(content []byte, path string) (domain.Audit, error) {
 // sweep that needs them (Summary's rollup, lint) reuses this single pass instead
 // of re-reading the body. parseAudit is the wrapper for callers that just want the
 // audit + its tally.
-func parseAuditWithFindings(content []byte, path string) (domain.Audit, []domain.Finding, []domain.NearMissHeader, error) {
+func parseAuditWithFindings(content []byte, path string) (domain.Audit, []domain.Finding, []domain.NearMissHeader, []domain.Issue, error) {
 	base := filepath.Base(path)
 	fnID, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
 	if !ok {
 		reason, kind := entityNameProblem(base)
-		return domain.Audit{}, nil, nil, fmt.Errorf("%w: %q %s", kind, base, reason)
+		return domain.Audit{}, nil, nil, nil, fmt.Errorf("%w: %q %s", kind, base, reason)
 	}
 	fm, body, err := splitFrontmatterStrict(content)
 	if err != nil {
-		return domain.Audit{}, nil, nil, err
+		return domain.Audit{}, nil, nil, nil, err
 	}
 	if fm == nil {
-		return domain.Audit{}, nil, nil, missingFrontmatterErr("audit", "area, date; see `tskflwctl schema audit`")
+		return domain.Audit{}, nil, nil, nil, missingFrontmatterErr("audit", "area, date; see `tskflwctl schema audit`")
 	}
 	var a domain.Audit
 	if len(fm) > 0 {
 		if err := yaml.Unmarshal(fm, &a); err != nil {
-			return domain.Audit{}, nil, nil, fmt.Errorf("%w: %s", errBadFrontmatter, frontmatterError(fm, err))
+			return domain.Audit{}, nil, nil, nil, fmt.Errorf("%w: %s", errBadFrontmatter, frontmatterError(fm, err))
 		}
 	}
 	a.Slug = slug
@@ -233,12 +234,13 @@ func parseAuditWithFindings(content []byte, path string) (domain.Audit, []domain
 	}
 	// The finding grammar (and "what each status means for progress") lives in the
 	// domain, so the store just records the tally ParseFindings + TallyFindings report.
-	findings := domain.ParseFindings(string(body))
+	bodyText := string(body)
+	findings := domain.ParseFindings(bodyText)
 	tally := domain.TallyFindings(findings)
 	a.Findings = len(findings)
 	a.OpenFindings = tally.Open
 	a.ActiveFindings = tally.Active
 	a.DoneFindings = tally.Done
 	a.DroppedFindings = tally.Dropped
-	return a, findings, domain.NearMissFindingHeaders(string(body)), nil
+	return a, findings, domain.NearMissFindingHeaders(bodyText), domain.LintCandidateTasks(bodyText, findings), nil
 }

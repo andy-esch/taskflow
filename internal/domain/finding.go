@@ -198,12 +198,46 @@ func ParseFindings(body string) []Finding {
 	return out
 }
 
-// findingStatuses is the legal finding-status vocabulary (the audit HOWTO + the
-// `audit new` scaffold). A free-text Status edit can write a typo; `audit lint`
-// catches it against this set.
-var findingStatuses = map[string]bool{
-	"open": true, "in-progress": true, "fixed": true, "tracked": true,
-	"deferred": true, "superseded": true, "wontfix": true,
+// findingStatusSpec is one persisted finding-status token and its plain-text glyph.
+// The glyph belongs here rather than in a renderer because managed candidate-task
+// rows persist it in Markdown. Theme adapters add colour, but they read this same
+// spelling so the on-disk mirror and every UI cannot drift apart.
+type findingStatusSpec struct {
+	Status string
+	Glyph  string
+}
+
+// findingStatusSpecs is ordered for explanatory output: actionable work first,
+// then dispositions. FindingStatuses retains its historical lexical order for
+// help/schema compatibility.
+var findingStatusSpecs = []findingStatusSpec{
+	{Status: "open", Glyph: "○"},
+	{Status: "in-progress", Glyph: "●"},
+	{Status: "fixed", Glyph: "✔"},
+	{Status: "tracked", Glyph: "→"},
+	{Status: "deferred", Glyph: "◌"},
+	{Status: "superseded", Glyph: "◌"},
+	{Status: "wontfix", Glyph: "✘"},
+}
+
+var findingStatuses = func() map[string]bool {
+	out := make(map[string]bool, len(findingStatusSpecs))
+	for _, spec := range findingStatusSpecs {
+		out[spec.Status] = true
+	}
+	return out
+}()
+
+// FindingStatusGlyph returns the persisted plain-text glyph for a legal status.
+// Unknown values use the neutral bullet; audit lint reports the vocabulary defect.
+func FindingStatusGlyph(status string) string {
+	status = strings.ToLower(strings.TrimSpace(status))
+	for _, spec := range findingStatusSpecs {
+		if spec.Status == status {
+			return spec.Glyph
+		}
+	}
+	return "•"
 }
 
 // FindingStatuses returns the legal finding statuses, sorted (for help/schema).
@@ -612,7 +646,8 @@ func SetFindingStatus(body, code, status string) (string, error) {
 			return "", fmt.Errorf("%w: finding %s has no **Status:** line to rewrite — add one, or run `lint --fix`",
 				ErrValidation, f.Code)
 		}
-		return body[:f.StatusSpan.Start] + want + body[f.StatusSpan.End:], nil
+		out := body[:f.StatusSpan.Start] + want + body[f.StatusSpan.End:]
+		return syncManagedCandidateStatus(out, f.Code), nil
 	}
 	return "", fmt.Errorf("%w: no finding %q in this audit", ErrNotFound, code)
 }

@@ -103,23 +103,36 @@ func Bucket(b domain.AuditBucket) Token {
 // matching is case-insensitive. An empty/unknown status falls to the neutral dot
 // (audit lint flags those separately).
 func FindingStatus(s string) Token {
-	switch strings.ToLower(strings.TrimSpace(s)) {
+	status := strings.ToLower(strings.TrimSpace(s))
+	glyph := domain.FindingStatusGlyph(status)
+	color, ok := findingStatusColor(status)
+	if !ok {
+		color = ColorGray
+	}
+	return Token{glyph, color}
+}
+
+// findingStatusColor returns false for a status the theme has not classified. Keeping
+// that distinction behind FindingStatus's stable fallback lets tests prove every domain
+// status has an intentional colour instead of silently inheriting the unknown-state grey.
+func findingStatusColor(status string) (Color, bool) {
+	switch status {
 	case "open":
-		return Token{"○", ColorYellow}
+		return ColorYellow, true
 	case "in-progress":
-		return Token{"●", ColorYellow}
+		return ColorYellow, true
 	case "fixed":
-		return Token{"✔", ColorGreen}
+		return ColorGreen, true
 	case "tracked":
 		// Resolved for this audit but not BY it: an arrow says the work moved on, where a
 		// tick would claim it was done here.
-		return Token{"→", ColorGreen}
+		return ColorGreen, true
 	case "deferred", "superseded":
-		return Token{"◌", ColorGray}
+		return ColorGray, true
 	case "wontfix":
-		return Token{"✘", ColorRed}
+		return ColorRed, true
 	default:
-		return Token{"•", ColorGray}
+		return ColorGray, false
 	}
 }
 

@@ -619,7 +619,7 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	}
 	dupAuditIDs := domain.DuplicateIDIssues(auditIDs)
 	for _, a := range auditRecords {
-		issues := AuditLintIssues(a.Audit, a.Findings, a.NearMisses)
+		issues := AuditLintIssues(a.Audit, a.Findings, a.NearMisses, a.CandidateIssues)
 		if issue, ok := dupAuditIDs[a.Audit.CanonicalID()]; ok {
 			issues = append(issues, issue)
 		}

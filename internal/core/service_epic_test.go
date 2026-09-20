@@ -167,7 +167,10 @@ func (f *fakeStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 func (f *fakeStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error) {
 	out := make([]AuditWithFindings, 0, len(f.audits))
 	for _, a := range f.audits {
-		out = append(out, AuditWithFindings{Audit: a, Findings: domain.ParseFindings(f.auditBodies[a.Slug])})
+		body := f.auditBodies[a.Slug]
+		findings := domain.ParseFindings(body)
+		out = append(out, AuditWithFindings{Audit: a, Findings: findings,
+			CandidateIssues: domain.LintCandidateTasks(body, findings)})
 	}
 	return out, f.auditProblems, nil
 }

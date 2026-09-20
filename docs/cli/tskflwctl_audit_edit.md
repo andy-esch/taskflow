@@ -6,8 +6,8 @@ Open an audit in your editor (whole file; re-validated on save)
 
 Open the audit's markdown file in $VISUAL/$EDITOR (falling back to vi). On save
 the file is re-parsed: a frontmatter break reopens the editor with the error rather
-than landing on disk. The findings are then lint-checked and any issues (bad
-**Status:**, bucket↔state drift) are surfaced as a warning. The human counterpart
+than landing on disk. Findings and managed candidate rows are then lint-checked,
+with any issues surfaced as a warning. The human counterpart
 to `audit append` (scriptable).
 
 ```

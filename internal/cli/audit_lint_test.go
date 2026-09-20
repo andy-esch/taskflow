@@ -60,3 +60,20 @@ func TestAuditLint_JSON(t *testing.T) {
 		t.Errorf("audit lint --json envelope wrong:\n%s", out)
 	}
 }
+
+func TestAuditLint_ManagedCandidateDriftExits11(t *testing.T) {
+	root := setupRepo(t)
+	body := "---\nid: " + testutil.TaskID("candidate-drift") + "\nbucket: open\narea: x\ndate: 2026-01-01\n---\n" +
+		"#### H1. t · **Status:** open\n\n## Candidate tasks\n\n" +
+		domain.CandidateTasksMarkerComment() + "\n- ✔ H1 · fixed — stale mirror\n"
+	p, content := testutil.AuditFixture(root, "open", "candidate-drift.md", body)
+	testutil.Write(t, p, content)
+
+	out, err := runRootRC(t, "-C", root, "audit", "lint", "candidate-drift", "--color=never")
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("managed candidate drift should exit 11, got %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "candidate status fixed disagrees with finding status open") {
+		t.Fatalf("candidate drift diagnostic missing:\n%s", out)
+	}
+}

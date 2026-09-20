@@ -200,12 +200,12 @@ func newAuditFindingsCmd(app *App) *cobra.Command {
 // write is a status nobody can be held to — and the same is true of the paragraph that says
 // how it was resolved, which is why --note is here rather than left to the editor.
 func newAuditFindingCmd(app *App) *cobra.Command {
-	var status, note string
+	var status, note, candidate string
 	var pr int
 	cmd := &cobra.Command{
 		Use:   "finding <audit> <code>",
-		Short: "Set one finding's status and resolution note in place (validated, atomic)",
-		Long: "Stamp a finding's **Status:** and **Resolution:** without touching the rest of the audit.\n\n" +
+		Short: "Set one finding's status, resolution, and candidate row (validated, atomic)",
+		Long: "Stamp a finding's **Status:**, **Resolution:**, and managed candidate row without touching the rest of the audit.\n\n" +
 			"The status is validated against the finding vocabulary, and only the leading token\n" +
 			"is normalised — decoration the line formats carry (`fixed 2026-08-24 (PR #12)`,\n" +
 			"`deferred (see ADR-0003)`, `superseded by <link>`) is written verbatim, because it\n" +
@@ -215,19 +215,22 @@ func newAuditFindingCmd(app *App) *cobra.Command {
 			"--note writes the `**Resolution:**` paragraph as the finding's last block: one\n" +
 			"paragraph, no newlines, placed inside the right finding by construction rather than\n" +
 			"by careful typing. Passing an empty --note removes it. Both flags REPLACE what was\n" +
-			"there, and given together they land in a single atomic write.\n\n" +
+			"there. --candidate adds or replaces the finding's one-line row in a\n" +
+			"`candidate-tasks:v1` section; an empty value removes it. Legacy unversioned sections\n" +
+			"are never guessed at or rewritten. All requested changes land in one atomic write.\n\n" +
 			"--pr N is sugar for the canonical `(PR #N)` decoration, so the reference is spelled\n" +
 			"one way across the corpus and stays greppable.",
 		Example: "  tskflwctl audit finding 2026-06-14-gateway H1 --status fixed\n" +
 			"  tskflwctl audit finding 2026-06-14-gateway M2 --status \"deferred (see ADR-0003)\"\n" +
 			"  tskflwctl audit finding 2026-06-14-gateway H1 --status \"tracked by 6g392b0rps7w\"\n" +
-			"  tskflwctl audit finding 2026-06-14-gateway H1 --status fixed --note \"Widened the regex; regression test added.\"",
+			"  tskflwctl audit finding 2026-06-14-gateway H1 --status fixed --note \"Widened the regex; regression test added.\"\n" +
+			"  tskflwctl audit finding 2026-06-14-gateway M2 --candidate \"Create a bounded follow-up task\"",
 		Args:              cobra.ExactArgs(2),
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.completeAuditSlugs,
 		RunE: func(c *cobra.Command, args []string) error {
-			if !c.Flags().Changed("status") && !c.Flags().Changed("note") && !c.Flags().Changed("pr") {
-				return fmt.Errorf("%w: pass --status (one of: %s) and/or --note",
+			if !c.Flags().Changed("status") && !c.Flags().Changed("note") && !c.Flags().Changed("candidate") && !c.Flags().Changed("pr") {
+				return fmt.Errorf("%w: pass --status (one of: %s), --note, and/or --candidate",
 					domain.ErrValidation, strings.Join(domain.FindingStatuses(), ", "))
 			}
 			if c.Flags().Changed("status") && strings.TrimSpace(status) == "" {
@@ -244,15 +247,19 @@ func newAuditFindingCmd(app *App) *cobra.Command {
 			if c.Flags().Changed("note") {
 				edit.Note = &note
 			}
+			if c.Flags().Changed("candidate") {
+				edit.Candidate = &candidate
+			}
 			a, changed, err := app.Svc.EditFinding(args[0], args[1], edit, app.DryRun)
 			if err != nil {
 				return err
 			}
-			what := describeFindingEdit(args[1], status, c.Flags().Changed("note"), note)
+			what := describeFindingEdit(args[1], status, c.Flags().Changed("note"), note,
+				c.Flags().Changed("candidate"), candidate)
 			if !changed && !app.JSON { // already exactly these values — say so, no write
 				// Naming the value is the useful half of this message, so the status-only
 				// case (the overwhelmingly common one) keeps saying it.
-				if !c.Flags().Changed("note") {
+				if !c.Flags().Changed("note") && !c.Flags().Changed("candidate") {
 					fmt.Fprintf(app.Out, "%s %s in %s is already %s\n", app.Style.Dim("•"),
 						app.Style.Bold(args[1]), app.Style.Bold(a.Slug), app.Style.Bold(status))
 					return nil
@@ -272,6 +279,7 @@ func newAuditFindingCmd(app *App) *cobra.Command {
 	cmd.Flags().StringVar(&status, "status", "", "the finding's new status — one of: "+strings.Join(domain.FindingStatuses(), " | ")+" (decoration after the token is kept verbatim)")
 	cmd.Flags().IntVar(&pr, "pr", 0, "append `(PR #N)` to the status — the one canonical spelling, so the reference stays greppable")
 	cmd.Flags().StringVar(&note, "note", "", "the finding's `**Resolution:**` paragraph — how it was resolved; empty removes it")
+	cmd.Flags().StringVar(&candidate, "candidate", "", "one-line managed Candidate tasks entry; empty removes it (requires candidate-tasks:v1)")
 	return cmd
 }
 
@@ -301,7 +309,29 @@ func decorateWithPR(status string, pr int, hasStatus bool) (string, error) {
 // and either may be a removal, so the object of "set …" is built rather than interpolated.
 // The status-only case is spelled exactly as it was before --note existed, because that is
 // the overwhelmingly common receipt and there is no reason to churn it.
-func describeFindingEdit(code, status string, noteSet bool, note string) string {
+func describeFindingEdit(code, status string, noteSet bool, note string, candidateSet bool, candidate string) string {
+	if candidateSet {
+		candidateChange := " and its candidate row"
+		if candidate == "" {
+			candidateChange = " and removed its candidate row"
+		}
+		switch {
+		case status != "" && noteSet && note != "":
+			return code + " " + status + ", its resolution note" + candidateChange
+		case status != "" && noteSet && note == "":
+			return code + " " + status + ", removed its resolution note" + candidateChange
+		case status != "":
+			return code + " " + status + candidateChange
+		case noteSet && note != "":
+			return code + "'s resolution note" + candidateChange
+		case noteSet:
+			return code + "'s resolution note removed" + candidateChange
+		case candidate == "":
+			return code + "'s candidate row removed"
+		default:
+			return code + "'s candidate row"
+		}
+	}
 	switch {
 	case status == "" && note == "":
 		return code + "'s resolution note removed"
@@ -318,10 +348,11 @@ func describeFindingEdit(code, status string, noteSet bool, note string) string 
 func newAuditLintCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "lint [audit]",
-		Short: "Validate audit findings (status vocabulary, missing status, bucket↔state)",
+		Short: "Validate audit findings, managed candidate rows, and bucket↔state",
 		Long: "Lint audit findings — the audit analog of `lint` (which covers tasks, epics, and research).\n" +
 			"Checks every finding has a legal **Status:** (catching typos a free-text edit\n" +
-			"allows) and that a non-open audit has no still-open findings. With no argument\n" +
+			"allows), every `candidate-tasks:v1` row still matches its finding, and a non-open\n" +
+			"audit has no still-open findings. Legacy unversioned candidate prose is ignored. With no argument\n" +
 			"it lints every audit; with a slug, just that one. Exit 11 when issues are found.",
 		Example:           "  tskflwctl audit lint\n  tskflwctl audit lint 2026-06-14-gateway --json",
 		Args:              cobra.MaximumNArgs(1),
@@ -487,8 +518,8 @@ func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.
 // newAuditEditCmd is the human face of audit mutation: open the audit file in the
 // user's editor and re-validate on save — the audit twin of `task edit`, complementing
 // the agent-facing `audit append`. The save is accepted only if it still parses
-// (parse-before-accept); once it lands, the findings are lint-checked and any issues
-// (a bad **Status:**, a bucket↔state drift a free-text edit can introduce) are surfaced
+// (parse-before-accept); once it lands, findings and managed candidate rows are lint-checked;
+// any issue a free-text edit can introduce is surfaced
 // as a WARNING, not a hard error — lint is advisory here, like `task edit`'s re-lint flag.
 func newAuditEditCmd(app *App) *cobra.Command {
 	return &cobra.Command{
@@ -496,8 +527,8 @@ func newAuditEditCmd(app *App) *cobra.Command {
 		Short: "Open an audit in your editor (whole file; re-validated on save)",
 		Long: "Open the audit's markdown file in $VISUAL/$EDITOR (falling back to vi). On save\n" +
 			"the file is re-parsed: a frontmatter break reopens the editor with the error rather\n" +
-			"than landing on disk. The findings are then lint-checked and any issues (bad\n" +
-			"**Status:**, bucket↔state drift) are surfaced as a warning. The human counterpart\n" +
+			"than landing on disk. Findings and managed candidate rows are then lint-checked,\n" +
+			"with any issues surfaced as a warning. The human counterpart\n" +
 			"to `audit append` (scriptable).",
 		Example:           "  tskflwctl audit edit 2026-06-20-api-gateway\n  tskflwctl audit edit   # pick from a list",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug

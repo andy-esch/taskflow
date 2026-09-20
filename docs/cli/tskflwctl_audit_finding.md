@@ -1,10 +1,10 @@
 ## tskflwctl audit finding
 
-Set one finding's status and resolution note in place (validated, atomic)
+Set one finding's status, resolution, and candidate row (validated, atomic)
 
 ### Synopsis
 
-Stamp a finding's **Status:** and **Resolution:** without touching the rest of the audit.
+Stamp a finding's **Status:**, **Resolution:**, and managed candidate row without touching the rest of the audit.
 
 The status is validated against the finding vocabulary, and only the leading token
 is normalised — decoration the line formats carry (`fixed 2026-08-24 (PR #12)`,
@@ -16,7 +16,9 @@ handed to a task always says where it went.
 --note writes the `**Resolution:**` paragraph as the finding's last block: one
 paragraph, no newlines, placed inside the right finding by construction rather than
 by careful typing. Passing an empty --note removes it. Both flags REPLACE what was
-there, and given together they land in a single atomic write.
+there. --candidate adds or replaces the finding's one-line row in a
+`candidate-tasks:v1` section; an empty value removes it. Legacy unversioned sections
+are never guessed at or rewritten. All requested changes land in one atomic write.
 
 --pr N is sugar for the canonical `(PR #N)` decoration, so the reference is spelled
 one way across the corpus and stays greppable.
@@ -32,11 +34,13 @@ tskflwctl audit finding <audit> <code> [flags]
   tskflwctl audit finding 2026-06-14-gateway M2 --status "deferred (see ADR-0003)"
   tskflwctl audit finding 2026-06-14-gateway H1 --status "tracked by 6g392b0rps7w"
   tskflwctl audit finding 2026-06-14-gateway H1 --status fixed --note "Widened the regex; regression test added."
+  tskflwctl audit finding 2026-06-14-gateway M2 --candidate "Create a bounded follow-up task"
 ```
 
 ### Options
 
 ```
+      --candidate string       one-line managed Candidate tasks entry; empty removes it (requires candidate-tasks:v1)
   -h, --help                   help for finding
       --note **Resolution:**   the finding's **Resolution:** paragraph — how it was resolved; empty removes it
       --pr (PR #N)             append (PR #N) to the status — the one canonical spelling, so the reference stays greppable

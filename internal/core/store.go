@@ -221,6 +221,9 @@ type AuditWithFindings struct {
 	// over the parsed set, and re-reading every audit to look for it would undo
 	// the one-read contract this type exists to keep.
 	NearMisses []domain.NearMissHeader
+	// CandidateIssues are managed candidate-task v1 defects derived from the same
+	// body read. Legacy unversioned candidate prose deliberately contributes none.
+	CandidateIssues []domain.Issue
 }
 
 // TaskWithBody is a task plus its markdown body, kept together by

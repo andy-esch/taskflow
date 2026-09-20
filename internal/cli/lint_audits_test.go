@@ -33,6 +33,23 @@ func TestLintFoldsAuditFindingIssues(t *testing.T) {
 	}
 }
 
+func TestLintFoldsManagedCandidateIssues(t *testing.T) {
+	root := setupRepo(t)
+	body := "---\nid: " + testutil.TaskID("candidate-drift") + "\nbucket: open\narea: x\ndate: 2026-01-01\n---\n" +
+		"#### H1. t · **Status:** open\n\n## Candidate tasks\n\n" +
+		domain.CandidateTasksMarkerComment() + "\n- ○ Z9 · open — missing finding\n"
+	p, content := testutil.AuditFixture(root, "open", "candidate-drift.md", body)
+	testutil.Write(t, p, content)
+
+	out, err := runRootRC(t, "-C", root, "lint", "--color=never")
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("top-level lint must fold managed candidate defects, got %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "references no parsed finding") {
+		t.Fatalf("top-level lint omitted candidate diagnostic:\n%s", out)
+	}
+}
+
 // The fold carries the audit's FRONTMATTER checks too, not just finding grammar:
 // a foreign bucket is an audit-shaped defect the top-level gate must now catch.
 func TestLintFoldsAuditFrontmatterIssues(t *testing.T) {

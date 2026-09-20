@@ -259,12 +259,140 @@ func TestAuditFinding_StatusAndNoteInOneWrite(t *testing.T) {
 	}
 }
 
+// A managed candidate row is the finding's optional projection, not a second source of
+// truth. One command can create it while changing status, later status changes refresh it,
+// and an empty value removes it. All three operations use the same atomic audit-body write.
+func TestAuditFinding_ManagedCandidateLifecycle(t *testing.T) {
+	root := setupAuditRepo(t)
+	p := filepath.Join(root, "audits", testutil.TaskID("o")+"-o.md")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed := strings.TrimRight(string(b), "\n") + "\n\n## Candidate tasks\n\n" +
+		domain.CandidateTasksMarkerComment() + "\n"
+	if err := os.WriteFile(p, []byte(managed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1",
+		"--status", "in-progress", "--candidate", "Harden the candidate projection"); err != nil {
+		t.Fatalf("combined status + candidate edit: %v", err)
+	}
+	b, _ = os.ReadFile(p)
+	if got := string(b); !strings.Contains(got, "**Status:** in-progress") ||
+		!strings.Contains(got, "- ● H1 · in-progress — Harden the candidate projection") {
+		t.Fatalf("finding and candidate did not land together:\n%s", got)
+	}
+
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1", "--status", "fixed"); err != nil {
+		t.Fatalf("status-only candidate sync: %v", err)
+	}
+	b, _ = os.ReadFile(p)
+	if !strings.Contains(string(b), "- ✔ H1 · fixed — Harden the candidate projection") {
+		t.Fatalf("status-only edit left the candidate stale:\n%s", b)
+	}
+
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1", "--candidate", ""); err != nil {
+		t.Fatalf("remove candidate: %v", err)
+	}
+	b, _ = os.ReadFile(p)
+	if strings.Contains(string(b), " H1 · fixed —") {
+		t.Fatalf("empty --candidate should remove the row:\n%s", b)
+	}
+}
+
+// Candidate edits travel through TransformAuditBody, whose normalization boundary must
+// restore the audit's original line-ending convention after the domain transform. Exercise
+// that at the CLI boundary so future candidate-specific writes cannot accidentally bypass it.
+func TestAuditFinding_ManagedCandidatePreservesCRLFAndDryRun(t *testing.T) {
+	root := setupAuditRepo(t)
+	p := filepath.Join(root, "audits", testutil.TaskID("o")+"-o.md")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	managedLF := strings.TrimRight(string(b), "\n") + "\n\n## Candidate tasks\n\n" +
+		domain.CandidateTasksMarkerComment() + "\n"
+	managedCRLF := strings.ReplaceAll(managedLF, "\n", "\r\n")
+	if err := os.WriteFile(p, []byte(managedCRLF), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runRootRC(t, "-C", root, "--dry-run", "audit", "finding", "o", "H1",
+		"--candidate", "Preserve the audit's line endings"); err != nil {
+		t.Fatalf("dry-run candidate edit: %v", err)
+	}
+	afterDryRun, _ := os.ReadFile(p)
+	if !bytes.Equal(before, afterDryRun) {
+		t.Fatal("dry-run candidate edit changed the audit")
+	}
+
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1",
+		"--status", "in-progress", "--candidate", "Preserve the audit's line endings"); err != nil {
+		t.Fatalf("real candidate edit: %v", err)
+	}
+	after, _ := os.ReadFile(p)
+	if bareLF := bytes.Count(after, []byte("\n")) - bytes.Count(after, []byte("\r\n")); bareLF != 0 {
+		t.Fatalf("candidate edit introduced %d bare LF line endings:\n%q", bareLF, after)
+	}
+	if !bytes.Contains(after, []byte("- "+domain.FindingStatusGlyph("in-progress")+" H1 · in-progress — Preserve the audit's line endings")) {
+		t.Fatalf("candidate row did not land in CRLF audit:\n%s", after)
+	}
+}
+
+func TestAuditFinding_CandidateRefusesLegacyWithoutWriting(t *testing.T) {
+	root := setupAuditRepo(t)
+	p := filepath.Join(root, "audits", testutil.TaskID("o")+"-o.md")
+	original, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := strings.TrimRight(string(original), "\n") + "\n\n## Candidate tasks\n\n- ⏳ H1 — handwritten legacy row\n"
+	if err := os.WriteFile(p, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := []byte(legacy)
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1",
+		"--status", "fixed", "--candidate", "Do not guess at this legacy section"); !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "legacy") {
+		t.Fatalf("legacy candidate edit should explain its refusal, got %v", err)
+	}
+	after, _ := os.ReadFile(p)
+	if !bytes.Equal(before, after) {
+		t.Fatalf("failed combined edit must be atomic; file changed:\n%s", after)
+	}
+}
+
+func TestAuditNewAppendAndManagedCandidateRoundTrip(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "audit", "new", "candidate-round-trip", "--date", "2026-09-19")
+	runRoot(t, "-C", root, "audit", "append", "2026-09-19-candidate-round-trip",
+		"--body", "#### H1. Exercise the managed projection · **Status:** open\n\nEvidence.")
+	runRoot(t, "-C", root, "audit", "finding", "2026-09-19-candidate-round-trip", "H1",
+		"--candidate", "Create the focused implementation task")
+	runRoot(t, "-C", root, "audit", "lint", "2026-09-19-candidate-round-trip")
+
+	b, err := os.ReadFile(auditPath(t, root, "2026-09-19-candidate-round-trip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	if strings.Index(got, "- ○ H1 · open — Create the focused implementation task") >
+		strings.Index(got, "#### H1. Exercise the managed projection") {
+		t.Fatalf("candidate row should remain in the scaffold section before appended findings:\n%s", got)
+	}
+}
+
 // Neither flag is a usage error, not a silent no-op: a call that changes nothing is almost
 // certainly a mistyped flag name.
 func TestAuditFinding_RequiresAFlag(t *testing.T) {
 	root := setupAuditRepo(t)
 	if _, err := runRootRC(t, "-C", root, "audit", "finding", "o", "H1"); err == nil {
-		t.Error("audit finding with neither --status nor --note must be rejected")
+		t.Error("audit finding with no requested field must be rejected")
 	}
 }
 
