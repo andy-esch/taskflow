@@ -1,15 +1,16 @@
 ## tskflwctl audit append
 
-Append a section to an audit's body (atomic; agent-facing)
+Add a narrative section to an audit (atomic; agent-facing)
 
 ### Synopsis
 
-Append markdown to the end of an audit's body in one atomic, validated write —
-the scriptable counterpart to `audit edit`, e.g. to add a finding section. Content
+Add markdown to an audit's narrative in one atomic, validated write — the
+scriptable counterpart to `audit edit`. A trailing managed Candidate tasks section
+remains final, so ordinary prose cannot become malformed projection content. Content
 comes from --body, --body-file, or stdin (--body-file -); a blank line separates it
-from the existing body. A heading that reads as a finding but would parse to nothing
-is refused here, with the canonical replacement — `audit lint` and `lint --fix` cover
-drift already in the file.
+from adjacent sections. Use `audit finding new` for findings. A heading that reads as
+a finding but would parse to nothing is still refused here, with the canonical
+replacement; `audit lint` and `lint --fix` cover drift already in the file.
 
 ```
 tskflwctl audit append <audit> [flags]
@@ -18,11 +19,13 @@ tskflwctl audit append <audit> [flags]
 ### Examples
 
 ```
-  tskflwctl audit append my-audit --body '#### H1. Title  · **Status:** open'
+  tskflwctl audit append my-audit --body '## Review context'
   tskflwctl audit append my-audit --body-file - <<'EOF'
-#### M3. Cache hit rate fell to 40% · **Status:** open
+## Validation notes
+
+Cache hit rate fell to 40%.
 EOF
-  cat findings.md | tskflwctl audit append my-audit --body-file -
+  cat follow-up.md | tskflwctl audit append my-audit --body-file -
 ```
 
 ### Options

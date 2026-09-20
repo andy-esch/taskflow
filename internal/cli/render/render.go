@@ -541,6 +541,11 @@ func CreatedJSON(w io.Writer, kind, id, slug, status, path string, dryRun bool, 
 	return wire.EncodeJSON(w, wire.ToCreatedEnvelope(kind, id, slug, status, path, dryRun, ws))
 }
 
+// FindingCreationJSON writes the compact receipt for `audit finding new`.
+func FindingCreationJSON(w io.Writer, receipt core.FindingCreationReceipt, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToFindingCreationEnvelope(receipt, ws))
+}
+
 // EpicsHuman writes a table of epics with task rollup.
 func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 	if len(epics) == 0 {

@@ -528,7 +528,8 @@ adapter capabilities rather than leaked persistence.
   assertion (finding M3 of `2026-08-17-finding-status-surface`).
 - **A state the tool cannot write is a state nobody can be held to.** Every
   closed-vocabulary field has a validated, atomic write verb — `task ac` for criterion
-  state, `audit finding` for finding status, its resolution note, and its optional managed
+  state, `audit finding new` for canonical creation and collision-free audit-local identity
+  allocation, and `audit finding` for status, resolution, and the optional managed
   candidate-task projection — because the
   alternative is hand-edited markdown, which is how a vocabulary drifts from its own
   documentation. Candidate rows use a versioned `candidate-tasks:v1` marker and carry one

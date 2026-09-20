@@ -1,6 +1,6 @@
 ---
 name: code-quality-audit
-version: 2
+version: 3
 schedule: "0 10 * * 2,5"         # 6am EDT Tuesdays + Fridays; lens picked by rotation index
 slack_channel: planning-updates
 repos:
@@ -20,7 +20,7 @@ lens_rotation:                   # index = (ISO week * 2 + slot) mod 6; slot 0 =
   4: adapter-hygiene
   5: simplification
 max_open_audits: 10              # backpressure: at or above this, triage instead of authoring
-last_modified: 2026-09-19
+last_modified: 2026-09-20
 ---
 
 # Code Quality Audit (Twice-Weekly Lens Rotation)
@@ -293,13 +293,22 @@ cannot get the check clean, post to Slack and exit without a PR.
     `area`/`date` frontmatter in the `open` bucket. `<lens-slug>` is the
     kebab-case name from LENS-ROTATION. Add `--date` only to backdate.
 
-    Write the body with `audit append` or `audit edit`, following
-    AUDIT-FILE-TEMPLATE below. Each finding carries `**Status:** open` from the
-    scaffold. **Never hand-edit a `**Status:**`, `**Resolution:**`, or managed
-    Candidate tasks row afterwards** — `./bin/tskflwctl audit finding <audit>
-    <code> [--status <v>] [--note <text>] [--candidate <one-line>]` owns all
-    three in one validated atomic edit. Preserve the scaffold's
-    `candidate-tasks:v1` marker.
+    Create every finding with the canonical writer; never type its code or header:
+
+        ./bin/tskflwctl audit finding new <audit> "<title>" \
+          --band <H|M|L> --file "<path:line>" --component "<component>" \
+          --effort <XS|S|M|L> --urgency <acute|soon|eventually> \
+          --body-file - --recommendation "<minimum fix>" \
+          --candidate '<one-line task command>' <<'EOF'
+        <evidence-backed explanation; Markdown allowed, but no unfenced headings>
+        EOF
+
+    The verb allocates the code, inserts the block before Candidate tasks, and adds
+    the optional managed row in one atomic write. Use `audit append` only for
+    non-finding sections. Afterwards, **never hand-edit a `**Status:**`,
+    `**Resolution:**`, or managed Candidate tasks row** — `./bin/tskflwctl audit
+    finding <audit> <code> [--status <v>] [--note <text>] [--candidate <one-line>]`
+    owns all three. Preserve the scaffold's `candidate-tasks:v1` marker.
 
     Before generating candidate tasks, run `./bin/tskflwctl epic list`
     to use real epic IDs in `task new` suggestions — template examples drift.
@@ -462,8 +471,9 @@ in the tree today.)
 
   # Code Quality Audit: <lens> — YYYY-MM-DD
 
-  > Edit findings through `tskflwctl audit finding` so status, resolution, and
-  > managed candidate metadata stay synchronized. Never hand-edit those fields.
+  > Create findings through `tskflwctl audit finding new`; update them through
+  > `tskflwctl audit finding` so identity, status, resolution, and managed candidate
+  > metadata stay synchronized. Never hand-edit those fields.
 
   Routine: `code-quality-audit` · lens `<lens-slug>` · ISO week `<YYYY-WNN>`,
   slot `<Tue|Fri>` (index <N>).

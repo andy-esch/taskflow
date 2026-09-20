@@ -130,6 +130,7 @@ var entities = []Descriptor{
 			// makes it impossible for this guidance to lag the vocabulary again.
 			"finding statuses: " + strings.Join(FindingStatuses(), " | ") +
 				" — `tracked` means handed to a task and needs the destination (`tracked by <id>`).",
+			"create findings with `audit finding new <audit> <title> --band H|M|L` plus optional metadata/body/recommendation/candidate flags; the tool allocates the code and owns the Markdown structure.",
 			"never hand-edit a finding's **Status:**, **Resolution:**, or managed candidate row — `audit finding <audit> " +
 				"<code> --status <v> [--pr N] [--note <text>] [--candidate <one-line>]` writes them in one validated, atomic edit.",
 			"a `candidate-tasks:v1` section uses one tool-owned row per represented finding: `- <glyph> <CODE> · <status> — <text>`. Unversioned Candidate tasks sections are tolerated legacy prose and are never guessed at or rewritten.",
@@ -337,9 +338,9 @@ const epicBodyTemplate = `
 // generic — a repo with its own conventions doc points at it from its own tooling,
 // not from the shared tool's scaffold.
 var auditBodyTemplate = "\n# Audit: {{area}} — {{date}}\n\n" +
-	"> Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
+	"> Create findings with `audit finding new`; update them with `audit finding`.\n\n" +
 	"## Findings\n\n" +
-	"<!-- One finding per issue, in this shape (un-fence it): -->\n\n" +
+	"<!-- Example grammar; let `audit finding new` allocate and render real findings: -->\n\n" +
 	"```\n" +
 	"#### H1. <title>  · **Status:** open\n\n" +
 	"**File:** <path:line> | **Component:** <component>\n" +
@@ -389,7 +390,7 @@ const threadBodyTemplate = `
 // plus a threat-model header and a review checklist to anchor a security pass. Uses
 // the same {{area}}/{{date}} placeholders as the default audit template.
 var auditSecurityBodyTemplate = "\n# Security audit: {{area}} — {{date}}\n\n" +
-	"> Security review. Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
+	"> Security review. Create findings with `audit finding new`; update them with `audit finding`.\n\n" +
 	"## Threat model\n\n" +
 	"- **Assets / trust boundaries:** <what's worth protecting; where untrusted input crosses in>\n" +
 	"- **Attacker & entry points:** <who, and through which surfaces>\n\n" +
@@ -400,7 +401,7 @@ var auditSecurityBodyTemplate = "\n# Security audit: {{area}} — {{date}}\n\n" 
 	"- [ ] Dependencies — known-vuln scan; versions pinned\n" +
 	"- [ ] Data at rest / in transit — encryption + safe defaults\n\n" +
 	"## Findings\n\n" +
-	"<!-- One finding per issue, in this shape (un-fence it): -->\n\n" +
+	"<!-- Example grammar; let `audit finding new` allocate and render real findings: -->\n\n" +
 	"```\n" +
 	"#### H1. <title>  · **Status:** open\n\n" +
 	"**File:** <path:line> | **Component:** <component>\n" +

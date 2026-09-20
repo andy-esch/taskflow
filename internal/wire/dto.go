@@ -266,6 +266,16 @@ func ToFindingJSON(f core.AuditFinding) FindingJSON {
 	}
 }
 
+// ToCreatedFindingJSON maps a newly planned or persisted finding without forcing
+// core to manufacture the query-only AuditFinding wrapper.
+func ToCreatedFindingJSON(a domain.Audit, f domain.Finding) FindingJSON {
+	return FindingJSON{
+		Audit: a.Slug, Bucket: string(a.Bucket), Code: f.Code, Title: f.Title, Status: f.Status,
+		File: f.File, Component: f.Component, Effort: f.Effort, Urgency: f.Urgency,
+		Note: f.Note, StatusDecoration: f.StatusDecoration,
+	}
+}
+
 // CountByJSON is one bucket of a finding breakdown — an urgency value or a
 // top-level component, and its count.
 type CountByJSON struct {

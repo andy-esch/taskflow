@@ -75,6 +75,23 @@ func TestAuditAppend_DryRun_NoWrite(t *testing.T) {
 	}
 }
 
+func TestAuditAppendKeepsFreshManagedCandidateSectionValid(t *testing.T) {
+	root := freshRepo(t)
+	runRoot(t, "-C", root, "audit", "new", "append-narrative", "--date", "2026-09-20")
+	runRoot(t, "-C", root, "audit", "append", "2026-09-20-append-narrative",
+		"--body", "## Progress\n\nNarrative update.")
+	runRoot(t, "-C", root, "audit", "lint", "2026-09-20-append-narrative")
+
+	b, err := os.ReadFile(auditPath(t, root, "2026-09-20-append-narrative"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	if strings.Index(got, "## Progress") > strings.Index(got, "## Candidate tasks") {
+		t.Fatalf("audit append put narrative inside/after the managed projection:\n%s", got)
+	}
+}
+
 // Empty append input is a clean validation error, not an empty write.
 func TestAuditAppend_Empty_Errors(t *testing.T) {
 	root := setupAuditRepo(t)
@@ -302,6 +319,101 @@ func TestAuditFinding_ManagedCandidateLifecycle(t *testing.T) {
 	}
 }
 
+func TestAuditFindingNewCreatesCanonicalBlockAndCandidate(t *testing.T) {
+	root := setupAuditRepo(t)
+	p := filepath.Join(root, "audits", testutil.TaskID("o")+"-o.md")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed := strings.TrimRight(string(b), "\n") + "\n\n## Candidate tasks\n\n" +
+		domain.CandidateTasksMarkerComment() + "\n"
+	if err := os.WriteFile(p, []byte(managed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := runRoot(t, "-C", root, "audit", "finding", "new", "o", "A second finding",
+		"--band", "H", "--file", "internal/a.go:12", "--component", "core",
+		"--effort", "s", "--urgency", "soon", "--body", "Evidence from the failing case.",
+		"--recommendation", "Add the focused guard.", "--candidate", "Create the repair task")
+	if !strings.Contains(out, "created H2 in o") {
+		t.Fatalf("human receipt should expose allocated identity:\n%s", out)
+	}
+	after, _ := os.ReadFile(p)
+	for _, want := range []string{
+		"#### H2. A second finding · **Status:** open",
+		"**File:** internal/a.go:12 | **Component:** core",
+		"**Effort:** S · **Urgency:** soon",
+		"- ○ H2 · open — Create the repair task",
+	} {
+		if !strings.Contains(string(after), want) {
+			t.Errorf("created audit missing %q:\n%s", want, after)
+		}
+	}
+	if strings.Index(string(after), "#### H2.") > strings.Index(string(after), "## Candidate tasks") {
+		t.Fatalf("finding should precede candidate section:\n%s", after)
+	}
+}
+
+func TestAuditFindingNewJSONDryRunIsCompactAndDoesNotWrite(t *testing.T) {
+	root := setupAuditRepo(t)
+	p := filepath.Join(root, "audits", testutil.TaskID("o")+"-o.md")
+	before, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := runRoot(t, "-C", root, "--json", "--dry-run", "audit", "finding", "new", "o", "Preview finding", "--band", "M")
+	var env struct {
+		SchemaVersion string `json:"schema_version"`
+		DryRun        bool   `json:"dry_run"`
+		Audit         struct {
+			Slug string `json:"slug"`
+		} `json:"audit"`
+		Finding struct {
+			Audit  string `json:"audit"`
+			Code   string `json:"code"`
+			Title  string `json:"title"`
+			Status string `json:"status"`
+		} `json:"finding"`
+		Body json.RawMessage `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("finding creation JSON: %v\n%s", err, out)
+	}
+	if env.SchemaVersion == "" || !env.DryRun || env.Audit.Slug != "o" || env.Finding.Audit != "o" ||
+		env.Finding.Code != "M1" || env.Finding.Title != "Preview finding" || env.Finding.Status != "open" {
+		t.Fatalf("unexpected finding creation receipt: %+v", env)
+	}
+	if env.Body != nil {
+		t.Fatalf("compact finding receipt must not echo the full audit body: %s", env.Body)
+	}
+	after, _ := os.ReadFile(p)
+	if !bytes.Equal(before, after) {
+		t.Fatal("dry-run finding creation wrote the audit")
+	}
+}
+
+func TestAuditFindingNewCandidateRefusalLeavesLegacyAuditUntouched(t *testing.T) {
+	root := setupAuditRepo(t)
+	p := filepath.Join(root, "audits", testutil.TaskID("o")+"-o.md")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := strings.TrimRight(string(b), "\n") + "\n\n## Candidate tasks\n\n- legacy prose\n"
+	if err := os.WriteFile(p, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runRootRC(t, "-C", root, "audit", "finding", "new", "o", "Must not land",
+		"--band", "H", "--candidate", "Needs managed linkage"); !errors.Is(err, domain.ErrValidation) || ExitCode(err) != 11 {
+		t.Fatalf("legacy candidate creation should fail validation, got %v", err)
+	}
+	after, _ := os.ReadFile(p)
+	if string(after) != legacy {
+		t.Fatalf("failed finding creation partially wrote the audit:\n%s", after)
+	}
+}
+
 // Candidate edits travel through TransformAuditBody, whose normalization boundary must
 // restore the audit's original line-ending convention after the domain transform. Exercise
 // that at the CLI boundary so future candidate-specific writes cannot accidentally bypass it.
@@ -367,12 +479,11 @@ func TestAuditFinding_CandidateRefusesLegacyWithoutWriting(t *testing.T) {
 	}
 }
 
-func TestAuditNewAppendAndManagedCandidateRoundTrip(t *testing.T) {
+func TestAuditNewFindingAndManagedCandidateRoundTrip(t *testing.T) {
 	root := freshRepo(t)
 	runRoot(t, "-C", root, "audit", "new", "candidate-round-trip", "--date", "2026-09-19")
-	runRoot(t, "-C", root, "audit", "append", "2026-09-19-candidate-round-trip",
-		"--body", "#### H1. Exercise the managed projection · **Status:** open\n\nEvidence.")
-	runRoot(t, "-C", root, "audit", "finding", "2026-09-19-candidate-round-trip", "H1",
+	runRoot(t, "-C", root, "audit", "finding", "new", "2026-09-19-candidate-round-trip",
+		"Exercise the managed projection", "--band", "H", "--body", "Evidence.",
 		"--candidate", "Create the focused implementation task")
 	runRoot(t, "-C", root, "audit", "lint", "2026-09-19-candidate-round-trip")
 
@@ -381,9 +492,9 @@ func TestAuditNewAppendAndManagedCandidateRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(b)
-	if strings.Index(got, "- ○ H1 · open — Create the focused implementation task") >
-		strings.Index(got, "#### H1. Exercise the managed projection") {
-		t.Fatalf("candidate row should remain in the scaffold section before appended findings:\n%s", got)
+	if strings.Index(got, "#### H1. Exercise the managed projection") >
+		strings.Index(got, "- ○ H1 · open — Create the focused implementation task") {
+		t.Fatalf("finding should remain before its trailing candidate projection:\n%s", got)
 	}
 }
 

@@ -1,6 +1,6 @@
 ---
 name: weekly-architecture-audit
-version: 2
+version: 3
 schedule: "30 11 * * 1"          # 7:30am EDT Mondays / 6:30am EST after Nov DST
 slack_channel: planning-updates
 repos:
@@ -22,7 +22,7 @@ lens_rotation:
     1: data-model-and-storage    # entity model, flat id-led layout, migration, OCC
     2: machine-contract          # --json envelopes, schema_version, agent ergonomics
     3: failure-and-recovery      # guard topology, atomicity, partial failure, repair
-last_modified: 2026-09-19
+last_modified: 2026-09-20
 ---
 
 # Weekly Architecture Audit (Single-Lens Rotation)
@@ -253,12 +253,22 @@ cannot get the check clean, post to Slack and exit without a PR.
 
     writes `planning/audits/<id>-YYYY-MM-DD-arch-<lens>.md` with valid
     `area`/`date` frontmatter in the `open` bucket. `<lens>` is the kebab-case
-    slug from LENS-ROTATION. Use AUDIT-FILE-TEMPLATE below for the body.
+    slug from LENS-ROTATION. Create every finding through the writer rather than
+    reproducing AUDIT-FILE-TEMPLATE by hand:
 
-    **Never hand-edit a `**Status:**`, `**Resolution:**`, or managed Candidate tasks
-    row** — `./bin/tskflwctl audit finding` owns all three. Preserve the
-    `candidate-tasks:v1` marker emitted by `audit new`; add an optional row with
-    `--candidate "<one line>"` only after its finding heading exists.
+        ./bin/tskflwctl audit finding new <audit> "<title>" \
+          --band <H|M|L> --file "<path:line>" --component "<component>" \
+          --effort <XS|S|M|L> --urgency <acute|soon|eventually> \
+          --body-file - --recommendation "<minimum fix>" \
+          --candidate '<one-line task command>' <<'EOF'
+        <evidence-backed explanation; Markdown allowed, but no unfenced headings>
+        EOF
+
+    The same atomic write allocates the code and adds the optional managed row.
+    Use `audit append` only for non-finding sections. **Never hand-edit a
+    `**Status:**`, `**Resolution:**`, or managed Candidate tasks row** —
+    `./bin/tskflwctl audit finding` owns them. Preserve the `candidate-tasks:v1`
+    marker emitted by `audit new`.
 
     Before generating candidate tasks, run `./bin/tskflwctl epic list` to use
     real epic IDs — template examples drift.
@@ -399,8 +409,9 @@ in the repo today.)
 
   # Weekly Architecture Audit: <lens> — YYYY-MM-DD
 
-  > Edit findings through `tskflwctl audit finding` so status, resolution, and
-  > managed candidate metadata stay synchronized. Never hand-edit those fields.
+  > Create findings through `tskflwctl audit finding new`; update them through
+  > `tskflwctl audit finding` so identity, status, resolution, and managed candidate
+  > metadata stay synchronized. Never hand-edit those fields.
   > Architecture audits are propose-only — no code, docs, or ADR edits.
 
   Routine: `weekly-architecture-audit` · lens `<lens-slug>` · ISO week

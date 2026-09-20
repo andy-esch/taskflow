@@ -118,10 +118,11 @@ func (s *Service) EditAudit(slug string, edit func(current string, prevErr error
 	return s.store.EditAudit(slug, s.now(), edit)
 }
 
-// AppendAuditBody appends a section to an audit's markdown body (`audit append`) in
-// one atomic, validated write — the agent face of audit body editing, beside the
-// human EditAudit. Stamps updated_at (the audit's `date` stays immutable — it's the
-// slug). Returns the reloaded audit and the resulting body.
+// AppendAuditBody adds a section to an audit's narrative (`audit append`) in one
+// atomic, validated write, preserving a trailing managed Candidate tasks section
+// as the final projection. It is the agent face of audit body editing beside the
+// human EditAudit. Stamps updated_at (the audit's date stays immutable) and returns
+// the reloaded audit and resulting body.
 func (s *Service) AppendAuditBody(slug, text string, dryRun bool) (domain.Audit, string, error) {
 	now := s.now()
 	type res struct {

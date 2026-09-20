@@ -112,6 +112,10 @@ Revisit after ~4 cycles (each lens has run once):
 
 ## Changelog
 
+- **v3 (2026-09-20)** — findings are created through `audit finding new`, which
+  allocates the audit-local code and writes the canonical finding plus optional
+  managed candidate row atomically. `audit append` is retained only for
+  non-finding narrative sections.
 - **v2 (2026-09-19)** — candidate-task mirrors are now written with `audit finding
   --candidate` under the `candidate-tasks:v1` marker; tracked handoffs update status and
   their candidate row atomically, and both lint entry points validate the projection.

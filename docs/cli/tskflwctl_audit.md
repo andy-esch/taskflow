@@ -26,7 +26,7 @@ Work with code audits
 ### SEE ALSO
 
 * [tskflwctl](tskflwctl.md)	 - Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
-* [tskflwctl audit append](tskflwctl_audit_append.md)	 - Append a section to an audit's body (atomic; agent-facing)
+* [tskflwctl audit append](tskflwctl_audit_append.md)	 - Add a narrative section to an audit (atomic; agent-facing)
 * [tskflwctl audit close](tskflwctl_audit_close.md)	 - Move audit(s) to the closed bucket
 * [tskflwctl audit defer](tskflwctl_audit_defer.md)	 - Move audit(s) to the deferred bucket
 * [tskflwctl audit edit](tskflwctl_audit_edit.md)	 - Open an audit in your editor (whole file; re-validated on save)

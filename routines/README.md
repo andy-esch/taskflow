@@ -79,6 +79,10 @@ than hand-editing markdown. The rules that matter most at run time:
 - **Audit files are tool-managed.** `audit new` mints the id and frontmatter;
   `audit show|list|findings|append|close` read and move them. Never hand-build
   a path or a `bucket:` value.
+- **Finding creation is tool-managed.** `audit finding new <audit> <title> --band
+  H|M|L` allocates the next code and renders canonical metadata/evidence; use
+  `--body-file` for long evidence and `--candidate` when the finding should also
+  enter the managed candidate list. Do not hand-type finding headings.
 - **Never hand-edit a finding's `**Status:**`, `**Resolution:**`, or managed candidate
   row.** `tskflwctl audit finding <audit> <code> [--status <v>] [--note <text>]
   [--candidate <one-line>]` writes them in one validated, atomic edit. An empty candidate

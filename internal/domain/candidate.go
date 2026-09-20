@@ -34,6 +34,25 @@ func candidateTasksScaffold() string {
 		"<!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate \"<one line>\"`; an empty value removes it. -->\n"
 }
 
+// InsertBeforeTrailingCandidateTasks keeps the managed projection as the final
+// audit section when `audit append` adds narrative prose. The default scaffold
+// deliberately ends with Candidate tasks; blindly appending after it makes the new
+// prose part of that managed grammar and leaves ordinary lint with an error no
+// candidate mutation can repair. The caller supplies LF-normalized text. False
+// means no trailing Candidate tasks section exists and ordinary append semantics
+// should be used.
+func InsertBeforeTrailingCandidateTasks(body, addition string) (string, bool) {
+	sections := candidateSections(body)
+	if len(sections) == 0 {
+		return body, false
+	}
+	section := sections[len(sections)-1]
+	if strings.TrimSpace(body[section.End:]) != "" {
+		return body, false
+	}
+	return insertMarkdownBlock(body, section.Start, addition), true
+}
+
 // candidateTask is one canonical row in a managed Candidate tasks section.
 // Status is stored beside Glyph deliberately: statuses that share a glyph
 // (deferred/superseded) remain distinguishable in plain Markdown.

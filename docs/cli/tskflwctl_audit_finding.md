@@ -65,4 +65,5 @@ tskflwctl audit finding <audit> <code> [flags]
 ### SEE ALSO
 
 * [tskflwctl audit](tskflwctl_audit.md)	 - Work with code audits
+* [tskflwctl audit finding new](tskflwctl_audit_finding_new.md)	 - Create one canonical audit finding and allocate its code
 
