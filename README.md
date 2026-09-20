@@ -147,6 +147,7 @@ tskflwctl audit show <slug> --section findings  # audit body section (or --front
 tskflwctl audit info <slug> --json     # token-cheap: path, bucket, findings:{total,open,in_progress,done,dropped}
 tskflwctl audit path <slug>            # just the absolute file path (like task path)
 tskflwctl audit findings --status open --effort XS,S --json  # query findings across audits
+tskflwctl audit finding new <slug> "Finding title" --band H --effort S --urgency soon  # allocate + render a canonical finding
 tskflwctl audit lint                   # validate findings + candidate-tasks:v1 mirrors + bucket↔state
 tskflwctl research list                # the whole corpus, newest first (--tag to filter)
 tskflwctl research show <slug>         # metadata + body (--section / --frontmatter-only; research path <slug> for the file)

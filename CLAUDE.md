@@ -61,8 +61,11 @@ We dogfood: drive this repo's planning with the tool itself.
   `--add <text>` / `--remove <n>` / `--replace <n> --text <new>` change which criteria
   exist. A criterion carrying a state has been DECIDED and does not block `complete`;
   only a silently unticked box does.
-- **Finding status and its managed candidate row — never hand-edit them; `audit finding`
-  owns them.** `audit finding <audit> <code> [--status <v>] [--pr N]
+- **Finding creation, status, and its managed candidate row are tool-owned.** Create a
+  finding with `audit finding new <audit> <title> --band H|M|L` and optional
+  `--file`, `--component`, `--effort`, `--urgency`, `--body|--body-file`,
+  `--recommendation`, and `--candidate`; the tool allocates the code and renders the
+  Markdown. Update it with `audit finding <audit> <code> [--status <v>] [--pr N]
   [--note <text>] [--candidate <one-line>]` writes the `**Status:**`, the
   `**Resolution:**` paragraph, and that finding's optional `candidate-tasks:v1` row in one
   validated, atomic edit. An empty `--candidate` removes the row. Unversioned Candidate
