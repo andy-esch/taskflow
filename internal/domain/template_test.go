@@ -107,6 +107,12 @@ func TestAuditTemplates_FreshCountZeroFindings(t *testing.T) {
 		if n := len(ParseFindings(body)); n != 0 {
 			t.Errorf("audit/%s: a fresh audit should have 0 parsed findings, got %d", name, n)
 		}
+		if !strings.Contains(body, CandidateTasksMarkerComment()) {
+			t.Errorf("audit/%s: fresh scaffold missing managed candidate marker", name)
+		}
+		if issues := LintCandidateTasks(body, ParseFindings(body)); len(issues) != 0 {
+			t.Errorf("audit/%s: fresh managed candidate section should lint clean, got %+v", name, issues)
+		}
 	}
 }
 

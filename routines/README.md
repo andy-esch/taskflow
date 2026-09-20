@@ -79,17 +79,19 @@ than hand-editing markdown. The rules that matter most at run time:
 - **Audit files are tool-managed.** `audit new` mints the id and frontmatter;
   `audit show|list|findings|append|close` read and move them. Never hand-build
   a path or a `bucket:` value.
-- **Never hand-edit a finding's `**Status:**` or `**Resolution:**`.**
-  `tskflwctl audit finding <audit> <code> --status <v> [--note <text>]` writes
-  both in one validated, atomic edit. Statuses: `open | in-progress | fixed |
+- **Never hand-edit a finding's `**Status:**`, `**Resolution:**`, or managed candidate
+  row.** `tskflwctl audit finding <audit> <code> [--status <v>] [--note <text>]
+  [--candidate <one-line>]` writes them in one validated, atomic edit. An empty candidate
+  removes the row; an unversioned Candidate tasks section is legacy and deliberately not
+  rewritten. Statuses: `open | in-progress | fixed |
   tracked | deferred | superseded | wontfix`. **`tracked` requires the
   destination** (`tracked by <task-id>`) — this is where taskflow diverges from
   the older desirelines convention of writing `superseded by <link>` by hand.
 - **Never hand-edit task `status:`.** Lifecycle verbs (`task start|next|ready|
   complete|defer|deprecate`) own it and edit frontmatter in place.
-- **Two validators, both required.** `tskflwctl lint` checks the entity tree and
-  dependency links; `tskflwctl audit lint <slug>` checks *finding* status
-  vocabulary. The first does not cover the second.
+- **Two validators, both required.** `tskflwctl lint` checks the full entity tree,
+  including audit findings and managed candidate rows; `tskflwctl audit lint <slug>`
+  repeats the audit checks with a focused receipt for the file a routine authored.
 - Machine reads are cheapest as `--json -c <cols>`; reach for full `--json`
   only when you need every frontmatter field.
 

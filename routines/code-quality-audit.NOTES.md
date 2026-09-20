@@ -125,6 +125,9 @@ Revisit after ~6 runs (each lens has run once):
 
 ## Changelog
 
+- **v2 (2026-09-19)** — candidate-task mirrors are now written with `audit finding
+  --candidate` under the `candidate-tasks:v1` marker; status and candidate changes can
+  land atomically, and both ordinary lint and scoped audit lint verify the projection.
 - **v1 (2026-08-30)** — initial spec, adapted from
   `desirelines-planning/routines/weekly-code-audit.md` v7 with the
   `simplification-audit.md` v4 rules folded in as one lens. Changes for

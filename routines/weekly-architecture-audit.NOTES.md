@@ -112,6 +112,9 @@ Revisit after ~4 cycles (each lens has run once):
 
 ## Changelog
 
+- **v2 (2026-09-19)** — candidate-task mirrors are now written with `audit finding
+  --candidate` under the `candidate-tasks:v1` marker; tracked handoffs update status and
+  their candidate row atomically, and both lint entry points validate the projection.
 - **v1 (2026-08-30)** — initial spec, adapted from
   `desirelines-planning/routines/weekly-architecture-audit.md` v2. Changes for
   taskflow: single-repo (no install script, no deploy repo); **ADR

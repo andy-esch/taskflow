@@ -61,9 +61,12 @@ We dogfood: drive this repo's planning with the tool itself.
   `--add <text>` / `--remove <n>` / `--replace <n> --text <new>` change which criteria
   exist. A criterion carrying a state has been DECIDED and does not block `complete`;
   only a silently unticked box does.
-- **Finding status — never hand-edit it; `audit finding` owns it.**
-  `audit finding <audit> <code> --status <v> [--pr N] [--note <text>]` writes the
-  `**Status:**` and the `**Resolution:**` paragraph in one validated, atomic edit.
+- **Finding status and its managed candidate row — never hand-edit them; `audit finding`
+  owns them.** `audit finding <audit> <code> [--status <v>] [--pr N]
+  [--note <text>] [--candidate <one-line>]` writes the `**Status:**`, the
+  `**Resolution:**` paragraph, and that finding's optional `candidate-tasks:v1` row in one
+  validated, atomic edit. An empty `--candidate` removes the row. Unversioned Candidate
+  tasks sections are legacy prose: readable, but deliberately never guessed at or rewritten.
   Statuses: `open | in-progress | fixed | tracked | deferred | superseded | wontfix`.
   **`tracked` means handed to a task and REQUIRES the destination** (`tracked by
   <task-id>`) — it counts toward the audit's done band, because the audit's interest

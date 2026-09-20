@@ -130,8 +130,9 @@ var entities = []Descriptor{
 			// makes it impossible for this guidance to lag the vocabulary again.
 			"finding statuses: " + strings.Join(FindingStatuses(), " | ") +
 				" — `tracked` means handed to a task and needs the destination (`tracked by <id>`).",
-			"never hand-edit a finding's **Status:** or **Resolution:** — `audit finding <audit> " +
-				"<code> --status <v> [--pr N] [--note <text>]` writes both in one validated, atomic edit.",
+			"never hand-edit a finding's **Status:**, **Resolution:**, or managed candidate row — `audit finding <audit> " +
+				"<code> --status <v> [--pr N] [--note <text>] [--candidate <one-line>]` writes them in one validated, atomic edit.",
+			"a `candidate-tasks:v1` section uses one tool-owned row per represented finding: `- <glyph> <CODE> · <status> — <text>`. Unversioned Candidate tasks sections are tolerated legacy prose and are never guessed at or rewritten.",
 		},
 		Templates: []NamedTemplate{
 			{DefaultTemplate, "Standard audit scaffold: findings + candidate tasks.", auditBodyTemplate},
@@ -335,7 +336,7 @@ const epicBodyTemplate = `
 // findings until real ones are added (parseAudit excludes fenced blocks). It stays
 // generic — a repo with its own conventions doc points at it from its own tooling,
 // not from the shared tool's scaffold.
-const auditBodyTemplate = "\n# Audit: {{area}} — {{date}}\n\n" +
+var auditBodyTemplate = "\n# Audit: {{area}} — {{date}}\n\n" +
 	"> Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
 	"## Findings\n\n" +
 	"<!-- One finding per issue, in this shape (un-fence it): -->\n\n" +
@@ -346,10 +347,7 @@ const auditBodyTemplate = "\n# Audit: {{area}} — {{date}}\n\n" +
 	"<what's wrong, why it matters, evidence>\n\n" +
 	"**Recommendation:** <minimum fix>\n\n" +
 	"**Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>\n" +
-	"```\n\n" +
-	"## Candidate tasks\n\n" +
-	"<!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do -->\n\n" +
-	"- ⏳ `tskflwctl task new \"<title>\" --epic <id> --tags <tag>` — <one line>\n"
+	"```\n\n" + candidateTasksScaffold()
 
 // researchBodyTemplate is the research scaffold. It opens with the QUESTION rather
 // than a status line: a research doc is an exploration snapshot, so what it was asking
@@ -390,7 +388,7 @@ const threadBodyTemplate = `
 // grammar as the default (a fenced example, so a fresh audit counts zero findings)
 // plus a threat-model header and a review checklist to anchor a security pass. Uses
 // the same {{area}}/{{date}} placeholders as the default audit template.
-const auditSecurityBodyTemplate = "\n# Security audit: {{area}} — {{date}}\n\n" +
+var auditSecurityBodyTemplate = "\n# Security audit: {{area}} — {{date}}\n\n" +
 	"> Security review. Edit findings in place and flip each `**Status:**` as you work it.\n\n" +
 	"## Threat model\n\n" +
 	"- **Assets / trust boundaries:** <what's worth protecting; where untrusted input crosses in>\n" +
@@ -409,10 +407,7 @@ const auditSecurityBodyTemplate = "\n# Security audit: {{area}} — {{date}}\n\n
 	"**Severity:** <critical|high|medium|low> · **Effort:** <XS|S|M|L> · **Urgency:** <acute|soon|eventually>\n\n" +
 	"<what's exploitable, the impact, and how>\n\n" +
 	"**Recommendation:** <the fix>\n" +
-	"```\n\n" +
-	"## Candidate tasks\n\n" +
-	"<!-- Mirror each finding: ✅ done · ⚠️ partial · ⏳ open · ⛔ won't do -->\n\n" +
-	"- ⏳ `tskflwctl task new \"<title>\" --epic <id> --tags security` — <one line>\n"
+	"```\n\n" + candidateTasksScaffold()
 
 // PluralKind returns the plural of a document kind for user-facing prose (an
 // ambiguous-match error listing candidates, say). Suffixing "s" is wrong for a mass

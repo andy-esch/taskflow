@@ -192,9 +192,6 @@ func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []domain.FileP
 	return out, problems, nil
 }
 
-// LintAudits validates audit findings — status vocabulary, missing status, and the
-// bucket↔state invariant — returning one LintResult per audit with issues (reusing
-// the task-lint result + render shape). slug, if set, restricts to one audit.
 // SetFindingStatus stamps one finding's status in place, through the audit body-replace
 // path so the rest of the file is byte-identical. Returns the audit and whether anything
 // changed — false means it already carried that exact value, so no write happened.
@@ -211,8 +208,9 @@ func (s *Service) SetFindingStatus(slug, code, status string, dryRun bool) (doma
 // two travel together so status and note land in ONE atomic write rather than two, which
 // would leave a window where the finding claims `fixed` with last round's explanation.
 type FindingEdit struct {
-	Status string  // "" leaves the status alone
-	Note   *string // nil leaves the note alone; a pointer to "" REMOVES it
+	Status    string  // "" leaves the status alone
+	Note      *string // nil leaves the note alone; a pointer to "" REMOVES it
+	Candidate *string // nil leaves the candidate alone; a pointer to "" REMOVES it
 }
 
 // apply runs the edit against a body, re-parsing between steps so the second edit sees the
@@ -228,6 +226,11 @@ func (e FindingEdit) apply(body, code string) (string, error) {
 	}
 	if e.Note != nil {
 		if out, err = domain.SetFindingNote(out, code, *e.Note); err != nil {
+			return "", err
+		}
+	}
+	if e.Candidate != nil {
+		if out, err = domain.SetFindingCandidate(out, code, *e.Candidate); err != nil {
 			return "", err
 		}
 	}
@@ -270,9 +273,10 @@ func (s *Service) EditFinding(slug, code string, edit FindingEdit, dryRun bool) 
 // nearMisses is a separate input rather than something recomputed from findings
 // because a dropped finding is by construction ABSENT from findings — the parsed
 // set can never reveal what failed to parse into it.
-func AuditLintIssues(a domain.Audit, findings []domain.Finding, nearMisses []domain.NearMissHeader) []domain.Issue {
+func AuditLintIssues(a domain.Audit, findings []domain.Finding, nearMisses []domain.NearMissHeader, candidateIssues []domain.Issue) []domain.Issue {
 	iss := domain.NearMissFindingIssues(nearMisses)
 	iss = append(iss, domain.LintFindings(string(a.Bucket), findings)...)
+	iss = append(iss, candidateIssues...)
 	iss = append(iss, domain.MissingIDIssue(a.ID)...)             // audits get a stable id too
 	iss = append(iss, domain.IDDriftIssue(a.ID, a.FilenameID)...) // …that must match the filename
 	iss = append(iss, domain.FrontmatterBucketIssues(a)...)       // and a missing/foreign bucket flag
@@ -327,13 +331,16 @@ func (s *Service) FixFindingHeaders(dryRun bool) ([]domain.FixResult, error) {
 	return out, nil
 }
 
+// LintAudits validates findings, managed candidate projections, and the bucket↔state
+// invariant, returning one LintResult per audit with issues. slug restricts it to one audit.
 func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, error) {
 	var (
 		results  []LintResult
 		problems []domain.FileProblem
 	)
 	check := func(a domain.Audit, body string) {
-		iss := AuditLintIssues(a, domain.ParseFindings(body), domain.NearMissFindingHeaders(body))
+		findings := domain.ParseFindings(body)
+		iss := AuditLintIssues(a, findings, domain.NearMissFindingHeaders(body), domain.LintCandidateTasks(body, findings))
 		if len(iss) > 0 {
 			results = append(results, LintResult{Slug: a.Slug, Issues: iss})
 		}

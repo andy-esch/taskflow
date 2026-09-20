@@ -1,6 +1,6 @@
 ---
 name: code-quality-audit
-version: 1
+version: 2
 schedule: "0 10 * * 2,5"         # 6am EDT Tuesdays + Fridays; lens picked by rotation index
 slack_channel: planning-updates
 repos:
@@ -20,7 +20,7 @@ lens_rotation:                   # index = (ISO week * 2 + slot) mod 6; slot 0 =
   4: adapter-hygiene
   5: simplification
 max_open_audits: 10              # backpressure: at or above this, triage instead of authoring
-last_modified: 2026-08-30
+last_modified: 2026-09-19
 ---
 
 # Code Quality Audit (Twice-Weekly Lens Rotation)
@@ -122,8 +122,9 @@ cannot get the check clean, post to Slack and exit without a PR.
         work — `./bin/tskflwctl task list --json`, match by file path and
         symbol, not by title.
     (c) If a task owns it:
-            ./bin/tskflwctl audit finding <audit> <code> \
-              --status "tracked by <task-id>" --note "<why it moved>"
+          ./bin/tskflwctl audit finding <audit> <code> \
+              --status "tracked by <task-id>" --note "<why it moved>" \
+              --candidate "Tracked in planning/tasks/<id>-<slug>.md"
         `tracked` REQUIRES the destination, and it goes INSIDE the --status
         value — `--status "tracked by <id>"`. A bare `--status tracked` is
         rejected even if --note names the task. Never hand-edit `**Status:**`.
@@ -243,8 +244,8 @@ cannot get the check clean, post to Slack and exit without a PR.
         - **FULL** — mark the finding tracked, with the destination:
               ./bin/tskflwctl audit finding <audit> <code> \
                 --status "tracked by <task-id>" --note "<why it moved>"
-          The candidate-tasks list gets `⏳ tracked in planning/tasks/<file>`
-          instead of a fresh `task new` suggestion. Annotate the task
+          This updates the managed candidate row instead of requiring a hand-written
+          mirror. Annotate the task
           additively: append this audit's path to `audit_sources:` (create if
           missing). `audit_sources` is a LIST and `--set` REPLACES it —
           read the current value first (`task list --json`, no `-c`) and pass
@@ -294,11 +295,13 @@ cannot get the check clean, post to Slack and exit without a PR.
 
     Write the body with `audit append` or `audit edit`, following
     AUDIT-FILE-TEMPLATE below. Each finding carries `**Status:** open` from the
-    scaffold. **Never hand-edit a `**Status:**` or `**Resolution:**` line
-    afterwards** — `./bin/tskflwctl audit finding <audit> <code> --status <v>
-    [--note <text>]` owns both, in one validated atomic edit.
+    scaffold. **Never hand-edit a `**Status:**`, `**Resolution:**`, or managed
+    Candidate tasks row afterwards** — `./bin/tskflwctl audit finding <audit>
+    <code> [--status <v>] [--note <text>] [--candidate <one-line>]` owns all
+    three in one validated atomic edit. Preserve the scaffold's
+    `candidate-tasks:v1` marker.
 
-    Before generating the candidate-tasks list, run `./bin/tskflwctl epic list`
+    Before generating candidate tasks, run `./bin/tskflwctl epic list`
     to use real epic IDs in `task new` suggestions — template examples drift.
     `21-code-quality-architecture-hardening` is the usual home for
     audit-derived work; pick a better-fitting epic when one exists.
@@ -311,10 +314,9 @@ cannot get the check clean, post to Slack and exit without a PR.
         ./bin/tskflwctl lint                        # entity tree + step-10 annotations
         ./bin/tskflwctl audit lint <date>-<lens>    # THIS audit's finding statuses
 
-    `tskflwctl lint` does **not** check finding `**Status:**` values —
-    `audit lint` is the one that does, and passing it the slug scopes it to the
-    file this run produced. Do not close out on a red `audit lint`; a bad status
-    is a one-word fix now and an archaeology problem later.
+    `tskflwctl lint` checks findings and managed candidate rows across the corpus;
+    `audit lint <slug>` repeats that contract with a focused receipt for this run's
+    file. Do not close out on either command red.
 
     If `just test` was already red before your run, say so in the PR and do not
     attempt to fix it — that is out of scope for this routine.
@@ -460,8 +462,8 @@ in the tree today.)
 
   # Code Quality Audit: <lens> — YYYY-MM-DD
 
-  > Edit findings through `tskflwctl audit finding` so status and resolution
-  > metadata stay queryable. Never hand-edit a `**Status:**` line.
+  > Edit findings through `tskflwctl audit finding` so status, resolution, and
+  > managed candidate metadata stay synchronized. Never hand-edit those fields.
 
   Routine: `code-quality-audit` · lens `<lens-slug>` · ISO week `<YYYY-WNN>`,
   slot `<Tue|Fri>` (index <N>).
@@ -530,14 +532,18 @@ in the tree today.)
 
   <patterns/antipatterns researched, with cited URLs>
 
-  ## Candidate tasks (human to triage)
+  ## Candidate tasks
 
-  Mix of `tskflwctl task new …` suggestions (findings with no matching open
-  task) and `⏳ tracked in planning/tasks/…` cross-links (already covered — see
-  step 10). Do NOT run the `task new` lines yourself.
+  Preserve the `candidate-tasks:v1` marker emitted by `audit new`. After the finding
+  headings exist, add exactly one optional row per represented finding through the tool,
+  never by typing the row:
 
-  - `tskflwctl task new "<title>" --epic <epic-id> --tags <tag> --tier <N> --priority <p> --description "..."`
-  - ⏳ M2 tracked in `planning/tasks/<id>-<slug>.md`
+      ./bin/tskflwctl audit finding <audit> <code> \
+        --candidate '`tskflwctl task new "<title>" --epic <epic-id> --tags <tag> --tier <N> --priority <p> --description "..."`'
+
+  Already-covered work uses a concise `Tracked in planning/tasks/<id>-<slug>.md` value.
+  The tool supplies the finding code, current status, and glyph. Multiple findings may
+  point to the same eventual task by carrying separate rows. Do NOT run `task new`.
 
   ## Related-task observations (propose-only)
 

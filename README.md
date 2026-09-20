@@ -147,7 +147,7 @@ tskflwctl audit show <slug> --section findings  # audit body section (or --front
 tskflwctl audit info <slug> --json     # token-cheap: path, bucket, findings:{total,open,in_progress,done,dropped}
 tskflwctl audit path <slug>            # just the absolute file path (like task path)
 tskflwctl audit findings --status open --effort XS,S --json  # query findings across audits
-tskflwctl audit lint                   # validate finding status vocab + missing status + bucket↔state
+tskflwctl audit lint                   # validate findings + candidate-tasks:v1 mirrors + bucket↔state
 tskflwctl research list                # the whole corpus, newest first (--tag to filter)
 tskflwctl research show <slug>         # metadata + body (--section / --frontmatter-only; research path <slug> for the file)
 tskflwctl schema                       # the tool's contract for agents (statuses, fields, codes)
@@ -174,7 +174,7 @@ tskflwctl task depend repair --auto --dry-run            # preview safe dedupe/s
 tskflwctl thread add <thread> <task>...                  # atomic guarded membership add
 tskflwctl thread remove <thread> <task>...               # atomic guarded membership removal
 tskflwctl thread start|complete|cancel|reopen <thread>    # explicit Thread lifecycle
-tskflwctl audit finding <slug> <code> --status "tracked by <id>" --note "how"  # status + resolution, one atomic write
+tskflwctl audit finding <slug> <code> --status "tracked by <id>" --note "how" --candidate "Follow-up"  # status + resolution + optional managed candidate, one atomic write
 tskflwctl audit close|reopen|defer <slug>...
 tskflwctl research set <slug> --description "…" --tags a,b   # settable fields only; `schema research` lists them
 tskflwctl research edit|append <slug>                        # same human/agent pair as task edit|append

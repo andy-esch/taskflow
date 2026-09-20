@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g9txm0s3yyh
-status: in-progress
+status: completed
 description: Turn compatibility audits into durable projected-output and command-contract guarantees.
 goal: Machine-facing CLI views stay backward compatible and reject registry drift as they evolve.
 created: "2026-09-13"
@@ -9,6 +9,7 @@ tags: [cli, json, contract, dogfood]
 tasks: [6g9s401jtqb7, 6g9txf8x9m70, 6ga3z57hqa70, 6ga968z46e9y, 6gbmzgsnzhhp]
 updated_at: "2026-09-19"
 started_at: "2026-09-13"
+ended_at: "2026-09-19"
 ---
 
 # Thread: Harden CLI machine contracts

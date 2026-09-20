@@ -528,9 +528,13 @@ adapter capabilities rather than leaked persistence.
   assertion (finding M3 of `2026-08-17-finding-status-surface`).
 - **A state the tool cannot write is a state nobody can be held to.** Every
   closed-vocabulary field has a validated, atomic write verb — `task ac` for criterion
-  state, `audit finding` for finding status and its resolution note — because the
+  state, `audit finding` for finding status, its resolution note, and its optional managed
+  candidate-task projection — because the
   alternative is hand-edited markdown, which is how a vocabulary drifts from its own
-  documentation. Reads stay tolerant so `lint` can REPORT malformed data already on
+  documentation. Candidate rows use a versioned `candidate-tasks:v1` marker and carry one
+  finding code each; their glyph and status derive from the same domain-owned status table
+  used by renderers. Unversioned sections remain tolerated legacy prose rather than guessed
+  migrations. Reads stay tolerant so `lint` can REPORT malformed managed data already on
   disk; writes refuse to create it.
 
 ## Why these boundaries (and why not collapse them)
@@ -777,7 +781,8 @@ application seams; it is no longer architecture held in reserve for a hypothetic
   is a versioned `internal/wire` contract with generated JSON Schema and golden coverage.
 - The planning model's closed vocabularies now have write verbs rather than only linters.
   An acceptance criterion carries a state and a reason (`task ac`), an audit finding
-  carries a status and a resolution paragraph (`audit finding`), and the words the two
+  carries a status, resolution paragraph, and optional versioned candidate projection
+  (`audit finding`), and the words the two
   share are declared once in `domain/resolution.go`. Two invariants are enforced at write
   time rather than reported after: `task complete` refuses a task with an unexplained
   unmet criterion, mirroring `audit close` refusing while findings are open.

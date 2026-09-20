@@ -1,10 +1,11 @@
 ## tskflwctl lint
 
-Validate entity frontmatter, audit findings, and task-dependency graph integrity
+Validate planning entities, audit projections, and task-dependency graph integrity
 
 ### Synopsis
 
-Validate task, epic, research, and Thread frontmatter plus audit findings, then validate the
+Validate task, epic, research, and Thread frontmatter plus audit findings and managed
+candidate-task projections, then validate the
 repository-global task-dependency graph. Exactly resolved legacy dependency fields are visible
 advisories; missing, ambiguous, or structurally unsafe references are errors.
 

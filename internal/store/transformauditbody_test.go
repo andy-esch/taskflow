@@ -178,6 +178,57 @@ func TestEditFinding_RetriesAroundConcurrentAppendPreservingBoth(t *testing.T) {
 	}
 }
 
+// Candidate projection is part of the same retried transform as status and note. A
+// concurrent append must cause the whole multi-field edit to recompute against fresh prose,
+// preserving both the append and exactly one synchronized candidate row.
+func TestEditFindingCandidate_RetriesAroundConcurrentAppendPreservingAll(t *testing.T) {
+	fs, p := transformAuditRepo(t)
+	original, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed := strings.TrimRight(string(original), "\n") + "\n\n## Candidate tasks\n\n" +
+		domain.CandidateTasksMarkerComment() + "\n"
+	if err := os.WriteFile(p, []byte(managed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	svc := core.NewService(fs, core.WithRetry(4, func(int) {}))
+
+	orig := testHookBeforeBodyWrite
+	defer func() { testHookBeforeBodyWrite = orig }()
+	testHookBeforeBodyWrite = func() {
+		testHookBeforeBodyWrite = orig
+		if _, _, err := fs.AppendAuditBody("2026-01-01-a", "## Appended section\n\nnew prose.", transformAuditNow, false); err != nil {
+			t.Errorf("concurrent append failed: %v", err)
+		}
+	}
+
+	candidate := "Preserve the candidate projection"
+	_, changed, err := svc.EditFinding("2026-01-01-a", "H1", core.FindingEdit{
+		Status:    "fixed",
+		Candidate: &candidate,
+	}, false)
+	if err != nil {
+		t.Fatalf("the candidate edit should retry around a concurrent append, got %v", err)
+	}
+	if !changed {
+		t.Error("the retried candidate edit should report a change")
+	}
+	after, _ := os.ReadFile(p)
+	for _, want := range []string{
+		"## Appended section\n\nnew prose.",
+		"**Status:** fixed",
+		"- ✔ H1 · fixed — Preserve the candidate projection",
+	} {
+		if !strings.Contains(string(after), want) {
+			t.Errorf("retried edit lost %q:\n%s", want, after)
+		}
+	}
+	if got := strings.Count(string(after), " H1 · fixed — Preserve the candidate projection"); got != 1 {
+		t.Errorf("want exactly one candidate row after retry, got %d:\n%s", got, after)
+	}
+}
+
 // The frontmatter is preserved surgically and the body write stamps updated_at.
 func TestTransformAuditBody_StampsUpdatedAtAndPreservesFrontmatter(t *testing.T) {
 	fs, p := transformAuditRepo(t)

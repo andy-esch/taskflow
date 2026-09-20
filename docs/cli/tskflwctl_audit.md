@@ -30,10 +30,10 @@ Work with code audits
 * [tskflwctl audit close](tskflwctl_audit_close.md)	 - Move audit(s) to the closed bucket
 * [tskflwctl audit defer](tskflwctl_audit_defer.md)	 - Move audit(s) to the deferred bucket
 * [tskflwctl audit edit](tskflwctl_audit_edit.md)	 - Open an audit in your editor (whole file; re-validated on save)
-* [tskflwctl audit finding](tskflwctl_audit_finding.md)	 - Set one finding's status and resolution note in place (validated, atomic)
+* [tskflwctl audit finding](tskflwctl_audit_finding.md)	 - Set one finding's status, resolution, and candidate row (validated, atomic)
 * [tskflwctl audit findings](tskflwctl_audit_findings.md)	 - Query findings across audits (or one) by status/effort/urgency/component
 * [tskflwctl audit info](tskflwctl_audit_info.md)	 - Show an audit's metadata + file path + finding tally (no body)
-* [tskflwctl audit lint](tskflwctl_audit_lint.md)	 - Validate audit findings (status vocabulary, missing status, bucket↔state)
+* [tskflwctl audit lint](tskflwctl_audit_lint.md)	 - Validate audit findings, managed candidate rows, and bucket↔state
 * [tskflwctl audit list](tskflwctl_audit_list.md)	 - List audits (open by default)
 * [tskflwctl audit new](tskflwctl_audit_new.md)	 - Create a new audit (open bucket, scaffolded findings)
 * [tskflwctl audit path](tskflwctl_audit_path.md)	 - Print the absolute path to an audit's file

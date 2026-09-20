@@ -14,8 +14,9 @@ func newLintCmd(app *App) *cobra.Command {
 	var fix, links bool
 	cmd := &cobra.Command{
 		Use:   "lint",
-		Short: "Validate entity frontmatter, audit findings, and task-dependency graph integrity",
-		Long: "Validate task, epic, research, and Thread frontmatter plus audit findings, then validate the\n" +
+		Short: "Validate planning entities, audit projections, and task-dependency graph integrity",
+		Long: "Validate task, epic, research, and Thread frontmatter plus audit findings and managed\n" +
+			"candidate-task projections, then validate the\n" +
 			"repository-global task-dependency graph. Exactly resolved legacy dependency fields are visible\n" +
 			"advisories; missing, ambiguous, or structurally unsafe references are errors.\n\n" +
 			"--fix repairs ordinary frontmatter and missing ids. It never normalizes or changes\n" +

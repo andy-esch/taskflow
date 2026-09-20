@@ -117,6 +117,19 @@ func TestFindingStatus(t *testing.T) {
 	}
 }
 
+func TestFindingStatusColorCoversDomainRegistry(t *testing.T) {
+	for _, status := range domain.FindingStatuses() {
+		if _, ok := findingStatusColor(status); !ok {
+			t.Errorf("domain finding status %q has no intentional theme colour", status)
+		}
+	}
+	for _, status := range []string{"", "bogus"} {
+		if _, ok := findingStatusColor(status); ok {
+			t.Errorf("unknown finding status %q should use the fallback, not claim registry coverage", status)
+		}
+	}
+}
+
 func TestPriority(t *testing.T) {
 	cases := []struct {
 		priority string

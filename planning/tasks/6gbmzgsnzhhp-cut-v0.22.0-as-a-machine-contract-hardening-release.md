@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gbmzgsnzhhp
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Qualify and publish the stable-ID projections, registry guards, and explicit machine-contract revision policy as one coherent release.
 effort: 1 day
@@ -13,6 +13,7 @@ created: "2026-09-19"
 updated_at: "2026-09-19"
 depends_on: [6ga968z46e9y]
 started_at: "2026-09-19"
+completed_at: "2026-09-19"
 ---
 
 # Cut v0.22.0 as a machine-contract hardening release
@@ -73,17 +74,17 @@ below before completing the publication criterion.
 
 ## Acceptance criteria
 
-- [ ] The four machine-contract Thread tasks are complete and merged into the clean candidate;
+- [x] The four machine-contract Thread tasks are complete and merged into the clean candidate;
       projected JSON and schema revision 1.68 remain classified as additive.
-- [ ] `just release-validate` and `just release-validate-container` pass against the same recorded
+- [x] `just release-validate` and `just release-validate-container` pass against the same recorded
       candidate without tracked worktree changes.
-- [ ] A fresh candidate binary passes the bounded schema/task/audit JSON dogfood; stable IDs,
+- [x] A fresh candidate binary passes the bounded schema/task/audit JSON dogfood; stable IDs,
       ordered selectors, raw registry values, and revision-policy metadata are verified.
-- [ ] Release notes concisely explain the machine-contract hardening, link planning and audit
+- [x] Release notes concisely explain the machine-contract hardening, link planning and audit
       evidence, and retain the Threads preview classification.
-- [ ] The v0.22.0 tag, release workflow, four archives, checksums, extracted version, and installed
+- [x] The v0.22.0 tag, release workflow, four archives, checksums, extracted version, and installed
       binary all identify the recorded candidate.
-- [ ] Remaining exit-code, command-discovery, Thread-list projection, and bounded-query findings
+- [x] Remaining exit-code, command-discovery, Thread-list projection, and bounded-query findings
       are tracked as a separate follow-on phase rather than made accidental release gates.
 
 ## Out of scope
@@ -100,3 +101,27 @@ below before completing the publication criterion.
 - Architecture audit [Machine contract](../audits/6g9zev1epg76-2026-09-14-arch-machine-contract.md)
 - Release guide [Releasing taskflow](../../docs/RELEASING.md)
 - Previous checkpoint [v0.21.0 spatial Threads preview](6g9mz2shwmb0-cut-v0.21.0-as-a-spatial-threads-preview.md)
+
+## Release closeout (2026-09-19)
+
+The immutable `v0.22.0` tag and candidate resolve to
+`934e1cfc75b2f798bad6344498ca4e4b535bc8d6`. The maintainer reported both
+`just release-validate` and `just release-validate-container` passing on the merged candidate, plus
+the bounded schema/task/audit dogfood. Revision 1.68 remained additive, and the four prerequisite
+machine-contract tasks were complete in the healthy Thread projection.
+
+The [tag-triggered release workflow](https://github.com/andy-esch/taskflow/actions/runs/35455671413)
+completed successfully. The [GitHub Release](https://github.com/andy-esch/taskflow/releases/tag/v0.22.0)
+publishes `checksums.txt` and Darwin/Linux archives for amd64 and arm64. Fresh downloads of all four
+archives passed the published SHA-256 checks; the extracted Darwin arm64 binary reports
+`tskflwctl 0.22.0`. The locally installed binary, built from the tag, also reports `0.22.0`; it is
+recorded as a source build rather than claimed byte-identical to the published archive.
+
+The generated commit dump was replaced with concise planning-linked notes covering stable-ID
+projections, structured JSON errors, registry invariants, revision 1.68, additive compatibility,
+and the continuing Threads preview boundary.
+
+Remaining findings are explicitly tracked in the unstarted
+[Make CLI contracts self-describing and bounded](../threads/6gbn4v2jpf2m-make-cli-contracts-self-describing-and-bounded.md)
+Thread: complete exit taxonomy (`6gbn4g1bb7wr`), command discovery (`6g63hhk3eddf`), Thread-list
+projection (`6gbn4g1eypzs`), and bounded list queries (`6gbn4g1j40pj`).

@@ -1,6 +1,6 @@
 ---
 name: weekly-architecture-audit
-version: 1
+version: 2
 schedule: "30 11 * * 1"          # 7:30am EDT Mondays / 6:30am EST after Nov DST
 slack_channel: planning-updates
 repos:
@@ -22,7 +22,7 @@ lens_rotation:
     1: data-model-and-storage    # entity model, flat id-led layout, migration, OCC
     2: machine-contract          # --json envelopes, schema_version, agent ergonomics
     3: failure-and-recovery      # guard topology, atomicity, partial failure, repair
-last_modified: 2026-08-30
+last_modified: 2026-09-19
 ---
 
 # Weekly Architecture Audit (Single-Lens Rotation)
@@ -228,9 +228,10 @@ cannot get the check clean, post to Slack and exit without a PR.
         package names, ADR number, schema field).
     (b) Classify overlap as **FULL** / **PARTIAL** / **NONE**.
     (c) FULL → `./bin/tskflwctl audit finding <audit> <code> --status
-        "tracked by <task-id>"` — the destination goes INSIDE --status; a bare
+        "tracked by <task-id>" --candidate "Tracked in planning/tasks/<id>-<slug>.md"`
+        — the destination goes INSIDE --status; a bare
         `--status tracked` is rejected even if --note names the task; the
-        candidate-tasks entry becomes `⏳ tracked in planning/tasks/…`; annotate
+        tool updates the versioned candidate row; annotate
         the task additively — `audit_sources` is a LIST and `--set` REPLACES
         it, so read the current value and pass the full comma-separated set
         (`task set <slug> --set audit_sources=<existing>,<new>`); then add a
@@ -254,8 +255,10 @@ cannot get the check clean, post to Slack and exit without a PR.
     `area`/`date` frontmatter in the `open` bucket. `<lens>` is the kebab-case
     slug from LENS-ROTATION. Use AUDIT-FILE-TEMPLATE below for the body.
 
-    **Never hand-edit a `**Status:**` or `**Resolution:**` line** —
-    `./bin/tskflwctl audit finding` owns both.
+    **Never hand-edit a `**Status:**`, `**Resolution:**`, or managed Candidate tasks
+    row** — `./bin/tskflwctl audit finding` owns all three. Preserve the
+    `candidate-tasks:v1` marker emitted by `audit new`; add an optional row with
+    `--candidate "<one line>"` only after its finding heading exists.
 
     Before generating candidate tasks, run `./bin/tskflwctl epic list` to use
     real epic IDs — template examples drift.
@@ -272,8 +275,9 @@ cannot get the check clean, post to Slack and exit without a PR.
         ./bin/tskflwctl lint                          # entity tree + step-11 annotations
         ./bin/tskflwctl audit lint <date>-arch-<lens> # THIS audit's finding statuses
 
-    `tskflwctl lint` does **not** check finding `**Status:**` values —
-    `audit lint` is the one that does. Do not close out on a red `audit lint`.
+    `tskflwctl lint` checks findings and managed candidate rows across the corpus;
+    `audit lint <slug>` repeats that contract with a focused receipt for this run's
+    file. Do not close out on either command red.
 
     If `just test` was already red before your run, say so in the PR and do not
     attempt to fix it — out of scope for this routine.
@@ -395,8 +399,8 @@ in the repo today.)
 
   # Weekly Architecture Audit: <lens> — YYYY-MM-DD
 
-  > Edit findings through `tskflwctl audit finding` so status and resolution
-  > metadata stay queryable. Never hand-edit a `**Status:**` line.
+  > Edit findings through `tskflwctl audit finding` so status, resolution, and
+  > managed candidate metadata stay synchronized. Never hand-edit those fields.
   > Architecture audits are propose-only — no code, docs, or ADR edits.
 
   Routine: `weekly-architecture-audit` · lens `<lens-slug>` · ISO week
@@ -476,13 +480,13 @@ in the repo today.)
   (Architectural patterns that are well-implemented, one line each with the ADR
   clause or cited practice they satisfy.)
 
-  ## Candidate tasks (human to triage)
+  ## Candidate tasks
 
-  Mix of `tskflwctl task new …` suggestions and `⏳ tracked in planning/tasks/…`
-  cross-links. Do NOT run the `task new` lines yourself.
-
-  - `tskflwctl task new "<title>" --epic <epic-id> --tags <tag> --tier <N> --priority <p> --description "..."`
-  - ⏳ M2 tracked in `planning/tasks/<id>-<slug>.md`
+  Preserve the `candidate-tasks:v1` marker emitted by `audit new`. Add each optional row
+  through `audit finding <audit> <code> --candidate "<one line>"`, never by typing it.
+  Use a `tskflwctl task new …` command as the value for new work and `Tracked in
+  planning/tasks/<id>-<slug>.md` for existing ownership. Multiple findings may point to
+  the same eventual task through separate rows. Do NOT run `task new`.
 
   ## Related-task observations (propose-only)
 

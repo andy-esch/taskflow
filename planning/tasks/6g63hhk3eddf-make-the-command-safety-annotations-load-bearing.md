@@ -50,6 +50,8 @@ mutating path should be a test failure, not a code-review catch.
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - `planning/research/6f9menr01t1n-tskflwctl-command-spec.md` — command safety tags, the original intent
+- Audit [AI-agent CLI ergonomics, M3](../audits/6fsa47r4f7es-2026-07-24-ai-agent-cli-ergonomics.md)
+- Thread [Make CLI contracts self-describing and bounded](../threads/6gbn4v2jpf2m-make-cli-contracts-self-describing-and-bounded.md)
 
 ## Sweep audit 2026-09-13
 
