@@ -3,14 +3,16 @@ schema: 1
 id: 6fmvcgpkyh3e
 status: ready-to-start
 epic: 26-frontmatter-schema-declared-validation-contract
-description: Flag legacy/misspelled frontmatter keys (deprecated_date→deprecated_at) in lint, rename under --fix via a frozen alias table; needs a raw-keys→lint path shared with epic 26 field checks.
+description: Flag legacy frontmatter keys (deprecated_date to deprecated_at) in lint and rename them under --fix from a frozen alias table; needs a raw-keys lint path.
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
 tags: [lint, schema, frontmatter, core]
 created: "2026-07-10"
-updated_at: "2026-07-10"
+updated_at: "2026-09-20"
+audited: "2026-09-20"
+audit_sources: [2026-09-20-weekly-task-sweep]
 ---
 # Alias lint-warn: flag legacy field names + `--fix` rename via a bounded alias table
 
@@ -87,3 +89,50 @@ defensible now.)
 - ADR survey task `6fkkz41cax80` — Q3 (auto-migrate, bounded) / Q2 (misspelled-known → alias) notes.
 - Audit-lint roster task `6fm8p1cj11qf` — share the raw-key path so audits get alias checks too.
 - Prior art: `KnownTaskField` / `taskFields` (`domain/fields.go`), `fixFrontmatterText` (`store/fix.go`), `Service.Lint` (`core/service.go:216`).
+
+## Sweep verification (2026-09-20)
+
+Automated weekly sweep re-read this task against `internal/domain`,
+`internal/core`, and `internal/store` at `934e1cf`. The gap is still real and the
+proposed change still fits; three references have drifted.
+
+**The gap is unchanged — verified accurate.** No alias machinery exists anywhere
+in production code: `grep` for `fieldAliases`, `AliasFor`, `AliasIssues`, and
+`deprecated_date` across `internal/**/*.go` (excluding tests) returns nothing. A
+legacy key still sails through lint silently.
+
+**`Service.Lint` has moved: `internal/core/service.go:216` →
+`internal/core/service.go:450`.** The premise still holds — it reads
+`ListTasksWithBodies()` and `ListEpics()` and works on parsed structs, so raw
+frontmatter keys are still not reachable from the reporter. Its doc comment now
+reads "validates task, epic, research, and Thread documents", i.e. the roster is
+wider than when this task was written, which makes the shared raw-key path worth
+*more*, not less.
+
+**The audit-lint roster task has landed.** `6fm8p1cj11qf-fold-audits-into-the-top-level-lint-command`
+is now `completed`, so step 3's "coordinate with the audit-lint roster task so
+audits get it too" is no longer a coordination problem — audits are already
+inside the unified `lint` roster. The raw-key foundation should be built so the
+already-unified roster picks alias findings up for every kind it covers, rather
+than for tasks first. Note `Service.LintAudits` (`internal/core/finding.go:330`)
+still exists alongside it as the audit-scoped entry point.
+
+**`fixFrontmatterText` verified accurate**, now at `internal/store/fix.go:324`;
+it still walks raw `key: value` lines, so step 4's bounded text-level rename
+remains the right locus.
+
+**The ADR-0005 gate is a naming collision.** This task is "gated on ADR-0005"
+and cites "ADR-0005 Q2/Q3/Q10" in four places, meaning the *frontmatter-schema
+policy ADR* — but `planning/adrs/0005-home-config-and-the-space-registry.md` is
+an unrelated accepted ADR, and 0006/0007/0008 are taken too. The gating ADR is
+still unwritten; it lives in task `6fkkz41cax80`, where §E's number now needs to
+be re-picked (next free: 0009).
+
+> **Lean:** read every "ADR-0005" in this task as "the frontmatter-schema
+> policy ADR (`6fkkz41cax80`)" and renumber both tasks together once §E is
+> confirmed. Left unedited here deliberately — the number is that task's
+> decision, not this sweep's.
+
+## Progress Log
+
+- 2026-09-20: automated weekly sweep — gap re-confirmed (no alias code exists); Service.Lint reference corrected 216→450; audit-lint roster task now completed, so the raw-key path should serve the already-unified roster; flagged the ADR-0005 number collision.

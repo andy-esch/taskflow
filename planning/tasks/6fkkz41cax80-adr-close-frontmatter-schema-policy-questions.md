@@ -3,16 +3,17 @@ schema: 1
 id: 6fkkz41cax80
 status: next-up
 epic: 26-frontmatter-schema-declared-validation-contract
-description: Design-first ADR closing epic 26's policy questions (strictness, unknown fields, schema location, severities, rollout) so one field registry drives lint, schema guidance, and the --json contract.
+description: Design-first ADR closing epic 26's policy questions so one declared field registry drives lint, schema guidance, and the --json contract.
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
 tags: [validation, schema, adr]
 created: "2026-07-07"
-updated_at: "2026-09-07"
+updated_at: "2026-09-20"
 started_at: "2026-08-23"
-audit_sources: [2026-09-07-arch-data-model-and-storage]
+audit_sources: [2026-09-07-arch-data-model-and-storage, 2026-09-20-weekly-task-sweep]
+audited: "2026-09-20"
 ---
 # ADR — declared frontmatter-schema contract: close the policy questions
 
@@ -308,3 +309,43 @@ Next number after 0003 / 0004 → **ADR-0005**. &nbsp; [ ] confirm &nbsp; [ ] ot
   missing-frontmatter failure, `schema --json-schema`.
 
 Reinforced by audit 2026-09-07-arch-data-model-and-storage: M3 (Q9 input) — three entity kinds declare known fields in three shapes: task a typed table (domain/fields.go:24), epic a hand-written map literal plus a hardcoded list predicate (domain/epic.go:106,130), research derived from the entity Descriptor (domain/research.go:81). Audit and Thread have none, correctly (no `set` verb). Also: the audit proposes adding stable-id uniqueness to Q7's candidate referential-rule list — see finding M1.
+
+## Sweep verification (2026-09-20)
+
+Automated weekly sweep re-read this survey against `internal/domain` and
+`planning/adrs/` at `934e1cf`. The survey itself is untouched — every box is
+still Andy's to tick. Two annotations only.
+
+**§E is stale — ADR-0005 is taken.** When this task was written, 0003 and 0004
+were the highest numbers on disk. Since then `planning/adrs/` has gained
+0005-home-config-and-the-space-registry, 0006-adopt-threads-as-task-dags,
+0007-planning-state-vocabularies, and
+0008-use-monotonic-revisions-for-the-json-machine-contract.
+
+> **Lean:** the next free ADR number is **0009**, not 0005. §E's "confirm" box
+> should be read as confirming *the next free number*, not the literal 0005.
+> Note that downstream tasks already cite "ADR-0005" meaning *this* ADR — see
+> the alias-lint task `6fmvcgpkyh3e`, which is "gated on ADR-0005" four times.
+> Whichever number is chosen, those references need updating with it.
+
+**Q10's envelope half is now settled by ADR-0008.** Q10 records that `schema:`
+versions the on-disk file shape while `schema_version` versions the `--json`
+contract, "neither drives the other". ADR-0008 (accepted 2026-09-15) has since
+made `schema_version` an explicit monotonic machine-contract revision with a
+per-revision ADDITIVE / NOT ADDITIVE declaration. That confirms the distinctness
+Q10 asserts and removes the envelope side from this ADR's scope; the `schema:`
+side — and the park decision — remain open exactly as drafted.
+
+**Prior-art citations — all verified accurate (2026-09-20):**
+
+- `domain.LintTask` → `internal/domain/lint.go:87`
+- `domain.MissingIDIssue` → `internal/domain/lint.go:161`
+- `store.parseTask` → `internal/store/fsstore.go:296`
+- M3's three-shape divergence (Q9 input) still holds: task a typed table
+  (`internal/domain/fields.go:24`), epic a hand-written map literal plus a
+  hardcoded predicate (`internal/domain/epic.go:106`, `:130`), research derived
+  from the entity `Descriptor` (`internal/domain/research.go:81`).
+
+## Progress Log
+
+- 2026-09-20: automated weekly sweep — survey untouched; flagged that §E's "ADR-0005" number is now taken (next free is 0009) and that ADR-0008 settles Q10's envelope half; all prior-art citations re-verified.

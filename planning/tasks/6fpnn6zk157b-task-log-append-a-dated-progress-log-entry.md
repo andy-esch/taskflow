@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, agents, ux, dx]
 created: "2026-07-16"
+updated_at: "2026-09-20"
+audited: "2026-09-20"
+audit_sources: [2026-09-20-weekly-task-sweep]
 ---
 > ⚠️ **Spun off 2026-07-16** from
 > [structure-aware-body-mutation-and-metadata-reads](6fpfcecdymca-structure-aware-body-mutation-and-metadata-reads.md)
@@ -84,3 +87,56 @@ other corpus:
 
 - Spun off from [structure-aware-body-mutation-and-metadata-reads](6fpfcecdymca-structure-aware-body-mutation-and-metadata-reads.md).
 - Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md).
+
+## Sweep verification (2026-09-20)
+
+Automated weekly sweep re-read this task against `internal/cli`,
+`internal/store`, `internal/domain`, and the `planning/tasks/` corpus at
+`934e1cf`. The feature is still unbuilt and the design notes still hold; the one
+substantive update is that the corpus evidence behind the blocking decision has
+inverted.
+
+**Still unbuilt — verified accurate.** `tskflwctl task --help` lists `ac`,
+`append`, `edit`, `set` and no `log`. `task append` is still structure-blind, so
+the duplicate-header problem in the Objective is exactly as described.
+
+**Design-note references verified accurate (2026-09-20):**
+
+- `FS.EditBody` → `internal/store/body.go:134` (still the surgical
+  parse-before-write + CAS path).
+- `domain.Section` → `internal/domain/body.go:216` and
+  `scanAcceptanceCheckboxes` → `internal/domain/body.go:251`; both still live in
+  the fence-aware body model, alongside `UnterminatedFence` (`body.go:173`),
+  which is the fence-awareness primitive AC #4 needs.
+- The injected clock is still the idiom — `s.now()` at
+  `internal/core/dependency_operations.go:129`, `dependency_repair.go:612`,
+  `finding.go:251`.
+- The parent batch task `6fpfcecdymca-structure-aware-body-mutation-and-metadata-reads`
+  is `completed`, confirming the spin-off note: the other three items shipped and
+  only this one is outstanding.
+
+**The corpus evidence for the shape decision has inverted.** This task records
+per-entry dated headings (`## Progress (YYYY-MM-DD)`) as "this repo's de-facto
+corpus". Counted across `planning/tasks/` at `934e1cf`:
+
+| shape | files |
+|---|---|
+| `## Progress Log` | 21 |
+| `## Implementation progress` | 19 |
+| `## Progress (YYYY-MM-DD)` | 7 |
+
+> **Lean (AC #1):** `## Progress Log` is now the majority section header, 21 to
+> 7 over per-entry dated headings — the opposite of what this task assumed, so
+> the "hard-coding either fights the other corpus" objection now cuts toward
+> the single-section shape rather than away from it. Two caveats keep this a
+> lean and not a decision: (a) `## Implementation progress` (19 files) is a
+> third header spelling that any implementation has to recognise or migrate, and
+> (b) within `## Progress Log` the *entry* format is itself split — plain dated
+> bullets (`- 2026-06-07: …`) in some files, bold dated sub-entries
+> (`**2026-06-07 — title.**` plus bullets) in the older ones. So the decision is
+> really two: which header `task log` targets, and which entry form it emits.
+> Left for the human — the box stays unticked.
+
+## Progress Log
+
+- 2026-09-20: automated weekly sweep — feature still unbuilt, all design-note references re-verified; corpus recount inverts the shape assumption (## Progress Log 21 files vs ## Progress (date) 7), recorded as a Lean under the blocking decision.
