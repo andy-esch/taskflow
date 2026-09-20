@@ -3,13 +3,16 @@ schema: 1
 id: 6g7wsr8yvt1a
 status: ready-to-start
 epic: 21-code-quality-architecture-hardening
-description: Consolidate identity, schema, locking, atomic-write, and diagnostic foundations; assess mutation-outcome and guard-lifecycle gaps before spinning out work.
+description: 'Design pass: reconcile the identity, schema, locking, atomic-write and diagnostic foundations into one sequenced roadmap before spinning out work.'
 effort: 1-2 days
 tier: 2
 priority: medium
 autonomy_level: 2
 tags: [architecture, integrity, store, design]
 created: "2026-09-07"
+updated_at: "2026-09-20"
+audited: "2026-09-20"
+audit_sources: [2026-09-20-weekly-task-sweep]
 ---
 # Define the next shared entity-integrity foundations
 
@@ -89,3 +92,51 @@ a deliberate sequence. This task owns design and scoping, not the implementation
 - [Shared ordinary-create guard](6g7s6hr3qnfq-serialize-research-id-collision-checks-with-creation.md)
 - [Architecture](../../docs/ARCHITECTURE.md)
 - [Epic 21](../epics/21-code-quality-architecture-hardening.md)
+
+## Sweep verification (2026-09-20)
+
+Automated weekly sweep re-read every reference in this task against
+`internal/store` and `internal/config` at `934e1cf`. No section is obsolete; the
+annotations below narrow two of the four newly observed questions.
+
+**Foundation links — all six still exist and are still open** (`ready-to-start`
+or `next-up`): the frontmatter-schema ADR, reserved document-schema enforcement,
+bounded lock acquisition, atomic-write unification, adapter-neutral lint
+diagnostics, and the markdown-durability reassessment. Nothing in this task's
+reconcile list has shipped underneath it.
+
+**Related link is stale in one direction:** `6g7s6hr3qnfq-serialize-research-id-collision-checks-with-creation`
+is now `completed`. The shared ordinary-create guard it names is landed, so the
+roadmap should treat it as settled input rather than as parallel work.
+
+**Q1 — verified accurate.** `FS.writeLock` (`internal/store/lock.go:103`) still
+wraps `checkedWriteLock` and discards the release error (`func() { _ = release() }`),
+while `checkedWriteLock` (`lock.go:111`) returns it via `errors.Join` for the
+control-inverted boundary. The two-tier split the question describes is exactly
+what is on disk; the decision is still open.
+
+**Q2 — verified accurate, and the code now states the same question.**
+`repositoryGuards.byRoot` (`internal/store/lock.go:28`) is still a process-wide
+map with no eviction, and its doc comment already records the intended answer:
+"CLI processes normally retain one entry; a future long-lived multi-space
+adapter should reference-count and evict idle entries." That is a lean, not a
+decision — the roadmap should either ratify it or measure it.
+
+**Q3 — narrower than written.** `createFileAtomicWithMode`
+(`internal/store/atomic.go:96`) now removes the destination on every in-process
+failure path, including a failed `Close`. The residual exposure is therefore
+only *process death* between `O_EXCL` open and `Close`, not ordinary write/sync
+errors. `sweepStaleTemps` (`atomic.go`) covers `.tskflwctl-*.tmp` orphans but not
+a half-written destination created by `createFileAtomic`, so the lint/repair
+question the criterion poses is still live — just scoped to crash recovery.
+
+**Q4 — unchanged.** No second secondary adapter exists; the conformance-suite
+trigger has not fired.
+
+**Atomic-write divergence still three-way:** `internal/store/atomic.go`,
+`internal/config/config.go`, and `internal/userconfig/paths.go` each carry their
+own implementation, so the linked unification task's premise holds.
+
+## Progress Log
+
+- 2026-09-20: automated weekly sweep — all six foundation links and all four newly observed questions re-verified against current code; Q3 narrowed to process-death recovery only; noted the completed shared-create-guard related link.
