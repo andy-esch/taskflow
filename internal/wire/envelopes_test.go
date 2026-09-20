@@ -308,6 +308,13 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		{"AuditMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToAuditMutationEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, "# new body", true, WorkspaceJSON{}))
 		}},
+		{"FindingCreationEnvelope", func(w io.Writer) error {
+			return emit(w, ToFindingCreationEnvelope(core.FindingCreationReceipt{
+				Audit:   domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 2},
+				Finding: domain.Finding{Code: "H2", Title: "new issue", Status: "open", Effort: "S", Urgency: "soon"},
+				DryRun:  true,
+			}, WorkspaceJSON{}))
+		}},
 		{"FindingsEnvelope", func(w io.Writer) error {
 			return emit(w, ToFindingsEnvelope([]core.AuditFinding{{
 				Finding: domain.Finding{Code: "S1", Title: "tighten the gateway", Status: "open", Effort: "S", Urgency: "soon"},

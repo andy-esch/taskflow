@@ -77,7 +77,7 @@ func TestAppendAuditBody_AllowsUnrelatedAppendToAlreadyDriftedAudit(t *testing.T
 // The repair path must stay permissive — it exists precisely to write drifted files.
 func TestTransformAuditBody_RepairPathIsNotBlockedByTheWriteGuard(t *testing.T) {
 	fs, p := auditRepo(t, "2026-01-01-d.md", driftedAuditSource)
-	_, _, changed, err := fs.TransformAuditBody("2026-01-01-d", writeNow, false, func(current string) (string, error) {
+	_, _, changed, err := fs.TransformAuditBody("2026-01-01-d", writeNow, false, func(_ domain.Audit, current string) (string, error) {
 		fixed, _ := domain.CanonicalizeFindingHeaders(current)
 		return fixed, nil
 	})
@@ -99,7 +99,7 @@ func TestEditFinding_WorksOnAnAuditWithUnrelatedDrift(t *testing.T) {
 	source := "---\nid: 6fjangd7kve1\nbucket: open\narea: e\ndate: \"2026-01-01\"\n---\n" +
 		"# Audit: e\n\n## Findings\n\n#### H1. good · **Status:** open\n\n#### M-2. drifted\n\n**Status:** open\n"
 	fs, p := auditRepo(t, "2026-01-01-e.md", source)
-	_, _, changed, err := fs.TransformAuditBody("2026-01-01-e", writeNow, false, func(current string) (string, error) {
+	_, _, changed, err := fs.TransformAuditBody("2026-01-01-e", writeNow, false, func(_ domain.Audit, current string) (string, error) {
 		return strings.Replace(current, "#### H1. good · **Status:** open", "#### H1. good · **Status:** fixed", 1), nil
 	})
 	if err != nil || !changed {

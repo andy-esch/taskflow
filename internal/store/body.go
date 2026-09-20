@@ -81,12 +81,13 @@ func writeBody[T any](
 	return v, string(storedBody), nil
 }
 
-// AppendAuditBody appends markdown to an audit's body in one atomic, validated
-// write — the audit twin of EditBody's append mode (`audit append`). It stamps
-// updated_at like the task path (audits now carry that field); the audit's `date`
-// stays untouched — that one is immutable, part of the slug. The shared write tail
-// (parse-before-accept, compare-and-swap, dry-run, body echo) lives in writeBody.
-// Returns the reloaded audit and the resulting (LF) body.
+// AppendAuditBody adds markdown to an audit's narrative in one atomic, validated
+// write. A trailing Candidate tasks section remains final: blindly appending into
+// it would turn ordinary prose into malformed managed-projection content. Without
+// that section this retains ordinary end-of-body append semantics. It stamps
+// updated_at like the task path; the audit's immutable date stays untouched. The
+// shared write tail (parse-before-accept, compare-and-swap, dry-run, body echo)
+// lives in writeBody. Returns the reloaded audit and the resulting (LF) body.
 func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, "", err
@@ -108,7 +109,14 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 	// — so a header appended in the drifted shape fell between the two and vanished.
 	// Only what this write introduces is refused: an audit that already carries drift
 	// must still accept unrelated appends.
-	appended := appendSection(string(body), text)
+	current := toLF(string(body))
+	addition := strings.Trim(toLF(text), "\n")
+	appended, inserted := domain.InsertBeforeTrailingCandidateTasks(current, addition)
+	if inserted {
+		appended = normalizeBody(appended)
+	} else {
+		appended = appendSection(current, addition)
+	}
 	if err := domain.NearMissWriteError("audit", domain.IntroducedNearMissHeaders(string(body), appended)); err != nil {
 		return domain.Audit{}, "", err
 	}
@@ -165,16 +173,18 @@ func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun 
 // TransformAuditBody is TransformTaskBody's audit twin: it applies transform to
 // the body read from the exact audit-file snapshot protected by the write's
 // content CAS. It is the non-interactive read-modify-write path for semantic
-// body edits such as finding status and resolution stamps. A rejected CAS lets
-// core invoke the operation again, at which point transform receives fresh body
-// text rather than stale precomputed bytes — which is what lets a finding stamp
-// retry around a concurrent `audit append` instead of refusing it. An unchanged
-// normalized body is a no-op and does not stamp updated_at.
+// body edits such as finding status and resolution stamps. The callback receives
+// parsed metadata from that same snapshot, avoiding a check-then-write race for
+// bucket-sensitive mutations. A rejected CAS lets core invoke the operation again,
+// at which point transform receives fresh metadata and body text rather than stale
+// precomputed values — which is what lets a finding stamp retry around a concurrent
+// `audit append` instead of refusing it. An unchanged normalized body is a no-op
+// and does not stamp updated_at.
 func (s *FS) TransformAuditBody(
 	slug string,
 	now time.Time,
 	dryRun bool,
-	transform func(current string) (string, error),
+	transform func(audit domain.Audit, current string) (string, error),
 ) (domain.Audit, string, bool, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, "", false, err
@@ -187,21 +197,21 @@ func (s *FS) TransformAuditBody(
 	if err != nil {
 		return domain.Audit{}, "", false, fmt.Errorf("read audit %s: %w", path, err)
 	}
+	currentAudit, err := parseAudit(content, path)
+	if err != nil {
+		return domain.Audit{}, "", false, fmt.Errorf("%s: %w", path, err)
+	}
 	_, body, err := splitFrontmatterStrict(content)
 	if err != nil {
 		return domain.Audit{}, "", false, err // can't body-edit a file whose frontmatter won't parse
 	}
-	newBody, err := transform(string(body))
+	newBody, err := transform(currentAudit, string(body))
 	if err != nil {
 		return domain.Audit{}, "", false, err
 	}
 	newBody = normalizeBody(newBody)
 	if newBody == normalizeBody(string(body)) {
-		audit, err := parseAudit(content, path)
-		if err != nil {
-			return domain.Audit{}, "", false, fmt.Errorf("%s: %w", path, err)
-		}
-		return audit, string(body), false, nil
+		return currentAudit, string(body), false, nil
 	}
 
 	updatedAt := now.Format("2006-01-02")

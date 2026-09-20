@@ -110,6 +110,31 @@ func TestAppendAuditBody_StampsUpdatedAt(t *testing.T) {
 	}
 }
 
+func TestAppendAuditBody_PreservesTrailingCandidateProjection(t *testing.T) {
+	root := t.TempDir()
+	source := "---\nid: 6fjangd7kvap\nbucket: open\narea: append\ndate: \"2026-06-20\"\n---\n" +
+		"# Audit\n\n## Findings\n\n#### H1. Existing · **Status:** open\n\nEvidence.\n\n" +
+		"## Candidate tasks\n\n" + domain.CandidateTasksMarkerComment() + "\n" +
+		"- ○ H1 · open — Keep the projection valid\n"
+	path, content := testutil.AuditFixture(root, "open", "2026-06-20-append.md", source)
+	testutil.Write(t, path, content)
+
+	_, body, err := NewFS(root).AppendAuditBody("2026-06-20-append", "## Progress\n\nNarrative update.", auditEditNow, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Index(body, "## Progress") > strings.Index(body, "## Candidate tasks") {
+		t.Fatalf("narrative append landed inside/after the final managed projection:\n%s", body)
+	}
+	if issues := domain.LintCandidateTasks(body, domain.ParseFindings(body)); len(issues) != 0 {
+		t.Fatalf("narrative append poisoned Candidate tasks: %+v\n%s", issues, body)
+	}
+	stored := readFile(t, path)
+	if !strings.Contains(stored, "## Progress\n\nNarrative update.\n\n## Candidate tasks") {
+		t.Fatalf("stored section order is wrong:\n%s", stored)
+	}
+}
+
 // Dry-run runs every check + returns the would-be body, but writes nothing.
 func TestAppendAuditBody_DryRun_NoWrite(t *testing.T) {
 	fs, path := auditEditRepo(t)

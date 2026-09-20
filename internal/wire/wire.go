@@ -283,7 +283,10 @@ import (
 // 1.68: ADDITIVE — `schema --json` publishes the monotonic revision policy and
 // current compatibility classification. The generated Draft 2020-12 schema has
 // a revision-qualified `$id` plus root revision/classification annotations.
-const SchemaVersion = "1.68"
+// 1.69: ADDITIVE — `audit finding new --json` adds a compact finding-creation
+// receipt with the allocated code, parsed finding, updated audit, dry-run bit,
+// and workspace identity; existing envelopes and fields are unchanged.
+const SchemaVersion = "1.69"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

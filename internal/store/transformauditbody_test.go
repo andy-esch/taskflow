@@ -33,7 +33,7 @@ func TestTransformAuditBody_CallbackErrorWritesNothing(t *testing.T) {
 	sentinel := errors.New("no such finding")
 
 	_, _, changed, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, false,
-		func(string) (string, error) { return "", sentinel })
+		func(_ domain.Audit, _ string) (string, error) { return "", sentinel })
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("callback error should surface unchanged, got %v", err)
 	}
@@ -52,7 +52,7 @@ func TestTransformAuditBody_UnchangedBodyIsNoOpAndDoesNotStamp(t *testing.T) {
 	before, _ := os.ReadFile(p)
 
 	_, _, changed, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, false,
-		func(current string) (string, error) { return current, nil })
+		func(_ domain.Audit, current string) (string, error) { return current, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestTransformAuditBody_DryRunWritesNothing(t *testing.T) {
 	before, _ := os.ReadFile(p)
 
 	_, _, changed, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, true,
-		func(current string) (string, error) { return current + "\nappended by dry run\n", nil })
+		func(_ domain.Audit, current string) (string, error) { return current + "\nappended by dry run\n", nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestTransformAuditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	}
 
 	_, _, _, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, false,
-		func(current string) (string, error) {
+		func(_ domain.Audit, current string) (string, error) {
 			return strings.Replace(current, "**Status:** open", "**Status:** fixed", 1), nil
 		})
 	if !errors.Is(err, domain.ErrConflict) {
@@ -123,7 +123,10 @@ func TestTransformAuditBody_TransformSeesFreshBodyAfterConcurrentAppend(t *testi
 
 	var seen string
 	_, _, changed, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, false,
-		func(current string) (string, error) {
+		func(audit domain.Audit, current string) (string, error) {
+			if audit.Bucket != domain.AuditOpen || audit.Slug != "2026-01-01-a" {
+				t.Fatalf("transform received wrong audit snapshot: %+v", audit)
+			}
 			seen = current
 			return strings.Replace(current, "**Status:** open", "**Status:** fixed", 1), nil
 		})
@@ -229,11 +232,88 @@ func TestEditFindingCandidate_RetriesAroundConcurrentAppendPreservingAll(t *test
 	}
 }
 
+// Finding allocation is part of the retried transform, not an identity chosen before
+// entering the store. If another writer creates H2 inside the first CAS window, the retry
+// must preserve it and allocate H3 rather than duplicating H2 or losing either block.
+func TestNewFinding_RetriesAllocationAroundConcurrentAppend(t *testing.T) {
+	fs, p := transformAuditRepo(t)
+	svc := core.NewService(fs, core.WithRetry(4, func(int) {}))
+
+	orig := testHookBeforeBodyWrite
+	defer func() { testHookBeforeBodyWrite = orig }()
+	testHookBeforeBodyWrite = func() {
+		testHookBeforeBodyWrite = orig
+		if _, _, err := fs.AppendAuditBody("2026-01-01-a",
+			"#### H2. Concurrent finding · **Status:** open\n\nConcurrent prose.", transformAuditNow, false); err != nil {
+			t.Errorf("concurrent finding append failed: %v", err)
+		}
+	}
+
+	receipt, err := svc.NewFinding("2026-01-01-a", core.NewFindingParams{
+		Band: "H", Title: "Retried finding", Body: "Retried prose.",
+	})
+	if err != nil {
+		t.Fatalf("finding creation should retry around concurrent append: %v", err)
+	}
+	if receipt.Finding.Code != "H3" {
+		t.Fatalf("fresh retry should allocate H3, got %+v", receipt.Finding)
+	}
+	after, _ := os.ReadFile(p)
+	for _, want := range []string{"#### H2. Concurrent finding", "#### H3. Retried finding"} {
+		if !strings.Contains(string(after), want) {
+			t.Errorf("concurrent creation lost %q:\n%s", want, after)
+		}
+	}
+}
+
+// Finding creation must evaluate bucket state from the exact snapshot protected by
+// the body CAS. A lifecycle move that wins the first write window forces a retry;
+// that retry must see the non-open bucket and refuse rather than replaying an
+// earlier open verdict into a closed or deferred audit.
+func TestNewFinding_RetryRefusesConcurrentNonOpenAuditMove(t *testing.T) {
+	for _, target := range []domain.AuditBucket{domain.AuditClosed, domain.AuditDeferred} {
+		t.Run(string(target), func(t *testing.T) {
+			fs, p := transformAuditRepo(t)
+			settled := strings.Replace(transformAuditSource, "**Status:** open", "**Status:** fixed", 1)
+			if err := os.WriteFile(p, []byte(settled), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			svc := core.NewService(fs, core.WithRetry(4, func(int) {}))
+
+			orig := testHookBeforeBodyWrite
+			defer func() { testHookBeforeBodyWrite = orig }()
+			testHookBeforeBodyWrite = func() {
+				testHookBeforeBodyWrite = orig
+				if _, err := fs.MoveAudit("2026-01-01-a", target, false); err != nil {
+					t.Errorf("concurrent move to %s failed: %v", target, err)
+				}
+			}
+
+			_, err := svc.NewFinding("2026-01-01-a", core.NewFindingParams{
+				Band: "H", Title: "Must observe the moved bucket",
+			})
+			if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "reopen the audit first") {
+				t.Fatalf("creation after concurrent move to %s should be refused, got %v", target, err)
+			}
+			audit, body, err := fs.GetAudit("2026-01-01-a")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if audit.Bucket != target {
+				t.Fatalf("concurrent move did not survive: bucket=%s want=%s", audit.Bucket, target)
+			}
+			if strings.Contains(body, "Must observe the moved bucket") {
+				t.Fatalf("refused creation landed after move to %s:\n%s", target, body)
+			}
+		})
+	}
+}
+
 // The frontmatter is preserved surgically and the body write stamps updated_at.
 func TestTransformAuditBody_StampsUpdatedAtAndPreservesFrontmatter(t *testing.T) {
 	fs, p := transformAuditRepo(t)
 	_, _, changed, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, false,
-		func(current string) (string, error) {
+		func(_ domain.Audit, current string) (string, error) {
 			return strings.Replace(current, "**Status:** open", "**Status:** fixed", 1), nil
 		})
 	if err != nil || !changed {

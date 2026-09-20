@@ -69,9 +69,9 @@ func (c *conflictStore) AppendAuditBody(slug, text string, _ time.Time, _ bool) 
 // caller precomputed before the conflict.
 const auditFindingBody = "# Audit: a\n\n## Findings\n\n#### H1. a finding · **Status:** open\n\nBody.\n"
 
-func (c *conflictStore) TransformAuditBody(slug string, _ time.Time, _ bool, transform func(string) (string, error)) (domain.Audit, string, bool, error) {
+func (c *conflictStore) TransformAuditBody(slug string, _ time.Time, _ bool, transform func(domain.Audit, string) (string, error)) (domain.Audit, string, bool, error) {
 	c.auditTransforms++
-	body, err := transform(auditFindingBody)
+	body, err := transform(domain.Audit{Slug: slug, Bucket: domain.AuditOpen}, auditFindingBody)
 	if err != nil {
 		return domain.Audit{}, "", false, err
 	}

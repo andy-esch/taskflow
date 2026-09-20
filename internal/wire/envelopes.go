@@ -855,6 +855,27 @@ func ToAuditMutationEnvelope(a domain.Audit, body string, dryRun bool, ws Worksp
 	return AuditMutationEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Audit: ToAuditJSON(a), Body: body, Workspace: ws}
 }
 
+// FindingCreationEnvelope is `audit finding new --json`: a compact receipt carrying
+// the exact allocated audit-local identity without echoing the complete Markdown body.
+type FindingCreationEnvelope struct {
+	SchemaVersion string        `json:"schema_version"`
+	DryRun        bool          `json:"dry_run"`
+	Audit         AuditJSON     `json:"audit"`
+	Finding       FindingJSON   `json:"finding"`
+	Workspace     WorkspaceJSON `json:"workspace"`
+}
+
+// ToFindingCreationEnvelope maps the core receipt to its machine contract.
+func ToFindingCreationEnvelope(r core.FindingCreationReceipt, ws WorkspaceJSON) FindingCreationEnvelope {
+	return FindingCreationEnvelope{
+		SchemaVersion: SchemaVersion,
+		DryRun:        r.DryRun,
+		Audit:         ToAuditJSON(r.Audit),
+		Finding:       ToCreatedFindingJSON(r.Audit, r.Finding),
+		Workspace:     ws,
+	}
+}
+
 // FindingsEnvelope is `audit findings --json` (the finding-level query).
 type FindingsEnvelope struct {
 	SchemaVersion string               `json:"schema_version"`
@@ -1180,6 +1201,7 @@ type jsonEnvelopes struct {
 	AuditShow      AuditShowEnvelope          `json:"audit_show"`
 	AuditInfo      AuditInfoEnvelope          `json:"audit_info"`
 	AuditMutation  AuditMutationEnvelope      `json:"audit_mutation"`
+	FindingCreate  FindingCreationEnvelope    `json:"finding_creation"`
 	Findings       FindingsEnvelope           `json:"findings"`
 	ResearchList   ResearchListEnvelope       `json:"research_list"`
 	ResearchShow   ResearchShowEnvelope       `json:"research_show"`

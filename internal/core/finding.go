@@ -258,7 +258,7 @@ func (s *Service) EditFinding(slug, code string, edit FindingEdit, dryRun bool) 
 	}
 	r, err := retryOnConflict(s, dryRun, func() (result, error) {
 		audit, _, changed, err := s.store.TransformAuditBody(slug, now, dryRun,
-			func(current string) (string, error) { return edit.apply(current, code) })
+			func(_ domain.Audit, current string) (string, error) { return edit.apply(current, code) })
 		return result{audit: audit, changed: changed}, err
 	})
 	return r.audit, r.changed, err
@@ -306,7 +306,7 @@ func (s *Service) FixFindingHeaders(dryRun bool) ([]domain.FixResult, error) {
 		slug := a.Audit.Slug
 		changes, err := retryOnConflict(s, dryRun, func() ([]string, error) {
 			var applied []string
-			_, _, changed, err := s.store.TransformAuditBody(slug, now, dryRun, func(current string) (string, error) {
+			_, _, changed, err := s.store.TransformAuditBody(slug, now, dryRun, func(_ domain.Audit, current string) (string, error) {
 				fixed, hits := domain.CanonicalizeFindingHeaders(current)
 				applied = applied[:0]
 				for _, h := range hits {

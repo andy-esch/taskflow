@@ -280,6 +280,73 @@ func newAuditFindingCmd(app *App) *cobra.Command {
 	cmd.Flags().IntVar(&pr, "pr", 0, "append `(PR #N)` to the status — the one canonical spelling, so the reference stays greppable")
 	cmd.Flags().StringVar(&note, "note", "", "the finding's `**Resolution:**` paragraph — how it was resolved; empty removes it")
 	cmd.Flags().StringVar(&candidate, "candidate", "", "one-line managed Candidate tasks entry; empty removes it (requires candidate-tasks:v1)")
+	cmd.AddCommand(newAuditFindingNewCmd(app))
+	return cmd
+}
+
+func newAuditFindingNewCmd(app *App) *cobra.Command {
+	var (
+		params    core.NewFindingParams
+		bodyFile  string
+		candidate string
+	)
+	cmd := &cobra.Command{
+		Use:   "new <audit> <title>",
+		Short: "Create one canonical audit finding and allocate its code",
+		Long: "Create one open finding without hand-writing its code or Markdown grammar.\n\n" +
+			"The audit itself must be open; reopen a closed or deferred audit before adding new\n" +
+			"work so creation cannot make its bucket and finding state disagree.\n\n" +
+			"--band is required and accepts H, M, or L. Allocation is monotonic within that\n" +
+			"band: the highest existing suffix plus one, recomputed after every concurrent-write\n" +
+			"retry so a stale caller cannot duplicate an identity. Optional file, component,\n" +
+			"effort, urgency, body, and recommendation values are rendered into the canonical\n" +
+			"block. --candidate adds the new finding's row to a managed candidate-tasks:v1\n" +
+			"section in the same atomic write; legacy sections are refused without a partial\n" +
+			"finding. Existing malformed findings or managed candidate projections also refuse\n" +
+			"creation; inspect them with `audit lint` and use `audit edit` for explicit repair.\n" +
+			"The compact JSON receipt returns the allocated code rather than the full body.",
+		Example: "  tskflwctl audit finding new 2026-09-20-storage \"Retry loop can lose evidence\" --band H --component store --effort S --urgency soon --body \"A conflicting write replaces the prior snapshot.\" --recommendation \"Recompute inside the CAS callback.\"\n" +
+			"  tskflwctl audit finding new my-audit \"Bound the query\" --band M --body-file finding.md --candidate \"Create a bounded-query task\"",
+		Args:              cobra.ExactArgs(2),
+		Annotations:       map[string]string{"safety": "mutating"},
+		ValidArgsFunction: app.completeAuditSlugs,
+		RunE: func(c *cobra.Command, args []string) error {
+			body, err := resolveBody(c, params.Body, bodyFile)
+			if err != nil {
+				return err
+			}
+			params.Title = args[1]
+			params.Body = body
+			params.DryRun = app.DryRun
+			if c.Flags().Changed("candidate") {
+				params.Candidate = &candidate
+			}
+			receipt, err := app.Svc.NewFinding(args[0], params)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return render.FindingCreationJSON(app.Out, receipt, app.workspace())
+			}
+			verb := "created"
+			if app.DryRun {
+				verb = "would create"
+			}
+			fmt.Fprintf(app.Out, "%s %s %s in %s\n", app.Style.Green("✔"), verb,
+				app.Style.Bold(receipt.Finding.Code), app.Style.Bold(receipt.Audit.Slug))
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&params.Band, "band", "", "required finding identity band: "+strings.Join(domain.FindingBands(), " | "))
+	cmd.Flags().StringVar(&params.File, "file", "", "optional source location, e.g. internal/store/body.go:194")
+	cmd.Flags().StringVar(&params.Component, "component", "", "optional component or subsystem")
+	cmd.Flags().StringVar(&params.Effort, "effort", "", "optional effort: "+strings.Join(domain.FindingEfforts(), " | "))
+	cmd.Flags().StringVar(&params.Urgency, "urgency", "", "optional urgency: "+strings.Join(domain.FindingUrgencies(), " | "))
+	cmd.Flags().StringVar(&params.Body, "body", "", "finding evidence as Markdown (unfenced headings are refused)")
+	cmd.Flags().StringVar(&bodyFile, "body-file", "", "read finding evidence from a file, or - for stdin")
+	cmd.Flags().StringVar(&params.Recommendation, "recommendation", "", "one-line minimum recommendation")
+	cmd.Flags().StringVar(&candidate, "candidate", "", "one-line managed Candidate tasks entry (requires candidate-tasks:v1)")
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 
@@ -550,7 +617,7 @@ func newAuditEditCmd(app *App) *cobra.Command {
 				return err
 			}
 			if !app.Gate.On() {
-				return fmt.Errorf("%w: `audit edit` needs an interactive terminal — use `audit append` to add findings non-interactively", domain.ErrValidation)
+				return fmt.Errorf("%w: `audit edit` needs an interactive terminal — use `audit finding new` for findings or `audit append` for narrative sections", domain.ErrValidation)
 			}
 			audit, changed, err := app.Svc.EditAudit(slug, app.editViaEditor(editor.Resolve()))
 			if err != nil {
@@ -573,25 +640,24 @@ func newAuditEditCmd(app *App) *cobra.Command {
 	}
 }
 
-// newAuditAppendCmd is the agent face of audit body editing: append a section
-// (typically a finding) to the body in one atomic, validated write — the scriptable
-// twin of `audit edit`, mirroring `task append`. Finding GRAMMAR correctness is left
-// to `audit lint` (raw markdown is appended), so a malformed finding lands but is
-// caught by lint rather than rejected inline.
+// newAuditAppendCmd is the agent face of unstructured audit-body editing: add a
+// narrative section in one atomic, validated write — the scriptable twin of
+// `audit edit`, mirroring `task append`. Findings have their own canonical writer.
 func newAuditAppendCmd(app *App) *cobra.Command {
 	var body, bodyFile string
 	cmd := &cobra.Command{
 		Use:   "append <audit>",
-		Short: "Append a section to an audit's body (atomic; agent-facing)",
-		Long: "Append markdown to the end of an audit's body in one atomic, validated write —\n" +
-			"the scriptable counterpart to `audit edit`, e.g. to add a finding section. Content\n" +
+		Short: "Add a narrative section to an audit (atomic; agent-facing)",
+		Long: "Add markdown to an audit's narrative in one atomic, validated write — the\n" +
+			"scriptable counterpart to `audit edit`. A trailing managed Candidate tasks section\n" +
+			"remains final, so ordinary prose cannot become malformed projection content. Content\n" +
 			"comes from --body, --body-file, or stdin (--body-file -); a blank line separates it\n" +
-			"from the existing body. A heading that reads as a finding but would parse to nothing\n" +
-			"is refused here, with the canonical replacement — `audit lint` and `lint --fix` cover\n" +
-			"drift already in the file.",
-		// A heredoc leads: findings quote percentages and code, and printf reads a
+			"from adjacent sections. Use `audit finding new` for findings. A heading that reads as\n" +
+			"a finding but would parse to nothing is still refused here, with the canonical\n" +
+			"replacement; `audit lint` and `lint --fix` cover drift already in the file.",
+		// A heredoc leads: audit prose quotes percentages and code, and printf reads a
 		// bare % as a format verb, truncating the write at the first one.
-		Example:           "  tskflwctl audit append my-audit --body '#### H1. Title  · **Status:** open'\n  tskflwctl audit append my-audit --body-file - <<'EOF'\n#### M3. Cache hit rate fell to 40% · **Status:** open\nEOF\n  cat findings.md | tskflwctl audit append my-audit --body-file -",
+		Example:           "  tskflwctl audit append my-audit --body '## Review context'\n  tskflwctl audit append my-audit --body-file - <<'EOF'\n## Validation notes\n\nCache hit rate fell to 40%.\nEOF\n  cat follow-up.md | tskflwctl audit append my-audit --body-file -",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "mutating"},
 		ValidArgsFunction: app.completeAuditSlugs,

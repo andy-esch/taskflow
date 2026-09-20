@@ -259,18 +259,21 @@ type AuditStore interface {
 	// reports whether the file changed. The audit counterpart to EditTask;
 	// finding-level lint is the caller's to surface.
 	EditAudit(slug string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Audit, bool, error)
-	// AppendAuditBody appends markdown to an audit's body in one atomic, validated
-	// write, stamping updated_at (the audit's `date` stays immutable — it's the slug).
-	// The agent face of audit body editing, beside EditAudit's editor. Returns the
-	// reloaded audit and the resulting body.
+	// AppendAuditBody adds markdown to an audit's narrative in one atomic, validated
+	// write, preserving a trailing managed Candidate tasks section as the final
+	// projection and stamping updated_at (the audit's `date` stays immutable — it's
+	// the slug). The agent face of audit body editing, beside EditAudit's editor.
+	// Returns the reloaded audit and the resulting body.
 	AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error)
 	// TransformAuditBody is the read-modify-write counterpart to AppendAuditBody,
 	// and the audit twin of TransformTaskBody. transform receives the body from the
-	// exact snapshot the write's content CAS protects, so core can simply re-invoke
-	// the operation on ErrConflict and have the edit recomputed against fresh text.
+	// exact snapshot the write's content CAS protects, together with that snapshot's
+	// parsed audit metadata, so core can enforce bucket-sensitive invariants without a
+	// racy read before the transform. On ErrConflict core can simply re-invoke the
+	// operation and have the edit recomputed against fresh metadata and text.
 	// Reports whether the normalized body actually changed; an unchanged body is a
 	// no-op that stamps nothing.
-	TransformAuditBody(slug string, now time.Time, dryRun bool, transform func(current string) (string, error)) (domain.Audit, string, bool, error)
+	TransformAuditBody(slug string, now time.Time, dryRun bool, transform func(audit domain.Audit, current string) (string, error)) (domain.Audit, string, bool, error)
 }
 
 // ResearchStore is the research-persistence port. The narrowest entity port: research
