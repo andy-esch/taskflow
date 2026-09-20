@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g3ag8py12y9
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Settle how a candidate-task line links to its finding, so audit sync and drift lint become possible
 effort: Unknown
@@ -10,8 +10,10 @@ priority: medium
 autonomy_level: 3
 tags: [cli, audit, core, design]
 created: "2026-08-24"
-updated_at: "2026-09-05"
+updated_at: "2026-09-19"
 depends_on: [6g72wf39pyhb]
+started_at: "2026-09-19"
+completed_at: "2026-09-19"
 ---
 ## Context
 
@@ -87,21 +89,53 @@ one on write.
 
 ## Acceptance criteria
 
-- [ ] The linkage convention is decided and written down — where the code sits, whether one
+- [x] The linkage convention is decided and written down — where the code sits, whether one
       line may name several findings, and whether an unlinked line stays legal.
-- [ ] The status→glyph mapping is decided, defined ONCE in code, and shared with whatever
+- [x] The status→glyph mapping is decided, defined ONCE in code, and shared with whatever
       already renders finding status rather than transcribed beside it.
-- [ ] `audit new`'s scaffold emits the decided shape, and its comment is derived from the
+- [x] `audit new`'s scaffold emits the decided shape, and its comment is derived from the
       mapping rather than hand-listed.
-- [ ] A candidate line is written by the tool, not typed — a finding resolved through
+- [x] A candidate line is written by the tool, not typed — a finding resolved through
       `audit finding` updates its mirror in the same atomic write.
-- [ ] `audit lint` flags candidate↔status drift, an unresolvable finding reference, and a
+- [x] `audit lint` flags candidate↔status drift, an unresolvable finding reference, and a
       duplicate line for one finding.
-- [ ] A decision is recorded on the 10 legacy audits, and honoured — migrated, tolerated on
+- [x] A decision is recorded on the 10 legacy audits, and honoured — migrated, tolerated on
       read, or explicitly left alone.
-- [ ] Errors wrap the domain sentinels; suite + lint green; README/docs updated.
+- [x] Errors wrap the domain sentinels; suite + lint green; README/docs updated.
 
 ## Notes
 
 Supersedes criteria 3 and 4 of `audit-finding-write-surface-status-write-and-candidate-list-sync`
 (`6feeygw00jmx`), which are deferred pointing at exactly this blocker.
+
+## Decision (2026-09-19)
+
+Candidate lists now have an explicit managed format rather than a heuristic parser:
+
+- `candidate-tasks:v1` marks the section the tool owns. Unversioned sections remain readable legacy prose and are neither linted nor rewritten; there is no bulk migration.
+- A canonical row is `- <glyph> <CODE> · <status> — <one-line candidate>`. A row names exactly one finding, no unlinked rows are legal, and the row itself is optional. Several findings may independently name the same eventual task.
+- `domain` owns the ordered finding-status/glyph table. The audit scaffold derives its marker legend from it, and themed rendering consumes the same glyph mapping.
+- `audit finding --candidate <one-line>` adds or replaces a row; an empty value removes it. A status edit refreshes an existing managed row, and combined status/note/candidate changes use the audit body’s single atomic transform.
+- `audit lint` and top-level `lint` validate only managed v1 rows: exact marker, grammar, finding reference, glyph/status agreement, status projection, and one-row-per-finding uniqueness.
+
+The deliberately strict v1 write path prevents silent inference from the ten historical formats while leaving those audits undisturbed.
+
+## Implementation and validation (2026-09-19)
+
+Implemented the v1 parser, writer, status synchronizer, and lint projection across domain, core, filesystem loading, CLI, templates, generated references, architecture guidance, and both scheduled audit routines. Fresh default and security audits emit the derived marker; legacy audits remain unchanged. The golden updater now explicitly honors ADR-0008’s exclusion of Markdown template bodies while retaining the revision gate for ordinary JSON payload changes.
+
+Validation: the race-enabled full Go suite passed; golangci-lint reported 0 issues; generated CLI docs and the security-template golden were refreshed; top-level planning lint, audit lint, and `git diff --check` passed. A disposable planning-space smoke test exercised `audit new` → `audit append` → `audit finding --candidate` → status sync → scoped lint successfully.
+
+That smoke test also made the remaining finding-creation gap concrete: raw append leaves a new finding after the scaffold’s Candidate section. Parsing and candidate synchronization are correct, but authoring is awkward. Follow-up `6gbpe6e8n87k` now owns a canonical finding-creation verb, depends on this task, and is Wave 4 of the same dogfooded Thread.
+
+## Adversarial review closeout (2026-09-19)
+
+Antigravity completed a substantive no-findings review with consumer inventory, disposable-space lifecycle exercises, concurrency checks, boundary probes, and mutations that proved the focused tests fail when status synchronization or duplicate detection is removed. The clean verdict is accepted without waiting on the unavailable second reviewer.
+
+Closeout hardening added permanent CLI coverage for dry-run and CRLF preservation, plus a store/core regression proving that a combined status-and-candidate edit retries around a concurrent audit append without losing prose or duplicating the projection. The full race-enabled suite, golangci-lint, planning lint, audit lint, and git diff check are green.
+
+## Claude review amendments (2026-09-19)
+
+Claude found five valid gaps after the initial clean review. All were fixed in scope: the ADR-0008 golden exception now proves a body-only change against an explicit snapshot allowlist; managed candidate add/remove cycles are whitespace-stable; fenced content inside the section is ignored by the row grammar without disturbing raw spans; token-delimited marker parsing distinguishes unknown versions and damaged managed rows from ordinary legacy prose; and theme tests require intentional colour coverage for every domain finding status.
+
+Focused regressions cover every finding. The full race-enabled Go suite passes, golangci-lint reports 0 issues, and planning lint, audit lint, and git diff checks are clean. Audit 6gbqd98pm8cw is closed with M1, M2, L1, L2, and L3 fixed.
