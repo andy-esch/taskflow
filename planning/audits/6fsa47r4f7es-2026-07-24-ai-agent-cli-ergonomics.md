@@ -4,7 +4,7 @@ id: 6fsa47r4f7es
 bucket: open
 area: ai-agent-cli-ergonomics
 date: "2026-07-24"
-updated_at: "2026-09-02"
+updated_at: "2026-09-19"
 ---
 # Audit: AI-agent CLI ergonomics — 2026-07-24
 
@@ -175,7 +175,7 @@ alternative.
 
 ### Medium
 
-#### M1. List and finding queries are projectable but still unbounded  · **Status:** open
+#### M1. List and finding queries are projectable but still unbounded  · **Status:** tracked by 6gbn4g1j40pj
 
 **File:** internal/cli/listmode.go; internal/cli/task.go:196; internal/cli/audit.go:102 | **Component:** query / token economy
 **Effort:** M · **Urgency:** soon
@@ -196,14 +196,8 @@ to task/audit/epic lists and `audit findings`; return `total` and `next_after` i
 Add `--query` over slug/title/description/tags and `--updated-since` for cross-session
 resumption. Preserve the current unbounded behavior when no bound is requested.
 
-**Resolution:** Re-verified still open on 2026-09-02: task list exposes none of
---limit, --after, --sort, --updated-since, or --query, so an unbounded corpus is
-still the only read. Column projection landed
-(honor-c-columns-and-compact-output-for-json, completed) and reduces per-row
-cost, but not row COUNT, which is what truncated the caller. Note
-recast-findingsrollup-as-a-composed-service-view-model-for-web-pagination-sort
-is deferred and covers FindingsRollup for the web read model, not these CLI list
-queries.
+**Resolution:** Cross-entity deterministic bounds, continuation, and filtering
+are scoped in 6gbn4g1j40pj with an adapter-neutral query boundary.
 
 #### M2. Body mutation JSON echoes the entire resulting document by default  · **Status:** open
 
@@ -233,7 +227,7 @@ so it needs a schema version decision and an --include-body escape hatch agreed
 first. Additive enrichment (M7) was safe to land unilaterally; a breaking
 default is not.
 
-#### M3. `schema` describes entities but not the executable command surface  · **Status:** open
+#### M3. `schema` describes entities but not the executable command surface  · **Status:** tracked by 6g63hhk3eddf
 
 **File:** internal/cli/schema.go; internal/cli/root.go | **Component:** command discovery
 **Effort:** M · **Urgency:** soon
@@ -251,14 +245,8 @@ required/variadic args, flags and types, conflicts, whether it mutates, whether 
 be destructive, dry-run support, input body modes, and the JSON envelope name. This is
 a CLI manifest, not an MCP server and not a second execution path.
 
-**Resolution:** Re-verified still open on 2026-09-02: schema exposes entity
-kinds, statuses, the field registry and exit codes, but nothing inventories the
-command surface — no schema cli, no capabilities. An agent still traverses
-root/noun/verb help prose to learn paths, arg shapes, flag conflicts and
-mutation classification. Note the safety annotations the manifest would expose
-are themselves already tracked as unread metadata by
-make-the-command-safety-annotations-load-bearing, so the two overlap and should
-be sequenced together.
+**Resolution:** The existing command-safety task now owns the machine-readable
+command surface and its load-bearing safety classification.
 
 #### M4. Structure-aware body writes stop short of the edits agents make most  · **Status:** tracked by 6fpnn6zk157b
 

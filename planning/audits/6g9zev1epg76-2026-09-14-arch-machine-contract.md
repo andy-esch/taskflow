@@ -388,7 +388,7 @@ revision rather than SemVer. Revision 1.68 publishes the policy, requires
 ADDITIVE or NOT ADDITIVE changelog classifications from that boundary, and tests
 the declaration against the executable constants.
 
-#### M1. The published `exit_codes` contract omits every code an agent is most likely to actually receive  · **Status:** open
+#### M1. The published `exit_codes` contract omits every code an agent is most likely to actually receive  · **Status:** tracked by 6gbn4g1bb7wr
 
 **File:** `internal/cli/exit.go:22-31`, `internal/cli/schema.go:100-103` | **Component:** cli / machine contract
 **Effort:** XS · **Urgency:** soon
@@ -449,6 +449,9 @@ a minor bump (additive field / additive rows). Consider also publishing `12` as
 `{"code":12,"name":"invalid-transition","status":"retired"}`, which CLAUDE.md
 and `domain/errors.go` both document as reserved and the contract does not
 mention at all.
+
+**Resolution:** The complete active and reserved process-exit taxonomy is scoped
+in 6gbn4g1bb7wr under the v0.22 follow-on Thread.
 
 #### M2. `--json -c` cannot project `id` for tasks or audits, so the cheap machine path cannot return the durable handle  · **Status:** fixed
 
@@ -513,7 +516,7 @@ trailing, explicitly selectable columns. Schema 1.67, command-level projections,
 completion, machine-text goldens, and the shared full-wire fidelity harness pin
 the behavior without changing slug-first quiet output.
 
-#### M3. `thread list` has neither `-o` nor `-c`, so the newest first-class entity is absent from the triage contract  · **Status:** open
+#### M3. `thread list` has neither `-o` nor `-c`, so the newest first-class entity is absent from the triage contract  · **Status:** tracked by 6gbn4g1eypzs
 
 **File:** `internal/cli/thread.go` (`thread list` flag set) | **Component:** cli — Thread commands
 **Effort:** S · **Urgency:** eventually
@@ -563,6 +566,9 @@ is a correct if expensive substitute).
 starting set: `slug`, `status`, `done`, `total`, `drained`, `frontier`,
 `description`, `id`. Use `contractColumn` for any column whose canonical wire
 key differs from its display header, per the 1.66 convention.
+
+**Resolution:** Thread list output modes and projected columns are scoped in
+6gbn4g1eypzs without flattening the rich typed envelope.
 
 #### L1. The published JSON Schema's `$id` carries no version  · **Status:** fixed 2026-09-19
 
