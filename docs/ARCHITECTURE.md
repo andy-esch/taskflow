@@ -751,6 +751,13 @@ static JSON Schema cannot describe. The single subprocess smoke layer (real bina
 exit codes, lifecycle) lives in `cmd/tskflwctl/main_test.go`. `just test` + `just
 lint`.
 
+The CLI owns one complete process-exit taxonomy: stable code, machine name,
+meaning, and active/reserved state. Domain classification remains adapter-neutral
+and maps only its four classifiable failures into that taxonomy; success, generic
+failures, prompt aborts, and retired reservations do not become domain classes.
+`schema --json` publishes the complete table, while subprocess tests prove the
+active command/error-envelope pairs.
+
 Every machine-contract revision beginning with 1.68 is classified `ADDITIVE` or
 `NOT ADDITIVE` beside `wire.SchemaVersion`; a focused test requires the marker
 and agreement with the policy published by `schema --json`. The generated schema

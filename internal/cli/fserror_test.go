@@ -76,6 +76,9 @@ func TestJSONError_CarriesFilesystemRecoveryDetails(t *testing.T) {
 	if env.Error.Filesystem == nil {
 		t.Fatalf("an OS failure should carry filesystem details:\n%s", envelope)
 	}
+	if code := ExitCode(err); code != exitError || env.Error.Code != "error" {
+		t.Fatalf("filesystem failure = exit %d/error.code %q, want 1/error", code, env.Error.Code)
+	}
 	fsDetail := env.Error.Filesystem
 	if fsDetail.Class != "permission" {
 		t.Errorf("class = %q, want permission", fsDetail.Class)

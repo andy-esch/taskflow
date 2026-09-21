@@ -286,7 +286,12 @@ import (
 // 1.69: ADDITIVE — `audit finding new --json` adds a compact finding-creation
 // receipt with the allocated code, parsed finding, updated audit, dry-run bit,
 // and workspace identity; existing envelopes and fields are unchanged.
-const SchemaVersion = "1.69"
+// 1.70: NOT ADDITIVE — the schema contract's closed exit-code vocabulary adds
+// success, generic failure, prompt abort, and retired code 12. Existing rows
+// also gain `state` and `meaning`; their four-row prefix remains stable. Code 12
+// is explicitly reserved and not emitted by this binary. Exhaustive consumers
+// must accept the new rows before upgrading.
+const SchemaVersion = "1.70"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.
@@ -301,7 +306,7 @@ const (
 	SchemaRevisionClassificationSince = "1.68"
 	// SchemaRevisionCompatibility classifies the current revision. It must agree
 	// with the current changelog entry; wire_changelog_test.go enforces that.
-	SchemaRevisionCompatibility = "additive"
+	SchemaRevisionCompatibility = "not-additive"
 	// SchemaRevisionCompatibilityDefault is policy, not a guarantee: every
 	// revision still declares its own classification.
 	SchemaRevisionCompatibilityDefault = "additive"

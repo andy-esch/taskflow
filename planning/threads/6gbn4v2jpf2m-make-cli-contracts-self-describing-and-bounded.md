@@ -1,12 +1,14 @@
 ---
 schema: 1
 id: 6gbn4v2jpf2m
-status: unstarted
+status: in-progress
 description: Turn the v0.22 machine-contract foundation into complete discovery and bounded planning reads for agents.
 goal: Agents discover safe commands and exit behavior, retain durable Thread handles, and page large planning corpora without prose scraping.
 created: "2026-09-19"
 tags: [cli, agents, json, contract]
 tasks: [6g63hhk3eddf, 6gbn4g1bb7wr, 6gbn4g1eypzs, 6gbn4g1j40pj]
+updated_at: "2026-09-20"
+started_at: "2026-09-20"
 ---
 
 # Thread: Make CLI contracts self-describing and bounded

@@ -227,15 +227,17 @@ Make `tskflwctl` machine-operable, not just human-runnable:
     `rename`, `recommend`, `lint --fix`, every `audit` write, `project
     new/add/rm`, `init`, `track`/`untrack`.
 - **Semantic exit codes** (route without parsing text):
-  `0` success / idempotent no-op · `10` ERR_NOT_FOUND · `11` ERR_VALIDATION ·
-  `12` ERR_INVALID_TRANSITION · `13` ERR_AMBIGUOUS_TARGET ·
-  `14` ERR_LOCK_CONFLICT. (Reserve a block for more.)
+  `0` `ok` (success / idempotent no-op) · `1` `error` (unclassified error) ·
+  `10` `not-found` · `11` `validation` · `13` `ambiguous` · `14` `conflict` ·
+  `130` `aborted` (interactive abort). Code `12` (`invalid-transition`) is retired and
+  reserved, never emitted. `schema --json` is the executable source for the
+  complete active/reserved taxonomy and meanings.
 - **Structured error envelope** — in `--json` mode, errors go to **stderr**
-  as `{ "error_code", "message", "candidates"? }` (e.g. the match list on
-  ERR_AMBIGUOUS_TARGET).
+  as `{ "schema_version", "error": { "code", "message", ... } }`; typed
+  recovery details are nested under `error` when a failure has them.
 - **Fail-fast on ambiguity:** a fuzzy `<t>` matching >1 file never silently
-  first-matches — exit `13` + candidate list. (pm already detects this;
-  make it structured.)
+  first-matches — exit `13`; today candidates are prose inside `error.message`,
+  not a structured list. A future contract revision may add typed candidates.
 - **Batch ops** (`complete a b c…`): emit a structured per-item
   success/failure report; non-zero exit if any item failed (no silent
   partials). True multi-file atomicity isn't possible, so report honestly.

@@ -1,8 +1,10 @@
 package render
 
 import (
+	"cmp"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/andy-esch/taskflow/internal/wire"
@@ -20,8 +22,7 @@ type SchemaStatus = wire.SchemaStatus
 // SchemaField is one known frontmatter field and its YAML storage type.
 type SchemaField = wire.SchemaField
 
-// SchemaExitCode is one exit code and its stable machine name (also the `code`
-// in the --json error envelope).
+// SchemaExitCode is one active or reserved process exit and its stable meaning.
 type SchemaExitCode = wire.SchemaExitCode
 
 // SchemaContract is the global machine contract (`tskflwctl schema`): everything
@@ -71,8 +72,16 @@ func SchemaHuman(w io.Writer, st Style, c SchemaContract) error {
 	}
 	fmt.Fprintf(w, "\n%s: %s\n", st.Bold("Research fields"), strings.Join(rf, ", "))
 	fmt.Fprintf(w, "\n%s:\n", st.Bold("Exit codes"))
-	for _, e := range c.ExitCodes {
-		fmt.Fprintf(w, "  %-3d %s\n", e.Code, st.Dim(e.Name))
+	exitCodes := slices.Clone(c.ExitCodes)
+	slices.SortFunc(exitCodes, func(a, b wire.SchemaExitCode) int {
+		return cmp.Compare(a.Code, b.Code)
+	})
+	for _, e := range exitCodes {
+		state := ""
+		if e.State == wire.ExitCodeStateReserved {
+			state = st.Dim(" [reserved]")
+		}
+		fmt.Fprintf(w, "  %-3d %-19s %s%s\n", e.Code, e.Name, st.Dim(e.Meaning), state)
 	}
 	fmt.Fprintf(w, "\n%s\n", st.Dim("`tskflwctl schema <"+strings.Join(c.Kinds, "|")+">` for per-kind authoring guidance."))
 	return nil

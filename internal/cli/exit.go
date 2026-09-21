@@ -11,52 +11,122 @@ import (
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
-// errCodes is the CLI's error policy: it ties each domain error Class to its exit
-// code and the stable machine name for the --json envelope. The *classification*
-// (which Class an error is) now lives in domain.Classify, shared with the TUI and a
-// future web adapter (audit H4); this table is only the CLI-specific Class → code +
-// name mapping. ExitCode and errorCodeName both read it, so the code and its name
-// can't drift apart, and schema.go iterates it for the `exit_codes` contract — so
-// the order and names are part of the wire golden and must not change.
-// 12 (invalid-transition) is retired but reserved — see domain/errors.go.
-var errCodes = []struct {
+const (
+	exitOK                = 0
+	exitError             = 1
+	exitNotFound          = 10
+	exitValidation        = 11
+	exitInvalidTransition = 12
+	exitAmbiguous         = 13
+	exitConflict          = 14
+	exitAborted           = 130
+)
+
+// processExitCodes is the complete process-level contract: it owns every stable
+// number, machine name, meaning, and whether this binary may emit the code. Keep
+// the original four rows first and in order so a consumer comparing that
+// historical prefix does not see gratuitous churn. Adding a row to this closed
+// vocabulary is still NOT ADDITIVE under ADR-0008.
+// Code 12 is deliberately published but reserved: invalid-transition was retired
+// when task transitions stopped having a restricted matrix, and the number must
+// not acquire a new meaning.
+var processExitCodes = []struct {
+	code    int
+	name    string
+	state   string
+	meaning string
+}{
+	{exitNotFound, "not-found", wire.ExitCodeStateActive, "a requested named entity or registered planning space does not exist"},
+	{exitValidation, "validation", wire.ExitCodeStateActive, "input or repository state failed validation"},
+	{exitAmbiguous, "ambiguous", wire.ExitCodeStateActive, "a selector matched more than one entity"},
+	{exitConflict, "conflict", wire.ExitCodeStateActive, "a write collided with existing or concurrently changed state"},
+	{exitOK, "ok", wire.ExitCodeStateActive, "the command completed successfully, including an idempotent no-op"},
+	{exitError, "error", wire.ExitCodeStateActive, "an unclassified command, filesystem, or flag-parsing failure occurred"},
+	{exitAborted, "aborted", wire.ExitCodeStateActive, "an interactive prompt was aborted, normally with Ctrl-C"},
+	{exitInvalidTransition, "invalid-transition", wire.ExitCodeStateReserved, "retired and reserved; this binary never emits it"},
+}
+
+// classifiedExitCodes is only the adapter mapping from an adapter-neutral domain
+// failure class to a process outcome. Success, generic errors, prompt aborts, and
+// retired reservations have no domain Class and therefore cannot distort
+// domain.Classify or errors.Is behavior.
+var classifiedExitCodes = []struct {
 	class domain.Class
 	code  int
-	name  string
 }{
-	{domain.ClassNotFound, 10, "not-found"},
-	{domain.ClassValidation, 11, "validation"},
-	{domain.ClassAmbiguous, 13, "ambiguous"},
-	{domain.ClassConflict, 14, "conflict"},
+	{domain.ClassNotFound, exitNotFound},
+	{domain.ClassValidation, exitValidation},
+	{domain.ClassAmbiguous, exitAmbiguous},
+	{domain.ClassConflict, exitConflict},
+}
+
+// classifiedExitCode selects a candidate process outcome. Keep the active-row
+// enforcement in ExitCode: additions here cannot make a reserved or unknown
+// number observable at the process boundary.
+func classifiedExitCode(err error) int {
+	if err == nil {
+		return exitOK
+	}
+	if errors.Is(err, prompt.ErrAborted) {
+		return exitAborted // 128 + SIGINT(2): the user interrupted a prompt with ctrl-c
+	}
+	class := domain.Classify(err)
+	for _, e := range classifiedExitCodes {
+		if e.class == class {
+			return e.code
+		}
+	}
+	return exitError
+}
+
+// activeExitCode accepts only published active outcomes. Falling back to the
+// generic error is deliberate: an accidentally reused reservation or an
+// unpublished number must not become a new process contract by accident.
+func activeExitCode(code int) int {
+	for _, e := range processExitCodes {
+		if e.code == code && e.state == wire.ExitCodeStateActive {
+			return code
+		}
+	}
+	return exitError
 }
 
 // ExitCode maps an error to a semantic exit code, so agents can route on the
 // code without parsing text. 0 also covers idempotent no-ops.
 func ExitCode(err error) int {
-	if err == nil {
-		return 0
-	}
-	if errors.Is(err, prompt.ErrAborted) {
-		return 130 // 128 + SIGINT(2): the user interrupted a prompt with ctrl-c
-	}
-	class := domain.Classify(err)
-	for _, e := range errCodes {
-		if e.class == class {
-			return e.code
-		}
-	}
-	return 1
+	return activeExitCode(classifiedExitCode(err))
 }
 
 // errorCodeName is the stable machine name for an exit code — the `code` field
 // of the --json error envelope. Same vocabulary as the exit codes, as words.
 func errorCodeName(code int) string {
-	for _, e := range errCodes {
-		if e.code == code {
+	code = activeExitCode(code)
+	for _, e := range processExitCodes {
+		if e.code == code && e.state == wire.ExitCodeStateActive {
 			return e.name
 		}
 	}
-	return "error"
+	// ExitCode returns only registered outcomes; this fallback is defensive for a
+	// future direct caller and still derives the generic name from the registry.
+	for _, e := range processExitCodes {
+		if e.code == exitError {
+			return e.name
+		}
+	}
+	return ""
+}
+
+// schemaExitCodes copies the CLI-owned process taxonomy into its neutral wire
+// DTO. Keeping assembly here makes schema.go a consumer rather than a second
+// transcription of the numbers, names, or reservation state.
+func schemaExitCodes() []wire.SchemaExitCode {
+	codes := make([]wire.SchemaExitCode, 0, len(processExitCodes))
+	for _, e := range processExitCodes {
+		codes = append(codes, wire.SchemaExitCode{
+			Code: e.code, Name: e.name, State: e.state, Meaning: e.meaning,
+		})
+	}
+	return codes
 }
 
 // WriteError reports a fatal error on w: prose normally, a versioned JSON
