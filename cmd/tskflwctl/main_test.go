@@ -14,11 +14,12 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/theme"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // buildBinary compiles the real tskflwctl once per test run. Everything else
 // in the suite tests packages in-process; only here are the os.Exit wiring and
-// the semantic exit codes (10–14) exercised through an actual process.
+// the semantic exit codes exercised through an actual process.
 var (
 	buildOnce sync.Once
 	binPath   string
@@ -60,6 +61,139 @@ func run(t *testing.T, root string, args ...string) (string, int) {
 	}
 	t.Fatalf("run %v: %v\n%s", args, err, out)
 	return "", -1
+}
+
+// runStreams is the process-boundary helper for the machine contract: successful
+// payloads use stdout, fatal --json envelopes use stderr, and neither stream may
+// silently absorb the other.
+func runStreams(t *testing.T, root string, args ...string) (string, string, int) {
+	t.Helper()
+	cmd := exec.Command(binary(t), append([]string{"-C", root}, args...)...)
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		return stdout.String(), stderr.String(), 0
+	}
+	if ee, ok := err.(*exec.ExitError); ok {
+		return stdout.String(), stderr.String(), ee.ExitCode()
+	}
+	t.Fatalf("run %v: %v\nstdout=%s\nstderr=%s", args, err, stdout.String(), stderr.String())
+	return "", "", -1
+}
+
+func TestSmoke_PublishedExitTaxonomyMatchesProcessBehavior(t *testing.T) {
+	root := t.TempDir()
+	if out, code := run(t, root, "init", "--path", root, "--no-register"); code != 0 {
+		t.Fatalf("init: exit %d\n%s", code, out)
+	}
+	if out, code := run(t, root, "epic", "new", "Exit Taxonomy", "--description", "test process exits"); code != 0 {
+		t.Fatalf("epic new: exit %d\n%s", code, out)
+	}
+	for range 2 {
+		if out, code := run(t, root, "task", "new", "Same Task", "--epic", "01-exit-taxonomy",
+			"--description", "force an ambiguous selector", "--tags", "test"); code != 0 {
+			t.Fatalf("task new: exit %d\n%s", code, out)
+		}
+	}
+
+	firstSpace, secondSpace := t.TempDir(), t.TempDir()
+	for _, space := range []string{firstSpace, secondSpace} {
+		if out, code := run(t, space, "init", "--path", space, "--no-register"); code != 0 {
+			t.Fatalf("space init: exit %d\n%s", code, out)
+		}
+	}
+	const collisionID = "exit-taxonomy-process-test"
+	if stdout, stderr, code := runStreams(t, root, "space", "add", firstSpace, "--id", collisionID, "--json"); code != 0 {
+		t.Fatalf("first space registration: exit %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	defer func() {
+		if out, code := run(t, root, "space", "forget", collisionID); code != 0 {
+			t.Errorf("forget process-test space: exit %d\n%s", code, out)
+		}
+	}()
+
+	schemaOut, schemaErr, code := runStreams(t, root, "schema", "--json")
+	if code != 0 || schemaErr != "" {
+		t.Fatalf("schema --json: exit %d\nstdout=%s\nstderr=%s", code, schemaOut, schemaErr)
+	}
+	var schema wire.SchemaEnvelope
+	if err := json.Unmarshal([]byte(schemaOut), &schema); err != nil {
+		t.Fatalf("decode schema contract: %v\n%s", err, schemaOut)
+	}
+	published := make(map[int]wire.SchemaExitCode, len(schema.ExitCodes))
+	for _, row := range schema.ExitCodes {
+		published[row.Code] = row
+	}
+
+	tests := []struct {
+		name     string
+		args     []string
+		wantCode int
+		wantName string
+	}{
+		{"success", []string{"version"}, 0, "ok"},
+		{"generic", []string{"--badflag", "--json"}, 1, "error"},
+		{"not found", []string{"task", "show", "ghost", "--json"}, 10, "not-found"},
+		{"validation", []string{"task", "list", "--status", "bogus", "--json"}, 11, "validation"},
+		{"ambiguous", []string{"task", "show", "same-task", "--json"}, 13, "ambiguous"},
+		{"conflict", []string{"space", "add", secondSpace, "--id", collisionID, "--json"}, 14, "conflict"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr, code := runStreams(t, root, tc.args...)
+			if code != tc.wantCode {
+				t.Fatalf("exit = %d, want %d\nstdout=%s\nstderr=%s", code, tc.wantCode, stdout, stderr)
+			}
+			row, ok := published[code]
+			if !ok || row.State != wire.ExitCodeStateActive || row.Name != tc.wantName {
+				t.Fatalf("process exit %d/%q is not the published active row: %+v", code, tc.wantName, row)
+			}
+			if code == 0 {
+				if stderr != "" {
+					t.Fatalf("successful command wrote stderr: %q", stderr)
+				}
+				return
+			}
+			if stdout != "" {
+				t.Fatalf("fatal --json command wrote stdout: %q", stdout)
+			}
+			var envelope wire.ErrorEnvelope
+			if err := json.Unmarshal([]byte(stderr), &envelope); err != nil {
+				t.Fatalf("decode error envelope: %v\n%s", err, stderr)
+			}
+			if envelope.Error.Code != tc.wantName {
+				t.Fatalf("error.code = %q, want %q", envelope.Error.Code, tc.wantName)
+			}
+		})
+	}
+
+	reserved, ok := published[12]
+	if !ok || reserved.Name != "invalid-transition" || reserved.State != wire.ExitCodeStateReserved {
+		t.Fatalf("retired code 12 must remain explicitly reserved: %+v", reserved)
+	}
+
+	// Pin a real unclassified filesystem failure to the active 1/error row. This
+	// also guards the reservation: filesystem detail must never make code 12 live.
+	tasksDir := filepath.Join(root, "tasks")
+	if err := os.Chmod(tasksDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := runStreams(t, root, "task", "new", "Blocked Write", "--epic", "01-exit-taxonomy", "--tags", "test", "--json")
+	if err := os.Chmod(tasksDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if code != 1 || stdout != "" {
+		t.Fatalf("filesystem failure = exit %d, want 1; stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var filesystemEnvelope wire.ErrorEnvelope
+	if err := json.Unmarshal([]byte(stderr), &filesystemEnvelope); err != nil {
+		t.Fatalf("decode filesystem error envelope: %v\n%s", err, stderr)
+	}
+	if filesystemEnvelope.Error.Code != "error" || filesystemEnvelope.Error.Filesystem == nil {
+		t.Fatalf("filesystem failure must be 1/error with typed detail: %+v", filesystemEnvelope.Error)
+	}
 }
 
 func TestSmoke_LifecycleAndExitCodes(t *testing.T) {

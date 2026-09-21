@@ -2,6 +2,14 @@ package wire
 
 import "github.com/andy-esch/taskflow/internal/domain"
 
+const (
+	// ExitCodeStateActive means the running binary can deliberately return the code.
+	ExitCodeStateActive = "active"
+	// ExitCodeStateReserved preserves a retired number and explicitly says the
+	// running binary does not emit it.
+	ExitCodeStateReserved = "reserved"
+)
+
 // This file holds the schema-contract DTOs — the wire shape of `tskflwctl schema`
 // (the tool's self-description for agents) and `schema <kind>` (per-kind authoring
 // guidance) — embedded by SchemaEnvelope / SchemaKindEnvelope. They are wire types
@@ -19,11 +27,15 @@ type SchemaField struct {
 	Type string `json:"type"`
 }
 
-// SchemaExitCode is one exit code and its stable machine name (also the `code`
-// in the --json error envelope).
+// SchemaExitCode is one process exit and its stable machine name. Active domain
+// and generic failures use the name as `error.code` in --json envelopes. Success
+// has no error envelope, interactive abort is human-only, and reserved rows are
+// explicitly not emitted.
 type SchemaExitCode struct {
-	Code int    `json:"code"`
-	Name string `json:"name"`
+	Code    int    `json:"code" jsonschema:"description=process exit code"`
+	Name    string `json:"name" jsonschema:"description=stable machine name; envelope-producing failures use it as error.code"`
+	State   string `json:"state" jsonschema:"enum=active,enum=reserved,description=whether this binary may emit the code"`
+	Meaning string `json:"meaning" jsonschema:"description=stable semantic meaning for callers"`
 }
 
 // SchemaRevisionPolicy makes ADR-0008's compatibility rules discoverable to a

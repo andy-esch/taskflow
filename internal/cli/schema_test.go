@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -74,11 +75,8 @@ func TestSchemaContract_JSON(t *testing.T) {
 			Active bool   `json:"active"`
 		} `json:"statuses"`
 		TaskFields []struct{ Name, Type string } `json:"task_fields"`
-		ExitCodes  []struct {
-			Code int    `json:"code"`
-			Name string `json:"name"`
-		} `json:"exit_codes"`
-		Kinds []string `json:"kinds"`
+		ExitCodes  []wire.SchemaExitCode         `json:"exit_codes"`
+		Kinds      []string                      `json:"kinds"`
 	}
 	if err := json.Unmarshal([]byte(js), &c); err != nil {
 		t.Fatalf("schema --json invalid: %v\n%s", err, js)
@@ -110,7 +108,11 @@ func TestSchemaContract_JSON(t *testing.T) {
 		t.Errorf("task_fields should cover the whole registry: got %d want %d",
 			len(c.TaskFields), len(domain.KnownTaskFieldNames()))
 	}
-	if len(c.ExitCodes) == 0 || len(c.Kinds) != len(domain.SchemaKinds()) {
+	if !reflect.DeepEqual(c.ExitCodes, schemaExitCodes()) {
+		t.Errorf("exit_codes must be the complete CLI-owned process taxonomy:\n got: %+v\nwant: %+v",
+			c.ExitCodes, schemaExitCodes())
+	}
+	if len(c.Kinds) != len(domain.SchemaKinds()) {
 		t.Errorf("contract missing exit codes / kinds: %+v %+v", c.ExitCodes, c.Kinds)
 	}
 }

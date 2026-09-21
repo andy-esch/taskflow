@@ -30,7 +30,8 @@ func newSchemaCmd(app *App) *cobra.Command {
 			"wire keys while explicit legacy aliases retain their requested compatibility key. Only\n" +
 			"full --json validates against --json-schema.\n\n" +
 			"With no argument, emit the machine contract — statuses, the epic/bucket\n" +
-			"enums, the task field registry with types, and the exit/error codes — so an\n" +
+			"enums, the task field registry with types, and active/reserved process exits\n" +
+			"with stable names and meanings — so an\n" +
 			"agent can drive the tool without parsing --help prose. With a kind, emit how\n" +
 			"to author that document: the body section template, per-field guidance, and\n" +
 			"conventions. With --json-schema, emit a JSON Schema for the full --json output\n" +
@@ -97,10 +98,6 @@ func runSchemaContract(app *App) error {
 	for _, name := range domain.KnownResearchFieldNames() {
 		researchFields = append(researchFields, render.SchemaField{Name: name, Type: domain.FieldType(name)})
 	}
-	codes := make([]render.SchemaExitCode, 0, len(errCodes))
-	for _, e := range errCodes {
-		codes = append(codes, render.SchemaExitCode{Code: e.code, Name: e.name})
-	}
 	c := render.SchemaContract{
 		Statuses:     statuses,
 		EpicStatuses: domain.AllEpicStatuses(),
@@ -118,7 +115,7 @@ func runSchemaContract(app *App) error {
 		TaskFields:      fields,
 		EpicFields:      domain.KnownEpicFieldNames(),
 		ResearchFields:  researchFields,
-		ExitCodes:       codes,
+		ExitCodes:       schemaExitCodes(),
 		Kinds:           domain.SchemaKinds(),
 	}
 	if app.JSON {

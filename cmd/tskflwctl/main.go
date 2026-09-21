@@ -24,7 +24,7 @@ func main() {
 	// fang wraps the *human* face only. When stderr is not a TTY, or the run is
 	// --json, fall through to the original machine path verbatim — so piped/agent
 	// output is byte-identical with and without fang, by construction. The whole
-	// machine contract (--json error envelope + semantic exit codes 10–14) lives
+	// machine contract (--json error envelope + semantic process exits) lives
 	// on that fall-through path; fang never touches it.
 	if useFang(os.Args[1:], term.IsTerminal(int(os.Stderr.Fd()))) {
 		err := fang.Execute(
@@ -54,7 +54,7 @@ func main() {
 			asJSON = jsonFlagActive(os.Args[1:])
 		}
 		cli.WriteError(os.Stderr, err, asJSON)
-		os.Exit(cli.ExitCode(err)) // semantic codes: 10 not-found … 14 conflict
+		os.Exit(cli.ExitCode(err)) // complete taxonomy is published by schema --json
 	}
 }
 

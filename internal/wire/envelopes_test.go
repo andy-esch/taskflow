@@ -356,8 +356,11 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				TaskFields:      []SchemaField{{Name: "tier", Type: "int"}},
 				EpicFields:      []string{"status", "description"},
 				ResearchFields:  []SchemaField{{Name: "created", Type: "date"}},
-				ExitCodes:       []SchemaExitCode{{Code: 10, Name: "not-found"}},
-				Kinds:           []string{"task"},
+				ExitCodes: []SchemaExitCode{{
+					Code: 10, Name: "not-found", State: ExitCodeStateActive,
+					Meaning: "a requested named entity or registered planning space does not exist",
+				}},
+				Kinds: []string{"task"},
 			}))
 		}},
 		{"SchemaKindEnvelope", func(w io.Writer) error {

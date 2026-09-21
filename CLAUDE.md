@@ -86,7 +86,8 @@ We dogfood: drive this repo's planning with the tool itself.
   projection is a string-valued column **view** (like `-o table`/`csv`); only
   full `--json` validates against `schema --json-schema`.
 - **Self-describe (agents):** `schema` (contract: statuses, field registry,
-  exit codes) · `schema task|thread|epic|audit|research` (authoring guidance) ·
+  complete active/reserved process-exit taxonomy) ·
+  `schema task|thread|epic|audit|research` (authoring guidance) ·
   `schema --json-schema` (Draft 2020-12 schema for the `--json` envelopes). Runs
   anywhere, no planning repo needed.
 - **Hygiene:** `tskflwctl lint` (`--fix` to auto-repair ordinary frontmatter; Thread
@@ -112,8 +113,10 @@ touch git — it writes files; the user stages/commits.
 
 Match the surrounding code (naming, comment density, idiom). Errors wrap the
 domain sentinels (`ErrNotFound` / `ErrValidation` / `ErrAmbiguous` /
-`ErrConflict`) so the CLI maps them to exit codes (10, 11, 13, 14; 12 is retired
-but reserved). New
+`ErrConflict`) so the CLI maps them to exit codes 10, 11, 13, and 14. The full
+process taxonomy is discoverable through `schema --json`: 0 success, 1 generic
+error, 130 interactive abort, and retired code 12 explicitly reserved alongside
+the classified failures. New
 file writes go through the atomic helpers in `store/atomic.go`
 (`writeFileAtomic` to overwrite, `createFileAtomic` for exclusive create).
 Frontmatter is edited **surgically** — preserve unknown fields, comments, and

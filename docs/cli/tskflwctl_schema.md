@@ -13,7 +13,8 @@ wire keys while explicit legacy aliases retain their requested compatibility key
 full --json validates against --json-schema.
 
 With no argument, emit the machine contract — statuses, the epic/bucket
-enums, the task field registry with types, and the exit/error codes — so an
+enums, the task field registry with types, and active/reserved process exits
+with stable names and meanings — so an
 agent can drive the tool without parsing --help prose. With a kind, emit how
 to author that document: the body section template, per-field guidance, and
 conventions. With --json-schema, emit a JSON Schema for the full --json output
