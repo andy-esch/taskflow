@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g9zev1epg76
-bucket: open
+bucket: closed
 area: arch-machine-contract
 date: "2026-09-14"
 updated_at: "2026-09-19"
