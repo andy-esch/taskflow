@@ -20,6 +20,7 @@ func TestColumnRegistriesRejectContradictoryDeclarations(t *testing.T) {
 		"audit":    func() error { return validateColumnRegistry(AuditColumns()) },
 		"research": func() error { return validateColumnRegistry(ResearchColumns()) },
 		"finding":  func() error { return validateColumnRegistry(FindingColumns()) },
+		"thread":   func() error { return validateColumnRegistry(ThreadColumns()) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := check(); err != nil {

@@ -319,6 +319,16 @@ func marshalOrderedObject(fields []orderedField) ([]byte, error) {
 // for default or explicitly legacy table/CSV selections. Only bare `--json` is
 // the schema-validated contract.
 func ProjectedListJSON[T any](w io.Writer, listKey string, cols []Column[T], items []T, problems []domain.FileProblem) error {
+	return ProjectedListJSONWithProblems(w, listKey, cols, items, problems)
+}
+
+// ProjectedListJSONWithProblems is the adapter-neutral form of
+// ProjectedListJSON. Most planning entities expose filesystem read failures and
+// use the convenience wrapper above; Threads deliberately expose portable
+// identity-aware diagnostics instead. Keeping the unreadable element generic
+// lets both retain their public diagnostic shape without teaching the shared
+// projection renderer about either adapter.
+func ProjectedListJSONWithProblems[T, P any](w io.Writer, listKey string, cols []Column[T], items []T, problems []P) error {
 	rows := make([]projectedRow, 0, len(items))
 	for _, it := range items {
 		row := make(projectedRow, len(cols))
@@ -457,5 +467,28 @@ func AuditColumns() []Column[domain.Audit] {
 			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) },
 			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) }),
 		column("id", "stable audit identifier", func(a domain.Audit) string { return a.ID }),
+	)
+}
+
+// ThreadColumns is the compact projectable view for `thread list`. It is
+// intentionally not a flattened replacement for the full typed Thread
+// envelope: bare --json retains members, external gates, topology diagnostics,
+// and the nested persisted document. Slug remains first so -o name emits the
+// human command handle; stable identity and explicit progress/health fields are
+// available to agents in any caller-selected order.
+func ThreadColumns() []Column[core.ThreadView] {
+	return columnRegistry(
+		column("slug", "Thread slug", func(v core.ThreadView) string { return v.Thread.Slug }),
+		column("status", "Thread lifecycle status", func(v core.ThreadView) string { return string(v.Thread.Status) }),
+		column("done", "completed member count", func(v core.ThreadView) string { return fmt.Sprintf("%d", v.Rollup.Done) }),
+		column("total", "total member count", func(v core.ThreadView) string { return fmt.Sprintf("%d", v.Rollup.Total) }),
+		column("drained", "soundly drained member count", func(v core.ThreadView) string { return fmt.Sprintf("%d", v.Rollup.Drained) }),
+		column("deprecated", "deprecated member count", func(v core.ThreadView) string { return fmt.Sprintf("%d", v.Rollup.Deprecated) }),
+		column("frontier", "eligible frontier member count", func(v core.ThreadView) string { return fmt.Sprintf("%d", len(v.Frontier)) }),
+		column("graph_health", "repository task-DAG health", func(v core.ThreadView) string { return string(v.GraphHealth) }),
+		column("projection_health", "Thread projection health", func(v core.ThreadView) string { return string(v.ProjectionHealth) }),
+		column("inconsistent", "completed Thread closure inconsistency", func(v core.ThreadView) string { return fmt.Sprintf("%t", v.Inconsistent) }),
+		column("description", "one-line summary", func(v core.ThreadView) string { return v.Thread.Description }),
+		column("id", "stable Thread identifier", func(v core.ThreadView) string { return v.Thread.ID }),
 	)
 }

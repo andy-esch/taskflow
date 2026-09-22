@@ -185,6 +185,9 @@ func TestComplete_Threads(t *testing.T) {
 	if got := complete(t, "-C", root, "thread", "list", "--status", "in"); !has(got, "in-progress") {
 		t.Errorf("Thread status completion: %v", got)
 	}
+	if got := complete(t, "-C", root, "thread", "list", "-c", "graph_"); !has(got, "graph_health") {
+		t.Errorf("Thread column completion: %v", got)
+	}
 }
 
 // TestFlatCompletions pins the flat-layout completion model: a unique slug completes to

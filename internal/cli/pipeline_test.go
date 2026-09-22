@@ -440,7 +440,7 @@ func TestComplete_Columns(t *testing.T) {
 	if has(got, "slug") || has(got, "slug,slug") {
 		t.Errorf("an already-chosen column must not be re-offered: %v", got)
 	}
-	for _, noun := range []string{"task", "audit"} {
+	for _, noun := range []string{"task", "audit", "thread"} {
 		if got := complete(t, "-C", root, noun, "list", "-c", "i"); !has(got, "id") {
 			t.Errorf("%s stable id column should be discoverable through completion: %v", noun, got)
 		}

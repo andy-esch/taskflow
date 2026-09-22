@@ -39,7 +39,7 @@ tskflwctl audit list [flags]
       --deferred          deferred audits only
   -h, --help              help for list
   -o, --output string     output format: human|json|name|table|csv
-  -q, --quiet             ids only, one per line (alias for -o name)
+  -q, --quiet             concise command handles, one per line (alias for -o name)
 ```
 
 ### Options inherited from parent commands

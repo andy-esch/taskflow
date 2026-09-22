@@ -6,11 +6,22 @@ List Threads with nominal and sound progress
 tskflwctl thread list [flags]
 ```
 
+### Examples
+
+```
+  tskflwctl thread list
+  tskflwctl thread list -o table -c slug,status,done,total,frontier
+  tskflwctl thread list --json -c id,slug,graph_health,projection_health
+```
+
 ### Options
 
 ```
-  -h, --help            help for list
-      --status string   filter by Thread status
+  -c, --columns strings   select columns for -o table/csv/json, comma-separated (-o table when no format is pinned); available: slug,status,done,total,drained,deprecated,frontier,graph_health,projection_health,inconsistent,description,id
+  -h, --help              help for list
+  -o, --output string     output format: human|json|name|table|csv
+  -q, --quiet             concise command handles, one per line (alias for -o name)
+      --status string     filter by Thread status
 ```
 
 ### Options inherited from parent commands

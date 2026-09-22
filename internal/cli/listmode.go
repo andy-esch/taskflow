@@ -18,7 +18,7 @@ type outputMode int
 const (
 	modeHuman outputMode = iota // colored, aligned table (default)
 	modeJSON                    // stable JSON envelope
-	modeName                    // ids only, one per line (the -q alias)
+	modeName                    // concise command handles, one per line (the -q alias)
 	modeTable                   // headered, byte-stable, tab-separated table
 	modeCSV                     // headered, RFC 4180 comma-separated (for spreadsheets)
 )
@@ -54,7 +54,7 @@ func (m *listMode) bind(cmd *cobra.Command, columnSpecs []render.ColumnSpec) {
 		// `--json -c`, which is the documented token-cheap machine path. The implication
 		// only fires when no format is pinned; say so.
 		"select columns for -o table/csv/json, comma-separated (-o table when no format is pinned); available: "+specNames(columnSpecs))
-	cmd.Flags().BoolVarP(&m.quiet, "quiet", "q", false, "ids only, one per line (alias for -o name)")
+	cmd.Flags().BoolVarP(&m.quiet, "quiet", "q", false, "concise command handles, one per line (alias for -o name)")
 	_ = cmd.RegisterFlagCompletionFunc("output", completeOutputFormats)
 	_ = cmd.RegisterFlagCompletionFunc("columns", columnCompleter(columnSpecs))
 }
@@ -203,13 +203,13 @@ func renderList[T any](
 	return nil
 }
 
-// completeOutputFormats offers the four output formats with descriptions
+// completeOutputFormats offers the five output formats with descriptions
 // (KeepOrder so the shell shows them in this deliberate order, not sorted). Built
 // from cobra's typed helpers rather than hand-joined "name\tdesc" strings.
 var completeOutputFormats = cobra.FixedCompletions([]cobra.Completion{
 	cobra.CompletionWithDesc("human", "colored, aligned table (default)"),
 	cobra.CompletionWithDesc("json", "stable JSON envelope"),
-	cobra.CompletionWithDesc("name", "ids only, one per line"),
+	cobra.CompletionWithDesc("name", "concise command handles, one per line"),
 	cobra.CompletionWithDesc("table", "headered tab-separated table"),
 	cobra.CompletionWithDesc("csv", "headered comma-separated (RFC 4180)"),
 }, cobra.ShellCompDirectiveNoFileComp|cobra.ShellCompDirectiveKeepOrder)

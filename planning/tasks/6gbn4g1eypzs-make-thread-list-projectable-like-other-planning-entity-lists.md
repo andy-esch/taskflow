@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gbn4g1eypzs
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Give Thread list the shared output and column-projection contract without flattening its richer typed envelope.
 effort: S
@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, threads, json, agents]
 created: "2026-09-19"
+updated_at: "2026-09-22"
+started_at: "2026-09-22"
+completed_at: "2026-09-22"
 ---
 
 # Make Thread list projectable like other planning entity lists
@@ -34,15 +37,15 @@ columns.
 
 ## Acceptance criteria
 
-- [ ] `thread list` supports the established table, CSV, name, and JSON output modes plus validated
+- [x] `thread list` supports the established table, CSV, name, and JSON output modes plus validated
       column selection without changing its default human presentation.
-- [ ] Projected JSON exposes stable Thread IDs and caller-ordered canonical keys; aliases, if any,
+- [x] Projected JSON exposes stable Thread IDs and caller-ordered canonical keys; aliases, if any,
       are explicit and collision-checked.
-- [ ] Full `thread list --json` retains its typed members, gates, graph health, projection health,
+- [x] Full `thread list --json` retains its typed members, gates, graph health, projection health,
       and diagnostics rather than being routed through the compact registry.
-- [ ] Help, completion, table/CSV/projected-JSON goldens, registry invariants, and hostile selector
+- [x] Help, completion, table/CSV/projected-JSON goldens, registry invariants, and hostile selector
       tests pin the contract.
-- [ ] The additive machine-contract revision and generated docs are updated; focused tests, full
+- [x] The additive machine-contract revision and generated docs are updated; focused tests, full
       tests, lint, planning lint, and diff checks pass.
 
 ## Out of scope
@@ -56,3 +59,15 @@ columns.
 - Audit [Machine contract, M3](../audits/6g9zev1epg76-2026-09-14-arch-machine-contract.md)
 - ADR [Adopt Threads as task DAGs](../adrs/0006-adopt-threads-as-task-dags.md)
 - Task [Bound and page agent-facing list queries](6gbn4g1j40pj-bound-and-page-agent-facing-list-queries.md)
+
+## Implementation notes
+
+- `thread list` now uses the shared list-mode resolver and one Thread column registry for name,
+  table, CSV, and caller-selected JSON output. The compact view exposes stable identity, explicit
+  nominal/sound progress, frontier size, and separate graph/projection health values.
+- Bare `thread list --json` still emits the full typed Thread envelope. Projected JSON preserves
+  the portable identity-aware unreadable-record shape instead of collapsing it to filesystem-only
+  diagnostics.
+- Machine revision 1.72, projection-contract and output goldens, completion/selector tests, and
+  generated CLI docs pin the additive surface. The full race suite, static lint, planning lint,
+  focused tests, and diff checks pass.

@@ -24,7 +24,7 @@ tskflwctl task list [flags]
       --epic string       filter by epic
   -h, --help              help for list
   -o, --output string     output format: human|json|name|table|csv
-  -q, --quiet             ids only, one per line (alias for -o name)
+  -q, --quiet             concise command handles, one per line (alias for -o name)
       --revisit-due       only deferred tasks whose revisit date has arrived (composes with --epic/--tag/-c)
       --status string     filter by status
       --tag string        filter by tag
