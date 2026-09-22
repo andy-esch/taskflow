@@ -10,7 +10,7 @@ priority: low
 autonomy_level: 3
 tags: [architecture, diagnostics, lint, ports]
 created: "2026-09-01"
-updated_at: "2026-09-04"
+updated_at: "2026-09-22"
 depends_on: [6g5rxq1ravd3, 6g6scc9jgxae]
 ---
 # Make repository lint load diagnostics adapter-neutral
@@ -52,3 +52,5 @@ deliberate post-release boundary. This task owns the multi-entity vocabulary fir
 
 - Thread diagnostic predecessor: make-thread-read-diagnostics-adapter-neutral
 - Task graph diagnostic precedent: make-task-graph-load-diagnostics-adapter-neutral
+
+Cross-referenced by audit 2026-09-22-correctness-and-errors: M1 (PARTIAL overlap). That finding is a lint *rule* gap — `Service.Lint`'s cross-kind task/Thread id-collision check builds its identity sets from readable records only, so a collision stops being reported once either document is malformed, even though the adapter already recovers the filename id and the duplicate-id check in the same loop consumes it. This task's "Out of scope" excludes changing lint rules, so M1 is deliberately left open rather than tracked here — but it touches the same code and this task's stress-test list already names duplicate identities, so the two are worth sequencing together.
