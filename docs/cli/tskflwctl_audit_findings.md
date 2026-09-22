@@ -30,7 +30,7 @@ tskflwctl audit findings [audit] [flags]
       --effort strings     filter by effort XS,S,M,L (any-of)
   -h, --help               help for findings
   -o, --output string      output format: human|json|name|table|csv
-  -q, --quiet              ids only, one per line (alias for -o name)
+  -q, --quiet              concise command handles, one per line (alias for -o name)
       --status strings     filter by finding status (comma-separated, any-of)
       --urgency strings    filter by urgency acute,soon,eventually (any-of)
 ```

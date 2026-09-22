@@ -80,6 +80,9 @@ func TestGolden_MachineContract(t *testing.T) {
 		{"task_depend_repair_json", []string{"-C", fixtureRepo, "task", "depend", "repair", "--json"}, redact},
 		{"task_list_unblocked_json", []string{"-C", fixtureRepo, "task", "list", "--unblocked", "--json"}, nil},
 		{"thread_list_json", []string{"-C", fixtureRepo, "thread", "list", "--json"}, nil},
+		{"thread_list_table", []string{"-C", fixtureRepo, "thread", "list", "-o", "table"}, nil},
+		{"thread_list_csv", []string{"-C", fixtureRepo, "thread", "list", "-o", "csv"}, nil},
+		{"thread_list_projected_json", []string{"-C", fixtureRepo, "thread", "list", "--json", "-c", "id,slug,status,done,total,drained,deprecated,frontier,graph_health,projection_health,inconsistent,description"}, nil},
 		{"thread_show_json", []string{"-C", fixtureRepo, "thread", "show", "fixture-thread", "--json"}, nil},
 		{"thread_frontier_json", []string{"-C", fixtureRepo, "thread", "frontier", "fixture-thread", "--json"}, nil},
 		{"thread_graph_json", []string{"-C", fixtureRepo, "thread", "graph", "fixture-thread", "--json"}, nil},
@@ -151,6 +154,7 @@ func TestGolden_ProjectionContract(t *testing.T) {
 		Finding       []projectionSelectorContract `json:"finding"`
 		Research      []projectionSelectorContract `json:"research"`
 		Audit         []projectionSelectorContract `json:"audit"`
+		Thread        []projectionSelectorContract `json:"thread"`
 	}{
 		SchemaVersion: wire.SchemaVersion,
 		Task:          projectionSelectorContracts(render.Specs(render.TaskColumns())),
@@ -158,6 +162,7 @@ func TestGolden_ProjectionContract(t *testing.T) {
 		Finding:       projectionSelectorContracts(render.Specs(render.FindingColumns())),
 		Research:      projectionSelectorContracts(render.Specs(render.ResearchColumns())),
 		Audit:         projectionSelectorContracts(render.Specs(render.AuditColumns())),
+		Thread:        projectionSelectorContracts(render.Specs(render.ThreadColumns())),
 	}
 	b, err := json.MarshalIndent(contract, "", "  ")
 	if err != nil {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"os"
@@ -114,6 +115,95 @@ func TestThreadNewListShowPathAndFrontier(t *testing.T) {
 	}
 }
 
+func TestThreadListProjectedOutputModes(t *testing.T) {
+	root := threadCLIRepo(t)
+	if _, _, err := runIn(t, root, "thread", "new", "Delivery", "--description", "Ship Threads, safely", "--goal", "Dogfood Threads", "--task", "beta", "--task", "alpha"); err != nil {
+		t.Fatal(err)
+	}
+
+	human, errOut, err := runIn(t, root, "thread", "list")
+	if err != nil || errOut != "" || !strings.Contains(human, "STATUS") || !strings.Contains(human, "GRAPH/VIEW") {
+		t.Fatalf("default human list changed: err=%v\nstdout=%s\nstderr=%s", err, human, errOut)
+	}
+	name, errOut, err := runIn(t, root, "thread", "list", "-o", "name")
+	if err != nil || errOut != "" || name != "delivery\n" {
+		t.Fatalf("name list: err=%v stdout=%q stderr=%q", err, name, errOut)
+	}
+
+	table, errOut, err := runIn(t, root, "thread", "list", "-c", "status,slug,done,total,frontier,id")
+	if err != nil || errOut != "" {
+		t.Fatalf("table list: err=%v\nstdout=%s\nstderr=%s", err, table, errOut)
+	}
+	lines := strings.Split(strings.TrimSpace(table), "\n")
+	if len(lines) != 2 || lines[0] != "status\tslug\tdone\ttotal\tfrontier\tid" {
+		t.Fatalf("projected table = %q", table)
+	}
+	fields := strings.Split(lines[1], "\t")
+	if len(fields) != 6 || fields[0] != "unstarted" || fields[1] != "delivery" || fields[2] != "0" || fields[3] != "2" || fields[4] != "1" || fields[5] == "" {
+		t.Fatalf("projected table row = %#v", fields)
+	}
+
+	csvOut, errOut, err := runIn(t, root, "thread", "list", "-o", "csv", "-c", "slug,description")
+	if err != nil || errOut != "" {
+		t.Fatalf("CSV list: err=%v\nstdout=%s\nstderr=%s", err, csvOut, errOut)
+	}
+	records, err := csv.NewReader(strings.NewReader(csvOut)).ReadAll()
+	if err != nil || len(records) != 2 || !slices.Equal(records[0], []string{"slug", "description"}) ||
+		!slices.Equal(records[1], []string{"delivery", "Ship Threads, safely"}) {
+		t.Fatalf("CSV records=%#v err=%v", records, err)
+	}
+
+	projected, errOut, err := runIn(t, root, "thread", "list", "--json", "-c", "id,slug,graph_health,projection_health,inconsistent")
+	if err != nil || errOut != "" {
+		t.Fatalf("projected JSON: err=%v\nstdout=%s\nstderr=%s", err, projected, errOut)
+	}
+	var narrow struct {
+		SchemaVersion string              `json:"schema_version"`
+		Threads       []map[string]string `json:"threads"`
+	}
+	if err := json.Unmarshal([]byte(projected), &narrow); err != nil {
+		t.Fatal(err)
+	}
+	if narrow.SchemaVersion != wire.SchemaVersion || len(narrow.Threads) != 1 || len(narrow.Threads[0]) != 5 ||
+		narrow.Threads[0]["id"] == "" || narrow.Threads[0]["slug"] != "delivery" ||
+		narrow.Threads[0]["graph_health"] != "healthy" || narrow.Threads[0]["projection_health"] != "healthy" ||
+		narrow.Threads[0]["inconsistent"] != "false" {
+		t.Fatalf("projected Thread row = %#v", narrow)
+	}
+	for previous, next := range map[string]string{
+		`"id"`: `"slug"`, `"slug"`: `"graph_health"`, `"graph_health"`: `"projection_health"`,
+		`"projection_health"`: `"inconsistent"`,
+	} {
+		if i, j := strings.Index(projected, previous), strings.Index(projected, next); i < 0 || j <= i {
+			t.Fatalf("projected keys lost caller order %s before %s:\n%s", previous, next, projected)
+		}
+	}
+	if strings.Contains(projected, `"members"`) || strings.Contains(projected, `"external_gates"`) {
+		t.Fatalf("compact projection leaked nested topology:\n%s", projected)
+	}
+
+	full, _, err := runIn(t, root, "thread", "list", "--json")
+	if err != nil || !strings.Contains(full, `"members"`) || !strings.Contains(full, `"external_gates"`) || !strings.Contains(full, `"graph_problems"`) {
+		t.Fatalf("bare JSON lost its typed topology: err=%v\n%s", err, full)
+	}
+}
+
+func TestThreadListRejectsHostileColumnSelectors(t *testing.T) {
+	root := threadCLIRepo(t)
+	for _, selector := range []string{"slug,nope", "slug,slug"} {
+		out, _, err := runIn(t, root, "thread", "list", "--json", "-c", selector)
+		if err == nil || !errors.Is(err, domain.ErrValidation) || ExitCode(err) != 11 || out != "" {
+			t.Fatalf("selector %q: err=%v exit=%d stdout=%q", selector, err, ExitCode(err), out)
+		}
+		var encoded bytes.Buffer
+		WriteError(&encoded, err, true)
+		var envelope wire.ErrorEnvelope
+		if decodeErr := json.Unmarshal(encoded.Bytes(), &envelope); decodeErr != nil || envelope.Error.Code != "validation" {
+			t.Fatalf("selector %q error envelope=%s decode=%v", selector, encoded.String(), decodeErr)
+		}
+	}
+}
+
 func TestThreadListReportsIdentityAwareUnreadableRecords(t *testing.T) {
 	root := threadCLIRepo(t)
 	threadID := testutil.TaskID("unreadable-cli-thread")
@@ -132,6 +222,21 @@ func TestThreadListReportsIdentityAwareUnreadableRecords(t *testing.T) {
 		envelope.Unreadable[0].ThreadSlug != "unreadable-cli-thread" ||
 		filepath.Base(envelope.Unreadable[0].Location) != filepath.Base(path) {
 		t.Fatalf("unreadable = %+v", envelope.Unreadable)
+	}
+
+	out, errOut, err = runIn(t, root, "thread", "list", "--json", "-c", "id,slug")
+	if err == nil || ExitCode(err) != 11 || errOut != "" {
+		t.Fatalf("projected JSON list error=%v exit=%d stderr=%q stdout=%s", err, ExitCode(err), errOut, out)
+	}
+	var projected struct {
+		Threads    []map[string]string          `json:"threads"`
+		Unreadable []wire.ThreadReadProblemJSON `json:"unreadable"`
+	}
+	if err := json.Unmarshal([]byte(out), &projected); err != nil {
+		t.Fatalf("decode projected Thread list: %v\n%s", err, out)
+	}
+	if len(projected.Unreadable) != 1 || projected.Unreadable[0] != envelope.Unreadable[0] {
+		t.Fatalf("projected unreadable = %+v, full = %+v", projected.Unreadable, envelope.Unreadable)
 	}
 
 	_, errOut, err = runIn(t, root, "thread", "list")

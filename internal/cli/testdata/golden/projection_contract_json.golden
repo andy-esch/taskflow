@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.71",
+  "schema_version": "1.72",
   "task": [
     {
       "name": "slug",
@@ -173,6 +173,56 @@
     {
       "name": "id",
       "description": "stable audit identifier"
+    }
+  ],
+  "thread": [
+    {
+      "name": "slug",
+      "description": "Thread slug"
+    },
+    {
+      "name": "status",
+      "description": "Thread lifecycle status"
+    },
+    {
+      "name": "done",
+      "description": "completed member count"
+    },
+    {
+      "name": "total",
+      "description": "total member count"
+    },
+    {
+      "name": "drained",
+      "description": "soundly drained member count"
+    },
+    {
+      "name": "deprecated",
+      "description": "deprecated member count"
+    },
+    {
+      "name": "frontier",
+      "description": "eligible frontier member count"
+    },
+    {
+      "name": "graph_health",
+      "description": "repository task-DAG health"
+    },
+    {
+      "name": "projection_health",
+      "description": "Thread projection health"
+    },
+    {
+      "name": "inconsistent",
+      "description": "completed Thread closure inconsistency"
+    },
+    {
+      "name": "description",
+      "description": "one-line summary"
+    },
+    {
+      "name": "id",
+      "description": "stable Thread identifier"
     }
   ]
 }

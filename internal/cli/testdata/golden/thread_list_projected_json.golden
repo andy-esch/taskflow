@@ -1,0 +1,1 @@
+{"schema_version":"1.72","threads":[{"id":"6fjangd7kvh4","slug":"fixture-thread","status":"unstarted","done":"0","total":"2","drained":"0","deprecated":"0","frontier":"1","graph_health":"healthy","projection_health":"healthy","inconsistent":"false","description":"A fixture Thread for golden snapshots"}]}

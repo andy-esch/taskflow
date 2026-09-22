@@ -366,13 +366,14 @@ forces color even off a TTY — handy for agents). `--json` is always plain.
 
 ### Pipelines
 
-The `list` commands (`task`/`epic`/`audit list`) share one output-format flag,
-`-o/--output`, plus an orthogonal column selector:
+The projectable entity queries (`task`/`thread`/`epic`/`audit`/`research list`
+and `audit findings`) share one output-format flag, `-o/--output`, plus an
+orthogonal column selector:
 
 | `-o` | Output | For |
 | :--- | :--- | :--- |
 | `human` *(default)* | colorized table | reading on a terminal |
-| `name` | ids only, one per line | `… \| xargs` |
+| `name` | concise command handles (slug, id, or finding ref), one per line | `… \| xargs` |
 | `table` | tab-separated, header row, absolute dates, no color/truncation | `cut`/`awk`; stable across versions |
 | `csv` | RFC 4180 comma-separated, header row | spreadsheets; cells with commas are quoted |
 | `json` | full records + `schema_version` | `jq` |
@@ -396,6 +397,9 @@ tskflwctl task list --unblocked -q --tag tui | xargs tskflwctl task start
 
 # audits with open findings, projected to slug + open count
 tskflwctl audit list --all -o table -c slug,open_findings | awk -F'\t' 'NR>1 && $2>0 {print $1}'
+
+# compact Thread health/progress without loading its full topology envelope
+tskflwctl thread list --json -c id,slug,status,done,total,frontier,projection_health
 
 # in-progress slugs via jq
 tskflwctl task list --status in-progress -o json | jq -r '.tasks[].slug'

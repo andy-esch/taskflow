@@ -145,16 +145,23 @@ type ThreadReadProblemJSON struct {
 func ToThreadsEnvelope(list core.ThreadListView, problems []core.ThreadReadProblem) ThreadsEnvelope {
 	payload := ThreadsEnvelope{
 		SchemaVersion: SchemaVersion, GraphHealth: string(list.GraphHealth), GraphProblems: toGraphProblemsJSON(list.GraphProblems),
-		Threads: make([]ThreadViewJSON, 0, len(list.Threads)), Unreadable: make([]ThreadReadProblemJSON, 0, len(problems)),
-	}
-	for _, problem := range problems {
-		payload.Unreadable = append(payload.Unreadable, ThreadReadProblemJSON{
-			ThreadID: problem.ThreadID, ThreadSlug: problem.ThreadSlug,
-			Location: problem.Location, Message: problem.Message,
-		})
+		Threads: make([]ThreadViewJSON, 0, len(list.Threads)), Unreadable: ToThreadReadProblemsJSON(problems),
 	}
 	for _, view := range list.Threads {
 		payload.Threads = append(payload.Threads, ToThreadViewJSON(view))
+	}
+	return payload
+}
+
+// ToThreadReadProblemsJSON preserves the same portable unreadable-record shape
+// across the full and caller-projected Thread list envelopes.
+func ToThreadReadProblemsJSON(problems []core.ThreadReadProblem) []ThreadReadProblemJSON {
+	payload := make([]ThreadReadProblemJSON, 0, len(problems))
+	for _, problem := range problems {
+		payload = append(payload, ThreadReadProblemJSON{
+			ThreadID: problem.ThreadID, ThreadSlug: problem.ThreadSlug,
+			Location: problem.Location, Message: problem.Message,
+		})
 	}
 	return payload
 }

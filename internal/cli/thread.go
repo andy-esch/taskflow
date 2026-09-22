@@ -193,13 +193,22 @@ func newThreadNewCmd(app *App) *cobra.Command {
 }
 
 func newThreadListCmd(app *App) *cobra.Command {
-	var status string
+	var (
+		status string
+		lm     listMode
+	)
+	cols := render.ThreadColumns()
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List Threads with nominal and sound progress",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
-		RunE: func(_ *cobra.Command, _ []string) error {
+		Example:     "  tskflwctl thread list\n  tskflwctl thread list -o table -c slug,status,done,total,frontier\n  tskflwctl thread list --json -c id,slug,graph_health,projection_health",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			mode, err := lm.resolve(cmd, app)
+			if err != nil {
+				return err
+			}
 			if status != "" {
 				if err := domain.ValidateThreadStatus(domain.ThreadStatus(status)); err != nil {
 					return err
@@ -218,19 +227,53 @@ func newThreadListCmd(app *App) *cobra.Command {
 				}
 				list.Threads = filtered
 			}
-			if app.JSON {
-				if err := render.ThreadsJSON(app.Out, list, problems); err != nil {
-					return err
+			if mode == modeJSON {
+				if len(lm.columns) == 0 {
+					if err := render.ThreadsJSON(app.Out, list, problems); err != nil {
+						return err
+					}
+				} else {
+					selected, err := render.SelectColumns(cols, lm.columns)
+					if err != nil {
+						return err
+					}
+					if err := render.ProjectedListJSONWithProblems(
+						app.Out, "threads", selected, list.Threads, wire.ToThreadReadProblemsJSON(problems),
+					); err != nil {
+						return err
+					}
 				}
 			} else {
-				if err := render.ThreadsHuman(app.Out, app.Style, list); err != nil {
-					return err
+				switch mode {
+				case modeName:
+					names := make([]string, len(list.Threads))
+					for i, view := range list.Threads {
+						names[i] = cols[0].Extract(view)
+					}
+					render.IDsQuiet(app.Out, names)
+				case modeTable, modeCSV:
+					selected, err := render.SelectColumns(cols, lm.columns)
+					if err != nil {
+						return err
+					}
+					if mode == modeCSV {
+						if err := render.WriteCSV(app.Out, selected, list.Threads); err != nil {
+							return err
+						}
+					} else {
+						render.WriteTablePlain(app.Out, selected, list.Threads)
+					}
+				default:
+					if err := render.ThreadsHuman(app.Out, app.Style, list); err != nil {
+						return err
+					}
 				}
 				render.ThreadProblemsHuman(app.ErrOut, app.Style, problems)
 			}
 			return threadProblemsError(problems)
 		},
 	}
+	lm.bind(cmd, render.Specs(cols))
 	cmd.Flags().StringVar(&status, "status", "", "filter by Thread status")
 	_ = cmd.RegisterFlagCompletionFunc("status", completeThreadStatusValues)
 	return cmd

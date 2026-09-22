@@ -294,7 +294,11 @@ import (
 // 1.71: ADDITIVE — the schema contract publishes every runnable CLI command,
 // including hidden and deprecated compatibility leaves, with its enforced
 // read-only or mutating side-effect capability.
-const SchemaVersion = "1.71"
+// 1.72: ADDITIVE — `thread list` gains name, table, and CSV views plus
+// caller-selected string-valued JSON projections over stable identity,
+// progress, frontier, health, and description fields. Bare
+// `thread list --json` retains its full typed topology and diagnostic envelope.
+const SchemaVersion = "1.72"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.
