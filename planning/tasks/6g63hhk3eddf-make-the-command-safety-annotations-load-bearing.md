@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g63hhk3eddf
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: '77 commands carry safety annotations that nothing reads: expose them in schema --json and make them verify something'
 effort: 3-5 hours
@@ -11,7 +11,9 @@ autonomy_level: 3
 tags: [cli, agents, schema, architecture]
 created: "2026-09-02"
 audited: "2026-09-13"
-updated_at: "2026-09-13"
+updated_at: "2026-09-22"
+started_at: "2026-09-21"
+completed_at: "2026-09-22"
 ---
 # Make the command safety annotations load-bearing
 
@@ -34,11 +36,11 @@ mutating path should be a test failure, not a code-review catch.
 
 ## Acceptance criteria
 
-- [ ] `schema --json` emits the command surface with each command's safety tag, and a golden pins the output
-- [ ] A test asserts every registered command — including hidden and deprecated ones — carries a recognized `safety` value
-- [ ] The tag gates or verifies something rather than only describing it: a `read-only` command that reaches a mutating service path fails a test
-- [ ] Decide and record whether `--dry-run` applicability should derive from the tag rather than being restated per command
-- [ ] Agent-facing guidance (`schema`, and the CLAUDE.md triage section) tells an agent the tag exists and is machine-readable
+- [x] `schema --json` emits the command surface with each command's safety tag, and a golden pins the output
+- [x] A test asserts every registered command — including hidden and deprecated ones — carries a recognized `safety` value
+- [x] The tag gates or verifies something rather than only describing it: a `read-only` command that reaches a mutating service path fails a test
+- [x] Decide and record whether `--dry-run` applicability should derive from the tag rather than being restated per command
+- [x] Agent-facing guidance (`schema`, and the CLAUDE.md triage section) tells an agent the tag exists and is machine-readable
 
 ## Out of scope
 
@@ -77,3 +79,17 @@ Command safety tagged via cobra Annotations` completion marker.
 ## Progress log
 
 - 2026-09-13: automated weekly sweep — annotation count drifted 76 → 77 (41 read-only, 36 mutating) with still zero consumers, which is the rot the task predicts; `description` updated.
+
+## Implementation closeout (2026-09-21)
+
+Command safety is now an executable contract rather than a convention. The final runnable Cobra leaf is bound before discovery; filesystem, configuration, space-registry, and workspace-opening adapters receive a framework-neutral mutation authorizer and fail closed when a read-only invocation reaches either a real or dry-run mutation path. Direct init, TUI-launch, and durable Thread-plan writes enforce the same capability. The audit caught and corrected `lint`: because `--fix` can persist repairs, its command capability is mutating even when a particular invocation only reads.
+
+`schema --json` revision 1.71 additively publishes 100 deterministic command records (49 read-only, 51 mutating) with hidden/deprecated markers. Coverage includes ordinary, hidden, deprecated, generated help/completion, and Cobra's runtime-only completion transport; a real CLI/core/filesystem probe proves a mislabeled read-only command cannot alter a task. Safety does not derive `--dry-run` support: it describes potential side effects, while previews remain command-specific because interactive mutating commands cannot preview meaningfully.
+
+Validation: the full race-enabled Go suite passes, golangci-lint reports zero issues, generated CLI/schema artifacts and machine-contract goldens are current, planning lint passes, and `git diff --check` is clean.
+
+## Adversarial review closeout (2026-09-22)
+
+Claude found two medium and three low gaps; all five are fixed and both implementation audits are closed. The CLI now carries authorization through workspace-opened stores, Thread creation authorizes before touching the filesystem, and Thread compose authorizes previews as well as writes. Regression coverage kills removal of all 26 filesystem mutation entries, every CLI-composed persistence family, custom pre-run binding, unbound fail-closed behavior, and direct init/compose/UI guards. The command research spec now consistently classifies whole-command capability. Antigravity found no separate defects but independently identified the workspace boundary as residual risk, corroborating Claude M1.
+
+Final validation: `go test -race ./...`, `golangci-lint run ./...`, generated CLI/schema artifacts, `go mod tidy -diff`, planning lint, audit lint, and `git diff --check` are clean.

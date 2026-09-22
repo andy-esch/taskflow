@@ -219,12 +219,18 @@ surface what's left; closing is an explicit `set status complete`.
 
 Make `tskflwctl` machine-operable, not just human-runnable:
 
-- **Command safety tags:** every command carries cobra
-  `Annotations{"safety": "read-only"|"mutating"}`.
+- **Command safety tags:** every runnable command carries cobra
+  `Annotations{"safety": "read-only"|"mutating"}`. The CLI binds the selected
+  capability before execution, persistence adapters reject mutation from a read-only
+  command, and `schema --json` publishes the complete runnable surface (including
+  hidden/deprecated compatibility commands).
+  Safety describes the whole command's capability, not the flags used for one
+  invocation: a mutating command remains classified as such when invoked in a
+  read-only mode such as `--dry-run` or without `--fix`.
   - *Read-only:* all `list`/`show`/`findings`/`stats`, plus `schema`,
-    `index`, `tags`, `version`, `completion`, `lint` *without* `--fix`.
+    `index`, `tags`, `version`, and `completion`.
   - *Mutating:* `new`, `set`, the transition verbs + `move`, `touch`,
-    `rename`, `recommend`, `lint --fix`, every `audit` write, `project
+    `rename`, `recommend`, `lint`, `task ac`, every `audit` write, `project
     new/add/rm`, `init`, `track`/`untrack`.
 - **Semantic exit codes** (route without parsing text):
   `0` `ok` (success / idempotent no-op) · `1` `error` (unclassified error) ·
@@ -246,9 +252,9 @@ Make `tskflwctl` machine-operable, not just human-runnable:
   never hang an agent loop on a prompt.
 - **`--dry-run`** (global, mutating commands): in `--json` mode, output the
   exact would-be file create/modify payloads — preview before write.
-- **`schema --type cli --json`:** emit the command tree (commands, flags,
-  enums, safety tags) so an agent introspects syntax instead of scraping
-  `--help`. Feeds a future MCP layer.
+- **`schema --json`:** emit the command paths, domain enums, process exits, and
+  enforced safety tags so an agent introspects the machine contract instead of
+  scraping `--help`. Flag-level introspection remains future work.
 
 ## Deliberate departures from the Python `pm`
 
@@ -277,7 +283,8 @@ Make `tskflwctl` machine-operable, not just human-runnable:
   audit-level `open/closed/deferred` buckets; `followup` stays.
 - ✅ `task new --status <s>` replaces a `--next` flag.
 - ✅ `--json` carries a semver `schema_version` (minor=add, major=rename/remove).
-- ✅ Command safety tagged via cobra `Annotations` (read-only vs mutating).
+- ✅ Command safety tagged via cobra `Annotations`, published by `schema --json`,
+  coverage-checked, and enforced at persistence boundaries (read-only vs mutating).
 - ✅ `project` is a first-class group (own dir + `projects:` list on tasks).
 
 ## Still open / needs scoping
