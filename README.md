@@ -310,7 +310,9 @@ re-normalizes a hand-edited drift). Errors carry semantic exit codes — `10`
 not-found, `11` validation, `13` ambiguous, `14` conflict (e.g. a name already taken).
 `schema --json` publishes the complete process taxonomy and meanings, including
 `0` success, `1` generic error, `130` interactive abort, and retired code `12` as
-reserved rather than emitted.
+reserved rather than emitted. It also publishes every runnable command path with
+its enforced `read-only` or `mutating` safety capability, so automation can inspect
+side-effect potential without scraping help text.
 
 **Task-dependency graph.** Task frontmatter and JSON may carry `depends_on`, a sorted
 set of stable task IDs representing repository-global prerequisites. Guarded

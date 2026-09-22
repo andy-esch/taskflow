@@ -113,6 +113,9 @@ func (s *FS) writeLock() (func(), error) {
 // Ordinary legacy call sites retain their no-error unlock function until they are
 // migrated; both paths use the same process + platform serialization.
 func (s *FS) checkedWriteLock() (func() error, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return nil, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, err
 	}

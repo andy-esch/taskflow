@@ -13,6 +13,17 @@ import (
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
+func TestFSRegistryMutationsRequireAuthorizationBeforeDryRun(t *testing.T) {
+	blocked := errors.New("mutation denied")
+	store := New(WithMutationAuthorization(func() error { return blocked }))
+	if _, _, err := store.AddSpace(core.SpaceRegistration{ID: "x", Checkout: "/x"}, true); !errors.Is(err, blocked) {
+		t.Fatalf("AddSpace error = %v, want authorization error", err)
+	}
+	if _, _, err := store.ForgetSpace("x", true); !errors.Is(err, blocked) {
+		t.Fatalf("ForgetSpace error = %v, want authorization error", err)
+	}
+}
+
 func TestFSRegistryAdapter_PreparesListsAndMutatesThroughCoreValues(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(userconfig.DirEnv, home)

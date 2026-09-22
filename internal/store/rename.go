@@ -30,6 +30,9 @@ var firstH1Re = regexp.MustCompile(`(?m)^# .*$`)
 // to inbound-link documents. A dry run performs the same planning without a reservation.
 func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (result core.TaskRenameMutationResult, err error) {
 	result.DryRun = dryRun
+	if err := s.authorizeMutation(); err != nil {
+		return result, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return result, err
 	}

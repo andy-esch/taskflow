@@ -69,6 +69,9 @@ func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
 // parse-before-commit guard: a status that wouldn't reload is rejected with the
 // file untouched.
 func (s *FS) MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epic, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return domain.Epic{}, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Epic{}, err
 	}
@@ -136,6 +139,9 @@ func (s *FS) MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epi
 // untouched (ErrValidation, not a FileProblem — the user's update is bad, the file
 // on disk was never the cause).
 func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (domain.Epic, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return domain.Epic{}, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Epic{}, err
 	}
@@ -194,6 +200,9 @@ func (s *FS) SetEpicFields(id string, updates map[string]any, dryRun bool) (doma
 // but the version-CAS recheck still catches a concurrent edit during the editor window.
 // Returns the reloaded epic and whether it changed.
 func (s *FS) EditEpic(id string, now time.Time, edit func(current string, prevErr error) (string, error)) (domain.Epic, bool, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return domain.Epic{}, false, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Epic{}, false, err
 	}

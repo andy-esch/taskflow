@@ -408,7 +408,16 @@ adapter capabilities rather than leaked persistence.
   (no retry, and the lock is held only for the write, never the editor session), and creates map
   the empty precondition onto `createFileAtomic`'s `O_EXCL`. Exposing it over HTTP
   (`If-Match`) is the web adapter's job (epic 19), not the FS store's.
-- **`internal/cli`** — a primary adapter: the cobra tree.
+- **`internal/cli`** — a primary adapter: the cobra tree. Every runnable leaf has a
+  `safety` annotation (`read-only` or `mutating`). Persistent pre-run binds that
+  capability before discovery, and the filesystem/config/space/workspace
+  secondary adapters receive a framework-neutral authorization callback that rejects a mutation path
+  reached by a read-only command. The callback is optional outside this composition
+  root, so core and reusable adapters do not depend on Cobra. `schema --json` publishes
+  the same complete runnable surface; coverage tests include hidden, deprecated, and
+  framework-generated commands. Safety describes whether a command *can* mutate, not
+  whether one invocation will: `--dry-run` remains a global preview input whose support
+  is command-specific because interactive mutating commands have no meaningful preview.
 - **`internal/tui`** — the *second* primary adapter (shipped): a Bubble Tea
   browser calling the **same** `core.Service`, never the store/fs. Its Config/About
   overlay embeds `internal/configui` and calls `core.ConfigurationService`, so it
@@ -494,8 +503,10 @@ adapter capabilities rather than leaked persistence.
 - **`internal/workspacestore`** — the filesystem secondary adapter for
   `core.WorkspaceStore`. It translates one explicit local start directory through
   repo-scoped `config.Discover`, constructs the concrete Markdown store once, and exposes
-  it as separate entity and watcher-layout capabilities. The TUI receives only the
-  resulting `core.WorkspaceService`; it does not import discovery or filesystem packages.
+  it as separate entity and watcher-layout capabilities. The CLI composition root carries
+  the invocation mutation authorizer through this boundary, so stores opened later from
+  the atlas cannot bypass command safety. The TUI receives only the resulting
+  `core.WorkspaceService`; it does not import discovery or filesystem packages.
 - **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
   `internal/cli` (`root.go`), which it calls.
 

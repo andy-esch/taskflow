@@ -360,7 +360,8 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 					Code: 10, Name: "not-found", State: ExitCodeStateActive,
 					Meaning: "a requested named entity or registered planning space does not exist",
 				}},
-				Kinds: []string{"task"},
+				Commands: []SchemaCommand{{Path: "tskflwctl task list", Safety: "read-only"}},
+				Kinds:    []string{"task"},
 			}))
 		}},
 		{"SchemaKindEnvelope", func(w io.Writer) error {

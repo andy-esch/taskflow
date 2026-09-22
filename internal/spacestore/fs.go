@@ -16,9 +16,33 @@ import (
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
-type FS struct{}
+type FS struct {
+	mutationAuthorization func() error
+}
 
-func New() *FS { return &FS{} }
+// Option configures the filesystem space-registry adapter.
+type Option func(*FS)
+
+// WithMutationAuthorization requires authorize to succeed before either
+// registry mutation use case, including a dry-run preview.
+func WithMutationAuthorization(authorize func() error) Option {
+	return func(store *FS) { store.mutationAuthorization = authorize }
+}
+
+func New(opts ...Option) *FS {
+	store := &FS{}
+	for _, opt := range opts {
+		opt(store)
+	}
+	return store
+}
+
+func (f *FS) authorizeMutation() error {
+	if f.mutationAuthorization == nil {
+		return nil
+	}
+	return f.mutationAuthorization()
+}
 
 var (
 	_ core.SpaceRegistryStore = (*FS)(nil)
@@ -58,6 +82,9 @@ func (f *FS) PrepareSpace(path string) (core.SpaceRegistration, error) {
 }
 
 func (f *FS) AddSpace(registration core.SpaceRegistration, dryRun bool) (core.SpaceEntryPoint, bool, error) {
+	if err := f.authorizeMutation(); err != nil {
+		return core.SpaceEntryPoint{}, false, err
+	}
 	added, existing, err := userconfig.AddSpace(userconfig.Space{
 		ID: registration.ID, Path: userconfig.TildePath(registration.Checkout), VerifyID: registration.VerifyID,
 	}, dryRun)
@@ -68,6 +95,9 @@ func (f *FS) AddSpace(registration core.SpaceRegistration, dryRun bool) (core.Sp
 }
 
 func (f *FS) ForgetSpace(id string, dryRun bool) (core.SpaceEntryPoint, bool, error) {
+	if err := f.authorizeMutation(); err != nil {
+		return core.SpaceEntryPoint{}, false, err
+	}
 	removed, existing, err := userconfig.ForgetSpace(id, dryRun)
 	if err != nil {
 		return core.SpaceEntryPoint{}, false, classifyRegistryError(err)

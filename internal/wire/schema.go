@@ -38,6 +38,16 @@ type SchemaExitCode struct {
 	Meaning string `json:"meaning" jsonschema:"description=stable semantic meaning for callers"`
 }
 
+// SchemaCommand is one executable CLI path and its side-effect capability.
+// Hidden and deprecated leaves remain present because agents can still invoke
+// them and compatibility aliases must obey the same safety invariant.
+type SchemaCommand struct {
+	Path       string `json:"path"`
+	Safety     string `json:"safety" jsonschema:"enum=read-only,enum=mutating"`
+	Hidden     bool   `json:"hidden"`
+	Deprecated bool   `json:"deprecated"`
+}
+
 // SchemaRevisionPolicy makes ADR-0008's compatibility rules discoverable to a
 // machine consumer without requiring access to source comments or planning docs.
 type SchemaRevisionPolicy struct {
@@ -71,6 +81,9 @@ func CurrentSchemaRevisionPolicy() SchemaRevisionPolicy {
 // not be able to omit or contradict the revision policy of the running binary.
 func NormalizeSchemaContract(c SchemaContract) SchemaContract {
 	c.RevisionPolicy = CurrentSchemaRevisionPolicy()
+	if c.Commands == nil {
+		c.Commands = []SchemaCommand{}
+	}
 	return c
 }
 
@@ -97,6 +110,7 @@ type SchemaContract struct {
 	// whose conventions name the protected ones.
 	ResearchFields []SchemaField    `json:"research_fields"`
 	ExitCodes      []SchemaExitCode `json:"exit_codes"`
+	Commands       []SchemaCommand  `json:"commands"`
 	Kinds          []string         `json:"kinds"`
 }
 

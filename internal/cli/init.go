@@ -49,6 +49,11 @@ func newInitCmd(app *App) *cobra.Command {
 		// falls back to the full scaffold (today's non-interactive behavior).
 		PersistentPreRunE: app.styleOnlyPreRun,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// init writes through the topology package before a repository-backed
+			// service exists, so enforce the same command capability at this boundary.
+			if err := app.authorizeMutation(); err != nil {
+				return err
+			}
 			abs, err := filepath.Abs(path)
 			if err != nil {
 				return err

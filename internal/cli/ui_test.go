@@ -33,6 +33,34 @@ func TestUIRefusesNonInteractiveAndDryRunInvocation(t *testing.T) {
 	}
 }
 
+func TestUIAmbientLaunchBindsSafetyBeforeItsMutationBoundary(t *testing.T) {
+	t.Setenv(userconfig.DirEnv, t.TempDir())
+	t.Chdir(t.TempDir())
+	_, err := runRootRC(t, "ui")
+	if err == nil || ExitCode(err) != 11 || !strings.Contains(err.Error(), "interactive terminal") {
+		t.Fatalf("ambient non-interactive ui should reach terminal validation after safety binding: %v", err)
+	}
+}
+
+func TestUILaunchRejectsReadOnlyClassification(t *testing.T) {
+	repo := t.TempDir()
+	if _, err := config.Init(repo, "", false); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	root := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd, _, err := root.Find([]string{"ui"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.Annotations[commandSafetyAnnotation] = commandSafetyReadOnly
+	root.SetArgs([]string{"-C", repo, "ui"})
+	err = root.Execute()
+	if err == nil || !strings.Contains(err.Error(), `read-only command "tskflwctl ui"`) {
+		t.Fatalf("ui error = %v, want bound read-only command violation", err)
+	}
+}
+
 func TestAtlasThemeUsesHomeScopeWithoutRepositoryOverride(t *testing.T) {
 	t.Setenv("TSKFLW_THEME", "")
 	app := &App{

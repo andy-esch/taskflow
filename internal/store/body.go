@@ -89,6 +89,9 @@ func writeBody[T any](
 // shared write tail (parse-before-accept, compare-and-swap, dry-run, body echo)
 // lives in writeBody. Returns the reloaded audit and the resulting (LF) body.
 func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return domain.Audit{}, "", err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, "", err
 	}
@@ -140,6 +143,9 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 // comments, and key order survive) and updated_at is stamped. The shared write tail
 // lives in writeBody. Returns the reloaded task and the resulting (LF) body.
 func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return domain.Task{}, "", err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Task{}, "", err
 	}
@@ -186,6 +192,9 @@ func (s *FS) TransformAuditBody(
 	dryRun bool,
 	transform func(audit domain.Audit, current string) (string, error),
 ) (domain.Audit, string, bool, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return domain.Audit{}, "", false, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, "", false, err
 	}
@@ -243,6 +252,9 @@ func (s *FS) TransformTaskBody(
 	dryRun bool,
 	transform func(current string) (string, error),
 ) (domain.Task, string, bool, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return domain.Task{}, "", false, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Task{}, "", false, err
 	}

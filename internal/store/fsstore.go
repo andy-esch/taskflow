@@ -41,6 +41,7 @@ type FS struct {
 	researchDir            string
 	threadsDir             string
 	planningIdentityReader PlanningIdentityReader
+	mutationAuthorization  func() error
 }
 
 // PlanningIdentityReader re-runs configuration discovery at apply time. Root
@@ -56,6 +57,22 @@ func WithPlanningIdentityReader(reader PlanningIdentityReader) FSOption {
 			store.planningIdentityReader = reader
 		}
 	}
+}
+
+// WithMutationAuthorization installs an adapter-boundary guard. The callback
+// is intentionally framework-neutral: a CLI can enforce command metadata while
+// another primary adapter can supply its own policy or omit the option.
+func WithMutationAuthorization(authorize func() error) FSOption {
+	return func(store *FS) {
+		store.mutationAuthorization = authorize
+	}
+}
+
+func (s *FS) authorizeMutation() error {
+	if s.mutationAuthorization == nil {
+		return nil
+	}
+	return s.mutationAuthorization()
 }
 
 // Compile-time assertions that FS satisfies the core ports. The use-case Store is
@@ -169,6 +186,9 @@ func (s *FS) GetTask(slug string) (domain.Task, string, error) {
 // SetFields surgically updates frontmatter fields on a task (no status/dir
 // change) and writes the file atomically in place.
 func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return domain.Task{}, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Task{}, err
 	}

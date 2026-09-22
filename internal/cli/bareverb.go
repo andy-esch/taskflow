@@ -43,6 +43,7 @@ func newBareVerbCmd(app *App, verb string, forms []string) *cobra.Command {
 	return &cobra.Command{
 		Use:                verb,
 		Hidden:             true,
+		Annotations:        map[string]string{commandSafetyAnnotation: commandSafetyReadOnly},
 		DisableFlagParsing: true, // the flags belong to the real command; never interpret them here
 		Args:               cobra.ArbitraryArgs,
 		// This is a usage error, so it must not depend on repo discovery: outside a
