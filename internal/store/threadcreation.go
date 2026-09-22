@@ -22,11 +22,19 @@ func (s *FS) MutateThreadCreation(now time.Time, dryRun bool, planner core.Threa
 	if now.IsZero() {
 		return result, fmt.Errorf("%w: Thread creation time is required", domain.ErrValidation)
 	}
+	// Authorize before any filesystem effect. checkedWriteLock repeats this at
+	// the shared writer choke point; this entry check also protects the root
+	// preparation that a real first write needs.
+	if err := s.authorizeMutation(); err != nil {
+		return result, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return result, err
 	}
-	if err := os.MkdirAll(s.root, 0o755); err != nil {
-		return result, fmt.Errorf("mkdir planning root %s: %w", s.root, err)
+	if !dryRun {
+		if err := os.MkdirAll(s.root, 0o755); err != nil {
+			return result, fmt.Errorf("mkdir planning root %s: %w", s.root, err)
+		}
 	}
 	unlock, err := s.checkedWriteLock()
 	if err != nil {

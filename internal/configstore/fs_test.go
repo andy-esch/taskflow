@@ -1,6 +1,7 @@
 package configstore
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,19 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
+
+func TestFSMutationsRequireAuthorizationBeforeDryRun(t *testing.T) {
+	blocked := errors.New("mutation denied")
+	store := New(WithMutationAuthorization(func() error { return blocked }))
+	if _, err := store.MigrateConfiguration(t.TempDir(), true); !errors.Is(err, blocked) {
+		t.Fatalf("MigrateConfiguration error = %v, want authorization error", err)
+	}
+	if _, err := store.SetPreference(t.TempDir(), core.PreferenceChange{
+		Scope: core.ConfigScopeUser, Field: core.PreferenceTheme, Value: "neon",
+	}, true); !errors.Is(err, blocked) {
+		t.Fatalf("SetPreference error = %v, want authorization error", err)
+	}
+}
 
 func TestFSLoadsBothScopesAndPendingMigration(t *testing.T) {
 	home := t.TempDir()

@@ -83,6 +83,10 @@ type App struct {
 	Fixer  core.Fixer
 	Layout core.Layout
 	Linter core.Linter
+	// commandSafety is bound from the final runnable Cobra command before any
+	// discovery or use-case execution. Persistence adapters consult it at their
+	// write boundaries, making the command annotation an enforced invariant.
+	commandSafety commandSafetyState
 }
 
 // setStyle resolves the presentation "face" — output Style (color + width) and the
@@ -141,6 +145,9 @@ func (a *App) warnPresentation(cmd *cobra.Command) {
 // no planning repo required (`version`, `init`, `schema`): resolve presentation, emit
 // its warnings, skip discovery entirely.
 func (a *App) styleOnlyPreRun(cmd *cobra.Command, _ []string) error {
+	if err := a.bindCommandSafety(cmd); err != nil {
+		return err
+	}
 	a.setStyle()
 	a.warnPresentation(cmd)
 	return nil
@@ -241,16 +248,25 @@ func themeFlagFrom(args []string) string {
 // `--body-file -`), so a caller/test injects one reader and every input path
 // agrees — production passes os.Stdin.
 func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
-	spaceAdapter := spacestore.New()
-	spaceSvc := core.NewSpaceRegistryService(spaceAdapter)
+	root, _ := newRootCmd(in, out, errOut)
+	return root
+}
+
+// newRootCmd exposes the invocation container to package tests so the safety
+// boundary can be exercised through a real Cobra execution and core service.
+func newRootCmd(in io.Reader, out, errOut io.Writer) (*cobra.Command, *App) {
 	app := &App{
 		Out: out, ErrOut: errOut, In: in, Th: design.Default(),
-		ConfigSvc: core.NewConfigurationService(configstore.New(),
-			core.WithConfigurationThemes(design.Names()), core.WithSpaceRegistry(spaceSvc)),
-		SpaceSvc:         spaceSvc,
-		SpaceOverviewSvc: core.NewSpaceOverviewService(spaceSvc, spaceAdapter),
-		WorkspaceSvc:     core.NewWorkspaceService(workspacestore.New()),
 	}
+	spaceAdapter := spacestore.New(spacestore.WithMutationAuthorization(app.authorizeMutation))
+	spaceSvc := core.NewSpaceRegistryService(spaceAdapter)
+	app.ConfigSvc = core.NewConfigurationService(
+		configstore.New(configstore.WithMutationAuthorization(app.authorizeMutation)),
+		core.WithConfigurationThemes(design.Names()), core.WithSpaceRegistry(spaceSvc))
+	app.SpaceSvc = spaceSvc
+	app.SpaceOverviewSvc = core.NewSpaceOverviewService(spaceSvc, spaceAdapter)
+	app.WorkspaceSvc = core.NewWorkspaceService(
+		workspacestore.New(workspacestore.WithMutationAuthorization(app.authorizeMutation)))
 
 	root := &cobra.Command{
 		Use:               "tskflwctl",
@@ -300,13 +316,27 @@ func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
 	root.AddCommand(newSchemaCmd(app))
 	root.AddCommand(newTemplateCmd(app))
 	root.AddCommand(newThemeCmd(app))
-	return root
+	// Cobra adds these trees lazily during Execute. Initialize them now so the
+	// schema and coverage invariant describe the same complete command surface
+	// before execution begins, then classify the framework-owned leaves.
+	root.InitDefaultHelpCmd()
+	root.InitDefaultCompletionCmd()
+	if help, _, err := root.Find([]string{"help"}); err == nil {
+		markCommandTreeReadOnly(help)
+	}
+	if completion, _, err := root.Find([]string{"completion"}); err == nil {
+		markCommandTreeReadOnly(completion)
+	}
+	return root, app
 }
 
 // repoPreRun is the default command hook: resolve presentation and the current
 // planning repo. Commands that can work without a current repo override it with
 // styleOnlyPreRun or their own conditional hook.
 func (a *App) repoPreRun(cmd *cobra.Command, _ []string) error {
+	if err := a.bindCommandSafety(cmd); err != nil {
+		return err
+	}
 	a.setStyle()
 	// Shell completion ('__complete') runs this hook too. Outside a planning repo,
 	// resolve() errors — which would abort completion. Stay silent there; completion
@@ -419,12 +449,20 @@ func (a *App) resolveFrom(start string) error {
 			return "", "", err
 		}
 		return fresh.Root, fresh.ID, nil
-	}))
+	}), store.WithMutationAuthorization(a.authorizeMutation))
 	a.Svc = core.NewService(fs)
 	a.Fixer = fs
 	a.Layout = fs
 	a.Linter = fs
 	return nil
+}
+
+func (a *App) bindCommandSafety(cmd *cobra.Command) error {
+	return a.commandSafety.bind(cmd)
+}
+
+func (a *App) authorizeMutation() error {
+	return a.commandSafety.authorizeMutation()
 }
 
 // warnLinks emits the ambient linkback-integrity warnings — one ⚠ per finding to

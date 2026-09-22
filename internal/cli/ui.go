@@ -37,6 +37,9 @@ func newUICmd(app *App) *cobra.Command {
 			if isCompletionCommand(cmd) || app.wantsSpace() || app.Chdir != "" {
 				return app.repoPreRun(cmd, args)
 			}
+			if err := app.bindCommandSafety(cmd); err != nil {
+				return err
+			}
 			app.setStyle()
 			if err := app.resolve(); err != nil {
 				if !errors.Is(err, config.ErrNoConfig) {
@@ -50,6 +53,11 @@ func newUICmd(app *App) *cobra.Command {
 			return nil
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
+			// The TUI is a long-lived mutating primary adapter and opens additional
+			// workspaces after launch. Authorize that capability once at its boundary.
+			if err := app.authorizeMutation(); err != nil {
+				return err
+			}
 			if app.DryRun {
 				return fmt.Errorf("%w: `ui` has no --dry-run preview (it is interactive and includes mutations)", domain.ErrValidation)
 			}

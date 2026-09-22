@@ -291,7 +291,10 @@ import (
 // also gain `state` and `meaning`; their four-row prefix remains stable. Code 12
 // is explicitly reserved and not emitted by this binary. Exhaustive consumers
 // must accept the new rows before upgrading.
-const SchemaVersion = "1.70"
+// 1.71: ADDITIVE — the schema contract publishes every runnable CLI command,
+// including hidden and deprecated compatibility leaves, with its enforced
+// read-only or mutating side-effect capability.
+const SchemaVersion = "1.71"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.
@@ -306,7 +309,7 @@ const (
 	SchemaRevisionClassificationSince = "1.68"
 	// SchemaRevisionCompatibility classifies the current revision. It must agree
 	// with the current changelog entry; wire_changelog_test.go enforces that.
-	SchemaRevisionCompatibility = "not-additive"
+	SchemaRevisionCompatibility = "additive"
 	// SchemaRevisionCompatibilityDefault is policy, not a guarantee: every
 	// revision still declares its own classification.
 	SchemaRevisionCompatibilityDefault = "additive"

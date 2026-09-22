@@ -22,6 +22,9 @@ func newTemplateCmd(app *App) *cobra.Command {
 		Short:       "List and inspect the body scaffolds `new --template` can use",
 		Annotations: map[string]string{"safety": "read-only"},
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			if err := app.bindCommandSafety(cmd); err != nil {
+				return err
+			}
 			app.setStyle()
 			defer app.warnPresentation(cmd)
 			// Best-effort: a planning repo (when present) lets repo-local templates

@@ -15,9 +15,33 @@ import (
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
-type FS struct{}
+type FS struct {
+	mutationAuthorization func() error
+}
 
-func New() *FS { return &FS{} }
+// Option configures the filesystem configuration adapter.
+type Option func(*FS)
+
+// WithMutationAuthorization requires authorize to succeed before either
+// configuration mutation use case, including a dry-run preview.
+func WithMutationAuthorization(authorize func() error) Option {
+	return func(store *FS) { store.mutationAuthorization = authorize }
+}
+
+func New(opts ...Option) *FS {
+	store := &FS{}
+	for _, opt := range opts {
+		opt(store)
+	}
+	return store
+}
+
+func (f *FS) authorizeMutation() error {
+	if f.mutationAuthorization == nil {
+		return nil
+	}
+	return f.mutationAuthorization()
+}
 
 var _ core.ConfigurationStore = (*FS)(nil)
 
@@ -85,6 +109,9 @@ func (f *FS) LoadConfiguration(start string) (core.ConfigurationState, error) {
 }
 
 func (f *FS) MigrateConfiguration(start string, dryRun bool) (core.ConfigurationMigration, error) {
+	if err := f.authorizeMutation(); err != nil {
+		return core.ConfigurationMigration{}, err
+	}
 	result, err := config.Migrate(start, dryRun)
 	if err != nil {
 		return core.ConfigurationMigration{}, err
@@ -128,6 +155,9 @@ func (f *FS) DiagnoseConfiguration(start string) (core.ConfigurationDiagnosis, e
 }
 
 func (f *FS) SetPreference(start string, change core.PreferenceChange, dryRun bool) (core.PreferenceResult, error) {
+	if err := f.authorizeMutation(); err != nil {
+		return core.PreferenceResult{}, err
+	}
 	encoded, err := encodePreference(change)
 	if err != nil {
 		return core.PreferenceResult{}, err

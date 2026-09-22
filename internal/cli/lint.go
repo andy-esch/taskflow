@@ -24,8 +24,9 @@ func newLintCmd(app *App) *cobra.Command {
 			"would-be graph repair is skipped and reported for deliberate remediation.",
 		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --links\n  tskflwctl lint --json",
 		Args:    cobra.NoArgs,
-		// Read-only by default; --fix opts into mutation explicitly.
-		Annotations: map[string]string{"safety": "read-only"},
+		// Safety is a command capability, not a statement about one flag set:
+		// --fix can persist repairs, so the runnable command is mutating.
+		Annotations: map[string]string{"safety": "mutating"},
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if fix {
 				return runLintFix(app, app.DryRun) // --dry-run is the persistent flag (root.go)

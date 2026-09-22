@@ -25,6 +25,9 @@ type SchemaField = wire.SchemaField
 // SchemaExitCode is one active or reserved process exit and its stable meaning.
 type SchemaExitCode = wire.SchemaExitCode
 
+// SchemaCommand is one runnable command and its enforced side-effect capability.
+type SchemaCommand = wire.SchemaCommand
+
 // SchemaContract is the global machine contract (`tskflwctl schema`): everything
 // an agent needs to drive the tool without parsing --help prose.
 type SchemaContract = wire.SchemaContract
@@ -83,6 +86,18 @@ func SchemaHuman(w io.Writer, st Style, c SchemaContract) error {
 		}
 		fmt.Fprintf(w, "  %-3d %-19s %s%s\n", e.Code, e.Name, st.Dim(e.Meaning), state)
 	}
+	readOnly, mutating := 0, 0
+	for _, command := range c.Commands {
+		switch command.Safety {
+		case "read-only":
+			readOnly++
+		case "mutating":
+			mutating++
+		}
+	}
+	fmt.Fprintf(w, "\n%s: %d runnable (%d read-only, %d mutating)\n",
+		st.Bold("Command safety"), len(c.Commands), readOnly, mutating)
+	fmt.Fprintf(w, "%s\n", st.Dim("Machine-readable paths and enforced safety tags are in `tskflwctl schema --json`."))
 	fmt.Fprintf(w, "\n%s\n", st.Dim("`tskflwctl schema <"+strings.Join(c.Kinds, "|")+">` for per-kind authoring guidance."))
 	return nil
 }

@@ -30,7 +30,8 @@ func newSchemaCmd(app *App) *cobra.Command {
 			"wire keys while explicit legacy aliases retain their requested compatibility key. Only\n" +
 			"full --json validates against --json-schema.\n\n" +
 			"With no argument, emit the machine contract — statuses, the epic/bucket\n" +
-			"enums, the task field registry with types, and active/reserved process exits\n" +
+			"enums, the task field registry with types, active/reserved process exits,\n" +
+			"and every runnable command's enforced read-only/mutating safety capability\n" +
 			"with stable names and meanings — so an\n" +
 			"agent can drive the tool without parsing --help prose. With a kind, emit how\n" +
 			"to author that document: the body section template, per-field guidance, and\n" +
@@ -51,12 +52,12 @@ func newSchemaCmd(app *App) *cobra.Command {
 		// resolve() lets an agent run `schema` in any repo to learn the contract
 		// (the strongest reason this command exists). Just set up styling.
 		PersistentPreRunE: app.styleOnlyPreRun,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if jsonSchema {
 				return runJSONSchema(app)
 			}
 			if len(args) == 0 {
-				return runSchemaContract(app)
+				return runSchemaContract(app, cmd.Root())
 			}
 			return runSchemaKind(app, args[0])
 		},
@@ -81,7 +82,7 @@ func runJSONSchema(app *App) error {
 
 // runSchemaContract assembles the global contract from the domain enums/registry
 // and the CLI's exit-code table — every value is read from its real source.
-func runSchemaContract(app *App) error {
+func runSchemaContract(app *App, root *cobra.Command) error {
 	statuses := make([]render.SchemaStatus, 0, len(domain.AllStatuses()))
 	for _, s := range domain.AllStatuses() {
 		statuses = append(statuses, render.SchemaStatus{Value: string(s), Active: s.IsActive()})
@@ -97,6 +98,10 @@ func runSchemaContract(app *App) error {
 	researchFields := make([]render.SchemaField, 0, len(domain.KnownResearchFieldNames()))
 	for _, name := range domain.KnownResearchFieldNames() {
 		researchFields = append(researchFields, render.SchemaField{Name: name, Type: domain.FieldType(name)})
+	}
+	commands, err := commandSafetySurface(root)
+	if err != nil {
+		return err
 	}
 	c := render.SchemaContract{
 		Statuses:     statuses,
@@ -116,6 +121,7 @@ func runSchemaContract(app *App) error {
 		EpicFields:      domain.KnownEpicFieldNames(),
 		ResearchFields:  researchFields,
 		ExitCodes:       schemaExitCodes(),
+		Commands:        commands,
 		Kinds:           domain.SchemaKinds(),
 	}
 	if app.JSON {

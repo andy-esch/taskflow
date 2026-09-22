@@ -83,6 +83,9 @@ func (s *FS) GetAuditByPath(path string) (domain.Audit, string, error) {
 // `bucket:` frontmatter in place — under the flat layout (ADR-0003 §4) there is no bucket
 // directory to move between. Moving to the bucket it already declares is an idempotent no-op.
 func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return domain.Audit{}, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, err
 	}

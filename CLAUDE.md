@@ -86,7 +86,9 @@ We dogfood: drive this repo's planning with the tool itself.
   projection is a string-valued column **view** (like `-o table`/`csv`); only
   full `--json` validates against `schema --json-schema`.
 - **Self-describe (agents):** `schema` (contract: statuses, field registry,
-  complete active/reserved process-exit taxonomy) ·
+  complete active/reserved process-exit taxonomy; `schema --json` also publishes
+  every runnable command path with its enforced `read-only` or `mutating` safety
+  capability, including hidden/deprecated compatibility commands) ·
   `schema task|thread|epic|audit|research` (authoring guidance) ·
   `schema --json-schema` (Draft 2020-12 schema for the `--json` envelopes). Runs
   anywhere, no planning repo needed.

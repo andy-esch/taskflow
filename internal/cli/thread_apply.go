@@ -39,6 +39,11 @@ func newThreadComposeCmd(app *App) *cobra.Command {
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "mutating"},
 		RunE: func(_ *cobra.Command, _ []string) error {
+			// Compose can create a durable plan. Authorize its command capability
+			// before validation and planning even when --dry-run suppresses the write.
+			if err := app.authorizeMutation(); err != nil {
+				return err
+			}
 			if strings.TrimSpace(from) == "" || strings.TrimSpace(outPath) == "" {
 				return fmt.Errorf("%w: --from and --out are required", domain.ErrValidation)
 			}

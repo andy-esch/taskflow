@@ -32,6 +32,9 @@ func newThemeCmd(app *App) *cobra.Command {
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			if err := app.bindCommandSafety(cmd); err != nil {
+				return err
+			}
 			app.setStyle()
 			// Ordinary cwd discovery is best-effort, but an explicit space selection
 			// is an address assertion and therefore cannot silently fall back.

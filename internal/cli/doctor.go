@@ -41,6 +41,9 @@ func newDoctorCommand(app *App) *cobra.Command {
 		// doctor reports the same findings on stdout (with an exit code), so the
 		// stderr warning would just duplicate them.
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			if err := app.bindCommandSafety(cmd); err != nil {
+				return err
+			}
 			app.setStyle()
 			err := app.resolve()
 			// After resolve so a repo [theme] participates; the ambient link ⚠ stays

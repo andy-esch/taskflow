@@ -59,6 +59,9 @@ type entityFileCreation struct {
 // creating the planning root or taking a writer lock. Compound graph-aware creates
 // retain their richer guarded planners and finish through writeNewFileUnlocked.
 func (s *FS) createEntityFile(dryRun bool, prepare func() (entityFileCreation, error)) (entityFileCreation, error) {
+	if err := s.authorizeMutation(); err != nil {
+		return entityFileCreation{}, err
+	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return entityFileCreation{}, err
 	}
@@ -77,7 +80,6 @@ func (s *FS) createEntityFile(dryRun bool, prepare func() (entityFileCreation, e
 		}
 		return creation, nil
 	}
-
 	// Preserve the store's historical ability to create the first entity in a
 	// not-yet-existing root; the directory-backed Unix lock needs the root first.
 	if err := os.MkdirAll(s.root, 0o755); err != nil {

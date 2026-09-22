@@ -1,0 +1,2 @@
+# Cobra's Markdown generator intentionally leaves a final section separator.
+docs/cli/*.md whitespace=-blank-at-eof

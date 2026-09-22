@@ -22,6 +22,7 @@ Local-first planning CLI (tasks, Threads, epics, audits, research) over markdown
 
 * [tskflwctl audit](tskflwctl_audit.md)	 - Work with code audits
 * [tskflwctl board](tskflwctl_board.md)	 - Active-work board: tasks by status (next-up → ready-to-start → in-progress)
+* [tskflwctl completion](tskflwctl_completion.md)	 - Generate the autocompletion script for the specified shell
 * [tskflwctl config](tskflwctl_config.md)	 - Inspect, migrate, diagnose, and edit configuration
 * [tskflwctl epic](tskflwctl_epic.md)	 - Work with epics
 * [tskflwctl init](tskflwctl_init.md)	 - Scaffold a planning tree here, or point at an external planning repo
