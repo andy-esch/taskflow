@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gch6xep2mh2
-bucket: open
+bucket: closed
 area: correctness-and-errors
 date: "2026-09-22"
 updated_at: "2026-09-22"
@@ -28,7 +28,7 @@ updated_at: "2026-09-22"
 **Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>
 ```
 
-#### M1. Cross-kind task/Thread id-collision lint is blind to unreadable records · **Status:** open
+#### M1. Cross-kind task/Thread id-collision lint is blind to unreadable records · **Status:** tracked by 6gcqz5aefjjf
 
 **File:** internal/core/service.go:496-518 | **Component:** core/lint
 **Effort:** S · **Urgency:** eventually
@@ -61,7 +61,11 @@ on disk, and it is the surface with the hole.
 
 **Recommendation:** Seed threadIdentity from threadRead.Problems[].ThreadID and taskIdentity from the task FileProblems' EntityID, exactly as threadIDSources already does, so the collision check sees recovered identity.
 
-#### L1. blockerReason's default arm mislabels a future status AND truncates the frontier · **Status:** open
+**Resolution:** Tracked as a focused lint-rule repair after adapter-neutral load
+diagnostics; regression coverage includes both readable/unreadable directions
+and safe recovered identities.
+
+#### L1. blockerReason's default arm mislabels a future status AND truncates the frontier · **Status:** tracked by 6gcqz5aqt2sg
 
 **File:** internal/core/dependency_graph.go:1152-1158 | **Component:** core/graph
 **Effort:** XS · **Urgency:** eventually
@@ -92,7 +96,10 @@ rather than a decision.
 
 **Recommendation:** Add a drift test mirroring TestTaskGraphLifecycleRoleCoversEveryPersistedStatus that asserts no domain.AllStatuses() value reaches blockerReason's default arm.
 
-#### L2. Two vocabulary switches fall through to a zero value that reads as real data · **Status:** open
+**Resolution:** Combined with the other closed-vocabulary fallthroughs in one
+bounded totality and exhaustive-lint task.
+
+#### L2. Two vocabulary switches fall through to a zero value that reads as real data · **Status:** tracked by 6gcqz5aqt2sg
 
 **File:** internal/domain/validate.go:179-186 | **Component:** domain,core/lint
 **Effort:** XS · **Urgency:** eventually
@@ -123,6 +130,10 @@ back, and `task_lifecycle.go:218` re-validates with `ValidateDate` before any
 write, so it fails closed (with a confusing message, but closed).
 
 **Recommendation:** Give both switches an explicit default that returns a wrapped ErrValidation, and enable the exhaustive linter so the class is caught mechanically rather than by review.
+
+**Resolution:** Combined with blocker classification and lifecycle-override
+drift so the shared failure mode is enforced mechanically rather than patched
+one switch at a time.
 
 ## Punch list
 
@@ -187,15 +198,22 @@ L1/L2 class rather than adding new defects.
   - https://blogtitle.github.io/go-slices-gotchas/
   - https://rednafi.com/go/slice-gotchas/
 
-## Related-task observations (propose-only)
+## Post-review task triage
 
-- Scope-adjacent, **not** a duplicate: `planning/tasks/6g5vm4efjcdv-make-repository-lint-load-diagnostics-adapter-neutral.md` vs finding `M1`. That task plumbs recovered identity *through* the lint diagnostic contract for pathless adapters; M1 is a lint **rule** that fails to consume identity the filesystem adapter already recovers. The task's "Out of scope" line says "Changing lint rules" in as many words, so M1 is not covered by it — but whoever picks it up will be holding exactly the right code, and its stress-test list already names "duplicate identities". Worth sequencing M1 immediately after, or folding in deliberately with a widened scope. Left `open` and cross-referenced on both sides rather than marked `tracked`.
+- **M1 is adjacent, not duplicate,** to
+  `planning/tasks/6g5vm4efjcdv-make-repository-lint-load-diagnostics-adapter-neutral.md`.
+  That task owns the portable failed-record identity shape; new task `6gcqz5aefjjf` owns the lint
+  rule that consumes it and explicitly depends on the adapter-neutral task.
+- **L1 and L2 share one failure mode** and are tracked together in `6gcqz5aqt2sg`: closed-vocabulary
+  switches must fail closed and remain mechanically exhaustive. The task also absorbs the full
+  overlap with finding M2 from the 2026-09-11 test-rigour audit, avoiding separate lifecycle-override
+  and linter tickets.
 
 ## Candidate tasks
 
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ○ M1 · open — `tskflwctl task new "Lint cross-kind task/Thread id collisions on unreadable records" --epic 21-code-quality-architecture-hardening --tags lint,diagnostics,identity --tier 3 --priority medium --description "Seed the task and Thread identity sets in Service.Lint from recovered ids on unreadable records so a cross-kind collision stays reported when a document is malformed."`
-- ○ L1 · open — `tskflwctl task new "Drift-test every domain.Status switch in the task graph" --epic 21-code-quality-architecture-hardening --tags testing,graph --tier 4 --priority low --description "Mirror TestTaskGraphLifecycleRoleCoversEveryPersistedStatus over blockerReason so a new status cannot become a terminal invalid-status blocker."`
-- ○ L2 · open — `tskflwctl task new "Enable the exhaustive linter for closed-vocabulary switches" --epic 21-code-quality-architecture-hardening --tags lint,tooling --tier 4 --priority low --description "Turn on golangci-lint exhaustive with default-signifies-exhaustive false, annotate deliberate defaults with //exhaustive:ignore, and close the ParseRevisitDate and LegacyResolution fallthroughs."`
+- → M1 · tracked — Tracked by 6gcqz5aefjjf — retain cross-kind collisions for unreadable records
+- → L1 · tracked — Tracked by 6gcqz5aqt2sg — make closed-vocabulary switches total
+- → L2 · tracked — Tracked by 6gcqz5aqt2sg — fail closed and enforce exhaustive switches

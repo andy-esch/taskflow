@@ -10,9 +10,9 @@ priority: medium
 autonomy_level: 2
 tags: [architecture, integrity, store, design]
 created: "2026-09-07"
-updated_at: "2026-09-20"
+updated_at: "2026-09-22"
 audited: "2026-09-20"
-audit_sources: [2026-09-20-weekly-task-sweep]
+audit_sources: [2026-09-20-weekly-task-sweep, planning/audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md]
 ---
 # Define the next shared entity-integrity foundations
 
@@ -53,6 +53,10 @@ a deliberate sequence. This task owns design and scoping, not the implementation
 4. Decide when a reusable secondary-adapter conformance suite becomes valuable. It should verify
    behavioral identity/atomicity contracts without requiring every adapter to implement filesystem
    locks; avoid building it before a second real adapter makes the shared contract concrete.
+5. Guarded mutation services currently spell “did anything become durable?” four ways across seven
+   retry loops, while task rename does not retry a pre-commit conflict at all. Decide one shared
+   durability predicate and retry contract, including whether rename participates or receives an
+   explicit policy carveout, before another mutation family copies an existing pattern.
 
 ## Design constraints
 
@@ -71,7 +75,8 @@ a deliberate sequence. This task owns design and scoping, not the implementation
 - [ ] Inventory the existing foundation tasks, their decisions, dependencies, and overlapping scope;
       correct stale assumptions without duplicating their implementation work.
 - [ ] Produce one decision table for stable-ID ownership, schema compatibility, lock acquisition and
-      lifecycle, atomic create/replace guarantees, and adapter-neutral diagnostic evidence.
+      lifecycle, atomic create/replace guarantees, guarded-mutation durability/retry semantics, and
+      adapter-neutral diagnostic evidence.
 - [ ] Reproduce or otherwise substantiate each newly observed question and distinguish current CLI/TUI
       risk from future long-lived or remote-adapter risk.
 - [ ] Recommend which new concerns should amend existing tasks, become separate tasks, remain measured
@@ -92,6 +97,7 @@ a deliberate sequence. This task owns design and scoping, not the implementation
 - [Shared ordinary-create guard](6g7s6hr3qnfq-serialize-research-id-collision-checks-with-creation.md)
 - [Architecture](../../docs/ARCHITECTURE.md)
 - [Epic 21](../epics/21-code-quality-architecture-hardening.md)
+- Audit [2026-09-21 architecture: failure and recovery](../audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md), findings M1 and L1
 
 ## Sweep verification (2026-09-20)
 
@@ -139,4 +145,7 @@ own implementation, so the linked unification task's premise holds.
 
 ## Progress Log
 
+- 2026-09-22: architecture audit M1/L1 added one design question: name the shared durable-outcome
+  predicate and retry rule, then either include task rename or document a deliberate carveout. No
+  implementation child was created before this design task's required human review.
 - 2026-09-20: automated weekly sweep — all six foundation links and all four newly observed questions re-verified against current code; Q3 narrowed to process-death recovery only; noted the completed shared-create-guard related link.
