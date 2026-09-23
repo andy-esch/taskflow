@@ -124,11 +124,12 @@ type TaskLifecycleMutationStore interface {
 // exact source that produced the problem. Core and guarded stores may compare it,
 // but user-facing projections must not publish it.
 type ThreadReadProblem struct {
-	ThreadID      string
-	ThreadSlug    string
-	Location      string
-	Message       string
-	SourceVersion string `json:"-" yaml:"-"`
+	ThreadID       string
+	ThreadSlug     string
+	Location       string
+	LocationIsPath bool
+	Message        string
+	SourceVersion  string `json:"-" yaml:"-"`
 }
 
 // ThreadRead is one adapter-owned Thread document snapshot. Readable records and
@@ -337,7 +338,7 @@ type Fixer interface {
 // Service.
 type Linter interface {
 	// DanglingLinks reports every body markdown link whose target .md file is missing.
-	DanglingLinks() ([]domain.FileProblem, error)
+	DanglingLinks() ([]LintLoadProblem, error)
 }
 
 // Layout is the on-disk-layout port: the desired directory set a filesystem

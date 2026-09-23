@@ -898,11 +898,11 @@ func ToFindingsEnvelope(fs []core.AuditFinding, problems []domain.FileProblem) F
 // issues) — the same slug+issues shape `lint --json` emits, so a --json consumer
 // learns what's still broken without re-running plain lint.
 type FixEnvelope struct {
-	SchemaVersion string               `json:"schema_version"`
-	DryRun        bool                 `json:"dry_run"`
-	Fixed         []domain.FixResult   `json:"fixed"`
-	Unreadable    []domain.FileProblem `json:"unreadable"`
-	Remaining     []LintTaskJSON       `json:"remaining"`
+	SchemaVersion string                `json:"schema_version"`
+	DryRun        bool                  `json:"dry_run"`
+	Fixed         []domain.FixResult    `json:"fixed"`
+	Unreadable    []LintLoadProblemJSON `json:"unreadable"`
+	Remaining     []LintTaskJSON        `json:"remaining"`
 	// Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.
 	Workspace WorkspaceJSON `json:"workspace"`
 }
@@ -912,9 +912,9 @@ type FixEnvelope struct {
 // per-entity lint findings the pass could NOT repair (`remaining`). The array
 // fields normalize to empty (not null) so a consumer can len() them and the output
 // validates against its own schema (type: array).
-func ToFixEnvelope(results []domain.FixResult, problems []domain.FileProblem, remaining []core.LintResult, dryRun bool, ws WorkspaceJSON) FixEnvelope {
+func ToFixEnvelope(results []domain.FixResult, problems []core.LintLoadProblem, remaining []core.LintResult, dryRun bool, ws WorkspaceJSON) FixEnvelope {
 	if problems == nil {
-		problems = []domain.FileProblem{}
+		problems = []core.LintLoadProblem{}
 	}
 	if results == nil {
 		results = []domain.FixResult{}
@@ -927,25 +927,56 @@ func ToFixEnvelope(results []domain.FixResult, problems []domain.FileProblem, re
 		}
 		rem = append(rem, LintTaskJSON{Slug: r.Slug, Issues: issues})
 	}
-	return FixEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results, Unreadable: problems, Remaining: rem, Workspace: ws}
+	return FixEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results,
+		Unreadable: toLintLoadProblemsJSON(problems), Remaining: rem, Workspace: ws}
+}
+
+// LintLoadProblemJSON is an adapter-neutral failed-record diagnostic shared by
+// `lint` and the post-fix residual report. Entity identity is explicit when
+// recoverable; location is optional repair context. Path is the retained local-
+// filesystem compatibility field: it equals location only when the source
+// adapter identified that location as a path, and is otherwise the empty string.
+type LintLoadProblemJSON struct {
+	EntityKind string `json:"entity_kind,omitempty"`
+	EntityID   string `json:"entity_id,omitempty"`
+	EntitySlug string `json:"entity_slug,omitempty"`
+	Location   string `json:"location,omitempty"`
+	Path       string `json:"path"`
+	Message    string `json:"message"`
+}
+
+func toLintLoadProblemsJSON(problems []core.LintLoadProblem) []LintLoadProblemJSON {
+	out := make([]LintLoadProblemJSON, 0, len(problems))
+	for _, problem := range problems {
+		path := ""
+		if problem.LocationIsPath {
+			path = problem.Location
+		}
+		out = append(out, LintLoadProblemJSON{
+			EntityKind: string(problem.EntityKind), EntityID: problem.EntityID,
+			EntitySlug: problem.EntitySlug, Location: problem.Location,
+			Path: path, Message: problem.Message,
+		})
+	}
+	return out
 }
 
 // LintEnvelope is `lint --json` and `audit lint --json` (the same per-entity
 // slug+issues shape backs both).
 type LintEnvelope struct {
-	SchemaVersion string               `json:"schema_version"`
-	Unreadable    []domain.FileProblem `json:"unreadable"`
-	Issues        []LintTaskJSON       `json:"issues"`
+	SchemaVersion string                `json:"schema_version"`
+	Unreadable    []LintLoadProblemJSON `json:"unreadable"`
+	Issues        []LintTaskJSON        `json:"issues"`
 }
 
 // ToLintEnvelope builds the structured lint report value: unreadable files + field
 // issues. The array fields normalize to empty (not null) so the output validates
 // against its own schema (type: array).
-func ToLintEnvelope(results []core.LintResult, problems []domain.FileProblem) LintEnvelope {
+func ToLintEnvelope(results []core.LintResult, problems []core.LintLoadProblem) LintEnvelope {
 	if problems == nil {
-		problems = []domain.FileProblem{}
+		problems = []core.LintLoadProblem{}
 	}
-	e := LintEnvelope{SchemaVersion: SchemaVersion, Unreadable: problems, Issues: make([]LintTaskJSON, 0, len(results))}
+	e := LintEnvelope{SchemaVersion: SchemaVersion, Unreadable: toLintLoadProblemsJSON(problems), Issues: make([]LintTaskJSON, 0, len(results))}
 	for _, r := range results {
 		issues := r.Issues
 		if issues == nil {

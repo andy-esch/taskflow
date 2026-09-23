@@ -333,10 +333,10 @@ func (s *Service) FixFindingHeaders(dryRun bool) ([]domain.FixResult, error) {
 
 // LintAudits validates findings, managed candidate projections, and the bucket↔state
 // invariant, returning one LintResult per audit with issues. slug restricts it to one audit.
-func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, error) {
+func (s *Service) LintAudits(slug string) ([]LintResult, []LintLoadProblem, error) {
 	var (
 		results  []LintResult
-		problems []domain.FileProblem
+		problems []LintLoadProblem
 	)
 	check := func(a domain.Audit, body string) {
 		findings := domain.ParseFindings(body)
@@ -353,20 +353,19 @@ func (s *Service) LintAudits(slug string) ([]LintResult, []domain.FileProblem, e
 		check(a, body)
 		return results, nil, nil
 	}
-	audits, probs, err := s.store.ListAudits()
+	if isNilCapability(s.lintReads) {
+		return nil, nil, fmt.Errorf("repository lint reads are unavailable from this store")
+	}
+	audits, probs, err := s.lintReads.ReadLintAudits()
 	if err != nil {
 		return nil, nil, err
 	}
 	problems = probs
-	for _, a := range audits {
-		// By path, not GetAudit(a.Slug) — same O(N^2) re-resolve avoidance as
-		// QueryFindings (the TUI runs LintAudits on every live reload).
-		_, body, err := s.store.GetAuditByPath(a.Path)
-		if err != nil {
-			problems = append(problems, domain.FileProblem{Path: a.Path, Message: err.Error()})
-			continue
+	for _, record := range audits {
+		iss := AuditLintIssues(record.Audit, record.Findings, record.NearMisses, record.CandidateIssues)
+		if len(iss) > 0 {
+			results = append(results, LintResult{Slug: record.Audit.Slug, Issues: iss})
 		}
-		check(a, body)
 	}
 	return results, problems, nil
 }

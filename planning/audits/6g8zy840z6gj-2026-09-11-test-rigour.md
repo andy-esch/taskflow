@@ -4,6 +4,7 @@ id: 6g8zy840z6gj
 bucket: open
 area: test-rigour
 date: "2026-09-11"
+updated_at: "2026-09-22"
 ---
 
 # Code Quality Audit: test-rigour — 2026-09-11
@@ -162,7 +163,7 @@ set branch — extend it to the unset branch in the same commit.
 (`domain/entity.go`) so create, set, unset, and lint all read one table is epic 26's
 territory, not this fix.
 
-#### M2. `TaskLifecycleOverride` closed vocabulary has no exhaustiveness or negative test  · **Status:** open
+#### M2. `TaskLifecycleOverride` closed vocabulary has no exhaustiveness or negative test  · **Status:** tracked by 6gcqz5aqt2sg
 
 **File:** `internal/core/task_lifecycle.go:229` | **Component:** core (task lifecycle)
 **Effort:** S · **Urgency:** eventually
@@ -211,6 +212,10 @@ rejected with `ErrValidation` from `ValidateTaskLifecyclePlan`.
 as a tracked follow-up. Enabling `exhaustive` scoped to `internal/core` and
 `internal/domain` would make every closed-vocabulary `switch` in the planning model
 compile-checked rather than convention-checked.
+
+**Resolution:** Full overlap with the new closed-vocabulary totality task, which
+now includes a negative lifecycle-override test and mechanical exhaustiveness
+checks.
 
 ### Low
 

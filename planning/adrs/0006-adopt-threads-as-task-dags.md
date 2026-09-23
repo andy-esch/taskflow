@@ -1122,6 +1122,14 @@ a Thread. The corrected adapter boundary is:
    with incomplete Thread evidence. `thread list --json` maps the neutral diagnostic explicitly;
    schema 1.59 replaces its preview-only `{path,message}` unreadable shape with optional identity and
    location fields, and service, TUI, schema, and wire projections omit the opaque revision.
+   Task [`6g5vm4efjcdv`](../tasks/6g5vm4efjcdv-make-repository-lint-load-diagnostics-adapter-neutral.md)
+   applies that rule to repository lint. A dedicated `LintSource` returns taskflow-owned
+   `LintLoadProblem` values for tasks, epics, audits, and research, while Thread diagnostics map
+   into the same result at the use-case boundary. Kind and recoverable identity are authoritative;
+   location is optional context and is never parsed by core. The filesystem adapter performs the
+   `FileProblem` conversion once around its existing resilient scans, while local fix and guarded
+   mutation flows retain exact-path diagnostics. Schema 1.73 adds kind, identity, and location to
+   lint/fix unreadable records and retains `path` as a local-filesystem compatibility field.
 
 This split is deliberately smaller than a repository abstraction redesign. It establishes the port
 and projection seams needed by additional interfaces while leaving concrete storage, HTTP transport,

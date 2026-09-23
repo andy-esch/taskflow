@@ -54,7 +54,7 @@ func threadReadProblemFromFile(problem domain.FileProblem, sourceVersion string)
 	}
 	return core.ThreadReadProblem{
 		ThreadID: threadID, ThreadSlug: threadSlug, Location: problem.Path,
-		Message: problem.Message, SourceVersion: sourceVersion,
+		LocationIsPath: problem.Path != "", Message: problem.Message, SourceVersion: sourceVersion,
 	}
 }
 

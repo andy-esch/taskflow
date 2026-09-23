@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/core"
 )
 
 // DanglingLinks walks the planning tree and returns every body markdown link — inline
@@ -15,11 +15,11 @@ import (
 // links whose target carries a template placeholder (`…`, `<`, `>`, `{`, `}`). A trailing
 // #fragment or ?query is stripped before the existence check. It is the Scheme-2 dangler
 // check `lint --links` surfaces.
-func (s *FS) DanglingLinks() ([]domain.FileProblem, error) {
+func (s *FS) DanglingLinks() ([]core.LintLoadProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, err
 	}
-	var out []domain.FileProblem
+	var out []core.LintLoadProblem
 	err := filepath.WalkDir(s.root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -60,7 +60,10 @@ func (s *FS) DanglingLinks() ([]domain.FileProblem, error) {
 				continue
 			}
 			if _, err := os.Stat(resolved); os.IsNotExist(err) {
-				out = append(out, domain.FileProblem{Path: p, Message: "body link to missing file: " + target})
+				out = append(out, core.LintLoadProblem{
+					Location: p, LocationIsPath: true,
+					Message: "body link to missing file: " + target,
+				})
 			}
 		}
 		return nil

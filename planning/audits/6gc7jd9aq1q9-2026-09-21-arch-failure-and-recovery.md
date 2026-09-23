@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gc7jd9aq1q9
-bucket: open
+bucket: closed
 area: arch-failure-and-recovery
 date: "2026-09-21"
-updated_at: "2026-09-21"
+updated_at: "2026-09-22"
 ---
 
 # Audit: arch-failure-and-recovery — 2026-09-21
@@ -373,7 +373,7 @@ mutation needs a sound graph, diagnosis must work on a broken one — and is exa
 **Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>
 ```
 
-#### M1. The retry-safety predicate — "did anything become durable?" — is spelled four ways across seven hand-rolled loops · **Status:** open
+#### M1. The retry-safety predicate — "did anything become durable?" — is spelled four ways across seven hand-rolled loops · **Status:** tracked by 6g7wsr8yvt1a
 
 **File:** internal/core/retry.go:62 | **Component:** core/guarded-mutations
 **Effort:** M · **Urgency:** soon
@@ -437,7 +437,11 @@ predicate."
 
 **Recommendation:** Name the predicate once: a small interface (e.g. `DurableOutcome interface { Durable() bool }`) implemented by every guarded mutation result, plus one shared `retryUntilDurable` combinator the seven call sites delegate to. Add `Committed` to `TaskGraphMutationResult` so no family infers durability from a slice length, and one table test asserting every result type reports Durable()==true after a partial write.
 
-#### M2. lint reports defects in prose, so repair coverage is unprovable and agents must route on English · **Status:** open
+**Resolution:** Folded into the shared entity-integrity design pass so one
+durability predicate and retry contract are decided across every guarded
+mutation family before an implementation task is split out.
+
+#### M2. lint reports defects in prose, so repair coverage is unprovable and agents must route on English · **Status:** tracked by 6gcqz5b0j0dg
 
 **File:** internal/domain/problem.go:5 | **Component:** domain/diagnostics
 **Effort:** M · **Urgency:** soon
@@ -522,7 +526,11 @@ would avoid two consecutive schema bumps on one envelope.
 
 **Recommendation:** Give both diagnostic types a closed machine vocabulary: a `Kind` (or `Code`) field drawn from a domain-owned table, and an `Applicability` enum (`fix` | `manual` | `refused`) stating whether `lint --fix` can repair it. Emit both in the --json envelope behind a schema_version bump, and add the drift test the project already uses for status vocabularies: every declared kind either has a fix path or is declared manual.
 
-#### M3. The repository guard's supported matrix is stated per-platform, but flock's guarantee is per-filesystem · **Status:** open
+**Resolution:** Tracked as a dedicated diagnostic-protocol task, sequenced
+behind the frontmatter policy ADR and adapter-neutral unreadable-record identity
+work.
+
+#### M3. The repository guard's supported matrix is stated per-platform, but flock's guarantee is per-filesystem · **Status:** tracked by 6g6yjm16dkgt
 
 **File:** internal/store/lock_unix.go:21 | **Component:** store/repository-guard
 **Effort:** S · **Urgency:** eventually
@@ -577,7 +585,11 @@ reportable `doctor` advisory rather than a hard refusal."
 
 **Recommendation:** State the filesystem precondition where a caller meets it: document that the repository guard's cross-process exclusion assumes a local filesystem, and have `doctor` report the planning root's filesystem type with an advisory when it is a network or synced mount. No lock redesign — the CAS already covers the single-machine case, and ADR-0004 already names git as the multi-machine channel.
 
-#### L1. task rename is the only scriptable mutation that does not auto-retry a pre-commit conflict · **Status:** open
+**Resolution:** Expanded the existing bounded repository-lock design task to
+state the local-filesystem precondition and design a bounded doctor advisory for
+degraded mount types.
+
+#### L1. task rename is the only scriptable mutation that does not auto-retry a pre-commit conflict · **Status:** tracked by 6g7wsr8yvt1a
 
 **File:** internal/core/service_task.go:678 | **Component:** core/task-rename
 **Effort:** XS · **Urgency:** eventually
@@ -636,6 +648,10 @@ decision belongs in ADR-0003 as an explicit carve-out rather than as an absence 
 `ARCHITECTURE.md`'s blanket claim needs the exception noted.
 
 **Recommendation:** Wrap the RenameTask call in the same bounded retry the other guarded mutations use, gated on the durability predicate M1 introduces (retry only while !result.Committed). A pre-commit rejection wrote nothing, so replaying it re-reads the tree and re-plans exactly as a lifecycle retry does; a committed prefix must keep today's no-retry behaviour.
+
+**Resolution:** Handled with M1 in the shared integrity design pass: task rename
+must either use the common pre-commit retry rule or receive an explicit policy
+carveout.
 
 ## What audited clean
 
@@ -708,37 +724,34 @@ decision belongs in ADR-0003 as an explicit carve-out rather than as an absence 
   (`core/store.go:105`) is the only port permitted to accept a broken graph, and it proves
   structural non-regression per step (`store/graphrepair.go:135-160`) — ADR-0006 2026-09-05.
 
-## Related-task observations (propose-only)
+## Post-review task triage
 
-- ⚠️ **M2 partially adjacent** to
+- **M1 and L1 converge on an existing design owner:**
+  `planning/tasks/6g7wsr8yvt1a-define-the-next-shared-entity-integrity-foundations.md` now
+  owns the shared durable-outcome predicate, retry rule, and explicit task-rename decision. The task
+  intentionally remains design-first; it will split implementation only after human review.
+- **M2 remains distinct but sequenced.** It is partially adjacent to
   `planning/tasks/6g5vm4efjcdv-make-repository-lint-load-diagnostics-adapter-neutral.md`
   (ready-to-start, epic 21, tier 3/low). That task replaces the shared unreadable-file bucket
   with entity kind, stable identity and an *optional repair location*, and touches the same
   struct and the same `lint --json` envelope M2 does. It is not the same change: its
   acceptance criteria say nothing about a defect kind or a repair applicability, and it lists
-  "Changing lint rules" as out of scope. Both sides cross-referenced; M2 stays open.
-  **Sequencing is the human's call** — landing them together would avoid two consecutive
-  schema bumps on one envelope, but widening a ready-to-start task is not this audit's
-  decision to make.
-- Possible home for M2's eventual task: `26-frontmatter-schema-declared-validation-contract`
-  (25% done) is about to derive lint, `schema task` guidance and the `--json` contract from
-  one declared field registry — the moment a defect kind is cheapest to mint. Its design-first
-  task `6fkkz41cax80-adr-close-frontmatter-schema-policy-questions` (next-up) is where the
-  policy question would naturally be settled first.
-- L1 is deliberately filed as a Low rather than folded silently into M1: if rename's
-  non-retry turns out to be a considered "always surface a destructive multi-document
-  operation to a human" decision, the right outcome is an explicit carve-out in ADR-0003 plus
-  a corrected claim in `docs/ARCHITECTURE.md` — not a code change. That call belongs to the
-  author, not to this audit.
-- No FULL overlaps were found for any Medium+ finding, so **no task frontmatter or body was
-  annotated this run**. The only file this audit changes is the audit itself.
+  "Changing lint rules" as out of scope. The new task
+  `6gcqz5b0j0dg-give-lint-diagnostics-stable-kinds-and-repair-applicability` is gated by the
+  frontmatter-schema policy ADR and by the corrected unreadable-record rule, which itself follows
+  adapter-neutral load diagnostics. That preserves bounded task ownership and avoids parallel edits
+  to the same contract.
+- **M3 is a full scope overlap** with
+  `planning/tasks/6g6yjm16dkgt-design-bounded-and-observable-repository-lock-acquisition.md`.
+  Its acceptance criteria now include the local-filesystem precondition and a bounded `doctor`
+  advisory; no duplicate task was created.
 
 ## Candidate tasks
 
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ○ M1 · open — tskflwctl task new "Give guarded mutations one named durability predicate and one retry combinator" --epic 21-code-quality-architecture-hardening
-- ○ M2 · open — tskflwctl task new "Give lint diagnostics a closed kind vocabulary and a declared repair applicability" --epic 26-frontmatter-schema-declared-validation-contract
-- ○ M3 · open — tskflwctl task new "Declare and diagnose the repository guard's local-filesystem precondition" --epic 21-code-quality-architecture-hardening
-- ○ L1 · open — Fold into the M1 retry-combinator task — rename becomes the eighth call site
+- → M1 · tracked — Tracked by 6g7wsr8yvt1a — decide one durable-outcome predicate and retry contract
+- → M2 · tracked — Tracked by 6gcqz5b0j0dg — publish lint kinds and repair applicability
+- → M3 · tracked — Tracked by 6g6yjm16dkgt — define and diagnose lock filesystem support
+- → L1 · tracked — Tracked by 6g7wsr8yvt1a — decide rename participation in the common retry rule

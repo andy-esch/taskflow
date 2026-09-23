@@ -126,6 +126,19 @@ type fakeStore struct {
 	taskBodies        map[string]string    // slug → body, for ListTasksWithBodies (acceptance lint)
 }
 
+var _ LintSource = (*fakeStore)(nil)
+
+func testLintLoadProblems(kind LintEntityKind, problems []domain.FileProblem) []LintLoadProblem {
+	out := make([]LintLoadProblem, 0, len(problems))
+	for _, problem := range problems {
+		out = append(out, LintLoadProblem{
+			EntityKind: kind, EntityID: problem.EntityID, EntitySlug: problem.EntitySlug,
+			Location: problem.Path, LocationIsPath: problem.Path != "", Message: problem.Message,
+		})
+	}
+	return out
+}
+
 func (f *fakeStore) GetAudit(slug string) (domain.Audit, string, error) {
 	for _, a := range f.audits {
 		if a.Slug == slug {
@@ -157,6 +170,10 @@ func (f *fakeStore) ListTasksWithBodies() ([]TaskWithBody, []domain.FileProblem,
 	}
 	return out, f.problems, nil
 }
+func (f *fakeStore) ReadLintTasks() ([]TaskWithBody, []LintLoadProblem, error) {
+	records, problems, err := f.ListTasksWithBodies()
+	return records, testLintLoadProblems(LintEntityTask, problems), err
+}
 func (f *fakeStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 	return f.audits, f.auditProblems, nil
 }
@@ -174,8 +191,16 @@ func (f *fakeStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.File
 	}
 	return out, f.auditProblems, nil
 }
+func (f *fakeStore) ReadLintAudits() ([]AuditWithFindings, []LintLoadProblem, error) {
+	records, problems, err := f.ListAuditsWithFindings()
+	return records, testLintLoadProblems(LintEntityAudit, problems), err
+}
 func (f *fakeStore) ListResearch() ([]domain.Research, []domain.FileProblem, error) {
 	return f.research, f.researchProblems, nil
+}
+func (f *fakeStore) ReadLintResearch() ([]domain.Research, []LintLoadProblem, error) {
+	records, problems, err := f.ListResearch()
+	return records, testLintLoadProblems(LintEntityResearch, problems), err
 }
 func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 	for _, t := range f.tasks {
@@ -197,6 +222,10 @@ func (f *fakeStore) CreateAudit(a domain.Audit, body string, _ bool) (domain.Aud
 }
 func (f *fakeStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return f.epics, nil, nil
+}
+func (f *fakeStore) ReadLintEpics() ([]domain.Epic, []LintLoadProblem, error) {
+	records, problems, err := f.ListEpics()
+	return records, testLintLoadProblems(LintEntityEpic, problems), err
 }
 func (f *fakeStore) CreateEpic(slug string, e domain.Epic, body string, _ bool) (domain.Epic, error) {
 	e.ID = slug

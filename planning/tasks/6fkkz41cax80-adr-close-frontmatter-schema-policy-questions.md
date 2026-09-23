@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [validation, schema, adr]
 created: "2026-07-07"
-updated_at: "2026-09-20"
+updated_at: "2026-09-22"
 started_at: "2026-08-23"
 audit_sources: [2026-09-07-arch-data-model-and-storage, 2026-09-20-weekly-task-sweep]
 audited: "2026-09-20"
@@ -308,6 +308,12 @@ Next number after 0003 / 0004 → **ADR-0005**. &nbsp; [ ] confirm &nbsp; [ ] ot
 - Prior art: `domain.LintTask`, `domain.MissingIDIssue`, `store.parseTask`'s loud
   missing-frontmatter failure, `schema --json-schema`.
 
+Audit [2026-09-21 architecture: failure and recovery](../audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md)
+adds a policy input adjacent to Q6 and Q11: reportable lint defects currently have no stable machine
+kind or declared repair applicability. This ADR must either define that closed diagnostic vocabulary
+or explicitly assign an ADR-0007 amendment before implementation of
+[stable lint kinds and repair applicability](6gcqz5b0j0dg-give-lint-diagnostics-stable-kinds-and-repair-applicability.md).
+
 Reinforced by audit 2026-09-07-arch-data-model-and-storage: M3 (Q9 input) — three entity kinds declare known fields in three shapes: task a typed table (domain/fields.go:24), epic a hand-written map literal plus a hardcoded list predicate (domain/epic.go:106,130), research derived from the entity Descriptor (domain/research.go:81). Audit and Thread have none, correctly (no `set` verb). Also: the audit proposes adding stable-id uniqueness to Q7's candidate referential-rule list — see finding M1.
 
 ## Sweep verification (2026-09-20)
@@ -348,4 +354,7 @@ side — and the park decision — remain open exactly as drafted.
 
 ## Progress Log
 
+- 2026-09-22: architecture audit M2 added a policy input for stable diagnostic kinds and explicit
+  repair applicability; the implementation task is sequenced behind this ADR rather than deciding the
+  vocabulary in code.
 - 2026-09-20: automated weekly sweep — survey untouched; flagged that §E's "ADR-0005" number is now taken (next free is 0009) and that ADR-0008 settles Q10's envelope half; all prior-art citations re-verified.
