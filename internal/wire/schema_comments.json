@@ -156,6 +156,7 @@
   "github.com/andy-esch/taskflow/internal/wire.LegacyFieldClearJSON": "LegacyFieldClearJSON identifies one legacy field occurrence cleared by migration.",
   "github.com/andy-esch/taskflow/internal/wire.LegacyReferenceJSON": "LegacyReferenceJSON records one legacy dependency resolution.",
   "github.com/andy-esch/taskflow/internal/wire.LintEnvelope": "LintEnvelope is `lint --json` and `audit lint --json` (the same per-entity slug+issues shape backs both).",
+  "github.com/andy-esch/taskflow/internal/wire.LintLoadProblemJSON": "LintLoadProblemJSON is an adapter-neutral failed-record diagnostic shared by `lint` and the post-fix residual report.",
   "github.com/andy-esch/taskflow/internal/wire.LintTaskJSON": "LintTaskJSON is one entity's lint result (slug + field issues), the shape the `lint` / `audit lint` / `fix --remaining` envelopes carry per entity.",
   "github.com/andy-esch/taskflow/internal/wire.MoveResult": "MoveResult is the per-item outcome of a transition.",
   "github.com/andy-esch/taskflow/internal/wire.MovesEnvelope": "MovesEnvelope is the transition report (`task start --json`, etc.).",

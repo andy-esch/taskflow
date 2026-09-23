@@ -16,6 +16,7 @@ import (
 // primary adapters (the cli and the tui).
 type Service struct {
 	store               Store
+	lintReads           LintSource
 	taskGraphs          TaskGraphSource
 	graphMutations      TaskGraphMutationStore
 	graphRepairs        TaskGraphRepairStore
@@ -51,6 +52,17 @@ func WithTaskGraphSource(source TaskGraphSource) Option {
 	return func(s *Service) {
 		if !isNilCapability(source) {
 			s.taskGraphs = source
+		}
+	}
+}
+
+// WithLintSource supplies the resilient multi-entity reads used by repository
+// lint. It is independent from Store so a remote or served adapter can provide
+// portable failed-record identity without implementing local path semantics.
+func WithLintSource(source LintSource) Option {
+	return func(s *Service) {
+		if !isNilCapability(source) {
+			s.lintReads = source
 		}
 	}
 }
@@ -198,6 +210,9 @@ func NewService(store Store, opts ...Option) *Service {
 	}
 	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New, newIDAt: id.NewAt, maxRetries: defaultMaxRetries, retrySleep: defaultRetrySleep}
 	if store != nil {
+		if source, ok := store.(LintSource); ok && !isNilCapability(source) {
+			s.lintReads = source
+		}
 		if source, ok := store.(TaskGraphSource); ok && !isNilCapability(source) {
 			s.taskGraphs = source
 		} else {
@@ -444,16 +459,20 @@ func BlockingLintResultCount(results []LintResult) int {
 	return count
 }
 
-// Lint validates task, epic, research, and Thread documents plus repository-global
-// task-graph and cross-kind identity integrity. Returns one LintResult per entity
-// with issues while unreadable files remain separately attributable.
-func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
-	tasks, problems, err := s.store.ListTasksWithBodies()
+// Lint validates task, epic, research, audit, and Thread documents plus
+// repository-global task-graph and cross-kind identity integrity. Returns one
+// LintResult per entity with issues while unreadable records retain portable
+// identity and optional repair locations separately.
+func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
+	if isNilCapability(s.lintReads) {
+		return nil, nil, fmt.Errorf("repository lint reads are unavailable from this store")
+	}
+	tasks, problems, err := s.lintReads.ReadLintTasks()
 	if err != nil {
 		return nil, nil, err
 	}
-	taskProblems := append([]domain.FileProblem(nil), problems...)
-	epics, ep2, err := s.store.ListEpics()
+	taskProblems := append([]LintLoadProblem(nil), problems...)
+	epics, ep2, err := s.lintReads.ReadLintEpics()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -467,7 +486,14 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	for i := range tasks {
 		taskRecords[i] = tasks[i].Task
 	}
-	graph := NewTaskGraph(taskRecords, taskProblems)
+	graphRead := TaskGraphRead{Tasks: taskRecords, Problems: make([]TaskGraphLoadProblem, 0, len(taskProblems))}
+	for _, problem := range taskProblems {
+		graphRead.Problems = append(graphRead.Problems, TaskGraphLoadProblem{
+			TaskID: problem.EntityID, TaskSlug: problem.EntitySlug,
+			Path: problem.Location, Message: problem.Message,
+		})
+	}
+	graph := NewTaskGraphRead(graphRead)
 	graphIssues := dependencyLintIssues(graph)
 	validTaskIDs := make(map[string]bool, len(tasks))
 	taskIdentity := make(map[string]bool, len(tasks)*2)
@@ -483,7 +509,7 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 
 	var threads []domain.Thread
 	threadIDSources := make([]domain.StableIdentitySource, 0)
-	threadProblems := make([]domain.FileProblem, 0)
+	threadProblems := make([]LintLoadProblem, 0)
 	threadIdentity := make(map[string]bool)
 	if s.threads != nil {
 		var threadRead ThreadRead
@@ -493,12 +519,13 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		}
 		threads = threadRead.Threads
 		for _, problem := range threadRead.Problems {
-			fileProblem := domain.FileProblem{
-				Path: problem.Location, Message: problem.Message,
-				EntityID: problem.ThreadID, EntitySlug: problem.ThreadSlug,
+			loadProblem := LintLoadProblem{
+				EntityKind: LintEntityThread, EntityID: problem.ThreadID,
+				EntitySlug: problem.ThreadSlug, Location: problem.Location,
+				LocationIsPath: problem.LocationIsPath, Message: problem.Message,
 			}
-			threadProblems = append(threadProblems, fileProblem)
-			problems = append(problems, fileProblem)
+			threadProblems = append(threadProblems, loadProblem)
+			problems = append(problems, loadProblem)
 			threadIDSources = append(threadIDSources, domain.StableIdentitySource{
 				ID: problem.ThreadID, Location: problem.Location,
 			})
@@ -573,7 +600,7 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	// research has no lifecycle, so every doc gets the same short check. Its per-file
 	// load problems (a non-id-led file, unreadable frontmatter) join the same
 	// `unreadable` bucket tasks and epics use.
-	docs, rp, err := s.store.ListResearch()
+	docs, rp, err := s.lintReads.ReadLintResearch()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -586,7 +613,7 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		researchIDs = append(researchIDs, domain.StableIdentitySource{ID: r.CanonicalID(), Location: r.Path})
 	}
 	for _, problem := range rp {
-		researchIDs = append(researchIDs, domain.StableIdentitySource{ID: problem.EntityID, Location: problem.Path})
+		researchIDs = append(researchIDs, domain.StableIdentitySource{ID: problem.EntityID, Location: problem.Location})
 	}
 	dupIDs := domain.DuplicateIDIssues(researchIDs)
 	for _, r := range docs {
@@ -603,7 +630,7 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 	// `audit lint`, so a finding defect stayed invisible to the command the repo
 	// actually runs). The sweep reads each audit once, findings already parsed, and
 	// shares its check-set with `audit lint` via AuditLintIssues.
-	auditRecords, ap, err := s.store.ListAuditsWithFindings()
+	auditRecords, ap, err := s.lintReads.ReadLintAudits()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -615,7 +642,7 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 		})
 	}
 	for _, problem := range ap {
-		auditIDs = append(auditIDs, domain.StableIdentitySource{ID: problem.EntityID, Location: problem.Path})
+		auditIDs = append(auditIDs, domain.StableIdentitySource{ID: problem.EntityID, Location: problem.Location})
 	}
 	dupAuditIDs := domain.DuplicateIDIssues(auditIDs)
 	for _, a := range auditRecords {
@@ -654,17 +681,13 @@ func (s *Service) Lint() ([]LintResult, []domain.FileProblem, error) {
 // diagnostic while also surfacing identity defects recovered by the adapter.
 // Identity belongs to the record even when its body does not decode; core must
 // never infer it by parsing an adapter's path or URI.
-func appendDuplicateProblemLintResults(results []LintResult, problems []domain.FileProblem, duplicates map[string]domain.Issue) []LintResult {
+func appendDuplicateProblemLintResults(results []LintResult, problems []LintLoadProblem, duplicates map[string]domain.Issue) []LintResult {
 	for _, problem := range problems {
 		issue, ok := duplicates[problem.EntityID]
 		if !ok {
 			continue
 		}
-		label := problem.EntitySlug
-		if label == "" {
-			label = problem.Path
-		}
-		results = append(results, LintResult{Slug: label, Issues: []domain.Issue{issue}})
+		results = append(results, LintResult{Slug: lintLoadProblemLabel(problem), Issues: []domain.Issue{issue}})
 	}
 	return results
 }

@@ -122,15 +122,25 @@ func TestTasksHuman_Table(t *testing.T) {
 func TestLintJSON_Envelope(t *testing.T) {
 	var out bytes.Buffer
 	results := []core.LintResult{{Slug: "alpha", Issues: []domain.Issue{{Field: "tags", Message: "missing"}}}}
-	problems := []domain.FileProblem{{Path: "bad.md", Message: "unterminated"}}
+	problems := []core.LintLoadProblem{{
+		EntityKind: core.LintEntityTask, EntityID: "6g0000000001", EntitySlug: "bad",
+		Location: "bad.md", LocationIsPath: true, Message: "unterminated",
+	}, {
+		EntityKind: core.LintEntityThread, EntityID: "6g0000000002", EntitySlug: "remote",
+		Message: "remote decode failed",
+	}}
 	if err := LintJSON(&out, results, problems); err != nil {
 		t.Fatal(err)
 	}
 	var got struct {
 		SchemaVersion string `json:"schema_version"`
 		Unreadable    []struct {
-			Path    string `json:"path"`
-			Message string `json:"message"`
+			EntityKind string `json:"entity_kind"`
+			EntityID   string `json:"entity_id"`
+			EntitySlug string `json:"entity_slug"`
+			Location   string `json:"location"`
+			Path       string `json:"path"`
+			Message    string `json:"message"`
 		} `json:"unreadable"`
 		Issues []struct {
 			Slug   string `json:"slug"`
@@ -144,8 +154,14 @@ func TestLintJSON_Envelope(t *testing.T) {
 	if got.SchemaVersion != SchemaVersion || len(got.Issues) != 1 || got.Issues[0].Issues[0].Field != "tags" {
 		t.Errorf("lint payload wrong:\n%s", out.String())
 	}
-	if len(got.Unreadable) != 1 {
+	if len(got.Unreadable) != 2 || got.Unreadable[0].EntityKind != "task" ||
+		got.Unreadable[0].EntityID != "6g0000000001" || got.Unreadable[0].EntitySlug != "bad" ||
+		got.Unreadable[0].Location != "bad.md" || got.Unreadable[0].Path != "bad.md" {
 		t.Errorf("unreadable files must be included:\n%s", out.String())
+	}
+	if got.Unreadable[1].EntityKind != "thread" || got.Unreadable[1].EntityID != "6g0000000002" ||
+		got.Unreadable[1].Location != "" || got.Unreadable[1].Path != "" {
+		t.Errorf("pathless diagnostics must keep identity without inventing a path:\n%s", out.String())
 	}
 }
 
@@ -658,6 +674,24 @@ func TestProblemsHuman(t *testing.T) {
 	ProblemsHuman(&out, NewStyle(false), []domain.FileProblem{{Path: "x.md", Message: "unterminated frontmatter"}})
 	if !strings.Contains(out.String(), "x.md") || !strings.Contains(out.String(), "unterminated") {
 		t.Errorf("problems output wrong:\n%s", out.String())
+	}
+}
+
+func TestLintProblemsHumanPrefersIdentityAndKeepsOptionalLocation(t *testing.T) {
+	var out bytes.Buffer
+	LintProblemsHuman(&out, NewStyle(false), []core.LintLoadProblem{
+		{EntityKind: core.LintEntityResearch, EntityID: "6g0000000002", EntitySlug: "remote-doc", Location: "opaque://misleading", Message: "decode failed"},
+		{EntityKind: core.LintEntityEpic, EntityID: "03-roadmap", Message: "identity only"},
+		{EntityKind: core.LintEntityTask, Message: "identity unavailable"},
+	})
+	got := out.String()
+	for _, want := range []string{
+		"research remote-doc (6g0000000002)", "opaque://misleading", "decode failed",
+		"epic 03-roadmap", "unidentified task record",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("lint problems output missing %q:\n%s", want, got)
+		}
 	}
 }
 

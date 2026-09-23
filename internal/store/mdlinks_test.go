@@ -66,6 +66,9 @@ func TestDanglingLinks_RefStyleAndFences(t *testing.T) {
 	if len(probs) != 1 {
 		t.Fatalf("want exactly 1 dangler (ref-style link; fenced example ignored), got %d: %+v", len(probs), probs)
 	}
+	if probs[0].Location != p || !probs[0].LocationIsPath {
+		t.Errorf("dangler location = %+v, want local path %s", probs[0], p)
+	}
 	if !strings.Contains(probs[0].Message, "6fjangd7kvzz-missing.md") {
 		t.Errorf("the reference-style dangler should be the one flagged, got %q", probs[0].Message)
 	}

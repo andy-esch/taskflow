@@ -921,7 +921,7 @@ func FixHuman(w io.Writer, st Style, results []domain.FixResult, remaining []cor
 // findings the pass could NOT repair (`remaining` — report-only epics, unfixable
 // task issues). All three are empty on a dry-run (which writes nothing) — so a
 // --json consumer learns the residual breakage without parsing the prose error.
-func FixJSON(w io.Writer, results []domain.FixResult, problems []domain.FileProblem, remaining []core.LintResult, dryRun bool, ws wire.WorkspaceJSON) error {
+func FixJSON(w io.Writer, results []domain.FixResult, problems []core.LintLoadProblem, remaining []core.LintResult, dryRun bool, ws wire.WorkspaceJSON) error {
 	return wire.EncodeJSON(w, wire.ToFixEnvelope(results, problems, remaining, dryRun, ws))
 }
 
@@ -929,6 +929,38 @@ func FixJSON(w io.Writer, results []domain.FixResult, problems []domain.FileProb
 func ProblemsHuman(w io.Writer, st Style, problems []domain.FileProblem) {
 	for _, p := range problems {
 		fmt.Fprintf(w, "%s %s\n    %s\n", st.Red("!"), st.Bold(p.Path), p.Message)
+	}
+}
+
+// LintProblemsHuman renders portable failed-record diagnostics without
+// assuming every source has a filesystem path. Identity leads when available;
+// an optional repair location remains visible on its own labelled line.
+func LintProblemsHuman(w io.Writer, st Style, problems []core.LintLoadProblem) {
+	for _, problem := range problems {
+		identity := problem.EntitySlug
+		if identity != "" && problem.EntityID != "" {
+			identity += " (" + problem.EntityID + ")"
+		} else if identity == "" {
+			identity = problem.EntityID
+		}
+		kind := string(problem.EntityKind)
+		if kind == "thread" {
+			kind = "Thread"
+		}
+		if identity == "" {
+			if kind == "" {
+				identity = "unidentified planning record"
+			} else {
+				identity = "unidentified " + kind + " record"
+			}
+		} else if kind != "" {
+			identity = kind + " " + identity
+		}
+		fmt.Fprintf(w, "%s %s\n", st.Red("!"), st.Bold(identity))
+		if problem.Location != "" {
+			fmt.Fprintf(w, "    %s %s\n", st.Dim("location:"), problem.Location)
+		}
+		fmt.Fprintf(w, "    %s\n", problem.Message)
 	}
 }
 
@@ -962,7 +994,7 @@ func LintHuman(w io.Writer, st Style, results []core.LintResult, noun string) {
 }
 
 // LintJSON writes the structured lint report: unreadable files + field issues.
-func LintJSON(w io.Writer, results []core.LintResult, problems []domain.FileProblem) error {
+func LintJSON(w io.Writer, results []core.LintResult, problems []core.LintLoadProblem) error {
 	return wire.EncodeJSON(w, wire.ToLintEnvelope(results, problems))
 }
 

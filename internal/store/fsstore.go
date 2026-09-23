@@ -80,6 +80,7 @@ func (s *FS) authorizeMutation() error {
 // primary adapters (lint --fix, the TUI watcher) wire to the FS directly.
 var (
 	_ core.Store           = (*FS)(nil)
+	_ core.LintSource      = (*FS)(nil)
 	_ core.TaskGraphSource = (*FS)(nil)
 	_ core.Fixer           = (*FS)(nil)
 	_ core.Linter          = (*FS)(nil)

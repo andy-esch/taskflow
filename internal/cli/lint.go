@@ -45,7 +45,7 @@ func runLint(app *App, links bool) error {
 		return err
 	}
 	// --links adds cross-reference integrity: a body link to a missing file surfaces as a
-	// FileProblem, flowing through the same render + exit path. Opt-in, since a tree can
+	// neutral load diagnostic, flowing through the same render + exit path. Opt-in, since a tree can
 	// accumulate pre-existing danglers that would otherwise noise up the default gate.
 	if links {
 		danglers, err := app.Linter.DanglingLinks()
@@ -61,7 +61,7 @@ func runLint(app *App, links bool) error {
 	} else {
 		// Diagnostics go to stderr, matching the list commands — scripts that
 		// capture stderr for problems must see them on one consistent stream.
-		render.ProblemsHuman(app.ErrOut, app.Style, problems)
+		render.LintProblemsHuman(app.ErrOut, app.Style, problems)
 		// Results mix tasks and epics now, so the footer noun is the neutral "item".
 		render.LintHuman(app.Out, app.Style, results, "item")
 		if len(results) == 0 && len(problems) == 0 {
@@ -70,7 +70,7 @@ func runLint(app *App, links bool) error {
 	}
 	blocking := core.BlockingLintResultCount(results)
 	if blocking+len(problems) > 0 {
-		return fmt.Errorf("%w: %d item(s) with issues, %d unreadable file(s)",
+		return fmt.Errorf("%w: %d item(s) with issues, %d unreadable record(s)",
 			domain.ErrValidation, blocking, len(problems))
 	}
 	return nil
@@ -107,7 +107,7 @@ func runLintFix(app *App, dryRun bool) error {
 		return nil
 	}
 	// The fixer only reports files it changed — issues it can't repair (epics are
-	// report-only; some task issues aren't auto-fixable) and unreadable files would
+	// report-only; some task issues aren't auto-fixable) and unreadable records would
 	// otherwise exit 0 in silence, leaving the tree broken while claiming success.
 	// Re-lint and surface BOTH the leftover results and problems, with plain lint's exit.
 	results2, problems, err := app.Svc.Lint()
@@ -116,18 +116,18 @@ func runLintFix(app *App, dryRun bool) error {
 	}
 	if app.JSON {
 		// One envelope carrying what was fixed plus what couldn't be (leftover lint
-		// findings + unreadable files) — a --json consumer must never parse the prose
+		// findings + unreadable records) — a --json consumer must never parse the prose
 		// error to learn that.
 		if err := render.FixJSON(app.Out, results, problems, results2, dryRun, app.workspace()); err != nil {
 			return err
 		}
 	} else {
 		render.FixHuman(app.Out, app.Style, results, results2, dryRun)
-		render.ProblemsHuman(app.ErrOut, app.Style, problems)
+		render.LintProblemsHuman(app.ErrOut, app.Style, problems)
 	}
 	blocking := core.BlockingLintResultCount(results2)
 	if blocking+len(problems) > 0 {
-		return fmt.Errorf("%w: %d item(s) still with issues, %d unreadable file(s)",
+		return fmt.Errorf("%w: %d item(s) still with issues, %d unreadable record(s)",
 			domain.ErrValidation, blocking, len(problems))
 	}
 	return nil

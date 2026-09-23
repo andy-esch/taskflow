@@ -298,7 +298,13 @@ import (
 // caller-selected string-valued JSON projections over stable identity,
 // progress, frontier, health, and description fields. Bare
 // `thread list --json` retains its full typed topology and diagnostic envelope.
-const SchemaVersion = "1.72"
+// 1.73: ADDITIVE — `lint --json`, `audit lint --json`, and the `lint --fix`
+// residual report enrich each unreadable record with its entity kind, optional
+// stable ID and slug, and optional adapter-neutral location. The existing
+// required `path` and `message` fields remain: local filesystem diagnostics keep
+// their exact path, while a diagnostic from a pathless adapter emits an empty
+// compatibility path and does not invent filesystem semantics.
+const SchemaVersion = "1.73"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

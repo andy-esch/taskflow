@@ -168,14 +168,15 @@ func TestServiceLintIncludesThreadIntegrityAndCrossKindIdentity(t *testing.T) {
 			Status: domain.ThreadStatusUnstarted, Description: "Valid description", Goal: "Ship it",
 			Created: "2026-08-29", Tasks: []string{"6g3q4rtmv4az"},
 		}},
-		problems: []ThreadReadProblem{{Location: "threads/bad.md", Message: "bad frontmatter"}},
+		problems: []ThreadReadProblem{{Location: "threads/bad.md", LocationIsPath: true, Message: "bad frontmatter"}},
 	}
 	svc := NewService(&fakeStore{tasks: []domain.Task{task}}, WithThreadStore(threadStore))
 	results, problems, err := svc.Lint()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(problems) != 1 || problems[0].Path != "threads/bad.md" {
+	if len(problems) != 1 || problems[0].EntityKind != LintEntityThread ||
+		problems[0].Location != "threads/bad.md" || !problems[0].LocationIsPath {
 		t.Fatalf("problems = %+v", problems)
 	}
 	got := make(map[string]string)

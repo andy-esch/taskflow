@@ -439,14 +439,14 @@ func newAuditLintCmd(app *App) *cobra.Command {
 					return err
 				}
 			} else {
-				render.ProblemsHuman(app.ErrOut, app.Style, problems)
+				render.LintProblemsHuman(app.ErrOut, app.Style, problems)
 				render.LintHuman(app.Out, app.Style, results, "audit")
 				if len(results) == 0 && len(problems) == 0 {
 					fmt.Fprintf(app.Out, "%s all audit findings pass lint\n", app.Style.Green("✔"))
 				}
 			}
 			if len(results)+len(problems) > 0 {
-				return fmt.Errorf("%w: %d audit(s) with finding issues, %d unreadable file(s)",
+				return fmt.Errorf("%w: %d audit(s) with finding issues, %d unreadable record(s)",
 					domain.ErrValidation, len(results), len(problems))
 			}
 			return nil
