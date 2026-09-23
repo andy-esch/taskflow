@@ -268,6 +268,13 @@ adapter capabilities rather than leaked persistence.
   `ThreadReadProblem` keeps location optional so a remote adapter does not invent a Markdown path;
   Thread list/service projections strip its source revision and wire output maps the diagnostic
   explicitly rather than serializing persistence evidence.
+  Repository lint follows the same rule through its dedicated `LintSource` port. Its per-kind,
+  resilient reads return decoded records with `LintLoadProblem` values carrying taskflow-owned
+  entity kind, optional stable identity, optional location, and message. Core neither accepts
+  `FileProblem` through this port nor parses a location to recover identity. The CLI maps the
+  neutral problem deliberately: human output leads with identity, while schema 1.73 keeps the
+  historical machine `path` field for compatibility and adds kind, identity, and location. A
+  pathless adapter leaves `path` empty instead of labelling a URI as a filesystem path.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
@@ -275,7 +282,11 @@ adapter capabilities rather than leaked persistence.
   scanner; parses YAML with `go.yaml.in/yaml/v3`. One `*FS` satisfies the entity
   `Store`, the narrow `Fixer`/`Linter`/`Layout` ports, and the guarded graph and
   lifecycle mutation capabilities. Its `ReadTaskGraph` adapter translates file diagnostics into
-  neutral record identity in the same task scan. The Service gets the use-case ports; CLI lint and
+  neutral record identity in the same task scan. Its `LintSource` implementation similarly adapts
+  the existing body-aware task/audit and entity scans once at the filesystem boundary; it does not
+  re-scan records to manufacture portable diagnostics. Exact-path `FileProblem` values remain on
+  local list, fixer, and guarded-mutation paths where filesystem repair evidence is the contract.
+  The Service gets the use-case ports; CLI lint and
   the TUI watcher get their narrower capabilities wired directly. It owns the *layout*
   knowledge — `WatchPaths()`
   hands the TUI watcher its dir set so the path convention isn't reconstructed
