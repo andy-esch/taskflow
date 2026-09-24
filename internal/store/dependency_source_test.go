@@ -27,6 +27,10 @@ func TestReadTaskGraphPopulatesLosslessDependencySourceProjection(t *testing.T) 
 	if err != nil || len(read.Problems) != 1 || read.Problems[0].SourceVersion == "" {
 		t.Fatalf("read=%+v err=%v", read, err)
 	}
+	if read.Problems[0].TaskID != unreadableID || read.Problems[0].TaskSlug != "source-adapter-unreadable" ||
+		read.Problems[0].Path != unreadablePath {
+		t.Fatalf("filesystem adapter did not recover unreadable record identity: %+v", read.Problems[0])
+	}
 	graph := core.NewTaskGraphRead(read)
 	records, err := graph.SourceRecords()
 	if err != nil {

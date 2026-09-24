@@ -8,6 +8,7 @@ import (
 )
 
 type lintSourceFake struct {
+	taskRecords      []TaskWithBody
 	taskProblems     []LintLoadProblem
 	epicProblems     []LintLoadProblem
 	auditProblems    []LintLoadProblem
@@ -20,7 +21,7 @@ type lintSourceFake struct {
 
 func (f *lintSourceFake) ReadLintTasks() ([]TaskWithBody, []LintLoadProblem, error) {
 	f.taskReads++
-	return nil, f.taskProblems, nil
+	return f.taskRecords, f.taskProblems, nil
 }
 
 func (f *lintSourceFake) ReadLintEpics() ([]domain.Epic, []LintLoadProblem, error) {
@@ -91,4 +92,111 @@ func TestLintRequiresDedicatedReadCapability(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "lint reads are unavailable") {
 		t.Fatalf("Lint error = %v; want missing lint capability", err)
 	}
+}
+
+func TestLintAttributesPathlessGraphDiagnosticsToReadableRecords(t *testing.T) {
+	t.Run("dependency and lifecycle", func(t *testing.T) {
+		prerequisite := graphRecord("pathless-prerequisite", domain.StatusNextUp)
+		dependent := graphRecord("pathless-in-flight", domain.StatusInProgress, prerequisite.ID)
+		invalid := graphRecord("pathless-invalid", domain.StatusReadyToStart, "not-a-stable-id")
+		prerequisite.Path, dependent.Path, invalid.Path = "", "", ""
+
+		results := lintTaskRecords(t, prerequisite, dependent, invalid)
+		assertLintIssue(t, results, invalid.Slug, "depends_on", "not a stable task id")
+		assertLintIssue(t, results, dependent.Slug, "status", "dependency gate")
+	})
+
+	t.Run("cycle", func(t *testing.T) {
+		left := graphRecord("pathless-cycle-left", domain.StatusReadyToStart)
+		right := graphRecord("pathless-cycle-right", domain.StatusReadyToStart, left.ID)
+		left.DependsOn = []string{right.ID}
+		left.Path, right.Path = "", ""
+
+		results := lintTaskRecords(t, left, right)
+		assertLintIssue(t, results, left.Slug, "depends_on", "dependency cycle")
+		assertLintIssue(t, results, right.Slug, "depends_on", "dependency cycle")
+	})
+
+	t.Run("legacy declaration", func(t *testing.T) {
+		prerequisite := graphRecord("pathless-legacy-prerequisite", domain.StatusCompleted)
+		owner := graphRecord("pathless-legacy-owner", domain.StatusReadyToStart)
+		owner.LegacyBlockedBy = []string{prerequisite.Slug}
+		owner.LegacyDependencyFields = []string{"blocked_by"}
+		prerequisite.Path, owner.Path = "", ""
+
+		results := lintTaskRecords(t, prerequisite, owner)
+		assertLintIssue(t, results, owner.Slug, "blocked_by", "legacy dependency field")
+	})
+}
+
+func TestLintRecordAttributionDoesNotCollideOnIDOrLocation(t *testing.T) {
+	first := graphRecord("portable-duplicate-first", domain.StatusReadyToStart)
+	second := graphRecord("portable-duplicate-second", domain.StatusReadyToStart, "bad-reference")
+	second.ID, second.FilenameID = first.ID, first.FilenameID
+	// An opaque or contradictory location is context, not the record join key.
+	first.Path, second.Path = "opaque://same", "opaque://same"
+
+	results := lintTaskRecords(t, first, second)
+	assertLintIssue(t, results, first.Slug, "id", "duplicate stable task id")
+	assertLintIssue(t, results, second.Slug, "id", "duplicate stable task id")
+	assertLintIssue(t, results, second.Slug, "depends_on", "bad-reference")
+	if lintResultHas(results, first.Slug, "depends_on", "bad-reference") {
+		t.Fatalf("second record dependency defect leaked onto first record: %+v", results)
+	}
+}
+
+func TestLintUsesPathlessUnreadableIdentityInLifecycleDiagnosis(t *testing.T) {
+	unreadableID := "6g0000000005"
+	dependent := graphRecord("depends-on-pathless-unreadable", domain.StatusInProgress, unreadableID)
+	dependent.Path = ""
+	source := &lintSourceFake{
+		taskRecords: []TaskWithBody{{Task: dependent}},
+		taskProblems: []LintLoadProblem{{
+			EntityKind: LintEntityTask, EntityID: unreadableID,
+			EntitySlug: "unreadable", Message: "remote decode failed",
+		}},
+	}
+
+	results, problems, err := NewService(nil, WithLintSource(source)).Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLintIssue(t, results, dependent.Slug, "status", unreadableID)
+	if len(problems) != 1 || problems[0].EntityID != unreadableID || problems[0].Location != "" {
+		t.Fatalf("load problems = %+v", problems)
+	}
+}
+
+func lintTaskRecords(t *testing.T, tasks ...domain.Task) []LintResult {
+	t.Helper()
+	records := make([]TaskWithBody, len(tasks))
+	for index, task := range tasks {
+		records[index] = TaskWithBody{Task: task}
+	}
+	results, _, err := NewService(nil, WithLintSource(&lintSourceFake{taskRecords: records})).Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return results
+}
+
+func assertLintIssue(t *testing.T, results []LintResult, slug, field, messagePart string) {
+	t.Helper()
+	if !lintResultHas(results, slug, field, messagePart) {
+		t.Fatalf("missing %s issue containing %q for %s in %+v", field, messagePart, slug, results)
+	}
+}
+
+func lintResultHas(results []LintResult, slug, field, messagePart string) bool {
+	for _, result := range results {
+		if result.Slug != slug {
+			continue
+		}
+		for _, issue := range result.Issues {
+			if issue.Field == field && strings.Contains(issue.Message, messagePart) {
+				return true
+			}
+		}
+	}
+	return false
 }
