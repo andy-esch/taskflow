@@ -199,7 +199,15 @@ func TestTaskGraphLegacyResolutionHealthAndDirection(t *testing.T) {
 	if len(graph.Problems()) != 0 || len(graph.LegacyDiagnostics()) != 3 {
 		t.Fatalf("problems=%+v legacy=%+v", graph.Problems(), graph.LegacyDiagnostics())
 	}
+	for _, diagnostic := range graph.legacy {
+		if diagnostic.recordRef == 0 {
+			t.Fatalf("internal legacy diagnostic lost readable-record attribution: %+v", diagnostic)
+		}
+	}
 	for _, diagnostic := range graph.LegacyDiagnostics() {
+		if diagnostic.recordRef != 0 {
+			t.Fatalf("public legacy diagnostic leaked snapshot-local record reference: %+v", diagnostic)
+		}
 		if !diagnostic.MigrationReady() {
 			t.Errorf("resolved legacy %s must be migration-ready: %+v", diagnostic.Field, diagnostic)
 		}
@@ -301,7 +309,10 @@ func TestTaskGraphResolveTaskIDMatchesRepositoryReferenceTiers(t *testing.T) {
 	unreadableID := testutil.TaskID("unreadable")
 	graph := NewTaskGraph(
 		[]domain.Task{jitter, batch, backoff, polish},
-		[]domain.FileProblem{{Path: "tasks/" + unreadableID + "-unreadable.md", Message: "bad YAML"}},
+		[]domain.FileProblem{{
+			EntityID: unreadableID, EntitySlug: "unreadable",
+			Path: "tasks/" + unreadableID + "-unreadable.md", Message: "bad YAML",
+		}},
 	)
 
 	tests := []struct {
@@ -651,6 +662,7 @@ func TestTaskGraphDistinguishesUnreadableAndInvalidReferences(t *testing.T) {
 	unreadableID := testutil.TaskID("unreadable")
 	target := graphRecord("unreadable-target", domain.StatusReadyToStart, unreadableID, "not-an-id")
 	graph := NewTaskGraph([]domain.Task{target}, []domain.FileProblem{{
+		EntityID: unreadableID, EntitySlug: "broken",
 		Path: "tasks/" + unreadableID + "-broken.md", Message: "malformed frontmatter",
 	}})
 	reasons := make(map[string]BlockerReason)
@@ -680,13 +692,15 @@ func TestTaskGraphDuplicateIDsRetainPathFaithfulDiagnostics(t *testing.T) {
 	if !duplicates[first.Path] || !duplicates[second.Path] || !invalidOnSecond {
 		t.Fatalf("path-faithful problems = %+v", graph.Problems())
 	}
-	lintByPath := dependencyLintIssues(graph)
-	if len(lintByPath[first.Path]) == 0 || len(lintByPath[second.Path]) < 2 {
-		t.Fatalf("path-faithful lint issues = %+v", lintByPath)
+	lintByRecord := dependencyLintIssues(graph)
+	firstIssues := lintByRecord[taskGraphRecordRefAt(1)]
+	secondIssues := lintByRecord[taskGraphRecordRefAt(0)]
+	if len(firstIssues) == 0 || len(secondIssues) < 2 {
+		t.Fatalf("record-faithful lint issues = %+v", lintByRecord)
 	}
-	for _, issue := range lintByPath[first.Path] {
+	for _, issue := range firstIssues {
 		if strings.Contains(issue.Message, "bad-reference") {
-			t.Fatalf("second record defect leaked onto first path: %+v", lintByPath)
+			t.Fatalf("second record defect leaked onto first record: %+v", lintByRecord)
 		}
 	}
 }
@@ -852,6 +866,9 @@ func TestTaskGraphReadDoesNotAddressInvalidUnreadableIdentity(t *testing.T) {
 func TestTaskGraphReadFromFilesPreservesListDiagnosticsAndAdaptsGraphMessage(t *testing.T) {
 	problem := domain.FileProblem{Path: "tasks/" + testutil.TaskID("file-problem") + "-broken.md", Message: "bad YAML"}
 	read := TaskGraphReadFromFiles(nil, []domain.FileProblem{problem})
+	if read.Problems[0].TaskID != "" || read.Problems[0].TaskSlug != "" {
+		t.Fatalf("core inferred identity from an opaque location: %+v", read.Problems[0])
+	}
 	if got := taskGraphFileProblems(read.Problems); !reflect.DeepEqual(got, []domain.FileProblem{problem}) {
 		t.Fatalf("list problems = %+v, want %+v", got, []domain.FileProblem{problem})
 	}

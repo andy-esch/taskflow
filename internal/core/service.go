@@ -544,7 +544,7 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 	}
 
 	var results []LintResult
-	for _, tb := range tasks {
+	for taskIndex, tb := range tasks {
 		t := tb.Task
 		// Active tasks get the full field lint; archived tasks are only checked for the
 		// universal defects (missing/unrecognized frontmatter status, missing or drifted
@@ -562,7 +562,7 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 			issues = append(domain.FrontmatterStatusIssues(t), domain.MissingIDIssue(t.ID)...)
 			issues = append(issues, domain.IDDriftIssue(t.ID, t.FilenameID)...)
 		}
-		issues = append(issues, graphIssues[t.Path]...)
+		issues = append(issues, graphIssues[taskGraphRecordRefAt(taskIndex)]...)
 		collisionID := t.ID
 		if !threadIdentity[collisionID] {
 			collisionID = t.FilenameID
@@ -692,9 +692,9 @@ func appendDuplicateProblemLintResults(results []LintResult, problems []LintLoad
 	return results
 }
 
-func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
-	out := make(map[string][]domain.Issue)
-	for _, problem := range graph.Problems() {
+func dependencyLintIssues(graph *TaskGraph) map[taskGraphRecordRef][]domain.Issue {
+	out := make(map[taskGraphRecordRef][]domain.Issue)
+	for _, problem := range graph.problems {
 		// These are already owned by another ordinary-lint path. The legacy missing
 		// and ambiguous graph problems are rendered once through the grouped legacy
 		// diagnostic below; the remaining codes are domain lint or FileProblems.
@@ -704,7 +704,7 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 			ProblemLegacyMissing, ProblemLegacyAmbiguous:
 			continue
 		}
-		if problem.Path == "" {
+		if problem.recordRef == 0 {
 			continue
 		}
 		field := problem.Field
@@ -715,9 +715,9 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 		if graphProblemRepairable(problem.Code) {
 			message += "; run `tskflwctl task depend repair` for exact source-level diagnosis"
 		}
-		out[problem.Path] = append(out[problem.Path], domain.Issue{Field: field, Message: message})
+		out[problem.recordRef] = append(out[problem.recordRef], domain.Issue{Field: field, Message: message})
 	}
-	for _, diagnostic := range graph.LegacyDiagnostics() {
+	for _, diagnostic := range graph.legacy {
 		parts := make([]string, 0, len(diagnostic.References))
 		severity := domain.IssueAdvisory
 		for _, ref := range diagnostic.References {
@@ -741,7 +741,7 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 			severity = ""
 			remedy = "run `tskflwctl task depend repair`, then `tskflwctl task depend migrate` when the graph is structurally safe"
 		}
-		out[diagnostic.TaskPath] = append(out[diagnostic.TaskPath], domain.Issue{
+		out[diagnostic.recordRef] = append(out[diagnostic.recordRef], domain.Issue{
 			Field: diagnostic.Field, Severity: severity,
 			Message: fmt.Sprintf("legacy dependency field: %s; %s", message, remedy),
 		})
@@ -761,9 +761,8 @@ func dependencyLintIssues(graph *TaskGraph) map[string][]domain.Issue {
 		if len(explanations) > 0 {
 			message += ": " + strings.Join(explanations, "; ")
 		}
-		task, ok := graph.Task(taskID)
-		if ok && task.Path != "" {
-			out[task.Path] = append(out[task.Path], domain.Issue{Field: "status", Message: message})
+		if recordRef := graph.representativeRecord[taskID]; recordRef != 0 {
+			out[recordRef] = append(out[recordRef], domain.Issue{Field: "status", Message: message})
 		}
 	}
 	return out

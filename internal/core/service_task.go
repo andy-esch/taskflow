@@ -154,16 +154,14 @@ func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) 
 }
 
 // TaskGraphLoadProblemFromFile is the one compatibility conversion for a local
-// file diagnostic. Filesystem adapters may attach an opaque source revision;
-// legacy list adapters deliberately leave it empty and therefore fail closed if
-// a guarded mutation ever tries to compare two unreadable snapshots from them.
+// file diagnostic. Identity must already have been recovered by the filesystem
+// adapter; core treats Path as opaque repair context and never parses it.
+// Filesystem adapters may attach an opaque source revision; legacy list adapters
+// deliberately leave it empty and therefore fail closed if a guarded mutation
+// ever tries to compare two unreadable snapshots from them.
 func TaskGraphLoadProblemFromFile(problem domain.FileProblem, sourceVersion string) TaskGraphLoadProblem {
-	taskID, taskSlug := problem.EntityID, problem.EntitySlug
-	if taskID == "" {
-		taskID, taskSlug = taskIdentityFromPath(problem.Path)
-	}
 	return TaskGraphLoadProblem{
-		TaskID: taskID, TaskSlug: taskSlug, Path: problem.Path,
+		TaskID: problem.EntityID, TaskSlug: problem.EntitySlug, Path: problem.Path,
 		Message: problem.Message, SourceVersion: sourceVersion,
 	}
 }

@@ -54,6 +54,7 @@ type GraphProblem struct {
 	Path          string
 	Message       string
 	Cycle         []string
+	recordRef     taskGraphRecordRef
 }
 
 type LegacyResolution string
@@ -90,6 +91,7 @@ type LegacyDependencyDiagnostic struct {
 	TaskPath   string
 	Field      string
 	References []LegacyReference
+	recordRef  taskGraphRecordRef
 }
 
 // MigrationReady reports whether the guarded legacy migration can rewrite this
@@ -269,30 +271,46 @@ type taskReferenceCandidate struct {
 	slug string
 }
 
+// taskGraphRecordRef is an opaque, snapshot-local handle for one readable task
+// record. It is deliberately unrelated to a task ID or adapter location: either
+// can collide, and locations are optional context rather than semantic identity.
+// A zero value means that a diagnostic does not belong to a readable record.
+type taskGraphRecordRef uint64
+
+func taskGraphRecordRefAt(index int) taskGraphRecordRef {
+	return taskGraphRecordRef(index + 1)
+}
+
+type taskGraphRecord struct {
+	task domain.Task
+	ref  taskGraphRecordRef
+}
+
 // TaskGraph is an immutable projection over one repository scan. Its internal
 // query caches are synchronized; callers always receive copies of slices/maps.
 type TaskGraph struct {
-	sourceTasks         []domain.Task
-	sourceComplete      bool
-	representative      map[string]TaskGraphSourceRef
-	sourceRefCounts     map[TaskGraphSourceRef]int
-	tasks               map[string]domain.Task
-	ids                 []string
-	loadProblems        []TaskGraphLoadProblem
-	dependencies        map[string][]string
-	outgoing            map[string][]string
-	problems            []GraphProblem
-	legacy              []LegacyDependencyDiagnostic
-	health              GraphHealth
-	hardBroken          map[string]bool
-	unreadableIDs       map[string]bool
-	referenceCandidates []taskReferenceCandidate
-	cycleMembers        map[string]bool
-	cycleComponent      map[string]int
-	sound               map[string]soundResult
-	states              map[string]TaskGraphState
-	waves               [][]string
-	wavesComplete       bool
+	sourceTasks          []domain.Task
+	sourceComplete       bool
+	representative       map[string]TaskGraphSourceRef
+	representativeRecord map[string]taskGraphRecordRef
+	sourceRefCounts      map[TaskGraphSourceRef]int
+	tasks                map[string]domain.Task
+	ids                  []string
+	loadProblems         []TaskGraphLoadProblem
+	dependencies         map[string][]string
+	outgoing             map[string][]string
+	problems             []GraphProblem
+	legacy               []LegacyDependencyDiagnostic
+	health               GraphHealth
+	hardBroken           map[string]bool
+	unreadableIDs        map[string]bool
+	referenceCandidates  []taskReferenceCandidate
+	cycleMembers         map[string]bool
+	cycleComponent       map[string]int
+	sound                map[string]soundResult
+	states               map[string]TaskGraphState
+	waves                [][]string
+	wavesComplete        bool
 
 	mu            sync.Mutex
 	causalCache   map[string][]Blocker
@@ -314,23 +332,24 @@ func NewTaskGraphRead(read TaskGraphRead) *TaskGraph {
 
 func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, sourceComplete bool) *TaskGraph {
 	g := &TaskGraph{
-		sourceTasks:     cloneTasks(tasks),
-		sourceComplete:  sourceComplete,
-		representative:  make(map[string]TaskGraphSourceRef, len(tasks)),
-		sourceRefCounts: make(map[TaskGraphSourceRef]int, len(tasks)),
-		tasks:           make(map[string]domain.Task, len(tasks)),
-		dependencies:    make(map[string][]string, len(tasks)),
-		outgoing:        make(map[string][]string, len(tasks)),
-		hardBroken:      make(map[string]bool),
-		unreadableIDs:   make(map[string]bool),
-		cycleMembers:    make(map[string]bool),
-		cycleComponent:  make(map[string]int),
-		sound:           make(map[string]soundResult, len(tasks)),
-		states:          make(map[string]TaskGraphState, len(tasks)),
-		causalCache:     make(map[string][]Blocker),
-		frontierCache:   make(map[string][]Blocker),
-		impactCache:     make(map[string][]DependentImpact),
-		soundVisits:     make(map[string]int, len(tasks)),
+		sourceTasks:          cloneTasks(tasks),
+		sourceComplete:       sourceComplete,
+		representative:       make(map[string]TaskGraphSourceRef, len(tasks)),
+		representativeRecord: make(map[string]taskGraphRecordRef, len(tasks)),
+		sourceRefCounts:      make(map[TaskGraphSourceRef]int, len(tasks)),
+		tasks:                make(map[string]domain.Task, len(tasks)),
+		dependencies:         make(map[string][]string, len(tasks)),
+		outgoing:             make(map[string][]string, len(tasks)),
+		hardBroken:           make(map[string]bool),
+		unreadableIDs:        make(map[string]bool),
+		cycleMembers:         make(map[string]bool),
+		cycleComponent:       make(map[string]int),
+		sound:                make(map[string]soundResult, len(tasks)),
+		states:               make(map[string]TaskGraphState, len(tasks)),
+		causalCache:          make(map[string][]Blocker),
+		frontierCache:        make(map[string][]Blocker),
+		impactCache:          make(map[string][]DependentImpact),
+		soundVisits:          make(map[string]int, len(tasks)),
 	}
 	for _, task := range tasks {
 		g.sourceRefCounts[sourceRefForTask(task)]++
@@ -359,33 +378,41 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 		})
 	}
 
-	ordered := append([]domain.Task(nil), tasks...)
+	ordered := make([]taskGraphRecord, len(tasks))
+	for index, task := range tasks {
+		ordered[index] = taskGraphRecord{task: task, ref: taskGraphRecordRefAt(index)}
+	}
 	sort.SliceStable(ordered, func(i, j int) bool {
-		left, right := canonicalTaskID(ordered[i]), canonicalTaskID(ordered[j])
+		left, right := canonicalTaskID(ordered[i].task), canonicalTaskID(ordered[j].task)
 		if left != right {
 			return left < right
 		}
-		if ordered[i].Path != ordered[j].Path {
-			return ordered[i].Path < ordered[j].Path
+		if ordered[i].task.Path != ordered[j].task.Path {
+			return ordered[i].task.Path < ordered[j].task.Path
 		}
-		return ordered[i].Slug < ordered[j].Slug
+		if ordered[i].task.Slug != ordered[j].task.Slug {
+			return ordered[i].task.Slug < ordered[j].task.Slug
+		}
+		return ordered[i].ref < ordered[j].ref
 	})
 	idCounts := make(map[string]int, len(ordered))
 	idPaths := make(map[string][]string, len(ordered))
 	representativeIndexes := make(map[string]int, len(ordered))
-	for _, task := range ordered {
+	for _, record := range ordered {
+		task := record.task
 		if taskID := canonicalTaskID(task); taskID != "" {
 			idCounts[taskID]++
 			idPaths[taskID] = append(idPaths[taskID], displayPath(task.Path))
 		}
 	}
-	for recordIndex, task := range ordered {
+	for recordIndex, record := range ordered {
+		task, recordRef := record.task, record.ref
 		taskID := canonicalTaskID(task)
 		if taskID != "" {
 			g.referenceCandidates = append(g.referenceCandidates, taskReferenceCandidate{id: taskID, slug: task.Slug})
 		}
 		if strings.TrimSpace(task.ID) == "" {
-			g.addProblem(GraphProblem{Code: ProblemMissingTaskID, TaskID: taskID, Field: "id", Path: task.Path,
+			g.addProblem(GraphProblem{Code: ProblemMissingTaskID, TaskID: taskID, Field: "id", Path: task.Path, recordRef: recordRef,
 				Message: "missing stable task id in frontmatter"})
 			g.hardBroken[taskID] = true
 		}
@@ -393,23 +420,24 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 			continue
 		}
 		if task.ID != "" && task.FilenameID != "" && task.ID != task.FilenameID {
-			g.addProblem(GraphProblem{Code: ProblemTaskIDDrift, TaskID: taskID, RelatedTaskID: task.ID, Field: "id", Path: task.Path,
+			g.addProblem(GraphProblem{Code: ProblemTaskIDDrift, TaskID: taskID, RelatedTaskID: task.ID, Field: "id", Path: task.Path, recordRef: recordRef,
 				Message: fmt.Sprintf("frontmatter id %q disagrees with filename id %q", task.ID, task.FilenameID)})
 			g.hardBroken[taskID] = true
 		}
 		if idCounts[taskID] > 1 {
-			g.addProblem(GraphProblem{Code: ProblemDuplicateTaskID, TaskID: taskID, Field: "id", Path: task.Path,
+			g.addProblem(GraphProblem{Code: ProblemDuplicateTaskID, TaskID: taskID, Field: "id", Path: task.Path, recordRef: recordRef,
 				Message: fmt.Sprintf("duplicate stable task id %q across %s; no source is uniquely authoritative", taskID, strings.Join(idPaths[taskID], ", "))})
 			g.hardBroken[taskID] = true
 		}
 		if _, exists := g.tasks[taskID]; !exists {
 			g.tasks[taskID] = cloneTask(task)
 			g.representative[taskID] = sourceRefForTask(task)
+			g.representativeRecord[taskID] = recordRef
 			representativeIndexes[taskID] = recordIndex
 			g.ids = append(g.ids, taskID)
 		}
 		if !task.Status.Valid() {
-			g.addProblem(GraphProblem{Code: ProblemInvalidStatus, TaskID: taskID, Field: "status", Path: task.Path,
+			g.addProblem(GraphProblem{Code: ProblemInvalidStatus, TaskID: taskID, Field: "status", Path: task.Path, recordRef: recordRef,
 				Message: fmt.Sprintf("task %s has missing or invalid status %q", taskID, task.Status)})
 			g.hardBroken[taskID] = true
 		}
@@ -417,7 +445,8 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 	sort.Strings(g.ids)
 
 	canonicalEdges := make([]DependencyEdge, 0)
-	for recordIndex, task := range ordered {
+	for recordIndex, record := range ordered {
+		task, recordRef := record.task, record.ref
 		taskID := canonicalTaskID(task)
 		if taskID == "" {
 			continue
@@ -433,7 +462,7 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 		for _, prerequisite := range dependencies {
 			if seen[prerequisite] {
 				g.addProblem(GraphProblem{Code: ProblemDuplicateDependency, TaskID: taskID, RelatedTaskID: prerequisite,
-					Field: "depends_on", Path: task.Path,
+					Field: "depends_on", Path: task.Path, recordRef: recordRef,
 					Message: fmt.Sprintf("task %s repeats dependency %s", taskID, prerequisite)})
 				g.hardBroken[taskID] = true
 				continue
@@ -442,7 +471,7 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 			switch {
 			case prerequisite == taskID:
 				g.addProblem(GraphProblem{Code: ProblemSelfDependency, TaskID: taskID, RelatedTaskID: prerequisite,
-					Field: "depends_on", Path: task.Path,
+					Field: "depends_on", Path: task.Path, recordRef: recordRef,
 					Message: fmt.Sprintf("task %s cannot depend on itself", taskID)})
 				g.hardBroken[taskID] = true
 				// Retain the representative self-edge for exact SCC membership.
@@ -452,12 +481,12 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 				}
 			case !id.Valid(prerequisite):
 				g.addProblem(GraphProblem{Code: ProblemInvalidDependencyID, TaskID: taskID, RelatedTaskID: prerequisite,
-					Field: "depends_on", Path: task.Path,
+					Field: "depends_on", Path: task.Path, recordRef: recordRef,
 					Message: fmt.Sprintf("task %s depends_on value %q is not a stable task id", taskID, prerequisite)})
 				g.hardBroken[taskID] = true
 			case !taskExists(g.tasks, prerequisite) && !g.unreadableIDs[prerequisite]:
 				g.addProblem(GraphProblem{Code: ProblemMissingDependency, TaskID: taskID, RelatedTaskID: prerequisite,
-					Field: "depends_on", Path: task.Path,
+					Field: "depends_on", Path: task.Path, recordRef: recordRef,
 					Message: fmt.Sprintf("task %s depends on missing task %s", taskID, prerequisite)})
 				g.hardBroken[taskID] = true
 			default:
@@ -506,7 +535,7 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 			if task, ok := g.tasks[taskID]; ok {
 				path = task.Path
 			}
-			g.addProblem(GraphProblem{Code: ProblemCycle, TaskID: taskID, Field: "depends_on", Path: path,
+			g.addProblem(GraphProblem{Code: ProblemCycle, TaskID: taskID, Field: "depends_on", Path: path, recordRef: g.representativeRecord[taskID],
 				Message: "dependency cycle: " + strings.Join(cycle, " -> "), Cycle: append([]string(nil), cycle...)})
 		}
 	}
@@ -551,19 +580,6 @@ func canonicalTaskID(task domain.Task) string {
 	return task.ID
 }
 
-func taskIdentityFromPath(path string) (string, string) {
-	base := filepath.Base(path)
-	stem := strings.TrimSuffix(base, ".md")
-	if len(stem) < id.Length+2 || stem[id.Length] != '-' {
-		return "", ""
-	}
-	candidate := stem[:id.Length]
-	if !id.Valid(candidate) {
-		return "", ""
-	}
-	return candidate, stem[id.Length+1:]
-}
-
 func cloneTask(task domain.Task) domain.Task {
 	task.Tags = append([]string(nil), task.Tags...)
 	task.DependsOn = append([]string(nil), task.DependsOn...)
@@ -606,7 +622,7 @@ func (g *TaskGraph) hasProblem(code GraphProblemCode, taskID string) bool {
 	return false
 }
 
-func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task, representativeIndexes map[string]int) ([]LegacyDependencyDiagnostic, []DependencyEdge) {
+func (g *TaskGraph) resolveLegacyDiagnostics(records []taskGraphRecord, representativeIndexes map[string]int) ([]LegacyDependencyDiagnostic, []DependencyEdge) {
 	bySlug := make(map[string][]string, len(g.tasks))
 	for _, taskID := range g.ids {
 		bySlug[g.tasks[taskID].Slug] = append(bySlug[g.tasks[taskID].Slug], taskID)
@@ -629,7 +645,8 @@ func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task, representati
 	var diagnostics []LegacyDependencyDiagnostic
 	var edges []DependencyEdge
 	seenEdges := make(map[DependencyEdge]bool)
-	for recordIndex, task := range records {
+	for recordIndex, record := range records {
+		task, recordRef := record.task, record.ref
 		taskID := canonicalTaskID(task)
 		if taskID == "" {
 			continue
@@ -642,7 +659,7 @@ func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task, representati
 				continue
 			}
 			diagnostic := LegacyDependencyDiagnostic{
-				TaskID: taskID, TaskSlug: task.Slug, TaskPath: task.Path, Field: field.name,
+				TaskID: taskID, TaskSlug: task.Slug, TaskPath: task.Path, Field: field.name, recordRef: recordRef,
 			}
 			for _, value := range values {
 				ref := LegacyReference{Value: value}
@@ -656,7 +673,7 @@ func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task, representati
 				switch len(candidates) {
 				case 0:
 					ref.Resolution = LegacyMissing
-					g.addProblem(GraphProblem{Code: ProblemLegacyMissing, TaskID: taskID, Field: field.name, Path: task.Path,
+					g.addProblem(GraphProblem{Code: ProblemLegacyMissing, TaskID: taskID, Field: field.name, Path: task.Path, recordRef: recordRef,
 						Message: fmt.Sprintf("legacy %s reference %q on task %s has no exact task ID or slug match", field.name, value, taskID)})
 					g.hardBroken[taskID] = true
 				case 1:
@@ -669,7 +686,7 @@ func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task, representati
 					if ref.Edge.From == ref.Edge.To {
 						ref.Resolution = LegacyUnsafe
 						g.addProblem(GraphProblem{Code: ProblemSelfDependency, TaskID: taskID, RelatedTaskID: taskID,
-							Field: field.name, Path: task.Path,
+							Field: field.name, Path: task.Path, recordRef: recordRef,
 							Message: fmt.Sprintf("legacy %s reference %q makes task %s depend on itself", field.name, value, taskID)})
 						g.hardBroken[taskID] = true
 					}
@@ -679,7 +696,7 @@ func (g *TaskGraph) resolveLegacyDiagnostics(records []domain.Task, representati
 					}
 				default:
 					ref.Resolution = LegacyAmbiguous
-					g.addProblem(GraphProblem{Code: ProblemLegacyAmbiguous, TaskID: taskID, Field: field.name, Path: task.Path,
+					g.addProblem(GraphProblem{Code: ProblemLegacyAmbiguous, TaskID: taskID, Field: field.name, Path: task.Path, recordRef: recordRef,
 						Message: fmt.Sprintf("legacy %s reference %q on task %s is ambiguous across task IDs %s", field.name, value, taskID, strings.Join(candidates, ", "))})
 					g.hardBroken[taskID] = true
 				}
@@ -810,6 +827,7 @@ func (g *TaskGraph) Problems() []GraphProblem {
 	copy(out, g.problems)
 	for i := range out {
 		out[i].Cycle = append([]string(nil), out[i].Cycle...)
+		out[i].recordRef = 0 // snapshot-local correlation is not query data
 	}
 	return out
 }
@@ -818,6 +836,7 @@ func (g *TaskGraph) LegacyDiagnostics() []LegacyDependencyDiagnostic {
 	out := make([]LegacyDependencyDiagnostic, len(g.legacy))
 	for i, diagnostic := range g.legacy {
 		out[i] = diagnostic
+		out[i].recordRef = 0 // snapshot-local correlation is not query data
 		out[i].References = make([]LegacyReference, len(diagnostic.References))
 		copy(out[i].References, diagnostic.References)
 		for j := range out[i].References {
