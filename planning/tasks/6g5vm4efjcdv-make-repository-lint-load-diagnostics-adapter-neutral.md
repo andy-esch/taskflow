@@ -61,11 +61,17 @@ deliberate post-release boundary. This task owns the multi-entity vocabulary fir
 
 - Thread diagnostic predecessor: make-thread-read-diagnostics-adapter-neutral
 - Task graph diagnostic precedent: make-task-graph-load-diagnostics-adapter-neutral
+- Delivery Thread: [Make planning data access adapter neutral](../threads/6gcwd78p9r04-make-planning-data-access-adapter-neutral.md)
 
 Cross-referenced by audit 2026-09-22-correctness-and-errors: M1 (PARTIAL overlap). That finding is a lint *rule* gap — `Service.Lint`'s cross-kind task/Thread id-collision check builds its identity sets from readable records only, so a collision stops being reported once either document is malformed, even though the adapter already recovers the filename id and the duplicate-id check in the same loop consumes it. This task's "Out of scope" still excludes changing lint rules. The repair is now tracked separately in [unreadable cross-kind ID collision lint](6gcqz5aefjjf-lint-cross-kind-task-and-thread-id-collisions-on-unreadable-records.md), with an explicit dependency on this task so both changes converge on one neutral failed-record identity contract.
 
 ## Progress log
 
+- 2026-09-23: A boundary audit confirmed this consumer-owned lint port is the intended pattern and
+  scoped the remaining portability work into the adapter-neutral data-access Thread. Follow-ups own
+  path-independent graph-lint attribution, portable dashboard/list diagnostics, path-free audit
+  finding reads, semantic/local path separation, CLI use-case routing, and executable controller
+  import boundaries rather than widening this focused unreadable-record change.
 - 2026-09-23: Implemented and locally validated the adapter-neutral lint read boundary. Portable
   core tests cover pathless task, epic, audit, research, and Thread failures; filesystem tests cover
   exact local identities, locations, messages, and one existing scan per kind; render/wire tests

@@ -6,12 +6,12 @@ epic: 30-threads-and-task-dependency-graphs
 description: Retain task identity and optional locations when graph-backed dashboards report unreadable records through non-filesystem adapters.
 effort: 1-2 days
 tier: 3
-priority: low
+priority: medium
 autonomy_level: 3
 tags: [threads, architecture, diagnostics, ports]
 created: "2026-09-03"
 depends_on: [6g5vm4efjcdv, 6g697mp8s4tx]
-updated_at: "2026-09-03"
+updated_at: "2026-09-23"
 ---
 
 # Preserve portable load diagnostics in board and status
@@ -70,10 +70,13 @@ status, board, and TUI reloads; scan-count assertions.
 This task follows both the status graph-health work and
 `make-repository-lint-load-diagnostics-adapter-neutral`. The latter should establish the shared
 multi-entity diagnostic value and wire compatibility policy first; this task then carries it through
-dashboard projections without duplicating that design.
+dashboard projections without duplicating that design. It is one of three parallel concrete seams
+after that foundation in the adapter-neutral data-access Thread; all three feed the shared entity-read
+design rather than allowing the design to proceed from lint alone.
 
 ## Related
 
 - Epic [30-threads-and-task-dependency-graphs](../epics/30-threads-and-task-dependency-graphs.md)
 - [Report graph degradation in status and lint](6g697mp8s4tx-report-graph-degradation-in-status-and-lint.md)
 - [Make repository lint load diagnostics adapter-neutral](6g5vm4efjcdv-make-repository-lint-load-diagnostics-adapter-neutral.md)
+- Thread [Make planning data access adapter neutral](../threads/6gcwd78p9r04-make-planning-data-access-adapter-neutral.md)
