@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g5vm4efjcdv
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Replace the shared lint unreadable-file bucket with record identity and optional repair locations before remote or served adapters consume it.
 effort: 1-2 days
@@ -13,6 +13,7 @@ created: "2026-09-01"
 updated_at: "2026-09-23"
 depends_on: [6g5rxq1ravd3, 6g6scc9jgxae]
 started_at: "2026-09-23"
+completed_at: "2026-09-23"
 ---
 # Make repository lint load diagnostics adapter-neutral
 
