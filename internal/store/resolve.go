@@ -30,6 +30,10 @@ type sourceFileProblem struct {
 }
 
 func scanDirSources[T any](dir string, parse func(path string, content []byte) (T, error), versionProblems bool) ([]T, []sourceFileProblem, error) {
+	return scanDirSourcesWithReader(dir, os.ReadFile, parse, versionProblems)
+}
+
+func scanDirSourcesWithReader[T any](dir string, readFile func(string) ([]byte, error), parse func(path string, content []byte) (T, error), versionProblems bool) ([]T, []sourceFileProblem, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -47,7 +51,7 @@ func scanDirSources[T any](dir string, parse func(path string, content []byte) (
 			continue // a README landing page is silently ignored — the carveout README carve
 		}
 		path := filepath.Join(dir, e.Name())
-		content, err := os.ReadFile(path)
+		content, err := readFile(path)
 		if err != nil {
 			return nil, nil, fmt.Errorf("read %s: %w", path, err)
 		}
@@ -72,6 +76,18 @@ func scanDirSources[T any](dir string, parse func(path string, content []byte) (
 			continue
 		}
 		out = append(out, v)
+	}
+	return out, problems, nil
+}
+
+func scanDirWithReader[T any](dir string, readFile func(string) ([]byte, error), parse func(path string, content []byte) (T, error)) ([]T, []domain.FileProblem, error) {
+	out, sourceProblems, err := scanDirSourcesWithReader(dir, readFile, parse, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	problems := make([]domain.FileProblem, len(sourceProblems))
+	for i, problem := range sourceProblems {
+		problems[i] = problem.problem
 	}
 	return out, problems, nil
 }

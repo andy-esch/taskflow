@@ -161,6 +161,21 @@ func renderList[T any](
 	jsonFn func(io.Writer, []T, []domain.FileProblem) error,
 	humanFn func(io.Writer, render.Style, []T) error,
 ) error {
+	return renderListWithProblems(app, mode, columns, items, problems, listKey, cols,
+		func(problems []domain.FileProblem) []domain.FileProblem { return problems },
+		jsonFn, humanFn, render.ProblemsHuman)
+}
+
+// renderListWithProblems is renderList's adapter-neutral diagnostic form. The
+// application problem type is retained for human rendering while wireProblems
+// supplies the explicit public representation used by projected JSON.
+func renderListWithProblems[T, P, W any](
+	app *App, mode outputMode, columns []string, items []T, problems []P,
+	listKey string, cols []render.Column[T], wireProblems func([]P) []W,
+	jsonFn func(io.Writer, []T, []P) error,
+	humanFn func(io.Writer, render.Style, []T) error,
+	problemsFn func(io.Writer, render.Style, []P),
+) error {
 	if mode == modeJSON {
 		// `--json -c …` narrows each row to raw string-valued fields while
 		// keeping the schema_version + unreadable envelope. Canonical selectors
@@ -171,7 +186,7 @@ func renderList[T any](
 			if err != nil {
 				return err
 			}
-			return render.ProjectedListJSON(app.Out, listKey, sel, items, problems)
+			return render.ProjectedListJSONWithProblems(app.Out, listKey, sel, items, wireProblems(problems))
 		}
 		return jsonFn(app.Out, items, problems)
 	}
@@ -199,7 +214,7 @@ func renderList[T any](
 			return err
 		}
 	}
-	render.ProblemsHuman(app.ErrOut, app.Style, problems)
+	problemsFn(app.ErrOut, app.Style, problems)
 	return nil
 }
 

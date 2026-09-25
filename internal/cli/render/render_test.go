@@ -127,7 +127,7 @@ func TestLintJSON_Envelope(t *testing.T) {
 		Location: "bad.md", LocationIsPath: true, Message: "unterminated",
 	}, {
 		EntityKind: core.LintEntityThread, EntityID: "6g0000000002", EntitySlug: "remote",
-		Message: "remote decode failed",
+		Location: "db://threads/6g0000000002", LocationIsPath: false, Message: "remote decode failed",
 	}}
 	if err := LintJSON(&out, results, problems); err != nil {
 		t.Fatal(err)
@@ -160,8 +160,38 @@ func TestLintJSON_Envelope(t *testing.T) {
 		t.Errorf("unreadable files must be included:\n%s", out.String())
 	}
 	if got.Unreadable[1].EntityKind != "thread" || got.Unreadable[1].EntityID != "6g0000000002" ||
-		got.Unreadable[1].Location != "" || got.Unreadable[1].Path != "" {
-		t.Errorf("pathless diagnostics must keep identity without inventing a path:\n%s", out.String())
+		got.Unreadable[1].Location != "db://threads/6g0000000002" || got.Unreadable[1].Path != "" {
+		t.Errorf("opaque diagnostics must keep location without inventing a path:\n%s", out.String())
+	}
+}
+
+func TestFindingsJSON_PreservesPortableUnreadableIdentity(t *testing.T) {
+	var out bytes.Buffer
+	problems := []core.LintLoadProblem{{
+		EntityKind: core.LintEntityAudit, EntityID: "6g0000000001", EntitySlug: "broken-audit",
+		Location: "db://audits/6g0000000001", LocationIsPath: false, Message: "remote decode failed",
+	}}
+	if err := FindingsJSON(&out, nil, problems); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		SchemaVersion string `json:"schema_version"`
+		Findings      []any  `json:"findings"`
+		Unreadable    []struct {
+			EntityKind string `json:"entity_kind"`
+			EntityID   string `json:"entity_id"`
+			EntitySlug string `json:"entity_slug"`
+			Location   string `json:"location"`
+			Path       string `json:"path"`
+			Message    string `json:"message"`
+		} `json:"unreadable"`
+	}
+	decodeStrict(t, out.Bytes(), &got)
+	if got.SchemaVersion != SchemaVersion || len(got.Unreadable) != 1 ||
+		got.Unreadable[0].EntityKind != "audit" || got.Unreadable[0].EntityID != "6g0000000001" ||
+		got.Unreadable[0].EntitySlug != "broken-audit" || got.Unreadable[0].Location != "db://audits/6g0000000001" ||
+		got.Unreadable[0].Path != "" || got.Unreadable[0].Message != "remote decode failed" {
+		t.Fatalf("portable findings diagnostic lost identity or invented a path:\n%s", out.String())
 	}
 }
 

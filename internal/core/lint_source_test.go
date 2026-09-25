@@ -29,9 +29,9 @@ func (f *lintSourceFake) ReadLintEpics() ([]domain.Epic, []LintLoadProblem, erro
 	return nil, f.epicProblems, nil
 }
 
-func (f *lintSourceFake) ReadLintAudits() ([]AuditWithFindings, []LintLoadProblem, error) {
+func (f *lintSourceFake) ReadAuditSnapshot(string) (AuditSnapshot, error) {
 	f.auditReads++
-	return nil, f.auditProblems, nil
+	return AuditSnapshot{Problems: f.auditProblems}, nil
 }
 
 func (f *lintSourceFake) ReadLintResearch() ([]domain.Research, []LintLoadProblem, error) {
@@ -91,6 +91,59 @@ func TestLintRequiresDedicatedReadCapability(t *testing.T) {
 	_, _, err := NewService(nopStore{}).Lint()
 	if err == nil || !strings.Contains(err.Error(), "lint reads are unavailable") {
 		t.Fatalf("Lint error = %v; want missing lint capability", err)
+	}
+}
+
+func TestLintRejectsMissingAuditSnapshotCapability(t *testing.T) {
+	source := &lintSourceFake{}
+	dropAuditCapability := func(s *Service) { s.auditReads = nil }
+
+	_, _, err := NewService(nil, WithLintSource(source), dropAuditCapability).Lint()
+	if err == nil || !strings.Contains(err.Error(), "audit snapshot reads are unavailable") {
+		t.Fatalf("Lint error = %v; want missing audit snapshot capability", err)
+	}
+	if source.taskReads != 0 || source.epicReads != 0 || source.researchReads != 0 || source.auditReads != 0 {
+		t.Fatalf("lint read before capability validation: %+v", source)
+	}
+}
+
+func TestExplicitAuditSnapshotSourceWinsRegardlessOfOptionOrder(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opts func(*lintSourceFake, *auditSnapshotStub) []Option
+	}{
+		{"audit then lint", func(lint *lintSourceFake, audit *auditSnapshotStub) []Option {
+			return []Option{WithAuditSnapshotSource(audit), WithLintSource(lint)}
+		}},
+		{"lint then audit", func(lint *lintSourceFake, audit *auditSnapshotStub) []Option {
+			return []Option{WithLintSource(lint), WithAuditSnapshotSource(audit)}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			broad := &lintSourceFake{}
+			dedicated := &auditSnapshotStub{all: AuditSnapshot{Problems: []LintLoadProblem{{
+				EntityKind: LintEntityAudit, EntityID: "6g0000000009", Message: "dedicated source",
+			}}}}
+			svc := NewService(nil, tc.opts(broad, dedicated)...)
+
+			_, problems, err := svc.QueryFindings(FindingFilter{})
+			if err != nil || len(problems) != 1 || problems[0].Message != "dedicated source" {
+				t.Fatalf("QueryFindings problems = %+v, err = %v", problems, err)
+			}
+			if len(dedicated.calls) != 1 || dedicated.calls[0] != "" || broad.auditReads != 0 {
+				t.Fatalf("audit reads = dedicated:%q broad:%d", dedicated.calls, broad.auditReads)
+			}
+		})
+	}
+}
+
+func TestLintSourceSuppliesDefaultAuditSnapshotSource(t *testing.T) {
+	source := &lintSourceFake{}
+	if _, _, err := NewService(nil, WithLintSource(source)).QueryFindings(FindingFilter{}); err != nil {
+		t.Fatal(err)
+	}
+	if source.auditReads != 1 {
+		t.Fatalf("audit reads = %d, want one embedded default read", source.auditReads)
 	}
 }
 

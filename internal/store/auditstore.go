@@ -25,13 +25,12 @@ func (s *FS) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 
 // ListAuditsWithFindings is ListAudits' scan that also keeps the findings parsed
 // from each body (the same ParseFindings parseAudit already runs for the tally),
-// so Summary reads each audit once for both the tally and the findings rollup
-// instead of re-reading every body through GetAuditByPath.
+// so consumers read each audit once for both metadata and body-derived views.
 func (s *FS) ListAuditsWithFindings() ([]core.AuditWithFindings, []domain.FileProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
-	return scanDir(s.auditsDir, func(path string, content []byte) (core.AuditWithFindings, error) {
+	return scanDirWithReader(s.auditsDir, s.auditReadFile, func(path string, content []byte) (core.AuditWithFindings, error) {
 		a, findings, nearMisses, candidateIssues, err := parseAuditWithFindings(content, path)
 		return core.AuditWithFindings{Audit: a, Findings: findings, NearMisses: nearMisses,
 			CandidateIssues: candidateIssues}, err
@@ -47,27 +46,7 @@ func (s *FS) GetAudit(slug string) (domain.Audit, string, error) {
 	if err != nil {
 		return domain.Audit{}, "", err
 	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return domain.Audit{}, "", fmt.Errorf("read audit %s: %w", path, err)
-	}
-	a, err := parseAudit(content, path)
-	if err != nil {
-		return domain.Audit{}, "", fmt.Errorf("%s: %w", path, err)
-	}
-	_, body := splitFrontmatter(content)
-	return a, string(body), nil
-}
-
-// GetAuditByPath reads one audit directly by file path (bucket comes from
-// frontmatter under the flat layout, ADR-0003 §4) instead of re-resolving the
-// slug. The finding/lint sweeps use this to read each audit ListAudits already
-// found exactly once, which also closes the concurrent-edit window a re-resolve opens.
-func (s *FS) GetAuditByPath(path string) (domain.Audit, string, error) {
-	if err := s.rejectRepositoryPlannerCall(); err != nil {
-		return domain.Audit{}, "", err
-	}
-	content, err := os.ReadFile(path)
+	content, err := s.auditReadFile(path)
 	if err != nil {
 		return domain.Audit{}, "", fmt.Errorf("read audit %s: %w", path, err)
 	}

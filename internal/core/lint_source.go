@@ -34,9 +34,9 @@ type LintLoadProblem struct {
 // keeping the methods separate lets `audit lint` read audits without scanning
 // unrelated entity kinds.
 type LintSource interface {
+	AuditSnapshotSource
 	ReadLintTasks() ([]TaskWithBody, []LintLoadProblem, error)
 	ReadLintEpics() ([]domain.Epic, []LintLoadProblem, error)
-	ReadLintAudits() ([]AuditWithFindings, []LintLoadProblem, error)
 	ReadLintResearch() ([]domain.Research, []LintLoadProblem, error)
 }
 

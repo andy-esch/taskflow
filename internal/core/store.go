@@ -239,19 +239,13 @@ type AuditStore interface {
 	ListAudits() ([]domain.Audit, []domain.FileProblem, error)
 	// ListAuditsWithFindings is ListAudits' scan with the parsed findings kept
 	// alongside each audit, so Summary computes the audit tallies AND the findings
-	// rollup from a single read of every body instead of re-reading each one through
-	// GetAuditByPath. Same resilient-read contract: an unreadable file is a
+	// rollup from a single read of every body. Same resilient-read contract: an unreadable file is a
 	// FileProblem, not fatal.
 	ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error)
 	GetAudit(slug string) (audit domain.Audit, body string, err error)
 	// ResolveAuditPath returns an audit's file path from its slug/id, parse-free
 	// (see ResolveTaskPath).
 	ResolveAuditPath(slug string) (string, error)
-	// GetAuditByPath reads one audit directly by its file path (bucket read from
-	// frontmatter, ADR-0003 §4) rather than re-resolving the slug. The finding/lint
-	// sweeps use this to read each audit ListAudits already located exactly once,
-	// instead of an O(N^2) re-resolve+re-read per audit.
-	GetAuditByPath(path string) (audit domain.Audit, body string, err error)
 	MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error)
 	CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error)
 	// EditAudit hands the current file content to edit (the caller's editor) and

@@ -304,7 +304,11 @@ import (
 // required `path` and `message` fields remain: local filesystem diagnostics keep
 // their exact path, while a diagnostic from a pathless adapter emits an empty
 // compatibility path and does not invent filesystem semantics.
-const SchemaVersion = "1.73"
+// 1.74: ADDITIVE — `audit findings --json` unreadable records gain the same
+// entity kind, optional stable ID and slug, and optional adapter-neutral
+// location published by lint diagnostics. Existing `path` and `message` remain;
+// pathless adapters emit an empty compatibility path.
+const SchemaVersion = "1.74"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

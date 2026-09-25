@@ -160,14 +160,11 @@ func TestService_Summary_ReadyToClose(t *testing.T) {
 	}
 }
 
-// countingAuditStore wraps fakeStore to count how each audit-read path is hit, so
-// a test can prove Summary reads every audit body exactly once (via the single
-// ListAuditsWithFindings sweep) and never re-reads through GetAuditByPath — the H2
-// regression guard.
+// countingAuditStore wraps fakeStore to prove Summary reads every audit body
+// exactly once through the body-aware ListAuditsWithFindings sweep.
 type countingAuditStore struct {
 	fakeStore
-	listWithFindings int            // ListAuditsWithFindings call count
-	byPath           map[string]int // GetAuditByPath reads, per path
+	listWithFindings int
 }
 
 func (c *countingAuditStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error) {
@@ -175,17 +172,8 @@ func (c *countingAuditStore) ListAuditsWithFindings() ([]AuditWithFindings, []do
 	return c.fakeStore.ListAuditsWithFindings()
 }
 
-func (c *countingAuditStore) GetAuditByPath(path string) (domain.Audit, string, error) {
-	if c.byPath == nil {
-		c.byPath = map[string]int{}
-	}
-	c.byPath[path]++
-	return c.fakeStore.GetAuditByPath(path)
-}
-
 // TestService_Summary_ReadsEachAuditOnce pins H2: Summary computes the audit
-// tallies AND the findings rollup from ONE sweep of the audit bodies — it must
-// never re-read a body through GetAuditByPath the way it did before the fix.
+// tallies AND the findings rollup from ONE sweep of the audit bodies.
 func TestService_Summary_ReadsEachAuditOnce(t *testing.T) {
 	store := &countingAuditStore{fakeStore: fakeStore{
 		audits: []domain.Audit{
@@ -201,12 +189,10 @@ func TestService_Summary_ReadsEachAuditOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// One scan, zero re-reads.
+	// One scan; the removed path-keyed audit port makes a second per-file read
+	// impossible at the application boundary.
 	if store.listWithFindings != 1 {
 		t.Errorf("ListAuditsWithFindings called %d times, want exactly 1", store.listWithFindings)
-	}
-	if len(store.byPath) != 0 {
-		t.Errorf("Summary must not re-read any audit via GetAuditByPath, got %v", store.byPath)
 	}
 	// And the rollup is still correct: S1 (gateway, open) + M1 (ingest, open) are
 	// actionable; H1 is fixed, so Open == 2 across the two audits.

@@ -68,9 +68,6 @@ func (nopStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProb
 func (nopStore) GetAudit(string) (domain.Audit, string, error) {
 	return domain.Audit{}, "", domain.ErrNotFound
 }
-func (nopStore) GetAuditByPath(string) (domain.Audit, string, error) {
-	return domain.Audit{}, "", domain.ErrNotFound
-}
 func (nopStore) MoveAudit(string, domain.AuditBucket, bool) (domain.Audit, error) {
 	return domain.Audit{}, nil
 }
@@ -148,18 +145,6 @@ func (f *fakeStore) GetAudit(slug string) (domain.Audit, string, error) {
 	return domain.Audit{}, "", domain.ErrNotFound
 }
 
-// GetAuditByPath mirrors the real store's read-by-path: find the seeded audit
-// whose .Path matches and return its body (auditBodies stays slug-keyed, so seed
-// audits set .Path — typically to the slug — for the two keys to coincide).
-func (f *fakeStore) GetAuditByPath(path string) (domain.Audit, string, error) {
-	for _, a := range f.audits {
-		if a.Path == path {
-			return a, f.auditBodies[a.Slug], nil
-		}
-	}
-	return domain.Audit{}, "", domain.ErrNotFound
-}
-
 func (f *fakeStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 	return f.tasks, f.problems, nil
 }
@@ -179,8 +164,7 @@ func (f *fakeStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 }
 
 // ListAuditsWithFindings mirrors the real store: one scan returning each seeded
-// audit alongside the findings parsed from its (slug-keyed) body — the single read
-// Summary's findings rollup now consumes instead of a GetAuditByPath re-read.
+// audit alongside the findings parsed from its (slug-keyed) body.
 func (f *fakeStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error) {
 	out := make([]AuditWithFindings, 0, len(f.audits))
 	for _, a := range f.audits {
@@ -191,9 +175,22 @@ func (f *fakeStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.File
 	}
 	return out, f.auditProblems, nil
 }
-func (f *fakeStore) ReadLintAudits() ([]AuditWithFindings, []LintLoadProblem, error) {
+func (f *fakeStore) ReadAuditSnapshot(selector string) (AuditSnapshot, error) {
+	if selector != "" {
+		a, body, err := f.GetAudit(selector)
+		if err != nil {
+			return AuditSnapshot{}, err
+		}
+		findings := domain.ParseFindings(body)
+		return AuditSnapshot{Audits: []AuditWithFindings{{
+			Audit: a, Findings: findings, NearMisses: domain.NearMissFindingHeaders(body),
+			CandidateIssues: domain.LintCandidateTasks(body, findings),
+		}}}, nil
+	}
 	records, problems, err := f.ListAuditsWithFindings()
-	return records, testLintLoadProblems(LintEntityAudit, problems), err
+	return AuditSnapshot{
+		Audits: records, Problems: testLintLoadProblems(LintEntityAudit, problems),
+	}, err
 }
 func (f *fakeStore) ListResearch() ([]domain.Research, []domain.FileProblem, error) {
 	return f.research, f.researchProblems, nil

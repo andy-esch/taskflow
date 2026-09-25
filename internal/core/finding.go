@@ -147,49 +147,32 @@ type FindingFilter struct {
 	Component string
 }
 
-// QueryFindings parses findings across every audit (or just f.Audit) and returns
-// those matching the filter, in (audit order, document order). Per-file load
-// problems are returned separately so a single unreadable audit doesn't sink the
-// whole query — the same resilient-read contract as ListTasks/ListAudits.
-func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []domain.FileProblem, error) {
-	var (
-		out      []AuditFinding
-		problems []domain.FileProblem
-	)
-	collect := func(id, slug, bucket, body string) {
-		for _, fd := range domain.ParseFindings(body) {
-			if findingMatches(fd, f) {
-				out = append(out, AuditFinding{Finding: fd, Audit: slug, AuditID: id, Bucket: bucket})
-			}
-		}
+// QueryFindings selects findings from one portable audit snapshot (or just the
+// audit resolved by f.Audit), in (audit order, document order). The snapshot
+// keeps metadata, parsed findings, and failed-record identity tied to the same
+// adapter read; core never follows a persistence location to reread a body.
+func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []LintLoadProblem, error) {
+	if isNilCapability(s.auditReads) {
+		return nil, nil, fmt.Errorf("audit snapshot reads are unavailable from this service")
 	}
-
-	if f.Audit != "" {
-		a, body, err := s.store.GetAudit(f.Audit) // resolves the slug; ErrNotFound/Ambiguous propagate
-		if err != nil {
-			return nil, nil, err
-		}
-		collect(a.CanonicalID(), a.Slug, string(a.Bucket), body)
-		return out, nil, nil
-	}
-
-	audits, probs, err := s.store.ListAudits()
+	snapshot, err := s.auditReads.ReadAuditSnapshot(f.Audit)
 	if err != nil {
 		return nil, nil, err
 	}
-	problems = probs
-	for _, a := range audits {
-		// Read by the path ListAudits already resolved, not GetAudit(a.Slug):
-		// re-resolving every slug across all 3 bucket dirs per audit is the O(N^2)
-		// sweep M16 flagged, and re-resolving also reopens a concurrent-edit window.
-		_, body, err := s.store.GetAuditByPath(a.Path)
-		if err != nil {
-			problems = append(problems, domain.FileProblem{Path: a.Path, Message: err.Error()})
-			continue
+	audits := snapshot.Audits
+
+	var out []AuditFinding
+	for _, record := range audits {
+		for _, fd := range record.Findings {
+			if findingMatches(fd, f) {
+				out = append(out, AuditFinding{
+					Finding: fd, Audit: record.Audit.Slug, AuditID: record.Audit.CanonicalID(),
+					Bucket: string(record.Audit.Bucket),
+				})
+			}
 		}
-		collect(a.CanonicalID(), a.Slug, string(a.Bucket), body)
 	}
-	return out, problems, nil
+	return out, snapshot.Problems, nil
 }
 
 // SetFindingStatus stamps one finding's status in place, through the audit body-replace
@@ -266,9 +249,8 @@ func (s *Service) EditFinding(slug, code string, edit FindingEdit, dryRun bool) 
 
 // AuditLintIssues is the single audit check-set, shared by `audit lint` and the
 // top-level `lint` roster so the two cannot drift. Findings and near-misses arrive
-// already derived because the repository sweep reads each audit once
-// (ListAuditsWithFindings), while the single-audit path derives both from the body
-// it just fetched.
+// already derived from the same AuditSnapshot source read for both repository
+// sweeps and single-audit queries.
 //
 // nearMisses is a separate input rather than something recomputed from findings
 // because a dropped finding is by construction ABSENT from findings — the parsed
@@ -338,30 +320,15 @@ func (s *Service) LintAudits(slug string) ([]LintResult, []LintLoadProblem, erro
 		results  []LintResult
 		problems []LintLoadProblem
 	)
-	check := func(a domain.Audit, body string) {
-		findings := domain.ParseFindings(body)
-		iss := AuditLintIssues(a, findings, domain.NearMissFindingHeaders(body), domain.LintCandidateTasks(body, findings))
-		if len(iss) > 0 {
-			results = append(results, LintResult{Slug: a.Slug, Issues: iss})
-		}
+	if isNilCapability(s.auditReads) {
+		return nil, nil, fmt.Errorf("audit snapshot reads are unavailable from this service")
 	}
-	if slug != "" {
-		a, body, err := s.store.GetAudit(slug)
-		if err != nil {
-			return nil, nil, err
-		}
-		check(a, body)
-		return results, nil, nil
-	}
-	if isNilCapability(s.lintReads) {
-		return nil, nil, fmt.Errorf("repository lint reads are unavailable from this store")
-	}
-	audits, probs, err := s.lintReads.ReadLintAudits()
+	snapshot, err := s.auditReads.ReadAuditSnapshot(slug)
 	if err != nil {
 		return nil, nil, err
 	}
-	problems = probs
-	for _, record := range audits {
+	problems = snapshot.Problems
+	for _, record := range snapshot.Audits {
 		iss := AuditLintIssues(record.Audit, record.Findings, record.NearMisses, record.CandidateIssues)
 		if len(iss) > 0 {
 			results = append(results, LintResult{Slug: record.Audit.Slug, Issues: iss})

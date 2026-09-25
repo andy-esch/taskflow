@@ -1,11 +1,49 @@
 package core
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+type auditSnapshotStub struct {
+	all       AuditSnapshot
+	selected  map[string]AuditSnapshot
+	selectErr map[string]error
+	calls     []string
+}
+
+type countingAuditSnapshotStore struct {
+	*fakeStore
+	snapshotReads int
+	getAuditReads int
+}
+
+func (s *countingAuditSnapshotStore) ReadAuditSnapshot(selector string) (AuditSnapshot, error) {
+	s.snapshotReads++
+	return s.fakeStore.ReadAuditSnapshot(selector)
+}
+
+func (s *countingAuditSnapshotStore) GetAudit(selector string) (domain.Audit, string, error) {
+	s.getAuditReads++
+	return s.fakeStore.GetAudit(selector)
+}
+
+func (s *auditSnapshotStub) ReadAuditSnapshot(selector string) (AuditSnapshot, error) {
+	s.calls = append(s.calls, selector)
+	if selector == "" {
+		return s.all, nil
+	}
+	if err := s.selectErr[selector]; err != nil {
+		return AuditSnapshot{}, err
+	}
+	if snapshot, ok := s.selected[selector]; ok {
+		return snapshot, nil
+	}
+	return AuditSnapshot{}, domain.ErrNotFound
+}
 
 const gatewayBody = `# Audit: gateway
 
@@ -24,9 +62,6 @@ const ingestBody = `# Audit: ingest
 
 func findingsRepo() *fakeStore {
 	return &fakeStore{
-		// .Path mirrors what ListAudits populates; finding sweeps now read by it.
-		// Keying Path to the slug lets the slug-keyed auditBodies map serve both
-		// GetAudit (single-audit) and GetAuditByPath (the cross-audit sweep).
 		audits: []domain.Audit{
 			{ID: "6fjangd7kvh5", FilenameID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Path: "2026-06-14-gateway", Bucket: domain.AuditOpen},
 			{ID: "6fjangd7kvh6", FilenameID: "6fjangd7kvh6", Slug: "2026-06-10-ingest", Path: "2026-06-10-ingest", Bucket: domain.AuditClosed},
@@ -58,6 +93,109 @@ func TestQueryFindings_CrossAudit_NoFilter(t *testing.T) {
 	if got[0].Audit != "2026-06-14-gateway" || got[0].AuditID != "6fjangd7kvh5" || got[0].Bucket != "open" {
 		t.Errorf("finding should be tagged with its audit/bucket, got %+v", got[0])
 	}
+}
+
+func TestQueryFindings_DoesNotRereadRecordsThroughAggregateStore(t *testing.T) {
+	store := &countingAuditSnapshotStore{fakeStore: findingsRepo()}
+
+	got, problems, err := NewService(store).QueryFindings(FindingFilter{})
+	if err != nil || len(problems) != 0 || len(got) != 3 {
+		t.Fatalf("QueryFindings = %v / %+v / %v", codes(got), problems, err)
+	}
+	if store.snapshotReads != 1 || store.getAuditReads != 0 {
+		t.Fatalf("audit reads = snapshot:%d GetAudit:%d; want one snapshot and no fallback rereads",
+			store.snapshotReads, store.getAuditReads)
+	}
+}
+
+func TestQueryFindings_PathlessSnapshotPreservesIdentityAndDiagnostics(t *testing.T) {
+	source := &auditSnapshotStub{all: AuditSnapshot{
+		Audits: []AuditWithFindings{
+			{Audit: domain.Audit{ID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Bucket: domain.AuditOpen}, Findings: domain.ParseFindings(gatewayBody)},
+			{Audit: domain.Audit{ID: "6fjangd7kvh6", Slug: "2026-06-10-ingest", Bucket: domain.AuditClosed}, Findings: domain.ParseFindings(ingestBody)},
+		},
+		Problems: []LintLoadProblem{{
+			EntityKind: LintEntityAudit, EntityID: "6fjangd7kvh7", EntitySlug: "2026-06-01-broken", Message: "invalid frontmatter",
+			Location: "db://audits/6fjangd7kvh7", LocationIsPath: false,
+		}, {
+			EntityKind: LintEntityAudit, Message: "identity unavailable",
+			Location: "6fjangd7kvh8-path-looking-but-opaque", LocationIsPath: false,
+		}},
+	}}
+	got, problems, err := NewService(nil, WithAuditSnapshotSource(source)).QueryFindings(FindingFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(source.calls) != 1 || source.calls[0] != "" {
+		t.Fatalf("snapshot calls = %q, want one unfiltered read", source.calls)
+	}
+	if want := []string{"2026-06-14-gateway:S1", "2026-06-14-gateway:H1", "2026-06-10-ingest:M1"}; !equalStrings(codes(got), want) {
+		t.Fatalf("findings = %v, want %v", codes(got), want)
+	}
+	if got[0].AuditID != "6fjangd7kvh5" || got[0].Bucket != "open" {
+		t.Errorf("portable finding attribution lost: %+v", got[0])
+	}
+	if len(problems) != 2 || problems[0].EntityID != "6fjangd7kvh7" ||
+		problems[0].EntitySlug != "2026-06-01-broken" || problems[0].Location != "db://audits/6fjangd7kvh7" ||
+		problems[0].LocationIsPath || problems[1].EntityID != "" || problems[1].EntitySlug != "" ||
+		problems[1].Location != "6fjangd7kvh8-path-looking-but-opaque" || problems[1].LocationIsPath {
+		t.Fatalf("portable unreadable evidence = %+v", problems)
+	}
+}
+
+func TestQueryFindings_DelegatesSingleAuditResolutionToSnapshot(t *testing.T) {
+	gateway := AuditSnapshot{Audits: []AuditWithFindings{{
+		Audit:    domain.Audit{ID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Bucket: domain.AuditOpen},
+		Findings: domain.ParseFindings(gatewayBody),
+	}}}
+	source := &auditSnapshotStub{
+		selected: map[string]AuditSnapshot{"gateway": gateway},
+		selectErr: map[string]error{
+			"ambiguous": errors.Join(errors.New("two audit matches"), domain.ErrAmbiguous),
+		},
+	}
+	svc := NewService(nil, WithAuditSnapshotSource(source))
+	got, problems, err := svc.QueryFindings(FindingFilter{Audit: "gateway"})
+	if err != nil || len(problems) != 0 || len(got) != 2 {
+		t.Fatalf("single pathless audit = %+v / %+v / %v", got, problems, err)
+	}
+	if len(source.calls) != 1 || source.calls[0] != "gateway" {
+		t.Fatalf("snapshot calls = %q, want selector-preserving read", source.calls)
+	}
+	if lint, lintProblems, err := svc.LintAudits("gateway"); err != nil || len(lint) != 0 || len(lintProblems) != 0 {
+		t.Fatalf("single pathless audit lint = %+v / %+v / %v", lint, lintProblems, err)
+	}
+	if len(source.calls) != 2 || source.calls[1] != "gateway" {
+		t.Fatalf("lint snapshot calls = %q, want the same selector-aware port", source.calls)
+	}
+	if _, _, err := svc.QueryFindings(FindingFilter{Audit: "missing"}); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("missing audit error = %v, want ErrNotFound", err)
+	}
+	if _, _, err := svc.QueryFindings(FindingFilter{Audit: "ambiguous"}); !errors.Is(err, domain.ErrAmbiguous) {
+		t.Fatalf("ambiguous audit error = %v, want ErrAmbiguous", err)
+	}
+}
+
+func TestAuditSnapshotConsumersRejectMissingCapabilityPrecisely(t *testing.T) {
+	svc := NewService(nil)
+	if _, _, err := svc.QueryFindings(FindingFilter{}); err == nil || !strings.Contains(err.Error(), "audit snapshot reads are unavailable") {
+		t.Fatalf("QueryFindings error = %v", err)
+	}
+	if _, _, err := svc.LintAudits("one-audit"); err == nil || !strings.Contains(err.Error(), "audit snapshot reads are unavailable") {
+		t.Fatalf("LintAudits error = %v", err)
+	}
+}
+
+func equalStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestQueryFindings_StatusFilter(t *testing.T) {

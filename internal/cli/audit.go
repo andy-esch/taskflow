@@ -13,6 +13,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/editor"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // auditVerbShort is the one-line help for an audit lifecycle verb, DERIVED from the
@@ -175,11 +176,12 @@ func newAuditFindingsCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := renderList(app, mode, lm.columns, findings, problems,
-				"findings", render.FindingColumns(), render.FindingsJSON, render.FindingsHuman); err != nil {
+			if err := renderListWithProblems(app, mode, lm.columns, findings, problems,
+				"findings", render.FindingColumns(), wire.ToLintLoadProblemsJSON,
+				render.FindingsJSON, render.FindingsHuman, render.LintProblemsHuman); err != nil {
 				return err
 			}
-			return problemsError(problems)
+			return portableProblemsError("audit", problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.FindingColumns()))
