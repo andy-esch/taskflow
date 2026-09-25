@@ -1,6 +1,6 @@
 module github.com/andy-esch/taskflow
 
-go 1.25.12
+go 1.26
 
 require (
 	charm.land/bubbles/v2 v2.2.1

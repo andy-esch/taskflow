@@ -98,7 +98,7 @@ func TestSpaceRegistryResolve_HealthyUnknownDuplicateAndBroken(t *testing.T) {
 				return
 			}
 			if domain.Classify(err) != tt.class || !strings.Contains(err.Error(), tt.text) {
-				t.Fatalf("Resolve error = %v (class %q), want class %q containing %q", err, domain.Classify(err), tt.class, tt.text)
+				t.Fatalf("Resolve error = %v (class %v), want class %v containing %q", err, domain.Classify(err), tt.class, tt.text)
 			}
 		})
 	}
