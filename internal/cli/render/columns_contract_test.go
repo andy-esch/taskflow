@@ -250,11 +250,11 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 		})
 }
 
-func assertRegistryMatchesFullWire[T any](
+func assertRegistryMatchesFullWire[T, P any](
 	t *testing.T,
 	registry, listKey string,
 	cols []Column[T],
-	fullJSON func(io.Writer, []T, []domain.FileProblem) error,
+	fullJSON func(io.Writer, []T, []P) error,
 	fixtures []registryFixture[T],
 	exceptions map[string]projectionException,
 ) {

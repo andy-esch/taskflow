@@ -34,12 +34,16 @@ var errBadEntityID = fmt.Errorf("%w: invalid entity id", domain.ErrValidation)
 // FS reads and writes the flat, id-led entity directories under one planning
 // root: tasks/, epics/, audits/, research/, and threads/.
 type FS struct {
-	root                   string // the planning root; the write-lock (flock) is taken on this dir
-	tasksDir               string
-	epicsDir               string
-	auditsDir              string
-	researchDir            string
-	threadsDir             string
+	root        string // the planning root; the write-lock (flock) is taken on this dir
+	tasksDir    string
+	epicsDir    string
+	auditsDir   string
+	researchDir string
+	threadsDir  string
+	// auditReadFile is the single body-read seam behind audit snapshots and
+	// ordinary audit gets. Keeping it adapter-private lets contract tests prove
+	// selected-read isolation and one-open scans without changing the core port.
+	auditReadFile          func(string) ([]byte, error)
 	planningIdentityReader PlanningIdentityReader
 	mutationAuthorization  func() error
 }
@@ -79,23 +83,25 @@ func (s *FS) authorizeMutation() error {
 // the one the Service depends on; Fixer/Layout are the narrow fs/text ports the
 // primary adapters (lint --fix, the TUI watcher) wire to the FS directly.
 var (
-	_ core.Store           = (*FS)(nil)
-	_ core.LintSource      = (*FS)(nil)
-	_ core.TaskGraphSource = (*FS)(nil)
-	_ core.Fixer           = (*FS)(nil)
-	_ core.Linter          = (*FS)(nil)
-	_ core.Layout          = (*FS)(nil)
+	_ core.Store               = (*FS)(nil)
+	_ core.LintSource          = (*FS)(nil)
+	_ core.AuditSnapshotSource = (*FS)(nil)
+	_ core.TaskGraphSource     = (*FS)(nil)
+	_ core.Fixer               = (*FS)(nil)
+	_ core.Linter              = (*FS)(nil)
+	_ core.Layout              = (*FS)(nil)
 )
 
 // NewFS returns a store rooted at a planning directory (the dir holding tasks/).
 func NewFS(root string, opts ...FSOption) *FS {
 	store := &FS{
-		root:        root,
-		tasksDir:    filepath.Join(root, domain.TasksDir),
-		epicsDir:    filepath.Join(root, domain.EpicsDir),
-		auditsDir:   filepath.Join(root, domain.AuditsDir),
-		researchDir: filepath.Join(root, domain.ResearchDir),
-		threadsDir:  filepath.Join(root, domain.ThreadsDir),
+		root:          root,
+		tasksDir:      filepath.Join(root, domain.TasksDir),
+		epicsDir:      filepath.Join(root, domain.EpicsDir),
+		auditsDir:     filepath.Join(root, domain.AuditsDir),
+		researchDir:   filepath.Join(root, domain.ResearchDir),
+		threadsDir:    filepath.Join(root, domain.ThreadsDir),
+		auditReadFile: os.ReadFile,
 	}
 	for _, opt := range opts {
 		opt(store)

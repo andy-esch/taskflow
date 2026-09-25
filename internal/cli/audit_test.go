@@ -35,6 +35,44 @@ func setupAuditRepo(t *testing.T) string {
 	return root
 }
 
+func TestAuditFindingsJSONReportsIdentityAwareUnreadableAudits(t *testing.T) {
+	root := setupAuditRepo(t)
+	brokenID := testutil.TaskID("broken-audit")
+	brokenPath := filepath.Join(root, domain.AuditsDir, brokenID+"-broken-audit.md")
+	if err := os.WriteFile(brokenPath, []byte("---\nid: [unterminated\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resolvedBrokenPath, err := filepath.EvalSymlinks(brokenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, extra := range [][]string{nil, {"-c", "code,audit"}} {
+		args := append([]string{"-C", root, "audit", "findings", "--json"}, extra...)
+		res, runErr := runRootStreams(t, args...)
+		if runErr == nil || ExitCode(runErr) != 11 {
+			t.Fatalf("args %v: unreadable audit error = %v, want exit 11", args, runErr)
+		}
+		var envelope struct {
+			Unreadable []struct {
+				EntityKind string `json:"entity_kind"`
+				EntityID   string `json:"entity_id"`
+				EntitySlug string `json:"entity_slug"`
+				Location   string `json:"location"`
+				Path       string `json:"path"`
+			} `json:"unreadable"`
+		}
+		if err := json.Unmarshal([]byte(res.Out), &envelope); err != nil {
+			t.Fatalf("args %v: decode output: %v\n%s", args, err, res.Out)
+		}
+		if len(envelope.Unreadable) != 1 || envelope.Unreadable[0].EntityKind != "audit" ||
+			envelope.Unreadable[0].EntityID != brokenID || envelope.Unreadable[0].EntitySlug != "broken-audit" ||
+			envelope.Unreadable[0].Location != resolvedBrokenPath || envelope.Unreadable[0].Path != resolvedBrokenPath {
+			t.Fatalf("args %v: unreadable audit = %+v", args, envelope.Unreadable)
+		}
+	}
+}
+
 // TestAuditAppend_JSON pins the `audit_mutation` --json envelope (the contract the
 // schema_version 1.20 bump is for): a parseable envelope with the reloaded audit,
 // dry_run=false, and the echoed resulting body.

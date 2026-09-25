@@ -70,3 +70,34 @@ func threadProblemsError(problems []core.ThreadReadProblem) error {
 	return fmt.Errorf("%w: %d unreadable Thread record(s): %s",
 		domain.ErrValidation, len(problems), listed)
 }
+
+// portableProblemsError reports a partial adapter-neutral read without assuming
+// a filesystem path exists. Identity leads; location is only the final fallback.
+func portableProblemsError(kind string, problems []core.LintLoadProblem) error {
+	if len(problems) == 0 {
+		return nil
+	}
+	names := make([]string, 0, problemNamesInError)
+	for _, problem := range problems {
+		if len(names) == problemNamesInError {
+			break
+		}
+		name := problem.EntitySlug
+		if name == "" {
+			name = problem.EntityID
+		}
+		if name == "" && problem.Location != "" {
+			name = filepath.Base(problem.Location)
+		}
+		if name == "" {
+			name = "unidentified " + kind + " record"
+		}
+		names = append(names, name)
+	}
+	listed := strings.Join(names, ", ")
+	if extra := len(problems) - len(names); extra > 0 {
+		listed += fmt.Sprintf(", +%d more", extra)
+	}
+	return fmt.Errorf("%w: %d unreadable %s record(s): %s",
+		domain.ErrValidation, len(problems), kind, listed)
+}

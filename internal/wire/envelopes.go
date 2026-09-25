@@ -878,15 +878,19 @@ func ToFindingCreationEnvelope(r core.FindingCreationReceipt, ws WorkspaceJSON) 
 
 // FindingsEnvelope is `audit findings --json` (the finding-level query).
 type FindingsEnvelope struct {
-	SchemaVersion string               `json:"schema_version"`
-	Findings      []FindingJSON        `json:"findings"`
-	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+	SchemaVersion string                `json:"schema_version"`
+	Findings      []FindingJSON         `json:"findings"`
+	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
 }
 
 // ToFindingsEnvelope builds the `audit findings --json` envelope value: each parsed
-// finding tagged with its audit slug and bucket, plus any per-file load problems.
-func ToFindingsEnvelope(fs []core.AuditFinding, problems []domain.FileProblem) FindingsEnvelope {
-	e := FindingsEnvelope{SchemaVersion: SchemaVersion, Findings: make([]FindingJSON, 0, len(fs)), Unreadable: problems}
+// finding tagged with its audit slug and bucket, plus portable failed-record
+// diagnostics whose identity does not depend on a filesystem path.
+func ToFindingsEnvelope(fs []core.AuditFinding, problems []core.LintLoadProblem) FindingsEnvelope {
+	e := FindingsEnvelope{
+		SchemaVersion: SchemaVersion, Findings: make([]FindingJSON, 0, len(fs)),
+		Unreadable: ToLintLoadProblemsJSON(problems),
+	}
 	for _, f := range fs {
 		e.Findings = append(e.Findings, ToFindingJSON(f))
 	}
@@ -928,7 +932,7 @@ func ToFixEnvelope(results []domain.FixResult, problems []core.LintLoadProblem, 
 		rem = append(rem, LintTaskJSON{Slug: r.Slug, Issues: issues})
 	}
 	return FixEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results,
-		Unreadable: toLintLoadProblemsJSON(problems), Remaining: rem, Workspace: ws}
+		Unreadable: ToLintLoadProblemsJSON(problems), Remaining: rem, Workspace: ws}
 }
 
 // LintLoadProblemJSON is an adapter-neutral failed-record diagnostic shared by
@@ -945,7 +949,10 @@ type LintLoadProblemJSON struct {
 	Message    string `json:"message"`
 }
 
-func toLintLoadProblemsJSON(problems []core.LintLoadProblem) []LintLoadProblemJSON {
+// ToLintLoadProblemsJSON projects application diagnostics to their public wire
+// representation. It is shared by full and column-projected envelopes so both
+// preserve identical identity and local-path compatibility fields.
+func ToLintLoadProblemsJSON(problems []core.LintLoadProblem) []LintLoadProblemJSON {
 	out := make([]LintLoadProblemJSON, 0, len(problems))
 	for _, problem := range problems {
 		path := ""
@@ -976,7 +983,7 @@ func ToLintEnvelope(results []core.LintResult, problems []core.LintLoadProblem) 
 	if problems == nil {
 		problems = []core.LintLoadProblem{}
 	}
-	e := LintEnvelope{SchemaVersion: SchemaVersion, Unreadable: toLintLoadProblemsJSON(problems), Issues: make([]LintTaskJSON, 0, len(results))}
+	e := LintEnvelope{SchemaVersion: SchemaVersion, Unreadable: ToLintLoadProblemsJSON(problems), Issues: make([]LintTaskJSON, 0, len(results))}
 	for _, r := range results {
 		issues := r.Issues
 		if issues == nil {

@@ -88,7 +88,7 @@ func TestFS_FindingCounts_IgnoresFencesAndOpenIsh(t *testing.T) {
 
 // TestFS_ListAuditsWithFindings pins the single-scan port (H2): it returns the
 // same per-audit tally ListAudits does AND the findings parsed from that same body
-// read, in document order — so Summary needs no GetAuditByPath re-read.
+// read, in document order — so consumers need no per-audit reread.
 func TestFS_ListAuditsWithFindings(t *testing.T) {
 	root := t.TempDir()
 	body := "# Audit\n\n#### H1. open thing  · **Status:** open\n\n#### M2. fixed thing  · **Status:** fixed 2026-01-01\n"
@@ -149,37 +149,5 @@ func TestFS_MoveAudit(t *testing.T) {
 func TestFS_GetAudit_NotFound(t *testing.T) {
 	if _, _, err := NewFS(t.TempDir()).GetAudit("nope"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
-	}
-}
-
-// TestFS_GetAuditByPath pins M16: a read-by-path returns the same audit+body as
-// GetAudit and derives the bucket from the frontmatter (authoritative under the flat
-// layout — there is no parent-directory bucket).
-func TestFS_GetAuditByPath(t *testing.T) {
-	root := t.TempDir()
-	body := "# Audit\n\n#### H1. t  · **Status:** open\n"
-	writeAudit(t, root, "deferred", "2026-06-01-x.md", "---\narea: dispatcher\ndate: 2026-06-01\n---\n"+body)
-	fs := NewFS(root)
-
-	// Discover the path the way the sweeps do: ListAudits populates .Path.
-	audits, _, err := fs.ListAudits()
-	if err != nil || len(audits) != 1 {
-		t.Fatalf("ListAudits: %v (n=%d)", err, len(audits))
-	}
-	wantPath := audits[0].Path
-
-	a, gotBody, err := fs.GetAuditByPath(wantPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a.Slug != "2026-06-01-x" || a.Bucket != domain.AuditDeferred || a.Area != "dispatcher" {
-		t.Errorf("metadata wrong (bucket must come from the frontmatter): %+v", a)
-	}
-	if a.Findings != 1 || a.OpenFindings != 1 {
-		t.Errorf("findings=%d open=%d, want 1/1", a.Findings, a.OpenFindings)
-	}
-	// Body matches the GetAudit (slug-resolved) read of the same file.
-	if _, slugBody, err := fs.GetAudit("2026-06-01-x"); err != nil || gotBody != slugBody {
-		t.Errorf("by-path body diverges from by-slug: %q vs %q (%v)", gotBody, slugBody, err)
 	}
 }

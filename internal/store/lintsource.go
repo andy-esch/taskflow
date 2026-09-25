@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -20,9 +21,31 @@ func (s *FS) ReadLintEpics() ([]domain.Epic, []core.LintLoadProblem, error) {
 	return records, lintLoadProblems(core.LintEntityEpic, problems), err
 }
 
-func (s *FS) ReadLintAudits() ([]core.AuditWithFindings, []core.LintLoadProblem, error) {
+func (s *FS) ReadAuditSnapshot(selector string) (core.AuditSnapshot, error) {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return core.AuditSnapshot{}, err
+	}
+	if selector != "" {
+		path, err := s.resolveAudit(selector)
+		if err != nil {
+			return core.AuditSnapshot{}, err
+		}
+		content, err := s.auditReadFile(path)
+		if err != nil {
+			return core.AuditSnapshot{}, fmt.Errorf("read audit %s: %w", path, err)
+		}
+		a, findings, nearMisses, candidateIssues, err := parseAuditWithFindings(content, path)
+		if err != nil {
+			return core.AuditSnapshot{}, fmt.Errorf("%s: %w", path, err)
+		}
+		return core.AuditSnapshot{Audits: []core.AuditWithFindings{{
+			Audit: a, Findings: findings, NearMisses: nearMisses, CandidateIssues: candidateIssues,
+		}}}, nil
+	}
 	records, problems, err := s.ListAuditsWithFindings()
-	return records, lintLoadProblems(core.LintEntityAudit, problems), err
+	return core.AuditSnapshot{
+		Audits: records, Problems: lintLoadProblems(core.LintEntityAudit, problems),
+	}, err
 }
 
 func (s *FS) ReadLintResearch() ([]domain.Research, []core.LintLoadProblem, error) {

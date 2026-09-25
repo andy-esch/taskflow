@@ -30,6 +30,26 @@ func TestToSchemaEnvelopeStampsRevisionPolicy(t *testing.T) {
 	}
 }
 
+func TestToLintLoadProblemsJSONKeepsOpaqueLocationsOutOfPath(t *testing.T) {
+	got := ToLintLoadProblemsJSON([]core.LintLoadProblem{{
+		EntityKind: core.LintEntityAudit, EntityID: "6g0000000001", EntitySlug: "broken-audit",
+		Location: "db://audits/6g0000000001", LocationIsPath: false, Message: "remote decode failed",
+	}, {
+		EntityKind: core.LintEntityAudit, EntityID: "6g0000000002",
+		Location: "/repo/planning/audits/broken.md", LocationIsPath: true, Message: "local decode failed",
+	}})
+	if len(got) != 2 {
+		t.Fatalf("problems = %+v", got)
+	}
+	if got[0].EntityID != "6g0000000001" || got[0].EntitySlug != "broken-audit" ||
+		got[0].Location != "db://audits/6g0000000001" || got[0].Path != "" {
+		t.Fatalf("opaque problem = %+v", got[0])
+	}
+	if got[1].Location != "/repo/planning/audits/broken.md" || got[1].Path != got[1].Location {
+		t.Fatalf("local problem = %+v", got[1])
+	}
+}
+
 func TestJSONSchemaRejectsEnvelopeFromAnotherRevision(t *testing.T) {
 	schemaBytes, err := JSONSchema()
 	if err != nil {
@@ -319,7 +339,10 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToFindingsEnvelope([]core.AuditFinding{{
 				Finding: domain.Finding{Code: "S1", Title: "tighten the gateway", Status: "open", Effort: "S", Urgency: "soon"},
 				Audit:   "2026-01-01-area", Bucket: "open",
-			}}, nil))
+			}}, []core.LintLoadProblem{{
+				EntityKind: core.LintEntityAudit, EntityID: "6g0000000004", EntitySlug: "broken-audit",
+				Location: "db://audits/6g0000000004", LocationIsPath: false, Message: "remote decode failed",
+			}}))
 		}},
 		{"LintEnvelope", func(w io.Writer) error {
 			return emit(w, ToLintEnvelope([]core.LintResult{{Slug: "alpha", Issues: []domain.Issue{{Field: "epic", Message: "missing"}}}}, nil))

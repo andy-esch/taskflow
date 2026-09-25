@@ -17,6 +17,8 @@ import (
 type Service struct {
 	store               Store
 	lintReads           LintSource
+	auditReads          AuditSnapshotSource
+	auditReadsExplicit  bool
 	taskGraphs          TaskGraphSource
 	graphMutations      TaskGraphMutationStore
 	graphRepairs        TaskGraphRepairStore
@@ -57,12 +59,30 @@ func WithTaskGraphSource(source TaskGraphSource) Option {
 }
 
 // WithLintSource supplies the resilient multi-entity reads used by repository
-// lint. It is independent from Store so a remote or served adapter can provide
-// portable failed-record identity without implementing local path semantics.
+// lint. Its embedded audit snapshot becomes the default for audit consumers,
+// but never displaces an explicitly supplied WithAuditSnapshotSource regardless
+// of option order. It is independent from Store so a remote or served adapter
+// can provide portable failed-record identity without local path semantics.
 func WithLintSource(source LintSource) Option {
 	return func(s *Service) {
 		if !isNilCapability(source) {
 			s.lintReads = source
+			if !s.auditReadsExplicit {
+				s.auditReads = source
+			}
+		}
+	}
+}
+
+// WithAuditSnapshotSource supplies the body-aware, adapter-neutral audit read
+// used by finding queries and audit lint. It is separate from the broader lint
+// port so focused and remote adapters need not implement unrelated entity
+// reads merely to expose audits.
+func WithAuditSnapshotSource(source AuditSnapshotSource) Option {
+	return func(s *Service) {
+		if !isNilCapability(source) {
+			s.auditReads = source
+			s.auditReadsExplicit = true
 		}
 	}
 }
@@ -212,6 +232,9 @@ func NewService(store Store, opts ...Option) *Service {
 	if store != nil {
 		if source, ok := store.(LintSource); ok && !isNilCapability(source) {
 			s.lintReads = source
+		}
+		if source, ok := store.(AuditSnapshotSource); ok && !isNilCapability(source) {
+			s.auditReads = source
 		}
 		if source, ok := store.(TaskGraphSource); ok && !isNilCapability(source) {
 			s.taskGraphs = source
@@ -467,6 +490,9 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 	if isNilCapability(s.lintReads) {
 		return nil, nil, fmt.Errorf("repository lint reads are unavailable from this store")
 	}
+	if isNilCapability(s.auditReads) {
+		return nil, nil, fmt.Errorf("audit snapshot reads are unavailable from this service")
+	}
 	tasks, problems, err := s.lintReads.ReadLintTasks()
 	if err != nil {
 		return nil, nil, err
@@ -630,10 +656,11 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 	// `audit lint`, so a finding defect stayed invisible to the command the repo
 	// actually runs). The sweep reads each audit once, findings already parsed, and
 	// shares its check-set with `audit lint` via AuditLintIssues.
-	auditRecords, ap, err := s.lintReads.ReadLintAudits()
+	auditSnapshot, err := s.auditReads.ReadAuditSnapshot("")
 	if err != nil {
 		return nil, nil, err
 	}
+	auditRecords, ap := auditSnapshot.Audits, auditSnapshot.Problems
 	problems = append(problems, ap...)
 	auditIDs := make([]domain.StableIdentitySource, 0, len(auditRecords)+len(ap))
 	for _, record := range auditRecords {

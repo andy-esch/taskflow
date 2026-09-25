@@ -855,7 +855,7 @@ func AuditMutationJSON(w io.Writer, a domain.Audit, body string, dryRun bool, ws
 // FindingsJSON writes the structured finding-query result: each parsed finding
 // tagged with its audit slug and bucket, so a cross-audit query stays
 // self-describing. Mirrors the list envelopes' `unreadable` for per-file problems.
-func FindingsJSON(w io.Writer, fs []core.AuditFinding, problems []domain.FileProblem) error {
+func FindingsJSON(w io.Writer, fs []core.AuditFinding, problems []core.LintLoadProblem) error {
 	return wire.EncodeJSON(w, wire.ToFindingsEnvelope(fs, problems))
 }
 

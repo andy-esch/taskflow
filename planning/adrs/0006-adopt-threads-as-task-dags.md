@@ -1130,6 +1130,13 @@ a Thread. The corrected adapter boundary is:
    `FileProblem` conversion once around its existing resilient scans, while local fix and guarded
    mutation flows retain exact-path diagnostics. Schema 1.73 adds kind, identity, and location to
    lint/fix unreadable records and retains `path` as a local-filesystem compatibility field.
+   Task [`6gcwcf7gjayh`](../tasks/6gcwcf7gjayh-make-finding-queries-consume-a-portable-audit-snapshot.md)
+   extracts audit reads from that broad lint capability into `AuditSnapshotSource`. An empty
+   selector returns one resilient body-aware scan; a non-empty selector preserves ordinary audit
+   reference resolution while returning a one-record snapshot. `QueryFindings` consumes parsed
+   findings and portable problems directly, so no core path lookup or second body read remains.
+   `GetAuditByPath` is removed from the application port, and schema 1.74 extends the lint/fix
+   diagnostic shape to `audit findings --json` without inventing a path for remote adapters.
 
 This split is deliberately smaller than a repository abstraction redesign. It establishes the port
 and projection seams needed by additional interfaces while leaving concrete storage, HTTP transport,

@@ -1,7 +1,10 @@
 package store
 
 import (
+	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/core"
@@ -27,7 +30,8 @@ func TestFSLintSourceTranslatesLocalProblemsAtAdapterBoundary(t *testing.T) {
 	fs := NewFS(root)
 	_, taskProblems, taskErr := fs.ReadLintTasks()
 	_, epicProblems, epicErr := fs.ReadLintEpics()
-	_, auditProblems, auditErr := fs.ReadLintAudits()
+	auditSnapshot, auditErr := fs.ReadAuditSnapshot("")
+	auditProblems := auditSnapshot.Problems
 	_, researchProblems, researchErr := fs.ReadLintResearch()
 	for kind, err := range map[core.LintEntityKind]error{
 		core.LintEntityTask: taskErr, core.LintEntityEpic: epicErr,
@@ -57,5 +61,55 @@ func TestFSLintSourceTranslatesLocalProblemsAtAdapterBoundary(t *testing.T) {
 			got.Location != paths[kind] || !got.LocationIsPath || got.Message == "" {
 			t.Errorf("%s problem = %+v; want id=%q slug=%q path=%q", kind, got, want.id, want.slug, paths[kind])
 		}
+	}
+}
+
+func TestFSAuditSnapshotPreservesSingleAuditResolutionSemantics(t *testing.T) {
+	root := t.TempDir()
+	writeAudit(t, root, "open", "2026-09-20-shared-alpha.md", "---\narea: cli\ndate: 2026-09-20\n---\n\n#### H1. Alpha\n**Status:** open\n")
+	writeAudit(t, root, "closed", "2026-09-21-shared-beta.md", "---\narea: cli\ndate: 2026-09-21\n---\n\n#### M1. Beta\n**Status:** fixed\n")
+	writeAudit(t, root, "open", "2026-09-22-unrelated-corrupt.md", "---\nid: [unterminated\n---\n")
+	fs := NewFS(root)
+	reads := map[string]int{}
+	fs.auditReadFile = func(path string) ([]byte, error) {
+		reads[path]++
+		return os.ReadFile(path)
+	}
+
+	snapshot, err := fs.ReadAuditSnapshot("shared-alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Problems) != 0 || len(snapshot.Audits) != 1 || snapshot.Audits[0].Audit.Slug != "2026-09-20-shared-alpha" ||
+		len(snapshot.Audits[0].Findings) != 1 || snapshot.Audits[0].Findings[0].Code != "H1" {
+		t.Fatalf("single audit snapshot = %+v", snapshot)
+	}
+	if len(reads) != 1 {
+		t.Fatalf("selected snapshot opened %d sources: %+v", len(reads), reads)
+	}
+	for path, count := range reads {
+		if count != 1 || !strings.Contains(filepath.Base(path), "shared-alpha") {
+			t.Fatalf("selected snapshot reads = %+v; want shared-alpha exactly once", reads)
+		}
+	}
+
+	clear(reads)
+	all, err := fs.ReadAuditSnapshot("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all.Audits) != 2 || len(all.Problems) != 1 || len(reads) != 3 {
+		t.Fatalf("unfiltered snapshot = %+v, reads = %+v", all, reads)
+	}
+	for path, count := range reads {
+		if count != 1 {
+			t.Fatalf("unfiltered snapshot read %s %d times; want once", path, count)
+		}
+	}
+	if _, err := fs.ReadAuditSnapshot("shared"); !errors.Is(err, domain.ErrAmbiguous) {
+		t.Fatalf("ambiguous selector error = %v, want ErrAmbiguous", err)
+	}
+	if _, err := fs.ReadAuditSnapshot("missing"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("missing selector error = %v, want ErrNotFound", err)
 	}
 }
