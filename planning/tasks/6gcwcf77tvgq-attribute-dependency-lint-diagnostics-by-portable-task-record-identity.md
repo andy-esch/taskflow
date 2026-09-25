@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gcwcf77tvgq
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Stop semantic graph lint findings from disappearing or colliding when a task source has no filesystem path.
 effort: 1-2 days
@@ -13,6 +13,7 @@ created: "2026-09-23"
 depends_on: [6g5vm4efjcdv]
 updated_at: "2026-09-24"
 started_at: "2026-09-23"
+completed_at: "2026-09-24"
 ---
 
 # Attribute dependency lint diagnostics by portable task record identity
