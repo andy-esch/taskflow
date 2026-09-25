@@ -423,7 +423,7 @@ func TestServiceThreadPathRejectsMissingAndTypedNilCapabilities(t *testing.T) {
 		NewService(nil, WithThreadStore(&threadReadFake{}), WithThreadPathSource(paths)),
 	} {
 		if _, err := svc.ThreadPath("any-thread"); domain.Classify(err) != domain.ClassValidation {
-			t.Fatalf("path error = %v, class = %q", err, domain.Classify(err))
+			t.Fatalf("path error = %v, class = %v", err, domain.Classify(err))
 		}
 	}
 }

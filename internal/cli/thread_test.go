@@ -255,7 +255,7 @@ func TestThreadPathReturnsTypedErrorWithoutLocalPathCapability(t *testing.T) {
 	cmd := newThreadPathCmd(app)
 	cmd.SetArgs([]string{"remote-thread"})
 	if err := cmd.Execute(); domain.Classify(err) != domain.ClassValidation {
-		t.Fatalf("thread path error = %v, class = %q", err, domain.Classify(err))
+		t.Fatalf("thread path error = %v, class = %v", err, domain.Classify(err))
 	}
 }
 
