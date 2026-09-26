@@ -82,7 +82,7 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		fmt.Fprintf(w, "\n%s\n", warning)
 	}
 	if len(s.Problems) > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable file(s) (run `lint`)", len(s.Problems))))
+		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable planning record(s) (run `lint`)", len(s.Problems))))
 	}
 	return nil
 }
@@ -208,10 +208,13 @@ func renderCompactSpaceSummary(w io.Writer, st Style, summary core.Summary) {
 		warnings = append(warnings, fmt.Sprintf("task graph %s: %s", summary.GraphHealth, summary.GraphDetail))
 	}
 	if len(summary.Problems) > 0 {
-		warnings = append(warnings, plural(len(summary.Problems), "unreadable file"))
+		warnings = append(warnings, plural(len(summary.Problems), "unreadable planning record"))
 	}
 	if len(warnings) > 0 {
 		fmt.Fprintf(w, "  %s %s\n", st.Warn("!"), strings.Join(warnings, st.Dim(" · ")))
+	}
+	if len(summary.Problems) > 0 {
+		lintProblemsHuman(w, st, summary.Problems, "    ")
 	}
 }
 

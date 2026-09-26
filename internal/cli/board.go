@@ -28,10 +28,10 @@ func newBoardCmd(app *App) *cobra.Command {
 			} else if err := render.BoardHuman(app.Out, app.Style, b); err != nil {
 				return err
 			}
-			// Render first, then exit non-zero if any file was unreadable — the same
+			// Render first, then exit non-zero if any record was unreadable — the same
 			// contract as `status`/`list`, so an agent gating on `board` (incl. --json,
 			// which carries the unreadable array) never gets exit 0 on a broken tree.
-			return problemsError(b.Problems)
+			return portableProblemsError("task", b.Problems)
 		},
 	}
 }

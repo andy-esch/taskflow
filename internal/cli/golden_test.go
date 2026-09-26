@@ -224,9 +224,9 @@ func TestMachineGoldenUpdateRequiresRevisionAdvance(t *testing.T) {
 }
 
 func TestValidateMachineGoldenUpdate(t *testing.T) {
-	changed := []byte(`{"schema_version":"1.74","new_contract_field":true}`)
-	if err := validateMachineGoldenUpdate("schema_json", nil, changed, "1.74"); err == nil ||
-		!strings.Contains(err.Error(), "unchanged revision 1.74") {
+	changed := []byte(`{"schema_version":"1.75","new_contract_field":true}`)
+	if err := validateMachineGoldenUpdate("schema_json", nil, changed, "1.75"); err == nil ||
+		!strings.Contains(err.Error(), "unchanged revision 1.75") {
 		t.Fatalf("same-revision rewrite should be refused, got %v", err)
 	}
 	if err := validateMachineGoldenUpdate("schema_json", nil, changed, "1.72"); err != nil {
@@ -234,20 +234,20 @@ func TestValidateMachineGoldenUpdate(t *testing.T) {
 	}
 	wrongRevision := []byte(`{"schema_version":"1.72","new_contract_field":true}`)
 	if err := validateMachineGoldenUpdate("schema_json", nil, wrongRevision, "1.71"); err == nil ||
-		!strings.Contains(err.Error(), "running contract is 1.74") {
+		!strings.Contains(err.Error(), "running contract is 1.75") {
 		t.Fatalf("output from another revision should be refused, got %v", err)
 	}
-	if err := validateMachineGoldenUpdate("task_list_csv", nil, []byte("new header\n"), "1.74"); err != nil {
+	if err := validateMachineGoldenUpdate("task_list_csv", nil, []byte("new header\n"), "1.75"); err != nil {
 		t.Fatalf("non-JSON golden should not require a wire revision: %v", err)
 	}
 
-	before := []byte(`{"schema_version":"1.74","template":{"kind":"audit","name":"security","description":"same"},"body":"old"}`)
-	bodyChanged := []byte(`{"schema_version":"1.74","template":{"kind":"audit","name":"security","description":"same"},"body":"new"}`)
-	if err := validateMachineGoldenUpdate("template_show_security_json", before, bodyChanged, "1.74"); err != nil {
+	before := []byte(`{"schema_version":"1.75","template":{"kind":"audit","name":"security","description":"same"},"body":"old"}`)
+	bodyChanged := []byte(`{"schema_version":"1.75","template":{"kind":"audit","name":"security","description":"same"},"body":"new"}`)
+	if err := validateMachineGoldenUpdate("template_show_security_json", before, bodyChanged, "1.75"); err != nil {
 		t.Fatalf("ADR-0008 excludes a body-only Markdown template change from the JSON revision: %v", err)
 	}
-	metadataChanged := []byte(`{"schema_version":"1.74","template":{"kind":"audit","name":"security","description":"changed"},"body":"new"}`)
-	metadataRemoved := []byte(`{"schema_version":"1.74","template":{"name":"security","description":"same"},"body":"new"}`)
+	metadataChanged := []byte(`{"schema_version":"1.75","template":{"kind":"audit","name":"security","description":"changed"},"body":"new"}`)
+	metadataRemoved := []byte(`{"schema_version":"1.75","template":{"name":"security","description":"same"},"body":"new"}`)
 	for _, tc := range []struct {
 		name string
 		data []byte
@@ -256,8 +256,8 @@ func TestValidateMachineGoldenUpdate(t *testing.T) {
 		{name: "template_show_security_json", data: metadataRemoved},
 		{name: "template_show_but_actually_task_list_json", data: bodyChanged},
 	} {
-		if err := validateMachineGoldenUpdate(tc.name, before, tc.data, "1.74"); err == nil ||
-			!strings.Contains(err.Error(), "unchanged revision 1.74") {
+		if err := validateMachineGoldenUpdate(tc.name, before, tc.data, "1.75"); err == nil ||
+			!strings.Contains(err.Error(), "unchanged revision 1.75") {
 			t.Errorf("non-body contract change %s should be refused, got %v", tc.name, err)
 		}
 	}

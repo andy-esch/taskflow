@@ -6,8 +6,31 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
+
+func TestPortableProblemsErrorPrefersIdentityOverLocation(t *testing.T) {
+	err := portableProblemsError("planning", []core.LintLoadProblem{{
+		EntityKind: core.LintEntityTask, EntityID: "6gknown000001", EntitySlug: "known-task",
+		Location: "db://misleading/not-the-task", Message: "bad record",
+	}})
+	if err == nil || !strings.Contains(err.Error(), "known-task") || strings.Contains(err.Error(), "not-the-task") {
+		t.Fatalf("portable error should prefer explicit identity: %v", err)
+	}
+}
+
+func TestPortableProblemsErrorRetainsLocalRepairLocation(t *testing.T) {
+	err := portableProblemsError("task", []core.LintLoadProblem{{
+		EntityKind: core.LintEntityTask, EntitySlug: "known-task",
+		Location: "db://tasks/known-task", Path: "/planning/tasks/6gknown000001-known-task.md",
+		Message: "bad record",
+	}})
+	if err == nil || !strings.Contains(err.Error(), "known-task") ||
+		!strings.Contains(err.Error(), "6gknown000001-known-task.md") {
+		t.Fatalf("portable local error should retain identity and repair location: %v", err)
+	}
+}
 
 func TestTaskList_ReportsBadFileButShowsGood(t *testing.T) {
 	root := t.TempDir()

@@ -165,11 +165,17 @@ func TestService_Summary_ReadyToClose(t *testing.T) {
 type countingAuditStore struct {
 	fakeStore
 	listWithFindings int
+	listEpics        int
 }
 
 func (c *countingAuditStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error) {
 	c.listWithFindings++
 	return c.fakeStore.ListAuditsWithFindings()
+}
+
+func (c *countingAuditStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
+	c.listEpics++
+	return c.fakeStore.ListEpics()
 }
 
 // TestService_Summary_ReadsEachAuditOnce pins H2: Summary computes the audit
@@ -198,6 +204,109 @@ func TestService_Summary_ReadsEachAuditOnce(t *testing.T) {
 	// actionable; H1 is fixed, so Open == 2 across the two audits.
 	if s.Findings.Open != 2 || s.Findings.InProgress != 0 {
 		t.Errorf("findings rollup wrong: open=%d in_progress=%d, want 2/0", s.Findings.Open, s.Findings.InProgress)
+	}
+}
+
+func TestService_Summary_PreservesMixedPortableLoadDiagnostics(t *testing.T) {
+	store := &countingAuditStore{fakeStore: fakeStore{
+		epicProblems: []domain.FileProblem{{
+			Path: "/planning/epics/30-threads.md", EntityID: "30-threads", Message: "bad epic",
+		}},
+		auditProblems: []domain.FileProblem{{
+			Path: "/planning/audits/6gaudit00001-review.md", EntityID: "6gaudit00001",
+			EntitySlug: "review", Message: "bad audit",
+		}},
+	}}
+	source := &neutralTaskGraphSource{read: TaskGraphRead{Problems: []TaskGraphLoadProblem{{
+		TaskID: "6gtask000001", TaskSlug: "portable-task",
+		Location: "db://planning/tasks/row-7", Message: "bad task",
+	}}}}
+
+	summary, err := NewService(store, WithTaskGraphSource(source)).Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source.calls != 1 || store.listEpics != 1 || store.listWithFindings != 1 {
+		t.Fatalf("scan counts task/epic/audit = %d/%d/%d, want 1/1/1",
+			source.calls, store.listEpics, store.listWithFindings)
+	}
+	if len(summary.Problems) != 3 {
+		t.Fatalf("problems = %+v", summary.Problems)
+	}
+	wantKinds := []LintEntityKind{LintEntityTask, LintEntityEpic, LintEntityAudit}
+	wantIDs := []string{"6gtask000001", "30-threads", "6gaudit00001"}
+	for i, problem := range summary.Problems {
+		if problem.EntityKind != wantKinds[i] || problem.EntityID != wantIDs[i] {
+			t.Errorf("problem %d = %+v, want kind=%s id=%s", i, problem, wantKinds[i], wantIDs[i])
+		}
+	}
+	if got := summary.Problems[0]; got.Location != "db://planning/tasks/row-7" || got.LocationIsPath {
+		t.Errorf("pathless task diagnostic = %+v", got)
+	}
+	for _, got := range summary.Problems[1:] {
+		if !got.LocationIsPath || got.Location == "" {
+			t.Errorf("local diagnostic lost file location: %+v", got)
+		}
+	}
+}
+
+func TestService_Summary_CanonicalizesProblemsWithinEachEntityKind(t *testing.T) {
+	store := &countingAuditStore{fakeStore: fakeStore{
+		epicProblems: []domain.FileProblem{
+			{Path: "/planning/epics/31-z.md", EntityID: "31-z", Message: "bad z epic"},
+			{Path: "/planning/epics/30-a.md", EntityID: "30-a", Message: "bad a epic"},
+		},
+		auditProblems: []domain.FileProblem{
+			{Path: "/planning/audits/6g0000000006-z.md", EntityID: "6g0000000006", Message: "bad z audit"},
+			{Path: "/planning/audits/6g0000000005-a.md", EntityID: "6g0000000005", Message: "bad a audit"},
+		},
+	}}
+	source := &neutralTaskGraphSource{read: TaskGraphRead{Problems: []TaskGraphLoadProblem{
+		{TaskID: "6g0000000002", TaskSlug: "z-task", Message: "bad z task"},
+		{TaskID: "6g0000000001", TaskSlug: "a-task", Message: "bad a task"},
+	}}}
+
+	summary, err := NewService(store, WithTaskGraphSource(source)).Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []struct {
+		kind LintEntityKind
+		id   string
+	}{
+		{LintEntityTask, "6g0000000001"}, {LintEntityTask, "6g0000000002"},
+		{LintEntityEpic, "30-a"}, {LintEntityEpic, "31-z"},
+		{LintEntityAudit, "6g0000000005"}, {LintEntityAudit, "6g0000000006"},
+	}
+	if len(summary.Problems) != len(want) {
+		t.Fatalf("problems = %+v", summary.Problems)
+	}
+	for i, expected := range want {
+		if got := summary.Problems[i]; got.EntityKind != expected.kind || got.EntityID != expected.id {
+			t.Fatalf("problem %d = %+v, want kind=%s id=%s", i, got, expected.kind, expected.id)
+		}
+	}
+}
+
+func TestService_Summary_DoesNotInferIdentityFromLocations(t *testing.T) {
+	store := &countingAuditStore{fakeStore: fakeStore{epicProblems: []domain.FileProblem{{
+		Path: "/planning/epics/30-not-authoritative.md", Message: "bad epic",
+	}}}}
+	source := &neutralTaskGraphSource{read: TaskGraphRead{Problems: []TaskGraphLoadProblem{{
+		Location: "db://tasks/6g0000000009-wrong.md", Message: "bad task",
+	}}}}
+
+	summary, err := NewService(store, WithTaskGraphSource(source)).Summary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summary.Problems) != 2 {
+		t.Fatalf("problems = %+v", summary.Problems)
+	}
+	for _, problem := range summary.Problems {
+		if problem.EntityID != "" || problem.EntitySlug != "" {
+			t.Fatalf("location manufactured identity: %+v", problem)
+		}
 	}
 }
 

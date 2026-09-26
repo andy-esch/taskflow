@@ -753,6 +753,34 @@ func TestTaskGraphSameSourceSnapshotComparesUnreadableIdentity(t *testing.T) {
 	}
 }
 
+func TestTaskGraphUnreadableOrderingMatchesPortableProjection(t *testing.T) {
+	taskID := testutil.TaskID("dual-location-order")
+	problems := []TaskGraphLoadProblem{{
+		TaskID: taskID, TaskSlug: "same-task", Location: "/planning/tasks/local.md",
+		LocationIsPath: true, Path: "/planning/tasks/local.md", Message: "local failure",
+	}, {
+		TaskID: taskID, TaskSlug: "same-task", Location: "z://remote/source",
+		Path: "/planning/tasks/remote-copy.md", Message: "remote failure",
+	}}
+
+	graph := NewTaskGraphRead(TaskGraphRead{Problems: problems})
+	portable := taskGraphLoadProblems(problems)
+	if len(graph.loadProblems) != 2 || len(portable) != 2 {
+		t.Fatalf("graph=%+v portable=%+v", graph.loadProblems, portable)
+	}
+	for i := range graph.loadProblems {
+		graphProblem, portableProblem := graph.loadProblems[i], portable[i]
+		if graphProblem.TaskID != portableProblem.EntityID || graphProblem.TaskSlug != portableProblem.EntitySlug ||
+			graphProblem.Location != portableProblem.Location || graphProblem.LocationIsPath != portableProblem.LocationIsPath ||
+			taskGraphLocalPath(graphProblem) != portableProblem.Path || graphProblem.Message != portableProblem.Message {
+			t.Fatalf("problem %d order drifted: graph=%+v portable=%+v", i, graphProblem, portableProblem)
+		}
+	}
+	if portable[0].Location != "z://remote/source" {
+		t.Fatalf("path classification must precede location text in canonical order: %+v", portable)
+	}
+}
+
 func TestTaskGraphSameSourceSnapshotComparesOpaqueUnreadableRevisions(t *testing.T) {
 	firstID := testutil.TaskID("first-unreadable")
 	secondID := testutil.TaskID("second-unreadable")
@@ -780,6 +808,12 @@ func TestTaskGraphSameSourceSnapshotComparesOpaqueUnreadableRevisions(t *testing
 	changed[0].SourceVersion = "opaque-revision-changed"
 	if left.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Problems: changed})) {
 		t.Fatal("changed unreadable source revision compared as the same snapshot")
+	}
+
+	changedLocation := append([]TaskGraphLoadProblem(nil), problems...)
+	changedLocation[0].Location = "db://tasks/changed"
+	if left.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Problems: changedLocation})) {
+		t.Fatal("changed unreadable source location compared as the same snapshot")
 	}
 
 	missing := append([]TaskGraphLoadProblem(nil), problems...)

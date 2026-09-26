@@ -25,7 +25,7 @@ func newStatusCmd(app *App) *cobra.Command {
 			"JSON it appears as graph, or spaces[].summary.graph with --all. Graph health is\n" +
 			"informational on this read-only dashboard; use lint when validation exit status\n" +
 			"is required.\n\n" +
-			"Broken registry entries remain inline and informational. Unreadable planning files\n" +
+			"Broken registry entries remain inline and informational. Unreadable planning records\n" +
 			"or a selected tree that fails to load still render every available result, then make\n" +
 			"the command exit non-zero so automation can detect the partial result.",
 		Example:     "  tskflwctl status\n  tskflwctl status --json\n  tskflwctl status --all\n  tskflwctl status --all --json",
@@ -92,22 +92,33 @@ func newStatusCmd(app *App) *cobra.Command {
 // command. A selected tree that subsequently cannot be read is a partial planning-data
 // failure and must not look successful to automation.
 func statusAllProblemsError(overview core.SpaceOverview) error {
-	unreadableFiles := 0
+	unreadableRecords := 0
 	failedSpaces := 0
+	names := make([]string, 0, problemNamesInError)
 	for _, space := range overview.Spaces {
 		if space.Summary != nil {
-			unreadableFiles += len(space.Summary.Problems)
+			unreadableRecords += len(space.Summary.Problems)
+			for _, problem := range space.Summary.Problems {
+				if len(names) == problemNamesInError {
+					break
+				}
+				names = append(names, space.ID+":"+portableProblemName("planning", problem))
+			}
 		}
 		if space.Selected != nil && space.Failure != nil {
 			failedSpaces++
 		}
 	}
-	if unreadableFiles == 0 && failedSpaces == 0 {
+	if unreadableRecords == 0 && failedSpaces == 0 {
 		return nil
 	}
 	parts := make([]string, 0, 2)
-	if unreadableFiles > 0 {
-		parts = append(parts, fmt.Sprintf("%d file(s) with unreadable frontmatter", unreadableFiles))
+	if unreadableRecords > 0 {
+		detail := strings.Join(names, ", ")
+		if extra := unreadableRecords - len(names); extra > 0 {
+			detail += fmt.Sprintf(", +%d more", extra)
+		}
+		parts = append(parts, fmt.Sprintf("%d unreadable planning record(s): %s", unreadableRecords, detail))
 	}
 	if failedSpaces > 0 {
 		parts = append(parts, fmt.Sprintf("%d planning space(s) failed to load", failedSpaces))
@@ -127,8 +138,8 @@ func runCurrentStatus(app *App) error {
 	} else if err := render.SummaryHuman(app.Out, app.Style, s); err != nil {
 		return err
 	}
-	// Render the dashboard first, then exit non-zero if any file was unreadable —
+	// Render the dashboard first, then exit non-zero if any record was unreadable —
 	// matching the list/lint/audit contract so an agent gating on `status` (incl.
 	// --json, which carries the unreadable array) doesn't get exit 0 on a broken tree.
-	return problemsError(s.Problems)
+	return portableProblemsError("planning", s.Problems)
 }

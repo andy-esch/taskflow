@@ -82,17 +82,7 @@ func portableProblemsError(kind string, problems []core.LintLoadProblem) error {
 		if len(names) == problemNamesInError {
 			break
 		}
-		name := problem.EntitySlug
-		if name == "" {
-			name = problem.EntityID
-		}
-		if name == "" && problem.Location != "" {
-			name = filepath.Base(problem.Location)
-		}
-		if name == "" {
-			name = "unidentified " + kind + " record"
-		}
-		names = append(names, name)
+		names = append(names, portableProblemName(kind, problem))
 	}
 	listed := strings.Join(names, ", ")
 	if extra := len(problems) - len(names); extra > 0 {
@@ -100,4 +90,29 @@ func portableProblemsError(kind string, problems []core.LintLoadProblem) error {
 	}
 	return fmt.Errorf("%w: %d unreadable %s record(s): %s",
 		domain.ErrValidation, len(problems), kind, listed)
+}
+
+func portableProblemName(kind string, problem core.LintLoadProblem) string {
+	name := problem.EntitySlug
+	if name == "" {
+		name = problem.EntityID
+	}
+	path := problem.Path
+	if path == "" && problem.LocationIsPath {
+		path = problem.Location
+	}
+	if path != "" {
+		base := filepath.Base(path)
+		if name == "" {
+			name = base
+		} else {
+			name += " (" + base + ")"
+		}
+	} else if name == "" && problem.Location != "" {
+		name = problem.Location
+	}
+	if name == "" {
+		name = "unidentified " + kind + " record"
+	}
+	return name
 }

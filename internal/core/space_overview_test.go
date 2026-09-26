@@ -98,6 +98,34 @@ func TestSpaceOverviewUsesPlanningStoresGraphSnapshot(t *testing.T) {
 	}
 }
 
+func TestSpaceOverviewPreservesPathlessTaskLoadProblemIdentity(t *testing.T) {
+	root := "/planning"
+	registry := NewSpaceRegistryService(&fakeSpaceRegistryStore{entries: []SpaceEntryPoint{{
+		ID: "planning", PlanningID: "planning", Role: SpaceRoleDirect, State: SpaceStateOK, Root: root,
+	}}})
+	source := &fakeSpaceOverviewStore{stores: map[string]PlanningSummarySource{
+		root: &splitSummaryStore{fakeStore: &fakeStore{}, read: TaskGraphRead{Problems: []TaskGraphLoadProblem{{
+			TaskID: "6gpathless01", TaskSlug: "broken-task",
+			Location: "db://planning/tasks/1", Message: "decode failed",
+		}}}},
+	}}
+
+	overview, err := NewSpaceOverviewService(registry, source).Overview()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(overview.Spaces) != 1 || overview.Spaces[0].Summary == nil ||
+		len(overview.Spaces[0].Summary.Problems) != 1 {
+		t.Fatalf("overview = %+v", overview)
+	}
+	problem := overview.Spaces[0].Summary.Problems[0]
+	if problem.EntityKind != LintEntityTask || problem.EntityID != "6gpathless01" ||
+		problem.EntitySlug != "broken-task" || problem.Location != "db://planning/tasks/1" ||
+		problem.LocationIsPath {
+		t.Fatalf("cross-space diagnostic = %+v", problem)
+	}
+}
+
 func TestSpaceOverview_IsolatesBrokenAndUnreadableGroups(t *testing.T) {
 	registry := NewSpaceRegistryService(&fakeSpaceRegistryStore{entries: []SpaceEntryPoint{
 		{ID: "gone", PlanningID: "gone", State: SpaceStateMissing},
@@ -251,7 +279,10 @@ func TestSpaceOverviewRetainedSummaryOwnsMutableSnapshotData(t *testing.T) {
 			ByUrgency: []CountBy{{Key: "soon", Count: 1}},
 			Acute:     []AuditFinding{{Finding: domain.Finding{Code: "H1", Title: "original"}}},
 		},
-		Problems: []domain.FileProblem{{Path: "tasks/broken.md", Message: "original"}},
+		Problems: []LintLoadProblem{{
+			EntityKind: LintEntityTask, Location: "tasks/broken.md",
+			LocationIsPath: true, Message: "original",
+		}},
 	}
 	previous := SpaceOverview{Spaces: []SpaceSummary{{
 		ID: "planning", PlanningID: "plan", Summary: &previousSummary,

@@ -36,6 +36,9 @@ func TestBoard_ExitsNonZeroOnUnreadableFiles(t *testing.T) {
 	if err == nil {
 		t.Fatal("board must exit non-zero when a file is unreadable (the status/list agent-gating contract)")
 	}
+	if !strings.Contains(err.Error(), testutil.TaskID("broken")+"-broken.md") {
+		t.Fatalf("board error should retain the local repair filename: %v", err)
+	}
 	// The board still renders before the non-zero exit.
 	if !strings.Contains(out, "ready-to-start") {
 		t.Errorf("the board should still render before the non-zero exit:\n%s", out)
