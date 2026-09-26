@@ -200,6 +200,17 @@ func TestDashboardNeedsAttentionReportsGraphDegradation(t *testing.T) {
 	}
 }
 
+func TestDashboardNeedsAttentionReportsPathlessUnreadableRecord(t *testing.T) {
+	var d dashboard
+	d.setSummary(core.Summary{Problems: []core.LintLoadProblem{{
+		EntityKind: core.LintEntityTask, EntityID: "6gpathless001", Message: "decode failed",
+	}}}, &testStyles, false)
+	view := ansi.Strip(d.view(&testStyles, 120, 40))
+	if !strings.Contains(view, "1 unreadable planning record") || strings.Contains(view, "all clear") {
+		t.Fatalf("pathless unreadable record not reflected in dashboard attention:\n%s", view)
+	}
+}
+
 // dashAlignRepo writes two epics whose rollup counts differ in width ("0/1" vs
 // "0/12"), both dated, so the column-alignment of the epic ids is observable.
 func dashAlignRepo(t *testing.T) string {

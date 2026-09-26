@@ -281,7 +281,17 @@ adapter capabilities rather than leaked persistence.
   therefore come from one adapter snapshot; core never follows a source location to reread a body.
   An explicitly injected `AuditSnapshotSource` takes precedence over the audit capability embedded
   in `LintSource` regardless of service-option order; the broad lint source is only the default.
-  Schema 1.74 carries the same portable diagnostic shape through `audit findings --json`.
+  Schema 1.74 carries the same portable diagnostic shape through `audit findings --json`;
+  schema 1.75 carries it through graph-backed `board`, current `status`, and each loaded
+  cross-space `status --all` summary. Those dashboard projections preserve kind, identity,
+  neutral location, an independently supplied local repair path, and message without another
+  entity scan. Publication canonically orders diagnostics by kind and explicit fields rather than
+  inheriting adapter return order. Human cross-space status renders the space-qualified identity,
+  location/repair path, and message before returning the existing partial-result exit. The
+  aggregate `SummaryStore` remains a transitional local compatibility port: filesystem adapters
+  recover identity before returning `FileProblem`, and core only maps the supplied fields. A later
+  entity-read design pass owns replacing that aggregate contract rather than letting dashboard code
+  parse paths.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as

@@ -341,17 +341,17 @@ func (s Summary) SplitCounts() (active, archived []StatusCount) {
 
 // Summary is the at-a-glance project state for the dashboard.
 type Summary struct {
-	Counts        []StatusCount        // every status in display order (count may be 0)
-	InProgress    []domain.Task        // the in-progress working set
-	Epics         []EpicSummary        // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
-	OpenAudits    []domain.Audit       // audits still in the open bucket (actionable work)
-	ReadyToClose  int                  // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
-	Findings      FindingsRollup       // actionable audit findings (open/in-progress) aggregated by urgency + component
-	RevisitDue    int                  // deferred tasks whose revisit_at (snooze-until) date has arrived
-	BadEpicStatus int                  // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
-	Problems      []domain.FileProblem // unreadable files
-	GraphHealth   GraphHealth          // repository-wide task-DAG verdict from the same snapshot as Counts/InProgress
-	GraphDetail   string               // first cause + remedy when GraphHealth is not healthy
+	Counts        []StatusCount     // every status in display order (count may be 0)
+	InProgress    []domain.Task     // the in-progress working set
+	Epics         []EpicSummary     // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
+	OpenAudits    []domain.Audit    // audits still in the open bucket (actionable work)
+	ReadyToClose  int               // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
+	Findings      FindingsRollup    // actionable audit findings (open/in-progress) aggregated by urgency + component
+	RevisitDue    int               // deferred tasks whose revisit_at (snooze-until) date has arrived
+	BadEpicStatus int               // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
+	Problems      []LintLoadProblem // unreadable planning records
+	GraphHealth   GraphHealth       // repository-wide task-DAG verdict from the same snapshot as Counts/InProgress
+	GraphDetail   string            // first cause + remedy when GraphHealth is not healthy
 }
 
 // Summary composes a one-screen overview from a single scan of tasks + epics +
@@ -367,7 +367,7 @@ func summarize(store SummaryStore, taskGraphs TaskGraphSource, now time.Time) (S
 		return Summary{}, err
 	}
 	tasks := read.Tasks
-	p1 := taskGraphFileProblems(read.Problems)
+	p1 := taskGraphLoadProblems(read.Problems)
 	graph := NewTaskGraphRead(read)
 	epics, p2, err := store.ListEpics()
 	if err != nil {
@@ -432,6 +432,11 @@ func summarize(store SummaryStore, taskGraphs TaskGraphSource, now time.Time) (S
 			badEpicStatus++
 		}
 	}
+	problems := make([]LintLoadProblem, 0, len(p1)+len(p2)+len(p3))
+	problems = append(problems, p1...)
+	problems = append(problems, lintLoadProblemsFromFiles(LintEntityEpic, p2)...)
+	problems = append(problems, lintLoadProblemsFromFiles(LintEntityAudit, p3)...)
+	problems = canonicalLintLoadProblems(problems)
 	summary := Summary{
 		Counts:     ordered,
 		InProgress: inProgress,
@@ -447,7 +452,7 @@ func summarize(store SummaryStore, taskGraphs TaskGraphSource, now time.Time) (S
 		Findings:      rollupFindings(actionable),
 		RevisitDue:    revisitDue,
 		BadEpicStatus: badEpicStatus,
-		Problems:      append(append(p1, p2...), p3...),
+		Problems:      problems,
 		GraphHealth:   graph.Health(),
 	}
 	if summary.GraphHealth != GraphHealthy {
@@ -514,9 +519,14 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 	}
 	graphRead := TaskGraphRead{Tasks: taskRecords, Problems: make([]TaskGraphLoadProblem, 0, len(taskProblems))}
 	for _, problem := range taskProblems {
+		// Ordinary lint returns the original portable diagnostic directly. The graph
+		// copy exists only so an unreadable stable task identity can hard-block its
+		// dependents; graph-level unreadable diagnostics are intentionally filtered
+		// to avoid duplicate output. Do not suggest that location/path fields have a
+		// second observable pass-through here.
 		graphRead.Problems = append(graphRead.Problems, TaskGraphLoadProblem{
 			TaskID: problem.EntityID, TaskSlug: problem.EntitySlug,
-			Path: problem.Location, Message: problem.Message,
+			Message: problem.Message,
 		})
 	}
 	graph := NewTaskGraphRead(graphRead)
@@ -549,6 +559,9 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 				EntityKind: LintEntityThread, EntityID: problem.ThreadID,
 				EntitySlug: problem.ThreadSlug, Location: problem.Location,
 				LocationIsPath: problem.LocationIsPath, Message: problem.Message,
+			}
+			if problem.LocationIsPath {
+				loadProblem.Path = problem.Location
 			}
 			threadProblems = append(threadProblems, loadProblem)
 			problems = append(problems, loadProblem)

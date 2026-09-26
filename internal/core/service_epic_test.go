@@ -109,6 +109,7 @@ type fakeStore struct {
 	nopStore
 	tasks             []domain.Task
 	epics             []domain.Epic
+	epicProblems      []domain.FileProblem
 	audits            []domain.Audit
 	auditProblems     []domain.FileProblem
 	research          []domain.Research
@@ -130,7 +131,8 @@ func testLintLoadProblems(kind LintEntityKind, problems []domain.FileProblem) []
 	for _, problem := range problems {
 		out = append(out, LintLoadProblem{
 			EntityKind: kind, EntityID: problem.EntityID, EntitySlug: problem.EntitySlug,
-			Location: problem.Path, LocationIsPath: problem.Path != "", Message: problem.Message,
+			Location: problem.Path, LocationIsPath: problem.Path != "", Path: problem.Path,
+			Message: problem.Message,
 		})
 	}
 	return out
@@ -218,7 +220,7 @@ func (f *fakeStore) CreateAudit(a domain.Audit, body string, _ bool) (domain.Aud
 	return a, nil
 }
 func (f *fakeStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
-	return f.epics, nil, nil
+	return f.epics, f.epicProblems, nil
 }
 func (f *fakeStore) ReadLintEpics() ([]domain.Epic, []LintLoadProblem, error) {
 	records, problems, err := f.ListEpics()

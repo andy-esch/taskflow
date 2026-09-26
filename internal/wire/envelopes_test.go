@@ -37,8 +37,12 @@ func TestToLintLoadProblemsJSONKeepsOpaqueLocationsOutOfPath(t *testing.T) {
 	}, {
 		EntityKind: core.LintEntityAudit, EntityID: "6g0000000002",
 		Location: "/repo/planning/audits/broken.md", LocationIsPath: true, Message: "local decode failed",
+	}, {
+		EntityKind: core.LintEntityTask, EntityID: "6g0000000003",
+		Location: "db://tasks/3", Path: "/repo/planning/tasks/repair.md",
+		Message: "remote decode failed with a local repair copy",
 	}})
-	if len(got) != 2 {
+	if len(got) != 3 {
 		t.Fatalf("problems = %+v", got)
 	}
 	if got[0].EntityID != "6g0000000001" || got[0].EntitySlug != "broken-audit" ||
@@ -47,6 +51,9 @@ func TestToLintLoadProblemsJSONKeepsOpaqueLocationsOutOfPath(t *testing.T) {
 	}
 	if got[1].Location != "/repo/planning/audits/broken.md" || got[1].Path != got[1].Location {
 		t.Fatalf("local problem = %+v", got[1])
+	}
+	if got[2].Location != "db://tasks/3" || got[2].Path != "/repo/planning/tasks/repair.md" {
+		t.Fatalf("dual-location problem = %+v", got[2])
 	}
 }
 
@@ -126,7 +133,13 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 	}{
 		{"TasksEnvelope", func(w io.Writer) error { return emit(w, ToTasksEnvelope([]domain.Task{task, beta}, nil)) }},
 		{"BoardEnvelope", func(w io.Writer) error {
-			return emit(w, ToBoardEnvelope(core.Board{Columns: []core.BoardColumn{{Status: domain.StatusInProgress, Tasks: []domain.Task{task}}}}))
+			return emit(w, ToBoardEnvelope(core.Board{
+				Columns: []core.BoardColumn{{Status: domain.StatusInProgress, Tasks: []domain.Task{task}}},
+				Problems: []core.LintLoadProblem{{
+					EntityKind: core.LintEntityTask, EntityID: "6g0000000007",
+					Location: "remote:tasks/7", Message: "decode failed",
+				}},
+			}))
 		}},
 		{"TaskShowEnvelope", func(w io.Writer) error { return emit(w, ToTaskShowEnvelope(task, "# body")) }},
 		{"TaskInfoEnvelope", func(w io.Writer) error {
@@ -268,17 +281,26 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"SummaryEnvelope", func(w io.Writer) error {
 			return emit(w, ToSummaryEnvelope(core.Summary{
-				Counts:      []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
-				InProgress:  []domain.Task{task},
-				Epics:       []core.EpicSummary{epicSum},
+				Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
+				InProgress: []domain.Task{task},
+				Epics:      []core.EpicSummary{epicSum},
+				Problems: []core.LintLoadProblem{{
+					EntityKind: core.LintEntityTask, EntityID: "6g0000000008",
+					Location: "db://tasks/8", Message: "decode failed",
+				}},
 				GraphHealth: core.GraphDegraded,
 				GraphDetail: "one safe legacy dependency field remains",
 			}))
 		}},
 		{"StatusAllEnvelope", func(w io.Writer) error {
 			summary := core.Summary{
-				Counts:      []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
-				InProgress:  []domain.Task{task},
+				Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
+				InProgress: []domain.Task{task},
+				Problems: []core.LintLoadProblem{{
+					EntityKind: core.LintEntityAudit, EntitySlug: "broken-audit",
+					Location: "/repo/planning/audits/broken.md", LocationIsPath: true,
+					Message: "decode failed",
+				}},
 				GraphHealth: core.GraphBroken,
 				GraphDetail: "canonical dependency target is missing",
 			}

@@ -308,7 +308,11 @@ import (
 // entity kind, optional stable ID and slug, and optional adapter-neutral
 // location published by lint diagnostics. Existing `path` and `message` remain;
 // pathless adapters emit an empty compatibility path.
-const SchemaVersion = "1.74"
+// 1.75: ADDITIVE — `board --json`, `status --json`, and each loaded
+// `status --all --json` summary enrich unreadable records with entity kind,
+// optional stable ID and slug, and optional adapter-neutral location. Existing
+// `path` and `message` remain; pathless adapters emit an empty compatibility path.
+const SchemaVersion = "1.75"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

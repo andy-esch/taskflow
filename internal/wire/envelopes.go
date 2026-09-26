@@ -47,9 +47,9 @@ func ToTasksEnvelope(tasks []domain.Task, problems []domain.FileProblem) TasksEn
 
 // BoardEnvelope is `board --json`: the active-work pipeline, tasks grouped by status.
 type BoardEnvelope struct {
-	SchemaVersion string               `json:"schema_version"`
-	Columns       []BoardColumnJSON    `json:"columns"`
-	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+	SchemaVersion string                `json:"schema_version"`
+	Columns       []BoardColumnJSON     `json:"columns"`
+	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
 	// Graph is the repository-wide dependency-graph verdict, present only when it is
 	// not healthy. Degradation is latched at mutation time, so without it here an agent
 	// reads a clean board and meets the refusal later, mid-operation.
@@ -80,7 +80,7 @@ type BoardTaskJSON struct {
 // ToBoardEnvelope builds the `board --json` envelope value: each active status a
 // column, tasks projected to the same TaskJSON as `task list`.
 func ToBoardEnvelope(b core.Board) BoardEnvelope {
-	e := BoardEnvelope{SchemaVersion: SchemaVersion, Columns: make([]BoardColumnJSON, 0, len(b.Columns)), Unreadable: b.Problems}
+	e := BoardEnvelope{SchemaVersion: SchemaVersion, Columns: make([]BoardColumnJSON, 0, len(b.Columns)), Unreadable: ToLintLoadProblemsJSON(b.Problems)}
 	for _, c := range b.Columns {
 		col := BoardColumnJSON{Status: string(c.Status), Tasks: make([]BoardTaskJSON, 0, len(c.Tasks))}
 		for _, t := range c.Tasks {
@@ -253,14 +253,14 @@ type SummaryEnvelope struct {
 // SummaryJSON is the reusable, versionless dashboard payload. StatusAllEnvelope embeds
 // one beneath each logical space while owning the schema version at its top level.
 type SummaryJSON struct {
-	Counts        []StatusCountJSON    `json:"counts"`
-	InProgress    []TaskJSON           `json:"in_progress"`
-	Epics         []EpicJSON           `json:"epics"`
-	OpenAudits    []AuditJSON          `json:"open_audits,omitempty"`
-	Findings      *FindingsRollupJSON  `json:"findings,omitempty"`
-	RevisitDue    int                  `json:"revisit_due"`
-	BadEpicStatus int                  `json:"bad_epic_status"`
-	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+	Counts        []StatusCountJSON     `json:"counts"`
+	InProgress    []TaskJSON            `json:"in_progress"`
+	Epics         []EpicJSON            `json:"epics"`
+	OpenAudits    []AuditJSON           `json:"open_audits,omitempty"`
+	Findings      *FindingsRollupJSON   `json:"findings,omitempty"`
+	RevisitDue    int                   `json:"revisit_due"`
+	BadEpicStatus int                   `json:"bad_epic_status"`
+	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
 	// Graph is omitted for a healthy repository and reports the same strict task-DAG
 	// verdict used by board, guarded mutations, and dispatch-oriented reads.
 	Graph *GraphHealthJSON `json:"graph,omitempty"`
@@ -297,7 +297,7 @@ func ToSummaryJSON(s core.Summary) SummaryJSON {
 		Counts: counts, InProgress: inprog,
 		Epics: epics, OpenAudits: audits, Findings: findings,
 		RevisitDue: s.RevisitDue, BadEpicStatus: s.BadEpicStatus,
-		Unreadable: s.Problems, Graph: toGraphHealthJSON(s.GraphHealth, s.GraphDetail),
+		Unreadable: ToLintLoadProblemsJSON(s.Problems), Graph: toGraphHealthJSON(s.GraphHealth, s.GraphDetail),
 	}
 }
 
@@ -937,9 +937,9 @@ func ToFixEnvelope(results []domain.FixResult, problems []core.LintLoadProblem, 
 
 // LintLoadProblemJSON is an adapter-neutral failed-record diagnostic shared by
 // `lint` and the post-fix residual report. Entity identity is explicit when
-// recoverable; location is optional repair context. Path is the retained local-
-// filesystem compatibility field: it equals location only when the source
-// adapter identified that location as a path, and is otherwise the empty string.
+// recoverable; location is optional adapter-neutral context. Path is the retained
+// local-filesystem compatibility field and may differ from location when an
+// adapter supplies both an opaque source key and a local repair target.
 type LintLoadProblemJSON struct {
 	EntityKind string `json:"entity_kind,omitempty"`
 	EntityID   string `json:"entity_id,omitempty"`
@@ -955,8 +955,8 @@ type LintLoadProblemJSON struct {
 func ToLintLoadProblemsJSON(problems []core.LintLoadProblem) []LintLoadProblemJSON {
 	out := make([]LintLoadProblemJSON, 0, len(problems))
 	for _, problem := range problems {
-		path := ""
-		if problem.LocationIsPath {
+		path := problem.Path
+		if path == "" && problem.LocationIsPath {
 			path = problem.Location
 		}
 		out = append(out, LintLoadProblemJSON{

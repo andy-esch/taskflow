@@ -468,6 +468,10 @@ func TestSummaryOutputs(t *testing.T) {
 		InProgress: []domain.Task{{Slug: "alpha", Status: domain.StatusInProgress}},
 		Epics:      []core.EpicSummary{{Epic: domain.Epic{ID: "01-x"}, Total: 2, Done: 1}},
 		OpenAudits: []domain.Audit{{Slug: "2026-06-01-audit-x", Bucket: domain.AuditOpen, Area: "store", Findings: 4, OpenFindings: 1, DoneFindings: 3}},
+		Problems: []core.LintLoadProblem{{
+			EntityKind: core.LintEntityTask, EntityID: "6g0000000001", EntitySlug: "broken-task",
+			Location: "db://tasks/row-1", Message: "remote decode failed",
+		}},
 	}
 	var out bytes.Buffer
 	if err := SummaryJSON(&out, s); err != nil {
@@ -479,6 +483,7 @@ func TestSummaryOutputs(t *testing.T) {
 			Slug         string `json:"slug"`
 			OpenFindings int    `json:"open_findings"`
 		} `json:"open_audits"`
+		Unreadable []wire.LintLoadProblemJSON `json:"unreadable"`
 	}
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("summary json invalid: %v", err)
@@ -489,16 +494,48 @@ func TestSummaryOutputs(t *testing.T) {
 	if len(got.OpenAudits) != 1 || got.OpenAudits[0].Slug != "2026-06-01-audit-x" || got.OpenAudits[0].OpenFindings != 1 {
 		t.Errorf("summary open_audits wrong:\n%s", out.String())
 	}
+	if len(got.Unreadable) != 1 || got.Unreadable[0].EntityKind != "task" ||
+		got.Unreadable[0].EntityID != "6g0000000001" || got.Unreadable[0].EntitySlug != "broken-task" ||
+		got.Unreadable[0].Location != "db://tasks/row-1" || got.Unreadable[0].Path != "" {
+		t.Errorf("summary portable diagnostic wrong: %+v\n%s", got.Unreadable, out.String())
+	}
 
 	out.Reset()
 	if err := SummaryHuman(&out, NewStyle(false), s); err != nil {
 		t.Fatal(err)
 	}
 	// open audits surface in their own dashboard section with the rollup (3/4 resolved).
-	for _, want := range []string{"in-progress", "alpha", "01-x", "Open audits", "2026-06-01-audit-x", "3/4"} {
+	for _, want := range []string{"in-progress", "alpha", "01-x", "Open audits", "2026-06-01-audit-x", "3/4", "1 unreadable planning record"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("summary human output missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+func TestBoardOutputsPreservePortableUnreadableIdentity(t *testing.T) {
+	board := core.Board{
+		Columns: []core.BoardColumn{{Status: domain.StatusNextUp}},
+		Problems: []core.LintLoadProblem{{
+			EntityKind: core.LintEntityTask, EntityID: "6g0000000002", EntitySlug: "broken-board-task",
+			Location: "cache:tasks/2", Message: "decode failed",
+		}},
+	}
+	var out bytes.Buffer
+	if err := BoardJSON(&out, board); err != nil {
+		t.Fatal(err)
+	}
+	var got wire.BoardEnvelope
+	decodeStrict(t, out.Bytes(), &got)
+	if len(got.Unreadable) != 1 || got.Unreadable[0].EntityID != "6g0000000002" ||
+		got.Unreadable[0].Location != "cache:tasks/2" || got.Unreadable[0].Path != "" {
+		t.Fatalf("board portable diagnostic wrong: %+v\n%s", got.Unreadable, out.String())
+	}
+	out.Reset()
+	if err := BoardHuman(&out, NewStyle(false), board); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "1 unreadable task record") {
+		t.Fatalf("board human warning missing:\n%s", out.String())
 	}
 }
 
@@ -563,6 +600,31 @@ func TestStatusAllHumanReportsSpaceGraphHealth(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "task graph broken: "+summary.GraphDetail) {
 		t.Fatalf("compact space summary hid graph verdict:\n%s", out.String())
+	}
+}
+
+func TestStatusAllHumanReportsPortableProblemDetailsWithinSpace(t *testing.T) {
+	summary := core.Summary{Problems: []core.LintLoadProblem{{
+		EntityKind: core.LintEntityTask, EntityID: "6g0000000001", EntitySlug: "remote-task",
+		Location: "db://tasks/1", Message: "remote decode failed",
+	}, {
+		EntityKind: core.LintEntityAudit, EntityID: "6g0000000002", EntitySlug: "local-audit",
+		Location: "db://audits/2", Path: "/planning/audits/6g0000000002-local-audit.md",
+		Message: "local repair required",
+	}}}
+	overview := core.SpaceOverview{Spaces: []core.SpaceSummary{{ID: "planning", Summary: &summary}}}
+	var out bytes.Buffer
+	if err := StatusAllHuman(&out, NewStyle(false), overview); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"2 unreadable planning records", "task remote-task (6g0000000001)",
+		"db://tasks/1", "remote decode failed", "audit local-audit (6g0000000002)",
+		"repair:", "6g0000000002-local-audit.md", "local repair required",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("compact space summary missing diagnostic %q:\n%s", want, out.String())
+		}
 	}
 }
 

@@ -30,7 +30,8 @@ func TestFS_ListEpics_MissingFrontmatterIsLoud(t *testing.T) {
 	if len(epics) != 0 {
 		t.Errorf("a fence-less epic must not parse as an epic, got %+v", epics)
 	}
-	if len(problems) != 1 || !strings.Contains(problems[0].Message, "missing frontmatter") || !strings.Contains(problems[0].Message, "schema epic") {
+	if len(problems) != 1 || problems[0].EntityID != "01-x" ||
+		!strings.Contains(problems[0].Message, "missing frontmatter") || !strings.Contains(problems[0].Message, "schema epic") {
 		t.Errorf("want one loud, shape-naming problem, got %+v", problems)
 	}
 }

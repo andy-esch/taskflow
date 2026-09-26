@@ -61,7 +61,7 @@ func (s *FS) DanglingLinks() ([]core.LintLoadProblem, error) {
 			}
 			if _, err := os.Stat(resolved); os.IsNotExist(err) {
 				out = append(out, core.LintLoadProblem{
-					Location: p, LocationIsPath: true,
+					Location: p, LocationIsPath: true, Path: p,
 					Message: "body link to missing file: " + target,
 				})
 			}

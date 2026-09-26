@@ -782,6 +782,12 @@ func TestTaskGraphSameSourceSnapshotComparesOpaqueUnreadableRevisions(t *testing
 		t.Fatal("changed unreadable source revision compared as the same snapshot")
 	}
 
+	changedLocation := append([]TaskGraphLoadProblem(nil), problems...)
+	changedLocation[0].Location = "db://tasks/changed"
+	if left.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Problems: changedLocation})) {
+		t.Fatal("changed unreadable source location compared as the same snapshot")
+	}
+
 	missing := append([]TaskGraphLoadProblem(nil), problems...)
 	missing[0].SourceVersion = ""
 	if left.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Problems: missing})) {

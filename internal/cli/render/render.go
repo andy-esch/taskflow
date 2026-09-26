@@ -396,7 +396,7 @@ func BoardHuman(w io.Writer, st Style, b core.Board) error {
 		fmt.Fprintf(w, "\n%s\n", warning)
 	}
 	if len(b.Problems) > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable file(s) (run `lint`)", len(b.Problems))))
+		fmt.Fprintf(w, "\n%s\n", st.Red(fmt.Sprintf("! %d unreadable task record(s) (run `lint`)", len(b.Problems))))
 	}
 	return nil
 }
@@ -936,6 +936,10 @@ func ProblemsHuman(w io.Writer, st Style, problems []domain.FileProblem) {
 // assuming every source has a filesystem path. Identity leads when available;
 // an optional repair location remains visible on its own labelled line.
 func LintProblemsHuman(w io.Writer, st Style, problems []core.LintLoadProblem) {
+	lintProblemsHuman(w, st, problems, "")
+}
+
+func lintProblemsHuman(w io.Writer, st Style, problems []core.LintLoadProblem, indent string) {
 	for _, problem := range problems {
 		identity := problem.EntitySlug
 		if identity != "" && problem.EntityID != "" {
@@ -956,11 +960,18 @@ func LintProblemsHuman(w io.Writer, st Style, problems []core.LintLoadProblem) {
 		} else if kind != "" {
 			identity = kind + " " + identity
 		}
-		fmt.Fprintf(w, "%s %s\n", st.Red("!"), st.Bold(identity))
+		fmt.Fprintf(w, "%s%s %s\n", indent, st.Red("!"), st.Bold(identity))
 		if problem.Location != "" {
-			fmt.Fprintf(w, "    %s %s\n", st.Dim("location:"), problem.Location)
+			fmt.Fprintf(w, "%s    %s %s\n", indent, st.Dim("location:"), problem.Location)
 		}
-		fmt.Fprintf(w, "    %s\n", problem.Message)
+		path := problem.Path
+		if path == "" && problem.LocationIsPath {
+			path = problem.Location
+		}
+		if path != "" && path != problem.Location {
+			fmt.Fprintf(w, "%s    %s %s\n", indent, st.Dim("repair:"), path)
+		}
+		fmt.Fprintf(w, "%s    %s\n", indent, problem.Message)
 	}
 }
 

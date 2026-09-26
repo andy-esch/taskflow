@@ -96,17 +96,21 @@ func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
 }
 
 // TaskGraphLoadProblem is an unreadable task record supplied to the strict graph.
-// TaskID/TaskSlug carry neutral record identity; Path is optional repair-location
-// context for filesystem adapters and is never parsed by the graph analyzer.
+// TaskID/TaskSlug carry neutral record identity. Location is optional adapter-
+// neutral repair context; LocationIsPath distinguishes a local path from an opaque
+// URI or adapter key. Path remains the local-only location used by guarded repair
+// and graph diagnostics and is never parsed by the graph analyzer.
 // SourceVersion is an opaque adapter-owned revision of the exact source that
 // produced the problem. Core only compares it during whole-snapshot CAS; it does
 // not parse or publish it.
 type TaskGraphLoadProblem struct {
-	TaskID        string
-	TaskSlug      string
-	Path          string
-	Message       string
-	SourceVersion string `json:"-" yaml:"-"`
+	TaskID         string
+	TaskSlug       string
+	Location       string
+	LocationIsPath bool
+	Path           string
+	Message        string
+	SourceVersion  string `json:"-" yaml:"-"`
 }
 
 // TaskGraphRead is one adapter-owned task-record snapshot. Readable records and
@@ -161,7 +165,8 @@ func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) 
 // ever tries to compare two unreadable snapshots from them.
 func TaskGraphLoadProblemFromFile(problem domain.FileProblem, sourceVersion string) TaskGraphLoadProblem {
 	return TaskGraphLoadProblem{
-		TaskID: problem.EntityID, TaskSlug: problem.EntitySlug, Path: problem.Path,
+		TaskID: problem.EntityID, TaskSlug: problem.EntitySlug,
+		Location: problem.Path, LocationIsPath: problem.Path != "", Path: problem.Path,
 		Message: problem.Message, SourceVersion: sourceVersion,
 	}
 }
@@ -169,7 +174,40 @@ func TaskGraphLoadProblemFromFile(problem domain.FileProblem, sourceVersion stri
 func taskGraphFileProblems(problems []TaskGraphLoadProblem) []domain.FileProblem {
 	out := make([]domain.FileProblem, len(problems))
 	for i, problem := range problems {
-		out[i] = domain.FileProblem{Path: problem.Path, Message: problem.Message}
+		out[i] = domain.FileProblem{
+			Path: taskGraphLocalPath(problem), Message: problem.Message,
+			EntityID: problem.TaskID, EntitySlug: problem.TaskSlug,
+		}
+	}
+	return out
+}
+
+func taskGraphLocalPath(problem TaskGraphLoadProblem) string {
+	if problem.Path != "" {
+		return problem.Path
+	}
+	if problem.LocationIsPath {
+		return problem.Location
+	}
+	return ""
+}
+
+func taskGraphLoadProblems(problems []TaskGraphLoadProblem) []LintLoadProblem {
+	out := make([]LintLoadProblem, 0, len(problems))
+	for _, problem := range problems {
+		location, isPath := problem.Location, problem.LocationIsPath
+		path := taskGraphLocalPath(problem)
+		// Path predates the neutral location fields. Treat it as local filesystem
+		// context so focused adapters/tests that still populate only Path retain the
+		// same diagnostics while new adapters can provide an opaque Location.
+		if location == "" && problem.Path != "" {
+			location, isPath = problem.Path, true
+		}
+		out = append(out, LintLoadProblem{
+			EntityKind: LintEntityTask, EntityID: problem.TaskID,
+			EntitySlug: problem.TaskSlug, Location: location,
+			LocationIsPath: isPath, Path: path, Message: problem.Message,
+		})
 	}
 	return out
 }

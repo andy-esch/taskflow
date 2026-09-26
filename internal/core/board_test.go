@@ -11,6 +11,16 @@ type countingTaskStore struct {
 	listCalls int
 }
 
+type neutralTaskGraphSource struct {
+	read  TaskGraphRead
+	calls int
+}
+
+func (s *neutralTaskGraphSource) ReadTaskGraph() (TaskGraphRead, error) {
+	s.calls++
+	return s.read, nil
+}
+
 func (s *countingTaskStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 	s.listCalls++
 	return s.fakeStore.ListTasks()
@@ -80,5 +90,62 @@ func TestBoard_CompleteStoreFallbackScansTasksOnce(t *testing.T) {
 	}
 	if store.listCalls != 1 {
 		t.Fatalf("ListTasks calls = %d, want 1", store.listCalls)
+	}
+}
+
+func TestBoard_PreservesPathlessTaskLoadProblemIdentity(t *testing.T) {
+	source := &neutralTaskGraphSource{read: TaskGraphRead{Problems: []TaskGraphLoadProblem{{
+		TaskID: "6gpathless01", TaskSlug: "known-task",
+		Location: "records/task/contradictory-name",
+		Path:     "/planning/tasks/6gpathless01-known-task.md",
+		Message:  "invalid frontmatter",
+	}}}}
+
+	board, err := NewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source.calls != 1 {
+		t.Fatalf("task graph reads = %d, want exactly 1", source.calls)
+	}
+	if len(board.Problems) != 1 {
+		t.Fatalf("problems = %+v", board.Problems)
+	}
+	problem := board.Problems[0]
+	if problem.EntityKind != LintEntityTask || problem.EntityID != "6gpathless01" ||
+		problem.EntitySlug != "known-task" || problem.Location != "records/task/contradictory-name" ||
+		problem.LocationIsPath || problem.Path != "/planning/tasks/6gpathless01-known-task.md" ||
+		problem.Message != "invalid frontmatter" {
+		t.Fatalf("portable task diagnostic = %+v", problem)
+	}
+}
+
+func TestBoard_CanonicalizesPortableLoadProblems(t *testing.T) {
+	source := &neutralTaskGraphSource{read: TaskGraphRead{Problems: []TaskGraphLoadProblem{
+		{TaskID: "6g0000000002", TaskSlug: "second", Location: "db://tasks/2", Message: "z"},
+		{TaskID: "6g0000000001", TaskSlug: "first", Location: "db://tasks/1", Message: "a"},
+	}}}
+
+	board, err := NewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(board.Problems) != 2 || board.Problems[0].EntityID != "6g0000000001" ||
+		board.Problems[1].EntityID != "6g0000000002" {
+		t.Fatalf("portable task diagnostics are not canonical: %+v", board.Problems)
+	}
+}
+
+func TestBoard_DoesNotInferIdentityFromOpaqueLocation(t *testing.T) {
+	source := &neutralTaskGraphSource{read: TaskGraphRead{Problems: []TaskGraphLoadProblem{{
+		Location: "db://tasks/6g0000000009-wrong.md", Message: "invalid frontmatter",
+	}}}}
+
+	board, err := NewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(board.Problems) != 1 || board.Problems[0].EntityID != "" || board.Problems[0].EntitySlug != "" {
+		t.Fatalf("opaque location manufactured identity: %+v", board.Problems)
 	}
 }

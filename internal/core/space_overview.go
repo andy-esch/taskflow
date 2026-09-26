@@ -205,7 +205,7 @@ func cloneSpaceSummary(summary Summary) Summary {
 	cloned.Findings.ByUrgency = append([]CountBy(nil), summary.Findings.ByUrgency...)
 	cloned.Findings.ByComponent = append([]CountBy(nil), summary.Findings.ByComponent...)
 	cloned.Findings.Acute = append([]AuditFinding(nil), summary.Findings.Acute...)
-	cloned.Problems = append([]domain.FileProblem(nil), summary.Problems...)
+	cloned.Problems = append([]LintLoadProblem(nil), summary.Problems...)
 	return cloned
 }
 

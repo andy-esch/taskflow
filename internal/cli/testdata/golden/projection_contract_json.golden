@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.74",
+  "schema_version": "1.75",
   "task": [
     {
       "name": "slug",

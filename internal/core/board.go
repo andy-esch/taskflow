@@ -16,7 +16,7 @@ type BoardColumn struct {
 // the web read endpoint) — distinct from Summary, which is the aggregation dashboard.
 type Board struct {
 	Columns  []BoardColumn
-	Problems []domain.FileProblem // unreadable files, surfaced not swallowed (mirrors Summary)
+	Problems []LintLoadProblem // portable unreadable records, surfaced not swallowed (mirrors Summary)
 	// Blocked holds the ids of listed tasks the repository graph says cannot be started
 	// — a hard prerequisite is unmet. The board is the tool's answer to "what should I
 	// do next", so answering it with work `task start` will refuse is the one thing it
@@ -45,7 +45,7 @@ func (s *Service) Board() (Board, error) {
 		return Board{}, err
 	}
 	tasks := read.Tasks
-	problems := taskGraphFileProblems(read.Problems)
+	problems := canonicalLintLoadProblems(taskGraphLoadProblems(read.Problems))
 	byStatus := map[domain.Status][]domain.Task{}
 	for _, t := range tasks {
 		if t.Status.IsActive() {

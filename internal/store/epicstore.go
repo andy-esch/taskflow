@@ -25,6 +25,14 @@ func (s *FS) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	// Epic files predate stable id-led filenames: their canonical identity is the
+	// entire filename stem. Recover it here, where that persistence convention is
+	// owned, so application projections never parse a path for entity identity.
+	for i := range problems {
+		if problems[i].EntityID == "" && problems[i].Path != "" {
+			problems[i].EntityID = strings.TrimSuffix(filepath.Base(problems[i].Path), ".md")
+		}
+	}
 	// Numeric order by the NN- prefix (10 after 9), not ReadDir's lexical order.
 	sort.Slice(epics, func(i, j int) bool {
 		if ni, nj := epicNum(epics[i].ID), epicNum(epics[j].ID); ni != nj {

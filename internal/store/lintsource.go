@@ -2,8 +2,6 @@ package store
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -56,16 +54,10 @@ func (s *FS) ReadLintResearch() ([]domain.Research, []core.LintLoadProblem, erro
 func lintLoadProblems(kind core.LintEntityKind, problems []domain.FileProblem) []core.LintLoadProblem {
 	out := make([]core.LintLoadProblem, 0, len(problems))
 	for _, problem := range problems {
-		entityID, entitySlug := problem.EntityID, problem.EntitySlug
-		// Epic identity is its whole filename stem rather than a 12-character
-		// stable-id prefix, so the generic scanner cannot recover it. This adapter
-		// owns the filename convention and performs the conversion here once.
-		if kind == core.LintEntityEpic && entityID == "" && problem.Path != "" {
-			entityID = strings.TrimSuffix(filepath.Base(problem.Path), ".md")
-		}
 		out = append(out, core.LintLoadProblem{
-			EntityKind: kind, EntityID: entityID, EntitySlug: entitySlug,
-			Location: problem.Path, LocationIsPath: problem.Path != "", Message: problem.Message,
+			EntityKind: kind, EntityID: problem.EntityID, EntitySlug: problem.EntitySlug,
+			Location: problem.Path, LocationIsPath: problem.Path != "", Path: problem.Path,
+			Message: problem.Message,
 		})
 	}
 	return out

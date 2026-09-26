@@ -313,6 +313,10 @@ type Store interface {
 // from the separate TaskGraphSource so counts, in-progress work, and graph health
 // cannot drift across two task snapshots. Store satisfies this metadata side, while
 // cross-space status requires both capabilities through PlanningSummarySource.
+// Its FileProblem results are a transitional local compatibility seam: adapters
+// recover EntityID/EntitySlug before returning, and summarize maps those supplied
+// values without parsing Path. The portable entity-read design task owns replacing
+// this aggregate contract rather than widening it piecemeal here.
 type SummaryStore interface {
 	ListEpics() ([]domain.Epic, []domain.FileProblem, error)
 	ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error)

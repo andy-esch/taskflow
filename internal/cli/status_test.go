@@ -28,6 +28,9 @@ func TestStatus_ExitsNonZeroOnUnreadableFiles(t *testing.T) {
 	if err == nil {
 		t.Fatal("status must exit non-zero when a file is unreadable")
 	}
+	if !strings.Contains(err.Error(), "broken.md") {
+		t.Fatalf("status error should retain the local repair filename: %v", err)
+	}
 	if !strings.Contains(out, "Tasks") {
 		t.Errorf("the dashboard should still render before the non-zero exit:\n%s", out)
 	}
@@ -208,6 +211,19 @@ func TestStatusAll_ExitsNonZeroAfterRenderingUnreadableFiles(t *testing.T) {
 	if len(envelope.Spaces) != 1 || envelope.Spaces[0].Summary == nil || len(envelope.Spaces[0].Summary.Unreadable) != 1 {
 		t.Fatalf("rendered envelope lost unreadable-file details: %+v", envelope)
 	}
+
+	out, errOut, err = runIn(t, t.TempDir(), "status", "--all")
+	if err == nil || ExitCode(err) != 11 {
+		t.Fatalf("human cross-space status should retain exit 11: err=%v stdout=%s stderr=%s", err, out, errOut)
+	}
+	for _, want := range []string{"broken", filepath.Base(path), "tier"} {
+		if !strings.Contains(out+errOut, want) {
+			t.Fatalf("human cross-space status hid %q:\nstdout:\n%s\nstderr:\n%s", want, out, errOut)
+		}
+	}
+	if !strings.Contains(err.Error(), "planning:broken") {
+		t.Fatalf("human cross-space partial error hid the space-qualified identity: %v", err)
+	}
 }
 
 func TestStatusAll_AllBrokenRegistryGroupRemainsInformational(t *testing.T) {
@@ -240,6 +256,19 @@ func TestStatusAllProblemsError_SelectedTreeLoadFailure(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "1 planning space(s) failed to load") || !errors.Is(err, domain.ErrValidation) {
 			t.Fatalf("selected tree load failure with summary=%v should be a partial validation failure, got %v", summary != nil, err)
 		}
+	}
+}
+
+func TestStatusAllProblemsErrorNamesSpaceQualifiedUnreadableRecords(t *testing.T) {
+	err := statusAllProblemsError(core.SpaceOverview{Spaces: []core.SpaceSummary{{
+		ID: "planning", Summary: &core.Summary{Problems: []core.LintLoadProblem{{
+			EntityKind: core.LintEntityTask, EntitySlug: "broken-task",
+			Path: "/planning/tasks/6g0000000001-broken-task.md", Message: "bad task",
+		}}},
+	}}})
+	if err == nil || !errors.Is(err, domain.ErrValidation) ||
+		!strings.Contains(err.Error(), "planning:broken-task (6g0000000001-broken-task.md)") {
+		t.Fatalf("cross-space partial error hid the repair target: %v", err)
 	}
 }
 

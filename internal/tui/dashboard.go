@@ -180,7 +180,7 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 	}
 
 	// Needs attention — the open/ready-to-close audit queue, epics with a non-conforming
-	// status, a non-healthy task graph, and unreadable files.
+	// status, a non-healthy task graph, and unreadable planning records.
 	// Under a non-specific heading a bare count says nothing, so every row names its
 	// own category and wears its entity's glyph (the audit ◆ matches the audits tab);
 	// "all clear" when there's nothing.
@@ -206,7 +206,7 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 		allClear = false
 	}
 	if len(s.Problems) > 0 {
-		info(st.glyph(theme.MarkerUnreadable) + fmt.Sprintf(" %d unreadable file(s) (run lint)", len(s.Problems)))
+		info(st.glyph(theme.MarkerUnreadable) + fmt.Sprintf(" %d unreadable planning record(s) (run lint)", len(s.Problems)))
 		allClear = false
 	}
 	if allClear {
