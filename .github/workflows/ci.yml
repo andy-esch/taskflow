@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  go-quality:
-    name: Go Quality
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
 
     steps:
@@ -76,6 +76,24 @@ jobs:
           # builds SSA so it can't hit the panic, and still fails CI on any vuln in
           # an imported package (it caught the x/net CVEs the panic was masking).
           "$(go env GOPATH)/bin/govulncheck" -scan package ./...
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache-dependency-path: go.sum
+
+      - name: Download dependencies
+        run: go mod download
 
       - name: Run tests with coverage
         run: go test -v -race -coverprofile=coverage.out ./...
