@@ -10,8 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [architecture, cli, ports, lint]
 created: "2026-09-23"
-depends_on: [6gcwcf7rgxef]
-updated_at: "2026-09-23"
+depends_on: [6gcwcf88z57p]
+updated_at: "2026-09-26"
 ---
 
 # Route CLI planning data operations through application ports
@@ -32,6 +32,8 @@ documented semantic ports.
   Cobra know the directory layout.
 - Inject these capabilities through composition rather than constructing `store.FS` inside command
   controllers.
+- Build on the settled entity read/source vocabulary and optional-local-capability composition;
+  do not reintroduce paths through a CLI-only convenience store.
 - Keep completion failure silent and fast as required by shell completion UX.
 
 ## Acceptance criteria
