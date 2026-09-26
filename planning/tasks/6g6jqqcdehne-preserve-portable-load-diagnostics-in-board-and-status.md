@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g6jqqcdehne
-status: ready-to-start
+status: completed
 epic: 30-threads-and-task-dependency-graphs
 description: Retain task identity and optional locations when graph-backed dashboards report unreadable records through non-filesystem adapters.
 effort: 1-2 days
@@ -11,7 +11,9 @@ autonomy_level: 3
 tags: [threads, architecture, diagnostics, ports]
 created: "2026-09-03"
 depends_on: [6g5vm4efjcdv, 6g697mp8s4tx]
-updated_at: "2026-09-23"
+updated_at: "2026-09-26"
+started_at: "2026-09-25"
+completed_at: "2026-09-26"
 ---
 
 # Preserve portable load diagnostics in board and status
@@ -39,16 +41,16 @@ them correctly.
 
 ## Acceptance criteria
 
-- [ ] A pathless task-graph load problem retains its task ID/slug through board and current/cross-space
+- [x] A pathless task-graph load problem retains its task ID/slug through board and current/cross-space
       status core results and JSON.
-- [ ] Explicit record identity wins over a misleading location; no core code parses an opaque
+- [x] Explicit record identity wins over a misleading location; no core code parses an opaque
       location to recover identity.
-- [ ] Local board/status human output still names actionable file locations and retains current
+- [x] Local board/status human output still names actionable file locations and retains current
       non-zero behavior for unreadable records.
-- [ ] Mixed task, epic, and audit load failures have deterministic kind/identity/location attribution
+- [x] Mixed task, epic, and audit load failures have deterministic kind/identity/location attribution
       in a summary without extra scans.
-- [ ] TUI overview and atlas continue to flag unreadable data without depending on filesystem paths.
-- [ ] Schema comments, generated JSON Schema, compatibility notes, and machine-contract fixtures are
+- [x] TUI overview and atlas continue to flag unreadable data without depending on filesystem paths.
+- [x] Schema comments, generated JSON Schema, compatibility notes, and machine-contract fixtures are
       updated together.
 
 ## Stress tests
@@ -80,3 +82,31 @@ design rather than allowing the design to proceed from lint alone.
 - [Report graph degradation in status and lint](6g697mp8s4tx-report-graph-degradation-in-status-and-lint.md)
 - [Make repository lint load diagnostics adapter-neutral](6g5vm4efjcdv-make-repository-lint-load-diagnostics-adapter-neutral.md)
 - Thread [Make planning data access adapter neutral](../threads/6gcwd78p9r04-make-planning-data-access-adapter-neutral.md)
+
+## Implementation outcome (2026-09-25)
+
+`Board`, `Summary`, retained cross-space summaries, wire envelopes, CLI partial-result errors, and
+TUI health indicators now share `LintLoadProblem`. `TaskGraphLoadProblem` preserves an explicit
+opaque location separately from its local repair path, and whole-snapshot comparison includes that
+evidence. Local adapters recover task/audit stable identity during their existing scans and recover
+legacy epic identity at the filesystem boundary; core performs no filename parsing. Board and
+summary tests prove pathless identity, canonical within-kind ordering, and one task/epic/audit scan.
+
+Schema 1.75 extends board/current-status/cross-space-status unreadable records with kind, optional
+ID/slug, and location while retaining required `path` and `message`; opaque locations leave `path`
+empty unless the adapter also supplied a distinct local repair path. Human output retains non-zero
+partial-result behavior: current and cross-space status identify affected records, and cross-space
+status renders their location, repair path, and message beneath the owning space. The remaining
+aggregate `SummaryStore` `FileProblem` seam is explicitly transitional and remains owned by the
+sequenced portable entity-read design task.
+
+The independent [Codex](../audits/6gdpcag50p97-2026-09-25-portable-board-status-diagnostics-implementation-codex.md)
+and [Antigravity](../audits/6gdpcagd8fk6-2026-09-25-portable-board-status-diagnostics-implementation-antigravity.md)
+reviews drove the closeout hardening. Codex's ordering, dual-location, cross-space detail, and
+no-inference findings were fixed in this slice. Antigravity's surviving mutation identified an
+inert location copy in lint's private graph input; the implementation now states and enforces that
+this copy carries unreadable identity only, while the original portable diagnostic remains the
+single user-facing source.
+
+Validation: `just test` (race-enabled), `golangci-lint`, `go mod tidy -diff`, generated schema-comment
+drift, machine-golden regeneration, planning lint, and `git diff --check` all pass.

@@ -1137,6 +1137,17 @@ a Thread. The corrected adapter boundary is:
    findings and portable problems directly, so no core path lookup or second body read remains.
    `GetAuditByPath` is removed from the application port, and schema 1.74 extends the lint/fix
    diagnostic shape to `audit findings --json` without inventing a path for remote adapters.
+   Task [`6g6jqqcdehne`](../tasks/6g6jqqcdehne-preserve-portable-load-diagnostics-in-board-and-status.md)
+   carries the same application vocabulary through graph-backed `Board`, `Summary`, and
+   cross-space summaries. `TaskGraphLoadProblem` keeps its local repair path while gaining an
+   explicitly typed neutral location; dashboard wire output in schema 1.75 preserves kind,
+   identity, location, and message while retaining the historical `path` field for local
+   consumers. Epic filename identity is recovered by the filesystem adapter before the aggregate
+   summary boundary. Core does not parse locations, and board/status each retain one task scan.
+   Adversarial implementation review tightened the published contract further: neutral location
+   and local repair path may coexist and survive independently, diagnostics are canonically ordered
+   instead of inheriting adapter order, and human cross-space status renders actionable per-record
+   detail before its partial-result exit.
 
 This split is deliberately smaller than a repository abstraction redesign. It establishes the port
 and projection seams needed by additional interfaces while leaving concrete storage, HTTP transport,
