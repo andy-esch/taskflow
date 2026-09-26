@@ -13,7 +13,7 @@ JSON it appears as graph, or spaces[].summary.graph with --all. Graph health is
 informational on this read-only dashboard; use lint when validation exit status
 is required.
 
-Broken registry entries remain inline and informational. Unreadable planning files
+Broken registry entries remain inline and informational. Unreadable planning records
 or a selected tree that fails to load still render every available result, then make
 the command exit non-zero so automation can detect the partial result.
 
