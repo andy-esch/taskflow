@@ -71,6 +71,31 @@ tar xzf tskflwctl_*_linux_arm64.tar.gz && ./tskflwctl version
 just install            # → go install onto $PATH (version-stamped)
 ```
 
+### GitHub Actions
+
+Validate planning trees, frontmatter schemas, and the task dependency DAG in CI using the official composite action ([`actions/lint`](./actions/)):
+
+```yaml
+name: Planning Lint
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate planning tree
+        uses: andy-esch/taskflow/actions/lint@v0.22.0 # or @latest
+```
+
+Inputs:
+- `version`: Version of `tskflwctl` to install (`latest` by default, or an explicit tag like `v0.22.0`).
+- `links`: Check markdown body cross-links for dangling targets (`false` by default; equivalent to `--links`).
+- `working-directory`: Directory containing `.tskflwctl.toml` or `planning/` (`.` by default).
+- `args`: Extra arguments passed to `tskflwctl lint`.
+
+See [`actions/README.md`](./actions/README.md) for full action reference and options. Pre-compiled release binaries are downloaded automatically for fast execution (~1s).
+
 ## Build / dev
 
 ```bash
