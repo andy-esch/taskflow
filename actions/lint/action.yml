@@ -1,0 +1,141 @@
+name: 'Taskflow Lint'
+description: 'Validate planning entities, audit projections, and task dependency DAG with tskflwctl'
+author: 'Andy Eschbacher'
+branding:
+  icon: 'check-circle'
+  color: 'blue'
+
+inputs:
+  version:
+    description: 'Version of tskflwctl to install (e.g. "latest", "v0.22.0", or a git ref/commit)'
+    required: false
+    default: 'latest'
+  links:
+    description: 'Check Markdown body cross-links for missing files (--links)'
+    required: false
+    default: 'false'
+  working-directory:
+    description: 'Directory where planning repository or .tskflwctl.toml is located'
+    required: false
+    default: '.'
+  args:
+    description: 'Additional flags to pass to tskflwctl lint (e.g. "--no-color")'
+    required: false
+    default: ''
+  github-token:
+    description: 'GitHub token for release downloads via gh CLI (avoids rate limits)'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up tskflwctl
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+
+        BIN_DIR="${RUNNER_TEMP:-/tmp}/tskflwctl/bin"
+        mkdir -p "$BIN_DIR"
+
+        OS=""
+        case "${RUNNER_OS:-$(uname -s)}" in
+          Linux) OS="linux" ;;
+          macOS|Darwin) OS="darwin" ;;
+          *)
+            echo "::error::Unsupported OS for pre-built binaries: ${RUNNER_OS:-$(uname -s)}"
+            exit 1
+            ;;
+        esac
+
+        ARCH=""
+        case "${RUNNER_ARCH:-$(uname -m)}" in
+          X64|x86_64) ARCH="amd64" ;;
+          ARM64|aarch64|arm64) ARCH="arm64" ;;
+          *)
+            echo "::error::Unsupported architecture for pre-built binaries: ${RUNNER_ARCH:-$(uname -m)}"
+            exit 1
+            ;;
+        esac
+
+        INSTALLED=0
+
+        # 0. If version is "local", compile from current checkout
+        if [ "$VERSION" = "local" ]; then
+          if [ -d "./cmd/tskflwctl" ] && command -v go >/dev/null 2>&1; then
+            echo "Building tskflwctl from local checkout..."
+            go build -o "$BIN_DIR/tskflwctl" ./cmd/tskflwctl
+            INSTALLED=1
+          fi
+        fi
+
+        # 1. Attempt to download pre-built release binary via GitHub CLI
+        if [ "$INSTALLED" -ne 1 ] && command -v gh >/dev/null 2>&1; then
+          DOWNLOAD_DIR="${RUNNER_TEMP:-/tmp}/tskflwctl/download"
+          rm -rf "$DOWNLOAD_DIR"
+          mkdir -p "$DOWNLOAD_DIR"
+
+          GH_ARGS=(--repo andy-esch/taskflow --pattern "*_${OS}_${ARCH}.tar.gz" --dir "$DOWNLOAD_DIR")
+          if [ "$VERSION" != "latest" ]; then
+            TAG="$VERSION"
+            if [[ ! "$TAG" =~ ^v ]]; then
+              TAG="v${TAG}"
+            fi
+            GH_ARGS=("$TAG" "${GH_ARGS[@]}")
+          fi
+
+          if gh release download "${GH_ARGS[@]}" 2>/dev/null; then
+            ARCHIVE=$(find "$DOWNLOAD_DIR" -name "*_${OS}_${ARCH}.tar.gz" | head -n 1)
+            if [ -n "$ARCHIVE" ] && [ -f "$ARCHIVE" ]; then
+              tar -xzf "$ARCHIVE" -C "$BIN_DIR"
+              chmod +x "$BIN_DIR/tskflwctl"
+              INSTALLED=1
+            fi
+          fi
+          rm -rf "$DOWNLOAD_DIR"
+        fi
+
+        # 2. Fallback to go install if release asset was not found (e.g. @main or unreleased ref)
+        if [ "$INSTALLED" -ne 1 ]; then
+          if command -v go >/dev/null 2>&1; then
+            echo "Pre-built release not found for '${VERSION}'; falling back to 'go install'..."
+            GOBIN="$BIN_DIR" go install "github.com/andy-esch/taskflow/cmd/tskflwctl@${VERSION}"
+            INSTALLED=1
+          else
+            echo "::error::Could not download pre-built tskflwctl release for '${VERSION}', and Go is not installed to compile from source."
+            exit 1
+          fi
+        fi
+
+        echo "$BIN_DIR" >> "$GITHUB_PATH"
+        echo "PATH=$BIN_DIR:$PATH" >> "$GITHUB_ENV"
+
+    - name: Verify tskflwctl installation
+      shell: bash
+      run: tskflwctl version
+
+    - name: Run tskflwctl lint
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        LINKS: ${{ inputs.links }}
+        ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        FLAGS=()
+        if [ "$LINKS" = "true" ]; then
+          FLAGS+=(--links)
+        fi
+        if [ -n "$ARGS" ]; then
+          # shellcheck disable=SC2206
+          FLAGS+=($ARGS)
+        fi
+        if [ ${#FLAGS[@]} -eq 0 ]; then
+          tskflwctl lint
+        else
+          tskflwctl lint "${FLAGS[@]}"
+        fi
+
