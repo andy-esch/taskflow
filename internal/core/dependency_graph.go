@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -355,13 +354,7 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 	for _, task := range tasks {
 		g.sourceRefCounts[sourceRefForTask(task)]++
 	}
-	g.loadProblems = cloneTaskGraphLoadProblems(unreadable)
-	sort.SliceStable(g.loadProblems, func(i, j int) bool {
-		left, right := g.loadProblems[i], g.loadProblems[j]
-		leftKey := strings.Join([]string{left.TaskID, left.TaskSlug, left.Location, strconv.FormatBool(left.LocationIsPath), left.Path, left.Message, left.SourceVersion}, "\x00")
-		rightKey := strings.Join([]string{right.TaskID, right.TaskSlug, right.Location, strconv.FormatBool(right.LocationIsPath), right.Path, right.Message, right.SourceVersion}, "\x00")
-		return leftKey < rightKey
-	})
+	g.loadProblems = canonicalTaskGraphLoadProblems(unreadable)
 	for _, problem := range g.loadProblems {
 		taskID, taskSlug := problem.TaskID, problem.TaskSlug
 		if id.Valid(taskID) {

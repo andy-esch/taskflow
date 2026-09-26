@@ -1,8 +1,10 @@
 package core
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -193,8 +195,9 @@ func taskGraphLocalPath(problem TaskGraphLoadProblem) string {
 }
 
 func taskGraphLoadProblems(problems []TaskGraphLoadProblem) []LintLoadProblem {
-	out := make([]LintLoadProblem, 0, len(problems))
-	for _, problem := range problems {
+	ordered := canonicalTaskGraphLoadProblems(problems)
+	out := make([]LintLoadProblem, 0, len(ordered))
+	for _, problem := range ordered {
 		location, isPath := problem.Location, problem.LocationIsPath
 		path := taskGraphLocalPath(problem)
 		// Path predates the neutral location fields. Treat it as local filesystem
@@ -209,6 +212,22 @@ func taskGraphLoadProblems(problems []TaskGraphLoadProblem) []LintLoadProblem {
 			LocationIsPath: isPath, Path: path, Message: problem.Message,
 		})
 	}
+	return out
+}
+
+func canonicalTaskGraphLoadProblems(problems []TaskGraphLoadProblem) []TaskGraphLoadProblem {
+	out := cloneTaskGraphLoadProblems(problems)
+	slices.SortFunc(out, func(left, right TaskGraphLoadProblem) int {
+		return cmp.Or(
+			cmp.Compare(left.TaskID, right.TaskID),
+			cmp.Compare(left.TaskSlug, right.TaskSlug),
+			cmp.Compare(boolRank(left.LocationIsPath), boolRank(right.LocationIsPath)),
+			cmp.Compare(left.Location, right.Location),
+			cmp.Compare(left.Path, right.Path),
+			cmp.Compare(left.Message, right.Message),
+			cmp.Compare(left.SourceVersion, right.SourceVersion),
+		)
+	})
 	return out
 }
 
