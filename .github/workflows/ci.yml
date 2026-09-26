@@ -75,7 +75,7 @@ jobs:
           # bug (golang/go#66783), not a vulnerability. Package-level scan never
           # builds SSA so it can't hit the panic, and still fails CI on any vuln in
           # an imported package (it caught the x/net CVEs the panic was masking).
-          $(go env GOPATH)/bin/govulncheck -scan package ./...
+          "$(go env GOPATH)/bin/govulncheck" -scan package ./...
 
       - name: Run tests with coverage
         run: go test -v -race -coverprofile=coverage.out ./...
@@ -88,3 +88,17 @@ jobs:
           flags: go
           name: go-coverage
           fail_ci_if_error: false
+
+  planning-lint:
+    name: Planning Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Validate planning tree
+        uses: ./actions/lint
+        with:
+          args: "--no-color"
+
