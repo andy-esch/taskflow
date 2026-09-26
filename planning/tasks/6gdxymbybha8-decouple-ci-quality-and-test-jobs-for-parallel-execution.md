@@ -76,3 +76,7 @@ Beyond the immediate job split, research into Go test acceleration in GitHub Act
 ## Progress Log
 
 - 2026-09-26: Evaluated Go CI acceleration research (matrix sharding, gotestsum, race detection separation, caching) and implemented Option 1 by decoupling the monolithic `go-quality` job in `.github/workflows/ci.yml` into parallel `lint` and `test` jobs. Verified clean actionlint syntax, docs-check, tidy-check, and planning lint.
+
+- 2026-09-26: Cached govulncheck binary in the CI lint job using actions/cache@v6 to eliminate compiling from source on every run (~9s saved).
+
+- 2026-09-26: Dropped verbose flag (-v) and tuned package parallelism with -p 4 in CI test job, eliminating runner virtual terminal streaming overhead while preserving full failure details.
