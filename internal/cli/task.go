@@ -223,10 +223,10 @@ func newTaskListCmd(app *App) *cobra.Command {
 				return err
 			}
 			if err := renderList(app, mode, lm.columns, tasks, problems,
-				"tasks", render.TaskColumns(), render.TasksJSON, render.TasksHuman); err != nil {
+				"tasks", render.TaskReadColumns(), render.TasksJSON, render.TasksReadHuman); err != nil {
 				return err
 			}
-			return problemsError(problems)
+			return portableProblemsError("task", problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.TaskColumns()))
@@ -268,7 +268,7 @@ func newTaskShowCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			task, body, err := app.Svc.ShowTask(slug)
+			record, err := app.Svc.ShowTask(slug)
 			if err != nil {
 				return err
 			}
@@ -276,18 +276,18 @@ func newTaskShowCmd(app *App) *cobra.Command {
 			// one named section, or none at all. Both narrow the SAME body the full
 			// view emits, so the task metadata (and the --json envelope shape) are
 			// unchanged — only Body shrinks.
-			body, err = narrowBody("task", slug, body, section, fmOnly)
+			record.Value.Body, err = narrowBody("task", slug, record.Value.Body, section, fmOnly)
 			if err != nil {
 				return err
 			}
 			if app.JSON {
-				return render.TaskShowJSON(app.Out, task, body)
+				return render.TaskShowJSON(app.Out, record)
 			}
 			return app.paged(func(w io.Writer) error {
 				if fmOnly { // metadata block only — skip the (empty) body render entirely
-					return render.TaskShowHuman(w, app.Style, task, "")
+					return render.TaskShowHuman(w, app.Style, record.Value.Task, "")
 				}
-				return render.TaskShowHuman(w, app.Style, task, render.RenderBody(app.Style, body, app.markdownStyle, raw))
+				return render.TaskShowHuman(w, app.Style, record.Value.Task, render.RenderBody(app.Style, record.Value.Body, app.markdownStyle, raw))
 			})
 		},
 	}
@@ -313,16 +313,16 @@ func newTaskInfoCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			task, body, err := app.Svc.ShowTask(slug)
+			record, err := app.Svc.ShowTask(slug)
 			if err != nil {
 				return err
 			}
-			ac := domain.CountAcceptanceCriteria(body)
-			path := absPath(task.Path)
+			ac := domain.CountAcceptanceCriteria(record.Value.Body)
+			path := absPath(record.Value.Task.Path)
 			if app.JSON {
-				return render.TaskInfoJSON(app.Out, task, ac, path)
+				return render.TaskInfoJSON(app.Out, record, ac, path)
 			}
-			render.TaskInfoHuman(app.Out, app.Style, task, ac, path)
+			render.TaskInfoHuman(app.Out, app.Style, record.Value.Task, ac, path)
 			return nil
 		},
 	}

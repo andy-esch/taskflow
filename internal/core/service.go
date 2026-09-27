@@ -341,49 +341,59 @@ func (s Summary) SplitCounts() (active, archived []StatusCount) {
 
 // Summary is the at-a-glance project state for the dashboard.
 type Summary struct {
-	Counts        []StatusCount     // every status in display order (count may be 0)
-	InProgress    []domain.Task     // the in-progress working set
-	Epics         []EpicSummary     // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
-	OpenAudits    []domain.Audit    // audits still in the open bucket (actionable work)
-	ReadyToClose  int               // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
-	Findings      FindingsRollup    // actionable audit findings (open/in-progress) aggregated by urgency + component
-	RevisitDue    int               // deferred tasks whose revisit_at (snooze-until) date has arrived
-	BadEpicStatus int               // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
-	Problems      []LintLoadProblem // unreadable planning records
-	GraphHealth   GraphHealth       // repository-wide task-DAG verdict from the same snapshot as Counts/InProgress
-	GraphDetail   string            // first cause + remedy when GraphHealth is not healthy
+	Counts        []StatusCount  // every status in display order (count may be 0)
+	InProgress    []domain.Task  // the in-progress working set
+	Epics         []EpicSummary  // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
+	OpenAudits    []domain.Audit // audits still in the open bucket (actionable work)
+	ReadyToClose  int            // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
+	Findings      FindingsRollup // actionable audit findings (open/in-progress) aggregated by urgency + component
+	RevisitDue    int            // deferred tasks whose revisit_at (snooze-until) date has arrived
+	BadEpicStatus int            // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
+	Problems      []LoadProblem  // unreadable planning records
+	GraphHealth   GraphHealth    // repository-wide task-DAG verdict from the same snapshot as Counts/InProgress
+	GraphDetail   string         // first cause + remedy when GraphHealth is not healthy
 }
 
 // Summary composes a one-screen overview from a single scan of tasks + epics +
 // audits. Only OPEN audits are surfaced — the actionable subset, paralleling the
 // in-progress task working set (closed/deferred audits are done/parked).
 func (s *Service) Summary() (Summary, error) {
-	return summarize(s.store, s.taskGraphs, s.now())
+	return summarize(s.store, s.auditReads, s.taskGraphs, s.now())
 }
 
-func summarize(store SummaryStore, taskGraphs TaskGraphSource, now time.Time) (Summary, error) {
+func summarize(store SummaryStore, auditsSource AuditSnapshotSource, taskGraphs TaskGraphSource, now time.Time) (Summary, error) {
 	read, err := loadTaskGraphRecords(taskGraphs)
 	if err != nil {
 		return Summary{}, err
 	}
-	tasks := read.Tasks
+	tasks := taskGraphTasks(read)
 	p1 := taskGraphLoadProblems(read.Problems)
 	graph := NewTaskGraphRead(read)
-	epics, p2, err := store.ListEpics()
+	epicRead, err := store.ReadEpics()
 	if err != nil {
 		return Summary{}, err
 	}
+	epicRead.Records, epicRead.Problems = loadedRecordsWithIDs(EntityEpic, epicRead.Records, epicRead.Problems,
+		func(epic domain.Epic) string { return epic.ID })
+	epics, p2 := epicRead.Records, epicRead.Problems
 	// One scan of every audit body serves BOTH the open-bucket list (audit-level
 	// tallies) AND the findings rollup below — the store hands back the findings it
 	// already parsed for the tally, so Summary never re-reads a body (the H2 fix).
-	audits, p3, err := store.ListAuditsWithFindings()
+	if isNilCapability(auditsSource) {
+		return Summary{}, fmt.Errorf("audit snapshot reads are unavailable from this service")
+	}
+	auditSnapshot, err := auditsSource.ReadAuditSnapshot("")
 	if err != nil {
 		return Summary{}, err
 	}
+	auditSnapshot = auditSnapshotWithSourceIDs(auditSnapshot)
+	audits, p3 := auditSnapshot.Audits, auditSnapshot.Problems
 	var openAudits []domain.Audit
 	var actionable []AuditFinding
 	readyToClose := 0
-	for _, a := range audits {
+	for _, loaded := range audits {
+		a := loaded.Value
+		a.Audit.FilenameID = loaded.Source.ID // temporary bare-domain dashboard projection
 		if a.Audit.Bucket == domain.AuditOpen {
 			openAudits = append(openAudits, a.Audit)
 			// "Ready to close" = an open audit with nothing left to work (every finding
@@ -399,7 +409,7 @@ func summarize(store SummaryStore, taskGraphs TaskGraphSource, now time.Time) (S
 		// that). Same filter + (audit, document) order as QueryFindings would produce.
 		for _, fd := range a.Findings {
 			if isActionableFinding(fd) {
-				actionable = append(actionable, AuditFinding{Finding: fd, Audit: a.Audit.Slug, AuditID: a.Audit.CanonicalID(), Bucket: string(a.Audit.Bucket)})
+				actionable = append(actionable, AuditFinding{Finding: fd, Audit: a.Audit.Slug, AuditID: loaded.Source.ID, Bucket: string(a.Audit.Bucket)})
 			}
 		}
 	}
@@ -427,16 +437,17 @@ func summarize(store SummaryStore, taskGraphs TaskGraphSource, now time.Time) (S
 	// (lint reports each by id); surface the count so the dashboard can nudge — these
 	// epics are NOT dropped (dashboardEpics fails open), just flagged.
 	badEpicStatus := 0
-	for _, e := range epics {
+	for _, record := range epics {
+		e := record.Value
 		if !domain.IsKnownEpicStatus(e.Status) {
 			badEpicStatus++
 		}
 	}
-	problems := make([]LintLoadProblem, 0, len(p1)+len(p2)+len(p3))
+	problems := make([]LoadProblem, 0, len(p1)+len(p2)+len(p3))
 	problems = append(problems, p1...)
-	problems = append(problems, lintLoadProblemsFromFiles(LintEntityEpic, p2)...)
-	problems = append(problems, lintLoadProblemsFromFiles(LintEntityAudit, p3)...)
-	problems = canonicalLintLoadProblems(problems)
+	problems = append(problems, p2...)
+	problems = append(problems, p3...)
+	problems = canonicalLoadProblems(problems)
 	summary := Summary{
 		Counts:     ordered,
 		InProgress: inProgress,
@@ -491,7 +502,7 @@ func BlockingLintResultCount(results []LintResult) int {
 // repository-global task-graph and cross-kind identity integrity. Returns one
 // LintResult per entity with issues while unreadable records retain portable
 // identity and optional repair locations separately.
-func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
+func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 	if isNilCapability(s.lintReads) {
 		return nil, nil, fmt.Errorf("repository lint reads are unavailable from this store")
 	}
@@ -502,22 +513,28 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	taskProblems := append([]LintLoadProblem(nil), problems...)
+	tasks, problems = loadedRecordsWithIDs(EntityTask, tasks, problems,
+		func(record TaskWithBody) string { return record.Task.Slug })
+	taskProblems := append([]LoadProblem(nil), problems...)
 	epics, ep2, err := s.lintReads.ReadLintEpics()
 	if err != nil {
 		return nil, nil, err
 	}
+	epics, ep2 = loadedRecordsWithIDs(EntityEpic, epics, ep2,
+		func(epic domain.Epic) string { return epic.ID })
 	problems = append(problems, ep2...)
 	valid := make(map[string]bool, len(epics))
-	for _, e := range epics {
-		valid[domain.EpicRefKey(e.ID)] = true
+	for _, record := range epics {
+		valid[domain.EpicRefKey(record.Source.ID)] = true
 	}
 	validEpic := func(id string) bool { return valid[domain.EpicRefKey(id)] }
 	taskRecords := make([]domain.Task, len(tasks))
+	loadedTaskRecords := make([]LoadedRecord[domain.Task], len(tasks))
 	for i := range tasks {
-		taskRecords[i] = tasks[i].Task
+		taskRecords[i] = tasks[i].Value.Task
+		loadedTaskRecords[i] = LoadedRecord[domain.Task]{Value: tasks[i].Value.Task, Source: tasks[i].Source}
 	}
-	graphRead := TaskGraphRead{Tasks: taskRecords, Problems: make([]TaskGraphLoadProblem, 0, len(taskProblems))}
+	graphRead := TaskGraphRead{Tasks: taskRecords, Records: loadedTaskRecords, Problems: make([]TaskGraphLoadProblem, 0, len(taskProblems))}
 	for _, problem := range taskProblems {
 		// Ordinary lint returns the original portable diagnostic directly. The graph
 		// copy exists only so an unreadable stable task identity can hard-block its
@@ -533,19 +550,20 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 	graphIssues := dependencyLintIssues(graph)
 	validTaskIDs := make(map[string]bool, len(tasks))
 	taskIdentity := make(map[string]bool, len(tasks)*2)
-	for _, task := range tasks {
-		if task.Task.ID != "" {
-			validTaskIDs[task.Task.ID] = true
-			taskIdentity[task.Task.ID] = true
+	for _, record := range tasks {
+		task := record.Value.Task
+		if record.Source.ID != "" {
+			validTaskIDs[record.Source.ID] = true
+			taskIdentity[record.Source.ID] = true
 		}
-		if task.Task.FilenameID != "" {
-			taskIdentity[task.Task.FilenameID] = true
+		if task.ID != "" {
+			taskIdentity[task.ID] = true
 		}
 	}
 
 	var threads []domain.Thread
 	threadIDSources := make([]domain.StableIdentitySource, 0)
-	threadProblems := make([]LintLoadProblem, 0)
+	threadProblems := make([]LoadProblem, 0)
 	threadIdentity := make(map[string]bool)
 	if s.threads != nil {
 		var threadRead ThreadRead
@@ -555,13 +573,13 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 		}
 		threads = threadRead.Threads
 		for _, problem := range threadRead.Problems {
-			loadProblem := LintLoadProblem{
-				EntityKind: LintEntityThread, EntityID: problem.ThreadID,
+			loadProblem := LoadProblem{
+				EntityKind: EntityThread, EntityID: problem.ThreadID,
 				EntitySlug: problem.ThreadSlug, Location: problem.Location,
-				LocationIsPath: problem.LocationIsPath, Message: problem.Message,
+				Message: problem.Message,
 			}
 			if problem.LocationIsPath {
-				loadProblem.Path = problem.Location
+				loadProblem.LocalPath = problem.Location
 			}
 			threadProblems = append(threadProblems, loadProblem)
 			problems = append(problems, loadProblem)
@@ -583,8 +601,13 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 	}
 
 	var results []LintResult
-	for taskIndex, tb := range tasks {
+	for taskIndex, loaded := range tasks {
+		tb := loaded.Value
 		t := tb.Task
+		// Domain lint still accepts filename identity during this compatibility
+		// stage. Supply the adapter-owned source ID explicitly rather than asking
+		// core to reconstruct it from Location.
+		t.FilenameID = loaded.Source.ID
 		// Active tasks get the full field lint; archived tasks are only checked for the
 		// universal defects (missing/unrecognized frontmatter status, missing or drifted
 		// id) — no point nagging about missing fields on a completed item, but a bad
@@ -622,17 +645,19 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 	// co-mingle their tasks and resolve ambiguously). The epic id slots into Slug as
 	// the result's label.
 	epicIDs := make([]string, len(epics))
-	for i, e := range epics {
-		epicIDs[i] = e.ID
+	for i, record := range epics {
+		epicIDs[i] = record.Source.ID
 	}
 	dupNN := domain.DuplicateEpicNNIssues(epicIDs)
-	for _, e := range epics {
+	for _, record := range epics {
+		e := record.Value
+		e.ID = record.Source.ID // compatibility projection for domain lint
 		issues := domain.LintEpic(e)
-		if iss, ok := dupNN[e.ID]; ok {
+		if iss, ok := dupNN[record.Source.ID]; ok {
 			issues = append(issues, iss)
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: e.ID, Issues: issues})
+			results = append(results, LintResult{Slug: record.Source.ID, Issues: issues})
 		}
 	}
 	// Research is linted too (epic 28). There is no active/archived split to gate on —
@@ -643,21 +668,25 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	docs, rp = loadedRecordsWithIDs(EntityResearch, docs, rp,
+		func(research domain.Research) string { return research.Slug })
 	problems = append(problems, rp...)
 	// Cross-doc: a duplicate stable id makes every owning doc unresolvable by id and unwritable,
 	// and nothing else reports it (the create path now refuses one, but a hand-edit or an
 	// older tool version can still produce it). Keyed by id, so each colliding doc gets it.
 	researchIDs := make([]domain.StableIdentitySource, 0, len(docs)+len(rp))
-	for _, r := range docs {
-		researchIDs = append(researchIDs, domain.StableIdentitySource{ID: r.CanonicalID(), Location: r.Path})
+	for _, record := range docs {
+		researchIDs = append(researchIDs, domain.StableIdentitySource{ID: record.Source.ID, Location: record.Source.Location})
 	}
 	for _, problem := range rp {
 		researchIDs = append(researchIDs, domain.StableIdentitySource{ID: problem.EntityID, Location: problem.Location})
 	}
 	dupIDs := domain.DuplicateIDIssues(researchIDs)
-	for _, r := range docs {
+	for _, record := range docs {
+		r := record.Value
+		r.FilenameID = record.Source.ID // compatibility projection for domain lint
 		issues := domain.LintResearch(r)
-		if iss, ok := dupIDs[r.CanonicalID()]; ok {
+		if iss, ok := dupIDs[record.Source.ID]; ok {
 			issues = append(issues, iss)
 		}
 		if len(issues) > 0 {
@@ -673,21 +702,24 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	auditSnapshot = auditSnapshotWithSourceIDs(auditSnapshot)
 	auditRecords, ap := auditSnapshot.Audits, auditSnapshot.Problems
 	problems = append(problems, ap...)
 	auditIDs := make([]domain.StableIdentitySource, 0, len(auditRecords)+len(ap))
-	for _, record := range auditRecords {
+	for _, loaded := range auditRecords {
 		auditIDs = append(auditIDs, domain.StableIdentitySource{
-			ID: record.Audit.CanonicalID(), Location: record.Audit.Path,
+			ID: loaded.Source.ID, Location: loaded.Source.Location,
 		})
 	}
 	for _, problem := range ap {
 		auditIDs = append(auditIDs, domain.StableIdentitySource{ID: problem.EntityID, Location: problem.Location})
 	}
 	dupAuditIDs := domain.DuplicateIDIssues(auditIDs)
-	for _, a := range auditRecords {
+	for _, loaded := range auditRecords {
+		a := loaded.Value
+		a.Audit.FilenameID = loaded.Source.ID
 		issues := AuditLintIssues(a.Audit, a.Findings, a.NearMisses, a.CandidateIssues)
-		if issue, ok := dupAuditIDs[a.Audit.CanonicalID()]; ok {
+		if issue, ok := dupAuditIDs[loaded.Source.ID]; ok {
 			issues = append(issues, issue)
 		}
 		if len(issues) > 0 {
@@ -721,13 +753,13 @@ func (s *Service) Lint() ([]LintResult, []LintLoadProblem, error) {
 // diagnostic while also surfacing identity defects recovered by the adapter.
 // Identity belongs to the record even when its body does not decode; core must
 // never infer it by parsing an adapter's path or URI.
-func appendDuplicateProblemLintResults(results []LintResult, problems []LintLoadProblem, duplicates map[string]domain.Issue) []LintResult {
+func appendDuplicateProblemLintResults(results []LintResult, problems []LoadProblem, duplicates map[string]domain.Issue) []LintResult {
 	for _, problem := range problems {
 		issue, ok := duplicates[problem.EntityID]
 		if !ok {
 			continue
 		}
-		results = append(results, LintResult{Slug: lintLoadProblemLabel(problem), Issues: []domain.Issue{issue}})
+		results = append(results, LintResult{Slug: loadProblemLabel(problem), Issues: []domain.Issue{issue}})
 	}
 	return results
 }

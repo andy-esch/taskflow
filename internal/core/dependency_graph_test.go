@@ -771,13 +771,13 @@ func TestTaskGraphUnreadableOrderingMatchesPortableProjection(t *testing.T) {
 	for i := range graph.loadProblems {
 		graphProblem, portableProblem := graph.loadProblems[i], portable[i]
 		if graphProblem.TaskID != portableProblem.EntityID || graphProblem.TaskSlug != portableProblem.EntitySlug ||
-			graphProblem.Location != portableProblem.Location || graphProblem.LocationIsPath != portableProblem.LocationIsPath ||
-			taskGraphLocalPath(graphProblem) != portableProblem.Path || graphProblem.Message != portableProblem.Message {
+			graphProblem.Location != portableProblem.Location ||
+			taskGraphLocalPath(graphProblem) != portableProblem.LocalPath || graphProblem.Message != portableProblem.Message {
 			t.Fatalf("problem %d order drifted: graph=%+v portable=%+v", i, graphProblem, portableProblem)
 		}
 	}
 	if portable[0].Location != "z://remote/source" {
-		t.Fatalf("path classification must precede location text in canonical order: %+v", portable)
+		t.Fatalf("local repair path must precede location text in canonical order: %+v", portable)
 	}
 }
 

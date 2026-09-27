@@ -15,11 +15,11 @@ import (
 // links whose target carries a template placeholder (`…`, `<`, `>`, `{`, `}`). A trailing
 // #fragment or ?query is stripped before the existence check. It is the Scheme-2 dangler
 // check `lint --links` surfaces.
-func (s *FS) DanglingLinks() ([]core.LintLoadProblem, error) {
+func (s *FS) DanglingLinks() ([]core.LoadProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, err
 	}
-	var out []core.LintLoadProblem
+	var out []core.LoadProblem
 	err := filepath.WalkDir(s.root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -60,8 +60,8 @@ func (s *FS) DanglingLinks() ([]core.LintLoadProblem, error) {
 				continue
 			}
 			if _, err := os.Stat(resolved); os.IsNotExist(err) {
-				out = append(out, core.LintLoadProblem{
-					Location: p, LocationIsPath: true, Path: p,
+				out = append(out, core.LoadProblem{
+					Location: p, LocalPath: p,
 					Message: "body link to missing file: " + target,
 				})
 			}

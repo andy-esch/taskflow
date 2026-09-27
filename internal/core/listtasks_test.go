@@ -57,7 +57,7 @@ func TestService_ListTasks_FilterByEpicNNKey(t *testing.T) {
 	if len(got) != 3 {
 		var slugs []string
 		for _, tk := range got {
-			slugs = append(slugs, tk.Slug)
+			slugs = append(slugs, tk.Value.Slug)
 		}
 		t.Errorf("--epic 24-data-model should match all 3 NN-24 refs (not 01-other), got %v", slugs)
 	}
@@ -85,7 +85,7 @@ func TestService_ListTasks_UnblockedUsesStrictGraphAndFailsClosed(t *testing.T) 
 	want := []string{blocked.ID, eligible.ID, queued.ID}
 	gotIDs := make([]string, len(got))
 	for i := range got {
-		gotIDs[i] = got[i].ID
+		gotIDs[i] = got[i].Source.ID
 	}
 	if !slices.Equal(gotIDs, want) {
 		t.Fatalf("eligible IDs = %v, want %v", gotIDs, want)

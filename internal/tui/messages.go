@@ -5,7 +5,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/andy-esch/taskflow/internal/core"
-	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // dashLoadedMsg carries the dashboard's core.Summary load (the landing screen's
@@ -75,7 +74,7 @@ type listLoadedMsg struct {
 	kind     entityKind
 	gen      int
 	items    []list.Item
-	problems []domain.FileProblem
+	problems []core.LoadProblem
 	// Only the Threads registry entry populates this. It retains repository-level
 	// diagnostics that cannot be attributed to a single Thread row.
 	threadDiagnostics *threadListDiagnostics

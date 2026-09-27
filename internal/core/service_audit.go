@@ -66,18 +66,21 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 // bucket is validated up front and returns ErrValidation rather than a silently
 // empty list, which agents routing on exit codes can't tell apart from an empty
 // bucket — mirroring ListTasks' status check.
-func (s *Service) ListAudits(bucket string, all bool) ([]domain.Audit, []domain.FileProblem, error) {
+func (s *Service) ListAudits(bucket string, all bool) ([]LoadedRecord[domain.Audit], []LoadProblem, error) {
 	if bucket != "" {
 		if _, err := domain.ParseAuditBucket(bucket); err != nil {
 			return nil, nil, err
 		}
 	}
-	audits, problems, err := s.store.ListAudits()
+	read, err := s.store.ReadAudits()
 	if err != nil {
 		return nil, nil, err
 	}
-	out := make([]domain.Audit, 0, len(audits))
-	for _, a := range audits {
+	read.Records, read.Problems = loadedRecordsWithIDs(EntityAudit, read.Records, read.Problems,
+		func(audit domain.Audit) string { return audit.Slug })
+	out := make([]LoadedRecord[domain.Audit], 0, len(read.Records))
+	for _, record := range read.Records {
+		a := record.Value
 		switch {
 		case bucket != "":
 			if string(a.Bucket) != bucket {
@@ -86,14 +89,21 @@ func (s *Service) ListAudits(bucket string, all bool) ([]domain.Audit, []domain.
 		case !all && a.Bucket != domain.AuditOpen:
 			continue
 		}
-		out = append(out, a)
+		out = append(out, record)
 	}
-	return out, problems, nil
+	return out, read.Problems, nil
 }
 
 // ShowAudit returns one audit plus its body.
-func (s *Service) ShowAudit(slug string) (domain.Audit, string, error) {
-	return s.store.GetAudit(slug)
+func (s *Service) ShowAudit(slug string) (LoadedRecord[AuditWithBody], error) {
+	record, err := s.store.ReadAudit(slug)
+	if err != nil {
+		return LoadedRecord[AuditWithBody]{}, err
+	}
+	if err := requireSourceID(EntityAudit, record.Source); err != nil {
+		return LoadedRecord[AuditWithBody]{}, err
+	}
+	return record, nil
 }
 
 // AuditPath resolves an audit's file path without reading or parsing it — the seam

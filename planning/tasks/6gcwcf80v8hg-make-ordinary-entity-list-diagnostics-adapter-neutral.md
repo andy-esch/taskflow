@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gcwcf80v8hg
-status: ready-to-start
+status: in-progress
 epic: 21-code-quality-architecture-hardening
 description: Preserve identity and optional locations through task, epic, audit, research, and finding list projections.
 effort: 3-5 days
@@ -12,6 +12,7 @@ tags: [architecture, diagnostics, ports, json]
 created: "2026-09-23"
 updated_at: "2026-09-26"
 depends_on: [6gcwcf7rgxef]
+started_at: "2026-09-26"
 ---
 
 # Make ordinary entity list diagnostics adapter neutral
@@ -46,19 +47,19 @@ Threads, and task-graph reads can already preserve it.
 
 ## Acceptance criteria
 
-- [ ] Every ordinary entity-list port and service result is free of `domain.FileProblem`.
-- [ ] Read ports remain entity-specific while their result values share one source and diagnostic
+- [x] Every ordinary entity-list port and service result is free of `domain.FileProblem`.
+- [x] Read ports remain entity-specific while their result values share one source and diagnostic
       vocabulary; no universal entity store or kind switch is introduced.
-- [ ] Task graph, ordinary list, show, lint, Board, and Summary projections reuse one authoritative
+- [x] Task graph, ordinary list, show, lint, Board, and Summary projections reuse one authoritative
       loaded scan where they request the same snapshot; tests pin adapter call counts.
-- [ ] Pathless failures retain kind and identity through core, human output, JSON, and generated
+- [x] Pathless failures retain kind and identity through core, human output, JSON, and generated
       schema.
-- [ ] Local failures remain actionable and retain current partial-result and exit behavior.
-- [ ] Explicit identity wins over misleading location on every entity kind.
-- [ ] Machine-contract fixtures document the additive compatibility mapping and reject schema drift.
-- [ ] `LintSource`, `AuditSnapshotSource`, Board/status, and ordinary list consumers use the promoted
+- [x] Local failures remain actionable and retain current partial-result and exit behavior.
+- [x] Explicit identity wins over misleading location on every entity kind.
+- [x] Machine-contract fixtures document the additive compatibility mapping and reject schema drift.
+- [x] `LintSource`, `AuditSnapshotSource`, Board/status, and ordinary list consumers use the promoted
       core diagnostic without a behaviorally identical compatibility wrapper.
-- [ ] Single-record show results and wire converters obtain canonical identity from the loaded
+- [x] Single-record show results and wire converters obtain canonical identity from the loaded
       source envelope while public JSON compatibility remains unchanged.
 
 ## Out of scope
@@ -75,3 +76,24 @@ Threads, and task-graph reads can already preserve it.
 - Thread [Make planning data access adapter neutral](../threads/6gcwd78p9r04-make-planning-data-access-adapter-neutral.md)
 - [Portable Board/status diagnostics](6g6jqqcdehne-preserve-portable-load-diagnostics-in-board-and-status.md)
 - [Stable lint diagnostic kinds](6gcqz5b0j0dg-give-lint-diagnostics-stable-kinds-and-repair-applicability.md)
+
+## Implementation evidence (2026-09-26)
+
+Ordinary entity ports now return loaded records and `LoadProblem`; task graph/list/lint share the
+filesystem adapter's body-bearing, versioned task scan. Board and Summary retain narrow
+bare-domain compatibility projections with source identity injected explicitly. Full and projected
+JSON use source IDs; local unreadable records keep `path`, while pathless records carry kind,
+ID/slug, and optional opaque location. Schema 1.76 and machine goldens cover the additive mapping.
+The full race-enabled Go suite, vet, CLI golden/schema checks, and repository lint passed locally.
+
+Codex's [implementation audit](../audits/6ge0q80cc01r-2026-09-26-ordinary-entity-read-snapshots-implementation-codex.md)
+found that a source-less explicit task record could inherit its declared ID and become graph-eligible.
+Read boundaries now reject that record as a load problem; focused regressions cover graph, Board,
+ordinary lists/show, and the audit bulk-fix preflight. The audit's readable-location attribution
+finding is tracked by [the sequenced follow-up](6ge1bacd3bd2-preserve-readable-source-locations-in-portable-entity-diagnostics.md)
+before source/path removal.
+
+The [Antigravity audit](../audits/6ge0q80ng3b4-2026-09-26-ordinary-entity-read-snapshots-implementation-antigravity.md)
+also found a bare research mutation JSON identity mismatch, a masked projected-ID test case, and
+an epic-show bare-task conversion that omitted source binding. All three are fixed; the audit carries
+an owner correction to its task hashing claim. Both implementation audits are closed.

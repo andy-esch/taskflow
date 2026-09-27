@@ -27,7 +27,7 @@ type TaskFilter struct {
 // ErrValidation rather than a silently empty list, which agents routing on exit
 // codes can't tell apart from an empty bucket. (The epic check costs one
 // ListEpics call, only when that filter is set.)
-func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, error) {
+func (s *Service) ListTasks(f TaskFilter) ([]LoadedRecord[domain.Task], []LoadProblem, error) {
 	if f.Status != "" {
 		if _, err := domain.ParseStatus(f.Status); err != nil {
 			return nil, nil, err
@@ -37,10 +37,11 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 		if s.store == nil {
 			return nil, nil, fmt.Errorf("epic reads are unavailable from this store")
 		}
-		epics, _, err := s.store.ListEpics()
+		epicRead, err := s.store.ReadEpics()
 		if err != nil {
 			return nil, nil, err
 		}
+		epics, _ := loadedRecordsWithIDs(EntityEpic, epicRead.Records, epicRead.Problems, func(epic domain.Epic) string { return epic.ID })
 		if !epicExists(epics, f.Epic) {
 			return nil, nil, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, f.Epic)
 		}
@@ -49,8 +50,8 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 	if err != nil {
 		return nil, nil, err
 	}
-	all := read.Tasks
-	problems := taskGraphFileProblems(read.Problems)
+	all := taskGraphRecords(read)
+	problems := taskGraphLoadProblems(read.Problems)
 	var graph *TaskGraph
 	if f.Unblocked {
 		graph = NewTaskGraphRead(read)
@@ -63,8 +64,9 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 	// default (deferred is inactive) just like an explicit --status does.
 	activeOnly := f.Status == "" && !f.All && !f.RevisitDue
 	now := s.now()
-	out := make([]domain.Task, 0, len(all))
-	for _, t := range all {
+	out := make([]LoadedRecord[domain.Task], 0, len(all))
+	for _, record := range all {
+		t := record.Value
 		if activeOnly && !t.Status.IsActive() {
 			continue
 		}
@@ -84,17 +86,24 @@ func (s *Service) ListTasks(f TaskFilter) ([]domain.Task, []domain.FileProblem, 
 		if f.Tag != "" && !hasTag(t.Tags, f.Tag) {
 			continue
 		}
-		if f.Unblocked && !graph.State(t.ID).Eligible {
+		if f.Unblocked && !graph.State(record.Source.ID).Eligible {
 			continue
 		}
-		out = append(out, t)
+		out = append(out, record)
 	}
 	return out, problems, nil
 }
 
 // ShowTask returns one task plus its markdown body.
-func (s *Service) ShowTask(slug string) (domain.Task, string, error) {
-	return s.store.GetTask(slug)
+func (s *Service) ShowTask(slug string) (LoadedRecord[TaskWithBody], error) {
+	record, err := s.store.ReadTask(slug)
+	if err != nil {
+		return LoadedRecord[TaskWithBody]{}, err
+	}
+	if err := requireSourceID(EntityTask, record.Source); err != nil {
+		return LoadedRecord[TaskWithBody]{}, err
+	}
+	return record, nil
 }
 
 // TaskGraphLoadProblem is an unreadable task record supplied to the strict graph.
@@ -120,6 +129,10 @@ type TaskGraphLoadProblem struct {
 // stores to compare the complete source set without making the analyzer or
 // primary adapters storage-aware.
 type TaskGraphRead struct {
+	// Records is the portable authoritative representation. Tasks remains a
+	// compatibility projection for focused fakes and guarded code while domain
+	// source metadata is migrated in the sequenced cleanup task.
+	Records  []LoadedRecord[domain.Task]
 	Tasks    []domain.Task
 	Problems []TaskGraphLoadProblem
 }
@@ -136,26 +149,109 @@ type TaskGraphSource interface {
 
 type taskStoreGraphSource struct {
 	store interface {
-		ListTasks() ([]domain.Task, []domain.FileProblem, error)
+		ReadTasks() (TaskRead, error)
+		ReadTask(ref string) (LoadedRecord[TaskWithBody], error)
 	}
 }
 
 func (s taskStoreGraphSource) ReadTaskGraph() (TaskGraphRead, error) {
-	tasks, problems, err := s.store.ListTasks()
+	ordinary, err := s.store.ReadTasks()
 	if err != nil {
 		return TaskGraphRead{}, err
 	}
-	return TaskGraphReadFromFiles(tasks, problems), nil
+	read := TaskGraphRead{Records: ordinary.Records, Problems: make([]TaskGraphLoadProblem, 0, len(ordinary.Problems))}
+	read.Tasks = make([]domain.Task, 0, len(ordinary.Records))
+	for _, record := range ordinary.Records {
+		task := record.Value
+		task.FilenameID = record.Source.ID
+		read.Tasks = append(read.Tasks, task)
+	}
+	for _, problem := range ordinary.Problems {
+		read.Problems = append(read.Problems, taskGraphLoadProblemFromLoadProblem(problem))
+	}
+	return read, nil
+}
+
+func taskGraphLoadProblemFromLoadProblem(problem LoadProblem) TaskGraphLoadProblem {
+	return TaskGraphLoadProblem{
+		TaskID: problem.EntityID, TaskSlug: problem.EntitySlug,
+		Location: problem.Location, LocationIsPath: problem.LocalPath != "",
+		Path: problem.LocalPath, Message: problem.Message,
+	}
 }
 
 // TaskGraphReadFromFiles adapts the legacy/local resilient task-list contract at
 // the storage boundary. Non-filesystem TaskGraphSource implementations provide
 // identity directly and need not synthesize a Markdown path.
 func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) TaskGraphRead {
-	read := TaskGraphRead{Tasks: tasks, Problems: make([]TaskGraphLoadProblem, 0, len(problems))}
+	read := TaskGraphRead{
+		Tasks: tasks, Records: make([]LoadedRecord[domain.Task], 0, len(tasks)),
+		Problems: make([]TaskGraphLoadProblem, 0, len(problems)),
+	}
+	for _, task := range tasks {
+		read.Records = append(read.Records, LoadedRecord[domain.Task]{
+			Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path},
+		})
+	}
 	for _, problem := range problems {
 		read.Problems = append(read.Problems, TaskGraphLoadProblemFromFile(problem, ""))
 	}
+	return read
+}
+
+// taskGraphRecords normalizes the compatibility Tasks projection into portable
+// records. New adapters populate Records directly; older focused fakes remain
+// usable while the staged migration removes domain source metadata.
+func taskGraphRecords(read TaskGraphRead) []LoadedRecord[domain.Task] {
+	if read.Records != nil {
+		return append([]LoadedRecord[domain.Task](nil), read.Records...)
+	}
+	records := make([]LoadedRecord[domain.Task], 0, len(read.Tasks))
+	for _, task := range read.Tasks {
+		records = append(records, LoadedRecord[domain.Task]{
+			Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path},
+		})
+	}
+	return records
+}
+
+func taskGraphTasks(read TaskGraphRead) []domain.Task {
+	records := taskGraphRecords(read)
+	tasks := make([]domain.Task, 0, len(records))
+	for _, record := range records {
+		task := record.Value
+		// This bare-domain projection exists only for older graph/board/status
+		// consumers. Never let a stale adapter-private filename field override
+		// the explicit identity supplied by the read port.
+		task.FilenameID = record.Source.ID
+		tasks = append(tasks, task)
+	}
+	return tasks
+}
+
+// validatedTaskGraphRead refuses to promote an explicit record with no source
+// identity into a graph node. In particular, the declared frontmatter ID must
+// never become an authorization fallback when a portable adapter omits its key.
+// Keep the malformed occurrence as a load problem so all partial-read surfaces
+// remain noisy and guarded snapshot comparison fails closed without a revision.
+func validatedTaskGraphRead(read TaskGraphRead) TaskGraphRead {
+	records := taskGraphRecords(read)
+	valid := make([]LoadedRecord[domain.Task], 0, len(records))
+	problems := append([]TaskGraphLoadProblem(nil), read.Problems...)
+	for _, record := range records {
+		if requireSourceID(EntityTask, record.Source) == nil {
+			valid = append(valid, record)
+			continue
+		}
+		problems = append(problems, TaskGraphLoadProblem{
+			TaskSlug: record.Value.Slug, Location: record.Source.Location,
+			Message:       "task record has no canonical source ID",
+			SourceVersion: record.Value.SourceVersion,
+		})
+	}
+	read.Records = valid
+	read.Tasks = nil // compatibility values cannot reintroduce a rejected record
+	read.Problems = problems
 	return read
 }
 
@@ -194,22 +290,22 @@ func taskGraphLocalPath(problem TaskGraphLoadProblem) string {
 	return ""
 }
 
-func taskGraphLoadProblems(problems []TaskGraphLoadProblem) []LintLoadProblem {
+func taskGraphLoadProblems(problems []TaskGraphLoadProblem) []LoadProblem {
 	ordered := canonicalTaskGraphLoadProblems(problems)
-	out := make([]LintLoadProblem, 0, len(ordered))
+	out := make([]LoadProblem, 0, len(ordered))
 	for _, problem := range ordered {
-		location, isPath := problem.Location, problem.LocationIsPath
+		location := problem.Location
 		path := taskGraphLocalPath(problem)
 		// Path predates the neutral location fields. Treat it as local filesystem
 		// context so focused adapters/tests that still populate only Path retain the
 		// same diagnostics while new adapters can provide an opaque Location.
 		if location == "" && problem.Path != "" {
-			location, isPath = problem.Path, true
+			location = problem.Path
 		}
-		out = append(out, LintLoadProblem{
-			EntityKind: LintEntityTask, EntityID: problem.TaskID,
+		out = append(out, LoadProblem{
+			EntityKind: EntityTask, EntityID: problem.TaskID,
 			EntitySlug: problem.TaskSlug, Location: location,
-			LocationIsPath: isPath, Path: path, Message: problem.Message,
+			LocalPath: path, Message: problem.Message,
 		})
 	}
 	return out
@@ -235,7 +331,11 @@ func loadTaskGraphRecords(source TaskGraphSource) (TaskGraphRead, error) {
 	if isNilCapability(source) {
 		return TaskGraphRead{}, fmt.Errorf("task graph reads are unavailable from this store")
 	}
-	return source.ReadTaskGraph()
+	read, err := source.ReadTaskGraph()
+	if err != nil {
+		return TaskGraphRead{}, err
+	}
+	return validatedTaskGraphRead(read), nil
 }
 
 // LoadTaskGraph is the one canonical filesystem-agnostic snapshot loader used by
@@ -259,11 +359,11 @@ func (s *Service) TaskPath(slug string) (string, error) {
 // AcceptanceCriteria lists a task's acceptance criteria (read-only, for `task ac
 // --list`). Returns the canonical slug (for the envelope) and the ordered criteria.
 func (s *Service) AcceptanceCriteria(slug string) (string, []domain.Criterion, error) {
-	t, body, err := s.store.GetTask(slug)
+	record, err := s.store.ReadTask(slug)
 	if err != nil {
 		return "", nil, err
 	}
-	return t.Slug, domain.ListAcceptanceCriteria(body), nil
+	return record.Value.Task.Slug, domain.ListAcceptanceCriteria(record.Value.Body), nil
 }
 
 // SetAcceptanceCriterion flips a task's nth (1-based) acceptance-criteria checkbox.
@@ -309,11 +409,12 @@ func (s *Service) SetCriteriaTracked(slug string, ns []int, trackedTo, reason st
 		return domain.Task{}, "", false, fmt.Errorf(
 			"%w: `tracked` needs a destination — pass --to <task> so the handoff can be followed", domain.ErrValidation)
 	}
-	destination, _, err := s.store.GetTask(trackedTo)
+	destinationRecord, err := s.store.ReadTask(trackedTo)
 	if err != nil {
 		return domain.Task{}, "", false, fmt.Errorf("resolve --to %q: %w", trackedTo, err)
 	}
-	if destination.ID == "" {
+	destination := destinationRecord.Value.Task
+	if destinationRecord.Source.ID == "" {
 		return domain.Task{}, "", false, fmt.Errorf(
 			"%w: destination task %q has no stable id to track by", domain.ErrValidation, trackedTo)
 	}
@@ -321,7 +422,7 @@ func (s *Service) SetCriteriaTracked(slug string, ns []int, trackedTo, reason st
 		return domain.Task{}, "", false, fmt.Errorf(
 			"%w: a criterion cannot be tracked to its own task", domain.ErrValidation)
 	}
-	return s.setCriteriaState(slug, ns, domain.CriterionTracked, domain.FormatTrackedReason(destination.ID, reason), dryRun)
+	return s.setCriteriaState(slug, ns, domain.CriterionTracked, domain.FormatTrackedReason(destinationRecord.Source.ID, reason), dryRun)
 }
 
 func (s *Service) setCriteriaState(slug string, ns []int, state domain.CriterionState, reason string, dryRun bool) (domain.Task, string, bool, error) {
@@ -548,16 +649,16 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 		if epic == "" {
 			withMeta["epic"] = domain.UnsetField{} // detach from the epic
 		} else {
-			epics, _, err := s.store.ListEpics()
+			epicRead, err := s.store.ReadEpics()
 			if err != nil {
 				return domain.Task{}, err
 			}
-			if !epicExists(epics, epic) {
+			if !epicExists(epicRead.Records, epic) {
 				return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, epic)
 			}
 			// Store the epic's canonical stem (as NewTask does), so `set --set epic=24` and
 			// `new --epic 24` leave the same readable `<NN>-<slug>` ref, not a bare NN.
-			withMeta["epic"] = canonicalEpic(epics, epic)
+			withMeta["epic"] = canonicalEpic(epicRead.Records, epic)
 		}
 	}
 	withMeta["updated_at"] = s.now().Format("2006-01-02")
@@ -638,16 +739,16 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	if err := templateBodyConflict(p.Body, p.Template); err != nil {
 		return domain.Task{}, err
 	}
-	epics, _, err := s.store.ListEpics()
+	epicRead, err := s.store.ReadEpics()
 	if err != nil {
 		return domain.Task{}, err
 	}
-	if !epicExists(epics, p.Epic) {
+	if !epicExists(epicRead.Records, p.Epic) {
 		return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, p.Epic)
 	}
 	// Store and link the epic's canonical stem (resolved on the NN key), so a bare NN or
 	// a stale slug the caller passed becomes the epic's current, readable `<NN>-<slug>`.
-	p.Epic = canonicalEpic(epics, p.Epic)
+	p.Epic = canonicalEpic(epicRead.Records, p.Epic)
 	// Defaults for zero-valued fields live here so EVERY caller — not just the CLI
 	// flags — produces a valid, lint-clean task; the CLI flag defaults stay as
 	// help-text hints. (A second adapter calling NewTask without replicating them

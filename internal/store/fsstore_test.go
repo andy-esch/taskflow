@@ -32,6 +32,39 @@ func TestFS_ListTasksWithBodies(t *testing.T) {
 	}
 }
 
+func TestFS_TaskReadProjectionsShareLoadedIdentityAndDiagnostics(t *testing.T) {
+	root := t.TempDir()
+	goodPath, good := testutil.TaskFixture(root, "ready-to-start", "good.md",
+		"---\nstatus: ready-to-start\ndescription: readable\n---\n# Good\n\n## Acceptance criteria\n")
+	badPath, bad := testutil.TaskFixture(root, "ready-to-start", "bad.md",
+		"---\nid: [unterminated\n---\n# Bad\n")
+	testutil.Write(t, goodPath, good)
+	testutil.Write(t, badPath, bad)
+	fs := NewFS(root)
+
+	graph, err := fs.ReadTaskGraph()
+	if err != nil || len(graph.Records) != 1 || len(graph.Problems) != 1 || graph.Problems[0].SourceVersion == "" {
+		t.Fatalf("graph projection = %+v, err = %v", graph, err)
+	}
+	ordinary, err := fs.ReadTasks()
+	if err != nil || len(ordinary.Records) != 1 || len(ordinary.Problems) != 1 {
+		t.Fatalf("ordinary projection = %+v, err = %v", ordinary, err)
+	}
+	lint, lintProblems, err := fs.ReadLintTasks()
+	if err != nil || len(lint) != 1 || len(lintProblems) != 1 {
+		t.Fatalf("lint projection = %+v, problems = %+v, err = %v", lint, lintProblems, err)
+	}
+	goodID, badID := testutil.TaskID("good"), testutil.TaskID("bad")
+	if graph.Records[0].Source.ID != goodID || ordinary.Records[0].Source.ID != goodID || lint[0].Source.ID != goodID ||
+		ordinary.Records[0].Source.Location != goodPath || !strings.Contains(lint[0].Value.Body, "## Acceptance criteria") {
+		t.Fatalf("readable source/body drift: graph=%+v ordinary=%+v lint=%+v", graph.Records, ordinary.Records, lint)
+	}
+	if graph.Problems[0].TaskID != badID || ordinary.Problems[0].EntityID != badID || lintProblems[0].EntityID != badID ||
+		ordinary.Problems[0].LocalPath != badPath || lintProblems[0].LocalPath != badPath {
+		t.Fatalf("unreadable source drift: graph=%+v ordinary=%+v lint=%+v", graph.Problems, ordinary.Problems, lintProblems)
+	}
+}
+
 func TestFS_ListTasks(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "alpha.md",

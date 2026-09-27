@@ -129,10 +129,10 @@ func newAuditListCmd(app *App) *cobra.Command {
 				return err
 			}
 			if err := renderList(app, mode, lm.columns, audits, problems,
-				"audits", render.AuditColumns(), render.AuditsJSON, render.AuditsHuman); err != nil {
+				"audits", render.AuditReadColumns(), render.AuditsJSON, render.AuditsReadHuman); err != nil {
 				return err
 			}
-			return problemsError(problems)
+			return portableProblemsError("audit", problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.AuditColumns()))
@@ -270,11 +270,11 @@ func newAuditFindingCmd(app *App) *cobra.Command {
 					app.Style.Dim("•"), app.Style.Bold(args[1]), app.Style.Bold(a.Slug))
 				return nil
 			}
-			_, body, err := app.Svc.ShowAudit(a.Slug)
+			loaded, err := app.Svc.ShowAudit(a.Slug)
 			if err != nil {
 				return err
 			}
-			return reportAuditMutation(app, a, body,
+			return reportAuditMutation(app, a, loaded.Value.Body,
 				"set "+what+" in", "would set "+what+" in")
 		},
 	}
@@ -474,27 +474,27 @@ func newAuditShowCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			audit, body, err := app.Svc.ShowAudit(slug)
+			record, err := app.Svc.ShowAudit(slug)
 			if err != nil {
 				return err
 			}
 			// --section / --frontmatter-only narrow the audit's markdown body only; the
 			// metadata + finding tree always show. Parse findings from the FULL body so
 			// the tree is unaffected by a narrowed view.
-			findings := domain.ParseFindings(body)
-			body, err = narrowBody("audit", slug, body, section, fmOnly)
+			findings := domain.ParseFindings(record.Value.Body)
+			record.Value.Body, err = narrowBody("audit", slug, record.Value.Body, section, fmOnly)
 			if err != nil {
 				return err
 			}
 			if app.JSON {
-				return render.AuditShowJSON(app.Out, audit, body)
+				return render.AuditShowJSON(app.Out, record)
 			}
 			return app.paged(func(w io.Writer) error {
 				rendered := ""
-				if body != "" { // --frontmatter-only → no body render (and no trailing blank line)
-					rendered = render.RenderBody(app.Style, body, app.markdownStyle, raw)
+				if record.Value.Body != "" { // --frontmatter-only → no body render (and no trailing blank line)
+					rendered = render.RenderBody(app.Style, record.Value.Body, app.markdownStyle, raw)
 				}
-				return render.AuditShowHuman(w, app.Style, audit, findings, rendered)
+				return render.AuditShowHuman(w, app.Style, record.Value.Audit, findings, rendered)
 			})
 		},
 	}
@@ -521,15 +521,15 @@ func newAuditInfoCmd(app *App) *cobra.Command {
 			}
 			// ShowAudit populates the disposition tally on load (parseAudit), so no
 			// re-parse is needed for the counts.
-			audit, _, err := app.Svc.ShowAudit(slug)
+			record, err := app.Svc.ShowAudit(slug)
 			if err != nil {
 				return err
 			}
-			path := absPath(audit.Path)
+			path := absPath(record.Value.Audit.Path)
 			if app.JSON {
-				return render.AuditInfoJSON(app.Out, audit, path)
+				return render.AuditInfoJSON(app.Out, record, path)
 			}
-			render.AuditInfoHuman(app.Out, app.Style, audit, path)
+			render.AuditInfoHuman(app.Out, app.Style, record.Value.Audit, path)
 			return nil
 		},
 	}

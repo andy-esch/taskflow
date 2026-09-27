@@ -151,7 +151,7 @@ type FindingFilter struct {
 // audit resolved by f.Audit), in (audit order, document order). The snapshot
 // keeps metadata, parsed findings, and failed-record identity tied to the same
 // adapter read; core never follows a persistence location to reread a body.
-func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []LintLoadProblem, error) {
+func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []LoadProblem, error) {
 	if isNilCapability(s.auditReads) {
 		return nil, nil, fmt.Errorf("audit snapshot reads are unavailable from this service")
 	}
@@ -159,14 +159,16 @@ func (s *Service) QueryFindings(f FindingFilter) ([]AuditFinding, []LintLoadProb
 	if err != nil {
 		return nil, nil, err
 	}
+	snapshot = auditSnapshotWithSourceIDs(snapshot)
 	audits := snapshot.Audits
 
 	var out []AuditFinding
-	for _, record := range audits {
+	for _, loaded := range audits {
+		record := loaded.Value
 		for _, fd := range record.Findings {
 			if findingMatches(fd, f) {
 				out = append(out, AuditFinding{
-					Finding: fd, Audit: record.Audit.Slug, AuditID: record.Audit.CanonicalID(),
+					Finding: fd, Audit: record.Audit.Slug, AuditID: loaded.Source.ID,
 					Bucket: string(record.Audit.Bucket),
 				})
 			}
@@ -275,13 +277,25 @@ func AuditLintIssues(a domain.Audit, findings []domain.Finding, nearMisses []dom
 // deliberately rewrites frontmatter only and passes the body through untouched.
 // Audits with nothing to repair are not written at all, so a clean corpus is a no-op.
 func (s *Service) FixFindingHeaders(dryRun bool) ([]domain.FixResult, error) {
-	audits, _, err := s.store.ListAuditsWithFindings()
+	if isNilCapability(s.auditReads) {
+		return nil, fmt.Errorf("audit snapshot reads are unavailable from this service")
+	}
+	snapshot, err := s.auditReads.ReadAuditSnapshot("")
 	if err != nil {
 		return nil, err
 	}
+	// This is a bulk write selected by slug. Validate the complete readable
+	// snapshot before applying any prefix, so an incomplete adapter envelope
+	// cannot silently substitute declaration or filename identity.
+	for _, loaded := range snapshot.Audits {
+		if err := requireSourceID(EntityAudit, loaded.Source); err != nil {
+			return nil, err
+		}
+	}
 	now := s.now()
 	var out []domain.FixResult
-	for _, a := range audits {
+	for _, loaded := range snapshot.Audits {
+		a := loaded.Value
 		if len(a.NearMisses) == 0 {
 			continue
 		}
@@ -315,10 +329,10 @@ func (s *Service) FixFindingHeaders(dryRun bool) ([]domain.FixResult, error) {
 
 // LintAudits validates findings, managed candidate projections, and the bucket↔state
 // invariant, returning one LintResult per audit with issues. slug restricts it to one audit.
-func (s *Service) LintAudits(slug string) ([]LintResult, []LintLoadProblem, error) {
+func (s *Service) LintAudits(slug string) ([]LintResult, []LoadProblem, error) {
 	var (
 		results  []LintResult
-		problems []LintLoadProblem
+		problems []LoadProblem
 	)
 	if isNilCapability(s.auditReads) {
 		return nil, nil, fmt.Errorf("audit snapshot reads are unavailable from this service")
@@ -327,8 +341,11 @@ func (s *Service) LintAudits(slug string) ([]LintResult, []LintLoadProblem, erro
 	if err != nil {
 		return nil, nil, err
 	}
+	snapshot = auditSnapshotWithSourceIDs(snapshot)
 	problems = snapshot.Problems
-	for _, record := range snapshot.Audits {
+	for _, loaded := range snapshot.Audits {
+		record := loaded.Value
+		record.Audit.FilenameID = loaded.Source.ID
 		iss := AuditLintIssues(record.Audit, record.Findings, record.NearMisses, record.CandidateIssues)
 		if len(iss) > 0 {
 			results = append(results, LintResult{Slug: record.Audit.Slug, Issues: iss})

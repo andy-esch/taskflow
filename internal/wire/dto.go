@@ -41,10 +41,22 @@ type TaskJSON struct {
 	DependsOn   []string `json:"depends_on,omitempty" jsonschema:"description=sorted stable task IDs that must be soundly completed before this task is ordinarily eligible to start"`
 }
 
-// ToTaskJSON maps a domain task to its wire DTO.
+// ToTaskJSON maps a bare-domain compatibility projection to its wire DTO.
+// Core's board/status projections set FilenameID from the loaded source before
+// using this mapper. Ordinary reads use ToLoadedTaskJSON directly.
 func ToTaskJSON(t domain.Task) TaskJSON {
+	return toTaskJSON(t, t.CanonicalID())
+}
+
+// ToLoadedTaskJSON maps an ordinary task read using the adapter-supplied source
+// ID as the public stable identity.
+func ToLoadedTaskJSON(record core.LoadedRecord[domain.Task]) TaskJSON {
+	return toTaskJSON(record.Value, record.Source.ID)
+}
+
+func toTaskJSON(t domain.Task, id string) TaskJSON {
 	j := TaskJSON{
-		ID: t.ID, Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
+		ID: id, Slug: t.Slug, Status: string(t.Status), Epic: t.Epic,
 		Description: t.Description, Effort: t.Effort, Tier: t.Tier,
 		Priority: t.Priority, Autonomy: t.Autonomy,
 		Created: t.Created, Updated: t.Updated, RevisitAt: t.RevisitAt, Tags: t.Tags,
@@ -184,7 +196,7 @@ type EpicJSON struct {
 // ToEpicJSON maps a core epic summary to the epic list/rollup DTO.
 func ToEpicJSON(e core.EpicSummary) EpicJSON {
 	return EpicJSON{
-		EpicMetaJSON: ToEpicMeta(e.Epic),
+		EpicMetaJSON: toEpicMeta(e.Epic, e.Source.ID),
 		Total:        e.Total, Done: e.Done, Open: e.Open(), Percent: e.Percent(),
 		Deprecated: e.Deprecated, Liveness: string(e.Liveness()),
 	}
@@ -226,16 +238,36 @@ type ResearchJSON struct {
 
 // ToResearchJSON maps a domain research doc to its wire DTO.
 func ToResearchJSON(r domain.Research) ResearchJSON {
+	return toResearchJSON(r, r.CanonicalID())
+}
+
+// ToLoadedResearchJSON maps an ordinary research read with authoritative
+// source identity.
+func ToLoadedResearchJSON(record core.LoadedRecord[domain.Research]) ResearchJSON {
+	return toResearchJSON(record.Value, record.Source.ID)
+}
+
+func toResearchJSON(r domain.Research, id string) ResearchJSON {
 	return ResearchJSON{
-		ID: r.ID, Slug: r.Slug, Created: r.Created,
+		ID: id, Slug: r.Slug, Created: r.Created,
 		Description: r.Description, Tags: r.Tags, Updated: r.Updated,
 	}
 }
 
 // ToAuditJSON maps a domain audit to its wire DTO.
 func ToAuditJSON(a domain.Audit) AuditJSON {
+	return toAuditJSON(a, a.CanonicalID())
+}
+
+// ToLoadedAuditJSON maps an ordinary audit read with authoritative source
+// identity.
+func ToLoadedAuditJSON(record core.LoadedRecord[domain.Audit]) AuditJSON {
+	return toAuditJSON(record.Value, record.Source.ID)
+}
+
+func toAuditJSON(a domain.Audit, id string) AuditJSON {
 	return AuditJSON{
-		ID: a.ID, Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date, Updated: a.Updated,
+		ID: id, Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date, Updated: a.Updated,
 		Findings: a.Findings, OpenFindings: a.OpenFindings,
 		InProgressFindings: a.ActiveFindings, DoneFindings: a.DoneFindings, DroppedFindings: a.DroppedFindings,
 		ReadyToClose: a.ReadyToClose(),
@@ -330,8 +362,18 @@ type EpicMetaJSON struct {
 // ToEpicMeta is the one place epic meta fields are mapped to JSON, shared by
 // `epic list` (embedded in EpicJSON) and `epic show`.
 func ToEpicMeta(e domain.Epic) EpicMetaJSON {
+	return toEpicMeta(e, e.ID)
+}
+
+// ToLoadedEpicMeta maps an ordinary epic read with authoritative source
+// identity.
+func ToLoadedEpicMeta(record core.LoadedRecord[domain.Epic]) EpicMetaJSON {
+	return toEpicMeta(record.Value, record.Source.ID)
+}
+
+func toEpicMeta(e domain.Epic, id string) EpicMetaJSON {
 	return EpicMetaJSON{
-		ID: e.ID, Status: e.Status, Description: e.Description,
+		ID: id, Status: e.Status, Description: e.Description,
 		Priority: e.Priority, Created: e.Created, Updated: e.Updated, Tags: e.Tags,
 	}
 }

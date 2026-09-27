@@ -202,8 +202,8 @@ func TestDashboardNeedsAttentionReportsGraphDegradation(t *testing.T) {
 
 func TestDashboardNeedsAttentionReportsPathlessUnreadableRecord(t *testing.T) {
 	var d dashboard
-	d.setSummary(core.Summary{Problems: []core.LintLoadProblem{{
-		EntityKind: core.LintEntityTask, EntityID: "6gpathless001", Message: "decode failed",
+	d.setSummary(core.Summary{Problems: []core.LoadProblem{{
+		EntityKind: core.EntityTask, EntityID: "6gpathless001", Message: "decode failed",
 	}}}, &testStyles, false)
 	view := ansi.Strip(d.view(&testStyles, 120, 40))
 	if !strings.Contains(view, "1 unreadable planning record") || strings.Contains(view, "all clear") {

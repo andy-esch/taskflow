@@ -15,33 +15,6 @@ import (
 // many. Beyond a handful the list stops being useful and the detail above is the answer.
 const problemNamesInError = 3
 
-// problemsError returns a validation error (non-zero exit) when any per-file
-// load problems exist, else nil. It does not print: human commands render the
-// problems to stderr themselves, and JSON commands carry them in the payload.
-//
-// The command still exits non-zero (11) on a single bad file, deliberately: the listing
-// above it is best-effort and complete, but a caller that got a partial result must be able
-// to tell. This mirrors `status --all`, which renders every available space and then exits
-// non-zero when one could not be read.
-func problemsError(problems []domain.FileProblem) error {
-	if len(problems) == 0 {
-		return nil
-	}
-	names := make([]string, 0, problemNamesInError)
-	for _, p := range problems {
-		if len(names) == problemNamesInError {
-			break
-		}
-		names = append(names, filepath.Base(p.Path))
-	}
-	listed := strings.Join(names, ", ")
-	if extra := len(problems) - len(names); extra > 0 {
-		listed += fmt.Sprintf(", +%d more", extra)
-	}
-	return fmt.Errorf("%w: %d file(s) with unreadable frontmatter: %s",
-		domain.ErrValidation, len(problems), listed)
-}
-
 func threadProblemsError(problems []core.ThreadReadProblem) error {
 	if len(problems) == 0 {
 		return nil
@@ -73,7 +46,7 @@ func threadProblemsError(problems []core.ThreadReadProblem) error {
 
 // portableProblemsError reports a partial adapter-neutral read without assuming
 // a filesystem path exists. Identity leads; location is only the final fallback.
-func portableProblemsError(kind string, problems []core.LintLoadProblem) error {
+func portableProblemsError(kind string, problems []core.LoadProblem) error {
 	if len(problems) == 0 {
 		return nil
 	}
@@ -92,15 +65,12 @@ func portableProblemsError(kind string, problems []core.LintLoadProblem) error {
 		domain.ErrValidation, len(problems), kind, listed)
 }
 
-func portableProblemName(kind string, problem core.LintLoadProblem) string {
+func portableProblemName(kind string, problem core.LoadProblem) string {
 	name := problem.EntitySlug
 	if name == "" {
 		name = problem.EntityID
 	}
-	path := problem.Path
-	if path == "" && problem.LocationIsPath {
-		path = problem.Location
-	}
+	path := problem.LocalPath
 	if path != "" {
 		base := filepath.Base(path)
 		if name == "" {

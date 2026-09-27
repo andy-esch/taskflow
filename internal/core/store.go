@@ -9,17 +9,12 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// TaskStore is the task-persistence port. The list methods return per-file
-// problems separately from a fatal error, so callers can show the good data
-// and report unreadable files instead of dying on the first one.
+// TaskStore is the task mutation and selected-read port. Repository-wide task
+// reads use TaskGraphSource so list, board, graph, and Thread projections share
+// one authoritative snapshot rather than rescanning through the aggregate store.
 type TaskStore interface {
-	ListTasks() ([]domain.Task, []domain.FileProblem, error)
-	// ListTasksWithBodies is ListTasks' scan with each task's markdown body kept
-	// alongside, so a body-aware pass (lint's acceptance-criteria checks) reads every
-	// file once instead of re-resolving each slug through GetTask. Same resilient-read
-	// contract: an unreadable file is a FileProblem, not fatal.
-	ListTasksWithBodies() ([]TaskWithBody, []domain.FileProblem, error)
-	GetTask(slug string) (task domain.Task, body string, err error)
+	ReadTasks() (TaskRead, error)
+	ReadTask(ref string) (LoadedRecord[TaskWithBody], error)
 	// ResolveTaskPath returns a task's file path from its slug/id WITHOUT parsing —
 	// so `task path` works even on a file whose frontmatter won't parse (the case
 	// where you most need the path, to open and repair it).
@@ -182,10 +177,10 @@ type ThreadApplyMutationStore interface {
 	MutateThreadApply(now time.Time, dryRun bool, planner ThreadApplyPlanner) (ThreadApplyMutationResult, error)
 }
 
-// EpicStore is the epic-persistence port.
+// EpicStore is the entity-specific epic persistence port.
 type EpicStore interface {
-	ListEpics() ([]domain.Epic, []domain.FileProblem, error)
-	GetEpic(id string) (epic domain.Epic, body string, err error)
+	ReadEpics() (EpicRead, error)
+	ReadEpic(ref string) (LoadedRecord[EpicWithBody], error)
 	// ResolveEpicPath returns an epic's file path from its id, parse-free (see
 	// ResolveTaskPath).
 	ResolveEpicPath(id string) (string, error)
@@ -236,13 +231,8 @@ type TaskWithBody struct {
 
 // AuditStore is the audit-persistence port.
 type AuditStore interface {
-	ListAudits() ([]domain.Audit, []domain.FileProblem, error)
-	// ListAuditsWithFindings is ListAudits' scan with the parsed findings kept
-	// alongside each audit, so Summary computes the audit tallies AND the findings
-	// rollup from a single read of every body. Same resilient-read contract: an unreadable file is a
-	// FileProblem, not fatal.
-	ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error)
-	GetAudit(slug string) (audit domain.Audit, body string, err error)
+	ReadAudits() (AuditRead, error)
+	ReadAudit(ref string) (LoadedRecord[AuditWithBody], error)
 	// ResolveAuditPath returns an audit's file path from its slug/id, parse-free
 	// (see ResolveTaskPath).
 	ResolveAuditPath(slug string) (string, error)
@@ -275,8 +265,8 @@ type AuditStore interface {
 // has no lifecycle (so no Move) and no cross-references (so nothing to resolve), which
 // leaves scan, read, path, and create.
 type ResearchStore interface {
-	ListResearch() ([]domain.Research, []domain.FileProblem, error)
-	GetResearch(slug string) (research domain.Research, body string, err error)
+	ReadResearch() (ResearchRead, error)
+	ReadResearchDocument(ref string) (LoadedRecord[ResearchWithBody], error)
 	// ResolveResearchPath returns a doc's file path from its slug/id, parse-free
 	// (see ResolveTaskPath).
 	ResolveResearchPath(slug string) (string, error)
@@ -310,16 +300,9 @@ type Store interface {
 }
 
 // SummaryStore is the non-task read port required by one dashboard scan. Tasks come
-// from the separate TaskGraphSource so counts, in-progress work, and graph health
-// cannot drift across two task snapshots. Store satisfies this metadata side, while
-// cross-space status requires both capabilities through PlanningSummarySource.
-// Its FileProblem results are a transitional local compatibility seam: adapters
-// recover EntityID/EntitySlug before returning, and summarize maps those supplied
-// values without parsing Path. The portable entity-read design task owns replacing
-// this aggregate contract rather than widening it piecemeal here.
+// from TaskGraphSource; audits reuse the same body-aware snapshot as finding queries.
 type SummaryStore interface {
-	ListEpics() ([]domain.Epic, []domain.FileProblem, error)
-	ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProblem, error)
+	ReadEpics() (EpicRead, error)
 }
 
 // Fixer is the frontmatter-repair port. It is an fs/text operation, not a core
@@ -336,7 +319,7 @@ type Fixer interface {
 // Service.
 type Linter interface {
 	// DanglingLinks reports every body markdown link whose target .md file is missing.
-	DanglingLinks() ([]LintLoadProblem, error)
+	DanglingLinks() ([]LoadProblem, error)
 }
 
 // Layout is the on-disk-layout port: the desired directory set a filesystem

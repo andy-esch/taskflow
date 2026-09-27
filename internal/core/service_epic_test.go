@@ -2,11 +2,13 @@ package core
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // nopStore is a no-op core.Store: every method returns zero values. Tests embed
@@ -16,6 +18,23 @@ import (
 type nopStore struct{}
 
 var _ Store = nopStore{}
+
+func (nopStore) ReadTasks() (TaskRead, error) { return TaskRead{}, nil }
+func (nopStore) ReadTask(string) (LoadedRecord[TaskWithBody], error) {
+	return LoadedRecord[TaskWithBody]{}, domain.ErrNotFound
+}
+func (nopStore) ReadEpics() (EpicRead, error) { return EpicRead{}, nil }
+func (nopStore) ReadEpic(string) (LoadedRecord[EpicWithBody], error) {
+	return LoadedRecord[EpicWithBody]{}, domain.ErrNotFound
+}
+func (nopStore) ReadAudits() (AuditRead, error) { return AuditRead{}, nil }
+func (nopStore) ReadAudit(string) (LoadedRecord[AuditWithBody], error) {
+	return LoadedRecord[AuditWithBody]{}, domain.ErrNotFound
+}
+func (nopStore) ReadResearch() (ResearchRead, error) { return ResearchRead{}, nil }
+func (nopStore) ReadResearchDocument(string) (LoadedRecord[ResearchWithBody], error) {
+	return LoadedRecord[ResearchWithBody]{}, domain.ErrNotFound
+}
 
 func (nopStore) ListTasks() ([]domain.Task, []domain.FileProblem, error) { return nil, nil, nil }
 func (nopStore) GetTask(string) (domain.Task, string, error) {
@@ -126,16 +145,130 @@ type fakeStore struct {
 
 var _ LintSource = (*fakeStore)(nil)
 
-func testLintLoadProblems(kind LintEntityKind, problems []domain.FileProblem) []LintLoadProblem {
-	out := make([]LintLoadProblem, 0, len(problems))
+func testLintLoadProblems(kind EntityKind, problems []domain.FileProblem) []LoadProblem {
+	out := make([]LoadProblem, 0, len(problems))
 	for _, problem := range problems {
-		out = append(out, LintLoadProblem{
+		out = append(out, LoadProblem{
 			EntityKind: kind, EntityID: problem.EntityID, EntitySlug: problem.EntitySlug,
-			Location: problem.Path, LocationIsPath: problem.Path != "", Path: problem.Path,
+			Location: problem.Path, LocalPath: problem.Path,
 			Message: problem.Message,
 		})
 	}
 	return out
+}
+
+func testSource(id, location string) RecordSource {
+	return RecordSource{ID: id, Location: location}
+}
+
+// The filesystem gives a readable fixture a source ID even when frontmatter
+// omits `id`. Keep this fake honest so tests of missing declarations do not
+// accidentally model a broken adapter instead of a malformed document.
+func fakeSourceID(id, slug string, index int) string {
+	if id != "" {
+		return id
+	}
+	if slug == "" {
+		slug = "unnamed-" + strconv.Itoa(index)
+	}
+	return testutil.TaskID(slug)
+}
+
+func loadedTasks(tasks []domain.Task) []LoadedRecord[domain.Task] {
+	out := make([]LoadedRecord[domain.Task], 0, len(tasks))
+	for i, task := range tasks {
+		out = append(out, LoadedRecord[domain.Task]{Value: task, Source: testSource(fakeSourceID(task.CanonicalID(), task.Slug, i), task.Path)})
+	}
+	return out
+}
+
+func loadedEpics(epics []domain.Epic) []LoadedRecord[domain.Epic] {
+	out := make([]LoadedRecord[domain.Epic], 0, len(epics))
+	for _, epic := range epics {
+		out = append(out, LoadedRecord[domain.Epic]{Value: epic, Source: testSource(epic.ID, epic.Path)})
+	}
+	return out
+}
+
+func TestEpicReadIdentityAndRollupUseExplicitSource(t *testing.T) {
+	records := []LoadedRecord[domain.Epic]{{
+		Value:  domain.Epic{ID: "24-stale", Description: "portable epic"},
+		Source: RecordSource{ID: "42-canonical", Location: "db://epics/misleading"},
+	}}
+	if !epicExists(records, "42") || epicExists(records, "24") {
+		t.Fatal("epic lookup used embedded ID instead of source ID")
+	}
+	if got := canonicalEpic(records, "42-old-name"); got != "42-canonical" {
+		t.Fatalf("canonical epic = %q", got)
+	}
+	rollups := rollupEpics(records, []domain.Task{{Epic: "42-old-name", Status: domain.StatusNextUp}})
+	if len(rollups) != 1 || rollups[0].Total != 1 || rollups[0].Epic.ID != "42-canonical" {
+		t.Fatalf("source-aware rollup = %+v", rollups)
+	}
+}
+
+func loadedAudits(audits []domain.Audit) []LoadedRecord[domain.Audit] {
+	out := make([]LoadedRecord[domain.Audit], 0, len(audits))
+	for i, audit := range audits {
+		out = append(out, LoadedRecord[domain.Audit]{Value: audit, Source: testSource(fakeSourceID(audit.CanonicalID(), audit.Slug, i), audit.Path)})
+	}
+	return out
+}
+
+func loadedResearch(docs []domain.Research) []LoadedRecord[domain.Research] {
+	out := make([]LoadedRecord[domain.Research], 0, len(docs))
+	for i, doc := range docs {
+		out = append(out, LoadedRecord[domain.Research]{Value: doc, Source: testSource(fakeSourceID(doc.CanonicalID(), doc.Slug, i), doc.Path)})
+	}
+	return out
+}
+
+func (f *fakeStore) ReadTasks() (TaskRead, error) {
+	return TaskRead{Records: loadedTasks(f.tasks), Problems: testLintLoadProblems(EntityTask, f.problems)}, nil
+}
+
+func (f *fakeStore) ReadTask(ref string) (LoadedRecord[TaskWithBody], error) {
+	task, body, err := f.GetTask(ref)
+	if err != nil {
+		return LoadedRecord[TaskWithBody]{}, err
+	}
+	return LoadedRecord[TaskWithBody]{Value: TaskWithBody{Task: task, Body: body}, Source: testSource(fakeSourceID(task.CanonicalID(), task.Slug, 0), task.Path)}, nil
+}
+
+func (f *fakeStore) ReadEpics() (EpicRead, error) {
+	return EpicRead{Records: loadedEpics(f.epics), Problems: testLintLoadProblems(EntityEpic, f.epicProblems)}, nil
+}
+
+func (f *fakeStore) ReadEpic(ref string) (LoadedRecord[EpicWithBody], error) {
+	epic, body, err := f.GetEpic(ref)
+	if err != nil {
+		return LoadedRecord[EpicWithBody]{}, err
+	}
+	return LoadedRecord[EpicWithBody]{Value: EpicWithBody{Epic: epic, Body: body}, Source: testSource(epic.ID, epic.Path)}, nil
+}
+
+func (f *fakeStore) ReadAudits() (AuditRead, error) {
+	return AuditRead{Records: loadedAudits(f.audits), Problems: testLintLoadProblems(EntityAudit, f.auditProblems)}, nil
+}
+
+func (f *fakeStore) ReadAudit(ref string) (LoadedRecord[AuditWithBody], error) {
+	audit, body, err := f.GetAudit(ref)
+	if err != nil {
+		return LoadedRecord[AuditWithBody]{}, err
+	}
+	return LoadedRecord[AuditWithBody]{Value: AuditWithBody{Audit: audit, Body: body}, Source: testSource(fakeSourceID(audit.CanonicalID(), audit.Slug, 0), audit.Path)}, nil
+}
+
+func (f *fakeStore) ReadResearch() (ResearchRead, error) {
+	return ResearchRead{Records: loadedResearch(f.research), Problems: testLintLoadProblems(EntityResearch, f.researchProblems)}, nil
+}
+
+func (f *fakeStore) ReadResearchDocument(ref string) (LoadedRecord[ResearchWithBody], error) {
+	doc, body, err := f.GetResearch(ref)
+	if err != nil {
+		return LoadedRecord[ResearchWithBody]{}, err
+	}
+	return LoadedRecord[ResearchWithBody]{Value: ResearchWithBody{Research: doc, Body: body}, Source: testSource(fakeSourceID(doc.CanonicalID(), doc.Slug, 0), doc.Path)}, nil
 }
 
 func (f *fakeStore) GetAudit(slug string) (domain.Audit, string, error) {
@@ -157,9 +290,13 @@ func (f *fakeStore) ListTasksWithBodies() ([]TaskWithBody, []domain.FileProblem,
 	}
 	return out, f.problems, nil
 }
-func (f *fakeStore) ReadLintTasks() ([]TaskWithBody, []LintLoadProblem, error) {
+func (f *fakeStore) ReadLintTasks() ([]LoadedRecord[TaskWithBody], []LoadProblem, error) {
 	records, problems, err := f.ListTasksWithBodies()
-	return records, testLintLoadProblems(LintEntityTask, problems), err
+	loaded := make([]LoadedRecord[TaskWithBody], 0, len(records))
+	for i, record := range records {
+		loaded = append(loaded, LoadedRecord[TaskWithBody]{Value: record, Source: testSource(fakeSourceID(record.Task.CanonicalID(), record.Task.Slug, i), record.Task.Path)})
+	}
+	return loaded, testLintLoadProblems(EntityTask, problems), err
 }
 func (f *fakeStore) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 	return f.audits, f.auditProblems, nil
@@ -184,22 +321,27 @@ func (f *fakeStore) ReadAuditSnapshot(selector string) (AuditSnapshot, error) {
 			return AuditSnapshot{}, err
 		}
 		findings := domain.ParseFindings(body)
-		return AuditSnapshot{Audits: []AuditWithFindings{{
-			Audit: a, Findings: findings, NearMisses: domain.NearMissFindingHeaders(body),
-			CandidateIssues: domain.LintCandidateTasks(body, findings),
+		return AuditSnapshot{Audits: []LoadedRecord[AuditWithFindings]{{
+			Value: AuditWithFindings{Audit: a, Findings: findings, NearMisses: domain.NearMissFindingHeaders(body),
+				CandidateIssues: domain.LintCandidateTasks(body, findings)},
+			Source: testSource(fakeSourceID(a.CanonicalID(), a.Slug, 0), a.Path),
 		}}}, nil
 	}
 	records, problems, err := f.ListAuditsWithFindings()
+	loaded := make([]LoadedRecord[AuditWithFindings], 0, len(records))
+	for i, record := range records {
+		loaded = append(loaded, LoadedRecord[AuditWithFindings]{Value: record, Source: testSource(fakeSourceID(record.Audit.CanonicalID(), record.Audit.Slug, i), record.Audit.Path)})
+	}
 	return AuditSnapshot{
-		Audits: records, Problems: testLintLoadProblems(LintEntityAudit, problems),
+		Audits: loaded, Problems: testLintLoadProblems(EntityAudit, problems),
 	}, err
 }
 func (f *fakeStore) ListResearch() ([]domain.Research, []domain.FileProblem, error) {
 	return f.research, f.researchProblems, nil
 }
-func (f *fakeStore) ReadLintResearch() ([]domain.Research, []LintLoadProblem, error) {
+func (f *fakeStore) ReadLintResearch() ([]LoadedRecord[domain.Research], []LoadProblem, error) {
 	records, problems, err := f.ListResearch()
-	return records, testLintLoadProblems(LintEntityResearch, problems), err
+	return loadedResearch(records), testLintLoadProblems(EntityResearch, problems), err
 }
 func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 	for _, t := range f.tasks {
@@ -222,9 +364,9 @@ func (f *fakeStore) CreateAudit(a domain.Audit, body string, _ bool) (domain.Aud
 func (f *fakeStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return f.epics, f.epicProblems, nil
 }
-func (f *fakeStore) ReadLintEpics() ([]domain.Epic, []LintLoadProblem, error) {
+func (f *fakeStore) ReadLintEpics() ([]LoadedRecord[domain.Epic], []LoadProblem, error) {
 	records, problems, err := f.ListEpics()
-	return records, testLintLoadProblems(LintEntityEpic, problems), err
+	return loadedEpics(records), testLintLoadProblems(EntityEpic, problems), err
 }
 func (f *fakeStore) CreateEpic(slug string, e domain.Epic, body string, _ bool) (domain.Epic, error) {
 	e.ID = slug
@@ -330,12 +472,12 @@ func TestService_EpicRollup_ResolvesOnNNPrefix(t *testing.T) {
 	}
 
 	// ShowEpic's roster joins the same way (this string-mismatch was the empty-roster bug).
-	_, its, _, err := svc.ShowEpic("24-data-model")
+	detail, err := svc.ShowEpic("24-data-model")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(its) != 3 {
-		t.Errorf("ShowEpic roster should join all 3 refs, got %d", len(its))
+	if len(detail.Tasks) != 3 {
+		t.Errorf("ShowEpic roster should join all 3 refs, got %d", len(detail.Tasks))
 	}
 }
 
@@ -643,14 +785,14 @@ func TestService_ShowEpic(t *testing.T) {
 			{Slug: "b", Epic: "other"},
 		},
 	})
-	es, tasks, body, err := svc.ShowEpic("e1")
+	detail, err := svc.ShowEpic("e1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// ShowEpic returns the rollup summary: e1 has one non-deprecated task (a), so the
 	// embedded epic id resolves and Total is 1 (b belongs to another epic).
-	if es.Epic.ID != "e1" || es.Total != 1 || len(tasks) != 1 || tasks[0].Slug != "a" || body != "epic body" {
-		t.Errorf("ShowEpic wrong: %+v tasks=%v body=%q", es, tasks, body)
+	if detail.Summary.Epic.ID != "e1" || detail.Summary.Total != 1 || len(detail.Tasks) != 1 || detail.Tasks[0].Value.Slug != "a" || detail.Body != "epic body" {
+		t.Errorf("ShowEpic wrong: %+v", detail)
 	}
 }
 

@@ -23,6 +23,10 @@ func (f *researchStore) ListResearch() ([]domain.Research, []domain.FileProblem,
 	return f.docs, nil, nil
 }
 
+func (f *researchStore) ReadResearch() (ResearchRead, error) {
+	return ResearchRead{Records: loadedResearch(f.docs)}, nil
+}
+
 func (f *researchStore) CreateResearch(r domain.Research, body string, dryRun bool) (domain.Research, error) {
 	if !dryRun {
 		f.created = append(f.created, r)
@@ -148,7 +152,7 @@ func TestListResearch_NewestFirstStableTiebreak(t *testing.T) {
 	}
 	want := []string{"middle", "alpha", "zebra"}
 	for i, w := range want {
-		if got[i].Slug != w {
+		if got[i].Value.Slug != w {
 			t.Fatalf("order = %v, want %v", slugsOf(got), want)
 		}
 	}
@@ -165,15 +169,15 @@ func TestListResearch_TagFilterCaseInsensitive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].Slug != "tui-doc" {
+	if len(got) != 1 || got[0].Value.Slug != "tui-doc" {
 		t.Errorf("tag filter = %v, want [tui-doc]", slugsOf(got))
 	}
 }
 
-func slugsOf(docs []domain.Research) []string {
+func slugsOf(docs []LoadedRecord[domain.Research]) []string {
 	out := make([]string, len(docs))
 	for i, r := range docs {
-		out[i] = r.Slug
+		out[i] = r.Value.Slug
 	}
 	return out
 }

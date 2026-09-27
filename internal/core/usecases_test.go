@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -119,8 +120,8 @@ func TestService_ListAudits_BucketFilters(t *testing.T) {
 			t.Fatal(err)
 		}
 		var slugs []string
-		for _, a := range audits {
-			slugs = append(slugs, a.Slug)
+		for _, record := range audits {
+			slugs = append(slugs, record.Value.Slug)
 		}
 		if strings.Join(slugs, ",") != strings.Join(tc.want, ",") {
 			t.Errorf("ListAudits(%q, %v) = %v, want %v", tc.bucket, tc.all, slugs, tc.want)
@@ -173,9 +174,19 @@ func (c *countingAuditStore) ListAuditsWithFindings() ([]AuditWithFindings, []do
 	return c.fakeStore.ListAuditsWithFindings()
 }
 
+func (c *countingAuditStore) ReadAuditSnapshot(selector string) (AuditSnapshot, error) {
+	c.listWithFindings++
+	return c.fakeStore.ReadAuditSnapshot(selector)
+}
+
 func (c *countingAuditStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	c.listEpics++
 	return c.fakeStore.ListEpics()
+}
+
+func (c *countingAuditStore) ReadEpics() (EpicRead, error) {
+	c.listEpics++
+	return c.fakeStore.ReadEpics()
 }
 
 // TestService_Summary_ReadsEachAuditOnce pins H2: Summary computes the audit
@@ -207,6 +218,43 @@ func TestService_Summary_ReadsEachAuditOnce(t *testing.T) {
 	}
 }
 
+type portableEpicSummarySource struct {
+	read  EpicRead
+	calls int
+}
+
+func (s *portableEpicSummarySource) ReadEpics() (EpicRead, error) {
+	s.calls++
+	return s.read, nil
+}
+
+func TestSummaryBareProjectionsUseLoadedSourceIdentity(t *testing.T) {
+	tasks := &neutralTaskGraphSource{read: TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
+		Value:  domain.Task{ID: "stale-task", FilenameID: "old-task", Slug: "task", Status: domain.StatusInProgress},
+		Source: RecordSource{ID: "6g0000000001", Location: "db://tasks/one"},
+	}}}}
+	epics := &portableEpicSummarySource{read: EpicRead{Records: []LoadedRecord[domain.Epic]{{
+		Value:  domain.Epic{ID: "24-stale", Status: "active", Description: "epic"},
+		Source: RecordSource{ID: "42-current", Location: "db://epics/one"},
+	}}}}
+	audits := &auditSnapshotStub{all: AuditSnapshot{Audits: []LoadedRecord[AuditWithFindings]{{
+		Value:  AuditWithFindings{Audit: domain.Audit{ID: "stale-audit", FilenameID: "old-audit", Slug: "audit", Bucket: domain.AuditOpen}},
+		Source: RecordSource{ID: "6g0000000002", Location: "db://audits/one"},
+	}}}}
+	summary, err := summarize(epics, audits, tasks, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tasks.calls != 1 || epics.calls != 1 || len(audits.calls) != 1 {
+		t.Fatalf("summary reads task/epic/audit = %d/%d/%d", tasks.calls, epics.calls, len(audits.calls))
+	}
+	if len(summary.InProgress) != 1 || summary.InProgress[0].FilenameID != "6g0000000001" ||
+		len(summary.Epics) != 1 || summary.Epics[0].Epic.ID != "42-current" ||
+		len(summary.OpenAudits) != 1 || summary.OpenAudits[0].FilenameID != "6g0000000002" {
+		t.Fatalf("summary source identities = %+v", summary)
+	}
+}
+
 func TestService_Summary_PreservesMixedPortableLoadDiagnostics(t *testing.T) {
 	store := &countingAuditStore{fakeStore: fakeStore{
 		epicProblems: []domain.FileProblem{{
@@ -233,18 +281,18 @@ func TestService_Summary_PreservesMixedPortableLoadDiagnostics(t *testing.T) {
 	if len(summary.Problems) != 3 {
 		t.Fatalf("problems = %+v", summary.Problems)
 	}
-	wantKinds := []LintEntityKind{LintEntityTask, LintEntityEpic, LintEntityAudit}
+	wantKinds := []EntityKind{EntityTask, EntityEpic, EntityAudit}
 	wantIDs := []string{"6gtask000001", "30-threads", "6gaudit00001"}
 	for i, problem := range summary.Problems {
 		if problem.EntityKind != wantKinds[i] || problem.EntityID != wantIDs[i] {
 			t.Errorf("problem %d = %+v, want kind=%s id=%s", i, problem, wantKinds[i], wantIDs[i])
 		}
 	}
-	if got := summary.Problems[0]; got.Location != "db://planning/tasks/row-7" || got.LocationIsPath {
+	if got := summary.Problems[0]; got.Location != "db://planning/tasks/row-7" || got.LocalPath != "" {
 		t.Errorf("pathless task diagnostic = %+v", got)
 	}
 	for _, got := range summary.Problems[1:] {
-		if !got.LocationIsPath || got.Location == "" {
+		if got.LocalPath == "" || got.Location == "" {
 			t.Errorf("local diagnostic lost file location: %+v", got)
 		}
 	}
@@ -271,12 +319,12 @@ func TestService_Summary_CanonicalizesProblemsWithinEachEntityKind(t *testing.T)
 		t.Fatal(err)
 	}
 	want := []struct {
-		kind LintEntityKind
+		kind EntityKind
 		id   string
 	}{
-		{LintEntityTask, "6g0000000001"}, {LintEntityTask, "6g0000000002"},
-		{LintEntityEpic, "30-a"}, {LintEntityEpic, "31-z"},
-		{LintEntityAudit, "6g0000000005"}, {LintEntityAudit, "6g0000000006"},
+		{EntityTask, "6g0000000001"}, {EntityTask, "6g0000000002"},
+		{EntityEpic, "30-a"}, {EntityEpic, "31-z"},
+		{EntityAudit, "6g0000000005"}, {EntityAudit, "6g0000000006"},
 	}
 	if len(summary.Problems) != len(want) {
 		t.Fatalf("problems = %+v", summary.Problems)

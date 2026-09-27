@@ -9,7 +9,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // outputMode is the resolved output format for a list command.
@@ -153,17 +155,16 @@ func conflictList(want map[outputMode]string) string {
 // selection (or all columns), and the others defer to the supplied JSON/human
 // renderers. A durable id may therefore be an explicit later column without
 // changing `-q`. Problems go to stderr except in JSON mode, where the envelope
-// embeds them. The caller still owns problemsError() for the exit code, since it
-// knows whether a problem is fatal for that command.
+// embeds them. The caller still owns the portable partial-result error for the
+// exit code, since it knows whether a problem is fatal for that command.
 func renderList[T any](
-	app *App, mode outputMode, columns []string, items []T, problems []domain.FileProblem,
+	app *App, mode outputMode, columns []string, items []T, problems []core.LoadProblem,
 	listKey string, cols []render.Column[T],
-	jsonFn func(io.Writer, []T, []domain.FileProblem) error,
+	jsonFn func(io.Writer, []T, []core.LoadProblem) error,
 	humanFn func(io.Writer, render.Style, []T) error,
 ) error {
 	return renderListWithProblems(app, mode, columns, items, problems, listKey, cols,
-		func(problems []domain.FileProblem) []domain.FileProblem { return problems },
-		jsonFn, humanFn, render.ProblemsHuman)
+		wire.ToLintLoadProblemsJSON, jsonFn, humanFn, render.LintProblemsHuman)
 }
 
 // renderListWithProblems is renderList's adapter-neutral diagnostic form. The

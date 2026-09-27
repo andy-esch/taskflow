@@ -32,15 +32,15 @@ func TestSetEpicFields_RoundTrip(t *testing.T) {
 	if _, err := svc.SetEpicFields("01-e", map[string]any{"priority": "high", "tags": "ui, cli"}, false, false); err != nil {
 		t.Fatalf("SetEpicFields rejected a valid update: %v", err)
 	}
-	es, _, _, err := svc.ShowEpic("01-e")
+	detail, err := svc.ShowEpic("01-e")
 	if err != nil {
 		t.Fatalf("epic no longer reloads after set (corrupted): %v", err)
 	}
-	if es.Epic.Priority != "high" {
-		t.Errorf("priority = %q, want high", es.Epic.Priority)
+	if detail.Summary.Epic.Priority != "high" {
+		t.Errorf("priority = %q, want high", detail.Summary.Epic.Priority)
 	}
-	if len(es.Epic.Tags) != 2 || es.Epic.Tags[0] != "ui" || es.Epic.Tags[1] != "cli" {
-		t.Errorf("tags = %v, want [ui cli] (trimmed)", es.Epic.Tags)
+	if len(detail.Summary.Epic.Tags) != 2 || detail.Summary.Epic.Tags[0] != "ui" || detail.Summary.Epic.Tags[1] != "cli" {
+		t.Errorf("tags = %v, want [ui cli] (trimmed)", detail.Summary.Epic.Tags)
 	}
 }
 
@@ -79,12 +79,12 @@ func TestSetEpicFields_BadPriorityNoWrite(t *testing.T) {
 	if _, err := svc.SetEpicFields("01-e", map[string]any{"priority": "urgent"}, false, false); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("want ErrValidation for a bad priority, got %v", err)
 	}
-	es, _, _, err := svc.ShowEpic("01-e")
+	detail, err := svc.ShowEpic("01-e")
 	if err != nil {
 		t.Fatalf("a rejected set must leave the epic readable, got: %v", err)
 	}
-	if es.Epic.Priority != "medium" {
-		t.Errorf("priority changed despite a rejected set: %q", es.Epic.Priority)
+	if detail.Summary.Epic.Priority != "medium" {
+		t.Errorf("priority changed despite a rejected set: %q", detail.Summary.Epic.Priority)
 	}
 }
 
@@ -98,9 +98,9 @@ func TestSetEpicFields_DryRun(t *testing.T) {
 	if epic.Priority != "high" {
 		t.Errorf("dry-run should return the would-be epic (priority high), got %q", epic.Priority)
 	}
-	reloaded, _, _, _ := svc.ShowEpic("01-e")
-	if reloaded.Epic.Priority != "medium" {
-		t.Errorf("--dry-run must not write: priority is now %q", reloaded.Epic.Priority)
+	reloaded, _ := svc.ShowEpic("01-e")
+	if reloaded.Summary.Epic.Priority != "medium" {
+		t.Errorf("--dry-run must not write: priority is now %q", reloaded.Summary.Epic.Priority)
 	}
 }
 
@@ -141,7 +141,7 @@ func TestEditEpic_RejectsBrokenSave(t *testing.T) {
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("a broken save kept broken should be ErrValidation, got %v", err)
 	}
-	if es, _, _, e := svc.ShowEpic("01-e"); e != nil || es.Epic.Description != "e" {
-		t.Errorf("a rejected edit must leave the epic intact, got epic=%+v err=%v", es, e)
+	if detail, e := svc.ShowEpic("01-e"); e != nil || detail.Summary.Epic.Description != "e" {
+		t.Errorf("a rejected edit must leave the epic intact, got epic=%+v err=%v", detail, e)
 	}
 }

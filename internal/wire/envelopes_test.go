@@ -18,6 +18,26 @@ import (
 // web handler would wrap) validates against the schema.
 func emit(w io.Writer, v any) error { return EncodeJSON(w, v) }
 
+func loadedTask(t domain.Task) core.LoadedRecord[domain.Task] {
+	return core.LoadedRecord[domain.Task]{Value: t, Source: core.RecordSource{ID: t.ID, Location: t.Path}}
+}
+
+func loadedTaskBody(t domain.Task, body string) core.LoadedRecord[core.TaskWithBody] {
+	return core.LoadedRecord[core.TaskWithBody]{Value: core.TaskWithBody{Task: t, Body: body}, Source: core.RecordSource{ID: t.ID, Location: t.Path}}
+}
+
+func loadedAuditBody(a domain.Audit, body string) core.LoadedRecord[core.AuditWithBody] {
+	return core.LoadedRecord[core.AuditWithBody]{Value: core.AuditWithBody{Audit: a, Body: body}, Source: core.RecordSource{ID: a.ID, Location: a.Path}}
+}
+
+func loadedResearchBody(r domain.Research, body string) core.LoadedRecord[core.ResearchWithBody] {
+	return core.LoadedRecord[core.ResearchWithBody]{Value: core.ResearchWithBody{Research: r, Body: body}, Source: core.RecordSource{ID: r.ID, Location: r.Path}}
+}
+
+func loadedResearchRecord(r domain.Research) core.LoadedRecord[domain.Research] {
+	return core.LoadedRecord[domain.Research]{Value: r, Source: core.RecordSource{ID: r.ID, Location: r.Path}}
+}
+
 func TestToSchemaEnvelopeStampsRevisionPolicy(t *testing.T) {
 	for _, input := range []SchemaRevisionPolicy{
 		{},
@@ -31,15 +51,15 @@ func TestToSchemaEnvelopeStampsRevisionPolicy(t *testing.T) {
 }
 
 func TestToLintLoadProblemsJSONKeepsOpaqueLocationsOutOfPath(t *testing.T) {
-	got := ToLintLoadProblemsJSON([]core.LintLoadProblem{{
-		EntityKind: core.LintEntityAudit, EntityID: "6g0000000001", EntitySlug: "broken-audit",
-		Location: "db://audits/6g0000000001", LocationIsPath: false, Message: "remote decode failed",
+	got := ToLintLoadProblemsJSON([]core.LoadProblem{{
+		EntityKind: core.EntityAudit, EntityID: "6g0000000001", EntitySlug: "broken-audit",
+		Location: "db://audits/6g0000000001", Message: "remote decode failed",
 	}, {
-		EntityKind: core.LintEntityAudit, EntityID: "6g0000000002",
-		Location: "/repo/planning/audits/broken.md", LocationIsPath: true, Message: "local decode failed",
+		EntityKind: core.EntityAudit, EntityID: "6g0000000002",
+		Location: "/repo/planning/audits/broken.md", LocalPath: "/repo/planning/audits/broken.md", Message: "local decode failed",
 	}, {
-		EntityKind: core.LintEntityTask, EntityID: "6g0000000003",
-		Location: "db://tasks/3", Path: "/repo/planning/tasks/repair.md",
+		EntityKind: core.EntityTask, EntityID: "6g0000000003",
+		Location: "db://tasks/3", LocalPath: "/repo/planning/tasks/repair.md",
 		Message: "remote decode failed with a local repair copy",
 	}})
 	if len(got) != 3 {
@@ -54,6 +74,40 @@ func TestToLintLoadProblemsJSONKeepsOpaqueLocationsOutOfPath(t *testing.T) {
 	}
 	if got[2].Location != "db://tasks/3" || got[2].Path != "/repo/planning/tasks/repair.md" {
 		t.Fatalf("dual-location problem = %+v", got[2])
+	}
+}
+
+func TestOrdinaryReadEnvelopesPreferSourceIdentityForEveryEntity(t *testing.T) {
+	source := core.RecordSource{ID: "source-id", Location: "db://records/misleading-name"}
+	task := domain.Task{ID: "declared-id", FilenameID: "stale-filename-id", Slug: "task"}
+	epic := domain.Epic{ID: "stale-epic", Description: "epic"}
+	audit := domain.Audit{ID: "declared-id", FilenameID: "stale-filename-id", Slug: "audit"}
+	research := domain.Research{ID: "declared-id", FilenameID: "stale-filename-id", Slug: "research"}
+
+	if got := ToTasksEnvelope([]core.LoadedRecord[domain.Task]{{Value: task, Source: source}}, nil).Tasks[0].ID; got != source.ID {
+		t.Fatalf("task list id = %q", got)
+	}
+	if got := ToTaskShowEnvelope(core.LoadedRecord[core.TaskWithBody]{Value: core.TaskWithBody{Task: task}, Source: source}).Task.ID; got != source.ID {
+		t.Fatalf("task show id = %q", got)
+	}
+	summary := core.EpicSummary{Epic: epic, Source: source}
+	if got := ToEpicsEnvelope([]core.EpicSummary{summary}, nil).Epics[0].ID; got != source.ID {
+		t.Fatalf("epic list id = %q", got)
+	}
+	if got := ToEpicShowEnvelope(core.EpicDetail{Summary: summary}).Epic.ID; got != source.ID {
+		t.Fatalf("epic show id = %q", got)
+	}
+	if got := ToAuditsEnvelope([]core.LoadedRecord[domain.Audit]{{Value: audit, Source: source}}, nil).Audits[0].ID; got != source.ID {
+		t.Fatalf("audit list id = %q", got)
+	}
+	if got := ToAuditShowEnvelope(core.LoadedRecord[core.AuditWithBody]{Value: core.AuditWithBody{Audit: audit}, Source: source}).Audit.ID; got != source.ID {
+		t.Fatalf("audit show id = %q", got)
+	}
+	if got := ToResearchListEnvelope([]core.LoadedRecord[domain.Research]{{Value: research, Source: source}}, nil).Research[0].ID; got != source.ID {
+		t.Fatalf("research list id = %q", got)
+	}
+	if got := ToResearchShowEnvelope(core.LoadedRecord[core.ResearchWithBody]{Value: core.ResearchWithBody{Research: research}, Source: source}).Research.ID; got != source.ID {
+		t.Fatalf("research show id = %q", got)
 	}
 }
 
@@ -76,7 +130,7 @@ func TestJSONSchemaRejectsEnvelopeFromAnotherRevision(t *testing.T) {
 		t.Fatalf("compile task-show definition: %v", err)
 	}
 
-	payload, err := json.Marshal(ToTaskShowEnvelope(domain.Task{ID: "6g0000000001", Slug: "alpha"}, "# Alpha\n"))
+	payload, err := json.Marshal(ToTaskShowEnvelope(loadedTaskBody(domain.Task{ID: "6g0000000001", Slug: "alpha"}, "# Alpha\n")))
 	if err != nil {
 		t.Fatalf("marshal task-show envelope: %v", err)
 	}
@@ -131,26 +185,28 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		def  string
 		emit func(io.Writer) error
 	}{
-		{"TasksEnvelope", func(w io.Writer) error { return emit(w, ToTasksEnvelope([]domain.Task{task, beta}, nil)) }},
+		{"TasksEnvelope", func(w io.Writer) error {
+			return emit(w, ToTasksEnvelope([]core.LoadedRecord[domain.Task]{loadedTask(task), loadedTask(beta)}, nil))
+		}},
 		{"BoardEnvelope", func(w io.Writer) error {
 			return emit(w, ToBoardEnvelope(core.Board{
 				Columns: []core.BoardColumn{{Status: domain.StatusInProgress, Tasks: []domain.Task{task}}},
-				Problems: []core.LintLoadProblem{{
-					EntityKind: core.LintEntityTask, EntityID: "6g0000000007",
+				Problems: []core.LoadProblem{{
+					EntityKind: core.EntityTask, EntityID: "6g0000000007",
 					Location: "remote:tasks/7", Message: "decode failed",
 				}},
 			}))
 		}},
-		{"TaskShowEnvelope", func(w io.Writer) error { return emit(w, ToTaskShowEnvelope(task, "# body")) }},
+		{"TaskShowEnvelope", func(w io.Writer) error { return emit(w, ToTaskShowEnvelope(loadedTaskBody(task, "# body"))) }},
 		{"TaskInfoEnvelope", func(w io.Writer) error {
-			return emit(w, ToTaskInfoEnvelope(task, domain.ACCount{Checked: 1, Total: 3}, "/root/tasks/alpha.md"))
+			return emit(w, ToTaskInfoEnvelope(loadedTaskBody(task, "# body"), domain.ACCount{Checked: 1, Total: 3}, "/root/tasks/alpha.md"))
 		}},
 		{"PathEnvelope", func(w io.Writer) error { return emit(w, ToPathEnvelope("/root/tasks/alpha.md")) }},
 		{"AcceptanceEnvelope", func(w io.Writer) error {
 			return emit(w, ToAcceptanceEnvelope("alpha", []domain.Criterion{{Index: 1, Checked: true, Text: "done"}, {Index: 2, Checked: false, Text: "todo"}}))
 		}},
 		{"AuditInfoEnvelope", func(w io.Writer) error {
-			return emit(w, ToAuditInfoEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 3, OpenFindings: 1, ActiveFindings: 1, DoneFindings: 1}, "/root/audits/x.md"))
+			return emit(w, ToAuditInfoEnvelope(loadedAuditBody(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 3, OpenFindings: 1, ActiveFindings: 1, DoneFindings: 1}, ""), "/root/audits/x.md"))
 		}},
 		{"TaskMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToTaskMutationEnvelope(task, "# new body", true, WorkspaceJSON{}))
@@ -284,8 +340,8 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
 				InProgress: []domain.Task{task},
 				Epics:      []core.EpicSummary{epicSum},
-				Problems: []core.LintLoadProblem{{
-					EntityKind: core.LintEntityTask, EntityID: "6g0000000008",
+				Problems: []core.LoadProblem{{
+					EntityKind: core.EntityTask, EntityID: "6g0000000008",
 					Location: "db://tasks/8", Message: "decode failed",
 				}},
 				GraphHealth: core.GraphDegraded,
@@ -296,9 +352,9 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			summary := core.Summary{
 				Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
 				InProgress: []domain.Task{task},
-				Problems: []core.LintLoadProblem{{
-					EntityKind: core.LintEntityAudit, EntitySlug: "broken-audit",
-					Location: "/repo/planning/audits/broken.md", LocationIsPath: true,
+				Problems: []core.LoadProblem{{
+					EntityKind: core.EntityAudit, EntitySlug: "broken-audit",
+					Location: "/repo/planning/audits/broken.md", LocalPath: "/repo/planning/audits/broken.md",
 					Message: "decode failed",
 				}},
 				GraphHealth: core.GraphBroken,
@@ -326,26 +382,27 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"EpicsEnvelope", func(w io.Writer) error { return emit(w, ToEpicsEnvelope([]core.EpicSummary{epicSum}, nil)) }},
 		{"EpicShowEnvelope", func(w io.Writer) error {
-			return emit(w, ToEpicShowEnvelope(epic, []domain.Task{task}, "# body"))
+			return emit(w, ToEpicShowEnvelope(core.EpicDetail{Summary: core.EpicSummary{Epic: epic, Source: core.RecordSource{ID: epic.ID}}, Tasks: []core.LoadedRecord[domain.Task]{loadedTask(task)}, Body: "# body"}))
 		}},
 		{"ResearchListEnvelope", func(w io.Writer) error {
-			return emit(w, ToResearchListEnvelope([]domain.Research{
-				{ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23", Description: "Weighed three libs", Tags: []string{"tui"}},
+			return emit(w, ToResearchListEnvelope([]core.LoadedRecord[domain.Research]{loadedResearchRecord(domain.Research{
+				ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23", Description: "Weighed three libs", Tags: []string{"tui"},
+			}),
 			}, nil))
 		}},
 		{"ResearchShowEnvelope", func(w io.Writer) error {
-			return emit(w, ToResearchShowEnvelope(
-				domain.Research{ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23"}, "# body"))
+			return emit(w, ToResearchShowEnvelope(loadedResearchBody(
+				domain.Research{ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23"}, "# body")))
 		}},
 		{"ResearchMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToResearchMutationEnvelope(
 				domain.Research{ID: "6ff3hpm01p4a", Slug: "theming-libs", Created: "2026-06-23", Updated: "2026-08-18"}, "# new body", true, WorkspaceJSON{}))
 		}},
 		{"AuditsEnvelope", func(w io.Writer) error {
-			return emit(w, ToAuditsEnvelope([]domain.Audit{{Slug: "x", Bucket: domain.AuditOpen, Findings: 1, OpenFindings: 1}}, nil))
+			return emit(w, ToAuditsEnvelope([]core.LoadedRecord[domain.Audit]{{Value: domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 1, OpenFindings: 1}, Source: core.RecordSource{ID: "6gaudit00001"}}}, nil))
 		}},
 		{"AuditShowEnvelope", func(w io.Writer) error {
-			return emit(w, ToAuditShowEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, "# body"))
+			return emit(w, ToAuditShowEnvelope(loadedAuditBody(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, "# body")))
 		}},
 		{"AuditMutationEnvelope", func(w io.Writer) error {
 			return emit(w, ToAuditMutationEnvelope(domain.Audit{Slug: "x", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, "# new body", true, WorkspaceJSON{}))
@@ -361,9 +418,9 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToFindingsEnvelope([]core.AuditFinding{{
 				Finding: domain.Finding{Code: "S1", Title: "tighten the gateway", Status: "open", Effort: "S", Urgency: "soon"},
 				Audit:   "2026-01-01-area", Bucket: "open",
-			}}, []core.LintLoadProblem{{
-				EntityKind: core.LintEntityAudit, EntityID: "6g0000000004", EntitySlug: "broken-audit",
-				Location: "db://audits/6g0000000004", LocationIsPath: false, Message: "remote decode failed",
+			}}, []core.LoadProblem{{
+				EntityKind: core.EntityAudit, EntityID: "6g0000000004", EntitySlug: "broken-audit",
+				Location: "db://audits/6g0000000004", Message: "remote decode failed",
 			}}))
 		}},
 		{"LintEnvelope", func(w io.Writer) error {

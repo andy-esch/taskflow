@@ -261,10 +261,10 @@ func newResearchListCmd(app *App) *cobra.Command {
 				return err
 			}
 			if err := renderList(app, mode, lm.columns, docs, problems,
-				"research", render.ResearchColumns(), render.ResearchJSON, render.ResearchHuman); err != nil {
+				"research", render.ResearchReadColumns(), render.ResearchJSON, render.ResearchReadHuman); err != nil {
 				return err
 			}
-			return problemsError(problems)
+			return portableProblemsError("research", problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.ResearchColumns()))
@@ -290,23 +290,23 @@ func newResearchShowCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			r, body, err := app.Svc.ShowResearch(slug)
+			record, err := app.Svc.ShowResearch(slug)
 			if err != nil {
 				return err
 			}
-			body, err = narrowBody("research", slug, body, section, fmOnly)
+			record.Value.Body, err = narrowBody("research", slug, record.Value.Body, section, fmOnly)
 			if err != nil {
 				return err
 			}
 			if app.JSON {
-				return render.ResearchShowJSON(app.Out, r, body)
+				return render.ResearchShowJSON(app.Out, record)
 			}
 			return app.paged(func(w io.Writer) error {
 				rendered := ""
-				if body != "" { // --frontmatter-only → no body render
-					rendered = render.RenderBody(app.Style, body, app.markdownStyle, raw)
+				if record.Value.Body != "" { // --frontmatter-only → no body render
+					rendered = render.RenderBody(app.Style, record.Value.Body, app.markdownStyle, raw)
 				}
-				return render.ResearchShowHuman(w, app.Style, r, rendered)
+				return render.ResearchShowHuman(w, app.Style, record.Value.Research, rendered)
 			})
 		},
 	}

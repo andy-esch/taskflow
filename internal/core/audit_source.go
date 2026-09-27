@@ -6,8 +6,8 @@ package core
 // Keeping both outcomes in one value makes it impossible for a consumer to
 // accidentally combine records and diagnostics from different scans.
 type AuditSnapshot struct {
-	Audits   []AuditWithFindings
-	Problems []LintLoadProblem
+	Audits   []LoadedRecord[AuditWithFindings]
+	Problems []LoadProblem
 }
 
 // AuditSnapshotSource is the consumer-owned read port shared by finding
@@ -19,4 +19,10 @@ type AuditSnapshot struct {
 // snapshot.
 type AuditSnapshotSource interface {
 	ReadAuditSnapshot(selector string) (AuditSnapshot, error)
+}
+
+func auditSnapshotWithSourceIDs(snapshot AuditSnapshot) AuditSnapshot {
+	snapshot.Audits, snapshot.Problems = loadedRecordsWithIDs(EntityAudit, snapshot.Audits, snapshot.Problems,
+		func(record AuditWithFindings) string { return record.Audit.Slug })
+	return snapshot
 }

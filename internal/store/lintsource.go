@@ -9,14 +9,22 @@ import (
 
 // ReadLintTasks adapts the body-carrying local task scan to lint's portable
 // failed-record contract without adding another filesystem pass.
-func (s *FS) ReadLintTasks() ([]core.TaskWithBody, []core.LintLoadProblem, error) {
+func (s *FS) ReadLintTasks() ([]core.LoadedRecord[core.TaskWithBody], []core.LoadProblem, error) {
 	records, problems, err := s.ListTasksWithBodies()
-	return records, lintLoadProblems(core.LintEntityTask, problems), err
+	loaded := make([]core.LoadedRecord[core.TaskWithBody], 0, len(records))
+	for _, record := range records {
+		loaded = append(loaded, taskBodyRecord(record))
+	}
+	return loaded, loadedProblems(core.EntityTask, problems), err
 }
 
-func (s *FS) ReadLintEpics() ([]domain.Epic, []core.LintLoadProblem, error) {
+func (s *FS) ReadLintEpics() ([]core.LoadedRecord[domain.Epic], []core.LoadProblem, error) {
 	records, problems, err := s.ListEpics()
-	return records, lintLoadProblems(core.LintEntityEpic, problems), err
+	loaded := make([]core.LoadedRecord[domain.Epic], 0, len(records))
+	for _, record := range records {
+		loaded = append(loaded, epicRecord(record))
+	}
+	return loaded, loadedProblems(core.EntityEpic, problems), err
 }
 
 func (s *FS) ReadAuditSnapshot(selector string) (core.AuditSnapshot, error) {
@@ -36,29 +44,31 @@ func (s *FS) ReadAuditSnapshot(selector string) (core.AuditSnapshot, error) {
 		if err != nil {
 			return core.AuditSnapshot{}, fmt.Errorf("%s: %w", path, err)
 		}
-		return core.AuditSnapshot{Audits: []core.AuditWithFindings{{
+		record := core.AuditWithFindings{
 			Audit: a, Findings: findings, NearMisses: nearMisses, CandidateIssues: candidateIssues,
+		}
+		return core.AuditSnapshot{Audits: []core.LoadedRecord[core.AuditWithFindings]{{
+			Value: record, Source: core.RecordSource{ID: a.FilenameID, Location: a.Path},
 		}}}, nil
 	}
 	records, problems, err := s.ListAuditsWithFindings()
+	loaded := make([]core.LoadedRecord[core.AuditWithFindings], 0, len(records))
+	for _, record := range records {
+		loaded = append(loaded, core.LoadedRecord[core.AuditWithFindings]{
+			Value:  record,
+			Source: core.RecordSource{ID: record.Audit.FilenameID, Location: record.Audit.Path},
+		})
+	}
 	return core.AuditSnapshot{
-		Audits: records, Problems: lintLoadProblems(core.LintEntityAudit, problems),
+		Audits: loaded, Problems: loadedProblems(core.EntityAudit, problems),
 	}, err
 }
 
-func (s *FS) ReadLintResearch() ([]domain.Research, []core.LintLoadProblem, error) {
+func (s *FS) ReadLintResearch() ([]core.LoadedRecord[domain.Research], []core.LoadProblem, error) {
 	records, problems, err := s.ListResearch()
-	return records, lintLoadProblems(core.LintEntityResearch, problems), err
-}
-
-func lintLoadProblems(kind core.LintEntityKind, problems []domain.FileProblem) []core.LintLoadProblem {
-	out := make([]core.LintLoadProblem, 0, len(problems))
-	for _, problem := range problems {
-		out = append(out, core.LintLoadProblem{
-			EntityKind: kind, EntityID: problem.EntityID, EntitySlug: problem.EntitySlug,
-			Location: problem.Path, LocationIsPath: problem.Path != "", Path: problem.Path,
-			Message: problem.Message,
-		})
+	loaded := make([]core.LoadedRecord[domain.Research], 0, len(records))
+	for _, record := range records {
+		loaded = append(loaded, researchRecord(record))
 	}
-	return out
+	return loaded, loadedProblems(core.EntityResearch, problems), err
 }

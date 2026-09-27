@@ -56,9 +56,9 @@ func TestModel_ActionMenuMovesEpic(t *testing.T) {
 		t.Errorf("expected a success flash, got %q (err=%v)", m.flash, m.flashErr)
 	}
 	// The status field was rewritten in place — the file did not move.
-	e, _, _, err := m.svc.ShowEpic("01-test")
-	if err != nil || e.Epic.Status != "retired" {
-		t.Errorf("epic should be retired after the action: status=%q err=%v", e.Epic.Status, err)
+	detail, err := m.svc.ShowEpic("01-test")
+	if err != nil || detail.Summary.Epic.Status != "retired" {
+		t.Errorf("epic should be retired after the action: status=%q err=%v", detail.Summary.Epic.Status, err)
 	}
 }
 

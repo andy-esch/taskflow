@@ -18,9 +18,9 @@ func TestProjectedFindingsJSONPreservesOpaqueDiagnosticLocation(t *testing.T) {
 		Finding: domain.Finding{Code: "M1", Title: "portable read", Status: "open"},
 		Audit:   "2026-09-24-portable", AuditID: "6g0000000001", Bucket: "open",
 	}}
-	problems := []core.LintLoadProblem{{
-		EntityKind: core.LintEntityAudit, EntityID: "6g0000000002", EntitySlug: "broken-audit",
-		Location: "db://audits/6g0000000002", LocationIsPath: false, Message: "remote decode failed",
+	problems := []core.LoadProblem{{
+		EntityKind: core.EntityAudit, EntityID: "6g0000000002", EntitySlug: "broken-audit",
+		Location: "db://audits/6g0000000002", Message: "remote decode failed",
 	}}
 
 	err := renderListWithProblems(app, modeJSON, []string{"audit", "code"}, findings, problems,

@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 2
 tags: [architecture, ports, entities, filesystem]
 created: "2026-09-23"
-depends_on: [6gcwcf80v8hg, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8]
+depends_on: [6gcwcf80v8hg, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2]
 updated_at: "2026-09-26"
 ---
 

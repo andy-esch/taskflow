@@ -11,8 +11,8 @@ import (
 )
 
 func TestPortableProblemsErrorPrefersIdentityOverLocation(t *testing.T) {
-	err := portableProblemsError("planning", []core.LintLoadProblem{{
-		EntityKind: core.LintEntityTask, EntityID: "6gknown000001", EntitySlug: "known-task",
+	err := portableProblemsError("planning", []core.LoadProblem{{
+		EntityKind: core.EntityTask, EntityID: "6gknown000001", EntitySlug: "known-task",
 		Location: "db://misleading/not-the-task", Message: "bad record",
 	}})
 	if err == nil || !strings.Contains(err.Error(), "known-task") || strings.Contains(err.Error(), "not-the-task") {
@@ -21,9 +21,9 @@ func TestPortableProblemsErrorPrefersIdentityOverLocation(t *testing.T) {
 }
 
 func TestPortableProblemsErrorRetainsLocalRepairLocation(t *testing.T) {
-	err := portableProblemsError("task", []core.LintLoadProblem{{
-		EntityKind: core.LintEntityTask, EntitySlug: "known-task",
-		Location: "db://tasks/known-task", Path: "/planning/tasks/6gknown000001-known-task.md",
+	err := portableProblemsError("task", []core.LoadProblem{{
+		EntityKind: core.EntityTask, EntitySlug: "known-task",
+		Location: "db://tasks/known-task", LocalPath: "/planning/tasks/6gknown000001-known-task.md",
 		Message: "bad record",
 	}})
 	if err == nil || !strings.Contains(err.Error(), "known-task") ||

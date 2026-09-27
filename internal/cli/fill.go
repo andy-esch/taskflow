@@ -122,7 +122,8 @@ func (a *App) tagHint() string {
 	}
 	seen := map[string]bool{}
 	var tags []string
-	for _, t := range tasks {
+	for _, record := range tasks {
+		t := record.Value
 		for _, tag := range t.Tags {
 			if !seen[tag] {
 				seen[tag] = true
@@ -160,7 +161,8 @@ func (a *App) transitionOptions(to domain.Status) func() ([]prompt.Option, error
 			return nil, err
 		}
 		opts := make([]prompt.Option, 0, len(tasks))
-		for _, t := range tasks {
+		for _, record := range tasks {
+			t := record.Value
 			if t.Status == to {
 				continue
 			}
@@ -191,7 +193,8 @@ func (a *App) taskOptions() ([]prompt.Option, error) {
 		return nil, err
 	}
 	opts := make([]prompt.Option, 0, len(tasks))
-	for _, t := range tasks {
+	for _, record := range tasks {
+		t := record.Value
 		opts = append(opts, labeledOption(t.Slug, t.Description))
 	}
 	return opts, nil
@@ -205,7 +208,8 @@ func (a *App) auditOptions() ([]prompt.Option, error) {
 		return nil, err
 	}
 	opts := make([]prompt.Option, 0, len(audits))
-	for _, ad := range audits {
+	for _, record := range audits {
+		ad := record.Value
 		opts = append(opts, labeledOption(ad.Slug, ad.Area))
 	}
 	return opts, nil
@@ -220,7 +224,8 @@ func (a *App) researchOptions() ([]prompt.Option, error) {
 		return nil, err
 	}
 	opts := make([]prompt.Option, 0, len(docs))
-	for _, r := range docs {
+	for _, record := range docs {
+		r := record.Value
 		opts = append(opts, labeledOption(r.Slug, r.Description))
 	}
 	return opts, nil
@@ -235,7 +240,8 @@ func (a *App) auditMoveOptions(to domain.AuditBucket) func() ([]prompt.Option, e
 			return nil, err
 		}
 		opts := make([]prompt.Option, 0, len(audits))
-		for _, ad := range audits {
+		for _, record := range audits {
+			ad := record.Value
 			if ad.Bucket == to {
 				continue
 			}

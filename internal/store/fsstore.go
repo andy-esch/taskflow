@@ -123,12 +123,40 @@ func (s *FS) WatchPaths() []string {
 // A file with unreadable frontmatter is skipped and reported as a FileProblem
 // (so one bad file doesn't blind the whole listing); err is only for fatal I/O.
 func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
+	loaded, sourceProblems, err := s.scanTaskDocuments()
+	if err != nil {
+		return nil, nil, err
+	}
+	tasks := make([]domain.Task, 0, len(loaded))
+	for _, record := range loaded {
+		tasks = append(tasks, record.Task)
+	}
+	return tasks, fileProblems(sourceProblems), nil
+}
+
+// scanTaskDocuments owns the one body-bearing, versioned task scan. Ordinary
+// lists, strict graph reads, and lint each project their own view of this result
+// without performing a second task read inside a request.
+func (s *FS) scanTaskDocuments() ([]core.TaskWithBody, []sourceFileProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
-	return scanDir(s.tasksDir, func(path string, content []byte) (domain.Task, error) {
-		return parseTask(content, path)
+	return scanDirWithSourceVersions(s.tasksDir, func(path string, content []byte) (core.TaskWithBody, error) {
+		task, err := parseTask(content, path)
+		if err != nil {
+			return core.TaskWithBody{}, err
+		}
+		_, body := splitFrontmatter(content)
+		return core.TaskWithBody{Task: task, Body: string(body)}, nil
 	})
+}
+
+func fileProblems(sourceProblems []sourceFileProblem) []domain.FileProblem {
+	problems := make([]domain.FileProblem, 0, len(sourceProblems))
+	for _, problem := range sourceProblems {
+		problems = append(problems, problem.problem)
+	}
+	return problems
 }
 
 // ReadTaskGraph translates local resilient file diagnostics into the neutral
@@ -136,16 +164,19 @@ func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 // source. It uses the same scanner and parser as ListTasks without exposing the
 // store-private token through that ordinary list surface.
 func (s *FS) ReadTaskGraph() (core.TaskGraphRead, error) {
-	if err := s.rejectRepositoryPlannerCall(); err != nil {
-		return core.TaskGraphRead{}, err
-	}
-	tasks, sourceProblems, err := scanDirWithSourceVersions(s.tasksDir, func(path string, content []byte) (domain.Task, error) {
-		return parseTask(content, path)
-	})
+	loaded, sourceProblems, err := s.scanTaskDocuments()
 	if err != nil {
 		return core.TaskGraphRead{}, err
 	}
-	read := core.TaskGraphRead{Tasks: tasks, Problems: make([]core.TaskGraphLoadProblem, 0, len(sourceProblems))}
+	read := core.TaskGraphRead{
+		Tasks: make([]domain.Task, 0, len(loaded)), Records: make([]core.LoadedRecord[domain.Task], 0, len(loaded)),
+		Problems: make([]core.TaskGraphLoadProblem, 0, len(sourceProblems)),
+	}
+	for _, record := range loaded {
+		task := record.Task
+		read.Tasks = append(read.Tasks, task)
+		read.Records = append(read.Records, taskRecord(task))
+	}
 	for _, problem := range sourceProblems {
 		read.Problems = append(read.Problems, core.TaskGraphLoadProblemFromFile(problem.problem, problem.sourceVersion))
 	}
@@ -156,17 +187,11 @@ func (s *FS) ReadTaskGraph() (core.TaskGraphRead, error) {
 // pass), so lint's acceptance-criteria checks read every file once — the task twin of
 // ListAuditsWithFindings.
 func (s *FS) ListTasksWithBodies() ([]core.TaskWithBody, []domain.FileProblem, error) {
-	if err := s.rejectRepositoryPlannerCall(); err != nil {
+	loaded, sourceProblems, err := s.scanTaskDocuments()
+	if err != nil {
 		return nil, nil, err
 	}
-	return scanDir(s.tasksDir, func(path string, content []byte) (core.TaskWithBody, error) {
-		t, err := parseTask(content, path)
-		if err != nil {
-			return core.TaskWithBody{}, err
-		}
-		_, body := splitFrontmatter(content)
-		return core.TaskWithBody{Task: t, Body: string(body)}, nil
-	})
+	return loaded, fileProblems(sourceProblems), nil
 }
 
 // GetTask returns a single task plus its markdown body.

@@ -9,22 +9,26 @@ import (
 
 type lintSourceFake struct {
 	taskRecords      []TaskWithBody
-	taskProblems     []LintLoadProblem
-	epicProblems     []LintLoadProblem
-	auditProblems    []LintLoadProblem
-	researchProblems []LintLoadProblem
+	taskProblems     []LoadProblem
+	epicProblems     []LoadProblem
+	auditProblems    []LoadProblem
+	researchProblems []LoadProblem
 	taskReads        int
 	epicReads        int
 	auditReads       int
 	researchReads    int
 }
 
-func (f *lintSourceFake) ReadLintTasks() ([]TaskWithBody, []LintLoadProblem, error) {
+func (f *lintSourceFake) ReadLintTasks() ([]LoadedRecord[TaskWithBody], []LoadProblem, error) {
 	f.taskReads++
-	return f.taskRecords, f.taskProblems, nil
+	out := make([]LoadedRecord[TaskWithBody], 0, len(f.taskRecords))
+	for _, record := range f.taskRecords {
+		out = append(out, LoadedRecord[TaskWithBody]{Value: record, Source: RecordSource{ID: record.Task.CanonicalID(), Location: record.Task.Path}})
+	}
+	return out, f.taskProblems, nil
 }
 
-func (f *lintSourceFake) ReadLintEpics() ([]domain.Epic, []LintLoadProblem, error) {
+func (f *lintSourceFake) ReadLintEpics() ([]LoadedRecord[domain.Epic], []LoadProblem, error) {
 	f.epicReads++
 	return nil, f.epicProblems, nil
 }
@@ -34,24 +38,24 @@ func (f *lintSourceFake) ReadAuditSnapshot(string) (AuditSnapshot, error) {
 	return AuditSnapshot{Problems: f.auditProblems}, nil
 }
 
-func (f *lintSourceFake) ReadLintResearch() ([]domain.Research, []LintLoadProblem, error) {
+func (f *lintSourceFake) ReadLintResearch() ([]LoadedRecord[domain.Research], []LoadProblem, error) {
 	f.researchReads++
 	return nil, f.researchProblems, nil
 }
 
 func TestLintPreservesPortableLoadProblemIdentityWithoutLocations(t *testing.T) {
 	source := &lintSourceFake{
-		taskProblems: []LintLoadProblem{{
-			EntityKind: LintEntityTask, EntityID: "6g0000000001", EntitySlug: "broken-task", Message: "bad task",
+		taskProblems: []LoadProblem{{
+			EntityKind: EntityTask, EntityID: "6g0000000001", EntitySlug: "broken-task", Message: "bad task",
 		}},
-		epicProblems: []LintLoadProblem{{
-			EntityKind: LintEntityEpic, EntityID: "21-broken-epic", Message: "bad epic",
+		epicProblems: []LoadProblem{{
+			EntityKind: EntityEpic, EntityID: "21-broken-epic", Message: "bad epic",
 		}},
-		auditProblems: []LintLoadProblem{{
-			EntityKind: LintEntityAudit, EntityID: "6g0000000002", EntitySlug: "2026-09-23-broken-audit", Message: "bad audit",
+		auditProblems: []LoadProblem{{
+			EntityKind: EntityAudit, EntityID: "6g0000000002", EntitySlug: "2026-09-23-broken-audit", Message: "bad audit",
 		}},
-		researchProblems: []LintLoadProblem{{
-			EntityKind: LintEntityResearch, EntityID: "6g0000000003", EntitySlug: "broken-research", Message: "bad research",
+		researchProblems: []LoadProblem{{
+			EntityKind: EntityResearch, EntityID: "6g0000000003", EntitySlug: "broken-research", Message: "bad research",
 		}},
 	}
 	threads := &threadReadFake{problems: []ThreadReadProblem{{
@@ -69,17 +73,17 @@ func TestLintPreservesPortableLoadProblemIdentityWithoutLocations(t *testing.T) 
 	if len(problems) != 5 {
 		t.Fatalf("problems = %+v; want all five entity kinds", problems)
 	}
-	byKind := make(map[LintEntityKind]LintLoadProblem, len(problems))
+	byKind := make(map[EntityKind]LoadProblem, len(problems))
 	for _, problem := range problems {
 		byKind[problem.EntityKind] = problem
-		if problem.Location != "" || problem.LocationIsPath {
+		if problem.Location != "" || problem.LocalPath != "" {
 			t.Errorf("pathless problem acquired filesystem semantics: %+v", problem)
 		}
 	}
-	for kind, wantID := range map[LintEntityKind]string{
-		LintEntityTask: "6g0000000001", LintEntityEpic: "21-broken-epic",
-		LintEntityAudit: "6g0000000002", LintEntityResearch: "6g0000000003",
-		LintEntityThread: "6g0000000004",
+	for kind, wantID := range map[EntityKind]string{
+		EntityTask: "6g0000000001", EntityEpic: "21-broken-epic",
+		EntityAudit: "6g0000000002", EntityResearch: "6g0000000003",
+		EntityThread: "6g0000000004",
 	} {
 		if got := byKind[kind]; got.EntityID != wantID || got.Message == "" {
 			t.Errorf("%s problem = %+v; want id %q and a message", kind, got, wantID)
@@ -121,8 +125,8 @@ func TestExplicitAuditSnapshotSourceWinsRegardlessOfOptionOrder(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			broad := &lintSourceFake{}
-			dedicated := &auditSnapshotStub{all: AuditSnapshot{Problems: []LintLoadProblem{{
-				EntityKind: LintEntityAudit, EntityID: "6g0000000009", Message: "dedicated source",
+			dedicated := &auditSnapshotStub{all: AuditSnapshot{Problems: []LoadProblem{{
+				EntityKind: EntityAudit, EntityID: "6g0000000009", Message: "dedicated source",
 			}}}}
 			svc := NewService(nil, tc.opts(broad, dedicated)...)
 
@@ -204,8 +208,8 @@ func TestLintUsesPathlessUnreadableIdentityInLifecycleDiagnosis(t *testing.T) {
 	dependent.Path = ""
 	source := &lintSourceFake{
 		taskRecords: []TaskWithBody{{Task: dependent}},
-		taskProblems: []LintLoadProblem{{
-			EntityKind: LintEntityTask, EntityID: unreadableID,
+		taskProblems: []LoadProblem{{
+			EntityKind: EntityTask, EntityID: unreadableID,
 			EntitySlug: "unreadable", Message: "remote decode failed",
 		}},
 	}

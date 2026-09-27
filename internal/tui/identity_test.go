@@ -170,14 +170,15 @@ func TestDuplicateTaskSlugsKeepCanonicalIdentityAcrossTUIState(t *testing.T) {
 	if _, ok := msg.(editedMsg); !ok {
 		t.Fatalf("stable-key edit failed: %T %+v", msg, msg)
 	}
-	left, _, err := m.svc.ShowTask(first.ref().key)
+	leftRecord, err := m.svc.ShowTask(first.ref().key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	right, _, err := m.svc.ShowTask(second.ref().key)
+	rightRecord, err := m.svc.ShowTask(second.ref().key)
 	if err != nil {
 		t.Fatal(err)
 	}
+	left, right := leftRecord.Value.Task, rightRecord.Value.Task
 	if left.Description == right.Description || right.Description != "changed second duplicate" {
 		t.Fatalf("edit crossed duplicate identities: first=%q second=%q", left.Description, right.Description)
 	}
@@ -345,14 +346,15 @@ func TestDuplicateIdentityMutationCommandsUseCanonicalKeys(t *testing.T) {
 	if _, ok := msg.(editedMsg); !ok {
 		t.Fatalf("canonical unset failed: %T %+v", msg, msg)
 	}
-	left, _, err := m.svc.ShowTask(first.ref().key)
+	leftRecord, err := m.svc.ShowTask(first.ref().key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	right, _, err := m.svc.ShowTask(second.ref().key)
+	rightRecord, err := m.svc.ShowTask(second.ref().key)
 	if err != nil {
 		t.Fatal(err)
 	}
+	left, right := leftRecord.Value.Task, rightRecord.Value.Task
 	if left.RevisitAt != "" || right.RevisitAt != "" {
 		t.Fatalf("unset crossed duplicate identities: first=%q second=%q", left.RevisitAt, right.RevisitAt)
 	}
@@ -365,11 +367,13 @@ func TestDuplicateIdentityMutationCommandsUseCanonicalKeys(t *testing.T) {
 		}
 		t.Fatalf("canonical lifecycle move failed: %T %+v", moveResult, moveResult)
 	}
-	right, _, err = m.svc.ShowTask(second.ref().key)
+	rightRecord, err = m.svc.ShowTask(second.ref().key)
+	right = rightRecord.Value.Task
 	if err != nil || right.Status != domain.StatusNextUp {
 		t.Fatalf("second duplicate status = %q, %v; want next-up", right.Status, err)
 	}
-	left, _, err = m.svc.ShowTask(first.ref().key)
+	leftRecord, err = m.svc.ShowTask(first.ref().key)
+	left = leftRecord.Value.Task
 	if err != nil || left.Status != domain.StatusInProgress {
 		t.Fatalf("first duplicate was changed by sibling move: %q, %v", left.Status, err)
 	}
@@ -379,7 +383,8 @@ func TestDuplicateIdentityMutationCommandsUseCanonicalKeys(t *testing.T) {
 	if !ok || deferred.ref.key != first.ref().key {
 		t.Fatalf("canonical defer failed: %T %+v", deferResult, deferResult)
 	}
-	left, _, err = m.svc.ShowTask(first.ref().key)
+	leftRecord, err = m.svc.ShowTask(first.ref().key)
+	left = leftRecord.Value.Task
 	if err != nil || left.Status != domain.StatusDeferred {
 		t.Fatalf("first duplicate status = %q, %v; want deferred", left.Status, err)
 	}
@@ -390,25 +395,28 @@ func TestDuplicateIdentityMutationCommandsUseCanonicalKeys(t *testing.T) {
 		t.Fatalf("post-move suppression key = %q, want %q", m.movedAwayKey, second.ref().key)
 	}
 
-	auditFirst, _, err := m.svc.ShowAudit(f.auditIDs[0])
+	auditFirstRecord, err := m.svc.ShowAudit(f.auditIDs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
-	auditSecond, _, err := m.svc.ShowAudit(f.auditIDs[1])
+	auditSecondRecord, err := m.svc.ShowAudit(f.auditIDs[1])
 	if err != nil {
 		t.Fatal(err)
 	}
+	auditFirst, auditSecond := auditFirstRecord.Value.Audit, auditSecondRecord.Value.Audit
 	auditResult := moveAudit(m.svc,
-		entityRef{key: auditSecond.CanonicalID(), label: auditSecond.Slug},
+		entityRef{key: auditSecondRecord.Source.ID, label: auditSecond.Slug},
 		transition{to: string(domain.AuditClosed)})()
-	if moved, ok := auditResult.(movedMsg); !ok || moved.ref.key != auditSecond.CanonicalID() {
+	if moved, ok := auditResult.(movedMsg); !ok || moved.ref.key != auditSecondRecord.Source.ID {
 		t.Fatalf("canonical audit move failed: %T %+v", auditResult, auditResult)
 	}
-	auditFirst, _, err = m.svc.ShowAudit(auditFirst.CanonicalID())
+	auditFirstRecord, err = m.svc.ShowAudit(auditFirstRecord.Source.ID)
+	auditFirst = auditFirstRecord.Value.Audit
 	if err != nil || auditFirst.Bucket != domain.AuditOpen {
 		t.Fatalf("first duplicate audit changed: %q, %v", auditFirst.Bucket, err)
 	}
-	auditSecond, _, err = m.svc.ShowAudit(auditSecond.CanonicalID())
+	auditSecondRecord, err = m.svc.ShowAudit(auditSecondRecord.Source.ID)
+	auditSecond = auditSecondRecord.Value.Audit
 	if err != nil || auditSecond.Bucket != domain.AuditClosed {
 		t.Fatalf("second duplicate audit status = %q, %v; want closed", auditSecond.Bucket, err)
 	}
