@@ -27,10 +27,10 @@ ordering without rescanning records.
 
 The loaded-record and optional-local-capability design is complete. Ordinary task, epic, audit,
 research, and finding reads now preserve portable source identity and diagnostics, and split
-planning-data capabilities must agree on one source-set witness at construction. The remaining
-seams are local mutation outcome paths, TUI identity and refresh, readable occurrence locations,
-domain fields that still carry local paths or revisions, and CLI controllers that reach directly
-into the filesystem adapter.
+planning-data capabilities must agree on one source-set witness at construction. Local mutation
+receipts and ordinary-create recovery no longer depend on domain paths. The remaining seams are
+TUI identity and refresh, readable occurrence locations, domain fields that still carry local
+paths or revisions, and CLI controllers that reach directly into the filesystem adapter.
 
 This Thread closes those seams in evidence-driven stages:
 
@@ -39,11 +39,12 @@ This Thread closes those seams in evidence-driven stages:
 2. Design the shared loaded-record and optional-local-capability contract. **Completed.**
 3. Promote portable diagnostics and migrate ordinary list/show, Summary, lint, and wire
    projections onto loaded-record evidence. **Completed.**
-4. Bind split capabilities to one source set. **Completed.** Preserve local create/rename outcome
-   evidence outside domain records. **In progress.** Then harden ordinary create guard-release
-   reporting so a durable file is never mistaken for a failed create that is safe to retry.
+4. Bind split capabilities to one source set, preserve local create/rename outcome evidence outside
+   domain records, and report ordinary-create guard-release failures without suggesting an unsafe
+   retry. **Completed.**
 5. Preserve readable occurrence locations and move TUI identity/refresh onto portable loaded-record
-   evidence while retaining fail-closed duplicate-ID behavior. **Eligible in parallel.**
+   evidence while retaining fail-closed duplicate-ID behavior. **Independent work:** TUI migration
+   is in progress; readable source-location diagnostics remain eligible.
 6. After those prerequisites, move local paths, filename-derived identity, and guarded revisions
    out of semantic entity values; finish the partial Thread precedent and wire explicit local
    capabilities.

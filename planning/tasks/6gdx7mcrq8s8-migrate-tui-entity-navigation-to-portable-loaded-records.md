@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gdx7mcrq8s8
-status: ready-to-start
+status: in-progress
 epic: 21-code-quality-architecture-hardening
 description: Move TUI identity, refresh, and local-action state onto adapter-neutral read evidence while preserving fail-closed ambiguity.
 effort: 3-5 days
@@ -11,7 +11,8 @@ autonomy_level: 2
 tags: [architecture, tui, ports]
 created: "2026-09-26"
 depends_on: [6gcwcf80v8hg]
-updated_at: "2026-09-26"
+updated_at: "2026-09-27"
+started_at: "2026-09-27"
 ---
 
 # Migrate TUI entity navigation to portable loaded records
