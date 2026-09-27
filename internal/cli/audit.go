@@ -69,6 +69,10 @@ func newAuditNewCmd(app *App) *cobra.Command {
 			p.DryRun = app.DryRun
 			receipt, err := app.Svc.NewAudit(p)
 			if err != nil {
+				if receipt.Committed {
+					return committedCreateFailure(app, err, "audit", receipt.Audit.ID, receipt.Audit.Slug,
+						string(receipt.Audit.Bucket), receipt.Local.CommittedPath)
+				}
 				return err
 			}
 			a := receipt.Audit

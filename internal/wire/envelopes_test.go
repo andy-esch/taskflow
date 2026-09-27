@@ -522,8 +522,13 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			// Built by cli.WriteError (not a constructor here) — marshal the named type
 			// directly to prove its schema matches. Include post-commit recovery payloads
 			// so their nested, schema-version-free shapes are covered too.
+			created := ToCreatedRecoveryJSON(CreatedItem{
+				Kind: "task", ID: "6g0000000002", Slug: "created", Status: "ready-to-start",
+				Path: "tasks/6g0000000002-created.md",
+			}, WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig})
 			return emit(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{
 				Code: "conflict", Message: "Thread creation committed before cleanup failed",
+				Created: &created,
 				TaskRename: &TaskRenameRecoveryJSON{
 					TaskRenameJSON: TaskRenameJSON{
 						TaskID: "6g0000000001", FromSlug: "old", ToSlug: "new",

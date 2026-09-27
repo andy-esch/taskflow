@@ -214,6 +214,10 @@ func newResearchNewCmd(app *App) *cobra.Command {
 			p.DryRun = app.DryRun
 			receipt, err := app.Svc.NewResearch(p)
 			if err != nil {
+				if receipt.Committed {
+					return committedCreateFailure(app, err, "research", receipt.Research.ID, receipt.Research.Slug,
+						"", receipt.Local.CommittedPath)
+				}
 				return err
 			}
 			r := receipt.Research

@@ -322,7 +322,10 @@ import (
 // optional local source, planned destination, and committed destination paths.
 // Existing created-document and Thread path fields retain their shapes; their
 // values now come from operation receipts rather than domain record paths.
-const SchemaVersion = "1.77"
+// 1.78: ADDITIVE — errors after an ordinary task, epic, audit, or research create
+// committed include created-item identity, exact local path when available,
+// committed=true, and workspace context for inspection before retry.
+const SchemaVersion = "1.78"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

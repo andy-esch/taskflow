@@ -230,6 +230,10 @@ func newEpicNewCmd(app *App) *cobra.Command {
 			p.DryRun = app.DryRun
 			receipt, err := app.Svc.NewEpic(p)
 			if err != nil {
+				if receipt.Committed {
+					return committedCreateFailure(app, err, "epic", receipt.Epic.ID, receipt.Epic.ID,
+						receipt.Epic.Status, receipt.Local.CommittedPath)
+				}
 				return err
 			}
 			e := receipt.Epic

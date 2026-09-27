@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -67,47 +68,52 @@ func localCreateOutcome(path string, dryRun bool) core.LocalCreateOutcome {
 // Dry-run invokes the same preparation and exact-path collision checks without
 // creating the planning root or taking a writer lock. Compound graph-aware creates
 // retain their richer guarded planners and finish through writeNewFileUnlocked.
-func (s *FS) createEntityFile(dryRun bool, prepare func() (entityFileCreation, error)) (entityFileCreation, error) {
+func (s *FS) createEntityFile(dryRun bool, prepare func() (entityFileCreation, error)) (creation entityFileCreation, committed bool, err error) {
 	if err := s.authorizeMutation(); err != nil {
-		return entityFileCreation{}, err
+		return creation, false, err
 	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
-		return entityFileCreation{}, err
+		return creation, false, err
 	}
 	if prepare == nil {
-		return entityFileCreation{}, fmt.Errorf("%w: entity file preparation is required", domain.ErrValidation)
+		return creation, false, fmt.Errorf("%w: entity file preparation is required", domain.ErrValidation)
 	}
 	if dryRun {
-		creation, err := prepare()
+		creation, err = prepare()
 		if err != nil {
-			return entityFileCreation{}, err
+			return entityFileCreation{}, false, err
 		}
 		if _, err := os.Stat(creation.path); err == nil {
-			return entityFileCreation{}, entityAlreadyExistsError(creation.kind, creation.name)
+			return entityFileCreation{}, false, entityAlreadyExistsError(creation.kind, creation.name)
 		} else if !os.IsNotExist(err) {
-			return entityFileCreation{}, fmt.Errorf("stat %s %s: %w", creation.kind, creation.path, err)
+			return entityFileCreation{}, false, fmt.Errorf("stat %s %s: %w", creation.kind, creation.path, err)
 		}
-		return creation, nil
+		return creation, false, nil
 	}
 	// Preserve the store's historical ability to create the first entity in a
 	// not-yet-existing root; the directory-backed Unix lock needs the root first.
 	if err := os.MkdirAll(s.root, 0o755); err != nil {
-		return entityFileCreation{}, fmt.Errorf("mkdir planning root %s: %w", s.root, err)
+		return creation, false, fmt.Errorf("mkdir planning root %s: %w", s.root, err)
 	}
-	unlock, err := s.writeLock()
+	unlock, err := s.checkedWriteLock()
 	if err != nil {
-		return entityFileCreation{}, err
+		return creation, false, err
 	}
-	defer unlock()
+	defer func() {
+		if releaseErr := unlock(); releaseErr != nil {
+			wrapped := &core.CreateFinalizationError{Cause: fmt.Errorf("release repository entity creation guard: %w", releaseErr)}
+			err = errors.Join(err, wrapped)
+		}
+	}()
 
-	creation, err := prepare()
+	creation, err = prepare()
 	if err != nil {
-		return entityFileCreation{}, err
+		return entityFileCreation{}, false, err
 	}
 	if err := s.writeNewFileUnlocked(creation.dir, creation.path, creation.content, creation.kind, creation.name); err != nil {
-		return entityFileCreation{}, err
+		return entityFileCreation{}, false, err
 	}
-	return creation, nil
+	return creation, true, nil
 }
 
 func entityAlreadyExistsError(kind, name string) error {
@@ -208,7 +214,7 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (core.TaskCreat
 	if err != nil {
 		return core.TaskCreationReceipt{}, err
 	}
-	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
+	creation, committed, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
 		if err := ensureCandidateIDUnique("task", t.ID, s.taskCandidates); err != nil {
 			return entityFileCreation{}, err
 		}
@@ -217,11 +223,11 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (core.TaskCreat
 		}
 		return entityFileCreation{dir: s.tasksDir, path: path, content: content, kind: "task", name: stem}, nil
 	})
-	if err != nil {
+	if err != nil && !committed {
 		return core.TaskCreationReceipt{}, err
 	}
 	t.Path = creation.path
-	return core.TaskCreationReceipt{Task: t, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: !dryRun}, nil
+	return core.TaskCreationReceipt{Task: t, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: committed}, err
 }
 
 // ensureCandidateIDUnique applies the same same-kind stable-identity rule to
@@ -306,17 +312,17 @@ func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (core.AuditCr
 	if err != nil {
 		return core.AuditCreationReceipt{}, err
 	}
-	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
+	creation, committed, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
 		if err := s.ensureAuditIDUnique(a.ID); err != nil {
 			return entityFileCreation{}, err
 		}
 		return entityFileCreation{dir: s.auditsDir, path: path, content: content, kind: "audit", name: stem}, nil
 	})
-	if err != nil {
+	if err != nil && !committed {
 		return core.AuditCreationReceipt{}, err
 	}
 	a.Path = creation.path
-	return core.AuditCreationReceipt{Audit: a, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: !dryRun}, nil
+	return core.AuditCreationReceipt{Audit: a, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: committed}, err
 }
 
 func (s *FS) ensureAuditIDUnique(auditID string) error {
@@ -367,17 +373,17 @@ func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (core.R
 	if err != nil {
 		return core.ResearchCreationReceipt{}, err
 	}
-	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
+	creation, committed, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
 		if err := ensureCandidateIDUnique("research", r.ID, s.researchCandidates); err != nil {
 			return entityFileCreation{}, err
 		}
 		return entityFileCreation{dir: s.researchDir, path: path, content: content, kind: "research doc", name: stem}, nil
 	})
-	if err != nil {
+	if err != nil && !committed {
 		return core.ResearchCreationReceipt{}, err
 	}
 	r.Path = creation.path
-	return core.ResearchCreationReceipt{Research: r, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: !dryRun}, nil
+	return core.ResearchCreationReceipt{Research: r, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: committed}, err
 }
 
 var epicNumRe = regexp.MustCompile(`^(\d+)-`)
@@ -442,7 +448,7 @@ func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (c
 	if slug == "" {
 		return core.EpicCreationReceipt{}, fmt.Errorf("%w: empty epic slug", domain.ErrValidation)
 	}
-	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
+	creation, committed, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
 		num, err := s.nextEpicNumber()
 		if err != nil {
 			return entityFileCreation{}, err
@@ -455,10 +461,10 @@ func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (c
 		}
 		return entityFileCreation{dir: s.epicsDir, path: path, content: content, kind: "epic", name: id}, nil
 	})
-	if err != nil {
+	if err != nil && !committed {
 		return core.EpicCreationReceipt{}, err
 	}
 	e.ID = creation.name
 	e.Path = creation.path
-	return core.EpicCreationReceipt{Epic: e, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: !dryRun}, nil
+	return core.EpicCreationReceipt{Epic: e, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: committed}, err
 }

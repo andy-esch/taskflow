@@ -91,10 +91,11 @@ func (s *Service) NewResearch(p NewResearchParams) (ResearchCreationReceipt, err
 		if err == nil {
 			return got, nil
 		}
-		// A conflict-classified cleanup error is not an ID collision once the
-		// adapter has committed. Preserve its receipt for recovery and never
-		// mint another ID for the same document.
-		if got.Committed {
+		// A conflict-classified cleanup error is not a safe ID collision,
+		// whether the attempt committed or release failed after a collision.
+		// Preserve its receipt and original error rather than minting again.
+		var finalizationErr *CreateFinalizationError
+		if got.Committed || errors.As(err, &finalizationErr) {
 			return got, err
 		}
 		if !errors.Is(err, domain.ErrConflict) {
