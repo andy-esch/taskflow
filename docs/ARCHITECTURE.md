@@ -338,6 +338,12 @@ adapter capabilities rather than leaked persistence.
   can provide native uniqueness. Each create returns a kind-specific core receipt with optional
   adapter-owned planned and committed local paths; dry runs carry only the plan. The CLI reads
   these paths from receipts, not from domain records, and pathless adapters leave them empty.
+  Ordinary creates also check repository-guard release: if the file is already durable but release
+  fails, they return the committed kind-specific receipt with the error. CLI recovery identifies
+  the created document and workspace and asks callers to inspect it before retrying. A Research
+  create never remints its ID after a committed result or a failed create finalization, even when
+  that error is joined with a pre-commit ID collision. Committed-create JSON also withholds a
+  whole-command retry hint even if the underlying release syscall was transient.
   Thread updates similarly expose their optional local path separately. Task rename receipts retain
   exact source and destination paths alongside their durable-prefix stage, including on partial
   failure, so recovery never has to resolve a possibly ambiguous post-rename name. The legacy

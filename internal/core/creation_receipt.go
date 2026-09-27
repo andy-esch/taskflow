@@ -2,6 +2,15 @@ package core
 
 import "github.com/andy-esch/taskflow/internal/domain"
 
+// CreateFinalizationError marks a failed create cleanup step. A caller must not
+// interpret a conflict elsewhere in the error chain as a safe ID collision to
+// retry: the adapter could not finish the original create attempt cleanly.
+// Cause retains the underlying cleanup error for classification and diagnosis.
+type CreateFinalizationError struct{ Cause error }
+
+func (e *CreateFinalizationError) Error() string { return e.Cause.Error() }
+func (e *CreateFinalizationError) Unwrap() error { return e.Cause }
+
 // LocalCreateOutcome is optional adapter-owned destination evidence. A dry run
 // can know the planned path without creating a resolvable record; CommittedPath
 // is set only after that destination became durable. Both remain empty for a

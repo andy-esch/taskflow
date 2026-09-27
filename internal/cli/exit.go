@@ -151,6 +151,16 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 	// An OS failure otherwise arrives as code "error" plus prose, leaving an agent to
 	// tell permission-denied from missing-directory from disk-full by reading English.
 	payload.Error.Filesystem = filesystemDetails(err)
+	var createdErr *createdCommandFailure
+	if errors.As(err, &createdErr) {
+		details := wire.ToCreatedRecoveryJSON(createdErr.created, createdErr.workspace)
+		payload.Error.Created = &details
+		// The OS operation may have been transient, but the create already
+		// committed. Repeating the command can create another document.
+		if payload.Error.Filesystem != nil {
+			payload.Error.Filesystem.Retryable = false
+		}
+	}
 	var dependencyErr *dependencyCommandFailure
 	if errors.As(err, &dependencyErr) {
 		details := wire.ToDependencyMutationJSON(dependencyErr.receipt, dependencyErr.workspace)

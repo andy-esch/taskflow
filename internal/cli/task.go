@@ -170,6 +170,10 @@ func newTaskNewCmd(app *App) *cobra.Command {
 				if errors.As(err, &committed) {
 					return &taskLifecycleCommandFailure{cause: err, receipt: committed.Receipt, workspace: app.workspace()}
 				}
+				if receipt.Committed {
+					return committedCreateFailure(app, err, "task", receipt.Task.ID, receipt.Task.Slug,
+						string(receipt.Task.Status), receipt.Local.CommittedPath)
+				}
 				return err
 			}
 			t := receipt.Task

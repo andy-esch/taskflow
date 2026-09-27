@@ -378,6 +378,17 @@ func TestNewResearch_DoesNotRetryCommittedConflict(t *testing.T) {
 	}
 }
 
+func TestNewResearch_DoesNotRetryCollisionJoinedWithFinalizationFailure(t *testing.T) {
+	cleanupErr := errors.New("repository guard release failed")
+	store := &failingStore{err: errors.Join(domain.ErrConflict, &CreateFinalizationError{Cause: cleanupErr})}
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-18")))
+
+	got, err := svc.NewResearch(NewResearchParams{Title: "Doc"})
+	if !errors.Is(err, domain.ErrConflict) || !errors.Is(err, cleanupErr) || store.calls != 1 || got.Committed {
+		t.Fatalf("joined pre-commit failure should stop after one attempt: receipt=%+v err=%v calls=%d", got, err, store.calls)
+	}
+}
+
 type failingStore struct {
 	nopStore
 	err     error

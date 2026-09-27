@@ -722,6 +722,19 @@ func ToCreatedEnvelope(kind, id, slug, status, path string, dryRun bool, ws Work
 	return CreatedEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Created: CreatedItem{Kind: kind, ID: id, Slug: slug, Status: status, Path: path}, Workspace: ws}
 }
 
+// CreatedRecoveryJSON is the committed created-item evidence in a --json error
+// when finalization fails. The path is local and relative to Workspace, or empty
+// for a pathless adapter; the stable ID remains available either way.
+type CreatedRecoveryJSON struct {
+	CreatedItem
+	Committed bool          `json:"committed"`
+	Workspace WorkspaceJSON `json:"workspace"`
+}
+
+func ToCreatedRecoveryJSON(created CreatedItem, workspace WorkspaceJSON) CreatedRecoveryJSON {
+	return CreatedRecoveryJSON{CreatedItem: created, Committed: true, Workspace: workspace}
+}
+
 // EpicsEnvelope is `epic list --json`.
 type EpicsEnvelope struct {
 	SchemaVersion string                `json:"schema_version"`
@@ -1105,6 +1118,7 @@ func ToTemplateShowEnvelope(info TemplateInfo, body string) TemplateShowEnvelope
 type ErrorItem struct {
 	Code               string                     `json:"code"`
 	Message            string                     `json:"message"`
+	Created            *CreatedRecoveryJSON       `json:"created,omitempty"`
 	DependencyMutation *DependencyMutationJSON    `json:"dependency_mutation,omitempty"`
 	GraphRepair        *TaskGraphRepairJSON       `json:"graph_repair,omitempty"`
 	TaskLifecycle      *TaskLifecycleRecoveryJSON `json:"task_lifecycle,omitempty"`

@@ -2,9 +2,11 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -97,6 +99,117 @@ func TestOrdinaryCreateReceiptsSeparatePlannedAndCommittedPaths(t *testing.T) {
 	}
 }
 
+func TestOrdinaryCreateReportsCommittedGuardReleaseFailure(t *testing.T) {
+	releaseErr := fmt.Errorf("injected release conflict: %w", domain.ErrConflict)
+	previous := testHookRepositoryUnlockError
+	t.Cleanup(func() { testHookRepositoryUnlockError = previous })
+	for _, tc := range []struct {
+		name, dir string
+		create    func(*FS) (core.LocalCreateOutcome, bool, error)
+	}{
+		{"task", "tasks", func(fs *FS) (core.LocalCreateOutcome, bool, error) {
+			r, err := fs.CreateTask(domain.Task{ID: "6ge7qn9ptaa1", Slug: "created", Status: domain.StatusReadyToStart}, "# Task\n", false)
+			return r.Local, r.Committed, err
+		}},
+		{"epic", "epics", func(fs *FS) (core.LocalCreateOutcome, bool, error) {
+			r, err := fs.CreateEpic("created", domain.Epic{Status: domain.EpicStatusActive}, "# Epic\n", false)
+			return r.Local, r.Committed, err
+		}},
+		{"audit", "audits", func(fs *FS) (core.LocalCreateOutcome, bool, error) {
+			r, err := fs.CreateAudit(domain.Audit{ID: "6ge7qn9ptaa2", Slug: "2026-09-27-created", Date: "2026-09-27"}, "# Audit\n", false)
+			return r.Local, r.Committed, err
+		}},
+		{"research", "research", func(fs *FS) (core.LocalCreateOutcome, bool, error) {
+			svc := core.MustNewService(fs, core.WithIDGen(func() string { return "6ge7qn9ptaa3" }))
+			r, err := svc.NewResearch(core.NewResearchParams{Title: "Created", Created: "2026-09-27"})
+			return r.Local, r.Committed, err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			calls := 0
+			testHookRepositoryUnlockError = func() error { calls++; return releaseErr }
+			local, committed, err := tc.create(NewFS(root))
+			if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "release repository entity creation guard") ||
+				!committed || local.PlannedPath == "" || local.CommittedPath != local.PlannedPath {
+				t.Fatalf("post-commit result local=%+v committed=%v err=%v", local, committed, err)
+			}
+			if calls != 1 {
+				t.Fatalf("create guard released %d times, want one (no retry)", calls)
+			}
+			files, err := os.ReadDir(filepath.Join(root, tc.dir))
+			if err != nil || len(files) != 1 || filepath.Join(root, tc.dir, files[0].Name()) != local.CommittedPath {
+				t.Fatalf("durable files=%v local=%+v err=%v", files, local, err)
+			}
+		})
+	}
+}
+
+func TestNewResearchDoesNotRetryCollisionWhenGuardReleaseFails(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "research"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	seeded := filepath.Join(root, "research", "6ge7qn9ptaa1-existing.md")
+	if err := os.WriteFile(seeded, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	previous := testHookRepositoryUnlockError
+	t.Cleanup(func() { testHookRepositoryUnlockError = previous })
+	releases := 0
+	testHookRepositoryUnlockError = func() error {
+		releases++
+		if releases == 1 {
+			return &os.PathError{Op: "flock", Path: root, Err: syscall.EIO}
+		}
+		return nil
+	}
+	minted := 0
+	svc := core.MustNewService(NewFS(root), core.WithIDGen(func() string {
+		minted++
+		if minted == 1 {
+			return "6ge7qn9ptaa1"
+		}
+		return "6ge7qn9ptaa2"
+	}))
+	got, err := svc.NewResearch(core.NewResearchParams{Title: "New research", Created: "2026-09-27"})
+	var finalizationErr *core.CreateFinalizationError
+	if err == nil || !errors.Is(err, domain.ErrConflict) || !errors.Is(err, syscall.EIO) ||
+		!errors.As(err, &finalizationErr) || got.Committed || minted != 1 || releases != 1 {
+		t.Fatalf("research result=%+v err=%v minted=%d releases=%d", got, err, minted, releases)
+	}
+	files, err := os.ReadDir(filepath.Join(root, "research"))
+	if err != nil || len(files) != 1 || files[0].Name() != filepath.Base(seeded) {
+		t.Fatalf("collision plus release failure wrote another document: files=%v err=%v", files, err)
+	}
+}
+
+func TestCreateEntityFileKeepsDryRunAndPreCommitFailuresDistinct(t *testing.T) {
+	root := t.TempDir()
+	previous := testHookRepositoryUnlockError
+	t.Cleanup(func() { testHookRepositoryUnlockError = previous })
+	calls := 0
+	testHookRepositoryUnlockError = func() error { calls++; return domain.ErrConflict }
+	prepare := func() (entityFileCreation, error) {
+		return entityFileCreation{dir: filepath.Join(root, "tasks"), path: filepath.Join(root, "tasks", "preview.md"),
+			content: []byte("preview"), kind: "task", name: "preview"}, nil
+	}
+	preview, committed, err := NewFS(root).createEntityFile(true, prepare)
+	if err != nil || committed || preview.path == "" || calls != 0 {
+		t.Fatalf("dry run result=%+v committed=%v calls=%d err=%v", preview, committed, calls, err)
+	}
+	if _, err := os.Stat(preview.path); !os.IsNotExist(err) {
+		t.Fatalf("dry run wrote destination: %v", err)
+	}
+	preCommitErr := fmt.Errorf("preparation failed: %w", domain.ErrValidation)
+	result, committed, err := NewFS(root).createEntityFile(false, func() (entityFileCreation, error) {
+		return entityFileCreation{}, preCommitErr
+	})
+	if committed || result.path != "" || !errors.Is(err, preCommitErr) || !errors.Is(err, domain.ErrConflict) || calls != 1 {
+		t.Fatalf("pre-commit result=%+v committed=%v calls=%d err=%v", result, committed, calls, err)
+	}
+}
+
 func TestCreateTaskCreatesMissingPlanningRootBeforeLocking(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "new-planning-root")
 	fs := NewFS(root)
@@ -123,7 +236,7 @@ func TestCreateEntityFileSerializesPreparationWithWrite(t *testing.T) {
 	results := make(chan error, 2)
 
 	go func() {
-		_, err := NewFS(root).createEntityFile(false, func() (entityFileCreation, error) {
+		_, _, err := NewFS(root).createEntityFile(false, func() (entityFileCreation, error) {
 			close(firstPrepared)
 			<-releaseFirst
 			return entityFileCreation{
@@ -135,7 +248,7 @@ func TestCreateEntityFileSerializesPreparationWithWrite(t *testing.T) {
 	<-firstPrepared
 
 	go func() {
-		_, err := NewFS(root).createEntityFile(false, func() (entityFileCreation, error) {
+		_, _, err := NewFS(root).createEntityFile(false, func() (entityFileCreation, error) {
 			close(secondPrepared)
 			return entityFileCreation{
 				dir: dir, path: filepath.Join(dir, "second.md"), content: []byte("second"), kind: "test entity", name: "second",
