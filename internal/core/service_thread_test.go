@@ -175,8 +175,8 @@ func TestServiceLintIncludesThreadIntegrityAndCrossKindIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(problems) != 1 || problems[0].EntityKind != LintEntityThread ||
-		problems[0].Location != "threads/bad.md" || !problems[0].LocationIsPath {
+	if len(problems) != 1 || problems[0].EntityKind != EntityThread ||
+		problems[0].Location != "threads/bad.md" || problems[0].LocalPath != "threads/bad.md" {
 		t.Fatalf("problems = %+v", problems)
 	}
 	got := make(map[string]string)
@@ -459,7 +459,7 @@ func TestServiceGraphQueriesDoNotRequireThreadSupport(t *testing.T) {
 		t.Fatalf("show error = %v", err)
 	}
 	tasks, problems, err := svc.ListTasks(TaskFilter{Unblocked: true})
-	if err != nil || len(problems) != 0 || len(tasks) != 1 || tasks[0].ID != task.ID {
+	if err != nil || len(problems) != 0 || len(tasks) != 1 || tasks[0].Source.ID != task.ID {
 		t.Fatalf("task list = %+v, problems = %+v, err = %v", tasks, problems, err)
 	}
 	board, err := svc.Board()

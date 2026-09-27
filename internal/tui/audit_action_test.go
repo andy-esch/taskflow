@@ -64,7 +64,8 @@ func TestModel_ActionMenuMovesAudit(t *testing.T) {
 	if m.flash == "" || m.flashErr {
 		t.Errorf("expected a success flash, got %q (err=%v)", m.flash, m.flashErr)
 	}
-	a, _, err := m.svc.ShowAudit("2026-06-01-thing")
+	record, err := m.svc.ShowAudit("2026-06-01-thing")
+	a := record.Value.Audit
 	if err != nil || a.Bucket != domain.AuditClosed {
 		t.Errorf("audit should be closed after the action: bucket=%s err=%v", a.Bucket, err)
 	}
@@ -120,7 +121,8 @@ func TestModel_AuditCloseBlockedByOpenFindings(t *testing.T) {
 		t.Errorf("closing an audit with open findings should flash red, got %q (err=%v)", m.flash, m.flashErr)
 	}
 	// The audit stayed open on disk — the guard refused the move.
-	a, _, err := m.svc.ShowAudit("2026-06-02-open")
+	record, err := m.svc.ShowAudit("2026-06-02-open")
+	a := record.Value.Audit
 	if err != nil || a.Bucket != domain.AuditOpen {
 		t.Errorf("audit must remain open after a blocked close: bucket=%s err=%v", a.Bucket, err)
 	}

@@ -109,32 +109,42 @@ const maxIDMintAttempts = 8
 // problems. There is no status/bucket to filter on, so unlike ListTasks/ListAudits
 // there is no default-view carve — the whole corpus is the listing. tag filters to one
 // topical tag (case-insensitive); empty means no filter.
-func (s *Service) ListResearch(tag string) ([]domain.Research, []domain.FileProblem, error) {
-	docs, problems, err := s.store.ListResearch()
+func (s *Service) ListResearch(tag string) ([]LoadedRecord[domain.Research], []LoadProblem, error) {
+	read, err := s.store.ReadResearch()
 	if err != nil {
 		return nil, nil, err
 	}
-	out := make([]domain.Research, 0, len(docs))
-	for _, r := range docs {
+	read.Records, read.Problems = loadedRecordsWithIDs(EntityResearch, read.Records, read.Problems,
+		func(research domain.Research) string { return research.Slug })
+	out := make([]LoadedRecord[domain.Research], 0, len(read.Records))
+	for _, record := range read.Records {
+		r := record.Value
 		if tag != "" && !hasTag(r.Tags, tag) {
 			continue
 		}
-		out = append(out, r)
+		out = append(out, record)
 	}
 	// Newest first — the useful default for a corpus read chronologically. Ties break on
 	// slug so the order is stable (same-day docs are common: dates are day-precision).
 	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Created != out[j].Created {
-			return out[i].Created > out[j].Created
+		if out[i].Value.Created != out[j].Value.Created {
+			return out[i].Value.Created > out[j].Value.Created
 		}
-		return out[i].Slug < out[j].Slug
+		return out[i].Value.Slug < out[j].Value.Slug
 	})
-	return out, problems, nil
+	return out, read.Problems, nil
 }
 
 // ShowResearch returns one research doc plus its body.
-func (s *Service) ShowResearch(slug string) (domain.Research, string, error) {
-	return s.store.GetResearch(slug)
+func (s *Service) ShowResearch(slug string) (LoadedRecord[ResearchWithBody], error) {
+	record, err := s.store.ReadResearchDocument(slug)
+	if err != nil {
+		return LoadedRecord[ResearchWithBody]{}, err
+	}
+	if err := requireSourceID(EntityResearch, record.Source); err != nil {
+		return LoadedRecord[ResearchWithBody]{}, err
+	}
+	return record, nil
 }
 
 // ResearchPath resolves a research doc's file path without reading or parsing it —

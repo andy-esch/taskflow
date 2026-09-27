@@ -25,7 +25,9 @@ func (s *splitSummaryStore) ReadTaskGraph() (TaskGraphRead, error) { return s.re
 type planningSummaryFake struct{ *fakeStore }
 
 func (s *planningSummaryFake) ReadTaskGraph() (TaskGraphRead, error) {
-	return TaskGraphReadFromFiles(s.tasks, s.problems), nil
+	read := TaskGraphReadFromFiles(s.tasks, s.problems)
+	read.Records = loadedTasks(s.tasks) // the fake store assigns source IDs even without frontmatter IDs
+	return read, nil
 }
 
 func (f *fakeSpaceOverviewStore) OpenPlanningStore(root string) (PlanningSummarySource, error) {
@@ -119,9 +121,9 @@ func TestSpaceOverviewPreservesPathlessTaskLoadProblemIdentity(t *testing.T) {
 		t.Fatalf("overview = %+v", overview)
 	}
 	problem := overview.Spaces[0].Summary.Problems[0]
-	if problem.EntityKind != LintEntityTask || problem.EntityID != "6gpathless01" ||
+	if problem.EntityKind != EntityTask || problem.EntityID != "6gpathless01" ||
 		problem.EntitySlug != "broken-task" || problem.Location != "db://planning/tasks/1" ||
-		problem.LocationIsPath {
+		problem.LocalPath != "" {
 		t.Fatalf("cross-space diagnostic = %+v", problem)
 	}
 }
@@ -279,9 +281,9 @@ func TestSpaceOverviewRetainedSummaryOwnsMutableSnapshotData(t *testing.T) {
 			ByUrgency: []CountBy{{Key: "soon", Count: 1}},
 			Acute:     []AuditFinding{{Finding: domain.Finding{Code: "H1", Title: "original"}}},
 		},
-		Problems: []LintLoadProblem{{
-			EntityKind: LintEntityTask, Location: "tasks/broken.md",
-			LocationIsPath: true, Message: "original",
+		Problems: []LoadProblem{{
+			EntityKind: EntityTask, Location: "tasks/broken.md",
+			LocalPath: "tasks/broken.md", Message: "original",
 		}},
 	}
 	previous := SpaceOverview{Spaces: []SpaceSummary{{

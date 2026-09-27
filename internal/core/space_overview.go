@@ -14,14 +14,16 @@ import (
 type PlanningSummarySource interface {
 	SummaryStore
 	TaskGraphSource
+	AuditSnapshotSource
 }
 
 // Pin both halves of the composite capability independently. This keeps a future
 // refactor from replacing either compile-time requirement with optional runtime
 // discovery while leaving the immediate summarize call buildable.
 var (
-	_ SummaryStore    = (PlanningSummarySource)(nil)
-	_ TaskGraphSource = (PlanningSummarySource)(nil)
+	_ SummaryStore        = (PlanningSummarySource)(nil)
+	_ TaskGraphSource     = (PlanningSummarySource)(nil)
+	_ AuditSnapshotSource = (PlanningSummarySource)(nil)
 )
 
 // SpaceOverviewStore is the narrow secondary-adapter port for opening one planning tree.
@@ -205,7 +207,7 @@ func cloneSpaceSummary(summary Summary) Summary {
 	cloned.Findings.ByUrgency = append([]CountBy(nil), summary.Findings.ByUrgency...)
 	cloned.Findings.ByComponent = append([]CountBy(nil), summary.Findings.ByComponent...)
 	cloned.Findings.Acute = append([]AuditFinding(nil), summary.Findings.Acute...)
-	cloned.Problems = append([]LintLoadProblem(nil), summary.Problems...)
+	cloned.Problems = append([]LoadProblem(nil), summary.Problems...)
 	return cloned
 }
 
@@ -253,7 +255,7 @@ func summarizeSpaceGroup(group SpaceGroup, source SpaceOverviewStore, asOf time.
 		}
 		return space
 	}
-	summary, err := summarize(planningStore, planningStore, asOf)
+	summary, err := summarize(planningStore, planningStore, planningStore, asOf)
 	if err != nil {
 		space.Failure = &SpaceLoadFailure{Class: domain.Classify(err), Message: err.Error()}
 		return space

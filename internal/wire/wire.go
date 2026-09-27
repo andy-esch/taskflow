@@ -312,7 +312,13 @@ import (
 // `status --all --json` summary enrich unreadable records with entity kind,
 // optional stable ID and slug, and optional adapter-neutral location. Existing
 // `path` and `message` remain; pathless adapters emit an empty compatibility path.
-const SchemaVersion = "1.75"
+// 1.76: ADDITIVE — ordinary task, epic, audit, and research list envelopes now
+// publish the same structured unreadable-record identity used by lint, board,
+// status, and findings. Existing local `path` and `message` values are unchanged;
+// pathless adapters retain kind, stable ID/slug, and opaque `location` without
+// inventing a filesystem path. Read DTO identity is sourced from the adapter's
+// loaded-record envelope rather than declared frontmatter.
+const SchemaVersion = "1.76"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

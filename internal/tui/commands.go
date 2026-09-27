@@ -36,9 +36,15 @@ func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 		default:
 			f.Status = view
 		}
-		tasks, problems, err := svc.ListTasks(f)
+		records, problems, err := svc.ListTasks(f)
 		if err != nil {
 			return errMsg{kind: entityTasks, gen: gen, err: err}
+		}
+		tasks := make([]domain.Task, 0, len(records))
+		for _, record := range records {
+			task := record.Value
+			task.FilenameID = record.Source.ID
+			tasks = append(tasks, task)
 		}
 		now := svc.Now() // one clock read drives both the sort and the per-row due flag
 		switch view {
@@ -77,11 +83,11 @@ func loadDashboard(svc *core.Service, gen int) tea.Cmd {
 
 func loadTaskDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
-		t, body, err := svc.ShowTask(id)
+		record, err := svc.ShowTask(id)
 		if err != nil {
 			return detailErrMsg{kind: entityTasks, id: id, err: err}
 		}
-		return detailMsg{kind: entityTasks, id: id, content: taskDetail{t: t, body: body}}
+		return detailMsg{kind: entityTasks, id: id, content: taskDetail{t: record.Value.Task, body: record.Value.Body}}
 	}
 }
 
@@ -146,11 +152,17 @@ func sortEpicsForView(epics []core.EpicSummary, view string) {
 
 func loadEpicDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
-		es, tasks, body, err := svc.ShowEpic(id)
+		detail, err := svc.ShowEpic(id)
 		if err != nil {
 			return detailErrMsg{kind: entityEpics, id: id, err: err}
 		}
-		return detailMsg{kind: entityEpics, id: id, content: epicDetail{es: es, tasks: tasks, body: body}}
+		tasks := make([]domain.Task, 0, len(detail.Tasks))
+		for _, record := range detail.Tasks {
+			task := record.Value
+			task.FilenameID = record.Source.ID
+			tasks = append(tasks, task)
+		}
+		return detailMsg{kind: entityEpics, id: id, content: epicDetail{es: detail.Summary, tasks: tasks, body: detail.Body}}
 	}
 }
 
@@ -170,9 +182,15 @@ func loadAuditList(t *entityTab, svc *core.Service) tea.Cmd {
 		case "all":
 			bucket, all = "", true
 		}
-		audits, problems, err := svc.ListAudits(bucket, all)
+		records, problems, err := svc.ListAudits(bucket, all)
 		if err != nil {
 			return errMsg{kind: entityAudits, gen: gen, err: err}
+		}
+		audits := make([]domain.Audit, 0, len(records))
+		for _, record := range records {
+			audit := record.Value
+			audit.FilenameID = record.Source.ID
+			audits = append(audits, audit)
 		}
 		countsW := countsWidth(audits, func(a domain.Audit) (int, int) { return a.Resolved(), a.Findings })
 		items := make([]list.Item, 0, len(audits))
@@ -190,11 +208,11 @@ func loadAuditList(t *entityTab, svc *core.Service) tea.Cmd {
 
 func loadAuditDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
-		a, body, err := svc.ShowAudit(id)
+		record, err := svc.ShowAudit(id)
 		if err != nil {
 			return detailErrMsg{kind: entityAudits, id: id, err: err}
 		}
-		return detailMsg{kind: entityAudits, id: id, content: auditDetail{a: a, body: body}}
+		return detailMsg{kind: entityAudits, id: id, content: auditDetail{a: record.Value.Audit, body: record.Value.Body}}
 	}
 }
 
@@ -269,9 +287,15 @@ func sortByRevisitDate(tasks []domain.Task) {
 func loadResearchList(t *entityTab, svc *core.Service) tea.Cmd {
 	gen := t.loadGen
 	return func() tea.Msg {
-		docs, problems, err := svc.ListResearch("")
+		records, problems, err := svc.ListResearch("")
 		if err != nil {
 			return errMsg{kind: entityResearch, gen: gen, err: err}
+		}
+		docs := make([]domain.Research, 0, len(records))
+		for _, record := range records {
+			doc := record.Value
+			doc.FilenameID = record.Source.ID
+			docs = append(docs, doc)
 		}
 		items := make([]list.Item, 0, len(docs))
 		refs := make([]entityRef, 0, len(docs))
@@ -288,10 +312,10 @@ func loadResearchList(t *entityTab, svc *core.Service) tea.Cmd {
 
 func loadResearchDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
-		r, body, err := svc.ShowResearch(id)
+		record, err := svc.ShowResearch(id)
 		if err != nil {
 			return detailErrMsg{kind: entityResearch, id: id, err: err}
 		}
-		return detailMsg{kind: entityResearch, id: id, content: researchDetail{r: r, body: body}}
+		return detailMsg{kind: entityResearch, id: id, content: researchDetail{r: record.Value.Research, body: record.Value.Body}}
 	}
 }

@@ -57,8 +57,18 @@ func plural(n int, noun string) string {
 // TasksJSON writes a stable, versioned JSON envelope of tasks, including any
 // per-file load problems so a JSON consumer never silently loses unreadable
 // files (mirrors LintJSON's `unreadable`).
-func TasksJSON(w io.Writer, tasks []domain.Task, problems []domain.FileProblem) error {
+func TasksJSON(w io.Writer, tasks []core.LoadedRecord[domain.Task], problems []core.LoadProblem) error {
 	return wire.EncodeJSON(w, wire.ToTasksEnvelope(tasks, problems))
+}
+
+// TasksReadHuman unwraps ordinary task records for presentation only. Source
+// identity remains attached through every machine projection.
+func TasksReadHuman(w io.Writer, st Style, tasks []core.LoadedRecord[domain.Task]) error {
+	values := make([]domain.Task, 0, len(tasks))
+	for _, record := range tasks {
+		values = append(values, record.Value)
+	}
+	return TasksHuman(w, st, values)
 }
 
 // fieldPrinter returns a key/value line writer for a metadata block: a dim,
@@ -118,14 +128,14 @@ func TaskShowHuman(w io.Writer, st Style, t domain.Task, body string) error {
 }
 
 // TaskShowJSON writes a task plus its body.
-func TaskShowJSON(w io.Writer, t domain.Task, body string) error {
-	return wire.EncodeJSON(w, wire.ToTaskShowEnvelope(t, body))
+func TaskShowJSON(w io.Writer, record core.LoadedRecord[core.TaskWithBody]) error {
+	return wire.EncodeJSON(w, wire.ToTaskShowEnvelope(record))
 }
 
 // TaskInfoJSON writes the token-cheap task metadata read (`task info --json`):
 // path + triage fields + the acceptance-criteria tally, no body.
-func TaskInfoJSON(w io.Writer, t domain.Task, ac domain.ACCount, path string) error {
-	return wire.EncodeJSON(w, wire.ToTaskInfoEnvelope(t, ac, path))
+func TaskInfoJSON(w io.Writer, record core.LoadedRecord[core.TaskWithBody], ac domain.ACCount, path string) error {
+	return wire.EncodeJSON(w, wire.ToTaskInfoEnvelope(record, ac, path))
 }
 
 // TaskInfoHuman prints task metadata as an aligned key/value block (the human face
@@ -149,8 +159,8 @@ func TaskInfoHuman(w io.Writer, st Style, t domain.Task, ac domain.ACCount, path
 
 // AuditInfoJSON writes the token-cheap audit metadata read (`audit info --json`):
 // path + bucket + finding tally, no body.
-func AuditInfoJSON(w io.Writer, a domain.Audit, path string) error {
-	return wire.EncodeJSON(w, wire.ToAuditInfoEnvelope(a, path))
+func AuditInfoJSON(w io.Writer, record core.LoadedRecord[core.AuditWithBody], path string) error {
+	return wire.EncodeJSON(w, wire.ToAuditInfoEnvelope(record, path))
 }
 
 // AuditInfoHuman prints audit metadata as an aligned key/value block: bucket and
@@ -571,7 +581,7 @@ func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 
 // EpicsJSON writes a versioned envelope of epics with rollup, including any
 // per-file load problems (mirrors LintJSON's `unreadable`).
-func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []domain.FileProblem) error {
+func EpicsJSON(w io.Writer, epics []core.EpicSummary, problems []core.LoadProblem) error {
 	return wire.EncodeJSON(w, wire.ToEpicsEnvelope(epics, problems))
 }
 
@@ -689,8 +699,16 @@ func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
 
 // AuditsJSON writes a versioned envelope of audits, including any per-file load
 // problems (mirrors LintJSON's `unreadable`).
-func AuditsJSON(w io.Writer, audits []domain.Audit, problems []domain.FileProblem) error {
+func AuditsJSON(w io.Writer, audits []core.LoadedRecord[domain.Audit], problems []core.LoadProblem) error {
 	return wire.EncodeJSON(w, wire.ToAuditsEnvelope(audits, problems))
+}
+
+func AuditsReadHuman(w io.Writer, st Style, audits []core.LoadedRecord[domain.Audit]) error {
+	values := make([]domain.Audit, 0, len(audits))
+	for _, record := range audits {
+		values = append(values, record.Value)
+	}
+	return AuditsHuman(w, st, values)
 }
 
 // ResearchHuman prints the research corpus as a date-led table. There is no status or
@@ -714,8 +732,16 @@ func ResearchHuman(w io.Writer, st Style, docs []domain.Research) error {
 
 // ResearchJSON writes a versioned envelope of research docs, including any per-file
 // load problems.
-func ResearchJSON(w io.Writer, docs []domain.Research, problems []domain.FileProblem) error {
+func ResearchJSON(w io.Writer, docs []core.LoadedRecord[domain.Research], problems []core.LoadProblem) error {
 	return wire.EncodeJSON(w, wire.ToResearchListEnvelope(docs, problems))
+}
+
+func ResearchReadHuman(w io.Writer, st Style, docs []core.LoadedRecord[domain.Research]) error {
+	values := make([]domain.Research, 0, len(docs))
+	for _, record := range docs {
+		values = append(values, record.Value)
+	}
+	return ResearchHuman(w, st, values)
 }
 
 // ResearchShowHuman prints a research doc's metadata and body. body is the
@@ -749,8 +775,8 @@ func ResearchMutationJSON(w io.Writer, r domain.Research, body string, dryRun bo
 }
 
 // ResearchShowJSON writes one research doc plus its body.
-func ResearchShowJSON(w io.Writer, r domain.Research, body string) error {
-	return wire.EncodeJSON(w, wire.ToResearchShowEnvelope(r, body))
+func ResearchShowJSON(w io.Writer, record core.LoadedRecord[core.ResearchWithBody]) error {
+	return wire.EncodeJSON(w, wire.ToResearchShowEnvelope(record))
 }
 
 // findingStatusOrder renders the finding groups of `audit show` in lifecycle
@@ -841,8 +867,8 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Fin
 }
 
 // AuditShowJSON writes an audit plus its body.
-func AuditShowJSON(w io.Writer, a domain.Audit, body string) error {
-	return wire.EncodeJSON(w, wire.ToAuditShowEnvelope(a, body))
+func AuditShowJSON(w io.Writer, record core.LoadedRecord[core.AuditWithBody]) error {
+	return wire.EncodeJSON(w, wire.ToAuditShowEnvelope(record))
 }
 
 // AuditMutationJSON writes the result of `audit append`: the reloaded audit, dry_run
@@ -855,7 +881,7 @@ func AuditMutationJSON(w io.Writer, a domain.Audit, body string, dryRun bool, ws
 // FindingsJSON writes the structured finding-query result: each parsed finding
 // tagged with its audit slug and bucket, so a cross-audit query stays
 // self-describing. Mirrors the list envelopes' `unreadable` for per-file problems.
-func FindingsJSON(w io.Writer, fs []core.AuditFinding, problems []core.LintLoadProblem) error {
+func FindingsJSON(w io.Writer, fs []core.AuditFinding, problems []core.LoadProblem) error {
 	return wire.EncodeJSON(w, wire.ToFindingsEnvelope(fs, problems))
 }
 
@@ -921,7 +947,7 @@ func FixHuman(w io.Writer, st Style, results []domain.FixResult, remaining []cor
 // findings the pass could NOT repair (`remaining` — report-only epics, unfixable
 // task issues). All three are empty on a dry-run (which writes nothing) — so a
 // --json consumer learns the residual breakage without parsing the prose error.
-func FixJSON(w io.Writer, results []domain.FixResult, problems []core.LintLoadProblem, remaining []core.LintResult, dryRun bool, ws wire.WorkspaceJSON) error {
+func FixJSON(w io.Writer, results []domain.FixResult, problems []core.LoadProblem, remaining []core.LintResult, dryRun bool, ws wire.WorkspaceJSON) error {
 	return wire.EncodeJSON(w, wire.ToFixEnvelope(results, problems, remaining, dryRun, ws))
 }
 
@@ -935,11 +961,11 @@ func ProblemsHuman(w io.Writer, st Style, problems []domain.FileProblem) {
 // LintProblemsHuman renders portable failed-record diagnostics without
 // assuming every source has a filesystem path. Identity leads when available;
 // an optional repair location remains visible on its own labelled line.
-func LintProblemsHuman(w io.Writer, st Style, problems []core.LintLoadProblem) {
+func LintProblemsHuman(w io.Writer, st Style, problems []core.LoadProblem) {
 	lintProblemsHuman(w, st, problems, "")
 }
 
-func lintProblemsHuman(w io.Writer, st Style, problems []core.LintLoadProblem, indent string) {
+func lintProblemsHuman(w io.Writer, st Style, problems []core.LoadProblem, indent string) {
 	for _, problem := range problems {
 		identity := problem.EntitySlug
 		if identity != "" && problem.EntityID != "" {
@@ -964,10 +990,7 @@ func lintProblemsHuman(w io.Writer, st Style, problems []core.LintLoadProblem, i
 		if problem.Location != "" {
 			fmt.Fprintf(w, "%s    %s %s\n", indent, st.Dim("location:"), problem.Location)
 		}
-		path := problem.Path
-		if path == "" && problem.LocationIsPath {
-			path = problem.Location
-		}
+		path := problem.LocalPath
 		if path != "" && path != problem.Location {
 			fmt.Fprintf(w, "%s    %s %s\n", indent, st.Dim("repair:"), path)
 		}
@@ -1005,13 +1028,13 @@ func LintHuman(w io.Writer, st Style, results []core.LintResult, noun string) {
 }
 
 // LintJSON writes the structured lint report: unreadable files + field issues.
-func LintJSON(w io.Writer, results []core.LintResult, problems []core.LintLoadProblem) error {
+func LintJSON(w io.Writer, results []core.LintResult, problems []core.LoadProblem) error {
 	return wire.EncodeJSON(w, wire.ToLintEnvelope(results, problems))
 }
 
 // EpicShowJSON writes an epic, its tasks, and its body.
-func EpicShowJSON(w io.Writer, epic domain.Epic, tasks []domain.Task, body string) error {
-	return wire.EncodeJSON(w, wire.ToEpicShowEnvelope(epic, tasks, body))
+func EpicShowJSON(w io.Writer, detail core.EpicDetail) error {
+	return wire.EncodeJSON(w, wire.ToEpicShowEnvelope(detail))
 }
 
 // EpicMutationJSON writes the result of an `epic set`: the reloaded epic + dry_run

@@ -110,16 +110,16 @@ func TestQueryFindings_DoesNotRereadRecordsThroughAggregateStore(t *testing.T) {
 
 func TestQueryFindings_PathlessSnapshotPreservesIdentityAndDiagnostics(t *testing.T) {
 	source := &auditSnapshotStub{all: AuditSnapshot{
-		Audits: []AuditWithFindings{
-			{Audit: domain.Audit{ID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Bucket: domain.AuditOpen}, Findings: domain.ParseFindings(gatewayBody)},
-			{Audit: domain.Audit{ID: "6fjangd7kvh6", Slug: "2026-06-10-ingest", Bucket: domain.AuditClosed}, Findings: domain.ParseFindings(ingestBody)},
+		Audits: []LoadedRecord[AuditWithFindings]{
+			{Value: AuditWithFindings{Audit: domain.Audit{ID: "declared-wrong", Slug: "2026-06-14-gateway", Bucket: domain.AuditOpen}, Findings: domain.ParseFindings(gatewayBody)}, Source: RecordSource{ID: "6fjangd7kvh5"}},
+			{Value: AuditWithFindings{Audit: domain.Audit{ID: "6fjangd7kvh6", Slug: "2026-06-10-ingest", Bucket: domain.AuditClosed}, Findings: domain.ParseFindings(ingestBody)}, Source: RecordSource{ID: "6fjangd7kvh6"}},
 		},
-		Problems: []LintLoadProblem{{
-			EntityKind: LintEntityAudit, EntityID: "6fjangd7kvh7", EntitySlug: "2026-06-01-broken", Message: "invalid frontmatter",
-			Location: "db://audits/6fjangd7kvh7", LocationIsPath: false,
+		Problems: []LoadProblem{{
+			EntityKind: EntityAudit, EntityID: "6fjangd7kvh7", EntitySlug: "2026-06-01-broken", Message: "invalid frontmatter",
+			Location: "db://audits/6fjangd7kvh7",
 		}, {
-			EntityKind: LintEntityAudit, Message: "identity unavailable",
-			Location: "6fjangd7kvh8-path-looking-but-opaque", LocationIsPath: false,
+			EntityKind: EntityAudit, Message: "identity unavailable",
+			Location: "6fjangd7kvh8-path-looking-but-opaque",
 		}},
 	}}
 	got, problems, err := NewService(nil, WithAuditSnapshotSource(source)).QueryFindings(FindingFilter{})
@@ -137,16 +137,19 @@ func TestQueryFindings_PathlessSnapshotPreservesIdentityAndDiagnostics(t *testin
 	}
 	if len(problems) != 2 || problems[0].EntityID != "6fjangd7kvh7" ||
 		problems[0].EntitySlug != "2026-06-01-broken" || problems[0].Location != "db://audits/6fjangd7kvh7" ||
-		problems[0].LocationIsPath || problems[1].EntityID != "" || problems[1].EntitySlug != "" ||
-		problems[1].Location != "6fjangd7kvh8-path-looking-but-opaque" || problems[1].LocationIsPath {
+		problems[0].LocalPath != "" || problems[1].EntityID != "" || problems[1].EntitySlug != "" ||
+		problems[1].Location != "6fjangd7kvh8-path-looking-but-opaque" || problems[1].LocalPath != "" {
 		t.Fatalf("portable unreadable evidence = %+v", problems)
 	}
 }
 
 func TestQueryFindings_DelegatesSingleAuditResolutionToSnapshot(t *testing.T) {
-	gateway := AuditSnapshot{Audits: []AuditWithFindings{{
-		Audit:    domain.Audit{ID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Bucket: domain.AuditOpen},
-		Findings: domain.ParseFindings(gatewayBody),
+	gateway := AuditSnapshot{Audits: []LoadedRecord[AuditWithFindings]{{
+		Value: AuditWithFindings{
+			Audit:    domain.Audit{ID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Bucket: domain.AuditOpen},
+			Findings: domain.ParseFindings(gatewayBody),
+		},
+		Source: RecordSource{ID: "6fjangd7kvh5"},
 	}}}
 	source := &auditSnapshotStub{
 		selected: map[string]AuditSnapshot{"gateway": gateway},
@@ -183,6 +186,17 @@ func TestAuditSnapshotConsumersRejectMissingCapabilityPrecisely(t *testing.T) {
 	}
 	if _, _, err := svc.LintAudits("one-audit"); err == nil || !strings.Contains(err.Error(), "audit snapshot reads are unavailable") {
 		t.Fatalf("LintAudits error = %v", err)
+	}
+}
+
+func TestFixFindingHeadersRejectsSourceLessSnapshotBeforeWrites(t *testing.T) {
+	source := &auditSnapshotStub{all: AuditSnapshot{Audits: []LoadedRecord[AuditWithFindings]{{
+		Value:  AuditWithFindings{Audit: domain.Audit{ID: "declared-only", Slug: "2026-06-14-gateway"}},
+		Source: RecordSource{Location: "db://audits/gateway"},
+	}}}}
+	_, err := NewService(findingsRepo(), WithAuditSnapshotSource(source)).FixFindingHeaders(false)
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("FixFindingHeaders error = %v, want validation failure", err)
 	}
 }
 

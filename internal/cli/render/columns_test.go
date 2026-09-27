@@ -199,7 +199,7 @@ func TestProjectedListJSON_UsesCanonicalWireKeysAndRawValues(t *testing.T) {
 	}
 
 	var full bytes.Buffer
-	if err := TasksJSON(&full, tasks, nil); err != nil {
+	if err := TasksJSON(&full, taskRecords(tasks), nil); err != nil {
 		t.Fatal(err)
 	}
 	var authoritative struct {
@@ -306,7 +306,7 @@ func TestTaskRevisitAt_FlowsThroughCSVAndJSON(t *testing.T) {
 	}
 
 	var jb bytes.Buffer
-	if err := TasksJSON(&jb, []domain.Task{task}, nil); err != nil {
+	if err := TasksJSON(&jb, taskRecords([]domain.Task{task}), nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(jb.String(), `"revisit_at":"2026-09-01"`) {
@@ -327,8 +327,9 @@ func TestWriteTablePlain_UpdatedFallsBackToCreated(t *testing.T) {
 func TestWriteTablePlain_EpicExtractors(t *testing.T) {
 	var b bytes.Buffer
 	WriteTablePlain(&b, EpicColumns(), []core.EpicSummary{{
-		Epic: domain.Epic{ID: "20-cli", Status: "active", Priority: "medium", Description: "ux"},
-		Done: 2, Total: 5,
+		Epic:   domain.Epic{ID: "20-cli", Status: "active", Priority: "medium", Description: "ux"},
+		Source: core.RecordSource{ID: "20-cli"},
+		Done:   2, Total: 5,
 	}})
 	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
 	// percent + deprecated are appended LAST (after description) so the pre-existing

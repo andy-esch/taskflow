@@ -48,6 +48,17 @@ func TestToAuditJSON_CarriesID(t *testing.T) {
 	}
 }
 
+func TestToResearchJSONUsesBareRecordCanonicalID(t *testing.T) {
+	research := domain.Research{ID: "stale-declaration", FilenameID: "6ga000000009", Slug: "identity"}
+	if got := ToResearchJSON(research).ID; got != "6ga000000009" {
+		t.Fatalf("research JSON ID = %q, want filename-derived canonical ID", got)
+	}
+	research.ID = ""
+	if got := ToResearchMutationEnvelope(research, "", false, WorkspaceJSON{}).Research.ID; got != "6ga000000009" {
+		t.Fatalf("research mutation JSON ID = %q, want filename-derived canonical ID", got)
+	}
+}
+
 // TestTaskJSONDescriptionTagMatchesCap guards the one description-cap copy that
 // can't derive from domain.MaxDescriptionLen — the jsonschema struct tag (tags are
 // static literals). Every other copy (CLI flag help, schema authoring guidance)

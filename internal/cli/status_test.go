@@ -261,9 +261,9 @@ func TestStatusAllProblemsError_SelectedTreeLoadFailure(t *testing.T) {
 
 func TestStatusAllProblemsErrorNamesSpaceQualifiedUnreadableRecords(t *testing.T) {
 	err := statusAllProblemsError(core.SpaceOverview{Spaces: []core.SpaceSummary{{
-		ID: "planning", Summary: &core.Summary{Problems: []core.LintLoadProblem{{
-			EntityKind: core.LintEntityTask, EntitySlug: "broken-task",
-			Path: "/planning/tasks/6g0000000001-broken-task.md", Message: "bad task",
+		ID: "planning", Summary: &core.Summary{Problems: []core.LoadProblem{{
+			EntityKind: core.EntityTask, EntitySlug: "broken-task",
+			LocalPath: "/planning/tasks/6g0000000001-broken-task.md", Message: "bad task",
 		}}},
 	}}})
 	if err == nil || !errors.Is(err, domain.ErrValidation) ||

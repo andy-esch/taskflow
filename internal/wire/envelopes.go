@@ -30,17 +30,17 @@ var schemaComments []byte
 
 // TasksEnvelope is `task list --json`.
 type TasksEnvelope struct {
-	SchemaVersion string               `json:"schema_version"`
-	Tasks         []TaskJSON           `json:"tasks"`
-	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+	SchemaVersion string                `json:"schema_version"`
+	Tasks         []TaskJSON            `json:"tasks"`
+	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
 }
 
 // ToTasksEnvelope builds the `task list --json` envelope value, including any
 // per-file load problems so a JSON consumer never silently loses unreadable files.
-func ToTasksEnvelope(tasks []domain.Task, problems []domain.FileProblem) TasksEnvelope {
-	e := TasksEnvelope{SchemaVersion: SchemaVersion, Tasks: make([]TaskJSON, 0, len(tasks)), Unreadable: problems}
+func ToTasksEnvelope(tasks []core.LoadedRecord[domain.Task], problems []core.LoadProblem) TasksEnvelope {
+	e := TasksEnvelope{SchemaVersion: SchemaVersion, Tasks: make([]TaskJSON, 0, len(tasks)), Unreadable: ToLintLoadProblemsJSON(problems)}
 	for _, t := range tasks {
-		e.Tasks = append(e.Tasks, ToTaskJSON(t))
+		e.Tasks = append(e.Tasks, ToLoadedTaskJSON(t))
 	}
 	return e
 }
@@ -84,7 +84,7 @@ func ToBoardEnvelope(b core.Board) BoardEnvelope {
 	for _, c := range b.Columns {
 		col := BoardColumnJSON{Status: string(c.Status), Tasks: make([]BoardTaskJSON, 0, len(c.Tasks))}
 		for _, t := range c.Tasks {
-			col.Tasks = append(col.Tasks, BoardTaskJSON{TaskJSON: ToTaskJSON(t), Blocked: b.Blocked[t.ID]})
+			col.Tasks = append(col.Tasks, BoardTaskJSON{TaskJSON: ToTaskJSON(t), Blocked: b.Blocked[t.CanonicalID()]})
 		}
 		e.Columns = append(e.Columns, col)
 	}
@@ -107,8 +107,8 @@ type TaskShowEnvelope struct {
 }
 
 // ToTaskShowEnvelope builds the `task show --json` envelope value.
-func ToTaskShowEnvelope(t domain.Task, body string) TaskShowEnvelope {
-	return TaskShowEnvelope{SchemaVersion: SchemaVersion, Task: ToTaskJSON(t), Body: body}
+func ToTaskShowEnvelope(record core.LoadedRecord[core.TaskWithBody]) TaskShowEnvelope {
+	return TaskShowEnvelope{SchemaVersion: SchemaVersion, Task: ToLoadedTaskJSON(core.LoadedRecord[domain.Task]{Value: record.Value.Task, Source: record.Source}), Body: record.Value.Body}
 }
 
 // TaskInfoEnvelope wraps `task info --json` — the token-cheap task metadata read
@@ -119,8 +119,10 @@ type TaskInfoEnvelope struct {
 }
 
 // ToTaskInfoEnvelope builds the `task info --json` envelope value.
-func ToTaskInfoEnvelope(t domain.Task, ac domain.ACCount, path string) TaskInfoEnvelope {
-	return TaskInfoEnvelope{SchemaVersion: SchemaVersion, TaskInfo: ToTaskInfoJSON(t, ac, path)}
+func ToTaskInfoEnvelope(record core.LoadedRecord[core.TaskWithBody], ac domain.ACCount, path string) TaskInfoEnvelope {
+	info := ToTaskInfoJSON(record.Value.Task, ac, path)
+	info.ID = record.Source.ID
+	return TaskInfoEnvelope{SchemaVersion: SchemaVersion, TaskInfo: info}
 }
 
 // PathEnvelope wraps `task path --json` — just the resolved absolute file path
@@ -145,8 +147,10 @@ type AuditInfoEnvelope struct {
 }
 
 // ToAuditInfoEnvelope builds the `audit info --json` envelope value.
-func ToAuditInfoEnvelope(a domain.Audit, path string) AuditInfoEnvelope {
-	return AuditInfoEnvelope{SchemaVersion: SchemaVersion, AuditInfo: ToAuditInfoJSON(a, path)}
+func ToAuditInfoEnvelope(record core.LoadedRecord[core.AuditWithBody], path string) AuditInfoEnvelope {
+	info := ToAuditInfoJSON(record.Value.Audit, path)
+	info.ID = record.Source.ID
+	return AuditInfoEnvelope{SchemaVersion: SchemaVersion, AuditInfo: info}
 }
 
 // AcceptanceEnvelope wraps `task ac --list --json` — a task's acceptance criteria
@@ -720,15 +724,15 @@ func ToCreatedEnvelope(kind, id, slug, status, path string, dryRun bool, ws Work
 
 // EpicsEnvelope is `epic list --json`.
 type EpicsEnvelope struct {
-	SchemaVersion string               `json:"schema_version"`
-	Epics         []EpicJSON           `json:"epics"`
-	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+	SchemaVersion string                `json:"schema_version"`
+	Epics         []EpicJSON            `json:"epics"`
+	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
 }
 
 // ToEpicsEnvelope builds the `epic list --json` envelope value with rollup,
 // including any per-file load problems.
-func ToEpicsEnvelope(epics []core.EpicSummary, problems []domain.FileProblem) EpicsEnvelope {
-	e := EpicsEnvelope{SchemaVersion: SchemaVersion, Epics: make([]EpicJSON, 0, len(epics)), Unreadable: problems}
+func ToEpicsEnvelope(epics []core.EpicSummary, problems []core.LoadProblem) EpicsEnvelope {
+	e := EpicsEnvelope{SchemaVersion: SchemaVersion, Epics: make([]EpicJSON, 0, len(epics)), Unreadable: ToLintLoadProblemsJSON(problems)}
 	for _, es := range epics {
 		e.Epics = append(e.Epics, ToEpicJSON(es))
 	}
@@ -744,27 +748,27 @@ type EpicShowEnvelope struct {
 }
 
 // ToEpicShowEnvelope builds the `epic show --json` envelope value (epic + tasks + body).
-func ToEpicShowEnvelope(epic domain.Epic, tasks []domain.Task, body string) EpicShowEnvelope {
-	jt := make([]TaskJSON, 0, len(tasks))
-	for _, t := range tasks {
-		jt = append(jt, ToTaskJSON(t))
+func ToEpicShowEnvelope(detail core.EpicDetail) EpicShowEnvelope {
+	jt := make([]TaskJSON, 0, len(detail.Tasks))
+	for _, task := range detail.Tasks {
+		jt = append(jt, ToLoadedTaskJSON(task))
 	}
-	return EpicShowEnvelope{SchemaVersion: SchemaVersion, Epic: ToEpicMeta(epic), Tasks: jt, Body: body}
+	return EpicShowEnvelope{SchemaVersion: SchemaVersion, Epic: toEpicMeta(detail.Summary.Epic, detail.Summary.Source.ID), Tasks: jt, Body: detail.Body}
 }
 
 // AuditsEnvelope is `audit list --json`.
 type AuditsEnvelope struct {
-	SchemaVersion string               `json:"schema_version"`
-	Audits        []AuditJSON          `json:"audits"`
-	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+	SchemaVersion string                `json:"schema_version"`
+	Audits        []AuditJSON           `json:"audits"`
+	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
 }
 
 // ToAuditsEnvelope builds the `audit list --json` envelope value, including any
 // per-file load problems.
-func ToAuditsEnvelope(audits []domain.Audit, problems []domain.FileProblem) AuditsEnvelope {
-	e := AuditsEnvelope{SchemaVersion: SchemaVersion, Audits: make([]AuditJSON, 0, len(audits)), Unreadable: problems}
+func ToAuditsEnvelope(audits []core.LoadedRecord[domain.Audit], problems []core.LoadProblem) AuditsEnvelope {
+	e := AuditsEnvelope{SchemaVersion: SchemaVersion, Audits: make([]AuditJSON, 0, len(audits)), Unreadable: ToLintLoadProblemsJSON(problems)}
 	for _, a := range audits {
-		e.Audits = append(e.Audits, ToAuditJSON(a))
+		e.Audits = append(e.Audits, ToLoadedAuditJSON(a))
 	}
 	return e
 }
@@ -777,23 +781,24 @@ type AuditShowEnvelope struct {
 }
 
 // ToAuditShowEnvelope builds the `audit show --json` envelope value (audit + body).
-func ToAuditShowEnvelope(a domain.Audit, body string) AuditShowEnvelope {
-	return AuditShowEnvelope{SchemaVersion: SchemaVersion, Audit: ToAuditJSON(a), Body: body}
+func ToAuditShowEnvelope(record core.LoadedRecord[core.AuditWithBody]) AuditShowEnvelope {
+	audit := core.LoadedRecord[domain.Audit]{Value: record.Value.Audit, Source: record.Source}
+	return AuditShowEnvelope{SchemaVersion: SchemaVersion, Audit: ToLoadedAuditJSON(audit), Body: record.Value.Body}
 }
 
 // ResearchListEnvelope is `research list --json`.
 type ResearchListEnvelope struct {
-	SchemaVersion string               `json:"schema_version"`
-	Research      []ResearchJSON       `json:"research"`
-	Unreadable    []domain.FileProblem `json:"unreadable,omitempty"`
+	SchemaVersion string                `json:"schema_version"`
+	Research      []ResearchJSON        `json:"research"`
+	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
 }
 
 // ToResearchListEnvelope builds the `research list --json` envelope value, including
 // any per-file load problems.
-func ToResearchListEnvelope(docs []domain.Research, problems []domain.FileProblem) ResearchListEnvelope {
-	e := ResearchListEnvelope{SchemaVersion: SchemaVersion, Research: make([]ResearchJSON, 0, len(docs)), Unreadable: problems}
+func ToResearchListEnvelope(docs []core.LoadedRecord[domain.Research], problems []core.LoadProblem) ResearchListEnvelope {
+	e := ResearchListEnvelope{SchemaVersion: SchemaVersion, Research: make([]ResearchJSON, 0, len(docs)), Unreadable: ToLintLoadProblemsJSON(problems)}
 	for _, r := range docs {
-		e.Research = append(e.Research, ToResearchJSON(r))
+		e.Research = append(e.Research, ToLoadedResearchJSON(r))
 	}
 	return e
 }
@@ -806,8 +811,9 @@ type ResearchShowEnvelope struct {
 }
 
 // ToResearchShowEnvelope builds the `research show --json` envelope value (doc + body).
-func ToResearchShowEnvelope(r domain.Research, body string) ResearchShowEnvelope {
-	return ResearchShowEnvelope{SchemaVersion: SchemaVersion, Research: ToResearchJSON(r), Body: body}
+func ToResearchShowEnvelope(record core.LoadedRecord[core.ResearchWithBody]) ResearchShowEnvelope {
+	research := core.LoadedRecord[domain.Research]{Value: record.Value.Research, Source: record.Source}
+	return ResearchShowEnvelope{SchemaVersion: SchemaVersion, Research: ToLoadedResearchJSON(research), Body: record.Value.Body}
 }
 
 // ResearchMutationEnvelope is `research set` / `research append` --json: the reloaded
@@ -886,7 +892,7 @@ type FindingsEnvelope struct {
 // ToFindingsEnvelope builds the `audit findings --json` envelope value: each parsed
 // finding tagged with its audit slug and bucket, plus portable failed-record
 // diagnostics whose identity does not depend on a filesystem path.
-func ToFindingsEnvelope(fs []core.AuditFinding, problems []core.LintLoadProblem) FindingsEnvelope {
+func ToFindingsEnvelope(fs []core.AuditFinding, problems []core.LoadProblem) FindingsEnvelope {
 	e := FindingsEnvelope{
 		SchemaVersion: SchemaVersion, Findings: make([]FindingJSON, 0, len(fs)),
 		Unreadable: ToLintLoadProblemsJSON(problems),
@@ -916,9 +922,9 @@ type FixEnvelope struct {
 // per-entity lint findings the pass could NOT repair (`remaining`). The array
 // fields normalize to empty (not null) so a consumer can len() them and the output
 // validates against its own schema (type: array).
-func ToFixEnvelope(results []domain.FixResult, problems []core.LintLoadProblem, remaining []core.LintResult, dryRun bool, ws WorkspaceJSON) FixEnvelope {
+func ToFixEnvelope(results []domain.FixResult, problems []core.LoadProblem, remaining []core.LintResult, dryRun bool, ws WorkspaceJSON) FixEnvelope {
 	if problems == nil {
-		problems = []core.LintLoadProblem{}
+		problems = []core.LoadProblem{}
 	}
 	if results == nil {
 		results = []domain.FixResult{}
@@ -936,7 +942,8 @@ func ToFixEnvelope(results []domain.FixResult, problems []core.LintLoadProblem, 
 }
 
 // LintLoadProblemJSON is an adapter-neutral failed-record diagnostic shared by
-// `lint` and the post-fix residual report. Entity identity is explicit when
+// `lint` and the post-fix residual report. The compatibility name also backs
+// ordinary lists, dashboards, and finding queries. Entity identity is explicit when
 // recoverable; location is optional adapter-neutral context. Path is the retained
 // local-filesystem compatibility field and may differ from location when an
 // adapter supplies both an opaque source key and a local repair target.
@@ -952,17 +959,13 @@ type LintLoadProblemJSON struct {
 // ToLintLoadProblemsJSON projects application diagnostics to their public wire
 // representation. It is shared by full and column-projected envelopes so both
 // preserve identical identity and local-path compatibility fields.
-func ToLintLoadProblemsJSON(problems []core.LintLoadProblem) []LintLoadProblemJSON {
+func ToLintLoadProblemsJSON(problems []core.LoadProblem) []LintLoadProblemJSON {
 	out := make([]LintLoadProblemJSON, 0, len(problems))
 	for _, problem := range problems {
-		path := problem.Path
-		if path == "" && problem.LocationIsPath {
-			path = problem.Location
-		}
 		out = append(out, LintLoadProblemJSON{
 			EntityKind: string(problem.EntityKind), EntityID: problem.EntityID,
 			EntitySlug: problem.EntitySlug, Location: problem.Location,
-			Path: path, Message: problem.Message,
+			Path: problem.LocalPath, Message: problem.Message,
 		})
 	}
 	return out
@@ -979,9 +982,9 @@ type LintEnvelope struct {
 // ToLintEnvelope builds the structured lint report value: unreadable files + field
 // issues. The array fields normalize to empty (not null) so the output validates
 // against its own schema (type: array).
-func ToLintEnvelope(results []core.LintResult, problems []core.LintLoadProblem) LintEnvelope {
+func ToLintEnvelope(results []core.LintResult, problems []core.LoadProblem) LintEnvelope {
 	if problems == nil {
-		problems = []core.LintLoadProblem{}
+		problems = []core.LoadProblem{}
 	}
 	e := LintEnvelope{SchemaVersion: SchemaVersion, Unreadable: ToLintLoadProblemsJSON(problems), Issues: make([]LintTaskJSON, 0, len(results))}
 	for _, r := range results {

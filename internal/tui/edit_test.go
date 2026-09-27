@@ -105,7 +105,8 @@ func TestModel_EditPriorityViaMenu(t *testing.T) {
 	if m.flash == "" || m.flashErr {
 		t.Errorf("expected a success flash, got %q (err=%v)", m.flash, m.flashErr)
 	}
-	task, _, err := m.svc.ShowTask("clean")
+	record, err := m.svc.ShowTask("clean")
+	task := record.Value.Task
 	if err != nil || task.Priority != "high" {
 		t.Errorf("priority should be high after the edit: %q (%v)", task.Priority, err)
 	}
@@ -151,7 +152,8 @@ func TestModel_EditStaysOpenForMultipleFields(t *testing.T) {
 	if m.edit.active {
 		t.Error("esc from the picker should close the editor")
 	}
-	if task, _, _ := m.svc.ShowTask("clean"); task.Priority != "high" || task.Tier != 1 {
+	if record, _ := m.svc.ShowTask("clean"); record.Value.Task.Priority != "high" || record.Value.Task.Tier != 1 {
+		task := record.Value.Task
 		t.Errorf("both edits should persist: priority=%q tier=%d", task.Priority, task.Tier)
 	}
 }
@@ -175,7 +177,8 @@ func TestModel_EditDescriptionViaTextInput(t *testing.T) {
 		t.Fatal("apply should return a SetFields command")
 	}
 	cmd() // run SetFields
-	task, _, err := m.svc.ShowTask("clean")
+	record, err := m.svc.ShowTask("clean")
+	task := record.Value.Task
 	if err != nil || task.Description != "dx" {
 		t.Errorf("description should be the typed value 'dx', got %q (%v)", task.Description, err)
 	}
@@ -209,7 +212,8 @@ func TestModel_EditRejectedSurfacesError(t *testing.T) {
 	if m.edit.err == "" || !strings.Contains(m.edit.err, "tag") {
 		t.Errorf("the validation error should be shown on the field, got %q", m.edit.err)
 	}
-	if task, _, _ := m.svc.ShowTask("clean"); len(task.Tags) != 1 || task.Tags[0] != "a" {
+	if record, _ := m.svc.ShowTask("clean"); len(record.Value.Task.Tags) != 1 || record.Value.Task.Tags[0] != "a" {
+		task := record.Value.Task
 		t.Errorf("a rejected edit must not write; tags=%v", task.Tags)
 	}
 	// The user fixes it in place: type a valid tag and re-submit.
@@ -225,7 +229,8 @@ func TestModel_EditRejectedSurfacesError(t *testing.T) {
 	if m.edit.editing {
 		t.Error("a successful re-submit should return to the picker")
 	}
-	if task, _, _ := m.svc.ShowTask("clean"); len(task.Tags) != 1 || task.Tags[0] != "x" {
+	if record, _ := m.svc.ShowTask("clean"); len(record.Value.Task.Tags) != 1 || record.Value.Task.Tags[0] != "x" {
+		task := record.Value.Task
 		t.Errorf("the fixed tag should persist; tags=%v", task.Tags)
 	}
 }
@@ -247,7 +252,8 @@ func TestModel_EditTagsCoercedToList(t *testing.T) {
 	}
 	tm, _ = m.Update(cmd())
 	m = tm.(Model)
-	task, _, err := m.svc.ShowTask("clean")
+	record, err := m.svc.ShowTask("clean")
+	task := record.Value.Task
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,9 +325,9 @@ func TestModel_EditEpicPriorityViaMenu(t *testing.T) {
 	if m.flash == "" || m.flashErr {
 		t.Errorf("expected a success flash, got %q (err=%v)", m.flash, m.flashErr)
 	}
-	epic, _, _, err := m.svc.ShowEpic("01-e")
-	if err != nil || epic.Epic.Priority != "high" {
-		t.Errorf("priority should be high after the edit: %q (%v)", epic.Epic.Priority, err)
+	detail, err := m.svc.ShowEpic("01-e")
+	if err != nil || detail.Summary.Epic.Priority != "high" {
+		t.Errorf("priority should be high after the edit: %q (%v)", detail.Summary.Epic.Priority, err)
 	}
 }
 
@@ -436,8 +442,8 @@ func TestModel_EditRevisitDate(t *testing.T) {
 		t.Fatal("submit should return a SetFields command")
 	}
 	m.Update(cmd()) // run the write
-	if task, _, err := m.svc.ShowTask("overdue"); err != nil || task.RevisitAt != "2030-05-05" {
-		t.Errorf("revisit_at should update to 2030-05-05, got %q (%v)", task.RevisitAt, err)
+	if record, err := m.svc.ShowTask("overdue"); err != nil || record.Value.Task.RevisitAt != "2030-05-05" {
+		t.Errorf("revisit_at should update to 2030-05-05, got %q (%v)", record.Value.Task.RevisitAt, err)
 	}
 }
 
@@ -456,8 +462,8 @@ func TestModel_EditRevisitDateBlankClears(t *testing.T) {
 		t.Fatal("a blank revisit submit should return an unset command")
 	}
 	m.Update(cmd())
-	if task, _, _ := m.svc.ShowTask("overdue"); task.RevisitAt != "" {
-		t.Errorf("blanking revisit should clear it, got %q", task.RevisitAt)
+	if record, _ := m.svc.ShowTask("overdue"); record.Value.Task.RevisitAt != "" {
+		t.Errorf("blanking revisit should clear it, got %q", record.Value.Task.RevisitAt)
 	}
 }
 

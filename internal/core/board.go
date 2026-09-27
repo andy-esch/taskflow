@@ -16,7 +16,7 @@ type BoardColumn struct {
 // the web read endpoint) — distinct from Summary, which is the aggregation dashboard.
 type Board struct {
 	Columns  []BoardColumn
-	Problems []LintLoadProblem // portable unreadable records, surfaced not swallowed (mirrors Summary)
+	Problems []LoadProblem // portable unreadable records, surfaced not swallowed (mirrors Summary)
 	// Blocked holds the ids of listed tasks the repository graph says cannot be started
 	// — a hard prerequisite is unmet. The board is the tool's answer to "what should I
 	// do next", so answering it with work `task start` will refuse is the one thing it
@@ -44,8 +44,8 @@ func (s *Service) Board() (Board, error) {
 	if err != nil {
 		return Board{}, err
 	}
-	tasks := read.Tasks
-	problems := canonicalLintLoadProblems(taskGraphLoadProblems(read.Problems))
+	tasks := taskGraphTasks(read)
+	problems := canonicalLoadProblems(taskGraphLoadProblems(read.Problems))
 	byStatus := map[domain.Status][]domain.Task{}
 	for _, t := range tasks {
 		if t.Status.IsActive() {
@@ -58,14 +58,14 @@ func (s *Service) Board() (Board, error) {
 	blocked := map[string]bool{}
 	if graph.Health() == GraphHealthy {
 		for _, t := range tasks {
-			if !t.Status.IsActive() || t.ID == "" {
+			if !t.Status.IsActive() || t.CanonicalID() == "" {
 				continue
 			}
 			// Only pending work can be "blocked": an in-progress task has already
 			// started, so reporting its gate would be advice about a decision already
 			// taken.
-			if state := graph.State(t.ID); isPendingWorkRole(state.Role) && !state.Eligible {
-				blocked[t.ID] = true
+			if state := graph.State(t.CanonicalID()); isPendingWorkRole(state.Role) && !state.Eligible {
+				blocked[t.CanonicalID()] = true
 			}
 		}
 	}
@@ -90,12 +90,12 @@ func sortEligibleFirst(tasks []domain.Task, blocked map[string]bool) []domain.Ta
 	}
 	out := make([]domain.Task, 0, len(tasks))
 	for _, t := range tasks {
-		if !blocked[t.ID] {
+		if !blocked[t.CanonicalID()] {
 			out = append(out, t)
 		}
 	}
 	for _, t := range tasks {
-		if blocked[t.ID] {
+		if blocked[t.CanonicalID()] {
 			out = append(out, t)
 		}
 	}

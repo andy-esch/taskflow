@@ -64,11 +64,11 @@ func TestSetFields_CoercesTypedStringsThroughRoundTrip(t *testing.T) {
 				t.Fatalf("SetFields(%s=%q) rejected: %v", tc.field, tc.value, err)
 			}
 			// The write must reload cleanly through the strict loader.
-			task, _, err := svc.ShowTask("t")
+			record, err := svc.ShowTask("t")
 			if err != nil {
 				t.Fatalf("task no longer reloads after set %s=%q (corrupted): %v", tc.field, tc.value, err)
 			}
-			tc.verify(t, task)
+			tc.verify(t, record.Value.Task)
 		})
 	}
 }
@@ -82,11 +82,11 @@ func TestSetFields_AcceptsAuditedWithoutForce(t *testing.T) {
 	if _, err := svc.SetFields("t", map[string]any{"audited": "2026-06-16"}, false, false); err != nil {
 		t.Fatalf("audited is a known field; set without --force should succeed, got %v", err)
 	}
-	task, _, err := svc.ShowTask("t")
+	record, err := svc.ShowTask("t")
 	if err != nil {
 		t.Fatalf("task no longer reloads after setting audited (corrupted): %v", err)
 	}
-	raw, err := os.ReadFile(task.Path)
+	raw, err := os.ReadFile(record.Value.Task.Path)
 	if err != nil {
 		t.Fatalf("read task file: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestSetFields_RejectsNonNumericTypedField(t *testing.T) {
 	if _, err := svc.SetFields("t", map[string]any{"tier": "huge"}, false, false); err == nil {
 		t.Fatal("want ErrValidation for a non-numeric tier")
 	}
-	if _, _, err := svc.ShowTask("t"); err != nil {
+	if _, err := svc.ShowTask("t"); err != nil {
 		t.Errorf("a rejected set must leave the task readable, got: %v", err)
 	}
 }
@@ -121,7 +121,8 @@ func TestSetFields_RejectsEveryGraphOwnedFieldEvenWithForce(t *testing.T) {
 			if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "guarded dependency") {
 				t.Fatalf("field=%s force=%v error=%v; want guarded-operation direction", field, force, err)
 			}
-			task, _, showErr := svc.ShowTask("t")
+			record, showErr := svc.ShowTask("t")
+			task := record.Value.Task
 			if showErr != nil || len(task.DependsOn) != 0 || len(task.LegacyBlockedBy) != 0 ||
 				len(task.LegacyDependencies) != 0 || len(task.LegacyBlocks) != 0 {
 				t.Fatalf("field=%s force=%v changed task after rejection: task=%+v err=%v", field, force, task, showErr)
@@ -151,7 +152,8 @@ func TestSetFields_UnsetRemovesKey(t *testing.T) {
 	if _, err := svc.SetFields("t", map[string]any{"tier": domain.UnsetField{}}, false, false); err != nil {
 		t.Fatal(err)
 	}
-	task, _, err := svc.ShowTask("t")
+	record, err := svc.ShowTask("t")
+	task := record.Value.Task
 	if err != nil || task.Tier != 0 {
 		t.Errorf("tier should be removed: %v tier=%d", err, task.Tier)
 	}
@@ -186,7 +188,8 @@ func TestSetFields_EpicDetach(t *testing.T) {
 	if _, err := svc.SetFields("t", map[string]any{"epic": ""}, false, false); err != nil {
 		t.Fatal(err)
 	}
-	task, _, err := svc.ShowTask("t")
+	record, err := svc.ShowTask("t")
+	task := record.Value.Task
 	if err != nil || task.Epic != "" {
 		t.Errorf("task should be detached from its epic: %v epic=%q", err, task.Epic)
 	}

@@ -63,10 +63,10 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 	return s.store.CreateEpic(slug, e, body, p.DryRun)
 }
 
-func epicExists(epics []domain.Epic, id string) bool {
+func epicExists(epics []LoadedRecord[domain.Epic], id string) bool {
 	key := domain.EpicRefKey(id)
-	for _, e := range epics {
-		if domain.EpicRefKey(e.ID) == key {
+	for _, record := range epics {
+		if domain.EpicRefKey(record.Source.ID) == key {
 			return true
 		}
 	}
@@ -77,11 +77,11 @@ func epicExists(epics []domain.Epic, id string) bool {
 // (resolved on the NN key), so a new task stores and links the epic's current, readable
 // stem even when the caller passed a bare NN or a stale slug. Falls back to ref when none
 // matches (callers gate on epicExists first).
-func canonicalEpic(epics []domain.Epic, ref string) string {
+func canonicalEpic(epics []LoadedRecord[domain.Epic], ref string) string {
 	key := domain.EpicRefKey(ref)
-	for _, e := range epics {
-		if domain.EpicRefKey(e.ID) == key {
-			return e.ID
+	for _, record := range epics {
+		if domain.EpicRefKey(record.Source.ID) == key {
+			return record.Source.ID
 		}
 	}
 	return ref
@@ -92,6 +92,7 @@ func canonicalEpic(epics []domain.Epic, ref string) string {
 // can still surface "N withdrawn" without dragging the percentage.
 type EpicSummary struct {
 	Epic       domain.Epic
+	Source     RecordSource
 	Total      int
 	Done       int
 	Deprecated int
@@ -151,29 +152,33 @@ func (e EpicSummary) Live() bool { return e.Liveness() != LivenessDormant }
 
 // ListEpics returns every epic with its task rollup (joined on the tasks'
 // `epic:` field), plus any per-file load problems from either scan.
-func (s *Service) ListEpics() ([]EpicSummary, []domain.FileProblem, error) {
-	epics, ep1, err := s.store.ListEpics()
+func (s *Service) ListEpics() ([]EpicSummary, []LoadProblem, error) {
+	epicRead, err := s.store.ReadEpics()
 	if err != nil {
 		return nil, nil, err
 	}
-	tasks, ep2, err := s.store.ListTasks()
+	epicRead.Records, epicRead.Problems = loadedRecordsWithIDs(EntityEpic, epicRead.Records, epicRead.Problems,
+		func(epic domain.Epic) string { return epic.ID })
+	taskRead, err := loadTaskGraphRecords(s.taskGraphs)
 	if err != nil {
 		return nil, nil, err
 	}
-	return rollupEpics(epics, tasks), append(ep1, ep2...), nil
+	problems := append([]LoadProblem(nil), epicRead.Problems...)
+	problems = append(problems, taskGraphLoadProblems(taskRead.Problems)...)
+	return rollupEpics(epicRead.Records, taskGraphTasks(taskRead)), canonicalLoadProblems(problems), nil
 }
 
 // rollupEpics joins tasks onto their epics (by the tasks' `epic:` field) to
 // produce per-epic done/total counts. Shared by ListEpics and Summary.
-func rollupEpics(epics []domain.Epic, tasks []domain.Task) []EpicSummary {
+func rollupEpics(epics []LoadedRecord[domain.Epic], tasks []domain.Task) []EpicSummary {
 	byEpic := make(map[string][]domain.Task, len(epics))
 	for _, t := range tasks {
 		k := domain.EpicRefKey(t.Epic)
 		byEpic[k] = append(byEpic[k], t)
 	}
 	out := make([]EpicSummary, len(epics))
-	for i, e := range epics {
-		out[i] = rollupEpic(e, byEpic[domain.EpicRefKey(e.ID)])
+	for i, record := range epics {
+		out[i] = rollupEpic(record, byEpic[domain.EpicRefKey(record.Source.ID)])
 	}
 	return out
 }
@@ -182,10 +187,12 @@ func rollupEpics(epics []domain.Epic, tasks []domain.Task) []EpicSummary {
 // single place an EpicSummary is assembled (TaskRollup called once), so the
 // done/total/percent rule can't drift across the list/status path (rollupEpics)
 // and the show/detail path (ShowEpic, audit M3).
-func rollupEpic(e domain.Epic, its []domain.Task) EpicSummary {
+func rollupEpic(record LoadedRecord[domain.Epic], its []domain.Task) EpicSummary {
+	e := record.Value
+	e.ID = record.Source.ID // temporary bare-domain display projection
 	done, total, deprecated := TaskRollup(its)
 	return EpicSummary{
-		Epic: e, Total: total, Done: done, Deprecated: deprecated,
+		Epic: e, Source: record.Source, Total: total, Done: done, Deprecated: deprecated,
 		LastUpdated: epicLastUpdated(its),
 	}
 }
@@ -362,23 +369,41 @@ func (s *Service) EditEpic(id string, edit func(current string, prevErr error) (
 // ShowEpic returns an epic's rollup summary (so show/detail consume
 // EpicSummary.Percent()/Done/Total instead of re-deriving the rule — audit M3),
 // the tasks that belong to it, and its body.
-func (s *Service) ShowEpic(id string) (EpicSummary, []domain.Task, string, error) {
-	epic, body, err := s.store.GetEpic(id)
+type EpicDetail struct {
+	Summary EpicSummary
+	Tasks   []LoadedRecord[domain.Task]
+	Body    string
+}
+
+func (s *Service) ShowEpic(id string) (EpicDetail, error) {
+	loadedEpic, err := s.store.ReadEpic(id)
 	if err != nil {
-		return EpicSummary{}, nil, "", err
+		return EpicDetail{}, err
 	}
-	tasks, _, err := s.store.ListTasks()
+	if err := requireSourceID(EntityEpic, loadedEpic.Source); err != nil {
+		return EpicDetail{}, err
+	}
+	taskRead, err := loadTaskGraphRecords(s.taskGraphs)
 	if err != nil {
-		return EpicSummary{}, nil, "", err
+		return EpicDetail{}, err
 	}
-	var its []domain.Task
-	key := domain.EpicRefKey(epic.ID) // join on the resolved epic's NN key, not the raw query
-	for _, t := range tasks {
+	var its []LoadedRecord[domain.Task]
+	epic := loadedEpic.Value.Epic
+	key := domain.EpicRefKey(loadedEpic.Source.ID) // join on the resolved source, not the raw query
+	for _, record := range taskGraphRecords(taskRead) {
+		t := record.Value
 		if domain.EpicRefKey(t.Epic) == key {
-			its = append(its, t)
+			its = append(its, record)
 		}
 	}
-	return rollupEpic(epic, its), its, body, nil
+	domainTasks := make([]domain.Task, 0, len(its))
+	for _, record := range its {
+		domainTasks = append(domainTasks, record.Value)
+	}
+	record := LoadedRecord[domain.Epic]{Value: epic, Source: loadedEpic.Source}
+	return EpicDetail{
+		Summary: rollupEpic(record, domainTasks), Tasks: its, Body: loadedEpic.Value.Body,
+	}, nil
 }
 
 // EpicPath resolves an epic's file path without reading or parsing it — the seam

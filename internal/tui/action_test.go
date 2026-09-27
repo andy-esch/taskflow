@@ -137,9 +137,9 @@ func TestModel_ActionMenuMovesTask(t *testing.T) {
 		t.Errorf("expected a success flash, got %q (err=%v)", m.flash, m.flashErr)
 	}
 	// The file actually moved: alpha is now completed on disk.
-	task, _, err := m.svc.ShowTask("alpha")
-	if err != nil || task.Status != domain.StatusCompleted {
-		t.Errorf("alpha should be completed after the action: status=%s err=%v", task.Status, err)
+	record, err := m.svc.ShowTask("alpha")
+	if err != nil || record.Value.Task.Status != domain.StatusCompleted {
+		t.Errorf("alpha should be completed after the action: status=%s err=%v", record.Value.Task.Status, err)
 	}
 }
 
@@ -270,7 +270,7 @@ func TestModel_DeferPromptsForRevisitDate(t *testing.T) {
 	if !m.action.revisit {
 		t.Fatal("selecting defer should open the revisit-date prompt, not apply at once")
 	}
-	if task, _, _ := m.svc.ShowTask("alpha"); task.Status == domain.StatusDeferred {
+	if record, _ := m.svc.ShowTask("alpha"); record.Value.Task.Status == domain.StatusDeferred {
 		t.Fatal("defer must not move the task before a date is entered")
 	}
 
@@ -286,7 +286,8 @@ func TestModel_DeferPromptsForRevisitDate(t *testing.T) {
 	tm, _ = m.Update(cmd()) // run DeferTask → movedMsg
 	m = tm.(Model)
 
-	task, _, err := m.svc.ShowTask("alpha")
+	record, err := m.svc.ShowTask("alpha")
+	task := record.Value.Task
 	if err != nil || task.Status != domain.StatusDeferred {
 		t.Fatalf("alpha should be deferred: status=%s err=%v", task.Status, err)
 	}
@@ -313,7 +314,8 @@ func TestModel_DeferBlankParksIndefinitely(t *testing.T) {
 	}
 	tm, _ = m.Update(cmd())
 	m = tm.(Model)
-	task, _, err := m.svc.ShowTask("alpha")
+	record, err := m.svc.ShowTask("alpha")
+	task := record.Value.Task
 	if err != nil || task.Status != domain.StatusDeferred {
 		t.Fatalf("alpha should be deferred: status=%s err=%v", task.Status, err)
 	}
@@ -338,7 +340,7 @@ func TestModel_DeferBadDateShowsError(t *testing.T) {
 	if !m.action.revisit || m.action.dateErr == "" {
 		t.Errorf("a bad date should keep the prompt open with an error, got revisit=%v err=%q", m.action.revisit, m.action.dateErr)
 	}
-	if task, _, _ := m.svc.ShowTask("alpha"); task.Status == domain.StatusDeferred {
+	if record, _ := m.svc.ShowTask("alpha"); record.Value.Task.Status == domain.StatusDeferred {
 		t.Error("a bad date must not move the task")
 	}
 }
@@ -452,10 +454,11 @@ func TestModel_CompleteRefusedOnUnexplainedCriteria(t *testing.T) {
 	}
 
 	// The task is still in-progress on disk — a refusal writes nothing.
-	tk, _, err := svc.ShowTask("gated")
+	record, err := svc.ShowTask("gated")
 	if err != nil {
 		t.Fatal(err)
 	}
+	tk := record.Value.Task
 	if tk.Status != domain.StatusInProgress {
 		t.Errorf("a refused completion must not move the task, got %q", tk.Status)
 	}

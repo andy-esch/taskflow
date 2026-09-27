@@ -397,11 +397,17 @@ func TaskColumns() []Column[domain.Task] {
 	)
 }
 
+// TaskReadColumns keeps the established list projection while sourcing the
+// durable id from the loaded-record envelope rather than parsed frontmatter.
+func TaskReadColumns() []Column[core.LoadedRecord[domain.Task]] {
+	return loadedRecordColumns(TaskColumns())
+}
+
 // EpicColumns is the projectable column set for `epic list` (id first; done/total
 // as plain numbers, not the human "2/3 (66%)" cell).
 func EpicColumns() []Column[core.EpicSummary] {
 	return columnRegistry(
-		column("id", "epic identifier", func(e core.EpicSummary) string { return e.Epic.ID }),
+		column("id", "epic identifier", func(e core.EpicSummary) string { return e.Source.ID }),
 		column("status", "epic status", func(e core.EpicSummary) string { return e.Epic.Status }),
 		column("priority", "high|medium|low", func(e core.EpicSummary) string { return e.Epic.Priority }),
 		column("done", "completed task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Done) }),
@@ -453,6 +459,11 @@ func ResearchColumns() []Column[domain.Research] {
 	)
 }
 
+// ResearchReadColumns is the source-aware research list projection.
+func ResearchReadColumns() []Column[core.LoadedRecord[domain.Research]] {
+	return loadedRecordColumns(ResearchColumns())
+}
+
 // AuditColumns is the projectable column set for `audit list`. Slug stays first
 // as the human-facing handle projected by `-o name`; the durable id is appended
 // last for explicit selection without shifting established columns.
@@ -468,6 +479,42 @@ func AuditColumns() []Column[domain.Audit] {
 			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) }),
 		column("id", "stable audit identifier", func(a domain.Audit) string { return a.ID }),
 	)
+}
+
+// AuditReadColumns is the source-aware audit list projection.
+func AuditReadColumns() []Column[core.LoadedRecord[domain.Audit]] {
+	return loadedRecordColumns(AuditColumns())
+}
+
+// loadedRecordColumns lifts an established domain column registry onto an
+// ordinary loaded-record projection. The stable `id` selector is intentionally
+// special: adapter-supplied source identity wins over a missing or drifting
+// declared id in every output mode. All other display and canonical projection
+// semantics remain byte-compatible.
+func loadedRecordColumns[T any](base []Column[T]) []Column[core.LoadedRecord[T]] {
+	out := make([]Column[core.LoadedRecord[T]], 0, len(base))
+	for _, baseColumn := range base {
+		c := baseColumn
+		display := func(record core.LoadedRecord[T]) string {
+			if c.selectorName() == "id" {
+				return record.Source.ID
+			}
+			return c.Extract(record.Value)
+		}
+		lifted := column(c.Name, c.Desc, display)
+		if c.projection != nil {
+			project := func(record core.LoadedRecord[T]) string {
+				if c.selectorName() == "id" {
+					return record.Source.ID
+				}
+				return c.projection.extract(record.Value)
+			}
+			lifted = contractColumn(c.Name, c.projection.name, c.Desc, display, project)
+		}
+		out = append(out, lifted)
+	}
+	mustValidateColumnRegistry(out)
+	return out
 }
 
 // ThreadColumns is the compact projectable view for `thread list`. It is

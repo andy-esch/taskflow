@@ -1241,7 +1241,7 @@ func TestAtlasAttentionFoldsOnlyWhatWantsAPerson(t *testing.T) {
 		Findings:     core.FindingsRollup{Open: 3, Acute: []core.AuditFinding{{}, {}}},
 		ReadyToClose: 1,
 		RevisitDue:   1,
-		Problems:     []core.LintLoadProblem{{EntityKind: core.LintEntityTask, EntityID: "6gpathless001"}},
+		Problems:     []core.LoadProblem{{EntityKind: core.EntityTask, EntityID: "6gpathless001"}},
 		GraphHealth:  core.GraphBroken,
 	}})
 	if loud.attention != 6 {

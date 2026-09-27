@@ -289,7 +289,7 @@ func newEpicListCmd(app *App) *cobra.Command {
 				"epics", render.EpicColumns(), render.EpicsJSON, render.EpicsHuman); err != nil {
 				return err
 			}
-			return problemsError(problems)
+			return portableProblemsError("epic or task", problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.EpicColumns()))
@@ -336,25 +336,31 @@ func newEpicShowCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			es, tasks, body, err := app.Svc.ShowEpic(id)
+			detail, err := app.Svc.ShowEpic(id)
 			if err != nil {
 				return err
 			}
 			// --section / --frontmatter-only narrow the epic's markdown body only; the
 			// metadata + task roster always show.
-			body, err = narrowBody("epic", id, body, section, fmOnly)
+			detail.Body, err = narrowBody("epic", id, detail.Body, section, fmOnly)
 			if err != nil {
 				return err
 			}
 			if app.JSON {
-				return render.EpicShowJSON(app.Out, es.Epic, tasks, body)
+				return render.EpicShowJSON(app.Out, detail)
 			}
 			return app.paged(func(w io.Writer) error {
 				rendered := ""
-				if body != "" { // --frontmatter-only → no body render (and no trailing blank line)
-					rendered = render.RenderBody(app.Style, body, app.markdownStyle, raw)
+				if detail.Body != "" { // --frontmatter-only → no body render (and no trailing blank line)
+					rendered = render.RenderBody(app.Style, detail.Body, app.markdownStyle, raw)
 				}
-				return render.EpicShowHuman(w, app.Style, es, tasks, rendered)
+				tasks := make([]domain.Task, 0, len(detail.Tasks))
+				for _, record := range detail.Tasks {
+					task := record.Value
+					task.FilenameID = record.Source.ID
+					tasks = append(tasks, task)
+				}
+				return render.EpicShowHuman(w, app.Style, detail.Summary, tasks, rendered)
 			})
 		},
 	}

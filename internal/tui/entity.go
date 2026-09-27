@@ -181,7 +181,7 @@ type entityTab struct {
 	loadOrder []list.Item
 	loadGen   int   // bumped per reload; stale list results/errors are dropped by gen
 	loadErr   error // this tab's last list-load failure (nil after a successful load)
-	problems  []domain.FileProblem
+	problems  []core.LoadProblem
 	// Thread list reads carry repository-wide graph/read diagnostics that do not
 	// belong to any one row. They live on the registry tab — not in a parallel
 	// Thread state machine — and are nil for every other entity.

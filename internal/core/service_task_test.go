@@ -33,6 +33,12 @@ func (s *committedFailureStore) ListEpics() ([]domain.Epic, []domain.FileProblem
 	return []domain.Epic{{ID: "01-test", Status: "active"}}, nil, nil
 }
 
+func (s *committedFailureStore) ReadEpics() (EpicRead, error) {
+	return EpicRead{Records: []LoadedRecord[domain.Epic]{{
+		Value: domain.Epic{ID: "01-test", Status: "active"}, Source: RecordSource{ID: "01-test"},
+	}}}, nil
+}
+
 func (s *committedFailureStore) MutateTaskLifecycle(_ time.Time, dryRun bool, planner TaskLifecyclePlanner) (TaskLifecycleMutationResult, error) {
 	s.calls++
 	existing := domain.Task{
@@ -254,10 +260,10 @@ func TestListTasks_RevisitDue(t *testing.T) {
 	}
 }
 
-func slugSet(tasks []domain.Task) map[string]bool {
+func slugSet(tasks []LoadedRecord[domain.Task]) map[string]bool {
 	m := map[string]bool{}
-	for _, t := range tasks {
-		m[t.Slug] = true
+	for _, record := range tasks {
+		m[record.Value.Slug] = true
 	}
 	return m
 }

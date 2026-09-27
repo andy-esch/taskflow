@@ -327,7 +327,8 @@ func NewTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGra
 // NewTaskGraphRead builds the strict snapshot from the neutral adapter read
 // contract used by Service graph consumers.
 func NewTaskGraphRead(read TaskGraphRead) *TaskGraph {
-	return newTaskGraph(read.Tasks, read.Problems, true)
+	read = validatedTaskGraphRead(read)
+	return newTaskGraph(taskGraphTasks(read), read.Problems, true)
 }
 
 func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, sourceComplete bool) *TaskGraph {

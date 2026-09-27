@@ -26,6 +26,11 @@ func (s *countingTaskStore) ListTasks() ([]domain.Task, []domain.FileProblem, er
 	return s.fakeStore.ListTasks()
 }
 
+func (s *countingTaskStore) ReadTasks() (TaskRead, error) {
+	s.listCalls++
+	return s.fakeStore.ReadTasks()
+}
+
 func TestBoard_ActivePipelineOnlyInOrder(t *testing.T) {
 	svc := NewService(&fakeStore{tasks: []domain.Task{
 		{Slug: "a", Status: domain.StatusInProgress},
@@ -89,7 +94,7 @@ func TestBoard_CompleteStoreFallbackScansTasksOnce(t *testing.T) {
 		t.Fatalf("board = %+v, err = %v", board, err)
 	}
 	if store.listCalls != 1 {
-		t.Fatalf("ListTasks calls = %d, want 1", store.listCalls)
+		t.Fatalf("task snapshot reads = %d, want 1", store.listCalls)
 	}
 }
 
@@ -112,11 +117,63 @@ func TestBoard_PreservesPathlessTaskLoadProblemIdentity(t *testing.T) {
 		t.Fatalf("problems = %+v", board.Problems)
 	}
 	problem := board.Problems[0]
-	if problem.EntityKind != LintEntityTask || problem.EntityID != "6gpathless01" ||
+	if problem.EntityKind != EntityTask || problem.EntityID != "6gpathless01" ||
 		problem.EntitySlug != "known-task" || problem.Location != "records/task/contradictory-name" ||
-		problem.LocationIsPath || problem.Path != "/planning/tasks/6gpathless01-known-task.md" ||
+		problem.LocalPath != "/planning/tasks/6gpathless01-known-task.md" ||
 		problem.Message != "invalid frontmatter" {
 		t.Fatalf("portable task diagnostic = %+v", problem)
+	}
+}
+
+func TestBoard_BareProjectionUsesExplicitSourceIdentity(t *testing.T) {
+	source := &neutralTaskGraphSource{read: TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
+		Value:  domain.Task{ID: "stale-declaration", FilenameID: "stale-file-id", Slug: "task", Status: domain.StatusInProgress},
+		Source: RecordSource{ID: "6g0000000001", Location: "db://tasks/misleading"},
+	}}}}
+	board, err := NewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source.calls != 1 {
+		t.Fatalf("graph read calls = %d", source.calls)
+	}
+	got := board.Columns[len(board.Columns)-1].Tasks[0].FilenameID
+	if got != "6g0000000001" {
+		t.Fatalf("board identity = %q, want source ID", got)
+	}
+}
+
+func TestEmptyExplicitTaskSourceIDNeverBecomesEligible(t *testing.T) {
+	read := TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
+		Value:  domain.Task{ID: "6g0000000001", FilenameID: "stale-id", Slug: "orphan", Status: domain.StatusReadyToStart},
+		Source: RecordSource{Location: "db://tasks/misleading-id"},
+	}}}
+	graph := NewTaskGraphRead(read)
+	if graph.Health() != GraphBroken || len(graph.TaskIDs()) != 0 {
+		t.Fatalf("empty source ID promoted to graph node: health=%s ids=%v", graph.Health(), graph.TaskIDs())
+	}
+	if state := graph.State("6g0000000001"); state.Eligible {
+		t.Fatalf("declared ID became eligible: %+v", state)
+	}
+	source := &neutralTaskGraphSource{read: read}
+	svc := NewService(&fakeStore{}, WithTaskGraphSource(source))
+	board, err := svc.Board()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, column := range board.Columns {
+		if len(column.Tasks) != 0 {
+			t.Fatalf("board published source-less record: %+v", board.Columns)
+		}
+	}
+	if board.GraphHealth != GraphBroken || len(board.Problems) != 1 ||
+		board.Problems[0].EntityID != "" || board.Problems[0].EntitySlug != "orphan" ||
+		board.Problems[0].Location != "db://tasks/misleading-id" || board.Problems[0].LocalPath != "" {
+		t.Fatalf("source-less board diagnostic = %+v", board)
+	}
+	tasks, problems, err := svc.ListTasks(TaskFilter{})
+	if err != nil || len(tasks) != 0 || len(problems) != 1 || problems[0].EntityID != "" {
+		t.Fatalf("source-less list = tasks:%+v problems:%+v err:%v", tasks, problems, err)
 	}
 }
 

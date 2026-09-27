@@ -156,56 +156,57 @@ type projectionException struct {
 }
 
 func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
-	assertRegistryMatchesFullWire(t, "task", "tasks", TaskColumns(), TasksJSON,
-		[]registryFixture[domain.Task]{
-			{name: "present", item: domain.Task{
-				ID: "6ga000000001", Slug: "task-present", Status: domain.StatusInProgress,
+	assertRegistryMatchesFullWire(t, "task", "tasks", TaskReadColumns(), TasksJSON,
+		[]registryFixture[core.LoadedRecord[domain.Task]]{
+			{name: "present", item: core.LoadedRecord[domain.Task]{Value: domain.Task{
+				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "task-present", Status: domain.StatusInProgress,
 				Tier: 2, Priority: "high", Epic: "20-cli", Updated: "2026-09-14",
 				Description: "present task", RevisitAt: "2026-10-01",
-			}},
-			{name: "absent optional strings", item: domain.Task{
-				ID: "6ga000000002", Slug: "task-absent", Status: domain.StatusNextUp, Tier: 3,
-			}},
-			{name: "created but never edited", item: domain.Task{
+			}, Source: core.RecordSource{ID: "6ga000000001"}}},
+			{name: "absent optional strings", item: core.LoadedRecord[domain.Task]{Value: domain.Task{
+				Slug: "task-absent", Status: domain.StatusNextUp, Tier: 3,
+			}, Source: core.RecordSource{ID: "6ga000000002"}}},
+			{name: "created but never edited", item: core.LoadedRecord[domain.Task]{Value: domain.Task{
 				ID: "6ga000000007", Slug: "task-never-edited", Status: domain.StatusNextUp,
 				Tier: 3, Created: "2026-09-01",
-			}},
+			}, Source: core.RecordSource{ID: "6ga000000007"}}},
 		}, nil)
 
 	assertRegistryMatchesFullWire(t, "epic", "epics", EpicColumns(), EpicsJSON,
 		[]registryFixture[core.EpicSummary]{
 			{name: "present", item: core.EpicSummary{
-				Epic: domain.Epic{ID: "20-cli", Status: "active", Priority: "high", Description: "present epic"},
-				Done: 2, Total: 5, Deprecated: 1,
+				Epic:   domain.Epic{ID: "20-stale", Status: "active", Priority: "high", Description: "present epic"},
+				Source: core.RecordSource{ID: "20-cli"},
+				Done:   2, Total: 5, Deprecated: 1,
 			}},
 			{name: "zero rollup and absent optional strings", item: core.EpicSummary{
-				Epic: domain.Epic{ID: "21-core"},
+				Epic: domain.Epic{}, Source: core.RecordSource{ID: "21-core"},
 			}},
 		}, nil)
 
-	assertRegistryMatchesFullWire(t, "audit", "audits", AuditColumns(), AuditsJSON,
-		[]registryFixture[domain.Audit]{
-			{name: "present", item: domain.Audit{
-				ID: "6ga000000003", Slug: "2026-09-14-present", Bucket: domain.AuditOpen,
+	assertRegistryMatchesFullWire(t, "audit", "audits", AuditReadColumns(), AuditsJSON,
+		[]registryFixture[core.LoadedRecord[domain.Audit]]{
+			{name: "present", item: core.LoadedRecord[domain.Audit]{Value: domain.Audit{
+				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "2026-09-14-present", Bucket: domain.AuditOpen,
 				Area: "cli", Date: "2026-09-14", Findings: 4, OpenFindings: 2,
-			}},
-			{name: "zero counts and absent optional strings", item: domain.Audit{
-				ID: "6ga000000004", Slug: "2026-09-14-zero", Bucket: domain.AuditClosed,
-			}},
+			}, Source: core.RecordSource{ID: "6ga000000003"}}},
+			{name: "zero counts and absent optional strings", item: core.LoadedRecord[domain.Audit]{Value: domain.Audit{
+				Slug: "2026-09-14-zero", Bucket: domain.AuditClosed,
+			}, Source: core.RecordSource{ID: "6ga000000004"}}},
 		}, nil)
 
-	assertRegistryMatchesFullWire(t, "research", "research", ResearchColumns(), ResearchJSON,
-		[]registryFixture[domain.Research]{
-			{name: "present", item: domain.Research{
-				ID: "6ga000000005", Slug: "research-present", Created: "2026-09-01",
+	assertRegistryMatchesFullWire(t, "research", "research", ResearchReadColumns(), ResearchJSON,
+		[]registryFixture[core.LoadedRecord[domain.Research]]{
+			{name: "present", item: core.LoadedRecord[domain.Research]{Value: domain.Research{
+				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "research-present", Created: "2026-09-01",
 				Description: "present research", Tags: []string{"cli", "contract"}, Updated: "2026-09-14",
-			}},
-			{name: "absent optional strings and empty tags", item: domain.Research{
-				ID: "6ga000000006", Slug: "research-absent",
-			}},
-			{name: "created but never edited", item: domain.Research{
+			}, Source: core.RecordSource{ID: "6ga000000005"}}},
+			{name: "absent optional strings and empty tags", item: core.LoadedRecord[domain.Research]{Value: domain.Research{
+				Slug: "research-absent",
+			}, Source: core.RecordSource{ID: "6ga000000006"}}},
+			{name: "created but never edited", item: core.LoadedRecord[domain.Research]{Value: domain.Research{
 				ID: "6ga000000008", Slug: "research-never-edited", Created: "2026-09-01",
-			}},
+			}, Source: core.RecordSource{ID: "6ga000000008"}}},
 		}, map[string]projectionException{
 			"tags": {
 				reason: "projected list values are strings, so the documented tags view is comma-joined",
@@ -401,7 +402,7 @@ func TestTaskTierZeroProjectionIsLintInvalidCompatibility(t *testing.T) {
 	}
 
 	var full bytes.Buffer
-	if err := TasksJSON(&full, []domain.Task{task}, nil); err != nil {
+	if err := TasksJSON(&full, taskRecords([]domain.Task{task}), nil); err != nil {
 		t.Fatal(err)
 	}
 	if row := decodeProjectedRow(t, full.Bytes(), "tasks"); row["tier"] != nil {

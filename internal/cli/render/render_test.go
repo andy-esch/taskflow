@@ -60,10 +60,26 @@ var sampleTasks = []domain.Task{
 	{Slug: "beta", Status: domain.StatusReadyToStart},
 }
 
+func taskRecords(tasks []domain.Task) []core.LoadedRecord[domain.Task] {
+	out := make([]core.LoadedRecord[domain.Task], 0, len(tasks))
+	for _, task := range tasks {
+		out = append(out, core.LoadedRecord[domain.Task]{Value: task, Source: core.RecordSource{ID: task.ID, Location: task.Path}})
+	}
+	return out
+}
+
+func loadProblems(problems []domain.FileProblem, kind core.EntityKind) []core.LoadProblem {
+	out := make([]core.LoadProblem, 0, len(problems))
+	for _, problem := range problems {
+		out = append(out, core.LoadProblem{EntityKind: kind, Location: problem.Path, LocalPath: problem.Path, Message: problem.Message})
+	}
+	return out
+}
+
 func TestTasksJSON_Envelope(t *testing.T) {
 	var out bytes.Buffer
 	problems := []domain.FileProblem{{Path: "bad.md", Message: "broken"}}
-	if err := TasksJSON(&out, sampleTasks, problems); err != nil {
+	if err := TasksJSON(&out, taskRecords(sampleTasks), loadProblems(problems, core.EntityTask)); err != nil {
 		t.Fatal(err)
 	}
 	var got struct {
@@ -82,8 +98,12 @@ func TestTasksJSON_Envelope(t *testing.T) {
 			Tags        []string `json:"tags,omitempty"`
 		} `json:"tasks"`
 		Unreadable []struct {
-			Path    string `json:"path"`
-			Message string `json:"message"`
+			EntityKind string `json:"entity_kind"`
+			EntityID   string `json:"entity_id,omitempty"`
+			EntitySlug string `json:"entity_slug,omitempty"`
+			Location   string `json:"location,omitempty"`
+			Path       string `json:"path"`
+			Message    string `json:"message"`
 		} `json:"unreadable,omitempty"`
 	}
 	decodeStrict(t, out.Bytes(), &got)
@@ -122,12 +142,12 @@ func TestTasksHuman_Table(t *testing.T) {
 func TestLintJSON_Envelope(t *testing.T) {
 	var out bytes.Buffer
 	results := []core.LintResult{{Slug: "alpha", Issues: []domain.Issue{{Field: "tags", Message: "missing"}}}}
-	problems := []core.LintLoadProblem{{
-		EntityKind: core.LintEntityTask, EntityID: "6g0000000001", EntitySlug: "bad",
-		Location: "bad.md", LocationIsPath: true, Message: "unterminated",
+	problems := []core.LoadProblem{{
+		EntityKind: core.EntityTask, EntityID: "6g0000000001", EntitySlug: "bad",
+		Location: "bad.md", LocalPath: "bad.md", Message: "unterminated",
 	}, {
-		EntityKind: core.LintEntityThread, EntityID: "6g0000000002", EntitySlug: "remote",
-		Location: "db://threads/6g0000000002", LocationIsPath: false, Message: "remote decode failed",
+		EntityKind: core.EntityThread, EntityID: "6g0000000002", EntitySlug: "remote",
+		Location: "db://threads/6g0000000002", Message: "remote decode failed",
 	}}
 	if err := LintJSON(&out, results, problems); err != nil {
 		t.Fatal(err)
@@ -167,9 +187,9 @@ func TestLintJSON_Envelope(t *testing.T) {
 
 func TestFindingsJSON_PreservesPortableUnreadableIdentity(t *testing.T) {
 	var out bytes.Buffer
-	problems := []core.LintLoadProblem{{
-		EntityKind: core.LintEntityAudit, EntityID: "6g0000000001", EntitySlug: "broken-audit",
-		Location: "db://audits/6g0000000001", LocationIsPath: false, Message: "remote decode failed",
+	problems := []core.LoadProblem{{
+		EntityKind: core.EntityAudit, EntityID: "6g0000000001", EntitySlug: "broken-audit",
+		Location: "db://audits/6g0000000001", Message: "remote decode failed",
 	}}
 	if err := FindingsJSON(&out, nil, problems); err != nil {
 		t.Fatal(err)
@@ -266,12 +286,14 @@ func TestEpicShowHuman_Tree(t *testing.T) {
 func TestAuditsJSONAndHuman(t *testing.T) {
 	audits := []domain.Audit{{Slug: "2026-06-01-x", Bucket: domain.AuditOpen, Area: "store", Date: "2026-06-01", Findings: 5, OpenFindings: 2}}
 	var out bytes.Buffer
-	if err := AuditsJSON(&out, audits, nil); err != nil {
+	loaded := []core.LoadedRecord[domain.Audit]{{Value: audits[0], Source: core.RecordSource{ID: "6gaudit00001"}}}
+	if err := AuditsJSON(&out, loaded, nil); err != nil {
 		t.Fatal(err)
 	}
 	var got struct {
 		SchemaVersion string `json:"schema_version"`
 		Audits        []struct {
+			ID                 string `json:"id,omitempty"`
 			Slug               string `json:"slug"`
 			Bucket             string `json:"bucket"`
 			Area               string `json:"area,omitempty"`
@@ -468,8 +490,8 @@ func TestSummaryOutputs(t *testing.T) {
 		InProgress: []domain.Task{{Slug: "alpha", Status: domain.StatusInProgress}},
 		Epics:      []core.EpicSummary{{Epic: domain.Epic{ID: "01-x"}, Total: 2, Done: 1}},
 		OpenAudits: []domain.Audit{{Slug: "2026-06-01-audit-x", Bucket: domain.AuditOpen, Area: "store", Findings: 4, OpenFindings: 1, DoneFindings: 3}},
-		Problems: []core.LintLoadProblem{{
-			EntityKind: core.LintEntityTask, EntityID: "6g0000000001", EntitySlug: "broken-task",
+		Problems: []core.LoadProblem{{
+			EntityKind: core.EntityTask, EntityID: "6g0000000001", EntitySlug: "broken-task",
 			Location: "db://tasks/row-1", Message: "remote decode failed",
 		}},
 	}
@@ -515,8 +537,8 @@ func TestSummaryOutputs(t *testing.T) {
 func TestBoardOutputsPreservePortableUnreadableIdentity(t *testing.T) {
 	board := core.Board{
 		Columns: []core.BoardColumn{{Status: domain.StatusNextUp}},
-		Problems: []core.LintLoadProblem{{
-			EntityKind: core.LintEntityTask, EntityID: "6g0000000002", EntitySlug: "broken-board-task",
+		Problems: []core.LoadProblem{{
+			EntityKind: core.EntityTask, EntityID: "6g0000000002", EntitySlug: "broken-board-task",
 			Location: "cache:tasks/2", Message: "decode failed",
 		}},
 	}
@@ -604,12 +626,12 @@ func TestStatusAllHumanReportsSpaceGraphHealth(t *testing.T) {
 }
 
 func TestStatusAllHumanReportsPortableProblemDetailsWithinSpace(t *testing.T) {
-	summary := core.Summary{Problems: []core.LintLoadProblem{{
-		EntityKind: core.LintEntityTask, EntityID: "6g0000000001", EntitySlug: "remote-task",
+	summary := core.Summary{Problems: []core.LoadProblem{{
+		EntityKind: core.EntityTask, EntityID: "6g0000000001", EntitySlug: "remote-task",
 		Location: "db://tasks/1", Message: "remote decode failed",
 	}, {
-		EntityKind: core.LintEntityAudit, EntityID: "6g0000000002", EntitySlug: "local-audit",
-		Location: "db://audits/2", Path: "/planning/audits/6g0000000002-local-audit.md",
+		EntityKind: core.EntityAudit, EntityID: "6g0000000002", EntitySlug: "local-audit",
+		Location: "db://audits/2", LocalPath: "/planning/audits/6g0000000002-local-audit.md",
 		Message: "local repair required",
 	}}}
 	overview := core.SpaceOverview{Spaces: []core.SpaceSummary{{ID: "planning", Summary: &summary}}}
@@ -771,10 +793,10 @@ func TestProblemsHuman(t *testing.T) {
 
 func TestLintProblemsHumanPrefersIdentityAndKeepsOptionalLocation(t *testing.T) {
 	var out bytes.Buffer
-	LintProblemsHuman(&out, NewStyle(false), []core.LintLoadProblem{
-		{EntityKind: core.LintEntityResearch, EntityID: "6g0000000002", EntitySlug: "remote-doc", Location: "opaque://misleading", Message: "decode failed"},
-		{EntityKind: core.LintEntityEpic, EntityID: "03-roadmap", Message: "identity only"},
-		{EntityKind: core.LintEntityTask, Message: "identity unavailable"},
+	LintProblemsHuman(&out, NewStyle(false), []core.LoadProblem{
+		{EntityKind: core.EntityResearch, EntityID: "6g0000000002", EntitySlug: "remote-doc", Location: "opaque://misleading", Message: "decode failed"},
+		{EntityKind: core.EntityEpic, EntityID: "03-roadmap", Message: "identity only"},
+		{EntityKind: core.EntityTask, Message: "identity unavailable"},
 	})
 	got := out.String()
 	for _, want := range []string{
