@@ -56,7 +56,12 @@ a deliberate sequence. This task owns design and scoping, not the implementation
 5. Guarded mutation services currently spell “did anything become durable?” four ways across seven
    retry loops, while task rename does not retry a pre-commit conflict at all. Decide one shared
    durability predicate and retry contract, including whether rename participates or receives an
-   explicit policy carveout, before another mutation family copies an existing pattern.
+   explicit policy carveout, before another mutation family copies an existing pattern. Include the
+   CLI error contract: a transient filesystem cause must not advertise whole-command retry when a
+   mutation receipt reports committed or partially durable work. Ordinary creates now suppress
+   this hint; verify the remaining mutation recovery envelopes in this design pass. Research also
+   still equates any clean, uncommitted `ErrConflict` with a mintable ID collision; decide whether
+   the port needs a positive ID-collision signal so future adapters cannot trigger futile remints.
 
 ## Design constraints
 
@@ -145,6 +150,11 @@ own implementation, so the linked unification task's premise holds.
 
 ## Progress Log
 
+- 2026-09-27: ordinary task, epic, audit, and research creates now return committed receipts when
+  guard release fails, through [the dedicated follow-up](6ge7qn9ptaxv-report-post-commit-guard-release-failures-from-ordinary-entity-creation.md). Q1 remains open for the legacy edit, fix, and body-write users of `writeLock`; the design pass should not duplicate the resolved create slice.
+- 2026-09-27: the ordinary-create review exposed an error-envelope retry contradiction for
+  committed work. The create slice now overrides the generic filesystem retry hint; Q5 should
+  determine and test the same command-level rule across the other mutation families.
 - 2026-09-22: architecture audit M1/L1 added one design question: name the shared durable-outcome
   predicate and retry rule, then either include task rename or document a deliberate carveout. No
   implementation child was created before this design task's required human review.
