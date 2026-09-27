@@ -3,13 +3,16 @@ schema: 1
 id: 6g1dp77y0g5n
 status: ready-to-start
 epic: 21-code-quality-architecture-hardening
-description: The migration tool emits a duplicate tags key on block-style YAML (making the file unparseable), mishandles CRLF frontmatter, and can mint an id that already exists on disk.
+description: The migration tool emits a duplicate tags key on block-style YAML (unparseable file), mishandles CRLF frontmatter, and can mint an id already on disk.
 effort: Unknown
 tier: 3
 priority: medium
 autonomy_level: 3
 tags: [tools, store]
 created: "2026-08-18"
+updated_at: "2026-09-27"
+audited: "2026-09-27"
+audit_sources: [2026-09-27-weekly-task-sweep]
 ---
 
 # researchmigrate corrupts block-style tags and CRLF files
@@ -68,3 +71,45 @@ rather than leaving it implicit.
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Found by an independent adversarial correctness review, 2026-08-18
+
+## Sweep verification (2026-09-27)
+
+Automated weekly sweep. **All four defects are still present** and no acceptance criterion
+was ticked. `internal/tools/researchmigrate/main.go` has had no functional change since
+this task was filed — the only commit touching the directory since 2026-08-18 is the merge
+`7ed39c8`, so the churn that made this task eligible was a false positive. Line numbers
+have drifted; refs re-anchored (2026-09-27):
+
+- **§1 duplicate `tags:`** — `ensureFrontmatter:274-276` still derives `wantTags` from
+  `frontmatterField(content, "tags") == ""`, and `:280` still calls
+  `dropFrontmatterKeys(rest, "schema", "id", "created")` — `tags` and `description` are
+  still absent from that drop list. Intact.
+- **§2 CRLF** — `bytes.HasPrefix(content, []byte("---\n"))` at `:262` (`ensureFrontmatter`)
+  and `:325` (`frontmatterField`). Intact, and still divergent from the store's
+  CRLF-tolerant `splitFrontmatter`.
+- **§3 cross-run id collisions** — `seenID := map[string]bool{}` at `:87` (seeded empty),
+  `mintUnique(millis, seenID)` at `:121`, `checkCollisions(renames)` at `:138`. Intact.
+- **§4 `applyPlan` not atomic** — `:459-476`, still plain `os.WriteFile` then `os.Remove`.
+  Intact.
+- The repair-path claim also still holds: `fixFrontmatterText`
+  (`internal/store/fix.go:327`) and `backfillMissingID` (`:298`) both still exist and
+  neither dedupes keys.
+
+### Two corrections
+
+- `## Scope` says the tool *"has already run cleanly against this repo's 28 docs"*. The
+  corpus is now **32 docs**, all of them id-led, so the tool remains fully spent here and
+  the LATENT framing is unchanged — only the count is stale.
+- Acceptance criterion 5 (*"Either make `applyPlan` atomic or document why it needn't
+  be"*) has a concrete obstacle worth knowing before starting: the obvious helper,
+  `writeFileAtomic` in `internal/store/atomic.go:48`, is **unexported**, so
+  `internal/tools/researchmigrate` cannot reuse it without either duplicating the pattern
+  or waiting on a shared foundations package. That is exactly what
+  [unify-the-three-divergent-writefileatomic-implementations](6g63jj1dh0sb-unify-the-three-divergent-writefileatomic-implementations.md)
+  proposes. Taking the "document why it needn't be" branch keeps this task independent;
+  taking the "make it atomic" branch creates a real ordering against that task. Flagged,
+  not decided — and `depends_on` is deliberately untouched.
+
+## Progress Log
+
+- 2026-09-27: automated weekly sweep — all four defects re-verified present with refs re-anchored to current line numbers; corrected the corpus count (28 → 32, all id-led) and noted that AC 5's atomic-write helper is unexported, making that criterion a fork with a real ordering against the writeFileAtomic unification task.

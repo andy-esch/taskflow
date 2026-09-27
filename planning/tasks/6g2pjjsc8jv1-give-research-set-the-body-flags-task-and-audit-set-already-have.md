@@ -10,7 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, research, consistency]
 created: "2026-08-22"
-updated_at: "2026-08-22"
+updated_at: "2026-09-27"
+audited: "2026-09-27"
+audit_sources: [2026-09-27-weekly-task-sweep]
 ---
 # Give research set the body flags task and audit set already have
 
@@ -51,3 +53,60 @@ existing one.
 
 - Epic [28-first-class-entities-new-planning-nouns](../epics/28-first-class-entities-new-planning-nouns.md)
 - Sibling implementations to mirror: `task set` and `audit set` in `internal/cli/`.
+
+## Sweep verification (2026-09-27)
+
+Automated weekly sweep. The **core ask is still valid and still unmet** — `research set`
+accepts neither `--body` nor `--body-file` today (`internal/cli/research.go`; confirmed
+from `research set --help`), so the scriptable body-rewrite gap described in
+`## Objective` is real. No acceptance criterion was ticked. Two premises underneath it,
+however, do not survive checking, and both touch the acceptance criteria — so they are
+recorded here rather than edited.
+
+### `audit set` does not exist, and never has
+
+`## Objective` opens: *"`task set` and `audit set` both accept `--body` / `--body-file`;
+`research set` accepts neither."* There is no `audit set` command. `audit`'s subcommands
+are `append`, `close`, `defer`, `edit`, `finding`, `findings`, `info`, `lint`, `list`,
+`new`, `path`, `reopen`, `show` — and `git log -S'newAuditSetCmd'` returns nothing, so it
+was never removed either; the premise was wrong when written. CLAUDE.md's own command
+roster agrees (it lists `audit new|list|show|findings|finding|lint|close|reopen|defer`).
+
+What almost certainly got conflated: `audit` *does* have body flags, on
+`audit append` (`internal/cli/audit.go:685-687`) and `audit finding new`
+(`:347-351`) — just not on a `set` verb it doesn't have.
+
+Two consequences, neither actioned:
+
+- The real asymmetry is **one-to-one, not two-against-one**: `task set` is the *only*
+  `set` verb in the CLI with body flags. That weakens the "every other entity has this"
+  framing a little, though it does not weaken the two-faces-of-mutation argument, which
+  stands on its own.
+- `## Related` says *"Sibling implementations to mirror: `task set` and `audit set` in
+  `internal/cli/`"*. Only the first half is followable. `internal/cli/task.go:636-673` is
+  the implementation to mirror.
+
+### Acceptance criterion 2 contradicts the sibling it asks to mirror
+
+AC 2 requires the flags to *"compose with the frontmatter flags in one write, not two"*.
+`task set` does the **opposite**, deliberately and with an error message: `task.go:638`
+returns `ErrValidation` with *"--body/--body-file can't be combined with field flags — set
+the body in its own call"*, and `--body`'s own help text reads *"(its own call — not
+combined with field flags)"*.
+
+So AC 2 and AC 1 (*"the same semantics ... as `task set`"*) cannot both be satisfied.
+Whoever picks this up has to choose:
+
+- **mirror `task set`** — reject the combination, and AC 2 is rewritten; or
+- **keep AC 2** — `research set` becomes the first `set` verb where body and fields
+  compose, which is a deliberate divergence from the sibling and arguably an argument for
+  changing `task set` too.
+
+I am **not** editing either criterion: which way this resolves is a contract decision about
+the two-faces-of-mutation model, not a drift correction. `## Out of scope` already declines
+the broader per-entity flag survey, but this specific contradiction is inside this task's
+own criteria and has to be settled before AC 1 and AC 2 can both be signed off.
+
+## Progress Log
+
+- 2026-09-27: automated weekly sweep — core gap re-confirmed unmet; found the `audit set` premise false (that command has never existed; `audit append`/`audit finding` carry the body flags instead) and AC 2's "compose in one write" requirement to contradict AC 1's "mirror `task set`", which explicitly forbids that combination. Both left for a human to resolve.
