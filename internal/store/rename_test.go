@@ -53,6 +53,9 @@ func TestRenameTask_RenamesAndCascades(t *testing.T) {
 		result.PlannedDocuments != 2 || result.AppliedDocuments != 2 || result.AppliedLinks != cascade {
 		t.Errorf("rename result does not describe the complete write set: %+v", result)
 	}
+	if result.SourcePath != aPath || result.DestinationPath != newPath {
+		t.Errorf("rename exact local paths = (%q, %q)", result.SourcePath, result.DestinationPath)
+	}
 	// The file is renamed (id kept), the old name is gone.
 	if _, err := os.Stat(aPath); !os.IsNotExist(err) {
 		t.Error("old file should be removed")
@@ -542,6 +545,9 @@ func TestRenameTask_PreDestinationCASCatchesRawSourceEdit(t *testing.T) {
 		result.AppliedDocuments != 1 || result.AppliedLinks != 1 {
 		t.Fatalf("raw pre-destination source race = %+v, %v", result, err)
 	}
+	if result.SourcePath != oldPath || result.DestinationPath != target {
+		t.Fatalf("pre-destination race lost local paths: %+v", result)
+	}
 	if body, _ := os.ReadFile(oldPath); string(body) != raced {
 		t.Fatalf("pre-destination CAS discarded the raw source edit:\n%s", body)
 	}
@@ -571,6 +577,10 @@ func TestRenameTask_PartialCascadeReceiptIsResumable(t *testing.T) {
 	if !errors.As(err, &partial) || !receipt.Committed || receipt.Complete || receipt.DestinationWritten ||
 		receipt.AppliedDocuments != 1 || receipt.PlannedDocuments != 3 || receipt.AppliedLinks != 1 || receipt.PlannedLinks != 2 {
 		t.Fatalf("partial cascade receipt = %+v, err=%v", receipt, err)
+	}
+	if receipt.SourcePath != oldPath || receipt.DestinationPath != filepath.Join(root, "tasks", "6fjangd7kva1-new-title.md") ||
+		!strings.Contains(err.Error(), oldPath) || !strings.Contains(err.Error(), receipt.DestinationPath) {
+		t.Fatalf("partial cascade lost exact source/destination evidence: %+v, %v", receipt, err)
 	}
 	if partial.Receipt.Remedy == "" || !strings.Contains(err.Error(), "rerun") {
 		t.Fatalf("partial cascade lacks recovery guidance: %+v, %v", partial.Receipt, err)
@@ -610,6 +620,10 @@ func TestRenameTask_DestinationWrittenCleanupFailureRequiresInspection(t *testin
 	if !errors.As(err, &partial) || !receipt.Committed || receipt.Complete || !receipt.DestinationWritten || receipt.SourceRemoved {
 		t.Fatalf("destination-written receipt = %+v, err=%v", receipt, err)
 	}
+	if receipt.SourcePath != oldPath || receipt.DestinationPath != newPath ||
+		!strings.Contains(err.Error(), oldPath) || !strings.Contains(err.Error(), newPath) {
+		t.Fatalf("cleanup failure lost exact source/destination evidence: %+v, %v", receipt, err)
+	}
 	if !strings.Contains(receipt.Remedy, "old and destination") || !strings.Contains(err.Error(), "before retrying") {
 		t.Fatalf("cleanup failure does not require inspection: %+v, %v", receipt, err)
 	}
@@ -636,6 +650,9 @@ func TestRenameTask_SourceRemovalCASCatchesRawEdit(t *testing.T) {
 		!receipt.Committed || receipt.Complete || !receipt.DestinationWritten || receipt.SourceRemoved {
 		t.Fatalf("source-removal CAS receipt = %+v, err=%v", receipt, err)
 	}
+	if receipt.SourcePath != oldPath || receipt.DestinationPath != newPath {
+		t.Fatalf("source-removal CAS lost local paths: %+v", receipt)
+	}
 	if body, _ := os.ReadFile(oldPath); string(body) != raced {
 		t.Fatalf("source-removal CAS discarded the raw edit:\n%s", body)
 	}
@@ -653,6 +670,9 @@ func TestRenameTask_CompleteUnlockFailureIsNotRetryable(t *testing.T) {
 	var committed *core.TaskRenameFailure
 	if !errors.As(err, &committed) || !receipt.Committed || !receipt.Complete {
 		t.Fatalf("completed unlock failure = %+v, %v", receipt, err)
+	}
+	if receipt.SourcePath != oldPath || receipt.DestinationPath == "" {
+		t.Fatalf("complete-but-unlocked rename lost local paths: %+v", receipt)
 	}
 	if !strings.Contains(receipt.Remedy, "already complete") {
 		t.Fatalf("completed failure suggests an unsafe retry: %+v", receipt)

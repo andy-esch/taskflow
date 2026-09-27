@@ -300,7 +300,11 @@ func ThreadCreatedHuman(w io.Writer, st Style, receipt core.ThreadCreationReceip
 	if receipt.DryRun {
 		verb, marker = "would create", "◇"
 	}
-	fmt.Fprintf(w, "%s %s Thread %s at %s\n", st.Green(marker), verb, st.Bold(receipt.Thread.ID), path)
+	fmt.Fprintf(w, "%s %s Thread %s", st.Green(marker), verb, st.Bold(receipt.Thread.ID))
+	if path != "" {
+		fmt.Fprintf(w, " at %s", path)
+	}
+	fmt.Fprintln(w)
 }
 
 func ThreadMutationHuman(w io.Writer, st Style, receipt core.ThreadMutationReceipt, path string) {

@@ -120,14 +120,14 @@ func newThreadLifecycleCmd(app *App, verb string, operation core.ThreadMutationO
 
 func emitThreadMutation(app *App, receipt core.ThreadMutationReceipt, err error) error {
 	path := ""
-	if receipt.Thread.Path != "" {
-		path = app.rel(receipt.Thread.Path)
+	if receipt.LocalPath != "" {
+		path = app.rel(receipt.LocalPath)
 	}
 	if err != nil {
 		var committed *core.ThreadMutationFailure
 		if errors.As(err, &committed) {
 			return &threadMutationCommandFailure{
-				cause: err, receipt: committed.Receipt, path: path, workspace: app.workspace(),
+				cause: err, receipt: committed.Receipt, path: app.rel(committed.Receipt.LocalPath), workspace: app.workspace(),
 			}
 		}
 		return err
@@ -135,7 +135,7 @@ func emitThreadMutation(app *App, receipt core.ThreadMutationReceipt, err error)
 	if app.JSON {
 		return render.ThreadUpdateJSON(app.Out, receipt, path, app.workspace())
 	}
-	render.ThreadMutationHuman(app.Out, app.Style, receipt, app.linkPath(receipt.Thread.Path))
+	render.ThreadMutationHuman(app.Out, app.Style, receipt, app.linkPath(receipt.LocalPath))
 	return nil
 }
 
@@ -165,16 +165,17 @@ func newThreadNewCmd(app *App) *cobra.Command {
 				var committed *core.ThreadCreationMutationFailure
 				if errors.As(err, &committed) {
 					return &threadCreationCommandFailure{
-						cause: err, receipt: committed.Receipt, path: app.rel(committed.Receipt.Thread.Path), workspace: app.workspace(),
+						cause: err, receipt: committed.Receipt, path: app.rel(committed.Receipt.Local.DisplayPath(committed.Receipt.DryRun)), workspace: app.workspace(),
 					}
 				}
 				return err
 			}
-			path := app.rel(receipt.Thread.Path)
+			localPath := receipt.Local.DisplayPath(receipt.DryRun)
+			path := app.rel(localPath)
 			if app.JSON {
 				return render.ThreadMutationJSON(app.Out, receipt, path, app.workspace())
 			}
-			render.ThreadCreatedHuman(app.Out, app.Style, receipt, app.linkPath(receipt.Thread.Path))
+			render.ThreadCreatedHuman(app.Out, app.Style, receipt, app.linkPath(localPath))
 			return nil
 		},
 	}

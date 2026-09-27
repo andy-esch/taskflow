@@ -113,8 +113,8 @@ func TestFS_CreateResearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := filepath.Join(root, domain.ResearchDir, "6dvxwxg034xm-storage-model.md")
-	if got.Path != want {
-		t.Errorf("path = %q, want %q", got.Path, want)
+	if got.Local.CommittedPath != want {
+		t.Errorf("path = %q, want %q", got.Local.CommittedPath, want)
 	}
 	content, err := os.ReadFile(want)
 	if err != nil {

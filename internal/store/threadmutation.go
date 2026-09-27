@@ -74,6 +74,7 @@ func (s *FS) MutateThread(now time.Time, dryRun bool, planner core.ThreadMutatio
 		return result, err
 	}
 	result.Thread = materialized.thread
+	result.LocalPath = materialized.path
 	if dryRun || !materialized.changed {
 		return result, nil
 	}

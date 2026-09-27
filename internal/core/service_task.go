@@ -550,7 +550,7 @@ func (s *Service) runTaskLifecycleMutation(dryRun bool, planner TaskLifecyclePla
 
 func taskLifecycleReceipt(result TaskLifecycleMutationResult) TaskLifecycleReceipt {
 	return TaskLifecycleReceipt{
-		Task: result.Task, From: result.From, To: result.Plan.To,
+		Task: result.Task, Local: result.Local, From: result.From, To: result.Plan.To,
 		Changed: result.Changed, DryRun: result.DryRun, Committed: result.Committed, Override: result.Plan.Override,
 		Forced: result.OverrideApplied, Before: result.Before, After: result.After,
 		OutstandingBlockers: cloneLifecycleBlockers(result.OutstandingBlockers),
@@ -739,19 +739,19 @@ type NewTaskParams struct {
 	DryRun      bool   // validate + report the would-be task without writing
 }
 
-// NewTask validates and creates a task, returning the created task. The epic
+// NewTask validates and creates a task, returning its operation receipt. The epic
 // must exist; tier/autonomy/priority/description are validated. On any invalid
 // input it returns ErrValidation and nothing is written.
-func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
+func (s *Service) NewTask(p NewTaskParams) (TaskCreationReceipt, error) {
 	if err := templateBodyConflict(p.Body, p.Template); err != nil {
-		return domain.Task{}, err
+		return TaskCreationReceipt{}, err
 	}
 	epicRead, err := s.store.ReadEpics()
 	if err != nil {
-		return domain.Task{}, err
+		return TaskCreationReceipt{}, err
 	}
 	if !epicExists(epicRead.Records, p.Epic) {
-		return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, p.Epic)
+		return TaskCreationReceipt{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, p.Epic)
 	}
 	// Store and link the epic's canonical stem (resolved on the NN key), so a bare NN or
 	// a stale slug the caller passed becomes the epic's current, readable `<NN>-<slug>`.
@@ -773,16 +773,16 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 		p.Effort = "Unknown"
 	}
 	if err := domain.ValidatePriority(p.Priority); err != nil {
-		return domain.Task{}, err
+		return TaskCreationReceipt{}, err
 	}
 	if err := domain.ValidateTier(p.Tier); err != nil {
-		return domain.Task{}, err
+		return TaskCreationReceipt{}, err
 	}
 	if err := domain.ValidateAutonomy(p.Autonomy); err != nil {
-		return domain.Task{}, err
+		return TaskCreationReceipt{}, err
 	}
 	if err := domain.ValidateDescription(p.Description); err != nil {
-		return domain.Task{}, err
+		return TaskCreationReceipt{}, err
 	}
 	// Any title is accepted: Slugify derives a filesystem-safe id (it word-breaks
 	// path separators, control chars, and the unicode punctuation it can't keep)
@@ -790,7 +790,7 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	// error below is the only hard guard — a title that slugifies to nothing.
 	slug := domain.Slugify(p.Title)
 	if slug == "" {
-		return domain.Task{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
+		return TaskCreationReceipt{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
 	}
 	status := domain.StatusReadyToStart
 	if p.Next {
@@ -813,13 +813,13 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 	// tags, and a next-up/in-progress one needs a description. The same rule the
 	// SetFields write path applies, defined once in the domain (decided 2026-06-12).
 	if err := domain.ActiveTaskFieldErr(t); err != nil {
-		return domain.Task{}, err
+		return TaskCreationReceipt{}, err
 	}
 	body := p.Body
 	if body == "" {
 		tmpl, err := s.templateBody("task", p.Template)
 		if err != nil {
-			return domain.Task{}, err
+			return TaskCreationReceipt{}, err
 		}
 		body = renderTemplate(tmpl, map[string]string{"title": p.Title, "epic": p.Epic})
 	}
@@ -830,7 +830,7 @@ func (s *Service) NewTask(p NewTaskParams) (domain.Task, error) {
 				Create: &TaskLifecycleCreation{Task: t, Body: body},
 			}, nil
 		})
-		return receipt.Task, err
+		return TaskCreationReceipt{Task: receipt.Task, Local: receipt.Local, DryRun: receipt.DryRun, Committed: receipt.Committed}, err
 	}
 	return s.store.CreateTask(t, body, p.DryRun)
 }

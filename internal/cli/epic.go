@@ -228,14 +228,16 @@ func newEpicNewCmd(app *App) *cobra.Command {
 			}
 			p.Body = body
 			p.DryRun = app.DryRun
-			e, err := app.Svc.NewEpic(p)
+			receipt, err := app.Svc.NewEpic(p)
 			if err != nil {
 				return err
 			}
+			e := receipt.Epic
+			path := receipt.Local.DisplayPath(receipt.DryRun)
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "epic", e.ID, e.ID, e.Status, app.rel(e.Path), app.DryRun, app.workspace())
+				return render.CreatedJSON(app.Out, "epic", e.ID, e.ID, e.Status, app.rel(path), app.DryRun, app.workspace())
 			}
-			render.CreatedHuman(app.Out, app.Style, app.linkPath(e.Path), app.DryRun)
+			render.CreatedHuman(app.Out, app.Style, app.linkPath(path), app.DryRun)
 			render.CreatedSlugNote(app.Out, app.Style, p.Title, e.ID)
 			if !app.DryRun {
 				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task new \"Title\" --epic "+e.ID))

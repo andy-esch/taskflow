@@ -120,6 +120,7 @@ type ThreadMutationAnalysis struct {
 type ThreadMutationResult struct {
 	Plan           ThreadMutationPlan
 	Thread         domain.Thread
+	LocalPath      string // optional local file observed under the guarded snapshot
 	Before         ThreadView
 	After          ThreadView
 	MemberOutcomes []ThreadMemberOutcome
@@ -131,6 +132,7 @@ type ThreadMutationResult struct {
 type ThreadMutationReceipt struct {
 	Operation      ThreadMutationOperation
 	Thread         domain.Thread
+	LocalPath      string
 	Before         ThreadView
 	After          ThreadView
 	MemberOutcomes []ThreadMemberOutcome
@@ -151,7 +153,11 @@ func (e *ThreadMutationFailure) Error() string {
 	if e == nil {
 		return "Thread mutation committed, but repository cleanup failed"
 	}
-	return fmt.Sprintf("Thread mutation committed, but repository cleanup failed: %v; inspect the current Thread before retrying", e.Cause)
+	message := fmt.Sprintf("Thread mutation committed, but repository cleanup failed: %v; inspect the current Thread before retrying", e.Cause)
+	if e.Receipt.LocalPath != "" {
+		message += fmt.Sprintf("; Thread file %q", e.Receipt.LocalPath)
+	}
+	return message
 }
 
 func (e *ThreadMutationFailure) Unwrap() error {

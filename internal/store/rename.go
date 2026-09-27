@@ -217,6 +217,7 @@ func taskRenameResult(plan taskRenamePlan, dryRun bool) core.TaskRenameMutationR
 	}
 	return core.TaskRenameMutationResult{
 		Task: plan.task, FromSlug: plan.source.oldSlug,
+		SourcePath: plan.source.path, DestinationPath: plan.newPath,
 		PlannedDocuments: plannedDocuments,
 		PlannedLinks:     plan.plannedLinks,
 		Changed:          plannedDocuments > 0,

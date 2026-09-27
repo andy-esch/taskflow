@@ -117,9 +117,30 @@ func TestMutateTaskLifecycleCreateAndStartIsOneGuardedOperation(t *testing.T) {
 	if result.From != domain.StatusReadyToStart || result.Task.Status != domain.StatusInProgress || !result.Changed {
 		t.Fatalf("create-and-start result = %+v", result)
 	}
+	if result.Local.PlannedPath == "" || result.Local.CommittedPath != result.Local.PlannedPath {
+		t.Fatalf("create-and-start local outcome = %+v", result.Local)
+	}
 	reloaded, _, err := NewFS(root).GetTask(taskID)
 	if err != nil || reloaded.Status != domain.StatusInProgress || reloaded.StartedAt != "2026-08-28" {
 		t.Fatalf("reloaded create-and-start = %+v err=%v", reloaded, err)
+	}
+}
+
+func TestMutateTaskLifecycleCreateAndStartDryRunKeepsOnlyPlannedPath(t *testing.T) {
+	root := t.TempDir()
+	task := domain.Task{
+		ID: testutil.TaskID("preview-created"), Slug: "preview-created", Status: domain.StatusReadyToStart,
+		Description: "preview", Tags: []string{"graph"}, Created: "2026-08-28",
+	}
+	result, err := NewFS(root).MutateTaskLifecycle(lifecycleMutationNow, true,
+		func(*core.TaskGraph) (core.TaskLifecyclePlan, error) {
+			return core.TaskLifecyclePlan{To: domain.StatusInProgress, Create: &core.TaskLifecycleCreation{Task: task, Body: "# Preview\n"}}, nil
+		})
+	if err != nil || !result.DryRun || result.Committed || result.Local.PlannedPath == "" || result.Local.CommittedPath != "" {
+		t.Fatalf("create-and-start preview result=%+v err=%v", result, err)
+	}
+	if _, err := os.Stat(result.Local.PlannedPath); !os.IsNotExist(err) {
+		t.Fatalf("preview wrote planned destination: %v", err)
 	}
 }
 

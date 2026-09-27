@@ -10,6 +10,7 @@ import (
 
 	yaml "go.yaml.in/yaml/v3"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/id"
 )
@@ -47,6 +48,14 @@ type entityFileCreation struct {
 	content []byte
 	kind    string
 	name    string
+}
+
+func localCreateOutcome(path string, dryRun bool) core.LocalCreateOutcome {
+	outcome := core.LocalCreateOutcome{PlannedPath: path}
+	if !dryRun {
+		outcome.CommittedPath = path
+	}
+	return outcome
 }
 
 // createEntityFile owns the check-and-create transaction for ordinary single-file
@@ -167,28 +176,28 @@ func validEntityID(entityID string) error {
 		domain.ErrValidation, entityID, id.Length)
 }
 
-func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error) {
+func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (core.TaskCreationReceipt, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
-		return domain.Task{}, err
+		return core.TaskCreationReceipt{}, err
 	}
 	if t.Slug == "" {
-		return domain.Task{}, fmt.Errorf("%w: empty task slug", domain.ErrValidation)
+		return core.TaskCreationReceipt{}, fmt.Errorf("%w: empty task slug", domain.ErrValidation)
 	}
 	if t.ID == "" {
-		return domain.Task{}, fmt.Errorf("%w: task has no id", domain.ErrValidation)
+		return core.TaskCreationReceipt{}, fmt.Errorf("%w: task has no id", domain.ErrValidation)
 	}
 	if err := validEntityID(t.ID); err != nil {
-		return domain.Task{}, err
+		return core.TaskCreationReceipt{}, err
 	}
 	switch t.Status {
 	case domain.StatusReadyToStart, domain.StatusNextUp:
 		// Ordinary creation may place a task only in a non-start lifecycle state.
 		// In-progress creation belongs exclusively to guarded create-and-start.
 	default:
-		return domain.Task{}, fmt.Errorf("%w: ordinary task creation supports only ready-to-start or next-up status, got %q", domain.ErrValidation, t.Status)
+		return core.TaskCreationReceipt{}, fmt.Errorf("%w: ordinary task creation supports only ready-to-start or next-up status, got %q", domain.ErrValidation, t.Status)
 	}
 	if len(t.DependsOn) > 0 || len(t.LegacyBlockedBy) > 0 || len(t.LegacyDependencies) > 0 || len(t.LegacyBlocks) > 0 {
-		return domain.Task{}, fmt.Errorf("%w: task creation cannot set graph-owned dependency fields until guarded dependency creation is available", domain.ErrValidation)
+		return core.TaskCreationReceipt{}, fmt.Errorf("%w: task creation cannot set graph-owned dependency fields until guarded dependency creation is available", domain.ErrValidation)
 	}
 	// A duplicate slug with a distinct id is legal and remains resolvable by id.
 	// A duplicate stable id with a different slug has a different path, so its
@@ -197,7 +206,7 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 	path := filepath.Join(s.tasksDir, stem+".md")
 	content, err := buildFile(taskFields(t), body)
 	if err != nil {
-		return domain.Task{}, err
+		return core.TaskCreationReceipt{}, err
 	}
 	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
 		if err := ensureCandidateIDUnique("task", t.ID, s.taskCandidates); err != nil {
@@ -209,10 +218,10 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, e
 		return entityFileCreation{dir: s.tasksDir, path: path, content: content, kind: "task", name: stem}, nil
 	})
 	if err != nil {
-		return domain.Task{}, err
+		return core.TaskCreationReceipt{}, err
 	}
 	t.Path = creation.path
-	return t, nil
+	return core.TaskCreationReceipt{Task: t, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: !dryRun}, nil
 }
 
 // ensureCandidateIDUnique applies the same same-kind stable-identity rule to
@@ -274,18 +283,18 @@ func auditFields(a domain.Audit) []fmField {
 // CreateAudit writes a new audit at audits/<id>-<slug>.md (flat, id-led per
 // ADR-0003 §4). New audits always start in the open bucket; it refuses to clobber
 // either the exact path or a different audit already using the same stable id.
-func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error) {
+func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (core.AuditCreationReceipt, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
-		return domain.Audit{}, err
+		return core.AuditCreationReceipt{}, err
 	}
 	if a.Slug == "" {
-		return domain.Audit{}, fmt.Errorf("%w: empty audit slug", domain.ErrValidation)
+		return core.AuditCreationReceipt{}, fmt.Errorf("%w: empty audit slug", domain.ErrValidation)
 	}
 	if a.ID == "" {
-		return domain.Audit{}, fmt.Errorf("%w: audit has no id", domain.ErrValidation)
+		return core.AuditCreationReceipt{}, fmt.Errorf("%w: audit has no id", domain.ErrValidation)
 	}
 	if err := validEntityID(a.ID); err != nil {
-		return domain.Audit{}, err
+		return core.AuditCreationReceipt{}, err
 	}
 	// A duplicate slug with a distinct id is legal and remains resolvable by id. A
 	// duplicate ID with a different slug is a different path, however, so O_EXCL
@@ -295,7 +304,7 @@ func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit
 	path := filepath.Join(s.auditsDir, stem+".md")
 	content, err := buildFile(auditFields(a), body)
 	if err != nil {
-		return domain.Audit{}, err
+		return core.AuditCreationReceipt{}, err
 	}
 	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
 		if err := s.ensureAuditIDUnique(a.ID); err != nil {
@@ -304,10 +313,10 @@ func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit
 		return entityFileCreation{dir: s.auditsDir, path: path, content: content, kind: "audit", name: stem}, nil
 	})
 	if err != nil {
-		return domain.Audit{}, err
+		return core.AuditCreationReceipt{}, err
 	}
 	a.Path = creation.path
-	return a, nil
+	return core.AuditCreationReceipt{Audit: a, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: !dryRun}, nil
 }
 
 func (s *FS) ensureAuditIDUnique(auditID string) error {
@@ -330,18 +339,18 @@ func researchFields(r domain.Research) []fmField {
 // CreateResearch writes a new research doc at research/<id>-<slug>.md (flat, id-led
 // per ADR-0003 §4). It refuses to clobber; the slug and id are taken from r. The id is
 // minted from r.Created by the caller (core), so ids stay chronological.
-func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (domain.Research, error) {
+func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (core.ResearchCreationReceipt, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
-		return domain.Research{}, err
+		return core.ResearchCreationReceipt{}, err
 	}
 	if r.Slug == "" {
-		return domain.Research{}, fmt.Errorf("%w: empty research slug", domain.ErrValidation)
+		return core.ResearchCreationReceipt{}, fmt.Errorf("%w: empty research slug", domain.ErrValidation)
 	}
 	if r.ID == "" {
-		return domain.Research{}, fmt.Errorf("%w: research doc has no id", domain.ErrValidation)
+		return core.ResearchCreationReceipt{}, fmt.Errorf("%w: research doc has no id", domain.ErrValidation)
 	}
 	if err := validEntityID(r.ID); err != nil {
-		return domain.Research{}, err
+		return core.ResearchCreationReceipt{}, err
 	}
 	// O_EXCL alone is NOT the whole collision guard here. Research ids are minted from a
 	// DAY (ADR-0003 §3), so
@@ -356,7 +365,7 @@ func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (domain
 	path := filepath.Join(s.researchDir, stem+".md")
 	content, err := buildFile(researchFields(r), body)
 	if err != nil {
-		return domain.Research{}, err
+		return core.ResearchCreationReceipt{}, err
 	}
 	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
 		if err := ensureCandidateIDUnique("research", r.ID, s.researchCandidates); err != nil {
@@ -365,10 +374,10 @@ func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (domain
 		return entityFileCreation{dir: s.researchDir, path: path, content: content, kind: "research doc", name: stem}, nil
 	})
 	if err != nil {
-		return domain.Research{}, err
+		return core.ResearchCreationReceipt{}, err
 	}
 	r.Path = creation.path
-	return r, nil
+	return core.ResearchCreationReceipt{Research: r, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: !dryRun}, nil
 }
 
 var epicNumRe = regexp.MustCompile(`^(\d+)-`)
@@ -426,12 +435,12 @@ func epicFields(e domain.Epic) []fmField {
 // id collision can't occur. Duplicate *name*-slugs (01-billing + 02-billing) are
 // deliberately allowed — they stay distinct ids; only `epic show billing` goes
 // fuzzy-ambiguous, recoverable by using the full NN-slug.
-func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (domain.Epic, error) {
+func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (core.EpicCreationReceipt, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
-		return domain.Epic{}, err
+		return core.EpicCreationReceipt{}, err
 	}
 	if slug == "" {
-		return domain.Epic{}, fmt.Errorf("%w: empty epic slug", domain.ErrValidation)
+		return core.EpicCreationReceipt{}, fmt.Errorf("%w: empty epic slug", domain.ErrValidation)
 	}
 	creation, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
 		num, err := s.nextEpicNumber()
@@ -447,9 +456,9 @@ func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (d
 		return entityFileCreation{dir: s.epicsDir, path: path, content: content, kind: "epic", name: id}, nil
 	})
 	if err != nil {
-		return domain.Epic{}, err
+		return core.EpicCreationReceipt{}, err
 	}
 	e.ID = creation.name
 	e.Path = creation.path
-	return e, nil
+	return core.EpicCreationReceipt{Epic: e, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: !dryRun}, nil
 }

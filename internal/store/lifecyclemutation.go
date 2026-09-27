@@ -84,6 +84,9 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 		return result, err
 	}
 	result.Task = materialized.task
+	if materialized.create {
+		result.Local.PlannedPath = materialized.path
+	}
 	result.From = analysis.From
 	result.Before = analysis.Before
 	result.After = analysis.After
@@ -119,6 +122,7 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 			return result, err
 		}
 		result.Committed = true
+		result.Local.CommittedPath = materialized.path
 		return result, nil
 	}
 

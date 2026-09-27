@@ -12,6 +12,8 @@ import (
 type TaskRenameMutationResult struct {
 	Task               domain.Task
 	FromSlug           string
+	SourcePath         string // exact local source observed by the guarded plan; optional for pathless adapters
+	DestinationPath    string // exact planned local destination, including on dry runs and partial failure
 	PlannedDocuments   int
 	AppliedDocuments   int
 	PlannedLinks       int
@@ -30,6 +32,8 @@ type TaskRenameMutationResult struct {
 type TaskRenameReceipt struct {
 	Task               domain.Task
 	FromSlug           string
+	SourcePath         string
+	DestinationPath    string
 	PlannedDocuments   int
 	AppliedDocuments   int
 	PlannedLinks       int
@@ -58,7 +62,22 @@ func (e *TaskRenameFailure) Error() string {
 	return fmt.Sprintf("task rename committed %d of %d planned document write(s) and %d of %d link rewrite(s) before failing: %v; %s",
 		e.Receipt.AppliedDocuments, e.Receipt.PlannedDocuments,
 		e.Receipt.AppliedLinks, e.Receipt.PlannedLinks,
-		e.Cause, e.Receipt.Remedy)
+		e.Cause, e.Receipt.Remedy) + taskRenamePathDiagnosis(e.Receipt)
+}
+
+func taskRenamePathDiagnosis(receipt TaskRenameReceipt) string {
+	diagnosis := ""
+	if receipt.SourcePath != "" {
+		diagnosis = fmt.Sprintf("; source %q", receipt.SourcePath)
+	}
+	if receipt.DestinationPath != "" {
+		if diagnosis == "" {
+			diagnosis = fmt.Sprintf("; destination %q", receipt.DestinationPath)
+		} else {
+			diagnosis += fmt.Sprintf(", destination %q", receipt.DestinationPath)
+		}
+	}
+	return diagnosis
 }
 
 func (e *TaskRenameFailure) Unwrap() error {
@@ -71,6 +90,7 @@ func (e *TaskRenameFailure) Unwrap() error {
 func taskRenameReceipt(result TaskRenameMutationResult) TaskRenameReceipt {
 	return TaskRenameReceipt{
 		Task: result.Task, FromSlug: result.FromSlug,
+		SourcePath: result.SourcePath, DestinationPath: result.DestinationPath,
 		PlannedDocuments: result.PlannedDocuments, AppliedDocuments: result.AppliedDocuments,
 		PlannedLinks: result.PlannedLinks, AppliedLinks: result.AppliedLinks,
 		Changed: result.Changed, DryRun: result.DryRun, Committed: result.Committed, Complete: result.Complete,

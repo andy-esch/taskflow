@@ -179,6 +179,28 @@ func TestRunMovesPreservesCommittedFailureForHumanJSONAndFatalRecovery(t *testin
 	}
 }
 
+func TestCreateAndStartFailurePublishesCommittedDestination(t *testing.T) {
+	localPath := "/repo/planning/tasks/6gdx7mn9f0a6-created.md"
+	receipt := core.TaskLifecycleReceipt{
+		Task:  domain.Task{ID: "6gdx7mn9f0a6", Slug: "created", Status: domain.StatusInProgress},
+		Local: core.LocalCreateOutcome{PlannedPath: localPath, CommittedPath: localPath},
+		To:    domain.StatusInProgress, Changed: true, Committed: true,
+	}
+	cause := &core.TaskLifecycleMutationFailure{Cause: domain.ErrConflict, Receipt: receipt}
+	if !strings.Contains(cause.Error(), localPath) {
+		t.Fatalf("human failure omitted committed destination: %v", cause)
+	}
+	err := &taskLifecycleCommandFailure{cause: cause, receipt: receipt, workspace: wire.WorkspaceJSON{PlanningRoot: "/repo/planning"}}
+	var out bytes.Buffer
+	WriteError(&out, err, true)
+	var got wire.ErrorEnvelope
+	if decodeErr := json.Unmarshal(out.Bytes(), &got); decodeErr != nil || got.Error.TaskLifecycle == nil ||
+		got.Error.TaskLifecycle.Lifecycle.PlannedPath != localPath ||
+		got.Error.TaskLifecycle.Lifecycle.CommittedPath != localPath {
+		t.Fatalf("create-and-start machine recovery = %+v decode=%v", got, decodeErr)
+	}
+}
+
 func TestTaskMoveForceUsesDestinationSpecificGate(t *testing.T) {
 	prerequisiteID := testutil.TaskID("move-prerequisite")
 	root := dependencyCLIRepo(t,

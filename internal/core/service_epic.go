@@ -22,28 +22,28 @@ type NewEpicParams struct {
 
 // NewEpic validates and creates an epic (auto-numbered NN-<slug>). Description
 // is required (single line, ≤ the description cap); priority is validated.
-func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
+func (s *Service) NewEpic(p NewEpicParams) (EpicCreationReceipt, error) {
 	if err := templateBodyConflict(p.Body, p.Template); err != nil {
-		return domain.Epic{}, err
+		return EpicCreationReceipt{}, err
 	}
 	if strings.TrimSpace(p.Description) == "" {
-		return domain.Epic{}, fmt.Errorf("%w: epic description is required", domain.ErrValidation)
+		return EpicCreationReceipt{}, fmt.Errorf("%w: epic description is required", domain.ErrValidation)
 	}
 	if err := domain.ValidateDescription(p.Description); err != nil {
-		return domain.Epic{}, err
+		return EpicCreationReceipt{}, err
 	}
 	if err := domain.ValidatePriority(p.Priority); err != nil {
-		return domain.Epic{}, err
+		return EpicCreationReceipt{}, err
 	}
 	if err := domain.ValidateEpicStatus(p.Status); err != nil {
-		return domain.Epic{}, err
+		return EpicCreationReceipt{}, err
 	}
 	// Any title is accepted: Slugify derives a filesystem-safe id while the full
 	// original title is preserved in the body H1. The empty-slug error below is the
 	// only hard guard — a title that slugifies to nothing.
 	slug := domain.Slugify(p.Title)
 	if slug == "" {
-		return domain.Epic{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
+		return EpicCreationReceipt{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
 	}
 	e := domain.Epic{
 		Status:      p.Status,
@@ -56,7 +56,7 @@ func (s *Service) NewEpic(p NewEpicParams) (domain.Epic, error) {
 	if body == "" {
 		tmpl, err := s.templateBody("epic", p.Template)
 		if err != nil {
-			return domain.Epic{}, err
+			return EpicCreationReceipt{}, err
 		}
 		body = renderTemplate(tmpl, map[string]string{"title": p.Title, "description": p.Description})
 	}

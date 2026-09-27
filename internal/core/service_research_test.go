@@ -27,12 +27,12 @@ func (f *researchStore) ReadResearch() (ResearchRead, error) {
 	return ResearchRead{Records: loadedResearch(f.docs)}, nil
 }
 
-func (f *researchStore) CreateResearch(r domain.Research, body string, dryRun bool) (domain.Research, error) {
+func (f *researchStore) CreateResearch(r domain.Research, body string, dryRun bool) (ResearchCreationReceipt, error) {
 	if !dryRun {
 		f.created = append(f.created, r)
 		f.createdBody = append(f.createdBody, body)
 	}
-	return r, nil
+	return ResearchCreationReceipt{Research: r, DryRun: dryRun, Committed: !dryRun}, nil
 }
 
 func fixedClock(date string) func() time.Time {
@@ -57,15 +57,15 @@ func TestNewResearch_IDMintedFromCreatedNotNow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if older.ID >= newer.ID {
-		t.Errorf("id order must follow created order: %q (2026-01-03) should sort before %q (2026-06-23)", older.ID, newer.ID)
+	if older.Research.ID >= newer.Research.ID {
+		t.Errorf("id order must follow created order: %q (2026-01-03) should sort before %q (2026-06-23)", older.Research.ID, newer.Research.ID)
 	}
 	// And the id genuinely decodes back to the created date, not to the clock. Compared
 	// in UTC: a date-only string parses to UTC midnight, so the encoded instant is
 	// UTC-anchored (id.Time returns it in local zone, which is a day earlier west of
 	// Greenwich). This matches flatmigrate's firstDate→UnixMilli minting exactly, so
 	// backdated ids stay consistent with the ones already in the tree.
-	if got := id.Time(older.ID).UTC().Format("2006-01-02"); got != "2026-01-03" {
+	if got := id.Time(older.Research.ID).UTC().Format("2006-01-02"); got != "2026-01-03" {
 		t.Errorf("id encodes %s, want the created date 2026-01-03 (not the 2026-08-14 clock)", got)
 	}
 }
@@ -78,8 +78,8 @@ func TestNewResearch_DefaultsCreatedToToday(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Created != "2026-08-14" {
-		t.Errorf("Created = %q, want the clock's date", r.Created)
+	if r.Research.Created != "2026-08-14" {
+		t.Errorf("Created = %q, want the clock's date", r.Research.Created)
 	}
 }
 
@@ -91,8 +91,8 @@ func TestNewResearch_SlugAndBodyFromTitle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Slug != "compare-theming-libs-a-call" {
-		t.Errorf("slug = %q", r.Slug)
+	if r.Research.Slug != "compare-theming-libs-a-call" {
+		t.Errorf("slug = %q", r.Research.Slug)
 	}
 	// The FULL original title survives as the body H1, punctuation and all.
 	if len(store.createdBody) != 1 || !strings.Contains(store.createdBody[0], "# Compare: theming libs → a call") {
@@ -285,13 +285,13 @@ type collidingStore struct {
 	accepted string
 }
 
-func (f *collidingStore) CreateResearch(r domain.Research, _ string, _ bool) (domain.Research, error) {
+func (f *collidingStore) CreateResearch(r domain.Research, _ string, _ bool) (ResearchCreationReceipt, error) {
 	f.offered = append(f.offered, r.ID)
 	if f.taken[r.ID] {
-		return domain.Research{}, fmt.Errorf("research id %q already used: %w", r.ID, domain.ErrConflict)
+		return ResearchCreationReceipt{}, fmt.Errorf("research id %q already used: %w", r.ID, domain.ErrConflict)
 	}
 	f.accepted = r.ID
-	return r, nil
+	return ResearchCreationReceipt{Research: r}, nil
 }
 
 // The headline fix: minting is keyed on a DAY, so same-day docs share one 2^17 random
@@ -312,8 +312,8 @@ func TestNewResearch_RegeneratesOnIDCollision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a collision must be regenerated, not surfaced: %v", err)
 	}
-	if got.ID != "bbbbbbbbbbbb" {
-		t.Errorf("id = %q, want the regenerated one", got.ID)
+	if got.Research.ID != "bbbbbbbbbbbb" {
+		t.Errorf("id = %q, want the regenerated one", got.Research.ID)
 	}
 	if len(store.offered) != 2 {
 		t.Errorf("want 2 mint attempts (collide then succeed), got %v", store.offered)
@@ -358,13 +358,34 @@ func TestNewResearch_DoesNotRetryNonConflictErrors(t *testing.T) {
 	}
 }
 
-type failingStore struct {
-	nopStore
-	err   error
-	calls int
+func TestNewResearch_DoesNotRetryCommittedConflict(t *testing.T) {
+	cleanupErr := fmt.Errorf("release guard: %w", domain.ErrConflict)
+	store := &failingStore{
+		err:     cleanupErr,
+		receipt: ResearchCreationReceipt{Committed: true, Local: LocalCreateOutcome{CommittedPath: "/planning/research/created.md"}},
+	}
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-18")))
+
+	got, err := svc.NewResearch(NewResearchParams{Title: "Doc"})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("committed cleanup failure should retain conflict classification: %v", err)
+	}
+	if store.calls != 1 {
+		t.Errorf("committed creation must not be retried, got %d attempts", store.calls)
+	}
+	if !got.Committed || got.Local.CommittedPath != "/planning/research/created.md" {
+		t.Errorf("committed receipt was lost: %+v", got)
+	}
 }
 
-func (f *failingStore) CreateResearch(domain.Research, string, bool) (domain.Research, error) {
+type failingStore struct {
+	nopStore
+	err     error
+	receipt ResearchCreationReceipt
+	calls   int
+}
+
+func (f *failingStore) CreateResearch(domain.Research, string, bool) (ResearchCreationReceipt, error) {
 	f.calls++
-	return domain.Research{}, f.err
+	return f.receipt, f.err
 }

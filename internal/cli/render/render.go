@@ -509,6 +509,10 @@ func CreatedHuman(w io.Writer, st Style, path string, dryRun bool) {
 	if dryRun {
 		verb = "would create"
 	}
+	if path == "" {
+		fmt.Fprintln(w, st.Green(verb))
+		return
+	}
 	fmt.Fprintf(w, "%s %s\n", st.Green(verb), st.Bold(path))
 }
 

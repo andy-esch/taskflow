@@ -76,6 +76,7 @@ func (s *FS) MutateThreadCreation(now time.Time, dryRun bool, planner core.Threa
 		return result, err
 	}
 	result.Thread = materialized.thread
+	result.Local.PlannedPath = materialized.path
 	result.Changed = true
 	if dryRun {
 		return result, nil
@@ -99,6 +100,7 @@ func (s *FS) MutateThreadCreation(now time.Time, dryRun bool, planner core.Threa
 		return result, err
 	}
 	result.Committed = true
+	result.Local.CommittedPath = materialized.path
 	return result, nil
 }
 
