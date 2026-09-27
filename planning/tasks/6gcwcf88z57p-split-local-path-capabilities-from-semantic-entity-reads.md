@@ -29,8 +29,9 @@ retain their stronger version evidence outside the domain values.
 - Remove `ResolveTaskPath`, `ResolveEpicPath`, `ResolveAuditPath`, and `ResolveResearchPath` from the
   aggregate semantic `Store` capabilities.
 - Introduce narrow entity-specific optional local-path capabilities with the proven Thread
-  detach/explicit-override composition rules, typed-nil handling, and the shared source-set identity
-  established by the dedicated composition task.
+  detach/explicit-override composition rules, typed-nil handling, and the `SourceSetProvider`
+  witness and checked constructor established by the dedicated composition task. Add every new
+  entity path port to that one validation matrix; do not introduce per-entity source-set checks.
 - Move `Path` and `FilenameID` out of task, epic, audit, research, and Thread domain values and into
   the read/source envelopes selected by the design task. Migrate navigation and lint to the
   adapter-supplied canonical source ID rather than `CanonicalID()` fallbacks.

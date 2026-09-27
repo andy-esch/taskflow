@@ -34,7 +34,7 @@ func setFieldsRepoFS(t *testing.T) (*core.Service, *store.FS) {
 	r.Task("ready-to-start", "t.md",
 		"---\nid: 6fjangd7kvh7\nstatus: ready-to-start\nepic: 01-e\ndescription: t\ntier: 3\ntags: [seed]\n---\n# t\n")
 	fs := store.NewFS(r.Root)
-	return core.NewService(fs), fs
+	return core.MustNewService(fs), fs
 }
 
 // TestSetFields_CoercesTypedStringsThroughRoundTrip is the headline guard: a

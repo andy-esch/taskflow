@@ -109,7 +109,7 @@ func atlasTestModel(t *testing.T) (Model, *atlasTestAdapter, string, string) {
 	registry := core.NewSpaceRegistryService(adapter)
 	// The atlas-landing shape: `ui` outside any planning repo, with alpha seeded behind
 	// the atlas as the space `esc` falls back into.
-	m := New(core.NewService(adapter.trees[alpha]),
+	m := New(core.MustNewService(adapter.trees[alpha]),
 		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
 		WithAtlas(core.NewSpaceOverviewService(registry, adapter)),
 		WithAtlasLanding())
@@ -272,7 +272,7 @@ func TestAtlasFirstLoadAndDurableFailuresDoNotInventRetainedData(t *testing.T) {
 	_, adapter, alpha, beta := atlasTestModel(t)
 	adapter.summaryErrs[beta] = fmt.Errorf("planner active: %w", domain.ErrConflict)
 	registry := core.NewSpaceRegistryService(adapter)
-	m := New(core.NewService(adapter.trees[alpha]),
+	m := New(core.MustNewService(adapter.trees[alpha]),
 		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
 		WithAtlas(core.NewSpaceOverviewService(registry, adapter)), WithAtlasLanding())
 	m.workspace = core.Workspace{Checkout: alpha, PlanningRoot: alpha, PlanningID: "planning-alpha",
@@ -540,7 +540,7 @@ func TestActivateWorkspaceReplacesAndClosesTheOnlyActiveWatcher(t *testing.T) {
 	m.watch = oldWatcher
 	next := core.Workspace{
 		SpaceID: "beta", Checkout: beta, PlanningRoot: beta, PlanningID: "planning-beta",
-		Planning: core.NewService(adapter.trees[beta]), Layout: noWatchLayout{},
+		Planning: core.MustNewService(adapter.trees[beta]), Layout: noWatchLayout{},
 	}
 
 	cmd := m.activateWorkspace(next, nextWatcher, nil)
@@ -593,7 +593,7 @@ func TestAtlasDropsStaleWorkspaceResultsAndOldSessionMessages(t *testing.T) {
 func TestAtlasInRepoStartupOpensTheRepoAndKeepsTheAtlasOneKeyAway(t *testing.T) {
 	_, adapter, alpha, _ := atlasTestModel(t)
 	registry := core.NewSpaceRegistryService(adapter)
-	m := New(core.NewService(adapter.trees[alpha]),
+	m := New(core.MustNewService(adapter.trees[alpha]),
 		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
 		WithAtlas(core.NewSpaceOverviewService(registry, adapter))) // no WithAtlasLanding
 	m.workspace = core.Workspace{Checkout: alpha, PlanningRoot: alpha, Planning: m.svc, Layout: noWatchLayout{}}
@@ -618,7 +618,7 @@ func TestAtlasLandingHoldsEvenWithOneRegisteredSpace(t *testing.T) {
 	_, adapter, alpha, _ := atlasTestModel(t)
 	adapter.entries = adapter.entries[:1]
 	registry := core.NewSpaceRegistryService(adapter)
-	m := New(core.NewService(adapter.trees[alpha]),
+	m := New(core.MustNewService(adapter.trees[alpha]),
 		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
 		WithAtlas(core.NewSpaceOverviewService(registry, adapter)),
 		WithAtlasLanding())
@@ -655,7 +655,7 @@ func TestAtlasRegistryFailurePreservesOrdinaryTUIAndExplicitDiagnosis(t *testing
 	_, adapter, alpha, _ := atlasTestModel(t)
 	adapter.listErr = errors.New("registry malformed")
 	registry := core.NewSpaceRegistryService(adapter)
-	m := New(core.NewService(adapter.trees[alpha]),
+	m := New(core.MustNewService(adapter.trees[alpha]),
 		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
 		WithAtlas(core.NewSpaceOverviewService(registry, adapter)),
 		WithAtlasLanding())
@@ -921,7 +921,7 @@ func TestAtlasChipNamesTheAtlasUntilASpaceIsChosen(t *testing.T) {
 func TestAtlasChipKeepsTheRepoNameWhenLaunchedInsideOne(t *testing.T) {
 	_, adapter, alpha, _ := atlasTestModel(t)
 	registry := core.NewSpaceRegistryService(adapter)
-	m := New(core.NewService(adapter.trees[alpha]),
+	m := New(core.MustNewService(adapter.trees[alpha]),
 		WithWorkspaceOpening(core.NewWorkspaceService(adapter)),
 		WithAtlas(core.NewSpaceOverviewService(registry, adapter))) // no WithAtlasLanding
 	m.workspace = core.Workspace{Checkout: alpha, PlanningRoot: alpha, Planning: m.svc, Layout: noWatchLayout{}}
@@ -1053,7 +1053,7 @@ func TestAtlasWorkLandingWidensWhenTaskLeavesWorkingViewBeforeOpen(t *testing.T)
 	// with a lifecycle change made through the same portable core service.
 	tm, cmd := m.Update(press("enter"))
 	m = tm.(Model)
-	if _, err := core.NewService(adapter.trees[root]).Move(
+	if _, err := core.MustNewService(adapter.trees[root]).Move(
 		row.Task.CanonicalID(), domain.StatusCompleted, false,
 		core.TaskLifecycleOverrideAcceptanceCriteria,
 	); err != nil {

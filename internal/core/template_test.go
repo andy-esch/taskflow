@@ -89,7 +89,7 @@ func TestService_TemplateSource_Seam(t *testing.T) {
 		"task": {{Name: "default", Description: "fake-desc", Body: "FAKE-BODY {{title}}"}},
 	}}
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
-	svc := NewService(fs, WithTemplateSource(src))
+	svc := MustNewService(fs, WithTemplateSource(src))
 
 	// ShowTemplate reads the injected source (metadata + raw, unfilled body).
 	info, body, err := svc.ShowTemplate("task", "")
@@ -122,7 +122,7 @@ func TestService_TemplateSource_Seam(t *testing.T) {
 // unknown kind/name surfaces ErrValidation through the service, as the old direct
 // domain.LookupTemplate call did.
 func TestService_ShowTemplate_UnknownIsValidation(t *testing.T) {
-	svc := NewService(nopStore{}) // built-in source
+	svc := MustNewService(nopStore{}) // built-in source
 	if _, _, err := svc.ShowTemplate("nope", ""); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("unknown kind should be ErrValidation, got %v", err)
 	}

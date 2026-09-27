@@ -233,7 +233,7 @@ func TestAcceptanceCriterionTransformRetriesWithoutLosingConcurrentBodyWrite(t *
 	}
 	t.Cleanup(func() { testHookBeforeBodyWrite = nil })
 
-	svc := core.NewService(NewFS(root), core.WithRetry(1, func(int) {}))
+	svc := core.MustNewService(NewFS(root), core.WithRetry(1, func(int) {}))
 	_, body, changed, err := svc.SetAcceptanceCriterion("criterion-race", 1, true, false)
 	if err != nil {
 		t.Fatal(err)

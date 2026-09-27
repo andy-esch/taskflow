@@ -22,7 +22,7 @@ func TestRetry_AmbiguityIsNotSleptThrough(t *testing.T) {
 		"6fjangd7kvc1", "6fjangd7kvc1", "6fjangd7kvc1", domain.ErrAmbiguous)
 	cs := &conflictStore{failErr: ambiguous}
 	sleeps := 0
-	svc := NewService(cs, WithRetry(4, func(int) { sleeps++ }))
+	svc := MustNewService(cs, WithRetry(4, func(int) { sleeps++ }))
 
 	_, err := svc.SetFields("alpha", map[string]any{"priority": "low"}, false, false)
 	if !errors.Is(err, domain.ErrAmbiguous) {

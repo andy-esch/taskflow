@@ -55,7 +55,7 @@ func (s *findingCreationStore) TransformAuditBody(
 func TestNewFindingRefusesNonOpenAuditFromGuardedSnapshot(t *testing.T) {
 	body := managedFindingCreationBody()
 	store := &findingCreationStore{body: body, bucket: domain.AuditClosed}
-	svc := NewService(store)
+	svc := MustNewService(store)
 	_, err := svc.NewFinding("audit", NewFindingParams{Band: "H", Title: "Would reopen work"})
 	if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "reopen the audit first") {
 		t.Fatalf("closed-audit creation should be refused, got %v", err)
@@ -72,7 +72,7 @@ func managedFindingCreationBody() string {
 
 func TestNewFindingCreatesFindingAndCandidateInOneTransform(t *testing.T) {
 	store := &findingCreationStore{body: managedFindingCreationBody()}
-	svc := NewService(store)
+	svc := MustNewService(store)
 	candidate := "Create a focused follow-up"
 	receipt, err := svc.NewFinding("audit", NewFindingParams{
 		Band: "H", Title: "New issue", Effort: "S", Urgency: "soon",
@@ -101,7 +101,7 @@ func TestNewFindingRetriesAllocationAgainstFreshBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := &findingCreationStore{body: initial, conflictBody: concurrent}
-	svc := NewService(store, WithRetry(2, func(int) {}))
+	svc := MustNewService(store, WithRetry(2, func(int) {}))
 	receipt, err := svc.NewFinding("audit", NewFindingParams{Band: "H", Title: "Retried issue"})
 	if err != nil {
 		t.Fatal(err)
@@ -117,7 +117,7 @@ func TestNewFindingRetriesAllocationAgainstFreshBody(t *testing.T) {
 func TestNewFindingCandidateRefusalIsAtomicAndDryRunDoesNotPersist(t *testing.T) {
 	legacy := "## Findings\n\n#### M1. Existing · **Status:** open\n\n## Candidate tasks\n\n- legacy prose\n"
 	store := &findingCreationStore{body: legacy}
-	svc := NewService(store)
+	svc := MustNewService(store)
 	candidate := "Needs a managed section"
 	if _, err := svc.NewFinding("audit", NewFindingParams{Band: "M", Title: "No partial write", Candidate: &candidate}); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("legacy candidate section should refuse creation, got %v", err)

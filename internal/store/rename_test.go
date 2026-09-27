@@ -566,7 +566,7 @@ func TestRenameTask_PartialCascadeReceiptIsResumable(t *testing.T) {
 		return nil
 	}
 
-	receipt, err := core.NewService(NewFS(root)).RenameTask("old", "New title", false)
+	receipt, err := core.MustNewService(NewFS(root)).RenameTask("old", "New title", false)
 	var partial *core.TaskRenameFailure
 	if !errors.As(err, &partial) || !receipt.Committed || receipt.Complete || receipt.DestinationWritten ||
 		receipt.AppliedDocuments != 1 || receipt.PlannedDocuments != 3 || receipt.AppliedLinks != 1 || receipt.PlannedLinks != 2 {
@@ -586,7 +586,7 @@ func TestRenameTask_PartialCascadeReceiptIsResumable(t *testing.T) {
 	}
 
 	testHookAfterTaskRenameWrite = nil
-	completed, err := core.NewService(NewFS(root)).RenameTask("6fjangd7kva1", "New title", false)
+	completed, err := core.MustNewService(NewFS(root)).RenameTask("6fjangd7kva1", "New title", false)
 	if err != nil || !completed.Complete || !completed.Committed {
 		t.Fatalf("retry did not converge: %+v, %v", completed, err)
 	}
@@ -605,7 +605,7 @@ func TestRenameTask_DestinationWrittenCleanupFailureRequiresInspection(t *testin
 	}
 	defer func() { testHookBeforeTaskRenameSourceRemove = nil }()
 
-	receipt, err := core.NewService(NewFS(root)).RenameTask("old", "New title", false)
+	receipt, err := core.MustNewService(NewFS(root)).RenameTask("old", "New title", false)
 	var partial *core.TaskRenameFailure
 	if !errors.As(err, &partial) || !receipt.Committed || receipt.Complete || !receipt.DestinationWritten || receipt.SourceRemoved {
 		t.Fatalf("destination-written receipt = %+v, err=%v", receipt, err)
@@ -630,7 +630,7 @@ func TestRenameTask_SourceRemovalCASCatchesRawEdit(t *testing.T) {
 	}
 	defer func() { testHookBeforeTaskRenameSourceRemove = nil }()
 
-	receipt, err := core.NewService(NewFS(root)).RenameTask("old", "New title", false)
+	receipt, err := core.MustNewService(NewFS(root)).RenameTask("old", "New title", false)
 	var partial *core.TaskRenameFailure
 	if !errors.As(err, &partial) || !errors.Is(err, domain.ErrConflict) ||
 		!receipt.Committed || receipt.Complete || !receipt.DestinationWritten || receipt.SourceRemoved {
@@ -649,7 +649,7 @@ func TestRenameTask_CompleteUnlockFailureIsNotRetryable(t *testing.T) {
 	testHookRepositoryUnlockError = func() error { return errors.New("injected unlock failure") }
 	defer func() { testHookRepositoryUnlockError = nil }()
 
-	receipt, err := core.NewService(NewFS(root)).RenameTask("old", "New title", false)
+	receipt, err := core.MustNewService(NewFS(root)).RenameTask("old", "New title", false)
 	var committed *core.TaskRenameFailure
 	if !errors.As(err, &committed) || !receipt.Committed || !receipt.Complete {
 		t.Fatalf("completed unlock failure = %+v, %v", receipt, err)
@@ -664,7 +664,7 @@ func TestRenameTask_CompleteUnlockFailureIsNotRetryable(t *testing.T) {
 
 func TestRenameTask_SuccessHasNoRecoveryRemedy(t *testing.T) {
 	root, _, _ := renameRepo(t)
-	receipt, err := core.NewService(NewFS(root)).RenameTask("old", "New title", false)
+	receipt, err := core.MustNewService(NewFS(root)).RenameTask("old", "New title", false)
 	if err != nil || !receipt.Complete || receipt.Remedy != "" {
 		t.Fatalf("successful rename receipt = %+v, %v; want no recovery remedy", receipt, err)
 	}

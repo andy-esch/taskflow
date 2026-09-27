@@ -158,9 +158,11 @@ adapter capabilities rather than leaked persistence.
   detaches any path source discovered from the aggregate store unless the composition root also
   supplies one; remote records therefore cannot be paired accidentally with unrelated local
   paths through a hidden fallback. An explicitly supplied path source is instead an affirmative
-  override and may accompany aggregate-discovered reads; the composition root must ensure explicit
-  read/path sources describe the same corpus because these narrow ports deliberately expose no
-  shared backend identity. A value implementing both ports must be supplied through both options.
+  override and may accompany aggregate-discovered reads. `NewService` now validates every selected
+  planning-data capability against an adapter-owned, opaque `SourceSetID` and returns a typed error
+  for a missing or mismatched witness before exposing the service; `WorkspaceService.Open` propagates
+  that error. The token is process-local composition evidence, not a record ID, path, planning-space
+  ID, or source revision. A value implementing both ports must still be supplied through both options.
   `WorkspaceService` intentionally still requires the complete `Store` and `Layout` needed
   by the local TUI; a read-only primary adapter composes `Service` directly from the narrow ports.
   Complete adapters remain ergonomic because `Service` discovers all supported capabilities from

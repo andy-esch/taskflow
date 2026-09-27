@@ -14,7 +14,7 @@ import (
 // core regression surfaced as a confusing CLI-level failure.
 
 func TestService_Lint(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{
 			// Valid epic the tasks join against.
 			{ID: "01-e1", Status: "active", Priority: "medium", Description: "the epic"},
@@ -75,7 +75,7 @@ func TestService_Lint(t *testing.T) {
 // Lint is body-aware for active tasks: an acceptance-criteria misconfiguration
 // (here a botched checkbox) surfaces via the ListTasksWithBodies scan.
 func TestService_Lint_FlagsMalformedAcceptance(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{{ID: "01-e1", Status: "active", Priority: "medium", Description: "e"}},
 		tasks: []domain.Task{{ID: "6fjangd7kvh1", Slug: "t", Status: domain.StatusInProgress,
 			Epic: "01-e1", Description: "d", Tags: []string{"x"}, Tier: 3, Priority: "medium",
@@ -100,7 +100,7 @@ func TestService_Lint_FlagsMalformedAcceptance(t *testing.T) {
 }
 
 func TestService_ListAudits_BucketFilters(t *testing.T) {
-	svc := NewService(&fakeStore{audits: []domain.Audit{
+	svc := MustNewService(&fakeStore{audits: []domain.Audit{
 		{Slug: "a-open", Bucket: domain.AuditOpen},
 		{Slug: "a-closed", Bucket: domain.AuditClosed},
 		{Slug: "a-deferred", Bucket: domain.AuditDeferred},
@@ -133,7 +133,7 @@ func TestService_ListAudits_BucketFilters(t *testing.T) {
 // check (TestService_ListTasks_RejectsInvalidFilters): an unrecognized bucket is
 // ErrValidation, not a silently empty list an agent can't tell from an empty one.
 func TestService_ListAudits_RejectsUnknownBucket(t *testing.T) {
-	svc := NewService(&fakeStore{audits: []domain.Audit{{Slug: "a-open", Bucket: domain.AuditOpen}}})
+	svc := MustNewService(&fakeStore{audits: []domain.Audit{{Slug: "a-open", Bucket: domain.AuditOpen}}})
 	if _, _, err := svc.ListAudits("bogus", false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("unknown bucket should be ErrValidation, got %v", err)
 	}
@@ -144,7 +144,7 @@ func TestService_ListAudits_RejectsUnknownBucket(t *testing.T) {
 // dashboards read s.ReadyToClose instead of each re-walking OpenAudits. A still-
 // active open audit and a settled but already-closed audit don't count.
 func TestService_Summary_ReadyToClose(t *testing.T) {
-	svc := NewService(&fakeStore{audits: []domain.Audit{
+	svc := MustNewService(&fakeStore{audits: []domain.Audit{
 		{Slug: "settled-open", Bucket: domain.AuditOpen, Findings: 3, DoneFindings: 2, DroppedFindings: 1}, // 2+1==3 → settled → counts
 		{Slug: "active-open", Bucket: domain.AuditOpen, Findings: 3, DoneFindings: 1, OpenFindings: 2},     // work remains → no
 		{Slug: "settled-closed", Bucket: domain.AuditClosed, Findings: 1, DoneFindings: 1},                 // settled but not open → no
@@ -202,7 +202,7 @@ func TestService_Summary_ReadsEachAuditOnce(t *testing.T) {
 			"2026-06-10-ingest":  ingestBody,
 		},
 	}}
-	s, err := NewService(store).Summary()
+	s, err := MustNewService(store).Summary()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,6 +219,7 @@ func TestService_Summary_ReadsEachAuditOnce(t *testing.T) {
 }
 
 type portableEpicSummarySource struct {
+	testSourceSetProvider
 	read  EpicRead
 	calls int
 }
@@ -270,7 +271,7 @@ func TestService_Summary_PreservesMixedPortableLoadDiagnostics(t *testing.T) {
 		Location: "db://planning/tasks/row-7", Message: "bad task",
 	}}}}
 
-	summary, err := NewService(store, WithTaskGraphSource(source)).Summary()
+	summary, err := MustNewService(store, WithTaskGraphSource(source)).Summary()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +315,7 @@ func TestService_Summary_CanonicalizesProblemsWithinEachEntityKind(t *testing.T)
 		{TaskID: "6g0000000001", TaskSlug: "a-task", Message: "bad a task"},
 	}}}
 
-	summary, err := NewService(store, WithTaskGraphSource(source)).Summary()
+	summary, err := MustNewService(store, WithTaskGraphSource(source)).Summary()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +345,7 @@ func TestService_Summary_DoesNotInferIdentityFromLocations(t *testing.T) {
 		Location: "db://tasks/6g0000000009-wrong.md", Message: "bad task",
 	}}}}
 
-	summary, err := NewService(store, WithTaskGraphSource(source)).Summary()
+	summary, err := MustNewService(store, WithTaskGraphSource(source)).Summary()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +362,7 @@ func TestService_Summary_DoesNotInferIdentityFromLocations(t *testing.T) {
 // TestService_NewTask_RequiresTags pins the D1 decision: `new` must not
 // scaffold a file its own linter rejects, so tags are required at creation.
 func TestService_NewTask_RequiresTags(t *testing.T) {
-	svc := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}})
+	svc := MustNewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}})
 	_, err := svc.NewTask(NewTaskParams{Title: "X", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium"})
 	if err == nil || !strings.Contains(err.Error(), "tag") {
 		t.Errorf("tagless create should fail mentioning tags, got %v", err)
@@ -375,7 +376,7 @@ func TestService_NewTask_RequiresTags(t *testing.T) {
 // stays the only hard guard (covered by TestService_Create_EmptySlugStillErrors).
 func TestService_Create_SlugifiesHostileTitle(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 
 	// task: hostile title accepted, slug derived, full title preserved in the H1.
 	tk, err := svc.NewTask(NewTaskParams{Title: "Wire OAuth: PKCE + refresh", Epic: "e1", Tags: []string{"x"}, Tier: 3, Autonomy: 3, Priority: "medium"})
@@ -423,7 +424,7 @@ func TestService_Create_SlugifiesHostileTitle(t *testing.T) {
 // ErrValidation, for all three create paths (nothing reaches the store).
 func TestService_Create_EmptySlugStillErrors(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 
 	if _, err := svc.NewTask(NewTaskParams{Title: "!!!", Epic: "e1", Tags: []string{"x"}, Tier: 3, Autonomy: 3, Priority: "medium"}); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("punctuation-only task title should be ErrValidation, got %v", err)
@@ -441,7 +442,7 @@ func TestService_Create_EmptySlugStillErrors(t *testing.T) {
 // validated (nothing reaches the store on bad input).
 func TestService_NewAudit(t *testing.T) {
 	fs := &fakeStore{}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 
 	// Explicit date → slug is <date>-<area-slug>; area kept verbatim, bucket open.
 	a, err := svc.NewAudit(NewAuditParams{Area: "Arch Data Flow", Date: "2026-06-16"})
@@ -481,7 +482,7 @@ func TestService_NewAudit(t *testing.T) {
 // a closed vocabulary, and files outside it surface in lint. The "good" epic is
 // fully valid (status/priority/description) so only the typo'd one is flagged.
 func TestService_Lint_FlagsInvalidEpicStatus(t *testing.T) {
-	svc := NewService(&fakeStore{epics: []domain.Epic{
+	svc := MustNewService(&fakeStore{epics: []domain.Epic{
 		{ID: "01-good", Status: "active", Priority: "medium", Description: "a goal"},
 		{ID: "02-weird", Status: "bananas", Priority: "medium", Description: "a goal"},
 	}})
@@ -499,7 +500,7 @@ func TestService_Lint_FlagsInvalidEpicStatus(t *testing.T) {
 }
 
 func TestService_NewEpic(t *testing.T) {
-	svc := NewService(&fakeStore{})
+	svc := MustNewService(&fakeStore{})
 
 	// Validation failures: nothing reaches the store.
 	for _, p := range []NewEpicParams{
@@ -527,7 +528,7 @@ func TestService_NewEpic(t *testing.T) {
 // default lint (an invalid state — their tasks co-mingle and epic refs resolve ambiguously);
 // a unique-NN epic is left clean.
 func TestService_Lint_FlagsDuplicateEpicNN(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{
 			{ID: "01-billing", Status: "active", Priority: "medium", Description: "d"},
 			{ID: "01-invoicing", Status: "active", Priority: "medium", Description: "d"},

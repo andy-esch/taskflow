@@ -150,6 +150,21 @@ func TestWorkspaceService_OpenRejectsTypedNilCapabilities(t *testing.T) {
 	}
 }
 
+func TestWorkspaceService_OpenRejectsCrossCorpusThreadCapabilitiesBeforeUse(t *testing.T) {
+	reads := 0
+	threads := &threadReadFake{
+		testSourceSetProvider: testSourceSetProvider{sourceSet: NewSourceSetID()},
+		onList:                func() { reads++ },
+	}
+	_, err := NewWorkspaceService(&workspaceStoreFake{source: WorkspaceSource{
+		Checkout: "/checkout", PlanningRoot: "/plan", Store: &fakeStore{},
+		Threads: threads, Layout: workspaceLayoutFake{},
+	}}).Open(WorkspaceRequest{Start: "/checkout"})
+	if !errors.Is(err, ErrIncompatibleCapabilities) || reads != 0 {
+		t.Fatalf("cross-corpus workspace error = %v, Thread reads = %d", err, reads)
+	}
+}
+
 // A service that cannot open anything is a different problem from a bad path, and the
 // caller has to be told which — so the capability check runs first.
 func TestWorkspaceService_OpenReportsAnUnavailableOpenerBeforeTheRequest(t *testing.T) {

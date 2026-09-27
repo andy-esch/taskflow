@@ -450,7 +450,10 @@ func (a *App) resolveFrom(start string) error {
 		}
 		return fresh.Root, fresh.ID, nil
 	}), store.WithMutationAuthorization(a.authorizeMutation))
-	a.Svc = core.NewService(fs)
+	a.Svc, err = core.NewService(fs)
+	if err != nil {
+		return err
+	}
 	a.Fixer = fs
 	a.Layout = fs
 	a.Linter = fs

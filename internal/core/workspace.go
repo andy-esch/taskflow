@@ -22,10 +22,10 @@ type WorkspaceStore interface {
 // or Threads retain the complete Store's backward-compatible defaults; explicitly
 // replacing Threads detaches any aggregate-store path default unless ThreadPaths is also
 // supplied. A value implementing both ports must be placed in both fields. Supplying only
-// ThreadPaths intentionally overrides paths for aggregate-discovered reads; the composition
-// root must ensure every explicit read/path pair describes the same Thread corpus because
-// these narrow ports carry no shared backend identity. Every non-nil interface must wrap an
-// operational implementation rather than delegating through an internally nil value.
+// ThreadPaths intentionally overrides paths for aggregate-discovered reads; NewService checks
+// each selected capability's source-set witness before Open returns a workspace. Every non-nil
+// interface must wrap an operational implementation rather than delegating through an internally
+// nil value.
 type WorkspaceSource struct {
 	Checkout     string
 	PlanningRoot string
@@ -100,16 +100,20 @@ func (s *WorkspaceService) Open(request WorkspaceRequest) (Workspace, error) {
 			domain.ErrConflict, source.PlanningID, request.ExpectedPlanningID,
 		)
 	}
+	planning, err := NewService(source.Store,
+		WithTaskGraphSource(source.TaskGraphs),
+		WithThreadStore(source.Threads),
+		WithThreadPathSource(source.ThreadPaths),
+	)
+	if err != nil {
+		return Workspace{}, err
+	}
 	return Workspace{
 		SpaceID:      request.SpaceID,
 		Checkout:     source.Checkout,
 		PlanningRoot: source.PlanningRoot,
 		PlanningID:   source.PlanningID,
-		Planning: NewService(source.Store,
-			WithTaskGraphSource(source.TaskGraphs),
-			WithThreadStore(source.Threads),
-			WithThreadPathSource(source.ThreadPaths),
-		),
-		Layout: source.Layout,
+		Planning:     planning,
+		Layout:       source.Layout,
 	}, nil
 }

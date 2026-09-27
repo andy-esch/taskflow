@@ -253,7 +253,7 @@ func TestServiceShowThreadGraphDetailUsesOnePairedReadInOrder(t *testing.T) {
 	calls := make([]string, 0, 2)
 	graphs := &taskGraphReadFake{tasks: []domain.Task{task}, onList: func() { calls = append(calls, "tasks") }}
 	threads := &threadReadFake{thread: thread, body: "# Ordered\n", onGet: func() { calls = append(calls, "threads") }}
-	projection, body, err := NewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads)).ShowThreadGraphDetail(thread.ID)
+	projection, body, err := MustNewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads)).ShowThreadGraphDetail(thread.ID)
 	if err != nil || !slices.Equal(calls, []string{"threads", "tasks"}) || len(projection.Nodes) != 1 || body != "# Ordered\n" {
 		t.Fatalf("calls=%v projection=%+v body=%q err=%v", calls, projection, body, err)
 	}

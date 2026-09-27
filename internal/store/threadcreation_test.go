@@ -24,7 +24,7 @@ func TestThreadCreationPersistsCanonicalDocumentAndReadsItBack(t *testing.T) {
 	writeGraphMutationTask(t, root, "thread-member-a", domain.StatusReadyToStart, nil, "")
 	writeGraphMutationTask(t, root, "thread-member-b", domain.StatusNextUp, nil, "")
 	threadID := testutil.TaskID("created-thread")
-	svc := core.NewService(NewFS(root),
+	svc := core.MustNewService(NewFS(root),
 		core.WithIDGen(func() string { return threadID }),
 		core.WithClock(func() time.Time { return threadCreationNow }),
 	)
@@ -66,7 +66,7 @@ func TestThreadCreationPersistsCanonicalDocumentAndReadsItBack(t *testing.T) {
 func TestThreadCreationDryRunValidatesWithoutWriting(t *testing.T) {
 	root := t.TempDir()
 	threadID := testutil.TaskID("dry-thread")
-	svc := core.NewService(NewFS(root), core.WithIDGen(func() string { return threadID }))
+	svc := core.MustNewService(NewFS(root), core.WithIDGen(func() string { return threadID }))
 	receipt, err := svc.NewThread(core.NewThreadParams{
 		Title: "Dry Thread", Description: "Preview a Thread", Goal: "Write nothing", DryRun: true,
 	})
@@ -158,7 +158,7 @@ func TestTaskAndThreadCreationSerializeCrossKindIdentity(t *testing.T) {
 	}
 	sharedID := testutil.TaskID("shared-cross-kind-id")
 	newService := func() *core.Service {
-		return core.NewService(NewFS(root),
+		return core.MustNewService(NewFS(root),
 			core.WithIDGen(func() string { return sharedID }),
 			core.WithClock(func() time.Time { return threadCreationNow }),
 			core.WithRetry(0, func(int) {}),

@@ -8,6 +8,7 @@ import (
 )
 
 type lintSourceFake struct {
+	testSourceSetProvider
 	taskRecords      []TaskWithBody
 	taskProblems     []LoadProblem
 	epicProblems     []LoadProblem
@@ -62,7 +63,7 @@ func TestLintPreservesPortableLoadProblemIdentityWithoutLocations(t *testing.T) 
 		ThreadID: "6g0000000004", ThreadSlug: "broken-thread", Message: "bad Thread",
 	}}}
 
-	_, problems, err := NewService(nil, WithLintSource(source), WithThreadStore(threads)).Lint()
+	_, problems, err := MustNewService(nil, WithLintSource(source), WithThreadStore(threads)).Lint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestLintPreservesPortableLoadProblemIdentityWithoutLocations(t *testing.T) 
 }
 
 func TestLintRequiresDedicatedReadCapability(t *testing.T) {
-	_, _, err := NewService(nopStore{}).Lint()
+	_, _, err := MustNewService(nopStore{}).Lint()
 	if err == nil || !strings.Contains(err.Error(), "lint reads are unavailable") {
 		t.Fatalf("Lint error = %v; want missing lint capability", err)
 	}
@@ -102,7 +103,7 @@ func TestLintRejectsMissingAuditSnapshotCapability(t *testing.T) {
 	source := &lintSourceFake{}
 	dropAuditCapability := func(s *Service) { s.auditReads = nil }
 
-	_, _, err := NewService(nil, WithLintSource(source), dropAuditCapability).Lint()
+	_, _, err := MustNewService(nil, WithLintSource(source), dropAuditCapability).Lint()
 	if err == nil || !strings.Contains(err.Error(), "audit snapshot reads are unavailable") {
 		t.Fatalf("Lint error = %v; want missing audit snapshot capability", err)
 	}
@@ -128,7 +129,7 @@ func TestExplicitAuditSnapshotSourceWinsRegardlessOfOptionOrder(t *testing.T) {
 			dedicated := &auditSnapshotStub{all: AuditSnapshot{Problems: []LoadProblem{{
 				EntityKind: EntityAudit, EntityID: "6g0000000009", Message: "dedicated source",
 			}}}}
-			svc := NewService(nil, tc.opts(broad, dedicated)...)
+			svc := MustNewService(nil, tc.opts(broad, dedicated)...)
 
 			_, problems, err := svc.QueryFindings(FindingFilter{})
 			if err != nil || len(problems) != 1 || problems[0].Message != "dedicated source" {
@@ -143,7 +144,7 @@ func TestExplicitAuditSnapshotSourceWinsRegardlessOfOptionOrder(t *testing.T) {
 
 func TestLintSourceSuppliesDefaultAuditSnapshotSource(t *testing.T) {
 	source := &lintSourceFake{}
-	if _, _, err := NewService(nil, WithLintSource(source)).QueryFindings(FindingFilter{}); err != nil {
+	if _, _, err := MustNewService(nil, WithLintSource(source)).QueryFindings(FindingFilter{}); err != nil {
 		t.Fatal(err)
 	}
 	if source.auditReads != 1 {
@@ -214,7 +215,7 @@ func TestLintUsesPathlessUnreadableIdentityInLifecycleDiagnosis(t *testing.T) {
 		}},
 	}
 
-	results, problems, err := NewService(nil, WithLintSource(source)).Lint()
+	results, problems, err := MustNewService(nil, WithLintSource(source)).Lint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +231,7 @@ func lintTaskRecords(t *testing.T, tasks ...domain.Task) []LintResult {
 	for index, task := range tasks {
 		records[index] = TaskWithBody{Task: task}
 	}
-	results, _, err := NewService(nil, WithLintSource(&lintSourceFake{taskRecords: records})).Lint()
+	results, _, err := MustNewService(nil, WithLintSource(&lintSourceFake{taskRecords: records})).Lint()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -153,7 +153,7 @@ func TestTransformAuditBody_TransformSeesFreshBodyAfterConcurrentAppend(t *testi
 // retries through core, recomputes against the appended body, and both survive.
 func TestEditFinding_RetriesAroundConcurrentAppendPreservingBoth(t *testing.T) {
 	fs, p := transformAuditRepo(t)
-	svc := core.NewService(fs, core.WithRetry(4, func(int) {}))
+	svc := core.MustNewService(fs, core.WithRetry(4, func(int) {}))
 
 	orig := testHookBeforeBodyWrite
 	defer func() { testHookBeforeBodyWrite = orig }()
@@ -195,7 +195,7 @@ func TestEditFindingCandidate_RetriesAroundConcurrentAppendPreservingAll(t *test
 	if err := os.WriteFile(p, []byte(managed), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	svc := core.NewService(fs, core.WithRetry(4, func(int) {}))
+	svc := core.MustNewService(fs, core.WithRetry(4, func(int) {}))
 
 	orig := testHookBeforeBodyWrite
 	defer func() { testHookBeforeBodyWrite = orig }()
@@ -237,7 +237,7 @@ func TestEditFindingCandidate_RetriesAroundConcurrentAppendPreservingAll(t *test
 // must preserve it and allocate H3 rather than duplicating H2 or losing either block.
 func TestNewFinding_RetriesAllocationAroundConcurrentAppend(t *testing.T) {
 	fs, p := transformAuditRepo(t)
-	svc := core.NewService(fs, core.WithRetry(4, func(int) {}))
+	svc := core.MustNewService(fs, core.WithRetry(4, func(int) {}))
 
 	orig := testHookBeforeBodyWrite
 	defer func() { testHookBeforeBodyWrite = orig }()
@@ -278,7 +278,7 @@ func TestNewFinding_RetryRefusesConcurrentNonOpenAuditMove(t *testing.T) {
 			if err := os.WriteFile(p, []byte(settled), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			svc := core.NewService(fs, core.WithRetry(4, func(int) {}))
+			svc := core.MustNewService(fs, core.WithRetry(4, func(int) {}))
 
 			orig := testHookBeforeBodyWrite
 			defer func() { testHookBeforeBodyWrite = orig }()

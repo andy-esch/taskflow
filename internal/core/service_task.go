@@ -154,6 +154,13 @@ type taskStoreGraphSource struct {
 	}
 }
 
+func (s taskStoreGraphSource) SourceSetID() SourceSetID {
+	if provider, ok := s.store.(SourceSetProvider); ok {
+		return provider.SourceSetID()
+	}
+	return SourceSetID{}
+}
+
 func (s taskStoreGraphSource) ReadTaskGraph() (TaskGraphRead, error) {
 	ordinary, err := s.store.ReadTasks()
 	if err != nil {

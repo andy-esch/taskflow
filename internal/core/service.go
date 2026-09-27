@@ -41,9 +41,9 @@ type Service struct {
 	retrySleep func(attempt int) // backoff+jitter before a retry; injectable so tests run instantly
 }
 
-// Option configures a Service at construction. Functional options keep the common
-// NewService(store) call unchanged while leaving room for injected ports (the
-// template source today; repo-local sources in epic 22).
+// Option configures a Service at construction. Functional options keep the
+// common aggregate-store call compact while permitting independently injected
+// ports; NewService validates the final composition after every option runs.
 type Option func(*Service)
 
 // WithTaskGraphSource supplies the read-only task snapshot capability used by
@@ -183,8 +183,8 @@ func WithThreadStore(store ThreadStore) Option {
 
 // WithThreadPathSource supplies optional local Thread path resolution. It is
 // independent from WithThreadStore so portable adapters never need to
-// counterfeit filesystem semantics and split sources cannot be cross-wired by
-// construction order.
+// counterfeit filesystem semantics. NewService validates the selected read
+// and path source-set witnesses after all options, independent of their order.
 func WithThreadPathSource(source ThreadPathSource) Option {
 	return func(s *Service) {
 		if !isNilCapability(source) {
@@ -222,9 +222,10 @@ func WithThreadApplyMutationStore(store ThreadApplyMutationStore) Option {
 	}
 }
 
-// NewService wires the core to its store; templates default to the built-in
-// source unless WithTemplateSource overrides it.
-func NewService(store Store, opts ...Option) *Service {
+// NewService wires the core to its store and rejects incompatible planning-data
+// capabilities before a caller can read, navigate, or mutate through the result.
+// Templates default to the built-in source unless WithTemplateSource overrides it.
+func NewService(store Store, opts ...Option) (*Service, error) {
 	if isNilCapability(store) {
 		store = nil
 	}
@@ -269,7 +270,38 @@ func NewService(store Store, opts ...Option) *Service {
 	for _, opt := range opts {
 		opt(s)
 	}
+	if err := s.validateSourceSets(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// MustNewService is for focused tests and invariant single-bundle construction
+// sites such as built-in templates. Runtime composition roots should use
+// NewService and return its typed error.
+func MustNewService(store Store, opts ...Option) *Service {
+	s, err := NewService(store, opts...)
+	if err != nil {
+		panic(err)
+	}
 	return s
+}
+
+func (s *Service) validateSourceSets() error {
+	return validateSourceSet([]sourceSetCapability{
+		{"aggregate store", s.store},
+		{"lint reads", s.lintReads},
+		{"audit snapshots", s.auditReads},
+		{"task graph reads", s.taskGraphs},
+		{"task graph mutations", s.graphMutations},
+		{"task graph repairs", s.graphRepairs},
+		{"task lifecycle mutations", s.lifecycleMutations},
+		{"Thread reads", s.threads},
+		{"Thread paths", s.threadPaths},
+		{"Thread creation", s.threadCreations},
+		{"Thread mutations", s.threadMutations},
+		{"Thread apply", s.threadApplies},
+	})
 }
 
 // isNilCapability handles Go interfaces containing nil pointers (or another
@@ -299,7 +331,7 @@ func (s *Service) Now() time.Time { return s.now() }
 // (`template list/show`, like `schema`). Only the template methods are safe to
 // call on it. When a planning repo IS present, the resolved store-backed Service
 // is used instead, and epic 22 layers repo-local templates over the built-ins.
-func NewBuiltinTemplateService() *Service { return NewService(nil) }
+func NewBuiltinTemplateService() *Service { return MustNewService(nil) }
 
 // templateBodyConflict rejects supplying both an explicit body and a --template:
 // they're mutually exclusive (override the scaffold OR pick one). Enforced in core
