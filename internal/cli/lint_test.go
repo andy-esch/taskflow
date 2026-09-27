@@ -146,7 +146,7 @@ func TestLintReportsMissingAndAmbiguousLegacyReferencesExactlyOnce(t *testing.T)
 	}
 	dependentID := testutil.TaskID("legacy-dependent")
 	r.Task("completed", "legacy-dependent.md", "---\nid: "+dependentID+"\nstatus: completed\nblocked_by: [same, gone]\n---\n# dependent\n")
-	results, problems, err := core.NewService(store.NewFS(r.Root)).Lint()
+	results, problems, err := core.MustNewService(store.NewFS(r.Root)).Lint()
 	if err != nil || len(problems) != 0 {
 		t.Fatalf("Lint() error=%v problems=%+v", err, problems)
 	}

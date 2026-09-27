@@ -251,7 +251,7 @@ func TestThreadListReportsIdentityAwareUnreadableRecords(t *testing.T) {
 }
 
 func TestThreadPathReturnsTypedErrorWithoutLocalPathCapability(t *testing.T) {
-	app := &App{Svc: core.NewService(nil), Out: &bytes.Buffer{}}
+	app := &App{Svc: core.MustNewService(nil), Out: &bytes.Buffer{}}
 	cmd := newThreadPathCmd(app)
 	cmd.SetArgs([]string{"remote-thread"})
 	if err := cmd.Execute(); domain.Classify(err) != domain.ClassValidation {
@@ -396,7 +396,7 @@ func TestThreadMembershipAndLifecycleCommands(t *testing.T) {
 			t.Fatalf("%v: %v", args, err)
 		}
 	}
-	view, _, err := core.NewService(store.NewFS(root)).ShowThread("lifecycle")
+	view, _, err := core.MustNewService(store.NewFS(root)).ShowThread("lifecycle")
 	if err != nil || view.Thread.Status != domain.ThreadStatusCancelled || view.Thread.EndedAt == "" {
 		t.Fatalf("lifecycle Thread = %+v err=%v", view.Thread, err)
 	}

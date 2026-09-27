@@ -373,7 +373,7 @@ func TestPlannerWindowSetupFailureReturnsInsteadOfHanging(t *testing.T) {
 // converges on its own retry once the window closes.
 func TestPlannerWindowRetainsEveryLoadedSurface(t *testing.T) {
 	root := threadRepo(t)
-	m := New(core.NewService(store.NewFS(root)))
+	m := New(core.MustNewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	m = drainNested(t, m, m.Init()) // dashboard
@@ -457,7 +457,7 @@ func TestPlannerWindowRetainsEveryLoadedSurface(t *testing.T) {
 // at must still be recoverable by the next watcher reload.
 func TestFirstLoadContentionIsNotAFalseEmptyState(t *testing.T) {
 	root := threadRepo(t)
-	m := New(core.NewService(store.NewFS(root)))
+	m := New(core.MustNewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 

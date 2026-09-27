@@ -45,7 +45,7 @@ func threadRepo(t *testing.T) string {
 func threadModel(t *testing.T) (Model, string) {
 	t.Helper()
 	root := threadRepo(t)
-	return New(core.NewService(store.NewFS(root))), root
+	return New(core.MustNewService(store.NewFS(root))), root
 }
 
 func threadTab(m Model) *entityTab { return m.tabs[indexOfKind(m.tabs, entityThreads)] }
@@ -173,9 +173,12 @@ func (s *splitWorkspaceStore) OpenWorkspace(start string) (core.WorkspaceSource,
 }
 
 type countingGraphSource struct {
-	tasks []domain.Task
-	calls int
+	sourceSet core.SourceSetID
+	tasks     []domain.Task
+	calls     int
 }
+
+func (s *countingGraphSource) SourceSetID() core.SourceSetID { return s.sourceSet }
 
 func (s *countingGraphSource) ReadTaskGraph() (core.TaskGraphRead, error) {
 	s.calls++
@@ -183,11 +186,14 @@ func (s *countingGraphSource) ReadTaskGraph() (core.TaskGraphRead, error) {
 }
 
 type countingThreadStore struct {
-	threads  []domain.Thread
-	problems []core.ThreadReadProblem
-	getErr   error
-	calls    int
+	sourceSet core.SourceSetID
+	threads   []domain.Thread
+	problems  []core.ThreadReadProblem
+	getErr    error
+	calls     int
 }
+
+func (s *countingThreadStore) SourceSetID() core.SourceSetID { return s.sourceSet }
 
 func (s *countingThreadStore) ReadThreads() (core.ThreadRead, error) {
 	s.calls++
@@ -202,17 +208,23 @@ func (s *countingThreadStore) GetThread(string) (domain.Thread, string, error) {
 	return s.threads[0], "split body\n", nil
 }
 
-type tuiThreadPathFake struct{ path string }
+type tuiThreadPathFake struct {
+	sourceSet core.SourceSetID
+	path      string
+}
 
 func (f tuiThreadPathFake) ResolveThreadPath(string) (string, error) { return f.path, nil }
+func (f tuiThreadPathFake) SourceSetID() core.SourceSetID            { return f.sourceSet }
 
 func TestThreadRouteSurvivesSplitPathlessCapabilities(t *testing.T) {
 	root := threadRepo(t)
-	graphs := &countingGraphSource{tasks: []domain.Task{{
+	fs := store.NewFS(root)
+	graphs := &countingGraphSource{sourceSet: fs.SourceSetID(), tasks: []domain.Task{{
 		ID: "6g5rwjqeh6a6", Slug: "split-only", Status: domain.StatusNextUp,
 		Description: "only the graph source has this",
 	}}}
 	threads := &countingThreadStore{
+		sourceSet: fs.SourceSetID(),
 		threads: []domain.Thread{{
 			ID: "6g503c6pfqe1", Slug: "split", Status: domain.ThreadStatusInProgress,
 			Description: "only the thread store has this", Goal: "prove the split",
@@ -221,7 +233,7 @@ func TestThreadRouteSurvivesSplitPathlessCapabilities(t *testing.T) {
 		problems: []core.ThreadReadProblem{{ThreadSlug: "broken", Location: "remote://thread", Message: "unreadable"}},
 	}
 	opener := core.NewWorkspaceService(&splitWorkspaceStore{
-		root: root, store: store.NewFS(root), graphs: graphs, threads: threads,
+		root: root, store: fs, graphs: graphs, threads: threads,
 	})
 	workspace, err := opener.Open(core.WorkspaceRequest{Start: root})
 	if err != nil {
@@ -260,15 +272,16 @@ func TestThreadRouteSurvivesSplitPathlessCapabilities(t *testing.T) {
 }
 
 func TestLocalThreadPathSurvivesSemanticDetailFailure(t *testing.T) {
+	sourceSet := core.NewSourceSetID()
 	thread := domain.Thread{
 		ID: testutil.TaskID("repair-thread"), Slug: "repair-thread", Status: domain.ThreadStatusUnstarted,
 		Description: "repair me", Goal: "retain local navigation", Created: "2026-09-02",
 	}
-	threads := &countingThreadStore{threads: []domain.Thread{thread}, getErr: domain.ErrValidation}
-	svc := core.NewService(nil,
+	threads := &countingThreadStore{sourceSet: sourceSet, threads: []domain.Thread{thread}, getErr: domain.ErrValidation}
+	svc := core.MustNewService(nil,
 		core.WithThreadStore(threads),
-		core.WithTaskGraphSource(&countingGraphSource{}),
-		core.WithThreadPathSource(tuiThreadPathFake{path: "/planning/threads/repair-thread.md"}),
+		core.WithTaskGraphSource(&countingGraphSource{sourceSet: sourceSet}),
+		core.WithThreadPathSource(tuiThreadPathFake{sourceSet: sourceSet, path: "/planning/threads/repair-thread.md"}),
 	)
 	m := openThreads(t, New(svc))
 	if m.detail.content != nil || m.detail.loadedKey != thread.CanonicalID() {

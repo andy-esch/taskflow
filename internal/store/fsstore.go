@@ -35,6 +35,7 @@ var errBadEntityID = fmt.Errorf("%w: invalid entity id", domain.ErrValidation)
 // root: tasks/, epics/, audits/, research/, and threads/.
 type FS struct {
 	root        string // the planning root; the write-lock (flock) is taken on this dir
+	sourceSet   core.SourceSetID
 	tasksDir    string
 	epicsDir    string
 	auditsDir   string
@@ -54,6 +55,16 @@ type FS struct {
 type PlanningIdentityReader func() (root, id string, err error)
 
 type FSOption func(*FS)
+
+// WithSourceSetID allows a composition root that owns multiple adapter objects
+// for the same planning corpus to bind them deliberately. It must not be minted
+// from root text, a record ID, or a source revision. The default is unique to
+// each FS instance and is shared by all capabilities that instance implements.
+func WithSourceSetID(id core.SourceSetID) FSOption {
+	return func(store *FS) { store.sourceSet = id }
+}
+
+func (s *FS) SourceSetID() core.SourceSetID { return s.sourceSet }
 
 func WithPlanningIdentityReader(reader PlanningIdentityReader) FSOption {
 	return func(store *FS) {
@@ -87,6 +98,7 @@ var (
 	_ core.LintSource          = (*FS)(nil)
 	_ core.AuditSnapshotSource = (*FS)(nil)
 	_ core.TaskGraphSource     = (*FS)(nil)
+	_ core.SourceSetProvider   = (*FS)(nil)
 	_ core.Fixer               = (*FS)(nil)
 	_ core.Linter              = (*FS)(nil)
 	_ core.Layout              = (*FS)(nil)
@@ -96,6 +108,7 @@ var (
 func NewFS(root string, opts ...FSOption) *FS {
 	store := &FS{
 		root:          root,
+		sourceSet:     core.NewSourceSetID(),
 		tasksDir:      filepath.Join(root, domain.TasksDir),
 		epicsDir:      filepath.Join(root, domain.EpicsDir),
 		auditsDir:     filepath.Join(root, domain.AuditsDir),

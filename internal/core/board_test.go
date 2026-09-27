@@ -12,6 +12,7 @@ type countingTaskStore struct {
 }
 
 type neutralTaskGraphSource struct {
+	testSourceSetProvider
 	read  TaskGraphRead
 	calls int
 }
@@ -32,7 +33,7 @@ func (s *countingTaskStore) ReadTasks() (TaskRead, error) {
 }
 
 func TestBoard_ActivePipelineOnlyInOrder(t *testing.T) {
-	svc := NewService(&fakeStore{tasks: []domain.Task{
+	svc := MustNewService(&fakeStore{tasks: []domain.Task{
 		{Slug: "a", Status: domain.StatusInProgress},
 		{Slug: "b", Status: domain.StatusNextUp},
 		{Slug: "c", Status: domain.StatusInProgress},
@@ -68,7 +69,7 @@ func TestBoard_ActivePipelineOnlyInOrder(t *testing.T) {
 }
 
 func TestBoard_EmptyColumnsStillPresent(t *testing.T) {
-	svc := NewService(&fakeStore{tasks: []domain.Task{
+	svc := MustNewService(&fakeStore{tasks: []domain.Task{
 		{Slug: "a", Status: domain.StatusInProgress},
 	}})
 	b, err := svc.Board()
@@ -89,7 +90,7 @@ func TestBoard_CompleteStoreFallbackScansTasksOnce(t *testing.T) {
 	store := &countingTaskStore{fakeStore: fakeStore{tasks: []domain.Task{{
 		ID: "6g3q4rtmv4ak", Slug: "single-scan", Status: domain.StatusNextUp,
 	}}}}
-	board, err := NewService(store).Board()
+	board, err := MustNewService(store).Board()
 	if err != nil || len(board.Columns) != len(domain.ActiveStatuses()) {
 		t.Fatalf("board = %+v, err = %v", board, err)
 	}
@@ -106,7 +107,7 @@ func TestBoard_PreservesPathlessTaskLoadProblemIdentity(t *testing.T) {
 		Message:  "invalid frontmatter",
 	}}}}
 
-	board, err := NewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
+	board, err := MustNewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +131,7 @@ func TestBoard_BareProjectionUsesExplicitSourceIdentity(t *testing.T) {
 		Value:  domain.Task{ID: "stale-declaration", FilenameID: "stale-file-id", Slug: "task", Status: domain.StatusInProgress},
 		Source: RecordSource{ID: "6g0000000001", Location: "db://tasks/misleading"},
 	}}}}
-	board, err := NewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
+	board, err := MustNewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +157,7 @@ func TestEmptyExplicitTaskSourceIDNeverBecomesEligible(t *testing.T) {
 		t.Fatalf("declared ID became eligible: %+v", state)
 	}
 	source := &neutralTaskGraphSource{read: read}
-	svc := NewService(&fakeStore{}, WithTaskGraphSource(source))
+	svc := MustNewService(&fakeStore{}, WithTaskGraphSource(source))
 	board, err := svc.Board()
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +184,7 @@ func TestBoard_CanonicalizesPortableLoadProblems(t *testing.T) {
 		{TaskID: "6g0000000001", TaskSlug: "first", Location: "db://tasks/1", Message: "a"},
 	}}}
 
-	board, err := NewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
+	board, err := MustNewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +199,7 @@ func TestBoard_DoesNotInferIdentityFromOpaqueLocation(t *testing.T) {
 		Location: "db://tasks/6g0000000009-wrong.md", Message: "invalid frontmatter",
 	}}}}
 
-	board, err := NewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
+	board, err := MustNewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
 	if err != nil {
 		t.Fatal(err)
 	}

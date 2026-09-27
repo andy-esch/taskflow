@@ -434,7 +434,7 @@ func TestModel_CompleteRefusedOnUnexplainedCriteria(t *testing.T) {
 	r.Task("in-progress", "gated.md", "---\nid: "+testutil.TaskID("gated")+"\nstatus: in-progress\nepic: 01-test\ndescription: d\n---\n"+
 		"# Gated\n\n## Acceptance criteria\n\n- [x] done\n- [ ] silently unticked\n")
 	r.Epic("01-test.md", "---\nstatus: active\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
-	svc := core.NewService(store.NewFS(r.Root))
+	svc := core.MustNewService(store.NewFS(r.Root))
 
 	msg := moveTask(svc, testEntityRef("gated"), transition{to: string(domain.StatusCompleted)})()
 	errMsg, ok := msg.(actionErrMsg)
@@ -470,7 +470,7 @@ func TestTUITaskStartUsesDependencyEligibilityPolicy(t *testing.T) {
 	r.Task("next-up", "prerequisite.md", "---\nid: "+prerequisiteID+"\nstatus: next-up\ndescription: prerequisite\ntags: [test]\n---\n# Prerequisite\n")
 	r.Task("ready-to-start", "target.md", "---\nid: "+testutil.TaskID("target")+"\nstatus: ready-to-start\ndescription: target\ntags: [test]\ndepends_on: ["+prerequisiteID+"]\n---\n# Target\n")
 
-	msg := moveTask(core.NewService(store.NewFS(r.Root)), testEntityRef("target"), transition{to: string(domain.StatusInProgress)})()
+	msg := moveTask(core.MustNewService(store.NewFS(r.Root)), testEntityRef("target"), transition{to: string(domain.StatusInProgress)})()
 	errMsg, ok := msg.(actionErrMsg)
 	if !ok || !strings.Contains(errMsg.err.Error(), "outstanding blockers") {
 		t.Fatalf("TUI start should expose the shared eligibility refusal, got %T (%v)", msg, msg)
@@ -481,7 +481,7 @@ func TestTUITaskStartUsesDependencyEligibilityPolicy(t *testing.T) {
 	}
 
 	r.Task("next-up", "queued-target.md", "---\nid: "+testutil.TaskID("queued-target")+"\nstatus: next-up\ndescription: queued target\ntags: [test]\n---\n# Queued target\n")
-	msg = moveTask(core.NewService(store.NewFS(r.Root)), testEntityRef("queued-target"), transition{to: string(domain.StatusInProgress)})()
+	msg = moveTask(core.MustNewService(store.NewFS(r.Root)), testEntityRef("queued-target"), transition{to: string(domain.StatusInProgress)})()
 	if _, ok := msg.(movedMsg); !ok {
 		t.Fatalf("TUI should start a clear-gated next-up task, got %T (%v)", msg, msg)
 	}
@@ -498,7 +498,7 @@ func TestTUITaskReopenSurfacesDescendantImpactsAndRemedy(t *testing.T) {
 	r.Task("completed", "dependent.md", "---\nid: "+testutil.TaskID("dependent")+"\nstatus: completed\nepic: 01-test\ndescription: dependent\ntags: [test]\ndepends_on: ["+upstreamID+"]\n---\n# Dependent\n")
 	r.Epic("01-test.md", "---\nstatus: active\ndescription: a test epic\npriority: high\n---\n# Test epic\n")
 
-	msg := moveTask(core.NewService(store.NewFS(r.Root)), testEntityRef("upstream"), transition{to: string(domain.StatusReadyToStart)})()
+	msg := moveTask(core.MustNewService(store.NewFS(r.Root)), testEntityRef("upstream"), transition{to: string(domain.StatusReadyToStart)})()
 	moved, ok := msg.(movedMsg)
 	if !ok || moved.lifecycle == nil || len(moved.lifecycle.Impacts) != 1 || moved.lifecycle.Remedy == "" {
 		if failed, failedOK := msg.(actionErrMsg); failedOK {

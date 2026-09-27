@@ -73,7 +73,7 @@ func TestAtlasThemeUsesHomeScopeWithoutRepositoryOverride(t *testing.T) {
 }
 
 func TestRuntimeWorkspacePreservesResolvedStartupContext(t *testing.T) {
-	svc := core.NewService(nil)
+	svc := core.MustNewService(nil)
 	layout := uiLayoutFake{}
 	app := &App{
 		Cfg: &config.Config{Dir: "/checkout", Root: "/planning", ID: "planning-id"},

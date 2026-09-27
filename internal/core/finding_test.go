@@ -9,6 +9,7 @@ import (
 )
 
 type auditSnapshotStub struct {
+	testSourceSetProvider
 	all       AuditSnapshot
 	selected  map[string]AuditSnapshot
 	selectErr map[string]error
@@ -82,7 +83,7 @@ func codes(fs []AuditFinding) []string {
 }
 
 func TestQueryFindings_CrossAudit_NoFilter(t *testing.T) {
-	got, problems, err := NewService(findingsRepo()).QueryFindings(FindingFilter{})
+	got, problems, err := MustNewService(findingsRepo()).QueryFindings(FindingFilter{})
 	if err != nil || len(problems) != 0 {
 		t.Fatalf("QueryFindings: %v / %v", err, problems)
 	}
@@ -98,7 +99,7 @@ func TestQueryFindings_CrossAudit_NoFilter(t *testing.T) {
 func TestQueryFindings_DoesNotRereadRecordsThroughAggregateStore(t *testing.T) {
 	store := &countingAuditSnapshotStore{fakeStore: findingsRepo()}
 
-	got, problems, err := NewService(store).QueryFindings(FindingFilter{})
+	got, problems, err := MustNewService(store).QueryFindings(FindingFilter{})
 	if err != nil || len(problems) != 0 || len(got) != 3 {
 		t.Fatalf("QueryFindings = %v / %+v / %v", codes(got), problems, err)
 	}
@@ -122,7 +123,7 @@ func TestQueryFindings_PathlessSnapshotPreservesIdentityAndDiagnostics(t *testin
 			Location: "6fjangd7kvh8-path-looking-but-opaque",
 		}},
 	}}
-	got, problems, err := NewService(nil, WithAuditSnapshotSource(source)).QueryFindings(FindingFilter{})
+	got, problems, err := MustNewService(nil, WithAuditSnapshotSource(source)).QueryFindings(FindingFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +158,7 @@ func TestQueryFindings_DelegatesSingleAuditResolutionToSnapshot(t *testing.T) {
 			"ambiguous": errors.Join(errors.New("two audit matches"), domain.ErrAmbiguous),
 		},
 	}
-	svc := NewService(nil, WithAuditSnapshotSource(source))
+	svc := MustNewService(nil, WithAuditSnapshotSource(source))
 	got, problems, err := svc.QueryFindings(FindingFilter{Audit: "gateway"})
 	if err != nil || len(problems) != 0 || len(got) != 2 {
 		t.Fatalf("single pathless audit = %+v / %+v / %v", got, problems, err)
@@ -180,7 +181,7 @@ func TestQueryFindings_DelegatesSingleAuditResolutionToSnapshot(t *testing.T) {
 }
 
 func TestAuditSnapshotConsumersRejectMissingCapabilityPrecisely(t *testing.T) {
-	svc := NewService(nil)
+	svc := MustNewService(nil)
 	if _, _, err := svc.QueryFindings(FindingFilter{}); err == nil || !strings.Contains(err.Error(), "audit snapshot reads are unavailable") {
 		t.Fatalf("QueryFindings error = %v", err)
 	}
@@ -194,7 +195,7 @@ func TestFixFindingHeadersRejectsSourceLessSnapshotBeforeWrites(t *testing.T) {
 		Value:  AuditWithFindings{Audit: domain.Audit{ID: "declared-only", Slug: "2026-06-14-gateway"}},
 		Source: RecordSource{Location: "db://audits/gateway"},
 	}}}}
-	_, err := NewService(findingsRepo(), WithAuditSnapshotSource(source)).FixFindingHeaders(false)
+	_, err := MustNewService(findingsRepo(), WithAuditSnapshotSource(source)).FixFindingHeaders(false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("FixFindingHeaders error = %v, want validation failure", err)
 	}
@@ -213,12 +214,12 @@ func equalStrings(got, want []string) bool {
 }
 
 func TestQueryFindings_StatusFilter(t *testing.T) {
-	got, _, _ := NewService(findingsRepo()).QueryFindings(FindingFilter{Status: []string{"open"}})
+	got, _, _ := MustNewService(findingsRepo()).QueryFindings(FindingFilter{Status: []string{"open"}})
 	// S1 (gateway) + M1 (ingest) are open; H1 is fixed.
 	if len(got) != 2 {
 		t.Fatalf("status=open should match 2, got %v", codes(got))
 	}
-	got, _, _ = NewService(findingsRepo()).QueryFindings(FindingFilter{Status: []string{"FIXED"}})
+	got, _, _ = MustNewService(findingsRepo()).QueryFindings(FindingFilter{Status: []string{"FIXED"}})
 	if len(got) != 1 || got[0].Code != "H1" {
 		t.Errorf("status=FIXED (case-insensitive) should match just H1, got %v", codes(got))
 	}
@@ -226,18 +227,18 @@ func TestQueryFindings_StatusFilter(t *testing.T) {
 
 func TestQueryFindings_MultiValueAndComponent(t *testing.T) {
 	// effort any-of S,M → all three (S1=S, H1=M, M1=M).
-	if got, _, _ := NewService(findingsRepo()).QueryFindings(FindingFilter{Effort: []string{"S", "M"}}); len(got) != 3 {
+	if got, _, _ := MustNewService(findingsRepo()).QueryFindings(FindingFilter{Effort: []string{"S", "M"}}); len(got) != 3 {
 		t.Errorf("effort S,M should match all 3, got %v", codes(got))
 	}
 	// component is a case-insensitive substring: "strava" → the two stravapipe findings.
-	got, _, _ := NewService(findingsRepo()).QueryFindings(FindingFilter{Component: "STRAVA"})
+	got, _, _ := MustNewService(findingsRepo()).QueryFindings(FindingFilter{Component: "STRAVA"})
 	if len(got) != 2 {
 		t.Errorf("component substring 'STRAVA' should match the 2 stravapipe findings, got %v", codes(got))
 	}
 }
 
 func TestQueryFindings_SingleAudit(t *testing.T) {
-	got, _, err := NewService(findingsRepo()).QueryFindings(FindingFilter{Audit: "2026-06-14-gateway"})
+	got, _, err := MustNewService(findingsRepo()).QueryFindings(FindingFilter{Audit: "2026-06-14-gateway"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,14 +246,14 @@ func TestQueryFindings_SingleAudit(t *testing.T) {
 		t.Fatalf("single-audit query should only see the gateway findings, got %v", codes(got))
 	}
 	// An unknown audit slug is ErrNotFound, not a silent empty result.
-	if _, _, err := NewService(findingsRepo()).QueryFindings(FindingFilter{Audit: "nope"}); err == nil {
+	if _, _, err := MustNewService(findingsRepo()).QueryFindings(FindingFilter{Audit: "nope"}); err == nil {
 		t.Error("unknown audit slug should error, not return empty")
 	}
 }
 
 func TestLintAudits(t *testing.T) {
 	// gateway (open): S1 open + H1 fixed → clean. ingest (closed): M1 open → bucket drift.
-	results, problems, err := NewService(findingsRepo()).LintAudits("")
+	results, problems, err := MustNewService(findingsRepo()).LintAudits("")
 	if err != nil || len(problems) != 0 {
 		t.Fatalf("LintAudits: %v / %v", err, problems)
 	}
@@ -263,7 +264,7 @@ func TestLintAudits(t *testing.T) {
 		t.Errorf("expected a bucket issue, got %v", results[0].Issues)
 	}
 	// Single, clean audit → no issues.
-	if clean, _, _ := NewService(findingsRepo()).LintAudits("2026-06-14-gateway"); len(clean) != 0 {
+	if clean, _, _ := MustNewService(findingsRepo()).LintAudits("2026-06-14-gateway"); len(clean) != 0 {
 		t.Errorf("the open gateway audit should lint clean, got %+v", clean)
 	}
 }
@@ -275,7 +276,7 @@ func TestQueryFindings_EmptyTokenDoesNotOverMatch(t *testing.T) {
 	}
 	// B1 has no **Status:** line → parsed status "". A stray-comma filter
 	// (["open",""]) must NOT pull in the status-less finding via the empty token.
-	got, _, _ := NewService(fs).QueryFindings(FindingFilter{Status: []string{"open", ""}})
+	got, _, _ := MustNewService(fs).QueryFindings(FindingFilter{Status: []string{"open", ""}})
 	if len(got) != 1 || got[0].Code != "A1" {
 		t.Errorf("empty filter token must not over-match the status-less finding, got %v", codes(got))
 	}
@@ -287,7 +288,7 @@ func TestLintAudits_MultipleIssues(t *testing.T) {
 		auditBodies: map[string]string{"a": "#### S1. t\n**Status:** opne\n\n#### M1. t\n**Status:** open\n"},
 	}
 	// closed audit: S1 has a typo'd status + M1 is still open → 2 issues.
-	results, _, _ := NewService(fs).LintAudits("")
+	results, _, _ := MustNewService(fs).LintAudits("")
 	if len(results) != 1 || len(results[0].Issues) != 2 {
 		t.Fatalf("expected 2 issues (bad status + open-in-closed), got %+v", results)
 	}
@@ -299,7 +300,7 @@ func TestServiceLintReportsDuplicateAuditIDs(t *testing.T) {
 		{ID: shared, FilenameID: shared, Slug: "2026-09-07-alpha", Path: "audits/" + shared + "-2026-09-07-alpha.md", Bucket: domain.AuditOpen},
 		{ID: shared, FilenameID: shared, Slug: "2026-09-07-beta", Path: "audits/" + shared + "-2026-09-07-beta.md", Bucket: domain.AuditOpen},
 	}}
-	results, problems, err := NewService(fs).Lint()
+	results, problems, err := MustNewService(fs).Lint()
 	if err != nil || len(problems) != 0 {
 		t.Fatalf("Lint: err=%v problems=%v", err, problems)
 	}
@@ -331,7 +332,7 @@ func TestServiceLintIncludesUnreadableAuditInDuplicateIdentity(t *testing.T) {
 			EntityID: shared, EntitySlug: "2026-09-07-beta",
 		}},
 	}
-	results, problems, err := NewService(fs).Lint()
+	results, problems, err := MustNewService(fs).Lint()
 	if err != nil || len(problems) != 1 {
 		t.Fatalf("Lint: err=%v problems=%+v", err, problems)
 	}
@@ -365,7 +366,7 @@ func TestServiceLintIncludesUnreadableResearchInDuplicateIdentity(t *testing.T) 
 			EntityID: shared, EntitySlug: "beta",
 		}},
 	}
-	results, problems, err := NewService(fs).Lint()
+	results, problems, err := MustNewService(fs).Lint()
 	if err != nil || len(problems) != 1 {
 		t.Fatalf("Lint: err=%v problems=%+v", err, problems)
 	}
@@ -387,7 +388,7 @@ func TestServiceLintIncludesUnreadableThreadInDuplicateIdentity(t *testing.T) {
 			Message: "malformed frontmatter",
 		}},
 	}
-	results, problems, err := NewService(&fakeStore{}, WithThreadStore(threadStore)).Lint()
+	results, problems, err := MustNewService(&fakeStore{}, WithThreadStore(threadStore)).Lint()
 	if err != nil || len(problems) != 1 {
 		t.Fatalf("Lint: err=%v problems=%+v", err, problems)
 	}
@@ -415,7 +416,7 @@ func assertDuplicateIdentityResults(t *testing.T, results []LintResult, slugs []
 }
 
 func TestQueryFindings_Order(t *testing.T) {
-	got, _, _ := NewService(findingsRepo()).QueryFindings(FindingFilter{})
+	got, _, _ := MustNewService(findingsRepo()).QueryFindings(FindingFilter{})
 	c := codes(got)
 	// ListAudits order (gateway, ingest) then per-audit document order.
 	if len(c) != 3 || c[0] != "2026-06-14-gateway:S1" || c[1] != "2026-06-14-gateway:H1" || c[2] != "2026-06-10-ingest:M1" {

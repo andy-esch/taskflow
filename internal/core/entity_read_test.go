@@ -46,7 +46,7 @@ func (*sourceLessEntityStore) ReadResearchDocument(string) (LoadedRecord[Researc
 }
 
 func TestOrdinaryReadServicesDoNotPublishSourceLessRecords(t *testing.T) {
-	svc := NewService(&sourceLessEntityStore{})
+	svc := MustNewService(&sourceLessEntityStore{})
 	epics, epicProblems, err := svc.ListEpics()
 	if err != nil || len(epics) != 0 || len(epicProblems) != 1 || epicProblems[0].EntityKind != EntityEpic ||
 		epicProblems[0].EntityID != "" || epicProblems[0].EntitySlug != "21-declared" || epicProblems[0].Location != "db://epics/misleading" {

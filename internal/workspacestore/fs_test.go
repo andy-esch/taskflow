@@ -86,6 +86,40 @@ func TestFS_OpenWorkspacePreservesDiscoveryFailureCause(t *testing.T) {
 	}
 }
 
+func TestFS_MultiWorkspaceSourceSetsCannotBeCrossWired(t *testing.T) {
+	first, second := t.TempDir(), t.TempDir()
+	for _, root := range []string{first, second} {
+		if _, err := config.Init(root, "", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	opener := New()
+	a, err := opener.OpenWorkspace(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := opener.OpenWorkspace(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aID := a.Store.(core.SourceSetProvider).SourceSetID()
+	bID := b.Store.(core.SourceSetProvider).SourceSetID()
+	if aID.IsZero() || bID.IsZero() || aID == bID {
+		t.Fatal("independent workspaces must expose distinct source sets")
+	}
+	if svc, err := core.NewService(a.Store, core.WithThreadStore(b.Threads)); svc != nil ||
+		!errors.Is(err, core.ErrIncompatibleCapabilities) {
+		t.Fatalf("cross-wired workspace = %v, %v", svc, err)
+	}
+	service := core.NewWorkspaceService(opener)
+	if _, err := service.Open(core.WorkspaceRequest{Start: first}); err != nil {
+		t.Fatalf("first independent workspace: %v", err)
+	}
+	if _, err := service.Open(core.WorkspaceRequest{Start: second}); err != nil {
+		t.Fatalf("second independent workspace: %v", err)
+	}
+}
+
 func TestFS_OpenWorkspaceDoesNotFallbackFromMissingOrMalformedEntry(t *testing.T) {
 	service := core.NewWorkspaceService(New())
 	missing := t.TempDir()

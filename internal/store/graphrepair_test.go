@@ -23,7 +23,7 @@ func TestMutateTaskGraphRepairDryRunThenAppliesExactSourceEdits(t *testing.T) {
 		[]string{prerequisiteID, prerequisiteID, "human-invalid-token"},
 		"custom_key: keep-me # source comment\nblocked_by: [] # remove only when selected\n")
 	before, _ := os.ReadFile(ownerPath)
-	service := core.NewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+	service := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
 
 	dry, err := service.RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, true)
 	if err != nil {
@@ -74,7 +74,7 @@ func TestMutateTaskGraphRepairAllowsMalformedThreadsButCASProtectsTheirBytes(t *
 		Field: core.TaskDependencyDependsOn, Value: "invalid-token",
 	}}}
 
-	dry, err := core.NewService(fs).RepairTaskGraph(request, true)
+	dry, err := core.MustNewService(fs).RepairTaskGraph(request, true)
 	if err != nil || len(dry.IncompleteThreads) != 1 {
 		t.Fatalf("malformed Thread dry run = %+v, %v", dry, err)
 	}
@@ -85,7 +85,7 @@ func TestMutateTaskGraphRepairAllowsMalformedThreadsButCASProtectsTheirBytes(t *
 		testutil.Write(t, threadPath, "---\nid: [unterminated\n---\n# Concurrent bytes\n")
 	}
 	before, _ := os.ReadFile(ownerPath)
-	receipt, err := core.NewService(fs, core.WithRetry(0, func(int) {})).RepairTaskGraph(request, false)
+	receipt, err := core.MustNewService(fs, core.WithRetry(0, func(int) {})).RepairTaskGraph(request, false)
 	if !errors.Is(err, domain.ErrConflict) || receipt.Changed || receipt.Committed || len(receipt.AppliedFiles) != 0 {
 		t.Fatalf("Thread CAS receipt=%+v err=%v", receipt, err)
 	}
@@ -106,7 +106,7 @@ func TestMutateTaskGraphRepairReportsReadableThreadProjectionImpacts(t *testing.
 	threadPath := filepath.Join(root, domain.ThreadsDir, threadID+"-repair-thread-impact.md")
 	testutil.Write(t, threadPath, fmt.Sprintf("---\nschema: 1\nid: %s\nstatus: unstarted\ndescription: Observe graph repair\ngoal: Report derived Thread changes\ncreated: \"2026-09-05\"\ntasks: [%s]\n---\n# Repair impact\n", threadID, ownerID))
 
-	receipt, err := core.NewService(NewFS(root)).RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, false)
+	receipt, err := core.MustNewService(NewFS(root)).RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestMutateTaskGraphRepairRejectsLateUnreadableTaskByteChange(t *testing.T) 
 		testutil.Write(t, unreadablePath, "---\nid: [unterminated\n---\n# Different bytes\n")
 	}
 	before, _ := os.ReadFile(ownerPath)
-	receipt, err := core.NewService(NewFS(root), core.WithRetry(0, func(int) {})).RepairTaskGraph(request, false)
+	receipt, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).RepairTaskGraph(request, false)
 	if !errors.Is(err, domain.ErrConflict) || receipt.Committed || len(receipt.RemainingFiles) != 1 {
 		t.Fatalf("unreadable task CAS receipt=%+v err=%v", receipt, err)
 	}
@@ -169,7 +169,7 @@ func TestMutateTaskGraphRepairRejectsLateReadableNonTargetTaskByteChange(t *test
 		testutil.Write(t, peerPath, string(content)+"\n<!-- concurrent readable edit -->\n")
 	}
 	before, _ := os.ReadFile(ownerPath)
-	receipt, err := core.NewService(NewFS(root), core.WithRetry(0, func(int) {})).RepairTaskGraph(request, false)
+	receipt, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).RepairTaskGraph(request, false)
 	if !errors.Is(err, domain.ErrConflict) || receipt.Committed || len(receipt.AppliedFiles) != 0 {
 		t.Fatalf("readable task CAS receipt=%+v err=%v", receipt, err)
 	}
@@ -199,7 +199,7 @@ func TestMutateTaskGraphRepairReportsAndConvergesDurablePrefix(t *testing.T) {
 		return nil
 	}
 
-	service := core.NewService(NewFS(root), core.WithRetry(0, func(int) {}))
+	service := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {}))
 	partial, err := service.RepairTaskGraph(request, false)
 	if err == nil || !partial.Committed || len(partial.AppliedFiles) != 1 || len(partial.RemainingFiles) != 1 || partial.FinalHealth != core.GraphBroken {
 		t.Fatalf("partial receipt=%+v err=%v", partial, err)
@@ -259,7 +259,7 @@ func TestMutateTaskGraphRepairAutoDeduplicatesAliasDeclaration(t *testing.T) {
 	ownerPath := filepath.Join(root, domain.TasksDir, ownerID+"-repair-alias-owner.md")
 	testutil.Write(t, ownerPath, fmt.Sprintf("---\nschema: 1\nid: %s\nstatus: next-up\ndescription: alias owner\nrepair_ref: &repair_ref %s\ndepends_on: [*repair_ref, %s]\n---\n# Alias owner\n", ownerID, prerequisiteID, prerequisiteID))
 
-	receipt, err := core.NewService(NewFS(root)).RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, false)
+	receipt, err := core.MustNewService(NewFS(root)).RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, false)
 	if err != nil || !receipt.Committed || receipt.FinalHealth != core.GraphHealthy {
 		t.Fatalf("alias repair receipt=%+v err=%v", receipt, err)
 	}
@@ -300,7 +300,7 @@ func TestMutateTaskGraphRepairValidatesOneSourceGroupPerDurableWrite(t *testing.
 			t.Fatalf("step plan was not source-bounded: %+v", plan)
 		}
 	}
-	receipt, err := core.NewService(NewFS(root)).RepairTaskGraph(request, false)
+	receipt, err := core.MustNewService(NewFS(root)).RepairTaskGraph(request, false)
 	if err != nil || !receipt.Committed || validated != len(request.Edits) {
 		t.Fatalf("bounded validation count=%d receipt=%+v err=%v", validated, receipt, err)
 	}
@@ -323,7 +323,7 @@ func BenchmarkMutateTaskGraphRepairManySources(b *testing.B) {
 						Field: core.TaskDependencyDependsOn, Value: seed + "-invalid",
 					})
 				}
-				service := core.NewService(NewFS(root))
+				service := core.MustNewService(NewFS(root))
 				b.StartTimer()
 				if _, err := service.RepairTaskGraph(request, false); err != nil {
 					b.Fatal(err)

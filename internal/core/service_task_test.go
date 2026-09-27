@@ -100,7 +100,7 @@ func (s *deferStore) MutateTaskLifecycle(now time.Time, dryRun bool, planner Tas
 // path that could leave a task deferred without its revisit_at.
 func TestDeferTask_AtomicSingleWrite(t *testing.T) {
 	st := &deferStore{}
-	svc := NewService(st)
+	svc := MustNewService(st)
 
 	got, err := svc.DeferTask("alpha", "2026-09-01", false)
 	if err != nil {
@@ -129,7 +129,7 @@ func TestLifecycleCommittedFailureIsNeverRetriedAndRetainsReceipt(t *testing.T) 
 			}
 			t.Run(fmt.Sprintf("%s/%v", name, domain.Classify(cause)), func(t *testing.T) {
 				st := &committedFailureStore{cause: cause}
-				svc := NewService(st, WithRetry(4, func(int) {}), WithIDGen(func() string { return "6g0000000002" }))
+				svc := MustNewService(st, WithRetry(4, func(int) {}), WithIDGen(func() string { return "6g0000000002" }))
 
 				var receipt TaskLifecycleReceipt
 				var err error
@@ -165,7 +165,7 @@ func TestLifecycleCommittedFailureIsNeverRetriedAndRetainsReceipt(t *testing.T) 
 // one error that IS retried; that path is covered by TestRetry_ExhaustionSurfacesConflict.)
 func TestDeferTask_PropagatesStoreError(t *testing.T) {
 	st := &deferStore{lifecycleErr: fmt.Errorf("%w: bad frontmatter", domain.ErrValidation)}
-	svc := NewService(st)
+	svc := MustNewService(st)
 
 	_, err := svc.DeferTask("alpha", "2026-09-01", false)
 	if !errors.Is(err, domain.ErrValidation) {
@@ -181,7 +181,7 @@ func TestDeferTask_PropagatesStoreError(t *testing.T) {
 // gave for free, kept now that the atomic write bypasses SetFields.
 func TestDeferTask_ValidatesDate(t *testing.T) {
 	st := &deferStore{}
-	svc := NewService(st)
+	svc := MustNewService(st)
 
 	_, err := svc.DeferTask("alpha", "next-week", false)
 	if !errors.Is(err, domain.ErrValidation) {
@@ -196,7 +196,7 @@ func TestDeferTask_ValidatesDate(t *testing.T) {
 // write) and still reflects the would-be revisit_at on the returned task.
 func TestDeferTask_DryRun(t *testing.T) {
 	st := &deferStore{}
-	svc := NewService(st)
+	svc := MustNewService(st)
 
 	got, err := svc.DeferTask("alpha", "2026-09-01", true)
 	if err != nil {
@@ -214,7 +214,7 @@ func TestDeferTask_DryRun(t *testing.T) {
 // deferred — store.Defer with an empty until, no revisit_at.
 func TestDeferTask_BareDefer(t *testing.T) {
 	st := &deferStore{}
-	svc := NewService(st)
+	svc := MustNewService(st)
 
 	if _, err := svc.DeferTask("alpha", "", false); err != nil {
 		t.Fatalf("bare DeferTask: %v", err)
@@ -230,7 +230,7 @@ func TestDeferTask_BareDefer(t *testing.T) {
 // non-deferred task is ignored. It composes with the other filters.
 func TestListTasks_RevisitDue(t *testing.T) {
 	now := func() time.Time { return time.Date(2026, 6, 26, 0, 0, 0, 0, time.UTC) }
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		tasks: []domain.Task{
 			{Slug: "due-past", Status: domain.StatusDeferred, RevisitAt: "2020-01-01", Tags: []string{"net"}},
 			{Slug: "due-today", Status: domain.StatusDeferred, RevisitAt: "2026-06-26", Tags: []string{"ui"}},
@@ -270,7 +270,7 @@ func slugSet(tasks []LoadedRecord[domain.Task]) map[string]bool {
 
 func TestNewTask_MintsValidID(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 	got, err := svc.NewTask(NewTaskParams{Title: "Add retry", Epic: "e1", Description: "d", Tags: []string{"net"}, Body: "# x\n"})
 	if err != nil {
 		t.Fatal(err)
@@ -286,7 +286,7 @@ func TestNewTask_MintsValidID(t *testing.T) {
 
 func TestNewAudit_MintsValidID(t *testing.T) {
 	fs := &fakeStore{}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 	got, err := svc.NewAudit(NewAuditParams{Area: "storage", Date: "2026-07-02", Body: "# x\n"})
 	if err != nil {
 		t.Fatal(err)
@@ -301,7 +301,7 @@ func TestNewAudit_MintsValidID(t *testing.T) {
 
 func TestNewTask_UsesInjectedIDGen(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
-	svc := NewService(fs, WithIDGen(func() string { return "0000000000zz" }))
+	svc := MustNewService(fs, WithIDGen(func() string { return "0000000000zz" }))
 	got, err := svc.NewTask(NewTaskParams{Title: "x", Epic: "e1", Tags: []string{"a"}, Body: "b"})
 	if err != nil {
 		t.Fatal(err)
@@ -317,7 +317,7 @@ func TestNewTask_UsesInjectedIDGen(t *testing.T) {
 func TestWithClock_GovernsWriteStamps(t *testing.T) {
 	fixed := time.Date(2031, 7, 8, 9, 0, 0, 0, time.UTC)
 	st := &deferStore{}
-	svc := NewService(st, WithClock(func() time.Time { return fixed }))
+	svc := MustNewService(st, WithClock(func() time.Time { return fixed }))
 
 	if _, err := svc.DeferTask("x", "2031-09-01", false); err != nil {
 		t.Fatalf("DeferTask: %v", err)

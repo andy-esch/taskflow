@@ -12,6 +12,7 @@ import (
 )
 
 type threadReadFake struct {
+	testSourceSetProvider
 	threads  []domain.Thread
 	problems []ThreadReadProblem
 	thread   domain.Thread
@@ -38,6 +39,7 @@ func (f *threadReadFake) GetThread(string) (domain.Thread, string, error) {
 var _ ThreadStore = (*threadReadFake)(nil)
 
 type threadPathFake struct {
+	testSourceSetProvider
 	path string
 	err  error
 	refs []string
@@ -77,6 +79,7 @@ func (f *aggregateThreadPathFake) GetThread(ref string) (domain.Thread, string, 
 }
 
 type taskGraphReadFake struct {
+	testSourceSetProvider
 	tasks    []domain.Task
 	problems []domain.FileProblem
 	err      error
@@ -93,6 +96,7 @@ func (f *taskGraphReadFake) ReadTaskGraph() (TaskGraphRead, error) {
 }
 
 type threadCreationFake struct {
+	testSourceSetProvider
 	snapshot ThreadCreationSnapshot
 	result   ThreadCreationMutationResult
 	err      error
@@ -114,7 +118,7 @@ func TestServiceNewThreadResolvesAndSortsMembersInsidePlanner(t *testing.T) {
 	a := graphRecord("a-member", domain.StatusReadyToStart)
 	b := graphRecord("b-member", domain.StatusReadyToStart)
 	fake := &threadCreationFake{snapshot: ThreadCreationSnapshot{Graph: NewTaskGraph([]domain.Task{b, a}, nil)}, result: ThreadCreationMutationResult{Changed: true, Committed: true}}
-	svc := NewService(nil, WithThreadCreationMutationStore(fake), WithIDGen(func() string { return "6g3q4rtmv4ak" }), WithClock(func() time.Time {
+	svc := MustNewService(nil, WithThreadCreationMutationStore(fake), WithIDGen(func() string { return "6g3q4rtmv4ak" }), WithClock(func() time.Time {
 		return time.Date(2026, 8, 29, 0, 0, 0, 0, time.UTC)
 	}))
 	receipt, err := svc.NewThread(NewThreadParams{
@@ -134,7 +138,7 @@ func TestServiceNewThreadResolvesAndSortsMembersInsidePlanner(t *testing.T) {
 func TestServiceNewThreadRejectsDuplicateResolvedMember(t *testing.T) {
 	task := graphRecord("member", domain.StatusReadyToStart)
 	fake := &threadCreationFake{snapshot: ThreadCreationSnapshot{Graph: NewTaskGraph([]domain.Task{task}, nil)}}
-	svc := NewService(nil, WithThreadCreationMutationStore(fake), WithIDGen(func() string { return "6g3q4rtmv4ak" }))
+	svc := MustNewService(nil, WithThreadCreationMutationStore(fake), WithIDGen(func() string { return "6g3q4rtmv4ak" }))
 	_, err := svc.NewThread(NewThreadParams{
 		Title: "Implementation", Description: "Thread implementation", Goal: "Ship", Tasks: []string{task.ID, task.Slug},
 	})
@@ -149,7 +153,7 @@ func TestServiceThreadCommittedFailureIsNotRetried(t *testing.T) {
 		result:   ThreadCreationMutationResult{Changed: true, Committed: true},
 		err:      errors.New("unlock failed"),
 	}
-	svc := NewService(nil, WithThreadCreationMutationStore(fake), WithIDGen(func() string { return "6g3q4rtmv4ak" }), WithRetry(4, func(int) {}))
+	svc := MustNewService(nil, WithThreadCreationMutationStore(fake), WithIDGen(func() string { return "6g3q4rtmv4ak" }), WithRetry(4, func(int) {}))
 	receipt, err := svc.NewThread(NewThreadParams{Title: "Implementation", Description: "Thread implementation", Goal: "Ship"})
 	var committed *ThreadCreationMutationFailure
 	if !errors.As(err, &committed) || !receipt.Committed || fake.calls != 1 {
@@ -170,7 +174,7 @@ func TestServiceLintIncludesThreadIntegrityAndCrossKindIdentity(t *testing.T) {
 		}},
 		problems: []ThreadReadProblem{{Location: "threads/bad.md", LocationIsPath: true, Message: "bad frontmatter"}},
 	}
-	svc := NewService(&fakeStore{tasks: []domain.Task{task}}, WithThreadStore(threadStore))
+	svc := MustNewService(&fakeStore{tasks: []domain.Task{task}}, WithThreadStore(threadStore))
 	results, problems, err := svc.Lint()
 	if err != nil {
 		t.Fatal(err)
@@ -202,7 +206,7 @@ func TestServiceThreadListHoistsRepositoryGraphDiagnostics(t *testing.T) {
 		Status: domain.ThreadStatusUnstarted, Description: "Broken graph list", Goal: "Report once",
 		Created: "2026-08-29", Tasks: []string{task.ID},
 	}}}
-	svc := NewService(&fakeStore{tasks: []domain.Task{task}}, WithThreadStore(threadStore))
+	svc := MustNewService(&fakeStore{tasks: []domain.Task{task}}, WithThreadStore(threadStore))
 
 	list, problems, err := svc.ListThreadViews()
 	if err != nil || len(problems) != 0 {
@@ -228,7 +232,7 @@ func TestServiceThreadListPreservesAndOrdersAdapterNeutralProblems(t *testing.T)
 			{ThreadID: "6g3q4rtmv4aa", ThreadSlug: "pathless", Message: "remote decode failed"},
 		},
 	}
-	svc := NewService(&fakeStore{}, WithThreadStore(threadStore))
+	svc := MustNewService(&fakeStore{}, WithThreadStore(threadStore))
 
 	list, problems, err := svc.ListThreadViews()
 	if err != nil {
@@ -248,7 +252,7 @@ func TestServiceThreadListStripsOpaqueProblemSourceRevisions(t *testing.T) {
 	threadStore := &threadReadFake{problems: []ThreadReadProblem{{
 		ThreadID: "6g3q4rtmv4aa", ThreadSlug: "broken", Message: "remote decode failed", SourceVersion: revision,
 	}}}
-	svc := NewService(&fakeStore{}, WithThreadStore(threadStore))
+	svc := MustNewService(&fakeStore{}, WithThreadStore(threadStore))
 
 	_, problems, err := svc.ListThreadViews()
 	if err != nil || len(problems) != 1 {
@@ -275,7 +279,7 @@ func TestServiceThreadListFailsDuplicateIDsButAllowsDuplicateSlugs(t *testing.T)
 		{ID: "6g3q4rtmv4aa", Slug: "shared-slug", Status: domain.ThreadStatusUnstarted, Description: "First shared slug", Goal: "Remain legal", Created: "2026-09-01"},
 		{ID: "6g3q4rtmv4ab", Slug: "shared-slug", Status: domain.ThreadStatusUnstarted, Description: "Second shared slug", Goal: "Remain legal", Created: "2026-09-01"},
 	}
-	list, _, err := NewService(&fakeStore{}, WithThreadStore(&threadReadFake{threads: threads})).ListThreadViews()
+	list, _, err := MustNewService(&fakeStore{}, WithThreadStore(&threadReadFake{threads: threads})).ListThreadViews()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +318,7 @@ func TestServiceThreadReadsComposeIndependentGraphAndThreadPorts(t *testing.T) {
 	}
 	graphs := &taskGraphReadFake{tasks: []domain.Task{member, gate}}
 	threads := &threadReadFake{threads: []domain.Thread{thread}, thread: thread, body: "# Split Thread\n"}
-	svc := NewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads))
+	svc := MustNewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads))
 
 	view, body, err := svc.ShowThread(thread.ID)
 	if err != nil || body != "# Split Thread\n" || len(view.Members) != 1 || len(view.ExternalGates) != 1 {
@@ -337,7 +341,7 @@ func TestServiceThreadReadsComposeIndependentGraphAndThreadPorts(t *testing.T) {
 
 func TestServiceThreadPathIsIndependentFromPortableThreadReads(t *testing.T) {
 	paths := &threadPathFake{path: "/planning/threads/6g3q4rtmv4ak-split-thread.md"}
-	svc := NewService(nil, WithThreadPathSource(paths))
+	svc := MustNewService(nil, WithThreadPathSource(paths))
 
 	got, err := svc.ThreadPath("split-thread")
 	if err != nil || got != paths.path || !slices.Equal(paths.refs, []string{"split-thread"}) {
@@ -354,7 +358,7 @@ func TestServiceThreadPathDefaultsAndExplicitSourcesDoNotCrossWire(t *testing.T)
 
 	t.Run("complete aggregate defaults path source", func(t *testing.T) {
 		aggregate := &aggregateThreadPathFake{fakeStore: &fakeStore{}, path: aggregatePath}
-		got, err := NewService(aggregate).ThreadPath("local")
+		got, err := MustNewService(aggregate).ThreadPath("local")
 		if err != nil || got != aggregatePath || aggregate.calls != 1 {
 			t.Fatalf("path = %q, calls = %d, err = %v", got, aggregate.calls, err)
 		}
@@ -362,7 +366,7 @@ func TestServiceThreadPathDefaultsAndExplicitSourcesDoNotCrossWire(t *testing.T)
 
 	t.Run("explicit Thread reads detach aggregate path", func(t *testing.T) {
 		aggregate := &aggregateThreadPathFake{fakeStore: &fakeStore{}, path: aggregatePath}
-		svc := NewService(aggregate, WithThreadStore(&threadReadFake{}))
+		svc := MustNewService(aggregate, WithThreadStore(&threadReadFake{}))
 		_, err := svc.ThreadPath("remote")
 		if domain.Classify(err) != domain.ClassValidation || aggregate.calls != 0 {
 			t.Fatalf("error = %v, aggregate calls = %d", err, aggregate.calls)
@@ -376,7 +380,7 @@ func TestServiceThreadPathDefaultsAndExplicitSourcesDoNotCrossWire(t *testing.T)
 			reads: &threadReadFake{threads: []domain.Thread{thread}, thread: thread},
 		}
 		paths := &threadPathFake{path: explicitPath}
-		svc := NewService(aggregate, WithThreadPathSource(paths))
+		svc := MustNewService(aggregate, WithThreadPathSource(paths))
 		view, _, err := svc.ShowThread(thread.ID)
 		if err != nil || view.Thread.ID != thread.ID {
 			t.Fatalf("aggregate Thread view = %+v, err = %v", view, err)
@@ -407,7 +411,7 @@ func TestServiceThreadPathDefaultsAndExplicitSourcesDoNotCrossWire(t *testing.T)
 		t.Run(tc.name, func(t *testing.T) {
 			aggregate := &aggregateThreadPathFake{fakeStore: &fakeStore{}, path: aggregatePath}
 			paths := &threadPathFake{path: explicitPath}
-			got, err := NewService(aggregate, tc.opts(paths)...).ThreadPath("remote")
+			got, err := MustNewService(aggregate, tc.opts(paths)...).ThreadPath("remote")
 			if err != nil || got != explicitPath || aggregate.calls != 0 || !slices.Equal(paths.refs, []string{"remote"}) {
 				t.Fatalf("path = %q, explicit refs = %v, aggregate calls = %d, err = %v", got, paths.refs, aggregate.calls, err)
 			}
@@ -418,9 +422,9 @@ func TestServiceThreadPathDefaultsAndExplicitSourcesDoNotCrossWire(t *testing.T)
 func TestServiceThreadPathRejectsMissingAndTypedNilCapabilities(t *testing.T) {
 	var paths *threadPathFake
 	for _, svc := range []*Service{
-		NewService(nil),
-		NewService(nil, WithThreadPathSource(paths)),
-		NewService(nil, WithThreadStore(&threadReadFake{}), WithThreadPathSource(paths)),
+		MustNewService(nil),
+		MustNewService(nil, WithThreadPathSource(paths)),
+		MustNewService(nil, WithThreadStore(&threadReadFake{}), WithThreadPathSource(paths)),
 	} {
 		if _, err := svc.ThreadPath("any-thread"); domain.Classify(err) != domain.ClassValidation {
 			t.Fatalf("path error = %v, class = %v", err, domain.Classify(err))
@@ -433,7 +437,7 @@ func TestServiceThreadReadsFailExplicitlyWithoutTaskGraphSource(t *testing.T) {
 		ID: "6g3q4rtmv4ak", Slug: "missing-graph", Status: domain.ThreadStatusUnstarted,
 		Description: "Missing graph source", Goal: "Fail explicitly", Created: "2026-08-31",
 	}
-	svc := NewService(nil, WithThreadStore(&threadReadFake{thread: thread}))
+	svc := MustNewService(nil, WithThreadStore(&threadReadFake{thread: thread}))
 
 	if _, _, err := svc.ShowThread(thread.ID); err == nil || !strings.Contains(err.Error(), "task graph reads are unavailable") {
 		t.Fatalf("show error = %v", err)
@@ -449,7 +453,7 @@ func TestServiceThreadReadsFailExplicitlyWithoutTaskGraphSource(t *testing.T) {
 func TestServiceGraphQueriesDoNotRequireThreadSupport(t *testing.T) {
 	task := graphRecord("graph-only", domain.StatusReadyToStart)
 	graphs := &taskGraphReadFake{tasks: []domain.Task{task}}
-	svc := NewService(nil, WithTaskGraphSource(graphs))
+	svc := MustNewService(nil, WithTaskGraphSource(graphs))
 
 	result, err := svc.TaskBlockers(task.ID, false)
 	if err != nil || result.Task.ID != task.ID || result.State.Gate != GateClear {
@@ -476,19 +480,19 @@ func TestServiceGraphQueriesDoNotRequireThreadSupport(t *testing.T) {
 
 func TestServiceGraphReadsRejectTypedNilCapabilities(t *testing.T) {
 	var store *fakeStore
-	svc := NewService(store)
+	svc := MustNewService(store)
 	if _, err := svc.TaskBlockers("any-task", false); err == nil || !strings.Contains(err.Error(), "task graph reads are unavailable") {
 		t.Fatalf("typed-nil aggregate error = %v", err)
 	}
 
 	var graphs *taskGraphReadFake
-	svc = NewService(nil, WithTaskGraphSource(graphs))
+	svc = MustNewService(nil, WithTaskGraphSource(graphs))
 	if _, err := svc.Board(); err == nil || !strings.Contains(err.Error(), "task graph reads are unavailable") {
 		t.Fatalf("typed-nil graph option error = %v", err)
 	}
 
 	var threads *threadReadFake
-	svc = NewService(nil,
+	svc = MustNewService(nil,
 		WithTaskGraphSource(&taskGraphReadFake{}),
 		WithThreadStore(threads),
 	)
@@ -514,7 +518,7 @@ func TestServiceThreadViewsReadThreadsBeforeTasks(t *testing.T) {
 				onList: func() { calls = append(calls, "threads") },
 				onGet:  func() { calls = append(calls, "threads") },
 			}
-			svc := NewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads))
+			svc := MustNewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads))
 			var err error
 			if operation == "show" {
 				_, _, err = svc.ShowThread(thread.ID)

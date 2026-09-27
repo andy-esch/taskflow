@@ -53,7 +53,7 @@ func TestTaskEditBare_NonInteractive(t *testing.T) {
 func TestTaskEditBare_Picker(t *testing.T) {
 	root := setupRepo(t) // alpha (ready-to-start), beta (in-progress)
 	f := &prompt.Fake{SelectAnswers: []string{"beta"}}
-	app := &App{Svc: core.NewService(store.NewFS(root)), Gate: prompt.NewGate(true), Prompt: f}
+	app := &App{Svc: core.MustNewService(store.NewFS(root)), Gate: prompt.NewGate(true), Prompt: f}
 	slug, err := app.fillSelect("", "specify a task to edit", "no tasks available to edit", "Task to edit", app.taskOptions)
 	if err != nil || slug != "beta" {
 		t.Fatalf("picker should resolve to beta, got %q %v", slug, err)
@@ -90,7 +90,7 @@ func TestEditViaEditor_RunsEditorOnTemp(t *testing.T) {
 // is what the command's ⚠ warning surfaces.
 func TestAuditEdit_PostEditLintFlagsBadStatus(t *testing.T) {
 	root := setupAuditRepo(t) // audit "o": one open finding, lints clean
-	app := &App{Svc: core.NewService(store.NewFS(root)), In: strings.NewReader(""), Out: &bytes.Buffer{}, ErrOut: &bytes.Buffer{}}
+	app := &App{Svc: core.MustNewService(store.NewFS(root)), In: strings.NewReader(""), Out: &bytes.Buffer{}, ErrOut: &bytes.Buffer{}}
 	if before, _, err := app.Svc.LintAudits("o"); err != nil || len(before) != 0 {
 		t.Fatalf("seed audit should lint clean (got %d issues, err %v)", len(before), err)
 	}

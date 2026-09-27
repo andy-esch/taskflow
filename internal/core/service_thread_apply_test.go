@@ -17,6 +17,7 @@ type threadApplyFakeOutcome struct {
 }
 
 type threadApplyFake struct {
+	testSourceSetProvider
 	snapshot ThreadApplySnapshot
 	outcomes []threadApplyFakeOutcome
 	calls    int
@@ -41,7 +42,7 @@ func (f *threadApplyFake) MutateThreadApply(_ time.Time, dryRun bool, planner Th
 func TestServiceComposeThreadApplyRendersDefaultTemplate(t *testing.T) {
 	task := graphRecord("compose-member", domain.StatusNextUp)
 	threadID := testutil.TaskID("composed-thread")
-	svc := NewService(nil,
+	svc := MustNewService(nil,
 		WithTaskGraphSource(&taskGraphReadFake{tasks: []domain.Task{task}}),
 		WithThreadStore(&threadReadFake{}),
 		WithIDGen(func() string { return threadID }),
@@ -67,8 +68,8 @@ func TestServiceComposeThreadApplyReportsEachMissingReadCapability(t *testing.T)
 		svc  *Service
 		want string
 	}{
-		{name: "task graph", svc: NewService(nil, WithThreadStore(&threadReadFake{})), want: "task graph reads are unavailable"},
-		{name: "Threads", svc: NewService(nil, WithTaskGraphSource(&taskGraphReadFake{})), want: "thread reads are unavailable"},
+		{name: "task graph", svc: MustNewService(nil, WithThreadStore(&threadReadFake{})), want: "task graph reads are unavailable"},
+		{name: "Threads", svc: MustNewService(nil, WithTaskGraphSource(&taskGraphReadFake{})), want: "thread reads are unavailable"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,7 +82,7 @@ func TestServiceComposeThreadApplyReportsEachMissingReadCapability(t *testing.T)
 
 func TestServiceComposeThreadApplyReadsThreadsBeforeTasks(t *testing.T) {
 	calls := make([]string, 0, 2)
-	svc := NewService(nil,
+	svc := MustNewService(nil,
 		WithTaskGraphSource(&taskGraphReadFake{onList: func() { calls = append(calls, "tasks") }}),
 		WithThreadStore(&threadReadFake{onList: func() { calls = append(calls, "threads") }}),
 	)
@@ -111,7 +112,7 @@ func TestServiceThreadApplyRetriesOnlyPreCommitConflict(t *testing.T) {
 			}},
 		},
 	}
-	svc := NewService(nil, WithThreadApplyMutationStore(fake), WithRetry(3, func(int) {}))
+	svc := MustNewService(nil, WithThreadApplyMutationStore(fake), WithRetry(3, func(int) {}))
 	receipt, err := svc.ApplyThreadPlan(plan, false)
 	if err != nil || fake.calls != 2 || !receipt.Complete || !receipt.Committed {
 		t.Fatalf("receipt=%+v err=%v calls=%d", receipt, err, fake.calls)
@@ -145,7 +146,7 @@ func TestServiceThreadApplyDoesNotRetryDurableOrCompleteFailure(t *testing.T) {
 					err:    domain.ErrConflict,
 				}},
 			}
-			svc := NewService(nil, WithThreadApplyMutationStore(fake), WithRetry(3, func(int) {}))
+			svc := MustNewService(nil, WithThreadApplyMutationStore(fake), WithRetry(3, func(int) {}))
 			receipt, err := svc.ApplyThreadPlan(plan, false)
 			var failure *ThreadApplyFailure
 			if !errors.As(err, &failure) || fake.calls != 1 || receipt.Committed != tc.committed || receipt.Complete != tc.complete {
@@ -169,7 +170,7 @@ func TestServiceThreadApplyRetainsPlanIdentityOnPreplanFailure(t *testing.T) {
 		snapshot: ThreadApplySnapshot{PlanningRepoID: "planning", Graph: NewTaskGraph([]domain.Task{task}, nil)},
 		outcomes: []threadApplyFakeOutcome{{}},
 	}
-	svc := NewService(nil, WithThreadApplyMutationStore(fake), WithRetry(0, func(int) {}))
+	svc := MustNewService(nil, WithThreadApplyMutationStore(fake), WithRetry(0, func(int) {}))
 	receipt, err := svc.ApplyThreadPlan(plan, false)
 	var failure *ThreadApplyFailure
 	if !errors.As(err, &failure) || receipt.Plan.Thread.ID != plan.Thread.ID || failure.Receipt.Plan.Thread.ID != plan.Thread.ID {

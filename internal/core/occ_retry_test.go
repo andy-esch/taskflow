@@ -95,7 +95,7 @@ func noopSleep(int) {}
 
 func TestRetry_SucceedsAfterTransientConflicts(t *testing.T) {
 	cs := &conflictStore{conflicts: 2}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	if _, err := svc.SetFields("t", map[string]any{"priority": "low"}, false, false); err != nil {
 		t.Fatalf("2 transient conflicts (< 4 retries) should heal: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestRetry_SucceedsAfterTransientConflicts(t *testing.T) {
 
 func TestRetry_ExhaustionSurfacesConflict(t *testing.T) {
 	cs := &conflictStore{conflicts: 100}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	_, err := svc.SetFields("t", map[string]any{"priority": "low"}, false, false)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("persistent contention must surface ErrConflict (exit 14), got %v", err)
@@ -118,7 +118,7 @@ func TestRetry_ExhaustionSurfacesConflict(t *testing.T) {
 
 func TestRetry_DryRunNotRetried(t *testing.T) {
 	cs := &conflictStore{conflicts: 100}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	_, err := svc.SetFields("t", map[string]any{"priority": "low"}, false, true) // dryRun
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a conflicting dry-run should return the conflict, got %v", err)
@@ -130,7 +130,7 @@ func TestRetry_DryRunNotRetried(t *testing.T) {
 
 func TestRetry_NonConflictErrorNotRetried(t *testing.T) {
 	cs := &conflictStore{failErr: domain.ErrValidation}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	_, err := svc.SetFields("t", map[string]any{"priority": "low"}, false, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("a non-conflict error must pass through unretried, got %v", err)
@@ -144,7 +144,7 @@ func TestRetry_NonConflictErrorNotRetried(t *testing.T) {
 // BEFORE the write, so a re-run re-appends onto fresh content exactly once (no double-apply).
 func TestRetry_AppendBodyRetries(t *testing.T) {
 	cs := &conflictStore{conflicts: 1}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	if _, _, err := svc.AppendBody("t", "more", false); err != nil {
 		t.Fatalf("append should heal a transient conflict: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestRetry_AppendBodyRetries(t *testing.T) {
 
 func TestRetry_SetAcceptanceCriterionReappliesAfterConflict(t *testing.T) {
 	cs := &conflictStore{conflicts: 2}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	if _, body, changed, err := svc.SetAcceptanceCriterion("t", 1, true, false); err != nil {
 		t.Fatalf("criterion edit should heal transient conflicts: %v", err)
 	} else if !changed || !strings.Contains(body, "- [x] works") {
@@ -168,7 +168,7 @@ func TestRetry_SetAcceptanceCriterionReappliesAfterConflict(t *testing.T) {
 
 func TestRetry_SetAcceptanceCriterionExhaustionSurfacesConflict(t *testing.T) {
 	cs := &conflictStore{conflicts: 100}
-	svc := NewService(cs, WithRetry(2, noopSleep))
+	svc := MustNewService(cs, WithRetry(2, noopSleep))
 	_, _, _, err := svc.SetAcceptanceCriterion("t", 1, true, false)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("persistent criterion contention must surface ErrConflict, got %v", err)
@@ -180,7 +180,7 @@ func TestRetry_SetAcceptanceCriterionExhaustionSurfacesConflict(t *testing.T) {
 
 func TestRetry_SetAcceptanceCriterionDryRunIsNotRetried(t *testing.T) {
 	cs := &conflictStore{conflicts: 100}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	_, _, _, err := svc.SetAcceptanceCriterion("t", 1, true, true)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a conflicting criterion dry-run should return the conflict, got %v", err)
@@ -195,7 +195,7 @@ func TestRetry_SetAcceptanceCriterionDryRunIsNotRetried(t *testing.T) {
 // wrong `now` capture or return-packing — in the audit/epic wraps the task tests don't touch).
 func TestRetry_MoveAuditRetries(t *testing.T) {
 	cs := &conflictStore{conflicts: 2}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	if _, err := svc.MoveAudit("a", domain.AuditClosed, false); err != nil {
 		t.Fatalf("MoveAudit should heal transient conflicts: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestRetry_MoveAuditRetries(t *testing.T) {
 
 func TestRetry_AppendAuditBodyRetries(t *testing.T) {
 	cs := &conflictStore{conflicts: 1}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	if _, _, err := svc.AppendAuditBody("a", "x", false); err != nil {
 		t.Fatalf("AppendAuditBody should heal a transient conflict: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestRetry_AppendAuditBodyRetries(t *testing.T) {
 // flag because it replayed stale precomputed text.
 func TestRetry_EditFindingRetries(t *testing.T) {
 	cs := &conflictStore{conflicts: 1}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	_, changed, err := svc.EditFinding("a", "H1", FindingEdit{Status: "fixed"}, false)
 	if err != nil {
 		t.Fatalf("EditFinding should heal a transient conflict: %v", err)
@@ -237,7 +237,7 @@ func TestRetry_EditFindingRetries(t *testing.T) {
 // masking it as success or as a plain error.
 func TestRetry_EditFindingExhaustionSurfacesConflict(t *testing.T) {
 	cs := &conflictStore{conflicts: 99}
-	svc := NewService(cs, WithRetry(2, noopSleep))
+	svc := MustNewService(cs, WithRetry(2, noopSleep))
 	if _, _, err := svc.EditFinding("a", "H1", FindingEdit{Status: "fixed"}, false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("exhausted retries must surface ErrConflict, got %v", err)
 	}
@@ -246,7 +246,7 @@ func TestRetry_EditFindingExhaustionSurfacesConflict(t *testing.T) {
 // A dry run neither retries nor writes: retryOnConflict returns the first result.
 func TestRetry_EditFindingDryRunDoesNotRetry(t *testing.T) {
 	cs := &conflictStore{conflicts: 1}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	if _, _, err := svc.EditFinding("a", "H1", FindingEdit{Status: "fixed"}, true); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a dry run should not retry, got %v", err)
 	}
@@ -273,7 +273,7 @@ func TestRetryBackoff_BoundedAndPanicFree(t *testing.T) {
 // retryOnConflict calls in service_research.go left the whole suite green.
 func TestRetry_SetResearchFieldsRetries(t *testing.T) {
 	cs := &conflictStore{conflicts: 2}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	if _, err := svc.SetResearchFields("r", map[string]any{"description": "d"}, false, false); err != nil {
 		t.Fatalf("SetResearchFields should heal transient conflicts: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestRetry_SetResearchFieldsRetries(t *testing.T) {
 
 func TestRetry_AppendResearchBodyRetries(t *testing.T) {
 	cs := &conflictStore{conflicts: 1}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	if _, _, err := svc.AppendResearchBody("r", "more", false); err != nil {
 		t.Fatalf("AppendResearchBody should heal a transient conflict: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestRetry_AppendResearchBodyRetries(t *testing.T) {
 // A dry run must not retry — it never writes, so a conflict from it is not transient.
 func TestRetry_ResearchDryRunNotRetried(t *testing.T) {
 	cs := &conflictStore{conflicts: 3}
-	svc := NewService(cs, WithRetry(4, noopSleep))
+	svc := MustNewService(cs, WithRetry(4, noopSleep))
 	if _, err := svc.SetResearchFields("r", map[string]any{"description": "d"}, false, true); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("want the conflict surfaced, got %v", err)
 	}

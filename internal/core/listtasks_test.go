@@ -17,7 +17,7 @@ func (f *failingEpicStore) ListEpics() ([]domain.Epic, []domain.FileProblem, err
 }
 
 func TestService_ListTasks_RejectsInvalidFilters(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{{ID: "e1"}},
 		tasks: []domain.Task{{Slug: "a", Epic: "e1", Status: domain.StatusInProgress}},
 	})
@@ -41,7 +41,7 @@ func TestService_ListTasks_RejectsInvalidFilters(t *testing.T) {
 // 24-data-model` matches a task whose ref is the full stem, a bare NN, or a stale slug —
 // all resolve on the NN key, mirroring validation and the rollup (was a raw string compare).
 func TestService_ListTasks_FilterByEpicNNKey(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{{ID: "24-data-model", Status: "active"}, {ID: "01-other", Status: "active"}},
 		tasks: []domain.Task{
 			{Slug: "a", Epic: "24-data-model", Status: domain.StatusReadyToStart},
@@ -64,7 +64,7 @@ func TestService_ListTasks_FilterByEpicNNKey(t *testing.T) {
 }
 
 func TestService_ListTasks_EmptyEpicFilterSkipsEpicScan(t *testing.T) {
-	svc := NewService(&failingEpicStore{fakeStore{
+	svc := MustNewService(&failingEpicStore{fakeStore{
 		tasks: []domain.Task{{Slug: "a", Status: domain.StatusInProgress}},
 	}})
 	if _, _, err := svc.ListTasks(TaskFilter{}); err != nil {
@@ -78,7 +78,7 @@ func TestService_ListTasks_UnblockedUsesStrictGraphAndFailsClosed(t *testing.T) 
 	eligible := graphRecord("eligible-candidate", domain.StatusReadyToStart, completed.ID)
 	queued := graphRecord("eligible-queued", domain.StatusNextUp)
 	store := &fakeStore{tasks: []domain.Task{blocked, eligible, queued, completed}}
-	got, problems, err := NewService(store).ListTasks(TaskFilter{Unblocked: true})
+	got, problems, err := MustNewService(store).ListTasks(TaskFilter{Unblocked: true})
 	if err != nil || len(problems) != 0 {
 		t.Fatalf("healthy --unblocked = %v, problems=%v", err, problems)
 	}
@@ -93,7 +93,7 @@ func TestService_ListTasks_UnblockedUsesStrictGraphAndFailsClosed(t *testing.T) 
 
 	broken := graphRecord("broken-candidate", domain.StatusReadyToStart, "not-a-stable-id")
 	store.tasks = append(store.tasks, broken)
-	if _, _, err := NewService(store).ListTasks(TaskFilter{Unblocked: true}); !errors.Is(err, domain.ErrValidation) {
+	if _, _, err := MustNewService(store).ListTasks(TaskFilter{Unblocked: true}); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("broken --unblocked = %v, want ErrValidation", err)
 	}
 }

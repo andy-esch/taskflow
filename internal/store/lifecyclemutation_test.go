@@ -265,7 +265,7 @@ func TestCooperatingDependencyMutationsSerializeBeforeStartAuthorization(t *test
 			}
 
 			dependencyDone := make(chan error, 1)
-			dependencyService := core.NewService(NewFS(root), core.WithRetry(0, func(int) {}))
+			dependencyService := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {}))
 			go func() {
 				var err error
 				if tc.operation == core.DependencyAdd {
@@ -282,7 +282,7 @@ func TestCooperatingDependencyMutationsSerializeBeforeStartAuthorization(t *test
 				err     error
 			}
 			startDone := make(chan lifecycleOutcome, 1)
-			startService := core.NewService(NewFS(root), core.WithRetry(0, func(int) {}))
+			startService := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {}))
 			go func() {
 				receipt, err := startService.Move("target", domain.StatusInProgress, false, tc.override)
 				startDone <- lifecycleOutcome{receipt: receipt, err: err}
@@ -334,7 +334,7 @@ func TestCooperatingPrerequisiteReopenSerializesBeforeStartAuthorization(t *test
 
 			reopenDone := make(chan error, 1)
 			go func() {
-				_, err := core.NewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
+				_, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
 					"prerequisite", domain.StatusReadyToStart, false, core.TaskLifecycleOverrideNone)
 				reopenDone <- err
 			}()
@@ -346,7 +346,7 @@ func TestCooperatingPrerequisiteReopenSerializesBeforeStartAuthorization(t *test
 			}
 			startDone := make(chan lifecycleOutcome, 1)
 			go func() {
-				receipt, err := core.NewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
+				receipt, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
 					"target", domain.StatusInProgress, false, override)
 				startDone <- lifecycleOutcome{receipt: receipt, err: err}
 			}()

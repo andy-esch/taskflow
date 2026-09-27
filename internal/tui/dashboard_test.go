@@ -20,7 +20,7 @@ import (
 // custom repo root (loadedDash is the seedRepo variant).
 func loadedDashAt(t *testing.T, root string, w, h int) Model {
 	t.Helper()
-	m := New(core.NewService(store.NewFS(root)))
+	m := New(core.MustNewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())

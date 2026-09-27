@@ -25,7 +25,7 @@ func TestDependencyMigrationPreservesBodyCommentsAndConverges(t *testing.T) {
 		"blocked_by: [legacy-prerequisite]\ndependencies: ["+secondID+"]\n")
 	writeGraphMutationTask(t, root, "legacy-second", domain.StatusCompleted, nil, "")
 
-	svc := core.NewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+	svc := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
 	receipt, err := svc.MigrateTaskDependencies(false)
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestDependencyMigrationFailureCarriesDurablePrefixAndRerunConverges(t *test
 		"blocks: [prefix-dependent]\n")
 	writeGraphMutationTask(t, root, "prefix-dependent", domain.StatusReadyToStart, nil,
 		"blocked_by: [prefix-prerequisite]\n")
-	svc := core.NewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+	svc := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
 
 	original := testHookAfterGraphWrite
 	defer func() { testHookAfterGraphWrite = original }()
@@ -106,7 +106,7 @@ func TestDependencyMigrationBlocksOnlyWritesDependentBeforeClearingOwner(t *test
 	writeGraphMutationTask(t, root, "blocks-only-owner", domain.StatusCompleted, nil,
 		"blocks: [blocks-only-dependent]\n")
 	writeGraphMutationTask(t, root, "blocks-only-dependent", domain.StatusReadyToStart, nil, "")
-	svc := core.NewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+	svc := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
 
 	original := testHookAfterGraphWrite
 	defer func() { testHookAfterGraphWrite = original }()
@@ -146,7 +146,7 @@ func TestDependencyMigrationClearsAndReportsPresentEmptyLegacyFields(t *testing.
 	taskID := testutil.TaskID("empty-legacy-owner")
 	path := writeGraphMutationTask(t, root, "empty-legacy-owner", domain.StatusReadyToStart, nil,
 		"blocked_by: []\ndependencies: []\nblocks: []\n")
-	svc := core.NewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+	svc := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
 	receipt, err := svc.MigrateTaskDependencies(false)
 	if err != nil || !receipt.Changed || len(receipt.ClearedLegacyFields) != 3 ||
 		!slices.Equal(receipt.AppliedTaskIDs, []string{taskID}) {
@@ -171,7 +171,7 @@ func TestDependencyMigrationEveryDurablePrefixStaysSoundAndResumes(t *testing.T)
 			writeGraphMutationTask(t, root, "prefix-b", domain.StatusCompleted, nil, "blocked_by: [prefix-c]\n")
 			writeGraphMutationTask(t, root, "prefix-c", domain.StatusCompleted, nil, "blocked_by: [prefix-d]\n")
 			writeGraphMutationTask(t, root, "prefix-d", domain.StatusCompleted, nil, "")
-			svc := core.NewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+			svc := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
 
 			original := testHookAfterGraphWrite
 			defer func() { testHookAfterGraphWrite = original }()

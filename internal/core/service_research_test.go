@@ -47,7 +47,7 @@ func fixedClock(date string) func() time.Time {
 // embedded millisecond (ADR-0003 §3), so an older created date must yield a smaller id.
 func TestNewResearch_IDMintedFromCreatedNotNow(t *testing.T) {
 	store := &researchStore{}
-	svc := NewService(store, WithClock(fixedClock("2026-08-14")))
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-14")))
 
 	older, err := svc.NewResearch(NewResearchParams{Title: "Old work", Created: "2026-01-03"})
 	if err != nil {
@@ -72,7 +72,7 @@ func TestNewResearch_IDMintedFromCreatedNotNow(t *testing.T) {
 
 func TestNewResearch_DefaultsCreatedToToday(t *testing.T) {
 	store := &researchStore{}
-	svc := NewService(store, WithClock(fixedClock("2026-08-14")))
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-14")))
 
 	r, err := svc.NewResearch(NewResearchParams{Title: "Today's work"})
 	if err != nil {
@@ -85,7 +85,7 @@ func TestNewResearch_DefaultsCreatedToToday(t *testing.T) {
 
 func TestNewResearch_SlugAndBodyFromTitle(t *testing.T) {
 	store := &researchStore{}
-	svc := NewService(store, WithClock(fixedClock("2026-08-14")))
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-14")))
 
 	r, err := svc.NewResearch(NewResearchParams{Title: "Compare: theming libs → a call"})
 	if err != nil {
@@ -105,7 +105,7 @@ func TestNewResearch_SlugAndBodyFromTitle(t *testing.T) {
 }
 
 func TestNewResearch_Validation(t *testing.T) {
-	svc := NewService(&researchStore{}, WithClock(fixedClock("2026-08-14")))
+	svc := MustNewService(&researchStore{}, WithClock(fixedClock("2026-08-14")))
 	cases := []struct {
 		name string
 		p    NewResearchParams
@@ -126,7 +126,7 @@ func TestNewResearch_Validation(t *testing.T) {
 
 func TestNewResearch_DryRunWritesNothing(t *testing.T) {
 	store := &researchStore{}
-	svc := NewService(store, WithClock(fixedClock("2026-08-14")))
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-14")))
 
 	if _, err := svc.NewResearch(NewResearchParams{Title: "Preview", DryRun: true}); err != nil {
 		t.Fatal(err)
@@ -144,7 +144,7 @@ func TestListResearch_NewestFirstStableTiebreak(t *testing.T) {
 		{Slug: "alpha", Created: "2026-01-03"},
 		{Slug: "middle", Created: "2026-06-23"},
 	}}
-	svc := NewService(store)
+	svc := MustNewService(store)
 
 	got, _, err := svc.ListResearch("")
 	if err != nil {
@@ -163,7 +163,7 @@ func TestListResearch_TagFilterCaseInsensitive(t *testing.T) {
 		{Slug: "tui-doc", Created: "2026-01-03", Tags: []string{"TUI", "color"}},
 		{Slug: "core-doc", Created: "2026-01-04", Tags: []string{"core"}},
 	}}
-	svc := NewService(store)
+	svc := MustNewService(store)
 
 	got, _, err := svc.ListResearch("tui")
 	if err != nil {
@@ -196,7 +196,7 @@ func (f *setStore) SetResearchFields(_ string, updates map[string]any, _ bool) (
 // `created` is the one field that must never be writable: the id is minted from it, so a
 // change in place would leave the pair desynced with no way to detect it later.
 func TestSetResearchFields_ProtectedFields(t *testing.T) {
-	svc := NewService(&setStore{}, WithClock(fixedClock("2026-08-18")))
+	svc := MustNewService(&setStore{}, WithClock(fixedClock("2026-08-18")))
 	for _, field := range []string{"created", "id", "schema", "updated_at"} {
 		t.Run(field, func(t *testing.T) {
 			_, err := svc.SetResearchFields("x", map[string]any{field: "whatever"}, false, false)
@@ -219,7 +219,7 @@ func TestSetResearchFields_ProtectedFields(t *testing.T) {
 
 func TestSetResearchFields_UnknownFieldNeedsForce(t *testing.T) {
 	store := &setStore{}
-	svc := NewService(store, WithClock(fixedClock("2026-08-18")))
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-18")))
 
 	if _, err := svc.SetResearchFields("x", map[string]any{"bogus": "1"}, false, false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("unknown field without --force must be ErrValidation, got %v", err)
@@ -236,7 +236,7 @@ func TestSetResearchFields_UnknownFieldNeedsForce(t *testing.T) {
 // single corrupting string.
 func TestSetResearchFields_CoercesTagsToList(t *testing.T) {
 	store := &setStore{}
-	svc := NewService(store, WithClock(fixedClock("2026-08-18")))
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-18")))
 
 	if _, err := svc.SetResearchFields("x", map[string]any{"tags": "a,b"}, false, false); err != nil {
 		t.Fatal(err)
@@ -250,7 +250,7 @@ func TestSetResearchFields_CoercesTagsToList(t *testing.T) {
 // updated_at is stamped by the service so every adapter gets it.
 func TestSetResearchFields_StampsUpdatedAt(t *testing.T) {
 	store := &setStore{}
-	svc := NewService(store, WithClock(fixedClock("2026-08-18")))
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-18")))
 
 	if _, err := svc.SetResearchFields("x", map[string]any{"description": "d"}, false, false); err != nil {
 		t.Fatal(err)
@@ -261,7 +261,7 @@ func TestSetResearchFields_StampsUpdatedAt(t *testing.T) {
 }
 
 func TestSetResearchFields_RejectsEmptyUpdate(t *testing.T) {
-	svc := NewService(&setStore{}, WithClock(fixedClock("2026-08-18")))
+	svc := MustNewService(&setStore{}, WithClock(fixedClock("2026-08-18")))
 	if _, err := svc.SetResearchFields("x", nil, false, false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("no fields must be ErrValidation, got %v", err)
 	}
@@ -269,7 +269,7 @@ func TestSetResearchFields_RejectsEmptyUpdate(t *testing.T) {
 
 // A too-long description is caught in core, so every adapter inherits the rule.
 func TestSetResearchFields_ValidatesDescription(t *testing.T) {
-	svc := NewService(&setStore{}, WithClock(fixedClock("2026-08-18")))
+	svc := MustNewService(&setStore{}, WithClock(fixedClock("2026-08-18")))
 	long := strings.Repeat("x", domain.MaxDescriptionLen+1)
 	if _, err := svc.SetResearchFields("x", map[string]any{"description": long}, false, false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("over-long description must be ErrValidation, got %v", err)
@@ -302,7 +302,7 @@ func TestNewResearch_RegeneratesOnIDCollision(t *testing.T) {
 	// First mint collides, second is fresh.
 	seq := []string{"aaaaaaaaaaaa", "bbbbbbbbbbbb"}
 	i := 0
-	svc := NewService(store, WithClock(fixedClock("2026-08-18")), WithIDGen(func() string {
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-18")), WithIDGen(func() string {
 		id := seq[min(i, len(seq)-1)]
 		i++
 		return id
@@ -324,7 +324,7 @@ func TestNewResearch_RegeneratesOnIDCollision(t *testing.T) {
 // would hang the command rather than fail it.
 func TestNewResearch_CollisionLoopIsBounded(t *testing.T) {
 	store := &collidingStore{taken: map[string]bool{"aaaaaaaaaaaa": true}}
-	svc := NewService(store, WithClock(fixedClock("2026-08-18")),
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-18")),
 		WithIDGen(func() string { return "aaaaaaaaaaaa" }))
 
 	done := make(chan error, 1)
@@ -348,7 +348,7 @@ func TestNewResearch_CollisionLoopIsBounded(t *testing.T) {
 // A non-conflict error must NOT be retried — only a collision is regenerable.
 func TestNewResearch_DoesNotRetryNonConflictErrors(t *testing.T) {
 	store := &failingStore{err: fmt.Errorf("disk on fire")}
-	svc := NewService(store, WithClock(fixedClock("2026-08-18")))
+	svc := MustNewService(store, WithClock(fixedClock("2026-08-18")))
 
 	if _, err := svc.NewResearch(NewResearchParams{Title: "Doc"}); err == nil {
 		t.Fatal("want the store error surfaced")

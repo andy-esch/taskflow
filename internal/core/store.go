@@ -291,7 +291,9 @@ type ResearchStore interface {
 // fs/text operations that aren't use cases (frontmatter repair, link checks,
 // and watch-path layout) are split into Fixer/Linter/Layout below so a second
 // Store implementation — and the test fakes — don't pay for methods the core
-// never calls.
+// never calls. NewService also requires a non-zero SourceSetProvider witness at
+// runtime; keeping that check at composition lets one complete adapter and
+// independently supplied narrow ports share the same rule.
 type Store interface {
 	TaskStore
 	EpicStore

@@ -17,6 +17,19 @@ import (
 // build error if nopStore ever falls out of sync with the port.
 type nopStore struct{}
 
+var testSourceSetID = NewSourceSetID()
+
+type testSourceSetProvider struct{ sourceSet SourceSetID }
+
+func (p testSourceSetProvider) SourceSetID() SourceSetID {
+	if p.sourceSet.IsZero() {
+		return testSourceSetID
+	}
+	return p.sourceSet
+}
+
+func (nopStore) SourceSetID() SourceSetID { return testSourceSetID }
+
 var _ Store = nopStore{}
 
 func (nopStore) ReadTasks() (TaskRead, error) { return TaskRead{}, nil }
@@ -423,7 +436,7 @@ func (f *fakeStore) SetEpicFields(id string, updates map[string]any, dryRun bool
 }
 
 func TestService_ListEpics_Rollup(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{{ID: "e1", Status: "active"}, {ID: "e2"}},
 		tasks: []domain.Task{
 			{Slug: "a", Epic: "e1", Status: domain.StatusReadyToStart},
@@ -454,7 +467,7 @@ func TestService_ListEpics_Rollup(t *testing.T) {
 // rolls up onto the epic — in both ListEpics and ShowEpic's roster (the fix for the
 // empty-roster-on-prefix bug).
 func TestService_EpicRollup_ResolvesOnNNPrefix(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{{ID: "24-data-model", Status: "active"}},
 		tasks: []domain.Task{
 			{Slug: "a", Epic: "24-data-model", Status: domain.StatusCompleted},
@@ -485,7 +498,7 @@ func TestService_EpicRollup_ResolvesOnNNPrefix(t *testing.T) {
 // total/done and are counted separately in Deprecated; deferred ("not now")
 // stays in total as real pending work.
 func TestService_ListEpics_ExcludesDeprecated(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{{ID: "e1"}},
 		tasks: []domain.Task{
 			{Slug: "a", Epic: "e1", Status: domain.StatusCompleted},
@@ -505,7 +518,7 @@ func TestService_ListEpics_ExcludesDeprecated(t *testing.T) {
 	}
 
 	// The epic-18 case: all real work done, one deprecated → 1/1 (100%), not 1/2.
-	svc2 := NewService(&fakeStore{
+	svc2 := MustNewService(&fakeStore{
 		epics: []domain.Epic{{ID: "x"}},
 		tasks: []domain.Task{
 			{Slug: "p", Epic: "x", Status: domain.StatusCompleted},
@@ -538,7 +551,7 @@ func TestTaskRollup(t *testing.T) {
 
 func TestService_NewTask_UnknownEpic(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 	_, err := svc.NewTask(NewTaskParams{Title: "X", Epic: "nope", Tier: 3, Autonomy: 3, Priority: "medium"})
 	if err == nil {
 		t.Fatal("expected error for unknown epic")
@@ -550,7 +563,7 @@ func TestService_NewTask_UnknownEpic(t *testing.T) {
 
 func TestService_NewTask_Valid(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 	tk, err := svc.NewTask(NewTaskParams{Title: "My New Task", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium", Effort: "Unknown", Tags: []string{"go"}})
 	if err != nil {
 		t.Fatal(err)
@@ -568,7 +581,7 @@ func TestService_NewTask_Valid(t *testing.T) {
 // CLI flag defaults still produces a valid, lint-clean task.
 func TestService_NewTask_AppliesDefaults(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 	if _, err := svc.NewTask(NewTaskParams{Title: "Defaulted", Epic: "e1", Tags: []string{"x"}}); err != nil {
 		t.Fatalf("NewTask with zero-valued fields should default and succeed, got %v", err)
 	}
@@ -584,7 +597,7 @@ func TestService_NewTask_AppliesDefaults(t *testing.T) {
 
 func TestService_NewTask_Next(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1"}}}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 	tk, err := svc.NewTask(NewTaskParams{Title: "T", Epic: "e1", Tier: 3, Autonomy: 3, Priority: "medium", Tags: []string{"go"}, Description: "do it", Next: true})
 	if err != nil {
 		t.Fatal(err)
@@ -595,7 +608,7 @@ func TestService_NewTask_Next(t *testing.T) {
 }
 
 func TestService_Summary(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{{ID: "e1", Status: domain.EpicStatusActive}},
 		tasks: []domain.Task{
 			{Slug: "a", Status: domain.StatusInProgress, Epic: "e1"},
@@ -631,7 +644,7 @@ func TestService_SummaryUsesInjectedTaskGraphSnapshot(t *testing.T) {
 	member := graphRecord("summary-member", domain.StatusReadyToStart)
 	member.LegacyBlockedBy = []string{gate.Slug}
 	graphs := &taskGraphReadFake{tasks: []domain.Task{member, gate}}
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		// Deliberately contradictory: this aggregate-store task must not leak into
 		// a Summary when a dedicated graph source was injected.
 		tasks: []domain.Task{{Slug: "wrong", Status: domain.StatusInProgress}},
@@ -662,7 +675,7 @@ func TestService_SummaryUsesInjectedTaskGraphSnapshot(t *testing.T) {
 // clock. A revisit_at on a non-deferred task is ignored by the count (Move clears
 // it on leaving deferred, so such a value only arises via a manual `task set`).
 func TestService_Summary_RevisitDue(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		tasks: []domain.Task{
 			{Slug: "past-due", Status: domain.StatusDeferred, RevisitAt: "2020-01-01"},        // due
 			{Slug: "future", Status: domain.StatusDeferred, RevisitAt: "2099-01-01"},          // not due
@@ -683,7 +696,7 @@ func TestService_Summary_RevisitDue(t *testing.T) {
 // is outside the canonical vocabulary are tallied (so the dashboard can nudge) but
 // NOT dropped — they still appear in Summary.Epics (dashboardEpics fails open).
 func TestService_Summary_BadEpicStatus(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{
 			{ID: "e1", Status: domain.EpicStatusActive},
 			{ID: "e2", Status: "planning"},    // non-canonical
@@ -715,7 +728,7 @@ func TestService_Summary_BadEpicStatus(t *testing.T) {
 // no updated_at of their own, so it's the max updated_at across their tasks
 // (falling back to created), and "" for an epic with no tasks.
 func TestService_Summary_EpicLastUpdated(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{
 			{ID: "e1", Status: domain.EpicStatusActive},
 			{ID: "e2", Status: domain.EpicStatusActive},
@@ -751,7 +764,7 @@ func TestService_Summary_EpicLastUpdated(t *testing.T) {
 // dashboard render ONE shared order instead of each re-sorting. The input order is
 // deliberately scrambled to prove the aggregate — not a surface — does the sorting.
 func TestService_Summary_EpicsByRecent(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{
 			{ID: "stale", Status: domain.EpicStatusActive},
 			{ID: "untouched", Status: domain.EpicStatusActive},
@@ -778,7 +791,7 @@ func TestService_Summary_EpicsByRecent(t *testing.T) {
 }
 
 func TestService_ShowEpic(t *testing.T) {
-	svc := NewService(&fakeStore{
+	svc := MustNewService(&fakeStore{
 		epics: []domain.Epic{{ID: "e1"}},
 		tasks: []domain.Task{
 			{Slug: "a", Epic: "e1"},
@@ -800,7 +813,7 @@ func TestService_ShowEpic(t *testing.T) {
 // an out-of-vocabulary status → ErrValidation, an unknown id → ErrNotFound.
 func TestService_MoveEpic(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 
 	e, err := svc.MoveEpic("e1", "retired", false)
 	if err != nil {
@@ -816,7 +829,7 @@ func TestService_MoveEpic(t *testing.T) {
 
 func TestService_MoveEpic_InvalidStatus(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}}
-	_, err := NewService(fs).MoveEpic("e1", "bogus", false)
+	_, err := MustNewService(fs).MoveEpic("e1", "bogus", false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("invalid status should be ErrValidation, got %v", err)
 	}
@@ -826,7 +839,7 @@ func TestService_MoveEpic_InvalidStatus(t *testing.T) {
 }
 
 func TestService_MoveEpic_NotFound(t *testing.T) {
-	_, err := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}}).MoveEpic("ghost", "retired", false)
+	_, err := MustNewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}}).MoveEpic("ghost", "retired", false)
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("unknown epic should be ErrNotFound, got %v", err)
 	}
@@ -836,7 +849,7 @@ func TestService_MoveEpic_NotFound(t *testing.T) {
 // a bad priority is ErrValidation (nothing written), an unknown id is ErrNotFound.
 func TestService_SetEpicFields(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active", Priority: "medium"}}}
-	svc := NewService(fs)
+	svc := MustNewService(fs)
 
 	e, err := svc.SetEpicFields("e1", map[string]any{"priority": "high"}, false, false)
 	if err != nil {
@@ -852,7 +865,7 @@ func TestService_SetEpicFields(t *testing.T) {
 
 func TestService_SetEpicFields_BadPriority(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active", Priority: "medium"}}}
-	_, err := NewService(fs).SetEpicFields("e1", map[string]any{"priority": "urgent"}, false, false)
+	_, err := MustNewService(fs).SetEpicFields("e1", map[string]any{"priority": "urgent"}, false, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("an invalid priority should be ErrValidation, got %v", err)
 	}
@@ -862,7 +875,7 @@ func TestService_SetEpicFields_BadPriority(t *testing.T) {
 }
 
 func TestService_SetEpicFields_UnknownEpic(t *testing.T) {
-	_, err := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}}).
+	_, err := MustNewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}}).
 		SetEpicFields("ghost", map[string]any{"priority": "high"}, false, false)
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("unknown epic should be ErrNotFound, got %v", err)
@@ -874,7 +887,7 @@ func TestService_SetEpicFields_UnknownEpic(t *testing.T) {
 // key are rejected before reaching the store.
 func TestService_SetEpicFields_StatusRejected(t *testing.T) {
 	fs := &fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}}
-	_, err := NewService(fs).SetEpicFields("e1", map[string]any{"status": "retired"}, false, false)
+	_, err := MustNewService(fs).SetEpicFields("e1", map[string]any{"status": "retired"}, false, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("setting status via `set` should be ErrValidation (use `epic move`), got %v", err)
 	}
@@ -886,7 +899,7 @@ func TestService_SetEpicFields_StatusRejected(t *testing.T) {
 // TestService_SetEpicFields_UnknownFieldNeedsForce mirrors the task contract: a key
 // outside the epic registry is rejected without --force, accepted with it.
 func TestService_SetEpicFields_UnknownFieldNeedsForce(t *testing.T) {
-	svc := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}})
+	svc := MustNewService(&fakeStore{epics: []domain.Epic{{ID: "e1", Status: "active"}}})
 	if _, err := svc.SetEpicFields("e1", map[string]any{"owner": "me"}, false, false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("an unknown field without --force should be ErrValidation, got %v", err)
 	}
@@ -896,7 +909,7 @@ func TestService_SetEpicFields_UnknownFieldNeedsForce(t *testing.T) {
 }
 
 func TestService_SetEpicFields_NoFields(t *testing.T) {
-	_, err := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}}).
+	_, err := MustNewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}}).
 		SetEpicFields("e1", map[string]any{}, false, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("no fields should be ErrValidation, got %v", err)
@@ -907,7 +920,7 @@ func TestService_SetEpicFields_NoFields(t *testing.T) {
 // the nopStore EditEpic (returns a zero epic, unchanged), so this just pins the
 // pass-through wiring exists and reports "no change" cleanly.
 func TestService_EditEpic_PassThrough(t *testing.T) {
-	svc := NewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}})
+	svc := MustNewService(&fakeStore{epics: []domain.Epic{{ID: "e1"}}})
 	_, changed, err := svc.EditEpic("e1", func(cur string, _ error) (string, error) { return cur, nil })
 	if err != nil {
 		t.Fatalf("EditEpic pass-through should not error, got %v", err)

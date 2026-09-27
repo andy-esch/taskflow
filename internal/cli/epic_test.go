@@ -291,7 +291,7 @@ func TestEpicSet_StatusViaSetRejected(t *testing.T) {
 func TestEpicSetBare_Picker(t *testing.T) {
 	root := setupEpicRepo(t) // epic "demo"
 	f := &prompt.Fake{SelectAnswers: []string{"demo"}}
-	app := &App{Svc: core.NewService(store.NewFS(root)), Gate: prompt.NewGate(true), Prompt: f}
+	app := &App{Svc: core.MustNewService(store.NewFS(root)), Gate: prompt.NewGate(true), Prompt: f}
 	id, err := app.resolveOne(nil, "specify an epic to set", "no epics available", "Epic to set", app.epicOptions)
 	if err != nil || id != "demo" {
 		t.Fatalf("picker should resolve to demo, got %q %v", id, err)

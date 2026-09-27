@@ -73,7 +73,7 @@ func TestServiceDependencyAddRemoveDryRunAndIdempotence(t *testing.T) {
 	charlie := graphRecord("charlie-prerequisite", domain.StatusCompleted)
 	dependent := graphRecord("dependent", domain.StatusReadyToStart, charlie.ID)
 	store := &graphOperationStore{fakeStore: fakeStore{tasks: []domain.Task{dependent, charlie, alpha}}}
-	svc := NewService(store)
+	svc := MustNewService(store)
 
 	dry, err := svc.AddTaskDependencies("DEPEN", []string{"ALPHA", charlie.ID}, true)
 	if err != nil {
@@ -124,7 +124,7 @@ func TestServiceDependencyMutationRejectsAmbiguousDuplicateSelfAndCycle(t *testi
 	atom := graphRecord("add-retry-atom", domain.StatusReadyToStart)
 	dependent := graphRecord("dependent", domain.StatusReadyToStart)
 	store := &graphOperationStore{fakeStore: fakeStore{tasks: []domain.Task{dependent, atom, alpha}}}
-	svc := NewService(store)
+	svc := MustNewService(store)
 
 	if _, err := svc.AddTaskDependencies(dependent.Slug, []string{"add-retry"}, false); !errors.Is(err, domain.ErrAmbiguous) {
 		t.Fatalf("ambiguous prerequisite = %v", err)
@@ -151,7 +151,7 @@ func TestServiceDependencyMigrationConvergesLegacyVocabulary(t *testing.T) {
 	dependent.LegacyBlockedBy = []string{prerequisite.Slug}
 	dependent.LegacyDependencies = []string{second.ID}
 	store := &graphOperationStore{fakeStore: fakeStore{tasks: []domain.Task{prerequisite, second, dependent}}}
-	svc := NewService(store)
+	svc := MustNewService(store)
 
 	receipt, err := svc.MigrateTaskDependencies(false)
 	if err != nil {
@@ -188,7 +188,7 @@ func TestServiceDependencyMutationRetriesOnlyBeforeDurablePrefix(t *testing.T) {
 		fakeStore: fakeStore{tasks: []domain.Task{dependent, prerequisite}},
 		failures:  []graphMutationFailure{{err: domain.ErrConflict}},
 	}
-	svc := NewService(store, WithRetry(2, func(int) {}))
+	svc := MustNewService(store, WithRetry(2, func(int) {}))
 	receipt, err := svc.AddTaskDependencies(dependent.Slug, []string{prerequisite.Slug}, false)
 	if err != nil || store.calls != 2 || !slices.Equal(receipt.AppliedTaskIDs, []string{dependent.ID}) {
 		t.Fatalf("pre-write retry receipt=%+v calls=%d err=%v", receipt, store.calls, err)
@@ -202,7 +202,7 @@ func TestServiceDependencyMutationRetriesOnlyBeforeDurablePrefix(t *testing.T) {
 		fakeStore: fakeStore{tasks: []domain.Task{legacyOwner, legacyDependent}},
 		failures:  []graphMutationFailure{{err: domain.ErrConflict, after: 1}},
 	}
-	partialSvc := NewService(partialStore, WithRetry(4, func(int) {}))
+	partialSvc := MustNewService(partialStore, WithRetry(4, func(int) {}))
 	partial, err := partialSvc.MigrateTaskDependencies(false)
 	var failure *DependencyMutationFailure
 	if !errors.Is(err, domain.ErrConflict) || !errors.As(err, &failure) || partialStore.calls != 1 {
@@ -219,7 +219,7 @@ func TestServiceTaskGraphQueriesExplainCurrentSnapshot(t *testing.T) {
 	middle := graphRecord("query-middle", domain.StatusCompleted, root.ID)
 	target := graphRecord("query-target", domain.StatusReadyToStart, middle.ID)
 	store := &graphOperationStore{fakeStore: fakeStore{tasks: []domain.Task{target, middle, root}}}
-	svc := NewService(store)
+	svc := MustNewService(store)
 
 	frontier, err := svc.TaskBlockers(target.Slug, false)
 	if err != nil || frontier.Projection != "frontier" || len(frontier.Blockers) != 1 ||

@@ -99,7 +99,7 @@ func TestModel_AuditCloseBlockedByOpenFindings(t *testing.T) {
 	r := testutil.NewRepo(t)
 	r.Audit("open", "2026-06-02-open.md",
 		"---\narea: store\ndate: 2026-06-02\n---\n# Audit\n\n#### H1. thing  · **Status:** open\n")
-	m := New(core.NewService(store.NewFS(r.Root)))
+	m := New(core.MustNewService(store.NewFS(r.Root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())

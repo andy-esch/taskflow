@@ -25,7 +25,7 @@ func TestGuardedMutationsRejectUnreadableThreadDocuments(t *testing.T) {
 		root := t.TempDir()
 		writeUnreadableGuardThread(t, root, "unreadable-create-guard")
 		threadID := testutil.TaskID("refused-create")
-		svc := core.NewService(NewFS(root),
+		svc := core.MustNewService(NewFS(root),
 			core.WithIDGen(func() string { return threadID }),
 			core.WithClock(func() time.Time { return threadCreationNow }),
 			core.WithRetry(0, func(int) {}),
@@ -74,7 +74,7 @@ func TestGuardedMutationsRejectUnreadableThreadDocuments(t *testing.T) {
 		}
 		writeUnreadableGuardThread(t, root, "unreadable-lifecycle-guard")
 
-		receipt, err := core.NewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
+		receipt, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
 			taskID, domain.StatusReadyToStart, false, core.TaskLifecycleOverrideNone,
 		)
 		if !errors.Is(err, domain.ErrValidation) || receipt.Committed {

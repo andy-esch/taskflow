@@ -38,7 +38,7 @@ func cleanTaskRepo(t *testing.T) string {
 
 func loadedAt(t *testing.T, root string, w, h int) Model {
 	t.Helper()
-	m := New(core.NewService(store.NewFS(root)))
+	m := New(core.MustNewService(store.NewFS(root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()()) // landing dashboard load
@@ -288,7 +288,7 @@ func TestModel_EditCancelNoWrite(t *testing.T) {
 func TestModel_EditEpicPriorityViaMenu(t *testing.T) {
 	r := testutil.NewRepo(t)
 	r.Epic("01-e.md", "---\nstatus: active\ndescription: a goal\npriority: low\ntags: [x]\n---\n# Epic\n")
-	m := New(core.NewService(store.NewFS(r.Root)))
+	m := New(core.MustNewService(store.NewFS(r.Root)))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
