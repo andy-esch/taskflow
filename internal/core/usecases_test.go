@@ -383,8 +383,8 @@ func TestService_Create_SlugifiesHostileTitle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("task new with a hostile title should succeed, got %v", err)
 	}
-	if tk.Slug != "wire-oauth-pkce-refresh" {
-		t.Errorf("task slug = %q, want wire-oauth-pkce-refresh", tk.Slug)
+	if tk.Task.Slug != "wire-oauth-pkce-refresh" {
+		t.Errorf("task slug = %q, want wire-oauth-pkce-refresh", tk.Task.Slug)
 	}
 	if len(fs.createdBodies) != 1 || !strings.Contains(fs.createdBodies[0], "# Wire OAuth: PKCE + refresh") {
 		t.Errorf("task body should keep the full title as the H1, got %q", fs.createdBodies)
@@ -396,8 +396,8 @@ func TestService_Create_SlugifiesHostileTitle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("epic new with a hostile title should succeed, got %v", err)
 	}
-	if ep.ID != "plan-phase-two" {
-		t.Errorf("epic slug = %q, want plan-phase-two", ep.ID)
+	if ep.Epic.ID != "plan-phase-two" {
+		t.Errorf("epic slug = %q, want plan-phase-two", ep.Epic.ID)
 	}
 	if len(fs.epicCreateBodies) != 1 || !strings.Contains(fs.epicCreateBodies[0], "# Plan: phase — two") {
 		t.Errorf("epic body should keep the full title as the H1, got %q", fs.epicCreateBodies)
@@ -408,11 +408,11 @@ func TestService_Create_SlugifiesHostileTitle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("audit new with a hostile area should succeed, got %v", err)
 	}
-	if au.Slug != "2026-06-25-auth-token-refresh" {
-		t.Errorf("audit slug = %q, want 2026-06-25-auth-token-refresh", au.Slug)
+	if au.Audit.Slug != "2026-06-25-auth-token-refresh" {
+		t.Errorf("audit slug = %q, want 2026-06-25-auth-token-refresh", au.Audit.Slug)
 	}
-	if au.Area != "Auth: token / refresh" {
-		t.Errorf("audit area should keep the full original, got %q", au.Area)
+	if au.Audit.Area != "Auth: token / refresh" {
+		t.Errorf("audit area should keep the full original, got %q", au.Audit.Area)
 	}
 	if len(fs.auditCreateBodies) != 1 || !strings.Contains(fs.auditCreateBodies[0], "Auth: token / refresh") {
 		t.Errorf("audit body should keep the full area, got %q", fs.auditCreateBodies)
@@ -449,10 +449,10 @@ func TestService_NewAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Slug != "2026-06-16-arch-data-flow" {
-		t.Errorf("slug = %q, want 2026-06-16-arch-data-flow", a.Slug)
+	if a.Audit.Slug != "2026-06-16-arch-data-flow" {
+		t.Errorf("slug = %q, want 2026-06-16-arch-data-flow", a.Audit.Slug)
 	}
-	if a.Bucket != domain.AuditOpen || a.Area != "Arch Data Flow" || a.Date != "2026-06-16" {
+	if a.Audit.Bucket != domain.AuditOpen || a.Audit.Area != "Arch Data Flow" || a.Audit.Date != "2026-06-16" {
 		t.Errorf("audit fields wrong: %+v", a)
 	}
 	if len(fs.createdAudits) != 1 {
@@ -464,9 +464,9 @@ func TestService_NewAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	datePart := strings.TrimSuffix(a2.Slug, "-dispatcher")
-	if datePart == a2.Slug || domain.ValidateDate(datePart) != nil {
-		t.Errorf("defaulted slug is not <today>-dispatcher: %q", a2.Slug)
+	datePart := strings.TrimSuffix(a2.Audit.Slug, "-dispatcher")
+	if datePart == a2.Audit.Slug || domain.ValidateDate(datePart) != nil {
+		t.Errorf("defaulted slug is not <today>-dispatcher: %q", a2.Audit.Slug)
 	}
 
 	// A missing area and a malformed date are both ErrValidation.
@@ -519,7 +519,7 @@ func TestService_NewEpic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Created == "" || e.Status != "active" {
+	if e.Epic.Created == "" || e.Epic.Status != "active" {
 		t.Errorf("created epic wrong: %+v", e)
 	}
 }

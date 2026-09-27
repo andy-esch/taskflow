@@ -48,8 +48,11 @@ func TestTaskRenameJSONReportsPreviewAndDurableOutcome(t *testing.T) {
 		t.Fatalf("preview task rename: %v\n%s%s", err, previewOut, previewErr)
 	}
 	preview := decodeTaskRenameEnvelope(t, previewOut)
+	wantSource := filepath.Join(preview.Workspace.PlanningRoot, "tasks", filepath.Base(oldPath))
+	wantDestination := filepath.Join(preview.Workspace.PlanningRoot, "tasks", filepath.Base(newPath))
 	if preview.SchemaVersion != wire.SchemaVersion || preview.TaskID != testutil.TaskID("old") ||
 		preview.FromSlug != "old" || preview.ToSlug != "new-title" || preview.Task.Slug != "new-title" ||
+		preview.SourcePath != wantSource || preview.DestinationPath != wantDestination ||
 		preview.PlannedDocuments != 2 || preview.AppliedDocuments != 0 ||
 		preview.PlannedLinks != 1 || preview.AppliedLinks != 0 || !preview.Changed || !preview.DryRun ||
 		preview.Committed || preview.Complete || preview.DestinationWritten || preview.SourceRemoved ||
@@ -72,6 +75,7 @@ func TestTaskRenameJSONReportsPreviewAndDurableOutcome(t *testing.T) {
 	}
 	result := decodeTaskRenameEnvelope(t, resultOut)
 	if result.TaskID != preview.TaskID || result.FromSlug != preview.FromSlug || result.ToSlug != preview.ToSlug ||
+		result.SourcePath != wantSource || result.DestinationPath != wantDestination ||
 		result.PlannedDocuments != preview.PlannedDocuments || result.PlannedLinks != preview.PlannedLinks ||
 		result.AppliedDocuments != 2 || result.AppliedLinks != 1 || result.DryRun ||
 		!result.Changed || !result.Committed || !result.Complete || !result.DestinationWritten || !result.SourceRemoved {
@@ -107,6 +111,8 @@ func TestWriteErrorCarriesStructuredTaskRenameRecovery(t *testing.T) {
 	receipt := core.TaskRenameReceipt{
 		Task:               domain.Task{ID: "6g7wxs43g7nh", Slug: "new-title"},
 		FromSlug:           "old-title",
+		SourcePath:         "/repo/planning/tasks/6g7wxs43g7nh-old-title.md",
+		DestinationPath:    "/repo/planning/tasks/6g7wxs43g7nh-new-title.md",
 		PlannedDocuments:   3,
 		AppliedDocuments:   2,
 		PlannedLinks:       2,
@@ -131,6 +137,7 @@ func TestWriteErrorCarriesStructuredTaskRenameRecovery(t *testing.T) {
 	got := envelope.Error.TaskRename
 	if envelope.Error.Code != "conflict" || got == nil || got.TaskID != receipt.Task.ID ||
 		got.FromSlug != receipt.FromSlug || got.ToSlug != receipt.Task.Slug ||
+		got.SourcePath != receipt.SourcePath || got.DestinationPath != receipt.DestinationPath ||
 		got.PlannedDocuments != 3 || got.AppliedDocuments != 2 ||
 		!got.Committed || got.Complete || !got.DestinationWritten || got.SourceRemoved ||
 		got.Remedy != receipt.Remedy || got.Workspace.PlanningRoot != "/repo/planning" ||

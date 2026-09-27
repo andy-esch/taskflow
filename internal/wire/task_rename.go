@@ -9,6 +9,8 @@ type TaskRenameJSON struct {
 	TaskID             string        `json:"task_id" jsonschema:"description=stable identity retained across the rename"`
 	FromSlug           string        `json:"from_slug" jsonschema:"description=source slug observed when the rename was planned"`
 	ToSlug             string        `json:"to_slug" jsonschema:"description=destination slug derived from the requested title"`
+	SourcePath         string        `json:"source_path,omitempty" jsonschema:"description=exact local source path captured by the guarded rename plan; absent for pathless adapters"`
+	DestinationPath    string        `json:"destination_path,omitempty" jsonschema:"description=exact planned local destination path; present for dry runs and durable-prefix recovery when available"`
 	PlannedDocuments   int           `json:"planned_documents" jsonschema:"description=document writes in the guarded rename plan"`
 	AppliedDocuments   int           `json:"applied_documents" jsonschema:"description=planned document writes that became durable"`
 	PlannedLinks       int           `json:"planned_links" jsonschema:"description=inbound Markdown links the guarded plan will repoint"`
@@ -43,6 +45,7 @@ type TaskRenameRecoveryJSON struct {
 func ToTaskRenameJSON(receipt core.TaskRenameReceipt, workspace WorkspaceJSON) TaskRenameJSON {
 	return TaskRenameJSON{
 		TaskID: receipt.Task.ID, FromSlug: receipt.FromSlug, ToSlug: receipt.Task.Slug,
+		SourcePath: receipt.SourcePath, DestinationPath: receipt.DestinationPath,
 		PlannedDocuments: receipt.PlannedDocuments, AppliedDocuments: receipt.AppliedDocuments,
 		PlannedLinks: receipt.PlannedLinks, AppliedLinks: receipt.AppliedLinks,
 		Changed: receipt.Changed, DryRun: receipt.DryRun, Committed: receipt.Committed, Complete: receipt.Complete,

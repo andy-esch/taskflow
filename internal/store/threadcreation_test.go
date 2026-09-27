@@ -41,7 +41,10 @@ func TestThreadCreationPersistsCanonicalDocumentAndReadsItBack(t *testing.T) {
 	if !slices.Equal(receipt.Thread.Tasks, []string{aID, bID}) {
 		t.Fatalf("members = %v", receipt.Thread.Tasks)
 	}
-	content, err := os.ReadFile(receipt.Thread.Path)
+	if receipt.Local.PlannedPath == "" || receipt.Local.CommittedPath != receipt.Local.PlannedPath {
+		t.Fatalf("committed Thread local outcome = %+v", receipt.Local)
+	}
+	content, err := os.ReadFile(receipt.Local.CommittedPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +61,7 @@ func TestThreadCreationPersistsCanonicalDocumentAndReadsItBack(t *testing.T) {
 	if err != nil || !slices.Equal(reloaded.Tasks, []string{aID, bID}) || !strings.Contains(body, "Dogfood Thread planning") {
 		t.Fatalf("reloaded=%+v body=%q err=%v", reloaded, body, err)
 	}
-	if got, err := NewFS(root).ResolveThreadPath("thread-foundation"); err != nil || got != receipt.Thread.Path {
+	if got, err := NewFS(root).ResolveThreadPath("thread-foundation"); err != nil || got != receipt.Local.CommittedPath {
 		t.Fatalf("path=%q err=%v", got, err)
 	}
 }
@@ -72,6 +75,9 @@ func TestThreadCreationDryRunValidatesWithoutWriting(t *testing.T) {
 	})
 	if err != nil || !receipt.DryRun || !receipt.Changed || receipt.Committed {
 		t.Fatalf("receipt=%+v err=%v", receipt, err)
+	}
+	if receipt.Local.PlannedPath == "" || receipt.Local.CommittedPath != "" {
+		t.Fatalf("dry-run Thread local outcome = %+v", receipt.Local)
 	}
 	if _, err := os.Stat(filepath.Join(root, domain.ThreadsDir)); !os.IsNotExist(err) {
 		t.Fatalf("dry-run created threads dir: %v", err)
@@ -180,7 +186,7 @@ func TestTaskAndThreadCreationSerializeCrossKindIdentity(t *testing.T) {
 		ready.Done()
 		<-start
 		_, err := newService().NewTask(core.NewTaskParams{
-			Title: "Shared identity", Epic: epic.ID, Description: "Task side", Effort: "1h",
+			Title: "Shared identity", Epic: epic.Epic.ID, Description: "Task side", Effort: "1h",
 			Priority: "medium", Tier: 2, Autonomy: 3, Tags: []string{"identity"}, Start: true,
 		})
 		results <- err

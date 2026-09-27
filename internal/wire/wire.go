@@ -318,7 +318,11 @@ import (
 // pathless adapters retain kind, stable ID/slug, and opaque `location` without
 // inventing a filesystem path. Read DTO identity is sourced from the adapter's
 // loaded-record envelope rather than declared frontmatter.
-const SchemaVersion = "1.76"
+// 1.77: ADDITIVE — task rename and create-and-start lifecycle receipts expose
+// optional local source, planned destination, and committed destination paths.
+// Existing created-document and Thread path fields retain their shapes; their
+// values now come from operation receipts rather than domain record paths.
+const SchemaVersion = "1.77"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

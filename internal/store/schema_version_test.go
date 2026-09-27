@@ -29,7 +29,7 @@ func TestCreate_StampsSchemaVersion(t *testing.T) {
 	}
 
 	prefix := fmt.Sprintf("---\nschema: %d", domain.FileSchemaVersion)
-	for _, p := range []string{taskC.Path, epicC.Path, auditC.Path} {
+	for _, p := range []string{taskC.Local.CommittedPath, epicC.Local.CommittedPath, auditC.Local.CommittedPath} {
 		b, err := os.ReadFile(p)
 		if err != nil {
 			t.Fatal(err)

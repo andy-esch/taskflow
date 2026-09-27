@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gdx7mcqq67d
-status: ready-to-start
+status: in-progress
 epic: 21-code-quality-architecture-hardening
 description: Keep planned, committed, and partially durable local paths in operation-specific receipts before domain paths are removed.
 effort: 2-3 days
@@ -11,7 +11,8 @@ autonomy_level: 2
 tags: [architecture, mutations, filesystem]
 created: "2026-09-26"
 depends_on: [6gcwcf7rgxef]
-updated_at: "2026-09-26"
+updated_at: "2026-09-27"
+started_at: "2026-09-27"
 ---
 
 # Preserve local mutation outcome evidence outside domain records
@@ -40,15 +41,29 @@ filesystem path is semantic data.
 
 ## Acceptance criteria
 
-- [ ] Every create dry run that currently reports a path still reports its planned local destination
+- [x] Every create dry run that currently reports a path still reports its planned local destination
       after domain paths are removed.
-- [ ] Committed creates report the resulting local path when their adapter supports one, and pathless
+- [x] Committed creates report the resulting local path when their adapter supports one, and pathless
       creates express absence without a fabricated location.
-- [ ] Task rename partial failures retain exact source/destination paths and durable progress in both
+- [x] Task rename partial failures retain exact source/destination paths and durable progress in both
       human and machine-readable recovery output.
-- [ ] Mutation receipts use operation-specific values rather than one generic entity mutation
+- [x] Mutation receipts use operation-specific values rather than one generic entity mutation
       envelope or a path-bearing domain record.
-- [ ] Tests cover dry run, success, pathless success, and each existing durable-prefix failure stage.
+- [x] Tests cover dry run, success, pathless success, and each existing durable-prefix failure stage.
+
+## Implementation notes
+
+- Kind-specific create receipts in `internal/core/creation_receipt.go` separate optional planned and
+  committed local paths from returned domain records. Thread update and task rename receipts carry
+  their own local evidence; create-and-start uses the guarded lifecycle receipt.
+- CLI creation, Thread mutation, and task-rename outputs read those receipts. JSON revision 1.77 adds
+  optional exact paths to rename and create-and-start recovery without changing existing path fields.
+- Focused core/store/CLI tests cover pathless adapters, dry runs and writes, and rename's partial
+  cascade, destination-written, source-cleanup, and complete-but-unlocked outcomes.
+- Self-review caught a retry hazard: a Research adapter can return a committed receipt with a
+  conflict-classified cleanup error. The service now preserves that receipt and stops before
+  minting another ID; a regression test covers the case. Ordinary filesystem creation still
+  discards guard-release errors, so that separate adapter fix is tracked below.
 
 ## Out of scope
 
@@ -63,3 +78,4 @@ filesystem path is semantic data.
 - [Portable entity-read design](6gcwcf7rgxef-design-portable-entity-reads-and-optional-local-source-capabilities.md)
 - [Codex design finding M2](../audits/6gdx1bvdf16p-2026-09-26-portable-entity-read-local-source-capability-design-codex.md)
 - [Antigravity design finding L2](../audits/6gdx1bvz683y-2026-09-26-portable-entity-read-local-source-capability-design-antigravity.md)
+- Follow-up [Report post-commit guard-release failures from ordinary entity creation](6ge7qn9ptaxv-report-post-commit-guard-release-failures-from-ordinary-entity-creation.md)

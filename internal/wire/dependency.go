@@ -217,6 +217,8 @@ type TaskLifecycleBlockerJSON struct {
 // envelope. Audit and epic transitions omit it.
 type TaskLifecycleJSON struct {
 	TaskID              string                       `json:"task_id"`
+	PlannedPath         string                       `json:"planned_path,omitempty" jsonschema:"description=optional local destination for create-and-start previews and outcomes"`
+	CommittedPath       string                       `json:"committed_path,omitempty" jsonschema:"description=optional durable local destination after create-and-start commits"`
 	From                string                       `json:"from"`
 	Changed             bool                         `json:"changed"`
 	Committed           bool                         `json:"committed" jsonschema:"description=true only after the lifecycle write became durable"`
@@ -257,7 +259,8 @@ func toThreadProjectionImpactsJSON(impacts []core.ThreadProjectionImpact) []Thre
 
 func ToTaskLifecycleJSON(receipt core.TaskLifecycleReceipt) TaskLifecycleJSON {
 	payload := TaskLifecycleJSON{
-		TaskID: receipt.Task.ID, From: string(receipt.From), Changed: receipt.Changed,
+		TaskID: receipt.Task.ID, PlannedPath: receipt.Local.PlannedPath, CommittedPath: receipt.Local.CommittedPath,
+		From: string(receipt.From), Changed: receipt.Changed,
 		Committed: receipt.Committed,
 		Forced:    receipt.Forced, Override: string(receipt.Override),
 		Before: toTaskGraphStateJSON(receipt.Before), After: toTaskGraphStateJSON(receipt.After),

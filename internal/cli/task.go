@@ -164,14 +164,20 @@ func newTaskNewCmd(app *App) *cobra.Command {
 			}
 			p.Body = body
 			p.DryRun = app.DryRun
-			t, err := app.Svc.NewTask(p)
+			receipt, err := app.Svc.NewTask(p)
 			if err != nil {
+				var committed *core.TaskLifecycleMutationFailure
+				if errors.As(err, &committed) {
+					return &taskLifecycleCommandFailure{cause: err, receipt: committed.Receipt, workspace: app.workspace()}
+				}
 				return err
 			}
+			t := receipt.Task
+			path := receipt.Local.DisplayPath(receipt.DryRun)
 			if app.JSON {
-				return render.CreatedJSON(app.Out, "task", t.ID, t.Slug, string(t.Status), app.rel(t.Path), app.DryRun, app.workspace())
+				return render.CreatedJSON(app.Out, "task", t.ID, t.Slug, string(t.Status), app.rel(path), app.DryRun, app.workspace())
 			}
-			render.CreatedHuman(app.Out, app.Style, app.linkPath(t.Path), app.DryRun)
+			render.CreatedHuman(app.Out, app.Style, app.linkPath(path), app.DryRun)
 			render.CreatedSlugNote(app.Out, app.Style, p.Title, t.Slug)
 			if !app.DryRun {
 				fmt.Fprintf(app.Out, "%s\n", app.Style.Dim("→ next: tskflwctl task start "+t.Slug))

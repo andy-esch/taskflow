@@ -21,13 +21,13 @@ type NewAuditParams struct {
 // area must produce a non-empty slug and the date must be YYYY-MM-DD (today when
 // omitted); the slug is `<date>-<area-slug>`. On invalid input it returns
 // ErrValidation and nothing is written.
-func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
+func (s *Service) NewAudit(p NewAuditParams) (AuditCreationReceipt, error) {
 	if err := templateBodyConflict(p.Body, p.Template); err != nil {
-		return domain.Audit{}, err
+		return AuditCreationReceipt{}, err
 	}
 	area := strings.TrimSpace(p.Area)
 	if area == "" {
-		return domain.Audit{}, fmt.Errorf("%w: audit area is required", domain.ErrValidation)
+		return AuditCreationReceipt{}, fmt.Errorf("%w: audit area is required", domain.ErrValidation)
 	}
 	// Any area is accepted: Slugify derives a filesystem-safe id while the full
 	// original area is preserved (frontmatter + body). The empty-slug error below
@@ -37,11 +37,11 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 		date = s.now().Format("2006-01-02")
 	}
 	if err := domain.ValidateDate(date); err != nil {
-		return domain.Audit{}, err
+		return AuditCreationReceipt{}, err
 	}
 	areaSlug := domain.Slugify(area)
 	if areaSlug == "" {
-		return domain.Audit{}, fmt.Errorf("%w: area produced an empty slug: %q", domain.ErrValidation, area)
+		return AuditCreationReceipt{}, fmt.Errorf("%w: area produced an empty slug: %q", domain.ErrValidation, area)
 	}
 	a := domain.Audit{
 		Slug:   date + "-" + areaSlug,
@@ -54,7 +54,7 @@ func (s *Service) NewAudit(p NewAuditParams) (domain.Audit, error) {
 	if body == "" {
 		tmpl, err := s.templateBody("audit", p.Template)
 		if err != nil {
-			return domain.Audit{}, err
+			return AuditCreationReceipt{}, err
 		}
 		body = renderTemplate(tmpl, map[string]string{"area": area, "date": date})
 	}

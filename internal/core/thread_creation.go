@@ -26,6 +26,7 @@ type ThreadCreationPlanner func(ThreadCreationSnapshot) (ThreadCreationPlan, err
 type ThreadCreationMutationResult struct {
 	Plan      ThreadCreationPlan
 	Thread    domain.Thread
+	Local     LocalCreateOutcome
 	Changed   bool
 	DryRun    bool
 	Committed bool
@@ -33,6 +34,7 @@ type ThreadCreationMutationResult struct {
 
 type ThreadCreationReceipt struct {
 	Thread    domain.Thread
+	Local     LocalCreateOutcome
 	Changed   bool
 	DryRun    bool
 	Committed bool
@@ -47,7 +49,11 @@ func (e *ThreadCreationMutationFailure) Error() string {
 	if e == nil {
 		return "thread creation committed, but repository cleanup failed"
 	}
-	return fmt.Sprintf("thread creation committed, but repository cleanup failed: %v; inspect the current Thread before retrying", e.Cause)
+	message := fmt.Sprintf("thread creation committed, but repository cleanup failed: %v; inspect the current Thread before retrying", e.Cause)
+	if e.Receipt.Local.CommittedPath != "" {
+		message += fmt.Sprintf("; created at %q", e.Receipt.Local.CommittedPath)
+	}
+	return message
 }
 
 func (e *ThreadCreationMutationFailure) Unwrap() error {

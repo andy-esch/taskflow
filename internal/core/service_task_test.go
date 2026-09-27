@@ -61,8 +61,12 @@ func (s *committedFailureStore) MutateTaskLifecycle(_ time.Time, dryRun bool, pl
 	}
 	task.Status = plan.To
 	after := taskGraphWithTask(graph, task).State(task.ID)
+	local := LocalCreateOutcome{}
+	if plan.Create != nil {
+		local = LocalCreateOutcome{PlannedPath: "/planning/tasks/created.md", CommittedPath: "/planning/tasks/created.md"}
+	}
 	return TaskLifecycleMutationResult{
-		Plan: plan, Task: task, From: from, Before: before, After: after,
+		Plan: plan, Task: task, Local: local, From: from, Before: before, After: after,
 		Changed: true, DryRun: dryRun, Committed: true,
 	}, s.cause
 }
@@ -134,12 +138,15 @@ func TestLifecycleCommittedFailureIsNeverRetriedAndRetainsReceipt(t *testing.T) 
 				var receipt TaskLifecycleReceipt
 				var err error
 				if create {
-					var task domain.Task
-					task, err = svc.NewTask(NewTaskParams{
+					var created TaskCreationReceipt
+					created, err = svc.NewTask(NewTaskParams{
 						Title: "Created", Epic: "01-test", Description: "created",
 						Tags: []string{"test"}, Start: true, Body: "# Created\n",
 					})
-					receipt.Task = task
+					receipt.Task = created.Task
+					if created.Local.CommittedPath != "/planning/tasks/created.md" {
+						t.Fatalf("create-and-start lost local receipt: %+v", created.Local)
+					}
 				} else {
 					receipt, err = svc.Move("existing", domain.StatusInProgress, false, TaskLifecycleOverrideNone)
 				}
@@ -147,6 +154,9 @@ func TestLifecycleCommittedFailureIsNeverRetriedAndRetainsReceipt(t *testing.T) 
 				if !errors.As(err, &committed) || !committed.Receipt.Committed ||
 					committed.Receipt.Task.Status != domain.StatusInProgress {
 					t.Fatalf("result receipt=%+v err=%v", receipt, err)
+				}
+				if create && committed.Receipt.Local.CommittedPath != "/planning/tasks/created.md" {
+					t.Fatalf("committed failure lost exact local destination: %+v", committed.Receipt.Local)
 				}
 				if st.calls != 1 {
 					t.Fatalf("committed failure retried %d times", st.calls)
@@ -275,11 +285,11 @@ func TestNewTask_MintsValidID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !id.Valid(got.ID) {
-		t.Errorf("NewTask minted an invalid id: %q", got.ID)
+	if !id.Valid(got.Task.ID) {
+		t.Errorf("NewTask minted an invalid id: %q", got.Task.ID)
 	}
 	// The id must reach CreateTask (be persisted), not just the returned value.
-	if len(fs.created) != 1 || fs.created[0].ID != got.ID {
+	if len(fs.created) != 1 || fs.created[0].ID != got.Task.ID {
 		t.Errorf("id not passed to CreateTask: created=%+v", fs.created)
 	}
 }
@@ -291,10 +301,10 @@ func TestNewAudit_MintsValidID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !id.Valid(got.ID) {
-		t.Errorf("NewAudit minted an invalid id: %q", got.ID)
+	if !id.Valid(got.Audit.ID) {
+		t.Errorf("NewAudit minted an invalid id: %q", got.Audit.ID)
 	}
-	if len(fs.createdAudits) != 1 || fs.createdAudits[0].ID != got.ID {
+	if len(fs.createdAudits) != 1 || fs.createdAudits[0].ID != got.Audit.ID {
 		t.Errorf("id not passed to CreateAudit: created=%+v", fs.createdAudits)
 	}
 }
@@ -306,8 +316,8 @@ func TestNewTask_UsesInjectedIDGen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ID != "0000000000zz" {
-		t.Errorf("NewTask ignored the injected id gen: got %q", got.ID)
+	if got.Task.ID != "0000000000zz" {
+		t.Errorf("NewTask ignored the injected id gen: got %q", got.Task.ID)
 	}
 }
 

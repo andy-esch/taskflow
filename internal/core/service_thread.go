@@ -96,7 +96,7 @@ func (s *Service) runThreadCreationMutation(dryRun bool, planner ThreadCreationP
 		}
 	}
 	receipt := ThreadCreationReceipt{
-		Thread: result.Thread, Changed: result.Changed, DryRun: result.DryRun, Committed: result.Committed,
+		Thread: result.Thread, Local: result.Local, Changed: result.Changed, DryRun: result.DryRun, Committed: result.Committed,
 	}
 	if err != nil && result.Committed {
 		return receipt, &ThreadCreationMutationFailure{Cause: err, Receipt: receipt}
@@ -190,7 +190,7 @@ func (s *Service) runThreadMutation(dryRun bool, planner ThreadMutationPlanner) 
 
 func threadMutationReceipt(result ThreadMutationResult) ThreadMutationReceipt {
 	receipt := ThreadMutationReceipt{
-		Operation: result.Plan.Operation, Thread: cloneThread(result.Thread),
+		Operation: result.Plan.Operation, Thread: cloneThread(result.Thread), LocalPath: result.LocalPath,
 		Before: cloneThreadView(result.Before), After: cloneThreadView(result.After),
 		MemberOutcomes: append([]ThreadMemberOutcome(nil), result.MemberOutcomes...),
 		Changed:        result.Changed, DryRun: result.DryRun, Committed: result.Committed,

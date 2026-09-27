@@ -62,7 +62,9 @@ func (nopStore) ResolveAuditPath(string) (string, error) { return "", domain.Err
 func (nopStore) SetFields(string, map[string]any, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
-func (nopStore) CreateTask(domain.Task, string, bool) (domain.Task, error) { return domain.Task{}, nil }
+func (nopStore) CreateTask(domain.Task, string, bool) (TaskCreationReceipt, error) {
+	return TaskCreationReceipt{}, nil
+}
 func (nopStore) EditTask(string, time.Time, func(string, error) (string, error)) (domain.Task, bool, error) {
 	return domain.Task{}, false, nil
 }
@@ -81,8 +83,8 @@ func (nopStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 func (nopStore) GetEpic(string) (domain.Epic, string, error) {
 	return domain.Epic{}, "", domain.ErrNotFound
 }
-func (nopStore) CreateEpic(string, domain.Epic, string, bool) (domain.Epic, error) {
-	return domain.Epic{}, nil
+func (nopStore) CreateEpic(string, domain.Epic, string, bool) (EpicCreationReceipt, error) {
+	return EpicCreationReceipt{}, nil
 }
 func (nopStore) MoveEpic(string, string, time.Time, bool) (domain.Epic, error) {
 	return domain.Epic{}, nil
@@ -103,8 +105,8 @@ func (nopStore) GetAudit(string) (domain.Audit, string, error) {
 func (nopStore) MoveAudit(string, domain.AuditBucket, bool) (domain.Audit, error) {
 	return domain.Audit{}, nil
 }
-func (nopStore) CreateAudit(domain.Audit, string, bool) (domain.Audit, error) {
-	return domain.Audit{}, nil
+func (nopStore) CreateAudit(domain.Audit, string, bool) (AuditCreationReceipt, error) {
+	return AuditCreationReceipt{}, nil
 }
 func (nopStore) EditAudit(string, time.Time, func(string, error) (string, error)) (domain.Audit, bool, error) {
 	return domain.Audit{}, false, nil
@@ -122,8 +124,8 @@ func (nopStore) GetResearch(string) (domain.Research, string, error) {
 	return domain.Research{}, "", domain.ErrNotFound
 }
 func (nopStore) ResolveResearchPath(string) (string, error) { return "", domain.ErrNotFound }
-func (nopStore) CreateResearch(domain.Research, string, bool) (domain.Research, error) {
-	return domain.Research{}, nil
+func (nopStore) CreateResearch(domain.Research, string, bool) (ResearchCreationReceipt, error) {
+	return ResearchCreationReceipt{}, nil
 }
 func (nopStore) SetResearchFields(string, map[string]any, bool) (domain.Research, error) {
 	return domain.Research{}, nil
@@ -364,15 +366,15 @@ func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 	}
 	return domain.Task{}, "", domain.ErrNotFound
 }
-func (f *fakeStore) CreateTask(t domain.Task, body string, _ bool) (domain.Task, error) {
+func (f *fakeStore) CreateTask(t domain.Task, body string, _ bool) (TaskCreationReceipt, error) {
 	f.created = append(f.created, t)
 	f.createdBodies = append(f.createdBodies, body)
-	return t, nil
+	return TaskCreationReceipt{Task: t}, nil
 }
-func (f *fakeStore) CreateAudit(a domain.Audit, body string, _ bool) (domain.Audit, error) {
+func (f *fakeStore) CreateAudit(a domain.Audit, body string, _ bool) (AuditCreationReceipt, error) {
 	f.createdAudits = append(f.createdAudits, a)
 	f.auditCreateBodies = append(f.auditCreateBodies, body)
-	return a, nil
+	return AuditCreationReceipt{Audit: a}, nil
 }
 func (f *fakeStore) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 	return f.epics, f.epicProblems, nil
@@ -381,10 +383,10 @@ func (f *fakeStore) ReadLintEpics() ([]LoadedRecord[domain.Epic], []LoadProblem,
 	records, problems, err := f.ListEpics()
 	return loadedEpics(records), testLintLoadProblems(EntityEpic, problems), err
 }
-func (f *fakeStore) CreateEpic(slug string, e domain.Epic, body string, _ bool) (domain.Epic, error) {
+func (f *fakeStore) CreateEpic(slug string, e domain.Epic, body string, _ bool) (EpicCreationReceipt, error) {
 	e.ID = slug
 	f.epicCreateBodies = append(f.epicCreateBodies, body)
-	return e, nil
+	return EpicCreationReceipt{Epic: e}, nil
 }
 func (f *fakeStore) GetEpic(id string) (domain.Epic, string, error) {
 	for _, e := range f.epics {
@@ -568,7 +570,7 @@ func TestService_NewTask_Valid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tk.Slug != "my-new-task" || tk.Status != domain.StatusReadyToStart || tk.Created == "" {
+	if tk.Task.Slug != "my-new-task" || tk.Task.Status != domain.StatusReadyToStart || tk.Task.Created == "" {
 		t.Errorf("unexpected created task: %+v", tk)
 	}
 	if len(fs.created) != 1 {
@@ -602,8 +604,8 @@ func TestService_NewTask_Next(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tk.Status != domain.StatusNextUp {
-		t.Errorf("--next should yield next-up, got %s", tk.Status)
+	if tk.Task.Status != domain.StatusNextUp {
+		t.Errorf("--next should yield next-up, got %s", tk.Task.Status)
 	}
 }
 

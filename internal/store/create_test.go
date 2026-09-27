@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/testutil"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -25,7 +26,7 @@ func TestCreateTask_OrderQuotingClobber(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(got.Path)
+	b, err := os.ReadFile(got.Local.CommittedPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,6 +52,51 @@ func TestCreateTask_OrderQuotingClobber(t *testing.T) {
 	}
 }
 
+func TestOrdinaryCreateReceiptsSeparatePlannedAndCommittedPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		make func(*FS, bool) (core.LocalCreateOutcome, bool, error)
+	}{
+		{"task", func(fs *FS, dry bool) (core.LocalCreateOutcome, bool, error) {
+			r, err := fs.CreateTask(domain.Task{ID: "6gdx7mn9f0a1", Slug: "created", Status: domain.StatusReadyToStart}, "# Task\n", dry)
+			return r.Local, r.Committed, err
+		}},
+		{"epic", func(fs *FS, dry bool) (core.LocalCreateOutcome, bool, error) {
+			r, err := fs.CreateEpic("created", domain.Epic{Status: domain.EpicStatusActive}, "# Epic\n", dry)
+			return r.Local, r.Committed, err
+		}},
+		{"audit", func(fs *FS, dry bool) (core.LocalCreateOutcome, bool, error) {
+			r, err := fs.CreateAudit(domain.Audit{ID: "6gdx7mn9f0a2", Slug: "2026-09-27-created", Date: "2026-09-27"}, "# Audit\n", dry)
+			return r.Local, r.Committed, err
+		}},
+		{"research", func(fs *FS, dry bool) (core.LocalCreateOutcome, bool, error) {
+			r, err := fs.CreateResearch(domain.Research{ID: "6gdx7mn9f0a3", Slug: "created", Created: "2026-09-27"}, "# Research\n", dry)
+			return r.Local, r.Committed, err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			fs := NewFS(root)
+			preview, committed, err := tc.make(fs, true)
+			if err != nil || committed || preview.PlannedPath == "" || preview.CommittedPath != "" ||
+				preview.DisplayPath(true) != preview.PlannedPath {
+				t.Fatalf("dry-run receipt=%+v committed=%v err=%v", preview, committed, err)
+			}
+			if _, err := os.Stat(preview.PlannedPath); !os.IsNotExist(err) {
+				t.Fatalf("dry run wrote planned destination: %v", err)
+			}
+			created, committed, err := tc.make(fs, false)
+			if err != nil || !committed || created.PlannedPath != preview.PlannedPath ||
+				created.CommittedPath != preview.PlannedPath || created.DisplayPath(false) != created.CommittedPath {
+				t.Fatalf("committed receipt=%+v committed=%v err=%v", created, committed, err)
+			}
+			if _, err := os.Stat(created.CommittedPath); err != nil {
+				t.Fatalf("committed path missing: %v", err)
+			}
+		})
+	}
+}
+
 func TestCreateTaskCreatesMissingPlanningRootBeforeLocking(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "new-planning-root")
 	fs := NewFS(root)
@@ -63,7 +109,7 @@ func TestCreateTaskCreatesMissingPlanningRootBeforeLocking(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(got.Path); err != nil {
+	if _, err := os.Stat(got.Local.CommittedPath); err != nil {
 		t.Fatalf("created task path: %v", err)
 	}
 }
@@ -163,7 +209,7 @@ func TestCreateTask_IDRoundTrips(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", wantID, err)
 		}
-		b, err := os.ReadFile(got.Path)
+		b, err := os.ReadFile(got.Local.CommittedPath)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -191,13 +237,13 @@ func TestCreateAudit_OpenBucketOrderClobber(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Flat layout: the audit lives directly under audits/ (bucket is frontmatter, open).
-	if base := filepath.Base(filepath.Dir(got.Path)); base != "audits" {
+	if base := filepath.Base(filepath.Dir(got.Local.CommittedPath)); base != "audits" {
 		t.Errorf("audit created under %q/, want audits/", base)
 	}
-	if got.Bucket != domain.AuditOpen {
-		t.Errorf("created audit bucket = %q, want open", got.Bucket)
+	if got.Audit.Bucket != domain.AuditOpen {
+		t.Errorf("created audit bucket = %q, want open", got.Audit.Bucket)
 	}
-	b, err := os.ReadFile(got.Path)
+	b, err := os.ReadFile(got.Local.CommittedPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +270,7 @@ func TestCreateAudit_IDRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(got.Path)
+	b, err := os.ReadFile(got.Local.CommittedPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,8 +361,8 @@ func TestCreateEpic_AutoNumber(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.ID != "01-alpha" {
-		t.Errorf("first epic id = %q, want 01-alpha", first.ID)
+	if first.Epic.ID != "01-alpha" {
+		t.Errorf("first epic id = %q, want 01-alpha", first.Epic.ID)
 	}
 	if err := os.WriteFile(fs.epicsDir+"/04-beta.md", []byte("---\nstatus: active\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -325,15 +371,15 @@ func TestCreateEpic_AutoNumber(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.ID != "05-gamma" {
-		t.Errorf("next epic id = %q, want 05-gamma", next.ID)
+	if next.Epic.ID != "05-gamma" {
+		t.Errorf("next epic id = %q, want 05-gamma", next.Epic.ID)
 	}
 }
 
 func TestCreateEpicSerializesNumberAllocation(t *testing.T) {
 	root := t.TempDir()
 	type result struct {
-		epic domain.Epic
+		epic core.EpicCreationReceipt
 		err  error
 	}
 	start := make(chan struct{})
@@ -353,9 +399,9 @@ func TestCreateEpicSerializesNumberAllocation(t *testing.T) {
 	if first.err != nil || second.err != nil {
 		t.Fatalf("concurrent epic creates failed: %v, %v", first.err, second.err)
 	}
-	firstNum, secondNum := epicNum(first.epic.ID), epicNum(second.epic.ID)
+	firstNum, secondNum := epicNum(first.epic.Epic.ID), epicNum(second.epic.Epic.ID)
 	if firstNum == secondNum || firstNum+secondNum != 3 {
-		t.Fatalf("concurrent epic ids = %q, %q; want distinct allocations 1 and 2", first.epic.ID, second.epic.ID)
+		t.Fatalf("concurrent epic ids = %q, %q; want distinct allocations 1 and 2", first.epic.Epic.ID, second.epic.Epic.ID)
 	}
 }
 

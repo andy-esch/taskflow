@@ -335,7 +335,12 @@ adapter capabilities rather than leaked persistence.
   preparation and collision checks without claiming a durable reservation. Graph-aware Thread and
   create-and-start operations retain their stronger core-planned transactions and reuse only the
   lock-compatible create primitive; this storage ordering is not imposed on future adapters that
-  can provide native uniqueness. The legacy
+  can provide native uniqueness. Each create returns a kind-specific core receipt with optional
+  adapter-owned planned and committed local paths; dry runs carry only the plan. The CLI reads
+  these paths from receipts, not from domain records, and pathless adapters leave them empty.
+  Thread updates similarly expose their optional local path separately. Task rename receipts retain
+  exact source and destination paths alongside their durable-prefix stage, including on partial
+  failure, so recovery never has to resolve a possibly ambiguous post-rename name. The legacy
   `projects/` scaffold is no longer created; only an empty directory or a lone regular
   `.gitkeep` is eligible for automatic retirement, and other content is preserved.
   `RenameTask` is the exceptional multi-document member of the ordinary task port. A real rename

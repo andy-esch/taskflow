@@ -31,13 +31,13 @@ type NewResearchParams struct {
 // actually happened sorts into place chronologically — the property that lets the
 // corpus be ordered by id (ADR-0003 §3). On invalid input it returns ErrValidation and
 // nothing is written.
-func (s *Service) NewResearch(p NewResearchParams) (domain.Research, error) {
+func (s *Service) NewResearch(p NewResearchParams) (ResearchCreationReceipt, error) {
 	if err := templateBodyConflict(p.Body, p.Template); err != nil {
-		return domain.Research{}, err
+		return ResearchCreationReceipt{}, err
 	}
 	title := strings.TrimSpace(p.Title)
 	if title == "" {
-		return domain.Research{}, fmt.Errorf("%w: research title is required", domain.ErrValidation)
+		return ResearchCreationReceipt{}, fmt.Errorf("%w: research title is required", domain.ErrValidation)
 	}
 	created := p.Created
 	if created == "" {
@@ -47,23 +47,23 @@ func (s *Service) NewResearch(p NewResearchParams) (domain.Research, error) {
 	// also be inside the range an id can encode — otherwise the timestamp wraps and the
 	// doc sorts wrongly forever, with no other symptom.
 	if err := domain.ValidateMintableDate(created); err != nil {
-		return domain.Research{}, err
+		return ResearchCreationReceipt{}, err
 	}
 	if err := domain.ValidateDescription(p.Description); err != nil {
-		return domain.Research{}, err
+		return ResearchCreationReceipt{}, err
 	}
 	// Any title is accepted: Slugify derives a filesystem-safe slug while the full
 	// original title is preserved as the body H1. An empty slug is the only hard guard.
 	slug := domain.Slugify(title)
 	if slug == "" {
-		return domain.Research{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, title)
+		return ResearchCreationReceipt{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, title)
 	}
 	// Mint from created, not now — a day-precision date, so same-day docs land in the
 	// same millisecond slot and their relative order comes from NewAt's random low bits.
 	// That intra-day order is deliberately not meaningful (epic 28, 2026-08-14).
 	day, err := time.Parse("2006-01-02", created)
 	if err != nil {
-		return domain.Research{}, fmt.Errorf("%w: unparseable created date %q", domain.ErrValidation, created)
+		return ResearchCreationReceipt{}, fmt.Errorf("%w: unparseable created date %q", domain.ErrValidation, created)
 	}
 	r := domain.Research{
 		Slug:        slug,
@@ -75,7 +75,7 @@ func (s *Service) NewResearch(p NewResearchParams) (domain.Research, error) {
 	if body == "" {
 		tmpl, err := s.templateBody("research", p.Template)
 		if err != nil {
-			return domain.Research{}, err
+			return ResearchCreationReceipt{}, err
 		}
 		body = renderTemplate(tmpl, map[string]string{"title": title, "date": created})
 	}
@@ -91,12 +91,18 @@ func (s *Service) NewResearch(p NewResearchParams) (domain.Research, error) {
 		if err == nil {
 			return got, nil
 		}
+		// A conflict-classified cleanup error is not an ID collision once the
+		// adapter has committed. Preserve its receipt for recovery and never
+		// mint another ID for the same document.
+		if got.Committed {
+			return got, err
+		}
 		if !errors.Is(err, domain.ErrConflict) {
-			return domain.Research{}, err
+			return got, err
 		}
 		lastErr = err
 	}
-	return domain.Research{}, lastErr
+	return ResearchCreationReceipt{}, lastErr
 }
 
 // maxIDMintAttempts bounds the regenerate-on-collision loop in NewResearch. A real

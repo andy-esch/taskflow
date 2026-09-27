@@ -23,7 +23,7 @@ type TaskStore interface {
 	// the would-be result but stops short of disk. Lifecycle changes are deliberately
 	// absent: TaskLifecycleMutationStore is the only status-write capability.
 	SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error)
-	CreateTask(t domain.Task, body string, dryRun bool) (domain.Task, error)
+	CreateTask(t domain.Task, body string, dryRun bool) (TaskCreationReceipt, error)
 	// EditTask hands the current file content to edit (which runs the caller's
 	// editor) and accepts the result only if it still parses as a task —
 	// parse-before-accept, looping on the editor for a broken edit. A changed save
@@ -184,7 +184,7 @@ type EpicStore interface {
 	// ResolveEpicPath returns an epic's file path from its id, parse-free (see
 	// ResolveTaskPath).
 	ResolveEpicPath(id string) (string, error)
-	CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (domain.Epic, error)
+	CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (EpicCreationReceipt, error)
 	// MoveEpic surgically rewrites an epic's `status` frontmatter field (epic
 	// status is a field, not a directory, so the file stays put), stamping updated_at
 	// on a real status change. dryRun runs every validation and returns the would-be
@@ -237,7 +237,7 @@ type AuditStore interface {
 	// (see ResolveTaskPath).
 	ResolveAuditPath(slug string) (string, error)
 	MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error)
-	CreateAudit(a domain.Audit, body string, dryRun bool) (domain.Audit, error)
+	CreateAudit(a domain.Audit, body string, dryRun bool) (AuditCreationReceipt, error)
 	// EditAudit hands the current file content to edit (the caller's editor) and
 	// accepts the result only if it still parses as an audit — parse-before-accept,
 	// looping on a broken edit. A changed save is stamped with updated_at (now);
@@ -270,7 +270,7 @@ type ResearchStore interface {
 	// ResolveResearchPath returns a doc's file path from its slug/id, parse-free
 	// (see ResolveTaskPath).
 	ResolveResearchPath(slug string) (string, error)
-	CreateResearch(r domain.Research, body string, dryRun bool) (domain.Research, error)
+	CreateResearch(r domain.Research, body string, dryRun bool) (ResearchCreationReceipt, error)
 	// SetResearchFields surgically updates frontmatter fields in one atomic, validated
 	// write. updated_at is injected by the service; `created` is rejected upstream (the
 	// id encodes it). dryRun runs every validation without touching disk.

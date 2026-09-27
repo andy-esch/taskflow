@@ -519,6 +519,9 @@ func (a *App) markdownStyle() string {
 // rel renders path relative to the planning root for readable output, falling
 // back to the original path.
 func (a *App) rel(path string) string {
+	if path == "" {
+		return ""
+	}
 	if a.Cfg != nil {
 		if r, err := filepath.Rel(a.Cfg.Root, path); err == nil {
 			return r
@@ -532,5 +535,8 @@ func (a *App) rel(path string) string {
 // absolute path in the URL so the terminal can resolve it). Off a TTY / under
 // --json it's just the plain relative path, so machine output is unchanged.
 func (a *App) linkPath(abs string) string {
+	if abs == "" {
+		return ""
+	}
 	return a.Style.Link(a.rel(abs), "file://"+abs)
 }

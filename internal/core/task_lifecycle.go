@@ -67,8 +67,10 @@ type TaskLifecycleAnalysis struct {
 // Changed means the semantic task document differs; dry runs report the same
 // result without a durable replacement.
 type TaskLifecycleMutationResult struct {
-	Plan                TaskLifecyclePlan
-	Task                domain.Task
+	Plan TaskLifecyclePlan
+	Task domain.Task
+	// Local is populated only for create-and-start, never for an existing-task transition.
+	Local               LocalCreateOutcome
 	From                domain.Status
 	Before              TaskGraphState
 	After               TaskGraphState
@@ -87,6 +89,7 @@ type TaskLifecycleMutationResult struct {
 // TaskLifecycleReceipt is the adapter-neutral public result returned by Service.
 type TaskLifecycleReceipt struct {
 	Task                domain.Task
+	Local               LocalCreateOutcome
 	From                domain.Status
 	To                  domain.Status
 	Changed             bool
@@ -174,7 +177,11 @@ func (e *TaskLifecycleMutationFailure) Error() string {
 	if e == nil {
 		return "task lifecycle transition committed, but repository cleanup failed"
 	}
-	return fmt.Sprintf("task lifecycle transition committed, but repository cleanup failed: %v; inspect current task state before retrying", e.Cause)
+	message := fmt.Sprintf("task lifecycle transition committed, but repository cleanup failed: %v; inspect current task state before retrying", e.Cause)
+	if e.Receipt.Local.CommittedPath != "" {
+		message += fmt.Sprintf("; created task at %q", e.Receipt.Local.CommittedPath)
+	}
+	return message
 }
 
 func (e *TaskLifecycleMutationFailure) Unwrap() error {

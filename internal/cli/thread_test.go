@@ -584,9 +584,13 @@ func TestThreadCreationCommittedFailureHasStructuredRecovery(t *testing.T) {
 	receipt := core.ThreadCreationReceipt{
 		Thread: domain.Thread{ID: "6g3q4rtmv4ak", Slug: "delivery", Status: domain.ThreadStatusUnstarted,
 			Description: "delivery", Goal: "ship", Created: "2026-08-29"},
+		Local:   core.LocalCreateOutcome{PlannedPath: "/repo/planning/threads/6g3q4rtmv4ak-delivery.md", CommittedPath: "/repo/planning/threads/6g3q4rtmv4ak-delivery.md"},
 		Changed: true, Committed: true,
 	}
 	cause := &core.ThreadCreationMutationFailure{Cause: domain.ErrConflict, Receipt: receipt}
+	if !strings.Contains(cause.Error(), receipt.Local.CommittedPath) {
+		t.Fatalf("human Thread creation failure omitted exact path: %v", cause)
+	}
 	err := &threadCreationCommandFailure{
 		cause: cause, receipt: receipt, path: "threads/6g3q4rtmv4ak-delivery.md",
 		workspace: wire.WorkspaceJSON{PlanningRoot: "/repo/planning", Source: wire.WorkspaceSourceConfig},
@@ -614,9 +618,13 @@ func TestThreadMutationCommittedFailureHasStructuredRecovery(t *testing.T) {
 	view := core.ProjectThread(thread, core.NewTaskGraph(nil, nil))
 	receipt := core.ThreadMutationReceipt{
 		Operation: core.ThreadMutationStart, Thread: thread, Before: view, After: view,
-		Changed: true, Committed: true,
+		LocalPath: "/repo/planning/threads/6g3q4rtmv4ak-delivery.md",
+		Changed:   true, Committed: true,
 	}
 	cause := &core.ThreadMutationFailure{Cause: domain.ErrConflict, Receipt: receipt}
+	if !strings.Contains(cause.Error(), receipt.LocalPath) {
+		t.Fatalf("human Thread mutation failure omitted exact path: %v", cause)
+	}
 	err := &threadMutationCommandFailure{
 		cause: cause, receipt: receipt, path: "threads/6g3q4rtmv4ak-delivery.md",
 		workspace: wire.WorkspaceJSON{PlanningRoot: "/repo/planning", Source: wire.WorkspaceSourceConfig},
