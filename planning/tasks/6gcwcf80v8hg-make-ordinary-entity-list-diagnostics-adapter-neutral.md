@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gcwcf80v8hg
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Preserve identity and optional locations through task, epic, audit, research, and finding list projections.
 effort: 3-5 days
@@ -10,9 +10,10 @@ priority: medium
 autonomy_level: 3
 tags: [architecture, diagnostics, ports, json]
 created: "2026-09-23"
-updated_at: "2026-09-26"
+updated_at: "2026-09-27"
 depends_on: [6gcwcf7rgxef]
 started_at: "2026-09-26"
+completed_at: "2026-09-27"
 ---
 
 # Make ordinary entity list diagnostics adapter neutral
