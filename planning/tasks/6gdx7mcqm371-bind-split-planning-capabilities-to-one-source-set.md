@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gdx7mcqm371
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Prevent semantic reads, local paths, and mutations from being composed across unrelated planning corpora.
 effort: 2-3 days
@@ -13,6 +13,7 @@ created: "2026-09-26"
 depends_on: [6gcwcf7rgxef]
 updated_at: "2026-09-27"
 started_at: "2026-09-27"
+completed_at: "2026-09-27"
 ---
 
 # Bind split planning capabilities to one source set

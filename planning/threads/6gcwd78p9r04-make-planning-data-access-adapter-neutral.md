@@ -6,8 +6,8 @@ description: Eliminate path-shaped application contracts and primary-to-secondar
 goal: Core use cases consume identity-bearing semantic ports; local paths are optional capabilities, and primary adapters cannot bypass the application boundary.
 created: "2026-09-23"
 tags: [architecture, ports, adapters, hardening]
-tasks: [6g5vm4efjcdv, 6g6jqqcdehne, 6gcwcf77tvgq, 6gcwcf7gjayh, 6gcwcf7rgxef, 6gcwcf80v8hg, 6gcwcf88z57p, 6gcwcf8gzn50, 6gcwcf8rxe72, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2]
-updated_at: "2026-09-26"
+tasks: [6g5vm4efjcdv, 6g6jqqcdehne, 6gcwcf77tvgq, 6gcwcf7gjayh, 6gcwcf7rgxef, 6gcwcf80v8hg, 6gcwcf88z57p, 6gcwcf8gzn50, 6gcwcf8rxe72, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2, 6ge7qn9ptaxv]
+updated_at: "2026-09-27"
 started_at: "2026-09-23"
 ---
 
@@ -25,25 +25,28 @@ opaque source location and a local repair path may coexist, core never reconstru
 either value, guarded source revisions remain private, and public projections use deterministic
 ordering without rescanning records.
 
-The remaining application surface is narrower but still uneven: ordinary task, epic, audit,
-research, and finding lists expose `FileProblem`; semantic entities and `Resolve*Path` methods mix
-portable reads with local navigation; and some CLI controllers reach directly into the filesystem
-adapter.
+The loaded-record and optional-local-capability design is complete. Ordinary task, epic, audit,
+research, and finding reads now preserve portable source identity and diagnostics, and split
+planning-data capabilities must agree on one source-set witness at construction. The remaining
+seams are local mutation outcome paths, TUI identity and refresh, readable occurrence locations,
+domain fields that still carry local paths or revisions, and CLI controllers that reach directly
+into the filesystem adapter.
 
 This Thread closes those seams in evidence-driven stages:
 
 1. Establish and stress-test the diagnostic/read precedents through lint, graph attribution,
    Board/status, and audit findings. **Completed.**
-2. Use those concrete ports to design one coherent loaded-record and optional-local-capability
-   contract instead of copying Thread-specific shapes mechanically. **In progress.**
-3. Promote the proven diagnostic vocabulary and introduce one authoritative loaded-record scan,
-   then migrate ordinary list/show, Summary, lint, and wire projections onto compatibility views.
-4. In parallel, bind split capabilities to one source set and preserve local create/rename outcome
-   evidence outside domain records.
-5. Move TUI identity and refresh handling onto portable loaded-record evidence while preserving its
-   fail-closed duplicate-ID behavior.
-6. Move local paths, filename-derived identity, and guarded revisions out of semantic entity values;
-   finish the partial Thread precedent and wire explicit local capabilities.
+2. Design the shared loaded-record and optional-local-capability contract. **Completed.**
+3. Promote portable diagnostics and migrate ordinary list/show, Summary, lint, and wire
+   projections onto loaded-record evidence. **Completed.**
+4. Bind split capabilities to one source set. **Completed.** Preserve local create/rename outcome
+   evidence outside domain records. **In progress.** Then harden ordinary create guard-release
+   reporting so a durable file is never mistaken for a failed create that is safe to retry.
+5. Preserve readable occurrence locations and move TUI identity/refresh onto portable loaded-record
+   evidence while retaining fail-closed duplicate-ID behavior. **Eligible in parallel.**
+6. After those prerequisites, move local paths, filename-derived identity, and guarded revisions
+   out of semantic entity values; finish the partial Thread precedent and wire explicit local
+   capabilities.
 7. Route CLI planning-data operations through those settled application ports.
 8. Isolate composition wiring and make the intended controller boundary executable through the
    standard lint suite.
