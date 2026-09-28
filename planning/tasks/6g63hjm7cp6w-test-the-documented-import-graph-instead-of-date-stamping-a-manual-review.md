@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [architecture, docs, go, dx]
 created: "2026-09-02"
 depends_on: [6g6x7e2ef37r]
-updated_at: "2026-09-13"
+updated_at: "2026-09-28"
+audit_sources: [2026-09-28-arch-hexagonal-boundaries]
 ---
 # Test the documented import graph instead of date-stamping a manual review
 
@@ -55,3 +56,5 @@ removes the review date as a thing a human has to refresh.
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Thread [Make documentation layered, executable, and agent-navigable](../threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md)
 - Follows [Restructure the architecture documentation into focused guides](6g6x7e2ef37r-restructure-the-architecture-documentation-into-focused-guides.md)
+
+Reinforced by audit 2026-09-28-arch-hexagonal-boundaries: M1 (partial overlap, finding kept open). The audit notes this task's import-graph test would independently catch M1's probe scenario, since a new `tui -> <newpkg>` edge is absent from the documented graph block — complementary to, not a duplicate of, the depguard policy change M1 proposes (which this task's "Out of scope" explicitly declines).
