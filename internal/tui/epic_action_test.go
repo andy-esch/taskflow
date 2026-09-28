@@ -77,7 +77,7 @@ func TestModel_CommandVerbMovesEpic(t *testing.T) {
 	if cmd == nil {
 		t.Fatal(":retire should fire a MoveEpic")
 	}
-	msg, ok := cmd().(movedMsg)
+	msg, ok := mutationResult(cmd()).(movedMsg)
 	if !ok || msg.to != "retired" {
 		t.Fatalf(":retire should yield a movedMsg → retired, got %T %+v", cmd(), cmd())
 	}

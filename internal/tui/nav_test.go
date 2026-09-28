@@ -76,7 +76,7 @@ func TestModel_FollowEpicToTaskViaMenuMultiHop(t *testing.T) {
 			t.Fatal("picker keys must not quit the app")
 		}
 	}
-	want := m.follow.selected().Slug
+	want := m.follow.selected().Value.Slug
 	tm, cmd = m.Update(press("enter")) // hop 2: epics/01-test → tasks/<want>
 	m = pump(t, tm.(Model), cmd, 8)
 	if m.cur().name != "tasks" || m.selectedLabel() != want {
@@ -182,7 +182,7 @@ func TestModel_FollowEscalatesToAllView(t *testing.T) {
 		t.Fatalf("picker should open (flash=%q)", m.flash)
 	}
 	// Select done-one (store scan order puts completed after in-progress).
-	for m.follow.selected().Slug != "done-one" {
+	for m.follow.selected().Value.Slug != "done-one" {
 		tm, _ = m.Update(press("j"))
 		m = tm.(Model)
 	}

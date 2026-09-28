@@ -36,6 +36,14 @@ type LoadedRecord[T any] struct {
 	Source RecordSource
 }
 
+// VersionedRecord keeps guarded snapshot evidence beside, but outside, the
+// semantic record. Ordinary projections use Record and never expose the opaque
+// version to renderers or domain values.
+type VersionedRecord[T any] struct {
+	Record        LoadedRecord[T]
+	SourceVersion string `json:"-" yaml:"-"`
+}
+
 // LoadProblem is one non-fatal failed-record diagnostic. Stable identity is
 // explicit when the adapter can recover it. Location is optional opaque context;
 // LocalPath is an independently optional repair handle for local adapters.
@@ -85,6 +93,11 @@ type AuditWithBody struct {
 type ResearchWithBody struct {
 	Research domain.Research
 	Body     string
+}
+
+type ThreadWithBody struct {
+	Thread domain.Thread
+	Body   string
 }
 
 func requireSourceID(kind EntityKind, source RecordSource) error {

@@ -82,7 +82,7 @@ func TestReadThreadsRecoversFilesystemProblemIdentityAtAdapterBoundary(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(read.Threads) != 0 || len(read.Problems) != 2 {
+	if len(read.Records) != 0 || len(read.Problems) != 2 {
 		t.Fatalf("read = %+v", read)
 	}
 	byLocation := make(map[string]core.ThreadReadProblem, len(read.Problems))

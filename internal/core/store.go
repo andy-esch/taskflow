@@ -4,6 +4,7 @@
 package core
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -131,8 +132,44 @@ type ThreadReadProblem struct {
 // unreadable problems both carry opaque source revisions so guarded stores can
 // qualify the complete source set without exposing persistence-specific types.
 type ThreadRead struct {
-	Threads  []domain.Thread
+	Records  []VersionedRecord[domain.Thread]
 	Problems []ThreadReadProblem
+}
+
+// SemanticThreads is the planner-facing view of one authoritative Thread read.
+// It preserves source-record order, strips any legacy embedded revision, and
+// deliberately does not let a second, independently populated slice become
+// mutation evidence.
+func (read ThreadRead) SemanticThreads() []domain.Thread {
+	threads := make([]domain.Thread, 0, len(read.Records))
+	for _, record := range read.Records {
+		thread := record.Record.Value
+		thread.SourceVersion = ""
+		threads = append(threads, thread)
+	}
+	return threads
+}
+
+// ValidateSources rejects a readable Thread set whose adapter identities cannot
+// safely address one occurrence each. Ordinary guarded mutations must call this
+// before constructing a semantic planner snapshot. Repair is intentionally not
+// gated here: it may need to operate while Thread evidence is incomplete.
+func (read ThreadRead) ValidateSources() error {
+	seen := make(map[string]struct{}, len(read.Records))
+	for _, record := range read.Records {
+		if err := requireSourceID(EntityThread, record.Record.Source); err != nil {
+			return err
+		}
+		id := record.Record.Source.ID
+		if _, duplicate := seen[id]; duplicate {
+			return fmt.Errorf("%w: duplicate canonical Thread source ID %q", domain.ErrValidation, id)
+		}
+		if declared := record.Record.Value.ID; declared != id {
+			return fmt.Errorf("%w: Thread source ID %q disagrees with declared id %q", domain.ErrValidation, id, declared)
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
 }
 
 // ThreadStore is the narrow read capability for first-class Thread documents.
@@ -144,7 +181,7 @@ type ThreadRead struct {
 // canonical repository view.
 type ThreadStore interface {
 	ReadThreads() (ThreadRead, error)
-	GetThread(ref string) (thread domain.Thread, body string, err error)
+	ReadThread(ref string) (LoadedRecord[ThreadWithBody], error)
 }
 
 // ThreadPathSource is the optional local-navigation capability behind `thread

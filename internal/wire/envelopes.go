@@ -277,8 +277,16 @@ func ToSummaryJSON(s core.Summary) SummaryJSON {
 		counts = append(counts, StatusCountJSON{Status: string(c.Status), Count: c.Count})
 	}
 	inprog := make([]TaskJSON, 0, len(s.InProgress))
-	for _, t := range s.InProgress {
-		inprog = append(inprog, ToTaskJSON(t))
+	if s.InProgressRecords != nil {
+		for _, record := range s.InProgressRecords {
+			inprog = append(inprog, ToLoadedTaskJSON(record))
+		}
+	} else {
+		// Focused legacy callers may still build a bare Summary. Production
+		// summaries provide records from the same task-graph snapshot.
+		for _, t := range s.InProgress {
+			inprog = append(inprog, ToTaskJSON(t))
+		}
 	}
 	epics := make([]EpicJSON, 0, len(s.Epics))
 	for _, e := range s.Epics {

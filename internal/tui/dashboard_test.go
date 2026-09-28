@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -390,6 +391,41 @@ func TestModel_DashboardAcuteFindingJumpsToAudit(t *testing.T) {
 	if m.onDash || m.cur().kind != entityAudits || m.selectedLabel() != "2026-06-27-arch" || m.selectedKey() != wantKey {
 		t.Errorf("enter on the acute finding should jump to its audit, got onDash=%v tab=%q id=%q",
 			m.onDash, m.cur().name, m.selectedLabel())
+	}
+}
+
+func TestDashboardAcuteFindingRefusesAuditIDDuplicatedOutsideOpenBucket(t *testing.T) {
+	root := auditFindingsRepo(t)
+	id := testutil.TaskID("2026-06-27-arch")
+	testutil.Write(t, filepath.Join(root, domain.AuditsDir, id+"-hidden-copy.md"),
+		"---\nid: "+testutil.TaskID("other-audit-declaration")+"\nbucket: closed\narea: arch\ndate: 2026-09-28\n---\n# Hidden copy\n")
+	summary, err := core.MustNewService(store.NewFS(root)).Summary()
+	if err != nil || len(summary.Findings.Acute) != 1 {
+		t.Fatalf("summary acute=%+v err=%v", summary.Findings.Acute, err)
+	}
+	count := 0
+	for _, sourceID := range summary.AuditSourceIDs {
+		if sourceID == id {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Fatalf("complete audit source snapshot lost closed duplicate: ids=%v", summary.AuditSourceIDs)
+	}
+	var d dashboard
+	d.setSummary(summary, &testStyles, false)
+	found := false
+	for _, row := range d.rows {
+		if !strings.Contains(ansi.Strip(row.text), "H1 fence event_time on writes") {
+			continue
+		}
+		found = true
+		if row.target != nil || !strings.Contains(ansi.Strip(row.text), "audit identity unavailable") {
+			t.Fatalf("ambiguous acute audit finding remained navigable: %+v", row)
+		}
+	}
+	if !found {
+		t.Fatal("acute finding disappeared instead of remaining explanatory")
 	}
 }
 

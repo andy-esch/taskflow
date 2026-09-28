@@ -86,7 +86,7 @@ func TestModel_CommandVerbMovesAudit(t *testing.T) {
 	if cmd == nil {
 		t.Fatal(":close should fire a MoveAudit")
 	}
-	msg, ok := cmd().(movedMsg)
+	msg, ok := mutationResult(cmd()).(movedMsg)
 	if !ok || msg.to != string(domain.AuditClosed) {
 		t.Fatalf(":close should yield a movedMsg → closed, got %T %+v", cmd(), cmd())
 	}

@@ -80,7 +80,10 @@ type SpaceInProgress struct {
 	SpaceID    string
 	PlanningID string
 	Task       domain.Task
-	Stale      bool
+	Source     RecordSource
+	// IdentityUnavailable includes duplicates outside the in-progress subset.
+	IdentityUnavailable bool
+	Stale               bool
 }
 
 // SpaceOverview is the read-only, cross-space dashboard projection.
@@ -199,6 +202,13 @@ func cloneSpaceSummary(summary Summary) Summary {
 	for i, task := range summary.InProgress {
 		cloned.InProgress[i] = cloneTask(task)
 	}
+	cloned.InProgressRecords = make([]LoadedRecord[domain.Task], len(summary.InProgressRecords))
+	for i, record := range summary.InProgressRecords {
+		cloned.InProgressRecords[i] = record
+		cloned.InProgressRecords[i].Value = cloneTask(record.Value)
+	}
+	cloned.TaskSourceIDs = append([]string(nil), summary.TaskSourceIDs...)
+	cloned.AuditSourceIDs = append([]string(nil), summary.AuditSourceIDs...)
 	cloned.Epics = append([]EpicSummary(nil), summary.Epics...)
 	for i := range cloned.Epics {
 		cloned.Epics[i].Epic.Tags = append([]string(nil), summary.Epics[i].Epic.Tags...)
@@ -220,9 +230,15 @@ func spaceOverviewFromSummaries(spaces []SpaceSummary) SpaceOverview {
 		if space.Summary == nil {
 			continue
 		}
-		for _, task := range space.Summary.InProgress {
+		sourceCounts := make(map[string]int, len(space.Summary.TaskSourceIDs))
+		for _, id := range space.Summary.TaskSourceIDs {
+			sourceCounts[id]++
+		}
+		for _, record := range space.Summary.InProgressRecords {
 			overview.InProgress = append(overview.InProgress, SpaceInProgress{
-				SpaceID: space.ID, PlanningID: space.PlanningID, Task: task, Stale: space.Stale,
+				SpaceID: space.ID, PlanningID: space.PlanningID, Task: record.Value,
+				Source: record.Source, IdentityUnavailable: record.Source.ID == "" || sourceCounts[record.Source.ID] != 1,
+				Stale: space.Stale,
 			})
 		}
 	}

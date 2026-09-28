@@ -35,8 +35,18 @@ func (s *FS) ReadThreads() (core.ThreadRead, error) {
 
 func threadReadFromSourceFiles(threads []domain.Thread, problems []sourceFileProblem) core.ThreadRead {
 	read := core.ThreadRead{
-		Threads:  append([]domain.Thread(nil), threads...),
+		Records:  make([]core.VersionedRecord[domain.Thread], 0, len(threads)),
 		Problems: make([]core.ThreadReadProblem, 0, len(problems)),
+	}
+	for _, thread := range threads {
+		version := thread.SourceVersion
+		thread.SourceVersion = ""
+		read.Records = append(read.Records, core.VersionedRecord[domain.Thread]{
+			Record: core.LoadedRecord[domain.Thread]{
+				Value: thread, Source: core.RecordSource{ID: thread.FilenameID, Location: thread.Path},
+			},
+			SourceVersion: version,
+		})
 	}
 	for _, problem := range problems {
 		read.Problems = append(read.Problems, threadReadProblemFromFile(problem.problem, problem.sourceVersion))
@@ -76,6 +86,20 @@ func (s *FS) GetThread(ref string) (domain.Thread, string, error) {
 	}
 	_, body := splitFrontmatter(content)
 	return thread, string(body), nil
+}
+
+// ReadThread is the portable selected-document read. Identity is established at
+// this adapter boundary from the resolved source name, not recovered by core or
+// a presentation adapter from domain metadata.
+func (s *FS) ReadThread(ref string) (core.LoadedRecord[core.ThreadWithBody], error) {
+	thread, body, err := s.GetThread(ref)
+	if err != nil {
+		return core.LoadedRecord[core.ThreadWithBody]{}, err
+	}
+	return core.LoadedRecord[core.ThreadWithBody]{
+		Value:  core.ThreadWithBody{Thread: thread, Body: body},
+		Source: core.RecordSource{ID: thread.FilenameID, Location: thread.Path},
+	}, nil
 }
 
 func (s *FS) threadCandidates() ([]candidate, error) { return flatCandidates(s.threadsDir) }

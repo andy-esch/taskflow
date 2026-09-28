@@ -65,6 +65,17 @@ type editedMsg struct {
 // path as an external edit — so there's no slug or content to carry.
 type editorClosedMsg struct{ err error }
 
+// mutationResultMsg ties a local action's delayed result to the selection and
+// list generation from which the action was launched. A later refresh may have
+// reused the same visible row or moved the cursor; neither may receive the old
+// result's inline-editor or flash side effects.
+type mutationResultMsg struct {
+	kind    entityKind
+	ref     entityRef
+	listGen int
+	result  tea.Msg
+}
+
 // listLoadedMsg carries the result of an async entity-list load. kind tags which
 // entity tab it belongs to, so a load that finishes after the user has switched
 // tabs still lands in the right list. gen is the tab's load generation at fire
@@ -75,6 +86,9 @@ type listLoadedMsg struct {
 	gen      int
 	items    []list.Item
 	problems []core.LoadProblem
+	// Identity validation is over the complete family snapshot, before this
+	// view's status/bucket filter may hide an ambiguous occurrence.
+	identityErr error
 	// Only the Threads registry entry populates this. It retains repository-level
 	// diagnostics that cannot be attributed to a single Thread row.
 	threadDiagnostics *threadListDiagnostics
@@ -94,10 +108,12 @@ type listLoadedMsg struct {
 // and when gen is the latest detail request (two loads for the *same* id aren't
 // ordered otherwise).
 type detailMsg struct {
-	kind    entityKind
-	id      string
-	gen     int
-	content detailContent
+	kind     entityKind
+	id       string
+	gen      int
+	listGen  int
+	sourceID string
+	content  detailContent
 }
 
 // detailErrMsg carries a per-item detail-load failure (e.g. an ambiguous
@@ -107,6 +123,7 @@ type detailErrMsg struct {
 	id        string
 	label     string
 	gen       int
+	listGen   int
 	err       error
 	localPath string // optional navigation capability retained on a semantic read failure
 }

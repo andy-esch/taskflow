@@ -395,7 +395,7 @@ func TestThreadSpatialDirectionalChooserRevalidatesAgainstCurrentGraph(t *testin
 	m = tm.(Model)
 	tm, _ = m.Update(press("l"))
 	m = tm.(Model)
-	if !m.direction.active || m.direction.tasks[0].CanonicalID() != "c" {
+	if !m.direction.active || m.direction.tasks[0].Source.ID != "c" {
 		t.Fatalf("expected dependent chooser before reload: %+v", m.direction)
 	}
 

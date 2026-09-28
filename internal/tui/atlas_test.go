@@ -1483,15 +1483,15 @@ func TestAtlasWorkStartedOrderPutsTheStalestFirst(t *testing.T) {
 func TestAtlasWorkOrderAndRowsDistinguishDuplicateSlugsByCanonicalID(t *testing.T) {
 	first := core.SpaceInProgress{SpaceID: "same-space", PlanningID: "planning-same", Task: domain.Task{
 		ID: "aaaaaa111111", Slug: "same-task", Priority: "low", StartedAt: "2026-08-01",
-	}}
+	}, Source: core.RecordSource{ID: "aaaaaa111111"}}
 	second := core.SpaceInProgress{SpaceID: "same-space", PlanningID: "planning-same", Task: domain.Task{
 		ID: "bbbbbb222222", Slug: "same-task", Priority: "high", StartedAt: "2026-08-02",
-	}}
+	}, Source: core.RecordSource{ID: "bbbbbb222222"}}
 	a := atlas{loaded: true, work: []core.SpaceInProgress{first, second}, workCursor: 1, workOrder: atlasWorkByPriority}
 	a.applyWorkOrder()
 	selected, ok := a.selectedWork()
-	if !ok || selected.Task.CanonicalID() != second.Task.CanonicalID() {
-		t.Fatalf("re-sort restored %+v, want second duplicate %q", selected.Task, second.Task.CanonicalID())
+	if !ok || selected.Source.ID != second.Source.ID {
+		t.Fatalf("re-sort restored %+v, want second duplicate %q", selected.Task, second.Source.ID)
 	}
 
 	rows, _ := a.workRows(&testStyles, 80)
@@ -1526,17 +1526,37 @@ func TestAtlasWorkLandingCarriesTheSelectedCanonicalKey(t *testing.T) {
 	m, _, _, _ := atlasTestModel(t)
 	first := core.SpaceInProgress{SpaceID: "alpha", PlanningID: "planning-alpha", Task: domain.Task{
 		ID: "aaaaaa111111", Slug: "same-task", Status: domain.StatusInProgress,
-	}}
+	}, Source: core.RecordSource{ID: "aaaaaa111111"}}
 	second := core.SpaceInProgress{SpaceID: "alpha", PlanningID: "planning-alpha", Task: domain.Task{
 		ID: "bbbbbb222222", Slug: "same-task", Status: domain.StatusInProgress,
-	}}
+	}, Source: core.RecordSource{ID: "bbbbbb222222"}}
 	m.atlas.work = []core.SpaceInProgress{first, second}
 	m.atlas.workCursor = 1
 	if cmd := m.openAtlasWork(); cmd == nil {
 		t.Fatal("selected work row did not issue a workspace open")
 	}
-	if !m.pendingJump.set || m.pendingJump.ref.key != second.Task.CanonicalID() {
-		t.Fatalf("pending landing = %+v, want second duplicate %q", m.pendingJump, second.Task.CanonicalID())
+	if !m.pendingJump.set || m.pendingJump.ref.key != second.Source.ID {
+		t.Fatalf("pending landing = %+v, want second duplicate %q", m.pendingJump, second.Source.ID)
+	}
+}
+
+func TestAtlasWorkRefusesMissingOrDuplicateSourceIdentity(t *testing.T) {
+	m, _, _, _ := atlasTestModel(t)
+	row := core.SpaceInProgress{SpaceID: "alpha", PlanningID: "planning-alpha",
+		Task: domain.Task{ID: "declared-only", Slug: "work", Status: domain.StatusInProgress}}
+	m.atlas.work = []core.SpaceInProgress{row}
+	if cmd := m.openAtlasWork(); cmd != nil || !strings.Contains(m.atlas.openErr, "identity") {
+		t.Fatalf("pathless source-less work was addressable: cmd=%v error=%q", cmd != nil, m.atlas.openErr)
+	}
+	row.Source.ID = "shared-source"
+	m.atlas.work = []core.SpaceInProgress{row, row}
+	if cmd := m.openAtlasWork(); cmd != nil || !strings.Contains(m.atlas.openErr, "identity") {
+		t.Fatalf("duplicate source work was addressable: cmd=%v error=%q", cmd != nil, m.atlas.openErr)
+	}
+	row.IdentityUnavailable = true // hidden completed sibling in the same planning space
+	m.atlas.work = []core.SpaceInProgress{row}
+	if cmd := m.openAtlasWork(); cmd != nil || !strings.Contains(m.atlas.openErr, "identity") {
+		t.Fatalf("hidden duplicate source work was addressable: cmd=%v error=%q", cmd != nil, m.atlas.openErr)
 	}
 }
 
@@ -1623,6 +1643,7 @@ func TestAtlasWorkRowsFitColumnsRatherThanShearingThem(t *testing.T) {
 	a := atlas{loaded: true, screen: atlasScreenWork}
 	a.setWork([]core.SpaceInProgress{{
 		SpaceID: "desirelines-planning", PlanningID: "p",
+		Source: core.RecordSource{ID: "6g7realidentity"},
 		Task: domain.Task{
 			Slug:     "retain-and-re-audit-api-gateway-penetration-findings-before-multi-user-launch",
 			Epic:     "15-activity-data-processing-and-retention",

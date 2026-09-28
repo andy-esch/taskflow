@@ -25,48 +25,59 @@ import (
 func loadTaskList(t *entityTab, svc *core.Service) tea.Cmd {
 	view, gen := t.statusView, t.loadGen
 	return func() tea.Msg {
-		f := core.TaskFilter{}
-		switch view {
-		case "":
-			f.All = true // working view: load all, drop completed/deprecated below
-		case "all":
-			f.All = true
-		case "revisit":
-			f.RevisitDue = true // synthetic view: deferred tasks whose snooze date has arrived
-		default:
-			f.Status = view
+		if view != "" && view != "all" && view != "revisit" {
+			if _, err := domain.ParseStatus(view); err != nil {
+				return errMsg{kind: entityTasks, gen: gen, err: err}
+			}
 		}
-		records, problems, err := svc.ListTasks(f)
+		// One complete read lets the registry reject an ID duplicated in a hidden
+		// status before this view makes its other occurrence actionable.
+		records, problems, err := svc.ListTasks(core.TaskFilter{All: true})
 		if err != nil {
 			return errMsg{kind: entityTasks, gen: gen, err: err}
 		}
-		tasks := make([]domain.Task, 0, len(records))
+		fullRefs := make([]entityRef, 0, len(records))
 		for _, record := range records {
-			task := record.Value
-			task.FilenameID = record.Source.ID
-			tasks = append(tasks, task)
+			fullRefs = append(fullRefs, entityRef{key: record.Source.ID, label: record.Value.Slug})
 		}
+		identityErr := validateEntityRefs(fullRefs)
 		now := svc.Now() // one clock read drives both the sort and the per-row due flag
 		switch view {
 		case "":
-			tasks = dropArchived(tasks) // working view excludes completed/deprecated
-			sortWorkingView(tasks, now) // active first, then deferred (due-for-revisit leading)
+			records = dropArchivedRecords(records) // working view excludes completed/deprecated
+			sortWorkingRecords(records, now)       // active first, then deferred (due-for-revisit leading)
 		case "revisit":
-			sortByRevisitDate(tasks) // oldest-overdue first
+			records = filterTaskRecords(records, func(task domain.Task) bool { return domain.IsTaskRevisitDue(task, now) })
+			sortRecordsByRevisitDate(records) // oldest-overdue first
 		case string(domain.StatusDeferred):
-			sortRevisitDueFirst(tasks, now) // browsing all deferred: the due ones lead
+			records = filterTaskRecords(records, func(task domain.Task) bool { return task.Status == domain.StatusDeferred })
+			sortRecordsRevisitDueFirst(records, now) // browsing all deferred: the due ones lead
+		case "all":
+		default:
+			records = filterTaskRecords(records, func(task domain.Task) bool { return string(task.Status) == view })
 		}
-		items := make([]list.Item, 0, len(tasks))
-		refs := make([]entityRef, 0, len(tasks))
-		for _, task := range tasks {
-			refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
+		items := make([]list.Item, 0, len(records))
+		refs := make([]entityRef, 0, len(records))
+		for _, record := range records {
+			refs = append(refs, entityRef{key: record.Source.ID, label: record.Value.Slug})
 		}
 		hints := duplicateIdentityHints(refs)
-		for _, t := range tasks {
-			items = append(items, taskItem{t: t, due: domain.IsTaskRevisitDue(t, now), identityHint: hints[t.CanonicalID()]})
+		for _, record := range records {
+			t := record.Value
+			items = append(items, taskItem{t: t, sourceID: record.Source.ID, due: domain.IsTaskRevisitDue(t, now), identityHint: hints[record.Source.ID]})
 		}
-		return listLoadedMsg{kind: entityTasks, gen: gen, items: items, problems: problems}
+		return listLoadedMsg{kind: entityTasks, gen: gen, items: items, problems: problems, identityErr: identityErr}
 	}
+}
+
+func filterTaskRecords(records []core.LoadedRecord[domain.Task], keep func(domain.Task) bool) []core.LoadedRecord[domain.Task] {
+	out := records[:0]
+	for _, record := range records {
+		if keep(record.Value) {
+			out = append(out, record)
+		}
+	}
+	return out
 }
 
 // loadDashboard reads the at-a-glance Summary for the landing screen (off the
@@ -87,7 +98,7 @@ func loadTaskDetail(svc *core.Service, id string) tea.Cmd {
 		if err != nil {
 			return detailErrMsg{kind: entityTasks, id: id, err: err}
 		}
-		return detailMsg{kind: entityTasks, id: id, content: taskDetail{t: record.Value.Task, body: record.Value.Body}}
+		return detailMsg{kind: entityTasks, id: id, sourceID: record.Source.ID, content: taskDetail{t: record.Value.Task, body: record.Value.Body}}
 	}
 }
 
@@ -105,14 +116,24 @@ func loadEpicList(t *entityTab, svc *core.Service) tea.Cmd {
 		if err != nil {
 			return errMsg{kind: entityEpics, gen: gen, err: err}
 		}
+		fullRefs := make([]entityRef, 0, len(epics))
+		for _, epic := range epics {
+			fullRefs = append(fullRefs, entityRef{key: epic.Source.ID, label: epic.Epic.ID})
+		}
+		identityErr := validateEntityRefs(fullRefs)
 		epics = filterEpicsByView(epics, view)
 		sortEpicsForView(epics, view)
 		countsW := countsWidth(epics, func(es core.EpicSummary) (int, int) { return es.Done, es.Total })
 		items := make([]list.Item, 0, len(epics))
+		refs := make([]entityRef, 0, len(epics))
 		for _, es := range epics {
-			items = append(items, epicItem{es: es, countsW: countsW})
+			refs = append(refs, entityRef{key: es.Source.ID, label: es.Epic.ID})
 		}
-		return listLoadedMsg{kind: entityEpics, gen: gen, items: items, problems: problems}
+		hints := duplicateIdentityHints(refs)
+		for _, es := range epics {
+			items = append(items, epicItem{es: es, countsW: countsW, identityHint: hints[es.Source.ID]})
+		}
+		return listLoadedMsg{kind: entityEpics, gen: gen, items: items, problems: problems, identityErr: identityErr}
 	}
 }
 
@@ -156,13 +177,8 @@ func loadEpicDetail(svc *core.Service, id string) tea.Cmd {
 		if err != nil {
 			return detailErrMsg{kind: entityEpics, id: id, err: err}
 		}
-		tasks := make([]domain.Task, 0, len(detail.Tasks))
-		for _, record := range detail.Tasks {
-			task := record.Value
-			task.FilenameID = record.Source.ID
-			tasks = append(tasks, task)
-		}
-		return detailMsg{kind: entityEpics, id: id, content: epicDetail{es: detail.Summary, tasks: tasks, body: detail.Body}}
+		return detailMsg{kind: entityEpics, id: id, sourceID: detail.Summary.Source.ID,
+			content: epicDetail{es: detail.Summary, tasks: detail.Tasks, body: detail.Body}}
 	}
 }
 
@@ -175,35 +191,52 @@ func loadEpicDetail(svc *core.Service, id string) tea.Cmd {
 func loadAuditList(t *entityTab, svc *core.Service) tea.Cmd {
 	view, gen := t.statusView, t.loadGen
 	return func() tea.Msg {
-		bucket, all := view, false
-		switch view {
-		case "":
-			// open-only default: bucket "" + all=false
-		case "all":
-			bucket, all = "", true
+		if view != "" && view != "all" {
+			if _, err := domain.ParseAuditBucket(view); err != nil {
+				return errMsg{kind: entityAudits, gen: gen, err: err}
+			}
 		}
-		records, problems, err := svc.ListAudits(bucket, all)
+		records, problems, err := svc.ListAudits("", true)
 		if err != nil {
 			return errMsg{kind: entityAudits, gen: gen, err: err}
 		}
-		audits := make([]domain.Audit, 0, len(records))
+		fullRefs := make([]entityRef, 0, len(records))
 		for _, record := range records {
-			audit := record.Value
-			audit.FilenameID = record.Source.ID
-			audits = append(audits, audit)
+			fullRefs = append(fullRefs, entityRef{key: record.Source.ID, label: record.Value.Slug})
 		}
-		countsW := countsWidth(audits, func(a domain.Audit) (int, int) { return a.Resolved(), a.Findings })
-		items := make([]list.Item, 0, len(audits))
-		refs := make([]entityRef, 0, len(audits))
-		for _, audit := range audits {
-			refs = append(refs, entityRef{key: audit.CanonicalID(), label: audit.Slug})
+		identityErr := validateEntityRefs(fullRefs)
+		if view != "all" {
+			bucket := view
+			if bucket == "" {
+				bucket = string(domain.AuditOpen)
+			}
+			records = filterAuditRecords(records, bucket)
+		}
+		countsW := countsWidth(records, func(record core.LoadedRecord[domain.Audit]) (int, int) {
+			return record.Value.Resolved(), record.Value.Findings
+		})
+		items := make([]list.Item, 0, len(records))
+		refs := make([]entityRef, 0, len(records))
+		for _, record := range records {
+			refs = append(refs, entityRef{key: record.Source.ID, label: record.Value.Slug})
 		}
 		hints := duplicateIdentityHints(refs)
-		for _, a := range audits {
-			items = append(items, auditItem{a: a, countsW: countsW, identityHint: hints[a.CanonicalID()]})
+		for _, record := range records {
+			items = append(items, auditItem{a: record.Value, sourceID: record.Source.ID,
+				countsW: countsW, identityHint: hints[record.Source.ID]})
 		}
-		return listLoadedMsg{kind: entityAudits, gen: gen, items: items, problems: problems}
+		return listLoadedMsg{kind: entityAudits, gen: gen, items: items, problems: problems, identityErr: identityErr}
 	}
+}
+
+func filterAuditRecords(records []core.LoadedRecord[domain.Audit], bucket string) []core.LoadedRecord[domain.Audit] {
+	out := records[:0]
+	for _, record := range records {
+		if string(record.Value.Bucket) == bucket {
+			out = append(out, record)
+		}
+	}
+	return out
 }
 
 func loadAuditDetail(svc *core.Service, id string) tea.Cmd {
@@ -212,7 +245,7 @@ func loadAuditDetail(svc *core.Service, id string) tea.Cmd {
 		if err != nil {
 			return detailErrMsg{kind: entityAudits, id: id, err: err}
 		}
-		return detailMsg{kind: entityAudits, id: id, content: auditDetail{a: record.Value.Audit, body: record.Value.Body}}
+		return detailMsg{kind: entityAudits, id: id, sourceID: record.Source.ID, content: auditDetail{a: record.Value.Audit, body: record.Value.Body}}
 	}
 }
 
@@ -251,18 +284,37 @@ func dropArchived(tasks []domain.Task) []domain.Task {
 	return out
 }
 
+// Keep the source envelope attached while filtering and sorting rows. Copying
+// Source.ID into domain.FilenameID would make identity depend on a local-field
+// compatibility shim and lose the adapter's explicit source contract.
+func dropArchivedRecords(records []core.LoadedRecord[domain.Task]) []core.LoadedRecord[domain.Task] {
+	out := records[:0]
+	for _, record := range records {
+		if record.Value.Status != domain.StatusCompleted && record.Value.Status != domain.StatusDeprecated {
+			out = append(out, record)
+		}
+	}
+	return out
+}
+
+func workingTaskLess(left, right domain.Task, now time.Time) bool {
+	leftRank, rightRank := rankOf(left.Status), rankOf(right.Status)
+	if leftRank != rightRank {
+		return leftRank < rightRank
+	}
+	return domain.IsTaskRevisitDue(left, now) && !domain.IsTaskRevisitDue(right, now)
+}
+
 // sortWorkingView orders the default view: active work first (by working-set rank),
 // then the deferred tail — and within deferred, the due-for-revisit ones lead, so a
 // fired snooze sits right under your active work instead of buried at the bottom.
 // now is the service clock, so "due" matches the marker and the core filter.
 func sortWorkingView(tasks []domain.Task, now time.Time) {
-	sort.SliceStable(tasks, func(i, j int) bool {
-		ri, rj := rankOf(tasks[i].Status), rankOf(tasks[j].Status)
-		if ri != rj {
-			return ri < rj
-		}
-		return domain.IsTaskRevisitDue(tasks[i], now) && !domain.IsTaskRevisitDue(tasks[j], now)
-	})
+	sort.SliceStable(tasks, func(i, j int) bool { return workingTaskLess(tasks[i], tasks[j], now) })
+}
+
+func sortWorkingRecords(records []core.LoadedRecord[domain.Task], now time.Time) {
+	sort.SliceStable(records, func(i, j int) bool { return workingTaskLess(records[i].Value, records[j].Value, now) })
 }
 
 // sortRevisitDueFirst floats due-for-revisit deferred tasks to the top of the
@@ -273,11 +325,23 @@ func sortRevisitDueFirst(tasks []domain.Task, now time.Time) {
 	})
 }
 
+func sortRecordsRevisitDueFirst(records []core.LoadedRecord[domain.Task], now time.Time) {
+	sort.SliceStable(records, func(i, j int) bool {
+		return domain.IsTaskRevisitDue(records[i].Value, now) && !domain.IsTaskRevisitDue(records[j].Value, now)
+	})
+}
+
 // sortByRevisitDate orders the `:revisit` view oldest-overdue first (every task
 // there is already due, so the date drives the order, not the marker).
 func sortByRevisitDate(tasks []domain.Task) {
 	sort.SliceStable(tasks, func(i, j int) bool {
 		return tasks[i].RevisitAt < tasks[j].RevisitAt
+	})
+}
+
+func sortRecordsByRevisitDate(records []core.LoadedRecord[domain.Task]) {
+	sort.SliceStable(records, func(i, j int) bool {
+		return records[i].Value.RevisitAt < records[j].Value.RevisitAt
 	})
 }
 
@@ -291,20 +355,14 @@ func loadResearchList(t *entityTab, svc *core.Service) tea.Cmd {
 		if err != nil {
 			return errMsg{kind: entityResearch, gen: gen, err: err}
 		}
-		docs := make([]domain.Research, 0, len(records))
+		items := make([]list.Item, 0, len(records))
+		refs := make([]entityRef, 0, len(records))
 		for _, record := range records {
-			doc := record.Value
-			doc.FilenameID = record.Source.ID
-			docs = append(docs, doc)
-		}
-		items := make([]list.Item, 0, len(docs))
-		refs := make([]entityRef, 0, len(docs))
-		for _, doc := range docs {
-			refs = append(refs, entityRef{key: doc.CanonicalID(), label: doc.Slug})
+			refs = append(refs, entityRef{key: record.Source.ID, label: record.Value.Slug})
 		}
 		hints := duplicateIdentityHints(refs)
-		for _, r := range docs {
-			items = append(items, researchItem{r: r, identityHint: hints[r.CanonicalID()]})
+		for _, record := range records {
+			items = append(items, researchItem{r: record.Value, sourceID: record.Source.ID, identityHint: hints[record.Source.ID]})
 		}
 		return listLoadedMsg{kind: entityResearch, gen: gen, items: items, problems: problems}
 	}
@@ -316,6 +374,6 @@ func loadResearchDetail(svc *core.Service, id string) tea.Cmd {
 		if err != nil {
 			return detailErrMsg{kind: entityResearch, id: id, err: err}
 		}
-		return detailMsg{kind: entityResearch, id: id, content: researchDetail{r: record.Value.Research, body: record.Value.Body}}
+		return detailMsg{kind: entityResearch, id: id, sourceID: record.Source.ID, content: researchDetail{r: record.Value.Research, body: record.Value.Body}}
 	}
 }

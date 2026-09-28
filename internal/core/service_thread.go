@@ -219,18 +219,33 @@ func (s *Service) ListThreadViews() (ThreadListView, []ThreadReadProblem, error)
 	if err != nil {
 		return ThreadListView{}, nil, err
 	}
-	threads := cloneThreads(read.Threads)
+	records := append([]VersionedRecord[domain.Thread](nil), read.Records...)
 	problems := append([]ThreadReadProblem(nil), read.Problems...)
+	valid := records[:0]
+	for _, record := range records {
+		if requireSourceID(EntityThread, record.Record.Source) != nil {
+			problems = append(problems, ThreadReadProblem{
+				ThreadSlug: record.Record.Value.Slug, Location: record.Record.Source.Location,
+				Message: "record has no canonical source ID",
+			})
+			continue
+		}
+		valid = append(valid, record)
+	}
+	records = valid
 	for i := range problems {
 		problems[i].SourceVersion = ""
 	}
-	sort.Slice(threads, func(i, j int) bool { return threadLess(threads[i], threads[j]) })
+	sort.Slice(records, func(i, j int) bool { return threadLess(records[i].Record.Value, records[j].Record.Value) })
 	sort.Slice(problems, func(i, j int) bool { return threadReadProblemLess(problems[i], problems[j]) })
 	list := ThreadListView{
-		Threads: make([]ThreadView, len(threads)), GraphHealth: graph.Health(), GraphProblems: graph.Problems(),
+		Threads: make([]ThreadView, len(records)), GraphHealth: graph.Health(), GraphProblems: graph.Problems(),
 	}
-	for i, thread := range threads {
+	for i, record := range records {
+		thread := record.Record.Value
+		thread.SourceVersion = "" // opaque revision belongs only to ThreadRead
 		list.Threads[i] = ProjectThread(thread, graph)
+		list.Threads[i].Source = record.Record.Source
 		list.Threads[i].GraphProblems = nil
 	}
 	markDuplicateThreadIDs(list.Threads)
@@ -340,11 +355,13 @@ func threadReadProblemName(problem ThreadReadProblem) string {
 }
 
 func (s *Service) ShowThread(ref string) (ThreadView, string, error) {
-	thread, body, graph, err := s.readThreadGraph(ref)
+	record, graph, err := s.readThreadGraph(ref)
 	if err != nil {
 		return ThreadView{}, "", err
 	}
-	return ProjectThread(thread, graph), body, nil
+	view := ProjectThread(record.Value.Thread, graph)
+	view.Source = record.Source
+	return view, record.Value.Body, nil
 }
 
 // ShowThreadGraphDetail returns the persisted Thread body and the complete
@@ -353,26 +370,32 @@ func (s *Service) ShowThread(ref string) (ThreadView, string, error) {
 // calling ShowThread and ShowThreadGraph, which could otherwise combine two
 // different repository snapshots during an external edit.
 func (s *Service) ShowThreadGraphDetail(ref string) (ThreadGraphProjection, string, error) {
-	thread, body, graph, err := s.readThreadGraph(ref)
+	record, graph, err := s.readThreadGraph(ref)
 	if err != nil {
 		return ThreadGraphProjection{}, "", err
 	}
-	return ProjectThreadGraph(thread, graph), body, nil
+	projection := ProjectThreadGraph(record.Value.Thread, graph)
+	projection.View.Source = record.Source
+	return projection, record.Value.Body, nil
 }
 
-func (s *Service) readThreadGraph(ref string) (domain.Thread, string, *TaskGraph, error) {
+func (s *Service) readThreadGraph(ref string) (LoadedRecord[ThreadWithBody], *TaskGraph, error) {
 	if s.threads == nil {
-		return domain.Thread{}, "", nil, fmt.Errorf("thread reads are unavailable from this store")
+		return LoadedRecord[ThreadWithBody]{}, nil, fmt.Errorf("thread reads are unavailable from this store")
 	}
-	thread, body, err := s.threads.GetThread(ref)
+	record, err := s.threads.ReadThread(ref)
 	if err != nil {
-		return domain.Thread{}, "", nil, err
+		return LoadedRecord[ThreadWithBody]{}, nil, err
 	}
+	if err := requireSourceID(EntityThread, record.Source); err != nil {
+		return LoadedRecord[ThreadWithBody]{}, nil, err
+	}
+	record.Value.Thread.SourceVersion = "" // selected reads must not publish adapter CAS evidence
 	graph, err := LoadTaskGraph(s.taskGraphs)
 	if err != nil {
-		return domain.Thread{}, "", nil, err
+		return LoadedRecord[ThreadWithBody]{}, nil, err
 	}
-	return thread, body, graph, nil
+	return record, graph, nil
 }
 
 // ShowThreadGraph reads the Thread first and the task graph second, preserving

@@ -42,18 +42,18 @@ type detailNavigationRestore struct {
 // key to it while active and floats it over the body.
 type followMenu struct {
 	active      bool
-	sourceLabel string        // the entity whose references are listed
-	tasks       []domain.Task // the rows
+	sourceLabel string                           // the entity whose references are listed
+	tasks       []core.LoadedRecord[domain.Task] // semantic rows with canonical source IDs
 	cursor      int
 }
 
-func (f *followMenu) open(sourceLabel string, tasks []domain.Task) {
+func (f *followMenu) open(sourceLabel string, tasks []core.LoadedRecord[domain.Task]) {
 	*f = followMenu{active: true, sourceLabel: sourceLabel, tasks: tasks}
 }
 
 func (f *followMenu) selectTask(taskID string) {
-	for index, task := range f.tasks {
-		if task.CanonicalID() == taskID {
+	for index, record := range f.tasks {
+		if record.Source.ID == taskID {
 			f.cursor = index
 			return
 		}
@@ -68,7 +68,7 @@ func (f *followMenu) move(d int) {
 	}
 }
 
-func (f followMenu) selected() domain.Task { return f.tasks[f.cursor] }
+func (f followMenu) selected() core.LoadedRecord[domain.Task] { return f.tasks[f.cursor] }
 
 // view renders the picker as a centered box + hint line for overlay().
 func (f followMenu) view(s *styles, maxW, maxH int) string {
@@ -80,15 +80,16 @@ func (f followMenu) view(s *styles, maxW, maxH int) string {
 	b.WriteString(s.actionHeading.Render("follow " + truncate(f.sourceLabel, max(maxW-8-ansi.StringWidth(position), 12)) + position))
 	b.WriteString("\n\n")
 	refs := make([]entityRef, 0, len(f.tasks))
-	for _, task := range f.tasks {
-		refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
+	for _, record := range f.tasks {
+		refs = append(refs, entityRef{key: record.Source.ID, label: record.Value.Slug})
 	}
 	hints := duplicateIdentityHints(refs)
 	start, end := f.visibleRange(maxH)
 	for i := start; i < end; i++ {
-		t := f.tasks[i]
+		record := f.tasks[i]
+		t := record.Value
 		tok := theme.Status(t.Status)
-		label := s.fg(tok.Color, tok.Glyph) + " " + truncate(labelWithIdentityHint(t.Slug, hints[t.CanonicalID()]), max(maxW-10, 12))
+		label := s.fg(tok.Color, tok.Glyph) + " " + truncate(labelWithIdentityHint(t.Slug, hints[record.Source.ID]), max(maxW-10, 12))
 		if i == f.cursor {
 			b.WriteString(s.selected.Render("› ") + label + "\n")
 		} else {
@@ -139,7 +140,7 @@ func (m *Model) handleFollowKey(msg tea.KeyPressMsg) tea.Cmd {
 		target := m.follow.selected()
 		m.follow.close()
 		m.pushLoc()
-		return m.jumpTo(entityTasks, entityRef{key: target.CanonicalID(), label: target.Slug})
+		return m.jumpTo(entityTasks, entityRef{key: target.Source.ID, label: target.Value.Slug})
 	case key.Matches(msg, keys.Back), key.Matches(msg, keys.Quit):
 		m.follow.close()
 	}
@@ -171,7 +172,7 @@ func (m Model) followSelected() (tea.Model, tea.Cmd) {
 		// The epic's task list rides in the already-loaded detail content (the
 		// pane is stale-guarded, so a matching ID means current data).
 		ed, ok := m.detail.content.(epicDetail)
-		if !ok || ed.es.Epic.ID != ref.key {
+		if !ok || ed.es.Source.ID != ref.key {
 			m.flash, m.flashErr = "references still loading…", true
 			return m, nil
 		}
@@ -187,7 +188,7 @@ func (m Model) followSelected() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		detail, ok := m.detail.content.(threadDetail)
-		if !ok || detail.projection.View.Thread.CanonicalID() != ref.key {
+		if !ok || detail.projection.View.Source.ID != ref.key {
 			m.flash, m.flashErr = "references still loading…", true
 			return m, nil
 		}
@@ -222,7 +223,7 @@ func (m Model) openDetailSelection() (tea.Model, tea.Cmd) {
 // while recovering the semantic task values carried by its Thread view. Missing
 // or unreadable nodes remain visible in topology diagnostics but are not offered
 // as navigation targets that cannot resolve on the task tab.
-func threadFollowTasks(projection core.ThreadGraphProjection) []domain.Task {
+func threadFollowTasks(projection core.ThreadGraphProjection) []core.LoadedRecord[domain.Task] {
 	byID := make(map[string]domain.Task, len(projection.View.Members)+len(projection.View.ExternalGates))
 	for _, member := range projection.View.Members {
 		if member.Task.Slug != "" {
@@ -234,10 +235,10 @@ func threadFollowTasks(projection core.ThreadGraphProjection) []domain.Task {
 			byID[gate.State.TaskID] = gate.Task
 		}
 	}
-	tasks := make([]domain.Task, 0, len(byID))
+	tasks := make([]core.LoadedRecord[domain.Task], 0, len(byID))
 	for _, node := range projection.Nodes {
 		if task, ok := byID[node.TaskID]; ok {
-			tasks = append(tasks, task)
+			tasks = append(tasks, core.LoadedRecord[domain.Task]{Value: task, Source: core.RecordSource{ID: node.TaskID}})
 		}
 	}
 	return tasks

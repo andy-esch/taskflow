@@ -54,13 +54,16 @@ func (s *FS) MutateThreadApply(now time.Time, dryRun bool, planner core.ThreadAp
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads: %w", err)
 	}
-	if err := core.ValidateThreadCreationSource(graph, threadRead.Threads, threadRead.Problems); err != nil {
+	if err := threadRead.ValidateSources(); err != nil {
+		return result, err
+	}
+	if err := core.ValidateThreadCreationSource(graph, threadRead.SemanticThreads(), threadRead.Problems); err != nil {
 		return result, err
 	}
 	snapshot := core.ThreadApplySnapshot{
 		PlanningRepoID: repoID,
 		Graph:          graph,
-		Threads:        clonePlannerThreads(threadRead.Threads),
+		Threads:        clonePlannerThreads(threadRead.SemanticThreads()),
 		ThreadBodies:   cloneStringMap(bodies),
 	}
 	plan, err := callThreadApplyPlanner(s, planner, snapshot)
@@ -263,12 +266,15 @@ func (s *FS) reprepareThreadApply(plan core.ThreadApplyPlan, expectedRepoID stri
 	if err != nil {
 		return core.ThreadApplyDecision{}, fmt.Errorf("re-read Threads before final Thread convergence: %w", err)
 	}
-	if err := core.ValidateThreadCreationSource(graph, threadRead.Threads, threadRead.Problems); err != nil {
+	if err := threadRead.ValidateSources(); err != nil {
+		return core.ThreadApplyDecision{}, err
+	}
+	if err := core.ValidateThreadCreationSource(graph, threadRead.SemanticThreads(), threadRead.Problems); err != nil {
 		return core.ThreadApplyDecision{}, err
 	}
 	return core.PrepareThreadApply(core.ThreadApplySnapshot{
 		PlanningRepoID: currentID, Graph: graph,
-		Threads: clonePlannerThreads(threadRead.Threads), ThreadBodies: cloneStringMap(bodies),
+		Threads: clonePlannerThreads(threadRead.SemanticThreads()), ThreadBodies: cloneStringMap(bodies),
 	}, plan)
 }
 

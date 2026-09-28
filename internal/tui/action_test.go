@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/andy-esch/taskflow/internal/core"
@@ -12,6 +14,13 @@ import (
 	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
+
+func mutationResult(msg tea.Msg) tea.Msg {
+	if scoped, ok := msg.(mutationResultMsg); ok {
+		return scoped.result
+	}
+	return msg
+}
 
 // cursorTo drives the action menu's cursor onto the given verb via j-presses (so
 // the real key path is exercised), failing if the verb isn't offered.
@@ -174,8 +183,9 @@ func TestModel_ActionMenuConfirmGatesDeprecate(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("y should fire the move")
 	}
-	if msg, ok := cmd().(movedMsg); !ok || msg.to != string(domain.StatusDeprecated) {
-		t.Fatalf("expected a deprecate movedMsg, got %T %+v", cmd(), cmd())
+	result := mutationResult(cmd())
+	if msg, ok := result.(movedMsg); !ok || msg.to != string(domain.StatusDeprecated) {
+		t.Fatalf("expected a deprecate movedMsg, got %T %+v", result, result)
 	}
 }
 
@@ -191,8 +201,10 @@ func TestModel_CommandVerbMovesTask(t *testing.T) {
 	if cmd == nil {
 		t.Fatal(":complete should fire a move")
 	}
-	if _, ok := cmd().(movedMsg); !ok {
-		t.Fatalf(":complete should yield movedMsg, got %T", cmd())
+	if result := mutationResult(cmd()); result == nil {
+		t.Fatal(":complete should yield movedMsg")
+	} else if _, ok := result.(movedMsg); !ok {
+		t.Fatalf(":complete should yield movedMsg, got %T", result)
 	}
 
 	// :deprecate gates on confirm even when typed explicitly.
@@ -397,8 +409,9 @@ func TestModel_AuditDeferSkipsRevisitPrompt(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("audit defer should apply immediately")
 	}
-	if msg, ok := cmd().(movedMsg); !ok || msg.to != string(domain.AuditDeferred) {
-		t.Fatalf("expected an audit defer movedMsg, got %T %+v", cmd(), cmd())
+	result := mutationResult(cmd())
+	if msg, ok := result.(movedMsg); !ok || msg.to != string(domain.AuditDeferred) {
+		t.Fatalf("expected an audit defer movedMsg, got %T %+v", result, result)
 	}
 }
 

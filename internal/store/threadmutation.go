@@ -51,10 +51,13 @@ func (s *FS) MutateThread(now time.Time, dryRun bool, planner core.ThreadMutatio
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads: %w", err)
 	}
-	if err := core.ValidateThreadMutationSource(graph, threadRead.Threads, threadRead.Problems); err != nil {
+	if err := threadRead.ValidateSources(); err != nil {
 		return result, err
 	}
-	snapshot := core.ThreadMutationSnapshot{Graph: graph, Threads: clonePlannerThreads(threadRead.Threads)}
+	if err := core.ValidateThreadMutationSource(graph, threadRead.SemanticThreads(), threadRead.Problems); err != nil {
+		return result, err
+	}
+	snapshot := core.ThreadMutationSnapshot{Graph: graph, Threads: clonePlannerThreads(threadRead.SemanticThreads())}
 	plan, err := callThreadMutationPlanner(s, planner, snapshot)
 	if err != nil {
 		return result, err

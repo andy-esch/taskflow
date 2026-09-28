@@ -535,7 +535,11 @@ func (m Model) footer() string {
 	}
 	switch {
 	case m.cur().loaded && m.cur().loadErr != nil:
-		hints = "⚠ reload failed · " + hints // the rows shown are the last good load
+		if m.cur().identityInvalid {
+			hints = "⚠ identity invalid; actions disabled: " + m.cur().loadErr.Error() + " · " + hints
+		} else {
+			hints = "⚠ reload failed · " + hints // the rows shown are the last good load
+		}
 	case m.detail.refreshFailed():
 		// The list reloaded fine but the body beside it did not; the detail on
 		// screen is the last good read of that item, not the current file.

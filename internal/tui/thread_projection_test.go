@@ -197,7 +197,23 @@ func (s *countingThreadStore) SourceSetID() core.SourceSetID { return s.sourceSe
 
 func (s *countingThreadStore) ReadThreads() (core.ThreadRead, error) {
 	s.calls++
-	return core.ThreadRead{Threads: s.threads, Problems: s.problems}, nil
+	read := core.ThreadRead{Problems: s.problems}
+	for _, thread := range s.threads {
+		read.Records = append(read.Records, core.VersionedRecord[domain.Thread]{
+			Record: core.LoadedRecord[domain.Thread]{Value: thread, Source: core.RecordSource{ID: thread.CanonicalID()}},
+		})
+	}
+	return read, nil
+}
+
+func (s *countingThreadStore) ReadThread(ref string) (core.LoadedRecord[core.ThreadWithBody], error) {
+	thread, body, err := s.GetThread(ref)
+	if err != nil {
+		return core.LoadedRecord[core.ThreadWithBody]{}, err
+	}
+	return core.LoadedRecord[core.ThreadWithBody]{
+		Value: core.ThreadWithBody{Thread: thread, Body: body}, Source: core.RecordSource{ID: thread.CanonicalID()},
+	}, nil
 }
 
 func (s *countingThreadStore) GetThread(string) (domain.Thread, string, error) {
@@ -3472,13 +3488,13 @@ func TestThreadFollowPickerNavigatesByStableTaskIdentityAndBack(t *testing.T) {
 			m.follow.active, len(m.follow.tasks), cmd != nil, m.flash)
 	}
 	target := m.follow.selected()
-	if target.CanonicalID() != wantTarget {
-		t.Fatalf("Thread follow picker selected %q want topology cursor %q", target.CanonicalID(), wantTarget)
+	if target.Source.ID != wantTarget {
+		t.Fatalf("Thread follow picker selected %q want topology cursor %q", target.Source.ID, wantTarget)
 	}
 	tm, cmd = m.Update(press("enter"))
 	m = drainNested(t, tm.(Model), cmd)
-	if m.cur().kind != entityTasks || m.selectedKey() != target.CanonicalID() {
-		t.Fatalf("Thread follow did not land on task %s: kind=%v selected=%q", target.CanonicalID(), m.cur().kind, m.selectedKey())
+	if m.cur().kind != entityTasks || m.selectedKey() != target.Source.ID {
+		t.Fatalf("Thread follow did not land on task %s: kind=%v selected=%q", target.Source.ID, m.cur().kind, m.selectedKey())
 	}
 	if len(m.navStack) != 1 || m.navStack[0].kind != entityThreads || m.navStack[0].ref.key != "6g503c6pfqeb" {
 		t.Fatalf("Thread origin was not retained on the back stack: %+v", m.navStack)
@@ -3505,7 +3521,7 @@ func TestThreadFollowTargetsIncludeExternalGatesAndSkipMissingMembers(t *testing
 	}
 	gotIDs := make([]string, 0, len(tasks))
 	for _, task := range tasks {
-		gotIDs = append(gotIDs, task.CanonicalID())
+		gotIDs = append(gotIDs, task.Source.ID)
 	}
 	if !reflect.DeepEqual(gotIDs, wantIDs) {
 		t.Fatalf("follow targets lost projection node order:\n got %v\nwant %v", gotIDs, wantIDs)
@@ -3515,7 +3531,7 @@ func TestThreadFollowTargetsIncludeExternalGatesAndSkipMissingMembers(t *testing
 	picker.open("large-thread", tasks)
 	picker.move(-1) // wrap to the final task, well below a short terminal's first window
 	view := ansi.Strip(picker.view(&testStyles, 60, 10))
-	if !strings.Contains(view, tasks[len(tasks)-1].Slug) || !strings.Contains(view, fmt.Sprintf("%d/%d", len(tasks), len(tasks))) {
+	if !strings.Contains(view, tasks[len(tasks)-1].Value.Slug) || !strings.Contains(view, fmt.Sprintf("%d/%d", len(tasks), len(tasks))) {
 		t.Fatalf("short picker clipped its selected final task:\n%s", view)
 	}
 	if lines := strings.Count(view, "\n") + 1; lines > 10 {

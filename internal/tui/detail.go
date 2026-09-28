@@ -133,7 +133,7 @@ type localFocusDetailContent interface {
 // an owned empty result is an explicit dead end rather than geometric fallback.
 type branchingDirectionalDetailContent interface {
 	directionalDetailContent
-	detailDirectionChoices(dx, dy int) (label string, tasks []domain.Task, owned bool)
+	detailDirectionChoices(dx, dy int) (label string, tasks []core.LoadedRecord[domain.Task], owned bool)
 }
 
 // yankableDetailContent lets a structured detail presentation name the thing
@@ -309,7 +309,7 @@ func (d *detailPane) toggleLocalFocus() (bool, error) {
 	return true, nil
 }
 
-func (d detailPane) directionChoices(dx, dy int) (string, []domain.Task, bool) {
+func (d detailPane) directionChoices(dx, dy int) (string, []core.LoadedRecord[domain.Task], bool) {
 	content, ok := d.content.(branchingDirectionalDetailContent)
 	if !ok {
 		return "", nil, false
@@ -337,7 +337,7 @@ func (d detailPane) directionTargetStillValid(menu detailDirectionMenu, taskID s
 		return false
 	}
 	for _, task := range tasks {
-		if task.CanonicalID() == taskID {
+		if task.Source.ID == taskID {
 			return true
 		}
 	}
@@ -847,7 +847,7 @@ func criterionRollup(body string, s *styles) string {
 
 type epicDetail struct {
 	es    core.EpicSummary
-	tasks []domain.Task
+	tasks []core.LoadedRecord[domain.Task]
 	body  string
 }
 
@@ -856,7 +856,7 @@ func (d epicDetail) Path() string                 { return d.es.Epic.Path }
 func (d epicDetail) rawBody() string              { return d.body }
 func (d epicDetail) meta(w int, s *styles) string { return renderEpicMeta(d.es, d.tasks, w, s) }
 
-func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int, s *styles) string {
+func renderEpicMeta(es core.EpicSummary, tasks []core.LoadedRecord[domain.Task], width int, s *styles) string {
 	e := es.Epic
 	var b strings.Builder
 	detailField(&b, "epic", e.ID, s)
@@ -877,14 +877,15 @@ func renderEpicMeta(es core.EpicSummary, tasks []domain.Task, width int, s *styl
 	if len(tasks) > 0 {
 		b.WriteString("\n")
 		refs := make([]entityRef, 0, len(tasks))
-		for _, task := range tasks {
-			refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
+		for _, record := range tasks {
+			refs = append(refs, entityRef{key: record.Source.ID, label: record.Value.Slug})
 		}
 		hints := duplicateIdentityHints(refs)
-		for _, t := range tasks {
+		for _, record := range tasks {
+			t := record.Value
 			tok := theme.Status(t.Status)
 			fmt.Fprintf(&b, "  %s %s\n", s.fg(tok.Color, tok.Glyph),
-				labelWithIdentityHint(t.Slug, hints[t.CanonicalID()]))
+				labelWithIdentityHint(t.Slug, hints[record.Source.ID]))
 		}
 	}
 	return wrap(strings.TrimRight(b.String(), "\n"), width)
@@ -1179,7 +1180,7 @@ func (d threadDetail) toggleDetailLocalFocus() (detailContent, error) {
 	return d, nil
 }
 
-func (d threadDetail) detailDirectionChoices(dx, dy int) (string, []domain.Task, bool) {
+func (d threadDetail) detailDirectionChoices(dx, dy int) (string, []core.LoadedRecord[domain.Task], bool) {
 	if d.focus == nil || d.detailViewName() != string(threadDetailSpatial) || dy != 0 || dx == 0 {
 		return "", nil, false
 	}
@@ -1188,7 +1189,7 @@ func (d threadDetail) detailDirectionChoices(dx, dy int) (string, []domain.Task,
 		label = "prerequisite"
 	}
 	selected := d.detailSelectionKey()
-	tasks := make([]domain.Task, 0)
+	tasks := make([]core.LoadedRecord[domain.Task], 0)
 	for _, edge := range orderedThreadGraphEdges(d.focus.projection.Edges) {
 		candidate := ""
 		switch {
@@ -1201,7 +1202,7 @@ func (d threadDetail) detailDirectionChoices(dx, dy int) (string, []domain.Task,
 			continue
 		}
 		if task, ok := threadGraphTask(d.projection, candidate); ok {
-			tasks = append(tasks, task)
+			tasks = append(tasks, core.LoadedRecord[domain.Task]{Value: task, Source: core.RecordSource{ID: candidate}})
 		}
 	}
 	return label, tasks, true
@@ -1215,7 +1216,7 @@ func (d threadDetail) detailSelectionTarget() (entityKind, entityRef, bool) {
 	if !ok {
 		return entityTasks, entityRef{}, false
 	}
-	return entityTasks, entityRef{key: task.CanonicalID(), label: task.Slug}, true
+	return entityTasks, entityRef{key: d.detailSelectionKey(), label: task.Slug}, true
 }
 
 func (d threadDetail) detailSelectionYankRef() (string, string, bool) {
@@ -1248,9 +1249,6 @@ func (d threadDetail) detailSelectionLine(rendered string) (int, bool) {
 
 func threadTaskIdentity(task core.ThreadTaskView) (string, string) {
 	id := task.State.TaskID
-	if id == "" {
-		id = task.Task.CanonicalID()
-	}
 	name := task.Task.Slug
 	if name == "" {
 		name = id
@@ -1281,7 +1279,7 @@ func renderThreadMeta(d threadDetail, width int, s *styles) string {
 	view, thread := d.projection.View, d.projection.View.Thread
 	var b strings.Builder
 	status := theme.ThreadStatus(thread.Status)
-	detailField(&b, "thread", thread.Slug+"  "+s.dim("("+thread.CanonicalID()+")"), s)
+	detailField(&b, "thread", thread.Slug+"  "+s.dim("("+view.Source.ID+")"), s)
 	detailField(&b, "lifecycle", s.fg(status.Color, status.Glyph+" "+string(thread.Status)), s)
 	health := string(view.GraphHealth) + " · projection " + string(view.ProjectionHealth)
 	if view.Inconsistent {
@@ -1377,7 +1375,7 @@ func renderThreadTopology(projection core.ThreadGraphProjection, pathIssue, sele
 		layoutWidth = 120
 	}
 	var b strings.Builder
-	detailField(&b, "thread", terminalText(thread.Slug)+"  "+s.dim("("+terminalText(thread.CanonicalID())+")"), s)
+	detailField(&b, "thread", terminalText(thread.Slug)+"  "+s.dim("("+terminalText(view.Source.ID)+")"), s)
 	detailField(&b, "view", "topology · member dependency ranks plus bounded dependencies", s)
 	health := string(view.GraphHealth) + " · projection " + string(view.ProjectionHealth)
 	if view.Inconsistent {

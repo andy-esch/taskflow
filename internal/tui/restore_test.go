@@ -37,8 +37,8 @@ func TestModel_StaleReloadDoesNotStealRestore(t *testing.T) {
 	m := loaded(t, 120, 40) // cursor on alpha
 	gen := m.cur().loadGen
 	items := []list.Item{
-		taskItem{t: domain.Task{FilenameID: testutil.TaskID("alpha"), Slug: "alpha", Status: domain.StatusInProgress}},
-		taskItem{t: domain.Task{FilenameID: testutil.TaskID("beta"), Slug: "beta", Status: domain.StatusReadyToStart}},
+		taskItem{t: domain.Task{Slug: "alpha", Status: domain.StatusInProgress}, sourceID: testutil.TaskID("alpha")},
+		taskItem{t: domain.Task{Slug: "beta", Status: domain.StatusReadyToStart}, sourceID: testutil.TaskID("beta")},
 	}
 	// A current-gen load carrying restore=beta selects beta.
 	tm, _ := m.Update(listLoadedMsg{kind: entityTasks, gen: gen, items: items, restore: entityRef{key: testutil.TaskID("beta"), label: "beta"}})

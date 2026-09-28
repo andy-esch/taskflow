@@ -92,25 +92,44 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 	// In progress — the active work, each with how long since it was last touched
 	// (a staleness cue) in an aligned column, the slug last so it absorbs truncation.
 	head(fmt.Sprintf("in progress (%d)", len(s.InProgress)))
-	if len(s.InProgress) == 0 {
+	if len(s.InProgress) == 0 && len(s.InProgressRecords) == 0 {
 		info("nothing in progress")
 	} else {
-		shown, more := capList(len(s.InProgress))
-		vis := s.InProgress[:shown]
+		// Compatibility summaries may contain bare tasks. They remain readable,
+		// but cannot become navigation targets without source evidence.
+		records := s.InProgressRecords
+		if len(records) == 0 {
+			for _, task := range s.InProgress {
+				records = append(records, core.LoadedRecord[domain.Task]{Value: task})
+			}
+		}
+		shown, more := capList(len(records))
+		vis := records[:shown]
 		refs := make([]entityRef, 0, len(vis))
-		for _, task := range vis {
-			refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
+		counts := make(map[string]int, len(s.TaskSourceIDs))
+		for _, id := range s.TaskSourceIDs {
+			counts[id]++
+		}
+		for _, record := range vis {
+			refs = append(refs, entityRef{key: record.Source.ID, label: record.Value.Slug})
 		}
 		hints := duplicateIdentityHints(refs)
-		dateCells := staleDateCells(vis, theme.TaskDate, st)
-		for i, t := range vis {
+		dateCells := staleDateCells(vis, func(record core.LoadedRecord[domain.Task]) string {
+			return theme.TaskDate(record.Value)
+		}, st)
+		for i, record := range vis {
+			t := record.Value
 			tok := theme.Status(t.Status)
 			cell := st.fg(tok.Color, tok.Glyph) + " "
 			if dateCells[i] != "" { // a blank (undated) cell still pads, so the slug column holds
 				cell += dateCells[i] + "  "
 			}
-			cell += labelWithIdentityHint(t.Slug, hints[t.CanonicalID()])
-			nav(cell, dashTarget{kind: entityTasks, ref: entityRef{key: t.CanonicalID(), label: t.Slug}})
+			cell += labelWithIdentityHint(t.Slug, hints[record.Source.ID])
+			if record.Source.ID == "" || counts[record.Source.ID] != 1 {
+				line(cell + st.dim("  (identity unavailable)"))
+			} else {
+				nav(cell, dashTarget{kind: entityTasks, ref: entityRef{key: record.Source.ID, label: t.Slug}})
+			}
 		}
 		if more > 0 {
 			nav(st.dim(fmt.Sprintf("+%d more →", more)), dashTarget{kind: entityTasks, view: "in-progress"})
@@ -138,6 +157,15 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 		epics := s.Epics
 		shown, more := capList(len(epics))
 		vis := epics[:shown]
+		epicRefs := make([]entityRef, 0, len(vis))
+		epicCounts := make(map[string]int, len(epics))
+		for _, es := range epics {
+			epicCounts[es.Source.ID]++
+		}
+		for _, es := range vis {
+			epicRefs = append(epicRefs, entityRef{key: es.Source.ID, label: es.Epic.ID})
+		}
+		epicHints := duplicateIdentityHints(epicRefs)
 		countsW := countsWidth(vis, func(es core.EpicSummary) (int, int) { return es.Done, es.Total })
 		dateCells := relDateCells(vis, func(es core.EpicSummary) string { return es.LastUpdated }, st)
 		for i, es := range vis {
@@ -149,12 +177,16 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 			if dateCells[i] != "" { // a blank (undated) cell still pads, so the id column holds
 				row += "  " + dateCells[i]
 			}
-			id := es.Epic.ID
+			id := labelWithIdentityHint(es.Epic.ID, epicHints[es.Source.ID])
 			if !es.Live() { // dormant buckets recede on the dashboard too
 				id = st.dim(id)
 			}
 			row += "  " + id + epicStatusNote(es, st)
-			nav(row, dashTarget{kind: entityEpics, ref: entityRef{key: es.Epic.ID, label: es.Epic.ID}})
+			if es.Source.ID == "" || epicCounts[es.Source.ID] != 1 {
+				line(row + st.dim("  (identity unavailable)"))
+			} else {
+				nav(row, dashTarget{kind: entityEpics, ref: entityRef{key: es.Source.ID, label: es.Epic.ID}})
+			}
 		}
 		if more > 0 {
 			nav(st.dim(fmt.Sprintf("+%d more →", more)), dashTarget{kind: entityEpics})
@@ -165,6 +197,10 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 	// triaged by urgency and by subsystem, with the rare acute ones called out. Each
 	// acute row jumps to its parent audit; the breakdown lines are read-only.
 	if fr := s.Findings; fr.Open+fr.InProgress > 0 {
+		auditIDCounts := make(map[string]int, len(s.AuditSourceIDs))
+		for _, id := range s.AuditSourceIDs {
+			auditIDCounts[id]++
+		}
 		blank()
 		head(fmt.Sprintf("audit findings (%d open · %d in progress)", fr.Open, fr.InProgress))
 		if len(fr.ByUrgency) > 0 {
@@ -175,7 +211,12 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 		}
 		for _, f := range fr.Acute {
 			label := strings.TrimSpace(f.Code + " " + f.Title)
-			nav(st.fg(theme.ColorRed, "⚠")+" "+label, dashTarget{kind: entityAudits, ref: entityRef{key: f.AuditID, label: f.Audit}})
+			row := st.fg(theme.ColorRed, "⚠") + " " + label
+			if f.AuditID == "" || auditIDCounts[f.AuditID] != 1 {
+				line(row + st.dim("  (audit identity unavailable)"))
+			} else {
+				nav(row, dashTarget{kind: entityAudits, ref: entityRef{key: f.AuditID, label: f.Audit}})
+			}
 		}
 	}
 

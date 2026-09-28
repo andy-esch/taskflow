@@ -54,7 +54,7 @@ func (s *FS) MutateTaskGraphRepair(now time.Time, dryRun bool, planner core.Task
 	if err != nil {
 		return result, fmt.Errorf("load authoritative task graph for repair: %w", err)
 	}
-	result.Threads = threadRead.Threads
+	result.Threads = threadRead.SemanticThreads()
 	result.ThreadProblems = threadRead.Problems
 
 	plan, err := callTaskGraphRepairPlanner(s, planner, graph)
