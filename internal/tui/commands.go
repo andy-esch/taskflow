@@ -270,20 +270,6 @@ func rankOf(s domain.Status) int {
 	return len(statusRank)
 }
 
-// dropArchived removes completed/deprecated tasks — the genuinely "done" states —
-// from the working view. Deferred is NOT archived (it's "snoozed, come back"), so
-// it stays in view as a reminder. Filters in place (the slice is freshly returned
-// by ListTasks, so reusing its backing array is safe).
-func dropArchived(tasks []domain.Task) []domain.Task {
-	out := tasks[:0]
-	for _, t := range tasks {
-		if t.Status != domain.StatusCompleted && t.Status != domain.StatusDeprecated {
-			out = append(out, t)
-		}
-	}
-	return out
-}
-
 // Keep the source envelope attached while filtering and sorting rows. Copying
 // Source.ID into domain.FilenameID would make identity depend on a local-field
 // compatibility shim and lose the adapter's explicit source contract.
@@ -317,28 +303,14 @@ func sortWorkingRecords(records []core.LoadedRecord[domain.Task], now time.Time)
 	sort.SliceStable(records, func(i, j int) bool { return workingTaskLess(records[i].Value, records[j].Value, now) })
 }
 
-// sortRevisitDueFirst floats due-for-revisit deferred tasks to the top of the
-// `:deferred` view (stable otherwise), so a snooze that came due isn't buried.
-func sortRevisitDueFirst(tasks []domain.Task, now time.Time) {
-	sort.SliceStable(tasks, func(i, j int) bool {
-		return domain.IsTaskRevisitDue(tasks[i], now) && !domain.IsTaskRevisitDue(tasks[j], now)
-	})
-}
-
+// sortRecordsRevisitDueFirst leads the `:deferred` view with due tasks.
 func sortRecordsRevisitDueFirst(records []core.LoadedRecord[domain.Task], now time.Time) {
 	sort.SliceStable(records, func(i, j int) bool {
 		return domain.IsTaskRevisitDue(records[i].Value, now) && !domain.IsTaskRevisitDue(records[j].Value, now)
 	})
 }
 
-// sortByRevisitDate orders the `:revisit` view oldest-overdue first (every task
-// there is already due, so the date drives the order, not the marker).
-func sortByRevisitDate(tasks []domain.Task) {
-	sort.SliceStable(tasks, func(i, j int) bool {
-		return tasks[i].RevisitAt < tasks[j].RevisitAt
-	})
-}
-
+// sortRecordsByRevisitDate orders the `:revisit` view oldest-overdue first.
 func sortRecordsByRevisitDate(records []core.LoadedRecord[domain.Task]) {
 	sort.SliceStable(records, func(i, j int) bool {
 		return records[i].Value.RevisitAt < records[j].Value.RevisitAt
