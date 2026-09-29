@@ -20,13 +20,25 @@ type threadReadFake struct {
 	getErr   error
 	onList   func()
 	onGet    func()
+	recordID string // optional adapter source identity independent of the domain value
 }
 
 func (f *threadReadFake) ReadThreads() (ThreadRead, error) {
 	if f.onList != nil {
 		f.onList()
 	}
-	return ThreadRead{Threads: f.threads, Problems: f.problems}, nil
+	read := ThreadRead{Problems: f.problems}
+	for _, thread := range f.threads {
+		id := thread.CanonicalID()
+		if f.recordID != "" {
+			id = f.recordID
+		}
+		read.Records = append(read.Records, VersionedRecord[domain.Thread]{
+			Record:        LoadedRecord[domain.Thread]{Value: thread, Source: RecordSource{ID: id}},
+			SourceVersion: thread.SourceVersion,
+		})
+	}
+	return read, nil
 }
 
 func (f *threadReadFake) GetThread(string) (domain.Thread, string, error) {
@@ -34,6 +46,20 @@ func (f *threadReadFake) GetThread(string) (domain.Thread, string, error) {
 		f.onGet()
 	}
 	return f.thread, f.body, f.getErr
+}
+
+func (f *threadReadFake) ReadThread(ref string) (LoadedRecord[ThreadWithBody], error) {
+	thread, body, err := f.GetThread(ref)
+	if err != nil {
+		return LoadedRecord[ThreadWithBody]{}, err
+	}
+	id := thread.CanonicalID()
+	if f.recordID != "" {
+		id = f.recordID
+	}
+	return LoadedRecord[ThreadWithBody]{
+		Value: ThreadWithBody{Thread: thread, Body: body}, Source: RecordSource{ID: id},
+	}, nil
 }
 
 var _ ThreadStore = (*threadReadFake)(nil)
@@ -76,6 +102,13 @@ func (f *aggregateThreadPathFake) GetThread(ref string) (domain.Thread, string, 
 		return domain.Thread{}, "", domain.ErrNotFound
 	}
 	return f.reads.GetThread(ref)
+}
+
+func (f *aggregateThreadPathFake) ReadThread(ref string) (LoadedRecord[ThreadWithBody], error) {
+	if f.reads == nil {
+		return LoadedRecord[ThreadWithBody]{}, domain.ErrNotFound
+	}
+	return f.reads.ReadThread(ref)
 }
 
 type taskGraphReadFake struct {
@@ -270,6 +303,34 @@ func TestServiceThreadListStripsOpaqueProblemSourceRevisions(t *testing.T) {
 	}
 }
 
+func TestServiceThreadViewsDoNotPublishAdapterSourceRevisions(t *testing.T) {
+	const revision = "opaque-thread-revision"
+	thread := domain.Thread{
+		ID: "6g3q4rtmv4ak", Slug: "remote-thread", Status: domain.ThreadStatusUnstarted,
+		Description: "Remote Thread", Goal: "Keep revisions private", Created: "2026-09-01",
+		SourceVersion: revision,
+	}
+	adapter := &threadReadFake{threads: []domain.Thread{thread}, thread: thread, recordID: thread.ID}
+	svc := MustNewService(&fakeStore{}, WithThreadStore(adapter))
+	list, _, err := svc.ListThreadViews()
+	if err != nil || len(list.Threads) != 1 {
+		t.Fatalf("list=%+v err=%v", list, err)
+	}
+	selected, _, err := svc.ShowThread(thread.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, view := range []ThreadView{list.Threads[0], selected} {
+		if view.Thread.SourceVersion != "" || view.Source.ID != thread.ID {
+			t.Fatalf("view leaked revision or lost source identity: %+v", view)
+		}
+		encoded, err := json.Marshal(view)
+		if err != nil || strings.Contains(string(encoded), revision) {
+			t.Fatalf("encoded view=%s err=%v", encoded, err)
+		}
+	}
+}
+
 func TestServiceThreadListFailsDuplicateIDsButAllowsDuplicateSlugs(t *testing.T) {
 	duplicateID := "6g3q4rtmv4ak"
 	missingID := "6g3q4rtmv4az"
@@ -336,6 +397,22 @@ func TestServiceThreadReadsComposeIndependentGraphAndThreadPorts(t *testing.T) {
 	unblocks, err := svc.TaskUnblocks(gate.ID)
 	if err != nil || len(unblocks.Unblocks) != 1 || unblocks.Unblocks[0].Task.ID != member.ID {
 		t.Fatalf("unblocks=%+v err=%v", unblocks, err)
+	}
+}
+
+func TestThreadProjectionsRetainAdapterSourceIdentity(t *testing.T) {
+	thread := threadRecord(domain.ThreadStatusUnstarted)
+	threads := &threadReadFake{
+		threads: []domain.Thread{thread}, thread: thread, recordID: "portable-thread-source",
+	}
+	svc := MustNewService(nil, WithTaskGraphSource(&taskGraphReadFake{}), WithThreadStore(threads))
+	list, _, err := svc.ListThreadViews()
+	if err != nil || len(list.Threads) != 1 || list.Threads[0].Source.ID != threads.recordID {
+		t.Fatalf("list lost adapter source: list=%+v err=%v", list, err)
+	}
+	projection, _, err := svc.ShowThreadGraphDetail(threads.recordID)
+	if err != nil || projection.View.Source.ID != threads.recordID {
+		t.Fatalf("detail lost adapter source: projection=%+v err=%v", projection, err)
 	}
 }
 

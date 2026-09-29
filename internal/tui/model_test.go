@@ -594,9 +594,12 @@ func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
 
 func TestEntityDetailRenderers(t *testing.T) {
 	epic := epicDetail{
-		es:    core.EpicSummary{Epic: domain.Epic{ID: "17-x", Status: "active", Priority: "high"}, Done: 1, Total: 2},
-		tasks: []domain.Task{{Slug: "a", Status: domain.StatusCompleted}, {Slug: "b", Status: domain.StatusReadyToStart}},
-		body:  "# Epic body",
+		es: core.EpicSummary{Epic: domain.Epic{ID: "17-x", Status: "active", Priority: "high"}, Done: 1, Total: 2},
+		tasks: []core.LoadedRecord[domain.Task]{
+			{Value: domain.Task{Slug: "a", Status: domain.StatusCompleted}, Source: core.RecordSource{ID: "a"}},
+			{Value: domain.Task{Slug: "b", Status: domain.StatusReadyToStart}, Source: core.RecordSource{ID: "b"}},
+		},
+		body: "# Epic body",
 	}
 	out := ansi.Strip(epic.meta(70, &testStyles) + "\n" + epic.rawBody())
 	for _, want := range []string{"17-x", "1/2", "50%", "Epic body"} {
@@ -612,10 +615,10 @@ func TestEntityDetailRenderers(t *testing.T) {
 	// denominator) that ShowEpic computes, not len(tasks). 2 done of 2 non-deprecated.
 	dep := epicDetail{
 		es: core.EpicSummary{Epic: domain.Epic{ID: "18-x"}, Done: 2, Total: 2, Deprecated: 1},
-		tasks: []domain.Task{
-			{Slug: "a", Status: domain.StatusCompleted},
-			{Slug: "b", Status: domain.StatusCompleted},
-			{Slug: "c", Status: domain.StatusDeprecated},
+		tasks: []core.LoadedRecord[domain.Task]{
+			{Value: domain.Task{Slug: "a", Status: domain.StatusCompleted}, Source: core.RecordSource{ID: "a"}},
+			{Value: domain.Task{Slug: "b", Status: domain.StatusCompleted}, Source: core.RecordSource{ID: "b"}},
+			{Value: domain.Task{Slug: "c", Status: domain.StatusDeprecated}, Source: core.RecordSource{ID: "c"}},
 		},
 	}
 	depOut := ansi.Strip(dep.meta(70, &testStyles))

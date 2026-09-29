@@ -43,6 +43,7 @@ func rollupCounts(done, total, width int) string {
 // reaches the marker too.
 type taskItem struct {
 	t            domain.Task
+	sourceID     string // canonical adapter-supplied identity; never derived from t
 	due          bool
 	identityHint string
 }
@@ -50,9 +51,9 @@ type taskItem struct {
 // FilterValue feeds the `/` fuzzy filter: slug, description, and tags so a tag
 // query (e.g. "/go") narrows the list (S2b broadened this from slug+desc).
 func (i taskItem) FilterValue() string {
-	return i.t.Slug + " " + i.t.CanonicalID() + " " + i.t.Description + " " + strings.Join(i.t.Tags, " ")
+	return i.t.Slug + " " + i.sourceID + " " + i.t.Description + " " + strings.Join(i.t.Tags, " ")
 }
-func (i taskItem) ref() entityRef { return entityRef{key: i.t.CanonicalID(), label: i.t.Slug} }
+func (i taskItem) ref() entityRef { return entityRef{key: i.sourceID, label: i.t.Slug} }
 func (i taskItem) displayLabel() string {
 	return labelWithIdentityHint(i.t.Slug, i.identityHint)
 }
@@ -107,18 +108,19 @@ func (d taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 // the done/total column width measured across the whole list at load (see
 // loadEpicList), so the delegate can pad to it without re-scanning siblings.
 type epicItem struct {
-	es      core.EpicSummary
-	countsW int
+	es           core.EpicSummary
+	countsW      int
+	identityHint string
 }
 
 func (i epicItem) FilterValue() string {
-	return i.es.Epic.ID + " " + i.es.Epic.Description + " " + strings.Join(i.es.Epic.Tags, " ")
+	return i.es.Epic.ID + " " + i.es.Source.ID + " " + i.es.Epic.Description + " " + strings.Join(i.es.Epic.Tags, " ")
 }
 func (i epicItem) ref() entityRef {
-	return entityRef{key: i.es.Epic.ID, label: i.es.Epic.ID}
+	return entityRef{key: i.es.Source.ID, label: i.es.Epic.ID}
 }
-func (i epicItem) displayLabel() string  { return i.es.Epic.ID }
-func (i epicItem) hasIdentityHint() bool { return false }
+func (i epicItem) displayLabel() string  { return labelWithIdentityHint(i.es.Epic.ID, i.identityHint) }
+func (i epicItem) hasIdentityHint() bool { return i.identityHint != "" }
 func (i epicItem) path() string          { return i.es.Epic.Path }
 
 // lifecycleState is the epic's current status (active/retired/deprecated) — the
@@ -176,7 +178,7 @@ func (d epicDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	bar := st.miniBar(pct, 8)
 	pctStr := st.fg(theme.Percent(pct), theme.PercentLabelPadded(pct))
 	counts := rollupCounts(it.es.Done, it.es.Total, it.countsW)
-	id := it.es.Epic.ID
+	id := it.displayLabel()
 	if !it.es.Live() { // dormant buckets recede: the id dims like the description
 		id = st.dim(id)
 	}
@@ -199,12 +201,12 @@ type threadItem struct {
 func (i threadItem) FilterValue() string {
 	t := i.view.Thread
 	return strings.Join([]string{
-		t.Slug, t.CanonicalID(), string(t.Status), t.Description, t.Goal,
+		t.Slug, i.view.Source.ID, string(t.Status), t.Description, t.Goal,
 		strings.Join(t.Tags, " "), string(i.view.GraphHealth), string(i.view.ProjectionHealth),
 	}, " ")
 }
 func (i threadItem) ref() entityRef {
-	return entityRef{key: i.view.Thread.CanonicalID(), label: i.view.Thread.Slug}
+	return entityRef{key: i.view.Source.ID, label: i.view.Thread.Slug}
 }
 func (i threadItem) displayLabel() string {
 	return labelWithIdentityHint(i.view.Thread.Slug, i.identityHint)
@@ -397,12 +399,13 @@ func (d threadDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 // column width measured across the list at load (see loadAuditList).
 type auditItem struct {
 	a            domain.Audit
+	sourceID     string // canonical adapter-supplied identity; never derived from a
 	countsW      int
 	identityHint string
 }
 
-func (i auditItem) FilterValue() string { return i.a.Slug + " " + i.a.CanonicalID() + " " + i.a.Area }
-func (i auditItem) ref() entityRef      { return entityRef{key: i.a.CanonicalID(), label: i.a.Slug} }
+func (i auditItem) FilterValue() string { return i.a.Slug + " " + i.sourceID + " " + i.a.Area }
+func (i auditItem) ref() entityRef      { return entityRef{key: i.sourceID, label: i.a.Slug} }
 func (i auditItem) displayLabel() string {
 	return labelWithIdentityHint(i.a.Slug, i.identityHint)
 }
@@ -450,15 +453,16 @@ func (d auditDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 // which the model already handles by checking len(transitions) before opening it.
 type researchItem struct {
 	r            domain.Research
+	sourceID     string // canonical adapter-supplied identity; never derived from r
 	identityHint string
 }
 
 // FilterValue spans slug, description, and tags: the corpus is browsed by topic, so `/`
 // has to reach a doc by what it's ABOUT, not just what the file is called.
 func (i researchItem) FilterValue() string {
-	return i.r.Slug + " " + i.r.CanonicalID() + " " + i.r.Description + " " + strings.Join(i.r.Tags, " ")
+	return i.r.Slug + " " + i.sourceID + " " + i.r.Description + " " + strings.Join(i.r.Tags, " ")
 }
-func (i researchItem) ref() entityRef { return entityRef{key: i.r.CanonicalID(), label: i.r.Slug} }
+func (i researchItem) ref() entityRef { return entityRef{key: i.sourceID, label: i.r.Slug} }
 func (i researchItem) displayLabel() string {
 	return labelWithIdentityHint(i.r.Slug, i.identityHint)
 }

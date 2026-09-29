@@ -29,6 +29,7 @@ type readRequest struct {
 	kind    entityKind
 	id      string
 	gen     int
+	listGen int // detail requests also belong to one loaded list generation
 }
 
 // readResult makes participation in the contention policy explicit beside a

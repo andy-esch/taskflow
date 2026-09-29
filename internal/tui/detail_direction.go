@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
@@ -20,7 +21,7 @@ import (
 type detailDirectionMenu struct {
 	active          bool
 	label           string
-	tasks           []domain.Task
+	tasks           []core.LoadedRecord[domain.Task]
 	cursor          int
 	loadedKey       string
 	originSelection string
@@ -30,12 +31,12 @@ type detailDirectionMenu struct {
 
 func (m *detailDirectionMenu) open(
 	label string,
-	tasks []domain.Task,
+	tasks []core.LoadedRecord[domain.Task],
 	loadedKey, originSelection string,
 	dx, dy int,
 ) {
 	*m = detailDirectionMenu{
-		active: true, label: label, tasks: append([]domain.Task(nil), tasks...),
+		active: true, label: label, tasks: append([]core.LoadedRecord[domain.Task](nil), tasks...),
 		loadedKey: loadedKey, originSelection: originSelection, dx: dx, dy: dy,
 	}
 }
@@ -48,9 +49,9 @@ func (m *detailDirectionMenu) move(delta int) {
 	}
 }
 
-func (m detailDirectionMenu) selected() (domain.Task, bool) {
+func (m detailDirectionMenu) selected() (core.LoadedRecord[domain.Task], bool) {
 	if m.cursor < 0 || m.cursor >= len(m.tasks) {
-		return domain.Task{}, false
+		return core.LoadedRecord[domain.Task]{}, false
 	}
 	return m.tasks[m.cursor], true
 }
@@ -61,16 +62,17 @@ func (m detailDirectionMenu) view(s *styles, maxW, maxH int) string {
 	b.WriteString(s.actionHeading.Render("choose " + truncate(m.label, max(maxW-8-ansi.StringWidth(position), 12)) + position))
 	b.WriteString("\n\n")
 	refs := make([]entityRef, 0, len(m.tasks))
-	for _, task := range m.tasks {
-		refs = append(refs, entityRef{key: task.CanonicalID(), label: task.Slug})
+	for _, record := range m.tasks {
+		refs = append(refs, entityRef{key: record.Source.ID, label: record.Value.Slug})
 	}
 	hints := duplicateIdentityHints(refs)
 	start, end := visibleTaskPickerRange(len(m.tasks), m.cursor, maxH)
 	for index := start; index < end; index++ {
-		task := m.tasks[index]
+		record := m.tasks[index]
+		task := record.Value
 		token := theme.Status(task.Status)
 		label := s.fg(token.Color, token.Glyph) + " " +
-			truncate(labelWithIdentityHint(task.Slug, hints[task.CanonicalID()]), max(maxW-10, 12))
+			truncate(labelWithIdentityHint(task.Slug, hints[record.Source.ID]), max(maxW-10, 12))
 		if index == m.cursor {
 			b.WriteString(s.selected.Render("› ") + label + "\n")
 		} else {
@@ -92,8 +94,8 @@ func (m *Model) handleDetailDirectionKey(msg tea.KeyPressMsg) tea.Cmd {
 		menu := m.direction
 		task, ok := m.direction.selected()
 		m.direction.close()
-		if !ok || !m.detail.directionTargetStillValid(menu, task.CanonicalID()) ||
-			!m.detail.selectDetailTask(task.CanonicalID()) {
+		if !ok || !m.detail.directionTargetStillValid(menu, task.Source.ID) ||
+			!m.detail.selectDetailTask(task.Source.ID) {
 			m.flash, m.flashErr = "directional target is no longer available", true
 		}
 	case key.Matches(msg, keys.Back), key.Matches(msg, keys.Quit):

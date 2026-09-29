@@ -75,13 +75,23 @@ type entityItem interface {
 // matching row. Local stores enforce this more deeply, but future adapters must
 // fail just as loudly instead of relying on filesystem invariants they do not have.
 func validateEntityItems(items []list.Item) error {
-	seen := make(map[string]string, len(items))
+	refs := make([]entityRef, 0, len(items))
 	for _, raw := range items {
 		item, ok := raw.(entityItem)
 		if !ok {
 			return fmt.Errorf("entity registry received unsupported row %T", raw)
 		}
-		ref := item.ref()
+		refs = append(refs, item.ref())
+	}
+	return validateEntityRefs(refs)
+}
+
+// validateEntityRefs runs on the complete loaded family before a view hides any
+// occurrence. A duplicate source ID in another status/bucket is still ambiguous
+// for selected reads and mutations in the current view.
+func validateEntityRefs(refs []entityRef) error {
+	seen := make(map[string]string, len(refs))
+	for _, ref := range refs {
 		if ref.key == "" {
 			return fmt.Errorf("entity %q has no canonical identity", ref.label)
 		}
@@ -178,10 +188,14 @@ type entityTab struct {
 	// cumulative and left sortDefault — which by definition does not reorder — unable to
 	// restore the loader's order. Cycling `o` all the way round then silently kept
 	// whichever column ran last.
-	loadOrder []list.Item
-	loadGen   int   // bumped per reload; stale list results/errors are dropped by gen
-	loadErr   error // this tab's last list-load failure (nil after a successful load)
-	problems  []core.LoadProblem
+	loadOrder   []list.Item
+	loadGen     int   // bumped per reload; stale list results/errors are dropped by gen
+	coherentGen int   // generation of the latest identity-validated installed rows
+	loadErr     error // this tab's last list-load failure (nil after a successful load)
+	// A malformed identity snapshot may leave the last coherent rows visible for
+	// context, but those rows are quarantined until a valid reload succeeds.
+	identityInvalid bool
+	problems        []core.LoadProblem
 	// Thread list reads carry repository-wide graph/read diagnostics that do not
 	// belong to any one row. They live on the registry tab — not in a parallel
 	// Thread state machine — and are nil for every other entity.
@@ -265,6 +279,9 @@ func (t *entityTab) selectByKey(key string) bool {
 // cursor back to where it was — the M6 fix for the reload/jump race. With nothing
 // pending it captures the current cursor (the ordinary reload-preserves-cursor case).
 func (t *entityTab) markReload() entityRef {
+	if t.identityInvalid {
+		return entityRef{}
+	}
 	if !t.restore.empty() {
 		return t.restore
 	}

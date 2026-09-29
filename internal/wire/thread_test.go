@@ -22,6 +22,25 @@ func TestToThreadJSONPreservesTagOrderAndCanonicalizesMembership(t *testing.T) {
 	}
 }
 
+func TestThreadViewEnvelopesPreserveDeclaredIDWhenSourceDiffers(t *testing.T) {
+	view := core.ThreadView{
+		Thread: domain.Thread{ID: "declared-thread-id", Slug: "drifted-thread"},
+		Source: core.RecordSource{ID: "canonical-source-id", Location: "remote://misleading-thread"},
+	}
+	for name, payload := range map[string]ThreadViewJSON{
+		"list":     ToThreadsEnvelope(core.ThreadListView{Threads: []core.ThreadView{view}}, nil).Threads[0],
+		"show":     ToThreadShowEnvelope(view, "body").View,
+		"frontier": ToThreadFrontierEnvelope(view).View,
+	} {
+		if payload.Thread.ID != view.Thread.ID || payload.Thread.ID == view.Source.ID {
+			t.Errorf("%s thread.id = %q, want declared ID %q", name, payload.Thread.ID, view.Thread.ID)
+		}
+	}
+	if projection := ToThreadGraphProjectionJSON(core.ThreadGraphProjection{View: view}); projection.View.Thread.ID != view.Thread.ID {
+		t.Errorf("graph projection thread.id = %q, want declared ID %q", projection.View.Thread.ID, view.Thread.ID)
+	}
+}
+
 func TestToThreadsEnvelopeRetainsPathlessIdentityWithoutParsingLocation(t *testing.T) {
 	const sourceVersion = "opaque-thread-source-revision"
 	payload := ToThreadsEnvelope(core.ThreadListView{}, []core.ThreadReadProblem{

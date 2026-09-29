@@ -670,19 +670,21 @@ Files split by concern:
   each owning its own `list.Model`, cursor, loaders, list-scoped state (status
   view, sort, filter restore), and its **lifecycle table** (the transitions it
   offers + an `applyMove`). Every row exposes an `entityRef` with a canonical store
-  key separate from its human label. Task, audit, research, and Thread rows use
-  the domain record's `CanonicalID`: filename-derived identity wins for local records
-  (the same identity the filesystem store resolves/CAS), while adapters without filename
-  semantics supply the semantic `ID`; epics use their already-canonical ID. Selection restore,
-  detail stale guards, palette/dashboard targets, follow history, lifecycle/edit writes, atlas
+  key separate from its human label. All five entity families take that key from the
+  adapter-supplied `RecordSource.ID` in the same loaded read as the semantic value; domain
+  `CanonicalID()`, filename fields, paths, and list positions are not TUI identity fallbacks.
+  Selection restore, detail stale guards, palette/dashboard targets, follow history,
+  lifecycle/edit writes, atlas
   landings, and cached workspace sessions carry that key. Rows, window titles, filters,
   breadcrumbs, and mutation messages keep the label; duplicate labels in one loaded result gain a
   leading shortest-unique stable-ID prefix, which stays present as long labels are truncated and
   remains stable while filtering or paginating that result. A missing or drifting frontmatter
   `id:` therefore remains lintable without making the TUI fall back to an ambiguous slug. Adapter
-  rows must provide non-empty, unique canonical keys; the registry rejects a loaded result that
-  violates that contract rather than selecting an arbitrary row. Read/browse is keybinding-free;
-  lifecycle is
+  rows must provide non-empty, unique canonical keys across the complete entity-family read,
+  including records hidden by the current view filter. The registry quarantines an invalid
+  snapshot rather than selecting an arbitrary row. Delayed detail and action results also carry
+  the selected source ID and list generation, so an older response cannot land on a newer
+  selection. Read/browse is keybinding-free; lifecycle is
   declared here per entity (tasks by status via `Move`, audits by bucket via `MoveAudit`, epics by
   status via `MoveEpic`; Threads and research have none), so adding Projects/ADRs later is a new registry entry
   — including any `a`-menu / `:`-verb actions — not a reducer edit.
@@ -694,7 +696,10 @@ Files split by concern:
   `Model.onDash` flag rather than joining `m.tabs` (a `-1` `entityDashboard`
   sentinel gives it `?`-help/title context without a tab slot). It's a *launch*
   surface: each navigable row jumps to an item/view on a real tab via `dashJump`,
-  never mutating. Rule of thumb for new screens: a browsable list ⇒ a new
+  never mutating. In-progress task rows and acute audit findings use source IDs from
+  that Summary read; complete-family source-ID evidence suppresses a jump when a
+  duplicate is hidden by status or bucket. Atlas uses the same fail-closed rule for
+  per-space in-progress rows. Rule of thumb for new screens: a browsable list ⇒ a new
   `entityTab`; a read-only orientation screen ⇒ the dashboard pattern.
 - **`commands.go` / `messages.go`** — the async load `tea.Cmd`s and the `tea.Msg`
   types they return (list loads, lazy detail loads, reload, errors).

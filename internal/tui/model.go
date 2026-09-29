@@ -344,8 +344,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleListLoaded(msg)
 
 	case detailMsg:
-		if !m.isCurrentSelection(msg.kind, msg.id) || msg.gen != m.detailGen {
+		if !m.isCurrentSelection(msg.kind, msg.id) || msg.gen != m.detailGen ||
+			(msg.listGen != 0 && msg.listGen != m.cur().loadGen) {
 			return m, nil // stale: tab/selection changed, or a newer load is in flight
+		}
+		if msg.sourceID != "" && msg.sourceID != msg.id {
+			m.detail.SetError(msg.id, m.selectedLabel(), "detail source identity differs from the selected record", "")
+			return m, nil
 		}
 		if m.direction.active {
 			m.direction.close()
@@ -359,7 +364,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case detailErrMsg:
 		// A per-item load failure (e.g. an ambiguous duplicate slug) shows in the
 		// detail pane — it must not blank the whole browser.
-		if !m.isCurrentSelection(msg.kind, msg.id) || msg.gen != m.detailGen {
+		if !m.isCurrentSelection(msg.kind, msg.id) || msg.gen != m.detailGen ||
+			(msg.listGen != 0 && msg.listGen != m.cur().loadGen) {
 			return m, nil
 		}
 		if m.pendingDetailNavigation.kind == msg.kind && m.pendingDetailNavigation.key == msg.id {
@@ -419,6 +425,23 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, msg.retry
 
+	case mutationResultMsg:
+		if msg.kind != m.cur().kind || msg.ref != m.selectedRef() ||
+			msg.listGen != m.cur().loadGen {
+			// The write may already have committed. Refresh the current surface, but
+			// never apply its flash/editor state to a different selection.
+			switch result := msg.result.(type) {
+			case movedMsg, editedMsg:
+				return m, m.reloadAll()
+			case editorClosedMsg:
+				if result.err == nil {
+					return m, m.reloadAll()
+				}
+			}
+			return m, nil
+		}
+		return m.update(msg.result)
+
 	case movedMsg:
 		// A transition succeeded: flash it and reload so the moved task shows in its
 		// new status (frontmatter-authoritative), each tab's cursor preserved by key.
@@ -453,7 +476,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.edit.active {
 			m.edit.applied(msg.field, msg.value) // back to the picker, value refreshed
 		}
-		return m, m.reloadAll()
+		cmd := m.reloadAll()
+		if m.edit.active {
+			// The form may continue after its own edit, but not until the new
+			// generation has passed identity validation.
+			m.edit.sourceGen = m.cur().loadGen
+		}
+		return m, cmd
 
 	case editorClosedMsg:
 		// The external $EDITOR (`E`) exited. A launch failure flashes; otherwise the
@@ -620,16 +649,34 @@ func (m Model) handleListLoaded(msg listLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.gen != tab.loadGen {
 		return m, nil // an older load finishing late must not clobber the newer one
 	}
-	if err := validateEntityItems(msg.items); err != nil {
+	identityErr := msg.identityErr
+	if identityErr == nil {
+		identityErr = validateEntityItems(msg.items)
+	}
+	if err := identityErr; err != nil {
 		// Treat an adapter identity violation exactly like a durable read failure:
 		// retain the last coherent rows on refresh, or show the error pane on an
 		// initial load. Never install a list whose selection key is ambiguous.
 		tab.loadErr = err
+		tab.identityInvalid = true
+		tab.restore, tab.restoreGen, tab.restoreWiden = entityRef{}, 0, false
+		if m.palette.active {
+			m.palette.reindex(m.paletteIndex())
+		}
+		if msg.kind == m.cur().kind {
+			m.detailGen++ // invalidate a detail read already in flight
+			m.detail.showEmpty()
+			m.action.close()
+			m.edit.close()
+			m.follow.close()
+		}
 		return m, nil
 	}
 	// A successful load clears the tab's error so a transient failure (e.g. the
 	// planning dir briefly unreadable) recovers on the next `r`/reload.
 	tab.loadErr = nil
+	tab.identityInvalid = false
+	tab.coherentGen = msg.gen
 	// Keep the loader's order before sorting: it is the base every later sort (and
 	// sortDefault) is computed from. Copied, since sortItems reorders in place.
 	tab.loadOrder = append([]list.Item(nil), msg.items...)
@@ -804,6 +851,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if cur := m.cur(); len(cur.transitions) > 0 {
 			if ref, state, ok := m.selectedLifecycle(); ok {
 				m.action.open(ref, cur.transitions, state)
+				m.action.sourceGen = cur.loadGen
 			}
 		}
 		return m, nil
@@ -815,9 +863,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// entity-agnostic `E` ($EDITOR) — so on an audit selection we point at `E`
 		// rather than dying as a silent no-op.
 		if t, ok := m.selectedTask(); ok {
-			m.edit.open(t)
+			m.edit.open(m.selectedRef(), t)
+			m.edit.sourceGen = m.cur().loadGen
 		} else if ep, ok := m.selectedEpic(); ok {
-			m.edit.openEpic(ep)
+			m.edit.openEpic(m.selectedRef(), ep)
+			m.edit.sourceGen = m.cur().loadGen
 		} else if m.cur().kind == entityThreads && !m.selectedRef().empty() {
 			switch {
 			case m.selectedPath() != "":
@@ -997,7 +1047,7 @@ func (m *Model) moveDetailDirection(dx, dy int) {
 		m.flash = "no readable direct " + label + " in this one-hop focus"
 		m.flashErr = true
 	case 1:
-		m.detail.selectDetailTask(tasks[0].CanonicalID())
+		m.detail.selectDetailTask(tasks[0].Source.ID)
 	default:
 		m.direction.open(label, tasks, m.detail.loadedKey, m.detail.detailSelectionKey(), dx, dy)
 	}
@@ -1038,6 +1088,15 @@ func (m Model) afterSelectionChange(prev string, cmd tea.Cmd) (tea.Model, tea.Cm
 // mutates the model copy directly (the modal loop passes &m) and returns the cmd;
 // ForceQuit is handled by handleKey's preamble, ahead of the modal loop.
 func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
+	if m.action.sourceGen == m.cur().loadGen && m.cur().coherentGen != m.cur().loadGen {
+		m.flash, m.flashErr = "refreshing selection; wait to act", true
+		return nil
+	}
+	if m.action.sourceGen != m.cur().loadGen || m.action.ref != m.selectedRef() {
+		m.action.close()
+		m.flash, m.flashErr = "selection changed; reopen action", true
+		return nil
+	}
 	if m.action.revisit {
 		switch msg.String() {
 		case "enter":
@@ -1048,7 +1107,7 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 			ref := m.action.ref
 			m.action.close()
-			return deferTaskCmd(m.svc, ref, date)
+			return scopeMutation(m.cur().kind, ref, m.action.sourceGen, deferTaskCmd(m.svc, ref, date))
 		case "esc":
 			if len(m.action.options) > 0 {
 				m.action.revisit = false // came from the menu → return to it
@@ -1068,7 +1127,7 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 		case "y", "Y":
 			tr, ref := m.action.selected(), m.action.ref
 			m.action.close()
-			return m.cur().applyMove(m.svc, ref, tr)
+			return scopeMutation(m.cur().kind, ref, m.action.sourceGen, m.cur().applyMove(m.svc, ref, tr))
 		case "n", "N", "esc":
 			if m.action.confirmOnly() {
 				m.action.close() // a bare `:deprecate` confirm has no menu to return to
@@ -1097,7 +1156,7 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		ref := m.action.ref
 		m.action.close()
-		return m.cur().applyMove(m.svc, ref, tr)
+		return scopeMutation(m.cur().kind, ref, m.action.sourceGen, m.cur().applyMove(m.svc, ref, tr))
 	case "esc", "h", "a", "q":
 		m.action.close()
 	}
@@ -1110,19 +1169,29 @@ func (m *Model) handleActionKey(msg tea.KeyPressMsg) tea.Cmd {
 // immediately. Shared by the `:`-command and palette entry points so all three
 // paths agree.
 func (m *Model) beginTransition(ref entityRef, tr transition) tea.Cmd {
+	if ref.empty() || ref != m.selectedRef() {
+		m.flash, m.flashErr = "selection changed; choose the action again", true
+		return nil
+	}
 	if tr.destructive {
 		m.action.openConfirm(ref, tr)
+		m.action.sourceGen = m.cur().loadGen
 		return nil
 	}
 	if tr.optionalDate {
-		return m.action.beginRevisit(ref)
+		cmd := m.action.beginRevisit(ref)
+		m.action.sourceGen = m.cur().loadGen
+		return cmd
 	}
-	return m.cur().applyMove(m.svc, ref, tr)
+	return scopeMutation(m.cur().kind, ref, m.cur().loadGen, m.cur().applyMove(m.svc, ref, tr))
 }
 
 // selectedTask returns the selected row as a task — ok only on the tasks tab. Used
 // by followSelected (the task→epic reference jump), which is task-specific.
 func (m Model) selectedTask() (domain.Task, bool) {
+	if m.cur().identityInvalid || m.cur().coherentGen != m.cur().loadGen {
+		return domain.Task{}, false
+	}
 	if it, ok := m.cur().list.SelectedItem().(taskItem); ok {
 		return it.t, true
 	}
@@ -1133,6 +1202,9 @@ func (m Model) selectedTask() (domain.Task, bool) {
 // Mirrors selectedTask; the `e` handler uses it to open the inline editor on an
 // epic (description/priority/tags via SetEpicFields).
 func (m Model) selectedEpic() (domain.Epic, bool) {
+	if m.cur().identityInvalid || m.cur().coherentGen != m.cur().loadGen {
+		return domain.Epic{}, false
+	}
 	if it, ok := m.cur().list.SelectedItem().(epicItem); ok {
 		return it.es.Epic, true
 	}
@@ -1146,6 +1218,9 @@ func (m Model) selectedEpic() (domain.Epic, bool) {
 // file), so it asks the row via the lifecycleItem interface, never switching on
 // concrete item types.
 func (m Model) selectedLifecycle() (ref entityRef, state string, ok bool) {
+	if m.cur().identityInvalid || m.cur().coherentGen != m.cur().loadGen {
+		return entityRef{}, "", false
+	}
 	if li, ok := m.cur().list.SelectedItem().(lifecycleItem); ok {
 		return li.ref(), li.lifecycleState(), true
 	}
@@ -1295,22 +1370,25 @@ func (m *Model) refreshDetail() tea.Cmd {
 func (m *Model) loadDetail(id string) tea.Cmd {
 	m.detailGen++
 	gen := m.detailGen
+	listGen := m.cur().loadGen
 	label := m.selectedLabel()
 	load := m.cur().loadItem(m.svc, id)
 	stamped := func() tea.Msg {
 		switch msg := load().(type) {
 		case detailMsg:
 			msg.gen = gen
+			msg.listGen = listGen
 			return msg
 		case detailErrMsg:
 			msg.gen = gen
+			msg.listGen = listGen
 			msg.label = label
 			return msg
 		default:
 			return msg
 		}
 	}
-	request := readRequest{surface: readEntityDetail, kind: m.cur().kind, id: id, gen: gen}
+	request := readRequest{surface: readEntityDetail, kind: m.cur().kind, id: id, gen: gen, listGen: listGen}
 	return withReadConflictRetry(request, stamped)
 }
 
@@ -1324,7 +1402,8 @@ func (m Model) readRequestCurrent(request readRequest) bool {
 		i := indexOfKind(m.tabs, request.kind)
 		return i >= 0 && m.tabs[i].loadGen == request.gen
 	case readEntityDetail:
-		return request.gen == m.detailGen && m.isCurrentSelection(request.kind, request.id)
+		return request.gen == m.detailGen && m.isCurrentSelection(request.kind, request.id) &&
+			(request.listGen == 0 || request.listGen == m.cur().loadGen)
 	case readDashboard:
 		return request.gen == m.dash.loadGen
 	default:
@@ -1411,6 +1490,9 @@ func (m *Model) syncClearedDetailLayout(wasImmersive bool) {
 }
 
 func (m Model) selectedRef() entityRef {
+	if m.cur().identityInvalid || m.cur().coherentGen != m.cur().loadGen {
+		return entityRef{}
+	}
 	if it, ok := m.cur().list.SelectedItem().(entityItem); ok {
 		return it.ref()
 	}
@@ -1427,6 +1509,9 @@ func (m Model) selectedLabel() string { return m.selectedRef().label }
 // selection: yanking a Thread wave/spatial node must not silently copy the
 // parent Thread row behind it.
 func (m Model) selectedYankRef() (string, string) {
+	if m.cur().identityInvalid || m.cur().coherentGen != m.cur().loadGen {
+		return "", "id"
+	}
 	if m.focus == focusDetail {
 		text, label, ok := m.detail.selectionYankRef()
 		if ok {
@@ -1447,6 +1532,9 @@ func (m Model) selectedYankRef() (string, string) {
 // selectedPath is the file path of the active tab's selection (empty if none) —
 // the clipboard yank target for Y.
 func (m Model) selectedPath() string {
+	if m.cur().identityInvalid || m.cur().coherentGen != m.cur().loadGen {
+		return ""
+	}
 	// Thread paths are an optional local-navigation capability, not part of the
 	// portable list projection. They arrive with the selected detail read.
 	if m.cur().kind == entityThreads {
@@ -1509,11 +1597,12 @@ func (m Model) openInEditor() (tea.Model, tea.Cmd) {
 	}
 	cmd := editor.Command(editor.Resolve(), path)
 	gen, scoped := m.sessionGen, m.sessionScope
+	kind, ref, listGen := m.cur().kind, m.selectedRef(), m.cur().loadGen
 	// ExecProcess itself remains a Bubble Tea runtime-control message; only its eventual
 	// callback is session-scoped, preventing an editor opened in space A from reloading
 	// space B.
 	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
-		msg := editorClosedMsg{err: err}
+		msg := mutationResultMsg{kind: kind, ref: ref, listGen: listGen, result: editorClosedMsg{err: err}}
 		if scoped {
 			return sessionMsg{gen: gen, msg: msg}
 		}

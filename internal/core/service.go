@@ -373,17 +373,27 @@ func (s Summary) SplitCounts() (active, archived []StatusCount) {
 
 // Summary is the at-a-glance project state for the dashboard.
 type Summary struct {
-	Counts        []StatusCount  // every status in display order (count may be 0)
-	InProgress    []domain.Task  // the in-progress working set
-	Epics         []EpicSummary  // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
-	OpenAudits    []domain.Audit // audits still in the open bucket (actionable work)
-	ReadyToClose  int            // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
-	Findings      FindingsRollup // actionable audit findings (open/in-progress) aggregated by urgency + component
-	RevisitDue    int            // deferred tasks whose revisit_at (snooze-until) date has arrived
-	BadEpicStatus int            // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
-	Problems      []LoadProblem  // unreadable planning records
-	GraphHealth   GraphHealth    // repository-wide task-DAG verdict from the same snapshot as Counts/InProgress
-	GraphDetail   string         // first cause + remedy when GraphHealth is not healthy
+	Counts     []StatusCount // every status in display order (count may be 0)
+	InProgress []domain.Task // the in-progress working set
+	// InProgressRecords is the same working set with adapter-supplied identity.
+	// InProgress remains a compatibility projection for existing CLI/wire callers.
+	InProgressRecords []LoadedRecord[domain.Task]
+	// TaskSourceIDs covers every readable task, not just in-progress rows, so
+	// dashboard and Atlas jumps cannot overlook an archived duplicate.
+	TaskSourceIDs []string
+	// AuditSourceIDs covers the complete readable audit snapshot, including
+	// non-open audits with no acute findings. Primary adapters use it to avoid
+	// turning a finding's ambiguous audit ID into a navigation target.
+	AuditSourceIDs []string
+	Epics          []EpicSummary  // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
+	OpenAudits     []domain.Audit // audits still in the open bucket (actionable work)
+	ReadyToClose   int            // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
+	Findings       FindingsRollup // actionable audit findings (open/in-progress) aggregated by urgency + component
+	RevisitDue     int            // deferred tasks whose revisit_at (snooze-until) date has arrived
+	BadEpicStatus  int            // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
+	Problems       []LoadProblem  // unreadable planning records
+	GraphHealth    GraphHealth    // repository-wide task-DAG verdict from the same snapshot as Counts/InProgress
+	GraphDetail    string         // first cause + remedy when GraphHealth is not healthy
 }
 
 // Summary composes a one-screen overview from a single scan of tasks + epics +
@@ -420,10 +430,12 @@ func summarize(store SummaryStore, auditsSource AuditSnapshotSource, taskGraphs 
 	}
 	auditSnapshot = auditSnapshotWithSourceIDs(auditSnapshot)
 	audits, p3 := auditSnapshot.Audits, auditSnapshot.Problems
+	auditSourceIDs := make([]string, 0, len(audits))
 	var openAudits []domain.Audit
 	var actionable []AuditFinding
 	readyToClose := 0
 	for _, loaded := range audits {
+		auditSourceIDs = append(auditSourceIDs, loaded.Source.ID)
 		a := loaded.Value
 		a.Audit.FilenameID = loaded.Source.ID // temporary bare-domain dashboard projection
 		if a.Audit.Bucket == domain.AuditOpen {
@@ -447,6 +459,8 @@ func summarize(store SummaryStore, auditsSource AuditSnapshotSource, taskGraphs 
 	}
 	counts := map[domain.Status]int{}
 	var inProgress []domain.Task
+	var inProgressRecords []LoadedRecord[domain.Task]
+	taskSourceIDs := make([]string, 0, len(tasks))
 	revisitDue := 0
 	for _, t := range tasks {
 		counts[t.Status]++
@@ -459,6 +473,12 @@ func summarize(store SummaryStore, auditsSource AuditSnapshotSource, taskGraphs 
 		// has arrived.
 		if domain.IsTaskRevisitDue(t, now) {
 			revisitDue++
+		}
+	}
+	for _, record := range taskGraphRecords(read) {
+		taskSourceIDs = append(taskSourceIDs, record.Source.ID)
+		if record.Value.Status == domain.StatusInProgress {
+			inProgressRecords = append(inProgressRecords, record)
 		}
 	}
 	ordered := make([]StatusCount, 0, len(domain.AllStatuses()))
@@ -481,8 +501,11 @@ func summarize(store SummaryStore, auditsSource AuditSnapshotSource, taskGraphs 
 	problems = append(problems, p3...)
 	problems = canonicalLoadProblems(problems)
 	summary := Summary{
-		Counts:     ordered,
-		InProgress: inProgress,
+		Counts:            ordered,
+		InProgress:        inProgress,
+		InProgressRecords: inProgressRecords,
+		TaskSourceIDs:     taskSourceIDs,
+		AuditSourceIDs:    auditSourceIDs,
 		// Active-only + live-first HERE so the dashboard's "what's live right now"
 		// lens is a property of the aggregate, not re-derived per surface — the CLI
 		// `status` and the TUI dashboard then agree by construction (audit M2).
@@ -603,7 +626,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		threads = threadRead.Threads
+		threads = threadRead.SemanticThreads()
 		for _, problem := range threadRead.Problems {
 			loadProblem := LoadProblem{
 				EntityKind: EntityThread, EntityID: problem.ThreadID,

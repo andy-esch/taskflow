@@ -73,3 +73,31 @@ func TestOrdinaryReadServicesDoNotPublishSourceLessRecords(t *testing.T) {
 		}
 	}
 }
+
+func TestThreadReadValidateSourcesFailsClosedWithoutCanonicalIdentity(t *testing.T) {
+	read := ThreadRead{Records: []VersionedRecord[domain.Thread]{
+		{Record: LoadedRecord[domain.Thread]{Value: domain.Thread{ID: "canonical-a"}, Source: RecordSource{ID: "canonical-a"}}},
+		{Record: LoadedRecord[domain.Thread]{Value: domain.Thread{ID: "canonical-b"}, Source: RecordSource{ID: "canonical-b"}}},
+	}}
+	if err := read.ValidateSources(); err != nil {
+		t.Fatalf("unique canonical sources = %v", err)
+	}
+	read.Records[0].Record.Value.SourceVersion = "legacy-embedded-revision"
+	if threads := read.SemanticThreads(); len(threads) != 2 || threads[0].SourceVersion != "" {
+		t.Fatalf("semantic Threads retained adapter revision: %+v", threads)
+	}
+	read.Records[1].Record.Value.ID = "drifted-declaration"
+	if err := read.ValidateSources(); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("declared/source identity drift = %v, want validation error", err)
+	}
+	read.Records[1].Record.Value.ID = "canonical-b"
+	read.Records[1].Record.Source.ID = ""
+	read.Records[1].Record.Source.Location = "remote://thread/declared-b"
+	if err := read.ValidateSources(); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("missing canonical source ID = %v, want validation error", err)
+	}
+	read.Records[1].Record.Source.ID = "canonical-a"
+	if err := read.ValidateSources(); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("duplicate canonical source ID = %v, want validation error", err)
+	}
+}

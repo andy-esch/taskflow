@@ -276,21 +276,21 @@ func TestDuplicateIdentityHintsLeadRowsSoTruncationCannotHideThem(t *testing.T) 
 		{
 			name: "tasks", width: 46,
 			rowFor: func(ref entityRef) string {
-				item := taskItem{t: domain.Task{ID: ref.key, Slug: ref.label, Status: domain.StatusInProgress}, identityHint: hints[ref.key]}
+				item := taskItem{t: domain.Task{Slug: ref.label, Status: domain.StatusInProgress}, sourceID: ref.key, identityHint: hints[ref.key]}
 				return renderDelegateRow(t, taskDelegate{st: &testStyles}, item, 46)
 			},
 		},
 		{
 			name: "audits", width: 60,
 			rowFor: func(ref entityRef) string {
-				item := auditItem{a: domain.Audit{ID: ref.key, Slug: ref.label, Bucket: domain.AuditOpen}, identityHint: hints[ref.key]}
+				item := auditItem{a: domain.Audit{Slug: ref.label, Bucket: domain.AuditOpen}, sourceID: ref.key, identityHint: hints[ref.key]}
 				return renderDelegateRow(t, auditDelegate{st: &testStyles}, item, 60)
 			},
 		},
 		{
 			name: "research", width: 46,
 			rowFor: func(ref entityRef) string {
-				item := researchItem{r: domain.Research{ID: ref.key, Slug: ref.label, Created: "2026-09-02"}, identityHint: hints[ref.key]}
+				item := researchItem{r: domain.Research{Slug: ref.label, Created: "2026-09-02"}, sourceID: ref.key, identityHint: hints[ref.key]}
 				return renderDelegateRow(t, researchDelegate{st: &testStyles}, item, 46)
 			},
 		},
@@ -334,7 +334,7 @@ func TestDuplicateIdentityMutationCommandsUseCanonicalKeys(t *testing.T) {
 	second := m.cur().list.Items()[1].(taskItem)
 
 	var editor editMenu
-	editor.open(second.t)
+	editor.open(second.ref(), second.t)
 	if editor.ref != second.ref() {
 		t.Fatalf("edit form captured %+v, want %+v", editor.ref, second.ref())
 	}
@@ -440,6 +440,7 @@ func TestEntityRegistryRejectsEmptyOrDuplicateCanonicalKeys(t *testing.T) {
 	m := loaded(t, 120, 40)
 	tab := m.cur()
 	wantRows := len(tab.list.Items())
+	coherent := append([]list.Item(nil), tab.list.Items()...)
 	tests := []struct {
 		name  string
 		items []list.Item
@@ -453,8 +454,8 @@ func TestEntityRegistryRejectsEmptyOrDuplicateCanonicalKeys(t *testing.T) {
 		{
 			name: "duplicate",
 			items: []list.Item{
-				taskItem{t: domain.Task{ID: "shared-key", Slug: "first"}},
-				taskItem{t: domain.Task{ID: "shared-key", Slug: "second"}},
+				taskItem{t: domain.Task{Slug: "first"}, sourceID: "shared-key"},
+				taskItem{t: domain.Task{Slug: "second"}, sourceID: "shared-key"},
 			},
 			want: "is shared by",
 		},
@@ -470,7 +471,89 @@ func TestEntityRegistryRejectsEmptyOrDuplicateCanonicalKeys(t *testing.T) {
 			if got := len(tab.list.Items()); got != wantRows {
 				t.Fatalf("invalid rows replaced last coherent list: got %d rows, want %d", got, wantRows)
 			}
+			if !m.selectedRef().empty() || m.selectedPath() != "" || tab.markReload() != (entityRef{}) {
+				t.Fatal("last coherent rows remained actionable after identity failure")
+			}
+			for _, candidate := range m.paletteIndex() {
+				if candidate.kind == palJump && candidate.ek == entityTasks {
+					t.Fatal("identity-invalid tab remained addressable from palette")
+				}
+			}
 		})
+	}
+	tab.loadGen++
+	tm, _ := m.Update(listLoadedMsg{kind: entityTasks, gen: tab.loadGen, items: coherent})
+	m = tm.(Model)
+	if tab.identityInvalid || m.selectedRef().empty() {
+		t.Fatal("a valid reload did not restore source-identified navigation")
+	}
+}
+
+func TestEntityRowsUsePortableSourceIDsNotDomainFallbacks(t *testing.T) {
+	const sourceID = "portable-source-id"
+	task := domain.Task{ID: "frontmatter-id", FilenameID: "filename-id", Slug: "task"}
+	audit := domain.Audit{ID: "frontmatter-id", FilenameID: "filename-id", Slug: "audit"}
+	research := domain.Research{ID: "frontmatter-id", FilenameID: "filename-id", Slug: "research"}
+	items := []entityItem{
+		taskItem{t: task, sourceID: sourceID},
+		epicItem{es: core.EpicSummary{Epic: domain.Epic{ID: "display-id"}, Source: core.RecordSource{ID: sourceID}}},
+		auditItem{a: audit, sourceID: sourceID},
+		researchItem{r: research, sourceID: sourceID},
+	}
+	for _, item := range items {
+		if got := item.ref().key; got != sourceID {
+			t.Errorf("%T ref = %q, want adapter source %q", item, got, sourceID)
+		}
+	}
+}
+
+func TestDetailRejectsDifferentSourceAndOldListGeneration(t *testing.T) {
+	m := loaded(t, 120, 40)
+	id := m.selectedKey()
+	m.detailGen++
+	oldGen := m.cur().loadGen
+	m.cur().loadGen++
+	tm, _ := m.Update(detailMsg{kind: entityTasks, id: id, sourceID: id, gen: m.detailGen,
+		listGen: oldGen, content: taskDetail{t: domain.Task{Slug: "old"}, body: "OLD"}})
+	m = tm.(Model)
+	if m.detail.hasContent {
+		t.Fatal("a detail from the prior list generation replaced the pane")
+	}
+	m.cur().coherentGen = m.cur().loadGen
+	tm, _ = m.Update(detailMsg{kind: entityTasks, id: id, sourceID: "different-source", gen: m.detailGen,
+		listGen: m.cur().loadGen, content: taskDetail{t: domain.Task{Slug: "wrong"}, body: "WRONG"}})
+	m = tm.(Model)
+	if m.detail.content != nil || !strings.Contains(m.detail.errMsg, "source identity differs") {
+		t.Fatalf("a mismatched detail source was accepted or not diagnosed: content=%T error=%q", m.detail.content, m.detail.errMsg)
+	}
+}
+
+func TestRefreshInvalidatesOpenMutationMenuAndDelayedResult(t *testing.T) {
+	m := loaded(t, 120, 40)
+	first := m.selectedRef()
+	tm, _ := m.Update(press("m"))
+	m = tm.(Model)
+	if !m.action.active {
+		t.Fatal("action menu did not open")
+	}
+	m.cur().loadGen++ // watcher/manual refresh started but has not validated its rows
+	tm, cmd := m.Update(press("enter"))
+	m = tm.(Model)
+	if cmd != nil || m.action.active {
+		t.Fatal("an action opened from the old generation was allowed to submit")
+	}
+
+	// A write launched before a refresh may still finish afterward. Its result
+	// must not update the current selection's editor/flash, even if committed.
+	m.cur().coherentGen = m.cur().loadGen
+	if !m.cur().selectByKey(testutil.TaskID("beta")) {
+		t.Fatal("fixture has no second task")
+	}
+	tm, _ = m.Update(mutationResultMsg{kind: entityTasks, ref: first,
+		listGen: m.cur().loadGen - 1, result: editedMsg{ref: first, field: "priority", value: "high"}})
+	m = tm.(Model)
+	if strings.Contains(m.flash, "set priority") || m.selectedRef() == first {
+		t.Fatal("stale mutation result acted on another selection")
 	}
 }
 
@@ -478,10 +561,10 @@ func TestPaletteDisambiguatesCrossKindLabelsWithoutDuplicatingKeys(t *testing.T)
 	m := Model{tabs: newEntityTabs(&testStyles)}
 	taskKey, auditKey := "aaaaaa111111", "bbbbbb222222"
 	m.tabs[indexOfKind(m.tabs, entityTasks)].list.SetItems([]list.Item{
-		taskItem{t: domain.Task{ID: taskKey, Slug: "shared"}},
+		taskItem{t: domain.Task{Slug: "shared"}, sourceID: taskKey},
 	})
 	m.tabs[indexOfKind(m.tabs, entityAudits)].list.SetItems([]list.Item{
-		auditItem{a: domain.Audit{ID: auditKey, Slug: "shared"}},
+		auditItem{a: domain.Audit{Slug: "shared"}, sourceID: auditKey},
 	})
 
 	titles := map[string]string{}
@@ -500,9 +583,9 @@ func TestPaletteDisambiguatesCrossKindLabelsWithoutDuplicatingKeys(t *testing.T)
 }
 
 func TestEpicTaskRosterDisambiguatesDuplicateSlugs(t *testing.T) {
-	tasks := []domain.Task{
-		{ID: "aaaaaa111111", Slug: "same-task", Status: domain.StatusInProgress},
-		{ID: "bbbbbb222222", Slug: "same-task", Status: domain.StatusNextUp},
+	tasks := []core.LoadedRecord[domain.Task]{
+		{Value: domain.Task{Slug: "same-task", Status: domain.StatusInProgress}, Source: core.RecordSource{ID: "aaaaaa111111"}},
+		{Value: domain.Task{Slug: "same-task", Status: domain.StatusNextUp}, Source: core.RecordSource{ID: "bbbbbb222222"}},
 	}
 	meta := renderEpicMeta(core.EpicSummary{Epic: domain.Epic{ID: "01-identity"}}, tasks, 80, &testStyles)
 	if !strings.Contains(meta, "[aaaaaa]") || !strings.Contains(meta, "[bbbbbb]") {
@@ -512,11 +595,14 @@ func TestEpicTaskRosterDisambiguatesDuplicateSlugs(t *testing.T) {
 
 func TestDashboardInProgressRowsCarryCanonicalDuplicateTargets(t *testing.T) {
 	tasks := []domain.Task{
-		{ID: "aaaaaa111111", Slug: "same-task", Status: domain.StatusInProgress},
-		{ID: "bbbbbb222222", Slug: "same-task", Status: domain.StatusInProgress},
+		{ID: "declared-a", Slug: "same-task", Status: domain.StatusInProgress},
+		{ID: "declared-b", Slug: "same-task", Status: domain.StatusInProgress},
 	}
 	var d dashboard
-	d.setSummary(core.Summary{InProgress: tasks}, &testStyles, false)
+	d.setSummary(core.Summary{InProgress: tasks, TaskSourceIDs: []string{"aaaaaa111111", "bbbbbb222222"}, InProgressRecords: []core.LoadedRecord[domain.Task]{
+		{Value: tasks[0], Source: core.RecordSource{ID: "aaaaaa111111"}},
+		{Value: tasks[1], Source: core.RecordSource{ID: "bbbbbb222222"}},
+	}}, &testStyles, false)
 	seen := map[string]bool{}
 	for _, row := range d.rows {
 		if row.target == nil || row.target.kind != entityTasks || row.target.ref.label != "same-task" {
@@ -527,7 +613,35 @@ func TestDashboardInProgressRowsCarryCanonicalDuplicateTargets(t *testing.T) {
 			t.Errorf("dashboard row lost its visible identity hint: %q", row.text)
 		}
 	}
-	if !seen[tasks[0].CanonicalID()] || !seen[tasks[1].CanonicalID()] {
+	if !seen["aaaaaa111111"] || !seen["bbbbbb222222"] {
 		t.Fatalf("dashboard duplicate targets = %+v", seen)
+	}
+}
+
+func TestDashboardDoesNotNavigateBareOrAmbiguousWork(t *testing.T) {
+	task := domain.Task{ID: "domain-fallback", Slug: "work", Status: domain.StatusInProgress}
+	for _, summary := range []core.Summary{
+		{InProgress: []domain.Task{task}},
+		{InProgress: []domain.Task{task, task}, InProgressRecords: []core.LoadedRecord[domain.Task]{
+			{Value: task, Source: core.RecordSource{ID: "shared-source"}},
+			{Value: task, Source: core.RecordSource{ID: "shared-source"}},
+		}},
+		{InProgress: []domain.Task{task}, TaskSourceIDs: []string{"shared-source", "shared-source"},
+			InProgressRecords: []core.LoadedRecord[domain.Task]{{Value: task, Source: core.RecordSource{ID: "shared-source"}}}},
+	} {
+		var d dashboard
+		d.setSummary(summary, &testStyles, false)
+		found := false
+		for _, row := range d.rows {
+			if strings.Contains(row.text, "identity unavailable") {
+				found = true
+				if row.target != nil {
+					t.Fatalf("unaddressable row acquired navigation target: %+v", row)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("unaddressable work had no visible diagnostic: %+v", d.rows)
+		}
 	}
 }

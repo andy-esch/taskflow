@@ -136,6 +136,9 @@ func (m *Model) openPalette() tea.Cmd {
 func (m Model) paletteIndex() []paletteItem {
 	var items []paletteItem
 	for _, t := range m.tabs {
+		if t.identityInvalid || t.coherentGen != t.loadGen {
+			continue
+		}
 		for _, it := range t.list.Items() {
 			ei, ok := it.(entityItem)
 			if !ok {

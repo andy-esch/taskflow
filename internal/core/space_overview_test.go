@@ -100,6 +100,30 @@ func TestSpaceOverviewUsesPlanningStoresGraphSnapshot(t *testing.T) {
 	}
 }
 
+func TestSpaceOverviewWorkRetainsPortableTaskSource(t *testing.T) {
+	const sourceID = "portable-task-source"
+	task := domain.Task{ID: "declared-id", FilenameID: "local-fallback", Slug: "work", Status: domain.StatusInProgress}
+	root := "/planning"
+	registry := NewSpaceRegistryService(&fakeSpaceRegistryStore{entries: []SpaceEntryPoint{{
+		ID: "planning", PlanningID: "planning", Role: SpaceRoleDirect, State: SpaceStateOK, Root: root,
+	}}})
+	source := &fakeSpaceOverviewStore{stores: map[string]PlanningSummarySource{
+		root: &splitSummaryStore{fakeStore: &fakeStore{}, read: TaskGraphRead{Records: []LoadedRecord[domain.Task]{
+			{Value: task, Source: RecordSource{ID: sourceID}},
+		}}},
+	}}
+	overview, err := NewSpaceOverviewService(registry, source).Overview()
+	if err != nil || len(overview.InProgress) != 1 {
+		t.Fatalf("overview=%+v err=%v", overview, err)
+	}
+	if got := overview.InProgress[0].Source.ID; got != sourceID {
+		t.Fatalf("cross-space work source = %q, want %q", got, sourceID)
+	}
+	if got := overview.Spaces[0].Summary.InProgressRecords[0].Source.ID; got != sourceID {
+		t.Fatalf("summary work source = %q, want %q", got, sourceID)
+	}
+}
+
 func TestSpaceOverviewPreservesPathlessTaskLoadProblemIdentity(t *testing.T) {
 	root := "/planning"
 	registry := NewSpaceRegistryService(&fakeSpaceRegistryStore{entries: []SpaceEntryPoint{{
@@ -275,8 +299,10 @@ func TestSpaceOverviewRetainedSummaryOwnsMutableSnapshotData(t *testing.T) {
 		InProgress: []domain.Task{{
 			Slug: "working", Tags: []string{"original"}, DependsOn: []string{"6g0000000001"},
 		}},
-		Epics:      []EpicSummary{{Epic: domain.Epic{ID: "01-domain", Tags: []string{"original"}}}},
-		OpenAudits: []domain.Audit{{Slug: "review"}},
+		TaskSourceIDs:  []string{"task-original"},
+		Epics:          []EpicSummary{{Epic: domain.Epic{ID: "01-domain", Tags: []string{"original"}}}},
+		OpenAudits:     []domain.Audit{{Slug: "review"}},
+		AuditSourceIDs: []string{"audit-original"},
 		Findings: FindingsRollup{
 			ByUrgency: []CountBy{{Key: "soon", Count: 1}},
 			Acute:     []AuditFinding{{Finding: domain.Finding{Code: "H1", Title: "original"}}},
@@ -298,18 +324,41 @@ func TestSpaceOverviewRetainedSummaryOwnsMutableSnapshotData(t *testing.T) {
 	previousSummary.Counts[0].Count = 9
 	previousSummary.InProgress[0].Tags[0] = "changed"
 	previousSummary.InProgress[0].DependsOn[0] = "changed"
+	previousSummary.TaskSourceIDs[0] = "changed"
 	previousSummary.Epics[0].Epic.Tags[0] = "changed"
 	previousSummary.OpenAudits[0].Slug = "changed"
+	previousSummary.AuditSourceIDs[0] = "changed"
 	previousSummary.Findings.ByUrgency[0].Key = "changed"
 	previousSummary.Findings.Acute[0].Title = "changed"
 	previousSummary.Problems[0].Message = "changed"
 
 	if retained.Counts[0].Count != 1 || retained.InProgress[0].Tags[0] != "original" ||
 		retained.InProgress[0].DependsOn[0] != "6g0000000001" ||
+		retained.TaskSourceIDs[0] != "task-original" ||
 		retained.Epics[0].Epic.Tags[0] != "original" || retained.OpenAudits[0].Slug != "review" ||
+		retained.AuditSourceIDs[0] != "audit-original" ||
 		retained.Findings.ByUrgency[0].Key != "soon" || retained.Findings.Acute[0].Title != "original" ||
 		retained.Problems[0].Message != "original" {
 		t.Fatalf("retained summary aliases previous mutable data: %+v", retained)
+	}
+}
+
+func TestSpaceOverviewMarksWorkWithHiddenDuplicateIdentityUnavailable(t *testing.T) {
+	record := LoadedRecord[domain.Task]{
+		Value:  domain.Task{ID: "declared", Slug: "working", Status: domain.StatusInProgress},
+		Source: RecordSource{ID: "shared-source"},
+	}
+	summary := Summary{InProgressRecords: []LoadedRecord[domain.Task]{record},
+		TaskSourceIDs: []string{"shared-source", "shared-source"}}
+	space := SpaceSummary{ID: "space", PlanningID: "planning", Summary: &summary}
+	overview := spaceOverviewFromSummaries([]SpaceSummary{space})
+	if len(overview.InProgress) != 1 || !overview.InProgress[0].IdentityUnavailable {
+		t.Fatalf("hidden completed duplicate stayed addressable: %+v", overview.InProgress)
+	}
+	summary.TaskSourceIDs = []string{"shared-source"}
+	overview = spaceOverviewFromSummaries([]SpaceSummary{space})
+	if len(overview.InProgress) != 1 || overview.InProgress[0].IdentityUnavailable {
+		t.Fatalf("unique source identity became unavailable: %+v", overview.InProgress)
 	}
 }
 

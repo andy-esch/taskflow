@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6ge7qn9ptaxv
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Do not silently discard a repository guard release error after an ordinary entity file was created.
 effort: 1-2 days
@@ -13,6 +13,7 @@ created: "2026-09-27"
 depends_on: [6gdx7mcqq67d]
 updated_at: "2026-09-27"
 started_at: "2026-09-27"
+completed_at: "2026-09-27"
 ---
 
 # Report post-commit guard-release failures from ordinary entity creation
@@ -60,3 +61,4 @@ mutations, without suggesting an unsafe retry.
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Predecessor [Preserve local mutation outcome evidence outside domain records](6gdx7mcqq67d-preserve-local-mutation-outcome-evidence-outside-domain-records.md)
 - Adversarial implementation reviews: [Codex](../audits/6ge9gcfjnwte-2026-09-27-ordinary-create-guard-release-implementation-codex.md) and [Antigravity](../audits/6ge9gcfv95ej-2026-09-27-ordinary-create-guard-release-implementation-antigravity.md)
+- Delivery: [PR #268](https://github.com/andy-esch/taskflow/pull/268)

@@ -29,7 +29,7 @@ func loadThreadList(t *entityTab, svc *core.Service) tea.Cmd {
 		}
 		refs := make([]entityRef, 0, len(view.Threads))
 		for _, thread := range view.Threads {
-			refs = append(refs, entityRef{key: thread.Thread.CanonicalID(), label: thread.Thread.Slug})
+			refs = append(refs, entityRef{key: thread.Source.ID, label: thread.Thread.Slug})
 		}
 		hints := duplicateIdentityHints(refs)
 		countsW := countsWidth(view.Threads, func(v core.ThreadView) (int, int) {
@@ -39,7 +39,7 @@ func loadThreadList(t *entityTab, svc *core.Service) tea.Cmd {
 		for _, thread := range view.Threads {
 			items = append(items, threadItem{
 				view: thread, countsW: countsW,
-				identityHint: hints[thread.Thread.CanonicalID()],
+				identityHint: hints[thread.Source.ID],
 			})
 		}
 		return listLoadedMsg{
@@ -71,7 +71,7 @@ func loadThreadDetail(svc *core.Service, id string) tea.Cmd {
 		if pathErr != nil {
 			issue = pathErr.Error()
 		}
-		return detailMsg{kind: entityThreads, id: id, content: newThreadDetail(
+		return detailMsg{kind: entityThreads, id: id, sourceID: projection.View.Source.ID, content: newThreadDetail(
 			projection, body, path, issue,
 		)}
 	}

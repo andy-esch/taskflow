@@ -95,11 +95,12 @@ func validTransitions(transitions []transition, cur string) []transition {
 // gates on a y/n confirm. It's a modal like the `?` help and `:` command bar: the
 // model routes every key to it while active and floats it over the body.
 type actionMenu struct {
-	active  bool
-	ref     entityRef    // canonical mutation key plus the visible label
-	options []transition // the rows (a single entry when a `:`-verb opened the confirm directly)
-	cursor  int
-	confirm bool // a destructive choice is awaiting y/n
+	active    bool
+	ref       entityRef    // canonical mutation key plus the visible label
+	sourceGen int          // list generation from which the action was offered
+	options   []transition // the rows (a single entry when a `:`-verb opened the confirm directly)
+	cursor    int
+	confirm   bool // a destructive choice is awaiting y/n
 	// A task defer opens a revisit ("snooze until") sub-state instead of applying
 	// at once — the TUI face of the CLI's `task defer` date prompt. dateInput takes
 	// an absolute YYYY-MM-DD or a relative offset (2w/10d); dateErr shows a parse
@@ -107,6 +108,23 @@ type actionMenu struct {
 	revisit   bool
 	dateInput textinput.Model
 	dateErr   string
+}
+
+// scopeMutation stamps only persistence results. Widget focus commands are not
+// mutation results and retain their ordinary Bubble Tea message contract.
+func scopeMutation(kind entityKind, ref entityRef, listGen int, cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		result := cmd()
+		switch result.(type) {
+		case movedMsg, editedMsg, actionErrMsg:
+			return mutationResultMsg{kind: kind, ref: ref, listGen: listGen, result: result}
+		default:
+			return result
+		}
+	}
 }
 
 // open shows the transition menu for slug from state cur (its current status or

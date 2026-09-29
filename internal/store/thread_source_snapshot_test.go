@@ -23,7 +23,7 @@ func TestReadThreadsVersionsExactUnreadableSourceBytes(t *testing.T) {
 	fs := NewFS(root)
 
 	first, err := fs.ReadThreads()
-	if err != nil || len(first.Threads) != 0 || len(first.Problems) != 1 {
+	if err != nil || len(first.Records) != 0 || len(first.Problems) != 1 {
 		t.Fatalf("first read=%+v err=%v", first, err)
 	}
 	problem := first.Problems[0]
@@ -64,6 +64,27 @@ func TestReadThreadsVersionsExactUnreadableSourceBytes(t *testing.T) {
 	}
 }
 
+func TestReadThreadsKeepsReadableRevisionOutsideSemanticValue(t *testing.T) {
+	root := t.TempDir()
+	id := testutil.TaskID("readable-thread-version")
+	path := filepath.Join(root, domain.ThreadsDir, id+"-readable-thread-version.md")
+	content := "---\nschema: 1\nid: " + id + "\nstatus: unstarted\ndescription: Keep revision evidence private\ngoal: Prove the adapter boundary\ncreated: \"2026-09-28\"\ntasks: []\n---\n# Thread\n"
+	testutil.Write(t, path, content)
+	read, err := NewFS(root).ReadThreads()
+	if err != nil || len(read.Records) != 1 || len(read.Problems) != 0 {
+		t.Fatalf("read=%+v err=%v", read, err)
+	}
+	record := read.Records[0]
+	if record.Record.Source.ID != id || record.Record.Source.Location != path ||
+		record.SourceVersion != hashContent([]byte(content)) || record.Record.Value.SourceVersion != "" {
+		t.Fatalf("versioned record = %+v", record)
+	}
+	encoded, err := json.Marshal(record)
+	if err != nil || strings.Contains(string(encoded), record.SourceVersion) {
+		t.Fatalf("revision leaked through JSON: %s, err=%v", encoded, err)
+	}
+}
+
 func TestThreadSourceSnapshotNormalizesOpaqueProblemsAndFailsClosed(t *testing.T) {
 	firstID := testutil.TaskID("first-remote-thread-problem")
 	secondID := testutil.TaskID("second-remote-thread-problem")
@@ -99,14 +120,31 @@ func TestThreadSourceSnapshotRejectsRepresentationAndIdentityChanges(t *testing.
 		ID: threadID, FilenameID: threadID, Slug: "thread-source-transition",
 		Path: "threads/" + threadID + "-thread-source-transition.md", SourceVersion: "opaque-readable",
 	}
-	readable := core.ThreadRead{Threads: []domain.Thread{thread}}
+	versioned := func(value domain.Thread) core.VersionedRecord[domain.Thread] {
+		version := value.SourceVersion
+		value.SourceVersion = ""
+		return core.VersionedRecord[domain.Thread]{
+			Record: core.LoadedRecord[domain.Thread]{
+				Value: value, Source: core.RecordSource{ID: value.FilenameID, Location: value.Path},
+			},
+			SourceVersion: version,
+		}
+	}
+	readable := core.ThreadRead{Records: []core.VersionedRecord[domain.Thread]{versioned(thread)}}
+	encoded, err := json.Marshal(readable.Records[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "opaque-readable") {
+		t.Fatalf("readable Thread source revision leaked through JSON: %s", encoded)
+	}
 	if err := verifyThreadSourceSnapshot(readable, readable); err != nil {
 		t.Fatalf("identical readable snapshot = %v", err)
 	}
 
 	drifted := thread
 	drifted.ID = testutil.TaskID("thread-source-drift")
-	if err := verifyThreadSourceSnapshot(readable, core.ThreadRead{Threads: []domain.Thread{drifted}}); !errors.Is(err, domain.ErrConflict) {
+	if err := verifyThreadSourceSnapshot(readable, core.ThreadRead{Records: []core.VersionedRecord[domain.Thread]{versioned(drifted)}}); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("identity drift error = %v", err)
 	}
 

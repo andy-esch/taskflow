@@ -62,6 +62,7 @@ type ThreadRollup struct {
 // list/show/frontier and their human and machine renderers.
 type ThreadView struct {
 	Thread           domain.Thread
+	Source           RecordSource
 	Rollup           ThreadRollup
 	Members          []ThreadTaskView
 	ExternalGates    []ThreadExternalGate

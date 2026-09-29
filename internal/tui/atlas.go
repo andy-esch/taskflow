@@ -407,6 +407,10 @@ func (m *Model) openAtlasWork() tea.Cmd {
 		m.atlas.openErr = "nothing in progress to open"
 		return nil
 	}
+	if !m.atlas.workAddressable(row) {
+		m.atlas.openErr = "task identity is missing or ambiguous; open its planning space to inspect"
+		return nil
+	}
 	space, ok := m.atlas.spaceFor(row)
 	if !ok {
 		m.atlas.openErr = "the space for " + row.Task.Slug + " is no longer registered"
@@ -417,7 +421,7 @@ func (m *Model) openAtlasWork() tea.Cmd {
 	if cmd == nil {
 		return nil // openAtlasSelection already explained why (unhealthy, or unavailable)
 	}
-	m.pendingJump = pendingJump{kind: entityTasks, ref: entityRef{key: row.Task.CanonicalID(), label: row.Task.Slug}, set: true}
+	m.pendingJump = pendingJump{kind: entityTasks, ref: entityRef{key: row.Source.ID, label: row.Task.Slug}, set: true}
 	return cmd
 }
 
@@ -503,14 +507,14 @@ func overviewHasContention(overview core.SpaceOverview) bool {
 // data has. Space and slug break ties so the order is byte-stable between runs.
 func (a *atlas) setWork(rows []core.SpaceInProgress) {
 	selected := ""
-	if row, ok := a.selectedWork(); ok {
+	if row, ok := a.selectedWork(); ok && a.workAddressable(row) {
 		selected = workKey(row)
 	}
 	a.work = append([]core.SpaceInProgress(nil), rows...)
 	a.sortWork()
 	a.workCursor = 0
 	for i, row := range a.work {
-		if workKey(row) == selected {
+		if selected != "" && workKey(row) == selected && a.workAddressable(row) {
 			a.workCursor = i
 			break
 		}
@@ -557,13 +561,13 @@ func (a *atlas) cycleWorkOrder(delta int) {
 
 func (a *atlas) applyWorkOrder() {
 	selected := ""
-	if row, ok := a.selectedWork(); ok {
+	if row, ok := a.selectedWork(); ok && a.workAddressable(row) {
 		selected = workKey(row)
 	}
 	a.sortWork()
 	a.workCursor = 0
 	for i, row := range a.work {
-		if workKey(row) == selected {
+		if selected != "" && workKey(row) == selected && a.workAddressable(row) {
 			a.workCursor = i
 			break
 		}
@@ -572,7 +576,27 @@ func (a *atlas) applyWorkOrder() {
 }
 
 func workKey(row core.SpaceInProgress) string {
-	return row.PlanningID + "\x00" + row.Task.CanonicalID()
+	if row.PlanningID == "" || row.Source.ID == "" {
+		return ""
+	}
+	return row.PlanningID + "\x00" + row.Source.ID
+}
+
+func (a atlas) workAddressable(row core.SpaceInProgress) bool {
+	if row.IdentityUnavailable {
+		return false
+	}
+	key := workKey(row)
+	if key == "" {
+		return false
+	}
+	count := 0
+	for _, candidate := range a.work {
+		if workKey(candidate) == key {
+			count++
+		}
+	}
+	return count == 1
 }
 
 func (a atlas) selectedWork() (core.SpaceInProgress, bool) {
@@ -1076,18 +1100,23 @@ func (a atlas) workRows(st *styles, maxW int) ([]string, int) {
 	spaceW, slugW, epicW, prioW, ageW := 0, 0, 0, 0, 0
 	ages := make([]string, len(a.work))
 	refs := make([]entityRef, 0, len(a.work))
+	identityCounts := make(map[string]int, len(a.work))
 	for _, row := range a.work {
+		identityCounts[workKey(row)]++
 		// Planning identity scopes duplicate labels: equal slugs in different
 		// planning spaces already have an explicit space discriminator.
 		refs = append(refs, entityRef{
-			key: row.Task.CanonicalID(), label: row.PlanningID + "\x00" + row.Task.Slug,
+			key: row.Source.ID, label: row.PlanningID + "\x00" + row.Task.Slug,
 		})
 	}
 	hints := duplicateIdentityHints(refs)
 	for i, row := range a.work {
 		ages[i] = theme.RelativeDate(theme.StartedDate(row.Task))
 		spaceW = maxInt(spaceW, ansi.StringWidth(row.SpaceID)+2) // the [brackets]
-		displayLabel := labelWithIdentityHint(row.Task.Slug, hints[row.Task.CanonicalID()])
+		displayLabel := labelWithIdentityHint(row.Task.Slug, hints[row.Source.ID])
+		if key := workKey(row); row.IdentityUnavailable || key == "" || identityCounts[key] != 1 {
+			displayLabel += " · identity unavailable"
+		}
 		if row.Stale && !grouped {
 			displayLabel = "stale · " + displayLabel
 		}
@@ -1190,7 +1219,10 @@ func (a atlas) workRows(st *styles, maxW int) ([]string, int) {
 			}
 			line += spaceLabel + " "
 		}
-		displayLabel := labelWithIdentityHint(row.Task.Slug, hints[row.Task.CanonicalID()])
+		displayLabel := labelWithIdentityHint(row.Task.Slug, hints[row.Source.ID])
+		if key := workKey(row); row.IdentityUnavailable || key == "" || identityCounts[key] != 1 {
+			displayLabel += " · identity unavailable"
+		}
 		if row.Stale && !grouped {
 			displayLabel = "stale · " + displayLabel
 		}

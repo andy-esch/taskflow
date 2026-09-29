@@ -211,8 +211,8 @@ func TestTaskAndThreadCreationSerializeCrossKindIdentity(t *testing.T) {
 	}
 	tasks, _, taskErr := NewFS(root).ListTasks()
 	threadRead, threadErr := NewFS(root).ReadThreads()
-	if taskErr != nil || threadErr != nil || len(tasks)+len(threadRead.Threads) != 1 {
-		t.Fatalf("tasks=%d Threads=%d taskErr=%v threadErr=%v", len(tasks), len(threadRead.Threads), taskErr, threadErr)
+	if taskErr != nil || threadErr != nil || len(tasks)+len(threadRead.Records) != 1 {
+		t.Fatalf("tasks=%d Threads=%d taskErr=%v threadErr=%v", len(tasks), len(threadRead.Records), taskErr, threadErr)
 	}
 }
 

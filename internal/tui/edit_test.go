@@ -126,8 +126,7 @@ func TestModel_EditStaysOpenForMultipleFields(t *testing.T) {
 	m = enumCursorTo(t, tm.(Model), "high")
 	tm, cmd := m.Update(press("enter")) // apply
 	m = tm.(Model)
-	tm, _ = m.Update(cmd()) // land editedMsg → back to the picker, value refreshed
-	m = tm.(Model)
+	m = drainNested(t, m, cmd) // land edit and its validated reload before another field
 	if !m.edit.active || m.edit.editing {
 		t.Fatal("after a successful apply, the editor should be back at the picker (still open)")
 	}
@@ -143,8 +142,7 @@ func TestModel_EditStaysOpenForMultipleFields(t *testing.T) {
 	m = enumCursorTo(t, tm.(Model), "1")
 	tm, cmd = m.Update(press("enter"))
 	m = tm.(Model)
-	tm, _ = m.Update(cmd())
-	m = tm.(Model)
+	m = drainNested(t, m, cmd)
 
 	// Esc from the picker closes.
 	tm, _ = m.Update(press("esc"))

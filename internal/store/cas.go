@@ -52,11 +52,11 @@ func verifyThreadSourceSnapshot(expected, current core.ThreadRead) error {
 }
 
 func sameThreadSourceSnapshot(left, right core.ThreadRead) bool {
-	if len(left.Threads) != len(right.Threads) || len(left.Problems) != len(right.Problems) {
+	if len(left.Records) != len(right.Records) || len(left.Problems) != len(right.Problems) {
 		return false
 	}
-	leftThreads := append([]domain.Thread(nil), left.Threads...)
-	rightThreads := append([]domain.Thread(nil), right.Threads...)
+	leftThreads := append([]core.VersionedRecord[domain.Thread](nil), left.Records...)
+	rightThreads := append([]core.VersionedRecord[domain.Thread](nil), right.Records...)
 	sort.SliceStable(leftThreads, func(i, j int) bool { return threadSourceKey(leftThreads[i]) < threadSourceKey(leftThreads[j]) })
 	sort.SliceStable(rightThreads, func(i, j int) bool { return threadSourceKey(rightThreads[i]) < threadSourceKey(rightThreads[j]) })
 	if !slices.EqualFunc(leftThreads, rightThreads, sameThreadSource) {
@@ -73,15 +73,17 @@ func sameThreadSourceSnapshot(left, right core.ThreadRead) bool {
 	return slices.EqualFunc(leftProblems, rightProblems, sameThreadProblemSource)
 }
 
-func threadSourceKey(thread domain.Thread) string {
+func threadSourceKey(thread core.VersionedRecord[domain.Thread]) string {
 	return strings.Join([]string{
-		thread.FilenameID, thread.ID, thread.Slug, thread.Path, thread.SourceVersion,
+		thread.Record.Source.ID, thread.Record.Source.Location,
+		thread.Record.Value.ID, thread.Record.Value.Slug, thread.SourceVersion,
 	}, "\x00")
 }
 
-func sameThreadSource(left, right domain.Thread) bool {
-	return left.FilenameID == right.FilenameID && left.ID == right.ID &&
-		left.Slug == right.Slug && left.Path == right.Path &&
+func sameThreadSource(left, right core.VersionedRecord[domain.Thread]) bool {
+	return left.Record.Source == right.Record.Source &&
+		left.Record.Value.ID == right.Record.Value.ID &&
+		left.Record.Value.Slug == right.Record.Value.Slug &&
 		left.SourceVersion != "" && left.SourceVersion == right.SourceVersion
 }
 

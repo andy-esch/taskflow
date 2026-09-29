@@ -416,11 +416,7 @@ func boundedThreadSpatialFallbackTaskID(projection core.ThreadGraphProjection) s
 		return current
 	}
 	viewTaskID := func(member core.ThreadTaskView) string {
-		taskID := member.State.TaskID
-		if taskID == "" {
-			taskID = member.Task.CanonicalID()
-		}
-		return taskID
+		return member.State.TaskID
 	}
 	var inFlight, recentMember candidate
 	for _, member := range projection.View.Members {

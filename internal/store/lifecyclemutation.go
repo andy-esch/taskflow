@@ -55,7 +55,10 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads for task lifecycle impact: %w", err)
 	}
-	if err := core.ValidateThreadMutationSource(graph, threadRead.Threads, threadRead.Problems); err != nil {
+	if err := threadRead.ValidateSources(); err != nil {
+		return result, err
+	}
+	if err := core.ValidateThreadMutationSource(graph, threadRead.SemanticThreads(), threadRead.Problems); err != nil {
 		return result, err
 	}
 
@@ -91,7 +94,7 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	result.Before = analysis.Before
 	result.After = analysis.After
 	result.Impacts = cloneStoreTaskImpacts(analysis.Impacts)
-	result.ThreadImpacts = core.TaskLifecycleThreadImpacts(clonePlannerThreads(threadRead.Threads), graph, validated)
+	result.ThreadImpacts = core.TaskLifecycleThreadImpacts(clonePlannerThreads(threadRead.SemanticThreads()), graph, validated)
 	result.OutstandingBlockers = cloneStoreBlockers(analysis.OutstandingBlockers)
 	result.OverrideApplied = analysis.OverrideApplied
 	result.Changed = materialized.changed

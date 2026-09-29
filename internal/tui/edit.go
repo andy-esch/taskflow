@@ -115,16 +115,17 @@ func tierStr(n int) string {
 // actionMenu: the model routes every key here while active and floats it over the
 // body (see overlay.go's editModal marker).
 type editMenu struct {
-	active  bool
-	ref     entityRef
-	fields  []editField
-	apply   fieldSetter     // routes submit to the entity's write (SetFields / SetEpicFields)
-	cursor  int             // selected field
-	editing bool            // false: navigating fields; true: editing the selected one
-	input   textinput.Model // single-line text fields
-	area    textarea.Model  // the word-wrapped long-text field (description)
-	optCur  int             // enum option cursor
-	err     string          // last submit's validation error, shown until the next edit
+	active    bool
+	ref       entityRef
+	sourceGen int // list generation from which the form was opened
+	fields    []editField
+	apply     fieldSetter     // routes submit to the entity's write (SetFields / SetEpicFields)
+	cursor    int             // selected field
+	editing   bool            // false: navigating fields; true: editing the selected one
+	input     textinput.Model // single-line text fields
+	area      textarea.Model  // the word-wrapped long-text field (description)
+	optCur    int             // enum option cursor
+	err       string          // last submit's validation error, shown until the next edit
 }
 
 // fieldSetter is the entity-specific write a submit fires: it persists key=value
@@ -135,14 +136,14 @@ type editMenu struct {
 type fieldSetter func(svc *core.Service, ref entityRef, key, value string) tea.Cmd
 
 // open shows the form for a task.
-func (e *editMenu) open(t domain.Task) {
-	*e = newEditMenu(entityRef{key: t.CanonicalID(), label: t.Slug}, editableFields(t), setFieldCmd)
+func (e *editMenu) open(ref entityRef, t domain.Task) {
+	*e = newEditMenu(ref, editableFields(t), setFieldCmd)
 }
 
 // openEpic shows the form for an epic. Same form + widgets as a task; only the
 // field set (no effort/tier) and the submit target (SetEpicFields) differ.
-func (e *editMenu) openEpic(ep domain.Epic) {
-	*e = newEditMenu(entityRef{key: ep.ID, label: ep.ID}, editableEpicFields(ep), setEpicFieldCmd)
+func (e *editMenu) openEpic(ref entityRef, ep domain.Epic) {
+	*e = newEditMenu(ref, editableEpicFields(ep), setEpicFieldCmd)
 }
 
 // newEditMenu builds the form shell (the shared text widgets) for an entity's
@@ -252,6 +253,15 @@ func indexOf(opts []string, v string) int {
 // submits via SetFields, Esc backs out a level. Mutates the model copy (the modal
 // loop passes &m); ForceQuit is the handleKey preamble's job.
 func (m *Model) handleEditKey(msg tea.KeyPressMsg) tea.Cmd {
+	if m.edit.sourceGen == m.cur().loadGen && m.cur().coherentGen != m.cur().loadGen {
+		m.flash, m.flashErr = "refreshing selection; wait to edit", true
+		return nil
+	}
+	if m.edit.sourceGen != m.cur().loadGen || m.edit.ref != m.selectedRef() {
+		m.edit.close()
+		m.flash, m.flashErr = "selection changed; reopen edit", true
+		return nil
+	}
 	if !m.edit.editing {
 		switch msg.String() {
 		case "j", "down":
@@ -323,11 +333,11 @@ func (m *Model) submitEdit() tea.Cmd {
 			return nil
 		}
 		if parsed == "" {
-			return unsetFieldCmd(m.svc, m.edit.ref, key) // blank → clear the snooze
+			return scopeMutation(m.cur().kind, m.edit.ref, m.edit.sourceGen, unsetFieldCmd(m.svc, m.edit.ref, key)) // blank → clear the snooze
 		}
 		val = parsed
 	}
-	return m.edit.apply(m.svc, m.edit.ref, key, val)
+	return scopeMutation(m.cur().kind, m.edit.ref, m.edit.sourceGen, m.edit.apply(m.svc, m.edit.ref, key, val))
 }
 
 // setCurrent updates the form's displayed value for a field after a confirmed
