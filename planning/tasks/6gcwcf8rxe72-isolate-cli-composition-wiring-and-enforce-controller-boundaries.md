@@ -11,8 +11,9 @@ autonomy_level: 3
 tags: [architecture, cli, depguard, ports]
 created: "2026-09-23"
 depends_on: [6gcwcf8gzn50]
-updated_at: "2026-09-27"
+updated_at: "2026-09-28"
 audited: "2026-09-27"
+audit_sources: [2026-09-28-arch-hexagonal-boundaries]
 ---
 
 # Isolate CLI composition wiring and enforce controller boundaries
@@ -100,3 +101,5 @@ untouched by this narrowing.
 ## Progress Log
 
 - 2026-09-27: automated weekly sweep — premise re-verified against `.golangci.yml` and the docs exception table; noted that concrete adapter construction is already confined to `root.go` + `completion.go`, so this task's move is `root.go` alone once its dependency lands.
+
+Reinforced by audit 2026-09-28-arch-hexagonal-boundaries: M1 (partial overlap, finding kept open). The audit's scope note proposes that this task's second acceptance criterion — which enumerates `internal/store`, `configstore`, `spacestore`, `workspacestore` by name — be satisfied with a prefix deny plus an allow-list instead, so a fifth adapter added later is denied by default rather than admitted. A probe confirmed the existing enumerated rule reports `0 issues` for a new package.

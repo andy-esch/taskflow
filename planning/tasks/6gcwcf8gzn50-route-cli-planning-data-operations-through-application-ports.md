@@ -11,8 +11,9 @@ autonomy_level: 3
 tags: [architecture, cli, ports, lint]
 created: "2026-09-23"
 depends_on: [6gcwcf88z57p]
-updated_at: "2026-09-27"
+updated_at: "2026-09-28"
 audited: "2026-09-27"
+audit_sources: [2026-09-28-arch-hexagonal-boundaries]
 ---
 
 # Route CLI planning data operations through application ports
@@ -105,3 +106,5 @@ this task rewrites, so fixing them is nearly free once the work starts.
 ## Progress Log
 
 - 2026-09-27: automated weekly sweep — all three cited seams re-verified present at current line numbers; no drift, nothing rescoped; flagged three stale `status == directory` comments inside `completion.go` for the implementer.
+
+Reinforced by audit 2026-09-28-arch-hexagonal-boundaries: M4 (tracked here). The audit confirms the two `store.NewFS` construction sites (`internal/cli/completion.go:222`, `:259`) and the three direct entity-directory globs (`:229`, `:239`, `:266`), and additionally records that three contract comments in that file still document the `status == directory` model ADR-0003 §2 retired.
