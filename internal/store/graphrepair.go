@@ -188,9 +188,9 @@ type materializedTaskGraphRepair struct {
 func (s *FS) materializeTaskGraphRepair(analysis core.TaskGraphRepairAnalysis, now time.Time) ([]materializedTaskGraphRepair, error) {
 	writes := make([]materializedTaskGraphRepair, 0, len(analysis.SourceGroups))
 	for _, group := range analysis.SourceGroups {
-		path := group.Source.Location
+		path := group.Source.LocalPath
 		if path == "" {
-			return nil, fmt.Errorf("%w: filesystem graph repair requires source location for task %s", domain.ErrValidation, group.Source.TaskID)
+			return nil, fmt.Errorf("%w: filesystem graph repair requires a local path for task %s", domain.ErrValidation, group.Source.TaskID)
 		}
 		relative, err := filepath.Rel(s.tasksDir, path)
 		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {

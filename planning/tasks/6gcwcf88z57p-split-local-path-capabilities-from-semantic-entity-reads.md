@@ -37,6 +37,10 @@ retain their stronger version evidence outside the domain values.
   adapter-supplied canonical source ID rather than `CanonicalID()` fallbacks.
 - Move task and Thread `SourceVersion` values into versioned guarded-record/problem wrappers without
   weakening complete-snapshot CAS or leaking tokens into planners and projections.
+- Supply graph-repair `LocalPath` as an explicit adapter-owned local capability, never infer it from
+  a semantic entity path or decide locality with a URI-string heuristic. Keep opaque readable
+  locations as diagnostic/stale-context evidence only; core must not advertise a local repair for
+  an adapter that has not supplied that capability.
 - Finish the Thread precedent by removing its remaining readable-record `Path`, `FilenameID`, and
   `SourceVersion` leakage; keep the existing `ThreadPathSource` behavior compatible.
 - Update CLI path/info commands and TUI edit/open behavior to request the optional capability and
@@ -59,6 +63,8 @@ retain their stronger version evidence outside the domain values.
 - [ ] The final domain-field removal lands only after ordinary/show/wire projections, TUI identity,
       local mutation receipts, and source-set validation no longer consume those fields.
 - [ ] Guarded mutation planners and public wire projections remain free of opaque revision tokens.
+- [ ] Pathless and non-filesystem adapters cannot accidentally gain a local graph-repair target
+      from a domain `Path` value such as `urn:…` or another URI-like key.
 - [ ] Task/Thread whole-snapshot comparisons still fail closed for missing or changed readable and
       unreadable source revisions, and duplicate-ID lint remains attributable without path identity.
 

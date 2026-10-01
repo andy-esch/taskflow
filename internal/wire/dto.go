@@ -22,10 +22,11 @@ import (
 
 // TaskJSON is the wire shape of a task inside the --json envelopes.
 type TaskJSON struct {
-	ID     string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key that survives slug and status changes; absent on tasks created before id assignment"`
-	Slug   string `json:"slug" jsonschema:"description=task slug (filename without .md) — the human handle"`
-	Status string `json:"status" jsonschema:"description=lifecycle status — authoritative, read from frontmatter (ADR-0003 §4)"`
-	Epic   string `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
+	ID       string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key that survives slug and status changes; absent on tasks created before id assignment"`
+	Location string `json:"location,omitempty" jsonschema:"description=optional opaque readable source location; not a selector or necessarily a filesystem path"`
+	Slug     string `json:"slug" jsonschema:"description=task slug (filename without .md) — the human handle"`
+	Status   string `json:"status" jsonschema:"description=lifecycle status — authoritative, read from frontmatter (ADR-0003 §4)"`
+	Epic     string `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
 	// The "<=200" cap can't be computed (struct tags are static literals) — the only
 	// hardcoded copy of domain.MaxDescriptionLen left. Kept honest by
 	// TestTaskJSONDescriptionTagMatchesCap; update both if the cap changes.
@@ -51,7 +52,9 @@ func ToTaskJSON(t domain.Task) TaskJSON {
 // ToLoadedTaskJSON maps an ordinary task read using the adapter-supplied source
 // ID as the public stable identity.
 func ToLoadedTaskJSON(record core.LoadedRecord[domain.Task]) TaskJSON {
-	return toTaskJSON(record.Value, record.Source.ID)
+	payload := toTaskJSON(record.Value, record.Source.ID)
+	payload.Location = readableSourceLocation(record.Source.Location, record.Value.Path)
+	return payload
 }
 
 func toTaskJSON(t domain.Task, id string) TaskJSON {
@@ -196,7 +199,7 @@ type EpicJSON struct {
 // ToEpicJSON maps a core epic summary to the epic list/rollup DTO.
 func ToEpicJSON(e core.EpicSummary) EpicJSON {
 	return EpicJSON{
-		EpicMetaJSON: toEpicMeta(e.Epic, e.Source.ID),
+		EpicMetaJSON: ToLoadedEpicMeta(core.LoadedRecord[domain.Epic]{Value: e.Epic, Source: e.Source}),
 		Total:        e.Total, Done: e.Done, Open: e.Open(), Percent: e.Percent(),
 		Deprecated: e.Deprecated, Liveness: string(e.Liveness()),
 	}
@@ -205,6 +208,7 @@ func ToEpicJSON(e core.EpicSummary) EpicJSON {
 // AuditJSON is the wire shape of an audit inside the --json envelopes.
 type AuditJSON struct {
 	ID           string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key; absent on audits created before id assignment"`
+	Location     string `json:"location,omitempty" jsonschema:"description=optional opaque readable source location; not a selector or necessarily a filesystem path"`
 	Slug         string `json:"slug" jsonschema:"description=audit slug (filename without .md) — the human handle"`
 	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — authoritative, read from frontmatter (ADR-0003 §4)"`
 	Area         string `json:"area,omitempty" jsonschema:"description=subsystem/topic audited"`
@@ -229,6 +233,7 @@ type AuditJSON struct {
 // "work item".
 type ResearchJSON struct {
 	ID          string   `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key, minted from created so lexical id order is authorship order"`
+	Location    string   `json:"location,omitempty" jsonschema:"description=optional opaque readable source location; not a selector or necessarily a filesystem path"`
 	Slug        string   `json:"slug" jsonschema:"description=research slug (filename without the leading id) — the human handle"`
 	Created     string   `json:"created,omitempty" jsonschema:"description=date the research was done YYYY-MM-DD; the id is minted from it"`
 	Description string   `json:"description,omitempty" jsonschema:"description=one-line summary of what was explored"`
@@ -244,7 +249,9 @@ func ToResearchJSON(r domain.Research) ResearchJSON {
 // ToLoadedResearchJSON maps an ordinary research read with authoritative
 // source identity.
 func ToLoadedResearchJSON(record core.LoadedRecord[domain.Research]) ResearchJSON {
-	return toResearchJSON(record.Value, record.Source.ID)
+	payload := toResearchJSON(record.Value, record.Source.ID)
+	payload.Location = readableSourceLocation(record.Source.Location, record.Value.Path)
+	return payload
 }
 
 func toResearchJSON(r domain.Research, id string) ResearchJSON {
@@ -262,7 +269,9 @@ func ToAuditJSON(a domain.Audit) AuditJSON {
 // ToLoadedAuditJSON maps an ordinary audit read with authoritative source
 // identity.
 func ToLoadedAuditJSON(record core.LoadedRecord[domain.Audit]) AuditJSON {
-	return toAuditJSON(record.Value, record.Source.ID)
+	payload := toAuditJSON(record.Value, record.Source.ID)
+	payload.Location = readableSourceLocation(record.Source.Location, record.Value.Path)
+	return payload
 }
 
 func toAuditJSON(a domain.Audit, id string) AuditJSON {
@@ -343,14 +352,16 @@ func ToFindingsRollup(r core.FindingsRollup) FindingsRollupJSON {
 // LintTaskJSON is one entity's lint result (slug + field issues), the shape the
 // `lint` / `audit lint` / `fix --remaining` envelopes carry per entity.
 type LintTaskJSON struct {
-	Slug   string         `json:"slug"`
-	Issues []domain.Issue `json:"issues"`
+	Slug     string         `json:"slug"`
+	Location string         `json:"location,omitempty" jsonschema:"description=optional opaque readable source location; not a selector or local repair path"`
+	Issues   []domain.Issue `json:"issues"`
 }
 
 // EpicMetaJSON is the shared epic meta fields, embedded by EpicJSON (`epic list`)
 // and emitted directly by `epic show` / `epic set`.
 type EpicMetaJSON struct {
 	ID          string   `json:"id" jsonschema:"description=epic identifier (NN-slug)"`
+	Location    string   `json:"location,omitempty" jsonschema:"description=optional opaque readable source location; not a selector or necessarily a filesystem path"`
 	Status      string   `json:"status,omitempty" jsonschema:"description=active | retired | deprecated"`
 	Description string   `json:"description,omitempty" jsonschema:"description=one-line epic goal"`
 	Priority    string   `json:"priority,omitempty" jsonschema:"description=high | medium | low"`
@@ -368,7 +379,19 @@ func ToEpicMeta(e domain.Epic) EpicMetaJSON {
 // ToLoadedEpicMeta maps an ordinary epic read with authoritative source
 // identity.
 func ToLoadedEpicMeta(record core.LoadedRecord[domain.Epic]) EpicMetaJSON {
-	return toEpicMeta(record.Value, record.Source.ID)
+	payload := toEpicMeta(record.Value, record.Source.ID)
+	payload.Location = readableSourceLocation(record.Source.Location, record.Value.Path)
+	return payload
+}
+
+// A local record already has a separate path capability. Publish location only
+// when it carries additional opaque context, so ordinary local wire output stays
+// stable and a URI never masquerades as the historical `path` field.
+func readableSourceLocation(location, localPath string) string {
+	if location == localPath {
+		return ""
+	}
+	return location
 }
 
 func toEpicMeta(e domain.Epic, id string) EpicMetaJSON {

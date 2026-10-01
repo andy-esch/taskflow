@@ -530,8 +530,9 @@ func summarize(store SummaryStore, auditsSource AuditSnapshotSource, taskGraphs 
 // LintResult is the set of frontmatter issues for one entity (a task by slug, or
 // an epic by id — the Slug field carries whichever as the label).
 type LintResult struct {
-	Slug   string
-	Issues []domain.Issue
+	Slug     string
+	Location string // optional readable occurrence context, never an identity or repair path
+	Issues   []domain.Issue
 }
 
 func (r LintResult) Blocking() bool {
@@ -689,7 +690,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 				"stable id %s is also used by a Thread — task and Thread identities must be globally unique", collisionID)})
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: t.Slug, Issues: issues})
+			results = append(results, LintResult{Slug: t.Slug, Location: readableDiagnosticLocation(loaded.Source, t.Path), Issues: issues})
 		}
 	}
 	// (Duplicate-slug lint retired with the flat layout: id-led filenames are unique by
@@ -712,7 +713,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			issues = append(issues, iss)
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: record.Source.ID, Issues: issues})
+			results = append(results, LintResult{Slug: record.Source.ID, Location: readableDiagnosticLocation(record.Source, e.Path), Issues: issues})
 		}
 	}
 	// Research is linted too (epic 28). There is no active/archived split to gate on —
@@ -745,7 +746,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			issues = append(issues, iss)
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: r.Slug, Issues: issues})
+			results = append(results, LintResult{Slug: r.Slug, Location: readableDiagnosticLocation(record.Source, r.Path), Issues: issues})
 		}
 	}
 	results = appendDuplicateProblemLintResults(results, rp, dupIDs)
@@ -778,7 +779,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			issues = append(issues, issue)
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: a.Audit.Slug, Issues: issues})
+			results = append(results, LintResult{Slug: a.Audit.Slug, Location: readableDiagnosticLocation(loaded.Source, a.Audit.Path), Issues: issues})
 		}
 	}
 	results = appendDuplicateProblemLintResults(results, ap, dupAuditIDs)
@@ -814,7 +815,11 @@ func appendDuplicateProblemLintResults(results []LintResult, problems []LoadProb
 		if !ok {
 			continue
 		}
-		results = append(results, LintResult{Slug: loadProblemLabel(problem), Issues: []domain.Issue{issue}})
+		location := problem.Location
+		if location == problem.LocalPath {
+			location = ""
+		}
+		results = append(results, LintResult{Slug: loadProblemLabel(problem), Location: location, Issues: []domain.Issue{issue}})
 	}
 	return results
 }

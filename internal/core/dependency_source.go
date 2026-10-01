@@ -22,13 +22,14 @@ const (
 	TaskDependencyBlocks       TaskDependencyField = "blocks"
 )
 
-// TaskGraphSourceRef identifies the readable source record that owns a
-// declaration. Location is optional adapter context; duplicate IDs remain
-// distinct when an adapter can provide distinct locations.
+// TaskGraphSourceRef describes the readable record that owns a declaration.
+// Location is opaque diagnostic context, never a repair selector. LocalPath is
+// separately supplied local repair evidence; it is absent for pathless adapters.
 type TaskGraphSourceRef struct {
-	TaskID   string
-	TaskSlug string
-	Location string
+	TaskID    string
+	TaskSlug  string
+	Location  string
+	LocalPath string
 }
 
 // TaskGraphSourceField is one present graph-owned field and its raw values in
@@ -94,13 +95,12 @@ func (g *TaskGraph) SourceRecords() ([]TaskGraphSourceRecord, error) {
 }
 
 func (g *TaskGraph) sourceRecords() []TaskGraphSourceRecord {
-	tasks := cloneTasks(g.sourceTasks)
-	sort.SliceStable(tasks, func(i, j int) bool { return taskSourceSortKey(tasks[i]) < taskSourceSortKey(tasks[j]) })
-	records := make([]TaskGraphSourceRecord, 0, len(tasks))
-	for _, task := range tasks {
+	pairs := taskSourcePairs(g.sourceTasks, g.sourceRefs)
+	records := make([]TaskGraphSourceRecord, 0, len(pairs))
+	for _, pair := range pairs {
 		records = append(records, TaskGraphSourceRecord{
-			Source: sourceRefForTask(task),
-			Fields: sourceFieldsForTask(task),
+			Source: pair.source,
+			Fields: sourceFieldsForTask(pair.task),
 		})
 	}
 	return records
@@ -166,7 +166,7 @@ func (g *TaskGraph) SimulateSourceEdits(edits []TaskGraphSourceEdit) (*TaskGraph
 		default:
 			return nil, fmt.Errorf("%w: unsupported source edit action %q", domain.ErrValidation, edit.Action)
 		}
-		index, found, err := resolveSourceTask(tasks, edit.Source)
+		index, found, err := resolveSourceTask(g.sourceRefs, edit.Source)
 		if err != nil {
 			return nil, err
 		}
@@ -219,9 +219,13 @@ func (g *TaskGraph) SimulateSourceEdits(edits []TaskGraphSourceEdit) (*TaskGraph
 		setTaskSourceField(&tasks[key.taskIndex], key.field, remaining, keepPresent)
 		tasks[key.taskIndex].SourceVersion = "" // prospective values are never authoritative CAS evidence
 	}
-	return NewTaskGraphRead(TaskGraphRead{
-		Tasks: tasks, Problems: cloneTaskGraphLoadProblems(g.loadProblems),
-	}), nil
+	records := make([]LoadedRecord[domain.Task], len(tasks))
+	for i, task := range tasks {
+		records[i] = LoadedRecord[domain.Task]{Value: task, Source: RecordSource{
+			ID: g.sourceRefs[i].TaskID, Location: g.sourceRefs[i].Location,
+		}}
+	}
+	return NewTaskGraphRead(TaskGraphRead{Records: records, Problems: cloneTaskGraphLoadProblems(g.loadProblems)}), nil
 }
 
 func (g *TaskGraph) requireCompleteSource() error {
@@ -269,16 +273,18 @@ func applySourceDeclarationEdits(values []string, group *sourceEditGroup) []stri
 	})
 }
 
-func resolveSourceTask(tasks []domain.Task, source TaskGraphSourceRef) (int, bool, error) {
-	if source.TaskID == "" && source.TaskSlug == "" && source.Location == "" {
-		return 0, false, fmt.Errorf("%w: source identity is required", domain.ErrValidation)
+func resolveSourceTask(sources []TaskGraphSourceRef, source TaskGraphSourceRef) (int, bool, error) {
+	if source.TaskID == "" && source.TaskSlug == "" && source.LocalPath == "" {
+		return 0, false, fmt.Errorf("%w: source ID, slug, or local repair path is required; location is not a selector", domain.ErrValidation)
+	}
+	if source.LocalPath != "" && !hasLocalRepairPath(source) {
+		return 0, false, fmt.Errorf("%w: repair path must be local, not an opaque location", domain.ErrValidation)
 	}
 	matches := make([]int, 0, 1)
-	for index, task := range tasks {
-		candidate := sourceRefForTask(task)
+	for index, candidate := range sources {
 		if (source.TaskID != "" && candidate.TaskID != source.TaskID) ||
 			(source.TaskSlug != "" && candidate.TaskSlug != source.TaskSlug) ||
-			(source.Location != "" && candidate.Location != source.Location) {
+			(source.LocalPath != "" && candidate.LocalPath != source.LocalPath) {
 			continue
 		}
 		matches = append(matches, index)
@@ -287,6 +293,9 @@ func resolveSourceTask(tasks []domain.Task, source TaskGraphSourceRef) (int, boo
 	case 0:
 		return 0, false, nil
 	case 1:
+		if source.Location != "" && source.Location != sources[matches[0]].Location {
+			return 0, false, fmt.Errorf("%w: readable source location changed", domain.ErrConflict)
+		}
 		return matches[0], true, nil
 	default:
 		return 0, false, fmt.Errorf("%w: source identity %+v matches %d readable task records", domain.ErrAmbiguous, source, len(matches))
@@ -294,7 +303,34 @@ func resolveSourceTask(tasks []domain.Task, source TaskGraphSourceRef) (int, boo
 }
 
 func sourceRefForTask(task domain.Task) TaskGraphSourceRef {
-	return TaskGraphSourceRef{TaskID: canonicalTaskID(task), TaskSlug: task.Slug, Location: task.Path}
+	return TaskGraphSourceRef{TaskID: canonicalTaskID(task), TaskSlug: task.Slug, Location: task.Path, LocalPath: task.Path}
+}
+
+func taskGraphSourceRefForRecord(record LoadedRecord[domain.Task]) TaskGraphSourceRef {
+	return TaskGraphSourceRef{TaskID: record.Source.ID, TaskSlug: record.Value.Slug, Location: record.Source.Location, LocalPath: record.Value.Path}
+}
+
+type taskSourcePair struct {
+	task   domain.Task
+	source TaskGraphSourceRef
+}
+
+func taskSourcePairs(tasks []domain.Task, sources []TaskGraphSourceRef) []taskSourcePair {
+	pairs := make([]taskSourcePair, len(tasks))
+	for i, task := range tasks {
+		pairs[i] = taskSourcePair{task: cloneTask(task), source: sources[i]}
+	}
+	sort.SliceStable(pairs, func(i, j int) bool {
+		left, right := pairs[i], pairs[j]
+		return taskSourcePairSortKey(left) < taskSourcePairSortKey(right)
+	})
+	return pairs
+}
+
+func taskSourcePairSortKey(pair taskSourcePair) string {
+	return strings.Join([]string{
+		pair.source.TaskID, pair.source.TaskSlug, pair.source.Location, pair.source.LocalPath, taskSourceSortKey(pair.task),
+	}, "\x00")
 }
 
 func sourceFieldsForTask(task domain.Task) []TaskGraphSourceField {
@@ -390,15 +426,9 @@ func taskSourceSortKey(task domain.Task) string {
 	}, "\x01")
 }
 
-func taskSourceSnapshotKey(task domain.Task) string {
-	return strings.Join([]string{
-		canonicalTaskID(task), task.Slug, task.Path, task.SourceVersion,
-	}, "\x00")
-}
-
 func sourceDeclarationSortKey(declaration TaskGraphSourceDeclaration) string {
-	return fmt.Sprintf("%s\x00%s\x00%s\x00%d\x00%s\x00%09d",
-		declaration.Source.TaskID, declaration.Source.TaskSlug, declaration.Source.Location,
+	return fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%d\x00%s\x00%09d",
+		declaration.Source.TaskID, declaration.Source.TaskSlug, declaration.Source.Location, declaration.Source.LocalPath,
 		dependencyFieldOrder(declaration.Field), declaration.Value, declaration.Occurrence)
 }
 
@@ -414,7 +444,8 @@ func (g *TaskGraph) projectedSourceEdge(declaration TaskGraphSourceDeclaration) 
 	}
 	for _, diagnostic := range g.legacy {
 		if diagnostic.TaskID != declaration.Source.TaskID || diagnostic.TaskSlug != declaration.Source.TaskSlug ||
-			diagnostic.TaskPath != declaration.Source.Location || diagnostic.Field != string(declaration.Field) {
+			diagnostic.TaskPath != declaration.Source.LocalPath || diagnostic.Field != string(declaration.Field) ||
+			g.sourceRefs[int(diagnostic.recordRef)-1] != declaration.Source {
 			continue
 		}
 		for _, reference := range diagnostic.References {

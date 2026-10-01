@@ -774,7 +774,7 @@ func ToEpicShowEnvelope(detail core.EpicDetail) EpicShowEnvelope {
 	for _, task := range detail.Tasks {
 		jt = append(jt, ToLoadedTaskJSON(task))
 	}
-	return EpicShowEnvelope{SchemaVersion: SchemaVersion, Epic: toEpicMeta(detail.Summary.Epic, detail.Summary.Source.ID), Tasks: jt, Body: detail.Body}
+	return EpicShowEnvelope{SchemaVersion: SchemaVersion, Epic: ToLoadedEpicMeta(core.LoadedRecord[domain.Epic]{Value: detail.Summary.Epic, Source: detail.Summary.Source}), Tasks: jt, Body: detail.Body}
 }
 
 // AuditsEnvelope is `audit list --json`.
@@ -956,7 +956,7 @@ func ToFixEnvelope(results []domain.FixResult, problems []core.LoadProblem, rema
 		if issues == nil {
 			issues = []domain.Issue{} // empty, not null — the per-row issues are type: array too
 		}
-		rem = append(rem, LintTaskJSON{Slug: r.Slug, Issues: issues})
+		rem = append(rem, LintTaskJSON{Slug: r.Slug, Location: r.Location, Issues: issues})
 	}
 	return FixEnvelope{SchemaVersion: SchemaVersion, DryRun: dryRun, Fixed: results,
 		Unreadable: ToLintLoadProblemsJSON(problems), Remaining: rem, Workspace: ws}
@@ -1013,7 +1013,7 @@ func ToLintEnvelope(results []core.LintResult, problems []core.LoadProblem) Lint
 		if issues == nil {
 			issues = []domain.Issue{} // empty, not null — the per-row issues are type: array too
 		}
-		e.Issues = append(e.Issues, LintTaskJSON{Slug: r.Slug, Issues: issues})
+		e.Issues = append(e.Issues, LintTaskJSON{Slug: r.Slug, Location: r.Location, Issues: issues})
 	}
 	return e
 }

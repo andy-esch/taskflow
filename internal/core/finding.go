@@ -348,7 +348,7 @@ func (s *Service) LintAudits(slug string) ([]LintResult, []LoadProblem, error) {
 		record.Audit.FilenameID = loaded.Source.ID
 		iss := AuditLintIssues(record.Audit, record.Findings, record.NearMisses, record.CandidateIssues)
 		if len(iss) > 0 {
-			results = append(results, LintResult{Slug: record.Audit.Slug, Issues: iss})
+			results = append(results, LintResult{Slug: record.Audit.Slug, Location: readableDiagnosticLocation(loaded.Source, record.Audit.Path), Issues: iss})
 		}
 	}
 	return results, problems, nil

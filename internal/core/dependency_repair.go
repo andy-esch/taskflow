@@ -225,7 +225,7 @@ func DiagnoseTaskGraphRepair(graph *TaskGraph) (TaskGraphRepairDiagnosis, error)
 	records := graph.sourceRecords()
 	declarations, _ := graph.SourceDeclarations()
 
-	legacyRefs := legacyReferenceIndex(graph.legacy)
+	legacyRefs := legacyReferenceIndex(graph)
 	seenCanonical := make(map[string]bool)
 	for _, declaration := range declarations {
 		edit := TaskGraphSourceEdit{
@@ -278,17 +278,17 @@ func DiagnoseTaskGraphRepair(graph *TaskGraph) (TaskGraphRepairDiagnosis, error)
 				continue
 			}
 		}
-		diagnosis.Defects = append(diagnosis.Defects, defect)
+		diagnosis.Defects = append(diagnosis.Defects, requireLocalRepairPath(defect))
 	}
 	for _, record := range records {
 		for _, field := range record.Fields {
 			if field.Field == TaskDependencyDependsOn || len(field.Values) != 0 {
 				continue
 			}
-			diagnosis.Defects = append(diagnosis.Defects, TaskGraphRepairDefect{
+			diagnosis.Defects = append(diagnosis.Defects, requireLocalRepairPath(TaskGraphRepairDefect{
 				Reason: RepairLegacyEmpty, Automatic: true, Repairable: true,
 				Target: TaskGraphSourceEdit{Action: TaskGraphSourceDropEmptyField, Source: record.Source, Field: field.Field},
-			})
+			}))
 		}
 	}
 	for _, problem := range diagnosis.Problems {
@@ -303,6 +303,24 @@ func DiagnoseTaskGraphRepair(graph *TaskGraph) (TaskGraphRepairDiagnosis, error)
 		return repairDefectSortKey(diagnosis.Defects[i]) < repairDefectSortKey(diagnosis.Defects[j])
 	})
 	return diagnosis, nil
+}
+
+func requireLocalRepairPath(defect TaskGraphRepairDefect) TaskGraphRepairDefect {
+	if hasLocalRepairPath(defect.Target.Source) {
+		return defect
+	}
+	defect.Repairable = false
+	defect.Automatic = false
+	defect.Problem = GraphProblem{
+		Code: ProblemRepairUnavailable, TaskID: defect.Target.Source.TaskID,
+		Location: defect.Target.Source.Location,
+		Message:  "source has no explicit local repair path; edit it through its adapter",
+	}
+	return defect
+}
+
+func hasLocalRepairPath(source TaskGraphSourceRef) bool {
+	return source.LocalPath != "" && !strings.Contains(source.LocalPath, "://")
 }
 
 // PlanTaskGraphRepair reauthorizes convergent intent against graph. An edit that
@@ -722,11 +740,14 @@ func repairDefectDifference(before, after []TaskGraphRepairDefect) []TaskGraphRe
 }
 
 func repairDefectIdentity(defect TaskGraphRepairDefect) string {
-	if defect.Repairable {
+	if defect.Target.Field != "" {
+		// A declaration remains identifiable even when its source has no local
+		// repair path. Otherwise two pathless values (or occurrences) collapse
+		// and the receipt may report the wrong one as addressed.
 		return string(defect.Reason) + "\x00" + sourceEditKey(defect.Target)
 	}
 	problem := defect.Problem
-	return strings.Join([]string{string(defect.Reason), string(problem.Code), problem.TaskID, problem.RelatedTaskID, problem.Field, problem.Path, problem.Message}, "\x00")
+	return strings.Join([]string{string(defect.Reason), string(problem.Code), problem.TaskID, problem.RelatedTaskID, problem.Field, problem.Path, problem.Location, problem.Message}, "\x00")
 }
 
 func authorizeRequestedRepair(graph *TaskGraph, defects []TaskGraphRepairDefect, requested TaskGraphSourceEdit) (TaskGraphRepairDefect, bool, error) {
@@ -794,8 +815,8 @@ func repairEditTargetPresent(graph *TaskGraph, requested TaskGraphSourceEdit) (b
 }
 
 func normalizeRepairEditSource(graph *TaskGraph, edit TaskGraphSourceEdit) (TaskGraphSourceEdit, bool, error) {
-	if edit.Source.TaskID == "" && edit.Source.TaskSlug == "" && edit.Source.Location == "" {
-		return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: repair source identity is required", domain.ErrValidation)
+	if edit.Source.TaskID == "" && edit.Source.TaskSlug == "" && edit.Source.LocalPath == "" {
+		return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: repair source ID, slug, or local path is required; location is not a selector", domain.ErrValidation)
 	}
 	records, err := graph.SourceRecords()
 	if err != nil {
@@ -805,7 +826,7 @@ func normalizeRepairEditSource(graph *TaskGraph, edit TaskGraphSourceEdit) (Task
 	for _, record := range records {
 		if (edit.Source.TaskID != "" && record.Source.TaskID != edit.Source.TaskID) ||
 			(edit.Source.TaskSlug != "" && record.Source.TaskSlug != edit.Source.TaskSlug) ||
-			(edit.Source.Location != "" && record.Source.Location != edit.Source.Location) {
+			(edit.Source.LocalPath != "" && record.Source.LocalPath != edit.Source.LocalPath) {
 			continue
 		}
 		matches = append(matches, record.Source)
@@ -814,10 +835,16 @@ func normalizeRepairEditSource(graph *TaskGraph, edit TaskGraphSourceEdit) (Task
 	case 0:
 		return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: repair source %+v does not identify a readable task record", domain.ErrNotFound, edit.Source)
 	case 1:
+		if edit.Source.Location != "" && edit.Source.Location != matches[0].Location {
+			return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: readable source location changed", domain.ErrConflict)
+		}
+		if !hasLocalRepairPath(matches[0]) {
+			return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: task %s has no explicit local repair path", domain.ErrValidation, matches[0].TaskID)
+		}
 		edit.Source = matches[0]
 		return edit, true, nil
 	default:
-		return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: repair source %+v matches %d task records; use its exact location", domain.ErrAmbiguous, edit.Source, len(matches))
+		return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: repair source %+v matches %d task records; use its exact local path", domain.ErrAmbiguous, edit.Source, len(matches))
 	}
 }
 
@@ -1128,12 +1155,12 @@ func repairValuesAreSubsequence(before, after []string) bool {
 	return next == len(after)
 }
 
-func legacyReferenceIndex(diagnostics []LegacyDependencyDiagnostic) map[string]LegacyReference {
+func legacyReferenceIndex(graph *TaskGraph) map[string]LegacyReference {
 	index := make(map[string]LegacyReference)
-	for _, diagnostic := range diagnostics {
+	for _, diagnostic := range graph.legacy {
 		occurrences := make(map[string]int)
 		for _, ref := range diagnostic.References {
-			source := TaskGraphSourceRef{TaskID: diagnostic.TaskID, TaskSlug: diagnostic.TaskSlug, Location: diagnostic.TaskPath}
+			source := graph.sourceRefs[int(diagnostic.recordRef)-1]
 			occurrence := occurrences[ref.Value]
 			occurrences[ref.Value]++
 			index[sourceFieldOccurrenceKey(source, TaskDependencyField(diagnostic.Field), ref.Value, occurrence)] = ref
@@ -1163,22 +1190,22 @@ func (g *TaskGraph) SameRepairSnapshot(actual *TaskGraph, changed []TaskGraphSou
 	if len(g.sourceTasks) != len(actual.sourceTasks) || len(g.loadProblems) != len(actual.loadProblems) {
 		return false
 	}
-	expectedTasks, actualTasks := cloneTasks(g.sourceTasks), cloneTasks(actual.sourceTasks)
-	sort.SliceStable(expectedTasks, func(i, j int) bool { return taskSourceSortKey(expectedTasks[i]) < taskSourceSortKey(expectedTasks[j]) })
-	sort.SliceStable(actualTasks, func(i, j int) bool { return taskSourceSortKey(actualTasks[i]) < taskSourceSortKey(actualTasks[j]) })
+	expectedPairs := taskSourcePairs(g.sourceTasks, g.sourceRefs)
+	actualPairs := taskSourcePairs(actual.sourceTasks, actual.sourceRefs)
 	changedSet := make(map[TaskGraphSourceRef]bool, len(changed))
 	for _, source := range changed {
 		changedSet[source] = true
 	}
-	for i := range expectedTasks {
-		if sourceRefForTask(expectedTasks[i]) != sourceRefForTask(actualTasks[i]) {
+	for i := range expectedPairs {
+		expected, observed := &expectedPairs[i], &actualPairs[i]
+		if expected.source != observed.source {
 			return false
 		}
-		if changedSet[sourceRefForTask(expectedTasks[i])] {
-			expectedTasks[i].SourceVersion, actualTasks[i].SourceVersion = "", ""
-			expectedTasks[i].Updated, actualTasks[i].Updated = "", ""
+		if changedSet[expected.source] {
+			expected.task.SourceVersion, observed.task.SourceVersion = "", ""
+			expected.task.Updated, observed.task.Updated = "", ""
 		}
-		if !reflect.DeepEqual(expectedTasks[i], actualTasks[i]) {
+		if !reflect.DeepEqual(expected.task, observed.task) {
 			return false
 		}
 	}
@@ -1212,11 +1239,11 @@ func sameRepairEditIntent(left, right TaskGraphSourceEdit) bool {
 }
 
 func sameSourceRef(left, right TaskGraphSourceRef) bool {
-	return left.TaskID == right.TaskID && left.TaskSlug == right.TaskSlug && left.Location == right.Location
+	return left == right
 }
 
 func sourceFieldValueKey(source TaskGraphSourceRef, field TaskDependencyField, value string) string {
-	return strings.Join([]string{source.TaskID, source.TaskSlug, source.Location, string(field), value}, "\x00")
+	return strings.Join([]string{source.TaskID, source.TaskSlug, source.Location, source.LocalPath, string(field), value}, "\x00")
 }
 
 func sourceFieldOccurrenceKey(source TaskGraphSourceRef, field TaskDependencyField, value string, occurrence int) string {
@@ -1236,8 +1263,8 @@ func repairDefectSortKey(defect TaskGraphRepairDefect) string {
 }
 
 func displayRepairSource(source TaskGraphSourceRef) string {
-	if source.Location != "" {
-		return source.Location
+	if source.LocalPath != "" {
+		return source.LocalPath
 	}
 	if source.TaskID != "" {
 		return source.TaskID

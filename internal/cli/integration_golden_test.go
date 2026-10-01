@@ -157,11 +157,11 @@ func TestGolden_ProjectionContract(t *testing.T) {
 		Thread        []projectionSelectorContract `json:"thread"`
 	}{
 		SchemaVersion: wire.SchemaVersion,
-		Task:          projectionSelectorContracts(render.Specs(render.TaskColumns())),
+		Task:          projectionSelectorContracts(render.Specs(render.TaskReadColumns())),
 		Epic:          projectionSelectorContracts(render.Specs(render.EpicColumns())),
 		Finding:       projectionSelectorContracts(render.Specs(render.FindingColumns())),
-		Research:      projectionSelectorContracts(render.Specs(render.ResearchColumns())),
-		Audit:         projectionSelectorContracts(render.Specs(render.AuditColumns())),
+		Research:      projectionSelectorContracts(render.Specs(render.ResearchReadColumns())),
+		Audit:         projectionSelectorContracts(render.Specs(render.AuditReadColumns())),
 		Thread:        projectionSelectorContracts(render.Specs(render.ThreadColumns())),
 	}
 	b, err := json.MarshalIndent(contract, "", "  ")

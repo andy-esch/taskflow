@@ -66,9 +66,29 @@ func TasksJSON(w io.Writer, tasks []core.LoadedRecord[domain.Task], problems []c
 func TasksReadHuman(w io.Writer, st Style, tasks []core.LoadedRecord[domain.Task]) error {
 	values := make([]domain.Task, 0, len(tasks))
 	for _, record := range tasks {
-		values = append(values, record.Value)
+		task := record.Value
+		task.Slug += readableLocationSuffix(record.Source, task.Path)
+		values = append(values, task)
 	}
 	return TasksHuman(w, st, values)
+}
+
+// Readable locations are explanatory, never selectors or inferred local paths.
+// Keep ordinary local output unchanged while making opaque-source occurrences
+// distinguishable even when their ID and semantic label are identical.
+func readableLocationSuffix(source core.RecordSource, localPath string) string {
+	location := readableLocation(source.Location, localPath)
+	if location == "" {
+		return ""
+	}
+	return " [location: " + location + "]"
+}
+
+func readableLocation(location, localPath string) string {
+	if location == localPath {
+		return ""
+	}
+	return location
 }
 
 // fieldPrinter returns a key/value line writer for a metadata block: a dim,
@@ -577,7 +597,7 @@ func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 			}
 			status = st.Warn("⚠ " + disp)
 		}
-		rows = append(rows, []string{st.Bold(e.Epic.ID), status, progress, e.Epic.Description})
+		rows = append(rows, []string{st.Bold(e.Epic.ID + readableLocationSuffix(e.Source, e.Epic.Path)), status, progress, e.Epic.Description})
 	}
 	writeTable(w, st.width, []string{st.Dim("EPIC"), st.Dim("STATUS"), st.Dim("PROGRESS"), st.Dim("DESCRIPTION")}, rows)
 	return nil
@@ -710,7 +730,9 @@ func AuditsJSON(w io.Writer, audits []core.LoadedRecord[domain.Audit], problems 
 func AuditsReadHuman(w io.Writer, st Style, audits []core.LoadedRecord[domain.Audit]) error {
 	values := make([]domain.Audit, 0, len(audits))
 	for _, record := range audits {
-		values = append(values, record.Value)
+		audit := record.Value
+		audit.Slug += readableLocationSuffix(record.Source, audit.Path)
+		values = append(values, audit)
 	}
 	return AuditsHuman(w, st, values)
 }
@@ -743,7 +765,9 @@ func ResearchJSON(w io.Writer, docs []core.LoadedRecord[domain.Research], proble
 func ResearchReadHuman(w io.Writer, st Style, docs []core.LoadedRecord[domain.Research]) error {
 	values := make([]domain.Research, 0, len(docs))
 	for _, record := range docs {
-		values = append(values, record.Value)
+		research := record.Value
+		research.Slug += readableLocationSuffix(record.Source, research.Path)
+		values = append(values, research)
 	}
 	return ResearchHuman(w, st, values)
 }
@@ -1009,6 +1033,9 @@ func LintHuman(w io.Writer, st Style, results []core.LintResult, noun string) {
 	blockingItems, advisories := 0, 0
 	for _, r := range results {
 		fmt.Fprintf(w, "%s\n", st.Bold(r.Slug))
+		if r.Location != "" {
+			fmt.Fprintf(w, "  %s %s\n", st.Dim("location:"), r.Location)
+		}
 		for _, iss := range r.Issues {
 			field := st.Red(iss.Field + ":")
 			if !iss.Blocking() {

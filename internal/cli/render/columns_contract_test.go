@@ -162,7 +162,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "task-present", Status: domain.StatusInProgress,
 				Tier: 2, Priority: "high", Epic: "20-cli", Updated: "2026-09-14",
 				Description: "present task", RevisitAt: "2026-10-01",
-			}, Source: core.RecordSource{ID: "6ga000000001"}}},
+			}, Source: core.RecordSource{ID: "6ga000000001", Location: "db://tasks/present"}}},
 			{name: "absent optional strings", item: core.LoadedRecord[domain.Task]{Value: domain.Task{
 				Slug: "task-absent", Status: domain.StatusNextUp, Tier: 3,
 			}, Source: core.RecordSource{ID: "6ga000000002"}}},
@@ -176,7 +176,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 		[]registryFixture[core.EpicSummary]{
 			{name: "present", item: core.EpicSummary{
 				Epic:   domain.Epic{ID: "20-stale", Status: "active", Priority: "high", Description: "present epic"},
-				Source: core.RecordSource{ID: "20-cli"},
+				Source: core.RecordSource{ID: "20-cli", Location: "db://epics/present"},
 				Done:   2, Total: 5, Deprecated: 1,
 			}},
 			{name: "zero rollup and absent optional strings", item: core.EpicSummary{
@@ -189,7 +189,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 			{name: "present", item: core.LoadedRecord[domain.Audit]{Value: domain.Audit{
 				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "2026-09-14-present", Bucket: domain.AuditOpen,
 				Area: "cli", Date: "2026-09-14", Findings: 4, OpenFindings: 2,
-			}, Source: core.RecordSource{ID: "6ga000000003"}}},
+			}, Source: core.RecordSource{ID: "6ga000000003", Location: "db://audits/present"}}},
 			{name: "zero counts and absent optional strings", item: core.LoadedRecord[domain.Audit]{Value: domain.Audit{
 				Slug: "2026-09-14-zero", Bucket: domain.AuditClosed,
 			}, Source: core.RecordSource{ID: "6ga000000004"}}},
@@ -200,7 +200,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 			{name: "present", item: core.LoadedRecord[domain.Research]{Value: domain.Research{
 				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "research-present", Created: "2026-09-01",
 				Description: "present research", Tags: []string{"cli", "contract"}, Updated: "2026-09-14",
-			}, Source: core.RecordSource{ID: "6ga000000005"}}},
+			}, Source: core.RecordSource{ID: "6ga000000005", Location: "db://research/present"}}},
 			{name: "absent optional strings and empty tags", item: core.LoadedRecord[domain.Research]{Value: domain.Research{
 				Slug: "research-absent",
 			}, Source: core.RecordSource{ID: "6ga000000006"}}},

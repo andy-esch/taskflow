@@ -36,6 +36,15 @@ type LoadedRecord[T any] struct {
 	Source RecordSource
 }
 
+// Readable source context is useful when it adds information beyond an already
+// available local path; keep location and path conceptually independent.
+func readableDiagnosticLocation(source RecordSource, localPath string) string {
+	if source.Location == localPath {
+		return ""
+	}
+	return source.Location
+}
+
 // VersionedRecord keeps guarded snapshot evidence beside, but outside, the
 // semantic record. Ordinary projections use Record and never expose the opaque
 // version to renderers or domain values.

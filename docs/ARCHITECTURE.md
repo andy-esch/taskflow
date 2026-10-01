@@ -270,6 +270,19 @@ adapter capabilities rather than leaked persistence.
   `ThreadReadProblem` keeps location optional so a remote adapter does not invent a Markdown path;
   Thread list/service projections strip its source revision and wire output maps the diagnostic
   explicitly rather than serializing persistence evidence.
+  Ordinary task, epic, audit, and research read snapshots likewise retain adapter-supplied
+  `RecordSource.Location` beside the canonical source ID. Schema 1.79 exposes a nonredundant
+  optional `location` on readable list rows, projected list columns, and lint/graph diagnostics;
+  a local `Path` remains independent and an opaque location is never converted to `path` or
+  used to infer an entity ID. Task-graph duplicate attribution retains each physical occurrence's
+  source context while guarded snapshot equality still compares source revisions and local paths.
+  Graph repair keeps the diagnostic location separate from the explicit local path used to
+  select/materialize a source edit. A pathless record remains diagnosable but is not repairable
+  through the local file writer, and a URI-like location cannot become a repair target. Schema
+  1.80 carries a pathless defect's raw declaration as diagnostic evidence, separate from an
+  executable repair target; YAML repair plans may pair a local `path` with a `location` stale-context
+  check, but never use the latter as a selector. The future local-path capability split must stop
+  deriving repair permission from transitional domain `Path`.
   Repository lint follows the same rule through its dedicated `LintSource` port. Its per-kind,
   resilient reads return decoded records with `LintLoadProblem` values carrying taskflow-owned
   entity kind, optional stable identity, optional location, and message. Core neither accepts

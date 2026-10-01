@@ -35,7 +35,8 @@ type graphRepairManifest struct {
 type graphRepairManifestOperation struct {
 	Action     string `yaml:"action"`
 	Task       string `yaml:"task"`
-	Location   string `yaml:"location"`
+	Path       string `yaml:"path"`
+	Location   string `yaml:"location"` // legacy local-path alias alone; diagnostic stale context when paired with path
 	Field      string `yaml:"field"`
 	Value      string `yaml:"value"`
 	Occurrence int    `yaml:"occurrence"`
@@ -48,7 +49,7 @@ func newTaskDependencyRepairCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "repair",
 		Short:   "Diagnose or repair broken graph-owned declarations",
-		Long:    "With no selector, diagnose exact graph-owned source defects and print copyable repair commands. --auto applies only canonical deduplication, self-edge removal, and empty legacy-key cleanup. Use repeatable --drop/--dedupe selectors or a YAML --plan for explicit, reauthorized source removals. Invalid and dangling values, cycle choices, and ambiguous legacy intent are never guessed.",
+		Long:    "With no selector, diagnose exact graph-owned source defects and print copyable repair commands. --auto applies only canonical deduplication, self-edge removal, and empty legacy-key cleanup. Use repeatable --drop/--dedupe selectors or a YAML --plan for explicit, reauthorized source removals. Select by task ID/slug or explicit local path; opaque source locations are diagnostic only. YAML plans use path (legacy location alone is accepted only for local paths); when paired with path, location is a stale-context check, never a selector. Invalid and dangling values, cycle choices, and ambiguous legacy intent are never guessed.",
 		Example: "  tskflwctl task depend repair\n  tskflwctl task depend repair --auto --dry-run\n  tskflwctl task depend repair --drop 'tasks/ID-task.md:depends_on=RAW#0'\n  tskflwctl task depend repair --plan repair.yaml --json",
 		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -66,14 +67,14 @@ func newTaskDependencyRepairCmd(app *App) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				request.Edits = append(request.Edits, normalizeGraphRepairLocation(app, edit))
+				request.Edits = append(request.Edits, normalizeGraphRepairPath(app, edit))
 			}
 			for _, selector := range dedupes {
 				edit, err := parseGraphRepairSelector(selector, core.TaskGraphSourceDedupe)
 				if err != nil {
 					return err
 				}
-				request.Edits = append(request.Edits, normalizeGraphRepairLocation(app, edit))
+				request.Edits = append(request.Edits, normalizeGraphRepairPath(app, edit))
 			}
 			if manifestPath != "" {
 				manifestEdits, err := readGraphRepairManifest(manifestPath)
@@ -81,7 +82,7 @@ func newTaskDependencyRepairCmd(app *App) *cobra.Command {
 					return err
 				}
 				for _, edit := range manifestEdits {
-					request.Edits = append(request.Edits, normalizeGraphRepairLocation(app, edit))
+					request.Edits = append(request.Edits, normalizeGraphRepairPath(app, edit))
 				}
 			}
 			receipt, err := app.Svc.RepairTaskGraph(request, app.DryRun)
@@ -102,9 +103,9 @@ func newTaskDependencyRepairCmd(app *App) *cobra.Command {
 	return cmd
 }
 
-func normalizeGraphRepairLocation(app *App, edit core.TaskGraphSourceEdit) core.TaskGraphSourceEdit {
-	if edit.Source.Location != "" && !filepath.IsAbs(edit.Source.Location) && app.Cfg != nil {
-		edit.Source.Location = filepath.Join(app.Cfg.Root, edit.Source.Location)
+func normalizeGraphRepairPath(app *App, edit core.TaskGraphSourceEdit) core.TaskGraphSourceEdit {
+	if edit.Source.LocalPath != "" && !filepath.IsAbs(edit.Source.LocalPath) && app.Cfg != nil {
+		edit.Source.LocalPath = filepath.Join(app.Cfg.Root, edit.Source.LocalPath)
 	}
 	return edit
 }
@@ -121,6 +122,9 @@ func parseGraphRepairSelector(selector string, action core.TaskGraphSourceEditAc
 	if !ok {
 		return core.TaskGraphSourceEdit{}, fmt.Errorf("%w: repair selector %q must be <task-or-path>:<field>=<raw-value>[#occurrence]", domain.ErrValidation, selector)
 	}
+	if strings.Contains(sourceText, "://") {
+		return core.TaskGraphSourceEdit{}, fmt.Errorf("%w: repair source %q is an opaque location, not a local path or task selector", domain.ErrValidation, sourceText)
+	}
 	occurrence := 0
 	if action == core.TaskGraphSourceDropDeclaration {
 		if hash := strings.LastIndex(value, "#"); hash >= 0 && hash < len(value)-1 {
@@ -134,7 +138,7 @@ func parseGraphRepairSelector(selector string, action core.TaskGraphSourceEditAc
 	}
 	source := core.TaskGraphSourceRef{}
 	if filepath.IsAbs(sourceText) || strings.ContainsRune(sourceText, filepath.Separator) {
-		source.Location = sourceText
+		source.LocalPath = sourceText
 	} else if id.Valid(sourceText) {
 		source.TaskID = sourceText
 	} else {
@@ -203,7 +207,21 @@ func readGraphRepairManifest(path string) ([]core.TaskGraphSourceEdit, error) {
 		if operation.Occurrence < 0 {
 			return nil, fmt.Errorf("%w: graph repair plan operation %d occurrence must be non-negative", domain.ErrValidation, index+1)
 		}
-		source := core.TaskGraphSourceRef{Location: operation.Location}
+		path := operation.Path
+		if path == "" {
+			// The older manifest shape used location as its local selector.
+			// A URI in that position remains forbidden.
+			path = operation.Location
+		}
+		if strings.Contains(path, "://") {
+			return nil, fmt.Errorf("%w: graph repair plan operation %d requires a local path, not an opaque location", domain.ErrValidation, index+1)
+		}
+		source := core.TaskGraphSourceRef{LocalPath: path}
+		if operation.Path != "" && operation.Location != operation.Path {
+			// When path is explicit, location is only a stale-context check.
+			// It must never take part in selecting a local repair target.
+			source.Location = operation.Location
+		}
 		if operation.Task != "" {
 			if id.Valid(operation.Task) {
 				source.TaskID = operation.Task
@@ -211,8 +229,8 @@ func readGraphRepairManifest(path string) ([]core.TaskGraphSourceEdit, error) {
 				source.TaskSlug = operation.Task
 			}
 		}
-		if source.TaskID == "" && source.TaskSlug == "" && source.Location == "" {
-			return nil, fmt.Errorf("%w: graph repair plan operation %d requires task or location", domain.ErrValidation, index+1)
+		if source.TaskID == "" && source.TaskSlug == "" && source.LocalPath == "" {
+			return nil, fmt.Errorf("%w: graph repair plan operation %d requires task or local path", domain.ErrValidation, index+1)
 		}
 		edits = append(edits, core.TaskGraphSourceEdit{
 			Action: action, Source: source, Field: core.TaskDependencyField(operation.Field),

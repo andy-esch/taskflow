@@ -27,6 +27,7 @@ type Column[T any] struct {
 	Extract      func(T) string
 	projection   *columnProjection[T]
 	selectedName string
+	optIn        bool // selectable without expanding the established default table/CSV shape
 }
 
 // columnProjection keeps a canonical selector inseparable from the raw value it
@@ -40,6 +41,12 @@ type columnProjection[T any] struct {
 
 func column[T any](name, desc string, extract func(T) string) Column[T] {
 	return Column[T]{Name: name, Desc: desc, Extract: extract}
+}
+
+func optInColumn[T any](name, desc string, extract func(T) string) Column[T] {
+	c := column(name, desc, extract)
+	c.optIn = true
+	return c
 }
 
 func contractColumn[T any](name, jsonName, desc string, display, project func(T) string) Column[T] {
@@ -153,14 +160,20 @@ func Specs[T any](cols []Column[T]) []ColumnSpec {
 }
 
 // SelectColumns returns the columns named by `names`, in that order; empty
-// `names` returns all (the default table). An unknown name is a validation error
+// `names` returns the established default table columns. An unknown name is a validation error
 // listing the available columns.
 func SelectColumns[T any](all []Column[T], names []string) ([]Column[T], error) {
 	if err := validateColumnRegistry(all); err != nil {
 		return nil, err
 	}
 	if len(names) == 0 {
-		return all, nil
+		defaults := make([]Column[T], 0, len(all))
+		for _, c := range all {
+			if !c.optIn {
+				defaults = append(defaults, c)
+			}
+		}
+		return defaults, nil
 	}
 	byName := make(map[string]Column[T], len(all)*2)
 	for _, c := range all {
@@ -400,7 +413,7 @@ func TaskColumns() []Column[domain.Task] {
 // TaskReadColumns keeps the established list projection while sourcing the
 // durable id from the loaded-record envelope rather than parsed frontmatter.
 func TaskReadColumns() []Column[core.LoadedRecord[domain.Task]] {
-	return loadedRecordColumns(TaskColumns())
+	return loadedRecordColumns(TaskColumns(), func(task domain.Task) string { return task.Path })
 }
 
 // EpicColumns is the projectable column set for `epic list` (id first; done/total
@@ -418,6 +431,7 @@ func EpicColumns() []Column[core.EpicSummary] {
 		// column 6); both are still `-c`-selectable in any position the caller asks.
 		column("percent", "rollup % complete", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Percent()) }),
 		column("deprecated", "withdrawn (excluded) task count", func(e core.EpicSummary) string { return fmt.Sprintf("%d", e.Deprecated) }),
+		optInColumn("location", "optional opaque readable source location (not a path or selector)", func(e core.EpicSummary) string { return readableLocation(e.Source.Location, e.Epic.Path) }),
 	)
 }
 
@@ -461,7 +475,7 @@ func ResearchColumns() []Column[domain.Research] {
 
 // ResearchReadColumns is the source-aware research list projection.
 func ResearchReadColumns() []Column[core.LoadedRecord[domain.Research]] {
-	return loadedRecordColumns(ResearchColumns())
+	return loadedRecordColumns(ResearchColumns(), func(research domain.Research) string { return research.Path })
 }
 
 // AuditColumns is the projectable column set for `audit list`. Slug stays first
@@ -483,7 +497,7 @@ func AuditColumns() []Column[domain.Audit] {
 
 // AuditReadColumns is the source-aware audit list projection.
 func AuditReadColumns() []Column[core.LoadedRecord[domain.Audit]] {
-	return loadedRecordColumns(AuditColumns())
+	return loadedRecordColumns(AuditColumns(), func(audit domain.Audit) string { return audit.Path })
 }
 
 // loadedRecordColumns lifts an established domain column registry onto an
@@ -491,8 +505,8 @@ func AuditReadColumns() []Column[core.LoadedRecord[domain.Audit]] {
 // special: adapter-supplied source identity wins over a missing or drifting
 // declared id in every output mode. All other display and canonical projection
 // semantics remain byte-compatible.
-func loadedRecordColumns[T any](base []Column[T]) []Column[core.LoadedRecord[T]] {
-	out := make([]Column[core.LoadedRecord[T]], 0, len(base))
+func loadedRecordColumns[T any](base []Column[T], localPath func(T) string) []Column[core.LoadedRecord[T]] {
+	out := make([]Column[core.LoadedRecord[T]], 0, len(base)+1)
 	for _, baseColumn := range base {
 		c := baseColumn
 		display := func(record core.LoadedRecord[T]) string {
@@ -513,6 +527,10 @@ func loadedRecordColumns[T any](base []Column[T]) []Column[core.LoadedRecord[T]]
 		}
 		out = append(out, lifted)
 	}
+	out = append(out, optInColumn("location", "optional opaque readable source location (not a path or selector)",
+		func(record core.LoadedRecord[T]) string {
+			return readableLocation(record.Source.Location, localPath(record.Value))
+		}))
 	mustValidateColumnRegistry(out)
 	return out
 }

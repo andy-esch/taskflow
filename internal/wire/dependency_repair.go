@@ -2,14 +2,17 @@ package wire
 
 import "github.com/andy-esch/taskflow/internal/core"
 
-// TaskGraphRepairSourceJSON is the exact owner of a graph declaration.
+// TaskGraphRepairSourceJSON identifies a declaration's owner. Path is the local
+// repair selector; Location is independent diagnostic context.
 type TaskGraphRepairSourceJSON struct {
 	TaskID   string `json:"task_id,omitempty"`
 	TaskSlug string `json:"task_slug,omitempty"`
-	Location string `json:"location,omitempty"`
+	Location string `json:"location,omitempty" jsonschema:"description=optional source context that may equal a local path; not a repair selector"`
+	Path     string `json:"path,omitempty" jsonschema:"description=explicit local repair path when available"`
 }
 
-// TaskGraphRepairEditJSON is a stable, replayable source-declaration selector.
+// TaskGraphRepairEditJSON is a stable source-declaration intent, replayable by
+// task ID/slug or explicit local path rather than opaque location.
 type TaskGraphRepairEditJSON struct {
 	Action     string                    `json:"action"`
 	Source     TaskGraphRepairSourceJSON `json:"source"`
@@ -21,7 +24,8 @@ type TaskGraphRepairEditJSON struct {
 func toTaskGraphRepairEditJSON(edit core.TaskGraphSourceEdit) TaskGraphRepairEditJSON {
 	return TaskGraphRepairEditJSON{
 		Action: string(edit.Action), Source: TaskGraphRepairSourceJSON{
-			TaskID: edit.Source.TaskID, TaskSlug: edit.Source.TaskSlug, Location: edit.Source.Location,
+			TaskID: edit.Source.TaskID, TaskSlug: edit.Source.TaskSlug,
+			Location: edit.Source.Location, Path: edit.Source.LocalPath,
 		},
 		Field: string(edit.Field), Value: edit.Value, Occurrence: edit.Occurrence,
 	}
@@ -46,18 +50,29 @@ type TaskGraphRepairDeclarationJSON struct {
 	DependentID      string                    `json:"dependent_id,omitempty"`
 }
 
+// TaskGraphRepairDefectDeclarationJSON identifies a defective raw declaration
+// when its source cannot be repaired locally. Unlike Target, it is diagnostic
+// evidence, not an executable edit.
+type TaskGraphRepairDefectDeclarationJSON struct {
+	Source     TaskGraphRepairSourceJSON `json:"source"`
+	Field      string                    `json:"field"`
+	Value      string                    `json:"value"`
+	Occurrence int                       `json:"occurrence"`
+}
+
 // TaskGraphRepairDefectJSON is one repairable declaration defect or residual
 // direct-edit problem. Raw values are retained verbatim.
 type TaskGraphRepairDefectJSON struct {
-	Reason           string                   `json:"reason"`
-	Repairable       bool                     `json:"repairable"`
-	Automatic        bool                     `json:"automatic"`
-	Target           *TaskGraphRepairEditJSON `json:"target,omitempty"`
-	HasProjectedEdge bool                     `json:"has_projected_edge"`
-	PrerequisiteID   string                   `json:"prerequisite_id,omitempty"`
-	DependentID      string                   `json:"dependent_id,omitempty"`
-	CandidateIDs     []string                 `json:"candidate_ids"`
-	Problem          *GraphProblemJSON        `json:"problem,omitempty"`
+	Reason           string                                `json:"reason"`
+	Repairable       bool                                  `json:"repairable"`
+	Automatic        bool                                  `json:"automatic"`
+	Target           *TaskGraphRepairEditJSON              `json:"target,omitempty"`
+	Declaration      *TaskGraphRepairDefectDeclarationJSON `json:"declaration,omitempty" jsonschema:"description=diagnostic declaration when no local repair action is available; not replayable"`
+	HasProjectedEdge bool                                  `json:"has_projected_edge"`
+	PrerequisiteID   string                                `json:"prerequisite_id,omitempty"`
+	DependentID      string                                `json:"dependent_id,omitempty"`
+	CandidateIDs     []string                              `json:"candidate_ids"`
+	Problem          *GraphProblemJSON                     `json:"problem,omitempty"`
 }
 
 // TaskGraphRepairJSON is the reusable guarded repair receipt payload.
@@ -141,6 +156,12 @@ func toTaskGraphRepairDefectsJSON(defects []core.TaskGraphRepairDefect) []TaskGr
 		if defect.Repairable {
 			target := toTaskGraphRepairEditJSON(defect.Target)
 			item.Target = &target
+		} else if defect.Target.Field != "" {
+			item.Declaration = &TaskGraphRepairDefectDeclarationJSON{
+				Source: toTaskGraphRepairEditJSON(defect.Target).Source,
+				Field:  string(defect.Target.Field), Value: defect.Target.Value,
+				Occurrence: defect.Target.Occurrence,
+			}
 		}
 		if defect.Problem.Code != "" {
 			problem := toGraphProblemsJSON([]core.GraphProblem{defect.Problem})[0]

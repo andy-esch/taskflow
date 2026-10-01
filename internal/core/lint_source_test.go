@@ -5,7 +5,32 @@ import (
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
+
+type locationLintSource struct {
+	lintSourceFake
+	tasks    []LoadedRecord[TaskWithBody]
+	epics    []LoadedRecord[domain.Epic]
+	audits   []LoadedRecord[AuditWithFindings]
+	research []LoadedRecord[domain.Research]
+}
+
+func (f *locationLintSource) ReadLintTasks() ([]LoadedRecord[TaskWithBody], []LoadProblem, error) {
+	return f.tasks, nil, nil
+}
+
+func (f *locationLintSource) ReadLintEpics() ([]LoadedRecord[domain.Epic], []LoadProblem, error) {
+	return f.epics, nil, nil
+}
+
+func (f *locationLintSource) ReadAuditSnapshot(string) (AuditSnapshot, error) {
+	return AuditSnapshot{Audits: f.audits}, nil
+}
+
+func (f *locationLintSource) ReadLintResearch() ([]LoadedRecord[domain.Research], []LoadProblem, error) {
+	return f.research, nil, nil
+}
 
 type lintSourceFake struct {
 	testSourceSetProvider
@@ -89,6 +114,27 @@ func TestLintPreservesPortableLoadProblemIdentityWithoutLocations(t *testing.T) 
 		if got := byKind[kind]; got.EntityID != wantID || got.Message == "" {
 			t.Errorf("%s problem = %+v; want id %q and a message", kind, got, wantID)
 		}
+	}
+}
+
+func TestLintAttributesDuplicateUnreadableOccurrencesByOpaqueLocation(t *testing.T) {
+	const sameID = "6g0000000001"
+	source := &lintSourceFake{researchProblems: []LoadProblem{
+		{EntityKind: EntityResearch, EntityID: sameID, EntitySlug: "same-research", Location: "db://research/a", Message: "unreadable"},
+		{EntityKind: EntityResearch, EntityID: sameID, EntitySlug: "same-research", Location: "db://research/b", Message: "unreadable"},
+	}}
+	results, problems, err := MustNewService(nil, WithLintSource(source)).Lint()
+	if err != nil || len(problems) != 2 {
+		t.Fatalf("lint problems = %+v, %v", problems, err)
+	}
+	seen := make(map[string]bool)
+	for _, result := range results {
+		if result.Slug == "same-research" {
+			seen[result.Location] = true
+		}
+	}
+	if len(seen) != 2 || !seen["db://research/a"] || !seen["db://research/b"] {
+		t.Fatalf("unreadable duplicate occurrences = %v; all results: %+v", seen, results)
 	}
 }
 
@@ -200,6 +246,43 @@ func TestLintRecordAttributionDoesNotCollideOnIDOrLocation(t *testing.T) {
 	assertLintIssue(t, results, second.Slug, "depends_on", "bad-reference")
 	if lintResultHas(results, first.Slug, "depends_on", "bad-reference") {
 		t.Fatalf("second record dependency defect leaked onto first record: %+v", results)
+	}
+}
+
+func TestLintDistinguishesEqualReadableRecordsByOpaqueLocation(t *testing.T) {
+	taskID := testutil.TaskID("lint-opaque-task")
+	auditID := testutil.TaskID("lint-opaque-audit")
+	researchID := testutil.TaskID("lint-opaque-research")
+	task := TaskWithBody{Task: domain.Task{ID: taskID, Slug: "same-task", Status: domain.StatusReadyToStart}}
+	epic := domain.Epic{ID: "21-same-epic", Status: "active"}
+	audit := AuditWithFindings{Audit: domain.Audit{ID: auditID, Slug: "same-audit", Bucket: domain.AuditOpen}}
+	research := domain.Research{ID: researchID, Slug: "same-research"}
+	source := &locationLintSource{}
+	for _, suffix := range []string{"a", "b"} {
+		source.tasks = append(source.tasks, LoadedRecord[TaskWithBody]{Value: task, Source: RecordSource{ID: taskID, Location: "db://tasks/" + suffix}})
+		source.epics = append(source.epics, LoadedRecord[domain.Epic]{Value: epic, Source: RecordSource{ID: epic.ID, Location: "db://epics/" + suffix}})
+		source.audits = append(source.audits, LoadedRecord[AuditWithFindings]{Value: audit, Source: RecordSource{ID: auditID, Location: "db://audits/" + suffix}})
+		source.research = append(source.research, LoadedRecord[domain.Research]{Value: research, Source: RecordSource{ID: researchID, Location: "db://research/" + suffix}})
+	}
+	results, _, err := MustNewService(nil, WithLintSource(source)).Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for label, locations := range map[string][]string{
+		"same-task":     {"db://tasks/a", "db://tasks/b"},
+		"21-same-epic":  {"db://epics/a", "db://epics/b"},
+		"same-audit":    {"db://audits/a", "db://audits/b"},
+		"same-research": {"db://research/a", "db://research/b"},
+	} {
+		seen := make(map[string]bool)
+		for _, result := range results {
+			if result.Slug == label {
+				seen[result.Location] = true
+			}
+		}
+		if len(seen) != 2 || !seen[locations[0]] || !seen[locations[1]] {
+			t.Errorf("%s lint occurrence locations = %v, want %v", label, seen, locations)
+		}
 	}
 }
 

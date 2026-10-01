@@ -132,7 +132,7 @@ func taskGraphFromMap(taskIDs []string, tasksByID map[string]domain.Task) *TaskG
 	// behavior queries only. Mark them source-incomplete so repair-oriented
 	// source queries and whole-snapshot CAS fail closed instead of treating one
 	// record per ID as a complete repository read.
-	return newTaskGraph(tasks, nil, false)
+	return newTaskGraph(tasks, nil, nil, false)
 }
 
 func taskGraphHealthDetail(graph *TaskGraph) string {

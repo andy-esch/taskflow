@@ -139,6 +139,45 @@ func TestTasksHuman_Table(t *testing.T) {
 	}
 }
 
+func TestReadableListHumanDistinguishesOpaqueLocations(t *testing.T) {
+	source := core.RecordSource{ID: "canonical", Location: "db://records/first"}
+	local := "/planning/records/local.md"
+	for _, tc := range []struct {
+		name   string
+		render func(*bytes.Buffer, core.RecordSource) error
+	}{
+		{"task", func(out *bytes.Buffer, src core.RecordSource) error {
+			return TasksReadHuman(out, NewStyle(false), []core.LoadedRecord[domain.Task]{{Value: domain.Task{Slug: "same", Path: local, Status: domain.StatusNextUp}, Source: src}})
+		}},
+		{"epic", func(out *bytes.Buffer, src core.RecordSource) error {
+			return EpicsHuman(out, NewStyle(false), []core.EpicSummary{{Epic: domain.Epic{ID: "same", Path: local}, Source: src}})
+		}},
+		{"audit", func(out *bytes.Buffer, src core.RecordSource) error {
+			return AuditsReadHuman(out, NewStyle(false), []core.LoadedRecord[domain.Audit]{{Value: domain.Audit{Slug: "same", Path: local}, Source: src}})
+		}},
+		{"research", func(out *bytes.Buffer, src core.RecordSource) error {
+			return ResearchReadHuman(out, NewStyle(false), []core.LoadedRecord[domain.Research]{{Value: domain.Research{Slug: "same", Path: local}, Source: src}})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			if err := tc.render(&out, source); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out.String(), "same [location: db://records/first]") {
+				t.Fatalf("opaque occurrence not attributable: %s", out.String())
+			}
+			out.Reset()
+			if err := tc.render(&out, core.RecordSource{ID: source.ID, Location: local}); err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(out.String(), "[location:") {
+				t.Fatalf("ordinary local record gained redundant location: %s", out.String())
+			}
+		})
+	}
+}
+
 func TestLintJSON_Envelope(t *testing.T) {
 	var out bytes.Buffer
 	results := []core.LintResult{{Slug: "alpha", Issues: []domain.Issue{{Field: "tags", Message: "missing"}}}}
