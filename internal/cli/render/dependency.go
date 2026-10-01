@@ -66,7 +66,7 @@ func TaskGraphRepairHuman(w io.Writer, st Style, receipt core.TaskGraphRepairRec
 			if defect.Repairable {
 				continue
 			}
-			fmt.Fprintf(w, "%s %s/%s: %s\n", st.Warn("⚠"), defect.Reason, defect.Problem.Code, defect.Problem.Message)
+			fmt.Fprintf(w, "%s %s/%s: %s%s\n", st.Warn("⚠"), defect.Reason, defect.Problem.Code, defect.Problem.Message, repairDefectContext(defect))
 		}
 		if len(receipt.IncompleteThreads) > 0 {
 			fmt.Fprintf(w, "%s %d unreadable Thread document(s); impact evidence is incomplete\n", st.Warn("⚠"), len(receipt.IncompleteThreads))
@@ -140,7 +140,7 @@ func TaskGraphRepairHuman(w io.Writer, st Style, receipt core.TaskGraphRepairRec
 			if defect.Repairable {
 				fmt.Fprintf(w, "  %s %s  %s\n", st.Dim("•"), defect.Reason, repairEditDisplay(defect.Target))
 			} else {
-				fmt.Fprintf(w, "  %s %s/%s: %s\n", st.Warn("⚠"), defect.Reason, defect.Problem.Code, defect.Problem.Message)
+				fmt.Fprintf(w, "  %s %s/%s: %s%s\n", st.Warn("⚠"), defect.Reason, defect.Problem.Code, defect.Problem.Message, repairDefectContext(defect))
 			}
 		}
 	}
@@ -166,6 +166,20 @@ func repairEditDisplay(edit core.TaskGraphSourceEdit) string {
 	return fmt.Sprintf("%s:%s=%s#%d", repairSourceDisplay(edit.Source), edit.Field, strconv.Quote(edit.Value), edit.Occurrence)
 }
 
+func repairDefectContext(defect core.TaskGraphRepairDefect) string {
+	if defect.Target.Field != "" {
+		context := "  declaration " + repairEditDisplay(defect.Target)
+		if location := defect.Target.Source.Location; location != "" && location != defect.Target.Source.LocalPath {
+			context += "  location " + location
+		}
+		return context
+	}
+	if defect.Problem.Location != "" && defect.Problem.Location != defect.Problem.Path {
+		return "  location " + defect.Problem.Location
+	}
+	return ""
+}
+
 func repairEditSelector(edit core.TaskGraphSourceEdit) string {
 	selector := fmt.Sprintf("%s:%s=%s", repairSourceDisplay(edit.Source), edit.Field, edit.Value)
 	if edit.Action == core.TaskGraphSourceDropDeclaration {
@@ -175,8 +189,8 @@ func repairEditSelector(edit core.TaskGraphSourceEdit) string {
 }
 
 func repairSourceDisplay(source core.TaskGraphSourceRef) string {
-	if source.Location != "" {
-		return source.Location
+	if source.LocalPath != "" {
+		return source.LocalPath
 	}
 	if source.TaskID != "" {
 		return source.TaskID
@@ -311,12 +325,20 @@ func graphQueryHeader(w io.Writer, st Style, taskID, slug string, state core.Tas
 func graphDiagnosticsHuman(w io.Writer, st Style, problems []core.GraphProblem, legacy []core.LegacyDependencyDiagnostic) {
 	seen := make(map[string]bool, len(problems))
 	for _, problem := range problems {
-		key := string(problem.Code) + "\x00" + problem.Message
+		location := ""
+		if problem.Location != problem.Path {
+			location = problem.Location
+		}
+		key := string(problem.Code) + "\x00" + problem.Message + "\x00" + location
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
-		fmt.Fprintf(w, "%s %s: %s\n", st.Warn("⚠"), problem.Code, problem.Message)
+		if location != "" {
+			fmt.Fprintf(w, "%s %s: %s (location: %s)\n", st.Warn("⚠"), problem.Code, problem.Message, location)
+		} else {
+			fmt.Fprintf(w, "%s %s: %s\n", st.Warn("⚠"), problem.Code, problem.Message)
+		}
 	}
 	for _, diagnostic := range legacy {
 		remedy := "run task depend migrate"

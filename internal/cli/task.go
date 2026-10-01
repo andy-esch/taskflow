@@ -239,7 +239,7 @@ func newTaskListCmd(app *App) *cobra.Command {
 			return portableProblemsError("task", problems)
 		},
 	}
-	lm.bind(cmd, render.Specs(render.TaskColumns()))
+	lm.bind(cmd, render.Specs(render.TaskReadColumns()))
 	cmd.Flags().StringVar(&filter.Status, "status", "", "filter by status")
 	cmd.Flags().StringVar(&filter.Epic, "epic", "", "filter by epic")
 	cmd.Flags().StringVar(&filter.Tag, "tag", "", "filter by tag")

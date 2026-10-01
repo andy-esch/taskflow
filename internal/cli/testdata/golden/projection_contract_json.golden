@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.78",
+  "schema_version": "1.80",
   "task": [
     {
       "name": "slug",
@@ -39,6 +39,10 @@
     {
       "name": "id",
       "description": "stable task identifier"
+    },
+    {
+      "name": "location",
+      "description": "optional opaque readable source location (not a path or selector)"
     }
   ],
   "epic": [
@@ -73,6 +77,10 @@
     {
       "name": "deprecated",
       "description": "withdrawn (excluded) task count"
+    },
+    {
+      "name": "location",
+      "description": "optional opaque readable source location (not a path or selector)"
     }
   ],
   "finding": [
@@ -140,6 +148,10 @@
     {
       "name": "id",
       "description": "stable identifier"
+    },
+    {
+      "name": "location",
+      "description": "optional opaque readable source location (not a path or selector)"
     }
   ],
   "audit": [
@@ -173,6 +185,10 @@
     {
       "name": "id",
       "description": "stable audit identifier"
+    },
+    {
+      "name": "location",
+      "description": "optional opaque readable source location (not a path or selector)"
     }
   ],
   "thread": [

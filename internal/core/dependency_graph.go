@@ -42,6 +42,7 @@ const (
 	ProblemCycle               GraphProblemCode = "cycle"
 	ProblemLegacyMissing       GraphProblemCode = "legacy-reference-missing"
 	ProblemLegacyAmbiguous     GraphProblemCode = "legacy-reference-ambiguous"
+	ProblemRepairUnavailable   GraphProblemCode = "repair-source-unavailable"
 )
 
 // GraphProblem is one deterministic, attributable reason a strict snapshot is
@@ -52,6 +53,7 @@ type GraphProblem struct {
 	RelatedTaskID string
 	Field         string
 	Path          string
+	Location      string
 	Message       string
 	Cycle         []string
 	recordRef     taskGraphRecordRef
@@ -282,14 +284,16 @@ func taskGraphRecordRefAt(index int) taskGraphRecordRef {
 }
 
 type taskGraphRecord struct {
-	task domain.Task
-	ref  taskGraphRecordRef
+	task   domain.Task
+	source TaskGraphSourceRef
+	ref    taskGraphRecordRef
 }
 
 // TaskGraph is an immutable projection over one repository scan. Its internal
 // query caches are synchronized; callers always receive copies of slices/maps.
 type TaskGraph struct {
 	sourceTasks          []domain.Task
+	sourceRefs           []TaskGraphSourceRef
 	sourceComplete       bool
 	representative       map[string]TaskGraphSourceRef
 	representativeRecord map[string]taskGraphRecordRef
@@ -328,12 +332,24 @@ func NewTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGra
 // contract used by Service graph consumers.
 func NewTaskGraphRead(read TaskGraphRead) *TaskGraph {
 	read = validatedTaskGraphRead(read)
-	return newTaskGraph(taskGraphTasks(read), read.Problems, true)
+	records := taskGraphRecords(read)
+	sources := make([]TaskGraphSourceRef, 0, len(records))
+	for _, record := range records {
+		sources = append(sources, taskGraphSourceRefForRecord(record))
+	}
+	return newTaskGraph(taskGraphTasks(read), sources, read.Problems, true)
 }
 
-func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, sourceComplete bool) *TaskGraph {
+func newTaskGraph(tasks []domain.Task, sources []TaskGraphSourceRef, unreadable []TaskGraphLoadProblem, sourceComplete bool) *TaskGraph {
+	if sources == nil {
+		sources = make([]TaskGraphSourceRef, len(tasks))
+		for i, task := range tasks {
+			sources[i] = sourceRefForTask(task)
+		}
+	}
 	g := &TaskGraph{
 		sourceTasks:          cloneTasks(tasks),
+		sourceRefs:           append([]TaskGraphSourceRef(nil), sources...),
 		sourceComplete:       sourceComplete,
 		representative:       make(map[string]TaskGraphSourceRef, len(tasks)),
 		representativeRecord: make(map[string]taskGraphRecordRef, len(tasks)),
@@ -352,8 +368,8 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 		impactCache:          make(map[string][]DependentImpact),
 		soundVisits:          make(map[string]int, len(tasks)),
 	}
-	for _, task := range tasks {
-		g.sourceRefCounts[sourceRefForTask(task)]++
+	for _, source := range sources {
+		g.sourceRefCounts[source]++
 	}
 	g.loadProblems = canonicalTaskGraphLoadProblems(unreadable)
 	for _, problem := range g.loadProblems {
@@ -369,22 +385,22 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 			message = "unreadable task file: " + problem.Message
 		}
 		g.problems = append(g.problems, GraphProblem{
-			Code: ProblemUnreadable, TaskID: taskID, Path: path,
+			Code: ProblemUnreadable, TaskID: taskID, Path: path, Location: problem.Location,
 			Message: message,
 		})
 	}
 
 	ordered := make([]taskGraphRecord, len(tasks))
 	for index, task := range tasks {
-		ordered[index] = taskGraphRecord{task: task, ref: taskGraphRecordRefAt(index)}
+		ordered[index] = taskGraphRecord{task: task, source: sources[index], ref: taskGraphRecordRefAt(index)}
 	}
 	sort.SliceStable(ordered, func(i, j int) bool {
 		left, right := canonicalTaskID(ordered[i].task), canonicalTaskID(ordered[j].task)
 		if left != right {
 			return left < right
 		}
-		if ordered[i].task.Path != ordered[j].task.Path {
-			return ordered[i].task.Path < ordered[j].task.Path
+		if ordered[i].source.Location != ordered[j].source.Location {
+			return ordered[i].source.Location < ordered[j].source.Location
 		}
 		if ordered[i].task.Slug != ordered[j].task.Slug {
 			return ordered[i].task.Slug < ordered[j].task.Slug
@@ -398,7 +414,11 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 		task := record.task
 		if taskID := canonicalTaskID(task); taskID != "" {
 			idCounts[taskID]++
-			idPaths[taskID] = append(idPaths[taskID], displayPath(task.Path))
+			location := record.source.Location
+			if location == "" {
+				location = displayPath(task.Path)
+			}
+			idPaths[taskID] = append(idPaths[taskID], location)
 		}
 	}
 	for recordIndex, record := range ordered {
@@ -427,7 +447,7 @@ func newTaskGraph(tasks []domain.Task, unreadable []TaskGraphLoadProblem, source
 		}
 		if _, exists := g.tasks[taskID]; !exists {
 			g.tasks[taskID] = cloneTask(task)
-			g.representative[taskID] = sourceRefForTask(task)
+			g.representative[taskID] = record.source
 			g.representativeRecord[taskID] = recordRef
 			representativeIndexes[taskID] = recordIndex
 			g.ids = append(g.ids, taskID)
@@ -606,6 +626,9 @@ func displayPath(path string) string {
 }
 
 func (g *TaskGraph) addProblem(problem GraphProblem) {
+	if problem.Location == "" && problem.recordRef != 0 {
+		problem.Location = g.sourceRefs[int(problem.recordRef)-1].Location
+	}
 	g.problems = append(g.problems, problem)
 }
 
@@ -943,7 +966,7 @@ func (g *TaskGraph) SameSourceSnapshot(other *TaskGraph) bool {
 		g.health != other.health || !slices.Equal(g.ids, other.ids) {
 		return false
 	}
-	if !sameReadableTaskSources(g.sourceTasks, other.sourceTasks) {
+	if !sameReadableTaskSources(g.sourceTasks, g.sourceRefs, other.sourceTasks, other.sourceRefs) {
 		return false
 	}
 	return slices.EqualFunc(g.loadProblems, other.loadProblems, sameTaskGraphLoadProblem) &&
@@ -951,17 +974,15 @@ func (g *TaskGraph) SameSourceSnapshot(other *TaskGraph) bool {
 		slices.EqualFunc(g.legacy, other.legacy, sameLegacyDiagnostic)
 }
 
-func sameReadableTaskSources(left, right []domain.Task) bool {
-	if len(left) != len(right) {
+func sameReadableTaskSources(left []domain.Task, leftSources []TaskGraphSourceRef, right []domain.Task, rightSources []TaskGraphSourceRef) bool {
+	if len(left) != len(right) || len(left) != len(leftSources) || len(right) != len(rightSources) {
 		return false
 	}
-	left = cloneTasks(left)
-	right = cloneTasks(right)
-	sort.SliceStable(left, func(i, j int) bool { return taskSourceSnapshotKey(left[i]) < taskSourceSnapshotKey(left[j]) })
-	sort.SliceStable(right, func(i, j int) bool { return taskSourceSnapshotKey(right[i]) < taskSourceSnapshotKey(right[j]) })
-	return slices.EqualFunc(left, right, func(a, b domain.Task) bool {
-		return sourceRefForTask(a) == sourceRefForTask(b) &&
-			a.SourceVersion != "" && a.SourceVersion == b.SourceVersion
+	leftPairs := taskSourcePairs(left, leftSources)
+	rightPairs := taskSourcePairs(right, rightSources)
+	return slices.EqualFunc(leftPairs, rightPairs, func(a, b taskSourcePair) bool {
+		return a.source == b.source && a.task.Path == b.task.Path &&
+			a.task.SourceVersion != "" && a.task.SourceVersion == b.task.SourceVersion
 	})
 }
 
@@ -975,7 +996,7 @@ func sameTaskGraphLoadProblem(left, right TaskGraphLoadProblem) bool {
 func sameGraphProblem(left, right GraphProblem) bool {
 	return left.Code == right.Code && left.TaskID == right.TaskID &&
 		left.RelatedTaskID == right.RelatedTaskID && left.Field == right.Field &&
-		left.Path == right.Path && left.Message == right.Message &&
+		left.Path == right.Path && left.Location == right.Location && left.Message == right.Message &&
 		slices.Equal(left.Cycle, right.Cycle)
 }
 
@@ -1408,8 +1429,8 @@ func representativeCycle(component []string, outgoing map[string][]string) []str
 func sortGraphProblems(problems []GraphProblem) {
 	sort.SliceStable(problems, func(i, j int) bool {
 		left, right := problems[i], problems[j]
-		lk := strings.Join([]string{left.TaskID, string(left.Code), left.Field, left.RelatedTaskID, left.Path, left.Message}, "\x00")
-		rk := strings.Join([]string{right.TaskID, string(right.Code), right.Field, right.RelatedTaskID, right.Path, right.Message}, "\x00")
+		lk := strings.Join([]string{left.TaskID, string(left.Code), left.Field, left.RelatedTaskID, left.Location, left.Path, left.Message}, "\x00")
+		rk := strings.Join([]string{right.TaskID, string(right.Code), right.Field, right.RelatedTaskID, right.Location, right.Path, right.Message}, "\x00")
 		return lk < rk
 	})
 }

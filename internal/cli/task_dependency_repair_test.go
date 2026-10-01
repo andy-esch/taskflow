@@ -79,8 +79,43 @@ func TestTaskDependRepairManifestAndSelectorParsing(t *testing.T) {
 		t.Fatalf("colon-bearing selector=%+v err=%v", selector, err)
 	}
 	selector, err = parseGraphRepairSelector("tasks/a.md:depends_on=a:depends_on=b#0", core.TaskGraphSourceDropDeclaration)
-	if err != nil || selector.Source.Location != "tasks/a.md" || selector.Value != "a:depends_on=b" || selector.Occurrence != 0 {
+	if err != nil || selector.Source.LocalPath != "tasks/a.md" || selector.Source.Location != "" || selector.Value != "a:depends_on=b" || selector.Occurrence != 0 {
 		t.Fatalf("embedded-field-marker selector=%+v err=%v", selector, err)
+	}
+	if _, err := parseGraphRepairSelector("db://tasks/a:depends_on=bad#0", core.TaskGraphSourceDropDeclaration); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("opaque source selector error = %v, want validation", err)
+	}
+	for _, tc := range []struct {
+		name string
+		key  string
+	}{
+		{"path", "path"},
+		{"legacy local location", "location"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			planPath := filepath.Join(t.TempDir(), "repair.yaml")
+			testutil.Write(t, planPath, "schema: 1\noperations:\n  - action: drop\n    "+tc.key+": tasks/a.md\n    field: depends_on\n    value: bad\n")
+			edits, err := readGraphRepairManifest(planPath)
+			if err != nil || len(edits) != 1 || edits[0].Source.LocalPath != "tasks/a.md" || edits[0].Source.Location != "" {
+				t.Fatalf("manifest edits = %+v, %v", edits, err)
+			}
+		})
+	}
+	pairedManifest := filepath.Join(t.TempDir(), "paired.yaml")
+	testutil.Write(t, pairedManifest, "schema: 1\noperations:\n  - action: drop\n    path: tasks/a.md\n    location: tasks/a.md\n    field: depends_on\n    value: bad\n")
+	paired, err := readGraphRepairManifest(pairedManifest)
+	if err != nil || len(paired) != 1 || paired[0].Source.LocalPath != "tasks/a.md" || paired[0].Source.Location != "" {
+		t.Fatalf("equal path/location manifest = %+v, %v", paired, err)
+	}
+	testutil.Write(t, pairedManifest, "schema: 1\noperations:\n  - action: drop\n    path: tasks/a.md\n    location: db://tasks/a\n    field: depends_on\n    value: bad\n")
+	paired, err = readGraphRepairManifest(pairedManifest)
+	if err != nil || len(paired) != 1 || paired[0].Source.LocalPath != "tasks/a.md" || paired[0].Source.Location != "db://tasks/a" {
+		t.Fatalf("diagnostic location manifest = %+v, %v", paired, err)
+	}
+	opaqueManifest := filepath.Join(t.TempDir(), "opaque.yaml")
+	testutil.Write(t, opaqueManifest, "schema: 1\noperations:\n  - action: drop\n    location: db://tasks/a\n    field: depends_on\n    value: bad\n")
+	if _, err := readGraphRepairManifest(opaqueManifest); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("opaque manifest repair source error = %v, want validation", err)
 	}
 }
 

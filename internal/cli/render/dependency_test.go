@@ -12,7 +12,7 @@ import (
 func TestTaskGraphRepairHumanReportsRecoveryEvidence(t *testing.T) {
 	edit := core.TaskGraphSourceEdit{
 		Action: core.TaskGraphSourceDropDeclaration,
-		Source: core.TaskGraphSourceRef{TaskID: "6g0000000001", Location: "planning/tasks/6g0000000001-owner.md"},
+		Source: core.TaskGraphSourceRef{TaskID: "6g0000000001", Location: "planning/tasks/6g0000000001-owner.md", LocalPath: "planning/tasks/6g0000000001-owner.md"},
 		Field:  core.TaskDependencyDependsOn, Value: "raw invalid value", Occurrence: 0,
 	}
 	receipt := core.TaskGraphRepairReceipt{
@@ -67,6 +67,42 @@ func TestGraphDiagnosticsHumanDeduplicatesRepeatedRepositoryProblems(t *testing.
 	}
 	if !strings.Contains(out.String(), "missing dependency") {
 		t.Fatalf("distinct repository problem was lost:\n%s", out.String())
+	}
+}
+
+func TestGraphDiagnosticsHumanAttributesOpaqueOccurrences(t *testing.T) {
+	problems := []core.GraphProblem{
+		{Code: core.ProblemInvalidDependencyID, Message: "invalid dependency", Location: "db://tasks/a"},
+		{Code: core.ProblemInvalidDependencyID, Message: "invalid dependency", Location: "db://tasks/b"},
+	}
+	var out bytes.Buffer
+	graphDiagnosticsHuman(&out, NewStyle(false), problems, nil)
+	for _, location := range []string{"db://tasks/a", "db://tasks/b"} {
+		if !strings.Contains(out.String(), "(location: "+location+")") {
+			t.Fatalf("missing distinct source %s:\n%s", location, out.String())
+		}
+	}
+}
+
+func TestTaskGraphRepairHumanAttributesNonRepairableDeclaration(t *testing.T) {
+	defect := core.TaskGraphRepairDefect{
+		Reason: core.RepairInvalidID,
+		Target: core.TaskGraphSourceEdit{Action: core.TaskGraphSourceDropDeclaration,
+			Source: core.TaskGraphSourceRef{TaskID: "6g0000000001", Location: "db://tasks/a"},
+			Field:  core.TaskDependencyDependsOn, Value: "invalid-token", Occurrence: 1},
+		Problem: core.GraphProblem{Code: core.ProblemRepairUnavailable, Message: "source has no explicit local repair path"},
+	}
+	var out bytes.Buffer
+	if err := TaskGraphRepairHuman(&out, NewStyle(false), core.TaskGraphRepairReceipt{Residual: []core.TaskGraphRepairDefect{defect}}, wire.WorkspaceJSON{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"declaration 6g0000000001:depends_on=\"invalid-token\"#1", "location db://tasks/a"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %q:\n%s", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "tskflwctl task depend repair --drop") {
+		t.Fatalf("non-repairable declaration gained a repair command:\n%s", out.String())
 	}
 }
 

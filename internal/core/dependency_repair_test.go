@@ -58,6 +58,141 @@ func TestTaskGraphRepairAutoIsLimitedAndPreservesExplicitIntent(t *testing.T) {
 	}
 }
 
+func TestTaskGraphRepairDoesNotSelectOpaqueLocations(t *testing.T) {
+	task := graphRecord("repair-opaque-source", domain.StatusNextUp, "invalid-token")
+	task.Path = ""
+	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
+		Value: task, Source: RecordSource{ID: task.ID, Location: "db://tasks/opaque"},
+	}}})
+	diagnosis, err := DiagnoseTaskGraphRepair(graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnosis.Defects) != 1 || diagnosis.Defects[0].Repairable || diagnosis.Defects[0].Automatic ||
+		diagnosis.Defects[0].Problem.Code != ProblemRepairUnavailable ||
+		diagnosis.Defects[0].Problem.Location != "db://tasks/opaque" {
+		t.Fatalf("pathless repair diagnosis = %+v", diagnosis.Defects)
+	}
+	auto, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: true})
+	if err != nil || len(auto.Operations) != 0 {
+		t.Fatalf("pathless auto plan = %+v, %v", auto, err)
+	}
+	for _, source := range []TaskGraphSourceRef{{Location: "db://tasks/opaque"}, {TaskID: task.ID}} {
+		_, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{{
+			Action: TaskGraphSourceDropDeclaration, Source: source,
+			Field: TaskDependencyDependsOn, Value: "invalid-token",
+		}}})
+		if !errors.Is(err, domain.ErrValidation) {
+			t.Fatalf("opaque/pathless source %+v error = %v, want validation", source, err)
+		}
+	}
+
+	// Even when the readable location is opaque, an independently supplied local
+	// path can select a repair. It is that path, not the URI, in the plan.
+	task.Path = "/planning/tasks/local-copy.md"
+	mixed := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
+		Value: task, Source: RecordSource{ID: task.ID, Location: "db://tasks/opaque"},
+	}}})
+	plan, err := PlanTaskGraphRepair(mixed, TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{{
+		Action: TaskGraphSourceDropDeclaration, Source: TaskGraphSourceRef{LocalPath: task.Path},
+		Field: TaskDependencyDependsOn, Value: "invalid-token",
+	}}})
+	if err != nil || len(plan.Operations) != 1 || plan.Operations[0].Edit.Source.LocalPath != task.Path ||
+		plan.Operations[0].Edit.Source.Location != "db://tasks/opaque" {
+		t.Fatalf("mixed source plan = %+v, %v", plan, err)
+	}
+	_, analysis, err := ValidateTaskGraphRepairPlan(mixed, plan)
+	if err != nil || analysis.After.Health != GraphHealthy ||
+		analysis.Prospective.sourceRefs[0].Location != "db://tasks/opaque" ||
+		analysis.Prospective.sourceRefs[0].LocalPath != task.Path {
+		t.Fatalf("mixed source repair analysis = %+v, %v", analysis, err)
+	}
+}
+
+func TestPathlessRepairDefectsKeepDeclarationIdentity(t *testing.T) {
+	owner := graphRecord("pathless-two-defects", domain.StatusNextUp, "invalid-one", "invalid-two")
+	owner.Path = ""
+	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
+		Value: owner, Source: RecordSource{ID: owner.ID, Location: "db://tasks/owner"},
+	}}})
+	diagnosis, err := DiagnoseTaskGraphRepair(graph)
+	if err != nil || len(diagnosis.Defects) != 2 {
+		t.Fatalf("pathless diagnosis = %+v, %v", diagnosis, err)
+	}
+	for _, defect := range diagnosis.Defects {
+		if defect.Repairable || defect.Target.Field != TaskDependencyDependsOn ||
+			defect.Target.Source.Location != "db://tasks/owner" {
+			t.Fatalf("unattributed pathless defect: %+v", defect)
+		}
+	}
+	addressed := repairDefectDifference(diagnosis.Defects, diagnosis.Defects[1:])
+	if len(addressed) != 1 || addressed[0].Target.Value != diagnosis.Defects[0].Target.Value {
+		t.Fatalf("addressed defect was conflated with residual: %+v", addressed)
+	}
+	other := diagnosis.Defects[0]
+	other.Target.Source.Location = "db://tasks/shadow"
+	if repairDefectIdentity(other) == repairDefectIdentity(diagnosis.Defects[0]) {
+		t.Fatal("distinct physical occurrences shared a defect identity")
+	}
+}
+
+func TestMixedSourceLocationIsAStaleContextCheck(t *testing.T) {
+	owner := graphRecord("mixed-stale-context", domain.StatusNextUp, "invalid-token")
+	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
+		Value: owner, Source: RecordSource{ID: owner.ID, Location: "db://tasks/current"},
+	}}})
+	stale := TaskGraphSourceRef{TaskID: owner.ID, LocalPath: owner.Path, Location: "db://tasks/old"}
+	if _, _, err := resolveSourceTask(graph.sourceRefs, stale); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("stale graph source context = %v, want conflict", err)
+	}
+	_, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{{
+		Action: TaskGraphSourceDropDeclaration, Source: stale,
+		Field: TaskDependencyDependsOn, Value: "invalid-token",
+	}}})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("stale repair source context = %v, want conflict", err)
+	}
+}
+
+func TestMixedSourceLocationRetainsLegacyRepairAttribution(t *testing.T) {
+	owner := graphRecord("mixed-legacy-owner", domain.StatusNextUp)
+	owner.LegacyBlockedBy = []string{"missing-human-intent"}
+	owner.LegacyDependencyFields = []string{"blocked_by"}
+	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
+		Value: owner, Source: RecordSource{ID: owner.ID, Location: "db://tasks/legacy"},
+	}}})
+	diagnosis, err := DiagnoseTaskGraphRepair(graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, defect := range diagnosis.Defects {
+		if defect.Reason == RepairLegacyMissing && defect.Target.Source.Location == "db://tasks/legacy" &&
+			defect.Target.Source.LocalPath == owner.Path && defect.Target.Value == "missing-human-intent" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("mixed-location legacy defect was lost: %+v", diagnosis.Defects)
+	}
+}
+
+func TestURIValuedTransitionalTaskPathDoesNotOfferLocalRepair(t *testing.T) {
+	owner := graphRecord("uri-path-owner", domain.StatusNextUp, "invalid-token")
+	owner.Path = "db://tasks/owner"
+	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
+		Value: owner, Source: RecordSource{ID: owner.ID, Location: owner.Path},
+	}}})
+	diagnosis, err := DiagnoseTaskGraphRepair(graph)
+	if err != nil || len(diagnosis.Defects) != 1 || diagnosis.Defects[0].Repairable {
+		t.Fatalf("URI-valued domain path exposed local repair: %+v, %v", diagnosis.Defects, err)
+	}
+	plan, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: true})
+	if err != nil || len(plan.Operations) != 0 {
+		t.Fatalf("URI-valued domain path entered auto plan: %+v, %v", plan, err)
+	}
+}
+
 func TestTaskGraphRepairAutoHandlesRepeatedSelfDeclarationsWithoutOrderDependence(t *testing.T) {
 	owner := graphRecord("repair-repeated-self", domain.StatusNextUp)
 	owner.DependsOn = []string{owner.ID, owner.ID}

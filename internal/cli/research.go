@@ -273,7 +273,7 @@ func newResearchListCmd(app *App) *cobra.Command {
 			return portableProblemsError("research", problems)
 		},
 	}
-	lm.bind(cmd, render.Specs(render.ResearchColumns()))
+	lm.bind(cmd, render.Specs(render.ResearchReadColumns()))
 	cmd.Flags().StringVar(&tag, "tag", "", "only docs carrying this tag")
 	return cmd
 }

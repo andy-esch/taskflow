@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/andy-esch/taskflow/internal/wire/json-envelopes/1.78",
+  "$id": "https://github.com/andy-esch/taskflow/internal/wire/json-envelopes/1.80",
   "$ref": "#/$defs/jsonEnvelopes",
   "$defs": {
     "ACJSON": {
@@ -30,7 +30,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "slug": {
           "type": "string"
@@ -55,7 +55,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "audit_info": {
           "$ref": "#/$defs/AuditInfoJSON"
@@ -107,6 +107,10 @@
         "id": {
           "type": "string",
           "description": "stable identifier — the immutable key; absent on audits created before id assignment"
+        },
+        "location": {
+          "type": "string",
+          "description": "optional opaque readable source location; not a selector or necessarily a filesystem path"
         },
         "slug": {
           "type": "string",
@@ -170,7 +174,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -200,7 +204,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "audit": {
           "$ref": "#/$defs/AuditJSON"
@@ -222,7 +226,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "audits": {
           "items": {
@@ -269,7 +273,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "columns": {
           "items": {
@@ -301,6 +305,10 @@
         "id": {
           "type": "string",
           "description": "stable identifier — the immutable key that survives slug and status changes; absent on tasks created before id assignment"
+        },
+        "location": {
+          "type": "string",
+          "description": "optional opaque readable source location; not a selector or necessarily a filesystem path"
         },
         "slug": {
           "type": "string",
@@ -414,7 +422,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "repository": {
           "$ref": "#/$defs/ConfigRepositoryJSON"
@@ -440,7 +448,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -649,7 +657,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -807,7 +815,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "operation": {
           "type": "string"
@@ -946,7 +954,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "root": {
           "type": "string"
@@ -1043,6 +1051,10 @@
           "type": "string",
           "description": "epic identifier (NN-slug)"
         },
+        "location": {
+          "type": "string",
+          "description": "optional opaque readable source location; not a selector or necessarily a filesystem path"
+        },
         "status": {
           "type": "string",
           "description": "active | retired | deprecated"
@@ -1111,6 +1123,10 @@
           "type": "string",
           "description": "epic identifier (NN-slug)"
         },
+        "location": {
+          "type": "string",
+          "description": "optional opaque readable source location; not a selector or necessarily a filesystem path"
+        },
         "status": {
           "type": "string",
           "description": "active | retired | deprecated"
@@ -1150,7 +1166,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -1177,7 +1193,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "epic": {
           "$ref": "#/$defs/EpicMetaJSON"
@@ -1206,7 +1222,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "epics": {
           "items": {
@@ -1233,7 +1249,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "error": {
           "$ref": "#/$defs/ErrorItem"
@@ -1354,7 +1370,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -1442,7 +1458,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "findings": {
           "items": {
@@ -1543,7 +1559,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -1642,6 +1658,10 @@
         "path": {
           "type": "string"
         },
+        "location": {
+          "type": "string",
+          "description": "optional opaque source location; not a local path or selector"
+        },
         "message": {
           "type": "string"
         },
@@ -1690,7 +1710,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -1892,7 +1912,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "unreadable": {
           "items": {
@@ -1950,6 +1970,10 @@
         "slug": {
           "type": "string"
         },
+        "location": {
+          "type": "string",
+          "description": "optional opaque readable source location; not a selector or local repair path"
+        },
         "issues": {
           "items": {
             "$ref": "#/$defs/Issue"
@@ -1999,7 +2023,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -2029,7 +2053,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "path": {
           "type": "string",
@@ -2049,6 +2073,10 @@
         "id": {
           "type": "string",
           "description": "stable identifier — the immutable key"
+        },
+        "location": {
+          "type": "string",
+          "description": "optional opaque readable source location; not a selector or necessarily a filesystem path"
         },
         "slug": {
           "type": "string",
@@ -2085,7 +2113,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "research": {
           "items": {
@@ -2112,7 +2140,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -2142,7 +2170,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "research": {
           "$ref": "#/$defs/ResearchJSON"
@@ -2193,7 +2221,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "revision_policy": {
           "$ref": "#/$defs/SchemaRevisionPolicy"
@@ -2347,7 +2375,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "kind": {
           "type": "string"
@@ -2526,7 +2554,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -2585,7 +2613,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "spaces": {
           "items": {
@@ -2606,7 +2634,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "spaces": {
           "items": {
@@ -2651,7 +2679,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "counts": {
           "items": {
@@ -2802,7 +2830,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "task": {
           "$ref": "#/$defs/GraphTaskJSON"
@@ -2920,6 +2948,31 @@
       ],
       "description": "TaskGraphRepairDeclarationJSON records an exact raw declaration removed by the prospective plan or durable prefix."
     },
+    "TaskGraphRepairDefectDeclarationJSON": {
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/TaskGraphRepairSourceJSON"
+        },
+        "field": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "occurrence": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "source",
+        "field",
+        "value",
+        "occurrence"
+      ],
+      "description": "TaskGraphRepairDefectDeclarationJSON identifies a defective raw declaration when its source cannot be repaired locally."
+    },
     "TaskGraphRepairDefectJSON": {
       "properties": {
         "reason": {
@@ -2933,6 +2986,10 @@
         },
         "target": {
           "$ref": "#/$defs/TaskGraphRepairEditJSON"
+        },
+        "declaration": {
+          "$ref": "#/$defs/TaskGraphRepairDefectDeclarationJSON",
+          "description": "diagnostic declaration when no local repair action is available; not replayable"
         },
         "has_projected_edge": {
           "type": "boolean"
@@ -2991,13 +3048,13 @@
         "value",
         "occurrence"
       ],
-      "description": "TaskGraphRepairEditJSON is a stable, replayable source-declaration selector."
+      "description": "TaskGraphRepairEditJSON is a stable source-declaration intent, replayable by task ID/slug or explicit local path rather than opaque location."
     },
     "TaskGraphRepairEnvelope": {
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "changed": {
           "type": "boolean"
@@ -3262,12 +3319,17 @@
           "type": "string"
         },
         "location": {
-          "type": "string"
+          "type": "string",
+          "description": "optional source context that may equal a local path; not a repair selector"
+        },
+        "path": {
+          "type": "string",
+          "description": "explicit local repair path when available"
         }
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "TaskGraphRepairSourceJSON is the exact owner of a graph declaration."
+      "description": "TaskGraphRepairSourceJSON identifies a declaration's owner."
     },
     "TaskGraphStateImpactJSON": {
       "properties": {
@@ -3338,7 +3400,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "task_info": {
           "$ref": "#/$defs/TaskInfoJSON"
@@ -3394,6 +3456,10 @@
         "id": {
           "type": "string",
           "description": "stable identifier — the immutable key that survives slug and status changes; absent on tasks created before id assignment"
+        },
+        "location": {
+          "type": "string",
+          "description": "optional opaque readable source location; not a selector or necessarily a filesystem path"
         },
         "slug": {
           "type": "string",
@@ -3604,7 +3670,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -3634,7 +3700,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "task_id": {
           "type": "string",
@@ -3823,7 +3889,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "task": {
           "$ref": "#/$defs/TaskJSON"
@@ -3873,7 +3939,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "task": {
           "$ref": "#/$defs/GraphTaskJSON"
@@ -3920,7 +3986,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "tasks": {
           "items": {
@@ -3968,7 +4034,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "template": {
           "$ref": "#/$defs/TemplateInfo"
@@ -3990,7 +4056,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "templates": {
           "items": {
@@ -4034,7 +4100,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "name": {
           "type": "string"
@@ -4088,7 +4154,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "themes": {
           "items": {
@@ -4109,7 +4175,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "dry_run": {
           "type": "boolean"
@@ -4160,7 +4226,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "thread_id": {
           "type": "string"
@@ -4403,7 +4469,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "view": {
           "$ref": "#/$defs/ThreadViewJSON"
@@ -4438,7 +4504,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "projection": {
           "$ref": "#/$defs/ThreadGraphProjectionJSON"
@@ -4694,7 +4760,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "thread": {
           "$ref": "#/$defs/ThreadJSON"
@@ -4796,7 +4862,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "projection": {
           "$ref": "#/$defs/ThreadGraphProjectionJSON"
@@ -4923,7 +4989,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "view": {
           "$ref": "#/$defs/ThreadViewJSON"
@@ -4967,7 +5033,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "operation": {
           "type": "string",
@@ -5155,7 +5221,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "graph_health": {
           "type": "string",
@@ -5195,7 +5261,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "version": {
           "type": "string"
@@ -5213,7 +5279,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.78"
+          "const": "1.80"
         },
         "workspace": {
           "$ref": "#/$defs/WorkspaceJSON"
@@ -5489,9 +5555,9 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.78)",
+  "title": "tskflwctl --json output (schema_version 1.80)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition.",
   "x-taskflow-revision-compatibility": "additive",
   "x-taskflow-revision-scheme": "monotonic-revision",
-  "x-taskflow-schema-version": "1.78"
+  "x-taskflow-schema-version": "1.80"
 }

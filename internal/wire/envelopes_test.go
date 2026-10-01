@@ -77,6 +77,27 @@ func TestToLintLoadProblemsJSONKeepsOpaqueLocationsOutOfPath(t *testing.T) {
 	}
 }
 
+func TestPathlessRepairDefectsExposeDiagnosticDeclarationsNotActions(t *testing.T) {
+	source := core.TaskGraphSourceRef{TaskID: "6g0000000001", Location: "db://tasks/owner"}
+	defects := []core.TaskGraphRepairDefect{
+		{Reason: core.RepairInvalidID, Target: core.TaskGraphSourceEdit{
+			Action: core.TaskGraphSourceDropDeclaration, Source: source,
+			Field: core.TaskDependencyDependsOn, Value: "bad-one", Occurrence: 0,
+		}},
+		{Reason: core.RepairInvalidID, Target: core.TaskGraphSourceEdit{
+			Action: core.TaskGraphSourceDropDeclaration, Source: source,
+			Field: core.TaskDependencyDependsOn, Value: "bad-two", Occurrence: 0,
+		}},
+	}
+	got := toTaskGraphRepairDefectsJSON(defects)
+	if len(got) != 2 || got[0].Target != nil || got[1].Target != nil ||
+		got[0].Declaration == nil || got[1].Declaration == nil ||
+		got[0].Declaration.Value != "bad-one" || got[1].Declaration.Value != "bad-two" ||
+		got[0].Declaration.Source.Location != source.Location || got[0].Declaration.Source.Path != "" {
+		t.Fatalf("pathless declarations = %+v", got)
+	}
+}
+
 func TestOrdinaryReadEnvelopesPreferSourceIdentityForEveryEntity(t *testing.T) {
 	source := core.RecordSource{ID: "source-id", Location: "db://records/misleading-name"}
 	task := domain.Task{ID: "declared-id", FilenameID: "stale-filename-id", Slug: "task"}
@@ -108,6 +129,127 @@ func TestOrdinaryReadEnvelopesPreferSourceIdentityForEveryEntity(t *testing.T) {
 	}
 	if got := ToResearchShowEnvelope(core.LoadedRecord[core.ResearchWithBody]{Value: core.ResearchWithBody{Research: research}, Source: source}).Research.ID; got != source.ID {
 		t.Fatalf("research show id = %q", got)
+	}
+}
+
+func TestReadableLocationsAreOptionalAndNeverBecomePathsOrIdentity(t *testing.T) {
+	source := core.RecordSource{ID: "canonical", Location: "db://records/one"}
+	local := "/planning/records/local.md"
+	task := domain.Task{ID: "declared", Slug: "same", Path: local}
+	epic := domain.Epic{ID: "declared", Path: local}
+	audit := domain.Audit{ID: "declared", Slug: "same", Path: local}
+	research := domain.Research{ID: "declared", Slug: "same", Path: local}
+	check := func(name string, payload any) {
+		t.Helper()
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(encoded, []byte(`"id":"canonical"`)) ||
+			!bytes.Contains(encoded, []byte(`"location":"db://records/one"`)) ||
+			bytes.Contains(encoded, []byte(`"path":`)) || bytes.Contains(encoded, []byte(`"id":"declared"`)) {
+			t.Fatalf("%s confused source ID, location, and local path: %s", name, encoded)
+		}
+	}
+	check("task", ToLoadedTaskJSON(core.LoadedRecord[domain.Task]{Value: task, Source: source}))
+	check("epic", ToEpicJSON(core.EpicSummary{Epic: epic, Source: source}))
+	check("audit", ToLoadedAuditJSON(core.LoadedRecord[domain.Audit]{Value: audit, Source: source}))
+	check("research", ToLoadedResearchJSON(core.LoadedRecord[domain.Research]{Value: research, Source: source}))
+	for _, tc := range []struct {
+		name    string
+		payload func(core.RecordSource) any
+	}{
+		{"task", func(src core.RecordSource) any {
+			return ToLoadedTaskJSON(core.LoadedRecord[domain.Task]{Value: task, Source: src})
+		}},
+		{"epic", func(src core.RecordSource) any { return ToEpicJSON(core.EpicSummary{Epic: epic, Source: src}) }},
+		{"audit", func(src core.RecordSource) any {
+			return ToLoadedAuditJSON(core.LoadedRecord[domain.Audit]{Value: audit, Source: src})
+		}},
+		{"research", func(src core.RecordSource) any {
+			return ToLoadedResearchJSON(core.LoadedRecord[domain.Research]{Value: research, Source: src})
+		}},
+	} {
+		for _, location := range []string{"", local} {
+			encoded, err := json.Marshal(tc.payload(core.RecordSource{ID: "canonical", Location: location}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(encoded, []byte(`"location":`)) {
+				t.Fatalf("%s emitted absent/redundant location %q: %s", tc.name, location, encoded)
+			}
+		}
+	}
+	sourceLess := core.RecordSource{Location: "db://records/one"}
+	for name, got := range map[string]string{
+		"task":     ToLoadedTaskJSON(core.LoadedRecord[domain.Task]{Value: task, Source: sourceLess}).ID,
+		"epic":     ToEpicJSON(core.EpicSummary{Epic: epic, Source: sourceLess}).ID,
+		"audit":    ToLoadedAuditJSON(core.LoadedRecord[domain.Audit]{Value: audit, Source: sourceLess}).ID,
+		"research": ToLoadedResearchJSON(core.LoadedRecord[domain.Research]{Value: research, Source: sourceLess}).ID,
+	} {
+		if got != "" {
+			t.Fatalf("source-less %s inferred identity %q from location or declaration", name, got)
+		}
+	}
+}
+
+func TestEqualReadableRecordsRemainDistinctByLocationInEveryList(t *testing.T) {
+	first := core.RecordSource{ID: "canonical", Location: "db://records/a"}
+	second := core.RecordSource{ID: "canonical", Location: "db://records/b"}
+	task := domain.Task{ID: "declared", Slug: "same"}
+	epic := domain.Epic{ID: "declared"}
+	audit := domain.Audit{ID: "declared", Slug: "same"}
+	research := domain.Research{ID: "declared", Slug: "same"}
+	for name, locations := range map[string][]string{
+		"task": func() []string {
+			rows := ToTasksEnvelope([]core.LoadedRecord[domain.Task]{{Value: task, Source: first}, {Value: task, Source: second}}, nil).Tasks
+			return []string{rows[0].Location, rows[1].Location}
+		}(),
+		"epic": func() []string {
+			rows := ToEpicsEnvelope([]core.EpicSummary{{Epic: epic, Source: first}, {Epic: epic, Source: second}}, nil).Epics
+			return []string{rows[0].Location, rows[1].Location}
+		}(),
+		"audit": func() []string {
+			rows := ToAuditsEnvelope([]core.LoadedRecord[domain.Audit]{{Value: audit, Source: first}, {Value: audit, Source: second}}, nil).Audits
+			return []string{rows[0].Location, rows[1].Location}
+		}(),
+		"research": func() []string {
+			rows := ToResearchListEnvelope([]core.LoadedRecord[domain.Research]{{Value: research, Source: first}, {Value: research, Source: second}}, nil).Research
+			return []string{rows[0].Location, rows[1].Location}
+		}(),
+	} {
+		if len(locations) != 2 || locations[0] != first.Location || locations[1] != second.Location {
+			t.Fatalf("%s equal-value list locations = %v", name, locations)
+		}
+	}
+}
+
+func TestGraphProblemLocationNeverBecomesPath(t *testing.T) {
+	got := toGraphProblemsJSON([]core.GraphProblem{{
+		Code: core.ProblemDuplicateTaskID, TaskID: "canonical", Location: "db://tasks/first", Message: "duplicate",
+	}, {
+		Code: core.ProblemUnreadable, TaskID: "canonical", Path: "/planning/tasks/local.md",
+		Location: "/planning/tasks/local.md", Message: "unreadable",
+	}})
+	if got[0].Location != "db://tasks/first" || got[0].Path != "" {
+		t.Fatalf("opaque graph diagnostic confused location with path: %+v", got[0])
+	}
+	if got[1].Location != "" || got[1].Path != "/planning/tasks/local.md" {
+		t.Fatalf("local graph diagnostic duplicated path as location: %+v", got[1])
+	}
+}
+
+func TestGraphRepairSourceSeparatesDiagnosticLocationFromLocalTarget(t *testing.T) {
+	source := core.TaskGraphSourceRef{
+		TaskID: "canonical", Location: "db://tasks/one", LocalPath: "/planning/tasks/local.md",
+	}
+	got := ToTaskGraphRepairJSON(core.TaskGraphRepairReceipt{Selected: []core.TaskGraphSourceEdit{{
+		Action: core.TaskGraphSourceDropDeclaration, Source: source,
+		Field: core.TaskDependencyDependsOn, Value: "invalid",
+	}}}, WorkspaceJSON{})
+	if len(got.Selected) != 1 || got.Selected[0].Source.Location != source.Location ||
+		got.Selected[0].Source.Path != source.LocalPath {
+		t.Fatalf("repair source projection = %+v", got.Selected)
 	}
 }
 
@@ -234,7 +376,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				Changed: true, DryRun: true, InitialHealth: core.GraphBroken, FinalHealth: core.GraphBroken,
 				Selected: []core.TaskGraphSourceEdit{{
 					Action: core.TaskGraphSourceDropDeclaration,
-					Source: core.TaskGraphSourceRef{TaskID: "6g0000000002", TaskSlug: "alpha", Location: "/repo/planning/tasks/alpha.md"},
+					Source: core.TaskGraphSourceRef{TaskID: "6g0000000002", TaskSlug: "alpha", Location: "db://tasks/alpha", LocalPath: "/repo/planning/tasks/alpha.md"},
 					Field:  core.TaskDependencyDependsOn, Value: "invalid raw value",
 				}},
 				Operations: []core.TaskGraphRepairOperation{{

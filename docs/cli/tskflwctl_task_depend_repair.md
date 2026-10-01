@@ -4,7 +4,7 @@ Diagnose or repair broken graph-owned declarations
 
 ### Synopsis
 
-With no selector, diagnose exact graph-owned source defects and print copyable repair commands. --auto applies only canonical deduplication, self-edge removal, and empty legacy-key cleanup. Use repeatable --drop/--dedupe selectors or a YAML --plan for explicit, reauthorized source removals. Invalid and dangling values, cycle choices, and ambiguous legacy intent are never guessed.
+With no selector, diagnose exact graph-owned source defects and print copyable repair commands. --auto applies only canonical deduplication, self-edge removal, and empty legacy-key cleanup. Use repeatable --drop/--dedupe selectors or a YAML --plan for explicit, reauthorized source removals. Select by task ID/slug or explicit local path; opaque source locations are diagnostic only. YAML plans use path (legacy location alone is accepted only for local paths); when paired with path, location is a stale-context check, never a selector. Invalid and dangling values, cycle choices, and ambiguous legacy intent are never guessed.
 
 ```
 tskflwctl task depend repair [flags]

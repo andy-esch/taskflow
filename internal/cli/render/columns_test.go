@@ -326,7 +326,11 @@ func TestWriteTablePlain_UpdatedFallsBackToCreated(t *testing.T) {
 
 func TestWriteTablePlain_EpicExtractors(t *testing.T) {
 	var b bytes.Buffer
-	WriteTablePlain(&b, EpicColumns(), []core.EpicSummary{{
+	defaultColumns, err := SelectColumns(EpicColumns(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	WriteTablePlain(&b, defaultColumns, []core.EpicSummary{{
 		Epic:   domain.Epic{ID: "20-cli", Status: "active", Priority: "medium", Description: "ux"},
 		Source: core.RecordSource{ID: "20-cli"},
 		Done:   2, Total: 5,

@@ -44,6 +44,7 @@ type GraphProblemJSON struct {
 	RelatedTaskID string   `json:"related_task_id,omitempty"`
 	Field         string   `json:"field,omitempty"`
 	Path          string   `json:"path,omitempty"`
+	Location      string   `json:"location,omitempty" jsonschema:"description=optional opaque source location; not a local path or selector"`
 	Message       string   `json:"message"`
 	Cycle         []string `json:"cycle,omitempty"`
 }
@@ -53,7 +54,7 @@ func toGraphProblemsJSON(problems []core.GraphProblem) []GraphProblemJSON {
 	for _, problem := range problems {
 		out = append(out, GraphProblemJSON{
 			Code: string(problem.Code), TaskID: problem.TaskID, RelatedTaskID: problem.RelatedTaskID,
-			Field: problem.Field, Path: problem.Path, Message: problem.Message,
+			Field: problem.Field, Path: problem.Path, Location: readableSourceLocation(problem.Location, problem.Path), Message: problem.Message,
 			Cycle: append([]string(nil), problem.Cycle...),
 		})
 	}

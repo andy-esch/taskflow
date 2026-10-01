@@ -325,7 +325,18 @@ import (
 // 1.78: ADDITIVE — errors after an ordinary task, epic, audit, or research create
 // committed include created-item identity, exact local path when available,
 // committed=true, and workspace context for inspection before retry.
-const SchemaVersion = "1.78"
+// 1.79: ADDITIVE — readable task, epic, audit, and research projections can
+// carry an optional opaque source location distinct from a local path. Lint and
+// graph diagnostics retain the same occurrence context; list `location` is an
+// opt-in column so established default tables remain unchanged. Graph repair
+// sources expose an independent optional local `path`; opaque `location` is
+// diagnostic context and cannot select or materialize a repair. The historical
+// repair-source `location` remains emitted for local files (often equal to
+// `path`); consumers must use `path` as the local repair selector.
+// 1.80: ADDITIVE — non-repairable graph-repair defects with an identifiable
+// declaration expose it separately from executable `target` edits, preserving
+// source occurrence, field, raw value, and occurrence index in receipts.
+const SchemaVersion = "1.80"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.
