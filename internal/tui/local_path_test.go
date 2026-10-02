@@ -65,6 +65,7 @@ func TestDelayedLocalPathActionCannotRetargetSelectionOrReload(t *testing.T) {
 	m = tm.(Model)
 	result = resolve()
 	m.cur().loadGen++
+	m.cur().coherentGen = m.cur().loadGen // a newer coherent list can retain this selection
 	tm, effect = m.Update(result)
 	if effect != nil || tm.(Model).flash != "" {
 		t.Fatal("delayed copy path survived a newer list generation")

@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -61,30 +62,36 @@ func TestTaskGraphRepairAutoIsLimitedAndPreservesExplicitIntent(t *testing.T) {
 func TestTaskGraphRepairDoesNotSelectOpaqueLocations(t *testing.T) {
 	task := graphRecord("repair-opaque-source", domain.StatusNextUp, "invalid-token")
 	task.Path = ""
-	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
-		Value: task, Source: RecordSource{ID: task.ID, Location: "db://tasks/opaque"},
-	}}})
-	diagnosis, err := DiagnoseTaskGraphRepair(graph)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(diagnosis.Defects) != 1 || diagnosis.Defects[0].Repairable || diagnosis.Defects[0].Automatic ||
-		diagnosis.Defects[0].Problem.Code != ProblemRepairUnavailable ||
-		diagnosis.Defects[0].Problem.Location != "db://tasks/opaque" {
-		t.Fatalf("pathless repair diagnosis = %+v", diagnosis.Defects)
-	}
-	auto, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: true})
-	if err != nil || len(auto.Operations) != 0 {
-		t.Fatalf("pathless auto plan = %+v, %v", auto, err)
-	}
-	for _, source := range []TaskGraphSourceRef{{Location: "db://tasks/opaque"}, {TaskID: task.ID}} {
-		_, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{{
-			Action: TaskGraphSourceDropDeclaration, Source: source,
-			Field: TaskDependencyDependsOn, Value: "invalid-token",
-		}}})
-		if !errors.Is(err, domain.ErrValidation) {
-			t.Fatalf("opaque/pathless source %+v error = %v, want validation", source, err)
-		}
+	for _, source := range []RecordSource{
+		{ID: task.ID, Location: "db://tasks/opaque"},
+		{ID: task.ID, Location: "tasks/path-shaped.md"},
+		{ID: task.ID, Location: "tasks/path-shaped.md", LocationIsPath: true},
+	} {
+		t.Run(source.Location+"/path-hint="+strconv.FormatBool(source.LocationIsPath), func(t *testing.T) {
+			graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{Value: task, Source: source}}})
+			diagnosis, err := DiagnoseTaskGraphRepair(graph)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(diagnosis.Defects) != 1 || diagnosis.Defects[0].Repairable || diagnosis.Defects[0].Automatic ||
+				diagnosis.Defects[0].Problem.Code != ProblemRepairUnavailable ||
+				diagnosis.Defects[0].Problem.Location != source.Location {
+				t.Fatalf("pathless repair diagnosis = %+v", diagnosis.Defects)
+			}
+			auto, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: true})
+			if err != nil || len(auto.Operations) != 0 {
+				t.Fatalf("pathless auto plan = %+v, %v", auto, err)
+			}
+			for _, selector := range []TaskGraphSourceRef{{Location: source.Location}, {TaskID: task.ID}} {
+				_, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{{
+					Action: TaskGraphSourceDropDeclaration, Source: selector,
+					Field: TaskDependencyDependsOn, Value: "invalid-token",
+				}}})
+				if !errors.Is(err, domain.ErrValidation) {
+					t.Fatalf("opaque/pathless source %+v error = %v, want validation", selector, err)
+				}
+			}
+		})
 	}
 
 	// Even when the readable location is opaque, an independently supplied local

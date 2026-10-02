@@ -282,9 +282,6 @@ func resolveSourceTask(sources []TaskGraphSourceRef, source TaskGraphSourceRef) 
 	if source.TaskID == "" && source.TaskSlug == "" && source.LocalPath == "" {
 		return 0, false, fmt.Errorf("%w: source ID, slug, or local repair path is required; location is not a selector", domain.ErrValidation)
 	}
-	if source.LocalPath != "" && !hasLocalRepairPath(source) {
-		return 0, false, fmt.Errorf("%w: repair path must be local, not an opaque location", domain.ErrValidation)
-	}
 	matches := make([]int, 0, 1)
 	for index, candidate := range sources {
 		if (source.TaskID != "" && candidate.TaskID != source.TaskID) ||
