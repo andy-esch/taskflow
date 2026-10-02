@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,6 +13,19 @@ import (
 	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
+
+func completeLocalPathAction(t *testing.T, m Model, initial tea.Cmd) (Model, tea.Cmd) {
+	t.Helper()
+	if initial == nil {
+		t.Fatal("local path action did not request an initial lookup")
+	}
+	tm, confirm := m.Update(initial())
+	if confirm == nil {
+		t.Fatal("local path action did not confirm the selected stable ID")
+	}
+	tm, effect := tm.(Model).Update(confirm())
+	return tm.(Model), effect
+}
 
 func TestTaskLocalActionDoesNotInferPathFromSemanticTask(t *testing.T) {
 	repo := testutil.NewRepo(t)
@@ -34,11 +49,79 @@ func TestTaskLocalActionDoesNotInferPathFromSemanticTask(t *testing.T) {
 		if resolve == nil {
 			t.Fatalf("%s did not request the optional path capability", action)
 		}
-		tm, effect := tm.(Model).Update(resolve())
-		m = tm.(Model)
+		m, effect := completeLocalPathAction(t, tm.(Model), resolve)
 		if effect != nil || !m.flashErr || !strings.Contains(m.flash, "local path unavailable") {
 			t.Fatalf("%s inferred local path: effect=%v flash=%q", action, effect != nil, m.flash)
 		}
+	}
+}
+
+func TestLocalPathActionFollowsRenameByStableID(t *testing.T) {
+	for _, action := range []string{"E", "Y"} {
+		t.Run(action, func(t *testing.T) {
+			m := loaded(t, 100, 30)
+			id := m.selectedKey()
+			oldPath, err := m.svc.TaskPath(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tm, lookup := m.Update(press(action))
+			m = tm.(Model)
+			if lookup == nil {
+				t.Fatal("action did not request a local path")
+			}
+			first := lookup() // the initial lookup now carries the old pathname
+			newPath := filepath.Join(filepath.Dir(oldPath), id+"-renamed.md")
+			if err := os.Rename(oldPath, newPath); err != nil {
+				t.Fatal(err)
+			}
+			tm, confirm := m.Update(first)
+			m = tm.(Model)
+			if confirm == nil {
+				t.Fatal("accepted initial lookup did not re-resolve the stable ID")
+			}
+			second, ok := confirm().(localPathResultMsg)
+			if !ok || !second.rechecked || second.path != newPath || second.err != nil {
+				t.Fatalf("confirmation did not follow rename: %+v", second)
+			}
+			tm, effect := m.Update(second)
+			m = tm.(Model)
+			if effect == nil || m.flashErr {
+				t.Fatalf("renamed action effect=%v flash=%q", effect != nil, m.flash)
+			}
+			if action == "Y" && m.flash != "copied path: "+newPath {
+				t.Fatalf("copied stale path: %q", m.flash)
+			}
+		})
+	}
+}
+
+func TestLocalPathActionReportsMissingStableIDAfterRename(t *testing.T) {
+	m := loaded(t, 100, 30)
+	id := m.selectedKey()
+	oldPath, err := m.svc.TaskPath(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tm, lookup := m.Update(press("Y"))
+	m = tm.(Model)
+	if lookup == nil {
+		t.Fatal("Y did not request a local path")
+	}
+	first := lookup()
+	otherPath := filepath.Join(filepath.Dir(oldPath), testutil.TaskID("different-task")+"-renamed.md")
+	if err := os.Rename(oldPath, otherPath); err != nil {
+		t.Fatal(err)
+	}
+	tm, confirm := m.Update(first)
+	m = tm.(Model)
+	if confirm == nil {
+		t.Fatal("accepted initial lookup did not re-resolve the stable ID")
+	}
+	tm, effect := m.Update(confirm())
+	m = tm.(Model)
+	if effect != nil || !m.flashErr || !strings.Contains(m.flash, "local path unavailable") {
+		t.Fatalf("missing ID action effect=%v flash=%q", effect != nil, m.flash)
 	}
 }
 

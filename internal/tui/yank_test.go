@@ -40,8 +40,7 @@ func TestModel_YankPath(t *testing.T) {
 	if resolve == nil {
 		t.Fatal("Y did not request the local path")
 	}
-	tm, cmd := tm.(Model).Update(resolve())
-	m = tm.(Model)
+	m, cmd := completeLocalPathAction(t, tm.(Model), resolve)
 
 	if m.flash != "copied path: "+wantPath || m.flashErr {
 		t.Errorf("flash = %q (err=%v), want %q", m.flash, m.flashErr, "copied path: "+wantPath)
@@ -176,8 +175,7 @@ func TestModel_YankAcrossEntities(t *testing.T) {
 	if resolve == nil {
 		t.Fatal("audit Y did not request the local path")
 	}
-	tm, _ = tm.(Model).Update(resolve())
-	m = tm.(Model)
+	m, _ = completeLocalPathAction(t, tm.(Model), resolve)
 	if m.flash != "copied path: "+wantPath || m.flashErr {
 		t.Errorf("audit yank flash = %q, want %q", m.flash, "copied path: "+wantPath)
 	}

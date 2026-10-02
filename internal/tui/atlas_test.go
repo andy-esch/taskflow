@@ -723,7 +723,12 @@ func TestAtlasEnabledModelDoesNotHideEditorControlCommand(t *testing.T) {
 	tm, cmd = m.Update(cmd())
 	m = tm.(Model)
 	if cmd == nil {
-		t.Fatal("a resolved path should return Bubble Tea's ExecProcess command")
+		t.Fatal("a resolved path should confirm the selected stable ID")
+	}
+	tm, cmd = m.Update(cmd())
+	m = tm.(Model)
+	if cmd == nil {
+		t.Fatal("a confirmed path should return Bubble Tea's ExecProcess command")
 	}
 	msg := cmd() // returns the control value; it does not launch the editor itself
 	if _, hidden := msg.(sessionMsg); hidden || !strings.Contains(fmt.Sprintf("%T", msg), "execMsg") {

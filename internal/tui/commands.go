@@ -21,6 +21,17 @@ const (
 // resolveLocalPath is the optional adapter capability, requested only for the
 // selected canonical row. An opaque record location is never an editor target.
 func resolveLocalPath(svc *core.Service, kind entityKind, id string, listGen int, action localPathAction) tea.Cmd {
+	return localPathLookup(svc, kind, id, listGen, action, false)
+}
+
+// recheckLocalPath resolves the stable ID again after the first result has passed
+// the reducer's selection guard. A rename between the initial lookup and that
+// guard therefore follows the same entity instead of acting on its old pathname.
+func recheckLocalPath(svc *core.Service, kind entityKind, id string, listGen int, action localPathAction) tea.Cmd {
+	return localPathLookup(svc, kind, id, listGen, action, true)
+}
+
+func localPathLookup(svc *core.Service, kind entityKind, id string, listGen int, action localPathAction, rechecked bool) tea.Cmd {
 	return func() tea.Msg {
 		var path string
 		var err error
@@ -36,7 +47,7 @@ func resolveLocalPath(svc *core.Service, kind entityKind, id string, listGen int
 		case entityResearch:
 			path, err = svc.ResearchPath(id)
 		}
-		return localPathResultMsg{kind: kind, id: id, listGen: listGen, action: action, path: path, err: err}
+		return localPathResultMsg{kind: kind, id: id, listGen: listGen, action: action, rechecked: rechecked, path: path, err: err}
 	}
 }
 

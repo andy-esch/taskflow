@@ -31,11 +31,10 @@ func TestOpenInEditor_Key(t *testing.T) {
 	if resolve == nil {
 		t.Fatal("E on a selection should request the local path")
 	}
-	mm, cmd := tm.(Model).Update(resolve())
+	model, cmd := completeLocalPathAction(t, tm.(Model), resolve)
 	if cmd == nil {
 		t.Fatal("a resolved task path should return an ExecProcess cmd")
 	}
-	model := mm.(Model)
 	if model.flash != "" {
 		t.Errorf("a successful launch should not flash; got %q", model.flash)
 	}
@@ -53,12 +52,12 @@ func TestOpenInEditor_Epic(t *testing.T) {
 	if resolve == nil {
 		t.Fatal("E on an epic should request the local path")
 	}
-	mm, cmd := tm.(Model).Update(resolve())
+	mm, cmd := completeLocalPathAction(t, tm.(Model), resolve)
 	if cmd == nil {
 		t.Fatal("a resolved epic path should return an ExecProcess cmd")
 	}
-	if mm.(Model).flashErr {
-		t.Errorf("E on a valid epic should not flash an error; got %q", mm.(Model).flash)
+	if mm.flashErr {
+		t.Errorf("E on a valid epic should not flash an error; got %q", mm.flash)
 	}
 }
 

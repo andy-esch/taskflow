@@ -393,6 +393,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.isCurrentSelection(msg.kind, msg.id) || msg.listGen != m.cur().loadGen {
 			return m, nil
 		}
+		if !msg.rechecked {
+			return m, recheckLocalPath(m.svc, msg.kind, msg.id, msg.listGen, msg.action)
+		}
 		if msg.err != nil || msg.path == "" {
 			m.flash, m.flashErr = fmt.Sprintf("local path unavailable for this %s", m.cur().name), true
 			if msg.err != nil {

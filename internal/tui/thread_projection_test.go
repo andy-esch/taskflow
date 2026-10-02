@@ -275,8 +275,7 @@ func TestThreadRouteSurvivesSplitPathlessCapabilities(t *testing.T) {
 	if resolve == nil {
 		t.Fatal("pathless yank did not request the optional path capability")
 	}
-	tm, cmd := m.Update(resolve())
-	m = tm.(Model)
+	m, cmd := completeLocalPathAction(t, m, resolve)
 	if cmd != nil || !m.flashErr || !strings.Contains(m.flash, "local path unavailable") {
 		t.Fatalf("pathless yank did not degrade explicitly: flash=%q cmd=%v", m.flash, cmd != nil)
 	}
@@ -285,8 +284,7 @@ func TestThreadRouteSurvivesSplitPathlessCapabilities(t *testing.T) {
 	if resolve == nil {
 		t.Fatal("pathless editor did not request the optional path capability")
 	}
-	tm, cmd = m.Update(resolve())
-	m = tm.(Model)
+	m, cmd = completeLocalPathAction(t, m, resolve)
 	if cmd != nil || !m.flashErr || !strings.Contains(m.flash, "local path unavailable") {
 		t.Fatalf("pathless editor did not degrade explicitly: flash=%q cmd=%v", m.flash, cmd != nil)
 	}
