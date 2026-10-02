@@ -56,9 +56,9 @@ retain their stronger version evidence outside the domain values.
       populating fake entity paths.
 - [ ] Semantic task, epic, audit, research, and Thread domain values contain no local path,
       filename-derived identity, or guarded revision token.
-- [ ] Local `<entity> path` commands still resolve malformed id-led documents without parsing their
+- [x] Local `<entity> path` commands still resolve malformed id-led documents without parsing their
       frontmatter.
-- [ ] TUI navigation and editing consume explicit optional source capabilities rather than entity
+- [x] TUI navigation and editing consume explicit optional source capabilities rather than entity
       `Path` fields.
 - [x] Split-source construction cannot silently pair semantic reads with an unrelated path resolver.
 - [ ] The final domain-field removal lands only after ordinary/show/wire projections, TUI identity,
@@ -80,9 +80,10 @@ retain their stronger version evidence outside the domain values.
 - Checkpoint review found that the compatibility `NewTaskGraph`/`TaskGraphRead.Tasks` conversions
   promoted `Task.Path` to a local repair handle. They are now read-only; local repair tests and
   filesystem adapters supply `VersionedRecord.LocalPath` explicitly. Hostile URI and path-shaped
-  compatibility inputs remain non-repairable. The review also identified a TUI edit/yank rename
-  window between asynchronous path resolution and action; selection/list generation checks do not
-  provide source-version authority across that window.
+  compatibility inputs remain non-repairable. The TUI edit/yank path now confirms the selected
+  stable ID after its initial asynchronous lookup, following a rename to its new path or reporting
+  that the ID disappeared. This narrows the action window but cannot make an external editor's
+  pathname atomic against a subsequent rename.
 - Thread lint now uses readable source IDs and opaque locations; `status --all` projects its
   combined working set from the same source record as per-space summaries. Regression tests cover
   those projections, path-shaped opaque repair locations, and coherent-list stale TUI results.
@@ -114,9 +115,10 @@ retain their stronger version evidence outside the domain values.
   detection; opaque source locations are not promoted to local diagnostic paths. Guarded Thread
   mutation planning still needs this same source-aware migration before the transitional fields can
   leave `domain.Thread`.
-- TUI editor/copy-path actions request the optional local path asynchronously by canonical ID and
-  reject results after a selection, list-generation, or workspace change. Detail hyperlinks use a
-  separately resolved path; pathless semantic records cannot supply editor paths by accident.
+- TUI editor/copy-path actions request the optional local path asynchronously by canonical ID,
+  confirm that ID before acting, and reject results after a selection, list-generation, or workspace
+  change. Detail hyperlinks use a separately resolved path; pathless semantic records cannot supply
+  editor paths by accident.
 - The remaining domain-field removal is concentrated in task and Thread compatibility constructors,
   Thread mutation planning/materialization, and their tests. Task and Thread `Path` and
   `FilenameID` must stay until those consumers have explicit source envelopes or local receipts.

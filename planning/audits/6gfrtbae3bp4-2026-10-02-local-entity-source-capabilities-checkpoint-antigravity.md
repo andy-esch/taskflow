@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gfrtbae3bp4
-bucket: open
+bucket: closed
 area: local-entity-source-capabilities-checkpoint-antigravity
 date: "2026-10-02"
 updated_at: "2026-10-02"

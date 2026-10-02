@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gfrtba5jky2
-bucket: open
+bucket: closed
 area: local-entity-source-capabilities-checkpoint-codex
 date: "2026-10-02"
 updated_at: "2026-10-02"
@@ -260,7 +260,7 @@ location.
 cross-kind checks and retains opaque source locations; regression covers
 distinct source IDs with one declared ID.
 
-#### M2. A renamed source leaves a stale TUI editor and yank target · **Status:** in-progress
+#### M2. A renamed source leaves a stale TUI editor and yank target · **Status:** fixed
 
 **Confirmed regression.** `resolveLocalPath` captures a selected ID and list
 generation and returns a path asynchronously
@@ -281,9 +281,12 @@ invalidates the result. The detail loaders also resolve a path before a separate
 semantic read (`internal/tui/commands.go:125-131,204-212,273-280,375-382`);
 that hyperlink can be stale across a rename, even when selection guards hold.
 
-**Resolution:** Confirmed rename window between asynchronous path resolution and
-editor/yank action. Selection and list-generation checks do not prove source
-freshness; a source-aware action design is still needed.
+**Resolution:** TUI E/Y now confirms the selected stable ID through the optional
+path port after the first asynchronous result passes selection and generation
+guards. A rename to a new same-ID filename is followed; a missing ID errors.
+Tests cover both. A subsequent rename after an external editor receives its
+pathname cannot be atomic; detail hyperlinks remain eventual-consistency
+presentation.
 
 #### M3. The compatibility graph constructor promotes a URI into repair authority · **Status:** fixed
 
