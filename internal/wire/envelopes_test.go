@@ -763,6 +763,24 @@ func TestStatusAllEnvelope_PreservesRetainedSummaryAndFailure(t *testing.T) {
 	}
 }
 
+func TestStatusAllEnvelopeUsesSourceIdentityInCombinedWorkingSet(t *testing.T) {
+	task := domain.Task{ID: "declared-id", Slug: "working", Status: domain.StatusInProgress}
+	source := core.RecordSource{ID: "source-id", Location: "db://tasks/working"}
+	summary := core.Summary{InProgressRecords: []core.LoadedRecord[domain.Task]{{Value: task, Source: source}}}
+	envelope := ToStatusAllEnvelope(core.SpaceOverview{
+		Spaces:     []core.SpaceSummary{{ID: "planning", Summary: &summary}},
+		InProgress: []core.SpaceInProgress{{SpaceID: "planning", Task: task, Source: source}},
+	})
+	if len(envelope.InProgress) != 1 || len(envelope.Spaces) != 1 || envelope.Spaces[0].Summary == nil {
+		t.Fatalf("status-all envelope = %+v", envelope)
+	}
+	got := envelope.InProgress[0].Task
+	want := envelope.Spaces[0].Summary.InProgress[0]
+	if got.ID != source.ID || got.Location != source.Location || !reflect.DeepEqual(got, want) {
+		t.Fatalf("combined task = %+v, nested task = %+v", got, want)
+	}
+}
+
 // TestMutationEnvelopes_CarryWorkspace pins the 1.31 contract structurally: a receipt
 // for a WRITE must name the planning tree it wrote to, so a caller can prove which one
 // it changed without a second read (audit 2026-07-24-ai-agent-cli-ergonomics, H1).

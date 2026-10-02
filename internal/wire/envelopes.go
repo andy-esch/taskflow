@@ -365,7 +365,8 @@ func ToStatusAllEnvelope(overview core.SpaceOverview) StatusAllEnvelope {
 	inProgress := make([]SpaceInProgressJSON, 0, len(overview.InProgress))
 	for _, item := range overview.InProgress {
 		inProgress = append(inProgress, SpaceInProgressJSON{
-			Space: item.SpaceID, PlanningID: item.PlanningID, Task: ToTaskJSON(item.Task),
+			Space: item.SpaceID, PlanningID: item.PlanningID,
+			Task: ToLoadedTaskJSON(core.LoadedRecord[domain.Task]{Value: item.Task, Source: item.Source}),
 		})
 	}
 	return StatusAllEnvelope{SchemaVersion: SchemaVersion, Spaces: spaces, InProgress: inProgress}
