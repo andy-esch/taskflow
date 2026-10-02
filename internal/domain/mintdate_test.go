@@ -102,7 +102,7 @@ func TestRepresentable_MillisEdges(t *testing.T) {
 // (set protects it). Lint must therefore apply the MINTABLE range, not just the date
 // shape — otherwise a hand-edited out-of-range date leaves the id unable to encode it.
 func TestLintResearch_FlagsUnmintableCreated(t *testing.T) {
-	r := Research{ID: "6dr29v000aaa", FilenameID: "6dr29v000aaa", Created: "1026-06-15"}
+	r := Research{ID: "6dr29v000aaa", Created: "1026-06-15"}
 	issues := LintResearch(r)
 	if len(issues) == 0 {
 		t.Fatal("an out-of-range created must be a lint issue")

@@ -198,10 +198,6 @@ func retainContendedSpaceSummary(previous, current SpaceSummary) SpaceSummary {
 func cloneSpaceSummary(summary Summary) Summary {
 	cloned := summary
 	cloned.Counts = append([]StatusCount(nil), summary.Counts...)
-	cloned.InProgress = make([]domain.Task, len(summary.InProgress))
-	for i, task := range summary.InProgress {
-		cloned.InProgress[i] = cloneTask(task)
-	}
 	cloned.InProgressRecords = make([]LoadedRecord[domain.Task], len(summary.InProgressRecords))
 	for i, record := range summary.InProgressRecords {
 		cloned.InProgressRecords[i] = record
@@ -213,7 +209,7 @@ func cloneSpaceSummary(summary Summary) Summary {
 	for i := range cloned.Epics {
 		cloned.Epics[i].Epic.Tags = append([]string(nil), summary.Epics[i].Epic.Tags...)
 	}
-	cloned.OpenAudits = append([]domain.Audit(nil), summary.OpenAudits...)
+	cloned.OpenAudits = append([]LoadedRecord[domain.Audit](nil), summary.OpenAudits...)
 	cloned.Findings.ByUrgency = append([]CountBy(nil), summary.Findings.ByUrgency...)
 	cloned.Findings.ByComponent = append([]CountBy(nil), summary.Findings.ByComponent...)
 	cloned.Findings.Acute = append([]AuditFinding(nil), summary.Findings.Acute...)

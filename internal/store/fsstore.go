@@ -99,6 +99,10 @@ var (
 	_ core.AuditSnapshotSource = (*FS)(nil)
 	_ core.TaskGraphSource     = (*FS)(nil)
 	_ core.SourceSetProvider   = (*FS)(nil)
+	_ core.TaskPathSource      = (*FS)(nil)
+	_ core.EpicPathSource      = (*FS)(nil)
+	_ core.AuditPathSource     = (*FS)(nil)
+	_ core.ResearchPathSource  = (*FS)(nil)
 	_ core.Fixer               = (*FS)(nil)
 	_ core.Linter              = (*FS)(nil)
 	_ core.Layout              = (*FS)(nil)
@@ -142,7 +146,7 @@ func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 	}
 	tasks := make([]domain.Task, 0, len(loaded))
 	for _, record := range loaded {
-		tasks = append(tasks, record.Task)
+		tasks = append(tasks, record.record.Value.Task)
 	}
 	return tasks, fileProblems(sourceProblems), nil
 }
@@ -150,17 +154,28 @@ func (s *FS) ListTasks() ([]domain.Task, []domain.FileProblem, error) {
 // scanTaskDocuments owns the one body-bearing, versioned task scan. Ordinary
 // lists, strict graph reads, and lint each project their own view of this result
 // without performing a second task read inside a request.
-func (s *FS) scanTaskDocuments() ([]core.TaskWithBody, []sourceFileProblem, error) {
+type taskSourceDocument struct {
+	record        core.LoadedRecord[core.TaskWithBody]
+	sourceVersion string
+	localPath     string
+}
+
+func (s *FS) scanTaskDocuments() ([]taskSourceDocument, []sourceFileProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
-	return scanDirWithSourceVersions(s.tasksDir, func(path string, content []byte) (core.TaskWithBody, error) {
+	return scanDirWithSourceVersions(s.tasksDir, func(path string, content []byte) (taskSourceDocument, error) {
 		task, err := parseTask(content, path)
 		if err != nil {
-			return core.TaskWithBody{}, err
+			return taskSourceDocument{}, err
 		}
 		_, body := splitFrontmatter(content)
-		return core.TaskWithBody{Task: task, Body: string(body)}, nil
+		return taskSourceDocument{
+			record: core.LoadedRecord[core.TaskWithBody]{
+				Value: core.TaskWithBody{Task: task, Body: string(body)}, Source: taskSource(path),
+			},
+			sourceVersion: hashContent(content), localPath: path,
+		}, nil
 	})
 }
 
@@ -182,13 +197,15 @@ func (s *FS) ReadTaskGraph() (core.TaskGraphRead, error) {
 		return core.TaskGraphRead{}, err
 	}
 	read := core.TaskGraphRead{
-		Tasks: make([]domain.Task, 0, len(loaded)), Records: make([]core.LoadedRecord[domain.Task], 0, len(loaded)),
-		Problems: make([]core.TaskGraphLoadProblem, 0, len(sourceProblems)),
+		GuardedRecords: make([]core.VersionedRecord[domain.Task], 0, len(loaded)),
+		Problems:       make([]core.TaskGraphLoadProblem, 0, len(sourceProblems)),
 	}
 	for _, record := range loaded {
-		task := record.Task
-		read.Tasks = append(read.Tasks, task)
-		read.Records = append(read.Records, taskRecord(task))
+		task := record.record.Value.Task
+		read.GuardedRecords = append(read.GuardedRecords, core.VersionedRecord[domain.Task]{
+			Record:        core.LoadedRecord[domain.Task]{Value: task, Source: record.record.Source},
+			SourceVersion: record.sourceVersion, LocalPath: record.localPath,
+		})
 	}
 	for _, problem := range sourceProblems {
 		read.Problems = append(read.Problems, core.TaskGraphLoadProblemFromFile(problem.problem, problem.sourceVersion))
@@ -204,28 +221,42 @@ func (s *FS) ListTasksWithBodies() ([]core.TaskWithBody, []domain.FileProblem, e
 	if err != nil {
 		return nil, nil, err
 	}
-	return loaded, fileProblems(sourceProblems), nil
+	records := make([]core.TaskWithBody, 0, len(loaded))
+	for _, record := range loaded {
+		records = append(records, record.record.Value)
+	}
+	return records, fileProblems(sourceProblems), nil
 }
 
 // GetTask returns a single task plus its markdown body.
 func (s *FS) GetTask(slug string) (domain.Task, string, error) {
-	if err := s.rejectRepositoryPlannerCall(); err != nil {
+	record, err := s.readTask(slug)
+	if err != nil {
 		return domain.Task{}, "", err
+	}
+	return record.Value.Task, record.Value.Body, nil
+}
+
+func (s *FS) readTask(slug string) (core.LoadedRecord[core.TaskWithBody], error) {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return core.LoadedRecord[core.TaskWithBody]{}, err
 	}
 	path, err := s.resolve(slug)
 	if err != nil {
-		return domain.Task{}, "", err
+		return core.LoadedRecord[core.TaskWithBody]{}, err
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return domain.Task{}, "", fmt.Errorf("read task %s: %w", path, err)
+		return core.LoadedRecord[core.TaskWithBody]{}, fmt.Errorf("read task %s: %w", path, err)
 	}
 	t, err := parseTask(content, path)
 	if err != nil {
-		return domain.Task{}, "", fmt.Errorf("%s: %w", path, err)
+		return core.LoadedRecord[core.TaskWithBody]{}, fmt.Errorf("%s: %w", path, err)
 	}
 	_, body := splitFrontmatter(content)
-	return t, string(body), nil
+	return core.LoadedRecord[core.TaskWithBody]{
+		Value: core.TaskWithBody{Task: t, Body: string(body)}, Source: taskSource(path),
+	}, nil
 }
 
 // SetFields surgically updates frontmatter fields on a task (no status/dir
@@ -403,6 +434,5 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 	}
 	t.FilenameID = fnID
 	t.Path = path
-	t.SourceVersion = hashContent(content)
 	return t, nil
 }

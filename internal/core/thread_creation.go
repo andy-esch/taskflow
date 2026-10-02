@@ -143,7 +143,6 @@ func cloneThreads(threads []domain.Thread) []domain.Thread {
 	out := make([]domain.Thread, len(threads))
 	for i, thread := range threads {
 		out[i] = cloneThread(thread)
-		out[i].SourceVersion = ""
 	}
 	return out
 }

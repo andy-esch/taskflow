@@ -139,7 +139,6 @@ func LintTask(t Task, validEpic func(string) bool) []Issue {
 
 	issues = append(issues, FrontmatterStatusIssues(t)...)
 	issues = append(issues, MissingIDIssue(t.ID)...)
-	issues = append(issues, IDDriftIssue(t.ID, t.FilenameID)...)
 	return issues
 }
 
@@ -189,10 +188,11 @@ const MissingIDMessage = "missing stable id — `lint --fix` assigns one"
 // LintResearch returns the frontmatter issues for a research doc — the shortest lint
 // in the package, because research has the thinnest contract (epic 28). There is no
 // status vocabulary to validate (research has no lifecycle) and no cross-reference to
-// resolve (provenance is body links), so what's left is: the id must be present and
-// agree with the filename, and `created` must be a real date — it is required because
+// resolve (provenance is body links), so what's left in this semantic check is:
+// the id must be present and `created` must be a real date — it is required because
 // the id is minted from it, so a missing or malformed one breaks the chronological
-// ordering the whole corpus is read by.
+// ordering the whole corpus is read by. The application adds ID drift against the
+// adapter's canonical source ID, which is deliberately absent from Research.
 //
 // description and tags are deliberately NOT nagged about: both are optional, and the
 // migrated corpus has no descriptions at all, so requiring one would flag 28 files for
@@ -200,7 +200,6 @@ const MissingIDMessage = "missing stable id — `lint --fix` assigns one"
 func LintResearch(r Research) []Issue {
 	var issues []Issue
 	issues = append(issues, MissingIDIssue(r.ID)...)
-	issues = append(issues, IDDriftIssue(r.ID, r.FilenameID)...)
 	switch {
 	case strings.TrimSpace(r.Created) == "":
 		issues = append(issues, Issue{Field: "created", Message: "missing created date — required (the stable id is minted from it)"})

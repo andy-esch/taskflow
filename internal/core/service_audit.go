@@ -109,7 +109,11 @@ func (s *Service) ShowAudit(slug string) (LoadedRecord[AuditWithBody], error) {
 // AuditPath resolves an audit's file path without reading or parsing it — the seam
 // for `audit path` (parse-free, like TaskPath).
 func (s *Service) AuditPath(slug string) (string, error) {
-	return s.store.ResolveAuditPath(slug)
+	if s.auditPaths == nil {
+		return "", fmt.Errorf("%w: audit path resolution is unavailable from this service", domain.ErrValidation)
+	}
+	path, err := s.auditPaths.ResolveAuditPath(slug)
+	return requireResolvedLocalPath(EntityAudit, path, err)
 }
 
 // MoveAudit relocates an audit to another bucket (close/reopen/defer).

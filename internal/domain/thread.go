@@ -49,9 +49,8 @@ func ValidateThreadStatus(status ThreadStatus) error {
 // persists metadata and membership only; task files remain the dependency source
 // of truth and all graph-derived state is computed at read time.
 type Thread struct {
-	Slug          string `yaml:"-"`
-	Path          string `yaml:"-"`
-	SourceVersion string `yaml:"-"`
+	Slug string `yaml:"-"`
+	Path string `yaml:"-"`
 
 	ID         string `yaml:"id"`
 	FilenameID string `yaml:"-"`

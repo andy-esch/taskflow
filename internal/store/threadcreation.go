@@ -181,7 +181,6 @@ func clonePlannerThreads(threads []domain.Thread) []domain.Thread {
 	out := make([]domain.Thread, len(threads))
 	for i, thread := range threads {
 		out[i] = thread
-		out[i].SourceVersion = ""
 		out[i].Tags = append([]string(nil), thread.Tags...)
 		out[i].Tasks = append([]string(nil), thread.Tasks...)
 	}

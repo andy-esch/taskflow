@@ -95,7 +95,7 @@ func (g *TaskGraph) SourceRecords() ([]TaskGraphSourceRecord, error) {
 }
 
 func (g *TaskGraph) sourceRecords() []TaskGraphSourceRecord {
-	pairs := taskSourcePairs(g.sourceTasks, g.sourceRefs)
+	pairs := taskSourcePairs(g.sourceTasks, g.sourceRefs, g.sourceVersions)
 	records := make([]TaskGraphSourceRecord, 0, len(pairs))
 	for _, pair := range pairs {
 		records = append(records, TaskGraphSourceRecord{
@@ -148,6 +148,7 @@ func (g *TaskGraph) SimulateSourceEdits(edits []TaskGraphSourceEdit) (*TaskGraph
 		return nil, err
 	}
 	tasks := cloneTasks(g.sourceTasks)
+	versions := append([]string(nil), g.sourceVersions...)
 	groups := make(map[sourceEditGroupKey]*sourceEditGroup)
 	for _, edit := range edits {
 		if !edit.Field.valid() {
@@ -217,15 +218,19 @@ func (g *TaskGraph) SimulateSourceEdits(edits []TaskGraphSourceEdit) (*TaskGraph
 			continue
 		}
 		setTaskSourceField(&tasks[key.taskIndex], key.field, remaining, keepPresent)
-		tasks[key.taskIndex].SourceVersion = "" // prospective values are never authoritative CAS evidence
+		versions[key.taskIndex] = "" // prospective values are never authoritative CAS evidence
 	}
-	records := make([]LoadedRecord[domain.Task], len(tasks))
+	records := make([]VersionedRecord[domain.Task], len(tasks))
 	for i, task := range tasks {
-		records[i] = LoadedRecord[domain.Task]{Value: task, Source: RecordSource{
-			ID: g.sourceRefs[i].TaskID, Location: g.sourceRefs[i].Location,
-		}}
+		records[i] = VersionedRecord[domain.Task]{
+			Record: LoadedRecord[domain.Task]{Value: task, Source: RecordSource{
+				ID: g.sourceRefs[i].TaskID, Location: g.sourceRefs[i].Location,
+				LocationIsPath: g.sourceRefs[i].LocalPath != "" && g.sourceRefs[i].Location == g.sourceRefs[i].LocalPath,
+			}},
+			SourceVersion: versions[i], LocalPath: g.sourceRefs[i].LocalPath,
+		}
 	}
-	return NewTaskGraphRead(TaskGraphRead{Records: records, Problems: cloneTaskGraphLoadProblems(g.loadProblems)}), nil
+	return NewTaskGraphRead(TaskGraphRead{GuardedRecords: records, Problems: cloneTaskGraphLoadProblems(g.loadProblems)}), nil
 }
 
 func (g *TaskGraph) requireCompleteSource() error {
@@ -306,19 +311,24 @@ func sourceRefForTask(task domain.Task) TaskGraphSourceRef {
 	return TaskGraphSourceRef{TaskID: canonicalTaskID(task), TaskSlug: task.Slug, Location: task.Path, LocalPath: task.Path}
 }
 
-func taskGraphSourceRefForRecord(record LoadedRecord[domain.Task]) TaskGraphSourceRef {
-	return TaskGraphSourceRef{TaskID: record.Source.ID, TaskSlug: record.Value.Slug, Location: record.Source.Location, LocalPath: record.Value.Path}
+func taskGraphSourceRefForGuardedRecord(guarded VersionedRecord[domain.Task]) TaskGraphSourceRef {
+	return TaskGraphSourceRef{TaskID: guarded.Record.Source.ID, TaskSlug: guarded.Record.Value.Slug,
+		Location: guarded.Record.Source.Location, LocalPath: guarded.LocalPath}
 }
 
 type taskSourcePair struct {
-	task   domain.Task
-	source TaskGraphSourceRef
+	task    domain.Task
+	source  TaskGraphSourceRef
+	version string
 }
 
-func taskSourcePairs(tasks []domain.Task, sources []TaskGraphSourceRef) []taskSourcePair {
+func taskSourcePairs(tasks []domain.Task, sources []TaskGraphSourceRef, versions []string) []taskSourcePair {
 	pairs := make([]taskSourcePair, len(tasks))
 	for i, task := range tasks {
 		pairs[i] = taskSourcePair{task: cloneTask(task), source: sources[i]}
+		if i < len(versions) {
+			pairs[i].version = versions[i]
+		}
 	}
 	sort.SliceStable(pairs, func(i, j int) bool {
 		left, right := pairs[i], pairs[j]
@@ -329,7 +339,7 @@ func taskSourcePairs(tasks []domain.Task, sources []TaskGraphSourceRef) []taskSo
 
 func taskSourcePairSortKey(pair taskSourcePair) string {
 	return strings.Join([]string{
-		pair.source.TaskID, pair.source.TaskSlug, pair.source.Location, pair.source.LocalPath, taskSourceSortKey(pair.task),
+		pair.source.TaskID, pair.source.TaskSlug, pair.source.Location, pair.source.LocalPath, taskSourceSortKey(pair.task), pair.version,
 	}, "\x00")
 }
 
@@ -420,7 +430,7 @@ func dependencyFieldOrder(field TaskDependencyField) int {
 
 func taskSourceSortKey(task domain.Task) string {
 	return strings.Join([]string{
-		canonicalTaskID(task), task.Slug, task.Path, task.SourceVersion,
+		canonicalTaskID(task), task.Slug,
 		strings.Join(task.DependsOn, "\x00"), strings.Join(task.LegacyBlockedBy, "\x00"),
 		strings.Join(task.LegacyDependencies, "\x00"), strings.Join(task.LegacyBlocks, "\x00"),
 	}, "\x01")

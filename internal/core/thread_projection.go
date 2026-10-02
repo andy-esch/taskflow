@@ -86,16 +86,31 @@ type ThreadListView struct {
 // ProjectThread joins one persisted membership set to the immutable repository
 // task graph. It never reads storage and never derives dependency rules itself.
 func ProjectThread(thread domain.Thread, graph *TaskGraph) ThreadView {
-	view := ThreadView{Thread: cloneThread(thread), GraphHealth: GraphBroken, ProjectionHealth: GraphBroken}
+	return projectThread(thread, RecordSource{ID: thread.CanonicalID(), Location: thread.Path, LocationIsPath: thread.Path != ""}, graph)
+}
+
+// ProjectLoadedThread uses the identity of the selected source, including when
+// its frontmatter ID has drifted. A readable location is diagnostic context,
+// not a local path unless the adapter supplied that presentation evidence.
+func ProjectLoadedThread(record LoadedRecord[domain.Thread], graph *TaskGraph) ThreadView {
+	return projectThread(record.Value, record.Source, graph)
+}
+
+func projectThread(thread domain.Thread, source RecordSource, graph *TaskGraph) ThreadView {
+	path := ""
+	if source.LocationIsPath {
+		path = source.Location
+	}
+	view := ThreadView{Thread: cloneThread(thread), Source: source, GraphHealth: GraphBroken, ProjectionHealth: GraphBroken}
 	if graph == nil {
 		view.Problems = append(view.Problems, ThreadProblem{
-			Code: ThreadProblemInvalidDocument, ThreadID: thread.ID, Path: thread.Path,
+			Code: ThreadProblemInvalidDocument, ThreadID: thread.ID, Path: path,
 			Message: "repository task graph is unavailable",
 		})
 		if thread.Status == domain.ThreadStatusCompleted {
 			view.Inconsistent = true
 			view.Problems = append(view.Problems, ThreadProblem{
-				Code: ThreadProblemCompletedUnhealthyEvidence, ThreadID: thread.ID, Path: thread.Path,
+				Code: ThreadProblemCompletedUnhealthyEvidence, ThreadID: thread.ID, Path: path,
 				Message: "completed Thread has broken projection evidence",
 			})
 		}
@@ -107,26 +122,26 @@ func ProjectThread(thread domain.Thread, graph *TaskGraph) ThreadView {
 	if err := domain.ValidateThreadDocument(thread); err != nil {
 		view.ProjectionHealth = GraphBroken
 		view.Problems = append(view.Problems, ThreadProblem{
-			Code: ThreadProblemInvalidDocument, ThreadID: thread.ID, Path: thread.Path,
+			Code: ThreadProblemInvalidDocument, ThreadID: thread.ID, Path: path,
 			Message: err.Error(),
 		})
 	}
-	if thread.FilenameID != "" && thread.FilenameID != thread.ID {
+	if source.ID != "" && source.ID != thread.ID {
 		view.ProjectionHealth = GraphBroken
 		view.Problems = append(view.Problems, ThreadProblem{
-			Code: ThreadProblemIDDrift, ThreadID: thread.ID, Path: thread.Path,
-			Message: fmt.Sprintf("Thread id drift: frontmatter=%q filename=%q", thread.ID, thread.FilenameID),
+			Code: ThreadProblemIDDrift, ThreadID: thread.ID, Path: path,
+			Message: fmt.Sprintf("Thread id drift: frontmatter=%q source=%q", thread.ID, source.ID),
 		})
 	}
 	collisionID := thread.ID
 	if _, collision := graph.Task(collisionID); !collision {
-		collisionID = thread.FilenameID
+		collisionID = source.ID
 	}
 	if collisionID != "" {
 		if _, collision := graph.Task(collisionID); collision {
 			view.ProjectionHealth = GraphBroken
 			view.Problems = append(view.Problems, ThreadProblem{
-				Code: ThreadProblemTaskIDCollision, ThreadID: thread.ID, TaskID: collisionID, Path: thread.Path,
+				Code: ThreadProblemTaskIDCollision, ThreadID: thread.ID, TaskID: collisionID, Path: path,
 				Message: fmt.Sprintf("stable id %s is used by both a task and a Thread", collisionID),
 			})
 		}
@@ -147,7 +162,7 @@ func ProjectThread(thread domain.Thread, graph *TaskGraph) ThreadView {
 			member.Task.ID = taskID
 			view.ProjectionHealth = GraphBroken
 			view.Problems = append(view.Problems, ThreadProblem{
-				Code: ThreadProblemMissingMember, ThreadID: thread.ID, TaskID: taskID, Path: thread.Path,
+				Code: ThreadProblemMissingMember, ThreadID: thread.ID, TaskID: taskID, Path: path,
 				Message: fmt.Sprintf("thread %s references missing task %s", thread.ID, taskID),
 			})
 			// A declared but unreadable/missing member remains real unfinished work;
@@ -209,21 +224,21 @@ func ProjectThread(thread domain.Thread, graph *TaskGraph) ThreadView {
 		if view.ProjectionHealth != GraphHealthy {
 			view.Inconsistent = true
 			view.Problems = append(view.Problems, ThreadProblem{
-				Code: ThreadProblemCompletedUnhealthyEvidence, ThreadID: thread.ID, Path: thread.Path,
+				Code: ThreadProblemCompletedUnhealthyEvidence, ThreadID: thread.ID, Path: path,
 				Message: fmt.Sprintf("completed Thread has %s projection evidence", view.ProjectionHealth),
 			})
 		}
 		if view.Rollup.Total == 0 {
 			view.Inconsistent = true
 			view.Problems = append(view.Problems, ThreadProblem{
-				Code: ThreadProblemCompletedEmpty, ThreadID: thread.ID, Path: thread.Path,
+				Code: ThreadProblemCompletedEmpty, ThreadID: thread.ID, Path: path,
 				Message: "completed Thread has no non-deprecated members",
 			})
 		}
 		if view.Rollup.Drained != view.Rollup.Total {
 			view.Inconsistent = true
 			view.Problems = append(view.Problems, ThreadProblem{
-				Code: ThreadProblemCompletedUndrained, ThreadID: thread.ID, Path: thread.Path,
+				Code: ThreadProblemCompletedUndrained, ThreadID: thread.ID, Path: path,
 				Message: fmt.Sprintf("completed Thread has %d of %d members soundly completed", view.Rollup.Drained, view.Rollup.Total),
 			})
 		}
@@ -233,7 +248,7 @@ func ProjectThread(thread domain.Thread, graph *TaskGraph) ThreadView {
 			}
 			view.Inconsistent = true
 			view.Problems = append(view.Problems, ThreadProblem{
-				Code: ThreadProblemCompletedExternalGate, ThreadID: thread.ID, TaskID: gate.State.TaskID, Path: thread.Path,
+				Code: ThreadProblemCompletedExternalGate, ThreadID: thread.ID, TaskID: gate.State.TaskID, Path: path,
 				Message: fmt.Sprintf("completed Thread has outstanding external gate %s", gate.State.TaskID),
 			})
 		}

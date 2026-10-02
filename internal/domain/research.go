@@ -29,16 +29,10 @@ import "sort"
 // contract and NOT linted — it simply rides along (the surgical-edit guarantee).
 type Research struct {
 	Slug string `yaml:"-"`
-	Path string `yaml:"-"`
 
 	// ID is the stable 12-char identifier (ADR-0003 §3): it leads the flat filename
 	// (research/<id>-<slug>.md) and is the primary resolution key.
 	ID string `yaml:"id"`
-
-	// FilenameID is that same id as parsed from the flat filename's leading field
-	// (set by the store via splitFlatName) — the canonical key; the frontmatter `id:`
-	// above must equal it, and lint flags drift. Derived, not frontmatter.
-	FilenameID string `yaml:"-"`
 
 	// Created is the date the research was done (YYYY-MM-DD), required. The id is
 	// minted from it, so this is what makes id order chronological.
@@ -53,16 +47,6 @@ type Research struct {
 	// Updated is the doc's own last-edited date (stamped by edit/append), distinct
 	// from the immutable Created.
 	Updated string `yaml:"updated_at"`
-}
-
-// CanonicalID is the stable store-resolution identity. Filename identity wins
-// for filesystem records so frontmatter drift cannot redirect a read; adapters
-// without filename semantics use ID.
-func (r Research) CanonicalID() string {
-	if r.FilenameID != "" {
-		return r.FilenameID
-	}
-	return r.ID
 }
 
 // knownResearchFields is the frontmatter keys the tool recognizes for a research doc,

@@ -5,7 +5,7 @@ import "github.com/andy-esch/taskflow/internal/domain"
 // BoardColumn is one status's tasks, in the board's (active-pipeline) order.
 type BoardColumn struct {
 	Status domain.Status
-	Tasks  []domain.Task
+	Tasks  []LoadedRecord[domain.Task]
 }
 
 // Board is the active-work view: tasks grouped by their active status — the
@@ -44,12 +44,12 @@ func (s *Service) Board() (Board, error) {
 	if err != nil {
 		return Board{}, err
 	}
-	tasks := taskGraphTasks(read)
+	records := taskGraphRecords(read)
 	problems := canonicalLoadProblems(taskGraphLoadProblems(read.Problems))
-	byStatus := map[domain.Status][]domain.Task{}
-	for _, t := range tasks {
-		if t.Status.IsActive() {
-			byStatus[t.Status] = append(byStatus[t.Status], t)
+	byStatus := map[domain.Status][]LoadedRecord[domain.Task]{}
+	for _, record := range records {
+		if record.Value.Status.IsActive() {
+			byStatus[record.Value.Status] = append(byStatus[record.Value.Status], record)
 		}
 	}
 	// One graph build for the whole board: eligibility is repository-global, so asking
@@ -57,15 +57,15 @@ func (s *Service) Board() (Board, error) {
 	graph := NewTaskGraphRead(read)
 	blocked := map[string]bool{}
 	if graph.Health() == GraphHealthy {
-		for _, t := range tasks {
-			if !t.Status.IsActive() || t.CanonicalID() == "" {
+		for _, record := range records {
+			if !record.Value.Status.IsActive() || record.Source.ID == "" {
 				continue
 			}
 			// Only pending work can be "blocked": an in-progress task has already
 			// started, so reporting its gate would be advice about a decision already
 			// taken.
-			if state := graph.State(t.CanonicalID()); isPendingWorkRole(state.Role) && !state.Eligible {
-				blocked[t.CanonicalID()] = true
+			if state := graph.State(record.Source.ID); isPendingWorkRole(state.Role) && !state.Eligible {
+				blocked[record.Source.ID] = true
 			}
 		}
 	}
@@ -84,18 +84,18 @@ func (s *Service) Board() (Board, error) {
 // sortEligibleFirst parks blocked work at the end of its column while keeping the
 // store's order within each group. Marking alone still leaves the first row of the
 // board unstartable; ordering is what makes the top of the list answerable.
-func sortEligibleFirst(tasks []domain.Task, blocked map[string]bool) []domain.Task {
+func sortEligibleFirst(tasks []LoadedRecord[domain.Task], blocked map[string]bool) []LoadedRecord[domain.Task] {
 	if len(blocked) == 0 {
 		return tasks
 	}
-	out := make([]domain.Task, 0, len(tasks))
+	out := make([]LoadedRecord[domain.Task], 0, len(tasks))
 	for _, t := range tasks {
-		if !blocked[t.CanonicalID()] {
+		if !blocked[t.Source.ID] {
 			out = append(out, t)
 		}
 	}
 	for _, t := range tasks {
-		if blocked[t.CanonicalID()] {
+		if blocked[t.Source.ID] {
 			out = append(out, t)
 		}
 	}

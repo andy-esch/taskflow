@@ -23,10 +23,13 @@ const (
 // RecordSource is adapter-supplied identity and optional explanatory source
 // context for one readable record. ID is the canonical stable identity used by
 // the application. Location is opaque and must never be parsed for identity or
-// assumed to be a local path.
+// assumed to be a local path. LocationIsPath is adapter-supplied presentation
+// evidence that the location is already the separately resolvable local path;
+// it is not a path capability or permission to open Location as a file.
 type RecordSource struct {
-	ID       string
-	Location string
+	ID             string
+	Location       string
+	LocationIsPath bool
 }
 
 // LoadedRecord pairs semantic data with the source identity that selected it.
@@ -38,8 +41,8 @@ type LoadedRecord[T any] struct {
 
 // Readable source context is useful when it adds information beyond an already
 // available local path; keep location and path conceptually independent.
-func readableDiagnosticLocation(source RecordSource, localPath string) string {
-	if source.Location == localPath {
+func readableDiagnosticLocation(source RecordSource) string {
+	if source.LocationIsPath {
 		return ""
 	}
 	return source.Location
@@ -47,10 +50,13 @@ func readableDiagnosticLocation(source RecordSource, localPath string) string {
 
 // VersionedRecord keeps guarded snapshot evidence beside, but outside, the
 // semantic record. Ordinary projections use Record and never expose the opaque
-// version to renderers or domain values.
+// version or optional local repair path to renderers or domain values. LocalPath
+// is supplied explicitly by a local guarded adapter; Location alone never
+// authorizes repair.
 type VersionedRecord[T any] struct {
 	Record        LoadedRecord[T]
 	SourceVersion string `json:"-" yaml:"-"`
+	LocalPath     string `json:"-" yaml:"-"`
 }
 
 // LoadProblem is one non-fatal failed-record diagnostic. Stable identity is

@@ -222,8 +222,9 @@ func (s *FS) currentPlanningIdentity() (string, error) {
 }
 
 type threadApplyDocument struct {
-	thread domain.Thread
-	body   string
+	thread        domain.Thread
+	body          string
+	sourceVersion string
 }
 
 func (s *FS) listThreadApplyThreads() (core.ThreadRead, map[string]string, error) {
@@ -236,15 +237,15 @@ func (s *FS) listThreadApplyThreads() (core.ThreadRead, map[string]string, error
 			return threadApplyDocument{}, parseErr
 		}
 		_, body := splitFrontmatter(content)
-		return threadApplyDocument{thread: thread, body: string(body)}, nil
+		return threadApplyDocument{thread: thread, body: string(body), sourceVersion: hashContent(content)}, nil
 	})
 	if err != nil {
 		return core.ThreadRead{}, nil, err
 	}
-	threads := make([]domain.Thread, 0, len(documents))
+	threads := make([]threadSourceDocument, 0, len(documents))
 	bodies := make(map[string]string, len(documents))
 	for _, document := range documents {
-		threads = append(threads, document.thread)
+		threads = append(threads, threadSourceDocument{thread: document.thread, sourceVersion: document.sourceVersion})
 		bodies[document.thread.ID] = document.body
 	}
 	return threadReadFromSourceFiles(threads, problems), bodies, nil

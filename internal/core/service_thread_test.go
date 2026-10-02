@@ -13,14 +13,15 @@ import (
 
 type threadReadFake struct {
 	testSourceSetProvider
-	threads  []domain.Thread
-	problems []ThreadReadProblem
-	thread   domain.Thread
-	body     string
-	getErr   error
-	onList   func()
-	onGet    func()
-	recordID string // optional adapter source identity independent of the domain value
+	threads       []domain.Thread
+	problems      []ThreadReadProblem
+	thread        domain.Thread
+	body          string
+	getErr        error
+	onList        func()
+	onGet         func()
+	recordID      string // optional adapter source identity independent of the domain value
+	sourceVersion string // guarded evidence supplied separately from the Thread value
 }
 
 func (f *threadReadFake) ReadThreads() (ThreadRead, error) {
@@ -35,7 +36,7 @@ func (f *threadReadFake) ReadThreads() (ThreadRead, error) {
 		}
 		read.Records = append(read.Records, VersionedRecord[domain.Thread]{
 			Record:        LoadedRecord[domain.Thread]{Value: thread, Source: RecordSource{ID: id}},
-			SourceVersion: thread.SourceVersion,
+			SourceVersion: f.sourceVersion,
 		})
 	}
 	return read, nil
@@ -308,9 +309,8 @@ func TestServiceThreadViewsDoNotPublishAdapterSourceRevisions(t *testing.T) {
 	thread := domain.Thread{
 		ID: "6g3q4rtmv4ak", Slug: "remote-thread", Status: domain.ThreadStatusUnstarted,
 		Description: "Remote Thread", Goal: "Keep revisions private", Created: "2026-09-01",
-		SourceVersion: revision,
 	}
-	adapter := &threadReadFake{threads: []domain.Thread{thread}, thread: thread, recordID: thread.ID}
+	adapter := &threadReadFake{threads: []domain.Thread{thread}, thread: thread, recordID: thread.ID, sourceVersion: revision}
 	svc := MustNewService(&fakeStore{}, WithThreadStore(adapter))
 	list, _, err := svc.ListThreadViews()
 	if err != nil || len(list.Threads) != 1 {
@@ -321,7 +321,7 @@ func TestServiceThreadViewsDoNotPublishAdapterSourceRevisions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, view := range []ThreadView{list.Threads[0], selected} {
-		if view.Thread.SourceVersion != "" || view.Source.ID != thread.ID {
+		if view.Source.ID != thread.ID {
 			t.Fatalf("view leaked revision or lost source identity: %+v", view)
 		}
 		encoded, err := json.Marshal(view)
@@ -365,6 +365,23 @@ func TestServiceThreadListFailsDuplicateIDsButAllowsDuplicateSlugs(t *testing.T)
 		}
 		if view.ProjectionHealth != GraphHealthy || len(view.Problems) != 0 {
 			t.Fatalf("duplicate slug was treated as an identity defect: %+v", view)
+		}
+	}
+}
+
+func TestServiceThreadListDetectsDuplicateAdapterSourceIDs(t *testing.T) {
+	threads := []domain.Thread{
+		{ID: "6g3q4rtmv4aa", Slug: "first", Status: domain.ThreadStatusUnstarted, Description: "First source", Goal: "Detect collision", Created: "2026-09-01"},
+		{ID: "6g3q4rtmv4ab", Slug: "second", Status: domain.ThreadStatusUnstarted, Description: "Second source", Goal: "Detect collision", Created: "2026-09-01"},
+	}
+	const sourceID = "6g3q4rtmv4ak"
+	list, _, err := MustNewService(&fakeStore{}, WithThreadStore(&threadReadFake{threads: threads, recordID: sourceID})).ListThreadViews()
+	if err != nil || len(list.Threads) != 2 {
+		t.Fatalf("list=%+v err=%v", list, err)
+	}
+	for _, view := range list.Threads {
+		if view.Source.ID != sourceID || view.ProjectionHealth != GraphBroken || !hasThreadProblem(view.Problems, ThreadProblemDuplicateID) {
+			t.Fatalf("source collision not attributed to loaded Thread: %+v", view)
 		}
 	}
 }

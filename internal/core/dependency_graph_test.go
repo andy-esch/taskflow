@@ -755,10 +755,17 @@ func TestTaskGraphSameSourceSnapshotComparesUnreadableIdentity(t *testing.T) {
 
 func TestTaskGraphReadableDuplicateLocationsRemainDistinct(t *testing.T) {
 	id := testutil.TaskID("opaque-readable-duplicates")
-	task := domain.Task{ID: id, Slug: "same-task", Status: domain.StatusReadyToStart, SourceVersion: "revision"}
+	task := domain.Task{ID: id, Slug: "same-task", Status: domain.StatusReadyToStart}
 	first := LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: id, Location: "db://tasks/a"}}
 	second := LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: id, Location: "db://tasks/b"}}
-	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{first, second}})
+	versioned := func(records ...LoadedRecord[domain.Task]) TaskGraphRead {
+		read := TaskGraphRead{GuardedRecords: make([]VersionedRecord[domain.Task], 0, len(records))}
+		for _, record := range records {
+			read.GuardedRecords = append(read.GuardedRecords, VersionedRecord[domain.Task]{Record: record, SourceVersion: "revision"})
+		}
+		return read
+	}
+	graph := NewTaskGraphRead(versioned(first, second))
 	if graph.Health() != GraphBroken {
 		t.Fatalf("duplicate source ID health = %s", graph.Health())
 	}
@@ -781,35 +788,51 @@ func TestTaskGraphReadableDuplicateLocationsRemainDistinct(t *testing.T) {
 		records[1].Source.Location != second.Source.Location {
 		t.Fatalf("source refs = %+v, %v", records, err)
 	}
-	if !graph.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{second, first}})) {
+	if !graph.SameSourceSnapshot(NewTaskGraphRead(versioned(second, first))) {
 		t.Fatal("reordering the same readable sources changed snapshot equality")
 	}
 	second.Source.Location = "db://tasks/changed"
-	if graph.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{first, second}})) {
+	if graph.SameSourceSnapshot(NewTaskGraphRead(versioned(first, second))) {
 		t.Fatal("a changed readable source location compared as the same snapshot")
 	}
 	second.Source.Location = "db://tasks/b"
-	second.Value.Path = "/local/repair-copy.md"
-	if graph.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{first, second}})) {
+	if graph.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{
+		{Record: first, SourceVersion: "revision"},
+		{Record: second, SourceVersion: "revision", LocalPath: "/local/repair-copy.md"},
+	}})) {
 		t.Fatal("a changed local repair path compared as the same snapshot")
 	}
 }
 
 func TestTaskGraphHealthyReadableLocationChangeInvalidatesSnapshot(t *testing.T) {
 	task := graphRecord("healthy-location-snapshot", domain.StatusNextUp)
-	task.SourceVersion = "unchanged-revision"
 	record := LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: "db://tasks/original"}}
-	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{record}})
+	graph := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{Record: record, SourceVersion: "unchanged-revision"}}})
 	if graph.Health() != GraphHealthy {
 		t.Fatalf("fixture must be healthy; got %s: %+v", graph.Health(), graph.Problems())
 	}
 	record.Source.Location = "db://tasks/moved"
-	changed := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{record}})
+	changed := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{Record: record, SourceVersion: "unchanged-revision"}}})
 	if graph.SameSourceSnapshot(changed) {
 		t.Fatal("a changed opaque location passed the healthy source snapshot guard")
 	}
 	if graph.SameRepairSnapshot(changed, nil) {
 		t.Fatal("a changed opaque location passed the repair snapshot guard")
+	}
+}
+
+func TestTaskGraphRepairSnapshotRequiresObservedChangedSourceRevision(t *testing.T) {
+	task := graphRecord("repair-postwrite-revision", domain.StatusNextUp)
+	record := LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: "tasks/repair.md", LocationIsPath: true}}
+	source := TaskGraphSourceRef{TaskID: task.ID, TaskSlug: task.Slug, Location: "tasks/repair.md", LocalPath: "tasks/repair.md"}
+	expected := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{
+		Record: record, SourceVersion: "before", LocalPath: source.LocalPath,
+	}}})
+	actual := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{
+		Record: record, LocalPath: source.LocalPath,
+	}}})
+	if expected.SameDurableRepairSnapshot(actual, []TaskGraphSourceRef{source}) {
+		t.Fatal("changed source with no observed revision passed post-write comparison")
 	}
 }
 
@@ -888,8 +911,10 @@ func TestTaskGraphSameSourceSnapshotComparesOpaqueUnreadableRevisions(t *testing
 
 func TestTaskGraphSameSourceSnapshotRejectsReadableUnreadableTransition(t *testing.T) {
 	task := graphRecord("representation-transition", domain.StatusReadyToStart)
-	task.SourceVersion = "opaque-readable-revision"
-	readable := NewTaskGraphRead(TaskGraphRead{Tasks: []domain.Task{task}})
+	readable := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{
+		Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: task.Path, LocationIsPath: true}},
+		SourceVersion: "opaque-readable-revision", LocalPath: task.Path,
+	}}})
 	unreadable := NewTaskGraphRead(TaskGraphRead{Problems: []TaskGraphLoadProblem{{
 		TaskID: task.ID, TaskSlug: task.Slug, Path: task.Path,
 		Message: "row became unreadable", SourceVersion: "opaque-unreadable-revision",

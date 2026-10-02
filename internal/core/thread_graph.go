@@ -52,7 +52,16 @@ type ThreadGraphProjection struct {
 // graph. Its boundary is deliberately the same as ProjectThread: members plus
 // immediate external gates. Deeper causal context remains a blocker-query concern.
 func ProjectThreadGraph(thread domain.Thread, graph *TaskGraph) ThreadGraphProjection {
-	view := ProjectThread(thread, graph)
+	return projectThreadGraphView(ProjectThread(thread, graph), graph)
+}
+
+// ProjectLoadedThreadGraph carries the adapter's source identity through graph
+// diagnostics without copying it onto the semantic Thread.
+func ProjectLoadedThreadGraph(record LoadedRecord[domain.Thread], graph *TaskGraph) ThreadGraphProjection {
+	return projectThreadGraphView(ProjectLoadedThread(record, graph), graph)
+}
+
+func projectThreadGraphView(view ThreadView, graph *TaskGraph) ThreadGraphProjection {
 	projection := ThreadGraphProjection{View: view}
 	if graph == nil {
 		return projection

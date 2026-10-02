@@ -20,6 +20,10 @@ type sourceSetProbe struct {
 	TaskLifecycleMutationStore
 	ThreadStore
 	ThreadPathSource
+	TaskPathSource
+	EpicPathSource
+	AuditPathSource
+	ResearchPathSource
 	ThreadCreationMutationStore
 	ThreadMutationStore
 	ThreadApplyMutationStore
@@ -62,6 +66,10 @@ func TestNewServiceRejectsEveryMismatchedSplitCapability(t *testing.T) {
 		{"lifecycle mutation", WithTaskLifecycleMutationStore(foreign)},
 		{"Thread read", WithThreadStore(foreign)},
 		{"Thread path", WithThreadPathSource(foreign)},
+		{"task path", WithTaskPathSource(foreign)},
+		{"epic path", WithEpicPathSource(foreign)},
+		{"audit path", WithAuditPathSource(foreign)},
+		{"research path", WithResearchPathSource(foreign)},
 		{"Thread creation", WithThreadCreationMutationStore(foreign)},
 		{"Thread mutation", WithThreadMutationStore(foreign)},
 		{"Thread apply", WithThreadApplyMutationStore(foreign)},

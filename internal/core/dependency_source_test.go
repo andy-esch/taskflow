@@ -360,14 +360,19 @@ func TestTaskGraphSourceSimulationRetainsDuplicateAndUnreadableRecords(t *testin
 	owner := graphRecord("source-mixed-owner", domain.StatusReadyToStart, unreadableID, "invalid-human-token")
 	duplicateA.DependsOn = []string{owner.ID}
 	duplicateB.DependsOn = []string{owner.ID}
-	owner.SourceVersion = "owner-revision"
-	duplicateA.SourceVersion = "duplicate-a-revision"
-	duplicateB.SourceVersion = "duplicate-b-revision"
+	versioned := func(task domain.Task, revision string) VersionedRecord[domain.Task] {
+		return VersionedRecord[domain.Task]{
+			Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path, LocationIsPath: true}},
+			SourceVersion: revision, LocalPath: task.Path,
+		}
+	}
 	readProblem := TaskGraphLoadProblem{
 		TaskID: unreadableID, TaskSlug: "source-unreadable", Path: "opaque://source-unreadable",
 		Message: "remote decode failed", SourceVersion: "unreadable-revision",
 	}
-	graph := NewTaskGraphRead(TaskGraphRead{Tasks: []domain.Task{duplicateB, owner, duplicateA}, Problems: []TaskGraphLoadProblem{readProblem}})
+	graph := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{
+		versioned(duplicateB, "duplicate-b-revision"), versioned(owner, "owner-revision"), versioned(duplicateA, "duplicate-a-revision"),
+	}, Problems: []TaskGraphLoadProblem{readProblem}})
 
 	simulated, err := graph.SimulateSourceEdits([]TaskGraphSourceEdit{{
 		Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner),
@@ -439,20 +444,24 @@ func TestTaskGraphSourceSnapshotCASIncludesEveryDuplicateIDRecord(t *testing.T) 
 	second := graphRecord("source-cas-second", domain.StatusCompleted)
 	second.ID = first.ID
 	second.FilenameID = first.ID
-	first.SourceVersion = "first-revision"
-	second.SourceVersion = "second-revision"
-	baseline := NewTaskGraphRead(TaskGraphRead{Tasks: []domain.Task{first, second}})
-	reordered := NewTaskGraphRead(TaskGraphRead{Tasks: []domain.Task{second, first}})
+	versioned := func(task domain.Task, revision string) VersionedRecord[domain.Task] {
+		return VersionedRecord[domain.Task]{
+			Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path, LocationIsPath: true}},
+			SourceVersion: revision, LocalPath: task.Path,
+		}
+	}
+	firstRecord, secondRecord := versioned(first, "first-revision"), versioned(second, "second-revision")
+	baseline := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{firstRecord, secondRecord}})
+	reordered := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{secondRecord, firstRecord}})
 	if !baseline.SameSourceSnapshot(reordered) {
 		t.Fatal("reordered duplicate-ID source records changed the snapshot")
 	}
 
-	changed := second
-	changed.SourceVersion = "changed-shadow-revision"
-	if baseline.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Tasks: []domain.Task{first, changed}})) {
+	changed := versioned(second, "changed-shadow-revision")
+	if baseline.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{firstRecord, changed}})) {
 		t.Fatal("duplicate-ID shadow edit was absent from whole-snapshot CAS")
 	}
-	if baseline.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Tasks: []domain.Task{first}})) {
+	if baseline.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{firstRecord}})) {
 		t.Fatal("duplicate-ID shadow removal was absent from whole-snapshot CAS")
 	}
 }

@@ -66,9 +66,6 @@ func TestMutateTaskGraphOwnsSemanticReadValidateWriteBoundary(t *testing.T) {
 		if graph.Health() != core.GraphHealthy || len(graph.TaskIDs()) != 3 {
 			t.Fatalf("planner snapshot health=%s tasks=%v", graph.Health(), graph.TaskIDs())
 		}
-		if task, _ := graph.Task(bID); task.SourceVersion != "" {
-			t.Fatal("planner-facing task exposed its persistence version")
-		}
 		return core.TaskGraphMutationPlan{TaskWrites: []core.TaskDependencyWrite{{
 			TaskID: bID, DependsOn: []string{cID, aID},
 		}}}, nil

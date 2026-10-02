@@ -43,7 +43,7 @@ func TestFS_TaskReadProjectionsShareLoadedIdentityAndDiagnostics(t *testing.T) {
 	fs := NewFS(root)
 
 	graph, err := fs.ReadTaskGraph()
-	if err != nil || len(graph.Records) != 1 || len(graph.Problems) != 1 || graph.Problems[0].SourceVersion == "" {
+	if err != nil || len(graph.GuardedRecords) != 1 || len(graph.Problems) != 1 || graph.Problems[0].SourceVersion == "" {
 		t.Fatalf("graph projection = %+v, err = %v", graph, err)
 	}
 	ordinary, err := fs.ReadTasks()
@@ -55,9 +55,12 @@ func TestFS_TaskReadProjectionsShareLoadedIdentityAndDiagnostics(t *testing.T) {
 		t.Fatalf("lint projection = %+v, problems = %+v, err = %v", lint, lintProblems, err)
 	}
 	goodID, badID := testutil.TaskID("good"), testutil.TaskID("bad")
-	if graph.Records[0].Source.ID != goodID || ordinary.Records[0].Source.ID != goodID || lint[0].Source.ID != goodID ||
+	if graph.GuardedRecords[0].Record.Source.ID != goodID || ordinary.Records[0].Source.ID != goodID || lint[0].Source.ID != goodID ||
 		ordinary.Records[0].Source.Location != goodPath || !strings.Contains(lint[0].Value.Body, "## Acceptance criteria") {
-		t.Fatalf("readable source/body drift: graph=%+v ordinary=%+v lint=%+v", graph.Records, ordinary.Records, lint)
+		t.Fatalf("readable source/body drift: graph=%+v ordinary=%+v lint=%+v", graph.GuardedRecords, ordinary.Records, lint)
+	}
+	if graph.GuardedRecords[0].LocalPath != goodPath || graph.GuardedRecords[0].SourceVersion == "" {
+		t.Fatalf("guarded revision/path leaked into ordinary task: graph=%+v ordinary=%+v", graph.GuardedRecords, ordinary.Records)
 	}
 	if graph.Problems[0].TaskID != badID || ordinary.Problems[0].EntityID != badID || lintProblems[0].EntityID != badID ||
 		ordinary.Problems[0].LocalPath != badPath || lintProblems[0].LocalPath != badPath {

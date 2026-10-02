@@ -129,12 +129,14 @@ type TaskGraphLoadProblem struct {
 // stores to compare the complete source set without making the analyzer or
 // primary adapters storage-aware.
 type TaskGraphRead struct {
-	// Records is the portable authoritative representation. Tasks remains a
-	// compatibility projection for focused fakes and guarded code while domain
-	// source metadata is migrated in the sequenced cleanup task.
-	Records  []LoadedRecord[domain.Task]
-	Tasks    []domain.Task
-	Problems []TaskGraphLoadProblem
+	// GuardedRecords is the authoritative representation for adapters that can
+	// supply complete snapshot evidence. Records and Tasks remain transitional
+	// read-only compatibility projections; they cannot gain a local repair path
+	// merely because their domain values happen to contain Path.
+	GuardedRecords []VersionedRecord[domain.Task]
+	Records        []LoadedRecord[domain.Task]
+	Tasks          []domain.Task
+	Problems       []TaskGraphLoadProblem
 }
 
 // TaskGraphSource is the narrow task-record read capability used by task listings,
@@ -167,12 +169,6 @@ func (s taskStoreGraphSource) ReadTaskGraph() (TaskGraphRead, error) {
 		return TaskGraphRead{}, err
 	}
 	read := TaskGraphRead{Records: ordinary.Records, Problems: make([]TaskGraphLoadProblem, 0, len(ordinary.Problems))}
-	read.Tasks = make([]domain.Task, 0, len(ordinary.Records))
-	for _, record := range ordinary.Records {
-		task := record.Value
-		task.FilenameID = record.Source.ID
-		read.Tasks = append(read.Tasks, task)
-	}
 	for _, problem := range ordinary.Problems {
 		read.Problems = append(read.Problems, taskGraphLoadProblemFromLoadProblem(problem))
 	}
@@ -192,12 +188,15 @@ func taskGraphLoadProblemFromLoadProblem(problem LoadProblem) TaskGraphLoadProbl
 // identity directly and need not synthesize a Markdown path.
 func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) TaskGraphRead {
 	read := TaskGraphRead{
-		Tasks: tasks, Records: make([]LoadedRecord[domain.Task], 0, len(tasks)),
-		Problems: make([]TaskGraphLoadProblem, 0, len(problems)),
+		GuardedRecords: make([]VersionedRecord[domain.Task], 0, len(tasks)),
+		Problems:       make([]TaskGraphLoadProblem, 0, len(problems)),
 	}
 	for _, task := range tasks {
-		read.Records = append(read.Records, LoadedRecord[domain.Task]{
-			Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path},
+		read.GuardedRecords = append(read.GuardedRecords, VersionedRecord[domain.Task]{
+			Record: LoadedRecord[domain.Task]{Value: task, Source: RecordSource{
+				ID: task.CanonicalID(), Location: task.Path, LocationIsPath: task.Path != "",
+			}},
+			LocalPath: task.Path,
 		})
 	}
 	for _, problem := range problems {
@@ -210,28 +209,49 @@ func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) 
 // records. New adapters populate Records directly; older focused fakes remain
 // usable while the staged migration removes domain source metadata.
 func taskGraphRecords(read TaskGraphRead) []LoadedRecord[domain.Task] {
+	if read.GuardedRecords != nil {
+		records := make([]LoadedRecord[domain.Task], 0, len(read.GuardedRecords))
+		for _, guarded := range read.GuardedRecords {
+			records = append(records, guarded.Record)
+		}
+		return records
+	}
 	if read.Records != nil {
 		return append([]LoadedRecord[domain.Task](nil), read.Records...)
 	}
 	records := make([]LoadedRecord[domain.Task], 0, len(read.Tasks))
 	for _, task := range read.Tasks {
 		records = append(records, LoadedRecord[domain.Task]{
-			Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path},
+			Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path, LocationIsPath: task.Path != ""},
 		})
 	}
 	return records
+}
+
+func taskGraphGuardedRecords(read TaskGraphRead) []VersionedRecord[domain.Task] {
+	if read.GuardedRecords != nil {
+		return append([]VersionedRecord[domain.Task](nil), read.GuardedRecords...)
+	}
+	records := taskGraphRecords(read)
+	guarded := make([]VersionedRecord[domain.Task], 0, len(records))
+	for _, record := range records {
+		localPath := ""
+		if read.Records == nil {
+			// Transitional task-only fakes and NewTaskGraph callers explicitly
+			// model local source files. Portable Records never gain repair
+			// authority from a domain field.
+			localPath = record.Value.Path
+		}
+		guarded = append(guarded, VersionedRecord[domain.Task]{Record: record, LocalPath: localPath})
+	}
+	return guarded
 }
 
 func taskGraphTasks(read TaskGraphRead) []domain.Task {
 	records := taskGraphRecords(read)
 	tasks := make([]domain.Task, 0, len(records))
 	for _, record := range records {
-		task := record.Value
-		// This bare-domain projection exists only for older graph/board/status
-		// consumers. Never let a stale adapter-private filename field override
-		// the explicit identity supplied by the read port.
-		task.FilenameID = record.Source.ID
-		tasks = append(tasks, task)
+		tasks = append(tasks, record.Value)
 	}
 	return tasks
 }
@@ -242,21 +262,23 @@ func taskGraphTasks(read TaskGraphRead) []domain.Task {
 // Keep the malformed occurrence as a load problem so all partial-read surfaces
 // remain noisy and guarded snapshot comparison fails closed without a revision.
 func validatedTaskGraphRead(read TaskGraphRead) TaskGraphRead {
-	records := taskGraphRecords(read)
-	valid := make([]LoadedRecord[domain.Task], 0, len(records))
+	records := taskGraphGuardedRecords(read)
+	valid := make([]VersionedRecord[domain.Task], 0, len(records))
 	problems := append([]TaskGraphLoadProblem(nil), read.Problems...)
-	for _, record := range records {
+	for _, guarded := range records {
+		record := guarded.Record
 		if requireSourceID(EntityTask, record.Source) == nil {
-			valid = append(valid, record)
+			valid = append(valid, guarded)
 			continue
 		}
 		problems = append(problems, TaskGraphLoadProblem{
 			TaskSlug: record.Value.Slug, Location: record.Source.Location,
 			Message:       "task record has no canonical source ID",
-			SourceVersion: record.Value.SourceVersion,
+			SourceVersion: guarded.SourceVersion,
 		})
 	}
-	read.Records = valid
+	read.GuardedRecords = valid
+	read.Records = nil
 	read.Tasks = nil // compatibility values cannot reintroduce a rejected record
 	read.Problems = problems
 	return read
@@ -360,7 +382,11 @@ func LoadTaskGraph(source TaskGraphSource) (*TaskGraph, error) {
 // TaskPath resolves a task's file path without reading or parsing it — the seam
 // for `task path`, which must work even on a file with broken frontmatter.
 func (s *Service) TaskPath(slug string) (string, error) {
-	return s.store.ResolveTaskPath(slug)
+	if s.taskPaths == nil {
+		return "", fmt.Errorf("%w: task path resolution is unavailable from this service", domain.ErrValidation)
+	}
+	path, err := s.taskPaths.ResolveTaskPath(slug)
+	return requireResolvedLocalPath(EntityTask, path, err)
 }
 
 // AcceptanceCriteria lists a task's acceptance criteria (read-only, for `task ac

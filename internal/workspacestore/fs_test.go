@@ -104,6 +104,9 @@ func TestFS_MultiWorkspaceSourceSetsCannotBeCrossWired(t *testing.T) {
 	}
 	aID := a.Store.(core.SourceSetProvider).SourceSetID()
 	bID := b.Store.(core.SourceSetProvider).SourceSetID()
+	if a.TaskPaths == nil || a.EpicPaths == nil || a.AuditPaths == nil || a.ResearchPaths == nil {
+		t.Fatalf("filesystem workspace omitted entity-local path capabilities: %+v", a)
+	}
 	if aID.IsZero() || bID.IsZero() || aID == bID {
 		t.Fatal("independent workspaces must expose distinct source sets")
 	}

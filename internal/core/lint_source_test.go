@@ -32,6 +32,24 @@ func (f *locationLintSource) ReadLintResearch() ([]LoadedRecord[domain.Research]
 	return f.research, nil, nil
 }
 
+func TestLintAttributesTaskIDDriftToAdapterSourceForActiveAndArchivedTasks(t *testing.T) {
+	source := &locationLintSource{}
+	for _, status := range []domain.Status{domain.StatusReadyToStart, domain.StatusCompleted} {
+		slug := string(status)
+		source.tasks = append(source.tasks, LoadedRecord[TaskWithBody]{
+			Value:  TaskWithBody{Task: domain.Task{ID: testutil.TaskID("declared-" + slug), Slug: slug, Status: status}},
+			Source: RecordSource{ID: testutil.TaskID("source-" + slug), Location: "db://tasks/" + slug},
+		})
+	}
+	results, _, err := MustNewService(nil, WithLintSource(source)).Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range source.tasks {
+		assertLintIssue(t, results, record.Value.Task.Slug, "id", record.Source.ID)
+	}
+}
+
 type lintSourceFake struct {
 	testSourceSetProvider
 	taskRecords      []TaskWithBody
@@ -340,4 +358,36 @@ func lintResultHas(results []LintResult, slug, field, messagePart string) bool {
 		}
 	}
 	return false
+}
+
+func TestLintResearchComparesDeclarationWithAdapterSourceID(t *testing.T) {
+	const sourceID = "6g0000000001"
+	source := &locationLintSource{research: []LoadedRecord[domain.Research]{{
+		Value:  domain.Research{ID: "6g0000000002", Slug: "drifted", Created: "2026-09-01"},
+		Source: RecordSource{ID: sourceID, Location: "db://research/one"},
+	}}}
+	results, problems, err := MustNewService(nil, WithLintSource(source)).Lint()
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("lint err=%v problems=%+v", err, problems)
+	}
+	assertLintIssue(t, results, "drifted", "id", sourceID)
+	if results[0].Location != "db://research/one" {
+		t.Fatalf("lint location = %q", results[0].Location)
+	}
+}
+
+func TestLintAuditComparesDeclarationWithAdapterSourceID(t *testing.T) {
+	const sourceID = "6g0000000001"
+	source := &locationLintSource{audits: []LoadedRecord[AuditWithFindings]{{
+		Value:  AuditWithFindings{Audit: domain.Audit{ID: "6g0000000002", Slug: "drifted", Bucket: domain.AuditOpen}},
+		Source: RecordSource{ID: sourceID, Location: "db://audits/one"},
+	}}}
+	results, problems, err := MustNewService(nil, WithLintSource(source)).Lint()
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("lint err=%v problems=%+v", err, problems)
+	}
+	assertLintIssue(t, results, "drifted", "id", sourceID)
+	if results[0].Location != "db://audits/one" {
+		t.Fatalf("lint location = %q", results[0].Location)
+	}
 }

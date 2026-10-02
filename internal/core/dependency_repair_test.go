@@ -90,8 +90,9 @@ func TestTaskGraphRepairDoesNotSelectOpaqueLocations(t *testing.T) {
 	// Even when the readable location is opaque, an independently supplied local
 	// path can select a repair. It is that path, not the URI, in the plan.
 	task.Path = "/planning/tasks/local-copy.md"
-	mixed := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
-		Value: task, Source: RecordSource{ID: task.ID, Location: "db://tasks/opaque"},
+	mixed := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{
+		Record:    LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: "db://tasks/opaque"}},
+		LocalPath: task.Path,
 	}}})
 	plan, err := PlanTaskGraphRepair(mixed, TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{{
 		Action: TaskGraphSourceDropDeclaration, Source: TaskGraphSourceRef{LocalPath: task.Path},
@@ -138,8 +139,9 @@ func TestPathlessRepairDefectsKeepDeclarationIdentity(t *testing.T) {
 
 func TestMixedSourceLocationIsAStaleContextCheck(t *testing.T) {
 	owner := graphRecord("mixed-stale-context", domain.StatusNextUp, "invalid-token")
-	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
-		Value: owner, Source: RecordSource{ID: owner.ID, Location: "db://tasks/current"},
+	graph := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{
+		Record:    LoadedRecord[domain.Task]{Value: owner, Source: RecordSource{ID: owner.ID, Location: "db://tasks/current"}},
+		LocalPath: owner.Path,
 	}}})
 	stale := TaskGraphSourceRef{TaskID: owner.ID, LocalPath: owner.Path, Location: "db://tasks/old"}
 	if _, _, err := resolveSourceTask(graph.sourceRefs, stale); !errors.Is(err, domain.ErrConflict) {
@@ -158,8 +160,9 @@ func TestMixedSourceLocationRetainsLegacyRepairAttribution(t *testing.T) {
 	owner := graphRecord("mixed-legacy-owner", domain.StatusNextUp)
 	owner.LegacyBlockedBy = []string{"missing-human-intent"}
 	owner.LegacyDependencyFields = []string{"blocked_by"}
-	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
-		Value: owner, Source: RecordSource{ID: owner.ID, Location: "db://tasks/legacy"},
+	graph := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{
+		Record:    LoadedRecord[domain.Task]{Value: owner, Source: RecordSource{ID: owner.ID, Location: "db://tasks/legacy"}},
+		LocalPath: owner.Path,
 	}}})
 	diagnosis, err := DiagnoseTaskGraphRepair(graph)
 	if err != nil {

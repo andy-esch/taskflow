@@ -24,8 +24,12 @@ func (s *FS) ReadThreads() (core.ThreadRead, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return core.ThreadRead{}, err
 	}
-	threads, problems, err := scanDirWithSourceVersions(s.threadsDir, func(path string, content []byte) (domain.Thread, error) {
-		return parseThread(content, path)
+	threads, problems, err := scanDirWithSourceVersions(s.threadsDir, func(path string, content []byte) (threadSourceDocument, error) {
+		thread, err := parseThread(content, path)
+		if err != nil {
+			return threadSourceDocument{}, err
+		}
+		return threadSourceDocument{thread: thread, sourceVersion: hashContent(content)}, nil
 	})
 	if err != nil {
 		return core.ThreadRead{}, err
@@ -33,19 +37,23 @@ func (s *FS) ReadThreads() (core.ThreadRead, error) {
 	return threadReadFromSourceFiles(threads, problems), nil
 }
 
-func threadReadFromSourceFiles(threads []domain.Thread, problems []sourceFileProblem) core.ThreadRead {
+type threadSourceDocument struct {
+	thread        domain.Thread
+	sourceVersion string
+}
+
+func threadReadFromSourceFiles(threads []threadSourceDocument, problems []sourceFileProblem) core.ThreadRead {
 	read := core.ThreadRead{
 		Records:  make([]core.VersionedRecord[domain.Thread], 0, len(threads)),
 		Problems: make([]core.ThreadReadProblem, 0, len(problems)),
 	}
-	for _, thread := range threads {
-		version := thread.SourceVersion
-		thread.SourceVersion = ""
+	for _, source := range threads {
+		thread := source.thread
 		read.Records = append(read.Records, core.VersionedRecord[domain.Thread]{
 			Record: core.LoadedRecord[domain.Thread]{
-				Value: thread, Source: core.RecordSource{ID: thread.FilenameID, Location: thread.Path},
+				Value: thread, Source: core.RecordSource{ID: thread.FilenameID, Location: thread.Path, LocationIsPath: true},
 			},
-			SourceVersion: version,
+			SourceVersion: source.sourceVersion,
 		})
 	}
 	for _, problem := range problems {
@@ -98,7 +106,7 @@ func (s *FS) ReadThread(ref string) (core.LoadedRecord[core.ThreadWithBody], err
 	}
 	return core.LoadedRecord[core.ThreadWithBody]{
 		Value:  core.ThreadWithBody{Thread: thread, Body: body},
-		Source: core.RecordSource{ID: thread.FilenameID, Location: thread.Path},
+		Source: core.RecordSource{ID: thread.FilenameID, Location: thread.Path, LocationIsPath: true},
 	}, nil
 }
 
@@ -139,6 +147,5 @@ func parseThread(content []byte, path string) (domain.Thread, error) {
 	thread.Slug = slug
 	thread.FilenameID = filenameID
 	thread.Path = path
-	thread.SourceVersion = hashContent(content)
 	return thread, nil
 }

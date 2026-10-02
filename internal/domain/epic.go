@@ -27,8 +27,7 @@ func EpicRefKey(ref string) string {
 // status is a frontmatter field with its own — closed — vocabulary, distinct
 // from the task lifecycle).
 type Epic struct {
-	ID   string `yaml:"-"`
-	Path string `yaml:"-"`
+	ID string `yaml:"-"`
 
 	Status      string `yaml:"status"`
 	Description string `yaml:"description"`

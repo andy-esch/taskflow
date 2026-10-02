@@ -19,6 +19,48 @@ func threadRecord(status domain.ThreadStatus, taskIDs ...string) domain.Thread {
 	}
 }
 
+func TestLoadedThreadProjectionUsesSourceIdentityWithoutPromotingOpaqueLocation(t *testing.T) {
+	thread := threadRecord(domain.ThreadStatusUnstarted)
+	thread.ID = testutil.TaskID("declared-thread-id")
+	thread.FilenameID = thread.ID // stale compatibility metadata must not mask drift
+	thread.Path = "/stale/domain/path.md"
+	sourceID := testutil.TaskID("actual-thread-source")
+	graph := NewTaskGraph(nil, nil)
+
+	for _, test := range []struct {
+		name     string
+		source   RecordSource
+		wantPath string
+	}{
+		{"opaque", RecordSource{ID: sourceID, Location: "urn:threads/actual"}, ""},
+		{"local", RecordSource{ID: sourceID, Location: "/planning/threads/actual.md", LocationIsPath: true}, "/planning/threads/actual.md"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			record := LoadedRecord[domain.Thread]{Value: thread, Source: test.source}
+			view := ProjectLoadedThread(record, graph)
+			if view.Source != test.source || view.ProjectionHealth != GraphBroken {
+				t.Fatalf("loaded projection = %+v", view)
+			}
+			found := false
+			for _, problem := range view.Problems {
+				if problem.Code == ThreadProblemIDDrift {
+					found = true
+					if problem.Path != test.wantPath {
+						t.Fatalf("drift path = %q, want %q", problem.Path, test.wantPath)
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("missing source-backed drift diagnostic: %+v", view.Problems)
+			}
+			projection := ProjectLoadedThreadGraph(record, graph)
+			if projection.View.Source != test.source || projection.View.ProjectionHealth != GraphBroken {
+				t.Fatalf("graph projection lost source: %+v", projection.View)
+			}
+		})
+	}
+}
+
 func TestProjectThreadRollupExternalGatesAndFrontier(t *testing.T) {
 	internalDone := graphRecord("internal-done", domain.StatusCompleted)
 	external := graphRecord("external", domain.StatusNextUp)

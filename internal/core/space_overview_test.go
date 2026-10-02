@@ -26,6 +26,7 @@ type planningSummaryFake struct{ *fakeStore }
 
 func (s *planningSummaryFake) ReadTaskGraph() (TaskGraphRead, error) {
 	read := TaskGraphReadFromFiles(s.tasks, s.problems)
+	read.GuardedRecords = nil           // use the fake's explicitly assigned portable IDs
 	read.Records = loadedTasks(s.tasks) // the fake store assigns source IDs even without frontmatter IDs
 	return read, nil
 }
@@ -95,7 +96,7 @@ func TestSpaceOverviewUsesPlanningStoresGraphSnapshot(t *testing.T) {
 		t.Fatalf("overview = %+v", overview)
 	}
 	summary := overview.Spaces[0].Summary
-	if summary.GraphHealth != GraphBroken || len(summary.InProgress) != 0 {
+	if summary.GraphHealth != GraphBroken || len(summary.InProgressRecords) != 0 {
 		t.Fatalf("summary did not use explicit graph snapshot: %+v", summary)
 	}
 }
@@ -211,11 +212,11 @@ func TestSpaceOverviewRetainsStructuredContentionAndRetriesOnlyFailedGroups(t *t
 	}
 
 	merged := RetainContendedSpaceSummaries(previous, current)
-	if merged.Spaces[0].Summary == nil || merged.Spaces[0].Summary.InProgress[0].Slug != "alpha-new" {
+	if merged.Spaces[0].Summary == nil || merged.Spaces[0].Summary.InProgressRecords[0].Value.Slug != "alpha-new" {
 		t.Fatalf("successful space did not advance: %+v", merged.Spaces[0])
 	}
 	if !merged.Spaces[1].Stale || merged.Spaces[1].Summary == nil ||
-		merged.Spaces[1].Summary.InProgress[0].Slug != "beta-old" {
+		merged.Spaces[1].Summary.InProgressRecords[0].Value.Slug != "beta-old" {
 		t.Fatalf("contended space did not retain its coherent summary: %+v", merged.Spaces[1])
 	}
 	if len(merged.InProgress) != 2 || !merged.InProgress[1].Stale {
@@ -231,7 +232,7 @@ func TestSpaceOverviewRetainsStructuredContentionAndRetriesOnlyFailedGroups(t *t
 	}
 	reconciled := ApplySpaceOverviewRefresh(merged, refresh)
 	if reconciled.Spaces[1].Stale || reconciled.Spaces[1].Failure != nil ||
-		reconciled.Spaces[1].Summary == nil || reconciled.Spaces[1].Summary.InProgress[0].Slug != "beta-new" {
+		reconciled.Spaces[1].Summary == nil || reconciled.Spaces[1].Summary.InProgressRecords[0].Value.Slug != "beta-new" {
 		t.Fatalf("successful retry did not replace stale data: %+v", reconciled.Spaces[1])
 	}
 }
@@ -296,12 +297,13 @@ func TestSpaceOverviewConsecutiveFirstLoadContentionDoesNotInventSummary(t *test
 func TestSpaceOverviewRetainedSummaryOwnsMutableSnapshotData(t *testing.T) {
 	previousSummary := Summary{
 		Counts: []StatusCount{{Status: domain.StatusInProgress, Count: 1}},
-		InProgress: []domain.Task{{
-			Slug: "working", Tags: []string{"original"}, DependsOn: []string{"6g0000000001"},
+		InProgressRecords: []LoadedRecord[domain.Task]{{
+			Value:  domain.Task{Slug: "working", Tags: []string{"original"}, DependsOn: []string{"6g0000000001"}},
+			Source: RecordSource{ID: "task-original"},
 		}},
 		TaskSourceIDs:  []string{"task-original"},
 		Epics:          []EpicSummary{{Epic: domain.Epic{ID: "01-domain", Tags: []string{"original"}}}},
-		OpenAudits:     []domain.Audit{{Slug: "review"}},
+		OpenAudits:     []LoadedRecord[domain.Audit]{{Value: domain.Audit{Slug: "review"}, Source: RecordSource{ID: "audit-original"}}},
 		AuditSourceIDs: []string{"audit-original"},
 		Findings: FindingsRollup{
 			ByUrgency: []CountBy{{Key: "soon", Count: 1}},
@@ -322,20 +324,24 @@ func TestSpaceOverviewRetainedSummaryOwnsMutableSnapshotData(t *testing.T) {
 
 	retained := RetainContendedSpaceSummaries(previous, current).Spaces[0].Summary
 	previousSummary.Counts[0].Count = 9
-	previousSummary.InProgress[0].Tags[0] = "changed"
-	previousSummary.InProgress[0].DependsOn[0] = "changed"
+	previousSummary.InProgressRecords[0].Value.Tags[0] = "changed"
+	previousSummary.InProgressRecords[0].Value.DependsOn[0] = "changed"
+	previousSummary.InProgressRecords[0].Source.ID = "changed"
 	previousSummary.TaskSourceIDs[0] = "changed"
 	previousSummary.Epics[0].Epic.Tags[0] = "changed"
-	previousSummary.OpenAudits[0].Slug = "changed"
+	previousSummary.OpenAudits[0].Value.Slug = "changed"
+	previousSummary.OpenAudits[0].Source.ID = "changed"
 	previousSummary.AuditSourceIDs[0] = "changed"
 	previousSummary.Findings.ByUrgency[0].Key = "changed"
 	previousSummary.Findings.Acute[0].Title = "changed"
 	previousSummary.Problems[0].Message = "changed"
 
-	if retained.Counts[0].Count != 1 || retained.InProgress[0].Tags[0] != "original" ||
-		retained.InProgress[0].DependsOn[0] != "6g0000000001" ||
+	if retained.Counts[0].Count != 1 || retained.InProgressRecords[0].Value.Tags[0] != "original" ||
+		retained.InProgressRecords[0].Value.DependsOn[0] != "6g0000000001" ||
+		retained.InProgressRecords[0].Source.ID != "task-original" ||
 		retained.TaskSourceIDs[0] != "task-original" ||
-		retained.Epics[0].Epic.Tags[0] != "original" || retained.OpenAudits[0].Slug != "review" ||
+		retained.Epics[0].Epic.Tags[0] != "original" || retained.OpenAudits[0].Value.Slug != "review" ||
+		retained.OpenAudits[0].Source.ID != "audit-original" ||
 		retained.AuditSourceIDs[0] != "audit-original" ||
 		retained.Findings.ByUrgency[0].Key != "soon" || retained.Findings.Acute[0].Title != "original" ||
 		retained.Problems[0].Message != "original" {

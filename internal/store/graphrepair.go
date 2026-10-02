@@ -154,7 +154,7 @@ func (s *FS) MutateTaskGraphRepair(now time.Time, dryRun bool, planner core.Task
 			return result, fmt.Errorf("thread evidence changed while graph repair committed a prefix; inspect before retrying: %w", domain.ErrConflict)
 		}
 		postGraph, evidenceErr := core.LoadTaskGraph(s)
-		if evidenceErr != nil || !stepAnalysis.Prospective.SameRepairSnapshot(postGraph, []core.TaskGraphSourceRef{write.source}) {
+		if evidenceErr != nil || !stepAnalysis.Prospective.SameDurableRepairSnapshot(postGraph, []core.TaskGraphSourceRef{write.source}) {
 			setRepairRemainingSources(&result)
 			return result, fmt.Errorf("task evidence changed while graph repair committed a prefix; inspect before retrying: %w", domain.ErrConflict)
 		}

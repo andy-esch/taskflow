@@ -157,7 +157,11 @@ func (s *Service) ShowResearch(slug string) (LoadedRecord[ResearchWithBody], err
 // ResearchPath resolves a research doc's file path without reading or parsing it —
 // the seam for `research path` (parse-free, like TaskPath).
 func (s *Service) ResearchPath(slug string) (string, error) {
-	return s.store.ResolveResearchPath(slug)
+	if s.researchPaths == nil {
+		return "", fmt.Errorf("%w: research path resolution is unavailable from this service", domain.ErrValidation)
+	}
+	path, err := s.researchPaths.ResolveResearchPath(slug)
+	return requireResolvedLocalPath(EntityResearch, path, err)
 }
 
 // SetResearchFields updates frontmatter fields on a research doc (`research set`) — the

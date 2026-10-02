@@ -16,10 +16,6 @@ import (
 type TaskStore interface {
 	ReadTasks() (TaskRead, error)
 	ReadTask(ref string) (LoadedRecord[TaskWithBody], error)
-	// ResolveTaskPath returns a task's file path from its slug/id WITHOUT parsing —
-	// so `task path` works even on a file whose frontmatter won't parse (the case
-	// where you most need the path, to open and repair it).
-	ResolveTaskPath(slug string) (string, error)
 	// Ordinary task mutations take dryRun: true runs every validation and returns
 	// the would-be result but stops short of disk. Lifecycle changes are deliberately
 	// absent: TaskLifecycleMutationStore is the only status-write capability.
@@ -46,6 +42,12 @@ type TaskStore interface {
 	// repointed to the new filename. Its result records a durable multi-document prefix
 	// so post-commit failures are recoverable without guessing whether a retry is safe.
 	RenameTask(slug, newTitle string, dryRun bool) (TaskRenameMutationResult, error)
+}
+
+// TaskPathSource is optional local, parse-free task navigation. Semantic task
+// reads do not imply that their adapter has a filesystem path to resolve.
+type TaskPathSource interface {
+	ResolveTaskPath(ref string) (string, error)
 }
 
 // TaskDependencyWrite is one semantic task-file change returned by a pure graph
@@ -137,15 +139,13 @@ type ThreadRead struct {
 }
 
 // SemanticThreads is the planner-facing view of one authoritative Thread read.
-// It preserves source-record order, strips any legacy embedded revision, and
-// deliberately does not let a second, independently populated slice become
-// mutation evidence.
+// It preserves source-record order and deliberately does not let a second,
+// independently populated slice become mutation evidence. Revisions stay only
+// in the guarded wrappers.
 func (read ThreadRead) SemanticThreads() []domain.Thread {
 	threads := make([]domain.Thread, 0, len(read.Records))
 	for _, record := range read.Records {
-		thread := record.Record.Value
-		thread.SourceVersion = ""
-		threads = append(threads, thread)
+		threads = append(threads, record.Record.Value)
 	}
 	return threads
 }
@@ -193,6 +193,21 @@ type ThreadPathSource interface {
 	ResolveThreadPath(ref string) (string, error)
 }
 
+// EpicPathSource is optional local, parse-free epic navigation.
+type EpicPathSource interface {
+	ResolveEpicPath(ref string) (string, error)
+}
+
+// AuditPathSource is optional local, parse-free audit navigation.
+type AuditPathSource interface {
+	ResolveAuditPath(ref string) (string, error)
+}
+
+// ResearchPathSource is optional local, parse-free research navigation.
+type ResearchPathSource interface {
+	ResolveResearchPath(ref string) (string, error)
+}
+
 // ThreadCreationMutationStore owns guarded, unstarted Thread creation. The
 // control-inverted planner receives only immutable semantic snapshot values.
 type ThreadCreationMutationStore interface {
@@ -218,9 +233,6 @@ type ThreadApplyMutationStore interface {
 type EpicStore interface {
 	ReadEpics() (EpicRead, error)
 	ReadEpic(ref string) (LoadedRecord[EpicWithBody], error)
-	// ResolveEpicPath returns an epic's file path from its id, parse-free (see
-	// ResolveTaskPath).
-	ResolveEpicPath(id string) (string, error)
 	CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (EpicCreationReceipt, error)
 	// MoveEpic surgically rewrites an epic's `status` frontmatter field (epic
 	// status is a field, not a directory, so the file stays put), stamping updated_at
@@ -270,9 +282,6 @@ type TaskWithBody struct {
 type AuditStore interface {
 	ReadAudits() (AuditRead, error)
 	ReadAudit(ref string) (LoadedRecord[AuditWithBody], error)
-	// ResolveAuditPath returns an audit's file path from its slug/id, parse-free
-	// (see ResolveTaskPath).
-	ResolveAuditPath(slug string) (string, error)
 	MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error)
 	CreateAudit(a domain.Audit, body string, dryRun bool) (AuditCreationReceipt, error)
 	// EditAudit hands the current file content to edit (the caller's editor) and
@@ -304,9 +313,6 @@ type AuditStore interface {
 type ResearchStore interface {
 	ReadResearch() (ResearchRead, error)
 	ReadResearchDocument(ref string) (LoadedRecord[ResearchWithBody], error)
-	// ResolveResearchPath returns a doc's file path from its slug/id, parse-free
-	// (see ResolveTaskPath).
-	ResolveResearchPath(slug string) (string, error)
 	CreateResearch(r domain.Research, body string, dryRun bool) (ResearchCreationReceipt, error)
 	// SetResearchFields surgically updates frontmatter fields in one atomic, validated
 	// write. updated_at is injected by the service; `created` is rejected upstream (the

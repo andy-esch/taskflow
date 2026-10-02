@@ -236,16 +236,13 @@ func (s *Service) ListThreadViews() (ThreadListView, []ThreadReadProblem, error)
 	for i := range problems {
 		problems[i].SourceVersion = ""
 	}
-	sort.Slice(records, func(i, j int) bool { return threadLess(records[i].Record.Value, records[j].Record.Value) })
+	sort.Slice(records, func(i, j int) bool { return threadRecordLess(records[i].Record, records[j].Record) })
 	sort.Slice(problems, func(i, j int) bool { return threadReadProblemLess(problems[i], problems[j]) })
 	list := ThreadListView{
 		Threads: make([]ThreadView, len(records)), GraphHealth: graph.Health(), GraphProblems: graph.Problems(),
 	}
 	for i, record := range records {
-		thread := record.Record.Value
-		thread.SourceVersion = "" // opaque revision belongs only to ThreadRead
-		list.Threads[i] = ProjectThread(thread, graph)
-		list.Threads[i].Source = record.Record.Source
+		list.Threads[i] = ProjectLoadedThread(record.Record, graph)
 		list.Threads[i].GraphProblems = nil
 	}
 	markDuplicateThreadIDs(list.Threads)
@@ -271,6 +268,16 @@ func threadLess(left, right domain.Thread) bool {
 	return false
 }
 
+func threadRecordLess(left, right LoadedRecord[domain.Thread]) bool {
+	if left.Source.ID != right.Source.ID {
+		return left.Source.ID < right.Source.ID
+	}
+	if left.Source.Location != right.Source.Location {
+		return left.Source.Location < right.Source.Location
+	}
+	return threadLess(left.Value, right.Value)
+}
+
 func threadReadProblemLess(left, right ThreadReadProblem) bool {
 	leftKey := [...]string{left.ThreadID, left.ThreadSlug, left.Location, left.Message}
 	rightKey := [...]string{right.ThreadID, right.ThreadSlug, right.Location, right.Message}
@@ -285,8 +292,8 @@ func threadReadProblemLess(left, right ThreadReadProblem) bool {
 func markDuplicateThreadIDs(views []ThreadView) {
 	indices := make(map[string][]int, len(views))
 	for i := range views {
-		if views[i].Thread.ID != "" {
-			indices[views[i].Thread.ID] = append(indices[views[i].Thread.ID], i)
+		if views[i].Source.ID != "" {
+			indices[views[i].Source.ID] = append(indices[views[i].Source.ID], i)
 		}
 	}
 	for threadID, matches := range indices {
@@ -297,20 +304,27 @@ func markDuplicateThreadIDs(views []ThreadView) {
 			views[i].ProjectionHealth = GraphBroken
 			views[i].Frontier = nil
 			views[i].Problems = append(views[i].Problems, ThreadProblem{
-				Code: ThreadProblemDuplicateID, ThreadID: threadID, Path: views[i].Thread.Path,
+				Code: ThreadProblemDuplicateID, ThreadID: threadID, Path: threadViewDiagnosticPath(views[i]),
 				Message: fmt.Sprintf("Thread id %s is used by %d readable Thread documents", threadID, len(matches)),
 			})
 			if views[i].Thread.Status == domain.ThreadStatusCompleted {
 				views[i].Inconsistent = true
 				if !hasThreadProblem(views[i].Problems, ThreadProblemCompletedUnhealthyEvidence) {
 					views[i].Problems = append(views[i].Problems, ThreadProblem{
-						Code: ThreadProblemCompletedUnhealthyEvidence, ThreadID: threadID, Path: views[i].Thread.Path,
+						Code: ThreadProblemCompletedUnhealthyEvidence, ThreadID: threadID, Path: threadViewDiagnosticPath(views[i]),
 						Message: "completed Thread has broken projection evidence",
 					})
 				}
 			}
 		}
 	}
+}
+
+func threadViewDiagnosticPath(view ThreadView) string {
+	if view.Source.LocationIsPath {
+		return view.Source.Location
+	}
+	return ""
 }
 
 func hasThreadProblem(problems []ThreadProblem, code ThreadProblemCode) bool {
@@ -359,8 +373,7 @@ func (s *Service) ShowThread(ref string) (ThreadView, string, error) {
 	if err != nil {
 		return ThreadView{}, "", err
 	}
-	view := ProjectThread(record.Value.Thread, graph)
-	view.Source = record.Source
+	view := ProjectLoadedThread(LoadedRecord[domain.Thread]{Value: record.Value.Thread, Source: record.Source}, graph)
 	return view, record.Value.Body, nil
 }
 
@@ -374,8 +387,7 @@ func (s *Service) ShowThreadGraphDetail(ref string) (ThreadGraphProjection, stri
 	if err != nil {
 		return ThreadGraphProjection{}, "", err
 	}
-	projection := ProjectThreadGraph(record.Value.Thread, graph)
-	projection.View.Source = record.Source
+	projection := ProjectLoadedThreadGraph(LoadedRecord[domain.Thread]{Value: record.Value.Thread, Source: record.Source}, graph)
 	return projection, record.Value.Body, nil
 }
 
@@ -390,7 +402,6 @@ func (s *Service) readThreadGraph(ref string) (LoadedRecord[ThreadWithBody], *Ta
 	if err := requireSourceID(EntityThread, record.Source); err != nil {
 		return LoadedRecord[ThreadWithBody]{}, nil, err
 	}
-	record.Value.Thread.SourceVersion = "" // selected reads must not publish adapter CAS evidence
 	graph, err := LoadTaskGraph(s.taskGraphs)
 	if err != nil {
 		return LoadedRecord[ThreadWithBody]{}, nil, err
@@ -410,5 +421,6 @@ func (s *Service) ThreadPath(ref string) (string, error) {
 	if s.threadPaths == nil {
 		return "", fmt.Errorf("%w: thread path resolution is unavailable from this service", domain.ErrValidation)
 	}
-	return s.threadPaths.ResolveThreadPath(ref)
+	path, err := s.threadPaths.ResolveThreadPath(ref)
+	return requireResolvedLocalPath(EntityThread, path, err)
 }

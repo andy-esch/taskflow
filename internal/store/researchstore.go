@@ -9,6 +9,7 @@ import (
 
 	yaml "go.yaml.in/yaml/v3"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -19,33 +20,60 @@ import (
 // ListResearch scans the research dir. An unreadable doc is skipped and reported as
 // a FileProblem (one bad file doesn't blind the listing); err is only for fatal I/O.
 func (s *FS) ListResearch() ([]domain.Research, []domain.FileProblem, error) {
+	records, problems, err := s.scanResearch()
+	if err != nil {
+		return nil, nil, err
+	}
+	docs := make([]domain.Research, 0, len(records))
+	for _, record := range records {
+		docs = append(docs, record.Value)
+	}
+	return docs, problems, nil
+}
+
+func (s *FS) scanResearch() ([]core.LoadedRecord[domain.Research], []domain.FileProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
-	return scanDir(s.researchDir, func(path string, content []byte) (domain.Research, error) {
-		return parseResearch(content, path)
+	return scanDir(s.researchDir, func(path string, content []byte) (core.LoadedRecord[domain.Research], error) {
+		doc, err := parseResearch(content, path)
+		if err != nil {
+			return core.LoadedRecord[domain.Research]{}, err
+		}
+		return researchRecord(doc, path), nil
 	})
 }
 
 // GetResearch returns one research doc plus its markdown body.
 func (s *FS) GetResearch(slug string) (domain.Research, string, error) {
-	if err := s.rejectRepositoryPlannerCall(); err != nil {
+	record, err := s.readResearch(slug)
+	if err != nil {
 		return domain.Research{}, "", err
+	}
+	return record.Value.Research, record.Value.Body, nil
+}
+
+func (s *FS) readResearch(slug string) (core.LoadedRecord[core.ResearchWithBody], error) {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return core.LoadedRecord[core.ResearchWithBody]{}, err
 	}
 	path, err := s.resolveResearch(slug)
 	if err != nil {
-		return domain.Research{}, "", err
+		return core.LoadedRecord[core.ResearchWithBody]{}, err
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return domain.Research{}, "", fmt.Errorf("read research %s: %w", path, err)
+		return core.LoadedRecord[core.ResearchWithBody]{}, fmt.Errorf("read research %s: %w", path, err)
 	}
 	r, err := parseResearch(content, path)
 	if err != nil {
-		return domain.Research{}, "", fmt.Errorf("%s: %w", path, err)
+		return core.LoadedRecord[core.ResearchWithBody]{}, fmt.Errorf("%s: %w", path, err)
 	}
 	_, body := splitFrontmatter(content)
-	return r, string(body), nil
+	return core.LoadedRecord[core.ResearchWithBody]{
+		Value:  core.ResearchWithBody{Research: r, Body: string(body)},
+		Source: researchSource(path),
+	}, nil
 }
 
 // researchCandidates lists every flat research file (research/<id>-<slug>.md) as a
@@ -73,7 +101,7 @@ func (s *FS) resolveResearch(slug string) (string, error) {
 // on, so the parse is purely "is this an id-led file with readable frontmatter".
 func parseResearch(content []byte, path string) (domain.Research, error) {
 	base := filepath.Base(path)
-	fnID, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
+	_, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
 	if !ok {
 		reason, kind := entityNameProblem(base)
 		return domain.Research{}, fmt.Errorf("%w: %q %s", kind, base, reason)
@@ -92,8 +120,6 @@ func parseResearch(content []byte, path string) (domain.Research, error) {
 		}
 	}
 	r.Slug = slug
-	r.FilenameID = fnID
-	r.Path = path
 	return r, nil
 }
 
@@ -168,7 +194,8 @@ func (s *FS) SetResearchFields(slug string, updates map[string]any, dryRun bool)
 	defer unlock()
 	// Version-CAS: catches a concurrent in-place edit during the read→write window.
 	// Keyed on the FILENAME id, the canonical resolution key.
-	if err := verifyUnchanged(s.resolveResearchPathExact, r.FilenameID, path, hashContent(content), "research doc", "update"); err != nil {
+	entityID, _, _ := splitFlatName(strings.TrimSuffix(filepath.Base(path), ".md"))
+	if err := verifyUnchanged(s.resolveResearchPathExact, entityID, path, hashContent(content), "research doc", "update"); err != nil {
 		return domain.Research{}, err
 	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {

@@ -53,7 +53,11 @@ func TestSetEpicFields_Surgical(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetEpicFields: %v", err)
 	}
-	raw, err := os.ReadFile(epic.Path)
+	path, err := svc.EpicPath(epic.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
