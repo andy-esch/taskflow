@@ -717,7 +717,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 		}
 	}
 
-	var threads []domain.Thread
+	var threads []VersionedRecord[domain.Thread]
 	threadIDSources := make([]domain.StableIdentitySource, 0)
 	threadProblems := make([]LoadProblem, 0)
 	threadIdentity := make(map[string]bool)
@@ -727,7 +727,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		threads = threadRead.SemanticThreads()
+		threads = threadRead.Records
 		for _, problem := range threadRead.Problems {
 			loadProblem := LoadProblem{
 				EntityKind: EntityThread, EntityID: problem.ThreadID,
@@ -743,15 +743,17 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 				ID: problem.ThreadID, Location: problem.Location,
 			})
 		}
-		for _, thread := range threads {
+		for _, record := range threads {
+			thread := record.Record.Value
+			source := record.Record.Source
 			threadIDSources = append(threadIDSources, domain.StableIdentitySource{
-				ID: thread.CanonicalID(), Location: thread.Path,
+				ID: source.ID, Location: source.Location,
 			})
 			if thread.ID != "" {
 				threadIdentity[thread.ID] = true
 			}
-			if thread.FilenameID != "" {
-				threadIdentity[thread.FilenameID] = true
+			if source.ID != "" {
+				threadIdentity[source.ID] = true
 			}
 		}
 	}
@@ -879,21 +881,24 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 	}
 	results = appendDuplicateProblemLintResults(results, ap, dupAuditIDs)
 	dupThreadIDs := domain.DuplicateIDIssues(threadIDSources)
-	for _, thread := range threads {
+	for _, record := range threads {
+		thread := record.Record.Value
+		source := record.Record.Source
 		issues := domain.LintThread(thread, func(taskID string) bool { return validTaskIDs[taskID] })
-		if issue, ok := dupThreadIDs[thread.CanonicalID()]; ok {
+		issues = append(issues, domain.IDDriftIssue(thread.ID, source.ID)...)
+		if issue, ok := dupThreadIDs[source.ID]; ok {
 			issues = append(issues, issue)
 		}
 		collisionID := thread.ID
 		if !taskIdentity[collisionID] {
-			collisionID = thread.FilenameID
+			collisionID = source.ID
 		}
 		if collisionID != "" && taskIdentity[collisionID] {
 			issues = append(issues, domain.Issue{Field: "id", Message: fmt.Sprintf(
 				"stable id %s is also used by a task — task and Thread identities must be globally unique", collisionID)})
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: thread.Slug, Issues: issues})
+			results = append(results, LintResult{Slug: thread.Slug, Location: readableDiagnosticLocation(source), Issues: issues})
 		}
 	}
 	results = appendDuplicateProblemLintResults(results, threadProblems, dupThreadIDs)

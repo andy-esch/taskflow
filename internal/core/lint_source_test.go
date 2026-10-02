@@ -50,6 +50,57 @@ func TestLintAttributesTaskIDDriftToAdapterSourceForActiveAndArchivedTasks(t *te
 	}
 }
 
+type threadLintSource struct {
+	threadReadFake
+	records []VersionedRecord[domain.Thread]
+}
+
+func (f *threadLintSource) ReadThreads() (ThreadRead, error) {
+	return ThreadRead{Records: f.records}, nil
+}
+
+func TestLintAttributesThreadIdentityAndLocationToAdapterSource(t *testing.T) {
+	declaredID := testutil.TaskID("declared-thread")
+	firstID := testutil.TaskID("source-thread-first")
+	secondID := testutil.TaskID("source-thread-second")
+	threads := &threadLintSource{records: []VersionedRecord[domain.Thread]{
+		{Record: LoadedRecord[domain.Thread]{
+			Value: domain.Thread{ID: declaredID, Slug: "first", Status: domain.ThreadStatusUnstarted,
+				Description: "First Thread", Goal: "Track first", Created: "2026-10-02"},
+			Source: RecordSource{ID: firstID, Location: "db://threads/first"},
+		}},
+		{Record: LoadedRecord[domain.Thread]{
+			Value: domain.Thread{ID: declaredID, Slug: "second", Status: domain.ThreadStatusUnstarted,
+				Description: "Second Thread", Goal: "Track second", Created: "2026-10-02"},
+			Source: RecordSource{ID: secondID, Location: "threads/path-shaped.md"},
+		}},
+	}}
+	results, _, err := MustNewService(nil, WithLintSource(&lintSourceFake{}), WithThreadStore(threads)).Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []struct{ slug, id, location string }{
+		{"first", firstID, "db://threads/first"},
+		{"second", secondID, "threads/path-shaped.md"},
+	} {
+		assertLintIssue(t, results, want.slug, "id", want.id)
+		found := false
+		for _, result := range results {
+			if result.Slug == want.slug && result.Location == want.location {
+				found = true
+				for _, issue := range result.Issues {
+					if strings.Contains(issue.Message, "duplicate stable id") {
+						t.Fatalf("distinct source IDs reported duplicate: %+v", results)
+					}
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("missing Thread source location %q: %+v", want.location, results)
+		}
+	}
+}
+
 type lintSourceFake struct {
 	testSourceSetProvider
 	taskRecords      []TaskWithBody

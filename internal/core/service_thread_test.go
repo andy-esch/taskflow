@@ -35,7 +35,7 @@ func (f *threadReadFake) ReadThreads() (ThreadRead, error) {
 			id = f.recordID
 		}
 		read.Records = append(read.Records, VersionedRecord[domain.Thread]{
-			Record:        LoadedRecord[domain.Thread]{Value: thread, Source: RecordSource{ID: id}},
+			Record:        LoadedRecord[domain.Thread]{Value: thread, Source: RecordSource{ID: id, Location: thread.Path, LocationIsPath: thread.Path != ""}},
 			SourceVersion: f.sourceVersion,
 		})
 	}

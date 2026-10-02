@@ -229,7 +229,6 @@ func LintThread(thread Thread, validTask func(string) bool) []Issue {
 	if !id.Valid(thread.ID) {
 		add("id", "missing or invalid stable Thread id")
 	}
-	issues = append(issues, IDDriftIssue(thread.ID, thread.FilenameID)...)
 	if err := ValidateThreadStatus(thread.Status); err != nil {
 		add("status", err.Error())
 	}
