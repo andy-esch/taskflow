@@ -324,7 +324,8 @@ type TaskGraph struct {
 	soundVisits   map[string]int
 }
 
-// NewTaskGraph builds the production strict snapshot with the owned analyzer.
+// NewTaskGraph builds a read-only compatibility snapshot with the owned analyzer.
+// Guarded adapters use NewTaskGraphRead with explicit source capabilities.
 func NewTaskGraph(tasks []domain.Task, unreadable []domain.FileProblem) *TaskGraph {
 	return NewTaskGraphRead(TaskGraphReadFromFiles(tasks, unreadable))
 }

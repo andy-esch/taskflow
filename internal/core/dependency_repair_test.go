@@ -18,7 +18,7 @@ func TestTaskGraphRepairAutoIsLimitedAndPreservesExplicitIntent(t *testing.T) {
 		prerequisite.ID, prerequisite.ID, "invalid-human-token", dangling)
 	owner.DependsOn = append(owner.DependsOn, owner.ID)
 	owner.LegacyDependencyFields = []string{"blocked_by"}
-	graph := NewTaskGraph([]domain.Task{owner, prerequisite}, nil)
+	graph := localTaskGraph([]domain.Task{owner, prerequisite}, nil)
 
 	diagnosis, err := DiagnoseTaskGraphRepair(graph)
 	if err != nil {
@@ -117,6 +117,35 @@ func TestTaskGraphRepairDoesNotSelectOpaqueLocations(t *testing.T) {
 	}
 }
 
+func TestCompatibilityTaskGraphsDoNotPromoteSemanticPathToRepairAuthority(t *testing.T) {
+	for _, path := range []string{"db://tasks/opaque", "tasks/path-shaped.md"} {
+		t.Run(path, func(t *testing.T) {
+			task := graphRecord("compatibility-opaque-repair", domain.StatusNextUp, "invalid-token")
+			task.Path = path
+			for name, graph := range map[string]*TaskGraph{
+				"constructor":      NewTaskGraph([]domain.Task{task}, nil),
+				"tasks projection": NewTaskGraphRead(TaskGraphRead{Tasks: []domain.Task{task}}),
+			} {
+				t.Run(name, func(t *testing.T) {
+					diagnosis, err := DiagnoseTaskGraphRepair(graph)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(diagnosis.Defects) != 1 || diagnosis.Defects[0].Repairable ||
+						diagnosis.Defects[0].Problem.Code != ProblemRepairUnavailable ||
+						diagnosis.Defects[0].Target.Source.LocalPath != "" {
+						t.Fatalf("semantic Path gained repair authority: %+v", diagnosis.Defects)
+					}
+					auto, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: true})
+					if err != nil || len(auto.Operations) != 0 {
+						t.Fatalf("compatibility auto plan = %+v, %v", auto, err)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestPathlessRepairDefectsKeepDeclarationIdentity(t *testing.T) {
 	owner := graphRecord("pathless-two-defects", domain.StatusNextUp, "invalid-one", "invalid-two")
 	owner.Path = ""
@@ -206,7 +235,7 @@ func TestURIValuedTransitionalTaskPathDoesNotOfferLocalRepair(t *testing.T) {
 func TestTaskGraphRepairAutoHandlesRepeatedSelfDeclarationsWithoutOrderDependence(t *testing.T) {
 	owner := graphRecord("repair-repeated-self", domain.StatusNextUp)
 	owner.DependsOn = []string{owner.ID, owner.ID}
-	graph := NewTaskGraph([]domain.Task{owner}, nil)
+	graph := localTaskGraph([]domain.Task{owner}, nil)
 	plan, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: true})
 	if err != nil {
 		t.Fatal(err)
@@ -227,11 +256,11 @@ func TestTaskGraphRepairAutoHandlesRepeatedSelfDeclarationsWithoutOrderDependenc
 
 func TestTaskGraphRepairRejectsOverlappingDedupeAndExactDrop(t *testing.T) {
 	owner := graphRecord("repair-overlap-owner", domain.StatusNextUp, "invalid-token", "invalid-token")
-	graph := NewTaskGraph([]domain.Task{owner}, nil)
+	graph := localTaskGraph([]domain.Task{owner}, nil)
 	plan, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{
 		Auto: true,
 		Edits: []TaskGraphSourceEdit{{
-			Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner),
+			Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(owner),
 			Field: TaskDependencyDependsOn, Value: "invalid-token",
 		}},
 	})
@@ -246,16 +275,16 @@ func TestTaskGraphRepairRejectsOverlappingDedupeAndExactDrop(t *testing.T) {
 func TestTaskGraphRepairValidationRejectsUnaccountedReceiptSelections(t *testing.T) {
 	dangling := testutil.TaskID("repair-receipt-dangling")
 	owner := graphRecord("repair-receipt-claim", domain.StatusNextUp, "invalid-token", dangling)
-	graph := NewTaskGraph([]domain.Task{owner}, nil)
+	graph := localTaskGraph([]domain.Task{owner}, nil)
 	plan, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{{
-		Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner),
+		Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(owner),
 		Field: TaskDependencyDependsOn, Value: "invalid-token",
 	}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	plan.Selections = []TaskGraphSourceEdit{{
-		Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner),
+		Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(owner),
 		Field: TaskDependencyDependsOn, Value: dangling,
 	}}
 	if _, _, err := ValidateTaskGraphRepairPlan(graph, plan); !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "does not exactly account") {
@@ -265,9 +294,9 @@ func TestTaskGraphRepairValidationRejectsUnaccountedReceiptSelections(t *testing
 
 func TestTaskGraphRepairValidationRejectsFalseAutomaticProvenance(t *testing.T) {
 	owner := graphRecord("repair-false-auto", domain.StatusNextUp, "invalid-token")
-	graph := NewTaskGraph([]domain.Task{owner}, nil)
+	graph := localTaskGraph([]domain.Task{owner}, nil)
 	plan, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{{
-		Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner),
+		Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(owner),
 		Field: TaskDependencyDependsOn, Value: "invalid-token",
 	}}})
 	if err != nil {
@@ -281,13 +310,13 @@ func TestTaskGraphRepairValidationRejectsFalseAutomaticProvenance(t *testing.T) 
 
 func TestTaskGraphRepairRejectsSemanticallyInvalidEditShapes(t *testing.T) {
 	owner := graphRecord("repair-edit-shapes", domain.StatusNextUp)
-	graph := NewTaskGraph([]domain.Task{owner}, nil)
+	graph := localTaskGraph([]domain.Task{owner}, nil)
 	for _, edit := range []TaskGraphSourceEdit{
-		{Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner), Field: TaskDependencyDependsOn, Value: "missing", Occurrence: -1},
-		{Action: TaskGraphSourceDedupe, Source: sourceRefForTask(owner), Field: TaskDependencyBlockedBy, Value: "missing"},
-		{Action: TaskGraphSourceDedupe, Source: sourceRefForTask(owner), Field: TaskDependencyDependsOn, Value: "missing", Occurrence: 1},
-		{Action: TaskGraphSourceDropEmptyField, Source: sourceRefForTask(owner), Field: TaskDependencyDependsOn},
-		{Action: TaskGraphSourceDropEmptyField, Source: sourceRefForTask(owner), Field: TaskDependencyBlockedBy, Value: "missing"},
+		{Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(owner), Field: TaskDependencyDependsOn, Value: "missing", Occurrence: -1},
+		{Action: TaskGraphSourceDedupe, Source: localSourceRefForTask(owner), Field: TaskDependencyBlockedBy, Value: "missing"},
+		{Action: TaskGraphSourceDedupe, Source: localSourceRefForTask(owner), Field: TaskDependencyDependsOn, Value: "missing", Occurrence: 1},
+		{Action: TaskGraphSourceDropEmptyField, Source: localSourceRefForTask(owner), Field: TaskDependencyDependsOn},
+		{Action: TaskGraphSourceDropEmptyField, Source: localSourceRefForTask(owner), Field: TaskDependencyBlockedBy, Value: "missing"},
 	} {
 		if _, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{edit}}); !errors.Is(err, domain.ErrValidation) {
 			t.Fatalf("edit %+v error = %v", edit, err)
@@ -300,8 +329,8 @@ func TestTaskGraphRepairExplicitDropsConvergeAndRejectValidConstraints(t *testin
 	dangling := testutil.TaskID("repair-explicit-dangling")
 	owner := graphRecord("repair-explicit-owner", domain.StatusReadyToStart,
 		prerequisite.ID, "invalid-human-token", dangling)
-	graph := NewTaskGraph([]domain.Task{owner, prerequisite}, nil)
-	source := sourceRefForTask(owner)
+	graph := localTaskGraph([]domain.Task{owner, prerequisite}, nil)
+	source := localSourceRefForTask(owner)
 	request := TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{
 		{Action: TaskGraphSourceDropDeclaration, Source: TaskGraphSourceRef{TaskID: owner.ID}, Field: TaskDependencyDependsOn, Value: "invalid-human-token"},
 		{Action: TaskGraphSourceDropDeclaration, Source: TaskGraphSourceRef{TaskSlug: owner.Slug}, Field: TaskDependencyDependsOn, Value: dangling},
@@ -341,7 +370,7 @@ func TestTaskGraphRepairCycleRequiresExplicitEdgeAndCanLeaveOtherDefects(t *test
 	dangling := testutil.TaskID("repair-cycle-dangling")
 	alpha.DependsOn = []string{beta.ID, dangling}
 	beta.DependsOn = []string{alpha.ID}
-	graph := NewTaskGraph([]domain.Task{beta, alpha}, nil)
+	graph := localTaskGraph([]domain.Task{beta, alpha}, nil)
 
 	auto, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: true})
 	if err != nil {
@@ -385,7 +414,7 @@ func TestTaskGraphRepairTargetsEveryLegacyFieldWithoutClearingItsNeighbors(t *te
 			case TaskDependencyBlocks:
 				owner.LegacyBlocks = []string{"missing-human-intent"}
 			}
-			graph := NewTaskGraph([]domain.Task{owner}, nil)
+			graph := localTaskGraph([]domain.Task{owner}, nil)
 			plan, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: true, Edits: []TaskGraphSourceEdit{
 				{Action: TaskGraphSourceDropDeclaration, Source: TaskGraphSourceRef{TaskID: owner.ID}, Field: field, Value: "missing-human-intent"},
 			}})
@@ -412,7 +441,7 @@ func TestTaskGraphRepairLegacyBlocksUsesDeclarationOwnerNotProjectedDependent(t 
 	owner.DependsOn = []string{dependent.ID}
 	owner.LegacyBlocks = []string{dependent.Slug}
 	owner.LegacyDependencyFields = []string{"blocks"}
-	graph := NewTaskGraph([]domain.Task{owner, dependent}, nil)
+	graph := localTaskGraph([]domain.Task{owner, dependent}, nil)
 	diagnosis, err := DiagnoseTaskGraphRepair(graph)
 	if err != nil {
 		t.Fatal(err)
@@ -444,7 +473,7 @@ func TestTaskGraphRepairNeverGuessesAmbiguousLegacyIntent(t *testing.T) {
 	owner := graphRecord("repair-ambiguous-owner", domain.StatusNextUp)
 	owner.LegacyBlockedBy = []string{"shared"}
 	owner.LegacyDependencyFields = []string{"blocked_by"}
-	graph := NewTaskGraph([]domain.Task{owner, second, first}, nil)
+	graph := localTaskGraph([]domain.Task{owner, second, first}, nil)
 	auto, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: true})
 	if err != nil {
 		t.Fatal(err)
@@ -502,7 +531,7 @@ func TestTaskGraphRepairAutoRemovesSelfDeclarationFromDuplicateIDShadow(t *testi
 	representative.Path = "tasks/a-primary.md"
 	shadow.Path = "tasks/b-shadow.md"
 	shadow.DependsOn = []string{shadow.ID}
-	graph := NewTaskGraph([]domain.Task{shadow, representative}, nil)
+	graph := localTaskGraph([]domain.Task{shadow, representative}, nil)
 
 	plan, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: true})
 	if err != nil {
@@ -525,14 +554,14 @@ func TestTaskGraphRepairPreservationRejectsUnauthorizedProspectiveRemoval(t *tes
 	second := graphRecord("repair-proof-second", domain.StatusCompleted)
 	owner := graphRecord("repair-proof-owner", domain.StatusNextUp, first.ID, second.ID)
 	owner.DependsOn = append(owner.DependsOn, owner.ID)
-	before := NewTaskGraph([]domain.Task{owner, first, second}, nil)
+	before := localTaskGraph([]domain.Task{owner, first, second}, nil)
 	plan, err := PlanTaskGraphRepair(before, TaskGraphRepairRequest{Auto: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	forgedOwner := owner
 	forgedOwner.DependsOn = []string{first.ID}
-	forgedAfter := NewTaskGraph([]domain.Task{forgedOwner, first, second}, nil)
+	forgedAfter := localTaskGraph([]domain.Task{forgedOwner, first, second}, nil)
 	removed, err := selectedRepairDeclarations(before, plan.Operations)
 	if err != nil {
 		t.Fatal(err)
@@ -545,14 +574,14 @@ func TestTaskGraphRepairPreservationRejectsUnauthorizedProspectiveRemoval(t *tes
 func TestExtendTaskGraphRepairAnalysisComposesSingleSourceProofs(t *testing.T) {
 	first := graphRecord("repair-prefix-proof-first", domain.StatusNextUp, "first-invalid")
 	second := graphRecord("repair-prefix-proof-second", domain.StatusNextUp, "second-invalid")
-	graph := NewTaskGraph([]domain.Task{first, second}, nil)
+	graph := localTaskGraph([]domain.Task{first, second}, nil)
 	_, prefix, err := ValidateTaskGraphRepairPlan(graph, TaskGraphRepairPlan{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, edit := range []TaskGraphSourceEdit{
-		{Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(first), Field: TaskDependencyDependsOn, Value: "first-invalid"},
-		{Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(second), Field: TaskDependencyDependsOn, Value: "second-invalid"},
+		{Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(first), Field: TaskDependencyDependsOn, Value: "first-invalid"},
+		{Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(second), Field: TaskDependencyDependsOn, Value: "second-invalid"},
 	} {
 		plan, planErr := PlanTaskGraphRepair(prefix.Prospective, TaskGraphRepairRequest{Edits: []TaskGraphSourceEdit{edit}})
 		if planErr != nil {

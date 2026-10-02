@@ -183,20 +183,17 @@ func taskGraphLoadProblemFromLoadProblem(problem LoadProblem) TaskGraphLoadProbl
 	}
 }
 
-// TaskGraphReadFromFiles adapts the legacy/local resilient task-list contract at
-// the storage boundary. Non-filesystem TaskGraphSource implementations provide
-// identity directly and need not synthesize a Markdown path.
+// TaskGraphReadFromFiles adapts a legacy task list for read-only graph queries.
+// Task.Path may describe the record, but it is not guarded repair authority;
+// local stores supply that independently in VersionedRecord.LocalPath.
 func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) TaskGraphRead {
 	read := TaskGraphRead{
-		GuardedRecords: make([]VersionedRecord[domain.Task], 0, len(tasks)),
-		Problems:       make([]TaskGraphLoadProblem, 0, len(problems)),
+		Records:  make([]LoadedRecord[domain.Task], 0, len(tasks)),
+		Problems: make([]TaskGraphLoadProblem, 0, len(problems)),
 	}
 	for _, task := range tasks {
-		read.GuardedRecords = append(read.GuardedRecords, VersionedRecord[domain.Task]{
-			Record: LoadedRecord[domain.Task]{Value: task, Source: RecordSource{
-				ID: task.CanonicalID(), Location: task.Path, LocationIsPath: task.Path != "",
-			}},
-			LocalPath: task.Path,
+		read.Records = append(read.Records, LoadedRecord[domain.Task]{
+			Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path},
 		})
 	}
 	for _, problem := range problems {
@@ -222,7 +219,7 @@ func taskGraphRecords(read TaskGraphRead) []LoadedRecord[domain.Task] {
 	records := make([]LoadedRecord[domain.Task], 0, len(read.Tasks))
 	for _, task := range read.Tasks {
 		records = append(records, LoadedRecord[domain.Task]{
-			Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path, LocationIsPath: task.Path != ""},
+			Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path},
 		})
 	}
 	return records
@@ -235,14 +232,7 @@ func taskGraphGuardedRecords(read TaskGraphRead) []VersionedRecord[domain.Task] 
 	records := taskGraphRecords(read)
 	guarded := make([]VersionedRecord[domain.Task], 0, len(records))
 	for _, record := range records {
-		localPath := ""
-		if read.Records == nil {
-			// Transitional task-only fakes and NewTaskGraph callers explicitly
-			// model local source files. Portable Records never gain repair
-			// authority from a domain field.
-			localPath = record.Value.Path
-		}
-		guarded = append(guarded, VersionedRecord[domain.Task]{Record: record, LocalPath: localPath})
+		guarded = append(guarded, VersionedRecord[domain.Task]{Record: record})
 	}
 	return guarded
 }

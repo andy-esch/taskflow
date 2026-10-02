@@ -23,6 +23,37 @@ func graphRecord(seed string, status domain.Status, dependencies ...string) doma
 	}
 }
 
+// localTaskGraph is for tests that explicitly exercise local source edits. Bare
+// NewTaskGraph and TaskGraphRead.Tasks are read-only compatibility projections:
+// a semantic Task.Path must never be promoted into repair authority.
+func localTaskGraph(tasks []domain.Task, problems []domain.FileProblem) *TaskGraph {
+	read := TaskGraphRead{
+		GuardedRecords: make([]VersionedRecord[domain.Task], 0, len(tasks)),
+		Problems:       make([]TaskGraphLoadProblem, 0, len(problems)),
+	}
+	for _, task := range tasks {
+		read.GuardedRecords = append(read.GuardedRecords, localGuardedRecord(task))
+	}
+	for _, problem := range problems {
+		read.Problems = append(read.Problems, TaskGraphLoadProblemFromFile(problem, ""))
+	}
+	return NewTaskGraphRead(read)
+}
+
+func localGuardedRecord(task domain.Task) VersionedRecord[domain.Task] {
+	return VersionedRecord[domain.Task]{
+		Record: LoadedRecord[domain.Task]{Value: task, Source: RecordSource{
+			ID: task.CanonicalID(), Location: task.Path, LocationIsPath: task.Path != "",
+		}},
+		LocalPath: task.Path,
+	}
+}
+
+func localSourceRefForTask(task domain.Task) TaskGraphSourceRef {
+	return TaskGraphSourceRef{TaskID: task.CanonicalID(), TaskSlug: task.Slug,
+		Location: task.Path, LocalPath: task.Path}
+}
+
 func TestTaskGraphHealthAndDeterministicStructuralProblems(t *testing.T) {
 	a := graphRecord("a", domain.StatusCompleted)
 	b := graphRecord("b", domain.StatusReadyToStart, a.ID, a.ID)
@@ -678,7 +709,7 @@ func TestTaskGraphDuplicateIDsRetainPathFaithfulDiagnostics(t *testing.T) {
 	first := graphRecord("duplicate-path-first", domain.StatusReadyToStart)
 	second := graphRecord("duplicate-path-second", domain.StatusReadyToStart, "bad-reference")
 	second.ID, second.FilenameID = first.ID, first.ID
-	graph := NewTaskGraph([]domain.Task{second, first}, nil)
+	graph := localTaskGraph([]domain.Task{second, first}, nil)
 	duplicates := make(map[string]bool)
 	invalidOnSecond := false
 	for _, problem := range graph.Problems() {
@@ -1041,7 +1072,7 @@ func TestValidateTaskGraphMutationPlanPreservesSemanticWriteOrder(t *testing.T) 
 
 func TestValidateTaskGraphMutationSourceNamesGuardedRepairPath(t *testing.T) {
 	task := graphRecord("manual-repair", domain.StatusReadyToStart, "not-a-stable-id")
-	err := ValidateTaskGraphMutationSource(NewTaskGraph([]domain.Task{task}, nil))
+	err := ValidateTaskGraphMutationSource(localTaskGraph([]domain.Task{task}, nil))
 	if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), task.Path) ||
 		!strings.Contains(err.Error(), "field depends_on") ||
 		!strings.Contains(err.Error(), "tskflwctl task depend repair") ||

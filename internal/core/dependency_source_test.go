@@ -20,7 +20,7 @@ func TestTaskGraphSourceViewsSeparateRawCanonicalAndProjectedDependencies(t *tes
 	owner.LegacyBlocks = []string{alpha.Slug}
 	owner.LegacyDependencyFields = []string{"blocked_by", "dependencies", "blocks"}
 	tasks := []domain.Task{owner, gamma, alpha, beta}
-	graph := NewTaskGraph(tasks, nil)
+	graph := localTaskGraph(tasks, nil)
 
 	if got := graph.CanonicalDependencies(owner.ID); !slices.Equal(got, []string{beta.ID}) {
 		t.Fatalf("canonical dependencies = %v", got)
@@ -39,7 +39,7 @@ func TestTaskGraphSourceViewsSeparateRawCanonicalAndProjectedDependencies(t *tes
 	assertSourceDeclaration(t, declarations, owner, TaskDependencyBlocks, alpha.Slug, 0, DependencyEdge{From: owner.ID, To: alpha.ID})
 	reversed := cloneTasks(tasks)
 	slices.Reverse(reversed)
-	if got := mustSourceDeclarations(t, NewTaskGraph(reversed, nil)); !reflect.DeepEqual(got, declarations) {
+	if got := mustSourceDeclarations(t, localTaskGraph(reversed, nil)); !reflect.DeepEqual(got, declarations) {
 		t.Fatalf("adapter record order changed declarations:\nfirst=%+v\nsecond=%+v", declarations, got)
 	}
 
@@ -73,7 +73,10 @@ func TestTaskGraphSourceDeclarationsOnlyNameEdgesInTheSemanticProjection(t *test
 	shadow.Path = "tasks/b-shadow.md"
 
 	graph := NewTaskGraphRead(TaskGraphRead{
-		Tasks: []domain.Task{shadow, owner, target, representative},
+		GuardedRecords: []VersionedRecord[domain.Task]{
+			localGuardedRecord(shadow), localGuardedRecord(owner),
+			localGuardedRecord(target), localGuardedRecord(representative),
+		},
 		Problems: []TaskGraphLoadProblem{{
 			TaskID: unreadableID, TaskSlug: "projected-edge-unreadable",
 			Message: "remote record is unreadable", SourceVersion: "unreadable-revision",
@@ -144,7 +147,7 @@ func TestTaskGraphLegacyShadowDeclarationsDoNotEnterSemanticProjection(t *testin
 			test.configure(&shadow, peer)
 			shadow.LegacyDependencyFields = []string{string(test.field)}
 
-			graph := NewTaskGraph([]domain.Task{shadow, peer, representative}, nil)
+			graph := localTaskGraph([]domain.Task{shadow, peer, representative}, nil)
 			test.assert(t, graph, representative, peer)
 			foundDiagnostic := false
 			for _, diagnostic := range graph.LegacyDiagnostics() {
@@ -172,8 +175,8 @@ func TestTaskGraphSourceSimulationPreservesRawInvalidAndDanglingIntent(t *testin
 	owner := graphRecord("source-invalid-owner", domain.StatusReadyToStart)
 	missingID := testutil.TaskID("source-missing-prerequisite")
 	owner.DependsOn = []string{"human-authored-slug", missingID, prerequisite.ID}
-	graph := NewTaskGraph([]domain.Task{owner, prerequisite}, nil)
-	source := sourceRefForTask(owner)
+	graph := localTaskGraph([]domain.Task{owner, prerequisite}, nil)
+	source := localSourceRefForTask(owner)
 
 	if got := graph.CanonicalDependencies(owner.ID); !slices.Equal(got, sortedUnique([]string{missingID, prerequisite.ID})) {
 		t.Fatalf("canonical stable-ID set = %v", got)
@@ -203,11 +206,11 @@ func TestTaskGraphSourceSimulationPreservesUntouchedInvalidLiteralsVerbatim(t *t
 		target.ID, "human-authored-slug", "  spaced literal  ", "")
 	owner.LegacyBlockedBy = []string{target.Slug, " legacy literal "}
 	owner.LegacyDependencyFields = []string{"blocked_by"}
-	graph := NewTaskGraph([]domain.Task{owner, target}, nil)
+	graph := localTaskGraph([]domain.Task{owner, target}, nil)
 
 	simulated, err := graph.SimulateSourceEdits([]TaskGraphSourceEdit{
-		{Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner), Field: TaskDependencyDependsOn, Value: ""},
-		{Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner), Field: TaskDependencyBlockedBy, Value: target.Slug},
+		{Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(owner), Field: TaskDependencyDependsOn, Value: ""},
+		{Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(owner), Field: TaskDependencyBlockedBy, Value: target.Slug},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -221,8 +224,8 @@ func TestTaskGraphSourceDedupeIsRetryStableAndExactDropNamesAnOccurrence(t *test
 	alpha := graphRecord("source-dedupe-alpha", domain.StatusCompleted)
 	beta := graphRecord("source-dedupe-beta", domain.StatusCompleted)
 	owner := graphRecord("source-dedupe-owner", domain.StatusReadyToStart, alpha.ID, alpha.ID, alpha.ID, beta.ID)
-	graph := NewTaskGraph([]domain.Task{owner, beta, alpha}, nil)
-	source := sourceRefForTask(owner)
+	graph := localTaskGraph([]domain.Task{owner, beta, alpha}, nil)
+	source := localSourceRefForTask(owner)
 
 	dropped, err := graph.SimulateSourceEdits([]TaskGraphSourceEdit{{
 		Action: TaskGraphSourceDropDeclaration, Source: source, Field: TaskDependencyDependsOn,
@@ -274,10 +277,10 @@ func TestTaskGraphSourceSimulationRemovesOnlyNamedLegacyState(t *testing.T) {
 	owner.LegacyDependencies = []string{gamma.ID}
 	owner.LegacyBlocks = []string{delta.ID}
 	owner.LegacyDependencyFields = []string{"blocked_by", "dependencies", "blocks"}
-	graph := NewTaskGraph([]domain.Task{owner, delta, gamma, beta, alpha}, nil)
+	graph := localTaskGraph([]domain.Task{owner, delta, gamma, beta, alpha}, nil)
 
 	simulated, err := graph.SimulateSourceEdits([]TaskGraphSourceEdit{{
-		Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner),
+		Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(owner),
 		Field: TaskDependencyBlockedBy, Value: beta.ID,
 	}})
 	if err != nil {
@@ -289,9 +292,9 @@ func TestTaskGraphSourceSimulationRemovesOnlyNamedLegacyState(t *testing.T) {
 
 	empty := graphRecord("source-empty-legacy", domain.StatusReadyToStart)
 	empty.LegacyDependencyFields = []string{"blocked_by", "dependencies", "blocks"}
-	emptyGraph := NewTaskGraph([]domain.Task{empty}, nil)
+	emptyGraph := localTaskGraph([]domain.Task{empty}, nil)
 	cleaned, err := emptyGraph.SimulateSourceEdits([]TaskGraphSourceEdit{{
-		Action: TaskGraphSourceDropEmptyField, Source: sourceRefForTask(empty), Field: TaskDependencyBlockedBy,
+		Action: TaskGraphSourceDropEmptyField, Source: localSourceRefForTask(empty), Field: TaskDependencyBlockedBy,
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -303,12 +306,12 @@ func TestTaskGraphSourceSimulationRemovesOnlyNamedLegacyState(t *testing.T) {
 		t.Fatalf("present-but-empty legacy fields must expose non-nil values: %+v", fields)
 	}
 	if _, err := graph.SimulateSourceEdits([]TaskGraphSourceEdit{{
-		Action: TaskGraphSourceDropEmptyField, Source: sourceRefForTask(owner), Field: TaskDependencyBlockedBy,
+		Action: TaskGraphSourceDropEmptyField, Source: localSourceRefForTask(owner), Field: TaskDependencyBlockedBy,
 	}}); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("non-empty field removal error = %v, want validation", err)
 	}
 	if _, err := emptyGraph.SimulateSourceEdits([]TaskGraphSourceEdit{{
-		Action: TaskGraphSourceDropEmptyField, Source: sourceRefForTask(empty), Field: TaskDependencyDependsOn,
+		Action: TaskGraphSourceDropEmptyField, Source: localSourceRefForTask(empty), Field: TaskDependencyDependsOn,
 	}}); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("canonical empty-field removal error = %v, want validation", err)
 	}
@@ -319,13 +322,13 @@ func TestTaskGraphSourceSimulationSeparatesDeclarationAndEmptyLegacyFieldRemoval
 	owner := graphRecord("source-last-legacy-owner", domain.StatusReadyToStart)
 	owner.LegacyBlockedBy = []string{prerequisite.ID}
 	owner.LegacyDependencyFields = []string{"blocked_by"}
-	graph := NewTaskGraph([]domain.Task{owner, prerequisite}, nil)
+	graph := localTaskGraph([]domain.Task{owner, prerequisite}, nil)
 	drop := TaskGraphSourceEdit{
-		Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner),
+		Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(owner),
 		Field: TaskDependencyBlockedBy, Value: prerequisite.ID,
 	}
 	dropEmpty := TaskGraphSourceEdit{
-		Action: TaskGraphSourceDropEmptyField, Source: sourceRefForTask(owner),
+		Action: TaskGraphSourceDropEmptyField, Source: localSourceRefForTask(owner),
 		Field: TaskDependencyBlockedBy,
 	}
 
@@ -375,7 +378,7 @@ func TestTaskGraphSourceSimulationRetainsDuplicateAndUnreadableRecords(t *testin
 	}, Problems: []TaskGraphLoadProblem{readProblem}})
 
 	simulated, err := graph.SimulateSourceEdits([]TaskGraphSourceEdit{{
-		Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(owner),
+		Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(owner),
 		Field: TaskDependencyDependsOn, Value: "invalid-human-token",
 	}})
 	if err != nil {
@@ -403,7 +406,7 @@ func TestTaskGraphSourceSimulationRetainsDuplicateAndUnreadableRecords(t *testin
 	}
 
 	targeted, err := graph.SimulateSourceEdits([]TaskGraphSourceEdit{{
-		Action: TaskGraphSourceDropDeclaration, Source: sourceRefForTask(duplicateB),
+		Action: TaskGraphSourceDropDeclaration, Source: localSourceRefForTask(duplicateB),
 		Field: TaskDependencyDependsOn, Value: owner.ID,
 	}})
 	if err != nil {
@@ -418,8 +421,8 @@ func TestTaskGraphSourceSimulationRetainsDuplicateAndUnreadableRecords(t *testin
 
 func TestTaskGraphSourceSimulationRejectsMalformedEditIntent(t *testing.T) {
 	task := graphRecord("source-edit-validation", domain.StatusReadyToStart)
-	graph := NewTaskGraph([]domain.Task{task}, nil)
-	source := sourceRefForTask(task)
+	graph := localTaskGraph([]domain.Task{task}, nil)
+	source := localSourceRefForTask(task)
 	tests := []struct {
 		name string
 		edit TaskGraphSourceEdit
@@ -528,7 +531,7 @@ func TestTaskGraphSourceDeclarationsProjectEveryLegacyCycleDirection(t *testing.
 			peer := graphRecord("cycle-peer", domain.StatusReadyToStart)
 			owner.DependsOn = []string{peer.ID}
 			test.configure(&owner, &peer)
-			graph := NewTaskGraph([]domain.Task{peer, owner}, nil)
+			graph := localTaskGraph([]domain.Task{peer, owner}, nil)
 			if graph.Health() != GraphBroken || !slices.Contains(graphProblemCodes(graph.Problems()), ProblemCycle) {
 				t.Fatalf("legacy cycle health=%s problems=%+v", graph.Health(), graph.Problems())
 			}
@@ -553,7 +556,7 @@ func TestTaskGraphSourceDeclarationsProjectEveryLegacyCycleDirection(t *testing.
 func assertSourceDeclaration(t *testing.T, declarations []TaskGraphSourceDeclaration, source domain.Task, field TaskDependencyField, value string, occurrence int, edge DependencyEdge) {
 	t.Helper()
 	for _, declaration := range declarations {
-		if declaration.Source == sourceRefForTask(source) && declaration.Field == field &&
+		if declaration.Source == localSourceRefForTask(source) && declaration.Field == field &&
 			declaration.Value == value && declaration.Occurrence == occurrence {
 			if !declaration.HasProjectedEdge || declaration.ProjectedEdge != edge {
 				t.Fatalf("declaration %+v projected edge = %+v/%t, want %+v", declaration, declaration.ProjectedEdge, declaration.HasProjectedEdge, edge)
@@ -561,20 +564,20 @@ func assertSourceDeclaration(t *testing.T, declarations []TaskGraphSourceDeclara
 			return
 		}
 	}
-	t.Fatalf("missing declaration source=%+v field=%s value=%q occurrence=%d in %+v", sourceRefForTask(source), field, value, occurrence, declarations)
+	t.Fatalf("missing declaration source=%+v field=%s value=%q occurrence=%d in %+v", localSourceRefForTask(source), field, value, occurrence, declarations)
 }
 
 func assertSourceDeclarationWithoutEdge(t *testing.T, declarations []TaskGraphSourceDeclaration, source domain.Task, field TaskDependencyField, value string) {
 	t.Helper()
 	for _, declaration := range declarations {
-		if declaration.Source == sourceRefForTask(source) && declaration.Field == field && declaration.Value == value {
+		if declaration.Source == localSourceRefForTask(source) && declaration.Field == field && declaration.Value == value {
 			if declaration.HasProjectedEdge || declaration.ProjectedEdge != (DependencyEdge{}) {
 				t.Fatalf("declaration %+v unexpectedly claims a projected edge", declaration)
 			}
 			return
 		}
 	}
-	t.Fatalf("missing declaration source=%+v field=%s value=%q in %+v", sourceRefForTask(source), field, value, declarations)
+	t.Fatalf("missing declaration source=%+v field=%s value=%q in %+v", localSourceRefForTask(source), field, value, declarations)
 }
 
 func sourceRecordFor(t *testing.T, records []TaskGraphSourceRecord, location string) TaskGraphSourceRecord {
