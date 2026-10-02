@@ -58,7 +58,6 @@ func (i taskItem) displayLabel() string {
 	return labelWithIdentityHint(i.t.Slug, i.identityHint)
 }
 func (i taskItem) hasIdentityHint() bool { return i.identityHint != "" }
-func (i taskItem) path() string          { return i.t.Path }
 
 // lifecycleState is the task's current status — the action menu drops the no-op
 // transition that lands on it (M10).
@@ -121,7 +120,6 @@ func (i epicItem) ref() entityRef {
 }
 func (i epicItem) displayLabel() string  { return labelWithIdentityHint(i.es.Epic.ID, i.identityHint) }
 func (i epicItem) hasIdentityHint() bool { return i.identityHint != "" }
-func (i epicItem) path() string          { return i.es.Epic.Path }
 
 // lifecycleState is the epic's current status (active/retired/deprecated) — the
 // action menu drops the no-op transition that lands on it.
@@ -215,7 +213,6 @@ func (i threadItem) hasIdentityHint() bool { return i.identityHint != "" }
 
 // Thread paths are resolved only through the optional ThreadPathSource during
 // detail loading. The portable semantic record is never treated as that port.
-func (i threadItem) path() string { return "" }
 func (i threadItem) sortFields() sortFields {
 	updated := i.view.Thread.Updated
 	if updated == "" {
@@ -410,7 +407,6 @@ func (i auditItem) displayLabel() string {
 	return labelWithIdentityHint(i.a.Slug, i.identityHint)
 }
 func (i auditItem) hasIdentityHint() bool { return i.identityHint != "" }
-func (i auditItem) path() string          { return i.a.Path }
 
 // lifecycleState is the audit's current bucket — the action menu drops the no-op
 // transition that lands on it (e.g. reopen on an already-open audit).
@@ -467,7 +463,6 @@ func (i researchItem) displayLabel() string {
 	return labelWithIdentityHint(i.r.Slug, i.identityHint)
 }
 func (i researchItem) hasIdentityHint() bool { return i.identityHint != "" }
-func (i researchItem) path() string          { return i.r.Path }
 
 func (i researchItem) sortFields() sortFields {
 	// Research sorts by created (the loader's default order), updated, and slug — no

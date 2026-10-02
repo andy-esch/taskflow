@@ -22,10 +22,11 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 		fmt.Fprintf(w, "  %s  %s\n", st.Dim("archived"), line)
 	}
 
-	if len(s.InProgress) > 0 {
-		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("In progress (%d)", len(s.InProgress))))
-		rows := make([][]string, 0, len(s.InProgress))
-		for _, t := range s.InProgress {
+	if len(s.InProgressRecords) > 0 {
+		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("In progress (%d)", len(s.InProgressRecords))))
+		rows := make([][]string, 0, len(s.InProgressRecords))
+		for _, record := range s.InProgressRecords {
+			t := record.Value
 			rows = append(rows, []string{"  " + st.Bold(t.Slug), st.Dim(theme.RelativeDate(theme.TaskDate(t))), t.Description})
 		}
 		writeTable(w, st.width, nil, rows)
@@ -46,7 +47,8 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 	if len(s.OpenAudits) > 0 {
 		fmt.Fprintf(w, "\n%s\n", st.Bold(fmt.Sprintf("Open audits (%d)", len(s.OpenAudits))))
 		rows := make([][]string, 0, len(s.OpenAudits))
-		for _, a := range s.OpenAudits {
+		for _, loaded := range s.OpenAudits {
+			a := loaded.Value
 			bar := fmt.Sprintf("%s %s", st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10), st.AuditPercent(a.Percent()))
 			counts := theme.Counts(a.Resolved(), a.Findings)
 			if note := auditStateNote(st, a, false); note != "" {

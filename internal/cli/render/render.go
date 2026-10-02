@@ -67,7 +67,7 @@ func TasksReadHuman(w io.Writer, st Style, tasks []core.LoadedRecord[domain.Task
 	values := make([]domain.Task, 0, len(tasks))
 	for _, record := range tasks {
 		task := record.Value
-		task.Slug += readableLocationSuffix(record.Source, task.Path)
+		task.Slug += readableLocationSuffix(record.Source)
 		values = append(values, task)
 	}
 	return TasksHuman(w, st, values)
@@ -76,19 +76,19 @@ func TasksReadHuman(w io.Writer, st Style, tasks []core.LoadedRecord[domain.Task
 // Readable locations are explanatory, never selectors or inferred local paths.
 // Keep ordinary local output unchanged while making opaque-source occurrences
 // distinguishable even when their ID and semantic label are identical.
-func readableLocationSuffix(source core.RecordSource, localPath string) string {
-	location := readableLocation(source.Location, localPath)
+func readableLocationSuffix(source core.RecordSource) string {
+	location := readableLocation(source)
 	if location == "" {
 		return ""
 	}
 	return " [location: " + location + "]"
 }
 
-func readableLocation(location, localPath string) string {
-	if location == localPath {
+func readableLocation(source core.RecordSource) string {
+	if source.LocationIsPath {
 		return ""
 	}
-	return location
+	return source.Location
 }
 
 // fieldPrinter returns a key/value line writer for a metadata block: a dim,
@@ -174,6 +174,9 @@ func TaskInfoHuman(w io.Writer, st Style, t domain.Task, ac domain.ACCount, path
 		acText += st.Dim(fmt.Sprintf(" · %d explained", ac.Explained))
 	}
 	field("ac", acText)
+	if path == "" {
+		path = st.Dim("unavailable (no local path capability)")
+	}
 	field("path", path)
 }
 
@@ -191,6 +194,9 @@ func AuditInfoHuman(w io.Writer, st Style, a domain.Audit, path string) {
 	field("bucket", string(a.Bucket))
 	field("findings", fmt.Sprintf("%d total · %d open · %d in-progress · %d done · %d dropped",
 		a.Findings, a.OpenFindings, a.ActiveFindings, a.DoneFindings, a.DroppedFindings))
+	if path == "" {
+		path = st.Dim("unavailable (no local path capability)")
+	}
 	field("path", path)
 }
 
@@ -408,12 +414,13 @@ func BoardHuman(w io.Writer, st Style, b core.Board) error {
 			continue
 		}
 		rows := make([][]string, 0, len(c.Tasks))
-		for _, t := range c.Tasks {
+		for _, record := range c.Tasks {
+			t := record.Value
 			// A blocked row is dimmed and marked: the board's whole job is to answer
 			// "what next", and an unmarked blocked task is an answer that `task start`
 			// will refuse. `task blockers <slug>` names the offending edge.
 			slug, marker := st.Bold(t.Slug), "  "
-			if b.Blocked[t.ID] {
+			if b.Blocked[record.Source.ID] {
 				slug, marker = st.Dim(t.Slug), st.Dim("⛔")
 			}
 			rows = append(rows, []string{marker + slug, st.Priority(t.Priority), t.Description})
@@ -597,7 +604,7 @@ func EpicsHuman(w io.Writer, st Style, epics []core.EpicSummary) error {
 			}
 			status = st.Warn("⚠ " + disp)
 		}
-		rows = append(rows, []string{st.Bold(e.Epic.ID + readableLocationSuffix(e.Source, e.Epic.Path)), status, progress, e.Epic.Description})
+		rows = append(rows, []string{st.Bold(e.Epic.ID + readableLocationSuffix(e.Source)), status, progress, e.Epic.Description})
 	}
 	writeTable(w, st.width, []string{st.Dim("EPIC"), st.Dim("STATUS"), st.Dim("PROGRESS"), st.Dim("DESCRIPTION")}, rows)
 	return nil
@@ -731,7 +738,7 @@ func AuditsReadHuman(w io.Writer, st Style, audits []core.LoadedRecord[domain.Au
 	values := make([]domain.Audit, 0, len(audits))
 	for _, record := range audits {
 		audit := record.Value
-		audit.Slug += readableLocationSuffix(record.Source, audit.Path)
+		audit.Slug += readableLocationSuffix(record.Source)
 		values = append(values, audit)
 	}
 	return AuditsHuman(w, st, values)
@@ -766,7 +773,7 @@ func ResearchReadHuman(w io.Writer, st Style, docs []core.LoadedRecord[domain.Re
 	values := make([]domain.Research, 0, len(docs))
 	for _, record := range docs {
 		research := record.Value
-		research.Slug += readableLocationSuffix(record.Source, research.Path)
+		research.Slug += readableLocationSuffix(record.Source)
 		values = append(values, research)
 	}
 	return ResearchHuman(w, st, values)

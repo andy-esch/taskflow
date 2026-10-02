@@ -362,9 +362,7 @@ func newEpicShowCmd(app *App) *cobra.Command {
 				}
 				tasks := make([]domain.Task, 0, len(detail.Tasks))
 				for _, record := range detail.Tasks {
-					task := record.Value
-					task.FilenameID = record.Source.ID
-					tasks = append(tasks, task)
+					tasks = append(tasks, record.Value)
 				}
 				return render.EpicShowHuman(w, app.Style, detail.Summary, tasks, rendered)
 			})

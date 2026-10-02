@@ -203,10 +203,10 @@ func TestAtlasRetainsContendedSpaceAndRetriesOnlyThatSpaceAfterQuietPeriod(t *te
 	}
 	alphaSummary := atlasSummary(t, m, "planning-alpha")
 	betaSummary := atlasSummary(t, m, "planning-beta")
-	if alphaSummary.Summary == nil || len(alphaSummary.Summary.InProgress) != 2 {
+	if alphaSummary.Summary == nil || len(alphaSummary.Summary.InProgressRecords) != 2 {
 		t.Fatalf("healthy space did not advance during partial failure: %+v", alphaSummary)
 	}
-	if !betaSummary.Stale || betaSummary.Summary == nil || len(betaSummary.Summary.InProgress) != 1 {
+	if !betaSummary.Stale || betaSummary.Summary == nil || len(betaSummary.Summary.InProgressRecords) != 1 {
 		t.Fatalf("contended space did not retain its coherent summary: %+v", betaSummary)
 	}
 	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "stale") ||
@@ -307,13 +307,13 @@ func TestAtlasDropsSupersededRetryRequestsAndResults(t *testing.T) {
 		t.Fatal("a newer Atlas generation must drop the older retry")
 	}
 	obsolete := atlasSummary(t, m, "planning-beta")
-	obsolete.Summary = &core.Summary{InProgress: []domain.Task{{Slug: "obsolete-result"}}}
+	obsolete.Summary = &core.Summary{InProgressRecords: []core.LoadedRecord[domain.Task]{{Value: domain.Task{Slug: "obsolete-result"}}}}
 	tm, cmd = m.Update(atlasRetriedMsg{
 		gen: oldLoad, refresh: core.SpaceOverviewRefresh{Spaces: []core.SpaceSummary{obsolete}},
 	})
 	m = tm.(Model)
 	if cmd != nil || !m.atlas.retrying ||
-		atlasSummary(t, m, "planning-beta").Summary.InProgress[0].Slug == "obsolete-result" {
+		atlasSummary(t, m, "planning-beta").Summary.InProgressRecords[0].Value.Slug == "obsolete-result" {
 		t.Fatal("an older Atlas generation's retry result changed current state")
 	}
 
@@ -325,13 +325,13 @@ func TestAtlasDropsSupersededRetryRequestsAndResults(t *testing.T) {
 		t.Fatal("an old workspace session retry must not touch the current Atlas")
 	}
 	foreign := obsolete
-	foreign.Summary = &core.Summary{InProgress: []domain.Task{{Slug: "foreign-session-result"}}}
+	foreign.Summary = &core.Summary{InProgressRecords: []core.LoadedRecord[domain.Task]{{Value: domain.Task{Slug: "foreign-session-result"}}}}
 	tm, cmd = m.Update(sessionMsg{gen: oldSession, msg: atlasRetriedMsg{
 		gen: m.atlas.loadGen, refresh: core.SpaceOverviewRefresh{Spaces: []core.SpaceSummary{foreign}},
 	}})
 	m = tm.(Model)
 	if cmd != nil || !m.atlas.retrying ||
-		atlasSummary(t, m, "planning-beta").Summary.InProgress[0].Slug == "foreign-session-result" {
+		atlasSummary(t, m, "planning-beta").Summary.InProgressRecords[0].Value.Slug == "foreign-session-result" {
 		t.Fatal("an old workspace session retry result changed current state")
 	}
 }
@@ -416,7 +416,7 @@ func TestAtlasLoadsGroupedCardsAndNavigatesThroughSelectedEntry(t *testing.T) {
 
 func TestAtlasOrderCyclesWithoutLosingTheSelectedLogicalSpace(t *testing.T) {
 	a := atlas{}
-	active := core.Summary{InProgress: []domain.Task{{}, {}}}
+	active := core.Summary{InProgressRecords: []core.LoadedRecord[domain.Task]{{}, {}}}
 	a.setOverview(core.SpaceOverview{Spaces: []core.SpaceSummary{
 		{ID: "zeta", PlanningID: "planning-zeta", Summary: &active},
 		{ID: "alpha", PlanningID: "planning-alpha", Summary: &core.Summary{}},
@@ -718,7 +718,12 @@ func TestAtlasEnabledModelDoesNotHideEditorControlCommand(t *testing.T) {
 	tm, cmd = m.Update(press("E"))
 	m = tm.(Model)
 	if cmd == nil {
-		t.Fatal("E should return Bubble Tea's ExecProcess command")
+		t.Fatal("E should request a local path")
+	}
+	tm, cmd = m.Update(cmd())
+	m = tm.(Model)
+	if cmd == nil {
+		t.Fatal("a resolved path should return Bubble Tea's ExecProcess command")
 	}
 	msg := cmd() // returns the control value; it does not launch the editor itself
 	if _, hidden := msg.(sessionMsg); hidden || !strings.Contains(fmt.Sprintf("%T", msg), "execMsg") {

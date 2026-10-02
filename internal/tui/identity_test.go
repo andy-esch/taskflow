@@ -313,7 +313,11 @@ func TestDuplicateDetailErrorsKeepTheFriendlyLabel(t *testing.T) {
 	if !m.cur().selectByKey(second.ref().key) {
 		t.Fatal("second duplicate was not selectable")
 	}
-	if err := os.Remove(second.path()); err != nil {
+	path, err := m.svc.TaskPath(second.ref().key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
 	cmd := m.refreshDetail()
@@ -492,8 +496,8 @@ func TestEntityRegistryRejectsEmptyOrDuplicateCanonicalKeys(t *testing.T) {
 func TestEntityRowsUsePortableSourceIDsNotDomainFallbacks(t *testing.T) {
 	const sourceID = "portable-source-id"
 	task := domain.Task{ID: "frontmatter-id", FilenameID: "filename-id", Slug: "task"}
-	audit := domain.Audit{ID: "frontmatter-id", FilenameID: "filename-id", Slug: "audit"}
-	research := domain.Research{ID: "frontmatter-id", FilenameID: "filename-id", Slug: "research"}
+	audit := domain.Audit{ID: "frontmatter-id", Slug: "audit"}
+	research := domain.Research{ID: "frontmatter-id", Slug: "research"}
 	items := []entityItem{
 		taskItem{t: task, sourceID: sourceID},
 		epicItem{es: core.EpicSummary{Epic: domain.Epic{ID: "display-id"}, Source: core.RecordSource{ID: sourceID}}},
@@ -599,7 +603,7 @@ func TestDashboardInProgressRowsCarryCanonicalDuplicateTargets(t *testing.T) {
 		{ID: "declared-b", Slug: "same-task", Status: domain.StatusInProgress},
 	}
 	var d dashboard
-	d.setSummary(core.Summary{InProgress: tasks, TaskSourceIDs: []string{"aaaaaa111111", "bbbbbb222222"}, InProgressRecords: []core.LoadedRecord[domain.Task]{
+	d.setSummary(core.Summary{TaskSourceIDs: []string{"aaaaaa111111", "bbbbbb222222"}, InProgressRecords: []core.LoadedRecord[domain.Task]{
 		{Value: tasks[0], Source: core.RecordSource{ID: "aaaaaa111111"}},
 		{Value: tasks[1], Source: core.RecordSource{ID: "bbbbbb222222"}},
 	}}, &testStyles, false)
@@ -621,12 +625,12 @@ func TestDashboardInProgressRowsCarryCanonicalDuplicateTargets(t *testing.T) {
 func TestDashboardDoesNotNavigateBareOrAmbiguousWork(t *testing.T) {
 	task := domain.Task{ID: "domain-fallback", Slug: "work", Status: domain.StatusInProgress}
 	for _, summary := range []core.Summary{
-		{InProgress: []domain.Task{task}},
-		{InProgress: []domain.Task{task, task}, InProgressRecords: []core.LoadedRecord[domain.Task]{
+		{InProgressRecords: []core.LoadedRecord[domain.Task]{{Value: task}}},
+		{InProgressRecords: []core.LoadedRecord[domain.Task]{
 			{Value: task, Source: core.RecordSource{ID: "shared-source"}},
 			{Value: task, Source: core.RecordSource{ID: "shared-source"}},
 		}},
-		{InProgress: []domain.Task{task}, TaskSourceIDs: []string{"shared-source", "shared-source"},
+		{TaskSourceIDs: []string{"shared-source", "shared-source"},
 			InProgressRecords: []core.LoadedRecord[domain.Task]{{Value: task, Source: core.RecordSource{ID: "shared-source"}}}},
 	} {
 		var d dashboard

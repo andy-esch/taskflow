@@ -54,11 +54,21 @@ func toGraphProblemsJSON(problems []core.GraphProblem) []GraphProblemJSON {
 	for _, problem := range problems {
 		out = append(out, GraphProblemJSON{
 			Code: string(problem.Code), TaskID: problem.TaskID, RelatedTaskID: problem.RelatedTaskID,
-			Field: problem.Field, Path: problem.Path, Location: readableSourceLocation(problem.Location, problem.Path), Message: problem.Message,
+			Field: problem.Field, Path: problem.Path, Location: graphProblemLocation(problem), Message: problem.Message,
 			Cycle: append([]string(nil), problem.Cycle...),
 		})
 	}
 	return out
+}
+
+func graphProblemLocation(problem core.GraphProblem) string {
+	// Graph diagnostics already separate the optional local repair path from
+	// opaque context. Suppress only a duplicate presentation value; this does
+	// not authorize opening Location as a local file.
+	if problem.Location == problem.Path {
+		return ""
+	}
+	return problem.Location
 }
 
 // LegacyReferenceJSON records one legacy dependency resolution.

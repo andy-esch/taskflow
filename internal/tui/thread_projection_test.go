@@ -270,12 +270,22 @@ func TestThreadRouteSurvivesSplitPathlessCapabilities(t *testing.T) {
 	if detail.body != "split body\n" || detail.path != "" || detail.pathIssue == "" {
 		t.Fatalf("pathless detail = body %q path %q issue %q", detail.body, detail.path, detail.pathIssue)
 	}
-	tm, cmd := m.yankSelectedPath()
+	tm, resolve := m.yankSelectedPath()
+	m = tm.(Model)
+	if resolve == nil {
+		t.Fatal("pathless yank did not request the optional path capability")
+	}
+	tm, cmd := m.Update(resolve())
 	m = tm.(Model)
 	if cmd != nil || !m.flashErr || !strings.Contains(m.flash, "local path unavailable") {
 		t.Fatalf("pathless yank did not degrade explicitly: flash=%q cmd=%v", m.flash, cmd != nil)
 	}
-	tm, cmd = m.openInEditor()
+	tm, resolve = m.openInEditor()
+	m = tm.(Model)
+	if resolve == nil {
+		t.Fatal("pathless editor did not request the optional path capability")
+	}
+	tm, cmd = m.Update(resolve())
 	m = tm.(Model)
 	if cmd != nil || !m.flashErr || !strings.Contains(m.flash, "local path unavailable") {
 		t.Fatalf("pathless editor did not degrade explicitly: flash=%q cmd=%v", m.flash, cmd != nil)
@@ -306,12 +316,16 @@ func TestLocalThreadPathSurvivesSemanticDetailFailure(t *testing.T) {
 	if got := m.selectedPath(); got != "/planning/threads/repair-thread.md" {
 		t.Fatalf("semantic detail failure lost local repair path: %q", got)
 	}
-	tm, copyCmd := m.yankSelectedPath()
+	tm, resolve := m.yankSelectedPath()
+	m = tm.(Model)
+	tm, copyCmd := m.Update(resolve())
 	m = tm.(Model)
 	if copyCmd == nil || m.flashErr {
 		t.Fatalf("repair path was not copyable: flash=%q cmd=%v", m.flash, copyCmd != nil)
 	}
-	tm, editorCmd := m.openInEditor()
+	tm, resolve = m.openInEditor()
+	m = tm.(Model)
+	tm, editorCmd := m.Update(resolve())
 	m = tm.(Model)
 	if editorCmd == nil || m.flashErr {
 		t.Fatalf("repair path was not openable: flash=%q cmd=%v", m.flash, editorCmd != nil)

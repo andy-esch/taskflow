@@ -65,7 +65,6 @@ type entityItem interface {
 	ref() entityRef
 	displayLabel() string
 	hasIdentityHint() bool
-	path() string // the entity's on-disk file path (for the clipboard yank)
 	sortFields() sortFields
 }
 

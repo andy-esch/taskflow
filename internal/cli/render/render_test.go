@@ -150,13 +150,13 @@ func TestReadableListHumanDistinguishesOpaqueLocations(t *testing.T) {
 			return TasksReadHuman(out, NewStyle(false), []core.LoadedRecord[domain.Task]{{Value: domain.Task{Slug: "same", Path: local, Status: domain.StatusNextUp}, Source: src}})
 		}},
 		{"epic", func(out *bytes.Buffer, src core.RecordSource) error {
-			return EpicsHuman(out, NewStyle(false), []core.EpicSummary{{Epic: domain.Epic{ID: "same", Path: local}, Source: src}})
+			return EpicsHuman(out, NewStyle(false), []core.EpicSummary{{Epic: domain.Epic{ID: "same"}, Source: src}})
 		}},
 		{"audit", func(out *bytes.Buffer, src core.RecordSource) error {
-			return AuditsReadHuman(out, NewStyle(false), []core.LoadedRecord[domain.Audit]{{Value: domain.Audit{Slug: "same", Path: local}, Source: src}})
+			return AuditsReadHuman(out, NewStyle(false), []core.LoadedRecord[domain.Audit]{{Value: domain.Audit{Slug: "same"}, Source: src}})
 		}},
 		{"research", func(out *bytes.Buffer, src core.RecordSource) error {
-			return ResearchReadHuman(out, NewStyle(false), []core.LoadedRecord[domain.Research]{{Value: domain.Research{Slug: "same", Path: local}, Source: src}})
+			return ResearchReadHuman(out, NewStyle(false), []core.LoadedRecord[domain.Research]{{Value: domain.Research{Slug: "same"}, Source: src}})
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -168,11 +168,18 @@ func TestReadableListHumanDistinguishesOpaqueLocations(t *testing.T) {
 				t.Fatalf("opaque occurrence not attributable: %s", out.String())
 			}
 			out.Reset()
-			if err := tc.render(&out, core.RecordSource{ID: source.ID, Location: local}); err != nil {
+			if err := tc.render(&out, core.RecordSource{ID: source.ID, Location: local, LocationIsPath: true}); err != nil {
 				t.Fatal(err)
 			}
 			if strings.Contains(out.String(), "[location:") {
 				t.Fatalf("ordinary local record gained redundant location: %s", out.String())
+			}
+			out.Reset()
+			if err := tc.render(&out, core.RecordSource{ID: source.ID, Location: local}); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out.String(), "[location: "+local+"]") {
+				t.Fatalf("opaque location was inferred to be a local path: %s", out.String())
 			}
 		})
 	}
@@ -526,9 +533,9 @@ func TestSummaryOutputs(t *testing.T) {
 			{Status: domain.StatusInProgress, Count: 2},
 			{Status: domain.StatusCompleted, Count: 5},
 		},
-		InProgress: []domain.Task{{Slug: "alpha", Status: domain.StatusInProgress}},
-		Epics:      []core.EpicSummary{{Epic: domain.Epic{ID: "01-x"}, Total: 2, Done: 1}},
-		OpenAudits: []domain.Audit{{Slug: "2026-06-01-audit-x", Bucket: domain.AuditOpen, Area: "store", Findings: 4, OpenFindings: 1, DoneFindings: 3}},
+		InProgressRecords: []core.LoadedRecord[domain.Task]{{Value: domain.Task{Slug: "alpha", Status: domain.StatusInProgress}, Source: core.RecordSource{ID: "alpha-id"}}},
+		Epics:             []core.EpicSummary{{Epic: domain.Epic{ID: "01-x"}, Total: 2, Done: 1}},
+		OpenAudits:        []core.LoadedRecord[domain.Audit]{{Value: domain.Audit{Slug: "2026-06-01-audit-x", Bucket: domain.AuditOpen, Area: "store", Findings: 4, OpenFindings: 1, DoneFindings: 3}, Source: core.RecordSource{ID: "audit-x"}}},
 		Problems: []core.LoadProblem{{
 			EntityKind: core.EntityTask, EntityID: "6g0000000001", EntitySlug: "broken-task",
 			Location: "db://tasks/row-1", Message: "remote decode failed",
@@ -691,8 +698,8 @@ func TestStatusAllHumanReportsPortableProblemDetailsWithinSpace(t *testing.T) {
 
 func TestStatusAllHumanReportsFailureBesideRetainedSummary(t *testing.T) {
 	summary := core.Summary{
-		Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
-		InProgress: []domain.Task{{Slug: "working"}},
+		Counts:            []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
+		InProgressRecords: []core.LoadedRecord[domain.Task]{{Value: domain.Task{Slug: "working"}, Source: core.RecordSource{ID: "working-id"}}},
 	}
 	overview := core.SpaceOverview{Spaces: []core.SpaceSummary{{
 		ID: "planning", Summary: &summary, Stale: true,

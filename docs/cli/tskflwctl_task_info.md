@@ -1,6 +1,6 @@
 ## tskflwctl task info
 
-Show a task's metadata + file path + acceptance tally (no body)
+Show a task's metadata, acceptance tally, and local path when available (no body)
 
 ```
 tskflwctl task info <task> [flags]

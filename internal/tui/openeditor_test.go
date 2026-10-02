@@ -24,16 +24,20 @@ func TestOpenInEditor_NoSelection(t *testing.T) {
 // would launch $EDITOR — so this asserts the wiring, not the spawn.
 func TestOpenInEditor_Key(t *testing.T) {
 	m := loaded(t, 120, 40)
-	if m.selectedPath() == "" {
-		t.Fatal("setup: expected a selected task with a path")
+	if m.selectedRef().empty() {
+		t.Fatal("setup: expected a selected task")
 	}
-	tm, cmd := m.Update(press("E"))
-	mm := tm.(Model)
+	tm, resolve := m.Update(press("E"))
+	if resolve == nil {
+		t.Fatal("E on a selection should request the local path")
+	}
+	mm, cmd := tm.(Model).Update(resolve())
 	if cmd == nil {
-		t.Fatal("E on a selection should return an ExecProcess cmd")
+		t.Fatal("a resolved task path should return an ExecProcess cmd")
 	}
-	if mm.flash != "" {
-		t.Errorf("a successful launch should not flash; got %q", mm.flash)
+	model := mm.(Model)
+	if model.flash != "" {
+		t.Errorf("a successful launch should not flash; got %q", model.flash)
 	}
 }
 
@@ -45,16 +49,16 @@ func TestOpenInEditor_Epic(t *testing.T) {
 	if m.selectedLabel() != "01-test" {
 		t.Fatalf("setup: want the seeded epic selected, got %q", m.selectedLabel())
 	}
-	if m.selectedPath() == "" {
-		t.Fatal("an epic selection should have a file path for E to open")
+	tm, resolve := m.Update(press("E"))
+	if resolve == nil {
+		t.Fatal("E on an epic should request the local path")
 	}
-	tm, cmd := m.Update(press("E"))
-	mm := tm.(Model)
+	mm, cmd := tm.(Model).Update(resolve())
 	if cmd == nil {
-		t.Fatal("E on an epic selection should return an ExecProcess cmd")
+		t.Fatal("a resolved epic path should return an ExecProcess cmd")
 	}
-	if mm.flashErr {
-		t.Errorf("E on a valid epic should not flash an error; got %q", mm.flash)
+	if mm.(Model).flashErr {
+		t.Errorf("E on a valid epic should not flash an error; got %q", mm.(Model).flash)
 	}
 }
 

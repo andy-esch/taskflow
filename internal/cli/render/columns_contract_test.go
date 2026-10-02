@@ -187,7 +187,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 	assertRegistryMatchesFullWire(t, "audit", "audits", AuditReadColumns(), AuditsJSON,
 		[]registryFixture[core.LoadedRecord[domain.Audit]]{
 			{name: "present", item: core.LoadedRecord[domain.Audit]{Value: domain.Audit{
-				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "2026-09-14-present", Bucket: domain.AuditOpen,
+				ID: "6ga000000099", Slug: "2026-09-14-present", Bucket: domain.AuditOpen,
 				Area: "cli", Date: "2026-09-14", Findings: 4, OpenFindings: 2,
 			}, Source: core.RecordSource{ID: "6ga000000003", Location: "db://audits/present"}}},
 			{name: "zero counts and absent optional strings", item: core.LoadedRecord[domain.Audit]{Value: domain.Audit{
@@ -198,7 +198,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 	assertRegistryMatchesFullWire(t, "research", "research", ResearchReadColumns(), ResearchJSON,
 		[]registryFixture[core.LoadedRecord[domain.Research]]{
 			{name: "present", item: core.LoadedRecord[domain.Research]{Value: domain.Research{
-				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "research-present", Created: "2026-09-01",
+				ID: "6ga000000099", Slug: "research-present", Created: "2026-09-01",
 				Description: "present research", Tags: []string{"cli", "contract"}, Updated: "2026-09-14",
 			}, Source: core.RecordSource{ID: "6ga000000005", Location: "db://research/present"}}},
 			{name: "absent optional strings and empty tags", item: core.LoadedRecord[domain.Research]{Value: domain.Research{

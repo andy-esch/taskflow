@@ -1110,8 +1110,8 @@ func cmdJump(t *testing.T, m Model, word string) Model {
 // an audit.
 func TestModel_EditKeyOnAudit_FlashesEditorHint(t *testing.T) {
 	m := cmdJump(t, auditModel(t), "audits")
-	if m.cur().kind != entityAudits || m.selectedPath() == "" {
-		t.Fatalf("setup: want an audit selected on the audits tab, got tab=%q path=%q", m.cur().name, m.selectedPath())
+	if m.cur().kind != entityAudits || m.selectedRef().empty() {
+		t.Fatalf("setup: want an audit selected on the audits tab, got tab=%q ref=%+v", m.cur().name, m.selectedRef())
 	}
 	tm, _ := m.Update(press("e"))
 	m = tm.(Model)

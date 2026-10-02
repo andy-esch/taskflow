@@ -32,11 +32,15 @@ func TestModel_YankSlug(t *testing.T) {
 // TestModel_YankPath: Y copies the selected entity's on-disk file path.
 func TestModel_YankPath(t *testing.T) {
 	m := loaded(t, 80, 24)
-	wantPath := m.selectedPath()
-	if wantPath == "" || !strings.HasSuffix(wantPath, ".md") {
-		t.Fatalf("setup: expected a .md file path, got %q", wantPath)
+	wantPath, err := m.svc.TaskPath(m.selectedKey())
+	if err != nil || !strings.HasSuffix(wantPath, ".md") {
+		t.Fatalf("setup: expected a .md file path, got %q, %v", wantPath, err)
 	}
-	tm, cmd := m.Update(press("Y"))
+	tm, resolve := m.Update(press("Y"))
+	if resolve == nil {
+		t.Fatal("Y did not request the local path")
+	}
+	tm, cmd := tm.(Model).Update(resolve())
 	m = tm.(Model)
 
 	if m.flash != "copied path: "+wantPath || m.flashErr {
@@ -164,11 +168,15 @@ func TestModel_YankAcrossEntities(t *testing.T) {
 	if m.cur().kind != entityAudits {
 		t.Fatalf("expected the audits tab, got %v", m.cur().kind)
 	}
-	wantPath := m.selectedPath()
-	if wantPath == "" || !strings.HasSuffix(wantPath, ".md") {
-		t.Fatalf("expected an audit .md path, got %q", wantPath)
+	wantPath, err := m.svc.AuditPath(m.selectedKey())
+	if err != nil || !strings.HasSuffix(wantPath, ".md") {
+		t.Fatalf("expected an audit .md path, got %q, %v", wantPath, err)
 	}
-	tm, _ = m.Update(press("Y"))
+	tm, resolve := m.Update(press("Y"))
+	if resolve == nil {
+		t.Fatal("audit Y did not request the local path")
+	}
+	tm, _ = tm.(Model).Update(resolve())
 	m = tm.(Model)
 	if m.flash != "copied path: "+wantPath || m.flashErr {
 		t.Errorf("audit yank flash = %q, want %q", m.flash, "copied path: "+wantPath)

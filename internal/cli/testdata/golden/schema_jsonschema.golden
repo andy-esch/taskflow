@@ -85,7 +85,7 @@
         },
         "path": {
           "type": "string",
-          "description": "absolute path to the audit's markdown file"
+          "description": "absolute local path to the audit's markdown file when available; empty for pathless sources"
         },
         "findings": {
           "$ref": "#/$defs/FindingsTallyJSON",
@@ -3434,7 +3434,7 @@
         },
         "path": {
           "type": "string",
-          "description": "absolute path to the task's markdown file"
+          "description": "absolute local path to the task's markdown file when available; empty for pathless sources"
         },
         "ac": {
           "$ref": "#/$defs/ACJSON",

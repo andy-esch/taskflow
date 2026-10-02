@@ -515,7 +515,7 @@ func newAuditShowCmd(app *App) *cobra.Command {
 func newAuditInfoCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:               "info <audit>",
-		Short:             "Show an audit's metadata + file path + finding tally (no body)",
+		Short:             "Show an audit's metadata, finding tally, and local path when available (no body)",
 		Example:           "  tskflwctl audit show 2026-06-20-api-gateway --frontmatter-only\n  tskflwctl audit info 2026-06-20-api-gateway --json",
 		Args:              cobra.MaximumNArgs(1),
 		Annotations:       map[string]string{"safety": "read-only"},
@@ -531,7 +531,14 @@ func newAuditInfoCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			path := absPath(record.Value.Audit.Path)
+			path := ""
+			if app.Svc.HasLocalPath(core.EntityAudit) {
+				resolved, err := app.Svc.AuditPath(record.Source.ID)
+				if err != nil {
+					return err
+				}
+				path = absPath(resolved)
+			}
 			if app.JSON {
 				return render.AuditInfoJSON(app.Out, record, path)
 			}

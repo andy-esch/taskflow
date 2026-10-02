@@ -368,6 +368,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			(msg.listGen != 0 && msg.listGen != m.cur().loadGen) {
 			return m, nil
 		}
+
 		if m.pendingDetailNavigation.kind == msg.kind && m.pendingDetailNavigation.key == msg.id {
 			m.pendingDetailNavigation = detailNavigationRestore{}
 		}
@@ -387,6 +388,22 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncClearedDetailLayout(wasImmersive)
 		}
 		return m, nil
+
+	case localPathResultMsg:
+		if !m.isCurrentSelection(msg.kind, msg.id) || msg.listGen != m.cur().loadGen {
+			return m, nil
+		}
+		if msg.err != nil || msg.path == "" {
+			m.flash, m.flashErr = fmt.Sprintf("local path unavailable for this %s", m.cur().name), true
+			if msg.err != nil {
+				m.flash += ": " + msg.err.Error()
+			}
+			return m, nil
+		}
+		if msg.action == localPathYank {
+			return m.yank(msg.path, "path")
+		}
+		return m.launchEditor(msg.path)
 
 	case tabMsg:
 		return m.handleTabMsg(msg)
@@ -877,7 +894,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			default:
 				m.flash, m.flashErr = "Thread editing is unavailable without a local path", true
 			}
-		} else if m.selectedPath() != "" {
+		} else if !m.selectedRef().empty() {
 			m.flash, m.flashErr = "no inline edit here — press E to edit in $EDITOR", true
 		}
 		return m, nil
@@ -1529,22 +1546,14 @@ func (m Model) selectedYankRef() (string, string) {
 	return ref.label, "slug"
 }
 
-// selectedPath is the file path of the active tab's selection (empty if none) —
-// the clipboard yank target for Y.
+// selectedPath is the independently resolved local path for the current detail.
+// A list row's semantic value never supplies edit/open authority.
 func (m Model) selectedPath() string {
 	if m.cur().identityInvalid || m.cur().coherentGen != m.cur().loadGen {
 		return ""
 	}
-	// Thread paths are an optional local-navigation capability, not part of the
-	// portable list projection. They arrive with the selected detail read.
-	if m.cur().kind == entityThreads {
-		if m.detail.loadedKey == m.selectedKey() {
-			return m.detail.path()
-		}
-		return ""
-	}
-	if it, ok := m.cur().list.SelectedItem().(entityItem); ok {
-		return it.path()
+	if m.detail.loadedKey == m.selectedKey() {
+		return m.detail.path()
 	}
 	return ""
 }
@@ -1562,15 +1571,12 @@ func (m Model) yank(text, label string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) yankSelectedPath() (tea.Model, tea.Cmd) {
-	if m.cur().kind == entityThreads && !m.selectedRef().empty() && m.selectedPath() == "" {
-		if m.detail.loading && !m.detail.showing(m.selectedKey()) {
-			m.flash, m.flashErr = "Thread path is still loading", true
-		} else {
-			m.flash, m.flashErr = "local path unavailable for this Thread", true
-		}
+	ref := m.selectedRef()
+	if ref.empty() || m.svc == nil {
+		m.flash, m.flashErr = "nothing to copy", true
 		return m, nil
 	}
-	return m.yank(m.selectedPath(), "path")
+	return m, resolveLocalPath(m.svc, m.cur().kind, ref.key, m.cur().loadGen, localPathYank)
 }
 
 // openInEditor suspends the TUI and opens the current selection's file in the
@@ -1582,19 +1588,17 @@ func (m Model) yankSelectedPath() (tea.Model, tea.Cmd) {
 // duplicate fs event). It works on any entity with a local path capability and from
 // either pane, since it acts on the selected row's path.
 func (m Model) openInEditor() (tea.Model, tea.Cmd) {
-	path := m.selectedPath()
-	if path == "" {
-		if m.cur().kind == entityThreads && !m.selectedRef().empty() {
-			if m.detail.loading && !m.detail.showing(m.selectedKey()) {
-				m.flash, m.flashErr = "Thread path is still loading", true
-			} else {
-				m.flash, m.flashErr = "local path unavailable for this Thread", true
-			}
-		} else {
-			m.flash, m.flashErr = "nothing to edit", true
-		}
+	ref := m.selectedRef()
+	if ref.empty() || m.svc == nil {
+		m.flash, m.flashErr = "nothing to edit", true
 		return m, nil
 	}
+	return m, resolveLocalPath(m.svc, m.cur().kind, ref.key, m.cur().loadGen, localPathEdit)
+}
+
+// launchEditor is reached only after a fresh local-path result passed the
+// selection/list-generation guard in Update.
+func (m Model) launchEditor(path string) (tea.Model, tea.Cmd) {
 	cmd := editor.Command(editor.Resolve(), path)
 	gen, scoped := m.sessionGen, m.sessionScope
 	kind, ref, listGen := m.cur().kind, m.selectedRef(), m.cur().loadGen

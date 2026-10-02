@@ -27,15 +27,15 @@ func loadedTaskBody(t domain.Task, body string) core.LoadedRecord[core.TaskWithB
 }
 
 func loadedAuditBody(a domain.Audit, body string) core.LoadedRecord[core.AuditWithBody] {
-	return core.LoadedRecord[core.AuditWithBody]{Value: core.AuditWithBody{Audit: a, Body: body}, Source: core.RecordSource{ID: a.ID, Location: a.Path}}
+	return core.LoadedRecord[core.AuditWithBody]{Value: core.AuditWithBody{Audit: a, Body: body}, Source: core.RecordSource{ID: a.ID}}
 }
 
 func loadedResearchBody(r domain.Research, body string) core.LoadedRecord[core.ResearchWithBody] {
-	return core.LoadedRecord[core.ResearchWithBody]{Value: core.ResearchWithBody{Research: r, Body: body}, Source: core.RecordSource{ID: r.ID, Location: r.Path}}
+	return core.LoadedRecord[core.ResearchWithBody]{Value: core.ResearchWithBody{Research: r, Body: body}, Source: core.RecordSource{ID: r.ID}}
 }
 
 func loadedResearchRecord(r domain.Research) core.LoadedRecord[domain.Research] {
-	return core.LoadedRecord[domain.Research]{Value: r, Source: core.RecordSource{ID: r.ID, Location: r.Path}}
+	return core.LoadedRecord[domain.Research]{Value: r, Source: core.RecordSource{ID: r.ID}}
 }
 
 func TestToSchemaEnvelopeStampsRevisionPolicy(t *testing.T) {
@@ -102,8 +102,8 @@ func TestOrdinaryReadEnvelopesPreferSourceIdentityForEveryEntity(t *testing.T) {
 	source := core.RecordSource{ID: "source-id", Location: "db://records/misleading-name"}
 	task := domain.Task{ID: "declared-id", FilenameID: "stale-filename-id", Slug: "task"}
 	epic := domain.Epic{ID: "stale-epic", Description: "epic"}
-	audit := domain.Audit{ID: "declared-id", FilenameID: "stale-filename-id", Slug: "audit"}
-	research := domain.Research{ID: "declared-id", FilenameID: "stale-filename-id", Slug: "research"}
+	audit := domain.Audit{ID: "declared-id", Slug: "audit"}
+	research := domain.Research{ID: "declared-id", Slug: "research"}
 
 	if got := ToTasksEnvelope([]core.LoadedRecord[domain.Task]{{Value: task, Source: source}}, nil).Tasks[0].ID; got != source.ID {
 		t.Fatalf("task list id = %q", got)
@@ -132,13 +132,24 @@ func TestOrdinaryReadEnvelopesPreferSourceIdentityForEveryEntity(t *testing.T) {
 	}
 }
 
+func TestSummaryOpenAuditUsesSourceIdentity(t *testing.T) {
+	source := core.RecordSource{ID: "canonical-audit", Location: "db://audits/one"}
+	got := ToSummaryEnvelope(core.Summary{OpenAudits: []core.LoadedRecord[domain.Audit]{{
+		Value:  domain.Audit{ID: "stale-declaration", Slug: "review", Bucket: domain.AuditOpen},
+		Source: source,
+	}}})
+	if len(got.OpenAudits) != 1 || got.OpenAudits[0].ID != source.ID || got.OpenAudits[0].Location != source.Location {
+		t.Fatalf("status open audit lost source identity: %+v", got.OpenAudits)
+	}
+}
+
 func TestReadableLocationsAreOptionalAndNeverBecomePathsOrIdentity(t *testing.T) {
 	source := core.RecordSource{ID: "canonical", Location: "db://records/one"}
 	local := "/planning/records/local.md"
 	task := domain.Task{ID: "declared", Slug: "same", Path: local}
-	epic := domain.Epic{ID: "declared", Path: local}
-	audit := domain.Audit{ID: "declared", Slug: "same", Path: local}
-	research := domain.Research{ID: "declared", Slug: "same", Path: local}
+	epic := domain.Epic{ID: "declared"}
+	audit := domain.Audit{ID: "declared", Slug: "same"}
+	research := domain.Research{ID: "declared", Slug: "same"}
 	check := func(name string, payload any) {
 		t.Helper()
 		encoded, err := json.Marshal(payload)
@@ -171,13 +182,20 @@ func TestReadableLocationsAreOptionalAndNeverBecomePathsOrIdentity(t *testing.T)
 		}},
 	} {
 		for _, location := range []string{"", local} {
-			encoded, err := json.Marshal(tc.payload(core.RecordSource{ID: "canonical", Location: location}))
+			encoded, err := json.Marshal(tc.payload(core.RecordSource{ID: "canonical", Location: location, LocationIsPath: location != ""}))
 			if err != nil {
 				t.Fatal(err)
 			}
 			if bytes.Contains(encoded, []byte(`"location":`)) {
 				t.Fatalf("%s emitted absent/redundant location %q: %s", tc.name, location, encoded)
 			}
+		}
+		encoded, err := json.Marshal(tc.payload(core.RecordSource{ID: "canonical", Location: local}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(encoded, []byte(`"location":"`+local+`"`)) {
+			t.Fatalf("%s inferred opaque location to be a local path: %s", tc.name, encoded)
 		}
 	}
 	sourceLess := core.RecordSource{Location: "db://records/one"}
@@ -332,7 +350,7 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"BoardEnvelope", func(w io.Writer) error {
 			return emit(w, ToBoardEnvelope(core.Board{
-				Columns: []core.BoardColumn{{Status: domain.StatusInProgress, Tasks: []domain.Task{task}}},
+				Columns: []core.BoardColumn{{Status: domain.StatusInProgress, Tasks: []core.LoadedRecord[domain.Task]{loadedTask(task)}}},
 				Problems: []core.LoadProblem{{
 					EntityKind: core.EntityTask, EntityID: "6g0000000007",
 					Location: "remote:tasks/7", Message: "decode failed",
@@ -479,9 +497,9 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"SummaryEnvelope", func(w io.Writer) error {
 			return emit(w, ToSummaryEnvelope(core.Summary{
-				Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
-				InProgress: []domain.Task{task},
-				Epics:      []core.EpicSummary{epicSum},
+				Counts:            []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
+				InProgressRecords: []core.LoadedRecord[domain.Task]{loadedTask(task)},
+				Epics:             []core.EpicSummary{epicSum},
 				Problems: []core.LoadProblem{{
 					EntityKind: core.EntityTask, EntityID: "6g0000000008",
 					Location: "db://tasks/8", Message: "decode failed",
@@ -492,8 +510,8 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		}},
 		{"StatusAllEnvelope", func(w io.Writer) error {
 			summary := core.Summary{
-				Counts:     []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
-				InProgress: []domain.Task{task},
+				Counts:            []core.StatusCount{{Status: domain.StatusInProgress, Count: 1}},
+				InProgressRecords: []core.LoadedRecord[domain.Task]{loadedTask(task)},
 				Problems: []core.LoadProblem{{
 					EntityKind: core.EntityAudit, EntitySlug: "broken-audit",
 					Location: "/repo/planning/audits/broken.md", LocalPath: "/repo/planning/audits/broken.md",
@@ -728,8 +746,8 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 }
 
 func TestStatusAllEnvelope_PreservesRetainedSummaryAndFailure(t *testing.T) {
-	summary := core.Summary{InProgress: []domain.Task{{
-		Slug: "working", Status: domain.StatusInProgress,
+	summary := core.Summary{InProgressRecords: []core.LoadedRecord[domain.Task]{{
+		Value: domain.Task{Slug: "working", Status: domain.StatusInProgress}, Source: core.RecordSource{ID: "working-id"},
 	}}}
 	envelope := ToStatusAllEnvelope(core.SpaceOverview{Spaces: []core.SpaceSummary{{
 		ID: "planning", PlanningID: "6gplan", Summary: &summary,
