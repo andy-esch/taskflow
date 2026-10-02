@@ -285,7 +285,7 @@ that hyperlink can be stale across a rename, even when selection guards hold.
 editor/yank action. Selection and list-generation checks do not prove source
 freshness; a source-aware action design is still needed.
 
-#### M3. The compatibility graph constructor promotes a URI into repair authority · **Status:** in-progress
+#### M3. The compatibility graph constructor promotes a URI into repair authority · **Status:** fixed
 
 **Concrete final-removal blocker.** `NewTaskGraph([]domain.Task, ...)` calls
 `TaskGraphReadFromFiles` (`internal/core/dependency_graph.go:327-330`), which
@@ -307,9 +307,10 @@ in the exported core compatibility path and can mislead a future adapter or a
 test helper. Remove the compatibility path before domain-field removal, or make
 it explicitly local and reject opaque/path-shaped keys as repair handles.
 
-**Resolution:** Confirmed compatibility NewTaskGraph and TaskGraphRead.Tasks
-still promote Task.Path to repair authority. The current task acceptance
-criterion is reopened; remove this fallback during final domain-field removal.
+**Resolution:** NewTaskGraph, TaskGraphReadFromFiles, and TaskGraphRead.Tasks
+now produce read-only records with no LocalPath. Repair tests supply explicit
+guarded local records; hostile URI and path-shaped semantic paths remain
+non-repairable.
 
 ## Producer and consumer inventory
 
