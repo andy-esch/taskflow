@@ -64,7 +64,7 @@ retain their stronger version evidence outside the domain values.
 - [ ] The final domain-field removal lands only after ordinary/show/wire projections, TUI identity,
       local mutation receipts, and source-set validation no longer consume those fields.
 - [x] Guarded mutation planners and public wire projections remain free of opaque revision tokens.
-- [x] Pathless and non-filesystem adapters cannot accidentally gain a local graph-repair target
+- [ ] Pathless and non-filesystem adapters cannot accidentally gain a local graph-repair target
       from a domain `Path` value such as `urn:…` or another URI-like key.
 - [ ] Task/Thread whole-snapshot comparisons still fail closed for missing or changed readable and
       unreadable source revisions, and duplicate-ID lint remains attributable without path identity.
@@ -76,6 +76,16 @@ retain their stronger version evidence outside the domain values.
 - Combining entity-specific stores into one generic interface.
 
 ## Progress
+
+- Checkpoint review found that the compatibility `NewTaskGraph`/`TaskGraphRead.Tasks` conversions
+  still promote `Task.Path` to a local repair handle. The guarded-record path is explicit and the
+  shipped filesystem materializer confines writes, but the broader acceptance criterion above
+  remains open until the compatibility fallback is removed. The review also identified a TUI
+  edit/yank rename window between asynchronous path resolution and action; selection/list
+  generation checks do not provide source-version authority across that window.
+- Thread lint now uses readable source IDs and opaque locations; `status --all` projects its
+  combined working set from the same source record as per-space summaries. Regression tests cover
+  those projections, path-shaped opaque repair locations, and coherent-list stale TUI results.
 
 - Optional task, epic, audit, and research path ports are split from the aggregate semantic
   `Store`. Complete local adapters still supply them; explicit read replacements detach implicit
