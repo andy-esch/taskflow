@@ -59,10 +59,7 @@ func (s *FS) MutateThreadCreation(now time.Time, dryRun bool, planner core.Threa
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads: %w", err)
 	}
-	if err := threadRead.ValidateSources(); err != nil {
-		return result, err
-	}
-	if err := core.ValidateThreadCreationSource(graph, threadRead.SemanticThreads(), threadRead.Problems); err != nil {
+	if err := core.ValidateThreadCreationSource(graph, threadRead); err != nil {
 		return result, err
 	}
 	snapshot := core.ThreadCreationSnapshot{Graph: graph, Threads: clonePlannerThreads(threadRead.SemanticThreads())}
@@ -113,6 +110,7 @@ func callThreadCreationPlanner(store *FS, planner core.ThreadCreationPlanner, sn
 		return core.ThreadCreationPlan{}, err
 	}
 	defer leave()
+	snapshot.Threads = clonePlannerThreads(snapshot.Threads)
 	return planner(snapshot)
 }
 
@@ -181,7 +179,6 @@ func clonePlannerThreads(threads []domain.Thread) []domain.Thread {
 	out := make([]domain.Thread, len(threads))
 	for i, thread := range threads {
 		out[i] = thread
-		out[i].SourceVersion = ""
 		out[i].Tags = append([]string(nil), thread.Tags...)
 		out[i].Tasks = append([]string(nil), thread.Tasks...)
 	}

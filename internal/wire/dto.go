@@ -42,18 +42,18 @@ type TaskJSON struct {
 	DependsOn   []string `json:"depends_on,omitempty" jsonschema:"description=sorted stable task IDs that must be soundly completed before this task is ordinarily eligible to start"`
 }
 
-// ToTaskJSON maps a bare-domain compatibility projection to its wire DTO.
-// Core's board/status projections set FilenameID from the loaded source before
-// using this mapper. Ordinary reads use ToLoadedTaskJSON directly.
+// ToTaskJSON maps a bare semantic task to its wire DTO. Mutation receipts use
+// this projection; ordinary reads use ToLoadedTaskJSON so source identity wins
+// even when the task's declared frontmatter ID has drifted.
 func ToTaskJSON(t domain.Task) TaskJSON {
-	return toTaskJSON(t, t.CanonicalID())
+	return toTaskJSON(t, t.ID)
 }
 
 // ToLoadedTaskJSON maps an ordinary task read using the adapter-supplied source
 // ID as the public stable identity.
 func ToLoadedTaskJSON(record core.LoadedRecord[domain.Task]) TaskJSON {
 	payload := toTaskJSON(record.Value, record.Source.ID)
-	payload.Location = readableSourceLocation(record.Source.Location, record.Value.Path)
+	payload.Location = readableSourceLocation(record.Source)
 	return payload
 }
 
@@ -94,7 +94,7 @@ type TaskInfoJSON struct {
 	Slug   string `json:"slug" jsonschema:"description=task slug (filename without .md)"`
 	Status string `json:"status" jsonschema:"description=lifecycle status — authoritative from frontmatter (ADR-0003 §4)"`
 	Epic   string `json:"epic,omitempty" jsonschema:"description=id of the epic this task belongs to"`
-	Path   string `json:"path" jsonschema:"description=absolute path to the task's markdown file"`
+	Path   string `json:"path" jsonschema:"description=absolute local path to the task's markdown file when available; empty for pathless sources"`
 	AC     ACJSON `json:"ac" jsonschema:"description=acceptance-criteria checkbox tally"`
 }
 
@@ -159,7 +159,7 @@ type AuditInfoJSON struct {
 	ID       string            `json:"id,omitempty" jsonschema:"description=stable identifier — absent on audits created before id assignment"`
 	Slug     string            `json:"slug" jsonschema:"description=audit slug (filename without .md)"`
 	Bucket   string            `json:"bucket" jsonschema:"description=open | closed | deferred — authoritative from frontmatter (ADR-0003 §4)"`
-	Path     string            `json:"path" jsonschema:"description=absolute path to the audit's markdown file"`
+	Path     string            `json:"path" jsonschema:"description=absolute local path to the audit's markdown file when available; empty for pathless sources"`
 	Findings FindingsTallyJSON `json:"findings" jsonschema:"description=finding disposition tally"`
 }
 
@@ -243,14 +243,14 @@ type ResearchJSON struct {
 
 // ToResearchJSON maps a domain research doc to its wire DTO.
 func ToResearchJSON(r domain.Research) ResearchJSON {
-	return toResearchJSON(r, r.CanonicalID())
+	return toResearchJSON(r, r.ID)
 }
 
 // ToLoadedResearchJSON maps an ordinary research read with authoritative
 // source identity.
 func ToLoadedResearchJSON(record core.LoadedRecord[domain.Research]) ResearchJSON {
 	payload := toResearchJSON(record.Value, record.Source.ID)
-	payload.Location = readableSourceLocation(record.Source.Location, record.Value.Path)
+	payload.Location = readableSourceLocation(record.Source)
 	return payload
 }
 
@@ -263,14 +263,14 @@ func toResearchJSON(r domain.Research, id string) ResearchJSON {
 
 // ToAuditJSON maps a domain audit to its wire DTO.
 func ToAuditJSON(a domain.Audit) AuditJSON {
-	return toAuditJSON(a, a.CanonicalID())
+	return toAuditJSON(a, a.ID)
 }
 
 // ToLoadedAuditJSON maps an ordinary audit read with authoritative source
 // identity.
 func ToLoadedAuditJSON(record core.LoadedRecord[domain.Audit]) AuditJSON {
 	payload := toAuditJSON(record.Value, record.Source.ID)
-	payload.Location = readableSourceLocation(record.Source.Location, record.Value.Path)
+	payload.Location = readableSourceLocation(record.Source)
 	return payload
 }
 
@@ -380,18 +380,18 @@ func ToEpicMeta(e domain.Epic) EpicMetaJSON {
 // identity.
 func ToLoadedEpicMeta(record core.LoadedRecord[domain.Epic]) EpicMetaJSON {
 	payload := toEpicMeta(record.Value, record.Source.ID)
-	payload.Location = readableSourceLocation(record.Source.Location, record.Value.Path)
+	payload.Location = readableSourceLocation(record.Source)
 	return payload
 }
 
 // A local record already has a separate path capability. Publish location only
 // when it carries additional opaque context, so ordinary local wire output stays
 // stable and a URI never masquerades as the historical `path` field.
-func readableSourceLocation(location, localPath string) string {
-	if location == localPath {
+func readableSourceLocation(source core.RecordSource) string {
+	if source.LocationIsPath {
 		return ""
 	}
-	return location
+	return source.Location
 }
 
 func toEpicMeta(e domain.Epic, id string) EpicMetaJSON {

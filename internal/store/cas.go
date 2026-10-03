@@ -75,13 +75,14 @@ func sameThreadSourceSnapshot(left, right core.ThreadRead) bool {
 
 func threadSourceKey(thread core.VersionedRecord[domain.Thread]) string {
 	return strings.Join([]string{
-		thread.Record.Source.ID, thread.Record.Source.Location,
+		thread.Record.Source.ID, thread.Record.Source.Location, thread.LocalPath,
 		thread.Record.Value.ID, thread.Record.Value.Slug, thread.SourceVersion,
 	}, "\x00")
 }
 
 func sameThreadSource(left, right core.VersionedRecord[domain.Thread]) bool {
 	return left.Record.Source == right.Record.Source &&
+		left.LocalPath == right.LocalPath &&
 		left.Record.Value.ID == right.Record.Value.ID &&
 		left.Record.Value.Slug == right.Record.Value.Slug &&
 		left.SourceVersion != "" && left.SourceVersion == right.SourceVersion

@@ -24,8 +24,12 @@ func (s *FS) ReadThreads() (core.ThreadRead, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return core.ThreadRead{}, err
 	}
-	threads, problems, err := scanDirWithSourceVersions(s.threadsDir, func(path string, content []byte) (domain.Thread, error) {
-		return parseThread(content, path)
+	threads, problems, err := scanDirWithSourceVersions(s.threadsDir, func(path string, content []byte) (threadSourceDocument, error) {
+		thread, err := parseThread(content, path)
+		if err != nil {
+			return threadSourceDocument{}, err
+		}
+		return threadSourceDocument{thread: thread, source: threadSource(path), sourceVersion: hashContent(content), localPath: path}, nil
 	})
 	if err != nil {
 		return core.ThreadRead{}, err
@@ -33,19 +37,30 @@ func (s *FS) ReadThreads() (core.ThreadRead, error) {
 	return threadReadFromSourceFiles(threads, problems), nil
 }
 
-func threadReadFromSourceFiles(threads []domain.Thread, problems []sourceFileProblem) core.ThreadRead {
+type threadSourceDocument struct {
+	thread        domain.Thread
+	source        core.RecordSource
+	sourceVersion string
+	localPath     string
+}
+
+func threadSource(path string) core.RecordSource {
+	id, _, _ := splitFlatName(strings.TrimSuffix(filepath.Base(path), ".md"))
+	return core.RecordSource{ID: id, Location: path, LocationIsPath: true}
+}
+
+func threadReadFromSourceFiles(threads []threadSourceDocument, problems []sourceFileProblem) core.ThreadRead {
 	read := core.ThreadRead{
 		Records:  make([]core.VersionedRecord[domain.Thread], 0, len(threads)),
 		Problems: make([]core.ThreadReadProblem, 0, len(problems)),
 	}
-	for _, thread := range threads {
-		version := thread.SourceVersion
-		thread.SourceVersion = ""
+	for _, source := range threads {
 		read.Records = append(read.Records, core.VersionedRecord[domain.Thread]{
 			Record: core.LoadedRecord[domain.Thread]{
-				Value: thread, Source: core.RecordSource{ID: thread.FilenameID, Location: thread.Path},
+				Value: source.thread, Source: source.source,
 			},
-			SourceVersion: version,
+			SourceVersion: source.sourceVersion,
+			LocalPath:     source.localPath,
 		})
 	}
 	for _, problem := range problems {
@@ -69,36 +84,33 @@ func threadReadProblemFromFile(problem domain.FileProblem, sourceVersion string)
 }
 
 func (s *FS) GetThread(ref string) (domain.Thread, string, error) {
-	if err := s.rejectRepositoryPlannerCall(); err != nil {
-		return domain.Thread{}, "", err
-	}
-	path, err := s.resolveThread(ref)
-	if err != nil {
-		return domain.Thread{}, "", err
-	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return domain.Thread{}, "", fmt.Errorf("read Thread %s: %w", path, err)
-	}
-	thread, err := parseThread(content, path)
-	if err != nil {
-		return domain.Thread{}, "", fmt.Errorf("%s: %w", path, err)
-	}
-	_, body := splitFrontmatter(content)
-	return thread, string(body), nil
+	record, err := s.ReadThread(ref)
+	return record.Value.Thread, record.Value.Body, err
 }
 
 // ReadThread is the portable selected-document read. Identity is established at
 // this adapter boundary from the resolved source name, not recovered by core or
 // a presentation adapter from domain metadata.
 func (s *FS) ReadThread(ref string) (core.LoadedRecord[core.ThreadWithBody], error) {
-	thread, body, err := s.GetThread(ref)
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return core.LoadedRecord[core.ThreadWithBody]{}, err
+	}
+	path, err := s.resolveThread(ref)
 	if err != nil {
 		return core.LoadedRecord[core.ThreadWithBody]{}, err
 	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return core.LoadedRecord[core.ThreadWithBody]{}, fmt.Errorf("read Thread %s: %w", path, err)
+	}
+	thread, err := parseThread(content, path)
+	if err != nil {
+		return core.LoadedRecord[core.ThreadWithBody]{}, fmt.Errorf("%s: %w", path, err)
+	}
+	_, body := splitFrontmatter(content)
 	return core.LoadedRecord[core.ThreadWithBody]{
-		Value:  core.ThreadWithBody{Thread: thread, Body: body},
-		Source: core.RecordSource{ID: thread.FilenameID, Location: thread.Path},
+		Value:  core.ThreadWithBody{Thread: thread, Body: string(body)},
+		Source: threadSource(path),
 	}, nil
 }
 
@@ -118,7 +130,7 @@ func (s *FS) resolveThread(ref string) (string, error) {
 
 func parseThread(content []byte, path string) (domain.Thread, error) {
 	base := filepath.Base(path)
-	filenameID, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
+	_, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
 	if !ok {
 		reason, kind := entityNameProblem(base)
 		return domain.Thread{}, fmt.Errorf("%w: %q %s", kind, base, reason)
@@ -137,8 +149,5 @@ func parseThread(content []byte, path string) (domain.Thread, error) {
 		}
 	}
 	thread.Slug = slug
-	thread.FilenameID = filenameID
-	thread.Path = path
-	thread.SourceVersion = hashContent(content)
 	return thread, nil
 }

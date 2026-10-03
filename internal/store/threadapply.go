@@ -54,10 +54,7 @@ func (s *FS) MutateThreadApply(now time.Time, dryRun bool, planner core.ThreadAp
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads: %w", err)
 	}
-	if err := threadRead.ValidateSources(); err != nil {
-		return result, err
-	}
-	if err := core.ValidateThreadCreationSource(graph, threadRead.SemanticThreads(), threadRead.Problems); err != nil {
+	if err := core.ValidateThreadCreationSource(graph, threadRead); err != nil {
 		return result, err
 	}
 	snapshot := core.ThreadApplySnapshot{
@@ -201,6 +198,8 @@ func callThreadApplyPlanner(store *FS, planner core.ThreadApplyPlanner, snapshot
 		return core.ThreadApplyPlan{}, err
 	}
 	defer leave()
+	snapshot.Threads = clonePlannerThreads(snapshot.Threads)
+	snapshot.ThreadBodies = cloneStringMap(snapshot.ThreadBodies)
 	return planner(snapshot)
 }
 
@@ -222,7 +221,7 @@ func (s *FS) currentPlanningIdentity() (string, error) {
 }
 
 type threadApplyDocument struct {
-	thread domain.Thread
+	source threadSourceDocument
 	body   string
 }
 
@@ -236,16 +235,19 @@ func (s *FS) listThreadApplyThreads() (core.ThreadRead, map[string]string, error
 			return threadApplyDocument{}, parseErr
 		}
 		_, body := splitFrontmatter(content)
-		return threadApplyDocument{thread: thread, body: string(body)}, nil
+		return threadApplyDocument{
+			source: threadSourceDocument{thread: thread, source: threadSource(path), sourceVersion: hashContent(content), localPath: path},
+			body:   string(body),
+		}, nil
 	})
 	if err != nil {
 		return core.ThreadRead{}, nil, err
 	}
-	threads := make([]domain.Thread, 0, len(documents))
+	threads := make([]threadSourceDocument, 0, len(documents))
 	bodies := make(map[string]string, len(documents))
 	for _, document := range documents {
-		threads = append(threads, document.thread)
-		bodies[document.thread.ID] = document.body
+		threads = append(threads, document.source)
+		bodies[document.source.source.ID] = document.body
 	}
 	return threadReadFromSourceFiles(threads, problems), bodies, nil
 }
@@ -266,10 +268,7 @@ func (s *FS) reprepareThreadApply(plan core.ThreadApplyPlan, expectedRepoID stri
 	if err != nil {
 		return core.ThreadApplyDecision{}, fmt.Errorf("re-read Threads before final Thread convergence: %w", err)
 	}
-	if err := threadRead.ValidateSources(); err != nil {
-		return core.ThreadApplyDecision{}, err
-	}
-	if err := core.ValidateThreadCreationSource(graph, threadRead.SemanticThreads(), threadRead.Problems); err != nil {
+	if err := core.ValidateThreadCreationSource(graph, threadRead); err != nil {
 		return core.ThreadApplyDecision{}, err
 	}
 	return core.PrepareThreadApply(core.ThreadApplySnapshot{

@@ -76,7 +76,7 @@ func TestReadThreadsKeepsReadableRevisionOutsideSemanticValue(t *testing.T) {
 	}
 	record := read.Records[0]
 	if record.Record.Source.ID != id || record.Record.Source.Location != path ||
-		record.SourceVersion != hashContent([]byte(content)) || record.Record.Value.SourceVersion != "" {
+		record.SourceVersion != hashContent([]byte(content)) {
 		t.Fatalf("versioned record = %+v", record)
 	}
 	encoded, err := json.Marshal(record)
@@ -117,17 +117,15 @@ func TestThreadSourceSnapshotNormalizesOpaqueProblemsAndFailsClosed(t *testing.T
 func TestThreadSourceSnapshotRejectsRepresentationAndIdentityChanges(t *testing.T) {
 	threadID := testutil.TaskID("thread-source-transition")
 	thread := domain.Thread{
-		ID: threadID, FilenameID: threadID, Slug: "thread-source-transition",
-		Path: "threads/" + threadID + "-thread-source-transition.md", SourceVersion: "opaque-readable",
+		ID: threadID, Slug: "thread-source-transition",
 	}
+	source := core.RecordSource{ID: threadID, Location: "threads/" + threadID + "-thread-source-transition.md"}
 	versioned := func(value domain.Thread) core.VersionedRecord[domain.Thread] {
-		version := value.SourceVersion
-		value.SourceVersion = ""
 		return core.VersionedRecord[domain.Thread]{
 			Record: core.LoadedRecord[domain.Thread]{
-				Value: value, Source: core.RecordSource{ID: value.FilenameID, Location: value.Path},
+				Value: value, Source: source,
 			},
-			SourceVersion: version,
+			SourceVersion: "opaque-readable",
 		}
 	}
 	readable := core.ThreadRead{Records: []core.VersionedRecord[domain.Thread]{versioned(thread)}}
@@ -149,7 +147,7 @@ func TestThreadSourceSnapshotRejectsRepresentationAndIdentityChanges(t *testing.
 	}
 
 	unreadable := core.ThreadRead{Problems: []core.ThreadReadProblem{{
-		ThreadID: threadID, ThreadSlug: thread.Slug, Location: thread.Path,
+		ThreadID: threadID, ThreadSlug: thread.Slug, Location: source.Location,
 		Message: "row became unreadable", SourceVersion: "opaque-unreadable",
 	}}}
 	if err := verifyThreadSourceSnapshot(readable, unreadable); !errors.Is(err, domain.ErrConflict) {

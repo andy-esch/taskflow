@@ -199,8 +199,8 @@ func threadPolicyError(thread domain.Thread, operation ThreadMutationOperation, 
 // ValidateThreadMutationSource applies the same strict repository-wide evidence
 // gate as Thread creation. A mutation cannot silently ignore an unreadable Thread
 // or an invalid/missing member while claiming an authoritative receipt.
-func ValidateThreadMutationSource(graph *TaskGraph, threads []domain.Thread, unreadable []ThreadReadProblem) error {
-	return ValidateThreadCreationSource(graph, threads, unreadable)
+func ValidateThreadMutationSource(graph *TaskGraph, read ThreadRead) error {
+	return ValidateThreadCreationSource(graph, read)
 }
 
 // ValidateThreadMutationPlan normalizes one planner intent and derives the exact
@@ -399,7 +399,7 @@ type ThreadProjectionImpact struct {
 // TaskLifecycleThreadImpacts compares every Thread projection using the same
 // before/after task graphs as lifecycle authorization. Thread files are never
 // mutated by this analysis.
-func TaskLifecycleThreadImpacts(threads []domain.Thread, graph *TaskGraph, plan TaskLifecyclePlan) []ThreadProjectionImpact {
+func TaskLifecycleThreadImpacts(threads []LoadedRecord[domain.Thread], graph *TaskGraph, plan TaskLifecyclePlan) []ThreadProjectionImpact {
 	if graph == nil || plan.Create != nil || plan.TaskID == "" {
 		return nil
 	}
@@ -408,16 +408,17 @@ func TaskLifecycleThreadImpacts(threads []domain.Thread, graph *TaskGraph, plan 
 		return nil
 	}
 	afterGraph := taskGraphWithStatus(graph, plan.TaskID, plan.To)
-	ordered := cloneThreads(threads)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].ID < ordered[j].ID })
+	ordered := append([]LoadedRecord[domain.Thread](nil), threads...)
+	sort.Slice(ordered, func(i, j int) bool { return threadRecordLess(ordered[i], ordered[j]) })
+	beforeViews, afterViews := projectLoadedThreads(ordered, graph), projectLoadedThreads(ordered, afterGraph)
 	impacts := make([]ThreadProjectionImpact, 0)
-	for _, thread := range ordered {
-		before, after := ProjectThread(thread, graph), ProjectThread(thread, afterGraph)
+	for i, thread := range ordered {
+		before, after := beforeViews[i], afterViews[i]
 		if reflect.DeepEqual(before, after) {
 			continue
 		}
 		impacts = append(impacts, ThreadProjectionImpact{
-			ThreadID: thread.ID, Slug: thread.Slug, Direct: slices.Contains(thread.Tasks, plan.TaskID),
+			ThreadID: thread.Source.ID, Slug: thread.Value.Slug, Direct: slices.Contains(thread.Value.Tasks, plan.TaskID),
 			ChangedTaskIDs: changedThreadProjectionTaskIDs(before, after), Before: before, After: after,
 		})
 	}
@@ -428,7 +429,7 @@ func TaskLifecycleThreadImpacts(threads []domain.Thread, graph *TaskGraph, plan 
 // arbitrary graph-only change. directTaskIDs are declaration owners whose files
 // were part of the selected durable prefix; malformed Thread evidence is carried
 // separately by the enclosing repair receipt and never blocks this computation.
-func TaskGraphThreadImpacts(threads []domain.Thread, before, after *TaskGraph, directTaskIDs []string) []ThreadProjectionImpact {
+func TaskGraphThreadImpacts(threads []LoadedRecord[domain.Thread], before, after *TaskGraph, directTaskIDs []string) []ThreadProjectionImpact {
 	if before == nil || after == nil {
 		return nil
 	}
@@ -436,23 +437,24 @@ func TaskGraphThreadImpacts(threads []domain.Thread, before, after *TaskGraph, d
 	for _, taskID := range directTaskIDs {
 		direct[taskID] = true
 	}
-	ordered := cloneThreads(threads)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].ID < ordered[j].ID })
+	ordered := append([]LoadedRecord[domain.Thread](nil), threads...)
+	sort.Slice(ordered, func(i, j int) bool { return threadRecordLess(ordered[i], ordered[j]) })
+	beforeViews, afterViews := projectLoadedThreads(ordered, before), projectLoadedThreads(ordered, after)
 	impacts := make([]ThreadProjectionImpact, 0)
-	for _, thread := range ordered {
-		left, right := ProjectThread(thread, before), ProjectThread(thread, after)
+	for i, thread := range ordered {
+		left, right := beforeViews[i], afterViews[i]
 		if reflect.DeepEqual(left, right) {
 			continue
 		}
 		isDirect := false
-		for _, taskID := range thread.Tasks {
+		for _, taskID := range thread.Value.Tasks {
 			if direct[taskID] {
 				isDirect = true
 				break
 			}
 		}
 		impacts = append(impacts, ThreadProjectionImpact{
-			ThreadID: thread.ID, Slug: thread.Slug, Direct: isDirect,
+			ThreadID: thread.Source.ID, Slug: thread.Value.Slug, Direct: isDirect,
 			ChangedTaskIDs: changedThreadProjectionTaskIDs(left, right), Before: left, After: right,
 		})
 	}

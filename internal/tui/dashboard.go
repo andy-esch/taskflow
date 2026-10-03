@@ -91,18 +91,11 @@ func (d *dashboard) setSummary(s core.Summary, st *styles, configAvailable bool)
 
 	// In progress — the active work, each with how long since it was last touched
 	// (a staleness cue) in an aligned column, the slug last so it absorbs truncation.
-	head(fmt.Sprintf("in progress (%d)", len(s.InProgress)))
-	if len(s.InProgress) == 0 && len(s.InProgressRecords) == 0 {
+	head(fmt.Sprintf("in progress (%d)", len(s.InProgressRecords)))
+	if len(s.InProgressRecords) == 0 {
 		info("nothing in progress")
 	} else {
-		// Compatibility summaries may contain bare tasks. They remain readable,
-		// but cannot become navigation targets without source evidence.
 		records := s.InProgressRecords
-		if len(records) == 0 {
-			for _, task := range s.InProgress {
-				records = append(records, core.LoadedRecord[domain.Task]{Value: task})
-			}
-		}
 		shown, more := capList(len(records))
 		vis := records[:shown]
 		refs := make([]entityRef, 0, len(vis))

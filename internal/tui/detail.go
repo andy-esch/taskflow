@@ -777,12 +777,13 @@ func wrap(s string, width int) string {
 // --- task detail ---
 
 type taskDetail struct {
-	t    domain.Task
-	body string
+	t         domain.Task
+	body      string
+	localPath string
 }
 
 func (d taskDetail) Title() string                { return d.t.Slug }
-func (d taskDetail) Path() string                 { return d.t.Path }
+func (d taskDetail) Path() string                 { return d.localPath }
 func (d taskDetail) rawBody() string              { return d.body }
 func (d taskDetail) meta(w int, s *styles) string { return renderTaskMeta(d.t, d.body, w, s) }
 
@@ -846,13 +847,14 @@ func criterionRollup(body string, s *styles) string {
 // --- epic detail ---
 
 type epicDetail struct {
-	es    core.EpicSummary
-	tasks []core.LoadedRecord[domain.Task]
-	body  string
+	es        core.EpicSummary
+	tasks     []core.LoadedRecord[domain.Task]
+	body      string
+	localPath string
 }
 
 func (d epicDetail) Title() string                { return d.es.Epic.ID }
-func (d epicDetail) Path() string                 { return d.es.Epic.Path }
+func (d epicDetail) Path() string                 { return d.localPath }
 func (d epicDetail) rawBody() string              { return d.body }
 func (d epicDetail) meta(w int, s *styles) string { return renderEpicMeta(d.es, d.tasks, w, s) }
 
@@ -1683,12 +1685,13 @@ func terminalText(value string) string {
 // --- audit detail ---
 
 type auditDetail struct {
-	a    domain.Audit
-	body string
+	a         domain.Audit
+	body      string
+	localPath string
 }
 
 func (d auditDetail) Title() string                { return d.a.Slug }
-func (d auditDetail) Path() string                 { return d.a.Path }
+func (d auditDetail) Path() string                 { return d.localPath }
 func (d auditDetail) rawBody() string              { return d.body }
 func (d auditDetail) meta(w int, s *styles) string { return renderAuditMeta(d.a, d.body, w, s) }
 
@@ -1729,12 +1732,13 @@ func renderAuditMeta(a domain.Audit, body string, width int, s *styles) string {
 }
 
 type researchDetail struct {
-	r    domain.Research
-	body string
+	r         domain.Research
+	body      string
+	localPath string
 }
 
 func (d researchDetail) Title() string                { return d.r.Slug }
-func (d researchDetail) Path() string                 { return d.r.Path }
+func (d researchDetail) Path() string                 { return d.localPath }
 func (d researchDetail) rawBody() string              { return d.body }
 func (d researchDetail) meta(w int, s *styles) string { return renderResearchMeta(d.r, w, s) }
 

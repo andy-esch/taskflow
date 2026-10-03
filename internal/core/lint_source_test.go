@@ -32,9 +32,78 @@ func (f *locationLintSource) ReadLintResearch() ([]LoadedRecord[domain.Research]
 	return f.research, nil, nil
 }
 
+func TestLintAttributesTaskIDDriftToAdapterSourceForActiveAndArchivedTasks(t *testing.T) {
+	source := &locationLintSource{}
+	for _, status := range []domain.Status{domain.StatusReadyToStart, domain.StatusCompleted} {
+		slug := string(status)
+		source.tasks = append(source.tasks, LoadedRecord[TaskWithBody]{
+			Value:  TaskWithBody{Task: domain.Task{ID: testutil.TaskID("declared-" + slug), Slug: slug, Status: status}},
+			Source: RecordSource{ID: testutil.TaskID("source-" + slug), Location: "db://tasks/" + slug},
+		})
+	}
+	results, _, err := MustNewService(nil, WithLintSource(source)).Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range source.tasks {
+		assertLintIssue(t, results, record.Value.Task.Slug, "id", record.Source.ID)
+	}
+}
+
+type threadLintSource struct {
+	threadReadFake
+	records []VersionedRecord[domain.Thread]
+}
+
+func (f *threadLintSource) ReadThreads() (ThreadRead, error) {
+	return ThreadRead{Records: f.records}, nil
+}
+
+func TestLintAttributesThreadIdentityAndLocationToAdapterSource(t *testing.T) {
+	declaredID := testutil.TaskID("declared-thread")
+	firstID := testutil.TaskID("source-thread-first")
+	secondID := testutil.TaskID("source-thread-second")
+	threads := &threadLintSource{records: []VersionedRecord[domain.Thread]{
+		{Record: LoadedRecord[domain.Thread]{
+			Value: domain.Thread{ID: declaredID, Slug: "first", Status: domain.ThreadStatusUnstarted,
+				Description: "First Thread", Goal: "Track first", Created: "2026-10-02"},
+			Source: RecordSource{ID: firstID, Location: "db://threads/first"},
+		}},
+		{Record: LoadedRecord[domain.Thread]{
+			Value: domain.Thread{ID: declaredID, Slug: "second", Status: domain.ThreadStatusUnstarted,
+				Description: "Second Thread", Goal: "Track second", Created: "2026-10-02"},
+			Source: RecordSource{ID: secondID, Location: "threads/path-shaped.md"},
+		}},
+	}}
+	results, _, err := MustNewService(nil, WithLintSource(&lintSourceFake{}), WithThreadStore(threads)).Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []struct{ slug, id, location string }{
+		{"first", firstID, "db://threads/first"},
+		{"second", secondID, "threads/path-shaped.md"},
+	} {
+		assertLintIssue(t, results, want.slug, "id", want.id)
+		found := false
+		for _, result := range results {
+			if result.Slug == want.slug && result.Location == want.location {
+				found = true
+				for _, issue := range result.Issues {
+					if strings.Contains(issue.Message, "duplicate stable id") {
+						t.Fatalf("distinct source IDs reported duplicate: %+v", results)
+					}
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("missing Thread source location %q: %+v", want.location, results)
+		}
+	}
+}
+
 type lintSourceFake struct {
 	testSourceSetProvider
-	taskRecords      []TaskWithBody
+	taskRecords      []LoadedRecord[TaskWithBody]
 	taskProblems     []LoadProblem
 	epicProblems     []LoadProblem
 	auditProblems    []LoadProblem
@@ -47,11 +116,7 @@ type lintSourceFake struct {
 
 func (f *lintSourceFake) ReadLintTasks() ([]LoadedRecord[TaskWithBody], []LoadProblem, error) {
 	f.taskReads++
-	out := make([]LoadedRecord[TaskWithBody], 0, len(f.taskRecords))
-	for _, record := range f.taskRecords {
-		out = append(out, LoadedRecord[TaskWithBody]{Value: record, Source: RecordSource{ID: record.Task.CanonicalID(), Location: record.Task.Path}})
-	}
-	return out, f.taskProblems, nil
+	return f.taskRecords, f.taskProblems, nil
 }
 
 func (f *lintSourceFake) ReadLintEpics() ([]LoadedRecord[domain.Epic], []LoadProblem, error) {
@@ -203,7 +268,6 @@ func TestLintAttributesPathlessGraphDiagnosticsToReadableRecords(t *testing.T) {
 		prerequisite := graphRecord("pathless-prerequisite", domain.StatusNextUp)
 		dependent := graphRecord("pathless-in-flight", domain.StatusInProgress, prerequisite.ID)
 		invalid := graphRecord("pathless-invalid", domain.StatusReadyToStart, "not-a-stable-id")
-		prerequisite.Path, dependent.Path, invalid.Path = "", "", ""
 
 		results := lintTaskRecords(t, prerequisite, dependent, invalid)
 		assertLintIssue(t, results, invalid.Slug, "depends_on", "not a stable task id")
@@ -214,7 +278,6 @@ func TestLintAttributesPathlessGraphDiagnosticsToReadableRecords(t *testing.T) {
 		left := graphRecord("pathless-cycle-left", domain.StatusReadyToStart)
 		right := graphRecord("pathless-cycle-right", domain.StatusReadyToStart, left.ID)
 		left.DependsOn = []string{right.ID}
-		left.Path, right.Path = "", ""
 
 		results := lintTaskRecords(t, left, right)
 		assertLintIssue(t, results, left.Slug, "depends_on", "dependency cycle")
@@ -226,7 +289,6 @@ func TestLintAttributesPathlessGraphDiagnosticsToReadableRecords(t *testing.T) {
 		owner := graphRecord("pathless-legacy-owner", domain.StatusReadyToStart)
 		owner.LegacyBlockedBy = []string{prerequisite.Slug}
 		owner.LegacyDependencyFields = []string{"blocked_by"}
-		prerequisite.Path, owner.Path = "", ""
 
 		results := lintTaskRecords(t, prerequisite, owner)
 		assertLintIssue(t, results, owner.Slug, "blocked_by", "legacy dependency field")
@@ -236,11 +298,16 @@ func TestLintAttributesPathlessGraphDiagnosticsToReadableRecords(t *testing.T) {
 func TestLintRecordAttributionDoesNotCollideOnIDOrLocation(t *testing.T) {
 	first := graphRecord("portable-duplicate-first", domain.StatusReadyToStart)
 	second := graphRecord("portable-duplicate-second", domain.StatusReadyToStart, "bad-reference")
-	second.ID, second.FilenameID = first.ID, first.FilenameID
+	second.ID = first.ID
 	// An opaque or contradictory location is context, not the record join key.
-	first.Path, second.Path = "opaque://same", "opaque://same"
-
-	results := lintTaskRecords(t, first, second)
+	source := &locationLintSource{tasks: []LoadedRecord[TaskWithBody]{
+		{Value: TaskWithBody{Task: first}, Source: RecordSource{ID: first.ID, Location: "opaque://same"}},
+		{Value: TaskWithBody{Task: second}, Source: RecordSource{ID: second.ID, Location: "opaque://same"}},
+	}}
+	results, _, err := MustNewService(nil, WithLintSource(source)).Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
 	assertLintIssue(t, results, first.Slug, "id", "duplicate stable task id")
 	assertLintIssue(t, results, second.Slug, "id", "duplicate stable task id")
 	assertLintIssue(t, results, second.Slug, "depends_on", "bad-reference")
@@ -289,9 +356,8 @@ func TestLintDistinguishesEqualReadableRecordsByOpaqueLocation(t *testing.T) {
 func TestLintUsesPathlessUnreadableIdentityInLifecycleDiagnosis(t *testing.T) {
 	unreadableID := "6g0000000005"
 	dependent := graphRecord("depends-on-pathless-unreadable", domain.StatusInProgress, unreadableID)
-	dependent.Path = ""
 	source := &lintSourceFake{
-		taskRecords: []TaskWithBody{{Task: dependent}},
+		taskRecords: []LoadedRecord[TaskWithBody]{{Value: TaskWithBody{Task: dependent}, Source: RecordSource{ID: dependent.ID}}},
 		taskProblems: []LoadProblem{{
 			EntityKind: EntityTask, EntityID: unreadableID,
 			EntitySlug: "unreadable", Message: "remote decode failed",
@@ -310,9 +376,9 @@ func TestLintUsesPathlessUnreadableIdentityInLifecycleDiagnosis(t *testing.T) {
 
 func lintTaskRecords(t *testing.T, tasks ...domain.Task) []LintResult {
 	t.Helper()
-	records := make([]TaskWithBody, len(tasks))
+	records := make([]LoadedRecord[TaskWithBody], len(tasks))
 	for index, task := range tasks {
-		records[index] = TaskWithBody{Task: task}
+		records[index] = LoadedRecord[TaskWithBody]{Value: TaskWithBody{Task: task}, Source: RecordSource{ID: task.ID}}
 	}
 	results, _, err := MustNewService(nil, WithLintSource(&lintSourceFake{taskRecords: records})).Lint()
 	if err != nil {
@@ -340,4 +406,36 @@ func lintResultHas(results []LintResult, slug, field, messagePart string) bool {
 		}
 	}
 	return false
+}
+
+func TestLintResearchComparesDeclarationWithAdapterSourceID(t *testing.T) {
+	const sourceID = "6g0000000001"
+	source := &locationLintSource{research: []LoadedRecord[domain.Research]{{
+		Value:  domain.Research{ID: "6g0000000002", Slug: "drifted", Created: "2026-09-01"},
+		Source: RecordSource{ID: sourceID, Location: "db://research/one"},
+	}}}
+	results, problems, err := MustNewService(nil, WithLintSource(source)).Lint()
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("lint err=%v problems=%+v", err, problems)
+	}
+	assertLintIssue(t, results, "drifted", "id", sourceID)
+	if results[0].Location != "db://research/one" {
+		t.Fatalf("lint location = %q", results[0].Location)
+	}
+}
+
+func TestLintAuditComparesDeclarationWithAdapterSourceID(t *testing.T) {
+	const sourceID = "6g0000000001"
+	source := &locationLintSource{audits: []LoadedRecord[AuditWithFindings]{{
+		Value:  AuditWithFindings{Audit: domain.Audit{ID: "6g0000000002", Slug: "drifted", Bucket: domain.AuditOpen}},
+		Source: RecordSource{ID: sourceID, Location: "db://audits/one"},
+	}}}
+	results, problems, err := MustNewService(nil, WithLintSource(source)).Lint()
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("lint err=%v problems=%+v", err, problems)
+	}
+	assertLintIssue(t, results, "drifted", "id", sourceID)
+	if results[0].Location != "db://audits/one" {
+		t.Fatalf("lint location = %q", results[0].Location)
+	}
 }

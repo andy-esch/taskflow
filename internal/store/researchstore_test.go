@@ -39,9 +39,30 @@ func TestFS_ListResearch(t *testing.T) {
 	if len(r.Tags) != 2 || r.Tags[0] != "tui" {
 		t.Errorf("tags wrong: %+v", r.Tags)
 	}
-	// FilenameID is the canonical key, parsed from the id-led name.
-	if r.FilenameID != testutil.TaskID("theming") {
-		t.Errorf("FilenameID = %q, want the filename's leading id", r.FilenameID)
+	// The source envelope, not the semantic value, owns filename identity.
+	read, err := NewFS(root).ReadResearch()
+	if err != nil || len(read.Records) != 1 || read.Records[0].Source.ID != testutil.TaskID("theming") {
+		t.Errorf("source identity = %+v, err=%v", read, err)
+	}
+}
+
+func TestFS_ReadResearchSourceIsFilenameNotFrontmatter(t *testing.T) {
+	root := t.TempDir()
+	const declaredID = "6g0000000002"
+	path, content := testutil.ResearchFixture(root, "drifted.md", "---\nid: "+declaredID+"\ncreated: 2026-09-01\n---\n# Drifted\n")
+	testutil.Write(t, path, content)
+	read, err := NewFS(root).ReadResearch()
+	if err != nil || len(read.Records) != 1 {
+		t.Fatalf("ReadResearch err=%v records=%+v", err, read.Records)
+	}
+	record := read.Records[0]
+	if record.Value.ID != declaredID || record.Source.ID != testutil.TaskID("drifted") ||
+		record.Source.Location != path || !record.Source.LocationIsPath {
+		t.Fatalf("record confused semantic ID and source identity: %+v", record)
+	}
+	shown, err := NewFS(root).ReadResearchDocument(record.Source.ID)
+	if err != nil || shown.Source != record.Source || shown.Value.Research.ID != declaredID {
+		t.Fatalf("single read lost source identity: %+v, err=%v", shown, err)
 	}
 }
 

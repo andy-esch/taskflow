@@ -17,10 +17,62 @@ import (
 func graphRecord(seed string, status domain.Status, dependencies ...string) domain.Task {
 	taskID := testutil.TaskID(seed)
 	return domain.Task{
-		ID: taskID, FilenameID: taskID, Slug: seed, Path: "tasks/" + taskID + "-" + seed + ".md",
+		ID: taskID, Slug: seed,
 		Status: status, Description: seed, Tags: []string{"graph"},
 		DependsOn: append([]string(nil), dependencies...),
 	}
+}
+
+// localTaskGraph is for tests that explicitly exercise local source edits. Bare
+// NewTaskGraph and TaskGraphRead.Tasks are read-only compatibility projections:
+// source location and repair authority come only from the test adapter below.
+func localTaskGraph(tasks []domain.Task, problems []domain.FileProblem) *TaskGraph {
+	return localTaskGraphWithSourceIDs(tasks, problems, nil)
+}
+
+// sourceIDs models the filename identity separately from the declared ID for
+// drift and missing-frontmatter fixtures.
+func localTaskGraphWithSourceIDs(tasks []domain.Task, problems []domain.FileProblem, sourceIDs map[string]string) *TaskGraph {
+	read := TaskGraphRead{
+		GuardedRecords: make([]VersionedRecord[domain.Task], 0, len(tasks)),
+		Problems:       make([]TaskGraphLoadProblem, 0, len(problems)),
+	}
+	for _, task := range tasks {
+		record := localGuardedRecord(task)
+		if sourceID, ok := sourceIDs[task.Slug]; ok {
+			record = localGuardedRecordAt(task, "tasks/"+sourceID+"-"+task.Slug+".md")
+			record.Record.Source.ID = sourceID
+		}
+		read.GuardedRecords = append(read.GuardedRecords, record)
+	}
+	for _, problem := range problems {
+		read.Problems = append(read.Problems, TaskGraphLoadProblemFromFile(problem, ""))
+	}
+	return NewTaskGraphRead(read)
+}
+
+func localGuardedRecord(task domain.Task) VersionedRecord[domain.Task] {
+	return localGuardedRecordAt(task, graphFixturePath(task))
+}
+
+// graphFixturePath supplies test-adapter metadata for matching-ID fixtures.
+// Drift and custom locations are supplied separately rather than modifying a Task.
+func graphFixturePath(task domain.Task) string {
+	return "tasks/" + task.ID + "-" + task.Slug + ".md"
+}
+
+func localGuardedRecordAt(task domain.Task, path string) VersionedRecord[domain.Task] {
+	return VersionedRecord[domain.Task]{
+		Record: LoadedRecord[domain.Task]{Value: task, Source: RecordSource{
+			ID: task.ID, Location: path, LocationIsPath: path != "",
+		}},
+		LocalPath: path,
+	}
+}
+
+func localSourceRefForTask(task domain.Task) TaskGraphSourceRef {
+	return TaskGraphSourceRef{TaskID: task.ID, TaskSlug: task.Slug,
+		Location: graphFixturePath(task), LocalPath: graphFixturePath(task)}
 }
 
 func TestTaskGraphHealthAndDeterministicStructuralProblems(t *testing.T) {
@@ -31,10 +83,12 @@ func TestTaskGraphHealthAndDeterministicStructuralProblems(t *testing.T) {
 	d := graphRecord("d", domain.StatusReadyToStart, testutil.TaskID("missing"))
 	e := graphRecord("e", domain.Status("invented"))
 	f := graphRecord("f", domain.StatusCompleted)
+	fSourceID := f.ID
 	f.ID = testutil.TaskID("drifted-frontmatter")
 
 	tasks := []domain.Task{f, e, d, c, b, a}
-	graph := NewTaskGraph(tasks, []domain.FileProblem{{Path: "tasks/broken.md", Message: "malformed frontmatter"}})
+	problems := []domain.FileProblem{{Path: "tasks/broken.md", Message: "malformed frontmatter"}}
+	graph := localTaskGraphWithSourceIDs(tasks, problems, map[string]string{f.Slug: fSourceID})
 	if graph.Health() != GraphBroken || graph.MutationReady() {
 		t.Fatalf("health = %s mutationReady=%v", graph.Health(), graph.MutationReady())
 	}
@@ -61,7 +115,7 @@ func TestTaskGraphHealthAndDeterministicStructuralProblems(t *testing.T) {
 				shuffled[i].DependsOn[x], shuffled[i].DependsOn[y] = shuffled[i].DependsOn[y], shuffled[i].DependsOn[x]
 			})
 		}
-		if got := fmt.Sprintf("%+v", NewTaskGraph(shuffled, []domain.FileProblem{{Path: "tasks/broken.md", Message: "malformed frontmatter"}}).Problems()); got != baseline {
+		if got := fmt.Sprintf("%+v", localTaskGraphWithSourceIDs(shuffled, problems, map[string]string{f.Slug: fSourceID}).Problems()); got != baseline {
 			t.Fatalf("seed %d changed diagnostics\nwant %s\n got %s", seed, baseline, got)
 		}
 	}
@@ -69,14 +123,15 @@ func TestTaskGraphHealthAndDeterministicStructuralProblems(t *testing.T) {
 
 func TestTaskGraphDiagnosesEveryIdentityAndEdgeShape(t *testing.T) {
 	missingFrontmatterID := graphRecord("missing-frontmatter-id", domain.StatusReadyToStart)
+	missingSourceID := missingFrontmatterID.ID
 	missingFrontmatterID.ID = ""
 	duplicateA := graphRecord("duplicate-a", domain.StatusReadyToStart)
 	duplicateB := graphRecord("duplicate-b", domain.StatusReadyToStart)
 	duplicateB.ID = duplicateA.ID
-	duplicateB.FilenameID = duplicateA.ID
 	invalidEdge := graphRecord("invalid-edge", domain.StatusReadyToStart, "not-a-stable-id")
 
-	graph := NewTaskGraph([]domain.Task{invalidEdge, duplicateB, missingFrontmatterID, duplicateA}, nil)
+	graph := localTaskGraphWithSourceIDs([]domain.Task{invalidEdge, duplicateB, missingFrontmatterID, duplicateA}, nil,
+		map[string]string{missingFrontmatterID.Slug: missingSourceID})
 	want := []GraphProblemCode{ProblemMissingTaskID, ProblemDuplicateTaskID, ProblemInvalidDependencyID}
 	got := make([]GraphProblemCode, 0)
 	for _, problem := range graph.Problems() {
@@ -348,7 +403,7 @@ func TestTaskGraphResolveTaskIDMatchesRepositoryReferenceTiers(t *testing.T) {
 
 	duplicateA := graphRecord("duplicate-one", domain.StatusReadyToStart)
 	duplicateB := graphRecord("duplicate-two", domain.StatusReadyToStart)
-	duplicateB.ID, duplicateB.FilenameID = duplicateA.ID, duplicateA.ID
+	duplicateB.ID = duplicateA.ID
 	duplicateGraph := NewTaskGraph([]domain.Task{duplicateA, duplicateB}, nil)
 	if _, err := duplicateGraph.ResolveTaskID(duplicateA.ID); !errors.Is(err, domain.ErrAmbiguous) ||
 		!strings.Contains(err.Error(), duplicateA.Slug) || !strings.Contains(err.Error(), duplicateB.Slug) {
@@ -439,8 +494,8 @@ func TestTaskGraphSupportedDeepChainEnvelope(t *testing.T) {
 			status = domain.StatusReadyToStart
 		}
 		task := domain.Task{
-			ID: taskID, FilenameID: taskID, Slug: fmt.Sprintf("deep-%04d", i),
-			Path: "tasks/" + taskID + "-deep.md", Status: status,
+			ID: taskID, Slug: fmt.Sprintf("deep-%04d", i),
+			Status: status,
 		}
 		if i < edges {
 			task.DependsOn = []string{fmt.Sprintf("%012d", i+1)}
@@ -473,7 +528,7 @@ func TestTaskGraphPathProjectionOutputEnvelope(t *testing.T) {
 		if i == edges {
 			status = domain.StatusReadyToStart
 		}
-		task := domain.Task{ID: taskID, FilenameID: taskID, Slug: fmt.Sprintf("path-%04d", i), Status: status}
+		task := domain.Task{ID: taskID, Slug: fmt.Sprintf("path-%04d", i), Status: status}
 		if i < edges {
 			task.DependsOn = []string{fmt.Sprintf("%012d", i+1)}
 		}
@@ -677,19 +732,19 @@ func TestTaskGraphDistinguishesUnreadableAndInvalidReferences(t *testing.T) {
 func TestTaskGraphDuplicateIDsRetainPathFaithfulDiagnostics(t *testing.T) {
 	first := graphRecord("duplicate-path-first", domain.StatusReadyToStart)
 	second := graphRecord("duplicate-path-second", domain.StatusReadyToStart, "bad-reference")
-	second.ID, second.FilenameID = first.ID, first.ID
-	graph := NewTaskGraph([]domain.Task{second, first}, nil)
+	second.ID = first.ID
+	graph := localTaskGraph([]domain.Task{second, first}, nil)
 	duplicates := make(map[string]bool)
 	invalidOnSecond := false
 	for _, problem := range graph.Problems() {
 		if problem.Code == ProblemDuplicateTaskID {
 			duplicates[problem.Path] = true
 		}
-		if problem.Code == ProblemInvalidDependencyID && problem.Path == second.Path {
+		if problem.Code == ProblemInvalidDependencyID && problem.Path == graphFixturePath(second) {
 			invalidOnSecond = true
 		}
 	}
-	if !duplicates[first.Path] || !duplicates[second.Path] || !invalidOnSecond {
+	if !duplicates[graphFixturePath(first)] || !duplicates[graphFixturePath(second)] || !invalidOnSecond {
 		t.Fatalf("path-faithful problems = %+v", graph.Problems())
 	}
 	lintByRecord := dependencyLintIssues(graph)
@@ -755,10 +810,17 @@ func TestTaskGraphSameSourceSnapshotComparesUnreadableIdentity(t *testing.T) {
 
 func TestTaskGraphReadableDuplicateLocationsRemainDistinct(t *testing.T) {
 	id := testutil.TaskID("opaque-readable-duplicates")
-	task := domain.Task{ID: id, Slug: "same-task", Status: domain.StatusReadyToStart, SourceVersion: "revision"}
+	task := domain.Task{ID: id, Slug: "same-task", Status: domain.StatusReadyToStart}
 	first := LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: id, Location: "db://tasks/a"}}
 	second := LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: id, Location: "db://tasks/b"}}
-	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{first, second}})
+	versioned := func(records ...LoadedRecord[domain.Task]) TaskGraphRead {
+		read := TaskGraphRead{GuardedRecords: make([]VersionedRecord[domain.Task], 0, len(records))}
+		for _, record := range records {
+			read.GuardedRecords = append(read.GuardedRecords, VersionedRecord[domain.Task]{Record: record, SourceVersion: "revision"})
+		}
+		return read
+	}
+	graph := NewTaskGraphRead(versioned(first, second))
 	if graph.Health() != GraphBroken {
 		t.Fatalf("duplicate source ID health = %s", graph.Health())
 	}
@@ -781,35 +843,51 @@ func TestTaskGraphReadableDuplicateLocationsRemainDistinct(t *testing.T) {
 		records[1].Source.Location != second.Source.Location {
 		t.Fatalf("source refs = %+v, %v", records, err)
 	}
-	if !graph.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{second, first}})) {
+	if !graph.SameSourceSnapshot(NewTaskGraphRead(versioned(second, first))) {
 		t.Fatal("reordering the same readable sources changed snapshot equality")
 	}
 	second.Source.Location = "db://tasks/changed"
-	if graph.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{first, second}})) {
+	if graph.SameSourceSnapshot(NewTaskGraphRead(versioned(first, second))) {
 		t.Fatal("a changed readable source location compared as the same snapshot")
 	}
 	second.Source.Location = "db://tasks/b"
-	second.Value.Path = "/local/repair-copy.md"
-	if graph.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{first, second}})) {
+	if graph.SameSourceSnapshot(NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{
+		{Record: first, SourceVersion: "revision"},
+		{Record: second, SourceVersion: "revision", LocalPath: "/local/repair-copy.md"},
+	}})) {
 		t.Fatal("a changed local repair path compared as the same snapshot")
 	}
 }
 
 func TestTaskGraphHealthyReadableLocationChangeInvalidatesSnapshot(t *testing.T) {
 	task := graphRecord("healthy-location-snapshot", domain.StatusNextUp)
-	task.SourceVersion = "unchanged-revision"
 	record := LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: "db://tasks/original"}}
-	graph := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{record}})
+	graph := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{Record: record, SourceVersion: "unchanged-revision"}}})
 	if graph.Health() != GraphHealthy {
 		t.Fatalf("fixture must be healthy; got %s: %+v", graph.Health(), graph.Problems())
 	}
 	record.Source.Location = "db://tasks/moved"
-	changed := NewTaskGraphRead(TaskGraphRead{Records: []LoadedRecord[domain.Task]{record}})
+	changed := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{Record: record, SourceVersion: "unchanged-revision"}}})
 	if graph.SameSourceSnapshot(changed) {
 		t.Fatal("a changed opaque location passed the healthy source snapshot guard")
 	}
 	if graph.SameRepairSnapshot(changed, nil) {
 		t.Fatal("a changed opaque location passed the repair snapshot guard")
+	}
+}
+
+func TestTaskGraphRepairSnapshotRequiresObservedChangedSourceRevision(t *testing.T) {
+	task := graphRecord("repair-postwrite-revision", domain.StatusNextUp)
+	record := LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: "tasks/repair.md", LocationIsPath: true}}
+	source := TaskGraphSourceRef{TaskID: task.ID, TaskSlug: task.Slug, Location: "tasks/repair.md", LocalPath: "tasks/repair.md"}
+	expected := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{
+		Record: record, SourceVersion: "before", LocalPath: source.LocalPath,
+	}}})
+	actual := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{
+		Record: record, LocalPath: source.LocalPath,
+	}}})
+	if expected.SameDurableRepairSnapshot(actual, []TaskGraphSourceRef{source}) {
+		t.Fatal("changed source with no observed revision passed post-write comparison")
 	}
 }
 
@@ -888,10 +966,12 @@ func TestTaskGraphSameSourceSnapshotComparesOpaqueUnreadableRevisions(t *testing
 
 func TestTaskGraphSameSourceSnapshotRejectsReadableUnreadableTransition(t *testing.T) {
 	task := graphRecord("representation-transition", domain.StatusReadyToStart)
-	task.SourceVersion = "opaque-readable-revision"
-	readable := NewTaskGraphRead(TaskGraphRead{Tasks: []domain.Task{task}})
+	readable := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{
+		Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: graphFixturePath(task), LocationIsPath: true}},
+		SourceVersion: "opaque-readable-revision", LocalPath: graphFixturePath(task),
+	}}})
 	unreadable := NewTaskGraphRead(TaskGraphRead{Problems: []TaskGraphLoadProblem{{
-		TaskID: task.ID, TaskSlug: task.Slug, Path: task.Path,
+		TaskID: task.ID, TaskSlug: task.Slug, Path: graphFixturePath(task),
 		Message: "row became unreadable", SourceVersion: "opaque-unreadable-revision",
 	}}})
 	if readable.SameSourceSnapshot(unreadable) || unreadable.SameSourceSnapshot(readable) {
@@ -1016,8 +1096,8 @@ func TestValidateTaskGraphMutationPlanPreservesSemanticWriteOrder(t *testing.T) 
 
 func TestValidateTaskGraphMutationSourceNamesGuardedRepairPath(t *testing.T) {
 	task := graphRecord("manual-repair", domain.StatusReadyToStart, "not-a-stable-id")
-	err := ValidateTaskGraphMutationSource(NewTaskGraph([]domain.Task{task}, nil))
-	if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), task.Path) ||
+	err := ValidateTaskGraphMutationSource(localTaskGraph([]domain.Task{task}, nil))
+	if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), graphFixturePath(task)) ||
 		!strings.Contains(err.Error(), "field depends_on") ||
 		!strings.Contains(err.Error(), "tskflwctl task depend repair") ||
 		!strings.Contains(err.Error(), "source-level diagnosis") {

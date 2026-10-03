@@ -54,7 +54,7 @@ func (s *FS) MutateTaskGraphRepair(now time.Time, dryRun bool, planner core.Task
 	if err != nil {
 		return result, fmt.Errorf("load authoritative task graph for repair: %w", err)
 	}
-	result.Threads = threadRead.SemanticThreads()
+	result.Threads = threadRead.LoadedThreads()
 	result.ThreadProblems = threadRead.Problems
 
 	plan, err := callTaskGraphRepairPlanner(s, planner, graph)
@@ -154,7 +154,7 @@ func (s *FS) MutateTaskGraphRepair(now time.Time, dryRun bool, planner core.Task
 			return result, fmt.Errorf("thread evidence changed while graph repair committed a prefix; inspect before retrying: %w", domain.ErrConflict)
 		}
 		postGraph, evidenceErr := core.LoadTaskGraph(s)
-		if evidenceErr != nil || !stepAnalysis.Prospective.SameRepairSnapshot(postGraph, []core.TaskGraphSourceRef{write.source}) {
+		if evidenceErr != nil || !stepAnalysis.Prospective.SameDurableRepairSnapshot(postGraph, []core.TaskGraphSourceRef{write.source}) {
 			setRepairRemainingSources(&result)
 			return result, fmt.Errorf("task evidence changed while graph repair committed a prefix; inspect before retrying: %w", domain.ErrConflict)
 		}
@@ -211,12 +211,19 @@ func (s *FS) materializeTaskGraphRepair(analysis core.TaskGraphRepairAnalysis, n
 		if err != nil {
 			return nil, fmt.Errorf("%w: graph repair for %s would not reload: %v", domain.ErrValidation, path, err)
 		}
-		actualRecords, err := core.NewTaskGraph([]domain.Task{parsed}, nil).SourceRecords()
+		// Reload with the adapter's source identity, even when the declaration
+		// is missing or drifting. Repair may leave that identity defect residual.
+		actualRecords, err := core.NewTaskGraphRead(core.TaskGraphRead{
+			GuardedRecords: []core.VersionedRecord[domain.Task]{{
+				Record:        core.LoadedRecord[domain.Task]{Value: parsed, Source: taskSource(path)},
+				SourceVersion: hashContent(updated), LocalPath: path,
+			}},
+		}).SourceRecords()
 		if err != nil || len(actualRecords) != 1 {
 			return nil, fmt.Errorf("%w: graph repair for %s has no reloadable source projection", domain.ErrValidation, path)
 		}
 		expected, ok := repairSourceRecord(analysis.Prospective, group.Source)
-		if !ok || !reflect.DeepEqual(expected.Fields, actualRecords[0].Fields) {
+		if !ok || expected.Source != actualRecords[0].Source || !reflect.DeepEqual(expected.Fields, actualRecords[0].Fields) {
 			return nil, fmt.Errorf("%w: graph repair for %s did not materialize only the authorized declarations", domain.ErrValidation, path)
 		}
 		writes = append(writes, materializedTaskGraphRepair{

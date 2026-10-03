@@ -55,10 +55,7 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads for task lifecycle impact: %w", err)
 	}
-	if err := threadRead.ValidateSources(); err != nil {
-		return result, err
-	}
-	if err := core.ValidateThreadMutationSource(graph, threadRead.SemanticThreads(), threadRead.Problems); err != nil {
+	if err := core.ValidateThreadMutationSource(graph, threadRead); err != nil {
 		return result, err
 	}
 
@@ -94,7 +91,7 @@ func (s *FS) MutateTaskLifecycle(now time.Time, dryRun bool, planner core.TaskLi
 	result.Before = analysis.Before
 	result.After = analysis.After
 	result.Impacts = cloneStoreTaskImpacts(analysis.Impacts)
-	result.ThreadImpacts = core.TaskLifecycleThreadImpacts(clonePlannerThreads(threadRead.SemanticThreads()), graph, validated)
+	result.ThreadImpacts = core.TaskLifecycleThreadImpacts(threadRead.LoadedThreads(), graph, validated)
 	result.OutstandingBlockers = cloneStoreBlockers(analysis.OutstandingBlockers)
 	result.OverrideApplied = analysis.OverrideApplied
 	result.Changed = materialized.changed
@@ -149,15 +146,19 @@ func (s *FS) readTaskLifecycleBody(graph *core.TaskGraph, plan core.TaskLifecycl
 	if plan.Create != nil {
 		return plan.Create.Body, nil
 	}
-	task, ok := graph.Task(plan.TaskID)
+	_, ok := graph.Task(plan.TaskID)
 	if !ok {
 		return "", nil // the pure validator owns the attributable not-found error
+	}
+	source, ok := graph.TaskSource(plan.TaskID)
+	if !ok || source.LocalPath == "" {
+		return "", fmt.Errorf("task %s has no local source in lifecycle snapshot: %w", plan.TaskID, domain.ErrConflict)
 	}
 	path, err := s.resolvePath(plan.TaskID)
 	if err != nil {
 		return "", err
 	}
-	if path != task.Path {
+	if path != source.LocalPath {
 		return "", fmt.Errorf("task %s changed path during lifecycle snapshot: %w", plan.TaskID, domain.ErrConflict)
 	}
 	content, err := os.ReadFile(path)
@@ -194,7 +195,11 @@ func (s *FS) prepareTaskLifecycleMaterialization(graph *core.TaskGraph, plan cor
 	if !ok {
 		return materializedTaskLifecycle{}, "", fmt.Errorf("task %q: %w", plan.TaskID, domain.ErrNotFound)
 	}
-	path := task.Path
+	source, ok := graph.TaskSource(plan.TaskID)
+	if !ok || source.LocalPath == "" {
+		return materializedTaskLifecycle{}, "", fmt.Errorf("task %s has no local source in lifecycle snapshot: %w", plan.TaskID, domain.ErrConflict)
+	}
+	path := source.LocalPath
 	resolved, err := s.resolvePath(plan.TaskID)
 	if err != nil {
 		return materializedTaskLifecycle{}, "", err

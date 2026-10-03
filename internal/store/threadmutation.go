@@ -51,10 +51,7 @@ func (s *FS) MutateThread(now time.Time, dryRun bool, planner core.ThreadMutatio
 	if err != nil {
 		return result, fmt.Errorf("load authoritative Threads: %w", err)
 	}
-	if err := threadRead.ValidateSources(); err != nil {
-		return result, err
-	}
-	if err := core.ValidateThreadMutationSource(graph, threadRead.SemanticThreads(), threadRead.Problems); err != nil {
+	if err := core.ValidateThreadMutationSource(graph, threadRead); err != nil {
 		return result, err
 	}
 	snapshot := core.ThreadMutationSnapshot{Graph: graph, Threads: clonePlannerThreads(threadRead.SemanticThreads())}
@@ -66,13 +63,17 @@ func (s *FS) MutateThread(now time.Time, dryRun bool, planner core.ThreadMutatio
 	if err != nil {
 		return result, err
 	}
+	source, err := threadMutationSource(threadRead, validated.ThreadID)
+	if err != nil {
+		return result, err
+	}
 	result.Plan = validated
-	result.Before = analysis.Before
-	result.After = analysis.After
+	result.Before = core.ProjectLoadedThread(core.LoadedRecord[domain.Thread]{Value: analysis.Before.Thread, Source: source.Record.Source}, graph)
+	result.After = core.ProjectLoadedThread(core.LoadedRecord[domain.Thread]{Value: analysis.After.Thread, Source: source.Record.Source}, graph)
 	result.MemberOutcomes = append([]core.ThreadMemberOutcome(nil), analysis.MemberOutcomes...)
 	result.Changed = analysis.Changed
 
-	materialized, err := s.materializeThreadMutation(validated, analysis)
+	materialized, err := s.materializeThreadMutation(source, validated, analysis)
 	if err != nil {
 		return result, err
 	}
@@ -116,6 +117,8 @@ func callThreadMutationPlanner(store *FS, planner core.ThreadMutationPlanner, sn
 		return core.ThreadMutationPlan{}, err
 	}
 	defer leave()
+	// Callback-owned slices must not rewrite the snapshot used to authorize its plan.
+	snapshot.Threads = clonePlannerThreads(snapshot.Threads)
 	return planner(snapshot)
 }
 
@@ -127,26 +130,47 @@ type materializedThreadMutation struct {
 	changed   bool
 }
 
+func threadMutationSource(read core.ThreadRead, threadID string) (core.VersionedRecord[domain.Thread], error) {
+	var source core.VersionedRecord[domain.Thread]
+	for _, record := range read.Records {
+		if record.Record.Source.ID != threadID {
+			continue
+		}
+		if source.Record.Source.ID != "" {
+			return core.VersionedRecord[domain.Thread]{}, fmt.Errorf("%w: Thread mutation target %s has duplicate source records", domain.ErrValidation, threadID)
+		}
+		source = record
+	}
+	if source.Record.Source.ID == "" {
+		return core.VersionedRecord[domain.Thread]{}, fmt.Errorf("%w: Thread mutation target %s has no source record", domain.ErrValidation, threadID)
+	}
+	return source, nil
+}
+
 // materializeThreadMutation is deliberately lock-free and update-only so a
-// future compound apply can compose it under one outer repository guard.
-func (s *FS) materializeThreadMutation(plan core.ThreadMutationPlan, analysis core.ThreadMutationAnalysis) (materializedThreadMutation, error) {
+// future compound apply can compose it under one outer repository guard. The
+// source record supplies its local target and original byte revision explicitly.
+func (s *FS) materializeThreadMutation(source core.VersionedRecord[domain.Thread], plan core.ThreadMutationPlan, analysis core.ThreadMutationAnalysis) (materializedThreadMutation, error) {
 	before, after := analysis.Before.Thread, analysis.After.Thread
-	if before.ID != plan.ThreadID || after.ID != plan.ThreadID || before.Path == "" {
+	if source.Record.Source.ID != plan.ThreadID || before.ID != plan.ThreadID || after.ID != plan.ThreadID || source.Record.Value.ID != plan.ThreadID || source.LocalPath == "" || source.SourceVersion == "" {
 		return materializedThreadMutation{}, fmt.Errorf("%w: Thread mutation analysis does not identify its target document", domain.ErrValidation)
 	}
 	resolved, err := s.resolveThread(plan.ThreadID)
 	if err != nil {
 		return materializedThreadMutation{}, err
 	}
-	if resolved != before.Path {
+	if resolved != source.LocalPath {
 		return materializedThreadMutation{}, fmt.Errorf("thread %s changed path during mutation snapshot: %w", plan.ThreadID, domain.ErrConflict)
 	}
-	content, err := os.ReadFile(before.Path)
+	content, err := os.ReadFile(source.LocalPath)
 	if err != nil {
-		return materializedThreadMutation{}, fmt.Errorf("read Thread %s for mutation: %w", before.Path, err)
+		return materializedThreadMutation{}, fmt.Errorf("read Thread %s for mutation: %w", source.LocalPath, err)
+	}
+	if hashContent(content) != source.SourceVersion {
+		return materializedThreadMutation{}, fmt.Errorf("thread %s changed content during mutation snapshot: %w", plan.ThreadID, domain.ErrConflict)
 	}
 	materialized := materializedThreadMutation{
-		thread: before, path: before.Path, ifVersion: hashContent(content), content: content,
+		thread: before, path: source.LocalPath, ifVersion: source.SourceVersion, content: content,
 	}
 	if !analysis.Changed {
 		return materialized, nil
@@ -179,7 +203,7 @@ func (s *FS) materializeThreadMutation(plan core.ThreadMutationPlan, analysis co
 	if err != nil {
 		return materializedThreadMutation{}, err
 	}
-	parsed, err := parseThread(newContent, before.Path)
+	parsed, err := parseThread(newContent, source.LocalPath)
 	if err != nil {
 		return materializedThreadMutation{}, fmt.Errorf("%w: Thread mutation for %s would not reload: %v", domain.ErrValidation, plan.ThreadID, err)
 	}

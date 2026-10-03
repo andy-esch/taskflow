@@ -35,7 +35,11 @@ func TestFS_SetResearchFields_PreservesUnknownKeysAndOrder(t *testing.T) {
 	if got.Description != "now described" {
 		t.Errorf("description = %q", got.Description)
 	}
-	raw, _ := os.ReadFile(got.Path)
+	path, err := NewFS(root).ResolveResearchPath(got.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(path)
 	s := string(raw)
 	// Byte-exact on the whole frontmatter block. A `strings.Contains` per key passes even if
 	// every key is REORDERED, which is half of what this test's name promises — verified by
@@ -60,7 +64,11 @@ func TestFS_SetResearchFields_UnsetRemovesKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, _ := os.ReadFile(got.Path)
+	path, err := NewFS(root).ResolveResearchPath(got.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(path)
 	if strings.Contains(string(raw), "status:") {
 		t.Errorf("unset should have removed status:\n%s", raw)
 	}

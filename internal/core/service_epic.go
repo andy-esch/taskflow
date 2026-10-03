@@ -409,5 +409,9 @@ func (s *Service) ShowEpic(id string) (EpicDetail, error) {
 // EpicPath resolves an epic's file path without reading or parsing it — the seam
 // for `epic path` (parse-free, like TaskPath).
 func (s *Service) EpicPath(id string) (string, error) {
-	return s.store.ResolveEpicPath(id)
+	if s.epicPaths == nil {
+		return "", fmt.Errorf("%w: epic path resolution is unavailable from this service", domain.ErrValidation)
+	}
+	path, err := s.epicPaths.ResolveEpicPath(id)
+	return requireResolvedLocalPath(EntityEpic, path, err)
 }

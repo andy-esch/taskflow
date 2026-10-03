@@ -15,11 +15,27 @@ import (
 // ListAudits scans every audit bucket. Unreadable audits are skipped and
 // reported as FileProblems.
 func (s *FS) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
+	records, problems, err := s.scanAudits()
+	if err != nil {
+		return nil, nil, err
+	}
+	audits := make([]domain.Audit, 0, len(records))
+	for _, record := range records {
+		audits = append(audits, record.Value)
+	}
+	return audits, problems, nil
+}
+
+func (s *FS) scanAudits() ([]core.LoadedRecord[domain.Audit], []domain.FileProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
-	return scanDir(s.auditsDir, func(path string, content []byte) (domain.Audit, error) {
-		return parseAudit(content, path)
+	return scanDir(s.auditsDir, func(path string, content []byte) (core.LoadedRecord[domain.Audit], error) {
+		audit, err := parseAudit(content, path)
+		if err != nil {
+			return core.LoadedRecord[domain.Audit]{}, err
+		}
+		return auditRecord(audit, path), nil
 	})
 }
 
@@ -27,35 +43,63 @@ func (s *FS) ListAudits() ([]domain.Audit, []domain.FileProblem, error) {
 // from each body (the same ParseFindings parseAudit already runs for the tally),
 // so consumers read each audit once for both metadata and body-derived views.
 func (s *FS) ListAuditsWithFindings() ([]core.AuditWithFindings, []domain.FileProblem, error) {
+	records, problems, err := s.scanAuditsWithFindings()
+	if err != nil {
+		return nil, nil, err
+	}
+	audits := make([]core.AuditWithFindings, 0, len(records))
+	for _, record := range records {
+		audits = append(audits, record.Value)
+	}
+	return audits, problems, nil
+}
+
+func (s *FS) scanAuditsWithFindings() ([]core.LoadedRecord[core.AuditWithFindings], []domain.FileProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
-	return scanDirWithReader(s.auditsDir, s.auditReadFile, func(path string, content []byte) (core.AuditWithFindings, error) {
+	return scanDirWithReader(s.auditsDir, s.auditReadFile, func(path string, content []byte) (core.LoadedRecord[core.AuditWithFindings], error) {
 		a, findings, nearMisses, candidateIssues, err := parseAuditWithFindings(content, path)
-		return core.AuditWithFindings{Audit: a, Findings: findings, NearMisses: nearMisses,
-			CandidateIssues: candidateIssues}, err
+		if err != nil {
+			return core.LoadedRecord[core.AuditWithFindings]{}, err
+		}
+		return core.LoadedRecord[core.AuditWithFindings]{
+			Value:  core.AuditWithFindings{Audit: a, Findings: findings, NearMisses: nearMisses, CandidateIssues: candidateIssues},
+			Source: auditSource(path),
+		}, nil
 	})
 }
 
 // GetAudit returns one audit plus its markdown body.
 func (s *FS) GetAudit(slug string) (domain.Audit, string, error) {
-	if err := s.rejectRepositoryPlannerCall(); err != nil {
+	record, err := s.readAudit(slug)
+	if err != nil {
 		return domain.Audit{}, "", err
+	}
+	return record.Value.Audit, record.Value.Body, nil
+}
+
+func (s *FS) readAudit(slug string) (core.LoadedRecord[core.AuditWithBody], error) {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return core.LoadedRecord[core.AuditWithBody]{}, err
 	}
 	path, err := s.resolveAudit(slug)
 	if err != nil {
-		return domain.Audit{}, "", err
+		return core.LoadedRecord[core.AuditWithBody]{}, err
 	}
 	content, err := s.auditReadFile(path)
 	if err != nil {
-		return domain.Audit{}, "", fmt.Errorf("read audit %s: %w", path, err)
+		return core.LoadedRecord[core.AuditWithBody]{}, fmt.Errorf("read audit %s: %w", path, err)
 	}
 	a, err := parseAudit(content, path)
 	if err != nil {
-		return domain.Audit{}, "", fmt.Errorf("%s: %w", path, err)
+		return core.LoadedRecord[core.AuditWithBody]{}, fmt.Errorf("%s: %w", path, err)
 	}
 	_, body := splitFrontmatter(content)
-	return a, string(body), nil
+	return core.LoadedRecord[core.AuditWithBody]{
+		Value:  core.AuditWithBody{Audit: a, Body: string(body)},
+		Source: auditSource(path),
+	}, nil
 }
 
 // MoveAudit changes an audit's bucket (close/reopen/defer) by rewriting its authoritative
@@ -187,7 +231,7 @@ func parseAudit(content []byte, path string) (domain.Audit, error) {
 // audit + its tally.
 func parseAuditWithFindings(content []byte, path string) (domain.Audit, []domain.Finding, []domain.NearMissHeader, []domain.Issue, error) {
 	base := filepath.Base(path)
-	fnID, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
+	_, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
 	if !ok {
 		reason, kind := entityNameProblem(base)
 		return domain.Audit{}, nil, nil, nil, fmt.Errorf("%w: %q %s", kind, base, reason)
@@ -206,8 +250,6 @@ func parseAuditWithFindings(content []byte, path string) (domain.Audit, []domain
 		}
 	}
 	a.Slug = slug
-	a.FilenameID = fnID
-	a.Path = path
 	// Bucket is authoritative in frontmatter (ADR-0003 §4). There is no directory to fall
 	// back to under the flat layout, but an id-led file with a missing/unrecognized bucket
 	// still LISTS (raw bucket) and is FLAGGED (BucketFellBack) — a lifecycle verb heals it.

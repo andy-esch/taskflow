@@ -10,21 +10,17 @@ import (
 // ReadLintTasks adapts the body-carrying local task scan to lint's portable
 // failed-record contract without adding another filesystem pass.
 func (s *FS) ReadLintTasks() ([]core.LoadedRecord[core.TaskWithBody], []core.LoadProblem, error) {
-	records, problems, err := s.ListTasksWithBodies()
+	records, sourceProblems, err := s.scanTaskDocuments()
 	loaded := make([]core.LoadedRecord[core.TaskWithBody], 0, len(records))
 	for _, record := range records {
-		loaded = append(loaded, taskBodyRecord(record))
+		loaded = append(loaded, record.record)
 	}
-	return loaded, loadedProblems(core.EntityTask, problems), err
+	return loaded, loadedProblems(core.EntityTask, fileProblems(sourceProblems)), err
 }
 
 func (s *FS) ReadLintEpics() ([]core.LoadedRecord[domain.Epic], []core.LoadProblem, error) {
-	records, problems, err := s.ListEpics()
-	loaded := make([]core.LoadedRecord[domain.Epic], 0, len(records))
-	for _, record := range records {
-		loaded = append(loaded, epicRecord(record))
-	}
-	return loaded, loadedProblems(core.EntityEpic, problems), err
+	records, problems, err := s.scanEpics()
+	return records, loadedProblems(core.EntityEpic, problems), err
 }
 
 func (s *FS) ReadAuditSnapshot(selector string) (core.AuditSnapshot, error) {
@@ -48,27 +44,16 @@ func (s *FS) ReadAuditSnapshot(selector string) (core.AuditSnapshot, error) {
 			Audit: a, Findings: findings, NearMisses: nearMisses, CandidateIssues: candidateIssues,
 		}
 		return core.AuditSnapshot{Audits: []core.LoadedRecord[core.AuditWithFindings]{{
-			Value: record, Source: core.RecordSource{ID: a.FilenameID, Location: a.Path},
+			Value: record, Source: auditSource(path),
 		}}}, nil
 	}
-	records, problems, err := s.ListAuditsWithFindings()
-	loaded := make([]core.LoadedRecord[core.AuditWithFindings], 0, len(records))
-	for _, record := range records {
-		loaded = append(loaded, core.LoadedRecord[core.AuditWithFindings]{
-			Value:  record,
-			Source: core.RecordSource{ID: record.Audit.FilenameID, Location: record.Audit.Path},
-		})
-	}
+	loaded, problems, err := s.scanAuditsWithFindings()
 	return core.AuditSnapshot{
 		Audits: loaded, Problems: loadedProblems(core.EntityAudit, problems),
 	}, err
 }
 
 func (s *FS) ReadLintResearch() ([]core.LoadedRecord[domain.Research], []core.LoadProblem, error) {
-	records, problems, err := s.ListResearch()
-	loaded := make([]core.LoadedRecord[domain.Research], 0, len(records))
-	for _, record := range records {
-		loaded = append(loaded, researchRecord(record))
-	}
-	return loaded, loadedProblems(core.EntityResearch, problems), err
+	records, problems, err := s.scanResearch()
+	return records, loadedProblems(core.EntityResearch, problems), err
 }

@@ -159,7 +159,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 	assertRegistryMatchesFullWire(t, "task", "tasks", TaskReadColumns(), TasksJSON,
 		[]registryFixture[core.LoadedRecord[domain.Task]]{
 			{name: "present", item: core.LoadedRecord[domain.Task]{Value: domain.Task{
-				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "task-present", Status: domain.StatusInProgress,
+				ID: "6ga000000099", Slug: "task-present", Status: domain.StatusInProgress,
 				Tier: 2, Priority: "high", Epic: "20-cli", Updated: "2026-09-14",
 				Description: "present task", RevisitAt: "2026-10-01",
 			}, Source: core.RecordSource{ID: "6ga000000001", Location: "db://tasks/present"}}},
@@ -187,7 +187,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 	assertRegistryMatchesFullWire(t, "audit", "audits", AuditReadColumns(), AuditsJSON,
 		[]registryFixture[core.LoadedRecord[domain.Audit]]{
 			{name: "present", item: core.LoadedRecord[domain.Audit]{Value: domain.Audit{
-				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "2026-09-14-present", Bucket: domain.AuditOpen,
+				ID: "6ga000000099", Slug: "2026-09-14-present", Bucket: domain.AuditOpen,
 				Area: "cli", Date: "2026-09-14", Findings: 4, OpenFindings: 2,
 			}, Source: core.RecordSource{ID: "6ga000000003", Location: "db://audits/present"}}},
 			{name: "zero counts and absent optional strings", item: core.LoadedRecord[domain.Audit]{Value: domain.Audit{
@@ -198,7 +198,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 	assertRegistryMatchesFullWire(t, "research", "research", ResearchReadColumns(), ResearchJSON,
 		[]registryFixture[core.LoadedRecord[domain.Research]]{
 			{name: "present", item: core.LoadedRecord[domain.Research]{Value: domain.Research{
-				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "research-present", Created: "2026-09-01",
+				ID: "6ga000000099", Slug: "research-present", Created: "2026-09-01",
 				Description: "present research", Tags: []string{"cli", "contract"}, Updated: "2026-09-14",
 			}, Source: core.RecordSource{ID: "6ga000000005", Location: "db://research/present"}}},
 			{name: "absent optional strings and empty tags", item: core.LoadedRecord[domain.Research]{Value: domain.Research{
@@ -392,7 +392,7 @@ func wireScalarString(raw json.RawMessage) (string, error) {
 
 func TestTaskTierZeroProjectionIsLintInvalidCompatibility(t *testing.T) {
 	task := domain.Task{
-		ID: "6ga000000009", FilenameID: "6ga000000009", Slug: "missing-tier",
+		ID: "6ga000000009", Slug: "missing-tier",
 		Status: domain.StatusReadyToStart, Epic: "20-cli", Priority: "medium", Effort: "S",
 		Created: "2026-09-14", Description: "lint-invalid tier fixture", Tags: []string{"contract"},
 	}

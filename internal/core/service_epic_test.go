@@ -56,9 +56,6 @@ func (nopStore) GetTask(string) (domain.Task, string, error) {
 func (nopStore) ListTasksWithBodies() ([]TaskWithBody, []domain.FileProblem, error) {
 	return nil, nil, nil
 }
-func (nopStore) ResolveTaskPath(string) (string, error)  { return "", domain.ErrNotFound }
-func (nopStore) ResolveEpicPath(string) (string, error)  { return "", domain.ErrNotFound }
-func (nopStore) ResolveAuditPath(string) (string, error) { return "", domain.ErrNotFound }
 func (nopStore) SetFields(string, map[string]any, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
@@ -123,7 +120,6 @@ func (nopStore) ListResearch() ([]domain.Research, []domain.FileProblem, error) 
 func (nopStore) GetResearch(string) (domain.Research, string, error) {
 	return domain.Research{}, "", domain.ErrNotFound
 }
-func (nopStore) ResolveResearchPath(string) (string, error) { return "", domain.ErrNotFound }
 func (nopStore) CreateResearch(domain.Research, string, bool) (ResearchCreationReceipt, error) {
 	return ResearchCreationReceipt{}, nil
 }
@@ -145,8 +141,11 @@ type fakeStore struct {
 	epics             []domain.Epic
 	epicProblems      []domain.FileProblem
 	audits            []domain.Audit
+	auditSourceIDs    map[string]string // optional canonical IDs from an adapter snapshot
+	auditLocations    map[string]string // optional adapter-owned readable source context, keyed by slug
 	auditProblems     []domain.FileProblem
 	research          []domain.Research
+	researchLocations map[string]string // optional adapter-owned readable source context
 	researchProblems  []domain.FileProblem
 	problems          []domain.FileProblem // returned by ListTasks
 	created           []domain.Task        // tasks passed to CreateTask
@@ -192,7 +191,7 @@ func fakeSourceID(id, slug string, index int) string {
 func loadedTasks(tasks []domain.Task) []LoadedRecord[domain.Task] {
 	out := make([]LoadedRecord[domain.Task], 0, len(tasks))
 	for i, task := range tasks {
-		out = append(out, LoadedRecord[domain.Task]{Value: task, Source: testSource(fakeSourceID(task.CanonicalID(), task.Slug, i), task.Path)})
+		out = append(out, LoadedRecord[domain.Task]{Value: task, Source: testSource(fakeSourceID(task.ID, task.Slug, i), "")})
 	}
 	return out
 }
@@ -200,7 +199,7 @@ func loadedTasks(tasks []domain.Task) []LoadedRecord[domain.Task] {
 func loadedEpics(epics []domain.Epic) []LoadedRecord[domain.Epic] {
 	out := make([]LoadedRecord[domain.Epic], 0, len(epics))
 	for _, epic := range epics {
-		out = append(out, LoadedRecord[domain.Epic]{Value: epic, Source: testSource(epic.ID, epic.Path)})
+		out = append(out, LoadedRecord[domain.Epic]{Value: epic, Source: testSource(epic.ID, "")})
 	}
 	return out
 }
@@ -225,17 +224,36 @@ func TestEpicReadIdentityAndRollupUseExplicitSource(t *testing.T) {
 func loadedAudits(audits []domain.Audit) []LoadedRecord[domain.Audit] {
 	out := make([]LoadedRecord[domain.Audit], 0, len(audits))
 	for i, audit := range audits {
-		out = append(out, LoadedRecord[domain.Audit]{Value: audit, Source: testSource(fakeSourceID(audit.CanonicalID(), audit.Slug, i), audit.Path)})
+		out = append(out, LoadedRecord[domain.Audit]{Value: audit, Source: testSource(fakeSourceID(audit.ID, audit.Slug, i), "")})
 	}
 	return out
+}
+
+func (f *fakeStore) auditSource(a domain.Audit, index int) RecordSource {
+	path := f.auditLocations[a.Slug]
+	id := f.auditSourceIDs[a.Slug]
+	if id == "" {
+		id = fakeSourceID(a.ID, a.Slug, index)
+	}
+	source := testSource(id, path)
+	source.LocationIsPath = path != ""
+	return source
 }
 
 func loadedResearch(docs []domain.Research) []LoadedRecord[domain.Research] {
 	out := make([]LoadedRecord[domain.Research], 0, len(docs))
 	for i, doc := range docs {
-		out = append(out, LoadedRecord[domain.Research]{Value: doc, Source: testSource(fakeSourceID(doc.CanonicalID(), doc.Slug, i), doc.Path)})
+		out = append(out, LoadedRecord[domain.Research]{Value: doc, Source: testSource(fakeSourceID(doc.ID, doc.Slug, i), "")})
 	}
 	return out
+}
+
+func (f *fakeStore) researchRecords() []LoadedRecord[domain.Research] {
+	records := loadedResearch(f.research)
+	for i := range records {
+		records[i].Source.Location = f.researchLocations[records[i].Source.ID]
+	}
+	return records
 }
 
 func (f *fakeStore) ReadTasks() (TaskRead, error) {
@@ -247,7 +265,7 @@ func (f *fakeStore) ReadTask(ref string) (LoadedRecord[TaskWithBody], error) {
 	if err != nil {
 		return LoadedRecord[TaskWithBody]{}, err
 	}
-	return LoadedRecord[TaskWithBody]{Value: TaskWithBody{Task: task, Body: body}, Source: testSource(fakeSourceID(task.CanonicalID(), task.Slug, 0), task.Path)}, nil
+	return LoadedRecord[TaskWithBody]{Value: TaskWithBody{Task: task, Body: body}, Source: testSource(fakeSourceID(task.ID, task.Slug, 0), "")}, nil
 }
 
 func (f *fakeStore) ReadEpics() (EpicRead, error) {
@@ -259,11 +277,15 @@ func (f *fakeStore) ReadEpic(ref string) (LoadedRecord[EpicWithBody], error) {
 	if err != nil {
 		return LoadedRecord[EpicWithBody]{}, err
 	}
-	return LoadedRecord[EpicWithBody]{Value: EpicWithBody{Epic: epic, Body: body}, Source: testSource(epic.ID, epic.Path)}, nil
+	return LoadedRecord[EpicWithBody]{Value: EpicWithBody{Epic: epic, Body: body}, Source: testSource(epic.ID, "")}, nil
 }
 
 func (f *fakeStore) ReadAudits() (AuditRead, error) {
-	return AuditRead{Records: loadedAudits(f.audits), Problems: testLintLoadProblems(EntityAudit, f.auditProblems)}, nil
+	records := loadedAudits(f.audits)
+	for i := range records {
+		records[i].Source = f.auditSource(records[i].Value, i)
+	}
+	return AuditRead{Records: records, Problems: testLintLoadProblems(EntityAudit, f.auditProblems)}, nil
 }
 
 func (f *fakeStore) ReadAudit(ref string) (LoadedRecord[AuditWithBody], error) {
@@ -271,11 +293,11 @@ func (f *fakeStore) ReadAudit(ref string) (LoadedRecord[AuditWithBody], error) {
 	if err != nil {
 		return LoadedRecord[AuditWithBody]{}, err
 	}
-	return LoadedRecord[AuditWithBody]{Value: AuditWithBody{Audit: audit, Body: body}, Source: testSource(fakeSourceID(audit.CanonicalID(), audit.Slug, 0), audit.Path)}, nil
+	return LoadedRecord[AuditWithBody]{Value: AuditWithBody{Audit: audit, Body: body}, Source: f.auditSource(audit, 0)}, nil
 }
 
 func (f *fakeStore) ReadResearch() (ResearchRead, error) {
-	return ResearchRead{Records: loadedResearch(f.research), Problems: testLintLoadProblems(EntityResearch, f.researchProblems)}, nil
+	return ResearchRead{Records: f.researchRecords(), Problems: testLintLoadProblems(EntityResearch, f.researchProblems)}, nil
 }
 
 func (f *fakeStore) ReadResearchDocument(ref string) (LoadedRecord[ResearchWithBody], error) {
@@ -283,7 +305,8 @@ func (f *fakeStore) ReadResearchDocument(ref string) (LoadedRecord[ResearchWithB
 	if err != nil {
 		return LoadedRecord[ResearchWithBody]{}, err
 	}
-	return LoadedRecord[ResearchWithBody]{Value: ResearchWithBody{Research: doc, Body: body}, Source: testSource(fakeSourceID(doc.CanonicalID(), doc.Slug, 0), doc.Path)}, nil
+	id := fakeSourceID(doc.ID, doc.Slug, 0)
+	return LoadedRecord[ResearchWithBody]{Value: ResearchWithBody{Research: doc, Body: body}, Source: testSource(id, f.researchLocations[id])}, nil
 }
 
 func (f *fakeStore) GetAudit(slug string) (domain.Audit, string, error) {
@@ -309,7 +332,7 @@ func (f *fakeStore) ReadLintTasks() ([]LoadedRecord[TaskWithBody], []LoadProblem
 	records, problems, err := f.ListTasksWithBodies()
 	loaded := make([]LoadedRecord[TaskWithBody], 0, len(records))
 	for i, record := range records {
-		loaded = append(loaded, LoadedRecord[TaskWithBody]{Value: record, Source: testSource(fakeSourceID(record.Task.CanonicalID(), record.Task.Slug, i), record.Task.Path)})
+		loaded = append(loaded, LoadedRecord[TaskWithBody]{Value: record, Source: testSource(fakeSourceID(record.Task.ID, record.Task.Slug, i), "")})
 	}
 	return loaded, testLintLoadProblems(EntityTask, problems), err
 }
@@ -339,13 +362,13 @@ func (f *fakeStore) ReadAuditSnapshot(selector string) (AuditSnapshot, error) {
 		return AuditSnapshot{Audits: []LoadedRecord[AuditWithFindings]{{
 			Value: AuditWithFindings{Audit: a, Findings: findings, NearMisses: domain.NearMissFindingHeaders(body),
 				CandidateIssues: domain.LintCandidateTasks(body, findings)},
-			Source: testSource(fakeSourceID(a.CanonicalID(), a.Slug, 0), a.Path),
+			Source: f.auditSource(a, 0),
 		}}}, nil
 	}
 	records, problems, err := f.ListAuditsWithFindings()
 	loaded := make([]LoadedRecord[AuditWithFindings], 0, len(records))
 	for i, record := range records {
-		loaded = append(loaded, LoadedRecord[AuditWithFindings]{Value: record, Source: testSource(fakeSourceID(record.Audit.CanonicalID(), record.Audit.Slug, i), record.Audit.Path)})
+		loaded = append(loaded, LoadedRecord[AuditWithFindings]{Value: record, Source: f.auditSource(record.Audit, i)})
 	}
 	return AuditSnapshot{
 		Audits: loaded, Problems: testLintLoadProblems(EntityAudit, problems),
@@ -355,8 +378,7 @@ func (f *fakeStore) ListResearch() ([]domain.Research, []domain.FileProblem, err
 	return f.research, f.researchProblems, nil
 }
 func (f *fakeStore) ReadLintResearch() ([]LoadedRecord[domain.Research], []LoadProblem, error) {
-	records, problems, err := f.ListResearch()
-	return loadedResearch(records), testLintLoadProblems(EntityResearch, problems), err
+	return f.researchRecords(), testLintLoadProblems(EntityResearch, f.researchProblems), nil
 }
 func (f *fakeStore) GetTask(slug string) (domain.Task, string, error) {
 	for _, t := range f.tasks {
@@ -630,8 +652,8 @@ func TestService_Summary(t *testing.T) {
 	if counts[domain.StatusInProgress] != 1 || counts[domain.StatusReadyToStart] != 1 || counts[domain.StatusCompleted] != 2 {
 		t.Errorf("counts wrong: %+v", counts)
 	}
-	if len(s.InProgress) != 1 || s.InProgress[0].Slug != "a" {
-		t.Errorf("in-progress wrong: %+v", s.InProgress)
+	if len(s.InProgressRecords) != 1 || s.InProgressRecords[0].Value.Slug != "a" {
+		t.Errorf("in-progress wrong: %+v", s.InProgressRecords)
 	}
 	if len(s.Epics) != 1 || s.Epics[0].Total != 3 || s.Epics[0].Done != 1 {
 		t.Errorf("epic rollup wrong: %+v", s.Epics)

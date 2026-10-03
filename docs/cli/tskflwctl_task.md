@@ -34,7 +34,7 @@ Work with tasks
 * [tskflwctl task depend](tskflwctl_task_depend.md)	 - Change repository-global task dependencies through the graph guard
 * [tskflwctl task deprecate](tskflwctl_task_deprecate.md)	 - Move task(s) to deprecated
 * [tskflwctl task edit](tskflwctl_task_edit.md)	 - Open a task in your editor (whole file; re-validated on save)
-* [tskflwctl task info](tskflwctl_task_info.md)	 - Show a task's metadata + file path + acceptance tally (no body)
+* [tskflwctl task info](tskflwctl_task_info.md)	 - Show a task's metadata, acceptance tally, and local path when available (no body)
 * [tskflwctl task list](tskflwctl_task_list.md)	 - List tasks (active by default)
 * [tskflwctl task move](tskflwctl_task_move.md)	 - Transition task(s) to <status> (generic escape hatch)
 * [tskflwctl task new](tskflwctl_task_new.md)	 - Create a new task (validated, handoff-ready scaffold)

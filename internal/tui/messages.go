@@ -65,6 +65,19 @@ type editedMsg struct {
 // path as an external edit — so there's no slug or content to carry.
 type editorClosedMsg struct{ err error }
 
+// localPathResultMsg is a local path lookup. The initial result must pass the
+// selection guard and trigger a second lookup by stable ID before an action.
+// Both results are scoped to the same tab, row, list generation, and session.
+type localPathResultMsg struct {
+	kind      entityKind
+	id        string
+	listGen   int
+	action    localPathAction
+	rechecked bool
+	path      string
+	err       error
+}
+
 // mutationResultMsg ties a local action's delayed result to the selection and
 // list generation from which the action was launched. A later refresh may have
 // reused the same visible row or moved the cursor; neither may receive the old

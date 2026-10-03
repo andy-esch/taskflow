@@ -186,7 +186,7 @@ func TestThreadSpatialEntryReanchorsToWorkWhileReloadRestorationRemainsExplicit(
 	for index := range recent.View.Members {
 		recent.View.Members[index].State.Role = core.RoleQueued
 		recent.View.Members[index].Task.Updated = "2026-09-10"
-		if recent.View.Members[index].Task.CanonicalID() == "e" {
+		if recent.View.Members[index].Task.ID == "e" {
 			recent.View.Members[index].Task.Updated = "2026-09-12"
 		}
 	}
@@ -204,7 +204,7 @@ func TestThreadSpatialEntryReanchorsToWorkWhileReloadRestorationRemainsExplicit(
 	for index := range recent.View.Members {
 		recent.View.Members[index].Task.Updated = "someday"
 		recent.View.Members[index].Task.Created = "2026-09-10"
-		if recent.View.Members[index].Task.CanonicalID() == "d" {
+		if recent.View.Members[index].Task.ID == "d" {
 			recent.View.Members[index].Task.Created = "2026-09-12"
 		}
 	}

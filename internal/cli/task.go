@@ -313,7 +313,7 @@ func newTaskShowCmd(app *App) *cobra.Command {
 func newTaskInfoCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:               "info <task>",
-		Short:             "Show a task's metadata + file path + acceptance tally (no body)",
+		Short:             "Show a task's metadata, acceptance tally, and local path when available (no body)",
 		Example:           "  tskflwctl task info add-retry-backoff\n  tskflwctl task info add-retry-backoff --json",
 		Args:              cobra.MaximumNArgs(1),
 		Annotations:       map[string]string{"safety": "read-only"},
@@ -328,7 +328,14 @@ func newTaskInfoCmd(app *App) *cobra.Command {
 				return err
 			}
 			ac := domain.CountAcceptanceCriteria(record.Value.Body)
-			path := absPath(record.Value.Task.Path)
+			path := ""
+			if app.Svc.HasLocalPath(core.EntityTask) {
+				resolved, err := app.Svc.TaskPath(record.Source.ID)
+				if err != nil {
+					return err
+				}
+				path = absPath(resolved)
+			}
 			if app.JSON {
 				return render.TaskInfoJSON(app.Out, record, ac, path)
 			}

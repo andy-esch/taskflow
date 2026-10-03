@@ -13,14 +13,14 @@ func TestValidateThreadCreationSourceRejectsCrossKindAndMissingMember(t *testing
 	task := graphRecord("member", domain.StatusReadyToStart)
 	graph := NewTaskGraph([]domain.Task{task}, nil)
 	existing := threadRecord(domain.ThreadStatusUnstarted, task.ID)
-	existing.ID, existing.FilenameID = task.ID, task.ID
-	if err := ValidateThreadCreationSource(graph, []domain.Thread{existing}, nil); !errors.Is(err, domain.ErrValidation) {
+	existing.ID = task.ID
+	if err := ValidateThreadCreationSource(graph, semanticThreadRead(existing)); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("cross-kind error = %v", err)
 	}
 
-	existing.ID, existing.FilenameID = testutil.TaskID("existing-thread"), testutil.TaskID("existing-thread")
+	existing.ID = testutil.TaskID("existing-thread")
 	existing.Tasks = []string{testutil.TaskID("missing")}
-	if err := ValidateThreadCreationSource(graph, []domain.Thread{existing}, nil); !errors.Is(err, domain.ErrValidation) {
+	if err := ValidateThreadCreationSource(graph, semanticThreadRead(existing)); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("missing-member error = %v", err)
 	}
 }
@@ -31,7 +31,7 @@ func TestValidateThreadCreationSourceOrdersPortableDiagnosticsAndNamesRemoteThre
 		{ThreadID: "6g0000000002", ThreadSlug: "later", Message: "later failure"},
 		{ThreadID: "6g0000000001", ThreadSlug: "first", Message: "first failure"},
 	}
-	if err := ValidateThreadCreationSource(graph, nil, unreadable); err == nil ||
+	if err := ValidateThreadCreationSource(graph, ThreadRead{Problems: unreadable}); err == nil ||
 		!strings.Contains(err.Error(), "first (6g0000000001)") || strings.Contains(err.Error(), "later failure") {
 		t.Fatalf("ordered unreadable error = %v", err)
 	}
@@ -41,7 +41,7 @@ func TestValidateThreadCreationSourceOrdersPortableDiagnosticsAndNamesRemoteThre
 		{ID: duplicateID, Slug: "z-remote", Status: domain.ThreadStatusUnstarted, Description: "Remote duplicate", Goal: "Fail closed", Created: "2026-09-01"},
 		{ID: duplicateID, Slug: "a-remote", Status: domain.ThreadStatusUnstarted, Description: "Remote duplicate", Goal: "Fail closed", Created: "2026-09-01"},
 	}
-	if err := ValidateThreadCreationSource(graph, threads, nil); err == nil ||
+	if err := ValidateThreadCreationSource(graph, semanticThreadRead(threads...)); err == nil ||
 		!strings.Contains(err.Error(), "a-remote ("+duplicateID+")") ||
 		!strings.Contains(err.Error(), "z-remote ("+duplicateID+")") {
 		t.Fatalf("portable duplicate error = %v", err)
@@ -63,8 +63,20 @@ func TestValidateThreadCreationPlanAllowsEmptyAndRejectsLifecycleOrCollision(t *
 		t.Fatalf("lifecycle error = %v", err)
 	}
 	thread.Status = domain.ThreadStatusUnstarted
-	thread.ID, thread.FilenameID = task.ID, task.ID
+	thread.ID = task.ID
 	if _, err := ValidateThreadCreationPlan(snapshot, ThreadCreationPlan{Thread: thread}); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("collision error = %v", err)
 	}
+}
+
+// semanticThreadRead is a pathless test adapter for matching source/declaration IDs.
+// Tests of source drift or local evidence supply explicit records instead.
+func semanticThreadRead(threads ...domain.Thread) ThreadRead {
+	read := ThreadRead{Records: make([]VersionedRecord[domain.Thread], 0, len(threads))}
+	for _, thread := range threads {
+		read.Records = append(read.Records, VersionedRecord[domain.Thread]{
+			Record: LoadedRecord[domain.Thread]{Value: thread, Source: RecordSource{ID: thread.ID}},
+		})
+	}
+	return read
 }

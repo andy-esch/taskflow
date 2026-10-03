@@ -194,8 +194,8 @@ func (c *countingAuditStore) ReadEpics() (EpicRead, error) {
 func TestService_Summary_ReadsEachAuditOnce(t *testing.T) {
 	store := &countingAuditStore{fakeStore: fakeStore{
 		audits: []domain.Audit{
-			{Slug: "2026-06-14-gateway", Path: "2026-06-14-gateway", Bucket: domain.AuditOpen},
-			{Slug: "2026-06-10-ingest", Path: "2026-06-10-ingest", Bucket: domain.AuditClosed},
+			{Slug: "2026-06-14-gateway", Bucket: domain.AuditOpen},
+			{Slug: "2026-06-10-ingest", Bucket: domain.AuditClosed},
 		},
 		auditBodies: map[string]string{
 			"2026-06-14-gateway": gatewayBody,
@@ -231,7 +231,7 @@ func (s *portableEpicSummarySource) ReadEpics() (EpicRead, error) {
 
 func TestSummaryBareProjectionsUseLoadedSourceIdentity(t *testing.T) {
 	tasks := &neutralTaskGraphSource{read: TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
-		Value:  domain.Task{ID: "stale-task", FilenameID: "old-task", Slug: "task", Status: domain.StatusInProgress},
+		Value:  domain.Task{ID: "stale-task", Slug: "task", Status: domain.StatusInProgress},
 		Source: RecordSource{ID: "6g0000000001", Location: "db://tasks/one"},
 	}}}}
 	epics := &portableEpicSummarySource{read: EpicRead{Records: []LoadedRecord[domain.Epic]{{
@@ -239,7 +239,7 @@ func TestSummaryBareProjectionsUseLoadedSourceIdentity(t *testing.T) {
 		Source: RecordSource{ID: "42-current", Location: "db://epics/one"},
 	}}}}
 	audits := &auditSnapshotStub{all: AuditSnapshot{Audits: []LoadedRecord[AuditWithFindings]{{
-		Value:  AuditWithFindings{Audit: domain.Audit{ID: "stale-audit", FilenameID: "old-audit", Slug: "audit", Bucket: domain.AuditOpen}},
+		Value:  AuditWithFindings{Audit: domain.Audit{ID: "stale-audit", Slug: "audit", Bucket: domain.AuditOpen}},
 		Source: RecordSource{ID: "6g0000000002", Location: "db://audits/one"},
 	}}}}
 	summary, err := summarize(epics, audits, tasks, time.Now())
@@ -249,9 +249,10 @@ func TestSummaryBareProjectionsUseLoadedSourceIdentity(t *testing.T) {
 	if tasks.calls != 1 || epics.calls != 1 || len(audits.calls) != 1 {
 		t.Fatalf("summary reads task/epic/audit = %d/%d/%d", tasks.calls, epics.calls, len(audits.calls))
 	}
-	if len(summary.InProgress) != 1 || summary.InProgress[0].FilenameID != "6g0000000001" ||
+	if len(summary.InProgressRecords) != 1 || summary.InProgressRecords[0].Source.ID != "6g0000000001" ||
 		len(summary.Epics) != 1 || summary.Epics[0].Epic.ID != "42-current" ||
-		len(summary.OpenAudits) != 1 || summary.OpenAudits[0].FilenameID != "6g0000000002" {
+		len(summary.OpenAudits) != 1 || summary.OpenAudits[0].Source.ID != "6g0000000002" ||
+		summary.OpenAudits[0].Value.ID != "stale-audit" {
 		t.Fatalf("summary source identities = %+v", summary)
 	}
 }

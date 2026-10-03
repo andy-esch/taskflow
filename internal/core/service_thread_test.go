@@ -13,14 +13,17 @@ import (
 
 type threadReadFake struct {
 	testSourceSetProvider
-	threads  []domain.Thread
-	problems []ThreadReadProblem
-	thread   domain.Thread
-	body     string
-	getErr   error
-	onList   func()
-	onGet    func()
-	recordID string // optional adapter source identity independent of the domain value
+	threads        []domain.Thread
+	problems       []ThreadReadProblem
+	thread         domain.Thread
+	body           string
+	getErr         error
+	onList         func()
+	onGet          func()
+	recordID       string // optional adapter source identity independent of the domain value
+	location       string
+	locationIsPath bool
+	sourceVersion  string // guarded evidence supplied separately from the Thread value
 }
 
 func (f *threadReadFake) ReadThreads() (ThreadRead, error) {
@@ -29,13 +32,13 @@ func (f *threadReadFake) ReadThreads() (ThreadRead, error) {
 	}
 	read := ThreadRead{Problems: f.problems}
 	for _, thread := range f.threads {
-		id := thread.CanonicalID()
+		id := thread.ID
 		if f.recordID != "" {
 			id = f.recordID
 		}
 		read.Records = append(read.Records, VersionedRecord[domain.Thread]{
-			Record:        LoadedRecord[domain.Thread]{Value: thread, Source: RecordSource{ID: id}},
-			SourceVersion: thread.SourceVersion,
+			Record:        LoadedRecord[domain.Thread]{Value: thread, Source: RecordSource{ID: id, Location: f.location, LocationIsPath: f.locationIsPath}},
+			SourceVersion: f.sourceVersion,
 		})
 	}
 	return read, nil
@@ -53,12 +56,12 @@ func (f *threadReadFake) ReadThread(ref string) (LoadedRecord[ThreadWithBody], e
 	if err != nil {
 		return LoadedRecord[ThreadWithBody]{}, err
 	}
-	id := thread.CanonicalID()
+	id := thread.ID
 	if f.recordID != "" {
 		id = f.recordID
 	}
 	return LoadedRecord[ThreadWithBody]{
-		Value: ThreadWithBody{Thread: thread, Body: body}, Source: RecordSource{ID: id},
+		Value: ThreadWithBody{Thread: thread, Body: body}, Source: RecordSource{ID: id, Location: f.location, LocationIsPath: f.locationIsPath},
 	}, nil
 }
 
@@ -196,12 +199,12 @@ func TestServiceThreadCommittedFailureIsNotRetried(t *testing.T) {
 
 func TestServiceLintIncludesThreadIntegrityAndCrossKindIdentity(t *testing.T) {
 	task := domain.Task{
-		ID: "6g3q4rtmv4ak", FilenameID: "6g3q4rtmv4ak", Slug: "task", Path: "tasks/6g3q4rtmv4ak-task.md",
+		ID: "6g3q4rtmv4ak", Slug: "task",
 		Status: domain.StatusCompleted, Epic: "01-e", Created: "2026-08-29",
 	}
 	threadStore := &threadReadFake{
 		threads: []domain.Thread{{
-			ID: "6g3q4rtmv4ak", FilenameID: "6g3q4rtmv4ak", Slug: "thread", Path: "threads/6g3q4rtmv4ak-thread.md",
+			ID: "6g3q4rtmv4ak", Slug: "thread",
 			Status: domain.ThreadStatusUnstarted, Description: "Valid description", Goal: "Ship it",
 			Created: "2026-08-29", Tasks: []string{"6g3q4rtmv4az"},
 		}},
@@ -235,7 +238,7 @@ func TestServiceLintIncludesThreadIntegrityAndCrossKindIdentity(t *testing.T) {
 func TestServiceThreadListHoistsRepositoryGraphDiagnostics(t *testing.T) {
 	task := graphRecord("broken-member", domain.StatusReadyToStart, "6g0000000009")
 	threadStore := &threadReadFake{threads: []domain.Thread{{
-		ID: "6g3q4rtmv4ak", FilenameID: "6g3q4rtmv4ak", Slug: "thread", Path: "threads/6g3q4rtmv4ak-thread.md",
+		ID: "6g3q4rtmv4ak", Slug: "thread",
 		Status: domain.ThreadStatusUnstarted, Description: "Broken graph list", Goal: "Report once",
 		Created: "2026-08-29", Tasks: []string{task.ID},
 	}}}
@@ -308,9 +311,8 @@ func TestServiceThreadViewsDoNotPublishAdapterSourceRevisions(t *testing.T) {
 	thread := domain.Thread{
 		ID: "6g3q4rtmv4ak", Slug: "remote-thread", Status: domain.ThreadStatusUnstarted,
 		Description: "Remote Thread", Goal: "Keep revisions private", Created: "2026-09-01",
-		SourceVersion: revision,
 	}
-	adapter := &threadReadFake{threads: []domain.Thread{thread}, thread: thread, recordID: thread.ID}
+	adapter := &threadReadFake{threads: []domain.Thread{thread}, thread: thread, recordID: thread.ID, sourceVersion: revision}
 	svc := MustNewService(&fakeStore{}, WithThreadStore(adapter))
 	list, _, err := svc.ListThreadViews()
 	if err != nil || len(list.Threads) != 1 {
@@ -321,7 +323,7 @@ func TestServiceThreadViewsDoNotPublishAdapterSourceRevisions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, view := range []ThreadView{list.Threads[0], selected} {
-		if view.Thread.SourceVersion != "" || view.Source.ID != thread.ID {
+		if view.Source.ID != thread.ID {
 			t.Fatalf("view leaked revision or lost source identity: %+v", view)
 		}
 		encoded, err := json.Marshal(view)
@@ -369,11 +371,28 @@ func TestServiceThreadListFailsDuplicateIDsButAllowsDuplicateSlugs(t *testing.T)
 	}
 }
 
+func TestServiceThreadListDetectsDuplicateAdapterSourceIDs(t *testing.T) {
+	threads := []domain.Thread{
+		{ID: "6g3q4rtmv4aa", Slug: "first", Status: domain.ThreadStatusUnstarted, Description: "First source", Goal: "Detect collision", Created: "2026-09-01"},
+		{ID: "6g3q4rtmv4ab", Slug: "second", Status: domain.ThreadStatusUnstarted, Description: "Second source", Goal: "Detect collision", Created: "2026-09-01"},
+	}
+	const sourceID = "6g3q4rtmv4ak"
+	list, _, err := MustNewService(&fakeStore{}, WithThreadStore(&threadReadFake{threads: threads, recordID: sourceID})).ListThreadViews()
+	if err != nil || len(list.Threads) != 2 {
+		t.Fatalf("list=%+v err=%v", list, err)
+	}
+	for _, view := range list.Threads {
+		if view.Source.ID != sourceID || view.ProjectionHealth != GraphBroken || !hasThreadProblem(view.Problems, ThreadProblemDuplicateID) {
+			t.Fatalf("source collision not attributed to loaded Thread: %+v", view)
+		}
+	}
+}
+
 func TestServiceThreadReadsComposeIndependentGraphAndThreadPorts(t *testing.T) {
 	gate := graphRecord("split-gate", domain.StatusCompleted)
 	member := graphRecord("split-member", domain.StatusReadyToStart, gate.ID)
 	thread := domain.Thread{
-		ID: "6g3q4rtmv4ak", FilenameID: "6g3q4rtmv4ak", Slug: "split-thread",
+		ID: "6g3q4rtmv4ak", Slug: "split-thread",
 		Status: domain.ThreadStatusUnstarted, Description: "Split read ports", Goal: "Keep core reusable",
 		Created: "2026-08-31", Tasks: []string{member.ID},
 	}

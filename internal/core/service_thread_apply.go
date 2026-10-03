@@ -20,14 +20,11 @@ func (s *Service) ComposeThreadApply(planningRepoID string, manifest ThreadCompo
 	if err != nil {
 		return ThreadApplyPlan{}, err
 	}
-	if err := read.ValidateSources(); err != nil {
-		return ThreadApplyPlan{}, err
-	}
 	graph, err := LoadTaskGraph(s.taskGraphs)
 	if err != nil {
 		return ThreadApplyPlan{}, err
 	}
-	if err := ValidateThreadCreationSource(graph, read.SemanticThreads(), read.Problems); err != nil {
+	if err := ValidateThreadCreationSource(graph, read); err != nil {
 		return ThreadApplyPlan{}, err
 	}
 	template, err := s.templateBody("thread", "")

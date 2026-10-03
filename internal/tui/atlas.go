@@ -670,7 +670,7 @@ func atlasActivity(summary core.SpaceSummary) int {
 	if summary.Summary == nil {
 		return 0
 	}
-	return len(summary.Summary.InProgress)
+	return len(summary.Summary.InProgressRecords)
 }
 
 func atlasSpaceName(summary core.SpaceSummary) string {
@@ -996,7 +996,7 @@ func statsFor(summary core.SpaceSummary) atlasStats {
 		return atlasStats{}
 	}
 	stats := atlasStats{
-		loaded: true, inProgress: len(s.InProgress),
+		loaded: true, inProgress: len(s.InProgressRecords),
 		epics: len(s.Epics), openAudits: len(s.OpenAudits),
 		findings:  s.Findings.Open + s.Findings.InProgress,
 		attention: len(s.Findings.Acute) + s.ReadyToClose + s.RevisitDue + len(s.Problems) + graphAttention(s.GraphHealth),

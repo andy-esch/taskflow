@@ -10,17 +10,31 @@ import (
 
 	yaml "go.yaml.in/yaml/v3"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // ListEpics parses every epics/*.md file. Unreadable epics are skipped and
 // reported as FileProblems (resilient, like ListTasks).
 func (s *FS) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
+	records, problems, err := s.scanEpics()
+	if err != nil {
+		return nil, nil, err
+	}
+	epics := make([]domain.Epic, 0, len(records))
+	for _, record := range records {
+		epics = append(epics, record.Value)
+	}
+	return epics, problems, nil
+}
+
+func (s *FS) scanEpics() ([]core.LoadedRecord[domain.Epic], []domain.FileProblem, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return nil, nil, err
 	}
-	epics, problems, err := scanDir(s.epicsDir, func(path string, content []byte) (domain.Epic, error) {
-		return parseEpic(content, path)
+	records, problems, err := scanDir(s.epicsDir, func(path string, content []byte) (core.LoadedRecord[domain.Epic], error) {
+		epic, err := parseEpic(content, path)
+		return epicRecord(epic, path), err
 	})
 	if err != nil {
 		return nil, nil, err
@@ -34,40 +48,51 @@ func (s *FS) ListEpics() ([]domain.Epic, []domain.FileProblem, error) {
 		}
 	}
 	// Numeric order by the NN- prefix (10 after 9), not ReadDir's lexical order.
-	sort.Slice(epics, func(i, j int) bool {
-		if ni, nj := epicNum(epics[i].ID), epicNum(epics[j].ID); ni != nj {
+	sort.Slice(records, func(i, j int) bool {
+		if ni, nj := epicNum(records[i].Value.ID), epicNum(records[j].Value.ID); ni != nj {
 			return ni < nj
 		}
-		return epics[i].ID < epics[j].ID
+		return records[i].Value.ID < records[j].Value.ID
 	})
-	return epics, problems, nil
+	return records, problems, nil
 }
 
 // GetEpic returns one epic plus its markdown body. The id resolves exact
 // first, then fuzzy (unique prefix/substring), like task and audit slugs.
 func (s *FS) GetEpic(id string) (domain.Epic, string, error) {
-	if err := s.rejectRepositoryPlannerCall(); err != nil {
+	record, err := s.readEpic(id)
+	if err != nil {
 		return domain.Epic{}, "", err
+	}
+	return record.Value.Epic, record.Value.Body, nil
+}
+
+func (s *FS) readEpic(id string) (core.LoadedRecord[core.EpicWithBody], error) {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return core.LoadedRecord[core.EpicWithBody]{}, err
 	}
 	cands, err := epicCandidates(s.epicsDir) // epics have no status/bucket dir
 	if err != nil {
-		return domain.Epic{}, "", err
+		return core.LoadedRecord[core.EpicWithBody]{}, err
 	}
 	c, err := resolveID("epic", id, cands)
 	if err != nil {
-		return domain.Epic{}, "", err
+		return core.LoadedRecord[core.EpicWithBody]{}, err
 	}
 	content, err := os.ReadFile(c.path)
 	if err != nil {
-		return domain.Epic{}, "", fmt.Errorf("read epic %s: %w", c.path, err)
+		return core.LoadedRecord[core.EpicWithBody]{}, fmt.Errorf("read epic %s: %w", c.path, err)
 	}
 	path := c.path
 	ep, err := parseEpic(content, path)
 	if err != nil {
-		return domain.Epic{}, "", fmt.Errorf("%s: %w", path, err)
+		return core.LoadedRecord[core.EpicWithBody]{}, fmt.Errorf("%s: %w", path, err)
 	}
 	_, body := splitFrontmatter(content)
-	return ep, string(body), nil
+	return core.LoadedRecord[core.EpicWithBody]{
+		Value:  core.EpicWithBody{Epic: ep, Body: string(body)},
+		Source: core.RecordSource{ID: ep.ID, Location: path, LocationIsPath: true},
+	}, nil
 }
 
 // MoveEpic surgically rewrites an epic's `status` frontmatter field. Unlike a
@@ -269,6 +294,5 @@ func parseEpic(content []byte, path string) (domain.Epic, error) {
 		}
 	}
 	ep.ID = strings.TrimSuffix(filepath.Base(path), ".md")
-	ep.Path = path
 	return ep, nil
 }

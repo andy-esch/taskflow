@@ -82,9 +82,9 @@ func TestThreadReadValidateSourcesFailsClosedWithoutCanonicalIdentity(t *testing
 	if err := read.ValidateSources(); err != nil {
 		t.Fatalf("unique canonical sources = %v", err)
 	}
-	read.Records[0].Record.Value.SourceVersion = "legacy-embedded-revision"
-	if threads := read.SemanticThreads(); len(threads) != 2 || threads[0].SourceVersion != "" {
-		t.Fatalf("semantic Threads retained adapter revision: %+v", threads)
+	read.Records[0].SourceVersion = "guarded-revision"
+	if threads := read.SemanticThreads(); len(threads) != 2 || threads[0].ID != "canonical-a" {
+		t.Fatalf("semantic Thread projection changed records: %+v", threads)
 	}
 	read.Records[1].Record.Value.ID = "drifted-declaration"
 	if err := read.ValidateSources(); !errors.Is(err, domain.ErrValidation) {

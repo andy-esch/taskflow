@@ -257,13 +257,13 @@ func (s *Service) EditFinding(slug, code string, edit FindingEdit, dryRun bool) 
 // nearMisses is a separate input rather than something recomputed from findings
 // because a dropped finding is by construction ABSENT from findings — the parsed
 // set can never reveal what failed to parse into it.
-func AuditLintIssues(a domain.Audit, findings []domain.Finding, nearMisses []domain.NearMissHeader, candidateIssues []domain.Issue) []domain.Issue {
+func AuditLintIssues(a domain.Audit, sourceID string, findings []domain.Finding, nearMisses []domain.NearMissHeader, candidateIssues []domain.Issue) []domain.Issue {
 	iss := domain.NearMissFindingIssues(nearMisses)
 	iss = append(iss, domain.LintFindings(string(a.Bucket), findings)...)
 	iss = append(iss, candidateIssues...)
-	iss = append(iss, domain.MissingIDIssue(a.ID)...)             // audits get a stable id too
-	iss = append(iss, domain.IDDriftIssue(a.ID, a.FilenameID)...) // …that must match the filename
-	iss = append(iss, domain.FrontmatterBucketIssues(a)...)       // and a missing/foreign bucket flag
+	iss = append(iss, domain.MissingIDIssue(a.ID)...)         // audits get a stable id too
+	iss = append(iss, domain.IDDriftIssue(a.ID, sourceID)...) // …that must match the adapter's source ID
+	iss = append(iss, domain.FrontmatterBucketIssues(a)...)   // and a missing/foreign bucket flag
 	return iss
 }
 
@@ -321,7 +321,11 @@ func (s *Service) FixFindingHeaders(dryRun bool) ([]domain.FixResult, error) {
 			return out, fmt.Errorf("canonicalize finding headers in %s: %w", slug, err)
 		}
 		if len(changes) > 0 {
-			out = append(out, domain.FixResult{Path: a.Audit.Path, Changes: changes})
+			path := ""
+			if loaded.Source.LocationIsPath {
+				path = loaded.Source.Location // explanatory output, never a file-open authority
+			}
+			out = append(out, domain.FixResult{Path: path, Changes: changes})
 		}
 	}
 	return out, nil
@@ -345,10 +349,9 @@ func (s *Service) LintAudits(slug string) ([]LintResult, []LoadProblem, error) {
 	problems = snapshot.Problems
 	for _, loaded := range snapshot.Audits {
 		record := loaded.Value
-		record.Audit.FilenameID = loaded.Source.ID
-		iss := AuditLintIssues(record.Audit, record.Findings, record.NearMisses, record.CandidateIssues)
+		iss := AuditLintIssues(record.Audit, loaded.Source.ID, record.Findings, record.NearMisses, record.CandidateIssues)
 		if len(iss) > 0 {
-			results = append(results, LintResult{Slug: record.Audit.Slug, Location: readableDiagnosticLocation(loaded.Source, record.Audit.Path), Issues: iss})
+			results = append(results, LintResult{Slug: record.Audit.Slug, Location: readableDiagnosticLocation(loaded.Source), Issues: iss})
 		}
 	}
 	return results, problems, nil

@@ -1,33 +1,22 @@
 package domain
 
-// Task is a planning task. Fields tagged `yaml:"-"` are derived by the store
-// (filename, path) and are not part of the markdown frontmatter.
+// Task is a planning task. Source identity and location belong to the adapter
+// read envelope; optional local actions request a separate path capability.
 type Task struct {
 	Slug string `yaml:"-"`
-	Path string `yaml:"-"`
 	// Title is the first non-fenced H1 in the Markdown body. It is derived by
 	// adapters rather than duplicated in frontmatter; callers must fall back to
 	// Slug when an adapter cannot provide body-derived presentation data.
 	Title string `yaml:"-"`
-	// SourceVersion is the store-internal hash of the exact bytes that produced this
-	// record. TaskGraph retains it for whole-snapshot CAS but clears it from Task()
-	// projections, so planners never receive persistence tokens.
-	SourceVersion string `yaml:"-"`
 	// StatusFellBack is set by the store when the frontmatter status is missing or
 	// unrecognized — under the flat layout (ADR-0003 §4) there is no directory to fall
 	// back to, so Status keeps its raw value; the task still lists and lint flags it
 	// (FrontmatterStatusIssues).
 	StatusFellBack bool `yaml:"-"`
 
-	// ID is the stable 12-char identifier (ADR-0003 §3): it leads the flat filename
-	// (tasks/<id>-<slug>.md) and is the primary resolution key.
+	// ID is the declared stable identifier (ADR-0003 §3). A local file repeats
+	// it in tasks/<id>-<slug>.md; the adapter's source ID is the resolution key.
 	ID string `yaml:"id"`
-
-	// FilenameID is that same id as parsed from the flat filename's leading field
-	// (set by the store via splitFlatName). It is the canonical key resolveID/CAS
-	// match on; the frontmatter `id:` above is a co-located copy that must equal it,
-	// and lint flags any drift (IDDriftIssue). Derived, not frontmatter.
-	FilenameID string `yaml:"-"`
 
 	Status      Status   `yaml:"status"`
 	Epic        string   `yaml:"epic"`
@@ -59,15 +48,4 @@ type Task struct {
 	// explicitly empty legacy key remains diagnosable and migratable. Values are
 	// the canonical field names and are populated by the store parser.
 	LegacyDependencyFields []string `yaml:"-"`
-}
-
-// CanonicalID returns the store-resolution identity for this record. Filesystem
-// reads prefer the ID derived from the filename so a missing/drifting frontmatter
-// copy remains repairable; portable adapters that have no filename identity use
-// the semantic ID they supplied.
-func (t Task) CanonicalID() string {
-	if t.FilenameID != "" {
-		return t.FilenameID
-	}
-	return t.ID
 }

@@ -39,7 +39,6 @@ func (b AuditBucket) Valid() bool { _, err := ParseAuditBucket(string(b)); retur
 // (ADR-0003 §4, flat layout); finding counts are parsed from the body.
 type Audit struct {
 	Slug string `yaml:"-"`
-	Path string `yaml:"-"`
 	// BucketFellBack is set by the store when the frontmatter bucket is missing or
 	// unrecognized — under the flat layout there is no directory to fall back to, so
 	// Bucket keeps its raw value; the audit still lists and lint flags it
@@ -49,11 +48,6 @@ type Audit struct {
 	// ID is the stable 12-char identifier (ADR-0003 §3): it leads the flat filename
 	// (audits/<id>-<slug>.md) and is the primary resolution key.
 	ID string `yaml:"id"`
-
-	// FilenameID is that same id as parsed from the flat filename's leading field
-	// (set by the store via splitFlatName) — the canonical key; the frontmatter `id:`
-	// above must equal it, and lint flags drift (IDDriftIssue). Derived, not frontmatter.
-	FilenameID string `yaml:"-"`
 
 	// Bucket is the audit's lifecycle state — authoritative, read from frontmatter.
 	Bucket AuditBucket `yaml:"bucket"`
@@ -75,16 +69,6 @@ type Audit struct {
 	ActiveFindings  int `yaml:"-"` // status: in-progress
 	DoneFindings    int `yaml:"-"` // status: fixed, tracked
 	DroppedFindings int `yaml:"-"` // status: deferred, superseded, wontfix
-}
-
-// CanonicalID is the stable store-resolution identity. Filename identity wins
-// for filesystem records so frontmatter drift cannot redirect a read; adapters
-// without filename semantics use ID.
-func (a Audit) CanonicalID() string {
-	if a.FilenameID != "" {
-		return a.FilenameID
-	}
-	return a.ID
 }
 
 // Resolved is the audit's SETTLED count — every finding that has reached a terminal

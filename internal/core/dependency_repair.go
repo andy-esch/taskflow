@@ -82,7 +82,7 @@ type TaskGraphRepairMutationResult struct {
 	Plan             TaskGraphRepairPlan
 	Analysis         TaskGraphRepairAnalysis
 	FinalGraph       *TaskGraph
-	Threads          []domain.Thread
+	Threads          []LoadedRecord[domain.Thread]
 	ThreadProblems   []ThreadReadProblem
 	PlannedSources   []TaskGraphSourceRef
 	AppliedSources   []TaskGraphSourceRef
@@ -320,7 +320,7 @@ func requireLocalRepairPath(defect TaskGraphRepairDefect) TaskGraphRepairDefect 
 }
 
 func hasLocalRepairPath(source TaskGraphSourceRef) bool {
-	return source.LocalPath != "" && !strings.Contains(source.LocalPath, "://")
+	return source.LocalPath != ""
 }
 
 // PlanTaskGraphRepair reauthorizes convergent intent against graph. An edit that
@@ -1179,19 +1179,29 @@ func (g *TaskGraph) edgeInCycle(edge DependencyEdge) bool {
 	return fromOK && toOK && from == to
 }
 
-// SameRepairSnapshot reports whether actual is the exact authoritative source
-// state represented by a prospective removal-only prefix. Revisions and the
-// repair-owned updated_at stamp may differ only for sources the prefix changed;
-// every other readable record and every unreadable revision must remain exact.
+// SameRepairSnapshot compares two repair projections. A simulated prospective
+// graph intentionally has no revision for changed sources, so this form also
+// serves pure composition proofs without pretending that it is a durable read.
 func (g *TaskGraph) SameRepairSnapshot(actual *TaskGraph, changed []TaskGraphSourceRef) bool {
+	return g.sameRepairSnapshot(actual, changed, false)
+}
+
+// SameDurableRepairSnapshot additionally requires post-write revision evidence
+// on each changed source. Filesystem repair uses this for its actual reread; a
+// pathless or incomplete adapter cannot pass by omitting the changed token.
+func (g *TaskGraph) SameDurableRepairSnapshot(actual *TaskGraph, changed []TaskGraphSourceRef) bool {
+	return g.sameRepairSnapshot(actual, changed, true)
+}
+
+func (g *TaskGraph) sameRepairSnapshot(actual *TaskGraph, changed []TaskGraphSourceRef, requireObservedRevision bool) bool {
 	if g == nil || actual == nil || g.requireCompleteSource() != nil || actual.requireCompleteSource() != nil {
 		return false
 	}
 	if len(g.sourceTasks) != len(actual.sourceTasks) || len(g.loadProblems) != len(actual.loadProblems) {
 		return false
 	}
-	expectedPairs := taskSourcePairs(g.sourceTasks, g.sourceRefs)
-	actualPairs := taskSourcePairs(actual.sourceTasks, actual.sourceRefs)
+	expectedPairs := taskSourcePairs(g.sourceTasks, g.sourceRefs, g.sourceVersions)
+	actualPairs := taskSourcePairs(actual.sourceTasks, actual.sourceRefs, actual.sourceVersions)
 	changedSet := make(map[TaskGraphSourceRef]bool, len(changed))
 	for _, source := range changed {
 		changedSet[source] = true
@@ -1202,10 +1212,17 @@ func (g *TaskGraph) SameRepairSnapshot(actual *TaskGraph, changed []TaskGraphSou
 			return false
 		}
 		if changedSet[expected.source] {
-			expected.task.SourceVersion, observed.task.SourceVersion = "", ""
+			// The prospective graph intentionally has no revision for a source it
+			// simulated changing. The actual post-write read must still present
+			// guarded evidence; a pathless/read-only adapter cannot pass by
+			// omitting the token on the changed source.
+			if requireObservedRevision && observed.version == "" {
+				return false
+			}
+			expected.version, observed.version = "", ""
 			expected.task.Updated, observed.task.Updated = "", ""
 		}
-		if !reflect.DeepEqual(expected.task, observed.task) {
+		if expected.version != observed.version || !reflect.DeepEqual(expected.task, observed.task) {
 			return false
 		}
 	}

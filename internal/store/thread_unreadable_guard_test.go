@@ -48,7 +48,7 @@ func TestGuardedMutationsRejectUnreadableThreadDocuments(t *testing.T) {
 		taskID := testutil.TaskID("refused-membership-task")
 		writeGraphMutationTask(t, root, "refused-membership-task", domain.StatusNextUp, nil, "")
 		created, svc := createThreadForMutation(t, root, "refused-membership")
-		before, err := os.ReadFile(created.Thread.Path)
+		before, err := os.ReadFile(created.Local.CommittedPath)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -58,7 +58,7 @@ func TestGuardedMutationsRejectUnreadableThreadDocuments(t *testing.T) {
 		if !errors.Is(err, domain.ErrValidation) || receipt.Committed {
 			t.Fatalf("receipt=%+v err=%v", receipt, err)
 		}
-		after, readErr := os.ReadFile(created.Thread.Path)
+		after, readErr := os.ReadFile(created.Local.CommittedPath)
 		if readErr != nil || !slices.Equal(before, after) {
 			t.Fatalf("Thread membership wrote despite unreadable evidence: readErr=%v", readErr)
 		}

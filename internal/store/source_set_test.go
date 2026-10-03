@@ -26,9 +26,10 @@ func TestFilesystemSourceSetIsInstanceOwnedNotDerivedFromRootOrRecordID(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(firstGraph.Records) != 1 || len(sameRootGraph.Records) != 1 ||
-		firstGraph.Records[0].Source != sameRootGraph.Records[0].Source ||
-		firstGraph.Records[0].Value.SourceVersion != sameRootGraph.Records[0].Value.SourceVersion {
+	if len(firstGraph.GuardedRecords) != 1 || len(sameRootGraph.GuardedRecords) != 1 ||
+		firstGraph.GuardedRecords[0].Record.Source != sameRootGraph.GuardedRecords[0].Record.Source ||
+		firstGraph.GuardedRecords[0].SourceVersion == "" ||
+		firstGraph.GuardedRecords[0].SourceVersion != sameRootGraph.GuardedRecords[0].SourceVersion {
 		t.Fatal("same-root fixtures must share record identity, location, and revision evidence")
 	}
 	if svc, err := core.NewService(first, core.WithTaskGraphSource(sameRootNewInstance)); svc != nil ||
@@ -54,6 +55,14 @@ func TestFilesystemSourceSetIsInstanceOwnedNotDerivedFromRootOrRecordID(t *testi
 	if svc, err := core.NewService(first, core.WithThreadPathSource(sameRootNewInstance)); svc != nil ||
 		!errors.Is(err, core.ErrIncompatibleCapabilities) {
 		t.Fatalf("same-root but unbound instance pairing = %v, %v", svc, err)
+	}
+	for _, opt := range []core.Option{
+		core.WithTaskPathSource(sameRootNewInstance), core.WithEpicPathSource(sameRootNewInstance),
+		core.WithAuditPathSource(sameRootNewInstance), core.WithResearchPathSource(sameRootNewInstance),
+	} {
+		if svc, err := core.NewService(first, opt); svc != nil || !errors.Is(err, core.ErrIncompatibleCapabilities) {
+			t.Fatalf("same-root entity path without matching source set = %v, %v", svc, err)
+		}
 	}
 	bound := NewFS(firstRepo.Root, WithSourceSetID(first.SourceSetID()))
 	if svc, err := core.NewService(first, core.WithThreadPathSource(bound)); err != nil || svc == nil {

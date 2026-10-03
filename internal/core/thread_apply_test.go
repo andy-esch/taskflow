@@ -185,7 +185,6 @@ func TestPrepareThreadApplyIsAdditiveAndIdempotent(t *testing.T) {
 	}
 
 	existing := plan.Thread.domainThread()
-	existing.FilenameID, existing.Path = existing.ID, "/threads/"+existing.ID+".md"
 	snapshot := applySnapshot("planning", other, gate, member)
 	snapshot.Threads = []domain.Thread{existing}
 	snapshot.ThreadBodies = map[string]string{threadID: plan.Thread.Body}
@@ -290,7 +289,6 @@ func TestPrepareThreadApplyExplainsExistingThreadDifference(t *testing.T) {
 		},
 	}
 	existing := plan.Thread.domainThread()
-	existing.FilenameID, existing.Path = existing.ID, "/threads/"+existing.ID+".md"
 	existing.Status = domain.ThreadStatusInProgress
 	existing.Updated = "2026-08-31"
 	existing.StartedAt = "2026-08-31"
@@ -303,7 +301,6 @@ func TestPrepareThreadApplyExplainsExistingThreadDifference(t *testing.T) {
 	}
 
 	existing = plan.Thread.domainThread()
-	existing.FilenameID, existing.Path = existing.ID, "/threads/"+existing.ID+".md"
 	existing.Description = "Different definition"
 	snapshot.Threads = []domain.Thread{existing}
 	if _, err := PrepareThreadApply(snapshot, plan); !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "different description") {

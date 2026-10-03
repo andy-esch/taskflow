@@ -29,6 +29,37 @@ func TestResolveThreadPathRemainsParseFreeForMalformedDocuments(t *testing.T) {
 	}
 }
 
+func TestEntityPathsRemainParseFreeForMalformedDocuments(t *testing.T) {
+	root := t.TempDir()
+	fs := NewFS(root)
+	broken := "---\nid: [unterminated\n---\n# Repair me\n"
+	for _, tc := range []struct {
+		name, path, ref string
+		resolve         func(string) (string, error)
+		read            func(string) error
+	}{
+		{"task", filepath.Join(root, domain.TasksDir, testutil.TaskID("broken-task")+"-broken-task.md"), "broken-task", fs.ResolveTaskPath,
+			func(ref string) error { _, _, err := fs.GetTask(ref); return err }},
+		{"epic", filepath.Join(root, domain.EpicsDir, "21-broken-epic.md"), "21-broken-epic", fs.ResolveEpicPath,
+			func(ref string) error { _, _, err := fs.GetEpic(ref); return err }},
+		{"audit", filepath.Join(root, domain.AuditsDir, testutil.TaskID("broken-audit")+"-broken-audit.md"), "broken-audit", fs.ResolveAuditPath,
+			func(ref string) error { _, _, err := fs.GetAudit(ref); return err }},
+		{"research", filepath.Join(root, domain.ResearchDir, testutil.TaskID("broken-research")+"-broken-research.md"), "broken-research", fs.ResolveResearchPath,
+			func(ref string) error { _, _, err := fs.GetResearch(ref); return err }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			testutil.Write(t, tc.path, broken)
+			got, err := tc.resolve(tc.ref)
+			if err != nil || got != tc.path {
+				t.Fatalf("path = %q, %v; want %q", got, err, tc.path)
+			}
+			if err := tc.read(tc.ref); err == nil {
+				t.Fatal("fixture unexpectedly parsed; path test did not exercise malformed frontmatter")
+			}
+		})
+	}
+}
+
 func TestResolveThreadPathPreservesFilenameIdentityAndAmbiguityRules(t *testing.T) {
 	root := t.TempDir()
 	firstID := testutil.TaskID("repair-alpha")

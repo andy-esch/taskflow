@@ -64,8 +64,8 @@ const ingestBody = `# Audit: ingest
 func findingsRepo() *fakeStore {
 	return &fakeStore{
 		audits: []domain.Audit{
-			{ID: "6fjangd7kvh5", FilenameID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Path: "2026-06-14-gateway", Bucket: domain.AuditOpen},
-			{ID: "6fjangd7kvh6", FilenameID: "6fjangd7kvh6", Slug: "2026-06-10-ingest", Path: "2026-06-10-ingest", Bucket: domain.AuditClosed},
+			{ID: "6fjangd7kvh5", Slug: "2026-06-14-gateway", Bucket: domain.AuditOpen},
+			{ID: "6fjangd7kvh6", Slug: "2026-06-10-ingest", Bucket: domain.AuditClosed},
 		},
 		auditBodies: map[string]string{
 			"2026-06-14-gateway": gatewayBody,
@@ -271,7 +271,7 @@ func TestLintAudits(t *testing.T) {
 
 func TestQueryFindings_EmptyTokenDoesNotOverMatch(t *testing.T) {
 	fs := &fakeStore{
-		audits:      []domain.Audit{{Slug: "a", Path: "a", Bucket: domain.AuditOpen}},
+		audits:      []domain.Audit{{Slug: "a", Bucket: domain.AuditOpen}},
 		auditBodies: map[string]string{"a": "#### A1. t\n**Status:** open\n\n#### B1. no status\nbody\n"},
 	}
 	// B1 has no **Status:** line → parsed status "". A stray-comma filter
@@ -284,7 +284,7 @@ func TestQueryFindings_EmptyTokenDoesNotOverMatch(t *testing.T) {
 
 func TestLintAudits_MultipleIssues(t *testing.T) {
 	fs := &fakeStore{
-		audits:      []domain.Audit{{ID: "6fjangd7kvh8", Slug: "a", Path: "a", Bucket: domain.AuditClosed}},
+		audits:      []domain.Audit{{ID: "6fjangd7kvh8", Slug: "a", Bucket: domain.AuditClosed}},
 		auditBodies: map[string]string{"a": "#### S1. t\n**Status:** opne\n\n#### M1. t\n**Status:** open\n"},
 	}
 	// closed audit: S1 has a typo'd status + M1 is still open → 2 issues.
@@ -297,8 +297,8 @@ func TestLintAudits_MultipleIssues(t *testing.T) {
 func TestServiceLintReportsDuplicateAuditIDs(t *testing.T) {
 	const shared = "6g7s4k845fsb"
 	fs := &fakeStore{audits: []domain.Audit{
-		{ID: shared, FilenameID: shared, Slug: "2026-09-07-alpha", Path: "audits/" + shared + "-2026-09-07-alpha.md", Bucket: domain.AuditOpen},
-		{ID: shared, FilenameID: shared, Slug: "2026-09-07-beta", Path: "audits/" + shared + "-2026-09-07-beta.md", Bucket: domain.AuditOpen},
+		{ID: shared, Slug: "2026-09-07-alpha", Bucket: domain.AuditOpen},
+		{ID: shared, Slug: "2026-09-07-beta", Bucket: domain.AuditOpen},
 	}}
 	results, problems, err := MustNewService(fs).Lint()
 	if err != nil || len(problems) != 0 {
@@ -324,9 +324,10 @@ func TestServiceLintIncludesUnreadableAuditInDuplicateIdentity(t *testing.T) {
 	betaPath := "audits/" + shared + "-2026-09-07-beta.md"
 	fs := &fakeStore{
 		audits: []domain.Audit{{
-			ID: shared, FilenameID: shared, Slug: "2026-09-07-alpha",
-			Path: alphaPath, Bucket: domain.AuditOpen,
+			ID: shared, Slug: "2026-09-07-alpha",
+			Bucket: domain.AuditOpen,
 		}},
+		auditLocations: map[string]string{"2026-09-07-alpha": alphaPath},
 		auditProblems: []domain.FileProblem{{
 			Path: betaPath, Message: "malformed frontmatter",
 			EntityID: shared, EntitySlug: "2026-09-07-beta",
@@ -358,9 +359,10 @@ func TestServiceLintIncludesUnreadableResearchInDuplicateIdentity(t *testing.T) 
 	betaPath := "research/" + shared + "-beta.md"
 	fs := &fakeStore{
 		research: []domain.Research{{
-			ID: shared, FilenameID: shared, Slug: "alpha", Path: alphaPath,
+			ID: shared, Slug: "alpha",
 			Created: "2026-09-07", Description: "readable research",
 		}},
+		researchLocations: map[string]string{shared: alphaPath},
 		researchProblems: []domain.FileProblem{{
 			Path: betaPath, Message: "malformed frontmatter",
 			EntityID: shared, EntitySlug: "beta",
@@ -378,8 +380,9 @@ func TestServiceLintIncludesUnreadableThreadInDuplicateIdentity(t *testing.T) {
 	alphaPath := "threads/" + shared + "-alpha.md"
 	betaPath := "threads/" + shared + "-beta.md"
 	threadStore := &threadReadFake{
+		location: alphaPath, locationIsPath: true,
 		threads: []domain.Thread{{
-			ID: shared, FilenameID: shared, Slug: "alpha", Path: alphaPath,
+			ID: shared, Slug: "alpha",
 			Status: domain.ThreadStatusUnstarted, Description: "readable Thread",
 			Goal: "prove duplicate identity lint", Created: "2026-09-07",
 		}},

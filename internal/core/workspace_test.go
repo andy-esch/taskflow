@@ -76,6 +76,31 @@ func TestWorkspaceService_ExplicitThreadReadsDoNotBorrowAggregatePaths(t *testin
 	}
 }
 
+func TestWorkspaceService_ExplicitTaskReadsDoNotBorrowAggregatePaths(t *testing.T) {
+	paths := &entityPathFake{path: "/plan/tasks/local.md"}
+	aggregate := &aggregateEntityPaths{entityPathFake: paths}
+	workspace, err := NewWorkspaceService(&workspaceStoreFake{source: WorkspaceSource{
+		Checkout: "/checkout", PlanningRoot: "/plan", Store: aggregate,
+		TaskGraphs: &taskGraphReadFake{}, Layout: workspaceLayoutFake{},
+	}}).Open(WorkspaceRequest{Start: "/checkout"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspace.Planning.TaskPath("remote"); !errors.Is(err, domain.ErrValidation) || len(paths.calls) != 0 {
+		t.Fatalf("workspace borrowed aggregate task path: %v, calls=%v", err, paths.calls)
+	}
+	workspace, err = NewWorkspaceService(&workspaceStoreFake{source: WorkspaceSource{
+		Checkout: "/checkout", PlanningRoot: "/plan", Store: aggregate,
+		TaskGraphs: &taskGraphReadFake{}, TaskPaths: paths, Layout: workspaceLayoutFake{},
+	}}).Open(WorkspaceRequest{Start: "/checkout"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := workspace.Planning.TaskPath("remote"); err != nil || got != paths.path {
+		t.Fatalf("explicit workspace task path = %q, %v", got, err)
+	}
+}
+
 func TestWorkspaceService_TypedNilThreadPathSourceIsUnavailable(t *testing.T) {
 	var paths *threadPathFake
 	workspace, err := NewWorkspaceService(&workspaceStoreFake{source: WorkspaceSource{

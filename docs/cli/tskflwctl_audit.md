@@ -32,7 +32,7 @@ Work with code audits
 * [tskflwctl audit edit](tskflwctl_audit_edit.md)	 - Open an audit in your editor (whole file; re-validated on save)
 * [tskflwctl audit finding](tskflwctl_audit_finding.md)	 - Set one finding's status, resolution, and candidate row (validated, atomic)
 * [tskflwctl audit findings](tskflwctl_audit_findings.md)	 - Query findings across audits (or one) by status/effort/urgency/component
-* [tskflwctl audit info](tskflwctl_audit_info.md)	 - Show an audit's metadata + file path + finding tally (no body)
+* [tskflwctl audit info](tskflwctl_audit_info.md)	 - Show an audit's metadata, finding tally, and local path when available (no body)
 * [tskflwctl audit lint](tskflwctl_audit_lint.md)	 - Validate audit findings, managed candidate rows, and bucket↔state
 * [tskflwctl audit list](tskflwctl_audit_list.md)	 - List audits (open by default)
 * [tskflwctl audit new](tskflwctl_audit_new.md)	 - Create a new audit (open bucket, scaffolded findings)

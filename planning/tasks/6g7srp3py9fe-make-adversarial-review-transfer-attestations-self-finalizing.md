@@ -52,3 +52,5 @@ finish the audit before invoking `transfer`; the 2026-09-07 audit therefore arri
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Predecessor [make adversarial review sandbox isolation executable](6g7grjz5ma57-make-adversarial-review-sandbox-isolation-executable.md)
 - Triggering review [audit ID collision hardening implementation](../audits/6g7sb0wnv5t5-2026-09-07-audit-id-collision-hardening-implementation-claude.md)
+- Repeated evidence: [final source-boundary review](../audits/6gg38rnydjbm-2026-10-03-final-semantic-entity-source-boundary-checkpoint-antigravity.md)
+  arrived byte-identical to its independent sandbox but still persisted `transfer=pending`.

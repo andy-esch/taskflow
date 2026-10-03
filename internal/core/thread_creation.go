@@ -64,30 +64,49 @@ func (e *ThreadCreationMutationFailure) Unwrap() error {
 }
 
 // ValidateThreadCreationSource proves the guarded snapshot is authoritative
-// enough to introduce a new cross-linked document.
-func ValidateThreadCreationSource(graph *TaskGraph, threads []domain.Thread, unreadable []ThreadReadProblem) error {
+// enough to introduce a new cross-linked document. Validate adapter identities
+// before discarding source evidence for the semantic planner snapshot.
+func ValidateThreadCreationSource(graph *TaskGraph, read ThreadRead) error {
 	if err := ValidateTaskLifecycleSource(graph); err != nil {
 		return err
 	}
-	if len(unreadable) > 0 {
-		orderedProblems := append([]ThreadReadProblem(nil), unreadable...)
+	if err := read.ValidateSources(); err != nil {
+		return err
+	}
+	if len(read.Problems) > 0 {
+		orderedProblems := append([]ThreadReadProblem(nil), read.Problems...)
 		sort.Slice(orderedProblems, func(i, j int) bool { return threadReadProblemLess(orderedProblems[i], orderedProblems[j]) })
 		problem := orderedProblems[0]
 		return fmt.Errorf("%w: current Thread record %s is unreadable: %s",
 			domain.ErrValidation, threadReadProblemName(problem), problem.Message)
 	}
-	seen := make(map[string]string, len(threads))
-	ordered := cloneThreads(threads)
-	sort.Slice(ordered, func(i, j int) bool { return threadLess(ordered[i], ordered[j]) })
-	for _, thread := range ordered {
-		name := threadDiagnosticName(thread)
+	return validateExistingThreadRecords(graph, read.LoadedThreads())
+}
+
+// validateThreadCreationSnapshot checks semantic planner inputs after the adapter
+// has validated its source identities. It cannot replace that source gate.
+func validateThreadCreationSnapshot(graph *TaskGraph, threads []domain.Thread) error {
+	if err := ValidateTaskLifecycleSource(graph); err != nil {
+		return err
+	}
+	records := make([]LoadedRecord[domain.Thread], 0, len(threads))
+	for _, thread := range threads {
+		records = append(records, LoadedRecord[domain.Thread]{Value: thread})
+	}
+	return validateExistingThreadRecords(graph, records)
+}
+
+func validateExistingThreadRecords(graph *TaskGraph, records []LoadedRecord[domain.Thread]) error {
+	ordered := append([]LoadedRecord[domain.Thread](nil), records...)
+	sort.Slice(ordered, func(i, j int) bool { return threadRecordLess(ordered[i], ordered[j]) })
+	seen := make(map[string]string, len(ordered))
+	for _, record := range ordered {
+		thread := record.Value
+		name := threadRecordDiagnosticName(record)
 		if err := domain.ValidateThreadDocument(thread); err != nil {
 			return fmt.Errorf("%w: existing Thread %s is invalid: %v", domain.ErrValidation, name, err)
 		}
-		if thread.FilenameID != "" && thread.FilenameID != thread.ID {
-			return fmt.Errorf("%w: existing Thread %s has id drift: frontmatter=%q filename=%q", domain.ErrValidation, name, thread.ID, thread.FilenameID)
-		}
-		if prior, exists := seen[thread.ID]; exists {
+		if prior, duplicate := seen[thread.ID]; duplicate {
 			return fmt.Errorf("%w: duplicate Thread id %s across %s and %s", domain.ErrValidation, thread.ID, prior, name)
 		}
 		seen[thread.ID] = name
@@ -128,7 +147,7 @@ func ValidateThreadCreationPlan(snapshot ThreadCreationSnapshot, plan ThreadCrea
 	}
 	for _, existing := range snapshot.Threads {
 		if existing.ID == thread.ID {
-			return ThreadCreationPlan{}, fmt.Errorf("thread id %s is already used by %s: %w", thread.ID, existing.Path, domain.ErrConflict)
+			return ThreadCreationPlan{}, fmt.Errorf("thread id %s is already used by %s: %w", thread.ID, threadDiagnosticName(existing), domain.ErrConflict)
 		}
 	}
 	for _, taskID := range thread.Tasks {
@@ -143,7 +162,6 @@ func cloneThreads(threads []domain.Thread) []domain.Thread {
 	out := make([]domain.Thread, len(threads))
 	for i, thread := range threads {
 		out[i] = cloneThread(thread)
-		out[i].SourceVersion = ""
 	}
 	return out
 }

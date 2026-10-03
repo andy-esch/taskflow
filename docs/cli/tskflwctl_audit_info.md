@@ -1,6 +1,6 @@
 ## tskflwctl audit info
 
-Show an audit's metadata + file path + finding tally (no body)
+Show an audit's metadata, finding tally, and local path when available (no body)
 
 ```
 tskflwctl audit info <audit> [flags]

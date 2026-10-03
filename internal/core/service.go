@@ -15,23 +15,31 @@ import (
 // It has no fs and no cobra, so it is testable in isolation and reused by both
 // primary adapters (the cli and the tui).
 type Service struct {
-	store               Store
-	lintReads           LintSource
-	auditReads          AuditSnapshotSource
-	auditReadsExplicit  bool
-	taskGraphs          TaskGraphSource
-	graphMutations      TaskGraphMutationStore
-	graphRepairs        TaskGraphRepairStore
-	lifecycleMutations  TaskLifecycleMutationStore
-	threads             ThreadStore
-	threadPaths         ThreadPathSource
-	threadPathsExplicit bool
-	threadCreations     ThreadCreationMutationStore
-	threadMutations     ThreadMutationStore
-	threadApplies       ThreadApplyMutationStore
-	templates           TemplateSource
-	now                 func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
-	newID               func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
+	store                 Store
+	taskPaths             TaskPathSource
+	taskPathsExplicit     bool
+	epicPaths             EpicPathSource
+	epicPathsExplicit     bool
+	auditPaths            AuditPathSource
+	auditPathsExplicit    bool
+	researchPaths         ResearchPathSource
+	researchPathsExplicit bool
+	lintReads             LintSource
+	auditReads            AuditSnapshotSource
+	auditReadsExplicit    bool
+	taskGraphs            TaskGraphSource
+	graphMutations        TaskGraphMutationStore
+	graphRepairs          TaskGraphRepairStore
+	lifecycleMutations    TaskLifecycleMutationStore
+	threads               ThreadStore
+	threadPaths           ThreadPathSource
+	threadPathsExplicit   bool
+	threadCreations       ThreadCreationMutationStore
+	threadMutations       ThreadMutationStore
+	threadApplies         ThreadApplyMutationStore
+	templates             TemplateSource
+	now                   func() time.Time // wall clock, injectable for deterministic snooze/revisit queries
+	newID                 func() string    // stable-id mint (default id.New), injectable so created-file tests are deterministic
 	// newIDAt mints an id stamped with a GIVEN time (default id.NewAt) — for an entity
 	// whose id must encode its own declared date rather than "now", so lexical id order
 	// stays authorship order. Research uses it (its id is minted from `created`, which
@@ -54,6 +62,54 @@ func WithTaskGraphSource(source TaskGraphSource) Option {
 	return func(s *Service) {
 		if !isNilCapability(source) {
 			s.taskGraphs = source
+			if !s.taskPathsExplicit {
+				s.taskPaths = nil
+			}
+		}
+	}
+}
+
+// WithTaskPathSource selects local task navigation independently from graph and
+// ordinary reads. An explicit source survives semantic read overrides in either
+// option order; NewService verifies all selected sources address one corpus.
+func WithTaskPathSource(source TaskPathSource) Option {
+	return func(s *Service) {
+		if !isNilCapability(source) {
+			s.taskPaths = source
+			s.taskPathsExplicit = true
+		}
+	}
+}
+
+// WithEpicPathSource supplies optional local epic navigation independently of
+// semantic epic reads.
+func WithEpicPathSource(source EpicPathSource) Option {
+	return func(s *Service) {
+		if !isNilCapability(source) {
+			s.epicPaths = source
+			s.epicPathsExplicit = true
+		}
+	}
+}
+
+// WithAuditPathSource supplies optional local audit navigation independently of
+// semantic audit reads and body-aware snapshots.
+func WithAuditPathSource(source AuditPathSource) Option {
+	return func(s *Service) {
+		if !isNilCapability(source) {
+			s.auditPaths = source
+			s.auditPathsExplicit = true
+		}
+	}
+}
+
+// WithResearchPathSource supplies optional local research navigation independently
+// of semantic research reads.
+func WithResearchPathSource(source ResearchPathSource) Option {
+	return func(s *Service) {
+		if !isNilCapability(source) {
+			s.researchPaths = source
+			s.researchPathsExplicit = true
 		}
 	}
 }
@@ -69,6 +125,9 @@ func WithLintSource(source LintSource) Option {
 			s.lintReads = source
 			if !s.auditReadsExplicit {
 				s.auditReads = source
+				if !s.auditPathsExplicit {
+					s.auditPaths = nil
+				}
 			}
 		}
 	}
@@ -83,6 +142,9 @@ func WithAuditSnapshotSource(source AuditSnapshotSource) Option {
 		if !isNilCapability(source) {
 			s.auditReads = source
 			s.auditReadsExplicit = true
+			if !s.auditPathsExplicit {
+				s.auditPaths = nil
+			}
 		}
 	}
 }
@@ -231,6 +293,18 @@ func NewService(store Store, opts ...Option) (*Service, error) {
 	}
 	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New, newIDAt: id.NewAt, maxRetries: defaultMaxRetries, retrySleep: defaultRetrySleep}
 	if store != nil {
+		if paths, ok := store.(TaskPathSource); ok && !isNilCapability(paths) {
+			s.taskPaths = paths
+		}
+		if paths, ok := store.(EpicPathSource); ok && !isNilCapability(paths) {
+			s.epicPaths = paths
+		}
+		if paths, ok := store.(AuditPathSource); ok && !isNilCapability(paths) {
+			s.auditPaths = paths
+		}
+		if paths, ok := store.(ResearchPathSource); ok && !isNilCapability(paths) {
+			s.researchPaths = paths
+		}
 		if source, ok := store.(LintSource); ok && !isNilCapability(source) {
 			s.lintReads = source
 		}
@@ -290,6 +364,10 @@ func MustNewService(store Store, opts ...Option) *Service {
 func (s *Service) validateSourceSets() error {
 	return validateSourceSet([]sourceSetCapability{
 		{"aggregate store", s.store},
+		{"task paths", s.taskPaths},
+		{"epic paths", s.epicPaths},
+		{"audit paths", s.auditPaths},
+		{"research paths", s.researchPaths},
 		{"lint reads", s.lintReads},
 		{"audit snapshots", s.auditReads},
 		{"task graph reads", s.taskGraphs},
@@ -302,6 +380,39 @@ func (s *Service) validateSourceSets() error {
 		{"Thread mutations", s.threadMutations},
 		{"Thread apply", s.threadApplies},
 	})
+}
+
+// HasLocalPath reports whether this service can resolve a local path for an
+// entity kind. It is only a capability check: callers still resolve against the
+// selected canonical source ID when the user requests a local action.
+func (s *Service) HasLocalPath(kind EntityKind) bool {
+	if s == nil {
+		return false
+	}
+	switch kind {
+	case EntityTask:
+		return s.taskPaths != nil
+	case EntityEpic:
+		return s.epicPaths != nil
+	case EntityAudit:
+		return s.auditPaths != nil
+	case EntityResearch:
+		return s.researchPaths != nil
+	case EntityThread:
+		return s.threadPaths != nil
+	default:
+		return false
+	}
+}
+
+func requireResolvedLocalPath(kind EntityKind, path string, err error) (string, error) {
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(path) == "" {
+		return "", fmt.Errorf("%w: %s local path resolver returned no path", domain.ErrValidation, kind)
+	}
+	return path, nil
 }
 
 // isNilCapability handles Go interfaces containing nil pointers (or another
@@ -373,11 +484,8 @@ func (s Summary) SplitCounts() (active, archived []StatusCount) {
 
 // Summary is the at-a-glance project state for the dashboard.
 type Summary struct {
-	Counts     []StatusCount // every status in display order (count may be 0)
-	InProgress []domain.Task // the in-progress working set
-	// InProgressRecords is the same working set with adapter-supplied identity.
-	// InProgress remains a compatibility projection for existing CLI/wire callers.
-	InProgressRecords []LoadedRecord[domain.Task]
+	Counts            []StatusCount               // every status in display order (count may be 0)
+	InProgressRecords []LoadedRecord[domain.Task] // the in-progress working set with adapter-supplied identity
 	// TaskSourceIDs covers every readable task, not just in-progress rows, so
 	// dashboard and Atlas jumps cannot overlook an archived duplicate.
 	TaskSourceIDs []string
@@ -385,15 +493,15 @@ type Summary struct {
 	// non-open audits with no acute findings. Primary adapters use it to avoid
 	// turning a finding's ambiguous audit ID into a navigation target.
 	AuditSourceIDs []string
-	Epics          []EpicSummary  // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
-	OpenAudits     []domain.Audit // audits still in the open bucket (actionable work)
-	ReadyToClose   int            // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
-	Findings       FindingsRollup // actionable audit findings (open/in-progress) aggregated by urgency + component
-	RevisitDue     int            // deferred tasks whose revisit_at (snooze-until) date has arrived
-	BadEpicStatus  int            // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
-	Problems       []LoadProblem  // unreadable planning records
-	GraphHealth    GraphHealth    // repository-wide task-DAG verdict from the same snapshot as Counts/InProgress
-	GraphDetail    string         // first cause + remedy when GraphHealth is not healthy
+	Epics          []EpicSummary                // epic rollups, most-recently-updated first (the one dashboard order both `status` and the TUI render)
+	OpenAudits     []LoadedRecord[domain.Audit] // audits still in the open bucket (actionable work)
+	ReadyToClose   int                          // open audits with every finding resolved/dropped ("ready to close") — the aggregate, computed once here so no surface re-derives it off OpenAudits (audit M9)
+	Findings       FindingsRollup               // actionable audit findings (open/in-progress) aggregated by urgency + component
+	RevisitDue     int                          // deferred tasks whose revisit_at (snooze-until) date has arrived
+	BadEpicStatus  int                          // epics whose status is outside the canonical vocabulary (a fixable data problem, not dropped)
+	Problems       []LoadProblem                // unreadable planning records
+	GraphHealth    GraphHealth                  // repository-wide task-DAG verdict from the same snapshot as Counts/InProgress
+	GraphDetail    string                       // first cause + remedy when GraphHealth is not healthy
 }
 
 // Summary composes a one-screen overview from a single scan of tasks + epics +
@@ -431,15 +539,14 @@ func summarize(store SummaryStore, auditsSource AuditSnapshotSource, taskGraphs 
 	auditSnapshot = auditSnapshotWithSourceIDs(auditSnapshot)
 	audits, p3 := auditSnapshot.Audits, auditSnapshot.Problems
 	auditSourceIDs := make([]string, 0, len(audits))
-	var openAudits []domain.Audit
+	var openAudits []LoadedRecord[domain.Audit]
 	var actionable []AuditFinding
 	readyToClose := 0
 	for _, loaded := range audits {
 		auditSourceIDs = append(auditSourceIDs, loaded.Source.ID)
 		a := loaded.Value
-		a.Audit.FilenameID = loaded.Source.ID // temporary bare-domain dashboard projection
 		if a.Audit.Bucket == domain.AuditOpen {
-			openAudits = append(openAudits, a.Audit)
+			openAudits = append(openAudits, LoadedRecord[domain.Audit]{Value: a.Audit, Source: loaded.Source})
 			// "Ready to close" = an open audit with nothing left to work (every finding
 			// resolved or dropped). Counted once here from the same scan, so the CLI and
 			// TUI dashboards read s.ReadyToClose instead of each re-walking OpenAudits.
@@ -458,15 +565,11 @@ func summarize(store SummaryStore, auditsSource AuditSnapshotSource, taskGraphs 
 		}
 	}
 	counts := map[domain.Status]int{}
-	var inProgress []domain.Task
 	var inProgressRecords []LoadedRecord[domain.Task]
 	taskSourceIDs := make([]string, 0, len(tasks))
 	revisitDue := 0
 	for _, t := range tasks {
 		counts[t.Status]++
-		if t.Status == domain.StatusInProgress {
-			inProgress = append(inProgress, t)
-		}
 		// Move clears revisit_at when a task leaves deferred, so a stray date on a
 		// non-deferred task is only possible via a manual `task set`/edit; either
 		// way the nudge stays scoped to tasks parked in deferred/ whose snooze date
@@ -502,7 +605,6 @@ func summarize(store SummaryStore, auditsSource AuditSnapshotSource, taskGraphs 
 	problems = canonicalLoadProblems(problems)
 	summary := Summary{
 		Counts:            ordered,
-		InProgress:        inProgress,
 		InProgressRecords: inProgressRecords,
 		TaskSourceIDs:     taskSourceIDs,
 		AuditSourceIDs:    auditSourceIDs,
@@ -584,13 +686,11 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 		valid[domain.EpicRefKey(record.Source.ID)] = true
 	}
 	validEpic := func(id string) bool { return valid[domain.EpicRefKey(id)] }
-	taskRecords := make([]domain.Task, len(tasks))
 	loadedTaskRecords := make([]LoadedRecord[domain.Task], len(tasks))
 	for i := range tasks {
-		taskRecords[i] = tasks[i].Value.Task
 		loadedTaskRecords[i] = LoadedRecord[domain.Task]{Value: tasks[i].Value.Task, Source: tasks[i].Source}
 	}
-	graphRead := TaskGraphRead{Tasks: taskRecords, Records: loadedTaskRecords, Problems: make([]TaskGraphLoadProblem, 0, len(taskProblems))}
+	graphRead := TaskGraphRead{Records: loadedTaskRecords, Problems: make([]TaskGraphLoadProblem, 0, len(taskProblems))}
 	for _, problem := range taskProblems {
 		// Ordinary lint returns the original portable diagnostic directly. The graph
 		// copy exists only so an unreadable stable task identity can hard-block its
@@ -617,7 +717,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 		}
 	}
 
-	var threads []domain.Thread
+	var threads []VersionedRecord[domain.Thread]
 	threadIDSources := make([]domain.StableIdentitySource, 0)
 	threadProblems := make([]LoadProblem, 0)
 	threadIdentity := make(map[string]bool)
@@ -627,7 +727,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		threads = threadRead.SemanticThreads()
+		threads = threadRead.Records
 		for _, problem := range threadRead.Problems {
 			loadProblem := LoadProblem{
 				EntityKind: EntityThread, EntityID: problem.ThreadID,
@@ -643,15 +743,17 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 				ID: problem.ThreadID, Location: problem.Location,
 			})
 		}
-		for _, thread := range threads {
+		for _, record := range threads {
+			thread := record.Record.Value
+			source := record.Record.Source
 			threadIDSources = append(threadIDSources, domain.StableIdentitySource{
-				ID: thread.CanonicalID(), Location: thread.Path,
+				ID: source.ID, Location: source.Location,
 			})
 			if thread.ID != "" {
 				threadIdentity[thread.ID] = true
 			}
-			if thread.FilenameID != "" {
-				threadIdentity[thread.FilenameID] = true
+			if source.ID != "" {
+				threadIdentity[source.ID] = true
 			}
 		}
 	}
@@ -660,10 +762,6 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 	for taskIndex, loaded := range tasks {
 		tb := loaded.Value
 		t := tb.Task
-		// Domain lint still accepts filename identity during this compatibility
-		// stage. Supply the adapter-owned source ID explicitly rather than asking
-		// core to reconstruct it from Location.
-		t.FilenameID = loaded.Source.ID
 		// Active tasks get the full field lint; archived tasks are only checked for the
 		// universal defects (missing/unrecognized frontmatter status, missing or drifted
 		// id) — no point nagging about missing fields on a completed item, but a bad
@@ -678,19 +776,19 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			// Archived tasks skip the field nags but still get the universal checks: a
 			// missing/unrecognized frontmatter status, and a missing stable id.
 			issues = append(domain.FrontmatterStatusIssues(t), domain.MissingIDIssue(t.ID)...)
-			issues = append(issues, domain.IDDriftIssue(t.ID, t.FilenameID)...)
 		}
+		issues = append(issues, domain.IDDriftIssue(t.ID, loaded.Source.ID)...)
 		issues = append(issues, graphIssues[taskGraphRecordRefAt(taskIndex)]...)
 		collisionID := t.ID
 		if !threadIdentity[collisionID] {
-			collisionID = t.FilenameID
+			collisionID = loaded.Source.ID
 		}
 		if collisionID != "" && threadIdentity[collisionID] {
 			issues = append(issues, domain.Issue{Field: "id", Message: fmt.Sprintf(
 				"stable id %s is also used by a Thread — task and Thread identities must be globally unique", collisionID)})
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: t.Slug, Location: readableDiagnosticLocation(loaded.Source, t.Path), Issues: issues})
+			results = append(results, LintResult{Slug: t.Slug, Location: readableDiagnosticLocation(loaded.Source), Issues: issues})
 		}
 	}
 	// (Duplicate-slug lint retired with the flat layout: id-led filenames are unique by
@@ -713,7 +811,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			issues = append(issues, iss)
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: record.Source.ID, Location: readableDiagnosticLocation(record.Source, e.Path), Issues: issues})
+			results = append(results, LintResult{Slug: record.Source.ID, Location: readableDiagnosticLocation(record.Source), Issues: issues})
 		}
 	}
 	// Research is linted too (epic 28). There is no active/archived split to gate on —
@@ -740,13 +838,13 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 	dupIDs := domain.DuplicateIDIssues(researchIDs)
 	for _, record := range docs {
 		r := record.Value
-		r.FilenameID = record.Source.ID // compatibility projection for domain lint
 		issues := domain.LintResearch(r)
+		issues = append(issues, domain.IDDriftIssue(r.ID, record.Source.ID)...)
 		if iss, ok := dupIDs[record.Source.ID]; ok {
 			issues = append(issues, iss)
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: r.Slug, Location: readableDiagnosticLocation(record.Source, r.Path), Issues: issues})
+			results = append(results, LintResult{Slug: r.Slug, Location: readableDiagnosticLocation(record.Source), Issues: issues})
 		}
 	}
 	results = appendDuplicateProblemLintResults(results, rp, dupIDs)
@@ -773,32 +871,34 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 	dupAuditIDs := domain.DuplicateIDIssues(auditIDs)
 	for _, loaded := range auditRecords {
 		a := loaded.Value
-		a.Audit.FilenameID = loaded.Source.ID
-		issues := AuditLintIssues(a.Audit, a.Findings, a.NearMisses, a.CandidateIssues)
+		issues := AuditLintIssues(a.Audit, loaded.Source.ID, a.Findings, a.NearMisses, a.CandidateIssues)
 		if issue, ok := dupAuditIDs[loaded.Source.ID]; ok {
 			issues = append(issues, issue)
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: a.Audit.Slug, Location: readableDiagnosticLocation(loaded.Source, a.Audit.Path), Issues: issues})
+			results = append(results, LintResult{Slug: a.Audit.Slug, Location: readableDiagnosticLocation(loaded.Source), Issues: issues})
 		}
 	}
 	results = appendDuplicateProblemLintResults(results, ap, dupAuditIDs)
 	dupThreadIDs := domain.DuplicateIDIssues(threadIDSources)
-	for _, thread := range threads {
+	for _, record := range threads {
+		thread := record.Record.Value
+		source := record.Record.Source
 		issues := domain.LintThread(thread, func(taskID string) bool { return validTaskIDs[taskID] })
-		if issue, ok := dupThreadIDs[thread.CanonicalID()]; ok {
+		issues = append(issues, domain.IDDriftIssue(thread.ID, source.ID)...)
+		if issue, ok := dupThreadIDs[source.ID]; ok {
 			issues = append(issues, issue)
 		}
 		collisionID := thread.ID
 		if !taskIdentity[collisionID] {
-			collisionID = thread.FilenameID
+			collisionID = source.ID
 		}
 		if collisionID != "" && taskIdentity[collisionID] {
 			issues = append(issues, domain.Issue{Field: "id", Message: fmt.Sprintf(
 				"stable id %s is also used by a task — task and Thread identities must be globally unique", collisionID)})
 		}
 		if len(issues) > 0 {
-			results = append(results, LintResult{Slug: thread.Slug, Issues: issues})
+			results = append(results, LintResult{Slug: thread.Slug, Location: readableDiagnosticLocation(source), Issues: issues})
 		}
 	}
 	results = appendDuplicateProblemLintResults(results, threadProblems, dupThreadIDs)

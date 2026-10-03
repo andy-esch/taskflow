@@ -86,9 +86,13 @@ func TestThreadApplyPersistsDependenciesThenThreadAndConverges(t *testing.T) {
 	}
 	firstPath, _ := NewFS(root).resolvePath(firstID)
 	secondPath, _ := NewFS(root).resolvePath(secondID)
+	threadPath, err := NewFS(root).ResolveThreadPath(threadID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	beforeFirst, _ := os.ReadFile(firstPath)
 	beforeSecond, _ := os.ReadFile(secondPath)
-	beforeThread, _ := os.ReadFile(thread.Path)
+	beforeThread, _ := os.ReadFile(threadPath)
 
 	converged, err := applyStoredThreadPlan(threadApplyStore(root, &repoID), plan, false)
 	if err != nil || converged.Changed || !converged.Complete || converged.Committed {
@@ -101,7 +105,7 @@ func TestThreadApplyPersistsDependenciesThenThreadAndConverges(t *testing.T) {
 	}
 	afterFirst, _ := os.ReadFile(firstPath)
 	afterSecond, _ := os.ReadFile(secondPath)
-	afterThread, _ := os.ReadFile(thread.Path)
+	afterThread, _ := os.ReadFile(threadPath)
 	if !slices.Equal(beforeFirst, afterFirst) || !slices.Equal(beforeSecond, afterSecond) || !slices.Equal(beforeThread, afterThread) {
 		t.Fatal("idempotent retry rewrote an already-converged file")
 	}

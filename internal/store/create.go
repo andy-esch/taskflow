@@ -226,7 +226,6 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (core.TaskCreat
 	if err != nil && !committed {
 		return core.TaskCreationReceipt{}, err
 	}
-	t.Path = creation.path
 	return core.TaskCreationReceipt{Task: t, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: committed}, err
 }
 
@@ -321,7 +320,6 @@ func (s *FS) CreateAudit(a domain.Audit, body string, dryRun bool) (core.AuditCr
 	if err != nil && !committed {
 		return core.AuditCreationReceipt{}, err
 	}
-	a.Path = creation.path
 	return core.AuditCreationReceipt{Audit: a, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: committed}, err
 }
 
@@ -382,7 +380,6 @@ func (s *FS) CreateResearch(r domain.Research, body string, dryRun bool) (core.R
 	if err != nil && !committed {
 		return core.ResearchCreationReceipt{}, err
 	}
-	r.Path = creation.path
 	return core.ResearchCreationReceipt{Research: r, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: committed}, err
 }
 
@@ -465,6 +462,5 @@ func (s *FS) CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (c
 		return core.EpicCreationReceipt{}, err
 	}
 	e.ID = creation.name
-	e.Path = creation.path
 	return core.EpicCreationReceipt{Epic: e, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: committed}, err
 }

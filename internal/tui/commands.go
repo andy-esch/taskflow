@@ -11,6 +11,46 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
+type localPathAction uint8
+
+const (
+	localPathYank localPathAction = iota
+	localPathEdit
+)
+
+// resolveLocalPath is the optional adapter capability, requested only for the
+// selected canonical row. An opaque record location is never an editor target.
+func resolveLocalPath(svc *core.Service, kind entityKind, id string, listGen int, action localPathAction) tea.Cmd {
+	return localPathLookup(svc, kind, id, listGen, action, false)
+}
+
+// recheckLocalPath resolves the stable ID again after the first result has passed
+// the reducer's selection guard. A rename between the initial lookup and that
+// guard therefore follows the same entity instead of acting on its old pathname.
+func recheckLocalPath(svc *core.Service, kind entityKind, id string, listGen int, action localPathAction) tea.Cmd {
+	return localPathLookup(svc, kind, id, listGen, action, true)
+}
+
+func localPathLookup(svc *core.Service, kind entityKind, id string, listGen int, action localPathAction, rechecked bool) tea.Cmd {
+	return func() tea.Msg {
+		var path string
+		var err error
+		switch kind {
+		case entityTasks:
+			path, err = svc.TaskPath(id)
+		case entityEpics:
+			path, err = svc.EpicPath(id)
+		case entityThreads:
+			path, err = svc.ThreadPath(id)
+		case entityAudits:
+			path, err = svc.AuditPath(id)
+		case entityResearch:
+			path, err = svc.ResearchPath(id)
+		}
+		return localPathResultMsg{kind: kind, id: id, listGen: listGen, action: action, rechecked: rechecked, path: path, err: err}
+	}
+}
+
 // Each entity has a list loader (off the event loop → listLoadedMsg) and an item
 // loader (lazy detail → detailMsg / detailErrMsg). Never call the service from
 // Update/View. The registry in entity.go wires these to their tabs.
@@ -94,11 +134,12 @@ func loadDashboard(svc *core.Service, gen int) tea.Cmd {
 
 func loadTaskDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
+		path, _ := svc.TaskPath(id)
 		record, err := svc.ShowTask(id)
 		if err != nil {
-			return detailErrMsg{kind: entityTasks, id: id, err: err}
+			return detailErrMsg{kind: entityTasks, id: id, err: err, localPath: path}
 		}
-		return detailMsg{kind: entityTasks, id: id, sourceID: record.Source.ID, content: taskDetail{t: record.Value.Task, body: record.Value.Body}}
+		return detailMsg{kind: entityTasks, id: id, sourceID: record.Source.ID, content: taskDetail{t: record.Value.Task, body: record.Value.Body, localPath: path}}
 	}
 }
 
@@ -173,12 +214,13 @@ func sortEpicsForView(epics []core.EpicSummary, view string) {
 
 func loadEpicDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
+		path, _ := svc.EpicPath(id)
 		detail, err := svc.ShowEpic(id)
 		if err != nil {
-			return detailErrMsg{kind: entityEpics, id: id, err: err}
+			return detailErrMsg{kind: entityEpics, id: id, err: err, localPath: path}
 		}
 		return detailMsg{kind: entityEpics, id: id, sourceID: detail.Summary.Source.ID,
-			content: epicDetail{es: detail.Summary, tasks: detail.Tasks, body: detail.Body}}
+			content: epicDetail{es: detail.Summary, tasks: detail.Tasks, body: detail.Body, localPath: path}}
 	}
 }
 
@@ -241,11 +283,12 @@ func filterAuditRecords(records []core.LoadedRecord[domain.Audit], bucket string
 
 func loadAuditDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
+		path, _ := svc.AuditPath(id)
 		record, err := svc.ShowAudit(id)
 		if err != nil {
-			return detailErrMsg{kind: entityAudits, id: id, err: err}
+			return detailErrMsg{kind: entityAudits, id: id, err: err, localPath: path}
 		}
-		return detailMsg{kind: entityAudits, id: id, sourceID: record.Source.ID, content: auditDetail{a: record.Value.Audit, body: record.Value.Body}}
+		return detailMsg{kind: entityAudits, id: id, sourceID: record.Source.ID, content: auditDetail{a: record.Value.Audit, body: record.Value.Body, localPath: path}}
 	}
 }
 
@@ -342,10 +385,11 @@ func loadResearchList(t *entityTab, svc *core.Service) tea.Cmd {
 
 func loadResearchDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
+		path, _ := svc.ResearchPath(id)
 		record, err := svc.ShowResearch(id)
 		if err != nil {
-			return detailErrMsg{kind: entityResearch, id: id, err: err}
+			return detailErrMsg{kind: entityResearch, id: id, err: err, localPath: path}
 		}
-		return detailMsg{kind: entityResearch, id: id, sourceID: record.Source.ID, content: researchDetail{r: record.Value.Research, body: record.Value.Body}}
+		return detailMsg{kind: entityResearch, id: id, sourceID: record.Source.ID, content: researchDetail{r: record.Value.Research, body: record.Value.Body, localPath: path}}
 	}
 }

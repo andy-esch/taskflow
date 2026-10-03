@@ -58,8 +58,8 @@ func TestBoard_ActivePipelineOnlyInOrder(t *testing.T) {
 		}
 		counts[c.Status] = len(c.Tasks)
 		for _, tk := range c.Tasks {
-			if !tk.Status.IsActive() {
-				t.Errorf("non-active task %q leaked onto the board (status %q)", tk.Slug, tk.Status)
+			if !tk.Value.Status.IsActive() {
+				t.Errorf("non-active task %q leaked onto the board (status %q)", tk.Value.Slug, tk.Value.Status)
 			}
 		}
 	}
@@ -128,7 +128,7 @@ func TestBoard_PreservesPathlessTaskLoadProblemIdentity(t *testing.T) {
 
 func TestBoard_BareProjectionUsesExplicitSourceIdentity(t *testing.T) {
 	source := &neutralTaskGraphSource{read: TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
-		Value:  domain.Task{ID: "stale-declaration", FilenameID: "stale-file-id", Slug: "task", Status: domain.StatusInProgress},
+		Value:  domain.Task{ID: "stale-declaration", Slug: "task", Status: domain.StatusInProgress},
 		Source: RecordSource{ID: "6g0000000001", Location: "db://tasks/misleading"},
 	}}}}
 	board, err := MustNewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
@@ -138,7 +138,7 @@ func TestBoard_BareProjectionUsesExplicitSourceIdentity(t *testing.T) {
 	if source.calls != 1 {
 		t.Fatalf("graph read calls = %d", source.calls)
 	}
-	got := board.Columns[len(board.Columns)-1].Tasks[0].FilenameID
+	got := board.Columns[len(board.Columns)-1].Tasks[0].Source.ID
 	if got != "6g0000000001" {
 		t.Fatalf("board identity = %q, want source ID", got)
 	}
@@ -146,7 +146,7 @@ func TestBoard_BareProjectionUsesExplicitSourceIdentity(t *testing.T) {
 
 func TestEmptyExplicitTaskSourceIDNeverBecomesEligible(t *testing.T) {
 	read := TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
-		Value:  domain.Task{ID: "6g0000000001", FilenameID: "stale-id", Slug: "orphan", Status: domain.StatusReadyToStart},
+		Value:  domain.Task{ID: "6g0000000001", Slug: "orphan", Status: domain.StatusReadyToStart},
 		Source: RecordSource{Location: "db://tasks/misleading-id"},
 	}}}
 	graph := NewTaskGraphRead(read)

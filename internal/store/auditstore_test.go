@@ -39,6 +39,29 @@ func TestFS_ListAudits_MissingFrontmatterIsLoud(t *testing.T) {
 	}
 }
 
+func TestFS_AuditReadsKeepFilenameIdentityOutsideSemanticValue(t *testing.T) {
+	root := t.TempDir()
+	const declaredID = "6g0000000002"
+	path, content := testutil.AuditFixture(root, "open", "drifted.md", "---\nid: "+declaredID+"\narea: drifted\ndate: 2026-09-01\n---\n# Drifted\n")
+	testutil.Write(t, path, content)
+	fs := NewFS(root)
+	want := auditSource(path)
+	read, err := fs.ReadAudits()
+	if err != nil || len(read.Records) != 1 || read.Records[0].Value.ID != declaredID || read.Records[0].Source != want {
+		t.Fatalf("bulk read confused declaration and source: %+v, err=%v", read, err)
+	}
+	shown, err := fs.ReadAudit(want.ID)
+	if err != nil || shown.Source != want || shown.Value.Audit.ID != declaredID {
+		t.Fatalf("single read confused declaration and source: %+v, err=%v", shown, err)
+	}
+	for _, selector := range []string{"", want.ID} {
+		snapshot, err := fs.ReadAuditSnapshot(selector)
+		if err != nil || len(snapshot.Audits) != 1 || snapshot.Audits[0].Source != want || snapshot.Audits[0].Value.Audit.ID != declaredID {
+			t.Fatalf("snapshot %q confused declaration and source: %+v, err=%v", selector, snapshot, err)
+		}
+	}
+}
+
 func TestFS_ListAudits_FindingCounts(t *testing.T) {
 	root := t.TempDir()
 	body := "# Audit\n\n#### H1. thing  · **Status:** open\n\nblah\n\n#### M2. other  · **Status:** fixed 2026-01-01\n"
@@ -128,8 +151,8 @@ func TestFS_MoveAudit(t *testing.T) {
 		t.Errorf("bucket = %s", a.Bucket)
 	}
 	// The path is unchanged — no relocation between buckets under flat.
-	if a.Path != wantPath {
-		t.Errorf("path moved: got %q want %q", a.Path, wantPath)
+	if got, err := NewFS(root).ResolveAuditPath("x"); err != nil || got != wantPath {
+		t.Errorf("path moved: got %q err=%v want %q", got, err, wantPath)
 	}
 	if _, err := os.Stat(wantPath); err != nil {
 		t.Errorf("audit file missing at its original flat path: %v", err)

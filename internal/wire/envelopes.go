@@ -84,7 +84,7 @@ func ToBoardEnvelope(b core.Board) BoardEnvelope {
 	for _, c := range b.Columns {
 		col := BoardColumnJSON{Status: string(c.Status), Tasks: make([]BoardTaskJSON, 0, len(c.Tasks))}
 		for _, t := range c.Tasks {
-			col.Tasks = append(col.Tasks, BoardTaskJSON{TaskJSON: ToTaskJSON(t), Blocked: b.Blocked[t.CanonicalID()]})
+			col.Tasks = append(col.Tasks, BoardTaskJSON{TaskJSON: ToLoadedTaskJSON(t), Blocked: b.Blocked[t.Source.ID]})
 		}
 		e.Columns = append(e.Columns, col)
 	}
@@ -276,17 +276,9 @@ func ToSummaryJSON(s core.Summary) SummaryJSON {
 	for _, c := range s.Counts {
 		counts = append(counts, StatusCountJSON{Status: string(c.Status), Count: c.Count})
 	}
-	inprog := make([]TaskJSON, 0, len(s.InProgress))
-	if s.InProgressRecords != nil {
-		for _, record := range s.InProgressRecords {
-			inprog = append(inprog, ToLoadedTaskJSON(record))
-		}
-	} else {
-		// Focused legacy callers may still build a bare Summary. Production
-		// summaries provide records from the same task-graph snapshot.
-		for _, t := range s.InProgress {
-			inprog = append(inprog, ToTaskJSON(t))
-		}
+	inprog := make([]TaskJSON, 0, len(s.InProgressRecords))
+	for _, record := range s.InProgressRecords {
+		inprog = append(inprog, ToLoadedTaskJSON(record))
 	}
 	epics := make([]EpicJSON, 0, len(s.Epics))
 	for _, e := range s.Epics {
@@ -296,7 +288,7 @@ func ToSummaryJSON(s core.Summary) SummaryJSON {
 	// repo with none sees no envelope change (the human dashboard self-hides too).
 	audits := make([]AuditJSON, 0, len(s.OpenAudits))
 	for _, a := range s.OpenAudits {
-		audits = append(audits, ToAuditJSON(a))
+		audits = append(audits, ToLoadedAuditJSON(a))
 	}
 	// findings is omitted (nil) unless there's actionable audit work, paralleling
 	// open_audits — a repo with none sees no envelope change.
@@ -373,7 +365,8 @@ func ToStatusAllEnvelope(overview core.SpaceOverview) StatusAllEnvelope {
 	inProgress := make([]SpaceInProgressJSON, 0, len(overview.InProgress))
 	for _, item := range overview.InProgress {
 		inProgress = append(inProgress, SpaceInProgressJSON{
-			Space: item.SpaceID, PlanningID: item.PlanningID, Task: ToTaskJSON(item.Task),
+			Space: item.SpaceID, PlanningID: item.PlanningID,
+			Task: ToLoadedTaskJSON(core.LoadedRecord[domain.Task]{Value: item.Task, Source: item.Source}),
 		})
 	}
 	return StatusAllEnvelope{SchemaVersion: SchemaVersion, Spaces: spaces, InProgress: inProgress}

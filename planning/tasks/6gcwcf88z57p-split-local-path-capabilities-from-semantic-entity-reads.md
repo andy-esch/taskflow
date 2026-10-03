@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gcwcf88z57p
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Remove local path, filename identity, and revision evidence from semantic entity values and expose local navigation explicitly.
 effort: 3-5 days
@@ -11,7 +11,9 @@ autonomy_level: 2
 tags: [architecture, ports, entities, filesystem]
 created: "2026-09-23"
 depends_on: [6gcwcf80v8hg, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2]
-updated_at: "2026-09-26"
+updated_at: "2026-10-03"
+started_at: "2026-10-01"
+completed_at: "2026-10-03"
 ---
 
 # Split local source capabilities from semantic entity reads
@@ -51,21 +53,21 @@ retain their stronger version evidence outside the domain values.
 
 ## Acceptance criteria
 
-- [ ] A pathless adapter implements semantic reads without stubbing any `Resolve*Path` method or
+- [x] A pathless adapter implements semantic reads without stubbing any `Resolve*Path` method or
       populating fake entity paths.
-- [ ] Semantic task, epic, audit, research, and Thread domain values contain no local path,
+- [x] Semantic task, epic, audit, research, and Thread domain values contain no local path,
       filename-derived identity, or guarded revision token.
-- [ ] Local `<entity> path` commands still resolve malformed id-led documents without parsing their
+- [x] Local `<entity> path` commands still resolve malformed id-led documents without parsing their
       frontmatter.
-- [ ] TUI navigation and editing consume explicit optional source capabilities rather than entity
+- [x] TUI navigation and editing consume explicit optional source capabilities rather than entity
       `Path` fields.
-- [ ] Split-source construction cannot silently pair semantic reads with an unrelated path resolver.
-- [ ] The final domain-field removal lands only after ordinary/show/wire projections, TUI identity,
+- [x] Split-source construction cannot silently pair semantic reads with an unrelated path resolver.
+- [x] The final domain-field removal lands only after ordinary/show/wire projections, TUI identity,
       local mutation receipts, and source-set validation no longer consume those fields.
-- [ ] Guarded mutation planners and public wire projections remain free of opaque revision tokens.
-- [ ] Pathless and non-filesystem adapters cannot accidentally gain a local graph-repair target
+- [x] Guarded mutation planners and public wire projections remain free of opaque revision tokens.
+- [x] Pathless and non-filesystem adapters cannot accidentally gain a local graph-repair target
       from a domain `Path` value such as `urn:…` or another URI-like key.
-- [ ] Task/Thread whole-snapshot comparisons still fail closed for missing or changed readable and
+- [x] Task/Thread whole-snapshot comparisons still fail closed for missing or changed readable and
       unreadable source revisions, and duplicate-ID lint remains attributable without path identity.
 
 ## Out of scope
@@ -74,9 +76,90 @@ retain their stronger version evidence outside the domain values.
 - Making filesystem path commands portable; their local nature should remain explicit.
 - Combining entity-specific stores into one generic interface.
 
+## Progress
+
+- Final checkpoint reviews are reconciled. Codex exposed a pre-existing repair receipt defect:
+  duplicate Thread sources retained their IDs/locations but lost duplicate health qualification.
+  List, graph-repair impacts, and lifecycle impacts now share complete-source-set projection before
+  filtering changed entries. Regressions cover dry-run/committed repair, unchanged duplicate
+  siblings, opaque sources, completed inconsistency, and unchanged Thread bytes. Antigravity's
+  no-findings report is qualified with explicit evidence corrections in its owner reconciliation.
+  Full tests, core/store/TUI/wire race checks, and lint pass; all acceptance criteria are met.
+- Thread `Path`/`FilenameID` and `CanonicalID()` are removed. Filesystem ordinary, selected, and
+  bulk-apply scans attach independent source identity/location and guarded local paths/revisions.
+  Creation, membership/lifecycle, task-lifecycle, and bulk-apply source gates now consume the full
+  Thread read before supplying semantic planner values. Materialization requires an explicit local
+  handle and compares bytes with the original revision; complete-snapshot CAS includes that handle.
+  Lifecycle and repair impact projections retain loaded records, including readable ID drift.
+- Self-review reproduced a planner callback rewriting its authorization snapshot to revive a
+  cancelled Thread. Mutation, creation, and apply callbacks now receive private copies of Thread
+  values and nested slices; apply bodies are copied too. Separate regression tests cover the policy
+  bypass and all three callback dispatchers. Full tests, affected-package race checks, and lint pass.
+  The final Codex and Antigravity reviews below cover the Task/Thread removal delta, remaining
+  source-aware consumers, compatibility, and compiling hostile mutation probes; both are reconciled.
+- `domain.Task` now contains no path, filename identity, or source revision. Filesystem scans and
+  creation receipts retain their explicit source/local metadata; bare-task graph compatibility
+  inputs provide no location or repair authority. Test fixtures now carry paths in loaded/guarded
+  records, preserving duplicate-source attribution and snapshot comparisons. TUI tests reject
+  opaque and path-shaped locations, including a path display hint, without a local path capability.
+  The repair-shadow test now requires an actual representative edit rather than accepting a no-op.
+  Full tests, core/store/TUI/wire race checks, and lint pass.
+- The Task filename-identity removal review exposed a repair reload check that rebuilt source
+  identity from the declared ID. It now uses an explicit filesystem source record and verifies the
+  source as well as the repaired fields. Regression tests cover missing and drifting declarations
+  in dry-run and committed repairs, retaining residual identity diagnostics and unrelated content.
+  Both Task identity checkpoint reviews are reconciled.
+- Checkpoint review found that the compatibility `NewTaskGraph`/`TaskGraphRead.Tasks` conversions
+  promoted `Task.Path` to a local repair handle. They are now read-only; local repair tests and
+  filesystem adapters supply `VersionedRecord.LocalPath` explicitly. Hostile URI and path-shaped
+  compatibility inputs remain non-repairable. The TUI edit/yank path now confirms the selected
+  stable ID after its initial asynchronous lookup, following a rename to its new path or reporting
+  that the ID disappeared. This narrows the action window but cannot make an external editor's
+  pathname atomic against a subsequent rename.
+- Thread lint now uses readable source IDs and opaque locations; `status --all` projects its
+  combined working set from the same source record as per-space summaries. Regression tests cover
+  those projections, path-shaped opaque repair locations, and coherent-list stale TUI results.
+
+- Optional task, epic, audit, and research path ports are split from the aggregate semantic
+  `Store`. Complete local adapters still supply them; explicit read replacements detach implicit
+  paths, and source-set validation rejects foreign resolvers before use.
+- `task info` and `audit info` now resolve local paths through those ports by canonical source ID.
+  Pathless reads retain the semantic metadata and report the unavailable path honestly.
+- Ordinary location projections now use an adapter-supplied `LocationIsPath` presentation hint
+  instead of comparing a location to a domain `Path`; the hint never authorizes opening a file.
+  Local output remains unchanged while opaque locations remain visible even if path-shaped.
+- The filesystem Thread scan now attaches successful-record source revisions directly to guarded
+  read wrappers (including the bulk-apply scan). Task and Thread domain types no longer contain
+  source-revision fields; guarded wrappers/problems are the sole owners of that evidence.
+- The filesystem task scan now carries revisions and local repair paths in guarded record wrappers.
+  Ordinary task reads have no revision token; graph CAS detects even body-only source edits. Graph
+  diagnostics use explicit source IDs/paths, repair locality no longer uses a URI heuristic, and
+  mutation materialization checks the graph's source handle rather than `Task.Path`.
+- Epic, audit, and research domain values no longer carry local paths; audit and research no longer
+  carry filename IDs. Their filesystem reads retain canonical source identity and location in
+  loaded records, including lint, selected reads, and open-audit summaries. The board and in-progress
+  summary now retain loaded task records instead of writing source identity back into task values.
+  Task lint compares frontmatter IDs with adapter source IDs for both active and archived records.
+- Task graph, lint, and selected filesystem reads now attach source IDs and locations at the scan
+  boundary. Regression tests cover frontmatter ID drift and parse-free path resolution of malformed
+  task, epic, audit, and research documents.
+- Thread list/show/graph read projections now use loaded source identity for ID drift and duplicate
+  detection; opaque source locations are not promoted to local diagnostic paths. Guarded Thread
+  mutation source validation now uses the same source records before semantic planning.
+- TUI editor/copy-path actions request the optional local path asynchronously by canonical ID,
+  confirm that ID before acting, and reject results after a selection, list-generation, or workspace
+  change. Detail hyperlinks use a separately resolved path; pathless semantic records cannot supply
+  editor paths by accident.
+- Task filename identity now lives only in loaded source records, not `domain.Task`; graph tests
+  supply distinct source IDs explicitly when frontmatter IDs drift or are missing. Task local-path
+  removal is complete. Thread mutation planning/materialization and their tests now use explicit
+  source envelopes and local receipts too; no semantic entity retains those transitional fields.
+
 ## Related
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Thread [Make planning data access adapter neutral](../threads/6gcwd78p9r04-make-planning-data-access-adapter-neutral.md)
 - [Thread path/read split precedent](6g5ryqqx5ab7-split-local-thread-path-resolution-from-portable-thread-reads.md)
 - [Portable entity-read design](6gcwcf7rgxef-design-portable-entity-reads-and-optional-local-source-capabilities.md)
+- Final checkpoint reviews: [Codex](../audits/6gg38rnpe94c-2026-10-03-final-semantic-entity-source-boundary-checkpoint-codex.md)
+  and [Antigravity](../audits/6gg38rnydjbm-2026-10-03-final-semantic-entity-source-boundary-checkpoint-antigravity.md)
